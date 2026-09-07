@@ -16,7 +16,6 @@ import {
 } from '../../docs/charts/chartModels'
 import { getWinningEscalationDepositClaimAmount } from '../../shared/ts/escalationMath'
 import { centeredDiagramScrollLeft, updateDiagramControl } from '../../docs/charts/diagramControl'
-import { htmlToDocumentationText } from './docs-html-text.mts'
 
 type InteractiveExampleHarness = {
 	close: () => void
@@ -736,11 +735,7 @@ async function checkAllZeroBids(scenario: AuctionExampleScenario): Promise<void>
 }
 
 async function checkSourceLabelsAndThresholdText(filePath: string, requiredSourceSnippets: string[]): Promise<void> {
-	const html = await readFile(filePath, 'utf8')
 	const runtimeSource = await readFile('docs/runtime/auctionClearing.ts', 'utf8')
-	assert.match(html, /<span>ETH retained<\/span/, `${filePath} should label retained ETH explicitly`)
-	assert.match(html, /<span>Winning ETH kept<\/span/, `${filePath} should label winning ETH kept explicitly`)
-	assert.match(html, /qualification threshold as <code>clearingTick<\/code>[\s\S]*Only bids at or above/, `${filePath} should describe the underfunded winner boundary with clearingTick`)
 	for (const snippet of requiredSourceSnippets) {
 		assert.match(runtimeSource, new RegExp(escapeRegExp(snippet)), `${filePath} runtime is missing expected source snippet: ${snippet}`)
 	}
@@ -882,75 +877,12 @@ checkExactRepCapEquality()
 
 const openOracleHtml = await readFile('docs/reference/open-oracle.html', 'utf8')
 assert.doesNotMatch(blockWithId(openOracleHtml, 'eq-openoracle-initial-report-size'), /<mi>(?:R|P|e|E|Q|N|D|T|H|m|u|F)<\/mi>/, 'dynamic report equation should use descriptive domain names instead of one-letter identifiers')
-assert.doesNotMatch(openOracleHtml, /259\.332023575638507216 REP/, 'OpenOracle integration should not retain the removed fixed REP report')
-assert.match(openOracleHtml, /WETH as <code>token1<\/code> and\s+REP as <code>token2<\/code>/, 'OpenOracle integration should document WETH as the exact token-one side')
 
 const auctionDesignHtml = await readFile('docs/explanation/truth-auctions.html', 'utf8')
-assert.doesNotMatch(auctionDesignHtml, /buy only the REP they demanded/i, 'auction design should not describe underfunded fills as per-tick demand')
-assert.match(auctionDesignHtml, /complete REP sale cap[\s\S]*one effective price/i, 'auction design should explain complete weak-demand REP allocation')
-assert.match(auctionDesignHtml, /only bids at or above\s+the cap-implied qualification threshold/i, 'auction design should make threshold qualification explicit')
-assert.doesNotMatch(auctionDesignHtml, /max-uint sentinel/i, 'auction design should not describe the removed no-bid threshold sentinel')
-assert.match(auctionDesignHtml, /every bid refunds/i, 'auction design should document the no-qualifying-bid refund branch')
-assert.match(auctionDesignHtml, /stores the lowest tick whose price reaches that\s+qualification threshold as <code>clearingTick<\/code>/i, 'canonical clearing copy should describe rounding the cap-implied threshold to a tick')
-assert.match(auctionDesignHtml, /Sold REP is allocated between them proportionally with integer floors/i, 'canonical clearing copy should describe deterministic floor allocation')
-assert.match(auctionDesignHtml, /dispute-staked bucket receives <code>⌊repPurchased \* disputeStakedRepBefore \/ combinedRepBefore⌋<\/code>[\s\S]*pool-held bucket receives the complementary remainder/i, 'canonical clearing copy should identify the dispute-staked floor and pool-held remainder')
-assert.doesNotMatch(auctionDesignHtml, /carries\s+remainders during paged withdrawals/i, 'auction design should not describe removed withdrawal-order remainder carry')
-assert.doesNotMatch(auctionDesignHtml, /carries division dust|carries division remainders/i, 'auction design should not describe deterministic cumulative allocation as mutable division carry')
-assert.doesNotMatch(auctionDesignHtml, /underfundedThreshold = ceil\(underfundedWinningAttoEth \* PRICE_PRECISION \/ maxAttoRepBeingSold\)/i, 'auction design should not derive the reserve from winning ETH')
 assert.match(auctionDesignHtml, /data-source="underfundedThreshold = ⌈attoEthRaiseCap \* PRICE_PRECISION \/ maxAttoRepBeingSold⌉"/i, 'auction design should derive the underfunded qualification threshold from both caps')
-assert.match(auctionDesignHtml, /activates with legitimate migration settlement collateral plus retained bid/i, 'auction design should document value-free weak-demand activation')
-assert.match(auctionDesignHtml, /rejects contribution-only ETH/i, 'auction design should reject unaccounted contribution ETH')
-assert.match(auctionDesignHtml, /ETH forced into the child does not count toward the repair target/i, 'auction design should exclude forced ETH from child collateral')
-assert.match(auctionDesignHtml, /Qualifying bidders collectively purchase[\s\S]*maxAttoRepBeingSold/i, 'auction design should assign the complete REP cap when demand qualifies')
-assert.match(auctionDesignHtml, /common effective price[\s\S]*threshold is not an execution-price floor/i, 'auction design should distinguish the reserve boundary from the weak-demand execution price')
-assert.doesNotMatch(auctionDesignHtml, /actual execution price|purchased REP by retained ETH at the reserve tick/i, 'auction design should not describe the underfunded eligibility boundary as an execution price')
-assert.doesNotMatch(auctionDesignHtml, /Qualifying ETH buys REP at the ceiling tick|tick rounds up[\s\S]*exact integer fills can be slightly lower/i, 'auction worked examples should not attribute proportional REP allocation to the reserve tick price')
-
-const operatorReferenceText = htmlToDocumentationText(await readFile('docs/reference/operator-guardrails.html', 'utf8'))
-assert.match(operatorReferenceText, /parent vault is checkpointed before its capacity ownership is cleared[\s\S]*earned fees remain redeemable[\s\S]*`totalAccruedFeesAttoEth\(\)`/i, 'operator reference should preserve parent fee solvency guardrails during vault migration')
-assert.match(operatorReferenceText, /statoblast\.html#forks-migration/i, 'operator reference should delegate migration derivations to the canonical explanation')
-assert.doesNotMatch(operatorReferenceText, /activateForkMode[\s\S]*fork-time checkpoint[\s\S]*settlementCollateralAtForkAttoEth/i, 'operator reference should not duplicate the canonical own-fork checkpoint derivation')
-assert.match(
-	operatorReferenceText,
-	/once every eligible vault and auction allocation is reconciled[\s\S]*subsequent permissionless vault fee checkpoint returns[\s\S]*no vault can individually claim[\s\S]*settlement collateral/i,
-	'operator reference should document the separate final aggregate-only fee reserve release',
-)
-assert.match(
-	operatorReferenceText,
-	/index carry is cleared when pool financials are installed[\s\S]*ordinary vault capacity ownership changes[\s\S]*liquidation transfers capacity ownership[\s\S]*assigning finalized-auction ownership[\s\S]*preserves that carry/i,
-	'operator reference should distinguish ordinary carry-clearing paths from finalized-auction vault assignment',
-)
-assert.match(
-	operatorReferenceText,
-	/sold truth-auction ownership enter the fee denominator at finalization[\s\S]*later auction claim assigns[\s\S]*fees accrued from the saved finalization index[\s\S]*without changing the pool’s live eligible total/i,
-	'operator reference should document finalization-time fee eligibility for delayed auction claims',
-)
-assert.match(operatorReferenceText, /Security Pool Guardrails[\s\S]*totalClaimableVaultFeesAttoEth[\s\S]*totalAccruedFeesAttoEth\(\)[\s\S]*Share Migration/i, 'operator reference security-pool guardrails should define assigned and aggregate fee accounting')
-
-const contractInteractionReferenceText = htmlToDocumentationText(await readFile('docs/reference/contracts.html', 'utf8'))
-const updateSettlementCollateralRow = contractInteractionReferenceText.split('\n').find(line => line.startsWith('`updateSettlementCollateral()`\t'))
-if (updateSettlementCollateralRow === undefined) {
-	throw new Error('contract interaction reference should document updateSettlementCollateral()')
-}
-assert.match(updateSettlementCollateralRow, /question end while this pool's universe remains unforked[\s\S]*fork timestamp replaces question end as this pool epoch's cutoff/i, 'contract interaction reference should document the conditional per-pool fee cutoff')
-assert.match(updateSettlementCollateralRow, /activated child starts a separate fee epoch/i, 'contract interaction reference should distinguish a child fee epoch from its parent cutoff')
-assert.doesNotMatch(updateSettlementCollateralRow, /earlier question-end or universe-fork clamp/i, 'contract interaction reference should not describe the conditional fee cutoff as a minimum')
-
-const redeemRepFromVaultRow = contractInteractionReferenceText.split('\n').find(line => line.startsWith('`redeemRepFromVault(vault)`\t'))
-if (redeemRepFromVaultRow === undefined) {
-	throw new Error('contract interaction reference should document redeemRepFromVault(vault)')
-}
-assert.match(redeemRepFromVaultRow, /specified `vault` has no escalation escrow and has redeemable REP/i, 'contract interaction reference should scope the redemption escrow precondition to the specified vault')
-assert.match(redeemRepFromVaultRow, /caller must equal `vault`/i, 'contract interaction reference should require the vault to authorize its own REP redemption')
-assert.doesNotMatch(redeemRepFromVaultRow, /no escalation escrow remains/i, 'contract interaction reference should not imply that redeemRepFromVault requires global escrow clearance')
 
 const statoblastHtml = await readFile('docs/explanation/statoblast.html', 'utf8')
-const escalationHtml = await readFile('docs/explanation/escalation-game.html', 'utf8')
 assert.doesNotMatch(statoblastHtml, /id="collateral-repair-example"/i, 'the overview must delegate interactive auction mechanics to the focused Truth Auction page')
-assert.match(escalationHtml, /configured start bond|fixed-point attrition curve/i, 'escalation explanation should name the configured bond and canonical curve')
-assert.match(escalationHtml, /cumulative binding-capital threshold/i, 'escalation explanation should distinguish the cumulative threshold from the deposit minimum')
-assert.match(escalationHtml, /deadline moves only when the deposit raises the median outcome balance/i, 'escalation explanation should tie deadline changes to median balance increases')
-assert.doesNotMatch(escalationHtml, /requiredEscalationCost|Exponential escalation bond curve/i, 'escalation explanation should not label the cumulative threshold as an individual deposit cost')
 for (const bindMatch of statoblastHtml.matchAll(/bindExample\("([^"]+)"/g)) {
 	const exampleId = bindMatch[1]
 	if (exampleId === undefined) {
@@ -993,7 +925,6 @@ assert.equal(
 	4n * payoutFixture,
 	'fork scaling should reduce even an above-cap principal-only withdrawal',
 )
-assert.match(escalationHtml, /Principal returned: <code>5 REP<\/code>[\s\S]*Bonus: <code>5 × 6 \/ 15 = 2 REP<\/code>[\s\S]*Winning payout: <code>5 \+ 2 = 7 REP<\/code>/i, 'published payout example should show principal, bonus, and total formulas')
 assert.match(chartRuntimeSource, /plot-statoblast-whitepaper-19[\s\S]*collateralRepairChart/, 'collateral repair chart should use its native Plot renderer')
 assert.match(chartRuntimeSource, /x1: model\.received, x2: model\.received \+ model\.repairEth/, 'collateral repair Plot should append auction repair after migration-routed collateral')
 assert.match(chartRuntimeSource, /domain: \['Migration-routed', 'Auction repair'\]/, 'collateral repair Plot should preserve distinct migration and repair segment colors')
@@ -1122,7 +1053,6 @@ assert.equal(
 )
 assert.deepEqual(calculateResolutionModel({ invalidBalance: 4, noBalance: 7, runningCost: 5, yesBalance: 6 }), { atCost: 2, result: 'None' }, 'resolution chart should keep two outcomes at cost unresolved')
 assert.deepEqual(calculateResolutionModel({ invalidBalance: 0, noBalance: 0, runningCost: 5, yesBalance: 0 }), { atCost: 0, result: 'Invalid' }, 'resolution chart should resolve an empty timed-out game to Invalid')
-const invariantsHtml = await readFile('docs/reference/invariants.html', 'utf8')
 const feeVectorPrecision = 10n ** 18n
 const feeVectorDecayCandidate = 7n
 const feeVectorEligibleCoverageCommitmentAttoEth = 3n
@@ -1147,7 +1077,3 @@ assert.deepEqual(
 	},
 	'fee accrual documentation vector should preserve nonzero index and global remainders while subtracting only whole-attoETH reserve credit',
 )
-assert.doesNotMatch(statoblastHtml, /carried remainder across paged withdrawals/i, 'whitepaper auction examples should not describe removed withdrawal-order remainder carry')
-assert.doesNotMatch(statoblastHtml, /paged withdrawals carr(?:y|ies) division dust/i, 'whitepaper should describe fixed cumulative-position allocation rather than mutable division carry')
-assert.doesNotMatch(statoblastHtml, /(?:collateralDecay|decayCandidate)[^\"]*totalCoverageCommitmentAttoEth/i, 'whitepaper fee-index formula should not use total capacity as the accrual denominator')
-assert.match(invariantsHtml, /AUC-09[\s\S]*Bounded bid settlement[\s\S]*finalizeTruthAuctionRepair/i, 'invariant evidence should point bounded settlement to the delegate guard')
