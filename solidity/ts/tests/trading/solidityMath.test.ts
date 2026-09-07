@@ -5,6 +5,7 @@ import { createWriteClient, type WriteClient } from '../../testSupport/simulator
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { compileArtifactsForTests } from './compileArtifactsForTests'
 import { quoteAddLiquidity, quoteExactInput, quoteExactOutput } from '@zoltar/shared/trading/math'
+import { flushSolidityBytecodeCoverageForTest } from '../../coverage/traceToSource'
 
 type TradingContracts = Awaited<ReturnType<typeof compileArtifactsForTests>>
 
@@ -84,6 +85,7 @@ describe('Solidity and TypeScript AMM math parity', () => {
 	test('preserves imported branchless selection and exact Math panic behavior', async () => {
 		await expect(client.readContract({ abi: artifact.abi, address: harness, functionName: 'ternary', args: [true, 11n, 29n] })).resolves.toBe(11n)
 		await expect(client.readContract({ abi: artifact.abi, address: harness, functionName: 'ternary', args: [false, 11n, 29n] })).resolves.toBe(29n)
+		await flushSolidityBytecodeCoverageForTest()
 
 		const maximum = (1n << 256n) - 1n
 		await expect(client.readContract({ abi: artifact.abi, address: harness, functionName: 'mulDiv', args: [maximum, maximum, 0n] })).rejects.toThrow(/division by zero|0x12|4e487b71[0-9a-f]*12/i)
