@@ -1,4 +1,4 @@
-export type DockerInstruction = {
+type DockerInstruction = {
 	readonly keyword: string
 	readonly value: string
 }
@@ -25,6 +25,20 @@ const normalizedLines = (source: string): string[] => {
 	}
 	if (current !== '') logicalLines.push(current.replaceAll(/\s+/gu, ' '))
 	return logicalLines
+}
+
+export function dockerGlobalArguments(source: string): readonly string[] {
+	const arguments_: string[] = []
+	for (const line of normalizedLines(source)) {
+		const instructionMatch = /^(\S+)\s+(.+)$/u.exec(line)
+		if (instructionMatch === null) continue
+		const [, rawKeyword, value] = instructionMatch
+		if (rawKeyword === undefined || value === undefined) continue
+		const keyword = rawKeyword.toUpperCase()
+		if (keyword === 'FROM') break
+		if (keyword === 'ARG') arguments_.push(value)
+	}
+	return arguments_
 }
 
 export function parseDockerfile(source: string): readonly DockerStage[] {

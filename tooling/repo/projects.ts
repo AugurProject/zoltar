@@ -337,10 +337,6 @@ export const projects: readonly Project[] = [
 	{ id: 'testnetwork', path: 'testnetwork', type: 'service', dependencies: ['contracts'], tasks: {}, generatedDirectories: [], ci: { scope: 'infrastructure' } },
 ]
 
-export function projectById(projectId: string, registry: readonly Project[] = projects): Project | undefined {
-	return registry.find(project => project.id === projectId)
-}
-
 export function validateProjectRegistry(registry: readonly Project[] = projects): void {
 	const ids = new Set<string>()
 	const paths = new Set<string>()
