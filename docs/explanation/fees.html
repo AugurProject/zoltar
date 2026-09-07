@@ -10,10 +10,11 @@
 	<body class="doc-openoracle">
 		<main>
 			<header>
-				<h1>Open Interest Fees</h1>
+				<h1>Protocol fees</h1>
 			</header>
 			<section>
-				<p>Vault holders have a lot responsibilities, they need to maintain enough REP to cover their commitments for open interest holders, they need to participate in escalation games, fork migrations etc. The reward for this service is fees generated from open interest. The security pool sets a side fees for vault holders to claim when they like. Earned fees are not ever taken away from the vault holders. REP becomes valuable only when its used in the ecosystem.</p>
+				<p>Vault owners provide REP-backed security capacity, maintain vault health, and may need to participate in reporting and migration. In return, fee-eligible capacity ownership earns a share of the time-based fees charged to outstanding complete-set collateral.</p>
+				<p>Complete-set holders pay through gradual decay of their pool's recorded settlement collateral. Fee-eligible vault owners earn in proportion to capacity ownership. State-changing pool operations checkpoint the global fee index, and vault operations checkpoint each vault's claim.</p>
 				<p>Complete-set collateral gradually decays into an unallocated fee reserve. Fee-eligible vaults accrue fees in proportion to their assigned capacity ownership. The retention rate falls as utilization rises, so security becomes more expensive as open interest consumes underwriting slack.</p>
 				<p>Retention follows a piecewise heuristic. It starts high, declines linearly until <code>80%</code> utilization, and then stays at the minimum retention rate. The intent is to charge more aggressively for security as utilization rises and underwriting slack falls.</p>
 				<p>At zero utilization, the constants imply roughly a <code>10%</code> yearly fee. Once utilization reaches the <code>80%</code> dip, the annualized fee is roughly <code>50%</code> and then stays flat because the on-chain retention rate is already pinned to its minimum. The UI annualizes the rate as <code>annualFee = 1 - (retentionRate / PRICE_PRECISION)^SECONDS_PER_YEAR</code>.</p>

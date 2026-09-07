@@ -10,16 +10,15 @@
 	<body class="doc-openoracle">
 		<main>
 			<header>
-				<h1>Truth Auction</h1>
-				<p>When a pool's migration deadline has passed, if a child pool lacks the ETH needed to fully collateralize its open interest, the child may start a truth auction. The fork may have been triggered either by a direct Zoltar fork or by the Statoblast Escalation Game.</p>
-
-				<p>Because collateral follows migration rather than being copied in full, a child pool retains its obligations while lacking enough ETH to reopen cleanly. The truth auction sells child-universe REP to raise as much repair ETH as demand supports. A truth auction does not determine which outcome is true. It sells REP belonging to one already-defined child universe to repair that child pool's collateral.</p>
-
-				<p>The auction has an ETH raise target and a cap on how much child-universe REP it may sell. That cap depends on migrated and dispute-staked REP. Statoblast writes winning claims back into vault state rather than paying simple token transfers, so bidders buy into the child pool and its matching capacity ownership instead of merely receiving REP.</p>
+				<h1>Truth Auctions</h1>
+				<p>A child pool has 100 ETH of outstanding claims but receives only 70 ETH of settlement collateral through migration. Its Truth Auction tries to raise the missing 30 ETH by selling child REP.</p>
+				<ul><li><strong>Full repair:</strong> bidders contribute 30 ETH, so the child reaches its 100 ETH target.</li><li><strong>Partial repair:</strong> bidders contribute 12 ETH, so the child operates with 82 ETH and remains impaired.</li><li><strong>No demand:</strong> no qualifying bid contributes ETH, so the child remains at 70 ETH.</li></ul>
+				<p><strong>The auction repairs collateral and never selects truth.</strong> It sells REP belonging to an already-defined child universe. The child resumes with only the ETH that migration and accepted bids actually provide.</p>
+				<p>Winning positions settle into REP backing units and matching capacity ownership in the child pool rather than receiving a simple REP transfer.</p>
 			</header>
 
 			<section id="lifecycle">
-				<h2>Operational Lifecycle</h2>
+				<h2>Lifecycle</h2>
 
 				<ol>
 					<li>Migration deadline passes; the child may start the auction later</li>
@@ -50,7 +49,7 @@
 			</section>
 
 			<section id="clearing">
-				<h2>How Clearing Works</h2>
+				<h2>Implementation details: clearing</h2>
 				<p>The clearing process walks demand from the highest price downward. A bid above the clearing tick wins in full, a bid below it loses in full, and bids at the clearing tick share the last fill. In the uniform-clearing branch that last fill is First in First Out within the tick, so earlier same-tick bids are consumed before later ones.</p>
 
 				<p>Higher ticks represent higher bid prices and therefore receive priority during auction clearing. The clearing algorithm matches bids starting from the highest tick and works downward until all available REP has been allocated.</p>
@@ -99,7 +98,7 @@
 			</section>
 
 			<section id="interactive-example">
-				<h2>Interactive Clearing Example</h2>
+				<h2>Interactive clearing example</h2>
 				<p>The interactive example shows the uniform-clearing path, the underfunded path, and how the same bid ladder reacts when the ETH cap, REP cap, and bid sizes change.</p>
 				<details class="interactive-example" id="simple-auction-example">
 					<summary>Try a simple auction clearing run</summary>

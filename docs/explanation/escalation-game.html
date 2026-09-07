@@ -10,13 +10,13 @@
 	<body class="doc-openoracle">
 		<main>
 			<header>
-				<h1>EscalationGame</h1>
+				<h1>Escalation Game</h1>
 			</header>
 			<section id="lifecycle-first">
-				<p class="lede">The Escalation Game's deposit, timing, outcome-selection, and continuation rules fit into the wider prediction-market lifecycle described in the Statoblast white paper.</p>
-
-				<p>When a Statoblast market ends, the security pool sends a valid deposit through its escalation-deposit delegate. The deposit must pass the pool's vault-backing and lifecycle checks and usually meet the configured starting bond. A smaller deposit is allowed only when it fills an outcome to the <a href="#term-non-decision-threshold">non-decision threshold</a>. The first deposit does not resolve the market by itself.</p>
-				<p>A deposit moves the local deadline only when it raises the median of the three outcome balances. A strict leader identifies the local result, but the pool can finalize it only after the deadline. If competing outcomes reach the non-decision threshold, the pool follows the fork path.</p>
+				<p class="lede">The Escalation Game gives a finished Statoblast market a local, REP-backed resolution path before a universe-wide fork is necessary.</p>
+				<p>For the Aurora launch question, suppose Yes has 8 REP, No has 5 REP, and Invalid has 2 REP. The median balance is 5 REP, so 5 REP is the game's binding capital and determines its scheduled deadline. A deposit that raises only the leading Yes balance does not move that deadline; a deposit that raises Invalid above 5 REP raises the median and moves it later.</p>
+				<p>After the deadline, Yes wins only if it remains the unique strict leader. If two outcomes each reach the non-decision threshold before local finalization, the game records non-decision and the SecurityPool follows the Zoltar fork path. A tie is never treated as a local winner.</p>
+				<p>Deposits must also pass the pool's vault-backing and lifecycle checks and normally meet the configured starting bond. A smaller deposit is accepted only when it exactly fills an outcome to the non-decision threshold.</p>
 
 				<p><strong>Lifecycle:</strong> tentative claim → conflicting deposit → accepted amount and new deadline → local settlement or non-decision → child continuation after a fork → proof-backed claims.</p>
 			</section>
@@ -104,12 +104,12 @@
 				</details>
 			</section>
 			<section id="payouts">
-				<h2>The game end</h2>
+				<h2>How the game ends</h2>
 
-				<p>The game can end two ways</p>
+				<p>Once the relevant deadline or threshold is reached, the game follows one of two mutually exclusive paths:</p>
 				<ol>
-					<li>The required escalation game increased high enough that only one side was able to keep up with it: That side wins and Statoblast finalizes on that outcome</li>
-					<li>Two sides have reached the maximal deposit amount: Statoblast triggers a fork</li>
+					<li><strong>Strict local winner.</strong> After the scheduled deadline, exactly one outcome has the greatest balance. Statoblast finalizes on that outcome.</li>
+					<li><strong>Local non-decision.</strong> Two outcomes reach the non-decision threshold. Statoblast uses its fork path instead of choosing one locally.</li>
 				</ol>
 
 				<p>After the game ends, the payout uses <a href="#term-binding-capital">binding capital</a>, the <a href="#term-safety-boundary">safety boundary</a>, and the <a href="#term-reward-cap">reward-eligible cap</a>. A winning deposit returns its <a href="#term-principal">principal</a> and may receive a bonus. Any excess above the reward cap returns principal without a bonus. The game burns the winning-deposit <a href="#term-haircut">haircut</a>; forked payouts can also be scaled by the fork threshold.</p>
