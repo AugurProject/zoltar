@@ -1027,7 +1027,7 @@ describe('Contract Test Suite', () => {
 		await assert.rejects(forkUniverse(client, genesisUniverse, nonExistentQuestionId), /Question does not exist in ZoltarQuestionData/)
 	})
 
-	test('forkUniverse fails when question has not ended', async () => {
+	test('forkUniverse rejects before question end and succeeds at and after equality', async () => {
 		const client2 = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const zoltar = getZoltarAddress()
 		await approveToken(client2, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
@@ -1051,13 +1051,17 @@ describe('Contract Test Suite', () => {
 		await createQuestion(client, questionData, outcomes)
 		const questionId = getQuestionId(questionData, outcomes)
 
-		// Should fail because question hasn't ended
+		let boundarySnapshot = await mockWindow.anvilSnapshot()
+		await mockWindow.setTime(futureEndTime - 2n)
 		await assert.rejects(forkUniverse(client, genesisUniverse, questionId), /Question has not ended, so it cannot force a fork yet/)
 
-		// Advance time past the endTime
-		await mockWindow.advanceTime(2000n)
+		await mockWindow.anvilRevert(boundarySnapshot)
+		boundarySnapshot = await mockWindow.anvilSnapshot()
+		await mockWindow.setTime(futureEndTime - 1n)
+		await forkUniverse(client, genesisUniverse, questionId)
 
-		// Should succeed now
+		await mockWindow.anvilRevert(boundarySnapshot)
+		await mockWindow.setTime(futureEndTime)
 		await forkUniverse(client, genesisUniverse, questionId)
 	})
 

@@ -571,7 +571,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 
 	function finalizeTruthAuction(ISecurityPool securityPool) external payable {
 		require(msg.value == 0, 'No repair ETH');
-		require(block.timestamp > _getForkData(securityPool).truthAuctionStarted + SecurityPoolUtils.AUCTION_TIME, 'Auction open');
+		require(block.timestamp >= _getForkData(securityPool).truthAuctionStarted + SecurityPoolUtils.AUCTION_TIME, 'Auction open');
 		_finalizeTruthAuction(securityPool);
 	}
 

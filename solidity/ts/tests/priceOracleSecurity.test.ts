@@ -2153,6 +2153,26 @@ describe('Price Oracle Refund Security Tests', () => {
 		await assert.rejects(async () => await executeStagedOperation(client, priceOracle, manualOperationId), /Staged operation unavailable/)
 	})
 
+	test('cached oracle prices expire exactly at the five-minute validity boundary', async () => {
+		await manipulatePriceOracle(client, mockWindow, priceOracle)
+		const lastSettlementTimestamp = await client.readContract({
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			address: priceOracle,
+			functionName: 'lastSettlementTimestamp',
+			args: [],
+		})
+		const priceValidityDeadline = lastSettlementTimestamp + 5n * 60n
+
+		await mockWindow.setTime(priceValidityDeadline - 1n)
+		assert.strictEqual(await getIsPriceValid(client, priceOracle), true, 'the cached price should remain valid one second before expiry')
+
+		await mockWindow.setTime(priceValidityDeadline)
+		assert.strictEqual(await getIsPriceValid(client, priceOracle), false, 'the cached price should become stale at the exact expiry timestamp')
+
+		await mockWindow.setTime(priceValidityDeadline + 1n)
+		assert.strictEqual(await getIsPriceValid(client, priceOracle), false, 'the cached price should remain stale after expiry')
+	})
+
 	test('non-liquidation staged operations require the initiator vault as target', async () => {
 		const otherVault = addressString(TEST_ADDRESSES[1])
 		const nonLiquidationOperations = [OperationType.WithdrawRep]
@@ -2189,7 +2209,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(executionLog.args.errorMessage, 'staged operation expired')
 	})
 
-	test('staged self operations expire after their caller-selected validity window', async () => {
+	test('staged self operations remain executable through equality and expire one second later', async () => {
 		const costAttoEth = await getRequestPriceCostAttoEth(client, priceOracle)
 		const queuedOperationCostAttoEth = await getQueuedOperationCostAttoEth(client, priceOracle)
 		const selfOperationTimeoutSeconds = 60n
@@ -2199,19 +2219,40 @@ describe('Price Oracle Refund Security Tests', () => {
 		await queueStagedOperation(OperationType.WithdrawRep, client.account.address, 1n, selfOperationTimeoutSeconds)
 
 		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
-		await mockWindow.advanceTime(selfOperationTimeoutSeconds + 1n)
-
-		const expiredExecutionHash = await executeStagedOperation(client, priceOracle, manualOperationId)
-		const expiredOperation = await getStagedOperation(client, priceOracle, manualOperationId)
-		const expiredExecutionReceipt = await client.waitForTransactionReceipt({
-			hash: expiredExecutionHash,
+		const stagedOperation = await getStagedOperation(client, priceOracle, manualOperationId)
+		const settlementTime = await client.readContract({
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			address: priceOracle,
+			functionName: 'settlementTime',
+			args: [],
 		})
-		const executionLog = findExecutedStagedOperationLog(expiredExecutionReceipt.logs)
-		if (executionLog === undefined) throw new Error('missing expired self-operation execution event')
+		const operationDeadline = stagedOperation[5] + settlementTime + stagedOperation[6]
+		let boundarySnapshot = await mockWindow.anvilSnapshot()
+
+		const executeAt = async (timestampBeforeTransaction: bigint) => {
+			await mockWindow.setTime(timestampBeforeTransaction)
+			const executionHash = await executeStagedOperation(client, priceOracle, manualOperationId)
+			const executionReceipt = await client.waitForTransactionReceipt({ hash: executionHash })
+			const executionLog = findExecutedStagedOperationLog(executionReceipt.logs)
+			if (executionLog === undefined) throw new Error('missing self-operation execution event')
+			return executionLog
+		}
+
+		const beforeDeadlineLog = await executeAt(operationDeadline - 2n)
+		assert.strictEqual(beforeDeadlineLog.args.success, true, 'the operation should execute one second before its deadline')
+
+		await mockWindow.anvilRevert(boundarySnapshot)
+		boundarySnapshot = await mockWindow.anvilSnapshot()
+		const atDeadlineLog = await executeAt(operationDeadline - 1n)
+		assert.strictEqual(atDeadlineLog.args.success, true, 'the operation should execute at its exact deadline')
+
+		await mockWindow.anvilRevert(boundarySnapshot)
+		const afterDeadlineLog = await executeAt(operationDeadline)
+		const expiredOperation = await getStagedOperation(client, priceOracle, manualOperationId)
 		assert.strictEqual(expiredOperation[1], zeroAddress, 'expired self operation should be consumed after execution attempt')
-		assert.strictEqual(executionLog.args.operationId, manualOperationId)
-		assert.strictEqual(executionLog.args.operation, BigInt(OperationType.WithdrawRep))
-		assert.strictEqual(executionLog.args.success, false)
-		assert.strictEqual(executionLog.args.errorMessage, 'staged operation expired')
+		assert.strictEqual(afterDeadlineLog.args.operationId, manualOperationId)
+		assert.strictEqual(afterDeadlineLog.args.operation, BigInt(OperationType.WithdrawRep))
+		assert.strictEqual(afterDeadlineLog.args.success, false, 'the operation should expire one second after its deadline')
+		assert.strictEqual(afterDeadlineLog.args.errorMessage, 'staged operation expired')
 	})
 })

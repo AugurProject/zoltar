@@ -1009,21 +1009,84 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 	})
 
 	test('the exact settlement deadline belongs only to settlement', async () => {
+		await installCurrentOpenOracle()
 		await prepareReporter(reporter)
 		await prepareReporter(disputer)
 		const reportId = await createReport(reporter)
 		const state = (await loadOpenOracleEventState(reporter, reportId)).latest
 		const deadline = state.game.reportTimestamp + SETTLEMENT_TIME
-		const boundarySnapshot = await mockWindow.anvilSnapshot()
-		await mockWindow.setTime(deadline - 1n)
+		const disputeData = encodeFunctionData({
+			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
+			functionName: 'dispute',
+			args: [reportId, 1_200n, 900n, disputer.account.address, false, false, getOpenOracleGameTuple(state.game), getOpenOracleHelperTuple(state.helper), getTimingBoundaries()],
+		})
+		const settleData = encodeFunctionData({
+			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
+			functionName: 'settle',
+			args: [reportId, getOpenOracleGameTuple(state.game), getOpenOracleHelperTuple(state.helper)],
+		})
+		const mineDeadlineCompetitors = async (settleFirst: boolean) => {
+			const rawRequest = async (method: string, params: readonly unknown[]) => await mockWindow.requestRaw({ method, params })
+			const queueTransaction = async (from: Address, data: Hex) => {
+				const hash = await rawRequest('eth_sendTransaction', [{ from, to: openOracle, data, gas: '0x17d7840', gasPrice: '0x0' }])
+				if (typeof hash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(hash)) throw new Error('Direct OpenOracle transaction returned an invalid hash')
+				return hash
+			}
+			const receiptStatus = async (hash: string) => {
+				const receipt = await rawRequest('eth_getTransactionReceipt', [hash])
+				if (typeof receipt !== 'object' || receipt === null) throw new Error(`Missing direct OpenOracle receipt for ${hash}`)
+				const status = Reflect.get(receipt, 'status')
+				if (status === '0x1') return 'success'
+				if (status === '0x0') return 'reverted'
+				throw new Error(`Invalid direct OpenOracle receipt status for ${hash}`)
+			}
 
-		await assertCustomError(() => disputeReport(disputer, reportId, 1_200n, 900n, state), 'DisputeTooLate')
-		assert.strictEqual((await reporter.getBlock()).timestamp, deadline)
+			await rawRequest('anvil_setAutomine', [false])
+			try {
+				await rawRequest('evm_setNextBlockTimestamp', [`0x${deadline.toString(16)}`])
+				const firstHash = settleFirst ? await queueTransaction(settler.account.address, settleData) : await queueTransaction(disputer.account.address, disputeData)
+				const secondHash = settleFirst ? await queueTransaction(disputer.account.address, disputeData) : await queueTransaction(settler.account.address, settleData)
+				await rawRequest('evm_mine', [])
+				const firstStatus = await receiptStatus(firstHash)
+				const secondStatus = await receiptStatus(secondHash)
+				return settleFirst ? { disputeStatus: secondStatus, settleStatus: firstStatus } : { disputeStatus: firstStatus, settleStatus: secondStatus }
+			} finally {
+				await rawRequest('anvil_setAutomine', [true])
+			}
+		}
+		let boundarySnapshot = await mockWindow.anvilSnapshot()
+		await mockWindow.setTime(deadline - 2n)
+		await assertCustomError(() => openOracleSettle(settler, reportId), 'SettleTooEarly')
+		assert.strictEqual((await reporter.getBlock()).timestamp, deadline - 1n)
 
 		await mockWindow.anvilRevert(boundarySnapshot)
-		await mockWindow.setTime(deadline - 1n)
-		await openOracleSettle(settler, reportId)
+		boundarySnapshot = await mockWindow.anvilSnapshot()
+		await mockWindow.setTime(deadline - 2n)
+		await disputeReport(disputer, reportId, 1_200n, 900n, state)
+		assert.strictEqual((await reporter.getBlock()).timestamp, deadline - 1n)
+
+		await mockWindow.anvilRevert(boundarySnapshot)
+		boundarySnapshot = await mockWindow.anvilSnapshot()
+		const disputeFirst = await mineDeadlineCompetitors(false)
+		assert.strictEqual(disputeFirst.disputeStatus, 'reverted', 'a dispute must fail at equality even when ordered first')
+		assert.strictEqual(disputeFirst.settleStatus, 'success', 'settlement must succeed at equality when ordered after a rejected dispute')
+
+		await mockWindow.anvilRevert(boundarySnapshot)
+		boundarySnapshot = await mockWindow.anvilSnapshot()
+		const settlementFirst = await mineDeadlineCompetitors(true)
+		assert.strictEqual(settlementFirst.disputeStatus, 'reverted', 'a dispute must fail at equality after settlement is ordered first')
+		assert.strictEqual(settlementFirst.settleStatus, 'success', 'settlement must succeed at equality when ordered first')
 		assert.strictEqual((await getOpenOracleReportStatus(reporter, reportId)).settlementTimestamp, deadline)
-		assert.strictEqual(await mockWindow.getTime(), deadline)
+
+		await mockWindow.anvilRevert(boundarySnapshot)
+		boundarySnapshot = await mockWindow.anvilSnapshot()
+		await mockWindow.setTime(deadline)
+		await assertCustomError(() => disputeReport(disputer, reportId, 1_200n, 900n, state), 'DisputeTooLate')
+		assert.strictEqual((await reporter.getBlock()).timestamp, deadline + 1n)
+
+		await mockWindow.anvilRevert(boundarySnapshot)
+		await mockWindow.setTime(deadline)
+		await openOracleSettle(settler, reportId)
+		assert.strictEqual((await getOpenOracleReportStatus(reporter, reportId)).settlementTimestamp, deadline + 1n)
 	})
 })

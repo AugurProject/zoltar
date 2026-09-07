@@ -730,18 +730,18 @@ describe('Statoblast: truth auction', () => {
 			assert.ok(auctionCap <= childBalance, 'truth auction cap should not exceed the child REP balance')
 		})
 
-		test('finalizeTruthAuction keeps the auction active at the exact end and finalizes one second later', async () => {
+		test('finalizeTruthAuction remains closed before the end and finalizes at the exact deadline', async () => {
 			const { yesSecurityPool } = await setupStartedTruthAuction('truth auction finalization deadline source')
 			const { truthAuctionStarted } = await getSecurityPoolForkerForkData(client, yesSecurityPool.securityPool)
 			const auctionDeadline = truthAuctionStarted + 7n * DAY
 
-			await mockWindow.setTime(auctionDeadline - 1n)
+			await mockWindow.setTime(auctionDeadline - 2n)
 			await assert.rejects(finalizeTruthAuction(client, yesSecurityPool.securityPool), /Auction open/)
-			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkTruthAuction, 'child pool should remain in truth auction at the exact finalization deadline')
+			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkTruthAuction, 'child pool should remain in truth auction one second before the finalization deadline')
 
-			await mockWindow.setTime(auctionDeadline)
+			await mockWindow.setTime(auctionDeadline - 1n)
 			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
-			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'child pool should become operational after the truth auction end boundary passes')
+			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'child pool should become operational at the exact truth auction deadline')
 		})
 
 		test('an ended truth auction finalizes and refunds non-qualifying demand without accepting a repair donation', async () => {
@@ -824,13 +824,14 @@ describe('Statoblast: truth auction', () => {
 			boundarySnapshot = await mockWindow.anvilSnapshot()
 			const atDeadline = await mineCompetitors(auctionDeadline, true)
 			strictEqualTypeSafe(atDeadline.bidStatus, 'reverted', 'bidding should be closed at the exact auction deadline')
-			strictEqualTypeSafe(atDeadline.finalizeStatus, 'reverted', 'forker finalization should remain closed at the exact auction deadline')
+			strictEqualTypeSafe(atDeadline.finalizeStatus, 'success', 'forker finalization should open at the exact auction deadline')
+			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'the child should activate through the exact-deadline finalization competitor')
 
 			await mockWindow.anvilRevert(boundarySnapshot)
 			const afterDeadline = await mineCompetitors(auctionDeadline + 1n, true)
 			strictEqualTypeSafe(afterDeadline.bidStatus, 'reverted', 'bidding should stay closed after the deadline')
 			strictEqualTypeSafe(afterDeadline.finalizeStatus, 'success', 'finalization should become valid one second after the deadline in the same block')
-			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'the repaired child should activate only through the post-deadline finalization competitor')
+			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'the child should also activate through a post-deadline finalization competitor')
 		})
 
 		const forcedBalanceCases = [

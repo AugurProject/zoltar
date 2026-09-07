@@ -224,11 +224,7 @@ describe('Statoblast: vault accounting', () => {
 		)
 		const vault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		assert.ok(vault.repBackingUnits > 0n, 'permit fallback deposit should credit the signer vault')
-		assert.strictEqual(
-			await client.readContract({ abi: ReputationToken_ReputationToken.abi, address: addressString(GENESIS_REPUTATION_TOKEN), functionName: 'allowance', args: [client.account.address, securityPoolAddresses.securityPool] }),
-			0n,
-			'exact fallback allowance should be fully consumed',
-		)
+		assert.strictEqual(await client.readContract({ abi: ReputationToken_ReputationToken.abi, address: addressString(GENESIS_REPUTATION_TOKEN), functionName: 'allowance', args: [client.account.address, securityPoolAddresses.securityPool] }), 0n, 'exact fallback allowance should be fully consumed')
 	})
 
 	test('supports a backing-only REP top-up without changing capacity ownership', async () => {
@@ -597,10 +593,14 @@ describe('Statoblast: vault accounting', () => {
 		strictEqualTypeSafe(vaultAfterWithdrawal.disputeStakedAttoRep, 0n, 'escalation lock should be released after withdrawal')
 	})
 
-	test('depositToEscalationGame rejects at exact market end and succeeds one second later', async () => {
+	test('depositToEscalationGame rejects before and at market end, then succeeds one second later', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 
 		// The Anvil harness mines mutating transactions one second after the latest block timestamp.
+		// Setting time to endTime - 2 makes the next transaction execute one second before endTime.
+		await mockWindow.setTime(endTime - 2n)
+		await assert.rejects(depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond), /Question active/)
+
 		// Setting time to endTime - 1 makes the next transaction execute exactly at endTime.
 		await mockWindow.setTime(endTime - 1n)
 		await assert.rejects(depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond), /Question active/)
