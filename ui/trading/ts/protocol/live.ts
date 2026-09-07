@@ -1,205 +1,38 @@
-import { createWalletClient, custom, encodeAbiParameters, getAddress, zeroAddress, type Address, type Hash, type Hex, type PublicClient, type WalletClient } from '@zoltar/shared/ethereum'
+import { getAddress, zeroAddress, type Address, type Hash, type PublicClient, type WalletClient } from '@zoltar/shared/ethereum'
 import { tradingContracts } from '../generated/contractArtifact.js'
-import { ReputationToken_ReputationToken, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_SecurityPool_SecurityPool, statoblast_tokens_ShareToken_ShareToken, ZoltarQuestionData_ZoltarQuestionData, Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_SecurityPool_SecurityPool, ZoltarQuestionData_ZoltarQuestionData, Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
 import type { DeploymentConfiguration } from './config.js'
-import type { InjectedEthereum } from './injected.js'
 import { bigintToSafeNumber } from '../lib/format.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { fetchLogsWithAdaptiveRanges } from '@zoltar/shared/logScan'
 export { connectWallet, connectedWalletAccount, switchWalletChain, walletChainId } from './wallet.js'
 import { SECURITY_POOL_QUESTION_OUTCOME_ABI } from '@zoltar/ui-core-shared/protocol/securityPoolAbi.js'
-import { shareBalanceScope, type LiveBalances, type LiveMarket, type MarketLifecycle } from './liveMarket.js'
+import { shareBalanceScope, type LiveBalances, type LiveMarket } from './liveMarket.js'
 import { deadlineAtBlock, latestBlockIdentity, maximumAfterSlippage, minimumAfterSlippage, requireQuoteBlock, requireTransactionSlippageBps, requireTransactionValidityMinutes, retainApprovedMaximum, retainApprovedMinimum, stableSimulation, UI_SLIPPAGE_BPS, type TransactionExpiry } from './tradeQuote.js'
 import { capabilitiesForTradingVersion } from './capabilities.js'
+import { configuredFactory, configuredPair, configuredShareOperationRouter, receiveBasedExitArguments, shareTokenAbi } from './versionedAuthorization.js'
+
+export { encodeReceiveBasedExitRequest, encodeReceiveBasedRedeemRequest } from './versionedAuthorization.js'
+export { createTradingPublicClient, createTradingWalletClient, loadWalletHeaderBalances, validateLiveDeployment, validateRpcChainId } from './runtimeClients.js'
+export { publicErrorMessage } from './publicError.js'
+export { normalizeForkOutcomeIndexes, settlementAvailability, simulateSettlement, submitFreshSettlement, type SettlementOperation, type ShareOutcome } from './settlement.js'
+export { approveLpRouter, simulateLiquidity, submitFreshLiquidity, type LiquidityOperation } from './liquidity.js'
+import { publicErrorMessage } from './publicError.js'
 
 export { liveBalancesForMarket, marketAcceptsNewRisk, marketNewRiskBlocker, shareBalanceScope, type LiveBalances, type LiveMarket, type MarketLifecycle } from './liveMarket.js'
 export { maximumAfterSlippage, minimumAfterSlippage, requireTransactionSlippageBps, requireTransactionValidityMinutes, retainApprovedMaximum, retainApprovedMinimum } from './tradeQuote.js'
 
 const securityPoolFactoryAbi = statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi
 const securityPoolAbi = statoblast_SecurityPool_SecurityPool.abi
-const erc20BalanceAbi = ReputationToken_ReputationToken.abi
 const zoltarAbi = Zoltar_Zoltar.abi
 const questionDataAbi = ZoltarQuestionData_ZoltarQuestionData.abi
-const shareTokenAbi = statoblast_tokens_ShareToken_ShareToken.abi
 const deploySecurityPoolEvent = securityPoolFactoryAbi.find((entry: (typeof securityPoolFactoryAbi)[number]) => entry.type === 'event' && entry.name === 'DeploySecurityPool')
 if (deploySecurityPoolEvent === undefined) throw new Error('DeploySecurityPool event missing from ABI')
 
 const MAXIMUM_DEPLOYMENT_LOG_RANGE = 10_000n
 
-const tradingFactory = tradingContracts['contracts/trading/TwoWayConstantProductFactory.sol'].TwoWayConstantProductFactory
 const pair = tradingContracts['contracts/trading/TwoWayConstantProductPair.sol'].TwoWayConstantProductPair
 const router = tradingContracts['contracts/trading/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter
-const tradingFactoryV2 = tradingContracts['contracts/trading/TwoWayConstantProductFactoryV2.sol'].TwoWayConstantProductFactoryV2
-const pairV2 = tradingContracts['contracts/trading/TwoWayConstantProductPairV2.sol'].TwoWayConstantProductPairV2
-const receiveRouterV2 = tradingContracts['contracts/trading/TwoWayConstantProductRouterV2.sol'].TwoWayConstantProductRouterV2
-
-function configuredFactory(configuration: DeploymentConfiguration) {
-	return configuration.version === 2 ? tradingFactoryV2 : tradingFactory
-}
-
-function configuredPair(configuration: DeploymentConfiguration) {
-	return configuration.version === 2 ? pairV2 : pair
-}
-
-function configuredShareOperationRouter(configuration: DeploymentConfiguration) {
-	if (configuration.version !== 2) return configuration.router
-	if (configuration.receiveRouter === undefined) throw new Error('V2 deployment is missing its approval-free router')
-	return configuration.receiveRouter
-}
-const directLiquidityRemovalV2Abi = [
-	{
-		type: 'function',
-		name: 'removeLiquidity',
-		stateMutability: 'nonpayable',
-		inputs: [
-			{ name: 'liquidity', type: 'uint256' },
-			{ name: 'minYes', type: 'uint256' },
-			{ name: 'minNo', type: 'uint256' },
-			{ name: 'recipient', type: 'address' },
-			{ name: 'deadline', type: 'uint256' },
-		],
-		outputs: [
-			{ name: 'yesOut', type: 'uint256' },
-			{ name: 'noOut', type: 'uint256' },
-		],
-	},
-] as const
-
-const receiveRequestParameter = {
-	type: 'tuple',
-	components: [
-		{ name: 'version', type: 'uint8' },
-		{ name: 'operation', type: 'uint8' },
-		{ name: 'shareToken', type: 'address' },
-		{ name: 'securityPool', type: 'address' },
-		{ name: 'pair', type: 'address' },
-		{ name: 'universeId', type: 'uint248' },
-		{ name: 'questionId', type: 'uint256' },
-		{ name: 'invalidTokenId', type: 'uint256' },
-		{ name: 'yesTokenId', type: 'uint256' },
-		{ name: 'noTokenId', type: 'uint256' },
-		{ name: 'longOutcome', type: 'uint8' },
-		{ name: 'completeSetShares', type: 'uint256' },
-		{ name: 'maxLongSharesIn', type: 'uint256' },
-		{ name: 'minEthOut', type: 'uint256' },
-		{ name: 'payoutRecipient', type: 'address' },
-		{ name: 'refundRecipient', type: 'address' },
-		{ name: 'deadline', type: 'uint256' },
-	],
-} as const
-
-export function encodeReceiveBasedExitRequest(market: Pick<LiveMarket, 'pair' | 'shareToken' | 'pool' | 'universeId' | 'questionId'>, side: 'YES' | 'NO', completeSetShares: bigint, maximumLongShares: bigint, minimumEth: bigint, recipient: Address, deadline: bigint): Hex {
-	if (market.pair === undefined) throw new Error('Pair is unavailable')
-	const invalidTokenId = market.universeId << 8n
-	return encodeAbiParameters(
-		[receiveRequestParameter],
-		[[1, 0, market.shareToken, market.pool, market.pair, market.universeId, market.questionId, invalidTokenId, invalidTokenId | 1n, invalidTokenId | 2n, side === 'YES' ? 1 : 2, completeSetShares, maximumLongShares, minimumEth, recipient, recipient, deadline]],
-	)
-}
-
-export function encodeReceiveBasedRedeemRequest(market: Pick<LiveMarket, 'pair' | 'shareToken' | 'pool' | 'universeId' | 'questionId'>, completeSetShares: bigint, minimumEth: bigint, recipient: Address, deadline: bigint): Hex {
-	if (market.pair === undefined) throw new Error('Pair is unavailable')
-	const invalidTokenId = market.universeId << 8n
-	return encodeAbiParameters(
-		[receiveRequestParameter],
-		[[1, 1, market.shareToken, market.pool, market.pair, market.universeId, market.questionId, invalidTokenId, invalidTokenId | 1n, invalidTokenId | 2n, 0, completeSetShares, 0n, minimumEth, recipient, recipient, deadline]],
-	)
-}
-
-function receiveBasedExitArguments(market: Pick<LiveMarket, 'pair' | 'shareToken' | 'pool' | 'universeId' | 'questionId'>, side: 'YES' | 'NO', completeSetShares: bigint, maximumLongShares: bigint, minimumEth: bigint, recipient: Address, deadline: bigint) {
-	const invalidTokenId = market.universeId << 8n
-	return {
-		ids: [invalidTokenId, invalidTokenId | (side === 'YES' ? 1n : 2n)],
-		amounts: [completeSetShares, maximumLongShares],
-		data: encodeReceiveBasedExitRequest(market, side, completeSetShares, maximumLongShares, minimumEth, recipient, deadline),
-	}
-}
-export function validateRpcChainId(rpcChainId: number, deploymentChainId: number) {
-	if (rpcChainId !== deploymentChainId) throw new Error(`RPC chain ${rpcChainId} does not match deployment chain ${deploymentChainId}`)
-}
-
-export type SettlementOperation = 'redeem-complete-set' | 'redeem-winning-shares' | 'migrate-shares'
-export type ShareOutcome = 'INVALID' | 'YES' | 'NO'
-
-function outcomeValue(outcome: ShareOutcome) {
-	if (outcome === 'INVALID') return 0n
-	return outcome === 'YES' ? 1n : 2n
-}
-
-export function normalizeForkOutcomeIndexes(targetOutcomeIndexes: readonly bigint[]) {
-	if (targetOutcomeIndexes.length === 0) throw new Error('Select at least one fork target')
-	const normalized = [...targetOutcomeIndexes].sort((left, right) => {
-		if (left < right) return -1
-		if (left > right) return 1
-		return 0
-	})
-	for (let index = 0; index < normalized.length; index++) {
-		const outcomeIndex = normalized[index]
-		if (outcomeIndex === undefined || outcomeIndex < 0n || outcomeIndex >= 1n << 256n) throw new Error('Fork target is outside uint256')
-		if (index > 0 && outcomeIndex === normalized[index - 1]) throw new Error('Select each fork target only once')
-	}
-	return normalized
-}
-
-export function settlementAvailability(market: MarketLifecycle, balances: Pick<LiveBalances, 'invalid' | 'yes' | 'no'> | undefined) {
-	const completeSets = balances === undefined ? 0n : [balances.invalid, balances.yes, balances.no].reduce((minimum, balance) => (balance < minimum ? balance : minimum))
-	let winningBalance = 0n
-	if (balances !== undefined) {
-		if (market.questionOutcome === 0) winningBalance = balances.invalid
-		else if (market.questionOutcome === 1) winningBalance = balances.yes
-		else if (market.questionOutcome === 2) winningBalance = balances.no
-	}
-	const directionalBalance = balances === undefined ? 0n : balances.invalid + balances.yes + balances.no
-	return {
-		completeSets,
-		winningBalance,
-		canRedeemCompleteSets: market.loadError === undefined && market.systemState === 0 && market.universeForkTime === 0n && completeSets > 0n,
-		canRedeemWinningShares: market.loadError === undefined && market.systemState === 0 && market.questionOutcome !== 3 && winningBalance > 0n,
-		canMigrateShares: market.loadError === undefined && market.universeForkTime !== 0n && directionalBalance > 0n,
-	}
-}
-
-export function createTradingPublicClient(configuration: DeploymentConfiguration) {
-	void configuration
-	return getActiveBackend().createReadClient()
-}
-
-export function createTradingWalletClient(provider: InjectedEthereum, account: Address) {
-	const backend = getActiveBackend()
-	if (backend.id === 'simulation') return backend.createWriteClient(account)
-	return createWalletClient({ account, transport: custom(provider) })
-}
-
-export async function loadWalletHeaderBalances(client: PublicClient, market: Pick<LiveMarket, 'pool'>, account: Address) {
-	const [ethAttoEth, repToken] = await Promise.all([client.getBalance({ address: account }), client.readContract({ abi: securityPoolAbi, address: market.pool, functionName: 'repToken' })])
-	const repAttoRep = await client.readContract({ abi: erc20BalanceAbi, address: getAddress(repToken), functionName: 'balanceOf', args: [account] })
-	return { ethAttoEth, repAttoRep, repToken: getAddress(repToken) }
-}
-
-export async function validateLiveDeployment(client: PublicClient, configuration: DeploymentConfiguration) {
-	const factoryArtifact = configuredFactory(configuration)
-	const [rpcChainId, configuredCoreFactory, configuredFee, configuredRouterFactory] = await Promise.all([
-		client.getChainId(),
-		client.readContract({ abi: factoryArtifact.abi, address: configuration.factory, functionName: 'securityPoolFactory' }),
-		client.readContract({ abi: factoryArtifact.abi, address: configuration.factory, functionName: 'feeBps' }),
-		client.readContract({ abi: router.abi, address: configuration.router, functionName: 'factory' }),
-	])
-	validateRpcChainId(rpcChainId, configuration.chainId)
-	if (getAddress(configuredCoreFactory) !== configuration.securityPoolFactory) throw new Error('Trading factory references a different SecurityPoolFactory')
-	if (configuredFee !== BigInt(configuration.feeBps)) throw new Error('Trading factory fee does not match the deterministic deployment')
-	if (getAddress(configuredRouterFactory) !== configuration.factory) throw new Error('Router references a different trading factory')
-	if (configuration.version === 2) {
-		const receiveRouterAddress = configuredShareOperationRouter(configuration)
-		const [factoryVersion, pairFactory, receiveFactory, receiveVersion] = await Promise.all([
-			client.readContract({ abi: tradingFactoryV2.abi, address: configuration.factory, functionName: 'IMPLEMENTATION_VERSION' }),
-			client.readContract({ abi: tradingFactoryV2.abi, address: configuration.factory, functionName: 'securityPoolFactory' }),
-			client.readContract({ abi: receiveRouterV2.abi, address: receiveRouterAddress, functionName: 'factory' }),
-			client.readContract({ abi: receiveRouterV2.abi, address: receiveRouterAddress, functionName: 'IMPLEMENTATION_VERSION' }),
-		])
-		if (factoryVersion !== 2n || receiveVersion !== 2n || getAddress(pairFactory) !== configuration.securityPoolFactory || getAddress(receiveFactory) !== configuration.factory) throw new Error('Configured V2 trading capabilities do not match their authoritative contracts')
-	}
-}
-
 async function loadLiveSecurityPoolSettings(client: PublicClient, pool: Address) {
 	const [questionData, zoltar, shareTokenSupplyAttoShares, mintingCapacityCeilingAttoEth, accounting, systemState, awaitingForkContinuation, vaultCount, forker] = await Promise.all([
 		client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'questionData' }),
@@ -290,14 +123,6 @@ export type SecurityPoolDeployment = Readonly<{
 	statoblastSecurityMultiplierBps: bigint
 	initialReportPriorityFeeAttoEthPerGas: bigint
 }>
-
-export function publicErrorMessage(error: unknown, fallback: string) {
-	if (!(error instanceof Error)) return fallback
-	const detail = error.message.trim()
-	if (detail.length === 0) return fallback
-	if (/(?<![0-9a-f])0x[0-9a-f]{40}(?![0-9a-f])|share[ -]?token|token[ _-]?id|contract address|call (?:arguments?|args)|\bargs?:/i.test(detail)) return fallback
-	return detail
-}
 
 function unavailableMarket(deployment: SecurityPoolDeployment, error: unknown, feeBps: number): LiveMarket {
 	return {
@@ -746,178 +571,4 @@ export async function submitFreshExit(client: WalletClient, configuration: Deplo
 
 export async function approveRouter(client: WalletClient, market: LiveMarket, configuration: DeploymentConfiguration, account: Address) {
 	return await client.writeContract({ abi: shareTokenAbi, address: market.shareToken, functionName: 'setApprovalForAll', account, args: [configuration.router, true] })
-}
-
-export type LiquidityOperation = 'initialize' | 'add' | 'remove'
-
-async function simulateLiquidityWithExpiry(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, operation: LiquidityOperation, amount: bigint, conditionalYesBps: bigint, expiry: TransactionExpiry, slippageBps: bigint) {
-	requireTransactionSlippageBps(slippageBps)
-	const pairAddress = market.pair
-	if (operation === 'initialize') {
-		const {
-			blockNumber,
-			blockHash,
-			result: { simulation, deadline },
-		} = await stableSimulation(client, async block => {
-			const deadline = deadlineAtBlock(expiry, block.blockTimestamp)
-			const simulation =
-				pairAddress === undefined
-					? await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'createPairAndInitializeWithEth', account, args: [market.pool, conditionalYesBps, 0n, account, deadline], value: amount, blockHash: block.blockHash })
-					: await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'initializeWithEth', account, args: [pairAddress, conditionalYesBps, 0n, account, deadline], value: amount, blockHash: block.blockHash })
-			return { simulation, deadline }
-		})
-		return { blockNumber, blockHash, operation, amount, conditionalYesBps, deadline, slippageBps, market, result: simulation.result, expectedLiquidity: simulation.result.liquidity, expectedYes: 0n, expectedNo: 0n }
-	}
-	if (pairAddress === undefined) throw new Error('Pair is unavailable')
-	if (operation === 'add') {
-		const {
-			blockNumber,
-			blockHash,
-			result: { simulation, deadline },
-		} = await stableSimulation(client, async block => {
-			const deadline = deadlineAtBlock(expiry, block.blockTimestamp)
-			const simulation = await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'addLiquidityWithEth', account, args: [pairAddress, 0n, account, deadline], value: amount, blockHash: block.blockHash })
-			return { simulation, deadline }
-		})
-		return { blockNumber, blockHash, operation, amount, conditionalYesBps, deadline, slippageBps, market, result: simulation.result, expectedLiquidity: simulation.result.liquidity, expectedYes: 0n, expectedNo: 0n }
-	}
-	const {
-		blockNumber,
-		blockHash,
-		result: { simulation, deadline },
-	} = await stableSimulation(client, async block => {
-		const deadline = deadlineAtBlock(expiry, block.blockTimestamp)
-		const simulation = capabilitiesForTradingVersion(configuration.version).directLiquidityRemovalDeadline
-			? await client.simulateContract({ abi: directLiquidityRemovalV2Abi, address: pairAddress, functionName: 'removeLiquidity', account, args: [amount, 0n, 0n, account, deadline], blockHash: block.blockHash })
-			: await client.simulateContract({ abi: pair.abi, address: pairAddress, functionName: 'removeLiquidity', account, args: [amount, 0n, 0n, account], blockHash: block.blockHash })
-		return { simulation, deadline }
-	})
-	return { blockNumber, blockHash, operation, amount, conditionalYesBps, deadline, slippageBps, market, result: simulation.result, expectedLiquidity: 0n, expectedYes: simulation.result[0], expectedNo: simulation.result[1] }
-}
-
-export async function simulateLiquidity(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, operation: LiquidityOperation, amount: bigint, conditionalYesBps = 5_000n, validityMinutes = 20n, slippageBps = UI_SLIPPAGE_BPS) {
-	requireTransactionValidityMinutes(validityMinutes)
-	return await simulateLiquidityWithExpiry(client, configuration, market, account, operation, amount, conditionalYesBps, { validityMinutes }, slippageBps)
-}
-
-export async function submitFreshLiquidity(client: WalletClient, configuration: DeploymentConfiguration, account: Address, quote: Awaited<ReturnType<typeof simulateLiquidity>>, guardedWrite: GuardedWalletWrite) {
-	await requireQuoteBlock(client, quote)
-	const refreshed = await simulateLiquidityWithExpiry(client, configuration, quote.market, account, quote.operation, quote.amount, quote.conditionalYesBps, quote.deadline, quote.slippageBps)
-	if (refreshed.blockNumber !== quote.blockNumber || refreshed.blockHash !== quote.blockHash) throw new Error('Quote changed blocks during revalidation')
-	if (quote.operation === 'initialize') {
-		const minimumLiquidity = retainApprovedMinimum(minimumAfterSlippage(quote.expectedLiquidity, quote.slippageBps), refreshed.expectedLiquidity, 'LP tokens')
-		const initializedPairAddress = quote.market.pair
-		return initializedPairAddress === undefined
-			? await guardedWrite(async () => await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'createPairAndInitializeWithEth', account, args: [quote.market.pool, quote.conditionalYesBps, minimumLiquidity, account, quote.deadline], value: quote.amount }))
-			: await guardedWrite(async () => await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'initializeWithEth', account, args: [initializedPairAddress, quote.conditionalYesBps, minimumLiquidity, account, quote.deadline], value: quote.amount }))
-	}
-	const pairAddress = quote.market.pair
-	if (pairAddress === undefined) throw new Error('Pair disappeared from the simulated market')
-	if (quote.operation === 'add') {
-		const minimumLiquidity = retainApprovedMinimum(minimumAfterSlippage(quote.expectedLiquidity, quote.slippageBps), refreshed.expectedLiquidity, 'LP tokens')
-		return await guardedWrite(async () => await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'addLiquidityWithEth', account, args: [pairAddress, minimumLiquidity, account, quote.deadline], value: quote.amount }))
-	}
-	const minimumYes = retainApprovedMinimum(minimumAfterSlippage(quote.expectedYes, quote.slippageBps), refreshed.expectedYes, 'YES')
-	const minimumNo = retainApprovedMinimum(minimumAfterSlippage(quote.expectedNo, quote.slippageBps), refreshed.expectedNo, 'NO')
-	return capabilitiesForTradingVersion(configuration.version).directLiquidityRemovalDeadline
-		? await guardedWrite(async () => await client.writeContract({ abi: directLiquidityRemovalV2Abi, address: pairAddress, functionName: 'removeLiquidity', account, args: [quote.amount, minimumYes, minimumNo, account, quote.deadline] }))
-		: await guardedWrite(async () => await client.writeContract({ abi: pair.abi, address: pairAddress, functionName: 'removeLiquidity', account, args: [quote.amount, minimumYes, minimumNo, account] }))
-}
-
-export async function approveLpRouter(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, amount: bigint) {
-	if (market.pair === undefined) throw new Error('Pair is unavailable')
-	return await client.writeContract({ abi: pair.abi, address: market.pair, functionName: 'approve', account, args: [configuration.router, amount] })
-}
-
-async function simulateSettlementWithExpiryParameters(
-	client: WalletClient,
-	configuration: DeploymentConfiguration,
-	market: LiveMarket,
-	account: Address,
-	operation: SettlementOperation,
-	parameters: Readonly<{ amount?: bigint; deadline?: bigint; validityMinutes?: bigint; slippageBps?: bigint; sourceOutcome?: ShareOutcome; targetOutcomeIndexes?: readonly bigint[] }> = {},
-) {
-	if (operation === 'redeem-complete-set') {
-		requireTransactionSlippageBps(parameters.slippageBps ?? UI_SLIPPAGE_BPS)
-		const amount = parameters.amount
-		if (amount === undefined || amount <= 0n) throw new Error('Enter a positive complete-set share amount')
-		const expiry: TransactionExpiry = parameters.deadline ?? { validityMinutes: parameters.validityMinutes ?? 20n }
-		const slippageBps = parameters.slippageBps ?? UI_SLIPPAGE_BPS
-		const {
-			blockNumber,
-			blockHash,
-			result: { simulation, deadline },
-		} = await stableSimulation(client, async block => {
-			const deadline = deadlineAtBlock(expiry, block.blockTimestamp)
-			if (capabilitiesForTradingVersion(configuration.version).receiveBasedShareOperations) {
-				const invalidTokenId = market.universeId << 8n
-				const estimatedEthOut = market.shareTokenSupplyAttoShares === 0n ? 0n : (amount * market.settlementCollateralAttoEth) / market.shareTokenSupplyAttoShares
-				const data = encodeReceiveBasedRedeemRequest(market, amount, 0n, account, deadline)
-				const simulation = await client.simulateContract({ abi: shareTokenAbi, address: market.shareToken, functionName: 'safeBatchTransferFrom', account, args: [account, configuredShareOperationRouter(configuration), [invalidTokenId, invalidTokenId | 1n, invalidTokenId | 2n], [amount, amount, amount], data], blockHash: block.blockHash })
-				void simulation
-				return { simulation: { result: estimatedEthOut }, deadline }
-			}
-			const simulation = await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'redeemCompleteSet', account, args: [market.pool, amount, 0n, account, deadline], blockHash: block.blockHash })
-			return { simulation, deadline }
-		})
-		if (simulation.result <= 0n) throw new Error('Complete-set redemption would return zero ETH')
-		return { blockNumber, blockHash, operation, market, amount, deadline, slippageBps, expectedAttoEth: simulation.result, minimumAttoEth: minimumAfterSlippage(simulation.result, slippageBps) }
-	}
-	if (operation === 'redeem-winning-shares') {
-		const { blockNumber, blockHash } = await stableSimulation(client, async block => await client.simulateContract({ abi: securityPoolAbi, address: market.pool, functionName: 'redeemShares', account, args: [], blockHash: block.blockHash }))
-		return { blockNumber, blockHash, operation, market }
-	}
-	if (parameters.sourceOutcome === undefined || parameters.targetOutcomeIndexes === undefined) throw new Error('Select a source share and at least one fork target')
-	const sourceOutcome = parameters.sourceOutcome
-	const targetOutcomeIndexes = normalizeForkOutcomeIndexes(parameters.targetOutcomeIndexes)
-	const sourceTokenId = (market.universeId << 8n) | outcomeValue(sourceOutcome)
-	const { blockNumber, blockHash } = await stableSimulation(client, async block => await client.simulateContract({ abi: shareTokenAbi, address: market.shareToken, functionName: 'migrate', account, args: [sourceTokenId, targetOutcomeIndexes], blockHash: block.blockHash }))
-	return { blockNumber, blockHash, operation, market, sourceOutcome, targetOutcomeIndexes }
-}
-
-export async function simulateSettlement(
-	client: WalletClient,
-	configuration: DeploymentConfiguration,
-	market: LiveMarket,
-	account: Address,
-	operation: SettlementOperation,
-	parameters: Readonly<{ amount?: bigint; validityMinutes?: bigint; slippageBps?: bigint; sourceOutcome?: ShareOutcome; targetOutcomeIndexes?: readonly bigint[] }> = {},
-) {
-	if (operation === 'redeem-complete-set') {
-		const validityMinutes = parameters.validityMinutes ?? 20n
-		requireTransactionValidityMinutes(validityMinutes)
-		const amount = parameters.amount
-		const slippageBps = parameters.slippageBps
-		return await simulateSettlementWithExpiryParameters(client, configuration, market, account, operation, { ...(amount === undefined ? {} : { amount }), validityMinutes, ...(slippageBps === undefined ? {} : { slippageBps }) })
-	}
-	if (operation === 'migrate-shares') {
-		const sourceOutcome = parameters.sourceOutcome
-		const targetOutcomeIndexes = parameters.targetOutcomeIndexes
-		return await simulateSettlementWithExpiryParameters(client, configuration, market, account, operation, { ...(sourceOutcome === undefined ? {} : { sourceOutcome }), ...(targetOutcomeIndexes === undefined ? {} : { targetOutcomeIndexes }) })
-	}
-	return await simulateSettlementWithExpiryParameters(client, configuration, market, account, operation)
-}
-
-export async function submitFreshSettlement(client: WalletClient, configuration: DeploymentConfiguration, account: Address, quote: Awaited<ReturnType<typeof simulateSettlement>>, guardedWrite: GuardedWalletWrite): Promise<Hash> {
-	await requireQuoteBlock(client, quote)
-	let parameters: Readonly<{ amount?: bigint; deadline?: bigint; validityMinutes?: bigint; slippageBps?: bigint; sourceOutcome?: ShareOutcome; targetOutcomeIndexes?: readonly bigint[] }> = {}
-	if (quote.operation === 'redeem-complete-set') parameters = { amount: quote.amount, deadline: quote.deadline, slippageBps: quote.slippageBps }
-	else if (quote.operation === 'migrate-shares') parameters = { sourceOutcome: quote.sourceOutcome, targetOutcomeIndexes: quote.targetOutcomeIndexes }
-	const refreshed = await simulateSettlementWithExpiryParameters(client, configuration, quote.market, account, quote.operation, parameters)
-	if (refreshed.blockNumber !== quote.blockNumber || refreshed.blockHash !== quote.blockHash) throw new Error('Settlement changed blocks during revalidation')
-	if (quote.operation === 'redeem-complete-set') {
-		if (refreshed.operation !== 'redeem-complete-set') throw new Error('Settlement operation changed during revalidation')
-		const minimumEth = retainApprovedMinimum(quote.minimumAttoEth, refreshed.expectedAttoEth, 'ETH output')
-		if (capabilitiesForTradingVersion(configuration.version).receiveBasedShareOperations) {
-			const invalidTokenId = quote.market.universeId << 8n
-			const data = encodeReceiveBasedRedeemRequest(quote.market, quote.amount, minimumEth, account, quote.deadline)
-			return await guardedWrite(async () => await client.writeContract({ abi: shareTokenAbi, address: quote.market.shareToken, functionName: 'safeBatchTransferFrom', account, args: [account, configuredShareOperationRouter(configuration), [invalidTokenId, invalidTokenId | 1n, invalidTokenId | 2n], [quote.amount, quote.amount, quote.amount], data] }))
-		}
-		return await guardedWrite(async () => await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'redeemCompleteSet', account, args: [quote.market.pool, quote.amount, minimumEth, account, quote.deadline] }))
-	}
-	if (quote.operation === 'redeem-winning-shares') {
-		return await guardedWrite(async () => await client.writeContract({ abi: securityPoolAbi, address: quote.market.pool, functionName: 'redeemShares', account, args: [] }))
-	}
-	const sourceTokenId = (quote.market.universeId << 8n) | outcomeValue(quote.sourceOutcome)
-	return await guardedWrite(async () => await client.writeContract({ abi: shareTokenAbi, address: quote.market.shareToken, functionName: 'migrate', account, args: [sourceTokenId, quote.targetOutcomeIndexes] }))
 }

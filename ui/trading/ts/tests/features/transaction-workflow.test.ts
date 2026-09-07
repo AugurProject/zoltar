@@ -62,6 +62,14 @@ describe('transaction workflow state machine', () => {
 		expect(() => transactionWorkflowReducer(idleTransactionWorkflow, { type: 'replaced', context, replacementHash })).toThrow()
 	})
 
+	test('does not let overlapping simulation or approval work replace a pending broadcast', () => {
+		let pending = transactionWorkflowReducer(idleTransactionWorkflow, { type: 'operation-preparing', context, operation: 'trade' })
+		pending = transactionWorkflowReducer(pending, { type: 'signature-requested', context, operation: 'trade' })
+		pending = transactionWorkflowReducer(pending, { type: 'broadcast', context, operation: 'trade', transactionHash: originalHash })
+		expect(() => transactionWorkflowReducer(pending, { type: 'simulation-started', context: { ...context, requestRevision: 5 } })).toThrow('A simulation cannot replace an active transaction')
+		expect(() => transactionWorkflowReducer(pending, { type: 'operation-preparing', context: { ...context, requestRevision: 5 }, operation: 'share-approval' })).toThrow('An operation cannot replace an active transaction')
+	})
+
 	test('retains a wallet invalidation notice and transaction hash when a known receipt arrives', () => {
 		let state = transactionWorkflowReducer(idleTransactionWorkflow, { type: 'operation-preparing', context, operation: 'share-approval' })
 		state = transactionWorkflowReducer(state, { type: 'signature-requested', context, operation: 'share-approval' })

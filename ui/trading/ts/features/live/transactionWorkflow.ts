@@ -19,7 +19,9 @@ export type TransactionWorkflowState = (
 	| Readonly<{ kind: 'confirmed'; context: TransactionContext; operation: TransactionOperation; transactionHash: Hash }>
 	| Readonly<{ kind: 'reverted'; context: TransactionContext; operation: TransactionOperation; transactionHash: Hash }>
 	| Readonly<{ kind: 'uncertain'; context: TransactionContext; operation: TransactionOperation; transactionHash: Hash; reason: string }>
-	| Readonly<{ kind: 'failed'; context?: TransactionContext; operation?: TransactionOperation; message: string }>) & Readonly<{ notice?: string }>
+	| Readonly<{ kind: 'failed'; context?: TransactionContext; operation?: TransactionOperation; message: string }>
+) &
+	Readonly<{ notice?: string }>
 
 export type TransactionWorkflowEvent =
 	| Readonly<{ type: 'reset' }>
@@ -52,13 +54,19 @@ function requireContext(state: TransactionWorkflowState, context: TransactionCon
 export function transactionWorkflowReducer(state: TransactionWorkflowState, event: TransactionWorkflowEvent): TransactionWorkflowState {
 	if (event.type === 'reset') return idleTransactionWorkflow
 	if (event.type === 'context-invalidated') return state.kind === 'idle' ? { kind: 'failed', message: event.message } : { ...state, notice: event.message }
-	if (event.type === 'simulation-started') return { kind: 'simulating', context: event.context }
+	if (event.type === 'simulation-started') {
+		if (state.kind === 'preparing' || state.kind === 'awaiting-signature' || state.kind === 'pending') throw new Error('A simulation cannot replace an active transaction')
+		return { kind: 'simulating', context: event.context }
+	}
 	if (event.type === 'simulation-succeeded') {
 		requireContext(state, event.context)
 		if (state.kind !== 'simulating') throw new Error('Simulation can only complete while simulating')
 		return { kind: 'ready-to-submit', context: event.context }
 	}
-	if (event.type === 'operation-preparing') return { kind: 'preparing', context: event.context, operation: event.operation }
+	if (event.type === 'operation-preparing') {
+		if (state.kind === 'preparing' || state.kind === 'awaiting-signature' || state.kind === 'pending') throw new Error('An operation cannot replace an active transaction')
+		return { kind: 'preparing', context: event.context, operation: event.operation }
+	}
 	if (event.type === 'signature-requested') {
 		requireContext(state, event.context)
 		if (state.kind !== 'preparing' || state.operation !== event.operation) throw new Error('Signature can only be requested for the preparing operation')

@@ -51,7 +51,6 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	...allowances('Existing UI workflow debt is owned by the functional or visual lanes.', [
 		['ui/statoblastDomain/ts/features/security-pools/components/SecurityPoolWorkflowSection.tsx', 987],
 		['ui/statoblastDomain/ts/features/truth-auctions/components/ForkAuctionSection.tsx', 980],
-		['ui/trading/ts/features/liveTradingController.ts', 967],
 		['ui/zoltarDomain/ts/protocol/openOracle.ts', 954],
 		['ui/zoltarDomain/ts/protocol/reporting.ts', 932],
 		['ui/coreShared/ts/simulation/tevmEngine.ts', 876],

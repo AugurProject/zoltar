@@ -1,4 +1,4 @@
-import type { Address, Hash } from '@zoltar/shared/ethereum'
+import { getAddress, type Address, type Hash } from '@zoltar/shared/ethereum'
 import { parseUnitsOrUndefined } from '../lib/format.js'
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
 import {
@@ -100,7 +100,7 @@ export function discoveryCommitAllowed(owner: WorkflowOwner | undefined, positio
 
 export function securityPoolAddressFromRoute(route: string) {
 	const match = /^security-pool\/(0x[0-9a-fA-F]{40})$/.exec(route)
-	return match?.[1]?.toLowerCase()
+	return match?.[1] === undefined ? undefined : getAddress(match[1])
 }
 
 export function livePairInitialized(market: Pick<LiveMarket, 'pair' | 'lpTotalSupply' | 'yesReserve' | 'noReserve' | 'tradingStatus'>) {

@@ -5,9 +5,7 @@ import { SecurityPoolAddressLink, TradingAddressValue } from '../components/Trad
 import type { DeploymentConfiguration } from '../protocol/config.js'
 import { marketAcceptsNewRisk, marketNewRiskBlocker, shareBalanceScope, type LiveMarket } from '../protocol/live.js'
 import { getActiveSimulationController } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import * as commonCopy from '../copy/common.js'
 import * as appCopy from '../copy/app.js'
-import * as liquidityCopy from '../copy/liquidity.js'
 import { getTradingRouteHref, type TradingRoute } from '../lib/routing.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { useLiveTradingController } from './liveTradingController.js'
@@ -20,21 +18,11 @@ import { LiveSettlementControls, liveSettlementServices, type LiveSettlementServ
 import { DEFAULT_SLIPPAGE_PERCENT, DEFAULT_TRANSACTION_VALIDITY_MINUTES, formatTimestamp } from './LiveTradingTransactionUi.js'
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
 import { capabilitiesForTradingVersion } from '../protocol/capabilities.js'
+import { liveWorkflowRoutePresentation, portfolioRouteSubtitle } from './live/routePresentation.js'
+
+export { liveWorkflowRoutePresentation, marketRouteSubtitle, portfolioRouteSubtitle } from './live/routePresentation.js'
 
 const ignoreWalletSummaryChange = () => undefined
-
-export function marketRouteSubtitle(chainName: string, simulationActive: boolean) {
-	return simulationActive ? commonCopy.conditionalPricesOnly : commonCopy.formatNetworkConditionalPrices(chainName)
-}
-
-export function liveWorkflowRoutePresentation(route: TradingRoute, chainName: string, simulationActive: boolean) {
-	if (route === 'liquidity') return { description: liquidityCopy.routeDescription, title: appCopy.liquidity }
-	return { description: marketRouteSubtitle(chainName, simulationActive), title: appCopy.markets }
-}
-
-export function portfolioRouteSubtitle(chainName: string, simulationActive: boolean) {
-	return simulationActive ? undefined : chainName
-}
 
 function statusLabel(market: LiveMarket, nowSeconds: bigint) {
 	if (market.loadError !== undefined) return 'Market data unavailable'

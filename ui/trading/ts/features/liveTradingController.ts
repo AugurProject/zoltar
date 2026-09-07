@@ -1,32 +1,20 @@
-import type { Address, Hash } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/ethereum'
 import { useCallback, useEffect, useMemo, useRef } from 'preact/hooks'
 import { parseUnits } from '../lib/format.js'
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
 import { createLatestRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
-import { waitForSubmittedTransactionReceipt } from '@zoltar/ui-core-shared/lib/transactionReceipt.js'
 import { getInjectedEthereum, subscribeToWalletContextChanges, type InjectedEthereum, type WalletContextChangeEvent } from '../protocol/injected.js'
-import { liveBalancesForMarket, mapWithConcurrency, marketAcceptsNewRisk, publicErrorMessage, type LiveMarket } from '../protocol/live.js'
+import { liveBalancesForMarket, publicErrorMessage, type LiveMarket } from '../protocol/live.js'
 import type { DeploymentConfiguration } from '../protocol/config.js'
-import type { LiveTradingControllerServices, PortfolioBalanceEntry, Quote } from './live/liveTradingTypes.js'
-import { parsedUniverseId, useMarketDiscovery, usePortfolioQueries, useQuestionClock, useTransactionWorkflow, useWalletSession } from './live/useLiveTradingState.js'
-import {
-	approvalFailureTransition,
-	broadcastUncertainMessage,
-	discoveryCommitAllowed,
-	failedSubmissionTransition,
-	filterMarketsByUniverse,
-	livePairInitialized,
-	liveTradingControllerServices,
-	marketSelectionAfterDiscovery,
-	parseSlippageBps,
-	parseTransactionValidityMinutes,
-	securityPoolAddressFromRoute,
-	walletSummaryAvailability,
-	walletSummaryDiscoveryRetryStart,
-	walletSummaryRefreshState,
-	type GuardedWalletWrite,
-	type WorkflowOwner,
-} from './liveTradingControllerHelpers.js'
+import type { LiveTradingControllerServices } from './live/liveTradingTypes.js'
+import { useQuestionClock } from './live/useLiveTradingState.js'
+import { useMarketDiscovery } from './live/useMarketDiscovery.js'
+import { usePortfolioQueries, usePortfolioRefreshEffects } from './live/usePortfolioQueries.js'
+import { useTransactionWorkflow } from './live/useTransactionWorkflow.js'
+import { useWalletSession, useWalletSummaryEffects } from './live/useWalletSession.js'
+import { createPositionTransactionController } from './live/positionTransactionController.js'
+import { useMarketDiscoveryController } from './live/useMarketDiscoveryController.js'
+import { filterMarketsByUniverse, livePairInitialized, liveTradingControllerServices, securityPoolAddressFromRoute, walletSummaryRefreshState, type GuardedWalletWrite } from './liveTradingControllerHelpers.js'
 
 export function useLiveTradingController({
 	route,
@@ -53,7 +41,9 @@ export function useLiveTradingController({
 	defaultValidityMinutes: string
 	services?: LiveTradingControllerServices
 }) {
-	const { markets, setMarkets, selectedPool, setSelectedPool, discoveryState, setDiscoveryState, discoveryError, setDiscoveryError, marketPage, setMarketPage, deploymentIndex } = useMarketDiscovery()
+	const marketDiscovery = useMarketDiscovery()
+	const { markets, selectedPool, setSelectedPool, discoveryState, discoveryError, marketPage } = marketDiscovery
+	const walletSession = useWalletSession()
 	const {
 		account,
 		setAccount,
@@ -64,54 +54,23 @@ export function useLiveTradingController({
 		setWalletProvider,
 		walletContextInvalidated,
 		setWalletContextInvalidated,
-		walletSummaryStatus,
 		setWalletSummaryStatus,
-		walletEthAttoEth,
 		setWalletEthAttoEth,
-		walletRepAttoRep,
 		setWalletRepAttoRep,
-		walletSummaryError,
 		setWalletSummaryError,
-		walletSummaryErrorLabel,
 		setWalletSummaryErrorLabel,
-		walletSummaryUniverseId,
 		setWalletSummaryUniverseId,
-		walletSummaryReceiptNonce,
 		setWalletSummaryReceiptNonce,
 		walletConnectionFeedback,
 		setWalletConnectionFeedback,
-	} = useWalletSession()
-	const { balances, setBalances, balanceState, setBalanceState, balanceError, setBalanceError, portfolioEntries, setPortfolioEntries, portfolioBalanceState, setPortfolioBalanceState, portfolioBalanceError, setPortfolioBalanceError, portfolioRefreshNonce, setPortfolioRefreshNonce } = usePortfolioQueries()
-	const {
-		mode,
-		setMode,
-		side,
-		setSide,
-		amount,
-		setAmount,
-		slippage,
-		setSlippage,
-		transactionValidityMinutes,
-		setTransactionValidityMinutes,
-		quote,
-		setQuote,
-		workflowState,
-		dispatchWorkflow,
-		state,
-		positionHash,
-		message,
-		positionReceiptWarning,
-		positionWorkflow,
-		positionWorkflowLockedRef,
-		liquidityWorkflowLockedRef,
-		workflowLocked,
-		updatePositionWorkflowLock,
-		updateLiquidityWorkflowLock,
-	} = useTransactionWorkflow(onWorkflowLockChange, defaultSlippage, defaultValidityMinutes)
+	} = walletSession
+	const portfolioQueries = usePortfolioQueries()
+	const { balances, setBalances, balanceState, setBalanceState, balanceError, setBalanceError, portfolioEntries, portfolioBalanceState, portfolioBalanceError, setPortfolioBalanceError, setPortfolioRefreshNonce } = portfolioQueries
+	const transactionWorkflow = useTransactionWorkflow(onWorkflowLockChange, defaultSlippage, defaultValidityMinutes)
+	const { mode, side, amount, slippage, transactionValidityMinutes, quote, setQuote, dispatchWorkflow, state, positionHash, message, positionReceiptWarning, positionWorkflowLockedRef, liquidityWorkflowLockedRef, workflowLocked, updateLiquidityWorkflowLock } = transactionWorkflow
 	const marketListRef = useRef<HTMLElement>(null)
 	const marketDetailRef = useRef<HTMLElement>(null)
 	const portfolioBalanceRequests = useRef(createLatestRequestGuard()).current
-	const previousRoute = useRef(route)
 	const discoveryRequests = useRef(createLatestRequestGuard()).current
 	const balanceRequests = useRef(createLatestRequestGuard()).current
 	const walletSummaryRequests = useRef(createLatestRequestGuard()).current
@@ -126,11 +85,7 @@ export function useLiveTradingController({
 	const walletRenderContextKey = `${route}\u0000${selectedUniverseId ?? ''}\u0000${configuration?.chainId.toString() ?? ''}\u0000${configuration?.router ?? ''}`
 	const walletRenderContextKeyRef = useRef(walletRenderContextKey)
 	walletRenderContextKeyRef.current = walletRenderContextKey
-	const previousWalletSummaryRetryNonce = useRef(walletSummaryRetryNonce)
-	const nextTransactionContext = useCallback(
-		(expectedAccount: Address, market: LiveMarket, chainId: number) => ({ account: expectedAccount, market: market.pool, chainId, requestRevision: ++transactionRequestRevision.current }),
-		[],
-	)
+	const nextTransactionContext = useCallback((expectedAccount: Address, market: LiveMarket, chainId: number) => ({ account: expectedAccount, market: market.pool, chainId, requestRevision: ++transactionRequestRevision.current }), [])
 
 	const invalidateWalletIdentity = useCallback(
 		(detail: string) => {
@@ -255,6 +210,28 @@ export function useLiveTradingController({
 	if (balanceState !== 'error' && balances !== undefined && selectedBalances === undefined) selectedBalanceState = account === undefined ? 'disconnected' : 'loading'
 	const selectedPairInitialized = selected === undefined ? false : livePairInitialized(selected)
 	const nowSeconds = useQuestionClock(selected?.endTime, configuration, services)
+	const { refresh, refreshFromControl, loadMarketPage } = useMarketDiscoveryController({
+		route,
+		configuration,
+		configurationError,
+		selectedUniverseId,
+		onUniversesChange,
+		walletSummaryRetryNonce,
+		selected,
+		routePool,
+		nowSeconds,
+		market: marketDiscovery,
+		portfolio: portfolioQueries,
+		wallet: walletSession,
+		transaction: transactionWorkflow,
+		services,
+		discoveryRequests,
+		balanceRequests,
+		portfolioBalanceRequests,
+		simulationRequests,
+	})
+	usePortfolioRefreshEffects({ route, configuration, account, selected, visibleMarkets, marketRevision: markets, selectedUniverseId, walletContextInvalidated, accountRef, queries: portfolioQueries, services, portfolioBalanceRequests, balanceRequests })
+	useWalletSummaryEffects({ configuration, configurationError, selectedUniverseId, discoveryState, discoveryError, selected, retryNonce: walletSummaryRetryNonce, onWalletSummaryChange, session: walletSession, services, requests: walletSummaryRequests })
 	const parsedAmount = useMemo(() => {
 		try {
 			return { value: parseUnits(amount), error: undefined }
@@ -263,162 +240,12 @@ export function useLiveTradingController({
 		}
 	}, [amount])
 
-	useEffect(() => {
-		onWalletSummaryChange({ account, ethAttoEth: walletEthAttoEth, repAttoRep: walletRepAttoRep, status: walletSummaryStatus, error: walletSummaryError, errorLabel: walletSummaryErrorLabel, universeId: walletSummaryUniverseId })
-	}, [account, onWalletSummaryChange, walletEthAttoEth, walletRepAttoRep, walletSummaryError, walletSummaryErrorLabel, walletSummaryStatus, walletSummaryUniverseId])
-
-	useEffect(() => {
-		const request = walletSummaryRequests.begin()
-		setWalletEthAttoEth(undefined)
-		setWalletRepAttoRep(undefined)
-		setWalletSummaryError(undefined)
-		setWalletSummaryErrorLabel(undefined)
-		setWalletSummaryUniverseId(selectedUniverseId)
-		if (account === undefined) {
-			setWalletSummaryStatus('disconnected')
-			return
-		}
-		const availability = walletSummaryAvailability(configuration !== undefined, configurationError, discoveryState, discoveryError, selected !== undefined)
-		if (availability !== undefined) {
-			setWalletSummaryStatus(availability.status)
-			setWalletSummaryError(availability.error)
-			setWalletSummaryErrorLabel(availability.errorLabel)
-			return
-		}
-		if (configuration === undefined || selected === undefined) throw new Error('Wallet summary availability was resolved without a SecurityPool configuration')
-		if (selected.loadError !== undefined) {
-			setWalletSummaryStatus('error')
-			setWalletSummaryError(`Wallet balances could not be loaded because the selected SecurityPool is unavailable: ${selected.loadError}`)
-			setWalletSummaryErrorLabel('SecurityPool unavailable')
-			return
-		}
-		setWalletSummaryStatus('loading')
-		void services.loadWalletHeaderBalances(services.createTradingPublicClient(configuration), selected, account).then(
-			loaded => {
-				if (!walletSummaryRequests.isCurrent(request) || accountRef.current !== account) return
-				setWalletEthAttoEth(loaded.ethAttoEth)
-				setWalletRepAttoRep(loaded.repAttoRep)
-				setWalletSummaryStatus('ready')
-			},
-			error => {
-				if (!walletSummaryRequests.isCurrent(request) || accountRef.current !== account) return
-				setWalletSummaryStatus('error')
-				setWalletSummaryError(publicErrorMessage(error, 'Wallet ETH and REP balances could not be loaded'))
-				setWalletSummaryErrorLabel('Wallet balance read failed')
-			},
-		)
-		return () => walletSummaryRequests.invalidate()
-	}, [account, configuration, configurationError, discoveryError, discoveryState, selected, walletSummaryReceiptNonce, walletSummaryRequests, walletSummaryRetryNonce])
-
-	async function refresh(nextConfiguration = configuration, requestedStart = marketPage.start, owner: WorkflowOwner | undefined = undefined) {
-		if (nextConfiguration === undefined) return
-		const request = discoveryRequests.begin()
-		simulationRequests.invalidate()
-		setQuote(undefined)
-		if (!positionWorkflowLockedRef.current) {
-			if (owner !== 'position') dispatchWorkflow({ type: 'reset' })
-		}
-		if (accountRef.current !== undefined) {
-			setBalanceState('loading')
-			setBalanceError(undefined)
-			setBalances(undefined)
-		}
-		if (route === 'portfolio') {
-			portfolioBalanceRequests.invalidate()
-			setPortfolioEntries([])
-			setPortfolioBalanceState(accountRef.current === undefined ? 'disconnected' : 'loading')
-			setPortfolioBalanceError(undefined)
-		}
-		setDiscoveryState('loading')
-		setDiscoveryError(undefined)
-		try {
-			const client = services.createTradingPublicClient(nextConfiguration)
-			await services.validateLiveDeployment(client, nextConfiguration)
-			if (!discoveryRequests.isCurrent(request)) return
-			const requestedUniverseId = parsedUniverseId(selectedUniverseId)
-			const discovered =
-				route === 'portfolio' || routePool !== undefined ? await services.discoverAllLiveMarketsInUniverse(client, nextConfiguration, requestedUniverseId, 25n, deploymentIndex) : await services.discoverLiveUniverseMarketPage(client, nextConfiguration, requestedUniverseId, requestedStart, 25n, deploymentIndex)
-			if (!discoveryRequests.isCurrent(request)) return
-			if (!discoveryCommitAllowed(owner, positionWorkflowLockedRef.current, liquidityWorkflowLockedRef.current)) {
-				setDiscoveryState('ready')
-				return
-			}
-			setMarkets(discovered.markets)
-			onUniversesChange(discovered.universeIds, discovered.selectedUniverseId)
-			setMarketPage({ start: discovered.start, total: discovered.total, previousStart: discovered.previousStart, nextStart: discovered.nextStart })
-			setSelectedPool(currentPool => marketSelectionAfterDiscovery(discovered.markets, currentPool, requestedStart === marketPage.start))
-			setDiscoveryState('ready')
-		} catch (error) {
-			if (!discoveryRequests.isCurrent(request)) return
-			if (!discoveryCommitAllowed(owner, positionWorkflowLockedRef.current, liquidityWorkflowLockedRef.current)) {
-				setDiscoveryState('ready')
-				return
-			}
-			const detail = publicErrorMessage(error, 'SecurityPool discovery failed')
-			setDiscoveryError(detail)
-			setDiscoveryState('error')
-			if (route === 'portfolio') {
-				setPortfolioBalanceState('error')
-				setPortfolioBalanceError(`SecurityPool discovery failed: ${detail}`)
-			}
-			if (accountRef.current !== undefined) {
-				setBalanceState('error')
-				setBalanceError('Market refresh failed before wallet balances could be revalidated')
-			}
-		}
-	}
-
-	function refreshFromControl() {
-		if (!positionWorkflowLockedRef.current && !liquidityWorkflowLockedRef.current) void refresh()
-	}
-
-	function loadMarketPage(start: bigint | undefined) {
-		if (start !== undefined && !workflowLocked) void refresh(configuration, start)
-	}
-
 	function focusSection(section: Readonly<{ current: HTMLElement | null }>) {
 		requestAnimationFrame(() => {
 			section.current?.focus({ preventScroll: true })
 			section.current?.scrollIntoView({ block: 'start' })
 		})
 	}
-
-	useEffect(() => {
-		if (configuration === undefined) {
-			discoveryRequests.invalidate()
-			balanceRequests.invalidate()
-			simulationRequests.invalidate()
-			dispatchWorkflow(configurationError === undefined ? { type: 'reset' } : { type: 'failed', message: configurationError })
-			return
-		}
-		void refresh(configuration, 0n)
-	}, [configuration, configurationError, selectedUniverseId])
-
-	useEffect(() => {
-		if (previousWalletSummaryRetryNonce.current === walletSummaryRetryNonce) return
-		previousWalletSummaryRetryNonce.current = walletSummaryRetryNonce
-		const retryStart = walletSummaryDiscoveryRetryStart(discoveryState, selected !== undefined, selected?.loadError, marketPage.start)
-		if (configuration !== undefined && retryStart !== undefined) void refresh(configuration, retryStart)
-	}, [configuration, discoveryState, marketPage.start, selected, walletSummaryRetryNonce])
-
-	useEffect(() => {
-		if (positionWorkflowLockedRef.current) return
-		simulationRequests.invalidate()
-		setQuote(undefined)
-		dispatchWorkflow({ type: 'reset' })
-		setWalletConnectionFeedback(current => (current?.route === route ? current : undefined))
-		if (previousRoute.current !== route) {
-			void refresh(configuration, 0n)
-		}
-		previousRoute.current = route
-	}, [route])
-
-	useEffect(() => {
-		if (selected === undefined || marketAcceptsNewRisk(selected, nowSeconds)) return
-		simulationRequests.invalidate()
-		setQuote(undefined)
-		if (!positionWorkflowLockedRef.current && !liquidityWorkflowLockedRef.current) dispatchWorkflow({ type: 'reset' })
-	}, [nowSeconds, selected])
 
 	useEffect(
 		() => () => {
@@ -430,85 +257,6 @@ export function useLiveTradingController({
 		},
 		[],
 	)
-
-	useEffect(() => {
-		const request = portfolioBalanceRequests.begin()
-		if (route !== 'portfolio') {
-			setPortfolioEntries([])
-			setPortfolioBalanceState('disconnected')
-			setPortfolioBalanceError(undefined)
-			return
-		}
-		const emptyEntries = visibleMarkets.map(market => ({ market, balances: undefined, error: market.loadError }))
-		setPortfolioEntries(emptyEntries)
-		if (configuration === undefined || account === undefined) {
-			setPortfolioBalanceState(walletContextInvalidated ? 'error' : 'disconnected')
-			setPortfolioBalanceError(walletContextInvalidated ? 'Wallet context changed; reconnect before loading portfolio positions' : undefined)
-			return
-		}
-		setPortfolioBalanceState('loading')
-		setPortfolioBalanceError(undefined)
-		const client = services.createTradingPublicClient(configuration)
-		void mapWithConcurrency(visibleMarkets, 6, async (market, index) => {
-			if (market.loadError !== undefined) return { market, balances: undefined, error: market.loadError }
-			let entry: PortfolioBalanceEntry
-			try {
-				const loaded = await services.loadLiveBalances(client, market, account, configuration.router)
-				entry = { market, balances: liveBalancesForMarket(loaded, market), error: undefined }
-			} catch (error) {
-				entry = { market, balances: undefined, error: publicErrorMessage(error, 'Balance refresh failed') }
-			}
-			if (portfolioBalanceRequests.isCurrent(request) && accountRef.current === account) setPortfolioEntries(current => current.map((currentEntry, currentIndex) => (currentIndex === index ? entry : currentEntry)))
-			return entry
-		})
-			.then(entries => {
-				if (!portfolioBalanceRequests.isCurrent(request) || accountRef.current !== account) return
-				setPortfolioEntries(entries)
-				setPortfolioBalanceState('ready')
-				setPortfolioBalanceError(undefined)
-			})
-			.catch(error => {
-				if (!portfolioBalanceRequests.isCurrent(request) || accountRef.current !== account) return
-				setPortfolioBalanceState('error')
-				setPortfolioBalanceError(publicErrorMessage(error, 'Portfolio balance refresh failed'))
-			})
-		return () => portfolioBalanceRequests.invalidate()
-	}, [account, configuration, markets, portfolioBalanceRequests, portfolioRefreshNonce, route, selectedUniverseId, walletContextInvalidated])
-
-	useEffect(() => {
-		const request = balanceRequests.begin()
-		if (route === 'portfolio') {
-			setBalances(undefined)
-			setBalanceState('disconnected')
-			setBalanceError(undefined)
-			return
-		}
-		if (configuration === undefined || account === undefined || selected === undefined || selected.loadError !== undefined) {
-			setBalances(undefined)
-			setBalanceState(walletContextInvalidated || selected?.loadError !== undefined ? 'error' : 'disconnected')
-			setBalanceError(selected?.loadError)
-			return
-		}
-		setBalanceState('loading')
-		setBalanceError(undefined)
-		setBalances(undefined)
-		void services.loadLiveBalances(services.createTradingPublicClient(configuration), selected, account, configuration.router).then(
-			loaded => {
-				if (balanceRequests.isCurrent(request)) {
-					setBalances(loaded)
-					setBalanceState('ready')
-					setBalanceError(undefined)
-				}
-			},
-			error => {
-				if (balanceRequests.isCurrent(request)) {
-					setBalanceState('error')
-					setBalanceError(publicErrorMessage(error, 'Balance refresh failed'))
-				}
-			},
-		)
-		return () => balanceRequests.invalidate()
-	}, [account, configuration, route, selected, walletContextInvalidated])
 
 	async function retryBalances() {
 		if (configuration === undefined || selected === undefined) return
@@ -703,163 +451,24 @@ export function useLiveTradingController({
 		}
 	}
 
-	async function simulate() {
-		const slippageBps = parseSlippageBps(slippage)
-		const validityMinutes = parseTransactionValidityMinutes(transactionValidityMinutes)
-		if (configuration === undefined || selected === undefined || account === undefined || walletClient === undefined || parsedAmount.value === undefined || parsedAmount.value === 0n || slippageBps === undefined || validityMinutes === undefined) return
-		const request = simulationRequests.begin()
-		const context = nextTransactionContext(account, selected, configuration.chainId)
-		try {
-			dispatchWorkflow({ type: 'simulation-started', context })
-			const quoteContext = { account, configuration, walletClient }
-			const nextQuote: Quote =
-				mode === 'entry'
-					? { ...quoteContext, kind: 'entry', value: await services.simulateEntry(walletClient, configuration, selected, account, side, parsedAmount.value, validityMinutes, slippageBps) }
-					: { ...quoteContext, kind: 'exit', value: await services.simulateExit(walletClient, configuration, selected, account, side, parsedAmount.value, validityMinutes, slippageBps) }
-			if (!simulationRequests.isCurrent(request)) return
-			setQuote(nextQuote)
-			dispatchWorkflow({ type: 'simulation-succeeded', context })
-		} catch (error) {
-			if (!simulationRequests.isCurrent(request)) return
-			setQuote(undefined)
-			dispatchWorkflow({ type: 'failed', context, operation: 'trade', message: publicErrorMessage(error, 'Router simulation failed') })
-		}
-	}
-
-	async function approve() {
-		if (configuration === undefined || selected === undefined || account === undefined || walletClient === undefined) return
-		if (positionWorkflowLockedRef.current || liquidityWorkflowLockedRef.current || !positionWorkflow.begin()) return
-		const context = nextTransactionContext(account, selected, configuration.chainId)
-		updatePositionWorkflowLock(true)
-		dispatchWorkflow({ type: 'operation-preparing', context, operation: 'share-approval' })
-		const balanceRequest = balanceRequests.begin()
-		let broadcastHash: Hash | undefined
-		let receiptKnown = false
-		let keepLocked = false
-		try {
-			broadcastHash = await createGuardedWalletWrite(
-				account,
-				'Wallet network changed; switch back before approving',
-				'Wallet account changed; reconnect before approving',
-			)(async () => {
-				dispatchWorkflow({ type: 'signature-requested', context, operation: 'share-approval' })
-				return await services.approveRouter(walletClient, selected, configuration, account)
-			})
-			dispatchWorkflow({ type: 'broadcast', context, operation: 'share-approval', transactionHash: broadcastHash })
-			const { receipt } = await waitForSubmittedTransactionReceipt(walletClient, broadcastHash, {
-				allowRevertedReceipt: true,
-				onKnownReceipt: () => {
-					receiptKnown = true
-					refreshWalletSummaryAfterReceipt()
-				},
-				onTransactionReplaced: replacementHash => {
-					broadcastHash = replacementHash
-					dispatchWorkflow({ type: 'replaced', context, replacementHash })
-				},
-			})
-			if (receipt.status === 'reverted') {
-				dispatchWorkflow({ type: 'reverted', context })
-				if (!balanceRequests.isCurrent(balanceRequest)) {
-					return
-				}
-				return
-			}
-			dispatchWorkflow({ type: 'confirmed', context })
-			if (!balanceRequests.isCurrent(balanceRequest)) return
-			const refreshResult = await refreshBalancesAfterApproval('Share-token approval', selected, account, balanceRequest)
-			if (refreshResult !== 'ready') return
-		} catch (error) {
-			if (!balanceRequests.isCurrent(balanceRequest)) {
-				if (broadcastHash !== undefined && !receiptKnown) {
-					keepLocked = true
-					dispatchWorkflow({ type: 'uncertain', context, reason: broadcastUncertainMessage('Share-token approval', broadcastHash) })
-				} else dispatchWorkflow({ type: 'failed', context, operation: 'share-approval', message: publicErrorMessage(error, 'Wallet context changed while approving') })
-				return
-			}
-			const failure = approvalFailureTransition('Share-token approval', broadcastHash, receiptKnown, error, 'Approval failed')
-			keepLocked = failure.keepLocked
-			if (failure.warning !== undefined) dispatchWorkflow({ type: 'uncertain', context, reason: failure.warning })
-			else dispatchWorkflow({ type: 'failed', context, operation: 'share-approval', message: failure.message ?? 'Approval failed' })
-		} finally {
-			positionWorkflow.finish()
-			if (!keepLocked) updatePositionWorkflowLock(false)
-		}
-	}
-
-	async function submit() {
-		if (configuration === undefined || account === undefined || walletClient === undefined || quote === undefined || selected === undefined) return
-		if (positionWorkflowLockedRef.current || liquidityWorkflowLockedRef.current || !positionWorkflow.begin()) return
-		const context = workflowState.kind === 'ready-to-submit' ? workflowState.context : nextTransactionContext(account, selected, configuration.chainId)
-		updatePositionWorkflowLock(true)
-		dispatchWorkflow({ type: 'operation-preparing', context, operation: 'trade' })
-		let broadcastHash: Hash | undefined
-		let receiptKnown = false
-		let keepLocked = false
-		try {
-			const quotedAmount = quote.kind === 'entry' ? quote.value.amount : quote.value.completeSets
-			if (
-				selected === undefined ||
-				quote.account !== account ||
-				quote.walletClient !== walletClient ||
-				quote.configuration.chainId !== configuration.chainId ||
-				quote.configuration.router !== configuration.router ||
-				quote.value.market.pool !== selected.pool ||
-				quote.value.side !== side ||
-				quote.kind !== mode ||
-				parsedAmount.value !== quotedAmount
-			) {
-				throw new Error('Trade inputs changed; simulate the current selection again')
-			}
-			simulationRequests.invalidate()
-			await executeWithCurrentWalletContext(account, 'Wallet network changed; switch back before submitting', 'Wallet account changed; reconnect and simulate again', async () => undefined)
-			const guardedPositionWrite = createGuardedWalletWrite(account, 'Wallet network changed during transaction revalidation; reconnect and simulate again', 'Wallet account changed during transaction revalidation; reconnect and simulate again')
-			const guardedWrite: GuardedWalletWrite = async write =>
-				await guardedPositionWrite(async () => {
-					dispatchWorkflow({ type: 'signature-requested', context, operation: 'trade' })
-					return await write()
-				})
-			broadcastHash = quote.kind === 'entry' ? await services.submitFreshEntry(walletClient, configuration, account, quote.value, guardedWrite) : await services.submitFreshExit(walletClient, configuration, account, quote.value, guardedWrite)
-			dispatchWorkflow({ type: 'broadcast', context, operation: 'trade', transactionHash: broadcastHash })
-			const { receipt } = await waitForSubmittedTransactionReceipt(walletClient, broadcastHash, {
-				allowRevertedReceipt: true,
-				onKnownReceipt: () => {
-					receiptKnown = true
-					refreshWalletSummaryAfterReceipt()
-				},
-				onTransactionReplaced: replacementHash => {
-					broadcastHash = replacementHash
-					dispatchWorkflow({ type: 'replaced', context, replacementHash })
-				},
-			})
-			if (receipt.status === 'reverted') {
-				dispatchWorkflow({ type: 'reverted', context })
-				return
-			}
-			setQuote(undefined)
-			dispatchWorkflow({ type: 'confirmed', context })
-			await refresh(configuration, marketPage.start, 'position')
-		} catch (error) {
-			if (broadcastHash !== undefined && !receiptKnown) {
-				keepLocked = true
-				dispatchWorkflow({ type: 'uncertain', context, reason: broadcastUncertainMessage('Transaction', broadcastHash) })
-			} else {
-				const failure = failedSubmissionTransition(error, 'Transaction failed')
-				setQuote(failure.quote)
-				dispatchWorkflow({ type: 'failed', context, operation: 'trade', message: failure.message })
-			}
-		} finally {
-			positionWorkflow.finish()
-			if (!keepLocked) updatePositionWorkflowLock(false)
-		}
-	}
-
-	function resetPositionInput(update: () => void) {
-		if (positionWorkflowLockedRef.current) return
-		simulationRequests.invalidate()
-		update()
-		setQuote(undefined)
-		dispatchWorkflow({ type: 'reset' })
-	}
+	const positionActions = createPositionTransactionController({
+		configuration,
+		selected,
+		account,
+		walletClient,
+		parsedAmount,
+		workflow: transactionWorkflow,
+		services,
+		simulationRequests,
+		balanceRequests,
+		nextTransactionContext,
+		createGuardedWalletWrite,
+		executeWithCurrentWalletContext,
+		refreshWalletSummaryAfterReceipt,
+		refreshBalancesAfterApproval,
+		refresh,
+		marketPageStart: marketPage.start,
+	})
 
 	function selectMarket(market: LiveMarket) {
 		if (positionWorkflowLockedRef.current || liquidityWorkflowLockedRef.current) return
@@ -925,14 +534,7 @@ export function useLiveTradingController({
 			positionHash,
 			message,
 			positionReceiptWarning,
-			simulate,
-			approve,
-			submit,
-			setMode: (value: 'entry' | 'exit') => resetPositionInput(() => setMode(value)),
-			setSide: (value: 'YES' | 'NO') => resetPositionInput(() => setSide(value)),
-			setAmount: (value: string) => resetPositionInput(() => setAmount(value)),
-			setSlippage: (value: string) => resetPositionInput(() => setSlippage(value)),
-			setTransactionValidityMinutes: (value: string) => resetPositionInput(() => setTransactionValidityMinutes(value)),
+			...positionActions,
 		},
 		workflow: {
 			workflowLocked,
