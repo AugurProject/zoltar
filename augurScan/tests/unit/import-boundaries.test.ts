@@ -34,3 +34,25 @@ test('keeps extracted indexer and database capabilities behind their public faca
 		{ file: 'src/api/routes.ts', reason: 'Database capabilities must be consumed through src/database.ts' },
 	])
 })
+
+test('keeps read repositories private to API controllers and SQL out of HTTP serializers', () => {
+	const sources = new Map([
+		['src/api/router.ts', "import { networkCatalog } from '../repositories/catalog.ts'"],
+		['src/api/serializers.ts', "import { parsedJsonColumn } from '../record-serialization.ts'"],
+		['src/repositories/catalog.ts', "import type { SQL } from 'bun'"],
+		['src/server.ts', "import { readIndexerHealth } from './database.ts'"],
+	])
+	expect(importBoundaryViolations(sources)).toEqual([])
+
+	sources.set('src/api/router.ts', "import type { SQL } from 'bun'\nconst rows = sql`SELECT 1`")
+	sources.set('src/api/serializers.ts', "const rows = sql.unsafe('SELECT 1')")
+	sources.set('src/repositories/catalog.ts', "import { json } from '../api/serializers.ts'")
+	sources.set('src/server.ts', "import { networkCatalog } from './repositories/catalog.ts'\nimport { readIndexerHealth } from './database/indexer-health.ts'")
+	expect(importBoundaryViolations(sources).map(({ file, reason }) => ({ file, reason }))).toEqual([
+		{ file: 'src/api/router.ts', reason: 'HTTP routing and response serialization must not execute database queries' },
+		{ file: 'src/api/serializers.ts', reason: 'HTTP routing and response serialization must not execute database queries' },
+		{ file: 'src/repositories/catalog.ts', reason: 'Read repositories must depend only on runtime-neutral domain and query contracts' },
+		{ file: 'src/server.ts', reason: 'Read repositories are private to the API query boundary' },
+		{ file: 'src/server.ts', reason: 'Database capabilities must be consumed through src/database.ts' },
+	])
+})

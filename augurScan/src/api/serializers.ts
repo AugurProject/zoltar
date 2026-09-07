@@ -6,21 +6,6 @@ export const normalize = (value: unknown): unknown => {
 	return value
 }
 
-export const parsedJsonColumn = (value: unknown): unknown => {
-	if (typeof value !== 'string') return value
-	try {
-		return JSON.parse(value) as unknown
-	} catch (error) {
-		if (error instanceof SyntaxError) return value
-		throw error
-	}
-}
-
-export const jsonRecord = (value: unknown): Record<string, unknown> => {
-	const parsed = parsedJsonColumn(value)
-	return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed) ? Object.fromEntries(Object.entries(parsed)) : {}
-}
-
 export const decodedJsonColumns = (row: Record<string, unknown>, columns: readonly string[]): Record<string, unknown> => ({
 	...row,
 	...Object.fromEntries(columns.flatMap((column) => (row[column] === undefined ? [] : [[column, parsedJsonColumn(row[column])]]))),
@@ -41,3 +26,6 @@ export const json = (value: unknown, status = 200): Response =>
 		status,
 		headers: { 'cache-control': 'no-store' },
 	})
+import { jsonRecord, parsedJsonColumn } from '../record-serialization.ts'
+
+export { jsonRecord, parsedJsonColumn } from '../record-serialization.ts'

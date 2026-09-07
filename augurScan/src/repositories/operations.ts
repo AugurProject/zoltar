@@ -1,6 +1,7 @@
 import type { SQL } from 'bun'
 import { auctionLifecycle, ESCALATION_OUTCOME, poolCapacity, reportLifecycle, vaultRisk } from '../operations.ts'
-import { ApiRequestError, jsonRecord } from '../api/shared.ts'
+import { ApiRequestError } from '../query-errors.ts'
+import { jsonRecord } from '../record-serialization.ts'
 
 export const operationsAsOf = async (sql: SQL, chainId: number, atBlock?: string): Promise<Record<string, unknown>> => {
 	const rows =
