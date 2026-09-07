@@ -11,18 +11,30 @@ const liquidatorComposeFile = join(import.meta.dir, '..', 'bots', 'liquidator', 
 const arbitragerComposeFile = join(import.meta.dir, '..', 'bots', 'open-oracle-arbitrager', 'compose.yaml')
 const arbitragerExampleFile = join(import.meta.dir, '..', 'bots', 'open-oracle-arbitrager', 'config', 'operator.example.json')
 
+const batchCommands = (source: string) =>
+	source
+		.replaceAll('\r\n', '\n')
+		.split('\n')
+		.map(line => line.trim().replaceAll(/\s+/g, ' '))
+		.filter(line => line !== '' && line.toLowerCase() !== '@echo off')
+
 describe('local test network packaging', () => {
 	test('builds a pinned Anvil image on the shared Zoltar network', async () => {
-		const compose = await readFile(composeFile, 'utf8')
+		const compose = Bun.YAML.parse(await readFile(composeFile, 'utf8'))
 		const image = await readFile(dockerfile, 'utf8')
 
-		expect(compose).toContain('  anvil:')
-		expect(compose).toContain('context: ..')
-		expect(compose).toContain('dockerfile: testnetwork/Dockerfile')
-		expect(compose).toContain('image: zoltar-testnetwork')
-		expect(compose).toContain('127.0.0.1:${ANVIL_RPC_PORT:-8545}:8545')
-		expect(compose).toContain('name: zoltar')
-		expect(compose).toContain('external: true')
+		expect(compose).toEqual(
+			expect.objectContaining({
+				networks: { default: { external: true, name: 'zoltar' } },
+				services: {
+					anvil: expect.objectContaining({
+						build: { context: '..', dockerfile: 'testnetwork/Dockerfile' },
+						image: 'zoltar-testnetwork',
+						ports: ['127.0.0.1:${ANVIL_RPC_PORT:-8545}:8545'],
+					}),
+				},
+			}),
+		)
 
 		expect(image).toContain('FROM ghcr.io/foundry-rs/foundry:v1.5.1')
 		expect(image).toContain('ENTRYPOINT ["anvil"]')
@@ -32,10 +44,7 @@ describe('local test network packaging', () => {
 	})
 
 	test('provides a location-independent Windows launcher', async () => {
-		const source = (await readFile(windowsLauncher, 'utf8')).replaceAll('\r\n', '\n')
-		expect(source).toContain('pushd "%~dp0"')
-		expect(source).toContain('docker network inspect zoltar >nul 2>&1 || docker network create zoltar || exit /b 1')
-		expect(source).toContain('docker compose up --build --force-recreate\nset "exit_code=%errorlevel%"\npopd\npause\nexit /b %exit_code%')
+		expect(batchCommands(await readFile(windowsLauncher, 'utf8'))).toEqual(['pushd "%~dp0" || exit /b 1', 'docker network inspect zoltar >nul 2>&1 || docker network create zoltar || exit /b 1', 'docker compose up --build --force-recreate', 'set "exit_code=%errorlevel%"', 'popd', 'pause', 'exit /b %exit_code%'])
 	})
 
 	test('accepts only known local node services as non-loopback HTTP RPCs', () => {

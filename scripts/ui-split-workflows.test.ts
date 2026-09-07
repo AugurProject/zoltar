@@ -52,21 +52,32 @@ describe('split UI workflow paths', () => {
 	})
 
 	test('production artifacts preserve app dist and JavaScript paths when uploaded and restored', async () => {
-		const workflow = await readFile(testDomainsWorkflowPath, 'utf8')
-		expect(workflow).toContain('ui/coreShared/js\n            ui/zoltar/js\n            ui/statoblast/js\n            ui/trading/js\n            ui/zoltar/dist\n            ui/statoblast/dist\n            ui/trading/dist')
-		expect(workflow).toContain('uses: actions/download-artifact@v5\n        with:\n          name: domain-production-ui\n          path: ui')
-		const downloadIndex = workflow.indexOf('name: domain-production-ui\n          path: ui')
-		let previousInstallIndex = downloadIndex
-		for (const packageId of ['coreShared', 'zoltar', 'statoblast', 'trading']) {
-			const installIndex = workflow.indexOf(`bun ./scripts/install-frozen.mts ui/${packageId}`, previousInstallIndex)
-			expect(installIndex).toBeGreaterThan(previousInstallIndex)
-			previousInstallIndex = installIndex
-		}
-
+		const workflow = await readWorkflow(testDomainsWorkflowPath)
+		const jobs = workflowJobs(workflow)
+		const prepareSteps = workflowSteps(jobs['prepare'])
+		const upload = prepareSteps.find(step => step['uses'] === 'actions/upload-artifact@v4')
+		const uploadOptions = requireRecord(upload?.['with'], 'production UI artifact upload options')
 		const uploadedPaths = ['ui/coreShared/js', 'ui/zoltar/js', 'ui/statoblast/js', 'ui/trading/js', 'ui/zoltar/dist', 'ui/statoblast/dist', 'ui/trading/dist']
-		const archiveRoot = 'ui'
-		const restoredPaths = uploadedPaths.map(path => join('ui', path.slice(archiveRoot.length + 1)))
-		expect(restoredPaths).toEqual(uploadedPaths)
+		expect(
+			String(uploadOptions['path'])
+				.split('\n')
+				.map(path => path.trim())
+				.filter(Boolean),
+		).toEqual(uploadedPaths)
+		expect(uploadOptions['name']).toBe('domain-production-ui')
+		expect(uploadOptions['if-no-files-found']).toBe('error')
+
+		const applicationSteps = workflowSteps(jobs['application-tests'])
+		const downloadIndex = applicationSteps.findIndex(step => step['uses'] === 'actions/download-artifact@v5')
+		const downloadOptions = requireRecord(applicationSteps[downloadIndex]?.['with'], 'production UI artifact download options')
+		expect(downloadOptions).toMatchObject({ name: uploadOptions['name'], path: 'ui' })
+
+		const refreshStep = applicationSteps.slice(downloadIndex + 1).find(step => step['name'] === 'Refresh split UI package installs')
+		const installCommands = String(refreshStep?.['run'])
+			.split('\n')
+			.map(command => command.trim())
+			.filter(Boolean)
+		expect(new Set(installCommands)).toEqual(new Set(['coreShared', 'zoltar', 'statoblast', 'trading'].map(packageId => `bun ./scripts/install-frozen.mts ui/${packageId}`)))
 	})
 
 	test('CI isolates the production browser workflow', async () => {

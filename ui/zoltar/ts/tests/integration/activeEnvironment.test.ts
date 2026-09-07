@@ -12,17 +12,10 @@ import { createFakeBackend, createFakeSimulationProfile } from '@zoltar/ui-core-
 import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE, type NetworkProfile } from '@zoltar/ui-core-shared/lib/networkProfile.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { createBootstrappedSimulationBackendWithRetry, resetSelectedAccountAndTransactionDelay, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulationTestUtils.js'
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 
 const DEFAULT_SIMULATION_REP_PER_ETH_PRICE = 3n * 10n ** 18n
 const SIMULATION_REP_MINT_AMOUNT = 1_000_000n * 10n ** 18n
-
-function createDeferred<T>() {
-	let resolve: (value: T) => void = () => undefined
-	const promise = new Promise<T>(promiseResolve => {
-		resolve = promiseResolve
-	})
-	return { promise, resolve }
-}
 
 afterEach(() => {
 	resetActiveEnvironmentForTesting()
@@ -319,7 +312,7 @@ void describe('active environment', () => {
 		expect(firstDisposeCalls).toBe(1)
 		expect(secondBootstrapCalls).toBe(1)
 
-		initialDispose.resolve()
+		initialDispose.resolve(undefined)
 		const firstResult = await firstInitialization
 
 		expect(firstResult).toBe(secondBackend)

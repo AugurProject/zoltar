@@ -9,27 +9,33 @@ const apps = [
 	{ id: 'statoblast', port: 8011 },
 ] as const
 
+const batchCommands = (source: string) =>
+	source
+		.replaceAll('\r\n', '\n')
+		.split('\n')
+		.map(line => line.trim().replaceAll(/\s+/g, ' '))
+		.filter(line => line !== '' && line.toLowerCase() !== '@echo off')
+
 describe('local UI Docker launchers', () => {
 	for (const app of apps) {
 		test(`${app.id} builds and serves its production UI`, async () => {
 			const appRoot = join(repositoryRoot, 'ui', app.id)
-			const composeSource = await readFile(join(appRoot, 'compose.yaml'), 'utf8')
-			const compose = Bun.YAML.parse(composeSource)
-			const launcherSource = (await readFile(join(appRoot, 'start.bat'), 'utf8')).replaceAll('\r\n', '\n')
+			const compose = Bun.YAML.parse(await readFile(join(appRoot, 'compose.yaml'), 'utf8'))
+			const commands = batchCommands(await readFile(join(appRoot, 'start.bat'), 'utf8'))
 
-			expect(composeSource).toContain('context: ../..')
-			expect(composeSource).toContain('dockerfile: ui/Dockerfile')
-			expect(composeSource).toContain(`target: local-runtime-${app.id}`)
-			expect(composeSource).toContain(`127.0.0.1:${app.port}:${app.port}`)
-			expect(composeSource).toContain(`UI_APP: ${app.id}`)
 			expect(compose).toEqual(
 				expect.objectContaining({
 					networks: { default: { external: true, name: 'zoltar' } },
+					services: {
+						[app.id]: expect.objectContaining({
+							build: { context: '../..', dockerfile: 'ui/Dockerfile', target: `local-runtime-${app.id}` },
+							environment: { UI_APP: app.id },
+							ports: [`127.0.0.1:${app.port.toString()}:${app.port.toString()}`],
+						}),
+					},
 				}),
 			)
-			expect(launcherSource).toContain('pushd "%~dp0"')
-			expect(launcherSource).toContain('docker network inspect zoltar >nul 2>&1 || docker network create zoltar || exit /b 1')
-			expect(launcherSource).toContain('docker compose up --build --force-recreate\nset "exit_code=%errorlevel%"\npopd\npause\nexit /b %exit_code%')
+			expect(commands).toEqual(['pushd "%~dp0" || exit /b 1', 'docker network inspect zoltar >nul 2>&1 || docker network create zoltar || exit /b 1', 'docker compose up --build --force-recreate', 'set "exit_code=%errorlevel%"', 'popd', 'pause', 'exit /b %exit_code%'])
 		})
 	}
 })

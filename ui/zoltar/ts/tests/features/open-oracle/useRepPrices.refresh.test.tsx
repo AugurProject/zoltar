@@ -9,19 +9,10 @@ import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } 
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { installRepPriceQuoterForTesting } from '../../../features/open-oracle/hooks/useRepPrices.js'
 
 type UseRepPrices = typeof import('../../../features/open-oracle/hooks/useRepPrices.js')['useRepPrices']
-
-function createDeferred<T>() {
-	let resolve: (value: T) => void = () => undefined
-	let reject: (reason?: unknown) => void = () => undefined
-	const promise = new Promise<T>((promiseResolve, promiseReject) => {
-		resolve = promiseResolve
-		reject = promiseReject
-	})
-	return { promise, reject, resolve }
-}
 
 function createHarness(useRepPrices: UseRepPrices) {
 	return function RepPricesHarness() {

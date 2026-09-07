@@ -11,6 +11,13 @@ const example = join(import.meta.dir, '..', 'config', 'operator.example.json')
 const windowsLauncher = join(import.meta.dir, '..', 'start.bat')
 const temporaryDirectories: string[] = []
 
+const batchCommands = (source: string) =>
+	source
+		.replaceAll('\r\n', '\n')
+		.split('\n')
+		.map(line => line.trim().replaceAll(/\s+/g, ' '))
+		.filter(line => line !== '' && line.toLowerCase() !== '@echo off')
+
 afterEach(async () => {
 	await Promise.all(temporaryDirectories.splice(0).map(directory => rm(directory, { force: true, recursive: true })))
 })
@@ -32,16 +39,15 @@ async function runEntrypoint(directory: string, path = process.env['PATH']) {
 
 describe('Docker entrypoint', () => {
 	test('provides a location-independent Windows launcher', async () => {
-		const source = (await readFile(windowsLauncher, 'utf8')).replaceAll('\r\n', '\n')
-		expect(source).toContain('pushd "%~dp0"')
-		expect(source).toContain('docker compose up --build --force-recreate\nset "exit_code=%errorlevel%"\npopd\npause\nexit /b %exit_code%')
+		expect(batchCommands(await readFile(windowsLauncher, 'utf8'))).toEqual(['pushd "%~dp0" || exit /b 1', 'docker network inspect zoltar >nul 2>&1 || docker network create zoltar || exit /b 1', 'docker compose up --build --force-recreate', 'set "exit_code=%errorlevel%"', 'popd', 'pause', 'exit /b %exit_code%'])
 	})
 
 	test('publishes the passwordless dashboard only on host loopback', async () => {
-		const source = await readFile(composeFile, 'utf8')
-		expect(source).not.toContain('ZOLTAR_BOT_DASHBOARD_PASSWORD')
-		expect(source).toContain('ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED: "true"')
-		expect(source).toContain('127.0.0.1:4173:4173')
+		const compose = Bun.YAML.parse(await readFile(composeFile, 'utf8')) as { services?: { arbitrager?: { environment?: Record<string, unknown>; ports?: unknown[] } } }
+		const arbitrager = compose.services?.arbitrager
+		expect(arbitrager?.environment).toEqual({ ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED: 'true' })
+		expect(arbitrager?.environment).not.toHaveProperty('ZOLTAR_BOT_DASHBOARD_PASSWORD')
+		expect(arbitrager?.ports).toEqual(['127.0.0.1:4173:4173'])
 	})
 
 	test('installs production dependencies where shared bot sources can resolve them', async () => {

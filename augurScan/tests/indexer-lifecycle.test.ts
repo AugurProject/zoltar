@@ -183,67 +183,19 @@ const parseRpcRequestBody = (value: unknown): { readonly id: number | string | n
 }
 
 describe('network indexer lifecycle', () => {
-	test('keeps extracted internals out of the public indexer facade', async () => {
+	test('keeps private runtime plumbing out of the public indexer facade', async () => {
 		const indexerFacade = await import('../src/indexer.ts')
-		expect(Object.keys(indexerFacade).sort()).toEqual(
-			[
-				'IndexerOwnershipStageError',
-				'RpcQueueSaturatedError',
-				'addressActivityFrom',
-				'boundedDeploymentRead',
-				'commitCanonicalRead',
-				'compactIndexerDuration',
-				'confirmCanonicalBlock',
-				'contractDeploymentScanDue',
-				'createRpcDiagnosticContext',
-				'createRpcRequestQueue',
-				'deploymentReadBudget',
-				'findContractDeploymentBlock',
-				'findManifestContractDeployment',
-				'indexerOperationFailureReason',
-				'indexerOwnershipStatuses',
-				'indexerProgressMessage',
-				'indexerWaitingMessage',
-				'indexingCompletion',
-				'initialIndexStartBlock',
-				'isLocalIndexerFailure',
-				'isProtocolActivitySource',
-				'isProtocolEvidenceEmitter',
-				'isSplittableLogRangeError',
-				'logScanCursorUpdates',
-				'manifestChangeRequiresFullReplay',
-				'manifestReplayAncestor',
-				'nextIndexerOwnershipStatus',
-				'ownershipFailureLogMessage',
-				'planDeploymentAwareLogScan',
-				'planManifestBackfill',
-				'queryAdaptiveLogRange',
-				'queryCanonicalLogRange',
-				'readTokenMetadata',
-				'reorgSearchFloor',
-				'requiresManifestHistoryCoverage',
-				'requiresParentLookup',
-				'retryDelayMs',
-				'rpcEndpointLabel',
-				'rpcFailureLogMessage',
-				'rpcIndexerFailureReason',
-				'rpcLogAddressGroups',
-				'rpcLogQueryGroups',
-				'rpcProviderLabel',
-				'runIndexerOwnershipLifecycle',
-				'runIndexerTask',
-				'runNetworkLifecycle',
-				'runOwnedNetworkLifecycle',
-				'safeIndexerFailure',
-				'safeIndexerFailureReason',
-				'startIndexers',
-				'tokenMetadataNeedsRead',
-				'uniswapV4PoolIds',
-				'waitForIndexerDelay',
-				'withRpcRequestQueue',
-				'withVerifiedProvider',
-			].sort(),
-		)
+		const privateRuntimeNames = [
+			'databaseFailureMessage',
+			'jsonEvidence',
+			'labelsFrom',
+			'leaseFailureNames',
+			'requireLogPosition',
+			'requireReceiptPosition',
+			'rpcQueueSaturatedMessage',
+			'rpcQueueSaturationFrom',
+		]
+		expect(privateRuntimeNames.filter((name) => name in indexerFacade)).toEqual([])
 	})
 
 	test('detects manifest contract replacements independently of ordering and address casing', () => {

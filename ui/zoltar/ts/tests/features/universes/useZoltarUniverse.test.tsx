@@ -11,6 +11,7 @@ import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBa
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 
 type UseZoltarUniverseState = ReturnType<typeof useZoltarUniverse>
 
@@ -22,16 +23,6 @@ function requireHookState(state: UseZoltarUniverseState | undefined) {
 	if (state === undefined) throw new Error('Hook state unavailable')
 
 	return state
-}
-
-function createDeferred<T>() {
-	let resolve: (value: T) => void = () => undefined
-	let reject: (reason?: unknown) => void = () => undefined
-	const promise = new Promise<T>((promiseResolve, promiseReject) => {
-		resolve = promiseResolve
-		reject = promiseReject
-	})
-	return { promise, reject, resolve }
 }
 
 function createZoltarDeploymentStatus(): DeploymentStatus {

@@ -5,13 +5,9 @@
     "": {
       "name": "@zoltar/ui-zoltar",
       "dependencies": {
-        "@noble/curves": "2.2.0",
-        "@noble/hashes": "2.2.0",
         "@preact/signals": "2.0.1",
         "@zoltar/shared": "file:../../shared",
         "@zoltar/ui-core-shared": "file:../coreShared",
-        "micro-eth-signer": "0.18.1",
-        "micro-packed": "0.8.0",
         "preact": "10.26.4",
         "tevm": "1.0.0-rc.151",
       },

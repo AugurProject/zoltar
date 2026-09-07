@@ -11,6 +11,7 @@ import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/rende
 import type { DeploymentStatus, MarketCreationResult } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { UseQuestionCreationDependencies } from '../../../features/questions/hooks/useQuestionCreation.js'
 import type { CreateWriteClientCallbacks, TransactionRequestPreview } from '@zoltar/ui-core-shared/lib/chainBackend.js'
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 
 type UseQuestionCreation = typeof import('../../../features/questions/hooks/useQuestionCreation.js')['useQuestionCreation']
 type UseQuestionCreationState = ReturnType<UseQuestionCreation>
@@ -31,14 +32,6 @@ const DEPLOYED_QUESTION_DATA: DeploymentStatus = {
 	deployed: true,
 	id: 'zoltarQuestionData',
 	label: 'ZoltarQuestionData',
-}
-
-function createDeferred<T>() {
-	let resolve: (value: T) => void = () => undefined
-	const promise = new Promise<T>(promiseResolve => {
-		resolve = promiseResolve
-	})
-	return { promise, resolve }
 }
 
 function requireHookState(state: UseQuestionCreationState | undefined) {
