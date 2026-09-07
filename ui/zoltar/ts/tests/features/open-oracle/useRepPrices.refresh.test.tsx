@@ -85,7 +85,7 @@ describe('useRepPrices refresh races', () => {
 			...createFakeBackend(),
 			createReadClient: () => createPublicClient({ transport: http('http://127.0.0.1:8545') }),
 		})
-		const { useRepPrices } = await import(`../../../features/open-oracle/hooks/useRepPrices.js?case=${crypto.randomUUID()}`)
+		const { useRepPrices } = await import(`@zoltar/ui-zoltar-domain/features/open-oracle/hooks/useRepPrices.js?case=${crypto.randomUUID()}`)
 		const Harness = createHarness(useRepPrices)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -163,7 +163,7 @@ describe('useRepPrices refresh races', () => {
 			...createFakeBackend(),
 			createReadClient: () => createPublicClient({ transport: http('http://127.0.0.1:8545') }),
 		})
-		const { useRepPrices } = await import(`../../../features/open-oracle/hooks/useRepPrices.js?case=${crypto.randomUUID()}`)
+		const { useRepPrices } = await import(`@zoltar/ui-zoltar-domain/features/open-oracle/hooks/useRepPrices.js?case=${crypto.randomUUID()}`)
 		const Harness = createHarness(useRepPrices)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
 		cleanupRenderedComponent = renderedComponent.cleanup
