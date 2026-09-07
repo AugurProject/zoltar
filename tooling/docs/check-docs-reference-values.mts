@@ -62,7 +62,7 @@ const truthAuctionStorage = await readFile('solidity/contracts/statoblast/Unifor
 const truthAuctionInterface = await readFile('solidity/contracts/statoblast/interfaces/IUniformPriceDualCapBatchAuction.sol', 'utf8')
 const zoltar = await readFile('solidity/contracts/Zoltar.sol', 'utf8')
 const constants = await readFile('solidity/contracts/Constants.sol', 'utf8')
-const sepoliaRepAllocations = await readFile('shared/ts/sepoliaRepAllocations.ts', 'utf8')
+const sepoliaRepAllocations = await readFile('shared/ts/deployment/sepoliaRepAllocations.ts', 'utf8')
 const escalationGameForkThresholdTest = await readFile('solidity/ts/tests/escalationGameForkThreshold.test.ts', 'utf8')
 const escalationGameBytecodeSnapshot = await readFile('solidity/ts/tests/fixtures/escalationGameBytecode.snapshot.json', 'utf8')
 
@@ -114,7 +114,7 @@ function assertMigrationSecurityCoverageCommitmentDocs(): void {
 	const calculateCapacity = (capacityOwnershipAttoRep: bigint, repPerEth: bigint, securityMultiplierBps: bigint) => ((capacityOwnershipAttoRep * 10n ** 18n) / repPerEth / securityMultiplierBps) * 10_000n
 	assert.ok(calculateCapacity(100n * 10n ** 18n, 4n * 10n ** 18n, 20_000n) < calculateCapacity(100n * 10n ** 18n, 2n * 10n ** 18n, 20_000n), 'A higher REP-per-ETH quote must lower live ETH minting capacity')
 	assert.match(whitepaperStatoblast, /id="dynamic-capacity"/)
-	assert.match(securityPool, /uint256 capacityOwnershipAddedAttoRep = Math\.mulDiv\(\s*attoRepAmount,\s*SecurityPoolUtils\.BPS_DENOMINATOR,\s*targetHealthFactorBps\s*\)/)
+	assert.match(securityPoolOperationsDelegate, /uint256 capacityOwnershipAddedAttoRep = Math\.mulDiv\(\s*attoRepAmount,\s*SecurityPoolUtils\.BPS_DENOMINATOR,\s*targetHealthFactorBps\s*\)/)
 	assert.equal((11n * 10_000n) / 30_000n, 3n, 'capacity ownership must round a nonzero remainder downward')
 	assert.equal((1n * 10_000n) / 10_001n, 0n, 'an extreme deposit target factor may round capacity ownership to zero')
 	assert.match(securityPoolUtils, /function isVaultHealthyAtFactor\([\s\S]*Math\.Rounding\.Ceil[\s\S]*poolHeldVaultRepBackingAttoRep \+ disputeStakedAttoRep < associatedRequiredRepAttoRep[\s\S]*return poolHeldVaultRepBackingAttoRep >= freeRequiredRepAttoRep/)
@@ -549,7 +549,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /ZoltarQuestionData[\s\S]*createQuestion\(questionData, outcomeOptions\)/)
 	assert.match(contractInteractionReference, /`QuestionData` tuple[\s\S]*`startTime` and `endTime` are `uint48`[\s\S]*`numTicks` is `uint120`[\s\S]*determine the `getQuestionId` and `createQuestion` selectors/)
 	assert.doesNotMatch(invariantsHtml, /active-vault index|<code>_syncActiveVault<\/code>/)
-	assert.match(contractInteractionReference, /ReputationToken[\s\S]*setMaxTheoreticalSupplyAttoRep[\s\S]*mint\(account, valueAttoRep\)[\s\S]*burn\(account, valueAttoRep\)/)
+	assert.match(contractInteractionReference, /ReputationToken[\s\S]*initialize\(universeId, totalTheoreticalSupplyAttoRep, repNumber\)[\s\S]*mint\(account, valueAttoRep\)[\s\S]*burn\(account, valueAttoRep\)[\s\S]*permit\(owner, spender, value, deadline, v, r, s\)[\s\S]*receiveWithAuthorization/)
 	assert.match(contractInteractionReference, /SecurityPoolFactory[\s\S]*deployOriginSecurityPool[\s\S]*statoblastSecurityMultiplierBps > 10_001[\s\S]*initialReportPriorityFeeAttoEthPerGas > 0[\s\S]*labels `Yes`, then `No`/)
 	assert.match(contractInteractionReference, /securityPoolDeploymentsRange\(startIndex, count\)[\s\S]*reverts rather than truncating/)
 	assert.match(contractInteractionReference, /burnEscalationWinnerHaircut\(amountAttoRep\)[\s\S]*configured escalation game/)

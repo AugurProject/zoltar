@@ -900,16 +900,32 @@
 							<td>Trading protocol</td>
 							<td>
 								<a href="../../solidity/contracts/trading/PredeploymentShareSink.sol"><code>PredeploymentShareSink.sol</code></a
+								>, <a href="../../solidity/contracts/trading/TradingLiquidityToken.sol"><code>TradingLiquidityToken.sol</code></a
 								>, <a href="../../solidity/contracts/trading/TwoWayConstantProductFactory.sol"><code>TwoWayConstantProductFactory.sol</code></a
+								>, <a href="../../solidity/contracts/trading/TwoWayConstantProductFactoryV2.sol"><code>TwoWayConstantProductFactoryV2.sol</code></a
 								>, <a href="../../solidity/contracts/trading/TwoWayConstantProductMath.sol"><code>TwoWayConstantProductMath.sol</code></a
 								>, <a href="../../solidity/contracts/trading/TwoWayConstantProductPair.sol"><code>TwoWayConstantProductPair.sol</code></a
+								>, <a href="../../solidity/contracts/trading/TwoWayConstantProductPairV2.sol"><code>TwoWayConstantProductPairV2.sol</code></a
 								>, <a href="../../solidity/contracts/trading/TwoWayConstantProductRouter.sol"><code>TwoWayConstantProductRouter.sol</code></a
+								>, <a href="../../solidity/contracts/trading/TwoWayConstantProductRouterV2.sol"><code>TwoWayConstantProductRouterV2.sol</code></a
 								>, <a href="../../solidity/contracts/trading/interfaces/ITradingShareToken.sol"><code>ITradingShareToken.sol</code></a
 								>, <a href="../../solidity/contracts/trading/interfaces/ITwoWayConstantProductFactory.sol"><code>ITwoWayConstantProductFactory.sol</code></a
+								>, <a href="../../solidity/contracts/trading/interfaces/ITwoWayConstantProductFactoryV2.sol"><code>ITwoWayConstantProductFactoryV2.sol</code></a
 								>, <a href="../../solidity/contracts/trading/interfaces/ITwoWayConstantProductPair.sol"><code>ITwoWayConstantProductPair.sol</code></a
+								>, <a href="../../solidity/contracts/trading/interfaces/ITwoWayConstantProductPairV2.sol"><code>ITwoWayConstantProductPairV2.sol</code></a
 								>.
 							</td>
-							<td>Deterministic two-outcome pool deployment, constant-product pricing and reserves, routed liquidity and swap operations, canonical Statoblast share-token integration, and quarantine of shares sent to counterfactual pair addresses before deployment.</td>
+							<td>Versioned deterministic two-outcome pool deployment, constant-product pricing and reserves, routed liquidity and swap operations, receive-based share authorization, permit-enabled liquidity tokens, canonical Statoblast share-token integration, and quarantine of shares sent to counterfactual pair addresses before deployment.</td>
+						</tr>
+						<tr>
+							<td>REP authorization support</td>
+							<td>
+								<a href="../../solidity/contracts/vendor/authorization/AuthorizationSignatures.sol"><code>AuthorizationSignatures.sol</code></a
+								>, <a href="../../solidity/contracts/vendor/authorization/ERC20Authorization.sol"><code>ERC20Authorization.sol</code></a
+								>, <a href="../../solidity/contracts/vendor/authorization/IERC20Authorization.sol"><code>IERC20Authorization.sol</code></a
+								>.
+							</td>
+							<td>Pinned signature recovery, EIP-712 domain handling, ERC-2612 permits, and recipient-bound ERC-3009 transfers used by newly deployed child REP.</td>
 						</tr>
 						<tr>
 							<td>Imported oracle integration</td>
