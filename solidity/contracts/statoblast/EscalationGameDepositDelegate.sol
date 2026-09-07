@@ -59,14 +59,13 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		_depositRepOnOutcome(outcome, maximumDepositAttoRep);
 	}
 
-	function depositRepOnOutcomeWithPermit(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep, uint256 permitAmountAttoRep, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external {
+	function depositRepOnOutcomeWithPermit(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external {
 		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
 		_validateGameForDeposit(game);
 		(uint256 depositedAttoRep, uint256 resultingCumulativeAttoRep) = game.previewDepositOnOutcome(outcome, maximumDepositAttoRep);
-		require(permitAmountAttoRep == depositedAttoRep, 'Permit amount must equal accepted deposit');
 		address token = game.repToken();
 		try
-			IERC20PermitAuthorization(token).permit(msg.sender, address(this), permitAmountAttoRep, deadline, v, r, s)
+			IERC20PermitAuthorization(token).permit(msg.sender, address(this), depositedAttoRep, deadline, v, r, s)
 		{} catch {
 			require(IERC20(token).allowance(msg.sender, address(this)) >= depositedAttoRep, 'Game permit and allowance insufficient');
 		}
