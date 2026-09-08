@@ -209,11 +209,6 @@ export const placeActivityDetailDrawer = (feed: ActivityDetailFeedLike, drawer: 
 	return true
 }
 
-export const activityDetailProvenanceField = (provenance: string | null): readonly [term: string, description: string] => [
-	'Contract provenance',
-	provenance ?? '—',
-]
-
 export interface ActivityDetailFocusSnapshot {
 	drawerFocused: boolean
 	focusIndex: number
@@ -482,10 +477,10 @@ const operationsInteger = (value: unknown): string => {
 
 export const operationsRouteFreshness = (asOf: Readonly<Record<string, unknown>>, liveConnected: boolean): string => {
 	if (asOf['historical'] === true || asOf['phase'] === 'historical')
-		return `Historical snapshot at block #${operationsInteger(asOf['blockNumber'])} · current indexed head #${operationsInteger(
+		return `Historical snapshot at block #${operationsInteger(asOf['blockNumber'])} · current head #${operationsInteger(
 			asOf['indexedHead'],
 		)} · ${operationsInteger(asOf['historyDepthBlocks'])} blocks earlier · fixed point-in-time evidence`
-	return `As of indexed block #${operationsInteger(asOf['blockNumber'])} · ${operationsInteger(asOf['lagBlocks'])} blocks behind · ${
+	return `As of block #${operationsInteger(asOf['blockNumber'])} · ${operationsInteger(asOf['lagBlocks'])} blocks behind · ${
 		liveConnected ? 'live updates connected' : 'live updates reconnecting'
 	}`
 }
@@ -497,7 +492,10 @@ export const decodedActionLabel = (
 	emitterAddress?: string | null,
 	deployedContractAddress?: string | null,
 ): string => {
-	if (toAddress !== null) return actionSummary ?? 'No decoded calldata'
+	if (toAddress !== null)
+		return actionSummary?.startsWith('Unknown call ')
+			? `${actionSummary.replace('Unknown call', 'Unrecognized function')} · no matching ABI`
+			: (actionSummary ?? 'No decoded calldata')
 	const verifiedLabel =
 		contractLabel && emitterAddress && deployedContractAddress && emitterAddress.toLowerCase() === deployedContractAddress.toLowerCase()
 			? contractLabel
@@ -1129,12 +1127,6 @@ export const contractRegistrySection = (contract: { readonly kind: string; reado
 	if (contract.provenance !== 'manifest') return 'Discovered contracts'
 	return dependencyContractKinds.has(contract.kind) ? 'System dependencies' : 'Protocol contracts'
 }
-
-export const contractDeploymentTimestampLabel = (contract: ContractDeploymentRecord): string =>
-	contract.deployment_block_exact === false ? 'Deployed at or before' : 'Deployed at'
-
-export const contractDeploymentBlockActionLabel = (contract: ContractDeploymentRecord): string =>
-	contract.deployment_block_exact === false ? 'Open search boundary block ↗' : 'Open deployment block ↗'
 
 export const reconcileTransactionDialogSnapshot = (snapshot: TransactionDialogSnapshot, availableKeys: ReadonlySet<string>): TransactionDialogSnapshot => ({
 	...snapshot,
