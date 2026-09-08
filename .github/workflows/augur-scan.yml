@@ -5,13 +5,13 @@ on:
     branches: [main]
     paths:
       - "augurScan/**"
-      - "shared/ts/ethereum.ts"
+      - "shared/core/ts/evm/**"
       - ".github/workflows/augur-scan.yml"
   push:
     branches: [main]
     paths:
       - "augurScan/**"
-      - "shared/ts/ethereum.ts"
+      - "shared/core/ts/evm/**"
       - ".github/workflows/augur-scan.yml"
   workflow_dispatch:
 
