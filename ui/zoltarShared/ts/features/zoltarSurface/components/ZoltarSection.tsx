@@ -115,7 +115,6 @@ export function QuestionsView({ canFork, hasForked, loadingZoltarQuestions, onAc
 
 export function ZoltarSection({
 	accountState,
-	activeUniverseId,
 	activeView,
 	environmentRefreshKey,
 	loadingZoltarForkAccess,
@@ -210,6 +209,8 @@ export function ZoltarSection({
 			universeActionContent = (
 				<SectionBlock title={zoltarCopy.migrateRep} variant='plain'>
 					<ZoltarMigrationSection
+						onDeployChildUniverse={onCreateChildUniverseForOutcomeIndex}
+						pendingOutcomeIndex={zoltarChildUniversePendingOutcomeIndex}
 						accountAddress={accountState.address}
 						isOnActiveAppChain={isOnActiveAppChain}
 						loadingZoltarForkAccess={loadingZoltarForkAccess}
@@ -265,9 +266,7 @@ export function ZoltarSection({
 		return (
 			<>
 				<RouteHeader title={commonCopy.universe} />
-				<UniverseDirectorySection activeUniverseId={activeUniverseId} accountAddress={accountState.address} isOnActiveAppChain={isOnActiveAppChain} onDeployChildUniverse={onCreateChildUniverseForOutcomeIndex} pendingOutcomeIndex={zoltarChildUniversePendingOutcomeIndex} zoltarUniverse={zoltarUniverse}>
-					{universeActionContent}
-				</UniverseDirectorySection>
+				<UniverseDirectorySection zoltarUniverse={zoltarUniverse}>{universeActionContent}</UniverseDirectorySection>
 				<ErrorNotice message={zoltarChildUniverseError} />
 			</>
 		)

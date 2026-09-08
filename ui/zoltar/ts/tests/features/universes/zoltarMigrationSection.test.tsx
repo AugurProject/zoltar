@@ -60,6 +60,8 @@ function createProps(overrides: Partial<ZoltarMigrationSectionProps> = {}): Zolt
 		loadingZoltarForkAccess: false,
 		loadingZoltarUniverse: false,
 		onApproveZoltarForkRep: () => undefined,
+		onDeployChildUniverse: () => undefined,
+		pendingOutcomeIndex: undefined,
 		onMigrateInternalRep: () => undefined,
 		onRetryMigrationBalances: () => undefined,
 		onZoltarMigrationFormChange: () => undefined,
@@ -98,6 +100,37 @@ describe('ZoltarMigrationSection', () => {
 		cleanupRenderedComponent = undefined
 		restoreDomEnvironment?.()
 		restoreDomEnvironment = undefined
+	})
+
+	test('selects destinations while keeping deployment and navigation separate', async () => {
+		const changes: Partial<ZoltarMigrationFormState>[] = []
+		const deployments: bigint[] = []
+		const universe = createUniverse()
+		const missing = { ...universe.childUniverses[0], exists: false, forkTime: 0n, outcomeIndex: 2n, outcomeLabel: 'No', parentUniverseId: 1n, reputationToken: zeroAddress, universeId: 3n }
+		const props = createProps({
+			zoltarUniverse: { ...universe, childUniverses: [...universe.childUniverses, missing] },
+			onZoltarMigrationFormChange: update => changes.push(update),
+			onDeployChildUniverse: outcome => deployments.push(outcome),
+		})
+		const rendered = await renderIntoDocument(h(ZoltarMigrationSection, props))
+		cleanupRenderedComponent = rendered.cleanup
+		const queries = within(document.body)
+		const selected = queries.getByRole('button', { name: /^Yes/ })
+		const unselected = queries.getByRole('button', { name: /^No/ })
+		expect(selected.getAttribute('aria-pressed')).toBe('true')
+		expect(unselected.getAttribute('aria-pressed')).toBe('false')
+		unselected.click()
+		expect(changes).toEqual([{ outcomeIndexes: '1, 2' }])
+		selected.click()
+		expect(changes[1]).toEqual({ outcomeIndexes: '' })
+		const details = unselected.parentElement?.querySelector('details')
+		if (details === null || details === undefined) throw new Error('Expected destination details')
+		details.open = true
+		within(details).getByRole('button', { name: 'Deploy universe' }).click()
+		expect(deployments).toEqual([2n])
+		expect(changes).toHaveLength(2)
+		expect(details.querySelector('a')).not.toBeNull()
+		expect(document.querySelector('button a, button button')).toBeNull()
 	})
 
 	test('Max includes prepared REP and explains the total without requiring it from the wallet again', async () => {
@@ -251,7 +284,8 @@ describe('ZoltarMigrationSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(document.body.textContent).toContain('Yes')
-		expect(document.body.textContent).not.toContain('Universe 0x2')
+		expect(document.querySelector('.migration-outcome-row')?.textContent).not.toContain('Universe 0x2')
+		expect(document.querySelector('.migration-outcome-list details')?.textContent).toContain('Universe 0x2')
 		expect(document.body.textContent).toContain('Child-Universe REP Received')
 		expect(document.body.textContent).not.toContain('Technical Details')
 		expect(document.body.textContent?.match(/Selected Destinations/g)).toHaveLength(1)
@@ -348,7 +382,7 @@ describe('ZoltarMigrationSection', () => {
 		else expectTransactionButtonDisabled(document.body, 'Split REP')
 	})
 
-	test('shows wallet import access only for deployed child tokens the account holds', async () => {
+	test('keeps deployed token details within the selectable destination without a second wallet list', async () => {
 		const heldChild = {
 			exists: true,
 			forkTime: 1n,
@@ -370,11 +404,11 @@ describe('ZoltarMigrationSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const walletTokensHeading = within(document.body).getByRole('heading', { name: 'Wallet REP Tokens' })
-		const walletTokensSection = walletTokensHeading.closest('section')
-		if (walletTokensSection === null) throw new Error('Expected wallet REP tokens section')
-		expect(walletTokensSection.textContent).toContain('Yes')
-		expect(walletTokensSection.textContent).toContain(CHILD_REP_ADDRESS)
+		const destination = document.querySelector('.migration-outcome-row')?.parentElement
+		expect(destination?.textContent).toContain('Yes')
+		expect(destination?.textContent).toContain(CHILD_REP_ADDRESS)
+		expect(within(document.body).queryByRole('heading', { name: 'Wallet REP Tokens' })).toBeNull()
+		expect(destination?.querySelector('button button, button a')).toBeNull()
 
 		await cleanupRenderedComponent()
 		cleanupRenderedComponent = undefined

@@ -11,8 +11,6 @@ import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
-import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
-import { WalletAssetControl } from '@zoltar/ui-core-shared/components/WalletAssetControl.js'
 import { getMigrationOutcomeSplitLimit, MigrationOutcomeUniversesSection } from './MigrationOutcomeUniversesSection.js'
 import type { LoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
@@ -26,6 +24,8 @@ import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contrac
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
 
 type ZoltarMigrationSectionProps = {
+	onDeployChildUniverse: (outcomeIndex: bigint) => void
+	pendingOutcomeIndex: bigint | undefined
 	accountAddress: Address | undefined
 	isOnActiveAppChain: boolean
 	loadingZoltarForkAccess: boolean
@@ -66,6 +66,8 @@ function getMissingPreparationAmount(targetAmount: bigint, preparedRepBalanceAtt
 }
 
 export function ZoltarMigrationSection({
+	onDeployChildUniverse,
+	pendingOutcomeIndex,
 	accountAddress,
 	isOnActiveAppChain,
 	loadingZoltarForkAccess,
@@ -93,10 +95,6 @@ export function ZoltarMigrationSection({
 	const selectedOutcomeIndexes = useMemo(() => getMigrationOutcomeIndexes(zoltarMigrationForm.outcomeIndexes), [zoltarMigrationForm.outcomeIndexes])
 	const selectedOutcomeIndexSet = useMemo(() => new Set(selectedOutcomeIndexes.map(index => index.toString())), [selectedOutcomeIndexes])
 	const selectedChildUniverses = useMemo(() => rootUniverse?.childUniverses.filter(child => selectedOutcomeIndexSet.has(child.outcomeIndex.toString())) ?? [], [rootUniverse?.childUniverses, selectedOutcomeIndexSet])
-	const heldChildUniverses = useMemo(
-		() => (loadingZoltarForkAccess ? [] : (rootUniverse?.childUniverses.filter(child => child.exists && (zoltarMigrationChildRepBalancesAttoRep[child.universeId.toString()] ?? 0n) > 0n) ?? [])),
-		[loadingZoltarForkAccess, rootUniverse?.childUniverses, zoltarMigrationChildRepBalancesAttoRep],
-	)
 	const migrationAmount = getMigrationAmount(zoltarMigrationForm.amount)
 	const hasValidAmount = migrationAmount !== undefined && migrationAmount > 0n
 	const isMigrationAmountInvalid = zoltarMigrationForm.amount.trim() !== '' && migrationAmount === undefined
@@ -242,6 +240,11 @@ export function ZoltarMigrationSection({
 
 					{rootUniverse === undefined ? undefined : (
 						<MigrationOutcomeUniversesSection
+							accountAddress={accountAddress}
+							isOnActiveAppChain={isOnActiveAppChain}
+							hasForked={hasForked}
+							onDeployChildUniverse={onDeployChildUniverse}
+							pendingOutcomeIndex={pendingOutcomeIndex}
 							childUniverseRepBalances={zoltarMigrationChildRepBalancesAttoRep}
 							childUniverseSplitAmounts={zoltarMigrationChildSplitAmountsAttoRep}
 							childUniverses={rootUniverse.childUniverses}
@@ -271,18 +274,6 @@ export function ZoltarMigrationSection({
 							tokenUnits={18}
 						/>
 					) : undefined}
-
-					{heldChildUniverses.length === 0 ? undefined : (
-						<WorkflowSubsection title={zoltarCopy.walletRepTokens}>
-							<DataGrid dense>
-								{heldChildUniverses.map(child => (
-									<MetricField key={child.universeId.toString()} label={child.outcomeLabel}>
-										<WalletAssetControl accountAddress={accountAddress} address={child.reputationToken} isSupportedChain={isOnActiveAppChain} tokenLabel={`${child.outcomeLabel} ${child.reputationTokenSymbol ?? commonCopy.rep}`} />
-									</MetricField>
-								))}
-							</DataGrid>
-						</WorkflowSubsection>
-					)}
 
 					<div className='actions'>
 						{accountAddress !== undefined && hasForked && !loadingZoltarForkAccess && !loadingZoltarUniverse && hasUnavailableRequiredBalance ? (

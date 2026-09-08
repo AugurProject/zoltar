@@ -47,14 +47,15 @@ describe('UniverseDirectorySection', () => {
 		restoreDomEnvironment = undefined
 	})
 
-	test('links deployed universe IDs and offers deployment for missing children', async () => {
-		const renderedComponent = await renderIntoDocument(h(UniverseDirectorySection, { activeUniverseId: 1n, accountAddress: zeroAddress, isOnActiveAppChain: true, onDeployChildUniverse: () => undefined, pendingOutcomeIndex: undefined, zoltarUniverse: createUniverse() }))
+	test('shows parent context without a second child list', async () => {
+		const renderedComponent = await renderIntoDocument(h(UniverseDirectorySection, { zoltarUniverse: createUniverse() }))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('link', { name: 'Select' })).toBeNull()
-		expect(documentQueries.getAllByRole('link').some(link => link.textContent?.includes('Universe'))).toBe(true)
-		expect(documentQueries.getByRole('button', { name: 'Deploy universe' })).toBeTruthy()
+		expect(documentQueries.getAllByRole('link')).toHaveLength(1)
+		expect(documentQueries.queryByRole('button', { name: 'Deploy universe' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Child Universes' })).toBeNull()
 	})
 
 	for (const hasForked of [false, true]) {
@@ -117,7 +118,8 @@ describe('UniverseDirectorySection', () => {
 			const queries = within(document.body)
 			expect(queries.getByRole('heading', { name: 'Universe' })).toBeTruthy()
 			if (hasForked) {
-				expect(document.body.textContent?.indexOf('Migrate REP')).toBeLessThan(document.body.textContent?.indexOf('Child Universes') ?? 0)
+				expect(queries.queryByRole('heading', { name: 'Child Universes' })).toBeNull()
+				expect(document.querySelectorAll('.migration-outcome-row')).toHaveLength(2)
 				expect(queries.getByRole('button', { name: 'Split REP' })).toBeTruthy()
 				expect(queries.queryByRole('button', { name: 'Fork Universe' })).toBeNull()
 			} else {
