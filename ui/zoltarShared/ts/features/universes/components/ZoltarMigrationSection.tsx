@@ -22,8 +22,9 @@ import { deriveTokenApprovalRequirement, type TokenApprovalState } from '@zoltar
 import { getUniversePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
 import { getMigrationGuardMessage } from '../lib/zoltarMigrationGuards.js'
 import type { ZoltarMigrationFormState } from '../../../types/app.js'
-import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ZoltarChildUniverseSummary, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
+import { getChildDeploymentAvailabilityReason } from './ChildUniverseDeploymentSection.js'
 
 type ZoltarMigrationSectionProps = {
 	accountAddress: Address | undefined
@@ -31,6 +32,7 @@ type ZoltarMigrationSectionProps = {
 	loadingZoltarForkAccess: boolean
 	loadingZoltarUniverse: boolean
 	onMigrateInternalRep: () => void
+	onDeployChildUniverse: (outcomeIndex: bigint) => void
 	onPrepareRepForMigration: () => void
 	onZoltarMigrationFormChange: (update: Partial<ZoltarMigrationFormState>) => void
 	zoltarForkRepBalanceAttoRep: bigint | undefined
@@ -45,6 +47,7 @@ type ZoltarMigrationSectionProps = {
 	zoltarUniverse: ZoltarUniverseSummary | undefined
 	zoltarUniverseState: LoadableValueState
 	onApproveZoltarForkRep: (amount?: bigint) => void
+	pendingChildUniverseOutcomeIndex: bigint | undefined
 }
 
 function getMigrationAmount(value: string) {
@@ -70,6 +73,7 @@ export function ZoltarMigrationSection({
 	loadingZoltarForkAccess,
 	loadingZoltarUniverse,
 	onMigrateInternalRep,
+	onDeployChildUniverse,
 	onPrepareRepForMigration,
 	onZoltarMigrationFormChange,
 	zoltarForkRepBalanceAttoRep,
@@ -84,6 +88,7 @@ export function ZoltarMigrationSection({
 	zoltarUniverse,
 	zoltarUniverseState,
 	onApproveZoltarForkRep,
+	pendingChildUniverseOutcomeIndex,
 }: ZoltarMigrationSectionProps) {
 	const prepareReasonId = useId()
 	const rootUniverse = zoltarUniverse
@@ -195,6 +200,7 @@ export function ZoltarMigrationSection({
 		}
 		onZoltarMigrationFormChange({ outcomeIndexes: [...selectedOutcomeIndexes, outcomeIndex].map((index: bigint) => index.toString()).join(', ') })
 	}
+	const deploymentDisabledReason = (child: ZoltarChildUniverseSummary) => getChildDeploymentAvailabilityReason({ accountAddress, exists: child.exists, hasForked, isOnActiveAppChain })
 	if (universeMissing) {
 		const presentation = getUniversePresentation(zoltarUniverseState)
 		return (
@@ -258,8 +264,11 @@ export function ZoltarMigrationSection({
 							isScalarFork={rootUniverse.forkQuestionDetails?.marketType === 'scalar'}
 							migrationBalance={zoltarMigrationPreparedRepBalanceAttoRep}
 							onAddNextOutcome={addNextOutcome}
+							onDeployChildUniverse={onDeployChildUniverse}
 							onToggleOutcomeIndex={toggleOutcomeIndex}
+							pendingOutcomeIndex={pendingChildUniverseOutcomeIndex}
 							selectedOutcomeIndexSet={selectedOutcomeIndexSet}
+							deploymentDisabledReason={deploymentDisabledReason}
 						/>
 					)}
 

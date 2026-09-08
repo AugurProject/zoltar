@@ -47,14 +47,14 @@ describe('UniverseDirectorySection', () => {
 		restoreDomEnvironment = undefined
 	})
 
-	test('links deployed universe IDs and offers deployment for missing children', async () => {
-		const renderedComponent = await renderIntoDocument(h(UniverseDirectorySection, { activeUniverseId: 1n, accountAddress: zeroAddress, isOnActiveAppChain: true, onDeployChildUniverse: () => undefined, pendingOutcomeIndex: undefined, zoltarUniverse: createUniverse() }))
+	test('shows current universe details without duplicating child universes', async () => {
+		const renderedComponent = await renderIntoDocument(h(UniverseDirectorySection, { zoltarUniverse: createUniverse() }))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('link', { name: 'Select' })).toBeNull()
-		expect(documentQueries.getAllByRole('link').some(link => link.textContent?.includes('Universe'))).toBe(true)
-		expect(documentQueries.getByRole('button', { name: 'Deploy universe' })).toBeTruthy()
+		expect(documentQueries.queryByRole('heading', { name: 'Child Universes' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Deploy universe' })).toBeNull()
 	})
 
 	for (const hasForked of [false, true]) {
@@ -114,10 +114,11 @@ describe('UniverseDirectorySection', () => {
 			const rendered = await renderIntoDocument(h(ZoltarSection, props))
 			cleanupRenderedComponent = rendered.cleanup
 			const queries = within(document.body)
-			expect(queries.getByRole('heading', { name: 'Universe' })).toBeTruthy()
+			expect(queries.queryByRole('heading', { name: 'Universe' })).toBeNull()
 			if (hasForked) {
 				expect(queries.getByRole('button', { name: 'Prepare REP' })).toBeTruthy()
-				expect(document.body.textContent?.indexOf('Migrate REP')).toBeLessThan(document.body.textContent?.indexOf('Child Universes') ?? 0)
+				expect(queries.getByRole('heading', { name: 'Outcome Universes' })).toBeTruthy()
+				expect(queries.getByRole('button', { name: 'Deploy universe' })).toBeTruthy()
 				expect(queries.getByRole('button', { name: 'Split REP' })).toBeTruthy()
 				expect(queries.queryByRole('button', { name: 'Fork Universe' })).toBeNull()
 			} else {
