@@ -1,4 +1,4 @@
-import type { Address } from '@zoltar/shared/evm/ethereum'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { ForkWorkflowSelectionStage } from '../../security-pools/lib/securityPoolWorkflow.js'
 import { getTruthAuctionSettlementBidKey } from './truthAuctionSettlement.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'

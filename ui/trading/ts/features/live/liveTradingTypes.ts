@@ -1,4 +1,4 @@
-import type { Address, WalletClient } from '@zoltar/shared/evm/ethereum'
+import type { Address, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import type {
 	LiveBalances,

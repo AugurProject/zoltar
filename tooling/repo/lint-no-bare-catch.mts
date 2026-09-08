@@ -27,7 +27,7 @@ const ignoredPathPrefixes = [
 	'ui/zoltar/js',
 	'ui/statoblast/js',
 	'ui/trading/js',
-	'shared/js',
+	...['core', 'zoltar', 'openOracle', 'statoblast', 'trading'].map(name => `shared/${name}/js`),
 	'solidity/artifacts',
 	'solidity/js',
 	'solidity/node_modules',

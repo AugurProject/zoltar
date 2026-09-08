@@ -1,7 +1,7 @@
 import type { ComponentProps } from 'preact'
 import { DeploymentRouteContent } from '@zoltar/ui-zoltar-shared/features/deployment/components/DeploymentRouteContent.js'
 import { NotFoundSection } from '@zoltar/ui-core-shared/app/components/NotFoundSection.js'
-import { OpenOracleSection } from '@zoltar/ui-zoltar-shared/features/open-oracle/components/OpenOracleSection.js'
+import { OpenOracleSection } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/OpenOracleSection.js'
 import { SecurityPoolsSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolsSection.js'
 import type { Route } from '@zoltar/ui-statoblast-shared/types/app.js'
 import { shouldRenderAppRouteContent } from '@zoltar/ui-core-shared/app/lib/appRouteGate.js'

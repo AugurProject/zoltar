@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import type { Address } from '@zoltar/shared/evm/ethereum'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'

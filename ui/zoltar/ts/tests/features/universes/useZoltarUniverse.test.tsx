@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
-import { createPublicClient, getAddress, http, zeroAddress, type Hash } from '@zoltar/shared/evm/ethereum'
+import { createPublicClient, getAddress, http, zeroAddress, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { useZoltarUniverse, type UseZoltarUniverseDependencies } from '@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarUniverse.js'
 import type { DeploymentStatus, MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'

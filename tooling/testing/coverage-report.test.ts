@@ -57,7 +57,7 @@ end_of_record
 	})
 
 	test('merges line hits and does not double-count totals', () => {
-		const first = parseLcov(`SF:shared/ts/example.ts
+		const first = parseLcov(`SF:shared/core/ts/example.ts
 DA:1,1
 DA:2,0
 LF:2
@@ -66,7 +66,7 @@ FNF:0
 FNH:0
 end_of_record
 `)
-		const second = parseLcov(`SF:shared/ts/example.ts
+		const second = parseLcov(`SF:shared/core/ts/example.ts
 DA:1,0
 DA:2,2
 LF:2
@@ -77,7 +77,7 @@ end_of_record
 `)
 
 		const merged = mergeLcovRecords([first, second])
-		expect(merged.get('shared/ts/example.ts')?.lineHits).toEqual(
+		expect(merged.get('shared/core/ts/example.ts')?.lineHits).toEqual(
 			new Map([
 				[1, 1],
 				[2, 2],
@@ -86,7 +86,7 @@ end_of_record
 	})
 
 	test('merges and renders exact function and branch hits across shards', () => {
-		const first = parseLcov(`SF:shared/ts/example.ts
+		const first = parseLcov(`SF:shared/core/ts/example.ts
 FN:1,first
 FN:2,second
 FNDA:1,first
@@ -103,7 +103,7 @@ LF:2
 LH:1
 end_of_record
 `)
-		const second = parseLcov(`SF:shared/ts/example.ts
+		const second = parseLcov(`SF:shared/core/ts/example.ts
 FN:1,first
 FN:2,second
 FNDA:0,first
@@ -122,7 +122,7 @@ end_of_record
 `)
 
 		const rendered = renderLcovRecords(mergeLcovRecords([first, second]))
-		const merged = parseLcov(rendered).get('shared/ts/example.ts')
+		const merged = parseLcov(rendered).get('shared/core/ts/example.ts')
 
 		expect(merged?.lineHits).toEqual(
 			new Map([
@@ -155,9 +155,9 @@ end_of_record
 	test('remaps generated package coverage to its tracked TypeScript source', async () => {
 		const repositoryRoot = await mkdtemp(join(tmpdir(), 'coverage-source-map-'))
 		try {
-			await mkdir(join(repositoryRoot, 'shared/js'), { recursive: true })
-			await writeFile(join(repositoryRoot, 'shared/js/domain.js.map'), `${JSON.stringify({ version: 3, sources: ['../ts/domain.ts'], mappings: ';AAAA;AACA;AACA' })}\n`)
-			const generatedRecords = parseLcov(`SF:shared/js/domain.js
+			await mkdir(join(repositoryRoot, 'shared/core/js'), { recursive: true })
+			await writeFile(join(repositoryRoot, 'shared/core/js/domain.js.map'), `${JSON.stringify({ version: 3, sources: ['../ts/domain.ts'], mappings: ';AAAA;AACA;AACA' })}\n`)
+			const generatedRecords = parseLcov(`SF:shared/core/js/domain.js
 DA:2,3
 DA:3,0
 DA:4,1
@@ -174,8 +174,8 @@ end_of_record
 
 			const remapped = await remapGeneratedTypeScriptLcovRecords(generatedRecords, repositoryRoot)
 
-			expect(remapped.get('shared/ts/domain.ts')).toEqual({
-				file: 'shared/ts/domain.ts',
+			expect(remapped.get('shared/core/ts/domain.ts')).toEqual({
+				file: 'shared/core/ts/domain.ts',
 				lineHits: new Map([
 					[1, 3],
 					[2, 0],
@@ -201,38 +201,38 @@ end_of_record
 
 	test('rejects malformed, duplicate, unterminated, and internally inconsistent LCOV records', () => {
 		for (const lcov of [
-			'SF:shared/ts/a.ts\nDA:one,1\nLF:1\nLH:1\nend_of_record\n',
-			'SF:shared/ts/a.ts\nDA:1,1\nDA:1,0\nLF:1\nLH:1\nend_of_record\n',
-			'SF:shared/ts/a.ts\nDA:1,1\nLF:2\nLH:1\nend_of_record\n',
-			'SF:shared/ts/a.ts\nDA:1,1\nLF:1\nLH:1\n',
-			'SF:shared/ts/a.ts\nDA:1,1\nLF:1\nLH:1\nend_of_record\nSF:shared/ts/a.ts\nDA:1,1\nLF:1\nLH:1\nend_of_record\n',
-			'LF:1\nSF:shared/ts/a.ts\nDA:1,1\nLH:1\nend_of_record\n',
-			'SF:shared/ts/a.ts\nDA:1,1\nLF:1\nLH:1\nBRF:1\nBRH:0\nend_of_record\n',
+			'SF:shared/core/ts/a.ts\nDA:one,1\nLF:1\nLH:1\nend_of_record\n',
+			'SF:shared/core/ts/a.ts\nDA:1,1\nDA:1,0\nLF:1\nLH:1\nend_of_record\n',
+			'SF:shared/core/ts/a.ts\nDA:1,1\nLF:2\nLH:1\nend_of_record\n',
+			'SF:shared/core/ts/a.ts\nDA:1,1\nLF:1\nLH:1\n',
+			'SF:shared/core/ts/a.ts\nDA:1,1\nLF:1\nLH:1\nend_of_record\nSF:shared/core/ts/a.ts\nDA:1,1\nLF:1\nLH:1\nend_of_record\n',
+			'LF:1\nSF:shared/core/ts/a.ts\nDA:1,1\nLH:1\nend_of_record\n',
+			'SF:shared/core/ts/a.ts\nDA:1,1\nLF:1\nLH:1\nBRF:1\nBRH:0\nend_of_record\n',
 		])
 			expect(() => parseLcov(lcov)).toThrow()
-		expect(() => parseLcov('SF:shared/ts/a.ts\nDA:1,1\nLF:1\nLH:1\nFNF:0\nFNF:0\nFNH:0\nend_of_record\n')).toThrow('Duplicate LCOV FNF')
-		expect(() => parseLcov('SF:shared/ts/a.ts\nDA:1,1\nLF:1\nLH:1\nend_of_record\n')).toThrow('missing FNF/FNH')
-		expect(() => parseLcov(`SF:shared/ts/a.ts\nDA:1,1\nLF:1\nLH:1\nFNF:${'9'.repeat(400)}\nFNH:0\nend_of_record\n`)).toThrow('Invalid LCOV FNF')
-		expect(() => parseLcov('SF:shared/ts/a.ts\nDA:1,1\nLF:1\nLH:1\nFNF:0\nFNH:0\nBRDA:1,0,missing,1\nBRF:1\nBRH:1\nend_of_record\n')).toThrow('BRDA branch')
-		expect(parseLcov('SF:shared/ts/a.ts\nDA:1,1\nLF:1\nLH:1\nFNF:1\nFNH:1\nend_of_record\n').get('shared/ts/a.ts')?.functions).toEqual({ covered: 1, total: 1 })
-		expect(() => parseLcov('SF:shared/ts/a.ts\nDA:1,1\nLF:1\nLH:1\nFN:1,only\nFNDA:1,only\nFNF:2\nFNH:1\nend_of_record\n')).toThrow('FN/FNDA')
-		for (const lcov of ['FN:1,stray\nFNDA:1,stray\n', 'SF:shared/ts/a.ts\nDA:1,1\nLF:1\nLH:1\nFNF:0\nFNH:0\nend_of_record\nFN:1,stray\n', 'SF:shared/ts/a.ts\nDA:1,1\nLF:1\nLH:1\nFNF:0\nFNH:0\nend_of_record\nend_of_record\n']) expect(() => parseLcov(lcov)).toThrow('outside a record')
+		expect(() => parseLcov('SF:shared/core/ts/a.ts\nDA:1,1\nLF:1\nLH:1\nFNF:0\nFNF:0\nFNH:0\nend_of_record\n')).toThrow('Duplicate LCOV FNF')
+		expect(() => parseLcov('SF:shared/core/ts/a.ts\nDA:1,1\nLF:1\nLH:1\nend_of_record\n')).toThrow('missing FNF/FNH')
+		expect(() => parseLcov(`SF:shared/core/ts/a.ts\nDA:1,1\nLF:1\nLH:1\nFNF:${'9'.repeat(400)}\nFNH:0\nend_of_record\n`)).toThrow('Invalid LCOV FNF')
+		expect(() => parseLcov('SF:shared/core/ts/a.ts\nDA:1,1\nLF:1\nLH:1\nFNF:0\nFNH:0\nBRDA:1,0,missing,1\nBRF:1\nBRH:1\nend_of_record\n')).toThrow('BRDA branch')
+		expect(parseLcov('SF:shared/core/ts/a.ts\nDA:1,1\nLF:1\nLH:1\nFNF:1\nFNH:1\nend_of_record\n').get('shared/core/ts/a.ts')?.functions).toEqual({ covered: 1, total: 1 })
+		expect(() => parseLcov('SF:shared/core/ts/a.ts\nDA:1,1\nLF:1\nLH:1\nFN:1,only\nFNDA:1,only\nFNF:2\nFNH:1\nend_of_record\n')).toThrow('FN/FNDA')
+		for (const lcov of ['FN:1,stray\nFNDA:1,stray\n', 'SF:shared/core/ts/a.ts\nDA:1,1\nLF:1\nLH:1\nFNF:0\nFNH:0\nend_of_record\nFN:1,stray\n', 'SF:shared/core/ts/a.ts\nDA:1,1\nLF:1\nLH:1\nFNF:0\nFNH:0\nend_of_record\nend_of_record\n']) expect(() => parseLcov(lcov)).toThrow('outside a record')
 	})
 
 	test('lists unloaded runtime source while excluding tests, generated files, and type-only modules', () => {
 		const report = buildTypeScriptCoverage(new Map(), [
-			{ file: 'shared/ts/runtime.ts', source: 'export const answer = () => 42\nanswer()' },
-			{ file: 'shared/ts/types.ts', source: 'export interface Answer { value: number }' },
-			{ file: 'shared/ts/runtime.test.ts', source: 'test("answer", () => {})' },
+			{ file: 'shared/core/ts/runtime.ts', source: 'export const answer = () => 42\nanswer()' },
+			{ file: 'shared/core/ts/types.ts', source: 'export interface Answer { value: number }' },
+			{ file: 'shared/core/ts/runtime.test.ts', source: 'test("answer", () => {})' },
 			{ file: 'ui/coreShared/ts/contractArtifact.ts', source: 'export const artifact = {}' },
 		])
 
-		expect(report.surfaces.shared.unloadedFiles).toEqual(['shared/ts/runtime.ts'])
+		expect(report.surfaces.shared.unloadedFiles).toEqual(['shared/core/ts/runtime.ts'])
 		expect(report.surfaces.shared.sourceFiles).toBe(1)
 		expect(report.surfaces.shared.lines).toEqual({ covered: 0, total: 2, percentage: 0 })
 		expect(report.surfaces.shared.functions).toEqual({ covered: 0, total: 1, percentage: 0 })
-		expect(report.excludedFiles).toContain('shared/ts/types.ts')
-		expect(report.excludedFiles).toContain('shared/ts/runtime.test.ts')
+		expect(report.excludedFiles).toContain('shared/core/ts/types.ts')
+		expect(report.excludedFiles).toContain('shared/core/ts/runtime.test.ts')
 		expect(report.excludedFiles).toContain('ui/coreShared/ts/contractArtifact.ts')
 	})
 
@@ -241,12 +241,12 @@ end_of_record
 		expect(classifyTypeScriptSource('ui/zoltarShared/ts/protocol.ts', 'export const protocol = true')).toBe('ui')
 		expect(classifyTypeScriptSource('ui/statoblastShared/ts/protocol.ts', 'export const protocol = true')).toBe('ui')
 		expect(classifyTypeScriptSource('ui/trading/ts/protocol/capabilities.ts', 'export const capabilities = true')).toBe('ui')
-		expect(classifyTypeScriptSource('shared/ts/model.ts', 'export const model = true')).toBe('shared')
+		expect(classifyTypeScriptSource('shared/core/ts/model.ts', 'export const model = true')).toBe('shared')
 		expect(classifyTypeScriptSource('scripts/task.mts', 'console.log("run")')).toBe('tooling')
 		expect(classifyTypeScriptSource('solidity/ts/client.ts', 'export const client = true')).toBe('tooling')
-		expect(classifyTypeScriptSource('shared/ts/model.ts', 'export type Model = string')).toBeUndefined()
-		expect(classifyTypeScriptSource('shared/ts/model.ts', "export type { Model } from './types'")).toBeUndefined()
-		expect(classifyTypeScriptSource('shared/ts/model.ts', "export { type Model } from './types'")).toBeUndefined()
+		expect(classifyTypeScriptSource('shared/core/ts/model.ts', 'export type Model = string')).toBeUndefined()
+		expect(classifyTypeScriptSource('shared/core/ts/model.ts', "export type { Model } from './types'")).toBeUndefined()
+		expect(classifyTypeScriptSource('shared/core/ts/model.ts', "export { type Model } from './types'")).toBeUndefined()
 		expect(classifyTypeScriptSource('scripts/augment.d.mts', "import './runtime-types'")).toBeUndefined()
 		expect(classifyTypeScriptSource('scripts/model.cts', "import type Model = require('./model-types')")).toBeUndefined()
 	})
@@ -275,7 +275,7 @@ describe('coverage policy', () => {
 		version: 1,
 		typescript: {
 			ui: { minimumLines: 80, minimumFunctions: 70, allowedUnloadedFiles: [], maximumAllowedUnloadedFiles: 0, unloadedFilesReviewBy: '2999-01-01' },
-			shared: { minimumLines: 75, minimumFunctions: 65, allowedUnloadedFiles: ['shared/ts/known.ts'], maximumAllowedUnloadedFiles: 1, unloadedFilesReviewBy: '2999-01-01' },
+			shared: { minimumLines: 75, minimumFunctions: 65, allowedUnloadedFiles: ['shared/core/ts/known.ts'], maximumAllowedUnloadedFiles: 1, unloadedFilesReviewBy: '2999-01-01' },
 			tooling: { minimumLines: 35, minimumFunctions: 30, allowedUnloadedFiles: [], maximumAllowedUnloadedFiles: 0, unloadedFilesReviewBy: '2999-01-01' },
 		},
 		solidity: { minimumFirstPartyLines: 100, minimumImportedLines: 100, minimumAggregateLines: 100, requireNoUncoveredLines: true },
@@ -288,7 +288,7 @@ describe('coverage policy', () => {
 				typescript: {
 					surfaces: {
 						ui: surface(79, 71),
-						shared: { ...surface(80, 70), unloadedFiles: ['shared/ts/new.ts'] },
+						shared: { ...surface(80, 70), unloadedFiles: ['shared/core/ts/new.ts'] },
 						tooling: surface(40, 35),
 					},
 					excludedFiles: [],
@@ -306,8 +306,8 @@ describe('coverage policy', () => {
 		)
 
 		expect(result.failures).toContain('TypeScript ui line coverage 79.0000% is below 80.000%')
-		expect(result.failures).toContain('TypeScript shared has newly unloaded executable source: shared/ts/new.ts')
-		expect(result.failures).toContain('TypeScript shared policy still allows source that is no longer unloaded: shared/ts/known.ts')
+		expect(result.failures).toContain('TypeScript shared has newly unloaded executable source: shared/core/ts/new.ts')
+		expect(result.failures).toContain('TypeScript shared policy still allows source that is no longer unloaded: shared/core/ts/known.ts')
 		expect(result.failures).toContain('First-party Solidity line coverage 99.5000% is below 100.000%')
 		expect(result.failures).toContain('Imported Solidity line coverage 90.0000% is below 100.000%')
 		expect(result.failures).toContain('Aggregate Solidity line coverage 98.0000% is below 100.000%')
@@ -320,7 +320,7 @@ describe('coverage policy', () => {
 				typescript: {
 					surfaces: {
 						ui: surface(80, 70),
-						shared: { ...surface(75, 65), unloadedFiles: ['shared/ts/known.ts'] },
+						shared: { ...surface(75, 65), unloadedFiles: ['shared/core/ts/known.ts'] },
 						tooling: surface(35, 30),
 					},
 					excludedFiles: [],
@@ -336,7 +336,7 @@ describe('coverage policy', () => {
 	test('rejects empty required Solidity evidence instead of treating it as complete coverage', () => {
 		const result = evaluateCoveragePolicy(
 			{
-				typescript: { surfaces: { ui: surface(100, 100), shared: { ...surface(100, 100), unloadedFiles: ['shared/ts/known.ts'] }, tooling: surface(100, 100) }, excludedFiles: [] },
+				typescript: { surfaces: { ui: surface(100, 100), shared: { ...surface(100, 100), unloadedFiles: ['shared/core/ts/known.ts'] }, tooling: surface(100, 100) }, excludedFiles: [] },
 				solidity: { firstParty: { covered: 0, total: 0, percentage: 100 }, imported: { covered: 0, total: 0, percentage: 100 }, all: { covered: 0, total: 0, percentage: 100 }, uncoveredFirstPartyLines: [], uncoveredImportedLines: [] },
 				changedLines: metric(100),
 			},
@@ -348,7 +348,7 @@ describe('coverage policy', () => {
 	test('caps and time-bounds unloaded source exceptions', () => {
 		const report = {
 			typescript: {
-				surfaces: { ui: surface(100, 100), shared: { ...surface(100, 100), unloadedFiles: ['shared/ts/known.ts'] }, tooling: surface(100, 100) },
+				surfaces: { ui: surface(100, 100), shared: { ...surface(100, 100), unloadedFiles: ['shared/core/ts/known.ts'] }, tooling: surface(100, 100) },
 				excludedFiles: [],
 			},
 			changedLines: metric(100),
@@ -374,7 +374,7 @@ describe('coverage policy', () => {
 				typescript: {
 					surfaces: {
 						ui: { ...surface(88.06, 70), lines: { covered: 28_105, total: 31_917, percentage: 88.06 } },
-						shared: { ...surface(75, 65), unloadedFiles: ['shared/ts/known.ts'] },
+						shared: { ...surface(75, 65), unloadedFiles: ['shared/core/ts/known.ts'] },
 						tooling: surface(35, 30),
 					},
 					excludedFiles: [],
@@ -394,7 +394,7 @@ describe('coverage policy', () => {
 				typescript: {
 					surfaces: {
 						ui: surface(100, 100),
-						shared: { ...surface(100, 100), unloadedFiles: ['shared/ts/known.ts'] },
+						shared: { ...surface(100, 100), unloadedFiles: ['shared/core/ts/known.ts'] },
 						tooling: surface(100, 100),
 					},
 					excludedFiles: [],
@@ -461,16 +461,16 @@ describe('changed-line and Solidity coverage', () => {
 +one
  context
 +two
-diff --git a/shared/ts/new.ts b/shared/ts/new.ts
+diff --git a/shared/core/ts/new.ts b/shared/core/ts/new.ts
 --- /dev/null
-+++ b/shared/ts/new.ts
++++ b/shared/core/ts/new.ts
 @@ -0,0 +1,2 @@
 +first
 +second
 `)
 
 		expect(changed.get('ui/zoltar/ts/app.ts')).toEqual(new Set([10, 12]))
-		expect(changed.get('shared/ts/new.ts')).toEqual(new Set([1, 2]))
+		expect(changed.get('shared/core/ts/new.ts')).toEqual(new Set([1, 2]))
 	})
 
 	test('counts committed, staged, unstaged, and untracked product additions', async () => {
@@ -480,7 +480,7 @@ diff --git a/shared/ts/new.ts b/shared/ts/new.ts
 			await runTemporaryGit(repositoryRoot, ['config', 'user.email', 'coverage@example.com'])
 			await runTemporaryGit(repositoryRoot, ['config', 'user.name', 'Coverage Test'])
 			await mkdir(join(repositoryRoot, 'ui/zoltar/ts'), { recursive: true })
-			await mkdir(join(repositoryRoot, 'shared/ts'), { recursive: true })
+			await mkdir(join(repositoryRoot, 'shared/core/ts'), { recursive: true })
 			await writeFile(join(repositoryRoot, 'ui/zoltar/ts/existing.ts'), 'export const baseline = 1\n')
 			await runTemporaryGit(repositoryRoot, ['add', 'ui/zoltar/ts/existing.ts'])
 			await runTemporaryGit(repositoryRoot, ['commit', '--quiet', '-m', 'baseline'])
@@ -489,8 +489,8 @@ diff --git a/shared/ts/new.ts b/shared/ts/new.ts
 			await writeFile(join(repositoryRoot, 'ui/zoltar/ts/committed.ts'), 'export const committed = 1\n')
 			await runTemporaryGit(repositoryRoot, ['add', 'ui/zoltar/ts/committed.ts'])
 			await runTemporaryGit(repositoryRoot, ['commit', '--quiet', '-m', 'committed'])
-			await writeFile(join(repositoryRoot, 'shared/ts/staged.ts'), 'export const staged = 1\n')
-			await runTemporaryGit(repositoryRoot, ['add', 'shared/ts/staged.ts'])
+			await writeFile(join(repositoryRoot, 'shared/core/ts/staged.ts'), 'export const staged = 1\n')
+			await runTemporaryGit(repositoryRoot, ['add', 'shared/core/ts/staged.ts'])
 			await writeFile(join(repositoryRoot, 'ui/zoltar/ts/existing.ts'), 'export const baseline = 1\nexport const unstaged = 2\n')
 			await writeFile(join(repositoryRoot, 'ui/zoltar/ts/untracked.ts'), '// untracked product source\nexport const untracked = 3\n')
 
@@ -511,7 +511,7 @@ LH:1
 FNF:0
 FNH:0
 end_of_record
-SF:shared/ts/staged.ts
+SF:shared/core/ts/staged.ts
 DA:1,1
 LF:1
 LH:1
@@ -529,7 +529,7 @@ end_of_record
 `)
 
 			expect(changedLines.get('ui/zoltar/ts/committed.ts')).toEqual(new Set([1]))
-			expect(changedLines.get('shared/ts/staged.ts')).toEqual(new Set([1]))
+			expect(changedLines.get('shared/core/ts/staged.ts')).toEqual(new Set([1]))
 			expect(changedLines.get('ui/zoltar/ts/existing.ts')).toEqual(new Set([2]))
 			expect(changedLines.get('ui/zoltar/ts/untracked.ts')).toEqual(new Set([1, 2]))
 			expect(calculateChangedLineCoverage(changedLines, records, productSources)).toEqual({ covered: 3, total: 4, percentage: 75 })

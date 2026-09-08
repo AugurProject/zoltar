@@ -7,12 +7,10 @@ WORKDIR /source
 RUN git init
 
 COPY package.json bun.lock ./
+COPY shared/ ./shared/
 COPY tooling/ ./tooling/
-COPY shared/package.json shared/bun.lock shared/tsconfig.json ./shared/
-COPY shared/ts/ ./shared/ts/
-RUN mkdir -p shared/js \
-	&& bun install --frozen-lockfile \
-	&& bun run shared:build
+RUN bun install --frozen-lockfile \
+	&& bun ./tooling/repo/build-shared.mts
 
 FROM oven/bun:${BUN_VERSION}-alpine
 
@@ -26,9 +24,9 @@ COPY bots/liquidator/package.json bots/liquidator/bun.lock ./bots/liquidator/
 # Use the repository installer for nested file: dependencies in production too.
 COPY --from=shared-builder /source/tooling/repo/install-frozen.mts /tmp/tooling/repo/install-frozen.mts
 COPY --from=shared-builder /source/tooling/ui/share-ui-preact-runtime.mts /tmp/tooling/ui/share-ui-preact-runtime.mts
-RUN cd shared \
+RUN cd shared/core \
 	&& bun /tmp/tooling/repo/install-frozen.mts . --production \
-	&& cd ../bots/shared \
+	&& cd ../../bots/shared \
 	&& bun /tmp/tooling/repo/install-frozen.mts . --production \
 	&& cd ../liquidator \
 	&& bun /tmp/tooling/repo/install-frozen.mts . --production \

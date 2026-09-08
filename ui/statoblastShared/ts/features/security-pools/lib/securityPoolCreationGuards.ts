@@ -1,5 +1,5 @@
-import type { Address } from '@zoltar/shared/evm/ethereum'
-import { MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/shared/oracle/oracleInitialReport'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
+import { MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import type { MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'

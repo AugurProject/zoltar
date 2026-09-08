@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { createWalletClient, custom, type Address, type Hash } from '@zoltar/shared/evm/ethereum'
+import { createWalletClient, custom, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { act } from 'preact/test-utils'
 import type { ComponentChildren } from 'preact'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'

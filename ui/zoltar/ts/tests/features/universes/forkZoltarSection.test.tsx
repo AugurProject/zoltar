@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { h, render } from 'preact'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
-import { zeroAddress } from '@zoltar/shared/evm/ethereum'
+import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { ForkZoltarSection } from '@zoltar/ui-zoltar-shared/features/universes/components/ForkZoltarSection.js'
 import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import { formatRelativeTimestamp, formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'

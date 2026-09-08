@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, mock, test } from 'bun:test'
-import type { Address } from '@zoltar/shared/evm/ethereum'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { AppHeaderShell } from '../../app/components/AppHeaderShell.js'
 import type { SimulationController } from '../../simulation/controller.js'
 

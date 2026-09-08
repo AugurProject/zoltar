@@ -1,6 +1,6 @@
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
-import type { Address } from '@zoltar/shared/evm/ethereum'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
 import type { ActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'

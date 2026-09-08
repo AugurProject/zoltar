@@ -1,10 +1,10 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
-import { encodeDeployData, type Address } from '@zoltar/shared/evm/ethereum'
+import { encodeDeployData, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, type WriteClient } from '../../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { compileArtifactsForTests } from './compileArtifactsForTests'
-import { quoteAddLiquidity, quoteExactInput, quoteExactOutput } from '@zoltar/shared/trading/math'
+import { quoteAddLiquidity, quoteExactInput, quoteExactOutput } from '@zoltar/trading-shared/trading/math'
 import { flushSolidityBytecodeCoverageForTest } from '../../coverage/traceToSource'
 
 type TradingContracts = Awaited<ReturnType<typeof compileArtifactsForTests>>

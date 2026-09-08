@@ -1,14 +1,14 @@
 import { beforeAll, beforeEach, setDefaultTimeout } from 'bun:test'
 import assert from '../../testSupport/simulator/utils/assert'
-import { decodeEventLog, encodeAbiParameters, keccak256 } from '@zoltar/shared/evm/ethereum'
-import type { Abi, Address, Hash } from '@zoltar/shared/evm/ethereum'
+import { decodeEventLog, encodeAbiParameters, keccak256 } from '@zoltar/core-shared/evm/ethereum'
+import type { Abi, Address, Hash } from '@zoltar/core-shared/evm/ethereum'
 import { AnvilWindowEthereum } from '../../testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnvilNode'
-import { sortBigIntsAscending } from '@zoltar/shared/serialization/bigInt'
-import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/shared/constants'
-// The solidity worktree can temporarily see a stale @zoltar/shared package through the shared node_modules link during refreshes.
+import { sortBigIntsAscending } from '@zoltar/core-shared/serialization/bigInt'
+import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/zoltar-shared/constants'
+// The solidity worktree can temporarily see a stale @zoltar/statoblast-shared package through the shared node_modules link during refreshes.
 // Import the generated shared helper directly so this fixture stays stable across merge-validation runs.
-import { pickFixtureProperties } from '../../../../shared/js/testing/pickFixtureProperties.js'
+import { pickFixtureProperties } from '../../../../shared/core/js/testing/pickFixtureProperties.js'
 import { createWriteClient, WriteClient } from '../../testSupport/simulator/utils/clients'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { approveToken, contractExists, getChildUniverseId, getERC20Balance, getETHBalance, ensureProxyDeployerDeployed, setupTestAccounts, sortStringArrayByKeccak } from '../../testSupport/simulator/utils/utilities'
@@ -19,7 +19,7 @@ import { createQuestion, getQuestionId } from '../../testSupport/simulator/utils
 
 import { balanceOfShares, balanceOfSharesInAttoEth, getEthRaiseCapAttoEth, getLastPrice, getQuestionEndDate, migrateShares, OperationType, participateAuction, requestPriceIfNeededAndStageOperation } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { getScalarOutcomeIndex } from '../../testSupport/simulator/utils/contracts/scalarOutcome'
-import { tickToPrice } from '@zoltar/shared/statoblast/truthAuctionTickMath'
+import { tickToPrice } from '@zoltar/statoblast-shared/statoblast/truthAuctionTickMath'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
 import { SystemState } from '../../testSupport/simulator/types/statoblastTypes'
 import { approximatelyEqual, ensureDefined, strictEqual18Decimal, strictEqualTypeSafe } from '../../testSupport/simulator/utils/testUtils'

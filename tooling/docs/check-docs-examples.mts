@@ -14,7 +14,7 @@ import {
 	calculateResolutionModel,
 	ESCALATION_TIME_LENGTH_SECONDS,
 } from '../../docs/charts/chartModels'
-import { getWinningEscalationDepositClaimAmount } from '../../shared/ts/oracle/escalationMath'
+import { getWinningEscalationDepositClaimAmount } from '../../shared/statoblast/ts/escalationGame/escalationMath'
 import { centeredDiagramScrollLeft, updateDiagramControl } from '../../docs/charts/diagramControl'
 
 type InteractiveExampleHarness = {

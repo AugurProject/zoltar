@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { concatHex, getAddress, type Hash, type Hex, type TransactionReceipt } from '@zoltar/shared/evm/ethereum'
+import { concatHex, getAddress, type Hash, type Hex, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import type { WriteClient } from '../../ui/coreShared/ts/wallet/chainBackend.ts'
 import { SEPOLIA_NETWORK_PROFILE } from '../../ui/coreShared/ts/wallet/networkProfile.ts'
 import { ARACHNID_CREATE2_DEPLOYER_ADDRESS, ARACHNID_CREATE2_DEPLOYER_RUNTIME_CODE, PERMIT2_ADDRESS, assertPermit2ImmutableValues, assertUniswapDeploymentArtifact, getUniswapDeployment, resolveCanonicalCreate2DeployerForPreflight } from './uniswap-deployment.mts'

@@ -1,3 +1,4 @@
+import { sharedPackages } from '../repo/sharedPackages.ts'
 import * as process from 'node:process'
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
@@ -8,8 +9,19 @@ import { createTestFingerprints, filterTestTimingHistory, getHistoricalTestWeigh
 const repositoryRoot = process.cwd()
 
 const SHARED_TIMING_CONTEXT_PATHS = ['bun-test-setup.ts', 'bunfig.toml'] as const
-const APPLICATION_TIMING_CONTEXT_PATHS = [...SHARED_TIMING_CONTEXT_PATHS, 'bun-test-setup-ui.ts', 'bun.lock', 'shared/bun.lock', 'ui/coreShared/bun.lock', 'ui/zoltarShared/bun.lock', 'ui/statoblastShared/bun.lock', 'ui/statoblast/bun.lock', 'ui/trading/bun.lock', 'ui/zoltar/bun.lock'] as const
-const SOLIDITY_TIMING_CONTEXT_PATHS = [...SHARED_TIMING_CONTEXT_PATHS, 'bun-test-setup-solidity.ts', 'bun.lock', 'shared/bun.lock', 'solidity/bun.lock'] as const
+const APPLICATION_TIMING_CONTEXT_PATHS = [
+	...SHARED_TIMING_CONTEXT_PATHS,
+	'bun-test-setup-ui.ts',
+	'bun.lock',
+	...sharedPackages.map(entry => `${entry.path}/bun.lock`),
+	'ui/coreShared/bun.lock',
+	'ui/zoltarShared/bun.lock',
+	'ui/statoblastShared/bun.lock',
+	'ui/statoblast/bun.lock',
+	'ui/trading/bun.lock',
+	'ui/zoltar/bun.lock',
+] as const
+const SOLIDITY_TIMING_CONTEXT_PATHS = [...SHARED_TIMING_CONTEXT_PATHS, 'bun-test-setup-solidity.ts', 'bun.lock', ...sharedPackages.map(entry => `${entry.path}/bun.lock`), 'solidity/bun.lock'] as const
 
 export function getTimingContextPaths(domain: TestDomain) {
 	if (domain === 'application') return [...APPLICATION_TIMING_CONTEXT_PATHS]
@@ -29,7 +41,7 @@ export const KNOWN_FILE_WEIGHTS = new Map<string, number>([
 	['solidity/ts/tests/statoblast/escalationMigration.test.ts', 71],
 	['solidity/ts/tests/statoblast/vaultAccounting.test.ts', 37],
 	['solidity/ts/tests/statoblast/deploymentAndOwnForkEscalation.test.ts', 33],
-	['ui/zoltar/ts/tests/features/open-oracle/openOracleSection.integration.test.tsx', 6],
+	['ui/statoblast/ts/tests/features/open-oracle/openOracleSection.integration.test.tsx', 6],
 	['ui/zoltar/ts/tests/integration/deployedEnvironment.test.ts', 4],
 	['solidity/ts/tests/statoblast/receiveGuards.test.ts', 2],
 ])

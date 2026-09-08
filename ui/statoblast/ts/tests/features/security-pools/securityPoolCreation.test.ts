@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { encodeAbiParameters, encodeEventTopics, zeroAddress, type Address } from '@zoltar/shared/evm/ethereum'
+import { encodeAbiParameters, encodeEventTopics, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { createSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
 import { createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import type { WriteClient as UiWriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -15,7 +15,7 @@ import { ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresse
 import { ensureZoltarDeployed } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { ensureProxyDeployerDeployed, setupTestAccounts } from '../../../../../../solidity/ts/testSupport/simulator/utils/utilities'
-import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 

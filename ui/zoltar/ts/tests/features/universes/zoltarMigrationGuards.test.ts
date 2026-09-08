@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { zeroAddress } from '@zoltar/shared/evm/ethereum'
+import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { getMigrationGuardMessage } from '@zoltar/ui-zoltar-shared/features/universes/lib/zoltarMigrationGuards.js'
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 

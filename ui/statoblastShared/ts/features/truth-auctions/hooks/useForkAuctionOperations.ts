@@ -2,20 +2,10 @@ import { useSignal } from '@preact/signals'
 import { useRef } from 'preact/hooks'
 import { useFormState } from '@zoltar/ui-core-shared/hooks/useFormState.js'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
-import type { Address } from '@zoltar/shared/evm/ethereum'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { finalizeSecurityPoolTruthAuction, refundTruthAuctionBid, settleTruthAuctionBids, startTruthAuctionForSecurityPool, submitTruthAuctionBid, withdrawTruthAuctionRefund } from '../../../protocol/truthAuctionActions.js'
-import {
-	claimParentEscalationDeposits,
-	createChildUniverseFromSecurityPool,
-	forkUniverseDirectly,
-	forkZoltarWithOwnEscalation,
-	initiateSecurityPoolFork,
-	loadForkAuctionDetails,
-	migrateRepToZoltarFromSecurityPool,
-	migrateSecurityVault,
-	migrateVaultWithUnresolvedEscalation,
-} from '@zoltar/ui-zoltar-shared/protocol/forks.js'
-import { buildForkCarriedEscalationProofs, withdrawForkedEscalationDeposits } from '@zoltar/ui-zoltar-shared/protocol/reporting.js'
+import { claimParentEscalationDeposits, createChildUniverseFromSecurityPool, forkUniverseDirectly, forkZoltarWithOwnEscalation, initiateSecurityPoolFork, loadForkAuctionDetails, migrateRepToZoltarFromSecurityPool, migrateSecurityVault, migrateVaultWithUnresolvedEscalation } from '../../../protocol/forks.js'
+import { buildForkCarriedEscalationProofs, withdrawForkedEscalationDeposits } from '../../../protocol/reporting.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { getTruthAuctionBidGuardMessage, getTruthAuctionBidPriceValidationMessage, getTruthAuctionTickAtPrice } from '../lib/truthAuctionBook.js'

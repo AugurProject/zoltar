@@ -1,4 +1,4 @@
-import { bigintToSafeNumber, getAddress, type Address } from '@zoltar/shared/evm/ethereum'
+import { bigintToSafeNumber, getAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { ABIS } from '../abis.js'
 import { getActiveBackend } from '../lib/activeEnvironment.js'
 import type { ChainBackend } from './chainBackend.js'

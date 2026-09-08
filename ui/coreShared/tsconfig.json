@@ -3,7 +3,8 @@
 	"compilerOptions": {
 		"baseUrl": ".",
 		"paths": {
-			"@zoltar/shared/*": ["../../shared/js/*"]
+			"@zoltar/core-shared/*": ["../../shared/core/js/*"],
+			"@zoltar/zoltar-shared/*": ["../../shared/zoltar/js/*"]
 		},
 		"rootDir": "./ts",
 		"outDir": "./js"

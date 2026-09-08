@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { getAddress, getCreateAddress, keccak256, privateKeyToAccount, type Address, type Hex } from '@zoltar/shared/evm/ethereum'
-import { getBootstrapDescendantAddresses, getInfraContractAddresses } from '../../ui/zoltarShared/ts/protocol/deploymentHelpers.ts'
+import { getAddress, getCreateAddress, keccak256, privateKeyToAccount, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { getBootstrapDescendantAddresses, getInfraContractAddresses } from '../../ui/statoblastShared/ts/protocol/deploymentHelpers.ts'
 import type { WriteClient } from '../../ui/coreShared/ts/wallet/chainBackend.ts'
 import { SEPOLIA_NETWORK_PROFILE } from '../../ui/coreShared/ts/wallet/networkProfile.ts'
 import { PROXY_DEPLOYER_RUNTIME_CODE } from '../../ui/zoltarShared/ts/protocol/deployment.ts'

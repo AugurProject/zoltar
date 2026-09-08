@@ -12,10 +12,11 @@
 	},
 	"dependencies": {
 		"@preact/signals": "2.0.1",
-		"@zoltar/shared": "file:../../shared",
 		"@zoltar/ui-core-shared": "file:../coreShared",
 		"preact": "10.26.4",
-		"tevm": "1.0.0-rc.151"
+		"tevm": "1.0.0-rc.151",
+		"@zoltar/core-shared": "file:../../shared/core",
+		"@zoltar/zoltar-shared": "file:../../shared/zoltar"
 	},
 	"overrides": {
 		"@tevm/actions": "1.0.0-rc.151",
@@ -26,7 +27,10 @@
 		"nanoid": "3.3.18",
 		"postcss": "8.5.23",
 		"tmp": "0.2.7",
-		"ws": "8.21.0"
+		"ws": "8.21.0",
+		"@zoltar/core-shared": "file:../../shared/core",
+		"@zoltar/zoltar-shared": "file:../../shared/zoltar",
+		"@zoltar/ui-core-shared": "file:../coreShared"
 	},
 	"scripts": {
 		"build": "bun x tsc --project tsconfig.json",
@@ -36,22 +40,6 @@
 		"./copy/market.js": {
 			"bun": "./ts/copy/market.ts",
 			"default": "./js/copy/market.js"
-		},
-		"./copy/openOracle.js": {
-			"bun": "./ts/copy/openOracle.ts",
-			"default": "./js/copy/openOracle.js"
-		},
-		"./copy/reporting.js": {
-			"bun": "./ts/copy/reporting.ts",
-			"default": "./js/copy/reporting.js"
-		},
-		"./copy/reportingEscalation.js": {
-			"bun": "./ts/copy/reportingEscalation.ts",
-			"default": "./js/copy/reportingEscalation.js"
-		},
-		"./copy/trading.js": {
-			"bun": "./ts/copy/trading.ts",
-			"default": "./js/copy/trading.js"
 		},
 		"./copy/zoltar.js": {
 			"bun": "./ts/copy/zoltar.ts",
@@ -77,58 +65,6 @@
 			"bun": "./ts/features/deployment/lib/deploymentRoute.ts",
 			"default": "./js/features/deployment/lib/deploymentRoute.js"
 		},
-		"./features/open-oracle/components/OpenOraclePriceValue.js": {
-			"bun": "./ts/features/open-oracle/components/OpenOraclePriceValue.tsx",
-			"default": "./js/features/open-oracle/components/OpenOraclePriceValue.js"
-		},
-		"./features/open-oracle/components/OpenOracleReportContent.js": {
-			"bun": "./ts/features/open-oracle/components/OpenOracleReportContent.tsx",
-			"default": "./js/features/open-oracle/components/OpenOracleReportContent.js"
-		},
-		"./features/open-oracle/components/OpenOracleSection.js": {
-			"bun": "./ts/features/open-oracle/components/OpenOracleSection.tsx",
-			"default": "./js/features/open-oracle/components/OpenOracleSection.js"
-		},
-		"./features/open-oracle/hooks/useOpenOracleOperations.js": {
-			"bun": "./ts/features/open-oracle/hooks/useOpenOracleOperations.ts",
-			"default": "./js/features/open-oracle/hooks/useOpenOracleOperations.js"
-		},
-		"./features/open-oracle/hooks/useOpenOracleRouteSync.js": {
-			"bun": "./ts/features/open-oracle/hooks/useOpenOracleRouteSync.ts",
-			"default": "./js/features/open-oracle/hooks/useOpenOracleRouteSync.js"
-		},
-		"./features/open-oracle/hooks/usePriceOracleManager.js": {
-			"bun": "./ts/features/open-oracle/hooks/usePriceOracleManager.ts",
-			"default": "./js/features/open-oracle/hooks/usePriceOracleManager.js"
-		},
-		"./features/open-oracle/hooks/useRepPrices.js": {
-			"bun": "./ts/features/open-oracle/hooks/useRepPrices.ts",
-			"default": "./js/features/open-oracle/hooks/useRepPrices.js"
-		},
-		"./features/open-oracle/lib/formDefaults.js": {
-			"bun": "./ts/features/open-oracle/lib/formDefaults.ts",
-			"default": "./js/features/open-oracle/lib/formDefaults.js"
-		},
-		"./features/open-oracle/lib/openOracle.js": {
-			"bun": "./ts/features/open-oracle/lib/openOracle.ts",
-			"default": "./js/features/open-oracle/lib/openOracle.js"
-		},
-		"./features/open-oracle/lib/openOracleNavigation.js": {
-			"bun": "./ts/features/open-oracle/lib/openOracleNavigation.ts",
-			"default": "./js/features/open-oracle/lib/openOracleNavigation.js"
-		},
-		"./features/open-oracle/lib/openOracleReadiness.js": {
-			"bun": "./ts/features/open-oracle/lib/openOracleReadiness.ts",
-			"default": "./js/features/open-oracle/lib/openOracleReadiness.js"
-		},
-		"./features/open-oracle/lib/openOracleStage.js": {
-			"bun": "./ts/features/open-oracle/lib/openOracleStage.ts",
-			"default": "./js/features/open-oracle/lib/openOracleStage.js"
-		},
-		"./features/open-oracle/lib/oracleRequestEth.js": {
-			"bun": "./ts/features/open-oracle/lib/oracleRequestEth.ts",
-			"default": "./js/features/open-oracle/lib/oracleRequestEth.js"
-		},
 		"./features/overview/OverviewPanels.js": {
 			"bun": "./ts/features/overview/OverviewPanels.tsx",
 			"default": "./js/features/overview/OverviewPanels.js"
@@ -148,42 +84,6 @@
 		"./features/questions/lib/questionForm.js": {
 			"bun": "./ts/features/questions/lib/questionForm.ts",
 			"default": "./js/features/questions/lib/questionForm.js"
-		},
-		"./features/reporting/components/EscalationDepositSelectionList.js": {
-			"bun": "./ts/features/reporting/components/EscalationDepositSelectionList.tsx",
-			"default": "./js/features/reporting/components/EscalationDepositSelectionList.js"
-		},
-		"./features/reporting/components/ImportedForkSettlementSection.js": {
-			"bun": "./ts/features/reporting/components/ImportedForkSettlementSection.tsx",
-			"default": "./js/features/reporting/components/ImportedForkSettlementSection.js"
-		},
-		"./features/reporting/components/ReportingSection.js": {
-			"bun": "./ts/features/reporting/components/ReportingSection.tsx",
-			"default": "./js/features/reporting/components/ReportingSection.js"
-		},
-		"./features/reporting/hooks/useReportingOperations.js": {
-			"bun": "./ts/features/reporting/hooks/useReportingOperations.ts",
-			"default": "./js/features/reporting/hooks/useReportingOperations.js"
-		},
-		"./features/reporting/lib/reporting.js": {
-			"bun": "./ts/features/reporting/lib/reporting.ts",
-			"default": "./js/features/reporting/lib/reporting.js"
-		},
-		"./features/reporting/lib/reportingDomain.js": {
-			"bun": "./ts/features/reporting/lib/reportingDomain.ts",
-			"default": "./js/features/reporting/lib/reportingDomain.js"
-		},
-		"./features/reporting/lib/reportingForm.js": {
-			"bun": "./ts/features/reporting/lib/reportingForm.ts",
-			"default": "./js/features/reporting/lib/reportingForm.js"
-		},
-		"./features/reporting/lib/reportingGuards.js": {
-			"bun": "./ts/features/reporting/lib/reportingGuards.ts",
-			"default": "./js/features/reporting/lib/reportingGuards.js"
-		},
-		"./features/transactionPresentations.js": {
-			"bun": "./ts/features/transactionPresentations.tsx",
-			"default": "./js/features/transactionPresentations.js"
 		},
 		"./features/types.js": {
 			"bun": "./ts/features/types.ts",
@@ -212,14 +112,6 @@
 		"./features/universes/components/MigrationOutcomeUniversesSection.js": {
 			"bun": "./ts/features/universes/components/MigrationOutcomeUniversesSection.tsx",
 			"default": "./js/features/universes/components/MigrationOutcomeUniversesSection.js"
-		},
-		"./features/universes/components/ShareMigrationTargetsSection.js": {
-			"bun": "./ts/features/universes/components/ShareMigrationTargetsSection.tsx",
-			"default": "./js/features/universes/components/ShareMigrationTargetsSection.js"
-		},
-		"./features/universes/components/TransactionUniverseValue.js": {
-			"bun": "./ts/features/universes/components/TransactionUniverseValue.tsx",
-			"default": "./js/features/universes/components/TransactionUniverseValue.js"
 		},
 		"./features/universes/components/UniverseDirectorySection.js": {
 			"bun": "./ts/features/universes/components/UniverseDirectorySection.tsx",
@@ -273,57 +165,13 @@
 			"bun": "./ts/protocol/core.ts",
 			"default": "./js/protocol/core.js"
 		},
-		"./protocol/decoders.js": {
-			"bun": "./ts/protocol/decoders.ts",
-			"default": "./js/protocol/decoders.js"
-		},
 		"./protocol/deployment.js": {
 			"bun": "./ts/protocol/deployment.ts",
 			"default": "./js/protocol/deployment.js"
 		},
-		"./protocol/deploymentHelpers.js": {
-			"bun": "./ts/protocol/deploymentHelpers.ts",
-			"default": "./js/protocol/deploymentHelpers.js"
-		},
-		"./protocol/forkActivity.js": {
-			"bun": "./ts/protocol/forkActivity.ts",
-			"default": "./js/protocol/forkActivity.js"
-		},
-		"./protocol/forkData.js": {
-			"bun": "./ts/protocol/forkData.ts",
-			"default": "./js/protocol/forkData.js"
-		},
-		"./protocol/forks.js": {
-			"bun": "./ts/protocol/forks.ts",
-			"default": "./js/protocol/forks.js"
-		},
 		"./protocol/helpers.js": {
 			"bun": "./ts/protocol/helpers.ts",
 			"default": "./js/protocol/helpers.js"
-		},
-		"./protocol/liquidationApprovals.js": {
-			"bun": "./ts/protocol/liquidationApprovals.ts",
-			"default": "./js/protocol/liquidationApprovals.js"
-		},
-		"./protocol/openOracle.js": {
-			"bun": "./ts/protocol/openOracle.ts",
-			"default": "./js/protocol/openOracle.js"
-		},
-		"./protocol/openOraclePricing.js": {
-			"bun": "./ts/protocol/openOraclePricing.ts",
-			"default": "./js/protocol/openOraclePricing.js"
-		},
-		"./protocol/oracleQueueOperation.js": {
-			"bun": "./ts/protocol/oracleQueueOperation.ts",
-			"default": "./js/protocol/oracleQueueOperation.js"
-		},
-		"./protocol/oracleTiming.js": {
-			"bun": "./ts/protocol/oracleTiming.ts",
-			"default": "./js/protocol/oracleTiming.js"
-		},
-		"./protocol/reporting.js": {
-			"bun": "./ts/protocol/reporting.ts",
-			"default": "./js/protocol/reporting.js"
 		},
 		"./protocol/tokenActions.js": {
 			"bun": "./ts/protocol/tokenActions.ts",
@@ -348,6 +196,10 @@
 		"./types/app.js": {
 			"bun": "./ts/types/app.ts",
 			"default": "./js/types/app.js"
+		},
+		"./lib/formDefaults.js": {
+			"bun": "./ts/lib/formDefaults.ts",
+			"default": "./js/lib/formDefaults.js"
 		}
 	}
 }

@@ -1,7 +1,7 @@
 import { useSignal } from '@preact/signals'
 import { useCallback, useEffect } from 'preact/hooks'
 import { useFormState } from '@zoltar/ui-core-shared/hooks/useFormState.js'
-import type { Address } from '@zoltar/shared/evm/ethereum'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { migrateInternalRepInZoltar, prepareRepForMigrationInZoltar } from '../../../protocol/zoltarForks.js'
 import { createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { formatRefreshErrorMessage, formatWriteErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'

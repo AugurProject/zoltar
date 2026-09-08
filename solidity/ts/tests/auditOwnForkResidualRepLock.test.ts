@@ -1,5 +1,5 @@
 import { beforeEach, describe, test } from 'bun:test'
-import { decodeEventLog } from '@zoltar/shared/evm/ethereum'
+import { decodeEventLog } from '@zoltar/core-shared/evm/ethereum'
 import { getVaultCount, getTotalRepBackingUnits, redeemRepFromVault } from '../testSupport/simulator/utils/contracts/securityPool'
 import { backingUnitsToAttoRep as forkerBackingUnitsToAttoRep, getOwnForkRepBuckets } from '../testSupport/simulator/utils/contracts/securityPoolForker'
 import { useStatoblastEscalationMigrationFixture, type StatoblastEscalationMigrationFixture } from './statoblast/fixture'

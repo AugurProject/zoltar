@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
-import { createPublicClient, createWalletClient, custom, getAddress, type Hash } from '@zoltar/shared/evm/ethereum'
+import { createPublicClient, createWalletClient, custom, getAddress, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { LiveSettlementControls } from '../../features/LiveSettlementControls.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'

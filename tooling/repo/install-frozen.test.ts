@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+import { sharedPackages } from './sharedPackages.ts'
 import { cp, lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
@@ -54,7 +55,7 @@ test('windows install workaround restores package and lock inputs after omitting
 	const installDirectory = await mkdtemp(path.join(tmpdir(), 'zoltar-install-frozen-'))
 	try {
 		const originalPackageJson = createPackageJson({
-			'@zoltar/shared': 'file:../shared',
+			'@zoltar/core-shared': 'file:../shared',
 		})
 		const originalLockfile = 'lockfile stays restored\n'
 		await writeFile(path.join(installDirectory, 'package.json'), originalPackageJson)
@@ -76,7 +77,7 @@ test('windows install workaround restores stale backups before installing', asyn
 	const installDirectory = await mkdtemp(path.join(tmpdir(), 'zoltar-install-frozen-recovery-'))
 	try {
 		const originalPackageJson = createPackageJson({
-			'@zoltar/shared': 'file:../shared',
+			'@zoltar/core-shared': 'file:../shared',
 		})
 		const originalLockfile = 'stale lock backup\n'
 		await writeFile(path.join(installDirectory, 'package.json'), createPackageJson({}))
@@ -118,14 +119,14 @@ test.each(['development', 'production'])('native %s install rejects a stale regi
 		await mkdir(installDirectory)
 		await mkdir(sharedDirectory)
 		await writeFile(path.join(sharedDirectory, 'package.json'), createPackageJson({}))
-		await writeFile(path.join(installDirectory, 'package.json'), createPackageJson({ '@zoltar/shared': 'file:../shared', kleur: '4.1.5' }))
+		await writeFile(path.join(installDirectory, 'package.json'), createPackageJson({ '@zoltar/core-shared': 'file:../shared', kleur: '4.1.5' }))
 		const initialInstall = Bun.spawnSync([process.execPath, 'install'], { cwd: installDirectory, stderr: 'pipe', stdout: 'pipe' })
 		expect(initialInstall.exitCode).toBe(0)
-		const installedSharedPath = path.join(installDirectory, 'node_modules', '@zoltar', 'shared')
+		const installedSharedPath = path.join(installDirectory, 'node_modules', '@zoltar', 'core-shared')
 		await rm(installedSharedPath, { force: true, recursive: true })
 		await symlink(sharedDirectory, installedSharedPath, 'dir')
 
-		const stalePackageJson = createPackageJson({ '@zoltar/shared': 'file:../shared', kleur: '4.1.4' })
+		const stalePackageJson = createPackageJson({ '@zoltar/core-shared': 'file:../shared', kleur: '4.1.4' })
 		await writeFile(path.join(installDirectory, 'package.json'), stalePackageJson)
 		const originalLockfile = await readFile(path.join(installDirectory, 'bun.lock'), 'utf8')
 		const result = runNativeInstall(installDirectory, mode === 'production' ? ['--production'] : [])
@@ -145,8 +146,8 @@ test('native install retains transitive dependencies from safe local packages', 
 	const sharedDirectory = path.join(installDirectory, 'shared')
 	try {
 		await mkdir(sharedDirectory)
-		await writeFile(path.join(sharedDirectory, 'package.json'), `${JSON.stringify({ name: '@zoltar/shared', version: '1.0.0', dependencies: { kleur: '4.1.5' } }, undefined, '\t')}\n`)
-		await writeFile(path.join(installDirectory, 'package.json'), createPackageJson({ '@zoltar/shared': 'file:shared' }))
+		await writeFile(path.join(sharedDirectory, 'package.json'), `${JSON.stringify({ name: '@zoltar/core-shared', version: '1.0.0', dependencies: { kleur: '4.1.5' } }, undefined, '\t')}\n`)
+		await writeFile(path.join(installDirectory, 'package.json'), createPackageJson({ '@zoltar/core-shared': 'file:shared' }))
 		const initialInstall = Bun.spawnSync([process.execPath, 'install'], { cwd: installDirectory, stderr: 'pipe', stdout: 'pipe' })
 		expect(initialInstall.exitCode).toBe(0)
 		await rm(path.join(installDirectory, 'node_modules'), { force: true, recursive: true })
@@ -164,14 +165,14 @@ test('native install retains transitive dependencies from safe local packages', 
 test('production installs resolve nested bot packages without development dependencies', async () => {
 	const root = await mkdtemp(path.join(tmpdir(), 'zoltar-install-production-'))
 	const botPackages = ['bots/liquidator', 'bots/chaos', 'bots/open-oracle-arbitrager']
-	const packages = ['shared', 'bots/shared', ...botPackages]
+	const packages = [...sharedPackages.map(entry => entry.path), 'bots/shared', ...botPackages]
 	try {
 		for (const packagePath of packages) {
 			const directory = path.join(root, packagePath)
 			await mkdir(directory, { recursive: true })
 			for (const file of ['package.json', 'bun.lock']) await cp(path.join(repositoryRootPath, packagePath, file), path.join(directory, file))
 		}
-		await cp(path.join(repositoryRootPath, 'shared/ts'), path.join(root, 'shared/ts'), { recursive: true })
+		for (const entry of sharedPackages) await cp(path.join(repositoryRootPath, entry.path, 'ts'), path.join(root, entry.path, 'ts'), { recursive: true })
 		await cp(path.join(repositoryRootPath, 'bots/shared/src'), path.join(root, 'bots/shared/src'), { recursive: true })
 		for (const packagePath of packages) {
 			const directory = path.join(root, packagePath)

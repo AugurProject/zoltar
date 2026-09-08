@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
-import { decodeEventLog, encodeDeployData, encodeFunctionData, type Abi, type Address, type Hex, zeroAddress } from '@zoltar/shared/evm/ethereum'
+import { decodeEventLog, encodeDeployData, encodeFunctionData, type Abi, type Address, type Hex, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'

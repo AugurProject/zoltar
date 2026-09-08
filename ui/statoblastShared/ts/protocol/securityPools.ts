@@ -1,4 +1,4 @@
-import { decodeEventLog, encodeAbiParameters, encodeDeployData, getAddress, getCreate2Address, keccak256, zeroAddress, type Address, type ContractFunctionParameters, type TransactionReceipt } from '@zoltar/shared/evm/ethereum'
+import { decodeEventLog, encodeAbiParameters, encodeDeployData, getAddress, getCreate2Address, keccak256, zeroAddress, type Address, type ContractFunctionParameters, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import {
 	statoblast_EscalationGame_EscalationGame,
 	statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
@@ -6,23 +6,21 @@ import {
 	statoblast_SecurityPoolForker_SecurityPoolForker,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
 	statoblast_tokens_ShareToken_ShareToken,
-	ReputationToken_ReputationToken,
-	Zoltar_Zoltar,
-	ZoltarQuestionData_ZoltarQuestionData,
-} from '@zoltar/ui-core-shared/contractArtifact.js'
+} from '../contractArtifact.js'
+import { ReputationToken_ReputationToken, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { isIgnorableLogDecodeError } from '@zoltar/ui-core-shared/lib/errors.js'
-import { SECURITY_POOL_QUESTION_OUTCOME_ABI } from '@zoltar/ui-core-shared/protocol/securityPoolAbi.js'
-import { deriveHasForkActivity } from '@zoltar/ui-zoltar-shared/protocol/forkActivity.js'
+import { SECURITY_POOL_QUESTION_OUTCOME_ABI } from './securityPoolAbi.js'
+import { deriveHasForkActivity } from './forkActivity.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import type { ListedSecurityPool, SecurityPoolCreationResult, SecurityPoolPage, SecurityPoolVaultSummary, SecurityVaultDetails, WriteClient, ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { readRequiredMulticall, writeContractAndWaitForReceipt } from '@zoltar/ui-zoltar-shared/protocol/core.js'
-import { requireForkDataView } from '@zoltar/ui-zoltar-shared/protocol/forkData.js'
+import { requireForkDataView } from './forkData.js'
 import { getForkOutcomeKey, getProtocolPageOffset, getQuestionIdHex, getReportingOutcomeKey, getSecurityPoolSystemState } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 import { requireSecurityPoolDeploymentTupleArray, requireSecurityVaultTupleArray, type SecurityPoolDeploymentTuple } from './helpers.js'
 import { getDeploymentSteps } from './deployment.js'
-import { getInfraContractAddresses, getZoltarAddress } from '@zoltar/ui-zoltar-shared/protocol/deploymentHelpers.js'
+import { getInfraContractAddresses, getZoltarAddress } from './deploymentHelpers.js'
 import { loadMarketDetails } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
-import { fetchLogsWithAdaptiveRanges } from '@zoltar/shared/evm/logScan'
+import { fetchLogsWithAdaptiveRanges } from '@zoltar/core-shared/evm/logScan'
 const SECURITY_POOL_LIST_VAULT_PREVIEW_LIMIT = 50n
 const SECURITY_POOL_PAGE_VAULT_PREVIEW_LIMIT = 3n
 const SECURITY_POOL_VAULT_SCAN_LIMIT = 500n

@@ -1,6 +1,6 @@
 import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
 import assert from '../testSupport/simulator/utils/assert'
-import { decodeEventLog, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, type Address, zeroAddress } from '@zoltar/shared/evm/ethereum'
+import { decodeEventLog, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, type Address, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import { addressString } from '../testSupport/simulator/utils/bigint'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'

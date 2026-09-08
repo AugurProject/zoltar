@@ -1,5 +1,5 @@
 import { createMemoryClient } from 'tevm'
-import { encodeAbiParameters, encodeDeployData, getCreateAddress, keccak256, toHex, type Address, type Hex } from '@zoltar/shared/evm/ethereum'
+import { encodeAbiParameters, encodeDeployData, getCreateAddress, keccak256, toHex, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { ReputationToken_ReputationToken, Zoltar_Zoltar, statoblast_WETH9_WETH9 } from '../contractArtifact.js'
 import type { ReadClient, WriteClient } from '../wallet/chainBackend.js'
 import type { DeploymentStep } from '../types/contracts.js'

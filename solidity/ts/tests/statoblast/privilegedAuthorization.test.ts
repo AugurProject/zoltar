@@ -1,5 +1,5 @@
 import { beforeEach, describe, test } from 'bun:test'
-import { encodeDeployData, encodeFunctionData, getAddress, type Address, type Hex, zeroAddress } from '@zoltar/shared/evm/ethereum'
+import { encodeDeployData, encodeFunctionData, getAddress, type Address, type Hex, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
 import { getSettlementCollateralAttoEth, getCurrentRetentionRate, getTotalRepBackingUnits, getSecurityPoolsEscalationGame, getSecurityVault, getTotalPoolHeldAttoRep, getTotalCapacityOwnershipAttoRep } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { getERC20Balance, getETHBalance } from '../../testSupport/simulator/utils/utilities'

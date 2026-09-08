@@ -1,4 +1,4 @@
-import type { Address } from '@zoltar/shared/evm/ethereum'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 
 export type AccountAddress = Address
 

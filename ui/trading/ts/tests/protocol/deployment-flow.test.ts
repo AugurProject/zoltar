@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { createPublicClient, custom, decodeFunctionData, encodeAbiParameters, getAddress } from '@zoltar/shared/evm/ethereum'
+import { createPublicClient, custom, decodeFunctionData, encodeAbiParameters, getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE, getTradingDeploymentPlan, loadTradingDeploymentStatus, nextTradingDeploymentStep, resolveInstalledTradingDeployment } from '../../protocol/deployment.js'
 import { tradingContracts } from '../../generated/contractArtifact.js'
 

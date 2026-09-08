@@ -1,6 +1,6 @@
 import { beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
-import { SEPOLIA_REP_ALLOCATIONS, SEPOLIA_REP_TOTAL_THEORETICAL_SUPPLY } from '@zoltar/shared/deployment/sepoliaRepAllocations'
-import { encodeDeployData, type Address } from '@zoltar/shared/evm/ethereum'
+import { SEPOLIA_REP_ALLOCATIONS, SEPOLIA_REP_TOTAL_THEORETICAL_SUPPLY } from '@zoltar/zoltar-shared/deployment/sepoliaRepAllocations'
+import { encodeDeployData, type Address } from '@zoltar/core-shared/evm/ethereum'
 import assert from '../testSupport/simulator/utils/assert'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'

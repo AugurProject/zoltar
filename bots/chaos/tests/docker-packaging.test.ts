@@ -54,7 +54,7 @@ describe('chaos Docker packaging', () => {
 		const runtimeRuns = dockerInstructions(runtime, 'RUN').flatMap(shellCommandSegments)
 		const ignoreSource = await readFile(dockerignore, 'utf8')
 		expect(builder.base).toContain('-alpine')
-		expect(dockerInstructions(builder, 'RUN').flatMap(shellCommandSegments)).toContain('bun run shared:build')
+		expect(dockerInstructions(builder, 'RUN').flatMap(shellCommandSegments)).toContain('bun ./tooling/repo/build-shared.mts')
 		expect(copies).toEqual(expect.arrayContaining(['--from=shared-builder /source/shared/ ./shared/', 'bots/chaos/src/ ./bots/chaos/src/', 'bots/chaos/scripts/check-runtime.mts ./bots/chaos/scripts/check-runtime.mts', 'bots/chaos/scripts/validate-container-paths.mts ./bots/chaos/scripts/validate-container-paths.mts']))
 		expect(copies.some(copy => copy.includes('solidity/tsconfig.json') && copy.includes('solidity/tsconfig-compile.json'))).toBe(true)
 		expect(copies.some(copy => copy.includes('ui/coreShared/favicon'))).toBe(false)

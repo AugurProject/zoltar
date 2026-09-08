@@ -1,6 +1,6 @@
 /// <reference types="bun-types" />
 import { describe, expect, test } from 'bun:test'
-import { createPublicClient, getAddress, http, zeroAddress, type Address } from '@zoltar/shared/evm/ethereum'
+import { createPublicClient, getAddress, http, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import {
 	DEFAULT_POOL_CONFIG,
 	ETH_ADDRESS,

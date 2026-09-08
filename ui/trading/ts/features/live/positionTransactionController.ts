@@ -1,4 +1,4 @@
-import type { Address, Hash } from '@zoltar/shared/evm/ethereum'
+import type { Address, Hash } from '@zoltar/core-shared/evm/ethereum'
 import { waitForSubmittedTransactionReceipt } from '@zoltar/ui-core-shared/transactions/transactionReceipt.js'
 import type { createLatestRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'

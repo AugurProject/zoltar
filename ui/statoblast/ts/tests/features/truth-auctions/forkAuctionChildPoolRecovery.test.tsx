@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
-import { getAddress, type Address, zeroAddress } from '@zoltar/shared/evm/ethereum'
+import { getAddress, type Address, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import type { ForkAuctionSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
 import type { AccountState, ForkAuctionFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import type { ForkAuctionDetails, ListedSecurityPool, MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -14,7 +14,7 @@ import { expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/tes
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 
 const actualSecurityPools = await import('@zoltar/ui-statoblast-shared/protocol/securityPools.js')
-const actualForks = await import('@zoltar/ui-zoltar-shared/protocol/forks.js')
+const actualForks = await import('@zoltar/ui-statoblast-shared/protocol/forks.js')
 const actualClients = await import('@zoltar/ui-core-shared/wallet/clients.js')
 
 const PARENT_POOL_ADDRESS: Address = '0x00000000000000000000000000000000000000f0'
@@ -40,7 +40,7 @@ mock.module('@zoltar/ui-statoblast-shared/protocol/securityPools.js', () => ({
 	loadSecurityPoolChildren: loadAllSecurityPoolsMock,
 }))
 
-mock.module('@zoltar/ui-zoltar-shared/protocol/forks.js', () => ({
+mock.module('@zoltar/ui-statoblast-shared/protocol/forks.js', () => ({
 	...actualForks,
 	loadForkAuctionDetails: mock(async (_client: unknown, securityPoolAddress: Address) => {
 		loadForkAuctionDetailsCalls += 1

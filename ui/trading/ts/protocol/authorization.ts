@@ -1,5 +1,5 @@
-import { encodeAbiParameters, type Address, type Hex } from '@zoltar/shared/evm/ethereum'
-import { statoblast_tokens_ShareToken_ShareToken } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { encodeAbiParameters, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { statoblast_tokens_ShareToken_ShareToken } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import type { DeploymentConfiguration } from './config.js'
 import type { LiveMarket } from './liveMarket.js'
 

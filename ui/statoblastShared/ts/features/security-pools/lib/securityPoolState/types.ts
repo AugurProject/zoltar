@@ -1,4 +1,4 @@
-import type { ReportingStage } from '@zoltar/ui-zoltar-shared/features/reporting/lib/reporting.js'
+import type { ReportingStage } from '../../../reporting/lib/reporting.js'
 
 export type SecurityPoolLifecycleState = 'operational' | 'ended' | 'poolForked' | 'forkMigration' | 'forkTruthAuction'
 

@@ -36,5 +36,5 @@ state transitions, and transfer/approval ordering remain the upstream behavior.
 
 The namespaced authorization storage is deliberate: adding these standards does
 not move the child REP token's pre-existing `totalTheoreticalSupplyAttoRep` at
-storage slot 5. `shared/ts/constants.ts` owns that slot anchor and the Solidity
+storage slot 5. `shared/zoltar/ts/constants.ts` owns that slot anchor and the Solidity
 tests read slot 5 directly after child initialization.

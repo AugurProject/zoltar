@@ -1,6 +1,6 @@
 import type { NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { getRuntimeNetworkProfile, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
-import { bytesToHex, encodeDeployData, hexToBytes, keccak256, toHex, type Address, type Hash, type Hex } from '@zoltar/shared/evm/ethereum'
+import { bytesToHex, encodeDeployData, hexToBytes, keccak256, toHex, type Address, type Hash, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import type { DeploymentStatusSnapshot, DeploymentStep, DeploymentStepId, ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import {
 	assertStaticDeploymentArtifactRuntimeCodeHashes,
@@ -20,16 +20,11 @@ import {
 	getSecurityPoolOperationsDelegateByteCode,
 	getSecurityPoolOperationsDelegateRuntimeCode,
 	getShareTokenFactoryByteCode,
-} from '@zoltar/ui-zoltar-shared/protocol/deploymentHelpers.js'
-import {
-	DeploymentStatusOracle_DeploymentStatusOracle,
-	statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
-	statoblast_SecurityPoolUtils_SecurityPoolUtils,
-	statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory,
-	statoblast_openOracle_OpenOracle_OpenOracle,
-} from '@zoltar/ui-core-shared/contractArtifact.js'
-import { createDeploymentStatusOracleAddressHelper } from '@zoltar/shared/deployment/deploymentAddresses'
-import { PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from '@zoltar/ui-zoltar-shared/protocol/deploymentHelpers.js'
+} from './deploymentHelpers.js'
+import { DeploymentStatusOracle_DeploymentStatusOracle } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate, statoblast_SecurityPoolUtils_SecurityPoolUtils, statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory, statoblast_openOracle_OpenOracle_OpenOracle } from '../contractArtifact.js'
+import { createDeploymentStatusOracleAddressHelper } from '@zoltar/core-shared/deployment/deploymentAddresses'
+import { PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from './deploymentHelpers.js'
 
 export { loadErc20Allowance, loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
 

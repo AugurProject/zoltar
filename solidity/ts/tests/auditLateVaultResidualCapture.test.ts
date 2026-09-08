@@ -1,5 +1,5 @@
 import { beforeEach, describe, test } from 'bun:test'
-import { encodeDeployData, type Address } from '@zoltar/shared/evm/ethereum'
+import { encodeDeployData, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { getTotalPoolHeldAttoRep, getTotalRepBackingUnits, redeemRepFromVault } from '../testSupport/simulator/utils/contracts/securityPool'
 import { splitMigrationRep } from '../testSupport/simulator/utils/contracts/zoltar'
 import { useStatoblastEscalationMigrationFixture, type StatoblastEscalationMigrationFixture } from './statoblast/fixture'

@@ -1,4 +1,4 @@
-import type { Hex } from '@zoltar/shared/evm/ethereum'
+import type { Hex } from '@zoltar/core-shared/evm/ethereum'
 import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'

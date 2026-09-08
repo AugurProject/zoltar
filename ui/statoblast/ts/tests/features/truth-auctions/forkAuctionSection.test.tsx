@@ -3,7 +3,7 @@
 import { describe, expect, mock, test } from 'bun:test'
 import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { h } from 'preact'
-import { type Address, getAddress, zeroAddress } from '@zoltar/shared/evm/ethereum'
+import { type Address, getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { ForkAuctionSection } from '@zoltar/ui-statoblast-shared/features/truth-auctions/components/ForkAuctionSection.js'
 import type { ForkAuctionSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
 import type { AccountState, ForkAuctionFormState, ReportingFormState } from '@zoltar/ui-zoltar-shared/types/app.js'

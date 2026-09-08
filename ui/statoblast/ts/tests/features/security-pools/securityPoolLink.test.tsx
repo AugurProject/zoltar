@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { act } from 'preact/test-utils'
-import { getAddress } from '@zoltar/shared/evm/ethereum'
+import { getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { SecurityPoolLink } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolLink.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'

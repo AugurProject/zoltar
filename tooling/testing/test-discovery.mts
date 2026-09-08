@@ -1,7 +1,8 @@
+import { sharedPackages } from '../repo/sharedPackages.ts'
 import { existsSync, promises as fs } from 'node:fs'
 import * as path from 'node:path'
 
-const APPLICATION_TEST_ROOTS = ['scripts', 'tooling', 'shared/ts', 'ui/coreShared/ts', 'ui/zoltar/ts', 'ui/statoblast/ts', 'ui/trading/ts'] as const
+const APPLICATION_TEST_ROOTS = ['scripts', 'tooling', ...sharedPackages.map(entry => `${entry.path}/ts`), 'ui/coreShared/ts', 'ui/zoltar/ts', 'ui/statoblast/ts', 'ui/trading/ts'] as const
 const SOLIDITY_TEST_ROOTS = ['solidity/ts'] as const
 const TEST_ROOTS = [...APPLICATION_TEST_ROOTS, ...SOLIDITY_TEST_ROOTS] as const
 const TEST_DOMAINS = ['all', 'application', 'solidity'] as const

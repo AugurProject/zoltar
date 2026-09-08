@@ -1,8 +1,10 @@
-import { concatHex, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, type Address, type Hex, toHex } from '@zoltar/shared/evm/ethereum'
-import { createSecurityPoolAddressHelper } from '@zoltar/shared/evm/addressDerivation'
-import { createApplyLinkedLibrariesHelper, createDeploymentStatusOracleAddressHelper, createInfraContractAddressHelper, createZoltarAddressHelpers } from '@zoltar/shared/deployment/deploymentAddresses'
-import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_FEE_PERCENTAGE, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_MULTIPLIER, ORACLE_PROTOCOL_FEE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE } from '@zoltar/shared/oracle/oracleInitialReport'
-import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/deployment/protocolConfig'
+import { concatHex, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, type Address, type Hex, toHex } from '@zoltar/core-shared/evm/ethereum'
+import { createSecurityPoolAddressHelper } from '@zoltar/statoblast-shared/evm/addressDerivation'
+import { createApplyLinkedLibrariesHelper, createDeploymentStatusOracleAddressHelper } from '@zoltar/core-shared/deployment/deploymentAddresses'
+import { createInfraContractAddressHelper } from '@zoltar/statoblast-shared/deployment/deploymentAddresses'
+import { createZoltarAddressHelpers } from '@zoltar/zoltar-shared/deployment/deploymentAddresses'
+import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_FEE_PERCENTAGE, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_MULTIPLIER, ORACLE_PROTOCOL_FEE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
+import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/core-shared/deployment/protocolConfig'
 import { WriteClient, writeContractAndWait } from '../clients'
 import { GENESIS_REPUTATION_TOKEN, PROXY_DEPLOYER_ADDRESS } from '../constants'
 import { addressString } from '../bigint'
@@ -32,7 +34,7 @@ import {
 import { objectEntries } from '../typescript'
 import { getRepTokenAddress } from './zoltar'
 
-export { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE } from '@zoltar/shared/oracle/oracleInitialReport'
+export { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 
 const ZERO_SALT: Hex = toHex(0, { size: 32 })
 const MULTICALL3_BYTECODE = `0x${statoblast_Multicall3_Multicall3.evm.bytecode.object}` satisfies Hex
