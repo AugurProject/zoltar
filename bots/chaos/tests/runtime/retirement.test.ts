@@ -25,7 +25,7 @@ import { assertOperationEthFunding } from '../../src/execution/safety.ts'
 import { recordCanonicalRecoveredBalances } from '../../src/runtime/retirement-balance-evidence.ts'
 import { CHAOS_OPERATION_CATALOG } from '../../src/operations/catalog.ts'
 import { unclassifiedRetirementOperations } from '../../src/runtime/retirement-operation-policy.ts'
-import { resetPristineStateForDeploymentProfile } from '../../src/runtime/deployment-profile.ts'
+import { resetPristineStateForDeploymentProfile, verifyRetirementCompletionFinality } from '../../src/runtime/deployment-profile.ts'
 import { createDurableWorkflow, markWorkflowFailed } from '../../src/runtime/workflows.ts'
 
 const now = '2026-09-07T00:00:00.000Z'
@@ -540,6 +540,16 @@ describe('Drain & Retire planning', () => {
 			}),
 		).rejects.toThrow('not finalized')
 		expect(changedHash).toEqual(beforeRejectedReset)
+
+		const singleReaderSettings = parseSettings({
+			...example,
+			connectivity: { publicRpcUrls: ['https://submit.example'], quorumRpcUrls: [], readRpcUrl: 'https://read.example', rpcQuorum: 1 },
+			networkConfigured: true,
+		})
+		const singleReaderReset = structuredClone(runtime)
+		const beforeSingleReaderReset = structuredClone(singleReaderReset)
+		await expect(resetPristineStateForDeploymentProfile(singleReaderReset, 'profile:replacement', true, snapshot.wallet.address, '/tmp/retirement-state.json', async evidence => verifyRetirementCompletionFinality(singleReaderSettings, evidence))).rejects.toThrow('two independent RPC readers')
+		expect(singleReaderReset).toEqual(beforeSingleReaderReset)
 
 		expect(await resetPristineStateForDeploymentProfile(runtime, 'profile:replacement', true, snapshot.wallet.address, '/tmp/retirement-state.json', async () => undefined)).toBeTrue()
 
