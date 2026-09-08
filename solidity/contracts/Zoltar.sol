@@ -227,8 +227,11 @@ contract Zoltar {
 		splitMigrationRep(universeId, amountAttoRep, outcomeIndexes);
 	}
 
-	function getChildMigrationRepAmountAttoRep(address migrator, uint248 universeId, uint248 childUniverseId) public view returns (uint256) {
-		return migrationRepBalances[migrator][universeId].childMigrationRepAmountsAttoRep[childUniverseId];
+	function getChildMigrationRepAmountsAttoRep(address migrator, uint248 universeId, uint248[] calldata childUniverseIds) external view returns (uint256[] memory amountsAttoRep) {
+		AddressRepMigration storage migration = migrationRepBalances[migrator][universeId];
+		amountsAttoRep = new uint256[](childUniverseIds.length);
+		for (uint256 i = 0; i < childUniverseIds.length; i++)
+			amountsAttoRep[i] = migration.childMigrationRepAmountsAttoRep[childUniverseIds[i]];
 	}
 
 	function splitRepInternal(uint248 universeId, uint256 amountAttoRep, uint256[] memory outcomeIndexes) private {

@@ -269,12 +269,12 @@ export function ZoltarMigrationSection({
 							allowanceError={zoltarForkApproval.error}
 							allowanceLoading={zoltarForkApproval.loading}
 							approvedAmount={zoltarForkApproval.value}
-							disabled={!isOnActiveAppChain}
+							disabled={!isOnActiveAppChain || hasUnavailableRequiredBalance}
 							guardMessage={approvalGuardMessage}
 							onApprove={amount => onApproveZoltarForkRep(amount)}
 							pending={zoltarForkActiveAction === 'approve'}
 							pendingLabel={commonCopy.approvingRep}
-							requiredAmount={missingPreparationAmount}
+							requiredAmount={hasUnavailableRequiredBalance ? undefined : missingPreparationAmount}
 							resetKey={`${rootUniverse?.reputationToken ?? ''}:${rootUniverse?.universeId.toString() ?? ''}:${missingPreparationAmount.toString()}`}
 							tokenSymbol={rootUniverse?.reputationTokenSymbol ?? 'REP'}
 							tokenUnits={18}
@@ -313,7 +313,7 @@ export function ZoltarMigrationSection({
 						<MetricField label={zoltarCopy.migrationAmount}>
 							<CurrencyValue value={migrationAmount} suffix={commonCopy.rep} />
 						</MetricField>
-						{needsAdditionalPreparation ? (
+						{needsAdditionalPreparation && !hasUnavailableRequiredBalance ? (
 							<MetricField label={zoltarCopy.walletRepUsed}>
 								<CurrencyValue value={missingPreparationAmount} suffix={commonCopy.rep} />
 							</MetricField>

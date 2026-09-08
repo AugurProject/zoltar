@@ -623,6 +623,11 @@ describe('Contract Test Suite', () => {
 		}
 		await split(5n, [2n, 1n])
 		assert.strictEqual(await getERC20Balance(migrator, addressString(GENESIS_REPUTATION_TOKEN), migrator.account.address), initialBalance - 35n)
+		const childIds = [2n, 0n, 1n, 99n].map(outcomeIndex => getChildUniverseId(genesisUniverse, outcomeIndex))
+		const readAmounts = (ids: bigint[], owner = migrator.account.address) => migrator.readContract({ address: getZoltarAddress(), abi: Zoltar_Zoltar.abi, functionName: 'getChildMigrationRepAmountsAttoRep', args: [owner, genesisUniverse, ids] })
+		assert.deepStrictEqual(await readAmounts(childIds), [25n, 35n, 25n, 0n])
+		assert.deepStrictEqual(await readAmounts([]), [])
+		assert.deepStrictEqual(await readAmounts(childIds, client.account.address), [0n, 0n, 0n, 0n])
 	})
 
 	test('splitMigrationRep preserves child balances across outcome orderings and rejects double use of the same balance', async () => {

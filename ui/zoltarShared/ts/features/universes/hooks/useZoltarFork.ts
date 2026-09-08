@@ -83,9 +83,11 @@ const defaultUseZoltarForkDependencies: UseZoltarForkDependencies = {
 				address: child.reputationToken,
 				args: [accountAddress],
 			})),
-			...childUniverses.map(child => ({ abi: Zoltar_Zoltar.abi, functionName: 'getChildMigrationRepAmountAttoRep', address: getZoltarAddress(), args: [accountAddress, universeId, child.universeId] })),
+			{ abi: Zoltar_Zoltar.abi, functionName: 'getChildMigrationRepAmountsAttoRep', address: getZoltarAddress(), args: [accountAddress, universeId, childUniverses.map(child => child.universeId)] },
 		])
-		return results.map(toBigIntReadResult)
+		const historyResult = results.at(-1)
+		const historyAmounts = historyResult?.status === 'success' && Array.isArray(historyResult.result) && historyResult.result.length === childUniverses.length ? historyResult.result : undefined
+		return [...results.slice(0, 3 + childUniverses.length).map(toBigIntReadResult), ...childUniverses.map((_, index) => toBigIntReadResult(historyResult?.status === 'failure' ? historyResult : { status: 'success', result: historyAmounts?.[index] }))]
 	},
 }
 

@@ -330,6 +330,7 @@ describe('ZoltarMigrationSection', () => {
 				ZoltarMigrationSection,
 				createProps({
 					zoltarMigrationPreparedRepBalanceAttoRep: undefined,
+					zoltarForkApproval: { error: undefined, loading: false, value: 0n },
 					onRetryMigrationBalances: () => {
 						retries += 1
 					},
@@ -337,6 +338,8 @@ describe('ZoltarMigrationSection', () => {
 			),
 		)
 		cleanupRenderedComponent = rendered.cleanup
+		expect(within(document.body).queryByRole('button', { name: /^Approve [0-9]/ })).toBeNull()
+		expect(document.body.textContent).not.toContain('Wallet REP Used')
 		expectTransactionButtonDisabled(document.body, 'Split REP', 'Could not read migration balances. Retry to continue.')
 		within(document.body).getByRole('button', { name: 'Retry' }).click()
 		expect(retries).toBe(1)
