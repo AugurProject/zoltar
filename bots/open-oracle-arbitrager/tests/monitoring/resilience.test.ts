@@ -163,3 +163,13 @@ describe('OpenOracle monitor resilience', () => {
 		])
 	})
 })
+
+test('clears deployment unavailability on recovery but preserves an empty-liquidity notice', () => {
+	const state: Parameters<typeof completeSuccessfulPoll>[0] = { lastError: 'No contract code', paused: false, status: 'error', marketAvailability: { kind: 'missing-deployment', chainId: 1, contracts: [] } }
+	completeSuccessfulPoll(state, undefined, false)
+	expect(state.marketAvailability).toBeUndefined()
+	expect(state.status).toBe('running')
+	state.marketAvailability = { kind: 'no-v3-liquidity', chainId: 1 }
+	completeSuccessfulPoll(state, undefined, false)
+	expect(state.marketAvailability?.kind).toBe('no-v3-liquidity')
+})
