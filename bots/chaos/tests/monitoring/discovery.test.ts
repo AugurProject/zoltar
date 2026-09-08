@@ -1796,3 +1796,8 @@ for (const [name, missingContracts, expected] of [
 		if (!expected.factory) expect(snapshot.pairs).toEqual([])
 	})
 }
+
+test('rejects a deployed trading router without its factory', async () => {
+	const fake = fakeClient(10n, hash(10), { missingContract: address(8) })
+	await expect(discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: fake.client, deployments: topologyIdentity(), wallet: address(1) })).rejects.toThrow('Configured trading router exists without its factory')
+})
