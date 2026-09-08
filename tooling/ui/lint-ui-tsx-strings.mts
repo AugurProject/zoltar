@@ -4,8 +4,8 @@ import path from 'node:path'
 import ts from 'typescript'
 import { getChangedFiles } from '../repo/changed-files.mts'
 
-const UI_TSX_ROOTS = ['coreShared', 'zoltarShared', 'statoblastShared', 'tradingShared', 'zoltar', 'statoblast', 'trading'].map(packageId => path.join('ui', packageId, 'ts'))
-const UI_TSX_CHANGED_FILE_PATTERN = /^ui\/(?:coreShared|zoltarShared|statoblastShared|tradingShared|zoltar|statoblast|trading)\/ts\/.+\.tsx$/
+const UI_TSX_ROOTS = ['coreShared', 'zoltarShared', 'statoblastShared', 'zoltar', 'statoblast', 'trading'].map(packageId => path.join('ui', packageId, 'ts'))
+const UI_TSX_CHANGED_FILE_PATTERN = /^ui\/(?:coreShared|zoltarShared|statoblastShared|zoltar|statoblast|trading)\/ts\/.+\.tsx$/
 const MAX_COPY_EXPORT_NAME_LENGTH = 48
 const SENTENCE_STYLE_EXPORT_NAME_PATTERN =
 	/^(?:approvalAmountMustBeADecimalNumber$|connectAWalletBefore|connectWalletTo|enterA|failedTo|format[A-Z].*BasedOnValue|formatMissing(?![A-Za-z]*(?:Detail|Error)$)|loadAPoolBefore|loadA[A-Z]|no[A-Z].*Were[A-Z]|selectA(?:n|t)?[A-Z]|selectedTickIsInvalid$|the[A-Z]|this[A-Z]|usesThe[A-Z]|writeThe[A-Z])/u

@@ -240,7 +240,7 @@ end_of_record
 		expect(classifyTypeScriptSource('ui/zoltar/ts/app.ts', 'export const app = true')).toBe('ui')
 		expect(classifyTypeScriptSource('ui/zoltarShared/ts/protocol.ts', 'export const protocol = true')).toBe('ui')
 		expect(classifyTypeScriptSource('ui/statoblastShared/ts/protocol.ts', 'export const protocol = true')).toBe('ui')
-		expect(classifyTypeScriptSource('ui/tradingShared/ts/capabilities.ts', 'export const capabilities = true')).toBe('ui')
+		expect(classifyTypeScriptSource('ui/trading/ts/protocol/capabilities.ts', 'export const capabilities = true')).toBe('ui')
 		expect(classifyTypeScriptSource('shared/ts/model.ts', 'export const model = true')).toBe('shared')
 		expect(classifyTypeScriptSource('scripts/task.mts', 'console.log("run")')).toBe('tooling')
 		expect(classifyTypeScriptSource('solidity/ts/client.ts', 'export const client = true')).toBe('tooling')
