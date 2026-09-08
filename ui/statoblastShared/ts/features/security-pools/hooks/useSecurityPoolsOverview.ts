@@ -1,16 +1,9 @@
 import { useSignal } from '@preact/signals'
 import { useRef } from 'preact/hooks'
 import type { Address, Hash } from '@zoltar/shared/evm/ethereum'
-import {
-	loadCoordinatorInitialReportFundingRequirement,
-	loadLiquidationApproval as loadProtocolLiquidationApproval,
-	loadOracleManagerDetails,
-	loadOracleManagerQueueOperationEthValue,
-	loadSecurityPoolPage,
-	loadSecurityPoolLineage,
-	loadSecurityPoolVaultSummary as loadProtocolSecurityPoolVaultSummary,
-	queueSecurityPoolLiquidation,
-} from '../../../protocol/index.js'
+import { loadLiquidationApproval as loadProtocolLiquidationApproval } from '@zoltar/ui-zoltar-shared/protocol/liquidationApprovals.js'
+import { loadCoordinatorInitialReportFundingRequirement, loadOracleManagerDetails, loadOracleManagerQueueOperationEthValue, queueSecurityPoolLiquidation } from '@zoltar/ui-zoltar-shared/protocol/openOracle.js'
+import { loadSecurityPoolLineage, loadSecurityPoolPage, loadSecurityPoolVaultSummary as loadProtocolSecurityPoolVaultSummary } from '../../../protocol/securityPools.js'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
 import { normalizeAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'

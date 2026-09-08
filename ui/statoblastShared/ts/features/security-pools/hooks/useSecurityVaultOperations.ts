@@ -5,20 +5,11 @@ import { useFormState } from '@zoltar/ui-core-shared/hooks/useFormState.js'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
 import type { Address } from '@zoltar/shared/evm/ethereum'
 import { addOpenOracleBountyBuffer } from '@zoltar/ui-zoltar-shared/features/open-oracle/lib/openOracle.js'
+import { loadErc20Allowance, loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
+import { loadCoordinatorInitialReportFundingRequirement, loadOracleManagerDetails, queueOracleManagerOperation } from '@zoltar/ui-zoltar-shared/protocol/openOracle.js'
 import { approveErc20 } from '@zoltar/ui-zoltar-shared/protocol/tokenActions.js'
-import {
-	depositRepToVaultToSecurityPool,
-	isSecurityPoolVaultAdmissionClosed,
-	loadCoordinatorInitialReportFundingRequirement,
-	loadErc20Allowance,
-	loadErc20Balance,
-	loadOracleManagerDetails,
-	loadSecurityVaultDetails,
-	queueOracleManagerOperation,
-	redeemRepFromVaultFromSecurityPool,
-	redeemSecurityVaultFees,
-	updateSecurityVaultFees,
-} from '../../../protocol/index.js'
+import { isSecurityPoolVaultAdmissionClosed, loadSecurityVaultDetails } from '../../../protocol/securityPools.js'
+import { depositRepToVaultToSecurityPool, redeemRepFromVaultFromSecurityPool, redeemSecurityVaultFees, updateSecurityVaultFees } from '../../../protocol/securityVault.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
