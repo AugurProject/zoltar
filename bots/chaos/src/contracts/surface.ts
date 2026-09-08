@@ -289,7 +289,7 @@ export const MUTATING_CONTRACT_SURFACE: readonly ContractMethodClassification[] 
 	entry('TwoWayConstantProductPair', 'transferFrom', 'excluded-dangerous', undefined, 'Delegated raw LP transfers are not chaos workflows.'),
 	entry('TwoWayConstantProductPair', 'initialize', 'selectable', 'trading.pair.initialize-shares'),
 	entry('TwoWayConstantProductPair', 'addLiquidity', 'selectable', 'trading.liquidity.add-shares'),
-	entry('TwoWayConstantProductPair', 'removeLiquidity', 'selectable', 'trading.liquidity.remove-shares'),
+	entry('TwoWayConstantProductPair', 'removeLiquidity', 'selectable', 'trading.liquidity.remove'),
 	entry('TwoWayConstantProductPair', 'swapExactInput', 'selectable', 'trading.swap.exact-input'),
 	entry('TwoWayConstantProductPair', 'swapExactOutput', 'selectable', 'trading.swap.exact-output'),
 	entry('TwoWayConstantProductPair', 'sync', 'selectable', 'trading.pair.sync'),
