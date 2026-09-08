@@ -49,7 +49,7 @@ test('prevents shared libraries from reaching back into applications', () => {
 	expect(findings.map(finding => finding.rule)).toEqual(['cross-package-import-boundary'])
 })
 
-test('requires cross-package imports to use an explicitly exported domain entry point', () => {
+test('requires cross-package imports to use an explicitly exported shared-library entry point', () => {
 	expect(findUiLayerBoundaryViolations('ui/zoltar/ts/app/App.tsx', "import { helper } from '@zoltar/ui-zoltar-shared/protocol/private-helper.js'").map(finding => finding.rule)).toEqual(['cross-package-private-subpath'])
 	expect(findUiLayerBoundaryViolations('ui/zoltar/ts/app/App.tsx', "import { helper } from '@zoltar/ui-zoltar-shared/protocol/core.js'")).toEqual([])
 })

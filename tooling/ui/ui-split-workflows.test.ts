@@ -178,7 +178,7 @@ describe('split UI workflow paths', () => {
 		expect(tradingPackageJson.scripts?.['watch']).toStartWith('bun run generate')
 	})
 
-	test('domain public exports attribute Bun tests to TypeScript sources', async () => {
+	test('shared-library public exports attribute Bun tests to TypeScript sources', async () => {
 		for (const packagePath of sharedLibraryPackagePaths) {
 			const packageDirectory = join(repositoryRoot, packagePath, '..')
 			const manifest: unknown = JSON.parse(await readFile(join(repositoryRoot, packagePath), 'utf8'))
