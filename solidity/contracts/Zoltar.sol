@@ -220,6 +220,30 @@ contract Zoltar {
 		splitRepInternal(universeId, amountAttoRep, outcomeIndexes);
 	}
 
+	function prepareAndSplitMigrationRep(uint248 universeId, uint256 amountAttoRep, uint256[] memory outcomeIndexes, uint256 maxPreparationAttoRep) external {
+		require(amountAttoRep > 0, 'Split amount must be greater than zero');
+		require(outcomeIndexes.length > 0, 'Select at least one outcome universe');
+		uint256 requiredBalanceAttoRep;
+		for (uint256 i = 0; i < outcomeIndexes.length; i++) {
+			for (uint256 j = 0; j < i; j++)
+				require(outcomeIndexes[i] != outcomeIndexes[j], 'Duplicate outcome universe');
+			uint256 requiredAttoRep =
+				getChildMigrationRepAmountAttoRep(msg.sender, universeId, getChildUniverseId(universeId, outcomeIndexes[i])) + amountAttoRep;
+			if (requiredAttoRep > requiredBalanceAttoRep) requiredBalanceAttoRep = requiredAttoRep;
+		}
+		uint256 preparedAmountAttoRep = migrationRepBalances[msg.sender][universeId].migrationRepBalanceAttoRep;
+		if (requiredBalanceAttoRep > preparedAmountAttoRep) {
+			uint256 preparationAttoRep = requiredBalanceAttoRep - preparedAmountAttoRep;
+			require(preparationAttoRep <= maxPreparationAttoRep, 'Required REP preparation increased; refresh and try again');
+			_addRepToMigrationBalance(msg.sender, universeId, preparationAttoRep, false);
+		}
+		splitMigrationRep(universeId, amountAttoRep, outcomeIndexes);
+	}
+
+	function getChildMigrationRepAmountAttoRep(address migrator, uint248 universeId, uint248 childUniverseId) public view returns (uint256) {
+		return migrationRepBalances[migrator][universeId].childMigrationRepAmountsAttoRep[childUniverseId];
+	}
+
 	function splitRepInternal(uint248 universeId, uint256 amountAttoRep, uint256[] memory outcomeIndexes) private {
 		uint256 questionId = universes[universeId].forkQuestionId;
 		// Fork migration intentionally duplicates the holder's migration balance across the

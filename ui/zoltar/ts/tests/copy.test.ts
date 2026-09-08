@@ -24,8 +24,6 @@ test('dynamic value and unit copy uses nonbreaking separators', () => {
 	expect(commonCopy.formatApproveTokenAmount('12', 'ETH')).toBe('Approve 12\u00a0ETH')
 	expect(zoltarCopy.formatAddMigrationRepDetail('12')).toContain('12\u00a0REP')
 	expect(zoltarCopy.formatMigrationRepShortfall('12')).toContain('12\u00a0more\u00a0REP')
-	expect(zoltarCopy.formatMigrationPreparationRequired('12')).toContain('12\u00a0REP')
-	expect(zoltarCopy.formatSplitCapacityDetail('12')).toContain('12\u00a0REP')
 	expect(zoltarCopy.formatMigrationBalanceExceeded('12', '8', '4')).toContain('12\u00a0REP')
 	expect(zoltarCopy.formatMigrationBalanceExceeded('12', '8', '4')).toContain('4\u00a0wallet\u00a0REP')
 })

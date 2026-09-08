@@ -20,21 +20,12 @@ async function executeZoltarMigrationAction<TCallParams extends ContractRevertRe
 	return { action, amountAttoRep, hash, outcomeIndexes, universeId } satisfies ZoltarMigrationActionResult
 }
 
-export async function prepareRepForMigrationInZoltar(client: WriteClient, universeId: bigint, amountAttoRep: bigint) {
-	return await executeZoltarMigrationAction(client, 'addRepToMigrationBalance', universeId, amountAttoRep, [], {
-		address: getZoltarAddress(),
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'addRepToMigrationBalance',
-		args: [universeId, amountAttoRep],
-	})
-}
-
-export async function migrateInternalRepInZoltar(client: WriteClient, universeId: bigint, amountAttoRep: bigint, outcomeIndexes: bigint[]) {
+export async function migrateInternalRepInZoltar(client: WriteClient, universeId: bigint, amountAttoRep: bigint, outcomeIndexes: bigint[], maxPreparationAttoRep: bigint) {
 	return await executeZoltarMigrationAction(client, 'splitMigrationRep', universeId, amountAttoRep, outcomeIndexes, {
 		address: getZoltarAddress(),
 		abi: Zoltar_Zoltar.abi,
-		functionName: 'splitMigrationRep',
-		args: [universeId, amountAttoRep, outcomeIndexes],
+		functionName: 'prepareAndSplitMigrationRep',
+		args: [universeId, amountAttoRep, outcomeIndexes, maxPreparationAttoRep],
 	})
 }
 

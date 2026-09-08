@@ -60,14 +60,17 @@ describe('useZoltarMigration', () => {
 		mock.restore()
 	})
 
-	test('reports transaction failures through the tray callback without leaving a local migration error', async () => {
-		const prepareRepForMigrationInZoltar = mock(async () => ({
-			action: 'addRepToMigrationBalance' as const,
-			amountAttoRep: 10n * 10n ** 18n,
-			hash: '0x00000000000000000000000000000000000000000000000000000000000000aa' as Hash,
-			outcomeIndexes: [],
-			universeId: 1n,
-		}))
+	test.each([false, true])('handles the combined split and refresh lifecycle (write failure: %s)', async writeFails => {
+		const migrateInternalRepInZoltar = mock(async () => {
+			if (writeFails) throw new Error('Split rejected')
+			return {
+				action: 'splitMigrationRep' as const,
+				amountAttoRep: 10n * 10n ** 18n,
+				hash: '0x00000000000000000000000000000000000000000000000000000000000000aa' as Hash,
+				outcomeIndexes: [],
+				universeId: 1n,
+			}
+		})
 		const refreshState = mock(async () => undefined)
 		const refreshZoltarUniverse = mock(async () => undefined)
 		const refreshZoltarForkAccess = mock(async () => undefined)
@@ -82,10 +85,7 @@ describe('useZoltarMigration', () => {
 			})),
 		}))
 		mock.module('@zoltar/ui-zoltar-shared/protocol/zoltarForks.js', () => ({
-			migrateInternalRepInZoltar: mock(async () => {
-				throw new Error('migrateInternalRepInZoltar should not be called in this test')
-			}),
-			prepareRepForMigrationInZoltar,
+			migrateInternalRepInZoltar,
 		}))
 
 		const { useZoltarMigration } = await import(`@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarMigration.js?case=${crypto.randomUUID()}`)
@@ -93,7 +93,9 @@ describe('useZoltarMigration', () => {
 		const Harness = function ZoltarMigrationHarness() {
 			const state = useZoltarMigration({
 				accountAddress: WALLET_ADDRESS,
-				ensureZoltarUniverse: async () => createUniverse({ hasForked: false }),
+				activeUniverseId: 1n,
+				environmentRefreshKey: 0,
+				ensureZoltarUniverse: async () => createUniverse(),
 				onTransactionFailed,
 				onTransactionFinished: () => undefined,
 				onTransactionPresented: () => undefined,
@@ -102,8 +104,6 @@ describe('useZoltarMigration', () => {
 				refreshState,
 				refreshZoltarForkAccess,
 				refreshZoltarUniverse,
-				zoltarForkRepBalanceAttoRep: 10n ** 19n,
-				zoltarMigrationPreparedRepBalanceAttoRep: 0n,
 			})
 
 			hookState = state
@@ -117,18 +117,27 @@ describe('useZoltarMigration', () => {
 			requireHookState(hookState).setZoltarMigrationForm(current => ({
 				...current,
 				amount: '10',
+				outcomeIndexes: '1',
 			}))
 		})
 
 		await act(async () => {
-			await requireHookState(hookState).prepareRepForMigration()
+			await requireHookState(hookState).migrateInternalRep(10n * 10n ** 18n)
 		})
 
-		expect(prepareRepForMigrationInZoltar).toHaveBeenCalledTimes(1)
+		expect(migrateInternalRepInZoltar).toHaveBeenCalledTimes(1)
+		if (writeFails) {
+			expect(transactionFailures).toHaveLength(1)
+			expect(transactionFailures[0]).toContain('Split rejected')
+			expect(requireHookState(hookState).zoltarMigrationPending).toBe(false)
+			expect(refreshState).not.toHaveBeenCalled()
+			expect(refreshZoltarForkAccess).not.toHaveBeenCalled()
+			return
+		}
 		expect(transactionFailures).toEqual([])
 		expect(requireHookState(hookState).zoltarMigrationError).toBeUndefined()
-		expect(refreshState).not.toHaveBeenCalled()
-		expect(refreshZoltarUniverse).not.toHaveBeenCalled()
+		expect(refreshState).toHaveBeenCalledTimes(1)
+		expect(refreshZoltarUniverse).toHaveBeenCalledTimes(1)
 		expect(refreshZoltarForkAccess).toHaveBeenCalledTimes(1)
 	})
 
@@ -147,6 +156,8 @@ describe('useZoltarMigration', () => {
 		const Harness = function ZoltarMigrationHarness() {
 			const state = useZoltarMigration({
 				accountAddress: WALLET_ADDRESS,
+				activeUniverseId: 1n,
+				environmentRefreshKey: 0,
 				ensureZoltarUniverse,
 				onTransactionFailed,
 				onTransactionFinished: () => undefined,
@@ -156,8 +167,6 @@ describe('useZoltarMigration', () => {
 				refreshState: async () => undefined,
 				refreshZoltarForkAccess: async () => undefined,
 				refreshZoltarUniverse: async () => undefined,
-				zoltarForkRepBalanceAttoRep: 10n ** 19n,
-				zoltarMigrationPreparedRepBalanceAttoRep: 0n,
 			})
 
 			hookState = state
@@ -175,21 +184,22 @@ describe('useZoltarMigration', () => {
 		})
 
 		await act(async () => {
-			await requireHookState(hookState).prepareRepForMigration()
+			await requireHookState(hookState).migrateInternalRep(10n * 10n ** 18n)
 		})
 
 		expect(onTransactionRequested).not.toHaveBeenCalled()
 		expect(ensureZoltarUniverse).not.toHaveBeenCalled()
 		expect(onTransactionFailed).not.toHaveBeenCalled()
-		expect(requireHookState(hookState).zoltarMigrationFeedback?.status.detail).toBe('Transaction failed while attempting to prepare REP for migration. Reason: Wallet network changed. Switch to Ethereum Mainnet and try again')
+		expect(requireHookState(hookState).zoltarMigrationFeedback?.status.detail).toBe('Transaction failed while attempting to migrate REP. Reason: Wallet network changed. Switch to Ethereum Mainnet and try again')
 	})
 
 	test('migrateInternalRep snapshots the submitted form before universe preflight resolves', async () => {
 		const universeLoad = createDeferred<ZoltarUniverseSummary>()
-		const migrateInternalRepInZoltar = mock(async (_client: unknown, universeId: bigint, amount: bigint, outcomeIndexes: bigint[]) => {
+		const migrateInternalRepInZoltar = mock(async (_client: unknown, universeId: bigint, amount: bigint, outcomeIndexes: bigint[], maxPreparationAttoRep: bigint) => {
 			expect(universeId).toBe(1n)
 			expect(amount).toBe(10n * 10n ** 18n)
 			expect(outcomeIndexes).toEqual([1n, 2n])
+			expect(maxPreparationAttoRep).toBe(10n * 10n ** 18n)
 			return {
 				action: 'splitMigrationRep' as const,
 				amountAttoRep: amount,
@@ -201,9 +211,6 @@ describe('useZoltarMigration', () => {
 
 		mock.module('@zoltar/ui-zoltar-shared/protocol/zoltarForks.js', () => ({
 			migrateInternalRepInZoltar,
-			prepareRepForMigrationInZoltar: mock(async () => {
-				throw new Error('prepareRepForMigrationInZoltar should not be called in this test')
-			}),
 		}))
 		mock.module('@zoltar/ui-core-shared/wallet/clients.js', () => ({
 			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
@@ -230,6 +237,8 @@ describe('useZoltarMigration', () => {
 		const Harness = function ZoltarMigrationHarness() {
 			const state = useZoltarMigration({
 				accountAddress: WALLET_ADDRESS,
+				activeUniverseId: 1n,
+				environmentRefreshKey: 0,
 				ensureZoltarUniverse: async () => await universeLoad.promise,
 				onTransactionFinished: () => undefined,
 				onTransactionPresented: () => undefined,
@@ -238,8 +247,6 @@ describe('useZoltarMigration', () => {
 				refreshState,
 				refreshZoltarForkAccess,
 				refreshZoltarUniverse,
-				zoltarForkRepBalanceAttoRep: 100n * 10n ** 18n,
-				zoltarMigrationPreparedRepBalanceAttoRep: 0n,
 			})
 
 			hookState = state
@@ -259,8 +266,10 @@ describe('useZoltarMigration', () => {
 
 		let migratePromise = Promise.resolve()
 		await act(() => {
-			migratePromise = requireHookState(hookState).migrateInternalRep()
+			migratePromise = requireHookState(hookState).migrateInternalRep(10n * 10n ** 18n)
 		})
+
+		await requireHookState(hookState).migrateInternalRep(0n)
 
 		await act(async () => {
 			requireHookState(hookState).setZoltarMigrationForm(current => ({

@@ -3,7 +3,8 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
-import { h } from 'preact'
+import { h, render } from 'preact'
+import { act } from 'preact/test-utils'
 import { zeroAddress } from '@zoltar/shared/evm/ethereum'
 import { ZoltarMigrationSection } from '@zoltar/ui-zoltar-shared/features/universes/components/ZoltarMigrationSection.js'
 import type { ZoltarMigrationFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
@@ -60,7 +61,7 @@ function createProps(overrides: Partial<ZoltarMigrationSectionProps> = {}): Zolt
 		loadingZoltarUniverse: false,
 		onApproveZoltarForkRep: () => undefined,
 		onMigrateInternalRep: () => undefined,
-		onPrepareRepForMigration: () => undefined,
+		onRetryMigrationBalances: () => undefined,
 		onZoltarMigrationFormChange: () => undefined,
 		zoltarForkActiveAction: undefined,
 		zoltarForkApproval: {
@@ -71,6 +72,7 @@ function createProps(overrides: Partial<ZoltarMigrationSectionProps> = {}): Zolt
 		zoltarForkRepBalanceAttoRep: 20n * ATTO_REP,
 		zoltarMigrationActiveAction: undefined,
 		zoltarMigrationChildRepBalancesAttoRep: { '2': 0n },
+		zoltarMigrationChildSplitAmountsAttoRep: { '2': 0n },
 		zoltarMigrationError: undefined,
 		zoltarMigrationForm: createForm(),
 		zoltarMigrationPending: false,
@@ -115,16 +117,11 @@ describe('ZoltarMigrationSection', () => {
 		if (amountField === undefined || amountField === null) throw new Error('Migration amount field is missing')
 		within(amountField).getByRole('button', { name: 'Max' }).click()
 		expect(updates).toEqual([{ amount: '2910000' }])
-		expect(rendered.container.textContent).toContain('Max includes wallet REP and REP already prepared for migration.')
-		const prepare = within(rendered.container).getByRole('button', { name: 'Prepare REP' })
-		const reasonId = prepare.getAttribute('aria-describedby')
-		if (reasonId === null) throw new Error('Prepare REP needs an associated reason')
-		const reason = document.getElementById(reasonId)
-		expect(reason?.classList.contains('visually-hidden')).toBe(false)
-		expect(reason?.textContent?.length).toBeGreaterThan(0)
+		expect(rendered.container.textContent).toContain('Max includes wallet REP and unused prepared REP for the selected destinations.')
+		expect(within(rendered.container).queryByRole('button', { name: 'Prepare REP' })).toBeNull()
 	})
 
-	test('disables prepare and split until forking and amount prerequisites are satisfied', async () => {
+	test('disables split until forking and amount prerequisites are satisfied', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ZoltarMigrationSection,
@@ -136,8 +133,7 @@ describe('ZoltarMigrationSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(Array.from(document.body.querySelectorAll('.migration-workflow-steps span')).map(step => step.textContent)).toEqual(['1. Choose destinations', '2. Prepare REP', '3. Split REP'])
-		expectTransactionButtonDisabled(document.body, 'Prepare REP', 'Enter an amount greater than zero.')
+		expect(Array.from(document.body.querySelectorAll('.migration-workflow-steps span')).map(step => step.textContent)).toEqual(['1. Choose destinations', '2. Split REP'])
 		expectTransactionButtonDisabled(document.body, 'Split REP', 'Enter an amount greater than zero.')
 	})
 
@@ -157,7 +153,7 @@ describe('ZoltarMigrationSection', () => {
 		expectTransactionButtonDisabled(document.body, 'Split REP', 'Select at least one outcome universe.')
 	})
 
-	test('enables prepare when additional REP must be moved into the migration balance', async () => {
+	test('enables the combined split when additional REP needs preparation', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ZoltarMigrationSection,
@@ -173,7 +169,7 @@ describe('ZoltarMigrationSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonEnabled(document.body, 'Prepare REP')
+		expectTransactionButtonEnabled(document.body, 'Split REP')
 	})
 
 	test('child REP preparation needs no approval transaction', async () => {
@@ -189,7 +185,7 @@ describe('ZoltarMigrationSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		expect(within(document.body).queryByRole('button', { name: /Approve/ })).toBeNull()
-		expectTransactionButtonEnabled(document.body, 'Prepare REP')
+		expectTransactionButtonEnabled(document.body, 'Split REP')
 	})
 
 	test('enables split when the selected amount is already prepared and valid outcome universes are selected', async () => {
@@ -224,7 +220,7 @@ describe('ZoltarMigrationSection', () => {
 		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(true)
 	})
 
-	test('keeps prepare and split disabled off mainnet and explains recovery', async () => {
+	test('keeps split disabled off mainnet and explains recovery', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ZoltarMigrationSection,
@@ -235,7 +231,6 @@ describe('ZoltarMigrationSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Prepare REP')
 		expectTransactionButtonDisabled(document.body, 'Split REP')
 		expect(document.body.textContent?.includes('Split the migration REP across the selected universes.')).toBe(false)
 		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(true)
@@ -247,7 +242,7 @@ describe('ZoltarMigrationSection', () => {
 
 		const currentSteps = document.body.querySelectorAll('.migration-workflow-steps .current')
 		expect(currentSteps).toHaveLength(1)
-		expect(currentSteps[0]?.textContent).toBe('3. Split REP')
+		expect(currentSteps[0]?.textContent).toBe('2. Split REP')
 		expect(document.body.textContent?.includes('Ready to split.')).toBe(false)
 	})
 
@@ -261,8 +256,96 @@ describe('ZoltarMigrationSection', () => {
 		expect(document.body.textContent).not.toContain('Technical Details')
 		expect(document.body.textContent?.match(/Selected Destinations/g)).toHaveLength(1)
 		expect(document.body.textContent).not.toContain('Balance Changes')
-		expect(within(document.body).getByRole('button', { name: 'Prepare REP' })).not.toBeNull()
+		expect(within(document.body).queryByRole('button', { name: 'Prepare REP' })).toBeNull()
 		expect(within(document.body).getByRole('button', { name: 'Split REP' })).not.toBeNull()
+	})
+
+	test('splits fully prepared REP when the wallet balance read failed', async () => {
+		const rendered = await renderIntoDocument(h(ZoltarMigrationSection, createProps({ zoltarForkRepBalanceAttoRep: undefined })))
+		cleanupRenderedComponent = rendered.cleanup
+		expectTransactionButtonEnabled(document.body, 'Split REP')
+	})
+
+	test('recovers a wallet-funded split by retrying the wallet balance read', async () => {
+		let walletBalance: bigint | undefined
+		const Harness = () =>
+			h(
+				ZoltarMigrationSection,
+				createProps({
+					zoltarForkRepBalanceAttoRep: walletBalance,
+					zoltarMigrationPreparedRepBalanceAttoRep: 0n,
+					onRetryMigrationBalances: () => {
+						walletBalance = 20n * ATTO_REP
+						render(h(Harness, {}), rendered.container)
+					},
+				}),
+			)
+		const rendered = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = rendered.cleanup
+		expectTransactionButtonDisabled(document.body, 'Split REP', 'Could not read migration balances. Retry to continue.')
+		await act(() => within(document.body).getByRole('button', { name: 'Retry' }).click())
+		expectTransactionButtonEnabled(document.body, 'Split REP')
+		expect(within(document.body).queryByRole('button', { name: 'Retry' })).toBeNull()
+	})
+
+	test('offers retry when migration history could not be read', async () => {
+		let retries = 0
+		const rendered = await renderIntoDocument(
+			h(
+				ZoltarMigrationSection,
+				createProps({
+					zoltarMigrationPreparedRepBalanceAttoRep: undefined,
+					onRetryMigrationBalances: () => {
+						retries += 1
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		expectTransactionButtonDisabled(document.body, 'Split REP', 'Could not read migration balances. Retry to continue.')
+		within(document.body).getByRole('button', { name: 'Retry' }).click()
+		expect(retries).toBe(1)
+	})
+
+	test('uses historical splits instead of wallet holdings to prepare a repeat split', async () => {
+		const preparations: bigint[] = []
+		const universe = createUniverse()
+		const rendered = await renderIntoDocument(
+			h(
+				ZoltarMigrationSection,
+				createProps({
+					zoltarUniverse: { ...universe, childUniverses: universe.childUniverses.map(child => ({ ...child, exists: true, reputationToken: CHILD_REP_ADDRESS })) },
+					zoltarMigrationChildRepBalancesAttoRep: { '2': 0n },
+					zoltarMigrationChildSplitAmountsAttoRep: { '2': 7n * ATTO_REP },
+					onMigrateInternalRep: amount => preparations.push(amount),
+				}),
+			),
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		expectTransactionButtonEnabled(document.body, 'Split REP')
+		within(document.body).getByRole('button', { name: 'Split REP' }).click()
+		expect(preparations).toEqual([7n * ATTO_REP])
+	})
+
+	test.each([
+		{ name: 'partial preparation', prepared: 4n * ATTO_REP, allowance: 6n * ATTO_REP, wallet: 6n * ATTO_REP, enabled: true },
+		{ name: 'insufficient approval', prepared: 4n * ATTO_REP, allowance: 5n * ATTO_REP, wallet: 6n * ATTO_REP, enabled: false },
+		{ name: 'insufficient wallet REP', prepared: 4n * ATTO_REP, allowance: 6n * ATTO_REP, wallet: 5n * ATTO_REP, enabled: false },
+		{ name: 'already prepared without approval', prepared: 10n * ATTO_REP, allowance: 0n, wallet: 0n, enabled: true },
+	])('checks $name before splitting', async ({ prepared, allowance, wallet, enabled }) => {
+		const rendered = await renderIntoDocument(
+			h(
+				ZoltarMigrationSection,
+				createProps({
+					zoltarMigrationPreparedRepBalanceAttoRep: prepared,
+					zoltarForkRepBalanceAttoRep: wallet,
+					zoltarForkApproval: { error: undefined, loading: false, value: allowance },
+				}),
+			),
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		if (enabled) expectTransactionButtonEnabled(document.body, 'Split REP')
+		else expectTransactionButtonDisabled(document.body, 'Split REP')
 	})
 
 	test('shows wallet import access only for deployed child tokens the account holds', async () => {
@@ -280,6 +363,7 @@ describe('ZoltarMigrationSection', () => {
 				ZoltarMigrationSection,
 				createProps({
 					zoltarMigrationChildRepBalancesAttoRep: { '2': 5n * ATTO_REP },
+					zoltarMigrationChildSplitAmountsAttoRep: { '2': 5n * ATTO_REP },
 					zoltarUniverse: createUniverse({ childUniverses: [heldChild] }),
 				}),
 			),
@@ -299,6 +383,7 @@ describe('ZoltarMigrationSection', () => {
 				ZoltarMigrationSection,
 				createProps({
 					zoltarMigrationChildRepBalancesAttoRep: { '2': 0n },
+					zoltarMigrationChildSplitAmountsAttoRep: { '2': 0n },
 					zoltarUniverse: createUniverse({ childUniverses: [heldChild] }),
 				}),
 			),

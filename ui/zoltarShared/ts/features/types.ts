@@ -106,8 +106,8 @@ export type MarketRouteContentProps = {
 	onApproveZoltarForkRep: (amount?: bigint) => void
 	onCreateChildUniverseForOutcomeIndex: (outcomeIndex: bigint) => void
 	onForkZoltar: () => void
-	onMigrateInternalRep: () => void
-	onPrepareRepForMigration: () => void
+	onRetryMigrationBalances: () => void
+	onMigrateInternalRep: (maxPreparationAttoRep: bigint) => void
 	onActiveViewChange: (view: ZoltarView) => void
 	loadingZoltarQuestionCount: boolean
 	loadingZoltarQuestion: boolean
@@ -141,12 +141,13 @@ export type MarketRouteContentProps = {
 	zoltarForkRepBalanceAttoRep: bigint | undefined
 	zoltarMigrationError: string | undefined
 	zoltarMigrationForm: ZoltarMigrationFormState
+	zoltarMigrationChildSplitAmountsAttoRep: Record<string, bigint | undefined>
 	zoltarMigrationChildRepBalancesAttoRep: Record<string, bigint | undefined>
 	zoltarMigrationPending: boolean
 	zoltarMigrationPreparedRepBalanceAttoRep: bigint | undefined
 	zoltarQuestions: MarketDetails[]
 	zoltarQuestionsError: string | undefined
-	zoltarMigrationActiveAction: 'prepare' | 'split' | undefined
+	zoltarMigrationActiveAction: 'split' | undefined
 	zoltarUniverse: ZoltarUniverseSummary | undefined
 	onZoltarForkQuestionIdChange: (questionId: string) => void
 }

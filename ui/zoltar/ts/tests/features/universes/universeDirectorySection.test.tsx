@@ -70,13 +70,14 @@ describe('UniverseDirectorySection', () => {
 				zoltarForkQuestionId: '',
 				zoltarMigrationForm: { amount: '', outcomeIndexes: '' },
 				zoltarMigrationChildRepBalancesAttoRep: {},
+				zoltarMigrationChildSplitAmountsAttoRep: {},
 				zoltarQuestions: [],
 				zoltarUniverse: createUniverse({ hasForked }),
 				onApproveZoltarForkRep: () => undefined,
 				onCreateChildUniverseForOutcomeIndex: () => undefined,
 				onForkZoltar: () => undefined,
 				onMigrateInternalRep: () => undefined,
-				onPrepareRepForMigration: () => undefined,
+				onRetryMigrationBalances: () => undefined,
 				onActiveViewChange: () => undefined,
 				loadingZoltarQuestionCount: false,
 				loadingZoltarQuestion: false,
@@ -116,7 +117,6 @@ describe('UniverseDirectorySection', () => {
 			const queries = within(document.body)
 			expect(queries.getByRole('heading', { name: 'Universe' })).toBeTruthy()
 			if (hasForked) {
-				expect(queries.getByRole('button', { name: 'Prepare REP' })).toBeTruthy()
 				expect(document.body.textContent?.indexOf('Migrate REP')).toBeLessThan(document.body.textContent?.indexOf('Child Universes') ?? 0)
 				expect(queries.getByRole('button', { name: 'Split REP' })).toBeTruthy()
 				expect(queries.queryByRole('button', { name: 'Fork Universe' })).toBeNull()

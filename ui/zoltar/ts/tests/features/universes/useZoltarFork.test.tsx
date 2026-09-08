@@ -530,7 +530,11 @@ describe('useZoltarFork', () => {
 			exists: true,
 			reputationToken: getAddress('0x00000000000000000000000000000000000000d4'),
 		}
-		const loadZoltarForkAccess = mock(async (_accountAddress: string, _reputationToken: string, _universeId: bigint, childUniverses: ZoltarUniverseSummary['childUniverses']) => [...createForkAccessResults(), ...childUniverses.map(() => ({ result: 10n, status: 'success' as const }))])
+		const loadZoltarForkAccess = mock(async (_accountAddress: string, _reputationToken: string, _universeId: bigint, childUniverses: ZoltarUniverseSummary['childUniverses']) => [
+			...createForkAccessResults(),
+			...childUniverses.map(() => ({ result: 10n, status: 'success' as const })),
+			...childUniverses.map(() => ({ result: 25n, status: 'success' as const })),
+		])
 		const dependencies = createZoltarForkDependencies({ loadZoltarForkAccess })
 		const createForkedUniverse = (child: ZoltarUniverseSummary['childUniverses'][number]) =>
 			createUniverse({
@@ -578,6 +582,7 @@ describe('useZoltarFork', () => {
 
 		expect(loadZoltarForkAccess).toHaveBeenCalledTimes(2)
 		expect(loadZoltarForkAccess.mock.calls[1]?.[3]).toEqual([deployedChildUniverse])
+		expect(requireHookState(hookState).zoltarMigrationChildSplitAmountsAttoRep).toEqual({ '2': 25n })
 		expect(requireHookState(hookState).zoltarMigrationChildRepBalancesAttoRep).toEqual({ '2': 10n })
 	})
 

@@ -83,6 +83,7 @@ const defaultUseZoltarForkDependencies: UseZoltarForkDependencies = {
 				address: child.reputationToken,
 				args: [accountAddress],
 			})),
+			...childUniverses.map(child => ({ abi: Zoltar_Zoltar.abi, functionName: 'getChildMigrationRepAmountAttoRep', address: getZoltarAddress(), args: [accountAddress, universeId, child.universeId] })),
 		])
 		return results.map(toBigIntReadResult)
 	},
@@ -162,6 +163,7 @@ export function useZoltarFork(
 	const zoltarForkActiveAction = useSignal<'approve' | 'fork' | undefined>(undefined)
 	const zoltarForkFeedback = useSignal<ActionFeedback<ZoltarForkActionResult['action']> | undefined>(undefined)
 	const zoltarMigrationPreparedRepBalanceAttoRep = useSignal<bigint | undefined>(undefined)
+	const zoltarMigrationChildSplitAmountsAttoRep = useSignal<Record<string, bigint | undefined>>({})
 	const zoltarMigrationChildRepBalancesAttoRep = useSignal<Record<string, bigint | undefined>>({})
 	const nextForkAccessLoad = useRequestGuard()
 	const forkAccessScopeKey = `${accountAddress ?? 'disconnected'}:${environmentRefreshKey}:${activeUniverseId.toString()}:${zoltarUniverse?.universeId.toString() ?? 'missing'}:${zoltarUniverse?.reputationToken ?? 'missing'}`
@@ -188,6 +190,7 @@ export function useZoltarFork(
 			zoltarForkRepBalanceAttoRep.value = undefined
 			zoltarMigrationPreparedRepBalanceAttoRep.value = undefined
 			zoltarMigrationChildRepBalancesAttoRep.value = {}
+			zoltarMigrationChildSplitAmountsAttoRep.value = {}
 			return
 		}
 
@@ -199,7 +202,10 @@ export function useZoltarFork(
 				error: undefined,
 				loading: true,
 			}
-		if (isCurrentScope()) zoltarMigrationChildRepBalancesAttoRep.value = {}
+		if (isCurrentScope()) {
+			zoltarMigrationChildRepBalancesAttoRep.value = {}
+			zoltarMigrationChildSplitAmountsAttoRep.value = {}
+		}
 
 		await forkAccessLoad.track(async () => {
 			const accessResults = await dependencies.loadZoltarForkAccess(accountAddress, reputationToken, universeId, childUniverses).catch(error => {
@@ -212,7 +218,7 @@ export function useZoltarFork(
 			const [repBalanceResult, approvalResult, preparedRepBalanceResult, ...childBalanceResults] = accessResults
 			if (!isCurrentScope()) return
 			loadedForkAccessScopeGeneration.current = forkAccessScopeGeneration
-			if (repBalanceResult?.status === 'success') zoltarForkRepBalanceAttoRep.value = repBalanceResult.result
+			zoltarForkRepBalanceAttoRep.value = repBalanceResult?.status === 'success' ? repBalanceResult.result : undefined
 			if (approvalResult?.status === 'success') {
 				zoltarForkApproval.value = {
 					error: undefined,
@@ -237,6 +243,12 @@ export function useZoltarFork(
 				if (childBalanceResult?.status !== 'success') continue
 				nextChildBalances[child.universeId.toString()] = childBalanceResult.result
 			}
+			const nextSplitAmounts: Record<string, bigint | undefined> = {}
+			for (const [index, child] of childUniverses.entries()) {
+				const result = childBalanceResults[childUniverses.length + index]
+				if (result?.status === 'success') nextSplitAmounts[child.universeId.toString()] = result.result
+			}
+			zoltarMigrationChildSplitAmountsAttoRep.value = nextSplitAmounts
 			zoltarMigrationChildRepBalancesAttoRep.value = nextChildBalances
 		})
 	}
@@ -380,6 +392,7 @@ export function useZoltarFork(
 		zoltarForkQuestionId,
 		zoltarForkRepBalanceAttoRep: hasCurrentForkAccess ? zoltarForkRepBalanceAttoRep.value : undefined,
 		zoltarForkResult: zoltarForkResult.value,
+		zoltarMigrationChildSplitAmountsAttoRep: hasCurrentForkAccess ? zoltarMigrationChildSplitAmountsAttoRep.value : {},
 		zoltarMigrationChildRepBalancesAttoRep: hasCurrentForkAccess ? zoltarMigrationChildRepBalancesAttoRep.value : {},
 		zoltarMigrationPreparedRepBalanceAttoRep: hasCurrentForkAccess ? zoltarMigrationPreparedRepBalanceAttoRep.value : undefined,
 		setZoltarForkQuestionId: (questionId: string) => {

@@ -12,6 +12,7 @@ type MigrationOutcomeUniversesSectionProps = {
 	isScalarFork: boolean
 	onAddNextOutcome: () => void
 	onToggleOutcomeIndex: (outcomeIndex: bigint) => void
+	childUniverseSplitAmounts: Record<string, bigint | undefined>
 	childUniverseRepBalances: Record<string, bigint | undefined>
 	selectedOutcomeIndexSet: Set<string>
 }
@@ -21,22 +22,22 @@ export function getMigrationOutcomeHeldBalance(child: ZoltarChildUniverseSummary
 	return childUniverseRepBalances[child.universeId.toString()]
 }
 
-export function getMigrationOutcomeSplitLimit(childUniverses: ZoltarChildUniverseSummary[], childUniverseRepBalances: Record<string, bigint | undefined>, migrationBalance: bigint | undefined, selectedOutcomeIndexSet: Set<string>) {
+export function getMigrationOutcomeSplitLimit(childUniverses: ZoltarChildUniverseSummary[], childUniverseSplitAmounts: Record<string, bigint | undefined>, migrationBalance: bigint | undefined, selectedOutcomeIndexSet: Set<string>) {
 	if (migrationBalance === undefined) return undefined
 	let splitLimit: bigint | undefined = undefined
 
 	for (const child of childUniverses) {
 		if (!selectedOutcomeIndexSet.has(child.outcomeIndex.toString())) continue
-		const heldBalance = getMigrationOutcomeHeldBalance(child, childUniverseRepBalances)
-		if (heldBalance === undefined) return undefined
-		const remainingCapacity = migrationBalance > heldBalance ? migrationBalance - heldBalance : 0n
+		const splitAmount = child.exists ? childUniverseSplitAmounts[child.universeId.toString()] : 0n
+		if (splitAmount === undefined) return undefined
+		const remainingCapacity = migrationBalance > splitAmount ? migrationBalance - splitAmount : 0n
 		splitLimit = splitLimit === undefined || remainingCapacity < splitLimit ? remainingCapacity : splitLimit
 	}
 
 	return splitLimit ?? 0n
 }
 
-export function MigrationOutcomeUniversesSection({ childUniverses, childUniverseRepBalances, disabled, isScalarFork, migrationBalance, onAddNextOutcome, onToggleOutcomeIndex, selectedOutcomeIndexSet }: MigrationOutcomeUniversesSectionProps) {
+export function MigrationOutcomeUniversesSection({ childUniverses, childUniverseRepBalances, childUniverseSplitAmounts, disabled, isScalarFork, migrationBalance, onAddNextOutcome, onToggleOutcomeIndex, selectedOutcomeIndexSet }: MigrationOutcomeUniversesSectionProps) {
 	const hasAddableOutcome = childUniverses.some(child => !selectedOutcomeIndexSet.has(child.outcomeIndex.toString()))
 
 	return (
@@ -71,7 +72,8 @@ export function MigrationOutcomeUniversesSection({ childUniverses, childUniverse
 									<span>
 										{zoltarCopy.migratedBalanceLabel}{' '}
 										<strong>
-											<CurrencyValue copyable={false} loading={isHeldBalanceLoading} value={heldBalance} suffix={commonCopy.rep} /> / <CurrencyValue copyable={false} loading={migrationBalance === undefined} value={migrationBalance} suffix={commonCopy.rep} />
+											<CurrencyValue copyable={false} loading={child.exists && childUniverseSplitAmounts?.[child.universeId.toString()] === undefined} value={child.exists ? childUniverseSplitAmounts?.[child.universeId.toString()] : 0n} suffix={commonCopy.rep} /> /{' '}
+											<CurrencyValue copyable={false} loading={migrationBalance === undefined} value={migrationBalance} suffix={commonCopy.rep} />
 										</strong>
 									</span>
 								</>

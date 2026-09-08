@@ -130,8 +130,8 @@ export function ZoltarSection({
 	onForkZoltar,
 	onLoadZoltarQuestion,
 	onLoadZoltarQuestionPage,
+	onRetryMigrationBalances,
 	onMigrateInternalRep,
-	onPrepareRepForMigration,
 	onQuestionFormChange,
 	onResetQuestion,
 	onZoltarForkQuestionIdChange,
@@ -145,6 +145,7 @@ export function ZoltarSection({
 	zoltarForkQuestionId,
 	zoltarForkRepBalanceAttoRep,
 	zoltarMigrationActiveAction,
+	zoltarMigrationChildSplitAmountsAttoRep,
 	zoltarMigrationChildRepBalancesAttoRep,
 	zoltarMigrationError,
 	zoltarMigrationForm,
@@ -215,13 +216,14 @@ export function ZoltarSection({
 						loadingZoltarUniverse={loadingZoltarUniverse}
 						onApproveZoltarForkRep={amount => onApproveZoltarForkRep(amount)}
 						onMigrateInternalRep={onMigrateInternalRep}
-						onPrepareRepForMigration={onPrepareRepForMigration}
+						onRetryMigrationBalances={onRetryMigrationBalances}
 						onZoltarMigrationFormChange={onZoltarMigrationFormChange}
 						zoltarForkActiveAction={zoltarForkActiveAction}
 						zoltarForkApproval={zoltarForkApproval}
 						zoltarForkRepBalanceAttoRep={zoltarForkRepBalanceAttoRep}
 						zoltarMigrationActiveAction={zoltarMigrationActiveAction}
 						zoltarMigrationChildRepBalancesAttoRep={zoltarMigrationChildRepBalancesAttoRep}
+						zoltarMigrationChildSplitAmountsAttoRep={zoltarMigrationChildSplitAmountsAttoRep}
 						zoltarMigrationError={zoltarMigrationError}
 						zoltarMigrationForm={zoltarMigrationForm}
 						zoltarMigrationPending={zoltarMigrationPending}
