@@ -1,5 +1,5 @@
 import { statoblast_EscalationGame_EscalationGame, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_SecurityPool_SecurityPool } from '../../../../types/contractArtifact'
-import type { Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/evm/ethereum'
 import { SystemState } from '../../types/statoblastTypes'
 import { QuestionOutcome } from '../../types/types'
 import { HIGH_GAS_SIMULATOR_WRITE_GAS } from '../constants'

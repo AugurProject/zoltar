@@ -1,6 +1,17 @@
-import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
-import { bytesToHex, encodeAbiParameters, encodeDeployData, encodeFunctionData, getAddress, hexToBytes, keccak256, type Address, type Hex } from '@zoltar/shared/ethereum'
-import { getOpenOracleGameTuple, getOpenOracleHelperTuple, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_STORE_PRICE, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_FLAG_TRACK_DISPUTES } from '@zoltar/shared/openOracle'
+import { beforeAll, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { bytesToHex, encodeAbiParameters, encodeDeployData, encodeFunctionData, getAddress, hexToBytes, keccak256, type Address, type Hex } from '@zoltar/shared/evm/ethereum'
+import {
+	getOpenOracleGameTuple,
+	getOpenOracleHelperTuple,
+	hashOpenOracleStatePreimage,
+	OPEN_ORACLE_FLAG_FEES_ONLY_AT_HALT,
+	OPEN_ORACLE_FLAG_FLEXIBLE_ESCALATION,
+	OPEN_ORACLE_FLAG_STORE_ALL,
+	OPEN_ORACLE_FLAG_STORE_PRICE,
+	OPEN_ORACLE_FLAG_STORE_SETTLEMENT_ELIGIBILITY,
+	OPEN_ORACLE_FLAG_TIME_TYPE,
+	OPEN_ORACLE_FLAG_TRACK_DISPUTES,
+} from '@zoltar/shared/oracle/openOracle'
 import assert from '../testSupport/simulator/utils/assert'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
@@ -108,6 +119,21 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 		const contractAddress = receipt.contractAddress
 		if (contractAddress === null || contractAddress === undefined) throw new Error('rejecting ETH receiver deployment address is unavailable')
 		return contractAddress
+	}
+
+	const installCurrentOpenOracle = async () => {
+		const hash = await reporter.sendTransaction({
+			data: encodeDeployData({
+				abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
+				bytecode: `0x${statoblast_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`,
+			}),
+		})
+		const receipt = await reporter.waitForTransactionReceipt({ hash })
+		const contractAddress = receipt.contractAddress
+		if (contractAddress === null || contractAddress === undefined) throw new Error('OpenOracle deployment address is unavailable')
+		const currentCode = await reporter.getCode({ address: contractAddress })
+		if (currentCode === undefined || currentCode === '0x') throw new Error('OpenOracle runtime bytecode is unavailable')
+		await mockWindow.addStateOverrides({ [openOracle]: { code: hexToBytes(currentCode) } })
 	}
 
 	const submitReport = async (
@@ -307,6 +333,145 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 			reportFundingBefore,
 			'underfunded report must not transfer or credit collateral',
 		)
+	})
+
+	test.each([
+		{ label: 'timestamp', timeType: true },
+		{ label: 'block', timeType: false },
+	] as const)('stores $label-clock settlement eligibility on report and dispute when that flag alone is enabled', async ({ timeType }) => {
+		await installCurrentOpenOracle()
+		await prepareReporter(reporter)
+		await prepareReporter(disputer)
+		const reportId = await reporter.readContract({
+			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
+			address: openOracle,
+			functionName: 'nextReportId',
+			args: [],
+		})
+		const clockFlags = timeType ? FLAGS : FLAGS & ~OPEN_ORACLE_FLAG_TIME_TYPE
+		const flags = clockFlags | OPEN_ORACLE_FLAG_STORE_SETTLEMENT_ELIGIBILITY
+		await submitReport(reporter, { ...getReportParameters(reporter), flags: Number(flags) })
+		const reported = (await loadOpenOracleEventState(reporter, reportId)).latest
+		expect(
+			await reporter.readContract({
+				abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
+				address: openOracle,
+				functionName: 'settlementEligibility',
+				args: [reportId],
+			}),
+		).toBe(reported.game.reportTimestamp + SETTLEMENT_TIME)
+
+		if (timeType) {
+			await mockWindow.setTime(reported.game.reportTimestamp + DISPUTE_DELAY - 1n)
+		} else {
+			for (let block = 1n; block < DISPUTE_DELAY; block += 1n) await mockWindow.request({ method: 'evm_mine', params: [] })
+		}
+		await disputeReport(disputer, reportId, 1_200n, 900n, reported)
+		const disputed = (await loadOpenOracleEventState(reporter, reportId)).latest
+		expect(disputed.game.currentAmount1).toBe(1_200n)
+		expect(
+			await reporter.readContract({
+				abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
+				address: openOracle,
+				functionName: 'settlementEligibility',
+				args: [reportId],
+			}),
+		).toBe(disputed.game.reportTimestamp + SETTLEMENT_TIME)
+	})
+
+	test('flexible escalation accepts the standard lower bound and halt upper bound but rejects values outside them', async () => {
+		await installCurrentOpenOracle()
+		await prepareReporter(reporter)
+		await prepareReporter(disputer)
+
+		const createFlexibleReportAtDisputeTime = async () => {
+			const reportId = await reporter.readContract({
+				abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
+				address: openOracle,
+				functionName: 'nextReportId',
+				args: [],
+			})
+			await submitReport(reporter, { ...getReportParameters(reporter), flags: Number(FLAGS | OPEN_ORACLE_FLAG_FLEXIBLE_ESCALATION) })
+			const state = (await loadOpenOracleEventState(reporter, reportId)).latest
+			await mockWindow.setTime(state.game.reportTimestamp + DISPUTE_DELAY - 1n)
+			return { reportId, state }
+		}
+
+		let report = await createFlexibleReportAtDisputeTime()
+		await disputeReport(disputer, report.reportId, 1_200n, 900n, report.state)
+		expect((await loadOpenOracleEventState(reporter, report.reportId)).latest.game.currentAmount1).toBe(1_200n)
+
+		report = await createFlexibleReportAtDisputeTime()
+		await disputeReport(disputer, report.reportId, 1_500n, 900n, report.state)
+		expect((await loadOpenOracleEventState(reporter, report.reportId)).latest.game.currentAmount1).toBe(1_500n)
+
+		report = await createFlexibleReportAtDisputeTime()
+		await assertCustomError(() => disputeReport(disputer, report.reportId, 1_199n, 900n, report.state), 'InvalidAmount1')
+		await assertCustomError(() => disputeReport(disputer, report.reportId, 1_501n, 900n, report.state), 'InvalidAmount1')
+	})
+
+	test('halt-only fees skip pre-halt fees and charge them once the prior report is at the halt', async () => {
+		await installCurrentOpenOracle()
+		await prepareReporter(reporter)
+		await prepareReporter(disputer)
+
+		const preHaltReportId = await reporter.readContract({
+			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
+			address: openOracle,
+			functionName: 'nextReportId',
+			args: [],
+		})
+		await submitReport(reporter, { ...getReportParameters(reporter), flags: Number(FLAGS | OPEN_ORACLE_FLAG_FEES_ONLY_AT_HALT) })
+		const preHaltReported = (await loadOpenOracleEventState(reporter, preHaltReportId)).latest
+		await mockWindow.setTime(preHaltReported.game.reportTimestamp + DISPUTE_DELAY - 1n)
+		const preHaltReporterCredit = await getHeldBalance(reporter.account.address, preHaltReported.game.token1)
+		await disputeReport(disputer, preHaltReportId, 1_200n, 900n, preHaltReported)
+		expect((await getHeldBalance(reporter.account.address, preHaltReported.game.token1)) - preHaltReporterCredit).toBe(2n * AMOUNT1)
+
+		const haltReportId = await reporter.readContract({
+			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
+			address: openOracle,
+			functionName: 'nextReportId',
+			args: [],
+		})
+		await submitReport(reporter, {
+			...getReportParameters(reporter),
+			escalationHalt: AMOUNT1,
+			flags: Number(FLAGS | OPEN_ORACLE_FLAG_FEES_ONLY_AT_HALT),
+		})
+		const haltReported = (await loadOpenOracleEventState(reporter, haltReportId)).latest
+		await mockWindow.setTime(haltReported.game.reportTimestamp + DISPUTE_DELAY - 1n)
+		const haltPreviousReporterCredit = await getHeldBalance(reporter.account.address, haltReported.game.token1)
+		await disputeReport(disputer, haltReportId, AMOUNT1 + 1n, 900n, haltReported)
+		expect((await getHeldBalance(reporter.account.address, haltReported.game.token1)) - haltPreviousReporterCredit).toBe(2n * AMOUNT1 + (AMOUNT1 * (FEE_PERCENTAGE + PROTOCOL_FEE)) / 10_000_000n)
+	})
+
+	test('legacy flags preserve eligibility, escalation, and fee behavior when no new optional bit is set', async () => {
+		await installCurrentOpenOracle()
+		await prepareReporter(reporter)
+		await prepareReporter(disputer)
+
+		const legacyReportId = await reporter.readContract({
+			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
+			address: openOracle,
+			functionName: 'nextReportId',
+			args: [],
+		})
+		await submitReport(reporter)
+		expect(
+			await reporter.readContract({
+				abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
+				address: openOracle,
+				functionName: 'settlementEligibility',
+				args: [legacyReportId],
+			}),
+		).toBe(0n)
+		const legacyReported = (await loadOpenOracleEventState(reporter, legacyReportId)).latest
+		await mockWindow.setTime(legacyReported.game.reportTimestamp + DISPUTE_DELAY - 1n)
+		const reporterCredit = await getHeldBalance(reporter.account.address, legacyReported.game.token1)
+		await assertCustomError(() => disputeReport(disputer, legacyReportId, 1_400n, 900n, legacyReported), 'InvalidAmount1')
+		await disputeReport(disputer, legacyReportId, 1_200n, 900n, legacyReported)
+		expect((await getHeldBalance(reporter.account.address, legacyReported.game.token1)) - reporterCredit).toBe(2n * AMOUNT1 + (AMOUNT1 * (FEE_PERCENTAGE + PROTOCOL_FEE)) / 10_000_000n)
 	})
 
 	test('dispute validates every reachable custom-error transition guard', async () => {
@@ -912,21 +1077,84 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 	})
 
 	test('the exact settlement deadline belongs only to settlement', async () => {
+		await installCurrentOpenOracle()
 		await prepareReporter(reporter)
 		await prepareReporter(disputer)
 		const reportId = await createReport(reporter)
 		const state = (await loadOpenOracleEventState(reporter, reportId)).latest
 		const deadline = state.game.reportTimestamp + SETTLEMENT_TIME
-		const boundarySnapshot = await mockWindow.anvilSnapshot()
-		await mockWindow.setTime(deadline - 1n)
+		const disputeData = encodeFunctionData({
+			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
+			functionName: 'dispute',
+			args: [reportId, 1_200n, 900n, disputer.account.address, false, false, getOpenOracleGameTuple(state.game), getOpenOracleHelperTuple(state.helper), getTimingBoundaries()],
+		})
+		const settleData = encodeFunctionData({
+			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
+			functionName: 'settle',
+			args: [reportId, getOpenOracleGameTuple(state.game), getOpenOracleHelperTuple(state.helper)],
+		})
+		const mineDeadlineCompetitors = async (settleFirst: boolean) => {
+			const rawRequest = async (method: string, params: readonly unknown[]) => await mockWindow.requestRaw({ method, params })
+			const queueTransaction = async (from: Address, data: Hex) => {
+				const hash = await rawRequest('eth_sendTransaction', [{ from, to: openOracle, data, gas: '0x17d7840', gasPrice: '0x0' }])
+				if (typeof hash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(hash)) throw new Error('Direct OpenOracle transaction returned an invalid hash')
+				return hash
+			}
+			const receiptStatus = async (hash: string) => {
+				const receipt = await rawRequest('eth_getTransactionReceipt', [hash])
+				if (typeof receipt !== 'object' || receipt === null) throw new Error(`Missing direct OpenOracle receipt for ${hash}`)
+				const status = Reflect.get(receipt, 'status')
+				if (status === '0x1') return 'success'
+				if (status === '0x0') return 'reverted'
+				throw new Error(`Invalid direct OpenOracle receipt status for ${hash}`)
+			}
 
-		await assertCustomError(() => disputeReport(disputer, reportId, 1_200n, 900n, state), 'DisputeTooLate')
-		assert.strictEqual((await reporter.getBlock()).timestamp, deadline)
+			await rawRequest('anvil_setAutomine', [false])
+			try {
+				await rawRequest('evm_setNextBlockTimestamp', [`0x${deadline.toString(16)}`])
+				const firstHash = settleFirst ? await queueTransaction(settler.account.address, settleData) : await queueTransaction(disputer.account.address, disputeData)
+				const secondHash = settleFirst ? await queueTransaction(disputer.account.address, disputeData) : await queueTransaction(settler.account.address, settleData)
+				await rawRequest('evm_mine', [])
+				const firstStatus = await receiptStatus(firstHash)
+				const secondStatus = await receiptStatus(secondHash)
+				return settleFirst ? { disputeStatus: secondStatus, settleStatus: firstStatus } : { disputeStatus: firstStatus, settleStatus: secondStatus }
+			} finally {
+				await rawRequest('anvil_setAutomine', [true])
+			}
+		}
+		let boundarySnapshot = await mockWindow.anvilSnapshot()
+		await mockWindow.setTime(deadline - 2n)
+		await assertCustomError(() => openOracleSettle(settler, reportId), 'SettleTooEarly')
+		assert.strictEqual((await reporter.getBlock()).timestamp, deadline - 1n)
 
 		await mockWindow.anvilRevert(boundarySnapshot)
-		await mockWindow.setTime(deadline - 1n)
-		await openOracleSettle(settler, reportId)
+		boundarySnapshot = await mockWindow.anvilSnapshot()
+		await mockWindow.setTime(deadline - 2n)
+		await disputeReport(disputer, reportId, 1_200n, 900n, state)
+		assert.strictEqual((await reporter.getBlock()).timestamp, deadline - 1n)
+
+		await mockWindow.anvilRevert(boundarySnapshot)
+		boundarySnapshot = await mockWindow.anvilSnapshot()
+		const disputeFirst = await mineDeadlineCompetitors(false)
+		assert.strictEqual(disputeFirst.disputeStatus, 'reverted', 'a dispute must fail at equality even when ordered first')
+		assert.strictEqual(disputeFirst.settleStatus, 'success', 'settlement must succeed at equality when ordered after a rejected dispute')
+
+		await mockWindow.anvilRevert(boundarySnapshot)
+		boundarySnapshot = await mockWindow.anvilSnapshot()
+		const settlementFirst = await mineDeadlineCompetitors(true)
+		assert.strictEqual(settlementFirst.disputeStatus, 'reverted', 'a dispute must fail at equality after settlement is ordered first')
+		assert.strictEqual(settlementFirst.settleStatus, 'success', 'settlement must succeed at equality when ordered first')
 		assert.strictEqual((await getOpenOracleReportStatus(reporter, reportId)).settlementTimestamp, deadline)
-		assert.strictEqual(await mockWindow.getTime(), deadline)
+
+		await mockWindow.anvilRevert(boundarySnapshot)
+		boundarySnapshot = await mockWindow.anvilSnapshot()
+		await mockWindow.setTime(deadline)
+		await assertCustomError(() => disputeReport(disputer, reportId, 1_200n, 900n, state), 'DisputeTooLate')
+		assert.strictEqual((await reporter.getBlock()).timestamp, deadline + 1n)
+
+		await mockWindow.anvilRevert(boundarySnapshot)
+		await mockWindow.setTime(deadline)
+		await openOracleSettle(settler, reportId)
+		assert.strictEqual((await getOpenOracleReportStatus(reporter, reportId)).settlementTimestamp, deadline + 1n)
 	})
 })

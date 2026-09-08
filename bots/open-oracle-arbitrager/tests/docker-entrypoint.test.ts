@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { batchCommands, dockerInstructions, parseDockerfile, requireDockerStage, shellCommandSegments } from '../../../tooling/testing/packaging-parsers.ts'
 
 const entrypoint = join(import.meta.dir, '..', 'scripts', 'docker-entrypoint.sh')
 const dockerfile = join(import.meta.dir, '..', 'Dockerfile')
@@ -32,24 +33,28 @@ async function runEntrypoint(directory: string, path = process.env['PATH']) {
 
 describe('Docker entrypoint', () => {
 	test('provides a location-independent Windows launcher', async () => {
-		const source = (await readFile(windowsLauncher, 'utf8')).replaceAll('\r\n', '\n')
-		expect(source).toContain('pushd "%~dp0"')
-		expect(source).toContain('docker compose up --build --force-recreate\nset "exit_code=%errorlevel%"\npopd\npause\nexit /b %exit_code%')
+		expect(batchCommands(await readFile(windowsLauncher, 'utf8'))).toEqual(['pushd "%~dp0" || exit /b 1', 'docker network inspect zoltar >nul 2>&1 || docker network create zoltar || exit /b 1', 'docker compose up --build --force-recreate', 'set "exit_code=%errorlevel%"', 'popd', 'pause', 'exit /b %exit_code%'])
 	})
 
 	test('publishes the passwordless dashboard only on host loopback', async () => {
-		const source = await readFile(composeFile, 'utf8')
-		expect(source).not.toContain('ZOLTAR_BOT_DASHBOARD_PASSWORD')
-		expect(source).toContain('ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED: "true"')
-		expect(source).toContain('127.0.0.1:4173:4173')
+		const compose = Bun.YAML.parse(await readFile(composeFile, 'utf8')) as { services?: { arbitrager?: { environment?: Record<string, unknown>; ports?: unknown[] } } }
+		const arbitrager = compose.services?.arbitrager
+		expect(arbitrager?.environment).toEqual({ ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED: 'true' })
+		expect(arbitrager?.environment).not.toHaveProperty('ZOLTAR_BOT_DASHBOARD_PASSWORD')
+		expect(arbitrager?.ports).toEqual(['127.0.0.1:4173:4173'])
 	})
 
 	test('installs production dependencies where shared bot sources can resolve them', async () => {
-		const source = await readFile(dockerfile, 'utf8')
-		expect(source).toContain('cd shared \\\n\t&& bun install --frozen-lockfile --production')
-		expect(source).toContain('cd ../bots/shared \\\n\t&& bun install --frozen-lockfile --production')
-		expect(source).not.toContain('ui/coreShared/favicon')
-		expect(source).toContain('COPY bots/open-oracle-arbitrager/src/ ./bots/open-oracle-arbitrager/src/')
+		const stages = parseDockerfile(await readFile(dockerfile, 'utf8'))
+		const runtime = stages.at(-1)
+		if (runtime === undefined) throw new Error('Missing runtime Docker stage')
+		const installCommands = dockerInstructions(runtime, 'RUN').flatMap(shellCommandSegments)
+		expect(installCommands).toEqual(expect.arrayContaining(['cd shared', 'bun install --frozen-lockfile --production', 'cd ../bots/shared']))
+		expect(installCommands).toContain('cd ../open-oracle-arbitrager')
+		expect(installCommands.filter(command => command === 'bun install --frozen-lockfile --production')).toHaveLength(3)
+		expect(stages.flatMap(stage => dockerInstructions(stage, 'COPY')).some(copy => copy.includes('ui/coreShared/favicon'))).toBe(false)
+		expect(dockerInstructions(runtime, 'COPY')).toContain('bots/open-oracle-arbitrager/src/ ./bots/open-oracle-arbitrager/src/')
+		expect(requireDockerStage(stages, 'shared-builder')).toBeDefined()
 		expect(await readFile(dockerignore, 'utf8')).not.toContain('ui/coreShared/favicon')
 	})
 

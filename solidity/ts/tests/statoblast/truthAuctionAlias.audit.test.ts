@@ -1,5 +1,5 @@
 import { beforeEach, describe, test } from 'bun:test'
-import { encodeDeployData } from '@zoltar/shared/ethereum'
+import { encodeDeployData } from '@zoltar/shared/evm/ethereum'
 import { useStatoblastTruthAuctionFixture, type StatoblastTruthAuctionFixture } from './fixture'
 import {
 	statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction,

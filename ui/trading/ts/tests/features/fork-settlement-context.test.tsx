@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
-import { createPublicClient, createWalletClient, custom, getAddress, type Hash } from '@zoltar/shared/ethereum'
+import { createPublicClient, createWalletClient, custom, getAddress, type Hash } from '@zoltar/shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { LiveSettlementControls } from '../../features/LiveSettlementControls.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
@@ -132,7 +132,7 @@ describe('live fork settlement context', () => {
 				},
 			}),
 		})
-		const balances = { scope: actualLive.shareBalanceScope(market), invalid: 1n, yes: 1n, no: 1n, approved: true, lp: 0n, lpAllowance: 0n }
+		const balances = { scope: actualLive.shareBalanceScope(market), invalid: 1n, yes: 1n, no: 1n, lp: 0n }
 		const settlementView = (currentAccount: typeof account, currentWalletClient: typeof walletClient, currentBalances: typeof balances) => (
 			<LiveSettlementControls
 				configuration={configuration}
@@ -146,9 +146,7 @@ describe('live fork settlement context', () => {
 				refresh={async () => {
 					refreshes++
 				}}
-				refreshBalancesAfterApproval={async () => 'ready'}
 				onKnownReceipt={() => undefined}
-				walletContextIsCurrent={() => true}
 				executeWithCurrentWalletContext={async (_account, _networkFailure, _accountFailure, action) => await action()}
 				createGuardedWalletWrite={() => async write => await write()}
 				retryBalances={async () => undefined}

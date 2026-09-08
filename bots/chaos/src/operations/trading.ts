@@ -1,4 +1,4 @@
-import { decodeFunctionData, encodeDeployData, getAddress, getCreate2Address, isAddress, toHex, zeroAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import { decodeFunctionData, encodeAbiParameters, encodeDeployData, getAddress, getCreate2Address, isAddress, toHex, zeroAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory, trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter } from '../../../../solidity/ts/types/contractArtifact.ts'
 import { erc1155Abi, erc20Abi, genesisUniswapSeederAbi, shareTokenAbi, tradingFactoryAbi, tradingPairAbi, tradingRouterAbi, uniswapV3FactoryAbi, uniswapV3PoolAbi } from '../contracts/abi.ts'
 import { CANONICAL_UNISWAP_V3_FACTORY, GENESIS_UNISWAP_FEE, GENESIS_UNISWAP_SQRT_PRICE_X96, GENESIS_UNISWAP_TICK_LOWER, GENESIS_UNISWAP_TICK_UPPER, genesisUniswapSeederDeployment } from '../core/genesis-uniswap.ts'
@@ -9,12 +9,42 @@ import { validForkOutcomeRoutes } from './fork-outcomes.ts'
 import { canCreateCompleteSet, projectedEthToShares, sharesToProjectedEth } from './pool-economics.ts'
 
 const shareForPool = (snapshot: EcosystemSnapshot, pool: PoolSnapshot) => snapshot.wallet.shares.find(share => share.shareToken.toLowerCase() === pool.shareToken.toLowerCase() && share.universeId === pool.universeId)
-const poolForPair = (snapshot: EcosystemSnapshot, pair: PairSnapshot) => snapshot.pools.find(pool => pool.address.toLowerCase() === pair.pool.toLowerCase())
+export const poolForPair = (snapshot: EcosystemSnapshot, pair: PairSnapshot) => snapshot.pools.find(pool => pool.address.toLowerCase() === pair.pool.toLowerCase())
 const shareTokenId = (universeId: string, outcome: number) => (amount(universeId) << 8n) | BigInt(outcome)
 const BPS_DENOMINATOR = 10_000n
 const CANONICAL_PROXY_DEPLOYER = getAddress('0x7a0d94f55792c434d74a40883c6ed8545e406d12')
 const ZERO_SALT = toHex(0, { size: 32 })
 const GENESIS_TRADING_FEE_BPS = 30
+const receiveRequestParameter = {
+	type: 'tuple',
+	components: [
+		{ name: 'version', type: 'uint8' },
+		{ name: 'operation', type: 'uint8' },
+		{ name: 'shareToken', type: 'address' },
+		{ name: 'securityPool', type: 'address' },
+		{ name: 'pair', type: 'address' },
+		{ name: 'universeId', type: 'uint248' },
+		{ name: 'questionId', type: 'uint256' },
+		{ name: 'invalidTokenId', type: 'uint256' },
+		{ name: 'yesTokenId', type: 'uint256' },
+		{ name: 'noTokenId', type: 'uint256' },
+		{ name: 'longOutcome', type: 'uint8' },
+		{ name: 'completeSetShares', type: 'uint256' },
+		{ name: 'maxLongSharesIn', type: 'uint256' },
+		{ name: 'minEthOut', type: 'uint256' },
+		{ name: 'payoutRecipient', type: 'address' },
+		{ name: 'refundRecipient', type: 'address' },
+		{ name: 'deadline', type: 'uint256' },
+	],
+} as const
+
+function receiveRequestData(snapshot: EcosystemSnapshot, pool: PoolSnapshot, pair: PairSnapshot, shares: ShareInventory, operation: 0 | 1, longOutcome: 1 | 2 | 3, completeAmount: bigint, maximumLong: bigint, minimumEthAttoEth: bigint, deadline: bigint) {
+	const invalidTokenId = shareTokenId(shares.universeId, 0)
+	return encodeAbiParameters(
+		[receiveRequestParameter],
+		[[1, operation, shares.shareToken, pool.address, pair.address, amount(pool.universeId), amount(pool.questionId), invalidTokenId, invalidTokenId | 1n, invalidTokenId | 2n, longOutcome, completeAmount, maximumLong, minimumEthAttoEth, snapshot.wallet.address, snapshot.wallet.address, deadline]],
+	)
+}
 
 function deploymentStep(id: string, label: string, to: Address, data: Hex, evidence: OperationEvidence[]) {
 	return { data, evidence, gasLimit: '12000000', id, label, preflightCalls: [], to, walletAssetDebits: [] }
@@ -504,7 +534,7 @@ const TRADING_SLIPPAGE_BPS = 100n
 const FORK_MIGRATION_WINDOW_SECONDS = 8n * 7n * 24n * 60n * 60n
 const ORACLE_PRICE_VALIDITY_SECONDS = 300n
 
-function minimumAfterSlippage(value: bigint) {
+export function minimumAfterSlippage(value: bigint) {
 	if (value <= 0n) return 0n
 	const bounded = (value * (BPS_DENOMINATOR - TRADING_SLIPPAGE_BPS)) / BPS_DENOMINATOR
 	return bounded > 0n ? bounded : 1n
@@ -593,7 +623,7 @@ function removableLiquidity(pair: PairSnapshot) {
 	return liquidity
 }
 
-function removableLiquidityQuote(pair: PairSnapshot, liquidity: bigint) {
+export function removableLiquidityQuote(pair: PairSnapshot, liquidity: bigint) {
 	const totalSupply = amount(pair.totalSupply)
 	if (liquidity <= 0n || totalSupply <= 0n) return undefined
 	const yesOut = (amount(pair.effectiveYesReserve) * liquidity) / totalSupply
@@ -632,10 +662,9 @@ function ethSpend(snapshot: EcosystemSnapshot, options: PlanningOptions, salt: s
 	return cappedSpend(amount(snapshot.wallet.ethBalanceAttoEth), optionAmount(options, 'minimumEthReserveAttoEth', 10n ** 16n), optionAmount(options, 'maxEthSpendAttoEth', 10n ** 16n), mixSeed(options.seed, salt), minimum)
 }
 
-type DirectLiquidityKind = 'initialize' | 'add' | 'remove'
+type DirectLiquidityKind = 'initialize' | 'add'
 
 function directLiquidityReady(snapshot: EcosystemSnapshot, pair: PairSnapshot, kind: DirectLiquidityKind, options: PlanningOptions) {
-	if (kind === 'remove') return removableLiquidity(pair) > 0n
 	const pool = poolForPair(snapshot, pair)
 	const shares = pool === undefined ? undefined : shareForPool(snapshot, pool)
 	if (pool === undefined || shares === undefined) return false
@@ -651,7 +680,7 @@ function buildDirectShareLiquidityPlan(
 	snapshot: EcosystemSnapshot,
 	options: PlanningOptions,
 	pair: PairSnapshot,
-	kind: Exclude<DirectLiquidityKind, 'remove'>,
+	kind: DirectLiquidityKind,
 	id: string,
 	method: 'addLiquidity' | 'initialize',
 	shareAmount: bigint,
@@ -794,36 +823,38 @@ function previousSwapActionMatches(snapshot: EcosystemSnapshot, context: Operati
 	}
 }
 
-function previousRouterRemoveActionMatches(snapshot: EcosystemSnapshot, context: OperationContinuationContext, pair: PairSnapshot, router: Address, liquidity: bigint, minimumYes: bigint, minimumNo: bigint) {
+function previousRemoveActionMatches(snapshot: EcosystemSnapshot, context: OperationContinuationContext, pair: PairSnapshot, liquidity: bigint, minimumYes: bigint, minimumNo: bigint) {
 	const step = previousAction(context, 'removeLiquidity')
-	if (step === undefined || step.to.toLowerCase() !== router.toLowerCase()) return false
+	if (step === undefined || step.to.toLowerCase() !== pair.address.toLowerCase()) return false
 	try {
-		const call = decodeFunctionData({ abi: tradingRouterAbi, data: step.data })
-		return call.functionName === 'removeLiquidity' && sameAddress(call.args[0], pair.address) && call.args[1] === liquidity && call.args[2] === minimumYes && call.args[3] === minimumNo && sameAddress(call.args[4], snapshot.wallet.address)
+		const call = decodeFunctionData({ abi: tradingPairAbi, data: step.data })
+		return call.functionName === 'removeLiquidity' && call.args[0] === liquidity && call.args[1] === minimumYes && call.args[2] === minimumNo && sameAddress(call.args[3], snapshot.wallet.address) && call.args[4] === BigInt(context.previousPlan.deadlineTimestamp ?? '0')
 	} catch (error) {
 		if (error instanceof Error) return false
 		throw error
 	}
 }
 
-function previousRouterRedeemActionMatches(snapshot: EcosystemSnapshot, context: OperationContinuationContext, pool: PoolSnapshot, router: Address, completeAmount: bigint, minimumEthAttoEth: bigint) {
-	const step = previousAction(context, 'redeemCompleteSet')
-	if (step === undefined || step.to.toLowerCase() !== router.toLowerCase()) return false
-	try {
-		const call = decodeFunctionData({ abi: tradingRouterAbi, data: step.data })
-		return call.functionName === 'redeemCompleteSet' && sameAddress(call.args[0], pool.address) && call.args[1] === completeAmount && call.args[2] === minimumEthAttoEth && sameAddress(call.args[3], snapshot.wallet.address)
-	} catch (error) {
-		if (error instanceof Error) return false
-		throw error
-	}
+function sameBigintArray(actual: unknown, expected: readonly bigint[]) {
+	return Array.isArray(actual) && actual.length === expected.length && actual.every((value, index) => value === expected[index])
 }
 
-function previousRouterExitActionMatches(snapshot: EcosystemSnapshot, context: OperationContinuationContext, pair: PairSnapshot, router: Address, longOutcome: 1 | 2, completeAmount: bigint, maximumLong: bigint, minimumEthAttoEth: bigint) {
-	const step = previousAction(context, 'exitPosition')
-	if (step === undefined || step.to.toLowerCase() !== router.toLowerCase()) return false
+function previousReceiveActionMatches(snapshot: EcosystemSnapshot, context: OperationContinuationContext, pool: PoolSnapshot, pair: PairSnapshot, shares: ShareInventory, operation: 0 | 1, longOutcome: 1 | 2 | 3, completeAmount: bigint, maximumLong: bigint, minimumEthAttoEth: bigint) {
+	const step = previousAction(context, operation === 0 ? 'exitPosition' : 'redeemCompleteSet')
+	const deadline = context.previousPlan.deadlineTimestamp
+	if (step === undefined || deadline === undefined || step.to.toLowerCase() !== shares.shareToken.toLowerCase()) return false
+	const tokenIds = operation === 0 ? [shareTokenId(shares.universeId, 0), shareTokenId(shares.universeId, longOutcome)] : [0, 1, 2].map(outcome => shareTokenId(shares.universeId, outcome))
+	const values = operation === 0 ? [completeAmount, maximumLong] : tokenIds.map(() => completeAmount)
 	try {
-		const call = decodeFunctionData({ abi: tradingRouterAbi, data: step.data })
-		return call.functionName === 'exitPosition' && sameAddress(call.args[0], pair.address) && call.args[1] === BigInt(longOutcome) && call.args[2] === completeAmount && call.args[3] === maximumLong && call.args[4] === minimumEthAttoEth && sameAddress(call.args[5], snapshot.wallet.address)
+		const call = decodeFunctionData({ abi: erc1155Abi, data: step.data })
+		return (
+			call.functionName === 'safeBatchTransferFrom' &&
+			sameAddress(call.args[0], snapshot.wallet.address) &&
+			sameAddress(call.args[1], snapshot.deployments.tradingRouter) &&
+			sameBigintArray(call.args[2], tokenIds) &&
+			sameBigintArray(call.args[3], values) &&
+			call.args[4] === receiveRequestData(snapshot, pool, pair, shares, operation, longOutcome, completeAmount, maximumLong, minimumEthAttoEth, BigInt(deadline))
+		)
 	} catch (error) {
 		if (error instanceof Error) return false
 		throw error
@@ -863,29 +894,6 @@ function hasConfirmedShareApprovalStep(context: OperationContinuationContext) {
 	return context.previousPlan.steps.some(step => confirmed.has(step.id) && (step.id.startsWith('approve-shares-') || step.id.startsWith('reapprove-shares-')))
 }
 
-function confirmedLpApproval(context: OperationContinuationContext) {
-	const confirmed = new Set(context.confirmedStepIds)
-	const approvals = context.previousPlan.steps.filter(step => confirmed.has(step.id) && (step.id === 'approve-lp' || step.id.startsWith('reapprove-lp-')))
-	const decoded = approvals.flatMap(approval => {
-		try {
-			const call = decodeFunctionData({ abi: tradingPairAbi, data: approval.data })
-			const spender = call.functionName === 'approve' ? call.args[0] : undefined
-			return typeof spender === 'string' && isAddress(spender) ? [{ spender: getAddress(spender), token: approval.to }] : []
-		} catch (error) {
-			if (error instanceof Error) return []
-			throw error
-		}
-	})
-	if (decoded.length !== approvals.length) return undefined
-	const unique = [...new Map(decoded.map(approval => [`${approval.token.toLowerCase()}:${approval.spender.toLowerCase()}`, approval])).values()]
-	return unique.length === 1 ? unique[0] : undefined
-}
-
-function hasConfirmedLpApprovalStep(context: OperationContinuationContext) {
-	const confirmed = new Set(context.confirmedStepIds)
-	return context.previousPlan.steps.some(step => confirmed.has(step.id) && (step.id === 'approve-lp' || step.id.startsWith('reapprove-lp-')))
-}
-
 function nextShareApprovalStepId(context: OperationContinuationContext, operator: Address) {
 	const confirmed = new Set(context.confirmedStepIds)
 	const reusable = context.previousPlan.steps.find(step => !confirmed.has(step.id) && step.id.startsWith('reapprove-shares-') && step.id.slice(-42).toLowerCase() === operator.toLowerCase())
@@ -893,15 +901,6 @@ function nextShareApprovalStepId(context: OperationContinuationContext, operator
 	let ordinal = 1
 	while (context.previousPlan.steps.some(step => step.id === `reapprove-shares-${ordinal}-${operator}`)) ordinal += 1
 	return `reapprove-shares-${ordinal}-${operator}`
-}
-
-function nextLpApprovalStepId(context: OperationContinuationContext) {
-	const confirmed = new Set(context.confirmedStepIds)
-	const reusable = context.previousPlan.steps.find(step => !confirmed.has(step.id) && step.id.startsWith('reapprove-lp-'))
-	if (reusable !== undefined) return reusable.id
-	let ordinal = 1
-	while (context.previousPlan.steps.some(step => step.id === `reapprove-lp-${ordinal}`)) ordinal += 1
-	return `reapprove-lp-${ordinal}`
 }
 
 function shareApprovalCleanup(snapshot: EcosystemSnapshot, context: OperationContinuationContext): OperationPlanDraft | undefined {
@@ -934,42 +933,6 @@ function shareApprovalCleanup(snapshot: EcosystemSnapshot, context: OperationCon
 				functionName: 'setApprovalForAll',
 				id: `revoke-shares-${approval.operator}`,
 				label: 'Revoke outcome-share approval',
-				to: approval.token,
-			}),
-		],
-	})
-}
-
-function lpApprovalCleanup(snapshot: EcosystemSnapshot, context: OperationContinuationContext): OperationPlanDraft | undefined {
-	const approval = confirmedLpApproval(context)
-	if (approval === undefined) return undefined
-	return planBase({
-		continuationDisposition: 'cleanup-only',
-		definitionId: context.previousPlan.definitionId,
-		ecosystem: 'trading',
-		label: `Clean up ${context.previousPlan.label}`,
-		metadata: context.previousPlan.metadata,
-		postconditions: ['The workflow-owned LP allowance is zero'],
-		risk: 'medium',
-		snapshot,
-		steps: [
-			encodeStep({
-				abi: tradingPairAbi,
-				args: [approval.spender, 0n],
-				evidence: [
-					{
-						abi: 'function allowance(address owner, address spender) view returns (uint256)',
-						args: [snapshot.wallet.address, approval.spender],
-						contract: approval.token,
-						expected: '0',
-						functionName: 'allowance',
-						kind: 'storage-postcondition',
-						relation: 'equals',
-					},
-				],
-				functionName: 'approve',
-				id: 'revoke-lp',
-				label: 'Revoke LP allowance',
 				to: approval.token,
 			}),
 		],
@@ -1034,7 +997,6 @@ function directLiquidity(kind: DirectLiquidityKind): OperationDefinition {
 	const details = {
 		add: ['trading.liquidity.add-shares', 'addLiquidity'],
 		initialize: ['trading.pair.initialize-shares', 'initialize'],
-		remove: ['trading.liquidity.remove-shares', 'removeLiquidity'],
 	} as const
 	const [id, method] = details[kind]
 	return {
@@ -1046,49 +1008,19 @@ function directLiquidity(kind: DirectLiquidityKind): OperationDefinition {
 			if (pair === undefined) return undefined
 			const pool = poolForPair(snapshot, pair)
 			if (pool === undefined) return undefined
-			if (kind !== 'remove') {
-				const shares = shareForPool(snapshot, pool)
-				if (shares === undefined) return undefined
-				const available = amount(shares.yes) < amount(shares.no) ? amount(shares.yes) : amount(shares.no)
-				const shareAmount = available > 10n ** 15n ? 10n ** 15n : available
-				const expectedLiquidity = kind === 'initialize' ? shareAmount - 1_000n : proportionalLiquidity(pair, shareAmount, shareAmount)?.liquidity
-				if (expectedLiquidity === undefined || expectedLiquidity <= 0n) return undefined
-				const minimumLiquidity = minimumAfterSlippage(expectedLiquidity)
-				const shareMethod = kind === 'initialize' ? 'initialize' : 'addLiquidity'
-				return buildDirectShareLiquidityPlan(snapshot, options, pair, kind, id, shareMethod, shareAmount, minimumLiquidity, { minimumLiquidity: minimumLiquidity.toString(), pair: pair.address, pool: pool.address, shareAmount: shareAmount.toString() })
-			}
-			const liquidity = removableLiquidity(pair)
-			const quote = removableLiquidityQuote(pair, liquidity)
-			if (quote === undefined) return undefined
-			return planBase({
-				definitionId: id,
-				ecosystem: 'trading',
-				label: `${kind} share liquidity`,
-				metadata: { pair: pair.address },
-				postconditions: ['Pair reserves and wallet LP balance change consistently'],
-				risk: 'medium',
-				snapshot,
-				steps: [
-					encodeStep({
-						abi: tradingPairAbi,
-						args: [liquidity, minimumAfterSlippage(quote.yesOut), minimumAfterSlippage(quote.noOut), snapshot.wallet.address],
-						evidence: [eventEvidence(pair.address, 'LiquidityRemoved(address,address,uint256,uint256,uint256)')],
-						functionName: method,
-						id: method,
-						label: `${kind} direct liquidity`,
-						to: pair.address,
-						walletAssetDebits: [erc20WalletDebit(pair.address, liquidity, 'lp-token')],
-					}),
-				],
-			})
+			const shares = shareForPool(snapshot, pool)
+			if (shares === undefined) return undefined
+			const available = amount(shares.yes) < amount(shares.no) ? amount(shares.yes) : amount(shares.no)
+			const shareAmount = available > 10n ** 15n ? 10n ** 15n : available
+			const expectedLiquidity = kind === 'initialize' ? shareAmount - 1_000n : proportionalLiquidity(pair, shareAmount, shareAmount)?.liquidity
+			if (expectedLiquidity === undefined || expectedLiquidity <= 0n) return undefined
+			const minimumLiquidity = minimumAfterSlippage(expectedLiquidity)
+			const shareMethod = kind === 'initialize' ? 'initialize' : 'addLiquidity'
+			return buildDirectShareLiquidityPlan(snapshot, options, pair, kind, id, shareMethod, shareAmount, minimumLiquidity, { minimumLiquidity: minimumLiquidity.toString(), pair: pair.address, pool: pool.address, shareAmount: shareAmount.toString() })
 		},
-		...(kind === 'remove'
-			? {}
-			: {
-					buildContinuationPlan(snapshot: EcosystemSnapshot, options: PlanningOptions, context: OperationContinuationContext) {
-						return buildDirectShareLiquidityContinuation(snapshot, options, context, kind, id, kind === 'initialize' ? 'initialize' : 'addLiquidity')
-					},
-				}),
+		buildContinuationPlan(snapshot, options, context) {
+			return buildDirectShareLiquidityContinuation(snapshot, options, context, kind, id, kind === 'initialize' ? 'initialize' : 'addLiquidity')
+		},
 		classification: 'selectable',
 		contract: 'TwoWayConstantProductPair',
 		description: `${kind}s pair liquidity using wallet-owned shares or LP tokens.`,
@@ -1359,50 +1291,23 @@ function routerEthDefinition(kind: 'create-and-initialize' | 'initialize' | 'add
 	}
 }
 
-function lpApproval(snapshot: EcosystemSnapshot, pair: PairSnapshot, liquidity: bigint, stepId = 'approve-lp') {
-	const inventory = snapshot.wallet.lpTokens.find(candidate => candidate.pair.toLowerCase() === pair.address.toLowerCase())
-	if (amount(inventory?.allowanceToRouter ?? '0') >= liquidity) return []
-	return [
-		encodeStep({
-			abi: tradingPairAbi,
-			args: [snapshot.deployments.tradingRouter, liquidity],
-			evidence: [
-				{
-					abi: 'function allowance(address owner, address spender) view returns (uint256)',
-					args: [snapshot.wallet.address, snapshot.deployments.tradingRouter],
-					contract: pair.address,
-					expected: liquidity.toString(),
-					functionName: 'allowance',
-					kind: 'storage-postcondition',
-					relation: 'equals',
-				},
-			],
-			functionName: 'approve',
-			id: stepId,
-			label: 'Approve LP token',
-			to: pair.address,
-		}),
-	]
-}
-
-function buildRouterRemovePlan(snapshot: EcosystemSnapshot, options: PlanningOptions, pair: PairSnapshot, liquidity: bigint, minimumYes: bigint, minimumNo: bigint, metadata: OperationPlan['metadata'], confirmedApproval = false, approvalStepId?: string) {
-	if (liquidity > 10n ** 15n || amount(pair.walletLiquidity) < liquidity) return undefined
+export function buildRouterRemovePlan(snapshot: EcosystemSnapshot, options: PlanningOptions, pair: PairSnapshot, liquidity: bigint, minimumYes: bigint, minimumNo: bigint, metadata: OperationPlan['metadata'], allowAboveOperationalCap = false) {
+	if ((!allowAboveOperationalCap && liquidity > 10n ** 15n) || amount(pair.walletLiquidity) < liquidity) return undefined
 	const inventory = snapshot.wallet.lpTokens.find(candidate => candidate.pair.toLowerCase() === pair.address.toLowerCase())
 	const quote = removableLiquidityQuote(pair, liquidity)
 	if (inventory === undefined || amount(inventory.balance) < liquidity || quote === undefined || quote.yesOut < minimumYes || quote.noOut < minimumNo) return undefined
-	const steps = lpApproval(snapshot, pair, liquidity, approvalStepId)
-	const maximumCleanupTransactionCount = steps.length > 0 || confirmedApproval ? 1 : undefined
+	const steps: OperationPlanDraft['steps'] = []
 	const deadline = randomDeadline(snapshot, mixSeed(options.seed, 'trading.liquidity.remove:deadline'))
-	if (!timestampDeadlineHasRequiredSafety(amount(snapshot.anchor.timestamp), BigInt(deadline), options, steps.length)) return undefined
+	if (!timestampDeadlineHasRequiredSafety(amount(snapshot.anchor.timestamp), BigInt(deadline), options, 0)) return undefined
 	steps.push(
 		encodeStep({
-			abi: tradingRouterAbi,
-			args: [pair.address, liquidity, minimumYes, minimumNo, snapshot.wallet.address, BigInt(deadline)],
+			abi: tradingPairAbi,
+			args: [liquidity, minimumYes, minimumNo, snapshot.wallet.address, BigInt(deadline)],
 			evidence: [eventEvidence(pair.address, 'LiquidityRemoved(address,address,uint256,uint256,uint256)')],
 			functionName: 'removeLiquidity',
 			id: 'removeLiquidity',
 			label: 'Router remove',
-			to: snapshot.deployments.tradingRouter,
+			to: pair.address,
 			walletAssetDebits: [erc20WalletDebit(pair.address, liquidity, 'lp-token')],
 		}),
 	)
@@ -1411,7 +1316,6 @@ function buildRouterRemovePlan(snapshot: EcosystemSnapshot, options: PlanningOpt
 		definitionId: 'trading.liquidity.remove',
 		ecosystem: 'trading',
 		label: 'Router remove',
-		maximumCleanupTransactionCount,
 		metadata,
 		postconditions: ['LP balance decreases and outcome shares return'],
 		risk: 'medium',
@@ -1420,25 +1324,25 @@ function buildRouterRemovePlan(snapshot: EcosystemSnapshot, options: PlanningOpt
 	})
 }
 
-function buildRouterRedeemPlan(snapshot: EcosystemSnapshot, options: PlanningOptions, pair: PairSnapshot, completeAmount: bigint, minimumEthAttoEth: bigint, metadata: OperationPlan['metadata'], confirmedApproval = false, approvalStepId?: string) {
+function buildRouterRedeemPlan(snapshot: EcosystemSnapshot, options: PlanningOptions, pair: PairSnapshot, completeAmount: bigint, minimumEthAttoEth: bigint, metadata: OperationPlan['metadata']) {
 	const pool = poolForPair(snapshot, pair)
 	const shares = pool === undefined ? undefined : shareForPool(snapshot, pool)
 	const universe = pool === undefined ? undefined : snapshot.universes.find(candidate => candidate.id === pool.universeId)
 	if (pool === undefined || shares === undefined || pool.systemState !== 0 || universe?.forkTime !== '0') return undefined
 	if (amount(shares.invalid) < completeAmount || amount(shares.yes) < completeAmount || amount(shares.no) < completeAmount || sharesToEth(pool, completeAmount) < minimumEthAttoEth) return undefined
-	const steps = shareApproval(shares, snapshot.deployments.tradingRouter, snapshot.wallet.address, approvalStepId)
-	const maximumCleanupTransactionCount = steps.length > 0 || confirmedApproval ? 1 : undefined
+	const steps: OperationPlanDraft['steps'] = []
 	const deadline = randomDeadline(snapshot, mixSeed(options.seed, 'trading.complete-set.redeem:deadline'))
-	if (!timestampDeadlineHasRequiredSafety(amount(snapshot.anchor.timestamp), BigInt(deadline), options, steps.length)) return undefined
+	if (!timestampDeadlineHasRequiredSafety(amount(snapshot.anchor.timestamp), BigInt(deadline), options, 0)) return undefined
+	const tokenIds = [0, 1, 2].map(outcome => shareTokenId(shares.universeId, outcome))
 	steps.push(
 		encodeStep({
-			abi: tradingRouterAbi,
-			args: [pool.address, completeAmount, minimumEthAttoEth, snapshot.wallet.address, BigInt(deadline)],
+			abi: erc1155Abi,
+			args: [snapshot.wallet.address, snapshot.deployments.tradingRouter, tokenIds, tokenIds.map(() => completeAmount), receiveRequestData(snapshot, pool, pair, shares, 1, 3, completeAmount, 0n, minimumEthAttoEth, BigInt(deadline))],
 			evidence: [eventEvidence(pool.address, 'CompleteSetRedeemed(address,uint256,uint256,uint256,uint256)')],
-			functionName: 'redeemCompleteSet',
+			functionName: 'safeBatchTransferFrom',
 			id: 'redeemCompleteSet',
 			label: 'Router redeem',
-			to: snapshot.deployments.tradingRouter,
+			to: shares.shareToken,
 			walletAssetDebits: [0, 1, 2].map(outcome => erc1155WalletDebit(shares.shareToken, shareTokenId(shares.universeId, outcome), completeAmount)),
 		}),
 	)
@@ -1447,7 +1351,6 @@ function buildRouterRedeemPlan(snapshot: EcosystemSnapshot, options: PlanningOpt
 		definitionId: 'trading.complete-set.redeem',
 		ecosystem: 'trading',
 		label: 'Router redeem',
-		maximumCleanupTransactionCount,
 		metadata,
 		postconditions: ['Complete sets redeem to ETH and wallet share balances decrease'],
 		risk: 'medium',
@@ -1456,26 +1359,26 @@ function buildRouterRedeemPlan(snapshot: EcosystemSnapshot, options: PlanningOpt
 	})
 }
 
-function buildRouterExitPlan(snapshot: EcosystemSnapshot, options: PlanningOptions, pair: PairSnapshot, longOutcome: 1 | 2, completeAmount: bigint, maximumLong: bigint, minimumEthAttoEth: bigint, metadata: OperationPlan['metadata'], confirmedApproval = false, approvalStepId?: string) {
+function buildRouterExitPlan(snapshot: EcosystemSnapshot, options: PlanningOptions, pair: PairSnapshot, longOutcome: 1 | 2, completeAmount: bigint, maximumLong: bigint, minimumEthAttoEth: bigint, metadata: OperationPlan['metadata']) {
 	const pool = poolForPair(snapshot, pair)
 	const shares = pool === undefined ? undefined : shareForPool(snapshot, pool)
 	if (pool === undefined || shares === undefined || pair.status !== 0 || amount(shares.invalid) < completeAmount || amount(longOutcome === 1 ? shares.yes : shares.no) < maximumLong) return undefined
-	const steps = shareApproval(shares, snapshot.deployments.tradingRouter, snapshot.wallet.address, approvalStepId)
-	const maximumCleanupTransactionCount = steps.length > 0 || confirmedApproval ? 1 : undefined
-	if (!poolLifecycleOpen(snapshot, pool, options, steps.length)) return undefined
+	const steps: OperationPlanDraft['steps'] = []
+	if (!poolLifecycleOpen(snapshot, pool, options, 0)) return undefined
 	const requiredSwapInput = quoteExactOutput(pair, longOutcome === 1, completeAmount)
 	if (requiredSwapInput === undefined || requiredSwapInput + completeAmount > maximumLong || sharesToEth(pool, completeAmount) < minimumEthAttoEth) return undefined
 	const deadline = questionDeadline(snapshot, pool, mixSeed(options.seed, 'trading.position.exit:deadline'))
-	if (deadline === undefined || !timestampDeadlineHasRequiredSafety(amount(snapshot.anchor.timestamp), BigInt(deadline), options, steps.length)) return undefined
+	if (deadline === undefined || !timestampDeadlineHasRequiredSafety(amount(snapshot.anchor.timestamp), BigInt(deadline), options, 0)) return undefined
+	const tokenIds = [shareTokenId(shares.universeId, 0), shareTokenId(shares.universeId, longOutcome)]
 	steps.push(
 		encodeStep({
-			abi: tradingRouterAbi,
-			args: [pair.address, longOutcome, completeAmount, maximumLong, minimumEthAttoEth, snapshot.wallet.address, BigInt(deadline)],
+			abi: erc1155Abi,
+			args: [snapshot.wallet.address, snapshot.deployments.tradingRouter, tokenIds, [completeAmount, maximumLong], receiveRequestData(snapshot, pool, pair, shares, 0, longOutcome, completeAmount, maximumLong, minimumEthAttoEth, BigInt(deadline))],
 			evidence: [eventEvidence(pair.address, 'Swap(address,address,bool,bool,uint256,uint256,uint256,uint256,uint256)'), eventEvidence(pool.address, 'CompleteSetRedeemed(address,uint256,uint256,uint256,uint256)')],
-			functionName: 'exitPosition',
+			functionName: 'safeBatchTransferFrom',
 			id: 'exitPosition',
 			label: 'Router exit',
-			to: snapshot.deployments.tradingRouter,
+			to: shares.shareToken,
 			walletAssetDebits: [erc1155WalletDebit(shares.shareToken, shareTokenId(shares.universeId, 0), completeAmount), erc1155WalletDebit(shares.shareToken, shareTokenId(shares.universeId, longOutcome), maximumLong)],
 		}),
 	)
@@ -1484,7 +1387,6 @@ function buildRouterExitPlan(snapshot: EcosystemSnapshot, options: PlanningOptio
 		definitionId: 'trading.position.exit',
 		ecosystem: 'trading',
 		label: 'Router exit',
-		maximumCleanupTransactionCount,
 		metadata,
 		postconditions: ['Complete sets redeem to ETH and wallet share balances decrease'],
 		risk: 'medium',
@@ -1494,41 +1396,41 @@ function buildRouterExitPlan(snapshot: EcosystemSnapshot, options: PlanningOptio
 }
 
 function buildRouterOwnedContinuation(snapshot: EcosystemSnapshot, options: PlanningOptions, context: OperationContinuationContext, kind: 'exit' | 'redeem' | 'remove') {
-	const cleanup = () => (kind === 'remove' ? lpApprovalCleanup(snapshot, context) : shareApprovalCleanup(snapshot, context))
-	if (context.continuationDisposition === 'cleanup-only') return cleanup()
+	if (context.continuationDisposition === 'cleanup-only') return undefined
 	const routerAddress = metadataAddress(context.previousPlan.metadata, 'router')
 	const pair = metadataPair(snapshot, context.previousPlan.metadata)
-	if (pair === undefined || routerAddress === undefined || routerAddress.toLowerCase() !== snapshot.deployments.tradingRouter.toLowerCase()) return cleanup()
+	if (pair === undefined || (kind !== 'remove' && (routerAddress === undefined || routerAddress.toLowerCase() !== snapshot.deployments.tradingRouter.toLowerCase()))) return undefined
+	let rebuilt: OperationPlanDraft | undefined
 	if (kind === 'remove') {
 		const liquidity = metadataPositiveAmount(context.previousPlan.metadata, 'liquidity')
 		const minimumYes = metadataPositiveAmount(context.previousPlan.metadata, 'minimumYes')
 		const minimumNo = metadataPositiveAmount(context.previousPlan.metadata, 'minimumNo')
-		if (liquidity === undefined || minimumYes === undefined || minimumNo === undefined || !previousRouterRemoveActionMatches(snapshot, context, pair, routerAddress, liquidity, minimumYes, minimumNo)) return cleanup()
-		const approval = confirmedLpApproval(context)
-		if (approval === undefined && hasConfirmedLpApprovalStep(context)) return cleanup()
-		return buildRouterRemovePlan(snapshot, options, pair, liquidity, minimumYes, minimumNo, context.previousPlan.metadata, approval !== undefined, approval === undefined ? undefined : nextLpApprovalStepId(context)) ?? cleanup()
+		if (liquidity === undefined || minimumYes === undefined || minimumNo === undefined || !previousRemoveActionMatches(snapshot, context, pair, liquidity, minimumYes, minimumNo)) return undefined
+		rebuilt = buildRouterRemovePlan(snapshot, options, pair, liquidity, minimumYes, minimumNo, context.previousPlan.metadata)
+	} else {
+		const completeAmount = metadataPositiveAmount(context.previousPlan.metadata, 'completeAmount')
+		const minimumEthAttoEth = metadataPositiveAmount(context.previousPlan.metadata, 'minimumEthAttoEth')
+		const pool = poolForPair(snapshot, pair)
+		const shares = pool === undefined ? undefined : shareForPool(snapshot, pool)
+		if (completeAmount === undefined || minimumEthAttoEth === undefined || pool === undefined || shares === undefined) return undefined
+		if (kind === 'redeem') {
+			if (!previousReceiveActionMatches(snapshot, context, pool, pair, shares, 1, 3, completeAmount, 0n, minimumEthAttoEth)) return undefined
+			rebuilt = buildRouterRedeemPlan(snapshot, options, pair, completeAmount, minimumEthAttoEth, context.previousPlan.metadata)
+		} else {
+			const longOutcome = metadataOutcome(context.previousPlan.metadata, 'longOutcome')
+			const maximumLong = metadataPositiveAmount(context.previousPlan.metadata, 'maximumLong')
+			if (longOutcome === undefined || maximumLong === undefined || !previousReceiveActionMatches(snapshot, context, pool, pair, shares, 0, longOutcome, completeAmount, maximumLong, minimumEthAttoEth)) return undefined
+			rebuilt = buildRouterExitPlan(snapshot, options, pair, longOutcome, completeAmount, maximumLong, minimumEthAttoEth, context.previousPlan.metadata)
+		}
 	}
-	const completeAmount = metadataPositiveAmount(context.previousPlan.metadata, 'completeAmount')
-	const minimumEthAttoEth = metadataPositiveAmount(context.previousPlan.metadata, 'minimumEthAttoEth')
-	const pool = poolForPair(snapshot, pair)
-	if (completeAmount === undefined || minimumEthAttoEth === undefined || pool === undefined) return cleanup()
-	const approval = confirmedShareApproval(context, snapshot.deployments.tradingRouter)
-	if (approval === undefined && hasConfirmedShareApprovalStep(context)) return cleanup()
-	const approvalStepId = approval === undefined ? undefined : nextShareApprovalStepId(context, snapshot.deployments.tradingRouter)
-	if (kind === 'redeem') {
-		if (!previousRouterRedeemActionMatches(snapshot, context, pool, routerAddress, completeAmount, minimumEthAttoEth)) return cleanup()
-		return buildRouterRedeemPlan(snapshot, options, pair, completeAmount, minimumEthAttoEth, context.previousPlan.metadata, approval !== undefined, approvalStepId) ?? cleanup()
-	}
-	const longOutcome = metadataOutcome(context.previousPlan.metadata, 'longOutcome')
-	const maximumLong = metadataPositiveAmount(context.previousPlan.metadata, 'maximumLong')
-	if (longOutcome === undefined || maximumLong === undefined || !previousRouterExitActionMatches(snapshot, context, pair, routerAddress, longOutcome, completeAmount, maximumLong, minimumEthAttoEth)) return cleanup()
-	return buildRouterExitPlan(snapshot, options, pair, longOutcome, completeAmount, maximumLong, minimumEthAttoEth, context.previousPlan.metadata, approval !== undefined, approvalStepId) ?? cleanup()
+	if (rebuilt === undefined) return undefined
+	return rebuilt
 }
 
 function routerOwnedDefinition(kind: 'exit' | 'redeem' | 'remove'): OperationDefinition {
 	const details = {
-		exit: ['trading.position.exit', 'exitPosition'],
-		redeem: ['trading.complete-set.redeem', 'redeemCompleteSet'],
+		exit: ['trading.position.exit', 'safeBatchTransferFrom'],
+		redeem: ['trading.complete-set.redeem', 'safeBatchTransferFrom'],
 		remove: ['trading.liquidity.remove', 'removeLiquidity'],
 	} as const
 	const [id, method] = details[kind]
@@ -1545,7 +1447,7 @@ function routerOwnedDefinition(kind: 'exit' | 'redeem' | 'remove'): OperationDef
 						const complete = [amount(shares.invalid), amount(shares.yes), amount(shares.no)].reduce((minimum, value) => (value < minimum ? value : minimum))
 						return pool?.systemState === 0 && universe?.forkTime === '0' && complete > 0n && sharesToEth(pool, complete) > 0n
 					}
-					if (candidate.status !== 0 || !poolLifecycleOpen(snapshot, pool, options, shareApproval(shares, snapshot.deployments.tradingRouter, snapshot.wallet.address).length)) return false
+					if (candidate.status !== 0 || !poolLifecycleOpen(snapshot, pool, options, 0)) return false
 					const complete = minimumPositivePayoutShares(pool)
 					if (complete === undefined || amount(shares.invalid) < complete) return false
 					return [true, false].some(longYes => {
@@ -1599,9 +1501,9 @@ function routerOwnedDefinition(kind: 'exit' | 'redeem' | 'remove'): OperationDef
 			return buildRouterOwnedContinuation(snapshot, options, context, kind)
 		},
 		classification: 'selectable',
-		contract: 'TwoWayConstantProductRouter',
-		description: `Executes router ${kind} using only wallet-owned LP/outcome inventory.`,
-		discoveryInputs: ['wallet shares/LP balance and approvals', 'pair lifecycle'],
+		contract: kind === 'remove' ? 'TwoWayConstantProductPair' : 'ShareToken',
+		description: kind === 'remove' ? 'Removes wallet-owned LP directly from the pair.' : `Transfers wallet-owned shares into the router's atomic ${kind} callback.`,
+		discoveryInputs: ['wallet shares/LP balance', 'pair lifecycle'],
 		ecosystem: 'trading',
 		evaluate(snapshot, options) {
 			const found = snapshot.pairs.some(pair => {
@@ -1614,7 +1516,7 @@ function routerOwnedDefinition(kind: 'exit' | 'redeem' | 'remove'): OperationDef
 					const complete = [amount(shares.invalid), amount(shares.yes), amount(shares.no)].reduce((minimum, value) => (value < minimum ? value : minimum))
 					return pool?.systemState === 0 && universe?.forkTime === '0' && complete > 0n && sharesToEth(pool, complete) > 0n
 				}
-				if (pair.status !== 0 || !poolLifecycleOpen(snapshot, pool, options, shareApproval(shares, snapshot.deployments.tradingRouter, snapshot.wallet.address).length)) return false
+				if (pair.status !== 0 || !poolLifecycleOpen(snapshot, pool, options, 0)) return false
 				const complete = minimumPositivePayoutShares(pool)
 				if (complete === undefined || amount(shares.invalid) < complete) return false
 				return [true, false].some(longYes => {
@@ -1752,7 +1654,6 @@ export const TRADING_OPERATIONS: readonly OperationDefinition[] = [
 	createPair,
 	directLiquidity('initialize'),
 	directLiquidity('add'),
-	directLiquidity('remove'),
 	swapDefinition('exact-input'),
 	swapDefinition('exact-output'),
 	syncPair,

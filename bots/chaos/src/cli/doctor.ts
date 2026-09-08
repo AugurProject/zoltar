@@ -19,6 +19,7 @@ import { canonicalAnchor, chaosReadClients, chaosReadEndpoints, createChaosReadP
 import { requiredLiveInventory } from '../runtime/live-readiness.ts'
 import { preflightTransactionSubmissionNetwork } from '../runtime/submission-preflight.ts'
 import { loadDurableState, type DurableState } from '../state/operator-state.ts'
+import { isPristineBootstrapState } from '../state/pristine.ts'
 
 type DoctorReaderResult = {
 	codeRoots: number
@@ -395,22 +396,6 @@ function familyReachability(settings: OperatorSettings, result: ChaosDoctorProbe
 				readiness: 'deployment-authenticated; exact transaction eligibility requires completed read-only indexes during paused dry-run',
 			},
 		]),
-	)
-}
-
-function isPristineBootstrapState(state: DurableState) {
-	const schedulerIsPristine = (state.scheduler.status === 'idle' || state.scheduler.status === 'paused') && state.scheduler.lastDelaySeconds === undefined && state.scheduler.lastRunAt === undefined && state.scheduler.nextRunAt === undefined && state.scheduler.selectedOperationId === undefined
-	return (
-		state.signerAddress === undefined &&
-		state.activities.length === 0 &&
-		state.lifecyclePresenceBlocker === undefined &&
-		state.obligationTombstones.length === 0 &&
-		state.obligations.length === 0 &&
-		state.pendingTransactions.length === 0 &&
-		state.protocolIndex === undefined &&
-		!state.safetyPaused &&
-		schedulerIsPristine &&
-		state.workflows.length === 0
 	)
 }
 

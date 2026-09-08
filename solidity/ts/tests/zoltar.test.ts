@@ -2,13 +2,13 @@ import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/shared/constants'
-import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/protocolConfig'
+import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/deployment/protocolConfig'
 import { createWriteClient, WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { approveToken, setupTestAccounts, getERC20Balance, getChildUniverseId, contractExists, sortStringArrayByKeccak } from '../testSupport/simulator/utils/utilities'
 import assert from '../testSupport/simulator/utils/assert'
 import { addressString } from '../testSupport/simulator/utils/bigint'
-import { decodeEventLog, encodeAbiParameters, encodeDeployData, hexToBytes, keccak256 } from '@zoltar/shared/ethereum'
+import { decodeEventLog, encodeAbiParameters, encodeDeployData, getAddress, hexToBytes, isHex, keccak256, type Address, type Hex } from '@zoltar/shared/evm/ethereum'
 import {
 	addRepToMigrationBalance,
 	deployChild,
@@ -16,7 +16,7 @@ import {
 	forkUniverse,
 	getMigrationRepBalanceAttoRep,
 	getRepTokenAddress,
-	getTotalTheoreticalSupplyAttoRep,
+	getTotalTheoreticalSupply,
 	getUniverseData,
 	getUniverseTheoreticalSupplyAttoRep,
 	getZoltarAddress,
@@ -28,7 +28,7 @@ import {
 } from '../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion, getAnswerOptionName, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { ensureDefined, strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
-import { ReputationToken_ReputationToken, test_statoblast_FalseReturningERC20_FalseReturningERC20, Zoltar_Zoltar } from '../types/contractArtifact'
+import { ReputationToken_ReputationToken, test_RepV2GenesisMock_RepV2GenesisMock, test_statoblast_FalseReturningERC20_FalseReturningERC20, Zoltar_Zoltar } from '../types/contractArtifact'
 import { formatScalarOutcomeLabel, getScalarOutcomeIndex } from '../testSupport/simulator/utils/contracts/scalarOutcome'
 
 // Forker deposit fraction: the deposit is 5% of total supply (1/20).
@@ -43,6 +43,38 @@ function withScalarReservedBits(answer: bigint, reservedBits = 1n) {
 
 function formatStorageSlot(slot: bigint) {
 	return `0x${slot.toString(16).padStart(64, '0')}`
+}
+
+function splitSignature(signature: string) {
+	if (signature.length !== 132) throw new Error('Expected a 65-byte signature')
+	return {
+		r: `0x${signature.slice(2, 66)}` as Hex,
+		s: `0x${signature.slice(66, 130)}` as Hex,
+		v: Number.parseInt(signature.slice(130, 132), 16),
+	}
+}
+
+async function signTypedData(ethereum: AnvilWindowEthereum, signer: Address, typedData: object) {
+	const signature = await ethereum.request({ method: 'eth_signTypedData_v4', params: [signer, JSON.stringify(typedData)] })
+	if (typeof signature !== 'string' || !isHex(signature)) throw new Error('Typed-data signature missing')
+	return splitSignature(signature)
+}
+
+async function signPermit(ethereum: AnvilWindowEthereum, owner: Address, token: Address, tokenName: string, spender: Address, value: bigint, nonce: bigint, deadline: bigint, chainId = 1) {
+	return await signTypedData(ethereum, owner, {
+		domain: { chainId, name: tokenName, version: '1', verifyingContract: token },
+		primaryType: 'Permit',
+		types: {
+			Permit: [
+				{ name: 'owner', type: 'address' },
+				{ name: 'spender', type: 'address' },
+				{ name: 'value', type: 'uint256' },
+				{ name: 'nonce', type: 'uint256' },
+				{ name: 'deadline', type: 'uint256' },
+			],
+		},
+		message: { owner, spender, value: value.toString(), nonce: nonce.toString(), deadline: deadline.toString() },
+	})
 }
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
@@ -74,7 +106,7 @@ describe('Contract Test Suite', () => {
 			functionName: 'totalSupply',
 			args: [],
 		})
-		const theoreticalSupply = await getTotalTheoreticalSupplyAttoRep(client, addressString(GENESIS_REPUTATION_TOKEN))
+		const theoreticalSupply = await getTotalTheoreticalSupply(client, addressString(GENESIS_REPUTATION_TOKEN))
 		assert.strictEqual(seededBalanceTotal, actualSupply, 'seeded REP balances should equal actual supply')
 		assert.strictEqual(actualSupply, theoreticalSupply, 'seeded REP actual and theoretical supply should match')
 		assert.ok(theoreticalSupply <= 11_000_000n * 10n ** 18n, 'seeded REP supply should remain within the protocol cap')
@@ -131,7 +163,7 @@ describe('Contract Test Suite', () => {
 		const childUniverseId = getChildUniverseId(genesisUniverse, outcomeIndex)
 		const expectedMaximumSupply = parentSupplyBeforeFork - forkHaircut
 		assert.strictEqual(await getUniverseTheoreticalSupplyAttoRep(client, childUniverseId), expectedMaximumSupply, 'child theoretical maximum should exclude the fork admission haircut')
-		assert.strictEqual(await getTotalTheoreticalSupplyAttoRep(client, getRepTokenAddress(childUniverseId)), expectedMaximumSupply, 'child REP token maximum should match the child universe theoretical supply')
+		assert.strictEqual(await getTotalTheoreticalSupply(client, getRepTokenAddress(childUniverseId)), expectedMaximumSupply, 'child REP token maximum should match the child universe theoretical supply')
 	})
 
 	test('constructor rejects an invalid fork threshold divisor', async () => {
@@ -151,6 +183,41 @@ describe('Contract Test Suite', () => {
 			writeContractAndWait(client, () => client.sendTransaction({ data: invalidThresholdDeployment })),
 			/Zoltar fork threshold divisor must be greater than one/,
 		)
+	})
+
+	test('constructor accepts the mainnet REPv2 theoretical-supply selector without authorization extensions', async () => {
+		const theoreticalSupply = 11_000_000n * 10n ** 18n
+		const repDeployment = encodeDeployData({
+			abi: test_RepV2GenesisMock_RepV2GenesisMock.abi,
+			bytecode: `0x${test_RepV2GenesisMock_RepV2GenesisMock.evm.bytecode.object}`,
+			args: [theoreticalSupply],
+		})
+		const repReceipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: repDeployment }) })
+		const repAddress = repReceipt.contractAddress
+		if (repAddress === undefined || repAddress === null) throw new Error('REPv2-compatible genesis deployment address missing')
+
+		const functionNames = new Set<string>(test_RepV2GenesisMock_RepV2GenesisMock.abi.flatMap(item => (item.type === 'function' ? [item.name] : [])))
+		assert.ok(functionNames.has('getTotalTheoreticalSupply'), 'fixture must expose the mainnet REPv2 theoretical-supply selector')
+		for (const unsupportedFunction of ['permit', 'nonces', 'receiveWithAuthorization', 'transferWithAuthorization']) {
+			assert.ok(!functionNames.has(unsupportedFunction), `fixture must not expose ${unsupportedFunction}`)
+		}
+
+		const zoltarQuestionDataAddress = await client.readContract({
+			abi: Zoltar_Zoltar.abi,
+			functionName: 'zoltarQuestionData',
+			address: getZoltarAddress(),
+			args: [],
+		})
+		const zoltarDeployment = encodeDeployData({
+			abi: Zoltar_Zoltar.abi,
+			bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
+			args: [zoltarQuestionDataAddress, repAddress, DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor, DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor],
+		})
+		const zoltarReceipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: zoltarDeployment }) })
+		const zoltarAddress = zoltarReceipt.contractAddress
+		if (zoltarAddress === undefined || zoltarAddress === null) throw new Error('Zoltar deployment address missing')
+
+		assert.strictEqual(await client.readContract({ abi: Zoltar_Zoltar.abi, address: zoltarAddress, functionName: 'getUniverseTheoreticalSupplyAttoRep', args: [0n] }), theoreticalSupply, 'genesis universe must use mainnet REPv2 theoretical supply')
 	})
 
 	test('constructor rejects an invalid fork burn divisor', async () => {
@@ -426,7 +493,7 @@ describe('Contract Test Suite', () => {
 
 		const preForkUniverseData = await getUniverseData(client, genesisUniverse)
 		const genesisRepToken = getRepTokenAddress(genesisUniverse)
-		const totalTheoreticalSupplyAttoRep = await getTotalTheoreticalSupplyAttoRep(client, genesisRepToken)
+		const totalTheoreticalSupplyAttoRep = await getTotalTheoreticalSupply(client, genesisRepToken)
 		assert.strictEqual(preForkUniverseData.forkTime, 0n, 'Universe was forked already')
 		assert.strictEqual(preForkUniverseData.parentUniverseId, 0n, 'Universe had parent')
 		assert.strictEqual(preForkUniverseData.forkingOutcomeIndex, 0n, 'Universe has forking outcome index')
@@ -597,7 +664,7 @@ describe('Contract Test Suite', () => {
 		strictEqualTypeSafe(secondChildBalance, secondMigrationCredit, 'the second migrator child balance should equal its selected migration amount')
 		strictEqualTypeSafe(childTotalSupply, firstChildBalance + secondChildBalance, 'child REP total supply should equal the aggregate balances minted into that child')
 		assert.ok(childTotalSupply <= childTheoreticalSupply, 'child REP total supply must not exceed the child theoretical maximum')
-		strictEqualTypeSafe(await getTotalTheoreticalSupplyAttoRep(client, childRepToken), childTheoreticalSupply, 'the REP token and universe should expose the same theoretical supply')
+		strictEqualTypeSafe(await getTotalTheoreticalSupply(client, childRepToken), childTheoreticalSupply, 'the REP token and universe should expose the same theoretical supply')
 
 		await splitMigrationRep(client, genesisUniverse, firstMigrationCredit - firstMint, [childOutcome])
 		const finalChildTotalSupply = await client.readContract({
@@ -647,6 +714,136 @@ describe('Contract Test Suite', () => {
 		const childUniverseData = await getUniverseData(deployer, childUniverseId)
 		assert.strictEqual(childUniverseData.forkingOutcomeIndex, outcomeIndex, 'child universe should record the correct outcome index')
 		assert.strictEqual(childUniverseData.parentUniverseId, genesisUniverse, 'child universe should point back to the parent')
+	})
+
+	test('child REP names follow successful global deployment order without affecting predicted addresses', async () => {
+		const zoltar = getZoltarAddress()
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
+		const questionData = {
+			title: 'ordered child REP metadata',
+			description: '',
+			startTime: 0n,
+			endTime: 0n,
+			numTicks: 0n,
+			displayValueMin: 0n,
+			displayValueMax: 0n,
+			answerUnit: '',
+		}
+		const outcomes = sortStringArrayByKeccak(['Yes', 'No'])
+		await createQuestion(client, questionData, outcomes)
+		await forkUniverse(client, genesisUniverse, getQuestionId(questionData, outcomes))
+
+		const firstUniverseId = getChildUniverseId(genesisUniverse, 1n)
+		const secondUniverseId = getChildUniverseId(genesisUniverse, 2n)
+		const firstPredictedAddress = getRepTokenAddress(firstUniverseId)
+		const secondPredictedAddress = getRepTokenAddress(secondUniverseId)
+		const firstDeploymentHash = await deployChild(client, genesisUniverse, 2n)
+		const firstDeploymentReceipt = await client.waitForTransactionReceipt({ hash: firstDeploymentHash })
+		await deployChild(client, genesisUniverse, 1n)
+
+		assert.strictEqual(getRepTokenAddress(secondUniverseId), secondPredictedAddress)
+		assert.strictEqual(getRepTokenAddress(firstUniverseId), firstPredictedAddress)
+		const readMetadata = async (token: Address) =>
+			await Promise.all([
+				client.readContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'name' }),
+				client.readContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'symbol' }),
+				client.readContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'repNumber' }),
+				client.readContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'universeId' }),
+			])
+		assert.deepStrictEqual(await readMetadata(secondPredictedAddress), ['Augur Reputation 1', 'REP1', 1n, secondUniverseId])
+		assert.deepStrictEqual(await readMetadata(firstPredictedAddress), ['Augur Reputation 2', 'REP2', 2n, firstUniverseId])
+		const zoltarInitialization = firstDeploymentReceipt.logs
+			.filter(log => log.address.toLowerCase() === zoltar.toLowerCase())
+			.map(log => decodeEventLog({ abi: Zoltar_Zoltar.abi, data: log.data, topics: log.topics }))
+			.find(log => log.eventName === 'ChildReputationTokenInitialized')
+		const tokenInitialization = firstDeploymentReceipt.logs
+			.filter(log => log.address.toLowerCase() === secondPredictedAddress.toLowerCase())
+			.map(log => decodeEventLog({ abi: ReputationToken_ReputationToken.abi, data: log.data, topics: log.topics }))
+			.find(log => log.eventName === 'ReputationTokenInitialized')
+		if (zoltarInitialization === undefined || tokenInitialization === undefined) throw new Error('Child REP initialization events missing')
+		assert.deepStrictEqual([zoltarInitialization.args.universeId, zoltarInitialization.args.reputationToken, zoltarInitialization.args.repNumber], [secondUniverseId, secondPredictedAddress, 1n])
+		assert.deepStrictEqual([tokenInitialization.args.universeId, tokenInitialization.args.repNumber, tokenInitialization.args.name, tokenInitialization.args.symbol], [secondUniverseId, 1n, 'Augur Reputation 1', 'REP1'])
+		assert.strictEqual(await client.readContract({ abi: ReputationToken_ReputationToken.abi, address: addressString(GENESIS_REPUTATION_TOKEN), functionName: 'name' }), 'Reputation')
+		assert.strictEqual(await client.readContract({ abi: ReputationToken_ReputationToken.abi, address: addressString(GENESIS_REPUTATION_TOKEN), functionName: 'symbol' }), 'REP')
+	})
+
+	test('child REP uses its initialized name in the EIP-712 domain and keeps theoretical supply in slot 5', async () => {
+		const zoltar = getAddress(getZoltarAddress())
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
+		const questionData = { title: 'child REP domain', description: '', startTime: 0n, endTime: 0n, numTicks: 0n, displayValueMin: 0n, displayValueMax: 0n, answerUnit: '' }
+		const outcomes = sortStringArrayByKeccak(['Yes', 'No'])
+		await createQuestion(client, questionData, outcomes)
+		await forkUniverse(client, genesisUniverse, getQuestionId(questionData, outcomes))
+		await deployChild(client, genesisUniverse, 1n)
+		await splitMigrationRep(client, genesisUniverse, 1n, [1n])
+		const childUniverseId = getChildUniverseId(genesisUniverse, 1n)
+		const childToken = getRepTokenAddress(childUniverseId)
+		const childSupply = await getTotalTheoreticalSupply(client, childToken)
+		const rawSlot = await mockWindow.request({ method: 'eth_getStorageAt', params: [childToken, formatStorageSlot(REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT), 'latest'] })
+		if (typeof rawSlot !== 'string' || !isHex(rawSlot)) throw new Error('Child REP theoretical supply slot missing')
+		assert.strictEqual(BigInt(rawSlot), childSupply, 'child theoretical supply must remain in storage slot 5')
+
+		const spender = addressString(TEST_ADDRESSES[2])
+		const accounts = await mockWindow.request({ method: 'eth_accounts' })
+		if (!Array.isArray(accounts) || typeof accounts[0] !== 'string') throw new Error('Anvil signer missing')
+		const owner = getAddress(accounts[0])
+		await writeContractAndWait(client, () => client.writeContract({ abi: ReputationToken_ReputationToken.abi, address: childToken, functionName: 'transfer', args: [owner, 1n] }))
+		const signature = await signPermit(mockWindow, owner, childToken, 'Augur Reputation 1', spender, 1n, 0n, 9_000_000_000n)
+		await writeContractAndWait(client, () => client.writeContract({ abi: ReputationToken_ReputationToken.abi, address: childToken, functionName: 'permit', args: [owner, spender, 1n, 9_000_000_000n, signature.v, signature.r, signature.s] }))
+		assert.strictEqual(await client.readContract({ abi: ReputationToken_ReputationToken.abi, address: childToken, functionName: 'allowance', args: [owner, spender] }), 1n)
+	})
+
+	test('failed and duplicate child deployments do not consume REP numbers', async () => {
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		const questionData = {
+			title: 'failed child numbering',
+			description: '',
+			startTime: 0n,
+			endTime: 0n,
+			numTicks: 0n,
+			displayValueMin: 0n,
+			displayValueMax: 0n,
+			answerUnit: '',
+		}
+		const outcomes = sortStringArrayByKeccak(['Yes', 'No'])
+		await createQuestion(client, questionData, outcomes)
+		await forkUniverse(client, genesisUniverse, getQuestionId(questionData, outcomes))
+		await assert.rejects(deployChild(client, genesisUniverse, 3n), /Malformed outcome index/)
+		assert.strictEqual(await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'childReputationTokenCount' }), 0n)
+		await deployChild(client, genesisUniverse, 1n)
+		await assert.rejects(deployChild(client, genesisUniverse, 1n), /already deployed/)
+		assert.strictEqual(await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'childReputationTokenCount' }), 1n)
+	})
+
+	test('nested children share the global REP sequence and child REP forks with zero allowance', async () => {
+		const zoltar = getZoltarAddress()
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
+		const createEndedBinaryQuestion = async (title: string) => {
+			const questionData = { title, description: '', startTime: 0n, endTime: 0n, numTicks: 0n, displayValueMin: 0n, displayValueMax: 0n, answerUnit: '' }
+			const outcomes = sortStringArrayByKeccak(['Yes', 'No'])
+			await createQuestion(client, questionData, outcomes)
+			return getQuestionId(questionData, outcomes)
+		}
+		await forkUniverse(client, genesisUniverse, await createEndedBinaryQuestion('parent fork for nested REP'))
+		const childUniverseId = getChildUniverseId(genesisUniverse, 1n)
+		await deployChild(client, genesisUniverse, 1n)
+		const childRep = getRepTokenAddress(childUniverseId)
+		assert.strictEqual(await client.readContract({ abi: ReputationToken_ReputationToken.abi, address: childRep, functionName: 'zoltar' }), zoltar, 'child REP should expose its immutable Zoltar owner')
+		const childForkThreshold = (await getUniverseTheoreticalSupplyAttoRep(client, childUniverseId)) / DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor
+		const prepared = await getMigrationRepBalanceAttoRep(client, genesisUniverse, client.account.address)
+		const childRepRequired = childForkThreshold + 1n
+		if (prepared < childRepRequired) await addRepToMigrationBalance(client, genesisUniverse, childRepRequired - prepared)
+		await splitMigrationRep(client, genesisUniverse, childRepRequired, [1n])
+		const childForkQuestionId = await createEndedBinaryQuestion('nested fork for global REP numbering')
+		assert.strictEqual(await client.readContract({ abi: ReputationToken_ReputationToken.abi, address: childRep, functionName: 'allowance', args: [client.account.address, zoltar] }), 0n)
+		await forkUniverse(client, childUniverseId, childForkQuestionId)
+		assert.strictEqual(await client.readContract({ abi: ReputationToken_ReputationToken.abi, address: childRep, functionName: 'allowance', args: [client.account.address, zoltar] }), 0n, 'all rejected child permit calls must preserve zero allowance')
+		await addRepToMigrationBalance(client, childUniverseId, 1n)
+		const nestedUniverseId = getChildUniverseId(childUniverseId, 2n)
+		await deployChild(client, childUniverseId, 2n)
+		const nestedRep = getRepTokenAddress(nestedUniverseId)
+		assert.strictEqual(await client.readContract({ abi: ReputationToken_ReputationToken.abi, address: childRep, functionName: 'symbol' }), 'REP1')
+		assert.strictEqual(await client.readContract({ abi: ReputationToken_ReputationToken.abi, address: nestedRep, functionName: 'symbol' }), 'REP2')
 	})
 
 	test('deployChild rejects malformed child universe outcomes', async () => {
@@ -710,7 +907,7 @@ describe('Contract Test Suite', () => {
 			const deployChildHash = await deployChild(client, genesisUniverse, outcomeIndex)
 			const deployChildReceipt = await client.waitForTransactionReceipt({ hash: deployChildHash })
 			const childUniverseData = await getUniverseData(client, childUniverseId)
-			const childSupply = await getTotalTheoreticalSupplyAttoRep(client, childRepToken)
+			const childSupply = await getTotalTheoreticalSupply(client, childRepToken)
 			const deployChildLog = deployChildReceipt.logs
 				.filter(log => log.address.toLowerCase() === getZoltarAddress().toLowerCase())
 				.map(log =>
@@ -859,14 +1056,14 @@ describe('Contract Test Suite', () => {
 
 		await forkUniverse(client, genesisUniverse, questionId)
 		await deployChild(client, genesisUniverse, 0n)
-		const earlyChildSupply = await getTotalTheoreticalSupplyAttoRep(client, getRepTokenAddress(getChildUniverseId(genesisUniverse, 0)))
+		const earlyChildSupply = await getTotalTheoreticalSupply(client, getRepTokenAddress(getChildUniverseId(genesisUniverse, 0)))
 
 		const remainingRepBalance = await getERC20Balance(client, getRepTokenAddress(genesisUniverse), client.account.address)
 		const additionalMigrationAmount = remainingRepBalance / 10n
 		await addRepToMigrationBalance(client, genesisUniverse, additionalMigrationAmount)
 
 		await deployChild(client, genesisUniverse, 1n)
-		const lateChildSupply = await getTotalTheoreticalSupplyAttoRep(client, getRepTokenAddress(getChildUniverseId(genesisUniverse, 1)))
+		const lateChildSupply = await getTotalTheoreticalSupply(client, getRepTokenAddress(getChildUniverseId(genesisUniverse, 1)))
 
 		assert.ok(earlyChildSupply > 0n, 'early child supply should remain positive')
 		assert.ok(lateChildSupply > 0n, 'late child supply should remain positive')
@@ -959,7 +1156,7 @@ describe('Contract Test Suite', () => {
 		await assert.rejects(forkUniverse(client, genesisUniverse, nonExistentQuestionId), /Question does not exist in ZoltarQuestionData/)
 	})
 
-	test('forkUniverse fails when question has not ended', async () => {
+	test('forkUniverse rejects before question end and succeeds at and after equality', async () => {
 		const client2 = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const zoltar = getZoltarAddress()
 		await approveToken(client2, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
@@ -983,13 +1180,17 @@ describe('Contract Test Suite', () => {
 		await createQuestion(client, questionData, outcomes)
 		const questionId = getQuestionId(questionData, outcomes)
 
-		// Should fail because question hasn't ended
+		let boundarySnapshot = await mockWindow.anvilSnapshot()
+		await mockWindow.setTime(futureEndTime - 2n)
 		await assert.rejects(forkUniverse(client, genesisUniverse, questionId), /Question has not ended, so it cannot force a fork yet/)
 
-		// Advance time past the endTime
-		await mockWindow.advanceTime(2000n)
+		await mockWindow.anvilRevert(boundarySnapshot)
+		boundarySnapshot = await mockWindow.anvilSnapshot()
+		await mockWindow.setTime(futureEndTime - 1n)
+		await forkUniverse(client, genesisUniverse, questionId)
 
-		// Should succeed now
+		await mockWindow.anvilRevert(boundarySnapshot)
+		await mockWindow.setTime(futureEndTime)
 		await forkUniverse(client, genesisUniverse, questionId)
 	})
 

@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { getOpenOracleStagePresentation } from '../../../features/open-oracle/lib/openOracleStage.js'
+import { getOpenOracleStagePresentation } from '@zoltar/ui-zoltar-shared/features/open-oracle/lib/openOracleStage.js'
 
 describe('open oracle stage presentation', () => {
 	test('maps every action mode to its lifecycle presentation', () => {

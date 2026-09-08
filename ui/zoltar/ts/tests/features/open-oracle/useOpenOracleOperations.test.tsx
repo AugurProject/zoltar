@@ -4,14 +4,14 @@ import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
-import { getAddress, zeroAddress, type Address } from '@zoltar/shared/ethereum'
+import { getAddress, zeroAddress, type Address } from '@zoltar/shared/evm/ethereum'
 import type { OpenOracleReportDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import { useOpenOracleOperations, type UseOpenOracleOperationsDependencies } from '../../../features/open-oracle/hooks/useOpenOracleOperations.js'
-import { createOpenOracleReportMissingError } from '../../../protocol/index.js'
+import { useOpenOracleOperations, type UseOpenOracleOperationsDependencies } from '@zoltar/ui-zoltar-shared/features/open-oracle/hooks/useOpenOracleOperations.js'
+import { createOpenOracleReportMissingError } from '@zoltar/ui-zoltar-shared/protocol/openOracle.js'
 
 type UseOpenOracleOperationsState = ReturnType<typeof useOpenOracleOperations>
 type TestOpenOracleWriteClient = { kind: 'injected-write-client' }

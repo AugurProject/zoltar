@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { getAddress, privateKeyToAccount, type Hex } from '../helpers/ethereum.ts'
+import { getAddress, privateKeyToAccount, type Hex } from '@zoltar/bot-shared/ethereum'
 import { parseTransactionReconciliation, validateFinalizedReplacement, validateReconciliationIntentChain, verifyFinalizedReplacement } from '../../src/core/transaction-reconciliation.ts'
 
 const intentHash = `0x${'11'.repeat(32)}` as Hex

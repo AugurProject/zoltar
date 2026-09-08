@@ -1,10 +1,10 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import { getAddress, zeroAddress } from '@zoltar/shared/ethereum'
+import { getAddress, zeroAddress } from '@zoltar/shared/evm/ethereum'
 import { h } from 'preact'
 import { act } from 'preact/test-utils'
-import { usePriceOracleManager, type UsePriceOracleManagerDependencies } from '../../../features/open-oracle/hooks/usePriceOracleManager.js'
+import { usePriceOracleManager, type UsePriceOracleManagerDependencies } from '@zoltar/ui-zoltar-shared/features/open-oracle/hooks/usePriceOracleManager.js'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'

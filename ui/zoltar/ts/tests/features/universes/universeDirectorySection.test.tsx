@@ -2,14 +2,14 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { h } from 'preact'
-import { zeroAddress } from '@zoltar/shared/ethereum'
+import { zeroAddress } from '@zoltar/shared/evm/ethereum'
 import { within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
-import { ZoltarSection } from '../../../features/zoltarSurface/components/ZoltarSection.js'
-import type { MarketRouteContentProps } from '../../../features/types.js'
-import { UniverseDirectorySection } from '../../../features/universes/components/UniverseDirectorySection.js'
+import { UniverseDirectorySection } from '@zoltar/ui-zoltar-shared/features/universes/components/UniverseDirectorySection.js'
+import { ZoltarSection } from '@zoltar/ui-zoltar-shared/features/zoltarSurface/components/ZoltarSection.js'
+import type { MarketRouteContentProps } from '@zoltar/ui-zoltar-shared/features/types.js'
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 
 function createUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarUniverseSummary {

@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { encodeAbiParameters, getAddress, toHex, zeroHash, type Address, type Hash, type Hex } from '../support/bot-shared.ts'
+import { encodeAbiParameters, getAddress, toHex, zeroHash, type Address, type Hash, type Hex } from '@zoltar/bot-shared/ethereum'
 import {
 	appendLocalCarryLeaf,
 	applyCarryConsumption,

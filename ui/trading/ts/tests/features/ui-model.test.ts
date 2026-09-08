@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test'
+import { getAddress } from '@zoltar/shared/evm/ethereum'
 import { bigintToSafeNumber, formatBpsMultiplier, formatCapacityOwnership, formatEthPerShare, formatOutcomeAmount, formatShareAmount, formatUnits, parseUnits, parseUnitsOrUndefined } from '../../lib/format.js'
-import { liveWorkflowRoutePresentation, marketRouteSubtitle, portfolioRouteSubtitle } from '../../features/LiveTrading.js'
-import { liquidityApprovalRequired, liquidityOperationAvailable } from '../../features/LiveLiquidityControls.js'
+import { liveWorkflowRoutePresentation, portfolioRouteSubtitle } from '../../features/LiveTrading.js'
+import { liquidityOperationAvailable } from '../../features/LiveLiquidityControls.js'
 import { forkMigrationBatchBlocker, forkMigrationBatchWarning, insuredExitLimitMessage, migrationSimulationSummary, settlementBalanceLabel, settlementInputBlocker } from '../../features/LiveSettlementModel.js'
 import { roundedProbabilityLabels } from '../../components/ProbabilityBar.js'
 import {
@@ -30,18 +31,7 @@ import {
 	shareBalanceScope,
 	type LiveMarket,
 } from '../../protocol/live.js'
-import {
-	approvalFailureTransition,
-	broadcastUncertainMessage,
-	discoveryCommitAllowed,
-	failedSubmissionTransition,
-	livePairInitialized,
-	marketSelectionAfterDiscovery,
-	parseSlippageBps,
-	parseTransactionValidityMinutes,
-	positionControlsWorkflowLocked,
-	securityPoolAddressFromRoute,
-} from '../../features/liveTradingControllerHelpers.js'
+import { broadcastUncertainMessage, discoveryCommitAllowed, failedSubmissionTransition, livePairInitialized, marketSelectionAfterDiscovery, parseSlippageBps, parseTransactionValidityMinutes, positionControlsWorkflowLocked, securityPoolAddressFromRoute } from '../../features/liveTradingControllerHelpers.js'
 import { initialQuestionClockTimestamp, questionClockShouldPollAgain } from '../../features/live/useLiveTradingState.js'
 
 describe('standalone trading UI model', () => {
@@ -58,8 +48,8 @@ describe('standalone trading UI model', () => {
 	})
 
 	test('keeps the shared simulation banner as the only Browser Simulation disclosure', () => {
-		expect(marketRouteSubtitle('Browser Simulation', true)).toBe('Conditional prices only')
-		expect(marketRouteSubtitle('Ethereum Mainnet', false)).toBe('Ethereum Mainnet · conditional prices only')
+		expect(liveWorkflowRoutePresentation('markets', 'Browser Simulation', true).description).toBe('Conditional prices only')
+		expect(liveWorkflowRoutePresentation('markets', 'Ethereum Mainnet', false).description).toBe('Ethereum Mainnet · conditional prices only')
 		expect(portfolioRouteSubtitle('Browser Simulation', true)).toBeUndefined()
 		expect(portfolioRouteSubtitle('Ethereum Mainnet', false)).toBe('Ethereum Mainnet')
 	})
@@ -121,7 +111,7 @@ describe('standalone trading UI model', () => {
 	})
 	test('parses only exact security pool detail routes', () => {
 		const address = `0x${'AB'.repeat(20)}`
-		expect(securityPoolAddressFromRoute(`security-pool/${address}`)).toBe(address.toLowerCase())
+		expect(securityPoolAddressFromRoute(`security-pool/${address}`)).toBe(getAddress(address))
 		expect(securityPoolAddressFromRoute('security-pool/not-an-address')).toBeUndefined()
 	})
 
@@ -136,13 +126,6 @@ describe('standalone trading UI model', () => {
 	test('keeps displayed conditional prices complementary after rounding', () => {
 		expect(roundedProbabilityLabels(70.25)).toEqual({ yes: '70.3', no: '29.7' })
 		expect(roundedProbabilityLabels(50.05)).toEqual({ yes: '50.1', no: '49.9' })
-	})
-
-	test('requires LP approval only after authoritative balances are ready', () => {
-		for (const state of ['disconnected', 'loading', 'error'] as const) expect(liquidityApprovalRequired(state, 'remove', 1n, 0n)).toBeFalse()
-		expect(liquidityApprovalRequired('ready', 'remove', 1n, 0n)).toBeTrue()
-		expect(liquidityApprovalRequired('ready', 'remove', 1n, 1n)).toBeFalse()
-		expect(liquidityApprovalRequired('ready', 'add', 1n, 0n)).toBeFalse()
 	})
 
 	test('parses and formats chain quantities without numbers', () => {
@@ -571,7 +554,7 @@ describe('standalone trading UI model', () => {
 	test('never exposes balances under another SecurityPool identity', () => {
 		const firstMarket = { pool: `0x${'11'.repeat(20)}`, shareToken: `0x${'22'.repeat(20)}`, universeId: 7n } as const
 		const secondMarket = { pool: `0x${'33'.repeat(20)}`, shareToken: `0x${'44'.repeat(20)}`, universeId: 8n } as const
-		const firstBalances = { scope: shareBalanceScope(firstMarket), invalid: 1n, yes: 2n, no: 3n, lp: 4n, approved: true, lpAllowance: 5n }
+		const firstBalances = { scope: shareBalanceScope(firstMarket), invalid: 1n, yes: 2n, no: 3n, lp: 4n }
 		expect(liveBalancesForMarket(firstBalances, firstMarket)).toBe(firstBalances)
 		expect(liveBalancesForMarket(firstBalances, secondMarket)).toBeUndefined()
 	})
@@ -636,24 +619,9 @@ describe('standalone trading UI model', () => {
 		const warning = broadcastUncertainMessage('Settlement transaction', hash)
 		expect(warning).toBe(`Settlement transaction ${hash} was broadcast, but its receipt could not be confirmed. Do not resubmit. Check this hash in your wallet or configured block explorer, then reload only after its final status is known.`)
 		expect(positionControlsWorkflowLocked('error', warning)).toBeTrue()
-		expect(positionControlsWorkflowLocked('approval-pending', undefined)).toBeTrue()
-		expect(positionControlsWorkflowLocked('approval-confirmed', undefined)).toBeFalse()
 		expect(positionControlsWorkflowLocked('preparing', undefined)).toBeTrue()
 		expect(positionControlsWorkflowLocked('submitting', undefined)).toBeTrue()
 		expect(positionControlsWorkflowLocked('idle', undefined)).toBeFalse()
-	})
-
-	test('keeps both approval workflows locked after an unconfirmed broadcast', () => {
-		const hash = `0x${'77'.repeat(32)}` as const
-		for (const label of ['Share-token approval', 'LP-token approval']) {
-			const transition = approvalFailureTransition(label, hash, false, new Error('receipt unavailable'), 'Approval failed')
-			expect(transition.keepLocked).toBeTrue()
-			expect(transition.state).toBe('pending')
-			expect(transition.message).toBeUndefined()
-			expect(transition.warning).toContain(hash)
-			expect(transition.warning).toContain('Do not resubmit')
-		}
-		expect(approvalFailureTransition('LP-token approval', hash, true, new Error('reverted'), 'Approval failed')).toEqual({ keepLocked: false, state: 'error', message: 'reverted', warning: undefined })
 	})
 
 	test('does not let an older discovery response replace an active workflow', () => {

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { batchCommands, dockerInstructions, parseDockerfile, requireDockerStage, shellCommandSegments } from '../../../tooling/testing/packaging-parsers.ts'
 
 const dockerfile = join(import.meta.dir, '..', 'Dockerfile')
 const dockerignore = join(import.meta.dir, '..', 'Dockerfile.dockerignore')
@@ -32,33 +33,37 @@ async function runEntrypoint(directory: string) {
 
 describe('Docker packaging', () => {
 	test('provides a location-independent Windows launcher', async () => {
-		const source = (await readFile(windowsLauncher, 'utf8')).replaceAll('\r\n', '\n')
-		expect(source).toContain('pushd "%~dp0"')
-		expect(source).toContain('docker compose up --build --force-recreate\nset "exit_code=%errorlevel%"\npopd\npause\nexit /b %exit_code%')
+		const commands = batchCommands(await readFile(windowsLauncher, 'utf8'))
+		expect(commands.at(0)).toBe('pushd "%~dp0" || exit /b 1')
+		expect(commands.slice(-5)).toEqual(['docker compose up --build --force-recreate', 'set "exit_code=%errorlevel%"', 'popd', 'pause', 'exit /b %exit_code%'])
 	})
 
 	test('builds and installs both shared packages where bot sources can resolve them', async () => {
-		const source = await readFile(dockerfile, 'utf8')
+		const stages = parseDockerfile(await readFile(dockerfile, 'utf8'))
+		const builder = requireDockerStage(stages, 'shared-builder')
+		const runtime = stages.at(-1)
+		if (runtime === undefined) throw new Error('Missing runtime Docker stage')
 		const ignoreSource = await readFile(dockerignore, 'utf8')
-		expect(source).toContain('-alpine AS shared-builder')
-		expect(source).toContain('&& bun run shared:build')
-		expect(source).toContain('COPY --from=shared-builder /source/shared/ ./shared/')
-		expect(source).not.toContain('ui/coreShared/favicon')
-		expect(source).toContain('COPY bots/liquidator/src/ ./bots/liquidator/src/')
+		expect(builder.base).toContain('-alpine')
+		expect(dockerInstructions(builder, 'RUN').flatMap(shellCommandSegments)).toContain('bun run shared:build')
+		expect(dockerInstructions(runtime, 'COPY')).toEqual(expect.arrayContaining(['--from=shared-builder /source/shared/ ./shared/', 'bots/liquidator/src/ ./bots/liquidator/src/', 'bots/liquidator/scripts/check-process-lock-runtime.mts ./bots/liquidator/scripts/check-process-lock-runtime.mts']))
+		expect(stages.flatMap(stage => dockerInstructions(stage, 'COPY')).some(copy => copy.includes('ui/coreShared/favicon'))).toBe(false)
 		expect(ignoreSource).not.toContain('ui/coreShared/favicon')
-		expect(source).toContain('cd shared \\\n\t&& bun install --frozen-lockfile --production \\\n\t&& cd ../bots/shared \\\n\t&& bun install --frozen-lockfile --production')
-		expect(source).toContain('COPY bots/liquidator/scripts/check-process-lock-runtime.mts ./bots/liquidator/scripts/check-process-lock-runtime.mts')
+		const installCommands = dockerInstructions(runtime, 'RUN').flatMap(shellCommandSegments)
+		expect(installCommands).toEqual(expect.arrayContaining(['cd shared', 'cd ../bots/shared', 'cd ../liquidator']))
+		expect(installCommands.filter(command => command === 'bun install --frozen-lockfile --production')).toHaveLength(3)
 		expect(ignoreSource).toContain('!bots/liquidator/scripts/check-process-lock-runtime.mts')
-		expect(source).toContain('RUN bun ./scripts/check-process-lock-runtime.mts')
+		expect(installCommands).toContain('bun ./scripts/check-process-lock-runtime.mts')
 	})
 
 	test('starts without host UID, GID, or .env configuration', async () => {
-		const source = await readFile(composeFile, 'utf8')
-		expect(source).not.toContain('LIQUIDATOR_UID')
-		expect(source).not.toContain('LIQUIDATOR_GID')
-		expect(source).not.toContain('ZOLTAR_BOT_DASHBOARD_PASSWORD')
-		expect(source).toContain('ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED: "true"')
-		expect(source).toContain('127.0.0.1:4183:4183')
+		const compose = Bun.YAML.parse(await readFile(composeFile, 'utf8')) as { services?: { liquidator?: { environment?: Record<string, unknown>; ports?: unknown[] } } }
+		const liquidator = compose.services?.liquidator
+		expect(liquidator?.environment).not.toHaveProperty('LIQUIDATOR_UID')
+		expect(liquidator?.environment).not.toHaveProperty('LIQUIDATOR_GID')
+		expect(liquidator?.environment).not.toHaveProperty('ZOLTAR_BOT_DASHBOARD_PASSWORD')
+		expect(liquidator?.environment?.['ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED']).toBe('true')
+		expect(liquidator?.ports).toContain('127.0.0.1:4183:4183')
 	})
 
 	test('creates a private Compose-ready operator configuration on first start', async () => {

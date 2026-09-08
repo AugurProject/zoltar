@@ -1,0 +1,62 @@
+/* Zoltar and Statoblast remain separate operational products on one foundation. */
+:root[data-product="zoltar"],
+:root[data-product="statoblast"] {
+	--primary-button-bg: color-mix(in srgb, var(--accent) 58%, #123046 42%);
+	--primary-button-bg-hover: color-mix(in srgb, var(--accent) 68%, #123046 32%);
+	--primary-button-border: color-mix(in srgb, var(--accent) 72%, transparent);
+	--interactive-border: color-mix(in srgb, var(--accent) 26%, transparent);
+	--interactive-border-hover: color-mix(in srgb, var(--accent) 46%, transparent);
+	--border-active: color-mix(in srgb, var(--accent) 58%, transparent);
+}
+
+:root[data-product="zoltar"] body::before {
+	background: radial-gradient(circle at 14% 0%, color-mix(in srgb, var(--accent-zoltar) 10%, transparent), transparent 28%), linear-gradient(180deg, #091521 0%, var(--bg-deep) 58%);
+}
+
+:root[data-product="statoblast"] body::before {
+	background: radial-gradient(circle at 14% 0%, color-mix(in srgb, var(--accent-statoblast) 11%, transparent), transparent 28%), linear-gradient(180deg, #111124 0%, var(--bg-deep) 58%);
+}
+
+:root[data-product="zoltar"] .top-shell,
+:root[data-product="statoblast"] .top-shell {
+	border-color: var(--border-default);
+	background: color-mix(in srgb, var(--surface-section-opaque) 94%, var(--accent) 6%);
+}
+
+:root[data-product="zoltar"] .view-tabs.route .view-tab.active,
+:root[data-product="statoblast"] .view-tabs.route .view-tab.active {
+	border-color: var(--border-active);
+	background: color-mix(in srgb, var(--accent) 14%, var(--surface-interactive));
+}
+
+:root[data-product="zoltar"] .route-header h1,
+:root[data-product="statoblast"] .route-header h1 {
+	font-size: clamp(1.625rem, 3vw, 2.5rem);
+	line-height: 1.08;
+	letter-spacing: -0.025em;
+}
+
+:root[data-product="zoltar"] :where(.record-list, .entity-list) > .entity-card,
+:root[data-product="statoblast"] :where(.record-list, .entity-list) > .entity-card {
+	border-width: 0 0 1px;
+	border-radius: 0;
+	background: transparent;
+}
+
+@media (max-width: 48rem) {
+	:root[data-product="zoltar"] .top-shell,
+	:root[data-product="statoblast"] .top-shell {
+		border-inline: 0;
+		border-radius: 0;
+	}
+
+	:root[data-product="zoltar"] .route-subnav-mobile-select,
+	:root[data-product="statoblast"] .route-subnav-mobile-select {
+		display: grid;
+	}
+
+	:root[data-product="zoltar"] .route-subnav-shell .view-tabs,
+	:root[data-product="statoblast"] .route-subnav-shell .view-tabs {
+		display: none;
+	}
+}

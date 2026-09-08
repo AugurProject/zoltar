@@ -1,5 +1,5 @@
 import { resolve } from 'node:path'
-import type { Address, Hex } from '#ethereum'
+import type { Address, Hex } from '@zoltar/bot-shared/ethereum'
 import type { DeploymentManifest } from '#config/deployment-auth'
 import { validateIndependentReadRpcUrls, type ConnectivitySettings } from '#monitoring/connectivity'
 import { type MutableStrategy } from '#state/operator-state'

@@ -1,12 +1,12 @@
 import { expect, test } from 'bun:test'
 import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import * as marketCopy from '../copy/market.js'
-import * as openOracleCopy from '../copy/openOracle.js'
-import * as reportingCopy from '../copy/reporting.js'
+import * as marketCopy from '@zoltar/ui-zoltar-shared/copy/market.js'
+import * as openOracleCopy from '@zoltar/ui-zoltar-shared/copy/openOracle.js'
+import * as reportingCopy from '@zoltar/ui-zoltar-shared/copy/reporting.js'
 import * as simulationCopy from '@zoltar/ui-core-shared/copy/simulation.js'
-import * as tradingCopy from '../copy/trading.js'
-import * as zoltarCopy from '../copy/zoltar.js'
+import * as tradingCopy from '@zoltar/ui-zoltar-shared/copy/trading.js'
+import * as zoltarCopy from '@zoltar/ui-zoltar-shared/copy/zoltar.js'
 
 test('reporting risk copy keeps escalation claims with their committed depositor', () => {
 	expect(reportingCopy.escalationClaimNonTradeableDetail).toContain('remain with their committed depositor through liquidation')

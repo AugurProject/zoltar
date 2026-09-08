@@ -4,29 +4,20 @@ import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { h } from 'preact'
 import { act } from 'preact/test-utils'
-import { getAddress, zeroAddress, type Address } from '@zoltar/shared/ethereum'
+import { getAddress, zeroAddress, type Address } from '@zoltar/shared/evm/ethereum'
 import type { ReportingDetails } from '@zoltar/ui-core-shared/types/contracts.js'
-import { useReportingOperations, type UseReportingOperationsDependencies } from '../../../features/reporting/hooks/useReportingOperations.js'
+import { useReportingOperations, type UseReportingOperationsDependencies } from '@zoltar/ui-zoltar-shared/features/reporting/hooks/useReportingOperations.js'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFinished, markTransactionRequested } from '@zoltar/ui-core-shared/lib/transactionTray.js'
-import type { TransactionIntent } from '../../../features/types.js'
+import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFinished, markTransactionRequested } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
+import type { TransactionIntent } from '@zoltar/ui-zoltar-shared/features/types.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 
 type UseReportingOperations = typeof useReportingOperations
 type UseReportingOperationsState = ReturnType<UseReportingOperations>
 const ATTO_REP = 10n ** 18n
-
-function createDeferred<T>() {
-	let resolve: (value: T) => void = () => undefined
-	let reject: (reason?: unknown) => void = () => undefined
-	const promise = new Promise<T>((promiseResolve, promiseReject) => {
-		resolve = promiseResolve
-		reject = promiseReject
-	})
-	return { promise, reject, resolve }
-}
 
 function createReportingDetails(securityPoolAddress: Address, overrides: Partial<ReportingDetails> = {}): ReportingDetails {
 	return {

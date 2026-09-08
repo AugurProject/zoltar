@@ -12,12 +12,9 @@
 	},
 	"dependencies": {
 		"@preact/signals": "2.0.1",
-		"@noble/curves": "2.2.0",
-		"@noble/hashes": "2.2.0",
 		"@zoltar/shared": "file:../../shared",
 		"@zoltar/ui-core-shared": "file:../coreShared",
-		"micro-eth-signer": "0.18.1",
-		"micro-packed": "0.8.0",
+		"@zoltar/ui-zoltar-shared": "file:../zoltarShared",
 		"preact": "10.26.4",
 		"tevm": "1.0.0-rc.151"
 	},
@@ -33,14 +30,14 @@
 		"ws": "8.21.0"
 	},
 	"scripts": {
-		"generate": "bun ../coreShared/build/projectArtifacts.mts && bun ../coreShared/build/vendor.mts zoltar",
-		"vendor": "bun ../coreShared/build/vendor.mts zoltar",
-		"build:workers": "bun ../coreShared/build/workers.mts zoltar",
-		"build:tests": "bun ../coreShared/build/tests.mts zoltar",
+		"generate": "bun ../../tooling/ui/projectArtifacts.mts && bun ../../tooling/ui/vendor.mts zoltar",
+		"vendor": "bun ../../tooling/ui/vendor.mts zoltar",
+		"build:workers": "bun ../../tooling/ui/workers.mts zoltar",
+		"build:tests": "bun ../../tooling/ui/tests.mts zoltar",
 		"build": "bun run generate && bun x tsc --project tsconfig.json && bun run build:workers",
-		"build:prod": "bun run generate && bun ../coreShared/build/production.mts zoltar",
-		"watch": "bun ../coreShared/build/watch.mts zoltar",
-		"serve": "bun ../coreShared/dev-server.ts zoltar"
+		"build:prod": "bun run generate && bun ../../tooling/ui/production.mts zoltar",
+		"watch": "bun ../../tooling/ui/watch.mts zoltar",
+		"serve": "bun ../../tooling/ui/dev-server.ts zoltar"
 	},
 	"types": "./js/index.d.ts",
 	"exports": {

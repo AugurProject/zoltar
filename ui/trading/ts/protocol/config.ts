@@ -1,4 +1,4 @@
-import type { Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/evm/ethereum'
 
 export type DeploymentConfiguration = Readonly<{
 	chainId: number

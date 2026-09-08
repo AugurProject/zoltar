@@ -3,13 +3,13 @@ import * as commonCopy from '../copy/common.js'
 import { DataGrid } from '../components/DataGrid.js'
 import { FormInput } from '../components/FormInput.js'
 import { MetricField } from '../components/MetricField.js'
-import { tryParseBigIntInput } from '../lib/integerInput.js'
+import { tryParseBigIntInput } from '../forms/integerInput.js'
 import type { ScalarOutcomePickerProps } from '../types/components.js'
 import { MAX_PRECISE_SCALAR_TICK_COUNT, clampScalarTickIndex, getScalarSliderFillWidth } from '../lib/scalarOutcome.js'
 import { useEffect, useId, useState } from 'preact/hooks'
 import type * as preact from 'preact'
-import { tryParseDecimalInput } from '../lib/decimal.js'
-import { formatScalarDisplayValue, getScalarDisplayValue, getScalarTickIndexForDisplayValue } from '@zoltar/shared/scalarOutcome'
+import { tryParseDecimalInput } from '../forms/decimal.js'
+import { formatScalarDisplayValue, getScalarDisplayValue, getScalarTickIndexForDisplayValue } from '@zoltar/shared/statoblast/scalarOutcome'
 
 function getSafeSelectedTickValue(selectedTick: string) {
 	return selectedTick.trim() === '' ? 0n : (tryParseBigIntInput(selectedTick) ?? 0n)

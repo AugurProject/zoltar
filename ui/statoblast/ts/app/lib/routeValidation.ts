@@ -1,8 +1,8 @@
-import { hasPresentEmptyQueryParam } from '@zoltar/ui-core-shared/lib/routing.js'
-import { isSupportedSelectedPoolView } from '../../features/security-pools/lib/securityPoolWorkflow.js'
-import type { Route } from '../../types/app.js'
-import type { SecurityPoolsView } from '../../features/types.js'
-import type { OpenOracleView } from '@zoltar/ui-zoltar/features/types.js'
+import { hasPresentEmptyQueryParam } from '@zoltar/ui-core-shared/navigation/routing.js'
+import { isSupportedSelectedPoolView } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolWorkflow.js'
+import type { Route } from '@zoltar/ui-statoblast-shared/types/app.js'
+import type { SecurityPoolsView } from '@zoltar/ui-statoblast-shared/features/types.js'
+import type { OpenOracleView } from '@zoltar/ui-zoltar-shared/features/types.js'
 
 const SECURITY_POOLS_VIEWS: readonly SecurityPoolsView[] = ['browse', 'create', 'operate', 'universes']
 const OPEN_ORACLE_VIEWS: readonly OpenOracleView[] = ['browse', 'create', 'selected-report']

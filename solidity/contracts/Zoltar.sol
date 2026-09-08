@@ -3,6 +3,7 @@ pragma solidity 0.8.35;
 
 import './Constants.sol';
 import './IERC20.sol';
+import './IExternalGenesisReputationToken.sol';
 import './ReputationToken.sol';
 import './SafeERC20Ops.sol';
 import './ZoltarQuestionData.sol';
@@ -22,6 +23,7 @@ contract Zoltar {
 	mapping(uint248 => uint256[]) private deployedChildOutcomeIndexes;
 	mapping(uint248 => uint256) private universeTheoreticalSupplies;
 	mapping(uint248 => uint256) private childUniverseTheoreticalSupplySnapshotsAttoRep;
+	uint256 public childReputationTokenCount;
 
 	struct AddressRepMigration {
 		uint256 migrationRepBalanceAttoRep;
@@ -35,13 +37,14 @@ contract Zoltar {
 	event MigrationRepSplit(address indexed migrator, address recipient, uint248 indexed universeId, uint256 outcomeIndex, uint248 indexed childUniverseId, uint256 amountAttoRep, uint256 childMigrationRepAmountAttoRep);
 	event UniverseInitialized(uint248 indexed universeId, uint256 forkTime, uint256 forkQuestionId, uint256 forkingOutcomeIndex, ReputationToken reputationToken, uint248 indexed parentUniverseId, uint256 universeTheoreticalSupplyAttoRep);
 	event RepBurned(address indexed burner, uint248 indexed universeId, uint256 amountAttoRep, uint256 universeTheoreticalSupplyAttoRep);
+	event ChildReputationTokenInitialized(uint248 indexed universeId, ReputationToken indexed reputationToken, uint256 indexed repNumber);
 
 	uint256 public immutable forkThresholdDivisor;
 	uint256 public immutable forkBurnDivisor;
-	ReputationToken public immutable genesisReputationToken;
+	IExternalGenesisReputationToken public immutable genesisReputationToken;
 	ZoltarQuestionData public immutable zoltarQuestionData;
 
-	constructor(ZoltarQuestionData _zoltarQuestionData, ReputationToken _genesisReputationToken, uint256 _forkThresholdDivisor, uint256 _forkBurnDivisor) {
+	constructor(ZoltarQuestionData _zoltarQuestionData, IExternalGenesisReputationToken _genesisReputationToken, uint256 _forkThresholdDivisor, uint256 _forkBurnDivisor) {
 		require(_forkThresholdDivisor > 1, 'Zoltar fork threshold divisor must be greater than one');
 		require(_forkBurnDivisor >= Constants.MINIMUM_FORK_BURN_DIVISOR, 'Zoltar fork burn divisor must be at least five');
 		require(address(_genesisReputationToken).code.length != 0, 'Genesis REP token address must contain code');
@@ -49,15 +52,13 @@ contract Zoltar {
 		genesisReputationToken = _genesisReputationToken;
 		forkThresholdDivisor = _forkThresholdDivisor;
 		forkBurnDivisor = _forkBurnDivisor;
-		universes[0] = Universe(0, 0, 0, _genesisReputationToken, 0);
-		// The configured genesis token must expose `getTotalTheoreticalSupplyAttoRep()`.
-		// This constructor intentionally relies on that non-ERC20 extension when wiring
-		// the genesis universe to an external REP deployment.
-		uint256 genesisSupply = _genesisReputationToken.getTotalTheoreticalSupplyAttoRep();
+		universes[0] = Universe(0, 0, 0, ReputationToken(address(_genesisReputationToken)), 0);
+		// Mainnet REPv2 exposes this theoretical-supply extension in addition to ERC-20.
+		uint256 genesisSupply = _genesisReputationToken.getTotalTheoreticalSupply();
 		require(genesisSupply != 0, 'Genesis REP missing supply: theoretical supply must be non-zero');
 		require(genesisSupply <= Constants.MAX_ATTO_REP, 'Genesis REP exceeds maximum supply');
 		universeTheoreticalSupplies[0] = genesisSupply;
-		emit UniverseInitialized(0, 0, 0, 0, _genesisReputationToken, 0, genesisSupply);
+		emit UniverseInitialized(0, 0, 0, 0, ReputationToken(address(_genesisReputationToken)), 0, genesisSupply);
 	}
 
 	function getForkTime(uint248 universeId) external view returns (uint256) {
@@ -89,6 +90,10 @@ contract Zoltar {
 	}
 
 	function forkUniverse(uint248 universeId, uint256 questionId) public {
+		_forkUniverse(msg.sender, universeId, questionId, false);
+	}
+
+	function _forkUniverse(address owner, uint248 universeId, uint256 questionId, bool repAlreadyReceived) private {
 		Universe storage universe = universes[universeId];
 		require(address(universe.reputationToken) != address(0x0), 'Universe not initialized with a REP token');
 		require(address(universe.reputationToken).code.length != 0, 'Universe REP token address must contain code');
@@ -105,34 +110,42 @@ contract Zoltar {
 		universes[universeId].forkQuestionId = questionId;
 		uint256 forkThresholdAttoRep = getForkThresholdAttoRep(universeId);
 		require(forkThresholdAttoRep != 0, 'Fork threshold must be non-zero');
-		_burnRep(universes[universeId].reputationToken, msg.sender, forkThresholdAttoRep);
+		_burnRep(universes[universeId].reputationToken, repAlreadyReceived ? address(this) : owner, forkThresholdAttoRep);
 		universeTheoreticalSupplies[universeId] -= forkThresholdAttoRep;
 		uint256 migrationRepBalanceAttoRep = forkThresholdAttoRep - forkThresholdAttoRep / forkBurnDivisor;
 		// The initiator's uncredited admission haircut is permanently absent from
 		// every child. Later REP added to the migration balance still converts 1:1.
 		childUniverseTheoreticalSupplySnapshotsAttoRep[universeId] =
 			universeTheoreticalSupplies[universeId] + migrationRepBalanceAttoRep;
-		migrationRepBalances[msg.sender][universeId].migrationRepBalanceAttoRep = migrationRepBalanceAttoRep;
-		emit UniverseForked(msg.sender, universeId, questionId, universes[universeId].forkTime, forkThresholdAttoRep, migrationRepBalanceAttoRep, universeTheoreticalSupplies[universeId]);
+		migrationRepBalances[owner][universeId].migrationRepBalanceAttoRep = migrationRepBalanceAttoRep;
+		emit UniverseForked(owner, universeId, questionId, universes[universeId].forkTime, forkThresholdAttoRep, migrationRepBalanceAttoRep, universeTheoreticalSupplies[universeId]);
 	}
 
 	// Burns REP without creating migration credit. Escalation games use this path
 	// when their question resolves without paying the winner haircut through an
 	// own-question universe fork.
 	function burnRep(uint248 universeId, uint256 amountAttoRep) external {
+		_burnRepFor(msg.sender, universeId, amountAttoRep, false);
+	}
+
+	function _burnRepFor(address owner, uint248 universeId, uint256 amountAttoRep, bool repAlreadyReceived) private {
 		require(amountAttoRep > 0, 'Burn amount zero');
 		Universe storage universe = universes[universeId];
 		require(address(universe.reputationToken) != address(0x0), 'Universe not initialized with a REP token');
 		require(universeTheoreticalSupplies[universeId] >= amountAttoRep, 'Burn exceeds theoretical supply');
-		_burnRep(universe.reputationToken, msg.sender, amountAttoRep);
+		_burnRep(universe.reputationToken, repAlreadyReceived ? address(this) : owner, amountAttoRep);
 		universeTheoreticalSupplies[universeId] -= amountAttoRep;
-		emit RepBurned(msg.sender, universeId, amountAttoRep, universeTheoreticalSupplies[universeId]);
+		emit RepBurned(owner, universeId, amountAttoRep, universeTheoreticalSupplies[universeId]);
 	}
 
 	function _burnRep(ReputationToken reputationToken, address migrator, uint256 amountAttoRep) private {
 		// Genesis is using REPv2 which we cannot actually burn
 		if (address(reputationToken) == address(genesisReputationToken)) {
-			IERC20(address(reputationToken)).safeTransferFrom(migrator, Constants.BURN_ADDRESS, amountAttoRep);
+			if (migrator == address(this)) {
+				IERC20(address(reputationToken)).safeTransfer(Constants.BURN_ADDRESS, amountAttoRep);
+			} else {
+				IERC20(address(reputationToken)).safeTransferFrom(migrator, Constants.BURN_ADDRESS, amountAttoRep);
+			}
 		} else {
 			ReputationToken(address(reputationToken)).burn(migrator, amountAttoRep);
 		}
@@ -151,11 +164,14 @@ contract Zoltar {
 		require(address(universes[childUniverseId].reputationToken) == address(0), 'Child universe already deployed for this outcome');
 		ReputationToken childReputationToken = new ReputationToken{salt: bytes32(uint256(childUniverseId))}(address(this));
 		uint256 childUniverseTheoreticalSupplyAttoRep = childUniverseTheoreticalSupplySnapshotsAttoRep[universeId];
-		childReputationToken.setMaxTheoreticalSupplyAttoRep(childUniverseTheoreticalSupplyAttoRep);
+		uint256 repNumber = childReputationTokenCount + 1;
+		childReputationToken.initialize(childUniverseId, childUniverseTheoreticalSupplyAttoRep, repNumber);
+		childReputationTokenCount = repNumber;
 		universeTheoreticalSupplies[childUniverseId] = childUniverseTheoreticalSupplyAttoRep;
 		universes[childUniverseId] = Universe(0, universe.forkQuestionId, outcomeIndex, childReputationToken, universeId);
 		deployedChildOutcomeIndexes[universeId].push(outcomeIndex);
 		emit DeployChild(msg.sender, universeId, outcomeIndex, childUniverseId, childReputationToken, childUniverseTheoreticalSupplyAttoRep);
+		emit ChildReputationTokenInitialized(childUniverseId, childReputationToken, repNumber);
 	}
 
 	function getDeployedChildUniverses(uint248 universeId, uint256 startIndex, uint256 count)
@@ -188,12 +204,16 @@ contract Zoltar {
 
 	// stores rep in the migration balance for a universe
 	function addRepToMigrationBalance(uint248 universeId, uint256 amountAttoRep) public {
+		_addRepToMigrationBalance(msg.sender, universeId, amountAttoRep, false);
+	}
+
+	function _addRepToMigrationBalance(address owner, uint248 universeId, uint256 amountAttoRep, bool repAlreadyReceived) private {
 		Universe memory universe = universes[universeId];
 		require(universe.forkTime != 0, 'Universe has not forked, so migration balance cannot be added');
-		_burnRep(universe.reputationToken, msg.sender, amountAttoRep);
+		_burnRep(universe.reputationToken, repAlreadyReceived ? address(this) : owner, amountAttoRep);
 		universeTheoreticalSupplies[universeId] -= amountAttoRep;
-		migrationRepBalances[msg.sender][universeId].migrationRepBalanceAttoRep += amountAttoRep;
-		emit MigrationRepAdded(msg.sender, universeId, amountAttoRep, migrationRepBalances[msg.sender][universeId].migrationRepBalanceAttoRep, universeTheoreticalSupplies[universeId]);
+		migrationRepBalances[owner][universeId].migrationRepBalanceAttoRep += amountAttoRep;
+		emit MigrationRepAdded(owner, universeId, amountAttoRep, migrationRepBalances[owner][universeId].migrationRepBalanceAttoRep, universeTheoreticalSupplies[universeId]);
 	}
 	function splitMigrationRep(uint248 universeId, uint256 amountAttoRep, uint256[] memory outcomeIndexes) public {
 		require(universes[universeId].forkTime != 0, 'Universe has not forked, so migration REP cannot be split');

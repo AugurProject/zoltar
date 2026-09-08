@@ -13,7 +13,7 @@ const zoltarAppShell = resolve(zoltarSourceRoot, '../index.html')
 function resolveZoltarImport(importer: string, specifier: string) {
 	let unresolved: string
 	if (specifier.startsWith('.')) unresolved = resolve(dirname(importer), specifier)
-	else if (specifier.startsWith('@zoltar/ui-zoltar/')) unresolved = resolve(zoltarSourceRoot, specifier.slice('@zoltar/ui-zoltar/'.length))
+	else if (specifier.startsWith('@zoltar/ui-zoltar-shared/')) unresolved = resolve(zoltarSourceRoot, specifier.slice('@zoltar/ui-zoltar-shared/'.length))
 	else if (specifier.startsWith('@zoltar/ui-core-shared/')) unresolved = resolve(coreSharedSourceRoot, specifier.slice('@zoltar/ui-core-shared/'.length))
 	else if (specifier.startsWith('@zoltar/ui-')) throw new Error(`Cross-application UI import from ${importer}: ${specifier}`)
 	else return undefined
@@ -219,8 +219,13 @@ describe('Zoltar production module graph', () => {
 
 	test('does not declare forbidden product modules or copy in the application shell', () => {
 		const appShell = readFileSync(zoltarAppShell, 'utf8')
+		const importMapMatch = appShell.match(/<script type="importmap">([\s\S]*?)<\/script>/)
+		if (importMapMatch === null) throw new Error('Zoltar application shell must declare an import map')
+		const importMap = importMapMatch[1]
+		const visibleShell = appShell.replace(importMapMatch[0], '')
 
-		expect(appShell.match(/open(?:\s|-)*oracle|statoblast|@zoltar\/shared\/oracleInitialReport/i)).toBeNull()
+		expect(visibleShell.match(/open(?:\s|-)*oracle|statoblast|@zoltar\/shared\/oracleInitialReport/i)).toBeNull()
+		expect(importMap.match(/@zoltar\/ui-(?:statoblast|trading)\/|(?:^|[./])ui\/(?:statoblast|trading)\/(?:js|ts)\//im)).toBeNull()
 	})
 
 	test('does not reach Statoblast-only protocol or presentation modules', () => {

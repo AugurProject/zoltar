@@ -1,5 +1,5 @@
-import { encodeAbiParameters, keccak256, zeroAddress } from '@zoltar/shared/ethereum'
-import type { Address } from '@zoltar/shared/ethereum'
+import { encodeAbiParameters, keccak256, zeroAddress } from '@zoltar/shared/evm/ethereum'
+import type { Address } from '@zoltar/shared/evm/ethereum'
 import { AnvilWindowEthereum } from '../../AnvilWindowEthereum'
 import { addressString } from '../bigint'
 import { getSecurityPoolAddresses } from './deployStatoblast'
@@ -10,7 +10,7 @@ import assert from '../assert'
 import { getIsPriceValid, getLastPrice, getOpenOracleReportMeta, getOpenOracleReportStatus, getPendingReportId, getRequestPriceCostAttoEth, openOracleSettle, OperationType, requestPriceIfNeededAndStageOperationWithInitialReportPrice, requestPriceWithValue } from './statoblast'
 import { QuestionOutcome } from '../../types/types'
 import { forkZoltarWithOwnEscalationGame } from './securityPoolForker'
-import { getTotalTheoreticalSupplyAttoRep } from './zoltar'
+import { getTotalTheoreticalSupply } from './zoltar'
 import { depositRepToVault, depositToEscalationGame, getRepToken, getSecurityVault, backingUnitsToAttoRep } from './securityPool'
 import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_SecurityPool_SecurityPool } from '../../../../types/contractArtifact'
 
@@ -34,7 +34,7 @@ export const approveAndDepositRepToVault = async (client: WriteClient, repDeposi
 
 export const triggerOwnGameFork = async (client: WriteClient, securityPoolAddress: Address) => {
 	const repToken = await getRepToken(client, securityPoolAddress)
-	const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
+	const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 	const vault = await getSecurityVault(client, securityPoolAddress, client.account.address)
 	const attoRepAmount = await backingUnitsToAttoRep(client, securityPoolAddress, vault.repBackingUnits)
 	assert.ok(attoRepAmount >= 2n * forkThresholdAttoRep, 'not enough rep in vault to fork')

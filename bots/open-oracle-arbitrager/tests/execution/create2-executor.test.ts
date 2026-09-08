@@ -12,10 +12,10 @@ import {
 	submitExecutorDeploymentTransaction,
 } from '#execution/create2-executor'
 import { executorArtifact } from '#contracts/artifacts.generated'
-import { keccak256, mainnet, privateKeyToAccount } from '#ethereum'
-import type { Hex } from '#ethereum'
+import { keccak256, mainnet, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
+import type { Hex } from '@zoltar/bot-shared/ethereum'
 import { acquireScanSignerOperation, deployExecutorFromConnectivity, persistExecutorDeploymentIntentForRecovery, requireActivePersistedNetwork, requireActivePersistedRpcQuorum, requireNoPendingExecutorDeployment, requirePausedExecutorDeployment } from '../../src/runtime/operator-control-plane.ts'
-import { createSignerOperationGate } from '#execution/signer-operation-gate'
+import { createSignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
 import { acquireExecutorDeploymentIntentLock, clearExecutorDeploymentIntent, executorDeploymentIntentPath, loadExecutorDeploymentIntent, saveExecutorDeploymentIntent, type ExecutorDeploymentIntent } from '#execution/executor-deployment-store'
 import { acquireExecutionSignerLock } from '#state/position-store'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'

@@ -170,6 +170,41 @@
 						<p class="rpc-health-note muted">Only origin counts and proof state are shown. Relay and RPC identities remain in protected bot logs.</p>
 					</article>
 				</div>
+				<article class="panel retirement-panel" aria-labelledby="retirement-title">
+					<div class="panel-heading">
+						<div>
+							<p class="eyebrow">Durable shutdown</p>
+							<h3 id="retirement-title">Drain &amp; Retire</h3>
+						</div>
+						<span id="retirement-status" class="badge neutral">Inactive</span>
+					</div>
+					<p id="retirement-summary" class="muted">No retirement has been requested.</p>
+					<form id="retirement-form">
+						<label>Recipient <input id="retirement-recipient" required autocomplete="off" placeholder="0x…" /></label>
+						<label>Maximum unmatched-share loss (bps) <input id="retirement-max-loss" type="number" min="0" max="10000" value="0" /></label>
+						<label><input id="retirement-exit-unmatched" type="checkbox" /> Exit unmatched shares within the loss limit</label>
+						<label><input id="retirement-migrate-claims" type="checkbox" /> Permit migration required to recover existing claims</label>
+						<label><input id="retirement-exit-after" type="checkbox" /> Exit the process after proven completion</label>
+						<label>Typed confirmation <input id="retirement-confirmation" required autocomplete="off" /></label>
+						<div class="dialog-actions"><button id="retirement-request" type="submit">Request drain</button><button id="retirement-cancel" class="secondary" type="button">Cancel drain</button></div>
+						<span id="retirement-action-status" class="action-status" role="alert"></span>
+					</form>
+					<details>
+						<summary>Register a verified legacy V3 position</summary>
+						<form id="retirement-v3-form" class="reconciliation-form">
+							<label>Owner <input id="retirement-v3-owner" required /></label><label>Pool <input id="retirement-v3-pool" required /></label> <label>Token 0 <input id="retirement-v3-token0" required /></label><label>Token 1 <input id="retirement-v3-token1" required /></label> <label>Fee tier <input id="retirement-v3-fee" type="number" value="3000" required /></label><label>Lower tick <input id="retirement-v3-lower" type="number" required /></label> <label>Upper tick <input id="retirement-v3-upper" type="number" required /></label><label>Receipt/workflow reference <input id="retirement-v3-workflow" required /></label> <label>Typed confirmation <input id="retirement-v3-confirmation" required /></label><button type="submit">Register position</button>
+						</form>
+					</details>
+					<details>
+						<summary>Accept residuals for profile replacement</summary>
+						<form id="retirement-residual-form" class="reconciliation-form">
+							<label>Target deployment profile <input id="retirement-residual-target-profile" required autocomplete="off" /></label>
+							<label>Review rationale <textarea id="retirement-residual-reason" required minlength="12" maxlength="2048"></textarea></label>
+							<label>Typed confirmation <input id="retirement-residual-confirmation" required autocomplete="off" placeholder="ACCEPT RESIDUALS FOR profile:id" /></label>
+							<button id="retirement-residual-submit" type="submit" disabled>Accept residuals</button>
+						</form>
+					</details>
+				</article>
 
 				<div class="two-column">
 					<article class="panel">
@@ -555,6 +590,8 @@
 			</div>
 		</dialog>
 
+		<script src="/formatting.js"></script>
+		<script src="/retirement-dashboard.js"></script>
 		<script type="module" src="/dashboard.js"></script>
 	</body>
 </html>

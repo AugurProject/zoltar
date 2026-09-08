@@ -1,6 +1,6 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { encodeDeployData, keccak256, type Address, type Hex } from '@zoltar/shared/ethereum'
+import { encodeDeployData, keccak256, type Address, type Hex } from '@zoltar/shared/evm/ethereum'
 import { trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory, trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter } from '../../types/contractArtifact'
 import { isRecord, parseCoreDeploymentManifest, requireAddress, requireMatchingChain, requireReceiptBlockNumber, requireSafeChainId } from './manifest'
 import { parseRpcResponse } from './rpc'

@@ -1,7 +1,7 @@
 /// <reference types='bun-types' />
 
 import { expect, mock, test } from 'bun:test'
-import { normalizeAccount } from '../../lib/chainBackend.js'
+import { normalizeAccount } from '../../wallet/chainBackend.js'
 import { createSimulationProvider } from '../../simulation/simulationProvider.js'
 
 test('simulation providers use the latest block for EIP-1898 calls unsupported by TEVM', async () => {

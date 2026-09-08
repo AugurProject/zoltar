@@ -1,12 +1,12 @@
 /// <reference types="bun-types" />
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { createPublicClient, getAddress, http } from '@zoltar/shared/ethereum'
-import { USDC_ADDRESS, quoteEthForToken, quoteExactInput, quoteRepForEth, quoteTokenForEth } from '../../protocol/uniswapQuoter.js'
+import { createPublicClient, getAddress, http } from '@zoltar/shared/evm/ethereum'
+import { USDC_ADDRESS, quoteEthForToken, quoteExactInput, quoteRepForEth, quoteTokenForEth } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { serializeSavedSimulationStateEnvelope } from '@zoltar/ui-core-shared/simulation/savedStates.js'
-import type { ReadClient } from '@zoltar/ui-core-shared/lib/clients.js'
-import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/lib/networkProfile.js'
+import type { ReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
+import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { createFakeBackend, createFakeSimulationProfile } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 
 afterEach(() => {

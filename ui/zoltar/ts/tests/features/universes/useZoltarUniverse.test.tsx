@@ -3,14 +3,15 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
-import { createPublicClient, getAddress, http, zeroAddress, type Hash } from '@zoltar/shared/ethereum'
+import { createPublicClient, getAddress, http, zeroAddress, type Hash } from '@zoltar/shared/evm/ethereum'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { useZoltarUniverse, type UseZoltarUniverseDependencies } from '../../../features/universes/hooks/useZoltarUniverse.js'
+import { useZoltarUniverse, type UseZoltarUniverseDependencies } from '@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarUniverse.js'
 import type { DeploymentStatus, MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 
 type UseZoltarUniverseState = ReturnType<typeof useZoltarUniverse>
 
@@ -22,16 +23,6 @@ function requireHookState(state: UseZoltarUniverseState | undefined) {
 	if (state === undefined) throw new Error('Hook state unavailable')
 
 	return state
-}
-
-function createDeferred<T>() {
-	let resolve: (value: T) => void = () => undefined
-	let reject: (reason?: unknown) => void = () => undefined
-	const promise = new Promise<T>((promiseResolve, promiseReject) => {
-		resolve = promiseResolve
-		reject = promiseReject
-	})
-	return { promise, reject, resolve }
 }
 
 function createZoltarDeploymentStatus(): DeploymentStatus {

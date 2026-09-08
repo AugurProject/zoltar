@@ -4,9 +4,9 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 import { h } from 'preact'
-import { zeroAddress } from '@zoltar/shared/ethereum'
-import { ZoltarMigrationSection } from '../../../features/universes/components/ZoltarMigrationSection.js'
-import type { ZoltarMigrationFormState } from '../../../types/app.js'
+import { zeroAddress } from '@zoltar/shared/evm/ethereum'
+import { ZoltarMigrationSection } from '@zoltar/ui-zoltar-shared/features/universes/components/ZoltarMigrationSection.js'
+import type { ZoltarMigrationFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -173,6 +173,22 @@ describe('ZoltarMigrationSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
+		expectTransactionButtonEnabled(document.body, 'Prepare REP')
+	})
+
+	test('child REP preparation needs no approval transaction', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ZoltarMigrationSection,
+				createProps({
+					zoltarForkApproval: { error: undefined, loading: false, value: 0n },
+					zoltarMigrationPreparedRepBalanceAttoRep: 0n,
+					zoltarUniverse: createUniverse({ reputationTokenKind: 'child', reputationTokenSymbol: 'REP4' }),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		expect(within(document.body).queryByRole('button', { name: /Approve/ })).toBeNull()
 		expectTransactionButtonEnabled(document.body, 'Prepare REP')
 	})
 

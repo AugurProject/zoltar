@@ -11,10 +11,27 @@
 	--faint: #7d8b9b;
 	--accent: #d9ff76;
 	--accent-dark: #17220b;
-	--yes: #87d7a4;
-	--no: #7ea8e8;
+	--yes: var(--outcome-yes);
+	--no: var(--outcome-no);
+	--invalid: var(--outcome-invalid);
 	--warn: #f1c76f;
 	--bad: #ee8d8d;
+}
+
+.trading-context-trigger {
+	display: none;
+}
+
+@media (min-width: 1201px) {
+	.header-actions[hidden] {
+		display: flex;
+	}
+}
+
+@media (min-width: 521px) and (max-width: 1200px) {
+	.header-actions[hidden] {
+		display: grid;
+	}
 }
 
 html {
@@ -57,7 +74,7 @@ body {
 	margin-bottom: 0.75rem;
 }
 .app-settings-menu label > span {
-	font-size: 0.75rem;
+	font-size: 0.8125rem;
 	color: var(--muted);
 }
 .app-settings-menu input,
@@ -70,7 +87,7 @@ body {
 	color: var(--text);
 }
 .app-settings-menu .field-help {
-	font-size: 0.8rem;
+	font-size: 0.8125rem;
 	color: var(--muted);
 }
 .app-settings-menu .field-error {
@@ -132,6 +149,7 @@ summary:focus-visible {
 .brand {
 	display: inline-flex;
 	width: fit-content;
+	min-height: var(--touch-target-min);
 	align-items: center;
 	gap: 0.7rem;
 	text-decoration: none;
@@ -152,7 +170,7 @@ summary:focus-visible {
 .brand small {
 	color: var(--muted);
 	font:
-		10px / 1.4 ui-monospace,
+		12px / 1.4 ui-monospace,
 		monospace;
 	text-transform: uppercase;
 	letter-spacing: 0.08em;
@@ -169,6 +187,11 @@ nav {
 	padding-bottom: 0.6rem;
 }
 nav a {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 44px;
+	min-height: 44px;
 	padding: 0.55rem 0.8rem;
 	border-radius: 4px;
 	color: var(--muted);
@@ -218,7 +241,7 @@ nav a[aria-current="page"] {
 	background: var(--surface-raised);
 	color: var(--text);
 	font:
-		11px / 1 ui-monospace,
+		13px / 1 ui-monospace,
 		monospace;
 	text-transform: none;
 }
@@ -234,7 +257,7 @@ nav a[aria-current="page"] {
 	gap: 0.45rem;
 	color: var(--muted);
 	font:
-		11px ui-monospace,
+		13px ui-monospace,
 		monospace;
 	text-decoration: none;
 }
@@ -264,7 +287,7 @@ nav a[aria-current="page"] {
 	background: var(--surface-raised);
 	color: var(--text);
 	cursor: pointer;
-	font-size: 12px;
+	font-size: 13px;
 }
 .wallet-button:disabled {
 	opacity: 0.58;
@@ -316,7 +339,7 @@ nav a[aria-current="page"] {
 }
 .wallet-summary__address {
 	color: var(--text);
-	font-size: 12px;
+	font-size: 13px;
 	white-space: nowrap;
 }
 .wallet-summary__address--compact {
@@ -346,7 +369,7 @@ nav a[aria-current="page"] {
 .wallet-summary__balances small {
 	color: var(--muted);
 	font:
-		11px / 1 ui-monospace,
+		13px / 1 ui-monospace,
 		monospace;
 }
 .wallet-summary__balances strong {
@@ -355,7 +378,7 @@ nav a[aria-current="page"] {
 	color: var(--text);
 	overflow-wrap: anywhere;
 	font:
-		12px / 1 ui-monospace,
+		13px / 1 ui-monospace,
 		monospace;
 }
 .wallet-summary__details {
@@ -370,7 +393,7 @@ nav a[aria-current="page"] {
 	border: 1px solid var(--line-strong);
 	background: var(--surface-raised);
 	color: var(--muted);
-	font-size: 12px;
+	font-size: 13px;
 }
 .wallet-summary:not(.wallet-summary--error):not([open]) .wallet-summary__details,
 .wallet-summary:not(.wallet-summary--error):not([open]) .wallet-summary__identity,
@@ -405,7 +428,7 @@ nav a[aria-current="page"] {
 .wallet-summary__error {
 	color: var(--warn);
 	font:
-		11px / 1.2 ui-monospace,
+		13px / 1.2 ui-monospace,
 		monospace;
 }
 .wallet-summary__failure {
@@ -414,7 +437,7 @@ nav a[aria-current="page"] {
 	gap: 0.45rem;
 }
 .wallet-summary__retry {
-	min-height: 32px;
+	min-height: 44px;
 	padding: 0.25rem 0.45rem;
 	border: 1px solid var(--warn);
 	border-radius: 3px;
@@ -422,7 +445,7 @@ nav a[aria-current="page"] {
 	color: var(--warn);
 	cursor: pointer;
 	font:
-		11px / 1 ui-monospace,
+		13px / 1 ui-monospace,
 		monospace;
 }
 .wallet-button,
@@ -469,7 +492,7 @@ nav a[aria-current="page"] {
 .section-kicker {
 	color: var(--accent);
 	font:
-		10px / 1.2 ui-monospace,
+		12px / 1.2 ui-monospace,
 		monospace;
 	letter-spacing: 0.12em;
 	text-transform: uppercase;
@@ -483,7 +506,7 @@ nav a[aria-current="page"] {
 	white-space: nowrap;
 	color: var(--muted);
 	font:
-		11px / 1.2 ui-monospace,
+		13px / 1.2 ui-monospace,
 		monospace;
 }
 .status__dot {
@@ -548,7 +571,7 @@ nav a[aria-current="page"] {
 	background: transparent;
 	color: var(--muted);
 	cursor: pointer;
-	font-size: 11px;
+	font-size: 13px;
 }
 .segmented button[aria-pressed="true"] {
 	background: var(--surface-raised);
@@ -589,7 +612,7 @@ nav a[aria-current="page"] {
 }
 .side-picker small {
 	color: var(--muted);
-	font-size: 12px;
+	font-size: 13px;
 }
 .field {
 	display: grid;
@@ -597,13 +620,13 @@ nav a[aria-current="page"] {
 	margin: 1rem 0;
 	color: var(--muted);
 	font:
-		12px ui-monospace,
+		0.8125rem ui-monospace,
 		monospace;
 }
 .field small {
 	color: var(--faint);
 	font:
-		11px / 1.4 ui-sans-serif,
+		0.8125rem / 1.4 ui-sans-serif,
 		sans-serif;
 }
 .field small.error {
@@ -618,7 +641,7 @@ nav a[aria-current="page"] {
 	padding: 0 0.35rem;
 	color: var(--text);
 	font:
-		600 11px ui-monospace,
+		600 13px ui-monospace,
 		monospace;
 }
 .execution-settings__fields {
@@ -633,7 +656,7 @@ nav a[aria-current="page"] {
 	display: block;
 	margin-top: 0.65rem;
 	color: var(--faint);
-	font-size: 11px;
+	font-size: 13px;
 	line-height: 1.4;
 }
 .field > input,
@@ -821,7 +844,7 @@ nav a[aria-current="page"] {
 .trade-summary span,
 .trade-summary small {
 	color: var(--muted);
-	font-size: 12px;
+	font-size: 13px;
 }
 .trade-summary strong {
 	color: var(--accent);
@@ -841,7 +864,7 @@ nav a[aria-current="page"] {
 .trade-summary--unavailable p {
 	margin: 0;
 	color: var(--muted);
-	font-size: 12px;
+	font-size: 13px;
 	line-height: 1.5;
 }
 .trade-summary--unavailable strong {
@@ -862,13 +885,13 @@ nav a[aria-current="page"] {
 	gap: 1rem;
 	padding-bottom: 0.8rem;
 	border-bottom: 1px solid var(--line);
-	font-size: 12px;
+	font-size: 13px;
 }
 .quote > p,
 details p,
 .operation-block p {
 	color: var(--muted);
-	font-size: 12px;
+	font-size: 13px;
 	line-height: 1.55;
 }
 .metrics,
@@ -889,7 +912,7 @@ details p,
 .fact-list dt {
 	min-width: 0;
 	color: var(--muted);
-	font-size: 12px;
+	font-size: 13px;
 	overflow-wrap: anywhere;
 }
 .metrics dd,
@@ -897,7 +920,7 @@ details p,
 	margin: 0;
 	text-align: right;
 	font:
-		12px ui-monospace,
+		13px ui-monospace,
 		monospace;
 	overflow-wrap: anywhere;
 }
@@ -941,7 +964,7 @@ details p,
 }
 .primary-link {
 	display: inline-flex;
-	min-height: 42px;
+	min-height: 44px;
 	align-items: center;
 	margin-top: 0.75rem;
 	padding: 0 1rem;
@@ -956,7 +979,7 @@ details p,
 	min-height: 1.4rem;
 	margin-top: 0.65rem;
 	color: var(--muted);
-	font-size: 12px;
+	font-size: 13px;
 }
 .transaction-message--confirmed {
 	color: var(--yes);
@@ -972,7 +995,7 @@ details p,
 	border: 1px solid var(--line);
 	background: #0b1016;
 	color: var(--muted);
-	font-size: 12px;
+	font-size: 13px;
 }
 .transaction-hash code {
 	color: var(--text);
@@ -981,7 +1004,7 @@ details p,
 details {
 	margin-top: 0.75rem;
 	color: var(--muted);
-	font-size: 12px;
+	font-size: 13px;
 }
 summary {
 	cursor: pointer;
@@ -997,11 +1020,11 @@ summary {
 	display: flex;
 	justify-content: space-between;
 	gap: 1rem;
-	font-size: 11px;
+	font-size: 13px;
 }
 .coverage p,
 .warning {
-	font-size: 11px;
+	font-size: 13px;
 	line-height: 1.5;
 }
 .probability {
@@ -1012,7 +1035,7 @@ summary {
 	justify-content: space-between;
 	margin-bottom: 0.5rem;
 	font:
-		600 11px ui-monospace,
+		600 13px ui-monospace,
 		monospace;
 }
 .probability__labels span:first-child {
@@ -1043,7 +1066,7 @@ summary {
 	margin-top: 0.45rem;
 	color: var(--faint);
 	font:
-		10px ui-monospace,
+		13px ui-monospace,
 		monospace;
 	text-transform: uppercase;
 	letter-spacing: 0.08em;
@@ -1058,7 +1081,9 @@ summary {
 }
 
 .security-pool-link {
-	display: inline-block;
+	display: inline-flex;
+	min-height: var(--touch-target-min);
+	align-items: center;
 	max-width: 100%;
 	text-decoration-color: var(--muted);
 	text-underline-offset: 0.2em;
@@ -1105,18 +1130,18 @@ summary {
 }
 .market-row__pool dt {
 	color: var(--muted);
-	font-size: 9px;
+	font-size: 13px;
 }
 .market-row__pool dd {
 	margin: 0;
 	font:
-		10px ui-monospace,
+		13px ui-monospace,
 		monospace;
 }
 .pool-mint-note {
 	margin: -0.25rem 0 1rem;
 	color: var(--muted);
-	font-size: 11px;
+	font-size: 13px;
 	line-height: 1.5;
 }
 .pool-mint-note__address {
@@ -1128,7 +1153,7 @@ summary {
 	gap: 1rem;
 	color: var(--faint);
 	font:
-		10px ui-monospace,
+		13px ui-monospace,
 		monospace;
 }
 .market-row h2 {
@@ -1147,7 +1172,7 @@ summary {
 	margin: 0;
 	color: var(--muted);
 	font:
-		10px ui-monospace,
+		13px ui-monospace,
 		monospace;
 }
 .market-row__metrics {
@@ -1162,12 +1187,12 @@ summary {
 }
 .market-row__metrics dt {
 	color: var(--muted);
-	font-size: 10px;
+	font-size: 13px;
 }
 .market-row__metrics dd {
 	margin: 0;
 	font:
-		10px ui-monospace,
+		13px ui-monospace,
 		monospace;
 }
 .row-action {
@@ -1180,7 +1205,7 @@ summary {
 	padding: 0 0.5rem;
 	white-space: nowrap;
 	font-family: inherit;
-	font-size: 11px;
+	font-size: 13px;
 	text-decoration: none;
 }
 .row-action:disabled {
@@ -1198,7 +1223,7 @@ summary {
 }
 .uninitialized-state p {
 	color: var(--muted);
-	font-size: 12px;
+	font-size: 13px;
 }
 .two-column {
 	display: grid;
@@ -1237,7 +1262,7 @@ summary {
 .fork-source-step p {
 	margin: 0 0 0.75rem;
 	color: var(--muted);
-	font-size: 12px;
+	font-size: 13px;
 	line-height: 1.5;
 }
 .fork-migration-targets {
@@ -1255,7 +1280,7 @@ summary {
 .fork-deployed-targets > span {
 	color: var(--muted);
 	font:
-		10px ui-monospace,
+		13px ui-monospace,
 		monospace;
 	text-transform: uppercase;
 	letter-spacing: 0.05em;
@@ -1294,7 +1319,7 @@ summary {
 	display: block;
 	color: var(--yes);
 	font:
-		10px ui-monospace,
+		13px ui-monospace,
 		monospace;
 }
 .fork-target-status--missing {
@@ -1327,7 +1352,7 @@ summary {
 	gap: 0.5rem;
 	min-height: 44px;
 	color: var(--muted);
-	font-size: 12px;
+	font-size: 13px;
 }
 .fork-deployed-targets {
 	display: flex;
@@ -1343,7 +1368,7 @@ summary {
 	background: transparent;
 	color: var(--text);
 	cursor: pointer;
-	font-size: 11px;
+	font-size: 13px;
 }
 .quiet-action:disabled {
 	color: #73808d;
@@ -1423,7 +1448,7 @@ summary {
 .balance-strip span {
 	color: var(--muted);
 	font:
-		10px ui-monospace,
+		13px ui-monospace,
 		monospace;
 }
 .balance-strip strong {
@@ -1438,7 +1463,7 @@ summary {
 	display: flex;
 	justify-content: space-between;
 	gap: 1rem;
-	font-size: 11px;
+	font-size: 13px;
 }
 .coverage-meter progress {
 	width: 100%;
@@ -1449,7 +1474,7 @@ summary {
 .coverage-meter small,
 .muted {
 	color: var(--muted);
-	font-size: 11px;
+	font-size: 13px;
 	line-height: 1.55;
 }
 .table-section {
@@ -1461,7 +1486,7 @@ summary {
 	gap: 1rem;
 	padding: 0.9rem 0;
 	border-top: 1px solid var(--line);
-	font-size: 11px;
+	font-size: 13px;
 }
 .table-row span {
 	color: var(--muted);
@@ -1491,7 +1516,7 @@ summary {
 .explanation-flow span {
 	color: var(--accent);
 	font:
-		10px ui-monospace,
+		13px ui-monospace,
 		monospace;
 }
 .explanation-flow h2 {
@@ -1503,7 +1528,7 @@ summary {
 .explanation-flow p,
 .prose p {
 	color: var(--muted);
-	font-size: 12px;
+	font-size: 13px;
 	line-height: 1.7;
 }
 .prose {
@@ -1566,14 +1591,16 @@ summary {
 	}
 	.site-header nav a {
 		display: inline-flex;
+		min-width: 44px;
 		min-height: 44px;
 		align-items: center;
+		justify-content: center;
 		padding: 0.5rem 0.42rem;
-		font-size: 12px;
+		font-size: 13px;
 	}
 	.network-pill {
 		max-width: 125px;
-		font-size: 11px;
+		font-size: 13px;
 		line-height: 1.2;
 	}
 	.universe-selector select {
@@ -1744,7 +1771,7 @@ summary {
 	.wallet-summary--loading .wallet-summary__compact-loading {
 		display: block;
 		color: var(--muted);
-		font-size: 11px;
+		font-size: 0.8125rem;
 	}
 	.wallet-summary__details {
 		left: 0;
@@ -1779,13 +1806,13 @@ summary {
 	}
 	.wallet-summary__detail-balances small {
 		color: var(--muted);
-		font-size: 11px;
+		font-size: 0.8125rem;
 	}
 	.wallet-summary__detail-balances strong {
 		min-width: 0;
 		color: var(--text);
 		font:
-			12px / 1.25 ui-monospace,
+			0.8125rem / 1.25 ui-monospace,
 			monospace;
 		overflow-wrap: anywhere;
 	}
@@ -1983,5 +2010,279 @@ summary {
 	*::after {
 		animation-duration: 0.01ms !important;
 		transition-duration: 0.01ms !important;
+	}
+}
+
+/* Augur Trading visual layer: compact, scan-first, and outcome-specific. */
+:root[data-product="trading"] {
+	--line: var(--border-default);
+	--line-strong: var(--border-strong);
+	--surface: var(--surface-section);
+	--surface-raised: var(--surface-interactive);
+	--muted: var(--text-muted);
+	--faint: var(--text-muted);
+	--accent-dark: color-mix(in srgb, var(--accent-trading) 10%, var(--surface-section));
+}
+
+:root[data-product="trading"] body {
+	font-size: var(--font-body);
+	background: radial-gradient(circle at 18% -12%, color-mix(in srgb, var(--accent-trading) 10%, transparent), transparent 34rem), var(--bg-deep);
+}
+
+:root[data-product="trading"] .site-header {
+	border-color: var(--border-default);
+	background: color-mix(in srgb, var(--bg-deep) 92%, transparent);
+}
+
+:root[data-product="trading"]
+	:where(
+		.app-settings-menu label > span,
+		.deployment-settings summary,
+		.universe-selector select,
+		.network-pill,
+		.wallet-button,
+		.secondary-action,
+		.wallet-summary__address,
+		.wallet-summary__balances small,
+		.wallet-summary__balances strong,
+		.wallet-summary__details,
+		.wallet-summary__error,
+		.wallet-summary__retry,
+		.segmented button,
+		.side-picker small,
+		.execution-settings > small,
+		.trade-summary span,
+		.trade-summary small,
+		.trade-summary--unavailable p,
+		.quote__title,
+		.quote > p,
+		details p,
+		.operation-block p,
+		.metrics dt,
+		.fact-list dt,
+		.metrics dd,
+		.fact-list dd,
+		.transaction-message,
+		.transaction-hash,
+		details,
+		.coverage div,
+		.coverage p,
+		.warning,
+		.pool-mint-note,
+		.market-row__top,
+		.market-row p,
+		.market-row__pool dt,
+		.market-row__pool dd,
+		.market-row__metrics dt,
+		.market-row__metrics dd,
+		.row-action,
+		.uninitialized-state p,
+		.fork-source-step p,
+		.fork-question-summary span,
+		.fork-question-summary small,
+		.fork-target-count,
+		.fork-deployed-targets > span,
+		.fork-deployed-targets,
+		.quiet-action,
+		.coverage-meter div,
+		.coverage-meter small,
+		.muted,
+		.table-row,
+		.explanation-flow p,
+		.prose p
+	) {
+	font-size: 0.8125rem;
+}
+
+:root[data-product="trading"] :where(.wallet-summary__trigger, .universe-selector select) {
+	min-height: var(--touch-target-min);
+}
+
+:root[data-product="trading"] :where(.market-row, .live-market-button, .portfolio-groups > .operation-block) {
+	border-width: 0 0 1px;
+	border-radius: 0;
+	background: transparent;
+}
+
+:root[data-product="trading"] .live-market-button + .live-market-button {
+	margin-top: 0;
+}
+
+:root[data-product="trading"] .live-market-button[aria-pressed="true"] {
+	background: color-mix(in srgb, var(--accent-trading) 9%, transparent);
+	box-shadow: inset 3px 0 var(--accent-trading);
+}
+
+:root[data-product="trading"] .probability__labels span:first-child,
+:root[data-product="trading"] .side-picker button[value="YES"][aria-pressed="true"] {
+	color: var(--outcome-yes);
+}
+
+:root[data-product="trading"] .probability__labels span:last-child,
+:root[data-product="trading"] .side-picker button[value="NO"][aria-pressed="true"] {
+	color: var(--outcome-no);
+}
+
+:root[data-product="trading"] .probability__yes {
+	background: var(--outcome-yes);
+}
+
+:root[data-product="trading"] .probability__track {
+	background: color-mix(in srgb, var(--outcome-no) 42%, var(--surface-raised));
+}
+
+:root[data-product="trading"] :where(.metrics dd, .fact-list dd, .trade-summary strong, .balance-strip strong) {
+	font-variant-numeric: tabular-nums;
+}
+
+@media (min-width: 521px) and (max-width: 1200px) {
+	:root[data-product="trading"] .site-header {
+		grid-template-columns: minmax(0, 1fr) auto;
+		min-height: 0;
+		padding-block: 0.5rem;
+	}
+
+	:root[data-product="trading"] .site-header > .brand {
+		grid-column: 1;
+		grid-row: 1;
+	}
+
+	:root[data-product="trading"] .trading-context-trigger {
+		display: inline-flex;
+		grid-column: 2;
+		grid-row: 1;
+		align-items: center;
+		min-height: var(--touch-target-min);
+		padding: 0.5rem 0.7rem;
+		border: 1px solid var(--line-strong);
+		background: var(--surface-raised);
+		color: var(--text);
+		font-size: 0.8125rem;
+	}
+
+	:root[data-product="trading"] .site-header nav {
+		grid-column: 1 / -1;
+		grid-row: 2;
+		justify-content: flex-start;
+		width: 100%;
+		padding: 0;
+	}
+
+	:root[data-product="trading"] .header-actions {
+		grid-column: 1 / -1;
+		grid-row: 3;
+		grid-template-columns: auto minmax(0, 1fr) auto auto;
+		gap: var(--space-2);
+		width: 100%;
+		padding-top: var(--space-3);
+		border-top: 1px solid var(--line);
+	}
+
+	:root[data-product="trading"] .header-actions[hidden] {
+		display: none;
+	}
+
+	:root[data-product="trading"] .header-actions > * {
+		grid-column: auto;
+		grid-row: auto;
+		max-width: 100%;
+	}
+
+	:root[data-product="trading"] .header-actions > .app-settings {
+		grid-column: 1;
+	}
+
+	:root[data-product="trading"] .header-actions .network-pill {
+		grid-column: 2;
+		min-width: 0;
+	}
+
+	:root[data-product="trading"] .header-actions .universe-selector {
+		grid-column: 3;
+	}
+
+	:root[data-product="trading"] .header-actions .wallet-button {
+		grid-column: 4;
+	}
+
+	:root[data-product="trading"] .header-actions .wallet-summary {
+		grid-column: 1 / -1;
+		grid-row: 2;
+	}
+}
+
+@media (max-width: 520px) {
+	:root[data-product="trading"] .site-header {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		min-height: 0;
+		padding: 0.5rem 1rem;
+	}
+
+	:root[data-product="trading"] .trading-context-trigger {
+		display: inline-flex;
+		grid-column: 2;
+		grid-row: 1;
+		align-items: center;
+		min-height: var(--touch-target-min);
+		padding: 0.5rem 0.7rem;
+		border: 1px solid var(--line-strong);
+		background: var(--surface-raised);
+		color: var(--text);
+		font-size: 0.8125rem;
+	}
+
+	:root[data-product="trading"] .site-header nav {
+		grid-column: 1 / -1;
+		grid-row: 2;
+		justify-content: flex-start;
+		width: 100%;
+		padding: 0;
+		overflow-x: auto;
+		overscroll-behavior-inline: contain;
+	}
+
+	:root[data-product="trading"] .site-header nav a {
+		flex: 0 0 auto;
+		font-size: 0.8125rem;
+	}
+
+	:root[data-product="trading"] .header-actions {
+		display: grid;
+		grid-column: 1 / -1;
+		grid-row: 3;
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+		gap: var(--space-2);
+		width: 100%;
+		padding-top: var(--space-3);
+		border-top: 1px solid var(--line);
+	}
+
+	:root[data-product="trading"] .header-actions[hidden] {
+		display: none;
+	}
+
+	:root[data-product="trading"] .header-actions > * {
+		grid-column: auto;
+		grid-row: auto;
+		max-width: 100%;
+	}
+
+	:root[data-product="trading"] .header-actions .wallet-summary {
+		grid-column: 1 / -1;
+		grid-row: auto;
+	}
+
+	:root[data-product="trading"] .market-row,
+	:root[data-product="trading"] .live-market-button {
+		width: 100%;
+		min-width: 0;
+	}
+
+	:root[data-product="trading"] .market-row__pool dl,
+	:root[data-product="trading"] .market-row__metrics,
+	:root[data-product="trading"] .balance-strip {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
 	}
 }

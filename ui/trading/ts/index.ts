@@ -1,5 +1,5 @@
 import { createElement } from 'preact'
-import { createPublicClient, custom, getAddress } from '@zoltar/shared/ethereum'
+import { createPublicClient, custom, getAddress } from '@zoltar/shared/evm/ethereum'
 import { mountApp } from '@zoltar/ui-core-shared/app/appRoot.js'
 import { App } from './app/App.js'
 import { initializeTradingActiveEnvironment } from './app/activeEnvironment.js'

@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
-import { getAddress } from '../helpers/ethereum.ts'
+import { getAddress } from '@zoltar/bot-shared/ethereum'
 import { assertSettingsProfileIsolation, loadSettings, parseSettings, parseStrategy, saveSettings, serializedSettings, settingsProfilePath, switchSettingsNetworkProfile, type SettingsFilesystem } from '../../src/config/settings.ts'
 
 const settings = {

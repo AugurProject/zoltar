@@ -1,12 +1,12 @@
-import type { Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/evm/ethereum'
 import { useEffect, useId, useRef, useState } from 'preact/hooks'
 import * as commonCopy from '../copy/common.js'
 import { getActiveBackend } from '../lib/activeEnvironment.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
-import { normalizeWalletAssetFailure, watchActiveWalletAsset, type WalletAssetWatchResult } from '../lib/walletAsset.js'
+import { normalizeWalletAssetFailure, watchActiveWalletAsset, type WalletAssetWatchResult } from '../wallet/walletAsset.js'
 import { AddressValue } from './AddressValue.js'
 import { LoadingText } from './LoadingText.js'
-import { getWrongNetworkReason } from '../lib/network.js'
+import { getWrongNetworkReason } from '../wallet/network.js'
 import { sameAddress } from '../lib/address.js'
 
 type WalletAssetControlProps = {

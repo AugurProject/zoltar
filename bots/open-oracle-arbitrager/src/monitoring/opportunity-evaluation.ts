@@ -1,5 +1,5 @@
 import { requireDeployedContracts } from '../../../shared/src/monitoring/deployed-contracts.js'
-import { getAddress, readContractAtBlock, type Address, zeroAddress } from '#ethereum'
+import { getAddress, readContractAtBlock, type Address, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { constantProductFactoryAbi, constantProductPairAbi, erc20Abi, factoryAbi, openOracleAbi, poolAbi, quoterAbi, v4QuoterAbi } from '#contracts/abi'
 import type { Configuration } from '#config/configuration'
 import { selectBestExecution, settledExecutionSnapshotWithQuorum } from '#execution/execution-orchestration'
@@ -12,7 +12,7 @@ import { constantProductExactInput, constantProductExactOutput, type Venue } fro
 import type { PositionRecord } from '#state/position-store'
 import { endpointLabel } from '#monitoring/connectivity'
 import type { MarketConsensusObservation } from '@zoltar/bot-shared/monitoring/market-consensus'
-import type { OpenOracleStatePreimage } from '@zoltar/shared/openOracle'
+import type { OpenOracleStatePreimage } from '@zoltar/shared/oracle/openOracle'
 
 const FEES = STANDARD_UNISWAP_FEES
 const UNISWAP_V2_FACTORY = getAddress('0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f')

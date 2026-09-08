@@ -2,7 +2,8 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import example from '../../config/operator.example.json'
-import { EndpointCheckFailure, privateKeyToAccount, zeroAddress, zeroHash, type Address, type EndpointCheck } from '../support/bot-shared.ts'
+import { privateKeyToAccount, zeroAddress, zeroHash, type Address } from '@zoltar/bot-shared/ethereum'
+import { EndpointCheckFailure, type EndpointCheck } from '@zoltar/bot-shared/monitoring/connectivity'
 import { parseSettings, serializedSettings, type OperatorSettings } from '../../src/config/settings.ts'
 import { createChaosShutdownController, type ChaosProcessLocks } from '../../src/core/process-locks.ts'
 import { OperationRediscoveryRequired } from '../../src/execution/transaction-executor.ts'
@@ -28,7 +29,7 @@ import { planningOptions } from '../../src/runtime/canonical-scan.ts'
 import { assertSubmissionPreflightFresh, submissionPreflightConfigurationIdentity, submissionPreflightIsDue } from '../../src/runtime/submission-preflight.ts'
 import { initialDurableState, initialRuntimeState, loadDurableState, recordActivity, saveDurableState } from '../../src/state/operator-state.ts'
 import { randomOperationPlans, urgentOperationPlans } from '../../src/runtime/selection.ts'
-import { createDurableWorkflow, markWorkflowFailed, markWorkflowStepConfirmed } from '../../src/runtime/workflows.ts'
+import { createDurableWorkflow, markWorkflowFailed, markWorkflowStepConfirmed, retirementCleanupBlocker } from '../../src/runtime/workflows.ts'
 import { beginLifecycleObligation, failLifecycleObligation, synchronizeLifecycleObligations } from '../../src/runtime/obligations.ts'
 import type { EvaluatedOperation, OperationPlan } from '../../src/operations/types.ts'
 import { address, snapshotFixture } from '../operations/fixture.ts'
@@ -927,6 +928,25 @@ describe('chaos operator runtime', () => {
 		workflow.continuationDisposition = selection.continuationDisposition
 		await saveDurableState(stateFile, state)
 		expect((await loadDurableState(stateFile, settings.network.chainId)).workflows[0]?.continuationDisposition).toBe('cleanup-only')
+	})
+
+	test('forces a partially prepared selectable workflow to cleanup-only during retirement', () => {
+		const settings = parseSettings(example)
+		const snapshot = snapshotFixture()
+		const original = eligibleOperationPlans(snapshot, planningOptions(settings, 17)).find(plan => plan.definitionId === 'open-oracle.deposit')
+		if (original === undefined) throw new Error('Retirement cleanup fixture requires an OpenOracle deposit')
+		const approval = original.steps.find(step => step.id.startsWith('approve-'))
+		if (approval === undefined) throw new Error('Retirement cleanup fixture requires an approval')
+		const workflow = createDurableWorkflow(original)
+		markWorkflowStepConfirmed(workflow, approval.id, zeroHash)
+		expect(retirementCleanupBlocker(workflow, true)).toBeUndefined()
+		const selection = evaluatePolicySafeContinuation(snapshot, workflow, { ...settings, strategy: { ...settings.strategy, enabledEcosystems: [] } }, snapshot.anchor.blockNumber, true)
+		expect(workflow.continuationDisposition).toBe('cleanup-only')
+		expect(selection.evaluation.plan?.steps.every(step => step.id.startsWith('revoke-'))).toBeTrue()
+		workflow.classification = 'lifecycle-obligation'
+		workflow.continuationDisposition = undefined
+		expect(retirementCleanupBlocker(workflow, true)).toBeUndefined()
+		expect(workflow).toMatchObject({ continuationDisposition: 'cleanup-only' })
 	})
 
 	test('latches cleanup-only after unsigned rediscovery of a partially confirmed selectable workflow', () => {

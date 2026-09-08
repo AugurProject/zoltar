@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { getOpenOracleReadinessActions } from '../../../features/open-oracle/lib/openOracleReadiness.js'
+import { getOpenOracleReadinessActions } from '@zoltar/ui-zoltar-shared/features/open-oracle/lib/openOracleReadiness.js'
 
 describe('open oracle readiness actions', () => {
 	test('builds dispute-mode actions with independent dispute and settle blockers', () => {

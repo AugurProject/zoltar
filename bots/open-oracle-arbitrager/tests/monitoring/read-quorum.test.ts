@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { quorumValue, readWithQuorum } from '#monitoring/read-quorum'
+import { quorumValue, readWithQuorum } from '@zoltar/bot-shared/monitoring/read-quorum'
 
 describe('independent read quorum', () => {
 	test('accepts one endpoint by default and enforces exact agreement for an explicit quorum', () => {

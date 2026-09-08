@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { TimestampValue } from '../components/TimestampValue.js'
-import { ChainTimestampContext } from '../lib/chainTimestamp.js'
+import { ChainTimestampContext } from '../wallet/chainTimestamp.js'
 import { formatTimestamp } from '../lib/formatters.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'

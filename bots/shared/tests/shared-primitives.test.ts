@@ -25,8 +25,10 @@ afterEach(async () => {
 })
 
 describe('shared bot primitives', () => {
-	test('resolves the root Ethereum package without generated JavaScript under Bun', () => {
-		expect(Bun.resolveSync('@zoltar/shared/ethereum', import.meta.dir)).toBe(join(import.meta.dir, '../../../shared/ts/ethereum.ts'))
+	test('resolves the shared Ethereum TypeScript source without generated JavaScript under Bun', () => {
+		const resolvedPath = Bun.resolveSync('@zoltar/shared/evm/ethereum', import.meta.dir).replaceAll('\\', '/')
+		expect(resolvedPath).toEndWith('/shared/ts/evm/ethereum.ts')
+		expect(resolvedPath).not.toContain('/shared/js/')
 	})
 
 	test('exposes raw transport requests only through the dedicated subpath', async () => {

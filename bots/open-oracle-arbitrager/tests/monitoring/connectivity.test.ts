@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { eip191Signer } from 'micro-eth-signer'
-import { keccak256, privateKeyToAccount, recoverTransactionAddress, type Hex } from '#ethereum'
+import { keccak256, privateKeyToAccount, recoverTransactionAddress, type Hex } from '@zoltar/bot-shared/ethereum'
 import {
 	checkConnectivity,
 	checkPrivateTransactionSubmissionEndpoints,

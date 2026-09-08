@@ -2,6 +2,8 @@ import { join } from 'node:path'
 import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
 import { boundedDashboardJson } from '@zoltar/bot-shared/dashboard/security'
 import { CONFIGURATION_REVISION_CONFLICT } from '../config/settings.ts'
+import { browserScript } from './browser-assets.ts'
+import { publicAlert, publicRetirement } from './public-retirement.ts'
 import { CONFIGURATION_COMMIT_INDETERMINATE, CONFIGURATION_COMMITTED_SAFELY_PAUSED } from '../runtime/dashboard-controller.ts'
 import { requiredLiveInventory } from '../runtime/live-readiness.ts'
 
@@ -16,6 +18,7 @@ export type ChaosDashboardController = {
 	setObligation: (value: unknown) => unknown | Promise<unknown>
 	setReplacement: (value: unknown) => unknown | Promise<unknown>
 	setPaused: (value: unknown) => unknown | Promise<unknown>
+	setRetirement?: ((value: unknown) => unknown | Promise<unknown>) | undefined
 	setSettings: (value: unknown) => unknown | Promise<unknown>
 	setSigner: (value: unknown) => unknown | Promise<unknown>
 	setWorkflow: (value: unknown) => unknown | Promise<unknown>
@@ -584,12 +587,6 @@ function publicActivity(value: unknown) {
 	})
 }
 
-function publicAlert(value: unknown) {
-	const source = record(value)
-	if (source === undefined) return undefined
-	return compact({ message: stringField(source, 'message'), severity: stringField(source, 'severity') })
-}
-
 export function publicChaosState(value: unknown, configurationValue?: unknown, nowMilliseconds = Date.now()) {
 	const source = record(value)
 	if (source === undefined) return {}
@@ -639,6 +636,8 @@ export function publicChaosState(value: unknown, configurationValue?: unknown, n
 					return transaction === undefined ? [] : [transaction]
 				})
 			: [],
+		profileId: stringField(source, 'profileId'),
+		retirement: publicRetirement(source['retirement']),
 		rpcHealth: publicRpcHealth(source['rpcEndpointHealth'], configurationValue),
 		submissionHealth: publicSubmissionHealth(source['rpcEndpointHealth'], configurationValue, nowMilliseconds, publicSubmissionHealthMaximumAgeSeconds(configurationValue)),
 		safetyPaused: booleanField(source, 'safetyPaused'),
@@ -939,7 +938,6 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 		throw new Error('Non-loopback chaos dashboard exposure is disabled; bind to 127.0.0.1 or publish a 0.0.0.0 container listener through a host-loopback-only port')
 	}
 	const directory = import.meta.dir
-	const browserSource = Bun.file(join(directory, 'dashboard.ts'))
 	const transpiler = new Bun.Transpiler({ loader: 'ts', target: 'browser' })
 	let authority = ''
 	let configurationCommitIndeterminate = false
@@ -990,7 +988,8 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 				if (url.pathname === '/operator-console.css') {
 					return new Response(Bun.file(join(directory, '..', '..', '..', 'shared', 'src', 'dashboard', 'operator-console.css')), { headers: securityHeaders('text/css; charset=utf-8') })
 				}
-				if (url.pathname === '/dashboard.js') return new Response(transpiler.transformSync(await browserSource.text()), { headers: securityHeaders('text/javascript; charset=utf-8') })
+				const script = await browserScript(url.pathname, directory, transpiler)
+				if (script !== undefined) return new Response(script, { headers: securityHeaders('text/javascript; charset=utf-8') })
 				if (url.pathname === '/api/state') {
 					try {
 						await mutationBarrier
@@ -1027,6 +1026,7 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 					['/api/settings', controller.setSettings],
 					['/api/signer', controller.setSigner],
 				])
+				if (controller.setRetirement !== undefined) handlers.set('/api/retirement', controller.setRetirement)
 				if (controller.setConnectivity !== undefined) handlers.set('/api/connectivity', controller.setConnectivity)
 				const handler = handlers.get(url.pathname)
 				if (handler !== undefined) {

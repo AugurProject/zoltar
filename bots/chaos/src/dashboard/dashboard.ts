@@ -128,6 +128,8 @@ type Snapshot = {
 	operationEvaluations: OperationEvaluation[]
 	paused?: boolean | undefined
 	pendingTransactions: PendingTransaction[]
+	profileId?: string | undefined
+	retirement?: { blockers: unknown[]; finalSweepStartedAt?: string | undefined; positions: unknown[]; recipient?: string | undefined; requestedAt?: string | undefined; status?: string | undefined; updatedAt?: string | undefined } | undefined
 	rpcHealth: RpcHealth
 	submissionHealth: SubmissionHealth
 	safetyPaused?: boolean | undefined
@@ -340,6 +342,7 @@ let pauseMutationUnreconciled = false
 let settingsMutationUnreconciled = false
 let connectivityMutationUnreconciled = false
 let signerMutationUnreconciled = false
+const retirementDashboard = createRetirementDashboard({ current: () => snapshot, put: async value => await put('/api/retirement', value), refresh: async () => await refresh() })
 let configurationCommitIndeterminate = false
 
 const configurationCommitIndeterminateRecoveryMessage = 'Dashboard mutation controls are permanently frozen in this server process and page. Stop the bot, inspect and reload the owner configuration and runtime-state files offline, then restart it before making another mutation.'
@@ -622,6 +625,8 @@ function parseSnapshot(value: unknown): Snapshot {
 			submittedAt: stringValue(entry['submittedAt']),
 			submissionBlock: scalarValue(entry['submissionBlock']),
 		})),
+		profileId: stringValue(source['profileId']),
+		retirement: parsePublicRetirement(source['retirement']),
 		rpcHealth: {
 			chainReady: booleanValue(rpcHealth['chainReady']),
 			configuredReadEndpointCount: nonnegativeIntegerValue(rpcHealth['configuredReadEndpointCount']),
@@ -894,17 +899,6 @@ function publicCandidateCount(value: string | number | undefined) {
 	return count <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(count) : count.toString()
 }
 
-function formatAtomic18(value: string | number | undefined) {
-	if (value === undefined) return '—'
-	let atomic = ''
-	if (typeof value === 'string') atomic = value
-	else if (Number.isSafeInteger(value) && value >= 0) atomic = value.toString()
-	if (!/^(?:0|[1-9]\d*)$/.test(atomic)) return 'Invalid atomic balance'
-	const padded = atomic.padStart(19, '0')
-	const integer = padded.slice(0, -18).replace(/^0+(?=\d)/, '')
-	return `${integer}.${padded.slice(-18)}`
-}
-
 function formatDuration(totalSeconds: number) {
 	const seconds = Math.max(0, Math.floor(totalSeconds))
 	const hours = Math.floor(seconds / 3_600)
@@ -1065,6 +1059,7 @@ function renderOverview(value: Snapshot) {
 	renderSubmissionHealth(value.submissionHealth)
 	renderWorkflow(value.currentWorkflow)
 	renderCoverage(value.operationEvaluations)
+	retirementDashboard.render(value)
 }
 
 function renderRpcHealth(value: Snapshot) {

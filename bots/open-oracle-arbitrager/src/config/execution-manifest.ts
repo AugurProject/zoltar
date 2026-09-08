@@ -2,7 +2,7 @@
 
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
-import { createPublicClient, getAddress, http, zeroAddress, type Address } from '#ethereum'
+import { createPublicClient, getAddress, http, zeroAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import { createDeploymentManifest, parseDeploymentManifest, parseDeploymentRole, verifyDeploymentManifest } from '#config/deployment-auth'
 import { defaultRpcUrl, networkConfiguration, parseNetworkName } from '#config/network'
 

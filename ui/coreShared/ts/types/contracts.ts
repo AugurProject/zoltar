@@ -1,6 +1,6 @@
-import type { Address, Hash, Hex } from '@zoltar/shared/ethereum'
-import type { WriteClient as ClientsWriteClient } from '../lib/clients.js'
-export type { ReadClient, WriteClient } from '../lib/clients.js'
+import type { Address, Hash, Hex } from '@zoltar/shared/evm/ethereum'
+import type { WriteClient as ClientsWriteClient } from '../wallet/clients.js'
+export type { ReadClient, WriteClient } from '../wallet/clients.js'
 
 export type ZoltarDeploymentStepId =
 	| 'proxyDeployer'
@@ -101,7 +101,7 @@ export type ZoltarChildUniverseSummary = {
 	parentUniverseId: bigint
 	reputationToken: Address
 	universeId: bigint
-}
+} & import('./reputation.js').ReputationTokenMetadata
 
 export type ZoltarUniverseSummary = {
 	childUniverses: ZoltarChildUniverseSummary[]
@@ -116,7 +116,7 @@ export type ZoltarUniverseSummary = {
 	totalTheoreticalSupplyAttoRep: bigint
 	universeId: bigint
 	zoltarAddress?: Address
-}
+} & import('./reputation.js').ReputationTokenMetadata
 
 export type DeploymentStep = {
 	id: DeploymentStepId
@@ -197,7 +197,6 @@ export type SecurityPoolCreationResult = {
 	statoblastSecurityMultiplierBps: bigint
 	universeId: bigint
 }
-
 export type SecurityVaultDetails = {
 	associatedRepPerCapacityBps?: bigint
 	badDebtAttoEth: bigint
@@ -211,6 +210,7 @@ export type SecurityVaultDetails = {
 	totalRepBackingUnits: bigint
 	vaultAttoRepBacking: bigint
 	repToken: Address
+	repTokenSymbol?: string
 	capacityOwnershipAttoRep: bigint
 	securityPoolAddress: Address
 	totalCapacityOwnershipAttoRep: bigint

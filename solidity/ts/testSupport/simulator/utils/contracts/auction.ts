@@ -1,5 +1,5 @@
 import { statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction, statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory } from '../../../../types/contractArtifact'
-import type { Address, Hex } from '@zoltar/shared/ethereum'
+import type { Address, Hex } from '@zoltar/shared/evm/ethereum'
 import { bytes32String } from '../bigint'
 import { ReadClient, WriteClient, writeContractAndWait } from '../clients'
 import { requireAddress, requireArray, requireBigInt, requireBoolean } from '../utilities'

@@ -5,11 +5,6 @@ inputs:
   directory:
     description: Component package directory
     required: true
-  artifacts:
-    description: Install root artifact-generation workspaces needed by this component
-    required: false
-    default: "false"
-
 runs:
   using: composite
   steps:
@@ -18,30 +13,19 @@ runs:
       with:
         bun-version: ${{ env.BUN_VERSION }}
 
+    - name: Read canonical project metadata
+      id: projects
+      shell: bash
+      run: bun ./tooling/repo/query-projects.mts --github-output
+
     - name: Cache component dependencies
       uses: actions/cache@v5
       with:
         path: ~/.bun/install/cache
-        key: ${{ runner.os }}-component-${{ inputs.directory }}-${{ env.BUN_VERSION }}-${{ hashFiles(format('{0}/bun.lock', inputs.directory), format('{0}/package.json', inputs.directory), 'bun.lock', 'package.json', 'bots/shared/bun.lock', 'bots/shared/package.json', 'shared/package.json', 'shared/ts/**') }}
+        key: ${{ runner.os }}-component-${{ inputs.directory }}-${{ env.BUN_VERSION }}-${{ steps.projects.outputs.dependency_cache_key }}
 
     - name: Install local dependency inputs
       shell: bash
       run: |
-        bun ./scripts/install-frozen.mts
-        if [[ "${{ inputs.directory }}" == "bots/open-oracle-arbitrager" || "${{ inputs.directory }}" == "bots/liquidator" || "${{ inputs.directory }}" == "bots/chaos" ]]; then
-          bun ./scripts/install-frozen.mts bots/shared
-        fi
-
-    - name: Install component dependencies
-      shell: bash
-      run: bun ./scripts/install-frozen.mts "${{ inputs.directory }}"
-
-    - name: Install artifact-generation dependencies
-      if: inputs.artifacts == 'true'
-      shell: bash
-      run: |
-        bun ./scripts/install-frozen.mts ui/coreShared
-        bun ./scripts/install-frozen.mts ui/zoltar
-        bun ./scripts/install-frozen.mts ui/statoblast
-        bun ./scripts/install-frozen.mts ui/trading
-        bun ./scripts/install-frozen.mts solidity
+        bun ./tooling/repo/run-project-tasks.mts setup repository
+        bun ./tooling/repo/run-project-tasks.mts setup --project-path "${{ inputs.directory }}" --dependencies

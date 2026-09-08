@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
+import { getAddress, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
 import {
 	assertCommonFinalizedBlockResults,
 	assertDoctorDurableStateScope,
@@ -23,6 +23,7 @@ import { carryProofDeploymentProfileId } from '../../src/monitoring/carry-proof-
 import { immutableTopologySidecarDirectory } from '../../src/monitoring/topology-cache.ts'
 import { preflightTransactionSubmissionNetwork } from '../../src/runtime/submission-preflight.ts'
 import { initialDurableState, loadDurableState, serializedDurableState } from '../../src/state/operator-state.ts'
+import { DEFAULT_RETIREMENT_POLICIES, registerV3Position, requestRetirement } from '../../src/state/retirement.ts'
 
 const temporaryDirectories: string[] = []
 
@@ -374,6 +375,41 @@ describe('chaos launch doctor', () => {
 
 		const pristine = initialDurableState(settings.network.chainId)
 		expect(assertDoctorDurableStateScope(settings, pristine, wallet, '/state.json').profile).toBe('pristine-bootstrap')
+	})
+
+	test('rejects mismatched-profile retirement state before network probing', async () => {
+		const settings = await settingsFixture('operator.configured-placeholder.json')
+		const recipient = getAddress('0x0000000000000000000000000000000000000099')
+		const requested = initialDurableState(settings.network.chainId, true, 'profile:wrong')
+		requestRetirement(requested.retirement, requested.profileId, recipient, DEFAULT_RETIREMENT_POLICIES, `DRAIN ${requested.profileId} TO ${recipient}`, undefined)
+		const registered = initialDurableState(settings.network.chainId, true, 'profile:wrong')
+		registerV3Position(registered.retirement, {
+			creationWorkflowId: 'legacy:position',
+			fee: 3_000,
+			owner: getAddress('0x0000000000000000000000000000000000000001'),
+			pool: getAddress('0x0000000000000000000000000000000000000020'),
+			profileId: registered.profileId,
+			tickLower: -120,
+			tickUpper: 120,
+			token0: getAddress('0x0000000000000000000000000000000000000021'),
+			token1: getAddress('0x0000000000000000000000000000000000000022'),
+		})
+		for (const state of [requested, registered]) {
+			let networkProbed = false
+			const dependencies = passiveDoctorDependencies(settings, {
+				loadState: async () => state,
+				preflightSubmission: async () => {
+					networkProbed = true
+					return []
+				},
+				probe: async () => {
+					networkProbed = true
+					return probeResult
+				},
+			})
+			await expect(runChaosDoctor(dependencies)).rejects.toThrow('belongs to deployment profile')
+			expect(networkProbed).toBeFalse()
+		}
 	})
 
 	test('loads the complete durable journal and fails when its committed index generation is missing', async () => {

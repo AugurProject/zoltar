@@ -1,12 +1,12 @@
-import { createPublicClient, http, type Hash, type PublicClient } from '@zoltar/shared/ethereum'
+import { createPublicClient, http, type Hash, type PublicClient } from '@zoltar/shared/evm/ethereum'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import type { ChainBackend } from '@zoltar/ui-core-shared/lib/chainBackend.js'
+import type { ChainBackend } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { Status } from '../components/Status.js'
 import { TradingAddressValue } from '../components/TradingAddress.js'
 import { parseDeploymentSetupInput, type DeploymentConfiguration } from '../protocol/config.js'
 import { isKnownDefaultRpcUrl, loadCoreDeployments } from '../protocol/coreDeployments.js'
-import { deployTradingStep, deploymentConfigurationForPlan, getTradingDeploymentPlan, loadTradingDeploymentStatus, nextTradingDeploymentStep, type CoreDeployment, type TradingDeploymentPlan, type TradingDeploymentStep } from '../protocol/deployment.js'
+import { deployTradingStep, deploymentConfigurationForPlan, getTradingDeploymentPlan, isTradingDeploymentComplete, loadTradingDeploymentStatus, nextTradingDeploymentStep, type CoreDeployment, type TradingDeploymentPlan, type TradingDeploymentStep } from '../protocol/deployment.js'
 import { createWalletContextSubscription, getInjectedEthereum, type InjectedEthereum } from '../protocol/injected.js'
 import { connectedWalletAccount, connectWallet, createTradingWalletClient, publicErrorMessage, switchWalletChain, validateRpcChainId, walletChainId } from '../protocol/live.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
@@ -61,9 +61,9 @@ function initialQueryValue(name: string) {
 	return new URLSearchParams(window.location.search).get(name) ?? ''
 }
 
-function deploymentProgress(status: DeploymentStatus | undefined) {
+function deploymentProgress(status: DeploymentStatus | undefined, total = 3) {
 	if (status === undefined) return '—'
-	return `${Number(status.factory) + Number(status.router)} / 2`
+	return `${Number(status.factory) + Number(status.router)} / ${total.toString()}`
 }
 
 function inspectionPresentation(state: 'blocked' | 'idle' | 'loading' | 'ready' | 'error', { busy, deploymentComplete, inputError, plan, registryError, registryLoading }: Readonly<{ busy: boolean; deploymentComplete: boolean; inputError: boolean; plan: boolean; registryError: boolean; registryLoading: boolean }>) {
@@ -80,9 +80,9 @@ function inspectionPresentation(state: 'blocked' | 'idle' | 'loading' | 'ready' 
 	return { label: appCopy.completeDeploymentSettings, tone: 'neutral' as const }
 }
 
-function deploymentActionLabel(busy: boolean, nextStep: ReturnType<typeof nextTradingDeploymentStep>, status: DeploymentStatus | undefined) {
+function deploymentActionLabel(busy: boolean, nextStep: ReturnType<typeof nextTradingDeploymentStep>, plan: TradingDeploymentPlan | undefined, status: DeploymentStatus | undefined) {
 	if (busy) return `Deploying ${nextStep?.label ?? 'contract'}…`
-	if (status?.factory === true && status.router) return 'Deployment complete'
+	if (plan !== undefined && status !== undefined && isTradingDeploymentComplete(plan, status)) return appCopy.deploymentComplete
 	if (nextStep === undefined) return 'Deploy trading contracts'
 	return `Deploy ${nextStep.label}`
 }
@@ -243,7 +243,7 @@ export function TradingDeploymentSetup({
 				setDeploymentStatus(status)
 				setInspectedRevision(revision)
 				setInspectionState('ready')
-				if (status.factory && status.router) {
+				if (isTradingDeploymentComplete(nextPlan, status)) {
 					const configuration = deploymentConfigurationForPlan(nextPlan, input.rpcUrl)
 					onComplete(configuration)
 					return
@@ -343,7 +343,7 @@ export function TradingDeploymentSetup({
 		else disconnectDeploymentWallet()
 	}, [walletControlRequestNonce])
 	const nextStep = plan === undefined || deploymentStatus === undefined ? undefined : nextTradingDeploymentStep(plan, deploymentStatus)
-	const deploymentComplete = deploymentStatus?.factory === true && deploymentStatus.router
+	const deploymentComplete = plan !== undefined && deploymentStatus !== undefined && isTradingDeploymentComplete(plan, deploymentStatus)
 	const deploymentSteps =
 		plan === undefined
 			? []
@@ -397,7 +397,7 @@ export function TradingDeploymentSetup({
 			})
 			const status = await loadTradingDeploymentStatus(publicClient, plan)
 			setDeploymentStatus(status)
-			if (status.factory && status.router) {
+			if (isTradingDeploymentComplete(plan, status)) {
 				const input = parseDeploymentSetupInput({ chainId, feeBps, rpcUrl: effectiveRpcUrl })
 				const configuration = deploymentConfigurationForPlan(plan, input.rpcUrl)
 				onComplete(configuration)
@@ -411,7 +411,7 @@ export function TradingDeploymentSetup({
 				const status = await loadTradingDeploymentStatus(publicClient, plan)
 				setDeploymentStatus(status)
 				if (status[nextStep.id]) {
-					if (status.factory && status.router) {
+					if (isTradingDeploymentComplete(plan, status)) {
 						const input = parseDeploymentSetupInput({ chainId, feeBps, rpcUrl: effectiveRpcUrl })
 						const configuration = deploymentConfigurationForPlan(plan, input.rpcUrl)
 						onComplete(configuration)
@@ -518,7 +518,7 @@ export function TradingDeploymentSetup({
 				<div class='deployment-setup__status' role='status' aria-live='polite'>
 					<div>
 						<span>Deployment progress</span>
-						<strong>{deploymentProgress(deploymentStatus)}</strong>
+						<strong>{deploymentProgress(deploymentStatus, 2)}</strong>
 					</div>
 					{inspection === undefined ? null : <Status tone={inspection.tone}>{inspection.label}</Status>}
 				</div>
@@ -545,7 +545,7 @@ export function TradingDeploymentSetup({
 				<div class='deployment-setup__actions'>
 					{deploymentComplete ? null : (
 						<button class='primary-action' type='button' disabled={busy || registryLoading || registryError !== undefined || !inspectionIsCurrent || inspectionState !== 'ready' || nextStep === undefined || !walletReady} aria-busy={busy} onClick={() => void deployNext()}>
-							{deploymentActionLabel(busy, nextStep, deploymentStatus)}
+							{deploymentActionLabel(busy, nextStep, plan, deploymentStatus)}
 						</button>
 					)}
 					{retryAction}

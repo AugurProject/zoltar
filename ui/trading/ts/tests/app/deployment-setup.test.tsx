@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { createPublicClient, custom, encodeAbiParameters, getAddress } from '@zoltar/shared/ethereum'
+import { createPublicClient, custom, encodeAbiParameters, getAddress } from '@zoltar/shared/evm/ethereum'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { act } from 'preact/test-utils'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
@@ -10,7 +10,7 @@ import type { InjectedEthereum } from '../../protocol/injected.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
-import { SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/lib/networkProfile.js'
+import { SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 
 const core = {
 	chainId: 11_155_111,
@@ -19,6 +19,7 @@ const core = {
 	id: 'sepolia',
 	proxyDeployer: getAddress(`0x${'12'.repeat(20)}`),
 	securityPoolFactory: getAddress(`0x${'34'.repeat(20)}`),
+	zoltar: getAddress(`0x${'56'.repeat(20)}`),
 }
 
 function deploymentClient(rpcAvailable: () => boolean = () => true) {
@@ -158,6 +159,47 @@ describe('trading deployment setup', () => {
 		expect(rendered.container.textContent).toContain('Deploy Trading factory')
 		expect(rendered.container.textContent).toContain('0 / 2')
 		expect(rendered.container.textContent).not.toContain('Ready to deploy')
+	})
+
+	test('keeps the router step available when a remounted deployment is partial', async () => {
+		const plan = getTradingDeploymentPlan(core, 30)
+		let contractReadCount = 0
+		const client = createPublicClient({
+			transport: custom({
+				request: async ({ method, params }) => {
+					if (method === 'eth_chainId') return '0xaa36a7'
+					if (method === 'eth_getCode' && Array.isArray(params)) {
+						const address = params[0]
+						if (typeof address !== 'string') throw new Error('Missing code address')
+						if (address.toLowerCase() === core.proxyDeployer.toLowerCase()) return CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE
+						if ([core.securityPoolFactory, plan.factory.address].some(expected => expected.toLowerCase() === address.toLowerCase())) return '0x01'
+						return '0x'
+					}
+					if (method === 'eth_call') {
+						contractReadCount += 1
+						if (contractReadCount === 1) return encodeAbiParameters([{ type: 'address' }], [core.securityPoolFactory])
+						if (contractReadCount === 2) return encodeAbiParameters([{ type: 'uint16' }], [plan.feeBps])
+						return encodeAbiParameters([{ type: 'address' }], [plan.factory.address])
+					}
+					throw new Error(`Unexpected RPC method ${method}`)
+				},
+			}),
+		})
+		let completionCount = 0
+		const rendered = await renderIntoDocument(
+			<TradingDeploymentSetup
+				currentConfiguration={deploymentConfigurationForPlan(plan, core.defaultRpcUrl)}
+				onComplete={() => {
+					completionCount += 1
+				}}
+				services={{ createPublicClient: () => client, loadCoreDeployments: async () => [core] }}
+			/>,
+		)
+		cleanupRendered = rendered.cleanup
+		await waitForText('Deploy Trading router')
+		expect(completionCount).toBe(0)
+		expect(rendered.container.textContent).toContain('1 / 2')
+		expect(Array.from(rendered.container.querySelectorAll('button')).some(button => button.textContent?.trim() === 'Deploy Trading router')).toBe(true)
 	})
 
 	test('presents an undeployed SecurityPoolFactory as an expected prerequisite and keeps trading addresses visible', async () => {
@@ -549,8 +591,9 @@ describe('trading deployment setup', () => {
 					}
 					if (method === 'eth_call') {
 						contractReadCount += 1
-						if (contractReadCount % 3 === 1) return encodeAbiParameters([{ type: 'address' }], [core.securityPoolFactory])
-						if (contractReadCount % 3 === 2) return encodeAbiParameters([{ type: 'uint16' }], [plan.feeBps])
+						const readInInspection = ((contractReadCount - 1) % 3) + 1
+						if (readInInspection === 1) return encodeAbiParameters([{ type: 'address' }], [core.securityPoolFactory])
+						if (readInInspection === 2) return encodeAbiParameters([{ type: 'uint16' }], [plan.feeBps])
 						return encodeAbiParameters([{ type: 'address' }], [plan.factory.address])
 					}
 					throw new Error(`Unexpected RPC method ${method}`)

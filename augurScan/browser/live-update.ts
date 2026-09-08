@@ -209,6 +209,90 @@ export const placeActivityDetailDrawer = (feed: ActivityDetailFeedLike, drawer: 
 	return true
 }
 
+export const activityDetailProvenanceField = (provenance: string | null): readonly [term: string, description: string] => [
+	'Contract provenance',
+	provenance ?? '—',
+]
+
+export interface ActivityDetailFocusSnapshot {
+	drawerFocused: boolean
+	focusIndex: number
+	focusKey?: string
+	focusKeyOccurrence?: number
+	focusTop?: number
+}
+
+interface ActivityDetailFocusableLike {
+	readonly tagName: string
+	readonly textContent: string | null
+	getAttribute(name: string): string | null
+	getBoundingClientRect(): { readonly top: number }
+	focus(options?: FocusOptions): void
+}
+
+interface ActivityDetailFocusDrawerLike extends ActivityDetailFocusableLike {
+	querySelectorAll(selectors: string): ArrayLike<ActivityDetailFocusableLike>
+}
+
+const activityDetailFocusable = (drawer: ActivityDetailFocusDrawerLike): ActivityDetailFocusableLike[] =>
+	Array.from(drawer.querySelectorAll('a, button, summary'))
+
+const activityDetailFocusKey = (node: ActivityDetailFocusableLike): string =>
+	`${node.tagName}:${node.tagName === 'A' ? (node.getAttribute('href') ?? '') : ''}:${node.getAttribute('aria-label') ?? node.textContent ?? ''}`
+
+export const captureActivityDetailFocus = (drawer: ActivityDetailFocusDrawerLike, activeElement: unknown): ActivityDetailFocusSnapshot => {
+	const focusable = activityDetailFocusable(drawer)
+	let focusIndex = -1
+	for (const [index, candidate] of focusable.entries()) {
+		if (candidate !== activeElement) continue
+		focusIndex = index
+		break
+	}
+	const focused = focusIndex < 0 ? undefined : focusable[focusIndex]
+	const focusKey = focused === undefined ? undefined : activityDetailFocusKey(focused)
+	return {
+		drawerFocused: activeElement === drawer,
+		focusIndex,
+		focusKey,
+		focusKeyOccurrence:
+			focusKey === undefined ? undefined : focusable.slice(0, focusIndex + 1).filter((candidate) => activityDetailFocusKey(candidate) === focusKey).length - 1,
+		focusTop: focused?.getBoundingClientRect().top,
+	}
+}
+
+export const restoreActivityDetailFocus = (
+	drawer: ActivityDetailFocusDrawerLike,
+	snapshot: ActivityDetailFocusSnapshot,
+	align?: (nextFocus: ActivityDetailFocusableLike, previousTop: number) => void,
+): boolean => {
+	if (snapshot.drawerFocused) {
+		drawer.focus({ preventScroll: true })
+		return true
+	}
+	if (snapshot.focusIndex < 0) return false
+	const focusable = activityDetailFocusable(drawer)
+	const keyedCandidates = snapshot.focusKey ? focusable.filter((candidate) => activityDetailFocusKey(candidate) === snapshot.focusKey) : []
+	const nextFocus = keyedCandidates[snapshot.focusKeyOccurrence ?? 0] ?? focusable[snapshot.focusIndex]
+	if (nextFocus === undefined) return false
+	if (snapshot.focusTop !== undefined) align?.(nextFocus, snapshot.focusTop)
+	nextFocus.focus({ preventScroll: true })
+	return true
+}
+
+interface ActivityDetailEscapeEvent {
+	readonly key: string
+	preventDefault(): void
+	stopPropagation(): void
+}
+
+export const handleActivityDetailDrawerEscape = (event: ActivityDetailEscapeEvent, close: () => void): boolean => {
+	if (event.key !== 'Escape') return false
+	event.preventDefault()
+	event.stopPropagation()
+	close()
+	return true
+}
+
 interface ActivityLogCountFeedLike {
 	querySelectorAll(selectors: string): ArrayLike<unknown>
 }

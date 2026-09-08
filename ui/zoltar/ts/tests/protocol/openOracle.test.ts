@@ -1,27 +1,13 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { decodeFunctionData, getAddress, toHex, zeroAddress, type Address, type Hex } from '@zoltar/shared/ethereum'
-import { encodeOpenOracleStatePreimagePacked, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SUBMITTED_TOPIC, type OpenOracleStatePreimage } from '@zoltar/shared/openOracle'
-import {
-	getOpenOracleAddress,
-	getOpenOracleDisputeSwapToken,
-	invalidateLiquidationApprovalNonce,
-	loadLiquidationApproval,
-	loadLiquidationApprovalRegistry,
-	loadOpenOracleReportDetails,
-	loadOpenOracleWithdrawableBalances,
-	loadOracleManagerDetails,
-	loadOpenOracleReportSummaries,
-	permitLiquidationApproval,
-	revokeLiquidationApproval,
-	setLiquidationApproval,
-	settleOracleReport,
-	withdrawOpenOracleBalance,
-	type LiquidationApprovalParams,
-} from '../../protocol/index.js'
+import { decodeFunctionData, getAddress, toHex, zeroAddress, type Address, type Hex } from '@zoltar/shared/evm/ethereum'
+import { encodeOpenOracleStatePreimagePacked, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SUBMITTED_TOPIC, type OpenOracleStatePreimage } from '@zoltar/shared/oracle/openOracle'
+import { getOpenOracleDisputeSwapToken, loadOpenOracleReportDetails, loadOpenOracleWithdrawableBalances, loadOracleManagerDetails, loadOpenOracleReportSummaries, settleOracleReport, withdrawOpenOracleBalance } from '@zoltar/ui-zoltar-shared/protocol/openOracle.js'
+import { getOpenOracleAddress } from '@zoltar/ui-zoltar-shared/protocol/deploymentHelpers.js'
+import { invalidateLiquidationApprovalNonce, loadLiquidationApproval, loadLiquidationApprovalRegistry, permitLiquidationApproval, revokeLiquidationApproval, setLiquidationApproval, type LiquidationApprovalParams } from '@zoltar/ui-zoltar-shared/protocol/liquidationApprovals.js'
 import { statoblast_LiquidationApprovalRegistry_LiquidationApprovalRegistry, statoblast_openOracle_OpenOracle_OpenOracle } from '@zoltar/ui-core-shared/contractArtifact.js'
-import { MAINNET_WETH_ADDRESS } from '@zoltar/ui-core-shared/lib/networkProfile.js'
+import { MAINNET_WETH_ADDRESS } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { asWriteClient, createBlockWithTimestamp, createMockLoaderClient, createMockWriteClient, getContractFunctionName } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 
 const vaultAddress = getAddress('0x00000000000000000000000000000000000000c1')

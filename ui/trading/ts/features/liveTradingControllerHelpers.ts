@@ -1,8 +1,7 @@
-import type { Address, Hash } from '@zoltar/shared/ethereum'
+import { getAddress, type Address, type Hash } from '@zoltar/shared/evm/ethereum'
 import { parseUnitsOrUndefined } from '../lib/format.js'
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
 import {
-	approveRouter,
 	connectWallet,
 	createTradingPublicClient,
 	createTradingWalletClient,
@@ -25,7 +24,6 @@ export type GuardedWalletWrite = <T>(write: () => Promise<T>) => Promise<T>
 export type WorkflowOwner = 'position' | 'liquidity'
 
 export const liveTradingControllerServices: LiveTradingControllerServices = {
-	approveRouter,
 	connectWallet,
 	createTradingPublicClient,
 	createTradingWalletClient,
@@ -83,13 +81,8 @@ export function broadcastUncertainMessage(label: string, hash: Hash) {
 	return `${label} ${hash} was broadcast, but its receipt could not be confirmed. Do not resubmit. Check this hash in your wallet or configured block explorer, then reload only after its final status is known.`
 }
 
-export function approvalFailureTransition(label: string, broadcastHash: Hash | undefined, receiptKnown: boolean, caught: unknown, fallback: string) {
-	if (broadcastHash !== undefined && !receiptKnown) return { keepLocked: true, state: 'pending' as const, message: undefined, warning: broadcastUncertainMessage(label, broadcastHash) }
-	return { keepLocked: false, state: 'error' as const, message: publicErrorMessage(caught, fallback), warning: undefined }
-}
-
 export function positionControlsWorkflowLocked(state: TransactionState, receiptWarning: string | undefined) {
-	return state === 'preparing' || state === 'approval' || state === 'approval-pending' || state === 'submitting' || state === 'pending' || receiptWarning !== undefined
+	return state === 'preparing' || state === 'submitting' || state === 'pending' || receiptWarning !== undefined
 }
 
 export function discoveryCommitAllowed(owner: WorkflowOwner | undefined, positionLocked: boolean, liquidityLocked: boolean) {
@@ -100,7 +93,7 @@ export function discoveryCommitAllowed(owner: WorkflowOwner | undefined, positio
 
 export function securityPoolAddressFromRoute(route: string) {
 	const match = /^security-pool\/(0x[0-9a-fA-F]{40})$/.exec(route)
-	return match?.[1]?.toLowerCase()
+	return match?.[1] === undefined ? undefined : getAddress(match[1])
 }
 
 export function livePairInitialized(market: Pick<LiveMarket, 'pair' | 'lpTotalSupply' | 'yesReserve' | 'noReserve' | 'tradingStatus'>) {

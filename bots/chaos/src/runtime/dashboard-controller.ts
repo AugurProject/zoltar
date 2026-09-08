@@ -7,8 +7,10 @@ import type { ChaosProcessLocks } from '../core/process-locks.ts'
 import { scheduledStateAfterRun, schedulerIsDue } from '../core/scheduler.ts'
 import { abandonLifecycleObligation, lifecyclePresenceBlockerMessage, MAXIMUM_AUTOMATIC_LIFECYCLE_ATTEMPTS, retryLifecycleObligation } from './obligations.ts'
 import { liveInventoryReadinessBlockers } from './live-readiness.ts'
-import { workflowNeedsContinuation } from './workflows.ts'
+import { workflowNeedsOperatorReconciliation } from './workflows.ts'
 import { bindRuntimeStateToSigner, MAXIMUM_OBLIGATION_TOMBSTONE_COUNT, recordActivity, saveDurableState, type RuntimeState } from '../state/operator-state.ts'
+import { createRetirementController } from './retirement-controller.ts'
+import { dashboardRecord as record, exactDashboardKeys as exactKeys } from './dashboard-input.ts'
 
 export type ConfigurationState = {
 	path: string
@@ -31,19 +33,6 @@ export type DashboardControllerOptions = {
 	saveConfiguration?: typeof saveSettings | undefined
 	saveState?: ((path: string, state: RuntimeState) => Promise<void>) | undefined
 	state: RuntimeState
-}
-
-function record(value: unknown, label: string) {
-	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`${label} must be a JSON object`)
-	return Object.fromEntries(Object.entries(value))
-}
-
-function exactKeys(value: Record<string, unknown>, required: readonly string[], label: string) {
-	const allowed = new Set(required)
-	const missing = required.filter(key => !(key in value))
-	const unexpected = Object.keys(value).filter(key => !allowed.has(key))
-	if (missing.length !== 0) throw new Error(`${label} is missing ${missing[0] ?? 'a required field'}`)
-	if (unexpected.length !== 0) throw new Error(`${label} contains unsupported field ${unexpected[0] ?? 'unknown'}`)
 }
 
 function expectedRevision(value: unknown, current: string) {
@@ -267,7 +256,7 @@ function groupedOperationEvaluations(state: RuntimeState, enabled: ReadonlySet<s
 }
 
 function dashboardState(state: RuntimeState, configuration: ConfigurationState) {
-	const currentWorkflow = state.workflows.find(workflow => workflow.status === 'running' || workflow.status === 'waiting-continuation' || workflow.status === 'waiting-obligation' || workflow.status === 'waiting-transaction')
+	const currentWorkflow = state.workflows.find(workflow => workflow.status === 'running' || workflow.status === 'waiting-continuation' || workflow.status === 'waiting-obligation' || workflow.status === 'waiting-transaction' || workflowNeedsOperatorReconciliation(workflow))
 	const enabled = new Set(configuration.settings.strategy.enabledEcosystems)
 	const lifecyclePresenceAlert = state.lifecyclePresenceBlocker === undefined ? undefined : lifecyclePresenceBlockerMessage(state.lifecyclePresenceBlocker)
 	return {
@@ -764,8 +753,8 @@ export function createChaosDashboardController(options: DashboardControllerOptio
 				if (source === undefined || source.updatedAt !== updatedAt) {
 					throw new Error('The partial workflow changed; refresh and review it again')
 				}
-				if (!workflowNeedsContinuation(source)) {
-					throw new Error('Only a partial workflow awaiting continuation can be abandoned')
+				if (!workflowNeedsOperatorReconciliation(source)) {
+					throw new Error('Only a partial workflow or semantic failure requiring operator reconciliation can be abandoned')
 				}
 				if (options.state.obligations.some(obligation => obligation.workflowId === source.id)) {
 					throw new Error('Lifecycle workflows must use lifecycle obligation reconciliation')
@@ -860,6 +849,7 @@ export function createChaosDashboardController(options: DashboardControllerOptio
 				throw error
 			}
 		},
+		setRetirement: createRetirementController({ persist: async state => await persistRuntimeState(options.configuration.settings.runtime.stateFile, state), state: options.state, update }),
 		async setConnectivity(value) {
 			await update(async () => {
 				const candidate = connectivityCandidate(options.configuration.settings, value)

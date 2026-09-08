@@ -13,11 +13,11 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { App, currentRoute, tradingNetworkLabel } from '../../app/App.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
-import { getCurrentRouteHash, getRouteHashSearch, resetRoutingForTesting } from '@zoltar/ui-core-shared/lib/routing.js'
+import { getCurrentRouteHash, getRouteHashSearch, resetRoutingForTesting } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { getTradingRouteHref, installTradingRouting } from '../../lib/routing.js'
 import { getActiveNetworkProfile, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
-import { createPublicClient, custom } from '@zoltar/shared/ethereum'
+import { createPublicClient, custom } from '@zoltar/shared/evm/ethereum'
 import { createTradingPublicClient } from '../../protocol/live.js'
 
 test('Trading registers its shared TEVM scenario and selects its own worker', () => {

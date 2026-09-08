@@ -3,25 +3,16 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { h } from 'preact'
 import { act } from 'preact/test-utils'
-import { createPublicClient, getAddress, http } from '@zoltar/shared/ethereum'
+import { createPublicClient, getAddress, http } from '@zoltar/shared/evm/ethereum'
 import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import { installRepPriceQuoterForTesting } from '../../../features/open-oracle/hooks/useRepPrices.js'
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
+import { installRepPriceQuoterForTesting } from '@zoltar/ui-zoltar-shared/features/open-oracle/hooks/useRepPrices.js'
 
-type UseRepPrices = typeof import('../../../features/open-oracle/hooks/useRepPrices.js')['useRepPrices']
-
-function createDeferred<T>() {
-	let resolve: (value: T) => void = () => undefined
-	let reject: (reason?: unknown) => void = () => undefined
-	const promise = new Promise<T>((promiseResolve, promiseReject) => {
-		resolve = promiseResolve
-		reject = promiseReject
-	})
-	return { promise, reject, resolve }
-}
+type UseRepPrices = typeof import('@zoltar/ui-zoltar-shared/features/open-oracle/hooks/useRepPrices.js')['useRepPrices']
 
 function createHarness(useRepPrices: UseRepPrices) {
 	return function RepPricesHarness() {
@@ -94,7 +85,7 @@ describe('useRepPrices refresh races', () => {
 			...createFakeBackend(),
 			createReadClient: () => createPublicClient({ transport: http('http://127.0.0.1:8545') }),
 		})
-		const { useRepPrices } = await import(`../../../features/open-oracle/hooks/useRepPrices.js?case=${crypto.randomUUID()}`)
+		const { useRepPrices } = await import(`@zoltar/ui-zoltar-shared/features/open-oracle/hooks/useRepPrices.js?case=${crypto.randomUUID()}`)
 		const Harness = createHarness(useRepPrices)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -172,7 +163,7 @@ describe('useRepPrices refresh races', () => {
 			...createFakeBackend(),
 			createReadClient: () => createPublicClient({ transport: http('http://127.0.0.1:8545') }),
 		})
-		const { useRepPrices } = await import(`../../../features/open-oracle/hooks/useRepPrices.js?case=${crypto.randomUUID()}`)
+		const { useRepPrices } = await import(`@zoltar/ui-zoltar-shared/features/open-oracle/hooks/useRepPrices.js?case=${crypto.randomUUID()}`)
 		const Harness = createHarness(useRepPrices)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
 		cleanupRenderedComponent = renderedComponent.cleanup

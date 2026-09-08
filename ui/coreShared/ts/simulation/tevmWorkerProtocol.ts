@@ -1,4 +1,4 @@
-import type { Address, Hash, Hex, TransactionReceipt } from '@zoltar/shared/ethereum'
+import type { Address, Hash, Hex, TransactionReceipt } from '@zoltar/shared/evm/ethereum'
 import type { SimulationScenario } from './scenarios.js'
 import type { SimulationInitialization, SimulationSource } from './savedStates.js'
 

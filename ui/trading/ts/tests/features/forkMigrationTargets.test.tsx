@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
-import { getScalarOutcomeIndex } from '@zoltar/shared/scalarOutcome'
+import { getScalarOutcomeIndex } from '@zoltar/shared/statoblast/scalarOutcome'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { ForkMigrationTargets, type ForkMigrationContext, type ForkTarget } from '../../features/ForkMigrationTargets.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'

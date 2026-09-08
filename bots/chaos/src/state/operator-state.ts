@@ -5,6 +5,8 @@ import { dirname, resolve } from 'node:path'
 import { getAddress, keccak256, parseTransaction, recoverTransactionAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import type { ChaosProtocolIndex } from '#monitoring/protocol-index'
 import type { ChaosEcosystem, EvaluatedOperation, OperationContinuationDisposition, OperationEvidence, OperationPreflightCall, OperationRisk, OperationTerminalSubmission, OperationWalletAssetDebit } from '#operations/types'
+import { assertSafeRetirementRecipient, initialRetirementState, parseRetirementState, type DurableRetirementState } from './retirement.ts'
+import { serializedScheduler } from './state-serialization.ts'
 import {
 	loadPersistedProtocolIndex,
 	parseProtocolIndex as parseStoredProtocolIndex,
@@ -17,7 +19,7 @@ import {
 	type ProtocolIndexReference,
 } from './protocol-index-store.ts'
 
-export const DURABLE_STATE_VERSION = 3
+export const DURABLE_STATE_VERSION = 4
 export const MAXIMUM_ACTIVITY_COUNT = 500
 export const MAXIMUM_LIFECYCLE_PRESENCE_BLOCKER_COUNT = 1_000_000
 export const MAXIMUM_TERMINAL_OBLIGATION_COUNT = 500
@@ -190,10 +192,11 @@ export type DurableState = {
 	pendingTransactions: PendingTransactionIntent[]
 	profileId: string
 	protocolIndex: ChaosProtocolIndex | undefined
+	retirement: DurableRetirementState
 	safetyPaused: boolean
 	scheduler: SchedulerState
 	signerAddress: Address | undefined
-	version: 3
+	version: 4
 	workflows: DurableWorkflow[]
 }
 
@@ -273,6 +276,7 @@ export function initialDurableState(chainId: number, paused = true, profileId = 
 		pendingTransactions: [],
 		profileId: identifier(profileId, 'profileId'),
 		protocolIndex: undefined,
+		retirement: initialRetirementState(),
 		safetyPaused: false,
 		scheduler: emptySchedulerState(paused),
 		signerAddress,
@@ -283,6 +287,7 @@ export function initialDurableState(chainId: number, paused = true, profileId = 
 
 export function initialRuntimeState(paused: boolean, wallet: Address | undefined, chainId: number, durableState: DurableState = initialDurableState(chainId, paused)): RuntimeState {
 	if (durableState.chainId !== chainId) throw new Error(`Durable state belongs to chain ${durableState.chainId.toString()}, expected chain ${chainId.toString()}`)
+	if (durableState.retirement.recipient !== undefined) assertSafeRetirementRecipient(durableState.retirement.recipient, wallet ?? durableState.signerAddress)
 	const restoredSchedulerStatus = durableState.scheduler.status
 	const effectivePaused = paused || durableState.safetyPaused
 	let activeSchedulerStatus = restoredSchedulerStatus
@@ -316,6 +321,7 @@ export function initialRuntimeState(paused: boolean, wallet: Address | undefined
 }
 
 export function bindRuntimeStateToSigner(state: RuntimeState, address: Address) {
+	if (state.retirement.recipient !== undefined) assertSafeRetirementRecipient(state.retirement.recipient, address)
 	if (state.signerAddress !== undefined && state.signerAddress.toLowerCase() !== address.toLowerCase()) {
 		throw new Error(`Durable runtime is scoped to signer ${state.signerAddress}, not ${address}`)
 	}
@@ -1098,8 +1104,9 @@ async function loadDurableStateFile(path: string, expectedChainId: number, files
 		throw error
 	}
 	const state = requiredRecord(value, 'chaos-bot state')
-	assertExactKeys(state, ['activities', 'chainId', 'lifecyclePresenceBlocker', 'obligationTombstones', 'obligations', 'pendingTransactions', 'profileId', 'protocolIndex', 'safetyPaused', 'scheduler', 'signerAddress', 'version', 'workflows'], [], 'chaos-bot state')
-	if (state['version'] !== DURABLE_STATE_VERSION) throw new Error('Chaos-bot state version is unsupported')
+	const storedVersion = state['version']
+	if (storedVersion !== 3 && storedVersion !== DURABLE_STATE_VERSION) throw new Error('Chaos-bot state version is unsupported')
+	assertExactKeys(state, ['activities', 'chainId', 'lifecyclePresenceBlocker', 'obligationTombstones', 'obligations', 'pendingTransactions', 'profileId', 'protocolIndex', ...(storedVersion === 3 ? [] : ['retirement']), 'safetyPaused', 'scheduler', 'signerAddress', 'version', 'workflows'], [], 'chaos-bot state')
 	if (state['chainId'] !== expectedChainId) throw new Error(`Chaos-bot state belongs to chain ${String(state['chainId'])}, expected chain ${expectedChainId.toString()}`)
 	if (typeof state['safetyPaused'] !== 'boolean') {
 		throw new Error('chaos-bot state.safetyPaused must be a boolean')
@@ -1174,6 +1181,7 @@ async function loadDurableStateFile(path: string, expectedChainId: number, files
 		pendingTransactions,
 		profileId: identifier(state['profileId'], 'profileId'),
 		protocolIndex,
+		retirement: storedVersion === 3 || state['retirement'] === undefined ? initialRetirementState() : parseRetirementState(state['retirement'], signerAddress),
 		safetyPaused: state['safetyPaused'],
 		scheduler: parseScheduler(state['scheduler']),
 		signerAddress,
@@ -1186,18 +1194,8 @@ export async function loadDurableState(path: string, expectedChainId: number, fi
 	return loadDurableStateFile(path, expectedChainId, filesystem, path, undefined)
 }
 
-function serializedScheduler(scheduler: SchedulerState) {
-	return {
-		lastDelaySeconds: scheduler.lastDelaySeconds ?? null,
-		lastRunAt: scheduler.lastRunAt ?? null,
-		nextRunAt: scheduler.nextRunAt ?? null,
-		selectedOperationId: scheduler.selectedOperationId ?? null,
-		status: scheduler.status,
-	}
-}
-
 export function serializedDurableState(
-	state: Pick<DurableState, 'activities' | 'chainId' | 'lifecyclePresenceBlocker' | 'obligationTombstones' | 'obligations' | 'pendingTransactions' | 'profileId' | 'protocolIndex' | 'safetyPaused' | 'scheduler' | 'signerAddress' | 'workflows'>,
+	state: Pick<DurableState, 'activities' | 'chainId' | 'lifecyclePresenceBlocker' | 'obligationTombstones' | 'obligations' | 'pendingTransactions' | 'profileId' | 'protocolIndex' | 'retirement' | 'safetyPaused' | 'scheduler' | 'signerAddress' | 'workflows'>,
 	persistedProtocolIndex: ChaosProtocolIndex | ProtocolIndexReference | null = state.protocolIndex ?? null,
 ) {
 	return {
@@ -1215,6 +1213,7 @@ export function serializedDurableState(
 		})),
 		profileId: state.profileId,
 		protocolIndex: persistedProtocolIndex,
+		retirement: state.retirement,
 		safetyPaused: state.safetyPaused,
 		scheduler: serializedScheduler(state.scheduler),
 		signerAddress: state.signerAddress ?? null,
@@ -1274,7 +1273,7 @@ export function compactDurableState(state: Pick<DurableState, 'activities' | 'ob
 	return state
 }
 
-type PersistableDurableState = Pick<DurableState, 'activities' | 'chainId' | 'lifecyclePresenceBlocker' | 'obligationTombstones' | 'obligations' | 'pendingTransactions' | 'profileId' | 'protocolIndex' | 'safetyPaused' | 'scheduler' | 'signerAddress' | 'workflows'>
+type PersistableDurableState = Pick<DurableState, 'activities' | 'chainId' | 'lifecyclePresenceBlocker' | 'obligationTombstones' | 'obligations' | 'pendingTransactions' | 'profileId' | 'protocolIndex' | 'retirement' | 'safetyPaused' | 'scheduler' | 'signerAddress' | 'workflows'>
 
 function snapshotDurableState(state: PersistableDurableState) {
 	compactDurableState(state)
@@ -1289,6 +1288,7 @@ function snapshotDurableState(state: PersistableDurableState) {
 		pendingTransactions: [...state.pendingTransactions],
 		profileId: state.profileId,
 		protocolIndex: undefined,
+		retirement: structuredClone(state.retirement),
 		safetyPaused: state.safetyPaused,
 		scheduler: { ...state.scheduler },
 		signerAddress: state.signerAddress,

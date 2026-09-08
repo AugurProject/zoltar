@@ -1,8 +1,8 @@
 /// <reference types='bun-types' />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { zeroAddress } from '@zoltar/shared/ethereum'
-import { DeploymentSection } from '../../../features/deployment/components/DeploymentSection.js'
+import { zeroAddress } from '@zoltar/shared/evm/ethereum'
+import { DeploymentSection } from '@zoltar/ui-zoltar-shared/features/deployment/components/DeploymentSection.js'
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import type { DeploymentStatus } from '@zoltar/ui-core-shared/types/contracts.js'

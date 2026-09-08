@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { Question } from '@zoltar/ui-core-shared/components/Question.js'
-import { ChainTimestampContext } from '@zoltar/ui-core-shared/lib/chainTimestamp.js'
+import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import type { MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'

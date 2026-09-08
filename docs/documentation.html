@@ -3,33 +3,23 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<meta name="description" content="Learn, operate, look up, and understand the Statoblast protocol." />
-		<title>Statoblast documentation</title>
+		<meta name="description" content="Start learning Zoltar, Statoblast, Trading, and the protocol reference." />
+		<title>Augur protocol documentation</title>
 		<link rel="stylesheet" href="./assets/css/shared-docs.css" />
 		<link rel="stylesheet" href="./assets/css/docsShell.css" />
 	</head>
 	<body class="doc-openoracle docs-home">
-		<main>
+		<main id="main-content">
 			<header>
-				<h1>Introduction to Statoblast</h1>
-				<p>Statoblast is a <a href="https://en.wikipedia.org/wiki/Prediction_market">prediction market</a> protocol for binary questions, built on <a href="./explanation/zoltar.html">Zoltar</a>. It lets anyone create markets for eligible questions, trade outcome shares, and provide liquidity. Each market has three possible outcomes: <code>Yes</code>, <code>No</code>, and <code>Invalid</code>. As traders buy and sell shares, market prices can reflect the collective estimate of how likely each outcome is.</p>
-
-				<p>After a market ends, Statoblast attempts to resolve the market through a REP-backed <a href="./explanation/escalation-game.html">escalation game</a>. Once an outcome is finalized, winning shares can be redeemed for the market's settlement collateral while losing shares become worthless. If disagreement cannot be resolved locally, the market continues through a Zoltar fork. Statoblast is designed to be economically secure under the assumptions described in its <a href="./reference/security-model.html">security model</a>.</p>
-
-				<p>Statoblast addresses the <a href="https://encyclopedia.pub/entry/2959">oracle problem</a> for prediction markets by aligning financial incentives with truthful reporting instead of relying on trusted authorities.</p>
-
-				<p>It is designed so that:</p>
-
-				<ul>
-					<li>Honest reporting is economically rewarded.</li>
-					<li>Dishonest reporting becomes increasingly expensive.</li>
-					<li>Anyone can challenge an incorrect resolution by risking REP.</li>
-					<li>Markets continue operating even when participants fundamentally disagree.</li>
-					<li>Every trader can ultimately settle their position according to the outcome they believe is truthful, even if multiple realities continue to exist simultaneously.</li>
-				</ul>
+				<p class="kicker">Augur protocol documentation</p>
+				<h1>Zoltar and Statoblast</h1>
+				<p>Zoltar provides branching universes and universe-specific REP. Statoblast uses those universes to operate collateralized prediction markets with Yes, No, and Invalid outcome shares. Statoblast Trading is an optional exchange for those shares, while OpenOracle supplies contestable REP/ETH prices for solvency-sensitive operations.</p>
+				<p>A fork lets users continue in selected child universes, but it does not copy ETH or guarantee full redemption in every branch. A child pool can remain impaired if too little collateral migrates and its Truth Auction cannot raise the difference.</p>
 			</header>
-			<nav aria-label="Start here">
-				<a class="button" href="./explanation/statoblast.html">Explore the protocol lifecycle</a>
+			<nav class="card-grid" aria-label="Choose a documentation route">
+				<a class="button" href="./explanation/system-overview.html">Understand Zoltar and Statoblast</a>
+				<a class="button" href="./explanation/statoblast.html">Follow a market from creation to redemption</a>
+				<a class="button" href="./reference/contracts.html">Look up contracts, invariants, and security assumptions</a>
 			</nav>
 		</main>
 		<script src="./assets/js/docsData.js"></script>

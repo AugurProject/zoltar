@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from 'bun:test'
 import { Browser, type BrowserWindow, type Element } from 'happy-dom'
 import { join } from 'node:path'
-import type { Address } from '#ethereum'
+import type { Address } from '@zoltar/bot-shared/ethereum'
 import { startDashboardServer } from '#dashboard/dashboard-server'
 import { operatorSnapshot, type MutableStrategy, type OperatorState } from '#state/operator-state'
 import { validateSubmissionSettings } from '#execution/transaction-submission'

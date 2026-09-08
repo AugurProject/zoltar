@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { getAddress } from '../support/bot-shared.ts'
+import { getAddress } from '@zoltar/bot-shared/ethereum'
 import type { StrategySettings } from '../../src/config/settings.ts'
 import type { EvaluatedOperation } from '../../src/operations/types.ts'
 import { applyLiveNoveltyInventoryReadiness, liveInventoryReadinessBlockers } from '../../src/runtime/live-readiness.ts'

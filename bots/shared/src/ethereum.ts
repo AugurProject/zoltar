@@ -21,7 +21,7 @@ export type {
 	TransactionReceipt,
 	TransactionReplacement,
 	Transport,
-} from '@zoltar/shared/ethereum'
+} from '@zoltar/shared/evm/ethereum'
 export {
 	bigintToSafeNumber,
 	bytesToHex,
@@ -52,7 +52,7 @@ export {
 	toHex,
 	zeroAddress,
 	zeroHash,
-} from '@zoltar/shared/ethereum'
+} from '@zoltar/shared/evm/ethereum'
 export type { PublicActions, PublicClient, WalletClient } from './ethereum/client'
 export type { RpcEndpointHealth, RpcEndpointPoolOptions, RpcEndpointStatus } from './ethereum/rpc-resilience'
 export {

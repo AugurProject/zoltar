@@ -1,8 +1,8 @@
 /// <reference types='bun-types' />
 
 import { describe, expect, test } from 'bun:test'
-import { getAddress } from '@zoltar/shared/ethereum'
-import { loadOracleManagerQueueOperationEthValue } from '../../protocol/index.js'
+import { getAddress } from '@zoltar/shared/evm/ethereum'
+import { loadOracleManagerQueueOperationEthValue } from '@zoltar/ui-zoltar-shared/protocol/openOracle.js'
 
 const MANAGER_ADDRESS = getAddress('0x0000000000000000000000000000000000000002')
 

@@ -1,5 +1,5 @@
 import type { ComponentChildren } from 'preact'
-import type { Hash } from '@zoltar/shared/ethereum'
+import type { Hash } from '@zoltar/shared/evm/ethereum'
 
 export type ActionAvailability = {
 	disabled: boolean

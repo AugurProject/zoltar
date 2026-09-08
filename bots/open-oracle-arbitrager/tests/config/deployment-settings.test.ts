@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { assertFocusedDeploymentCompatible, prepareDeploymentTokenTransition, replacePrimaryRepToken, validateDeploymentSettings } from '#config/deployment-settings'
-import type { Address } from '#ethereum'
+import type { Address } from '@zoltar/bot-shared/ethereum'
 
 const address = (digit: string) => `0x${digit.repeat(40)}` as Address
 

@@ -1,13 +1,11 @@
 /// <reference types="bun-types" />
 
 import { beforeAll, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { getAddress, maxUint256, zeroAddress, type Address, type Hash } from '@zoltar/shared/ethereum'
+import { getAddress, maxUint256, zeroAddress, type Address, type Hash } from '@zoltar/shared/evm/ethereum'
 import {
 	createOpenOracleReportInstance,
 	executeOracleManagerStagedOperation,
-	getOpenOracleAddress,
 	loadCoordinatorInitialReportFundingRequirement,
-	loadErc20Balance,
 	loadOpenOracleWithdrawableBalances,
 	loadOpenOracleReportDetails,
 	loadOpenOracleReportSummaries,
@@ -18,7 +16,9 @@ import {
 	settleOracleReport,
 	withdrawOpenOracleBalance,
 	wrapWeth as wrapUiWeth,
-} from '../../../protocol/index.js'
+} from '@zoltar/ui-zoltar-shared/protocol/openOracle.js'
+import { loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
+import { getOpenOracleAddress } from '@zoltar/ui-zoltar-shared/protocol/deploymentHelpers.js'
 import {
 	addOpenOracleBountyBuffer,
 	deriveOpenOracleDisputeSubmissionDetails,
@@ -34,16 +34,16 @@ import {
 	getOpenOracleSettleAvailability,
 	parseOpenOracleCreateFormSubmission,
 	parseOpenOracleFeePercentageInput,
-} from '../../../features/open-oracle/lib/openOracle.js'
-import { loadOpenOracleInitialReportPrice, loadOpenOracleInitialReportPriceResult } from '../../../protocol/openOraclePricing.js'
-import { getDefaultOpenOracleCreateFormState } from '../../../features/open-oracle/lib/formDefaults.js'
-import { ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS } from '../../../protocol/oracleTiming.js'
-import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/lib/clients.js'
-import { ETH_ADDRESS, REP_ADDRESS, UNISWAP_V4_QUOTER_ADDRESS, USDC_ADDRESS } from '../../../protocol/uniswapQuoter.js'
+} from '@zoltar/ui-zoltar-shared/features/open-oracle/lib/openOracle.js'
+import { loadOpenOracleInitialReportPrice, loadOpenOracleInitialReportPriceResult } from '@zoltar/ui-zoltar-shared/protocol/openOraclePricing.js'
+import { getDefaultOpenOracleCreateFormState } from '@zoltar/ui-zoltar-shared/features/open-oracle/lib/formDefaults.js'
+import { ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS } from '@zoltar/ui-zoltar-shared/protocol/oracleTiming.js'
+import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
+import { ETH_ADDRESS, REP_ADDRESS, UNISWAP_V4_QUOTER_ADDRESS, USDC_ADDRESS } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { statoblast_openOracle_OpenOracle_OpenOracle } from '@zoltar/ui-core-shared/contractArtifact.js'
-import type { InjectedEthereum } from '@zoltar/ui-core-shared/injectedEthereum.js'
-import type { WriteContractClient } from '../../../protocol/core.js'
+import type { InjectedEthereum } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'
+import type { WriteContractClient } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { DAY, GENESIS_REPUTATION_TOKEN, WETH_ADDRESS, TEST_ADDRESSES } from '../../../../../../solidity/ts/testSupport/simulator/utils/constants'
 import { addressString } from '../../../../../../solidity/ts/testSupport/simulator/utils/bigint'
 import { setupTestAccounts, ensureProxyDeployerDeployed } from '../../../../../../solidity/ts/testSupport/simulator/utils/utilities'

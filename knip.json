@@ -4,17 +4,17 @@
 			"entry": [
 				"docs/charts/chartRuntime.ts!",
 				"docs/runtime/{auctionClearing,deploymentMaskDecoder,docsShell,responsiveDocs,interactiveTools,invariantExplorer,mmrProofPlanner,openOracleTools}.ts!",
-				"scripts/**/*.test.ts",
+				"tooling/**/*.test.ts",
 				"bun-test-setup*.ts",
 				"docs/{charts/virtualModules,runtime/globals}.d.ts!",
-				"scripts/knip-baseline.mts"
+				"tooling/repo/knip-baseline.mts"
 			],
-			"project": ["docs/runtime/**/*.ts!", "docs/charts/**/*.ts", "scripts/**/*.{ts,mts}", "bun-test-setup*.ts"],
+			"project": ["docs/runtime/**/*.ts!", "docs/charts/**/*.ts", "tooling/**/*.{ts,mts}", "bun-test-setup*.ts"],
 			"ignoreDependencies": ["@preact/signals", "tevm"]
 		},
 		"ui/coreShared": {
-			"entry": ["ts/tests/**/*.{ts,tsx}", "build/**/*.test.ts", "build/{apps,watch,vendor,workers,production,tests,browserSmoke,dockerServe,projectArtifacts}.mts!", "dev-server.ts!"],
-			"project": ["ts/**/*.{ts,tsx}!", "build/*.{ts,mts}!", "dev-server.ts!"],
+			"entry": ["ts/tests/**/*.{ts,tsx}"],
+			"project": ["ts/**/*.{ts,tsx}!"],
 			"paths": {
 				"@zoltar/ui-core-shared/*": ["./ts/*"],
 				"@zoltar/shared/*": ["../../shared/ts/*"]
@@ -22,15 +22,37 @@
 			"ignoreDependencies": ["@noble/curves", "@noble/hashes", "micro-eth-signer", "micro-packed"],
 			"ignoreUnresolved": ["./bun-test-setup-solidity.ts"]
 		},
+		"ui/zoltarShared": {
+			"entry": ["ts/**/*.ts", "ts/**/*.tsx"],
+			"project": ["ts/**/*.ts", "ts/**/*.tsx"],
+			"paths": {
+				"@zoltar/ui-core-shared/*": ["../coreShared/ts/*"],
+				"@zoltar/ui-zoltar-shared/*": ["./ts/*"],
+				"@zoltar/shared/*": ["../../shared/ts/*"]
+			},
+			"ignoreDependencies": ["bun-types"]
+		},
+		"ui/statoblastShared": {
+			"entry": ["ts/**/*.ts", "ts/**/*.tsx"],
+			"project": ["ts/**/*.ts", "ts/**/*.tsx"],
+			"paths": {
+				"@zoltar/ui-core-shared/*": ["../coreShared/ts/*"],
+				"@zoltar/ui-zoltar-shared/*": ["../zoltarShared/ts/*"],
+				"@zoltar/ui-statoblast-shared/*": ["./ts/*"],
+				"@zoltar/shared/*": ["../../shared/ts/*"]
+			},
+			"ignoreDependencies": ["bun-types"]
+		},
 		"ui/zoltar": {
 			"entry": ["ts/tests/**/*.{ts,tsx}", "ts/index.ts!", "ts/index.dev.ts!", "ts/simulation/tevmWorker.ts!"],
 			"project": ["ts/**/*.{ts,tsx}!"],
 			"paths": {
 				"@zoltar/ui-core-shared/*": ["../coreShared/ts/*"],
+				"@zoltar/ui-zoltar-shared/*": ["../zoltarShared/ts/*"],
 				"@zoltar/ui-zoltar/*": ["./ts/*"],
 				"@zoltar/shared/*": ["../../shared/ts/*"]
 			},
-			"ignoreDependencies": ["@noble/curves", "@noble/hashes", "micro-eth-signer", "micro-packed", "tevm"],
+			"ignoreDependencies": ["tevm"],
 			"ignoreUnresolved": ["./bun-test-setup-solidity.ts"]
 		},
 		"ui/statoblast": {
@@ -38,11 +60,12 @@
 			"project": ["ts/**/*.{ts,tsx}!"],
 			"paths": {
 				"@zoltar/ui-core-shared/*": ["../coreShared/ts/*"],
-				"@zoltar/ui-zoltar/*": ["../zoltar/ts/*"],
+				"@zoltar/ui-zoltar-shared/*": ["../zoltarShared/ts/*"],
+				"@zoltar/ui-statoblast-shared/*": ["../statoblastShared/ts/*"],
 				"@zoltar/ui-statoblast/*": ["./ts/*"],
 				"@zoltar/shared/*": ["../../shared/ts/*"]
 			},
-			"ignoreDependencies": ["@noble/curves", "@noble/hashes", "micro-eth-signer", "micro-packed", "tevm"],
+			"ignoreDependencies": ["tevm"],
 			"ignoreUnresolved": ["./bun-test-setup-solidity.ts"]
 		},
 		"ui/trading": {
@@ -50,8 +73,8 @@
 			"project": ["ts/**/*.{ts,tsx}!"],
 			"paths": {
 				"@zoltar/ui-core-shared/*": ["../coreShared/ts/*"],
-				"@zoltar/ui-zoltar/*": ["../zoltar/ts/*"],
-				"@zoltar/ui-statoblast/*": ["../statoblast/ts/*"],
+				"@zoltar/ui-zoltar-shared/*": ["../zoltarShared/ts/*"],
+				"@zoltar/ui-statoblast-shared/*": ["../statoblastShared/ts/*"],
 				"@zoltar/ui-trading/*": ["./ts/*"],
 				"@zoltar/shared/*": ["../../shared/ts/*"]
 			},
@@ -67,15 +90,16 @@
 			"ignoreUnresolved": ["./bun-test-setup-solidity.ts"]
 		},
 		"augurScan": {
-			"entry": ["src/server.ts!", "src/indexer-process.ts!", "browser/app.ts!", "tests/**/*.ts", "scripts/{build-browser,check-ethereum-imports,check-project-metadata,dev,serve-demo,snapshot-project-metadata,verify-compose-source,verify-export-page}.ts!"],
-			"project": ["{src,browser,scripts}/**/*.ts!", "tests/**/*.ts"]
+			"entry": ["src/server.ts!", "src/indexer-process.ts!", "browser/app.ts!", "tests/**/*.ts", "scripts/{build-browser,check-ethereum-imports,check-import-boundaries,check-project-metadata,dev,serve-demo,snapshot-project-metadata,verify-compose-source,verify-export-page}.ts!"],
+			"project": ["{src,browser,scripts}/**/*.ts!", "tests/**/*.ts"],
+			"ignoreDependencies": ["@noble/hashes", "micro-eth-signer"]
 		},
 		"bots/shared": {
 			"entry": ["tests/**/*.ts"],
 			"project": ["src/**/*.ts!", "tests/**/*.ts"]
 		},
 		"bots/chaos": {
-			"entry": ["src/cli/*.ts!", "scripts/*.mts!", "tests/**/*.ts", "src/dashboard/dashboard.ts!"],
+			"entry": ["src/cli/*.ts!", "scripts/*.mts!", "tests/**/*.ts", "src/dashboard/{dashboard,formatting,retirement-dashboard}.ts!"],
 			"project": ["src/**/*.ts!", "scripts/*.{ts,mts}!", "tests/**/*.ts"]
 		},
 		"bots/liquidator": {
@@ -84,7 +108,8 @@
 		},
 		"bots/open-oracle-arbitrager": {
 			"entry": ["src/cli/*.ts!", "scripts/*.mts!", "tests/**/*.ts", "src/dashboard/dashboard.ts!", "docs/chart-runtime.ts!", "src/config/execution-manifest.ts!"],
-			"project": ["src/**/*.ts!", "scripts/*.{ts,mts}!", "tests/**/*.ts", "docs/*.ts!"]
+			"project": ["src/**/*.ts!", "scripts/*.{ts,mts}!", "tests/**/*.ts", "docs/*.ts!"],
+			"ignoreDependencies": ["prettier-plugin-solidity"]
 		}
 	},
 	"ignoreDependencies": ["better-typescript-lib"]

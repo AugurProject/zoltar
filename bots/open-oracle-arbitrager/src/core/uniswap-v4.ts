@@ -1,4 +1,4 @@
-import { zeroAddress, type Address } from '#ethereum'
+import { zeroAddress, type Address } from '@zoltar/bot-shared/ethereum'
 
 export const STANDARD_UNISWAP_FEES = [100, 500, 3_000, 10_000] as const
 

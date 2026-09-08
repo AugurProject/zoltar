@@ -3,9 +3,9 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { h, render } from 'preact'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
-import { zeroAddress } from '@zoltar/shared/ethereum'
-import { ForkZoltarSection } from '../../../features/universes/components/ForkZoltarSection.js'
-import { ChainTimestampContext } from '@zoltar/ui-core-shared/lib/chainTimestamp.js'
+import { zeroAddress } from '@zoltar/shared/evm/ethereum'
+import { ForkZoltarSection } from '@zoltar/ui-zoltar-shared/features/universes/components/ForkZoltarSection.js'
+import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import { formatRelativeTimestamp, formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { MarketDetails, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
@@ -236,6 +236,34 @@ describe('ForkZoltarSection', () => {
 		expect(forkButton.hasAttribute('disabled')).toBe(false)
 		fireEvent.click(forkButton)
 		expect(onForkZoltar).toHaveBeenCalledTimes(1)
+	})
+
+	test('child REP forks without requesting token approval', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(ForkZoltarSection, {
+				accountAddress: zeroAddress,
+				currentTimestamp: 2n,
+				hasLoadedZoltarQuestions: true,
+				isOnActiveAppChain: true,
+				loadingZoltarForkAccess: false,
+				loadingZoltarQuestions: false,
+				onApproveZoltarForkRep: () => undefined,
+				onForkZoltar: () => undefined,
+				onZoltarForkQuestionIdChange: () => undefined,
+				zoltarForkActiveAction: undefined,
+				zoltarForkApproval: { error: undefined, loading: false, value: 0n },
+				zoltarForkError: undefined,
+				zoltarForkPending: false,
+				zoltarForkQuestionId: '0x01',
+				zoltarForkRepBalanceAttoRep: 1000n,
+				zoltarQuestions: [createQuestion()],
+				zoltarUniverse: createUniverse({ forkBurnDivisor: 5n, reputationTokenKind: 'child', reputationTokenSymbol: 'REP7', zoltarAddress: ZOLTAR_ADDRESS }),
+				zoltarUniverseState: 'ready',
+			}),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		expect(within(document.body).queryByRole('button', { name: /Approve/ })).toBeNull()
+		expect(within(document.body).getByRole('button', { name: 'Fork Universe' }).hasAttribute('disabled')).toBe(false)
 	})
 
 	test('keeps direct fork submission available when the selected fork question changes', async () => {

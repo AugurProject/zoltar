@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { chmod, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { batchCommands, dockerInstructions, parseDockerfile, requireDockerStage, shellCommandSegments } from '../../../tooling/testing/packaging-parsers.ts'
 
 const botDirectory = join(import.meta.dir, '..')
 const dockerfile = join(botDirectory, 'Dockerfile')
@@ -33,39 +34,39 @@ async function runEntrypoint(directory: string) {
 
 describe('chaos Docker packaging', () => {
 	test('provides a location-independent Windows launcher', async () => {
-		const source = (await readFile(windowsLauncher, 'utf8')).replaceAll('\r\n', '\n')
-		expect(source).toContain('pushd "%~dp0"')
-		expect(source).toContain('docker compose up --build --force-recreate -d')
-		expect(source).toContain('if /I "%~1"=="doctor" goto doctor')
-		expect(source).toContain('docker compose run --rm --no-deps chaos bun src/cli/doctor.ts --if-live-capable')
-		expect(source).toContain('docker compose run --rm --no-deps chaos bun run doctor')
-		expect(source.indexOf('bun src/cli/doctor.ts --if-live-capable')).toBeLessThan(source.indexOf('docker compose up --build --force-recreate -d'))
-		expect(source).not.toContain('dashboard-password')
-		expect(source).toContain('started with its persisted configuration')
-		expect(source).not.toContain('started in paused dry-run mode')
-		expect(source).toContain('exit /b 1')
+		const commands = batchCommands(await readFile(windowsLauncher, 'utf8'))
+		expect(commands.at(0)).toBe('pushd "%~dp0" || exit /b 1')
+		expect(commands).toContain('if /I "%~1"=="doctor" goto doctor')
+		for (const command of ['docker compose run --rm --no-deps chaos bun src/cli/doctor.ts --if-live-capable', 'docker compose run --rm --no-deps chaos bun run doctor', 'docker compose up --build --force-recreate -d']) expect(commands).toContain(`${command} || exit /b 1`)
+		expect(commands.indexOf('docker compose run --rm --no-deps chaos bun src/cli/doctor.ts --if-live-capable || exit /b 1')).toBeLessThan(commands.indexOf('docker compose up --build --force-recreate -d || exit /b 1'))
+		expect(commands.some(command => command.includes('dashboard-password'))).toBe(false)
+		expect(commands.some(command => command.includes('started with its persisted configuration'))).toBe(true)
+		expect(commands.some(command => command.includes('started in paused dry-run mode'))).toBe(false)
+		expect(commands.some(command => command.includes('exit /b 1'))).toBe(true)
 	})
 
 	test('builds shared packages and runs as the non-root Bun user', async () => {
-		const source = await readFile(dockerfile, 'utf8')
+		const stages = parseDockerfile(await readFile(dockerfile, 'utf8'))
+		const builder = requireDockerStage(stages, 'shared-builder')
+		const runtime = stages.at(-1)
+		if (runtime === undefined) throw new Error('Missing runtime Docker stage')
+		const copies = stages.flatMap(stage => dockerInstructions(stage, 'COPY'))
+		const runtimeRuns = dockerInstructions(runtime, 'RUN').flatMap(shellCommandSegments)
 		const ignoreSource = await readFile(dockerignore, 'utf8')
-		expect(source).toContain('-alpine AS shared-builder')
-		expect(source).toContain('&& bun run shared:build')
-		expect(source).toContain('COPY --from=shared-builder /source/shared/ ./shared/')
-		expect(source).toContain('solidity/tsconfig.json solidity/tsconfig-compile.json')
-		expect(source).not.toContain('ui/coreShared/favicon')
-		expect(source).toContain('COPY bots/chaos/src/ ./bots/chaos/src/')
-		expect(source).toContain('COPY bots/chaos/scripts/check-runtime.mts ./bots/chaos/scripts/check-runtime.mts')
-		expect(source).toContain('COPY bots/chaos/scripts/validate-container-paths.mts ./bots/chaos/scripts/validate-container-paths.mts')
+		expect(builder.base).toContain('-alpine')
+		expect(dockerInstructions(builder, 'RUN').flatMap(shellCommandSegments)).toContain('bun run shared:build')
+		expect(copies).toEqual(expect.arrayContaining(['--from=shared-builder /source/shared/ ./shared/', 'bots/chaos/src/ ./bots/chaos/src/', 'bots/chaos/scripts/check-runtime.mts ./bots/chaos/scripts/check-runtime.mts', 'bots/chaos/scripts/validate-container-paths.mts ./bots/chaos/scripts/validate-container-paths.mts']))
+		expect(copies.some(copy => copy.includes('solidity/tsconfig.json') && copy.includes('solidity/tsconfig-compile.json'))).toBe(true)
+		expect(copies.some(copy => copy.includes('ui/coreShared/favicon'))).toBe(false)
 		expect(ignoreSource).toContain('!bots/chaos/scripts/check-runtime.mts')
 		expect(ignoreSource).toContain('!bots/chaos/scripts/validate-container-paths.mts')
 		expect(ignoreSource).toContain('!solidity/tsconfig.json')
 		expect(ignoreSource).not.toContain('ui/coreShared/favicon')
-		expect(source).toContain('USER bun')
-		expect(source).toContain('RUN bun ./scripts/check-runtime.mts')
+		expect(dockerInstructions(runtime, 'USER')).toEqual(['bun'])
+		expect(runtimeRuns).toContain('bun ./scripts/check-runtime.mts')
 		expect(await readFile(join(botDirectory, 'scripts', 'check-runtime.mts'), 'utf8')).toContain("import { main } from '../src/cli/run.ts'")
-		expect(source).toContain('EXPOSE 4193')
-		expect(source).toContain('VOLUME ["/app/bots/chaos/.state"]')
+		expect(dockerInstructions(runtime, 'EXPOSE')).toContain('4193')
+		expect(dockerInstructions(runtime, 'VOLUME')).toContain('["/app/bots/chaos/.state"]')
 		const entrypointSource = await readFile(entrypoint, 'utf8')
 		expect(entrypointSource).toContain('[ "$1" = \'bun\' ] && [ "$2" = \'run\' ] && [ "$3" = \'run\' ]')
 		expect(entrypointSource).toContain('bun "$script_directory/../src/cli/doctor.ts" --if-live-capable')
@@ -73,17 +74,17 @@ describe('chaos Docker packaging', () => {
 	})
 
 	test('publishes only the host-loopback dashboard port and retains state', async () => {
-		const source = await readFile(composeFile, 'utf8')
-		expect(source).toContain('ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED: "true"')
-		expect(source).toContain('127.0.0.1:4193:4193')
-		expect(source).toContain('chaos-state:/app/bots/chaos/.state')
-		expect(source).toContain('chaos-signer-locks:/app/bots/chaos/.state/process-locks')
-		expect(source).toContain('name: zoltar-chaos-signer-locks')
-		expect(source).not.toContain('DASHBOARD_PASSWORD')
-		expect(source).toContain('ZOLTAR_BOT_SIGNER_LOCK_ROOT: .state/process-locks')
-		expect(source).toContain("fetch('http://127.0.0.1:4193/healthz')")
-		expect(source).not.toContain("fetch('http://127.0.0.1:4193/readyz')")
-		expect(source).not.toMatch(/ZOLTAR_BOT_DASHBOARD_PASSWORD:\s/)
+		const compose = Bun.YAML.parse(await readFile(composeFile, 'utf8')) as { services?: { chaos?: { environment?: Record<string, unknown>; healthcheck?: { test?: unknown[] }; ports?: unknown[]; volumes?: unknown[] } }; volumes?: Record<string, { name?: string }> }
+		const chaos = compose.services?.chaos
+		expect(chaos?.environment?.['ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED']).toBe('true')
+		expect(chaos?.environment?.['ZOLTAR_BOT_SIGNER_LOCK_ROOT']).toBe('.state/process-locks')
+		expect(chaos?.environment).not.toHaveProperty('ZOLTAR_BOT_DASHBOARD_PASSWORD')
+		expect(chaos?.ports).toContain('127.0.0.1:4193:4193')
+		expect(chaos?.volumes).toEqual(expect.arrayContaining(['chaos-state:/app/bots/chaos/.state', 'chaos-signer-locks:/app/bots/chaos/.state/process-locks']))
+		expect(compose.volumes?.['chaos-signer-locks']?.name).toBe('zoltar-chaos-signer-locks')
+		const healthCommand = chaos?.healthcheck?.test?.map(String).join(' ') ?? ''
+		expect(healthCommand).toContain("fetch('http://127.0.0.1:4193/healthz')")
+		expect(healthCommand).not.toContain('/readyz')
 	})
 
 	test('creates a private paused dry-run operator configuration on first start', async () => {

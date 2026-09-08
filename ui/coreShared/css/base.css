@@ -109,7 +109,7 @@ main {
 
 .app-settings-menu label > span {
 	font-family: var(--font-family-mono);
-	font-size: 0.75rem;
+	font-size: var(--font-label);
 	color: var(--text-muted);
 }
 
@@ -509,7 +509,7 @@ button.quiet:disabled {
 	min-width: var(--touch-target-min);
 	min-height: var(--touch-target-min);
 	padding: 0.35rem;
-	font-size: 0.8rem;
+	font-size: var(--font-label);
 	line-height: 1;
 }
 
@@ -579,7 +579,7 @@ button.quiet:disabled {
 
 .account-menu-network span {
 	color: var(--muted);
-	font-size: 0.75rem;
+	font-size: var(--font-label);
 }
 
 .detail {
@@ -1026,7 +1026,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 .address-value.copyable {
 	display: inline-flex;
 	align-items: center;
-	min-height: 2rem;
+	min-height: var(--touch-target-min);
 	max-width: 100%;
 	box-sizing: border-box;
 	border: 0;
@@ -1307,9 +1307,11 @@ button.wallet-asset-action-pending:disabled {
 	white-space: normal;
 	text-overflow: clip;
 	overflow: visible;
-	display: inline-block;
+	display: inline-flex;
+	align-items: center;
 	max-width: 100%;
 	min-width: 0;
+	min-height: var(--touch-target-min);
 	border: 0;
 	border-radius: 0.35rem;
 	margin: 0;

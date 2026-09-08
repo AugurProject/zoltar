@@ -1,6 +1,6 @@
 import { beforeEach, describe, test } from 'bun:test'
-import { encodeAbiParameters, encodeDeployData, keccak256, zeroAddress, type Address } from '@zoltar/shared/ethereum'
-import { getLiquidationVaultRepBackingToTransfer } from '@zoltar/shared/liquidation'
+import { encodeAbiParameters, encodeDeployData, keccak256, zeroAddress, type Address } from '@zoltar/shared/evm/ethereum'
+import { getLiquidationVaultRepBackingToTransfer } from '@zoltar/shared/statoblast/liquidation'
 import { useStatoblastForkMigrationFixture, type StatoblastForkMigrationFixture } from './fixture'
 import { createCarryProof, SparseNullifierTree } from '../carryProofHelpers'
 import { addRepToMigrationBalance, getMigrationRepBalanceAttoRep, getUniverseData, splitMigrationRep } from '../../testSupport/simulator/utils/contracts/zoltar'
@@ -102,7 +102,7 @@ describe('Statoblast: fork migration', () => {
 		startTruthAuction,
 		forkUniverse,
 		getRepTokenAddress,
-		getTotalTheoreticalSupplyAttoRep,
+		getTotalTheoreticalSupply,
 		getZoltarAddress,
 		getZoltarForkThreshold,
 		getTotalRepPurchasedAttoRep,
@@ -335,7 +335,7 @@ describe('Statoblast: fork migration', () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 			await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
-			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			await mockWindow.setTime(endTime + 10000n)
 			const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
@@ -1793,7 +1793,7 @@ describe('Statoblast: fork migration', () => {
 
 		test('can set capacity ownership, mint complete sets and fork happily', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
-			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, forkThresholdAttoRep * 2n)
 			await mockWindow.setTime(endTime + 10000n)
 			const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
@@ -1915,7 +1915,7 @@ describe('Statoblast: fork migration', () => {
 		test('redeemShares reserves collateral for winning shares that migrate after child redemption begins', async () => {
 			const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
 			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
-			const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
+			const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime - 1n)
@@ -2096,7 +2096,7 @@ describe('Statoblast: fork migration', () => {
 			const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
 			const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 			await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
-			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 
 			const zoltarForkThreshold = await getZoltarForkThreshold(client, genesisUniverse)
 			const burnAmount = zoltarForkThreshold / 5n
@@ -2501,7 +2501,7 @@ describe('Statoblast: fork migration', () => {
 			const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 			await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
 			const endTime = await getQuestionEndDate(client, questionId)
-			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			await mockWindow.setTime(endTime + 10000n)
 			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
@@ -2533,7 +2533,7 @@ describe('Statoblast: fork migration', () => {
 
 		test('parent pool halts on fork while a migrated child can resume operational flows', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
-			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
 			await approveAndDepositRepToVault(passiveRepHolder, 2n * forkThresholdAttoRep, questionId)
@@ -2577,7 +2577,7 @@ describe('Statoblast: fork migration', () => {
 		test('child pool prices complete sets against all fork-time claims after balanced partial migration', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime - 2n * DAY)
-			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
 			const newMinter = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
 			await approveAndDepositRepToVault(passiveRepHolder, 2n * forkThresholdAttoRep, questionId)
@@ -2657,7 +2657,7 @@ describe('Statoblast: fork migration', () => {
 		test('an uneven child mints and redeems complete sets against fork-time economic claims', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime - 2n * DAY)
-			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
 			await approveAndDepositRepToVault(passiveRepHolder, 2n * forkThresholdAttoRep, questionId)
 			const parentCapacityOwnershipAttoRep = repDeposit / 4n
@@ -2818,7 +2818,7 @@ describe('Statoblast: fork migration', () => {
 
 		test('can claim parent escalation deposits before migrateVault', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
-			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			await mockWindow.setTime(endTime + 10000n)
 			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
@@ -2860,7 +2860,7 @@ describe('Statoblast: fork migration', () => {
 			await mockWindow.advanceTime(30n * DAY)
 
 			const endTime = await getQuestionEndDate(client, questionId)
-			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			if ((await mockWindow.getTime()) <= endTime) await mockWindow.setTime(endTime + 1n)
 			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
@@ -2902,7 +2902,7 @@ describe('Statoblast: fork migration', () => {
 
 		test('createChildUniverse allows the exact own-fork migration deadline and rejects one second later', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
-			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			await mockWindow.setTime(endTime + 10000n)
 			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
@@ -2945,7 +2945,7 @@ describe('Statoblast: fork migration', () => {
 
 		test('migrateRepToZoltar should fund an already-created child pool with pool-held vault REP backing in own-fork mode', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
-			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			await mockWindow.setTime(endTime + 10000n)
 			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
@@ -2971,7 +2971,7 @@ describe('Statoblast: fork migration', () => {
 
 		test('migrateRepToZoltar rejects after the migration window closes', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
-			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			await mockWindow.setTime(endTime + 10000n)
 			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
@@ -2997,7 +2997,7 @@ describe('Statoblast: fork migration', () => {
 
 		test('migrateRepToZoltar allows the exact own-fork migration deadline', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
-			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			await mockWindow.setTime(endTime + 10000n)
 			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
@@ -3018,7 +3018,7 @@ describe('Statoblast: fork migration', () => {
 
 		test('migrateRepToZoltar rejects once the child branch is already priced', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
-			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			await mockWindow.setTime(endTime + 10000n)
 			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
@@ -3035,7 +3035,7 @@ describe('Statoblast: fork migration', () => {
 
 		test('migrateVault preserves parent escalation claim state', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
-			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			await mockWindow.setTime(endTime + 10000n)
 			const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
@@ -3065,7 +3065,7 @@ describe('Statoblast: fork migration', () => {
 
 		test('migrateVault allows the exact own-fork migration deadline', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
-			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			await mockWindow.setTime(endTime + 10000n)
 			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
@@ -3517,7 +3517,7 @@ describe('Statoblast: fork migration', () => {
 
 		test('migrateVault transfers pool-held vault REP backing for own forks', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
-			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 20n * 10n ** 18n)
 			await mockWindow.setTime(endTime - 1n)
@@ -3548,7 +3548,7 @@ describe('Statoblast: fork migration', () => {
 
 		test('own-fork non-escrowed vault migration values child REP backing units against the vault REP bucket', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
-			const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
+			const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 4n * forkThresholdAttoRep)
 			await mockWindow.setTime(endTime + 1n)
 			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
@@ -3578,7 +3578,7 @@ describe('Statoblast: fork migration', () => {
 			const secondVaultClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 			await approveAndDepositRepToVault(secondVaultClient, repDeposit, questionId)
 			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, settlementCollateralAttoEth)
-			const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
+			const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 4n * forkThresholdAttoRep)
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime - 1n)
@@ -3628,7 +3628,7 @@ describe('Statoblast: fork migration', () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 			await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
-			const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
+			const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 4n * forkThresholdAttoRep)
 			await mockWindow.setTime(endTime + 10000n)
 			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
@@ -3687,7 +3687,7 @@ describe('Statoblast: fork migration', () => {
 			const winningDeposit = repDeposit / 2n
 			const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 			await approveAndDepositRepToVault(attackerClient, repDeposit * 2n, questionId)
-			const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
+			const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			await mockWindow.setTime(endTime + 10000n)
 			const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
@@ -3783,7 +3783,7 @@ describe('Statoblast: fork migration', () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			const winningDeposit = repDeposit * 5n
 			await approveAndDepositRepToVault(client, repDeposit * 10n, questionId)
-			const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
+			const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			await mockWindow.setTime(endTime + 10000n)
 			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
@@ -3819,7 +3819,7 @@ describe('Statoblast: fork migration', () => {
 			const winningDeposit = repDeposit / 8n
 			const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 			await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
-			const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
+			const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			await mockWindow.setTime(endTime + 10000n)
 			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
@@ -3842,7 +3842,7 @@ describe('Statoblast: fork migration', () => {
 			const winningDeposit = repDeposit / 8n
 			const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 			await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
-			const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
+			const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			await mockWindow.setTime(endTime + 10000n)
 			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
@@ -3868,7 +3868,7 @@ describe('Statoblast: fork migration', () => {
 			const winningDeposit = repDeposit / 8n
 			const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 			await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
-			const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
+			const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			await mockWindow.setTime(endTime + 10000n)
 			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)

@@ -2,7 +2,7 @@
 
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { getInfraContractAddresses, PROXY_DEPLOYER_ADDRESS } from '@zoltar/ui-zoltar/protocol/deploymentHelpers.js'
+import { getInfraContractAddresses, PROXY_DEPLOYER_ADDRESS } from '@zoltar/ui-zoltar-shared/protocol/deploymentHelpers.js'
 import { activateSimulationBackendProfile, createBootstrappedSimulationBackendWithRetry, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulationTestUtils.js'
 import { deploymentConfigurationForPlan, getTradingDeploymentPlan } from '../../protocol/deployment.js'
 import { discoverLiveUniverseMarketPage } from '../../protocol/live.js'
@@ -40,5 +40,6 @@ describe('trading simulation market discovery', () => {
 		expect(discovery.universeIds).toEqual([0n])
 		expect(discovery.markets).toHaveLength(1)
 		expect(discovery.markets[0]?.title).toBe('Will this resolve?')
+		expect(discovery.markets[0]?.originUniverseId).toBe(0n)
 	}, 180_000)
 })

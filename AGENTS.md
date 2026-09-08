@@ -38,7 +38,7 @@ Use the whole task change set when choosing validation and preparing review:
 - unstaged changes
 - task-related untracked files
 
-`scripts/changed-files.mts` is the canonical implementation for this calculation. Keep a separate note of pre-existing or unrelated worktree changes so validation and reviewers do not attribute them to the task.
+`tooling/repo/changed-files.mts` is the canonical implementation for this calculation. Keep a separate note of pre-existing or unrelated worktree changes so validation and reviewers do not attribute them to the task.
 
 ## Validation
 
@@ -54,13 +54,13 @@ Run `bun run tsc` when any of these change:
 - Solidity contracts or generated contract outputs
 - anything that can change generated TypeScript imports
 
-UI app-only exception: when changes are limited to one app's `ui/<app>/ts/**/*.ts(x)` sources outside its tests and do not touch contracts, `ui/coreShared/build`, `ui/coreShared/dev-server.ts`, generated artifacts, or consumers of refreshed contract output, run:
+UI app-only exception: when changes are limited to one app's `ui/<app>/ts/**/*.ts(x)` sources outside its tests and do not touch contracts, `tooling/ui`, generated artifacts, or consumers of refreshed contract output, run:
 
 ```bash
 cd ui/zoltar && bun x tsc --project tsconfig.json
 ```
 
-(or the matching `ui/statoblast`, `ui/trading`, or `ui/coreShared` project). Use full `bun run tsc` for UI tests, UI build scripts, `ui/coreShared/dev-server.ts`, any UI tsconfig, package scripts, mixed UI/non-UI TypeScript, contracts, or generated contract output.
+(or the matching `ui/statoblast`, `ui/trading`, or `ui/coreShared` project). Use full `bun run tsc` for UI tests, UI build scripts under `tooling/ui`, any UI tsconfig, package scripts, mixed UI/non-UI TypeScript, contracts, or generated contract output.
 
 Skip TypeScript for prose-only, instruction-only, `.codex/agents`-only, formatting-only, or comment-only changes that cannot affect generated imports or executable behavior.
 
@@ -127,7 +127,7 @@ pins the deployment input and prevents its large upstream packages from entering
 | `solidity/ts/types/contractArtifact.ts` | `bun run compile-contracts` |
 | `ui/coreShared/ts/contractArtifact.ts` and `ui/coreShared/ts/abis.ts` | `bun run generate` or `bun run ui:build` |
 | `ui/*/js/**` | UI TypeScript builds per package |
-| `ui/trading/ts/generated/contractArtifact.ts` | `bun ./ui/coreShared/build/vendor.mts trading`, `bun run ui:vendor`, or `bun run trading:compile` |
+| `ui/trading/ts/generated/contractArtifact.ts` | `bun ./tooling/ui/vendor.mts trading`, `bun run ui:vendor`, or `bun run trading:compile` |
 | `ui/*/vendor/**` | `bun run ui:vendor` |
 | `docs/assets/js/chartRuntime.js` | `bun run docs:build-charts` |
 | `docs/assets/js/docsShell.js` | `bun run docs:build-runtime` |

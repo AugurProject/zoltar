@@ -1,0 +1,313 @@
+import { describe, expect, test } from 'bun:test'
+import { access, readFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { projectQuery } from '../repo/query-projects.mts'
+import { taskProjects } from '../repo/projects.ts'
+import { dockerGlobalArguments, dockerInstructions, parseDockerfile } from '../testing/packaging-parsers.ts'
+import { reviewableGitHubPath } from '../testing/reviewable-github-path.ts'
+
+const repositoryRoot = join(import.meta.dir, '..', '..')
+const activeCiWorkflowPath = reviewableGitHubPath(repositoryRoot, 'workflows/ci.yml')
+const stagedCiWorkflowPath = join(repositoryRoot, 'workflow-changes', 'ci.yml')
+const browserWorkflowPath = reviewableGitHubPath(repositoryRoot, 'workflows/browser-workflow.yml')
+const activeCoverageWorkflowPath = reviewableGitHubPath(repositoryRoot, 'workflows/coverage.yml')
+const coverageWorkflowPath = activeCoverageWorkflowPath
+const testDomainsWorkflowPath = reviewableGitHubPath(repositoryRoot, 'workflows/test-domains.yml')
+const testStabilityWorkflowPath = reviewableGitHubPath(repositoryRoot, 'workflows/test-stability.yml')
+const deployTestnetWorkflowPath = reviewableGitHubPath(repositoryRoot, 'workflows/deploy-testnet.yml')
+const setupActionPath = reviewableGitHubPath(repositoryRoot, 'actions/setup-ci/action.yml')
+const setupComponentActionPath = reviewableGitHubPath(repositoryRoot, 'actions/setup-component/action.yml')
+const ipfsDeployWorkflowPath = reviewableGitHubPath(repositoryRoot, 'workflows/ipfs-deploy.yml')
+const versionDeployWorkflowPath = reviewableGitHubPath(repositoryRoot, 'workflows/version-deploy.yml')
+const dockerfilePath = join(repositoryRoot, 'ui', 'Dockerfile')
+const rootPackagePath = join(repositoryRoot, 'package.json')
+const tradingPackagePath = join(repositoryRoot, 'ui', 'trading', 'package.json')
+const sharedLibraryPackagePaths = ['ui/zoltarShared/package.json', 'ui/statoblastShared/package.json'] as const
+const developerDocumentation = [
+	{ path: join(repositoryRoot, 'README.md'), command: 'bun run app:serve:zoltar', port: '4153' },
+	{ path: join(repositoryRoot, 'testnetwork', 'README.md'), command: 'bun run app:serve:zoltar', port: '4153' },
+	{ path: join(repositoryRoot, 'solidity', 'docs', 'trading', 'how-to', 'deploy.md'), command: 'bun run app:serve:trading', port: '4163' },
+]
+const uiPackageIds = ['coreShared', 'zoltarShared', 'statoblastShared', 'zoltar', 'statoblast', 'trading'] as const
+const tevmPackagePaths = ['package.json', 'ui/coreShared/package.json', 'ui/zoltarShared/package.json', 'ui/statoblastShared/package.json', 'ui/zoltar/package.json', 'ui/statoblast/package.json', 'ui/trading/package.json'] as const
+const pinnedTevmTransitives = ['@tevm/actions', '@tevm/node', '@tevm/server'] as const
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
+const requireRecord = (value: unknown, label: string) => {
+	if (!isRecord(value)) throw new Error(`${label} must be a YAML mapping`)
+	return value
+}
+const readWorkflow = async (workflowPath: string) => requireRecord(Bun.YAML.parse(await readFile(workflowPath, 'utf8')), workflowPath)
+const workflowJobs = (workflow: Record<string, unknown>) => requireRecord(workflow['jobs'], 'workflow jobs')
+const workflowSteps = (job: unknown) => {
+	const steps = requireRecord(job, 'workflow job')['steps']
+	if (!Array.isArray(steps)) throw new Error('workflow job steps must be a sequence')
+	return steps.map((step, index) => requireRecord(step, `workflow step ${index.toString()}`))
+}
+const workflowTestPaths = (workflow: Record<string, unknown>) =>
+	Object.values(workflowJobs(workflow)).flatMap(job =>
+		workflowSteps(job).flatMap(step => {
+			const command = step['run']
+			if (typeof command !== 'string') return []
+			const workingDirectory = step['working-directory']
+			if (workingDirectory !== undefined && typeof workingDirectory !== 'string') throw new Error('workflow working-directory must be a string')
+			return [...command.matchAll(/(?:^|\s)([A-Za-z0-9_./-]+\.test\.(?:ts|tsx))(?=\s|$)/gu)].map(match => join(workingDirectory ?? '', match[1] ?? '').replaceAll('\\', '/'))
+		}),
+	)
+describe('split UI workflow paths', () => {
+	test('CI validates test ownership before scope-dependent jobs', async () => {
+		const jobs = workflowJobs(await readWorkflow(activeCiWorkflowPath))
+		const changesSteps = workflowSteps(jobs['changes'])
+		expect(changesSteps.some(step => step['run'] === 'bun run test:preflight')).toBe(true)
+	})
+	test('CI validation cannot be diverted to a staged workflow copy', async () => {
+		await expect(access(stagedCiWorkflowPath)).rejects.toThrow()
+		expect(coverageWorkflowPath).toBe(activeCoverageWorkflowPath)
+	})
+
+	test('split CI remains callable by the version release workflow', async () => {
+		const workflow = await readWorkflow(activeCiWorkflowPath)
+		expect(requireRecord(workflow['on'], 'CI triggers')).toHaveProperty('workflow_call')
+		const releaseWorkflow = await readWorkflow(join(repositoryRoot, '.github', 'workflows', 'version-deploy.yml'))
+		const releaseJobs = workflowJobs(releaseWorkflow)
+		expect(Object.values(releaseJobs).some(job => isRecord(job) && job['uses'] === './.github/workflows/ci.yml')).toBe(true)
+	})
+
+	test('production artifacts preserve app dist and JavaScript paths when uploaded and restored', async () => {
+		const workflow = await readWorkflow(testDomainsWorkflowPath)
+		const jobs = workflowJobs(workflow)
+		const prepareSteps = workflowSteps(jobs['prepare'])
+		const upload = prepareSteps.find(step => step['uses'] === 'actions/upload-artifact@v4')
+		const uploadOptions = requireRecord(upload?.['with'], 'production UI artifact upload options')
+		expect(uploadOptions['path']).toBe('${{ steps.projects.outputs.ui_artifact_outputs }}')
+		expect((await projectQuery()).uiArtifactOutputs).toEqual(['ui/coreShared/js', 'ui/zoltarShared/js', 'ui/statoblastShared/js', 'ui/zoltar/js', 'ui/zoltar/dist', 'ui/statoblast/js', 'ui/statoblast/dist', 'ui/trading/js', 'ui/trading/dist'])
+		expect(prepareSteps.findIndex(step => step['id'] === 'projects')).toBeLessThan(prepareSteps.indexOf(upload ?? {}))
+		expect(uploadOptions['name']).toBe('domain-production-ui')
+		expect(uploadOptions['if-no-files-found']).toBe('error')
+
+		const applicationSteps = workflowSteps(jobs['application-tests'])
+		const downloadIndex = applicationSteps.findIndex(step => step['uses'] === 'actions/download-artifact@v5')
+		const downloadOptions = requireRecord(applicationSteps[downloadIndex]?.['with'], 'production UI artifact download options')
+		expect(downloadOptions).toMatchObject({ name: uploadOptions['name'], path: 'ui' })
+
+		const refreshStep = applicationSteps.slice(downloadIndex + 1).find(step => step['name'] === 'Refresh split UI package installs')
+		expect(refreshStep?.['run']).toBe('bun ./tooling/repo/run-project-tasks.mts setup --path-prefix ui/')
+		expect((await projectQuery()).setupProjectPaths.filter(projectPath => projectPath.startsWith('ui/'))).toEqual(uiPackageIds.map(packageId => `ui/${packageId}`))
+	})
+
+	test('CI isolates the production browser workflow', async () => {
+		const workflow = await readWorkflow(browserWorkflowPath)
+		expect(workflow['name']).toBe('Production Browser Workflow')
+		const steps = Object.values(workflowJobs(workflow)).flatMap(workflowSteps)
+		expect(steps.some(step => step['run'] === 'bun run test:browser:smoke')).toBe(true)
+		expect(steps.some(step => step['run'] === 'bun run test:browser:workflow')).toBe(true)
+		const ciWorkflow = await readWorkflow(activeCiWorkflowPath)
+		const ciJobs = workflowJobs(ciWorkflow)
+		const requiredBrowserJob = requireRecord(ciJobs['browser-smoke'], 'required browser smoke job')
+		expect(requiredBrowserJob['if']).toBe("needs.changes.outputs.core == 'true'")
+		expect(workflowSteps(requiredBrowserJob).some(step => step['run'] === 'bun run test:browser:smoke')).toBe(true)
+		expect(requireRecord(ciJobs['required'], 'required CI result')['needs']).toContain('browser-smoke')
+	})
+
+	test('manual coverage publishes and retains the canonical policy report', async () => {
+		const workflow = await readWorkflow(coverageWorkflowPath)
+		const triggers = requireRecord(workflow['on'], 'coverage triggers')
+		expect(Object.keys(triggers)).toEqual(['workflow_dispatch'])
+		const steps = Object.values(workflowJobs(workflow)).flatMap(workflowSteps)
+		expect(steps.some(step => step['run'] === 'bun run coverage:fast')).toBe(false)
+		expect(steps.some(step => step['run'] === 'bun run coverage:full')).toBe(true)
+		const publisher = steps.find(step => typeof step['run'] === 'string' && step['run'].includes('coverage/coverage-summary.md'))
+		expect(publisher).toBeDefined()
+		const upload = steps.find(step => step['uses'] === 'actions/upload-artifact@v4')
+		expect(requireRecord(upload?.['with'], 'coverage upload options')['name']).toBe('coverage-report')
+	})
+
+	test('split CI partitions application and Solidity tests and adds pull-request quality gates', async () => {
+		const testDomainsWorkflow = await readWorkflow(testDomainsWorkflowPath)
+		const testDomainTriggers = requireRecord(testDomainsWorkflow['on'], 'test-domain triggers')
+		const workflowCall = requireRecord(testDomainTriggers['workflow_call'], 'reusable test-domain trigger')
+		const workflowCallInputs = requireRecord(workflowCall['inputs'], 'reusable test-domain inputs')
+		const invocationInput = requireRecord(workflowCallInputs['invocation'], 'reusable invocation input')
+		expect(invocationInput['default']).toBe('reusable')
+		expect(testDomainTriggers).not.toHaveProperty('pull_request')
+		expect(testDomainTriggers).not.toHaveProperty('push')
+		expect(testDomainTriggers).toHaveProperty('workflow_dispatch')
+		const testDomainConcurrency = requireRecord(testDomainsWorkflow['concurrency'], 'test-domain concurrency')
+		expect(testDomainConcurrency['group']).toContain("${{ inputs.invocation || 'direct' }}")
+		const concurrencyInvocation = (invocation: string | undefined) => invocation ?? 'direct'
+		expect(concurrencyInvocation(undefined)).not.toBe(concurrencyInvocation(String(invocationInput['default'])))
+		const ciWorkflow = await readWorkflow(activeCiWorkflowPath)
+		const ciJobs = workflowJobs(ciWorkflow)
+		const domainTestsJob = requireRecord(ciJobs['domain-tests'], 'CI domain-tests job')
+		expect(domainTestsJob['uses']).toBe('./.github/workflows/test-domains.yml')
+		expect(domainTestsJob['if']).toBe("needs.changes.outputs.core == 'true'")
+		expect(ciJobs).not.toHaveProperty('tests')
+		expect(ciJobs).not.toHaveProperty('test-timings')
+		const domainSteps = Object.values(workflowJobs(testDomainsWorkflow)).flatMap(workflowSteps)
+		const domainCommands = domainSteps.flatMap(step => (typeof step['run'] === 'string' ? [step['run']] : []))
+		expect(domainCommands.some(command => command.includes('bun run ui:build:apps\nbun ./tooling/repo/install-frozen.mts ui/statoblast\nbun run ci:preflight:current'))).toBe(true)
+		expect(domainCommands).not.toContain('bun run tsc')
+		expect(domainSteps.some(step => typeof step['run'] === 'string' && step['run'].includes('--domain=application'))).toBe(true)
+		expect(domainSteps.some(step => typeof step['run'] === 'string' && step['run'].includes('--domain=solidity'))).toBe(true)
+		expect(domainSteps.some(step => step['run'] === 'bun run test:mutation:smoke')).toBe(true)
+
+		const stabilityWorkflow = await readWorkflow(testStabilityWorkflowPath)
+		const stabilitySteps = Object.values(workflowJobs(stabilityWorkflow)).flatMap(workflowSteps)
+		const stabilityTestPaths = workflowTestPaths(stabilityWorkflow).sort()
+		expect(stabilityTestPaths).toEqual(['augurScan/tests/api/live.test.ts', 'augurScan/tests/replay/indexer-lifecycle.test.ts', 'tooling/docs/documentation-tools-runtime.test.ts', 'tooling/ui/chromiumPath.test.ts', 'ui/zoltar/ts/tests/features/open-oracle/useRepPrices.test.tsx'].sort())
+		await Promise.all(stabilityTestPaths.map(testPath => access(join(repositoryRoot, testPath))))
+		expect(stabilitySteps.some(step => typeof step['run'] === 'string' && step['run'].includes('without retries'))).toBe(true)
+	})
+
+	test('contract caches and transferred inputs include the generated Trading artifact', async () => {
+		const query = await projectQuery()
+		expect(query.componentArtifactOutputs).toContain('ui/trading/ts/generated/contractArtifact.ts')
+		expect(query.generatedCachePaths).toContain('ui/trading/ts/generated/contractArtifact.ts')
+		const workflow = await readFile(activeCiWorkflowPath, 'utf8')
+		expect(workflow.match(/steps\.projects\.outputs\.component_artifact_outputs/gu)).toHaveLength(2)
+	})
+
+	test('Trading-owned compile and test commands explicitly generate Trading artifacts', async () => {
+		const packageJson = JSON.parse(await readFile(rootPackagePath, 'utf8')) as { scripts?: Record<string, string> }
+		const tradingPackageJson = JSON.parse(await readFile(tradingPackagePath, 'utf8')) as { scripts?: Record<string, string> }
+		expect(packageJson.scripts?.['trading:compile']).toContain('bun ./tooling/ui/vendor.mts trading')
+		expect(packageJson.scripts?.['trading:test']).toContain('bun ./tooling/ui/vendor.mts trading')
+		expect(packageJson.scripts?.['tsc:app']).toStartWith('bun ./tooling/ui/vendor.mts trading')
+		expect(packageJson.scripts?.['coverage:ui']).toContain('bun ./tooling/ui/vendor.mts trading')
+		expect(packageJson.scripts?.['coverage:typescript']).toContain('bun ./tooling/ui/vendor.mts trading')
+		expect(tradingPackageJson.scripts?.['test']).toStartWith('bun run generate')
+		expect(tradingPackageJson.scripts?.['watch']).toStartWith('bun run generate')
+	})
+
+	test('shared-library public exports attribute Bun tests to TypeScript sources', async () => {
+		for (const packagePath of sharedLibraryPackagePaths) {
+			const packageDirectory = join(repositoryRoot, packagePath, '..')
+			const manifest: unknown = JSON.parse(await readFile(join(repositoryRoot, packagePath), 'utf8'))
+			const exports = requireRecord(requireRecord(manifest, packagePath)['exports'], `${packagePath} exports`)
+			for (const [exportName, exportValue] of Object.entries(exports)) {
+				const conditions = requireRecord(exportValue, `${packagePath} export ${exportName}`)
+				expect(Object.keys(conditions).indexOf('bun')).toBeLessThan(Object.keys(conditions).indexOf('default'))
+				const bunTarget = conditions['bun']
+				const defaultTarget = conditions['default']
+				expect(typeof bunTarget).toBe('string')
+				expect(typeof defaultTarget).toBe('string')
+				if (typeof bunTarget !== 'string' || typeof defaultTarget !== 'string') continue
+				expect(bunTarget).toStartWith('./ts/')
+				expect(defaultTarget).toStartWith('./js/')
+				await access(join(packageDirectory, bunTarget))
+			}
+		}
+	})
+
+	test('clean CI emits the complete UI dependency DAG while testnet deployment stays headless', async () => {
+		const ciWorkflow = await readFile(activeCiWorkflowPath, 'utf8')
+		const buildIndex = ciWorkflow.indexOf('bun run ui:build:apps')
+		const preflightIndex = ciWorkflow.indexOf('bun run ci:preflight:current')
+		expect(buildIndex).toBeGreaterThan(0)
+		expect(preflightIndex).toBeGreaterThan(buildIndex)
+
+		const deployWorkflow = await readFile(deployTestnetWorkflowPath, 'utf8')
+		for (const packageId of uiPackageIds) {
+			expect(deployWorkflow).not.toContain(`(cd ui/${packageId} && bun install --frozen-lockfile)`)
+		}
+		expect(deployWorkflow).toContain('(cd solidity && bun install --frozen-lockfile)')
+		expect(deployWorkflow).not.toContain('bun run ui:build:apps')
+		expect(deployWorkflow).toContain('bun ./tooling/contracts/ensure-contract-artifacts.mts --headless')
+		expect(deployWorkflow).toContain('bun ./tooling/contracts/run-deploy-testnet.mts --help')
+		expect(deployWorkflow).not.toContain('bun ./tooling/contracts/deploy-testnet.mts --help')
+	})
+
+	test('CI refreshes deployment runtime dependencies before the parallel preflight', async () => {
+		const workflow = await readWorkflow(activeCiWorkflowPath)
+		const prepareSteps = workflowSteps(workflowJobs(workflow)['prepare'])
+		const command = String(prepareSteps.find(step => step['name'] === 'TypeScript checks and production UI build')?.['run'])
+		const lines = command.split('\n').map(line => line.trim())
+		const buildIndex = lines.indexOf('bun run ui:build:apps')
+		const refreshIndex = lines.indexOf('bun ./tooling/repo/run-project-tasks.mts setup --project-path ui/statoblast')
+		const preflightIndex = lines.indexOf('bun run ci:preflight:current')
+		expect(buildIndex).toBeGreaterThanOrEqual(0)
+		expect(refreshIndex).toBeGreaterThan(buildIndex)
+		expect(preflightIndex).toBeGreaterThan(refreshIndex)
+	})
+
+	test('CI and Docker install every UI package from its committed lockfile', async () => {
+		const setupWorkflow = await readWorkflow(setupActionPath)
+		const setupSteps = workflowSteps(requireRecord(setupWorkflow['runs'], 'setup action'))
+		expect(setupSteps.some(step => step['run'] === 'bun run projects:setup')).toBe(true)
+		expect((await projectQuery()).setupProjectPaths.filter(projectPath => projectPath.startsWith('ui/'))).toEqual(uiPackageIds.map(packageId => `ui/${packageId}`))
+
+		const dockerfile = await readFile(dockerfilePath, 'utf8')
+		const dockerStages = parseDockerfile(dockerfile)
+		expect(dockerGlobalArguments(dockerfile)).toContain('BUN_VERSION=1.4.2')
+		const copies = dockerStages.flatMap(stage => dockerInstructions(stage, 'COPY'))
+		const runs = dockerStages.flatMap(stage => dockerInstructions(stage, 'RUN'))
+		for (const appId of uiPackageIds) {
+			expect(copies.some(copy => copy.includes(`./ui/${appId}/bun.lock`))).toBe(true)
+		}
+		for (const appId of uiPackageIds) expect(runs.some(run => run.includes(`bun ./tooling/repo/install-frozen.mts ui/${appId}`))).toBe(true)
+	})
+
+	test('dead-code CI installs every bot workspace before analyzing it', async () => {
+		const workflow = await readWorkflow(activeCiWorkflowPath)
+		const steps = workflowSteps(workflowJobs(workflow)['knip'])
+		expect(steps.findIndex(step => step['uses'] === './.github/actions/setup-ci')).toBeLessThan(steps.findIndex(step => step['run'] === 'bun run knip'))
+		expect(
+			taskProjects('setup')
+				.filter(project => project.path === 'shared' || project.path.startsWith('bots/'))
+				.map(project => project.path),
+		).toEqual(['shared', 'bots/shared', 'bots/chaos', 'bots/open-oracle-arbitrager', 'bots/liquidator'])
+	})
+
+	test('every TEVM workspace pins the compatible release-candidate dependency cohort', async () => {
+		for (const packagePath of tevmPackagePaths) {
+			const parsed: unknown = JSON.parse(await readFile(join(repositoryRoot, packagePath), 'utf8'))
+			expect(isRecord(parsed)).toBe(true)
+			if (!isRecord(parsed)) throw new Error(`${packagePath} must contain a JSON object`)
+			const overrides = parsed['overrides']
+			expect(isRecord(overrides)).toBe(true)
+			if (!isRecord(overrides)) throw new Error(`${packagePath} must define dependency overrides`)
+			for (const dependencyName of pinnedTevmTransitives) expect(overrides[dependencyName]).toBe('1.0.0-rc.151')
+
+			const lockPath = packagePath === 'package.json' ? join(repositoryRoot, 'bun.lock') : join(repositoryRoot, packagePath, '..', 'bun.lock')
+			const lock = await readFile(lockPath, 'utf8')
+			expect(lock).toContain('"@tevm/actions": ["@tevm/actions@1.0.0-rc.151"')
+			expect(lock).not.toContain('"@tevm/actions": ["@tevm/actions@1.0.0-rc.153"')
+		}
+	})
+
+	test('activatable workflows replace every stale monolithic UI setup command', async () => {
+		const activeSources = await Promise.all([readFile(activeCiWorkflowPath, 'utf8'), readFile(deployTestnetWorkflowPath, 'utf8'), readFile(setupActionPath, 'utf8'), readFile(setupComponentActionPath, 'utf8')])
+		for (const source of activeSources) {
+			expect(source).not.toMatch(/\(cd ui &&|ui\/bun\.lock|ui\/package\.json|ui\/dist(?:\s|$)|ui\/ts\//)
+		}
+	})
+
+	test('one tag workflow owns releases and advertises every published app', async () => {
+		const ipfsWorkflow = await readFile(ipfsDeployWorkflowPath, 'utf8')
+		const versionWorkflow = await readFile(versionDeployWorkflowPath, 'utf8')
+		expect(ipfsWorkflow).not.toMatch(/push:\s*\n\s*tags:/)
+		expect(versionWorkflow).toContain('push:\n    tags:')
+		expect(versionWorkflow).toContain('Create or update GitHub release')
+		for (const appId of ['zoltar', 'statoblast', 'trading']) expect(versionWorkflow).toContain(`/\${IPFS_CID}/${appId}/`)
+	})
+
+	test('CI cache keys reference existing files or intentional globs', async () => {
+		const setupAction = await readFile(setupActionPath, 'utf8')
+		for (const match of setupAction.matchAll(/hashFiles\(([^)]*)\)/g)) {
+			for (const quotedPath of match[1]?.matchAll(/'([^']+)'/g) ?? []) {
+				const cacheInput = quotedPath[1]
+				if (cacheInput === undefined || /[*?[\]]/.test(cacheInput)) continue
+				await access(join(repositoryRoot, cacheInput))
+			}
+		}
+	})
+
+	test('developer documentation selects a split app command and current port', async () => {
+		for (const { path: documentationPath, command, port } of developerDocumentation) {
+			const documentation = await readFile(documentationPath, 'utf8')
+			expect(documentation).toContain(command)
+			expect(documentation).toContain(`localhost:${port}`)
+			expect(documentation).not.toMatch(/bun run app:(?:serve|watch)(?:`|\s)/)
+			expect(documentation).not.toContain('localhost:12345')
+		}
+	})
+})

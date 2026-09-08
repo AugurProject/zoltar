@@ -15,7 +15,7 @@
 	},
 	"scripts": {
 		"check": "bun run typecheck && bun run test && bun run format:check",
-		"ensure-contract-artifacts": "bun ../../scripts/ensure-contract-artifacts.mts",
+		"ensure-contract-artifacts": "bun ../../tooling/contracts/ensure-contract-artifacts.mts",
 		"format": "bun x @biomejs/biome format --write package.json tsconfig.json README.md src tests scripts config",
 		"format:check": "bun x @biomejs/biome format package.json tsconfig.json README.md src tests scripts config",
 		"run": "bun ./src/cli/run.ts",
@@ -25,8 +25,10 @@
 		"ui:fixture": "bun ./scripts/serve-dashboard-fixture.mts"
 	},
 	"dependencies": {
-		"@zoltar/bot-shared": "file:../shared",
-		"@zoltar/shared": "file:../../shared"
+		"@zoltar/bot-shared": "file:../shared"
+	},
+	"overrides": {
+		"undici": "7.29.0"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.3.11",

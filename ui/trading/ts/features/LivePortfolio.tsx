@@ -56,16 +56,6 @@ function LivePortfolioBalanceMetrics({ market, balances }: { market: LiveMarket;
 					<dt>{portfolioCopy.maximumInsuredNoExit}</dt>
 					<dd>{formatOutcomeAmount(maximumNoExit, portfolioCopy.no)}</dd>
 				</div>
-				<div>
-					<dt>{portfolioCopy.shareApproval}</dt>
-					<dd>{balances.approved ? portfolioCopy.routerApproved : portfolioCopy.approvalRequiredForExit}</dd>
-				</div>
-				<div>
-					<dt>{portfolioCopy.lpAllowance}</dt>
-					<dd>
-						{formatUnits(balances.lpAllowance)} {portfolioCopy.lp}
-					</dd>
-				</div>
 			</dl>
 			<p>{portfolioCopy.invalidOwnershipNotice}</p>
 		</>

@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { privateKeyToAccount, type Hex } from '#ethereum'
+import { privateKeyToAccount, type Hex } from '@zoltar/bot-shared/ethereum'
 import { acquirePositionJournalLock, loadPositionJournalState, manuallyReconcilePosition, savePositionJournalState } from '#state/position-store'
 
 const usage = `Close one fully investigated recovery-required position without submitting a transaction.

@@ -1,0 +1,253 @@
+import { promises as fs } from 'node:fs'
+import * as path from 'node:path'
+import * as url from 'node:url'
+import { spawn } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import { getSharedPackageGeneratedOutputs } from './check-generated-artifacts.mts'
+import { sharedBrowserArtifactRelativePaths } from '../ui/sharedBrowserArtifacts.ts'
+
+const scriptDirectory = path.dirname(url.fileURLToPath(import.meta.url))
+const repositoryRoot = path.join(scriptDirectory, '..', '..')
+
+const solidityRoot = path.join(repositoryRoot, 'solidity')
+const contractsRoot = path.join(solidityRoot, 'contracts')
+const sharedRoot = path.join(repositoryRoot, 'shared')
+const sharedSourceRoot = path.join(sharedRoot, 'ts')
+const contractFreshnessCachePath = path.join(solidityRoot, 'artifacts', '.freshness-hash')
+const sharedFreshnessCachePath = path.join(sharedRoot, 'js', '.freshness-hash')
+const deprecatedContractArtifactRelativePaths = ['solidity/types/contractArtifact.ts']
+
+const requiredContractArtifactRelativePaths = ['solidity/artifacts/Contracts.json', 'solidity/ts/types/contractArtifact.ts', 'ui/coreShared/ts/contractArtifact.ts', 'ui/coreShared/ts/abis.ts']
+const requiredOutputs = requiredContractArtifactRelativePaths.map(relativePath => path.join(repositoryRoot, relativePath))
+const freshnessInputs = [path.join(solidityRoot, 'bun.lock'), path.join(solidityRoot, 'package.json'), path.join(solidityRoot, 'tsconfig-compile.json'), path.join(solidityRoot, 'ts', 'abi', 'abis.ts'), path.join(solidityRoot, 'ts', 'compile.ts'), path.join(repositoryRoot, 'tooling', 'ui', 'projectArtifacts.mts')]
+const sharedFreshnessInputs = [path.join(sharedRoot, 'package.json'), path.join(sharedRoot, 'tsconfig.json')]
+const unexpectedSharedSourceOutputSuffixes = ['.js', '.js.map', '.d.ts', '.d.ts.map']
+const sharedTypeScriptSourceSuffixes = ['.ts', '.tsx', '.mts', '.cts']
+
+function isMissingPathError(error: unknown): error is NodeJS.ErrnoException {
+	return error instanceof Error && 'code' in error && error.code === 'ENOENT'
+}
+
+async function exists(filePath: string): Promise<boolean> {
+	try {
+		await fs.stat(filePath)
+		return true
+	} catch (error) {
+		if (!isMissingPathError(error)) throw error
+		return false
+	}
+}
+
+export async function removeDeprecatedContractArtifactOutputs(root = repositoryRoot): Promise<void> {
+	for (const relativePath of deprecatedContractArtifactRelativePaths) {
+		const deprecatedOutputPath = path.join(root, relativePath)
+		if (!(await exists(deprecatedOutputPath))) continue
+		await fs.rm(deprecatedOutputPath, { force: true })
+		console.log(`Removed deprecated generated contract artifact: ${relativePath}`)
+	}
+}
+
+async function getFilesRecursively(directoryPath: string): Promise<string[]> {
+	const entries = await fs.readdir(directoryPath, { withFileTypes: true })
+	const files: string[] = []
+	for (const entry of entries) {
+		const entryPath = path.join(directoryPath, entry.name)
+		if (entry.isDirectory()) {
+			files.push(...(await getFilesRecursively(entryPath)))
+			continue
+		}
+		if (entry.isFile()) files.push(entryPath)
+	}
+	return files
+}
+
+export async function removeUnexpectedSharedSourceOutputs(root = repositoryRoot): Promise<void> {
+	const sourceRoot = path.join(root, 'shared', 'ts')
+	const sourceFiles = await getFilesRecursively(sourceRoot)
+	const sourceFileSet = new Set(sourceFiles)
+	for (const sourceFile of sourceFiles) {
+		const outputSuffix = unexpectedSharedSourceOutputSuffixes.find(suffix => sourceFile.endsWith(suffix))
+		if (outputSuffix === undefined) continue
+		const sourceBasePath = sourceFile.slice(0, -outputSuffix.length)
+		if (!sharedTypeScriptSourceSuffixes.some(suffix => sourceFileSet.has(`${sourceBasePath}${suffix}`))) continue
+		await fs.rm(sourceFile, { force: true })
+		console.log(`Removed compiled output from shared source directory: ${path.relative(root, sourceFile)}`)
+	}
+}
+
+async function contractsJsonIsReadable(contractsJsonPath: string): Promise<boolean> {
+	try {
+		JSON.parse(await fs.readFile(contractsJsonPath, 'utf8'))
+		return true
+	} catch (error) {
+		if (error instanceof SyntaxError || isMissingPathError(error)) return false
+		throw error
+	}
+}
+
+async function computeFreshnessHash(filePaths: readonly string[]): Promise<string> {
+	const hash = createHash('sha256')
+	const sortedFilePaths = [...filePaths].sort()
+	for (const filePath of sortedFilePaths) {
+		const relativePath = path.relative(repositoryRoot, filePath)
+		hash.update(relativePath)
+		hash.update('\0')
+		hash.update(await fs.readFile(filePath))
+		hash.update('\0')
+	}
+	return hash.digest('hex')
+}
+
+async function readFreshnessHash(cachePath: string): Promise<string | undefined> {
+	try {
+		return await fs.readFile(cachePath, 'utf8')
+	} catch (error) {
+		if (!isMissingPathError(error)) throw error
+		return undefined
+	}
+}
+
+async function writeFreshnessHash(cachePath: string, hash: string): Promise<void> {
+	await fs.mkdir(path.dirname(cachePath), { recursive: true })
+	await fs.writeFile(cachePath, hash)
+}
+
+async function getArtifactRegenerationReason(): Promise<string | undefined> {
+	for (const outputPath of requiredOutputs) {
+		if (!(await exists(outputPath))) return `missing generated file: ${path.relative(repositoryRoot, outputPath)}`
+	}
+
+	const contractsJsonPath = path.join(solidityRoot, 'artifacts', 'Contracts.json')
+	if (!(await contractsJsonIsReadable(contractsJsonPath))) return 'solidity/artifacts/Contracts.json is unreadable'
+
+	const contractSourceFiles = await getFilesRecursively(contractsRoot)
+	const currentFreshnessHash = await computeFreshnessHash([...freshnessInputs, ...contractSourceFiles])
+	const cachedFreshnessHash = await readFreshnessHash(contractFreshnessCachePath)
+	if (cachedFreshnessHash !== currentFreshnessHash) return 'Solidity sources or artifact generation inputs changed since the last generated outputs'
+
+	return undefined
+}
+
+async function syncContractFreshnessHash(): Promise<void> {
+	const contractSourceFiles = await getFilesRecursively(contractsRoot)
+	await writeFreshnessHash(contractFreshnessCachePath, await computeFreshnessHash([...freshnessInputs, ...contractSourceFiles]))
+}
+
+async function runCompileContracts(): Promise<void> {
+	await runBunScript(['run', 'compile-contracts:current'], `bun run compile-contracts:current`)
+}
+
+async function runSharedBuild(): Promise<void> {
+	await runBunScript(['run', 'shared:build'], `bun run shared:build`)
+}
+
+async function refreshRootSharedDependency(): Promise<void> {
+	await runBunScript(['./tooling/repo/ensure-shared-package-fresh.mts', '--refresh'], `root @zoltar/shared dependency refresh`)
+}
+
+async function refreshAllSharedDependencies(): Promise<void> {
+	await runBunScript(['run', 'refresh:shared-dependencies'], `bun run refresh:shared-dependencies`)
+}
+
+async function runBunScript(args: string[], label: string): Promise<void> {
+	await new Promise<void>((resolve, reject) => {
+		const child = spawn(process.execPath, args, {
+			cwd: repositoryRoot,
+			stdio: 'inherit',
+		})
+
+		child.on('error', reject)
+		child.on('exit', code => {
+			if (code === 0) {
+				resolve()
+				return
+			}
+			reject(new Error(`${label} exited with code ${code ?? 'unknown'}`))
+		})
+	})
+}
+
+export async function getRequiredSharedOutputRelativePaths(): Promise<string[]> {
+	return [...new Set([...(await getSharedPackageGeneratedOutputs(repositoryRoot)), ...sharedBrowserArtifactRelativePaths])]
+}
+
+export function getRequiredContractArtifactRelativePaths(): string[] {
+	return [...requiredContractArtifactRelativePaths]
+}
+
+async function getSharedBuildRegenerationReason(): Promise<string | undefined> {
+	for (const relativePath of await getRequiredSharedOutputRelativePaths()) {
+		const outputPath = path.join(repositoryRoot, relativePath)
+		if (!(await exists(outputPath))) return `missing shared build output: ${path.relative(repositoryRoot, outputPath)}`
+	}
+
+	const sharedSourceFiles = await getFilesRecursively(sharedSourceRoot)
+	const currentFreshnessHash = await computeFreshnessHash([...sharedFreshnessInputs, ...sharedSourceFiles])
+	const cachedFreshnessHash = await readFreshnessHash(sharedFreshnessCachePath)
+	if (cachedFreshnessHash !== currentFreshnessHash) return 'Shared TypeScript sources or build inputs changed since the last shared/js outputs'
+
+	return undefined
+}
+
+async function syncSharedFreshnessHash(): Promise<void> {
+	await removeUnexpectedSharedSourceOutputs()
+	const sharedSourceFiles = await getFilesRecursively(sharedSourceRoot)
+	await writeFreshnessHash(sharedFreshnessCachePath, await computeFreshnessHash([...sharedFreshnessInputs, ...sharedSourceFiles]))
+}
+
+export async function ensureSharedBuildIsCurrent(refreshSharedDependencies = refreshAllSharedDependencies): Promise<void> {
+	await removeUnexpectedSharedSourceOutputs()
+	const sharedRegenerationReason = await getSharedBuildRegenerationReason()
+	if (sharedRegenerationReason === undefined) return
+
+	console.log(`Regenerating shared build outputs before tests: ${sharedRegenerationReason}`)
+	await runSharedBuild()
+	await refreshSharedDependencies()
+	await syncSharedFreshnessHash()
+	const sharedRegenerationReasonAfterBuild = await getSharedBuildRegenerationReason()
+	if (sharedRegenerationReasonAfterBuild !== undefined) {
+		throw new Error(`Shared build outputs are still stale after regeneration: ${sharedRegenerationReasonAfterBuild}`)
+	}
+}
+
+export async function ensureContractArtifactsAreCurrent(refreshSharedDependencies = refreshAllSharedDependencies): Promise<void> {
+	await removeDeprecatedContractArtifactOutputs()
+	await ensureSharedBuildIsCurrent(refreshSharedDependencies)
+	const regenerationReason = await getArtifactRegenerationReason()
+	if (regenerationReason === undefined) return
+
+	console.log(`Regenerating contract artifacts before tests: ${regenerationReason}`)
+	await runCompileContracts()
+	await syncContractFreshnessHash()
+	const regenerationReasonAfterBuild = await getArtifactRegenerationReason()
+	if (regenerationReasonAfterBuild !== undefined) {
+		throw new Error(`Contract artifacts are still stale after regeneration: ${regenerationReasonAfterBuild}`)
+	}
+}
+
+export async function prepareHeadlessContractArtifacts(refreshRootDependency = refreshRootSharedDependency, ensureArtifacts: typeof ensureContractArtifactsAreCurrent = ensureContractArtifactsAreCurrent): Promise<void> {
+	let refreshedDuringBuild = false
+	await ensureArtifacts(async () => {
+		await refreshRootDependency()
+		refreshedDuringBuild = true
+	})
+	if (!refreshedDuringBuild) await refreshRootDependency()
+}
+
+export async function runEnsureContractArtifactsCommand(args: readonly string[] = process.argv.slice(2)): Promise<void> {
+	const mode = args[0]
+	if (mode === '--ensure-shared-only') {
+		await prepareHeadlessContractArtifacts(refreshAllSharedDependencies, ensureSharedBuildIsCurrent)
+	} else if (mode === '--headless') {
+		await prepareHeadlessContractArtifacts()
+	} else if (mode === '--sync-shared-freshness') {
+		await syncSharedFreshnessHash()
+	} else if (mode === '--sync-contract-freshness') {
+		await removeDeprecatedContractArtifactOutputs()
+		await syncContractFreshnessHash()
+	} else {
+		await prepareHeadlessContractArtifacts(refreshAllSharedDependencies)
+	}
+}
+
+if (import.meta.main) await runEnsureContractArtifactsCommand()

@@ -1,4 +1,4 @@
-import { findTruthAuctionMinSupportedTick, tickToPrice, TRUTH_AUCTION_MAX_TICK, TRUTH_AUCTION_PRICE_PRECISION } from '@zoltar/shared/truthAuctionTickMath'
+import { findTruthAuctionMinSupportedTick, tickToPrice, TRUTH_AUCTION_MAX_TICK, TRUTH_AUCTION_PRICE_PRECISION } from '@zoltar/shared/statoblast/truthAuctionTickMath'
 
 export const TRUTH_AUCTION_MIN_SUPPORTED_TICK = findTruthAuctionMinSupportedTick()
 

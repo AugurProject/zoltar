@@ -1,4 +1,4 @@
-import { computeEscalationBindingCapitalAttoRep, computeEscalationTimeSinceStartFromAttritionCostAttoRep, ESCALATION_TIME_LENGTH, hasReachedNonDecision, type EscalationBalanceTuple, type EscalationOutcomeKey, projectEscalationDeposit } from '../../shared/ts/escalationMath'
+import { computeEscalationBindingCapitalAttoRep, computeEscalationTimeSinceStartFromAttritionCostAttoRep, ESCALATION_TIME_LENGTH, hasReachedNonDecision, type EscalationBalanceTuple, type EscalationOutcomeKey, projectEscalationDeposit } from '../../shared/ts/oracle/escalationMath'
 
 export type AuctionBidInput = {
 	eth: number

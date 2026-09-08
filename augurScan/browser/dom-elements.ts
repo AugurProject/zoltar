@@ -1,7 +1,7 @@
 export type RequiredElementRole = 'anchor' | 'button' | 'dialog' | 'element' | 'form' | 'input' | 'select'
 
 const inputSelectors = new Set(['#event-filter', '#address-filter', '#entity-search'])
-const selectSelectors = new Set(['#global-network-filter', '#rich-sort'])
+const selectSelectors = new Set(['#global-network-filter', '#operations-route-select', '#rich-sort'])
 const anchorSelectors = new Set(['#address-back', '.skip-link'])
 const buttonSelectors = new Set([
 	'#refresh-stale',

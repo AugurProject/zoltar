@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en">
+	<head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><meta name="description" content="How optional Statoblast Trading turns complete sets into Yes and No liquidity." /><title>How Statoblast Trading works</title><link rel="stylesheet" href="../assets/css/shared-docs.css" /><link rel="stylesheet" href="../assets/css/docsShell.css" /></head>
+	<body class="doc-openoracle">
+		<main id="main-content">
+			<header><p class="kicker">Explanation</p><h1>How Statoblast Trading works</h1><p>Statoblast Trading is an optional, separate on-chain exchange around Statoblast outcome shares. Statoblast core still owns market creation, collateral, migration, resolution, and redemption.</p></header>
+			<section id="complete-set-entry"><h2>From ETH to a directional position</h2><p>Each ETH entry first creates a <a href="../reference/glossary.html#complete-set">complete set</a>: one Yes, one No, and one Invalid share. The pair contains only Yes and No reserves. The router sends the unwanted directional share into the pair, receives more of the selected directional share, and returns the matching Invalid share to the user. Invalid never enters the automated market maker (AMM).</p><p>For the Aurora launch question, a trader choosing Yes receives a Yes-heavy position plus the Invalid share created with the complete set. The Invalid share remains a separate claim if the market later resolves Invalid.</p></section>
+			<section id="prices"><h2>What the prices mean</h2><p>Yes and No prices are conditional on valid resolution. They describe the relative price of the two directional outcomes; they are not estimates of invalidity. Interfaces should therefore label the Yes and No values directly and present Invalid separately.</p><p>Spot prices come from current reserves and can be manipulated. Protocol contracts never use them as truth or solvency oracles. Settlement uses the SecurityPool's resolved outcome, while solvency-sensitive REP/ETH operations use OpenOracle.</p></section>
+			<section id="market-isolation"><h2>One pair per SecurityPool</h2><p>Each SecurityPool maps to its own pair. Parent and child pools therefore have separate pairs, reserves, prices, and liquidity-provider tokens. A fork does not copy liquidity between them.</p><p>The router supports direct liquidity removal, exact-amount permits, and receive-based share authorization. See the <a href="../../solidity/docs/trading/README.md">Trading contract documentation</a> for entrypoints, authorization payloads, and deployment details.</p></section>
+		</main>
+		<script src="../assets/js/docsData.js"></script><script src="../assets/js/docsShell.js"></script>
+	</body>
+</html>

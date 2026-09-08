@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import { erc1155Abi, tradingPairAbi, tradingRouterAbi } from '../../src/contracts/abi.ts'
+import { erc1155Abi, tradingPairAbi } from '../../src/contracts/abi.ts'
 import { eligibleOperationPlans, reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
 import type { OperationPlan } from '../../src/operations/types.ts'
 import { createDurableWorkflow, durableWorkflowPlan, markWorkflowStepConfirmed, refreshWorkflowContinuation } from '../../src/runtime/workflows.ts'
-import { decodeFunctionData } from '../support/bot-shared.ts'
+import { decodeFunctionData } from '@zoltar/bot-shared/ethereum'
 import { address, hash, snapshotFixture } from './fixture.ts'
 
 const options = {
@@ -174,24 +174,23 @@ describe('trading exact continuations', () => {
 		if (pair === undefined || shares === undefined) throw new Error('Position-exit fixture is incomplete')
 		shares.no = '0'
 		const original = requiredPlan(snapshot, 'trading.position.exit')
-		const originalArgs = decodeFunctionData({ abi: tradingRouterAbi, data: requiredAction(original).data }).args
-		const confirmedStepId = confirmShareApproval(snapshot, original, snapshot.deployments.tradingRouter)
+		const originalArgs = decodeFunctionData({ abi: erc1155Abi, data: requiredAction(original).data }).args
 		shares.invalid = (10n ** 18n).toString()
 		shares.yes = (10n ** 18n).toString()
 		shares.no = (10n ** 18n).toString()
 
-		const continuation = exactContinuation(snapshot, original, confirmedStepId)
+		const continuation = exactContinuation(snapshot, original, '')
 		if (continuation === undefined) throw new Error('Missing position-exit continuation')
-		const continuationArgs = decodeFunctionData({ abi: tradingRouterAbi, data: requiredAction(continuation).data }).args
-		expect(continuationArgs.slice(1, 5)).toEqual(originalArgs.slice(1, 5))
+		const continuationArgs = decodeFunctionData({ abi: erc1155Abi, data: requiredAction(continuation).data }).args
+		expect(continuationArgs.slice(0, 4)).toEqual(originalArgs.slice(0, 4))
 
-		shares.invalid = (requiredBigint(originalArgs[2], 'position-exit complete amount') - 1n).toString()
-		const cleanup = exactContinuation(snapshot, original, confirmedStepId)
-		if (cleanup === undefined) throw new Error('Missing position-exit cleanup')
-		expect(decodeFunctionData({ abi: erc1155Abi, data: requiredAction(cleanup).data }).args).toEqual([snapshot.deployments.tradingRouter, false])
+		const transferredAmounts = originalArgs[3]
+		if (!Array.isArray(transferredAmounts)) throw new Error('Position-exit transfer amounts are missing')
+		shares.invalid = (requiredBigint(transferredAmounts[0], 'position-exit complete amount') - 1n).toString()
+		expect(exactContinuation(snapshot, original, '')).toBeUndefined()
 	})
 
-	test('keeps router-owned principal exact after inbound inventory', () => {
+	test('keeps receive-based and direct-removal principal exact after inbound inventory', () => {
 		const redeemSnapshot = openTradingSnapshot()
 		const redeemShares = redeemSnapshot.wallet.shares[0]
 		if (redeemShares === undefined) throw new Error('Router redeem fixture is incomplete')
@@ -199,17 +198,17 @@ describe('trading exact continuations', () => {
 		redeemShares.yes = '5000'
 		redeemShares.no = '5000'
 		const redeem = requiredPlan(redeemSnapshot, 'trading.complete-set.redeem')
-		const redeemArgs = decodeFunctionData({ abi: tradingRouterAbi, data: requiredAction(redeem).data }).args
-		const redeemApproval = confirmShareApproval(redeemSnapshot, redeem, redeemSnapshot.deployments.tradingRouter)
+		const redeemArgs = decodeFunctionData({ abi: erc1155Abi, data: requiredAction(redeem).data }).args
 		redeemShares.invalid = (10n ** 18n).toString()
 		redeemShares.yes = (10n ** 18n).toString()
 		redeemShares.no = (10n ** 18n).toString()
 		redeemSnapshot.anchor = { ...redeemSnapshot.anchor, blockHash: hash(302), blockNumber: '101', timestamp: (BigInt(redeemSnapshot.anchor.timestamp) + 60n).toString() }
-		const redeemContinuation = exactContinuation(redeemSnapshot, redeem, redeemApproval)
+		const redeemContinuation = exactContinuation(redeemSnapshot, redeem, '')
 		if (redeemContinuation === undefined) throw new Error('Missing router redeem continuation')
-		const redeemContinuationArgs = decodeFunctionData({ abi: tradingRouterAbi, data: requiredAction(redeemContinuation).data }).args
-		expect(redeemContinuationArgs[1]).toBe(redeemArgs[1])
-		expect(requiredBigint(redeemContinuationArgs[4], 'fresh redeem deadline')).toBeGreaterThan(requiredBigint(redeemArgs[4], 'original redeem deadline'))
+		const redeemContinuationArgs = decodeFunctionData({ abi: erc1155Abi, data: requiredAction(redeemContinuation).data }).args
+		expect(redeemContinuationArgs[2]).toEqual(redeemArgs[2])
+		expect(redeemContinuationArgs[3]).toEqual(redeemArgs[3])
+		expect(BigInt(redeemContinuation.deadlineTimestamp ?? '0')).toBeGreaterThan(BigInt(redeem.deadlineTimestamp ?? '0'))
 
 		const removeSnapshot = openTradingSnapshot()
 		const pair = removeSnapshot.pairs[0]
@@ -219,15 +218,12 @@ describe('trading exact continuations', () => {
 		lp.balance = '5000'
 		lp.allowanceToRouter = '0'
 		const remove = requiredPlan(removeSnapshot, 'trading.liquidity.remove')
-		const removeArgs = decodeFunctionData({ abi: tradingRouterAbi, data: requiredAction(remove).data }).args
-		const approval = remove.steps.find(step => step.id === 'approve-lp')
-		if (approval === undefined) throw new Error('Missing LP approval')
-		lp.allowanceToRouter = '5000'
+		const removeArgs = decodeFunctionData({ abi: tradingPairAbi, data: requiredAction(remove).data }).args
 		pair.walletLiquidity = (10n ** 18n).toString()
 		lp.balance = (10n ** 18n).toString()
-		const removeContinuation = exactContinuation(removeSnapshot, remove, approval.id)
+		const removeContinuation = exactContinuation(removeSnapshot, remove, '')
 		if (removeContinuation === undefined) throw new Error('Missing router remove continuation')
-		expect(decodeFunctionData({ abi: tradingRouterAbi, data: requiredAction(removeContinuation).data }).args[1]).toBe(removeArgs[1])
+		expect(decodeFunctionData({ abi: tradingPairAbi, data: requiredAction(removeContinuation).data }).args[0]).toBe(removeArgs[0])
 	})
 
 	test('cleans up every exact liquidity or redemption principal when live inventory falls below it', () => {
@@ -255,12 +251,11 @@ describe('trading exact continuations', () => {
 		const redeemShares = redeemSnapshot.wallet.shares[0]
 		if (redeemShares === undefined) throw new Error('Redeem inventory cleanup fixture is incomplete')
 		const redeem = requiredPlan(redeemSnapshot, 'trading.complete-set.redeem')
-		const completeAmount = requiredBigint(decodeFunctionData({ abi: tradingRouterAbi, data: requiredAction(redeem).data }).args[1], 'redeem complete amount')
-		const redeemApproval = confirmShareApproval(redeemSnapshot, redeem, redeemSnapshot.deployments.tradingRouter)
+		const transferredAmounts = decodeFunctionData({ abi: erc1155Abi, data: requiredAction(redeem).data }).args[3]
+		if (!Array.isArray(transferredAmounts)) throw new Error('Redeem transfer amounts are missing')
+		const completeAmount = requiredBigint(transferredAmounts[0], 'redeem complete amount')
 		redeemShares.invalid = (completeAmount - 1n).toString()
-		const redeemCleanup = exactContinuation(redeemSnapshot, redeem, redeemApproval)
-		if (redeemCleanup === undefined) throw new Error('Missing redeem inventory cleanup')
-		expect(decodeFunctionData({ abi: erc1155Abi, data: requiredAction(redeemCleanup).data }).args).toEqual([redeemSnapshot.deployments.tradingRouter, false])
+		expect(exactContinuation(redeemSnapshot, redeem, '')).toBeUndefined()
 
 		const removeSnapshot = openTradingSnapshot()
 		const pair = removeSnapshot.pairs[0]
@@ -268,18 +263,13 @@ describe('trading exact continuations', () => {
 		if (pair === undefined || lp === undefined) throw new Error('LP inventory cleanup fixture is incomplete')
 		lp.allowanceToRouter = '0'
 		const remove = requiredPlan(removeSnapshot, 'trading.liquidity.remove')
-		const liquidity = requiredBigint(decodeFunctionData({ abi: tradingRouterAbi, data: requiredAction(remove).data }).args[1], 'remove liquidity')
-		const approval = remove.steps.find(step => step.id === 'approve-lp')
-		if (approval === undefined) throw new Error('Missing LP inventory cleanup approval')
-		lp.allowanceToRouter = liquidity.toString()
+		const liquidity = requiredBigint(decodeFunctionData({ abi: tradingPairAbi, data: requiredAction(remove).data }).args[0], 'remove liquidity')
 		lp.balance = (liquidity - 1n).toString()
 		pair.walletLiquidity = (liquidity - 1n).toString()
-		const removeCleanup = exactContinuation(removeSnapshot, remove, approval.id)
-		if (removeCleanup === undefined) throw new Error('Missing LP inventory cleanup')
-		expect(decodeFunctionData({ abi: tradingPairAbi, data: requiredAction(removeCleanup).data }).args).toEqual([removeSnapshot.deployments.tradingRouter, 0n])
+		expect(exactContinuation(removeSnapshot, remove, '')).toBeUndefined()
 	})
 
-	test('uses revoke-only cleanup after a terminal failure and revokes only the confirmed approval', () => {
+	test('uses revoke-only cleanup after a terminal failure for approval-based pair operations', () => {
 		const shareSnapshot = openTradingSnapshot()
 		const pair = shareSnapshot.pairs[0]
 		if (pair === undefined) throw new Error('Share cleanup fixture is incomplete')
@@ -289,21 +279,6 @@ describe('trading exact continuations', () => {
 		if (shareCleanup === undefined) throw new Error('Missing share cleanup')
 		expect(decodeFunctionData({ abi: erc1155Abi, data: requiredAction(shareCleanup).data }).args).toEqual([pair.address, false])
 		expect(shareCleanup.continuationDisposition).toBe('cleanup-only')
-
-		const lpSnapshot = openTradingSnapshot()
-		const lp = lpSnapshot.wallet.lpTokens[0]
-		if (lp === undefined) throw new Error('LP cleanup fixture is incomplete')
-		lp.allowanceToRouter = '0'
-		const remove = requiredPlan(lpSnapshot, 'trading.liquidity.remove')
-		const lpApproval = remove.steps.find(step => step.id === 'approve-lp')
-		if (lpApproval === undefined) throw new Error('Missing LP cleanup approval')
-		lp.allowanceToRouter = lp.balance
-		const lpCleanup = exactContinuation(lpSnapshot, remove, lpApproval.id, 'cleanup-only')
-		if (lpCleanup === undefined) throw new Error('Missing LP cleanup')
-		const lpCleanupCall = decodeFunctionData({ abi: tradingPairAbi, data: requiredAction(lpCleanup).data })
-		expect(lpCleanupCall.functionName).toBe('approve')
-		expect(lpCleanupCall.args).toEqual([lpSnapshot.deployments.tradingRouter, 0n])
-		expect(lpCleanup.continuationDisposition).toBe('cleanup-only')
 	})
 
 	test('uses distinct reapproval steps when a confirmed approval was externally revoked', () => {
@@ -328,47 +303,17 @@ describe('trading exact continuations', () => {
 		expect(workflow.steps.find(step => step.id === shareReapproval.id)?.status).toBe('planned')
 		const repeated = exactContinuation(shareSnapshot, durableWorkflowPlan(workflow), confirmedShareApproval)
 		expect(repeated?.steps.find(step => step.id.startsWith('reapprove-shares-'))?.id).toBe(shareReapproval.id)
-
-		const lpSnapshot = openTradingSnapshot()
-		const lpPair = lpSnapshot.pairs[0]
-		const lp = lpSnapshot.wallet.lpTokens[0]
-		if (lpPair === undefined || lp === undefined) throw new Error('LP reapproval fixture is incomplete')
-		lp.allowanceToRouter = '0'
-		const remove = requiredPlan(lpSnapshot, 'trading.liquidity.remove')
-		const confirmedLpApproval = remove.steps.find(step => step.id === 'approve-lp')
-		if (confirmedLpApproval === undefined) throw new Error('Missing initial LP approval')
-		lp.allowanceToRouter = requiredBigint(decodeFunctionData({ abi: tradingPairAbi, data: confirmedLpApproval.data }).args[1], 'LP approval amount').toString()
-		lp.allowanceToRouter = '0'
-		const lpContinuation = exactContinuation(lpSnapshot, remove, confirmedLpApproval.id)
-		if (lpContinuation === undefined) throw new Error('Missing LP reapproval continuation')
-		const lpReapproval = lpContinuation.steps.find(step => step.id.startsWith('reapprove-lp-'))
-		if (lpReapproval === undefined) throw new Error('Missing distinct LP reapproval')
-		expect(lpReapproval.id).not.toBe(confirmedLpApproval.id)
-		expect(decodeFunctionData({ abi: tradingPairAbi, data: lpReapproval.data }).functionName).toBe('approve')
 	})
 
-	test('cleans up the exact confirmed spender when the canonical router target changes', () => {
+	test('invalidates receive-based work when the canonical router changes but keeps direct LP removal independent', () => {
 		const shareSnapshot = openTradingSnapshot()
-		const oldShareRouter = shareSnapshot.deployments.tradingRouter
 		const redeem = requiredPlan(shareSnapshot, 'trading.complete-set.redeem')
-		const confirmedShareApproval = confirmShareApproval(shareSnapshot, redeem, oldShareRouter)
 		shareSnapshot.deployments.tradingRouter = address(901)
-		const shareCleanup = exactContinuation(shareSnapshot, redeem, confirmedShareApproval)
-		if (shareCleanup === undefined) throw new Error('Missing changed-router share cleanup')
-		expect(decodeFunctionData({ abi: erc1155Abi, data: requiredAction(shareCleanup).data }).args).toEqual([oldShareRouter, false])
+		expect(exactContinuation(shareSnapshot, redeem, '')).toBeUndefined()
 
 		const lpSnapshot = openTradingSnapshot()
-		const oldLpRouter = lpSnapshot.deployments.tradingRouter
-		const lp = lpSnapshot.wallet.lpTokens[0]
-		if (lp === undefined) throw new Error('Changed-router LP fixture is incomplete')
-		lp.allowanceToRouter = '0'
 		const remove = requiredPlan(lpSnapshot, 'trading.liquidity.remove')
-		const confirmedLpApproval = remove.steps.find(step => step.id === 'approve-lp')
-		if (confirmedLpApproval === undefined) throw new Error('Missing changed-router LP approval')
-		lp.allowanceToRouter = requiredBigint(decodeFunctionData({ abi: tradingPairAbi, data: confirmedLpApproval.data }).args[1], 'changed-router LP approval amount').toString()
 		lpSnapshot.deployments.tradingRouter = address(902)
-		const lpCleanup = exactContinuation(lpSnapshot, remove, confirmedLpApproval.id)
-		if (lpCleanup === undefined) throw new Error('Missing changed-router LP cleanup')
-		expect(decodeFunctionData({ abi: tradingPairAbi, data: requiredAction(lpCleanup).data }).args).toEqual([oldLpRouter, 0n])
+		expect(exactContinuation(lpSnapshot, remove, '')).toBeDefined()
 	})
 })

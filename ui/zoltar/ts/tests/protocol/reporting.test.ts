@@ -1,8 +1,9 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { concatHex, decodeFunctionData, encodeAbiParameters, getAddress, keccak256, parseAbiParameters, zeroAddress, type Address, type Hex } from '@zoltar/shared/ethereum'
-import { buildForkCarriedEscalationProofs, loadEscalationDeposits, loadReportingDetails, claimParentEscalationDeposits, migrateVaultWithUnresolvedEscalation, reportOutcomeInSecurityPool, withdrawForkedEscalationDeposits } from '../../protocol/index.js'
+import { concatHex, decodeFunctionData, encodeAbiParameters, getAddress, keccak256, parseAbiParameters, zeroAddress, type Address, type Hex } from '@zoltar/shared/evm/ethereum'
+import { claimParentEscalationDeposits, migrateVaultWithUnresolvedEscalation } from '@zoltar/ui-zoltar-shared/protocol/forks.js'
+import { buildForkCarriedEscalationProofs, loadEscalationDeposits, loadReportingDetails, reportOutcomeInSecurityPool, withdrawForkedEscalationDeposits } from '@zoltar/ui-zoltar-shared/protocol/reporting.js'
 import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool, statoblast_SecurityPoolForker_SecurityPoolForker } from '@zoltar/ui-core-shared/contractArtifact.js'
 import type { EscalationSide } from '@zoltar/ui-core-shared/types/contracts.js'
 import { asWriteClient, createBlockWithTimestamp, createMockReadClient, createMockWriteClient, createMulticallStub, createReadContractStub, getContractFunctionName, mockTransactionHash, type MockReadContractHandler } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'

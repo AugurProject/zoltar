@@ -1,8 +1,8 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { zeroAddress } from '@zoltar/shared/ethereum'
-import { getMigrationGuardMessage } from '../../../features/universes/lib/zoltarMigrationGuards.js'
+import { zeroAddress } from '@zoltar/shared/evm/ethereum'
+import { getMigrationGuardMessage } from '@zoltar/ui-zoltar-shared/features/universes/lib/zoltarMigrationGuards.js'
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 
 function createUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarUniverseSummary {

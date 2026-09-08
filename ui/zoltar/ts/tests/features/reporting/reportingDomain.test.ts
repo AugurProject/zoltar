@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { zeroAddress } from '@zoltar/shared/ethereum'
+import { zeroAddress } from '@zoltar/shared/evm/ethereum'
 import {
 	ESCALATION_GAME_ACTIVATION_DELAY,
 	calculateEstimatedEscalationReturn,
@@ -22,7 +22,7 @@ import {
 	isReportingClosed,
 	previewReportingContribution,
 	projectEscalationEndTime,
-} from '../../../features/reporting/lib/reportingDomain.js'
+} from '@zoltar/ui-zoltar-shared/features/reporting/lib/reportingDomain.js'
 import type { ActiveReportingDetails, MarketDetails, ReportingDetails, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 
 const ATTO_REP = 10n ** 18n

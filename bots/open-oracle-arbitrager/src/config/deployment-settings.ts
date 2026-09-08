@@ -1,4 +1,4 @@
-import { getAddress, type Address } from '#ethereum'
+import { getAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import { parseDeploymentManifest, type DeploymentManifest } from '#config/deployment-auth'
 import { validateReadRpcUrls } from '#monitoring/connectivity'
 

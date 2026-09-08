@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { getAddress, zeroAddress } from '@zoltar/shared/ethereum'
+import { getAddress, zeroAddress } from '@zoltar/shared/evm/ethereum'
 import {
 	getCurrentForkWorkflowSelectionStage,
 	getCurrentSelectedPoolForkAuctionDetails,
@@ -23,9 +23,9 @@ import {
 	isSupportedSelectedPoolView,
 	resolveSelectedPoolView,
 	shouldShowSelectedPoolWorkflowDetails,
-} from '../../../features/security-pools/lib/securityPoolWorkflow.js'
-import { getOracleLastPriceDisplay, getOraclePriceValidityPresentation } from '@zoltar/ui-zoltar/features/open-oracle/lib/openOracle.js'
-import { ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS } from '../../../features/security-pools/lib/securityVault.js'
+} from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolWorkflow.js'
+import { getOracleLastPriceDisplay, getOraclePriceValidityPresentation } from '@zoltar/ui-zoltar-shared/features/open-oracle/lib/openOracle.js'
+import { ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityVault.js'
 
 void describe('selected pool workflow lookup state', () => {
 	void test('uses a single stable operate header title', () => {

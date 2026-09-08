@@ -1,4 +1,4 @@
-import type { Address, Hash } from '@zoltar/shared/ethereum'
+import type { Address, Hash } from '@zoltar/shared/evm/ethereum'
 import { statoblast_SecurityPool_SecurityPool } from '../contractArtifact.js'
 import type { ForkAuctionAction, ForkAuctionActionResult, ReadClient, WriteClient } from '../types/contracts.js'
 

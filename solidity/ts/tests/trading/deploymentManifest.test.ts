@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/evm/ethereum'
 import { parseCoreDeploymentManifest, requireMatchingChain, requireReceiptBlockNumber, requireSafeChainId } from '../../trading/deploy/manifest'
 
 describe('trading deployment manifest validation', () => {

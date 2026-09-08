@@ -9,7 +9,7 @@ import { MetricGrid } from './MetricGrid.js'
 import { MetricField } from './MetricField.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { formatCurrencyBalance } from '../lib/formatters.js'
-import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, parseTokenApprovalAmountInput, resolveTokenApprovalStatusMessage } from '../lib/tokenApproval.js'
+import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, parseTokenApprovalAmountInput, resolveTokenApprovalStatusMessage } from '../transactions/tokenApproval.js'
 type TokenApprovalControlProps = {
 	actionLabel: string
 	allowanceError: string | undefined

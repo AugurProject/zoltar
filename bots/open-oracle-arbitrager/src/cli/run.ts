@@ -1,10 +1,10 @@
 #!/usr/bin/env bun
 
-import { privateKeyToAccount } from '#ethereum'
+import { privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
 import { loadConfiguration } from '#config/configuration'
 import { createExecutionLockManager } from '#execution/execution-locks'
 import { errorMessage } from '#core/rpc-validation'
-import { operationalFailureDisposition, retryDelayMilliseconds } from '#monitoring/resilience'
+import { operationalFailureDisposition, retryDelayMilliseconds } from '@zoltar/bot-shared/monitoring/resilience'
 import { acquireExecutionSignerLock, acquirePositionJournalLock } from '#state/position-store'
 import { runOperator } from '../runtime/operator'
 import { createArbitragerShutdownController } from '../runtime/shutdown.ts'

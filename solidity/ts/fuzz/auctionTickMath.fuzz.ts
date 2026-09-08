@@ -1,6 +1,6 @@
 import { beforeAll, describe, setDefaultTimeout, test } from 'bun:test'
 import assert from '../testSupport/simulator/utils/assert'
-import { type Address } from '@zoltar/shared/ethereum'
+import { type Address } from '@zoltar/shared/evm/ethereum'
 import { statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '../types/contractArtifact'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
@@ -9,7 +9,7 @@ import { ensureInfraDeployed } from '../testSupport/simulator/utils/contracts/de
 import { getUniformPriceDualCapBatchAuctionAddress } from '../testSupport/simulator/utils/contracts/deployments'
 import { deployUniformPriceDualCapBatchAuction } from '../testSupport/simulator/utils/contracts/auction'
 import { ensureZoltarDeployed } from '../testSupport/simulator/utils/contracts/zoltar'
-import { priceToClosestTick, tickToPrice } from '../testSupport/simulator/utils/tickMath'
+import { priceToClosestTick, tickToPrice } from '@zoltar/shared/statoblast/truthAuctionTickMath'
 import { createWriteClient, WriteClient } from '../testSupport/simulator/utils/clients'
 import { contractExists, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 

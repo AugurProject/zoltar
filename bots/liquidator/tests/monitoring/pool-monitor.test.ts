@@ -4,7 +4,7 @@ import { parseSettings } from '#config/settings'
 import { isUnsafeVault, PRICE_PRECISION, type VaultPosition } from '#core/strategy'
 import { createPoolMonitorIndex, currentVaultPositionForPoolAccounting, loadChangedVaultAddresses, resolveOperatorVault, scanPools } from '#monitoring/pool-monitor'
 import { createVaultStateIndex, refreshVaultStateIndex } from '#monitoring/vault-state-index'
-import { getAddress } from '../helpers/ethereum.ts'
+import { getAddress } from '@zoltar/bot-shared/ethereum'
 
 const vault = getAddress('0x0000000000000000000000000000000000000001')
 const escrowVault = getAddress('0x0000000000000000000000000000000000000002')

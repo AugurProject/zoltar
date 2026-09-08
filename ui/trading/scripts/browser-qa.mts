@@ -209,7 +209,7 @@ const scenarios = [
 		width: 1440,
 		height: 900,
 		path: `${simulationPath}#/markets`,
-			evaluate: `(async () => {
+		evaluate: `(async () => {
 			await (${waitForSeededMarket})
 			const details = document.querySelector('.simulation-banner-details')
 			if (!(details instanceof HTMLDetailsElement)) throw new Error('Simulation details are unavailable')

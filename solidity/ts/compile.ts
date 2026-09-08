@@ -81,11 +81,15 @@ const ContractData = funtypes.ReadonlyPartial({
 			object: funtypes.String,
 			opcodes: funtypes.String,
 			sourceMap: funtypes.String,
+			immutableReferences: funtypes.Unknown,
+			linkReferences: funtypes.Unknown,
 		}),
 		deployedBytecode: funtypes.ReadonlyPartial({
 			object: funtypes.String,
 			opcodes: funtypes.String,
 			sourceMap: funtypes.String,
+			immutableReferences: funtypes.Unknown,
+			linkReferences: funtypes.Unknown,
 		}),
 	}),
 	storageLayout: funtypes.Unknown,
@@ -120,7 +124,20 @@ const mainCompilerSettings = {
 	},
 	outputSelection: {
 		'*': {
-			'*': ['abi', 'evm.bytecode.object', 'evm.bytecode.opcodes', 'evm.bytecode.sourceMap', 'evm.deployedBytecode.object', 'evm.deployedBytecode.opcodes', 'evm.deployedBytecode.sourceMap', 'storageLayout'],
+			'*': [
+				'abi',
+				'evm.bytecode.object',
+				'evm.bytecode.opcodes',
+				'evm.bytecode.sourceMap',
+				'evm.bytecode.immutableReferences',
+				'evm.bytecode.linkReferences',
+				'evm.deployedBytecode.object',
+				'evm.deployedBytecode.opcodes',
+				'evm.deployedBytecode.sourceMap',
+				'evm.deployedBytecode.immutableReferences',
+				'evm.deployedBytecode.linkReferences',
+				'storageLayout',
+			],
 		},
 	},
 }

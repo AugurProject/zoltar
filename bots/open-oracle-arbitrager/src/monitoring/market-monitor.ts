@@ -2,7 +2,7 @@ import { requireDeployedContracts } from '../../../shared/src/monitoring/deploye
 import { randomUUID } from 'node:crypto'
 import { appendFile, mkdir, open, rename, rm } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import { bigintToSafeNumber, formatUnits, getAddress, isAddress, keccak256, type Address, type Chain, type Hex, type PublicClient, type Transport, zeroAddress } from '#ethereum'
+import { bigintToSafeNumber, formatUnits, getAddress, isAddress, keccak256, type Address, type Chain, type Hex, type PublicClient, type Transport, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { augurMarketAbi, augurUniverseAbi, constantProductFactoryAbi, constantProductPairAbi, erc20Abi, factoryAbi, poolAbi } from '#contracts/abi'
 
 const MAINNET_AUGUR_GENESIS_UNIVERSE = getAddress('0x49244BD018Ca9fd1f06ecC07B9E9De773246e5AA')

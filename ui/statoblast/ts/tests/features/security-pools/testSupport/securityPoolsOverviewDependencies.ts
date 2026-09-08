@@ -1,6 +1,6 @@
 import { mock } from 'bun:test'
-import { zeroAddress, zeroHash } from '@zoltar/shared/ethereum'
-import { createSecurityPoolPageFromLoadedPools, type UseSecurityPoolsOverviewDependencies } from '../../../../features/security-pools/hooks/useSecurityPoolsOverview.js'
+import { zeroAddress, zeroHash } from '@zoltar/shared/evm/ethereum'
+import { createSecurityPoolPageFromLoadedPools, type UseSecurityPoolsOverviewDependencies } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolsOverview.js'
 import type { OracleManagerDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 
 export type TestSecurityPoolsOverviewWriteClient = { kind: 'write-client' }

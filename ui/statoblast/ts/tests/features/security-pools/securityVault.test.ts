@@ -1,9 +1,9 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { getAddress, zeroAddress } from '@zoltar/shared/ethereum'
+import { getAddress, zeroAddress } from '@zoltar/shared/evm/ethereum'
 import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { parseOptionalRepAmountInput, parseRepAmountInput } from '@zoltar/ui-core-shared/lib/formInputs.js'
+import { parseOptionalRepAmountInput, parseRepAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import {
 	doesLoadedSecurityVaultMatchSelection,
 	doesSecurityVaultExistOnchain,
@@ -17,9 +17,9 @@ import {
 	isSelectedVaultOwnedByAccount,
 	MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP,
 	ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS,
-} from '../../../features/security-pools/lib/securityVault.js'
-import { createConnectedReadClient } from '@zoltar/ui-core-shared/lib/clients.js'
-import { loadSecurityVaultDetails } from '../../../protocol/securityPools.js'
+} from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityVault.js'
+import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
+import { loadSecurityVaultDetails } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
 
 void describe('security vault helpers', () => {
 	void test('defaults to the connected wallet vault when no explicit vault is selected', () => {

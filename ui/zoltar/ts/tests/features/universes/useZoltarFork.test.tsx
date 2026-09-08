@@ -3,30 +3,21 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
-import { type Address, getAddress, type Hash, zeroAddress } from '@zoltar/shared/ethereum'
+import { type Address, getAddress, type Hash, zeroAddress } from '@zoltar/shared/evm/ethereum'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { useZoltarFork, type UseZoltarForkDependencies } from '../../../features/universes/hooks/useZoltarFork.js'
+import { useZoltarFork, type UseZoltarForkDependencies } from '@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarFork.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import { createInitialTransactionTrayState, markTransactionFailed, markTransactionRequested, TRANSACTION_ACTION_LOCK_REASON } from '@zoltar/ui-core-shared/lib/transactionTray.js'
+import { createInitialTransactionTrayState, markTransactionFailed, markTransactionRequested, TRANSACTION_ACTION_LOCK_REASON } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
 import type { MarketDetails, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 
 type UseZoltarForkState = ReturnType<typeof useZoltarFork>
 
 const WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000a1')
 const NEXT_WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000b2')
 const REPUTATION_TOKEN_ADDRESS = getAddress('0x00000000000000000000000000000000000000c3')
-
-function createDeferred<T>() {
-	let resolve: (value: T) => void = () => undefined
-	let reject: (reason?: unknown) => void = () => undefined
-	const promise = new Promise<T>((promiseResolve, promiseReject) => {
-		resolve = promiseResolve
-		reject = promiseReject
-	})
-	return { promise, reject, resolve }
-}
 
 function createUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarUniverseSummary {
 	return {

@@ -1,0 +1,129 @@
+import * as path from 'node:path'
+import * as process from 'node:process'
+import * as url from 'node:url'
+import { projectDependencyClosure, projects } from '../repo/projects.ts'
+
+export const UI_APP_IDS = ['zoltar', 'statoblast', 'trading'] as const
+export type UiAppId = (typeof UI_APP_IDS)[number]
+export type UiPackageId = 'coreShared' | 'zoltarShared' | 'statoblastShared' | UiAppId
+
+const UI_PROJECT_ID_BY_PACKAGE_ID: Readonly<Record<UiPackageId, string>> = {
+	coreShared: 'ui-core',
+	statoblast: 'ui-statoblast',
+	statoblastShared: 'ui-statoblast-shared',
+	trading: 'ui-trading',
+	zoltar: 'ui-zoltar',
+	zoltarShared: 'ui-zoltar-shared',
+}
+
+const UI_PACKAGE_ID_BY_PROJECT_ID = new Map(Object.entries(UI_PROJECT_ID_BY_PACKAGE_ID).map(([packageId, projectId]) => [projectId, packageId as UiPackageId]))
+
+function getUiProject(packageId: UiPackageId) {
+	const projectId = UI_PROJECT_ID_BY_PACKAGE_ID[packageId]
+	const project = projects.find(candidate => candidate.id === projectId)
+	if (project === undefined) throw new Error(`UI package ${packageId} is missing canonical project ${projectId}`)
+	return project
+}
+
+export function getUiAppDependencyOrder(appId: UiAppId): readonly UiPackageId[] {
+	return projectDependencyClosure([UI_PROJECT_ID_BY_PACKAGE_ID[appId]])
+		.map(project => UI_PACKAGE_ID_BY_PROJECT_ID.get(project.id))
+		.filter((packageId): packageId is UiPackageId => packageId !== undefined)
+}
+
+export const getUiPackageRoot = (uiRoot: string, packageId: UiPackageId) => path.resolve(uiRoot, '..', getUiProject(packageId).path)
+
+export function isUiAppId(candidate: string): candidate is UiAppId {
+	return (UI_APP_IDS as readonly string[]).includes(candidate)
+}
+
+export function parseUiAppId(candidate: string | undefined, context: string): UiAppId {
+	if (candidate === undefined || candidate === '') throw new Error(`Missing UI app ID for ${context}; expected one of: ${UI_APP_IDS.join(', ')}`)
+	if (!isUiAppId(candidate)) throw new Error(`Unknown UI app ID '${candidate}' for ${context}; expected one of: ${UI_APP_IDS.join(', ')}`)
+	return candidate
+}
+
+export function parseUiAppIdFromProcess(context: string): UiAppId {
+	return parseUiAppId(process.argv[2] ?? process.env['UI_APP'], context)
+}
+
+export type UiAppPaths = {
+	readonly appId: UiAppId
+	readonly repositoryRoot: string
+	readonly uiRoot: string
+	readonly coreSharedRoot: string
+	readonly appRoot: string
+	readonly appSourceRoot: string
+	readonly appGeneratedJsRoot: string
+	readonly appDistRoot: string
+	readonly appDistAssetsRoot: string
+	readonly appIndexHtml: string
+	readonly appEntrypoint: string
+	readonly workerEntrypoint: string
+	readonly coreSharedCssRoot: string
+	readonly faviconSvg: string
+	readonly vendorBuildScript: string
+	readonly workersBuildScript: string
+	readonly testsBuildScript: string
+	readonly productionBuildScript: string
+	readonly projectArtifactsScript: string
+	readonly bundlerPathsScript: string
+	readonly devServerScript: string
+	readonly sharedSourceRoot: string
+	readonly sharedGeneratedJsRoot: string
+}
+
+const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
+
+export function getUiAppPaths(appId: UiAppId): UiAppPaths {
+	const repositoryRoot = path.resolve(directoryOfThisFile, '..', '..')
+	const uiRoot = path.join(repositoryRoot, 'ui')
+	const coreSharedRoot = path.join(uiRoot, 'coreShared')
+	const appRoot = path.join(uiRoot, appId)
+	const appSourceRoot = path.join(appRoot, 'ts')
+	const appGeneratedJsRoot = path.join(appRoot, 'js')
+	const appDistRoot = path.join(appRoot, 'dist')
+	const buildRoot = directoryOfThisFile
+	return {
+		appId,
+		repositoryRoot,
+		uiRoot,
+		coreSharedRoot,
+		appRoot,
+		appSourceRoot,
+		appGeneratedJsRoot,
+		appDistRoot,
+		appDistAssetsRoot: path.join(appDistRoot, 'assets'),
+		appIndexHtml: path.join(appRoot, 'index.html'),
+		appEntrypoint: path.join(appSourceRoot, 'index.ts'),
+		workerEntrypoint: path.join(appSourceRoot, 'simulation', 'tevmWorker.ts'),
+		coreSharedCssRoot: path.join(coreSharedRoot, 'css'),
+		faviconSvg: path.join(appRoot, 'favicon.svg'),
+		vendorBuildScript: path.join(buildRoot, 'vendor.mts'),
+		workersBuildScript: path.join(buildRoot, 'workers.mts'),
+		testsBuildScript: path.join(buildRoot, 'tests.mts'),
+		productionBuildScript: path.join(buildRoot, 'production.mts'),
+		projectArtifactsScript: path.join(buildRoot, 'projectArtifacts.mts'),
+		bundlerPathsScript: path.join(buildRoot, 'bundlerPaths.mts'),
+		devServerScript: path.join(buildRoot, 'dev-server.ts'),
+		sharedSourceRoot: path.join(repositoryRoot, 'shared', 'ts'),
+		sharedGeneratedJsRoot: path.join(repositoryRoot, 'shared', 'js'),
+	}
+}
+
+export function getUiCoreSharedPaths() {
+	const repositoryRoot = path.resolve(directoryOfThisFile, '..', '..')
+	const uiRoot = path.join(repositoryRoot, 'ui')
+	const coreSharedRoot = path.join(uiRoot, 'coreShared')
+	return {
+		repositoryRoot,
+		uiRoot,
+		coreSharedRoot,
+		coreSharedSourceRoot: path.join(coreSharedRoot, 'ts'),
+		coreSharedGeneratedJsRoot: path.join(coreSharedRoot, 'js'),
+		coreSharedTestSourceRoot: path.join(coreSharedRoot, 'ts', 'tests'),
+		coreSharedTestOutputRoot: path.join(coreSharedRoot, 'js', 'tests'),
+		sharedSourceRoot: path.join(repositoryRoot, 'shared', 'ts'),
+		sharedGeneratedJsRoot: path.join(repositoryRoot, 'shared', 'js'),
+	}
+}

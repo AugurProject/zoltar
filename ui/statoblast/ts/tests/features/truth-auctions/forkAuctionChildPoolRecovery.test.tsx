@@ -4,17 +4,18 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
-import { getAddress, type Address, zeroAddress } from '@zoltar/shared/ethereum'
-import type { ForkAuctionSectionProps } from '@zoltar/ui-zoltar/features/types.js'
-import type { AccountState, ForkAuctionFormState } from '@zoltar/ui-zoltar/types/app.js'
+import { getAddress, type Address, zeroAddress } from '@zoltar/shared/evm/ethereum'
+import type { ForkAuctionSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
+import type { AccountState, ForkAuctionFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import type { ForkAuctionDetails, ListedSecurityPool, MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 
-const actualContracts = await import('../../../protocol/index.js')
-const actualClients = await import('@zoltar/ui-core-shared/lib/clients.js')
+const actualSecurityPools = await import('@zoltar/ui-statoblast-shared/protocol/securityPools.js')
+const actualForks = await import('@zoltar/ui-zoltar-shared/protocol/forks.js')
+const actualClients = await import('@zoltar/ui-core-shared/wallet/clients.js')
 
 const PARENT_POOL_ADDRESS: Address = '0x00000000000000000000000000000000000000f0'
 const YES_CHILD_POOL_ADDRESS: Address = '0x00000000000000000000000000000000000000f1'
@@ -34,16 +35,20 @@ const loadAllSecurityPoolsMock = mock(async (_client: unknown, parent: Address, 
 	return recoveredPoolsFactory()
 })
 
-mock.module('../../../protocol/index.js', () => ({
-	...actualContracts,
+mock.module('@zoltar/ui-statoblast-shared/protocol/securityPools.js', () => ({
+	...actualSecurityPools,
 	loadSecurityPoolChildren: loadAllSecurityPoolsMock,
+}))
+
+mock.module('@zoltar/ui-zoltar-shared/protocol/forks.js', () => ({
+	...actualForks,
 	loadForkAuctionDetails: mock(async (_client: unknown, securityPoolAddress: Address) => {
 		loadForkAuctionDetailsCalls += 1
 		return childAuctionDetailsFactory(securityPoolAddress)
 	}),
 }))
 
-mock.module('@zoltar/ui-core-shared/lib/clients.js', () => ({
+mock.module('@zoltar/ui-core-shared/wallet/clients.js', () => ({
 	...actualClients,
 	createConnectedReadClient: mock(() => ({
 		readContract: mock(async () => {
@@ -52,7 +57,7 @@ mock.module('@zoltar/ui-core-shared/lib/clients.js', () => ({
 	})),
 }))
 
-const { ForkAuctionSection } = await import('../../../features/truth-auctions/components/ForkAuctionSection.js')
+const { ForkAuctionSection } = await import('@zoltar/ui-statoblast-shared/features/truth-auctions/components/ForkAuctionSection.js')
 
 function createDeferred<T>() {
 	let resolve: (value: T) => void = () => undefined
