@@ -1783,13 +1783,14 @@ button.wallet-asset-action-pending:disabled {
 
 .migration-outcome-list {
 	display: grid;
-	gap: 0.6rem;
-	grid-template-columns: minmax(0, 1fr);
+	gap: 0.6rem 0;
+	grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .migration-outcome-row {
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) auto;
+	grid-column: 1 / -1;
+	grid-template-columns: subgrid;
 	align-items: start;
 	width: 100%;
 	border: 1px solid var(--control-border);
@@ -1869,10 +1870,6 @@ button.wallet-asset-action-pending:disabled {
 }
 
 @media (max-width: 520px) {
-	.migration-outcome-row {
-		grid-template-columns: minmax(0, 1fr) auto;
-	}
-
 	.migration-outcome-metrics {
 		grid-template-columns: minmax(0, 1fr);
 	}
