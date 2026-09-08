@@ -39,13 +39,12 @@
 		"tooling": {
 			"minimumLines": 25.715,
 			"minimumFunctions": 25.476,
-			"maximumAllowedUnloadedFiles": 45,
+			"maximumAllowedUnloadedFiles": 44,
 			"unloadedFilesReviewBy": "2026-11-24",
 			"allowedUnloadedFiles": [
 				"solidity/ts/gas-costs.ts",
 				"solidity/ts/trading/deploy/deploy-local.mts",
 				"tooling/ci/run-ci-preflight.mts",
-				"tooling/ci/run-component-ci.mts",
 				"tooling/contracts/check-contract-boundaries.mts",
 				"tooling/contracts/check-contract-safety.mts",
 				"tooling/contracts/check-trading-number-casts.mts",
