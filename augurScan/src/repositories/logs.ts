@@ -46,7 +46,7 @@ export const logListRows = async (sql: SQL, query: LogListQuery) => {
 	}
 	values.push(query.limit + 1)
 	return await sql.unsafe(
-		`SELECT l.*, b.timestamp AS block_timestamp, b.hash AS canonical_block_hash, t.from_address AS origin_address, c.label AS contract_label, c.kind AS contract_kind, n.id AS network_id, n.name AS network_name, n.explorer_base_url,
+		`SELECT l.*, b.timestamp AS block_timestamp, b.hash AS canonical_block_hash, t.from_address AS origin_address, t.to_address, a.function_name, a.function_signature, a.summary AS action_summary, c.label AS contract_label, c.kind AS contract_kind, n.id AS network_id, n.name AS network_name, n.explorer_base_url,
 			CASE WHEN l.canonical THEN 'canonical'
 				WHEN invalidation.reason = 'chain-reorg' THEN 'chain-orphaned'
 				WHEN invalidation.reason = 'manifest-reset' THEN 'manifest-superseded'
@@ -59,6 +59,7 @@ export const logListRows = async (sql: SQL, query: LogListQuery) => {
 		FROM logs l
 		JOIN blocks b ON b.chain_id = l.chain_id AND b.hash = l.block_hash
 		JOIN transactions t ON t.chain_id = l.chain_id AND t.block_hash = l.block_hash AND t.hash = l.tx_hash
+		LEFT JOIN actions a ON a.chain_id = l.chain_id AND a.block_hash = l.block_hash AND a.tx_hash = l.tx_hash
 		JOIN networks n ON n.chain_id = l.chain_id
 		LEFT JOIN contracts c ON c.chain_id = l.chain_id AND c.address = l.emitter_address AND c.canonical
 		LEFT JOIN LATERAL (

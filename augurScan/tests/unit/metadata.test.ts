@@ -470,3 +470,40 @@ describe('ABI metadata', () => {
 		}
 	})
 })
+
+describe('deterministic proxy deployment actions', () => {
+	const proxy = { address: getAddress('0x7a0d94f55792c434d74a40883c6ed8545e406d12'), label: 'Proxy Deployer', kind: 'proxyDeployer', provenance: 'manifest' }
+	const initCode = '0x60a0604052'
+	const deployedAddress = getAddress('0x7D6c6809d80965f5eeE276E86A8A0cDF473E5B47')
+
+	test('decodes raw creation bytecode rather than looking for a function selector', () => {
+		const decoded = decodeAction(proxy, initCode, new Map([[deployedAddress.toLowerCase(), 'Deployment Status Oracle']]))
+		expect(decoded.status).toBe('decoded')
+		expect(decoded.name).toBe('deploy')
+		expect(decoded.signature).toBeUndefined()
+		expect(decoded.error).toBeUndefined()
+		expect(decoded.summary).toBe('Deploy Deployment Status Oracle via Proxy Deployer')
+		expect(decoded.arguments?.['deployedContract']).toBe(deployedAddress)
+		expect(decoded.argumentSchema).toContainEqual({ index: 0, name: 'deployedContract', type: 'address' })
+		expect(decoded.referencedAddresses).toEqual([deployedAddress])
+	})
+
+	test('identifies a deployment even when the created address has no registry label', () => {
+		const decoded = decodeAction(proxy, initCode, new Map())
+		expect(decoded.status).toBe('decoded')
+		expect(decoded.summary).toBe(`Deploy ${deployedAddress} via Proxy Deployer`)
+	})
+
+	test('does not misclassify bytecode-like input to a normal ABI contract', () => {
+		expect(decodeAction({ ...proxy, kind: 'zoltar' }, initCode, new Map()).status).toBe('failed')
+	})
+
+	test('treats empty init code sent to the proxy as a deployment, not a native transfer', () => {
+		expect(decodeAction(proxy, '0x', new Map()).name).toBe('deploy')
+	})
+})
+
+test('retains malformed proxy calldata as failed evidence rather than throwing', () => {
+	const proxy = { address: account, label: 'Proxy Deployer', kind: 'proxyDeployer', provenance: 'manifest' }
+	expect(decodeAction(proxy, '0xzz', new Map()).status).toBe('failed')
+})
