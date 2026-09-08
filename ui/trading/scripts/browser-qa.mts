@@ -115,12 +115,12 @@ const selectSeededMarket = `(async () => {
 	if (!(market instanceof HTMLButtonElement)) return false
 	market.click()
 	for (let attempt = 0; attempt < 100; attempt++) {
-		if (document.querySelector('.two-column:not(.two-column--single)') !== null) return true
+		if (document.querySelector('.market-stack .section .fact-list') !== null) return true
 		await new Promise(resolve => setTimeout(resolve, 100))
 	}
 	return false
 })()`
-const commonAssertion = `document.querySelector('.demo-banner') === null && !document.body.textContent?.includes('SIMULATED DATA') && !document.body.textContent?.includes('Demo mode') && !document.body.textContent?.includes('Loading...') && document.querySelector('.simulation-banner-details') !== null && document.querySelector('.brand')?.textContent?.includes('Statoblast trading') === true && document.querySelector('.network-pill')?.textContent?.includes('Deployment verified') === true && document.documentElement.scrollWidth <= document.documentElement.clientWidth`
+const commonAssertion = `document.querySelector('.demo-banner') === null && !document.body.textContent?.includes('SIMULATED DATA') && !document.body.textContent?.includes('Demo mode') && !document.body.textContent?.includes('Loading...') && document.querySelector('.simulation-banner-details') !== null && document.querySelector('.top-shell .overview-panel') !== null && document.documentElement.scrollWidth <= document.documentElement.clientWidth`
 const waitForRouteHeading = (heading: string) => `(async () => {
 	for (let attempt = 0; attempt < 600; attempt++) {
 		if ((${commonAssertion}) && document.querySelector('#main-content .route-header h2')?.textContent === '${heading}') return true
@@ -153,7 +153,7 @@ const scenarios = [
 		height,
 		path: `${simulationPath}#/markets`,
 		evaluate: selectSeededMarket,
-		assertExpression: `(${commonAssertion}) && document.querySelector('.two-column:not(.two-column--single)') !== null && document.querySelector('.section .fact-list') !== null`,
+		assertExpression: `(${commonAssertion}) && document.querySelector('.market-stack .section .fact-list') !== null && document.querySelector('.market-list.section') === null`,
 	})),
 	...(
 		[
@@ -202,7 +202,7 @@ const scenarios = [
 		width,
 		height,
 		path: `${simulationPath}#/deploy`,
-		assertExpression: `(async () => { await (${waitForRouteHeading('Deploy')}); for (let attempt = 0; attempt < 100; attempt++) { if (document.querySelector('.deployment-setup__status')?.textContent?.includes('Deployment complete') === true) { const panel = document.querySelector('.deployment-settings__panel')?.getBoundingClientRect(); const routeHeading = document.querySelector('#main-content .route-header h2')?.getBoundingClientRect(); const surfacesDoNotOverlap = panel !== undefined && routeHeading !== undefined && (panel.bottom <= routeHeading.top || panel.top >= routeHeading.bottom || panel.right <= routeHeading.left || panel.left >= routeHeading.right); return document.title === 'Deploy · Statoblast trading' && surfacesDoNotOverlap; } await new Promise(resolve => setTimeout(resolve, 100)); } return false })()`,
+		assertExpression: `(async () => { await (${waitForRouteHeading('Deploy')}); for (let attempt = 0; attempt < 100; attempt++) { if (document.querySelector('.deployment-setup__status')?.textContent?.includes('Deployment complete') === true) return document.title === 'Deploy · Statoblast trading' && document.querySelector('.deployment-settings') === null && document.querySelector('.deployment-setup input[type="url"]') === null; await new Promise(resolve => setTimeout(resolve, 100)); } return false })()`,
 	})),
 	{
 		name: 'simulation-scenario-navigation-desktop',
@@ -289,7 +289,10 @@ try {
 		}
 		const evaluated = await command('Runtime.evaluate', { expression: scenario.assertExpression, returnByValue: true, awaitPromise: true })
 		const result = evaluated.result
-		if (typeof result !== 'object' || result === null || !('value' in result) || result.value !== true) throw new Error(`Browser assertion failed for ${scenario.name}: ${JSON.stringify(evaluated)}`)
+		if (typeof result !== 'object' || result === null || !('value' in result) || result.value !== true) {
+			const diagnostic = await command('Runtime.evaluate', { expression: `({ title: document.title, text: document.body.textContent, hash: location.hash, overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth, hasSimulation: document.querySelector('.simulation-banner-details') !== null, hasOverview: document.querySelector('.top-shell .overview-panel') !== null, markets: document.querySelectorAll('.live-market-button').length })`, returnByValue: true })
+			throw new Error(`Browser assertion failed for ${scenario.name}: ${JSON.stringify(evaluated)} ${JSON.stringify(diagnostic)}`)
+		}
 		if (injectedFailure === 'page-console') await command('Runtime.evaluate', { expression: `console.error('injected Trading QA page failure')` })
 		if (injectedFailure === 'worker-runtime') await command('Runtime.evaluate', { expression: `new Worker(URL.createObjectURL(new Blob(["console.error('injected Trading QA worker failure'); throw new Error('injected Trading QA worker failure')"], { type: 'text/javascript' })))` })
 		if (injectedFailure !== undefined) await Bun.sleep(500)

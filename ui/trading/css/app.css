@@ -132,6 +132,8 @@ summary:focus-visible {
 	position: sticky;
 	top: 0;
 	z-index: 10;
+	width: min(1260px, calc(100% - 2rem));
+	margin: 1rem auto 0;
 }
 .site-header {
 	height: auto;
@@ -140,10 +142,9 @@ summary:focus-visible {
 	grid-template-columns: 1fr auto;
 	align-items: center;
 	gap: 0.75rem;
-	padding: 0 clamp(1rem, 4vw, 4rem);
-	border-bottom: 1px solid var(--line);
-	background: rgb(9 13 18 / 88%);
-	backdrop-filter: blur(16px);
+	padding: clamp(1rem, 2.5vw, 1.5rem);
+	border: 0;
+	background: transparent;
 	position: relative;
 }
 .brand {
@@ -1227,7 +1228,7 @@ summary {
 }
 .two-column {
 	display: grid;
-	grid-template-columns: 1fr 1fr;
+	grid-template-columns: minmax(0, 1fr);
 	gap: 1rem;
 	align-items: start;
 }
@@ -1947,9 +1948,23 @@ summary {
 	gap: 0.35rem;
 	padding: 1rem;
 	border: 1px solid var(--line);
-	background: transparent;
+	background: var(--surface);
 	color: var(--text);
 	text-align: left;
+}
+
+.market-stack {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: 1rem;
+}
+
+.market-list {
+	min-width: 0;
+}
+
+.market-list .section-heading {
+	margin-bottom: 1rem;
 }
 
 .live-market-button + .live-market-button {
@@ -2030,8 +2045,7 @@ summary {
 }
 
 :root[data-product="trading"] .site-header {
-	border-color: var(--border-default);
-	background: color-mix(in srgb, var(--bg-deep) 92%, transparent);
+	background: transparent;
 }
 
 :root[data-product="trading"]
@@ -2099,9 +2113,7 @@ summary {
 }
 
 :root[data-product="trading"] :where(.market-row, .live-market-button, .portfolio-groups > .operation-block) {
-	border-width: 0 0 1px;
 	border-radius: 0;
-	background: transparent;
 }
 
 :root[data-product="trading"] .live-market-button + .live-market-button {

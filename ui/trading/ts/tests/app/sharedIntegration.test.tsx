@@ -154,6 +154,12 @@ test('Trading preserves its route headers and does not restyle shared disclosure
 	expect(css).toContain('details:not(.wallet-summary):not(.simulation-banner-details) > summary::after')
 })
 
+test('Trading keeps the initial loading fallback visible while the environment boots', async () => {
+	const source = await Bun.file(new URL('../../index.ts', import.meta.url)).text()
+	expect(source.indexOf('await initializeTradingActiveEnvironment()')).toBeLessThan(source.indexOf("document.querySelector('body > main')?.remove()"))
+	expect(source).toContain('initialize: initializeTradingForMount')
+})
+
 test('verified deployment status stays accurate in live and simulated environments', () => {
 	const address = '0x00000000000000000000000000000000000000a1'
 	const configuration = { chainId: 1, chainName: 'Ethereum', factory: address, feeBps: 30, router: address, rpcUrl: 'https://rpc.example', securityPoolFactory: address, zoltar: address }

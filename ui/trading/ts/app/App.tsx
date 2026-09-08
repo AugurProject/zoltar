@@ -246,9 +246,9 @@ export function App({
 				onEnvironmentChanged={refreshActiveEnvironment}
 				onRefresh={async () => window.location.reload()}
 				renderHeader={(simulationBanner, settingsMenu) => (
-					<div class='site-chrome'>
+					<div class='top-shell site-chrome'>
 						{simulationBanner}
-						<header class={`site-header${deploymentSetupActive ? ' site-header--deployment' : ''}`}>
+						<header class={`overview-panel overview-wallet-panel site-header${deploymentSetupActive ? ' site-header--deployment' : ''}`}>
 							<a class='brand' href={getTradingRouteHref('#/markets')} aria-label={appCopy.appHomeLabel} aria-disabled={workflowLocked} onClick={workflowLocked ? event => event.preventDefault() : undefined}>
 								<img class='brand__mark' src='./favicon.svg' alt='' />
 								<span>
