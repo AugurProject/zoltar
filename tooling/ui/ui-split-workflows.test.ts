@@ -4,20 +4,21 @@ import { join } from 'node:path'
 import { projectQuery } from '../repo/query-projects.mts'
 import { taskProjects } from '../repo/projects.ts'
 import { dockerGlobalArguments, dockerInstructions, parseDockerfile } from '../testing/packaging-parsers.ts'
+import { reviewableGitHubPath } from '../testing/reviewable-github-path.ts'
 
 const repositoryRoot = join(import.meta.dir, '..', '..')
-const activeCiWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'ci.yml')
+const activeCiWorkflowPath = reviewableGitHubPath(repositoryRoot, 'workflows/ci.yml')
 const stagedCiWorkflowPath = join(repositoryRoot, 'workflow-changes', 'ci.yml')
-const browserWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'browser-workflow.yml')
-const activeCoverageWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'coverage.yml')
+const browserWorkflowPath = reviewableGitHubPath(repositoryRoot, 'workflows/browser-workflow.yml')
+const activeCoverageWorkflowPath = reviewableGitHubPath(repositoryRoot, 'workflows/coverage.yml')
 const coverageWorkflowPath = activeCoverageWorkflowPath
-const testDomainsWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'test-domains.yml')
-const testStabilityWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'test-stability.yml')
-const deployTestnetWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'deploy-testnet.yml')
-const setupActionPath = join(repositoryRoot, '.github', 'actions', 'setup-ci', 'action.yml')
-const setupComponentActionPath = join(repositoryRoot, '.github', 'actions', 'setup-component', 'action.yml')
-const ipfsDeployWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'ipfs-deploy.yml')
-const versionDeployWorkflowPath = join(repositoryRoot, '.github', 'workflows', 'version-deploy.yml')
+const testDomainsWorkflowPath = reviewableGitHubPath(repositoryRoot, 'workflows/test-domains.yml')
+const testStabilityWorkflowPath = reviewableGitHubPath(repositoryRoot, 'workflows/test-stability.yml')
+const deployTestnetWorkflowPath = reviewableGitHubPath(repositoryRoot, 'workflows/deploy-testnet.yml')
+const setupActionPath = reviewableGitHubPath(repositoryRoot, 'actions/setup-ci/action.yml')
+const setupComponentActionPath = reviewableGitHubPath(repositoryRoot, 'actions/setup-component/action.yml')
+const ipfsDeployWorkflowPath = reviewableGitHubPath(repositoryRoot, 'workflows/ipfs-deploy.yml')
+const versionDeployWorkflowPath = reviewableGitHubPath(repositoryRoot, 'workflows/version-deploy.yml')
 const dockerfilePath = join(repositoryRoot, 'ui', 'Dockerfile')
 const rootPackagePath = join(repositoryRoot, 'package.json')
 const tradingPackagePath = join(repositoryRoot, 'ui', 'trading', 'package.json')

@@ -25,8 +25,8 @@ export function createComponentCiPlan(packageName: string, registry?: readonly P
 	return plan
 }
 
-if (import.meta.main) {
-	const packageName = process.argv[2]
+export async function runComponentCiCommand(args: readonly string[] = process.argv.slice(2)): Promise<void> {
+	const packageName = args[0]
 	if (packageName === undefined) throw new Error('Unknown component package: (missing)')
 	for (const task of createComponentCiPlan(packageName)) {
 		console.log(`component-ci(${packageName}): ${task.command.join(' ')}`)
@@ -35,3 +35,5 @@ if (import.meta.main) {
 		if (exitCode !== 0) process.exit(exitCode)
 	}
 }
+
+if (import.meta.main) await runComponentCiCommand()

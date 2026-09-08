@@ -101,9 +101,8 @@ function writeGitHubOutput(classification: CiChangeClassification): void {
 	)
 }
 
-if (import.meta.main) {
-	const args = process.argv.slice(2),
-		githubOutput = args.includes('--github-output'),
+export function runClassifyCiChangeCommand(args: readonly string[] = process.argv.slice(2)): void {
+	const githubOutput = args.includes('--github-output'),
 		full = args.includes('--full'),
 		baseIndex = args.indexOf('--base-ref')
 	const explicitFiles: string[] = []
@@ -133,3 +132,5 @@ if (import.meta.main) {
 	if (githubOutput) writeGitHubOutput(classification)
 	console.log(JSON.stringify(classification))
 }
+
+if (import.meta.main) runClassifyCiChangeCommand()

@@ -2,6 +2,13 @@
 	"workspaces": {
 		".": {
 			"entry": [
+				"scripts/classify-ci-change.mts!",
+				"scripts/documentation-tools-runtime.test.ts!",
+				"scripts/ensure-contract-artifacts.mts!",
+				"scripts/install-frozen.mts!",
+				"scripts/merge-test-timings.mts!",
+				"scripts/run-component-ci.mts!",
+				"scripts/run-deploy-testnet.mts!",
 				"docs/charts/chartRuntime.ts!",
 				"docs/runtime/{auctionClearing,deploymentMaskDecoder,docsShell,responsiveDocs,interactiveTools,invariantExplorer,mmrProofPlanner,openOracleTools}.ts!",
 				"tooling/**/*.test.ts",

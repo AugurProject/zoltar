@@ -234,11 +234,8 @@ export async function prepareHeadlessContractArtifacts(refreshRootDependency = r
 	if (!refreshedDuringBuild) await refreshRootDependency()
 }
 
-const currentScriptPath = url.fileURLToPath(import.meta.url)
-const invokedScriptPath = process.argv[1]
-const mode = process.argv[2]
-
-if (invokedScriptPath !== undefined && path.resolve(invokedScriptPath) === currentScriptPath) {
+export async function runEnsureContractArtifactsCommand(args: readonly string[] = process.argv.slice(2)): Promise<void> {
+	const mode = args[0]
 	if (mode === '--ensure-shared-only') {
 		await prepareHeadlessContractArtifacts(refreshAllSharedDependencies, ensureSharedBuildIsCurrent)
 	} else if (mode === '--headless') {
@@ -252,3 +249,5 @@ if (invokedScriptPath !== undefined && path.resolve(invokedScriptPath) === curre
 		await prepareHeadlessContractArtifacts(refreshAllSharedDependencies)
 	}
 }
+
+if (import.meta.main) await runEnsureContractArtifactsCommand()

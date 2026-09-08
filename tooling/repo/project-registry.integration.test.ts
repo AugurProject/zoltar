@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
+import { reviewableGitHubPath } from '../testing/reviewable-github-path.ts'
 import { componentProjects, projects, taskProjects, validateProjectRegistryFiles } from './projects.ts'
 
 const repositoryRoot = path.resolve(import.meta.dir, '../..')
@@ -59,7 +60,7 @@ test('local installation and CI use the package-manager Bun version', async () =
 	if (bunVersion === undefined) throw new Error(`Unsupported packageManager declaration: ${packageManager}`)
 
 	const installSource = await fs.readFile(path.join(repositoryRoot, 'tooling/repo/install-frozen.mts'), 'utf8')
-	const ciSource = await fs.readFile(path.join(repositoryRoot, '.github/workflows/ci.yml'), 'utf8')
+	const ciSource = await fs.readFile(reviewableGitHubPath(repositoryRoot, 'workflows/ci.yml'), 'utf8')
 	expect(installSource).toContain(`const repositoryBunVersion = '${bunVersion}'`)
 	expect(ciSource).toContain(`BUN_VERSION: ${bunVersion}`)
 })
