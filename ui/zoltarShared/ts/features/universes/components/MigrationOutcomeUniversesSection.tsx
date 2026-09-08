@@ -7,6 +7,7 @@ import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSu
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { UniverseLink } from './UniverseLink.js'
+import { formatUniverseIdHex } from '../lib/universe.js'
 import type { ZoltarChildUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 
 type MigrationOutcomeUniversesSectionProps = {
@@ -82,14 +83,22 @@ export function MigrationOutcomeUniversesSection({ childUniverses, childUniverse
 							),
 							details: (
 								<>
-									<span>
-										{zoltarCopy.walletBalanceLabel}{' '}
+									<span className='migration-outcome-metric'>
+										<span className='migration-outcome-metric-label'>{commonCopy.universe}</span>
+										<strong>{formatUniverseIdHex(child.universeId)}</strong>
+									</span>
+									<span className='migration-outcome-metric'>
+										<span className='migration-outcome-metric-label'>{commonCopy.reputationToken}</span>
+										<strong>{child.reputationTokenName ?? child.reputationTokenSymbol ?? commonCopy.notDeployed}</strong>
+									</span>
+									<span className='migration-outcome-metric'>
+										<span className='migration-outcome-metric-label'>{zoltarCopy.walletBalanceLabel}</span>
 										<strong>
 											<CurrencyValue copyable={false} loading={isHeldBalanceLoading} value={heldBalance} suffix={commonCopy.rep} />
 										</strong>
 									</span>
-									<span>
-										{zoltarCopy.migratedBalanceLabel}{' '}
+									<span className='migration-outcome-metric'>
+										<span className='migration-outcome-metric-label'>{zoltarCopy.migratedBalanceLabel}</span>
 										<strong>
 											<CurrencyValue copyable={false} loading={isHeldBalanceLoading} value={heldBalance} suffix={commonCopy.rep} /> / <CurrencyValue copyable={false} loading={migrationBalance === undefined} value={migrationBalance} suffix={commonCopy.rep} />
 										</strong>

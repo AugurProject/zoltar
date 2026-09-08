@@ -1784,13 +1784,13 @@ button.wallet-asset-action-pending:disabled {
 .migration-outcome-list {
 	display: grid;
 	gap: 0.6rem;
-	grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+	grid-template-columns: minmax(0, 1fr);
 }
 
 .migration-outcome-row {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) auto;
-	align-items: stretch;
+	align-items: start;
 	width: 100%;
 	border: 1px solid var(--control-border);
 	background: var(--control-bg);
@@ -1810,7 +1810,7 @@ button.wallet-asset-action-pending:disabled {
 	display: flex;
 	align-items: flex-start;
 	width: 100%;
-	padding: 0.7rem 0.8rem;
+	padding: 0.9rem 1rem;
 	border: 0;
 	border-radius: 0;
 	background: transparent;
@@ -1820,9 +1820,9 @@ button.wallet-asset-action-pending:disabled {
 
 .migration-outcome-actions {
 	display: flex;
-	align-items: center;
-	padding: 0.55rem;
-	border-left: 1px solid var(--control-border);
+	align-items: flex-start;
+	justify-content: flex-end;
+	padding: 0.75rem 0.75rem 0 0;
 }
 
 .migration-outcome-label {
@@ -1839,15 +1839,53 @@ button.wallet-asset-action-pending:disabled {
 
 .migration-outcome-metrics {
 	display: grid;
-	gap: 0.25rem;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 0.5rem 1rem;
+	margin-top: 0.25rem;
 	color: var(--text-secondary);
 	font-size: var(--font-caption);
 	line-height: 1.35;
 }
 
+.migration-outcome-metric {
+	display: grid;
+	gap: 0.16rem;
+	min-width: 0;
+	overflow: hidden;
+}
+
+.migration-outcome-metric-label {
+	color: var(--muted);
+	font-size: var(--font-xs);
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+@media (max-width: 900px) {
+	.migration-outcome-metrics {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 520px) {
+	.migration-outcome-row {
+		grid-template-columns: minmax(0, 1fr) auto;
+	}
+
+	.migration-outcome-metrics {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
 .migration-outcome-metrics strong {
+	display: block;
+	min-width: 0;
+	max-width: 100%;
 	color: var(--text);
 	font-weight: 600;
+	overflow-wrap: anywhere;
+	word-break: break-word;
 }
 
 .status-list span,

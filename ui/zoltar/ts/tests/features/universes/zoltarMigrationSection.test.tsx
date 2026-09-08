@@ -214,7 +214,7 @@ describe('ZoltarMigrationSection', () => {
 					zoltarUniverse: createUniverse({
 						childUniverses: [
 							{ exists: false, forkTime: 1n, outcomeIndex: 1n, outcomeLabel: 'Yes', parentUniverseId: 1n, reputationToken: zeroAddress, universeId: 2n },
-							{ exists: true, forkTime: 1n, outcomeIndex: 2n, outcomeLabel: 'No', parentUniverseId: 1n, reputationToken: CHILD_REP_ADDRESS, universeId: 3n },
+							{ exists: true, forkTime: 1n, outcomeIndex: 2n, outcomeLabel: 'No', parentUniverseId: 1n, reputationToken: CHILD_REP_ADDRESS, reputationTokenName: 'No Reputation', reputationTokenSymbol: 'REP-NO', universeId: 3n },
 						],
 					}),
 				}),
@@ -226,6 +226,8 @@ describe('ZoltarMigrationSection', () => {
 		const deployedLink = queries.getByRole('link', { name: 'Deployed' })
 		expect(deployedLink.getAttribute('href')).toBe(getUniverseLinkHref(3n))
 		expect(deployedLink.querySelector('[role="button"]')).toBeNull()
+		expect(document.body.textContent).toContain('0x3')
+		expect(document.body.textContent).toContain('No Reputation')
 		queries.getByRole('button', { name: /^No/ }).click()
 		expect(formUpdates).toEqual([{ outcomeIndexes: '1, 2' }])
 		queries.getByRole('button', { name: 'Deploy universe' }).click()
@@ -289,7 +291,7 @@ describe('ZoltarMigrationSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(document.body.textContent).toContain('Yes')
-		expect(document.body.textContent).not.toContain('Universe 0x2')
+		expect(document.body.textContent).toContain('0x2')
 		expect(document.body.textContent).toContain('Child-Universe REP Received')
 		expect(document.body.textContent).not.toContain('Technical Details')
 		expect(document.body.textContent?.match(/Selected Destinations/g)).toHaveLength(1)

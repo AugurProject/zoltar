@@ -8,10 +8,10 @@ export function OutcomeSelectionList({ className = '', emptyMessage, items }: Ou
 			{items.map(item => (
 				<div className={`migration-outcome-row ${item.selected ? 'active' : ''}`} key={item.key}>
 					<button aria-pressed={item.selected} className='migration-outcome-select' disabled={item.disabled} onClick={item.onSelect} type='button'>
-						<span className='migration-outcome-copy'>
+						<div className='migration-outcome-copy'>
 							<span className='migration-outcome-label'>{item.label}</span>
-							{item.details === undefined ? undefined : <span className='migration-outcome-metrics'>{item.details}</span>}
-						</span>
+							{item.details === undefined ? undefined : <div className='migration-outcome-metrics'>{item.details}</div>}
+						</div>
 					</button>
 					{item.actions === undefined ? undefined : <div className='migration-outcome-actions'>{item.actions}</div>}
 				</div>
