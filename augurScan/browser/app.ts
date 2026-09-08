@@ -7,6 +7,7 @@ import {
 	isAmmPriceValue,
 	isChartRowValue,
 	isEntityHistoryCoverageValue,
+	isJsonRecord,
 	isJsonValue,
 	isLogDetailValue,
 	isNetworkRecordValue,
@@ -20,6 +21,7 @@ import {
 	isUniswapPriceValue,
 	isUniverseStateEntityValue,
 	isVaultStateEntityValue,
+	type JsonRecord,
 	type JsonValue,
 	type OperationsResponse,
 	operationRecords,
@@ -93,6 +95,7 @@ import {
 	restoreActivityDetailFocus,
 	restoreDisclosureState,
 	retainedPaginationAvailable,
+	riskPaginationForCollectedCursors,
 	runSerializedOperationsLoad,
 	runWithForegroundReservation,
 	shouldClearPendingDetailState,
@@ -238,9 +241,12 @@ interface RichListRecord {
 		claimableFeesAttoEth: SerializedAtomicInteger
 		blockNumber: string
 	}>
-	escalation_claims?: Array<Record<string, unknown>>
-	auction_claims?: Array<Record<string, unknown>>
-	[key: string]: unknown
+	escalation_claims?: JsonRecord[]
+	auction_claims?: JsonRecord[]
+	lp_positions?: JsonRecord[]
+	fork_participation?: JsonRecord[]
+	report_participation?: JsonRecord[]
+	portfolioPagination?: JsonRecord
 }
 type PoolRecord = (typeof demoCatalog.pools)[number] & { current_state?: Record<string, JsonValue> }
 type VaultRecord = (typeof demoCatalog.vaults)[number]
@@ -535,22 +541,22 @@ let operationsCatalogState:
 	| {
 			readonly chainId: string
 			readonly section: PagedOperationsCatalogSection
-			readonly items: readonly Record<string, unknown>[]
+			readonly items: readonly JsonRecord[]
 	  }
 	| undefined
 let operationsRiskCatalogState:
 	| {
 			readonly chainId: string
-			readonly pools: readonly Record<string, unknown>[]
-			readonly vaults: readonly Record<string, unknown>[]
+			readonly pools: readonly JsonRecord[]
+			readonly vaults: readonly JsonRecord[]
 	  }
 	| undefined
 let operationsDetailState:
 	| {
 			readonly chainId: string
 			readonly routeKey: string
-			readonly items: readonly Record<string, unknown>[]
-			readonly decisionItems: readonly Record<string, unknown>[]
+			readonly items: readonly JsonRecord[]
+			readonly decisionItems: readonly JsonRecord[]
 			readonly riskHistoryOffset: number
 	  }
 	| undefined
@@ -3099,24 +3105,25 @@ const operationsRiskCatalogEndpoint = (poolCursor?: string, vaultCursor?: string
 	return `/api/v1/state/risk?${query.toString()}`
 }
 
-const catalogOperationsResponse = (
-	response: OperationsResponse,
-	section: PagedOperationsCatalogSection,
-	items: readonly Record<string, unknown>[],
-): OperationsResponse => ({ ...response, data: { ...response.data, [section]: items, _catalogPage: response.data } })
+const catalogOperationsResponse = (response: OperationsResponse, section: PagedOperationsCatalogSection, items: readonly JsonRecord[]): OperationsResponse => ({
+	...response,
+	data: { ...response.data, [section]: items, _catalogPage: response.data },
+})
 
-const riskCatalogOperationsResponse = (
-	response: OperationsResponse,
-	pools: readonly Record<string, unknown>[],
-	vaults: readonly Record<string, unknown>[],
-): OperationsResponse => ({
+const riskCatalogOperationsResponse = (response: OperationsResponse, pools: readonly JsonRecord[], vaults: readonly JsonRecord[]): OperationsResponse => ({
 	...response,
 	data: {
 		risk: { ...response.data, pools, vaults },
 		_riskCatalogPage: response.data,
 		totals: {
-			pools: isRecord(response.data['pagination']) ? response.data['pagination']['poolTotal'] : pools.length,
-			vaults: isRecord(response.data['pagination']) ? response.data['pagination']['vaultTotal'] : vaults.length,
+			pools:
+				isJsonRecord(response.data['pagination']) && typeof response.data['pagination']['poolTotal'] === 'number'
+					? response.data['pagination']['poolTotal']
+					: pools.length,
+			vaults:
+				isJsonRecord(response.data['pagination']) && typeof response.data['pagination']['vaultTotal'] === 'number'
+					? response.data['pagination']['vaultTotal']
+					: vaults.length,
 		},
 	},
 })
@@ -3825,7 +3832,7 @@ const rawEvidence = (value: unknown) => {
 	return disclosure
 }
 
-const detailEvidenceRows = (items: readonly Record<string, unknown>[]) =>
+const detailEvidenceRows = (items: readonly JsonRecord[]) =>
 	items.map((item) => {
 		const eventName = String(item['event_name'] ?? item['semantic_event_kind'] ?? 'Protocol evidence')
 		const block = item['block_number']
@@ -3834,7 +3841,7 @@ const detailEvidenceRows = (items: readonly Record<string, unknown>[]) =>
 		return row
 	})
 
-const tradingEvidenceRows = (items: readonly Record<string, unknown>[]) =>
+const tradingEvidenceRows = (items: readonly JsonRecord[]) =>
 	items.map((item) => {
 		const eventName = String(item['event_name'] ?? 'AMM event')
 		const data = isRecord(item['event_data']) ? item['event_data'] : {}
@@ -3855,7 +3862,7 @@ const tradingEvidenceRows = (items: readonly Record<string, unknown>[]) =>
 		return row
 	})
 
-const reportEvidenceRows = (items: readonly Record<string, unknown>[]) =>
+const reportEvidenceRows = (items: readonly JsonRecord[]) =>
 	items.map((item) => {
 		const data = isRecord(item['report_data']) ? item['report_data'] : {}
 		const token1 = String(data['token1'] ?? 'token 1')
@@ -3896,7 +3903,7 @@ const reportEvidenceRows = (items: readonly Record<string, unknown>[]) =>
 		return row
 	})
 
-const detailPageRecord = (data: Record<string, unknown>, key: string): Record<string, unknown> => (isRecord(data[key]) ? data[key] : {})
+const detailPageRecord = (data: JsonRecord, key: string): JsonRecord => (isJsonRecord(data[key]) ? data[key] : {})
 
 const renderOperationsDetail = (response: OperationsResponse, route: OperationsDetailRoute, preservedContext?: OperationsRenderContext) => {
 	const content = $('#operations-content')
@@ -4362,7 +4369,10 @@ const loadOperationsCatalog = async (section: PagedOperationsCatalogSection, ret
 	)
 	if (first === undefined || last === undefined) throw new Error('Operations catalog returned no page')
 	return catalogOperationsResponse(
-		{ ...first, data: { ...last.data, hasMore: snapshot.nextCursor !== undefined, nextCursor: snapshot.nextCursor } },
+		{
+			...first,
+			data: { ...last.data, hasMore: snapshot.nextCursor !== undefined, ...(snapshot.nextCursor === undefined ? {} : { nextCursor: snapshot.nextCursor }) },
+		},
 		section,
 		snapshot.items,
 	)
@@ -4395,19 +4405,13 @@ const loadOperationsRiskCatalog = async (poolTargetCount: number, vaultTargetCou
 		(item) => `${String(item['pool_address'] ?? '')}:${String(item['vault_address'] ?? '')}`,
 	)
 	if (first === undefined || last === undefined) throw new Error('Risk catalog returned no page')
-	const pagination = isRecord(last.data['pagination']) ? last.data['pagination'] : {}
+	const pagination = isJsonRecord(last.data['pagination']) ? last.data['pagination'] : {}
 	return riskCatalogOperationsResponse(
 		{
 			...first,
 			data: {
 				...last.data,
-				pagination: {
-					...pagination,
-					poolHasMore: collected.leftNextCursor !== undefined,
-					poolNextCursor: collected.leftNextCursor,
-					vaultHasMore: collected.rightNextCursor !== undefined,
-					vaultNextCursor: collected.rightNextCursor,
-				},
+				pagination: riskPaginationForCollectedCursors(pagination, collected.leftNextCursor, collected.rightNextCursor),
 			},
 		},
 		collected.left,
@@ -4460,7 +4464,7 @@ const loadOperationsRiskDetail = async (route: OperationsDetailRoute, throughOff
 				offset: 0,
 				loadedOffset: collected.loadedOffset,
 				truncated: collected.nextCursor !== undefined,
-				nextCursor: collected.nextCursor,
+				...(collected.nextCursor === undefined ? {} : { nextCursor: collected.nextCursor }),
 			},
 		},
 	}
@@ -6839,15 +6843,17 @@ const renderAddressProfile = (
 	content.setAttribute('aria-busy', 'false')
 }
 
-const portfolioPage = (data: Record<string, unknown>, kind: 'forks' | 'lp' | 'reports'): Record<string, unknown> => {
-	const pagination = isRecord(data['portfolioPagination']) ? data['portfolioPagination'] : {}
-	return isRecord(pagination[kind]) ? pagination[kind] : {}
+type PortfolioData = JsonRecord | Pick<RichListRecord, 'lp_positions' | 'fork_participation' | 'report_participation' | 'portfolioPagination'>
+
+const portfolioPage = (data: PortfolioData, kind: 'forks' | 'lp' | 'reports'): JsonRecord => {
+	const pagination = isJsonRecord(data['portfolioPagination']) ? data['portfolioPagination'] : {}
+	return isJsonRecord(pagination[kind]) ? pagination[kind] : {}
 }
 
-const portfolioItems = (data: Record<string, unknown>, kind: 'forks' | 'lp' | 'reports'): Record<string, unknown>[] =>
+const portfolioItems = (data: PortfolioData, kind: 'forks' | 'lp' | 'reports'): JsonRecord[] =>
 	operationRecords(data[kind === 'lp' ? 'lp_positions' : kind === 'forks' ? 'fork_participation' : 'report_participation'])
 
-const portfolioItemKey = (kind: 'forks' | 'lp' | 'reports', item: Readonly<Record<string, unknown>>): string => {
+const portfolioItemKey = (kind: 'forks' | 'lp' | 'reports', item: JsonRecord): string => {
 	if (kind === 'lp') return String(item['market_address'] ?? '')
 	return `${String(item['block_hash'] ?? '')}:${String(item['tx_hash'] ?? '')}:${String(item['log_index'] ?? '')}:${
 		kind === 'forks' ? String(item['universe_identity'] ?? '') : `${String(item['open_oracle_address'] ?? '')}:${String(item['report_id'] ?? '')}`

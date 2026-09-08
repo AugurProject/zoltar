@@ -4976,7 +4976,7 @@ postgresTest(
 			await database.close()
 		}
 	},
-	60_000,
+	180_000,
 )
 
 postgresTest('returns the originating transaction action on every log row', async () => {

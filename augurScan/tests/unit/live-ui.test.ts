@@ -66,6 +66,7 @@ import {
 	restoreActivityDetailFocus,
 	restoreDisclosureState,
 	retainedPaginationAvailable,
+	riskPaginationForCollectedCursors,
 	runSerializedOperationsLoad,
 	runWithForegroundReservation,
 	shouldClearPendingDetailState,
@@ -401,6 +402,16 @@ test('distinguishes historical Operations snapshots from the live indexed view',
 			true,
 		),
 	).toBe('As of block #23,184,712 · 0 blocks behind · live updates connected')
+})
+
+test('drops stale risk cursors when one collection is exhausted before the other', () => {
+	expect(
+		riskPaginationForCollectedCursors(
+			{ poolTotal: 1, poolHasMore: true, poolNextCursor: 'pool-2', vaultTotal: 3, vaultHasMore: true, vaultNextCursor: 'vault-2' },
+			undefined,
+			'vault-2',
+		),
+	).toEqual({ poolTotal: 1, poolHasMore: false, vaultTotal: 3, vaultHasMore: true, vaultNextCursor: 'vault-2' })
 })
 
 test('labels historical pool and vault detail headers as fixed snapshots', () => {

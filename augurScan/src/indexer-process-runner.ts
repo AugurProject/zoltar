@@ -1,5 +1,6 @@
 import { startIndexers } from './indexer.ts'
 import { initializeProcessContext, recordProcessStop } from './process-bootstrap.ts'
+import type { NetworkConfig } from './types.ts'
 
 type RuntimeSettings = {
 	readonly disableIndexer: boolean
@@ -7,7 +8,7 @@ type RuntimeSettings = {
 
 type ProcessContext = {
 	readonly database: { close: () => Promise<void> }
-	readonly networks: readonly unknown[]
+	readonly networks: readonly NetworkConfig[]
 	readonly evidenceProvenance: {
 		readonly indexerRunId: string
 		readonly abiSourceHash: string

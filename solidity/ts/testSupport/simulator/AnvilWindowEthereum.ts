@@ -349,7 +349,7 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 					method: 'evm_mine',
 					params: [],
 				})
-			} catch (error: unknown) {
+			} catch (error) {
 				if (!isEvmMineUnsupported(error)) throw error
 			}
 		}

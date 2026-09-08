@@ -1,4 +1,4 @@
-import { decodeFunctionData, encodeAbiParameters, encodeDeployData, getAddress, getCreate2Address, isAddress, toHex, zeroAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import { decodeFunctionData, encodeAbiParameters, encodeDeployData, getAddress, getCreate2Address, isAddress, toHex, zeroAddress, type AbiValue, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory, trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter } from '../../../../solidity/ts/types/contractArtifact.ts'
 import { erc1155Abi, erc20Abi, genesisUniswapSeederAbi, shareTokenAbi, tradingFactoryAbi, tradingPairAbi, tradingRouterAbi, uniswapV3FactoryAbi, uniswapV3PoolAbi } from '../contracts/abi.ts'
 import { CANONICAL_UNISWAP_V3_FACTORY, GENESIS_UNISWAP_FEE, GENESIS_UNISWAP_SQRT_PRICE_X96, GENESIS_UNISWAP_TICK_LOWER, GENESIS_UNISWAP_TICK_UPPER, genesisUniswapSeederDeployment } from '../core/genesis-uniswap.ts'
@@ -1046,7 +1046,7 @@ function buildSwapPlan(snapshot: EcosystemSnapshot, options: PlanningOptions, pa
 	const maximumCleanupTransactionCount = steps.length > 0 || confirmedApproval ? 1 : undefined
 	if (!poolLifecycleOpen(snapshot, pool, options, steps.length)) return undefined
 	const inputBalance = amount(yesForNo ? shares.yes : shares.no)
-	let args: readonly unknown[]
+	let args: readonly AbiValue[]
 	let maximumInput: bigint
 	if (mode === 'exact-input') {
 		if (inputBalance < principal || quoteExactInput(pair, yesForNo, principal) < bound) return undefined
@@ -1234,7 +1234,7 @@ function routerEthDefinition(kind: 'create-and-initialize' | 'initialize' | 'add
 			const enterOutcomes = pair === undefined ? [] : [1, 2].filter(outcome => quoteExactInput(pair, outcome === 2, minted) > 0n)
 			const longOutcome = kind === 'enter' ? choose(enterOutcomes, mixSeed(options.seed, 'long-outcome')) : undefined
 			if (kind === 'enter' && longOutcome === undefined) return undefined
-			let args: readonly unknown[]
+			let args: readonly AbiValue[]
 			let evidence: OperationEvidence[]
 			if (kind === 'create-and-initialize' || kind === 'initialize') {
 				args = [target, 5_000n, minimumAfterSlippage(minted - 1_000n), snapshot.wallet.address, BigInt(deadline)]

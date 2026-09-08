@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { enterPositionRequest, migrateSharesRequest, redeemCompleteSetRequest, redeemWinningSharesRequest, requireFreshSimulation, simulateAuthoritatively } from './transactions.js'
+import { enterPositionRequest, migrateSharesRequest, redeemCompleteSetRequest, redeemWinningSharesRequest, requireFreshSimulation, simulateAuthoritatively, type ContractRequest } from './transactions.js'
 
 const address = `0x${'12'.repeat(20)}` as const
 const securityPool = `0x${'34'.repeat(20)}` as const
@@ -12,7 +12,7 @@ describe('authoritative router simulation', () => {
 		let simulatedAt: `0x${string}` | undefined
 		const client = {
 			getBlock: async () => ({ number: block, hash }),
-			simulate: async (_request: unknown, blockHash: `0x${string}`) => {
+			simulate: async (_request: ContractRequest, blockHash: `0x${string}`) => {
 				simulatedAt = blockHash
 				return { totalLongShares: 42n }
 			},

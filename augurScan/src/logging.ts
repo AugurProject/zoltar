@@ -1,6 +1,6 @@
 import { mkdir, open, rename, rm, stat } from 'node:fs/promises'
 import path from 'node:path'
-import type { RpcFetchFn } from './ethereum.ts'
+import type { JsonValue, RpcFetchFn } from './ethereum.ts'
 
 const JSON_RPC_ERROR_NAMES = new Map<number, string>([
 	[-32700, 'Parse error'],
@@ -94,18 +94,18 @@ export class RotatingJsonLog {
 }
 
 type RpcEnvelope = {
-	readonly id?: unknown
-	readonly jsonrpc?: unknown
-	readonly method?: unknown
-	readonly error?: unknown
-	readonly result?: unknown
+	readonly id?: JsonValue
+	readonly jsonrpc?: JsonValue
+	readonly method?: JsonValue
+	readonly error?: JsonValue
+	readonly result?: JsonValue
 }
 
 const parseEnvelope = (body: unknown): RpcEnvelope | undefined => {
 	if (typeof body !== 'string') return undefined
 	try {
-		const parsed: unknown = JSON.parse(body)
-		return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed) ? parsed : undefined
+		const parsed: JsonValue = JSON.parse(body) as JsonValue
+		return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed) ? (parsed as RpcEnvelope) : undefined
 	} catch (error) {
 		if (error instanceof SyntaxError) return undefined
 		throw error
@@ -114,8 +114,8 @@ const parseEnvelope = (body: unknown): RpcEnvelope | undefined => {
 
 const rpcErrorFrom = (envelope: RpcEnvelope | undefined): { readonly code: number; readonly message?: string } | undefined => {
 	if (typeof envelope?.error !== 'object' || envelope.error === null || Array.isArray(envelope.error)) return undefined
-	const code = 'code' in envelope.error ? envelope.error.code : undefined
-	const message = 'message' in envelope.error ? envelope.error.message : undefined
+	const code = 'code' in envelope.error ? envelope.error['code'] : undefined
+	const message = 'message' in envelope.error ? envelope.error['message'] : undefined
 	return typeof code === 'number' && Number.isInteger(code) ? { code, ...(typeof message === 'string' ? { message } : {}) } : undefined
 }
 
