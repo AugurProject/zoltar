@@ -132,7 +132,7 @@ export async function loadTradingDeploymentStatus(client: Pick<PublicClient, 'ge
 	const routerCode = await client.getCode({ address: plan.router.address })
 	const routerDeployed = routerCode !== undefined && routerCode !== '0x'
 	const receiveRouterCode = plan.receiveRouter === undefined ? undefined : await client.getCode({ address: plan.receiveRouter.address })
-	const receiveRouterDeployed = plan.receiveRouter === undefined || (receiveRouterCode !== undefined && receiveRouterCode !== '0x')
+	const receiveRouterDeployed = plan.receiveRouter === undefined ? undefined : receiveRouterCode !== undefined && receiveRouterCode !== '0x'
 	if (routerDeployed) {
 		if (!factoryDeployed) throw new Error('Trading router exists without its expected factory')
 		await validateTradingRouter(client, plan)
@@ -141,7 +141,11 @@ export async function loadTradingDeploymentStatus(client: Pick<PublicClient, 'ge
 		if (!factoryDeployed) throw new Error('Approval-free router exists without its expected factory')
 		await validateReceiveRouter(client, plan)
 	}
-	return { factory: factoryDeployed, router: routerDeployed, receiveRouter: receiveRouterDeployed }
+	return { factory: factoryDeployed, router: routerDeployed, ...(receiveRouterDeployed === undefined ? {} : { receiveRouter: receiveRouterDeployed }) }
+}
+
+export function isTradingDeploymentComplete(plan: TradingDeploymentPlan, status: Readonly<{ factory: boolean; router: boolean; receiveRouter?: boolean }>) {
+	return status.factory && status.router && (plan.receiveRouter === undefined || status.receiveRouter === true)
 }
 
 function hasInstalledTradingStep(status: Readonly<{ factory: boolean; router: boolean; receiveRouter?: boolean }>) {
@@ -151,10 +155,10 @@ function hasInstalledTradingStep(status: Readonly<{ factory: boolean; router: bo
 export async function resolveInstalledTradingDeployment(client: Pick<PublicClient, 'getCode' | 'readContract'>, core: CoreDeployment, feeBps: number, rpcUrl: string): Promise<DeploymentConfiguration> {
 	const versionTwoPlan = getTradingDeploymentPlan(core, feeBps, 2)
 	const versionTwoStatus = await loadTradingDeploymentStatus(client, versionTwoPlan)
-	if (versionTwoStatus.factory && versionTwoStatus.router && versionTwoStatus.receiveRouter) return deploymentConfigurationForPlan(versionTwoPlan, rpcUrl)
+	if (isTradingDeploymentComplete(versionTwoPlan, versionTwoStatus)) return deploymentConfigurationForPlan(versionTwoPlan, rpcUrl)
 	const legacyPlan = getTradingDeploymentPlan(core, feeBps, 1)
 	const legacyStatus = await loadTradingDeploymentStatus(client, legacyPlan)
-	if (legacyStatus.factory && legacyStatus.router) return deploymentConfigurationForPlan(legacyPlan, rpcUrl)
+	if (isTradingDeploymentComplete(legacyPlan, legacyStatus)) return deploymentConfigurationForPlan(legacyPlan, rpcUrl)
 	if (hasInstalledTradingStep(versionTwoStatus)) throw new Error('The V2 trading deployment is incomplete')
 	if (hasInstalledTradingStep(legacyStatus)) throw new Error('The V1 trading deployment is incomplete')
 	throw new Error('Trading contracts have not been deployed')

@@ -162,6 +162,49 @@ describe('trading deployment setup', () => {
 		expect(rendered.container.textContent).not.toContain('Ready to deploy')
 	})
 
+	test('keeps the approval-free router step available when a remounted V2 deployment is partial', async () => {
+		const plan = getTradingDeploymentPlan(core, 30, 2)
+		if (plan.receiveRouter === undefined) throw new Error('V2 deployment plan is missing its approval-free router')
+		let contractReadCount = 0
+		const client = createPublicClient({
+			transport: custom({
+				request: async ({ method, params }) => {
+					if (method === 'eth_chainId') return '0xaa36a7'
+					if (method === 'eth_getCode' && Array.isArray(params)) {
+						const address = params[0]
+						if (typeof address !== 'string') throw new Error('Missing code address')
+						if (address.toLowerCase() === core.proxyDeployer.toLowerCase()) return CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE
+						if ([core.securityPoolFactory, plan.factory.address, plan.router.address].some(expected => expected.toLowerCase() === address.toLowerCase())) return '0x01'
+						return '0x'
+					}
+					if (method === 'eth_call') {
+						contractReadCount += 1
+						if (contractReadCount === 1) return encodeAbiParameters([{ type: 'address' }], [core.securityPoolFactory])
+						if (contractReadCount === 2) return encodeAbiParameters([{ type: 'uint16' }], [plan.feeBps])
+						if (contractReadCount === 3) return encodeAbiParameters([{ type: 'uint256' }], [2n])
+						return encodeAbiParameters([{ type: 'address' }], [plan.factory.address])
+					}
+					throw new Error(`Unexpected RPC method ${method}`)
+				},
+			}),
+		})
+		let completionCount = 0
+		const rendered = await renderIntoDocument(
+			<TradingDeploymentSetup
+				currentConfiguration={deploymentConfigurationForPlan(plan, core.defaultRpcUrl)}
+				onComplete={() => {
+					completionCount += 1
+				}}
+				services={{ createPublicClient: () => client, loadCoreDeployments: async () => [core] }}
+			/>,
+		)
+		cleanupRendered = rendered.cleanup
+		await waitForText('Deploy Approval-free trading router')
+		expect(completionCount).toBe(0)
+		expect(rendered.container.textContent).toContain('2 / 3')
+		expect(Array.from(rendered.container.querySelectorAll('button')).some(button => button.textContent?.trim() === 'Deploy Approval-free trading router')).toBe(true)
+	})
+
 	test('presents an undeployed SecurityPoolFactory as an expected prerequisite and keeps trading addresses visible', async () => {
 		const plan = getTradingDeploymentPlan(core, 30, 2)
 		const client = createPublicClient({

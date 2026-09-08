@@ -135,6 +135,11 @@ describe('wallet trading deployment plan', () => {
 		await expect(resolveInstalledTradingDeployment(installedDeploymentClient(core, [2], { partialV2: true }), core, 30, core.defaultRpcUrl)).rejects.toThrow('V2 trading deployment is incomplete')
 	})
 
+	test('classifies a deployment with no V1 or V2 contracts as not deployed', async () => {
+		const core = examplePlan().core
+		await expect(resolveInstalledTradingDeployment(installedDeploymentClient(core, []), core, 30, core.defaultRpcUrl)).rejects.toThrow('Trading contracts have not been deployed')
+	})
+
 	test('rejects false V2 capability claims and wrong router factory links', async () => {
 		const core = examplePlan().core
 		await expect(resolveInstalledTradingDeployment(installedDeploymentClient(core, [2], { wrongVersion: true }), core, 30, core.defaultRpcUrl)).rejects.toThrow('implementation version is not V2')
