@@ -34,7 +34,12 @@ type DeploymentManifest = {
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const repositoryRootPath = path.join(directoryOfThisFile, '..', '..')
-const deploymentRuntimeOutputPaths = [path.join(repositoryRootPath, 'ui', 'statoblast', 'node_modules', '@zoltar', 'ui-core-shared', 'js', 'lib', 'networkProfile.js'), path.join(repositoryRootPath, 'ui', 'statoblast', 'node_modules', '@zoltar', 'ui-zoltar-shared', 'js', 'protocol', 'deployment.js')] as const
+export const deploymentRuntimeTypeScriptProjects = ['ui/coreShared/tsconfig.json', 'ui/zoltarShared/tsconfig.json', 'ui/statoblastShared/tsconfig.json'] as const
+const deploymentRuntimeOutputPaths = [
+	path.join(repositoryRootPath, 'ui', 'coreShared', 'js', 'wallet', 'networkProfile.js'),
+	path.join(repositoryRootPath, 'ui', 'zoltarShared', 'js', 'protocol', 'deploymentHelpers.js'),
+	path.join(repositoryRootPath, 'ui', 'statoblastShared', 'js', 'protocol', 'deployment.js'),
+] as const
 const manifestIds = ['mainnet', 'sepolia'] as const
 type ManifestId = (typeof manifestIds)[number]
 
@@ -62,14 +67,14 @@ async function runRepositoryCommand(args: readonly string[], label: string) {
 
 async function buildDeploymentRuntimeDependencies() {
 	await runRepositoryCommand(['run', 'ensure-shared-build'], 'Shared TypeScript prerequisite build')
-	await runRepositoryCommand(['x', 'tsc', '--project', 'ui/coreShared/tsconfig.json'], 'coreShared TypeScript prerequisite build')
-	await runRepositoryCommand(['x', 'tsc', '--project', 'ui/zoltar/tsconfig.json'], 'Zoltar TypeScript prerequisite build')
-	await runRepositoryCommand(['./tooling/repo/install-frozen.mts', 'ui/statoblast'], 'Statoblast frozen dependency refresh')
+	for (const project of deploymentRuntimeTypeScriptProjects) {
+		await runRepositoryCommand(['x', 'tsc', '--project', project], `${project} prerequisite build`)
+	}
 }
 
 export async function ensureDeploymentRuntimeDependencies(hasRuntimeOutput: () => Promise<boolean> = async () => (await Promise.all(deploymentRuntimeOutputPaths.map(pathExists))).every(Boolean), buildRuntimeDependencies: () => Promise<void> = buildDeploymentRuntimeDependencies) {
 	if (await hasRuntimeOutput()) return
-	console.log('Building missing coreShared JavaScript required by deployment manifest checks')
+	console.log('Building missing shared UI JavaScript required by deployment manifest checks')
 	await buildRuntimeDependencies()
 	if (!(await hasRuntimeOutput())) throw new Error(`Deployment manifest prerequisite build did not create ${deploymentRuntimeOutputPaths.map(outputPath => path.relative(repositoryRootPath, outputPath)).join(' and ')}`)
 }

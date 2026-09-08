@@ -1,7 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import { assertDeploymentManifestCurrent, ensureDeploymentRuntimeDependencies } from './check-mainnet-deployment.mts'
+import { assertDeploymentManifestCurrent, deploymentRuntimeTypeScriptProjects, ensureDeploymentRuntimeDependencies } from './check-mainnet-deployment.mts'
 
 describe('deployment manifest freshness', () => {
+	test('builds shared libraries in dependency order without compiling an application leaf', () => {
+		expect(deploymentRuntimeTypeScriptProjects).toEqual(['ui/coreShared/tsconfig.json', 'ui/zoltarShared/tsconfig.json', 'ui/statoblastShared/tsconfig.json'])
+	})
+
 	test('builds missing UI runtime dependencies before loading deployment sources', async () => {
 		let checks = 0
 		let builds = 0
