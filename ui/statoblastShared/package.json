@@ -298,6 +298,10 @@
 			"bun": "./ts/simulation/statoblastScenarios.ts",
 			"default": "./js/simulation/statoblastScenarios.js"
 		},
+		"./simulation/statoblastScenarioProtocol.js": {
+			"bun": "./ts/simulation/statoblastScenarioProtocol.ts",
+			"default": "./js/simulation/statoblastScenarioProtocol.js"
+		},
 		"./types/app.js": {
 			"bun": "./ts/types/app.ts",
 			"default": "./js/types/app.js"

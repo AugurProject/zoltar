@@ -26,8 +26,7 @@ import { getDefaultOpenOracleCreateFormState, getDefaultOpenOracleFormState } fr
 import { requireDefined } from '@zoltar/ui-core-shared/forms/required.js'
 import type { TokenApprovalState } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
-import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
-import type { ActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
+import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback, type ActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
 import { createOpenOracleSuccessPresentation, createOpenOracleTransactionIntent, createOpenOracleWarningPresentation } from '../../transactionPresentations.js'
 import { buildWriteActionConfig, runWriteAction } from '@zoltar/ui-core-shared/transactions/writeAction.js'
 import { refreshWalletStateOnly } from '@zoltar/ui-core-shared/lib/refreshState.js'
@@ -49,14 +48,11 @@ import {
 	type RefreshOpenOracleTokenAccessOptions,
 	type TokenAccessLoadResult,
 } from '../lib/openOracleTokenAccess.js'
-
 type UseOpenOracleOperationsParameters = WriteOperationsParameters & {
 	enabled: boolean
 	onReportSettled?: () => Promise<void> | void
 }
-
 type OpenOracleProductionWriteClient = ReturnType<typeof createWalletWriteClient>
-
 export type UseOpenOracleOperationsDependencies<TWriteClient = OpenOracleProductionWriteClient> = {
 	approveErc20: (client: TWriteClient, tokenAddress: Address, spenderAddress: Address, amount: bigint, action: 'approveToken1' | 'approveToken2') => Promise<OpenOracleActionResult>
 	createConnectedReadClient: () => OpenOracleReadClient

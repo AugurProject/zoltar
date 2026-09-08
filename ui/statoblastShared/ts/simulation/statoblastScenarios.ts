@@ -1,75 +1,7 @@
 import { zeroAddress, type Address } from '@zoltar/shared/evm/ethereum'
 import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/shared/oracle/oracleInitialReport'
-import { createChildUniverseFromSecurityPool, forkZoltarWithOwnEscalation, loadForkAuctionDetails, migrateRepToZoltarFromSecurityPool } from '@zoltar/ui-zoltar-shared/protocol/forks.js'
-import { loadOpenOracleReportDetails, loadOracleManagerDetails, requestOraclePrice, settleOracleReport } from '@zoltar/ui-zoltar-shared/protocol/openOracle.js'
-import { loadReportingDetails, reportOutcomeInSecurityPool } from '@zoltar/ui-zoltar-shared/protocol/reporting.js'
-import { approveErc20 } from '@zoltar/ui-zoltar-shared/protocol/tokenActions.js'
-import { createMarket, loadZoltarUniverseSummary } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
-import { getDeploymentSteps } from '../protocol/deployment.js'
-import { createSecurityPool, loadAllSecurityPools, loadSecurityVaultDetails } from '../protocol/securityPools.js'
-import { depositRepToVaultToSecurityPool } from '../protocol/securityVault.js'
-import { createCompleteSetInSecurityPool } from '../protocol/trading.js'
-import { startTruthAuctionForSecurityPool, submitTruthAuctionBid } from '../protocol/truthAuctionActions.js'
+import { getStatoblastScenarioProtocol as getScenarioProtocol } from './statoblastScenarioProtocol.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
-
-const defaultScenarioProtocol = {
-	approveErc20,
-	createChildUniverseFromSecurityPool,
-	createCompleteSetInSecurityPool,
-	createMarket,
-	createSecurityPool,
-	depositRepToVaultToSecurityPool,
-	forkZoltarWithOwnEscalation,
-	getDeploymentSteps,
-	loadAllSecurityPools,
-	loadForkAuctionDetails,
-	loadOpenOracleReportDetails,
-	loadOracleManagerDetails,
-	loadReportingDetails,
-	loadSecurityVaultDetails,
-	loadZoltarUniverseSummary,
-	migrateRepToZoltarFromSecurityPool,
-	reportOutcomeInSecurityPool,
-	requestOraclePrice,
-	settleOracleReport,
-	startTruthAuctionForSecurityPool,
-	submitTruthAuctionBid,
-}
-
-type StatoblastScenarioProtocol = Pick<
-	typeof defaultScenarioProtocol,
-	| 'approveErc20'
-	| 'createChildUniverseFromSecurityPool'
-	| 'createCompleteSetInSecurityPool'
-	| 'createMarket'
-	| 'createSecurityPool'
-	| 'depositRepToVaultToSecurityPool'
-	| 'forkZoltarWithOwnEscalation'
-	| 'getDeploymentSteps'
-	| 'loadAllSecurityPools'
-	| 'loadForkAuctionDetails'
-	| 'loadOracleManagerDetails'
-	| 'loadOpenOracleReportDetails'
-	| 'loadReportingDetails'
-	| 'loadSecurityVaultDetails'
-	| 'loadZoltarUniverseSummary'
-	| 'migrateRepToZoltarFromSecurityPool'
-	| 'reportOutcomeInSecurityPool'
-	| 'requestOraclePrice'
-	| 'settleOracleReport'
-	| 'startTruthAuctionForSecurityPool'
-	| 'submitTruthAuctionBid'
->
-
-let scenarioProtocolOverride: StatoblastScenarioProtocol | undefined
-
-export function installStatoblastScenarioProtocolForTesting(override: StatoblastScenarioProtocol | undefined) {
-	scenarioProtocolOverride = override
-}
-
-function getScenarioProtocol(): StatoblastScenarioProtocol {
-	return scenarioProtocolOverride ?? defaultScenarioProtocol
-}
 import { createRangeProgressReporter, deploySimulationAppContracts, reportBootstrapProgress, requireQaAccount, type BootstrapProgressHandler, type ProgressRange, type BootstrapScenarioApplyParameters, type TevmLikeClient } from '@zoltar/ui-core-shared/simulation/bootstrap.js'
 import { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice } from '@zoltar/ui-core-shared/protocol/truthAuctionMath.js'
 import { advanceSimulationTime, getSimulationChainTimestamp } from '@zoltar/ui-core-shared/simulation/clock.js'
