@@ -5,7 +5,7 @@ import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/querie
 import { act } from 'preact/test-utils'
 import { render } from 'preact'
 import { GlobalTransactionTray } from '@zoltar/ui-core-shared/app/components/GlobalTransactionTray.js'
-import { createMarketCreationSuccessPresentation, createMarketCreationTransactionIntent, createZoltarForkSuccessPresentation } from '@zoltar/ui-zoltar-domain/features/transactionPresentations.js'
+import { createMarketCreationSuccessPresentation, createMarketCreationTransactionIntent, createZoltarForkSuccessPresentation } from '@zoltar/ui-zoltar-shared/features/transactionPresentations.js'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'

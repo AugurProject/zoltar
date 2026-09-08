@@ -1,9 +1,9 @@
 import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import * as marketCopy from '@zoltar/ui-zoltar-domain/copy/market.js'
-import * as zoltarCopy from '@zoltar/ui-zoltar-domain/copy/zoltar.js'
-import type { Route } from '@zoltar/ui-zoltar-domain/types/app.js'
-import type { ZoltarView } from '@zoltar/ui-zoltar-domain/features/types.js'
+import * as marketCopy from '@zoltar/ui-zoltar-shared/copy/market.js'
+import * as zoltarCopy from '@zoltar/ui-zoltar-shared/copy/zoltar.js'
+import type { Route } from '@zoltar/ui-zoltar-shared/types/app.js'
+import type { ZoltarView } from '@zoltar/ui-zoltar-shared/features/types.js'
 import { formatAppDocumentTitle as formatDocumentTitle } from '@zoltar/ui-core-shared/app/lib/appTitle.js'
 
 export type AppPageTitleInput = {

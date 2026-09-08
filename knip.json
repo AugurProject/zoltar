@@ -29,32 +29,32 @@
 			"ignoreDependencies": ["@noble/curves", "@noble/hashes", "micro-eth-signer", "micro-packed"],
 			"ignoreUnresolved": ["./bun-test-setup-solidity.ts"]
 		},
-		"ui/zoltarDomain": {
+		"ui/zoltarShared": {
 			"entry": ["ts/**/*.ts", "ts/**/*.tsx"],
 			"project": ["ts/**/*.ts", "ts/**/*.tsx"],
 			"paths": {
 				"@zoltar/ui-core-shared/*": ["../coreShared/ts/*"],
-				"@zoltar/ui-zoltar-domain/*": ["./ts/*"],
+				"@zoltar/ui-zoltar-shared/*": ["./ts/*"],
 				"@zoltar/shared/*": ["../../shared/ts/*"]
 			},
 			"ignoreDependencies": ["bun-types"]
 		},
-		"ui/statoblastDomain": {
+		"ui/statoblastShared": {
 			"entry": ["ts/**/*.ts", "ts/**/*.tsx"],
 			"project": ["ts/**/*.ts", "ts/**/*.tsx"],
 			"paths": {
 				"@zoltar/ui-core-shared/*": ["../coreShared/ts/*"],
-				"@zoltar/ui-zoltar-domain/*": ["../zoltarDomain/ts/*"],
-				"@zoltar/ui-statoblast-domain/*": ["./ts/*"],
+				"@zoltar/ui-zoltar-shared/*": ["../zoltarShared/ts/*"],
+				"@zoltar/ui-statoblast-shared/*": ["./ts/*"],
 				"@zoltar/shared/*": ["../../shared/ts/*"]
 			},
 			"ignoreDependencies": ["bun-types"]
 		},
-		"ui/tradingDomain": {
+		"ui/tradingShared": {
 			"entry": ["ts/**/*.ts", "ts/**/*.tsx"],
 			"project": ["ts/**/*.ts", "ts/**/*.tsx"],
 			"paths": {
-				"@zoltar/ui-trading-domain/*": ["./ts/*"],
+				"@zoltar/ui-trading-shared/*": ["./ts/*"],
 				"@zoltar/shared/*": ["../../shared/ts/*"]
 			},
 			"ignoreDependencies": ["bun-types"]
@@ -64,7 +64,7 @@
 			"project": ["ts/**/*.{ts,tsx}!"],
 			"paths": {
 				"@zoltar/ui-core-shared/*": ["../coreShared/ts/*"],
-				"@zoltar/ui-zoltar-domain/*": ["../zoltarDomain/ts/*"],
+				"@zoltar/ui-zoltar-shared/*": ["../zoltarShared/ts/*"],
 				"@zoltar/ui-zoltar/*": ["./ts/*"],
 				"@zoltar/shared/*": ["../../shared/ts/*"]
 			},
@@ -76,8 +76,8 @@
 			"project": ["ts/**/*.{ts,tsx}!"],
 			"paths": {
 				"@zoltar/ui-core-shared/*": ["../coreShared/ts/*"],
-				"@zoltar/ui-zoltar-domain/*": ["../zoltarDomain/ts/*"],
-				"@zoltar/ui-statoblast-domain/*": ["../statoblastDomain/ts/*"],
+				"@zoltar/ui-zoltar-shared/*": ["../zoltarShared/ts/*"],
+				"@zoltar/ui-statoblast-shared/*": ["../statoblastShared/ts/*"],
 				"@zoltar/ui-statoblast/*": ["./ts/*"],
 				"@zoltar/shared/*": ["../../shared/ts/*"]
 			},
@@ -89,9 +89,9 @@
 			"project": ["ts/**/*.{ts,tsx}!"],
 			"paths": {
 				"@zoltar/ui-core-shared/*": ["../coreShared/ts/*"],
-				"@zoltar/ui-zoltar-domain/*": ["../zoltarDomain/ts/*"],
-				"@zoltar/ui-statoblast-domain/*": ["../statoblastDomain/ts/*"],
-				"@zoltar/ui-trading-domain/*": ["../tradingDomain/ts/*"],
+				"@zoltar/ui-zoltar-shared/*": ["../zoltarShared/ts/*"],
+				"@zoltar/ui-statoblast-shared/*": ["../statoblastShared/ts/*"],
+				"@zoltar/ui-trading-shared/*": ["../tradingShared/ts/*"],
 				"@zoltar/ui-trading/*": ["./ts/*"],
 				"@zoltar/shared/*": ["../../shared/ts/*"]
 			},

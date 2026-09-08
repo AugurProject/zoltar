@@ -6,8 +6,8 @@ import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testR
 import { act } from 'preact/test-utils'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import { UniverseLink } from '@zoltar/ui-zoltar-domain/features/universes/components/UniverseLink.js'
-import { getUniverseLinkHref } from '@zoltar/ui-zoltar-domain/features/universes/lib/universe.js'
+import { UniverseLink } from '@zoltar/ui-zoltar-shared/features/universes/components/UniverseLink.js'
+import { getUniverseLinkHref } from '@zoltar/ui-zoltar-shared/features/universes/lib/universe.js'
 
 installTestRouting()
 describe('UniverseLink', () => {

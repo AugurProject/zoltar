@@ -1,7 +1,7 @@
 import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 
 export type { AccountState, TransactionCancellationParameters, TransactionLifecycleParameters, WriteOperationContext, WriteOperationsParameters } from '@zoltar/ui-core-shared/types/app.js'
-export type { MarketFormState } from '@zoltar/ui-zoltar-domain/types/app.js'
+export type { MarketFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
 
 export type Route = 'deploy' | 'security-pools' | 'open-oracle' | 'not-found'
 

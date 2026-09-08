@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/shared/evm/ethereum'
-import { loadOracleManagerQueueOperationEthValue } from '@zoltar/ui-zoltar-domain/protocol/index.js'
+import { loadOracleManagerQueueOperationEthValue } from '@zoltar/ui-zoltar-shared/protocol/index.js'
 
 const MANAGER_ADDRESS = getAddress('0x0000000000000000000000000000000000000002')
 

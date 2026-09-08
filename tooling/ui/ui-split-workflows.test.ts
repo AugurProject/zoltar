@@ -22,14 +22,14 @@ const versionDeployWorkflowPath = reviewableGitHubPath(repositoryRoot, 'workflow
 const dockerfilePath = join(repositoryRoot, 'ui', 'Dockerfile')
 const rootPackagePath = join(repositoryRoot, 'package.json')
 const tradingPackagePath = join(repositoryRoot, 'ui', 'trading', 'package.json')
-const domainPackagePaths = ['ui/zoltarDomain/package.json', 'ui/statoblastDomain/package.json', 'ui/tradingDomain/package.json'] as const
+const sharedLibraryPackagePaths = ['ui/zoltarShared/package.json', 'ui/statoblastShared/package.json', 'ui/tradingShared/package.json'] as const
 const developerDocumentation = [
 	{ path: join(repositoryRoot, 'README.md'), command: 'bun run app:serve:zoltar', port: '4153' },
 	{ path: join(repositoryRoot, 'testnetwork', 'README.md'), command: 'bun run app:serve:zoltar', port: '4153' },
 	{ path: join(repositoryRoot, 'solidity', 'docs', 'trading', 'how-to', 'deploy.md'), command: 'bun run app:serve:trading', port: '4163' },
 ]
-const uiPackageIds = ['coreShared', 'zoltarDomain', 'statoblastDomain', 'tradingDomain', 'zoltar', 'statoblast', 'trading'] as const
-const tevmPackagePaths = ['package.json', 'ui/coreShared/package.json', 'ui/zoltarDomain/package.json', 'ui/statoblastDomain/package.json', 'ui/zoltar/package.json', 'ui/statoblast/package.json', 'ui/trading/package.json'] as const
+const uiPackageIds = ['coreShared', 'zoltarShared', 'statoblastShared', 'tradingShared', 'zoltar', 'statoblast', 'trading'] as const
+const tevmPackagePaths = ['package.json', 'ui/coreShared/package.json', 'ui/zoltarShared/package.json', 'ui/statoblastShared/package.json', 'ui/zoltar/package.json', 'ui/statoblast/package.json', 'ui/trading/package.json'] as const
 const pinnedTevmTransitives = ['@tevm/actions', '@tevm/node', '@tevm/server'] as const
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
 const requireRecord = (value: unknown, label: string) => {
@@ -79,7 +79,7 @@ describe('split UI workflow paths', () => {
 		const upload = prepareSteps.find(step => step['uses'] === 'actions/upload-artifact@v4')
 		const uploadOptions = requireRecord(upload?.['with'], 'production UI artifact upload options')
 		expect(uploadOptions['path']).toBe('${{ steps.projects.outputs.ui_artifact_outputs }}')
-		expect((await projectQuery()).uiArtifactOutputs).toEqual(['ui/coreShared/js', 'ui/zoltarDomain/js', 'ui/statoblastDomain/js', 'ui/tradingDomain/js', 'ui/zoltar/js', 'ui/zoltar/dist', 'ui/statoblast/js', 'ui/statoblast/dist', 'ui/trading/js', 'ui/trading/dist'])
+		expect((await projectQuery()).uiArtifactOutputs).toEqual(['ui/coreShared/js', 'ui/zoltarShared/js', 'ui/statoblastShared/js', 'ui/tradingShared/js', 'ui/zoltar/js', 'ui/zoltar/dist', 'ui/statoblast/js', 'ui/statoblast/dist', 'ui/trading/js', 'ui/trading/dist'])
 		expect(prepareSteps.findIndex(step => step['id'] === 'projects')).toBeLessThan(prepareSteps.indexOf(upload ?? {}))
 		expect(uploadOptions['name']).toBe('domain-production-ui')
 		expect(uploadOptions['if-no-files-found']).toBe('error')
@@ -179,7 +179,7 @@ describe('split UI workflow paths', () => {
 	})
 
 	test('domain public exports attribute Bun tests to TypeScript sources', async () => {
-		for (const packagePath of domainPackagePaths) {
+		for (const packagePath of sharedLibraryPackagePaths) {
 			const packageDirectory = join(repositoryRoot, packagePath, '..')
 			const manifest: unknown = JSON.parse(await readFile(join(repositoryRoot, packagePath), 'utf8'))
 			const exports = requireRecord(requireRecord(manifest, packagePath)['exports'], `${packagePath} exports`)

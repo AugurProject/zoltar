@@ -4,9 +4,9 @@ import { describe, expect, mock, test } from 'bun:test'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import { type Address, type Hash, type Hex, type TransactionReceipt, encodeDeployData, getAddress, getCreate2Address, keccak256 } from '@zoltar/shared/evm/ethereum'
-import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Allowance, loadErc20Balance } from '@zoltar/ui-zoltar-domain/protocol/index.js'
-import { getGenesisReputationTokenAddress } from '@zoltar/ui-zoltar-domain/protocol/activeProtocolAddresses.js'
-import { PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from '@zoltar/ui-zoltar-domain/protocol/deploymentHelpers.js'
+import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Allowance, loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/index.js'
+import { getGenesisReputationTokenAddress } from '@zoltar/ui-zoltar-shared/protocol/activeProtocolAddresses.js'
+import { PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from '@zoltar/ui-zoltar-shared/protocol/deploymentHelpers.js'
 import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createInitialTransactionTrayState, markTransactionPrepared, markTransactionRequested } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
@@ -14,7 +14,7 @@ import { createFakeBackend, createFakeSimulationProfile } from '@zoltar/ui-core-
 import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { SEPOLIA_GENESIS_REP_INIT_CODE, SEPOLIA_WETH_INIT_CODE } from '@zoltar/ui-core-shared/lib/sepoliaDeploymentConfig.js'
 import { DeploymentStatusOracle_DeploymentStatusOracle, ScalarOutcomes_ScalarOutcomes } from '@zoltar/ui-core-shared/contractArtifact.js'
-import { ATOMIC_FUNDING_BYTECODE, ATOMIC_FUNDING_SOURCE, PROXY_DEPLOYER_RUNTIME_CODE, STATIC_DEPLOYMENT_ARTIFACT_RUNTIME_CODE_BY_STEP_ID, assertStaticDeploymentArtifactRuntimeCodeHashes } from '@zoltar/ui-zoltar-domain/protocol/deployment.js'
+import { ATOMIC_FUNDING_BYTECODE, ATOMIC_FUNDING_SOURCE, PROXY_DEPLOYER_RUNTIME_CODE, STATIC_DEPLOYMENT_ARTIFACT_RUNTIME_CODE_BY_STEP_ID, assertStaticDeploymentArtifactRuntimeCodeHashes } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
 
 const require = createRequire(import.meta.url)
 const rootSolcPath = fileURLToPath(new URL('../../../../../node_modules/solc/index.js', import.meta.url))

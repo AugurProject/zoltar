@@ -5,8 +5,8 @@
 		"paths": {
 			"@zoltar/shared/*": ["../../shared/js/*"],
 			"@zoltar/ui-core-shared/*": ["../coreShared/js/*"],
-			"@zoltar/ui-zoltar-domain/*": ["../zoltarDomain/js/*"],
-			"@zoltar/ui-statoblast-domain/*": ["./ts/*"]
+			"@zoltar/ui-zoltar-shared/*": ["../zoltarShared/js/*"],
+			"@zoltar/ui-statoblast-shared/*": ["./ts/*"]
 		},
 		"rootDir": "./ts",
 		"outDir": "./js"

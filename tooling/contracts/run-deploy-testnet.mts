@@ -11,8 +11,8 @@ const deploymentEntrypoint = path.join(repositoryRoot, 'tooling', 'contracts', '
 const forwardedSignals = ['SIGINT', 'SIGTERM', 'SIGHUP'] as const
 const uiSourceRoots: Readonly<Record<string, string>> = {
 	'@zoltar/ui-core-shared': path.join(repositoryRoot, 'ui', 'coreShared', 'ts'),
-	'@zoltar/ui-statoblast-domain': path.join(repositoryRoot, 'ui', 'statoblastDomain', 'ts'),
-	'@zoltar/ui-zoltar-domain': path.join(repositoryRoot, 'ui', 'zoltarDomain', 'ts'),
+	'@zoltar/ui-statoblast-shared': path.join(repositoryRoot, 'ui', 'statoblastShared', 'ts'),
+	'@zoltar/ui-zoltar-shared': path.join(repositoryRoot, 'ui', 'zoltarShared', 'ts'),
 }
 
 export function resolveHeadlessUiSource(specifier: string): string | undefined {

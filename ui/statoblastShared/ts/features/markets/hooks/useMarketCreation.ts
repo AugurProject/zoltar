@@ -15,7 +15,7 @@ import { getBrowserStorage } from '@zoltar/ui-core-shared/lib/browserStorage.js'
 import type { MarketFormState, TransactionLifecycleParameters, WriteOperationContext } from '../../../types/app.js'
 import type { DeploymentStatus, MarketCreationResult } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { CreateWriteClientCallbacks } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
-import { useZoltarOperations } from '@zoltar/ui-zoltar-domain/features/universes/hooks/useZoltarOperations.js'
+import { useZoltarOperations } from '@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarOperations.js'
 
 type UseMarketCreationParameters = TransactionLifecycleParameters &
 	WriteOperationContext & {

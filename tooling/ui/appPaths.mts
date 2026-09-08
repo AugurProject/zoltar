@@ -5,16 +5,16 @@ import { projectDependencyClosure, projects } from '../repo/projects.ts'
 
 export const UI_APP_IDS = ['zoltar', 'statoblast', 'trading'] as const
 export type UiAppId = (typeof UI_APP_IDS)[number]
-export type UiPackageId = 'coreShared' | 'zoltarDomain' | 'statoblastDomain' | 'tradingDomain' | UiAppId
+export type UiPackageId = 'coreShared' | 'zoltarShared' | 'statoblastShared' | 'tradingShared' | UiAppId
 
 const UI_PROJECT_ID_BY_PACKAGE_ID: Readonly<Record<UiPackageId, string>> = {
 	coreShared: 'ui-core',
 	statoblast: 'ui-statoblast',
-	statoblastDomain: 'ui-statoblast-domain',
+	statoblastShared: 'ui-statoblast-shared',
 	trading: 'ui-trading',
-	tradingDomain: 'ui-trading-domain',
+	tradingShared: 'ui-trading-shared',
 	zoltar: 'ui-zoltar',
-	zoltarDomain: 'ui-zoltar-domain',
+	zoltarShared: 'ui-zoltar-shared',
 }
 
 const UI_PACKAGE_ID_BY_PROJECT_ID = new Map(Object.entries(UI_PROJECT_ID_BY_PACKAGE_ID).map(([packageId, projectId]) => [projectId, packageId as UiPackageId]))

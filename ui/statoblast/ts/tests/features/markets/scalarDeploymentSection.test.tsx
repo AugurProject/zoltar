@@ -5,7 +5,7 @@ import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/querie
 import { act } from 'preact/test-utils'
 import { render } from 'preact'
 import { zeroAddress } from '@zoltar/shared/evm/ethereum'
-import { ScalarDeploymentSection } from '@zoltar/ui-statoblast-domain/features/markets/components/ScalarDeploymentSection.js'
+import { ScalarDeploymentSection } from '@zoltar/ui-statoblast-shared/features/markets/components/ScalarDeploymentSection.js'
 import { getScalarOutcomeIndex } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 import type { MarketDetails, ZoltarChildUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'

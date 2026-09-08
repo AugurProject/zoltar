@@ -1,6 +1,6 @@
 {
 	"description": "Reusable Zoltar protocol and workflow UI capabilities",
-	"name": "@zoltar/ui-zoltar-domain",
+	"name": "@zoltar/ui-zoltar-shared",
 	"private": true,
 	"repository": {},
 	"license": "Unlicense",

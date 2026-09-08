@@ -11,14 +11,14 @@ import { copyProjectArtifacts, isCoreProjectContractPath, type ProjectArtifactPa
 const coreSharedPaths = getUiCoreSharedPaths()
 const repositoryRootPath = coreSharedPaths.repositoryRoot
 const uiRootPath = coreSharedPaths.uiRoot
-const zoltarDomainSourceRoot = path.join(getUiPackageRoot(uiRootPath, 'zoltarDomain'), 'ts')
-const statoblastDomainSourceRoot = path.join(getUiPackageRoot(uiRootPath, 'statoblastDomain'), 'ts')
-const uiProtocolPaths = [path.join(zoltarDomainSourceRoot, 'protocol', 'forks.ts'), path.join(zoltarDomainSourceRoot, 'protocol', 'openOracle.ts'), path.join(statoblastDomainSourceRoot, 'protocol', 'trading.ts')]
-const uiDeploymentHelpersPath = path.join(zoltarDomainSourceRoot, 'protocol', 'deploymentHelpers.ts')
-const uiReportingDomainPath = path.join(zoltarDomainSourceRoot, 'features', 'reporting', 'lib', 'reportingDomain.ts')
+const zoltarSharedSourceRoot = path.join(getUiPackageRoot(uiRootPath, 'zoltarShared'), 'ts')
+const statoblastSharedSourceRoot = path.join(getUiPackageRoot(uiRootPath, 'statoblastShared'), 'ts')
+const uiProtocolPaths = [path.join(zoltarSharedSourceRoot, 'protocol', 'forks.ts'), path.join(zoltarSharedSourceRoot, 'protocol', 'openOracle.ts'), path.join(statoblastSharedSourceRoot, 'protocol', 'trading.ts')]
+const uiDeploymentHelpersPath = path.join(zoltarSharedSourceRoot, 'protocol', 'deploymentHelpers.ts')
+const uiReportingDomainPath = path.join(zoltarSharedSourceRoot, 'features', 'reporting', 'lib', 'reportingDomain.ts')
 const uiSepoliaDeploymentConfigPath = path.join(coreSharedPaths.coreSharedSourceRoot, 'lib', 'sepoliaDeploymentConfig.ts')
 const uiSimulationBootstrapPath = path.join(coreSharedPaths.coreSharedSourceRoot, 'simulation', 'bootstrap.ts')
-const uiTruthAuctionBookPath = path.join(statoblastDomainSourceRoot, 'features', 'truth-auctions', 'lib', 'truthAuctionBook.ts')
+const uiTruthAuctionBookPath = path.join(statoblastSharedSourceRoot, 'features', 'truth-auctions', 'lib', 'truthAuctionBook.ts')
 const uiIndexHtmlPaths = new Map(UI_APP_IDS.map(appId => [appId, path.join(uiRootPath, appId, 'index.html')]))
 const uiVendorBuildPath = path.join(import.meta.dir, 'vendor.mts')
 const uiWatchBuildPath = path.join(import.meta.dir, 'watch.mts')

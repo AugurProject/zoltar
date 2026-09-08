@@ -34,13 +34,13 @@ test('non-UI installs are left unchanged', () => {
 	expect(shareUiPreactRuntime(path.join(tmpdir(), 'zoltar', 'shared'))).toBeFalse()
 })
 
-test('runtime-neutral UI domain installs do not require Preact', async () => {
+test('runtime-neutral UI shared-library installs do not require Preact', async () => {
 	const repositoryRoot = await mkdtemp(path.join(tmpdir(), 'zoltar-ui-runtime-neutral-'))
-	const domainRoot = path.join(repositoryRoot, 'ui', 'tradingDomain')
+	const sharedLibraryRoot = path.join(repositoryRoot, 'ui', 'tradingShared')
 	try {
-		await mkdir(domainRoot, { recursive: true })
-		await writeFile(path.join(domainRoot, 'package.json'), `${JSON.stringify({ dependencies: { '@zoltar/shared': 'file:../../shared' } })}\n`)
-		expect(shareUiPreactRuntime(domainRoot)).toBeFalse()
+		await mkdir(sharedLibraryRoot, { recursive: true })
+		await writeFile(path.join(sharedLibraryRoot, 'package.json'), `${JSON.stringify({ dependencies: { '@zoltar/shared': 'file:../../shared' } })}\n`)
+		expect(shareUiPreactRuntime(sharedLibraryRoot)).toBeFalse()
 	} finally {
 		await rm(repositoryRoot, { recursive: true, force: true })
 	}

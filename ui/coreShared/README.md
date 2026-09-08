@@ -1,6 +1,6 @@
 # Core UI ownership
 
-`ui/coreShared` contains runtime-neutral UI code. Product rules belong in a domain package, and runnable application composition belongs in an application leaf.
+`ui/coreShared` contains runtime-neutral UI code. Product rules belong in a product shared library, and runnable application composition belongs in an application leaf.
 
 - `components/` owns reusable primitives and composite controls.
 - `forms/` owns parsing, validation, and form state helpers.

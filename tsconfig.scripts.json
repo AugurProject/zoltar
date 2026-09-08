@@ -21,9 +21,9 @@
 		"types": ["bun-types", "node"],
 		"paths": {
 			"@zoltar/ui-core-shared/*": ["./ui/coreShared/ts/*"],
-			"@zoltar/ui-zoltar-domain/*": ["./ui/zoltarDomain/ts/*"],
-			"@zoltar/ui-statoblast-domain/*": ["./ui/statoblastDomain/ts/*"],
-			"@zoltar/ui-trading-domain": ["./ui/tradingDomain/ts/index.ts"]
+			"@zoltar/ui-zoltar-shared/*": ["./ui/zoltarShared/ts/*"],
+			"@zoltar/ui-statoblast-shared/*": ["./ui/statoblastShared/ts/*"],
+			"@zoltar/ui-trading-shared": ["./ui/tradingShared/ts/index.ts"]
 		}
 	},
 	"include": ["bun-test-setup*.ts", "scripts/**/*.mts", "scripts/**/*.ts", "tooling/**/*.mts", "tooling/**/*.ts"],

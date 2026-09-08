@@ -2,7 +2,7 @@ import { getAddress, isAddress } from '@zoltar/shared/evm/ethereum'
 import { defaultCoreDeploymentRpcUrls } from './coreDeploymentDefaults.js'
 import type { CoreDeployment } from './deployment.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { getInfraContractAddresses, PROXY_DEPLOYER_ADDRESS } from '@zoltar/ui-zoltar-domain/protocol/deploymentHelpers.js'
+import { getInfraContractAddresses, PROXY_DEPLOYER_ADDRESS } from '@zoltar/ui-zoltar-shared/protocol/deploymentHelpers.js'
 
 export function isKnownDefaultRpcUrl(rpcUrl: string) {
 	let normalizedRpcUrl: string

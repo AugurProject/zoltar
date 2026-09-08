@@ -366,7 +366,7 @@ type TypeScriptSourceMap = {
 	mappings: string
 }
 
-const generatedTypeScriptOutputPattern = /^(?:shared|ui\/(?:coreShared|zoltarDomain|statoblastDomain|tradingDomain|zoltar|statoblast|trading))\/js\/.*\.js$/
+const generatedTypeScriptOutputPattern = /^(?:shared|ui\/(?:coreShared|zoltarShared|statoblastShared|tradingShared|zoltar|statoblast|trading))\/js\/.*\.js$/
 const base64Digits = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 
 const decodeVlqSegment = (segment: string): number[] => {
@@ -522,7 +522,7 @@ export function classifyTypeScriptSource(filePath: string, source: string): Type
 	const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, false, scriptKind)
 	if (!sourceFile.statements.some(hasRuntimeStatement)) return undefined
 
-	if (/^ui\/(?:coreShared|zoltarDomain|statoblastDomain|tradingDomain|zoltar|statoblast|trading)\/ts\//.test(file) && !/^ui\/(?:zoltar|statoblast|trading)\/ts\/(?:index\.dev|liveReload)\.ts$/.test(file)) return 'ui'
+	if (/^ui\/(?:coreShared|zoltarShared|statoblastShared|tradingShared|zoltar|statoblast|trading)\/ts\//.test(file) && !/^ui\/(?:zoltar|statoblast|trading)\/ts\/(?:index\.dev|liveReload)\.ts$/.test(file)) return 'ui'
 	if (file.startsWith('shared/ts/')) return 'shared'
 	if (file.startsWith('scripts/') || file.startsWith('tooling/') || /^ui\/(?:zoltar|statoblast|trading)\/ts\/(?:index\.dev|liveReload)\.ts$/.test(file) || file.startsWith('solidity/ts/')) return 'tooling'
 	return undefined

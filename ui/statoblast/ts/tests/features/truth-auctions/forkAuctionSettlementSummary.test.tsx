@@ -5,19 +5,19 @@ import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/querie
 import { h } from 'preact'
 import { act } from 'preact/test-utils'
 import { getAddress, type Address, zeroAddress } from '@zoltar/shared/evm/ethereum'
-import { getTruthAuctionBidDisposition, TRUTH_AUCTION_PRICE_PRECISION } from '@zoltar/ui-statoblast-domain/features/truth-auctions/lib/truthAuctionBook.js'
-import { getTruthAuctionSettlementBidKey, getTruthAuctionSettlementSelectionState, type TruthAuctionSettlementBidRow } from '@zoltar/ui-statoblast-domain/features/truth-auctions/lib/truthAuctionSettlement.js'
-import type { AccountState, ForkAuctionFormState } from '@zoltar/ui-zoltar-domain/types/app.js'
-import type { ForkAuctionSectionProps } from '@zoltar/ui-zoltar-domain/features/types.js'
+import { getTruthAuctionBidDisposition, TRUTH_AUCTION_PRICE_PRECISION } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/truthAuctionBook.js'
+import { getTruthAuctionSettlementBidKey, getTruthAuctionSettlementSelectionState, type TruthAuctionSettlementBidRow } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/truthAuctionSettlement.js'
+import type { AccountState, ForkAuctionFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
+import type { ForkAuctionSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
 import type { ForkAuctionDetails, ListedSecurityPool, MarketDetails, TruthAuctionBidView, TruthAuctionMetrics } from '@zoltar/ui-core-shared/types/contracts.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 
-const actualContracts = await import('@zoltar/ui-statoblast-domain/protocol/index.js')
+const actualContracts = await import('@zoltar/ui-statoblast-shared/protocol/index.js')
 const actualClients = await import('@zoltar/ui-core-shared/wallet/clients.js')
-const actualTruthAuctionBookHook = await import('@zoltar/ui-statoblast-domain/features/truth-auctions/hooks/useTruthAuctionBookData.js')
-const actualTruthAuctionSettlementHook = await import('@zoltar/ui-statoblast-domain/features/truth-auctions/hooks/useTruthAuctionSettlementActionState.js')
+const actualTruthAuctionBookHook = await import('@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useTruthAuctionBookData.js')
+const actualTruthAuctionSettlementHook = await import('@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useTruthAuctionSettlementActionState.js')
 
 type TruthAuctionBookHookState = ReturnType<typeof actualTruthAuctionBookHook.useTruthAuctionBookData>
 type TruthAuctionSettlementHookState = ReturnType<typeof actualTruthAuctionSettlementHook.useTruthAuctionSettlementActionState>
@@ -34,7 +34,7 @@ let mockedSecurityPools: ListedSecurityPool[] = []
 let mockedTruthAuctionBookState: TruthAuctionBookHookState
 let mockedTruthAuctionSettlementState: TruthAuctionSettlementHookState
 
-mock.module('@zoltar/ui-statoblast-domain/protocol/index.js', () => ({
+mock.module('@zoltar/ui-statoblast-shared/protocol/index.js', () => ({
 	...actualContracts,
 	loadSecurityPoolChildren: mock(async () => mockedSecurityPools),
 	loadForkAuctionDetails: mock(async () => mockedForkAuctionDetails),
@@ -49,17 +49,17 @@ mock.module('@zoltar/ui-core-shared/wallet/clients.js', () => ({
 	})),
 }))
 
-mock.module('@zoltar/ui-statoblast-domain/features/truth-auctions/hooks/useTruthAuctionBookData.js', () => ({
+mock.module('@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useTruthAuctionBookData.js', () => ({
 	...actualTruthAuctionBookHook,
 	useTruthAuctionBookData: mock(() => mockedTruthAuctionBookState),
 }))
 
-mock.module('@zoltar/ui-statoblast-domain/features/truth-auctions/hooks/useTruthAuctionSettlementActionState.js', () => ({
+mock.module('@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useTruthAuctionSettlementActionState.js', () => ({
 	...actualTruthAuctionSettlementHook,
 	useTruthAuctionSettlementActionState: mock(() => mockedTruthAuctionSettlementState),
 }))
 
-const { ForkAuctionSection } = await import('@zoltar/ui-statoblast-domain/features/truth-auctions/components/ForkAuctionSection.js')
+const { ForkAuctionSection } = await import('@zoltar/ui-statoblast-shared/features/truth-auctions/components/ForkAuctionSection.js')
 
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {

@@ -34,7 +34,7 @@ type DeploymentManifest = {
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const repositoryRootPath = path.join(directoryOfThisFile, '..', '..')
-const deploymentRuntimeOutputPaths = [path.join(repositoryRootPath, 'ui', 'statoblast', 'node_modules', '@zoltar', 'ui-core-shared', 'js', 'lib', 'networkProfile.js'), path.join(repositoryRootPath, 'ui', 'statoblast', 'node_modules', '@zoltar', 'ui-zoltar-domain', 'js', 'protocol', 'deployment.js')] as const
+const deploymentRuntimeOutputPaths = [path.join(repositoryRootPath, 'ui', 'statoblast', 'node_modules', '@zoltar', 'ui-core-shared', 'js', 'lib', 'networkProfile.js'), path.join(repositoryRootPath, 'ui', 'statoblast', 'node_modules', '@zoltar', 'ui-zoltar-shared', 'js', 'protocol', 'deployment.js')] as const
 const manifestIds = ['mainnet', 'sepolia'] as const
 type ManifestId = (typeof manifestIds)[number]
 
@@ -146,8 +146,8 @@ function readNetworkProfile(source: unknown, manifestId: ManifestId): ManifestNe
 }
 
 async function loadComputedManifest(manifestId: ManifestId): Promise<DeploymentManifest> {
-	const deploymentModulePath = path.join(repositoryRootPath, 'ui', 'statoblastDomain', 'ts', 'protocol', 'deployment.ts')
-	const deploymentHelpersModulePath = path.join(repositoryRootPath, 'ui', 'zoltarDomain', 'ts', 'protocol', 'deploymentHelpers.ts')
+	const deploymentModulePath = path.join(repositoryRootPath, 'ui', 'statoblastShared', 'ts', 'protocol', 'deployment.ts')
+	const deploymentHelpersModulePath = path.join(repositoryRootPath, 'ui', 'zoltarShared', 'ts', 'protocol', 'deploymentHelpers.ts')
 	const networkProfileModulePath = path.join(repositoryRootPath, 'ui', 'coreShared', 'ts', 'lib', 'networkProfile.ts')
 	const protocolConfigModulePath = path.join(repositoryRootPath, 'shared', 'ts', 'protocolConfig.ts')
 

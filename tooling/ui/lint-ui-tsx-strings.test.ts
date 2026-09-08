@@ -6,10 +6,10 @@ import { join } from 'node:path'
 import { getChangedLineNumbers, getChangedUiTsxFiles, lintCopySourceText, lintSourceText } from './lint-ui-tsx-strings.mts'
 
 test('lint-ui-tsx-strings enforces semantic copy names, template parameters, and ellipsis style', () => {
-	const legacyNameFailures = lintCopySourceText('ui/zoltarDomain/ts/copy/test.ts', "export const UI_STRING_LOADING = 'Loading…'")
-	const longNameFailures = lintCopySourceText('ui/zoltarDomain/ts/copy/test.ts', "export const simulationModeUsesBrowserLocalContractStateTransactionsDoNotAffectAPublicNetwork = 'Detail.'")
-	const positionalParameterFailures = lintCopySourceText('ui/zoltarDomain/ts/copy/test.ts', 'export const formatDetail = (value0: string) => `Detail ${value0}`')
-	const ellipsisFailures = lintCopySourceText('ui/zoltarDomain/ts/copy/test.ts', "export const loading = 'Loading...'")
+	const legacyNameFailures = lintCopySourceText('ui/zoltarShared/ts/copy/test.ts', "export const UI_STRING_LOADING = 'Loading…'")
+	const longNameFailures = lintCopySourceText('ui/zoltarShared/ts/copy/test.ts', "export const simulationModeUsesBrowserLocalContractStateTransactionsDoNotAffectAPublicNetwork = 'Detail.'")
+	const positionalParameterFailures = lintCopySourceText('ui/zoltarShared/ts/copy/test.ts', 'export const formatDetail = (value0: string) => `Detail ${value0}`')
+	const ellipsisFailures = lintCopySourceText('ui/zoltarShared/ts/copy/test.ts', "export const loading = 'Loading...'")
 
 	expect(legacyNameFailures).toHaveLength(1)
 	expect(longNameFailures).toHaveLength(1)
@@ -18,10 +18,10 @@ test('lint-ui-tsx-strings enforces semantic copy names, template parameters, and
 })
 
 test('lint-ui-tsx-strings allows only recognized three-period truncation', () => {
-	const hexPlaceholderFailures = lintCopySourceText('ui/zoltarDomain/ts/copy/test.ts', "export const hashPlaceholder = '0x...'")
-	const valueTruncationFailures = lintCopySourceText('ui/zoltarDomain/ts/copy/test.ts', 'export const formatTruncatedValue = (value: string, byteCount: number) => `${value}... (${byteCount} bytes)`')
-	const mixedPendingFailures = lintCopySourceText('ui/zoltarDomain/ts/copy/test.ts', "export const loadingHash = 'Loading... 0x...'")
-	const embeddedHexFailures = lintCopySourceText('ui/zoltarDomain/ts/copy/test.ts', "export const malformedHash = 'prefix0x...suffix'")
+	const hexPlaceholderFailures = lintCopySourceText('ui/zoltarShared/ts/copy/test.ts', "export const hashPlaceholder = '0x...'")
+	const valueTruncationFailures = lintCopySourceText('ui/zoltarShared/ts/copy/test.ts', 'export const formatTruncatedValue = (value: string, byteCount: number) => `${value}... (${byteCount} bytes)`')
+	const mixedPendingFailures = lintCopySourceText('ui/zoltarShared/ts/copy/test.ts', "export const loadingHash = 'Loading... 0x...'")
+	const embeddedHexFailures = lintCopySourceText('ui/zoltarShared/ts/copy/test.ts', "export const malformedHash = 'prefix0x...suffix'")
 
 	expect(hexPlaceholderFailures).toHaveLength(0)
 	expect(valueTruncationFailures).toHaveLength(0)
@@ -30,14 +30,14 @@ test('lint-ui-tsx-strings allows only recognized three-period truncation', () =>
 })
 
 test('lint-ui-tsx-strings rejects short sentence names and function-declaration bypasses', () => {
-	const sentenceNameFailures = lintCopySourceText('ui/zoltarDomain/ts/copy/test.ts', "export const thisVaultDoesNotExistDepositRepToCreateIt = 'This vault does not exist.'")
-	const shortErrorNameFailures = lintCopySourceText('ui/zoltarDomain/ts/copy/test.ts', "export const failedToLoadReports = 'Failed to load reports.'")
-	const emptySentenceNameFailures = lintCopySourceText('ui/zoltarDomain/ts/copy/test.ts', "export const noCorruptedStatesWereFound = 'No corrupted states were found.'")
-	const sentenceTemplateNameFailures = lintCopySourceText('ui/zoltarDomain/ts/copy/test.ts', 'export const formatCustomStateValueBasedOnValue = (stateName: string) => `State ${stateName}`')
-	const missingErrorRoleFailures = lintCopySourceText('ui/zoltarDomain/ts/copy/test.ts', 'export const formatMissingSavedState = (stateName: string) => `Missing ${stateName}.`')
-	const invalidStateNameFailures = lintCopySourceText('ui/zoltarDomain/ts/copy/test.ts', "export const selectedTickIsInvalid = 'Selected tick is invalid.'")
-	const requirementSentenceNameFailures = lintCopySourceText('ui/zoltarDomain/ts/copy/test.ts', "export const approvalAmountMustBeADecimalNumber = 'Approval amount must be a decimal number.'")
-	const functionDeclarationFailures = lintCopySourceText('ui/zoltarDomain/ts/copy/test.ts', 'export function UI_TEMPLATE_BAD(value0: string) { return `Detail ${value0}` }')
+	const sentenceNameFailures = lintCopySourceText('ui/zoltarShared/ts/copy/test.ts', "export const thisVaultDoesNotExistDepositRepToCreateIt = 'This vault does not exist.'")
+	const shortErrorNameFailures = lintCopySourceText('ui/zoltarShared/ts/copy/test.ts', "export const failedToLoadReports = 'Failed to load reports.'")
+	const emptySentenceNameFailures = lintCopySourceText('ui/zoltarShared/ts/copy/test.ts', "export const noCorruptedStatesWereFound = 'No corrupted states were found.'")
+	const sentenceTemplateNameFailures = lintCopySourceText('ui/zoltarShared/ts/copy/test.ts', 'export const formatCustomStateValueBasedOnValue = (stateName: string) => `State ${stateName}`')
+	const missingErrorRoleFailures = lintCopySourceText('ui/zoltarShared/ts/copy/test.ts', 'export const formatMissingSavedState = (stateName: string) => `Missing ${stateName}.`')
+	const invalidStateNameFailures = lintCopySourceText('ui/zoltarShared/ts/copy/test.ts', "export const selectedTickIsInvalid = 'Selected tick is invalid.'")
+	const requirementSentenceNameFailures = lintCopySourceText('ui/zoltarShared/ts/copy/test.ts', "export const approvalAmountMustBeADecimalNumber = 'Approval amount must be a decimal number.'")
+	const functionDeclarationFailures = lintCopySourceText('ui/zoltarShared/ts/copy/test.ts', 'export function UI_TEMPLATE_BAD(value0: string) { return `Detail ${value0}` }')
 
 	expect(sentenceNameFailures).toHaveLength(1)
 	expect(shortErrorNameFailures).toHaveLength(1)
@@ -50,10 +50,10 @@ test('lint-ui-tsx-strings rejects short sentence names and function-declaration 
 })
 
 test('lint-ui-tsx-strings enforces fragment roles and prose punctuation', () => {
-	const unnamedFragmentFailures = lintCopySourceText('ui/zoltarDomain/ts/copy/test.ts', "export const amountCopy = 'Amount: '")
-	const namedFragmentFailures = lintCopySourceText('ui/zoltarDomain/ts/copy/test.ts', "export const amountLead = 'Amount: '")
-	const missingPunctuationFailures = lintCopySourceText('ui/zoltarDomain/ts/copy/test.ts', "export const poolSearchHelpText = 'Filter this page by pool address'")
-	const punctuatedFailures = lintCopySourceText('ui/zoltarDomain/ts/copy/test.ts', "export const poolSearchHelpText = 'Filter this page by pool address.'")
+	const unnamedFragmentFailures = lintCopySourceText('ui/zoltarShared/ts/copy/test.ts', "export const amountCopy = 'Amount: '")
+	const namedFragmentFailures = lintCopySourceText('ui/zoltarShared/ts/copy/test.ts', "export const amountLead = 'Amount: '")
+	const missingPunctuationFailures = lintCopySourceText('ui/zoltarShared/ts/copy/test.ts', "export const poolSearchHelpText = 'Filter this page by pool address'")
+	const punctuatedFailures = lintCopySourceText('ui/zoltarShared/ts/copy/test.ts', "export const poolSearchHelpText = 'Filter this page by pool address.'")
 
 	expect(unnamedFragmentFailures).toHaveLength(1)
 	expect(namedFragmentFailures).toHaveLength(0)

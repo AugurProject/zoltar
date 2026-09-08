@@ -11,7 +11,7 @@ import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contrac
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 
-type UseZoltarMigration = typeof import('@zoltar/ui-zoltar-domain/features/universes/hooks/useZoltarMigration.js')['useZoltarMigration']
+type UseZoltarMigration = typeof import('@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarMigration.js')['useZoltarMigration']
 type UseZoltarMigrationState = ReturnType<UseZoltarMigration>
 
 const WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000a1')
@@ -81,14 +81,14 @@ describe('useZoltarMigration', () => {
 				kind: 'write-client',
 			})),
 		}))
-		mock.module('@zoltar/ui-zoltar-domain/protocol/zoltarForks.js', () => ({
+		mock.module('@zoltar/ui-zoltar-shared/protocol/zoltarForks.js', () => ({
 			migrateInternalRepInZoltar: mock(async () => {
 				throw new Error('migrateInternalRepInZoltar should not be called in this test')
 			}),
 			prepareRepForMigrationInZoltar,
 		}))
 
-		const { useZoltarMigration } = await import(`@zoltar/ui-zoltar-domain/features/universes/hooks/useZoltarMigration.js?case=${crypto.randomUUID()}`)
+		const { useZoltarMigration } = await import(`@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarMigration.js?case=${crypto.randomUUID()}`)
 		let hookState: UseZoltarMigrationState | undefined
 		const Harness = function ZoltarMigrationHarness() {
 			const state = useZoltarMigration({
@@ -142,7 +142,7 @@ describe('useZoltarMigration', () => {
 		const onTransactionRequested = mock(() => undefined)
 		const onTransactionFailed = mock(() => undefined)
 
-		const { useZoltarMigration } = await import(`@zoltar/ui-zoltar-domain/features/universes/hooks/useZoltarMigration.js?case=${crypto.randomUUID()}`)
+		const { useZoltarMigration } = await import(`@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarMigration.js?case=${crypto.randomUUID()}`)
 		let hookState: UseZoltarMigrationState | undefined
 		const Harness = function ZoltarMigrationHarness() {
 			const state = useZoltarMigration({
@@ -199,7 +199,7 @@ describe('useZoltarMigration', () => {
 			}
 		})
 
-		mock.module('@zoltar/ui-zoltar-domain/protocol/zoltarForks.js', () => ({
+		mock.module('@zoltar/ui-zoltar-shared/protocol/zoltarForks.js', () => ({
 			migrateInternalRepInZoltar,
 			prepareRepForMigrationInZoltar: mock(async () => {
 				throw new Error('prepareRepForMigrationInZoltar should not be called in this test')
@@ -225,7 +225,7 @@ describe('useZoltarMigration', () => {
 		})
 		const refreshZoltarUniverse = mock(async () => refreshedUniverse)
 		const refreshZoltarForkAccess = mock(async () => undefined)
-		const { useZoltarMigration } = await import(`@zoltar/ui-zoltar-domain/features/universes/hooks/useZoltarMigration.js?case=${crypto.randomUUID()}`)
+		const { useZoltarMigration } = await import(`@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarMigration.js?case=${crypto.randomUUID()}`)
 		let hookState: UseZoltarMigrationState | undefined
 		const Harness = function ZoltarMigrationHarness() {
 			const state = useZoltarMigration({

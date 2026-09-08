@@ -2,10 +2,10 @@
 
 import { beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/shared/evm/ethereum'
-import { findNextDeployableStep, getDeploymentSections, getDeploymentStepAvailability, getDeployNextMissingAvailability, getPrerequisiteLabel } from '@zoltar/ui-zoltar-domain/features/deployment/lib/deployment.js'
+import { findNextDeployableStep, getDeploymentSections, getDeploymentStepAvailability, getDeployNextMissingAvailability, getPrerequisiteLabel } from '@zoltar/ui-zoltar-shared/features/deployment/lib/deployment.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import type { InjectedEthereum } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'
-import { getDeploymentSteps, getMulticall3Address, loadDeploymentStatusOracleSnapshot, loadZoltarUniverseSummary } from '@zoltar/ui-zoltar-domain/protocol/index.js'
+import { getDeploymentSteps, getMulticall3Address, loadDeploymentStatusOracleSnapshot, loadZoltarUniverseSummary } from '@zoltar/ui-zoltar-shared/protocol/index.js'
 import type { DeploymentStatus, ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { AnvilWindowEthereum } from '../../../../../../solidity/ts/testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../../../../../solidity/ts/testSupport/simulator/useIsolatedAnvilNode'

@@ -2,7 +2,7 @@ import * as path from 'node:path'
 import * as url from 'node:url'
 import { preactSingletonDependencyPaths, shareUiPreactRuntime } from './share-ui-preact-runtime.mjs'
 
-export const uiPackageIds = ['coreShared', 'zoltarDomain', 'statoblastDomain', 'zoltar', 'statoblast', 'trading'] as const
+export const uiPackageIds = ['coreShared', 'zoltarShared', 'statoblastShared', 'zoltar', 'statoblast', 'trading'] as const
 export { preactSingletonDependencyPaths }
 
 const scriptDirectoryPath = path.dirname(url.fileURLToPath(import.meta.url))

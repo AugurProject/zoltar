@@ -1,8 +1,8 @@
 import type { Address } from '@zoltar/shared/evm/ethereum'
 import { statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '@zoltar/ui-core-shared/contractArtifact.js'
 import type { ReadClient, TruthAuctionBidView, TruthAuctionBidderBidPage, TruthAuctionTickBidPage, TruthAuctionTickPage, TruthAuctionTickSummary } from '@zoltar/ui-core-shared/types/contracts.js'
-import { requireAddressValue, requireArrayValue, requireBigintValue, requireBooleanValue, requireObjectValue } from '@zoltar/ui-zoltar-domain/protocol/decoders.js'
-import { getProtocolPageOffset } from '@zoltar/ui-zoltar-domain/protocol/helpers.js'
+import { requireAddressValue, requireArrayValue, requireBigintValue, requireBooleanValue, requireObjectValue } from '@zoltar/ui-zoltar-shared/protocol/decoders.js'
+import { getProtocolPageOffset } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 
 function requireTruthAuctionTickSummary(value: unknown, context: string): TruthAuctionTickSummary {
 	const summary = requireObjectValue(value, context)

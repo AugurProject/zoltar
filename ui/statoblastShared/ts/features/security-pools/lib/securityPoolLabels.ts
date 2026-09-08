@@ -1,7 +1,7 @@
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import type { SecurityPoolLifecycleState } from './securityPoolState.js'
-import { getReportingOutcomeLabel } from '@zoltar/ui-zoltar-domain/features/reporting/lib/reporting.js'
+import { getReportingOutcomeLabel } from '@zoltar/ui-zoltar-shared/features/reporting/lib/reporting.js'
 import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 
 type VaultLauncherAction = 'claim-fees' | 'deposit-rep' | 'rep-exit'

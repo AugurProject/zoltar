@@ -59,7 +59,7 @@ const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
 	{
 		command: 'bun run test:browser:smoke',
 		reason: 'production build or browser smoke behavior changed',
-		matches: filePath => filePath === 'tooling/ui/production.mts' || filePath === 'tooling/ui/appPaths.mts' || filePath === 'tooling/ui/browserSmoke.mts' || filePath === 'ui/coreShared/css/application-surfaces.css' || filePath === 'ui/statoblastDomain/ts/features/security-pools/components/CollateralizationCircle.tsx',
+		matches: filePath => filePath === 'tooling/ui/production.mts' || filePath === 'tooling/ui/appPaths.mts' || filePath === 'tooling/ui/browserSmoke.mts' || filePath === 'ui/coreShared/css/application-surfaces.css' || filePath === 'ui/statoblastShared/ts/features/security-pools/components/CollateralizationCircle.tsx',
 		ownedTestOptions: { timeout: 300_000 },
 		ownedTestPaths: ['tooling/ui/browserSmoke.test.ts', 'tooling/ui/productionBuild.test.ts', 'ui/statoblast/ts/tests/features/security-pools/collateralizationCircle.browser.test.ts'],
 	},
@@ -77,12 +77,12 @@ const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
 	{
 		command: 'bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/zoltar/ts/tests/protocol/uniswapQuoter.test.ts',
 		reason: 'Uniswap quote selection behavior changed',
-		matches: filePath => filePath === 'ui/zoltarDomain/ts/protocol/uniswapQuoter.ts',
+		matches: filePath => filePath === 'ui/zoltarShared/ts/protocol/uniswapQuoter.ts',
 	},
 	{
 		command: 'bun run test:integration:mainnet-fork',
 		reason: 'deterministic historical Uniswap routing changed; requires MAINNET_ARCHIVE_RPC_URL',
-		matches: filePath => filePath === 'ui/zoltarDomain/ts/protocol/uniswapQuoter.ts' || filePath === 'ui/zoltar/ts/tests/protocol/uniswapQuoter.fork.test.ts',
+		matches: filePath => filePath === 'ui/zoltarShared/ts/protocol/uniswapQuoter.ts' || filePath === 'ui/zoltar/ts/tests/protocol/uniswapQuoter.fork.test.ts',
 		ownedTestOptions: { environment: 'RUN_MAINNET_FORK_INTEGRATION_TESTS=1', timeout: 300_000 },
 		ownedTestPaths: ['ui/zoltar/ts/tests/protocol/uniswapQuoter.fork.test.ts'],
 		selectOnOwnedRename: true,
@@ -126,9 +126,9 @@ const PACKAGE_ALIASES = new Map([
 	['@zoltar/shared/', 'shared/ts/'],
 	['@zoltar/bot-shared/', 'bots/shared/src/'],
 	['@zoltar/ui-core-shared/', 'ui/coreShared/ts/'],
-	['@zoltar/ui-statoblast-domain/', 'ui/statoblastDomain/ts/'],
-	['@zoltar/ui-zoltar-domain/', 'ui/zoltarDomain/ts/'],
-	['@zoltar/ui-trading-domain', 'ui/tradingDomain/ts/index.ts'],
+	['@zoltar/ui-statoblast-shared/', 'ui/statoblastShared/ts/'],
+	['@zoltar/ui-zoltar-shared/', 'ui/zoltarShared/ts/'],
+	['@zoltar/ui-trading-shared', 'ui/tradingShared/ts/index.ts'],
 ])
 
 type PackageImportMap = ReadonlyMap<string, ReadonlyMap<string, string>>

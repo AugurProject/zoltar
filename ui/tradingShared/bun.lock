@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "@zoltar/ui-trading-domain",
+      "name": "@zoltar/ui-trading-shared",
       "dependencies": {
         "@zoltar/shared": "file:../../shared",
       },

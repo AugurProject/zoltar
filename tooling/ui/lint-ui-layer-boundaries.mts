@@ -4,7 +4,7 @@ import * as url from 'node:url'
 import * as ts from 'typescript'
 
 const projectRoot = path.join(path.dirname(url.fileURLToPath(import.meta.url)), '..', '..')
-const uiPackageIds = ['coreShared', 'zoltarDomain', 'statoblastDomain', 'tradingDomain', 'zoltar', 'statoblast', 'trading'] as const
+const uiPackageIds = ['coreShared', 'zoltarShared', 'statoblastShared', 'tradingShared', 'zoltar', 'statoblast', 'trading'] as const
 const uiSourceRoots = uiPackageIds.map(packageId => path.join(projectRoot, 'ui', packageId, 'ts'))
 
 export type UiLayerBoundaryFinding = {
@@ -19,20 +19,20 @@ function isWithin(candidatePath: string, directoryPath: string) {
 	return candidatePath === directoryPath || candidatePath.startsWith(`${directoryPath}/`)
 }
 
-const appPackagePattern = /^ui\/(coreShared|zoltarDomain|statoblastDomain|tradingDomain|zoltar|statoblast|trading)\/ts(?:\/|$)/
+const appPackagePattern = /^ui\/(coreShared|zoltarShared|statoblastShared|tradingShared|zoltar|statoblast|trading)\/ts(?:\/|$)/
 const packageAliases: Record<string, string> = {
 	'@zoltar/ui-core-shared': 'coreShared',
-	'@zoltar/ui-zoltar-domain': 'zoltarDomain',
-	'@zoltar/ui-statoblast-domain': 'statoblastDomain',
-	'@zoltar/ui-trading-domain': 'tradingDomain',
+	'@zoltar/ui-zoltar-shared': 'zoltarShared',
+	'@zoltar/ui-statoblast-shared': 'statoblastShared',
+	'@zoltar/ui-trading-shared': 'tradingShared',
 	'@zoltar/ui-zoltar': 'zoltar',
 	'@zoltar/ui-statoblast': 'statoblast',
 	'@zoltar/ui-trading': 'trading',
 }
-const domainPackageIds = new Set(['zoltarDomain', 'statoblastDomain', 'tradingDomain'])
-const domainPublicExports = new Map(
+const sharedLibraryPackageIds = new Set(['zoltarShared', 'statoblastShared', 'tradingShared'])
+const sharedLibraryPublicExports = new Map(
 	Object.entries(packageAliases)
-		.filter(([, packageId]) => domainPackageIds.has(packageId))
+		.filter(([, packageId]) => sharedLibraryPackageIds.has(packageId))
 		.map(([alias, packageId]) => {
 			const manifest = JSON.parse(readFileSync(path.join(projectRoot, 'ui', packageId, 'package.json'), 'utf8')) as { exports?: Record<string, unknown> }
 			return [alias, new Set(Object.keys(manifest.exports ?? {}))] as const
@@ -40,12 +40,12 @@ const domainPublicExports = new Map(
 )
 const allowedCrossPackageImports: Record<string, readonly string[]> = {
 	coreShared: [],
-	zoltarDomain: ['coreShared'],
-	statoblastDomain: ['coreShared', 'zoltarDomain'],
-	tradingDomain: [],
-	zoltar: ['coreShared', 'zoltarDomain'],
-	statoblast: ['coreShared', 'zoltarDomain', 'statoblastDomain'],
-	trading: ['coreShared', 'zoltarDomain', 'statoblastDomain', 'tradingDomain'],
+	zoltarShared: ['coreShared'],
+	statoblastShared: ['coreShared', 'zoltarShared'],
+	tradingShared: [],
+	zoltar: ['coreShared', 'zoltarShared'],
+	statoblast: ['coreShared', 'zoltarShared', 'statoblastShared'],
+	trading: ['coreShared', 'zoltarShared', 'statoblastShared', 'tradingShared'],
 }
 
 function getViolatedRule(sourcePath: string, specifier: string): UiLayerBoundaryFinding['rule'] | undefined {
@@ -61,7 +61,7 @@ function getViolatedRule(sourcePath: string, specifier: string): UiLayerBoundary
 		if (targetPackage === undefined) return undefined
 		const allowedTargets = allowedCrossPackageImports[sourcePackage] ?? []
 		if (targetPackage === sourcePackage || !allowedTargets.includes(targetPackage)) return 'cross-package-import-boundary'
-		const publicExports = domainPublicExports.get(aliasName)
+		const publicExports = sharedLibraryPublicExports.get(aliasName)
 		if (publicExports !== undefined) {
 			const subpath = specifier === aliasName ? '.' : `.${specifier.slice(aliasName.length)}`
 			if (!publicExports.has(subpath)) return 'cross-package-private-subpath'

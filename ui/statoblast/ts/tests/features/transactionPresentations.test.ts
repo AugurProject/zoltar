@@ -18,7 +18,7 @@ import {
 	createSecurityVaultTransactionIntent,
 	createTradingSuccessPresentation,
 	createTradingTransactionIntent,
-} from '@zoltar/ui-statoblast-domain/features/transactionPresentations.js'
+} from '@zoltar/ui-statoblast-shared/features/transactionPresentations.js'
 import type { ForkAuctionActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
 import { createInitialTransactionTrayState, markTransactionFailed, markTransactionPrepared, markTransactionRequested, markTransactionSubmitted } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
 

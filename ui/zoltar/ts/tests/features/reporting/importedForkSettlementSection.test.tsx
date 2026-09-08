@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { useState } from 'preact/hooks'
-import { ImportedForkSettlementSection } from '@zoltar/ui-zoltar-domain/features/reporting/components/ImportedForkSettlementSection.js'
+import { ImportedForkSettlementSection } from '@zoltar/ui-zoltar-shared/features/reporting/components/ImportedForkSettlementSection.js'
 import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'

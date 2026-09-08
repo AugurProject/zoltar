@@ -46,18 +46,18 @@ for (const appId of UI_APP_IDS) {
 		expect(imports['@zoltar/shared/statoblast/scalarOutcome']).toBe('../shared/js/statoblast/scalarOutcome.js')
 		expect(imports['tevm']).toBe('./vendor/tevm/index.js')
 		expect(imports['@zoltar/ui-core-shared/']).toBe('/ui/coreShared/js/')
-		expect(imports['@zoltar/ui-zoltar-domain/']).toBe('/ui/zoltarDomain/js/')
-		if (appId === 'statoblast' || appId === 'trading') expect(imports['@zoltar/ui-statoblast-domain/']).toBe('/ui/statoblastDomain/js/')
-		else expect(imports['@zoltar/ui-statoblast-domain/']).toBeUndefined()
+		expect(imports['@zoltar/ui-zoltar-shared/']).toBe('/ui/zoltarShared/js/')
+		if (appId === 'statoblast' || appId === 'trading') expect(imports['@zoltar/ui-statoblast-shared/']).toBe('/ui/statoblastShared/js/')
+		else expect(imports['@zoltar/ui-statoblast-shared/']).toBeUndefined()
 		if (appId === 'trading') {
-			expect(imports['@zoltar/ui-trading-domain']).toBe('/ui/tradingDomain/js/index.js')
-			expect(imports['@zoltar/ui-trading-domain/']).toBe('/ui/tradingDomain/js/')
+			expect(imports['@zoltar/ui-trading-shared']).toBe('/ui/tradingShared/js/index.js')
+			expect(imports['@zoltar/ui-trading-shared/']).toBe('/ui/tradingShared/js/')
 			expect(imports['@zoltar/shared/trading/math']).toBe('../shared/js/trading/math.js')
 			expect(imports['@zoltar/shared/trading/positions']).toBe('../shared/js/trading/positions.js')
 			expect(imports['@zoltar/shared/trading/transactions']).toBe('../shared/js/trading/transactions.js')
 		} else {
-			expect(imports['@zoltar/ui-trading-domain']).toBeUndefined()
-			expect(imports['@zoltar/ui-trading-domain/']).toBeUndefined()
+			expect(imports['@zoltar/ui-trading-shared']).toBeUndefined()
+			expect(imports['@zoltar/ui-trading-shared/']).toBeUndefined()
 		}
 
 		for (const mappedPath of Object.values(imports)) {

@@ -1,6 +1,6 @@
 {
-	"description": "Reusable Trading UI domain calculations",
-	"name": "@zoltar/ui-trading-domain",
+	"description": "Reusable Trading UI calculations",
+	"name": "@zoltar/ui-trading-shared",
 	"private": true,
 	"repository": {},
 	"license": "Unlicense",

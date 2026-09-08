@@ -1,8 +1,8 @@
 /// <reference types='bun-types' />
 
 import { describe, expect, test } from 'bun:test'
-import { resolveUiRepPerEthPrice } from '@zoltar/ui-statoblast-domain/features/security-pools/lib/uiPriceOracle.js'
-import { getOracleManagerPriceValidUntilTimestamp } from '@zoltar/ui-zoltar-domain/protocol/oracleTiming.js'
+import { resolveUiRepPerEthPrice } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/uiPriceOracle.js'
+import { getOracleManagerPriceValidUntilTimestamp } from '@zoltar/ui-zoltar-shared/protocol/oracleTiming.js'
 
 describe('UI price oracle', () => {
 	const prices = {

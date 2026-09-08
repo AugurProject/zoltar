@@ -53,8 +53,8 @@ const pathSpecificForbidden = new Map<string, RegExp>([
 	['docs/explanation/truth-auctions.html', /\b(?:postAuctionEffectiveOutcomeBalance|preAuctionOutcomeBalance)\b/],
 	['solidity/contracts/statoblast/EscalationGameCarry.sol', /\b(?:forkCarryInitialBacking|forkCarryBackingExportedBeforeResume|minimumBacking|sourceRetainedAmount|inheritedUnresolvedTotal|directlyClaimedPrincipal|_getEffectiveInheritedUnresolvedTotal)\b/],
 	['bots/shared/src/monitoring/constant-product-markets.ts', /\bethReceived\b/],
-	['ui/zoltarDomain/ts/features/types.ts', /\bonRepRedeemedFromVault\b/],
-	['ui/statoblastDomain/ts/copy/forkAuction.ts', /\bexport const collateral\b/],
+	['ui/zoltarShared/ts/features/types.ts', /\bonRepRedeemedFromVault\b/],
+	['ui/statoblastShared/ts/copy/forkAuction.ts', /\bexport const collateral\b/],
 	['tooling/docs/check-docs-reference-values.mts', /poolHeldVaultRepBackingValueAttoRep/],
 ])
 

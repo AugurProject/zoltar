@@ -3,8 +3,8 @@
 import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/shared/evm/ethereum'
 import type { Address } from '@zoltar/shared/evm/ethereum'
-import { getForkAuctionStageLabel, getForkAuctionStageOrder, getForkAuctionStageView, getForkStageDescriptionForState, getOutcomeActionLabel, hasForkActivity } from '@zoltar/ui-statoblast-domain/features/truth-auctions/lib/forkAuction.js'
-import { buildTruthAuctionBidRows, buildViewerTruthAuctionBidRows, updateTruthAuctionSettlementBidSelection } from '@zoltar/ui-statoblast-domain/features/truth-auctions/lib/truthAuctionBidViewModels.js'
+import { getForkAuctionStageLabel, getForkAuctionStageOrder, getForkAuctionStageView, getForkStageDescriptionForState, getOutcomeActionLabel, hasForkActivity } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/forkAuction.js'
+import { buildTruthAuctionBidRows, buildViewerTruthAuctionBidRows, updateTruthAuctionSettlementBidSelection } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/truthAuctionBidViewModels.js'
 import {
 	buildTruthAuctionDepthPoints,
 	getTruthAuctionBidSettlementEstimate,
@@ -22,8 +22,8 @@ import {
 	sortTruthAuctionTickSummariesDescending,
 	TRUTH_AUCTION_MAX_TICK,
 	TRUTH_AUCTION_PRICE_PRECISION,
-} from '@zoltar/ui-statoblast-domain/features/truth-auctions/lib/truthAuctionBook.js'
-import { getTruthAuctionSettlementActionAvailabilityMessage, getTruthAuctionSettlementBidKey, getTruthAuctionSettlementBidRows, getTruthAuctionSettlementSelectionEstimate, getTruthAuctionSettlementSelectionState } from '@zoltar/ui-statoblast-domain/features/truth-auctions/lib/truthAuctionSettlement.js'
+} from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/truthAuctionBook.js'
+import { getTruthAuctionSettlementActionAvailabilityMessage, getTruthAuctionSettlementBidKey, getTruthAuctionSettlementBidRows, getTruthAuctionSettlementSelectionEstimate, getTruthAuctionSettlementSelectionState } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/truthAuctionSettlement.js'
 import type { TruthAuctionBidView, TruthAuctionMetrics, TruthAuctionTickSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 

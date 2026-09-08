@@ -53,22 +53,22 @@ COPY ./ui/coreShared/ts/ /source/ui/coreShared/ts/
 RUN bun ./tooling/repo/install-frozen.mts ui/coreShared
 RUN cd /source/ui/coreShared && bun x tsc --project tsconfig.json
 
-# Build reusable domain packages before any dependency-leaf application.
-COPY ./ui/zoltarDomain/package.json /source/ui/zoltarDomain/package.json
-COPY ./ui/zoltarDomain/bun.lock /source/ui/zoltarDomain/bun.lock
-COPY ./ui/zoltarDomain/tsconfig.json /source/ui/zoltarDomain/tsconfig.json
-COPY ./ui/zoltarDomain/ts/ /source/ui/zoltarDomain/ts/
-RUN bun ./tooling/repo/install-frozen.mts ui/zoltarDomain && cd /source/ui/zoltarDomain && bun run build
-COPY ./ui/statoblastDomain/package.json /source/ui/statoblastDomain/package.json
-COPY ./ui/statoblastDomain/bun.lock /source/ui/statoblastDomain/bun.lock
-COPY ./ui/statoblastDomain/tsconfig.json /source/ui/statoblastDomain/tsconfig.json
-COPY ./ui/statoblastDomain/ts/ /source/ui/statoblastDomain/ts/
-RUN bun ./tooling/repo/install-frozen.mts ui/statoblastDomain && cd /source/ui/statoblastDomain && bun run build
-COPY ./ui/tradingDomain/package.json /source/ui/tradingDomain/package.json
-COPY ./ui/tradingDomain/bun.lock /source/ui/tradingDomain/bun.lock
-COPY ./ui/tradingDomain/tsconfig.json /source/ui/tradingDomain/tsconfig.json
-COPY ./ui/tradingDomain/ts/ /source/ui/tradingDomain/ts/
-RUN bun ./tooling/repo/install-frozen.mts ui/tradingDomain && cd /source/ui/tradingDomain && bun run build
+# Build reusable shared libraries before any dependency-leaf application.
+COPY ./ui/zoltarShared/package.json /source/ui/zoltarShared/package.json
+COPY ./ui/zoltarShared/bun.lock /source/ui/zoltarShared/bun.lock
+COPY ./ui/zoltarShared/tsconfig.json /source/ui/zoltarShared/tsconfig.json
+COPY ./ui/zoltarShared/ts/ /source/ui/zoltarShared/ts/
+RUN bun ./tooling/repo/install-frozen.mts ui/zoltarShared && cd /source/ui/zoltarShared && bun run build
+COPY ./ui/statoblastShared/package.json /source/ui/statoblastShared/package.json
+COPY ./ui/statoblastShared/bun.lock /source/ui/statoblastShared/bun.lock
+COPY ./ui/statoblastShared/tsconfig.json /source/ui/statoblastShared/tsconfig.json
+COPY ./ui/statoblastShared/ts/ /source/ui/statoblastShared/ts/
+RUN bun ./tooling/repo/install-frozen.mts ui/statoblastShared && cd /source/ui/statoblastShared && bun run build
+COPY ./ui/tradingShared/package.json /source/ui/tradingShared/package.json
+COPY ./ui/tradingShared/bun.lock /source/ui/tradingShared/bun.lock
+COPY ./ui/tradingShared/tsconfig.json /source/ui/tradingShared/tsconfig.json
+COPY ./ui/tradingShared/ts/ /source/ui/tradingShared/ts/
+RUN bun ./tooling/repo/install-frozen.mts ui/tradingShared && cd /source/ui/tradingShared && bun run build
 
 # Build Zoltar from only its inward dependencies.
 FROM common-builder AS zoltar-builder

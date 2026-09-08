@@ -21,12 +21,12 @@ import { getInitialReportPriorityFeeValidationMessage, getSecurityPoolCreateDisa
 import { formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js'
 import { MarketCreateQuestionSection } from '../../markets/components/MarketCreateQuestionSection.js'
 import { getDefaultMarketFormState } from '../../markets/lib/marketForm.js'
-import { validateMarketForm } from '@zoltar/ui-zoltar-domain/features/questions/lib/questionCreation.js'
+import { validateMarketForm } from '@zoltar/ui-zoltar-shared/features/questions/lib/questionCreation.js'
 import type { SecurityPoolSectionProps } from '../../types.js'
-import { formatUniverseIdHex } from '@zoltar/ui-zoltar-domain/features/universes/lib/universe.js'
+import { formatUniverseIdHex } from '@zoltar/ui-zoltar-shared/features/universes/lib/universe.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
-import * as marketCopy from '@zoltar/ui-zoltar-domain/copy/market.js'
+import * as marketCopy from '@zoltar/ui-zoltar-shared/copy/market.js'
 
 export function SecurityPoolSection({
 	accountState,

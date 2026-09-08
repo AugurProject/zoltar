@@ -2,7 +2,7 @@ import { formatOutcomeAmount, formatShareAmount, formatUnits } from '../lib/form
 import { Status } from '../components/Status.js'
 import { SecurityPoolAddressLink } from '../components/TradingAddress.js'
 import type { LiveBalances, LiveMarket } from '../protocol/live.js'
-import { maximumInsuredExit } from '@zoltar/ui-trading-domain'
+import { maximumInsuredExit } from '@zoltar/ui-trading-shared'
 import type { BalanceState, PortfolioBalanceEntry } from './live/liveTradingTypes.js'
 import { BalanceLoadError } from './LiveTradingTransactionUi.js'
 import * as portfolioCopy from '../copy/portfolio.js'

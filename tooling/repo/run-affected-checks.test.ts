@@ -7,8 +7,8 @@ test('global, tooling, and unowned paths select the complete registry', () => {
 })
 
 test('owned paths select their registry dependent closure', () => {
-	const selected = affectedCheckSelection(['ui/tradingDomain/ts/capabilities.ts']).map(project => project.id)
-	expect(selected).toContain('ui-trading-domain')
+	const selected = affectedCheckSelection(['ui/tradingShared/ts/capabilities.ts']).map(project => project.id)
+	expect(selected).toContain('ui-trading-shared')
 	expect(selected).toContain('ui-trading')
 	expect(selected).toContain('repository')
 	expect(selected).not.toContain('chaos')

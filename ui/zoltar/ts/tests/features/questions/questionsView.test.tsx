@@ -6,7 +6,7 @@ import { render } from 'preact'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import type { MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
-import { QuestionsView } from '@zoltar/ui-zoltar-domain/features/zoltarSurface/components/ZoltarSection.js'
+import { QuestionsView } from '@zoltar/ui-zoltar-shared/features/zoltarSurface/components/ZoltarSection.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
 const question: MarketDetails = {

@@ -10,8 +10,8 @@ import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/a
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import { useOpenOracleOperations, type UseOpenOracleOperationsDependencies } from '@zoltar/ui-zoltar-domain/features/open-oracle/hooks/useOpenOracleOperations.js'
-import { createOpenOracleReportMissingError } from '@zoltar/ui-zoltar-domain/protocol/index.js'
+import { useOpenOracleOperations, type UseOpenOracleOperationsDependencies } from '@zoltar/ui-zoltar-shared/features/open-oracle/hooks/useOpenOracleOperations.js'
+import { createOpenOracleReportMissingError } from '@zoltar/ui-zoltar-shared/protocol/index.js'
 
 type UseOpenOracleOperationsState = ReturnType<typeof useOpenOracleOperations>
 type TestOpenOracleWriteClient = { kind: 'injected-write-client' }

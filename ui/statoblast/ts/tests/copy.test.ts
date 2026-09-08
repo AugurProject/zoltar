@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
-import * as forkAuctionCopy from '@zoltar/ui-statoblast-domain/copy/forkAuction.js'
-import * as liquidationCopy from '@zoltar/ui-statoblast-domain/copy/liquidation.js'
-import * as securityPoolCopy from '@zoltar/ui-statoblast-domain/copy/securityPool.js'
+import * as forkAuctionCopy from '@zoltar/ui-statoblast-shared/copy/forkAuction.js'
+import * as liquidationCopy from '@zoltar/ui-statoblast-shared/copy/liquidation.js'
+import * as securityPoolCopy from '@zoltar/ui-statoblast-shared/copy/securityPool.js'
 
 test('vault operation copy uses accounting roles', () => {
 	expect(securityPoolCopy.settingCapacityOwnership).toBe('Setting capacity ownership…')

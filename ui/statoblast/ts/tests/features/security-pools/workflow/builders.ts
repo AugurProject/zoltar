@@ -1,8 +1,8 @@
 import { zeroAddress, type Address } from '@zoltar/shared/evm/ethereum'
-import { deriveHasForkActivity } from '@zoltar/ui-statoblast-domain/features/truth-auctions/lib/forkAuction.js'
-import type { AccountState } from '@zoltar/ui-zoltar-domain/types/app.js'
+import { deriveHasForkActivity } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/forkAuction.js'
+import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import type { ForkAuctionDetails, ListedSecurityPool, MarketDetails, OracleManagerDetails, SecurityPoolVaultSummary, SecurityVaultDetails } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { ForkAuctionRouteContentProps, ReportingRouteContentProps, SecurityPoolWorkflowRouteContentProps, SecurityVaultRouteContentProps, TradingRouteContentProps } from '@zoltar/ui-zoltar-domain/features/types.js'
+import type { ForkAuctionRouteContentProps, ReportingRouteContentProps, SecurityPoolWorkflowRouteContentProps, SecurityVaultRouteContentProps, TradingRouteContentProps } from '@zoltar/ui-zoltar-shared/features/types.js'
 
 export function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {

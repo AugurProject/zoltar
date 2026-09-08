@@ -9,7 +9,7 @@ The codebase is split into these main areas:
 
 - `solidity/` contains contracts, protocol test support, tests, and generated contract artifacts
 - `ui/coreShared/` contains runtime-neutral UI primitives, wallet and chain integration, shared workflows, and the simulation engine used by all three interfaces
-- `ui/zoltarDomain/`, `ui/statoblastDomain/`, and `ui/tradingDomain/` expose reusable product-domain APIs without application bootstrap, routing, or pages
+- `ui/zoltarShared/`, `ui/statoblastShared/`, and `ui/tradingShared/` expose reusable product libraries without application bootstrap, routing, or pages
 - `ui/zoltar/` contains the Zoltar oracle operations interface (its own package, dev server, and production build)
 - `ui/statoblast/` contains the Augur Statoblast prediction-market operations interface (its own package, dev server, and production build)
 - `ui/trading/` contains the Statoblast Trading interface (its own package, dev server, and production build)
@@ -19,7 +19,7 @@ The codebase is split into these main areas:
 - `tooling/` contains typed repository metadata plus CI, contract-safety, documentation, testing, and UI build/development orchestration; `scripts/` retains only the pinned Uniswap deployment artifact
 - `bots/` contains chaos, liquidator, and OpenOracle arbitrager bots
 
-The runnable packages (`ui/zoltar`, `ui/statoblast`, and `ui/trading`) are dependency leaves: they own bootstrap, routes, application composition, and tests. Reusable product capabilities live in the matching domain package, while runtime-neutral primitives, hooks, wallet/chain integration, transactions, and simulation infrastructure live in `ui/coreShared/ts`. Package exports and the UI boundary checker prevent domain packages from importing runnable applications or applications from importing one another.
+The runnable packages (`ui/zoltar`, `ui/statoblast`, and `ui/trading`) are dependency leaves: they own bootstrap, routes, application composition, and tests. Reusable product capabilities live in the matching shared library, while runtime-neutral primitives, hooks, wallet/chain integration, transactions, and simulation infrastructure live in `ui/coreShared/ts`. Package exports and the UI boundary checker prevent shared libraries from importing runnable applications or applications from importing one another.
 
 Protocol documentation lives in [docs/documentation.html](https://augurproject.github.io/zoltar/docs/documentation.html)
 

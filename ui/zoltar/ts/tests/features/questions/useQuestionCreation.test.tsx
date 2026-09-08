@@ -9,11 +9,11 @@ import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBa
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import type { DeploymentStatus, MarketCreationResult } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { UseQuestionCreationDependencies } from '@zoltar/ui-zoltar-domain/features/questions/hooks/useQuestionCreation.js'
+import type { UseQuestionCreationDependencies } from '@zoltar/ui-zoltar-shared/features/questions/hooks/useQuestionCreation.js'
 import type { CreateWriteClientCallbacks, TransactionRequestPreview } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 
-type UseQuestionCreation = typeof import('@zoltar/ui-zoltar-domain/features/questions/hooks/useQuestionCreation.js')['useQuestionCreation']
+type UseQuestionCreation = typeof import('@zoltar/ui-zoltar-shared/features/questions/hooks/useQuestionCreation.js')['useQuestionCreation']
 type UseQuestionCreationState = ReturnType<UseQuestionCreation>
 
 const WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000a1')
@@ -76,10 +76,10 @@ describe('useQuestionCreation', () => {
 	) {
 		const loadZoltarQuestions = mock(options.loadZoltarQuestions ?? (async () => undefined))
 		const setZoltarForkQuestionId = mock(() => undefined)
-		mock.module('@zoltar/ui-zoltar-domain/features/universes/hooks/useZoltarOperations.js', () => ({
+		mock.module('@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarOperations.js', () => ({
 			useZoltarOperations: () => ({ loadZoltarQuestions, setZoltarForkQuestionId }),
 		}))
-		const { useQuestionCreation } = await import(`@zoltar/ui-zoltar-domain/features/questions/hooks/useQuestionCreation.js?case=${crypto.randomUUID()}`)
+		const { useQuestionCreation } = await import(`@zoltar/ui-zoltar-shared/features/questions/hooks/useQuestionCreation.js?case=${crypto.randomUUID()}`)
 		const createQuestion = mock(options.createQuestion ?? (async () => CREATION_RESULT))
 		const onTransactionFailed = mock(() => undefined)
 		const onTransactionFinished = mock(options.onTransactionFinished ?? (() => undefined))
@@ -397,10 +397,10 @@ describe('useQuestionCreation', () => {
 	})
 
 	test('keeps global question drafts across universe changes and isolates them by account', async () => {
-		mock.module('@zoltar/ui-zoltar-domain/features/universes/hooks/useZoltarOperations.js', () => ({
+		mock.module('@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarOperations.js', () => ({
 			useZoltarOperations: () => ({ loadZoltarQuestions: async () => undefined, setZoltarForkQuestionId: () => undefined }),
 		}))
-		const { useQuestionCreation } = await import(`@zoltar/ui-zoltar-domain/features/questions/hooks/useQuestionCreation.js?case=${crypto.randomUUID()}`)
+		const { useQuestionCreation } = await import(`@zoltar/ui-zoltar-shared/features/questions/hooks/useQuestionCreation.js?case=${crypto.randomUUID()}`)
 		let hookState: UseQuestionCreationState | undefined
 		const Harness = function QuestionDraftHarness({ accountAddress, activeUniverseId }: { accountAddress: typeof WALLET_ADDRESS; activeUniverseId: bigint }) {
 			hookState = useQuestionCreation({

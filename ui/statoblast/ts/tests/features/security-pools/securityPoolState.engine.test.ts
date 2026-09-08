@@ -1,9 +1,9 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { deriveVaultAdmissionClosed, evaluateSecurityPoolState } from '@zoltar/ui-statoblast-domain/features/security-pools/lib/securityPoolState.js'
-import { ALL_SECURITY_POOL_ACTIONS } from '@zoltar/ui-statoblast-domain/features/security-pools/lib/securityPoolState/matrix.js'
-import type { SecurityPoolActionId, SecurityPoolStateModel } from '@zoltar/ui-statoblast-domain/features/security-pools/lib/securityPoolState.js'
+import { deriveVaultAdmissionClosed, evaluateSecurityPoolState } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolState.js'
+import { ALL_SECURITY_POOL_ACTIONS } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolState/matrix.js'
+import type { SecurityPoolActionId, SecurityPoolStateModel } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolState.js'
 
 function getEnabledActionIds(model: SecurityPoolStateModel) {
 	return ALL_SECURITY_POOL_ACTIONS.filter(actionId => model.actions[actionId].enabled)

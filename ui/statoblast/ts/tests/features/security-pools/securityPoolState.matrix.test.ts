@@ -11,8 +11,8 @@ import {
 	REPORTING_ACTIONS,
 	UNIVERSE_FORKED_DISABLE,
 	UNIVERSE_FORKED_ENABLE,
-} from '@zoltar/ui-statoblast-domain/features/security-pools/lib/securityPoolState/matrix.js'
-import type { SecurityPoolActionId } from '@zoltar/ui-statoblast-domain/features/security-pools/lib/securityPoolState.js'
+} from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolState/matrix.js'
+import type { SecurityPoolActionId } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolState.js'
 
 function expectActionSet(actionIds: readonly SecurityPoolActionId[], expectedActionIds: readonly SecurityPoolActionId[]) {
 	expect(new Set(actionIds)).toEqual(new Set(expectedActionIds))

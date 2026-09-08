@@ -1,7 +1,7 @@
 import type { BootstrapScenarioApplyParameters } from '@zoltar/ui-core-shared/simulation/bootstrap.js'
 import { reportBootstrapProgress, requireQaAccount } from '@zoltar/ui-core-shared/simulation/bootstrap.js'
-import { applyStatoblastScenario } from '@zoltar/ui-statoblast-domain/simulation/statoblastScenarios.js'
-import { getInfraContractAddresses, PROXY_DEPLOYER_ADDRESS } from '@zoltar/ui-zoltar-domain/protocol/deploymentHelpers.js'
+import { applyStatoblastScenario } from '@zoltar/ui-statoblast-shared/simulation/statoblastScenarios.js'
+import { getInfraContractAddresses, PROXY_DEPLOYER_ADDRESS } from '@zoltar/ui-zoltar-shared/protocol/deploymentHelpers.js'
 import { deployTradingStep, getTradingDeploymentPlan } from '../protocol/deployment.js'
 import { TRADING_SIMULATION_SCENARIO } from './index.js'
 

@@ -1,8 +1,8 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { getSecurityPoolLifecycleLabel } from '@zoltar/ui-statoblast-domain/features/security-pools/lib/securityPoolLabels.js'
-import { deriveSecurityPoolForkStage, deriveSecurityPoolLifecycleState, deriveSecurityPoolReportingStage, isSecurityPoolEnded } from '@zoltar/ui-statoblast-domain/features/security-pools/lib/securityPoolState.js'
+import { getSecurityPoolLifecycleLabel } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolLabels.js'
+import { deriveSecurityPoolForkStage, deriveSecurityPoolLifecycleState, deriveSecurityPoolReportingStage, isSecurityPoolEnded } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolState.js'
 import type { ActiveReportingDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 
 function createActiveReportingDetails(overrides: Partial<ActiveReportingDetails> = {}): ActiveReportingDetails {

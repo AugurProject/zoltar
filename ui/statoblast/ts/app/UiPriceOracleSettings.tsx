@@ -1,6 +1,6 @@
 import { useState } from 'preact/hooks'
-import * as appCopy from '@zoltar/ui-statoblast-domain/copy/app.js'
-import type { UiPriceOracle } from '@zoltar/ui-statoblast-domain/features/security-pools/lib/uiPriceOracle.js'
+import * as appCopy from '@zoltar/ui-statoblast-shared/copy/app.js'
+import type { UiPriceOracle } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/uiPriceOracle.js'
 
 const PRICE_ORACLE_STORAGE_KEY = 'statoblast.uiPriceOracle'
 const priceOracleDescriptions: Record<UiPriceOracle, string> = {

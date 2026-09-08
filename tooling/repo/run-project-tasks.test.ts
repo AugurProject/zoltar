@@ -6,7 +6,7 @@ import { projects, type Project } from './projects.ts'
 
 const registry: readonly Project[] = [
 	{ id: 'app', path: 'app', type: 'ui-app', dependencies: ['domain'], tasks: { build: { command: ['bun', 'run', 'build'], cwd: 'app', inputs: ['app/**'] } }, generatedDirectories: [] },
-	{ id: 'domain', path: 'domain', type: 'ui-domain', dependencies: [], tasks: { build: { command: ['bun', 'run', 'build'], cwd: 'domain', inputs: ['domain/**'] } }, generatedDirectories: [] },
+	{ id: 'domain', path: 'domain', type: 'ui-library', dependencies: [], tasks: { build: { command: ['bun', 'run', 'build'], cwd: 'domain', inputs: ['domain/**'] } }, generatedDirectories: [] },
 ]
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -33,7 +33,7 @@ test('full setup bootstraps the repository before dependency-ordered package set
 			generatedDirectories: [],
 		},
 		{ id: 'app', path: 'app', type: 'ui-app', dependencies: ['domain'], tasks: { setup: { command: ['bun', 'install'], cwd: 'app', inputs: ['app/package.json'] } }, generatedDirectories: [] },
-		{ id: 'domain', path: 'domain', type: 'ui-domain', dependencies: [], tasks: { setup: { command: ['bun', 'install'], cwd: 'domain', inputs: ['domain/package.json'] } }, generatedDirectories: [] },
+		{ id: 'domain', path: 'domain', type: 'ui-library', dependencies: [], tasks: { setup: { command: ['bun', 'install'], cwd: 'domain', inputs: ['domain/package.json'] } }, generatedDirectories: [] },
 	]
 
 	expect(createProjectTaskPlan('setup', undefined, setupRegistry).map(entry => entry.projectId)).toEqual(['repository', 'domain', 'app'])

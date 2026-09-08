@@ -7,15 +7,15 @@ import { getAddress, zeroAddress, zeroHash, type Address } from '@zoltar/shared/
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFailed, markTransactionFinished, markTransactionPrepared, markTransactionRequested, markTransactionSubmitted } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
 import { parseTruthAuctionAmountInput, parseTruthAuctionPriceInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
-import { getTruthAuctionTickAtPrice } from '@zoltar/ui-statoblast-domain/features/truth-auctions/lib/truthAuctionBook.js'
+import { getTruthAuctionTickAtPrice } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/truthAuctionBook.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import type { ForkAuctionActionResult, ForkAuctionDetails, MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { SettlementSelectedBid, TransactionIntent } from '@zoltar/ui-zoltar-domain/features/types.js'
+import type { SettlementSelectedBid, TransactionIntent } from '@zoltar/ui-zoltar-shared/features/types.js'
 import type { TruthAuctionMetrics } from '@zoltar/ui-core-shared/types/contracts.js'
-import { useForkAuctionOperations, type UseForkAuctionOperationsDependencies } from '@zoltar/ui-statoblast-domain/features/truth-auctions/hooks/useForkAuctionOperations.js'
+import { useForkAuctionOperations, type UseForkAuctionOperationsDependencies } from '@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useForkAuctionOperations.js'
 
 type UseForkAuctionOperationsState = ReturnType<typeof useForkAuctionOperations>
 type TestForkAuctionWriteClient = { kind: 'injected-write-client' }

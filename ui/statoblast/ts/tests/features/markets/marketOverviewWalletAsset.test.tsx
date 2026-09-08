@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/shared/evm/ethereum'
-import { MarketOverviewSection } from '@zoltar/ui-statoblast-domain/features/markets/components/MarketOverviewSection.js'
+import { MarketOverviewSection } from '@zoltar/ui-statoblast-shared/features/markets/components/MarketOverviewSection.js'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createInjectedBackend } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'

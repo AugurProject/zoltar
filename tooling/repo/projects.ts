@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 
-const projectTypes = ['repository', 'library', 'contracts', 'ui-domain', 'ui-app', 'service', 'bot', 'documentation'] as const
+const projectTypes = ['repository', 'library', 'contracts', 'ui-library', 'ui-app', 'service', 'bot', 'documentation'] as const
 type ProjectType = (typeof projectTypes)[number]
 
 export const projectTaskNames = ['setup', 'build', 'vendor', 'test-build', 'workers', 'test', 'check', 'lint', 'typecheck', 'knip', 'audit', 'dependency-update', 'integration'] as const
@@ -74,7 +74,7 @@ export const projects: readonly Project[] = [
 		id: 'repository',
 		path: '.',
 		type: 'repository',
-		dependencies: ['shared', 'contracts', 'ui-core', 'ui-zoltar-domain', 'ui-statoblast-domain', 'ui-trading-domain', 'ui-zoltar', 'ui-statoblast', 'ui-trading'],
+		dependencies: ['shared', 'contracts', 'ui-core', 'ui-zoltar-shared', 'ui-statoblast-shared', 'ui-trading-shared', 'ui-zoltar', 'ui-statoblast', 'ui-trading'],
 		tasks: {
 			setup: { command: ['bun', './tooling/repo/install-frozen.mts'], cwd: '.', inputs: ['package.json', 'bun.lock'], cacheInputs: ['package.json', 'bun.lock'] },
 			test: rootTask(['bun', 'run', 'test'], ['package.json', 'bun.lock', 'bun-test-setup*.ts', 'tooling/testing/**', 'shared/ts/**', 'solidity/ts/**', 'ui/*/ts/**'], ['complete-validation']),
@@ -134,55 +134,55 @@ export const projects: readonly Project[] = [
 		ci: { scope: 'core', artifactOutputs: ['ui/coreShared/js'] },
 	},
 	{
-		id: 'ui-zoltar-domain',
-		path: 'ui/zoltarDomain',
-		type: 'ui-domain',
+		id: 'ui-zoltar-shared',
+		path: 'ui/zoltarShared',
+		type: 'ui-library',
 		dependencies: ['shared', 'ui-core'],
 		tasks: {
-			setup: packageInstallTask('ui/zoltarDomain'),
-			build: packageTask('ui/zoltarDomain', 'build', { groups: ['ui'], outputs: ['ui/zoltarDomain/js'] }),
-			typecheck: packageTask('ui/zoltarDomain', 'typecheck'),
-			audit: packageAuditTask('ui/zoltarDomain', ['core-audit']),
-			'dependency-update': sharedDependencyTask('ui/zoltarDomain'),
+			setup: packageInstallTask('ui/zoltarShared'),
+			build: packageTask('ui/zoltarShared', 'build', { groups: ['ui'], outputs: ['ui/zoltarShared/js'] }),
+			typecheck: packageTask('ui/zoltarShared', 'typecheck'),
+			audit: packageAuditTask('ui/zoltarShared', ['core-audit']),
+			'dependency-update': sharedDependencyTask('ui/zoltarShared'),
 		},
-		generatedDirectories: ['ui/zoltarDomain/js'],
-		ci: { scope: 'core', artifactOutputs: ['ui/zoltarDomain/js'] },
+		generatedDirectories: ['ui/zoltarShared/js'],
+		ci: { scope: 'core', artifactOutputs: ['ui/zoltarShared/js'] },
 	},
 	{
-		id: 'ui-statoblast-domain',
-		path: 'ui/statoblastDomain',
-		type: 'ui-domain',
-		dependencies: ['shared', 'ui-core', 'ui-zoltar-domain'],
+		id: 'ui-statoblast-shared',
+		path: 'ui/statoblastShared',
+		type: 'ui-library',
+		dependencies: ['shared', 'ui-core', 'ui-zoltar-shared'],
 		tasks: {
-			setup: packageInstallTask('ui/statoblastDomain'),
-			build: packageTask('ui/statoblastDomain', 'build', { groups: ['ui'], outputs: ['ui/statoblastDomain/js'] }),
-			typecheck: packageTask('ui/statoblastDomain', 'typecheck'),
-			audit: packageAuditTask('ui/statoblastDomain', ['core-audit']),
-			'dependency-update': sharedDependencyTask('ui/statoblastDomain'),
+			setup: packageInstallTask('ui/statoblastShared'),
+			build: packageTask('ui/statoblastShared', 'build', { groups: ['ui'], outputs: ['ui/statoblastShared/js'] }),
+			typecheck: packageTask('ui/statoblastShared', 'typecheck'),
+			audit: packageAuditTask('ui/statoblastShared', ['core-audit']),
+			'dependency-update': sharedDependencyTask('ui/statoblastShared'),
 		},
-		generatedDirectories: ['ui/statoblastDomain/js'],
-		ci: { scope: 'core', artifactOutputs: ['ui/statoblastDomain/js'] },
+		generatedDirectories: ['ui/statoblastShared/js'],
+		ci: { scope: 'core', artifactOutputs: ['ui/statoblastShared/js'] },
 	},
 	{
-		id: 'ui-trading-domain',
-		path: 'ui/tradingDomain',
-		type: 'ui-domain',
+		id: 'ui-trading-shared',
+		path: 'ui/tradingShared',
+		type: 'ui-library',
 		dependencies: ['shared'],
 		tasks: {
-			setup: packageInstallTask('ui/tradingDomain'),
-			build: packageTask('ui/tradingDomain', 'build', { groups: ['ui'], outputs: ['ui/tradingDomain/js'] }),
-			typecheck: packageTask('ui/tradingDomain', 'typecheck'),
-			audit: packageAuditTask('ui/tradingDomain', ['core-audit']),
-			'dependency-update': sharedDependencyTask('ui/tradingDomain'),
+			setup: packageInstallTask('ui/tradingShared'),
+			build: packageTask('ui/tradingShared', 'build', { groups: ['ui'], outputs: ['ui/tradingShared/js'] }),
+			typecheck: packageTask('ui/tradingShared', 'typecheck'),
+			audit: packageAuditTask('ui/tradingShared', ['core-audit']),
+			'dependency-update': sharedDependencyTask('ui/tradingShared'),
 		},
-		generatedDirectories: ['ui/tradingDomain/js'],
-		ci: { scope: 'core', artifactOutputs: ['ui/tradingDomain/js'] },
+		generatedDirectories: ['ui/tradingShared/js'],
+		ci: { scope: 'core', artifactOutputs: ['ui/tradingShared/js'] },
 	},
 	{
 		id: 'ui-zoltar',
 		path: 'ui/zoltar',
 		type: 'ui-app',
-		dependencies: ['shared', 'ui-core', 'ui-zoltar-domain'],
+		dependencies: ['shared', 'ui-core', 'ui-zoltar-shared'],
 		tasks: {
 			setup: packageInstallTask('ui/zoltar'),
 			build: { ...packageTask('ui/zoltar', 'build', { groups: ['ui'], outputs: ['ui/zoltar/js'] }), command: ['bun', 'x', 'tsc', '--project', 'tsconfig.json'] },
@@ -200,7 +200,7 @@ export const projects: readonly Project[] = [
 		id: 'ui-statoblast',
 		path: 'ui/statoblast',
 		type: 'ui-app',
-		dependencies: ['shared', 'ui-core', 'ui-zoltar-domain', 'ui-statoblast-domain'],
+		dependencies: ['shared', 'ui-core', 'ui-zoltar-shared', 'ui-statoblast-shared'],
 		tasks: {
 			setup: packageInstallTask('ui/statoblast'),
 			build: { ...packageTask('ui/statoblast', 'build', { groups: ['ui'], outputs: ['ui/statoblast/js'] }), command: ['bun', 'x', 'tsc', '--project', 'tsconfig.json'] },
@@ -218,7 +218,7 @@ export const projects: readonly Project[] = [
 		id: 'ui-trading',
 		path: 'ui/trading',
 		type: 'ui-app',
-		dependencies: ['shared', 'ui-core', 'ui-zoltar-domain', 'ui-statoblast-domain', 'ui-trading-domain'],
+		dependencies: ['shared', 'ui-core', 'ui-zoltar-shared', 'ui-statoblast-shared', 'ui-trading-shared'],
 		tasks: {
 			setup: packageInstallTask('ui/trading'),
 			build: { ...packageTask('ui/trading', 'build', { groups: ['ui'], outputs: ['ui/trading/js'] }), command: ['bun', 'x', 'tsc', '--project', 'tsconfig.json'] },

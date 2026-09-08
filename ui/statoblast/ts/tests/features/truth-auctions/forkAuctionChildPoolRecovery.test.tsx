@@ -5,15 +5,15 @@ import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUti
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
 import { getAddress, type Address, zeroAddress } from '@zoltar/shared/evm/ethereum'
-import type { ForkAuctionSectionProps } from '@zoltar/ui-zoltar-domain/features/types.js'
-import type { AccountState, ForkAuctionFormState } from '@zoltar/ui-zoltar-domain/types/app.js'
+import type { ForkAuctionSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
+import type { AccountState, ForkAuctionFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import type { ForkAuctionDetails, ListedSecurityPool, MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 
-const actualContracts = await import('@zoltar/ui-statoblast-domain/protocol/index.js')
+const actualContracts = await import('@zoltar/ui-statoblast-shared/protocol/index.js')
 const actualClients = await import('@zoltar/ui-core-shared/wallet/clients.js')
 
 const PARENT_POOL_ADDRESS: Address = '0x00000000000000000000000000000000000000f0'
@@ -34,7 +34,7 @@ const loadAllSecurityPoolsMock = mock(async (_client: unknown, parent: Address, 
 	return recoveredPoolsFactory()
 })
 
-mock.module('@zoltar/ui-statoblast-domain/protocol/index.js', () => ({
+mock.module('@zoltar/ui-statoblast-shared/protocol/index.js', () => ({
 	...actualContracts,
 	loadSecurityPoolChildren: loadAllSecurityPoolsMock,
 	loadForkAuctionDetails: mock(async (_client: unknown, securityPoolAddress: Address) => {
@@ -52,7 +52,7 @@ mock.module('@zoltar/ui-core-shared/wallet/clients.js', () => ({
 	})),
 }))
 
-const { ForkAuctionSection } = await import('@zoltar/ui-statoblast-domain/features/truth-auctions/components/ForkAuctionSection.js')
+const { ForkAuctionSection } = await import('@zoltar/ui-statoblast-shared/features/truth-auctions/components/ForkAuctionSection.js')
 
 function createDeferred<T>() {
 	let resolve: (value: T) => void = () => undefined

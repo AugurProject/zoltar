@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { createLoadSecurityVaultHandler } from '@zoltar/ui-statoblast-domain/features/security-pools/lib/securityVaultHandlers.js'
+import { createLoadSecurityVaultHandler } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityVaultHandlers.js'
 
 describe('security vault handlers', () => {
 	test('forwards vault refresh requests without requiring an explicit vault address', async () => {

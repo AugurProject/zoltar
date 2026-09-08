@@ -18,12 +18,12 @@ describe('test impact recommendations', () => {
 		expect(commandsFor(['tooling/ui/productionBuild.test.ts'])).toEqual(['bun test --preload ./bun-test-setup-ui.ts --timeout 300000 tooling/ui/productionBuild.test.ts'])
 		expect(commandsFor(['tooling/ui/browserSmoke.mts'])).toEqual(['bun run test:browser:smoke'])
 		expect(commandsFor(['ui/coreShared/css/application-surfaces.css'])).toEqual(['bun run test:browser:smoke'])
-		expect(commandsFor(['ui/statoblastDomain/ts/features/security-pools/components/CollateralizationCircle.tsx'])).toContain('bun run test:browser:smoke')
+		expect(commandsFor(['ui/statoblastShared/ts/features/security-pools/components/CollateralizationCircle.tsx'])).toContain('bun run test:browser:smoke')
 		expect(commandsFor(['tooling/ui/production.mts'])).toEqual(['bun run test:browser:smoke', 'bun run test:browser:workflow'])
 	})
 
 	test('maps quote behavior to unit and deterministic fork coverage', () => {
-		expect(commandsFor(['ui/zoltarDomain/ts/protocol/uniswapQuoter.ts'])).toEqual(['bun run test:integration:mainnet-fork', 'bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/zoltar/ts/tests/protocol/uniswapQuoter.test.ts'])
+		expect(commandsFor(['ui/zoltarShared/ts/protocol/uniswapQuoter.ts'])).toEqual(['bun run test:integration:mainnet-fork', 'bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/zoltar/ts/tests/protocol/uniswapQuoter.test.ts'])
 	})
 
 	test('uses each package test runner for changed package-owned tests', () => {
@@ -80,7 +80,7 @@ describe('test impact recommendations', () => {
 		const renamedForkTest = 'bots/liquidator/tests/uniswapQuoter.fork.test.ts'
 		expect(
 			getTestImpactRecommendations([
-				{ path: 'ui/zoltarDomain/ts/protocol/uniswapQuoter.ts', status: 'modified' },
+				{ path: 'ui/zoltarShared/ts/protocol/uniswapQuoter.ts', status: 'modified' },
 				{ path: renamedForkTest, previousPath: forkTest, status: 'renamed' },
 			]).map(recommendation => recommendation.command),
 		).toEqual(['bun run ensure-contract-artifacts && cd bots/liquidator && RUN_MAINNET_FORK_INTEGRATION_TESTS=1 bun test --timeout 300000 tests/uniswapQuoter.fork.test.ts', 'bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/zoltar/ts/tests/protocol/uniswapQuoter.test.ts'])

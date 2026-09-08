@@ -1,5 +1,5 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import * as marketCopy from '@zoltar/ui-zoltar-domain/copy/market.js'
+import * as marketCopy from '@zoltar/ui-zoltar-shared/copy/market.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
@@ -8,8 +8,8 @@ import { EntityCard } from '@zoltar/ui-core-shared/components/EntityCard.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
-import { UniverseLink } from '@zoltar/ui-zoltar-domain/features/universes/components/UniverseLink.js'
-import { formatUniverseLabel } from '@zoltar/ui-zoltar-domain/features/universes/lib/universe.js'
+import { UniverseLink } from '@zoltar/ui-zoltar-shared/features/universes/components/UniverseLink.js'
+import { formatUniverseLabel } from '@zoltar/ui-zoltar-shared/features/universes/lib/universe.js'
 import type { ListedSecurityPool, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 
 type UniverseDirectorySectionProps = {

@@ -17,9 +17,9 @@ import {
 	isSelectedVaultOwnedByAccount,
 	MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP,
 	ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS,
-} from '@zoltar/ui-statoblast-domain/features/security-pools/lib/securityVault.js'
+} from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityVault.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
-import { loadSecurityVaultDetails } from '@zoltar/ui-statoblast-domain/protocol/securityPools.js'
+import { loadSecurityVaultDetails } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
 
 void describe('security vault helpers', () => {
 	void test('defaults to the connected wallet vault when no explicit vault is selected', () => {

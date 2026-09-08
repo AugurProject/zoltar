@@ -1,8 +1,8 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { applyReportingFormUpdate } from '@zoltar/ui-zoltar-domain/features/reporting/lib/reportingForm.js'
-import type { ReportingFormState } from '@zoltar/ui-zoltar-domain/types/app.js'
+import { applyReportingFormUpdate } from '@zoltar/ui-zoltar-shared/features/reporting/lib/reportingForm.js'
+import type { ReportingFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
 
 function createReportingFormState(): ReportingFormState {
 	return {

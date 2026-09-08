@@ -36,26 +36,26 @@ test('allows dependencies within protocol and shared UI libraries', () => {
 	expect(findings).toEqual([])
 })
 
-test('keeps runnable applications as dependency leaves behind domain APIs', () => {
+test('keeps runnable applications as dependency leaves behind shared-library APIs', () => {
 	expect(findUiLayerBoundaryViolations('ui/statoblast/ts/app/App.tsx', "import { helper } from '@zoltar/ui-zoltar/protocol/core.js'").map(finding => finding.rule)).toEqual(['cross-package-import-boundary'])
-	expect(findUiLayerBoundaryViolations('ui/statoblast/ts/app/App.tsx', "import { helper } from '@zoltar/ui-zoltar-domain/protocol/core.js'")).toEqual([])
+	expect(findUiLayerBoundaryViolations('ui/statoblast/ts/app/App.tsx', "import { helper } from '@zoltar/ui-zoltar-shared/protocol/core.js'")).toEqual([])
 	expect(findUiLayerBoundaryViolations('ui/trading/ts/app/App.tsx', "import { helper } from '@zoltar/ui-statoblast/app/App.js'").map(finding => finding.rule)).toEqual(['cross-package-import-boundary'])
-	expect(findUiLayerBoundaryViolations('ui/trading/ts/app/App.tsx', "import { helper } from '@zoltar/ui-statoblast-domain/protocol/index.js'")).toEqual([])
-	expect(findUiLayerBoundaryViolations('ui/trading/ts/features/LivePortfolio.tsx', "import { maximumInsuredExit } from '@zoltar/ui-trading-domain'")).toEqual([])
+	expect(findUiLayerBoundaryViolations('ui/trading/ts/app/App.tsx', "import { helper } from '@zoltar/ui-statoblast-shared/protocol/index.js'")).toEqual([])
+	expect(findUiLayerBoundaryViolations('ui/trading/ts/features/LivePortfolio.tsx', "import { maximumInsuredExit } from '@zoltar/ui-trading-shared'")).toEqual([])
 })
 
-test('prevents domain packages from reaching back into applications', () => {
-	const findings = findUiLayerBoundaryViolations('ui/statoblastDomain/ts/protocol/example.ts', "import { App } from '@zoltar/ui-zoltar/app/App.js'")
+test('prevents shared libraries from reaching back into applications', () => {
+	const findings = findUiLayerBoundaryViolations('ui/statoblastShared/ts/protocol/example.ts', "import { App } from '@zoltar/ui-zoltar/app/App.js'")
 	expect(findings.map(finding => finding.rule)).toEqual(['cross-package-import-boundary'])
 })
 
 test('requires cross-package imports to use an explicitly exported domain entry point', () => {
-	expect(findUiLayerBoundaryViolations('ui/zoltar/ts/app/App.tsx', "import { helper } from '@zoltar/ui-zoltar-domain/protocol/private-helper.js'").map(finding => finding.rule)).toEqual(['cross-package-private-subpath'])
-	expect(findUiLayerBoundaryViolations('ui/zoltar/ts/app/App.tsx', "import { helper } from '@zoltar/ui-zoltar-domain/protocol/core.js'")).toEqual([])
+	expect(findUiLayerBoundaryViolations('ui/zoltar/ts/app/App.tsx', "import { helper } from '@zoltar/ui-zoltar-shared/protocol/private-helper.js'").map(finding => finding.rule)).toEqual(['cross-package-private-subpath'])
+	expect(findUiLayerBoundaryViolations('ui/zoltar/ts/app/App.tsx', "import { helper } from '@zoltar/ui-zoltar-shared/protocol/core.js'")).toEqual([])
 })
 
-test('domain packages expose intentional entry points instead of wildcard internals', () => {
-	for (const packageId of ['zoltarDomain', 'statoblastDomain', 'tradingDomain']) {
+test('shared libraries expose intentional entry points instead of wildcard internals', () => {
+	for (const packageId of ['zoltarShared', 'statoblastShared', 'tradingShared']) {
 		const manifest = JSON.parse(readFileSync(`ui/${packageId}/package.json`, 'utf8')) as { exports: Record<string, unknown> }
 		expect(Object.keys(manifest.exports).some(exportPath => exportPath.includes('*'))).toBe(false)
 	}

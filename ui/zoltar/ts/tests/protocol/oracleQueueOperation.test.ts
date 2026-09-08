@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { decodeOracleQueueOperation, encodeOracleQueueOperation, LIQUIDATION_OPERATION_TYPE, WITHDRAW_REP_OPERATION_TYPE } from '@zoltar/ui-zoltar-domain/protocol/oracleQueueOperation.js'
+import { decodeOracleQueueOperation, encodeOracleQueueOperation, LIQUIDATION_OPERATION_TYPE, WITHDRAW_REP_OPERATION_TYPE } from '@zoltar/ui-zoltar-shared/protocol/oracleQueueOperation.js'
 
 describe('oracleQueueOperation', () => {
 	test('round-trips supported operations', () => {

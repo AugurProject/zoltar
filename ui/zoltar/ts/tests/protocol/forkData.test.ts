@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/shared/evm/ethereum'
-import { requireForkDataView } from '@zoltar/ui-zoltar-domain/protocol/forkData.js'
+import { requireForkDataView } from '@zoltar/ui-zoltar-shared/protocol/forkData.js'
 
 describe('fork data decoder', () => {
 	test('accepts the current tuple including fork activation time', () => {

@@ -5,7 +5,7 @@ import { fireEvent } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { act } from 'preact/test-utils'
 import { useState } from 'preact/hooks'
 import { zeroAddress } from '@zoltar/shared/evm/ethereum'
-import { EscalationDepositSelectionList } from '@zoltar/ui-zoltar-domain/features/reporting/components/EscalationDepositSelectionList.js'
+import { EscalationDepositSelectionList } from '@zoltar/ui-zoltar-shared/features/reporting/components/EscalationDepositSelectionList.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 

@@ -14,8 +14,8 @@
 		"@preact/signals": "2.0.1",
 		"@zoltar/shared": "file:../../shared",
 		"@zoltar/ui-core-shared": "file:../coreShared",
-		"@zoltar/ui-statoblast-domain": "file:../statoblastDomain",
-		"@zoltar/ui-zoltar-domain": "file:../zoltarDomain",
+		"@zoltar/ui-statoblast-shared": "file:../statoblastShared",
+		"@zoltar/ui-zoltar-shared": "file:../zoltarShared",
 		"preact": "10.26.4",
 		"tevm": "1.0.0-rc.151"
 	},

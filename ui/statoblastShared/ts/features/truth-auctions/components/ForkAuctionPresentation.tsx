@@ -13,7 +13,7 @@ import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL, AUCTION_TIME_SECONDS, getForkAuctionStageLabel, getForkAuctionStageView } from '../lib/forkAuction.js'
 import { formatCurrencyInputBalance, formatRoundedCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { getReportingOutcomeLabel } from '@zoltar/ui-zoltar-domain/features/reporting/lib/reporting.js'
+import { getReportingOutcomeLabel } from '@zoltar/ui-zoltar-shared/features/reporting/lib/reporting.js'
 import { type ForkWorkflowSelectionStage } from '../../security-pools/lib/securityPoolWorkflow.js'
 import type { ForkAuctionDetails, ListedSecurityPool, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 

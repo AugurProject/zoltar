@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "@zoltar/ui-zoltar-domain",
+      "name": "@zoltar/ui-zoltar-shared",
       "dependencies": {
         "@preact/signals": "2.0.1",
         "@zoltar/shared": "file:../../shared",

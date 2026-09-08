@@ -18,7 +18,7 @@ import {
 	settleOracleReport,
 	withdrawOpenOracleBalance,
 	wrapWeth as wrapUiWeth,
-} from '@zoltar/ui-zoltar-domain/protocol/index.js'
+} from '@zoltar/ui-zoltar-shared/protocol/index.js'
 import {
 	addOpenOracleBountyBuffer,
 	deriveOpenOracleDisputeSubmissionDetails,
@@ -34,16 +34,16 @@ import {
 	getOpenOracleSettleAvailability,
 	parseOpenOracleCreateFormSubmission,
 	parseOpenOracleFeePercentageInput,
-} from '@zoltar/ui-zoltar-domain/features/open-oracle/lib/openOracle.js'
-import { loadOpenOracleInitialReportPrice, loadOpenOracleInitialReportPriceResult } from '@zoltar/ui-zoltar-domain/protocol/openOraclePricing.js'
-import { getDefaultOpenOracleCreateFormState } from '@zoltar/ui-zoltar-domain/features/open-oracle/lib/formDefaults.js'
-import { ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS } from '@zoltar/ui-zoltar-domain/protocol/oracleTiming.js'
+} from '@zoltar/ui-zoltar-shared/features/open-oracle/lib/openOracle.js'
+import { loadOpenOracleInitialReportPrice, loadOpenOracleInitialReportPriceResult } from '@zoltar/ui-zoltar-shared/protocol/openOraclePricing.js'
+import { getDefaultOpenOracleCreateFormState } from '@zoltar/ui-zoltar-shared/features/open-oracle/lib/formDefaults.js'
+import { ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS } from '@zoltar/ui-zoltar-shared/protocol/oracleTiming.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
-import { ETH_ADDRESS, REP_ADDRESS, UNISWAP_V4_QUOTER_ADDRESS, USDC_ADDRESS } from '@zoltar/ui-zoltar-domain/protocol/uniswapQuoter.js'
+import { ETH_ADDRESS, REP_ADDRESS, UNISWAP_V4_QUOTER_ADDRESS, USDC_ADDRESS } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { statoblast_openOracle_OpenOracle_OpenOracle } from '@zoltar/ui-core-shared/contractArtifact.js'
 import type { InjectedEthereum } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'
-import type { WriteContractClient } from '@zoltar/ui-zoltar-domain/protocol/core.js'
+import type { WriteContractClient } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { DAY, GENESIS_REPUTATION_TOKEN, WETH_ADDRESS, TEST_ADDRESSES } from '../../../../../../solidity/ts/testSupport/simulator/utils/constants'
 import { addressString } from '../../../../../../solidity/ts/testSupport/simulator/utils/bigint'
 import { setupTestAccounts, ensureProxyDeployerDeployed } from '../../../../../../solidity/ts/testSupport/simulator/utils/utilities'
