@@ -44,10 +44,11 @@ export const createFixedWindowRateLimiter = (limit: number, windowMs: number, ma
 	if (!Number.isSafeInteger(windowMs) || windowMs <= 0) throw new Error('Rate-limit window must be a positive safe integer')
 	if (!Number.isSafeInteger(maximumClients) || maximumClients <= 0) throw new Error('Rate-limit client capacity must be a positive safe integer')
 	const windows = new Map<string, { count: number; startedAt: number }>()
-	return (client: string, now = Date.now()): { readonly allowed: boolean; readonly retryAfterSeconds?: number } => {
+	const admit = (client: string, now = Date.now(), consume = true): { readonly allowed: boolean; readonly retryAfterSeconds?: number } => {
 		if (limit === 0) return { allowed: true }
 		let current = windows.get(client)
 		if (current === undefined || now - current.startedAt >= windowMs) {
+			if (!consume) return { allowed: true }
 			if (current === undefined && windows.size >= maximumClients) {
 				for (const [key, value] of windows) {
 					if (now - value.startedAt >= windowMs) windows.delete(key)
@@ -59,9 +60,12 @@ export const createFixedWindowRateLimiter = (limit: number, windowMs: number, ma
 			windows.set(client, current)
 		}
 		if (current.count >= limit) return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil((current.startedAt + windowMs - now) / 1_000)) }
-		current.count++
+		if (consume) current.count++
 		return { allowed: true }
 	}
+	return Object.assign(admit, {
+		check: (client: string, now = Date.now()) => admit(client, now, false),
+	})
 }
 
 export const requestAccessGuard = (
@@ -69,21 +73,28 @@ export const requestAccessGuard = (
 	pathname: string,
 	client: string,
 	credentials: BasicAccessCredentials | undefined,
-	admitApiRequest: (client: string) => { readonly allowed: boolean; readonly retryAfterSeconds?: number },
+	admitRequest: ReturnType<typeof createFixedWindowRateLimiter>,
 	headers: Readonly<Record<string, string>> = {},
 ): { readonly reason: 'authentication' | 'rate-limit'; readonly response: Response } | undefined => {
-	if (pathname.startsWith('/api/')) {
-		const admission = admitApiRequest(client)
-		if (!admission.allowed)
-			return {
-				reason: 'rate-limit',
-				response: Response.json(
-					{ error: 'Rate limit exceeded; retry shortly' },
-					{ status: 429, headers: { ...headers, 'retry-after': String(admission.retryAfterSeconds ?? 1) } },
-				),
-			}
-	}
-	if (!hasBasicAccess(request, credentials)) return { reason: 'authentication', response: basicAccessRequiredResponse(headers) }
+	const admissionFailure = (admission: { readonly allowed: boolean; readonly retryAfterSeconds?: number }) =>
+		admission.allowed
+			? undefined
+			: {
+					reason: 'rate-limit' as const,
+					response: Response.json(
+						{ error: 'Rate limit exceeded; retry shortly' },
+						{ status: 429, headers: { ...headers, 'retry-after': String(admission.retryAfterSeconds ?? 1) } },
+					),
+				}
+	const lockout = credentials === undefined ? undefined : admissionFailure(admitRequest.check(client))
+	if (lockout !== undefined) return lockout
+	const authenticated = hasBasicAccess(request, credentials)
+	const admission =
+		pathname.startsWith('/api/') || (credentials !== undefined && !authenticated)
+			? admissionFailure(admitRequest(client))
+			: undefined
+	if (admission !== undefined) return admission
+	if (!authenticated) return { reason: 'authentication', response: basicAccessRequiredResponse(headers) }
 	return undefined
 }
 
@@ -124,7 +135,7 @@ export const createRequestMetrics = () => {
 			lines.push('# TYPE augurscan_http_request_duration_seconds_sum counter')
 			for (const [route, seconds] of [...durationSums].toSorted(([left], [right]) => left.localeCompare(right)))
 				lines.push(`augurscan_http_request_duration_seconds_sum{route="${prometheusLabel(route)}"} ${seconds}`)
-			lines.push('# HELP augurscan_rate_limit_rejections_total Requests rejected by the process-local API limiter.')
+			lines.push('# HELP augurscan_rate_limit_rejections_total Requests rejected by the process-local request limiter.')
 			lines.push('# TYPE augurscan_rate_limit_rejections_total counter')
 			lines.push(`augurscan_rate_limit_rejections_total ${rateLimitRejections}`)
 			return `${[...lines, ...extraLines].join('\n')}\n`
