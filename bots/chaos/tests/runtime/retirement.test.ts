@@ -13,6 +13,7 @@ import {
 	readV3PositionsWithQuorum,
 	reconcileV3PositionJournal,
 	retirementPlanFromEvaluations,
+	type V3PositionAnchor,
 	type V3PositionObservation,
 } from '../../src/runtime/retirement.ts'
 import { initialDurableState, initialRuntimeState, type DurableWorkflow } from '../../src/state/operator-state.ts'
@@ -57,6 +58,10 @@ function request(retirement = initialRetirementState()) {
 	const recipient = address(99)
 	requestRetirement(retirement, 'profile:test', recipient, DEFAULT_RETIREMENT_POLICIES, `DRAIN profile:test TO ${recipient}`, now)
 	return retirement
+}
+
+function v3Anchor(blockNumber: bigint) {
+	return { blockHash: hash(Number(blockNumber)), blockNumber }
 }
 
 function emptySnapshot() {
@@ -195,9 +200,37 @@ describe('Drain & Retire planning', () => {
 	test('requires RPC quorum for current position amounts', async () => {
 		const current = position()
 		const reader = (liquidity: bigint) => async () => ({ liquidity, position: current, tokensOwed0: 2n, tokensOwed1: 3n })
-		const observations = await readV3PositionsWithQuorum([reader(5n), reader(5n), reader(9n)], 2, [current], 100n)
+		const observations = await readV3PositionsWithQuorum([reader(5n), reader(5n), reader(9n)], 2, [current], v3Anchor(100n))
 		expect(observations[0]).toMatchObject({ liquidity: 5n, tokensOwed0: 2n, tokensOwed1: 3n })
-		await expect(readV3PositionsWithQuorum([reader(5n), reader(9n)], 2, [current], 100n)).rejects.toThrow('No RPC quorum')
+		await expect(readV3PositionsWithQuorum([reader(5n), reader(9n)], 2, [current], v3Anchor(100n))).rejects.toThrow('No RPC quorum')
+	})
+
+	test('rejects a competing-fork V3 quorum before recording retirement completion', async () => {
+		const canonicalBlockHash = hash(100)
+		const competingBlockHash = hash(101)
+		const current = position('active')
+		const state = initialRuntimeState(true, address(1), 31_337)
+		request(state.retirement)
+		state.retirement.positions = [current]
+		const reader = (endpointBlockHash: `0x${string}`, failPositionRead: boolean) => async (candidate: DurableV3Position, anchor: V3PositionAnchor) => {
+			if (endpointBlockHash.toLowerCase() !== anchor.blockHash.toLowerCase()) throw new Error('V3 endpoint does not match the canonical retirement anchor')
+			if (failPositionRead) throw new Error('Canonical endpoint V3 read failed')
+			return { liquidity: 0n, position: candidate, tokensOwed0: 0n, tokensOwed1: 0n }
+		}
+		try {
+			const observations = await readV3PositionsWithQuorum([reader(canonicalBlockHash, true), reader(canonicalBlockHash, true), reader(competingBlockHash, false), reader(competingBlockHash, false)], 2, [current], {
+				blockHash: canonicalBlockHash,
+				blockNumber: 100n,
+			})
+			for (const observation of observations) recordV3ScanSuccess(state, observation, 100n)
+		} catch (error) {
+			recordV3ScanFailure(state, current, error)
+		}
+		const assessment = assessRetirement({ blockHash: canonicalBlockHash, blockNumber: 100n, canonicalScanComplete: true, evaluations: [], retirement: state.retirement, snapshot: emptySnapshot(), state, v3: [] })
+		applyRetirementAssessment(state.retirement, assessment, canonicalBlockHash, 100n, now)
+		expect(current.status).toBe('blocked')
+		expect(assessment).toMatchObject({ blockers: [{ category: 'ambiguous-position', id: current.id }], status: 'blocked' })
+		expect(state.retirement.completionEvidence).toBeUndefined()
 	})
 
 	test('closes a canonically confirmed zeroed workflow position after restart', () => {
@@ -220,7 +253,7 @@ describe('Drain & Retire planning', () => {
 		recordV3ScanFailure(state, active, new Error('No RPC quorum agreed on retirement position'))
 		expect(active.status).toBe('blocked')
 		const reader = async (current: DurableV3Position) => ({ liquidity: 5n, position: current, tokensOwed0: 2n, tokensOwed1: 3n })
-		const observations = await readV3PositionsWithQuorum([reader], 1, [active], 101n)
+		const observations = await readV3PositionsWithQuorum([reader], 1, [active], v3Anchor(101n))
 		expect(observations).toHaveLength(1)
 		const observation = observations[0]
 		if (observation === undefined) throw new Error('Expected retryable V3 observation')
@@ -529,7 +562,7 @@ describe('Drain & Retire planning', () => {
 		expect(retirement.positions.map(candidate => candidate.status)).toEqual(['active', 'pending-confirmation', 'blocked'])
 		const pendingPosition = retirement.positions[1]
 		if (pendingPosition === undefined) throw new Error('Pending position was not journaled')
-		expect(await readV3PositionsWithQuorum([async candidate => ({ liquidity: 1n, position: candidate, tokensOwed0: 0n, tokensOwed1: 0n })], 1, [pendingPosition], 1n)).toHaveLength(1)
+		expect(await readV3PositionsWithQuorum([async candidate => ({ liquidity: 1n, position: candidate, tokensOwed0: 0n, tokensOwed1: 0n })], 1, [pendingPosition], v3Anchor(1n))).toHaveLength(1)
 		const seed = pending.steps[0]
 		if (seed === undefined) throw new Error('Seed workflow step is missing')
 		seed.status = 'confirmed'

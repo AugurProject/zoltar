@@ -1,5 +1,11 @@
+import type { Hash } from '@zoltar/bot-shared/ethereum'
 import type { OperationPlan } from '../operations/types.ts'
 import type { DurableV3Position, RetirementBlocker, RetirementResidual } from '../state/retirement.ts'
+
+export type V3PositionAnchor = {
+	blockHash: Hash
+	blockNumber: bigint
+}
 
 export type V3PositionObservation = {
 	liquidity: bigint
@@ -8,7 +14,7 @@ export type V3PositionObservation = {
 	tokensOwed1: bigint
 }
 
-export type V3PositionReader = (position: DurableV3Position, blockNumber: bigint) => Promise<V3PositionObservation>
+export type V3PositionReader = (position: DurableV3Position, anchor: V3PositionAnchor) => Promise<V3PositionObservation>
 
 export type RetirementProofCounts = {
 	actionableObligations: number

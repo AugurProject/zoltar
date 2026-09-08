@@ -175,6 +175,13 @@ async function executePlan(client: ReturnType<typeof createWriteClient>, plan: R
 	for (const step of plan.steps) await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: step.data, to: step.to, value: BigInt(step.value ?? '0') }) })
 }
 
+async function currentV3Anchor(client: ReturnType<typeof createWriteClient>) {
+	const blockNumber = await client.getBlockNumber()
+	const block = await client.getBlock({ blockNumber })
+	if (block.hash === null || block.hash === undefined) throw new Error('Local-chain V3 test anchor has no block hash')
+	return { blockHash: block.hash, blockNumber }
+}
+
 describe('Drain & Retire on a local chain', () => {
 	test('recovers idempotently across pre-confirmation, post-confirmation, and burn-to-collect restarts', async () => {
 		const simulator = requiredNode().anvilWindowEthereum
@@ -194,7 +201,7 @@ describe('Drain & Retire on a local chain', () => {
 			let restored = await loadDurableState(path, 31_337)
 			const restoredPending = restored.retirement.positions[0]
 			if (restoredPending === undefined) throw new Error('Pending V3 position was not restored')
-			await expect(readV3Position(owner, restoredPending, await owner.getBlockNumber())).rejects.toThrow('missing its canonical creation transaction')
+			await expect(readV3Position(owner, restoredPending, await currentV3Anchor(owner))).rejects.toThrow('missing its canonical creation transaction')
 
 			const creationTransactionHash = await owner.writeContract({ abi: poolAbi, address: pool, args: [owner.account.address, -120, 120, 70n, 3n, 4n], functionName: 'seed' })
 			await owner.waitForTransactionReceipt({ hash: creationTransactionHash })
@@ -203,7 +210,7 @@ describe('Drain & Retire on a local chain', () => {
 			restored = await loadDurableState(path, 31_337)
 			const confirmed = restored.retirement.positions[0]
 			if (confirmed === undefined) throw new Error('Confirmed V3 position was not restored')
-			let observation = await readV3Position(owner, confirmed, await owner.getBlockNumber())
+			let observation = await readV3Position(owner, confirmed, await currentV3Anchor(owner))
 			updateV3PositionStatus(observation, await owner.getBlockNumber())
 			expect(confirmed.status).toBe('active')
 			await saveDurableState(path, restored)
@@ -216,7 +223,7 @@ describe('Drain & Retire on a local chain', () => {
 			restored = await loadDurableState(path, 31_337)
 			const afterBurn = restored.retirement.positions[0]
 			if (afterBurn === undefined) throw new Error('Burned V3 position was not restored')
-			observation = await readV3Position(owner, afterBurn, await owner.getBlockNumber())
+			observation = await readV3Position(owner, afterBurn, await currentV3Anchor(owner))
 			expect(observation).toMatchObject({ liquidity: 0n, tokensOwed0: 73n, tokensOwed1: 144n })
 			const collectPlan = buildV3RetirementPlan(snapshotFixture(), observation, 2)
 			expect(collectPlan.steps.map(step => step.id)).toEqual(['collect-full-v3-position'])
@@ -225,13 +232,14 @@ describe('Drain & Retire on a local chain', () => {
 			restored = await loadDurableState(path, 31_337)
 			const afterCollectCrash = restored.retirement.positions[0]
 			if (afterCollectCrash === undefined) throw new Error('Collected V3 position was not restored')
-			const closed = await readV3Position(owner, afterCollectCrash, await owner.getBlockNumber())
+			const closed = await readV3Position(owner, afterCollectCrash, await currentV3Anchor(owner))
 			expect(closed).toMatchObject({ liquidity: 0n, tokensOwed0: 0n, tokensOwed1: 0n })
 			updateV3PositionStatus(closed, await owner.getBlockNumber())
 			await saveDurableState(path, restored)
 			const terminal = await loadDurableState(path, 31_337)
 			expect(terminal.retirement.positions[0]?.status).toBe('closed')
-			expect(await readV3PositionsWithQuorum([async candidate => await readV3Position(owner, candidate, await owner.getBlockNumber())], 1, terminal.retirement.positions, await owner.getBlockNumber())).toEqual([])
+			const terminalAnchor = await currentV3Anchor(owner)
+			expect(await readV3PositionsWithQuorum([async (candidate, anchor) => await readV3Position(owner, candidate, anchor)], 1, terminal.retirement.positions, terminalAnchor)).toEqual([])
 		} finally {
 			await rm(directory, { force: true, recursive: true })
 		}
@@ -251,18 +259,19 @@ describe('Drain & Retire on a local chain', () => {
 		const position = { ...durablePosition(pool, owner.account.address, token0, token1, 'owner'), creationTransactionHash, registeredBy: 'workflow' as const }
 		const onChainKey = await owner.readContract({ abi: poolAbi, address: pool, args: [owner.account.address, -120, 120], functionName: 'positionKey' })
 		expect(position.positionKey).toBe(onChainKey)
-		const before = await readV3Position(owner, position, await owner.getBlockNumber())
+		const before = await readV3Position(owner, position, await currentV3Anchor(owner))
 		expect(before).toMatchObject({ liquidity: 70n, tokensOwed0: 3n, tokensOwed1: 4n })
+		await expect(readV3Position(owner, position, { blockHash: `0x${'ff'.repeat(32)}`, blockNumber: await owner.getBlockNumber() })).rejects.toThrow('does not match canonical anchor')
 		await executePlan(owner, buildV3RetirementPlan(snapshotFixture(), before, 1))
-		expect(await readV3Position(owner, position, await owner.getBlockNumber())).toMatchObject({ liquidity: 0n, tokensOwed0: 0n, tokensOwed1: 0n })
+		expect(await readV3Position(owner, position, await currentV3Anchor(owner))).toMatchObject({ liquidity: 0n, tokensOwed0: 0n, tokensOwed1: 0n })
 		const secondPosition = durablePosition(pool, owner.account.address, token0, token1, 'owner-second', -60, 60)
-		const secondBefore = await readV3Position(owner, secondPosition, await owner.getBlockNumber())
+		const secondBefore = await readV3Position(owner, secondPosition, await currentV3Anchor(owner))
 		await executePlan(owner, buildV3RetirementPlan(snapshotFixture(), secondBefore, 1))
-		expect(await readV3Position(owner, secondPosition, await owner.getBlockNumber())).toMatchObject({ liquidity: 0n, tokensOwed0: 0n, tokensOwed1: 0n })
+		expect(await readV3Position(owner, secondPosition, await currentV3Anchor(owner))).toMatchObject({ liquidity: 0n, tokensOwed0: 0n, tokensOwed1: 0n })
 		expect(await owner.readContract({ abi: tokenAbi, address: token0, args: [owner.account.address], functionName: 'balanceOf' })).toBe(94n)
 		expect(await owner.readContract({ abi: tokenAbi, address: token1, args: [owner.account.address], functionName: 'balanceOf' })).toBe(186n)
 		const otherPosition = durablePosition(pool, other.account.address, token0, token1, 'other')
-		expect(await readV3Position(owner, otherPosition, await owner.getBlockNumber())).toMatchObject({ liquidity: 90n, tokensOwed0: 5n, tokensOwed1: 6n })
+		expect(await readV3Position(owner, otherPosition, await currentV3Anchor(owner))).toMatchObject({ liquidity: 90n, tokensOwed0: 5n, tokensOwed1: 6n })
 	})
 
 	test('collects a zero-liquidity position, revokes allowance, and sweeps native ETH last with gas reserve', async () => {
@@ -275,7 +284,7 @@ describe('Drain & Retire on a local chain', () => {
 		for (const token of [token0, token1]) await owner.writeContract({ abi: tokenAbi, address: token, args: [pool, 10_000n], functionName: 'mint' })
 		await owner.writeContract({ abi: poolAbi, address: pool, args: [owner.account.address, -120, 120, 0n, 7n, 8n], functionName: 'seed' })
 		const position = durablePosition(pool, owner.account.address, token0, token1, 'collect-only')
-		const observation = await readV3Position(owner, position, await owner.getBlockNumber())
+		const observation = await readV3Position(owner, position, await currentV3Anchor(owner))
 		const plan = buildV3RetirementPlan(snapshotFixture(), observation, 2)
 		expect(plan.steps.map(step => step.id)).toEqual(['collect-full-v3-position'])
 		await executePlan(owner, plan)

@@ -6,10 +6,10 @@ import { buildRetirementLiquidityRemovalPlan } from '../operations/retirement-li
 import type { EcosystemSnapshot, EvaluatedOperation, OperationPlan, PlanningOptions } from '../operations/types.ts'
 import { uniswapV3PositionKey, type DurableRetirementState, type DurableV3Position, type RetirementBlocker, type RetirementResidual } from '../state/retirement.ts'
 import type { DurableState } from '../state/operator-state.ts'
-import type { RetirementAssessment, RetirementProofCounts, V3PositionObservation, V3PositionReader } from './retirement-types.ts'
+import type { RetirementAssessment, RetirementProofCounts, V3PositionAnchor, V3PositionObservation, V3PositionReader } from './retirement-types.ts'
 import { CLAIM_LINKED_MIGRATIONS, operationAllowedDuringRetirement } from './retirement-operation-policy.ts'
 
-export type { RetirementAssessment, V3PositionObservation, V3PositionReader } from './retirement-types.ts'
+export type { RetirementAssessment, V3PositionAnchor, V3PositionObservation, V3PositionReader } from './retirement-types.ts'
 
 const RETIREMENT_OPERATION_ORDER = [
 	'open-oracle.withdraw',
@@ -86,29 +86,38 @@ export function retirementPlanFromEvaluations(evaluations: readonly EvaluatedOpe
 	})[0]
 }
 
-export async function readV3Position(client: Pick<PublicClient, 'getBlock' | 'getTransactionReceipt' | 'readContract'>, position: DurableV3Position, blockNumber: bigint): Promise<V3PositionObservation> {
+async function assertV3EndpointAnchor(client: Pick<PublicClient, 'getBlock'>, position: DurableV3Position, anchor: V3PositionAnchor) {
+	const block = await client.getBlock({ blockNumber: anchor.blockNumber })
+	if (block.hash === null || block.hash === undefined || block.hash.toLowerCase() !== anchor.blockHash.toLowerCase()) {
+		throw new Error(`Retirement position ${position.id} RPC endpoint does not match canonical anchor ${anchor.blockHash} at block ${anchor.blockNumber.toString()}`)
+	}
+}
+
+export async function readV3Position(client: Pick<PublicClient, 'getBlock' | 'getTransactionReceipt' | 'readContract'>, position: DurableV3Position, anchor: V3PositionAnchor): Promise<V3PositionObservation> {
+	await assertV3EndpointAnchor(client, position, anchor)
 	if (position.registeredBy === 'workflow') {
 		if (position.creationTransactionHash === undefined) throw new Error(`Retirement position ${position.id} is missing its canonical creation transaction`)
 		const receipt = await client.getTransactionReceipt({ hash: position.creationTransactionHash })
-		if (receipt.status !== 'success' || receipt.blockNumber > blockNumber) throw new Error(`Retirement position ${position.id} does not have a successful canonical creation receipt at the scan anchor`)
+		if (receipt.status !== 'success' || receipt.blockNumber > anchor.blockNumber) throw new Error(`Retirement position ${position.id} does not have a successful canonical creation receipt at the scan anchor`)
 		const creationBlock = await client.getBlock({ blockNumber: receipt.blockNumber })
 		if (creationBlock.hash?.toLowerCase() !== receipt.blockHash.toLowerCase()) throw new Error(`Retirement position ${position.id} creation receipt is not canonical`)
 	}
 	const [token0, token1, fee, result] = await Promise.all([
-		client.readContract({ abi: retirementUniswapV3PositionAbi, address: position.pool, blockNumber, functionName: 'token0' }),
-		client.readContract({ abi: retirementUniswapV3PositionAbi, address: position.pool, blockNumber, functionName: 'token1' }),
-		client.readContract({ abi: retirementUniswapV3PositionAbi, address: position.pool, blockNumber, functionName: 'fee' }),
-		client.readContract({ abi: retirementUniswapV3PositionAbi, address: position.pool, args: [position.positionKey], blockNumber, functionName: 'positions' }),
+		client.readContract({ abi: retirementUniswapV3PositionAbi, address: position.pool, blockNumber: anchor.blockNumber, functionName: 'token0' }),
+		client.readContract({ abi: retirementUniswapV3PositionAbi, address: position.pool, blockNumber: anchor.blockNumber, functionName: 'token1' }),
+		client.readContract({ abi: retirementUniswapV3PositionAbi, address: position.pool, blockNumber: anchor.blockNumber, functionName: 'fee' }),
+		client.readContract({ abi: retirementUniswapV3PositionAbi, address: position.pool, args: [position.positionKey], blockNumber: anchor.blockNumber, functionName: 'positions' }),
 	])
+	await assertV3EndpointAnchor(client, position, anchor)
 	if (getAddress(token0).toLowerCase() !== position.token0.toLowerCase() || getAddress(token1).toLowerCase() !== position.token1.toLowerCase() || Number(fee) !== position.fee) throw new Error(`Retirement position ${position.id} does not match its canonical pool identity`)
 	return { liquidity: result[0], position, tokensOwed0: result[3], tokensOwed1: result[4] }
 }
 
-export async function readV3PositionsWithQuorum(readers: readonly V3PositionReader[], requiredQuorum: number, positions: readonly DurableV3Position[], blockNumber: bigint) {
+export async function readV3PositionsWithQuorum(readers: readonly V3PositionReader[], requiredQuorum: number, positions: readonly DurableV3Position[], anchor: V3PositionAnchor) {
 	if (readers.length < requiredQuorum) throw new Error('Retirement V3 scan does not have enough RPC clients for quorum')
 	const observations: V3PositionObservation[] = []
 	for (const position of positions.filter(candidate => candidate.status === 'active' || candidate.status === 'blocked' || candidate.status === 'collect-only' || candidate.status === 'pending-confirmation')) {
-		const settled = await Promise.allSettled(readers.map(reader => reader(position, blockNumber)))
+		const settled = await Promise.allSettled(readers.map(reader => reader(position, anchor)))
 		const successful = settled.flatMap(result => (result.status === 'fulfilled' ? [result.value] : []))
 		const grouped = new Map<string, V3PositionObservation[]>()
 		for (const observation of successful) {

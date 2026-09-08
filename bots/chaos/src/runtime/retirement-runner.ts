@@ -3,7 +3,7 @@ import type { OperatorSettings } from '../config/settings.ts'
 import type { OperationPlan } from '../operations/types.ts'
 import { evaluateOperationCatalog } from '../operations/catalog.ts'
 import type { DurableWorkflow, RuntimeState } from '../state/operator-state.ts'
-import { chaosReadClients, planningOptions, type CanonicalScanResult } from './canonical-scan.ts'
+import { chaosReadClients, planningOptions, type CanonicalAnchor, type CanonicalScanResult } from './canonical-scan.ts'
 import { applyRetirementAssessment, assessRetirement, buildV3RetirementPlan, readV3Position, readV3PositionsWithQuorum, reconcileV3PositionJournal, type V3PositionObservation } from './retirement.ts'
 import { recordCanonicalRecoveredBalances } from './retirement-balance-evidence.ts'
 import { retirementCleanupBlocker } from './workflows.ts'
@@ -68,17 +68,17 @@ export function recordV3ScanSuccess(state: RuntimeState, observation: V3Position
 	updateV3PositionStatus(observation, blockNumber)
 }
 
-export async function retirementPositionsForScan(parameters: { blockNumber: bigint; pool: Parameters<typeof chaosReadClients>[1]; profileId: string; settings: OperatorSettings; state: RuntimeState; wallet: Address | undefined }) {
-	const { blockNumber, pool, profileId, settings, state, wallet } = parameters
+export async function retirementPositionsForScan(parameters: { anchor: Pick<CanonicalAnchor, 'blockHash' | 'blockNumber'>; pool: Parameters<typeof chaosReadClients>[1]; profileId: string; settings: OperatorSettings; state: RuntimeState; wallet: Address | undefined }) {
+	const { anchor, pool, profileId, settings, state, wallet } = parameters
 	if (wallet !== undefined) reconcileV3PositionJournal(state.retirement, state.workflows, profileId, wallet)
 	if (state.retirement.status === 'inactive' || state.retirement.positions.length === 0) return []
 	if (settings.connectivity === undefined) throw new Error('Retirement V3 scan requires configured RPC connectivity')
-	const readers = chaosReadClients(settings, pool).map(candidate => (position: Parameters<typeof readV3Position>[1], anchor: bigint) => readV3Position(candidate.client, position, anchor))
+	const readers = chaosReadClients(settings, pool).map(candidate => (position: Parameters<typeof readV3Position>[1], positionAnchor: Parameters<typeof readV3Position>[2]) => readV3Position(candidate.client, position, positionAnchor))
 	const observations: V3PositionObservation[] = []
 	for (const position of state.retirement.positions) {
 		try {
-			const positionObservations = await readV3PositionsWithQuorum(readers, settings.connectivity.rpcQuorum, [position], blockNumber)
-			for (const observation of positionObservations) recordV3ScanSuccess(state, observation, blockNumber)
+			const positionObservations = await readV3PositionsWithQuorum(readers, settings.connectivity.rpcQuorum, [position], anchor)
+			for (const observation of positionObservations) recordV3ScanSuccess(state, observation, anchor.blockNumber)
 			observations.push(...positionObservations)
 		} catch (error) {
 			recordV3ScanFailure(state, position, error)
