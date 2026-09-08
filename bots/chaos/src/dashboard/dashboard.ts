@@ -1,3 +1,4 @@
+import { renderOperatorAlerts } from './operator-alerts.js'
 type RepBalance = {
 	balance?: string | number | undefined
 	symbol?: string | undefined
@@ -1514,17 +1515,6 @@ function renderRecovery(value: Snapshot) {
 	}
 }
 
-function renderAlerts(value: Snapshot) {
-	const messages = value.alerts.flatMap(alert => (alert.message === undefined ? [] : [alert.message]))
-	if (messages.length === 0) {
-		operatorAlerts.classList.add('hidden')
-		operatorAlerts.replaceChildren()
-		return
-	}
-	operatorAlerts.classList.remove('hidden')
-	operatorAlerts.replaceChildren(...messages.map(message => node('li', undefined, message)))
-}
-
 function renderSnapshot(value: Snapshot) {
 	renderHeader(value)
 	renderOverview(value)
@@ -1532,7 +1522,7 @@ function renderSnapshot(value: Snapshot) {
 	renderEcosystems(value.operationEvaluations)
 	renderTopology(value.topology)
 	renderRecovery(value)
-	renderAlerts(value)
+	renderOperatorAlerts(operatorAlerts, value.alerts)
 	renderCountdown()
 	applyMutationControlLatches()
 }

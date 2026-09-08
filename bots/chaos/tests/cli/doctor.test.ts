@@ -57,6 +57,7 @@ const probeResult: ChaosDoctorProbeResult = {
 
 function passiveDoctorDependencies(settings: Awaited<ReturnType<typeof settingsFixture>>, overrides: Partial<ChaosDoctorDependencies> = {}): ChaosDoctorDependencies {
 	return {
+		deploymentAvailability: async () => undefined,
 		acquireLocks: async () => ({ release: async () => undefined }),
 		assertProfileIsolation: async () => undefined,
 		load: async () => ({ path: '/private/operator.json', revision: 'sha256:test', settings }),
@@ -236,6 +237,7 @@ describe('chaos launch doctor', () => {
 			submissionCapabilityChecks: 2,
 			topology: { universes: 1 },
 		})
+		if (report.operationFamilies === undefined) throw new Error('Expected deployed doctor report')
 		expect(Object.keys(report.operationFamilies).sort()).toEqual(['open-oracle', 'statoblast', 'trading', 'zoltar'])
 	})
 
@@ -575,4 +577,24 @@ test('doctor reports the actual chain, pinned block, and missing root address be
 	} finally {
 		server.stop(true)
 	}
+})
+
+test('allows the dashboard to launch while canonical deployments are absent', async () => {
+	const settings = await settingsFixture('operator.configured-placeholder.json')
+	settings.runtime.execute = true
+	let released = false
+	const dependencies = passiveDoctorDependencies(settings, {
+		deploymentAvailability: async () => 'Waiting for deployments on chain 11155111: Zoltar.',
+		acquireLocks: async () => ({
+			release: async () => {
+				released = true
+			},
+		}),
+		probe: async () => {
+			throw new Error('Must not discover unavailable contracts')
+		},
+	})
+	const result = await runChaosLaunchGate(dependencies)
+	expect(result).toMatchObject({ checks: { deploymentCodeAndGraph: 'waiting' }, operationsAvailable: false })
+	expect(released).toBeTrue()
 })

@@ -1,3 +1,4 @@
+import { recordUnavailableDeploymentScan } from '../../src/runtime/deployment-availability.ts'
 import { describe, expect, test } from 'bun:test'
 import { privateKeyToAccount, zeroAddress, zeroHash, type Hex } from '@zoltar/bot-shared/ethereum'
 import { createSignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
@@ -1556,4 +1557,13 @@ describe('chaos dashboard configuration boundary', () => {
 		expect(stateSaveCount).toBe(2)
 		expect(configuration.settings.scheduler.minimumDelaySeconds).toBe(90)
 	})
+})
+
+test('projects absent deployments as informational availability with no executable plans', async () => {
+	const current = parseSettings(example)
+	const state = initialRuntimeState(false, undefined, current.network.chainId)
+	recordUnavailableDeploymentScan(state, 'Waiting for deployments')
+	const { controller } = noopController(current, state)
+	expect(await controller.getState()).toMatchObject({ alerts: [{ message: 'Waiting for deployments', severity: 'info' }], error: undefined })
+	expect(state.evaluations.every(evaluation => !evaluation.eligibility.eligible && evaluation.plan === undefined)).toBeTrue()
 })

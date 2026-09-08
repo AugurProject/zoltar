@@ -16,6 +16,7 @@ import { CHAOS_OPERATION_CATALOG } from '../operations/catalog.ts'
 import { CONSENSUS_FINALITY_HORIZON_BLOCKS } from '../operations/timing.ts'
 import type { ChaosReadClient } from '../monitoring/discovery.ts'
 import { canonicalAnchor, chaosReadClients, chaosReadEndpoints, createChaosReadPool, discoverWithQuorum } from '../runtime/canonical-scan.ts'
+import { deploymentAvailabilityNotice } from '../runtime/deployment-availability.ts'
 import { requiredLiveInventory } from '../runtime/live-readiness.ts'
 import { preflightTransactionSubmissionNetwork } from '../runtime/submission-preflight.ts'
 import { loadDurableState, type DurableState } from '../state/operator-state.ts'
@@ -49,6 +50,7 @@ export type ChaosDoctorProbeResult = {
 }
 
 export type ChaosDoctorDependencies = {
+	deploymentAvailability: (settings: OperatorSettings) => Promise<string | undefined>
 	acquireLocks: (settings: OperatorSettings) => Promise<Pick<ChaosProcessLocks, 'release'>>
 	assertProfileIsolation: typeof assertSettingsProfileIsolation
 	load: typeof loadSettings
@@ -341,6 +343,7 @@ export async function validateDoctorCompanionState(settings: OperatorSettings) {
 }
 
 const defaultDependencies: ChaosDoctorDependencies = {
+	deploymentAvailability: settings => deploymentAvailabilityNotice(settings, createChaosReadPool(settings)),
 	acquireLocks: acquireDoctorLocks,
 	assertProfileIsolation: assertSettingsProfileIsolation,
 	load: loadSettings,
@@ -441,6 +444,13 @@ async function runChaosDoctorWithLoaded(loaded: LoadedDoctorSettings, dependenci
 		const durableScope = assertDoctorDurableStateScope(loaded.settings, durableState, configuredSigner)
 		const companionState = await dependencies.validateCompanionState(loaded.settings)
 		const submissionChecks = await dependencies.preflightSubmission(loaded.settings)
+		const deploymentNotice = await dependencies.deploymentAvailability(loaded.settings)
+		if (deploymentNotice !== undefined)
+			return {
+				checks: { configuration: 'passed', durableState: 'passed', companionState: 'passed', submission: 'passed', deploymentCodeAndGraph: 'waiting' },
+				deploymentNotice,
+				operationsAvailable: false,
+			}
 		const probeWallet = configuredSigner ?? zeroAddress
 		const result = await dependencies.probe(loaded.settings, probeWallet)
 		const fundingBlockers = liveFundingBlockers(loaded.settings, result.snapshot)

@@ -61,6 +61,8 @@ describe('chaos Docker packaging', () => {
 		expect(ignoreSource).toContain('!bots/chaos/scripts/check-runtime.mts')
 		expect(ignoreSource).toContain('!bots/chaos/scripts/validate-container-paths.mts')
 		expect(ignoreSource).toContain('!solidity/tsconfig.json')
+		expect(copies).toContain('docs/mainnet-deployment-addresses.json docs/sepolia-deployment-addresses.json ./docs/')
+		for (const network of ['mainnet', 'sepolia']) expect(ignoreSource).toContain(`!docs/${network}-deployment-addresses.json`)
 		expect(ignoreSource).not.toContain('ui/coreShared/favicon')
 		expect(dockerInstructions(runtime, 'USER')).toEqual(['bun'])
 		expect(runtimeRuns.filter(command => command === 'bun /tmp/tooling/repo/install-frozen.mts . --production')).toHaveLength(3)

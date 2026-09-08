@@ -29,3 +29,7 @@
 !bots/chaos/scripts/docker-entrypoint.sh
 !bots/chaos/scripts/validate-container-paths.mts
 !bots/chaos/src/**
+
+!docs/
+!docs/mainnet-deployment-addresses.json
+!docs/sepolia-deployment-addresses.json

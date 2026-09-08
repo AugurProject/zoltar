@@ -15,7 +15,7 @@ type RecoveryScenario = {
 	statusId: string
 }
 
-const chromium = process.env['CHROMIUM_PATH'] ?? '/usr/bin/chromium'
+const chromium = process.env['CHROMIUM_PATH'] ?? Bun.which('google-chrome') ?? Bun.which('chromium') ?? '/usr/bin/chromium'
 const browserTest = existsSync(chromium) ? test : test.skip
 const transactionHash = `0x${'12'.repeat(32)}`
 const candidateHash = `0x${'34'.repeat(32)}`
@@ -523,6 +523,19 @@ browserTest(
 			stateRequests = 0
 			await cdp.command('Page.navigate', { url: new URL('/overview', dashboard.url).href })
 			await waitFor("document.querySelector('#mode-badge')?.textContent === 'Safety paused'", 'Safety-pause fixture did not render its durable latch')
+			expect(
+				await cdp.evaluate(`(async () => {
+ const { renderOperatorAlerts } = await import('/operator-alerts.js')
+ const container = document.createElement('ul')
+ renderOperatorAlerts(container, [{ message: 'Waiting for deployments', severity: 'info' }])
+ const waiting = { role: container.getAttribute('role'), live: container.getAttribute('aria-live'), style: container.firstElementChild.className, text: container.textContent }
+ renderOperatorAlerts(container, [{ message: 'RPC failed', severity: 'error' }, { message: 'Waiting for deployments', severity: 'info' }])
+ const mixed = { role: container.getAttribute('role'), live: container.getAttribute('aria-live'), styles: [...container.children].map(item => item.className) }
+ renderOperatorAlerts(container, [])
+ return { waiting, mixed, cleared: container.children.length === 0 && container.classList.contains('hidden') }
+ })()`),
+			).toEqual({ waiting: { role: 'status', live: 'polite', style: 'notice info', text: 'Waiting for deployments' }, mixed: { role: 'alert', live: 'assertive', styles: ['notice error', 'notice info'] }, cleared: true })
+
 			expect(
 				await cdp.evaluate(`({
 					eth: document.querySelector('#balance-eth')?.textContent,

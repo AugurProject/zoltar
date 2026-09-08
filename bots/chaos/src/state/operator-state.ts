@@ -1,10 +1,12 @@
+import type { RuntimeState } from './runtime-state.ts'
+export type { RuntimeState, RuntimeTopologySummary, WalletBalanceState } from './runtime-state.ts'
 import { randomUUID } from 'node:crypto'
 import { constants } from 'node:fs'
 import { link, mkdir, open, readFile, readdir, rename, rm } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { getAddress, keccak256, parseTransaction, recoverTransactionAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import type { ChaosProtocolIndex } from '#monitoring/protocol-index'
-import type { ChaosEcosystem, EvaluatedOperation, OperationContinuationDisposition, OperationEvidence, OperationPreflightCall, OperationRisk, OperationTerminalSubmission, OperationWalletAssetDebit } from '#operations/types'
+import type { ChaosEcosystem, OperationContinuationDisposition, OperationEvidence, OperationPreflightCall, OperationRisk, OperationTerminalSubmission, OperationWalletAssetDebit } from '#operations/types'
 import { assertSafeRetirementRecipient, initialRetirementState, parseRetirementState, type DurableRetirementState } from './retirement.ts'
 import { serializedScheduler } from './state-serialization.ts'
 import {
@@ -198,47 +200,6 @@ export type DurableState = {
 	signerAddress: Address | undefined
 	version: 4
 	workflows: DurableWorkflow[]
-}
-
-export type WalletBalanceState = {
-	eth: string
-	rep: readonly { balance: string; symbol: string; token: Address; universeId: string }[]
-	weth: string
-}
-
-export type RuntimeTopologySummary = {
-	anchor: { blockNumber: bigint; timestamp: bigint }
-	auctions: { address: string; bidCount: number; endTime: string; finalized: boolean; pool: string; startTime: string }[]
-	complete: boolean
-	pairs: { address: string; feeBps: number; pool: string; status: number; universeId: string }[]
-	pools: {
-		address: string
-		awaitingForkContinuation: boolean
-		coordinator: string
-		questionId: string
-		systemState: number
-		universeId: string
-		/** Total canonical registry entries, independent of how many vault states this scan inspected. */
-		vaultCount: number
-	}[]
-	reports: { currentReporter: string; flags: number; reportId: string; settlementTime: string; token1: string; token2: string }[]
-	universes: { forkQuestionId: string; forkTime: string; id: string; knownChildOutcomeCount: number; parentUniverseId?: string | undefined; repToken: string }[]
-}
-
-export type RuntimeState = DurableState & {
-	error: string | undefined
-	evaluations: EvaluatedOperation[]
-	inventory: WalletBalanceState
-	lastScanAt: string | undefined
-	lastScannedBlock: bigint | undefined
-	paused: boolean
-	rpcEndpointHealth: readonly unknown[]
-	scanning: boolean
-	startedAt: string
-	status: 'connectivity-degraded' | 'dry-run' | 'error' | 'paused' | 'running' | 'starting'
-	topology: RuntimeTopologySummary | undefined
-	wallet: Address | undefined
-	warnings: string[]
 }
 
 export type StateFilesystem = ProtocolIndexFilesystem

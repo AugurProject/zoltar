@@ -46,6 +46,7 @@ RUN cd shared \
 
 COPY bots/chaos/README.md ./bots/chaos/README.md
 COPY bots/chaos/config/ ./bots/chaos/config/
+COPY docs/mainnet-deployment-addresses.json docs/sepolia-deployment-addresses.json ./docs/
 COPY bots/chaos/scripts/check-runtime.mts ./bots/chaos/scripts/check-runtime.mts
 COPY bots/chaos/scripts/docker-entrypoint.sh ./bots/chaos/scripts/docker-entrypoint.sh
 COPY bots/chaos/scripts/validate-container-paths.mts ./bots/chaos/scripts/validate-container-paths.mts

@@ -262,6 +262,7 @@ function dashboardState(state: RuntimeState, configuration: ConfigurationState) 
 	return {
 		...state,
 		alerts: [
+			...(state.deploymentNotice === undefined ? [] : [{ message: state.deploymentNotice, severity: 'info' }]),
 			...(state.error === undefined ? [] : [{ message: state.error, severity: 'error' }]),
 			...(lifecyclePresenceAlert === undefined || lifecyclePresenceAlert === state.error ? [] : [{ message: lifecyclePresenceAlert, severity: 'error' }]),
 			...(state.safetyPaused
