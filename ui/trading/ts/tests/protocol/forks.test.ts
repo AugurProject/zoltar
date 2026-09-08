@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { createPublicClient, custom, encodeAbiParameters, getAddress, keccak256, zeroAddress, type Address } from '@zoltar/shared/evm/ethereum'
+import { createPublicClient, custom, encodeAbiParameters, getAddress, keccak256, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { getChildUniverseId, loadForkMigrationContext } from '../../protocol/forks.js'
 
 const pool = getAddress(`0x${'11'.repeat(20)}`)

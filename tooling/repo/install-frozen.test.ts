@@ -54,7 +54,7 @@ test('windows install workaround restores package and lock inputs after omitting
 	const installDirectory = await mkdtemp(path.join(tmpdir(), 'zoltar-install-frozen-'))
 	try {
 		const originalPackageJson = createPackageJson({
-			'@zoltar/shared': 'file:../shared',
+			'@zoltar/core-shared': 'file:../shared',
 		})
 		const originalLockfile = 'lockfile stays restored\n'
 		await writeFile(path.join(installDirectory, 'package.json'), originalPackageJson)
@@ -76,7 +76,7 @@ test('windows install workaround restores stale backups before installing', asyn
 	const installDirectory = await mkdtemp(path.join(tmpdir(), 'zoltar-install-frozen-recovery-'))
 	try {
 		const originalPackageJson = createPackageJson({
-			'@zoltar/shared': 'file:../shared',
+			'@zoltar/core-shared': 'file:../shared',
 		})
 		const originalLockfile = 'stale lock backup\n'
 		await writeFile(path.join(installDirectory, 'package.json'), createPackageJson({}))
@@ -118,14 +118,14 @@ test('native local dependency workaround rejects a stale registry lock without m
 		await mkdir(installDirectory)
 		await mkdir(sharedDirectory)
 		await writeFile(path.join(sharedDirectory, 'package.json'), createPackageJson({}))
-		await writeFile(path.join(installDirectory, 'package.json'), createPackageJson({ '@zoltar/shared': 'file:../shared', kleur: '4.1.5' }))
+		await writeFile(path.join(installDirectory, 'package.json'), createPackageJson({ '@zoltar/core-shared': 'file:../shared', kleur: '4.1.5' }))
 		const initialInstall = Bun.spawnSync([process.execPath, 'install'], { cwd: installDirectory, stderr: 'pipe', stdout: 'pipe' })
 		expect(initialInstall.exitCode).toBe(0)
-		const installedSharedPath = path.join(installDirectory, 'node_modules', '@zoltar', 'shared')
+		const installedSharedPath = path.join(installDirectory, 'node_modules', '@zoltar', 'core-shared')
 		await rm(installedSharedPath, { force: true, recursive: true })
 		await symlink(sharedDirectory, installedSharedPath, 'dir')
 
-		const stalePackageJson = createPackageJson({ '@zoltar/shared': 'file:../shared', kleur: '4.1.4' })
+		const stalePackageJson = createPackageJson({ '@zoltar/core-shared': 'file:../shared', kleur: '4.1.4' })
 		await writeFile(path.join(installDirectory, 'package.json'), stalePackageJson)
 		const originalLockfile = await readFile(path.join(installDirectory, 'bun.lock'), 'utf8')
 		const result = runNativeInstall(installDirectory)
@@ -145,8 +145,8 @@ test('native install retains transitive dependencies from safe local packages', 
 	const sharedDirectory = path.join(installDirectory, 'shared')
 	try {
 		await mkdir(sharedDirectory)
-		await writeFile(path.join(sharedDirectory, 'package.json'), `${JSON.stringify({ name: '@zoltar/shared', version: '1.0.0', dependencies: { kleur: '4.1.5' } }, undefined, '\t')}\n`)
-		await writeFile(path.join(installDirectory, 'package.json'), createPackageJson({ '@zoltar/shared': 'file:shared' }))
+		await writeFile(path.join(sharedDirectory, 'package.json'), `${JSON.stringify({ name: '@zoltar/core-shared', version: '1.0.0', dependencies: { kleur: '4.1.5' } }, undefined, '\t')}\n`)
+		await writeFile(path.join(installDirectory, 'package.json'), createPackageJson({ '@zoltar/core-shared': 'file:shared' }))
 		const initialInstall = Bun.spawnSync([process.execPath, 'install'], { cwd: installDirectory, stderr: 'pipe', stdout: 'pipe' })
 		expect(initialInstall.exitCode).toBe(0)
 		await rm(path.join(installDirectory, 'node_modules'), { force: true, recursive: true })

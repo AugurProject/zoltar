@@ -10,7 +10,6 @@ const packageJsonBackupPath = `${packageJsonPath}.zoltar-install-backup`
 const lockfileBackupPath = `${lockfilePath}.zoltar-install-backup`
 const repositoryBunVersion = '1.4.2'
 
-type DependencySection = 'dependencies' | 'devDependencies' | 'optionalDependencies'
 type DependencyMap = Record<string, string>
 interface PackageManifest {
 	dependencies?: DependencyMap
@@ -58,13 +57,6 @@ const restoreInstallBackups = () => {
 
 restoreInstallBackups()
 
-const getSharedDependencySection = (packageJson: PackageManifest): DependencySection | undefined => {
-	for (const dependencySection of ['dependencies', 'devDependencies', 'optionalDependencies'] as const) {
-		if (packageJson[dependencySection]?.['@zoltar/shared'] !== undefined) return dependencySection
-	}
-	return undefined
-}
-
 const runInstall = (installArguments: string[]): number => {
 	const command = process.versions.bun === repositoryBunVersion ? [process.execPath, ...installArguments] : [process.execPath, 'x', `bun@${repositoryBunVersion}`, ...installArguments]
 	if (process.versions.bun !== repositoryBunVersion) console.warn(`Using repository Bun ${repositoryBunVersion}; current Bun is ${process.versions.bun ?? 'unknown'}.`)
@@ -84,8 +76,12 @@ const runInstall = (installArguments: string[]): number => {
 
 const runWindowsInstallWithoutSharedCacheCopy = () => {
 	const packageJson = readPackageJson()
-	const sharedDependencySection = getSharedDependencySection(packageJson)
-	if (sharedDependencySection === undefined) {
+	const localDependencies = (['dependencies', 'devDependencies', 'optionalDependencies'] as const).flatMap(section =>
+		Object.entries(packageJson[section] ?? {})
+			.filter(([name, value]) => name.startsWith('@zoltar/') && value.startsWith('file:'))
+			.map(([name]) => ({ section, name })),
+	)
+	if (localDependencies.length === 0) {
 		return runInstall(['install', '--frozen-lockfile', '--backend=copyfile'])
 	}
 
@@ -105,9 +101,7 @@ const runWindowsInstallWithoutSharedCacheCopy = () => {
 	process.once('SIGHUP', () => restoreAndExit(129))
 
 	try {
-		const dependencies = packageJson[sharedDependencySection]
-		if (dependencies === undefined) throw new Error(`Missing ${sharedDependencySection} after dependency detection`)
-		delete dependencies['@zoltar/shared']
+		for (const { section, name } of localDependencies) delete packageJson[section]?.[name]
 		writePackageJson(packageJson)
 		return runInstall(['install', '--no-save', '--backend=copyfile'])
 	} finally {

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { encodeAbiParameters, encodeDeployData, getAddress, isHex, keccak256, type Address, type Hex } from '@zoltar/shared/evm/ethereum'
+import { encodeAbiParameters, encodeDeployData, getAddress, isHex, keccak256, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, writeContractAndWait, type WriteClient } from '../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'

@@ -1,5 +1,5 @@
 import { beforeEach, describe, test } from 'bun:test'
-import { encodeDeployData, encodeFunctionData, type Address, type Hex } from '@zoltar/shared/evm/ethereum'
+import { encodeDeployData, encodeFunctionData, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import {
 	statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
 	statoblast_EscalationGame_EscalationGame,
@@ -15,7 +15,7 @@ import { getMaxRepBeingSoldAttoRep, getMinBidSizeAttoEth, isFinalized, submitBid
 import { queueLiquidationAtForcedPrice } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { applyLibraries } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { getForkActivationTime } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
-import { priceToClosestTick } from '@zoltar/shared/statoblast/truthAuctionTickMath'
+import { priceToClosestTick } from '@zoltar/statoblast-shared/statoblast/truthAuctionTickMath'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { rpow } from '../../testSupport/simulator/utils/bigint'
 import { getContractOutput, loadContractsJson, normalizeStorageLayout } from '../contractArtifactHelpers'

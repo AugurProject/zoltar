@@ -49,7 +49,7 @@ describe('Docker entrypoint', () => {
 		const runtime = stages.at(-1)
 		if (runtime === undefined) throw new Error('Missing runtime Docker stage')
 		const installCommands = dockerInstructions(runtime, 'RUN').flatMap(shellCommandSegments)
-		expect(installCommands).toEqual(expect.arrayContaining(['cd shared', 'bun install --frozen-lockfile --production', 'cd ../bots/shared']))
+		expect(installCommands).toEqual(expect.arrayContaining(['cd shared/core', 'bun install --frozen-lockfile --production', 'cd ../../bots/shared']))
 		expect(installCommands).toContain('cd ../open-oracle-arbitrager')
 		expect(installCommands.filter(command => command === 'bun install --frozen-lockfile --production')).toHaveLength(3)
 		expect(stages.flatMap(stage => dockerInstructions(stage, 'COPY')).some(copy => copy.includes('ui/coreShared/favicon'))).toBe(false)

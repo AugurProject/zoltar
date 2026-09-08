@@ -1,7 +1,7 @@
 import * as commonCopy from '../copy/common.js'
 import * as transactionCopy from '../copy/transaction.js'
 import type { ComponentChildren } from 'preact'
-import type { Hash } from '@zoltar/shared/evm/ethereum'
+import type { Hash } from '@zoltar/core-shared/evm/ethereum'
 import { formatCurrencyBalanceWithUnit } from '../lib/formatters.js'
 import type { TransactionRequestPreview } from '../wallet/chainBackend.js'
 import type { GlobalTransactionPresentation, GlobalTransactionRow, TransactionIntent } from '../types/components.js'

@@ -1,4 +1,4 @@
-import type { Hash, ReplacementReason, TransactionReceipt } from '@zoltar/shared/evm/ethereum'
+import type { Hash, ReplacementReason, TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import type { WriteClient } from '../wallet/chainBackend.js'
 
 export type SubmittedTransactionClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = {

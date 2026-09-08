@@ -1,10 +1,11 @@
+import { appSharedPackages, sharedPackageClosure } from '../repo/sharedPackages.ts'
 import * as path from 'node:path'
 import * as process from 'node:process'
 import * as url from 'node:url'
 import { projectDependencyClosure, projects } from '../repo/projects.ts'
 
-export const UI_APP_IDS = ['zoltar', 'statoblast', 'trading'] as const
-export type UiAppId = (typeof UI_APP_IDS)[number]
+import { parseUiAppId, type UiAppId } from './appIds.mts'
+export { UI_APP_IDS, isUiAppId, parseUiAppId, type UiAppId } from './appIds.mts'
 export type UiPackageId = 'coreShared' | 'zoltarShared' | 'statoblastShared' | UiAppId
 
 const UI_PROJECT_ID_BY_PACKAGE_ID: Readonly<Record<UiPackageId, string>> = {
@@ -33,16 +34,6 @@ export function getUiAppDependencyOrder(appId: UiAppId): readonly UiPackageId[] 
 
 export const getUiPackageRoot = (uiRoot: string, packageId: UiPackageId) => path.resolve(uiRoot, '..', getUiProject(packageId).path)
 
-export function isUiAppId(candidate: string): candidate is UiAppId {
-	return (UI_APP_IDS as readonly string[]).includes(candidate)
-}
-
-export function parseUiAppId(candidate: string | undefined, context: string): UiAppId {
-	if (candidate === undefined || candidate === '') throw new Error(`Missing UI app ID for ${context}; expected one of: ${UI_APP_IDS.join(', ')}`)
-	if (!isUiAppId(candidate)) throw new Error(`Unknown UI app ID '${candidate}' for ${context}; expected one of: ${UI_APP_IDS.join(', ')}`)
-	return candidate
-}
-
 export function parseUiAppIdFromProcess(context: string): UiAppId {
 	return parseUiAppId(process.argv[2] ?? process.env['UI_APP'], context)
 }
@@ -69,8 +60,8 @@ export type UiAppPaths = {
 	readonly projectArtifactsScript: string
 	readonly bundlerPathsScript: string
 	readonly devServerScript: string
-	readonly sharedSourceRoot: string
-	readonly sharedGeneratedJsRoot: string
+	readonly sharedSourceRoots: readonly string[]
+	readonly sharedGeneratedJsRoots: readonly string[]
 }
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
@@ -106,8 +97,8 @@ export function getUiAppPaths(appId: UiAppId): UiAppPaths {
 		projectArtifactsScript: path.join(buildRoot, 'projectArtifacts.mts'),
 		bundlerPathsScript: path.join(buildRoot, 'bundlerPaths.mts'),
 		devServerScript: path.join(buildRoot, 'dev-server.ts'),
-		sharedSourceRoot: path.join(repositoryRoot, 'shared', 'ts'),
-		sharedGeneratedJsRoot: path.join(repositoryRoot, 'shared', 'js'),
+		sharedSourceRoots: sharedPackageClosure(appSharedPackages[appId]).map(entry => path.join(repositoryRoot, entry.path, 'ts')),
+		sharedGeneratedJsRoots: sharedPackageClosure(appSharedPackages[appId]).map(entry => path.join(repositoryRoot, entry.path, 'js')),
 	}
 }
 
@@ -123,7 +114,7 @@ export function getUiCoreSharedPaths() {
 		coreSharedGeneratedJsRoot: path.join(coreSharedRoot, 'js'),
 		coreSharedTestSourceRoot: path.join(coreSharedRoot, 'ts', 'tests'),
 		coreSharedTestOutputRoot: path.join(coreSharedRoot, 'js', 'tests'),
-		sharedSourceRoot: path.join(repositoryRoot, 'shared', 'ts'),
-		sharedGeneratedJsRoot: path.join(repositoryRoot, 'shared', 'js'),
+		sharedSourceRoots: sharedPackageClosure(appSharedPackages.zoltar).map(entry => path.join(repositoryRoot, entry.path, 'ts')),
+		sharedGeneratedJsRoots: sharedPackageClosure(appSharedPackages.zoltar).map(entry => path.join(repositoryRoot, entry.path, 'js')),
 	}
 }

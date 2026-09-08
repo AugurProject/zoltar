@@ -1,5 +1,5 @@
 import type { ComponentChildren } from 'preact'
-import type { Address } from '@zoltar/shared/evm/ethereum'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { getSecurityPoolLinkHref, navigateToSecurityPool } from '../lib/securityPoolNavigation.js'
 
 type SecurityPoolLinkProps = {

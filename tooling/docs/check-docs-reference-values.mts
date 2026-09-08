@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto'
 import ts from 'typescript'
 import { diagramGraphSpecs } from '../../docs/charts/diagramModels'
 import type { DiagramGraphNode } from '../../docs/charts/diagramTypes'
-import { getMainnetProtocolConfig } from '../../shared/ts/deployment/protocolConfig'
+import { getMainnetProtocolConfig } from '../../shared/core/ts/deployment/protocolConfig'
 import { htmlToDocumentationText } from './docs-html-text.mts'
 
 const normalizeHtmlSource = (source: string): string => source.replaceAll(/<\/([a-z][\w:-]*)\s+>/gi, '</$1>')
@@ -59,7 +59,7 @@ const truthAuctionStorage = await readFile('solidity/contracts/statoblast/Unifor
 const truthAuctionInterface = await readFile('solidity/contracts/statoblast/interfaces/IUniformPriceDualCapBatchAuction.sol', 'utf8')
 const zoltar = await readFile('solidity/contracts/Zoltar.sol', 'utf8')
 const constants = await readFile('solidity/contracts/Constants.sol', 'utf8')
-const sepoliaRepAllocations = await readFile('shared/ts/deployment/sepoliaRepAllocations.ts', 'utf8')
+const sepoliaRepAllocations = await readFile('shared/zoltar/ts/deployment/sepoliaRepAllocations.ts', 'utf8')
 const escalationGameForkThresholdTest = await readFile('solidity/ts/tests/escalationGameForkThreshold.test.ts', 'utf8')
 const escalationGameBytecodeSnapshot = await readFile('solidity/ts/tests/fixtures/escalationGameBytecode.snapshot.json', 'utf8')
 

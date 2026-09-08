@@ -14,11 +14,12 @@
 		"@preact/signals": "2.0.1",
 		"@noble/curves": "2.2.0",
 		"@noble/hashes": "2.2.0",
-		"@zoltar/shared": "file:../../shared",
 		"micro-eth-signer": "0.18.1",
 		"micro-packed": "0.8.0",
 		"preact": "10.26.4",
-		"tevm": "1.0.0-rc.151"
+		"tevm": "1.0.0-rc.151",
+		"@zoltar/core-shared": "file:../../shared/core",
+		"@zoltar/zoltar-shared": "file:../../shared/zoltar"
 	},
 	"overrides": {
 		"@tevm/actions": "1.0.0-rc.151",
@@ -29,7 +30,9 @@
 		"nanoid": "3.3.18",
 		"postcss": "8.5.23",
 		"tmp": "0.2.7",
-		"ws": "8.21.0"
+		"ws": "8.21.0",
+		"@zoltar/core-shared": "file:../../shared/core",
+		"@zoltar/zoltar-shared": "file:../../shared/zoltar"
 	},
 	"scripts": {
 		"build:tests": "bun ../../tooling/ui/tests.mts coreShared",
@@ -40,19 +43,585 @@
 	"types": "./js/index.d.ts",
 	"exports": {
 		"./tests/simulationTestUtils.js": "./ts/tests/simulation/testUtils.ts",
-		"./tests/testUtils/domEnvironment.js": "./ts/tests/testUtils/domEnvironment.ts",
-		"./tests/testUtils/deferred.js": "./ts/tests/testUtils/deferred.ts",
-		"./tests/testUtils/coreSharedCss.js": "./ts/tests/testUtils/coreSharedCss.ts",
-		"./tests/testUtils/domTestLifecycle.js": "./ts/tests/testUtils/domTestLifecycle.ts",
-		"./tests/testUtils/fakeBackend.js": "./ts/tests/testUtils/fakeBackend.ts",
-		"./tests/testUtils/protocolTestSupport.js": "./ts/tests/testUtils/protocolTestSupport.ts",
-		"./tests/testUtils/queries.js": "./ts/tests/testUtils/queries.ts",
-		"./tests/testUtils/renderIntoDocument.js": "./ts/tests/testUtils/renderIntoDocument.tsx",
-		"./tests/testUtils/transactionActionButton.js": "./ts/tests/testUtils/transactionActionButton.ts",
+		"./tests/testUtils/domEnvironment.js": {
+			"bun": "./ts/tests/testUtils/domEnvironment.ts",
+			"default": "./js/tests/testUtils/domEnvironment.js"
+		},
+		"./tests/testUtils/deferred.js": {
+			"bun": "./ts/tests/testUtils/deferred.ts",
+			"default": "./js/tests/testUtils/deferred.js"
+		},
+		"./tests/testUtils/coreSharedCss.js": {
+			"bun": "./ts/tests/testUtils/coreSharedCss.ts",
+			"default": "./js/tests/testUtils/coreSharedCss.js"
+		},
+		"./tests/testUtils/domTestLifecycle.js": {
+			"bun": "./ts/tests/testUtils/domTestLifecycle.ts",
+			"default": "./js/tests/testUtils/domTestLifecycle.js"
+		},
+		"./tests/testUtils/fakeBackend.js": {
+			"bun": "./ts/tests/testUtils/fakeBackend.ts",
+			"default": "./js/tests/testUtils/fakeBackend.js"
+		},
+		"./tests/testUtils/protocolTestSupport.js": {
+			"bun": "./ts/tests/testUtils/protocolTestSupport.ts",
+			"default": "./js/tests/testUtils/protocolTestSupport.js"
+		},
+		"./tests/testUtils/queries.js": {
+			"bun": "./ts/tests/testUtils/queries.ts",
+			"default": "./js/tests/testUtils/queries.js"
+		},
+		"./tests/testUtils/renderIntoDocument.js": {
+			"bun": "./ts/tests/testUtils/renderIntoDocument.tsx",
+			"default": "./js/tests/testUtils/renderIntoDocument.js"
+		},
+		"./tests/testUtils/transactionActionButton.js": {
+			"bun": "./ts/tests/testUtils/transactionActionButton.ts",
+			"default": "./js/tests/testUtils/transactionActionButton.js"
+		},
 		"./*": {
 			"bun": "./ts/*.ts",
 			"default": "./js/*.js"
 		},
-		"./tests/testUtils/testRouting.js": "./ts/tests/testUtils/testRouting.ts"
+		"./tests/testUtils/testRouting.js": {
+			"bun": "./ts/tests/testUtils/testRouting.ts",
+			"default": "./js/tests/testUtils/testRouting.js"
+		},
+		"./abis.js": {
+			"bun": "./ts/abis.ts",
+			"default": "./js/abis.js"
+		},
+		"./app/appRoot.js": {
+			"bun": "./ts/app/appRoot.ts",
+			"default": "./js/app/appRoot.js"
+		},
+		"./app/components/AppHeaderShell.js": {
+			"bun": "./ts/app/components/AppHeaderShell.tsx",
+			"default": "./js/app/components/AppHeaderShell.js"
+		},
+		"./app/components/AppPageHeading.js": {
+			"bun": "./ts/app/components/AppPageHeading.tsx",
+			"default": "./js/app/components/AppPageHeading.js"
+		},
+		"./app/components/AppStatusNotices.js": {
+			"bun": "./ts/app/components/AppStatusNotices.tsx",
+			"default": "./js/app/components/AppStatusNotices.js"
+		},
+		"./app/components/GlobalTransactionTray.js": {
+			"bun": "./ts/app/components/GlobalTransactionTray.tsx",
+			"default": "./js/app/components/GlobalTransactionTray.js"
+		},
+		"./app/components/NotFoundSection.js": {
+			"bun": "./ts/app/components/NotFoundSection.tsx",
+			"default": "./js/app/components/NotFoundSection.js"
+		},
+		"./app/components/ProtocolAppFrame.js": {
+			"bun": "./ts/app/components/ProtocolAppFrame.tsx",
+			"default": "./js/app/components/ProtocolAppFrame.js"
+		},
+		"./app/components/RouteSubNavigation.js": {
+			"bun": "./ts/app/components/RouteSubNavigation.tsx",
+			"default": "./js/app/components/RouteSubNavigation.js"
+		},
+		"./app/hooks/useHashRoute.js": {
+			"bun": "./ts/app/hooks/useHashRoute.ts",
+			"default": "./js/app/hooks/useHashRoute.js"
+		},
+		"./app/hooks/useMissingDeploymentRedirect.js": {
+			"bun": "./ts/app/hooks/useMissingDeploymentRedirect.ts",
+			"default": "./js/app/hooks/useMissingDeploymentRedirect.js"
+		},
+		"./app/hooks/useProtocolOnchainRuntime.js": {
+			"bun": "./ts/app/hooks/useProtocolOnchainRuntime.ts",
+			"default": "./js/app/hooks/useProtocolOnchainRuntime.js"
+		},
+		"./app/hooks/useUrlState.js": {
+			"bun": "./ts/app/hooks/useUrlState.ts",
+			"default": "./js/app/hooks/useUrlState.js"
+		},
+		"./app/lib/appRouteGate.js": {
+			"bun": "./ts/app/lib/appRouteGate.ts",
+			"default": "./js/app/lib/appRouteGate.js"
+		},
+		"./app/lib/appTitle.js": {
+			"bun": "./ts/app/lib/appTitle.ts",
+			"default": "./js/app/lib/appTitle.js"
+		},
+		"./app/liveReload.js": {
+			"bun": "./ts/app/liveReload.ts",
+			"default": "./js/app/liveReload.js"
+		},
+		"./components/ActionLauncherButton.js": {
+			"bun": "./ts/components/ActionLauncherButton.tsx",
+			"default": "./js/components/ActionLauncherButton.js"
+		},
+		"./components/ActionLauncherCard.js": {
+			"bun": "./ts/components/ActionLauncherCard.tsx",
+			"default": "./js/components/ActionLauncherCard.js"
+		},
+		"./components/AddressInfo.js": {
+			"bun": "./ts/components/AddressInfo.tsx",
+			"default": "./js/components/AddressInfo.js"
+		},
+		"./components/AddressValue.js": {
+			"bun": "./ts/components/AddressValue.tsx",
+			"default": "./js/components/AddressValue.js"
+		},
+		"./components/Badge.js": {
+			"bun": "./ts/components/Badge.tsx",
+			"default": "./js/components/Badge.js"
+		},
+		"./components/ComparisonRecord.js": {
+			"bun": "./ts/components/ComparisonRecord.tsx",
+			"default": "./js/components/ComparisonRecord.js"
+		},
+		"./components/CurrencyValue.js": {
+			"bun": "./ts/components/CurrencyValue.tsx",
+			"default": "./js/components/CurrencyValue.js"
+		},
+		"./components/DataGrid.js": {
+			"bun": "./ts/components/DataGrid.tsx",
+			"default": "./js/components/DataGrid.js"
+		},
+		"./components/EntityCard.js": {
+			"bun": "./ts/components/EntityCard.tsx",
+			"default": "./js/components/EntityCard.js"
+		},
+		"./components/EnumDropdown.js": {
+			"bun": "./ts/components/EnumDropdown.tsx",
+			"default": "./js/components/EnumDropdown.js"
+		},
+		"./components/ErrorNotice.js": {
+			"bun": "./ts/components/ErrorNotice.tsx",
+			"default": "./js/components/ErrorNotice.js"
+		},
+		"./components/FormInput.js": {
+			"bun": "./ts/components/FormInput.tsx",
+			"default": "./js/components/FormInput.js"
+		},
+		"./components/GlobalTransactionPresentationContext.js": {
+			"bun": "./ts/components/GlobalTransactionPresentationContext.tsx",
+			"default": "./js/components/GlobalTransactionPresentationContext.js"
+		},
+		"./components/IdentifierValue.js": {
+			"bun": "./ts/components/IdentifierValue.tsx",
+			"default": "./js/components/IdentifierValue.js"
+		},
+		"./components/LifecycleStageBanner.js": {
+			"bun": "./ts/components/LifecycleStageBanner.tsx",
+			"default": "./js/components/LifecycleStageBanner.js"
+		},
+		"./components/LoadableValue.js": {
+			"bun": "./ts/components/LoadableValue.tsx",
+			"default": "./js/components/LoadableValue.js"
+		},
+		"./components/LoadingText.js": {
+			"bun": "./ts/components/LoadingText.tsx",
+			"default": "./js/components/LoadingText.js"
+		},
+		"./components/LookupFieldRow.js": {
+			"bun": "./ts/components/LookupFieldRow.tsx",
+			"default": "./js/components/LookupFieldRow.js"
+		},
+		"./components/MetricField.js": {
+			"bun": "./ts/components/MetricField.tsx",
+			"default": "./js/components/MetricField.js"
+		},
+		"./components/MetricGrid.js": {
+			"bun": "./ts/components/MetricGrid.tsx",
+			"default": "./js/components/MetricGrid.js"
+		},
+		"./components/OperationModal.js": {
+			"bun": "./ts/components/OperationModal.tsx",
+			"default": "./js/components/OperationModal.js"
+		},
+		"./components/OutcomeChipRow.js": {
+			"bun": "./ts/components/OutcomeChipRow.tsx",
+			"default": "./js/components/OutcomeChipRow.js"
+		},
+		"./components/OutcomeSelectionList.js": {
+			"bun": "./ts/components/OutcomeSelectionList.tsx",
+			"default": "./js/components/OutcomeSelectionList.js"
+		},
+		"./components/PaginationControls.js": {
+			"bun": "./ts/components/PaginationControls.tsx",
+			"default": "./js/components/PaginationControls.js"
+		},
+		"./components/ProgressMeter.js": {
+			"bun": "./ts/components/ProgressMeter.tsx",
+			"default": "./js/components/ProgressMeter.js"
+		},
+		"./components/Question.js": {
+			"bun": "./ts/components/Question.tsx",
+			"default": "./js/components/Question.js"
+		},
+		"./components/RankedBarList.js": {
+			"bun": "./ts/components/RankedBarList.tsx",
+			"default": "./js/components/RankedBarList.js"
+		},
+		"./components/ReadOnlyDetailAccordion.js": {
+			"bun": "./ts/components/ReadOnlyDetailAccordion.tsx",
+			"default": "./js/components/ReadOnlyDetailAccordion.js"
+		},
+		"./components/RequirementsChecklist.js": {
+			"bun": "./ts/components/RequirementsChecklist.tsx",
+			"default": "./js/components/RequirementsChecklist.js"
+		},
+		"./components/RouteHeader.js": {
+			"bun": "./ts/components/RouteHeader.tsx",
+			"default": "./js/components/RouteHeader.js"
+		},
+		"./components/RouteWorkflowPanel.js": {
+			"bun": "./ts/components/RouteWorkflowPanel.tsx",
+			"default": "./js/components/RouteWorkflowPanel.js"
+		},
+		"./components/ScalarOutcomePicker.js": {
+			"bun": "./ts/components/ScalarOutcomePicker.tsx",
+			"default": "./js/components/ScalarOutcomePicker.js"
+		},
+		"./components/SectionBlock.js": {
+			"bun": "./ts/components/SectionBlock.tsx",
+			"default": "./js/components/SectionBlock.js"
+		},
+		"./components/StateHint.js": {
+			"bun": "./ts/components/StateHint.tsx",
+			"default": "./js/components/StateHint.js"
+		},
+		"./components/StickyObjectContext.js": {
+			"bun": "./ts/components/StickyObjectContext.tsx",
+			"default": "./js/components/StickyObjectContext.js"
+		},
+		"./components/TimestampValue.js": {
+			"bun": "./ts/components/TimestampValue.tsx",
+			"default": "./js/components/TimestampValue.js"
+		},
+		"./components/TokenApprovalControl.js": {
+			"bun": "./ts/components/TokenApprovalControl.tsx",
+			"default": "./js/components/TokenApprovalControl.js"
+		},
+		"./components/TransactionActionButton.js": {
+			"bun": "./ts/components/TransactionActionButton.tsx",
+			"default": "./js/components/TransactionActionButton.js"
+		},
+		"./components/TransactionHashLink.js": {
+			"bun": "./ts/components/TransactionHashLink.tsx",
+			"default": "./js/components/TransactionHashLink.js"
+		},
+		"./components/TransactionNetworkValue.js": {
+			"bun": "./ts/components/TransactionNetworkValue.tsx",
+			"default": "./js/components/TransactionNetworkValue.js"
+		},
+		"./components/TransactionObjectContext.js": {
+			"bun": "./ts/components/TransactionObjectContext.tsx",
+			"default": "./js/components/TransactionObjectContext.js"
+		},
+		"./components/TransactionReview.js": {
+			"bun": "./ts/components/TransactionReview.tsx",
+			"default": "./js/components/TransactionReview.js"
+		},
+		"./components/TransactionStatusCard.js": {
+			"bun": "./ts/components/TransactionStatusCard.tsx",
+			"default": "./js/components/TransactionStatusCard.js"
+		},
+		"./components/ViewTabs.js": {
+			"bun": "./ts/components/ViewTabs.tsx",
+			"default": "./js/components/ViewTabs.js"
+		},
+		"./components/WalletAssetControl.js": {
+			"bun": "./ts/components/WalletAssetControl.tsx",
+			"default": "./js/components/WalletAssetControl.js"
+		},
+		"./components/WarningSurface.js": {
+			"bun": "./ts/components/WarningSurface.tsx",
+			"default": "./js/components/WarningSurface.js"
+		},
+		"./components/WorkflowSubsection.js": {
+			"bun": "./ts/components/WorkflowSubsection.tsx",
+			"default": "./js/components/WorkflowSubsection.js"
+		},
+		"./contractArtifact.js": {
+			"bun": "./ts/contractArtifact.ts",
+			"default": "./js/contractArtifact.js"
+		},
+		"./copy/app.js": {
+			"bun": "./ts/copy/app.ts",
+			"default": "./js/copy/app.js"
+		},
+		"./copy/common.js": {
+			"bun": "./ts/copy/common.ts",
+			"default": "./js/copy/common.js"
+		},
+		"./copy/pricing.js": {
+			"bun": "./ts/copy/pricing.ts",
+			"default": "./js/copy/pricing.js"
+		},
+		"./copy/simulation.js": {
+			"bun": "./ts/copy/simulation.ts",
+			"default": "./js/copy/simulation.js"
+		},
+		"./copy/transaction.js": {
+			"bun": "./ts/copy/transaction.ts",
+			"default": "./js/copy/transaction.js"
+		},
+		"./copy/transactionReview.js": {
+			"bun": "./ts/copy/transactionReview.ts",
+			"default": "./js/copy/transactionReview.js"
+		},
+		"./copy/types.js": {
+			"bun": "./ts/copy/types.ts",
+			"default": "./js/copy/types.js"
+		},
+		"./forms/decimal.js": {
+			"bun": "./ts/forms/decimal.ts",
+			"default": "./js/forms/decimal.js"
+		},
+		"./forms/formInputs.js": {
+			"bun": "./ts/forms/formInputs.ts",
+			"default": "./js/forms/formInputs.js"
+		},
+		"./forms/inputs.js": {
+			"bun": "./ts/forms/inputs.ts",
+			"default": "./js/forms/inputs.js"
+		},
+		"./forms/integerInput.js": {
+			"bun": "./ts/forms/integerInput.ts",
+			"default": "./js/forms/integerInput.js"
+		},
+		"./forms/required.js": {
+			"bun": "./ts/forms/required.ts",
+			"default": "./js/forms/required.js"
+		},
+		"./forms/viewState.js": {
+			"bun": "./ts/forms/viewState.ts",
+			"default": "./js/forms/viewState.js"
+		},
+		"./hooks/useErc20Loader.js": {
+			"bun": "./ts/hooks/useErc20Loader.ts",
+			"default": "./js/hooks/useErc20Loader.js"
+		},
+		"./hooks/useFormState.js": {
+			"bun": "./ts/hooks/useFormState.ts",
+			"default": "./js/hooks/useFormState.js"
+		},
+		"./hooks/useLoadController.js": {
+			"bun": "./ts/hooks/useLoadController.ts",
+			"default": "./js/hooks/useLoadController.js"
+		},
+		"./hooks/useModalFocusIsolation.js": {
+			"bun": "./ts/hooks/useModalFocusIsolation.ts",
+			"default": "./js/hooks/useModalFocusIsolation.js"
+		},
+		"./lib/activeEnvironment.js": {
+			"bun": "./ts/lib/activeEnvironment.ts",
+			"default": "./js/lib/activeEnvironment.js"
+		},
+		"./lib/address.js": {
+			"bun": "./ts/lib/address.ts",
+			"default": "./js/lib/address.js"
+		},
+		"./lib/assert.js": {
+			"bun": "./ts/lib/assert.ts",
+			"default": "./js/lib/assert.js"
+		},
+		"./lib/browserStorage.js": {
+			"bun": "./ts/lib/browserStorage.ts",
+			"default": "./js/lib/browserStorage.js"
+		},
+		"./lib/caseInsensitive.js": {
+			"bun": "./ts/lib/caseInsensitive.ts",
+			"default": "./js/lib/caseInsensitive.js"
+		},
+		"./lib/deploymentStatus.js": {
+			"bun": "./ts/lib/deploymentStatus.ts",
+			"default": "./js/lib/deploymentStatus.js"
+		},
+		"./lib/errors.js": {
+			"bun": "./ts/lib/errors.ts",
+			"default": "./js/lib/errors.js"
+		},
+		"./lib/formatters.js": {
+			"bun": "./ts/lib/formatters.ts",
+			"default": "./js/lib/formatters.js"
+		},
+		"./lib/loadState.js": {
+			"bun": "./ts/lib/loadState.ts",
+			"default": "./js/lib/loadState.js"
+		},
+		"./lib/marketType.js": {
+			"bun": "./ts/lib/marketType.ts",
+			"default": "./js/lib/marketType.js"
+		},
+		"./lib/numericInput.js": {
+			"bun": "./ts/lib/numericInput.ts",
+			"default": "./js/lib/numericInput.js"
+		},
+		"./lib/outcomeLabels.js": {
+			"bun": "./ts/lib/outcomeLabels.ts",
+			"default": "./js/lib/outcomeLabels.js"
+		},
+		"./lib/pagination.js": {
+			"bun": "./ts/lib/pagination.ts",
+			"default": "./js/lib/pagination.js"
+		},
+		"./lib/promise.js": {
+			"bun": "./ts/lib/promise.ts",
+			"default": "./js/lib/promise.js"
+		},
+		"./lib/questionId.js": {
+			"bun": "./ts/lib/questionId.ts",
+			"default": "./js/lib/questionId.js"
+		},
+		"./lib/refreshState.js": {
+			"bun": "./ts/lib/refreshState.ts",
+			"default": "./js/lib/refreshState.js"
+		},
+		"./lib/repPriceSource.js": {
+			"bun": "./ts/lib/repPriceSource.tsx",
+			"default": "./js/lib/repPriceSource.js"
+		},
+		"./lib/requestGuard.js": {
+			"bun": "./ts/lib/requestGuard.ts",
+			"default": "./js/lib/requestGuard.js"
+		},
+		"./lib/scalarOutcome.js": {
+			"bun": "./ts/lib/scalarOutcome.ts",
+			"default": "./js/lib/scalarOutcome.js"
+		},
+		"./lib/sepoliaDeploymentConfig.js": {
+			"bun": "./ts/lib/sepoliaDeploymentConfig.ts",
+			"default": "./js/lib/sepoliaDeploymentConfig.js"
+		},
+		"./lib/time.js": {
+			"bun": "./ts/lib/time.ts",
+			"default": "./js/lib/time.js"
+		},
+		"./lib/userCopy.js": {
+			"bun": "./ts/lib/userCopy.ts",
+			"default": "./js/lib/userCopy.js"
+		},
+		"./lib/visualMetrics.js": {
+			"bun": "./ts/lib/visualMetrics.ts",
+			"default": "./js/lib/visualMetrics.js"
+		},
+		"./navigation/openOracleUrlParams.js": {
+			"bun": "./ts/navigation/openOracleUrlParams.ts",
+			"default": "./js/navigation/openOracleUrlParams.js"
+		},
+		"./navigation/routing.js": {
+			"bun": "./ts/navigation/routing.ts",
+			"default": "./js/navigation/routing.js"
+		},
+		"./navigation/urlParams.js": {
+			"bun": "./ts/navigation/urlParams.ts",
+			"default": "./js/navigation/urlParams.js"
+		},
+		"./simulation/bootstrap.js": {
+			"bun": "./ts/simulation/bootstrap.ts",
+			"default": "./js/simulation/bootstrap.js"
+		},
+		"./simulation/clock.js": {
+			"bun": "./ts/simulation/clock.ts",
+			"default": "./js/simulation/clock.js"
+		},
+		"./simulation/controller.js": {
+			"bun": "./ts/simulation/controller.ts",
+			"default": "./js/simulation/controller.js"
+		},
+		"./simulation/savedStates.js": {
+			"bun": "./ts/simulation/savedStates.ts",
+			"default": "./js/simulation/savedStates.js"
+		},
+		"./simulation/scenarios.js": {
+			"bun": "./ts/simulation/scenarios.ts",
+			"default": "./js/simulation/scenarios.js"
+		},
+		"./simulation/tevmBackend.js": {
+			"bun": "./ts/simulation/tevmBackend.ts",
+			"default": "./js/simulation/tevmBackend.js"
+		},
+		"./simulation/tevmEngine.js": {
+			"bun": "./ts/simulation/tevmEngine.ts",
+			"default": "./js/simulation/tevmEngine.js"
+		},
+		"./simulation/tevmWorker.js": {
+			"bun": "./ts/simulation/tevmWorker.ts",
+			"default": "./js/simulation/tevmWorker.js"
+		},
+		"./transactions/actionAvailability.js": {
+			"bun": "./ts/transactions/actionAvailability.ts",
+			"default": "./js/transactions/actionAvailability.js"
+		},
+		"./transactions/actionFeedback.js": {
+			"bun": "./ts/transactions/actionFeedback.ts",
+			"default": "./js/transactions/actionFeedback.js"
+		},
+		"./transactions/actionGuards.js": {
+			"bun": "./ts/transactions/actionGuards.ts",
+			"default": "./js/transactions/actionGuards.js"
+		},
+		"./transactions/tokenApproval.js": {
+			"bun": "./ts/transactions/tokenApproval.ts",
+			"default": "./js/transactions/tokenApproval.js"
+		},
+		"./transactions/transactionPresentations.js": {
+			"bun": "./ts/transactions/transactionPresentations.tsx",
+			"default": "./js/transactions/transactionPresentations.js"
+		},
+		"./transactions/transactionReceipt.js": {
+			"bun": "./ts/transactions/transactionReceipt.ts",
+			"default": "./js/transactions/transactionReceipt.js"
+		},
+		"./transactions/transactionTray.js": {
+			"bun": "./ts/transactions/transactionTray.ts",
+			"default": "./js/transactions/transactionTray.js"
+		},
+		"./transactions/writeAction.js": {
+			"bun": "./ts/transactions/writeAction.ts",
+			"default": "./js/transactions/writeAction.js"
+		},
+		"./types/app.js": {
+			"bun": "./ts/types/app.ts",
+			"default": "./js/types/app.js"
+		},
+		"./types/components.js": {
+			"bun": "./ts/types/components.ts",
+			"default": "./js/types/components.js"
+		},
+		"./types/contracts.js": {
+			"bun": "./ts/types/contracts.ts",
+			"default": "./js/types/contracts.js"
+		},
+		"./wallet/assertActiveWallet.js": {
+			"bun": "./ts/wallet/assertActiveWallet.ts",
+			"default": "./js/wallet/assertActiveWallet.js"
+		},
+		"./wallet/chainBackend.js": {
+			"bun": "./ts/wallet/chainBackend.ts",
+			"default": "./js/wallet/chainBackend.js"
+		},
+		"./wallet/chainTimestamp.js": {
+			"bun": "./ts/wallet/chainTimestamp.ts",
+			"default": "./js/wallet/chainTimestamp.js"
+		},
+		"./wallet/clients.js": {
+			"bun": "./ts/wallet/clients.ts",
+			"default": "./js/wallet/clients.js"
+		},
+		"./wallet/injectedEthereum.js": {
+			"bun": "./ts/wallet/injectedEthereum.ts",
+			"default": "./js/wallet/injectedEthereum.js"
+		},
+		"./wallet/network.js": {
+			"bun": "./ts/wallet/network.ts",
+			"default": "./js/wallet/network.js"
+		},
+		"./wallet/networkProfile.js": {
+			"bun": "./ts/wallet/networkProfile.ts",
+			"default": "./js/wallet/networkProfile.js"
+		},
+		"./wallet/requireWalletConnection.js": {
+			"bun": "./ts/wallet/requireWalletConnection.ts",
+			"default": "./js/wallet/requireWalletConnection.js"
+		}
 	}
 }

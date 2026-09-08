@@ -1,4 +1,4 @@
-import type { Address } from '@zoltar/shared/evm/ethereum'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { createActiveEnvironmentGuard, getActiveBackend } from '../lib/activeEnvironment.js'
 import { sameAddress } from '../lib/address.js'
 import { sameChainId } from './chainId.js'

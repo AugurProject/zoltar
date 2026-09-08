@@ -1,4 +1,4 @@
-import { getAddress, type Address, type Hash } from '@zoltar/shared/evm/ethereum'
+import { getAddress, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { parseUnitsOrUndefined } from '../lib/format.js'
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
 import {

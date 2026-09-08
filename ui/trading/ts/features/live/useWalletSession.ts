@@ -1,4 +1,4 @@
-import type { Address, WalletClient } from '@zoltar/shared/evm/ethereum'
+import type { Address, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import type { createLatestRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 import type { WalletSummaryState } from '../../lib/walletSummaryState.js'

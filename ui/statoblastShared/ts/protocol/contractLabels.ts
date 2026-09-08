@@ -6,7 +6,7 @@ import {
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
 	statoblast_openOracle_OpenOracle_OpenOracle,
 	statoblast_tokens_ShareToken_ShareToken,
-} from '@zoltar/ui-core-shared/contractArtifact.js'
+} from '../contractArtifact.js'
 import { installAppContractLabelResolver } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 
 const CONTRACT_LABEL_BY_ABI = new Map<readonly unknown[], string>([

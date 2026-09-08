@@ -7,7 +7,7 @@ import { bootstrapSimulationChain, mintSimulationGenesisRep, predictSimulationTo
 import { installStatoblastScenarioProtocolForTesting } from '@zoltar/ui-statoblast-shared/simulation/statoblastScenarioProtocol.js'
 import { applyStatoblastScenario } from '@zoltar/ui-statoblast-shared/simulation/statoblastScenarios.js'
 import type { DeploymentStep } from '@zoltar/ui-core-shared/types/contracts.js'
-import { type Address, getAddress, getCreateAddress, toHex, zeroAddress } from '@zoltar/shared/evm/ethereum'
+import { type Address, getAddress, getCreateAddress, toHex, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 
 const MOCK_PRIMARY_ACCOUNT = getAddress('0x00000000000000000000000000000000000000a1')
 const MOCK_SECONDARY_ACCOUNT = getAddress('0x00000000000000000000000000000000000000a2')

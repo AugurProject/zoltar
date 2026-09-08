@@ -1,4 +1,4 @@
-import type { Address, WalletClient } from '@zoltar/shared/evm/ethereum'
+import type { Address, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { formatEthPerShare, formatOutcomeAmount, formatShareAmount, formatUnits } from '../lib/format.js'
 import type { DeploymentConfiguration } from '../protocol/config.js'
 import { marketAcceptsNewRisk, publicErrorMessage, simulateLiquidity, submitFreshLiquidity, type LiveMarket } from '../protocol/live.js'

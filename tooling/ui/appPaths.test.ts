@@ -47,7 +47,7 @@ for (const appId of UI_APP_IDS) {
 		expect(paths.workerEntrypoint).toBe(path.join(paths.appSourceRoot, 'simulation', 'tevmWorker.ts'))
 		expect(paths.faviconSvg).toBe(path.join(paths.appRoot, 'favicon.svg'))
 
-		for (const existingPath of [paths.appIndexHtml, paths.appEntrypoint, paths.workerEntrypoint, paths.faviconSvg, paths.coreSharedCssRoot, paths.sharedSourceRoot]) {
+		for (const existingPath of [paths.appIndexHtml, paths.appEntrypoint, paths.workerEntrypoint, paths.faviconSvg, paths.coreSharedCssRoot, ...paths.sharedSourceRoots]) {
 			expect(fs.existsSync(existingPath), `expected ${existingPath} to exist`).toBe(true)
 		}
 	})

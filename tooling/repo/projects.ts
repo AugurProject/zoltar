@@ -1,3 +1,5 @@
+import { contractProjectOwner, isContractProjectSource } from '../../solidity/ts/contractProjects.ts'
+import { sharedPackages } from './sharedPackages.ts'
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 
@@ -57,8 +59,8 @@ const packageAuditTask = (projectPath: string, groups?: readonly string[]): Proj
 const sharedDependencyTask = (projectPath: string): ProjectTask => ({
 	command: ['bun', `${'../'.repeat(projectPath.split('/').length)}tooling/repo/ensure-shared-package-fresh.mts`, '--refresh'],
 	cwd: projectPath,
-	inputs: [...packageInputs(projectPath), 'shared/package.json', 'shared/ts/**'],
-	cacheInputs: [...packageInputs(projectPath), 'shared/package.json'],
+	inputs: [...packageInputs(projectPath), 'shared/*/package.json', 'shared/*/ts/**'],
+	cacheInputs: [...packageInputs(projectPath), 'shared/*/package.json'],
 })
 
 const rootTask = (command: readonly string[], inputs: readonly string[], groups?: readonly string[]): ProjectTask => ({ command, cwd: '.', inputs, ...(groups === undefined ? {} : { groups }) })
@@ -74,39 +76,75 @@ export const projects: readonly Project[] = [
 		id: 'repository',
 		path: '.',
 		type: 'repository',
-		dependencies: ['shared', 'contracts', 'ui-core', 'ui-zoltar-shared', 'ui-statoblast-shared', 'ui-zoltar', 'ui-statoblast', 'ui-trading'],
+		dependencies: ['shared-core', 'shared-zoltar', 'shared-open-oracle', 'shared-statoblast', 'shared-trading', 'contracts', 'ui-core', 'ui-zoltar-shared', 'ui-statoblast-shared', 'ui-zoltar', 'ui-statoblast', 'ui-trading'],
 		tasks: {
 			setup: { command: ['bun', './tooling/repo/install-frozen.mts'], cwd: '.', inputs: ['package.json', 'bun.lock'], cacheInputs: ['package.json', 'bun.lock'] },
-			test: rootTask(['bun', 'run', 'test'], ['package.json', 'bun.lock', 'bun-test-setup*.ts', 'tooling/testing/**', 'shared/ts/**', 'solidity/ts/**', 'ui/*/ts/**'], ['complete-validation']),
-			check: { ...rootTask(['bun', 'run', 'check:complete'], ['package.json', 'bun.lock', 'biome.json', 'knip.json', '.prettierrc.json', 'tooling/**', 'docs/**', 'shared/ts/**', 'solidity/**', 'ui/**']), covers: ['lint'] },
-			lint: rootTask(['bun', 'run', 'check:static'], ['package.json', 'biome.json', 'tooling/**', 'shared/ts/**', 'solidity/ts/**', 'ui/**']),
+			test: rootTask(['bun', 'run', 'test'], ['package.json', 'bun.lock', 'bun-test-setup*.ts', 'tooling/testing/**', 'shared/*/ts/**', 'solidity/ts/**', 'ui/*/ts/**'], ['complete-validation']),
+			check: { ...rootTask(['bun', 'run', 'check:complete'], ['package.json', 'bun.lock', 'biome.json', 'knip.json', '.prettierrc.json', 'tooling/**', 'docs/**', 'shared/*/ts/**', 'solidity/**', 'ui/**']), covers: ['lint'] },
+			lint: rootTask(['bun', 'run', 'check:static'], ['package.json', 'biome.json', 'tooling/**', 'shared/*/ts/**', 'solidity/ts/**', 'ui/**']),
 			typecheck: rootTask(['bun', 'run', 'tsc:root'], ['package.json', 'tsconfig.scripts.json', 'docs/tsconfig.json', 'tooling/**']),
-			knip: rootTask(['bun', 'run', 'knip'], ['package.json', 'knip.json', 'tooling/**', 'shared/ts/**', 'solidity/ts/**', 'ui/**', 'bots/**', 'augurScan/**']),
+			knip: rootTask(['bun', 'run', 'knip'], ['package.json', 'knip.json', 'tooling/**', 'shared/*/ts/**', 'solidity/ts/**', 'ui/**', 'bots/**', 'augurScan/**']),
 			audit: rootTask(['bun', 'audit'], ['package.json', 'bun.lock'], ['core-audit']),
 		},
 		generatedDirectories: [],
 		ci: { scope: 'core' },
 	},
-	{
-		id: 'shared',
-		path: 'shared',
-		type: 'library',
-		dependencies: [],
-		tasks: { setup: packageInstallTask('shared'), build: packageTask('shared', 'build', { cacheInputs: [...packageInputs('shared'), 'shared/tsconfig.json', 'shared/ts/**'], groups: ['generated', 'component-artifacts'], outputs: ['shared/js'] }), audit: packageAuditTask('shared', ['core-audit']) },
-		generatedDirectories: ['shared/js'],
-		ci: { scope: 'core' },
-	},
+	...sharedPackages.map(
+		(entry): Project => ({
+			id: entry.id,
+			path: entry.path,
+			type: 'library',
+			dependencies: entry.dependencies,
+			tasks: {
+				setup: packageInstallTask(entry.path),
+				build: packageTask(entry.path, 'build', { cacheInputs: [...packageInputs(entry.path), `${entry.path}/tsconfig.json`, `${entry.path}/ts/**`], groups: ['generated', 'component-artifacts'], outputs: [`${entry.path}/js`] }),
+				typecheck: { ...packageTask(entry.path, 'build'), command: ['bun', 'x', 'tsc', '--project', 'tsconfig.json', '--noEmit'] },
+				audit: packageAuditTask(entry.path, ['core-audit']),
+				'dependency-update': sharedDependencyTask(entry.path),
+			},
+			generatedDirectories: [`${entry.path}/js`],
+			ci: { scope: 'core' },
+		}),
+	),
+	...(['zoltar', 'statoblast', 'trading'] as const).map(
+		(app): Project => ({
+			id: `contracts-${app}`,
+			path: app === 'zoltar' ? 'solidity/contracts' : `solidity/contracts/${app}`,
+			type: 'contracts',
+			dependencies: app === 'zoltar' ? [] : [app === 'statoblast' ? 'contracts-zoltar' : 'contracts-statoblast'],
+			tasks: {
+				build: rootTask(
+					['bun', './tooling/contracts/build-app-contracts.mts', app],
+					[
+						'solidity/ts/compile.ts',
+						'solidity/ts/abi/**',
+						'solidity/contracts/*.sol',
+						'solidity/contracts/vendor/**',
+						'solidity/contracts/statoblast/WETH9.sol',
+						'solidity/contracts/statoblast/Multicall3.sol',
+						...(app === 'zoltar' ? [] : ['solidity/contracts/statoblast/**']),
+						...(app === 'trading' ? ['solidity/contracts/trading/**'] : []),
+						'solidity/ts/contractProjects.ts',
+						'tooling/contracts/build-app-contracts.mts',
+						'tooling/ui/projectArtifacts.mts',
+					],
+				),
+			},
+			generatedDirectories: [`solidity/artifacts/${app}`],
+			ci: { scope: 'core' },
+		}),
+	),
 	{
 		id: 'contracts',
 		path: 'solidity',
 		type: 'contracts',
-		dependencies: ['shared'],
+		dependencies: ['contracts-trading', 'shared-core', 'shared-zoltar', 'shared-open-oracle', 'shared-statoblast', 'shared-trading'],
 		tasks: {
 			setup: packageInstallTask('solidity'),
 			build: packageTask('solidity', 'compile-contracts:current', {
 				cacheInputs: [...packageInputs('solidity'), 'solidity/tsconfig-compile.json', 'solidity/ts/abi/**', 'solidity/ts/compile.ts', 'solidity/contracts/**', 'tooling/ui/projectArtifacts.mts'],
 				groups: ['generated', 'component-artifacts'],
-				outputs: ['solidity/artifacts', 'solidity/js', 'solidity/.contract-hash.json', 'solidity/ts/types/contractArtifact.ts', 'ui/coreShared/ts/abis.ts', 'ui/coreShared/ts/contractArtifact.ts', 'ui/trading/ts/generated/contractArtifact.ts'],
+				outputs: ['solidity/artifacts', 'solidity/js', 'solidity/.contract-hash.json', 'solidity/ts/types/contractArtifact.ts', 'ui/coreShared/ts/abis.ts', 'ui/coreShared/ts/contractArtifact.ts', 'ui/statoblastShared/ts/contractArtifact.ts', 'ui/trading/ts/generated/contractArtifact.ts'],
 			}),
 			test: packageTask('solidity', 'test'),
 			typecheck: { ...packageTask('solidity', 'tsc'), command: ['bun', 'x', 'tsc', '--project', 'tsconfig.typecheck.json'] },
@@ -114,14 +152,14 @@ export const projects: readonly Project[] = [
 			'dependency-update': sharedDependencyTask('solidity'),
 		},
 		generatedDirectories: ['solidity/artifacts', 'solidity/js'],
-		generatedFiles: ['solidity/.contract-hash.json', 'solidity/ts/types/contractArtifact.ts', 'ui/coreShared/ts/abis.ts', 'ui/coreShared/ts/contractArtifact.ts', 'ui/trading/ts/generated/contractArtifact.ts'],
+		generatedFiles: ['solidity/.contract-hash.json', 'solidity/ts/types/contractArtifact.ts', 'ui/coreShared/ts/abis.ts', 'ui/coreShared/ts/contractArtifact.ts', 'ui/statoblastShared/ts/contractArtifact.ts', 'ui/trading/ts/generated/contractArtifact.ts'],
 		ci: { scope: 'infrastructure' },
 	},
 	{
 		id: 'ui-core',
 		path: 'ui/coreShared',
 		type: 'library',
-		dependencies: ['shared', 'contracts'],
+		dependencies: ['shared-core', 'shared-zoltar', 'contracts-zoltar'],
 		tasks: {
 			setup: packageInstallTask('ui/coreShared'),
 			build: packageTask('ui/coreShared', 'tsc', { groups: ['ui'], outputs: ['ui/coreShared/js'] }),
@@ -137,7 +175,7 @@ export const projects: readonly Project[] = [
 		id: 'ui-zoltar-shared',
 		path: 'ui/zoltarShared',
 		type: 'ui-library',
-		dependencies: ['shared', 'ui-core'],
+		dependencies: ['shared-core', 'shared-zoltar', 'ui-core'],
 		tasks: {
 			setup: packageInstallTask('ui/zoltarShared'),
 			build: packageTask('ui/zoltarShared', 'build', { groups: ['ui'], outputs: ['ui/zoltarShared/js'] }),
@@ -152,7 +190,7 @@ export const projects: readonly Project[] = [
 		id: 'ui-statoblast-shared',
 		path: 'ui/statoblastShared',
 		type: 'ui-library',
-		dependencies: ['shared', 'ui-core', 'ui-zoltar-shared'],
+		dependencies: ['shared-core', 'shared-zoltar', 'shared-open-oracle', 'shared-statoblast', 'ui-core', 'ui-zoltar-shared', 'contracts-statoblast'],
 		tasks: {
 			setup: packageInstallTask('ui/statoblastShared'),
 			build: packageTask('ui/statoblastShared', 'build', { groups: ['ui'], outputs: ['ui/statoblastShared/js'] }),
@@ -167,7 +205,7 @@ export const projects: readonly Project[] = [
 		id: 'ui-zoltar',
 		path: 'ui/zoltar',
 		type: 'ui-app',
-		dependencies: ['shared', 'ui-core', 'ui-zoltar-shared'],
+		dependencies: ['shared-core', 'shared-zoltar', 'ui-core', 'ui-zoltar-shared'],
 		tasks: {
 			setup: packageInstallTask('ui/zoltar'),
 			build: { ...packageTask('ui/zoltar', 'build', { groups: ['ui'], outputs: ['ui/zoltar/js'] }), command: ['bun', 'x', 'tsc', '--project', 'tsconfig.json'] },
@@ -185,7 +223,7 @@ export const projects: readonly Project[] = [
 		id: 'ui-statoblast',
 		path: 'ui/statoblast',
 		type: 'ui-app',
-		dependencies: ['shared', 'ui-core', 'ui-zoltar-shared', 'ui-statoblast-shared'],
+		dependencies: ['shared-core', 'shared-zoltar', 'shared-open-oracle', 'shared-statoblast', 'ui-core', 'ui-zoltar-shared', 'ui-statoblast-shared'],
 		tasks: {
 			setup: packageInstallTask('ui/statoblast'),
 			build: { ...packageTask('ui/statoblast', 'build', { groups: ['ui'], outputs: ['ui/statoblast/js'] }), command: ['bun', 'x', 'tsc', '--project', 'tsconfig.json'] },
@@ -203,7 +241,7 @@ export const projects: readonly Project[] = [
 		id: 'ui-trading',
 		path: 'ui/trading',
 		type: 'ui-app',
-		dependencies: ['shared', 'ui-core', 'ui-zoltar-shared', 'ui-statoblast-shared'],
+		dependencies: ['shared-core', 'shared-zoltar', 'shared-open-oracle', 'shared-statoblast', 'shared-trading', 'ui-core', 'ui-zoltar-shared', 'ui-statoblast-shared', 'contracts-trading'],
 		tasks: {
 			setup: packageInstallTask('ui/trading'),
 			build: { ...packageTask('ui/trading', 'build', { groups: ['ui'], outputs: ['ui/trading/js'] }), command: ['bun', 'x', 'tsc', '--project', 'tsconfig.json'] },
@@ -223,7 +261,7 @@ export const projects: readonly Project[] = [
 		id: 'bot-shared',
 		path: 'bots/shared',
 		type: 'library',
-		dependencies: ['shared'],
+		dependencies: ['shared-core'],
 		tasks: {
 			setup: packageInstallTask('bots/shared'),
 			test: packageTask('bots/shared', 'test'),
@@ -240,7 +278,7 @@ export const projects: readonly Project[] = [
 		id: 'chaos',
 		path: 'bots/chaos',
 		type: 'bot',
-		dependencies: ['shared', 'bot-shared', 'contracts'],
+		dependencies: ['bot-shared', 'contracts'],
 		tasks: {
 			setup: packageInstallTask('bots/chaos'),
 			test: packageTask('bots/chaos', 'test'),
@@ -257,7 +295,7 @@ export const projects: readonly Project[] = [
 		id: 'arbitrager',
 		path: 'bots/open-oracle-arbitrager',
 		type: 'bot',
-		dependencies: ['shared', 'bot-shared', 'contracts'],
+		dependencies: ['shared-core', 'shared-zoltar', 'shared-open-oracle', 'shared-statoblast', 'bot-shared', 'contracts'],
 		tasks: {
 			setup: packageInstallTask('bots/open-oracle-arbitrager'),
 			test: packageTask('bots/open-oracle-arbitrager', 'test'),
@@ -275,7 +313,7 @@ export const projects: readonly Project[] = [
 		id: 'liquidator',
 		path: 'bots/liquidator',
 		type: 'bot',
-		dependencies: ['shared', 'bot-shared', 'contracts'],
+		dependencies: ['bot-shared', 'contracts'],
 		tasks: {
 			setup: packageInstallTask('bots/liquidator'),
 			test: packageTask('bots/liquidator', 'test'),
@@ -292,7 +330,7 @@ export const projects: readonly Project[] = [
 		id: 'augur-scan',
 		path: 'augurScan',
 		type: 'service',
-		dependencies: ['shared'],
+		dependencies: ['shared-core'],
 		tasks: {
 			setup: packageInstallTask('augurScan'),
 			build: packageTask('augurScan', 'build', { outputs: ['augurScan/dist'] }),
@@ -458,6 +496,12 @@ export function topologicallySortedProjects(registry: readonly Project[] = proje
 }
 
 function ownerProject(filePath: string, registry: readonly Project[] = projects): Project | undefined {
+	if (filePath.startsWith('solidity/contracts/')) {
+		const source = filePath.slice('solidity/'.length)
+		const ownerId = isContractProjectSource(source, 'trading') ? `contracts-${contractProjectOwner(source)}` : 'contracts'
+		const owner = registry.find(project => project.id === ownerId)
+		if (owner !== undefined) return owner
+	}
 	return [...registry]
 		.filter(project => project.path !== '.')
 		.sort((left, right) => right.path.length - left.path.length)

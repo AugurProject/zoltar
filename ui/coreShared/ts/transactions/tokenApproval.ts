@@ -1,4 +1,4 @@
-import { maxUint256 } from '@zoltar/shared/evm/ethereum'
+import { maxUint256 } from '@zoltar/core-shared/evm/ethereum'
 import { parseDecimalInput } from '../forms/decimal.js'
 import { sanitizeErrorDetail } from '../lib/errors.js'
 import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from '../lib/formatters.js'

@@ -7,7 +7,7 @@ The pair trades only YES and NO. Every ETH entry creates a complete set, swaps t
 ## Project map
 
 - `../../contracts/trading/` — immutable-fee factory, ERC-20 LP pair, stateless router, full-precision math, interfaces, and harnesses compiled by the main Solidity pipeline.
-- `../../../shared/ts/trading/` — exact bigint quote math, maximum insured-exit search, transaction builders, simulations, and result extraction.
+- `../../../shared/trading/ts/trading/` — exact bigint quote math, maximum insured-exit search, transaction builders, simulations, and result extraction.
 - `../../ts/trading/deploy/` — deployment from an existing Zoltar core manifest.
 - `../../../ui/trading/` — standalone Preact application, deterministic visual fixtures, and walletless TEVM simulation.
 - This directory contains tutorials, task guides, reference, and design explanation.

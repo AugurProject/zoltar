@@ -13,8 +13,8 @@ The codebase is split into these main areas:
 - `ui/zoltar/` contains the Zoltar oracle operations interface (its own package, dev server, and production build)
 - `ui/statoblast/` contains the Augur Statoblast prediction-market operations interface (its own package, dev server, and production build)
 - `ui/trading/` contains the Statoblast Trading interface (its own package, dev server, and production build)
-- `solidity/contracts/trading/` contains the Trading contracts, `shared/ts/trading/` contains reusable AMM math, and contract-facing tooling and tests live under `solidity/ts`
-- `shared/` contains runtime-neutral TypeScript used by Solidity tooling and the UI
+- `solidity/contracts/trading/` contains the Trading contracts, `shared/trading/ts/trading/` contains reusable AMM math, and contract-facing tooling and tests live under `solidity/ts`
+- [`shared/`](./shared/README.md) contains independently built Core, Zoltar, OpenOracle, Statoblast, and Trading runtime packages used by Solidity tooling and the UI
 - `docs/` contains the published protocol documentation
 - `tooling/` contains typed repository metadata plus CI, contract-safety, documentation, testing, and UI build/development orchestration; `scripts/` retains only the pinned Uniswap deployment artifact
 - `bots/` contains chaos, liquidator, and OpenOracle arbitrager bots
@@ -80,7 +80,7 @@ and Sepolia-specific deterministic contract addresses.
 The Sepolia deployment flow includes WETH and genesis REP before the contracts
 that depend on them. Initial Sepolia REP holders and exact 18-decimal balances
 are defined in
-[`shared/ts/deployment/sepoliaRepAllocations.ts`](./shared/ts/deployment/sepoliaRepAllocations.ts).
+[`shared/zoltar/ts/deployment/sepoliaRepAllocations.ts`](./shared/zoltar/ts/deployment/sepoliaRepAllocations.ts).
 Changing that list also changes the deterministic genesis REP address and every
 dependent deployment address.
 

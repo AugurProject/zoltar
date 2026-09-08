@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { productionSourceLineLimit, sourceSizeAllowances, type SourceSizeAllowance } from './source-size-policy.ts'
 
-const productionRoots = /^(?:augurScan\/(?:src|public)|bots\/[^/]+\/src|shared\/ts|solidity\/contracts|ui\/[^/]+\/ts)\//
+const productionRoots = /^(?:augurScan\/(?:src|public)|bots\/[^/]+\/src|shared\/[^/]+\/ts|solidity\/contracts|ui\/[^/]+\/ts)\//
 const sourceExtension = /\.(?:[cm]?[jt]sx?|sol)$/
 const excludedSegment = /\/(?:artifacts|dist|fixtures|js|node_modules|snapshots|tests?|vendor)\//
 const excludedFile = /(?:\.(?:generated|spec|test)\.[cm]?[jt]sx?$|\/statoblast\/(?:Multicall3|WETH9)\.sol$|\/statoblast\/openOracle\/)/

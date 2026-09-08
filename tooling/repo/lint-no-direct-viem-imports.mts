@@ -16,7 +16,7 @@ const ignoredPathPrefixes = [
 	'.git',
 	'coverage',
 	'node_modules',
-	'shared/js',
+	...['core', 'zoltar', 'openOracle', 'statoblast', 'trading'].map(name => `shared/${name}/js`),
 	'shared/node_modules',
 	'solidity/artifacts',
 	'solidity/js',
@@ -152,7 +152,7 @@ async function main() {
 
 	if (findings.length === 0) return
 
-	console.log("Direct 'viem' and 'abitype' imports are not allowed. Import from '@zoltar/shared/evm/ethereum' instead.")
+	console.log("Direct 'viem' and 'abitype' imports are not allowed. Import from '@zoltar/core-shared/evm/ethereum' instead.")
 	for (const finding of findings) {
 		console.log(`${finding.file}:${finding.line}:${finding.column} - ${finding.importText}`)
 	}

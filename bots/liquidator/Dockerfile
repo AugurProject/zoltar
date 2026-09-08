@@ -8,11 +8,10 @@ RUN git init
 
 COPY package.json bun.lock ./
 COPY scripts/ ./scripts/
-COPY shared/package.json shared/bun.lock shared/tsconfig.json ./shared/
-COPY shared/ts/ ./shared/ts/
-RUN mkdir -p shared/js \
-	&& bun install --frozen-lockfile \
-	&& bun run shared:build
+COPY shared/ ./shared/
+COPY tooling/ ./tooling/
+RUN bun install --frozen-lockfile \
+	&& bun ./tooling/repo/build-shared.mts
 
 FROM oven/bun:${BUN_VERSION}-alpine
 
@@ -23,9 +22,9 @@ COPY --from=shared-builder /source/shared/ ./shared/
 COPY bots/shared/package.json bots/shared/bun.lock ./bots/shared/
 COPY bots/shared/src/ ./bots/shared/src/
 COPY bots/liquidator/package.json bots/liquidator/bun.lock ./bots/liquidator/
-RUN cd shared \
+RUN cd shared/core \
 	&& bun install --frozen-lockfile --production \
-	&& cd ../bots/shared \
+	&& cd ../../bots/shared \
 	&& bun install --frozen-lockfile --production \
 	&& cd ../liquidator \
 	&& bun install --frozen-lockfile --production

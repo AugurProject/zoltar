@@ -1,6 +1,6 @@
 import { parseDecimalInput } from '../forms/decimal.js'
 import { getVisualRatio } from './visualMetrics.js'
-import { formatScalarOutcomeIndexLabel as formatSharedScalarOutcomeIndexLabel, formatScalarOutcomeLabel as formatSharedScalarOutcomeLabel, MAX_PRECISE_SCALAR_TICK_COUNT, type ScalarQuestionDetails } from '@zoltar/shared/statoblast/scalarOutcome'
+import { formatScalarOutcomeIndexLabel as formatSharedScalarOutcomeIndexLabel, formatScalarOutcomeLabel as formatSharedScalarOutcomeLabel, MAX_PRECISE_SCALAR_TICK_COUNT, type ScalarQuestionDetails } from '@zoltar/zoltar-shared/questions/scalarOutcome'
 
 export {
 	clampScalarTickIndex,
@@ -11,7 +11,7 @@ export {
 	getScalarTickIndexForDisplayValue,
 	isValidScalarOutcomeIndex,
 	MAX_PRECISE_SCALAR_TICK_COUNT,
-} from '@zoltar/shared/statoblast/scalarOutcome'
+} from '@zoltar/zoltar-shared/questions/scalarOutcome'
 
 function keepScalarUnitWithValue(label: string) {
 	return label.replace(' ', '\u00a0')

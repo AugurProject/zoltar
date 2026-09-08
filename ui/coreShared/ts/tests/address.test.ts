@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { getAddress } from '@zoltar/shared/evm/ethereum'
+import { getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { abbreviateAddress, normalizeAddress, sameAddress } from '../lib/address.js'
 import { sameCaseInsensitiveText } from '../lib/caseInsensitive.js'
 

@@ -1,8 +1,8 @@
 import { readFile } from 'node:fs/promises'
 import { beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
 import assert from '../testSupport/simulator/utils/assert'
-import { encodeDeployData, encodeFunctionData, type Address, type Hash, type Hex, zeroAddress } from '@zoltar/shared/evm/ethereum'
-import { privateKeyToAccount } from '@zoltar/shared/evm/ethereum'
+import { encodeDeployData, encodeFunctionData, type Address, type Hash, type Hex, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { privateKeyToAccount } from '@zoltar/core-shared/evm/ethereum'
 import { knownSourceMapCoverageGaps } from '../coverage/sourceMapCoverageGaps'
 import {
 	buildCoveragePcToSourceMapForTest,

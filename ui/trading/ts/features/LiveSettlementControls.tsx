@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'preact/hooks'
-import type { Address, PublicClient, WalletClient } from '@zoltar/shared/evm/ethereum'
+import type { Address, PublicClient, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { formatUnits, parseUnitsOrUndefined } from '../lib/format.js'
 import { ForkMigrationTargets } from './ForkMigrationTargets.js'
 import type { DeploymentConfiguration } from '../protocol/config.js'

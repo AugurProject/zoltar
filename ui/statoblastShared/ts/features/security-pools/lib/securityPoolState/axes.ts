@@ -1,5 +1,5 @@
 import type { ForkAuctionStageView } from '../../../truth-auctions/lib/forkAuction.js'
-import { deriveReportingStage } from '@zoltar/ui-zoltar-shared/features/reporting/lib/reporting.js'
+import { deriveReportingStage } from '../../../reporting/lib/reporting.js'
 import type { SecurityPoolForkStage, SecurityPoolLifecycleState, SecurityPoolReportingStage } from './types.js'
 import type { ReportingDetails, ReportingOutcomeKey, SecurityPoolSystemState } from '@zoltar/ui-core-shared/types/contracts.js'
 

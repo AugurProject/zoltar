@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { DEFAULT_PROTOCOL_CONFIG, MAINNET_PROTOCOL_CONFIG, getMainnetProtocolConfig, getProtocolConfig, validateProtocolConfig } from '@zoltar/shared/deployment/protocolConfig'
+import { DEFAULT_PROTOCOL_CONFIG, MAINNET_PROTOCOL_CONFIG, getMainnetProtocolConfig, getProtocolConfig, validateProtocolConfig } from '@zoltar/core-shared/deployment/protocolConfig'
 
 const PROTOCOL_CONFIG_GLOBAL_KEY = '__ZOLTAR_PROTOCOL_CONFIG__'
 const FORK_BURN_ENV = 'ZOLTAR_FORK_BURN_DIVISOR'

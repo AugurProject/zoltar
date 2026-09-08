@@ -81,23 +81,23 @@ export function getMutationJunitTestNames(junitXml: string) {
 export const MUTATION_SMOKE_CASES: readonly SourceMutation[] = [
 	{
 		name: 'bigint ascending comparator direction',
-		filePath: 'shared/ts/serialization/bigInt.ts',
+		filePath: 'shared/core/ts/serialization/bigInt.ts',
 		from: 'if (left < right) return -1',
 		to: 'if (left > right) return -1',
-		testCommand: ['bun', 'test', 'shared/ts/serialization/bigInt.test.ts'],
+		testCommand: ['bun', 'test', 'shared/core/ts/serialization/bigInt.test.ts'],
 	},
 	{
 		name: 'trading exact-output ceiling',
-		filePath: 'shared/ts/trading/math.ts',
+		filePath: 'shared/trading/ts/trading/math.ts',
 		from: 'return numerator === 0n ? 0n : (numerator - 1n) / denominator + 1n',
 		to: 'return numerator === 0n ? 0n : numerator / denominator',
-		testCommand: ['bun', 'test', 'shared/ts/trading/math.test.ts'],
+		testCommand: ['bun', 'test', 'shared/trading/ts/trading/math.test.ts'],
 	},
 	{
 		name: 'escalation non-decision threshold count',
-		filePath: 'shared/ts/oracle/escalationMath.ts',
+		filePath: 'shared/statoblast/ts/escalationGame/escalationMath.ts',
 		from: 'return thresholdHits >= 2',
 		to: 'return thresholdHits >= 3',
-		testCommand: ['bun', 'test', 'shared/ts/oracle/escalationMath.test.ts'],
+		testCommand: ['bun', 'test', 'shared/statoblast/ts/escalationGame/escalationMath.test.ts'],
 	},
 ]

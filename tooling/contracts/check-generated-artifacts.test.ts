@@ -1,3 +1,4 @@
+import { sharedPackages } from '../repo/sharedPackages.ts'
 import { expect, test } from 'bun:test'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -11,15 +12,16 @@ const cleanGit: GitRunner = () => ({
 })
 
 const generatedFixtureFiles = [
-	'shared/js/.freshness-hash',
-	'shared/js/foo.js',
-	'shared/js/foo.d.ts',
+	'shared/.freshness-hash',
+	...sharedPackages.map(entry => `${entry.path}/js/foo.js`),
+	...sharedPackages.map(entry => `${entry.path}/js/foo.d.ts`),
 	'solidity/artifacts/Contracts.json',
 	'solidity/artifacts/.freshness-hash',
 	'solidity/.contract-hash.json',
 	'solidity/ts/types/contractArtifact.ts',
 	'ui/coreShared/ts/abis.ts',
 	'ui/coreShared/ts/contractArtifact.ts',
+	'ui/statoblastShared/ts/contractArtifact.ts',
 	'ui/trading/ts/generated/contractArtifact.ts',
 	'ui/coreShared/js/index.js',
 	'ui/zoltar/dist/index.html',
@@ -37,14 +39,14 @@ async function writeFixtureFile(repositoryRoot: string, relativePath: string, co
 
 async function createGeneratedArtifactFixture() {
 	const repositoryRoot = await mkdtemp(path.join(tmpdir(), 'zoltar-generated-artifacts-'))
-	await writeFixtureFile(repositoryRoot, 'shared/package.json', `${JSON.stringify({ exports: { './foo': { default: './js/foo.js' } } }, undefined, '\t')}\n`)
+	for (const entry of sharedPackages) await writeFixtureFile(repositoryRoot, `${entry.path}/package.json`, `${JSON.stringify({ exports: { './foo': { default: './js/foo.js' } } }, undefined, '\t')}\n`)
 	await writeFixtureFile(
 		repositoryRoot,
 		'ui/zoltar/index.html',
 		`<script type='importmap'>
 {
 	"imports": {
-		"@zoltar/shared/foo": "../shared/js/foo.js",
+		"@zoltar/core-shared/foo": "../shared/core/js/foo.js",
 		"isows": "./vendor/isows/native.js"
 	}
 }
@@ -56,7 +58,7 @@ async function createGeneratedArtifactFixture() {
 		`<script type='importmap'>
 {
 	"imports": {
-		"@zoltar/shared/foo": "../shared/js/foo.js",
+		"@zoltar/core-shared/foo": "../shared/core/js/foo.js",
 		"isows": "./vendor/isows/native.js"
 	}
 }
@@ -68,7 +70,7 @@ async function createGeneratedArtifactFixture() {
 		`<script type='importmap'>
 {
 	"imports": {
-		"@zoltar/shared/foo": "../shared/js/foo.js",
+		"@zoltar/core-shared/foo": "../shared/core/js/foo.js",
 		"isows": "./vendor/isows/native.js"
 	}
 }
@@ -95,8 +97,8 @@ test('generated artifact checker fails when import-map generated outputs are mis
 test('generated artifact checker resolves shared import-map outputs from the repository package', async () => {
 	const repositoryRoot = await createGeneratedArtifactFixture()
 	try {
-		await rm(path.join(repositoryRoot, 'shared/js/foo.js'))
-		await expect(assertGeneratedArtifactsClean({ repositoryRoot, runGit: cleanGit })).rejects.toThrow('Generated artifact is missing after generation: shared/js/foo.js')
+		await rm(path.join(repositoryRoot, 'shared/core/js/foo.js'))
+		await expect(assertGeneratedArtifactsClean({ repositoryRoot, runGit: cleanGit })).rejects.toThrow('Generated artifact is missing after generation: shared/core/js/foo.js')
 	} finally {
 		await rm(repositoryRoot, { force: true, recursive: true })
 	}

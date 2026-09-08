@@ -9,7 +9,7 @@
 		["devDependencies", "bots/open-oracle-arbitrager/package.json", "", "prettier-plugin-solidity"],
 		["devDependencies", "solidity/package.json", "", "tsx"],
 		["duplicates", "bots/chaos/src/operations/timing.ts", "", "CONSENSUS_FINALITY_HORIZON_BLOCKS|EXECUTOR_FINALITY_BLOCKS"],
-		["duplicates", "shared/ts/testing/scalarOutcomeParityFixtures.ts", "", "SCALAR_PARITY_PART_MASK|SCALAR_PARITY_UINT120_MAX"],
+		["duplicates", "shared/zoltar/ts/testing/scalarOutcomeParityFixtures.ts", "", "SCALAR_PARITY_PART_MASK|SCALAR_PARITY_UINT120_MAX"],
 		["exports", "augurScan/browser/api-validation.ts", "", "isArgumentDefinition"],
 		["exports", "augurScan/browser/api-validation.ts", "", "isJsonRecord"],
 		["exports", "augurScan/browser/api-validation.ts", "", "isNativeBalanceDetailValue"],

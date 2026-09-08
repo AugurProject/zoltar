@@ -31,7 +31,7 @@ test('rejects app and feature imports from every non-composition layer', () => {
 })
 
 test('allows dependencies within protocol and shared UI libraries', () => {
-	const findings = findUiLayerBoundaryViolations('ui/zoltar/ts/protocol/example.ts', ["import { helper } from './helpers.js'", "import { format } from '../lib/format.js'", "import { getAddress } from '@zoltar/shared/evm/ethereum'"].join('\n'))
+	const findings = findUiLayerBoundaryViolations('ui/zoltar/ts/protocol/example.ts', ["import { helper } from './helpers.js'", "import { format } from '../lib/format.js'", "import { getAddress } from '@zoltar/core-shared/evm/ethereum'"].join('\n'))
 
 	expect(findings).toEqual([])
 })
@@ -41,7 +41,7 @@ test('keeps runnable applications as dependency leaves behind shared-library API
 	expect(findUiLayerBoundaryViolations('ui/statoblast/ts/app/App.tsx', "import { helper } from '@zoltar/ui-zoltar-shared/protocol/core.js'")).toEqual([])
 	expect(findUiLayerBoundaryViolations('ui/trading/ts/app/App.tsx', "import { helper } from '@zoltar/ui-statoblast/app/App.js'").map(finding => finding.rule)).toEqual(['cross-package-import-boundary'])
 	expect(findUiLayerBoundaryViolations('ui/trading/ts/app/App.tsx', "import { helper } from '@zoltar/ui-statoblast-shared/protocol/trading.js'")).toEqual([])
-	expect(findUiLayerBoundaryViolations('ui/trading/ts/features/LivePortfolio.tsx', "import { maximumInsuredExit } from '@zoltar/shared/trading/positions'")).toEqual([])
+	expect(findUiLayerBoundaryViolations('ui/trading/ts/features/LivePortfolio.tsx', "import { maximumInsuredExit } from '@zoltar/trading-shared/trading/positions'")).toEqual([])
 })
 
 test('prevents shared libraries from reaching back into applications', () => {
