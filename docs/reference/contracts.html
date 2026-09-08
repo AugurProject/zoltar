@@ -59,11 +59,11 @@
 				</table>
 				<h2 id="zoltar">Zoltar</h2>
 				<p>Registers universe forks, charges the fork admission haircut, and mints branch-specific child REP. <a href="../../solidity/contracts/Zoltar.sol">Zoltar source contract</a></p>
-				<p>Read surface: Use <code>universes</code>, <code>forkThresholdDivisor</code>, <code>forkBurnDivisor</code>, <code>zoltarQuestionData</code>, <code>genesisReputationToken</code>, <code>childReputationTokenCount</code>, <code>getForkTime</code>, <code>forkQuestionMatches</code>, <code>getRepToken</code>, <code>getForkThresholdAttoRep</code>, <code>getNonDecisionThresholdAttoRep</code>, <code>getUniverseTheoreticalSupplyAttoRep</code>, <code>getChildUniverseId</code>, <code>getDeployedChildUniverses</code>, <code>getMigrationRepBalanceAttoRep</code>, and <code>getBoundAuthorizationNonce</code> to reconstruct universe and migration state or prepare a recipient-bound authorization. The fork threshold is the live universe theoretical supply divided by <code>forkThresholdDivisor</code>, rounded up, so every nonzero-supply universe has a positive fork cost. Construction requires a deployed genesis REP token with theoretical supply from one attoREP through 11 million REP and <code>forkBurnDivisor &gt;= 5</code>, which caps the uncredited fork haircut at 20% of the threshold.</p>
+				<p>Read surface: Use <code>universes</code>, <code>forkThresholdDivisor</code>, <code>forkBurnDivisor</code>, <code>zoltarQuestionData</code>, <code>genesisReputationToken</code>, <code>childReputationTokenCount</code>, <code>getForkTime</code>, <code>forkQuestionMatches</code>, <code>getRepToken</code>, <code>getForkThresholdAttoRep</code>, <code>getNonDecisionThresholdAttoRep</code>, <code>getUniverseTheoreticalSupplyAttoRep</code>, <code>getChildUniverseId</code>, <code>getDeployedChildUniverses</code>, and <code>getMigrationRepBalanceAttoRep</code> to reconstruct universe and migration state. The fork threshold is the live universe theoretical supply divided by <code>forkThresholdDivisor</code>, rounded up, so every nonzero-supply universe has a positive fork cost. Construction requires a deployed genesis REP token with the REPv2 <code>getTotalTheoreticalSupply()</code> selector, theoretical supply from one attoREP through 11 million REP, and <code>forkBurnDivisor &gt;= 5</code>, which caps the uncredited fork haircut at 20% of the threshold. Genesis REP uses ordinary ERC-20 approvals because the configured mainnet REPv2 token does not implement ERC-2612 or ERC-3009.</p>
 
 				<p>Security boundaries for these calls are <a href="./security-model.html#assumption-a15">A15 intended question selection</a> and <a href="./security-model.html#assumption-a25">A25 safe immutable parameters</a>.</p>
-				<!-- Validated read ABI fingerprint: c908994972ca4e8bcf1a44c288dcc830dc9a8bbb1e0a6f85a55f051d96703887 -->
-				<!-- Validated complete compiled ABI fingerprint: 58a39fda8fd00d2448a493854e8dbfb9d7cd8f3178f80614b3d53f6057bb6950 -->
+				<!-- Validated read ABI fingerprint: 1fc117bbe886565313a38c6c17e400355eaa11a02daeb87cffd633b7b09ceea6 -->
+				<!-- Validated complete compiled ABI fingerprint: aae115c225ff97708c3ab5dee1b8131e1aff2d3a543b944d815563433a33a275 -->
 				<table>
 					<thead>
 						<tr>
@@ -83,39 +83,11 @@
 							<td><code>UniverseForked</code></td>
 						</tr>
 						<tr>
-							<td><code>forkUniverseWithPermit(universeId, questionId, deadline, v, r, s)</code></td>
-							<td>Genesis REP holder supplying an ERC-2612 signature</td>
-							<td>The universe uses genesis REP; the permit is valid or an existing allowance covers the threshold; ordinary fork prerequisites still hold.</td>
-							<td>Attempts the exact fork-threshold permit and then performs the same fork as <code>forkUniverse</code>; an already mined permit remains usable when the exact allowance is present.</td>
-							<td><code>Approval</code>, then <code>UniverseForked</code> and token transfer events</td>
-						</tr>
-						<tr>
-							<td><code>forkUniverseWithAuthorization(owner, universeId, questionId, validAfter, validBefore, nonce, v, r, s)</code></td>
-							<td>Any relayer presenting the REP owner's valid ERC-3009 authorization</td>
-							<td>The REP token supports ERC-3009; authorization recipient is Zoltar, its validity window is open, its nonce is unused, and ordinary fork prerequisites hold.</td>
-							<td>Receives exactly the fork threshold into Zoltar under an operation- and owner-bound nonce, burns it, and credits the named owner with migration REP.</td>
-							<td><code>AuthorizationUsed</code>, <code>UniverseForked</code>, and token transfer events</td>
-						</tr>
-						<tr>
 							<td><code>burnRep(universeId, amountAttoRep)</code></td>
 							<td>Any REP holder; the caller can burn only its own balance</td>
 							<td>Initialized universe; positive amount; sufficient caller REP and theoretical supply. Genesis REP requires allowance.</td>
 							<td>Permanently removes REP without creating migration credit; escalation settlement uses this when the haircut was not paid through its own fork.</td>
 							<td><code>RepBurned</code> and the token burn or transfer event</td>
-						</tr>
-						<tr>
-							<td><code>burnRepWithPermit(universeId, amountAttoRep, deadline, v, r, s)</code></td>
-							<td>Genesis REP holder supplying an ERC-2612 signature</td>
-							<td>The universe uses genesis REP; the permit is valid or an existing allowance covers the amount; ordinary burn prerequisites hold.</td>
-							<td>Attempts an exact-amount permit and burns the caller's REP without migration credit.</td>
-							<td><code>Approval</code>, <code>RepBurned</code>, and token transfer events</td>
-						</tr>
-						<tr>
-							<td><code>burnRepWithAuthorization(owner, universeId, amountAttoRep, validAfter, validBefore, nonce, v, r, s)</code></td>
-							<td>Any relayer presenting the REP owner's valid ERC-3009 authorization</td>
-							<td>The authorization recipient is Zoltar, its validity window is open, its nonce is unused, and ordinary burn prerequisites hold.</td>
-							<td>Receives and burns exactly the signed amount under an operation- and owner-bound nonce.</td>
-							<td><code>AuthorizationUsed</code>, <code>RepBurned</code>, and token transfer events</td>
 						</tr>
 						<tr>
 							<td><code>deployChild(universeId, outcomeIndex)</code></td>
@@ -132,20 +104,6 @@
 							<td><code>MigrationRepAdded</code></td>
 						</tr>
 						<tr>
-							<td><code>addRepToMigrationBalanceWithPermit(universeId, amountAttoRep, deadline, v, r, s)</code></td>
-							<td>Genesis REP holder supplying an ERC-2612 signature</td>
-							<td>The universe uses genesis REP; the permit is valid or an existing allowance covers the amount; the universe is forked.</td>
-							<td>Attempts an exact-amount permit, sinks the caller's parent REP, and adds the amount to its migration balance.</td>
-							<td><code>Approval</code>, <code>MigrationRepAdded</code>, and token transfer events</td>
-						</tr>
-						<tr>
-							<td><code>addRepToMigrationBalanceWithAuthorization(owner, universeId, amountAttoRep, validAfter, validBefore, nonce, v, r, s)</code></td>
-							<td>Any relayer presenting the REP owner's valid ERC-3009 authorization</td>
-							<td>The authorization recipient is Zoltar, its validity window is open, its nonce is unused, and the universe is forked.</td>
-							<td>Receives and sinks the signed amount under an operation- and owner-bound nonce, then credits the named owner's migration balance.</td>
-							<td><code>AuthorizationUsed</code>, <code>MigrationRepAdded</code>, and token transfer events</td>
-						</tr>
-						<tr>
 							<td><code>splitMigrationRep(universeId, amountAttoRep, outcomeIndexes)</code></td>
 							<td>Migration-balance holder</td>
 							<td>Universe forked. A nonempty list additionally requires every outcome to be well formed and the cumulative amount per child not to exceed the caller's migration balance.</td>
@@ -158,8 +116,8 @@
 				<p>Implements universe-specific ERC-20 REP, ERC-2612 permits, and ERC-3009 transfers while enforcing the supply ceiling maintained by Zoltar. <a href="../../solidity/contracts/ReputationToken.sol">ReputationToken source contract</a></p>
 				<p>Read surface: Use <code>getTotalTheoreticalSupply</code>, <code>zoltar</code>, <code>universeId</code>, <code>repNumber</code>, the standard ERC-20 <code>name</code>, <code>symbol</code>, <code>decimals</code>, <code>totalSupply</code>, <code>balanceOf</code>, and <code>allowance</code> reads, and authorization reads <code>nonces</code>, <code>DOMAIN_SEPARATOR</code>, and <code>authorizationState</code>.</p>
 
-				<!-- Validated read ABI fingerprint: 45de6b2cbe737531d3b96d234678d2005f7801f9df527506e9abcd47da18eaee -->
-				<!-- Validated complete compiled ABI fingerprint: 13ddc463c15993eab7862efc6371b2401eae8fb3edc9c947cb10d42eb26d6493 -->
+				<!-- Validated read ABI fingerprint: 1cedbd5efbd60e56cb8f88586096eba913a58cbf7fc5d9908649ea4cc8a0658b -->
+				<!-- Validated complete compiled ABI fingerprint: c870ce39465c90820caef827233163f7898f339aba3563d29b7014e60da28687 -->
 				<table>
 					<thead>
 						<tr>

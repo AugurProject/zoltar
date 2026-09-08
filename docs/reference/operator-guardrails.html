@@ -797,13 +797,14 @@
 							<td>
 								<a href="../../solidity/contracts/ERC20.sol"><code>ERC20.sol</code></a
 								>, <a href="../../solidity/contracts/IERC20.sol"><code>IERC20.sol</code></a
+								>, <a href="../../solidity/contracts/IExternalGenesisReputationToken.sol"><code>IExternalGenesisReputationToken.sol</code></a
 								>, <a href="../../solidity/contracts/IERC20Metadata.sol"><code>IERC20Metadata.sol</code></a
 								>, <a href="../../solidity/contracts/Context.sol"><code>Context.sol</code></a
 								>, <a href="../../solidity/contracts/SafeERC20Ops.sol"><code>SafeERC20Ops.sol</code></a
 								>, <a href="../../solidity/contracts/GenesisReputationToken.sol"><code>GenesisReputationToken.sol</code></a
 								>, <a href="../../solidity/contracts/ReputationToken.sol"><code>ReputationToken.sol</code></a>
 							</td>
-							<td>Base REP token implementation, interfaces, metadata, execution context, safe transfer wrappers, the constructor-allocated genesis token with fixed theoretical supply, and the inherited <code>transfer</code>, <code>approve</code>, and <code>transferFrom</code> entrypoints.</td>
+							<td>Base REP token implementation, ERC-20 and external genesis REPv2 interfaces, metadata, execution context, safe transfer wrappers, the constructor-allocated genesis token with fixed theoretical supply, and the inherited <code>transfer</code>, <code>approve</code>, and <code>transferFrom</code> entrypoints.</td>
 						</tr>
 						<tr>
 							<td>ERC-1155 and token ids</td>
@@ -889,20 +890,15 @@
 								<a href="../../solidity/contracts/trading/PredeploymentShareSink.sol"><code>PredeploymentShareSink.sol</code></a
 								>, <a href="../../solidity/contracts/trading/TradingLiquidityToken.sol"><code>TradingLiquidityToken.sol</code></a
 								>, <a href="../../solidity/contracts/trading/TwoWayConstantProductFactory.sol"><code>TwoWayConstantProductFactory.sol</code></a
-								>, <a href="../../solidity/contracts/trading/TwoWayConstantProductFactoryV2.sol"><code>TwoWayConstantProductFactoryV2.sol</code></a
 								>, <a href="../../solidity/contracts/trading/TwoWayConstantProductMath.sol"><code>TwoWayConstantProductMath.sol</code></a
 								>, <a href="../../solidity/contracts/trading/TwoWayConstantProductPair.sol"><code>TwoWayConstantProductPair.sol</code></a
-								>, <a href="../../solidity/contracts/trading/TwoWayConstantProductPairV2.sol"><code>TwoWayConstantProductPairV2.sol</code></a
 								>, <a href="../../solidity/contracts/trading/TwoWayConstantProductRouter.sol"><code>TwoWayConstantProductRouter.sol</code></a
-								>, <a href="../../solidity/contracts/trading/TwoWayConstantProductRouterV2.sol"><code>TwoWayConstantProductRouterV2.sol</code></a
 								>, <a href="../../solidity/contracts/trading/interfaces/ITradingShareToken.sol"><code>ITradingShareToken.sol</code></a
 								>, <a href="../../solidity/contracts/trading/interfaces/ITwoWayConstantProductFactory.sol"><code>ITwoWayConstantProductFactory.sol</code></a
-								>, <a href="../../solidity/contracts/trading/interfaces/ITwoWayConstantProductFactoryV2.sol"><code>ITwoWayConstantProductFactoryV2.sol</code></a
 								>, <a href="../../solidity/contracts/trading/interfaces/ITwoWayConstantProductPair.sol"><code>ITwoWayConstantProductPair.sol</code></a
-								>, <a href="../../solidity/contracts/trading/interfaces/ITwoWayConstantProductPairV2.sol"><code>ITwoWayConstantProductPairV2.sol</code></a
 								>.
 							</td>
-							<td>Versioned deterministic two-outcome pool deployment, constant-product pricing and reserves, routed liquidity and swap operations, receive-based share authorization, permit-enabled liquidity tokens, canonical Statoblast share-token integration, and quarantine of shares sent to counterfactual pair addresses before deployment.</td>
+							<td>Deterministic two-outcome pool deployment, constant-product pricing and reserves, routed liquidity and swap operations, receive-based share authorization, permit-enabled liquidity tokens, canonical Statoblast share-token integration, and quarantine of shares sent to counterfactual pair addresses before deployment.</td>
 						</tr>
 						<tr>
 							<td>REP authorization support</td>

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { createWalletClient, custom, decodeFunctionData, encodeAbiParameters, type Address, type Hex } from '@zoltar/shared/evm/ethereum'
+import { createWalletClient, custom, decodeFunctionData, type Address, type Hex } from '@zoltar/shared/evm/ethereum'
 import { settlementQuoteCanSubmit, settlementQuoteMatchesInputs } from '../../features/live/settlementQuote.js'
 import { simulateSettlement, submitFreshSettlement, type LiveMarket } from '../../protocol/live.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'

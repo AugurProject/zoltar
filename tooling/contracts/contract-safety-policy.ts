@@ -101,8 +101,8 @@ export const contractSafetyPolicy = {
 				sourcePath: 'contracts/statoblast/factories/EscalationGameFactory.sol',
 				contractName: 'EscalationGameFactory',
 			},
-			46_137,
-			'The factory embeds the reviewed, question-bound EscalationGame with exact authorization-selector routing and permits no further growth.',
+			46_549,
+			'The factory embeds the reviewed, question-bound EscalationGame with child-REP authorization routing and permits no further growth.',
 		),
 	] satisfies readonly BytecodeBudget[],
 	exactLayoutPairs: [

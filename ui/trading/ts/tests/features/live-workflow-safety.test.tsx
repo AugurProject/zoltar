@@ -91,7 +91,7 @@ describe('live workflow safety boundary', () => {
 		let deferPositionBroadcast = false
 		let deferredWalletChainRead: ReturnType<typeof deferred<number>> | undefined
 		let walletChainReadStarted: ReturnType<typeof deferred<undefined>> | undefined
-		let rejectBalanceRefresh = false
+		const rejectBalanceRefresh = false
 		let deferSecondPortfolioBalance = false
 		const secondPortfolioBalance = deferred<undefined>()
 		let deferChildDiscovery = false

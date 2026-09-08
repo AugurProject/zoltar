@@ -148,8 +148,8 @@ function readNetworkProfile(source: unknown, manifestId: ManifestId): ManifestNe
 async function loadComputedManifest(manifestId: ManifestId): Promise<DeploymentManifest> {
 	const deploymentModulePath = path.join(repositoryRootPath, 'ui', 'statoblastShared', 'ts', 'protocol', 'deployment.ts')
 	const deploymentHelpersModulePath = path.join(repositoryRootPath, 'ui', 'zoltarShared', 'ts', 'protocol', 'deploymentHelpers.ts')
-	const networkProfileModulePath = path.join(repositoryRootPath, 'ui', 'coreShared', 'ts', 'lib', 'networkProfile.ts')
-	const protocolConfigModulePath = path.join(repositoryRootPath, 'shared', 'ts', 'protocolConfig.ts')
+	const networkProfileModulePath = path.join(repositoryRootPath, 'ui', 'coreShared', 'ts', 'wallet', 'networkProfile.ts')
+	const protocolConfigModulePath = path.join(repositoryRootPath, 'shared', 'ts', 'deployment', 'protocolConfig.ts')
 
 	try {
 		await ensureDeploymentRuntimeDependencies()

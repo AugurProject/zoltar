@@ -39,7 +39,7 @@ export type AssemblyDelegateCall = {
 }
 
 export const outputPath = 'docs/reference/contracts.html'
-export const expectedProductionSoliditySourceFingerprint = 'b49bc3fd08c3fafc8100d8acd3ade418d9bce343bf462cbda36295f372533ab9'
+export const expectedProductionSoliditySourceFingerprint = 'a2feaab8f77f5b40a8a84e04981b2cb560868503ee687c553d03216211b88c8a'
 
 export const eventSourceByName: Record<string, string> = {
 	VaultBadDebtMigrated: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
@@ -510,7 +510,7 @@ export const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/Context.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/ERC20.sol': '6c4161bf27a2ed1bc2de94b58253a8ec4201e28d125571cb2124238753387a22',
 	'solidity/contracts/ReputationToken.sol': '30c2987453109942297ab8ee8256c53fc68cd5c22f9fd16e168cd6bbb12b8608',
-	'solidity/contracts/Zoltar.sol': '8d588dcdad4b8a646f0fcb6304891cab250b0b9ae7c694a9cf4c2fb4cde73e8a',
+	'solidity/contracts/Zoltar.sol': '6479e6b24905f8f3299e486703df934aa7811152a9d20517596da64cbcd4b471',
 	'solidity/contracts/ZoltarQuestionData.sol': '904b4369195f070fa3b04bbcbc1acba529810ffa2da4667569cd9168ac568d65',
 	'solidity/contracts/statoblast/EscalationGame.sol': '22346007107d60d8dac5545122037fa8bc457ac604c733c03edd992276604e85',
 	'solidity/contracts/statoblast/EscalationGameCalculations.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
@@ -573,10 +573,10 @@ export const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '58a39fda8fd00d2448a493854e8dbfb9d7cd8f3178f80614b3d53f6057bb6950',
+		compiledAbiFingerprint: 'aae115c225ff97708c3ab5dee1b8131e1aff2d3a543b944d815563433a33a275',
 		name: 'Zoltar',
 		purpose: 'Registers universe forks, charges the fork admission haircut, and mints branch-specific child REP.',
-		readAbiFingerprint: 'c908994972ca4e8bcf1a44c288dcc830dc9a8bbb1e0a6f85a55f051d96703887',
+		readAbiFingerprint: '1fc117bbe886565313a38c6c17e400355eaa11a02daeb87cffd633b7b09ceea6',
 		readSurface:
 			'Use `universes`, `forkThresholdDivisor`, `forkBurnDivisor`, `zoltarQuestionData`, `genesisReputationToken`, `childReputationTokenCount`, `getForkTime`, `forkQuestionMatches`, `getRepToken`, `getForkThresholdAttoRep`, `getNonDecisionThresholdAttoRep`, `getUniverseTheoreticalSupplyAttoRep`, `getChildUniverseId`, `getDeployedChildUniverses`, and `getMigrationRepBalanceAttoRep` to reconstruct universe and migration state. The fork threshold is the live universe theoretical supply divided by `forkThresholdDivisor`, rounded up, so every nonzero-supply universe has a positive fork cost. Construction requires a deployed genesis REP token with the REPv2 `getTotalTheoreticalSupply()` selector, theoretical supply from one attoREP through 11 million REP, and `forkBurnDivisor >= 5`, which caps the uncredited fork haircut at 20% of the threshold. Genesis REP uses ordinary ERC-20 approvals because the configured mainnet REPv2 token does not implement ERC-2612 or ERC-3009.',
 		securityBoundary: 'Security boundaries for these calls are [A15 intended question selection](./security-model.html#assumption-a15) and [A25 safe immutable parameters](./security-model.html#assumption-a25).',
@@ -638,10 +638,10 @@ export const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '13ddc463c15993eab7862efc6371b2401eae8fb3edc9c947cb10d42eb26d6493',
+		compiledAbiFingerprint: 'c870ce39465c90820caef827233163f7898f339aba3563d29b7014e60da28687',
 		name: 'ReputationToken',
 		purpose: 'Implements universe-specific ERC-20 REP, ERC-2612 permits, and ERC-3009 transfers while enforcing the supply ceiling maintained by Zoltar.',
-		readAbiFingerprint: '45de6b2cbe737531d3b96d234678d2005f7801f9df527506e9abcd47da18eaee',
+		readAbiFingerprint: '1cedbd5efbd60e56cb8f88586096eba913a58cbf7fc5d9908649ea4cc8a0658b',
 		readSurface: 'Use `getTotalTheoreticalSupply`, `zoltar`, `universeId`, `repNumber`, the standard ERC-20 `name`, `symbol`, `decimals`, `totalSupply`, `balanceOf`, and `allowance` reads, and authorization reads `nonces`, `DOMAIN_SEPARATOR`, and `authorizationState`.',
 		readDeclarations: [
 			{ name: 'getTotalTheoreticalSupply' },
