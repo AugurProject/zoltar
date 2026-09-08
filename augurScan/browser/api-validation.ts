@@ -256,6 +256,10 @@ export const isActivityRecordValue = (value: unknown): boolean =>
 	isNullableJsonRecord(value['display_arguments']) &&
 	isNullableArgumentDefinitions(value['argument_schema']) &&
 	isNullableString(value['origin_address']) &&
+	(value['function_name'] === undefined || isNullableString(value['function_name'])) &&
+	(value['function_signature'] === undefined || isNullableString(value['function_signature'])) &&
+	(value['action_summary'] === undefined || isNullableString(value['action_summary'])) &&
+	(value['to_address'] === undefined || isNullableString(value['to_address'])) &&
 	isString(value['explorer_base_url'])
 
 export const isRelatedLogRecordValue = (value: unknown): boolean =>
