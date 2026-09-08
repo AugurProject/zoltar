@@ -4,11 +4,14 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { reviewableGitHubPath } from './reviewable-github-path.ts'
 
-test('prefers a staged GitHub file and falls back after maintainer promotion', () => {
+test.each([
+	['workflows/ci.yml', 'workflow/ci.yml'],
+	['actions/setup-ci/action.yml', 'workflow/actions/setup-ci/action.yml'],
+	['workflows/ci.yml', 'move_github/workflows/ci.yml'],
+])('prefers staged %s in %s and falls back after promotion', (relativePath, stagedRelativePath) => {
 	const repositoryRoot = mkdtempSync(path.join(tmpdir(), 'zoltar-reviewable-github-'))
-	const relativePath = 'workflows/ci.yml'
 	const activePath = path.join(repositoryRoot, '.github', relativePath)
-	const stagedPath = path.join(repositoryRoot, 'move_github', relativePath)
+	const stagedPath = path.join(repositoryRoot, stagedRelativePath)
 	try {
 		mkdirSync(path.dirname(activePath), { recursive: true })
 		mkdirSync(path.dirname(stagedPath), { recursive: true })

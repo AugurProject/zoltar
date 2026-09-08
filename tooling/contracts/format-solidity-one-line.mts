@@ -202,45 +202,47 @@ function canonicalSoliditySource(prettierSource: string): string {
 	return oneLineSource
 }
 
-function runPrettier(filePaths: string[]): void {
-	execFileSync('bunx', ['prettier', '--config', path.join(projectRoot, '.prettierrc.json'), '--write', ...filePaths], {
+function formatSoliditySources(files: string[]): string[] {
+	if (files.length === 0) return []
+	// The Solidity plugin requires Node worker APIs that Bun does not implement.
+	// One Node process formats the whole batch and reuses the loaded plugin.
+	const output = execFileSync('node', [path.join(scriptDirectory, 'prettier-solidity-batch.mjs')], {
 		cwd: projectRoot,
+		input: JSON.stringify(files.map(filePath => path.resolve(filePath))),
 		encoding: 'utf8',
-		stdio: 'pipe',
+		maxBuffer: 64 * 1024 * 1024,
 	})
-}
-
-function canonicalFileSource(filePath: string, source: string): string {
-	const prettierSource = execFileSync('bunx', ['prettier', '--config', path.join(projectRoot, '.prettierrc.json'), '--stdin-filepath', filePath], {
-		cwd: projectRoot,
-		encoding: 'utf8',
-		input: source,
-		stdio: ['pipe', 'pipe', 'pipe'],
+	const formatted: unknown = JSON.parse(output)
+	if (!Array.isArray(formatted) || formatted.length !== files.length) throw new Error('Prettier returned an incomplete Solidity batch')
+	return formatted.map(source => {
+		if (typeof source !== 'string') throw new Error('Prettier returned a non-string Solidity source')
+		return canonicalSoliditySource(source)
 	})
-	return canonicalSoliditySource(prettierSource)
 }
 
 export async function checkSolidityFiles(files: string[]): Promise<string[]> {
+	const formatted = formatSoliditySources(files)
 	const changedFiles: string[] = []
-	for (const filePath of files) {
+	for (const [index, filePath] of files.entries()) {
 		const source = await fs.readFile(filePath, 'utf8')
-		if (source !== canonicalFileSource(filePath, source)) changedFiles.push(projectPath(filePath))
+		if (source !== formatted[index]) changedFiles.push(projectPath(filePath))
 	}
 	return changedFiles.toSorted()
 }
 
 export async function writeSolidityFiles(files: string[]): Promise<string[]> {
-	const originalSources = new Map<string, string>()
-	for (const filePath of files) originalSources.set(filePath, await fs.readFile(filePath, 'utf8'))
-	runPrettier(files)
+	const formatted = formatSoliditySources(files)
 	const changedFiles: string[] = []
-	for (const filePath of files) {
-		const prettierSource = await fs.readFile(filePath, 'utf8')
-		const canonicalSource = canonicalSoliditySource(prettierSource)
-		if (canonicalSource !== prettierSource) await fs.writeFile(filePath, canonicalSource)
-		if (canonicalSource !== originalSources.get(filePath)) changedFiles.push(projectPath(filePath))
+	for (const [index, filePath] of files.entries()) {
+		const source = await fs.readFile(filePath, 'utf8')
+		const canonicalSource = formatted[index]
+		if (canonicalSource === undefined) throw new Error(`Missing formatted source for ${filePath}`)
+		if (canonicalSource !== source) {
+			await fs.writeFile(filePath, canonicalSource)
+			changedFiles.push(projectPath(filePath))
+		}
 	}
-	return changedFiles
+	return changedFiles.toSorted()
 }
 
 async function main(): Promise<void> {

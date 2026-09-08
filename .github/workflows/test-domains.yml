@@ -3,12 +3,34 @@ name: Test Domains
 on:
   workflow_call:
     inputs:
+      solidity:
+        description: Run Solidity tests.
+        type: boolean
+        default: true
+      prepared:
+        description: Reuse the caller's domain-production-ui artifact and preflight checks.
+        type: boolean
+        default: false
+      application:
+        description: Run application preparation, tests, and mutation smoke alongside Solidity.
+        required: false
+        type: boolean
+        default: true
       invocation:
         description: Identifies the caller in concurrency groups.
         required: false
         type: string
         default: reusable
   workflow_dispatch:
+    inputs:
+      solidity:
+        description: Run Solidity tests.
+        type: boolean
+        default: true
+      application:
+        description: Run application preparation, tests, and mutation smoke alongside Solidity.
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -24,6 +46,7 @@ env:
 jobs:
   prepare:
     name: Prepare domain test inputs
+    if: inputs.application && !inputs.prepared
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -48,6 +71,7 @@ jobs:
   application-tests:
     name: Application tests (${{ matrix.shard }}/4)
     needs: prepare
+    if: always() && !cancelled() && inputs.application && (needs.prepare.result == 'success' || (inputs.prepared && needs.prepare.result == 'skipped'))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -84,6 +108,7 @@ jobs:
 
   solidity-tests:
     name: Solidity tests (${{ matrix.shard }}/4)
+    if: inputs.solidity
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -93,6 +118,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-ci
+        with:
+          profile: contracts
       - uses: actions/cache/restore@v5
         with:
           path: .ci/test-timings-solidity.json
@@ -114,11 +141,11 @@ jobs:
   timing-history:
     name: Update ${{ matrix.domain }} timing history
     needs: [application-tests, solidity-tests]
-    if: always() && needs.application-tests.result == 'success' && needs.solidity-tests.result == 'success'
+    if: always() && !cancelled() && (needs.solidity-tests.result == 'success' || needs.application-tests.result == 'success') && (needs.solidity-tests.result == 'success' || needs.solidity-tests.result == 'skipped') && (needs.application-tests.result == 'success' || needs.application-tests.result == 'skipped')
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        domain: [application, solidity]
+        domain: ${{ fromJSON(needs.application-tests.result != 'success' && '["solidity"]' || (needs.solidity-tests.result == 'success' && '["application", "solidity"]' || '["application"]')) }}
     steps:
       - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
@@ -142,8 +169,47 @@ jobs:
 
   mutation-smoke:
     name: Critical mutation smoke
+    if: inputs.application
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-ci
+        with:
+          profile: root
+          foundry: "false"
       - run: bun run test:mutation:smoke
+
+  required:
+    name: Required domain results
+    if: always()
+    needs: [prepare, application-tests, solidity-tests, timing-history, mutation-smoke]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify selected domains
+        env:
+          SOLIDITY_SELECTED: ${{ inputs.solidity }}
+          PREPARED: ${{ inputs.prepared }}
+          APPLICATION_SELECTED: ${{ inputs.application }}
+          PREPARE_RESULT: ${{ needs.prepare.result }}
+          APPLICATION_RESULT: ${{ needs.application-tests.result }}
+          SOLIDITY_RESULT: ${{ needs.solidity-tests.result }}
+          TIMING_RESULT: ${{ needs.timing-history.result }}
+          MUTATION_RESULT: ${{ needs.mutation-smoke.result }}
+        run: |
+          require_result() {
+            local selected="$1" result="$2" label="$3"
+            local expected="skipped"
+            if [[ "${selected}" == "true" ]]; then expected="success"; fi
+            if [[ "${result}" != "${expected}" ]]; then
+              echo "${label} ended as ${result}; expected ${expected}."
+              exit 1
+            fi
+          }
+          [[ "${APPLICATION_SELECTED}" == "true" || "${SOLIDITY_SELECTED}" == "true" ]] || exit 1
+          require_result "${SOLIDITY_SELECTED}" "${SOLIDITY_RESULT}" solidity
+          require_result "${APPLICATION_SELECTED}" "${APPLICATION_RESULT}" application
+          require_result "${APPLICATION_SELECTED}" "${MUTATION_RESULT}" mutation
+          prepare_selected="false"
+          if [[ "${APPLICATION_SELECTED}" == "true" && "${PREPARED}" != "true" ]]; then prepare_selected="true"; fi
+          require_result "${prepare_selected}" "${PREPARE_RESULT}" prepare
+          [[ "${TIMING_RESULT}" == "success" ]] || exit 1

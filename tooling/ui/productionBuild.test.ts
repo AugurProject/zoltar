@@ -19,7 +19,7 @@ let server: Bun.Server | undefined
 const chromiumPath = getChromiumPath()
 const productionBrowserTest = (name: string, run: () => Promise<void>) => test(name, run, PRODUCTION_BROWSER_TIMEOUT_MILLISECONDS)
 const productionWorkflowTest = process.env['RUN_PRODUCTION_BROWSER_WORKFLOWS'] === '1' ? (name: string, run: () => Promise<void>) => test(name, run, PRODUCTION_WORKFLOW_TIMEOUT_MILLISECONDS) : test.skip
-const productionRebuildInvariantTest = process.env['ZOLTAR_USE_EXISTING_PRODUCTION_BUILD'] === '1' ? test.skip : test
+const productionRebuildInvariantTest = process.env['ZOLTAR_USE_EXISTING_PRODUCTION_BUILD'] === '1' && process.env['ZOLTAR_RUN_PRODUCTION_REBUILD_INVARIANTS'] !== '1' ? test.skip : test
 
 beforeAll(async () => {
 	if (process.env['ZOLTAR_USE_EXISTING_PRODUCTION_BUILD'] !== '1') {
