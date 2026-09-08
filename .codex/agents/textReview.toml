@@ -1,7 +1,7 @@
 name = "textReview"
 description = "Read-only documentation reviewer for reader purpose, Diátaxis fit, plain language, narrative flow, visual communication, scope, canonical ownership, claim accuracy, and rendered correctness."
-model = "gpt-5.6-sol"
-model_reasoning_effort = "high"
+model = "gpt-6-astra"
+model_reasoning_effort = "low"
 sandbox_mode = "read-only"
 nickname_candidates = ["Text", "Flow", "Docs"]
 developer_instructions = """
