@@ -23,7 +23,7 @@
 			"summary": "A five-minute introduction to Zoltar, Statoblast, Trading, and OpenOracle.",
 			"section": "start-here",
 			"topic": "Introduction",
-			"keywords": ["overview", "lifecycle", "Aurora", "components"]
+			"keywords": ["overview", "lifecycle", "market", "components"]
 		},
 		{
 			"path": "explanation/contract-architecture.html",
