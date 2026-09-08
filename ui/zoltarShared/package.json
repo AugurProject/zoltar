@@ -301,6 +301,10 @@
 			"bun": "./ts/protocol/helpers.ts",
 			"default": "./js/protocol/helpers.js"
 		},
+		"./protocol/liquidationApprovals.js": {
+			"bun": "./ts/protocol/liquidationApprovals.ts",
+			"default": "./js/protocol/liquidationApprovals.js"
+		},
 		"./protocol/openOracle.js": {
 			"bun": "./ts/protocol/openOracle.ts",
 			"default": "./js/protocol/openOracle.js"
