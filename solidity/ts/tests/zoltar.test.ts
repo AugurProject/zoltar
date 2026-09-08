@@ -607,7 +607,8 @@ describe('Contract Test Suite', () => {
 		}
 		await assert.rejects(split(20n, [0n], 0n), /Required REP preparation increased/)
 		await assert.rejects(split(20n, [0n, 99n]), /Malformed outcome index/)
-		await assert.rejects(split(20n, [0n, 0n]), /Duplicate outcome universe/)
+		await assert.rejects(split(20n, [2n, 1n]), /Outcome indexes must be strictly increasing/)
+		await assert.rejects(split(20n, [0n, 0n]), /Outcome indexes must be strictly increasing/)
 		await assert.rejects(split(20n, []), /Select at least one outcome universe/)
 		await assert.rejects(split(0n, [0n]), /Split amount must be greater than zero/)
 		assert.strictEqual(await getMigrationRepBalanceAttoRep(migrator, genesisUniverse, migrator.account.address), 15n)
@@ -615,6 +616,12 @@ describe('Contract Test Suite', () => {
 		await split(20n, [0n], 15n)
 		assert.strictEqual(await getMigrationRepBalanceAttoRep(migrator, genesisUniverse, migrator.account.address), 30n)
 		assert.strictEqual(await getERC20Balance(migrator, getRepTokenAddress(getChildUniverseId(genesisUniverse, 0n)), migrator.account.address), 30n)
+		await split(5n, [0n, 1n, 2n], 5n)
+		assert.strictEqual(await getMigrationRepBalanceAttoRep(migrator, genesisUniverse, migrator.account.address), 35n)
+		assert.strictEqual(await getERC20Balance(migrator, addressString(GENESIS_REPUTATION_TOKEN), migrator.account.address), initialBalance - 35n)
+		for (const outcomeIndex of [0n, 1n, 2n]) {
+			assert.strictEqual(await getERC20Balance(migrator, getRepTokenAddress(getChildUniverseId(genesisUniverse, outcomeIndex)), migrator.account.address), outcomeIndex === 0n ? 35n : 20n)
+		}
 	})
 
 	test('splitMigrationRep preserves child balances across outcome orderings and rejects double use of the same balance', async () => {

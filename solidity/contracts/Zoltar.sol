@@ -223,15 +223,18 @@ contract Zoltar {
 	function prepareAndSplitMigrationRep(uint248 universeId, uint256 amountAttoRep, uint256[] memory outcomeIndexes, uint256 maxPreparationAttoRep) external {
 		require(amountAttoRep > 0, 'Split amount must be greater than zero');
 		require(outcomeIndexes.length > 0, 'Select at least one outcome universe');
-		uint256 requiredBalanceAttoRep;
+		AddressRepMigration storage migration = migrationRepBalances[msg.sender][universeId];
+		uint256 largestSplitAttoRep;
 		for (uint256 i = 0; i < outcomeIndexes.length; i++) {
-			for (uint256 j = 0; j < i; j++)
-				require(outcomeIndexes[i] != outcomeIndexes[j], 'Duplicate outcome universe');
-			uint256 requiredAttoRep =
-				getChildMigrationRepAmountAttoRep(msg.sender, universeId, getChildUniverseId(universeId, outcomeIndexes[i])) + amountAttoRep;
-			if (requiredAttoRep > requiredBalanceAttoRep) requiredBalanceAttoRep = requiredAttoRep;
+			uint256 outcomeIndex = outcomeIndexes[i];
+			require(i == 0 || outcomeIndex > outcomeIndexes[i - 1], 'Outcome indexes must be strictly increasing');
+			uint256 splitAttoRep = migration.childMigrationRepAmountsAttoRep[
+				getChildUniverseId(universeId, outcomeIndex)
+			];
+			if (splitAttoRep > largestSplitAttoRep) largestSplitAttoRep = splitAttoRep;
 		}
-		uint256 preparedAmountAttoRep = migrationRepBalances[msg.sender][universeId].migrationRepBalanceAttoRep;
+		uint256 requiredBalanceAttoRep = largestSplitAttoRep + amountAttoRep;
+		uint256 preparedAmountAttoRep = migration.migrationRepBalanceAttoRep;
 		if (requiredBalanceAttoRep > preparedAmountAttoRep) {
 			uint256 preparationAttoRep = requiredBalanceAttoRep - preparedAmountAttoRep;
 			require(preparationAttoRep <= maxPreparationAttoRep, 'Required REP preparation increased; refresh and try again');

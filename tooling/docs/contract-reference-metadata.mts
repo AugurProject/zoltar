@@ -634,7 +634,7 @@ export const contractReferences: ContractReference[] = [
 				effect:
 					'Reuses prepared migration credit, burns or sinks only the additional parent REP needed for the most-used selected destination, and mints the requested amount in every selected child. Preparation and splitting revert together on failure. Historical splits, rather than current child token holdings, determine remaining credit.',
 				declarations: [{ name: 'prepareAndSplitMigrationRep' }],
-				preconditions: 'Forked universe; positive amount; nonempty distinct valid outcomes; sufficient parent REP for any shortfall. Additional preparation cannot exceed maxPreparationAttoRep. Genesis REP requires allowance only for the shortfall; child REP needs no allowance.',
+				preconditions: 'Forked universe; positive amount; nonempty valid outcome indexes in strictly increasing order; sufficient parent REP for any shortfall. Additional preparation cannot exceed maxPreparationAttoRep. Genesis REP requires allowance only for the shortfall; child REP needs no allowance.',
 				signals: '`MigrationRepAdded` when preparation is needed; `DeployChild` and `ChildReputationTokenInitialized` when children are deployed; child REP `Transfer`, `Mint`, and `MigrationRepSplit` for each destination',
 			},
 			{

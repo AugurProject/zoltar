@@ -1,5 +1,4 @@
 import { Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
-import type { ContractRevertReasonParams } from './core.js'
 import type { WriteClient, ZoltarChildUniverseActionResult, ZoltarForkActionResult, ZoltarMigrationActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getQuestionIdHex } from './helpers.js'
 import { getZoltarAddress } from './zoltarDeploymentHelpers.js'
@@ -15,18 +14,15 @@ export async function createZoltarChildUniverse(client: WriteClient, universeId:
 	return { action: 'createChildUniverse', hash, outcomeIndex, universeId } satisfies ZoltarChildUniverseActionResult
 }
 
-async function executeZoltarMigrationAction<TCallParams extends ContractRevertReasonParams>(client: WriteClient, action: ZoltarMigrationActionResult['action'], universeId: bigint, amountAttoRep: bigint, outcomeIndexes: bigint[], callParams: TCallParams) {
-	const hash = await writeContractAndWait(client, () => callParams)
-	return { action, amountAttoRep, hash, outcomeIndexes, universeId } satisfies ZoltarMigrationActionResult
-}
-
 export async function migrateInternalRepInZoltar(client: WriteClient, universeId: bigint, amountAttoRep: bigint, outcomeIndexes: bigint[], maxPreparationAttoRep: bigint) {
-	return await executeZoltarMigrationAction(client, 'splitMigrationRep', universeId, amountAttoRep, outcomeIndexes, {
+	const sortedOutcomeIndexes = outcomeIndexes.toSorted((left, right) => (left < right ? -1 : left > right ? 1 : 0))
+	const hash = await writeContractAndWait(client, () => ({
 		address: getZoltarAddress(),
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'prepareAndSplitMigrationRep',
-		args: [universeId, amountAttoRep, outcomeIndexes, maxPreparationAttoRep],
-	})
+		args: [universeId, amountAttoRep, sortedOutcomeIndexes, maxPreparationAttoRep],
+	}))
+	return { action: 'splitMigrationRep', amountAttoRep, hash, outcomeIndexes: sortedOutcomeIndexes, universeId } satisfies ZoltarMigrationActionResult
 }
 
 export async function forkZoltarUniverse(client: WriteClient, universeId: bigint, questionId: bigint) {
