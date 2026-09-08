@@ -1,4 +1,4 @@
-import { encodeAbiParameters, getAddress, zeroAddress } from '@zoltar/bot-shared/ethereum'
+import { encodeAbiParameters, getAddress, zeroAddress, type AbiValue } from '@zoltar/bot-shared/ethereum'
 import { erc20Abi, openOracleAbi, wethAbi } from '../contracts/abi.ts'
 import { OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT, trustedOpenOracleReportPredicate } from '../monitoring/protocol-index.ts'
 import { allowance, amount, cappedSpend, choose, disabled, eligible, encodePreflightCall, encodeStep, erc20AllowanceEvidence, erc20WalletDebit, eventEvidence, eventTopic, mixSeed, ONE_TOKEN, openOracleCreditDebit, optionAmount, planBase, tokenInventory } from './planning.ts'
@@ -750,7 +750,7 @@ function reportOperation(mode: 'dispute' | 'settle'): OperationDefinition {
 		})
 	}
 	const build = (snapshot: EcosystemSnapshot, options: PlanningOptions, selected: OracleGameSnapshot) => {
-		let args: readonly unknown[]
+		let args: readonly AbiValue[]
 		let steps: OperationStep[] = []
 		if (mode === 'settle') args = [BigInt(selected.reportId), oracleGame(selected), oracleHelper(selected)]
 		else {

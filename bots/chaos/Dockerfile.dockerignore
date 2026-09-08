@@ -1,8 +1,8 @@
 **
 !package.json
 !bun.lock
-!scripts/
-!scripts/**
+!tooling/
+!tooling/**
 !shared/
 !shared/*/
 !shared/*/package.json
@@ -31,8 +31,9 @@
 !bots/chaos/scripts/validate-container-paths.mts
 !bots/chaos/src/**
 
-!tooling/
-!tooling/**
+!docs/
+!docs/mainnet-deployment-addresses.json
+!docs/sepolia-deployment-addresses.json
 
 **/node_modules
 shared/*/js

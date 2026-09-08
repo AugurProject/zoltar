@@ -1,5 +1,6 @@
 export type JsonPrimitive = string | number | boolean | null
-export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue }
+export type JsonValue = JsonPrimitive | readonly JsonValue[] | { readonly [key: string]: JsonValue }
+export type JsonRecord = { readonly [key: string]: JsonValue }
 
 export const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
 export const isString = (value: unknown): value is string => typeof value === 'string'
@@ -10,14 +11,15 @@ export const isJsonValue = (value: unknown): value is JsonValue => {
 	if (Array.isArray(value)) return value.every(isJsonValue)
 	return isRecord(value) && Object.values(value).every(isJsonValue)
 }
-export const isJsonRecord = (value: unknown): value is Record<string, JsonValue> => isRecord(value) && Object.values(value).every(isJsonValue)
-export const isNullableJsonRecord = (value: unknown): value is Record<string, JsonValue> | null => value === null || isJsonRecord(value)
+export const isJsonRecord = (value: unknown): value is JsonRecord => isRecord(value) && Object.values(value).every(isJsonValue)
+export const isNullableJsonRecord = (value: unknown): value is JsonRecord | null => value === null || isJsonRecord(value)
+export const isJsonArray = (value: unknown): value is readonly JsonValue[] => Array.isArray(value) && value.every(isJsonValue)
 
 export type OperationsCatalogSection = 'auctions' | 'escalations' | 'forks' | 'integrity' | 'reports' | 'timeline' | 'trading'
 export type OperationsResponse = {
 	readonly chainId: string | number
-	readonly asOf: Record<string, unknown>
-	readonly data: Record<string, unknown>
+	readonly asOf: JsonRecord
+	readonly data: JsonRecord
 }
 
 const isUnsignedIntegerString = (value: unknown): value is string => typeof value === 'string' && /^(0|[1-9]\d*)$/.test(value)
@@ -25,8 +27,8 @@ const isNonNegativeSafeInteger = (value: unknown): value is number => typeof val
 const isHash = (value: unknown): value is string => typeof value === 'string' && /^0x[0-9a-f]{64}$/.test(value)
 const isAddress = (value: unknown): value is string => typeof value === 'string' && /^0x[0-9a-f]{40}$/i.test(value)
 
-const isOperationsAsOf = (value: unknown): value is Record<string, unknown> =>
-	isRecord(value) &&
+const isOperationsAsOf = (value: unknown): value is JsonRecord =>
+	isJsonRecord(value) &&
 	isUnsignedIntegerString(value['blockNumber']) &&
 	isHash(value['blockHash']) &&
 	isUnsignedIntegerString(value['blockTimestamp']) &&
@@ -38,7 +40,7 @@ const isOperationsAsOf = (value: unknown): value is Record<string, unknown> =>
 	isString(value['phase']) &&
 	typeof value['historical'] === 'boolean'
 
-const validateOperationsPagination = (data: Record<string, unknown>): void => {
+const validateOperationsPagination = (data: JsonRecord): void => {
 	const total = data['total']
 	if (total !== undefined && !isNonNegativeSafeInteger(total) && !isUnsignedIntegerString(total)) throw new Error('Operations total is malformed')
 	for (const [name, value] of [
@@ -52,32 +54,32 @@ const validateOperationsPagination = (data: Record<string, unknown>): void => {
 
 export const decodeOperationsResponseValue = (value: unknown): OperationsResponse => {
 	if (
-		!isRecord(value) ||
+		!isJsonRecord(value) ||
 		(!isUnsignedIntegerString(value['chainId']) && !isNonNegativeSafeInteger(value['chainId'])) ||
 		!isOperationsAsOf(value['asOf']) ||
-		!isRecord(value['data'])
+		!isJsonRecord(value['data'])
 	)
 		throw new Error('Operations response is malformed')
 	validateOperationsPagination(value['data'])
 	return { chainId: value['chainId'], asOf: value['asOf'], data: value['data'] }
 }
 
-export const operationRecords = (value: unknown, label = 'Operations records', required = false): Record<string, unknown>[] => {
+export const operationRecords = (value: unknown, label = 'Operations records', required = false): JsonRecord[] => {
 	if (value === undefined && !required) return []
-	if (!Array.isArray(value) || !value.every(isRecord)) throw new Error(`${label} are malformed`)
+	if (!Array.isArray(value) || !value.every(isJsonRecord)) throw new Error(`${label} are malformed`)
 	return value
 }
 
-const isCatalogRecord = (section: OperationsCatalogSection, value: Record<string, unknown>): boolean => {
+const isCatalogRecord = (section: OperationsCatalogSection, value: JsonRecord): boolean => {
 	if (section === 'reports') return isAddress(value['open_oracle_address']) && isUnsignedIntegerString(value['report_id'])
 	if (section === 'trading') return isAddress(value['pair_address'])
 	if (section === 'integrity')
 		return (
 			isUnsignedIntegerString(value['id']) &&
 			isString(value['reason']) &&
-			Array.isArray(value['causes']) &&
+			isJsonArray(value['causes']) &&
 			value['causes'].every(isString) &&
-			isRecord(value['occurrence_counts']) &&
+			isJsonRecord(value['occurrence_counts']) &&
 			Object.values(value['occurrence_counts']).every(isUnsignedIntegerString)
 		)
 	if (section === 'timeline')
@@ -92,22 +94,22 @@ const isCatalogRecord = (section: OperationsCatalogSection, value: Record<string
 	return isAddress(value[section === 'auctions' ? 'auction_address' : 'game_address'])
 }
 
-export const operationsCatalogRecords = (section: OperationsCatalogSection, value: unknown, required = false): Record<string, unknown>[] => {
+export const operationsCatalogRecords = (section: OperationsCatalogSection, value: unknown, required = false): JsonRecord[] => {
 	const records = operationRecords(value, `Operations ${section}`, required)
 	if (!records.every((record) => isCatalogRecord(section, record))) throw new Error(`Operations ${section} records are malformed`)
 	return records
 }
 
-export const operationsRiskRecords = (kind: 'pools' | 'vaults', value: unknown, required = false): Record<string, unknown>[] => {
+export const operationsRiskRecords = (kind: 'pools' | 'vaults', value: unknown, required = false): JsonRecord[] => {
 	const records = operationRecords(value, `Operations risk ${kind}`, required)
 	if (!records.every((record) => isAddress(record['pool_address']) && (kind === 'pools' || isAddress(record['vault_address']))))
 		throw new Error(`Operations risk ${kind} records are malformed`)
 	return records
 }
 
-export const operationsRiskPagination = (value: unknown, required = false): Record<string, unknown> => {
+export const operationsRiskPagination = (value: unknown, required = false): JsonRecord => {
 	if (value === undefined && !required) return {}
-	if (!isRecord(value)) throw new Error('Operations risk pagination is malformed')
+	if (!isJsonRecord(value)) throw new Error('Operations risk pagination is malformed')
 	for (const name of ['poolTotal', 'vaultTotal'] as const) if (!isNonNegativeSafeInteger(value[name])) throw new Error(`Operations risk ${name} is malformed`)
 	for (const name of ['poolHasMore', 'vaultHasMore'] as const) if (typeof value[name] !== 'boolean') throw new Error(`Operations risk ${name} is malformed`)
 	for (const [hasMoreName, cursorName] of [
@@ -254,6 +256,10 @@ export const isActivityRecordValue = (value: unknown): boolean =>
 	isNullableJsonRecord(value['display_arguments']) &&
 	isNullableArgumentDefinitions(value['argument_schema']) &&
 	isNullableString(value['origin_address']) &&
+	(value['function_name'] === undefined || isNullableString(value['function_name'])) &&
+	(value['function_signature'] === undefined || isNullableString(value['function_signature'])) &&
+	(value['action_summary'] === undefined || isNullableString(value['action_summary'])) &&
+	(value['to_address'] === undefined || isNullableString(value['to_address'])) &&
 	isString(value['explorer_base_url'])
 
 export const isRelatedLogRecordValue = (value: unknown): boolean =>

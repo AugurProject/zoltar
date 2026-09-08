@@ -4,7 +4,6 @@ import { requiredElementRole } from '../../browser/dom-elements.ts'
 import {
 	accountStateDuringStagedRefresh,
 	activityDetailAnchorIndex,
-	activityDetailProvenanceField,
 	activityRefreshRetention,
 	approvalTransitionFields,
 	availableSessionSnapshotStorage,
@@ -18,9 +17,7 @@ import {
 	collectDualCursorCollections,
 	compactIndexerDuration,
 	compareCanonicalEventPosition,
-	contractDeploymentBlockActionLabel,
 	contractDeploymentStatus,
-	contractDeploymentTimestampLabel,
 	contractRegistrySection,
 	createForegroundRefreshGate,
 	createLatestRefreshCoordinator,
@@ -69,6 +66,7 @@ import {
 	restoreActivityDetailFocus,
 	restoreDisclosureState,
 	retainedPaginationAvailable,
+	riskPaginationForCollectedCursors,
 	runSerializedOperationsLoad,
 	runWithForegroundReservation,
 	shouldClearPendingDetailState,
@@ -165,22 +163,6 @@ test('places and reanchors the activity detail drawer after the clicked row acro
 	expect(placeActivityDetailDrawer(feed, drawer)).toBeFalse()
 	expect([...feed.children].map((child) => child.className)).toEqual(['log-row', 'log-row'])
 	expect(visibleActivityLogCount(feed)).toBe(2)
-})
-
-test('renders event contract provenance supplied by the log detail API', () => {
-	const { document } = new Window()
-	const card = document.createElement('dl')
-	card.className = 'detail-card'
-	const [term, description] = activityDetailProvenanceField('deployment-manifest')
-	const termNode = document.createElement('dt')
-	termNode.textContent = term
-	const descriptionNode = document.createElement('dd')
-	descriptionNode.textContent = description
-	card.append(termNode, descriptionNode)
-	expect(card.tagName).toBe('DL')
-	expect(card.className).toBe('detail-card')
-	expect(card.querySelector('dt')?.textContent).toBe('Contract provenance')
-	expect(card.querySelector('dd')?.textContent).toBe('deployment-manifest')
 })
 
 test('Escape closes an activity detail drawer and restores its trigger focus', () => {
@@ -408,7 +390,7 @@ test('distinguishes historical Operations snapshots from the live indexed view',
 			},
 			true,
 		),
-	).toBe('Historical snapshot at block #23,184,690 · current indexed head #23,184,712 · 22 blocks earlier · fixed point-in-time evidence')
+	).toBe('Historical snapshot at block #23,184,690 · current head #23,184,712 · 22 blocks earlier · fixed point-in-time evidence')
 	expect(
 		operationsRouteFreshness(
 			{
@@ -419,7 +401,17 @@ test('distinguishes historical Operations snapshots from the live indexed view',
 			},
 			true,
 		),
-	).toBe('As of indexed block #23,184,712 · 0 blocks behind · live updates connected')
+	).toBe('As of block #23,184,712 · 0 blocks behind · live updates connected')
+})
+
+test('drops stale risk cursors when one collection is exhausted before the other', () => {
+	expect(
+		riskPaginationForCollectedCursors(
+			{ poolTotal: 1, poolHasMore: true, poolNextCursor: 'pool-2', vaultTotal: 3, vaultHasMore: true, vaultNextCursor: 'vault-2' },
+			undefined,
+			'vault-2',
+		),
+	).toEqual({ poolTotal: 1, poolHasMore: false, vaultTotal: 3, vaultHasMore: true, vaultNextCursor: 'vault-2' })
 })
 
 test('labels historical pool and vault detail headers as fixed snapshots', () => {
@@ -435,7 +427,7 @@ test('labels historical pool and vault detail headers as fixed snapshots', () =>
 		expect(operationsDetailHeaderPresentation(kind, asOf, true)).toEqual({
 			backLabel: '← Back to catalog',
 			catalogPath: '/operations/risk',
-			freshness: 'Historical snapshot at block #23,184,690 · current indexed head #23,184,712 · 22 blocks earlier · fixed point-in-time evidence',
+			freshness: 'Historical snapshot at block #23,184,690 · current head #23,184,712 · 22 blocks earlier · fixed point-in-time evidence',
 			riskPanelTitle: 'Risk state at snapshot',
 		})
 	for (const kind of ['pool', 'vault'] as const)
@@ -1315,10 +1307,6 @@ test('describes verified, absent, and pending contract deployments', () => {
 	expect(contractDeploymentStatus({ deployment_block: '42', deployment_block_exact: false })).toEqual({ label: 'Deployed at or before #42', tone: 'live' })
 	expect(contractDeploymentStatus({ deployment_block: null, deployment_checked_block: '100' })).toEqual({ label: 'No code at #100', tone: 'error' })
 	expect(contractDeploymentStatus({ deployment_block: null, deployment_checked_block: null })).toEqual({ label: 'Checking deployment', tone: 'pending' })
-	expect(contractDeploymentTimestampLabel({ deployment_block_exact: false })).toBe('Deployed at or before')
-	expect(contractDeploymentTimestampLabel({ deployment_block_exact: true })).toBe('Deployed at')
-	expect(contractDeploymentBlockActionLabel({ deployment_block_exact: false })).toBe('Open search boundary block ↗')
-	expect(contractDeploymentBlockActionLabel({ deployment_block_exact: true })).toBe('Open deployment block ↗')
 })
 
 test('identifies contract creation from the known deployed contract', () => {
@@ -1543,4 +1531,8 @@ test('restores transaction depth and keeps context only for canonical cards', ()
 test('clears pending detail state for native dismissal unless a programmatic recovery close preserves it', () => {
 	expect(shouldClearPendingDetailState(false)).toBe(true)
 	expect(shouldClearPendingDetailState(true)).toBe(false)
+})
+
+test('explains undecodable function calls without treating bytecode prefixes as proof of deployment', () => {
+	expect(decodedActionLabel('Unknown call 0x60a06040', '0xabc', 'Factory')).toBe('Unrecognized function 0x60a06040 · no matching ABI')
 })

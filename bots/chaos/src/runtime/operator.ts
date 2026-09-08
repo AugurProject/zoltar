@@ -1,3 +1,7 @@
+import { migrateEmptyBootstrapState } from '../state/bootstrap-migration.ts'
+import { runtimeTopologySummary } from './topology-summary.ts'
+export { runtimeTopologySummary } from './topology-summary.ts'
+import { checkDeploymentAvailability, recordUnavailableDeploymentScan, tradingDeploymentNotice } from './deployment-availability.ts'
 import { createWalletClient, privateKeyToAccount, zeroAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import { checkRpcEndpoint, EndpointCheckFailure, type EndpointCheck } from '@zoltar/bot-shared/monitoring/connectivity'
 import { createSignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
@@ -16,8 +20,8 @@ import { ChaosProtocolIndexReorgError } from '../monitoring/protocol-index.ts'
 import type { CanonicalImmutableTopologyCache } from '../monitoring/topology-cache.ts'
 import { evaluateSelectableOperationDefinition, operationHasCanonicalContinuationBuilder, reevaluateOperationContinuation } from '../operations/catalog.ts'
 import type { EcosystemSnapshot, EvaluatedOperation, OperationContinuationDisposition, OperationPlan } from '../operations/types.ts'
-import { bindRuntimeStateToSigner, loadRuntimeState, recordActivity, saveDurableState, type DurableLifecyclePresenceBlocker, type DurableObligation, type DurableWorkflow, type RuntimeState, type RuntimeTopologySummary } from '../state/operator-state.ts'
-import { blockExecutableEvaluations, applyExecutionPolicy, chaosChain, createChaosReadPool, performCanonicalScan, planningOptions, unavailableOperationCatalog, type CanonicalScanResult } from './canonical-scan.ts'
+import { bindRuntimeStateToSigner, loadRuntimeState, recordActivity, saveDurableState, type DurableLifecyclePresenceBlocker, type DurableObligation, type DurableWorkflow, type RuntimeState } from '../state/operator-state.ts'
+import { blockExecutableEvaluations, applyExecutionPolicy, chaosChain, createChaosReadPool, performCanonicalScan, planningOptions, unavailableOperationCatalog } from './canonical-scan.ts'
 import { createChaosDashboardController, restartSafeSettings, type ConfigurationState } from './dashboard-controller.ts'
 import { resetPristineStateForDeploymentProfile, verifyRetirementCompletionFinality } from './deployment-profile.ts'
 import { beginLifecycleObligation, completeLifecycleObligation, failLifecycleObligation, lifecyclePresenceBlockerMessage, MAXIMUM_AUTOMATIC_LIFECYCLE_ATTEMPTS, obligationForPlan, synchronizeLifecycleObligations, waitForCanonicalLifecycleConfirmation } from './obligations.ts'
@@ -64,47 +68,6 @@ export function operatorWaitMilliseconds(baseMilliseconds: number, state: Pick<R
 	return Math.min(baseMilliseconds, Math.max(1, schedulerWait))
 }
 
-export function runtimeTopologySummary(scan: Pick<CanonicalScanResult, 'anchor' | 'canonicalLifecyclePresenceComplete' | 'carryProofJournalComplete' | 'indexComplete' | 'snapshot' | 'topologyCache'>): RuntimeTopologySummary {
-	return {
-		anchor: { blockNumber: scan.anchor.blockNumber, timestamp: scan.anchor.timestamp },
-		auctions: scan.snapshot.auctions.map(auction => ({
-			address: auction.address,
-			bidCount: auction.bids.length,
-			endTime: auction.endTime,
-			finalized: auction.finalized,
-			pool: auction.pool,
-			startTime: auction.startTime,
-		})),
-		complete: scan.canonicalLifecyclePresenceComplete && scan.carryProofJournalComplete && scan.indexComplete,
-		pairs: scan.snapshot.pairs.map(pair => ({ address: pair.address, feeBps: pair.feeBps, pool: pair.pool, status: pair.status, universeId: pair.universeId })),
-		pools: scan.snapshot.pools.map(pool => ({
-			address: pool.address,
-			awaitingForkContinuation: pool.awaitingForkContinuation,
-			coordinator: pool.coordinator,
-			questionId: pool.questionId,
-			systemState: pool.systemState,
-			universeId: pool.universeId,
-			vaultCount: registeredVaultCount(scan.topologyCache, pool.address),
-		})),
-		reports: scan.snapshot.reports.map(report => ({
-			currentReporter: report.currentReporter,
-			flags: report.flags,
-			reportId: report.reportId,
-			settlementTime: report.settlementTime,
-			token1: report.token1,
-			token2: report.token2,
-		})),
-		universes: scan.snapshot.universes.map(universe => ({
-			forkQuestionId: universe.forkQuestionId,
-			forkTime: universe.forkTime,
-			id: universe.id,
-			knownChildOutcomeCount: universe.knownChildOutcomes.length,
-			...(universe.parentUniverseId === undefined ? {} : { parentUniverseId: universe.parentUniverseId }),
-			repToken: universe.repToken,
-		})),
-	}
-}
-
 export function blockNovelEvaluations(evaluations: readonly EvaluatedOperation[], blocker: DurableLifecyclePresenceBlocker) {
 	const reason = lifecyclePresenceBlockerMessage(blocker)
 	return evaluations.map(evaluation => {
@@ -117,14 +80,6 @@ export function blockNovelEvaluations(evaluations: readonly EvaluatedOperation[]
 			},
 		}
 	})
-}
-
-function registeredVaultCount(topologyCache: CanonicalImmutableTopologyCache, pool: Address) {
-	const cursor = topologyCache.discoveryCursors.vaultsByPool[pool.toLowerCase()]
-	if (cursor === undefined) throw new Error(`Canonical topology cache omitted the vault registry cursor for pool ${pool}`)
-	const count = BigInt(cursor.canonicalCount)
-	if (count > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error(`Canonical vault count for pool ${pool} exceeds the dashboard safe integer range`)
-	return Number(count)
 }
 
 function configuredWallet(settings: OperatorSettings): Address | undefined {
@@ -679,6 +634,7 @@ async function safetyPause(configuration: ConfigurationState, state: RuntimeStat
 }
 
 async function handleCycleFailure(error: unknown, configuration: ConfigurationState, state: RuntimeState) {
+	state.deploymentNotice = undefined
 	if (error instanceof ChaosProtocolIndexReorgError) {
 		state.protocolIndex = undefined
 		state.error = 'A protocol-index reorganization was detected; canonical backfill will restart from the configured protocol start block'
@@ -714,7 +670,7 @@ async function handleCycleFailure(error: unknown, configuration: ConfigurationSt
 
 export async function runChaosOperator(loaded: LoadedConfiguration, locks: ChaosProcessLocks, shutdown: ChaosShutdownController) {
 	const initialWallet = configuredWallet(loaded.settings)
-	const state = await loadRuntimeState(loaded.settings.runtime.stateFile, loaded.settings.paused, initialWallet, loaded.settings.network.chainId)
+	const state = migrateEmptyBootstrapState(await loadRuntimeState(loaded.settings.runtime.stateFile, loaded.settings.paused, initialWallet, loaded.settings.network.chainId), loaded.settings)
 	const initialProfileId = executionProfileId(loaded.settings)
 	assertDurableSignerScope(state, initialWallet, loaded.settings.runtime.stateFile)
 	const initialCarryProfileResetAuthorized = await resetPristineStateForDeploymentProfile(state, initialProfileId, loaded.settings.paused, initialWallet, loaded.settings.runtime.stateFile, async evidence => verifyRetirementCompletionFinality(loaded.settings, evidence))
@@ -859,6 +815,15 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 						return settings.runtime.once
 					}
 				}
+				const deploymentCheck = await checkDeploymentAvailability(settings, resources.pool)
+				const deploymentNotice = deploymentCheck.notice
+				if (deploymentCheck.blocking && deploymentNotice !== undefined) {
+					if (!acquireCycleGate() || !configurationIsCurrent()) return 'deferred'
+					recordUnavailableDeploymentScan(state, deploymentNotice, deploymentCheck)
+					await schedulerFor(configuration, state).pause()
+					await persistState(configuration, state)
+					return settings.runtime.once
+				}
 				const discoveryWallet = state.wallet ?? zeroAddress
 				if (carryProofJournalStateFile !== settings.runtime.stateFile) carryProofJournal = undefined
 				if (topologyCacheStateFile !== settings.runtime.stateFile || topologyCacheProfileId !== expectedProfileId) topologyCache = undefined
@@ -877,6 +842,9 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 				state.topology = runtimeTopologySummary(scan)
 				state.lastScanAt = new Date().toISOString()
 				state.lastScannedBlock = scan.anchor.blockNumber
+				state.deploymentNotice = tradingDeploymentNotice(scan.snapshot)
+				state.lastDeploymentCheckedBlock = undefined
+				state.lastDeploymentCheckAt = undefined
 				state.error = undefined
 				state.warnings = [...scan.snapshot.warnings]
 				state.rpcEndpointHealth = resourceHealth(resources)

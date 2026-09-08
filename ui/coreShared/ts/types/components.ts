@@ -270,6 +270,7 @@ export type OutcomeSelectionListProps = {
 	className?: string
 	emptyMessage?: ComponentChildren
 	items: Array<{
+		actions?: ComponentChildren
 		key: string
 		label: ComponentChildren
 		details?: ComponentChildren

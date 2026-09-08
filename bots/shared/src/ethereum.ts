@@ -1,6 +1,7 @@
 export type {
 	Abi,
 	AbiParameter,
+	AbiValue,
 	Account,
 	Address,
 	Block,
@@ -10,6 +11,7 @@ export type {
 	EIP1193Provider,
 	Hash,
 	Hex,
+	JsonValue,
 	MulticallFailureResult,
 	MulticallReturnType,
 	MulticallSuccessResult,

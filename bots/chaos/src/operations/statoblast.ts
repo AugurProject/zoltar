@@ -1,4 +1,4 @@
-import { getAddress, zeroAddress } from '@zoltar/bot-shared/ethereum'
+import { getAddress, zeroAddress, type AbiValue } from '@zoltar/bot-shared/ethereum'
 import { maximumFeePerGas } from '@zoltar/bot-shared/execution/transaction-submission'
 import { auctionAbi, coordinatorAbi, erc20Abi, escalationGameAbi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi } from '../contracts/abi.ts'
 import { allowance, amount, cappedSpend, choose, disabled, eligible, encodePreflightCall, encodeStep, erc1155WalletDebit, erc20AllowanceEvidence, erc20WalletDebit, eventEvidence, eventTopic, mixSeed, ONE_TOKEN, optionAmount, planBase, securityPoolVaultRepDebit, tokenInventory } from './planning.ts'
@@ -1821,7 +1821,7 @@ function forkDefinition(kind: 'initiate' | 'migrate-rep' | 'create-child' | 'mig
 	}
 	const build = (snapshot: EcosystemSnapshot, candidate: ForkCandidate) => {
 		const outcome = candidate.outcome
-		let args: readonly unknown[] = [candidate.pool.address]
+		let args: readonly AbiValue[] = [candidate.pool.address]
 		if (kind === 'migrate-rep') args = [candidate.pool.address, [BigInt(outcome)]]
 		else if (kind === 'create-child' || kind === 'migrate-vault') args = [candidate.pool.address, BigInt(outcome)]
 		let evidence: OperationEvidence[]

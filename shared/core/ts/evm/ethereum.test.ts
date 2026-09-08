@@ -69,6 +69,24 @@ const BALANCE_OF_ABI = [
 		type: 'function',
 	},
 ] as const
+const NO_OUTPUT_ABI = [
+	{
+		inputs: [],
+		name: 'noOutput',
+		outputs: [],
+		stateMutability: 'view',
+		type: 'function',
+	},
+] as const
+const SINGLE_OUTPUT_ABI = [
+	{
+		inputs: [],
+		name: 'singleOutput',
+		outputs: [{ type: 'uint256' }],
+		stateMutability: 'view',
+		type: 'function',
+	},
+] as const
 const TRANSFER_ABI = [
 	{
 		inputs: [
@@ -1541,6 +1559,125 @@ describe('shared ethereum compatibility layer', () => {
 		expect(receipt.effectiveGasPrice).toBe(3n)
 		expect(receiptPolls).toBe(2)
 		expect(calls.map(call => call.method)).toContain('eth_getLogs')
+	})
+
+	test('widened ABI calls preserve undefined for no-output functions', async () => {
+		const widenedAbi: Abi = NO_OUTPUT_ABI
+		const client = createPublicClient({
+			transport: custom(
+				createProvider(({ method }) => {
+					if (method !== 'eth_call') throw new Error(`Unexpected rpc method: ${method}`)
+					return '0x'
+				}, []),
+			),
+		})
+		const readResult = await client.readContract({ abi: widenedAbi, address: TOKEN_ADDRESS, functionName: 'noOutput' })
+		type WidenedReadAllowsUndefined = undefined extends typeof readResult ? true : false
+		const widenedReadAllowsUndefined: WidenedReadAllowsUndefined = true
+		expect(widenedReadAllowsUndefined).toBe(true)
+		expect(readResult).toBeUndefined()
+
+		const simulation = await client.simulateContract({ abi: widenedAbi, address: TOKEN_ADDRESS, functionName: 'noOutput' })
+		type WidenedSimulationAllowsUndefined = undefined extends typeof simulation.result ? true : false
+		const widenedSimulationAllowsUndefined: WidenedSimulationAllowsUndefined = true
+		expect(widenedSimulationAllowsUndefined).toBe(true)
+		expect(simulation.result).toBeUndefined()
+
+		const decodedResult = decodeFunctionResult({ abi: widenedAbi, data: '0x', functionName: 'noOutput' })
+		type WidenedDecodedResultAllowsUndefined = undefined extends typeof decodedResult ? true : false
+		const widenedDecodedResultAllowsUndefined: WidenedDecodedResultAllowsUndefined = true
+		expect(widenedDecodedResultAllowsUndefined).toBe(true)
+		expect(decodedResult).toBeUndefined()
+
+		const multicallClient = createPublicClient({
+			transport: custom(
+				createProvider(({ method }) => {
+					if (method !== 'eth_call') throw new Error(`Unexpected rpc method: ${method}`)
+					return encodeAbiParameters(
+						[
+							{
+								components: [
+									{ name: 'success', type: 'bool' },
+									{ name: 'returnData', type: 'bytes' },
+								],
+								name: 'returnData',
+								type: 'tuple[]',
+							},
+						],
+						[[[true, '0x']]],
+					)
+				}, []),
+			),
+		})
+		const multicallResult = await multicallClient.multicall({
+			allowFailure: false,
+			contracts: [{ abi: widenedAbi, address: TOKEN_ADDRESS, functionName: 'noOutput' }],
+			multicallAddress: MULTICALL_ADDRESS,
+		})
+		type WidenedMulticallAllowsUndefined = undefined extends (typeof multicallResult)[number] ? true : false
+		const widenedMulticallAllowsUndefined: WidenedMulticallAllowsUndefined = true
+		expect(widenedMulticallAllowsUndefined).toBe(true)
+		expect(multicallResult[0]).toBeUndefined()
+	})
+
+	test('widened ABI calls preserve scalar values for single-output functions', async () => {
+		const widenedAbi: Abi = SINGLE_OUTPUT_ABI
+		const singleOutputData = encodeAbiParameters([{ type: 'uint256' }], [7n])
+		const client = createPublicClient({
+			transport: custom(
+				createProvider(({ method }) => {
+					if (method !== 'eth_call') throw new Error(`Unexpected rpc method: ${method}`)
+					return singleOutputData
+				}, []),
+			),
+		})
+		const readResult = await client.readContract({ abi: widenedAbi, address: TOKEN_ADDRESS, functionName: 'singleOutput' })
+		type WidenedReadAllowsBigint = bigint extends typeof readResult ? true : false
+		const widenedReadAllowsBigint: WidenedReadAllowsBigint = true
+		expect(widenedReadAllowsBigint).toBe(true)
+		expect(readResult).toBe(7n)
+
+		const simulation = await client.simulateContract({ abi: widenedAbi, address: TOKEN_ADDRESS, functionName: 'singleOutput' })
+		type WidenedSimulationAllowsBigint = bigint extends typeof simulation.result ? true : false
+		const widenedSimulationAllowsBigint: WidenedSimulationAllowsBigint = true
+		expect(widenedSimulationAllowsBigint).toBe(true)
+		expect(simulation.result).toBe(7n)
+
+		const decodedResult = decodeFunctionResult({ abi: widenedAbi, data: singleOutputData, functionName: 'singleOutput' })
+		type WidenedDecodedResultAllowsBigint = bigint extends typeof decodedResult ? true : false
+		const widenedDecodedResultAllowsBigint: WidenedDecodedResultAllowsBigint = true
+		expect(widenedDecodedResultAllowsBigint).toBe(true)
+		expect(decodedResult).toBe(7n)
+
+		const multicallClient = createPublicClient({
+			transport: custom(
+				createProvider(({ method }) => {
+					if (method !== 'eth_call') throw new Error(`Unexpected rpc method: ${method}`)
+					return encodeAbiParameters(
+						[
+							{
+								components: [
+									{ name: 'success', type: 'bool' },
+									{ name: 'returnData', type: 'bytes' },
+								],
+								name: 'returnData',
+								type: 'tuple[]',
+							},
+						],
+						[[[true, singleOutputData]]],
+					)
+				}, []),
+			),
+		})
+		const multicallResult = await multicallClient.multicall({
+			allowFailure: false,
+			contracts: [{ abi: widenedAbi, address: TOKEN_ADDRESS, functionName: 'singleOutput' }],
+			multicallAddress: MULTICALL_ADDRESS,
+		})
+		type WidenedMulticallAllowsBigint = bigint extends (typeof multicallResult)[number] ? true : false
+		const widenedMulticallAllowsBigint: WidenedMulticallAllowsBigint = true
+		expect(widenedMulticallAllowsBigint).toBe(true)
+		expect(multicallResult[0]).toBe(7n)
 	})
 
 	test('public client rejects logs without the required topics array', async () => {

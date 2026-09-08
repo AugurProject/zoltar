@@ -11,10 +11,9 @@ RUN apk add --no-cache git
 WORKDIR /source
 RUN git init
 
-# Copy install orchestration before running package hooks or independent installs.
-COPY ./tooling/repo/link-shared-node-modules.mts /source/tooling/repo/link-shared-node-modules.mts
-COPY ./tooling/repo/install-frozen.mts /source/tooling/repo/install-frozen.mts
-COPY ./tooling/ui/share-ui-preact-runtime.mts /source/tooling/ui/share-ui-preact-runtime.mts
+# Build scripts import shared repository, contract, and UI tooling.
+# Copy the complete tool tree before any install hook or generation command.
+COPY ./tooling/ /source/tooling/
 
 # Shared package metadata and source for local package resolution
 COPY ./shared/core/package.json ./shared/core/bun.lock ./shared/core/tsconfig.json /source/shared/core/
@@ -24,7 +23,6 @@ COPY ./shared/statoblast/package.json /source/shared/statoblast/package.json
 COPY ./shared/trading/package.json /source/shared/trading/package.json
 COPY ./shared/core/ts/ /source/shared/core/ts/
 COPY ./shared/zoltar/ts/ /source/shared/zoltar/ts/
-COPY ./tooling/ /source/tooling/
 
 # Install root dependencies and build generated shared outputs from tracked source.
 COPY ./package.json ./bun.lock /source/
@@ -36,8 +34,6 @@ COPY ./solidity/package.json ./solidity/bun.lock /source/solidity/
 RUN cd /source/solidity && bun install --frozen-lockfile
 
 # Solidity contracts and TypeScript source
-COPY ./tooling/ui/appPaths.mts /source/tooling/ui/appPaths.mts
-COPY ./tooling/ui/projectArtifacts.mts /source/tooling/ui/projectArtifacts.mts
 COPY ./solidity/tsconfig.json /source/solidity/tsconfig.json
 COPY ./solidity/tsconfig-compile.json /source/solidity/tsconfig-compile.json
 COPY ./solidity/contracts/*.sol /source/solidity/contracts/
@@ -50,7 +46,6 @@ RUN mkdir -p /source/ui/coreShared/ts && bun ./tooling/contracts/build-app-contr
 # Common UI build inputs.
 COPY ./ui/coreShared/package.json /source/ui/coreShared/package.json
 COPY ./ui/coreShared/bun.lock /source/ui/coreShared/bun.lock
-COPY ./tooling/ui/ /source/tooling/ui/
 COPY ./docs/mainnet-deployment-addresses.json /source/docs/mainnet-deployment-addresses.json
 COPY ./docs/sepolia-deployment-addresses.json /source/docs/sepolia-deployment-addresses.json
 COPY ./ui/tsconfig.base.json /source/ui/tsconfig.base.json
@@ -84,14 +79,14 @@ FROM oven/bun:${BUN_VERSION}-alpine AS local-runtime-zoltar
 
 WORKDIR /app
 COPY --from=zoltar-builder --chown=bun:bun /source/ui/zoltar/dist/ /app/ui/zoltar/
-COPY --chown=bun:bun ./tooling/ui/dockerServe.mts /app/dockerServe.mts
-COPY --chown=bun:bun ./tooling/ui/appIds.mts /app/appIds.mts
+COPY --chown=bun:bun ./tooling/ui/dockerServe.mts /app/tooling/ui/dockerServe.mts
+COPY --chown=bun:bun ./tooling/ui/appIds.mts /app/tooling/ui/appIds.mts
 USER bun
 EXPOSE 8012
 ENV UI_APP=zoltar
 ENV PORT=8012
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:8012/'); process.exit(response.ok ? 0 : 1)" ]
-CMD [ "bun", "/app/dockerServe.mts" ]
+CMD [ "bun", "/app/tooling/ui/dockerServe.mts" ]
 
 # Extend the common Zoltar libraries only for downstream applications.
 FROM common-builder AS statoblast-dependencies
@@ -124,14 +119,14 @@ FROM oven/bun:${BUN_VERSION}-alpine AS local-runtime-statoblast
 
 WORKDIR /app
 COPY --from=statoblast-builder --chown=bun:bun /source/ui/statoblast/dist/ /app/ui/statoblast/
-COPY --chown=bun:bun ./tooling/ui/dockerServe.mts /app/dockerServe.mts
-COPY --chown=bun:bun ./tooling/ui/appIds.mts /app/appIds.mts
+COPY --chown=bun:bun ./tooling/ui/dockerServe.mts /app/tooling/ui/dockerServe.mts
+COPY --chown=bun:bun ./tooling/ui/appIds.mts /app/tooling/ui/appIds.mts
 USER bun
 EXPOSE 8011
 ENV UI_APP=statoblast
 ENV PORT=8011
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:8011/'); process.exit(response.ok ? 0 : 1)" ]
-CMD [ "bun", "/app/dockerServe.mts" ]
+CMD [ "bun", "/app/tooling/ui/dockerServe.mts" ]
 
 # Build Trading as an application leaf.
 FROM statoblast-dependencies AS trading-builder
@@ -156,13 +151,13 @@ FROM oven/bun:${BUN_VERSION}-alpine AS local-runtime-trading
 
 WORKDIR /app
 COPY --from=trading-builder --chown=bun:bun /source/ui/trading/dist/ /app/ui/trading/
-COPY --chown=bun:bun ./tooling/ui/dockerServe.mts /app/dockerServe.mts
-COPY --chown=bun:bun ./tooling/ui/appIds.mts /app/appIds.mts
+COPY --chown=bun:bun ./tooling/ui/dockerServe.mts /app/tooling/ui/dockerServe.mts
+COPY --chown=bun:bun ./tooling/ui/appIds.mts /app/tooling/ui/appIds.mts
 USER bun
 EXPOSE 8080
 ENV UI_APP=trading
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:8080/'); process.exit(response.ok ? 0 : 1)" ]
-CMD [ "bun", "/app/dockerServe.mts" ]
+CMD [ "bun", "/app/tooling/ui/dockerServe.mts" ]
 
 # The publisher intentionally includes every independently built application.
 FROM common-builder AS builder

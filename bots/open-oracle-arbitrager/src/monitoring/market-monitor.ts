@@ -197,6 +197,7 @@ async function loadConstantProductPools(client: ReadClient, chainId: number, tok
 export async function loadTokenMarkets(
 	client: ReadClient,
 	parameters: {
+		blockNumber?: bigint | undefined
 		explorerUrl: string
 		factory: Address
 		chainId: number
@@ -206,7 +207,7 @@ export async function loadTokenMarkets(
 	},
 ) {
 	const snapshots: TokenMarketSnapshot[] = []
-	await requireDeployedContracts(client, [{ name: 'Uniswap V3 factory', address: parameters.factory }])
+	await requireDeployedContracts(client, [{ name: 'Uniswap V3 factory', address: parameters.factory }], parameters.blockNumber)
 	for (const token of parameters.tokens) {
 		const poolAddresses = []
 		for (const fee of UNISWAP_V3_FEES) {

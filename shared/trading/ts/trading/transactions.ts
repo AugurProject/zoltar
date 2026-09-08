@@ -1,10 +1,12 @@
+import type { AbiValue } from '@zoltar/core-shared/evm/ethereum'
+
 export type Address = `0x${string}`
 export type Hash = `0x${string}`
 
 export type ContractRequest = Readonly<{
 	address: Address
 	functionName: string
-	args: readonly unknown[]
+	args: readonly AbiValue[]
 	value?: bigint
 }>
 

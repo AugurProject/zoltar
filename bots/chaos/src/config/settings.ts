@@ -1,10 +1,11 @@
+import { canonicalDeployment } from './canonical-deployment.ts'
 import { createHash, randomUUID } from 'node:crypto'
 import { constants } from 'node:fs'
 import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
 import { dirname, extname, resolve } from 'node:path'
 import { persistentPathIdentitiesMatch, persistentPathIdentity } from '@zoltar/bot-shared/config/persistent-path'
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
-import { getAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import { type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { validateSubmissionSettings, type SubmissionSettings } from '@zoltar/bot-shared/execution/transaction-submission'
 import { validateConnectivitySettings, validateIndependentReadRpcUrls, type ConnectivitySettings, type NetworkName } from '@zoltar/bot-shared/monitoring/connectivity'
 import { configuredQuorumRpcUrlMinimum, rpcQuorumRequirement, type RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
@@ -140,8 +141,6 @@ const settingsFilesystem: SettingsFilesystem = {
 
 const settingsWriteQueues = new Map<string, Promise<void>>()
 
-const zeroAddress = getAddress('0x0000000000000000000000000000000000000000')
-const canonicalUniswapV3Factory = getAddress('0x1F98431c8aD98523631AE4a59f267346ea31F984')
 const unit = 10n ** 18n
 const defaultSettingsPath = resolve(import.meta.dir, '..', '..', '.state', 'operator.json')
 
@@ -271,23 +270,6 @@ function parseConnectivity(value: unknown): NonNullable<OperatorSettings['connec
 	return { ...parsed, quorumRpcUrls, rpcQuorum }
 }
 
-function parseDeployment(value: unknown): DeploymentSettings {
-	const deployment = requiredRecord(value, 'deployment')
-	const keys = ['openOracle', 'questionData', 'securityPoolFactory', 'securityPoolForker', 'tradingFactory', 'tradingRouter', ...('uniswapV3Factory' in deployment ? ['uniswapV3Factory'] : []), 'weth', 'zoltar'] as const
-	assertExactKeys(deployment, keys, 'deployment')
-	return {
-		openOracle: getAddress(nonemptyString(deployment['openOracle'], 'deployment.openOracle')),
-		questionData: getAddress(nonemptyString(deployment['questionData'], 'deployment.questionData')),
-		securityPoolFactory: getAddress(nonemptyString(deployment['securityPoolFactory'], 'deployment.securityPoolFactory')),
-		securityPoolForker: getAddress(nonemptyString(deployment['securityPoolForker'], 'deployment.securityPoolForker')),
-		tradingFactory: getAddress(nonemptyString(deployment['tradingFactory'], 'deployment.tradingFactory')),
-		tradingRouter: getAddress(nonemptyString(deployment['tradingRouter'], 'deployment.tradingRouter')),
-		uniswapV3Factory: deployment['uniswapV3Factory'] === undefined ? canonicalUniswapV3Factory : getAddress(nonemptyString(deployment['uniswapV3Factory'], 'deployment.uniswapV3Factory')),
-		weth: getAddress(nonemptyString(deployment['weth'], 'deployment.weth')),
-		zoltar: getAddress(nonemptyString(deployment['zoltar'], 'deployment.zoltar')),
-	}
-}
-
 function parseDiscovery(value: unknown): DiscoverySettings {
 	const discovery = requiredRecord(value, 'discovery')
 	const keys = ['maxPools', 'maxQuestions', 'maxStagedOperationsPerPool', 'maxUniverses', 'maxVaultsPerPool'] as const
@@ -387,13 +369,10 @@ function parseStrategy(value: unknown): StrategySettings {
 	}
 }
 
-function hasZeroDeploymentAddress(deployment: DeploymentSettings) {
-	return Object.values(deployment).some(address => address === zeroAddress)
-}
-
 export function parseSettings(value: unknown, preservedPrivateKey?: Hex): OperatorSettings {
 	const root = requiredRecord(value, 'operator settings')
-	assertExactKeys(root, ['connectivity', 'deployment', 'discovery', 'network', 'networkConfigured', 'paused', 'privateKey', 'runtime', 'scheduler', 'strategy', 'submission', 'version'], 'operator settings')
+	// Accept the obsolete field so existing saved configurations can migrate; never use its addresses.
+	assertExactKeys(root, ['connectivity', ...('deployment' in root ? ['deployment'] : []), 'discovery', 'network', 'networkConfigured', 'paused', 'privateKey', 'runtime', 'scheduler', 'strategy', 'submission', 'version'], 'operator settings')
 	if (root['version'] !== 1) throw new Error('operator settings version must be 1')
 	const networkConfigured = boolean(root['networkConfigured'], 'networkConfigured')
 	const connectivity = root['connectivity'] === null ? undefined : parseConnectivity(root['connectivity'])
@@ -401,11 +380,12 @@ export function parseSettings(value: unknown, preservedPrivateKey?: Hex): Operat
 	if (root['privateKey'] === PRESERVE_PRIVATE_KEY && preservedPrivateKey === undefined) throw new Error('A redacted private key can only preserve an existing saved signer')
 	const privateKeyValue = root['privateKey'] === PRESERVE_PRIVATE_KEY ? preservedPrivateKey : root['privateKey']
 	const privateKey = signerCandidate(privateKeyValue ?? null).privateKey
+	const network = parseNetwork(root['network'])
 	const settings: OperatorSettings = {
 		connectivity,
-		deployment: parseDeployment(root['deployment']),
+		deployment: canonicalDeployment(network.chainId),
 		discovery: parseDiscovery(root['discovery']),
-		network: parseNetwork(root['network']),
+		network,
 		networkConfigured,
 		paused: boolean(root['paused'], 'paused'),
 		privateKey,
@@ -422,7 +402,6 @@ export function parseSettings(value: unknown, preservedPrivateKey?: Hex): Operat
 	if (settings.runtime.execute && settings.strategy.minimumEthReserveAttoEth < settings.strategy.maximumGasCostAttoEth) {
 		throw new Error('Live execution requires strategy.minimumEthReserve to retain at least one strategy.maximumGasCostEth-sized safety floor')
 	}
-	if (settings.runtime.execute && hasZeroDeploymentAddress(settings.deployment)) throw new Error('Live execution requires every ecosystem deployment address')
 	if (settings.runtime.execute && (settings.connectivity === undefined || settings.connectivity.rpcQuorum !== 2 || settings.connectivity.quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(2))) {
 		throw new Error('Live execution requires RPC quorum 2 with three independent read origins')
 	}
@@ -432,7 +411,6 @@ export function parseSettings(value: unknown, preservedPrivateKey?: Hex): Operat
 export function serializedSettings(settings: OperatorSettings, redactPrivateKey = false) {
 	return {
 		connectivity: settings.connectivity === undefined ? null : { ...settings.connectivity },
-		deployment: settings.deployment,
 		discovery: settings.discovery,
 		network: settings.network,
 		networkConfigured: settings.networkConfigured,
@@ -653,7 +631,7 @@ export async function switchSettingsNetworkProfile(path: string, network: Networ
 		target = {
 			...template,
 			connectivity: undefined,
-			deployment: Object.fromEntries(Object.keys(template.deployment).map(key => [key, zeroAddress])) as DeploymentSettings,
+			deployment: canonicalDeployment(chainId),
 			network: {
 				chainId,
 				explorerUrl: network === 'mainnet' ? 'https://etherscan.io' : 'https://sepolia.etherscan.io',

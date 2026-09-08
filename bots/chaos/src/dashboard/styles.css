@@ -1095,8 +1095,7 @@ button.operation-id-copy {
 	margin-top: 0.25rem;
 }
 
-.notice,
-.operator-alerts {
+.notice {
 	margin: 0 0 1rem;
 	padding: 0.85rem 1rem;
 	border: 1px solid var(--operator-border);
@@ -1111,14 +1110,15 @@ button.operation-id-copy {
 	color: var(--operator-warning);
 }
 
-.notice.error,
-.operator-alerts {
+.notice.error {
 	border-color: rgb(255 117 111 / 38%);
 	color: var(--operator-error);
 }
 
 .operator-alerts {
-	padding-left: 2rem;
+	margin: 0;
+	padding: 0;
+	list-style: none;
 }
 
 .operator-alerts li + li {

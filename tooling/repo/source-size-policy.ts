@@ -33,7 +33,6 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['bots/chaos/src/monitoring/protocol-index.ts', 716],
 		['bots/chaos/src/config/settings.ts', 685],
 		['bots/chaos/src/runtime/canonical-scan.ts', 651],
-		['bots/chaos/src/operations/types.ts', 625],
 		['bots/chaos/src/operations/zoltar.ts', 619],
 	]),
 	...allowances('Existing bot dashboard/runtime debt is outside this lane.', [

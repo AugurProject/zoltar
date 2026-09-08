@@ -12,6 +12,7 @@ import {
 	formatAbiParameter,
 	formatUnits,
 	getAddress,
+	getCreate2Address,
 	type Hex,
 	isAddress,
 	keccak256,
@@ -20,6 +21,7 @@ import {
 	toEventSelector,
 	toFunctionSelector,
 	zeroAddress,
+	zeroHash,
 } from './ethereum.ts'
 import type { AbiCatalogEntry, ContractMetadata, DecodedRecord, SerializedArguments, TokenMetadata } from './types.ts'
 
@@ -482,10 +484,29 @@ export const decodeAction = (
 	contractKinds: ReadonlyMap<string, string> = new Map(),
 	context: DecodeDisplayContext = defaultDisplayContext,
 ): DecodedRecord => {
-	if (input === '0x') return { status: 'decoded', name: 'receive', summary: `Native transfer to ${contract?.label ?? 'contract'}` }
-	const abi = contract === undefined ? undefined : abiForKind(contract.kind)
-	if (abi === undefined) return { status: 'unknown', summary: `Call ${input.slice(0, 10)}` }
 	try {
+		// deployViaProxy sends the entire init code to the zero-salt CREATE2 deployer;
+		// there is no Solidity function selector or ABI envelope to decode.
+		if (contract?.kind === 'proxyDeployer') {
+			const deployedContract = getCreate2Address({ from: contract.address, salt: zeroHash, bytecode: input })
+			const initCodeHash = keccak256(input)
+			const deployedLabel = labels.get(deployedContract.toLowerCase()) ?? deployedContract
+			return {
+				name: 'deploy',
+				arguments: { deployedContract, initCodeHash },
+				displayArguments: { deployedContract: deployedLabel, initCodeHash },
+				argumentSchema: [
+					{ index: 0, name: 'deployedContract', type: 'address' },
+					{ index: 1, name: 'initCodeHash', type: 'bytes32' },
+				],
+				referencedAddresses: [deployedContract],
+				status: 'decoded',
+				summary: `Deploy ${deployedLabel} via ${contract.label}`,
+			}
+		}
+		if (input === '0x') return { status: 'decoded', name: 'receive', summary: `Native transfer to ${contract?.label ?? 'contract'}` }
+		const abi = contract === undefined ? undefined : abiForKind(contract.kind)
+		if (abi === undefined) return { status: 'unknown', summary: `Call ${input.slice(0, 10)}` }
 		const result = decodeFunctionData({ abi, data: input })
 		const selector = input.slice(0, 10)
 		const functionItem = abi.find((item): item is AbiFunction => isAbiFunction(item) && toFunctionSelector(item) === selector)

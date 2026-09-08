@@ -4,6 +4,7 @@
 	"private": true,
 	"type": "module",
 	"exports": {
+		"./config/canonical-deployment": "./src/config/canonical-deployment.ts",
 		"./config/persistent-path": "./src/config/persistent-path.ts",
 		"./config/signer": "./src/config/signer.ts",
 		"./dashboard/connectivity-error": "./src/dashboard/connectivity-error.ts",

@@ -63,8 +63,8 @@ async function loadPool(client: ReadClient, address: Address, token: Address, fe
 	}
 }
 
-export async function poolsForToken(client: ReadClient, config: Pick<Configuration, 'network' | 'v2Router' | 'twapSeconds'>, token: Address) {
-	await requireDeployedContracts(client, [{ name: 'Uniswap V3 factory', address: config.network.factory }])
+export async function poolsForToken(client: ReadClient, config: Pick<Configuration, 'network' | 'v2Router' | 'twapSeconds'>, token: Address, blockNumber?: bigint) {
+	await requireDeployedContracts(client, [{ name: 'Uniswap V3 factory', address: config.network.factory }], blockNumber)
 	const pools: Pool[] = []
 	let v2Pair: Address | undefined
 	if (config.v2Router !== undefined && config.network.chain.id === 1) {

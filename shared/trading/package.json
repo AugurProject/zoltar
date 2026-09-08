@@ -28,5 +28,11 @@
 	},
 	"devDependencies": {
 		"typescript": "5.8.2"
+	},
+	"dependencies": {
+		"@zoltar/core-shared": "file:../core"
+	},
+	"overrides": {
+		"@zoltar/core-shared": "file:../core"
 	}
 }

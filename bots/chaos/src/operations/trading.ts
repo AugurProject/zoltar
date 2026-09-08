@@ -1,4 +1,4 @@
-import { decodeFunctionData, encodeAbiParameters, encodeDeployData, getAddress, getCreate2Address, isAddress, toHex, zeroAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import { decodeFunctionData, encodeAbiParameters, encodeDeployData, getAddress, getCreate2Address, isAddress, toHex, zeroAddress, type AbiValue, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory, trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter } from '../../../../solidity/ts/types/contractArtifact.ts'
 import { erc1155Abi, erc20Abi, genesisUniswapSeederAbi, shareTokenAbi, tradingFactoryAbi, tradingPairAbi, tradingRouterAbi, uniswapV3FactoryAbi, uniswapV3PoolAbi } from '../contracts/abi.ts'
 import { CANONICAL_UNISWAP_V3_FACTORY, GENESIS_UNISWAP_FEE, GENESIS_UNISWAP_SQRT_PRICE_X96, GENESIS_UNISWAP_TICK_LOWER, GENESIS_UNISWAP_TICK_UPPER, genesisUniswapSeederDeployment } from '../core/genesis-uniswap.ts'
@@ -50,10 +50,10 @@ function deploymentStep(id: string, label: string, to: Address, data: Hex, evide
 	return { data, evidence, gasLimit: '12000000', id, label, preflightCalls: [], to, walletAssetDebits: [] }
 }
 
-function tradingRootDeploymentPlans(snapshot: EcosystemSnapshot) {
+export function tradingRootDeploymentPlans(securityPoolFactory: Address) {
 	const factoryData = encodeDeployData({
 		abi: trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory.abi,
-		args: [snapshot.deployments.securityPoolFactory, BigInt(GENESIS_TRADING_FEE_BPS)],
+		args: [securityPoolFactory, BigInt(GENESIS_TRADING_FEE_BPS)],
 		bytecode: `0x${trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory.evm.bytecode.object}`,
 	})
 	const factoryAddress = getCreate2Address({ bytecode: factoryData, from: CANONICAL_PROXY_DEPLOYER, salt: ZERO_SALT })
@@ -68,7 +68,7 @@ function tradingRootDeploymentPlans(snapshot: EcosystemSnapshot) {
 
 const deployTradingFactory: OperationDefinition = {
 	buildPlan(snapshot) {
-		const deployment = tradingRootDeploymentPlans(snapshot)
+		const deployment = tradingRootDeploymentPlans(snapshot.deployments.securityPoolFactory)
 		if (deployment.factoryAddress !== snapshot.deployments.tradingFactory) return undefined
 		return planBase({
 			definitionId: deployTradingFactory.id,
@@ -91,7 +91,7 @@ const deployTradingFactory: OperationDefinition = {
 	discoveryInputs: ['configured trading roots and canonical proxy deployment'],
 	ecosystem: 'trading',
 	evaluate(snapshot) {
-		const deployment = tradingRootDeploymentPlans(snapshot)
+		const deployment = tradingRootDeploymentPlans(snapshot.deployments.securityPoolFactory)
 		return eligible(snapshot.tradingDeployment?.factory === false ? undefined : 'Trading factory is already deployed', deployment.factoryAddress === snapshot.deployments.tradingFactory ? undefined : 'Configured trading factory does not match the deterministic deployment plan')
 	},
 	id: 'trading.root.deploy-factory',
@@ -102,7 +102,7 @@ const deployTradingFactory: OperationDefinition = {
 
 const deployTradingRouter: OperationDefinition = {
 	buildPlan(snapshot) {
-		const deployment = tradingRootDeploymentPlans(snapshot)
+		const deployment = tradingRootDeploymentPlans(snapshot.deployments.securityPoolFactory)
 		if (deployment.routerAddress !== snapshot.deployments.tradingRouter) return undefined
 		return planBase({
 			definitionId: deployTradingRouter.id,
@@ -125,7 +125,7 @@ const deployTradingRouter: OperationDefinition = {
 	discoveryInputs: ['configured trading roots and canonical proxy deployment'],
 	ecosystem: 'trading',
 	evaluate(snapshot) {
-		const deployment = tradingRootDeploymentPlans(snapshot)
+		const deployment = tradingRootDeploymentPlans(snapshot.deployments.securityPoolFactory)
 		return eligible(
 			snapshot.tradingDeployment?.factory === true ? undefined : 'Deploy the trading factory first',
 			snapshot.tradingDeployment?.router === false ? undefined : 'Trading router is already deployed',
@@ -940,6 +940,7 @@ function shareApprovalCleanup(snapshot: EcosystemSnapshot, context: OperationCon
 }
 
 const createPair: OperationDefinition = {
+	requiredTradingDeployment: ['factory'],
 	buildPlan(snapshot, options) {
 		const paired = new Set(snapshot.pairs.map(pair => pair.pool.toLowerCase()))
 		const pool = choose(
@@ -1046,7 +1047,7 @@ function buildSwapPlan(snapshot: EcosystemSnapshot, options: PlanningOptions, pa
 	const maximumCleanupTransactionCount = steps.length > 0 || confirmedApproval ? 1 : undefined
 	if (!poolLifecycleOpen(snapshot, pool, options, steps.length)) return undefined
 	const inputBalance = amount(yesForNo ? shares.yes : shares.no)
-	let args: readonly unknown[]
+	let args: readonly AbiValue[]
 	let maximumInput: bigint
 	if (mode === 'exact-input') {
 		if (inputBalance < principal || quoteExactInput(pair, yesForNo, principal) < bound) return undefined
@@ -1196,6 +1197,7 @@ function routerEthDefinition(kind: 'create-and-initialize' | 'initialize' | 'add
 	} as const
 	const [id, method] = details[kind]
 	return {
+		requiredTradingDeployment: ['factory', 'router'],
 		buildPlan(snapshot, options) {
 			const spend = ethSpend(snapshot, options, id, kind === 'create-and-initialize' || kind === 'initialize' ? 2_002n : 1n)
 			if (spend === 0n) return undefined
@@ -1234,7 +1236,7 @@ function routerEthDefinition(kind: 'create-and-initialize' | 'initialize' | 'add
 			const enterOutcomes = pair === undefined ? [] : [1, 2].filter(outcome => quoteExactInput(pair, outcome === 2, minted) > 0n)
 			const longOutcome = kind === 'enter' ? choose(enterOutcomes, mixSeed(options.seed, 'long-outcome')) : undefined
 			if (kind === 'enter' && longOutcome === undefined) return undefined
-			let args: readonly unknown[]
+			let args: readonly AbiValue[]
 			let evidence: OperationEvidence[]
 			if (kind === 'create-and-initialize' || kind === 'initialize') {
 				args = [target, 5_000n, minimumAfterSlippage(minted - 1_000n), snapshot.wallet.address, BigInt(deadline)]
@@ -1435,6 +1437,7 @@ function routerOwnedDefinition(kind: 'exit' | 'redeem' | 'remove'): OperationDef
 	} as const
 	const [id, method] = details[kind]
 	return {
+		requiredTradingDeployment: kind === 'remove' ? [] : ['router'],
 		buildPlan(snapshot, options) {
 			const pair = choose(
 				snapshot.pairs.filter(candidate => {

@@ -3,6 +3,7 @@ import { join } from 'node:path'
 const sourceByPath = new Map([
 	['/dashboard.js', 'dashboard.ts'],
 	['/formatting.js', 'formatting.ts'],
+	['/operator-alerts.js', 'operator-alerts.ts'],
 	['/retirement-dashboard.js', 'retirement-dashboard.ts'],
 ])
 
