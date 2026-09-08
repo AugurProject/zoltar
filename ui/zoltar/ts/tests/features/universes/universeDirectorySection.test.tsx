@@ -47,15 +47,14 @@ describe('UniverseDirectorySection', () => {
 		restoreDomEnvironment = undefined
 	})
 
-	test('shows parent context without a second child list', async () => {
+	test('shows current universe details without duplicating child universes', async () => {
 		const renderedComponent = await renderIntoDocument(h(UniverseDirectorySection, { zoltarUniverse: createUniverse() }))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('link', { name: 'Select' })).toBeNull()
-		expect(documentQueries.getAllByRole('link')).toHaveLength(1)
-		expect(documentQueries.queryByRole('button', { name: 'Deploy universe' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Child Universes' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Deploy universe' })).toBeNull()
 	})
 
 	for (const hasForked of [false, true]) {
@@ -116,10 +115,13 @@ describe('UniverseDirectorySection', () => {
 			const rendered = await renderIntoDocument(h(ZoltarSection, props))
 			cleanupRenderedComponent = rendered.cleanup
 			const queries = within(document.body)
-			expect(queries.getByRole('heading', { name: 'Universe' })).toBeTruthy()
+			expect(queries.queryByRole('heading', { name: 'Universe' })).toBeNull()
 			if (hasForked) {
+				expect(queries.queryByRole('button', { name: 'Prepare REP' })).toBeNull()
+				expect(document.querySelectorAll('.migration-outcome-list')).toHaveLength(1)
 				expect(queries.queryByRole('heading', { name: 'Child Universes' })).toBeNull()
-				expect(document.querySelectorAll('.migration-outcome-row')).toHaveLength(2)
+				expect(queries.getByRole('heading', { name: 'Outcome Universes' })).toBeTruthy()
+				expect(queries.getByRole('button', { name: 'Deploy universe' })).toBeTruthy()
 				expect(queries.getByRole('button', { name: 'Split REP' })).toBeTruthy()
 				expect(queries.queryByRole('button', { name: 'Fork Universe' })).toBeNull()
 			} else {

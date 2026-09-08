@@ -7,6 +7,7 @@ import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
 import { zeroAddress } from '@zoltar/shared/evm/ethereum'
 import { ZoltarMigrationSection } from '@zoltar/ui-zoltar-shared/features/universes/components/ZoltarMigrationSection.js'
+import { getUniverseLinkHref } from '@zoltar/ui-zoltar-shared/features/universes/lib/universe.js'
 import type { ZoltarMigrationFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
@@ -60,9 +61,9 @@ function createProps(overrides: Partial<ZoltarMigrationSectionProps> = {}): Zolt
 		loadingZoltarForkAccess: false,
 		loadingZoltarUniverse: false,
 		onApproveZoltarForkRep: () => undefined,
-		onDeployChildUniverse: () => undefined,
-		pendingOutcomeIndex: undefined,
 		onMigrateInternalRep: () => undefined,
+		onDeployChildUniverse: () => undefined,
+		pendingChildUniverseOutcomeIndex: undefined,
 		onRetryMigrationBalances: () => undefined,
 		onZoltarMigrationFormChange: () => undefined,
 		zoltarForkActiveAction: undefined,
@@ -100,37 +101,6 @@ describe('ZoltarMigrationSection', () => {
 		cleanupRenderedComponent = undefined
 		restoreDomEnvironment?.()
 		restoreDomEnvironment = undefined
-	})
-
-	test('selects destinations while keeping deployment and navigation separate', async () => {
-		const changes: Partial<ZoltarMigrationFormState>[] = []
-		const deployments: bigint[] = []
-		const universe = createUniverse()
-		const missing = { ...universe.childUniverses[0], exists: false, forkTime: 0n, outcomeIndex: 2n, outcomeLabel: 'No', parentUniverseId: 1n, reputationToken: zeroAddress, universeId: 3n }
-		const props = createProps({
-			zoltarUniverse: { ...universe, childUniverses: [...universe.childUniverses, missing] },
-			onZoltarMigrationFormChange: update => changes.push(update),
-			onDeployChildUniverse: outcome => deployments.push(outcome),
-		})
-		const rendered = await renderIntoDocument(h(ZoltarMigrationSection, props))
-		cleanupRenderedComponent = rendered.cleanup
-		const queries = within(document.body)
-		const selected = queries.getByRole('button', { name: /^Yes/ })
-		const unselected = queries.getByRole('button', { name: /^No/ })
-		expect(selected.getAttribute('aria-pressed')).toBe('true')
-		expect(unselected.getAttribute('aria-pressed')).toBe('false')
-		unselected.click()
-		expect(changes).toEqual([{ outcomeIndexes: '1, 2' }])
-		selected.click()
-		expect(changes[1]).toEqual({ outcomeIndexes: '' })
-		const details = unselected.parentElement?.querySelector('details')
-		if (details === null || details === undefined) throw new Error('Expected destination details')
-		details.open = true
-		within(details).getByRole('button', { name: 'Deploy universe' }).click()
-		expect(deployments).toEqual([2n])
-		expect(changes).toHaveLength(2)
-		expect(details.querySelector('a')).not.toBeNull()
-		expect(document.querySelector('button a, button button')).toBeNull()
 	})
 
 	test('Max includes prepared REP and explains the total without requiring it from the wallet again', async () => {
@@ -228,6 +198,38 @@ describe('ZoltarMigrationSection', () => {
 		expectTransactionButtonEnabled(document.body, 'Split REP')
 	})
 
+	test('shows deployment state and deploys missing universes from the outcome selector', async () => {
+		const deployedOutcomes: bigint[] = []
+		const formUpdates: Partial<ZoltarMigrationFormState>[] = []
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ZoltarMigrationSection,
+				createProps({
+					onDeployChildUniverse: outcomeIndex => deployedOutcomes.push(outcomeIndex),
+					onZoltarMigrationFormChange: update => formUpdates.push(update),
+					zoltarUniverse: createUniverse({
+						childUniverses: [
+							{ exists: false, forkTime: 1n, outcomeIndex: 1n, outcomeLabel: 'Yes', parentUniverseId: 1n, reputationToken: zeroAddress, universeId: 2n },
+							{ exists: true, forkTime: 1n, outcomeIndex: 2n, outcomeLabel: 'No', parentUniverseId: 1n, reputationToken: CHILD_REP_ADDRESS, reputationTokenName: 'No Reputation', reputationTokenSymbol: 'REP-NO', universeId: 3n },
+						],
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const queries = within(document.body)
+		const deployedLink = queries.getByRole('link', { name: 'Deployed' })
+		expect(deployedLink.getAttribute('href')).toBe(getUniverseLinkHref(3n))
+		expect(deployedLink.querySelector('[role="button"]')).toBeNull()
+		expect(document.body.textContent).toContain('0x3')
+		expect(document.body.textContent).toContain('No Reputation')
+		queries.getByRole('button', { name: /^No/ }).click()
+		expect(formUpdates).toEqual([{ outcomeIndexes: '1, 2' }])
+		queries.getByRole('button', { name: 'Deploy universe' }).click()
+		expect(deployedOutcomes).toEqual([1n])
+	})
+
 	test('keeps migration approval disabled off mainnet and explains recovery', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
@@ -284,8 +286,7 @@ describe('ZoltarMigrationSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(document.body.textContent).toContain('Yes')
-		expect(document.querySelector('.migration-outcome-row')?.textContent).not.toContain('Universe 0x2')
-		expect(document.querySelector('.migration-outcome-list details')?.textContent).toContain('Universe 0x2')
+		expect(document.body.textContent).toContain('0x2')
 		expect(document.body.textContent).toContain('Child-Universe REP Received')
 		expect(document.body.textContent).not.toContain('Technical Details')
 		expect(document.body.textContent?.match(/Selected Destinations/g)).toHaveLength(1)
@@ -382,7 +383,7 @@ describe('ZoltarMigrationSection', () => {
 		else expectTransactionButtonDisabled(document.body, 'Split REP')
 	})
 
-	test('keeps deployed token details within the selectable destination without a second wallet list', async () => {
+	test('shows wallet import access only for deployed child tokens the account holds', async () => {
 		const heldChild = {
 			exists: true,
 			forkTime: 1n,
@@ -404,11 +405,11 @@ describe('ZoltarMigrationSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const destination = document.querySelector('.migration-outcome-row')?.parentElement
-		expect(destination?.textContent).toContain('Yes')
-		expect(destination?.textContent).toContain(CHILD_REP_ADDRESS)
-		expect(within(document.body).queryByRole('heading', { name: 'Wallet REP Tokens' })).toBeNull()
-		expect(destination?.querySelector('button button, button a')).toBeNull()
+		const walletTokensHeading = within(document.body).getByRole('heading', { name: 'Wallet REP Tokens' })
+		const walletTokensSection = walletTokensHeading.closest('section')
+		if (walletTokensSection === null) throw new Error('Expected wallet REP tokens section')
+		expect(walletTokensSection.textContent).toContain('Yes')
+		expect(walletTokensSection.textContent).toContain(CHILD_REP_ADDRESS)
 
 		await cleanupRenderedComponent()
 		cleanupRenderedComponent = undefined

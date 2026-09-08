@@ -1784,18 +1784,16 @@ button.wallet-asset-action-pending:disabled {
 .migration-outcome-list {
 	display: grid;
 	gap: 0.6rem;
+	grid-template-columns: minmax(0, 1fr);
 }
 
 .migration-outcome-row {
-	display: flex;
-	flex-direction: column;
-	align-items: flex-start;
-	gap: 0.35rem;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: start;
 	width: 100%;
-	padding: 0.8rem 0.95rem;
 	border: 1px solid var(--control-border);
 	background: var(--control-bg);
-	text-align: left;
 }
 
 .migration-outcome-row.active {
@@ -1803,9 +1801,28 @@ button.wallet-asset-action-pending:disabled {
 	background: var(--interactive-bg);
 }
 
-.migration-outcome-row:disabled {
+.migration-outcome-select:disabled {
 	opacity: 0.55;
 	cursor: not-allowed;
+}
+
+.migration-outcome-select {
+	display: flex;
+	align-items: flex-start;
+	width: 100%;
+	padding: 0.9rem 1rem;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	color: inherit;
+	text-align: left;
+}
+
+.migration-outcome-actions {
+	display: flex;
+	align-items: flex-start;
+	justify-content: flex-end;
+	padding: 0.75rem 0.75rem 0 0;
 }
 
 .migration-outcome-label {
@@ -1822,15 +1839,53 @@ button.wallet-asset-action-pending:disabled {
 
 .migration-outcome-metrics {
 	display: grid;
-	gap: 0.25rem;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 0.5rem 1rem;
+	margin-top: 0.25rem;
 	color: var(--text-secondary);
 	font-size: var(--font-caption);
 	line-height: 1.35;
 }
 
+.migration-outcome-metric {
+	display: grid;
+	gap: 0.16rem;
+	min-width: 0;
+	overflow: hidden;
+}
+
+.migration-outcome-metric-label {
+	color: var(--muted);
+	font-size: var(--font-xs);
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+@media (max-width: 900px) {
+	.migration-outcome-metrics {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 520px) {
+	.migration-outcome-row {
+		grid-template-columns: minmax(0, 1fr) auto;
+	}
+
+	.migration-outcome-metrics {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
 .migration-outcome-metrics strong {
+	display: block;
+	min-width: 0;
+	max-width: 100%;
 	color: var(--text);
 	font-weight: 600;
+	overflow-wrap: anywhere;
+	word-break: break-word;
 }
 
 .status-list span,

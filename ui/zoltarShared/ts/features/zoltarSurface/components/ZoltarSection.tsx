@@ -210,7 +210,7 @@ export function ZoltarSection({
 				<SectionBlock title={zoltarCopy.migrateRep} variant='plain'>
 					<ZoltarMigrationSection
 						onDeployChildUniverse={onCreateChildUniverseForOutcomeIndex}
-						pendingOutcomeIndex={zoltarChildUniversePendingOutcomeIndex}
+						pendingChildUniverseOutcomeIndex={zoltarChildUniversePendingOutcomeIndex}
 						accountAddress={accountState.address}
 						isOnActiveAppChain={isOnActiveAppChain}
 						loadingZoltarForkAccess={loadingZoltarForkAccess}
@@ -265,7 +265,6 @@ export function ZoltarSection({
 		}
 		return (
 			<>
-				<RouteHeader title={commonCopy.universe} />
 				<UniverseDirectorySection zoltarUniverse={zoltarUniverse}>{universeActionContent}</UniverseDirectorySection>
 				<ErrorNotice message={zoltarChildUniverseError} />
 			</>
