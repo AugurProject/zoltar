@@ -9,7 +9,6 @@
         "@zoltar/shared": "file:../../shared",
         "@zoltar/ui-core-shared": "file:../coreShared",
         "@zoltar/ui-statoblast-shared": "file:../statoblastShared",
-        "@zoltar/ui-trading-shared": "file:../tradingShared",
         "@zoltar/ui-zoltar-shared": "file:../zoltarShared",
         "preact": "10.26.4",
         "tevm": "1.0.0-rc.151",
@@ -406,8 +405,6 @@
     "@zoltar/ui-core-shared": ["@zoltar/ui-core-shared@file:../coreShared", { "dependencies": { "@noble/curves": "2.2.0", "@noble/hashes": "2.2.0", "@preact/signals": "2.0.1", "@zoltar/shared": "file:../../shared", "micro-eth-signer": "0.18.1", "micro-packed": "0.8.0", "preact": "10.26.4", "tevm": "1.0.0-rc.151" }, "devDependencies": { "better-typescript-lib": "2.11.0", "bun-types": "1.4.2", "typescript": "5.8.2" } }],
 
     "@zoltar/ui-statoblast-shared": ["@zoltar/ui-statoblast-shared@file:../statoblastShared", { "dependencies": { "@preact/signals": "2.0.1", "@zoltar/shared": "file:../../shared", "@zoltar/ui-core-shared": "file:../coreShared", "@zoltar/ui-zoltar-shared": "file:../zoltarShared", "preact": "10.26.4", "tevm": "1.0.0-rc.151" }, "devDependencies": { "better-typescript-lib": "2.11.0", "bun-types": "1.4.2", "typescript": "5.8.2" } }],
-
-    "@zoltar/ui-trading-shared": ["@zoltar/ui-trading-shared@file:../tradingShared", { "dependencies": { "@zoltar/shared": "file:../../shared" }, "devDependencies": { "better-typescript-lib": "2.11.0", "bun-types": "1.4.2", "typescript": "5.8.2" } }],
 
     "@zoltar/ui-zoltar-shared": ["@zoltar/ui-zoltar-shared@file:../zoltarShared", { "dependencies": { "@preact/signals": "2.0.1", "@zoltar/shared": "file:../../shared", "@zoltar/ui-core-shared": "file:../coreShared", "preact": "10.26.4", "tevm": "1.0.0-rc.151" }, "devDependencies": { "better-typescript-lib": "2.11.0", "bun-types": "1.4.2", "typescript": "5.8.2" } }],
 
@@ -963,25 +960,15 @@
 
     "@zoltar/ui-core-shared/@zoltar/shared": ["@zoltar/shared@file:../../shared", { "dependencies": { "@noble/hashes": "2.2.0", "micro-eth-signer": "0.18.1" } }],
 
-    "@zoltar/ui-core-shared/bun-types": ["bun-types@1.4.2", "", { "dependencies": { "@types/node": "*" } }, "sha512-bxV1FgK7yBIzjRe5zBozIM4Bem11ZJcCXSrjWRG3YWLt8yFDePu4cLjpebO8OvPeIE9trbyPF4fuj3Cia4Fj3w=="],
-
     "@zoltar/ui-statoblast-shared/@zoltar/shared": ["@zoltar/shared@file:../../shared", { "dependencies": { "@noble/hashes": "2.2.0", "micro-eth-signer": "0.18.1" } }],
 
     "@zoltar/ui-statoblast-shared/@zoltar/ui-core-shared": ["@zoltar/ui-core-shared@file:../coreShared", { "dependencies": { "@noble/curves": "2.2.0", "@noble/hashes": "2.2.0", "@preact/signals": "2.0.1", "@zoltar/shared": "file:../../shared", "micro-eth-signer": "0.18.1", "micro-packed": "0.8.0", "preact": "10.26.4", "tevm": "1.0.0-rc.151" }, "devDependencies": { "better-typescript-lib": "2.11.0", "bun-types": "1.4.2", "typescript": "5.8.2" } }],
 
     "@zoltar/ui-statoblast-shared/@zoltar/ui-zoltar-shared": ["@zoltar/ui-zoltar-shared@file:../zoltarShared", { "dependencies": { "@preact/signals": "2.0.1", "@zoltar/shared": "file:../../shared", "@zoltar/ui-core-shared": "file:../coreShared", "preact": "10.26.4", "tevm": "1.0.0-rc.151" }, "devDependencies": { "better-typescript-lib": "2.11.0", "bun-types": "1.4.2", "typescript": "5.8.2" } }],
 
-    "@zoltar/ui-statoblast-shared/bun-types": ["bun-types@1.4.2", "", { "dependencies": { "@types/node": "*" } }, "sha512-bxV1FgK7yBIzjRe5zBozIM4Bem11ZJcCXSrjWRG3YWLt8yFDePu4cLjpebO8OvPeIE9trbyPF4fuj3Cia4Fj3w=="],
-
-    "@zoltar/ui-trading-shared/@zoltar/shared": ["@zoltar/shared@file:../../shared", { "dependencies": { "@noble/hashes": "2.2.0", "micro-eth-signer": "0.18.1" } }],
-
-    "@zoltar/ui-trading-shared/bun-types": ["bun-types@1.4.2", "", { "dependencies": { "@types/node": "*" } }, "sha512-bxV1FgK7yBIzjRe5zBozIM4Bem11ZJcCXSrjWRG3YWLt8yFDePu4cLjpebO8OvPeIE9trbyPF4fuj3Cia4Fj3w=="],
-
     "@zoltar/ui-zoltar-shared/@zoltar/shared": ["@zoltar/shared@file:../../shared", { "dependencies": { "@noble/hashes": "2.2.0", "micro-eth-signer": "0.18.1" } }],
 
     "@zoltar/ui-zoltar-shared/@zoltar/ui-core-shared": ["@zoltar/ui-core-shared@file:../coreShared", { "dependencies": { "@noble/curves": "2.2.0", "@noble/hashes": "2.2.0", "@preact/signals": "2.0.1", "@zoltar/shared": "file:../../shared", "micro-eth-signer": "0.18.1", "micro-packed": "0.8.0", "preact": "10.26.4", "tevm": "1.0.0-rc.151" }, "devDependencies": { "better-typescript-lib": "2.11.0", "bun-types": "1.4.2", "typescript": "5.8.2" } }],
-
-    "@zoltar/ui-zoltar-shared/bun-types": ["bun-types@1.4.2", "", { "dependencies": { "@types/node": "*" } }, "sha512-bxV1FgK7yBIzjRe5zBozIM4Bem11ZJcCXSrjWRG3YWLt8yFDePu4cLjpebO8OvPeIE9trbyPF4fuj3Cia4Fj3w=="],
 
     "cross-spawn/which": ["which@2.0.2", "", { "dependencies": { "isexe": "^2.0.0" }, "bin": { "node-which": "./bin/node-which" } }, "sha512-BLI3Tl1TW3Pvl70l3yq3Y64i+awpwXqsGBYWkkqMtnbXgrMD+yj7rhW0kuEDxzJaYXGjEW5ogapKNMEKNMjibA=="],
 
