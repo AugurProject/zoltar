@@ -5,11 +5,11 @@ export const sharedBrowserArtifactRelativePaths = [
 	'shared/js/escalationMath.js',
 	'shared/js/ethereum.js',
 	'shared/js/liquidation.js',
-	'shared/js/logScan.js',
+	'shared/js/evm/logScan.js',
 	'shared/js/openOracle.js',
 	'shared/js/oracleInitialReport.js',
 	'shared/js/protocolConfig.js',
-	'shared/js/scalarOutcome.js',
+	'shared/js/statoblast/scalarOutcome.js',
 	'shared/js/sepoliaRepAllocations.js',
 	'shared/js/truthAuctionTickMath.js',
 ] as const

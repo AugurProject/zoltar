@@ -24,11 +24,12 @@ const uiVendorBuildPath = path.join(import.meta.dir, 'vendor.mts')
 const uiWatchBuildPath = path.join(import.meta.dir, 'watch.mts')
 const uiWorkerBuildPath = path.join(import.meta.dir, 'workers.mts')
 const rootPackageJsonPath = path.join(repositoryRootPath, 'package.json')
+const sharedPackageJsonPath = path.join(repositoryRootPath, 'shared', 'package.json')
 const sharedBrowserArtifacts = sharedBrowserArtifactRelativePaths.map(relativePath => path.join(repositoryRootPath, relativePath))
 const developmentImportMapRegressionEntries: Record<string, string> = {
 	'@zoltar/shared/ethereum': '../shared/js/ethereum.js',
-	'@zoltar/shared/logScan': '../shared/js/logScan.js',
-	'@zoltar/shared/scalarOutcome': '../shared/js/scalarOutcome.js',
+	'@zoltar/shared/logScan': '../shared/js/evm/logScan.js',
+	'@zoltar/shared/scalarOutcome': '../shared/js/statoblast/scalarOutcome.js',
 	'@zoltar/shared/sepoliaRepAllocations': '../shared/js/sepoliaRepAllocations.js',
 	'@zoltar/shared/sortStringArrayByKeccak': '../shared/js/sortStringArrayByKeccak.js',
 	abitype: './vendor/abitype/exports/index.js',
@@ -360,7 +361,7 @@ test('shared helper package imports resolve to browser-served shared outputs', (
 		expect(uiIndexHtml).toContain('"@zoltar/shared/escalationMath": "../shared/js/escalationMath.js"')
 		expect(uiIndexHtml).toContain('"@zoltar/shared/ethereum": "../shared/js/ethereum.js"')
 		expect(uiIndexHtml).toContain('"@zoltar/shared/liquidation": "../shared/js/liquidation.js"')
-		expect(uiIndexHtml).toContain('"@zoltar/shared/logScan": "../shared/js/logScan.js"')
+		expect(uiIndexHtml).toContain('"@zoltar/shared/logScan": "../shared/js/evm/logScan.js"')
 		if (appId !== 'zoltar') {
 			expect(uiIndexHtml).toContain('"@zoltar/shared/openOracle": "../shared/js/openOracle.js"')
 			expect(uiIndexHtml).toContain('"@zoltar/shared/oracleInitialReport": "../shared/js/oracleInitialReport.js"')
@@ -369,17 +370,47 @@ test('shared helper package imports resolve to browser-served shared outputs', (
 			expect(uiIndexHtml).not.toContain('"@zoltar/shared/oracleInitialReport": "../shared/js/oracleInitialReport.js"')
 		}
 		expect(uiIndexHtml).toContain('"@zoltar/shared/protocolConfig": "../shared/js/protocolConfig.js"')
-		expect(uiIndexHtml).toContain('"@zoltar/shared/scalarOutcome": "../shared/js/scalarOutcome.js"')
+		expect(uiIndexHtml).toContain('"@zoltar/shared/scalarOutcome": "../shared/js/statoblast/scalarOutcome.js"')
 		expect(uiIndexHtml).toContain('"@zoltar/shared/sepoliaRepAllocations": "../shared/js/sepoliaRepAllocations.js"')
 		expect(uiIndexHtml).toContain('"@zoltar/shared/sortStringArrayByKeccak": "../shared/js/sortStringArrayByKeccak.js"')
 		expect(uiIndexHtml).toContain('"@zoltar/shared/truthAuctionTickMath": "../shared/js/truthAuctionTickMath.js"')
 		expect(uiIndexHtml).not.toContain('"viem": "./vendor/viem/index.js"')
 	}
-	expect(sharedBrowserArtifactRelativePaths).toContain('shared/js/scalarOutcome.js')
-	expect(sharedBrowserArtifactRelativePaths).toContain('shared/js/logScan.js')
+	expect(sharedBrowserArtifactRelativePaths).toContain('shared/js/statoblast/scalarOutcome.js')
+	expect(sharedBrowserArtifactRelativePaths).toContain('shared/js/evm/logScan.js')
 
 	for (const artifactPath of sharedBrowserArtifacts) {
 		expect(fs.existsSync(artifactPath)).toBe(true)
+	}
+})
+
+test('shared browser import maps and required assets follow package export outputs', () => {
+	const sharedPackageJson = JSON.parse(fs.readFileSync(sharedPackageJsonPath, 'utf8')) as {
+		exports?: Record<string, { default?: string }>
+	}
+	if (sharedPackageJson.exports === undefined) throw new Error('Expected shared/package.json to define exports.')
+
+	for (const appId of UI_APP_IDS) {
+		const imports = readDevelopmentImportMap(appId)
+		for (const [specifier, mappedPath] of Object.entries(imports)) {
+			if (!specifier.startsWith('@zoltar/shared/')) continue
+			const exportName = `.${specifier.slice('@zoltar/shared'.length)}`
+			const packageExport = sharedPackageJson.exports[exportName]
+			if (packageExport?.default === undefined) {
+				throw new Error(`${appId} maps ${specifier}, but ${exportName} has no default shared package export.`)
+			}
+			const expectedMappedPath = `../shared/${packageExport.default.replace(/^\.\//, '')}`
+			expect(mappedPath, `${appId} import map entry for ${specifier}`).toBe(expectedMappedPath)
+		}
+	}
+
+	const exportedArtifacts = new Set(
+		Object.values(sharedPackageJson.exports).flatMap(packageExport =>
+			packageExport.default === undefined ? [] : [`shared/${packageExport.default.replace(/^\.\//, '')}`],
+		),
+	)
+	for (const relativePath of sharedBrowserArtifactRelativePaths) {
+		expect(exportedArtifacts.has(relativePath), `${relativePath} is a current package export output`).toBe(true)
 	}
 })
 
