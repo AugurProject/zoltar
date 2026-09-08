@@ -26,11 +26,10 @@ jobs:
     outputs:
       docs: ${{ steps.scope.outputs.docs }}
       core: ${{ steps.scope.outputs.core }}
-      trading: ${{ steps.scope.outputs.trading }}
       bot_shared: ${{ steps.scope.outputs.bot_shared }}
+      chaos: ${{ steps.scope.outputs.chaos }}
       arbitrager: ${{ steps.scope.outputs.arbitrager }}
       liquidator: ${{ steps.scope.outputs.liquidator }}
-      chaos: ${{ steps.scope.outputs.chaos }}
       augur_scan: ${{ steps.scope.outputs.augur_scan }}
       infrastructure: ${{ steps.scope.outputs.infrastructure }}
       package_matrix: ${{ steps.scope.outputs.package_matrix }}
@@ -45,6 +44,8 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
+      - name: Check production source size
+        run: bun run check:source-size
       - name: Select CI scope
         id: scope
         shell: bash
@@ -52,11 +53,11 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
-            bun scripts/classify-ci-change.mts --github-output --base-ref "${BASE_SHA}"
+            bun tooling/ci/classify-ci-change.mts --github-output --base-ref "${BASE_SHA}"
           else
-            bun scripts/classify-ci-change.mts --github-output --full
+            bun tooling/ci/classify-ci-change.mts --github-output --full
           fi
-      - name: Validate test ownership
+      - name: Validate canonical project and test ownership
         run: bun run test:preflight
 
   docs-checks:
@@ -81,16 +82,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-ci
+      - name: Read canonical artifact metadata
+        id: projects
+        run: bun ./tooling/repo/query-projects.mts --github-output
       - uses: actions/upload-artifact@v4
         with:
           name: component-build-inputs
-          path: |
-            shared/js
-            solidity/artifacts
-            solidity/ts/types/contractArtifact.ts
-            ui/coreShared/ts/abis.ts
-            ui/coreShared/ts/contractArtifact.ts
-            ui/trading/ts/generated/contractArtifact.ts
+          path: ${{ steps.projects.outputs.component_artifact_outputs }}
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 1
@@ -134,7 +132,7 @@ jobs:
           fi
           # Refresh the built local packages before preflight so the deployment
           # manifest check does not emit declarations while tsc:app reads them.
-          bun ./scripts/install-frozen.mts ui/statoblast
+          bun ./tooling/repo/run-project-tasks.mts setup --project-path ui/statoblast
           refresh_status="$?"
           if [[ "${refresh_status}" -ne 0 ]]; then
             exit "${refresh_status}"
@@ -145,17 +143,14 @@ jobs:
           duration="$((SECONDS - started_at))"
           echo "| Preflight and production build | ${duration}s |" >> "${GITHUB_STEP_SUMMARY}"
           exit "${status}"
+      - name: Read canonical artifact metadata
+        id: projects
+        run: bun ./tooling/repo/query-projects.mts --github-output
       - name: Upload component build inputs
         uses: actions/upload-artifact@v4
         with:
           name: component-build-inputs
-          path: |
-            shared/js
-            solidity/artifacts
-            solidity/ts/types/contractArtifact.ts
-            ui/coreShared/ts/abis.ts
-            ui/coreShared/ts/contractArtifact.ts
-            ui/trading/ts/generated/contractArtifact.ts
+          path: ${{ steps.projects.outputs.component_artifact_outputs }}
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 1
@@ -219,14 +214,14 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
       - name: Run dependency audits
-        run: bun audit && (cd ui/coreShared && bun audit) && (cd ui/zoltar && bun audit) && (cd ui/statoblast && bun audit) && (cd ui/trading && bun audit) && (cd solidity && bun audit)
+        run: bun ./tooling/repo/run-project-tasks.mts audit --group core-audit
 
   infrastructure-checks:
     name: Infrastructure checks
     needs: changes
     if: needs.changes.outputs.infrastructure == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-ci
@@ -255,8 +250,7 @@ jobs:
       - uses: ./.github/actions/setup-component
         with:
           directory: ${{ matrix.directory }}
-          artifacts: ${{ matrix.artifacts }}
-      - run: bun scripts/run-component-ci.mts "${{ matrix.package }}"
+      - run: bun tooling/ci/run-component-ci.mts "${{ matrix.package }}"
 
   augur-scan-integration:
     name: augurScan PostgreSQL integration
@@ -299,11 +293,10 @@ jobs:
           FORCED_FULL: ${{ needs.changes.outputs.forced_full }}
           DOCS_SELECTED: ${{ needs.changes.outputs.docs }}
           CORE_SELECTED: ${{ needs.changes.outputs.core }}
-          TRADING_SELECTED: ${{ needs.changes.outputs.trading }}
           BOT_SHARED_SELECTED: ${{ needs.changes.outputs.bot_shared }}
+          CHAOS_SELECTED: ${{ needs.changes.outputs.chaos }}
           ARBITRAGER_SELECTED: ${{ needs.changes.outputs.arbitrager }}
           LIQUIDATOR_SELECTED: ${{ needs.changes.outputs.liquidator }}
-          CHAOS_SELECTED: ${{ needs.changes.outputs.chaos }}
           AUGUR_SCAN_SELECTED: ${{ needs.changes.outputs.augur_scan }}
           INFRA_SELECTED: ${{ needs.changes.outputs.infrastructure }}
           PACKAGES_SELECTED: ${{ needs.changes.outputs.has_packages }}
@@ -340,7 +333,7 @@ jobs:
           for result in PREPARE_RESULT DOMAIN_TESTS_RESULT BROWSER_SMOKE_RESULT CHECKS_RESULT KNIP_RESULT AUDIT_RESULT; do
             require_result "${CORE_SELECTED}" "${!result}" "${result}"
           done
-          if [[ "${FORCED_FULL}" == "true" && ( "${DOCS_SELECTED}" != "true" || "${CORE_SELECTED}" != "true" || "${TRADING_SELECTED}" != "true" || "${BOT_SHARED_SELECTED}" != "true" || "${ARBITRAGER_SELECTED}" != "true" || "${LIQUIDATOR_SELECTED}" != "true" || "${CHAOS_SELECTED}" != "true" || "${AUGUR_SCAN_SELECTED}" != "true" || "${INFRA_SELECTED}" != "true" || "${PACKAGES_SELECTED}" != "true" ) ]]; then
+          if [[ "${FORCED_FULL}" == "true" && ( "${DOCS_SELECTED}" != "true" || "${CORE_SELECTED}" != "true" || "${BOT_SHARED_SELECTED}" != "true" || "${CHAOS_SELECTED}" != "true" || "${ARBITRAGER_SELECTED}" != "true" || "${LIQUIDATOR_SELECTED}" != "true" || "${AUGUR_SCAN_SELECTED}" != "true" || "${INFRA_SELECTED}" != "true" || "${PACKAGES_SELECTED}" != "true" ) ]]; then
             echo 'Forced full run did not select every ordinary route.'
             exit 1
           fi

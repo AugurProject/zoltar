@@ -30,30 +30,64 @@ runs:
       with:
         version: ${{ env.FOUNDRY_VERSION }}
 
-    - name: Read canonical project metadata
-      id: projects
-      shell: bash
-      run: bun ./tooling/repo/query-projects.mts --github-output
-
     - name: Cache Bun dependencies
       uses: actions/cache@v5
       with:
         path: ~/.bun/install/cache
-        key: ${{ runner.os }}-bun-${{ env.BUN_VERSION }}-${{ steps.projects.outputs.dependency_cache_key }}
+        key: ${{ runner.os }}-bun-${{ env.BUN_VERSION }}-${{ hashFiles('bun.lock', 'ui/*/bun.lock', 'solidity/bun.lock') }}
 
     - name: Install dependencies
       shell: bash
-      run: bun run projects:setup
+      run: |
+        bun ./scripts/install-frozen.mts
+        bun ./scripts/install-frozen.mts ui/coreShared
+        bun ./scripts/install-frozen.mts ui/zoltar
+        bun ./scripts/install-frozen.mts ui/statoblast
+        bun ./scripts/install-frozen.mts ui/trading
+        bun ./scripts/install-frozen.mts solidity
 
-    - name: Cache generated project outputs
-      id: generated-cache
+    - name: Install bot workspace dependencies for dead code analysis
+      if: github.job == 'knip'
+      shell: bash
+      run: |
+        bun ./scripts/install-frozen.mts bots/shared
+        bun ./scripts/install-frozen.mts bots/open-oracle-arbitrager
+        bun ./scripts/install-frozen.mts bots/liquidator
+        bun ./scripts/install-frozen.mts bots/chaos
+
+    - name: Cache generated shared package
+      id: shared-cache
       uses: actions/cache@v5
       with:
-        path: ${{ steps.projects.outputs.generated_cache_paths }}
-        key: ${{ runner.os }}-generated-${{ env.BUN_VERSION }}-${{ env.FOUNDRY_VERSION }}-${{ steps.projects.outputs.generated_cache_key }}
+        path: shared/js
+        key: ${{ runner.os }}-shared-${{ env.BUN_VERSION }}-${{ hashFiles('bun.lock', 'package.json', 'shared/package.json', 'shared/tsconfig.json', 'shared/ts/**') }}
+
+    - name: Cache generated contract artifacts
+      id: contract-cache
+      uses: actions/cache@v5
+      with:
+        path: |
+          solidity/artifacts
+          solidity/.contract-hash.json
+          solidity/ts/types/contractArtifact.ts
+          solidity/types/contractArtifact.ts
+          ui/coreShared/ts/abis.ts
+          ui/coreShared/ts/contractArtifact.ts
+          ui/trading/ts/generated/contractArtifact.ts
+        key: ${{ runner.os }}-contracts-${{ env.BUN_VERSION }}-${{ env.FOUNDRY_VERSION }}-${{ hashFiles('bun.lock', 'solidity/bun.lock', 'solidity/package.json', 'solidity/tsconfig-compile.json', 'solidity/ts/abi/abis.ts', 'solidity/ts/compile.ts', 'solidity/contracts/**', 'ui/coreShared/build/projectArtifacts.mts') }}
+
+    - name: Cache UI vendor assets
+      id: vendor-cache
+      uses: actions/cache@v5
+      with:
+        path: |
+          ui/zoltar/vendor
+          ui/statoblast/vendor
+          ui/trading/vendor
+        key: ${{ runner.os }}-ui-vendor-${{ env.BUN_VERSION }}-${{ hashFiles('bun.lock', 'ui/*/bun.lock', 'ui/*/package.json', 'ui/coreShared/build/bundlerPaths.mts', 'ui/coreShared/build/vendor.mts') }}
 
     - name: Generate and verify generated artifacts
-      if: inputs.verify-generated == 'true' || steps.generated-cache.outputs.cache-hit != 'true'
+      if: inputs.verify-generated == 'true' || steps.shared-cache.outputs.cache-hit != 'true' || steps.contract-cache.outputs.cache-hit != 'true' || steps.vendor-cache.outputs.cache-hit != 'true'
       shell: bash
       run: bun run check:generated-clean
 
