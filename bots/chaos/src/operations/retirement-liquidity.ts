@@ -11,6 +11,6 @@ export function buildRetirementLiquidityRemovalPlan(snapshot: EcosystemSnapshot,
 	if (pool === undefined || quote === undefined) return undefined
 	const minimumYes = minimumAfterSlippage(quote.yesOut)
 	const minimumNo = minimumAfterSlippage(quote.noOut)
-	const plan = buildRouterRemovePlan(snapshot, options, pair, liquidity, minimumYes, minimumNo, { liquidity: liquidity.toString(), minimumNo: minimumNo.toString(), minimumYes: minimumYes.toString(), pair: pair.address, pool: pool.address, router: snapshot.deployments.tradingRouter }, false, undefined, true)
+	const plan = buildRouterRemovePlan(snapshot, options, pair, liquidity, minimumYes, minimumNo, { liquidity: liquidity.toString(), minimumNo: minimumNo.toString(), minimumYes: minimumYes.toString(), pair: pair.address, pool: pool.address, router: snapshot.deployments.tradingRouter }, true)
 	return plan === undefined ? undefined : { ...plan, planningSeed: options.seed }
 }

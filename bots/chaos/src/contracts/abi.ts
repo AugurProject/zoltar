@@ -5,7 +5,6 @@ const universeComponents = [
 	{ name: 'reputationToken', type: 'address' },
 	{ name: 'parentUniverseId', type: 'uint248' },
 ] as const
-
 const questionComponents = [
 	{ name: 'title', type: 'string' },
 	{ name: 'description', type: 'string' },
@@ -19,7 +18,7 @@ const questionComponents = [
 
 export const erc20Abi = [
 	{ inputs: [], name: 'getTotalTheoreticalSupply', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
-	{ inputs: [{ name: '', type: 'address' }], name: 'balanceOf', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [{ name: 'account', type: 'address' }], name: 'balanceOf', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
 	{
 		inputs: [
 			{ name: 'owner', type: 'address' },
@@ -1425,21 +1424,6 @@ export const tradingPairAbi = [
 	{ inputs: [], name: 'tradingStatus', outputs: [{ name: 'status', type: 'uint8' }], stateMutability: 'view', type: 'function' },
 	{ inputs: [], name: 'feeBps', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
 	{
-		inputs: [
-			{ name: 'owner', type: 'address' },
-			{ name: 'spender', type: 'address' },
-			{ name: 'value', type: 'uint256' },
-			{ name: 'deadline', type: 'uint256' },
-			{ name: 'v', type: 'uint8' },
-			{ name: 'r', type: 'bytes32' },
-			{ name: 's', type: 'bytes32' },
-		],
-		name: 'permit',
-		outputs: [],
-		stateMutability: 'nonpayable',
-		type: 'function',
-	},
-	{
 		inputs: [],
 		name: 'getReserves',
 		outputs: [
@@ -1515,6 +1499,7 @@ export const tradingPairAbi = [
 			{ name: 'minYes', type: 'uint256' },
 			{ name: 'minNo', type: 'uint256' },
 			{ name: 'recipient', type: 'address' },
+			{ name: 'deadline', type: 'uint256' },
 		],
 		name: 'removeLiquidity',
 		outputs: [
@@ -1664,23 +1649,6 @@ export const tradingRouterAbi = [
 		name: 'addLiquidityWithEth',
 		outputs: [{ components: liquidityResultComponents, name: 'result', type: 'tuple' }],
 		stateMutability: 'payable',
-		type: 'function',
-	},
-	{
-		inputs: [
-			{ name: 'pair', type: 'address' },
-			{ name: 'liquidity', type: 'uint256' },
-			{ name: 'minYesOut', type: 'uint256' },
-			{ name: 'minNoOut', type: 'uint256' },
-			{ name: 'recipient', type: 'address' },
-			{ name: 'deadline', type: 'uint256' },
-		],
-		name: 'removeLiquidity',
-		outputs: [
-			{ name: 'yesOut', type: 'uint256' },
-			{ name: 'noOut', type: 'uint256' },
-		],
-		stateMutability: 'nonpayable',
 		type: 'function',
 	},
 ] as const

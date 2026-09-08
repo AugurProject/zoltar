@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData, encodeAbiParameters } from '@zoltar/bot-shared/ethereum'
-import { coordinatorAbi, erc20Abi, escalationGameAbi, tradingRouterAbi } from '../../src/contracts/abi.ts'
+import { coordinatorAbi, erc1155Abi, erc20Abi, escalationGameAbi } from '../../src/contracts/abi.ts'
 import { validateStepReceiptEvidence } from '../../src/execution/receipt-validation.ts'
 import { CARRY_PROOF_SCAN_MAXIMUM_WITHDRAWAL_CANDIDATES } from '../../src/monitoring/carry-proof-scan.ts'
 import { canonicalLifecyclePresence, CHAOS_OPERATION_CATALOG, eligibleOperationPlans, evaluateOperationCatalog, reevaluateOperationContinuation, urgentOperationPlans } from '../../src/operations/catalog.ts'
@@ -408,7 +408,7 @@ describe('chaos operation catalog', () => {
 		expect(reevaluateOperationContinuation(snapshot, original, options).plan).toBeUndefined()
 	})
 
-	test('continues the exact position-exit route after approval and opposite inventory appears', () => {
+	test('continues the exact approval-free position-exit route after opposite inventory appears', () => {
 		const snapshot = snapshotFixture()
 		const pair = snapshot.pairs[0]
 		const pool = snapshot.pools[0]
@@ -422,18 +422,15 @@ describe('chaos operation catalog', () => {
 		const original = eligibleOperationPlans(snapshot, options).find(plan => plan.definitionId === 'trading.position.exit')
 		if (original === undefined) throw new Error('Expected a position-exit plan')
 		const originalAction = original.steps.at(-1)
-		const confirmedApproval = original.steps[0]
-		if (originalAction === undefined || confirmedApproval === undefined || !confirmedApproval.id.startsWith('approve-shares-')) throw new Error('Expected a position-exit approval and action')
-		expect(decodeFunctionData({ abi: tradingRouterAbi, data: originalAction.data }).args[1]).toBe(1n)
-		shares.isApprovedForAll[snapshot.deployments.tradingRouter] = true
+		if (originalAction === undefined || original.steps.length !== 1) throw new Error('Expected one approval-free position-exit action')
+		expect(decodeFunctionData({ abi: erc1155Abi, data: originalAction.data }).args[2]).toEqual([0n, 1n])
 		shares.no = shares.yes
 
 		const rebuilt = reevaluateOperationContinuation(snapshot, original, options)
 		const rebuiltAction = rebuilt.plan?.steps.at(-1)
 		if (rebuiltAction === undefined) throw new Error('Expected an exact position-exit continuation')
-		expect(decodeFunctionData({ abi: tradingRouterAbi, data: rebuiltAction.data }).args[1]).toBe(1n)
+		expect(decodeFunctionData({ abi: erc1155Abi, data: rebuiltAction.data }).args[2]).toEqual([0n, 1n])
 		expect(rebuilt.plan?.metadata).toMatchObject({ longOutcome: 1, pair: pair.address })
-		expect(rebuilt.plan?.steps.some(step => step.id === confirmedApproval.id)).toBe(false)
 
 		shares.yes = '0'
 		expect(reevaluateOperationContinuation(snapshot, original, options).plan).toBeUndefined()
@@ -1182,7 +1179,7 @@ describe('chaos operation catalog', () => {
 		question.endTime = (BigInt(snapshot.anchor.timestamp) + 200n).toString()
 		plans = eligibleOperationPlans(snapshot, permissiveOptions)
 		expect(plans.find(candidate => candidate.definitionId === 'trading.swap.exact-input')).toBeUndefined()
-		expect(plans.find(candidate => candidate.definitionId === 'trading.position.exit')).toBeUndefined()
+		expect(plans.find(candidate => candidate.definitionId === 'trading.position.exit')).toBeDefined()
 
 		shares.isApprovedForAll[snapshot.pairs[0]?.address ?? address(14)] = true
 		shares.isApprovedForAll[snapshot.deployments.tradingRouter] = true

@@ -403,7 +403,7 @@ describe('Drain & Retire planning', () => {
 		const plan = buildRetirementLiquidityRemovalPlan(snapshot, { maximumBlockIntervalSeconds: 15, seed: 1, workflowValidForBlocks: 288 })
 		expect(plan?.metadata['liquidity']).toBe(pair.walletLiquidity)
 		expect(plan?.planningSeed).toBe(1)
-		expect(plan?.steps.map(step => step.id)).toEqual(['approve-lp', 'removeLiquidity'])
+		expect(plan?.steps.map(step => step.id)).toEqual(['removeLiquidity'])
 	})
 
 	test('unwraps WETH, sweeps tokens in bounded chunks, and sends native ETH last above reserve', () => {
