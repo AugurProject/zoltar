@@ -16,7 +16,7 @@ type ProcessLockFileHandle = {
 
 export type ProcessLockFilesystem = {
 	lstat?: (path: string) => Promise<{ isDirectory: () => boolean; isSymbolicLink: () => boolean; mode: number; uid: number }>
-	mkdir: (path: string, options: { mode: number; recursive: true }) => Promise<unknown>
+	mkdir: (path: string, options: { mode: number; recursive: true }) => Promise<string | undefined>
 	open: (path: string, flags: number, mode: number) => Promise<ProcessLockFileHandle>
 	readFile: (path: string, encoding: 'utf8') => Promise<string>
 	tryLock: (fileDescriptor: number) => boolean
