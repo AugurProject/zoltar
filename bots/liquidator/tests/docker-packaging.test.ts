@@ -46,12 +46,21 @@ describe('Docker packaging', () => {
 		const ignoreSource = await readFile(dockerignore, 'utf8')
 		expect(builder.base).toContain('-alpine')
 		expect(dockerInstructions(builder, 'RUN').flatMap(shellCommandSegments)).toContain('bun run shared:build')
-		expect(dockerInstructions(runtime, 'COPY')).toEqual(expect.arrayContaining(['--from=shared-builder /source/shared/ ./shared/', 'bots/liquidator/src/ ./bots/liquidator/src/', 'bots/liquidator/scripts/check-process-lock-runtime.mts ./bots/liquidator/scripts/check-process-lock-runtime.mts']))
+		expect(dockerInstructions(runtime, 'COPY')).toEqual(
+			expect.arrayContaining([
+				'--from=shared-builder /source/shared/ ./shared/',
+				'bots/liquidator/src/ ./bots/liquidator/src/',
+				'docs/mainnet-deployment-addresses.json docs/sepolia-deployment-addresses.json ./docs/',
+				'bots/liquidator/scripts/check-process-lock-runtime.mts ./bots/liquidator/scripts/check-process-lock-runtime.mts',
+			]),
+		)
 		expect(stages.flatMap(stage => dockerInstructions(stage, 'COPY')).some(copy => copy.includes('ui/coreShared/favicon'))).toBe(false)
 		expect(ignoreSource).not.toContain('ui/coreShared/favicon')
+		expect(ignoreSource).toContain('!docs/mainnet-deployment-addresses.json')
+		expect(ignoreSource).toContain('!docs/sepolia-deployment-addresses.json')
 		const installCommands = dockerInstructions(runtime, 'RUN').flatMap(shellCommandSegments)
 		expect(installCommands).toEqual(expect.arrayContaining(['cd shared', 'cd ../bots/shared', 'cd ../liquidator']))
-		expect(installCommands.filter(command => command === 'bun install --frozen-lockfile --production')).toHaveLength(3)
+		expect(installCommands.filter(command => command === 'bun /tmp/tooling/repo/install-frozen.mts . --production')).toHaveLength(3)
 		expect(ignoreSource).toContain('!bots/liquidator/scripts/check-process-lock-runtime.mts')
 		expect(installCommands).toContain('bun ./scripts/check-process-lock-runtime.mts')
 	})

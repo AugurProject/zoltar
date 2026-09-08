@@ -1,3 +1,4 @@
+import sepoliaManifest from '../../../../docs/sepolia-deployment-addresses.json'
 import { createHash } from 'node:crypto'
 import { mkdir, mkdtemp, readFile, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -86,6 +87,18 @@ const settings = {
 }
 
 describe('liquidator settings', () => {
+	test('derives Sepolia roots instead of loading zero or obsolete address overrides', () => {
+		const zoltar = sepoliaManifest.deploymentSteps.find(step => step.id === 'zoltar')
+		if (zoltar === undefined) throw new Error('Canonical Sepolia Zoltar is missing')
+		for (const deployment of [undefined, settings.deployment, { zoltar: '0x0000000000000000000000000000000000000001' }]) {
+			const parsed = parseSettings({ ...settings, deployment })
+			expect(parsed.deployment.zoltar).toBe(getAddress(zoltar.address))
+			expect(parsed.deployment.weth).toBe(getAddress(sepoliaManifest.network.wethAddress))
+			expect(Object.values(parsed.deployment)).not.toContain('0x0000000000000000000000000000000000000000')
+			expect(serializedSettings(parsed)).not.toHaveProperty('deployment')
+		}
+	})
+
 	test('keeps settings and durable recovery state isolated while switching chain profiles', async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-profiles-'))
 		try {
@@ -102,6 +115,8 @@ describe('liquidator settings', () => {
 			const sepolia = await switchSettingsNetworkProfile(path, 'sepolia', join(import.meta.dir, '..', '..', 'config', 'operator.example.json'))
 			expect(sepolia.settings).toMatchObject({ network: { name: 'sepolia' }, networkConfigured: false, paused: true, privateKey: undefined })
 			expect(sepolia.settings.runtime.stateFile).toContain('.sepolia.')
+			expect(sepolia.settings.deployment.weth).toBe(getAddress(sepoliaManifest.network.wethAddress))
+			expect(sepolia.settings.deployment).not.toEqual(mainnet.deployment)
 			await saveSettings(
 				path,
 				{
@@ -348,8 +363,8 @@ describe('liquidator settings', () => {
 		}
 	})
 
-	test('requires a deployed WETH contract for live execution', () => {
-		expect(() =>
+	test('uses canonical WETH for live execution despite saved placeholders', () => {
+		expect(
 			parseSettings({
 				...settings,
 				connectivity: {
@@ -363,8 +378,8 @@ describe('liquidator settings', () => {
 				},
 				privateKey: `0x${'11'.repeat(32)}`,
 				runtime: { ...settings.runtime, execute: true },
-			}),
-		).toThrow('deployed WETH contract')
+			}).deployment.weth,
+		).toBe(getAddress(sepoliaManifest.network.wethAddress))
 	})
 
 	test('parses desired origin pools and exact child REP market configurations', () => {

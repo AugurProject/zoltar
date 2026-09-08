@@ -1,5 +1,7 @@
 #!/usr/bin/env bun
 
+import { recordSystemDeploymentCheck } from '../core/deployment-observation.ts'
+
 import { createPublicClient, createWalletClient, getAddress, privateKeyToAccount, type Address, type Hash } from '@zoltar/bot-shared/ethereum'
 import { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, readRpcChainId } from '@zoltar/bot-shared/monitoring/connectivity'
@@ -505,20 +507,8 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				chain = currentChain
 				client = createPrimaryClient()
 				const deploymentStatus = await checkSystemDeployment(client, settings.network.chainId, settings.deployment)
-				if (!deploymentStatus.deployed) {
-					state.status = state.paused ? 'paused' : 'starting'
-					if (missingDeploymentAddress !== deploymentStatus.address) {
-						recordActivity(state, {
-							details: `chain=${settings.network.chainId.toString()} contract=${deploymentStatus.address}`,
-							kind: 'deployment',
-							message: `${deploymentStatus.name} is not deployed; waiting before checking again`,
-							status: 'info',
-						})
-						missingDeploymentAddress = deploymentStatus.address
-					}
-					return 'deferred'
-				}
-				missingDeploymentAddress = undefined
+				missingDeploymentAddress = recordSystemDeploymentCheck(state, deploymentStatus, missingDeploymentAddress)
+				if (!deploymentStatus.deployed) return 'deferred'
 				let primary
 				if (settings.runtime.execute) {
 					const endpoints = [settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls]

@@ -1,3 +1,4 @@
+import { operatorNoticePresentation } from './dashboard-notice.ts'
 import { setAttentionBadge } from '../../../shared/src/dashboard/components.js'
 import type { ConnectivitySettings } from '#monitoring/connectivity'
 import type { OpportunitySnapshot, PublicExecutionRecord, PublicOperationEntry, PublicOperatorSnapshot, PublicPositionRecord, PublicTransactionActivity, StrategySettings } from '#state/operator-state'
@@ -1019,7 +1020,7 @@ function render(snapshot: PublicOperatorSnapshot) {
 	modeBadge.dataset['mode'] = snapshot.mode
 	modeBadge.textContent = statusLabels.mode
 	const runStatusBadge = element('run-status-badge')
-	const runStatus = snapshot.paused ? 'paused' : snapshot.status
+	const runStatus = snapshot.paused ? 'paused' : snapshot.status === 'error' && snapshot.marketAvailability?.kind === 'missing-deployment' ? 'syncing' : snapshot.status
 	runStatusBadge.dataset['status'] = runStatus
 	runStatusBadge.textContent = statusLabels.status
 	runStatusBadge.className = `badge${runStatus === 'running' ? ' badge-ok' : runStatus === 'error' ? ' badge-danger' : ' badge-warning'}`
@@ -1076,37 +1077,7 @@ function render(snapshot: PublicOperatorSnapshot) {
 		launchNotice.dataset['tone'] = 'warning'
 	}
 	const notice = element('notice')
-	let noticeTitle = 'Dry-run mode'
-	let noticeCopy = 'Opportunities are monitored, but this process cannot submit transactions. Enable runtime.execute in the configuration to change modes.'
-	let noticeTone = 'info'
-	if (snapshot.execute) {
-		noticeTitle = 'Execution mode is locally armed'
-		noticeCopy = 'The local wallet can submit disputes when every strategy, timing, inventory, state, and delivery guard passes.'
-		noticeTone = 'warning'
-	}
-	if (!snapshot.operatorCapable) {
-		noticeTitle = 'Operator not ready'
-		noticeCopy = 'Check the latest poll and execution settings before starting new work.'
-		if (snapshot.lastPollAt === undefined) noticeCopy = 'Waiting for the first successful poll. Check RPC connectivity in Settings if polling does not complete.'
-		else if (snapshot.execute && snapshot.wallet === undefined) noticeCopy = 'Configure a local signer in Settings before starting execution.'
-		noticeTone = 'warning'
-	}
-	if (snapshot.paused) {
-		noticeTitle = 'Bot paused'
-		noticeCopy = 'New entries are paused. Settlement and withdrawal continue for already-funded positions so capital is not stranded.'
-		noticeTone = 'warning'
-	}
-	if (snapshot.lastError !== undefined) {
-		const retry = pollRetryStatus(snapshot)
-		noticeTitle = snapshot.retryInProgress ? 'Automatic retry in progress' : retry?.state === 'due' ? 'Automatic retry due' : snapshot.lastPollFailureAt === undefined ? 'Operator attention required' : 'Latest poll failed'
-		const failure = retry === undefined ? snapshot.lastError : snapshot.lastError.replace(/ Automatic retry remains active\.$/, '')
-		const failureTime = snapshot.lastPollFailureAt === undefined ? '' : ` Poll failed at ${new Date(snapshot.lastPollFailureAt).toLocaleTimeString()}.`
-		const nextRetry = retry?.state === 'scheduled' && snapshot.nextRetryAt !== undefined ? ` Next automatic retry is scheduled for ${new Date(snapshot.nextRetryAt).toLocaleTimeString()}.` : ''
-		const retryDue = retry?.state === 'due' && snapshot.nextRetryAt !== undefined ? ` Automatic retry became due at ${new Date(snapshot.nextRetryAt).toLocaleTimeString()}.` : ''
-		const lastRetry = snapshot.lastRetryAt === undefined ? '' : ` ${snapshot.retryInProgress ? 'Automatic retry' : 'Last automatic retry'} started at ${new Date(snapshot.lastRetryAt).toLocaleTimeString()}.`
-		noticeCopy = `${failure}${failureTime}${nextRetry}${retryDue}${lastRetry}`
-		noticeTone = 'danger'
-	}
+	const { noticeTitle, noticeCopy, noticeTone } = operatorNoticePresentation(snapshot)
 	setText('notice-title', noticeTitle)
 	setText('notice-copy', noticeCopy)
 	notice.dataset['tone'] = noticeTone

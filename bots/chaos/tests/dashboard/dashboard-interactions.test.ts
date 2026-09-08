@@ -1,7 +1,5 @@
+import { startChromiumSession } from './chromium-session.ts'
 import { existsSync } from 'node:fs'
-import { mkdtemp, rm } from 'node:fs/promises'
-import { createServer } from 'node:net'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test } from 'bun:test'
 import { startDashboardServer } from '../../src/dashboard/dashboard-server.ts'
@@ -17,7 +15,7 @@ type RecoveryScenario = {
 	statusId: string
 }
 
-const chromium = process.env['CHROMIUM_PATH'] ?? '/usr/bin/chromium'
+const chromium = process.env['CHROMIUM_PATH'] ?? Bun.which('google-chrome') ?? Bun.which('chromium') ?? '/usr/bin/chromium'
 const browserTest = existsSync(chromium) ? test : test.skip
 const transactionHash = `0x${'12'.repeat(32)}`
 const candidateHash = `0x${'34'.repeat(32)}`
@@ -225,71 +223,21 @@ const pausedWorkflowRenderingState = { ...workflowRenderingState, paused: true }
 const degradedWorkflowRenderingState = { ...workflowRenderingState, rpcEndpointHealth: [...degradedReadRpcHealth, ...degradedPrivateSubmissionHealth] }
 const staleSubmissionWorkflowRenderingState = { ...workflowRenderingState, rpcEndpointHealth: [...readRpcHealth, ...stalePrivateSubmissionHealth] }
 
-async function availablePort() {
-	const listener = createServer()
-	await new Promise<void>((resolve, reject) => {
-		listener.once('error', reject)
-		listener.listen(0, '127.0.0.1', resolve)
-	})
-	const address = listener.address()
-	if (address === null || typeof address === 'string') throw new Error('Could not allocate a Chromium debugging port')
-	await new Promise<void>((resolve, reject) => listener.close(error => (error === undefined ? resolve() : reject(error))))
-	return address.port
-}
-
-async function connectToChromium(port: number) {
-	let tabs: unknown
-	for (let attempt = 0; attempt < 400; attempt += 1) {
-		try {
-			const response: unknown = await fetch(`http://127.0.0.1:${port.toString()}/json/list`).then(value => value.json())
-			if (Array.isArray(response) && response.length > 0) {
-				tabs = response
-				break
-			}
-		} catch (error) {
-			if (!(error instanceof Error) || Reflect.get(error, 'code') !== 'ConnectionRefused') throw error
+async function connectToChromium() {
+	const session = await startChromiumSession(chromium)
+	try {
+		await session.send('Runtime.enable')
+		await session.send('Page.enable')
+		const evaluate = async (expression: string) => {
+			const response = await session.send('Runtime.evaluate', { awaitPromise: true, expression, returnByValue: true })
+			const result = typeof response === 'object' && response !== null ? Reflect.get(response, 'result') : undefined
+			return typeof result === 'object' && result !== null ? Reflect.get(result, 'value') : undefined
 		}
-		await Bun.sleep(50)
+		return { command: session.send, evaluate, close: session.close }
+	} catch (error) {
+		await session.close()
+		throw error
 	}
-	if (!Array.isArray(tabs) || tabs.length === 0) throw new Error('Chromium debugging tab did not become available')
-	const debuggerUrl = Reflect.get(tabs[0], 'webSocketDebuggerUrl')
-	if (typeof debuggerUrl !== 'string') throw new Error('Chromium tab is missing a debugger URL')
-	const socket = new WebSocket(debuggerUrl)
-	const pending = new Map<number, { reject: (error: Error) => void; resolve: (value: unknown) => void }>()
-	let requestId = 0
-	socket.addEventListener('message', event => {
-		const response: unknown = JSON.parse(String(event.data))
-		if (typeof response !== 'object' || response === null || Array.isArray(response)) return
-		const responseId = Reflect.get(response, 'id')
-		if (typeof responseId !== 'number') return
-		const callback = pending.get(responseId)
-		if (callback === undefined) return
-		pending.delete(responseId)
-		const responseError = Reflect.get(response, 'error')
-		if (responseError === undefined) callback.resolve(Reflect.get(response, 'result'))
-		else {
-			const message = typeof responseError === 'object' && responseError !== null ? Reflect.get(responseError, 'message') : undefined
-			callback.reject(new Error(typeof message === 'string' ? message : 'CDP command failed'))
-		}
-	})
-	await new Promise<void>((resolve, reject) => {
-		socket.addEventListener('open', () => resolve(), { once: true })
-		socket.addEventListener('error', () => reject(new Error('Chromium debugger connection failed')), { once: true })
-	})
-	const command = (method: string, params: Record<string, unknown> = {}) =>
-		new Promise<unknown>((resolve, reject) => {
-			requestId += 1
-			pending.set(requestId, { reject, resolve })
-			socket.send(JSON.stringify({ id: requestId, method, params }))
-		})
-	await command('Runtime.enable')
-	await command('Page.enable')
-	const evaluate = async (expression: string) => {
-		const response = await command('Runtime.evaluate', { awaitPromise: true, expression, returnByValue: true })
-		const result = typeof response === 'object' && response !== null ? Reflect.get(response, 'result') : undefined
-		return typeof result === 'object' && result !== null ? Reflect.get(result, 'value') : undefined
-	}
-	return { command, evaluate, socket }
 }
 
 browserTest(
@@ -378,13 +326,10 @@ browserTest(
 		})
 		const dashboardPort = dashboard.port
 		if (dashboardPort === undefined) throw new Error('Dashboard interaction fixture did not expose a port')
-		const debuggingPort = await availablePort()
-		const userDataDirectory = await mkdtemp(join(tmpdir(), 'chaos-dashboard-chromium-'))
-		const browser = Bun.spawn([chromium, '--headless', '--no-sandbox', '--disable-gpu', `--remote-debugging-port=${debuggingPort.toString()}`, `--user-data-dir=${userDataDirectory}`, 'about:blank'], { stderr: 'ignore', stdout: 'ignore' })
-		let socket: WebSocket | undefined
+		let browserSession: Awaited<ReturnType<typeof connectToChromium>> | undefined
 		try {
-			const cdp = await connectToChromium(debuggingPort)
-			socket = cdp.socket
+			const cdp = await connectToChromium()
+			browserSession = cdp
 			await cdp.command('Network.enable')
 			const waitFor = async (expression: string, message: string) => {
 				for (let attempt = 0; attempt < 400; attempt += 1) {
@@ -572,12 +517,34 @@ browserTest(
 				expect(await cdp.evaluate(`document.querySelector('#${scenario.fieldsId}')?.disabled`)).toBe(false)
 			}
 
+			initialDashboardState = { ...partialRecoveryDashboardState, lastScannedBlock: undefined, lastScanAt: undefined, lastDeploymentCheckedBlock: '100', lastDeploymentCheckAt: new Date().toISOString(), pendingTransactions: [], obligations: [], workflows: [], currentWorkflow: undefined }
+			recoveredDashboardState = initialDashboardState
+			failSecondStateRead = false
+			stateRequests = 0
+			await cdp.command('Page.navigate', { url: new URL('/overview', dashboard.url).href })
+			await waitFor("document.querySelector('#last-block')?.textContent === 'Block 100'", 'Deployment check block was not displayed before a complete scan')
+			expect(await cdp.evaluate("document.querySelector('#last-scan')?.textContent")).toContain('Deployments checked')
+			expect(await cdp.evaluate("document.querySelector('#recovery-badge')?.getClientRects().length")).toBe(0)
+			expect(await cdp.evaluate("document.querySelector('#rep-balances')?.textContent")).toBe('Inventory unavailable until the first canonical scan.')
 			initialDashboardState = partialRecoveryDashboardState
 			recoveredDashboardState = partialRecoveryDashboardState
 			failSecondStateRead = false
 			stateRequests = 0
 			await cdp.command('Page.navigate', { url: new URL('/overview', dashboard.url).href })
 			await waitFor("document.querySelector('#mode-badge')?.textContent === 'Safety paused'", 'Safety-pause fixture did not render its durable latch')
+			expect(
+				await cdp.evaluate(`(async () => {
+ const { renderOperatorAlerts } = await import('/operator-alerts.js')
+ const container = document.createElement('ul')
+ renderOperatorAlerts(container, [{ message: 'Waiting for deployments', severity: 'info' }])
+ const waiting = { role: container.getAttribute('role'), live: container.getAttribute('aria-live'), style: container.firstElementChild.className, text: container.textContent }
+ renderOperatorAlerts(container, [{ message: 'RPC failed', severity: 'error' }, { message: 'Waiting for deployments', severity: 'info' }])
+ const mixed = { role: container.getAttribute('role'), live: container.getAttribute('aria-live'), styles: [...container.children].map(item => item.className) }
+ renderOperatorAlerts(container, [])
+ return { waiting, mixed, cleared: container.children.length === 0 && container.classList.contains('hidden') }
+ })()`),
+			).toEqual({ waiting: { role: 'status', live: 'polite', style: 'notice info', text: 'Waiting for deployments' }, mixed: { role: 'alert', live: 'assertive', styles: ['notice error', 'notice info'] }, cleared: true })
+
 			expect(
 				await cdp.evaluate(`({
 					eth: document.querySelector('#balance-eth')?.textContent,
@@ -586,6 +553,7 @@ browserTest(
 					weth: document.querySelector('#balance-weth')?.textContent,
 				})`),
 			).toEqual({ eth: '—', recovery: '1 recovery item', rep: 'Inventory unavailable until the first canonical scan.', weth: '—' })
+			expect(await cdp.evaluate("document.querySelector('#recovery-badge')?.getClientRects().length")).toBe(1)
 			await cdp.evaluate("document.querySelector('#pause-button')?.click()")
 			await waitFor("document.querySelector('#resume-dialog')?.open === true", 'Safety-pause resume dialog did not open')
 			expect(await cdp.evaluate(`Object.fromEntries([...document.querySelectorAll('#resume-preflight li')].map(row => [row.querySelector('span')?.textContent, row.querySelector('strong')?.textContent]))`)).toMatchObject({ 'Recovery items': '1', 'Safety latch': 'Active' })
@@ -1688,11 +1656,11 @@ browserTest(
 				expect(navigationAfterRefresh).toEqual({ scrollLeft: Reflect.get(navigationBeforeRefresh, 'scrollLeft'), scrollY: Reflect.get(navigationBeforeRefresh, 'scrollY') })
 			}
 		} finally {
-			socket?.close()
-			browser.kill()
-			await browser.exited
-			dashboard.stop(true)
-			await rm(userDataDirectory, { force: true, recursive: true })
+			try {
+				await browserSession?.close()
+			} finally {
+				dashboard.stop(true)
+			}
 		}
 	},
 	60_000,
@@ -1730,13 +1698,10 @@ browserTest(
 			},
 			setWorkflow: () => {},
 		})
-		const debuggingPort = await availablePort()
-		const userDataDirectory = await mkdtemp(join(tmpdir(), 'chaos-dashboard-indeterminate-chromium-'))
-		const browser = Bun.spawn([chromium, '--headless', '--no-sandbox', '--disable-gpu', `--remote-debugging-port=${debuggingPort.toString()}`, `--user-data-dir=${userDataDirectory}`, 'about:blank'], { stderr: 'ignore', stdout: 'ignore' })
-		let socket: WebSocket | undefined
+		let browserSession: Awaited<ReturnType<typeof connectToChromium>> | undefined
 		try {
-			const cdp = await connectToChromium(debuggingPort)
-			socket = cdp.socket
+			const cdp = await connectToChromium()
+			browserSession = cdp
 			await cdp.command('Network.enable')
 			const waitFor = async (expression: string, message: string) => {
 				for (let attempt = 0; attempt < 200; attempt += 1) {
@@ -1783,11 +1748,11 @@ browserTest(
 			await waitFor("document.querySelector('#configuration-status')?.textContent?.includes('permanently frozen in this server process and page') === true", 'A new page did not inherit the server-process mutation latch')
 			expect(await cdp.evaluate("document.querySelector('#pause-button')?.disabled === true && document.querySelector('#settings-fields')?.disabled === true && document.querySelector('#signer-fields')?.disabled === true")).toBe(true)
 		} finally {
-			socket?.close()
-			browser.kill()
-			await browser.exited
-			dashboard.stop(true)
-			await rm(userDataDirectory, { force: true, recursive: true })
+			try {
+				await browserSession?.close()
+			} finally {
+				dashboard.stop(true)
+			}
 		}
 	},
 	30_000,

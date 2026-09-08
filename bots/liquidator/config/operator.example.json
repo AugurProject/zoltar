@@ -31,11 +31,6 @@
 			"minimumTotalSourceCount": 3
 		}
 	},
-	"deployment": {
-		"securityPoolFactory": "0x0000000000000000000000000000000000000000",
-		"weth": "0x0000000000000000000000000000000000000000",
-		"zoltar": "0x0000000000000000000000000000000000000000"
-	},
 	"submission": {
 		"mode": "public",
 		"minimumBundleRelaySuccesses": 1,

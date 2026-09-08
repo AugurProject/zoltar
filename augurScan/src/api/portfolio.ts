@@ -1,5 +1,6 @@
 import type { SQL } from 'bun'
-import { decodeOpaqueCursor, encodeOpaqueCursor } from '../cursor-codec.ts'
+import { decodeOpaqueCursor, encodeOpaqueCursor, isJsonArray } from '../cursor-codec.ts'
+import type { JsonValue } from '../ethereum.ts'
 import { addressPortfolioRows, type RichListSort, richListRows } from '../repositories/portfolio.ts'
 import { snapshotBoundary } from './entity-details.ts'
 import {
@@ -48,10 +49,10 @@ const parsePortfolioCursor = (
 	kind: PortfolioCollection,
 ): { readonly total: number; readonly offset: number; readonly cursor?: PortfolioCursor } => {
 	if (value === null) return { total: 0, offset: 0 }
-	let parts: unknown[]
+	let parts: readonly JsonValue[]
 	try {
 		const parsed = decodeOpaqueCursor(value)
-		parts = Array.isArray(parsed) ? parsed : []
+		parts = isJsonArray(parsed) ? parsed : []
 	} catch (error) {
 		throw new ApiRequestError(`${kind}Cursor is invalid`, { cause: error })
 	}
@@ -117,7 +118,7 @@ export const addressPortfolioResponse = async (sql: SQL, url: URL): Promise<Resp
 		reportOffset: reportPage.offset,
 	})
 	const portfolioResponse = await portfolioResponsePromise
-	const payload: unknown = await portfolioResponse.json()
+	const payload: JsonValue = await portfolioResponse.json()
 	const payloadRecord = jsonRecord(payload)
 	const items = Array.isArray(payloadRecord['items']) ? payloadRecord['items'] : []
 	const collection = (

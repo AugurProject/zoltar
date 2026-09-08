@@ -2,8 +2,8 @@
 
 !package.json
 !bun.lock
-!scripts/
-!scripts/**
+!tooling/
+!tooling/**
 !shared/
 !shared/package.json
 !shared/bun.lock

@@ -1,4 +1,5 @@
 import type { SQL } from 'bun'
+import type { JsonValue } from '../ethereum.ts'
 
 export const networkCatalog = async (sql: SQL) =>
 	await sql`SELECT chain_id, id, name, explorer_base_url, start_block, indexed_block, indexed_hash, indexed_timestamp, observed_block, finalized_block, phase, last_poll_at, last_success_at, failure_started_at, consecutive_failures, next_retry_at, last_reorg_at, last_reorg_depth, last_error, updated_at FROM networks ORDER BY chain_id`
@@ -20,7 +21,7 @@ export const contractDetail = async (sql: SQL, chainId: number, address: string)
 		WHERE contract.chain_id = ${chainId} AND contract.address = ${address} AND contract.canonical
 	`
 
-export const actionCatalog = async (sql: SQL, chainId: number, limit: number, cursor?: readonly unknown[]) => {
+export const actionCatalog = async (sql: SQL, chainId: number, limit: number, cursor?: readonly JsonValue[]) => {
 	const values: Array<string | number> = []
 	const clauses = ['t.canonical', 'block.canonical']
 	const bind = (value: string | number): string => {
