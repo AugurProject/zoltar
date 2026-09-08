@@ -547,10 +547,10 @@ describe('chaos launch doctor', () => {
 	})
 })
 
-test('doctor reports the actual chain, pinned block, and missing root address before discovery', async () => {
+test.each(['zoltar', 'tradingFactory', 'tradingRouter'] as const)('doctor requires core roots but reaches discovery without optional %s', async missingRoot => {
 	const baseline = await settingsFixture('operator.configured-placeholder.json')
 	const methods: string[] = []
-	const missing = baseline.deployment.tradingRouter
+	const missing = baseline.deployment[missingRoot]
 	const server = Bun.serve({
 		port: 0,
 		fetch: async request => {
@@ -572,8 +572,13 @@ test('doctor reports the actual chain, pinned block, and missing root address be
 	})
 	try {
 		const settings = { ...baseline, connectivity: { publicRpcUrls: [server.url.href], readRpcUrl: server.url.href, quorumRpcUrls: [], rpcQuorum: 1 as const } }
-		await expect(probeChaosDoctor(settings, '0x0000000000000000000000000000000000000001')).rejects.toThrow(`No contract code on RPC chain ${baseline.network.chainId} at block 100: tradingRouter (${missing})`)
-		expect(methods).not.toContain('eth_call')
+		if (missingRoot === 'zoltar') {
+			await expect(probeChaosDoctor(settings, '0x0000000000000000000000000000000000000001')).rejects.toThrow(`No contract code on RPC chain ${baseline.network.chainId} at block 100: zoltar (${missing})`)
+			expect(methods).not.toContain('eth_call')
+		} else {
+			await expect(probeChaosDoctor(settings, '0x0000000000000000000000000000000000000001')).rejects.toThrow('Unexpected discovery request')
+			expect(methods).toContain('eth_call')
+		}
 	} finally {
 		server.stop(true)
 	}

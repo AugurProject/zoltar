@@ -20,3 +20,6 @@
 !bots/liquidator/scripts/check-process-lock-runtime.mts
 !bots/liquidator/scripts/docker-entrypoint.sh
 !bots/liquidator/src/**
+!docs/
+!docs/mainnet-deployment-addresses.json
+!docs/sepolia-deployment-addresses.json

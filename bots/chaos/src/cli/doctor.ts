@@ -230,12 +230,10 @@ export async function probeChaosDoctor(settings: OperatorSettings, wallet: `0x${
 		{ address: settings.deployment.questionData, name: 'questionData' },
 		{ address: settings.deployment.securityPoolFactory, name: 'securityPoolFactory' },
 		{ address: settings.deployment.securityPoolForker, name: 'securityPoolForker' },
-		{ address: settings.deployment.tradingFactory, name: 'tradingFactory' },
-		{ address: settings.deployment.tradingRouter, name: 'tradingRouter' },
 		{ address: settings.deployment.weth, name: 'weth' },
 		{ address: settings.deployment.zoltar, name: 'zoltar' },
 	]
-	const deploymentAddresses = deploymentRoots.map(root => root.address)
+	const deploymentAddresses = [...deploymentRoots.map(root => root.address), settings.deployment.tradingFactory, settings.deployment.tradingRouter]
 	const logToBlock = anchor.blockNumber < settings.runtime.protocolStartBlock + BigInt(settings.runtime.protocolLogBlockSpan) - 1n ? anchor.blockNumber : settings.runtime.protocolStartBlock + BigInt(settings.runtime.protocolLogBlockSpan) - 1n
 	const readerUrls = chaosReadEndpoints(settings)
 	const readers = chaosReadClients(settings, pool)

@@ -36,6 +36,7 @@ RUN cd shared \
 
 COPY bots/liquidator/README.md ./bots/liquidator/README.md
 COPY bots/liquidator/config/ ./bots/liquidator/config/
+COPY docs/mainnet-deployment-addresses.json docs/sepolia-deployment-addresses.json ./docs/
 COPY bots/liquidator/scripts/check-market-sources.mts ./bots/liquidator/scripts/check-market-sources.mts
 COPY bots/liquidator/scripts/check-process-lock-runtime.mts ./bots/liquidator/scripts/check-process-lock-runtime.mts
 COPY bots/liquidator/scripts/docker-entrypoint.sh ./bots/liquidator/scripts/docker-entrypoint.sh
