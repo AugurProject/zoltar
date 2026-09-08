@@ -22,8 +22,7 @@
 		"paths": {
 			"@zoltar/ui-core-shared/*": ["./ui/coreShared/ts/*"],
 			"@zoltar/ui-zoltar-shared/*": ["./ui/zoltarShared/ts/*"],
-			"@zoltar/ui-statoblast-shared/*": ["./ui/statoblastShared/ts/*"],
-			"@zoltar/ui-trading-shared": ["./ui/tradingShared/ts/index.ts"]
+			"@zoltar/ui-statoblast-shared/*": ["./ui/statoblastShared/ts/*"]
 		}
 	},
 	"include": ["bun-test-setup*.ts", "scripts/**/*.mts", "scripts/**/*.ts", "tooling/**/*.mts", "tooling/**/*.ts"],

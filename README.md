@@ -9,7 +9,7 @@ The codebase is split into these main areas:
 
 - `solidity/` contains contracts, protocol test support, tests, and generated contract artifacts
 - `ui/coreShared/` contains runtime-neutral UI primitives, wallet and chain integration, shared workflows, and the simulation engine used by all three interfaces
-- `ui/zoltarShared/`, `ui/statoblastShared/`, and `ui/tradingShared/` expose reusable product libraries without application bootstrap, routing, or pages
+- `ui/zoltarShared/` and `ui/statoblastShared/` expose reusable product libraries without application bootstrap, routing, or pages; Trading-specific capabilities currently live in the Trading application because no implementation is shared with another consumer
 - `ui/zoltar/` contains the Zoltar oracle operations interface (its own package, dev server, and production build)
 - `ui/statoblast/` contains the Augur Statoblast prediction-market operations interface (its own package, dev server, and production build)
 - `ui/trading/` contains the Statoblast Trading interface (its own package, dev server, and production build)

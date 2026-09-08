@@ -50,15 +50,6 @@
 			},
 			"ignoreDependencies": ["bun-types"]
 		},
-		"ui/tradingShared": {
-			"entry": ["ts/**/*.ts", "ts/**/*.tsx"],
-			"project": ["ts/**/*.ts", "ts/**/*.tsx"],
-			"paths": {
-				"@zoltar/ui-trading-shared/*": ["./ts/*"],
-				"@zoltar/shared/*": ["../../shared/ts/*"]
-			},
-			"ignoreDependencies": ["bun-types"]
-		},
 		"ui/zoltar": {
 			"entry": ["ts/tests/**/*.{ts,tsx}", "ts/index.ts!", "ts/index.dev.ts!", "ts/simulation/tevmWorker.ts!"],
 			"project": ["ts/**/*.{ts,tsx}!"],
@@ -91,7 +82,6 @@
 				"@zoltar/ui-core-shared/*": ["../coreShared/ts/*"],
 				"@zoltar/ui-zoltar-shared/*": ["../zoltarShared/ts/*"],
 				"@zoltar/ui-statoblast-shared/*": ["../statoblastShared/ts/*"],
-				"@zoltar/ui-trading-shared/*": ["../tradingShared/ts/*"],
 				"@zoltar/ui-trading/*": ["./ts/*"],
 				"@zoltar/shared/*": ["../../shared/ts/*"]
 			},
