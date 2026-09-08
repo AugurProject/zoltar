@@ -33,7 +33,6 @@
 		"build": "bun x tsc --project tsconfig.json",
 		"typecheck": "bun x tsc --project tsconfig.json --noEmit"
 	},
-	"types": "./js/protocol/index.d.ts",
 	"exports": {
 		"./copy/app.js": {
 			"bun": "./ts/copy/app.ts",
@@ -274,10 +273,6 @@
 		"./protocol/deployment.js": {
 			"bun": "./ts/protocol/deployment.ts",
 			"default": "./js/protocol/deployment.js"
-		},
-		"./protocol/index.js": {
-			"bun": "./ts/protocol/index.ts",
-			"default": "./js/protocol/index.js"
 		},
 		"./protocol/securityPools.js": {
 			"bun": "./ts/protocol/securityPools.ts",

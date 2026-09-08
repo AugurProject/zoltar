@@ -32,7 +32,6 @@
 		"build": "bun x tsc --project tsconfig.json",
 		"typecheck": "bun x tsc --project tsconfig.json --noEmit"
 	},
-	"types": "./js/protocol/index.d.ts",
 	"exports": {
 		"./copy/market.js": {
 			"bun": "./ts/copy/market.ts",
@@ -301,10 +300,6 @@
 		"./protocol/helpers.js": {
 			"bun": "./ts/protocol/helpers.ts",
 			"default": "./js/protocol/helpers.js"
-		},
-		"./protocol/index.js": {
-			"bun": "./ts/protocol/index.ts",
-			"default": "./js/protocol/index.js"
 		},
 		"./protocol/openOracle.js": {
 			"bun": "./ts/protocol/openOracle.ts",

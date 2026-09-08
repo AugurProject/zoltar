@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks'
 import { type Address, zeroAddress } from '@zoltar/shared/evm/ethereum'
-import { loadTruthAuctionActiveTickPage, loadTruthAuctionBidderBidPage, loadTruthAuctionTickBidPage } from '../../../protocol/index.js'
+import { loadTruthAuctionActiveTickPage, loadTruthAuctionBidderBidPage, loadTruthAuctionTickBidPage } from '../../../protocol/truthAuctions.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { sortTruthAuctionBidsByPriority, sortTruthAuctionTickSummariesDescending } from '../lib/truthAuctionBook.js'

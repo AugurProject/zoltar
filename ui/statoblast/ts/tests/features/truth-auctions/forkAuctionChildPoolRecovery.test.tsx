@@ -13,7 +13,8 @@ import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/rende
 import { expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 
-const actualContracts = await import('@zoltar/ui-statoblast-shared/protocol/index.js')
+const actualSecurityPools = await import('@zoltar/ui-statoblast-shared/protocol/securityPools.js')
+const actualForks = await import('@zoltar/ui-zoltar-shared/protocol/forks.js')
 const actualClients = await import('@zoltar/ui-core-shared/wallet/clients.js')
 
 const PARENT_POOL_ADDRESS: Address = '0x00000000000000000000000000000000000000f0'
@@ -34,9 +35,13 @@ const loadAllSecurityPoolsMock = mock(async (_client: unknown, parent: Address, 
 	return recoveredPoolsFactory()
 })
 
-mock.module('@zoltar/ui-statoblast-shared/protocol/index.js', () => ({
-	...actualContracts,
+mock.module('@zoltar/ui-statoblast-shared/protocol/securityPools.js', () => ({
+	...actualSecurityPools,
 	loadSecurityPoolChildren: loadAllSecurityPoolsMock,
+}))
+
+mock.module('@zoltar/ui-zoltar-shared/protocol/forks.js', () => ({
+	...actualForks,
 	loadForkAuctionDetails: mock(async (_client: unknown, securityPoolAddress: Address) => {
 		loadForkAuctionDetailsCalls += 1
 		return childAuctionDetailsFactory(securityPoolAddress)

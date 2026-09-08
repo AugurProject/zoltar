@@ -11,7 +11,7 @@ import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/do
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { useOpenOracleOperations, type UseOpenOracleOperationsDependencies } from '@zoltar/ui-zoltar-shared/features/open-oracle/hooks/useOpenOracleOperations.js'
-import { createOpenOracleReportMissingError } from '@zoltar/ui-zoltar-shared/protocol/index.js'
+import { createOpenOracleReportMissingError } from '@zoltar/ui-zoltar-shared/protocol/openOracle.js'
 
 type UseOpenOracleOperationsState = ReturnType<typeof useOpenOracleOperations>
 type TestOpenOracleWriteClient = { kind: 'injected-write-client' }

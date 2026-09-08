@@ -12,11 +12,8 @@ export const intentionalForwardingModules: Readonly<Record<string, string>> = {
 	'bots/shared/src/ethereum.ts': 'Intentional bot package entry point composing shared EVM primitives with bot-specific clients and RPC resilience.',
 	'ui/statoblast/ts/index.dev.ts': 'Development bootstrap whose side-effect imports enable live reload before starting the application.',
 	'ui/statoblastShared/ts/features/security-pools/lib/securityPoolState.ts': 'Cohesive public capability facade over the security-pool state engine, axes, and types.',
-	'ui/statoblastShared/ts/protocol/index.ts': 'Explicit package entry point exposing the supported Statoblast protocol surface to application leaves.',
 	'ui/trading/ts/index.dev.ts': 'Development bootstrap whose side-effect imports enable live reload before starting the application.',
-	'ui/tradingShared/ts/index.ts': 'Narrow package entry point preserving the independently buildable Trading shared-library boundary.',
 	'ui/zoltar/ts/index.dev.ts': 'Development bootstrap whose side-effect imports enable live reload before starting the application.',
-	'ui/zoltarShared/ts/protocol/index.ts': 'Explicit package entry point exposing the supported Zoltar protocol surface to application leaves.',
 }
 
 const ignoredDirectoryNames = new Set(['.git', 'artifacts', 'coverage', 'dist', 'js', 'node_modules', 'vendor'])

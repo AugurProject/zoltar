@@ -63,8 +63,11 @@ function createStatus(id: DeploymentStatus['id'], deployed: boolean, dependencie
 }
 
 function setupContractMocks({ loadMarketDetails, createSecurityPool, originSecurityPoolExists }: Partial<MockContractDeps>) {
-	mock.module('@zoltar/ui-statoblast-shared/protocol/index.js', () => ({
+	mock.module('@zoltar/ui-zoltar-shared/protocol/zoltar.js', () => ({
 		loadMarketDetails: loadMarketDetails ?? mock(async () => createMarketDetails()),
+	}))
+
+	mock.module('@zoltar/ui-statoblast-shared/protocol/securityPools.js', () => ({
 		createSecurityPool:
 			createSecurityPool ??
 			mock(

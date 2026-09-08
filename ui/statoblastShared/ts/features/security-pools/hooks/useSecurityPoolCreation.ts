@@ -1,6 +1,7 @@
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
-import { createSecurityPool, loadMarketDetails, originSecurityPoolExists } from '../../../protocol/index.js'
+import { createSecurityPool, originSecurityPoolExists } from '../../../protocol/securityPools.js'
+import { loadMarketDetails } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'

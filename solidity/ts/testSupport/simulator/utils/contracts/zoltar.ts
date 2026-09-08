@@ -1,7 +1,7 @@
 import { ReputationToken_ReputationToken, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData } from '../../../../types/contractArtifact'
 import { createRepTokenAddressHelper } from '@zoltar/shared/evm/addressDerivation'
 import { createZoltarAddressHelpers } from '@zoltar/shared/deployment/deploymentAddresses'
-import { getProtocolConfig } from '../protocolConfig'
+import { getProtocolConfig } from '@zoltar/shared/deployment/protocolConfig'
 import { ReadClient, WriteClient, writeContractAndWait } from '../clients'
 import { GENESIS_REPUTATION_TOKEN, PROXY_DEPLOYER_ADDRESS } from '../constants'
 import { encodeDeployData, getAddress, type Address, type Hex, toHex } from '@zoltar/shared/evm/ethereum'

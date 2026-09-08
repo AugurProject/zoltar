@@ -14,7 +14,8 @@ import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/do
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 
-const actualContracts = await import('@zoltar/ui-statoblast-shared/protocol/index.js')
+const actualSecurityPools = await import('@zoltar/ui-statoblast-shared/protocol/securityPools.js')
+const actualForks = await import('@zoltar/ui-zoltar-shared/protocol/forks.js')
 const actualClients = await import('@zoltar/ui-core-shared/wallet/clients.js')
 const actualTruthAuctionBookHook = await import('@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useTruthAuctionBookData.js')
 const actualTruthAuctionSettlementHook = await import('@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useTruthAuctionSettlementActionState.js')
@@ -34,9 +35,13 @@ let mockedSecurityPools: ListedSecurityPool[] = []
 let mockedTruthAuctionBookState: TruthAuctionBookHookState
 let mockedTruthAuctionSettlementState: TruthAuctionSettlementHookState
 
-mock.module('@zoltar/ui-statoblast-shared/protocol/index.js', () => ({
-	...actualContracts,
+mock.module('@zoltar/ui-statoblast-shared/protocol/securityPools.js', () => ({
+	...actualSecurityPools,
 	loadSecurityPoolChildren: mock(async () => mockedSecurityPools),
+}))
+
+mock.module('@zoltar/ui-zoltar-shared/protocol/forks.js', () => ({
+	...actualForks,
 	loadForkAuctionDetails: mock(async () => mockedForkAuctionDetails),
 }))
 

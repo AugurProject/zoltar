@@ -5,9 +5,7 @@ import { getAddress, maxUint256, zeroAddress, type Address, type Hash } from '@z
 import {
 	createOpenOracleReportInstance,
 	executeOracleManagerStagedOperation,
-	getOpenOracleAddress,
 	loadCoordinatorInitialReportFundingRequirement,
-	loadErc20Balance,
 	loadOpenOracleWithdrawableBalances,
 	loadOpenOracleReportDetails,
 	loadOpenOracleReportSummaries,
@@ -18,7 +16,9 @@ import {
 	settleOracleReport,
 	withdrawOpenOracleBalance,
 	wrapWeth as wrapUiWeth,
-} from '@zoltar/ui-zoltar-shared/protocol/index.js'
+} from '@zoltar/ui-zoltar-shared/protocol/openOracle.js'
+import { loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
+import { getOpenOracleAddress } from '@zoltar/ui-zoltar-shared/protocol/deploymentHelpers.js'
 import {
 	addOpenOracleBountyBuffer,
 	deriveOpenOracleDisputeSubmissionDetails,

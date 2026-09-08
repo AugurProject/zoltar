@@ -4,24 +4,25 @@ import { useFormState } from '@zoltar/ui-core-shared/hooks/useFormState.js'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
 import type { Address } from '@zoltar/shared/evm/ethereum'
 import {
-	createChildUniverseFromSecurityPool,
-	buildForkCarriedEscalationProofs,
 	finalizeSecurityPoolTruthAuction,
-	forkUniverseDirectly,
-	forkZoltarWithOwnEscalation,
-	initiateSecurityPoolFork,
-	loadForkAuctionDetails,
-	claimParentEscalationDeposits,
-	migrateVaultWithUnresolvedEscalation,
-	migrateRepToZoltarFromSecurityPool,
-	migrateSecurityVault,
 	refundTruthAuctionBid,
 	settleTruthAuctionBids,
 	startTruthAuctionForSecurityPool,
 	submitTruthAuctionBid,
 	withdrawTruthAuctionRefund,
-	withdrawForkedEscalationDeposits,
-} from '../../../protocol/index.js'
+} from '../../../protocol/truthAuctionActions.js'
+import {
+	claimParentEscalationDeposits,
+	createChildUniverseFromSecurityPool,
+	forkUniverseDirectly,
+	forkZoltarWithOwnEscalation,
+	initiateSecurityPoolFork,
+	loadForkAuctionDetails,
+	migrateRepToZoltarFromSecurityPool,
+	migrateSecurityVault,
+	migrateVaultWithUnresolvedEscalation,
+} from '@zoltar/ui-zoltar-shared/protocol/forks.js'
+import { buildForkCarriedEscalationProofs, withdrawForkedEscalationDeposits } from '@zoltar/ui-zoltar-shared/protocol/reporting.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { getTruthAuctionBidGuardMessage, getTruthAuctionBidPriceValidationMessage, getTruthAuctionTickAtPrice } from '../lib/truthAuctionBook.js'
