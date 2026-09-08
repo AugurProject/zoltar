@@ -7,7 +7,7 @@ WORKDIR /source
 RUN git init
 
 COPY package.json bun.lock ./
-COPY scripts/ ./scripts/
+COPY tooling/ ./tooling/
 COPY shared/package.json shared/bun.lock shared/tsconfig.json ./shared/
 COPY shared/ts/ ./shared/ts/
 RUN mkdir -p shared/js \
