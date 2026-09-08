@@ -30,7 +30,6 @@ const RETIREMENT_OPERATION_ORDER = [
 	'statoblast.complete-set.redeem',
 	'statoblast.shares.redeem-winning',
 	'trading.liquidity.remove',
-	'trading.liquidity.remove-shares',
 	'trading.complete-set.redeem',
 	'trading.position.exit',
 	'statoblast.staged.execute',

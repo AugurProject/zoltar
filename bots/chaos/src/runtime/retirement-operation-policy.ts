@@ -30,7 +30,6 @@ const RECOVERY_OPERATIONS = [
 	'statoblast.vault.redeem-rep',
 	'trading.complete-set.redeem',
 	'trading.liquidity.remove',
-	'trading.liquidity.remove-shares',
 ] as const
 
 export const CLAIM_LINKED_MIGRATIONS = new Set(['statoblast.fork.create-child', 'statoblast.fork.migrate-rep', 'statoblast.fork.migrate-vault', 'statoblast.fork.migrate-vault-unresolved', 'trading.shares.migrate'])
