@@ -281,6 +281,16 @@ function isTransientChromiumConnectionError(error: unknown) {
 	return false
 }
 
+function throwCombinedErrors(primaryError: unknown, primaryThrown: boolean, cleanupErrors: readonly unknown[], message: string) {
+	if (!primaryThrown) {
+		if (cleanupErrors.length === 0) return
+		if (cleanupErrors.length === 1) throw cleanupErrors[0]
+		throw new AggregateError(cleanupErrors, message)
+	}
+	if (cleanupErrors.length === 0) throw primaryError
+	throw new AggregateError([primaryError, ...cleanupErrors], message)
+}
+
 async function readChromiumDebuggingPort(userDataDirectory: string) {
 	try {
 		const activePort = await readFile(join(userDataDirectory, 'DevToolsActivePort'), 'utf8')
@@ -303,6 +313,9 @@ async function removeChromiumProfile(userDataDirectory: string) {
 }
 
 async function stopChromium(chromiumProcess: DashboardChromium) {
+	let shutdownError: unknown
+	let shutdownFailed = false
+	let stderrText = ''
 	try {
 		chromiumProcess.browser.kill()
 		if (!(await waitForChromiumExit(chromiumProcess.browser, chromiumShutdownTimeoutMilliseconds))) {
@@ -312,11 +325,22 @@ async function stopChromium(chromiumProcess: DashboardChromium) {
 		await chromiumProcess.browser.exited
 		const stderr = await Promise.race([chromiumProcess.stderr.text.then(text => ({ complete: true as const, text })), Bun.sleep(chromiumShutdownTimeoutMilliseconds).then(() => ({ complete: false as const, text: '' }))])
 		if (!stderr.complete) chromiumProcess.stderr.cancel()
-		return stderr.text
-	} finally {
-		chromiumProcess.stderr.cancel()
-		await removeChromiumProfile(chromiumProcess.userDataDirectory)
+		stderrText = stderr.text
+	} catch (error) {
+		shutdownFailed = true
+		shutdownError = error
 	}
+	chromiumProcess.stderr.cancel()
+	let profileCleanupError: unknown
+	let profileCleanupFailed = false
+	try {
+		await removeChromiumProfile(chromiumProcess.userDataDirectory)
+	} catch (error) {
+		profileCleanupFailed = true
+		profileCleanupError = error
+	}
+	throwCombinedErrors(shutdownError, shutdownFailed, profileCleanupFailed ? [profileCleanupError] : [], 'Chromium shutdown and profile cleanup failed')
+	return stderrText
 }
 
 async function launchChromium(userDataDirectoryPrefix: string): Promise<DashboardChromium> {
@@ -347,13 +371,21 @@ async function launchChromium(userDataDirectoryPrefix: string): Promise<Dashboar
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error)
 		let diagnostics = ''
+		let cleanupError: unknown
+		let cleanupFailed = false
 		try {
 			diagnostics = await stopChromium(chromiumProcess)
-		} catch (cleanupError) {
-			diagnostics = cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
+		} catch (caughtCleanupError) {
+			cleanupFailed = true
+			cleanupError = caughtCleanupError
 		}
-		const suffix = diagnostics.trim() === '' ? '' : `: ${diagnostics.trim()}`
-		throw new Error(`${message}${suffix}`)
+		if (cleanupFailed) {
+			const errors = [error, cleanupError]
+			if (diagnostics.trim() !== '') errors.push(new Error(`Chromium stderr: ${diagnostics.trim()}`))
+			throw new AggregateError(errors, `Chromium startup failed: ${message}`)
+		}
+		if (diagnostics.trim() !== '') throw new AggregateError([error, new Error(`Chromium stderr: ${diagnostics.trim()}`)], `Chromium startup failed: ${message}`)
+		throw error
 	}
 }
 
@@ -552,6 +584,8 @@ browserTest(
 		if (dashboardPort === undefined) throw new Error('Dashboard interaction fixture did not expose a port')
 		let chromiumProcess: DashboardChromium | undefined
 		let socket: WebSocket | undefined
+		let primaryError: unknown
+		let primaryErrorThrown = false
 		try {
 			chromiumProcess = await launchChromium('chaos-dashboard-chromium-')
 			const cdp = await connectToChromium(chromiumProcess.debuggingPort, chromiumProcess.browser, chromiumProcess.startupDeadline)
@@ -1858,13 +1892,27 @@ browserTest(
 				})`)
 				expect(navigationAfterRefresh).toEqual({ scrollLeft: Reflect.get(navigationBeforeRefresh, 'scrollLeft'), scrollY: Reflect.get(navigationBeforeRefresh, 'scrollY') })
 			}
+		} catch (error) {
+			primaryErrorThrown = true
+			primaryError = error
 		} finally {
-			socket?.close()
+			const cleanupErrors: unknown[] = []
+			try {
+				socket?.close()
+			} catch (error) {
+				cleanupErrors.push(error)
+			}
 			try {
 				if (chromiumProcess !== undefined) await stopChromium(chromiumProcess)
-			} finally {
-				dashboard.stop(true)
+			} catch (error) {
+				cleanupErrors.push(error)
 			}
+			try {
+				dashboard.stop(true)
+			} catch (error) {
+				cleanupErrors.push(error)
+			}
+			throwCombinedErrors(primaryError, primaryErrorThrown, cleanupErrors, 'Dashboard interaction and cleanup failed')
 		}
 	},
 	60_000,
@@ -1904,6 +1952,8 @@ browserTest(
 		})
 		let chromiumProcess: DashboardChromium | undefined
 		let socket: WebSocket | undefined
+		let primaryError: unknown
+		let primaryErrorThrown = false
 		try {
 			chromiumProcess = await launchChromium('chaos-dashboard-indeterminate-chromium-')
 			const cdp = await connectToChromium(chromiumProcess.debuggingPort, chromiumProcess.browser, chromiumProcess.startupDeadline)
@@ -1953,13 +2003,27 @@ browserTest(
 			await cdp.command('Page.navigate', { url: new URL('/settings', dashboard.url).href })
 			await waitFor("document.querySelector('#configuration-status')?.textContent?.includes('permanently frozen in this server process and page') === true", 'A new page did not inherit the server-process mutation latch')
 			expect(await cdp.evaluate("document.querySelector('#pause-button')?.disabled === true && document.querySelector('#settings-fields')?.disabled === true && document.querySelector('#signer-fields')?.disabled === true")).toBe(true)
+		} catch (error) {
+			primaryErrorThrown = true
+			primaryError = error
 		} finally {
-			socket?.close()
+			const cleanupErrors: unknown[] = []
+			try {
+				socket?.close()
+			} catch (error) {
+				cleanupErrors.push(error)
+			}
 			try {
 				if (chromiumProcess !== undefined) await stopChromium(chromiumProcess)
-			} finally {
-				dashboard.stop(true)
+			} catch (error) {
+				cleanupErrors.push(error)
 			}
+			try {
+				dashboard.stop(true)
+			} catch (error) {
+				cleanupErrors.push(error)
+			}
+			throwCombinedErrors(primaryError, primaryErrorThrown, cleanupErrors, 'Dashboard interaction and cleanup failed')
 		}
 	},
 	60_000,
