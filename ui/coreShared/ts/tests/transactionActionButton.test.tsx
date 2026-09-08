@@ -57,17 +57,12 @@ describe('TransactionActionButton', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('button', { name: 'Submit' })).not.toBeNull()
-		const hintToggle = documentQueries.getByRole('button', { name: 'Submit details' })
-		expect(documentQueries.getByText('Connect a wallet before submitting.')).not.toBeNull()
-		await act(() => {
-			fireEvent.click(hintToggle)
-		})
-		const hintPopover = documentQueries.getByRole('note')
+		const notice = documentQueries.getByRole('note', { name: 'Submit details' })
+		expect(notice.textContent).toContain('Connect a wallet before submitting.')
 		const button = documentQueries.getByRole('button', { name: 'Submit' })
 		const descriptionId = button.getAttribute('aria-describedby')
 		expect(descriptionId).not.toBeNull()
-		expect(hintPopover.getAttribute('id')).not.toBe(descriptionId)
-		expect(document.getElementById(descriptionId ?? '')).not.toBeNull()
+		expect(notice.getAttribute('id')).toBe(descriptionId)
 	})
 
 	test('adds a spinner to a loading disabled reason', async () => {
@@ -108,9 +103,9 @@ describe('TransactionActionButton', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const button = within(document.body).getByRole('button', { name: 'Deploy Scalar Outcomes' })
-		const inlineHint = within(document.body).getByRole('button', { name: 'Deploy Scalar Outcomes details' })
+		const notice = within(document.body).getByRole('note', { name: 'Deploy Scalar Outcomes details' })
 		expect(button.textContent).toBe('Deploy')
-		expect(inlineHint).not.toBeNull()
+		expect(notice.textContent).toContain('Confirm the scalar deployment inputs before continuing.')
 	})
 
 	test('blocks new actions while another transaction is still in flight', async () => {
