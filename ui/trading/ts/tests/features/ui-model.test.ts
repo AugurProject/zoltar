@@ -31,17 +31,7 @@ import {
 	shareBalanceScope,
 	type LiveMarket,
 } from '../../protocol/live.js'
-import {
-	broadcastUncertainMessage,
-	discoveryCommitAllowed,
-	failedSubmissionTransition,
-	livePairInitialized,
-	marketSelectionAfterDiscovery,
-	parseSlippageBps,
-	parseTransactionValidityMinutes,
-	positionControlsWorkflowLocked,
-	securityPoolAddressFromRoute,
-} from '../../features/liveTradingControllerHelpers.js'
+import { broadcastUncertainMessage, discoveryCommitAllowed, failedSubmissionTransition, livePairInitialized, marketSelectionAfterDiscovery, parseSlippageBps, parseTransactionValidityMinutes, positionControlsWorkflowLocked, securityPoolAddressFromRoute } from '../../features/liveTradingControllerHelpers.js'
 import { initialQuestionClockTimestamp, questionClockShouldPollAgain } from '../../features/live/useLiveTradingState.js'
 
 describe('standalone trading UI model', () => {
