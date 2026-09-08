@@ -1612,19 +1612,9 @@ button[aria-busy="true"]:disabled {
 	text-decoration-color: color-mix(in srgb, var(--cyan) 55%, transparent);
 	text-underline-offset: 0.2em;
 }
-.activity-contract-link .contract-address {
-	margin-left: 0;
-}
-.activity-contract-link .contract-category {
-	flex-basis: 100%;
-	margin-top: 0;
-}
-.contract-address {
-	margin-left: 0.35rem;
-	color: var(--muted);
-	font:
-		0.8125rem / 1 ui-monospace,
-		monospace;
+.cell-function {
+	font: 0.8125rem / 1.3 var(--mono);
+	overflow-wrap: anywhere;
 }
 .event-name {
 	padding: 0;
@@ -2813,15 +2803,7 @@ dialog::backdrop {
 
 .feed-header,
 .log-row {
-	grid-template-columns: 112px 130px minmax(190px, 1fr) minmax(190px, 1fr) 130px 120px;
-}
-
-.contract-category {
-	display: block;
-	margin-top: 0.2rem;
-	color: var(--muted);
-	font-family: var(--mono);
-	font-size: 0.8125rem;
+	grid-template-columns: 112px 130px minmax(140px, 1fr) minmax(160px, 1fr) minmax(140px, 1fr) 130px 120px;
 }
 
 @media (max-width: 900px) {
@@ -3009,11 +2991,15 @@ dialog::backdrop {
 	}
 
 	.log-row > .cell:nth-child(3)::before {
-		content: "Contract and category";
+		content: "Contract";
 	}
 
 	.log-row > .event-name::before {
 		content: "Event";
+	}
+
+	.log-row > .cell-function::before {
+		content: "Function";
 	}
 
 	.log-row > .cell-tx::before {

@@ -22,6 +22,7 @@ import {
 } from '../../src/database.ts'
 import { getAddress, keccak256, stringToHex, zeroAddress } from '../../src/ethereum.ts'
 import { LiveBus } from '../../src/live.ts'
+import { decodeAction } from '../../src/metadata.ts'
 import { CURRENT_SCHEMA_VERSION, initializeSchema, UNSUPPORTED_SCHEMA_MESSAGE } from '../../src/schema.ts'
 import type { ContractMetadata, NetworkConfig, StoredLog, TokenMetadata } from '../../src/types.ts'
 import { uniswapV4PoolId } from '../../src/uniswap.ts'
@@ -4977,3 +4978,62 @@ postgresTest(
 	},
 	60_000,
 )
+
+postgresTest('returns the originating transaction action on every log row', async () => {
+	if (postgresUrl === undefined) throw new Error('POSTGRES_TEST_URL disappeared')
+	const database = new ScannerDatabase(postgresUrl)
+	const actionChainId = chainId + 200_000 + process.pid
+	const proxy = { address: getAddress('0x7a0d94f55792c434d74a40883c6ed8545e406d12'), label: 'Proxy Deployer', kind: 'proxyDeployer', provenance: 'manifest' }
+	const created = getAddress('0x7D6c6809d80965f5eeE276E86A8A0cDF473E5B47')
+	const input = '0x60a0604052'
+	const decoded = decodeAction(proxy, input, new Map([[created.toLowerCase(), 'Known deployment']]))
+	const evidenceHash = blockHash(`log-action-one-${actionChainId}`)
+	let lease: IndexerLease | undefined
+	try {
+		await initializeSchema(database.sql)
+		await database.seedNetwork({
+			id: `log-action-${actionChainId}`,
+			name: 'Log action fixture',
+			chainId: actionChainId,
+			rpcUrls: ['http://127.0.0.1:8545'],
+			startBlock: 1n,
+			explorerBaseUrl: 'https://example.invalid',
+			nativeSymbol: 'ETH',
+			confirmationDepth: 0n,
+			contracts: [
+				[proxy.address, proxy.label, proxy.kind],
+				[created, 'Known deployment', 'zoltar'],
+			],
+		})
+		lease = await database.tryAcquireIndexerLock(actionChainId)
+		if (lease === undefined) throw new Error('Log action fixture did not acquire its lock')
+		await database.storeBlock(
+			actionChainId,
+			{
+				...indexedBlock('log-action-one', blockHash('log-action-parent')),
+				hash: evidenceHash,
+				transactions: [{ ...transaction(), to: proxy.address, input, decoded }],
+				logs: [0, 1].map((logIndex) => ({ ...log(evidenceHash, 'Constructor event'), address: created, blockNumber: 1n, logIndex })),
+			},
+			lease,
+		)
+		const response = await handleApi(new Request(`http://localhost/api/v1/logs?chainId=${actionChainId}`), database.sql)
+		expect(response?.status).toBe(200)
+		const payload = await response?.json()
+		if (!isRecord(payload) || !Array.isArray(payload['items'])) throw new Error('Log action response has no items')
+		expect(payload.items).toHaveLength(2)
+		for (const row of payload.items) {
+			if (!isRecord(row)) throw new Error('Log action response contains an invalid row')
+			expect(row.function_name).toBe('deploy')
+			expect(row.action_summary).toBe('Deploy Known deployment via Proxy Deployer')
+			expect(row.to_address).toBe(proxy.address.toLowerCase())
+			expect(row.contract_label).toBe('Known deployment')
+		}
+	} finally {
+		await lease?.release()
+		for (const table of ['actions', 'logs', 'transactions', 'contracts', 'blocks', 'networks'])
+			await database.sql.unsafe(`DELETE FROM ${table} WHERE chain_id = $1`, [actionChainId])
+		await database.sql`DELETE FROM live_events WHERE payload ->> 'chainId' = ${String(actionChainId)}`
+		await database.close()
+	}
+})

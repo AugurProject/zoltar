@@ -33,6 +33,8 @@ for (const viewport of [
 				await session.send('Emulation.setDeviceMetricsOverride', { ...viewport, deviceScaleFactor: 1, mobile: false })
 				await session.send('Page.navigate', { url: session.pageUrl })
 				await waitFor(`document.querySelectorAll('.event-name').length > 5`)
+				expect(await evaluate(`document.querySelector('.activity-contract-link').textContent`)).toBe('OpenOracle')
+				expect(await evaluate(`document.querySelector('.cell-function')?.textContent`)).toBe('checkpoint')
 				await evaluate(`document.querySelector('.event-name').click()`)
 				await waitFor(`!!document.querySelector('.event-detail-content .detail-grid')`)
 				await evaluate(`document.querySelector('.event-name').click()`)

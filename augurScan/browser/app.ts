@@ -189,6 +189,7 @@ interface ActivityRecord {
 	action_argument_schema?: ArgumentDefinition[] | null
 	receipt?: Record<string, JsonValue>
 	relatedLogs?: RelatedLogRecord[]
+	function_name?: string | null
 	function_signature?: string | null
 }
 interface TokenBalanceRecord {
@@ -897,6 +898,10 @@ const demoLogs = Array.from({ length: 18 }, (_, index) => {
 		contract_label: index % 4 === 0 ? 'Security Pool 0x8c2f' : index % 4 === 1 ? 'OpenOracle' : index % 4 === 2 ? 'Genesis REP' : 'Security Pool Factory',
 		contract_kind: 'securityPool',
 		event_name: demoEvents[index % demoEvents.length],
+		function_name: index % 2 === 0 ? 'report' : 'checkpoint',
+		function_signature: index % 2 === 0 ? 'report(uint256)' : 'checkpoint(uint8,address[])',
+		action_summary: index % 2 === 0 ? 'report' : 'checkpoint',
+		to_address: '0x7777777777777777777777777777777777777777',
 		summary:
 			index % 2 === 0
 				? 'amount=4,250.75 REP · vault=Market maker (0x19B4…E2a0)'
@@ -4767,6 +4772,8 @@ const rowFor = (log: ActivityRecord) => {
 		eventName: log.event_name,
 		summary: log.summary,
 		origin: log.origin_address,
+		functionName: log.function_name,
+		actionSummary: log.action_summary,
 	})
 	const chain = element('span', 'cell chain-block')
 	const openCue = element('span', 'row-open-cue', '›')
@@ -4781,11 +4788,7 @@ const rowFor = (log: ActivityRecord) => {
 	const contractLink = explorerLink(log.explorer_base_url, 'address', log.emitter_address, log.contract_label ?? short(log.emitter_address, 10, 8))
 	contractLink.className = 'cell address-link activity-target activity-contract-link'
 	contractLink.title = log.contract_label ? `${log.contract_label} · ${log.emitter_address}` : log.emitter_address
-	contractLink.replaceChildren(
-		element('span', 'contract-name', log.contract_label ?? short(log.emitter_address, 10, 8)),
-		element('span', 'contract-address', short(log.emitter_address)),
-		element('span', 'contract-category', log.contract_kind ?? 'Protocol contract'),
-	)
+	contractLink.replaceChildren(element('span', 'contract-name', log.contract_label || short(log.emitter_address, 10, 8)))
 	const event = element('button', 'cell event-name', log.event_name ?? 'Unknown event')
 	event.type = 'button'
 	event.setAttribute('aria-label', `Toggle ${log.event_name ?? 'unknown event'} log details from block ${log.block_number}`)
@@ -4793,7 +4796,15 @@ const rowFor = (log: ActivityRecord) => {
 	const tx = explorerLink(log.explorer_base_url, 'tx', log.tx_hash, `${short(log.tx_hash, 7, 5)} · ${log.log_index}`)
 	tx.className = 'cell cell-tx activity-target'
 	const origin = protocolAddressLink(log.origin_address, { chainId: log.chain_id, className: 'cell cell-origin address-link activity-target', compact: true })
-	row.append(chain, timestamp, contractLink, event, tx, origin)
+	const action = element(
+		'span',
+		'cell cell-function',
+		log.function_name === 'deploy'
+			? (log.action_summary ?? 'Deploy contract')
+			: (log.function_name ?? (log.to_address === null ? 'Deploy contract' : 'Unknown call')),
+	)
+	action.title = `Transaction action: ${log.function_signature ?? log.action_summary ?? action.textContent ?? ''}`
+	row.append(chain, timestamp, contractLink, event, action, tx, origin)
 	row.addEventListener('click', (clickEvent: MouseEvent) => {
 		if (clickEvent.target instanceof Element && clickEvent.target.closest('a')) return
 		if (document.querySelector<HTMLElement>('.event-detail-drawer')?.dataset.triggerKey === key) closeEventDrawer({ restoreFocus: true })

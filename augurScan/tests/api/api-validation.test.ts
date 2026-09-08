@@ -355,3 +355,11 @@ test('requires complete, renderable state catalog entities', () => {
 	expect(isQuestionStateEntityValue({ ...question, outcome_options: [null] })).toBeFalse()
 	expect(isUniverseStateEntityValue({ ...universe, reputation_token_address: null })).toBeFalse()
 })
+
+test('validates the originating transaction action on activity records', () => {
+	expect(
+		isActivityRecordValue({ ...activity, function_name: 'deploy', function_signature: null, action_summary: 'Deploy Zoltar', to_address: '0x1234' }),
+	).toBeTrue()
+	for (const field of ['function_name', 'function_signature', 'action_summary', 'to_address'])
+		expect(isActivityRecordValue({ ...activity, [field]: 42 })).toBeFalse()
+})
