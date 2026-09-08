@@ -19,7 +19,7 @@ import type { EcosystemSnapshot, EvaluatedOperation, OperationContinuationDispos
 import { bindRuntimeStateToSigner, loadRuntimeState, recordActivity, saveDurableState, type DurableLifecyclePresenceBlocker, type DurableObligation, type DurableWorkflow, type RuntimeState, type RuntimeTopologySummary } from '../state/operator-state.ts'
 import { blockExecutableEvaluations, applyExecutionPolicy, chaosChain, createChaosReadPool, performCanonicalScan, planningOptions, unavailableOperationCatalog, type CanonicalScanResult } from './canonical-scan.ts'
 import { createChaosDashboardController, restartSafeSettings, type ConfigurationState } from './dashboard-controller.ts'
-import { resetPristineStateForDeploymentProfile } from './deployment-profile.ts'
+import { resetPristineStateForDeploymentProfile, verifyRetirementCompletionFinality } from './deployment-profile.ts'
 import { beginLifecycleObligation, completeLifecycleObligation, failLifecycleObligation, lifecyclePresenceBlockerMessage, MAXIMUM_AUTOMATIC_LIFECYCLE_ATTEMPTS, obligationForPlan, synchronizeLifecycleObligations, waitForCanonicalLifecycleConfirmation } from './obligations.ts'
 import { genesisInitializationDefinitionId, genesisInitializationPlan, randomOperationPlans, urgentOperationPlans } from './selection.ts'
 import { enforceRetirementContinuation, processRetirementCycle, retirementPositionsForScan, updateRetirementAssessment } from './retirement-runner.ts'
@@ -717,7 +717,7 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 	const state = await loadRuntimeState(loaded.settings.runtime.stateFile, loaded.settings.paused, initialWallet, loaded.settings.network.chainId)
 	const initialProfileId = executionProfileId(loaded.settings)
 	assertDurableSignerScope(state, initialWallet, loaded.settings.runtime.stateFile)
-	const initialCarryProfileResetAuthorized = resetPristineStateForDeploymentProfile(state, initialProfileId, loaded.settings.paused, initialWallet, loaded.settings.runtime.stateFile)
+	const initialCarryProfileResetAuthorized = await resetPristineStateForDeploymentProfile(state, initialProfileId, loaded.settings.paused, initialWallet, loaded.settings.runtime.stateFile, async evidence => verifyRetirementCompletionFinality(loaded.settings, evidence))
 	if (initialCarryProfileResetAuthorized) {
 		recordActivity(state, {
 			message: 'Durable runtime initialized for the configured deployment profile',
@@ -815,7 +815,7 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 					if (!configurationIsCurrent()) return 'deferred'
 					const wallet = configuredWallet(settings)
 					assertDurableSignerScope(state, wallet, settings.runtime.stateFile)
-					resetPristineStateForDeploymentProfile(state, expectedProfileId, settings.paused, wallet, settings.runtime.stateFile)
+					await resetPristineStateForDeploymentProfile(state, expectedProfileId, settings.paused, wallet, settings.runtime.stateFile, async evidence => verifyRetirementCompletionFinality(settings, evidence))
 					carryProofJournal = undefined
 					carryProofJournalStateFile = undefined
 					topologyCache = undefined

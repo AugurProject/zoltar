@@ -10,6 +10,7 @@ import type { RetirementAssessment, RetirementProofCounts, V3PositionAnchor, V3P
 import { CLAIM_LINKED_MIGRATIONS, operationAllowedDuringRetirement } from './retirement-operation-policy.ts'
 
 export type { RetirementAssessment, V3PositionAnchor, V3PositionObservation, V3PositionReader } from './retirement-types.ts'
+export { applyRetirementAssessment } from './retirement-assessment.ts'
 
 const RETIREMENT_OPERATION_ORDER = [
 	'open-oracle.withdraw',
@@ -528,26 +529,6 @@ export function assessRetirement(parameters: {
 	if (outstanding > 0) return { action, blockers, proof, residuals, status: 'draining' }
 	if (parameters.sweepLimits !== undefined && BigInt(parameters.snapshot.wallet.ethBalanceAttoEth) > 0n) residuals.push({ amount: parameters.snapshot.wallet.ethBalanceAttoEth, asset: 'ETH', category: 'mandatory-sentinel', reason: 'Configured ETH reserve and final-sweep gas budget retained after native sweeping' })
 	return { action, blockers, proof, residuals, status: residuals.length === 0 ? 'drained' : 'drained-with-residuals' }
-}
-
-export function applyRetirementAssessment(retirement: DurableRetirementState, assessment: RetirementAssessment, blockHash: Hash, blockNumber: bigint, now = new Date().toISOString()) {
-	retirement.blockers = assessment.blockers
-	retirement.status = assessment.status
-	retirement.updatedAt = now
-	retirement.profileReplacementOverride = undefined
-	if (assessment.status !== 'drained' && assessment.status !== 'drained-with-residuals') {
-		retirement.completionEvidence = undefined
-		return
-	}
-	const outstanding = assessment.proof.actionableObligations + assessment.proof.claimableAssets + assessment.proof.collectableV3Positions + assessment.proof.knownApprovals + assessment.proof.ownedLiquidityPositions + assessment.proof.partialWorkflows + assessment.proof.pendingTransactions
-	if (outstanding !== 0) throw new Error('Retirement completion requires every canonical proof count to be zero')
-	retirement.completionEvidence = {
-		blockHash,
-		blockNumber: blockNumber.toString(),
-		completedAt: now,
-		proof: { actionableObligations: 0, claimableAssets: 0, collectableV3Positions: 0, knownApprovals: 0, ownedLiquidityPositions: 0, partialWorkflows: 0, pendingTransactions: 0 },
-		residuals: assessment.residuals,
-	}
 }
 
 export function reconcileV3PositionJournal(retirement: DurableRetirementState, workflows: DurableState['workflows'], profileId: string, owner: Address, now = new Date().toISOString()) {

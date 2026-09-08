@@ -25,10 +25,11 @@ export type RetirementResidual = {
 	reason: string
 }
 
-type RetirementCompletionEvidence = {
+export type RetirementCompletionEvidence = {
 	blockHash: Hash
 	blockNumber: string
 	completedAt: string
+	profileId?: string | undefined
 	proof: {
 		actionableObligations: 0
 		claimableAssets: 0
@@ -39,6 +40,7 @@ type RetirementCompletionEvidence = {
 		pendingTransactions: 0
 	}
 	residuals: RetirementResidual[]
+	signerAddress?: Address | undefined
 }
 
 type RetirementProfileReplacementOverride = {
@@ -208,7 +210,7 @@ function parsePosition(value: unknown, index: number): DurableV3Position {
 
 function parseCompletionEvidence(value: unknown): RetirementCompletionEvidence {
 	const evidence = record(value, 'retirement.completionEvidence')
-	exactKeys(evidence, ['blockHash', 'blockNumber', 'completedAt', 'proof', 'residuals'], [], 'retirement.completionEvidence')
+	exactKeys(evidence, ['blockHash', 'blockNumber', 'completedAt', 'proof', 'residuals'], ['profileId', 'signerAddress'], 'retirement.completionEvidence')
 	const blockHash = evidence['blockHash']
 	if (typeof blockHash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(blockHash)) throw new Error('retirement.completionEvidence.blockHash is invalid')
 	const proof = record(evidence['proof'], 'retirement.completionEvidence.proof')
@@ -229,12 +231,18 @@ function parseCompletionEvidence(value: unknown): RetirementCompletionEvidence {
 		}
 		return { amount: unsigned(residual['amount'], `${label}.amount`), asset: residual['asset'] as string, category: category as RetirementResidual['category'], reason: residual['reason'] as string }
 	})
+	const profileId = evidence['profileId']
+	const signerAddress = evidence['signerAddress']
+	if ((profileId === undefined) !== (signerAddress === undefined)) throw new Error('retirement.completionEvidence signer and profile binding must both be present')
+	if (profileId !== undefined && (typeof profileId !== 'string' || profileId !== profileId.trim() || profileId.length === 0 || profileId.length > 256)) throw new Error('retirement.completionEvidence.profileId is invalid')
 	return {
 		blockHash: blockHash as Hash,
 		blockNumber: unsigned(evidence['blockNumber'], 'retirement.completionEvidence.blockNumber'),
 		completedAt: timestamp(evidence['completedAt'], 'retirement.completionEvidence.completedAt'),
+		...(profileId === undefined ? {} : { profileId }),
 		proof: { actionableObligations: 0, claimableAssets: 0, collectableV3Positions: 0, knownApprovals: 0, ownedLiquidityPositions: 0, partialWorkflows: 0, pendingTransactions: 0 },
 		residuals,
+		...(signerAddress === undefined ? {} : { signerAddress: getAddress(String(signerAddress)) }),
 	}
 }
 
@@ -325,6 +333,7 @@ export function parseRetirementState(value: unknown, signerAddress: Address | un
 export function acceptResidualProfileReplacement(state: DurableRetirementState, sourceProfileId: string, targetProfileId: string, reason: string, confirmation: string, now = new Date().toISOString()) {
 	if (state.status !== 'drained-with-residuals') throw new Error('A residual override is only valid after drained-with-residuals completion')
 	if (state.completionEvidence === undefined || state.recipient === undefined) throw new Error('A residual override requires current completion evidence and its retirement recipient')
+	if (state.completionEvidence.profileId !== sourceProfileId || state.completionEvidence.signerAddress === undefined) throw new Error('A residual override requires completion evidence bound to its source profile and signer')
 	if (sourceProfileId !== sourceProfileId.trim() || targetProfileId !== targetProfileId.trim() || sourceProfileId.length === 0 || targetProfileId.length === 0 || sourceProfileId.length > 256 || targetProfileId.length > 256 || sourceProfileId === targetProfileId) {
 		throw new Error('Residual override requires distinct valid source and target deployment profiles')
 	}

@@ -210,6 +210,9 @@ describe('chaos dashboard configuration boundary', () => {
 	test('binds dashboard residual acceptance to the current profile and completion proof', async () => {
 		const current = configuredSettings(true, false)
 		const state = runtimeState(current)
+		if (current.privateKey === undefined) throw new Error('Expected a configured signer')
+		const signer = privateKeyToAccount(current.privateKey).address
+		bindRuntimeStateToSigner(state, signer)
 		state.profileId = 'profile:test'
 		state.retirement.status = 'drained-with-residuals'
 		state.retirement.recipient = '0x0000000000000000000000000000000000000099'
@@ -217,8 +220,10 @@ describe('chaos dashboard configuration boundary', () => {
 			blockHash: zeroHash,
 			blockNumber: '42',
 			completedAt: '2026-09-07T00:00:00.000Z',
+			profileId: state.profileId,
 			proof: { actionableObligations: 0, claimableAssets: 0, collectableV3Positions: 0, knownApprovals: 0, ownedLiquidityPositions: 0, partialWorkflows: 0, pendingTransactions: 0 },
 			residuals: [{ amount: '1', asset: 'TEST', category: 'operator-accepted', reason: 'Retained test asset' }],
+			signerAddress: signer,
 		}
 		const { controller } = noopController(current, state)
 		if (controller.setRetirement === undefined) throw new Error('Retirement controller is unavailable')

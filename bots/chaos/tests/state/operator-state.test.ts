@@ -390,7 +390,8 @@ describe('chaos-bot durable state', () => {
 
 	test('persists proof-bound residual replacement acceptance and discards the legacy unbound shape', async () => {
 		const path = await statePath()
-		const state = initialDurableState(1)
+		const signer = getAddress('0x0000000000000000000000000000000000000021')
+		const state = initialDurableState(1, true, 'profile:test', signer)
 		state.profileId = 'profile:test'
 		state.retirement.status = 'drained-with-residuals'
 		state.retirement.recipient = emitter
@@ -398,8 +399,10 @@ describe('chaos-bot durable state', () => {
 			blockHash: topic0,
 			blockNumber: '50',
 			completedAt: createdAt,
+			profileId: state.profileId,
 			proof: { actionableObligations: 0, claimableAssets: 0, collectableV3Positions: 0, knownApprovals: 0, ownedLiquidityPositions: 0, partialWorkflows: 0, pendingTransactions: 0 },
 			residuals: [{ amount: '1', asset: 'dust', category: 'accepted-dust', reason: 'Accepted test dust' }],
+			signerAddress: signer,
 		}
 		acceptResidualProfileReplacement(state.retirement, state.profileId, 'profile:next', 'Reviewed current residual assets.', 'ACCEPT RESIDUALS FOR profile:next', createdAt)
 		await saveDurableState(path, state)

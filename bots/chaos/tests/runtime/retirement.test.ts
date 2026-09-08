@@ -29,6 +29,7 @@ import { resetPristineStateForDeploymentProfile } from '../../src/runtime/deploy
 import { createDurableWorkflow, markWorkflowFailed } from '../../src/runtime/workflows.ts'
 
 const now = '2026-09-07T00:00:00.000Z'
+const completionBinding = { profileId: 'profile:test', scannedWallet: address(1), signerAddress: address(1) }
 
 function position(status: DurableV3Position['status'] = 'active'): DurableV3Position {
 	const owner = address(1)
@@ -160,10 +161,32 @@ describe('Drain & Retire planning', () => {
 			expect(() => buildNativeOpenOracleCreditPlan({ ...snapshot, wallet: { ...snapshot.wallet, openOracleEthCredit: '2' } }, retirement, 1)).toThrow(expectedError)
 		}
 	})
+
+	test('does not record terminal completion from an unbound zero-wallet scan', async () => {
+		const snapshot = emptySnapshot()
+		snapshot.wallet.address = address(0)
+		snapshot.wallet.ethBalanceAttoEth = '0'
+		const state = initialRuntimeState(true, undefined, snapshot.chainId)
+		request(state.retirement)
+		await expect(
+			processRetirementCycle({
+				execute: async () => undefined,
+				persist: async () => undefined,
+				prepareExecution: async () => undefined,
+				scan: { anchor: { baseFeePerGas: 1n, blockHash: hash(1), blockNumber: 1n, timestamp: 1n }, canonicalLifecyclePresenceComplete: true, carryProofJournalComplete: true, indexComplete: true, snapshot },
+				settings: parseSettings(example),
+				state,
+				v3: [],
+			}),
+		).rejects.toThrow('bound signer')
+		expect(state.retirement.completionEvidence).toBeUndefined()
+		expect(state.retirement.status).not.toBe('drained')
+	})
 	test('persists a canonical assessment before returning from a paused process cycle', async () => {
 		const snapshot = emptySnapshot()
 		snapshot.wallet.ethBalanceAttoEth = '0'
-		const state = initialRuntimeState(true, snapshot.wallet.address, snapshot.chainId)
+		const durable = initialDurableState(snapshot.chainId, true, 'profile:test', snapshot.wallet.address)
+		const state = initialRuntimeState(true, snapshot.wallet.address, snapshot.chainId, durable)
 		request(state.retirement)
 		let persistCount = 0
 		const result = await processRetirementCycle({
@@ -186,7 +209,7 @@ describe('Drain & Retire planning', () => {
 		expect(state.retirement.blockers).toEqual([])
 		expect(state.evaluations.filter(item => item.eligibility.eligible && item.plan !== undefined && operationAllowedDuringRetirement(item.plan.definitionId, state.retirement.policies)).map(item => item.plan?.definitionId)).toEqual([])
 		expect(state.retirement.status).toBe('drained')
-		expect(state.retirement.completionEvidence?.blockNumber).toBe('1')
+		expect(state.retirement.completionEvidence).toMatchObject({ blockNumber: '1', profileId: 'profile:test', signerAddress: snapshot.wallet.address })
 	})
 
 	test('blocks exposure-creating operations but permits recovery', () => {
@@ -247,7 +270,7 @@ describe('Drain & Retire planning', () => {
 			recordV3ScanFailure(state, current, error)
 		}
 		const assessment = assessRetirement({ blockHash: canonicalBlockHash, blockNumber: 100n, canonicalScanComplete: true, evaluations: [], retirement: state.retirement, snapshot: emptySnapshot(), state, v3: [] })
-		applyRetirementAssessment(state.retirement, assessment, canonicalBlockHash, 100n, now)
+		applyRetirementAssessment(state.retirement, assessment, canonicalBlockHash, 100n, completionBinding, now)
 		expect(current.status).toBe('blocked')
 		expect(assessment).toMatchObject({ blockers: [{ category: 'ambiguous-position', id: current.id }], status: 'blocked' })
 		expect(state.retirement.completionEvidence).toBeUndefined()
@@ -291,7 +314,7 @@ describe('Drain & Retire planning', () => {
 		expect(result.proof.knownApprovals).toBe(1)
 	})
 
-	test('blocks completion and profile replacement for an unresolved semantic workflow failure', () => {
+	test('blocks completion and profile replacement for an unresolved semantic workflow failure', async () => {
 		const snapshot = emptySnapshot()
 		const workflow = createDurableWorkflow(plan('trading.position.exit', 'semantic-failure'))
 		markWorkflowFailed(workflow, 'step', new Error('Canonical postcondition was not proven'), 'semantic-failure')
@@ -304,10 +327,10 @@ describe('Drain & Retire planning', () => {
 			proof: { partialWorkflows: 1 },
 			status: 'blocked',
 		})
-		applyRetirementAssessment(retirement, assessment, hash(1), 1n, now)
+		applyRetirementAssessment(retirement, assessment, hash(1), 1n, completionBinding, now)
 		expect(retirement.completionEvidence).toBeUndefined()
 		const runtime = initialRuntimeState(true, snapshot.wallet.address, 31_337, durable)
-		expect(() => resetPristineStateForDeploymentProfile(runtime, 'profile:replacement', true, snapshot.wallet.address, '/tmp/retirement-state.json')).toThrow('drain it first')
+		await expect(resetPristineStateForDeploymentProfile(runtime, 'profile:replacement', true, snapshot.wallet.address, '/tmp/retirement-state.json', async () => undefined)).rejects.toThrow('drain it first')
 	})
 
 	test('revokes ERC-20, ERC-1155, and LP approvals one deterministic target at a time', () => {
@@ -471,7 +494,7 @@ describe('Drain & Retire planning', () => {
 		expect(incomplete).toMatchObject({ blockers: [{ id: 'canonical-scan-incomplete' }], status: 'blocked' })
 		const clean = assessRetirement({ blockHash: hash(1), blockNumber: 1n, canonicalScanComplete: true, evaluations: [], retirement, snapshot, state, v3: [] })
 		expect(clean.status).toBe('drained')
-		applyRetirementAssessment(retirement, clean, hash(1), 1n, now)
+		applyRetirementAssessment(retirement, clean, hash(1), 1n, completionBinding, now)
 		expect(retirement.completionEvidence?.proof.pendingTransactions).toBe(0)
 
 		const pool = snapshot.pools[0]
@@ -482,7 +505,7 @@ describe('Drain & Retire planning', () => {
 		expect(residual.status).toBe('drained-with-residuals')
 	})
 
-	test('binds a residual replacement override to current completion evidence, profile, and recipient', () => {
+	test('binds a residual replacement override to current completion evidence, profile, and recipient', async () => {
 		const snapshot = emptySnapshot()
 		const pool = snapshot.pools[0]
 		if (pool === undefined) throw new Error('Pool fixture is missing')
@@ -490,21 +513,37 @@ describe('Drain & Retire planning', () => {
 		snapshot.wallet.shares = [{ invalid: '0', isApprovedForAll: {}, migrationProgressByRoute: {}, no: '4', shareToken: pool.shareToken, universeId: pool.universeId, yes: '0' }]
 		const retirement = request()
 		const residual = assessRetirement({ blockHash: hash(2), blockNumber: 2n, canonicalScanComplete: true, evaluations: [], retirement, snapshot, state: initialDurableState(31337), v3: [] })
-		applyRetirementAssessment(retirement, residual, hash(2), 2n, now)
+		applyRetirementAssessment(retirement, residual, hash(2), 2n, completionBinding, now)
 		acceptResidualProfileReplacement(retirement, 'profile:test', 'profile:replacement', 'Residual share loss was reviewed and accepted.', 'ACCEPT RESIDUALS FOR profile:replacement', now)
 		expect(retirement.profileReplacementOverride).toMatchObject({ completionBlockHash: hash(2), completionBlockNumber: '2', recipient: address(99), sourceProfileId: 'profile:test', targetProfileId: 'profile:replacement' })
 
 		const mismatchedRuntime = initialRuntimeState(true, snapshot.wallet.address, 31_337)
 		mismatchedRuntime.profileId = 'profile:other'
 		mismatchedRuntime.retirement = structuredClone(retirement)
-		expect(() => resetPristineStateForDeploymentProfile(mismatchedRuntime, 'profile:replacement', true, snapshot.wallet.address, '/tmp/retirement-state.json')).toThrow('drain it first')
+		await expect(resetPristineStateForDeploymentProfile(mismatchedRuntime, 'profile:replacement', true, snapshot.wallet.address, '/tmp/retirement-state.json', async () => undefined)).rejects.toThrow('drain it first')
 
 		const runtime = initialRuntimeState(true, snapshot.wallet.address, 31_337)
 		runtime.profileId = 'profile:test'
+		runtime.signerAddress = snapshot.wallet.address
 		runtime.retirement = structuredClone(retirement)
-		expect(resetPristineStateForDeploymentProfile(runtime, 'profile:replacement', true, snapshot.wallet.address, '/tmp/retirement-state.json')).toBeTrue()
+		const mismatchedSigner = structuredClone(runtime)
+		if (mismatchedSigner.retirement.completionEvidence === undefined) throw new Error('Completion evidence fixture is missing')
+		Object.assign(mismatchedSigner.retirement.completionEvidence, { profileId: 'profile:test', signerAddress: address(44) })
+		await expect(resetPristineStateForDeploymentProfile(mismatchedSigner, 'profile:replacement', true, snapshot.wallet.address, '/tmp/retirement-state.json', async () => undefined)).rejects.toThrow('signer')
+		expect(mismatchedSigner.profileId).toBe('profile:test')
 
-		applyRetirementAssessment(retirement, residual, hash(3), 3n, '2026-09-07T00:01:00.000Z')
+		const changedHash = structuredClone(runtime)
+		const beforeRejectedReset = structuredClone(changedHash)
+		await expect(
+			resetPristineStateForDeploymentProfile(changedHash, 'profile:replacement', true, snapshot.wallet.address, '/tmp/retirement-state.json', async () => {
+				throw new Error('Completion block is not finalized or is no longer canonical')
+			}),
+		).rejects.toThrow('not finalized')
+		expect(changedHash).toEqual(beforeRejectedReset)
+
+		expect(await resetPristineStateForDeploymentProfile(runtime, 'profile:replacement', true, snapshot.wallet.address, '/tmp/retirement-state.json', async () => undefined)).toBeTrue()
+
+		applyRetirementAssessment(retirement, residual, hash(3), 3n, completionBinding, '2026-09-07T00:01:00.000Z')
 		expect(retirement.profileReplacementOverride).toBeUndefined()
 	})
 

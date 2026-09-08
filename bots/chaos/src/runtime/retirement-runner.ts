@@ -45,7 +45,7 @@ export function updateRetirementAssessment(scan: RetirementScan, settings: Opera
 		canonicalScanComplete,
 		sweepLimits: { maximumEthAttoEth: settings.strategy.maximumEthPerOperationAttoEth, maximumGasCostAttoEth: settings.strategy.maximumGasCostAttoEth, maximumRepAttoRep: settings.strategy.maximumRepPerOperationAttoRep, minimumEthReserveAttoEth: settings.strategy.minimumEthReserveAttoEth },
 	})
-	applyRetirementAssessment(state.retirement, assessment, scan.anchor.blockHash, scan.anchor.blockNumber)
+	applyRetirementAssessment(state.retirement, assessment, scan.anchor.blockHash, scan.anchor.blockNumber, { profileId: state.profileId, scannedWallet: scan.snapshot.wallet.address, signerAddress: state.signerAddress })
 	state.scheduler.status = 'paused'
 	return assessment
 }
