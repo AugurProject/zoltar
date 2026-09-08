@@ -1,4 +1,5 @@
-import { decodeOpaqueCursor } from './cursor-codec.ts'
+import { decodeOpaqueCursor, isJsonArray } from './cursor-codec.ts'
+import type { JsonValue } from './ethereum.ts'
 
 const POSTGRES_BIGINT_MAX = 9_223_372_036_854_775_807n
 
@@ -154,9 +155,9 @@ const ndjsonRecords = (body: string): readonly Record<string, unknown>[] => {
 		.split('\n')
 		.map((line) => {
 			if (line.length === 0) throw new Error('NDJSON body contains an empty record')
-			let parsed: unknown
+			let parsed: JsonValue
 			try {
-				parsed = JSON.parse(line)
+				parsed = JSON.parse(line) as JsonValue
 			} catch (error) {
 				throw new Error('NDJSON body contains malformed JSON', { cause: error })
 			}
@@ -181,7 +182,7 @@ const sameScope = (left: ExportRequestScope, right: ExportRequestScope): boolean
 	left.fromBlock === right.fromBlock &&
 	left.toBlock === right.toBlock
 
-const keyFor = (dataset: ExportDataset, value: Record<string, unknown> | readonly unknown[], cursor: boolean): ExportKey => {
+const keyFor = (dataset: ExportDataset, value: Record<string, unknown> | readonly JsonValue[], cursor: boolean): ExportKey => {
 	const fields = record(value)
 	const field = (name: string, index: number): unknown => (cursor && Array.isArray(value) ? value[index] : fields[name])
 	if (dataset === 'logs')
@@ -223,13 +224,13 @@ const compareKeys = (dataset: ExportDataset, left: ExportKey, right: ExportKey):
 const sameKey = (dataset: ExportDataset, left: ExportKey, right: ExportKey): boolean => compareKeys(dataset, left, right) === 0
 
 const parseCursor = (cursor: string): CursorBoundary => {
-	let value: unknown
+	let value: JsonValue
 	try {
 		value = decodeOpaqueCursor(cursor)
 	} catch (error) {
 		throw new Error('export cursor is not valid base64url JSON', { cause: error })
 	}
-	if (!Array.isArray(value) || value.length !== 14 || value[0] !== 1) throw new Error('export cursor shape is invalid')
+	if (!isJsonArray(value) || value.length !== 14 || value[0] !== 1) throw new Error('export cursor shape is invalid')
 	const rawChainId = value[2]
 	if (typeof rawChainId !== 'number' || !Number.isSafeInteger(rawChainId) || rawChainId < 0) throw new Error('export cursor chain ID is invalid')
 	const scope = exportRequestScope(value[1], String(rawChainId), value[3], value[4], value[5])
@@ -242,7 +243,7 @@ const parseCursor = (cursor: string): CursorBoundary => {
 		projectionSourceHash: nonEmptyString(value[12], 'cursor projection source hash'),
 	}
 	const lastKeyValue = value[13]
-	if (!Array.isArray(lastKeyValue)) throw new Error('export cursor row identity is invalid')
+	if (lastKeyValue === undefined || !isJsonArray(lastKeyValue)) throw new Error('export cursor row identity is invalid')
 	return {
 		scope,
 		snapshot,

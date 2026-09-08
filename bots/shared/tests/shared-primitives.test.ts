@@ -9,7 +9,7 @@ import { boundedDashboardJson, dashboardAuthorities, dashboardRequestAuthorityIs
 import { acquireExclusiveProcessLock } from '../src/execution/process-lock.ts'
 import { createSignerOperationGate } from '../src/execution/signer-operation-gate.ts'
 import { maximumFeePerGas, paddedTransactionGas, prepareSignedTransaction, submitSignedTransaction, validateSubmissionSettings } from '../src/execution/transaction-submission.ts'
-import { createContextualPublicClient, createPublicClient, custom, encodeAbiParameters, http, mainnet, parseTransaction, privateKeyToAccount, RpcError, type Hex } from '../src/ethereum.ts'
+import { createContextualPublicClient, createPublicClient, custom, encodeAbiParameters, http, mainnet, parseTransaction, privateKeyToAccount, readContractAtBlock, RpcError, type Abi, type AbiValue, type Hex } from '../src/ethereum.ts'
 import { createRpcEndpointPool, rpcFailureWithContext, RpcEndpointPoolFailure } from '../src/ethereum/rpc-resilience.ts'
 import { LOG_RPC_RESPONSE_BYTES } from '../src/infrastructure/bounded-json.ts'
 import { ConnectivityDegradedError, operationalFailureDisposition } from '../src/monitoring/resilience.ts'
@@ -86,6 +86,28 @@ describe('shared bot primitives', () => {
 				'zeroHash',
 			].sort(),
 		)
+	})
+
+	test('preserves undefined results for no-output calls through a widened ABI', async () => {
+		const calls: string[] = []
+		const client = createPublicClient({
+			chain: mainnet,
+			transport: custom({
+				request: async ({ method }) => {
+					calls.push(method)
+					if (method !== 'eth_call') throw new Error(`Unexpected RPC method: ${method}`)
+					return '0x'
+				},
+			}),
+		})
+		const noOutputAbi = [{ inputs: [], name: 'touch', outputs: [], stateMutability: 'view', type: 'function' }] as const
+		const widenedAbi: Abi = noOutputAbi
+		const result: AbiValue | undefined = await readContractAtBlock(client, { abi: widenedAbi, address: '0x0000000000000000000000000000000000000001', functionName: 'touch' }, 42n)
+		const typedUndefinedResult: Awaited<ReturnType<typeof readContractAtBlock>> = undefined
+
+		expect(result).toBeUndefined()
+		expect(typedUndefinedResult).toBeUndefined()
+		expect(calls).toEqual(['eth_call'])
 	})
 
 	test('converts bigint values only inside the safe integer range', () => {

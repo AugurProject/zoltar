@@ -1,4 +1,5 @@
-import { decodeOpaqueCursor, encodeOpaqueCursor } from '../cursor-codec.ts'
+import { decodeOpaqueCursor, encodeOpaqueCursor, isJsonArray } from '../cursor-codec.ts'
+import type { JsonValue } from '../ethereum.ts'
 
 export { ApiConflictError, ApiRequestError } from '../query-errors.ts'
 
@@ -81,7 +82,7 @@ export type LogCursor = readonly [
 	blockHash: string,
 ]
 
-const isLogCursor = (parts: readonly unknown[]): parts is LogCursor =>
+const isLogCursor = (parts: readonly JsonValue[]): parts is LogCursor =>
 	parts.length === 17 &&
 	parts[0] === 1 &&
 	isNonNegativeSafeInteger(parts[1]) &&
@@ -111,10 +112,10 @@ export const parseLogCursor = (
 	canonical: CanonicalHistoryFilter,
 ): LogCursor | undefined => {
 	if (value === null) return undefined
-	let parts: unknown[]
+	let parts: readonly JsonValue[]
 	try {
 		const parsed = decodeOpaqueCursor(value)
-		parts = Array.isArray(parsed) ? parsed : []
+		parts = isJsonArray(parsed) ? parsed : []
 		if (!isLogCursor(parts)) throw new Error('shape')
 	} catch (error) {
 		throw new ApiRequestError('cursor is invalid', { cause: error })
@@ -189,7 +190,7 @@ export const parseAddressHistoryCursor = (value: string | null, kind: AddressHis
 	if (value === null) return undefined
 	try {
 		const parsed = decodeOpaqueCursor(value)
-		const parts = Array.isArray(parsed) ? parsed : []
+		const parts = isJsonArray(parsed) ? parsed : []
 		if (
 			parts.length !== 13 ||
 			parts[0] !== 1 ||
@@ -256,7 +257,7 @@ export type ActionCursor = readonly [
 	txHash: string,
 ]
 
-const isActionCursor = (parts: readonly unknown[]): parts is ActionCursor =>
+const isActionCursor = (parts: readonly JsonValue[]): parts is ActionCursor =>
 	parts.length === 13 &&
 	parts[0] === 1 &&
 	isNonNegativeSafeInteger(parts[1]) &&
@@ -276,10 +277,10 @@ const isActionCursor = (parts: readonly unknown[]): parts is ActionCursor =>
 
 export const parseActionCursor = (value: string | null, chainId: number): ActionCursor | undefined => {
 	if (value === null) return undefined
-	let parts: unknown[]
+	let parts: readonly JsonValue[]
 	try {
 		const parsed = decodeOpaqueCursor(value)
-		parts = Array.isArray(parsed) ? parsed : []
+		parts = isJsonArray(parsed) ? parsed : []
 		if (!isActionCursor(parts)) throw new Error('shape')
 	} catch (error) {
 		throw new ApiRequestError('cursor is invalid', { cause: error })
