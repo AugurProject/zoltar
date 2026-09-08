@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { h } from 'preact'
 import { act } from 'preact/test-utils'
-import { getAddress, type Address, zeroAddress } from '@zoltar/shared/evm/ethereum'
+import { getAddress, type Address, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { getTruthAuctionBidDisposition, TRUTH_AUCTION_PRICE_PRECISION } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/truthAuctionBook.js'
 import { getTruthAuctionSettlementBidKey, getTruthAuctionSettlementSelectionState, type TruthAuctionSettlementBidRow } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/truthAuctionSettlement.js'
 import type { AccountState, ForkAuctionFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
@@ -15,7 +15,7 @@ import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/rende
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 
 const actualSecurityPools = await import('@zoltar/ui-statoblast-shared/protocol/securityPools.js')
-const actualForks = await import('@zoltar/ui-zoltar-shared/protocol/forks.js')
+const actualForks = await import('@zoltar/ui-statoblast-shared/protocol/forks.js')
 const actualClients = await import('@zoltar/ui-core-shared/wallet/clients.js')
 const actualTruthAuctionBookHook = await import('@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useTruthAuctionBookData.js')
 const actualTruthAuctionSettlementHook = await import('@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useTruthAuctionSettlementActionState.js')
@@ -40,7 +40,7 @@ mock.module('@zoltar/ui-statoblast-shared/protocol/securityPools.js', () => ({
 	loadSecurityPoolChildren: mock(async () => mockedSecurityPools),
 }))
 
-mock.module('@zoltar/ui-zoltar-shared/protocol/forks.js', () => ({
+mock.module('@zoltar/ui-statoblast-shared/protocol/forks.js', () => ({
 	...actualForks,
 	loadForkAuctionDetails: mock(async () => mockedForkAuctionDetails),
 }))

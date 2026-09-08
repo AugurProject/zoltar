@@ -3,7 +3,7 @@ import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import * as ts from 'typescript'
-import { sharedBrowserArtifactRelativePaths } from './sharedBrowserArtifacts.ts'
+import { getSharedBrowserImports, sharedBrowserArtifactRelativePaths } from './sharedBrowserArtifacts.ts'
 import { assertSuccessfulBuilds, clearVendorOutput, vendor } from './vendor.mts'
 import { UI_APP_IDS, getUiAppPaths, getUiCoreSharedPaths, getUiPackageRoot } from './appPaths.mts'
 import { copyProjectArtifacts, isCoreProjectContractPath, type ProjectArtifactPaths } from './projectArtifacts.mts'
@@ -11,11 +11,10 @@ import { copyProjectArtifacts, isCoreProjectContractPath, type ProjectArtifactPa
 const coreSharedPaths = getUiCoreSharedPaths()
 const repositoryRootPath = coreSharedPaths.repositoryRoot
 const uiRootPath = coreSharedPaths.uiRoot
-const zoltarSharedSourceRoot = path.join(getUiPackageRoot(uiRootPath, 'zoltarShared'), 'ts')
 const statoblastSharedSourceRoot = path.join(getUiPackageRoot(uiRootPath, 'statoblastShared'), 'ts')
-const uiProtocolPaths = [path.join(zoltarSharedSourceRoot, 'protocol', 'forks.ts'), path.join(zoltarSharedSourceRoot, 'protocol', 'openOracle.ts'), path.join(statoblastSharedSourceRoot, 'protocol', 'trading.ts')]
-const uiDeploymentHelpersPath = path.join(zoltarSharedSourceRoot, 'protocol', 'deploymentHelpers.ts')
-const uiReportingDomainPath = path.join(zoltarSharedSourceRoot, 'features', 'reporting', 'lib', 'reportingDomain.ts')
+const uiProtocolPaths = [path.join(statoblastSharedSourceRoot, 'protocol', 'forks.ts'), path.join(statoblastSharedSourceRoot, 'protocol', 'openOracle.ts'), path.join(statoblastSharedSourceRoot, 'protocol', 'trading.ts')]
+const uiDeploymentHelpersPath = path.join(statoblastSharedSourceRoot, 'protocol', 'deploymentHelpers.ts')
+const uiReportingDomainPath = path.join(statoblastSharedSourceRoot, 'features', 'reporting', 'lib', 'reportingDomain.ts')
 const uiSepoliaDeploymentConfigPath = path.join(coreSharedPaths.coreSharedSourceRoot, 'lib', 'sepoliaDeploymentConfig.ts')
 const uiSimulationBootstrapPath = path.join(coreSharedPaths.coreSharedSourceRoot, 'simulation', 'bootstrap.ts')
 const uiTruthAuctionBookPath = path.join(statoblastSharedSourceRoot, 'features', 'truth-auctions', 'lib', 'truthAuctionBook.ts')
@@ -24,14 +23,13 @@ const uiVendorBuildPath = path.join(import.meta.dir, 'vendor.mts')
 const uiWatchBuildPath = path.join(import.meta.dir, 'watch.mts')
 const uiWorkerBuildPath = path.join(import.meta.dir, 'workers.mts')
 const rootPackageJsonPath = path.join(repositoryRootPath, 'package.json')
-const sharedPackageJsonPath = path.join(repositoryRootPath, 'shared', 'package.json')
 const sharedBrowserArtifacts = sharedBrowserArtifactRelativePaths.map(relativePath => path.join(repositoryRootPath, relativePath))
 const developmentImportMapRegressionEntries: Record<string, string> = {
-	'@zoltar/shared/evm/ethereum': '../shared/js/evm/ethereum.js',
-	'@zoltar/shared/evm/logScan': '../shared/js/evm/logScan.js',
-	'@zoltar/shared/statoblast/scalarOutcome': '../shared/js/statoblast/scalarOutcome.js',
-	'@zoltar/shared/deployment/sepoliaRepAllocations': '../shared/js/deployment/sepoliaRepAllocations.js',
-	'@zoltar/shared/serialization/sortStringArrayByKeccak': '../shared/js/serialization/sortStringArrayByKeccak.js',
+	'@zoltar/core-shared/evm/ethereum': '../shared/core/js/evm/ethereum.js',
+	'@zoltar/core-shared/evm/logScan': '../shared/core/js/evm/logScan.js',
+	'@zoltar/zoltar-shared/questions/scalarOutcome': '../shared/zoltar/js/questions/scalarOutcome.js',
+	'@zoltar/zoltar-shared/deployment/sepoliaRepAllocations': '../shared/zoltar/js/deployment/sepoliaRepAllocations.js',
+	'@zoltar/core-shared/serialization/sortStringArrayByKeccak': '../shared/core/js/serialization/sortStringArrayByKeccak.js',
 	abitype: './vendor/abitype/exports/index.js',
 	'micro-eth-signer': './vendor/micro-eth-signer/index.js',
 	'micro-eth-signer/advanced/abi.js': './vendor/micro-eth-signer/advanced/abi.js',
@@ -341,43 +339,25 @@ test('shared helper package imports resolve to browser-served shared outputs', (
 	const simulationBootstrapSource = fs.readFileSync(uiSimulationBootstrapPath, 'utf8')
 	const appIndexHtmlSources = [...uiIndexHtmlPaths].map(([appId, indexPath]) => ({ appId, source: fs.readFileSync(indexPath, 'utf8') }))
 
-	expect(protocolSource).toContain("from './helpers.js'")
+	expect(protocolSource).toContain("from '@zoltar/ui-zoltar-shared/protocol/helpers.js'")
 	expect(protocolSource).toContain("from './deploymentHelpers.js'")
-	expect(protocolSource).toContain("from '@zoltar/shared/serialization/bigInt'")
-	expect(sepoliaDeploymentConfigSource).toContain("from '@zoltar/shared/deployment/sepoliaRepAllocations'")
-	expect(deploymentHelpersSource).toContain("from '@zoltar/shared/deployment/deploymentAddresses'")
-	expect(deploymentHelpersSource).toContain("from '@zoltar/shared/oracle/oracleInitialReport'")
-	expect(deploymentHelpersSource).toContain("from '@zoltar/shared/deployment/protocolConfig'")
-	expect(protocolSource).toContain("from '@zoltar/shared/evm/ethereum'")
-	expect(fs.readFileSync(uiReportingDomainPath, 'utf8')).toContain("from '@zoltar/shared/oracle/escalationMath'")
-	expect(fs.readFileSync(uiTruthAuctionBookPath, 'utf8')).toContain("from '@zoltar/shared/statoblast/truthAuctionTickMath'")
+	expect(protocolSource).toContain("from '@zoltar/core-shared/serialization/bigInt'")
+	expect(sepoliaDeploymentConfigSource).toContain("from '@zoltar/zoltar-shared/deployment/sepoliaRepAllocations'")
+	expect(deploymentHelpersSource).toContain("from '@zoltar/core-shared/deployment/deploymentAddresses'")
+	expect(deploymentHelpersSource).toContain("from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'")
+	expect(deploymentHelpersSource).toContain("from '@zoltar/core-shared/deployment/protocolConfig'")
+	expect(protocolSource).toContain("from '@zoltar/core-shared/evm/ethereum'")
+	expect(fs.readFileSync(uiReportingDomainPath, 'utf8')).toContain("from '@zoltar/statoblast-shared/escalationGame/escalationMath'")
+	expect(fs.readFileSync(uiTruthAuctionBookPath, 'utf8')).toContain("from '@zoltar/statoblast-shared/statoblast/truthAuctionTickMath'")
 	expect(protocolSource).not.toContain('./shared/bigInt.js')
 	expect(simulationBootstrapSource).not.toContain('../shared/constants.js')
 	expect(deploymentHelpersSource).not.toContain('../shared/deploymentAddresses.js')
 	for (const { appId, source: uiIndexHtml } of appIndexHtmlSources) {
-		expect(uiIndexHtml).toContain('"@zoltar/shared/serialization/bigInt": "../shared/js/serialization/bigInt.js"')
-		expect(uiIndexHtml).toContain('"@zoltar/shared/constants": "../shared/js/constants.js"')
-		expect(uiIndexHtml).toContain('"@zoltar/shared/deployment/deploymentAddresses": "../shared/js/deployment/deploymentAddresses.js"')
-		expect(uiIndexHtml).toContain('"@zoltar/shared/oracle/escalationMath": "../shared/js/oracle/escalationMath.js"')
-		expect(uiIndexHtml).toContain('"@zoltar/shared/evm/ethereum": "../shared/js/evm/ethereum.js"')
-		expect(uiIndexHtml).toContain('"@zoltar/shared/statoblast/liquidation": "../shared/js/statoblast/liquidation.js"')
-		expect(uiIndexHtml).toContain('"@zoltar/shared/evm/logScan": "../shared/js/evm/logScan.js"')
-		if (appId !== 'zoltar') {
-			expect(uiIndexHtml).toContain('"@zoltar/shared/oracle/openOracle": "../shared/js/oracle/openOracle.js"')
-			expect(uiIndexHtml).toContain('"@zoltar/shared/oracle/oracleInitialReport": "../shared/js/oracle/oracleInitialReport.js"')
-		} else {
-			expect(uiIndexHtml).not.toContain('"@zoltar/shared/oracle/openOracle": "../shared/js/oracle/openOracle.js"')
-			expect(uiIndexHtml).not.toContain('"@zoltar/shared/oracle/oracleInitialReport": "../shared/js/oracle/oracleInitialReport.js"')
-		}
-		expect(uiIndexHtml).toContain('"@zoltar/shared/deployment/protocolConfig": "../shared/js/deployment/protocolConfig.js"')
-		expect(uiIndexHtml).toContain('"@zoltar/shared/statoblast/scalarOutcome": "../shared/js/statoblast/scalarOutcome.js"')
-		expect(uiIndexHtml).toContain('"@zoltar/shared/deployment/sepoliaRepAllocations": "../shared/js/deployment/sepoliaRepAllocations.js"')
-		expect(uiIndexHtml).toContain('"@zoltar/shared/serialization/sortStringArrayByKeccak": "../shared/js/serialization/sortStringArrayByKeccak.js"')
-		expect(uiIndexHtml).toContain('"@zoltar/shared/statoblast/truthAuctionTickMath": "../shared/js/statoblast/truthAuctionTickMath.js"')
+		for (const [specifier, output] of Object.entries(getSharedBrowserImports(appId))) expect(uiIndexHtml).toContain(JSON.stringify(specifier) + ': ' + JSON.stringify(output))
 		expect(uiIndexHtml).not.toContain('"viem": "./vendor/viem/index.js"')
 	}
-	expect(sharedBrowserArtifactRelativePaths).toContain('shared/js/statoblast/scalarOutcome.js')
-	expect(sharedBrowserArtifactRelativePaths).toContain('shared/js/evm/logScan.js')
+	expect(sharedBrowserArtifactRelativePaths).toContain('shared/zoltar/js/questions/scalarOutcome.js')
+	expect(sharedBrowserArtifactRelativePaths).toContain('shared/core/js/evm/logScan.js')
 
 	for (const artifactPath of sharedBrowserArtifacts) {
 		expect(fs.existsSync(artifactPath)).toBe(true)
@@ -385,32 +365,14 @@ test('shared helper package imports resolve to browser-served shared outputs', (
 })
 
 test('shared browser import maps and required assets follow package export outputs', () => {
-	const sharedPackageJson = JSON.parse(fs.readFileSync(sharedPackageJsonPath, 'utf8')) as {
-		exports?: Record<string, { default?: string }>
-	}
-	if (sharedPackageJson.exports === undefined) throw new Error('Expected shared/package.json to define exports.')
-
-	const mappedSharedArtifacts = new Set<string>()
+	const mappedArtifacts = new Set<string>()
 	for (const appId of UI_APP_IDS) {
 		const imports = readDevelopmentImportMap(appId)
-		for (const [specifier, mappedPath] of Object.entries(imports)) {
-			if (!specifier.startsWith('@zoltar/shared/')) continue
-			const exportName = `.${specifier.slice('@zoltar/shared'.length)}`
-			const packageExport = sharedPackageJson.exports[exportName]
-			if (packageExport?.default === undefined) {
-				throw new Error(`${appId} maps ${specifier}, but ${exportName} has no default shared package export.`)
-			}
-			const expectedMappedPath = `../shared/${packageExport.default.replace(/^\.\//, '')}`
-			expect(mappedPath, `${appId} import map entry for ${specifier}`).toBe(expectedMappedPath)
-			mappedSharedArtifacts.add(`shared/${packageExport.default.replace(/^\.\//, '')}`)
-		}
+		const runtimeImports = Object.fromEntries(Object.entries(imports).filter(([specifier]) => /^@zoltar\/(core|zoltar|open-oracle|statoblast|trading)-shared\//.test(specifier)))
+		expect(runtimeImports).toEqual(getSharedBrowserImports(appId))
+		for (const output of Object.values(runtimeImports)) mappedArtifacts.add(output.slice(3))
 	}
-
-	const exportedArtifacts = new Set(Object.values(sharedPackageJson.exports).flatMap(packageExport => (packageExport.default === undefined ? [] : [`shared/${packageExport.default.replace(/^\.\//, '')}`])))
-	for (const relativePath of sharedBrowserArtifactRelativePaths) {
-		expect(exportedArtifacts.has(relativePath), `${relativePath} is a current package export output`).toBe(true)
-	}
-	expect([...mappedSharedArtifacts].sort()).toEqual([...sharedBrowserArtifactRelativePaths].sort())
+	expect([...mappedArtifacts].sort()).toEqual([...sharedBrowserArtifactRelativePaths].sort())
 })
 
 test('watch build regression scanner catches indirect bare Bun commands', () => {
@@ -432,9 +394,9 @@ test('development import map maps browser dependency subpaths', () => {
 			expect(imports[specifier], `${appId} import map entry for ${specifier}`).toBe(mappedPath)
 		}
 		if (appId !== 'zoltar') {
-			expect(imports['@zoltar/shared/oracle/openOracle']).toBe('../shared/js/oracle/openOracle.js')
+			expect(imports['@zoltar/open-oracle-shared/openOracle/openOracle']).toBe('../shared/openOracle/js/openOracle/openOracle.js')
 		} else {
-			expect(imports['@zoltar/shared/oracle/openOracle']).toBeUndefined()
+			expect(imports['@zoltar/open-oracle-shared/openOracle/openOracle']).toBeUndefined()
 		}
 	}
 	expect(rootPackageJson.scripts?.['app:watch:zoltar']).toContain('tooling/ui/watch.mts zoltar')
@@ -442,7 +404,7 @@ test('development import map maps browser dependency subpaths', () => {
 	expect(rootPackageJson.scripts?.['app:serve:zoltar']).toContain('dev-server.ts zoltar')
 	expect(rootPackageJson.scripts?.['app:serve:statoblast']).toContain('dev-server.ts statoblast')
 	expect(vendorBuildSource).toContain("{ packageName: 'isows', mainEntrypointFile: 'native.js'")
-	expect(vendorBuildSource).toContain("includeTrading: parseUiAppIdFromProcess('vendor build') === 'trading'")
+	expect(vendorBuildSource).toContain("includeTrading: app === 'trading'")
 	expect(watchBuildSource).toContain("const runProjectArtifactBuild = async (reason: string) => {\n\tif (shuttingDown) return\n\tif (appId === 'trading') {\n\t\tawait runVendorBuild(reason)")
 	expect(watchBuildSource).toContain("if (appId === 'trading') {\n\t\tawait runProjectArtifactBuild(reason)")
 	expect(watchBuildSource).toContain('if (workerBuildRunning) {\n\t\tvendorBuildQueued = true')
@@ -497,6 +459,7 @@ test('vendor build failures cannot be silently ignored', () => {
 test('project artifact generation writes Trading output only when explicitly requested', async () => {
 	const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'zoltar-project-artifacts-'))
 	const artifactPaths: ProjectArtifactPaths = {
+		statoblastContractArtifactOutputPath: path.join(temporaryRoot, 'statoblastContractArtifact.ts'),
 		abiOutputPath: path.join(temporaryRoot, 'ui/coreShared/ts/abis.ts'),
 		abiSourcePath: path.join(temporaryRoot, 'solidity/ts/abi/abis.ts'),
 		contractArtifactOutputPath: path.join(temporaryRoot, 'ui/coreShared/ts/contractArtifact.ts'),
@@ -513,6 +476,9 @@ test('project artifact generation writes Trading output only when explicitly req
 			JSON.stringify({
 				contracts: {
 					'contracts/Zoltar.sol': { Zoltar: { abi: [] } },
+					'contracts/statoblast/SecurityPool.sol': { SecurityPool: { abi: [] } },
+					'contracts/statoblast/openOracle/OpenOracle.sol': { OpenOracle: { abi: [] } },
+					'contracts/test/Mock.sol': { Mock: { abi: [] } },
 					'contracts/trading/Router.sol': {
 						Router: {
 							abi: [],
@@ -524,7 +490,15 @@ test('project artifact generation writes Trading output only when explicitly req
 			}),
 		)
 
+		await copyProjectArtifacts({ project: 'zoltar' }, artifactPaths)
+		expect(fs.existsSync(artifactPaths.statoblastContractArtifactOutputPath)).toBe(false)
+		const zoltarOutput = fs.readFileSync(artifactPaths.contractArtifactOutputPath, 'utf8')
+		for (const excluded of ['SecurityPool', 'OpenOracle', 'Mock', 'Router']) expect(zoltarOutput).not.toContain(excluded)
 		await copyProjectArtifacts({}, artifactPaths)
+		const statoblastOutput = fs.readFileSync(artifactPaths.statoblastContractArtifactOutputPath, 'utf8')
+		expect(statoblastOutput).toContain('SecurityPool')
+		expect(statoblastOutput).toContain('OpenOracle')
+		for (const excluded of ['Zoltar_Zoltar', 'Mock', 'Router']) expect(statoblastOutput).not.toContain(excluded)
 		expect(fs.readFileSync(artifactPaths.contractArtifactOutputPath, 'utf8')).toContain('Zoltar_Zoltar')
 		expect(fs.readFileSync(artifactPaths.contractArtifactOutputPath, 'utf8')).not.toContain('Router_Router')
 		expect(fs.existsSync(artifactPaths.tradingContractArtifactOutputPath)).toBe(false)

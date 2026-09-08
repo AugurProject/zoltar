@@ -4,13 +4,15 @@ import * as path from 'node:path'
 import { shareUiPreactRuntime } from '../ui/share-ui-preact-runtime.mjs'
 
 const installDirectory = process.argv[2] === undefined ? process.cwd() : path.resolve(process.cwd(), process.argv[2])
+const installOptions = process.argv.slice(3)
+if (installOptions.some(option => option !== '--production')) throw new Error('Only --production is supported after the install directory')
+const productionOnly = installOptions.includes('--production')
 const packageJsonPath = path.join(installDirectory, 'package.json')
 const lockfilePath = path.join(installDirectory, 'bun.lock')
 const packageJsonBackupPath = `${packageJsonPath}.zoltar-install-backup`
 const lockfileBackupPath = `${lockfilePath}.zoltar-install-backup`
 const repositoryBunVersion = '1.4.2'
 
-type DependencySection = 'dependencies' | 'devDependencies' | 'optionalDependencies'
 type DependencyMap = Record<string, string>
 interface PackageManifest {
 	dependencies?: DependencyMap
@@ -58,14 +60,10 @@ const restoreInstallBackups = () => {
 
 restoreInstallBackups()
 
-const getSharedDependencySection = (packageJson: PackageManifest): DependencySection | undefined => {
-	for (const dependencySection of ['dependencies', 'devDependencies', 'optionalDependencies'] as const) {
-		if (packageJson[dependencySection]?.['@zoltar/shared'] !== undefined) return dependencySection
-	}
-	return undefined
-}
-
 const runInstall = (installArguments: string[]): number => {
+	// --production implicitly freezes Bun's lockfile even during the temporary
+	// manifest workaround; --omit=dev preserves production scope after preflight.
+	if (productionOnly) installArguments = [...installArguments, '--omit=dev']
 	const command = process.versions.bun === repositoryBunVersion ? [process.execPath, ...installArguments] : [process.execPath, 'x', `bun@${repositoryBunVersion}`, ...installArguments]
 	if (process.versions.bun !== repositoryBunVersion) console.warn(`Using repository Bun ${repositoryBunVersion}; current Bun is ${process.versions.bun ?? 'unknown'}.`)
 	const executable = command[0]
@@ -84,8 +82,12 @@ const runInstall = (installArguments: string[]): number => {
 
 const runWindowsInstallWithoutSharedCacheCopy = () => {
 	const packageJson = readPackageJson()
-	const sharedDependencySection = getSharedDependencySection(packageJson)
-	if (sharedDependencySection === undefined) {
+	const localDependencies = (['dependencies', 'devDependencies', 'optionalDependencies'] as const).flatMap(section =>
+		Object.entries(packageJson[section] ?? {})
+			.filter(([name, value]) => name.startsWith('@zoltar/') && value.startsWith('file:'))
+			.map(([name]) => ({ section, name })),
+	)
+	if (localDependencies.length === 0) {
 		return runInstall(['install', '--frozen-lockfile', '--backend=copyfile'])
 	}
 
@@ -105,9 +107,7 @@ const runWindowsInstallWithoutSharedCacheCopy = () => {
 	process.once('SIGHUP', () => restoreAndExit(129))
 
 	try {
-		const dependencies = packageJson[sharedDependencySection]
-		if (dependencies === undefined) throw new Error(`Missing ${sharedDependencySection} after dependency detection`)
-		delete dependencies['@zoltar/shared']
+		for (const { section, name } of localDependencies) delete packageJson[section]?.[name]
 		writePackageJson(packageJson)
 		return runInstall(['install', '--no-save', '--backend=copyfile'])
 	} finally {
@@ -117,7 +117,7 @@ const runWindowsInstallWithoutSharedCacheCopy = () => {
 
 const linkLocalZoltarDependencies = () => {
 	const packageJson = readPackageJson()
-	for (const dependencies of [packageJson.dependencies, packageJson.devDependencies, packageJson.optionalDependencies]) {
+	for (const dependencies of [packageJson.dependencies, ...(productionOnly ? [] : [packageJson.devDependencies]), packageJson.optionalDependencies]) {
 		for (const [dependencyName, dependencySource] of Object.entries(dependencies ?? {})) {
 			if (!dependencyName.startsWith('@zoltar/') || !dependencySource.startsWith('file:')) continue
 			const sourcePath = path.resolve(installDirectory, dependencySource.slice('file:'.length))
@@ -131,7 +131,7 @@ const linkLocalZoltarDependencies = () => {
 
 const unlinkLocalZoltarDependencies = () => {
 	const packageJson = readPackageJson()
-	for (const dependencies of [packageJson.dependencies, packageJson.devDependencies, packageJson.optionalDependencies]) {
+	for (const dependencies of [packageJson.dependencies, ...(productionOnly ? [] : [packageJson.devDependencies]), packageJson.optionalDependencies]) {
 		for (const [dependencyName, dependencySource] of Object.entries(dependencies ?? {})) {
 			if (!dependencyName.startsWith('@zoltar/') || !dependencySource.startsWith('file:')) continue
 			const installedPath = path.join(installDirectory, 'node_modules', ...dependencyName.split('/'))

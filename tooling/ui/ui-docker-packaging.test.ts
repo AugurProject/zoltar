@@ -26,7 +26,7 @@ describe('UI Docker packaging', () => {
 		}
 		expect(copies.some(copy => copy.includes('ui/coreShared/tsconfig.vendor.json'))).toBe(false)
 		expect(runSegments).not.toContain('bun run vendor')
-		expect(runSegments).toEqual(expect.arrayContaining(['bun ./tooling/ui/vendor.mts zoltar', 'bun ./tooling/ui/vendor.mts statoblast']))
+		expect(runSegments).toEqual(expect.arrayContaining(['bun ./tooling/ui/vendor.mts zoltar --scoped-artifacts', 'bun ./tooling/ui/vendor.mts statoblast --scoped-artifacts']))
 		for (const packageId of ['coreShared', 'zoltar', 'statoblast', 'trading']) expect(runSegments).toContain(`bun ./tooling/repo/install-frozen.mts ui/${packageId}`)
 		expect(runSegments.some(command => /cd \/source\/ui\/\w+ && bun install/u.test(command))).toBe(false)
 		expect(relative(join(dirname(dockerfile), '..'), join(dirname(staticServer)))).toBe('tooling/ui')
@@ -35,16 +35,22 @@ describe('UI Docker packaging', () => {
 	test('builds local runtime images from only the selected application dependency stage', async () => {
 		const stages = parseDockerfile(await readFile(dockerfile, 'utf8'))
 		const common = requireDockerStage(stages, 'common-builder')
-		expect(dockerInstructions(common, 'RUN').flatMap(shellCommandSegments)).toEqual(expect.arrayContaining(['mkdir -p /source/ui/coreShared/ts', 'bun run compile-contracts']))
+		expect(dockerInstructions(common, 'RUN').flatMap(shellCommandSegments)).toEqual(expect.arrayContaining(['mkdir -p /source/ui/coreShared/ts', 'bun ./tooling/contracts/build-app-contracts.mts zoltar']))
+		const upstreamCopies = dockerInstructions(common, 'COPY')
+		for (const forbidden of ['./shared/', './solidity/contracts/', './shared/statoblast/ts/', './shared/openOracle/ts/', './shared/trading/ts/', './ui/statoblastShared/ts/']) expect(upstreamCopies.some(copy => copy.startsWith(`${forbidden} `))).toBe(false)
+		expect(requireDockerStage(stages, 'zoltar-builder').base).toBe('common-builder')
+		expect(requireDockerStage(stages, 'statoblast-dependencies').base).toBe('common-builder')
+		for (const app of ['statoblast', 'trading']) expect(requireDockerStage(stages, `${app}-builder`).base).toBe('statoblast-dependencies')
+
 		for (const appId of ['zoltar', 'statoblast', 'trading']) {
 			const builder = requireDockerStage(stages, `${appId}-builder`)
 			const runtime = requireDockerStage(stages, `local-runtime-${appId}`)
 			expect(dockerInstructions(runtime, 'COPY').some(copy => copy.includes(`--from=${appId}-builder`) && copy.endsWith(`/source/ui/${appId}/dist/ /app/ui/${appId}/`))).toBe(true)
-			expect(dockerInstructions(runtime, 'COPY').some(copy => copy.endsWith('./tooling/ui/appPaths.mts /app/appPaths.mts'))).toBe(true)
+			expect(dockerInstructions(runtime, 'COPY').some(copy => copy.endsWith('./tooling/ui/appIds.mts /app/tooling/ui/appIds.mts'))).toBe(true)
 			if (appId === 'trading') {
 				const instructions = builder.instructions
 				expect(instructions.findIndex(instruction => instruction.keyword === 'COPY' && instruction.value === './ui/trading/ts/ /source/ui/trading/ts/')).toBeLessThan(
-					instructions.findIndex(instruction => instruction.keyword === 'RUN' && shellCommandSegments(instruction.value).includes('bun ./tooling/ui/vendor.mts trading')),
+					instructions.findIndex(instruction => instruction.keyword === 'RUN' && shellCommandSegments(instruction.value).includes('bun ./tooling/ui/vendor.mts trading --scoped-artifacts')),
 				)
 			}
 		}
@@ -100,7 +106,7 @@ describe('UI Docker packaging', () => {
 		expect(dockerSource).toContain('AS local-runtime-zoltar')
 		expect(dockerSource).toContain('FROM debian:12.6-slim@sha256:39868a6f452462b70cf720a8daff250c63e7342970e749059c105bf7c1e8eeaf AS publisher')
 		expect(dockerSource.indexOf('AS local-runtime-zoltar')).toBeLessThan(dockerSource.indexOf('AS publisher'))
-		expect(dockerSource).toContain('CMD [ "bun", "/app/dockerServe.mts" ]')
+		expect(dockerSource).toContain('CMD [ "bun", "/app/tooling/ui/dockerServe.mts" ]')
 		expect(await readFile(publisherEntrypoint, 'utf8')).toContain('ipfs add --api "/ip4/$IPFS_IP4_ADDRESS/tcp/5001"')
 		const server = await readFile(staticServer, 'utf8')
 		expect(server).toContain('http://localhost:${port}/')
@@ -114,7 +120,7 @@ describe('UI Docker packaging', () => {
 		expect(workflows.some(workflow => workflow.includes('cat /ipfs_hash.txt'))).toBe(true)
 		const dockerSource = await readFile(dockerfile, 'utf8')
 		expect(dockerSource.lastIndexOf('AS publisher')).toBeGreaterThan(dockerSource.lastIndexOf('AS local-runtime'))
-		expect(dockerSource.lastIndexOf('ENTRYPOINT [ "/entrypoint.sh" ]')).toBeGreaterThan(dockerSource.lastIndexOf('CMD [ "bun", "/app/dockerServe.mts" ]'))
+		expect(dockerSource.lastIndexOf('ENTRYPOINT [ "/entrypoint.sh" ]')).toBeGreaterThan(dockerSource.lastIndexOf('CMD [ "bun", "/app/tooling/ui/dockerServe.mts" ]'))
 		const stages = dockerSource.split('\n').filter(line => line.startsWith('FROM '))
 		expect(stages.at(-1)).toContain(' AS publisher')
 	})

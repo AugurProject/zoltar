@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { createPublicClient, custom, encodeAbiParameters, getAddress } from '@zoltar/shared/evm/ethereum'
+import { createPublicClient, custom, encodeAbiParameters, getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { act } from 'preact/test-utils'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'

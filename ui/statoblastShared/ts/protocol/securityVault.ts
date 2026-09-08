@@ -1,5 +1,5 @@
-import { type Address } from '@zoltar/shared/evm/ethereum'
-import { statoblast_SecurityPool_SecurityPool } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { type Address } from '@zoltar/core-shared/evm/ethereum'
+import { statoblast_SecurityPool_SecurityPool } from '../contractArtifact.js'
 import type { SecurityVaultActionResult, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { writeContractAndWait } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 

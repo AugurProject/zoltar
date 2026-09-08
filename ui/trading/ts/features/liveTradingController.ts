@@ -1,4 +1,4 @@
-import type { Address } from '@zoltar/shared/evm/ethereum'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { useCallback, useMemo, useRef } from 'preact/hooks'
 import { parseUnits } from '../lib/format.js'
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'

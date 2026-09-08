@@ -40,7 +40,7 @@ const pathSpecificForbidden = new Map<string, RegExp>([
 	['bots/shared/src/monitoring/market-consensus.ts', /\bminimum(?:Ask|Bid)DepthEthPerSource\b/],
 	['solidity/contracts/statoblast/EscalationGameCalculations.sol', /\battritionCost\b/],
 	['solidity/contracts/test/statoblast/EscalationGameForkThresholdHarness.sol', /\b(?:winningBalance|depositAmount|cumulativeAmount|burnAmount)\b/],
-	['shared/ts/oracle/escalationMath.ts', /\b(?:balances|bindingCapital|depositAmount|depositEnd|depositStart|cumulativeAmount|postDepositCumulativeAmount|winningOutcomeBalance|attritionCost|acceptedAmount|projectedBalances)\b/],
+	['shared/statoblast/ts/escalationGame/escalationMath.ts', /\b(?:balances|bindingCapital|depositAmount|depositEnd|depositStart|cumulativeAmount|postDepositCumulativeAmount|winningOutcomeBalance|attritionCost|acceptedAmount|projectedBalances)\b/],
 	['docs/charts/chartModels.ts', /\b(?:[A-Za-z_$][A-Za-z0-9_$]*(?:AttoEth|AttoRep|AttoShares)[A-Za-z0-9_$]*\??:\s*number|[A-Za-z_$][A-Za-z0-9_$]*Atomic[A-Za-z0-9_$]*)\b/],
 	['docs/charts/chartRuntime.ts', /\b[A-Za-z_$][A-Za-z0-9_$]*Atomic[A-Za-z0-9_$]*\b/],
 	[

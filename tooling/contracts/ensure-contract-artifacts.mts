@@ -1,3 +1,4 @@
+import { sharedPackages } from '../repo/sharedPackages.ts'
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
 import * as url from 'node:url'
@@ -12,15 +13,15 @@ const repositoryRoot = path.join(scriptDirectory, '..', '..')
 const solidityRoot = path.join(repositoryRoot, 'solidity')
 const contractsRoot = path.join(solidityRoot, 'contracts')
 const sharedRoot = path.join(repositoryRoot, 'shared')
-const sharedSourceRoot = path.join(sharedRoot, 'ts')
+const sharedSourceRoots = sharedPackages.map(entry => path.join(repositoryRoot, entry.path, 'ts'))
 const contractFreshnessCachePath = path.join(solidityRoot, 'artifacts', '.freshness-hash')
-const sharedFreshnessCachePath = path.join(sharedRoot, 'js', '.freshness-hash')
+const sharedFreshnessCachePath = path.join(sharedRoot, '.freshness-hash')
 const deprecatedContractArtifactRelativePaths = ['solidity/types/contractArtifact.ts']
 
-const requiredContractArtifactRelativePaths = ['solidity/artifacts/Contracts.json', 'solidity/ts/types/contractArtifact.ts', 'ui/coreShared/ts/contractArtifact.ts', 'ui/coreShared/ts/abis.ts']
+const requiredContractArtifactRelativePaths = ['solidity/artifacts/Contracts.json', 'solidity/ts/types/contractArtifact.ts', 'ui/coreShared/ts/contractArtifact.ts', 'ui/statoblastShared/ts/contractArtifact.ts', 'ui/coreShared/ts/abis.ts']
 const requiredOutputs = requiredContractArtifactRelativePaths.map(relativePath => path.join(repositoryRoot, relativePath))
 const freshnessInputs = [path.join(solidityRoot, 'bun.lock'), path.join(solidityRoot, 'package.json'), path.join(solidityRoot, 'tsconfig-compile.json'), path.join(solidityRoot, 'ts', 'abi', 'abis.ts'), path.join(solidityRoot, 'ts', 'compile.ts'), path.join(repositoryRoot, 'tooling', 'ui', 'projectArtifacts.mts')]
-const sharedFreshnessInputs = [path.join(sharedRoot, 'package.json'), path.join(sharedRoot, 'tsconfig.json')]
+const sharedFreshnessInputs = sharedPackages.flatMap(entry => [path.join(repositoryRoot, entry.path, 'package.json'), path.join(repositoryRoot, entry.path, 'tsconfig.json')])
 const unexpectedSharedSourceOutputSuffixes = ['.js', '.js.map', '.d.ts', '.d.ts.map']
 const sharedTypeScriptSourceSuffixes = ['.ts', '.tsx', '.mts', '.cts']
 
@@ -62,8 +63,7 @@ async function getFilesRecursively(directoryPath: string): Promise<string[]> {
 }
 
 export async function removeUnexpectedSharedSourceOutputs(root = repositoryRoot): Promise<void> {
-	const sourceRoot = path.join(root, 'shared', 'ts')
-	const sourceFiles = await getFilesRecursively(sourceRoot)
+	const sourceFiles = (await Promise.all(sharedPackages.map(entry => getFilesRecursively(path.join(root, entry.path, 'ts'))))).flat()
 	const sourceFileSet = new Set(sourceFiles)
 	for (const sourceFile of sourceFiles) {
 		const outputSuffix = unexpectedSharedSourceOutputSuffixes.find(suffix => sourceFile.endsWith(suffix))
@@ -142,7 +142,7 @@ async function runSharedBuild(): Promise<void> {
 }
 
 async function refreshRootSharedDependency(): Promise<void> {
-	await runBunScript(['./tooling/repo/ensure-shared-package-fresh.mts', '--refresh'], `root @zoltar/shared dependency refresh`)
+	await runBunScript(['./tooling/repo/ensure-shared-package-fresh.mts', '--refresh'], `root shared package dependency refresh`)
 }
 
 async function refreshAllSharedDependencies(): Promise<void> {
@@ -181,17 +181,17 @@ async function getSharedBuildRegenerationReason(): Promise<string | undefined> {
 		if (!(await exists(outputPath))) return `missing shared build output: ${path.relative(repositoryRoot, outputPath)}`
 	}
 
-	const sharedSourceFiles = await getFilesRecursively(sharedSourceRoot)
+	const sharedSourceFiles = (await Promise.all(sharedSourceRoots.map(getFilesRecursively))).flat()
 	const currentFreshnessHash = await computeFreshnessHash([...sharedFreshnessInputs, ...sharedSourceFiles])
 	const cachedFreshnessHash = await readFreshnessHash(sharedFreshnessCachePath)
-	if (cachedFreshnessHash !== currentFreshnessHash) return 'Shared TypeScript sources or build inputs changed since the last shared/js outputs'
+	if (cachedFreshnessHash !== currentFreshnessHash) return 'Shared TypeScript sources or build inputs changed since the last shared package outputs'
 
 	return undefined
 }
 
 async function syncSharedFreshnessHash(): Promise<void> {
 	await removeUnexpectedSharedSourceOutputs()
-	const sharedSourceFiles = await getFilesRecursively(sharedSourceRoot)
+	const sharedSourceFiles = (await Promise.all(sharedSourceRoots.map(getFilesRecursively))).flat()
 	await writeFreshnessHash(sharedFreshnessCachePath, await computeFreshnessHash([...sharedFreshnessInputs, ...sharedSourceFiles]))
 }
 

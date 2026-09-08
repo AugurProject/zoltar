@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { readdir, readFile, writeFile } from 'node:fs/promises'
-import { keccak256 } from '../../shared/ts/evm/ethereum'
+import { keccak256 } from '../../shared/core/ts/evm/ethereum'
 import { renderReferencePage } from './docs-html-page.mts'
 import { ensureContractArtifactsAreCurrent } from '../contracts/ensure-contract-artifacts.mts'
 import {

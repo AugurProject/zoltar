@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, describe, expect, mock, test } from 'bun:test'
-import { getAddress, isHex, keccak256, zeroAddress } from '@zoltar/shared/evm/ethereum'
+import { getAddress, isHex, keccak256, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { createInjectedBackend, normalizeAccount } from '../wallet/chainBackend.js'
 import type { InjectedEthereum } from '../wallet/injectedEthereum.js'
 

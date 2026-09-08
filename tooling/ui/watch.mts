@@ -1,3 +1,4 @@
+import { isWatchedContractSource } from './watchContractSources.mts'
 import { spawn } from 'node:child_process'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
@@ -11,12 +12,12 @@ const APP_ROOT_PATH = appPaths.appRoot
 const REPOSITORY_ROOT_PATH = appPaths.repositoryRoot
 const DEV_SERVER_PATH = appPaths.devServerScript
 const INDEX_HTML_PATH = appPaths.appIndexHtml
-const SHARED_SOURCE_ROOT_PATH = path.join(REPOSITORY_ROOT_PATH, 'shared', 'ts')
-const SHARED_TSCONFIG_PATH = path.join(REPOSITORY_ROOT_PATH, 'shared', 'tsconfig.json')
+const SHARED_SOURCE_ROOT_PATHS = appPaths.sharedSourceRoots
+const SHARED_TSCONFIG_PATHS = SHARED_SOURCE_ROOT_PATHS.map(sourceRoot => path.join(sourceRoot, '..', 'tsconfig.json'))
 const SOLIDITY_CONTRACTS_ROOT_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity', 'contracts')
 const SOLIDITY_ABI_INPUT_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity', 'ts', 'abi', 'abis.ts')
 const SOLIDITY_COMPILE_INPUT_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity', 'ts', 'compile.ts')
-const SOLIDITY_ARTIFACTS_JSON_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity', 'artifacts', 'Contracts.json')
+const SOLIDITY_ARTIFACTS_JSON_PATH = path.join(REPOSITORY_ROOT_PATH, 'solidity', 'artifacts', appId, 'Contracts.json')
 const PROJECT_ARTIFACT_BUILD_PATH = appPaths.projectArtifactsScript
 const BUNDLER_PATHS_BUILD_PATH = appPaths.bundlerPathsScript
 const TYPE_SCRIPT_PROJECT_ROOT_PATHS = getUiAppDependencyOrder(appId).map(packageId => getUiPackageRoot(appPaths.uiRoot, packageId))
@@ -306,7 +307,7 @@ const watchDirectoryForContractSources = (directoryPath: string, refreshWatchers
 			debounceTimeout = undefined
 			refreshWatchers()
 			const changedPath = typeof filename === 'string' && filename.length > 0 ? path.join(directoryPath, filename) : directoryPath
-			void runContractBuild(path.relative(UI_ROOT_PATH, changedPath).replaceAll('\\', '/'))
+			if (isWatchedContractSource(changedPath, REPOSITORY_ROOT_PATH, appId)) void runContractBuild(path.relative(UI_ROOT_PATH, changedPath).replaceAll('\\', '/'))
 		}, 120)
 	})
 	contractSourceUnwatchCallbacks.push(() => {
@@ -341,13 +342,13 @@ const refreshTypeScriptOutputWatchers = async () => {
 
 const refreshSharedSourceWatchers = async () => {
 	clearSharedSourceWatchers()
-	const directories = await getAllDirectories(SHARED_SOURCE_ROOT_PATH)
+	const directories = (await Promise.all(SHARED_SOURCE_ROOT_PATHS.map(sourceRoot => getAllDirectories(sourceRoot)))).flat()
 	for (const directoryPath of directories) {
 		watchDirectoryForSharedSources(directoryPath, () => {
 			void refreshSharedSourceWatchers()
 		})
 	}
-	const files = await getAllFiles(SHARED_SOURCE_ROOT_PATH)
+	const files = (await Promise.all(SHARED_SOURCE_ROOT_PATHS.map(sourceRoot => getAllFiles(sourceRoot)))).flat()
 	for (const filePath of files) {
 		watchFileWithCleanup(
 			filePath,
@@ -393,7 +394,7 @@ const refreshContractSourceWatchers = async () => {
 			void refreshContractSourceWatchers()
 		})
 	}
-	const files = await getAllFiles(SOLIDITY_CONTRACTS_ROOT_PATH)
+	const files = (await getAllFiles(SOLIDITY_CONTRACTS_ROOT_PATH)).filter(filePath => isWatchedContractSource(filePath, REPOSITORY_ROOT_PATH, appId))
 	for (const filePath of files) {
 		watchFileWithCleanup(
 			filePath,
@@ -469,7 +470,7 @@ const runVendorBuild = async (reason: string) => {
 	vendorBuildRunning = true
 	console.log(`[ui:watch] Rebuilding UI vendor assets because ${reason} changed`)
 	try {
-		vendorBuildProcess = spawn(BUN_EXECUTABLE_PATH, [VENDOR_BUILD_PATH, appId], {
+		vendorBuildProcess = spawn(BUN_EXECUTABLE_PATH, [VENDOR_BUILD_PATH, appId, '--scoped-artifacts'], {
 			cwd: UI_ROOT_PATH,
 			stdio: 'inherit',
 		})
@@ -580,7 +581,7 @@ const runSharedBuild = async (reason: string) => {
 	}
 	sharedBuildRunning = true
 	console.log(`[ui:watch] Rebuilding shared package outputs because ${reason} changed`)
-	const builtSharedOutputs = await runSharedBuildStep([BUN_EXECUTABLE_PATH, 'run', 'shared:build'], REPOSITORY_ROOT_PATH, 'Shared TypeScript build')
+	const builtSharedOutputs = await runSharedBuildStep([BUN_EXECUTABLE_PATH, './tooling/repo/build-shared.mts', appId], REPOSITORY_ROOT_PATH, 'Shared TypeScript build')
 	if (!builtSharedOutputs) return
 	sharedBuildRunning = false
 	if (sharedBuildQueued) {
@@ -605,7 +606,7 @@ const runProjectArtifactBuild = async (reason: string) => {
 	projectArtifactBuildRunning = true
 	console.log(`[ui:watch] Rebuilding UI contract artifacts because ${reason} changed`)
 	try {
-		projectArtifactBuildProcess = spawn(BUN_EXECUTABLE_PATH, ['run', 'generate:ui-contract-artifact'], {
+		projectArtifactBuildProcess = spawn(BUN_EXECUTABLE_PATH, ['./tooling/contracts/build-app-contracts.mts', appId], {
 			cwd: REPOSITORY_ROOT_PATH,
 			stdio: 'inherit',
 		})
@@ -655,7 +656,7 @@ const runContractBuild = async (reason: string) => {
 	contractBuildRunning = true
 	console.log(`[ui:watch] Rebuilding Solidity contracts and UI artifacts because ${reason} changed`)
 	try {
-		contractBuildProcess = spawn(BUN_EXECUTABLE_PATH, ['run', 'generate:contracts'], {
+		contractBuildProcess = spawn(BUN_EXECUTABLE_PATH, ['./tooling/contracts/build-app-contracts.mts', appId], {
 			cwd: REPOSITORY_ROOT_PATH,
 			stdio: 'inherit',
 		})
@@ -793,9 +794,10 @@ const main = () => {
 		void shutdown(1)
 	})
 
-	watchFile(SHARED_TSCONFIG_PATH, relativePath => {
-		void runSharedBuild(relativePath)
-	})
+	for (const configPath of SHARED_TSCONFIG_PATHS)
+		watchFile(configPath, relativePath => {
+			void runSharedBuild(relativePath)
+		})
 
 	void refreshSharedSourceWatchers().catch(error => {
 		console.error('[ui:watch] Failed to watch shared TypeScript source files')

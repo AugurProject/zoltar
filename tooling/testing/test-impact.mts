@@ -1,3 +1,4 @@
+import { sharedPackages } from '../repo/sharedPackages.ts'
 import { execFileSync } from 'node:child_process'
 import { getChangedFileEntries, type ChangedFileEntry } from '../repo/changed-files.mts'
 import { promises as fs } from 'node:fs'
@@ -137,7 +138,7 @@ function specializedTestCommand(filePath: string, options: SpecializedTestOption
 const IMPORT_GRAPH_IGNORED_DIRECTORIES = new Set(['.git', '.t3', 'artifacts', 'coverage', 'dist', 'js', 'node_modules', 'vendor'])
 const IMPORT_GRAPH_SOURCE_PATTERN = /\.(?:cts|mts|ts|tsx)$/
 const PACKAGE_ALIASES = new Map([
-	['@zoltar/shared/', 'shared/ts/'],
+	...sharedPackages.map(entry => [`${entry.name}/`, `${entry.path}/ts/`] as const),
 	['@zoltar/bot-shared/', 'bots/shared/src/'],
 	['@zoltar/ui-core-shared/', 'ui/coreShared/ts/'],
 	['@zoltar/ui-statoblast-shared/', 'ui/statoblastShared/ts/'],

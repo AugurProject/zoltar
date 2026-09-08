@@ -17,7 +17,7 @@ import { getCurrentRouteHash, getRouteHashSearch, resetRoutingForTesting } from 
 import { getTradingRouteHref, installTradingRouting } from '../../lib/routing.js'
 import { getActiveNetworkProfile, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
-import { createPublicClient, custom } from '@zoltar/shared/evm/ethereum'
+import { createPublicClient, custom } from '@zoltar/core-shared/evm/ethereum'
 import { createTradingPublicClient } from '../../protocol/live.js'
 
 test('Trading registers its shared TEVM scenario and selects its own worker', () => {

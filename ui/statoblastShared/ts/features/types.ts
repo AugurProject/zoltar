@@ -1,4 +1,4 @@
-import type { Address } from '@zoltar/shared/evm/ethereum'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { AccountState, ForkAuctionFormState, MarketFormState, SecurityPoolFormState, SecurityVaultFormState, TradingFormState } from '../types/app.js'
 import type { ReportingFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import type {
@@ -30,7 +30,7 @@ import type { ForkAuctionStageView } from './truth-auctions/lib/forkAuction.js'
 import type { SecurityPoolStateModel } from './security-pools/lib/securityPoolState.js'
 import type { ForkWorkflowSelectionStage } from './security-pools/lib/securityPoolWorkflow.js'
 import type { TokenApprovalState } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
-import type { ReportingRouteContentProps } from '@zoltar/ui-zoltar-shared/features/types.js'
+import type { ReportingRouteContentProps } from './oracleTypes.js'
 
 export type * from '@zoltar/ui-core-shared/types/components.js'
 

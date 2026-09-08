@@ -12,7 +12,7 @@ import { constantProductExactInput, constantProductExactOutput, type Venue } fro
 import type { PositionRecord } from '#state/position-store'
 import { endpointLabel } from '#monitoring/connectivity'
 import type { MarketConsensusObservation } from '@zoltar/bot-shared/monitoring/market-consensus'
-import type { OpenOracleStatePreimage } from '@zoltar/shared/oracle/openOracle'
+import type { OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 
 const FEES = STANDARD_UNISWAP_FEES
 const UNISWAP_V2_FACTORY = getAddress('0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f')
@@ -63,8 +63,8 @@ async function loadPool(client: ReadClient, address: Address, token: Address, fe
 	}
 }
 
-export async function poolsForToken(client: ReadClient, config: Pick<Configuration, 'network' | 'v2Router' | 'twapSeconds'>, token: Address) {
-	await requireDeployedContracts(client, [{ name: 'Uniswap V3 factory', address: config.network.factory }])
+export async function poolsForToken(client: ReadClient, config: Pick<Configuration, 'network' | 'v2Router' | 'twapSeconds'>, token: Address, blockNumber?: bigint) {
+	await requireDeployedContracts(client, [{ name: 'Uniswap V3 factory', address: config.network.factory }], blockNumber)
 	const pools: Pool[] = []
 	let v2Pair: Address | undefined
 	if (config.v2Router !== undefined && config.network.chain.id === 1) {

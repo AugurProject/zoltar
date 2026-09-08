@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 
+import { migrateEmptyBootstrapState } from '../state/bootstrap-migration.ts'
 import { requireDeployedContracts } from '../../../shared/src/monitoring/deployed-contracts.js'
 import { access, lstat } from 'node:fs/promises'
 import { constants } from 'node:fs'
@@ -16,6 +17,7 @@ import { CHAOS_OPERATION_CATALOG } from '../operations/catalog.ts'
 import { CONSENSUS_FINALITY_HORIZON_BLOCKS } from '../operations/timing.ts'
 import type { ChaosReadClient } from '../monitoring/discovery.ts'
 import { canonicalAnchor, chaosReadClients, chaosReadEndpoints, createChaosReadPool, discoverWithQuorum } from '../runtime/canonical-scan.ts'
+import { checkDeploymentAvailability } from '../runtime/deployment-availability.ts'
 import { requiredLiveInventory } from '../runtime/live-readiness.ts'
 import { preflightTransactionSubmissionNetwork } from '../runtime/submission-preflight.ts'
 import { loadDurableState, type DurableState } from '../state/operator-state.ts'
@@ -49,6 +51,7 @@ export type ChaosDoctorProbeResult = {
 }
 
 export type ChaosDoctorDependencies = {
+	deploymentAvailability: (settings: OperatorSettings) => Promise<string | undefined>
 	acquireLocks: (settings: OperatorSettings) => Promise<Pick<ChaosProcessLocks, 'release'>>
 	assertProfileIsolation: typeof assertSettingsProfileIsolation
 	load: typeof loadSettings
@@ -227,12 +230,10 @@ export async function probeChaosDoctor(settings: OperatorSettings, wallet: `0x${
 		{ address: settings.deployment.questionData, name: 'questionData' },
 		{ address: settings.deployment.securityPoolFactory, name: 'securityPoolFactory' },
 		{ address: settings.deployment.securityPoolForker, name: 'securityPoolForker' },
-		{ address: settings.deployment.tradingFactory, name: 'tradingFactory' },
-		{ address: settings.deployment.tradingRouter, name: 'tradingRouter' },
 		{ address: settings.deployment.weth, name: 'weth' },
 		{ address: settings.deployment.zoltar, name: 'zoltar' },
 	]
-	const deploymentAddresses = deploymentRoots.map(root => root.address)
+	const deploymentAddresses = [...deploymentRoots.map(root => root.address), settings.deployment.tradingFactory, settings.deployment.tradingRouter]
 	const logToBlock = anchor.blockNumber < settings.runtime.protocolStartBlock + BigInt(settings.runtime.protocolLogBlockSpan) - 1n ? anchor.blockNumber : settings.runtime.protocolStartBlock + BigInt(settings.runtime.protocolLogBlockSpan) - 1n
 	const readerUrls = chaosReadEndpoints(settings)
 	const readers = chaosReadClients(settings, pool)
@@ -341,6 +342,10 @@ export async function validateDoctorCompanionState(settings: OperatorSettings) {
 }
 
 const defaultDependencies: ChaosDoctorDependencies = {
+	deploymentAvailability: async settings => {
+		const check = await checkDeploymentAvailability(settings, createChaosReadPool(settings))
+		return check.blocking ? check.notice : undefined
+	},
 	acquireLocks: acquireDoctorLocks,
 	assertProfileIsolation: assertSettingsProfileIsolation,
 	load: loadSettings,
@@ -437,10 +442,17 @@ async function runChaosDoctorWithLoaded(loaded: LoadedDoctorSettings, dependenci
 	const locks = await dependencies.acquireLocks(loaded.settings)
 	try {
 		const configuredSigner = loaded.settings.privateKey === undefined ? undefined : privateKeyToAccount(loaded.settings.privateKey).address
-		const durableState = await dependencies.loadState(loaded.settings.runtime.stateFile, loaded.settings.network.chainId)
+		const durableState = migrateEmptyBootstrapState(await dependencies.loadState(loaded.settings.runtime.stateFile, loaded.settings.network.chainId), loaded.settings)
 		const durableScope = assertDoctorDurableStateScope(loaded.settings, durableState, configuredSigner)
 		const companionState = await dependencies.validateCompanionState(loaded.settings)
 		const submissionChecks = await dependencies.preflightSubmission(loaded.settings)
+		const deploymentNotice = await dependencies.deploymentAvailability(loaded.settings)
+		if (deploymentNotice !== undefined)
+			return {
+				checks: { configuration: 'passed', durableState: 'passed', companionState: 'passed', submission: 'passed', deploymentCodeAndGraph: 'waiting' },
+				deploymentNotice,
+				operationsAvailable: false,
+			}
 		const probeWallet = configuredSigner ?? zeroAddress
 		const result = await dependencies.probe(loaded.settings, probeWallet)
 		const fundingBlockers = liveFundingBlockers(loaded.settings, result.snapshot)

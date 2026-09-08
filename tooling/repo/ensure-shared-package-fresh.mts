@@ -1,3 +1,4 @@
+import { sharedPackages } from './sharedPackages.ts'
 import { createHash } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
@@ -5,10 +6,6 @@ import * as url from 'node:url'
 
 const scriptDirectoryPath = path.dirname(url.fileURLToPath(import.meta.url))
 const repositoryRootPath = path.join(scriptDirectoryPath, '..', '..')
-const sharedPackagePath = path.join(repositoryRootPath, 'shared')
-const installedSharedPackagePath = path.join(process.cwd(), 'node_modules', '@zoltar', 'shared')
-const installedSharedNodeModulesPath = path.join(installedSharedPackagePath, 'node_modules')
-const sourceSharedNodeModulesPath = path.join(sharedPackagePath, 'node_modules')
 const mode = process.argv.includes('--refresh') ? 'refresh' : 'check'
 
 interface PackageManifest {
@@ -52,85 +49,101 @@ const hashFile = async (filePath: string): Promise<string> =>
 		.update(await fs.readFile(filePath))
 		.digest('hex')
 
-const getPublishedSharedFiles = async () => {
-	const sharedPackageJson = await readPackageJson(path.join(sharedPackagePath, 'package.json'))
-	const publishedDirectories = sharedPackageJson.files
-	const publishedFiles = await Promise.all(
-		publishedDirectories.map(async directoryName => {
-			const directoryPath = path.join(sharedPackagePath, directoryName)
-			return await listFilesRecursively(directoryPath)
-		}),
-	)
-	return [path.join(sharedPackagePath, 'package.json'), ...publishedFiles.flat()].sort()
-}
-
-const getSharedPackageManifest = async (packageRootPath: string, files: readonly string[]): Promise<string[]> => {
-	return await Promise.all(
-		files.map(async sourcePath => {
-			const relativePath = path.relative(sharedPackagePath, sourcePath)
-			return await hashFile(path.join(packageRootPath, relativePath))
-		}),
-	)
-}
-
-const manifestsMatch = async () => {
+const consumerManifest: unknown = JSON.parse(await fs.readFile(path.join(process.cwd(), 'package.json'), 'utf8'))
+if (!isRecord(consumerManifest)) throw new Error('Expected a package manifest object')
+const consumerDependencies = consumerManifest['dependencies']
+const consumerDevDependencies = consumerManifest['devDependencies']
+for (const entry of sharedPackages) {
+	if (!(isRecord(consumerDependencies) && entry.name in consumerDependencies) && !(isRecord(consumerDevDependencies) && entry.name in consumerDevDependencies)) continue
+	const sharedPackagePath = path.join(repositoryRootPath, entry.path)
+	const installedSharedPackagePath = path.join(process.cwd(), 'node_modules', entry.name)
+	const installedSharedNodeModulesPath = path.join(installedSharedPackagePath, 'node_modules')
+	const sourceSharedNodeModulesPath = path.join(sharedPackagePath, 'node_modules')
 	try {
-		const sourceFiles = await getPublishedSharedFiles()
-		const installedFiles = await listPackageFilesRecursively(installedSharedPackagePath)
-		if (
-			sourceFiles.map(filePath => path.relative(sharedPackagePath, filePath)).join('\n') !==
-			installedFiles
-				.map(filePath => path.relative(installedSharedPackagePath, filePath))
-				.sort()
-				.join('\n')
+		if ((await fs.realpath(installedSharedPackagePath)) === (await fs.realpath(sharedPackagePath))) continue
+	} catch (error) {
+		if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error
+	}
+	const getPublishedSharedFiles = async () => {
+		const sharedPackageJson = await readPackageJson(path.join(sharedPackagePath, 'package.json'))
+		const publishedDirectories = sharedPackageJson.files
+		const publishedFiles = await Promise.all(
+			publishedDirectories.map(async directoryName => {
+				const directoryPath = path.join(sharedPackagePath, directoryName)
+				return await listFilesRecursively(directoryPath)
+			}),
 		)
-			return false
-		const [sourceManifest, installedManifest] = await Promise.all([getSharedPackageManifest(sharedPackagePath, sourceFiles), getSharedPackageManifest(installedSharedPackagePath, sourceFiles)])
-		return sourceManifest.every((hash, index) => hash === installedManifest[index])
-	} catch (error) {
-		if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return false
-		throw error
+		return [path.join(sharedPackagePath, 'package.json'), ...publishedFiles.flat()].sort()
 	}
-}
 
-const copyCurrentSharedPackageInstall = async () => {
-	if (path.resolve(installedSharedPackagePath) === path.resolve(sharedPackagePath)) return
-	await fs.rm(installedSharedPackagePath, { force: true, recursive: true })
-	const files = await getPublishedSharedFiles()
-	for (const sourcePath of files) {
-		const relativePath = path.relative(sharedPackagePath, sourcePath)
-		const destinationPath = path.join(installedSharedPackagePath, relativePath)
-		await fs.mkdir(path.dirname(destinationPath), { recursive: true })
-		await fs.copyFile(sourcePath, destinationPath)
+	const getSharedPackageManifest = async (packageRootPath: string, files: readonly string[]): Promise<string[]> => {
+		return await Promise.all(
+			files.map(async sourcePath => {
+				const relativePath = path.relative(sharedPackagePath, sourcePath)
+				return await hashFile(path.join(packageRootPath, relativePath))
+			}),
+		)
 	}
-}
 
-const linkSharedPackageNodeModules = async () => {
-	if (path.resolve(installedSharedPackagePath) === path.resolve(sharedPackagePath)) return
-	try {
-		const sourceNodeModulesStat = await fs.stat(sourceSharedNodeModulesPath)
-		if (!sourceNodeModulesStat.isDirectory()) return
-	} catch (error) {
-		if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return
-		throw error
+	const manifestsMatch = async () => {
+		try {
+			const sourceFiles = await getPublishedSharedFiles()
+			const installedFiles = await listPackageFilesRecursively(installedSharedPackagePath)
+			if (
+				sourceFiles.map(filePath => path.relative(sharedPackagePath, filePath)).join('\n') !==
+				installedFiles
+					.map(filePath => path.relative(installedSharedPackagePath, filePath))
+					.sort()
+					.join('\n')
+			)
+				return false
+			const [sourceManifest, installedManifest] = await Promise.all([getSharedPackageManifest(sharedPackagePath, sourceFiles), getSharedPackageManifest(installedSharedPackagePath, sourceFiles)])
+			return sourceManifest.every((hash, index) => hash === installedManifest[index])
+		} catch (error) {
+			if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return false
+			throw error
+		}
 	}
-	await fs.rm(installedSharedNodeModulesPath, { force: true, recursive: true })
-	const relativeNodeModulesPath = path.relative(installedSharedPackagePath, sourceSharedNodeModulesPath)
-	await fs.symlink(relativeNodeModulesPath, installedSharedNodeModulesPath, 'dir')
-}
 
-const refreshSharedPackageInstall = async () => {
-	console.warn(`Refreshing stale @zoltar/shared install in ${process.cwd()}`)
-	await copyCurrentSharedPackageInstall()
-	await linkSharedPackageNodeModules()
-}
-
-if (!(await manifestsMatch())) {
-	if (mode === 'check') {
-		throw new Error(`Installed @zoltar/shared package in ${process.cwd()} does not match ${sharedPackagePath}. Run the shared dependency refresh for this workspace to sync it.`)
+	const copyCurrentSharedPackageInstall = async () => {
+		if (path.resolve(installedSharedPackagePath) === path.resolve(sharedPackagePath)) return
+		await fs.rm(installedSharedPackagePath, { force: true, recursive: true })
+		const files = await getPublishedSharedFiles()
+		for (const sourcePath of files) {
+			const relativePath = path.relative(sharedPackagePath, sourcePath)
+			const destinationPath = path.join(installedSharedPackagePath, relativePath)
+			await fs.mkdir(path.dirname(destinationPath), { recursive: true })
+			await fs.copyFile(sourcePath, destinationPath)
+		}
 	}
-	await refreshSharedPackageInstall()
+
+	const linkSharedPackageNodeModules = async () => {
+		if (path.resolve(installedSharedPackagePath) === path.resolve(sharedPackagePath)) return
+		try {
+			const sourceNodeModulesStat = await fs.stat(sourceSharedNodeModulesPath)
+			if (!sourceNodeModulesStat.isDirectory()) return
+		} catch (error) {
+			if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return
+			throw error
+		}
+		await fs.rm(installedSharedNodeModulesPath, { force: true, recursive: true })
+		const relativeNodeModulesPath = path.relative(installedSharedPackagePath, sourceSharedNodeModulesPath)
+		await fs.symlink(relativeNodeModulesPath, installedSharedNodeModulesPath, 'dir')
+	}
+
+	const refreshSharedPackageInstall = async () => {
+		console.warn(`Refreshing stale ${entry.name} install in ${process.cwd()}`)
+		await copyCurrentSharedPackageInstall()
+		await linkSharedPackageNodeModules()
+	}
+
 	if (!(await manifestsMatch())) {
-		throw new Error(`Installed @zoltar/shared package in ${process.cwd()} still does not match ${sharedPackagePath} after reinstall`)
+		if (mode === 'check') {
+			throw new Error(`Installed ${entry.name} package in ${process.cwd()} does not match ${sharedPackagePath}. Run the shared dependency refresh for this workspace to sync it.`)
+		}
+		await refreshSharedPackageInstall()
+		if (!(await manifestsMatch())) {
+			throw new Error(`Installed ${entry.name} package in ${process.cwd()} still does not match ${sharedPackagePath} after reinstall`)
+		}
 	}
 }

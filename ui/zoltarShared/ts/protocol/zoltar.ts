@@ -1,4 +1,4 @@
-import { zeroAddress, type Address } from '@zoltar/shared/evm/ethereum'
+import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { ReputationToken_ReputationToken, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
 import type { MarketCreationResult, MarketDetails, MarketDetailsPage, MarketType, QuestionData, ReadClient, WriteClient, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { readRequiredMulticall, writeContractAndWait } from './core.js'

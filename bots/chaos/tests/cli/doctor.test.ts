@@ -57,6 +57,7 @@ const probeResult: ChaosDoctorProbeResult = {
 
 function passiveDoctorDependencies(settings: Awaited<ReturnType<typeof settingsFixture>>, overrides: Partial<ChaosDoctorDependencies> = {}): ChaosDoctorDependencies {
 	return {
+		deploymentAvailability: async () => undefined,
 		acquireLocks: async () => ({ release: async () => undefined }),
 		assertProfileIsolation: async () => undefined,
 		load: async () => ({ path: '/private/operator.json', revision: 'sha256:test', settings }),
@@ -236,6 +237,7 @@ describe('chaos launch doctor', () => {
 			submissionCapabilityChecks: 2,
 			topology: { universes: 1 },
 		})
+		if (report.operationFamilies === undefined) throw new Error('Expected deployed doctor report')
 		expect(Object.keys(report.operationFamilies).sort()).toEqual(['open-oracle', 'statoblast', 'trading', 'zoltar'])
 	})
 
@@ -545,10 +547,10 @@ describe('chaos launch doctor', () => {
 	})
 })
 
-test('doctor reports the actual chain, pinned block, and missing root address before discovery', async () => {
+test.each(['zoltar', 'tradingFactory', 'tradingRouter'] as const)('doctor requires core roots but reaches discovery without optional %s', async missingRoot => {
 	const baseline = await settingsFixture('operator.configured-placeholder.json')
 	const methods: string[] = []
-	const missing = baseline.deployment.tradingRouter
+	const missing = baseline.deployment[missingRoot]
 	const server = Bun.serve({
 		port: 0,
 		fetch: async request => {
@@ -570,9 +572,34 @@ test('doctor reports the actual chain, pinned block, and missing root address be
 	})
 	try {
 		const settings = { ...baseline, connectivity: { publicRpcUrls: [server.url.href], readRpcUrl: server.url.href, quorumRpcUrls: [], rpcQuorum: 1 as const } }
-		await expect(probeChaosDoctor(settings, '0x0000000000000000000000000000000000000001')).rejects.toThrow(`No contract code on RPC chain ${baseline.network.chainId} at block 100: tradingRouter (${missing})`)
-		expect(methods).not.toContain('eth_call')
+		if (missingRoot === 'zoltar') {
+			await expect(probeChaosDoctor(settings, '0x0000000000000000000000000000000000000001')).rejects.toThrow(`No contract code on RPC chain ${baseline.network.chainId} at block 100: zoltar (${missing})`)
+			expect(methods).not.toContain('eth_call')
+		} else {
+			await expect(probeChaosDoctor(settings, '0x0000000000000000000000000000000000000001')).rejects.toThrow('Unexpected discovery request')
+			expect(methods).toContain('eth_call')
+		}
 	} finally {
 		server.stop(true)
 	}
+})
+
+test('allows the dashboard to launch while canonical deployments are absent', async () => {
+	const settings = await settingsFixture('operator.configured-placeholder.json')
+	settings.runtime.execute = true
+	let released = false
+	const dependencies = passiveDoctorDependencies(settings, {
+		deploymentAvailability: async () => 'Waiting for deployments on chain 11155111: Zoltar.',
+		acquireLocks: async () => ({
+			release: async () => {
+				released = true
+			},
+		}),
+		probe: async () => {
+			throw new Error('Must not discover unavailable contracts')
+		},
+	})
+	const result = await runChaosLaunchGate(dependencies)
+	expect(result).toMatchObject({ checks: { deploymentCodeAndGraph: 'waiting' }, operationsAvailable: false })
+	expect(released).toBeTrue()
 })

@@ -1,4 +1,4 @@
-import type { Address, Hash, WalletClient } from '@zoltar/shared/evm/ethereum'
+import type { Address, Hash, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { createExclusiveWorkflowGuard, createLatestRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { waitForSubmittedTransactionReceipt } from '@zoltar/ui-core-shared/transactions/transactionReceipt.js'
 import { useEffect, useReducer, useRef, useState } from 'preact/hooks'

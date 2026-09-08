@@ -1,4 +1,4 @@
-import { bigintToSafeNumber } from '@zoltar/shared/evm/ethereum'
+import { bigintToSafeNumber } from '@zoltar/core-shared/evm/ethereum'
 import { formatRoundedCurrencyBalance } from './formatters.js'
 
 const VISUAL_RATIO_SCALE = 1_000_000n

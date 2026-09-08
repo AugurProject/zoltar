@@ -1,12 +1,12 @@
 /// <reference types="bun-types" />
 
 import { beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { zeroAddress } from '@zoltar/shared/evm/ethereum'
+import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { findNextDeployableStep, getDeploymentSections, getDeploymentStepAvailability, getDeployNextMissingAvailability, getPrerequisiteLabel } from '@zoltar/ui-zoltar-shared/features/deployment/lib/deployment.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import type { InjectedEthereum } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'
 import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
-import { getMulticall3Address } from '@zoltar/ui-zoltar-shared/protocol/deploymentHelpers.js'
+import { getMulticall3Address } from '@zoltar/ui-zoltar-shared/protocol/zoltarDeploymentHelpers.js'
 import { loadZoltarUniverseSummary } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
 import type { DeploymentStatus, ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { AnvilWindowEthereum } from '../../../../../../solidity/ts/testSupport/simulator/AnvilWindowEthereum'
@@ -17,7 +17,7 @@ import { ensureProxyDeployerDeployed, setupTestAccounts } from '../../../../../.
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
-import { SEPOLIA_REP_ALLOCATIONS, SEPOLIA_REP_TOTAL_THEORETICAL_SUPPLY } from '@zoltar/shared/deployment/sepoliaRepAllocations'
+import { SEPOLIA_REP_ALLOCATIONS, SEPOLIA_REP_TOTAL_THEORETICAL_SUPPLY } from '@zoltar/zoltar-shared/deployment/sepoliaRepAllocations'
 import type { WriteClient as UiWriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { GenesisReputationToken_GenesisReputationToken, Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
 

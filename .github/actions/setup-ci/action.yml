@@ -74,7 +74,7 @@ runs:
           if [[ "${PROFILE}" == "contracts" ]]; then
             bun ./tooling/repo/run-project-tasks.mts setup contracts --dependencies
           else
-            bun ./tooling/repo/run-project-tasks.mts setup shared
+            bun ./tooling/repo/run-project-tasks.mts setup --path-prefix shared/
           fi
         fi
 

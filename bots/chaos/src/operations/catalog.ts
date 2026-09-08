@@ -45,7 +45,14 @@ function evaluatedPlan(definition: OperationDefinition, plan: Omit<OperationPlan
 	}
 }
 
+function missingTradingDeployment(definition: OperationDefinition, snapshot: EcosystemSnapshot): EvaluatedOperation | undefined {
+	const blockers = (definition.requiredTradingDeployment ?? []).filter(root => snapshot.tradingDeployment?.[root] === false).map(root => `Trading ${root} is not deployed`)
+	return blockers.length === 0 ? undefined : { definition: publicDefinition(definition), eligibility: { blockers, eligible: false } }
+}
+
 function evaluateDefinition(definition: OperationDefinition, snapshot: EcosystemSnapshot, options: PlanningOptions): EvaluatedOperation {
+	const missing = missingTradingDeployment(definition, snapshot)
+	if (missing !== undefined) return missing
 	const eligibility = definition.evaluate(snapshot, options)
 	const evaluated: EvaluatedOperation = { definition: publicDefinition(definition), eligibility }
 	if (!eligibility.eligible || definition.classification !== 'selectable') return evaluated
@@ -62,6 +69,8 @@ export function evaluateSelectableOperationDefinition(definitionId: string, snap
 }
 
 function evaluateLifecycleDefinition(definition: OperationDefinition, snapshot: EcosystemSnapshot, options: PlanningOptions): EvaluatedOperation[] {
+	const missing = missingTradingDeployment(definition, snapshot)
+	if (missing !== undefined) return [missing]
 	const eligibility = definition.evaluate(snapshot, options)
 	if (!eligibility.eligible) return [{ definition: publicDefinition(definition), eligibility }]
 	if (definition.buildLifecyclePlans === undefined) throw new Error(`Lifecycle definition ${definition.id} has no single-pass instance enumerator`)
@@ -169,6 +178,8 @@ function isolateSelectableContinuation(snapshot: EcosystemSnapshot, metadata: Op
 export function reevaluateOperationContinuation(snapshot: EcosystemSnapshot, previousPlan: OperationPlan, options: Omit<PlanningOptions, 'seed'>, context: Partial<Pick<OperationContinuationContext, 'confirmedStepIds' | 'continuationDisposition'>> = {}): EvaluatedOperation {
 	const definition = CHAOS_OPERATION_CATALOG.find(candidate => candidate.id === previousPlan.definitionId)
 	if (definition === undefined) throw new Error(`Unknown durable operation definition ${previousPlan.definitionId}`)
+	const missing = missingTradingDeployment(definition, snapshot)
+	if (missing !== undefined) return missing
 	if (definition.classification === 'lifecycle-obligation') {
 		const evaluations = evaluateLifecycleDefinition(definition, snapshot, { ...options, seed: previousPlan.planningSeed })
 		const expected = canonicalMetadata(previousPlan.metadata)

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks'
-import type { Address } from '@zoltar/shared/evm/ethereum'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { createTruthAuctionSettlementActionState, getTruthAuctionSettlementAction, reduceTruthAuctionSettlementActionState } from '../lib/truthAuctionSettlementActionState.js'
 import { getTruthAuctionSettlementBidKey, getTruthAuctionSettlementSelectionState, type TruthAuctionSettlementBidRow } from '../lib/truthAuctionSettlement.js'

@@ -63,8 +63,8 @@
 				<p id="activity-summary" class="activity-summary">Waiting for activity</p>
 
 				<div class="feed-shell">
-					<div class="feed-header" aria-hidden="true"><span>Block</span><span>Time</span><span>Contract</span><span>Event</span><span>Transaction</span><span>msg.origin</span><span>Integrity</span></div>
-					<div id="feed-state" class="feed-state" role="status">Loading indexed activity…</div>
+					<div class="feed-header" aria-hidden="true"><span>Block</span><span>Time</span><span>Contract</span><span>Event</span><span title="Top-level transaction function or deployment action">Function</span><span>Transaction</span><span>msg.origin</span></div>
+					<div id="feed-state" class="feed-state" role="status">Loading activity…</div>
 					<div id="feed" class="feed" role="region" aria-label="Project log activity" aria-busy="true"></div>
 				</div>
 				<div class="activity-pagination">
@@ -81,7 +81,7 @@
 					</div>
 					<form id="history-range" class="history-range" aria-label="Historical block range">
 						<label>From block <input id="history-from-block" name="fromBlock" type="number" inputmode="numeric" min="0" placeholder="Index start" /></label>
-						<label>To block <input id="history-to-block" name="toBlock" type="number" inputmode="numeric" min="0" placeholder="Indexed head" /></label>
+						<label>To block <input id="history-to-block" name="toBlock" type="number" inputmode="numeric" min="0" placeholder="Current head" /></label>
 						<button class="secondary compact" type="submit">Apply range</button>
 						<button id="history-range-clear" class="secondary compact" type="button">Clear</button>
 					</form>
@@ -99,7 +99,7 @@
 					<aside class="entity-panel" aria-label="Entity browser">
 						<div class="entity-panel-bar">
 							<div>
-								<p class="eyebrow">Indexed registry</p>
+								<p class="eyebrow">Registry</p>
 								<h3 id="entity-list-title">All pools</h3>
 							</div>
 							<span id="entity-count" class="entity-count">0</span>
@@ -119,8 +119,7 @@
 			<section id="operations" class="operations" aria-labelledby="operations-heading" hidden>
 				<div class="section-heading operations-heading">
 					<div>
-						<p class="eyebrow">Protocol operations</p>
-						<h2 id="operations-heading">Evidence-first protocol status</h2>
+						<h2 id="operations-heading">Protocol operations</h2>
 					</div>
 				</div>
 				<nav class="operations-nav" aria-label="Operations sections">

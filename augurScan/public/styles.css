@@ -247,7 +247,7 @@ main {
 .network-title {
 	display: flex;
 	align-items: center;
-	justify-content: flex-end;
+	justify-content: space-between;
 	gap: 1rem;
 }
 .badge {
@@ -1519,13 +1519,6 @@ button[aria-busy="true"]:disabled {
 	background: color-mix(in srgb, var(--cyan) 4%, #0d141c);
 	box-shadow: inset 3px 0 var(--cyan);
 }
-.event-detail-header {
-	display: flex;
-	align-items: center;
-	justify-content: flex-end;
-	gap: 1rem;
-	margin-bottom: 0.4rem;
-}
 .event-detail-content .detail-grid {
 	grid-template-columns: repeat(4, minmax(0, 1fr));
 }
@@ -1533,11 +1526,15 @@ button[aria-busy="true"]:disabled {
 	padding: 0.7rem;
 }
 .detail-disclosure summary {
-	display: inline-flex;
+	display: list-item;
 	align-items: center;
 	width: fit-content;
 	min-height: var(--control-height);
-	padding: 0.1rem 0;
+	padding: 0.55rem 0.8rem;
+	border: 1px solid var(--line-interactive);
+	border-radius: 6px;
+	background: var(--panel);
+	list-style-position: inside;
 	color: var(--cyan);
 	cursor: pointer;
 }
@@ -1615,19 +1612,9 @@ button[aria-busy="true"]:disabled {
 	text-decoration-color: color-mix(in srgb, var(--cyan) 55%, transparent);
 	text-underline-offset: 0.2em;
 }
-.activity-contract-link .contract-address {
-	margin-left: 0;
-}
-.activity-contract-link .contract-category {
-	flex-basis: 100%;
-	margin-top: 0;
-}
-.contract-address {
-	margin-left: 0.35rem;
-	color: var(--muted);
-	font:
-		0.8125rem / 1 ui-monospace,
-		monospace;
+.cell-function {
+	font: 0.8125rem / 1.3 var(--mono);
+	overflow-wrap: anywhere;
 }
 .event-name {
 	padding: 0;
@@ -1882,24 +1869,11 @@ dialog::backdrop {
 }
 .contract-group-rows {
 	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
+	grid-template-columns: minmax(0, 1fr);
 	gap: 0.8rem;
 	min-width: 0;
 	max-width: 100%;
 	padding: 0.8rem 0;
-}
-.contract-group-heading {
-	position: sticky;
-	top: 0;
-	z-index: 1;
-	margin: 0;
-	padding: 0.58rem 1rem;
-	color: var(--cyan);
-	border-bottom: 1px solid var(--line);
-	background: var(--panel);
-	font: 600 0.8125rem / 1 var(--mono);
-	letter-spacing: 0.07em;
-	text-transform: uppercase;
 }
 .contract-row {
 	display: grid;
@@ -1942,12 +1916,6 @@ dialog::backdrop {
 .deployment-status.error {
 	color: var(--red);
 	border-color: color-mix(in srgb, var(--red) 38%, transparent);
-}
-.contract-row-facts {
-	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: 0.6rem;
-	margin-top: 0.5rem;
 }
 .richlist-controls {
 	display: flex;
@@ -2597,10 +2565,6 @@ dialog::backdrop {
 		display: grid;
 		overflow: visible;
 	}
-	.contract-group-heading {
-		position: static;
-		padding: 0.58rem 1rem;
-	}
 	.contract-group-rows {
 		display: grid;
 		grid-template-columns: 1fr;
@@ -2839,35 +2803,7 @@ dialog::backdrop {
 
 .feed-header,
 .log-row {
-	grid-template-columns: 112px 130px minmax(190px, 1fr) minmax(190px, 1fr) 130px 120px 112px;
-}
-
-.contract-category {
-	display: block;
-	margin-top: 0.2rem;
-	color: var(--muted);
-	font-family: var(--mono);
-	font-size: 0.8125rem;
-}
-
-.log-integrity {
-	width: fit-content;
-	max-width: 100%;
-	padding: 0.25rem 0.45rem;
-	border: 1px solid var(--line-interactive);
-	border-radius: 999px;
-	font-size: 0.8125rem;
-	font-weight: 650;
-}
-
-.log-integrity.is-canonical {
-	color: var(--green);
-	border-color: color-mix(in srgb, var(--green) 45%, var(--line));
-}
-
-.log-integrity.is-noncanonical {
-	color: var(--amber);
-	border-color: color-mix(in srgb, var(--amber) 55%, var(--line));
+	grid-template-columns: 112px 130px minmax(140px, 1fr) minmax(160px, 1fr) minmax(140px, 1fr) 130px 120px;
 }
 
 @media (max-width: 900px) {
@@ -3055,11 +2991,15 @@ dialog::backdrop {
 	}
 
 	.log-row > .cell:nth-child(3)::before {
-		content: "Contract and category";
+		content: "Contract";
 	}
 
 	.log-row > .event-name::before {
 		content: "Event";
+	}
+
+	.log-row > .cell-function::before {
+		content: "Function";
 	}
 
 	.log-row > .cell-tx::before {
@@ -3077,16 +3017,16 @@ dialog::backdrop {
 		border-radius: var(--radius-compact);
 	}
 
+	.event-name[aria-expanded="true"]::after {
+		content: "Hide details";
+	}
+
 	.event-name::after {
 		content: "View details";
 		color: var(--cyan);
 		font-family: inherit;
 		font-size: 0.8125rem;
 		font-weight: 500;
-	}
-
-	.log-integrity {
-		align-self: end;
 	}
 
 	.event-detail-drawer {
@@ -3100,4 +3040,16 @@ dialog::backdrop {
 		max-width: 100%;
 		overflow-x: auto;
 	}
+}
+
+.contract-address-link {
+	font-family: var(--mono);
+	font-size: 0.8125rem;
+	overflow-wrap: anywhere;
+}
+.network-title .block-number {
+	margin: 0;
+}
+.contract-row-head {
+	flex-wrap: wrap;
 }

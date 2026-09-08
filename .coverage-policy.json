@@ -25,7 +25,7 @@
 				"ui/zoltar/ts/index.ts",
 				"ui/zoltar/ts/simulation/tevmWorker.ts",
 				"ui/zoltarShared/ts/features/deployment/lib/deploymentRoute.ts",
-				"ui/zoltarShared/ts/features/open-oracle/lib/openOracleNavigation.ts",
+				"ui/statoblastShared/ts/features/open-oracle/lib/openOracleNavigation.ts",
 				"ui/zoltarShared/ts/features/universes/hooks/useZoltarOperations.ts"
 			]
 		},
@@ -34,7 +34,7 @@
 			"minimumFunctions": 79.536,
 			"maximumAllowedUnloadedFiles": 1,
 			"unloadedFilesReviewBy": "2026-11-24",
-			"allowedUnloadedFiles": ["shared/ts/evm/logScan.ts"]
+			"allowedUnloadedFiles": ["shared/core/ts/evm/logScan.ts"]
 		},
 		"tooling": {
 			"minimumLines": 25.715,

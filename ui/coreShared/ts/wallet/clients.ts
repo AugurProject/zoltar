@@ -1,4 +1,4 @@
-import type { Address } from '@zoltar/shared/evm/ethereum'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { getActiveBackend } from '../lib/activeEnvironment.js'
 import type { CreateWriteClientCallbacks } from './chainBackend.js'
 export type { ReadClient, WriteClient } from './chainBackend.js'

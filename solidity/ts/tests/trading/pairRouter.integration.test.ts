@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
-import { encodeAbiParameters, encodeDeployData, encodeFunctionData, isHex, privateKeyToAccount, type Abi, type Address, type Hex } from '@zoltar/shared/evm/ethereum'
+import { encodeAbiParameters, encodeDeployData, encodeFunctionData, isHex, privateKeyToAccount, type Abi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { signTyped } from 'micro-eth-signer'
 import { useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'

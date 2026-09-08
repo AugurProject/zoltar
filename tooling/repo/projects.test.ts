@@ -55,5 +55,5 @@ test('validates composite task coverage against supported non-self tasks', () =>
 })
 
 test('dependency closure follows registry edges without hard-coded package lists', () => {
-	expect(projectDependencyClosure(['chaos']).map(project => project.id)).toEqual(['shared', 'contracts', 'bot-shared', 'chaos'])
+	expect(projectDependencyClosure(['chaos']).map(project => project.id)).toEqual(['shared-core', 'shared-zoltar', 'shared-open-oracle', 'shared-statoblast', 'shared-trading', 'contracts-zoltar', 'contracts-statoblast', 'contracts-trading', 'contracts', 'bot-shared', 'chaos'])
 })

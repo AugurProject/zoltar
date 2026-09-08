@@ -1,7 +1,7 @@
 /// <reference types='bun-types' />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { getAddress } from '@zoltar/shared/evm/ethereum'
+import { getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import type { ChainBackend } from '../wallet/chainBackend.js'
 import { MAINNET_NETWORK_PROFILE } from '../wallet/networkProfile.js'

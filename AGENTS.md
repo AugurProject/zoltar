@@ -21,7 +21,7 @@ On a fresh checkout, use `bun install --frozen-lockfile && bun run setup` for a 
 ## Working boundaries
 
 - Treat TypeScript as source. Never inspect or edit a generated `js/` file when a corresponding TypeScript source exists.
-- Never edit `ui/*/js/**` or `shared/js/**` directly.
+- Never edit `ui/*/js/**` or `shared/*/js/**` directly.
 - Do not modify imported compatibility contracts:
   - `solidity/contracts/statoblast/openOracle/OpenOracle.sol`
   - `solidity/contracts/statoblast/WETH9.sol`
@@ -122,10 +122,11 @@ pins the deployment input and prevents its large upstream packages from entering
 
 | Output | Source or command |
 | --- | --- |
-| `shared/js/**` | `bun run shared:build` |
+| `shared/*/js/**` | `bun run shared:build` |
+| `solidity/artifacts/<app>/Contracts.json` | `bun tooling/contracts/build-app-contracts.mts <app>` |
 | `solidity/artifacts/Contracts.json` | `bun run compile-contracts` |
 | `solidity/ts/types/contractArtifact.ts` | `bun run compile-contracts` |
-| `ui/coreShared/ts/contractArtifact.ts` and `ui/coreShared/ts/abis.ts` | `bun run generate` or `bun run ui:build` |
+| `ui/coreShared/ts/contractArtifact.ts`, `ui/coreShared/ts/abis.ts`, and `ui/statoblastShared/ts/contractArtifact.ts` | `bun run generate` or `bun run ui:build` |
 | `ui/*/js/**` | UI TypeScript builds per package |
 | `ui/trading/ts/generated/contractArtifact.ts` | `bun ./tooling/ui/vendor.mts trading`, `bun run ui:vendor`, or `bun run trading:compile` |
 | `ui/*/vendor/**` | `bun run ui:vendor` |

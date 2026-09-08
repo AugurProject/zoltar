@@ -1,4 +1,4 @@
-import { sortStringArrayByKeccak } from '@zoltar/shared/serialization/sortStringArrayByKeccak'
+import { sortStringArrayByKeccak } from '@zoltar/core-shared/serialization/sortStringArrayByKeccak'
 import type { MarketFormState } from '../../../types/app.js'
 import type { QuestionData } from '@zoltar/ui-core-shared/types/contracts.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'

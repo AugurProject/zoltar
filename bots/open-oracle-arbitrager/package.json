@@ -32,11 +32,16 @@
 	},
 	"dependencies": {
 		"@zoltar/bot-shared": "file:../shared",
-		"@zoltar/shared": "file:../../shared"
+		"@zoltar/open-oracle-shared": "file:../../shared/openOracle",
+		"@zoltar/statoblast-shared": "file:../../shared/statoblast"
 	},
 	"overrides": {
 		"tmp": "0.2.7",
-		"undici": "7.29.0"
+		"undici": "7.29.0",
+		"@zoltar/bot-shared": "file:../shared",
+		"@zoltar/core-shared": "file:../../shared/core",
+		"@zoltar/open-oracle-shared": "file:../../shared/openOracle",
+		"@zoltar/statoblast-shared": "file:../../shared/statoblast"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.3.11",

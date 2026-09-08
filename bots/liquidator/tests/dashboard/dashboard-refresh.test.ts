@@ -417,18 +417,36 @@ describe('liquidator dashboard refresh behavior', () => {
 		}
 	})
 
+	test('shows the missing deployment and checked block instead of generic readiness guidance', async () => {
+		const waiting = { ...state(), operatorCapable: false, deploymentMissingName: 'Zoltar', deploymentCheckedBlock: '11662177', deploymentCheckedTimestamp: '123' }
+		const page = await dashboard(mainnetConfiguration(), waiting)
+		expect(page.window.document.getElementById('global-error')?.textContent).toContain('Zoltar is not deployed at block 11662177')
+		expect(page.window.document.getElementById('global-error')?.textContent).not.toContain('logs')
+		expect(page.window.document.getElementById('global-error')?.getAttribute('role')).toBe('status')
+		expect(page.window.document.getElementById('attention-badge')?.textContent).toBe('Not deployed')
+		expect(page.window.document.getElementById('attention-badge')?.getAttribute('href')).toBe('/overview#global-error')
+		expect(page.window.document.getElementById('run-status-badge')?.textContent).toBe('Waiting')
+		page.setSnapshot({ ...waiting, error: 'RPC timed out', status: 'connectivity-degraded' })
+		await page.refresh()
+		expect(page.window.document.getElementById('global-error')?.getAttribute('role')).toBe('alert')
+		expect(page.window.document.getElementById('global-error')?.textContent).toContain('RPC connectivity is degraded')
+		page.setSnapshot({ ...state(), operatorCapable: true })
+		await page.refresh()
+		expect(page.window.document.getElementById('global-error')?.classList.contains('hidden')).toBe(true)
+	})
+
 	for (const [label, snapshot, guidance] of [
-		['startup', { ...state(), operatorCapable: false }, 'first successful scan'],
-		['scanning', { ...state(), scanning: true, operatorCapable: false }, 'scan is in progress'],
+		['startup', { ...state(), operatorCapable: false }, 'first scan has not completed'],
+		['scanning', { ...state(), scanning: true, operatorCapable: false }, 'Scan in progress'],
 		['paused', { ...state(undefined, [], { paused: true }), operatorCapable: false }, 'Use Resume'],
 		['missing signer', { ...state(undefined, [], { execute: true }), operatorCapable: false }, 'Execution signer'],
 	] as const) {
 		test(`explains capability-only ${label} blockers`, async () => {
 			const pending = label === 'startup' || label === 'scanning'
 			const page = await dashboard(mainnetConfiguration(), snapshot)
-			expect(page.window.document.getElementById('attention-badge')?.textContent).toBe(pending ? 'Checking readiness' : '1 action')
+			expect(page.window.document.getElementById('attention-badge')?.textContent).toBe(pending ? (label === 'scanning' ? 'Scanning pools' : 'Awaiting first scan') : '1 action')
 			expect(page.window.document.getElementById('attention-badge')?.getAttribute('href')).toBe(pending ? null : '/overview#global-error')
-			expect(page.window.document.getElementById('global-error')?.classList.contains('warning')).toBe(true)
+			expect(page.window.document.getElementById('global-error')?.classList.contains('warning')).toBe(!pending)
 			if (pending) expect(page.window.document.getElementById('global-error')?.textContent).toContain('automatically')
 			expect(page.window.document.getElementById('global-error')?.textContent).toContain(guidance)
 			page.setSnapshot({ ...state(), operatorCapable: true })

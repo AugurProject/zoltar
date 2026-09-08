@@ -1,4 +1,4 @@
-import { encodeAbiParameters, getAddress, keccak256, type Address, type Hex, zeroAddress } from '@zoltar/shared/evm/ethereum'
+import { encodeAbiParameters, getAddress, keccak256, type Address, type Hex, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import type { ReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { getActiveNetworkProfile, getActiveSimulationController } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { isRecoverableContractReadError, isRecoverableQuoteError } from '@zoltar/ui-core-shared/lib/errors.js'

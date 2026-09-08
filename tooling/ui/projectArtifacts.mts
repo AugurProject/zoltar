@@ -1,3 +1,4 @@
+import { contractProjectOwner, isContractProjectSource, type ContractProject } from '../../solidity/ts/contractProjects.ts'
 import { promises as fs } from 'fs'
 import * as path from 'path'
 import * as process from 'node:process'
@@ -28,12 +29,14 @@ type CompiledContractsJson = {
 
 export type ProjectArtifactOptions = {
 	readonly includeTrading?: boolean
+	readonly project?: ContractProject
 }
 
 export type ProjectArtifactPaths = {
 	readonly abiOutputPath: string
 	readonly abiSourcePath: string
 	readonly contractArtifactOutputPath: string
+	readonly statoblastContractArtifactOutputPath: string
 	readonly contractArtifactsJsonPath: string
 	readonly tradingContractArtifactOutputPath: string
 }
@@ -49,10 +52,11 @@ function tradingRuntimeArtifact(contract: CompiledContract) {
 	}
 }
 
-const defaultProjectArtifactPaths: ProjectArtifactPaths = {
+export const defaultProjectArtifactPaths: ProjectArtifactPaths = {
 	abiOutputPath: ABI_OUTPUT_PATH,
 	abiSourcePath: ABI_SOURCE_PATH,
 	contractArtifactOutputPath: CONTRACT_ARTIFACT_OUTPUT_PATH,
+	statoblastContractArtifactOutputPath: path.join(UI_ROOT_PATH, 'statoblastShared', 'ts', 'contractArtifact.ts'),
 	contractArtifactsJsonPath: CONTRACT_ARTIFACTS_JSON_PATH,
 	tradingContractArtifactOutputPath: TRADING_CONTRACT_ARTIFACT_OUTPUT_PATH,
 }
@@ -64,23 +68,29 @@ export async function copyProjectArtifacts(options: ProjectArtifactOptions = {},
 	const compiledArtifacts = JSON.parse(await fs.readFile(artifactPaths.contractArtifactsJsonPath, 'utf8')) as CompiledContractsJson
 	if (compiledArtifacts.contracts === undefined) throw new Error('No compiled contracts found in Contracts.json')
 
-	const contracts = Object.entries(compiledArtifacts.contracts)
-		.filter(([filename]) => isCoreProjectContractPath(filename))
-		.flatMap(([filename, contractFile]) => {
-			if (contractFile === undefined) throw new Error(`missing compiled contract file for ${filename}`)
-			return Object.entries(contractFile).map(([contractName, contractData]) => {
-				if (contractData === undefined) throw new Error(`missing compiled contract ${contractName} in ${filename}`)
-				const normalizedName = `${filename
-					.replace('contracts/', '')
-					.replace(/-/g, '')
-					.replace(/\//g, '_')
-					.replace(/\\/g, '_')
-					.replace(/\.sol$/, '')}_${contractName}`
-				return `export const ${normalizedName} = ${JSON.stringify(contractData, null, 4)} as const`
+	const compiledContracts = compiledArtifacts.contracts
+	const renderContracts = (owner: ContractProject) =>
+		Object.entries(compiledContracts)
+			.filter(([filename]) => isCoreProjectContractPath(filename) && contractProjectOwner(filename) === owner && isContractProjectSource(filename, owner))
+			.flatMap(([filename, contractFile]) => {
+				if (contractFile === undefined) throw new Error(`missing compiled contract file for ${filename}`)
+				return Object.entries(contractFile).map(([contractName, contractData]) => {
+					if (contractData === undefined) throw new Error(`missing compiled contract ${contractName} in ${filename}`)
+					const normalizedName = `${filename
+						.replace('contracts/', '')
+						.replace(/-/g, '')
+						.replace(/\//g, '_')
+						.replace(/\\/g, '_')
+						.replace(/\.sol$/, '')}_${contractName}`
+					return `export const ${normalizedName} = ${JSON.stringify(contractData, null, 4)} as const`
+				})
 			})
-		})
 
-	await fs.writeFile(artifactPaths.contractArtifactOutputPath, `${contracts.join('\n\n')}\n`)
+	await fs.writeFile(artifactPaths.contractArtifactOutputPath, `${renderContracts('zoltar').join('\n\n')}\n`)
+	if (options.project !== 'zoltar') {
+		await fs.mkdir(path.dirname(artifactPaths.statoblastContractArtifactOutputPath), { recursive: true })
+		await fs.writeFile(artifactPaths.statoblastContractArtifactOutputPath, `${renderContracts('statoblast').join('\n\n')}\n`)
+	}
 
 	if (options.includeTrading !== true) return
 	const tradingContracts = Object.fromEntries(

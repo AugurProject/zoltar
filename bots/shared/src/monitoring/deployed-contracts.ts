@@ -11,5 +11,18 @@ export async function requireDeployedContracts(client: DeploymentReader, contrac
 	if (missing.length === 0) return
 	const chainId = await client.getChainId()
 	const at = blockNumber === undefined ? 'latest block' : `block ${blockNumber.toString()}`
-	throw new Error(`No contract code on RPC chain ${chainId.toString()} at ${at}: ${missing.map(contract => `${contract.name} (${contract.address})`).join(', ')}. Verify the selected network, RPC synchronization, and deployment addresses before retrying.`)
+	const error = new Error(`No contract code on RPC chain ${chainId.toString()} at ${at}: ${missing.map(contract => `${contract.name} (${contract.address})`).join(', ')}. Verify the selected network, RPC synchronization, and deployment addresses before retrying.`)
+	missingDeployments.set(error, { chainId, contracts: missing })
+	throw error
+}
+
+export type MissingContractDeployment = {
+	chainId: number
+	contracts: readonly { address: Address; name: string }[]
+}
+
+const missingDeployments = new WeakMap<Error, MissingContractDeployment>()
+
+export function missingContractDeployment(error: unknown): MissingContractDeployment | undefined {
+	return error instanceof Error ? missingDeployments.get(error) : undefined
 }

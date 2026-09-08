@@ -1,5 +1,5 @@
 import { useId } from 'preact/hooks'
-import type { Hash } from '@zoltar/shared/evm/ethereum'
+import type { Hash } from '@zoltar/core-shared/evm/ethereum'
 import { bigintToSafeNumber, formatOutcomeAmount, formatUnits } from '../lib/format.js'
 import * as workflowCopy from '../copy/workflows.js'
 import { TransactionHashLink } from '@zoltar/ui-core-shared/components/TransactionHashLink.js'

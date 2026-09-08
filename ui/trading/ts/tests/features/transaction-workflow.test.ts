@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { Address, Hash } from '@zoltar/shared/evm/ethereum'
+import type { Address, Hash } from '@zoltar/core-shared/evm/ethereum'
 import { idleTransactionWorkflow, transactionPhase, transactionWorkflowReducer, type TransactionContext } from '../../features/live/transactionWorkflow.js'
 
 const context: TransactionContext = {

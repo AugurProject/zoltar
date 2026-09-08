@@ -49,8 +49,8 @@ describe('TypeScript coverage sharding', () => {
 		try {
 			const firstPath = join(directory, 'first.info')
 			const secondPath = join(directory, 'second.info')
-			await writeFile(firstPath, 'SF:shared/ts/example.ts\nFN:1,run\nFNDA:1,run\nFNF:1\nFNH:1\nDA:1,2\nDA:2,0\nLF:2\nLH:1\nend_of_record\n')
-			await writeFile(secondPath, 'SF:shared/ts/example.ts\nFN:1,run\nFNDA:3,run\nFNF:1\nFNH:1\nDA:1,4\nDA:2,5\nLF:2\nLH:2\nend_of_record\n')
+			await writeFile(firstPath, 'SF:shared/core/ts/example.ts\nFN:1,run\nFNDA:1,run\nFNF:1\nFNH:1\nDA:1,2\nDA:2,0\nLF:2\nLH:1\nend_of_record\n')
+			await writeFile(secondPath, 'SF:shared/core/ts/example.ts\nFN:1,run\nFNDA:3,run\nFNF:1\nFNH:1\nDA:1,4\nDA:2,5\nLF:2\nLH:2\nend_of_record\n')
 
 			const merged = await mergeTypeScriptCoverageFiles([firstPath, secondPath], directory)
 

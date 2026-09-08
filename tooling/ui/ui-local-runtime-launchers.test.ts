@@ -5,8 +5,9 @@ import { join } from 'node:path'
 const repositoryRoot = join(import.meta.dir, '..', '..')
 
 const apps = [
-	{ id: 'zoltar', port: 8012 },
-	{ id: 'statoblast', port: 8011 },
+	{ id: 'zoltar', port: 8012, containerPort: 8012 },
+	{ id: 'statoblast', port: 8011, containerPort: 8011 },
+	{ id: 'trading', port: 4163, containerPort: 8080 },
 ] as const
 
 const batchCommands = (source: string) =>
@@ -30,7 +31,7 @@ describe('local UI Docker launchers', () => {
 						[app.id]: expect.objectContaining({
 							build: { context: '../..', dockerfile: 'ui/Dockerfile', target: `local-runtime-${app.id}` },
 							environment: { UI_APP: app.id },
-							ports: [`127.0.0.1:${app.port.toString()}:${app.port.toString()}`],
+							ports: [`127.0.0.1:${app.port.toString()}:${app.containerPort.toString()}`],
 						}),
 					},
 				}),

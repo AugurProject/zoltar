@@ -1,3 +1,4 @@
+import { getAddress } from '@zoltar/bot-shared/ethereum'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -74,12 +75,8 @@ const FIRST_PRIVATE_KEY = `0x${'11'.repeat(32)}` as const
 const SECOND_PRIVATE_KEY = `0x${'22'.repeat(32)}` as const
 
 function restartSettings(stateFile: string, deploymentIdentity: number, privateKey: `0x${string}` | null) {
-	return parseSettings({
+	const settings = parseSettings({
 		...example,
-		deployment: {
-			...example.deployment,
-			zoltar: `0x${deploymentIdentity.toString(16).padStart(40, '0')}`,
-		},
 		privateKey,
 		runtime: {
 			...example.runtime,
@@ -88,6 +85,9 @@ function restartSettings(stateFile: string, deploymentIdentity: number, privateK
 			ui: false,
 		},
 	})
+	// Inject a distinct historical deployment identity only for persistence tests.
+	settings.deployment.zoltar = getAddress(`0x${deploymentIdentity.toString(16).padStart(40, '0')}`)
+	return settings
 }
 
 function lifecyclePlan(): OperationPlan {
@@ -503,13 +503,7 @@ describe('chaos operator runtime', () => {
 			...serialized,
 			privateKey: `0x${'11'.repeat(32)}`,
 		})
-		const withDeployment = parseSettings({
-			...serialized,
-			deployment: {
-				...serialized.deployment,
-				zoltar: '0x0000000000000000000000000000000000000001',
-			},
-		})
+		const withDeployment = { ...base, deployment: { ...base.deployment, zoltar: getAddress('0x0000000000000000000000000000000000000001') } }
 		const withProtocolOrigin = parseSettings({
 			...serialized,
 			runtime: { ...serialized.runtime, protocolStartBlock: '1' },

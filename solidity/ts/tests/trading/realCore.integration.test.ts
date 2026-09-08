@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, test } from 'bun:test'
-import { encodeAbiParameters, encodeDeployData, type Abi, type Address, type Hex } from '@zoltar/shared/evm/ethereum'
+import { encodeAbiParameters, encodeDeployData, type Abi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { useStatoblastVaultAccountingFixture } from '../statoblast/fixture'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { statoblast_SecurityPool_SecurityPool } from '../../types/contractArtifact'

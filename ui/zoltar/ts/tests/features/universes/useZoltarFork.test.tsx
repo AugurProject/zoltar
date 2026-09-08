@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
-import { type Address, getAddress, type Hash, zeroAddress } from '@zoltar/shared/evm/ethereum'
+import { type Address, getAddress, type Hash, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { useZoltarFork, type UseZoltarForkDependencies } from '@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarFork.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'

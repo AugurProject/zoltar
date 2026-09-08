@@ -2,7 +2,7 @@ import type { CopyTemplateValue } from '@zoltar/ui-core-shared/copy/types.js'
 export {
 	initiallyDepositedLead,
 	worthNowLead,
-} from '@zoltar/ui-zoltar-shared/copy/reportingEscalation.js'
+} from './reportingEscalation.js'
 
 export const bidAmountEth = 'Bid Amount (ETH)'
 export const scrollableAuctionBidHistory = 'Scrollable auction bid history'
