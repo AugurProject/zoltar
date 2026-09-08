@@ -33,19 +33,15 @@ jobs:
       - name: TypeScript checks and production UI build
         run: |
           bun run ui:build:apps
-          bun ./scripts/install-frozen.mts ui/statoblast
+          bun ./tooling/repo/install-frozen.mts ui/statoblast
           bun run ci:preflight:current
+      - name: Read canonical UI artifact metadata
+        id: projects
+        run: bun ./tooling/repo/query-projects.mts --github-output
       - uses: actions/upload-artifact@v4
         with:
           name: domain-production-ui
-          path: |
-            ui/coreShared/js
-            ui/zoltar/js
-            ui/statoblast/js
-            ui/trading/js
-            ui/zoltar/dist
-            ui/statoblast/dist
-            ui/trading/dist
+          path: ${{ steps.projects.outputs.ui_artifact_outputs }}
           if-no-files-found: error
           retention-days: 1
 
@@ -66,11 +62,7 @@ jobs:
           name: domain-production-ui
           path: ui
       - name: Refresh split UI package installs
-        run: |
-          bun ./scripts/install-frozen.mts ui/coreShared
-          bun ./scripts/install-frozen.mts ui/zoltar
-          bun ./scripts/install-frozen.mts ui/statoblast
-          bun ./scripts/install-frozen.mts ui/trading
+        run: bun ./tooling/repo/run-project-tasks.mts setup --path-prefix ui/
       - uses: actions/cache/restore@v5
         with:
           path: .ci/test-timings-application.json
@@ -142,7 +134,7 @@ jobs:
           pattern: ${{ matrix.domain }}-test-timing-*
           path: test-results
           merge-multiple: true
-      - run: bun ./scripts/merge-test-timings.mts --observations test-results --history ".ci/test-timings-${{ matrix.domain }}.json"
+      - run: bun ./tooling/testing/merge-test-timings.mts --observations test-results --history ".ci/test-timings-${{ matrix.domain }}.json"
       - uses: actions/cache/save@v5
         with:
           path: .ci/test-timings-${{ matrix.domain }}.json
