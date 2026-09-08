@@ -276,11 +276,7 @@ export function buildAllowanceRevocationPlan(snapshot: EcosystemSnapshot, seed: 
 
 export function buildNativeOpenOracleCreditPlan(snapshot: EcosystemSnapshot, retirement: DurableRetirementState, seed: number): OperationPlan | undefined {
 	if (retirement.recipient === undefined) return undefined
-	try {
-		assertSafeRetirementRecipient(retirement.recipient, snapshot.wallet.address)
-	} catch (error) {
-		throw new Error(`Cannot plan with unsafe retirement recipient: ${error instanceof Error ? error.message : String(error)}`)
-	}
+	assertSafeRetirementRecipient(retirement.recipient, snapshot.wallet.address)
 	const credit = BigInt(snapshot.wallet.openOracleEthCredit)
 	if (credit <= 1n) return undefined
 	const amount = credit - 1n
@@ -321,11 +317,7 @@ type RetirementSweepLimits = {
 
 export function buildAssetSweepPlan(snapshot: EcosystemSnapshot, retirement: DurableRetirementState, seed: number, limits?: RetirementSweepLimits): OperationPlan | undefined {
 	if (!retirement.policies.sweepAssets || retirement.recipient === undefined || limits === undefined) return undefined
-	try {
-		assertSafeRetirementRecipient(retirement.recipient, snapshot.wallet.address)
-	} catch (error) {
-		throw new Error(`Cannot plan with unsafe retirement recipient: ${error instanceof Error ? error.message : String(error)}`)
-	}
+	assertSafeRetirementRecipient(retirement.recipient, snapshot.wallet.address)
 	const weth = snapshot.wallet.tokens.find(token => token.address.toLowerCase() === snapshot.deployments.weth.toLowerCase())
 	if (retirement.policies.unwrapWeth && weth !== undefined && BigInt(weth.balance) > 0n) {
 		const amount = BigInt(weth.balance) < limits.maximumEthAttoEth ? BigInt(weth.balance) : limits.maximumEthAttoEth

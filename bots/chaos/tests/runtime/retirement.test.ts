@@ -151,10 +151,13 @@ describe('Drain & Retire planning', () => {
 		const snapshot = emptySnapshot()
 		snapshot.wallet.ethBalanceAttoEth = '100'
 		const limits = { maximumEthAttoEth: 10n, maximumGasCostAttoEth: 1n, maximumRepAttoRep: 10n, minimumEthReserveAttoEth: 1n }
-		for (const recipient of [address(0), snapshot.wallet.address]) {
+		for (const [recipient, expectedError] of [
+			[address(0), 'zero address'],
+			[snapshot.wallet.address, 'durable signer'],
+		] as const) {
 			const retirement = { ...request(), recipient }
-			expect(() => buildAssetSweepPlan(snapshot, retirement, 1, limits)).toThrow('unsafe retirement recipient')
-			expect(() => buildNativeOpenOracleCreditPlan({ ...snapshot, wallet: { ...snapshot.wallet, openOracleEthCredit: '2' } }, retirement, 1)).toThrow('unsafe retirement recipient')
+			expect(() => buildAssetSweepPlan(snapshot, retirement, 1, limits)).toThrow(expectedError)
+			expect(() => buildNativeOpenOracleCreditPlan({ ...snapshot, wallet: { ...snapshot.wallet, openOracleEthCredit: '2' } }, retirement, 1)).toThrow(expectedError)
 		}
 	})
 	test('persists a canonical assessment before returning from a paused process cycle', async () => {

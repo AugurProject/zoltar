@@ -338,11 +338,14 @@ describe('Drain & Retire on a local chain', () => {
 		snapshot.wallet.openOracleEthCredit = '2'
 		const before = await owner.getBalance({ address: owner.account.address })
 		const limits = { maximumEthAttoEth: 10n ** 18n, maximumGasCostAttoEth: 1n, maximumRepAttoRep: 10n ** 18n, minimumEthReserveAttoEth: 1n }
-		for (const recipient of [address(0), owner.account.address]) {
+		for (const [recipient, expectedError] of [
+			[address(0), 'zero address'],
+			[owner.account.address, 'durable signer'],
+		] as const) {
 			const retirement = { ...initialRetirementState(), recipient, status: 'draining' as const }
-			expect(() => buildAssetSweepPlan(snapshot, retirement, 1, limits)).toThrow('unsafe retirement recipient')
-			expect(() => buildAssetSweepPlan(snapshot, retirement, 2, limits)).toThrow('unsafe retirement recipient')
-			expect(() => buildNativeOpenOracleCreditPlan(snapshot, retirement, 3)).toThrow('unsafe retirement recipient')
+			expect(() => buildAssetSweepPlan(snapshot, retirement, 1, limits)).toThrow(expectedError)
+			expect(() => buildAssetSweepPlan(snapshot, retirement, 2, limits)).toThrow(expectedError)
+			expect(() => buildNativeOpenOracleCreditPlan(snapshot, retirement, 3)).toThrow(expectedError)
 		}
 		expect(await owner.getBalance({ address: owner.account.address })).toBe(before)
 		expect(await owner.getBalance({ address: address(0) })).toBe(0n)
