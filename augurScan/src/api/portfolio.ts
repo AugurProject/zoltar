@@ -1,6 +1,6 @@
 import type { SQL } from 'bun'
-import type { JsonValue } from '../ethereum.ts'
 import { decodeOpaqueCursor, encodeOpaqueCursor, isJsonArray } from '../cursor-codec.ts'
+import type { JsonValue } from '../ethereum.ts'
 import { addressPortfolioRows, type RichListSort, richListRows } from '../repositories/portfolio.ts'
 import { snapshotBoundary } from './entity-details.ts'
 import {

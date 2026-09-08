@@ -1,6 +1,6 @@
 import type { SQL } from 'bun'
-import type { JsonValue } from '../ethereum.ts'
 import { decodeOpaqueCursor, encodeOpaqueCursor, isJsonArray } from '../cursor-codec.ts'
+import type { JsonValue } from '../ethereum.ts'
 import { directObservationMaxima, directObservationRows } from '../repositories/direct-observations.ts'
 import { snapshotBoundary } from './entity-details.ts'
 import {

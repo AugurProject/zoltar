@@ -1,10 +1,10 @@
 import path from 'node:path'
 import { loadNetworks, runtimeConfig } from './config.ts'
 import { type EvidenceProvenance, ScannerDatabase } from './database.ts'
+import type { JsonValue } from './ethereum.ts'
 import { abiSourceHash } from './metadata.ts'
 import { sourceProvenance } from './provenance.ts'
 import { CURRENT_SCHEMA_VERSION, initializeSchema } from './schema.ts'
-import type { JsonValue } from './ethereum.ts'
 import type { NetworkConfig } from './types.ts'
 
 export type AugurScanProcessContext = {

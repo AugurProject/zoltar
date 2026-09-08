@@ -1,5 +1,5 @@
-import type { JsonValue } from '../ethereum.ts'
 import { decodeOpaqueCursor, encodeOpaqueCursor, isJsonArray } from '../cursor-codec.ts'
+import type { JsonValue } from '../ethereum.ts'
 
 export { ApiConflictError, ApiRequestError } from '../query-errors.ts'
 

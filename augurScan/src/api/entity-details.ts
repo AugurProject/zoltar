@@ -1,6 +1,6 @@
 import type { SQL } from 'bun'
-import type { JsonValue } from '../ethereum.ts'
 import { decodeOpaqueCursor, encodeOpaqueCursor, isJsonArray } from '../cursor-codec.ts'
+import type { JsonValue } from '../ethereum.ts'
 import { auctionDemandCurve, reportLifecycle, reportRoundChanges } from '../operations.ts'
 import { auctionDetailData, eventEntityRows, forkDetailData, latestEntitySnapshot, reportDetailData } from '../repositories/entity-details.ts'
 import {

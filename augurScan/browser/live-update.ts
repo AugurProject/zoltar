@@ -1,5 +1,5 @@
-import { isJsonArray } from './api-validation.ts'
 import type { JsonRecord, JsonValue } from './api-validation.ts'
+import { isJsonArray } from './api-validation.ts'
 
 export type LiveRecord = { key: string; signature: string }
 export type ClassifiedLiveRecord = LiveRecord & { state: 'added' | 'changed' | 'unchanged' }
