@@ -1,3 +1,4 @@
+import { record, safeString, stringField, booleanField, scalar, safeIntegerField, isoTimestampField, compact } from './public-fields.ts'
 import { join } from 'node:path'
 import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
 import { boundedDashboardJson } from '@zoltar/bot-shared/dashboard/security'
@@ -41,53 +42,6 @@ function securityHeaders(contentType: string) {
 
 function json(value: unknown, status = 200) {
 	return Response.json(value, { headers: securityHeaders('application/json; charset=utf-8'), status })
-}
-
-function record(value: unknown): Record<string, unknown> | undefined {
-	return typeof value === 'object' && value !== null && !Array.isArray(value) ? Object.fromEntries(Object.entries(value)) : undefined
-}
-
-function safeString(value: unknown) {
-	if (typeof value !== 'string') return undefined
-	const sensitive =
-		/(?:authorization|bearer|password|private[_-]?key|secret|token|api[_-]?key|rpc[_-]?(?:url|endpoint)|calldata|raw[_-]?(?:transaction|tx)|signed[_-]?(?:transaction|tx))\s*[=:]/i.test(value) ||
-		/https?:\/\//i.test(value) ||
-		/(?:[a-z]:\\|\/(?:etc|home|root|tmp|var|workspace)\/)/i.test(value) ||
-		/0x[0-9a-f]{130,}/i.test(value)
-	return sensitive ? undefined : value.slice(0, 1_000)
-}
-
-function stringField(source: Record<string, unknown>, key: string) {
-	return safeString(source[key])
-}
-
-function booleanField(source: Record<string, unknown>, key: string) {
-	return typeof source[key] === 'boolean' ? source[key] : undefined
-}
-
-function numberField(source: Record<string, unknown>, key: string) {
-	return typeof source[key] === 'number' && Number.isFinite(source[key]) ? source[key] : undefined
-}
-
-function scalar(source: Record<string, unknown>, key: string) {
-	const value = source[key]
-	return stringField(source, key) ?? numberField(source, key) ?? booleanField(source, key) ?? (typeof value === 'bigint' ? value.toString() : undefined)
-}
-
-function safeIntegerField(source: Record<string, unknown>, key: string) {
-	const value = source[key]
-	return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined
-}
-
-function isoTimestampField(source: Record<string, unknown>, key: string) {
-	const value = source[key]
-	if (typeof value !== 'string') return undefined
-	const milliseconds = Date.parse(value)
-	return Number.isFinite(milliseconds) ? new Date(milliseconds).toISOString() : undefined
-}
-
-function compact<T extends Record<string, unknown>>(value: T) {
-	return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined))
 }
 
 function publicStrings(value: unknown) {
@@ -617,6 +571,8 @@ export function publicChaosState(value: unknown, configurationValue?: unknown, n
 		inventory: publicInventory(source['inventory']),
 		inventoryAvailable: booleanField(source, 'inventoryAvailable') ?? source['inventory'] !== undefined,
 		lastScanAt: stringField(source, 'lastScanAt'),
+		lastDeploymentCheckedBlock: scalar(source, 'lastDeploymentCheckedBlock'),
+		lastDeploymentCheckAt: stringField(source, 'lastDeploymentCheckAt'),
 		lastScannedBlock: scalar(source, 'lastScannedBlock') ?? scalar(source, 'block'),
 		network: stringField(source, 'network'),
 		obligations: Array.isArray(source['obligations'])

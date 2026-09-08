@@ -2,8 +2,8 @@ import { createChaosReadPool } from '../../src/runtime/canonical-scan.ts'
 import { expect, test } from 'bun:test'
 import example from '../../config/operator.example.json'
 import { parseSettings } from '../../src/config/settings.ts'
-import { deploymentAvailabilityNotice, recordUnavailableDeploymentScan } from '../../src/runtime/deployment-availability.ts'
-import { initialRuntimeState } from '../../src/state/operator-state.ts'
+import { checkDeploymentAvailability, recordUnavailableDeploymentScan } from '../../src/runtime/deployment-availability.ts'
+import { initialRuntimeState, resetRuntimeStateForProfile } from '../../src/state/operator-state.ts'
 
 const settings = parseSettings(example)
 
@@ -13,7 +13,10 @@ test('disables stale operation plans without latching a safety pause or clearing
 	const workflows = state.workflows
 	const pending = state.pendingTransactions
 	state.error = 'old deployment error'
-	recordUnavailableDeploymentScan(state, 'Waiting for deployments')
+	recordUnavailableDeploymentScan(state, 'Waiting for deployments', { blockNumber: 100n, checkedAt: '2026-09-08T00:00:00.000Z' })
+	expect(state.lastDeploymentCheckedBlock).toBe(100n)
+	expect(state.lastScanAt).toBeUndefined()
+	expect(state.lastScannedBlock).toBeUndefined()
 	expect(state.error).toBeUndefined()
 	expect(state.safetyPaused).toBe(false)
 	expect(state.deploymentNotice).toBe('Waiting for deployments')
@@ -22,6 +25,10 @@ test('disables stale operation plans without latching a safety pause or clearing
 	expect(state.obligations).toBe(obligations)
 	expect(state.workflows).toBe(workflows)
 	expect(state.pendingTransactions).toBe(pending)
+	resetRuntimeStateForProfile(state, 'new-profile', true, undefined)
+	expect(state.lastDeploymentCheckedBlock).toBeUndefined()
+	expect(state.lastDeploymentCheckAt).toBeUndefined()
+	expect(state.deploymentNotice).toBeUndefined()
 })
 
 test('rechecks canonical addresses at the agreed block and recovers when code appears', async () => {
@@ -56,19 +63,19 @@ test('rechecks canonical addresses at the agreed block and recovers when code ap
 		const configured = parseSettings({ ...example, networkConfigured: true, connectivity: { readRpcUrl: url, publicRpcUrls: [url], quorumRpcUrls: [], rpcQuorum: 1 } })
 		configured.strategy.initializeGenesisUniverse = false
 		const pool = createChaosReadPool(configured)
-		expect(await deploymentAvailabilityNotice(configured, pool)).toContain('Waiting for deployments on chain 11155111: Zoltar')
+		expect((await checkDeploymentAvailability(configured, pool)).notice).toContain('Waiting for deployments on chain 11155111 at block 100: Zoltar')
 		expect(requested.length).toBe(8)
 		expect(requested.every(params => params[1] === '0x64')).toBeTrue()
 		expect(requested.map(params => String(params[0]).toLowerCase())).toContain(configured.deployment.zoltar.toLowerCase())
 		missingTradingOnly = true
-		expect(await deploymentAvailabilityNotice(configured, pool)).toContain('Trading factory, Trading router')
+		expect((await checkDeploymentAvailability(configured, pool)).notice).toContain('Trading factory, Trading router')
 		configured.strategy.initializeGenesisUniverse = true
-		expect(await deploymentAvailabilityNotice(configured, pool)).toBeUndefined()
+		expect((await checkDeploymentAvailability(configured, pool)).notice).toBeUndefined()
 		configured.strategy.initializeGenesisUniverse = false
 		deployed = true
-		expect(await deploymentAvailabilityNotice(configured, pool)).toBeUndefined()
+		expect((await checkDeploymentAvailability(configured, pool)).notice).toBeUndefined()
 		failCode = true
-		await expect(deploymentAvailabilityNotice(configured, pool)).rejects.toThrow()
+		await expect(checkDeploymentAvailability(configured, pool)).rejects.toThrow()
 	} finally {
 		server.stop(true)
 	}

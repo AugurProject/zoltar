@@ -1,3 +1,4 @@
+import { blockStatusText, scanStatusText } from './block-status.js'
 import { createMetric, setAttentionBadge } from '../../../shared/src/dashboard/components.js'
 type Activity = {
 	at: string
@@ -85,6 +86,8 @@ type Snapshot = {
 	marketConsensus?: MarketConsensus
 	error?: string
 	execute: boolean
+	deploymentCheckedBlock?: string
+	deploymentCheckedTimestamp?: string
 	lastScanAt?: string
 	lastScannedBlock?: string
 	lastScannedTimestamp?: string
@@ -220,37 +223,9 @@ const CONFIGURATION_REQUEST_TIMEOUT_MS = 2_000
 const PROFILE_SWITCH_REQUEST_TIMEOUT_MS = 2_000
 const PROFILE_SWITCH_REQUEST_TIMEOUT_MESSAGE = 'Profile switch request timed out.'
 
-function compactDuration(seconds: number) {
-	if (seconds < 60) return `${seconds.toString()}s`
-	const minutes = Math.floor(seconds / 60)
-	if (minutes < 60) return `${minutes.toString()}m`
-	const hours = Math.floor(minutes / 60)
-	return hours < 24 ? `${hours.toString()}h` : `${Math.floor(hours / 24).toString()}d`
-}
-
 function renderBlockStatus(snapshot = currentSnapshot) {
-	const headerBlockStatus = element('header-block-status', HTMLParagraphElement)
-	if (snapshot?.lastScannedBlock === undefined) {
-		blockStatus.textContent = 'Block — · waiting for first observation'
-		headerBlockStatus.textContent = blockStatus.textContent
-		return
-	}
-	const timestamp = snapshot.lastScannedTimestamp
-	if (timestamp === undefined || !/^(?:0|[1-9]\d*)$/.test(timestamp)) {
-		blockStatus.textContent = `Block ${snapshot.lastScannedBlock} · timestamp unavailable`
-		headerBlockStatus.textContent = blockStatus.textContent
-		return
-	}
-	const timestampMilliseconds = Number(timestamp) * 1_000
-	if (!Number.isSafeInteger(timestampMilliseconds)) {
-		blockStatus.textContent = `Block ${snapshot.lastScannedBlock} · timestamp unavailable`
-		headerBlockStatus.textContent = blockStatus.textContent
-		return
-	}
-	const differenceSeconds = Math.floor(Math.abs(Date.now() - timestampMilliseconds) / 1_000)
-	const age = compactDuration(differenceSeconds)
-	blockStatus.textContent = Date.now() >= timestampMilliseconds ? `Block ${snapshot.lastScannedBlock} · seen ${age} ago` : `Block ${snapshot.lastScannedBlock} · ${age} ahead of local clock`
-	headerBlockStatus.textContent = blockStatus.textContent
+	blockStatus.textContent = blockStatusText(snapshot)
+	element('header-block-status', HTMLParagraphElement).textContent = blockStatus.textContent
 }
 
 function setMutationControlsEnabled(enabled: boolean) {
@@ -1007,7 +982,7 @@ function render(snapshot: Snapshot) {
 	capabilityBadge.className = `badge ${snapshot.operatorCapable ? 'ok' : 'warning'}`
 	renderAttention(snapshot)
 	recoveryGuidance.hidden = snapshot.paused
-	lastScan.textContent = snapshot.lastScanAt === undefined ? (snapshot.scanning ? 'Scanning configured pools…' : 'Waiting for first scan') : `Last scan ${new Date(snapshot.lastScanAt).toLocaleString()}`
+	lastScan.textContent = scanStatusText(snapshot)
 	walletAddress.textContent = snapshot.wallet ?? 'No active signer'
 	setGlobalError(
 		snapshot.error === undefined

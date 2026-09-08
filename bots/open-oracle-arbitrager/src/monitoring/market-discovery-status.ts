@@ -30,3 +30,8 @@ export function recordMarketDiscoveryFailure(state: OperatorState, error: unknow
 	})
 	logMarketDiscoveryFailure('pollFailed=', error)
 }
+
+export function recordObservedHead(state: Pick<OperatorState, 'blockNumber' | 'blockTimestamp'>, block: { number: bigint; timestamp: bigint }) {
+	state.blockNumber = block.number.toString()
+	state.blockTimestamp = block.timestamp.toString()
+}

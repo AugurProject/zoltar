@@ -1,7 +1,8 @@
 import type { Address, Hex } from '@zoltar/bot-shared/ethereum'
 
 type DeploymentReader = {
-	getCode(parameters: { address: Address }): Promise<Hex | undefined>
+	getBlock(): Promise<{ number?: bigint | undefined; timestamp: bigint }>
+	getCode(parameters: { address: Address; blockNumber: bigint }): Promise<Hex | undefined>
 }
 
 type CoreDeployment = {
@@ -10,9 +11,12 @@ type CoreDeployment = {
 	zoltar: Address
 }
 
-export type SystemDeploymentStatus = { deployed: true } | { address: Address; deployed: false; name: string }
+export type SystemDeploymentStatus = { deployed: true } | { address: Address; deployed: false; name: string; block: { number: bigint; timestamp: bigint } }
 
 export async function systemDeploymentStatus(client: DeploymentReader, deployment: CoreDeployment): Promise<SystemDeploymentStatus> {
+	const observed = await client.getBlock()
+	if (observed.number === undefined) throw new Error('Deployment check block is missing its number')
+	const block = { number: observed.number, timestamp: observed.timestamp }
 	const contracts = [
 		{ address: deployment.zoltar, name: 'Zoltar' },
 		{ address: deployment.securityPoolFactory, name: 'security-pool factory' },
@@ -20,8 +24,8 @@ export async function systemDeploymentStatus(client: DeploymentReader, deploymen
 	] as const
 
 	for (const contract of contracts) {
-		const code = await client.getCode({ address: contract.address })
-		if (code === undefined || code === '0x') return { ...contract, deployed: false }
+		const code = await client.getCode({ address: contract.address, blockNumber: block.number })
+		if (code === undefined || code === '0x') return { ...contract, deployed: false, block }
 	}
 	return { deployed: true }
 }

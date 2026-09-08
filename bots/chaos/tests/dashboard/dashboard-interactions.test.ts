@@ -517,6 +517,15 @@ browserTest(
 				expect(await cdp.evaluate(`document.querySelector('#${scenario.fieldsId}')?.disabled`)).toBe(false)
 			}
 
+			initialDashboardState = { ...partialRecoveryDashboardState, lastScannedBlock: undefined, lastScanAt: undefined, lastDeploymentCheckedBlock: '100', lastDeploymentCheckAt: new Date().toISOString(), pendingTransactions: [], obligations: [], workflows: [], currentWorkflow: undefined }
+			recoveredDashboardState = initialDashboardState
+			failSecondStateRead = false
+			stateRequests = 0
+			await cdp.command('Page.navigate', { url: new URL('/overview', dashboard.url).href })
+			await waitFor("document.querySelector('#last-block')?.textContent === 'Block 100'", 'Deployment check block was not displayed before a complete scan')
+			expect(await cdp.evaluate("document.querySelector('#last-scan')?.textContent")).toContain('Deployments checked')
+			expect(await cdp.evaluate("document.querySelector('#recovery-badge')?.getClientRects().length")).toBe(0)
+			expect(await cdp.evaluate("document.querySelector('#rep-balances')?.textContent")).toBe('Inventory unavailable until the first canonical scan.')
 			initialDashboardState = partialRecoveryDashboardState
 			recoveredDashboardState = partialRecoveryDashboardState
 			failSecondStateRead = false
@@ -544,6 +553,7 @@ browserTest(
 					weth: document.querySelector('#balance-weth')?.textContent,
 				})`),
 			).toEqual({ eth: '—', recovery: '1 recovery item', rep: 'Inventory unavailable until the first canonical scan.', weth: '—' })
+			expect(await cdp.evaluate("document.querySelector('#recovery-badge')?.getClientRects().length")).toBe(1)
 			await cdp.evaluate("document.querySelector('#pause-button')?.click()")
 			await waitFor("document.querySelector('#resume-dialog')?.open === true", 'Safety-pause resume dialog did not open')
 			expect(await cdp.evaluate(`Object.fromEntries([...document.querySelectorAll('#resume-preflight li')].map(row => [row.querySelector('span')?.textContent, row.querySelector('strong')?.textContent]))`)).toMatchObject({ 'Recovery items': '1', 'Safety latch': 'Active' })

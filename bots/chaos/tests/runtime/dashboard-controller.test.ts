@@ -1562,7 +1562,7 @@ describe('chaos dashboard configuration boundary', () => {
 test('projects absent deployments as informational availability with no executable plans', async () => {
 	const current = parseSettings(example)
 	const state = initialRuntimeState(false, undefined, current.network.chainId)
-	recordUnavailableDeploymentScan(state, 'Waiting for deployments')
+	recordUnavailableDeploymentScan(state, 'Waiting for deployments', { blockNumber: 100n, checkedAt: '2026-09-08T00:00:00.000Z' })
 	const { controller } = noopController(current, state)
 	expect(await controller.getState()).toMatchObject({ alerts: [{ message: 'Waiting for deployments', severity: 'info' }], error: undefined })
 	expect(state.evaluations.every(evaluation => !evaluation.eligibility.eligible && evaluation.plan === undefined)).toBeTrue()

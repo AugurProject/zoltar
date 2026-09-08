@@ -1,7 +1,7 @@
 import { migrateEmptyBootstrapState } from '../state/bootstrap-migration.ts'
 import { runtimeTopologySummary } from './topology-summary.ts'
 export { runtimeTopologySummary } from './topology-summary.ts'
-import { deploymentAvailabilityNotice, recordUnavailableDeploymentScan } from './deployment-availability.ts'
+import { checkDeploymentAvailability, recordUnavailableDeploymentScan } from './deployment-availability.ts'
 import { createWalletClient, privateKeyToAccount, zeroAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import { checkRpcEndpoint, EndpointCheckFailure, type EndpointCheck } from '@zoltar/bot-shared/monitoring/connectivity'
 import { createSignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
@@ -815,10 +815,11 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 						return settings.runtime.once
 					}
 				}
-				const deploymentNotice = await deploymentAvailabilityNotice(settings, resources.pool)
+				const deploymentCheck = await checkDeploymentAvailability(settings, resources.pool)
+				const deploymentNotice = deploymentCheck.notice
 				if (deploymentNotice !== undefined) {
 					if (!acquireCycleGate() || !configurationIsCurrent()) return 'deferred'
-					recordUnavailableDeploymentScan(state, deploymentNotice)
+					recordUnavailableDeploymentScan(state, deploymentNotice, deploymentCheck)
 					await schedulerFor(configuration, state).pause()
 					await persistState(configuration, state)
 					return settings.runtime.once
@@ -842,6 +843,8 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 				state.lastScanAt = new Date().toISOString()
 				state.lastScannedBlock = scan.anchor.blockNumber
 				state.deploymentNotice = undefined
+				state.lastDeploymentCheckedBlock = undefined
+				state.lastDeploymentCheckAt = undefined
 				state.error = undefined
 				state.warnings = [...scan.snapshot.warnings]
 				state.rpcEndpointHealth = resourceHealth(resources)

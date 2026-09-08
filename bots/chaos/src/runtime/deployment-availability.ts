@@ -23,17 +23,21 @@ async function missingDeploymentRoots(client: Pick<ChaosReadClient, 'getCode'>, 
 	return roots.filter((_, index) => code[index] === undefined || code[index] === '0x')
 }
 
-export async function deploymentAvailabilityNotice(settings: OperatorSettings, pool: ReturnType<typeof createChaosReadPool>) {
+export async function checkDeploymentAvailability(settings: OperatorSettings, pool: ReturnType<typeof createChaosReadPool>) {
 	const anchor = await canonicalAnchor(settings, pool)
 	const missing = await settledQuorumValue(
 		'ecosystem deployment availability',
 		chaosReadClients(settings, pool).map(async ({ client, endpoint }) => ({ endpoint, value: await missingDeploymentRoots(client, settings.deployment, anchor.blockNumber, settings.strategy.initializeGenesisUniverse) })),
 		settings.connectivity?.rpcQuorum,
 	)
-	return missing.length === 0 ? undefined : `Waiting for deployments on chain ${settings.network.chainId.toString()}: ${missing.map(root => root.name).join(', ')}. Chaos operations are unavailable until these contracts are deployed. Availability is checked automatically.`
+	const notice =
+		missing.length === 0 ? undefined : `Waiting for deployments on chain ${settings.network.chainId.toString()} at block ${anchor.blockNumber.toString()}: ${missing.map(root => root.name).join(', ')}. Chaos operations are unavailable until these contracts are deployed. Availability is checked automatically.`
+	return { blockNumber: anchor.blockNumber, checkedAt: new Date().toISOString(), notice }
 }
 
-export function recordUnavailableDeploymentScan(state: RuntimeState, notice: string) {
+export function recordUnavailableDeploymentScan(state: RuntimeState, notice: string, check: { blockNumber: bigint; checkedAt: string }) {
+	state.lastDeploymentCheckedBlock = check.blockNumber
+	state.lastDeploymentCheckAt = check.checkedAt
 	state.deploymentNotice = notice
 	state.error = undefined
 	state.evaluations = unavailableOperationCatalog(notice)

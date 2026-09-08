@@ -11,12 +11,16 @@ const config = { network, v2Router: undefined, twapSeconds: 60 }
 
 function clientWithFactory(code: '0x' | '0x01', poolResult = `0x${'0'.repeat(64)}`) {
 	let contractCalls = 0
+	const codeReads: unknown[] = []
 	const client = createPublicClient({
 		chain: network.chain,
 		transport: custom({
 			request: async ({ method, params }) => {
 				if (method === 'eth_chainId') return '0xaa36a7'
-				if (method === 'eth_getCode') return code
+				if (method === 'eth_getCode') {
+					codeReads.push(params)
+					return code
+				}
 				if (method === 'eth_call') {
 					contractCalls += 1
 					const input = JSON.stringify(params) ?? ''
@@ -28,7 +32,7 @@ function clientWithFactory(code: '0x' | '0x01', poolResult = `0x${'0'.repeat(64)
 			},
 		}),
 	})
-	return { client, contractCalls: () => contractCalls }
+	return { client, codeReads, contractCalls: () => contractCalls }
 }
 
 describe('Uniswap factory discovery', () => {
@@ -102,4 +106,13 @@ test('logs genuine failures but presents all confirmed missing deployments as UI
 	} finally {
 		logged.mockRestore()
 	}
+})
+
+test('checks factory deployment at the displayed cycle block', async () => {
+	const missing = clientWithFactory('0x')
+	await expect(poolsForToken(missing.client, config, zeroAddress, 100n)).rejects.toThrow('block 100')
+	expect(missing.codeReads).toEqual([[network.factory, '0x64']])
+	const overview = clientWithFactory('0x')
+	await expect(loadTokenMarkets(overview.client, { blockNumber: 100n, explorerUrl: '', factory: network.factory, chainId: 11155111, tokens: [], weth: zeroAddress, wallet: undefined })).rejects.toThrow('block 100')
+	expect(overview.codeReads).toEqual([[network.factory, '0x64']])
 })

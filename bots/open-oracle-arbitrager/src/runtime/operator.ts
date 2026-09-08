@@ -1,4 +1,4 @@
-import { logMarketDiscoveryFailure, recordMarketDiscoveryFailure } from '#monitoring/market-discovery-status'
+import { logMarketDiscoveryFailure, recordMarketDiscoveryFailure, recordObservedHead } from '#monitoring/market-discovery-status'
 import { bigintToSafeNumber, createContextualPublicClient, createWalletClient, privateKeyToAccount, type Address, type Chain, type PublicClient, type TransactionLog, type Transport, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import { OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SETTLED_TOPIC, OPEN_ORACLE_REPORT_SUBMITTED_TOPIC } from '@zoltar/shared/oracle/openOracle'
@@ -542,6 +542,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						return { ...value, hash: value.hash, number: value.number }
 					})
 					const blockNumber = block.number
+					recordObservedHead(state, block)
 					console.log(`observedBlock=${blockNumber.toString()} blockAgeSeconds=${(BigInt(Math.floor(Date.now() / 1_000)) - block.timestamp).toString()}`)
 					const blockHash = block.hash
 					const finalityAnchorForHead = async () => {
@@ -769,6 +770,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						if (stopHead()) return
 						state.tokenAddresses = [...executionTokens]
 						state.tokenMarkets = await loadTokenMarkets(client, {
+							blockNumber,
 							chainId: config.network.chain.id,
 							explorerUrl: config.network.explorerUrl,
 							factory: config.network.factory,
@@ -781,7 +783,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						const samples = missingPricePoints(state.priceHistory, pricePoints(state.tokenMarkets, blockNumber, sampledAt))
 						await appendPriceHistory(config.priceHistoryFile, samples, config.network.chain.id)
 						state.priceHistory = [...state.priceHistory, ...samples]
-						const pools = (await Promise.all(discoveredTokens.map(token => poolsForToken(client, config, token)))).flat()
+						const pools = (await Promise.all(discoveredTokens.map(token => poolsForToken(client, config, token, blockNumber)))).flat()
 						if (stopHead()) return
 						state.marketAvailability = pools.length === 0 ? { kind: 'no-v3-liquidity', chainId: config.network.chain.id } : undefined
 						const balances = await contextualRpcRead('eth_call', requestClient => loadBalances(requestClient, wallet, config, pools, discoveredTokens))

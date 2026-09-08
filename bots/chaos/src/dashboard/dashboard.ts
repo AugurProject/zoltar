@@ -123,6 +123,8 @@ type Snapshot = {
 	inventory: { eth?: string | number | undefined; rep: RepBalance[]; weth?: string | number | undefined }
 	inventoryAvailable?: boolean | undefined
 	lastScanAt?: string | undefined
+	lastDeploymentCheckedBlock?: string | number | undefined
+	lastDeploymentCheckAt?: string | undefined
 	lastScannedBlock?: string | number | undefined
 	network?: string | undefined
 	obligations: Obligation[]
@@ -583,6 +585,8 @@ function parseSnapshot(value: unknown): Snapshot {
 		},
 		inventoryAvailable: booleanValue(source['inventoryAvailable']),
 		lastScanAt: stringValue(source['lastScanAt']),
+		lastDeploymentCheckedBlock: scalarValue(source['lastDeploymentCheckedBlock']),
+		lastDeploymentCheckAt: stringValue(source['lastDeploymentCheckAt']),
 		lastScannedBlock: scalarValue(source['lastScannedBlock']),
 		network: stringValue(source['network']),
 		obligations: list(source['obligations'], entry => ({
@@ -1015,8 +1019,9 @@ function activeSchedulerWorkLabel(value: Snapshot) {
 }
 
 function renderHeader(value: Snapshot) {
-	lastBlock.textContent = value.lastScannedBlock === undefined ? 'Block —' : `Block ${String(value.lastScannedBlock)}`
-	lastScan.textContent = formatRelative(value.lastScanAt)
+	const checkedBlock = value.lastDeploymentCheckedBlock ?? value.lastScannedBlock
+	lastBlock.textContent = checkedBlock === undefined ? 'Block —' : `Block ${String(checkedBlock)}`
+	lastScan.textContent = value.lastDeploymentCheckedBlock === undefined ? formatRelative(value.lastScanAt) : formatRelative(value.lastDeploymentCheckAt).replace('Scanned', 'Deployments checked')
 	if (value.safetyPaused === true) setBadge(modeBadge, 'Safety paused', 'error')
 	else if (value.paused === true) setBadge(modeBadge, 'Paused', 'warning')
 	else if (value.execute === true) setBadge(modeBadge, 'Live execution', 'error')
@@ -1026,7 +1031,8 @@ function renderHeader(value: Snapshot) {
 	setBadge(networkBadge, chainId === undefined ? networkName : `${networkName} · ${String(chainId)}`, value.network === undefined && configuration?.network === undefined ? 'warning' : 'neutral')
 	setBadge(signerBadge, value.signerReady === true ? 'Signer ready' : 'Signer missing', value.signerReady === true ? 'success' : 'warning')
 	const recoveryItems = recoveryItemCount(value)
-	setBadge(recoveryBadge, recoveryItems === 0 ? 'Recovery clear' : `${recoveryItems.toString()} recovery item${recoveryItems === 1 ? '' : 's'}`, recoveryItems === 0 ? 'success' : 'warning')
+	setBadge(recoveryBadge, `${recoveryItems.toString()} recovery item${recoveryItems === 1 ? '' : 's'}`, 'warning')
+	recoveryBadge.classList.toggle('hidden', recoveryItems === 0)
 	let pauseLabel = value.paused === true ? 'Resume' : 'Pause'
 	if (pauseMutationPending) pauseLabel = value.paused === true ? 'Resuming…' : 'Pausing…'
 	pauseButton.textContent = pauseLabel

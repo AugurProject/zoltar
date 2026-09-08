@@ -17,7 +17,7 @@ import { CHAOS_OPERATION_CATALOG } from '../operations/catalog.ts'
 import { CONSENSUS_FINALITY_HORIZON_BLOCKS } from '../operations/timing.ts'
 import type { ChaosReadClient } from '../monitoring/discovery.ts'
 import { canonicalAnchor, chaosReadClients, chaosReadEndpoints, createChaosReadPool, discoverWithQuorum } from '../runtime/canonical-scan.ts'
-import { deploymentAvailabilityNotice } from '../runtime/deployment-availability.ts'
+import { checkDeploymentAvailability } from '../runtime/deployment-availability.ts'
 import { requiredLiveInventory } from '../runtime/live-readiness.ts'
 import { preflightTransactionSubmissionNetwork } from '../runtime/submission-preflight.ts'
 import { loadDurableState, type DurableState } from '../state/operator-state.ts'
@@ -344,7 +344,7 @@ export async function validateDoctorCompanionState(settings: OperatorSettings) {
 }
 
 const defaultDependencies: ChaosDoctorDependencies = {
-	deploymentAvailability: settings => deploymentAvailabilityNotice(settings, createChaosReadPool(settings)),
+	deploymentAvailability: async settings => (await checkDeploymentAvailability(settings, createChaosReadPool(settings))).notice,
 	acquireLocks: acquireDoctorLocks,
 	assertProfileIsolation: assertSettingsProfileIsolation,
 	load: loadSettings,

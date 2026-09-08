@@ -1,3 +1,5 @@
+import type { RuntimeState } from './runtime-state.ts'
+export type { RuntimeState } from './runtime-state.ts'
 import { randomBytes } from 'node:crypto'
 import { dirname } from 'node:path'
 import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
@@ -5,10 +7,8 @@ import { getAddress, isHex, keccak256, parseTransaction, recoverTransactionAddre
 import { formatDecimalAmount } from '#config/settings'
 import { isVaultMigrationSourceEligible } from '#core/fork-migration'
 import { vaultHealthBps, type LiquidationCandidate, type VaultPosition } from '#core/strategy'
-import { centralizedMarketConfigurationAllowsExecution, centralizedPriceAllowsExecution, centralizedPriceDeviationBps, serializeCentralizedMarketEstimate, type CentralizedMarketEstimate, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
-import { marketConsensusAllowsExecution, marketConsensusDeviationBps, serializeMarketConsensusEstimate, type MarketConsensusEstimate } from '@zoltar/bot-shared/monitoring/market-consensus'
-import type { MarketConsensusObservation } from '@zoltar/bot-shared/monitoring/market-consensus'
-import type { RpcEndpointHealth } from '@zoltar/bot-shared/ethereum'
+import { centralizedMarketConfigurationAllowsExecution, centralizedPriceAllowsExecution, centralizedPriceDeviationBps, serializeCentralizedMarketEstimate, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
+import { marketConsensusAllowsExecution, marketConsensusDeviationBps, serializeMarketConsensusEstimate } from '@zoltar/bot-shared/monitoring/market-consensus'
 
 export type PoolObservation = {
 	knownVaultCount: bigint
@@ -130,33 +130,6 @@ export type PendingTransactionIntent = {
 	submissionBlock: bigint
 }
 
-export type RuntimeState = {
-	activities: Activity[]
-	chainId: number
-	centralizedMarket: CentralizedMarketEstimate | undefined
-	centralizedMarketsByAsset: Map<string, CentralizedMarketEstimate>
-	marketConsensus: MarketConsensusEstimate | undefined
-	marketConsensusByAsset: Map<string, MarketConsensusEstimate>
-	marketObservations: MarketConsensusObservation[]
-	error: string | undefined
-	lastScanAt: string | undefined
-	lastScannedBlock: bigint | undefined
-	lastScannedBlockHash: Hex | undefined
-	lastScannedTimestamp: bigint | undefined
-	paused: boolean
-	rpcEndpointHealth: readonly RpcEndpointHealth[]
-	pendingStagedOperations: PendingStagedOperation[]
-	pendingTransactions: PendingTransactionIntent[]
-	pools: PoolObservation[]
-	scanning: boolean
-	startedAt: string
-	status: 'connectivity-degraded' | 'dry-run' | 'error' | 'paused' | 'running' | 'starting'
-	universes: UniverseObservation[]
-	wallet: Address | undefined
-	walletAttoEth: bigint
-	walletRepByToken: Map<string, bigint>
-}
-
 function isHash(value: unknown): value is Hex {
 	return typeof value === 'string' && isHex(value) && value.length === 66
 }
@@ -172,6 +145,8 @@ export function initialRuntimeState(paused: boolean, wallet: Address | undefined
 		marketConsensusByAsset: new Map(),
 		marketObservations: [],
 		error: undefined,
+		deploymentCheckedBlock: undefined,
+		deploymentCheckedTimestamp: undefined,
 		lastScanAt: undefined,
 		lastScannedBlock: undefined,
 		lastScannedBlockHash: undefined,
@@ -363,6 +338,8 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 			state.pendingStagedOperations.length === 0 &&
 			state.status === (execute ? 'running' : 'dry-run') &&
 			(!execute || state.wallet !== undefined),
+		deploymentCheckedBlock: state.deploymentCheckedBlock?.toString(),
+		deploymentCheckedTimestamp: state.deploymentCheckedTimestamp?.toString(),
 		lastScanAt: state.lastScanAt,
 		lastScannedBlock: state.lastScannedBlock?.toString(),
 		lastScannedTimestamp: state.lastScannedTimestamp?.toString(),

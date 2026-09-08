@@ -1,4 +1,4 @@
-import { recordMarketDiscoveryFailure } from '#monitoring/market-discovery-status'
+import { recordMarketDiscoveryFailure, recordObservedHead } from '#monitoring/market-discovery-status'
 import { requireDeployedContracts } from '../../../shared/src/monitoring/deployed-contracts.ts'
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
@@ -778,6 +778,8 @@ describe('operator execution history', () => {
 
 test('publishes absent deployments without console errors, keeps execution blocked and restores real failures', async () => {
 	const state = capabilityState()
+	state.lastPollAt = undefined
+	recordObservedHead(state, { number: 100n, timestamp: 123n })
 	const failure: unknown = await requireDeployedContracts({ getCode: async () => '0x', getChainId: async () => 11155111 }, [{ name: 'OpenOracle', address }]).then(
 		() => undefined,
 		error => error,
@@ -786,6 +788,9 @@ test('publishes absent deployments without console errors, keeps execution block
 	try {
 		recordMarketDiscoveryFailure(state, failure)
 		const snapshot = publicOperatorSnapshot(operatorSnapshot(state, strategy(), submission, connectivity, fixed))
+		expect(snapshot.blockNumber).toBe('100')
+		expect(snapshot.blockTimestamp).toBe('123')
+		expect(snapshot.lastPollAt).toBeUndefined()
 		expect(snapshot.marketAvailability).toEqual({ kind: 'missing-deployment', chainId: 11155111, contracts: [{ name: 'OpenOracle', address }] })
 		expect(snapshot.lastError).toBeUndefined()
 		expect(snapshot.operatorCapable).toBe(false)

@@ -29,6 +29,8 @@ export type RuntimeTopologySummary = {
 
 export type RuntimeState = DurableState & {
 	deploymentNotice?: string | undefined
+	lastDeploymentCheckedBlock?: bigint | undefined
+	lastDeploymentCheckAt?: string | undefined
 	error: string | undefined
 	evaluations: EvaluatedOperation[]
 	inventory: WalletBalanceState
