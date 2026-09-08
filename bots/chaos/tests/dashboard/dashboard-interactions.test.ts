@@ -1,4 +1,4 @@
-import { createDevToolsSession } from '../../../../tooling/ui/browserSmoke.mts'
+import { startChromiumSession } from './chromium-session.ts'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, test } from 'bun:test'
@@ -224,7 +224,7 @@ const degradedWorkflowRenderingState = { ...workflowRenderingState, rpcEndpointH
 const staleSubmissionWorkflowRenderingState = { ...workflowRenderingState, rpcEndpointHealth: [...readRpcHealth, ...stalePrivateSubmissionHealth] }
 
 async function connectToChromium() {
-	const session = await createDevToolsSession(chromium, 'about:blank', { width: 1440, height: 900 }, { initializationTimeoutMilliseconds: 15_000 })
+	const session = await startChromiumSession(chromium)
 	try {
 		await session.send('Runtime.enable')
 		await session.send('Page.enable')
