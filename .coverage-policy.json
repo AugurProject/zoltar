@@ -32,14 +32,14 @@
 		"shared": {
 			"minimumLines": 76.923,
 			"minimumFunctions": 79.536,
-			"maximumAllowedUnloadedFiles": 2,
+			"maximumAllowedUnloadedFiles": 1,
 			"unloadedFilesReviewBy": "2026-11-24",
-			"allowedUnloadedFiles": ["shared/ts/evm/logScan.ts", "shared/ts/trading/index.ts"]
+			"allowedUnloadedFiles": ["shared/ts/evm/logScan.ts"]
 		},
 		"tooling": {
 			"minimumLines": 25.715,
 			"minimumFunctions": 25.476,
-			"maximumAllowedUnloadedFiles": 44,
+			"maximumAllowedUnloadedFiles": 41,
 			"unloadedFilesReviewBy": "2026-11-24",
 			"allowedUnloadedFiles": [
 				"solidity/ts/gas-costs.ts",
