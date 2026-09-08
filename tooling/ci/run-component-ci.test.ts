@@ -45,7 +45,7 @@ test('registered AugurScan CI runs its complete non-database suite while bots av
 	])
 	expect(createComponentCiPlan('chaos').map(entry => entry.command.slice(0, 3))).toEqual([
 		['bun', 'run', 'check'],
-		['bun', 'audit', '--ignore'],
+		['bun', 'audit'],
 	])
 
 	const manifest: unknown = JSON.parse(readFileSync(path.resolve(import.meta.dir, '../../augurScan/package.json'), 'utf8'))
