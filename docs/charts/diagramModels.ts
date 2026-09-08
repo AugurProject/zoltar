@@ -340,13 +340,13 @@ export const diagramGraphSpecs = {
 		[
 			section(
 				'share-lifecycle',
-				[node('eth', 'User sends ETH', 'blue'), node('full-set', 'Receives full set', 'green', ['Invalid + Yes + No']), node('before', 'Before finalization', 'teal', ['burn full set']), node('after', 'After finalization', 'gold', ['winning leg redeems']), node('settlement', 'Collateral settlement', 'slate')],
+				[node('eth', 'User sends ETH', 'blue'), node('full-set', 'Receives full set', 'green', ['Invalid + Yes + No']), node('operational', 'While operational', 'teal', ['burn full set']), node('finalized', 'After finalization', 'gold', ['winning leg redeems']), node('settlement', 'Collateral settlement', 'slate')],
 				[
 					edge('shares-eth-full-set', 'eth', 'full-set', 'createCompleteSet'),
-					edge('shares-full-set-before', 'full-set', 'before'),
-					edge('shares-full-set-after', 'full-set', 'after'),
-					edge('shares-before-settlement', 'before', 'settlement', 'recover collateral'),
-					edge('shares-after-settlement', 'after', 'settlement', 'redeem payout'),
+					edge('shares-full-set-operational', 'full-set', 'operational'),
+					edge('shares-full-set-finalized', 'full-set', 'finalized'),
+					edge('shares-operational-settlement', 'operational', 'settlement', 'recover collateral'),
+					edge('shares-finalized-settlement', 'finalized', 'settlement', 'redeem payout'),
 				],
 			),
 		],
