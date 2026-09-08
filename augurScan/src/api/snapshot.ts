@@ -1,8 +1,9 @@
 import type { SQL } from 'bun'
+import type { JsonValue } from '../ethereum.ts'
 import { operationsAsOf } from '../repositories/operations.ts'
 import { ApiConflictError, ApiRequestError, postgresBigint } from './shared.ts'
 
-export const snapshotBoundaryMatches = (parts: readonly unknown[], offset: number, asOf: Record<string, unknown>): boolean =>
+export const snapshotBoundaryMatches = (parts: readonly JsonValue[], offset: number, asOf: Record<string, unknown>): boolean =>
 	parts[offset] === String(asOf['blockNumber']) &&
 	parts[offset + 1] === String(asOf['blockHash']) &&
 	parts[offset + 2] === String(asOf['invalidationId']) &&
@@ -13,7 +14,7 @@ export const snapshotBoundaryMatches = (parts: readonly unknown[], offset: numbe
 export const operationsAsOfFromUrl = async (sql: SQL, chainId: number, url: URL): Promise<Record<string, unknown>> =>
 	await operationsAsOf(sql, chainId, postgresBigint(url.searchParams.get('atBlock'), 'atBlock'))
 
-export type SnapshotCursorReference = { readonly parts: readonly unknown[]; readonly offset: number }
+export type SnapshotCursorReference = { readonly parts: readonly JsonValue[]; readonly offset: number }
 
 export const operationsAsOfForContinuations = async (
 	sql: SQL,

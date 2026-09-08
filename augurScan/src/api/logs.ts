@@ -1,5 +1,6 @@
 import type { SQL } from 'bun'
-import { decodeOpaqueCursor, encodeOpaqueCursor } from '../cursor-codec.ts'
+import type { JsonValue } from '../ethereum.ts'
+import { decodeOpaqueCursor, encodeOpaqueCursor, isJsonArray } from '../cursor-codec.ts'
 import { logDetailData, logListRows, provenanceHistoryData, reorganizationHistoryData } from '../repositories/logs.ts'
 import { snapshotBoundary } from './entity-details.ts'
 import {
@@ -102,7 +103,7 @@ type ReorganizationCursor = readonly [
 	id: string,
 ]
 
-const isReorganizationCursor = (parts: readonly unknown[]): parts is ReorganizationCursor =>
+const isReorganizationCursor = (parts: readonly JsonValue[]): parts is ReorganizationCursor =>
 	parts.length === 10 &&
 	parts[0] === 1 &&
 	isNonNegativeSafeInteger(parts[1]) &&
@@ -117,10 +118,10 @@ const isReorganizationCursor = (parts: readonly unknown[]): parts is Reorganizat
 
 const parseReorganizationCursor = (value: string | null, chainId: number): ReorganizationCursor | undefined => {
 	if (value === null) return undefined
-	let parts: unknown[]
+	let parts: readonly JsonValue[]
 	try {
 		const parsed = decodeOpaqueCursor(value)
-		parts = Array.isArray(parsed) ? parsed : []
+		parts = isJsonArray(parsed) ? parsed : []
 		if (!isReorganizationCursor(parts)) throw new Error('shape')
 	} catch (error) {
 		throw new ApiRequestError('cursor is invalid', { cause: error })
@@ -162,7 +163,7 @@ const parseProvenanceCursor = (value: string | null): ProvenanceCursor | undefin
 	if (value === null) return undefined
 	try {
 		const parsed = decodeOpaqueCursor(value)
-		const parts = Array.isArray(parsed) ? parsed : []
+		const parts = isJsonArray(parsed) ? parsed : []
 		if (parts.length !== 3 || parts[0] !== 1 || typeof parts[1] !== 'string' || !isCursorTimestamp(parts[1]) || !isPostgresBigint(parts[2]))
 			throw new Error('shape')
 		return [1, parts[1], parts[2]]

@@ -1,5 +1,6 @@
 import type { SQL } from 'bun'
-import { decodeOpaqueCursor, encodeOpaqueCursor } from '../cursor-codec.ts'
+import type { JsonValue } from '../ethereum.ts'
+import { decodeOpaqueCursor, encodeOpaqueCursor, isJsonArray } from '../cursor-codec.ts'
 import { auctionDemandCurve, reportLifecycle, reportRoundChanges } from '../operations.ts'
 import { auctionDetailData, eventEntityRows, forkDetailData, latestEntitySnapshot, reportDetailData } from '../repositories/entity-details.ts'
 import {
@@ -29,10 +30,10 @@ export type ProtocolCursor = readonly [number, string, string, string, string, s
 export type RiskCursor = readonly [number, 'pool' | 'vault', string, string, string, string, string, string, string]
 export const parseRiskCursor = (value: string | null, chainId: number, kind: 'pool' | 'vault'): RiskCursor | undefined => {
 	if (value === null) return undefined
-	let parts: unknown[]
+	let parts: readonly JsonValue[]
 	try {
 		const parsed = decodeOpaqueCursor(value)
-		parts = Array.isArray(parsed) ? parsed : []
+		parts = isJsonArray(parsed) ? parsed : []
 		if (
 			parts.length !== 9 ||
 			!isNonNegativeSafeInteger(parts[0]) ||
@@ -60,7 +61,7 @@ const parseProtocolCursor = (value: string | null): ProtocolCursor | undefined =
 	if (value === null) return undefined
 	try {
 		const parsed = decodeOpaqueCursor(value)
-		const parts = Array.isArray(parsed) ? parsed : []
+		const parts = isJsonArray(parsed) ? parsed : []
 		if (
 			parts.length !== 12 ||
 			!isNonNegativeSafeInteger(parts[0]) ||
@@ -136,10 +137,10 @@ export type TimelineCatalogCursor = readonly [
 
 export const parseTimelineCatalogCursor = (value: string | null, chainId: number, filterIdentity: string): TimelineCatalogCursor | undefined => {
 	if (value === null) return undefined
-	let parts: unknown[]
+	let parts: readonly JsonValue[]
 	try {
 		const parsed = decodeOpaqueCursor(value)
-		parts = Array.isArray(parsed) ? parsed : []
+		parts = isJsonArray(parsed) ? parsed : []
 		if (
 			parts.length !== 15 ||
 			!isNonNegativeSafeInteger(parts[0]) ||

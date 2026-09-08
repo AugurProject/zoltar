@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { encodeAbiParameters, getAddress, type Abi, type Address } from '@zoltar/bot-shared/ethereum'
+import { encodeAbiParameters, getAddress, type Abi, type AbiValue, type Address } from '@zoltar/bot-shared/ethereum'
 import {
 	advanceVaultRegistryCursor,
 	assertCanonicalPairGraph,
@@ -130,7 +130,7 @@ interface GraphOverrides {
 
 function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: GraphOverrides = {}, poisonToken?: Address) {
 	const pinnedReads: Array<bigint | undefined> = []
-	const contractReads: Array<{ args?: readonly unknown[]; functionName: string }> = []
+	const contractReads: Array<{ args?: readonly AbiValue[]; functionName: string }> = []
 	let requestedBlock: bigint | undefined
 	const implementation = {
 		async getBalance(parameters: { address: Address; blockNumber?: bigint }) {
@@ -152,7 +152,7 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 			if ([address(2), address(3), address(4), address(5), address(6), address(7), address(8), address(9)].includes(parameters.address)) return '0x01'
 			return graph.uniswapFactory !== undefined && parameters.address.toLowerCase() === graph.uniswapFactory.toLowerCase() ? '0x01' : '0x'
 		},
-		async readContract(parameters: { abi: Abi; address: Address; args?: readonly unknown[]; blockNumber?: bigint; functionName: string }) {
+		async readContract(parameters: { abi: Abi; address: Address; args?: readonly AbiValue[]; blockNumber?: bigint; functionName: string }) {
 			pinnedReads.push(parameters.blockNumber)
 			contractReads.push({ ...(parameters.args === undefined ? {} : { args: parameters.args }), functionName: parameters.functionName })
 			if (graph.delayUniswapPoolReads === true && ['factory', 'fee', 'liquidity', 'slot0', 'token0', 'token1'].includes(parameters.functionName) && Object.values(graph.uniswapPoolsByRep ?? {}).some(candidate => candidate.pool.toLowerCase() === parameters.address.toLowerCase())) {
@@ -296,7 +296,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, walletVaultRegistere
 		questionIds: [101n],
 	})
 	const implementation = {
-		async readContract(parameters: { abi: Abi; address: Address; args?: readonly unknown[]; blockNumber?: bigint; functionName: string }) {
+		async readContract(parameters: { abi: Abi; address: Address; args?: readonly AbiValue[]; blockNumber?: bigint; functionName: string }) {
 			contractReads.push(parameters.functionName)
 			switch (parameters.functionName) {
 				case 'getVaultCount':
@@ -1248,12 +1248,12 @@ describe('anchored ecosystem discovery', () => {
 	test('selects only exact threshold-filling direct escalation quotes', async () => {
 		const wallet = address(1)
 		const game = address(15)
-		const previews: Array<readonly unknown[]> = []
-		const simulations: Array<readonly unknown[]> = []
+		const previews: Array<readonly AbiValue[]> = []
+		const simulations: Array<readonly AbiValue[]> = []
 		const client = new Proxy({} as ChaosReadClient, {
 			get(_target, property) {
 				if (property === 'readContract') {
-					return async (parameters: { args?: readonly unknown[]; functionName: string }) => {
+						return async (parameters: { args?: readonly AbiValue[]; functionName: string }) => {
 						if (parameters.functionName !== 'previewDepositOnOutcome') throw new Error(`Unexpected read ${parameters.functionName}`)
 						previews.push(parameters.args ?? [])
 						const outcome = parameters.args?.[0]
@@ -1263,7 +1263,7 @@ describe('anchored ecosystem discovery', () => {
 					}
 				}
 				if (property === 'simulateContract') {
-					return async (parameters: { args?: readonly unknown[]; functionName: string }) => {
+						return async (parameters: { args?: readonly AbiValue[]; functionName: string }) => {
 						if (parameters.functionName !== 'depositRepOnOutcome') throw new Error(`Unexpected simulation ${parameters.functionName}`)
 						simulations.push(parameters.args ?? [])
 						return { result: undefined }
@@ -1287,7 +1287,7 @@ describe('anchored ecosystem discovery', () => {
 		const client = new Proxy({} as ChaosReadClient, {
 			get(_target, property) {
 				if (property === 'readContract') {
-					return async (parameters: { args?: readonly unknown[] }) => {
+						return async (parameters: { args?: readonly AbiValue[] }) => {
 						const requested = parameters.args?.[1]
 						if (typeof requested !== 'bigint') throw new Error('Direct quote amount missing')
 						return [requested - 1n, requested - 1n] as const
@@ -1376,7 +1376,7 @@ describe('anchored ecosystem discovery', () => {
 		let reservationAmount = 80n
 		let approvalReceiver = address(87)
 		let approvalRevoked = false
-		const simulations: Array<{ account?: Address; blockNumber?: bigint; functionName: string; args?: readonly unknown[] }> = []
+		const simulations: Array<{ account?: Address; blockNumber?: bigint; functionName: string; args?: readonly AbiValue[] }> = []
 		const implementation = {
 			async readContract(parameters: { functionName: string }) {
 				switch (parameters.functionName) {
@@ -1444,7 +1444,7 @@ describe('anchored ecosystem discovery', () => {
 						throw new Error(`Unexpected read ${parameters.functionName}`)
 				}
 			},
-			async simulateContract(parameters: { account?: Address; blockNumber?: bigint; functionName: string; args?: readonly unknown[] }) {
+			async simulateContract(parameters: { account?: Address; blockNumber?: bigint; functionName: string; args?: readonly AbiValue[] }) {
 				simulations.push(parameters)
 				if (simulationFailure !== undefined) throw simulationFailure
 				return { result: [80n, 20n, 0n] }
@@ -1512,8 +1512,8 @@ describe('anchored ecosystem discovery', () => {
 		if (pool === undefined) throw new Error('Pool fixture missing')
 		let receiver = fixture.wallet.address
 		let simulationFailure: Error | undefined
-		const simulations: Array<{ account?: Address; functionName: string; args?: readonly unknown[] }> = []
-		const pageRequests: Array<readonly unknown[]> = []
+		const simulations: Array<{ account?: Address; functionName: string; args?: readonly AbiValue[] }> = []
+		const pageRequests: Array<readonly AbiValue[]> = []
 		const operation = () => ({
 			liquidationApprovalId: hash(0),
 			operation: 1n,
@@ -1534,7 +1534,7 @@ describe('anchored ecosystem discovery', () => {
 		const client = new Proxy({} as ChaosReadClient, {
 			get(_target, property) {
 				if (property === 'readContract') {
-					return async (parameters: { args?: readonly unknown[]; functionName: string }) => {
+						return async (parameters: { args?: readonly AbiValue[]; functionName: string }) => {
 						if (parameters.functionName === 'getActiveStagedOperationCount') return 2n
 						if (parameters.functionName === 'getPendingSettlementOperationIds') return []
 						if (parameters.functionName === 'getActiveStagedOperations') {
@@ -1551,7 +1551,7 @@ describe('anchored ecosystem discovery', () => {
 					}
 				}
 				if (property === 'simulateContract') {
-					return async (parameters: { account?: Address; functionName: string; args?: readonly unknown[] }) => {
+						return async (parameters: { account?: Address; functionName: string; args?: readonly AbiValue[] }) => {
 						simulations.push(parameters)
 						if (simulationFailure !== undefined) throw simulationFailure
 						return { result: undefined }

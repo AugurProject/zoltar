@@ -4,6 +4,7 @@ import { type EvidenceProvenance, ScannerDatabase } from './database.ts'
 import { abiSourceHash } from './metadata.ts'
 import { sourceProvenance } from './provenance.ts'
 import { CURRENT_SCHEMA_VERSION, initializeSchema } from './schema.ts'
+import type { JsonValue } from './ethereum.ts'
 import type { NetworkConfig } from './types.ts'
 
 export type AugurScanProcessContext = {
@@ -19,7 +20,7 @@ const packageVersion = async (): Promise<string> => {
 	return packageMetadata.version
 }
 
-const networkConfiguration = (networks: readonly NetworkConfig[]): unknown =>
+const networkConfiguration = (networks: readonly NetworkConfig[]): readonly JsonValue[] =>
 	networks.map((network) => ({
 		id: network.id,
 		chainId: network.chainId,

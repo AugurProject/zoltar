@@ -1,5 +1,5 @@
 import type { SQL } from 'bun'
-import { decodeOpaqueCursor, encodeOpaqueCursor } from '../cursor-codec.ts'
+import { decodeOpaqueCursor, encodeOpaqueCursor, isJsonArray } from '../cursor-codec.ts'
 import { integrityCatalogData, latestInvalidationId } from '../repositories/integrity.ts'
 import { snapshotBoundary } from './entity-details.ts'
 import { ApiRequestError, cursorTimestamp, integer, isCursorTimestamp, isNonNegativeSafeInteger, isPostgresBigint, json } from './shared.ts'
@@ -27,7 +27,7 @@ const parseIntegrityCursor = (value: string | null, chainId: number): IntegrityC
 	if (value === null) return undefined
 	try {
 		const decoded = decodeOpaqueCursor(value)
-		const parts = Array.isArray(decoded) ? decoded : []
+		const parts = isJsonArray(decoded) ? decoded : []
 		if (
 			parts.length !== 14 ||
 			parts[0] !== 1 ||

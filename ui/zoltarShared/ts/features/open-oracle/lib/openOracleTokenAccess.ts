@@ -1,4 +1,4 @@
-import { bigintToSafeNumber, type Abi, type Address } from '@zoltar/shared/evm/ethereum'
+import { bigintToSafeNumber, type Abi, type AbiValue, type Address } from '@zoltar/shared/evm/ethereum'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { isRecoverableContractReadError } from '@zoltar/ui-core-shared/lib/errors.js'
 import { formatTokenApprovalUnavailableMessage, type TokenApprovalRequirement, type TokenApprovalState } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
@@ -6,10 +6,10 @@ import type { OpenOracleReportDetails } from '@zoltar/ui-core-shared/types/contr
 
 export type OpenOracleReadClient = {
 	getBalance: (parameters: { address: Address }) => Promise<bigint>
-	readContract: (parameters: { abi: Abi; address: Address; args: readonly unknown[]; functionName: string }) => Promise<unknown>
+	readContract: (parameters: { abi: Abi; address: Address; args: readonly AbiValue[]; functionName: string }) => Promise<AbiValue>
 }
 
-export type OpenOracleRawReadResult = { error?: unknown; result?: unknown; status: 'failure' | 'success' }
+export type OpenOracleRawReadResult = { error?: unknown; result?: AbiValue; status: 'failure' | 'success' }
 
 function parseTokenDecimals(value: unknown) {
 	let decimals: number | undefined

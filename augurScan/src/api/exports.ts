@@ -1,5 +1,6 @@
 import type { SQL } from 'bun'
-import { decodeOpaqueCursor, encodeOpaqueCursor } from '../cursor-codec.ts'
+import type { JsonValue } from '../ethereum.ts'
+import { decodeOpaqueCursor, encodeOpaqueCursor, isJsonArray } from '../cursor-codec.ts'
 import { historicalExportRows, historicalExportSnapshot, historicalExportSnapshotCanonical, historicalExportTotal } from '../repositories/exports.ts'
 import {
 	ApiConflictError,
@@ -32,7 +33,7 @@ export type HistoricalExportCursor = readonly [
 	lastKey: readonly string[],
 ]
 
-const historicalExportKeyValid = (dataset: HistoricalExportDataset, key: readonly unknown[]): key is readonly string[] => {
+const historicalExportKeyValid = (dataset: HistoricalExportDataset, key: readonly JsonValue[]): key is readonly string[] => {
 	if (!key.every((item) => typeof item === 'string')) return false
 	if (dataset === 'logs')
 		return (
@@ -60,7 +61,7 @@ export const parseHistoricalExportCursor = (value: string | null): HistoricalExp
 	if (value === null) return undefined
 	try {
 		const parsed = decodeOpaqueCursor(value)
-		const parts = Array.isArray(parsed) ? parsed : []
+		const parts = isJsonArray(parsed) ? parsed : []
 		const dataset = parts[1]
 		const canonical = parts[3]
 		const lastKey = parts[13]
@@ -81,7 +82,8 @@ export const parseHistoricalExportCursor = (value: string | null): HistoricalExp
 			typeof parts[10] !== 'string' ||
 			typeof parts[11] !== 'string' ||
 			typeof parts[12] !== 'string' ||
-			!Array.isArray(lastKey) ||
+			lastKey === undefined ||
+			!isJsonArray(lastKey) ||
 			!historicalExportKeyValid(dataset, lastKey)
 		)
 			throw new Error('shape')
@@ -91,7 +93,7 @@ export const parseHistoricalExportCursor = (value: string | null): HistoricalExp
 	}
 }
 
-const historicalExportCursorFor = (snapshot: readonly unknown[], lastKey: readonly string[]): string => encodeOpaqueCursor([...snapshot, lastKey])
+const historicalExportCursorFor = (snapshot: readonly JsonValue[], lastKey: readonly string[]): string => encodeOpaqueCursor([...snapshot, lastKey])
 
 export const historicalExport = async (sql: SQL, url: URL): Promise<Response> => {
 	const chainId = integer(url.searchParams.get('chainId'), 'chainId')

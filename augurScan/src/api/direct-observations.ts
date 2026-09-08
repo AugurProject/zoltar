@@ -1,5 +1,6 @@
 import type { SQL } from 'bun'
-import { decodeOpaqueCursor, encodeOpaqueCursor } from '../cursor-codec.ts'
+import type { JsonValue } from '../ethereum.ts'
+import { decodeOpaqueCursor, encodeOpaqueCursor, isJsonArray } from '../cursor-codec.ts'
 import { directObservationMaxima, directObservationRows } from '../repositories/direct-observations.ts'
 import { snapshotBoundary } from './entity-details.ts'
 import {
@@ -51,7 +52,7 @@ const parseDirectObservationCursor = (value: string | null, chainId: number): Di
 	if (value === null) return undefined
 	try {
 		const decoded = decodeOpaqueCursor(value)
-		const parts = Array.isArray(decoded) ? decoded : []
+		const parts = isJsonArray(decoded) ? decoded : []
 		if (
 			parts.length !== 14 ||
 			parts[0] !== 1 ||
@@ -115,7 +116,7 @@ const directObservationCursorFor = (
 
 const directObservationSnapshot = (value: string): DirectObservationSnapshot => {
 	try {
-		const parsed = JSON.parse(value) as unknown
+		const parsed = JSON.parse(value) as JsonValue
 		if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error('shape')
 		const record = jsonRecord(parsed)
 		const kind = record['kind']

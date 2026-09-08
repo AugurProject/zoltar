@@ -6,6 +6,8 @@ import { Decoder, createContract, deployContract, events } from 'micro-eth-signe
 export type Hex = `0x${string}`
 export type Address = Hex
 export type Hash = Hex
+export type JsonValue = string | number | boolean | null | readonly JsonValue[] | { readonly [key: string]: JsonValue }
+export type AbiValue = JsonValue | bigint | Uint8Array | readonly AbiValue[] | { readonly [key: string]: AbiValue }
 export type AbiParameter = {
 	readonly anonymous?: boolean
 	readonly components?: readonly AbiParameter[]
@@ -20,9 +22,7 @@ export type AbiParameter = {
 export type Abi = readonly AbiParameter[]
 export type AbiEvent = AbiParameter & { readonly inputs: readonly AbiParameter[]; readonly name: string; readonly type: 'event' }
 export type AbiFunction = AbiParameter & { readonly inputs: readonly AbiParameter[]; readonly name: string; readonly outputs: readonly AbiParameter[]; readonly type: 'function' }
-
-type FixedArrayValue<TValue, TLength extends number, TAccumulator extends readonly unknown[] = readonly []> = TAccumulator['length'] extends TLength ? TAccumulator : FixedArrayValue<TValue, TLength, readonly [...TAccumulator, TValue]>
-
+type FixedArrayValue<TValue, TLength extends number, TAccumulator extends readonly TValue[] = readonly []> = TAccumulator['length'] extends TLength ? TAccumulator : FixedArrayValue<TValue, TLength, readonly [...TAccumulator, TValue]>
 type AbiValueKind = 'input' | 'output'
 
 type TupleComponentsAllNamed<TComponents extends readonly AbiParameter[]> = TComponents extends readonly [infer TComponent extends AbiParameter, ...infer TRest extends readonly AbiParameter[]]
@@ -35,7 +35,7 @@ type TupleComponentsAllNamed<TComponents extends readonly AbiParameter[]> = TCom
 		: false
 	: false
 
-type TupleComponentReservedAliasName = keyof unknown[] | keyof Object | '__defineGetter__' | '__defineSetter__' | '__lookupGetter__' | '__lookupSetter__' | '__proto__'
+type TupleComponentReservedAliasName = keyof [] | keyof Object | '__defineGetter__' | '__defineSetter__' | '__lookupGetter__' | '__lookupSetter__' | '__proto__'
 
 type IsCanonicalNonNegativeIntegerName<TName extends string> = TName extends '0' ? true : TName extends `${infer TInteger extends bigint}` ? (`${TInteger}` extends TName ? (TName extends `-${string}` ? false : true) : false) : false
 
@@ -54,7 +54,7 @@ type TupleComponentsArray<TComponents extends readonly AbiParameter[], TKind ext
 }>
 
 type DecodedEventArguments<TComponents extends readonly AbiParameter[]> = number extends TComponents['length']
-	? Readonly<Record<string, unknown>> | readonly unknown[]
+	? Readonly<Record<string, AbiValue>> | readonly AbiValue[]
 	: TComponents extends readonly []
 		? Readonly<Record<string, never>>
 		: TupleComponentsAllNamed<TComponents> extends true
@@ -90,11 +90,11 @@ type ArrayElementValue<TParameter extends AbiParameter, TElementType extends str
 			: TupleComponentsAllNamed<TParameter['components']> extends true
 				? TupleComponentsObject<TParameter['components'], TKind>
 				: TupleComponentsArray<TParameter['components'], TKind>
-		: unknown
+		: AbiValue
 	: AbiParameterValue<RebasedAbiParameter<TParameter, TElementType>, TKind>
 
 type AbiParameterValue<TParameter extends AbiParameter, TKind extends AbiValueKind> = string extends TParameter['type']
-	? unknown
+	? AbiValue
 	: TParameter['type'] extends `${infer TElementType}[${infer TSize}]`
 		? TSize extends `${infer TLength extends number}`
 			? FixedArrayValue<ArrayElementValue<TParameter, TElementType, TKind>, TLength>
@@ -115,9 +115,9 @@ type AbiParameterValue<TParameter extends AbiParameter, TKind extends AbiValueKi
 									: bigint
 								: TParameter['type'] extends 'string'
 									? string
-									: unknown
+									: AbiValue
 
-type AbiParametersToValues<TParameters extends readonly AbiParameter[] | undefined, TKind extends AbiValueKind> = TParameters extends readonly AbiParameter[] ? TupleComponentsArray<TParameters, TKind> : readonly unknown[]
+type AbiParametersToValues<TParameters extends readonly AbiParameter[] | undefined, TKind extends AbiValueKind> = TParameters extends readonly AbiParameter[] ? TupleComponentsArray<TParameters, TKind> : readonly AbiValue[]
 
 type KnownAbiFunctions<TAbi extends Abi> = Extract<TAbi[number], { name: string; type: 'function' }>
 
@@ -156,8 +156,8 @@ type ContractFunctionResult<TAbi extends Abi, TFunctionName extends string> = Co
 			? AbiParameterValue<TOutput, 'output'>
 			: TOutputs extends readonly AbiParameter[]
 				? DecodedTupleArrayValue<TOutputs>
-				: unknown
-	: unknown
+				: AbiValue
+	: AbiValue
 
 type KnownAbiEvents<TAbi extends Abi> = Extract<TAbi[number], { name: string; type: 'event' }>
 
@@ -173,7 +173,7 @@ type ContractEventArgs<TAbi extends Abi, TEventName extends string> = DecodedEve
 
 type DecodedFunctionData<TAbi extends Abi> = [KnownAbiFunctions<TAbi>] extends [never]
 	? {
-			args: readonly unknown[]
+			args: readonly AbiValue[]
 			functionName: string
 		}
 	: {
@@ -233,7 +233,7 @@ export type EstimateGasParameters = {
 	value?: bigint | undefined
 }
 
-type MulticallContractResult<TContract> = TContract extends ContractFunctionParameters<infer TAbi, infer TFunctionName> ? ContractFunctionResult<TAbi, TFunctionName> : unknown
+type MulticallContractResult<TContract> = TContract extends ContractFunctionParameters<infer TAbi, infer TFunctionName> ? ContractFunctionResult<TAbi, TFunctionName> : AbiValue
 
 export type ContractFunctionParameters<TAbi extends Abi = Abi, TFunctionName extends string = string> = {
 	abi: TAbi
@@ -258,7 +258,7 @@ export type Chain = {
 			http: readonly string[]
 		}
 	}
-	readonly [key: string]: unknown
+	readonly [key: string]: JsonValue
 }
 
 export type EIP1193Provider = {
@@ -337,11 +337,11 @@ export type Block = {
 	hash?: Hash | undefined
 	number?: bigint | undefined
 	parentHash?: Hash | undefined
-	readonly transactions: readonly unknown[]
+	readonly transactions: readonly (Hex | BlockTransaction)[]
 	timestamp: bigint
 }
 
-export type RpcLog<TArgs = unknown, TEventName extends string = string> = TransactionLog & {
+export type RpcLog<TArgs = AbiValue, TEventName extends string = string> = TransactionLog & {
 	args?: TArgs
 	eventName?: TEventName | undefined
 }
@@ -380,10 +380,10 @@ export type ParsedTransaction = {
 
 export type RpcRequestScheduler = <TValue>(method: string, operation: () => Promise<TValue>) => Promise<TValue>
 export type RpcFetchFn = (input: string | URL | Request, init?: RequestInit | undefined) => Promise<Response>
-export type RpcResponseParser = (response: Response, method: string) => Promise<unknown>
+export type RpcResponseParser = (response: Response, method: string) => Promise<JsonValue>
 
 type TransportRetryOptions = {
-	batch?: unknown
+	batch?: { readonly wait?: number } | undefined
 	requestScheduler?: RpcRequestScheduler | undefined
 	retryCount?: number | undefined
 	retryDelay?: number | undefined
@@ -432,8 +432,8 @@ export type MulticallReturnType<TContracts extends readonly unknown[], TAllowFai
 			? MulticallSuccessResult<MulticallContractResult<TContracts[TIndex]>> | MulticallFailureResult
 			: MulticallContractResult<TContracts[TIndex]>
 		: TAllowFailure extends true
-			? MulticallSuccessResult<unknown> | MulticallFailureResult
-			: unknown
+			? MulticallSuccessResult<AbiValue> | MulticallFailureResult
+			: AbiValue
 }>
 
 export class RpcError extends Error {
@@ -1090,7 +1090,7 @@ function normalizeEventTopicArgs(eventAbi: AbiParameter, args: readonly unknown[
 	)
 }
 
-function eventTopicWildcardPlaceholder(input: AbiParameter): unknown {
+function eventTopicWildcardPlaceholder(input: AbiParameter): AbiValue {
 	const arrayMatch = /^(.*)\[(\d*)\]$/u.exec(input.type)
 	if (arrayMatch !== null) {
 		const itemType = arrayMatch[1]
@@ -1230,16 +1230,16 @@ async function requestTransportOnce<TValue>(transport: Transport, parameters: Cl
 			})
 		}
 
-		const payload: unknown = transport.responseParser === undefined ? await response.json() : await transport.responseParser(response, parameters.method)
+		const payload: JsonValue = transport.responseParser === undefined ? ((await response.json()) as JsonValue) : await transport.responseParser(response, parameters.method)
 		if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) throw new RpcError(`Malformed JSON-RPC response while calling ${parameters.method}`)
-		const envelope = payload as Record<string, unknown>
+		const envelope = payload as Record<string, JsonValue>
 		const hasResult = Object.prototype.hasOwnProperty.call(envelope, 'result')
 		const hasError = Object.prototype.hasOwnProperty.call(envelope, 'error')
 		if (envelope['jsonrpc'] !== '2.0' || envelope['id'] !== 1 || hasResult === hasError) throw new RpcError(`Malformed JSON-RPC response while calling ${parameters.method}`)
 		if (hasError) {
 			const error = envelope['error']
 			if (typeof error !== 'object' || error === null || Array.isArray(error)) throw new RpcError(`Malformed JSON-RPC error while calling ${parameters.method}`)
-			const errorRecord = error as Record<string, unknown>
+			const errorRecord = error as Record<string, JsonValue>
 			const code = errorRecord['code']
 			const message = errorRecord['message']
 			if (typeof code !== 'number' || !Number.isInteger(code) || typeof message !== 'string') throw new RpcError(`Malformed JSON-RPC error while calling ${parameters.method}`)
@@ -1678,7 +1678,7 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 		getBlock: async parameters => {
 			const includeTransactions = parameters?.includeTransactions === true
 			const blockTag = parameters?.blockNumber === undefined ? (parameters?.blockTag ?? 'latest') : normalizeBlockTag(parameters.blockNumber)
-			const block = await requestTransportWithRateLimitRetries<unknown>(transport, {
+			const block = await requestTransportWithRateLimitRetries<JsonValue>(transport, {
 				method: 'eth_getBlockByNumber',
 				params: [blockTag, includeTransactions],
 			})
@@ -1719,7 +1719,7 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 						}))
 			const requestedTopics = topics === undefined ? undefined : snapshotLogTopicFilter(topics)
 			const requestTopics = requestedTopics === undefined ? undefined : snapshotLogTopicFilter(requestedTopics)
-			const rawLogs = await requestTransportWithRateLimitRetries<unknown[]>(transport, {
+			const rawLogs = await requestTransportWithRateLimitRetries<readonly JsonValue[]>(transport, {
 				method: 'eth_getLogs',
 				params: [
 					{
@@ -1751,7 +1751,7 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 		},
 		getTransaction: async parameters => {
 			const requestedHash = normalizeHash(parameters.hash)
-			const rawTransaction = await requestTransportWithRateLimitRetries<unknown>(transport, {
+			const rawTransaction = await requestTransportWithRateLimitRetries<JsonValue>(transport, {
 				method: 'eth_getTransactionByHash',
 				params: [requestedHash],
 			})
@@ -1762,7 +1762,7 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 		},
 		getTransactionReceipt: async parameters => {
 			const requestedHash = normalizeHash(parameters.hash)
-			const rawReceipt = await requestTransportWithRateLimitRetries<unknown>(transport, {
+			const rawReceipt = await requestTransportWithRateLimitRetries<JsonValue>(transport, {
 				method: 'eth_getTransactionReceipt',
 				params: [requestedHash],
 			})
@@ -2326,7 +2326,7 @@ export function encodeFunctionData(parameters: { abi: readonly unknown[]; args?:
 
 export function decodeFunctionData<TAbi extends Abi>(parameters: { abi: TAbi; data: Hex }): DecodedFunctionData<TAbi>
 export function decodeFunctionData(parameters: { abi: Abi; data: Hex }): {
-	args: readonly unknown[]
+	args: readonly AbiValue[]
 	functionName: string
 }
 export function decodeFunctionData(parameters: { abi: Abi; data: Hex }) {
@@ -2342,7 +2342,7 @@ export function decodeFunctionData(parameters: { abi: Abi; data: Hex }) {
 	if (decoded === undefined || Array.isArray(decoded)) throw new Error('Function selector was not found in the ABI')
 	const functionAbi = getNamedFunctionAbi(parameters.abi, decoded.signature ?? decoded.name, normalizeDecodeFunctionArgs(decoded.value))
 	return {
-		args: normalizeDecodedArguments(functionAbi.inputs ?? [], decoded.value),
+		args: normalizeDecodedArguments(functionAbi.inputs ?? [], decoded.value) as AbiValue[],
 		functionName: decoded.name,
 	}
 }
