@@ -7,7 +7,7 @@ WORKDIR /source
 RUN git init
 
 COPY package.json bun.lock ./
-COPY scripts/ ./scripts/
+COPY tooling/ ./tooling/
 COPY shared/package.json shared/bun.lock shared/tsconfig.json ./shared/
 COPY shared/ts/ ./shared/ts/
 RUN mkdir -p shared/js \
@@ -33,15 +33,20 @@ COPY --from=shared-builder /source/solidity/ts/types/contractArtifact.ts ./solid
 COPY bots/shared/package.json bots/shared/bun.lock ./bots/shared/
 COPY bots/shared/src/ ./bots/shared/src/
 COPY bots/chaos/package.json bots/chaos/bun.lock ./bots/chaos/
+# Use the repository installer for nested file: dependencies in production too.
+COPY --from=shared-builder /source/tooling/repo/install-frozen.mts /tmp/tooling/repo/install-frozen.mts
+COPY --from=shared-builder /source/tooling/ui/share-ui-preact-runtime.mts /tmp/tooling/ui/share-ui-preact-runtime.mts
 RUN cd shared \
-	&& bun install --frozen-lockfile --production \
+	&& bun /tmp/tooling/repo/install-frozen.mts . --production \
 	&& cd ../bots/shared \
-	&& bun install --frozen-lockfile --production \
+	&& bun /tmp/tooling/repo/install-frozen.mts . --production \
 	&& cd ../chaos \
-	&& bun install --frozen-lockfile --production
+	&& bun /tmp/tooling/repo/install-frozen.mts . --production \
+	&& rm -rf /tmp/tooling
 
 COPY bots/chaos/README.md ./bots/chaos/README.md
 COPY bots/chaos/config/ ./bots/chaos/config/
+COPY docs/mainnet-deployment-addresses.json docs/sepolia-deployment-addresses.json ./docs/
 COPY bots/chaos/scripts/check-runtime.mts ./bots/chaos/scripts/check-runtime.mts
 COPY bots/chaos/scripts/docker-entrypoint.sh ./bots/chaos/scripts/docker-entrypoint.sh
 COPY bots/chaos/scripts/validate-container-paths.mts ./bots/chaos/scripts/validate-container-paths.mts

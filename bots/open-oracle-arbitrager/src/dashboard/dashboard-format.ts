@@ -181,7 +181,7 @@ export function blockAgeLabel(blockTimestamp: string | undefined, nowMillisecond
 	return nowMilliseconds >= timestampMilliseconds ? `seen ${label} ago` : `${label} ahead of local clock`
 }
 
-export function botStatusLabels(state: Pick<PublicOperatorSnapshot, 'mode' | 'paused' | 'status'> | undefined) {
+export function botStatusLabels(state: Pick<PublicOperatorSnapshot, 'mode' | 'paused' | 'status' | 'marketAvailability'> | undefined) {
 	if (state === undefined) return { mode: 'Mode —', status: '—' }
 	if (state.paused) return { mode: state.mode, status: 'Paused' }
 	const statuses: Record<PublicOperatorSnapshot['status'], string> = {
@@ -192,7 +192,7 @@ export function botStatusLabels(state: Pick<PublicOperatorSnapshot, 'mode' | 'pa
 		stopped: 'Stopped',
 		syncing: 'Syncing',
 	}
-	return { mode: state.mode, status: statuses[state.status] }
+	return { mode: state.mode, status: state.status === 'error' && state.marketAvailability?.kind === 'missing-deployment' ? 'Not deployed' : state.status === 'running' && state.marketAvailability?.kind === 'no-v3-liquidity' ? 'No V3 liquidity' : statuses[state.status] }
 }
 
 export function opportunityDecisionReason(opportunity: Pick<OpportunitySnapshot, 'decision' | 'tokenSymbol'>) {
@@ -244,4 +244,11 @@ export function signerControlState(parameters: { hasQueuedSigner: boolean; hasWa
 
 export function sumSignedDecimals(values: readonly string[]) {
 	return decimalFromScaled(values.reduce((total, value) => total + parseSignedDecimal(value), 0n))
+}
+
+export function marketAvailabilityPresentation(notice: PublicOperatorSnapshot['marketAvailability']) {
+	if (notice === undefined) return undefined
+	if (notice.kind === 'no-v3-liquidity') return { title: 'No V3 liquidity', detail: 'No liquid REP/WETH V3 pools were found. Market checks continue automatically.' }
+	const names = [...new Set(notice.contracts.map(contract => contract.name))].join(', ')
+	return { title: 'Deployment unavailable', detail: `${names}: no contract at the configured ${notice.contracts.length === 1 ? 'address' : 'addresses'} on chain ${notice.chainId.toString()}. Availability is checked automatically.` }
 }
