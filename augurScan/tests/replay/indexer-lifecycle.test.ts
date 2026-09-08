@@ -3314,6 +3314,173 @@ describe('network indexer lifecycle', () => {
 		}
 	})
 
+	test('continues the owned run when acquired diagnostics persistence rejects', async () => {
+		const controller = new AbortController()
+		let acquisitions = 0
+		let ownedRuns = 0
+		let releases = 0
+		let rejected = false
+		const logged = spyOn(console, 'error').mockImplementation(() => {})
+		try {
+			await runIndexerOwnershipLifecycle({
+				networkId: 'mainnet',
+				acquire: async () => {
+					acquisitions++
+					return {
+						backendPid: 42,
+						assertHeld: async () => {},
+						release: async () => {
+							releases++
+						},
+					}
+				},
+				seed: async () => {},
+				runOwned: async () => {
+					ownedRuns++
+					controller.abort()
+				},
+				failure: async () => {},
+				standby: () => {},
+				intervalMs: 10,
+				onEvent: async (event) => {
+					if (event.type === 'acquired' && !rejected) {
+						rejected = true
+						throw new Error('diagnostics unavailable')
+					}
+				},
+				signal: controller.signal,
+			})
+
+			expect(acquisitions).toBe(1)
+			expect(ownedRuns).toBe(1)
+			expect(releases).toBe(1)
+			expect(logged.mock.calls.flat().join(' ')).toContain('acquired')
+		} finally {
+			logged.mockRestore()
+		}
+	})
+
+	test('retries after failure diagnostics persistence rejects', async () => {
+		const controller = new AbortController()
+		let acquisitions = 0
+		let failureRecords = 0
+		let ownedRuns = 0
+		const logged = spyOn(console, 'error').mockImplementation(() => {})
+		try {
+			await runIndexerOwnershipLifecycle({
+				networkId: 'mainnet',
+				acquire: async () => {
+					acquisitions++
+					if (acquisitions === 1) throw new Error('database starting')
+					return { backendPid: 42, assertHeld: async () => {}, release: async () => {} }
+				},
+				seed: async () => {},
+				runOwned: async () => {
+					ownedRuns++
+					controller.abort()
+				},
+				failure: async () => {
+					failureRecords++
+				},
+				standby: () => {},
+				intervalMs: 10,
+				onEvent: async (event) => {
+					if (event.type === 'failure') throw new Error('diagnostics unavailable')
+				},
+				wait: async () => {},
+				signal: controller.signal,
+			})
+
+			expect(acquisitions).toBe(2)
+			expect(failureRecords).toBe(1)
+			expect(ownedRuns).toBe(1)
+			expect(logged.mock.calls.flat().join(' ')).toContain('failure')
+		} finally {
+			logged.mockRestore()
+		}
+	})
+
+	test('reacquires after released diagnostics persistence rejects', async () => {
+		const controller = new AbortController()
+		let acquisitions = 0
+		let ownedRuns = 0
+		let rejected = false
+		const logged = spyOn(console, 'error').mockImplementation(() => {})
+		try {
+			await runIndexerOwnershipLifecycle({
+				networkId: 'mainnet',
+				acquire: async () => {
+					acquisitions++
+					return { backendPid: 42, assertHeld: async () => {}, release: async () => {} }
+				},
+				seed: async () => {},
+				runOwned: async () => {
+					ownedRuns++
+					if (ownedRuns === 2) controller.abort()
+				},
+				failure: async () => {},
+				standby: () => {},
+				intervalMs: 10,
+				onEvent: async (event) => {
+					if (event.type === 'released' && !rejected) {
+						rejected = true
+						throw new Error('diagnostics unavailable')
+					}
+				},
+				wait: async () => {},
+				signal: controller.signal,
+			})
+
+			expect(acquisitions).toBe(2)
+			expect(ownedRuns).toBe(2)
+			expect(logged.mock.calls.flat().join(' ')).toContain('released')
+		} finally {
+			logged.mockRestore()
+		}
+	})
+
+	test('reacquires after release-failed diagnostics persistence rejects', async () => {
+		const controller = new AbortController()
+		let acquisitions = 0
+		let ownedRuns = 0
+		const logged = spyOn(console, 'error').mockImplementation(() => {})
+		try {
+			await runIndexerOwnershipLifecycle({
+				networkId: 'mainnet',
+				acquire: async () => {
+					acquisitions++
+					const attempt = acquisitions
+					return {
+						backendPid: 42,
+						assertHeld: async () => {},
+						release: async () => {
+							if (attempt === 1) throw new Error('release unavailable')
+						},
+					}
+				},
+				seed: async () => {},
+				runOwned: async () => {
+					ownedRuns++
+					if (ownedRuns === 2) controller.abort()
+				},
+				failure: async () => {},
+				standby: () => {},
+				intervalMs: 10,
+				onEvent: async (event) => {
+					if (event.type === 'release-failed') throw new Error('diagnostics unavailable')
+				},
+				wait: async () => {},
+				signal: controller.signal,
+			})
+
+			expect(acquisitions).toBe(2)
+			expect(ownedRuns).toBe(2)
+			expect(logged.mock.calls.flat().join(' ')).toContain('release-failed')
+		} finally {
+			logged.mockRestore()
+		}
+	})
+
 	test('reports sanitized ownership stages and backs off rapid failures', async () => {
 		const controller = new AbortController()
 		const delays: number[] = []

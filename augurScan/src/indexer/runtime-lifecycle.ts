@@ -220,6 +220,15 @@ export const runIndexerOwnershipLifecycle = async <TLease extends LeaseControl>(
 	let standbyReported = false
 	let wasStandby = false
 	let consecutiveFailures = 0
+	const emitOwnershipEvent = async (event: IndexerOwnershipEvent): Promise<void> => {
+		try {
+			await onEvent(event)
+		} catch (error) {
+			console.error(
+				`[${networkId}] indexer ownership diagnostics failed; event: ${event.type}; backend PID: ${'backendPid' in event ? (event.backendPid ?? 'unavailable') : 'unavailable'}; reason: ${ownershipFailureReason(error)}`,
+			)
+		}
+	}
 	while (!signal.aborted) {
 		let lease: TLease | undefined
 		let ownedRunStartedAt: number | undefined
@@ -234,7 +243,7 @@ export const runIndexerOwnershipLifecycle = async <TLease extends LeaseControl>(
 				if (!standbyReported) {
 					standby()
 					stage = 'record-ownership'
-					await onEvent({ type: 'standby' })
+					await emitOwnershipEvent({ type: 'standby' })
 					standbyReported = true
 				}
 			} else {
@@ -248,7 +257,7 @@ export const runIndexerOwnershipLifecycle = async <TLease extends LeaseControl>(
 				const recoveredAfterFailures = consecutiveFailures
 				const acquiredAfterStandby = wasStandby
 				stage = 'record-ownership'
-				await onEvent({
+				await emitOwnershipEvent({
 					type: 'acquired',
 					...(lease.backendPid === undefined ? {} : { backendPid: lease.backendPid }),
 					recoveredAfterFailures,
@@ -274,7 +283,7 @@ export const runIndexerOwnershipLifecycle = async <TLease extends LeaseControl>(
 				consecutiveFailures = 0
 			consecutiveFailures++
 			retryDelay = retryDelayMs(consecutiveFailures, intervalMs, random)
-			await onEvent({
+			await emitOwnershipEvent({
 				type: 'failure',
 				stage: failureStage,
 				consecutiveFailures,
@@ -298,7 +307,7 @@ export const runIndexerOwnershipLifecycle = async <TLease extends LeaseControl>(
 				if (retryDelay === undefined) {
 					consecutiveFailures++
 					retryDelay = retryDelayMs(consecutiveFailures, intervalMs, random)
-					await onEvent({
+					await emitOwnershipEvent({
 						type: 'failure',
 						stage: 'release',
 						consecutiveFailures,
@@ -308,9 +317,10 @@ export const runIndexerOwnershipLifecycle = async <TLease extends LeaseControl>(
 				}
 				console.error(ownershipFailureLogMessage(networkId, 'release', error, consecutiveFailures, retryDelay, lease?.backendPid))
 				if (lease !== undefined && !released)
-					await onEvent({ type: 'release-failed', ...(lease.backendPid === undefined ? {} : { backendPid: lease.backendPid }) })
+					await emitOwnershipEvent({ type: 'release-failed', ...(lease.backendPid === undefined ? {} : { backendPid: lease.backendPid }) })
 			}
-			if (lease !== undefined && released) await onEvent({ type: 'released', ...(lease.backendPid === undefined ? {} : { backendPid: lease.backendPid }) })
+			if (lease !== undefined && released)
+				await emitOwnershipEvent({ type: 'released', ...(lease.backendPid === undefined ? {} : { backendPid: lease.backendPid }) })
 		}
 		if (!signal.aborted) await wait(retryDelay ?? intervalMs, signal)
 	}
