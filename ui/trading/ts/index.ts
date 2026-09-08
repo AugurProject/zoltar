@@ -55,8 +55,11 @@ function pendingDeploymentFixture() {
 
 const root = document.querySelector('#app') ?? document.body
 async function initializeTradingForMount() {
-	await initializeTradingActiveEnvironment()
-	document.querySelector('body > main')?.remove()
+	try {
+		await initializeTradingActiveEnvironment()
+	} finally {
+		document.querySelector('body > main')?.remove()
+	}
 }
 installTradingRouting()
 registerTradingSimulationScenario()

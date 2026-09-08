@@ -154,9 +154,10 @@ test('Trading preserves its route headers and does not restyle shared disclosure
 	expect(css).toContain('details:not(.wallet-summary):not(.simulation-banner-details) > summary::after')
 })
 
-test('Trading keeps the initial loading fallback visible while the environment boots', async () => {
+test('Trading keeps the initial loading fallback visible until the environment settles', async () => {
 	const source = await Bun.file(new URL('../../index.ts', import.meta.url)).text()
 	expect(source.indexOf('await initializeTradingActiveEnvironment()')).toBeLessThan(source.indexOf("document.querySelector('body > main')?.remove()"))
+	expect(source.indexOf('} finally {')).toBeLessThan(source.indexOf("document.querySelector('body > main')?.remove()"))
 	expect(source).toContain('initialize: initializeTradingForMount')
 })
 
