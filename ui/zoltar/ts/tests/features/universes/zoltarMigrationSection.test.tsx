@@ -11,6 +11,7 @@ import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contrac
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
+import { getUniverseLinkHref } from '@zoltar/ui-zoltar-shared/features/universes/lib/universe.js'
 
 type ZoltarMigrationSectionProps = Parameters<typeof ZoltarMigrationSection>[0]
 const ATTO_REP = 10n ** 18n
@@ -60,6 +61,7 @@ function createProps(overrides: Partial<ZoltarMigrationSectionProps> = {}): Zolt
 		loadingZoltarUniverse: false,
 		onApproveZoltarForkRep: () => undefined,
 		onMigrateInternalRep: () => undefined,
+		onDeployChildUniverse: () => undefined,
 		onPrepareRepForMigration: () => undefined,
 		onZoltarMigrationFormChange: () => undefined,
 		zoltarForkActiveAction: undefined,
@@ -77,6 +79,7 @@ function createProps(overrides: Partial<ZoltarMigrationSectionProps> = {}): Zolt
 		zoltarMigrationPreparedRepBalanceAttoRep: 10n * ATTO_REP,
 		zoltarUniverse: createUniverse(),
 		zoltarUniverseState: 'ready',
+		pendingChildUniverseOutcomeIndex: undefined,
 		...overrides,
 	}
 }
@@ -197,6 +200,36 @@ describe('ZoltarMigrationSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expectTransactionButtonEnabled(document.body, 'Split REP')
+	})
+
+	test('shows deployment state and deploys missing universes from the outcome selector', async () => {
+		const deployedOutcomes: bigint[] = []
+		const formUpdates: Partial<ZoltarMigrationFormState>[] = []
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ZoltarMigrationSection,
+				createProps({
+					onDeployChildUniverse: outcomeIndex => deployedOutcomes.push(outcomeIndex),
+					onZoltarMigrationFormChange: update => formUpdates.push(update),
+					zoltarUniverse: createUniverse({
+						childUniverses: [
+							{ exists: false, forkTime: 1n, outcomeIndex: 1n, outcomeLabel: 'Yes', parentUniverseId: 1n, reputationToken: zeroAddress, universeId: 2n },
+							{ exists: true, forkTime: 1n, outcomeIndex: 2n, outcomeLabel: 'No', parentUniverseId: 1n, reputationToken: CHILD_REP_ADDRESS, universeId: 3n },
+						],
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const queries = within(document.body)
+		const deployedLink = queries.getByRole('link', { name: 'Deployed' })
+		expect(deployedLink.getAttribute('href')).toBe(getUniverseLinkHref(3n))
+		expect(deployedLink.querySelector('[role="button"]')).toBeNull()
+		queries.getByRole('button', { name: /^No/ }).click()
+		expect(formUpdates).toEqual([{ outcomeIndexes: '1, 2' }])
+		queries.getByRole('button', { name: 'Deploy universe' }).click()
+		expect(deployedOutcomes).toEqual([1n])
 	})
 
 	test('keeps migration approval disabled off mainnet and explains recovery', async () => {

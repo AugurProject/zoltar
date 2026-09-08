@@ -1784,18 +1784,16 @@ button.wallet-asset-action-pending:disabled {
 .migration-outcome-list {
 	display: grid;
 	gap: 0.6rem;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
 }
 
 .migration-outcome-row {
-	display: flex;
-	flex-direction: column;
-	align-items: flex-start;
-	gap: 0.35rem;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: stretch;
 	width: 100%;
-	padding: 0.8rem 0.95rem;
 	border: 1px solid var(--control-border);
 	background: var(--control-bg);
-	text-align: left;
 }
 
 .migration-outcome-row.active {
@@ -1803,9 +1801,28 @@ button.wallet-asset-action-pending:disabled {
 	background: var(--interactive-bg);
 }
 
-.migration-outcome-row:disabled {
+.migration-outcome-select:disabled {
 	opacity: 0.55;
 	cursor: not-allowed;
+}
+
+.migration-outcome-select {
+	display: flex;
+	align-items: flex-start;
+	width: 100%;
+	padding: 0.7rem 0.8rem;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	color: inherit;
+	text-align: left;
+}
+
+.migration-outcome-actions {
+	display: flex;
+	align-items: center;
+	padding: 0.55rem;
+	border-left: 1px solid var(--control-border);
 }
 
 .migration-outcome-label {
