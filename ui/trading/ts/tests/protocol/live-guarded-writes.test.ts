@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { createPublicClient, createWalletClient, custom, decodeFunctionData, encodeAbiParameters, type Address, type Hex } from '@zoltar/shared/ethereum'
+import { createPublicClient, createWalletClient, custom, decodeFunctionData, encodeAbiParameters, type Address, type Hex } from '@zoltar/shared/evm/ethereum'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'

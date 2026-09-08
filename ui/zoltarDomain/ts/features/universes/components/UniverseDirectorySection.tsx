@@ -13,7 +13,7 @@ import { UniverseLink } from './UniverseLink.js'
 import { formatUniverseLabel } from '../lib/universe.js'
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
-import type { Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/evm/ethereum'
 import { getChildDeploymentAvailabilityReason } from './ChildUniverseDeploymentSection.js'
 
 type UniverseDirectorySectionProps = {

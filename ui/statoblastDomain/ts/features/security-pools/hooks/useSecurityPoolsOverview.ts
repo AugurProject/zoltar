@@ -1,6 +1,6 @@
 import { useSignal } from '@preact/signals'
 import { useRef } from 'preact/hooks'
-import type { Address, Hash } from '@zoltar/shared/ethereum'
+import type { Address, Hash } from '@zoltar/shared/evm/ethereum'
 import {
 	loadCoordinatorInitialReportFundingRequirement,
 	loadLiquidationApproval as loadProtocolLiquidationApproval,

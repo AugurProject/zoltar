@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { getAddress, zeroAddress } from '@zoltar/shared/ethereum'
+import { getAddress, zeroAddress } from '@zoltar/shared/evm/ethereum'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { renderSelectedReportActionSection } from '@zoltar/ui-zoltar-domain/features/open-oracle/components/OpenOracleReportContent.js'

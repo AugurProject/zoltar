@@ -3,59 +3,59 @@
 	"version": "1.0.0",
 	"type": "module",
 	"exports": {
-		"./addressDerivation": {
-			"types": "./ts/addressDerivation.ts",
-			"default": "./js/addressDerivation.js"
+		"./evm/addressDerivation": {
+			"types": "./ts/evm/addressDerivation.ts",
+			"default": "./js/evm/addressDerivation.js"
 		},
-		"./bigInt": {
-			"types": "./ts/bigInt.ts",
-			"default": "./js/bigInt.js"
+		"./serialization/bigInt": {
+			"types": "./ts/serialization/bigInt.ts",
+			"default": "./js/serialization/bigInt.js"
 		},
 		"./constants": {
 			"types": "./ts/constants.ts",
 			"default": "./js/constants.js"
 		},
-		"./escalationMath": {
-			"types": "./ts/escalationMath.ts",
-			"default": "./js/escalationMath.js"
+		"./oracle/escalationMath": {
+			"types": "./ts/oracle/escalationMath.ts",
+			"default": "./js/oracle/escalationMath.js"
 		},
-		"./deploymentAddresses": {
-			"types": "./ts/deploymentAddresses.ts",
-			"default": "./js/deploymentAddresses.js"
+		"./deployment/deploymentAddresses": {
+			"types": "./ts/deployment/deploymentAddresses.ts",
+			"default": "./js/deployment/deploymentAddresses.js"
 		},
-		"./ethereum": {
-			"types": "./ts/ethereum.ts",
-			"bun": "./ts/ethereum.ts",
-			"default": "./js/ethereum.js"
+		"./evm/ethereum": {
+			"types": "./ts/evm/ethereum.ts",
+			"bun": "./ts/evm/ethereum.ts",
+			"default": "./js/evm/ethereum.js"
 		},
-		"./protocolConfig": {
-			"types": "./ts/protocolConfig.ts",
-			"default": "./js/protocolConfig.js"
+		"./deployment/protocolConfig": {
+			"types": "./ts/deployment/protocolConfig.ts",
+			"default": "./js/deployment/protocolConfig.js"
 		},
-		"./sepoliaRepAllocations": {
-			"types": "./ts/sepoliaRepAllocations.ts",
-			"default": "./js/sepoliaRepAllocations.js"
+		"./deployment/sepoliaRepAllocations": {
+			"types": "./ts/deployment/sepoliaRepAllocations.ts",
+			"default": "./js/deployment/sepoliaRepAllocations.js"
 		},
-		"./oracleInitialReport": {
-			"types": "./ts/oracleInitialReport.ts",
-			"default": "./js/oracleInitialReport.js"
+		"./oracle/oracleInitialReport": {
+			"types": "./ts/oracle/oracleInitialReport.ts",
+			"default": "./js/oracle/oracleInitialReport.js"
 		},
-		"./openOracle": {
-			"types": "./ts/openOracle.ts",
-			"default": "./js/openOracle.js"
+		"./oracle/openOracle": {
+			"types": "./ts/oracle/openOracle.ts",
+			"default": "./js/oracle/openOracle.js"
 		},
-		"./liquidation": {
-			"types": "./ts/liquidation.ts",
-			"default": "./js/liquidation.js"
+		"./statoblast/liquidation": {
+			"types": "./ts/statoblast/liquidation.ts",
+			"default": "./js/statoblast/liquidation.js"
 		},
-		"./logScan": {
+		"./evm/logScan": {
 			"types": "./ts/evm/logScan.ts",
 			"bun": "./ts/evm/logScan.ts",
 			"default": "./js/evm/logScan.js"
 		},
-		"./truthAuctionTickMath": {
-			"types": "./ts/truthAuctionTickMath.ts",
-			"default": "./js/truthAuctionTickMath.js"
+		"./statoblast/truthAuctionTickMath": {
+			"types": "./ts/statoblast/truthAuctionTickMath.ts",
+			"default": "./js/statoblast/truthAuctionTickMath.js"
 		},
 		"./trading": {
 			"types": "./ts/trading/index.ts",
@@ -73,11 +73,11 @@
 			"types": "./ts/trading/transactions.ts",
 			"default": "./js/trading/transactions.js"
 		},
-		"./sortStringArrayByKeccak": {
-			"types": "./ts/sortStringArrayByKeccak.ts",
-			"default": "./js/sortStringArrayByKeccak.js"
+		"./serialization/sortStringArrayByKeccak": {
+			"types": "./ts/serialization/sortStringArrayByKeccak.ts",
+			"default": "./js/serialization/sortStringArrayByKeccak.js"
 		},
-		"./scalarOutcome": {
+		"./statoblast/scalarOutcome": {
 			"types": "./ts/statoblast/scalarOutcome.ts",
 			"bun": "./ts/statoblast/scalarOutcome.ts",
 			"default": "./js/statoblast/scalarOutcome.js"

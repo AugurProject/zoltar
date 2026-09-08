@@ -1,5 +1,5 @@
 import { beforeEach, describe, test } from 'bun:test'
-import { decodeEventLog } from '@zoltar/shared/ethereum'
+import { decodeEventLog } from '@zoltar/shared/evm/ethereum'
 import { createCarryProof, SparseNullifierTree } from './carryProofHelpers'
 import { useStatoblastEscalationMigrationFixture, type StatoblastEscalationMigrationFixture } from './statoblast/fixture'
 import { getTotalRepBackingUnits, getTotalPoolHeldAttoRep, redeemRepFromVault } from '../testSupport/simulator/utils/contracts/securityPool'

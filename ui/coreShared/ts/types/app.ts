@@ -1,4 +1,4 @@
-import type { Address, Hash } from '@zoltar/shared/ethereum'
+import type { Address, Hash } from '@zoltar/shared/evm/ethereum'
 import type { GlobalTransactionPresentation, TransactionIntent } from './components.js'
 import type { TransactionRequestPreview } from '../lib/chainBackend.js'
 

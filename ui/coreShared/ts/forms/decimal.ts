@@ -1,4 +1,4 @@
-import { parseUnits } from '@zoltar/shared/ethereum'
+import { parseUnits } from '@zoltar/shared/evm/ethereum'
 import * as commonCopy from '../copy/common.js'
 import { normalizeNumericInput } from '../lib/numericInput.js'
 

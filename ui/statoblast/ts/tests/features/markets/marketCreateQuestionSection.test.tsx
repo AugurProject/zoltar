@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { act } from 'preact/test-utils'
-import { zeroAddress } from '@zoltar/shared/ethereum'
+import { zeroAddress } from '@zoltar/shared/evm/ethereum'
 import { MarketCreateQuestionSection } from '@zoltar/ui-statoblast-domain/features/markets/components/MarketCreateQuestionSection.js'
 import { ChainTimestampContext } from '@zoltar/ui-core-shared/lib/chainTimestamp.js'
 import { createMarketParameters } from '@zoltar/ui-statoblast-domain/features/markets/lib/marketCreation.js'

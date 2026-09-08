@@ -1,4 +1,4 @@
-import type { Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/evm/ethereum'
 import type { createLatestRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { useEffect, useState } from 'preact/hooks'
 import type { DeploymentConfiguration } from '../../protocol/config.js'

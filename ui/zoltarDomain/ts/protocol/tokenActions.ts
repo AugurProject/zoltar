@@ -1,4 +1,4 @@
-import { type Address } from '@zoltar/shared/ethereum'
+import { type Address } from '@zoltar/shared/evm/ethereum'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import type { WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { writeContractAndWait } from './core.js'

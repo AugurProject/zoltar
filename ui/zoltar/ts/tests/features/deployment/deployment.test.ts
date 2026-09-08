@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { zeroAddress } from '@zoltar/shared/ethereum'
+import { zeroAddress } from '@zoltar/shared/evm/ethereum'
 import { findNextDeployableStep, getDeploymentSections, getDeploymentStepAvailability, getDeployNextMissingAvailability, getPrerequisiteLabel } from '@zoltar/ui-zoltar-domain/features/deployment/lib/deployment.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/lib/clients.js'
 import type { InjectedEthereum } from '@zoltar/ui-core-shared/injectedEthereum.js'
@@ -15,7 +15,7 @@ import { ensureProxyDeployerDeployed, setupTestAccounts } from '../../../../../.
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/lib/networkProfile.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
-import { SEPOLIA_REP_ALLOCATIONS, SEPOLIA_REP_TOTAL_THEORETICAL_SUPPLY } from '@zoltar/shared/sepoliaRepAllocations'
+import { SEPOLIA_REP_ALLOCATIONS, SEPOLIA_REP_TOTAL_THEORETICAL_SUPPLY } from '@zoltar/shared/deployment/sepoliaRepAllocations'
 import type { WriteClient as UiWriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { GenesisReputationToken_GenesisReputationToken, Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
 

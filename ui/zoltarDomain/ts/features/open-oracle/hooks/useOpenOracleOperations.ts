@@ -1,5 +1,5 @@
 import { useSignal } from '@preact/signals'
-import { zeroAddress, type Address, type Hash } from '@zoltar/shared/ethereum'
+import { zeroAddress, type Address, type Hash } from '@zoltar/shared/evm/ethereum'
 import { useEffect, useRef } from 'preact/hooks'
 import { useFormState } from '@zoltar/ui-core-shared/hooks/useFormState.js'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'

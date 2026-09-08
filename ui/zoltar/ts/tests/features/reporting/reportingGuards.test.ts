@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { zeroAddress } from '@zoltar/shared/ethereum'
+import { zeroAddress } from '@zoltar/shared/evm/ethereum'
 import { getReportingReportGuardMessage, getReportingWithdrawGuardMessage } from '@zoltar/ui-zoltar-domain/features/reporting/lib/reportingGuards.js'
 
 describe('reporting guards', () => {

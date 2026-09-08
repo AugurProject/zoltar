@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { decodeFunctionData, getAddress, zeroAddress, type Address, type Hex } from '@zoltar/shared/ethereum'
+import { decodeFunctionData, getAddress, zeroAddress, type Address, type Hex } from '@zoltar/shared/evm/ethereum'
 import { depositRepToVaultToSecurityPool } from '@zoltar/ui-statoblast-domain/protocol/securityVault.js'
 import { finalizeSecurityPoolTruthAuction } from '@zoltar/ui-statoblast-domain/protocol/truthAuctionActions.js'
 import { migrateSharesFromUniverse } from '@zoltar/ui-statoblast-domain/protocol/trading.js'

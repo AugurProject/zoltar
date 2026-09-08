@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'preact/hooks'
 import { useErc20AllowanceLoader, useErc20BalanceLoader } from '@zoltar/ui-core-shared/hooks/useErc20Loader.js'
 import { useFormState } from '@zoltar/ui-core-shared/hooks/useFormState.js'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
-import type { Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/evm/ethereum'
 import { addOpenOracleBountyBuffer } from '@zoltar/ui-zoltar-domain/features/open-oracle/lib/openOracle.js'
 import { approveErc20 } from '@zoltar/ui-zoltar-domain/protocol/tokenActions.js'
 import {

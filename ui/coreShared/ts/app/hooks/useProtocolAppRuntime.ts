@@ -1,4 +1,4 @@
-import type { Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/evm/ethereum'
 import { useRef, useState } from 'preact/hooks'
 import { shouldFollowWalletNetwork } from '../../lib/activeEnvironment.js'
 import { createSupportedNetworkChangeCoordinator } from '../lib/supportedNetworkChange.js'

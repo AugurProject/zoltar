@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'preact/hooks'
-import type { Address, PublicClient, WalletClient } from '@zoltar/shared/ethereum'
+import type { Address, PublicClient, WalletClient } from '@zoltar/shared/evm/ethereum'
 import { formatUnits, parseUnitsOrUndefined } from '../lib/format.js'
 import { ForkMigrationTargets } from './ForkMigrationTargets.js'
 import type { DeploymentConfiguration } from '../protocol/config.js'
 import { loadForkMigrationContext, type ForkMigrationContext, type ForkTarget } from '../protocol/forks.js'
-import { approveRouter, createTradingPublicClient, publicErrorMessage, settlementAvailability, simulateSettlement, submitFreshSettlement, type LiveBalances, type LiveMarket, type SettlementOperation, type ShareOutcome } from '../protocol/live.js'
+import { createTradingPublicClient, publicErrorMessage, settlementAvailability, simulateSettlement, submitFreshSettlement, type LiveBalances, type LiveMarket, type SettlementOperation, type ShareOutcome } from '../protocol/live.js'
 import * as workflowCopy from '../copy/workflows.js'
 import * as settlementCopy from '../copy/settlement.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
@@ -13,11 +13,9 @@ import { parseSlippageBps, parseTransactionValidityMinutes, type GuardedWalletWr
 import type { BalanceState } from './live/liveTradingTypes.js'
 import { BalanceLoadError, DEFAULT_SLIPPAGE_PERCENT, DEFAULT_TRANSACTION_VALIDITY_MINUTES, ExecutionProtectionFields, formatTimestamp, TradingTransactionHash } from './LiveTradingTransactionUi.js'
 import { forkMigrationBatchBlocker, forkMigrationBatchWarning, migrationSimulationSummary, settlementBalanceLabel, settlementInputBlocker } from './LiveSettlementModel.js'
-import { capabilitiesForTradingVersion } from '@zoltar/ui-trading-domain'
 import { useSettlementWorkflowController } from './live/useSettlementWorkflowController.js'
 
 export type LiveSettlementServices = Readonly<{
-	approveRouter: typeof approveRouter
 	createPublicClient(configuration: DeploymentConfiguration): PublicClient
 	loadForkContext: typeof loadForkMigrationContext
 	simulate: typeof simulateSettlement
@@ -25,7 +23,6 @@ export type LiveSettlementServices = Readonly<{
 }>
 
 export const liveSettlementServices: LiveSettlementServices = {
-	approveRouter,
 	createPublicClient: createTradingPublicClient,
 	loadForkContext: loadForkMigrationContext,
 	simulate: simulateSettlement,
@@ -49,9 +46,7 @@ export function LiveSettlementControls({
 	walletClient,
 	externallyLocked,
 	refresh,
-	refreshBalancesAfterApproval,
 	onKnownReceipt,
-	walletContextIsCurrent,
 	executeWithCurrentWalletContext,
 	createGuardedWalletWrite,
 	retryBalances,
@@ -67,9 +62,7 @@ export function LiveSettlementControls({
 	walletClient: WalletClient | undefined
 	externallyLocked: boolean
 	refresh(): Promise<void>
-	refreshBalancesAfterApproval(label: string, market: LiveMarket, account: Address): Promise<'ready' | 'refresh-error' | 'context-changed'>
 	onKnownReceipt(): void
-	walletContextIsCurrent(account: Address): boolean
 	executeWithCurrentWalletContext<T>(account: Address, networkFailure: string, accountFailure: string, action: () => Promise<T>): Promise<T>
 	createGuardedWalletWrite(account: Address, networkFailure: string, accountFailure: string): GuardedWalletWrite
 	retryBalances(): Promise<void>
@@ -113,7 +106,6 @@ export function LiveSettlementControls({
 	if (operation === 'redeem-complete-set' && slippageBps === undefined) protectionInputBlocker = 'Enter a slippage tolerance from 0% to 5%'
 	else if (operation === 'redeem-complete-set' && validityMinutes === undefined) protectionInputBlocker = 'Enter a transaction validity from 1 to 1440 whole minutes'
 	if (protectionInputBlocker !== undefined) inputBlocker = protectionInputBlocker
-	const approvalRequired = operation === 'redeem-complete-set' && !capabilitiesForTradingVersion(configuration.version).receiveBasedShareOperations && balances?.approved === false
 	const contextKey = `${account ?? ''}\u0000${configuration.chainId.toString()}\u0000${market.pool}\u0000${market.systemState}\u0000${market.awaitingForkContinuation ? '1' : '0'}\u0000${market.universeForkTime.toString()}\u0000${market.questionOutcome.toString()}\u0000${operation}\u0000${amount}\u0000${slippage}\u0000${sourceOutcome}\u0000${transactionValidityMinutes}\u0000${targetOutcomeKey}`
 	const workflowController = useSettlementWorkflowController({
 		configuration,
@@ -127,24 +119,20 @@ export function LiveSettlementControls({
 		sourceOutcome,
 		targetOutcomeIndexes,
 		inputBlocker,
-		approvalRequired,
 		contextKey,
 		refresh,
-		refreshBalancesAfterApproval,
 		onKnownReceipt,
-		walletContextIsCurrent,
 		executeWithCurrentWalletContext,
 		createGuardedWalletWrite,
 		onWorkflowLockChange,
 		onMigrationConfirmed: () => setForkContextNonce(current => current + 1),
 		services,
 	})
-	const { state, transactionHash, error, receiptWarning, actionableQuote, workflowLocked, invalidateInputs: invalidateSettlementInputs, submitCurrent, approveCompleteSetRouter } = workflowController
+	const { state, transactionHash, error, receiptWarning, actionableQuote, workflowLocked, invalidateInputs: invalidateSettlementInputs, submitCurrent } = workflowController
 	const simulateCurrent = () => workflowController.simulateCurrent({ validityMinutes, slippageBps })
 	const suppressRedundantProtectionStatus = protectionInputBlocker !== undefined && balanceState === 'ready' && state !== 'error'
 	let settlementStatus = 'Connect a wallet to load balances for settlement'
 	if (state === 'confirmed') settlementStatus = 'Settlement transaction confirmed on-chain'
-	else if (state === 'approval-confirmed') settlementStatus = 'Share-token approval confirmed on-chain'
 	else if (balanceState === 'loading') settlementStatus = 'Loading wallet balances for settlement…'
 	else if (balanceState === 'ready') {
 		if (account === undefined || walletClient === undefined) settlementStatus = 'Connect a wallet to load balances for settlement'
@@ -154,7 +142,6 @@ export function LiveSettlementControls({
 		else if (state === 'submitting') settlementStatus = 'Settlement transaction pending in wallet…'
 		else if (state === 'pending') settlementStatus = error ?? 'Settlement transaction pending on-chain…'
 		else if (state === 'error') settlementStatus = error ?? 'Settlement workflow needs attention'
-		else if (approvalRequired) settlementStatus = 'Approve the router to pull the explicit complete set before simulation'
 		else if (inputBlocker !== undefined) settlementStatus = inputBlocker
 		else if (state === 'simulating') settlementStatus = 'Simulating the authoritative settlement call…'
 		else if (state === 'ready' && actionableQuote !== undefined) {
@@ -323,24 +310,12 @@ export function LiveSettlementControls({
 			<ErrorNotice message={receiptWarning} />
 			{balanceState === 'error' ? <BalanceLoadError message={balanceError ?? settlementCopy.walletBalancesUnavailable} retry={retryBalances} disabled={workflowLocked} /> : null}
 			<ErrorNotice message={state === 'error' ? error : undefined} />
-			{!(state === 'error' && error !== undefined) && (balanceState !== 'error' || state === 'confirmed' || state === 'approval-confirmed') && receiptWarning === undefined && !suppressRedundantProtectionStatus ? (
+			{!(state === 'error' && error !== undefined) && (balanceState !== 'error' || state === 'confirmed') && receiptWarning === undefined && !suppressRedundantProtectionStatus ? (
 				<p class={state === 'error' ? 'error' : undefined} role={state === 'error' ? 'alert' : 'status'} aria-live={state === 'error' ? 'assertive' : 'polite'}>
 					{settlementStatus}
 				</p>
 			) : null}
-			{approvalRequired ? (
-				<>
-					<p>{workflowCopy.erc1155ApprovalScopeWarning}</p>
-					<TransactionActionButton
-						disabled={workflowLocked || balanceState !== 'ready' || walletClient === undefined || account === undefined}
-						idleLabel={workflowCopy.approveSettlement}
-						pending={state === 'preparing' || state === 'approval' || state === 'approval-pending'}
-						pendingLabel={workflowCopy.approvingRouter}
-						onClick={() => void approveCompleteSetRouter()}
-					/>
-				</>
-			) : null}
-			{!approvalRequired && actionableQuote === undefined ? (
+			{actionableQuote === undefined ? (
 				<TransactionActionButton
 					disabled={inputBlocker !== undefined || balanceState !== 'ready' || walletClient === undefined || account === undefined || workflowLocked}
 					idleLabel={workflowCopy.simulateSettlement}
@@ -349,7 +324,7 @@ export function LiveSettlementControls({
 					onClick={() => void simulateCurrent()}
 				/>
 			) : null}
-			{!approvalRequired && actionableQuote !== undefined ? (
+			{actionableQuote !== undefined ? (
 				<TransactionActionButton
 					disabled={workflowLocked || state !== 'ready'}
 					idleLabel={actionableQuote.operation === 'migrate-shares' ? workflowCopy.migrationSubmission(actionableQuote.targetOutcomeIndexes.length) : workflowCopy.submitSettlement}

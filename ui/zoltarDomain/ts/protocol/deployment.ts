@@ -1,6 +1,6 @@
-import { encodeDeployData, getAddress, keccak256, type Address, type Hash, type Hex } from '@zoltar/shared/ethereum'
+import { encodeDeployData, getAddress, keccak256, type Address, type Hash, type Hex } from '@zoltar/shared/evm/ethereum'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
-import { createDeploymentStatusOracleAddressHelper } from '@zoltar/shared/deploymentAddresses'
+import { createDeploymentStatusOracleAddressHelper } from '@zoltar/shared/deployment/deploymentAddresses'
 import { DeploymentStatusOracle_DeploymentStatusOracle, ScalarOutcomes_ScalarOutcomes, ZoltarQuestionData_ZoltarQuestionData, statoblast_Multicall3_Multicall3, statoblast_WETH9_WETH9 } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { MULTICALL3_BYTECODE, PROXY_DEPLOYER_ADDRESS, ZERO_SALT, getZoltarContractAddresses, getZoltarInitCode, getZoltarQuestionDataByteCode } from './zoltarDeploymentHelpers.js'
 import { readWithRpcStateRetries, waitForSubmittedTransactionReceipt, type RpcStateRetryWait } from './core.js'

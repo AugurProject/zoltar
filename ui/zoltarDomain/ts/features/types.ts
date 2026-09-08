@@ -1,4 +1,4 @@
-import type { Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/evm/ethereum'
 import type { AccountState, OpenOracleCreateFormState, OpenOracleFormState, ReportingFormState, ZoltarMigrationFormState } from '../types/app.js'
 import type {
 	DeploymentStatus,

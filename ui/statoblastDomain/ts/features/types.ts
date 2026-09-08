@@ -1,4 +1,4 @@
-import type { Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/evm/ethereum'
 import type { AccountState, ForkAuctionFormState, MarketFormState, SecurityPoolFormState, SecurityVaultFormState, TradingFormState } from '../types/app.js'
 import type { ReportingFormState } from '@zoltar/ui-zoltar-domain/types/app.js'
 import type {

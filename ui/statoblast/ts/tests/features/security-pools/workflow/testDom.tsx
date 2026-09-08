@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach } from 'bun:test'
-import { zeroAddress } from '@zoltar/shared/ethereum'
+import { zeroAddress } from '@zoltar/shared/evm/ethereum'
 import { SecurityPoolWorkflowSection } from '@zoltar/ui-statoblast-domain/features/security-pools/components/SecurityPoolWorkflowSection.js'
 import type { SecurityPoolWorkflowRouteContentProps } from '@zoltar/ui-zoltar-domain/features/types.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'

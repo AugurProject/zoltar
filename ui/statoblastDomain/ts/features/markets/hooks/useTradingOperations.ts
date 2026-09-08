@@ -1,6 +1,6 @@
 import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
-import type { Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/evm/ethereum'
 import { createCompleteSetInSecurityPool, loadSecurityPoolMintCapacity, loadTradingDetails as loadTradingDetailsForPool, loadZoltarUniverseSummary, migrateSharesFromUniverse, redeemCompleteSetInSecurityPool, redeemSharesInSecurityPool } from '../../../protocol/index.js'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'

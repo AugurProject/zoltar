@@ -1,4 +1,4 @@
-import { getAddress, isAddress, type Address } from '@zoltar/shared/ethereum'
+import { getAddress, isAddress, type Address } from '@zoltar/shared/evm/ethereum'
 
 export function requireArrayValue(value: unknown, context: string): readonly unknown[] {
 	if (Array.isArray(value)) return value

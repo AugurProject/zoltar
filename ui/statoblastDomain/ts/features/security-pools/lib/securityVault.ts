@@ -1,4 +1,4 @@
-import type { Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/evm/ethereum'
 import type { OracleManagerDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { SecurityVaultDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'

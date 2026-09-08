@@ -80,7 +80,7 @@ and Sepolia-specific deterministic contract addresses.
 The Sepolia deployment flow includes WETH and genesis REP before the contracts
 that depend on them. Initial Sepolia REP holders and exact 18-decimal balances
 are defined in
-[`shared/ts/sepoliaRepAllocations.ts`](./shared/ts/sepoliaRepAllocations.ts).
+[`shared/ts/deployment/sepoliaRepAllocations.ts`](./shared/ts/deployment/sepoliaRepAllocations.ts).
 Changing that list also changes the deterministic genesis REP address and every
 dependent deployment address.
 

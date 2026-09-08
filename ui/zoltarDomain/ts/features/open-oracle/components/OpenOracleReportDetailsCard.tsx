@@ -1,5 +1,5 @@
 import type { ComponentChildren } from 'preact'
-import { zeroAddress } from '@zoltar/shared/ethereum'
+import { zeroAddress } from '@zoltar/shared/evm/ethereum'
 import { ActionLauncherCard } from '@zoltar/ui-core-shared/components/ActionLauncherCard.js'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'

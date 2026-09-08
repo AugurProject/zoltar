@@ -1,4 +1,4 @@
-import type { Hash, WalletClient } from '@zoltar/shared/ethereum'
+import type { Hash, WalletClient } from '@zoltar/shared/evm/ethereum'
 
 export const UI_SLIPPAGE_BPS = 50n
 

@@ -1,4 +1,4 @@
-import { getAddress, isAddress } from '@zoltar/shared/ethereum'
+import { getAddress, isAddress } from '@zoltar/shared/evm/ethereum'
 import { defaultCoreDeploymentRpcUrls } from './coreDeploymentDefaults.js'
 import type { CoreDeployment } from './deployment.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'

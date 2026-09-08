@@ -1,5 +1,5 @@
 import { beforeEach, describe, test } from 'bun:test'
-import type { Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/evm/ethereum'
 import { statoblast_SecurityPool_SecurityPool } from '../../types/contractArtifact'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { createCarryProof, readCarryLeafHash, SparseNullifierTree } from '../carryProofHelpers'

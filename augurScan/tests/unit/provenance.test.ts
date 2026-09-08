@@ -32,14 +32,14 @@ test('fingerprints canonical contract sources independently of generated import 
 test('changes the application hash when a shared runtime dependency changes', async () => {
 	const repositoryRoot = await mkdtemp(path.join(tmpdir(), 'augurscan-provenance-'))
 	const projectRoot = path.join(repositoryRoot, 'augurScan')
-	const sharedSource = path.join(repositoryRoot, 'shared/ts/ethereum.ts')
+	const sharedSource = path.join(repositoryRoot, 'shared/ts/evm/ethereum.ts')
 	try {
 		await mkdir(path.join(projectRoot, 'src'), { recursive: true })
 		await mkdir(path.dirname(sharedSource), { recursive: true })
 		await Promise.all([
 			writeFile(path.join(projectRoot, 'package.json'), '{}'),
 			writeFile(path.join(projectRoot, 'bun.lock'), ''),
-			writeFile(path.join(projectRoot, 'src/ethereum.ts'), "export {\n\tdecoderVersion,\n} from '../../shared/ts/ethereum.ts'\n"),
+			writeFile(path.join(projectRoot, 'src/ethereum.ts'), "export {\n\tdecoderVersion,\n} from '../../shared/ts/evm/ethereum.ts'\n"),
 			writeFile(path.join(projectRoot, 'src/operations.ts'), "export const operation = 'stable'\n"),
 			writeFile(path.join(projectRoot, 'src/projections.ts'), "export const projection = 'stable'\n"),
 			writeFile(sharedSource, "export const decoderVersion = 'one'\n"),

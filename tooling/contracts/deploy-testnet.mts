@@ -1,6 +1,6 @@
 import { appendFile } from 'node:fs/promises'
 import * as process from 'node:process'
-import { createWalletClient, defineChain, formatEther, http, keccak256, parseUnits, privateKeyToAccount, type Account, type Address, type Chain, type Hash, type Hex } from '@zoltar/shared/ethereum'
+import { createWalletClient, defineChain, formatEther, http, keccak256, parseUnits, privateKeyToAccount, type Account, type Address, type Chain, type Hash, type Hex } from '@zoltar/shared/evm/ethereum'
 import { getBootstrapDescendantAddresses } from '../../ui/zoltarDomain/ts/protocol/deploymentHelpers.ts'
 import {
 	assertStaticDeploymentArtifactRuntimeCodeHashes,

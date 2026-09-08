@@ -1,5 +1,5 @@
-import { type Address, type TransactionReceipt } from '@zoltar/shared/ethereum'
-import { sortBigIntsAscending } from '@zoltar/shared/bigInt'
+import { type Address, type TransactionReceipt } from '@zoltar/shared/evm/ethereum'
+import { sortBigIntsAscending } from '@zoltar/shared/serialization/bigInt'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_SecurityPool_SecurityPool, statoblast_tokens_ShareToken_ShareToken } from '@zoltar/ui-core-shared/contractArtifact.js'
 import type { ReadClient, ReportingOutcomeKey, TradingActionResult, TradingDetails, TradingShareBalances, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'

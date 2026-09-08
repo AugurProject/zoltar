@@ -1,4 +1,4 @@
-import { zeroAddress, type Address } from '@zoltar/shared/ethereum'
+import { zeroAddress, type Address } from '@zoltar/shared/evm/ethereum'
 import { deriveHasForkActivity } from '@zoltar/ui-statoblast-domain/features/truth-auctions/lib/forkAuction.js'
 import type { AccountState } from '@zoltar/ui-zoltar-domain/types/app.js'
 import type { ForkAuctionDetails, ListedSecurityPool, MarketDetails, OracleManagerDetails, SecurityPoolVaultSummary, SecurityVaultDetails } from '@zoltar/ui-core-shared/types/contracts.js'

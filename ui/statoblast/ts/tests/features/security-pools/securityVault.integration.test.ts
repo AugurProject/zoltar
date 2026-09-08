@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { zeroAddress, type Address } from '@zoltar/shared/ethereum'
+import { zeroAddress, type Address } from '@zoltar/shared/evm/ethereum'
 import { approveErc20 } from '@zoltar/ui-zoltar-domain/protocol/tokenActions.js'
 import { depositRepToVaultToSecurityPool } from '@zoltar/ui-statoblast-domain/protocol/securityVault.js'
 import { loadSecurityVaultDetails } from '@zoltar/ui-statoblast-domain/protocol/securityPools.js'

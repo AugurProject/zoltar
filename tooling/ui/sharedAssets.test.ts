@@ -27,11 +27,11 @@ const rootPackageJsonPath = path.join(repositoryRootPath, 'package.json')
 const sharedPackageJsonPath = path.join(repositoryRootPath, 'shared', 'package.json')
 const sharedBrowserArtifacts = sharedBrowserArtifactRelativePaths.map(relativePath => path.join(repositoryRootPath, relativePath))
 const developmentImportMapRegressionEntries: Record<string, string> = {
-	'@zoltar/shared/ethereum': '../shared/js/ethereum.js',
-	'@zoltar/shared/logScan': '../shared/js/evm/logScan.js',
-	'@zoltar/shared/scalarOutcome': '../shared/js/statoblast/scalarOutcome.js',
-	'@zoltar/shared/sepoliaRepAllocations': '../shared/js/sepoliaRepAllocations.js',
-	'@zoltar/shared/sortStringArrayByKeccak': '../shared/js/sortStringArrayByKeccak.js',
+	'@zoltar/shared/evm/ethereum': '../shared/js/evm/ethereum.js',
+	'@zoltar/shared/evm/logScan': '../shared/js/evm/logScan.js',
+	'@zoltar/shared/statoblast/scalarOutcome': '../shared/js/statoblast/scalarOutcome.js',
+	'@zoltar/shared/deployment/sepoliaRepAllocations': '../shared/js/deployment/sepoliaRepAllocations.js',
+	'@zoltar/shared/serialization/sortStringArrayByKeccak': '../shared/js/serialization/sortStringArrayByKeccak.js',
 	abitype: './vendor/abitype/exports/index.js',
 	'micro-eth-signer': './vendor/micro-eth-signer/index.js',
 	'micro-eth-signer/advanced/abi.js': './vendor/micro-eth-signer/advanced/abi.js',
@@ -343,37 +343,37 @@ test('shared helper package imports resolve to browser-served shared outputs', (
 
 	expect(protocolSource).toContain("from './helpers.js'")
 	expect(protocolSource).toContain("from './deploymentHelpers.js'")
-	expect(protocolSource).toContain("from '@zoltar/shared/bigInt'")
-	expect(sepoliaDeploymentConfigSource).toContain("from '@zoltar/shared/sepoliaRepAllocations'")
-	expect(deploymentHelpersSource).toContain("from '@zoltar/shared/deploymentAddresses'")
-	expect(deploymentHelpersSource).toContain("from '@zoltar/shared/oracleInitialReport'")
-	expect(deploymentHelpersSource).toContain("from '@zoltar/shared/protocolConfig'")
-	expect(protocolSource).toContain("from '@zoltar/shared/ethereum'")
-	expect(fs.readFileSync(uiReportingDomainPath, 'utf8')).toContain("from '@zoltar/shared/escalationMath'")
-	expect(fs.readFileSync(uiTruthAuctionBookPath, 'utf8')).toContain("from '@zoltar/shared/truthAuctionTickMath'")
+	expect(protocolSource).toContain("from '@zoltar/shared/serialization/bigInt'")
+	expect(sepoliaDeploymentConfigSource).toContain("from '@zoltar/shared/deployment/sepoliaRepAllocations'")
+	expect(deploymentHelpersSource).toContain("from '@zoltar/shared/deployment/deploymentAddresses'")
+	expect(deploymentHelpersSource).toContain("from '@zoltar/shared/oracle/oracleInitialReport'")
+	expect(deploymentHelpersSource).toContain("from '@zoltar/shared/deployment/protocolConfig'")
+	expect(protocolSource).toContain("from '@zoltar/shared/evm/ethereum'")
+	expect(fs.readFileSync(uiReportingDomainPath, 'utf8')).toContain("from '@zoltar/shared/oracle/escalationMath'")
+	expect(fs.readFileSync(uiTruthAuctionBookPath, 'utf8')).toContain("from '@zoltar/shared/statoblast/truthAuctionTickMath'")
 	expect(protocolSource).not.toContain('./shared/bigInt.js')
 	expect(simulationBootstrapSource).not.toContain('../shared/constants.js')
 	expect(deploymentHelpersSource).not.toContain('../shared/deploymentAddresses.js')
 	for (const { appId, source: uiIndexHtml } of appIndexHtmlSources) {
-		expect(uiIndexHtml).toContain('"@zoltar/shared/bigInt": "../shared/js/bigInt.js"')
+		expect(uiIndexHtml).toContain('"@zoltar/shared/serialization/bigInt": "../shared/js/serialization/bigInt.js"')
 		expect(uiIndexHtml).toContain('"@zoltar/shared/constants": "../shared/js/constants.js"')
-		expect(uiIndexHtml).toContain('"@zoltar/shared/deploymentAddresses": "../shared/js/deploymentAddresses.js"')
-		expect(uiIndexHtml).toContain('"@zoltar/shared/escalationMath": "../shared/js/escalationMath.js"')
-		expect(uiIndexHtml).toContain('"@zoltar/shared/ethereum": "../shared/js/ethereum.js"')
-		expect(uiIndexHtml).toContain('"@zoltar/shared/liquidation": "../shared/js/liquidation.js"')
-		expect(uiIndexHtml).toContain('"@zoltar/shared/logScan": "../shared/js/evm/logScan.js"')
+		expect(uiIndexHtml).toContain('"@zoltar/shared/deployment/deploymentAddresses": "../shared/js/deployment/deploymentAddresses.js"')
+		expect(uiIndexHtml).toContain('"@zoltar/shared/oracle/escalationMath": "../shared/js/oracle/escalationMath.js"')
+		expect(uiIndexHtml).toContain('"@zoltar/shared/evm/ethereum": "../shared/js/evm/ethereum.js"')
+		expect(uiIndexHtml).toContain('"@zoltar/shared/statoblast/liquidation": "../shared/js/statoblast/liquidation.js"')
+		expect(uiIndexHtml).toContain('"@zoltar/shared/evm/logScan": "../shared/js/evm/logScan.js"')
 		if (appId !== 'zoltar') {
-			expect(uiIndexHtml).toContain('"@zoltar/shared/openOracle": "../shared/js/openOracle.js"')
-			expect(uiIndexHtml).toContain('"@zoltar/shared/oracleInitialReport": "../shared/js/oracleInitialReport.js"')
+			expect(uiIndexHtml).toContain('"@zoltar/shared/oracle/openOracle": "../shared/js/oracle/openOracle.js"')
+			expect(uiIndexHtml).toContain('"@zoltar/shared/oracle/oracleInitialReport": "../shared/js/oracle/oracleInitialReport.js"')
 		} else {
-			expect(uiIndexHtml).not.toContain('"@zoltar/shared/openOracle": "../shared/js/openOracle.js"')
-			expect(uiIndexHtml).not.toContain('"@zoltar/shared/oracleInitialReport": "../shared/js/oracleInitialReport.js"')
+			expect(uiIndexHtml).not.toContain('"@zoltar/shared/oracle/openOracle": "../shared/js/oracle/openOracle.js"')
+			expect(uiIndexHtml).not.toContain('"@zoltar/shared/oracle/oracleInitialReport": "../shared/js/oracle/oracleInitialReport.js"')
 		}
-		expect(uiIndexHtml).toContain('"@zoltar/shared/protocolConfig": "../shared/js/protocolConfig.js"')
-		expect(uiIndexHtml).toContain('"@zoltar/shared/scalarOutcome": "../shared/js/statoblast/scalarOutcome.js"')
-		expect(uiIndexHtml).toContain('"@zoltar/shared/sepoliaRepAllocations": "../shared/js/sepoliaRepAllocations.js"')
-		expect(uiIndexHtml).toContain('"@zoltar/shared/sortStringArrayByKeccak": "../shared/js/sortStringArrayByKeccak.js"')
-		expect(uiIndexHtml).toContain('"@zoltar/shared/truthAuctionTickMath": "../shared/js/truthAuctionTickMath.js"')
+		expect(uiIndexHtml).toContain('"@zoltar/shared/deployment/protocolConfig": "../shared/js/deployment/protocolConfig.js"')
+		expect(uiIndexHtml).toContain('"@zoltar/shared/statoblast/scalarOutcome": "../shared/js/statoblast/scalarOutcome.js"')
+		expect(uiIndexHtml).toContain('"@zoltar/shared/deployment/sepoliaRepAllocations": "../shared/js/deployment/sepoliaRepAllocations.js"')
+		expect(uiIndexHtml).toContain('"@zoltar/shared/serialization/sortStringArrayByKeccak": "../shared/js/serialization/sortStringArrayByKeccak.js"')
+		expect(uiIndexHtml).toContain('"@zoltar/shared/statoblast/truthAuctionTickMath": "../shared/js/statoblast/truthAuctionTickMath.js"')
 		expect(uiIndexHtml).not.toContain('"viem": "./vendor/viem/index.js"')
 	}
 	expect(sharedBrowserArtifactRelativePaths).toContain('shared/js/statoblast/scalarOutcome.js')
@@ -390,6 +390,7 @@ test('shared browser import maps and required assets follow package export outpu
 	}
 	if (sharedPackageJson.exports === undefined) throw new Error('Expected shared/package.json to define exports.')
 
+	const mappedSharedArtifacts = new Set<string>()
 	for (const appId of UI_APP_IDS) {
 		const imports = readDevelopmentImportMap(appId)
 		for (const [specifier, mappedPath] of Object.entries(imports)) {
@@ -401,6 +402,7 @@ test('shared browser import maps and required assets follow package export outpu
 			}
 			const expectedMappedPath = `../shared/${packageExport.default.replace(/^\.\//, '')}`
 			expect(mappedPath, `${appId} import map entry for ${specifier}`).toBe(expectedMappedPath)
+			mappedSharedArtifacts.add(`shared/${packageExport.default.replace(/^\.\//, '')}`)
 		}
 	}
 
@@ -412,6 +414,7 @@ test('shared browser import maps and required assets follow package export outpu
 	for (const relativePath of sharedBrowserArtifactRelativePaths) {
 		expect(exportedArtifacts.has(relativePath), `${relativePath} is a current package export output`).toBe(true)
 	}
+	expect([...sharedBrowserArtifactRelativePaths].sort()).toEqual([...mappedSharedArtifacts].sort())
 })
 
 test('watch build regression scanner catches indirect bare Bun commands', () => {
@@ -433,9 +436,9 @@ test('development import map maps browser dependency subpaths', () => {
 			expect(imports[specifier], `${appId} import map entry for ${specifier}`).toBe(mappedPath)
 		}
 		if (appId !== 'zoltar') {
-			expect(imports['@zoltar/shared/openOracle']).toBe('../shared/js/openOracle.js')
+			expect(imports['@zoltar/shared/oracle/openOracle']).toBe('../shared/js/oracle/openOracle.js')
 		} else {
-			expect(imports['@zoltar/shared/openOracle']).toBeUndefined()
+			expect(imports['@zoltar/shared/oracle/openOracle']).toBeUndefined()
 		}
 	}
 	expect(rootPackageJson.scripts?.['app:watch:zoltar']).toContain('tooling/ui/watch.mts zoltar')

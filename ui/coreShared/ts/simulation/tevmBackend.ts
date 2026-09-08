@@ -1,4 +1,4 @@
-import { createPublicClient, createWalletClient, custom, publicActions, type Address } from '@zoltar/shared/ethereum'
+import { createPublicClient, createWalletClient, custom, publicActions, type Address } from '@zoltar/shared/evm/ethereum'
 import type { ChainBackend, WriteClient } from '../lib/chainBackend.js'
 import { normalizeAccount } from '../lib/chainBackend.js'
 import { createSimulationProfile } from '../lib/networkProfile.js'

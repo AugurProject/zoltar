@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { bytesToHex, encodeAbiParameters, encodeDeployData, encodeFunctionData, getAddress, hexToBytes, keccak256, type Address, type Hex } from '@zoltar/shared/ethereum'
+import { bytesToHex, encodeAbiParameters, encodeDeployData, encodeFunctionData, getAddress, hexToBytes, keccak256, type Address, type Hex } from '@zoltar/shared/evm/ethereum'
 import {
 	getOpenOracleGameTuple,
 	getOpenOracleHelperTuple,
@@ -11,7 +11,7 @@ import {
 	OPEN_ORACLE_FLAG_STORE_SETTLEMENT_ELIGIBILITY,
 	OPEN_ORACLE_FLAG_TIME_TYPE,
 	OPEN_ORACLE_FLAG_TRACK_DISPUTES,
-} from '@zoltar/shared/openOracle'
+} from '@zoltar/shared/oracle/openOracle'
 import assert from '../testSupport/simulator/utils/assert'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'

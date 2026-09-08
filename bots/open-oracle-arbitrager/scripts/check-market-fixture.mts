@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { Window } from 'happy-dom'
-import { calculateOracleMinimumWethReportAttoEth, DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS } from '@zoltar/shared/oracleInitialReport'
+import { calculateOracleMinimumWethReportAttoEth, DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS } from '@zoltar/shared/oracle/oracleInitialReport'
 import { evaluateBuyRep, evaluateSellRep } from '#core/strategy'
 import { bigintToSafeNumber } from '#ethereum'
 

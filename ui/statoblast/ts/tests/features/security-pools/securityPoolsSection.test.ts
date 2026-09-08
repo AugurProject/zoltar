@@ -5,7 +5,7 @@ import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/querie
 import { h } from 'preact'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
-import { getAddress, zeroAddress, zeroHash, type Address } from '@zoltar/shared/ethereum'
+import { getAddress, zeroAddress, zeroHash, type Address } from '@zoltar/shared/evm/ethereum'
 import { SecurityPoolsSection, shouldRefreshSelectedPoolDataOnViewOpen } from '@zoltar/ui-statoblast-domain/features/security-pools/components/SecurityPoolsSection.js'
 import { deriveHasForkActivity } from '@zoltar/ui-statoblast-domain/features/truth-auctions/lib/forkAuction.js'
 import type { AccountState } from '@zoltar/ui-zoltar-domain/types/app.js'

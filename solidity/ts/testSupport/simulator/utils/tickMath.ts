@@ -1,1 +1,1 @@
-export { priceToClosestTick, tickToPrice } from '@zoltar/shared/truthAuctionTickMath'
+export { priceToClosestTick, tickToPrice } from '@zoltar/shared/statoblast/truthAuctionTickMath'

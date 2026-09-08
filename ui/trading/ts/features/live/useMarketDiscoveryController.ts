@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'preact/hooks'
 import type { createLatestRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
-import type { Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/evm/ethereum'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import { marketAcceptsNewRisk, publicErrorMessage, type LiveMarket } from '../../protocol/live.js'
 import { discoveryCommitAllowed, marketSelectionAfterDiscovery, walletSummaryDiscoveryRetryStart, type WorkflowOwner } from '../liveTradingControllerHelpers.js'

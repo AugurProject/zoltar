@@ -1,8 +1,8 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { decodeFunctionData, getAddress, toHex, zeroAddress, type Address, type Hex } from '@zoltar/shared/ethereum'
-import { encodeOpenOracleStatePreimagePacked, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SUBMITTED_TOPIC, type OpenOracleStatePreimage } from '@zoltar/shared/openOracle'
+import { decodeFunctionData, getAddress, toHex, zeroAddress, type Address, type Hex } from '@zoltar/shared/evm/ethereum'
+import { encodeOpenOracleStatePreimagePacked, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SUBMITTED_TOPIC, type OpenOracleStatePreimage } from '@zoltar/shared/oracle/openOracle'
 import {
 	getOpenOracleAddress,
 	getOpenOracleDisputeSwapToken,

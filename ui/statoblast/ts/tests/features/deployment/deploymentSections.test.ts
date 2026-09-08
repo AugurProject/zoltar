@@ -1,7 +1,7 @@
 /// <reference types='bun-types' />
 
 import { describe, expect, test } from 'bun:test'
-import { zeroAddress, zeroHash } from '@zoltar/shared/ethereum'
+import { zeroAddress, zeroHash } from '@zoltar/shared/evm/ethereum'
 import { getStatoblastDeploymentSections } from '@zoltar/ui-statoblast-domain/features/deployment/deploymentSections.js'
 import type { DeploymentStatus } from '@zoltar/ui-core-shared/types/contracts.js'
 

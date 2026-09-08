@@ -1,4 +1,4 @@
-import type { Address, Hex } from '@zoltar/shared/ethereum'
+import type { Address, Hex } from '@zoltar/shared/evm/ethereum'
 import { statoblast_LiquidationApprovalRegistry_LiquidationApprovalRegistry, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '@zoltar/ui-core-shared/contractArtifact.js'
 import type { LiquidationApprovalDetails, ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { writeContractAndWait } from './core.js'

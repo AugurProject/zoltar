@@ -1,4 +1,4 @@
-import { type Address } from '@zoltar/shared/ethereum'
+import { type Address } from '@zoltar/shared/evm/ethereum'
 import { statoblast_SecurityPoolForker_SecurityPoolForker, statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '@zoltar/ui-core-shared/contractArtifact.js'
 import type { WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { writeContractAndWait } from '@zoltar/ui-zoltar-domain/protocol/core.js'

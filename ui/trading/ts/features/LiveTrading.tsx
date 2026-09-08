@@ -17,7 +17,6 @@ import { LiveLiquidityControls, liveLiquidityServices, type LiveLiquidityService
 import { LiveSettlementControls, liveSettlementServices, type LiveSettlementServices } from './LiveSettlementControls.js'
 import { DEFAULT_SLIPPAGE_PERCENT, DEFAULT_TRANSACTION_VALIDITY_MINUTES, formatTimestamp } from './LiveTradingTransactionUi.js'
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
-import { capabilitiesForTradingVersion } from '@zoltar/ui-trading-domain/capabilities.js'
 import { liveWorkflowRoutePresentation, portfolioRouteSubtitle } from './live/routePresentation.js'
 import { SecurityPoolIdentityRows } from './LiveMarketIdentity.js'
 import { liveCopy } from '../copy/live.js'
@@ -246,7 +245,7 @@ export function LiveTrading({
 	const { account, walletClient, connect, connectionMessage, refreshWalletSummaryAfterReceipt, walletContextIsCurrent, executeWithCurrentWalletContext, createGuardedWalletWrite } = wallet
 	const { balanceError, portfolioBalanceState, portfolioBalanceError, visiblePortfolioEntries, selectedBalances, selectedBalanceState, retryBalances, retryPortfolioBalances, refreshBalancesAfterApproval } = balances
 	const { visibleMarkets, selected, selectedPairInitialized, routePool, discoveryState, discoveryError, marketPage, marketListRef, marketDetailRef, nowSeconds, refresh, refreshFromControl, loadMarketPage, focusSection, selectMarket } = discovery
-	const { parsedAmount, mode, setMode, side, setSide, amount, setAmount, slippage, setSlippage, transactionValidityMinutes, setTransactionValidityMinutes, quote, state, positionHash, message, positionReceiptWarning, simulate, approve, submit } = position
+	const { parsedAmount, mode, setMode, side, setSide, amount, setAmount, slippage, setSlippage, transactionValidityMinutes, setTransactionValidityMinutes, quote, state, positionHash, message, positionReceiptWarning, simulate, submit } = position
 	const { workflowLocked, updateLiquidityWorkflowLock } = workflow
 	const previousWalletConnectRequestNonce = useRef(walletConnectRequestNonce)
 	useEffect(() => {
@@ -495,9 +494,7 @@ export function LiveTrading({
 									walletClient={walletClient}
 									externallyLocked={workflowLocked}
 									refresh={() => refresh(configuration, marketPage.start, 'liquidity')}
-									refreshBalancesAfterApproval={refreshBalancesAfterApproval}
 									onKnownReceipt={refreshWalletSummaryAfterReceipt}
-									walletContextIsCurrent={walletContextIsCurrent}
 									executeWithCurrentWalletContext={executeWithCurrentWalletContext}
 									createGuardedWalletWrite={createGuardedWalletWrite}
 									retryBalances={retryBalances}
@@ -540,7 +537,6 @@ export function LiveTrading({
 									receiptWarning={positionReceiptWarning}
 									transactionHash={positionHash}
 									externallyLocked={workflowLocked}
-									receiveBasedShareOperations={capabilitiesForTradingVersion(configuration.version).receiveBasedShareOperations}
 									nowSeconds={nowSeconds}
 									setMode={setMode}
 									setSide={setSide}
@@ -548,7 +544,6 @@ export function LiveTrading({
 									setSlippage={setSlippage}
 									setTransactionValidityMinutes={setTransactionValidityMinutes}
 									simulate={simulate}
-									approve={approve}
 									submit={submit}
 									retryBalances={retryBalances}
 								/>

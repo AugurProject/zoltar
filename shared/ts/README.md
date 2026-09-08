@@ -10,4 +10,4 @@ Reusable TypeScript is grouped by the domain that owns its meaning:
 - `serialization/` contains general deterministic value and ordering helpers.
 - `testing/` contains runtime-neutral fixtures only.
 
-Root modules are compatibility entry points for current package consumers. New code should import the owned domain path so those forwarding modules can be removed as consumers migrate.
+Package exports use these owned domain paths directly. Add new exports beside the implementation that owns them instead of introducing root-level forwarding modules.

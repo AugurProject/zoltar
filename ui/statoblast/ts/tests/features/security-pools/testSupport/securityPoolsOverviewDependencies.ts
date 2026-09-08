@@ -1,5 +1,5 @@
 import { mock } from 'bun:test'
-import { zeroAddress, zeroHash } from '@zoltar/shared/ethereum'
+import { zeroAddress, zeroHash } from '@zoltar/shared/evm/ethereum'
 import { createSecurityPoolPageFromLoadedPools, type UseSecurityPoolsOverviewDependencies } from '@zoltar/ui-statoblast-domain/features/security-pools/hooks/useSecurityPoolsOverview.js'
 import type { OracleManagerDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 

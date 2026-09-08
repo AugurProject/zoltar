@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { getAddress } from '@zoltar/shared/ethereum'
+import { getAddress } from '@zoltar/shared/evm/ethereum'
 import { bigintToSafeNumber, formatBpsMultiplier, formatCapacityOwnership, formatEthPerShare, formatOutcomeAmount, formatShareAmount, formatUnits, parseUnits, parseUnitsOrUndefined } from '../../lib/format.js'
 import { liveWorkflowRoutePresentation, portfolioRouteSubtitle } from '../../features/LiveTrading.js'
 import { liquidityOperationAvailable } from '../../features/LiveLiquidityControls.js'

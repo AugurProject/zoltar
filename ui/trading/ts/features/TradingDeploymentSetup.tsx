@@ -1,4 +1,4 @@
-import { createPublicClient, http, type Hash, type PublicClient } from '@zoltar/shared/ethereum'
+import { createPublicClient, http, type Hash, type PublicClient } from '@zoltar/shared/evm/ethereum'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import type { ChainBackend } from '@zoltar/ui-core-shared/lib/chainBackend.js'
 import { useEffect, useRef, useState } from 'preact/hooks'
@@ -55,7 +55,7 @@ const defaultServices: TradingDeploymentSetupServices = {
 	loadCoreDeployments,
 }
 
-type DeploymentStatus = Readonly<{ factory: boolean; router: boolean; receiveRouter?: boolean }>
+type DeploymentStatus = Readonly<{ factory: boolean; router: boolean }>
 
 function initialQueryValue(name: string) {
 	return new URLSearchParams(window.location.search).get(name) ?? ''
@@ -63,7 +63,7 @@ function initialQueryValue(name: string) {
 
 function deploymentProgress(status: DeploymentStatus | undefined, total = 3) {
 	if (status === undefined) return '—'
-	return `${Number(status.factory) + Number(status.router) + Number(status.receiveRouter)} / ${total.toString()}`
+	return `${Number(status.factory) + Number(status.router)} / ${total.toString()}`
 }
 
 function inspectionPresentation(state: 'blocked' | 'idle' | 'loading' | 'ready' | 'error', { busy, deploymentComplete, inputError, plan, registryError, registryLoading }: Readonly<{ busy: boolean; deploymentComplete: boolean; inputError: boolean; plan: boolean; registryError: boolean; registryLoading: boolean }>) {
@@ -223,7 +223,7 @@ export function TradingDeploymentSetup({
 		void (async () => {
 			try {
 				const input = parseDeploymentSetupInput({ chainId, feeBps, rpcUrl: effectiveRpcUrl })
-				const nextPlan = getTradingDeploymentPlan(selectedCore, input.feeBps, 2)
+				const nextPlan = getTradingDeploymentPlan(selectedCore, input.feeBps)
 				if (!active || revision !== inputRevision.current) return
 				setPlan(nextPlan)
 				const client = services.createPublicClient(input.rpcUrl)
@@ -233,7 +233,7 @@ export function TradingDeploymentSetup({
 				const securityPoolFactoryCode = await client.getCode({ address: nextPlan.core.securityPoolFactory })
 				if (securityPoolFactoryCode === undefined || securityPoolFactoryCode === '0x') {
 					if (!active || revision !== inputRevision.current) return
-					setDeploymentStatus({ factory: false, receiveRouter: false, router: false })
+					setDeploymentStatus({ factory: false, router: false })
 					setInspectedRevision(revision)
 					setInspectionState('blocked')
 					return
@@ -347,9 +347,9 @@ export function TradingDeploymentSetup({
 	const deploymentSteps =
 		plan === undefined
 			? []
-			: [plan.factory, plan.router, ...(plan.receiveRouter === undefined ? [] : [plan.receiveRouter])].map(step => {
+			: [plan.factory, plan.router].map(step => {
 					const deployed = deploymentStatus?.[step.id]
-					const isNext = inspectionState === 'ready' && nextTradingDeploymentStep(plan, deploymentStatus ?? { factory: false, router: false, receiveRouter: false })?.id === step.id && !deploymentComplete
+					const isNext = inspectionState === 'ready' && nextTradingDeploymentStep(plan, deploymentStatus ?? { factory: false, router: false })?.id === step.id && !deploymentComplete
 					return { step, presentation: contractStatusPresentation(deployed, isNext) }
 				})
 	const inspectionIsCurrent = inspectedRevision === inputRevision.current
@@ -518,7 +518,7 @@ export function TradingDeploymentSetup({
 				<div class='deployment-setup__status' role='status' aria-live='polite'>
 					<div>
 						<span>Deployment progress</span>
-						<strong>{deploymentProgress(deploymentStatus, plan?.receiveRouter === undefined ? 2 : 3)}</strong>
+						<strong>{deploymentProgress(deploymentStatus, 2)}</strong>
 					</div>
 					{inspection === undefined ? null : <Status tone={inspection.tone}>{inspection.label}</Status>}
 				</div>

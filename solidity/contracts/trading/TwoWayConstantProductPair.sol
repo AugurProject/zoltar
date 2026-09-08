@@ -7,14 +7,21 @@ import { ISecurityPoolForker } from '../statoblast/interfaces/ISecurityPoolForke
 import { IERC1155Receiver } from '../statoblast/interfaces/IERC1155Receiver.sol';
 import { Math } from '../statoblast/openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { ITradingShareToken } from './interfaces/ITradingShareToken.sol';
-import { ITwoWayConstantProductPair } from './interfaces/ITwoWayConstantProductPair.sol';
+import { TradingLiquidityToken } from './TradingLiquidityToken.sol';
 import { TwoWayConstantProductMath } from './TwoWayConstantProductMath.sol';
 
-contract TwoWayConstantProductPair is ITwoWayConstantProductPair, IERC1155Receiver {
-	string public constant name = 'Zoltar Two-Way LP';
-	string public constant symbol = 'Z2LP';
-	uint8 public constant decimals = 18;
+contract TwoWayConstantProductPair is TradingLiquidityToken, IERC1155Receiver {
+	enum TradingStatus {
+		Open,
+		QuestionEnded,
+		PoolInactive,
+		AwaitingForkContinuation,
+		UniverseForked,
+		QuestionResolved,
+		Uninitialized
+	}
 	uint256 public constant MINIMUM_LIQUIDITY = 1_000;
+	address public constant MINIMUM_LIQUIDITY_LOCK = address(1);
 
 	address public immutable factory;
 	ISecurityPool public immutable securityPool;
@@ -26,15 +33,10 @@ contract TwoWayConstantProductPair is ITwoWayConstantProductPair, IERC1155Receiv
 	uint256 public immutable noTokenId;
 	uint256 public immutable feeBps;
 
-	uint256 public totalSupply;
-	mapping(address => uint256) public balanceOf;
-	mapping(address => mapping(address => uint256)) public allowance;
 	uint256 private yesReserve;
 	uint256 private noReserve;
 	bool private entered;
 
-	event Transfer(address indexed from, address indexed to, uint256 amount);
-	event Approval(address indexed owner, address indexed spender, uint256 amount);
 	event LiquidityInitialized(address indexed provider, address indexed recipient, uint256 yesAmount, uint256 noAmount, uint256 liquidity);
 	event LiquidityAdded(address indexed provider, address indexed recipient, uint256 yesAmount, uint256 noAmount, uint256 liquidity);
 	event LiquidityRemoved(address indexed provider, address indexed recipient, uint256 yesAmount, uint256 noAmount, uint256 liquidity);
@@ -47,6 +49,11 @@ contract TwoWayConstantProductPair is ITwoWayConstantProductPair, IERC1155Receiv
 		entered = true;
 		_;
 		entered = false;
+	}
+
+	modifier beforeDeadline(uint256 deadline) {
+		require(block.timestamp <= deadline, 'Deadline expired');
+		_;
 	}
 
 	constructor(address _factory, ISecurityPool _securityPool, uint256 _feeBps, address predeploymentShareSink) {
@@ -83,28 +90,6 @@ contract TwoWayConstantProductPair is ITwoWayConstantProductPair, IERC1155Receiv
 		emit PredeploymentSharesQuarantined(invalidAmount, yesAmount, noAmount);
 	}
 
-	function approve(address spender, uint256 amount) external returns (bool) {
-		allowance[msg.sender][spender] = amount;
-		emit Approval(msg.sender, spender, amount);
-		return true;
-	}
-
-	function transfer(address recipient, uint256 amount) external returns (bool) {
-		_transfer(msg.sender, recipient, amount);
-		return true;
-	}
-
-	function transferFrom(address sender, address recipient, uint256 amount) external returns (bool) {
-		uint256 approved = allowance[sender][msg.sender];
-		if (approved != type(uint256).max) {
-			require(approved >= amount, 'LP allowance');
-			allowance[sender][msg.sender] = approved - amount;
-			emit Approval(sender, msg.sender, approved - amount);
-		}
-		_transfer(sender, recipient, amount);
-		return true;
-	}
-
 	function getReserves() external view returns (uint256, uint256) {
 		return (yesReserve, noReserve);
 	}
@@ -114,7 +99,7 @@ contract TwoWayConstantProductPair is ITwoWayConstantProductPair, IERC1155Receiv
 	}
 
 	function tradingStatus() public view returns (TradingStatus status) {
-		if (totalSupply == 0) return TradingStatus.Uninitialized;
+		if (totalSupply() == 0) return TradingStatus.Uninitialized;
 		if (securityPool.zoltar().getForkTime(universeId) != 0) return TradingStatus.UniverseForked;
 		if (securityPool.awaitingForkContinuation()) return TradingStatus.AwaitingForkContinuation;
 		if (securityPool.systemState() != SystemState.Operational) return TradingStatus.PoolInactive;
@@ -128,7 +113,7 @@ contract TwoWayConstantProductPair is ITwoWayConstantProductPair, IERC1155Receiv
 	}
 
 	function initialize(uint256 yesAmount, uint256 noAmount, uint256 minLiquidity, address recipient) external nonReentrant returns (uint256 liquidity) {
-		require(totalSupply == 0, 'Already initialized');
+		require(totalSupply() == 0, 'Already initialized');
 		_requireLifecycleOpen(false);
 		require(recipient != address(0), 'Recipient is zero');
 		require(_yesBalance() == 0 && _noBalance() == 0 && _invalidBalance() == 0, 'Nonzero initial balance');
@@ -138,7 +123,7 @@ contract TwoWayConstantProductPair is ITwoWayConstantProductPair, IERC1155Receiv
 		shareToken.safeTransferFrom(msg.sender, address(this), noTokenId, noAmount, '');
 		liquidity = scale - MINIMUM_LIQUIDITY;
 		require(liquidity >= minLiquidity, 'Minimum liquidity');
-		_mint(address(0), MINIMUM_LIQUIDITY);
+		_mint(MINIMUM_LIQUIDITY_LOCK, MINIMUM_LIQUIDITY);
 		_mint(recipient, liquidity);
 		_updateReserves();
 		emit LiquidityInitialized(msg.sender, recipient, yesAmount, noAmount, liquidity);
@@ -150,8 +135,8 @@ contract TwoWayConstantProductPair is ITwoWayConstantProductPair, IERC1155Receiv
 		_synchronize();
 		(yesUsed, noUsed) = TwoWayConstantProductMath.proportionalDeposit(yesReserve, noReserve, maxYes, maxNo);
 		require(yesUsed > 0 && noUsed > 0, 'Liquidity rounds to zero');
-		uint256 yesLiquidity = Math.mulDiv(yesUsed, totalSupply, yesReserve);
-		uint256 noLiquidity = Math.mulDiv(noUsed, totalSupply, noReserve);
+		uint256 yesLiquidity = Math.mulDiv(yesUsed, totalSupply(), yesReserve);
+		uint256 noLiquidity = Math.mulDiv(noUsed, totalSupply(), noReserve);
 		liquidity = yesLiquidity < noLiquidity ? yesLiquidity : noLiquidity;
 		require(liquidity > 0 && liquidity >= minLiquidity, 'Minimum liquidity');
 		shareToken.safeTransferFrom(msg.sender, address(this), yesTokenId, yesUsed, '');
@@ -161,12 +146,12 @@ contract TwoWayConstantProductPair is ITwoWayConstantProductPair, IERC1155Receiv
 		emit LiquidityAdded(msg.sender, recipient, yesUsed, noUsed, liquidity);
 	}
 
-	function removeLiquidity(uint256 liquidity, uint256 minYes, uint256 minNo, address recipient) external nonReentrant returns (uint256 yesOut, uint256 noOut) {
+	function removeLiquidity(uint256 liquidity, uint256 minYes, uint256 minNo, address recipient, uint256 deadline) external nonReentrant beforeDeadline(deadline) returns (uint256 yesOut, uint256 noOut) {
 		require(recipient != address(0), 'Recipient is zero');
 		require(liquidity > 0, 'Liquidity is zero');
 		_synchronize();
-		yesOut = Math.mulDiv(yesReserve, liquidity, totalSupply);
-		noOut = Math.mulDiv(noReserve, liquidity, totalSupply);
+		yesOut = Math.mulDiv(yesReserve, liquidity, totalSupply());
+		noOut = Math.mulDiv(noReserve, liquidity, totalSupply());
 		require(yesOut >= minYes && noOut >= minNo, 'Liquidity slippage');
 		require(yesOut > 0 && noOut > 0, 'Liquidity output is zero');
 		_burn(msg.sender, liquidity);
@@ -207,7 +192,7 @@ contract TwoWayConstantProductPair is ITwoWayConstantProductPair, IERC1155Receiv
 	}
 
 	function sync() external nonReentrant {
-		require(totalSupply > 0, 'Uninitialized');
+		require(totalSupply() > 0, 'Uninitialized');
 		_synchronize();
 	}
 
@@ -245,11 +230,11 @@ contract TwoWayConstantProductPair is ITwoWayConstantProductPair, IERC1155Receiv
 	function _validateReceivedShare(address operator, uint256 id) private view {
 		require(msg.sender == address(shareToken), 'Wrong share token');
 		require(id == yesTokenId || id == noTokenId, 'Unsupported share id');
-		require(totalSupply > 0 || operator == address(this), 'Uninitialized donation');
+		require(totalSupply() > 0 || operator == address(this), 'Uninitialized donation');
 	}
 
 	function _requireLifecycleOpen(bool requireInitialized) private view {
-		if (requireInitialized) require(totalSupply > 0, 'Uninitialized');
+		if (requireInitialized) require(totalSupply() > 0, 'Uninitialized');
 		require(block.timestamp < securityPool.questionData().getQuestionEndDate(questionId), 'Question ended');
 		require(securityPool.zoltar().getForkTime(universeId) == 0, 'Universe forked');
 		require(!securityPool.awaitingForkContinuation(), 'Fork continuation pending');
@@ -290,24 +275,4 @@ contract TwoWayConstantProductPair is ITwoWayConstantProductPair, IERC1155Receiv
 		return shareToken.balanceOf(address(this), invalidTokenId);
 	}
 
-	function _mint(address recipient, uint256 amount) private {
-		totalSupply += amount;
-		balanceOf[recipient] += amount;
-		emit Transfer(address(0), recipient, amount);
-	}
-
-	function _burn(address holder, uint256 amount) private {
-		require(balanceOf[holder] >= amount, 'LP balance');
-		balanceOf[holder] -= amount;
-		totalSupply -= amount;
-		emit Transfer(holder, address(0), amount);
-	}
-
-	function _transfer(address sender, address recipient, uint256 amount) private {
-		require(recipient != address(0), 'Recipient is zero');
-		require(balanceOf[sender] >= amount, 'LP balance');
-		balanceOf[sender] -= amount;
-		balanceOf[recipient] += amount;
-		emit Transfer(sender, recipient, amount);
-	}
 }

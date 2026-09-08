@@ -3,7 +3,7 @@
 import { describe, expect, mock, test } from 'bun:test'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
-import { type Address, type Hash, type Hex, type TransactionReceipt, encodeDeployData, getAddress, getCreate2Address, keccak256 } from '@zoltar/shared/ethereum'
+import { type Address, type Hash, type Hex, type TransactionReceipt, encodeDeployData, getAddress, getCreate2Address, keccak256 } from '@zoltar/shared/evm/ethereum'
 import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Allowance, loadErc20Balance } from '@zoltar/ui-zoltar-domain/protocol/index.js'
 import { getGenesisReputationTokenAddress } from '@zoltar/ui-zoltar-domain/protocol/activeProtocolAddresses.js'
 import { PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from '@zoltar/ui-zoltar-domain/protocol/deploymentHelpers.js'

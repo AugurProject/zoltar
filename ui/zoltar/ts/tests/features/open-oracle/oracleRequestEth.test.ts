@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { zeroAddress } from '@zoltar/shared/ethereum'
+import { zeroAddress } from '@zoltar/shared/evm/ethereum'
 import { getOracleRequestEthGuardMessage, resolveOracleOperationEthFunding } from '@zoltar/ui-zoltar-domain/features/open-oracle/lib/oracleRequestEth.js'
 import type { OracleManagerDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 

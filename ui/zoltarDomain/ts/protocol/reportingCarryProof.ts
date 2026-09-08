@@ -1,4 +1,4 @@
-import { concatHex, encodeAbiParameters, keccak256, parseAbiParameters, type Address, type Hex } from '@zoltar/shared/ethereum'
+import { concatHex, encodeAbiParameters, keccak256, parseAbiParameters, type Address, type Hex } from '@zoltar/shared/evm/ethereum'
 import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getReportingOutcomeValue } from './helpers.js'
 

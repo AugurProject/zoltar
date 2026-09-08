@@ -11,7 +11,7 @@ import assert from '../testSupport/simulator/utils/assert'
 import { combineUint256FromTwoWithInvalid, createQuestion, getAnswerOptionName, getOutcomeLabels, getQuestionData, getQuestionId, isMalformedAnswerOption } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { areEqualArrays } from '../testSupport/simulator/utils/array-utils'
 import { ZoltarQuestionData_ZoltarQuestionData } from '../types/contractArtifact'
-import { decodeEventLog } from '@zoltar/shared/ethereum'
+import { decodeEventLog } from '@zoltar/shared/evm/ethereum'
 import {
 	SCALAR_PARITY_ENCODING_FIXTURES,
 	SCALAR_PARITY_LABEL_FIXTURES,

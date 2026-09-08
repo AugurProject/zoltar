@@ -3,7 +3,7 @@ import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { WalletAssetControl } from '@zoltar/ui-core-shared/components/WalletAssetControl.js'
-import type { Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/evm/ethereum'
 import type { ZoltarChildUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 
 type ChildUniverseDetailsProps = {

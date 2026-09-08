@@ -1,14 +1,14 @@
-import { encodeAbiParameters, getAddress, keccak256, toHex } from '@zoltar/shared/ethereum'
+import { encodeAbiParameters, getAddress, keccak256, toHex } from '@zoltar/shared/evm/ethereum'
 import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/shared/constants'
 import { ReadClient, WriteClient, writeContractAndWait } from './clients'
 import { GENESIS_REPUTATION_TOKEN, PROXY_DEPLOYER_ADDRESS, TEST_ADDRESSES } from './constants'
 import { addressString } from './bigint'
-import { Address } from '@zoltar/shared/ethereum'
+import { Address } from '@zoltar/shared/evm/ethereum'
 import { ABIS } from '../../../abi/abis'
 import { AnvilWindowEthereum } from '../AnvilWindowEthereum'
 import { QuestionOutcome } from '../types/types'
 import { ReputationToken_ReputationToken, statoblast_WETH9_WETH9 } from '../../../types/contractArtifact'
-export { sortStringArrayByKeccak } from '@zoltar/shared/sortStringArrayByKeccak'
+export { sortStringArrayByKeccak } from '@zoltar/shared/serialization/sortStringArrayByKeccak'
 const TOTAL_REP_SUPPLY_ATTO_REP = 11_000_000n * 10n ** 18n
 const ETH_AMOUNT_TO_MINT = 10n ** 30n
 const DEFAULT_APPROVAL_AMOUNT = (1n << 256n) - 1n

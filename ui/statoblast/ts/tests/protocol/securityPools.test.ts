@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { bigintToSafeNumber, getAddress, zeroAddress, type Address } from '@zoltar/shared/ethereum'
+import { bigintToSafeNumber, getAddress, zeroAddress, type Address } from '@zoltar/shared/evm/ethereum'
 import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { isSecurityPoolVaultAdmissionClosed, loadAllSecurityPools, loadSecurityPoolChildren, loadSecurityPoolPage } from '@zoltar/ui-statoblast-domain/protocol/securityPools.js'
 import { loadSecurityPoolMintCapacity } from '@zoltar/ui-statoblast-domain/protocol/trading.js'

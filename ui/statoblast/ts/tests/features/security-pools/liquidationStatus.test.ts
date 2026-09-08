@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { zeroAddress } from '@zoltar/shared/ethereum'
+import { zeroAddress } from '@zoltar/shared/evm/ethereum'
 import { getLiquidationNoticeState } from '@zoltar/ui-statoblast-domain/features/security-pools/lib/liquidationStatus.js'
 import { createOracleManagerDetails } from './workflow/builders.js'
 

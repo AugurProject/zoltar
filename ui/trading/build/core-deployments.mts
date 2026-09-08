@@ -1,6 +1,6 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { getAddress } from '@zoltar/shared/ethereum'
+import { getAddress } from '@zoltar/shared/evm/ethereum'
 import { defaultCoreDeploymentRpcUrls } from '../ts/protocol/coreDeploymentDefaults.ts'
 
 function isRecord(value: unknown): value is Record<string, unknown> {

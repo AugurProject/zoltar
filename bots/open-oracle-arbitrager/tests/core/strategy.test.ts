@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { Address } from '#ethereum'
-import type { OpenOracleGame } from '@zoltar/shared/openOracle'
+import type { OpenOracleGame } from '@zoltar/shared/oracle/openOracle'
 import { decimalSignedEth } from '#state/operator-state'
 import {
 	calculateContribution,

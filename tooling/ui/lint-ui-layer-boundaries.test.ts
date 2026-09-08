@@ -31,7 +31,7 @@ test('rejects app and feature imports from every non-composition layer', () => {
 })
 
 test('allows dependencies within protocol and shared UI libraries', () => {
-	const findings = findUiLayerBoundaryViolations('ui/zoltar/ts/protocol/example.ts', ["import { helper } from './helpers.js'", "import { format } from '../lib/format.js'", "import { getAddress } from '@zoltar/shared/ethereum'"].join('\n'))
+	const findings = findUiLayerBoundaryViolations('ui/zoltar/ts/protocol/example.ts', ["import { helper } from './helpers.js'", "import { format } from '../lib/format.js'", "import { getAddress } from '@zoltar/shared/evm/ethereum'"].join('\n'))
 
 	expect(findings).toEqual([])
 })

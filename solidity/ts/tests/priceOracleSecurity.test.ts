@@ -1,6 +1,6 @@
 import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
 import assert from '../testSupport/simulator/utils/assert'
-import { decodeEventLog, encodeAbiParameters, encodeDeployData, encodeFunctionData, keccak256, type Address, type Hex, zeroAddress } from '@zoltar/shared/ethereum'
+import { decodeEventLog, encodeAbiParameters, encodeDeployData, encodeFunctionData, keccak256, type Address, type Hex, zeroAddress } from '@zoltar/shared/evm/ethereum'
 import {
 	getOpenOracleGameTuple,
 	getOpenOracleHelperTuple,
@@ -12,8 +12,8 @@ import {
 	OPEN_ORACLE_FLAG_TIME_TYPE,
 	OPEN_ORACLE_FLAG_TRACK_DISPUTES,
 	type OpenOracleStatePreimage,
-} from '@zoltar/shared/openOracle'
-import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS, MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, calculateOracleMinimumWethReportAttoEth } from '@zoltar/shared/oracleInitialReport'
+} from '@zoltar/shared/oracle/openOracle'
+import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS, MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, calculateOracleMinimumWethReportAttoEth } from '@zoltar/shared/oracle/oracleInitialReport'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient } from '../testSupport/simulator/utils/clients'

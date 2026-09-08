@@ -10,7 +10,7 @@ import { endpointLabel } from '#monitoring/connectivity'
 import { settledQuorumValue } from '#monitoring/read-quorum'
 import type { DurableTransactionIntent, PositionRecord } from '#state/position-store'
 import { decimalWeth } from '#state/operator-state'
-import { decodeOpenOracleStatePreimage, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, type OpenOracleStatePreimage } from '@zoltar/shared/openOracle'
+import { decodeOpenOracleStatePreimage, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, type OpenOracleStatePreimage } from '@zoltar/shared/oracle/openOracle'
 
 export function dateFromBlockTimestamp(timestamp: bigint) {
 	const milliseconds = timestamp * 1_000n

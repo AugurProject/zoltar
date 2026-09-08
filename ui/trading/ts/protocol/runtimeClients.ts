@@ -1,11 +1,10 @@
-import { createWalletClient, custom, getAddress, type Address, type PublicClient } from '@zoltar/shared/ethereum'
+import { createWalletClient, custom, getAddress, type Address, type PublicClient } from '@zoltar/shared/evm/ethereum'
 import { ReputationToken_ReputationToken, statoblast_SecurityPool_SecurityPool } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { tradingContracts } from '../generated/contractArtifact.js'
 import type { DeploymentConfiguration } from './config.js'
 import type { InjectedEthereum } from './injected.js'
 import type { LiveMarket } from './liveMarket.js'
-import { configuredFactory, validateV2AuthorizationDeployment } from './versionedAuthorization.js'
 
 const securityPoolAbi = statoblast_SecurityPool_SecurityPool.abi
 const erc20BalanceAbi = ReputationToken_ReputationToken.abi
@@ -33,16 +32,14 @@ export async function loadWalletHeaderBalances(client: PublicClient, market: Pic
 }
 
 export async function validateLiveDeployment(client: PublicClient, configuration: DeploymentConfiguration) {
-	const factoryArtifact = configuredFactory(configuration)
 	const [rpcChainId, configuredCoreFactory, configuredFee, configuredRouterFactory] = await Promise.all([
 		client.getChainId(),
-		client.readContract({ abi: factoryArtifact.abi, address: configuration.factory, functionName: 'securityPoolFactory' }),
-		client.readContract({ abi: factoryArtifact.abi, address: configuration.factory, functionName: 'feeBps' }),
+		client.readContract({ abi: tradingContracts['contracts/trading/TwoWayConstantProductFactory.sol'].TwoWayConstantProductFactory.abi, address: configuration.factory, functionName: 'securityPoolFactory' }),
+		client.readContract({ abi: tradingContracts['contracts/trading/TwoWayConstantProductFactory.sol'].TwoWayConstantProductFactory.abi, address: configuration.factory, functionName: 'feeBps' }),
 		client.readContract({ abi: router.abi, address: configuration.router, functionName: 'factory' }),
 	])
 	validateRpcChainId(rpcChainId, configuration.chainId)
 	if (getAddress(configuredCoreFactory) !== configuration.securityPoolFactory) throw new Error('Trading factory references a different SecurityPoolFactory')
 	if (configuredFee !== BigInt(configuration.feeBps)) throw new Error('Trading factory fee does not match the deterministic deployment')
 	if (getAddress(configuredRouterFactory) !== configuration.factory) throw new Error('Router references a different trading factory')
-	await validateV2AuthorizationDeployment(client, configuration)
 }

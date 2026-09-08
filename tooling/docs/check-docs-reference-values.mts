@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto'
 import ts from 'typescript'
 import { diagramGraphSpecs } from '../../docs/charts/diagramModels'
 import type { DiagramGraphNode } from '../../docs/charts/diagramTypes'
-import { getMainnetProtocolConfig } from '../../shared/ts/protocolConfig'
+import { getMainnetProtocolConfig } from '../../shared/ts/deployment/protocolConfig'
 import { htmlToDocumentationText } from './docs-html-text.mts'
 
 const normalizeHtmlSource = (source: string): string => source.replaceAll(/<\/([a-z][\w:-]*)\s+>/gi, '</$1>')

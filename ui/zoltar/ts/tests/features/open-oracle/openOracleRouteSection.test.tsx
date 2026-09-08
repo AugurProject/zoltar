@@ -5,7 +5,7 @@ import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/querie
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
 import { useState } from 'preact/hooks'
-import { zeroAddress } from '@zoltar/shared/ethereum'
+import { zeroAddress } from '@zoltar/shared/evm/ethereum'
 import { OpenOracleSection } from '@zoltar/ui-zoltar-domain/features/open-oracle/components/OpenOracleSection.js'
 import * as openOracleCopy from '@zoltar/ui-zoltar-domain/copy/openOracle.js'
 import { ChainBlockNumberContext, ChainTimestampContext } from '@zoltar/ui-core-shared/lib/chainTimestamp.js'

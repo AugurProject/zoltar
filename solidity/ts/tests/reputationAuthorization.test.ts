@@ -1,5 +1,5 @@
 import { beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
-import { encodeDeployData, getAddress, isHex, type Address, type Hex } from '@zoltar/shared/ethereum'
+import { encodeDeployData, getAddress, isHex, type Address, type Hex } from '@zoltar/shared/evm/ethereum'
 import assert from '../testSupport/simulator/utils/assert'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
@@ -7,7 +7,7 @@ import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { addressString } from '../testSupport/simulator/utils/bigint'
-import { GenesisReputationToken_GenesisReputationToken } from '../types/contractArtifact'
+import { ReputationToken_ReputationToken } from '../types/contractArtifact'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -38,13 +38,15 @@ describe('REP token authorizations', () => {
 		if (typeof accounts[1] !== 'string') throw new Error('Second Anvil signer missing')
 		other = getAddress(accounts[1])
 		const deployment = encodeDeployData({
-			abi: GenesisReputationToken_GenesisReputationToken.abi,
-			bytecode: `0x${GenesisReputationToken_GenesisReputationToken.evm.bytecode.object}`,
-			args: [[owner], [1_000n]],
+			abi: ReputationToken_ReputationToken.abi,
+			bytecode: `0x${ReputationToken_ReputationToken.evm.bytecode.object}`,
+			args: [relayer.account.address],
 		})
 		const receipt = await relayer.waitForTransactionReceipt({ hash: await relayer.sendTransaction({ data: deployment }) })
-		if (receipt.contractAddress === undefined || receipt.contractAddress === null) throw new Error('Genesis REP deployment failed')
+		if (receipt.contractAddress === undefined || receipt.contractAddress === null) throw new Error('Child REP deployment failed')
 		token = receipt.contractAddress
+		await writeContractAndWait(relayer, () => relayer.writeContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'initialize', args: [1n, 1_000n, 1n] }))
+		await writeContractAndWait(relayer, () => relayer.writeContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'mint', args: [owner, 1_000n] }))
 	})
 
 	const signTypedData = async (typedData: object, signer = owner) => {
@@ -70,7 +72,7 @@ describe('REP token authorizations', () => {
 		]
 		for (const invalidCase of invalidCases) {
 			const invalidSignature = await signTypedData({
-				domain: { chainId: 1, name: 'Reputation', version: '1', verifyingContract: token, ...invalidCase.domain },
+				domain: { chainId: 1, name: 'Augur Reputation 1', version: '1', verifyingContract: token, ...invalidCase.domain },
 				primaryType: 'Permit',
 				types: {
 					Permit: [
@@ -83,16 +85,12 @@ describe('REP token authorizations', () => {
 				},
 				message: { ...message, ...invalidCase.message },
 			})
-			await assert.rejects(
-				relayer.writeContract({ abi: GenesisReputationToken_GenesisReputationToken.abi, address: token, functionName: 'permit', args: [owner, relayer.account.address, 25n, deadline, invalidSignature.v, invalidSignature.r, invalidSignature.s] }),
-				/invalid signer|reverted/i,
-				`wrong ${invalidCase.label} must fail`,
-			)
-			assert.strictEqual(await relayer.readContract({ abi: GenesisReputationToken_GenesisReputationToken.abi, address: token, functionName: 'nonces', args: [owner] }), 0n)
+			await assert.rejects(relayer.writeContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'permit', args: [owner, relayer.account.address, 25n, deadline, invalidSignature.v, invalidSignature.r, invalidSignature.s] }), /invalid signer|reverted/i, `wrong ${invalidCase.label} must fail`)
+			assert.strictEqual(await relayer.readContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'nonces', args: [owner] }), 0n)
 		}
 		const wrongSigner = await signTypedData(
 			{
-				domain: { chainId: 1, name: 'Reputation', version: '1', verifyingContract: token },
+				domain: { chainId: 1, name: 'Augur Reputation 1', version: '1', verifyingContract: token },
 				primaryType: 'Permit',
 				types: {
 					Permit: [
@@ -107,9 +105,9 @@ describe('REP token authorizations', () => {
 			},
 			other,
 		)
-		await assert.rejects(relayer.writeContract({ abi: GenesisReputationToken_GenesisReputationToken.abi, address: token, functionName: 'permit', args: [owner, relayer.account.address, 25n, deadline, wrongSigner.v, wrongSigner.r, wrongSigner.s] }), /invalid signer|reverted/i)
+		await assert.rejects(relayer.writeContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'permit', args: [owner, relayer.account.address, 25n, deadline, wrongSigner.v, wrongSigner.r, wrongSigner.s] }), /invalid signer|reverted/i)
 		const signature = await signTypedData({
-			domain: { chainId: 1, name: 'Reputation', version: '1', verifyingContract: token },
+			domain: { chainId: 1, name: 'Augur Reputation 1', version: '1', verifyingContract: token },
 			primaryType: 'Permit',
 			types: {
 				Permit: [
@@ -122,12 +120,12 @@ describe('REP token authorizations', () => {
 			},
 			message,
 		})
-		await writeContractAndWait(relayer, () => relayer.writeContract({ abi: GenesisReputationToken_GenesisReputationToken.abi, address: token, functionName: 'permit', args: [owner, relayer.account.address, 25n, deadline, signature.v, signature.r, signature.s] }))
-		assert.strictEqual(await relayer.readContract({ abi: GenesisReputationToken_GenesisReputationToken.abi, address: token, functionName: 'allowance', args: [owner, relayer.account.address] }), 25n)
-		await assert.rejects(relayer.writeContract({ abi: GenesisReputationToken_GenesisReputationToken.abi, address: token, functionName: 'permit', args: [owner, relayer.account.address, 25n, deadline, signature.v, signature.r, signature.s] }), /invalid signer|reverted/i)
-		await writeContractAndWait(relayer, () => relayer.writeContract({ abi: GenesisReputationToken_GenesisReputationToken.abi, address: token, functionName: 'transferFrom', args: [owner, addressString(TEST_ADDRESSES[1]), 25n] }))
-		assert.strictEqual(await relayer.readContract({ abi: GenesisReputationToken_GenesisReputationToken.abi, address: token, functionName: 'balanceOf', args: [addressString(TEST_ADDRESSES[1])] }), 25n)
-		await assert.rejects(relayer.writeContract({ abi: GenesisReputationToken_GenesisReputationToken.abi, address: token, functionName: 'permit', args: [owner, relayer.account.address, 1n, 0n, signature.v, signature.r, signature.s] }), /permit expired|reverted/i)
+		await writeContractAndWait(relayer, () => relayer.writeContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'permit', args: [owner, relayer.account.address, 25n, deadline, signature.v, signature.r, signature.s] }))
+		assert.strictEqual(await relayer.readContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'allowance', args: [owner, relayer.account.address] }), 25n)
+		await assert.rejects(relayer.writeContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'permit', args: [owner, relayer.account.address, 25n, deadline, signature.v, signature.r, signature.s] }), /invalid signer|reverted/i)
+		await writeContractAndWait(relayer, () => relayer.writeContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'transferFrom', args: [owner, addressString(TEST_ADDRESSES[1]), 25n] }))
+		assert.strictEqual(await relayer.readContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'balanceOf', args: [addressString(TEST_ADDRESSES[1])] }), 25n)
+		await assert.rejects(relayer.writeContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'permit', args: [owner, relayer.account.address, 1n, 0n, signature.v, signature.r, signature.s] }), /permit expired|reverted/i)
 	})
 
 	test('ERC-3009 receive authorization binds recipient, validity, and nonce', async () => {
@@ -135,7 +133,7 @@ describe('REP token authorizations', () => {
 		const nonce = `0x${'12'.repeat(32)}` as Hex
 		const validBefore = 9_000_000_000n
 		const signature = await signTypedData({
-			domain: { chainId: 1, name: 'Reputation', version: '1', verifyingContract: token },
+			domain: { chainId: 1, name: 'Augur Reputation 1', version: '1', verifyingContract: token },
 			primaryType: 'ReceiveWithAuthorization',
 			types: {
 				ReceiveWithAuthorization: [
@@ -150,11 +148,11 @@ describe('REP token authorizations', () => {
 			message: { from: owner, to: recipient.account.address, value: '40', validAfter: '0', validBefore: validBefore.toString(), nonce },
 		})
 		const args = [owner, recipient.account.address, 40n, 0n, validBefore, nonce, signature.v, signature.r, signature.s] as const
-		await assert.rejects(relayer.writeContract({ abi: GenesisReputationToken_GenesisReputationToken.abi, address: token, functionName: 'receiveWithAuthorization', args }), /caller must be the recipient|reverted/i)
-		await writeContractAndWait(recipient, () => recipient.writeContract({ abi: GenesisReputationToken_GenesisReputationToken.abi, address: token, functionName: 'receiveWithAuthorization', args }))
-		assert.strictEqual(await recipient.readContract({ abi: GenesisReputationToken_GenesisReputationToken.abi, address: token, functionName: 'balanceOf', args: [recipient.account.address] }), 40n)
-		assert.strictEqual(await recipient.readContract({ abi: GenesisReputationToken_GenesisReputationToken.abi, address: token, functionName: 'authorizationState', args: [owner, nonce] }), true)
-		await assert.rejects(recipient.writeContract({ abi: GenesisReputationToken_GenesisReputationToken.abi, address: token, functionName: 'receiveWithAuthorization', args }), /already used|reverted/i)
+		await assert.rejects(relayer.writeContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'receiveWithAuthorization', args }), /caller must be the recipient|reverted/i)
+		await writeContractAndWait(recipient, () => recipient.writeContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'receiveWithAuthorization', args }))
+		assert.strictEqual(await recipient.readContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'balanceOf', args: [recipient.account.address] }), 40n)
+		assert.strictEqual(await recipient.readContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'authorizationState', args: [owner, nonce] }), true)
+		await assert.rejects(recipient.writeContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'receiveWithAuthorization', args }), /already used|reverted/i)
 	})
 
 	test('ERC-3009 transfer authorization supports relayers and rejects altered signed fields', async () => {
@@ -163,7 +161,7 @@ describe('REP token authorizations', () => {
 		const signTransfer = async ({ chainId = 1, from = owner, nonce, signer = owner, to = recipient.account.address, value = 7n, verifyingContract = token }: { chainId?: number; from?: Address; nonce: Hex; signer?: Address; to?: Address; value?: bigint; verifyingContract?: Address }) =>
 			await signTypedData(
 				{
-					domain: { chainId, name: 'Reputation', version: '1', verifyingContract },
+					domain: { chainId, name: 'Augur Reputation 1', version: '1', verifyingContract },
 					primaryType: 'TransferWithAuthorization',
 					types: {
 						TransferWithAuthorization: [
@@ -191,26 +189,22 @@ describe('REP token authorizations', () => {
 		for (const [index, invalidCase] of invalidCases.entries()) {
 			const nonce = `0x${(40 + index).toString(16).padStart(2, '0').repeat(32)}` as Hex
 			const signature = await signTransfer({ nonce, ...invalidCase.signed })
-			await assert.rejects(
-				relayer.writeContract({ abi: GenesisReputationToken_GenesisReputationToken.abi, address: token, functionName: 'transferWithAuthorization', args: [owner, recipient.account.address, 7n, 0n, validBefore, nonce, signature.v, signature.r, signature.s] }),
-				/invalid signer|reverted/i,
-				invalidCase.label,
-			)
-			assert.strictEqual(await relayer.readContract({ abi: GenesisReputationToken_GenesisReputationToken.abi, address: token, functionName: 'authorizationState', args: [owner, nonce] }), false, `${invalidCase.label} must not consume the nonce`)
+			await assert.rejects(relayer.writeContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'transferWithAuthorization', args: [owner, recipient.account.address, 7n, 0n, validBefore, nonce, signature.v, signature.r, signature.s] }), /invalid signer|reverted/i, invalidCase.label)
+			assert.strictEqual(await relayer.readContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'authorizationState', args: [owner, nonce] }), false, `${invalidCase.label} must not consume the nonce`)
 		}
 
 		const validNonce = `0x${'55'.repeat(32)}` as Hex
 		const validSignature = await signTransfer({ nonce: validNonce })
-		await writeContractAndWait(relayer, () => relayer.writeContract({ abi: GenesisReputationToken_GenesisReputationToken.abi, address: token, functionName: 'transferWithAuthorization', args: [owner, recipient.account.address, 7n, 0n, validBefore, validNonce, validSignature.v, validSignature.r, validSignature.s] }))
-		assert.strictEqual(await relayer.readContract({ abi: GenesisReputationToken_GenesisReputationToken.abi, address: token, functionName: 'balanceOf', args: [relayer.account.address] }), 0n, 'relayer must not receive transferred REP')
-		assert.strictEqual(await recipient.readContract({ abi: GenesisReputationToken_GenesisReputationToken.abi, address: token, functionName: 'balanceOf', args: [recipient.account.address] }), 7n)
+		await writeContractAndWait(relayer, () => relayer.writeContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'transferWithAuthorization', args: [owner, recipient.account.address, 7n, 0n, validBefore, validNonce, validSignature.v, validSignature.r, validSignature.s] }))
+		assert.strictEqual(await relayer.readContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'balanceOf', args: [relayer.account.address] }), 0n, 'relayer must not receive transferred REP')
+		assert.strictEqual(await recipient.readContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'balanceOf', args: [recipient.account.address] }), 7n)
 	})
 
 	test('ERC-3009 enforces validity windows and signed cancellation', async () => {
 		const recipient = addressString(TEST_ADDRESSES[2])
 		const signTransfer = async (nonce: Hex, validAfter: bigint, validBefore: bigint) =>
 			await signTypedData({
-				domain: { chainId: 1, name: 'Reputation', version: '1', verifyingContract: token },
+				domain: { chainId: 1, name: 'Augur Reputation 1', version: '1', verifyingContract: token },
 				primaryType: 'TransferWithAuthorization',
 				types: {
 					TransferWithAuthorization: [
@@ -226,16 +220,16 @@ describe('REP token authorizations', () => {
 			})
 		const futureNonce = `0x${'61'.repeat(32)}` as Hex
 		const future = await signTransfer(futureNonce, 9_000_000_000n, 10_000_000_000n)
-		await assert.rejects(relayer.writeContract({ abi: GenesisReputationToken_GenesisReputationToken.abi, address: token, functionName: 'transferWithAuthorization', args: [owner, recipient, 3n, 9_000_000_000n, 10_000_000_000n, futureNonce, future.v, future.r, future.s] }), /not yet valid|reverted/i)
+		await assert.rejects(relayer.writeContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'transferWithAuthorization', args: [owner, recipient, 3n, 9_000_000_000n, 10_000_000_000n, futureNonce, future.v, future.r, future.s] }), /not yet valid|reverted/i)
 
 		const expiredNonce = `0x${'62'.repeat(32)}` as Hex
 		const expired = await signTransfer(expiredNonce, 0n, 1n)
-		await assert.rejects(relayer.writeContract({ abi: GenesisReputationToken_GenesisReputationToken.abi, address: token, functionName: 'transferWithAuthorization', args: [owner, recipient, 3n, 0n, 1n, expiredNonce, expired.v, expired.r, expired.s] }), /expired|reverted/i)
+		await assert.rejects(relayer.writeContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'transferWithAuthorization', args: [owner, recipient, 3n, 0n, 1n, expiredNonce, expired.v, expired.r, expired.s] }), /expired|reverted/i)
 
 		const canceledNonce = `0x${'63'.repeat(32)}` as Hex
 		const transfer = await signTransfer(canceledNonce, 0n, 9_000_000_000n)
 		const cancellation = await signTypedData({
-			domain: { chainId: 1, name: 'Reputation', version: '1', verifyingContract: token },
+			domain: { chainId: 1, name: 'Augur Reputation 1', version: '1', verifyingContract: token },
 			primaryType: 'CancelAuthorization',
 			types: {
 				CancelAuthorization: [
@@ -245,9 +239,9 @@ describe('REP token authorizations', () => {
 			},
 			message: { authorizer: owner, nonce: canceledNonce },
 		})
-		await writeContractAndWait(relayer, () => relayer.writeContract({ abi: GenesisReputationToken_GenesisReputationToken.abi, address: token, functionName: 'cancelAuthorization', args: [owner, canceledNonce, cancellation.v, cancellation.r, cancellation.s] }))
-		assert.strictEqual(await relayer.readContract({ abi: GenesisReputationToken_GenesisReputationToken.abi, address: token, functionName: 'authorizationState', args: [owner, canceledNonce] }), true)
-		await assert.rejects(relayer.writeContract({ abi: GenesisReputationToken_GenesisReputationToken.abi, address: token, functionName: 'transferWithAuthorization', args: [owner, recipient, 3n, 0n, 9_000_000_000n, canceledNonce, transfer.v, transfer.r, transfer.s] }), /already used|reverted/i)
-		await assert.rejects(relayer.writeContract({ abi: GenesisReputationToken_GenesisReputationToken.abi, address: token, functionName: 'cancelAuthorization', args: [owner, canceledNonce, cancellation.v, cancellation.r, cancellation.s] }), /already used|reverted/i)
+		await writeContractAndWait(relayer, () => relayer.writeContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'cancelAuthorization', args: [owner, canceledNonce, cancellation.v, cancellation.r, cancellation.s] }))
+		assert.strictEqual(await relayer.readContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'authorizationState', args: [owner, canceledNonce] }), true)
+		await assert.rejects(relayer.writeContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'transferWithAuthorization', args: [owner, recipient, 3n, 0n, 9_000_000_000n, canceledNonce, transfer.v, transfer.r, transfer.s] }), /already used|reverted/i)
+		await assert.rejects(relayer.writeContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'cancelAuthorization', args: [owner, canceledNonce, cancellation.v, cancellation.r, cancellation.s] }), /already used|reverted/i)
 	})
 })

@@ -1,6 +1,6 @@
 import * as liquidationCopy from '../../../copy/liquidation.js'
-import { LIQUIDATION_BPS_DENOMINATOR, LIQUIDATION_PRICE_PRECISION, LIQUIDATION_REP_BONUS_BPS, getLiquidationVaultRepBackingToTransfer, getMaximumFundedDebtAttoEth } from '@zoltar/shared/liquidation'
-import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/protocolConfig'
+import { LIQUIDATION_BPS_DENOMINATOR, LIQUIDATION_PRICE_PRECISION, LIQUIDATION_REP_BONUS_BPS, getLiquidationVaultRepBackingToTransfer, getMaximumFundedDebtAttoEth } from '@zoltar/shared/statoblast/liquidation'
+import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/deployment/protocolConfig'
 import type { SecurityPoolVaultSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 
 const DEFAULT_MINIMUM_SECURITY_BOND_DEBT_ATTO_ETH = DEFAULT_PROTOCOL_CONFIG.minimumSecurityBondDebtAttoEth

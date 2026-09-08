@@ -1,5 +1,5 @@
 import type { Address } from '#ethereum'
-import type { OpenOracleGame } from '@zoltar/shared/openOracle'
+import type { OpenOracleGame } from '@zoltar/shared/oracle/openOracle'
 
 export const OPEN_ORACLE_PERCENTAGE_PRECISION = 10_000_000n
 

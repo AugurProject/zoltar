@@ -1,5 +1,5 @@
 import type { TransactionLog } from '#ethereum'
-import { decodeOpenOracleStatePreimage, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SETTLED_TOPIC, OPEN_ORACLE_REPORT_SUBMITTED_TOPIC, type OpenOracleStatePreimage } from '@zoltar/shared/openOracle'
+import { decodeOpenOracleStatePreimage, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SETTLED_TOPIC, OPEN_ORACLE_REPORT_SUBMITTED_TOPIC, type OpenOracleStatePreimage } from '@zoltar/shared/oracle/openOracle'
 import type { DisputeStepSnapshot } from '#state/operator-state'
 
 export type ActiveReport = {

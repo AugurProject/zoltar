@@ -1,4 +1,4 @@
-import type { Address, Hash } from '@zoltar/shared/ethereum'
+import type { Address, Hash } from '@zoltar/shared/evm/ethereum'
 import { formatRefreshErrorMessage, formatWriteErrorMessage } from '../lib/errors.js'
 import { assertActiveWallet, type ActiveWalletContext } from '../wallet/assertActiveWallet.js'
 import type { WriteOperationsParameters } from '../types/app.js'

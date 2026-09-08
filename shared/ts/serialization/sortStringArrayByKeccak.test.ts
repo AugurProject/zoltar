@@ -1,8 +1,8 @@
 /// <reference types='bun-types' />
 
 import { describe, expect, test } from 'bun:test'
-import { encodeAbiParameters, keccak256 } from '@zoltar/shared/ethereum'
-import { sortStringArrayByKeccak } from '@zoltar/shared/sortStringArrayByKeccak'
+import { encodeAbiParameters, keccak256 } from '@zoltar/shared/evm/ethereum'
+import { sortStringArrayByKeccak } from '@zoltar/shared/serialization/sortStringArrayByKeccak'
 
 void describe('sortStringArrayByKeccak', () => {
 	void test('returns strings sorted descending by keccak hash and does not mutate input', () => {

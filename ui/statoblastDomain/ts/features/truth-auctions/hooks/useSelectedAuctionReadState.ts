@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
-import type { Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/evm/ethereum'
 import { loadForkAuctionDetails, loadForkOutcomeMigrationSeedStatus, loadSecurityPoolChildren } from '../../../protocol/index.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/lib/clients.js'

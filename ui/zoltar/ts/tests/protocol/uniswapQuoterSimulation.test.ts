@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { createPublicClient, getAddress, http } from '@zoltar/shared/ethereum'
+import { createPublicClient, getAddress, http } from '@zoltar/shared/evm/ethereum'
 import { USDC_ADDRESS, quoteEthForToken, quoteExactInput, quoteRepForEth, quoteTokenForEth } from '@zoltar/ui-zoltar-domain/protocol/uniswapQuoter.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { serializeSavedSimulationStateEnvelope } from '@zoltar/ui-core-shared/simulation/savedStates.js'

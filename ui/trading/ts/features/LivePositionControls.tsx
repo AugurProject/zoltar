@@ -1,4 +1,4 @@
-import type { Hash } from '@zoltar/shared/ethereum'
+import type { Hash } from '@zoltar/shared/evm/ethereum'
 import { bigintToSafeNumber, formatEthPerShare, formatOutcomeAmount, formatShareAmount, formatUnits, parseUnitsOrUndefined } from '../lib/format.js'
 import { SecurityPoolAddressLink } from '../components/TradingAddress.js'
 import { ProbabilityBar } from '../components/ProbabilityBar.js'
@@ -28,7 +28,6 @@ export function LivePositionControls({
 	receiptWarning,
 	transactionHash,
 	externallyLocked,
-	receiveBasedShareOperations,
 	nowSeconds,
 	setMode,
 	setSide,
@@ -54,7 +53,6 @@ export function LivePositionControls({
 	receiptWarning: string | undefined
 	transactionHash: Hash | undefined
 	externallyLocked: boolean
-	receiveBasedShareOperations: boolean
 	nowSeconds: bigint
 	setMode(value: 'entry' | 'exit'): void
 	setSide(value: 'YES' | 'NO'): void
@@ -62,7 +60,6 @@ export function LivePositionControls({
 	setSlippage(value: string): void
 	setTransactionValidityMinutes(value: string): void
 	simulate(): Promise<void>
-	approve(): Promise<void>
 	submit(): Promise<void>
 	retryBalances(): Promise<void>
 }) {
@@ -134,13 +131,7 @@ export function LivePositionControls({
 				</p>
 			) : null}
 			{quote === undefined ? null : renderLiveTradeSummary(quote, side)}
-			{mode === 'exit' && !receiveBasedShareOperations && balances?.approved === false ? (
-				<>
-					<p>{workflowCopy.erc1155ApprovalScopeWarning}</p>
-					<TransactionActionButton disabled={closed || balanceState !== 'ready' || workflowLocked} idleLabel={workflowCopy.approveOutcomeTokens} pending={state === 'preparing' || state === 'approval' || state === 'approval-pending'} pendingLabel={workflowCopy.approvingRouter} onClick={approve} />
-				</>
-			) : null}
-			{!(mode === 'exit' && !receiveBasedShareOperations && balances?.approved === false) && quote === undefined ? (
+			{quote === undefined ? (
 				<TransactionActionButton
 					disabled={closed || balanceState !== 'ready' || balances === undefined || parsedInput === undefined || parsedInput === 0n || slippageBps === undefined || validityMinutes === undefined || exceedsInsurance || workflowLocked}
 					idleLabel={workflowCopy.previewTrade}
@@ -149,7 +140,7 @@ export function LivePositionControls({
 					onClick={simulate}
 				/>
 			) : null}
-			{!(mode === 'exit' && !receiveBasedShareOperations && balances?.approved === false) && quote !== undefined ? (
+			{quote !== undefined ? (
 				<TransactionActionButton disabled={workflowLocked || closed || state !== 'ready'} idleLabel={submitLabel} pending={state === 'submitting' || state === 'pending'} pendingLabel={workflowCopy.submittingTrade} onClick={submit} />
 			) : null}
 			<p role='status' aria-live='polite'>

@@ -1,4 +1,4 @@
-import type { Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/evm/ethereum'
 import type { ChainBackend } from '../../lib/chainBackend.js'
 import { MAINNET_NETWORK_PROFILE, createSimulationProfile, type NetworkProfile } from '../../lib/networkProfile.js'
 

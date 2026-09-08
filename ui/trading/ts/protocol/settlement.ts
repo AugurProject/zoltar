@@ -1,14 +1,11 @@
-import type { Address, Hash, WalletClient } from '@zoltar/shared/ethereum'
+import type { Address, Hash, WalletClient } from '@zoltar/shared/evm/ethereum'
 import { statoblast_SecurityPool_SecurityPool } from '@zoltar/ui-core-shared/contractArtifact.js'
-import { tradingContracts } from '../generated/contractArtifact.js'
-import { capabilitiesForTradingVersion } from '@zoltar/ui-trading-domain/capabilities.js'
 import type { DeploymentConfiguration } from './config.js'
 import type { LiveBalances, LiveMarket, MarketLifecycle } from './liveMarket.js'
 import { deadlineAtBlock, minimumAfterSlippage, requireQuoteBlock, requireTransactionSlippageBps, requireTransactionValidityMinutes, retainApprovedMinimum, stableSimulation, UI_SLIPPAGE_BPS, type TransactionExpiry } from './tradeQuote.js'
-import { configuredShareOperationRouter, encodeReceiveBasedRedeemRequest, shareTokenAbi } from './versionedAuthorization.js'
+import { encodeReceiveBasedRedeemRequest, shareOperationRouter, shareTokenAbi } from './authorization.js'
 
 const securityPoolAbi = statoblast_SecurityPool_SecurityPool.abi
-const router = tradingContracts['contracts/trading/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter
 
 export type SettlementOperation = 'redeem-complete-set' | 'redeem-winning-shares' | 'migrate-shares'
 export type ShareOutcome = 'INVALID' | 'YES' | 'NO'
@@ -72,24 +69,20 @@ async function simulateSettlementWithExpiryParameters(
 			result: { simulation, deadline },
 		} = await stableSimulation(client, async block => {
 			const deadline = deadlineAtBlock(expiry, block.blockTimestamp)
-			if (capabilitiesForTradingVersion(configuration.version).receiveBasedShareOperations) {
-				const invalidTokenId = market.universeId << 8n
-				const estimatedEthOut = market.shareTokenSupplyAttoShares === 0n ? 0n : (amount * market.settlementCollateralAttoEth) / market.shareTokenSupplyAttoShares
-				const minimumEth = minimumAfterSlippage(estimatedEthOut, slippageBps)
-				const data = encodeReceiveBasedRedeemRequest(market, amount, minimumEth, account, deadline)
-				const simulation = await client.simulateContract({
-					abi: shareTokenAbi,
-					address: market.shareToken,
-					functionName: 'safeBatchTransferFrom',
-					account,
-					args: [account, configuredShareOperationRouter(configuration), [invalidTokenId, invalidTokenId | 1n, invalidTokenId | 2n], [amount, amount, amount], data],
-					blockHash: block.blockHash,
-				})
-				void simulation
-				return { simulation: { result: estimatedEthOut }, deadline }
-			}
-			const simulation = await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'redeemCompleteSet', account, args: [market.pool, amount, 0n, account, deadline], blockHash: block.blockHash })
-			return { simulation, deadline }
+			const invalidTokenId = market.universeId << 8n
+			const estimatedEthOut = market.shareTokenSupplyAttoShares === 0n ? 0n : (amount * market.settlementCollateralAttoEth) / market.shareTokenSupplyAttoShares
+			const minimumEth = minimumAfterSlippage(estimatedEthOut, slippageBps)
+			const data = encodeReceiveBasedRedeemRequest(market, amount, minimumEth, account, deadline)
+			const simulation = await client.simulateContract({
+				abi: shareTokenAbi,
+				address: market.shareToken,
+				functionName: 'safeBatchTransferFrom',
+				account,
+				args: [account, shareOperationRouter(configuration), [invalidTokenId, invalidTokenId | 1n, invalidTokenId | 2n], [amount, amount, amount], data],
+				blockHash: block.blockHash,
+			})
+			void simulation
+			return { simulation: { result: estimatedEthOut }, deadline }
 		})
 		if (simulation.result <= 0n) throw new Error('Complete-set redemption would return zero ETH')
 		return { blockNumber, blockHash, operation, market, amount, deadline, slippageBps, expectedAttoEth: simulation.result, minimumAttoEth: minimumAfterSlippage(simulation.result, slippageBps) }
@@ -139,15 +132,12 @@ export async function submitFreshSettlement(client: WalletClient, configuration:
 	if (quote.operation === 'redeem-complete-set') {
 		if (refreshed.operation !== 'redeem-complete-set') throw new Error('Settlement operation changed during revalidation')
 		const minimumEth = retainApprovedMinimum(quote.minimumAttoEth, refreshed.expectedAttoEth, 'ETH output')
-		if (capabilitiesForTradingVersion(configuration.version).receiveBasedShareOperations) {
-			const invalidTokenId = quote.market.universeId << 8n
-			const data = encodeReceiveBasedRedeemRequest(quote.market, quote.amount, minimumEth, account, quote.deadline)
-			return await guardedWrite(
-				async () =>
-					await client.writeContract({ abi: shareTokenAbi, address: quote.market.shareToken, functionName: 'safeBatchTransferFrom', account, args: [account, configuredShareOperationRouter(configuration), [invalidTokenId, invalidTokenId | 1n, invalidTokenId | 2n], [quote.amount, quote.amount, quote.amount], data] }),
-			)
-		}
-		return await guardedWrite(async () => await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'redeemCompleteSet', account, args: [quote.market.pool, quote.amount, minimumEth, account, quote.deadline] }))
+		const invalidTokenId = quote.market.universeId << 8n
+		const data = encodeReceiveBasedRedeemRequest(quote.market, quote.amount, minimumEth, account, quote.deadline)
+		return await guardedWrite(
+			async () =>
+				await client.writeContract({ abi: shareTokenAbi, address: quote.market.shareToken, functionName: 'safeBatchTransferFrom', account, args: [account, shareOperationRouter(configuration), [invalidTokenId, invalidTokenId | 1n, invalidTokenId | 2n], [quote.amount, quote.amount, quote.amount], data] }),
+		)
 	}
 	if (quote.operation === 'redeem-winning-shares') return await guardedWrite(async () => await client.writeContract({ abi: securityPoolAbi, address: quote.market.pool, functionName: 'redeemShares', account, args: [] }))
 	const sourceTokenId = (quote.market.universeId << 8n) | outcomeValue(quote.sourceOutcome)

@@ -1,5 +1,5 @@
 import * as transactionCopy from '../copy/transaction.js'
-import type { Hash } from '@zoltar/shared/ethereum'
+import type { Hash } from '@zoltar/shared/evm/ethereum'
 import { getActiveNetworkProfile } from '../lib/activeEnvironment.js'
 import { buildTransactionExplorerUrl } from '../lib/networkProfile.js'
 

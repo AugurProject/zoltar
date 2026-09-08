@@ -1,4 +1,4 @@
-import type { Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/evm/ethereum'
 import { requireAddressValue, requireBigintValue, requireBooleanValue, requireTupleValue } from './decoders.js'
 
 type ForkDataView = {

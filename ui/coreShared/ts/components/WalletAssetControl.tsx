@@ -1,4 +1,4 @@
-import type { Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/evm/ethereum'
 import { useEffect, useId, useRef, useState } from 'preact/hooks'
 import * as commonCopy from '../copy/common.js'
 import { getActiveBackend } from '../lib/activeEnvironment.js'

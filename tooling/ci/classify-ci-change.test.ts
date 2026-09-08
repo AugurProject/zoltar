@@ -16,7 +16,7 @@ const routingCases: readonly (readonly [readonly string[], readonly CiScope[]])[
 	[['bots/chaos/src/run.ts'], ['chaos']],
 	[['bots/shared/src/ethereum.ts'], ['bot-shared', 'chaos', 'arbitrager', 'liquidator']],
 	[['augurScan/src/server.ts'], ['augur-scan']],
-	[['shared/ts/ethereum.ts'], ['core', 'infrastructure', 'bot-shared', 'chaos', 'arbitrager', 'liquidator', 'augur-scan', 'docs']],
+	[['shared/ts/evm/ethereum.ts'], ['core', 'infrastructure', 'bot-shared', 'chaos', 'arbitrager', 'liquidator', 'augur-scan', 'docs']],
 	[['ui/zoltar/ts/index.ts'], ['core']],
 	[['solidity/contracts/Zoltar.sol'], ['core', 'infrastructure', 'chaos', 'arbitrager', 'liquidator', 'docs']],
 	[['reth/compose.yaml'], ['infrastructure']],
@@ -43,7 +43,7 @@ test('requires PostgreSQL integration for augurScan behavior and safe full runs'
 	expect(classifyCiChange(['augurScan/migrations/002.sql']).augurScanIntegration).toBe(true)
 	expect(classifyCiChange(['augurScan/config/abis.json']).augurScanIntegration).toBe(true)
 	expect(classifyCiChange(['augurScan/config/manifests/mainnet.json']).augurScanIntegration).toBe(true)
-	expect(classifyCiChange(['shared/ts/ethereum.ts']).augurScanIntegration).toBe(true)
+	expect(classifyCiChange(['shared/ts/evm/ethereum.ts']).augurScanIntegration).toBe(true)
 	expect(classifyCiChange(['unknown/file']).augurScanIntegration).toBe(true)
 	expect(classifyCiChange([], { full: true }).augurScanIntegration).toBe(true)
 })
@@ -59,7 +59,7 @@ test('matrices are valid, deterministic JSON for empty and non-empty selections'
 })
 
 test('shared changes select every verified package consumer', () => {
-	const shared = classifyCiChange(['shared/ts/ethereum.ts'])
+	const shared = classifyCiChange(['shared/ts/evm/ethereum.ts'])
 	expect(shared.packageMatrix.map(entry => entry.package)).toEqual(['bot-shared', 'chaos', 'arbitrager', 'liquidator', 'augur-scan'])
 	expect(JSON.parse(shared.packageMatrixJson)).toEqual({ include: [...shared.packageMatrix] })
 })

@@ -1,6 +1,6 @@
 import { beforeEach, describe, test } from 'bun:test'
-import { encodeAbiParameters, encodeDeployData, keccak256, zeroAddress, type Address } from '@zoltar/shared/ethereum'
-import { getLiquidationVaultRepBackingToTransfer } from '@zoltar/shared/liquidation'
+import { encodeAbiParameters, encodeDeployData, keccak256, zeroAddress, type Address } from '@zoltar/shared/evm/ethereum'
+import { getLiquidationVaultRepBackingToTransfer } from '@zoltar/shared/statoblast/liquidation'
 import { useStatoblastForkMigrationFixture, type StatoblastForkMigrationFixture } from './fixture'
 import { createCarryProof, SparseNullifierTree } from '../carryProofHelpers'
 import { addRepToMigrationBalance, getMigrationRepBalanceAttoRep, getUniverseData, splitMigrationRep } from '../../testSupport/simulator/utils/contracts/zoltar'

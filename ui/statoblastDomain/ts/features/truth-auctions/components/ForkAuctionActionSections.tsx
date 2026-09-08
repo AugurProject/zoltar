@@ -1,5 +1,5 @@
 import type { ComponentChildren } from 'preact'
-import type { Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/evm/ethereum'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'

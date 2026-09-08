@@ -1,5 +1,5 @@
 import { createElement } from 'preact'
-import { createPublicClient, custom, getAddress } from '@zoltar/shared/ethereum'
+import { createPublicClient, custom, getAddress } from '@zoltar/shared/evm/ethereum'
 import { mountApp } from '@zoltar/ui-core-shared/app/appRoot.js'
 import { App } from './app/App.js'
 import { initializeTradingActiveEnvironment } from './app/activeEnvironment.js'
@@ -43,7 +43,7 @@ function pendingDeploymentFixture() {
 		},
 		loadCoreDeployments: async () => [qaCore],
 	}
-	const configuration = deploymentConfigurationForPlan(getTradingDeploymentPlan(qaCore, 30, 2), 'http://127.0.0.1:8545/')
+	const configuration = deploymentConfigurationForPlan(getTradingDeploymentPlan(qaCore, 30), 'http://127.0.0.1:8545/')
 	return {
 		deploymentSetupServices: services,
 		loadLiveDeployment: async () => {

@@ -1,7 +1,7 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as marketCopy from '@zoltar/ui-zoltar-domain/copy/market.js'
 import { useEffect, useState } from 'preact/hooks'
-import type { Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/evm/ethereum'
 import { ChildUniversesSection, ChildUniverseStatusBadge } from '@zoltar/ui-zoltar-domain/features/universes/components/ChildUniversesSection.js'
 import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLauncherButton.js'
 import { ChildUniverseDetails } from '@zoltar/ui-zoltar-domain/features/universes/components/ChildUniverseDetails.js'

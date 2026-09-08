@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { encodeAbiParameters, encodeEventTopics, zeroAddress, type Address } from '@zoltar/shared/ethereum'
+import { encodeAbiParameters, encodeEventTopics, zeroAddress, type Address } from '@zoltar/shared/evm/ethereum'
 import { createSecurityPool } from '@zoltar/ui-statoblast-domain/protocol/securityPools.js'
 import { createWalletWriteClient } from '@zoltar/ui-core-shared/lib/clients.js'
 import type { WriteClient as UiWriteClient } from '@zoltar/ui-core-shared/types/contracts.js'

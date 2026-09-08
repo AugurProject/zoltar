@@ -1,6 +1,6 @@
 import { beforeEach, describe, test } from 'bun:test'
 import { useStatoblastDeploymentAndOwnForkEscalationFixture, type StatoblastDeploymentAndOwnForkEscalationFixture } from './fixture'
-import type { Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/evm/ethereum'
 import type { WriteClient } from '../../testSupport/simulator/utils/clients'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_SecurityPool_SecurityPool, statoblast_tokens_ShareToken_ShareToken } from '../../types/contractArtifact'

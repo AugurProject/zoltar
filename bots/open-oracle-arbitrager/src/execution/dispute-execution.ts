@@ -1,6 +1,6 @@
 import { encodeFunctionData, type Address, type Hex, zeroAddress } from '#ethereum'
 import { STANDARD_UNISWAP_FEES } from '#core/uniswap-v4'
-import { getOpenOracleGameTuple, getOpenOracleHelperTuple, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_TIME_TYPE, type OpenOracleStatePreimage } from '@zoltar/shared/openOracle'
+import { getOpenOracleGameTuple, getOpenOracleHelperTuple, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_TIME_TYPE, type OpenOracleStatePreimage } from '@zoltar/shared/oracle/openOracle'
 import { erc20Abi, openOracleArbitrageExecutorAbi } from '#contracts/abi'
 import { type Configuration } from '#config/configuration'
 import {

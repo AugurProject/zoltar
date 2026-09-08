@@ -6,7 +6,7 @@ import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as forkAuctionCopy from '../../../copy/forkAuction.js'
-import type { Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/evm/ethereum'
 import { renderWorkflowMetricGrid } from './ForkAuctionPresentation.js'
 
 export function ForkTriggeredStage({ currentTimestamp, disabled, hasTriggeredFork, universeForkTime }: { currentTimestamp: bigint | undefined; disabled: boolean; hasTriggeredFork: boolean; universeForkTime: bigint | undefined }) {

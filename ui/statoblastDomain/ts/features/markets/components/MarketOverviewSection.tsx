@@ -1,6 +1,6 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as marketCopy from '@zoltar/ui-zoltar-domain/copy/market.js'
-import type { Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/evm/ethereum'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { ChildUniverseDeploymentSection } from '@zoltar/ui-zoltar-domain/features/universes/components/ChildUniverseDeploymentSection.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'

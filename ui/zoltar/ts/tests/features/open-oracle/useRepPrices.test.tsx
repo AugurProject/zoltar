@@ -2,8 +2,8 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
-import type { Address } from '@zoltar/shared/ethereum'
-import { createPublicClient, http } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/evm/ethereum'
+import { createPublicClient, http } from '@zoltar/shared/evm/ethereum'
 import { act } from 'preact/test-utils'
 import { render } from 'preact'
 import type { SimulationController } from '@zoltar/ui-core-shared/simulation/controller.js'

@@ -1,5 +1,5 @@
 import { normalizeNumericInput } from '@zoltar/ui-core-shared/lib/numericInput.js'
-import { bigintToSafeNumber, zeroAddress, type Address } from '@zoltar/shared/ethereum'
+import { bigintToSafeNumber, zeroAddress, type Address } from '@zoltar/shared/evm/ethereum'
 import type { OpenOracleCreateFormState } from '../../../types/app.js'
 import type { OpenOracleReportDetails, OpenOracleReportSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getWalletConnectionActiveAppChainGuardState } from '@zoltar/ui-core-shared/lib/actionGuards.js'

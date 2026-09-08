@@ -1,4 +1,4 @@
-import { zeroAddress, type Address } from '@zoltar/shared/ethereum'
+import { zeroAddress, type Address } from '@zoltar/shared/evm/ethereum'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { deriveHasForkActivity } from './forkActivity.js'
 import { Zoltar_Zoltar, statoblast_SecurityPoolForker_SecurityPoolForker, statoblast_SecurityPool_SecurityPool, statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '@zoltar/ui-core-shared/contractArtifact.js'

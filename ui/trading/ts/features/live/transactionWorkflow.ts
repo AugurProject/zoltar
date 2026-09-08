@@ -1,4 +1,4 @@
-import type { Address, Hash } from '@zoltar/shared/ethereum'
+import type { Address, Hash } from '@zoltar/shared/evm/ethereum'
 
 type TransactionOperation = 'share-approval' | 'trade' | 'settlement-approval' | 'settlement' | 'liquidity'
 

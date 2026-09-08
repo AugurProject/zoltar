@@ -1,8 +1,7 @@
-import { getAddress, type Address, type Hash } from '@zoltar/shared/ethereum'
+import { getAddress, type Address, type Hash } from '@zoltar/shared/evm/ethereum'
 import { parseUnitsOrUndefined } from '../lib/format.js'
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
 import {
-	approveRouter,
 	connectWallet,
 	createTradingPublicClient,
 	createTradingWalletClient,
@@ -25,7 +24,6 @@ export type GuardedWalletWrite = <T>(write: () => Promise<T>) => Promise<T>
 export type WorkflowOwner = 'position' | 'liquidity'
 
 export const liveTradingControllerServices: LiveTradingControllerServices = {
-	approveRouter,
 	connectWallet,
 	createTradingPublicClient,
 	createTradingWalletClient,

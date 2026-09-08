@@ -1,1 +1,1 @@
-export * from '../../shared/ts/ethereum.ts'
+export * from '../../shared/ts/evm/ethereum.ts'

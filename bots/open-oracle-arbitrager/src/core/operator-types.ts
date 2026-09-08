@@ -5,7 +5,7 @@ import type { ArbitrageQuote } from '#core/strategy'
 import type { Venue } from '#core/venue-strategy'
 import type { OpportunitySnapshot } from '#state/operator-state'
 import type { MarketConsensusEstimate, MarketConsensusObservation } from '@zoltar/bot-shared/monitoring/market-consensus'
-import type { OpenOracleStatePreimage } from '@zoltar/shared/openOracle'
+import type { OpenOracleStatePreimage } from '@zoltar/shared/oracle/openOracle'
 
 export type Pool = {
 	address: Address

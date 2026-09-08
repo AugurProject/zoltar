@@ -62,6 +62,8 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 	function depositRepOnOutcomeWithPermit(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external {
 		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
 		_validateGameForDeposit(game);
+		IEscalationGameSecurityPoolContext pool = IEscalationGameSecurityPoolContext(game.securityPool());
+		require(pool.universeId() != 0, 'Genesis REP does not support permit');
 		(uint256 depositedAttoRep, uint256 resultingCumulativeAttoRep) = game.previewDepositOnOutcome(outcome, maximumDepositAttoRep);
 		address token = game.repToken();
 		try
@@ -78,6 +80,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		_validateGameForDeposit(game);
 		(uint256 depositedAttoRep, uint256 resultingCumulativeAttoRep) = game.previewDepositOnOutcome(outcome, maximumDepositAttoRep);
 		IEscalationGameSecurityPoolContext pool = IEscalationGameSecurityPoolContext(game.securityPool());
+		require(pool.universeId() != 0, 'Genesis REP does not support authorization');
 		bytes32 operationHash = keccak256(abi.encode(this.depositRepOnOutcomeWithAuthorization.selector, owner, game.securityPool(), pool.universeId(), pool.questionId(), outcome, maximumDepositAttoRep, depositedAttoRep));
 		IERC3009Authorization(game.repToken()).receiveWithAuthorization(owner, address(this), depositedAttoRep, validAfter, validBefore, keccak256(abi.encode(nonce, operationHash, owner)), v, r, s);
 		_recordDeposit(owner, outcome, depositedAttoRep, resultingCumulativeAttoRep);

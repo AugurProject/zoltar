@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
-import type { Address, Hash, WalletClient } from '@zoltar/shared/ethereum'
+import type { Address, Hash, WalletClient } from '@zoltar/shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import { LiveTrading as ProductionLiveTrading } from '../../features/LiveTrading.js'

@@ -1,4 +1,4 @@
-import type { Address, Hash } from '@zoltar/shared/ethereum'
+import type { Address, Hash } from '@zoltar/shared/evm/ethereum'
 import { waitForSubmittedTransactionReceipt } from '@zoltar/ui-core-shared/lib/transactionReceipt.js'
 import type { createLatestRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
@@ -6,7 +6,7 @@ import { publicErrorMessage, type LiveMarket } from '../../protocol/live.js'
 import type { LiveTradingControllerServices, Quote } from './liveTradingTypes.js'
 import type { useTransactionWorkflow } from './useTransactionWorkflow.js'
 import type { TransactionContext } from './transactionWorkflow.js'
-import { approvalFailureTransition, broadcastUncertainMessage, failedSubmissionTransition, parseSlippageBps, parseTransactionValidityMinutes, type GuardedWalletWrite, type WorkflowOwner } from '../liveTradingControllerHelpers.js'
+import { broadcastUncertainMessage, failedSubmissionTransition, parseSlippageBps, parseTransactionValidityMinutes, type GuardedWalletWrite, type WorkflowOwner } from '../liveTradingControllerHelpers.js'
 
 type RequestGuard = ReturnType<typeof createLatestRequestGuard>
 type TransactionWorkflow = ReturnType<typeof useTransactionWorkflow>
@@ -21,12 +21,10 @@ export function createPositionTransactionController({
 	workflow,
 	services,
 	simulationRequests,
-	balanceRequests,
 	nextTransactionContext,
 	createGuardedWalletWrite,
 	executeWithCurrentWalletContext,
 	refreshWalletSummaryAfterReceipt,
-	refreshBalancesAfterApproval,
 	refresh,
 	marketPageStart,
 }: {
@@ -38,12 +36,10 @@ export function createPositionTransactionController({
 	workflow: TransactionWorkflow
 	services: LiveTradingControllerServices
 	simulationRequests: RequestGuard
-	balanceRequests: RequestGuard
 	nextTransactionContext(expectedAccount: Address, market: LiveMarket, chainId: number): TransactionContext
 	createGuardedWalletWrite(expectedAccount: Address, networkFailure: string, accountFailure: string): GuardedWalletWrite
 	executeWithCurrentWalletContext<T>(expectedAccount: Address, networkFailure: string, accountFailure: string, action: () => Promise<T>): Promise<T>
 	refreshWalletSummaryAfterReceipt(): void
-	refreshBalancesAfterApproval(label: string, expectedMarket: LiveMarket, expectedAccount: Address, request?: ReturnType<RequestGuard['begin']>): Promise<'ready' | 'refresh-error' | 'context-changed'>
 	refresh: Refresh
 	marketPageStart: bigint
 }) {
@@ -69,61 +65,6 @@ export function createPositionTransactionController({
 			if (!simulationRequests.isCurrent(request)) return
 			setQuote(undefined)
 			dispatchWorkflow({ type: 'failed', context, operation: 'trade', message: publicErrorMessage(error, 'Router simulation failed') })
-		}
-	}
-
-	async function approve() {
-		if (configuration === undefined || selected === undefined || account === undefined || walletClient === undefined) return
-		if (positionWorkflowLockedRef.current || liquidityWorkflowLockedRef.current || !positionWorkflow.begin()) return
-		const context = nextTransactionContext(account, selected, configuration.chainId)
-		updatePositionWorkflowLock(true)
-		dispatchWorkflow({ type: 'operation-preparing', context, operation: 'share-approval' })
-		const balanceRequest = balanceRequests.begin()
-		let broadcastHash: Hash | undefined
-		let receiptKnown = false
-		let keepLocked = false
-		try {
-			broadcastHash = await createGuardedWalletWrite(
-				account,
-				'Wallet network changed; switch back before approving',
-				'Wallet account changed; reconnect before approving',
-			)(async () => {
-				dispatchWorkflow({ type: 'signature-requested', context, operation: 'share-approval' })
-				return await services.approveRouter(walletClient, selected, configuration, account)
-			})
-			dispatchWorkflow({ type: 'broadcast', context, operation: 'share-approval', transactionHash: broadcastHash })
-			const { receipt } = await waitForSubmittedTransactionReceipt(walletClient, broadcastHash, {
-				allowRevertedReceipt: true,
-				onKnownReceipt: () => {
-					receiptKnown = true
-					refreshWalletSummaryAfterReceipt()
-				},
-				onTransactionReplaced: replacementHash => {
-					broadcastHash = replacementHash
-					dispatchWorkflow({ type: 'replaced', context, replacementHash })
-				},
-			})
-			if (receipt.status === 'reverted') {
-				dispatchWorkflow({ type: 'reverted', context })
-				return
-			}
-			dispatchWorkflow({ type: 'confirmed', context })
-			if (balanceRequests.isCurrent(balanceRequest)) await refreshBalancesAfterApproval('Share-token approval', selected, account, balanceRequest)
-		} catch (error) {
-			if (!balanceRequests.isCurrent(balanceRequest)) {
-				if (broadcastHash !== undefined && !receiptKnown) {
-					keepLocked = true
-					dispatchWorkflow({ type: 'uncertain', context, reason: broadcastUncertainMessage('Share-token approval', broadcastHash) })
-				} else dispatchWorkflow({ type: 'failed', context, operation: 'share-approval', message: publicErrorMessage(error, 'Wallet context changed while approving') })
-				return
-			}
-			const failure = approvalFailureTransition('Share-token approval', broadcastHash, receiptKnown, error, 'Approval failed')
-			keepLocked = failure.keepLocked
-			if (failure.warning !== undefined) dispatchWorkflow({ type: 'uncertain', context, reason: failure.warning })
-			else dispatchWorkflow({ type: 'failed', context, operation: 'share-approval', message: failure.message ?? 'Approval failed' })
-		} finally {
-			positionWorkflow.finish()
-			if (!keepLocked) updatePositionWorkflowLock(false)
 		}
 	}
 
@@ -202,7 +143,6 @@ export function createPositionTransactionController({
 
 	return {
 		simulate,
-		approve,
 		submit,
 		setMode: (value: 'entry' | 'exit') => resetPositionInput(() => setMode(value)),
 		setSide: (value: 'YES' | 'NO') => resetPositionInput(() => setSide(value)),

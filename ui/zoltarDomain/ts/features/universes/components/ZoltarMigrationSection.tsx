@@ -1,7 +1,7 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as zoltarCopy from '../../../copy/zoltar.js'
 import { useId, useMemo } from 'preact/hooks'
-import type { Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/evm/ethereum'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'

@@ -1,7 +1,7 @@
 /// <reference types='bun-types' />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { getAddress } from '@zoltar/shared/ethereum'
+import { getAddress } from '@zoltar/shared/evm/ethereum'
 import { getSecurityPoolLinkHref, getUseQuestionForPoolHref } from '@zoltar/ui-statoblast-domain/features/security-pools/lib/securityPoolNavigation.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'

@@ -1,6 +1,6 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as marketCopy from '../../../copy/market.js'
-import type { Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/evm/ethereum'
 import { useState } from 'preact/hooks'
 import { EntityCard } from '@zoltar/ui-core-shared/components/EntityCard.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/lib/network.js'

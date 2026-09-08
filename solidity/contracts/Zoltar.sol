@@ -6,7 +6,6 @@ import './IERC20.sol';
 import './ReputationToken.sol';
 import './SafeERC20Ops.sol';
 import './ZoltarQuestionData.sol';
-import { IERC20PermitAuthorization, IERC3009Authorization } from './vendor/authorization/IERC20Authorization.sol';
 
 contract Zoltar {
 	using SafeERC20Ops for IERC20;
@@ -95,25 +94,6 @@ contract Zoltar {
 		_forkUniverse(msg.sender, universeId, questionId, false);
 	}
 
-	function forkUniverseWithPermit(uint248 universeId, uint256 questionId, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external {
-		ReputationToken reputationToken = _getGenesisPermitToken(universeId);
-		uint256 amountAttoRep = getForkThresholdAttoRep(universeId);
-		try
-			IERC20PermitAuthorization(address(reputationToken)).permit(msg.sender, address(this), amountAttoRep, deadline, v, r, s)
-		{} catch {
-			require(IERC20(address(reputationToken)).allowance(msg.sender, address(this)) >= amountAttoRep, 'Fork permit and allowance insufficient');
-		}
-		_forkUniverse(msg.sender, universeId, questionId, false);
-	}
-
-	function forkUniverseWithAuthorization(address owner, uint248 universeId, uint256 questionId, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external {
-		ReputationToken reputationToken = universes[universeId].reputationToken;
-		uint256 amountAttoRep = getForkThresholdAttoRep(universeId);
-		bytes32 operationHash = keccak256(abi.encode(this.forkUniverseWithAuthorization.selector, owner, universeId, questionId, amountAttoRep));
-		IERC3009Authorization(address(reputationToken)).receiveWithAuthorization(owner, address(this), amountAttoRep, validAfter, validBefore, _boundAuthorizationNonce(nonce, operationHash, owner), v, r, s);
-		_forkUniverse(owner, universeId, questionId, true);
-	}
-
 	function _forkUniverse(address owner, uint248 universeId, uint256 questionId, bool repAlreadyReceived) private {
 		Universe storage universe = universes[universeId];
 		require(address(universe.reputationToken) != address(0x0), 'Universe not initialized with a REP token');
@@ -147,23 +127,6 @@ contract Zoltar {
 	// own-question universe fork.
 	function burnRep(uint248 universeId, uint256 amountAttoRep) external {
 		_burnRepFor(msg.sender, universeId, amountAttoRep, false);
-	}
-
-	function burnRepWithPermit(uint248 universeId, uint256 amountAttoRep, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external {
-		ReputationToken reputationToken = _getGenesisPermitToken(universeId);
-		try
-			IERC20PermitAuthorization(address(reputationToken)).permit(msg.sender, address(this), amountAttoRep, deadline, v, r, s)
-		{} catch {
-			require(IERC20(address(reputationToken)).allowance(msg.sender, address(this)) >= amountAttoRep, 'Burn permit and allowance insufficient');
-		}
-		_burnRepFor(msg.sender, universeId, amountAttoRep, false);
-	}
-
-	function burnRepWithAuthorization(address owner, uint248 universeId, uint256 amountAttoRep, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external {
-		ReputationToken reputationToken = universes[universeId].reputationToken;
-		bytes32 operationHash = keccak256(abi.encode(this.burnRepWithAuthorization.selector, owner, universeId, amountAttoRep));
-		IERC3009Authorization(address(reputationToken)).receiveWithAuthorization(owner, address(this), amountAttoRep, validAfter, validBefore, _boundAuthorizationNonce(nonce, operationHash, owner), v, r, s);
-		_burnRepFor(owner, universeId, amountAttoRep, true);
 	}
 
 	function _burnRepFor(address owner, uint248 universeId, uint256 amountAttoRep, bool repAlreadyReceived) private {
@@ -245,23 +208,6 @@ contract Zoltar {
 		_addRepToMigrationBalance(msg.sender, universeId, amountAttoRep, false);
 	}
 
-	function addRepToMigrationBalanceWithPermit(uint248 universeId, uint256 amountAttoRep, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external {
-		ReputationToken reputationToken = _getGenesisPermitToken(universeId);
-		try
-			IERC20PermitAuthorization(address(reputationToken)).permit(msg.sender, address(this), amountAttoRep, deadline, v, r, s)
-		{} catch {
-			require(IERC20(address(reputationToken)).allowance(msg.sender, address(this)) >= amountAttoRep, 'Migration permit and allowance insufficient');
-		}
-		_addRepToMigrationBalance(msg.sender, universeId, amountAttoRep, false);
-	}
-
-	function addRepToMigrationBalanceWithAuthorization(address owner, uint248 universeId, uint256 amountAttoRep, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external {
-		ReputationToken reputationToken = universes[universeId].reputationToken;
-		bytes32 operationHash = keccak256(abi.encode(this.addRepToMigrationBalanceWithAuthorization.selector, owner, universeId, amountAttoRep));
-		IERC3009Authorization(address(reputationToken)).receiveWithAuthorization(owner, address(this), amountAttoRep, validAfter, validBefore, _boundAuthorizationNonce(nonce, operationHash, owner), v, r, s);
-		_addRepToMigrationBalance(owner, universeId, amountAttoRep, true);
-	}
-
 	function _addRepToMigrationBalance(address owner, uint248 universeId, uint256 amountAttoRep, bool repAlreadyReceived) private {
 		Universe memory universe = universes[universeId];
 		require(universe.forkTime != 0, 'Universe has not forked, so migration balance cannot be added');
@@ -298,18 +244,5 @@ contract Zoltar {
 
 	function getMigrationRepBalanceAttoRep(address migrator, uint248 universeId) public view returns (uint256 migrationRepBalanceAttoRep) {
 		return migrationRepBalances[migrator][universeId].migrationRepBalanceAttoRep;
-	}
-
-	function getBoundAuthorizationNonce(bytes32 nonce, bytes32 operationHash, address creditedAccount) external pure returns (bytes32) {
-		return _boundAuthorizationNonce(nonce, operationHash, creditedAccount);
-	}
-
-	function _boundAuthorizationNonce(bytes32 nonce, bytes32 operationHash, address creditedAccount) private pure returns (bytes32) {
-		return keccak256(abi.encode(nonce, operationHash, creditedAccount));
-	}
-
-	function _getGenesisPermitToken(uint248 universeId) private view returns (ReputationToken reputationToken) {
-		reputationToken = universes[universeId].reputationToken;
-		require(address(reputationToken) == address(genesisReputationToken), 'Permit only supported for genesis REP');
 	}
 }

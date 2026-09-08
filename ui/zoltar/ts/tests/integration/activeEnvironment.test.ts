@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
-import { getAddress } from '@zoltar/shared/ethereum'
+import { getAddress } from '@zoltar/shared/evm/ethereum'
 import { loadDeploymentStatusOracleSnapshot, loadErc20Balance } from '@zoltar/ui-zoltar-domain/protocol/index.js'
 import { getChainDisplayLabel, getChainIdDecimalLabel, getWalletScopedAccountAddress, getWrongNetworkMessage, getWrongNetworkReason, isActiveAppChain, isSupportedAppChain } from '@zoltar/ui-core-shared/lib/network.js'
 import { getActiveBackend, initializeActiveEnvironment, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting, shouldUseSimulationLocation } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'

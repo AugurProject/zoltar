@@ -3,9 +3,11 @@ pragma solidity 0.8.35;
 
 import './Constants.sol';
 import { ERC20 } from './ERC20.sol';
-import { ERC20Authorization } from './vendor/authorization/ERC20Authorization.sol';
 
-contract GenesisReputationToken is ERC20Authorization {
+/// @notice Deterministic testnet stand-in for the externally supplied mainnet REPv2 token.
+/// @dev Intentionally exposes only the ERC-20 authorization surface supported by REPv2:
+/// callers must use `approve` and `transferFrom`, not ERC-2612 or ERC-3009 signatures.
+contract GenesisReputationToken is ERC20 {
 	uint256 private immutable totalTheoreticalSupplyAttoRep;
 
 	constructor(address[] memory initialHolders, uint256[] memory initialBalances) ERC20('Reputation', 'REP') {

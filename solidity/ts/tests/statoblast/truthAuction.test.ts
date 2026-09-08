@@ -1,5 +1,5 @@
 import { beforeEach, describe, test } from 'bun:test'
-import { encodeDeployData, encodeFunctionData, type Address, type Hex } from '@zoltar/shared/ethereum'
+import { encodeDeployData, encodeFunctionData, type Address, type Hex } from '@zoltar/shared/evm/ethereum'
 import {
 	statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
 	statoblast_EscalationGame_EscalationGame,

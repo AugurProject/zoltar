@@ -1,7 +1,7 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as openOracleCopy from '../../../copy/openOracle.js'
 import type { ComponentChildren } from 'preact'
-import { zeroAddress } from '@zoltar/shared/ethereum'
+import { zeroAddress } from '@zoltar/shared/evm/ethereum'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { ComparisonRecord } from '@zoltar/ui-core-shared/components/ComparisonRecord.js'

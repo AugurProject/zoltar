@@ -1,10 +1,10 @@
 import { beforeAll, beforeEach, setDefaultTimeout } from 'bun:test'
 import assert from '../../testSupport/simulator/utils/assert'
-import { decodeEventLog, encodeAbiParameters, keccak256 } from '@zoltar/shared/ethereum'
-import type { Abi, Address, Hash } from '@zoltar/shared/ethereum'
+import { decodeEventLog, encodeAbiParameters, keccak256 } from '@zoltar/shared/evm/ethereum'
+import type { Abi, Address, Hash } from '@zoltar/shared/evm/ethereum'
 import { AnvilWindowEthereum } from '../../testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnvilNode'
-import { sortBigIntsAscending } from '@zoltar/shared/bigInt'
+import { sortBigIntsAscending } from '@zoltar/shared/serialization/bigInt'
 import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/shared/constants'
 // The solidity worktree can temporarily see a stale @zoltar/shared package through the shared node_modules link during refreshes.
 // Import the generated shared helper directly so this fixture stays stable across merge-validation runs.

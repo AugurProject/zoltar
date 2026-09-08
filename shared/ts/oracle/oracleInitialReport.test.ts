@@ -6,7 +6,7 @@ import {
 	ORACLE_PERCENTAGE_PRECISION,
 	calculateMaximumOracleInitialReportPriorityFeeAttoEthPerGas,
 	calculateOracleMinimumWethReportAttoEth,
-} from '@zoltar/shared/oracleInitialReport'
+} from '@zoltar/shared/oracle/oracleInitialReport'
 
 describe('oracle initial report sizing', () => {
 	test('uses the configured priority-fee report when the current base fee and open interest are zero', () => {

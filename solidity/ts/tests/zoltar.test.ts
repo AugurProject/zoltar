@@ -2,13 +2,13 @@ import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/shared/constants'
-import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/protocolConfig'
+import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/deployment/protocolConfig'
 import { createWriteClient, WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { approveToken, setupTestAccounts, getERC20Balance, getChildUniverseId, contractExists, sortStringArrayByKeccak } from '../testSupport/simulator/utils/utilities'
 import assert from '../testSupport/simulator/utils/assert'
 import { addressString } from '../testSupport/simulator/utils/bigint'
-import { decodeEventLog, encodeAbiParameters, encodeDeployData, getAddress, hexToBytes, isHex, keccak256, type Address, type Hex } from '@zoltar/shared/ethereum'
+import { decodeEventLog, encodeAbiParameters, encodeDeployData, getAddress, hexToBytes, isHex, keccak256, type Address, type Hex } from '@zoltar/shared/evm/ethereum'
 import {
 	addRepToMigrationBalance,
 	deployChild,
@@ -54,10 +54,6 @@ function splitSignature(signature: string) {
 	}
 }
 
-function functionSelector(signature: string) {
-	return keccak256(new TextEncoder().encode(signature)).slice(0, 10) as Hex
-}
-
 async function signTypedData(ethereum: AnvilWindowEthereum, signer: Address, typedData: object) {
 	const signature = await ethereum.request({ method: 'eth_signTypedData_v4', params: [signer, JSON.stringify(typedData)] })
 	if (typeof signature !== 'string' || !isHex(signature)) throw new Error('Typed-data signature missing')
@@ -78,24 +74,6 @@ async function signPermit(ethereum: AnvilWindowEthereum, owner: Address, token: 
 			],
 		},
 		message: { owner, spender, value: value.toString(), nonce: nonce.toString(), deadline: deadline.toString() },
-	})
-}
-
-async function signReceiveAuthorization(ethereum: AnvilWindowEthereum, owner: Address, token: Address, tokenName: string, recipient: Address, value: bigint, validAfter: bigint, validBefore: bigint, nonce: Hex) {
-	return await signTypedData(ethereum, owner, {
-		domain: { chainId: 1, name: tokenName, version: '1', verifyingContract: token },
-		primaryType: 'ReceiveWithAuthorization',
-		types: {
-			ReceiveWithAuthorization: [
-				{ name: 'from', type: 'address' },
-				{ name: 'to', type: 'address' },
-				{ name: 'value', type: 'uint256' },
-				{ name: 'validAfter', type: 'uint256' },
-				{ name: 'validBefore', type: 'uint256' },
-				{ name: 'nonce', type: 'bytes32' },
-			],
-		},
-		message: { from: owner, to: recipient, value: value.toString(), validAfter: validAfter.toString(), validBefore: validBefore.toString(), nonce },
 	})
 }
 
@@ -754,102 +732,6 @@ describe('Contract Test Suite', () => {
 		assert.strictEqual(await client.readContract({ abi: ReputationToken_ReputationToken.abi, address: addressString(GENESIS_REPUTATION_TOKEN), functionName: 'symbol' }), 'REP')
 	})
 
-	test('relays a recipient-bound fork authorization while crediting only the REP owner', async () => {
-		const accounts = await mockWindow.request({ method: 'eth_accounts' })
-		if (!Array.isArray(accounts) || typeof accounts[0] !== 'string') throw new Error('Anvil signer missing')
-		const owner = getAddress(accounts[0])
-		const relayer = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		const zoltar = getAddress(getZoltarAddress())
-		const token = addressString(GENESIS_REPUTATION_TOKEN)
-		const questionData = { title: 'relayed REP fork', description: '', startTime: 0n, endTime: 0n, numTicks: 0n, displayValueMin: 0n, displayValueMax: 0n, answerUnit: '' }
-		const outcomes = sortStringArrayByKeccak(['Yes', 'No'])
-		await createQuestion(client, questionData, outcomes)
-		const questionId = getQuestionId(questionData, outcomes)
-		const amountAttoRep = await getZoltarForkThreshold(client, genesisUniverse)
-		await writeContractAndWait(client, () => client.writeContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'transfer', args: [owner, amountAttoRep] }))
-		const nonce = `0x${'31'.repeat(32)}` as Hex
-		const operationHash = keccak256(
-			encodeAbiParameters([{ type: 'bytes4' }, { type: 'address' }, { type: 'uint248' }, { type: 'uint256' }, { type: 'uint256' }], [functionSelector('forkUniverseWithAuthorization(address,uint248,uint256,uint256,uint256,bytes32,uint8,bytes32,bytes32)'), owner, genesisUniverse, questionId, amountAttoRep]),
-		)
-		const boundNonce = await client.readContract({ abi: Zoltar_Zoltar.abi, address: zoltar, functionName: 'getBoundAuthorizationNonce', args: [nonce, operationHash, owner] })
-		const validBefore = 9_000_000_000n
-		const signature = await signReceiveAuthorization(mockWindow, owner, token, 'Reputation', zoltar, amountAttoRep, 0n, validBefore, boundNonce)
-		const relayerRepBefore = await getERC20Balance(client, token, relayer.account.address)
-		for (const [label, args] of [
-			['owner', [relayer.account.address, genesisUniverse, questionId, 0n, validBefore, nonce, signature.v, signature.r, signature.s]],
-			['universe', [owner, 1n, questionId, 0n, validBefore, nonce, signature.v, signature.r, signature.s]],
-			['question', [owner, genesisUniverse, questionId + 1n, 0n, validBefore, nonce, signature.v, signature.r, signature.s]],
-			['nonce', [owner, genesisUniverse, questionId, 0n, validBefore, `0x${'30'.repeat(32)}`, signature.v, signature.r, signature.s]],
-			['window', [owner, genesisUniverse, questionId, 0n, validBefore - 1n, nonce, signature.v, signature.r, signature.s]],
-		] as const) {
-			await assert.rejects(relayer.writeContract({ abi: Zoltar_Zoltar.abi, address: zoltar, functionName: 'forkUniverseWithAuthorization', args }), /invalid signer|reverted/i, `altered ${label} must invalidate authorization`)
-		}
-
-		await writeContractAndWait(relayer, () =>
-			relayer.writeContract({
-				abi: Zoltar_Zoltar.abi,
-				address: zoltar,
-				functionName: 'forkUniverseWithAuthorization',
-				args: [owner, genesisUniverse, questionId, 0n, validBefore, nonce, signature.v, signature.r, signature.s],
-			}),
-		)
-
-		assert.ok((await getMigrationRepBalanceAttoRep(client, genesisUniverse, owner)) > 0n, 'owner should receive the fork migration balance')
-		assert.strictEqual(await getMigrationRepBalanceAttoRep(client, genesisUniverse, relayer.account.address), 0n, 'relayer must not receive fork migration credit')
-		assert.strictEqual(await getERC20Balance(client, token, relayer.account.address), relayerRepBefore, 'relayer must not receive REP')
-	})
-
-	test('atomic permits and relayed authorizations preserve the owner across migration and burn operations', async () => {
-		const accounts = await mockWindow.request({ method: 'eth_accounts' })
-		if (!Array.isArray(accounts) || typeof accounts[0] !== 'string') throw new Error('Anvil signer missing')
-		const owner = getAddress(accounts[0])
-		const ownerClient = createWriteClient(mockWindow, BigInt(owner), 0)
-		const relayer = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		const zoltar = getAddress(getZoltarAddress())
-		const token = addressString(GENESIS_REPUTATION_TOKEN)
-		const questionData = { title: 'permit and relay migration', description: '', startTime: 0n, endTime: 0n, numTicks: 0n, displayValueMin: 0n, displayValueMax: 0n, answerUnit: '' }
-		const outcomes = sortStringArrayByKeccak(['Yes', 'No'])
-		await createQuestion(client, questionData, outcomes)
-		const questionId = getQuestionId(questionData, outcomes)
-		const forkAmount = await getZoltarForkThreshold(client, genesisUniverse)
-		await writeContractAndWait(client, () => client.writeContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'transfer', args: [owner, forkAmount + 100n] }))
-		const deadline = 9_000_000_000n
-		const forkPermit = await signPermit(mockWindow, owner, token, 'Reputation', zoltar, forkAmount, 0n, deadline)
-		await writeContractAndWait(ownerClient, () => ownerClient.writeContract({ abi: Zoltar_Zoltar.abi, address: zoltar, functionName: 'forkUniverseWithPermit', args: [genesisUniverse, questionId, deadline, forkPermit.v, forkPermit.r, forkPermit.s] }))
-
-		const permittedMigrationAmount = 17n
-		const migrationPermit = await signPermit(mockWindow, owner, token, 'Reputation', zoltar, permittedMigrationAmount, 1n, deadline)
-		await writeContractAndWait(ownerClient, () => ownerClient.writeContract({ abi: Zoltar_Zoltar.abi, address: zoltar, functionName: 'addRepToMigrationBalanceWithPermit', args: [genesisUniverse, permittedMigrationAmount, deadline, migrationPermit.v, migrationPermit.r, migrationPermit.s] }))
-
-		const authorizedMigrationAmount = 19n
-		const migrationNonce = `0x${'32'.repeat(32)}` as Hex
-		const migrationOperationHash = keccak256(
-			encodeAbiParameters([{ type: 'bytes4' }, { type: 'address' }, { type: 'uint248' }, { type: 'uint256' }], [functionSelector('addRepToMigrationBalanceWithAuthorization(address,uint248,uint256,uint256,uint256,bytes32,uint8,bytes32,bytes32)'), owner, genesisUniverse, authorizedMigrationAmount]),
-		)
-		const migrationBoundNonce = await client.readContract({ abi: Zoltar_Zoltar.abi, address: zoltar, functionName: 'getBoundAuthorizationNonce', args: [migrationNonce, migrationOperationHash, owner] })
-		const migrationAuthorization = await signReceiveAuthorization(mockWindow, owner, token, 'Reputation', zoltar, authorizedMigrationAmount, 0n, deadline, migrationBoundNonce)
-		await assert.rejects(
-			relayer.writeContract({ abi: Zoltar_Zoltar.abi, address: zoltar, functionName: 'addRepToMigrationBalanceWithAuthorization', args: [owner, genesisUniverse, authorizedMigrationAmount + 1n, 0n, deadline, migrationNonce, migrationAuthorization.v, migrationAuthorization.r, migrationAuthorization.s] }),
-			/invalid signer|reverted/i,
-		)
-		await writeContractAndWait(relayer, () =>
-			relayer.writeContract({ abi: Zoltar_Zoltar.abi, address: zoltar, functionName: 'addRepToMigrationBalanceWithAuthorization', args: [owner, genesisUniverse, authorizedMigrationAmount, 0n, deadline, migrationNonce, migrationAuthorization.v, migrationAuthorization.r, migrationAuthorization.s] }),
-		)
-
-		const burnAmount = 23n
-		const burnNonce = `0x${'33'.repeat(32)}` as Hex
-		const burnOperationHash = keccak256(encodeAbiParameters([{ type: 'bytes4' }, { type: 'address' }, { type: 'uint248' }, { type: 'uint256' }], [functionSelector('burnRepWithAuthorization(address,uint248,uint256,uint256,uint256,bytes32,uint8,bytes32,bytes32)'), owner, genesisUniverse, burnAmount]))
-		const burnBoundNonce = await client.readContract({ abi: Zoltar_Zoltar.abi, address: zoltar, functionName: 'getBoundAuthorizationNonce', args: [burnNonce, burnOperationHash, owner] })
-		const burnAuthorization = await signReceiveAuthorization(mockWindow, owner, token, 'Reputation', zoltar, burnAmount, 0n, deadline, burnBoundNonce)
-		const supplyBeforeBurn = await getUniverseTheoreticalSupplyAttoRep(client, genesisUniverse)
-		await assert.rejects(relayer.writeContract({ abi: Zoltar_Zoltar.abi, address: zoltar, functionName: 'burnRepWithAuthorization', args: [owner, genesisUniverse, burnAmount + 1n, 0n, deadline, burnNonce, burnAuthorization.v, burnAuthorization.r, burnAuthorization.s] }), /invalid signer|reverted/i)
-		await writeContractAndWait(relayer, () => relayer.writeContract({ abi: Zoltar_Zoltar.abi, address: zoltar, functionName: 'burnRepWithAuthorization', args: [owner, genesisUniverse, burnAmount, 0n, deadline, burnNonce, burnAuthorization.v, burnAuthorization.r, burnAuthorization.s] }))
-
-		assert.strictEqual(await getMigrationRepBalanceAttoRep(client, genesisUniverse, owner), forkAmount - forkAmount / DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor + permittedMigrationAmount + authorizedMigrationAmount)
-		assert.strictEqual(await getMigrationRepBalanceAttoRep(client, genesisUniverse, relayer.account.address), 0n)
-		assert.strictEqual(await getUniverseTheoreticalSupplyAttoRep(client, genesisUniverse), supplyBeforeBurn - burnAmount)
-	})
-
 	test('child REP uses its initialized name in the EIP-712 domain and keeps theoretical supply in slot 5', async () => {
 		const zoltar = getAddress(getZoltarAddress())
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
@@ -917,16 +799,9 @@ describe('Contract Test Suite', () => {
 		const childRepRequired = childForkThreshold + 1n
 		if (prepared < childRepRequired) await addRepToMigrationBalance(client, genesisUniverse, childRepRequired - prepared)
 		await splitMigrationRep(client, genesisUniverse, childRepRequired, [1n])
-		const childNonceBefore = await client.readContract({ abi: ReputationToken_ReputationToken.abi, address: childRep, functionName: 'nonces', args: [client.account.address] })
-		const zeroSignature = [0n, 27, `0x${'00'.repeat(32)}`, `0x${'00'.repeat(32)}`] as const
 		const childForkQuestionId = await createEndedBinaryQuestion('nested fork for global REP numbering')
-		await assert.rejects(client.writeContract({ abi: Zoltar_Zoltar.abi, address: zoltar, functionName: 'forkUniverseWithPermit', args: [childUniverseId, childForkQuestionId, ...zeroSignature] }), /genesis REP/)
-		await assert.rejects(client.writeContract({ abi: Zoltar_Zoltar.abi, address: zoltar, functionName: 'burnRepWithPermit', args: [childUniverseId, 1n, ...zeroSignature] }), /genesis REP/)
-		assert.strictEqual(await client.readContract({ abi: ReputationToken_ReputationToken.abi, address: childRep, functionName: 'nonces', args: [client.account.address] }), childNonceBefore, 'rejected child permit calls must not consume a nonce')
 		assert.strictEqual(await client.readContract({ abi: ReputationToken_ReputationToken.abi, address: childRep, functionName: 'allowance', args: [client.account.address, zoltar] }), 0n)
 		await forkUniverse(client, childUniverseId, childForkQuestionId)
-		await assert.rejects(client.writeContract({ abi: Zoltar_Zoltar.abi, address: zoltar, functionName: 'addRepToMigrationBalanceWithPermit', args: [childUniverseId, 1n, ...zeroSignature] }), /genesis REP/)
-		assert.strictEqual(await client.readContract({ abi: ReputationToken_ReputationToken.abi, address: childRep, functionName: 'nonces', args: [client.account.address] }), childNonceBefore, 'all rejected child permit calls must preserve the nonce')
 		assert.strictEqual(await client.readContract({ abi: ReputationToken_ReputationToken.abi, address: childRep, functionName: 'allowance', args: [client.account.address, zoltar] }), 0n, 'all rejected child permit calls must preserve zero allowance')
 		await addRepToMigrationBalance(client, childUniverseId, 1n)
 		const nestedUniverseId = getChildUniverseId(childUniverseId, 2n)

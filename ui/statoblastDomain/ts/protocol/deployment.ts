@@ -1,6 +1,6 @@
 import type { NetworkProfile } from '@zoltar/ui-core-shared/lib/networkProfile.js'
 import { getRuntimeNetworkProfile, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/lib/networkProfile.js'
-import { bytesToHex, encodeDeployData, hexToBytes, keccak256, toHex, type Address, type Hash, type Hex } from '@zoltar/shared/ethereum'
+import { bytesToHex, encodeDeployData, hexToBytes, keccak256, toHex, type Address, type Hash, type Hex } from '@zoltar/shared/evm/ethereum'
 import type { DeploymentStatusSnapshot, DeploymentStep, DeploymentStepId, ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import {
 	assertStaticDeploymentArtifactRuntimeCodeHashes,
@@ -28,7 +28,7 @@ import {
 	statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory,
 	statoblast_openOracle_OpenOracle_OpenOracle,
 } from '@zoltar/ui-core-shared/contractArtifact.js'
-import { createDeploymentStatusOracleAddressHelper } from '@zoltar/shared/deploymentAddresses'
+import { createDeploymentStatusOracleAddressHelper } from '@zoltar/shared/deployment/deploymentAddresses'
 import { PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from '@zoltar/ui-zoltar-domain/protocol/deploymentHelpers.js'
 
 export { loadErc20Allowance, loadErc20Balance } from '@zoltar/ui-zoltar-domain/protocol/deployment.js'

@@ -1,6 +1,6 @@
 import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
-import { encodeAbiParameters, encodeDeployData, keccak256, type Address, type Hex } from '@zoltar/shared/ethereum'
-import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/protocolConfig'
+import { encodeAbiParameters, encodeDeployData, keccak256, type Address, type Hex } from '@zoltar/shared/evm/ethereum'
+import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/deployment/protocolConfig'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'

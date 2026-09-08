@@ -1,4 +1,4 @@
-import type { Address, Hash, Hex, TransactionLog } from '@zoltar/shared/ethereum'
+import type { Address, Hash, Hex, TransactionLog } from '@zoltar/shared/evm/ethereum'
 import {
 	decodeOpenOracleStatePreimage,
 	getOpenOracleGameTuple,
@@ -11,7 +11,7 @@ import {
 	OPEN_ORACLE_REPORT_SETTLED_TOPIC,
 	OPEN_ORACLE_REPORT_SUBMITTED_TOPIC,
 	type OpenOracleStatePreimage,
-} from '@zoltar/shared/openOracle'
+} from '@zoltar/shared/oracle/openOracle'
 import { ReadClient, WriteClient, writeContractAndWait } from '../clients'
 import { WETH_ADDRESS } from '../constants'
 import { statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction, statoblast_openOracle_OpenOracle_OpenOracle, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_tokens_ShareToken_ShareToken, ZoltarQuestionData_ZoltarQuestionData } from '../../../../types/contractArtifact'

@@ -1,4 +1,4 @@
-import { bigintToSafeNumber, zeroAddress, type Address, type ContractFunctionParameters, type Hex } from '@zoltar/shared/ethereum'
+import { bigintToSafeNumber, zeroAddress, type Address, type ContractFunctionParameters, type Hex } from '@zoltar/shared/evm/ethereum'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { Zoltar_Zoltar, statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool, statoblast_SecurityPoolForker_SecurityPoolForker } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'

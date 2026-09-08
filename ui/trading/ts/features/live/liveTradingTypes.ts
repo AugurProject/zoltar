@@ -1,9 +1,8 @@
-import type { Address, WalletClient } from '@zoltar/shared/ethereum'
+import type { Address, WalletClient } from '@zoltar/shared/evm/ethereum'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import type {
 	LiveBalances,
 	LiveMarket,
-	approveRouter,
 	connectWallet,
 	createTradingPublicClient,
 	createTradingWalletClient,
@@ -30,7 +29,6 @@ export type TransactionState = TransactionPhase
 export type BalanceState = 'disconnected' | 'loading' | 'ready' | 'error'
 export type PortfolioBalanceEntry = Readonly<{ market: LiveMarket; balances: LiveBalances | undefined; error: string | undefined }>
 export type LiveTradingControllerServices = Readonly<{
-	approveRouter: typeof approveRouter
 	connectWallet: typeof connectWallet
 	createTradingPublicClient: typeof createTradingPublicClient
 	createTradingWalletClient: typeof createTradingWalletClient

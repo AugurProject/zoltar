@@ -1,4 +1,4 @@
-import type { Hash } from '@zoltar/shared/ethereum'
+import type { Hash } from '@zoltar/shared/evm/ethereum'
 import { getActiveBackend } from '../lib/activeEnvironment.js'
 import { createAwaitingWalletPresentation, createPreparedWalletPresentation, createTransactionFailurePresentation } from './transactionPresentations.js'
 import type { TransactionRequestPreview } from '../wallet/chainBackend.js'

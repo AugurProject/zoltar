@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { zeroAddress } from '@zoltar/shared/ethereum'
+import { zeroAddress } from '@zoltar/shared/evm/ethereum'
 import { getMigrationOutcomeHeldBalance, getMigrationOutcomeSplitLimit } from '@zoltar/ui-zoltar-domain/features/universes/components/MigrationOutcomeUniversesSection.js'
 import type { ZoltarChildUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 

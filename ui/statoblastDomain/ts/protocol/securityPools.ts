@@ -1,4 +1,4 @@
-import { decodeEventLog, encodeAbiParameters, encodeDeployData, getAddress, getCreate2Address, keccak256, zeroAddress, type Address, type ContractFunctionParameters, type TransactionReceipt } from '@zoltar/shared/ethereum'
+import { decodeEventLog, encodeAbiParameters, encodeDeployData, getAddress, getCreate2Address, keccak256, zeroAddress, type Address, type ContractFunctionParameters, type TransactionReceipt } from '@zoltar/shared/evm/ethereum'
 import {
 	statoblast_EscalationGame_EscalationGame,
 	statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
@@ -22,7 +22,7 @@ import { requireSecurityPoolDeploymentTupleArray, requireSecurityVaultTupleArray
 import { getDeploymentSteps } from './deployment.js'
 import { getInfraContractAddresses, getZoltarAddress } from '@zoltar/ui-zoltar-domain/protocol/deploymentHelpers.js'
 import { loadMarketDetails } from '@zoltar/ui-zoltar-domain/protocol/zoltar.js'
-import { fetchLogsWithAdaptiveRanges } from '@zoltar/shared/logScan'
+import { fetchLogsWithAdaptiveRanges } from '@zoltar/shared/evm/logScan'
 const SECURITY_POOL_LIST_VAULT_PREVIEW_LIMIT = 50n
 const SECURITY_POOL_PAGE_VAULT_PREVIEW_LIMIT = 3n
 const SECURITY_POOL_VAULT_SCAN_LIMIT = 500n

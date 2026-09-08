@@ -1,4 +1,4 @@
-import type { Address, WalletClient } from '@zoltar/shared/ethereum'
+import type { Address, WalletClient } from '@zoltar/shared/evm/ethereum'
 import type { LiveMarket, SettlementOperation, ShareOutcome } from '../../protocol/live.js'
 import type { LiveSettlementServices } from '../LiveSettlementControls.js'
 import type { BalanceState } from './liveTradingTypes.js'

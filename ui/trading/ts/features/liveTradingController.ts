@@ -1,4 +1,4 @@
-import type { Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/evm/ethereum'
 import { useCallback, useMemo, useRef } from 'preact/hooks'
 import { parseUnits } from '../lib/format.js'
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
@@ -190,12 +190,10 @@ export function useLiveTradingController({
 		workflow: transactionWorkflow,
 		services,
 		simulationRequests,
-		balanceRequests,
 		nextTransactionContext,
 		createGuardedWalletWrite,
 		executeWithCurrentWalletContext,
 		refreshWalletSummaryAfterReceipt,
-		refreshBalancesAfterApproval,
 		refresh,
 		marketPageStart: marketPage.start,
 	})

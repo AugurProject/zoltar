@@ -1,6 +1,6 @@
 import { useSignal } from '@preact/signals'
 import { useEffect, useLayoutEffect, useRef } from 'preact/hooks'
-import type { Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/evm/ethereum'
 import { createConnectedReadClient, normalizeAccount } from '../../lib/clients.js'
 import type { ChainBackend, ReadBackendStatus } from '../../lib/chainBackend.js'
 import { getErrorMessage, hasErrorCode, hasErrorMessage } from '../../lib/errors.js'

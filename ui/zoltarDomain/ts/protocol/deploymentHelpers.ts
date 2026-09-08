@@ -1,7 +1,7 @@
-import { concatHex, encodeAbiParameters, encodeDeployData, getCreate2Address, getCreateAddress, keccak256, toHex, type Address } from '@zoltar/shared/ethereum'
-import { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_FEE_PERCENTAGE, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_MULTIPLIER, ORACLE_PROTOCOL_FEE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE } from '@zoltar/shared/oracleInitialReport'
-import { createApplyLinkedLibrariesHelper, createInfraContractAddressHelper } from '@zoltar/shared/deploymentAddresses'
-import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/protocolConfig'
+import { concatHex, encodeAbiParameters, encodeDeployData, getCreate2Address, getCreateAddress, keccak256, toHex, type Address } from '@zoltar/shared/evm/ethereum'
+import { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_FEE_PERCENTAGE, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_MULTIPLIER, ORACLE_PROTOCOL_FEE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE } from '@zoltar/shared/oracle/oracleInitialReport'
+import { createApplyLinkedLibrariesHelper, createInfraContractAddressHelper } from '@zoltar/shared/deployment/deploymentAddresses'
+import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/deployment/protocolConfig'
 import {
 	ScalarOutcomes_ScalarOutcomes,
 	statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
@@ -19,7 +19,7 @@ import { getWethAddress } from './activeProtocolAddresses.js'
 import { getRuntimeNetworkProfile, type NetworkProfile } from '@zoltar/ui-core-shared/lib/networkProfile.js'
 import { getZoltarContractAddresses, MULTICALL3_BYTECODE, PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from './zoltarDeploymentHelpers.js'
 
-export { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE } from '@zoltar/shared/oracleInitialReport'
+export { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE } from '@zoltar/shared/oracle/oracleInitialReport'
 export { getZoltarAddress, getZoltarInitCode, getZoltarQuestionDataByteCode, MULTICALL3_BYTECODE, PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from './zoltarDeploymentHelpers.js'
 const ORACLE_FEE_SINK_ADDRESS = '0x000000000000000000000000000000000000dEaD' satisfies Address
 const ORACLE_REPORT_GAS = 100000n

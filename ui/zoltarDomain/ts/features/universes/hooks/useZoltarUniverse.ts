@@ -1,6 +1,6 @@
 import { useSignal } from '@preact/signals'
 import { useLayoutEffect, useRef } from 'preact/hooks'
-import type { Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/evm/ethereum'
 import { createZoltarChildUniverse } from '../../../protocol/zoltarForks.js'
 import { loadAllZoltarQuestions, loadMarketDetails, loadZoltarQuestionCount, loadZoltarQuestionPage, loadZoltarUniverseSummary } from '../../../protocol/zoltar.js'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'

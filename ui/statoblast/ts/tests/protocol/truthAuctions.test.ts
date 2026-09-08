@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { getAddress } from '@zoltar/shared/ethereum'
+import { getAddress } from '@zoltar/shared/evm/ethereum'
 import { loadTruthAuctionActiveTickPage, loadTruthAuctionBidderBidPage, loadTruthAuctionTickBidPage, loadTruthAuctionTickPage, loadTruthAuctionTickSummary } from '@zoltar/ui-statoblast-domain/protocol/truthAuctions.js'
 import { createMockReadClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 

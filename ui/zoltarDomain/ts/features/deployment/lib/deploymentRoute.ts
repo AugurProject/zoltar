@@ -1,4 +1,4 @@
-import type { Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/evm/ethereum'
 import type { DeploymentStatus } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { DeploymentRouteContentProps } from '../../types.js'
 import type { useDeploymentFlow } from '../hooks/useDeploymentFlow.js'

@@ -1,4 +1,4 @@
-import { custom as sharedCustom, http as sharedHttp, requestRpc, RpcError, type EIP1193Provider, type Transport } from '@zoltar/shared/ethereum'
+import { custom as sharedCustom, http as sharedHttp, requestRpc, RpcError, type EIP1193Provider, type Transport } from '@zoltar/shared/evm/ethereum'
 import { boundedJsonResponse, DEFAULT_RPC_RESPONSE_BYTES, LOG_RPC_RESPONSE_BYTES } from '../infrastructure/bounded-json.ts'
 
 export { RpcError }

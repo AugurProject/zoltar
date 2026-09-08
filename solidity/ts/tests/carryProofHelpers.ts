@@ -1,4 +1,4 @@
-import { concatHex, encodeAbiParameters, keccak256, type Address, type Hex } from '@zoltar/shared/ethereum'
+import { concatHex, encodeAbiParameters, keccak256, type Address, type Hex } from '@zoltar/shared/evm/ethereum'
 import { statoblast_EscalationGame_EscalationGame } from '../types/contractArtifact'
 
 const NULLIFIER_DEPTH = 64

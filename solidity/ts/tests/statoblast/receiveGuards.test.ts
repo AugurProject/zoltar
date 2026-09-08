@@ -1,5 +1,5 @@
 import { beforeEach, describe, test } from 'bun:test'
-import type { Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/evm/ethereum'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { useStatoblastReceiveGuardsFixture, type StatoblastReceiveGuardsFixture } from './fixture'
 

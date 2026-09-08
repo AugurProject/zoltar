@@ -1,6 +1,6 @@
 import { beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
-import { SEPOLIA_REP_ALLOCATIONS, SEPOLIA_REP_TOTAL_THEORETICAL_SUPPLY } from '@zoltar/shared/sepoliaRepAllocations'
-import { encodeDeployData, type Address } from '@zoltar/shared/ethereum'
+import { SEPOLIA_REP_ALLOCATIONS, SEPOLIA_REP_TOTAL_THEORETICAL_SUPPLY } from '@zoltar/shared/deployment/sepoliaRepAllocations'
+import { encodeDeployData, type Address } from '@zoltar/shared/evm/ethereum'
 import assert from '../testSupport/simulator/utils/assert'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
@@ -20,6 +20,13 @@ describe('GenesisReputationToken', () => {
 		mockWindow = getAnvilWindowEthereum()
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		await setupTestAccounts(mockWindow)
+	})
+
+	test('matches external REPv2 by exposing approval-based ERC-20 authorization only', () => {
+		const functionNames = GenesisReputationToken_GenesisReputationToken.abi.flatMap(item => (item.type === 'function' ? [item.name] : []))
+		for (const unsupportedFunction of ['permit', 'nonces', 'transferWithAuthorization', 'receiveWithAuthorization', 'cancelAuthorization', 'authorizationState']) {
+			assert.ok(!functionNames.includes(unsupportedFunction), `genesis REP must not advertise unsupported ${unsupportedFunction}`)
+		}
 	})
 
 	test('mints the configured Sepolia balances and fixes theoretical supply to their sum', async () => {

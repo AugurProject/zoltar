@@ -1,10 +1,8 @@
-import type { Address, WalletClient } from '@zoltar/shared/ethereum'
+import type { Address, WalletClient } from '@zoltar/shared/evm/ethereum'
 import { tradingContracts } from '../generated/contractArtifact.js'
-import { capabilitiesForTradingVersion } from '@zoltar/ui-trading-domain/capabilities.js'
 import type { DeploymentConfiguration } from './config.js'
 import type { LiveMarket } from './liveMarket.js'
 import { deadlineAtBlock, minimumAfterSlippage, requireQuoteBlock, requireTransactionSlippageBps, requireTransactionValidityMinutes, retainApprovedMinimum, stableSimulation, UI_SLIPPAGE_BPS, type TransactionExpiry } from './tradeQuote.js'
-import { directLiquidityRemovalV2Abi } from './versionedAuthorization.js'
 
 const pair = tradingContracts['contracts/trading/TwoWayConstantProductPair.sol'].TwoWayConstantProductPair
 const router = tradingContracts['contracts/trading/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter
@@ -48,9 +46,7 @@ async function simulateLiquidityWithExpiry(client: WalletClient, configuration: 
 		result: { simulation, deadline },
 	} = await stableSimulation(client, async block => {
 		const deadline = deadlineAtBlock(expiry, block.blockTimestamp)
-		const simulation = capabilitiesForTradingVersion(configuration.version).directLiquidityRemovalDeadline
-			? await client.simulateContract({ abi: directLiquidityRemovalV2Abi, address: pairAddress, functionName: 'removeLiquidity', account, args: [amount, 0n, 0n, account, deadline], blockHash: block.blockHash })
-			: await client.simulateContract({ abi: pair.abi, address: pairAddress, functionName: 'removeLiquidity', account, args: [amount, 0n, 0n, account], blockHash: block.blockHash })
+		const simulation = await client.simulateContract({ abi: pair.abi, address: pairAddress, functionName: 'removeLiquidity', account, args: [amount, 0n, 0n, account, deadline], blockHash: block.blockHash })
 		return { simulation, deadline }
 	})
 	return { blockNumber, blockHash, operation, amount, conditionalYesBps, deadline, slippageBps, market, result: simulation.result, expectedLiquidity: 0n, expectedYes: simulation.result[0], expectedNo: simulation.result[1] }
@@ -80,7 +76,5 @@ export async function submitFreshLiquidity(client: WalletClient, configuration: 
 	}
 	const minimumYes = retainApprovedMinimum(minimumAfterSlippage(quote.expectedYes, quote.slippageBps), refreshed.expectedYes, 'YES')
 	const minimumNo = retainApprovedMinimum(minimumAfterSlippage(quote.expectedNo, quote.slippageBps), refreshed.expectedNo, 'NO')
-	return capabilitiesForTradingVersion(configuration.version).directLiquidityRemovalDeadline
-		? await guardedWrite(async () => await client.writeContract({ abi: directLiquidityRemovalV2Abi, address: pairAddress, functionName: 'removeLiquidity', account, args: [quote.amount, minimumYes, minimumNo, account, quote.deadline] }))
-		: await guardedWrite(async () => await client.writeContract({ abi: pair.abi, address: pairAddress, functionName: 'removeLiquidity', account, args: [quote.amount, minimumYes, minimumNo, account] }))
+	return await guardedWrite(async () => await client.writeContract({ abi: pair.abi, address: pairAddress, functionName: 'removeLiquidity', account, args: [quote.amount, minimumYes, minimumNo, account, quote.deadline] }))
 }

@@ -1,11 +1,11 @@
-import type { Address, Hash, WalletClient } from '@zoltar/shared/ethereum'
+import type { Address, Hash, WalletClient } from '@zoltar/shared/evm/ethereum'
 import { createExclusiveWorkflowGuard, createLatestRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { waitForSubmittedTransactionReceipt } from '@zoltar/ui-core-shared/lib/transactionReceipt.js'
 import { useEffect, useReducer, useRef, useState } from 'preact/hooks'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import { publicErrorMessage, type LiveMarket, type SettlementOperation, type ShareOutcome } from '../../protocol/live.js'
 import type { LiveSettlementServices } from '../LiveSettlementControls.js'
-import { approvalFailureTransition, broadcastUncertainMessage, positionControlsWorkflowLocked, type GuardedWalletWrite } from '../liveTradingControllerHelpers.js'
+import { broadcastUncertainMessage, positionControlsWorkflowLocked, type GuardedWalletWrite } from '../liveTradingControllerHelpers.js'
 import type { BalanceState } from './liveTradingTypes.js'
 import { settlementQuoteCanSubmit, settlementQuoteMatchesInputs, type SettlementQuote } from './settlementQuote.js'
 import { idleTransactionWorkflow, transactionPhase, transactionWorkflowError, transactionWorkflowHash, transactionWorkflowReceiptWarning, transactionWorkflowReducer, type TransactionContext } from './transactionWorkflow.js'
@@ -22,12 +22,9 @@ export function useSettlementWorkflowController({
 	sourceOutcome,
 	targetOutcomeIndexes,
 	inputBlocker,
-	approvalRequired,
 	contextKey,
 	refresh,
-	refreshBalancesAfterApproval,
 	onKnownReceipt,
-	walletContextIsCurrent,
 	executeWithCurrentWalletContext,
 	createGuardedWalletWrite,
 	onWorkflowLockChange,
@@ -45,12 +42,9 @@ export function useSettlementWorkflowController({
 	sourceOutcome: ShareOutcome
 	targetOutcomeIndexes: readonly bigint[]
 	inputBlocker: string | undefined
-	approvalRequired: boolean
 	contextKey: string
 	refresh(): Promise<void>
-	refreshBalancesAfterApproval(label: string, market: LiveMarket, account: Address): Promise<'ready' | 'refresh-error' | 'context-changed'>
 	onKnownReceipt(): void
-	walletContextIsCurrent(account: Address): boolean
 	executeWithCurrentWalletContext<T>(account: Address, networkFailure: string, accountFailure: string, action: () => Promise<T>): Promise<T>
 	createGuardedWalletWrite(account: Address, networkFailure: string, accountFailure: string): GuardedWalletWrite
 	onWorkflowLockChange(locked: boolean): void
@@ -69,7 +63,7 @@ export function useSettlementWorkflowController({
 	const mounted = useRef(true)
 	const preserveConfirmedOnNextInvalidation = useRef(false)
 	const matches = settlementQuoteMatchesInputs(quote, inputRevision.current, market, operation, parsedAmount, sourceOutcome, targetOutcomeIndexes, account, walletClient)
-	const actionableQuote = !approvalRequired && settlementQuoteCanSubmit(balanceState, inputBlocker, matches) ? quote : undefined
+	const actionableQuote = settlementQuoteCanSubmit(balanceState, inputBlocker, matches) ? quote : undefined
 	const submitContext = useRef({ balanceState, inputBlocker, actionableQuote })
 	submitContext.current = { balanceState, inputBlocker, actionableQuote }
 	const workflowLocked = externallyLocked || positionControlsWorkflowLocked(state, receiptWarning)
@@ -194,69 +188,5 @@ export function useSettlementWorkflowController({
 		}
 	}
 
-	async function approveCompleteSetRouter() {
-		if (walletClient === undefined || account === undefined || !approvalRequired || externallyLocked || !workflow.begin()) return
-		const context = transactionContext(account, inputRevision.current)
-		onWorkflowLockChange(true)
-		dispatchWorkflow({ type: 'operation-preparing', context, operation: 'settlement-approval' })
-		let broadcastHash: Hash | undefined
-		let receiptKnown = false
-		let keepLocked = false
-		try {
-			broadcastHash = await createGuardedWalletWrite(
-				account,
-				'Wallet network changed; reconnect before approving',
-				'Wallet account changed; reconnect before approving',
-			)(async () => {
-				if (mounted.current) dispatchWorkflow({ type: 'signature-requested', context, operation: 'settlement-approval' })
-				return await services.approveRouter(walletClient, market, configuration, account)
-			})
-			if (!mounted.current) return
-			dispatchWorkflow({ type: 'broadcast', context, operation: 'settlement-approval', transactionHash: broadcastHash })
-			const { receipt } = await waitForSubmittedTransactionReceipt(walletClient, broadcastHash, {
-				allowRevertedReceipt: true,
-				onKnownReceipt: () => {
-					receiptKnown = true
-					onKnownReceipt()
-				},
-				onTransactionReplaced: replacementHash => {
-					broadcastHash = replacementHash
-					if (mounted.current) dispatchWorkflow({ type: 'replaced', context, replacementHash })
-				},
-			})
-			if (!mounted.current) return
-			if (receipt.status === 'reverted') {
-				dispatchWorkflow({ type: 'reverted', context })
-				if (!walletContextIsCurrent(account)) {
-					dispatchWorkflow({ type: 'context-invalidated', message: 'Wallet context changed while the share-token approval was pending. Approval transaction reverted.' })
-				}
-				return
-			}
-			dispatchWorkflow({ type: 'confirmed', context })
-			if (!walletContextIsCurrent(account)) return
-			const refreshResult = await refreshBalancesAfterApproval('Share-token approval', market, account)
-			if (!mounted.current) return
-			if (refreshResult === 'context-changed') dispatchWorkflow({ type: 'context-invalidated', message: 'Wallet context changed while approved balances were refreshing. Reconnect to continue.' })
-		} catch (caught) {
-			if (!mounted.current) return
-			if (!walletContextIsCurrent(account)) {
-				if (broadcastHash !== undefined && !receiptKnown) {
-					keepLocked = true
-					dispatchWorkflow({ type: 'uncertain', context, reason: broadcastUncertainMessage('Share-token approval', broadcastHash) })
-				} else {
-					dispatchWorkflow({ type: 'failed', context, operation: 'settlement-approval', message: 'Wallet context changed while the share-token approval was pending. Reconnect to continue.' })
-				}
-				return
-			}
-			const failure = approvalFailureTransition('Share-token approval', broadcastHash, receiptKnown, caught, 'Approval failed')
-			keepLocked = failure.keepLocked
-			if (failure.warning !== undefined) dispatchWorkflow({ type: 'uncertain', context, reason: failure.warning })
-			else dispatchWorkflow({ type: 'failed', context, operation: 'settlement-approval', message: failure.message ?? 'Approval failed' })
-		} finally {
-			workflow.finish()
-			if (!keepLocked) onWorkflowLockChange(false)
-		}
-	}
-
-	return { quote, state, transactionHash, error, receiptWarning, actionableQuote, workflowLocked, invalidateInputs, simulateCurrent, submitCurrent, approveCompleteSetRouter }
+	return { quote, state, transactionHash, error, receiptWarning, actionableQuote, workflowLocked, invalidateInputs, simulateCurrent, submitCurrent }
 }

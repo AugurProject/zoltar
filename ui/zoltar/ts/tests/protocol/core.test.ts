@@ -1,7 +1,7 @@
 /// <reference types='bun-types' />
 
 import { describe, expect, mock, test } from 'bun:test'
-import { encodeFunctionData, getAddress, type Hash, type TransactionReceipt } from '@zoltar/shared/ethereum'
+import { encodeFunctionData, getAddress, type Hash, type TransactionReceipt } from '@zoltar/shared/evm/ethereum'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { getMulticall3Address } from '@zoltar/ui-zoltar-domain/protocol/deploymentHelpers.js'
 import { readOptionalMulticall, readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from '@zoltar/ui-zoltar-domain/protocol/core.js'

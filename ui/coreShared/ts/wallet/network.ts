@@ -1,5 +1,5 @@
 import * as commonCopy from '../copy/common.js'
-import type { Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/evm/ethereum'
 import { getActiveNetworkProfile } from '../lib/activeEnvironment.js'
 import { parseChainId, sameChainId } from './chainId.js'
 

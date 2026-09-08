@@ -1,7 +1,7 @@
 /// <reference types='bun-types' />
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import { type Address, zeroAddress } from '@zoltar/shared/ethereum'
+import { type Address, zeroAddress } from '@zoltar/shared/evm/ethereum'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { WalletAssetControl } from '../components/WalletAssetControl.js'

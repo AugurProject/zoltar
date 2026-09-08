@@ -1,5 +1,5 @@
 import { useSignal } from '@preact/signals'
-import type { Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/evm/ethereum'
 import { executeOracleManagerStagedOperation, loadCoordinatorInitialReportFundingRequirement, loadOracleManagerDetails, requestOraclePrice } from '../../../protocol/index.js'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/lib/clients.js'

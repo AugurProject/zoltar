@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { beforeAll, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { getAddress, maxUint256, zeroAddress, type Address, type Hash } from '@zoltar/shared/ethereum'
+import { getAddress, maxUint256, zeroAddress, type Address, type Hash } from '@zoltar/shared/evm/ethereum'
 import {
 	createOpenOracleReportInstance,
 	executeOracleManagerStagedOperation,
