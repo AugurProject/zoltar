@@ -64,12 +64,6 @@ COPY ./ui/statoblastShared/bun.lock /source/ui/statoblastShared/bun.lock
 COPY ./ui/statoblastShared/tsconfig.json /source/ui/statoblastShared/tsconfig.json
 COPY ./ui/statoblastShared/ts/ /source/ui/statoblastShared/ts/
 RUN bun ./tooling/repo/install-frozen.mts ui/statoblastShared && cd /source/ui/statoblastShared && bun run build
-COPY ./ui/tradingShared/package.json /source/ui/tradingShared/package.json
-COPY ./ui/tradingShared/bun.lock /source/ui/tradingShared/bun.lock
-COPY ./ui/tradingShared/tsconfig.json /source/ui/tradingShared/tsconfig.json
-COPY ./ui/tradingShared/ts/ /source/ui/tradingShared/ts/
-RUN bun ./tooling/repo/install-frozen.mts ui/tradingShared && cd /source/ui/tradingShared && bun run build
-
 # Build Zoltar from only its inward dependencies.
 FROM common-builder AS zoltar-builder
 
