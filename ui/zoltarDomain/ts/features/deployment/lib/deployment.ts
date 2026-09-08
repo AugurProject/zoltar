@@ -1,5 +1,5 @@
 import * as deploymentCopy from '../../../copy/deployment.js'
-import { getWalletActiveAppChainActionAvailability } from '@zoltar/ui-core-shared/lib/actionGuards.js'
+import { getWalletActiveAppChainActionAvailability } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import type { ActionAvailability } from '../../types.js'
 import type { DeploymentStatus } from '@zoltar/ui-core-shared/types/contracts.js'
 

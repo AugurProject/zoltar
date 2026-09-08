@@ -12,7 +12,7 @@ import type { SecurityVaultSectionProps } from '@zoltar/ui-zoltar-domain/feature
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled, getTransactionButtonState } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
-import { ChainTimestampContext } from '@zoltar/ui-core-shared/lib/chainTimestamp.js'
+import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {

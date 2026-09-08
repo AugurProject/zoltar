@@ -21,18 +21,18 @@ import { TransactionActionButton } from '@zoltar/ui-core-shared/components/Trans
 import { TransactionNetworkValue } from '@zoltar/ui-core-shared/components/TransactionNetworkValue.js'
 import { normalizeAddress, sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance, formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { balanceShortage } from '@zoltar/ui-core-shared/lib/inputs.js'
+import { balanceShortage } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
 import { tryParseRepAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
-import { isActiveAppChain } from '@zoltar/ui-core-shared/lib/network.js'
+import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import { resolveOracleOperationEthFunding } from '@zoltar/ui-zoltar-domain/features/open-oracle/lib/oracleRequestEth.js'
-import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/lib/actionGuards.js'
+import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { getSecurityPoolVaultReadinessActions } from '../lib/securityPoolReadiness.js'
 import { getVaultLauncherVaultOwnerReason, getVaultLauncherWalletReason } from '../lib/securityPoolLabels.js'
 import { isVaultHealthyAtFactor } from '../lib/liquidation.js'
 import { getTargetHealthFactorGuardMessage, getVaultDepositGuardMessage, getVaultRedeemRepGuardMessage, getVaultWithdrawGuardMessage } from '../lib/securityVaultGuards.js'
-import { deriveTokenApprovalRequirement } from '@zoltar/ui-core-shared/lib/tokenApproval.js'
-import { useChainTimestamp } from '@zoltar/ui-core-shared/lib/chainTimestamp.js'
+import { deriveTokenApprovalRequirement } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
+import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import {
 	DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES,
 	doesSecurityVaultExistOnchain,

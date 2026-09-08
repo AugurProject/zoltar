@@ -8,7 +8,7 @@ import { getAddress, zeroAddress, type Address } from '@zoltar/shared/evm/ethere
 import type { ReportingDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { useReportingOperations, type UseReportingOperationsDependencies } from '@zoltar/ui-zoltar-domain/features/reporting/hooks/useReportingOperations.js'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFinished, markTransactionRequested } from '@zoltar/ui-core-shared/lib/transactionTray.js'
+import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFinished, markTransactionRequested } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
 import type { TransactionIntent } from '@zoltar/ui-zoltar-domain/features/types.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'

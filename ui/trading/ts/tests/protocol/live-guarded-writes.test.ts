@@ -13,24 +13,7 @@ const shareToken = `0x${'44'.repeat(20)}` as Address
 const blockHash = `0x${'55'.repeat(32)}` as Hex
 const transactionHash = `0x${'66'.repeat(32)}` as Hex
 const routerAbi = tradingContracts['contracts/trading/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter.abi
-const directLiquidityRemovalV2Abi = [
-	{
-		type: 'function',
-		name: 'removeLiquidity',
-		stateMutability: 'nonpayable',
-		inputs: [
-			{ name: 'liquidity', type: 'uint256' },
-			{ name: 'minYes', type: 'uint256' },
-			{ name: 'minNo', type: 'uint256' },
-			{ name: 'recipient', type: 'address' },
-			{ name: 'deadline', type: 'uint256' },
-		],
-		outputs: [
-			{ name: 'yesOut', type: 'uint256' },
-			{ name: 'noOut', type: 'uint256' },
-		],
-	},
-] as const
+const pairAbi = tradingContracts['contracts/trading/TwoWayConstantProductPair.sol'].TwoWayConstantProductPair.abi
 const receiveRequestParameter = {
 	type: 'tuple',
 	components: [
@@ -122,8 +105,6 @@ test('creates live read clients from the configured active backend', () => {
 
 describe('live guarded transaction writes', () => {
 	test('simulates and submits the exact same final receive-based exit payload', async () => {
-		const receiveRouter = `0x${'aa'.repeat(20)}` as Address
-		const versionTwoConfiguration = { ...configuration, receiveRouter, version: 2 as const }
 		const shareCalls: Hex[] = []
 		const client = createWalletClient({
 			account,
@@ -143,10 +124,10 @@ describe('live guarded transaction writes', () => {
 				},
 			}),
 		})
-		const quote = await simulateExit(client, versionTwoConfiguration, market, account, 'YES', 10n, 7n, 500n)
+		const quote = await simulateExit(client, configuration, market, account, 'YES', 10n, 7n, 500n)
 		expect(quote.maximumLongShares).toBe(13n)
 		expect(quote.minimumEth).toBe(9n)
-		expect(await submitFreshExit(client, versionTwoConfiguration, account, quote, async write => await write())).toBe(transactionHash)
+		expect(await submitFreshExit(client, configuration, account, quote, async write => await write())).toBe(transactionHash)
 		expect(shareCalls).toHaveLength(3)
 		expect(shareCalls[1]).toBe(shareCalls[0])
 		expect(shareCalls[2]).toBe(shareCalls[0])
@@ -157,7 +138,6 @@ describe('live guarded transaction writes', () => {
 
 	test('uses one approved deadline for liquidity simulation, revalidation, and submission', async () => {
 		const calls: ReturnType<typeof decodeFunctionData>[] = []
-		const versionTwoConfiguration = { ...configuration, version: 2 as const }
 		const client = createWalletClient({
 			account,
 			transport: custom({
@@ -165,7 +145,7 @@ describe('live guarded transaction writes', () => {
 					if (method === 'eth_blockNumber') return '0x2'
 					if (method === 'eth_getBlockByNumber') return { hash: blockHash, number: '0x2', parentHash: `0x${'aa'.repeat(32)}`, timestamp: '0x1', transactions: [] }
 					if (method === 'eth_call' || method === 'eth_sendTransaction') {
-						const decoded = decodeFunctionData({ abi: [...routerAbi, ...directLiquidityRemovalV2Abi], data: callData(params) })
+						const decoded = decodeFunctionData({ abi: [...routerAbi, ...pairAbi], data: callData(params) })
 						calls.push(decoded)
 						if (method === 'eth_sendTransaction') return transactionHash
 						if (decoded.functionName === 'removeLiquidity') return encodeAbiParameters([uint256, uint256], [5n, 5n])
@@ -185,10 +165,10 @@ describe('live guarded transaction writes', () => {
 			{ operation: 'remove', market },
 		] as const
 		for (const scenario of operations) {
-			const quote = await simulateLiquidity(client, versionTwoConfiguration, scenario.market, account, scenario.operation, 10n, 5_000n, validityMinutes, slippageBps)
+			const quote = await simulateLiquidity(client, configuration, scenario.market, account, scenario.operation, 10n, 5_000n, validityMinutes, slippageBps)
 			expect(quote.deadline).toBe(deadline)
 			expect(quote.slippageBps).toBe(slippageBps)
-			expect(await submitFreshLiquidity(client, versionTwoConfiguration, account, quote, async write => await write())).toBe(transactionHash)
+			expect(await submitFreshLiquidity(client, configuration, account, quote, async write => await write())).toBe(transactionHash)
 		}
 
 		expect(calls).toHaveLength(12)
@@ -226,9 +206,12 @@ describe('live guarded transaction writes', () => {
 					if (method === 'eth_blockNumber') return '0x2'
 					if (method === 'eth_getBlockByNumber') return { hash: blockHash, number: '0x2', parentHash: `0x${'aa'.repeat(32)}`, timestamp: '0x1', transactions: [] }
 					if (method === 'eth_call') {
+						const transaction = Array.isArray(params) ? params[0] : undefined
+						const target = typeof transaction === 'object' && transaction !== null && 'to' in transaction && typeof transaction.to === 'string' ? transaction.to.toLowerCase() : ''
+						if (target === pair.toLowerCase()) return encodeAbiParameters([uint256, uint256], [2n, 1n])
+						if (target === shareToken.toLowerCase()) return '0x'
 						const decoded = decodeFunctionData({ abi: routerAbi, data: callData(params) })
 						if (decoded.functionName === 'enterPosition') return encodeAbiParameters([{ type: 'tuple', components: [uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256] }], [[10n, 10n, 1n, 2n, 12n, 10n, 1n, 5_000n, 5_001n]])
-						if (decoded.functionName === 'exitPosition') return encodeAbiParameters([{ type: 'tuple', components: [uint256, uint256, uint256, uint256, uint256, uint256] }], [[10n, 2n, 12n, 10n, 1_000n, 1n]])
 						if (decoded.functionName === 'addLiquidityWithEth') return encodeAbiParameters([{ type: 'tuple', components: [address, uint256, uint256, uint256, uint256, uint256, uint256, uint256] }], [[pair, 10n, 5n, 5n, 5n, 5n, 10n, 10n]])
 						throw new Error(`Unexpected simulation ${decoded.functionName}`)
 					}

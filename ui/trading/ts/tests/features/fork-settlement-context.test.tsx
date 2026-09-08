@@ -132,7 +132,7 @@ describe('live fork settlement context', () => {
 				},
 			}),
 		})
-		const balances = { scope: actualLive.shareBalanceScope(market), invalid: 1n, yes: 1n, no: 1n, approved: true, lp: 0n, lpAllowance: 0n }
+		const balances = { scope: actualLive.shareBalanceScope(market), invalid: 1n, yes: 1n, no: 1n, lp: 0n }
 		const settlementView = (currentAccount: typeof account, currentWalletClient: typeof walletClient, currentBalances: typeof balances) => (
 			<LiveSettlementControls
 				configuration={configuration}
@@ -146,9 +146,7 @@ describe('live fork settlement context', () => {
 				refresh={async () => {
 					refreshes++
 				}}
-				refreshBalancesAfterApproval={async () => 'ready'}
 				onKnownReceipt={() => undefined}
-				walletContextIsCurrent={() => true}
 				executeWithCurrentWalletContext={async (_account, _networkFailure, _accountFailure, action) => await action()}
 				createGuardedWalletWrite={() => async write => await write()}
 				retryBalances={async () => undefined}

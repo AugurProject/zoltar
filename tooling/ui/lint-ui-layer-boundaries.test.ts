@@ -41,7 +41,7 @@ test('keeps runnable applications as dependency leaves behind domain APIs', () =
 	expect(findUiLayerBoundaryViolations('ui/statoblast/ts/app/App.tsx', "import { helper } from '@zoltar/ui-zoltar-domain/protocol/core.js'")).toEqual([])
 	expect(findUiLayerBoundaryViolations('ui/trading/ts/app/App.tsx', "import { helper } from '@zoltar/ui-statoblast/app/App.js'").map(finding => finding.rule)).toEqual(['cross-package-import-boundary'])
 	expect(findUiLayerBoundaryViolations('ui/trading/ts/app/App.tsx', "import { helper } from '@zoltar/ui-statoblast-domain/protocol/index.js'")).toEqual([])
-	expect(findUiLayerBoundaryViolations('ui/trading/ts/protocol/live.ts', "import { capabilities } from '@zoltar/ui-trading-domain/capabilities.js'")).toEqual([])
+	expect(findUiLayerBoundaryViolations('ui/trading/ts/features/LivePortfolio.tsx', "import { maximumInsuredExit } from '@zoltar/ui-trading-domain'")).toEqual([])
 })
 
 test('prevents domain packages from reaching back into applications', () => {

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdir, mkdtemp, open, readFile, rename, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { Hex } from '#ethereum'
+import type { Hex } from '@zoltar/bot-shared/ethereum'
 import { assertOperatorProfileIsolation, CONFIGURATION_REVISION_CONFLICT, loadOperatorSettings, loadOperatorSettingsWithRevision, operatorProfilePath, parseOperatorSettings, saveOperatorSettings, serializeOperatorSettings, switchOperatorNetworkProfile, type OperatorSettingsFilesystem } from '#config/settings-store'
 import { executorDeploymentIntentPath } from '#execution/executor-deployment-store'
 

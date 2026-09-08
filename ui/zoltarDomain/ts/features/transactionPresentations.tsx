@@ -8,8 +8,8 @@ import { IdentifierValue } from '@zoltar/ui-core-shared/components/IdentifierVal
 import { formatCurrencyBalanceWithUnit, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getReportingOutcomeLabel } from './reporting/lib/reporting.js'
 import { getMarketTypeLabel } from '@zoltar/ui-core-shared/lib/marketType.js'
-import { buildIntent, buildPresentation, getPoolUniverseTransactionRows, humanizeTransactionAction, withWarning } from '@zoltar/ui-core-shared/lib/transactionPresentations.js'
-import type { PoolUniverseTransactionContext } from '@zoltar/ui-core-shared/lib/transactionPresentations.js'
+import { buildIntent, buildPresentation, getPoolUniverseTransactionRows, humanizeTransactionAction, withWarning } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
+import type { PoolUniverseTransactionContext } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
 import type { MarketCreationResult, OpenOracleActionResult, ReportingActionResult, ZoltarChildUniverseActionResult, ZoltarForkActionResult, ZoltarMigrationActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
 export function createDeploymentTransactionIntent(stepLabel: string) {
 	return buildIntent({

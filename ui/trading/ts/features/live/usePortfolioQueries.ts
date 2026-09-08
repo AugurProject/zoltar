@@ -69,7 +69,7 @@ export function usePortfolioRefreshEffects({
 			if (market.loadError !== undefined) return { market, balances: undefined, error: market.loadError }
 			let entry: PortfolioBalanceEntry
 			try {
-				const loaded = await services.loadLiveBalances(client, market, account, configuration.router)
+				const loaded = await services.loadLiveBalances(client, market, account)
 				entry = { market, balances: liveBalancesForMarket(loaded, market), error: undefined }
 			} catch (error) {
 				entry = { market, balances: undefined, error: publicErrorMessage(error, 'Balance refresh failed') }
@@ -108,7 +108,7 @@ export function usePortfolioRefreshEffects({
 		queries.setBalanceState('loading')
 		queries.setBalanceError(undefined)
 		queries.setBalances(undefined)
-		void services.loadLiveBalances(services.createTradingPublicClient(configuration), selected, account, configuration.router).then(
+		void services.loadLiveBalances(services.createTradingPublicClient(configuration), selected, account).then(
 			loaded => {
 				if (!balanceRequests.isCurrent(request)) return
 				queries.setBalances(loaded)

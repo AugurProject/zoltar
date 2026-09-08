@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { chmod, cp, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { getAddress, keccak256, toHex, zeroHash, type Address, type Hash } from '../support/bot-shared.ts'
+import { getAddress, keccak256, toHex, zeroHash, type Address, type Hash } from '@zoltar/bot-shared/ethereum'
 import type { CanonicalUintString } from '../../src/core/units.ts'
 import {
 	appendCarryLeafToAccumulator,

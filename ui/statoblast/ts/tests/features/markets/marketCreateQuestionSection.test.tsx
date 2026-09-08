@@ -5,7 +5,7 @@ import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/querie
 import { act } from 'preact/test-utils'
 import { zeroAddress } from '@zoltar/shared/evm/ethereum'
 import { MarketCreateQuestionSection } from '@zoltar/ui-statoblast-domain/features/markets/components/MarketCreateQuestionSection.js'
-import { ChainTimestampContext } from '@zoltar/ui-core-shared/lib/chainTimestamp.js'
+import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import { createMarketParameters } from '@zoltar/ui-statoblast-domain/features/markets/lib/marketCreation.js'
 import type { MarketFormState } from '@zoltar/ui-zoltar-domain/types/app.js'
 import type { MarketCreationResult, MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'

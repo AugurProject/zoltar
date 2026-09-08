@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { privateKeyToAccount, zeroAddress, type Hex } from '#ethereum'
+import { privateKeyToAccount, zeroAddress, type Hex } from '@zoltar/bot-shared/ethereum'
 import { defaultConfigurationFile } from '#config/configuration'
 import { loadOperatorSettings, operatorProfilePath } from '#config/settings-store'
 import { defaultRpcUrl, networkConfiguration, parseNetworkName } from '#config/network'

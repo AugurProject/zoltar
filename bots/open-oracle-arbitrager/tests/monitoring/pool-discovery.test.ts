@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { createPublicClient, custom, zeroAddress } from '#ethereum'
+import { createPublicClient, custom, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { networkConfiguration } from '#config/network'
 import { loadTokenMarkets } from '#monitoring/market-monitor'
 import { poolsForToken } from '#monitoring/opportunity-evaluation'

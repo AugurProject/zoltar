@@ -21,9 +21,9 @@ import {
 	quoteRepForUsdcV4WithSource,
 	quoteTokenForEth,
 } from '@zoltar/ui-zoltar-domain/protocol/uniswapQuoter.js'
-import type { ReadClient } from '@zoltar/ui-core-shared/lib/clients.js'
+import type { ReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/lib/networkProfile.js'
+import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 type SimulateArgs = Parameters<ReadClient['simulateContract']>[0]
 type RawSimulateParam = {

@@ -20,7 +20,7 @@ import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { pickFirstReason } from '@zoltar/ui-core-shared/transactions/actionAvailability.js'
 import { formatCurrencyInputBalance, formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { parseOptionalRepAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
-import { getWrongNetworkReason, isActiveAppChain } from '@zoltar/ui-core-shared/lib/network.js'
+import { getWrongNetworkReason, isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import {
 	ESCALATION_GAME_ACTIVATION_DELAY,
 	getEscalationDepositClaimAmount,

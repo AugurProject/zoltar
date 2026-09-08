@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { Address } from '#ethereum'
+import type { Address } from '@zoltar/bot-shared/ethereum'
 import { OPEN_ORACLE_FLAG_FEES_ONLY_AT_HALT, OPEN_ORACLE_FLAG_FLEXIBLE_ESCALATION, OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_STORE_SETTLEMENT_ELIGIBILITY, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_FLAG_TRACK_DISPUTES, type OpenOracleStatePreimage } from '@zoltar/shared/oracle/openOracle'
 import { gamePolicyMismatch, retainedReportIds, type CoordinatorGamePolicy } from '#core/game-policy'
 

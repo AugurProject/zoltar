@@ -5,8 +5,8 @@ import { DeploymentStatusOracle_DeploymentStatusOracle, ScalarOutcomes_ScalarOut
 import { MULTICALL3_BYTECODE, PROXY_DEPLOYER_ADDRESS, ZERO_SALT, getZoltarContractAddresses, getZoltarInitCode, getZoltarQuestionDataByteCode } from './zoltarDeploymentHelpers.js'
 import { readWithRpcStateRetries, waitForSubmittedTransactionReceipt, type RpcStateRetryWait } from './core.js'
 import type { DeploymentStatusSnapshot, DeploymentStep, DeploymentStepId, ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { TransactionRequestPreview } from '@zoltar/ui-core-shared/lib/chainBackend.js'
-import { getRuntimeNetworkProfile, type NetworkProfile } from '@zoltar/ui-core-shared/lib/networkProfile.js'
+import type { TransactionRequestPreview } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
+import { getRuntimeNetworkProfile, type NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { SEPOLIA_GENESIS_REP_INIT_CODE, SEPOLIA_WETH_INIT_CODE } from '@zoltar/ui-core-shared/lib/sepoliaDeploymentConfig.js'
 
 const PROXY_DEPLOYER_SIGNER = getAddress('0x4c8d290a1b368ac4728d83a9e8321fc3af2b39b1')

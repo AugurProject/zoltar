@@ -15,7 +15,7 @@ const market: LiveMarket = {
 	universeId: 7n,
 	questionId: 9n,
 	title: 'Authorization routing',
-	description: 'V1 and V2 control fixture',
+	description: 'Canonical authorization control fixture',
 	endTime: 10_000n,
 	statoblastSecurityMultiplierBps: 20_000n,
 	initialReportPriorityFeeAttoEthPerGas: 1n,
@@ -43,15 +43,13 @@ const balances: LiveBalances = {
 	yes: 20n,
 	no: 20n,
 	lp: 0n,
-	approved: false,
-	lpAllowance: 0n,
 }
 
 describe('trading authorization routing', () => {
 	let cleanup: (() => Promise<void>) | undefined
 	installDomTestLifecycle({ afterTest: async () => cleanup?.(), url: 'http://localhost/#/market' })
 
-	async function renderExit(receiveBasedShareOperations: boolean) {
+	async function renderExit() {
 		const rendered = await renderIntoDocument(
 			<LivePositionControls
 				market={market}
@@ -68,7 +66,6 @@ describe('trading authorization routing', () => {
 				receiptWarning={undefined}
 				transactionHash={undefined}
 				externallyLocked={false}
-				receiveBasedShareOperations={receiveBasedShareOperations}
 				nowSeconds={1n}
 				setMode={() => undefined}
 				setSide={() => undefined}
@@ -76,7 +73,6 @@ describe('trading authorization routing', () => {
 				setSlippage={() => undefined}
 				setTransactionValidityMinutes={() => undefined}
 				simulate={async () => undefined}
-				approve={async () => undefined}
 				submit={async () => undefined}
 				retryBalances={async () => undefined}
 			/>,
@@ -85,15 +81,9 @@ describe('trading authorization routing', () => {
 		return rendered.container
 	}
 
-	test('defaults capable V2 exits to the receive flow without an approval action', async () => {
-		const container = await renderExit(true)
+	test('uses the receive flow without an approval action', async () => {
+		const container = await renderExit()
 		expect(container.textContent).toContain('Preview trade')
 		expect(container.textContent).not.toContain('Approve router for all outcome tokens')
-	})
-
-	test('retains the explicit approval fallback for legacy deployments', async () => {
-		const container = await renderExit(false)
-		expect(container.textContent).toContain('Approve router for all outcome tokens')
-		expect(container.textContent).not.toContain('Preview trade')
 	})
 })

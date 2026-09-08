@@ -68,8 +68,8 @@ describe('live portfolio scope', () => {
 
 	test('renders separate balance groups for each exact SecurityPool', async () => {
 		const secondMarket = { ...market, pool: secondPool, shareToken: secondShareToken, universeId: 8n, questionId: 10n, title: 'Second scoped portfolio' }
-		const firstBalances = { scope: { pool, shareToken, invalidTokenId: 1_792n, yesTokenId: 1_793n, noTokenId: 1_794n }, invalid: 3n * 10n ** 18n, yes: 1n * 10n ** 18n, no: 2n * 10n ** 18n, lp: 0n, approved: false, lpAllowance: 0n }
-		const secondBalances = { scope: { pool: secondPool, shareToken: secondShareToken, invalidTokenId: 2_048n, yesTokenId: 2_049n, noTokenId: 2_050n }, invalid: 6n * 10n ** 18n, yes: 4n * 10n ** 18n, no: 5n * 10n ** 18n, lp: 0n, approved: false, lpAllowance: 0n }
+		const firstBalances = { scope: { pool, shareToken, invalidTokenId: 1_792n, yesTokenId: 1_793n, noTokenId: 1_794n }, invalid: 3n * 10n ** 18n, yes: 1n * 10n ** 18n, no: 2n * 10n ** 18n, lp: 0n }
+		const secondBalances = { scope: { pool: secondPool, shareToken: secondShareToken, invalidTokenId: 2_048n, yesTokenId: 2_049n, noTokenId: 2_050n }, invalid: 6n * 10n ** 18n, yes: 4n * 10n ** 18n, no: 5n * 10n ** 18n, lp: 0n }
 		const rendered = await renderIntoDocument(
 			<LivePortfolio
 				entries={[

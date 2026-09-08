@@ -242,8 +242,8 @@ export function LiveTrading({
 		defaultValidityMinutes: DEFAULT_TRANSACTION_VALIDITY_MINUTES,
 		services: controllerServices,
 	})
-	const { account, walletClient, connect, connectionMessage, refreshWalletSummaryAfterReceipt, walletContextIsCurrent, executeWithCurrentWalletContext, createGuardedWalletWrite } = wallet
-	const { balanceError, portfolioBalanceState, portfolioBalanceError, visiblePortfolioEntries, selectedBalances, selectedBalanceState, retryBalances, retryPortfolioBalances, refreshBalancesAfterApproval } = balances
+	const { account, walletClient, connect, connectionMessage, refreshWalletSummaryAfterReceipt, executeWithCurrentWalletContext, createGuardedWalletWrite } = wallet
+	const { balanceError, portfolioBalanceState, portfolioBalanceError, visiblePortfolioEntries, selectedBalances, selectedBalanceState, retryBalances, retryPortfolioBalances } = balances
 	const { visibleMarkets, selected, selectedPairInitialized, routePool, discoveryState, discoveryError, marketPage, marketListRef, marketDetailRef, nowSeconds, refresh, refreshFromControl, loadMarketPage, focusSection, selectMarket } = discovery
 	const { parsedAmount, mode, setMode, side, setSide, amount, setAmount, slippage, setSlippage, transactionValidityMinutes, setTransactionValidityMinutes, quote, state, positionHash, message, positionReceiptWarning, simulate, submit } = position
 	const { workflowLocked, updateLiquidityWorkflowLock } = workflow

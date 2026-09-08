@@ -1,6 +1,6 @@
 import type { Address, Hash } from '@zoltar/shared/evm/ethereum'
 
-type TransactionOperation = 'share-approval' | 'trade' | 'settlement-approval' | 'settlement' | 'liquidity'
+type TransactionOperation = 'trade' | 'settlement' | 'liquidity'
 
 export type TransactionContext = Readonly<{
 	account: Address
@@ -102,19 +102,15 @@ export function transactionWorkflowReducer(state: TransactionWorkflowState, even
 	return { kind: 'failed', ...(event.context === undefined ? {} : { context: event.context }), ...(event.operation === undefined ? {} : { operation: event.operation }), message: event.message }
 }
 
-export type TransactionPhase = 'idle' | 'simulating' | 'ready' | 'preparing' | 'approval' | 'approval-pending' | 'approval-confirmed' | 'submitting' | 'pending' | 'confirmed' | 'error'
+export type TransactionPhase = 'idle' | 'simulating' | 'ready' | 'preparing' | 'submitting' | 'pending' | 'confirmed' | 'error'
 
 export function transactionPhase(state: TransactionWorkflowState): TransactionPhase {
 	if (state.kind === 'ready-to-submit') return 'ready'
-	if (state.kind === 'awaiting-signature') return transactionOperationIsApproval(state.operation) ? 'approval' : 'submitting'
-	if (state.kind === 'pending') return transactionOperationIsApproval(state.operation) ? 'approval-pending' : 'pending'
-	if (state.kind === 'confirmed') return transactionOperationIsApproval(state.operation) ? 'approval-confirmed' : 'confirmed'
+	if (state.kind === 'awaiting-signature') return 'submitting'
+	if (state.kind === 'pending') return 'pending'
+	if (state.kind === 'confirmed') return 'confirmed'
 	if (state.kind === 'simulating' || state.kind === 'preparing' || state.kind === 'idle') return state.kind
 	return 'error'
-}
-
-function transactionOperationIsApproval(operation: TransactionOperation) {
-	return operation === 'share-approval' || operation === 'settlement-approval'
 }
 
 export function transactionWorkflowHash(state: TransactionWorkflowState) {

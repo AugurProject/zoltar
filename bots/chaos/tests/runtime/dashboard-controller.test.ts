@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { createSignerOperationGate, privateKeyToAccount, zeroAddress, zeroHash, type Hex } from '../support/bot-shared.ts'
+import { privateKeyToAccount, zeroAddress, zeroHash, type Hex } from '@zoltar/bot-shared/ethereum'
+import { createSignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
 import example from '../../config/operator.example.json'
 import {
 	assertSignerCompatibleWithPending,

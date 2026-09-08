@@ -14,7 +14,7 @@ import { expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/tes
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 
 const actualContracts = await import('@zoltar/ui-statoblast-domain/protocol/index.js')
-const actualClients = await import('@zoltar/ui-core-shared/lib/clients.js')
+const actualClients = await import('@zoltar/ui-core-shared/wallet/clients.js')
 
 const PARENT_POOL_ADDRESS: Address = '0x00000000000000000000000000000000000000f0'
 const YES_CHILD_POOL_ADDRESS: Address = '0x00000000000000000000000000000000000000f1'
@@ -43,7 +43,7 @@ mock.module('@zoltar/ui-statoblast-domain/protocol/index.js', () => ({
 	}),
 }))
 
-mock.module('@zoltar/ui-core-shared/lib/clients.js', () => ({
+mock.module('@zoltar/ui-core-shared/wallet/clients.js', () => ({
 	...actualClients,
 	createConnectedReadClient: mock(() => ({
 		readContract: mock(async () => {

@@ -136,7 +136,7 @@ export function useLiveTradingController({
 		setBalanceError(undefined)
 		setBalances(undefined)
 		try {
-			const loaded = await services.loadLiveBalances(services.createTradingPublicClient(configuration), selected, account, configuration.router)
+			const loaded = await services.loadLiveBalances(services.createTradingPublicClient(configuration), selected, account)
 			if (!balanceRequests.isCurrent(request)) return
 			setBalances(loaded)
 			setBalanceState('ready')
@@ -158,27 +158,6 @@ export function useLiveTradingController({
 			return
 		}
 		setPortfolioRefreshNonce(value => value + 1)
-	}
-
-	async function refreshBalancesAfterApproval(label: string, expectedMarket: LiveMarket, expectedAccount: Address, request = balanceRequests.begin()): Promise<'ready' | 'refresh-error' | 'context-changed'> {
-		if (configuration === undefined || accountRef.current !== expectedAccount || !balanceRequests.isCurrent(request)) return 'context-changed'
-		setBalances(undefined)
-		setBalanceState('loading')
-		setBalanceError(undefined)
-		try {
-			const loaded = await services.loadLiveBalances(services.createTradingPublicClient(configuration), expectedMarket, expectedAccount, configuration.router)
-			if (accountRef.current !== expectedAccount || !balanceRequests.isCurrent(request)) return 'context-changed'
-			setBalances(loaded)
-			setBalanceState('ready')
-			setBalanceError(undefined)
-			return 'ready'
-		} catch (error) {
-			if (accountRef.current !== expectedAccount || !balanceRequests.isCurrent(request)) return 'context-changed'
-			const detail = publicErrorMessage(error, 'Balance refresh failed')
-			setBalanceState('error')
-			setBalanceError(`${label} confirmed, but balances could not be refreshed: ${detail}`)
-			return 'refresh-error'
-		}
 	}
 
 	const positionActions = createPositionTransactionController({
@@ -231,7 +210,6 @@ export function useLiveTradingController({
 			selectedBalanceState,
 			retryBalances,
 			retryPortfolioBalances,
-			refreshBalancesAfterApproval,
 		},
 		discovery: {
 			visibleMarkets,

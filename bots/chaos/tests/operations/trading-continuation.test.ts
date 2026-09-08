@@ -3,7 +3,7 @@ import { erc1155Abi, tradingPairAbi, tradingRouterAbi } from '../../src/contract
 import { eligibleOperationPlans, reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
 import type { OperationPlan } from '../../src/operations/types.ts'
 import { createDurableWorkflow, durableWorkflowPlan, markWorkflowStepConfirmed, refreshWorkflowContinuation } from '../../src/runtime/workflows.ts'
-import { decodeFunctionData } from '../support/bot-shared.ts'
+import { decodeFunctionData } from '@zoltar/bot-shared/ethereum'
 import { address, hash, snapshotFixture } from './fixture.ts'
 
 const options = {

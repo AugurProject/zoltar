@@ -1,7 +1,7 @@
 import * as transactionCopy from '../copy/transaction.js'
 import type { Hash } from '@zoltar/shared/evm/ethereum'
 import { getActiveNetworkProfile } from '../lib/activeEnvironment.js'
-import { buildTransactionExplorerUrl } from '../lib/networkProfile.js'
+import { buildTransactionExplorerUrl } from '../wallet/networkProfile.js'
 
 type TransactionHashLinkProps = {
 	hash: Hash

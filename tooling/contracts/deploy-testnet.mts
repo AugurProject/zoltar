@@ -13,8 +13,8 @@ import {
 } from '../../ui/zoltarDomain/ts/protocol/deployment.ts'
 import { assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes, EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES, getDeploymentSteps } from '../../ui/statoblastDomain/ts/protocol/deployment.ts'
 import { PROXY_DEPLOYER_ADDRESS } from '../../ui/zoltarDomain/ts/protocol/deploymentHelpers.ts'
-import { SEPOLIA_NETWORK_PROFILE, type NetworkProfile } from '../../ui/coreShared/ts/lib/networkProfile.ts'
-import type { WriteClient } from '../../ui/coreShared/ts/lib/chainBackend.ts'
+import type { WriteClient } from '../../ui/coreShared/ts/wallet/chainBackend.ts'
+import { SEPOLIA_NETWORK_PROFILE, type NetworkProfile } from '../../ui/coreShared/ts/wallet/networkProfile.ts'
 import { readWithRpcStateRetries, type RpcStateRetryWait } from '../../ui/zoltarDomain/ts/protocol/core.ts'
 import { ARACHNID_CREATE2_DEPLOYER_ADDRESS, ARACHNID_CREATE2_DEPLOYER_RUNTIME_CODE, getUniswapDeployment, resolveCanonicalCreate2DeployerForPreflight, type UniswapDeployment } from './uniswap-deployment.mts'
 

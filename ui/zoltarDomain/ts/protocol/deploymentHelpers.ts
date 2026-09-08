@@ -16,7 +16,7 @@ import {
 	statoblast_openOracle_OpenOracle_OpenOracle,
 } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { getWethAddress } from './activeProtocolAddresses.js'
-import { getRuntimeNetworkProfile, type NetworkProfile } from '@zoltar/ui-core-shared/lib/networkProfile.js'
+import { getRuntimeNetworkProfile, type NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { getZoltarContractAddresses, MULTICALL3_BYTECODE, PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from './zoltarDeploymentHelpers.js'
 
 export { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE } from '@zoltar/shared/oracle/oracleInitialReport'

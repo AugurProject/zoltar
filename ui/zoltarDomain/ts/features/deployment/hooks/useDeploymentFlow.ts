@@ -1,9 +1,9 @@
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
 import type { Address } from '@zoltar/shared/evm/ethereum'
-import { createWalletWriteClient } from '@zoltar/ui-core-shared/lib/clients.js'
-import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback } from '@zoltar/ui-core-shared/lib/actionFeedback.js'
-import type { ActionFeedback } from '@zoltar/ui-core-shared/lib/actionFeedback.js'
+import { createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
+import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
+import type { ActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
 import { findNextDeployableStep, getPrerequisiteLabel } from '../lib/deployment.js'
 import { formatWriteErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { createDeploymentSuccessPresentation, createDeploymentTransactionIntent } from '../../zoltarTransactionPresentations.js'
@@ -14,7 +14,7 @@ import type { DeploymentStatus, DeploymentStepId } from '@zoltar/ui-core-shared/
 import { assertDeploymentStepRuntimeCode } from '../../../protocol/deployment.js'
 import { readWithRpcStateRetries, type RpcStateRetryWait } from '../../../protocol/core.js'
 import { createActiveEnvironmentGuard } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { TRANSACTION_ACTION_LOCK_REASON } from '@zoltar/ui-core-shared/lib/transactionTray.js'
+import { TRANSACTION_ACTION_LOCK_REASON } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
 
 type UseDeploymentFlowParameters = TransactionLifecycleParameters & {
 	accountAddress: Address | undefined

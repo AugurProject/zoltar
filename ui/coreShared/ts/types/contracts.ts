@@ -1,6 +1,6 @@
 import type { Address, Hash, Hex } from '@zoltar/shared/evm/ethereum'
-import type { WriteClient as ClientsWriteClient } from '../lib/clients.js'
-export type { ReadClient, WriteClient } from '../lib/clients.js'
+import type { WriteClient as ClientsWriteClient } from '../wallet/clients.js'
+export type { ReadClient, WriteClient } from '../wallet/clients.js'
 
 export type ZoltarDeploymentStepId =
 	| 'proxyDeployer'

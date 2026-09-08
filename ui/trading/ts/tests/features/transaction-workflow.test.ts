@@ -25,18 +25,17 @@ describe('transaction workflow state machine', () => {
 		expect(state).toEqual({ kind: 'confirmed', context, operation: 'trade', transactionHash: replacementHash })
 	})
 
-	test('keeps approval and trade receipts in distinct operation states', () => {
-		let state = transactionWorkflowReducer(idleTransactionWorkflow, { type: 'operation-preparing', context, operation: 'share-approval' })
-		state = transactionWorkflowReducer(state, { type: 'signature-requested', context, operation: 'share-approval' })
-		state = transactionWorkflowReducer(state, { type: 'broadcast', context, operation: 'share-approval', transactionHash: originalHash })
-		expect(transactionPhase(state)).toBe('approval-pending')
+	test('keeps transaction receipts bound to their originating operation', () => {
+		let state = transactionWorkflowReducer(idleTransactionWorkflow, { type: 'operation-preparing', context, operation: 'settlement' })
+		state = transactionWorkflowReducer(state, { type: 'signature-requested', context, operation: 'settlement' })
+		state = transactionWorkflowReducer(state, { type: 'broadcast', context, operation: 'settlement', transactionHash: originalHash })
+		expect(transactionPhase(state)).toBe('pending')
 		expect(() => transactionWorkflowReducer(state, { type: 'broadcast', context, operation: 'trade', transactionHash: replacementHash })).toThrow()
 	})
 
 	test.each([
 		['settlement', 'pending', 'confirmed'],
 		['liquidity', 'pending', 'confirmed'],
-		['settlement-approval', 'approval-pending', 'approval-confirmed'],
 	] as const)('models the %s controller with one coherent transaction state', (operation, pendingPhase, confirmedPhase) => {
 		let state = transactionWorkflowReducer(idleTransactionWorkflow, { type: 'operation-preparing', context, operation })
 		state = transactionWorkflowReducer(state, { type: 'signature-requested', context, operation })
@@ -99,20 +98,20 @@ describe('transaction workflow state machine', () => {
 		expect(transactionWorkflowReducer(confirmed, { type: 'inputs-invalidated' })).toEqual(idleTransactionWorkflow)
 	})
 
-	test('does not let overlapping simulation or approval work replace a pending broadcast', () => {
+	test('does not let overlapping simulation or other work replace a pending broadcast', () => {
 		let pending = transactionWorkflowReducer(idleTransactionWorkflow, { type: 'operation-preparing', context, operation: 'trade' })
 		pending = transactionWorkflowReducer(pending, { type: 'signature-requested', context, operation: 'trade' })
 		pending = transactionWorkflowReducer(pending, { type: 'broadcast', context, operation: 'trade', transactionHash: originalHash })
 		expect(() => transactionWorkflowReducer(pending, { type: 'simulation-started', context: { ...context, requestRevision: 5 } })).toThrow('A simulation cannot replace an active or uncertain transaction')
-		expect(() => transactionWorkflowReducer(pending, { type: 'operation-preparing', context: { ...context, requestRevision: 5 }, operation: 'share-approval' })).toThrow('An operation cannot replace an active or uncertain transaction')
+		expect(() => transactionWorkflowReducer(pending, { type: 'operation-preparing', context: { ...context, requestRevision: 5 }, operation: 'settlement' })).toThrow('An operation cannot replace an active or uncertain transaction')
 	})
 
 	test('retains a wallet invalidation notice and transaction hash when a known receipt arrives', () => {
-		let state = transactionWorkflowReducer(idleTransactionWorkflow, { type: 'operation-preparing', context, operation: 'share-approval' })
-		state = transactionWorkflowReducer(state, { type: 'signature-requested', context, operation: 'share-approval' })
-		state = transactionWorkflowReducer(state, { type: 'broadcast', context, operation: 'share-approval', transactionHash: originalHash })
+		let state = transactionWorkflowReducer(idleTransactionWorkflow, { type: 'operation-preparing', context, operation: 'settlement' })
+		state = transactionWorkflowReducer(state, { type: 'signature-requested', context, operation: 'settlement' })
+		state = transactionWorkflowReducer(state, { type: 'broadcast', context, operation: 'settlement', transactionHash: originalHash })
 		state = transactionWorkflowReducer(state, { type: 'context-invalidated', message: 'Wallet account changed' })
 		state = transactionWorkflowReducer(state, { type: 'confirmed', context })
-		expect(state).toEqual({ kind: 'confirmed', context, operation: 'share-approval', transactionHash: originalHash, notice: 'Wallet account changed' })
+		expect(state).toEqual({ kind: 'confirmed', context, operation: 'settlement', transactionHash: originalHash, notice: 'Wallet account changed' })
 	})
 })

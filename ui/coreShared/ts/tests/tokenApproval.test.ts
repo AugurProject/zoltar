@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { maxUint256 } from '@zoltar/shared/evm/ethereum'
-import { deriveTokenApprovalRequirement, formatTokenApprovalNeededMessage, formatTokenApprovalPartialMessage, formatTokenApprovalUnavailableMessage, maxUint200, parseTokenApprovalAmountInput, resolveTokenApprovalStatusMessage, shouldDisplayMaxTokenApprovalAmount } from '../lib/tokenApproval.js'
+import { deriveTokenApprovalRequirement, formatTokenApprovalNeededMessage, formatTokenApprovalPartialMessage, formatTokenApprovalUnavailableMessage, maxUint200, parseTokenApprovalAmountInput, resolveTokenApprovalStatusMessage, shouldDisplayMaxTokenApprovalAmount } from '../transactions/tokenApproval.js'
 
 const ONE = 10n ** 18n
 

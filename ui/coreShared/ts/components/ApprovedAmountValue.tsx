@@ -1,5 +1,5 @@
 import * as commonCopy from '../copy/common.js'
-import { shouldDisplayMaxTokenApprovalAmount } from '../lib/tokenApproval.js'
+import { shouldDisplayMaxTokenApprovalAmount } from '../transactions/tokenApproval.js'
 import { CurrencyValue } from './CurrencyValue.js'
 
 type ApprovedAmountValueProps = {

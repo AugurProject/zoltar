@@ -18,7 +18,7 @@ import { statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuct
 import { QuestionOutcome } from '../../types/types'
 import { getInfraContractAddresses } from './deployStatoblast'
 import { threeAttoShareArrayToAttoEth } from './securityPool'
-import { priceToClosestTick, tickToPrice } from '../tickMath'
+import { priceToClosestTick, tickToPrice } from '@zoltar/shared/statoblast/truthAuctionTickMath'
 import { HIGH_GAS_SIMULATOR_WRITE_GAS } from '../constants'
 import { requireAddress } from '../utilities'
 

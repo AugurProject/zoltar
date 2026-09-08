@@ -1,5 +1,5 @@
 import { requireDeployedContracts } from '../../../shared/src/monitoring/deployed-contracts.js'
-import { getAddress, readContractAtBlock, type Address, zeroAddress } from '#ethereum'
+import { getAddress, readContractAtBlock, type Address, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { constantProductFactoryAbi, constantProductPairAbi, erc20Abi, factoryAbi, openOracleAbi, poolAbi, quoterAbi, v4QuoterAbi } from '#contracts/abi'
 import type { Configuration } from '#config/configuration'
 import { selectBestExecution, settledExecutionSnapshotWithQuorum } from '#execution/execution-orchestration'

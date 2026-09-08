@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { getAddress, zeroAddress } from '#ethereum'
+import { getAddress, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { STANDARD_UNISWAP_FEES, STANDARD_UNISWAP_V4_POOLS, standardV4QuotePlans, v4QuoteParameters, v4TickSpacing } from '#core/uniswap-v4'
 
 describe('Uniswap V4 execution configuration', () => {

@@ -1,6 +1,6 @@
 import type { Address, Hash, WalletClient } from '@zoltar/shared/evm/ethereum'
 import { createExclusiveWorkflowGuard, createLatestRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
-import { waitForSubmittedTransactionReceipt } from '@zoltar/ui-core-shared/lib/transactionReceipt.js'
+import { waitForSubmittedTransactionReceipt } from '@zoltar/ui-core-shared/transactions/transactionReceipt.js'
 import { useEffect, useReducer, useRef, useState } from 'preact/hooks'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import { publicErrorMessage, type LiveMarket, type SettlementOperation, type ShareOutcome } from '../../protocol/live.js'
@@ -55,7 +55,7 @@ export function useSettlementWorkflowController({
 	const [workflowState, dispatchWorkflow] = useReducer(transactionWorkflowReducer, idleTransactionWorkflow)
 	const state = transactionPhase(workflowState)
 	const transactionHash = transactionWorkflowHash(workflowState)
-	const error = transactionWorkflowError(workflowState, workflowState.kind === 'reverted' && workflowState.operation === 'settlement-approval' ? 'Approval transaction reverted' : 'Settlement transaction reverted')
+	const error = transactionWorkflowError(workflowState, 'Settlement transaction reverted')
 	const receiptWarning = transactionWorkflowReceiptWarning(workflowState)
 	const workflow = useRef(createExclusiveWorkflowGuard()).current
 	const simulationRequests = useRef(createLatestRequestGuard()).current

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { lstat, mkdir, open, readFile, rename, rm } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { acquireExecutionSignerLock as acquireSharedExecutionSignerLock, acquireFileProcessLock, type ExclusiveProcessLock } from '@zoltar/bot-shared/execution/process-lock'
-import { getAddress, type Address, type Hex } from '#ethereum'
+import { getAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { parseExecutionRecord, type ExecutionRecord } from '#state/operator-state'
 
 type PositionJournalFileHandle = {

@@ -135,8 +135,7 @@ export async function submitFreshSettlement(client: WalletClient, configuration:
 		const invalidTokenId = quote.market.universeId << 8n
 		const data = encodeReceiveBasedRedeemRequest(quote.market, quote.amount, minimumEth, account, quote.deadline)
 		return await guardedWrite(
-			async () =>
-				await client.writeContract({ abi: shareTokenAbi, address: quote.market.shareToken, functionName: 'safeBatchTransferFrom', account, args: [account, shareOperationRouter(configuration), [invalidTokenId, invalidTokenId | 1n, invalidTokenId | 2n], [quote.amount, quote.amount, quote.amount], data] }),
+			async () => await client.writeContract({ abi: shareTokenAbi, address: quote.market.shareToken, functionName: 'safeBatchTransferFrom', account, args: [account, shareOperationRouter(configuration), [invalidTokenId, invalidTokenId | 1n, invalidTokenId | 2n], [quote.amount, quote.amount, quote.amount], data] }),
 		)
 	}
 	if (quote.operation === 'redeem-winning-shares') return await guardedWrite(async () => await client.writeContract({ abi: securityPoolAbi, address: quote.market.pool, functionName: 'redeemShares', account, args: [] }))

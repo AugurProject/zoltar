@@ -2,8 +2,8 @@
 
 import { afterEach, describe, expect, mock, test } from 'bun:test'
 import { getAddress, isHex, keccak256, zeroAddress } from '@zoltar/shared/evm/ethereum'
-import { createInjectedBackend, normalizeAccount } from '../lib/chainBackend.js'
-import type { InjectedEthereum } from '../injectedEthereum.js'
+import { createInjectedBackend, normalizeAccount } from '../wallet/chainBackend.js'
+import type { InjectedEthereum } from '../wallet/injectedEthereum.js'
 
 type FetchArguments = Parameters<typeof fetch>
 type FetchHandler = (input: FetchArguments[0], init: FetchArguments[1] | undefined) => Promise<Response>

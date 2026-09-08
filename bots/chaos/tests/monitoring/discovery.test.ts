@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { encodeAbiParameters, getAddress, type Abi, type Address } from '../support/bot-shared.ts'
+import { encodeAbiParameters, getAddress, type Abi, type Address } from '@zoltar/bot-shared/ethereum'
 import {
 	advanceVaultRegistryCursor,
 	assertCanonicalPairGraph,

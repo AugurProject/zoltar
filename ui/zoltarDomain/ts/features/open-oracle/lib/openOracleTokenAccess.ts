@@ -1,7 +1,7 @@
 import { bigintToSafeNumber, type Abi, type Address } from '@zoltar/shared/evm/ethereum'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { isRecoverableContractReadError } from '@zoltar/ui-core-shared/lib/errors.js'
-import { formatTokenApprovalUnavailableMessage, type TokenApprovalRequirement, type TokenApprovalState } from '@zoltar/ui-core-shared/lib/tokenApproval.js'
+import { formatTokenApprovalUnavailableMessage, type TokenApprovalRequirement, type TokenApprovalState } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import type { OpenOracleReportDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 
 export type OpenOracleReadClient = {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { getAddress, keccak256, type Address, type Hex } from '#ethereum'
+import { getAddress, keccak256, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { authenticateDeploymentManifest, createDeploymentManifest, parseDeploymentManifest, parseDeploymentRole, verifyDeploymentManifest, type DeploymentManifest } from '#config/deployment-auth'
 import { requireManifestAuthenticationQuorum } from '#config/runtime-deployment'
 

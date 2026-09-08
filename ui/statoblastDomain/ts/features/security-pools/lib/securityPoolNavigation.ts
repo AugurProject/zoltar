@@ -1,5 +1,5 @@
-import { buildRouteHref, getRouteHash, getRouteHashSearch, getTopLevelRouteSearch } from '@zoltar/ui-core-shared/lib/routing.js'
-import { readSelectedPoolViewQueryParam, readUniverseQueryParam, writeSecurityPoolQueryParam, writeSecurityPoolQuestionIdQueryParam, writeSelectedPoolViewQueryParam, writeUniverseQueryParam } from '@zoltar/ui-core-shared/lib/urlParams.js'
+import { buildRouteHref, getRouteHash, getRouteHashSearch, getTopLevelRouteSearch } from '@zoltar/ui-core-shared/navigation/routing.js'
+import { readSelectedPoolViewQueryParam, readUniverseQueryParam, writeSecurityPoolQueryParam, writeSecurityPoolQuestionIdQueryParam, writeSelectedPoolViewQueryParam, writeUniverseQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
 
 export function getSecurityPoolLinkHref(securityPoolAddress: string, selectedPoolView?: string, universeId?: bigint) {
 	const currentSearch = getRouteHashSearch()

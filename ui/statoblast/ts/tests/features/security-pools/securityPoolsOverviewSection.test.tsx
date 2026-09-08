@@ -5,7 +5,7 @@ import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUti
 import { render } from 'preact'
 import { SecurityPoolsOverviewSection } from '@zoltar/ui-statoblast-domain/features/security-pools/components/SecurityPoolsOverviewSection.js'
 import { deriveHasForkActivity } from '@zoltar/ui-statoblast-domain/features/truth-auctions/lib/forkAuction.js'
-import { getWalletScopedAccountAddress } from '@zoltar/ui-core-shared/lib/network.js'
+import { getWalletScopedAccountAddress } from '@zoltar/ui-core-shared/wallet/network.js'
 import type { AccountState } from '@zoltar/ui-zoltar-domain/types/app.js'
 import type { ListedSecurityPool, MarketDetails, SecurityPoolBrowsePage, SecurityPoolPage } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { SecurityPoolsOverviewSectionProps } from '@zoltar/ui-zoltar-domain/features/types.js'

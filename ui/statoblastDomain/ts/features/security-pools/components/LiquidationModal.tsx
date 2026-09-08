@@ -19,9 +19,9 @@ import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface
 import { TransactionStatusCard } from '@zoltar/ui-core-shared/components/TransactionStatusCard.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
-import { tryParseAddressInput } from '@zoltar/ui-core-shared/lib/inputs.js'
+import { tryParseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { pickFirstReason } from '@zoltar/ui-core-shared/transactions/actionAvailability.js'
-import { useChainTimestamp } from '@zoltar/ui-core-shared/lib/chainTimestamp.js'
+import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import { formatCurrencyInputBalance, formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { getDeterministicLiquidationFailureReason, getLiquidationExecutionFailureDetail, getLiquidationFailureReason, getMaxLiquidationAmount, simulateLiquidation } from '../lib/liquidation.js'
@@ -34,7 +34,7 @@ import { formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js
 import { useModalFocusIsolation } from '@zoltar/ui-core-shared/hooks/useModalFocusIsolation.js'
 import type { SecurityPoolStateModel } from '../lib/securityPoolState.js'
 import type { LiquidationApprovalDetails, LiquidationFundingPreview, ListedSecurityPool, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '@zoltar/ui-core-shared/types/contracts.js'
-import { getWrongNetworkReason } from '@zoltar/ui-core-shared/lib/network.js'
+import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
 import type { UiPriceOracle } from '../lib/uiPriceOracle.js'
 type LiquidationModalProps = {
 	accountAddress: Address | undefined

@@ -1,8 +1,8 @@
 import { useSignal } from '@preact/signals'
-import { createConnectedReadClient } from '../lib/clients.js'
+import { createConnectedReadClient } from '../wallet/clients.js'
 import { getErrorMessage, isRecoverableContractReadError } from '../lib/errors.js'
 import { useRequestGuard } from '../lib/requestGuard.js'
-import type { TokenApprovalState } from '../lib/tokenApproval.js'
+import type { TokenApprovalState } from '../transactions/tokenApproval.js'
 import type { ReadClient } from '../types/contracts.js'
 
 function useErc20Loader<TArgs extends unknown[]>(loadFn: (client: ReadClient, ...args: TArgs) => Promise<bigint>) {

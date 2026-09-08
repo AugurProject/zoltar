@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { decodeFunctionData, encodeAbiParameters } from '../support/bot-shared.ts'
+import { decodeFunctionData, encodeAbiParameters } from '@zoltar/bot-shared/ethereum'
 import { coordinatorAbi, erc20Abi, escalationGameAbi, tradingRouterAbi } from '../../src/contracts/abi.ts'
 import { validateStepReceiptEvidence } from '../../src/execution/receipt-validation.ts'
 import { CARRY_PROOF_SCAN_MAXIMUM_WITHDRAWAL_CANDIDATES } from '../../src/monitoring/carry-proof-scan.ts'

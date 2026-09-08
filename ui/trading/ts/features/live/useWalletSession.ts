@@ -120,7 +120,7 @@ export function useWalletSessionController({
 			session.setAccount(undefined)
 			portfolio.setBalances(undefined)
 			portfolio.setBalanceState('error')
-			portfolio.setBalanceError('Wallet context changed; reconnect to refresh balances and approvals')
+			portfolio.setBalanceError('Wallet context changed; reconnect to refresh balances')
 			portfolio.setPortfolioBalanceError('Wallet context changed; reconnect before loading portfolio positions')
 			session.setWalletContextInvalidated(true)
 			transaction.setQuote(undefined)

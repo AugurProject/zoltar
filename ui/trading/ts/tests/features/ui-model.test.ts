@@ -32,7 +32,6 @@ import {
 	type LiveMarket,
 } from '../../protocol/live.js'
 import {
-	approvalFailureTransition,
 	broadcastUncertainMessage,
 	discoveryCommitAllowed,
 	failedSubmissionTransition,
@@ -565,7 +564,7 @@ describe('standalone trading UI model', () => {
 	test('never exposes balances under another SecurityPool identity', () => {
 		const firstMarket = { pool: `0x${'11'.repeat(20)}`, shareToken: `0x${'22'.repeat(20)}`, universeId: 7n } as const
 		const secondMarket = { pool: `0x${'33'.repeat(20)}`, shareToken: `0x${'44'.repeat(20)}`, universeId: 8n } as const
-		const firstBalances = { scope: shareBalanceScope(firstMarket), invalid: 1n, yes: 2n, no: 3n, lp: 4n, approved: true, lpAllowance: 5n }
+		const firstBalances = { scope: shareBalanceScope(firstMarket), invalid: 1n, yes: 2n, no: 3n, lp: 4n }
 		expect(liveBalancesForMarket(firstBalances, firstMarket)).toBe(firstBalances)
 		expect(liveBalancesForMarket(firstBalances, secondMarket)).toBeUndefined()
 	})
@@ -630,24 +629,9 @@ describe('standalone trading UI model', () => {
 		const warning = broadcastUncertainMessage('Settlement transaction', hash)
 		expect(warning).toBe(`Settlement transaction ${hash} was broadcast, but its receipt could not be confirmed. Do not resubmit. Check this hash in your wallet or configured block explorer, then reload only after its final status is known.`)
 		expect(positionControlsWorkflowLocked('error', warning)).toBeTrue()
-		expect(positionControlsWorkflowLocked('approval-pending', undefined)).toBeTrue()
-		expect(positionControlsWorkflowLocked('approval-confirmed', undefined)).toBeFalse()
 		expect(positionControlsWorkflowLocked('preparing', undefined)).toBeTrue()
 		expect(positionControlsWorkflowLocked('submitting', undefined)).toBeTrue()
 		expect(positionControlsWorkflowLocked('idle', undefined)).toBeFalse()
-	})
-
-	test('keeps both approval workflows locked after an unconfirmed broadcast', () => {
-		const hash = `0x${'77'.repeat(32)}` as const
-		for (const label of ['Share-token approval', 'LP-token approval']) {
-			const transition = approvalFailureTransition(label, hash, false, new Error('receipt unavailable'), 'Approval failed')
-			expect(transition.keepLocked).toBeTrue()
-			expect(transition.state).toBe('pending')
-			expect(transition.message).toBeUndefined()
-			expect(transition.warning).toContain(hash)
-			expect(transition.warning).toContain('Do not resubmit')
-		}
-		expect(approvalFailureTransition('LP-token approval', hash, true, new Error('reverted'), 'Approval failed')).toEqual({ keepLocked: false, state: 'error', message: 'reverted', warning: undefined })
 	})
 
 	test('does not let an older discovery response replace an active workflow', () => {

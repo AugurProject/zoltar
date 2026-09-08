@@ -26,9 +26,6 @@ export function stateLabel(state: TransactionState, action = workflowCopy.defaul
 	if (state === 'simulating') return workflowCopy.simulatingRouterCall
 	if (state === 'ready') return workflowCopy.authoritativeSimulationReady
 	if (state === 'preparing') return workflowCopy.preparingAction(action)
-	if (state === 'approval') return workflowCopy.actionApprovalPendingInWallet(action)
-	if (state === 'approval-pending') return workflowCopy.actionApprovalPendingOnchain(action)
-	if (state === 'approval-confirmed') return workflowCopy.actionApprovalConfirmedOnchain(action)
 	if (state === 'submitting') return workflowCopy.actionPendingInWallet(action)
 	if (state === 'pending') return workflowCopy.actionPendingOnchain(action)
 	if (state === 'confirmed') return workflowCopy.actionConfirmedOnchain(action)

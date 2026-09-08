@@ -1,4 +1,4 @@
-import { hasPresentEmptyQueryParam } from '@zoltar/ui-core-shared/lib/routing.js'
+import { hasPresentEmptyQueryParam } from '@zoltar/ui-core-shared/navigation/routing.js'
 import type { Route } from '@zoltar/ui-zoltar-domain/types/app.js'
 import type { ZoltarView } from '@zoltar/ui-zoltar-domain/features/types.js'
 

@@ -3,7 +3,7 @@ import { readWithRpcStateRetries, waitForSubmittedTransactionReceipt, type RpcSt
 import type { TransactionReceipt } from '@zoltar/shared/evm/ethereum'
 import { assertCanonicalRawTransactionFeeCompatible, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST, fundCanonicalDeployerSigner, isInsufficientFundsError } from '../../ui/zoltarDomain/ts/protocol/deployment.ts'
 import { PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from '../../ui/zoltarDomain/ts/protocol/deploymentHelpers.ts'
-import type { WriteClient } from '../../ui/coreShared/ts/lib/chainBackend.ts'
+import type { WriteClient } from '../../ui/coreShared/ts/wallet/chainBackend.ts'
 
 const UNISWAP_DEPLOYMENT_ARTIFACT = new URL('../../scripts/artifacts/uniswap-deployment.json', import.meta.url)
 const UNISWAP_DEPLOYMENT_ARTIFACT_SHA256 = '4f3d8c4839675fd70102172a2c82eecee6e60d076f7709af264d733631c6efe6'

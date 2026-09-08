@@ -1,4 +1,4 @@
-import { getAddress, type Hex } from '#ethereum'
+import { getAddress, type Hex } from '@zoltar/bot-shared/ethereum'
 
 export function requiredBigint(value: unknown, description: string) {
 	if (typeof value !== 'bigint') throw new Error(`${description} is not an RPC bigint`)

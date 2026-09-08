@@ -27,7 +27,7 @@ import { UniverseLink } from '@zoltar/ui-zoltar-domain/features/universes/compon
 import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
 import { tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
 import { normalizeAddress, sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
-import { useChainTimestamp } from '@zoltar/ui-core-shared/lib/chainTimestamp.js'
+import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import {
 	applySelectedPoolWorkflowState,
 	getCurrentSelectedPoolReportingDetails,
@@ -55,7 +55,7 @@ import {
 import { sameCaseInsensitiveText } from '@zoltar/ui-core-shared/lib/caseInsensitive.js'
 import { getLiquidationNoticeState } from '../lib/liquidationStatus.js'
 import { resolveRequestedLoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
-import { isActiveAppChain } from '@zoltar/ui-core-shared/lib/network.js'
+import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import { getReportingLockedUntilMessage, hasReportingOpened } from '@zoltar/ui-zoltar-domain/features/reporting/lib/reporting.js'
 import { addOpenOracleBountyBuffer } from '@zoltar/ui-zoltar-domain/features/open-oracle/lib/openOracle.js'
 import { getSecurityPoolStatusBadgeLabel } from '../lib/securityPoolLabels.js'

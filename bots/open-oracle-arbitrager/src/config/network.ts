@@ -1,4 +1,4 @@
-import { defineChain, getAddress, type Address, type Chain } from '#ethereum'
+import { defineChain, getAddress, type Address, type Chain } from '@zoltar/bot-shared/ethereum'
 import type { NetworkName } from '#monitoring/connectivity'
 
 export type NetworkConfiguration = {

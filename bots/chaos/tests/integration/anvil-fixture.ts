@@ -1,5 +1,6 @@
 import { eip191Signer } from 'micro-eth-signer'
-import { encodeDeployData, getAddress, keccak256, privateKeyToAccount, TRANSACTION_SUBMISSION_CAPABILITY_PROBE, type Address, type Hex } from '../support/bot-shared.ts'
+import { encodeDeployData, getAddress, keccak256, privateKeyToAccount, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import { TRANSACTION_SUBMISSION_CAPABILITY_PROBE } from '@zoltar/bot-shared/monitoring/connectivity'
 import { createAnvilNodeForConnectionMode, type AnvilNode } from '../../../../solidity/ts/testSupport/simulator/anvilNode.ts'
 import { addressString } from '../../../../solidity/ts/testSupport/simulator/utils/bigint.ts'
 import { createWriteClient, writeContractAndWait } from '../../../../solidity/ts/testSupport/simulator/utils/clients.ts'

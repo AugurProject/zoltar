@@ -10,7 +10,6 @@
 		"#contracts/*": "./src/contracts/*.ts",
 		"#core/*": "./src/core/*.ts",
 		"#dashboard/*": "./src/dashboard/*.ts",
-		"#ethereum": "./src/infrastructure/ethereum.ts",
 		"#execution/*": "./src/execution/*.ts",
 		"#monitoring/*": "./src/monitoring/*.ts",
 		"#state/*": "./src/state/*.ts"

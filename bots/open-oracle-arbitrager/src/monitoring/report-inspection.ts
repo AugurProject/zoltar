@@ -1,4 +1,4 @@
-import { bigintToSafeNumber, formatEther, type Address } from '#ethereum'
+import { bigintToSafeNumber, formatEther, type Address } from '@zoltar/bot-shared/ethereum'
 import { OPEN_ORACLE_FLAG_TIME_TYPE, type OpenOracleStatePreimage } from '@zoltar/shared/oracle/openOracle'
 import { type Configuration } from '#config/configuration'
 import { opportunityDecision } from '#execution/execution-orchestration'

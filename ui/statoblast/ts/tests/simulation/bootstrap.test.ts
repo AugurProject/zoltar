@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, describe, expect, mock, test } from 'bun:test'
-import { MAINNET_NETWORK_PROFILE, MAINNET_WETH_ADDRESS, type NetworkProfile } from '@zoltar/ui-core-shared/lib/networkProfile.js'
+import { MAINNET_NETWORK_PROFILE, MAINNET_WETH_ADDRESS, type NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { SIMULATION_INITIAL_TIMESTAMP } from '@zoltar/ui-core-shared/simulation/clock.js'
 import { bootstrapSimulationChain, mintSimulationGenesisRep, predictSimulationTokenAddresses, type BootstrapScenarioApplyParameters } from '@zoltar/ui-core-shared/simulation/bootstrap.js'
 import { applyStatoblastScenario, installStatoblastScenarioProtocolForTesting } from '@zoltar/ui-statoblast-domain/simulation/statoblastScenarios.js'

@@ -1,4 +1,4 @@
-import { installRouting, resetRoutingForTesting } from '../../lib/routing.js'
+import { installRouting, resetRoutingForTesting } from '../../navigation/routing.js'
 
 const DEFAULT_TEST_ROUTES = [
 	{ hash: '#/deploy', name: 'deploy' },

@@ -12,10 +12,10 @@ import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApp
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
 import { normalizeQuestionId } from '@zoltar/ui-core-shared/lib/questionId.js'
-import { useChainTimestamp } from '@zoltar/ui-core-shared/lib/chainTimestamp.js'
+import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import { formatRelativeTimestamp, formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { resolveLoadableValueState, type LoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
-import { deriveTokenApprovalRequirement, type TokenApprovalState } from '@zoltar/ui-core-shared/lib/tokenApproval.js'
+import { deriveTokenApprovalRequirement, type TokenApprovalState } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { getReportPresentation, getUniversePresentation, getWalletPresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
 import type { MarketDetails, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 

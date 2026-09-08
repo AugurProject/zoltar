@@ -15,7 +15,7 @@ import { PaginationControls } from '@zoltar/ui-core-shared/components/Pagination
 import { Question, getQuestionTitle } from '@zoltar/ui-core-shared/components/Question.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { QuestionCreateSection } from '../../questions/components/QuestionCreateSection.js'
-import { isActiveAppChain } from '@zoltar/ui-core-shared/lib/network.js'
+import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import type { MarketRouteContentProps } from '../../types.js'
 import { QUESTION_PAGE_SIZE, formatPaginationSummary, getHasNextPaginationPage, getPaginationPageCount, resolvePaginationPageIndex } from '@zoltar/ui-core-shared/lib/pagination.js'
 import { getMarketTypeLabel } from '@zoltar/ui-core-shared/lib/marketType.js'

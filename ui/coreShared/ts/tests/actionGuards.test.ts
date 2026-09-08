@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { getWalletActiveAppChainActionAvailability, getWalletActiveAppChainGuardMessage, getWalletActiveAppChainGuardState } from '../lib/actionGuards.js'
+import { getWalletActiveAppChainActionAvailability, getWalletActiveAppChainGuardMessage, getWalletActiveAppChainGuardState } from '../transactions/actionGuards.js'
 
 describe('actionGuards', () => {
 	test('returns the provided disconnected-wallet reason before feature-specific checks', () => {

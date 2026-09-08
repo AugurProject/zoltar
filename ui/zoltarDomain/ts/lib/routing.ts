@@ -1,4 +1,4 @@
-import { createRouting, installRouting, type RoutingConfig } from '@zoltar/ui-core-shared/lib/routing.js'
+import { createRouting, installRouting, type RoutingConfig } from '@zoltar/ui-core-shared/navigation/routing.js'
 import type { Route } from '../types/app.js'
 
 type ZoltarRoute = Exclude<Route, 'not-found'>

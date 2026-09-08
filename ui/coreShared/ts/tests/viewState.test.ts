@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { resolveEnumValue, resolveFirstMatchingValue } from '../lib/viewState.js'
+import { resolveEnumValue, resolveFirstMatchingValue } from '../forms/viewState.js'
 
 void describe('view state helpers', () => {
 	void test('resolveEnumValue returns the matching enum value or the fallback', () => {

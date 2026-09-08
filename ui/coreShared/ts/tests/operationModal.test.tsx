@@ -9,7 +9,7 @@ import { OperationModal } from '../components/OperationModal.js'
 import { AddressValue } from '../components/AddressValue.js'
 import { GlobalTransactionPresentationProvider } from '../components/GlobalTransactionPresentationContext.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
-import { createInitialTransactionTrayState, markTransactionFailed, markTransactionFinished, markTransactionPresented, markTransactionRequested, markTransactionSubmitted } from '../lib/transactionTray.js'
+import { createInitialTransactionTrayState, markTransactionFailed, markTransactionFinished, markTransactionPresented, markTransactionRequested, markTransactionSubmitted } from '../transactions/transactionTray.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 import type { GlobalTransactionPresentation, TransactionIntent } from '../types/components.js'
 

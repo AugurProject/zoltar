@@ -11,11 +11,11 @@ import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
-import { getChainDisplayLabel, getChainIdDecimalLabel, getKnownChainName, isActiveAppChain } from '@zoltar/ui-core-shared/lib/network.js'
+import { getChainDisplayLabel, getChainIdDecimalLabel, getKnownChainName, isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import { renderRepPriceSourceLabel } from '@zoltar/ui-core-shared/lib/repPriceSource.js'
 import type { OverviewPanelsProps, RepPriceFailure } from '../types.js'
 import { getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { getNetworkSwitchTarget } from '@zoltar/ui-core-shared/lib/networkProfile.js'
+import { getNetworkSwitchTarget } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import type { UserMessagePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
 
 function omitPresentationActionHint(presentation: UserMessagePresentation) {

@@ -24,7 +24,5 @@
 		"skipLibCheck": true,
 		"types": ["bun-types"]
 	},
-	"include": [
-		"./ts/**/*.ts",
-	]
+	"include": ["./ts/**/*.ts"]
 }

@@ -5,7 +5,7 @@ import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { deriveHasForkActivity, getForkAuctionStageView, type ForkAuctionStageView } from '../../truth-auctions/lib/forkAuction.js'
 import type { LoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
 import type { UserMessagePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
-import { resolveEnumValue } from '@zoltar/ui-core-shared/lib/viewState.js'
+import { resolveEnumValue } from '@zoltar/ui-core-shared/forms/viewState.js'
 import type { ListedSecurityPool, OracleManagerDetails, ReportingDetails, ReportingOutcomeKey, SecurityPoolSystemState, TruthAuctionMetrics } from '@zoltar/ui-core-shared/types/contracts.js'
 
 const FORK_WORKFLOW_SELECTION_STAGES = ['fork-triggered', 'migration', 'auction', 'settlement'] as const

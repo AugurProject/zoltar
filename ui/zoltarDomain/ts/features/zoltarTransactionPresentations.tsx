@@ -5,7 +5,7 @@ import type { Hash } from '@zoltar/shared/evm/ethereum'
 import { IdentifierValue } from '@zoltar/ui-core-shared/components/IdentifierValue.js'
 import { formatCurrencyBalanceWithUnit, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getMarketTypeLabel } from '@zoltar/ui-core-shared/lib/marketType.js'
-import { buildIntent, buildPresentation, withWarning } from '@zoltar/ui-core-shared/lib/transactionPresentations.js'
+import { buildIntent, buildPresentation, withWarning } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
 import type { MarketCreationResult, ZoltarChildUniverseActionResult, ZoltarForkActionResult, ZoltarMigrationActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
 
 export function createDeploymentTransactionIntent(stepLabel: string) {

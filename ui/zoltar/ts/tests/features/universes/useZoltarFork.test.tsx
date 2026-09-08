@@ -9,7 +9,7 @@ import { useZoltarFork, type UseZoltarForkDependencies } from '@zoltar/ui-zoltar
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import { createInitialTransactionTrayState, markTransactionFailed, markTransactionRequested, TRANSACTION_ACTION_LOCK_REASON } from '@zoltar/ui-core-shared/lib/transactionTray.js'
+import { createInitialTransactionTrayState, markTransactionFailed, markTransactionRequested, TRANSACTION_ACTION_LOCK_REASON } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
 import type { MarketDetails, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 

@@ -1,7 +1,7 @@
 import { useSignal } from '@preact/signals'
 import { useCallback, useEffect } from 'preact/hooks'
-import { buildRouteHref, getCurrentRouteHash, getRouteHashSearch } from '../../lib/routing.js'
-import { readOpenOracleReportIdQueryParam, readOpenOracleViewQueryParam, writeOpenOracleReportIdQueryParam, writeOpenOracleViewQueryParam } from '../../lib/openOracleUrlParams.js'
+import { buildRouteHref, getCurrentRouteHash, getRouteHashSearch } from '../../navigation/routing.js'
+import { readOpenOracleReportIdQueryParam, readOpenOracleViewQueryParam, writeOpenOracleReportIdQueryParam, writeOpenOracleViewQueryParam } from '../../navigation/openOracleUrlParams.js'
 import {
 	readSecurityPoolsViewQueryParam,
 	readSecurityPoolQuestionIdQueryParam,
@@ -15,7 +15,7 @@ import {
 	writeSelectedPoolViewQueryParam,
 	writeUniverseQueryParam,
 	writeZoltarViewQueryParam,
-} from '../../lib/urlParams.js'
+} from '../../navigation/urlParams.js'
 
 type UrlState = {
 	activeUniverseId: bigint

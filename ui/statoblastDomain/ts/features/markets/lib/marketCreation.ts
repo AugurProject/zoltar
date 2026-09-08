@@ -1,5 +1,5 @@
 import type { MarketFormState, SecurityPoolFormState } from '../../../types/app.js'
-import { parseDecimalInput } from '@zoltar/ui-core-shared/lib/decimal.js'
+import { parseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
 import { createQuestionParameters } from '@zoltar/ui-zoltar-domain/features/questions/lib/questionCreation.js'
 import { parseStatoblastSecurityMultiplierBpsInput } from './marketForm.js'

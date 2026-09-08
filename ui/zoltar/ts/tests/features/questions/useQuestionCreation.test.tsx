@@ -10,7 +10,7 @@ import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/do
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import type { DeploymentStatus, MarketCreationResult } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { UseQuestionCreationDependencies } from '@zoltar/ui-zoltar-domain/features/questions/hooks/useQuestionCreation.js'
-import type { CreateWriteClientCallbacks, TransactionRequestPreview } from '@zoltar/ui-core-shared/lib/chainBackend.js'
+import type { CreateWriteClientCallbacks, TransactionRequestPreview } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 
 type UseQuestionCreation = typeof import('@zoltar/ui-zoltar-domain/features/questions/hooks/useQuestionCreation.js')['useQuestionCreation']

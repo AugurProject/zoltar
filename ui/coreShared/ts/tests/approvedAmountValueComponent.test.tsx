@@ -5,7 +5,7 @@ import { describe, expect, test } from 'bun:test'
 import { within } from './testUtils/queries'
 import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
-import { maxUint200 } from '../lib/tokenApproval.js'
+import { maxUint200 } from '../transactions/tokenApproval.js'
 import { ApprovedAmountValue } from '../components/ApprovedAmountValue.js'
 
 describe('ApprovedAmountValue', () => {

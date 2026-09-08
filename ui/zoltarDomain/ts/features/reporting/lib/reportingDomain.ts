@@ -8,7 +8,7 @@ import {
 } from '@zoltar/shared/oracle/escalationMath'
 import type { ActiveReportingDetails, EscalationDeposit, EscalationSide, ImportedEscalationDeposit, ReportingDetails, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 import { formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { requireDefined } from '@zoltar/ui-core-shared/lib/required.js'
+import { requireDefined } from '@zoltar/ui-core-shared/forms/required.js'
 import { getTimeRemaining } from '@zoltar/ui-core-shared/lib/time.js'
 type ReportingAmountSuggestion = {
 	amountAttoRep: bigint | undefined

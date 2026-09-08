@@ -13,7 +13,7 @@ import { DEFAULT_RETIREMENT_POLICIES, initialRetirementState, uniswapV3PositionK
 import { updateV3PositionStatus } from '../../src/runtime/retirement-runner.ts'
 import { initialDurableState, loadDurableState, saveDurableState } from '../../src/state/operator-state.ts'
 import { address, snapshotFixture } from '../operations/fixture.ts'
-import { encodeDeployData, getAddress, type Abi, type Address, type Hex } from '../support/bot-shared.ts'
+import { encodeDeployData, getAddress, type Abi, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 
 const tokenAbi = [
 	{

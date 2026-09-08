@@ -1,5 +1,5 @@
 import type { Address } from '@zoltar/shared/evm/ethereum'
-import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/lib/actionGuards.js'
+import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getOracleRequestEthGuardMessage } from '@zoltar/ui-zoltar-domain/features/open-oracle/lib/oracleRequestEth.js'
 import { MAX_STAGED_OPERATION_TIMEOUT_MINUTES, MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP, MIN_STAGED_OPERATION_TIMEOUT_MINUTES, parseTargetHealthFactorBps } from './securityVault.js'

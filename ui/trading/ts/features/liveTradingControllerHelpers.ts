@@ -81,13 +81,8 @@ export function broadcastUncertainMessage(label: string, hash: Hash) {
 	return `${label} ${hash} was broadcast, but its receipt could not be confirmed. Do not resubmit. Check this hash in your wallet or configured block explorer, then reload only after its final status is known.`
 }
 
-export function approvalFailureTransition(label: string, broadcastHash: Hash | undefined, receiptKnown: boolean, caught: unknown, fallback: string) {
-	if (broadcastHash !== undefined && !receiptKnown) return { keepLocked: true, state: 'pending' as const, message: undefined, warning: broadcastUncertainMessage(label, broadcastHash) }
-	return { keepLocked: false, state: 'error' as const, message: publicErrorMessage(caught, fallback), warning: undefined }
-}
-
 export function positionControlsWorkflowLocked(state: TransactionState, receiptWarning: string | undefined) {
-	return state === 'preparing' || state === 'approval' || state === 'approval-pending' || state === 'submitting' || state === 'pending' || receiptWarning !== undefined
+	return state === 'preparing' || state === 'submitting' || state === 'pending' || receiptWarning !== undefined
 }
 
 export function discoveryCommitAllowed(owner: WorkflowOwner | undefined, positionLocked: boolean, liquidityLocked: boolean) {

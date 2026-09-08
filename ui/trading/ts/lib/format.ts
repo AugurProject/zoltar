@@ -1,7 +1,7 @@
 import { normalizeNumericInput } from '@zoltar/ui-core-shared/lib/numericInput.js'
 import { bigintToSafeNumber } from '@zoltar/shared/evm/ethereum'
 import { abbreviateAddress } from '@zoltar/ui-core-shared/lib/address.js'
-import { tryParseDecimalInput } from '@zoltar/ui-core-shared/lib/decimal.js'
+import { tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
 
 function requireNonNegativeSafeInteger(value: number, label: string) {

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtemp, open, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { Address } from '#ethereum'
+import type { Address } from '@zoltar/bot-shared/ethereum'
 import {
 	appendPriceHistory,
 	availableTokenBalances,

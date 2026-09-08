@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { bestSuccessful, compactFinalityWindow, pollUntilStopped, replaceOverlap, retryDelayMilliseconds } from '#monitoring/resilience'
+import { bestSuccessful, compactFinalityWindow, pollUntilStopped, replaceOverlap, retryDelayMilliseconds } from '@zoltar/bot-shared/monitoring/resilience'
 import { completeSuccessfulPoll, completeUnconfiguredPoll } from '../../src/runtime/operator.ts'
 
 describe('OpenOracle monitor resilience', () => {

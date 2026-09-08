@@ -81,7 +81,7 @@ function setupContractMocks({ loadMarketDetails, createSecurityPool, originSecur
 		originSecurityPoolExists: originSecurityPoolExists ?? mock(async () => false),
 	}))
 
-	mock.module('@zoltar/ui-core-shared/lib/clients.js', () => ({
+	mock.module('@zoltar/ui-core-shared/wallet/clients.js', () => ({
 		createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
 		createWalletWriteClient: mock((walletAddress: Address, options: { onTransactionSubmitted: (hash: Hash) => void }) => ({
 			walletAddress,

@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from 'bun:test'
-import type { Address, Hex } from '#ethereum'
+import type { Address, Hex } from '@zoltar/bot-shared/ethereum'
 import { startDashboardServer } from '#dashboard/dashboard-server'
 import { operatorSnapshot, updateStrategyFromRequest, type MutableStrategy, type OperatorState } from '#state/operator-state'
 import { validateSubmissionSettings } from '#execution/transaction-submission'

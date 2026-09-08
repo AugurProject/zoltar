@@ -14,7 +14,7 @@ import { RouteWorkflowPanel } from '@zoltar/ui-core-shared/components/RouteWorkf
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { TransactionHashLink } from '@zoltar/ui-core-shared/components/TransactionHashLink.js'
-import { isActiveAppChain } from '@zoltar/ui-core-shared/lib/network.js'
+import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import { formatOpenInterestFeePerYearPercent, ORIGIN_POOL_INITIAL_RETENTION_RATE } from '../lib/retentionRate.js'
 import { formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getInitialReportPriorityFeeValidationMessage, getSecurityPoolCreateDisabledReason, getStatoblastSecurityMultiplierValidationMessage } from '../lib/securityPoolCreationGuards.js'
@@ -25,7 +25,7 @@ import { validateMarketForm } from '@zoltar/ui-zoltar-domain/features/questions/
 import type { SecurityPoolSectionProps } from '../../types.js'
 import { formatUniverseIdHex } from '@zoltar/ui-zoltar-domain/features/universes/lib/universe.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
-import { getWrongNetworkReason } from '@zoltar/ui-core-shared/lib/network.js'
+import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
 import * as marketCopy from '@zoltar/ui-zoltar-domain/copy/market.js'
 
 export function SecurityPoolSection({

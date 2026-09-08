@@ -16,14 +16,14 @@ import { WalletAssetControl } from '@zoltar/ui-core-shared/components/WalletAsse
 import { getMigrationOutcomeSplitLimit, MigrationOutcomeUniversesSection } from './MigrationOutcomeUniversesSection.js'
 import type { LoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { tryParseBigIntListInput } from '@zoltar/ui-core-shared/lib/inputs.js'
+import { tryParseBigIntListInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { tryParseRepAmountInput as parseMigrationAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
-import { deriveTokenApprovalRequirement, type TokenApprovalState } from '@zoltar/ui-core-shared/lib/tokenApproval.js'
+import { deriveTokenApprovalRequirement, type TokenApprovalState } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { getUniversePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
 import { getMigrationGuardMessage } from '../lib/zoltarMigrationGuards.js'
 import type { ZoltarMigrationFormState } from '../../../types/app.js'
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
-import { getWrongNetworkReason } from '@zoltar/ui-core-shared/lib/network.js'
+import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
 
 type ZoltarMigrationSectionProps = {
 	accountAddress: Address | undefined

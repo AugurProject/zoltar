@@ -8,7 +8,7 @@ import type { ScalarOutcomePickerProps } from '../types/components.js'
 import { MAX_PRECISE_SCALAR_TICK_COUNT, clampScalarTickIndex, getScalarSliderFillWidth } from '../lib/scalarOutcome.js'
 import { useEffect, useId, useState } from 'preact/hooks'
 import type * as preact from 'preact'
-import { tryParseDecimalInput } from '../lib/decimal.js'
+import { tryParseDecimalInput } from '../forms/decimal.js'
 import { formatScalarDisplayValue, getScalarDisplayValue, getScalarTickIndexForDisplayValue } from '@zoltar/shared/statoblast/scalarOutcome'
 
 function getSafeSelectedTickValue(selectedTick: string) {

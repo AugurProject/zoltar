@@ -284,6 +284,7 @@ export const MUTATING_CONTRACT_SURFACE: readonly ContractMethodClassification[] 
 
 	entry('TwoWayConstantProductFactory', 'createPair', 'selectable', 'trading.pair.create'),
 	entry('TwoWayConstantProductPair', 'approve', 'prerequisite', 'trading.lp.approve'),
+	entry('TwoWayConstantProductPair', 'permit', 'excluded-dangerous', undefined, 'Chaos does not originate durable LP permit signatures.'),
 	entry('TwoWayConstantProductPair', 'transfer', 'excluded-dangerous', undefined, 'Raw LP transfers have no ecosystem postcondition.'),
 	entry('TwoWayConstantProductPair', 'transferFrom', 'excluded-dangerous', undefined, 'Delegated raw LP transfers are not chaos workflows.'),
 	entry('TwoWayConstantProductPair', 'initialize', 'selectable', 'trading.pair.initialize-shares'),
@@ -293,12 +294,11 @@ export const MUTATING_CONTRACT_SURFACE: readonly ContractMethodClassification[] 
 	entry('TwoWayConstantProductPair', 'swapExactOutput', 'selectable', 'trading.swap.exact-output'),
 	entry('TwoWayConstantProductPair', 'sync', 'selectable', 'trading.pair.sync'),
 	entry('TwoWayConstantProductRouter', 'enterPosition', 'selectable', 'trading.position.enter'),
-	entry('TwoWayConstantProductRouter', 'exitPosition', 'selectable', 'trading.position.exit'),
-	entry('TwoWayConstantProductRouter', 'redeemCompleteSet', 'selectable', 'trading.complete-set.redeem'),
 	entry('TwoWayConstantProductRouter', 'createPairAndInitializeWithEth', 'selectable', 'trading.pair.create-and-initialize'),
 	entry('TwoWayConstantProductRouter', 'initializeWithEth', 'selectable', 'trading.pair.initialize-eth'),
 	entry('TwoWayConstantProductRouter', 'addLiquidityWithEth', 'selectable', 'trading.liquidity.add-eth'),
-	entry('TwoWayConstantProductRouter', 'removeLiquidity', 'selectable', 'trading.liquidity.remove'),
+	entry('TwoWayConstantProductRouter', 'onERC1155BatchReceived', 'role-restricted', undefined, 'Only the canonical ShareToken invokes the router callback after an owner-initiated batch transfer.'),
+	entry('TwoWayConstantProductRouter', 'removeLiquidityWithPermit', 'excluded-dangerous', undefined, 'Chaos removes liquidity directly and does not originate durable LP permit signatures.'),
 	entry('TwoWayConstantProductRouter', 'receive', 'role-restricted', undefined, 'Only the active callback pool may return ETH during a router workflow.', undefined, 'receive'),
 ] as const
 

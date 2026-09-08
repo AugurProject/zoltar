@@ -1,6 +1,6 @@
 # Router reference
 
-Trading deployments are versioned. V1 keeps the original approval-based router. A V2 venue deploys three coordinated contracts: `TwoWayConstantProductFactoryV2`, the original execution router for entry and legacy-compatible calls, and `TwoWayConstantProductRouterV2` for receive-based exits, receive-based complete-set redemption, and permit-assisted LP removal. The configured registry is authoritative and the UI verifies the V2 implementation constants and factory relationships before enabling V2 paths.
+Trading deploys one canonical factory and one canonical router. The router handles entry and liquidity operations, receive-based exits and complete-set redemption, and permit-assisted LP removal. The configured deterministic addresses and factory relationships are authoritative.
 
 `TwoWayConstantProductRouter(factory)` fixes the only eligible factory. All user mutations enforce a deadline and reentrancy guard. The router’s receiver callbacks accept only the active pool’s canonical share token and universe IDs. `receive()` accepts ETH only during redemption and only from the expected SecurityPool.
 
@@ -16,10 +16,10 @@ Trading deployments are versioned. V1 keeps the original approval-based router. 
 
 Successful share-custody operations assert that all three router balances equal their starting values, preserving pre-existing forced shares. Both insured exits and standalone complete-set redemptions calculate and forward only ETH received during that operation, so pre-existing forced ETH remains untouched and cannot increase a user's payout.
 
-## Approval-free V2 share operations
+## Approval-free share operations
 
-Users initiate V2 exits and complete-set redemption by calling the existing ShareToken's `safeBatchTransferFrom` with themselves as both caller and owner. No `setApprovalForAll` is required. The callback payload version binds the operation, ShareToken, canonical SecurityPool and pair, universe, question, exact INVALID/YES/NO token IDs, transferred and maximum input, minimum ETH output, payout and refund recipients, and deadline.
+Users initiate exits and complete-set redemption by calling the existing ShareToken's `safeBatchTransferFrom` with themselves as both caller and owner. No `setApprovalForAll` is required. The callback payload version binds the operation, ShareToken, canonical SecurityPool and pair, universe, question, exact INVALID/YES/NO token IDs, transferred and maximum input, minimum ETH output, payout and refund recipients, and deadline.
 
 The router accepts only owner-initiated top-level transfers (`operator == from`). An insured exit transfers INVALID plus the maximum directional-share input; after the exact-output swap, unused directional shares return to the bound refund recipient. Complete-set redemption requires exactly ordered, equal INVALID/YES/NO amounts. Internal pair callbacks are distinguished from top-level user callbacks, and every operation proves that it leaves the router's pre-existing share balances unchanged.
 
-`removeLiquidityWithPermit` is an integration path for V2 pairs. It first attempts an exact-amount ERC-2612 permit and continues after a previously submitted permit only when the exact router already has enough allowance. Safes and integrations without signature support may use ordinary exact allowances. The first-party UI calls the pair directly and needs no router allowance.
+`removeLiquidityWithPermit` first attempts an exact-amount ERC-2612 permit and continues after a previously submitted permit only when the exact router already has enough allowance. Safes and integrations without signature support may use ordinary exact allowances. The first-party UI calls the pair directly and needs no router allowance.

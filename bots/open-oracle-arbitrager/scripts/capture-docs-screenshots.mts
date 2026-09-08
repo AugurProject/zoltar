@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { getAddress, keccak256, toHex } from '#ethereum'
+import { getAddress, keccak256, toHex } from '@zoltar/bot-shared/ethereum'
 import { startDashboardServer } from '#dashboard/dashboard-server'
 import { operatorSnapshot, publicOperatorFailure, publicPollFailure, type OperatorSnapshot, type OperatorState } from '#state/operator-state'
 import type { PositionRecord } from '#state/position-store'

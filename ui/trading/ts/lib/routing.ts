@@ -1,4 +1,4 @@
-import { buildRouteHref, createRouting, getRouteHashSearch, installRouting, type RoutingConfig } from '@zoltar/ui-core-shared/lib/routing.js'
+import { buildRouteHref, createRouting, getRouteHashSearch, installRouting, type RoutingConfig } from '@zoltar/ui-core-shared/navigation/routing.js'
 
 export type TradingRoute = 'markets' | 'market' | 'liquidity' | 'portfolio' | 'deploy' | 'help' | `security-pool/${string}`
 

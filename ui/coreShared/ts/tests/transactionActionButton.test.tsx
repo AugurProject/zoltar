@@ -6,7 +6,7 @@ import { h } from 'preact'
 import { act } from 'preact/test-utils'
 import { TransactionActionButton, TransactionActionButtonLockProvider } from '../components/TransactionActionButton.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
-import { TRANSACTION_ACTION_LOCK_REASON } from '../lib/transactionTray.js'
+import { TRANSACTION_ACTION_LOCK_REASON } from '../transactions/transactionTray.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 import { GlobalTransactionPresentationProvider } from '../components/GlobalTransactionPresentationContext.js'
 

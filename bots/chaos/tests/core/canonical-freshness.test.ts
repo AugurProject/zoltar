@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { ConnectivityDegradedError } from '../support/bot-shared.ts'
+import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
 import { MAXIMUM_CANONICAL_ANCHOR_AGE_SECONDS, MAXIMUM_CANONICAL_FUTURE_DRIFT_SECONDS, MAXIMUM_CANONICAL_HEAD_LAG_BLOCKS, assertCanonicalAnchorFreshness } from '../../src/core/canonical-freshness.ts'
 
 describe('canonical anchor freshness', () => {

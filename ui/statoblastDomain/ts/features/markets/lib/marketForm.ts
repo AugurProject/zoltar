@@ -1,6 +1,6 @@
 import type { ForkAuctionFormState, SecurityPoolFormState, SecurityVaultFormState, TradingFormState } from '../../../types/app.js'
 import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/shared/oracle/oracleInitialReport'
-import { parseDecimalInput, tryParseDecimalInput } from '@zoltar/ui-core-shared/lib/decimal.js'
+import { parseDecimalInput, tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 
 const STATOBLAST_SECURITY_MULTIPLIER_DECIMALS = 4

@@ -1,8 +1,8 @@
 import { useSignal } from '@preact/signals'
 import { useRef } from 'preact/hooks'
 import type { Hash } from '@zoltar/shared/evm/ethereum'
-import type { TransactionRequestPreview } from '../../lib/chainBackend.js'
-import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFailed, markTransactionFinished, markTransactionPrepared, markTransactionPresented, markTransactionRequested, markTransactionSubmitted } from '../../lib/transactionTray.js'
+import type { TransactionRequestPreview } from '../../wallet/chainBackend.js'
+import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFailed, markTransactionFinished, markTransactionPrepared, markTransactionPresented, markTransactionRequested, markTransactionSubmitted } from '../../transactions/transactionTray.js'
 import type { GlobalTransactionPresentation, TransactionIntent } from '../../types/components.js'
 
 type TransactionTrayControllerOptions = {

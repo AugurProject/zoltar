@@ -410,7 +410,7 @@ test('shared browser import maps and required assets follow package export outpu
 	for (const relativePath of sharedBrowserArtifactRelativePaths) {
 		expect(exportedArtifacts.has(relativePath), `${relativePath} is a current package export output`).toBe(true)
 	}
-	expect([...sharedBrowserArtifactRelativePaths].sort()).toEqual([...mappedSharedArtifacts].sort())
+	expect([...mappedSharedArtifacts].sort()).toEqual([...sharedBrowserArtifactRelativePaths].sort())
 })
 
 test('watch build regression scanner catches indirect bare Bun commands', () => {

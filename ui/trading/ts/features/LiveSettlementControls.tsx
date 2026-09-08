@@ -137,8 +137,6 @@ export function LiveSettlementControls({
 	else if (balanceState === 'ready') {
 		if (account === undefined || walletClient === undefined) settlementStatus = 'Connect a wallet to load balances for settlement'
 		else if (state === 'preparing') settlementStatus = 'Preparing settlement transaction…'
-		else if (state === 'approval') settlementStatus = 'Share-token approval pending in wallet…'
-		else if (state === 'approval-pending') settlementStatus = 'Share-token approval pending on-chain…'
 		else if (state === 'submitting') settlementStatus = 'Settlement transaction pending in wallet…'
 		else if (state === 'pending') settlementStatus = error ?? 'Settlement transaction pending on-chain…'
 		else if (state === 'error') settlementStatus = error ?? 'Settlement workflow needs attention'

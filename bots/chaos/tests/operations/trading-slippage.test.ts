@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { decodeFunctionData } from '../support/bot-shared.ts'
+import { decodeFunctionData } from '@zoltar/bot-shared/ethereum'
 import { tradingPairAbi, tradingRouterAbi } from '../../src/contracts/abi.ts'
 import { eligibleOperationPlans } from '../../src/operations/catalog.ts'
 import { snapshotFixture } from './fixture.ts'

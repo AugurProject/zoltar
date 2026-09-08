@@ -10,7 +10,7 @@ import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBa
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import type { DeploymentStatus } from '@zoltar/ui-core-shared/types/contracts.js'
-import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/lib/networkProfile.js'
+import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 
 type UseDeploymentFlowState = ReturnType<typeof useDeploymentFlow>
 

@@ -43,8 +43,8 @@ function getScenarioProtocol(): StatoblastScenarioProtocol {
 import { createRangeProgressReporter, deploySimulationAppContracts, reportBootstrapProgress, requireQaAccount, type BootstrapProgressHandler, type ProgressRange, type BootstrapScenarioApplyParameters, type TevmLikeClient } from '@zoltar/ui-core-shared/simulation/bootstrap.js'
 import { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice } from '@zoltar/ui-core-shared/protocol/truthAuctionMath.js'
 import { advanceSimulationTime, getSimulationChainTimestamp } from '@zoltar/ui-core-shared/simulation/clock.js'
-import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/lib/chainBackend.js'
-import type { NetworkProfile } from '@zoltar/ui-core-shared/lib/networkProfile.js'
+import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
+import type { NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import type { ListedSecurityPool, QuestionData } from '@zoltar/ui-core-shared/types/contracts.js'
 
 export type StatoblastScenario = 'security-pool' | 'securitypoolx2' | 'securitypoolx2-auction'

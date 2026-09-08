@@ -12,7 +12,7 @@ import { ScalarOutcomePicker } from '@zoltar/ui-core-shared/components/ScalarOut
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
 import { clampScalarTickIndex, formatScalarOutcomeLabel, getScalarOutcomeIndex } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 import type { MarketDetails, ZoltarChildUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
-import { getWrongNetworkReason } from '@zoltar/ui-core-shared/lib/network.js'
+import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
 type ScalarDeploymentSectionProps = {
 	accountAddress: Address | undefined
 	childUniverses: ZoltarChildUniverseSummary[]

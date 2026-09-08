@@ -9,7 +9,7 @@ import { createMarketCreationSuccessPresentation, createMarketCreationTransactio
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
-import { createInitialTransactionTrayState, markTransactionFailed, markTransactionPresented, markTransactionRequested, markTransactionSubmitted } from '@zoltar/ui-core-shared/lib/transactionTray.js'
+import { createInitialTransactionTrayState, markTransactionFailed, markTransactionPresented, markTransactionRequested, markTransactionSubmitted } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
 
 describe('GlobalTransactionTray', () => {
 	let restoreRouting: (() => void) | undefined

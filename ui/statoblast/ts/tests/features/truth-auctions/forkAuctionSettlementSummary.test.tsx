@@ -15,7 +15,7 @@ import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/rende
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 
 const actualContracts = await import('@zoltar/ui-statoblast-domain/protocol/index.js')
-const actualClients = await import('@zoltar/ui-core-shared/lib/clients.js')
+const actualClients = await import('@zoltar/ui-core-shared/wallet/clients.js')
 const actualTruthAuctionBookHook = await import('@zoltar/ui-statoblast-domain/features/truth-auctions/hooks/useTruthAuctionBookData.js')
 const actualTruthAuctionSettlementHook = await import('@zoltar/ui-statoblast-domain/features/truth-auctions/hooks/useTruthAuctionSettlementActionState.js')
 
@@ -40,7 +40,7 @@ mock.module('@zoltar/ui-statoblast-domain/protocol/index.js', () => ({
 	loadForkAuctionDetails: mock(async () => mockedForkAuctionDetails),
 }))
 
-mock.module('@zoltar/ui-core-shared/lib/clients.js', () => ({
+mock.module('@zoltar/ui-core-shared/wallet/clients.js', () => ({
 	...actualClients,
 	createConnectedReadClient: mock(() => ({
 		readContract: mock(async () => {

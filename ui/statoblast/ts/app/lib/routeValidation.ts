@@ -1,4 +1,4 @@
-import { hasPresentEmptyQueryParam } from '@zoltar/ui-core-shared/lib/routing.js'
+import { hasPresentEmptyQueryParam } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { isSupportedSelectedPoolView } from '@zoltar/ui-statoblast-domain/features/security-pools/lib/securityPoolWorkflow.js'
 import type { Route } from '@zoltar/ui-statoblast-domain/types/app.js'
 import type { SecurityPoolsView } from '@zoltar/ui-statoblast-domain/features/types.js'

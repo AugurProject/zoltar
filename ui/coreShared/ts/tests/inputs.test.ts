@@ -16,7 +16,7 @@ import {
 	parseReportIdInput,
 	resolveOptionalAddressInput,
 	resolveOptionalBigIntListInput,
-} from '../lib/inputs.js'
+} from '../forms/inputs.js'
 
 void describe('input helpers', () => {
 	void test('parses and trims required address inputs', () => {

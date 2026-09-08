@@ -1,4 +1,4 @@
-import { getAddress, isAddress, keccak256, type Address, type Hex } from '#ethereum'
+import { getAddress, isAddress, keccak256, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 
 export type DeploymentRole = 'coordinator' | 'executor' | 'open-oracle' | 'token' | 'uniswap-factory' | 'uniswap-quoter' | 'uniswap-router' | 'uniswap-v2-router' | 'uniswap-v4-pool-manager' | 'uniswap-v4-quoter' | 'weth'
 

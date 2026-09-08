@@ -529,7 +529,7 @@
         },
         {
           "inputs": [],
-          "name": "getTotalTheoreticalSupplyAttoRep",
+          "name": "getTotalTheoreticalSupply",
           "outputs": [
             {
               "internalType": "uint256",
@@ -1583,7 +1583,7 @@
         },
         {
           "inputs": [],
-          "name": "getTotalTheoreticalSupplyAttoRep",
+          "name": "getTotalTheoreticalSupply",
           "outputs": [
             {
               "internalType": "uint256",

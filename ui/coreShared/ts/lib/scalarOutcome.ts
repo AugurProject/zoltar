@@ -1,4 +1,4 @@
-import { parseDecimalInput } from './decimal.js'
+import { parseDecimalInput } from '../forms/decimal.js'
 import { getVisualRatio } from './visualMetrics.js'
 import { formatScalarOutcomeIndexLabel as formatSharedScalarOutcomeIndexLabel, formatScalarOutcomeLabel as formatSharedScalarOutcomeLabel, MAX_PRECISE_SCALAR_TICK_COUNT, type ScalarQuestionDetails } from '@zoltar/shared/statoblast/scalarOutcome'
 

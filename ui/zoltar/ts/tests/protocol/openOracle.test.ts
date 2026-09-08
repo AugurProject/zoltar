@@ -21,7 +21,7 @@ import {
 	type LiquidationApprovalParams,
 } from '@zoltar/ui-zoltar-domain/protocol/index.js'
 import { statoblast_LiquidationApprovalRegistry_LiquidationApprovalRegistry, statoblast_openOracle_OpenOracle_OpenOracle } from '@zoltar/ui-core-shared/contractArtifact.js'
-import { MAINNET_WETH_ADDRESS } from '@zoltar/ui-core-shared/lib/networkProfile.js'
+import { MAINNET_WETH_ADDRESS } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { asWriteClient, createBlockWithTimestamp, createMockLoaderClient, createMockWriteClient, getContractFunctionName } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 
 const vaultAddress = getAddress('0x00000000000000000000000000000000000000c1')

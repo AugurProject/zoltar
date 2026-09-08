@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'preact/hooks'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import type { ChainBackend } from '@zoltar/ui-core-shared/lib/chainBackend.js'
+import type { ChainBackend } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { isRecoverableQuoteError } from '@zoltar/ui-core-shared/lib/errors.js'
 import { quoteBestExactInputWithSource, quoteBestV3ExactInputWithSource, quoteRepForUsdcV4WithSource, ETH_ADDRESS, getRepAddress, isRepPricingEnabled } from '../../../protocol/uniswapQuoter.js'
 

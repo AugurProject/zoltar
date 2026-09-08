@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { Address } from '#ethereum'
+import type { Address } from '@zoltar/bot-shared/ethereum'
 import {
 	blockAgeLabel,
 	botStatusLabels,

@@ -19,7 +19,7 @@ import { createQuestion, getQuestionId } from '../../testSupport/simulator/utils
 
 import { balanceOfShares, balanceOfSharesInAttoEth, getEthRaiseCapAttoEth, getLastPrice, getQuestionEndDate, migrateShares, OperationType, participateAuction, requestPriceIfNeededAndStageOperation } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { getScalarOutcomeIndex } from '../../testSupport/simulator/utils/contracts/scalarOutcome'
-import { tickToPrice } from '../../testSupport/simulator/utils/tickMath'
+import { tickToPrice } from '@zoltar/shared/statoblast/truthAuctionTickMath'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
 import { SystemState } from '../../testSupport/simulator/types/statoblastTypes'
 import { approximatelyEqual, ensureDefined, strictEqual18Decimal, strictEqualTypeSafe } from '../../testSupport/simulator/utils/testUtils'

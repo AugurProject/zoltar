@@ -2,7 +2,7 @@ import { encodeDeployData, getCreate2Address, keccak256, toHex, type Address, ty
 import { createApplyLinkedLibrariesHelper, createZoltarAddressHelpers } from '@zoltar/shared/deployment/deploymentAddresses'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/deployment/protocolConfig'
 import { ScalarOutcomes_ScalarOutcomes, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData, statoblast_Multicall3_Multicall3 } from '@zoltar/ui-core-shared/contractArtifact.js'
-import { getRuntimeNetworkProfile, type NetworkProfile } from '@zoltar/ui-core-shared/lib/networkProfile.js'
+import { getRuntimeNetworkProfile, type NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { bigintToAddress } from './helpers.js'
 
 export const PROXY_DEPLOYER_ADDRESS = bigintToAddress(0x7a0d94f55792c434d74a40883c6ed8545e406d12n)

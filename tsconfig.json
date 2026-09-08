@@ -31,13 +31,5 @@
 		"tsBuildInfoFile": "./.tsbuildinfo",
 		"noEmit": true
 	},
-	"include": [
-		"shared/ts/**/*.ts",
-		"ui/coreShared/ts/**/*.ts",
-		"ui/coreShared/ts/**/*.tsx",
-		"ui/zoltar/ts/**/*.ts",
-		"ui/zoltar/ts/**/*.tsx",
-		"ui/statoblast/ts/**/*.ts",
-		"ui/statoblast/ts/**/*.tsx",
-	],
+	"include": ["shared/ts/**/*.ts", "ui/coreShared/ts/**/*.ts", "ui/coreShared/ts/**/*.tsx", "ui/zoltar/ts/**/*.ts", "ui/zoltar/ts/**/*.tsx", "ui/statoblast/ts/**/*.ts", "ui/statoblast/ts/**/*.tsx"]
 }

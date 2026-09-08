@@ -76,7 +76,7 @@ describe('useZoltarMigration', () => {
 			transactionFailures.push(message)
 		}
 
-		mock.module('@zoltar/ui-core-shared/lib/clients.js', () => ({
+		mock.module('@zoltar/ui-core-shared/wallet/clients.js', () => ({
 			createWalletWriteClient: mock(() => ({
 				kind: 'write-client',
 			})),
@@ -205,7 +205,7 @@ describe('useZoltarMigration', () => {
 				throw new Error('prepareRepForMigrationInZoltar should not be called in this test')
 			}),
 		}))
-		mock.module('@zoltar/ui-core-shared/lib/clients.js', () => ({
+		mock.module('@zoltar/ui-core-shared/wallet/clients.js', () => ({
 			createWalletWriteClient: mock(() => ({ kind: 'write-client' })),
 		}))
 

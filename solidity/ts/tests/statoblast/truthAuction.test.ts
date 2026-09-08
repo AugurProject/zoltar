@@ -15,7 +15,7 @@ import { getMaxRepBeingSoldAttoRep, getMinBidSizeAttoEth, isFinalized, submitBid
 import { queueLiquidationAtForcedPrice } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { applyLibraries } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { getForkActivationTime } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
-import { priceToClosestTick } from '../../testSupport/simulator/utils/tickMath'
+import { priceToClosestTick } from '@zoltar/shared/statoblast/truthAuctionTickMath'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { rpow } from '../../testSupport/simulator/utils/bigint'
 import { getContractOutput, loadContractsJson, normalizeStorageLayout } from '../contractArtifactHelpers'

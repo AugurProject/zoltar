@@ -57,10 +57,6 @@
 			"types": "./ts/statoblast/truthAuctionTickMath.ts",
 			"default": "./js/statoblast/truthAuctionTickMath.js"
 		},
-		"./trading": {
-			"types": "./ts/trading/index.ts",
-			"default": "./js/trading/index.js"
-		},
 		"./trading/math": {
 			"types": "./ts/trading/math.ts",
 			"default": "./js/trading/math.js"

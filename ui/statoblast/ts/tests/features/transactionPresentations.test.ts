@@ -20,7 +20,7 @@ import {
 	createTradingTransactionIntent,
 } from '@zoltar/ui-statoblast-domain/features/transactionPresentations.js'
 import type { ForkAuctionActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
-import { createInitialTransactionTrayState, markTransactionFailed, markTransactionPrepared, markTransactionRequested, markTransactionSubmitted } from '@zoltar/ui-core-shared/lib/transactionTray.js'
+import { createInitialTransactionTrayState, markTransactionFailed, markTransactionPrepared, markTransactionRequested, markTransactionSubmitted } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
 
 const transactionHash = '0x1234000000000000000000000000000000000000000000000000000000000000'
 

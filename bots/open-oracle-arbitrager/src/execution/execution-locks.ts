@@ -1,4 +1,4 @@
-import { getAddress, type Address } from '#ethereum'
+import { getAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import type { ExclusiveProcessLock } from '#state/position-store'
 
 export type ExecutionLockManager = {

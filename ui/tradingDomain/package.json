@@ -23,11 +23,6 @@
 			"types": "./js/index.d.ts",
 			"bun": "./ts/index.ts",
 			"default": "./js/index.js"
-		},
-		"./capabilities.js": {
-			"types": "./js/capabilities.d.ts",
-			"bun": "./ts/capabilities.ts",
-			"default": "./js/capabilities.js"
 		}
 	}
 }

@@ -4,10 +4,10 @@ import type { Address } from '@zoltar/shared/evm/ethereum'
 import { createZoltarChildUniverse } from '../../../protocol/zoltarForks.js'
 import { loadAllZoltarQuestions, loadMarketDetails, loadZoltarQuestionCount, loadZoltarQuestionPage, loadZoltarUniverseSummary } from '../../../protocol/zoltar.js'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
-import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/lib/clients.js'
+import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { formatRefreshErrorMessage, formatWriteErrorMessage, getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
-import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '@zoltar/ui-core-shared/lib/actionFeedback.js'
-import type { ActionFeedback } from '@zoltar/ui-core-shared/lib/actionFeedback.js'
+import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
+import type { ActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
 import { createChildUniverseSuccessPresentation, createChildUniverseTransactionIntent, createChildUniverseWarningPresentation } from '../../zoltarTransactionPresentations.js'
 import { hasDeployedStep } from '@zoltar/ui-core-shared/lib/deploymentStatus.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
@@ -17,7 +17,7 @@ import { assertActiveWallet } from '@zoltar/ui-core-shared/wallet/assertActiveWa
 import { createActiveEnvironmentGuard } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import type { TransactionLifecycleParameters } from '../../../types/app.js'
 import type { DeploymentStatus, MarketDetails, MarketDetailsPage, ZoltarChildUniverseActionResult, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
-import { TRANSACTION_ACTION_LOCK_REASON } from '@zoltar/ui-core-shared/lib/transactionTray.js'
+import { TRANSACTION_ACTION_LOCK_REASON } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
 
 function buildQuestionPageFromQuestions(questions: MarketDetails[], currentPage: MarketDetailsPage): MarketDetailsPage {
 	const questionCount = BigInt(questions.length)

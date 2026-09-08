@@ -18,9 +18,9 @@ import type {
 import type { ActionAvailability } from '@zoltar/ui-core-shared/types/components.js'
 import type { OpenOracleCreateContractFieldErrors, OpenOracleDisputeSubmissionDetails } from './open-oracle/lib/openOracle.js'
 import type { LoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
-import type { TokenApprovalState } from '@zoltar/ui-core-shared/lib/tokenApproval.js'
+import type { TokenApprovalState } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import type { UserMessagePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
-import type { ReadBackendStatus } from '@zoltar/ui-core-shared/lib/chainBackend.js'
+import type { ReadBackendStatus } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import type { ComponentChildren } from 'preact'
 
 export type * from '@zoltar/ui-core-shared/types/components.js'
