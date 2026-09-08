@@ -51,7 +51,7 @@ describe('Docker packaging', () => {
 		expect(ignoreSource).not.toContain('ui/coreShared/favicon')
 		const installCommands = dockerInstructions(runtime, 'RUN').flatMap(shellCommandSegments)
 		expect(installCommands).toEqual(expect.arrayContaining(['cd shared', 'cd ../bots/shared', 'cd ../liquidator']))
-		expect(installCommands.filter(command => command === 'bun install --frozen-lockfile --production')).toHaveLength(3)
+		expect(installCommands.filter(command => command === 'bun /tmp/tooling/repo/install-frozen.mts . --production')).toHaveLength(3)
 		expect(ignoreSource).toContain('!bots/liquidator/scripts/check-process-lock-runtime.mts')
 		expect(installCommands).toContain('bun ./scripts/check-process-lock-runtime.mts')
 	})

@@ -33,12 +33,16 @@ COPY --from=shared-builder /source/solidity/ts/types/contractArtifact.ts ./solid
 COPY bots/shared/package.json bots/shared/bun.lock ./bots/shared/
 COPY bots/shared/src/ ./bots/shared/src/
 COPY bots/chaos/package.json bots/chaos/bun.lock ./bots/chaos/
+# Use the repository installer for nested file: dependencies in production too.
+COPY --from=shared-builder /source/tooling/repo/install-frozen.mts /tmp/tooling/repo/install-frozen.mts
+COPY --from=shared-builder /source/tooling/ui/share-ui-preact-runtime.mts /tmp/tooling/ui/share-ui-preact-runtime.mts
 RUN cd shared \
-	&& bun install --frozen-lockfile --production \
+	&& bun /tmp/tooling/repo/install-frozen.mts . --production \
 	&& cd ../bots/shared \
-	&& bun install --frozen-lockfile --production \
+	&& bun /tmp/tooling/repo/install-frozen.mts . --production \
 	&& cd ../chaos \
-	&& bun install --frozen-lockfile --production
+	&& bun /tmp/tooling/repo/install-frozen.mts . --production \
+	&& rm -rf /tmp/tooling
 
 COPY bots/chaos/README.md ./bots/chaos/README.md
 COPY bots/chaos/config/ ./bots/chaos/config/

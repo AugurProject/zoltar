@@ -23,12 +23,16 @@ COPY --from=shared-builder /source/shared/ ./shared/
 COPY bots/shared/package.json bots/shared/bun.lock ./bots/shared/
 COPY bots/shared/src/ ./bots/shared/src/
 COPY bots/liquidator/package.json bots/liquidator/bun.lock ./bots/liquidator/
+# Use the repository installer for nested file: dependencies in production too.
+COPY --from=shared-builder /source/tooling/repo/install-frozen.mts /tmp/tooling/repo/install-frozen.mts
+COPY --from=shared-builder /source/tooling/ui/share-ui-preact-runtime.mts /tmp/tooling/ui/share-ui-preact-runtime.mts
 RUN cd shared \
-	&& bun install --frozen-lockfile --production \
+	&& bun /tmp/tooling/repo/install-frozen.mts . --production \
 	&& cd ../bots/shared \
-	&& bun install --frozen-lockfile --production \
+	&& bun /tmp/tooling/repo/install-frozen.mts . --production \
 	&& cd ../liquidator \
-	&& bun install --frozen-lockfile --production
+	&& bun /tmp/tooling/repo/install-frozen.mts . --production \
+	&& rm -rf /tmp/tooling
 
 COPY bots/liquidator/README.md ./bots/liquidator/README.md
 COPY bots/liquidator/config/ ./bots/liquidator/config/

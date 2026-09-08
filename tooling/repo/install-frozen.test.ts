@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { cp, lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import * as process from 'node:process'
@@ -32,8 +32,8 @@ const runForcedWindowsInstall = (installDirectory: string) => {
 	}
 }
 
-const runNativeInstall = (installDirectory: string) => {
-	const result = Bun.spawnSync([process.execPath, installScriptPath, installDirectory], {
+const runNativeInstall = (installDirectory: string, options: string[] = []) => {
+	const result = Bun.spawnSync([process.execPath, installScriptPath, installDirectory, ...options], {
 		cwd: repositoryRootPath,
 		stderr: 'pipe',
 		stdout: 'pipe',
@@ -110,7 +110,7 @@ test('windows install workaround rejects invalid package backups without corrupt
 	}
 })
 
-test('native local dependency workaround rejects a stale registry lock without modifying inputs', async () => {
+test.each(['development', 'production'])('native %s install rejects a stale registry lock without modifying inputs', async mode => {
 	const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'zoltar-install-frozen-native-'))
 	const installDirectory = path.join(temporaryRoot, 'app')
 	const sharedDirectory = path.join(temporaryRoot, 'shared')
@@ -128,7 +128,7 @@ test('native local dependency workaround rejects a stale registry lock without m
 		const stalePackageJson = createPackageJson({ '@zoltar/shared': 'file:../shared', kleur: '4.1.4' })
 		await writeFile(path.join(installDirectory, 'package.json'), stalePackageJson)
 		const originalLockfile = await readFile(path.join(installDirectory, 'bun.lock'), 'utf8')
-		const result = runNativeInstall(installDirectory)
+		const result = runNativeInstall(installDirectory, mode === 'production' ? ['--production'] : [])
 
 		expect(result.exitCode).not.toBe(0)
 		expect(await readFile(path.join(installDirectory, 'package.json'), 'utf8')).toBe(stalePackageJson)
@@ -158,5 +158,37 @@ test('native install retains transitive dependencies from safe local packages', 
 		await expectNoInstallBackups(installDirectory)
 	} finally {
 		await rm(installDirectory, { force: true, recursive: true })
+	}
+})
+
+test('production installs resolve nested bot packages without development dependencies', async () => {
+	const root = await mkdtemp(path.join(tmpdir(), 'zoltar-install-production-'))
+	const botPackages = ['bots/liquidator', 'bots/chaos', 'bots/open-oracle-arbitrager']
+	const packages = ['shared', 'bots/shared', ...botPackages]
+	try {
+		for (const packagePath of packages) {
+			const directory = path.join(root, packagePath)
+			await mkdir(directory, { recursive: true })
+			for (const file of ['package.json', 'bun.lock']) await cp(path.join(repositoryRootPath, packagePath, file), path.join(directory, file))
+		}
+		await cp(path.join(repositoryRootPath, 'shared/ts'), path.join(root, 'shared/ts'), { recursive: true })
+		await cp(path.join(repositoryRootPath, 'bots/shared/src'), path.join(root, 'bots/shared/src'), { recursive: true })
+		for (const packagePath of packages) {
+			const directory = path.join(root, packagePath)
+			const manifest = await readFile(path.join(directory, 'package.json'), 'utf8')
+			const lockfile = await readFile(path.join(directory, 'bun.lock'), 'utf8')
+			const result = runNativeInstall(directory, ['--production'])
+			if (result.exitCode !== 0) throw new Error(`${result.stdout}\n${result.stderr}`)
+			expect(await readFile(path.join(directory, 'package.json'), 'utf8')).toBe(manifest)
+			expect(await readFile(path.join(directory, 'bun.lock'), 'utf8')).toBe(lockfile)
+			await expectNoInstallBackups(directory)
+			await expect(lstat(path.join(directory, 'node_modules/typescript'))).rejects.toThrow()
+		}
+		for (const packagePath of botPackages) {
+			const runtime = Bun.spawnSync([process.execPath, '--eval', "import { getAddress } from '@zoltar/bot-shared/ethereum'; getAddress('0x0000000000000000000000000000000000000001')"], { cwd: path.join(root, packagePath), stdout: 'pipe', stderr: 'pipe' })
+			expect(runtime.exitCode).toBe(0)
+		}
+	} finally {
+		await rm(root, { recursive: true, force: true })
 	}
 })

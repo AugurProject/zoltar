@@ -63,6 +63,7 @@ describe('chaos Docker packaging', () => {
 		expect(ignoreSource).toContain('!solidity/tsconfig.json')
 		expect(ignoreSource).not.toContain('ui/coreShared/favicon')
 		expect(dockerInstructions(runtime, 'USER')).toEqual(['bun'])
+		expect(runtimeRuns.filter(command => command === 'bun /tmp/tooling/repo/install-frozen.mts . --production')).toHaveLength(3)
 		expect(runtimeRuns).toContain('bun ./scripts/check-runtime.mts')
 		expect(await readFile(join(botDirectory, 'scripts', 'check-runtime.mts'), 'utf8')).toContain("import { main } from '../src/cli/run.ts'")
 		expect(dockerInstructions(runtime, 'EXPOSE')).toContain('4193')
