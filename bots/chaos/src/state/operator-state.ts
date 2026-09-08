@@ -5,7 +5,7 @@ import { dirname, resolve } from 'node:path'
 import { getAddress, keccak256, parseTransaction, recoverTransactionAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import type { ChaosProtocolIndex } from '#monitoring/protocol-index'
 import type { ChaosEcosystem, EvaluatedOperation, OperationContinuationDisposition, OperationEvidence, OperationPreflightCall, OperationRisk, OperationTerminalSubmission, OperationWalletAssetDebit } from '#operations/types'
-import { initialRetirementState, parseRetirementState, type DurableRetirementState } from './retirement.ts'
+import { assertSafeRetirementRecipient, initialRetirementState, parseRetirementState, type DurableRetirementState } from './retirement.ts'
 import { serializedScheduler } from './state-serialization.ts'
 import {
 	loadPersistedProtocolIndex,
@@ -287,6 +287,7 @@ export function initialDurableState(chainId: number, paused = true, profileId = 
 
 export function initialRuntimeState(paused: boolean, wallet: Address | undefined, chainId: number, durableState: DurableState = initialDurableState(chainId, paused)): RuntimeState {
 	if (durableState.chainId !== chainId) throw new Error(`Durable state belongs to chain ${durableState.chainId.toString()}, expected chain ${chainId.toString()}`)
+	if (durableState.retirement.recipient !== undefined) assertSafeRetirementRecipient(durableState.retirement.recipient, wallet ?? durableState.signerAddress)
 	const restoredSchedulerStatus = durableState.scheduler.status
 	const effectivePaused = paused || durableState.safetyPaused
 	let activeSchedulerStatus = restoredSchedulerStatus
@@ -320,6 +321,7 @@ export function initialRuntimeState(paused: boolean, wallet: Address | undefined
 }
 
 export function bindRuntimeStateToSigner(state: RuntimeState, address: Address) {
+	if (state.retirement.recipient !== undefined) assertSafeRetirementRecipient(state.retirement.recipient, address)
 	if (state.signerAddress !== undefined && state.signerAddress.toLowerCase() !== address.toLowerCase()) {
 		throw new Error(`Durable runtime is scoped to signer ${state.signerAddress}, not ${address}`)
 	}

@@ -7,6 +7,7 @@ import {
 	DURABLE_STATE_VERSION,
 	MAXIMUM_LIFECYCLE_PRESENCE_BLOCKER_COUNT,
 	MAXIMUM_TERMINAL_WORKFLOW_COUNT,
+	bindRuntimeStateToSigner,
 	compactDurableState,
 	initialDurableState,
 	initialRuntimeState,
@@ -246,6 +247,38 @@ describe('chaos-bot durable state', () => {
 		const runtime = initialRuntimeState(false, undefined, 1, durable)
 		expect(runtime.signerAddress).toBe(signer)
 		expect(runtime.wallet).toBe(signer)
+	})
+
+	test('rejects an active keyless retirement targeting the configured signer before recovery or binding', async () => {
+		const path = await statePath()
+		const configuredSigner = privateKeyToAccount(`0x${'22'.repeat(32)}`).address
+		const durable = initialDurableState(1, false, 'profile:test')
+		durable.retirement.status = 'draining'
+		durable.retirement.recipient = configuredSigner
+		durable.retirement.requestedAt = createdAt
+		const pendingRetirementWorkflow = workflow()
+		pendingRetirementWorkflow.id = 'workflow:retirement-sweep'
+		pendingRetirementWorkflow.operationId = 'retirement.sweep.native-last'
+		pendingRetirementWorkflow.planId = 'retirement.sweep.native-last:1'
+		pendingRetirementWorkflow.status = 'planned'
+		const pendingStep = pendingRetirementWorkflow.steps[0]
+		if (pendingStep === undefined) throw new Error('Expected retirement workflow step')
+		pendingStep.status = 'planned'
+		pendingStep.transactionIntentId = undefined
+		durable.workflows = [pendingRetirementWorkflow]
+		await saveDurableState(path, durable)
+
+		let recoveryStateReturned = false
+		await expect(
+			loadRuntimeState(path, false, configuredSigner, 1).then(() => {
+				recoveryStateReturned = true
+			}),
+		).rejects.toThrow('durable signer')
+		expect(recoveryStateReturned).toBeFalse()
+		const keylessRuntime = initialRuntimeState(false, undefined, 1, durable)
+		expect(() => bindRuntimeStateToSigner(keylessRuntime, configuredSigner)).toThrow('durable signer')
+		expect(keylessRuntime.signerAddress).toBeUndefined()
+		expect(keylessRuntime.workflows[0]?.status).toBe('planned')
 	})
 
 	test('honors a durable safety pause across process restart', () => {
