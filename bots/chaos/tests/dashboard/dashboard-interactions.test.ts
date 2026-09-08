@@ -241,6 +241,12 @@ type ChromiumStderrCapture = {
 	text: Promise<string>
 }
 
+type ChromiumStopResult = {
+	error: unknown
+	failed: boolean
+	stderr: string
+}
+
 function captureChromiumStderr(stream: ReadableStream<Uint8Array> | null): ChromiumStderrCapture {
 	if (stream === null) return { cancel: () => {}, text: Promise.resolve('') }
 	const reader = stream.getReader()
@@ -281,14 +287,19 @@ function isTransientChromiumConnectionError(error: unknown) {
 	return false
 }
 
-function throwCombinedErrors(primaryError: unknown, primaryThrown: boolean, cleanupErrors: readonly unknown[], message: string) {
+function combinedErrors(primaryError: unknown, primaryThrown: boolean, cleanupErrors: readonly unknown[], message: string) {
 	if (!primaryThrown) {
-		if (cleanupErrors.length === 0) return
-		if (cleanupErrors.length === 1) throw cleanupErrors[0]
-		throw new AggregateError(cleanupErrors, message)
+		if (cleanupErrors.length === 0) return { error: undefined, failed: false }
+		if (cleanupErrors.length === 1) return { error: cleanupErrors[0], failed: true }
+		return { error: new AggregateError(cleanupErrors, message), failed: true }
 	}
-	if (cleanupErrors.length === 0) throw primaryError
-	throw new AggregateError([primaryError, ...cleanupErrors], message)
+	if (cleanupErrors.length === 0) return { error: primaryError, failed: true }
+	return { error: new AggregateError([primaryError, ...cleanupErrors], message), failed: true }
+}
+
+function throwCombinedErrors(primaryError: unknown, primaryThrown: boolean, cleanupErrors: readonly unknown[], message: string) {
+	const result = combinedErrors(primaryError, primaryThrown, cleanupErrors, message)
+	if (result.failed) throw result.error
 }
 
 async function readChromiumDebuggingPort(userDataDirectory: string) {
@@ -312,7 +323,7 @@ async function removeChromiumProfile(userDataDirectory: string) {
 	if (!removal) throw new Error('Chromium profile cleanup timed out')
 }
 
-async function stopChromium(chromiumProcess: DashboardChromium) {
+async function stopChromium(chromiumProcess: DashboardChromium): Promise<ChromiumStopResult> {
 	let shutdownError: unknown
 	let shutdownFailed = false
 	let stderrText = ''
@@ -323,14 +334,14 @@ async function stopChromium(chromiumProcess: DashboardChromium) {
 			if (!(await waitForChromiumExit(chromiumProcess.browser, chromiumShutdownTimeoutMilliseconds))) throw new Error('Chromium did not exit after SIGKILL')
 		}
 		await chromiumProcess.browser.exited
-		const stderr = await Promise.race([chromiumProcess.stderr.text.then(text => ({ complete: true as const, text })), Bun.sleep(chromiumShutdownTimeoutMilliseconds).then(() => ({ complete: false as const, text: '' }))])
-		if (!stderr.complete) chromiumProcess.stderr.cancel()
-		stderrText = stderr.text
 	} catch (error) {
 		shutdownFailed = true
 		shutdownError = error
 	}
 	chromiumProcess.stderr.cancel()
+	const stderr = await Promise.race([chromiumProcess.stderr.text.then(text => ({ complete: true as const, text })), Bun.sleep(chromiumShutdownTimeoutMilliseconds).then(() => ({ complete: false as const, text: '' }))])
+	if (!stderr.complete) chromiumProcess.stderr.cancel()
+	stderrText = stderr.text
 	let profileCleanupError: unknown
 	let profileCleanupFailed = false
 	try {
@@ -339,8 +350,8 @@ async function stopChromium(chromiumProcess: DashboardChromium) {
 		profileCleanupFailed = true
 		profileCleanupError = error
 	}
-	throwCombinedErrors(shutdownError, shutdownFailed, profileCleanupFailed ? [profileCleanupError] : [], 'Chromium shutdown and profile cleanup failed')
-	return stderrText
+	const failure = combinedErrors(shutdownError, shutdownFailed, profileCleanupFailed ? [profileCleanupError] : [], 'Chromium shutdown and profile cleanup failed')
+	return { ...failure, stderr: stderrText }
 }
 
 async function launchChromium(userDataDirectoryPrefix: string): Promise<DashboardChromium> {
@@ -374,7 +385,12 @@ async function launchChromium(userDataDirectoryPrefix: string): Promise<Dashboar
 		let cleanupError: unknown
 		let cleanupFailed = false
 		try {
-			diagnostics = await stopChromium(chromiumProcess)
+			const stopResult = await stopChromium(chromiumProcess)
+			diagnostics = stopResult.stderr
+			if (stopResult.failed) {
+				cleanupFailed = true
+				cleanupError = stopResult.error
+			}
 		} catch (caughtCleanupError) {
 			cleanupFailed = true
 			cleanupError = caughtCleanupError
@@ -1897,13 +1913,18 @@ browserTest(
 			primaryError = error
 		} finally {
 			const cleanupErrors: unknown[] = []
+			let chromiumStderr = ''
 			try {
 				socket?.close()
 			} catch (error) {
 				cleanupErrors.push(error)
 			}
 			try {
-				if (chromiumProcess !== undefined) await stopChromium(chromiumProcess)
+				if (chromiumProcess !== undefined) {
+					const stopResult = await stopChromium(chromiumProcess)
+					chromiumStderr = stopResult.stderr
+					if (stopResult.failed) cleanupErrors.push(stopResult.error)
+				}
 			} catch (error) {
 				cleanupErrors.push(error)
 			}
@@ -1912,6 +1933,7 @@ browserTest(
 			} catch (error) {
 				cleanupErrors.push(error)
 			}
+			if (chromiumStderr.trim() !== '' && (primaryErrorThrown || cleanupErrors.length > 0)) cleanupErrors.push(new Error(`Chromium stderr: ${chromiumStderr.trim()}`))
 			throwCombinedErrors(primaryError, primaryErrorThrown, cleanupErrors, 'Dashboard interaction and cleanup failed')
 		}
 	},
@@ -2008,13 +2030,18 @@ browserTest(
 			primaryError = error
 		} finally {
 			const cleanupErrors: unknown[] = []
+			let chromiumStderr = ''
 			try {
 				socket?.close()
 			} catch (error) {
 				cleanupErrors.push(error)
 			}
 			try {
-				if (chromiumProcess !== undefined) await stopChromium(chromiumProcess)
+				if (chromiumProcess !== undefined) {
+					const stopResult = await stopChromium(chromiumProcess)
+					chromiumStderr = stopResult.stderr
+					if (stopResult.failed) cleanupErrors.push(stopResult.error)
+				}
 			} catch (error) {
 				cleanupErrors.push(error)
 			}
@@ -2023,6 +2050,7 @@ browserTest(
 			} catch (error) {
 				cleanupErrors.push(error)
 			}
+			if (chromiumStderr.trim() !== '' && (primaryErrorThrown || cleanupErrors.length > 0)) cleanupErrors.push(new Error(`Chromium stderr: ${chromiumStderr.trim()}`))
 			throwCombinedErrors(primaryError, primaryErrorThrown, cleanupErrors, 'Dashboard interaction and cleanup failed')
 		}
 	},
