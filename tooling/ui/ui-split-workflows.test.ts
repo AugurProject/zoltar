@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { spawnSync } from 'node:child_process'
 import { access, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { projectQuery } from '../repo/query-projects.mts'
@@ -128,9 +129,11 @@ describe('split UI workflow paths', () => {
 		const workflowCallInputs = requireRecord(workflowCall['inputs'], 'reusable test-domain inputs')
 		const invocationInput = requireRecord(workflowCallInputs['invocation'], 'reusable invocation input')
 		expect(invocationInput['default']).toBe('reusable')
+		expect(requireRecord(workflowCallInputs['application'], 'application input')).toMatchObject({ type: 'boolean', default: true })
 		expect(testDomainTriggers).not.toHaveProperty('pull_request')
 		expect(testDomainTriggers).not.toHaveProperty('push')
-		expect(testDomainTriggers).toHaveProperty('workflow_dispatch')
+		const manualInputs = requireRecord(requireRecord(testDomainTriggers['workflow_dispatch'], 'manual domain trigger')['inputs'], 'manual domain inputs')
+		expect(requireRecord(manualInputs['application'], 'manual application input')).toMatchObject({ type: 'boolean', default: true })
 		const testDomainConcurrency = requireRecord(testDomainsWorkflow['concurrency'], 'test-domain concurrency')
 		expect(testDomainConcurrency['group']).toContain("${{ inputs.invocation || 'direct' }}")
 		const concurrencyInvocation = (invocation: string | undefined) => invocation ?? 'direct'
@@ -139,7 +142,9 @@ describe('split UI workflow paths', () => {
 		const ciJobs = workflowJobs(ciWorkflow)
 		const domainTestsJob = requireRecord(ciJobs['domain-tests'], 'CI domain-tests job')
 		expect(domainTestsJob['uses']).toBe('./.github/workflows/test-domains.yml')
-		expect(domainTestsJob['if']).toBe("needs.changes.outputs.core == 'true'")
+		expect(domainTestsJob['if']).toBe("needs.changes.outputs.core == 'true' || needs.changes.outputs.infrastructure == 'true'")
+		expect(requireRecord(domainTestsJob['with'], 'domain inputs')['application']).toBe(false)
+		expect(workflowSteps(ciJobs['infrastructure-checks']).some(step => String(step['run']).includes('bun test'))).toBe(false)
 		expect(ciJobs).not.toHaveProperty('tests')
 		expect(ciJobs).not.toHaveProperty('test-timings')
 		const domainSteps = Object.values(workflowJobs(testDomainsWorkflow)).flatMap(workflowSteps)
@@ -156,6 +161,134 @@ describe('split UI workflow paths', () => {
 		expect(stabilityTestPaths).toEqual(['augurScan/tests/api/live.test.ts', 'augurScan/tests/replay/indexer-lifecycle.test.ts', 'tooling/docs/documentation-tools-runtime.test.ts', 'tooling/ui/chromiumPath.test.ts', 'ui/zoltar/ts/tests/features/open-oracle/useRepPrices.test.tsx'].sort())
 		await Promise.all(stabilityTestPaths.map(testPath => access(join(repositoryRoot, testPath))))
 		expect(stabilitySteps.some(step => typeof step['run'] === 'string' && step['run'].includes('without retries'))).toBe(true)
+	})
+
+	test('infrastructure-only runs retain Solidity coverage without application preparation', async () => {
+		const ciJobs = workflowJobs(await readWorkflow(activeCiWorkflowPath))
+		const domainJobs = workflowJobs(await readWorkflow(testDomainsWorkflowPath))
+		expect(requireRecord(ciJobs['infrastructure-checks'], 'infrastructure checks')['if']).toBe("needs.changes.outputs.infrastructure == 'true' && needs.changes.outputs.core != 'true'")
+		expect(requireRecord(domainJobs['prepare'], 'prepare')['if']).toBe('inputs.application && !inputs.prepared')
+		expect(requireRecord(domainJobs['mutation-smoke'], 'mutation smoke')['if']).toBe('inputs.application')
+		expect(requireRecord(domainJobs['application-tests'], 'application tests')['needs']).toBe('prepare')
+		const solidity = requireRecord(domainJobs['solidity-tests'], 'Solidity tests')
+		expect(solidity['needs']).toBeUndefined()
+		expect(solidity['if']).toBe('inputs.solidity')
+		expect(requireRecord(requireRecord(solidity['strategy'], 'strategy')['matrix'], 'matrix')['shard']).toEqual([1, 2, 3, 4])
+		const history = requireRecord(domainJobs['timing-history'], 'timing history')
+		expect(history['if']).toContain("needs.solidity-tests.result == 'success' || needs.application-tests.result == 'success'")
+		expect(requireRecord(requireRecord(history['strategy'], 'strategy')['matrix'], 'matrix')['domain']).toBe("${{ fromJSON(needs.application-tests.result != 'success' && '[\"solidity\"]' || (needs.solidity-tests.result == 'success' && '[\"application\", \"solidity\"]' || '[\"application\"]')) }}")
+	})
+
+	test('required gates reject failures, cancellations, and unexpected skips for every selected route', async () => {
+		const ciJobs = workflowJobs(await readWorkflow(activeCiWorkflowPath))
+		const required = requireRecord(ciJobs['required'], 'required CI gate')
+		expect(required['needs']).toEqual(expect.arrayContaining(['domain-tests', 'infrastructure-checks', 'prepare', 'checks', 'audit']))
+		const gate = workflowSteps(required)[0]
+		const command = gate?.['run']
+		if (typeof command !== 'string') throw new Error('Missing required CI gate command')
+		const gateEnv = requireRecord(gate?.['env'], 'required CI gate environment')
+		expect(gateEnv['DOMAIN_TESTS_SELECTED']).toBe("${{ needs.changes.outputs.core == 'true' || needs.changes.outputs.infrastructure == 'true' }}")
+		expect(gateEnv['INFRA_CHECKS_SELECTED']).toBe("${{ needs.changes.outputs.infrastructure == 'true' && needs.changes.outputs.core != 'true' }}")
+		for (const core of [false, true])
+			for (const infrastructure of [false, true]) {
+				const env = Object.fromEntries(Object.keys(gateEnv).map(key => [key, key.endsWith('_RESULT') ? 'skipped' : 'false']))
+				Object.assign(env, { CHANGES_RESULT: 'success', CORE_SELECTED: String(core), DOCS_SELECTED: String(core), INFRA_SELECTED: String(infrastructure), DOMAIN_TESTS_SELECTED: String(core || infrastructure), INFRA_CHECKS_SELECTED: String(infrastructure && !core) })
+				const selected = ['CHANGES_RESULT']
+				if (core) selected.push('PREPARE_RESULT', 'APPLICATION_TESTS_RESULT', 'DOCS_RESULT', 'BROWSER_SMOKE_RESULT', 'CHECKS_RESULT', 'KNIP_RESULT', 'AUDIT_RESULT')
+				if (core || infrastructure) selected.push('DOMAIN_TESTS_RESULT')
+				if (infrastructure && !core) selected.push('INFRA_RESULT')
+				for (const key of selected) env[key] = 'success'
+				expect(spawnSync('bash', ['-e', '-c', command], { env }).status).toBe(0)
+				for (const key of selected) for (const result of ['failure', 'cancelled', 'skipped']) expect(spawnSync('bash', ['-e', '-c', command], { env: { ...env, [key]: result } }).status).not.toBe(0)
+			}
+		const domainJobs = workflowJobs(await readWorkflow(testDomainsWorkflowPath))
+		const domainGate = requireRecord(domainJobs['required'], 'domain gate')
+		expect(domainGate['if']).toBe('always()')
+		expect(domainGate['needs']).toEqual(['prepare', 'application-tests', 'solidity-tests', 'timing-history', 'mutation-smoke'])
+		const domainStep = workflowSteps(domainGate)[0]
+		expect(requireRecord(domainStep?.['env'], 'domain gate environment')['APPLICATION_SELECTED']).toBe('${{ inputs.application }}')
+		const domainCommand = domainStep?.['run']
+		if (typeof domainCommand !== 'string') throw new Error('Missing domain gate command')
+		for (const application of [false, true])
+			for (const solidity of [false, true])
+				for (const prepared of [false, true]) {
+					const env = {
+						APPLICATION_SELECTED: String(application),
+						SOLIDITY_SELECTED: String(solidity),
+						PREPARED: String(prepared),
+						PREPARE_RESULT: application && !prepared ? 'success' : 'skipped',
+						APPLICATION_RESULT: application ? 'success' : 'skipped',
+						MUTATION_RESULT: application ? 'success' : 'skipped',
+						SOLIDITY_RESULT: solidity ? 'success' : 'skipped',
+						TIMING_RESULT: 'success',
+					}
+					const success = spawnSync('bash', ['-e', '-c', domainCommand], { env }).status
+					if (!application && !solidity) {
+						expect(success).not.toBe(0)
+						continue
+					}
+					expect(success).toBe(0)
+					for (const key of ['SOLIDITY_RESULT', 'TIMING_RESULT', 'PREPARE_RESULT', 'APPLICATION_RESULT', 'MUTATION_RESULT']) {
+						for (const result of ['failure', 'cancelled']) expect(spawnSync('bash', ['-e', '-c', domainCommand], { env: { ...env, [key]: result } }).status).not.toBe(0)
+					}
+					for (const [key, expected] of Object.entries(env).filter(([key]) => key.endsWith('_RESULT'))) expect(spawnSync('bash', ['-e', '-c', domainCommand], { env: { ...env, [key]: expected === 'success' ? 'skipped' : 'success' } }).status).not.toBe(0)
+				}
+	})
+
+	test('stacked PRs run CI, with one build and one automatic owner for docs and browser smoke', async () => {
+		const ci = await readWorkflow(activeCiWorkflowPath)
+		expect(requireRecord(ci['on'], 'CI triggers')).toHaveProperty('pull_request')
+		expect(requireRecord(ci['on'], 'CI triggers')['pull_request']).toBeNull()
+		const jobs = workflowJobs(ci)
+		const application = requireRecord(jobs['application-tests'], 'application call')
+		expect(application['needs']).toEqual(['changes', 'prepare'])
+		expect(requireRecord(application['with'], 'application options')).toMatchObject({ prepared: true, solidity: false, invocation: 'ci-application' })
+		const solidity = requireRecord(jobs['domain-tests'], 'Solidity call')
+		expect(solidity['needs']).toBe('changes')
+		expect(requireRecord(solidity['with'], 'Solidity options')).toMatchObject({ application: false, invocation: 'ci-solidity' })
+		expect(workflowSteps(jobs['prepare']).some(step => step['name'] === 'Upload production UI inputs')).toBe(true)
+		const buildJobs = Object.entries(jobs)
+			.filter(([, job]) => Array.isArray(requireRecord(job, 'CI job')['steps']))
+			.filter(([, job]) => workflowSteps(job).some(step => typeof step['run'] === 'string' && /bun run (ui:build|ci:preflight)/.test(step['run'])))
+			.map(([name]) => name)
+		expect(buildJobs).toEqual(['prepare'])
+		const smoke = requireRecord(jobs['browser-smoke'], 'CI smoke consumer')
+		expect(smoke['needs']).toEqual(['changes', 'prepare'])
+		const smokeSteps = workflowSteps(smoke)
+		const download = smokeSteps.find(step => step['uses'] === 'actions/download-artifact@v5')
+		expect(requireRecord(download?.['with'], 'smoke build artifact')).toMatchObject({ name: 'domain-production-ui', path: 'ui' })
+		const smokeTest = smokeSteps.find(step => step['run'] === 'bun run test:browser:smoke')
+		expect(requireRecord(smokeTest?.['env'], 'smoke environment')).toMatchObject({ ZOLTAR_USE_EXISTING_PRODUCTION_BUILD: '1', ZOLTAR_RUN_PRODUCTION_REBUILD_INVARIANTS: '1' })
+		expect(smokeSteps.indexOf(download ?? {})).toBeLessThan(smokeSteps.indexOf(smokeTest ?? {}))
+		expect(workflowSteps(jobs['checks']).some(step => step['run'] === 'bun run check:static && bun run check:repository')).toBe(true)
+		expect(requireRecord(jobs['docs-checks'], 'documentation checks')['if']).toBe("needs.changes.outputs.docs == 'true' || needs.changes.outputs.core == 'true'")
+		const browser = await readWorkflow(browserWorkflowPath)
+		expect(requireRecord(browser['on'], 'browser triggers')['pull_request']).toBeNull()
+		expect(requireRecord(workflowJobs(browser)['browser-smoke'], 'manual smoke')['if']).toBe("github.event_name == 'workflow_dispatch'")
+		const domains = workflowJobs(await readWorkflow(testDomainsWorkflowPath))
+		expect(requireRecord(domains['application-tests'], 'application shards')['if']).toBe("always() && !cancelled() && inputs.application && (needs.prepare.result == 'success' || (inputs.prepared && needs.prepare.result == 'skipped'))")
+	})
+
+	test('setup profiles isolate lightweight jobs and reject unsupported configuration', async () => {
+		const action = await readWorkflow(setupActionPath)
+		const steps = workflowSteps(requireRecord(action['runs'], 'setup action'))
+		const validation = steps.find(step => step['name'] === 'Validate setup profile')?.['run']
+		if (typeof validation !== 'string') throw new Error('Missing profile validation')
+		for (const profile of ['full', 'contracts', 'root']) expect(spawnSync('bash', ['-e', '-c', validation], { env: { PROFILE: profile, VERIFY_GENERATED: 'false' } }).status).toBe(0)
+		for (const profile of ['contracts', 'root', 'unknown']) expect(spawnSync('bash', ['-e', '-c', validation], { env: { PROFILE: profile, VERIFY_GENERATED: 'true' } }).status).not.toBe(0)
+		expect(steps.find(step => step['name'] === 'Setup Foundry / Anvil')?.['if']).toBe("inputs.foundry == 'true' && inputs.profile != 'root'")
+		expect(steps.find(step => step['name'] === 'Cache generated project outputs')?.['if']).toBe("inputs.profile != 'root'")
+		const cache = requireRecord(steps.find(step => step['name'] === 'Cache generated project outputs')?.['with'], 'cache inputs')
+		expect(cache['key']).toContain('${{ inputs.profile }}')
+		const jobs = workflowJobs(await readWorkflow(testDomainsWorkflowPath))
+		for (const [job, profile] of [
+			['solidity-tests', 'contracts'],
+			['mutation-smoke', 'root'],
+		]) {
+			if (job === undefined) throw new Error('Missing setup job')
+			const setup = workflowSteps(jobs[job]).find(step => step['uses'] === './.github/actions/setup-ci')
+			expect(requireRecord(setup?.['with'], 'setup options')['profile']).toBe(profile)
+		}
 	})
 
 	test('contract caches and transferred inputs include the generated Trading artifact', async () => {
@@ -232,7 +365,7 @@ describe('split UI workflow paths', () => {
 	test('CI and Docker install every UI package from its committed lockfile', async () => {
 		const setupWorkflow = await readWorkflow(setupActionPath)
 		const setupSteps = workflowSteps(requireRecord(setupWorkflow['runs'], 'setup action'))
-		expect(setupSteps.some(step => step['run'] === 'bun run projects:setup')).toBe(true)
+		expect(setupSteps.some(step => typeof step['run'] === 'string' && step['run'].includes('bun run projects:setup'))).toBe(true)
 		expect((await projectQuery()).setupProjectPaths.filter(projectPath => projectPath.startsWith('ui/'))).toEqual(uiPackageIds.map(packageId => `ui/${packageId}`))
 
 		const dockerfile = await readFile(dockerfilePath, 'utf8')

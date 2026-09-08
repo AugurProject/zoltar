@@ -42,6 +42,11 @@ const TEST_INFRASTRUCTURE_PATHS = new Set([
 
 const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
 	{
+		command: 'bun test tooling/contracts/format-solidity-one-line.test.ts',
+		reason: 'Solidity formatter subprocess engine changed',
+		matches: filePath => filePath === 'tooling/contracts/prettier-solidity-batch.mjs',
+	},
+	{
 		command: 'bun test tooling/testing/mutation-support.test.ts tooling/testing/test-discovery.test.ts tooling/testing/run-tests.test.ts tooling/testing/test-impact.test.ts',
 		reason: 'root test discovery, execution, timing, or impact selection changed',
 		matches: filePath => TEST_INFRASTRUCTURE_PATHS.has(filePath),
@@ -54,7 +59,16 @@ const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
 	{
 		command: 'bun test tooling/ui/ui-split-workflows.test.ts',
 		reason: 'CI or coverage workflow wiring changed',
-		matches: filePath => filePath === '.github/workflows/ci.yml' || filePath === '.github/workflows/browser-workflow.yml' || filePath === '.github/workflows/coverage.yml' || filePath === '.github/workflows/test-domains.yml' || filePath === '.github/workflows/test-stability.yml' || filePath === 'workflow/coverage.yml',
+		matches: filePath =>
+			filePath.startsWith('workflow/') ||
+			filePath === '.github/actions/setup-ci/action.yml' ||
+			filePath === 'tooling/testing/reviewable-github-path.ts' ||
+			filePath === '.github/workflows/ci.yml' ||
+			filePath === '.github/workflows/browser-workflow.yml' ||
+			filePath === '.github/workflows/coverage.yml' ||
+			filePath === '.github/workflows/test-domains.yml' ||
+			filePath === '.github/workflows/test-stability.yml' ||
+			filePath === 'workflow/coverage.yml',
 	},
 	{
 		command: 'bun run test:browser:smoke',

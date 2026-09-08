@@ -5,6 +5,7 @@
 				"docs/charts/chartRuntime.ts!",
 				"docs/runtime/{auctionClearing,deploymentMaskDecoder,docsShell,responsiveDocs,interactiveTools,invariantExplorer,mmrProofPlanner,openOracleTools}.ts!",
 				"tooling/**/*.test.ts",
+				"tooling/contracts/prettier-solidity-batch.mjs!",
 				"bun-test-setup*.ts",
 				"docs/{charts/virtualModules,runtime/globals}.d.ts!",
 				"tooling/repo/knip-baseline.mts"
