@@ -3,14 +3,7 @@ import { useRef } from 'preact/hooks'
 import { useFormState } from '@zoltar/ui-core-shared/hooks/useFormState.js'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
 import type { Address } from '@zoltar/shared/evm/ethereum'
-import {
-	finalizeSecurityPoolTruthAuction,
-	refundTruthAuctionBid,
-	settleTruthAuctionBids,
-	startTruthAuctionForSecurityPool,
-	submitTruthAuctionBid,
-	withdrawTruthAuctionRefund,
-} from '../../../protocol/truthAuctionActions.js'
+import { finalizeSecurityPoolTruthAuction, refundTruthAuctionBid, settleTruthAuctionBids, startTruthAuctionForSecurityPool, submitTruthAuctionBid, withdrawTruthAuctionRefund } from '../../../protocol/truthAuctionActions.js'
 import {
 	claimParentEscalationDeposits,
 	createChildUniverseFromSecurityPool,
