@@ -1,7 +1,6 @@
 import { beforeEach, describe, test } from 'bun:test'
 import { statoblast_interfaces_ISecurityPool_ISecurityPool, statoblast_SecurityPool_SecurityPool, statoblast_SecurityPoolForker_SecurityPoolForker, statoblast_SecurityPoolUtils_SecurityPoolUtils, ReputationToken_ReputationToken } from '../../types/contractArtifact'
 import { createCompleteSet } from '../../testSupport/simulator/utils/contracts/securityPool'
-import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { useStatoblastVaultAccountingFixture, type StatoblastVaultAccountingFixture } from './fixture'
 
 const depositRepToVaultEvent = {

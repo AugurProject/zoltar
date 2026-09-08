@@ -23,9 +23,9 @@ describe('GenesisReputationToken', () => {
 	})
 
 	test('matches external REPv2 by exposing approval-based ERC-20 authorization only', () => {
-		const functionNames = GenesisReputationToken_GenesisReputationToken.abi.flatMap(item => (item.type === 'function' ? [item.name] : []))
+		const functionNames = new Set<string>(GenesisReputationToken_GenesisReputationToken.abi.flatMap(item => (item.type === 'function' ? [item.name] : [])))
 		for (const unsupportedFunction of ['permit', 'nonces', 'transferWithAuthorization', 'receiveWithAuthorization', 'cancelAuthorization', 'authorizationState']) {
-			assert.ok(!functionNames.includes(unsupportedFunction), `genesis REP must not advertise unsupported ${unsupportedFunction}`)
+			assert.ok(!functionNames.has(unsupportedFunction), `genesis REP must not advertise unsupported ${unsupportedFunction}`)
 		}
 	})
 
