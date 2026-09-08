@@ -225,17 +225,17 @@ describe('test impact recommendations', () => {
 	test('uses the baseline graph to find surviving tests affected by a deleted source', async () => {
 		const repositoryRoot = await mkdtemp(join(tmpdir(), 'test-impact-deleted-'))
 		try {
-			await mkdir(join(repositoryRoot, 'shared', 'ts'), { recursive: true })
+			await mkdir(join(repositoryRoot, 'shared', 'core', 'ts'), { recursive: true })
 			await mkdir(join(repositoryRoot, 'ui', 'zoltar', 'ts', 'tests'), { recursive: true })
-			await writeFile(join(repositoryRoot, 'shared', 'ts', 'replacement.ts'), 'export const value = 2\n')
-			await writeFile(join(repositoryRoot, 'ui', 'zoltar', 'ts', 'tests', 'consumer.test.ts'), "import { value } from '@zoltar/shared/replacement'\nvoid value\n")
+			await writeFile(join(repositoryRoot, 'shared', 'core', 'ts', 'replacement.ts'), 'export const value = 2\n')
+			await writeFile(join(repositoryRoot, 'ui', 'zoltar', 'ts', 'tests', 'consumer.test.ts'), "import { value } from '@zoltar/core-shared/replacement'\nvoid value\n")
 			const baselineSources = new Map([
-				['shared/ts/deleted.ts', 'export const value = 1\n'],
-				['shared/ts/consumer.ts', "export { value } from './deleted.js'\n"],
-				['ui/zoltar/ts/tests/consumer.test.ts', "import { value } from '@zoltar/shared/consumer'\nvoid value\n"],
+				['shared/core/ts/deleted.ts', 'export const value = 1\n'],
+				['shared/core/ts/consumer.ts', "export { value } from './deleted.js'\n"],
+				['ui/zoltar/ts/tests/consumer.test.ts', "import { value } from '@zoltar/core-shared/consumer'\nvoid value\n"],
 			])
 
-			expect(await getImportGraphTestRecommendations([{ path: 'shared/ts/deleted.ts', status: 'deleted' }], repositoryRoot, { baselineSources })).toEqual([
+			expect(await getImportGraphTestRecommendations([{ path: 'shared/core/ts/deleted.ts', status: 'deleted' }], repositoryRoot, { baselineSources })).toEqual([
 				{
 					command: 'bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/zoltar/ts/tests/consumer.test.ts',
 					reason: 'imports changed production source directly or transitively',

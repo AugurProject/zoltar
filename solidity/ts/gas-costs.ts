@@ -1,5 +1,5 @@
-import { bigintToSafeNumber, zeroAddress } from '@zoltar/shared/evm/ethereum'
-import type { Hash } from '@zoltar/shared/evm/ethereum'
+import { bigintToSafeNumber, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import type { Hash } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_openOracle_OpenOracle_OpenOracle, Zoltar_Zoltar } from './types/contractArtifact'
 import { createAnvilNodeForConnectionMode, getGasCostsAnvilConnectionMode } from './testSupport/simulator/anvilNode'
 import { submitBid, refundLosingBids } from './testSupport/simulator/utils/contracts/auction'

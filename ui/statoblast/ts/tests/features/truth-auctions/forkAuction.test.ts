@@ -1,8 +1,8 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { zeroAddress } from '@zoltar/shared/evm/ethereum'
-import type { Address } from '@zoltar/shared/evm/ethereum'
+import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { getForkAuctionStageLabel, getForkAuctionStageOrder, getForkAuctionStageView, getForkStageDescriptionForState, getOutcomeActionLabel, hasForkActivity } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/forkAuction.js'
 import { buildTruthAuctionBidRows, buildViewerTruthAuctionBidRows, updateTruthAuctionSettlementBidSelection } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/truthAuctionBidViewModels.js'
 import {

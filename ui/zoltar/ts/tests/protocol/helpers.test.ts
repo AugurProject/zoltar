@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { getAddress, zeroAddress } from '@zoltar/shared/evm/ethereum'
+import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { getGenesisReputationTokenAddress } from '@zoltar/ui-zoltar-shared/protocol/activeProtocolAddresses.js'
 import {
 	bigintToAddress,

@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { RpcError } from '@zoltar/shared/evm/ethereum'
+import { RpcError } from '@zoltar/core-shared/evm/ethereum'
 import { formatRefreshErrorMessage, formatWriteErrorMessage, getErrorMessage, isCloseableErrorMessage, isRecoverableContractReadError } from '../lib/errors.js'
 
 void describe('error helpers', () => {

@@ -9,14 +9,14 @@ const scopes = (paths: readonly string[]) => classifyCiChange(paths).expandedSco
 
 const routingCases: readonly (readonly [readonly string[], readonly CiScope[]])[] = [
 	[['README.md'], ['docs']],
-	[['shared/ts/trading/math.ts'], ['core', 'infrastructure', 'bot-shared', 'chaos', 'arbitrager', 'liquidator', 'augur-scan', 'docs']],
+	[['shared/trading/ts/trading/math.ts'], ['core', 'infrastructure', 'chaos', 'arbitrager', 'liquidator', 'docs']],
 	[['ui/trading/ts/index.ts'], ['core']],
 	[['bots/open-oracle-arbitrager/src/run.ts'], ['arbitrager']],
 	[['bots/liquidator/src/run.ts'], ['liquidator']],
 	[['bots/chaos/src/run.ts'], ['chaos']],
 	[['bots/shared/src/ethereum.ts'], ['bot-shared', 'chaos', 'arbitrager', 'liquidator']],
 	[['augurScan/src/server.ts'], ['augur-scan']],
-	[['shared/ts/evm/ethereum.ts'], ['core', 'infrastructure', 'bot-shared', 'chaos', 'arbitrager', 'liquidator', 'augur-scan', 'docs']],
+	[['shared/core/ts/evm/ethereum.ts'], ['core', 'infrastructure', 'bot-shared', 'chaos', 'arbitrager', 'liquidator', 'augur-scan', 'docs']],
 	[['ui/zoltar/ts/index.ts'], ['core']],
 	[['solidity/contracts/Zoltar.sol'], ['core', 'infrastructure', 'chaos', 'arbitrager', 'liquidator', 'docs']],
 	[['reth/compose.yaml'], ['infrastructure']],
@@ -43,7 +43,7 @@ test('requires PostgreSQL integration for augurScan behavior and safe full runs'
 	expect(classifyCiChange(['augurScan/migrations/002.sql']).augurScanIntegration).toBe(true)
 	expect(classifyCiChange(['augurScan/config/abis.json']).augurScanIntegration).toBe(true)
 	expect(classifyCiChange(['augurScan/config/manifests/mainnet.json']).augurScanIntegration).toBe(true)
-	expect(classifyCiChange(['shared/ts/evm/ethereum.ts']).augurScanIntegration).toBe(true)
+	expect(classifyCiChange(['shared/core/ts/evm/ethereum.ts']).augurScanIntegration).toBe(true)
 	expect(classifyCiChange(['unknown/file']).augurScanIntegration).toBe(true)
 	expect(classifyCiChange([], { full: true }).augurScanIntegration).toBe(true)
 })
@@ -52,14 +52,14 @@ test('matrices are valid, deterministic JSON for empty and non-empty selections'
 	const docs = classifyCiChange(['README.md'])
 	expect(JSON.parse(docs.packageMatrixJson)).toEqual({ include: [] })
 	expect(docs.hasPackages).toBe(false)
-	const mixed = classifyCiChange(['bots/liquidator/src/run.ts', 'shared/ts/trading/math.ts', 'bots/shared/src/ethereum.ts'])
+	const mixed = classifyCiChange(['bots/liquidator/src/run.ts', 'shared/trading/ts/trading/math.ts', 'bots/shared/src/ethereum.ts'])
 	expect(JSON.parse(mixed.packageMatrixJson)).toEqual({ include: [...mixed.packageMatrix] })
-	expect(mixed.packageMatrix.map(entry => entry.package)).toEqual(['bot-shared', 'chaos', 'arbitrager', 'liquidator', 'augur-scan'])
-	expect(classifyCiChange(['shared/ts/trading/math.ts', 'bots/shared/src/ethereum.ts', 'bots/liquidator/src/run.ts']).packageMatrixJson).toBe(mixed.packageMatrixJson)
+	expect(mixed.packageMatrix.map(entry => entry.package)).toEqual(['bot-shared', 'chaos', 'arbitrager', 'liquidator'])
+	expect(classifyCiChange(['shared/trading/ts/trading/math.ts', 'bots/shared/src/ethereum.ts', 'bots/liquidator/src/run.ts']).packageMatrixJson).toBe(mixed.packageMatrixJson)
 })
 
 test('shared changes select every verified package consumer', () => {
-	const shared = classifyCiChange(['shared/ts/evm/ethereum.ts'])
+	const shared = classifyCiChange(['shared/core/ts/evm/ethereum.ts'])
 	expect(shared.packageMatrix.map(entry => entry.package)).toEqual(['bot-shared', 'chaos', 'arbitrager', 'liquidator', 'augur-scan'])
 	expect(JSON.parse(shared.packageMatrixJson)).toEqual({ include: [...shared.packageMatrix] })
 })

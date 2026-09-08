@@ -1,6 +1,7 @@
-import { encodeAbiParameters, getAddress, keccak256, zeroAddress, type Address, type PublicClient } from '@zoltar/shared/evm/ethereum'
-import { formatScalarOutcomeIndexLabel, type ScalarQuestionDetails } from '@zoltar/shared/statoblast/scalarOutcome'
-import { statoblast_SecurityPool_SecurityPool, statoblast_tokens_ShareToken_ShareToken, ZoltarQuestionData_ZoltarQuestionData, Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { encodeAbiParameters, getAddress, keccak256, zeroAddress, type Address, type PublicClient } from '@zoltar/core-shared/evm/ethereum'
+import { formatScalarOutcomeIndexLabel, type ScalarQuestionDetails } from '@zoltar/zoltar-shared/questions/scalarOutcome'
+import { statoblast_SecurityPool_SecurityPool, statoblast_tokens_ShareToken_ShareToken } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
+import { ZoltarQuestionData_ZoltarQuestionData, Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
 import type { LiveMarket } from './live.js'
 
 const poolForkAbi = statoblast_SecurityPool_SecurityPool.abi

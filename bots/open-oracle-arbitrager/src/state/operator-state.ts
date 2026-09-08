@@ -2,7 +2,7 @@ import type { MissingContractDeployment } from '../../../shared/src/monitoring/d
 import { mkdir, open, readFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { bigintToSafeNumber, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
-import type { OpenOracleGame } from '@zoltar/shared/oracle/openOracle'
+import type { OpenOracleGame } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import type { DeploymentSettings } from '#config/deployment-settings'
 import type { ConnectivitySettings, EndpointCheck, NetworkName } from '#monitoring/connectivity'
 import type { SubmissionSettings, SubmissionTargetResult } from '#execution/transaction-submission'

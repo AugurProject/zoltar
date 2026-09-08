@@ -1,0 +1,28 @@
+{
+	"name": "@zoltar/open-oracle-shared",
+	"version": "1.0.0",
+	"type": "module",
+	"exports": {
+		"./openOracle/openOracle": {
+			"types": "./ts/openOracle/openOracle.ts",
+			"bun": "./ts/openOracle/openOracle.ts",
+			"default": "./js/openOracle/openOracle.js"
+		}
+	},
+	"files": [
+		"js",
+		"ts"
+	],
+	"scripts": {
+		"build": "bun x tsc --project tsconfig.json"
+	},
+	"dependencies": {
+		"@zoltar/core-shared": "file:../core"
+	},
+	"overrides": {
+		"@zoltar/core-shared": "file:../core"
+	},
+	"devDependencies": {
+		"typescript": "5.8.2"
+	}
+}

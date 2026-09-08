@@ -7,8 +7,8 @@
  */
 
 import { describe as baseDescribe, expect, test } from 'bun:test'
-import { createPublicClient, http, zeroAddress } from '@zoltar/shared/evm/ethereum'
-import { mainnet } from '@zoltar/shared/evm/ethereum'
+import { createPublicClient, http, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { mainnet } from '@zoltar/core-shared/evm/ethereum'
 import { ETH_ADDRESS, REP_ADDRESS, USDC_ADDRESS, quoteExactInput } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
 
 const RPC_URL = 'https://ethereum.dark.florist'

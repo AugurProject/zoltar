@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
-import type { PublicClient } from '@zoltar/shared/evm/ethereum'
+import type { PublicClient } from '@zoltar/core-shared/evm/ethereum'
 import { Help } from '../features/Help.js'
 import { LiveTrading } from '../features/LiveTrading.js'
 import { UniverseSelector } from '../components/UniverseSelector.js'

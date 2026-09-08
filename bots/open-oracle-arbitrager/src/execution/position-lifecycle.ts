@@ -1,5 +1,5 @@
 import { encodeFunctionData, parseUnits, type Address, type Hex, zeroAddress } from '@zoltar/bot-shared/ethereum'
-import { getOpenOracleGameTuple, getOpenOracleHelperTuple, OPEN_ORACLE_FLAG_TIME_TYPE } from '@zoltar/shared/oracle/openOracle'
+import { getOpenOracleGameTuple, getOpenOracleHelperTuple, OPEN_ORACLE_FLAG_TIME_TYPE } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { openOracleArbitrageExecutorAbi } from '#contracts/abi'
 import type { Configuration } from '#config/configuration'
 import {

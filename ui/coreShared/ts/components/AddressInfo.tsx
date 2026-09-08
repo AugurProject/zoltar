@@ -1,5 +1,5 @@
 import * as commonCopy from '../copy/common.js'
-import type { Address } from '@zoltar/shared/evm/ethereum'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { AddressValue } from './AddressValue.js'
 import { MetricField } from './MetricField.js'
 import { getMetricPlaceholderPresentation } from '../lib/userCopy.js'

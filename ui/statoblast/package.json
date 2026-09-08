@@ -12,12 +12,14 @@
 	},
 	"dependencies": {
 		"@preact/signals": "2.0.1",
-		"@zoltar/shared": "file:../../shared",
 		"@zoltar/ui-core-shared": "file:../coreShared",
 		"@zoltar/ui-statoblast-shared": "file:../statoblastShared",
 		"@zoltar/ui-zoltar-shared": "file:../zoltarShared",
 		"preact": "10.26.4",
-		"tevm": "1.0.0-rc.151"
+		"tevm": "1.0.0-rc.151",
+		"@zoltar/core-shared": "file:../../shared/core",
+		"@zoltar/open-oracle-shared": "file:../../shared/openOracle",
+		"@zoltar/statoblast-shared": "file:../../shared/statoblast"
 	},
 	"overrides": {
 		"@tevm/actions": "1.0.0-rc.151",
@@ -28,15 +30,22 @@
 		"nanoid": "3.3.18",
 		"postcss": "8.5.23",
 		"tmp": "0.2.7",
-		"ws": "8.21.0"
+		"ws": "8.21.0",
+		"@zoltar/ui-core-shared": "file:../coreShared",
+		"@zoltar/core-shared": "file:../../shared/core",
+		"@zoltar/zoltar-shared": "file:../../shared/zoltar",
+		"@zoltar/ui-statoblast-shared": "file:../statoblastShared",
+		"@zoltar/ui-zoltar-shared": "file:../zoltarShared",
+		"@zoltar/open-oracle-shared": "file:../../shared/openOracle",
+		"@zoltar/statoblast-shared": "file:../../shared/statoblast"
 	},
 	"scripts": {
-		"generate": "bun ../../tooling/ui/projectArtifacts.mts && bun ../../tooling/ui/vendor.mts statoblast",
+		"generate": "bun ../../tooling/contracts/build-app-contracts.mts statoblast && bun ../../tooling/repo/build-shared.mts statoblast && bun ../../tooling/ui/vendor.mts statoblast --scoped-artifacts",
 		"vendor": "bun ../../tooling/ui/vendor.mts statoblast",
 		"build:workers": "bun ../../tooling/ui/workers.mts statoblast",
 		"build:tests": "bun ../../tooling/ui/tests.mts statoblast",
-		"build": "bun run generate && bun x tsc --project tsconfig.json && bun run build:workers",
-		"build:prod": "bun run generate && bun ../../tooling/ui/production.mts statoblast",
+		"build": "bun ../../tooling/ui/apps.mts statoblast",
+		"build:prod": "bun run build && bun ../../tooling/ui/production.mts statoblast",
 		"watch": "bun ../../tooling/ui/watch.mts statoblast",
 		"serve": "bun ../../tooling/ui/dev-server.ts statoblast"
 	}

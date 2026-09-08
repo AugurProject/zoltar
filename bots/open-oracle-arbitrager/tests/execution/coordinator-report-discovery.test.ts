@@ -4,7 +4,7 @@ import { openOracleAbi, openOraclePriceCoordinatorAbi } from '#contracts/abi'
 import { disputeRecord, legacyReplacementAmountsWithQuorum, pendingCoordinatorReports, pendingCoordinatorReportsWithQuorum, replacementDisputeAmountsWithQuorum } from '#execution/recovery-support'
 import { applyCoordinatorReports, type ActiveReport } from '#monitoring/oracle-log-state'
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
-import { encodeOpenOracleStatePreimagePacked, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, type OpenOracleStatePreimage } from '@zoltar/shared/oracle/openOracle'
+import { encodeOpenOracleStatePreimagePacked, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 
 const activeCoordinator = getAddress('0x0000000000000000000000000000000000000001')
 const idleCoordinator = getAddress('0x0000000000000000000000000000000000000002')

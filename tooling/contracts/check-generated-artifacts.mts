@@ -1,3 +1,4 @@
+import { sharedPackages } from '../repo/sharedPackages.ts'
 import { spawnSync } from 'node:child_process'
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
@@ -22,18 +23,19 @@ export type GeneratedArtifactCheckOptions = {
 }
 
 const explicitlyRequiredGeneratedOutputs = [
-	'shared/js/.freshness-hash',
+	'shared/.freshness-hash',
 	'solidity/artifacts/Contracts.json',
 	'solidity/artifacts/.freshness-hash',
 	'solidity/.contract-hash.json',
 	'solidity/ts/types/contractArtifact.ts',
 	'ui/coreShared/ts/abis.ts',
 	'ui/coreShared/ts/contractArtifact.ts',
+	'ui/statoblastShared/ts/contractArtifact.ts',
 	'ui/trading/ts/generated/contractArtifact.ts',
 ]
 
 const generatedReviewPaths = [
-	'shared/js',
+	...sharedPackages.map(entry => `${entry.path}/js`),
 	'solidity/artifacts',
 	'solidity/.contract-hash.json',
 	'solidity/ts/types/contractArtifact.ts',
@@ -49,6 +51,7 @@ const generatedReviewPaths = [
 	':(glob)ui/*/ts/**/*.d.ts.map',
 	'ui/coreShared/ts/abis.ts',
 	'ui/coreShared/ts/contractArtifact.ts',
+	'ui/statoblastShared/ts/contractArtifact.ts',
 	'ui/coreShared/ts/deploymentArtifacts.ts',
 	'ui/trading/ts/generated',
 	'ui/zoltar/vendor',
@@ -95,19 +98,21 @@ function normalizeRepositoryRelativePath(baseDirectory: string, relativePath: st
 }
 
 export async function getSharedPackageGeneratedOutputs(repositoryRoot: string) {
-	const packageJson = await readJsonObject(repositoryRoot, 'shared/package.json')
-	const exportsValue = packageJson['exports']
-	if (!isRecord(exportsValue)) throw new Error('shared/package.json exports must be an object')
-
 	const outputs: string[] = []
-	for (const [exportName, exportValue] of Object.entries(exportsValue)) {
-		if (!isRecord(exportValue)) throw new Error(`shared/package.json export ${exportName} must be an object`)
-		const defaultPath = exportValue['default']
-		if (typeof defaultPath !== 'string') throw new Error(`shared/package.json export ${exportName} must define a default path`)
-		const generatedJavaScriptPath = normalizeRepositoryRelativePath('shared', defaultPath)
-		outputs.push(generatedJavaScriptPath)
-		if (generatedJavaScriptPath.endsWith('.js')) {
-			outputs.push(generatedJavaScriptPath.replace(/\.js$/, '.d.ts'))
+	for (const entry of sharedPackages) {
+		const packageJson = await readJsonObject(repositoryRoot, `${entry.path}/package.json`)
+		const exportsValue = packageJson['exports']
+		if (!isRecord(exportsValue)) throw new Error(`${entry.path}/package.json exports must be an object`)
+
+		for (const [exportName, exportValue] of Object.entries(exportsValue)) {
+			if (!isRecord(exportValue)) throw new Error(`${entry.path}/package.json export ${exportName} must be an object`)
+			const defaultPath = exportValue['default']
+			if (typeof defaultPath !== 'string') throw new Error(`${entry.path}/package.json export ${exportName} must define a default path`)
+			const generatedJavaScriptPath = normalizeRepositoryRelativePath(entry.path, defaultPath)
+			outputs.push(generatedJavaScriptPath)
+			if (generatedJavaScriptPath.endsWith('.js')) {
+				outputs.push(generatedJavaScriptPath.replace(/\.js$/, '.d.ts'))
+			}
 		}
 	}
 	return outputs

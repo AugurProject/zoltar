@@ -1,4 +1,4 @@
-import type { Address, Hash, Hex } from '@zoltar/shared/evm/ethereum'
+import type { Address, Hash, Hex } from '@zoltar/core-shared/evm/ethereum'
 import type { WriteClient as ClientsWriteClient } from '../wallet/clients.js'
 export type { ReadClient, WriteClient } from '../wallet/clients.js'
 

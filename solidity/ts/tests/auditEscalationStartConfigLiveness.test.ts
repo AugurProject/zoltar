@@ -1,6 +1,6 @@
 import { describe, test } from 'bun:test'
-import { encodeAbiParameters, keccak256, zeroAddress } from '@zoltar/shared/evm/ethereum'
-import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/deployment/protocolConfig'
+import { encodeAbiParameters, keccak256, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/core-shared/deployment/protocolConfig'
 import { balanceOfShares, OperationType } from '../testSupport/simulator/utils/contracts/statoblast'
 import { createCompleteSet, getShareTokenSupplyAttoShares, redeemShares } from '../testSupport/simulator/utils/contracts/securityPool'
 import { statoblast_SecurityPool_SecurityPool, Zoltar_Zoltar } from '../types/contractArtifact'

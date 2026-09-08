@@ -28,10 +28,10 @@ describe('mutation smoke support', () => {
 
 	test('pins mutation tests to TypeScript when built JavaScript could also resolve', () => {
 		const mutation: SourceMutation = {
-			filePath: 'shared/ts/domain/value.ts',
+			filePath: 'shared/core/ts/domain/value.ts',
 			from: 'original',
 			name: 'resolution fixture',
-			testCommand: ['bun', 'test', 'shared/ts/domain/value.test.ts'],
+			testCommand: ['bun', 'test', 'shared/core/ts/domain/value.test.ts'],
 			to: 'mutated',
 		}
 		expect(pinMutationTestToTypeScript("import { value } from './value.js'", mutation)).toBe("import { value } from './value.ts'")

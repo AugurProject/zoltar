@@ -1,5 +1,5 @@
-import type { Address, Hash, WalletClient } from '@zoltar/shared/evm/ethereum'
-import { statoblast_SecurityPool_SecurityPool } from '@zoltar/ui-core-shared/contractArtifact.js'
+import type { Address, Hash, WalletClient } from '@zoltar/core-shared/evm/ethereum'
+import { statoblast_SecurityPool_SecurityPool } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import type { DeploymentConfiguration } from './config.js'
 import type { LiveBalances, LiveMarket, MarketLifecycle } from './liveMarket.js'
 import { deadlineAtBlock, minimumAfterSlippage, requireQuoteBlock, requireTransactionSlippageBps, requireTransactionValidityMinutes, retainApprovedMinimum, stableSimulation, UI_SLIPPAGE_BPS, type TransactionExpiry } from './tradeQuote.js'

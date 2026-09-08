@@ -1,7 +1,7 @@
 import { appendFile } from 'node:fs/promises'
 import * as process from 'node:process'
-import { createWalletClient, defineChain, formatEther, http, keccak256, parseUnits, privateKeyToAccount, type Account, type Address, type Chain, type Hash, type Hex } from '@zoltar/shared/evm/ethereum'
-import { getBootstrapDescendantAddresses } from '../../ui/zoltarShared/ts/protocol/deploymentHelpers.ts'
+import { createWalletClient, defineChain, formatEther, http, keccak256, parseUnits, privateKeyToAccount, type Account, type Address, type Chain, type Hash, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { getBootstrapDescendantAddresses } from '../../ui/statoblastShared/ts/protocol/deploymentHelpers.ts'
 import {
 	assertStaticDeploymentArtifactRuntimeCodeHashes,
 	CANONICAL_DEPLOYER_RAW_GAS_PRICE,
@@ -12,7 +12,7 @@ import {
 	PROXY_DEPLOYER_RUNTIME_CODE,
 } from '../../ui/zoltarShared/ts/protocol/deployment.ts'
 import { assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes, EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES, getDeploymentSteps } from '../../ui/statoblastShared/ts/protocol/deployment.ts'
-import { PROXY_DEPLOYER_ADDRESS } from '../../ui/zoltarShared/ts/protocol/deploymentHelpers.ts'
+import { PROXY_DEPLOYER_ADDRESS } from '../../ui/zoltarShared/ts/protocol/zoltarDeploymentHelpers.ts'
 import type { WriteClient } from '../../ui/coreShared/ts/wallet/chainBackend.ts'
 import { SEPOLIA_NETWORK_PROFILE, type NetworkProfile } from '../../ui/coreShared/ts/wallet/networkProfile.ts'
 import { readWithRpcStateRetries, type RpcStateRetryWait } from '../../ui/zoltarShared/ts/protocol/core.ts'

@@ -28,12 +28,12 @@ describe('UI build dependency direction', () => {
 		const commands = getAppBuildCommands(['zoltar', 'statoblast', 'trading'])
 		expect(commands.filter(command => command[0] === 'x').map(command => command[3])).toEqual(['coreShared', 'zoltarShared', 'zoltar', 'statoblastShared', 'statoblast', 'trading'].map(packageId => `ui/${packageId}/tsconfig.json`))
 		expect(commands.filter(command => command[0]?.endsWith('/vendor.mts') === true)).toEqual([
-			['./tooling/ui/vendor.mts', 'zoltar'],
-			['./tooling/ui/vendor.mts', 'statoblast'],
-			['./tooling/ui/vendor.mts', 'trading'],
+			['./tooling/ui/vendor.mts', 'zoltar', '--scoped-artifacts'],
+			['./tooling/ui/vendor.mts', 'statoblast', '--scoped-artifacts'],
+			['./tooling/ui/vendor.mts', 'trading', '--scoped-artifacts'],
 		])
 		expect(commands.filter(command => command[0]?.endsWith('/workers.mts') === true).map(command => command[1])).toEqual(['zoltar', 'statoblast', 'trading'])
-		expect(commands.filter(command => command.includes('ensure-contract-artifacts'))).toHaveLength(1)
+		expect(commands.filter(command => command.includes('ensure-contract-artifacts'))).toHaveLength(0)
 	})
 
 	test('app serve/watch scripts prepare only the selected application before starting', () => {
@@ -96,9 +96,9 @@ describe('UI build dependency direction', () => {
 		expect(statoblastPackage.dependencies?.['@zoltar/ui-zoltar']).toBeUndefined()
 		expect(statoblastPackage.dependencies?.['@zoltar/ui-trading']).toBeUndefined()
 		expect(tradingPackage.dependencies?.['@zoltar/ui-core-shared']).toBeDefined()
-		expect(tradingPackage.dependencies?.['@zoltar/ui-zoltar-shared']).toBeDefined()
+		expect(getUiAppDependencyOrder('trading')).toContain('zoltarShared')
 		expect(tradingPackage.dependencies?.['@zoltar/ui-statoblast-shared']).toBeDefined()
-		expect(tradingPackage.dependencies?.['@zoltar/shared']).toBeDefined()
+		expect(tradingPackage.dependencies?.['@zoltar/core-shared']).toBeDefined()
 		expect(tradingPackage.dependencies?.['@zoltar/ui-zoltar']).toBeUndefined()
 		expect(tradingPackage.dependencies?.['@zoltar/ui-statoblast']).toBeUndefined()
 		expect(tradingPackage.dependencies?.['@zoltar/trading']).toBeUndefined()
@@ -112,9 +112,9 @@ describe('UI build dependency direction', () => {
 
 	test('Trading watch mode rebuilds shared SDK and main contract outputs and reloads app CSS', () => {
 		const watchSource = fs.readFileSync(`${import.meta.dir}/watch.mts`, 'utf8')
-		expect(watchSource).toContain("path.join(REPOSITORY_ROOT_PATH, 'shared', 'ts')")
+		expect(watchSource).toContain('appPaths.sharedSourceRoots')
 		expect(watchSource).toContain("path.join(REPOSITORY_ROOT_PATH, 'solidity', 'contracts')")
-		expect(watchSource).toContain("spawn(BUN_EXECUTABLE_PATH, ['run', 'generate:contracts']")
+		expect(watchSource).toContain('build-app-contracts.mts')
 		expect(watchSource).toContain("path.join(APP_ROOT_PATH, 'css')")
 		expect(watchSource).not.toContain('TRADING_PACKAGE_ROOT_PATH')
 	})

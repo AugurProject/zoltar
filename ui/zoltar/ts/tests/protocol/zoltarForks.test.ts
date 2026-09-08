@@ -1,7 +1,7 @@
 /// <reference types='bun-types' />
 
 import { describe, expect, test } from 'bun:test'
-import { decodeFunctionData, type Hex } from '@zoltar/shared/evm/ethereum'
+import { decodeFunctionData, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { asWriteClient, createMockWriteClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { migrateInternalRepInZoltar } from '@zoltar/ui-zoltar-shared/protocol/zoltarForks.js'

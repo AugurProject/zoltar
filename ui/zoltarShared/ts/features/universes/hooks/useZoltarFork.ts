@@ -1,6 +1,6 @@
 import { useSignal } from '@preact/signals'
 import { useCallback, useEffect, useRef } from 'preact/hooks'
-import { zeroAddress, type Address } from '@zoltar/shared/evm/ethereum'
+import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { readOptionalMulticall } from '../../../protocol/core.js'

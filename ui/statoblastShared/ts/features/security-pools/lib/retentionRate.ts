@@ -1,4 +1,4 @@
-import { formatUnits } from '@zoltar/shared/evm/ethereum'
+import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
 
 const PRICE_PRECISION = 1_000_000_000_000_000_000n
 const PRICE_PRECISION_AS_NUMBER = 1e18

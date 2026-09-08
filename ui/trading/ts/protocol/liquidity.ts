@@ -1,4 +1,4 @@
-import type { Address, WalletClient } from '@zoltar/shared/evm/ethereum'
+import type { Address, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { tradingContracts } from '../generated/contractArtifact.js'
 import type { DeploymentConfiguration } from './config.js'
 import type { LiveMarket } from './liveMarket.js'

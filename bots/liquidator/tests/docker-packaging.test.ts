@@ -45,7 +45,7 @@ describe('Docker packaging', () => {
 		if (runtime === undefined) throw new Error('Missing runtime Docker stage')
 		const ignoreSource = await readFile(dockerignore, 'utf8')
 		expect(builder.base).toContain('-alpine')
-		expect(dockerInstructions(builder, 'RUN').flatMap(shellCommandSegments)).toContain('bun run shared:build')
+		expect(dockerInstructions(builder, 'RUN').flatMap(shellCommandSegments)).toContain('bun ./tooling/repo/build-shared.mts')
 		expect(dockerInstructions(runtime, 'COPY')).toEqual(
 			expect.arrayContaining([
 				'--from=shared-builder /source/shared/ ./shared/',
@@ -59,7 +59,7 @@ describe('Docker packaging', () => {
 		expect(ignoreSource).toContain('!docs/mainnet-deployment-addresses.json')
 		expect(ignoreSource).toContain('!docs/sepolia-deployment-addresses.json')
 		const installCommands = dockerInstructions(runtime, 'RUN').flatMap(shellCommandSegments)
-		expect(installCommands).toEqual(expect.arrayContaining(['cd shared', 'cd ../bots/shared', 'cd ../liquidator']))
+		expect(installCommands).toEqual(expect.arrayContaining(['cd shared/core', 'cd ../../bots/shared', 'cd ../liquidator']))
 		expect(installCommands.filter(command => command === 'bun /tmp/tooling/repo/install-frozen.mts . --production')).toHaveLength(3)
 		expect(ignoreSource).toContain('!bots/liquidator/scripts/check-process-lock-runtime.mts')
 		expect(installCommands).toContain('bun ./scripts/check-process-lock-runtime.mts')

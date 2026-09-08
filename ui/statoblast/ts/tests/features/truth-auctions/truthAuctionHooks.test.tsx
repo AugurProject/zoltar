@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
-import type { Address } from '@zoltar/shared/evm/ethereum'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { useTruthAuctionPaginationState } from '@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useTruthAuctionPaginationState.js'
 import { useTruthAuctionBookData } from '@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useTruthAuctionBookData.js'
 import { useTruthAuctionSettlementActionState } from '@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useTruthAuctionSettlementActionState.js'

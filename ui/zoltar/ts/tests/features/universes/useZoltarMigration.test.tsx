@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { h } from 'preact'
 import { act } from 'preact/test-utils'
-import { getAddress, type Hash, zeroAddress } from '@zoltar/shared/evm/ethereum'
+import { getAddress, type Hash, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'

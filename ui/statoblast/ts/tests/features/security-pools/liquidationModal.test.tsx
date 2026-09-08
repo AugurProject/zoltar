@@ -5,7 +5,7 @@ import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/querie
 import { render } from 'preact'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
-import { getAddress, zeroAddress } from '@zoltar/shared/evm/ethereum'
+import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { LiquidationModal } from '@zoltar/ui-statoblast-shared/features/security-pools/components/LiquidationModal.js'
 import { isVaultHealthyAtFactor, simulateLiquidation } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/liquidation.js'
 import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'

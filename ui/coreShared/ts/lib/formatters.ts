@@ -1,4 +1,4 @@
-import { bigintToSafeNumber, formatEther, formatUnits } from '@zoltar/shared/evm/ethereum'
+import { bigintToSafeNumber, formatEther, formatUnits } from '@zoltar/core-shared/evm/ethereum'
 
 const MILLISECONDS_PER_SECOND = 1000
 const MAX_DATE_TIMESTAMP_SECONDS = 8_640_000_000_000n

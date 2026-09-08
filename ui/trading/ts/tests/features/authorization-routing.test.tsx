@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { Address } from '@zoltar/shared/evm/ethereum'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { LivePositionControls } from '../../features/LivePositionControls.js'

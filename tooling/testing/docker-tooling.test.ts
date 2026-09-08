@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { cp, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { dockerInstructions, parseDockerfile, requireDockerStage } from './packaging-parsers.ts'
 
 const repositoryRoot = join(import.meta.dir, '..', '..')
@@ -9,11 +9,15 @@ const dockerfile = join(repositoryRoot, 'ui', 'Dockerfile')
 
 async function copyToolingInput(copy: string, root: string) {
 	const parts = copy.split(' ').filter(part => !part.startsWith('--'))
-	const [source, destination] = parts
-	if (!source?.replace(/^\.\//u, '').startsWith('tooling/') || destination === undefined) return
-	const target = join(root, destination.startsWith('/') ? destination : `/source/${destination}`)
-	await mkdir(dirname(target), { recursive: true })
-	await cp(join(repositoryRoot, source), target, { recursive: true })
+	const destination = parts.at(-1)
+	if (destination === undefined) return
+	for (const source of parts.slice(0, -1)) {
+		if (!/^(tooling|solidity\/ts)\//u.test(source.replace(/^\.\//u, ''))) continue
+		const targetDirectory = join(root, destination.startsWith('/') ? destination : `/source/${destination}`)
+		const target = parts.length > 2 ? join(targetDirectory, basename(source)) : targetDirectory
+		await mkdir(dirname(target), { recursive: true })
+		await cp(join(repositoryRoot, source), target, { recursive: true })
+	}
 }
 
 async function expectToolImports(root: string, entrypoint: string) {
@@ -43,6 +47,8 @@ describe('Docker tooling dependencies', () => {
 					if (instruction.keyword === 'COPY') await copyToolingInput(instruction.value, root)
 					if (instruction.keyword !== 'RUN') continue
 					if (instruction.value.includes('bun install')) await expectToolImports(root, '/source/tooling/repo/link-shared-node-modules.mts')
+					if (instruction.value.includes('build-shared.mts')) await expectToolImports(root, '/source/tooling/repo/build-shared.mts')
+					if (instruction.value.includes('build-app-contracts.mts')) await expectToolImports(root, '/source/tooling/contracts/build-app-contracts.mts')
 					if (instruction.value.includes('bun run shared:build')) await expectToolImports(root, '/source/tooling/contracts/ensure-contract-artifacts.mts')
 					if (instruction.value.includes('bun run compile-contracts')) {
 						await expectToolImports(root, '/source/tooling/repo/ensure-shared-package-fresh.mts')

@@ -1,4 +1,4 @@
-import { createPublicClient, type Abi, type AbiValue, type Address, type Chain, type PublicClient, type Transport } from '@zoltar/shared/evm/ethereum'
+import { createPublicClient, type Abi, type AbiValue, type Address, type Chain, type PublicClient, type Transport } from '@zoltar/core-shared/evm/ethereum'
 import { custom, http, RpcError, type TransportOptions } from './rpc-transport.ts'
 import type { createRpcEndpointPool } from './rpc-resilience.ts'
 
@@ -8,8 +8,8 @@ export {
 	defineChain,
 	mainnet,
 	publicActions,
-} from '@zoltar/shared/evm/ethereum'
-export type { PublicActions, PublicClient, WalletClient } from '@zoltar/shared/evm/ethereum'
+} from '@zoltar/core-shared/evm/ethereum'
+export type { PublicActions, PublicClient, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 export { custom, http, RpcError, type TransportOptions }
 
 export async function readContractAtBlock(client: Pick<PublicClient, 'readContract'>, parameters: { abi: Abi; address: Address; args?: readonly AbiValue[] | undefined; functionName: string }, blockNumber: bigint): Promise<AbiValue | undefined> {

@@ -37,7 +37,7 @@ const repositoryRootPath = path.join(directoryOfThisFile, '..', '..')
 export const deploymentRuntimeTypeScriptProjects = ['ui/coreShared/tsconfig.json', 'ui/zoltarShared/tsconfig.json', 'ui/statoblastShared/tsconfig.json'] as const
 const deploymentRuntimeOutputPaths = [
 	path.join(repositoryRootPath, 'ui', 'coreShared', 'js', 'wallet', 'networkProfile.js'),
-	path.join(repositoryRootPath, 'ui', 'zoltarShared', 'js', 'protocol', 'deploymentHelpers.js'),
+	path.join(repositoryRootPath, 'ui', 'statoblastShared', 'js', 'protocol', 'deploymentHelpers.js'),
 	path.join(repositoryRootPath, 'ui', 'statoblastShared', 'js', 'protocol', 'deployment.js'),
 ] as const
 const manifestIds = ['mainnet', 'sepolia'] as const
@@ -152,9 +152,9 @@ function readNetworkProfile(source: unknown, manifestId: ManifestId): ManifestNe
 
 async function loadComputedManifest(manifestId: ManifestId): Promise<DeploymentManifest> {
 	const deploymentModulePath = path.join(repositoryRootPath, 'ui', 'statoblastShared', 'ts', 'protocol', 'deployment.ts')
-	const deploymentHelpersModulePath = path.join(repositoryRootPath, 'ui', 'zoltarShared', 'ts', 'protocol', 'deploymentHelpers.ts')
+	const deploymentHelpersModulePath = path.join(repositoryRootPath, 'ui', 'statoblastShared', 'ts', 'protocol', 'deploymentHelpers.ts')
 	const networkProfileModulePath = path.join(repositoryRootPath, 'ui', 'coreShared', 'ts', 'wallet', 'networkProfile.ts')
-	const protocolConfigModulePath = path.join(repositoryRootPath, 'shared', 'ts', 'deployment', 'protocolConfig.ts')
+	const protocolConfigModulePath = path.join(repositoryRootPath, 'shared', 'core', 'ts', 'deployment', 'protocolConfig.ts')
 
 	try {
 		await ensureDeploymentRuntimeDependencies()

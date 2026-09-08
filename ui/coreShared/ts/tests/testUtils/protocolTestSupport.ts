@@ -1,4 +1,4 @@
-import type { Address, Hash, Hex, TransactionReceipt } from '@zoltar/shared/evm/ethereum'
+import type { Address, Hash, Hex, TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import type { ReadClient, WriteClient } from '../../types/contracts.js'
 
 export type MockReadClient = Pick<ReadClient, 'readContract'>

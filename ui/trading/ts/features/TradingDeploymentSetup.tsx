@@ -1,4 +1,4 @@
-import { createPublicClient, http, type Hash, type PublicClient } from '@zoltar/shared/evm/ethereum'
+import { createPublicClient, http, type Hash, type PublicClient } from '@zoltar/core-shared/evm/ethereum'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import type { ChainBackend } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { useEffect, useRef, useState } from 'preact/hooks'

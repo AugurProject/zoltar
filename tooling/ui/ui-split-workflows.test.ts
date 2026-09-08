@@ -158,7 +158,7 @@ describe('split UI workflow paths', () => {
 		const stabilityWorkflow = await readWorkflow(testStabilityWorkflowPath)
 		const stabilitySteps = Object.values(workflowJobs(stabilityWorkflow)).flatMap(workflowSteps)
 		const stabilityTestPaths = workflowTestPaths(stabilityWorkflow).sort()
-		expect(stabilityTestPaths).toEqual(['augurScan/tests/api/live.test.ts', 'augurScan/tests/replay/indexer-lifecycle.test.ts', 'tooling/docs/documentation-tools-runtime.test.ts', 'tooling/ui/chromiumPath.test.ts', 'ui/zoltar/ts/tests/features/open-oracle/useRepPrices.test.tsx'].sort())
+		expect(stabilityTestPaths).toEqual(['augurScan/tests/api/live.test.ts', 'augurScan/tests/replay/indexer-lifecycle.test.ts', 'tooling/docs/documentation-tools-runtime.test.ts', 'tooling/ui/chromiumPath.test.ts', 'ui/statoblast/ts/tests/features/open-oracle/useRepPrices.test.tsx'].sort())
 		await Promise.all(stabilityTestPaths.map(testPath => access(join(repositoryRoot, testPath))))
 		expect(stabilitySteps.some(step => typeof step['run'] === 'string' && step['run'].includes('without retries'))).toBe(true)
 	})
@@ -280,6 +280,11 @@ describe('split UI workflow paths', () => {
 		expect(steps.find(step => step['name'] === 'Cache generated project outputs')?.['if']).toBe("inputs.profile != 'root'")
 		const cache = requireRecord(steps.find(step => step['name'] === 'Cache generated project outputs')?.['with'], 'cache inputs')
 		expect(cache['key']).toContain('${{ inputs.profile }}')
+		const install = steps.find(step => step['name'] === 'Install dependencies')?.['run']
+		if (typeof install !== 'string') throw new Error('Missing dependency installation')
+		const rootInstall = spawnSync('bash', ['-e', '-c', `bun() { printf '%s\\n' "$*"; }\n${install}`], { env: { PROFILE: 'root' }, encoding: 'utf8' })
+		expect(rootInstall.status).toBe(0)
+		expect(rootInstall.stdout.trim().split('\n')).toEqual(['./tooling/repo/run-project-tasks.mts setup repository', './tooling/repo/run-project-tasks.mts setup --path-prefix shared/'])
 		const jobs = workflowJobs(await readWorkflow(testDomainsWorkflowPath))
 		for (const [job, profile] of [
 			['solidity-tests', 'contracts'],
@@ -385,9 +390,9 @@ describe('split UI workflow paths', () => {
 		expect(steps.findIndex(step => step['uses'] === './.github/actions/setup-ci')).toBeLessThan(steps.findIndex(step => step['run'] === 'bun run knip'))
 		expect(
 			taskProjects('setup')
-				.filter(project => project.path === 'shared' || project.path.startsWith('bots/'))
+				.filter(project => project.path.startsWith('shared/') || project.path.startsWith('bots/'))
 				.map(project => project.path),
-		).toEqual(['shared', 'bots/shared', 'bots/chaos', 'bots/open-oracle-arbitrager', 'bots/liquidator'])
+		).toEqual(['shared/core', 'shared/zoltar', 'shared/openOracle', 'shared/statoblast', 'shared/trading', 'bots/shared', 'bots/chaos', 'bots/open-oracle-arbitrager', 'bots/liquidator'])
 	})
 
 	test('every TEVM workspace pins the compatible release-candidate dependency cohort', async () => {

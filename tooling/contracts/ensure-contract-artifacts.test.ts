@@ -17,12 +17,12 @@ async function exists(filePath: string) {
 test('ensure-contract-artifacts requires shared package testing helper outputs', async () => {
 	const requiredSharedOutputs = await getRequiredSharedOutputRelativePaths()
 
-	expect(requiredSharedOutputs).toContain('shared/js/deployment/protocolConfig.js')
-	expect(requiredSharedOutputs).toContain('shared/js/deployment/protocolConfig.d.ts')
-	expect(requiredSharedOutputs).toContain('shared/js/testing/pickFixtureProperties.js')
-	expect(requiredSharedOutputs).toContain('shared/js/testing/pickFixtureProperties.d.ts')
-	expect(requiredSharedOutputs).toContain('shared/js/testing/scalarOutcomeParityFixtures.js')
-	expect(requiredSharedOutputs).toContain('shared/js/testing/scalarOutcomeParityFixtures.d.ts')
+	expect(requiredSharedOutputs).toContain('shared/core/js/deployment/protocolConfig.js')
+	expect(requiredSharedOutputs).toContain('shared/core/js/deployment/protocolConfig.d.ts')
+	expect(requiredSharedOutputs).toContain('shared/core/js/testing/pickFixtureProperties.js')
+	expect(requiredSharedOutputs).toContain('shared/core/js/testing/pickFixtureProperties.d.ts')
+	expect(requiredSharedOutputs).toContain('shared/zoltar/js/testing/scalarOutcomeParityFixtures.js')
+	expect(requiredSharedOutputs).toContain('shared/zoltar/js/testing/scalarOutcomeParityFixtures.d.ts')
 })
 
 test('core contract artifact preparation does not require Trading UI output', () => {
@@ -99,8 +99,9 @@ test('ensure-contract-artifacts removes the deprecated cached contract artifact'
 
 test('ensure-contract-artifacts removes compiled outputs that can shadow shared TypeScript sources', async () => {
 	const repositoryRoot = await mkdtemp(path.join(tmpdir(), 'zoltar-shared-source-outputs-'))
-	const sharedSourceRoot = path.join(repositoryRoot, 'shared/ts')
+	const sharedSourceRoot = path.join(repositoryRoot, 'shared/core/ts')
 	try {
+		for (const name of ['core', 'zoltar', 'openOracle', 'statoblast', 'trading']) await mkdir(path.join(repositoryRoot, 'shared', name, 'ts'), { recursive: true })
 		await mkdir(path.join(sharedSourceRoot, 'nested'), { recursive: true })
 		await writeFile(path.join(sharedSourceRoot, 'oracleInitialReport.ts'), 'export const current = true\n')
 		await writeFile(path.join(sharedSourceRoot, 'oracleInitialReport.js'), 'export const stale = true\n')

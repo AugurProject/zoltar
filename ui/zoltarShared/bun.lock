@@ -6,8 +6,9 @@
       "name": "@zoltar/ui-zoltar-shared",
       "dependencies": {
         "@preact/signals": "2.0.1",
-        "@zoltar/shared": "file:../../shared",
+        "@zoltar/core-shared": "file:../../shared/core",
         "@zoltar/ui-core-shared": "file:../coreShared",
+        "@zoltar/zoltar-shared": "file:../../shared/zoltar",
         "preact": "10.26.4",
         "tevm": "1.0.0-rc.151",
       },
@@ -22,6 +23,9 @@
     "@tevm/actions": "1.0.0-rc.151",
     "@tevm/node": "1.0.0-rc.151",
     "@tevm/server": "1.0.0-rc.151",
+    "@zoltar/core-shared": "file:../../shared/core",
+    "@zoltar/ui-core-shared": "file:../coreShared",
+    "@zoltar/zoltar-shared": "file:../../shared/zoltar",
     "brace-expansion": "5.0.9",
     "fast-uri": "3.1.6",
     "nanoid": "3.3.18",
@@ -398,9 +402,11 @@
 
     "@xtuc/long": ["@xtuc/long@4.2.2", "", {}, "sha512-NuHqBY1PB/D8xU6s/thBgOAiAP7HOYDQ32+BFZILJ8ivkUkAHQnWfn6WhL79Owj1qmUnoN/YPhktdIoucipkAQ=="],
 
-    "@zoltar/shared": ["@zoltar/shared@file:../../shared", { "dependencies": { "@noble/hashes": "2.2.0", "micro-eth-signer": "0.18.1" } }],
+    "@zoltar/core-shared": ["@zoltar/core-shared@file:../../shared/core", { "dependencies": { "@noble/hashes": "2.2.0", "micro-eth-signer": "0.18.1" }, "devDependencies": { "typescript": "5.8.2" } }],
 
-    "@zoltar/ui-core-shared": ["@zoltar/ui-core-shared@file:../coreShared", { "dependencies": { "@noble/curves": "2.2.0", "@noble/hashes": "2.2.0", "@preact/signals": "2.0.1", "@zoltar/shared": "file:../../shared", "micro-eth-signer": "0.18.1", "micro-packed": "0.8.0", "preact": "10.26.4", "tevm": "1.0.0-rc.151" }, "devDependencies": { "better-typescript-lib": "2.11.0", "bun-types": "1.4.2", "typescript": "5.8.2" } }],
+    "@zoltar/ui-core-shared": ["@zoltar/ui-core-shared@file:../coreShared", { "dependencies": { "@noble/curves": "2.2.0", "@noble/hashes": "2.2.0", "@preact/signals": "2.0.1", "@zoltar/core-shared": "file:../../shared/core", "@zoltar/zoltar-shared": "file:../../shared/zoltar", "micro-eth-signer": "0.18.1", "micro-packed": "0.8.0", "preact": "10.26.4", "tevm": "1.0.0-rc.151" }, "devDependencies": { "better-typescript-lib": "2.11.0", "bun-types": "1.4.2", "typescript": "5.8.2" } }],
+
+    "@zoltar/zoltar-shared": ["@zoltar/zoltar-shared@file:../../shared/zoltar", { "dependencies": { "@zoltar/core-shared": "file:../core" }, "devDependencies": { "typescript": "5.8.2" } }],
 
     "abitype": ["abitype@1.3.0", "", { "peerDependencies": { "typescript": ">=5.0.4", "zod": "^3.22.0 || ^4.0.0" }, "optionalPeers": ["typescript", "zod"] }, "sha512-fk6Te+bojIFrMvMZrnOO+SxCB+RUksTGOzq/60ZRvs1L+BVzvi2bqt9L3W/17ZLdZsyM1FuYf65P5nlmoiH1Bg=="],
 
@@ -948,9 +954,11 @@
 
     "@tevm/unplugin/solc": ["solc@0.8.35", "", { "dependencies": { "command-exists": "^1.2.8", "commander": "^8.1.0", "follow-redirects": "^1.12.1", "js-sha3": "0.8.0", "memorystream": "^0.3.1", "semver": "^5.5.0", "tmp": "0.0.33" }, "bin": { "solcjs": "solc.js" } }, "sha512-OaP/4zyoKRo2CjqZDxbtkeRlEo6MxP4FLCxntw1Agf9OSoecmwYKoFBSB34UcSKBFBucrTh3Mb0nRoJou62ibw=="],
 
-    "@zoltar/ui-core-shared/@zoltar/shared": ["@zoltar/shared@file:../../shared", { "dependencies": { "@noble/hashes": "2.2.0", "micro-eth-signer": "0.18.1" } }],
+    "@zoltar/ui-core-shared/@zoltar/core-shared": ["@zoltar/core-shared@file:../../shared/core", { "dependencies": { "@noble/hashes": "2.2.0", "micro-eth-signer": "0.18.1" }, "devDependencies": { "typescript": "5.8.2" } }],
 
-    "@zoltar/ui-core-shared/bun-types": ["bun-types@1.4.2", "", { "dependencies": { "@types/node": "*" } }, "sha512-bxV1FgK7yBIzjRe5zBozIM4Bem11ZJcCXSrjWRG3YWLt8yFDePu4cLjpebO8OvPeIE9trbyPF4fuj3Cia4Fj3w=="],
+    "@zoltar/ui-core-shared/@zoltar/zoltar-shared": ["@zoltar/zoltar-shared@file:../../shared/zoltar", { "dependencies": { "@zoltar/core-shared": "file:../core" }, "devDependencies": { "typescript": "5.8.2" } }],
+
+    "@zoltar/zoltar-shared/@zoltar/core-shared": ["@zoltar/core-shared@file:../../shared/core", { "dependencies": { "@noble/hashes": "2.2.0", "micro-eth-signer": "0.18.1" }, "devDependencies": { "typescript": "5.8.2" } }],
 
     "cross-spawn/which": ["which@2.0.2", "", { "dependencies": { "isexe": "^2.0.0" }, "bin": { "node-which": "./bin/node-which" } }, "sha512-BLI3Tl1TW3Pvl70l3yq3Y64i+awpwXqsGBYWkkqMtnbXgrMD+yj7rhW0kuEDxzJaYXGjEW5ogapKNMEKNMjibA=="],
 
@@ -1029,6 +1037,8 @@
     "@tevm/tsupconfig/@types/node/undici-types": ["undici-types@7.24.6", "", {}, "sha512-WRNW+sJgj5OBN4/0JpHFqtqzhpbnV0GuB+OozA9gCL7a993SmU+1JBZCzLNxYsbMfIeDL+lTsphD5jN5N+n0zg=="],
 
     "@tevm/unplugin/solc/commander": ["commander@8.3.0", "", {}, "sha512-OkTL9umf+He2DZkUq8f8J9of7yL6RJKI24dVITBmNfZBmri9zYZQrKkuXiKhyfPSu8tUhnVBB1iKXevvnlR4Ww=="],
+
+    "@zoltar/ui-core-shared/@zoltar/zoltar-shared/@zoltar/core-shared": ["@zoltar/core-shared@file:../../shared/core", { "dependencies": { "@noble/hashes": "2.2.0", "micro-eth-signer": "0.18.1" }, "devDependencies": { "typescript": "5.8.2" } }],
 
     "solc-typed-ast/solc/commander": ["commander@8.3.0", "", {}, "sha512-OkTL9umf+He2DZkUq8f8J9of7yL6RJKI24dVITBmNfZBmri9zYZQrKkuXiKhyfPSu8tUhnVBB1iKXevvnlR4Ww=="],
 

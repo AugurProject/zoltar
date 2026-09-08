@@ -1,4 +1,4 @@
-import { sortStringArrayByKeccak } from '@zoltar/shared/serialization/sortStringArrayByKeccak'
+import { sortStringArrayByKeccak } from '@zoltar/core-shared/serialization/sortStringArrayByKeccak'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { getSimulationChainTimestamp } from '@zoltar/ui-core-shared/simulation/clock.js'
 import { deploySimulationAppContracts, reportBootstrapProgress, requireQaAccount, type BootstrapScenarioApplyParameters } from '@zoltar/ui-core-shared/simulation/bootstrap.js'

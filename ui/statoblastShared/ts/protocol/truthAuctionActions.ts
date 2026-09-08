@@ -1,9 +1,9 @@
-import { type Address } from '@zoltar/shared/evm/ethereum'
-import { statoblast_SecurityPoolForker_SecurityPoolForker, statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { type Address } from '@zoltar/core-shared/evm/ethereum'
+import { statoblast_SecurityPoolForker_SecurityPoolForker, statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '../contractArtifact.js'
 import type { WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { writeContractAndWait } from '@zoltar/ui-zoltar-shared/protocol/core.js'
-import { getInfraContractAddresses } from '@zoltar/ui-zoltar-shared/protocol/deploymentHelpers.js'
-import { executeForkAuctionAction } from '@zoltar/ui-core-shared/protocol/securityPoolActions.js'
+import { getInfraContractAddresses } from './deploymentHelpers.js'
+import { executeForkAuctionAction } from './securityPoolActions.js'
 
 export async function startTruthAuctionForSecurityPool(client: WriteClient, securityPoolAddress: Address, universeId: bigint) {
 	return await executeForkAuctionAction(

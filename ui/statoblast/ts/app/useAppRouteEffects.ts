@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'preact/hooks'
-import type { Address } from '@zoltar/shared/evm/ethereum'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { useMissingDeploymentRedirect } from '@zoltar/ui-core-shared/app/hooks/useMissingDeploymentRedirect.js'
 import { normalizeAddress } from '@zoltar/ui-core-shared/lib/address.js'
-import { shouldLoadOpenOracleReportFromUrl as shouldLoadOpenOracleReport, useOpenOracleRouteSync } from '@zoltar/ui-zoltar-shared/features/open-oracle/hooks/useOpenOracleRouteSync.js'
+import { shouldLoadOpenOracleReportFromUrl as shouldLoadOpenOracleReport, useOpenOracleRouteSync } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useOpenOracleRouteSync.js'
 import type { Route } from '@zoltar/ui-statoblast-shared/types/app.js'
 
 type Props = {

@@ -1,5 +1,6 @@
-import { createWalletClient, custom, getAddress, type Address, type PublicClient } from '@zoltar/shared/evm/ethereum'
-import { ReputationToken_ReputationToken, statoblast_SecurityPool_SecurityPool } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { createWalletClient, custom, getAddress, type Address, type PublicClient } from '@zoltar/core-shared/evm/ethereum'
+import { ReputationToken_ReputationToken } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { statoblast_SecurityPool_SecurityPool } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { tradingContracts } from '../generated/contractArtifact.js'
 import type { DeploymentConfiguration } from './config.js'

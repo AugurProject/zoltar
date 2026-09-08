@@ -1,14 +1,14 @@
 import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
-import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/shared/constants'
-import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/deployment/protocolConfig'
+import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/zoltar-shared/constants'
+import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/core-shared/deployment/protocolConfig'
 import { createWriteClient, WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { approveToken, setupTestAccounts, getERC20Balance, getChildUniverseId, contractExists, sortStringArrayByKeccak } from '../testSupport/simulator/utils/utilities'
 import assert from '../testSupport/simulator/utils/assert'
 import { addressString } from '../testSupport/simulator/utils/bigint'
-import { decodeEventLog, encodeAbiParameters, encodeDeployData, getAddress, hexToBytes, isHex, keccak256, type Address, type Hex } from '@zoltar/shared/evm/ethereum'
+import { decodeEventLog, encodeAbiParameters, encodeDeployData, getAddress, hexToBytes, isHex, keccak256, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import {
 	addRepToMigrationBalance,
 	deployChild,

@@ -1,5 +1,5 @@
-import { encodeAbiParameters, keccak256, zeroAddress } from '@zoltar/shared/evm/ethereum'
-import type { Address } from '@zoltar/shared/evm/ethereum'
+import { encodeAbiParameters, keccak256, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { AnvilWindowEthereum } from '../../AnvilWindowEthereum'
 import { addressString } from '../bigint'
 import { getSecurityPoolAddresses } from './deployStatoblast'

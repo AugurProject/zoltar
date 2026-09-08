@@ -1,0 +1,53 @@
+{
+	"name": "@zoltar/statoblast-shared",
+	"version": "1.0.0",
+	"type": "module",
+	"exports": {
+		"./deployment/deploymentAddresses": {
+			"types": "./ts/deployment/deploymentAddresses.ts",
+			"bun": "./ts/deployment/deploymentAddresses.ts",
+			"default": "./js/deployment/deploymentAddresses.js"
+		},
+		"./escalationGame/escalationMath": {
+			"types": "./ts/escalationGame/escalationMath.ts",
+			"bun": "./ts/escalationGame/escalationMath.ts",
+			"default": "./js/escalationGame/escalationMath.js"
+		},
+		"./evm/addressDerivation": {
+			"types": "./ts/evm/addressDerivation.ts",
+			"bun": "./ts/evm/addressDerivation.ts",
+			"default": "./js/evm/addressDerivation.js"
+		},
+		"./initialReport/oracleInitialReport": {
+			"types": "./ts/initialReport/oracleInitialReport.ts",
+			"bun": "./ts/initialReport/oracleInitialReport.ts",
+			"default": "./js/initialReport/oracleInitialReport.js"
+		},
+		"./statoblast/liquidation": {
+			"types": "./ts/statoblast/liquidation.ts",
+			"bun": "./ts/statoblast/liquidation.ts",
+			"default": "./js/statoblast/liquidation.js"
+		},
+		"./statoblast/truthAuctionTickMath": {
+			"types": "./ts/statoblast/truthAuctionTickMath.ts",
+			"bun": "./ts/statoblast/truthAuctionTickMath.ts",
+			"default": "./js/statoblast/truthAuctionTickMath.js"
+		}
+	},
+	"files": [
+		"js",
+		"ts"
+	],
+	"scripts": {
+		"build": "bun x tsc --project tsconfig.json"
+	},
+	"dependencies": {
+		"@zoltar/core-shared": "file:../core"
+	},
+	"overrides": {
+		"@zoltar/core-shared": "file:../core"
+	},
+	"devDependencies": {
+		"typescript": "5.8.2"
+	}
+}

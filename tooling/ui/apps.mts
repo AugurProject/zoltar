@@ -2,7 +2,13 @@ import { getUiAppDependencyOrder, getUiAppPaths, parseUiAppId, UI_APP_IDS, type 
 
 export function getAppBuildCommands(appIds: readonly UiAppId[]): readonly string[][] {
 	const packages = [...new Set(appIds.flatMap(getUiAppDependencyOrder))]
-	return [['run', 'ensure-contract-artifacts'], ...appIds.map(appId => ['./tooling/ui/vendor.mts', appId]), ...packages.map(packageId => ['x', 'tsc', '--project', `ui/${packageId}/tsconfig.json`]), ...appIds.map(appId => ['./tooling/ui/workers.mts', appId, '--artifacts-current'])]
+	return [
+		...appIds.map(appId => ['./tooling/contracts/build-app-contracts.mts', appId]),
+		...appIds.map(appId => ['./tooling/repo/build-shared.mts', appId]),
+		...appIds.map(appId => ['./tooling/ui/vendor.mts', appId, '--scoped-artifacts']),
+		...packages.map(packageId => ['x', 'tsc', '--project', `ui/${packageId}/tsconfig.json`]),
+		...appIds.map(appId => ['./tooling/ui/workers.mts', appId, '--artifacts-current']),
+	]
 }
 
 if (import.meta.main) {

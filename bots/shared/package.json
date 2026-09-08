@@ -32,11 +32,12 @@
 		"typecheck": "bun x tsc --project tsconfig.json --noEmit"
 	},
 	"dependencies": {
-		"@zoltar/shared": "file:../../shared",
-		"ccxt": "4.5.70"
+		"ccxt": "4.5.70",
+		"@zoltar/core-shared": "file:../../shared/core"
 	},
 	"overrides": {
-		"undici": "7.29.0"
+		"undici": "7.29.0",
+		"@zoltar/core-shared": "file:../../shared/core"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.3.11",

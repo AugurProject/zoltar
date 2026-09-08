@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { hexToBytes, type Hex } from '@zoltar/shared/evm/ethereum'
+import { hexToBytes, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { getDeploymentSteps } from '../../ui/statoblastShared/ts/protocol/deployment.ts'
 import { MAINNET_NETWORK_PROFILE } from '../../ui/coreShared/ts/wallet/networkProfile.ts'
 import { createAnvilNodeForConnectionMode, type AnvilNode } from '../../solidity/ts/testSupport/simulator/anvilNode.ts'
