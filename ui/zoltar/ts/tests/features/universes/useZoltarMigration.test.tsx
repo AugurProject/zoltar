@@ -195,11 +195,11 @@ describe('useZoltarMigration', () => {
 
 	test('migrateInternalRep snapshots the submitted form before universe preflight resolves', async () => {
 		const universeLoad = createDeferred<ZoltarUniverseSummary>()
-		const migrateInternalRepInZoltar = mock(async (_client: unknown, universeId: bigint, amount: bigint, outcomeIndexes: bigint[], maxPreparationAttoRep: bigint) => {
+		const migrateInternalRepInZoltar = mock(async (_client: unknown, universeId: bigint, amount: bigint, outcomeIndexes: bigint[], preparationAttoRep: bigint) => {
 			expect(universeId).toBe(1n)
 			expect(amount).toBe(10n * 10n ** 18n)
 			expect(outcomeIndexes).toEqual([1n, 2n])
-			expect(maxPreparationAttoRep).toBe(10n * 10n ** 18n)
+			expect(preparationAttoRep).toBe(10n * 10n ** 18n)
 			return {
 				action: 'splitMigrationRep' as const,
 				amountAttoRep: amount,

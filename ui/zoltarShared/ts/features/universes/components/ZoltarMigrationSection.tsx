@@ -34,7 +34,7 @@ type ZoltarMigrationSectionProps = {
 	loadingZoltarForkAccess: boolean
 	loadingZoltarUniverse: boolean
 	onRetryMigrationBalances: () => void
-	onMigrateInternalRep: (maxPreparationAttoRep: bigint) => void
+	onMigrateInternalRep: (preparationAttoRep: bigint) => void
 	onZoltarMigrationFormChange: (update: Partial<ZoltarMigrationFormState>) => void
 	zoltarForkRepBalanceAttoRep: bigint | undefined
 	zoltarForkApproval: TokenApprovalState

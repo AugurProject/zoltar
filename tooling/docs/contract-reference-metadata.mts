@@ -39,7 +39,7 @@ export type AssemblyDelegateCall = {
 }
 
 export const outputPath = 'docs/reference/contracts.html'
-export const expectedProductionSoliditySourceFingerprint = 'bbdb4b8e90bc66e984131b49571bf2a80aef977ca8bfc48e38fa87ff6921e134'
+export const expectedProductionSoliditySourceFingerprint = 'e15084cc28dfad80ba830315e8d41ae964fe64b253ce47f4757646fbf3954c40'
 
 export const eventSourceByName: Record<string, string> = {
 	VaultBadDebtMigrated: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
@@ -511,7 +511,7 @@ export const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/Context.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/ERC20.sol': '6c4161bf27a2ed1bc2de94b58253a8ec4201e28d125571cb2124238753387a22',
 	'solidity/contracts/ReputationToken.sol': '30c2987453109942297ab8ee8256c53fc68cd5c22f9fd16e168cd6bbb12b8608',
-	'solidity/contracts/Zoltar.sol': '321cc14d0fb093daddde7d1d98b4173b239894ad0c4192dbc1c2da9e7353e7f2',
+	'solidity/contracts/Zoltar.sol': '7820943e20dcb5ea796e2c00af55219042cb772133f0844c8d79dcd2ae30c938',
 	'solidity/contracts/ZoltarQuestionData.sol': '904b4369195f070fa3b04bbcbc1acba529810ffa2da4667569cd9168ac568d65',
 	'solidity/contracts/statoblast/EscalationGame.sol': '22346007107d60d8dac5545122037fa8bc457ac604c733c03edd992276604e85',
 	'solidity/contracts/statoblast/EscalationGameCalculations.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
@@ -574,7 +574,7 @@ export const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '5293c67e0f80e55be101ac29452fc1a1eb145049e925d0fb6d98b08feef1c094',
+		compiledAbiFingerprint: '5be17dc2f229af489f38f634927284a3c75ed13faa39e076a27ab39a57481321',
 		name: 'Zoltar',
 		purpose: 'Registers universe forks, charges the fork admission haircut, and mints branch-specific child REP.',
 		readAbiFingerprint: 'eaf0060c4cdd3bd7d33342fff6805c343c3a42abf173388b95157e231998ed14',
@@ -629,13 +629,13 @@ export const contractReferences: ContractReference[] = [
 				signals: '`MigrationRepAdded`',
 			},
 			{
-				call: '`prepareAndSplitMigrationRep`(`universeId`, `amountAttoRep`, `outcomeIndexes`, `maxPreparationAttoRep`)',
+				call: '`prepareAndSplitMigrationRep`(`universeId`, `amountAttoRep`, `outcomeIndexes`, `preparationAttoRep`)',
 				caller: 'Parent REP holder',
 				effect:
-					'Reuses prepared migration credit, burns or sinks only the additional parent REP needed for the most-used selected destination, and mints the requested amount in every selected child. Preparation and splitting revert together on failure. Historical splits, rather than current child token holdings, determine remaining credit.',
+					'Adds the supplied preparation amount to migration credit, then splits the requested REP into the supplied outcomes using the existing migration checks. Both steps revert together on failure. Callers compute any preparation shortfall from cumulative child migration amounts, rather than current child token holdings.',
 				declarations: [{ name: 'prepareAndSplitMigrationRep' }],
-				preconditions: 'Forked universe; positive amount; nonempty valid outcome indexes in strictly increasing order; sufficient parent REP for any shortfall. Additional preparation cannot exceed maxPreparationAttoRep. Genesis REP requires allowance only for the shortfall; child REP needs no allowance.',
-				signals: '`MigrationRepAdded` when preparation is needed; `DeployChild` and `ChildReputationTokenInitialized` when children are deployed; child REP `Transfer`, `Mint`, and `MigrationRepSplit` for each destination',
+				preconditions: 'Forked universe; positive split amount; nonempty valid outcomes; sufficient parent REP for the exact preparationAttoRep supplied and sufficient migration credit for every split. Outcome order is unrestricted. Genesis REP requires allowance for preparation; child REP needs no allowance.',
+				signals: '`MigrationRepAdded` when preparationAttoRep is positive; `DeployChild` and `ChildReputationTokenInitialized` when children are deployed; child REP `Transfer`, `Mint`, and `MigrationRepSplit` for each destination',
 			},
 			{
 				call: '`splitMigrationRep(universeId, amountAttoRep, outcomeIndexes)`',

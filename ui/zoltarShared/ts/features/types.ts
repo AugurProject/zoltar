@@ -107,7 +107,7 @@ export type MarketRouteContentProps = {
 	onCreateChildUniverseForOutcomeIndex: (outcomeIndex: bigint) => void
 	onForkZoltar: () => void
 	onRetryMigrationBalances: () => void
-	onMigrateInternalRep: (maxPreparationAttoRep: bigint) => void
+	onMigrateInternalRep: (preparationAttoRep: bigint) => void
 	onActiveViewChange: (view: ZoltarView) => void
 	loadingZoltarQuestionCount: boolean
 	loadingZoltarQuestion: boolean

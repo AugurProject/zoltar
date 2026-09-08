@@ -57,7 +57,7 @@ export function useZoltarMigration({
 	}, [environmentRefreshKey])
 
 	const migrateInternalRep = useCallback(
-		async (maxPreparationAttoRep: bigint) => {
+		async (preparationAttoRep: bigint) => {
 			if (zoltarMigrationPending.value) return
 			let writeFailed = false
 			let ownsTransaction = false
@@ -102,7 +102,7 @@ export function useZoltarMigration({
 				const amount = parseRepAmountInput(submittedForm.amount, 'Migration amount')
 				if (amount <= 0n) throw new Error('Migration amount must be greater than zero')
 				const outcomeIndexes = parseBigIntListInput(submittedForm.outcomeIndexes, 'Outcome indexes')
-				const result = await migrateInternalRepInZoltar(createWalletWriteClient(accountAddress, { onTransactionPrepared, onTransactionSubmitted }), universe.universeId, amount, outcomeIndexes, maxPreparationAttoRep)
+				const result = await migrateInternalRepInZoltar(createWalletWriteClient(accountAddress, { onTransactionPrepared, onTransactionSubmitted }), universe.universeId, amount, outcomeIndexes, preparationAttoRep)
 				if (!environmentGuard.isCurrent()) return
 				zoltarMigrationResult.value = result
 				zoltarMigrationFeedback.value = createSuccessActionFeedback(result.action, 'REP split', result.hash)

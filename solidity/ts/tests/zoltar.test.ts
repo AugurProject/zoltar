@@ -571,7 +571,7 @@ describe('Contract Test Suite', () => {
 		}
 	})
 
-	test('prepareAndSplitMigrationRep prepares only missing REP and rolls preparation back when splitting fails', async () => {
+	test('prepareAndSplitMigrationRep prepares the supplied REP amount and rolls preparation back when splitting fails', async () => {
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
 		const questionData = { title: 'Atomic REP preparation and split', description: '', startTime: 0n, endTime: 0n, numTicks: 0n, displayValueMin: 0n, displayValueMax: 0n, answerUnit: '' }
 		const outcomes = sortStringArrayByKeccak(['Yes', 'No'])
@@ -579,24 +579,25 @@ describe('Contract Test Suite', () => {
 		await forkUniverse(client, genesisUniverse, getQuestionId(questionData, outcomes))
 		const migrator = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveToken(migrator, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
-		const split = async (amount: bigint, indexes: bigint[], maxPreparationAttoRep = amount) =>
+		const split = async (amount: bigint, indexes: bigint[], preparationAttoRep = 0n) =>
 			await writeContractAndWait(migrator, () =>
 				migrator.writeContract({
 					address: getZoltarAddress(),
 					abi: Zoltar_Zoltar.abi,
 					functionName: 'prepareAndSplitMigrationRep',
-					args: [genesisUniverse, amount, indexes, maxPreparationAttoRep],
+					args: [genesisUniverse, amount, indexes, preparationAttoRep],
 				}),
 			)
 		const initialBalance = await getERC20Balance(migrator, addressString(GENESIS_REPUTATION_TOKEN), migrator.account.address)
-		await split(10n, [0n])
+		await split(10n, [0n], 10n)
 		assert.strictEqual(await getMigrationRepBalanceAttoRep(migrator, genesisUniverse, migrator.account.address), 10n)
 		assert.strictEqual(await getERC20Balance(migrator, addressString(GENESIS_REPUTATION_TOKEN), migrator.account.address), initialBalance - 10n)
-		await split(15n, [1n])
+		await split(15n, [1n], 5n)
 		assert.strictEqual(await getMigrationRepBalanceAttoRep(migrator, genesisUniverse, migrator.account.address), 15n)
 		assert.strictEqual(await getERC20Balance(migrator, addressString(GENESIS_REPUTATION_TOKEN), migrator.account.address), initialBalance - 15n)
-		await split(15n, [2n])
-		assert.strictEqual(await getERC20Balance(migrator, addressString(GENESIS_REPUTATION_TOKEN), migrator.account.address), initialBalance - 15n)
+		await split(15n, [2n], 5n)
+		assert.strictEqual(await getMigrationRepBalanceAttoRep(migrator, genesisUniverse, migrator.account.address), 20n)
+		assert.strictEqual(await getERC20Balance(migrator, addressString(GENESIS_REPUTATION_TOKEN), migrator.account.address), initialBalance - 20n)
 		for (const [outcomeIndex, expectedBalance] of [
 			[0n, 10n],
 			[1n, 15n],
@@ -605,23 +606,23 @@ describe('Contract Test Suite', () => {
 			if (outcomeIndex === undefined || expectedBalance === undefined) throw new Error('Missing expected outcome balance')
 			assert.strictEqual(await getERC20Balance(migrator, getRepTokenAddress(getChildUniverseId(genesisUniverse, outcomeIndex)), migrator.account.address), expectedBalance)
 		}
-		await assert.rejects(split(20n, [0n], 0n), /Required REP preparation increased/)
-		await assert.rejects(split(20n, [0n, 99n]), /Malformed outcome index/)
-		await assert.rejects(split(20n, [2n, 1n]), /Outcome indexes must be strictly increasing/)
-		await assert.rejects(split(20n, [0n, 0n]), /Outcome indexes must be strictly increasing/)
-		await assert.rejects(split(20n, []), /Select at least one outcome universe/)
-		await assert.rejects(split(0n, [0n]), /Split amount must be greater than zero/)
-		assert.strictEqual(await getMigrationRepBalanceAttoRep(migrator, genesisUniverse, migrator.account.address), 15n)
-		assert.strictEqual(await getERC20Balance(migrator, addressString(GENESIS_REPUTATION_TOKEN), migrator.account.address), initialBalance - 15n)
-		await split(20n, [0n], 15n)
+		await assert.rejects(split(20n, [0n], 0n), /Cannot migrate more than internal balance/)
+		await assert.rejects(split(20n, [0n, 99n], 10n), /Malformed outcome index/)
+		await assert.rejects(split(20n, [0n, 0n], 10n), /Cannot migrate more than internal balance/)
+		await assert.rejects(split(20n, [], 20n), /Select at least one outcome universe/)
+		await assert.rejects(split(0n, [0n], 20n), /Split amount must be greater than zero/)
+		assert.strictEqual(await getMigrationRepBalanceAttoRep(migrator, genesisUniverse, migrator.account.address), 20n)
+		assert.strictEqual(await getERC20Balance(migrator, addressString(GENESIS_REPUTATION_TOKEN), migrator.account.address), initialBalance - 20n)
+		await split(20n, [0n], 10n)
 		assert.strictEqual(await getMigrationRepBalanceAttoRep(migrator, genesisUniverse, migrator.account.address), 30n)
-		assert.strictEqual(await getERC20Balance(migrator, getRepTokenAddress(getChildUniverseId(genesisUniverse, 0n)), migrator.account.address), 30n)
-		await split(5n, [0n, 1n, 2n], 5n)
+		await split(5n, [2n, 0n, 1n], 5n)
 		assert.strictEqual(await getMigrationRepBalanceAttoRep(migrator, genesisUniverse, migrator.account.address), 35n)
 		assert.strictEqual(await getERC20Balance(migrator, addressString(GENESIS_REPUTATION_TOKEN), migrator.account.address), initialBalance - 35n)
 		for (const outcomeIndex of [0n, 1n, 2n]) {
 			assert.strictEqual(await getERC20Balance(migrator, getRepTokenAddress(getChildUniverseId(genesisUniverse, outcomeIndex)), migrator.account.address), outcomeIndex === 0n ? 35n : 20n)
 		}
+		await split(5n, [2n, 1n])
+		assert.strictEqual(await getERC20Balance(migrator, addressString(GENESIS_REPUTATION_TOKEN), migrator.account.address), initialBalance - 35n)
 	})
 
 	test('splitMigrationRep preserves child balances across outcome orderings and rejects double use of the same balance', async () => {

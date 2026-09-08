@@ -220,26 +220,10 @@ contract Zoltar {
 		splitRepInternal(universeId, amountAttoRep, outcomeIndexes);
 	}
 
-	function prepareAndSplitMigrationRep(uint248 universeId, uint256 amountAttoRep, uint256[] memory outcomeIndexes, uint256 maxPreparationAttoRep) external {
+	function prepareAndSplitMigrationRep(uint248 universeId, uint256 amountAttoRep, uint256[] memory outcomeIndexes, uint256 preparationAttoRep) external {
 		require(amountAttoRep > 0, 'Split amount must be greater than zero');
 		require(outcomeIndexes.length > 0, 'Select at least one outcome universe');
-		AddressRepMigration storage migration = migrationRepBalances[msg.sender][universeId];
-		uint256 largestSplitAttoRep;
-		for (uint256 i = 0; i < outcomeIndexes.length; i++) {
-			uint256 outcomeIndex = outcomeIndexes[i];
-			require(i == 0 || outcomeIndex > outcomeIndexes[i - 1], 'Outcome indexes must be strictly increasing');
-			uint256 splitAttoRep = migration.childMigrationRepAmountsAttoRep[
-				getChildUniverseId(universeId, outcomeIndex)
-			];
-			if (splitAttoRep > largestSplitAttoRep) largestSplitAttoRep = splitAttoRep;
-		}
-		uint256 requiredBalanceAttoRep = largestSplitAttoRep + amountAttoRep;
-		uint256 preparedAmountAttoRep = migration.migrationRepBalanceAttoRep;
-		if (requiredBalanceAttoRep > preparedAmountAttoRep) {
-			uint256 preparationAttoRep = requiredBalanceAttoRep - preparedAmountAttoRep;
-			require(preparationAttoRep <= maxPreparationAttoRep, 'Required REP preparation increased; refresh and try again');
-			_addRepToMigrationBalance(msg.sender, universeId, preparationAttoRep, false);
-		}
+		if (preparationAttoRep > 0) addRepToMigrationBalance(universeId, preparationAttoRep);
 		splitMigrationRep(universeId, amountAttoRep, outcomeIndexes);
 	}
 

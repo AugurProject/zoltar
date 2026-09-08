@@ -14,15 +14,14 @@ export async function createZoltarChildUniverse(client: WriteClient, universeId:
 	return { action: 'createChildUniverse', hash, outcomeIndex, universeId } satisfies ZoltarChildUniverseActionResult
 }
 
-export async function migrateInternalRepInZoltar(client: WriteClient, universeId: bigint, amountAttoRep: bigint, outcomeIndexes: bigint[], maxPreparationAttoRep: bigint) {
-	const sortedOutcomeIndexes = outcomeIndexes.toSorted((left, right) => (left < right ? -1 : left > right ? 1 : 0))
+export async function migrateInternalRepInZoltar(client: WriteClient, universeId: bigint, amountAttoRep: bigint, outcomeIndexes: bigint[], preparationAttoRep: bigint) {
 	const hash = await writeContractAndWait(client, () => ({
 		address: getZoltarAddress(),
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'prepareAndSplitMigrationRep',
-		args: [universeId, amountAttoRep, sortedOutcomeIndexes, maxPreparationAttoRep],
+		args: [universeId, amountAttoRep, outcomeIndexes, preparationAttoRep],
 	}))
-	return { action: 'splitMigrationRep', amountAttoRep, hash, outcomeIndexes: sortedOutcomeIndexes, universeId } satisfies ZoltarMigrationActionResult
+	return { action: 'splitMigrationRep', amountAttoRep, hash, outcomeIndexes, universeId } satisfies ZoltarMigrationActionResult
 }
 
 export async function forkZoltarUniverse(client: WriteClient, universeId: bigint, questionId: bigint) {
