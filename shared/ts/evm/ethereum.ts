@@ -69,7 +69,7 @@ type TupleValue<TComponents extends readonly AbiParameter[], TKind extends AbiVa
 		? TupleComponentsObject<TComponents, TKind>
 		: TupleComponentsArray<TComponents, TKind>
 
-type DecodedTupleArrayValue<TComponents extends readonly AbiParameter[]> = TupleComponentsArray<TComponents, 'output'> & (TupleComponentsAllNamed<TComponents> extends true ? TupleComponentsArrayAliases<TComponents, 'output'> : {})
+type DecodedTupleArrayValue<TComponents extends readonly AbiParameter[]> = number extends TComponents['length'] ? AbiValue | undefined : TupleComponentsArray<TComponents, 'output'> & (TupleComponentsAllNamed<TComponents> extends true ? TupleComponentsArrayAliases<TComponents, 'output'> : {})
 
 type RebasedAbiParameter<TParameter extends AbiParameter, TType extends string> = {
 	readonly anonymous?: boolean
@@ -156,8 +156,8 @@ type ContractFunctionResult<TAbi extends Abi, TFunctionName extends string> = Co
 			? AbiParameterValue<TOutput, 'output'>
 			: TOutputs extends readonly AbiParameter[]
 				? DecodedTupleArrayValue<TOutputs>
-				: AbiValue
-	: AbiValue
+				: AbiValue | undefined
+	: AbiValue | undefined
 
 type KnownAbiEvents<TAbi extends Abi> = Extract<TAbi[number], { name: string; type: 'event' }>
 

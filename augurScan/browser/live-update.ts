@@ -108,7 +108,8 @@ export const loadInitialNetworkStatus = async (restoredSnapshot: boolean, load: 
 	if (!restoredSnapshot) await load()
 }
 
-export const operationsForkChildCount = (formattedCount: string, value: JsonValue | undefined): string => `${formattedCount} ${Number(value) === 1 ? 'child' : 'children'}`
+export const operationsForkChildCount = (formattedCount: string, value: JsonValue | undefined): string =>
+	`${formattedCount} ${Number(value) === 1 ? 'child' : 'children'}`
 
 export interface RefreshGate {
 	runBackground<T>(operation: RefreshOperation<T>): Promise<T>
@@ -493,7 +494,11 @@ export const operationsRouteFreshness = (asOf: JsonRecord, liveConnected: boolea
 	}`
 }
 
-export const riskPaginationForCollectedCursors = (pagination: JsonRecord, poolNextCursor: string | undefined, vaultNextCursor: string | undefined): JsonRecord => {
+export const riskPaginationForCollectedCursors = (
+	pagination: JsonRecord,
+	poolNextCursor: string | undefined,
+	vaultNextCursor: string | undefined,
+): JsonRecord => {
 	const paginationWithoutCursors = Object.fromEntries(Object.entries(pagination).filter(([key]) => key !== 'poolNextCursor' && key !== 'vaultNextCursor'))
 	return {
 		...paginationWithoutCursors,

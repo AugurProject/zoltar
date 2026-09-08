@@ -3102,25 +3102,26 @@ const operationsRiskCatalogEndpoint = (poolCursor?: string, vaultCursor?: string
 	return `/api/v1/state/risk?${query.toString()}`
 }
 
-const catalogOperationsResponse = (
-	response: OperationsResponse,
-	section: PagedOperationsCatalogSection,
-	items: readonly JsonRecord[],
-): OperationsResponse => ({ ...response, data: { ...response.data, [section]: items, _catalogPage: response.data } })
+const catalogOperationsResponse = (response: OperationsResponse, section: PagedOperationsCatalogSection, items: readonly JsonRecord[]): OperationsResponse => ({
+	...response,
+	data: { ...response.data, [section]: items, _catalogPage: response.data },
+})
 
-const riskCatalogOperationsResponse = (
-	response: OperationsResponse,
-	pools: readonly JsonRecord[],
-	vaults: readonly JsonRecord[],
-): OperationsResponse => ({
+const riskCatalogOperationsResponse = (response: OperationsResponse, pools: readonly JsonRecord[], vaults: readonly JsonRecord[]): OperationsResponse => ({
 	...response,
 	data: {
 		risk: { ...response.data, pools, vaults },
 		_riskCatalogPage: response.data,
-			totals: {
-				pools: isJsonRecord(response.data['pagination']) && typeof response.data['pagination']['poolTotal'] === 'number' ? response.data['pagination']['poolTotal'] : pools.length,
-				vaults: isJsonRecord(response.data['pagination']) && typeof response.data['pagination']['vaultTotal'] === 'number' ? response.data['pagination']['vaultTotal'] : vaults.length,
-			},
+		totals: {
+			pools:
+				isJsonRecord(response.data['pagination']) && typeof response.data['pagination']['poolTotal'] === 'number'
+					? response.data['pagination']['poolTotal']
+					: pools.length,
+			vaults:
+				isJsonRecord(response.data['pagination']) && typeof response.data['pagination']['vaultTotal'] === 'number'
+					? response.data['pagination']['vaultTotal']
+					: vaults.length,
+		},
 	},
 })
 
@@ -4365,7 +4366,10 @@ const loadOperationsCatalog = async (section: PagedOperationsCatalogSection, ret
 	)
 	if (first === undefined || last === undefined) throw new Error('Operations catalog returned no page')
 	return catalogOperationsResponse(
-		{ ...first, data: { ...last.data, hasMore: snapshot.nextCursor !== undefined, ...(snapshot.nextCursor === undefined ? {} : { nextCursor: snapshot.nextCursor }) } },
+		{
+			...first,
+			data: { ...last.data, hasMore: snapshot.nextCursor !== undefined, ...(snapshot.nextCursor === undefined ? {} : { nextCursor: snapshot.nextCursor }) },
+		},
 		section,
 		snapshot.items,
 	)

@@ -6,7 +6,7 @@ import type { OpenOracleReportDetails } from '@zoltar/ui-core-shared/types/contr
 
 export type OpenOracleReadClient = {
 	getBalance: (parameters: { address: Address }) => Promise<bigint>
-	readContract: (parameters: { abi: Abi; address: Address; args: readonly AbiValue[]; functionName: string }) => Promise<AbiValue>
+	readContract: (parameters: { abi: Abi; address: Address; args: readonly AbiValue[]; functionName: string }) => Promise<AbiValue | undefined>
 }
 
 export type OpenOracleRawReadResult = { error?: unknown; result?: AbiValue; status: 'failure' | 'success' }
