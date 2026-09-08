@@ -254,8 +254,9 @@ function captureChromiumStderr(stream: ReadableStream<Uint8Array> | null): Chrom
 				if (chunk.done) return output + decoder.decode()
 				output += decoder.decode(chunk.value, { stream: true })
 			}
-		} catch {
-			return output + decoder.decode()
+		} catch (error) {
+			const diagnostic = cancelled ? '' : `Chromium stderr read failed: ${error instanceof Error ? error.message : String(error)}`
+			return output + (diagnostic === '' ? '' : `${diagnostic}\n`) + decoder.decode()
 		}
 	})()
 	return {
@@ -326,8 +327,9 @@ async function launchChromium(userDataDirectoryPrefix: string): Promise<Dashboar
 	} catch (error) {
 		try {
 			await removeChromiumProfile(userDataDirectory)
-		} catch {
-			// Preserve the Chromium spawn failure; profile cleanup is best effort here.
+		} catch (cleanupError) {
+			const cleanupMessage = cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
+			if (cleanupMessage !== '') throw new AggregateError([error, cleanupError], 'Chromium spawn and profile cleanup failed')
 		}
 		throw error
 	}
@@ -347,8 +349,8 @@ async function launchChromium(userDataDirectoryPrefix: string): Promise<Dashboar
 		let diagnostics = ''
 		try {
 			diagnostics = await stopChromium(chromiumProcess)
-		} catch {
-			// Preserve the startup failure; the profile cleanup still runs in stopChromium.
+		} catch (cleanupError) {
+			diagnostics = cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
 		}
 		const suffix = diagnostics.trim() === '' ? '' : `: ${diagnostics.trim()}`
 		throw new Error(`${message}${suffix}`)
