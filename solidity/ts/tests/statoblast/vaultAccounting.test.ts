@@ -613,7 +613,7 @@ describe('Statoblast: vault accounting', () => {
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
 		await manipulatePriceOracleAndPerformOperation(attackerClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, attackerClient.account.address, 0n)
 		const escrowRepToken = await getRepToken(client, securityPoolAddresses.securityPool)
-		const theoreticalRepSupply = await client.readContract({ address: escrowRepToken, abi: ReputationToken_ReputationToken.abi, functionName: 'getTotalTheoreticalSupplyAttoRep' })
+		const theoreticalRepSupply = await client.readContract({ address: escrowRepToken, abi: ReputationToken_ReputationToken.abi, functionName: 'getTotalTheoreticalSupply' })
 		const escalationDepositUnit = theoreticalRepSupply / 10_000_000n > 10n ** 18n ? theoreticalRepSupply / 10_000_000n : 10n ** 18n
 
 		const firstWinningDeposit = 5n * escalationDepositUnit
@@ -700,7 +700,7 @@ describe('Statoblast: vault accounting', () => {
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
 		await manipulatePriceOracleAndPerformOperation(attackerClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, attackerClient.account.address, 0n)
 		const escrowRepToken = await getRepToken(client, securityPoolAddresses.securityPool)
-		const theoreticalRepSupply = await client.readContract({ address: escrowRepToken, abi: ReputationToken_ReputationToken.abi, functionName: 'getTotalTheoreticalSupplyAttoRep' })
+		const theoreticalRepSupply = await client.readContract({ address: escrowRepToken, abi: ReputationToken_ReputationToken.abi, functionName: 'getTotalTheoreticalSupply' })
 		const escalationDepositUnit = theoreticalRepSupply / 10_000_000n > 10n ** 18n ? theoreticalRepSupply / 10_000_000n : 10n ** 18n
 
 		const winningDeposit = 20n * escalationDepositUnit
@@ -800,7 +800,7 @@ describe('Statoblast: vault accounting', () => {
 		await transferRepToAddress(benefactorClient, securityPoolAddresses.securityPool, repDeposit)
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
-		const theoreticalRepSupply = await client.readContract({ address: repToken, abi: ReputationToken_ReputationToken.abi, functionName: 'getTotalTheoreticalSupplyAttoRep' })
+		const theoreticalRepSupply = await client.readContract({ address: repToken, abi: ReputationToken_ReputationToken.abi, functionName: 'getTotalTheoreticalSupply' })
 		const escrowAmount = theoreticalRepSupply / 10_000_000n > 10n ** 18n ? theoreticalRepSupply / 10_000_000n : 10n ** 18n
 
 		const vaultBeforeEscrow = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
@@ -874,7 +874,7 @@ describe('Statoblast: vault accounting', () => {
 		await manipulatePriceOracleAndPerformOperation(secondWinner, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, secondWinner.account.address, 0n)
 		await manipulatePriceOracleAndPerformOperation(losingSide, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, losingSide.account.address, 0n)
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
-		const theoreticalRepSupply = await client.readContract({ address: repToken, abi: ReputationToken_ReputationToken.abi, functionName: 'getTotalTheoreticalSupplyAttoRep' })
+		const theoreticalRepSupply = await client.readContract({ address: repToken, abi: ReputationToken_ReputationToken.abi, functionName: 'getTotalTheoreticalSupply' })
 		const escalationDepositUnit = theoreticalRepSupply / 10_000_000n > 10n ** 18n ? theoreticalRepSupply / 10_000_000n : 10n ** 18n
 
 		const firstWinningDeposit = 20n * escalationDepositUnit
@@ -946,7 +946,7 @@ describe('Statoblast: vault accounting', () => {
 		await manipulatePriceOracleAndPerformOperation(secondWinner, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, secondWinner.account.address, 0n)
 		await manipulatePriceOracleAndPerformOperation(losingSide, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, losingSide.account.address, 0n)
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
-		const theoreticalRepSupply = await client.readContract({ address: repToken, abi: ReputationToken_ReputationToken.abi, functionName: 'getTotalTheoreticalSupplyAttoRep' })
+		const theoreticalRepSupply = await client.readContract({ address: repToken, abi: ReputationToken_ReputationToken.abi, functionName: 'getTotalTheoreticalSupply' })
 		const escalationDepositUnit = theoreticalRepSupply / 10_000_000n > 10n ** 18n ? theoreticalRepSupply / 10_000_000n : 10n ** 18n
 
 		const firstWinningDeposit = 14n * escalationDepositUnit
@@ -1010,7 +1010,7 @@ describe('Statoblast: vault accounting', () => {
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
 		await manipulatePriceOracleAndPerformOperation(attackerClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, attackerClient.account.address, 0n)
 		const escrowRepToken = await getRepToken(client, securityPoolAddresses.securityPool)
-		const theoreticalRepSupply = await client.readContract({ address: escrowRepToken, abi: ReputationToken_ReputationToken.abi, functionName: 'getTotalTheoreticalSupplyAttoRep' })
+		const theoreticalRepSupply = await client.readContract({ address: escrowRepToken, abi: ReputationToken_ReputationToken.abi, functionName: 'getTotalTheoreticalSupply' })
 		const escalationDepositUnit = theoreticalRepSupply / 10_000_000n > 10n ** 18n ? theoreticalRepSupply / 10_000_000n : 10n ** 18n
 
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, escalationDepositUnit + 1n)

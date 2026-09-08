@@ -124,7 +124,7 @@ describe('zoltar contract helpers', () => {
 				[QUESTION_TUPLE_BINARY, 0n],
 			],
 			readContractHandlers: {
-				getTotalTheoreticalSupplyAttoRep: async () => 111n,
+				getUniverseTheoreticalSupplyAttoRep: async () => 111n,
 				getOutcomeLabels: async () => ['Yes', 'No'],
 			},
 		})
@@ -148,7 +148,7 @@ describe('zoltar contract helpers', () => {
 				[QUESTION_TUPLE_SCALAR, 1n],
 			],
 			readContractHandlers: {
-				getTotalTheoreticalSupplyAttoRep: async () => 222n,
+				getUniverseTheoreticalSupplyAttoRep: async () => 222n,
 				getOutcomeLabels: async () => [],
 				getDeployedChildUniverses: async () => [[], [], []],
 			},
@@ -179,7 +179,7 @@ describe('zoltar contract helpers', () => {
 				['Augur Reputation 3', 'REP3', 3n],
 			],
 			readContractHandlers: {
-				getTotalTheoreticalSupplyAttoRep: async () => 999n,
+				getUniverseTheoreticalSupplyAttoRep: async () => 999n,
 				getOutcomeLabels: async () => ['Yes', 'No'],
 				getChildUniverseId: async () => {
 					throw new Error('getChildUniverseId should be resolved via multicall in this test')

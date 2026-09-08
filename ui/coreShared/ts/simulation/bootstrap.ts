@@ -144,7 +144,7 @@ export async function updateZoltarGenesisRepToken({ createWriteClient, memoryCli
 	const genesisTheoreticalSupply = await readClient.readContract({
 		address: repAddress,
 		abi: ReputationToken_ReputationToken.abi,
-		functionName: 'getTotalTheoreticalSupplyAttoRep',
+		functionName: 'getTotalTheoreticalSupply',
 		args: [],
 	})
 

@@ -18,7 +18,7 @@ const questionComponents = [
 ] as const
 
 export const erc20Abi = [
-	{ inputs: [], name: 'getTotalTheoreticalSupplyAttoRep', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'getTotalTheoreticalSupply', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
 	{ inputs: [{ name: 'account', type: 'address' }], name: 'balanceOf', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
 	{
 		inputs: [

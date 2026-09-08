@@ -24,6 +24,7 @@ describe('GenesisReputationToken', () => {
 
 	test('matches external REPv2 by exposing approval-based ERC-20 authorization only', () => {
 		const functionNames = new Set<string>(GenesisReputationToken_GenesisReputationToken.abi.flatMap(item => (item.type === 'function' ? [item.name] : [])))
+		assert.ok(functionNames.has('getTotalTheoreticalSupply'), 'genesis REP must expose the mainnet REPv2 theoretical-supply selector')
 		for (const unsupportedFunction of ['permit', 'nonces', 'transferWithAuthorization', 'receiveWithAuthorization', 'cancelAuthorization', 'authorizationState']) {
 			assert.ok(!functionNames.has(unsupportedFunction), `genesis REP must not advertise unsupported ${unsupportedFunction}`)
 		}
@@ -59,7 +60,7 @@ describe('GenesisReputationToken', () => {
 		const theoreticalSupply = await client.readContract({
 			abi: GenesisReputationToken_GenesisReputationToken.abi,
 			address: tokenAddress,
-			functionName: 'getTotalTheoreticalSupplyAttoRep',
+			functionName: 'getTotalTheoreticalSupply',
 			args: [],
 		})
 		assert.strictEqual(totalSupply, SEPOLIA_REP_TOTAL_THEORETICAL_SUPPLY)

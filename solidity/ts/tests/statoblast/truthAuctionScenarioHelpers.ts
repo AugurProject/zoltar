@@ -12,7 +12,7 @@ import { getEthRaiseCapAttoEth, getQuestionEndDate, OperationType, participateAu
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
 import { strictEqualTypeSafe } from '../../testSupport/simulator/utils/testUtils'
 import { finalizeTruthAuction, getOwnForkRepBuckets, getQuestionOutcome, getSecurityPoolForkerForkData, initiateSecurityPoolFork, migrateRepToZoltar, migrateVault, startTruthAuction } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
-import { getRepTokenAddress, getTotalTheoreticalSupplyAttoRep, getZoltarAddress, forkUniverse } from '../../testSupport/simulator/utils/contracts/zoltar'
+import { getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress, forkUniverse } from '../../testSupport/simulator/utils/contracts/zoltar'
 
 type SecurityPoolAddresses = {
 	escalationGame: Address
@@ -101,7 +101,7 @@ export function createStatoblastTruthAuctionScenarioHelpers({
 		const questionId = getQuestionId()
 		const securityPoolAddresses = getFixtureSecurityPoolAddresses()
 		const endTime = await getQuestionEndDate(client, questionId)
-		const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+		const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 		await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 		const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
 		await approveAndDepositRepToVault(passiveRepHolder, 2n * forkThresholdAttoRep, questionId)
@@ -212,7 +212,7 @@ export function createStatoblastTruthAuctionScenarioHelpers({
 		const questionId = getQuestionId()
 		const securityPoolAddresses = getFixtureSecurityPoolAddresses()
 		const endTime = await getQuestionEndDate(client, questionId)
-		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
+		const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 		await mockWindow.setTime(endTime + 10000n)
 		const repBalanceAttoRep = await getERC20Balance(client, getRepTokenAddress(genesisUniverse), securityPoolAddresses.securityPool)

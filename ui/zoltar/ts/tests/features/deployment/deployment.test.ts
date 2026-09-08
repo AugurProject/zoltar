@@ -153,7 +153,7 @@ void describe('deployment helpers', () => {
 				await readClient.readContract({
 					abi: GenesisReputationToken_GenesisReputationToken.abi,
 					address: SEPOLIA_NETWORK_PROFILE.genesisRepTokenAddress,
-					functionName: 'getTotalTheoreticalSupplyAttoRep',
+					functionName: 'getTotalTheoreticalSupply',
 					args: [],
 				}),
 			).toBe(SEPOLIA_REP_TOTAL_THEORETICAL_SUPPLY)

@@ -3,6 +3,7 @@ pragma solidity 0.8.35;
 
 import './Constants.sol';
 import './IERC20.sol';
+import './IExternalGenesisReputationToken.sol';
 import './ReputationToken.sol';
 import './SafeERC20Ops.sol';
 import './ZoltarQuestionData.sol';
@@ -40,10 +41,10 @@ contract Zoltar {
 
 	uint256 public immutable forkThresholdDivisor;
 	uint256 public immutable forkBurnDivisor;
-	ReputationToken public immutable genesisReputationToken;
+	IExternalGenesisReputationToken public immutable genesisReputationToken;
 	ZoltarQuestionData public immutable zoltarQuestionData;
 
-	constructor(ZoltarQuestionData _zoltarQuestionData, ReputationToken _genesisReputationToken, uint256 _forkThresholdDivisor, uint256 _forkBurnDivisor) {
+	constructor(ZoltarQuestionData _zoltarQuestionData, IExternalGenesisReputationToken _genesisReputationToken, uint256 _forkThresholdDivisor, uint256 _forkBurnDivisor) {
 		require(_forkThresholdDivisor > 1, 'Zoltar fork threshold divisor must be greater than one');
 		require(_forkBurnDivisor >= Constants.MINIMUM_FORK_BURN_DIVISOR, 'Zoltar fork burn divisor must be at least five');
 		require(address(_genesisReputationToken).code.length != 0, 'Genesis REP token address must contain code');
@@ -51,15 +52,13 @@ contract Zoltar {
 		genesisReputationToken = _genesisReputationToken;
 		forkThresholdDivisor = _forkThresholdDivisor;
 		forkBurnDivisor = _forkBurnDivisor;
-		universes[0] = Universe(0, 0, 0, _genesisReputationToken, 0);
-		// The configured genesis token must expose `getTotalTheoreticalSupplyAttoRep()`.
-		// This constructor intentionally relies on that non-ERC20 extension when wiring
-		// the genesis universe to an external REP deployment.
-		uint256 genesisSupply = _genesisReputationToken.getTotalTheoreticalSupplyAttoRep();
+		universes[0] = Universe(0, 0, 0, ReputationToken(address(_genesisReputationToken)), 0);
+		// Mainnet REPv2 exposes this theoretical-supply extension in addition to ERC-20.
+		uint256 genesisSupply = _genesisReputationToken.getTotalTheoreticalSupply();
 		require(genesisSupply != 0, 'Genesis REP missing supply: theoretical supply must be non-zero');
 		require(genesisSupply <= Constants.MAX_ATTO_REP, 'Genesis REP exceeds maximum supply');
 		universeTheoreticalSupplies[0] = genesisSupply;
-		emit UniverseInitialized(0, 0, 0, 0, _genesisReputationToken, 0, genesisSupply);
+		emit UniverseInitialized(0, 0, 0, 0, ReputationToken(address(_genesisReputationToken)), 0, genesisSupply);
 	}
 
 	function getForkTime(uint248 universeId) external view returns (uint256) {

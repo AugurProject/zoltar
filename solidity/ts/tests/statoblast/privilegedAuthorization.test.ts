@@ -52,7 +52,7 @@ describe('Statoblast: privileged authorization matrix', () => {
 			theoreticalSupply: await client.readContract({
 				abi: ReputationToken_ReputationToken.abi,
 				address: reputationToken,
-				functionName: 'getTotalTheoreticalSupplyAttoRep',
+				functionName: 'getTotalTheoreticalSupply',
 				args: [],
 			}),
 			totalSupply: await client.readContract({

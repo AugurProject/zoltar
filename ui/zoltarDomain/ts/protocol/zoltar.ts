@@ -229,12 +229,7 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 	if (repToken === zeroAddress) return undefined
 	const reputationTokenMetadata = await loadReputationTokenMetadata(client, repToken, universeId === 0n)
 
-	const totalTheoreticalSupplyAttoRep = await client.readContract({
-		abi: ReputationToken_ReputationToken.abi,
-		functionName: 'getTotalTheoreticalSupplyAttoRep',
-		address: repToken,
-		args: [],
-	})
+	const totalTheoreticalSupplyAttoRep = await client.readContract({ abi: Zoltar_Zoltar.abi, functionName: 'getUniverseTheoreticalSupplyAttoRep', address: zoltarAddress, args: [universeId] })
 	const universeData: UniverseTuple = universe
 	const [storedForkTime, forkQuestionId, forkingOutcomeIndex, , parentUniverseId] = universeData
 	const hasForked = forkTime > 0n || storedForkTime > 0n

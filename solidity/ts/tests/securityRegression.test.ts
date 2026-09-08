@@ -22,7 +22,7 @@ import { approveAndDepositRepToVault, handleOracleReporting, manipulatePriceOrac
 import { createCompleteSet, depositRepToVault, depositToEscalationGame, getSettlementCollateralAttoEth, getRepToken, getSecurityVault, getTotalCapacityOwnershipAttoRep } from '../testSupport/simulator/utils/contracts/securityPool'
 import { createChildUniverse, getMigratedAttoRep, getOwnForkRepBuckets, initiateSecurityPoolFork, migrateRepToZoltar, migrateVault } from '../testSupport/simulator/utils/contracts/securityPoolForker'
 import { getScalarOutcomeIndex } from '../testSupport/simulator/utils/contracts/scalarOutcome'
-import { ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupplyAttoRep, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
+import { ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { approveToken, contractExists, getChildUniverseId, getERC20Balance, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
@@ -90,7 +90,7 @@ describe('security regression coverage', () => {
 	const prepareOwnForkToYes = async () => {
 		const mockWindow = getAnvilWindowEthereum()
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
-		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
+		const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 		await mockWindow.setTime(questionEndDate + 10n * DAY)
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
@@ -214,7 +214,7 @@ describe('security regression coverage', () => {
 		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRepToVault(attacker, repDeposit, questionId)
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
-		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
+		const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 		await mockWindow.setTime(questionEndDate + 10n * DAY)
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)

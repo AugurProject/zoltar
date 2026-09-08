@@ -26,7 +26,7 @@ describe('Own-fork continuation residual settlement regression', () => {
 		getSecurityPoolsEscalationGame,
 		getSecurityVault,
 		getSystemState,
-		getTotalTheoreticalSupplyAttoRep,
+		getTotalTheoreticalSupply,
 		getZoltarForkThreshold,
 		manipulatePriceOracle,
 		statoblast_EscalationGame_EscalationGame,
@@ -50,7 +50,7 @@ describe('Own-fork continuation residual settlement regression', () => {
 
 	test('burns significant continuation residual when the resolved child has no live owner', async () => {
 		const parentRepToken = await getRepToken(client, securityPoolAddresses.securityPool)
-		const forkThreshold = (((await getTotalTheoreticalSupplyAttoRep(client, parentRepToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
+		const forkThreshold = (((await getTotalTheoreticalSupply(client, parentRepToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const universeForkThreshold = await getZoltarForkThreshold(client, genesisUniverse)
 		const extraLosingPrincipal = forkThreshold / 2n
 		const totalEscrowTarget = 2n * forkThreshold + extraLosingPrincipal
@@ -98,7 +98,7 @@ describe('Own-fork continuation residual settlement regression', () => {
 		})
 		await mockWindow.setTime(continuationEndTime + 1n)
 
-		const theoreticalSupplyBeforeSweep = await getTotalTheoreticalSupplyAttoRep(client, yesRepToken)
+		const theoreticalSupplyBeforeSweep = await getTotalTheoreticalSupply(client, yesRepToken)
 		const sweepHash = await client.writeContract({
 			abi: statoblast_EscalationGame_EscalationGame.abi,
 			address: yesGame,
@@ -121,7 +121,7 @@ describe('Own-fork continuation residual settlement regression', () => {
 
 		strictEqualTypeSafe(await getERC20Balance(client, yesRepToken, yesGame), 0n, 'the sweep should empty the continuation game')
 		strictEqualTypeSafe(await getERC20Balance(client, yesRepToken, yesPool.securityPool), 0n, 'the resolved ownerless child pool should not receive continuation residual')
-		strictEqualTypeSafe(theoreticalSupplyBeforeSweep - (await getTotalTheoreticalSupplyAttoRep(client, yesRepToken)), expectedResidual, 'the continuation residual should be removed from child-universe supply')
+		strictEqualTypeSafe(theoreticalSupplyBeforeSweep - (await getTotalTheoreticalSupply(client, yesRepToken)), expectedResidual, 'the continuation residual should be removed from child-universe supply')
 		strictEqualTypeSafe(await getVaultCount(client, yesPool.securityPool), 0n, 'the child should have no live vault that owns the residual')
 		strictEqualTypeSafe((await getSecurityVault(client, yesPool.securityPool, client.account.address)).repBackingUnits, 0n, 'the original depositor should own none of the child denominator')
 		strictEqualTypeSafe(await getTotalRepBackingUnits(client, yesPool.securityPool), 0n, 'the ownerless child should not retain a phantom ownership denominator')

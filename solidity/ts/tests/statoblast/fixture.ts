@@ -43,7 +43,7 @@ import {
 	startTruthAuction,
 } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
 import { getEscalationGameDeposits, getEscalationGameOutcomeState, getEscalationGameTotalCost, getNonDecisionThresholdAttoRep, getQuestionResolution, getStartBond } from '../../testSupport/simulator/utils/contracts/escalationGame'
-import { ensureZoltarDeployed, forkUniverse, getMigrationRepBalanceAttoRep, getRepTokenAddress, getTotalTheoreticalSupplyAttoRep, getUniverseData, getZoltarAddress, getZoltarForkThreshold } from '../../testSupport/simulator/utils/contracts/zoltar'
+import { ensureZoltarDeployed, forkUniverse, getMigrationRepBalanceAttoRep, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getZoltarAddress, getZoltarForkThreshold } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { getTotalRepPurchasedAttoRep } from '../../testSupport/simulator/utils/contracts/auction'
 import { isIgnorableLogDecodeError } from '../logDecodeErrors'
 import { createStatoblastTruthAuctionScenarioHelpers } from './truthAuctionScenarioHelpers'
@@ -360,7 +360,7 @@ function useStatoblastTestFixture() {
 		forkUniverse,
 		getMigrationRepBalanceAttoRep,
 		getRepTokenAddress,
-		getTotalTheoreticalSupplyAttoRep,
+		getTotalTheoreticalSupply,
 		getUniverseData,
 		getZoltarAddress,
 		getZoltarForkThreshold,
@@ -467,7 +467,7 @@ export function useStatoblastDeploymentAndOwnForkEscalationFixture() {
 		'getEscalationGameOutcomeState',
 		'forkUniverse',
 		'getRepTokenAddress',
-		'getTotalTheoreticalSupplyAttoRep',
+		'getTotalTheoreticalSupply',
 		'getUniverseData',
 		'getZoltarAddress',
 		'depositRepToVault',
@@ -552,7 +552,7 @@ export function useStatoblastEscalationMigrationFixture() {
 		'getQuestionResolution',
 		'forkUniverse',
 		'getRepTokenAddress',
-		'getTotalTheoreticalSupplyAttoRep',
+		'getTotalTheoreticalSupply',
 		'getZoltarAddress',
 		'getZoltarForkThreshold',
 		'createCompleteSet',
@@ -652,7 +652,7 @@ export function useStatoblastForkMigrationFixture() {
 		'startTruthAuction',
 		'forkUniverse',
 		'getRepTokenAddress',
-		'getTotalTheoreticalSupplyAttoRep',
+		'getTotalTheoreticalSupply',
 		'getZoltarAddress',
 		'getZoltarForkThreshold',
 		'getTotalRepPurchasedAttoRep',
@@ -728,7 +728,7 @@ export function useStatoblastReceiveGuardsFixture() {
 		'QuestionOutcome',
 		'migrateRepToZoltar',
 		'migrateVault',
-		'getTotalTheoreticalSupplyAttoRep',
+		'getTotalTheoreticalSupply',
 		'createCompleteSet',
 		'depositRepToVault',
 		'getRepToken',
@@ -799,7 +799,7 @@ export function useStatoblastTruthAuctionFixture() {
 		'forkUniverse',
 		'getMigrationRepBalanceAttoRep',
 		'getRepTokenAddress',
-		'getTotalTheoreticalSupplyAttoRep',
+		'getTotalTheoreticalSupply',
 		'getZoltarAddress',
 		'getTotalRepPurchasedAttoRep',
 		'isIgnorableLogDecodeError',

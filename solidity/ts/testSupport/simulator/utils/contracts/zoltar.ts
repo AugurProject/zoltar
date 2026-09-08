@@ -139,11 +139,11 @@ export const splitMigrationRep = async (client: WriteClient, universeId: bigint,
 	)
 }
 
-export async function getTotalTheoreticalSupplyAttoRep(client: ReadClient, repToken: Address) {
+export async function getTotalTheoreticalSupply(client: ReadClient, repToken: Address) {
 	return requireBigInt(
 		await client.readContract({
 			abi: ReputationToken_ReputationToken.abi,
-			functionName: 'getTotalTheoreticalSupplyAttoRep',
+			functionName: 'getTotalTheoreticalSupply',
 			address: repToken,
 			args: [],
 		}),

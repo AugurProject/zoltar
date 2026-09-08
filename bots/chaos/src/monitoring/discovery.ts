@@ -752,7 +752,7 @@ async function discoverUniverses(context: EcosystemDiscoveryContext, blockNumber
 		])
 		const [forkTime, forkQuestionId, forkingOutcomeIndex, reputationToken, parentUniverseId] = raw
 		if (reputationToken === zeroAddress) throw new Error(`Universe ${universeId.toString()} has no REP token`)
-		const theoreticalSupply = await client.readContract({ abi: erc20Abi, address: reputationToken, blockNumber, functionName: 'getTotalTheoreticalSupplyAttoRep' })
+		const theoreticalSupply = await client.readContract({ abi: erc20Abi, address: reputationToken, blockNumber, functionName: 'getTotalTheoreticalSupply' })
 		const supplyBasedDeposit = theoreticalSupply / 10_000_000n
 		const initialEscalationDeposit = supplyBasedDeposit < 10n ** 18n ? 10n ** 18n : supplyBasedDeposit
 		const cachedChildren = topology.universeChildren[universeId.toString()]

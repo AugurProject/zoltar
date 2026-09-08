@@ -198,7 +198,7 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 					return 100n
 				case 'getNonDecisionThresholdAttoRep':
 					return 200n
-				case 'getTotalTheoreticalSupplyAttoRep':
+				case 'getTotalTheoreticalSupply':
 					return 1_000_000n
 				case 'forkBurnDivisor':
 					return 5n

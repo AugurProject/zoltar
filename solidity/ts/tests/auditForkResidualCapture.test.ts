@@ -38,7 +38,7 @@ describe('Fork-continuation residual settlement regression', () => {
 		getSecurityPoolsEscalationGame,
 		getSecurityVault,
 		getSystemState,
-		getTotalTheoreticalSupplyAttoRep,
+		getTotalTheoreticalSupply,
 		manipulatePriceOracle,
 		backingUnitsToAttoRep,
 		statoblast_EscalationGame_EscalationGame,
@@ -151,7 +151,7 @@ describe('Fork-continuation residual settlement regression', () => {
 		const winnerHaircut = (noPrincipal * 2n) / 5n
 		const expectedResidual = totalPrincipal - yesPrincipal - rewardBonus - winnerHaircut
 		strictEqualTypeSafe(await getERC20Balance(client, childRepToken, childGame), expectedResidual, 'the lower losing side must remain as sweepable continuation residual')
-		const theoreticalSupplyBeforeSweep = await getTotalTheoreticalSupplyAttoRep(client, childRepToken)
+		const theoreticalSupplyBeforeSweep = await getTotalTheoreticalSupply(client, childRepToken)
 		const sweepHash = await client.writeContract({
 			abi: statoblast_EscalationGame_EscalationGame.abi,
 			address: childGame,
@@ -172,7 +172,7 @@ describe('Fork-continuation residual settlement regression', () => {
 		assert.ok(sweepEventNames.includes('ForkContinuationResidualRepBurned'), 'continuation cleanup must emit its dedicated burn event')
 		assert.ok(!sweepEventNames.includes('ResidualRepSweptToSecurityPool'), 'continuation cleanup must not emit the ordinary residual sweep event')
 		strictEqualTypeSafe(await getTotalPoolHeldAttoRep(client, childPool.securityPool), seedRep, 'continuation residual must not enter the late depositor-owned pool balance')
-		strictEqualTypeSafe(theoreticalSupplyBeforeSweep - (await getTotalTheoreticalSupplyAttoRep(client, childRepToken)), expectedResidual, 'continuation residual must be removed from child-universe supply')
+		strictEqualTypeSafe(theoreticalSupplyBeforeSweep - (await getTotalTheoreticalSupply(client, childRepToken)), expectedResidual, 'continuation residual must be removed from child-universe supply')
 
 		await redeemRepFromVault(forkInitiator, childPool.securityPool, forkInitiator.account.address)
 		const attackerBalanceAfterRedeem = await getERC20Balance(client, childRepToken, forkInitiator.account.address)

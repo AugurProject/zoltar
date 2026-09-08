@@ -21,7 +21,7 @@ describe('Statoblast: receive guards', () => {
 		QuestionOutcome,
 		migrateRepToZoltar,
 		migrateVault,
-		getTotalTheoreticalSupplyAttoRep,
+		getTotalTheoreticalSupply,
 		createCompleteSet,
 		depositRepToVault,
 		getRepToken,
@@ -73,7 +73,7 @@ describe('Statoblast: receive guards', () => {
 
 		// 3. Set up child pool scenario to test additional senders
 		const endTime = await getQuestionEndDate(client, questionId)
-		const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+		const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 		await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 		await mockWindow.setTime(endTime + 10000n)
 		const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
@@ -121,7 +121,7 @@ describe('Statoblast: receive guards', () => {
 
 		// Setup to create a child pool so truthAuction is registered
 		const endTime = await getQuestionEndDate(client, questionId)
-		const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+		const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 		await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 		await mockWindow.setTime(endTime + 10000n)
 		const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n

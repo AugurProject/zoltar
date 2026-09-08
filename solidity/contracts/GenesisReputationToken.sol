@@ -8,7 +8,7 @@ import { ERC20 } from './ERC20.sol';
 /// @dev Intentionally exposes only the ERC-20 authorization surface supported by REPv2:
 /// callers must use `approve` and `transferFrom`, not ERC-2612 or ERC-3009 signatures.
 contract GenesisReputationToken is ERC20 {
-	uint256 private immutable totalTheoreticalSupplyAttoRep;
+	uint256 private immutable theoreticalSupply;
 
 	constructor(address[] memory initialHolders, uint256[] memory initialBalances) ERC20('Reputation', 'REP') {
 		require(initialHolders.length != 0, 'Genesis REP requires at least one initial holder');
@@ -27,10 +27,10 @@ contract GenesisReputationToken is ERC20 {
 			supply += balance;
 			require(supply <= Constants.MAX_ATTO_REP, 'Genesis REP exceeds maximum supply');
 		}
-		totalTheoreticalSupplyAttoRep = supply;
+		theoreticalSupply = supply;
 	}
 
-	function getTotalTheoreticalSupplyAttoRep() external view returns (uint256) {
-		return totalTheoreticalSupplyAttoRep;
+	function getTotalTheoreticalSupply() external view returns (uint256) {
+		return theoreticalSupply;
 	}
 }

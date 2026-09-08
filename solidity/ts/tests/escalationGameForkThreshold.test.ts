@@ -15,7 +15,7 @@ import { deployOriginSecurityPool, getSecurityPoolAddresses } from '../testSuppo
 import { approveAndDepositRepToVault, manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { depositToEscalationGame, getSecurityVault, backingUnitsToAttoRep, redeemRepFromVault, withdrawFromEscalationGame } from '../testSupport/simulator/utils/contracts/securityPool'
 import { getNonDecisionThresholdAttoRep } from '../testSupport/simulator/utils/contracts/escalationGame'
-import { addRepToMigrationBalance, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupplyAttoRep, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
+import { addRepToMigrationBalance, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { addressString } from '../testSupport/simulator/utils/bigint'
 import {
 	statoblast_EscalationGame_EscalationGame,
@@ -104,7 +104,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 
 		// Get current total supply of REP
 		const repToken = getRepTokenAddress(genesisUniverse)
-		const initialTotalSupply = await getTotalTheoreticalSupplyAttoRep(client, repToken)
+		const initialTotalSupply = await getTotalTheoreticalSupply(client, repToken)
 
 		// Ensure initial fork threshold > escalationThreshold (should be twice)
 		const initialForkThreshold = initialTotalSupply / DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor
@@ -291,7 +291,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 	test('deploys the escalation game with the tracked Zoltar fork threshold instead of the token supply', async () => {
 		const depositAmount = 100n * 10n ** 18n
 		const repToken = getRepTokenAddress(genesisUniverse)
-		const initialTotalSupply = await getTotalTheoreticalSupplyAttoRep(client, repToken)
+		const initialTotalSupply = await getTotalTheoreticalSupply(client, repToken)
 		const approximateForkThreshold = initialTotalSupply / 10n / DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor
 		const oddForkThreshold = approximateForkThreshold % 2n === 0n ? approximateForkThreshold + 1n : approximateForkThreshold
 		const overriddenTotalSupply = oddForkThreshold * DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor

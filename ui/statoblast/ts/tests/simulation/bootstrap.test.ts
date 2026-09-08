@@ -59,7 +59,7 @@ function createRepTokenWriteClient({ accountAddress, repAddress, repState, zolta
 						if (typeof requestedAddress !== 'string') throw new Error('Missing balanceOf account argument')
 						return repState.balances.get(requestedAddress.toLowerCase()) ?? 0n
 					}
-					case 'getTotalTheoreticalSupplyAttoRep':
+					case 'getTotalTheoreticalSupply':
 						return repState.theoreticalSupply
 					case 'totalSupply':
 						return repState.totalSupply
@@ -612,7 +612,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 			readContract: async ({ address, args, functionName }: { address: Address; args?: unknown[]; functionName: string }) => {
 				if (address.toLowerCase() !== profile.genesisRepTokenAddress.toLowerCase()) throw new Error(`Unexpected contract read for ${address}`)
 				switch (functionName) {
-					case 'getTotalTheoreticalSupplyAttoRep':
+					case 'getTotalTheoreticalSupply':
 						return repState.theoreticalSupply
 					case 'totalSupply':
 						return repState.totalSupply

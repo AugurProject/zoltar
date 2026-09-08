@@ -28,7 +28,7 @@ import {
 	requestPriceIfNeededAndStageOperationWithValue,
 } from '../testSupport/simulator/utils/contracts/statoblast'
 import { createQuestion, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
-import { ensureZoltarDeployed, forkUniverse, getMigrationRepBalanceAttoRep, getRepTokenAddress, getTotalTheoreticalSupplyAttoRep, getUniverseData, getUniverseTheoreticalSupplyAttoRep, getZoltarAddress, getZoltarForkThreshold } from '../testSupport/simulator/utils/contracts/zoltar'
+import { ensureZoltarDeployed, forkUniverse, getMigrationRepBalanceAttoRep, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getUniverseTheoreticalSupplyAttoRep, getZoltarAddress, getZoltarForkThreshold } from '../testSupport/simulator/utils/contracts/zoltar'
 import {
 	claimForkedEscalationDeposits,
 	claimAuctionProceeds,
@@ -1063,7 +1063,7 @@ describe('Statoblast invariant harness', () => {
 
 	test('fork and migration state transitions preserve REP supply and child mapping', async () => {
 		const parentRepToken = getRepTokenAddress(genesisUniverse)
-		const parentSupplyBeforeFork = await getTotalTheoreticalSupplyAttoRep(client, parentRepToken)
+		const parentSupplyBeforeFork = await getTotalTheoreticalSupply(client, parentRepToken)
 		const burnAddressBalanceBeforeFork = await getERC20Balance(client, parentRepToken, addressString(BURN_ADDRESS))
 		const forkThresholdAttoRep = await getZoltarForkThreshold(client, genesisUniverse)
 		const expectedChildSupplySnapshot = parentSupplyBeforeFork - forkThresholdAttoRep / 5n
@@ -1145,7 +1145,7 @@ describe('Statoblast invariant harness', () => {
 		const repToken = getRepTokenAddress(genesisUniverse)
 		const parentSupplyBeforeFork = await getUniverseTheoreticalSupplyAttoRep(client, genesisUniverse)
 		const burnAddressBalanceBeforeFork = await getERC20Balance(client, repToken, addressString(BURN_ADDRESS))
-		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
+		const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		await depositRepToVault(client, context.securityPool, 2n * forkThresholdAttoRep)
 		await mockWindow.setTime(context.questionEndDate + 10n)
 		await manipulatePriceOracle(client, mockWindow, getSecurityPoolAddresses(addressString(0n), genesisUniverse, context.questionId, statoblastSecurityMultiplierBps).priceOracleManagerAndOperatorQueuer)
@@ -1388,7 +1388,7 @@ describe('Statoblast invariant harness', () => {
 	test('redeemRepFromVault becomes unavailable after the first child-pool redemption', async () => {
 		const attackerClient = createClient(1)
 		await approveAndDepositRepToVault(attackerClient, repDeposit, context.questionId)
-		const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, getRepTokenAddress(genesisUniverse))) / 20n
+		const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, getRepTokenAddress(genesisUniverse))) / 20n
 		await depositRepToVault(client, context.securityPool, 2n * forkThresholdAttoRep)
 		await mockWindow.setTime(context.questionEndDate + 1n)
 		await manipulatePriceOracle(client, mockWindow, getSecurityPoolAddresses(addressString(0n), genesisUniverse, context.questionId, statoblastSecurityMultiplierBps).priceOracleManagerAndOperatorQueuer)

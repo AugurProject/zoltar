@@ -578,7 +578,7 @@ export const contractReferences: ContractReference[] = [
 		purpose: 'Registers universe forks, charges the fork admission haircut, and mints branch-specific child REP.',
 		readAbiFingerprint: 'c908994972ca4e8bcf1a44c288dcc830dc9a8bbb1e0a6f85a55f051d96703887',
 		readSurface:
-			'Use `universes`, `forkThresholdDivisor`, `forkBurnDivisor`, `zoltarQuestionData`, `genesisReputationToken`, `childReputationTokenCount`, `getForkTime`, `forkQuestionMatches`, `getRepToken`, `getForkThresholdAttoRep`, `getNonDecisionThresholdAttoRep`, `getUniverseTheoreticalSupplyAttoRep`, `getChildUniverseId`, `getDeployedChildUniverses`, and `getMigrationRepBalanceAttoRep` to reconstruct universe and migration state. The fork threshold is the live universe theoretical supply divided by `forkThresholdDivisor`, rounded up, so every nonzero-supply universe has a positive fork cost. Construction requires a deployed genesis REP token with theoretical supply from one attoREP through 11 million REP and `forkBurnDivisor >= 5`, which caps the uncredited fork haircut at 20% of the threshold. Genesis REP uses ordinary ERC-20 approvals because the configured mainnet REPv2 token does not implement ERC-2612 or ERC-3009.',
+			'Use `universes`, `forkThresholdDivisor`, `forkBurnDivisor`, `zoltarQuestionData`, `genesisReputationToken`, `childReputationTokenCount`, `getForkTime`, `forkQuestionMatches`, `getRepToken`, `getForkThresholdAttoRep`, `getNonDecisionThresholdAttoRep`, `getUniverseTheoreticalSupplyAttoRep`, `getChildUniverseId`, `getDeployedChildUniverses`, and `getMigrationRepBalanceAttoRep` to reconstruct universe and migration state. The fork threshold is the live universe theoretical supply divided by `forkThresholdDivisor`, rounded up, so every nonzero-supply universe has a positive fork cost. Construction requires a deployed genesis REP token with the REPv2 `getTotalTheoreticalSupply()` selector, theoretical supply from one attoREP through 11 million REP, and `forkBurnDivisor >= 5`, which caps the uncredited fork haircut at 20% of the threshold. Genesis REP uses ordinary ERC-20 approvals because the configured mainnet REPv2 token does not implement ERC-2612 or ERC-3009.',
 		securityBoundary: 'Security boundaries for these calls are [A15 intended question selection](./security-model.html#assumption-a15) and [A25 safe immutable parameters](./security-model.html#assumption-a25).',
 		readDeclarations: [
 			{ name: 'getForkTime' },
@@ -642,9 +642,9 @@ export const contractReferences: ContractReference[] = [
 		name: 'ReputationToken',
 		purpose: 'Implements universe-specific ERC-20 REP, ERC-2612 permits, and ERC-3009 transfers while enforcing the supply ceiling maintained by Zoltar.',
 		readAbiFingerprint: '45de6b2cbe737531d3b96d234678d2005f7801f9df527506e9abcd47da18eaee',
-		readSurface: 'Use `getTotalTheoreticalSupplyAttoRep`, `zoltar`, `universeId`, `repNumber`, the standard ERC-20 `name`, `symbol`, `decimals`, `totalSupply`, `balanceOf`, and `allowance` reads, and authorization reads `nonces`, `DOMAIN_SEPARATOR`, and `authorizationState`.',
+		readSurface: 'Use `getTotalTheoreticalSupply`, `zoltar`, `universeId`, `repNumber`, the standard ERC-20 `name`, `symbol`, `decimals`, `totalSupply`, `balanceOf`, and `allowance` reads, and authorization reads `nonces`, `DOMAIN_SEPARATOR`, and `authorizationState`.',
 		readDeclarations: [
-			{ name: 'getTotalTheoreticalSupplyAttoRep' },
+			{ name: 'getTotalTheoreticalSupply' },
 			{ name: 'name', sourcePath: 'solidity/contracts/ERC20.sol' },
 			{ name: 'symbol', sourcePath: 'solidity/contracts/ERC20.sol' },
 			{ name: 'decimals', sourcePath: 'solidity/contracts/ERC20.sol' },

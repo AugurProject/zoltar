@@ -80,7 +80,7 @@ describe('Statoblast: truth auction', () => {
 		forkUniverse,
 		getMigrationRepBalanceAttoRep,
 		getRepTokenAddress,
-		getTotalTheoreticalSupplyAttoRep,
+		getTotalTheoreticalSupply,
 		getZoltarAddress,
 		getTotalRepPurchasedAttoRep,
 		isIgnorableLogDecodeError,
@@ -215,7 +215,7 @@ describe('Statoblast: truth auction', () => {
 	const setupLongDatedChildAuction = async (titlePrefix: string, forcedSurplusAboveCapacityOwnershipAttoRep?: bigint, purchaseAuctionRep = true, forcedAuctionedBadDebtAttoEth?: bigint) => {
 		const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
-		const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+		const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 		await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 		const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
 		await approveAndDepositRepToVault(passiveRepHolder, 2n * forkThresholdAttoRep, questionId)
@@ -381,7 +381,7 @@ describe('Statoblast: truth auction', () => {
 
 		test('external-fork escalation backing is auctionable before the child game resumes', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
-			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
 			await approveAndDepositRepToVault(passiveRepHolder, 2n * forkThresholdAttoRep, questionId)
@@ -918,7 +918,7 @@ describe('Statoblast: truth auction', () => {
 
 		test('auction claims move cumulative bad debt with capacity ownership independent of claim order', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
-			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
 			await approveAndDepositRepToVault(passiveRepHolder, 2n * forkThresholdAttoRep, questionId)
@@ -1019,7 +1019,7 @@ describe('Statoblast: truth auction', () => {
 			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
 			await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
 			const endTime = await getQuestionEndDate(client, questionId)
-			const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
+			const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 			let vault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 			let vaultAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.repBackingUnits)
 			const requiredVaultAttoRep = 4n * forkThresholdAttoRep
@@ -1053,7 +1053,7 @@ describe('Statoblast: truth auction', () => {
 
 		test('forced ETH before child deployment cannot block the no-auction finalization path', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
-			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			await mockWindow.setTime(endTime + 10000n)
 			const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
@@ -1089,7 +1089,7 @@ describe('Statoblast: truth auction', () => {
 		test('escalation migration remains redeemable after truth auction finalization', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			const winningDeposit = repDeposit / 2n
-			const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
+			const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
 			await approveAndDepositRepToVault(passiveRepHolder, 2n * forkThresholdAttoRep, questionId)
@@ -1184,7 +1184,7 @@ describe('Statoblast: truth auction', () => {
 			await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
 
 			const endTime = await getQuestionEndDate(client, questionId)
-			const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
+			const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
 			await approveAndDepositRepToVault(passiveRepHolder, 2n * forkThresholdAttoRep, questionId)
@@ -1488,7 +1488,7 @@ describe('Statoblast: truth auction', () => {
 
 		test('redeemRepFromVault should stay blocked until the own-fork child pool becomes operational', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
-			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			await mockWindow.setTime(endTime + 10000n)
 			const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
@@ -1515,7 +1515,7 @@ describe('Statoblast: truth auction', () => {
 			await approveAndDepositRepToVault(unmigratedCapacityOwnershipAttoRepHolder, repDeposit, questionId)
 
 			const endTime = await getQuestionEndDate(client, questionId)
-			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			await mockWindow.setTime(endTime + 10000n)
 
@@ -1616,7 +1616,7 @@ describe('Statoblast: truth auction', () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 
 			// Set capacity ownership and deposit extra REP for capacity
-			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
 			await approveAndDepositRepToVault(passiveRepHolder, repDeposit, questionId)
@@ -1679,7 +1679,7 @@ describe('Statoblast: truth auction', () => {
 		test('claimAuctionProceeds releases ETH for a finalized losing bid without mutating vault accounting', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 
-			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
 			await approveAndDepositRepToVault(passiveRepHolder, 2n * forkThresholdAttoRep, questionId)
@@ -1843,7 +1843,7 @@ describe('Statoblast: truth auction', () => {
 		test('claimAuctionProceeds handles a zero-REP finalized refund path when totalAttoRepPurchased is zero', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 
-			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
 			await approveAndDepositRepToVault(passiveRepHolder, 2n * forkThresholdAttoRep, questionId)
@@ -1977,7 +1977,7 @@ describe('Statoblast: truth auction', () => {
 
 			const freshVault = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
 			const childRepToken = await getRepToken(client, yesSecurityPool.securityPool)
-			const supplyBasedMinimumDeposit = (await getTotalTheoreticalSupplyAttoRep(client, childRepToken)) / 100_000n
+			const supplyBasedMinimumDeposit = (await getTotalTheoreticalSupply(client, childRepToken)) / 100_000n
 			const freshDeposit = supplyBasedMinimumDeposit > 10n * 10n ** 18n ? supplyBasedMinimumDeposit : 10n * 10n ** 18n
 			const freshVaultBalanceSlot = formatStorageSlot(getMappingStorageSlot(freshVault.account.address, 0n))
 			await mockWindow.addStateOverrides({
@@ -1997,7 +1997,7 @@ describe('Statoblast: truth auction', () => {
 
 		test('permissionless winner settlement assigns capacity once when an ETH refund is credited', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
-			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 
 			const unmigratedVault = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
@@ -2435,7 +2435,7 @@ describe('Statoblast: truth auction', () => {
 			const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 			await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
 			const endTime = await getQuestionEndDate(client, questionId)
-			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			await mockWindow.setTime(endTime + 10000n)
 
@@ -2513,7 +2513,7 @@ describe('Statoblast: truth auction', () => {
 
 		test('claimAuctionProceeds initializes fee accounting for a newly auction-funded vault at the current pool fee index', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
-			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
 			await approveAndDepositRepToVault(passiveRepHolder, 2n * forkThresholdAttoRep, questionId)
@@ -2564,7 +2564,7 @@ describe('Statoblast: truth auction', () => {
 
 		test('claimAuctionProceeds allows a vault to claim winning bids across multiple calls', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
-			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
 			await approveAndDepositRepToVault(passiveRepHolder, 2n * forkThresholdAttoRep, questionId)
@@ -2614,7 +2614,7 @@ describe('Statoblast: truth auction', () => {
 			const baseSecurityPoolCapacityOwnershipAttoRep = repDeposit / 4n
 			const securityPoolCapacityOwnershipAttoRep = baseSecurityPoolCapacityOwnershipAttoRep - (baseSecurityPoolCapacityOwnershipAttoRep % 3n) + 1n
 
-			const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
 			await approveAndDepositRepToVault(passiveRepHolder, 2n * forkThresholdAttoRep, questionId)

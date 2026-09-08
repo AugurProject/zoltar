@@ -55,7 +55,7 @@ contract ReputationToken is ERC20Authorization {
 		emit Burn(account, valueAttoRep, totalTheoreticalSupplyAttoRep);
 	}
 
-	function getTotalTheoreticalSupplyAttoRep() external view returns (uint256) {
+	function getTotalTheoreticalSupply() external view returns (uint256) {
 		return totalTheoreticalSupplyAttoRep;
 	}
 

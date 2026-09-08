@@ -16,7 +16,7 @@ import {
 	forkUniverse,
 	getMigrationRepBalanceAttoRep,
 	getRepTokenAddress,
-	getTotalTheoreticalSupplyAttoRep,
+	getTotalTheoreticalSupply,
 	getUniverseData,
 	getUniverseTheoreticalSupplyAttoRep,
 	getZoltarAddress,
@@ -28,7 +28,7 @@ import {
 } from '../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion, getAnswerOptionName, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { ensureDefined, strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
-import { ReputationToken_ReputationToken, test_statoblast_FalseReturningERC20_FalseReturningERC20, Zoltar_Zoltar } from '../types/contractArtifact'
+import { ReputationToken_ReputationToken, test_RepV2GenesisMock_RepV2GenesisMock, test_statoblast_FalseReturningERC20_FalseReturningERC20, Zoltar_Zoltar } from '../types/contractArtifact'
 import { formatScalarOutcomeLabel, getScalarOutcomeIndex } from '../testSupport/simulator/utils/contracts/scalarOutcome'
 
 // Forker deposit fraction: the deposit is 5% of total supply (1/20).
@@ -106,7 +106,7 @@ describe('Contract Test Suite', () => {
 			functionName: 'totalSupply',
 			args: [],
 		})
-		const theoreticalSupply = await getTotalTheoreticalSupplyAttoRep(client, addressString(GENESIS_REPUTATION_TOKEN))
+		const theoreticalSupply = await getTotalTheoreticalSupply(client, addressString(GENESIS_REPUTATION_TOKEN))
 		assert.strictEqual(seededBalanceTotal, actualSupply, 'seeded REP balances should equal actual supply')
 		assert.strictEqual(actualSupply, theoreticalSupply, 'seeded REP actual and theoretical supply should match')
 		assert.ok(theoreticalSupply <= 11_000_000n * 10n ** 18n, 'seeded REP supply should remain within the protocol cap')
@@ -163,7 +163,7 @@ describe('Contract Test Suite', () => {
 		const childUniverseId = getChildUniverseId(genesisUniverse, outcomeIndex)
 		const expectedMaximumSupply = parentSupplyBeforeFork - forkHaircut
 		assert.strictEqual(await getUniverseTheoreticalSupplyAttoRep(client, childUniverseId), expectedMaximumSupply, 'child theoretical maximum should exclude the fork admission haircut')
-		assert.strictEqual(await getTotalTheoreticalSupplyAttoRep(client, getRepTokenAddress(childUniverseId)), expectedMaximumSupply, 'child REP token maximum should match the child universe theoretical supply')
+		assert.strictEqual(await getTotalTheoreticalSupply(client, getRepTokenAddress(childUniverseId)), expectedMaximumSupply, 'child REP token maximum should match the child universe theoretical supply')
 	})
 
 	test('constructor rejects an invalid fork threshold divisor', async () => {
@@ -183,6 +183,41 @@ describe('Contract Test Suite', () => {
 			writeContractAndWait(client, () => client.sendTransaction({ data: invalidThresholdDeployment })),
 			/Zoltar fork threshold divisor must be greater than one/,
 		)
+	})
+
+	test('constructor accepts the mainnet REPv2 theoretical-supply selector without authorization extensions', async () => {
+		const theoreticalSupply = 11_000_000n * 10n ** 18n
+		const repDeployment = encodeDeployData({
+			abi: test_RepV2GenesisMock_RepV2GenesisMock.abi,
+			bytecode: `0x${test_RepV2GenesisMock_RepV2GenesisMock.evm.bytecode.object}`,
+			args: [theoreticalSupply],
+		})
+		const repReceipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: repDeployment }) })
+		const repAddress = repReceipt.contractAddress
+		if (repAddress === undefined || repAddress === null) throw new Error('REPv2-compatible genesis deployment address missing')
+
+		const functionNames = new Set<string>(test_RepV2GenesisMock_RepV2GenesisMock.abi.flatMap(item => (item.type === 'function' ? [item.name] : [])))
+		assert.ok(functionNames.has('getTotalTheoreticalSupply'), 'fixture must expose the mainnet REPv2 theoretical-supply selector')
+		for (const unsupportedFunction of ['permit', 'nonces', 'receiveWithAuthorization', 'transferWithAuthorization']) {
+			assert.ok(!functionNames.has(unsupportedFunction), `fixture must not expose ${unsupportedFunction}`)
+		}
+
+		const zoltarQuestionDataAddress = await client.readContract({
+			abi: Zoltar_Zoltar.abi,
+			functionName: 'zoltarQuestionData',
+			address: getZoltarAddress(),
+			args: [],
+		})
+		const zoltarDeployment = encodeDeployData({
+			abi: Zoltar_Zoltar.abi,
+			bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
+			args: [zoltarQuestionDataAddress, repAddress, DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor, DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor],
+		})
+		const zoltarReceipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data: zoltarDeployment }) })
+		const zoltarAddress = zoltarReceipt.contractAddress
+		if (zoltarAddress === undefined || zoltarAddress === null) throw new Error('Zoltar deployment address missing')
+
+		assert.strictEqual(await client.readContract({ abi: Zoltar_Zoltar.abi, address: zoltarAddress, functionName: 'getUniverseTheoreticalSupplyAttoRep', args: [0n] }), theoreticalSupply, 'genesis universe must use mainnet REPv2 theoretical supply')
 	})
 
 	test('constructor rejects an invalid fork burn divisor', async () => {
@@ -458,7 +493,7 @@ describe('Contract Test Suite', () => {
 
 		const preForkUniverseData = await getUniverseData(client, genesisUniverse)
 		const genesisRepToken = getRepTokenAddress(genesisUniverse)
-		const totalTheoreticalSupplyAttoRep = await getTotalTheoreticalSupplyAttoRep(client, genesisRepToken)
+		const totalTheoreticalSupplyAttoRep = await getTotalTheoreticalSupply(client, genesisRepToken)
 		assert.strictEqual(preForkUniverseData.forkTime, 0n, 'Universe was forked already')
 		assert.strictEqual(preForkUniverseData.parentUniverseId, 0n, 'Universe had parent')
 		assert.strictEqual(preForkUniverseData.forkingOutcomeIndex, 0n, 'Universe has forking outcome index')
@@ -629,7 +664,7 @@ describe('Contract Test Suite', () => {
 		strictEqualTypeSafe(secondChildBalance, secondMigrationCredit, 'the second migrator child balance should equal its selected migration amount')
 		strictEqualTypeSafe(childTotalSupply, firstChildBalance + secondChildBalance, 'child REP total supply should equal the aggregate balances minted into that child')
 		assert.ok(childTotalSupply <= childTheoreticalSupply, 'child REP total supply must not exceed the child theoretical maximum')
-		strictEqualTypeSafe(await getTotalTheoreticalSupplyAttoRep(client, childRepToken), childTheoreticalSupply, 'the REP token and universe should expose the same theoretical supply')
+		strictEqualTypeSafe(await getTotalTheoreticalSupply(client, childRepToken), childTheoreticalSupply, 'the REP token and universe should expose the same theoretical supply')
 
 		await splitMigrationRep(client, genesisUniverse, firstMigrationCredit - firstMint, [childOutcome])
 		const finalChildTotalSupply = await client.readContract({
@@ -743,7 +778,7 @@ describe('Contract Test Suite', () => {
 		await splitMigrationRep(client, genesisUniverse, 1n, [1n])
 		const childUniverseId = getChildUniverseId(genesisUniverse, 1n)
 		const childToken = getRepTokenAddress(childUniverseId)
-		const childSupply = await getTotalTheoreticalSupplyAttoRep(client, childToken)
+		const childSupply = await getTotalTheoreticalSupply(client, childToken)
 		const rawSlot = await mockWindow.request({ method: 'eth_getStorageAt', params: [childToken, formatStorageSlot(REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT), 'latest'] })
 		if (typeof rawSlot !== 'string' || !isHex(rawSlot)) throw new Error('Child REP theoretical supply slot missing')
 		assert.strictEqual(BigInt(rawSlot), childSupply, 'child theoretical supply must remain in storage slot 5')
@@ -872,7 +907,7 @@ describe('Contract Test Suite', () => {
 			const deployChildHash = await deployChild(client, genesisUniverse, outcomeIndex)
 			const deployChildReceipt = await client.waitForTransactionReceipt({ hash: deployChildHash })
 			const childUniverseData = await getUniverseData(client, childUniverseId)
-			const childSupply = await getTotalTheoreticalSupplyAttoRep(client, childRepToken)
+			const childSupply = await getTotalTheoreticalSupply(client, childRepToken)
 			const deployChildLog = deployChildReceipt.logs
 				.filter(log => log.address.toLowerCase() === getZoltarAddress().toLowerCase())
 				.map(log =>
@@ -1021,14 +1056,14 @@ describe('Contract Test Suite', () => {
 
 		await forkUniverse(client, genesisUniverse, questionId)
 		await deployChild(client, genesisUniverse, 0n)
-		const earlyChildSupply = await getTotalTheoreticalSupplyAttoRep(client, getRepTokenAddress(getChildUniverseId(genesisUniverse, 0)))
+		const earlyChildSupply = await getTotalTheoreticalSupply(client, getRepTokenAddress(getChildUniverseId(genesisUniverse, 0)))
 
 		const remainingRepBalance = await getERC20Balance(client, getRepTokenAddress(genesisUniverse), client.account.address)
 		const additionalMigrationAmount = remainingRepBalance / 10n
 		await addRepToMigrationBalance(client, genesisUniverse, additionalMigrationAmount)
 
 		await deployChild(client, genesisUniverse, 1n)
-		const lateChildSupply = await getTotalTheoreticalSupplyAttoRep(client, getRepTokenAddress(getChildUniverseId(genesisUniverse, 1)))
+		const lateChildSupply = await getTotalTheoreticalSupply(client, getRepTokenAddress(getChildUniverseId(genesisUniverse, 1)))
 
 		assert.ok(earlyChildSupply > 0n, 'early child supply should remain positive')
 		assert.ok(lateChildSupply > 0n, 'late child supply should remain positive')
