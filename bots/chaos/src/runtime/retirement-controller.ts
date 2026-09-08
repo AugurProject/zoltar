@@ -29,7 +29,7 @@ export function createRetirementController(options: RetirementControllerOptions)
 					unwrapWeth: rawPolicies['unwrapWeth'] === true,
 				}
 				if (!Number.isSafeInteger(policies.maximumExitLossBps) || policies.maximumExitLossBps < 0 || policies.maximumExitLossBps > 10_000) throw new Error('maximumExitLossBps must be an integer from 0 through 10000')
-				requestRetirement(candidateState.retirement, options.state.profileId, getAddress(String(body['recipient'])), policies, String(body['confirmation']))
+				requestRetirement(candidateState.retirement, options.state.profileId, getAddress(String(body['recipient'])), policies, String(body['confirmation']), options.state.signerAddress)
 				recordActivity(candidateState, { message: `Drain & Retire requested for ${options.state.profileId}`, status: 'info', type: 'configuration' })
 			} else if (action === 'cancel') {
 				exactKeys(body, ['action', 'confirmation'], 'Retirement update')

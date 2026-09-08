@@ -15,6 +15,7 @@ describe('retirement CLI', () => {
 	test('rejects missing confirmation and invalid maximum loss', () => {
 		expect(() => parseRunCommand(['--drain', '0x1'])).toThrow('--confirm')
 		expect(() => parseRunCommand(['--drain', '0x1', '--exit-unmatched-shares=10001', '--confirm', 'x'])).toThrow('10000')
+		expect(() => parseRunCommand(['--drain', '0x0000000000000000000000000000000000000000', '--confirm', 'x'])).toThrow('zero address')
 	})
 
 	test('supports status, cancellation, residual acceptance, and verified V3 registration', () => {

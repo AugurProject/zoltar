@@ -56,7 +56,7 @@ function position(status: DurableV3Position['status'] = 'active'): DurableV3Posi
 
 function request(retirement = initialRetirementState()) {
 	const recipient = address(99)
-	requestRetirement(retirement, 'profile:test', recipient, DEFAULT_RETIREMENT_POLICIES, `DRAIN profile:test TO ${recipient}`, now)
+	requestRetirement(retirement, 'profile:test', recipient, DEFAULT_RETIREMENT_POLICIES, `DRAIN profile:test TO ${recipient}`, address(1), now)
 	return retirement
 }
 
@@ -105,8 +105,15 @@ function evaluation(operation: OperationPlan): EvaluatedOperation {
 describe('Drain & Retire state', () => {
 	test('requires profile- and recipient-bound confirmation', () => {
 		const retirement = initialRetirementState()
-		expect(() => requestRetirement(retirement, 'profile:test', address(99), DEFAULT_RETIREMENT_POLICIES, 'DRAIN')).toThrow()
+		expect(() => requestRetirement(retirement, 'profile:test', address(99), DEFAULT_RETIREMENT_POLICIES, 'DRAIN', address(1))).toThrow()
 		expect(retirement.status).toBe('inactive')
+	})
+
+	test('rejects zero and durable-signer retirement recipients', () => {
+		const signer = address(1)
+		const zero = address(0)
+		expect(() => requestRetirement(initialRetirementState(), 'profile:test', zero, DEFAULT_RETIREMENT_POLICIES, `DRAIN profile:test TO ${zero}`, undefined)).toThrow('zero address')
+		expect(() => requestRetirement(initialRetirementState(), 'profile:test', signer, DEFAULT_RETIREMENT_POLICIES, `DRAIN profile:test TO ${signer}`, signer)).toThrow('durable signer')
 	})
 
 	test('persists the requested policy and recipient', () => {
@@ -140,6 +147,16 @@ describe('Drain & Retire state', () => {
 })
 
 describe('Drain & Retire planning', () => {
+	test('fails closed before planning a self or zero-address sweep', () => {
+		const snapshot = emptySnapshot()
+		snapshot.wallet.ethBalanceAttoEth = '100'
+		const limits = { maximumEthAttoEth: 10n, maximumGasCostAttoEth: 1n, maximumRepAttoRep: 10n, minimumEthReserveAttoEth: 1n }
+		for (const recipient of [address(0), snapshot.wallet.address]) {
+			const retirement = { ...request(), recipient }
+			expect(() => buildAssetSweepPlan(snapshot, retirement, 1, limits)).toThrow('unsafe retirement recipient')
+			expect(() => buildNativeOpenOracleCreditPlan({ ...snapshot, wallet: { ...snapshot.wallet, openOracleEthCredit: '2' } }, retirement, 1)).toThrow('unsafe retirement recipient')
+		}
+	})
 	test('persists a canonical assessment before returning from a paused process cycle', async () => {
 		const snapshot = emptySnapshot()
 		snapshot.wallet.ethBalanceAttoEth = '0'

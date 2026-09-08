@@ -1,4 +1,4 @@
-import { getAddress, keccak256, type Address, type Hash, type Hex } from '@zoltar/bot-shared/ethereum'
+import { getAddress, keccak256, zeroAddress, type Address, type Hash, type Hex } from '@zoltar/bot-shared/ethereum'
 
 type RetirementStatus = 'inactive' | 'requested' | 'draining' | 'waiting' | 'blocked' | 'drained' | 'drained-with-residuals'
 
@@ -105,6 +105,11 @@ export function initialRetirementState(): DurableRetirementState {
 		status: 'inactive',
 		policies: { ...DEFAULT_RETIREMENT_POLICIES },
 	}
+}
+
+export function assertSafeRetirementRecipient(recipient: Address, signerAddress: Address | undefined) {
+	if (recipient.toLowerCase() === zeroAddress) throw new Error('Retirement recipient must not be the zero address')
+	if (signerAddress !== undefined && recipient.toLowerCase() === signerAddress.toLowerCase()) throw new Error('Retirement recipient must not be the durable signer')
 }
 
 export function uniswapV3PositionKey(owner: Address, tickLower: number, tickUpper: number) {
@@ -233,7 +238,7 @@ function parseCompletionEvidence(value: unknown): RetirementCompletionEvidence {
 	}
 }
 
-export function parseRetirementState(value: unknown): DurableRetirementState {
+export function parseRetirementState(value: unknown, signerAddress: Address | undefined): DurableRetirementState {
 	const retirement = record(value, 'retirement')
 	exactKeys(retirement, ['blockers', 'policies', 'positions', 'recoveredBalances', 'status'], ['cancelledAt', 'completionEvidence', 'finalSweepStartedAt', 'lastObservedBalances', 'profileReplacementOverride', 'recipient', 'requestedAt', 'updatedAt'], 'retirement')
 	const status = retirement['status']
@@ -262,6 +267,8 @@ export function parseRetirementState(value: unknown): DurableRetirementState {
 		exactKeys(rawOverride, legacyOverride ? ['acceptedAt', 'reason', 'targetProfileId'] : ['acceptedAt', 'completionBlockHash', 'completionBlockNumber', 'reason', 'recipient', 'sourceProfileId', 'targetProfileId'], [], 'retirement.profileReplacementOverride')
 	}
 	const completionEvidence = retirement['completionEvidence'] === undefined ? undefined : parseCompletionEvidence(retirement['completionEvidence'])
+	const recipient = retirement['recipient'] === undefined ? undefined : getAddress(String(retirement['recipient']))
+	if (recipient !== undefined) assertSafeRetirementRecipient(recipient, signerAddress)
 	let profileReplacementOverride: RetirementProfileReplacementOverride | undefined
 	if (rawOverride !== undefined && !legacyOverride) {
 		const completionBlockHash = rawOverride['completionBlockHash']
@@ -294,7 +301,7 @@ export function parseRetirementState(value: unknown): DurableRetirementState {
 			throw new Error('Residual profile replacement override does not match current completion evidence')
 		}
 		if (Date.parse(profileReplacementOverride.acceptedAt) < Date.parse(completionEvidence.completedAt)) throw new Error('Residual profile replacement override predates current completion evidence')
-		if (retirement['recipient'] === undefined || profileReplacementOverride.recipient.toLowerCase() !== getAddress(String(retirement['recipient'])).toLowerCase()) {
+		if (recipient === undefined || profileReplacementOverride.recipient.toLowerCase() !== recipient.toLowerCase()) {
 			throw new Error('Residual profile replacement override does not match the retirement recipient')
 		}
 	}
@@ -306,7 +313,7 @@ export function parseRetirementState(value: unknown): DurableRetirementState {
 		lastObservedBalances,
 		positions,
 		...(profileReplacementOverride === undefined ? {} : { profileReplacementOverride }),
-		...(retirement['recipient'] === undefined ? {} : { recipient: getAddress(String(retirement['recipient'])) }),
+		...(recipient === undefined ? {} : { recipient }),
 		recoveredBalances,
 		...(retirement['requestedAt'] === undefined ? {} : { requestedAt: timestamp(retirement['requestedAt'], 'retirement.requestedAt') }),
 		status: status as RetirementStatus,
@@ -335,8 +342,9 @@ export function acceptResidualProfileReplacement(state: DurableRetirementState, 
 	state.updatedAt = now
 }
 
-export function requestRetirement(state: DurableRetirementState, profileId: string, recipient: Address, policies: RetirementPolicies, confirmation: string, now = new Date().toISOString()) {
+export function requestRetirement(state: DurableRetirementState, profileId: string, recipient: Address, policies: RetirementPolicies, confirmation: string, signerAddress: Address | undefined, now = new Date().toISOString()) {
 	if (state.status !== 'inactive') throw new Error(`Retirement cannot be requested while ${state.status}`)
+	assertSafeRetirementRecipient(recipient, signerAddress)
 	if (confirmation !== `DRAIN ${profileId} TO ${recipient}`) throw new Error(`Confirmation must exactly match DRAIN ${profileId} TO ${recipient}`)
 	state.status = 'requested'
 	state.recipient = recipient

@@ -1179,7 +1179,7 @@ async function loadDurableStateFile(path: string, expectedChainId: number, files
 		pendingTransactions,
 		profileId: identifier(state['profileId'], 'profileId'),
 		protocolIndex,
-		retirement: storedVersion === 3 || state['retirement'] === undefined ? initialRetirementState() : parseRetirementState(state['retirement']),
+		retirement: storedVersion === 3 || state['retirement'] === undefined ? initialRetirementState() : parseRetirementState(state['retirement'], signerAddress),
 		safetyPaused: state['safetyPaused'],
 		scheduler: parseScheduler(state['scheduler']),
 		signerAddress,

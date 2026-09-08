@@ -1,11 +1,11 @@
 #!/usr/bin/env bun
 
-import { getAddress } from '@zoltar/bot-shared/ethereum'
+import { getAddress, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
 import { assertSettingsProfileIsolation, loadSettings } from '../config/settings.ts'
 import { acquireChaosProcessLocksForShutdown, ChaosProcessLockAcquisitionError, createChaosShutdownController, type ChaosProcessLocks } from '../core/process-locks.ts'
 import { executionProfileId, runChaosOperator } from '../runtime/operator.ts'
 import { loadDurableState, saveDurableState } from '../state/operator-state.ts'
-import { acceptResidualProfileReplacement, cancelRetirement, DEFAULT_RETIREMENT_POLICIES, registerV3Position, requestRetirement } from '../state/retirement.ts'
+import { acceptResidualProfileReplacement, assertSafeRetirementRecipient, cancelRetirement, DEFAULT_RETIREMENT_POLICIES, registerV3Position, requestRetirement } from '../state/retirement.ts'
 
 function errorMessage(error: unknown) {
 	return error instanceof Error ? error.message : String(error)
@@ -42,6 +42,7 @@ export function parseRunCommand(args: readonly string[]): RunCommand {
 	const lossArgument = args.find(argument => argument.startsWith('--exit-unmatched-shares='))
 	const maximumExitLossBps = lossArgument === undefined ? 0 : Number(lossArgument.slice('--exit-unmatched-shares='.length))
 	if (!Number.isSafeInteger(maximumExitLossBps) || maximumExitLossBps < 0 || maximumExitLossBps > 10_000) throw new Error('Unmatched-share loss must be an integer from 0 through 10000 bps')
+	assertSafeRetirementRecipient(getAddress(args[1]), undefined)
 	return {
 		confirmation,
 		exitAfterCompletion: args.includes('--exit-after-completion'),
@@ -62,12 +63,16 @@ async function applyRetirementCommand(command: Exclude<RunCommand, { kind: 'oper
 	const profileId = executionProfileId(loaded.settings)
 	if (state.profileId !== profileId) throw new Error(`Durable state belongs to ${state.profileId}, not configured profile ${profileId}`)
 	if (command.kind === 'request-drain') {
+		const recipient = getAddress(command.recipient)
+		const configuredSigner = loaded.settings.privateKey === undefined ? undefined : privateKeyToAccount(loaded.settings.privateKey).address
+		assertSafeRetirementRecipient(recipient, configuredSigner)
 		requestRetirement(
 			state.retirement,
 			profileId,
-			getAddress(command.recipient),
+			recipient,
 			{ ...DEFAULT_RETIREMENT_POLICIES, exitAfterCompletion: command.exitAfterCompletion, exitUnmatchedShares: command.exitUnmatchedShares, maximumExitLossBps: command.maximumExitLossBps, migrateExistingClaims: command.migrateExistingClaims },
 			command.confirmation,
+			state.signerAddress,
 		)
 	} else if (command.kind === 'cancel-drain') {
 		cancelRetirement(state.retirement, command.confirmation)

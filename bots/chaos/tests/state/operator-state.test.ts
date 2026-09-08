@@ -340,6 +340,21 @@ describe('chaos-bot durable state', () => {
 		expect((await loadDurableState(path, 1)).retirement.lastObservedBalances).toEqual({})
 	})
 
+	test('fails closed when persisted retirement state targets zero or the durable signer', async () => {
+		const path = await statePath()
+		const signer = getAddress('0x0000000000000000000000000000000000000099')
+		const state = initialDurableState(1, true, 'profile:test', signer)
+		await saveDurableState(path, state)
+		const stored = JSON.parse(await readFile(path, 'utf8')) as { retirement: Record<string, unknown> }
+		stored.retirement['status'] = 'requested'
+		stored.retirement['requestedAt'] = createdAt
+		for (const recipient of [getAddress('0x0000000000000000000000000000000000000000'), signer]) {
+			stored.retirement['recipient'] = recipient
+			await writeFile(path, `${JSON.stringify(stored)}\n`)
+			await expect(loadDurableState(path, 1)).rejects.toThrow(recipient === signer ? 'durable signer' : 'zero address')
+		}
+	})
+
 	test('persists proof-bound residual replacement acceptance and discards the legacy unbound shape', async () => {
 		const path = await statePath()
 		const state = initialDurableState(1)

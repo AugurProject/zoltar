@@ -329,4 +329,22 @@ describe('Drain & Retire on a local chain', () => {
 		expect((await owner.getBalance({ address: recipient })) - recipientBefore).toBe(10n ** 18n)
 		expect(await owner.getBalance({ address: owner.account.address })).toBeGreaterThan(10n ** 18n)
 	})
+
+	test('never builds zero-address transfers or repeated self-sweeps on a local chain', async () => {
+		const owner = createWriteClient(requiredNode().anvilWindowEthereum, TEST_ADDRESSES[2], 2)
+		const snapshot = snapshotFixture()
+		snapshot.wallet.address = owner.account.address
+		snapshot.wallet.ethBalanceAttoEth = (2n * 10n ** 18n).toString()
+		snapshot.wallet.openOracleEthCredit = '2'
+		const before = await owner.getBalance({ address: owner.account.address })
+		const limits = { maximumEthAttoEth: 10n ** 18n, maximumGasCostAttoEth: 1n, maximumRepAttoRep: 10n ** 18n, minimumEthReserveAttoEth: 1n }
+		for (const recipient of [address(0), owner.account.address]) {
+			const retirement = { ...initialRetirementState(), recipient, status: 'draining' as const }
+			expect(() => buildAssetSweepPlan(snapshot, retirement, 1, limits)).toThrow('unsafe retirement recipient')
+			expect(() => buildAssetSweepPlan(snapshot, retirement, 2, limits)).toThrow('unsafe retirement recipient')
+			expect(() => buildNativeOpenOracleCreditPlan(snapshot, retirement, 3)).toThrow('unsafe retirement recipient')
+		}
+		expect(await owner.getBalance({ address: owner.account.address })).toBe(before)
+		expect(await owner.getBalance({ address: address(0) })).toBe(0n)
+	})
 })

@@ -4,7 +4,7 @@ import { retirementErc20TransferAbi, retirementUniswapV3PositionAbi } from '../c
 import { encodeStep, planBase } from '../operations/planning.ts'
 import { buildRetirementLiquidityRemovalPlan } from '../operations/retirement-liquidity.ts'
 import type { EcosystemSnapshot, EvaluatedOperation, OperationPlan, PlanningOptions } from '../operations/types.ts'
-import { uniswapV3PositionKey, type DurableRetirementState, type DurableV3Position, type RetirementBlocker, type RetirementResidual } from '../state/retirement.ts'
+import { assertSafeRetirementRecipient, uniswapV3PositionKey, type DurableRetirementState, type DurableV3Position, type RetirementBlocker, type RetirementResidual } from '../state/retirement.ts'
 import type { DurableState } from '../state/operator-state.ts'
 import type { RetirementAssessment, RetirementProofCounts, V3PositionAnchor, V3PositionObservation, V3PositionReader } from './retirement-types.ts'
 import { CLAIM_LINKED_MIGRATIONS, operationAllowedDuringRetirement } from './retirement-operation-policy.ts'
@@ -276,6 +276,11 @@ export function buildAllowanceRevocationPlan(snapshot: EcosystemSnapshot, seed: 
 
 export function buildNativeOpenOracleCreditPlan(snapshot: EcosystemSnapshot, retirement: DurableRetirementState, seed: number): OperationPlan | undefined {
 	if (retirement.recipient === undefined) return undefined
+	try {
+		assertSafeRetirementRecipient(retirement.recipient, snapshot.wallet.address)
+	} catch (error) {
+		throw new Error(`Cannot plan with unsafe retirement recipient: ${error instanceof Error ? error.message : String(error)}`)
+	}
 	const credit = BigInt(snapshot.wallet.openOracleEthCredit)
 	if (credit <= 1n) return undefined
 	const amount = credit - 1n
@@ -316,6 +321,11 @@ type RetirementSweepLimits = {
 
 export function buildAssetSweepPlan(snapshot: EcosystemSnapshot, retirement: DurableRetirementState, seed: number, limits?: RetirementSweepLimits): OperationPlan | undefined {
 	if (!retirement.policies.sweepAssets || retirement.recipient === undefined || limits === undefined) return undefined
+	try {
+		assertSafeRetirementRecipient(retirement.recipient, snapshot.wallet.address)
+	} catch (error) {
+		throw new Error(`Cannot plan with unsafe retirement recipient: ${error instanceof Error ? error.message : String(error)}`)
+	}
 	const weth = snapshot.wallet.tokens.find(token => token.address.toLowerCase() === snapshot.deployments.weth.toLowerCase())
 	if (retirement.policies.unwrapWeth && weth !== undefined && BigInt(weth.balance) > 0n) {
 		const amount = BigInt(weth.balance) < limits.maximumEthAttoEth ? BigInt(weth.balance) : limits.maximumEthAttoEth

@@ -44,7 +44,8 @@ function liveSettings() {
 
 function requestedState(snapshot: EcosystemSnapshot) {
 	const durable = initialDurableState(snapshot.chainId, false, 'profile:test', snapshot.wallet.address)
-	requestRetirement(durable.retirement, durable.profileId, snapshot.wallet.address, DEFAULT_RETIREMENT_POLICIES, `DRAIN ${durable.profileId} TO ${snapshot.wallet.address}`)
+	const recipient = address(99)
+	requestRetirement(durable.retirement, durable.profileId, recipient, DEFAULT_RETIREMENT_POLICIES, `DRAIN ${durable.profileId} TO ${recipient}`, snapshot.wallet.address)
 	return initialRuntimeState(false, snapshot.wallet.address, snapshot.chainId, durable)
 }
 
