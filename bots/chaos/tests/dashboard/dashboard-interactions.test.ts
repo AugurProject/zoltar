@@ -21,6 +21,7 @@ const browserTest = existsSync(chromium) ? test : test.skip
 const chromiumStartupTimeoutMilliseconds = 30_000
 const chromiumShutdownTimeoutMilliseconds = 2_000
 const chromiumCommandTimeoutMilliseconds = 10_000
+const chromiumStderrMaximumCharacters = 16_384
 const transientChromiumConnectionErrorCodes = new Set(['ECONNREFUSED', 'ECONNRESET', 'ConnectionRefused', 'ConnectionReset'])
 const transactionHash = `0x${'12'.repeat(32)}`
 const candidateHash = `0x${'34'.repeat(32)}`
@@ -238,6 +239,7 @@ type DashboardChromium = {
 
 type ChromiumStderrCapture = {
 	cancel: () => void
+	snapshot: () => string
 	text: Promise<string>
 }
 
@@ -248,21 +250,30 @@ type ChromiumStopResult = {
 }
 
 function captureChromiumStderr(stream: ReadableStream<Uint8Array> | null): ChromiumStderrCapture {
-	if (stream === null) return { cancel: () => {}, text: Promise.resolve('') }
+	if (stream === null) return { cancel: () => {}, snapshot: () => '', text: Promise.resolve('') }
 	const reader = stream.getReader()
 	let cancelled = false
+	let output = ''
+	const append = (chunk: string) => {
+		output += chunk
+		if (output.length > chromiumStderrMaximumCharacters) output = output.slice(-chromiumStderrMaximumCharacters)
+	}
 	const text = (async () => {
 		const decoder = new TextDecoder()
-		let output = ''
 		try {
 			while (true) {
 				const chunk = await reader.read()
-				if (chunk.done) return output + decoder.decode()
-				output += decoder.decode(chunk.value, { stream: true })
+				if (chunk.done) {
+					append(decoder.decode())
+					return output
+				}
+				append(decoder.decode(chunk.value, { stream: true }))
 			}
 		} catch (error) {
 			const diagnostic = cancelled ? '' : `Chromium stderr read failed: ${error instanceof Error ? error.message : String(error)}`
-			return output + (diagnostic === '' ? '' : `${diagnostic}\n`) + decoder.decode()
+			if (diagnostic !== '') append(`${diagnostic}\n`)
+			append(decoder.decode())
+			return output
 		}
 	})()
 	return {
@@ -271,6 +282,7 @@ function captureChromiumStderr(stream: ReadableStream<Uint8Array> | null): Chrom
 			cancelled = true
 			void reader.cancel().catch(() => {})
 		},
+		snapshot: () => output,
 		text,
 	}
 }
@@ -301,6 +313,18 @@ function throwCombinedErrors(primaryError: unknown, primaryThrown: boolean, clea
 	const result = combinedErrors(primaryError, primaryThrown, cleanupErrors, message)
 	if (result.failed) throw result.error
 }
+
+test('bounds Chromium stderr diagnostics when the stream never completes', async () => {
+	const capture = captureChromiumStderr(
+		new ReadableStream<Uint8Array>({
+			start: controller => controller.enqueue(new TextEncoder().encode('x'.repeat(chromiumStderrMaximumCharacters * 2))),
+		}),
+	)
+	await Bun.sleep(1)
+	expect(capture.snapshot()).toHaveLength(chromiumStderrMaximumCharacters)
+	capture.cancel()
+	expect(await capture.text).toHaveLength(chromiumStderrMaximumCharacters)
+})
 
 async function readChromiumDebuggingPort(userDataDirectory: string) {
 	try {
@@ -339,7 +363,7 @@ async function stopChromium(chromiumProcess: DashboardChromium): Promise<Chromiu
 		shutdownError = error
 	}
 	chromiumProcess.stderr.cancel()
-	const stderr = await Promise.race([chromiumProcess.stderr.text.then(text => ({ complete: true as const, text })), Bun.sleep(chromiumShutdownTimeoutMilliseconds).then(() => ({ complete: false as const, text: '' }))])
+	const stderr = await Promise.race([chromiumProcess.stderr.text.then(text => ({ complete: true as const, text })), Bun.sleep(chromiumShutdownTimeoutMilliseconds).then(() => ({ complete: false as const, text: chromiumProcess.stderr.snapshot() }))])
 	if (!stderr.complete) chromiumProcess.stderr.cancel()
 	stderrText = stderr.text
 	let profileCleanupError: unknown
