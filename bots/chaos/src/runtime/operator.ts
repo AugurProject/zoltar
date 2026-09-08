@@ -1,3 +1,4 @@
+import { migrateEmptyBootstrapState } from '../state/bootstrap-migration.ts'
 import { runtimeTopologySummary } from './topology-summary.ts'
 export { runtimeTopologySummary } from './topology-summary.ts'
 import { deploymentAvailabilityNotice, recordUnavailableDeploymentScan } from './deployment-availability.ts'
@@ -669,7 +670,7 @@ async function handleCycleFailure(error: unknown, configuration: ConfigurationSt
 
 export async function runChaosOperator(loaded: LoadedConfiguration, locks: ChaosProcessLocks, shutdown: ChaosShutdownController) {
 	const initialWallet = configuredWallet(loaded.settings)
-	const state = await loadRuntimeState(loaded.settings.runtime.stateFile, loaded.settings.paused, initialWallet, loaded.settings.network.chainId)
+	const state = migrateEmptyBootstrapState(await loadRuntimeState(loaded.settings.runtime.stateFile, loaded.settings.paused, initialWallet, loaded.settings.network.chainId), loaded.settings)
 	const initialProfileId = executionProfileId(loaded.settings)
 	assertDurableSignerScope(state, initialWallet, loaded.settings.runtime.stateFile)
 	const initialCarryProfileResetAuthorized = await resetPristineStateForDeploymentProfile(state, initialProfileId, loaded.settings.paused, initialWallet, loaded.settings.runtime.stateFile, async evidence => verifyRetirementCompletionFinality(loaded.settings, evidence))

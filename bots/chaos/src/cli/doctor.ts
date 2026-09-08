@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 
+import { migrateEmptyBootstrapState } from '../state/bootstrap-migration.ts'
 import { requireDeployedContracts } from '../../../shared/src/monitoring/deployed-contracts.js'
 import { access, lstat } from 'node:fs/promises'
 import { constants } from 'node:fs'
@@ -440,7 +441,7 @@ async function runChaosDoctorWithLoaded(loaded: LoadedDoctorSettings, dependenci
 	const locks = await dependencies.acquireLocks(loaded.settings)
 	try {
 		const configuredSigner = loaded.settings.privateKey === undefined ? undefined : privateKeyToAccount(loaded.settings.privateKey).address
-		const durableState = await dependencies.loadState(loaded.settings.runtime.stateFile, loaded.settings.network.chainId)
+		const durableState = migrateEmptyBootstrapState(await dependencies.loadState(loaded.settings.runtime.stateFile, loaded.settings.network.chainId), loaded.settings)
 		const durableScope = assertDoctorDurableStateScope(loaded.settings, durableState, configuredSigner)
 		const companionState = await dependencies.validateCompanionState(loaded.settings)
 		const submissionChecks = await dependencies.preflightSubmission(loaded.settings)
