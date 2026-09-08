@@ -41,6 +41,7 @@
 		"nanoid": "3.3.18",
 		"postcss": "8.5.23",
 		"tmp": "0.2.7",
+		"vitest": "4.1.11",
 		"ws": "8.21.0",
 		"@zoltar/core-shared": "file:shared/core",
 		"@zoltar/open-oracle-shared": "file:shared/openOracle",
