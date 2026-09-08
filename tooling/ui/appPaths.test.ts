@@ -13,7 +13,7 @@ test('UI_APP_IDS lists exactly the supported applications', () => {
 test('getUiAppDependencyOrder preserves the UI package DAG', () => {
 	expect(getUiAppDependencyOrder('zoltar')).toEqual(['coreShared', 'zoltarShared', 'zoltar'])
 	expect(getUiAppDependencyOrder('statoblast')).toEqual(['coreShared', 'zoltarShared', 'statoblastShared', 'statoblast'])
-	expect(getUiAppDependencyOrder('trading')).toEqual(['coreShared', 'zoltarShared', 'statoblastShared', 'tradingShared', 'trading'])
+	expect(getUiAppDependencyOrder('trading')).toEqual(['coreShared', 'zoltarShared', 'statoblastShared', 'trading'])
 })
 
 test('isUiAppId accepts supported applications and rejects unknown values', () => {

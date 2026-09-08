@@ -21,12 +21,12 @@ describe('UI build dependency direction', () => {
 		if (buildAppsScript === undefined) throw new Error('ui:build:apps script is missing')
 		expect(buildAppsScript).toBe('bun ./tooling/repo/run-project-tasks.mts build --group ui && bun run projects:workers')
 		const uiProjects = projectsInTaskGroup('build', 'ui').map(project => project.id)
-		expect(createProjectTaskPlan('build', uiProjects).map(entry => entry.projectId)).toEqual(['ui-core', 'ui-zoltar-shared', 'ui-statoblast-shared', 'ui-trading-shared', 'ui-zoltar', 'ui-statoblast', 'ui-trading'])
+		expect(createProjectTaskPlan('build', uiProjects).map(entry => entry.projectId)).toEqual(['ui-core', 'ui-zoltar-shared', 'ui-statoblast-shared', 'ui-zoltar', 'ui-statoblast', 'ui-trading'])
 	})
 
 	test('targeted application preparation compiles each dependency once and builds only requested workers', () => {
 		const commands = getAppBuildCommands(['zoltar', 'statoblast', 'trading'])
-		expect(commands.filter(command => command[0] === 'x').map(command => command[3])).toEqual(['coreShared', 'zoltarShared', 'zoltar', 'statoblastShared', 'statoblast', 'tradingShared', 'trading'].map(packageId => `ui/${packageId}/tsconfig.json`))
+		expect(commands.filter(command => command[0] === 'x').map(command => command[3])).toEqual(['coreShared', 'zoltarShared', 'zoltar', 'statoblastShared', 'statoblast', 'trading'].map(packageId => `ui/${packageId}/tsconfig.json`))
 		expect(commands.filter(command => command[0]?.endsWith('/vendor.mts') === true)).toEqual([
 			['./tooling/ui/vendor.mts', 'zoltar'],
 			['./tooling/ui/vendor.mts', 'statoblast'],
@@ -80,7 +80,6 @@ describe('UI build dependency direction', () => {
 		const coreSharedPackage = JSON.parse(fs.readFileSync(`${uiRoot}/coreShared/package.json`, 'utf8')) as { dependencies?: Record<string, string> }
 		const zoltarSharedPackage = JSON.parse(fs.readFileSync(`${uiRoot}/zoltarShared/package.json`, 'utf8')) as { dependencies?: Record<string, string> }
 		const statoblastSharedPackage = JSON.parse(fs.readFileSync(`${uiRoot}/statoblastShared/package.json`, 'utf8')) as { dependencies?: Record<string, string> }
-		const tradingSharedPackage = JSON.parse(fs.readFileSync(`${uiRoot}/tradingShared/package.json`, 'utf8')) as { dependencies?: Record<string, string> }
 		const zoltarPackage = JSON.parse(fs.readFileSync(`${uiRoot}/zoltar/package.json`, 'utf8')) as { dependencies?: Record<string, string> }
 		const statoblastPackage = JSON.parse(fs.readFileSync(`${uiRoot}/statoblast/package.json`, 'utf8')) as { dependencies?: Record<string, string> }
 		const tradingPackage = JSON.parse(fs.readFileSync(`${uiRoot}/trading/package.json`, 'utf8')) as { dependencies?: Record<string, string> }
@@ -88,7 +87,6 @@ describe('UI build dependency direction', () => {
 		for (const dependency of ['@zoltar/ui-zoltar', '@zoltar/ui-statoblast', '@zoltar/ui-trading']) expect(coreSharedPackage.dependencies?.[dependency]).toBeUndefined()
 		expect(zoltarSharedPackage.dependencies?.['@zoltar/ui-core-shared']).toBeDefined()
 		expect(statoblastSharedPackage.dependencies?.['@zoltar/ui-zoltar-shared']).toBeDefined()
-		expect(tradingSharedPackage.dependencies?.['@zoltar/shared']).toBeDefined()
 		expect(zoltarPackage.dependencies?.['@zoltar/ui-core-shared']).toBeDefined()
 		expect(zoltarPackage.dependencies?.['@zoltar/ui-zoltar-shared']).toBeDefined()
 		for (const dependency of ['@zoltar/ui-statoblast', '@zoltar/ui-trading']) expect(zoltarPackage.dependencies?.[dependency]).toBeUndefined()
@@ -100,7 +98,7 @@ describe('UI build dependency direction', () => {
 		expect(tradingPackage.dependencies?.['@zoltar/ui-core-shared']).toBeDefined()
 		expect(tradingPackage.dependencies?.['@zoltar/ui-zoltar-shared']).toBeDefined()
 		expect(tradingPackage.dependencies?.['@zoltar/ui-statoblast-shared']).toBeDefined()
-		expect(tradingPackage.dependencies?.['@zoltar/ui-trading-shared']).toBeDefined()
+		expect(tradingPackage.dependencies?.['@zoltar/shared']).toBeDefined()
 		expect(tradingPackage.dependencies?.['@zoltar/ui-zoltar']).toBeUndefined()
 		expect(tradingPackage.dependencies?.['@zoltar/ui-statoblast']).toBeUndefined()
 		expect(tradingPackage.dependencies?.['@zoltar/trading']).toBeUndefined()
@@ -109,7 +107,7 @@ describe('UI build dependency direction', () => {
 	test('watch mode starts every TypeScript project required by the selected app', () => {
 		expect(getUiAppDependencyOrder('zoltar')).toEqual(['coreShared', 'zoltarShared', 'zoltar'])
 		expect(getUiAppDependencyOrder('statoblast')).toEqual(['coreShared', 'zoltarShared', 'statoblastShared', 'statoblast'])
-		expect(getUiAppDependencyOrder('trading')).toEqual(['coreShared', 'zoltarShared', 'statoblastShared', 'tradingShared', 'trading'])
+		expect(getUiAppDependencyOrder('trading')).toEqual(['coreShared', 'zoltarShared', 'statoblastShared', 'trading'])
 	})
 
 	test('Trading watch mode rebuilds shared SDK and main contract outputs and reloads app CSS', () => {

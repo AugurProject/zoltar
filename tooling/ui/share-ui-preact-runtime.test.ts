@@ -33,15 +33,3 @@ test('UI frozen installs share the repository Preact runtime', async () => {
 test('non-UI installs are left unchanged', () => {
 	expect(shareUiPreactRuntime(path.join(tmpdir(), 'zoltar', 'shared'))).toBeFalse()
 })
-
-test('runtime-neutral UI shared-library installs do not require Preact', async () => {
-	const repositoryRoot = await mkdtemp(path.join(tmpdir(), 'zoltar-ui-runtime-neutral-'))
-	const sharedLibraryRoot = path.join(repositoryRoot, 'ui', 'tradingShared')
-	try {
-		await mkdir(sharedLibraryRoot, { recursive: true })
-		await writeFile(path.join(sharedLibraryRoot, 'package.json'), `${JSON.stringify({ dependencies: { '@zoltar/shared': 'file:../../shared' } })}\n`)
-		expect(shareUiPreactRuntime(sharedLibraryRoot)).toBeFalse()
-	} finally {
-		await rm(repositoryRoot, { recursive: true, force: true })
-	}
-})

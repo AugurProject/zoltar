@@ -128,7 +128,6 @@ const PACKAGE_ALIASES = new Map([
 	['@zoltar/ui-core-shared/', 'ui/coreShared/ts/'],
 	['@zoltar/ui-statoblast-shared/', 'ui/statoblastShared/ts/'],
 	['@zoltar/ui-zoltar-shared/', 'ui/zoltarShared/ts/'],
-	['@zoltar/ui-trading-shared', 'ui/tradingShared/ts/index.ts'],
 ])
 
 type PackageImportMap = ReadonlyMap<string, ReadonlyMap<string, string>>

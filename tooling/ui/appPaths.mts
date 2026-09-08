@@ -5,14 +5,13 @@ import { projectDependencyClosure, projects } from '../repo/projects.ts'
 
 export const UI_APP_IDS = ['zoltar', 'statoblast', 'trading'] as const
 export type UiAppId = (typeof UI_APP_IDS)[number]
-export type UiPackageId = 'coreShared' | 'zoltarShared' | 'statoblastShared' | 'tradingShared' | UiAppId
+export type UiPackageId = 'coreShared' | 'zoltarShared' | 'statoblastShared' | UiAppId
 
 const UI_PROJECT_ID_BY_PACKAGE_ID: Readonly<Record<UiPackageId, string>> = {
 	coreShared: 'ui-core',
 	statoblast: 'ui-statoblast',
 	statoblastShared: 'ui-statoblast-shared',
 	trading: 'ui-trading',
-	tradingShared: 'ui-trading-shared',
 	zoltar: 'ui-zoltar',
 	zoltarShared: 'ui-zoltar-shared',
 }

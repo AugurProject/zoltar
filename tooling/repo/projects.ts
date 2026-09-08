@@ -74,7 +74,7 @@ export const projects: readonly Project[] = [
 		id: 'repository',
 		path: '.',
 		type: 'repository',
-		dependencies: ['shared', 'contracts', 'ui-core', 'ui-zoltar-shared', 'ui-statoblast-shared', 'ui-trading-shared', 'ui-zoltar', 'ui-statoblast', 'ui-trading'],
+		dependencies: ['shared', 'contracts', 'ui-core', 'ui-zoltar-shared', 'ui-statoblast-shared', 'ui-zoltar', 'ui-statoblast', 'ui-trading'],
 		tasks: {
 			setup: { command: ['bun', './tooling/repo/install-frozen.mts'], cwd: '.', inputs: ['package.json', 'bun.lock'], cacheInputs: ['package.json', 'bun.lock'] },
 			test: rootTask(['bun', 'run', 'test'], ['package.json', 'bun.lock', 'bun-test-setup*.ts', 'tooling/testing/**', 'shared/ts/**', 'solidity/ts/**', 'ui/*/ts/**'], ['complete-validation']),
@@ -164,21 +164,6 @@ export const projects: readonly Project[] = [
 		ci: { scope: 'core', artifactOutputs: ['ui/statoblastShared/js'] },
 	},
 	{
-		id: 'ui-trading-shared',
-		path: 'ui/tradingShared',
-		type: 'ui-library',
-		dependencies: ['shared'],
-		tasks: {
-			setup: packageInstallTask('ui/tradingShared'),
-			build: packageTask('ui/tradingShared', 'build', { groups: ['ui'], outputs: ['ui/tradingShared/js'] }),
-			typecheck: packageTask('ui/tradingShared', 'typecheck'),
-			audit: packageAuditTask('ui/tradingShared', ['core-audit']),
-			'dependency-update': sharedDependencyTask('ui/tradingShared'),
-		},
-		generatedDirectories: ['ui/tradingShared/js'],
-		ci: { scope: 'core', artifactOutputs: ['ui/tradingShared/js'] },
-	},
-	{
 		id: 'ui-zoltar',
 		path: 'ui/zoltar',
 		type: 'ui-app',
@@ -218,7 +203,7 @@ export const projects: readonly Project[] = [
 		id: 'ui-trading',
 		path: 'ui/trading',
 		type: 'ui-app',
-		dependencies: ['shared', 'ui-core', 'ui-zoltar-shared', 'ui-statoblast-shared', 'ui-trading-shared'],
+		dependencies: ['shared', 'ui-core', 'ui-zoltar-shared', 'ui-statoblast-shared'],
 		tasks: {
 			setup: packageInstallTask('ui/trading'),
 			build: { ...packageTask('ui/trading', 'build', { groups: ['ui'], outputs: ['ui/trading/js'] }), command: ['bun', 'x', 'tsc', '--project', 'tsconfig.json'] },

@@ -16,7 +16,6 @@ const APPLICATION_TIMING_CONTEXT_PATHS = [
 	'ui/coreShared/bun.lock',
 	'ui/zoltarShared/bun.lock',
 	'ui/statoblastShared/bun.lock',
-	'ui/tradingShared/bun.lock',
 	'ui/statoblast/bun.lock',
 	'ui/trading/bun.lock',
 	'ui/zoltar/bun.lock',

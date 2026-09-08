@@ -4,7 +4,7 @@ import * as url from 'node:url'
 import * as ts from 'typescript'
 
 const projectRoot = path.join(path.dirname(url.fileURLToPath(import.meta.url)), '..', '..')
-const uiPackageIds = ['coreShared', 'zoltarShared', 'statoblastShared', 'tradingShared', 'zoltar', 'statoblast', 'trading'] as const
+const uiPackageIds = ['coreShared', 'zoltarShared', 'statoblastShared', 'zoltar', 'statoblast', 'trading'] as const
 const uiSourceRoots = uiPackageIds.map(packageId => path.join(projectRoot, 'ui', packageId, 'ts'))
 
 export type UiLayerBoundaryFinding = {
@@ -19,17 +19,16 @@ function isWithin(candidatePath: string, directoryPath: string) {
 	return candidatePath === directoryPath || candidatePath.startsWith(`${directoryPath}/`)
 }
 
-const appPackagePattern = /^ui\/(coreShared|zoltarShared|statoblastShared|tradingShared|zoltar|statoblast|trading)\/ts(?:\/|$)/
+const appPackagePattern = /^ui\/(coreShared|zoltarShared|statoblastShared|zoltar|statoblast|trading)\/ts(?:\/|$)/
 const packageAliases: Record<string, string> = {
 	'@zoltar/ui-core-shared': 'coreShared',
 	'@zoltar/ui-zoltar-shared': 'zoltarShared',
 	'@zoltar/ui-statoblast-shared': 'statoblastShared',
-	'@zoltar/ui-trading-shared': 'tradingShared',
 	'@zoltar/ui-zoltar': 'zoltar',
 	'@zoltar/ui-statoblast': 'statoblast',
 	'@zoltar/ui-trading': 'trading',
 }
-const sharedLibraryPackageIds = new Set(['zoltarShared', 'statoblastShared', 'tradingShared'])
+const sharedLibraryPackageIds = new Set(['zoltarShared', 'statoblastShared'])
 const sharedLibraryPublicExports = new Map(
 	Object.entries(packageAliases)
 		.filter(([, packageId]) => sharedLibraryPackageIds.has(packageId))
@@ -42,10 +41,9 @@ const allowedCrossPackageImports: Record<string, readonly string[]> = {
 	coreShared: [],
 	zoltarShared: ['coreShared'],
 	statoblastShared: ['coreShared', 'zoltarShared'],
-	tradingShared: [],
 	zoltar: ['coreShared', 'zoltarShared'],
 	statoblast: ['coreShared', 'zoltarShared', 'statoblastShared'],
-	trading: ['coreShared', 'zoltarShared', 'statoblastShared', 'tradingShared'],
+	trading: ['coreShared', 'zoltarShared', 'statoblastShared'],
 }
 
 function getViolatedRule(sourcePath: string, specifier: string): UiLayerBoundaryFinding['rule'] | undefined {

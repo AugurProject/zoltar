@@ -50,15 +50,12 @@ for (const appId of UI_APP_IDS) {
 		if (appId === 'statoblast' || appId === 'trading') expect(imports['@zoltar/ui-statoblast-shared/']).toBe('/ui/statoblastShared/js/')
 		else expect(imports['@zoltar/ui-statoblast-shared/']).toBeUndefined()
 		if (appId === 'trading') {
-			expect(imports['@zoltar/ui-trading-shared']).toBe('/ui/tradingShared/js/index.js')
-			expect(imports['@zoltar/ui-trading-shared/']).toBe('/ui/tradingShared/js/')
 			expect(imports['@zoltar/shared/trading/math']).toBe('../shared/js/trading/math.js')
 			expect(imports['@zoltar/shared/trading/positions']).toBe('../shared/js/trading/positions.js')
 			expect(imports['@zoltar/shared/trading/transactions']).toBe('../shared/js/trading/transactions.js')
-		} else {
-			expect(imports['@zoltar/ui-trading-shared']).toBeUndefined()
-			expect(imports['@zoltar/ui-trading-shared/']).toBeUndefined()
 		}
+		expect(imports['@zoltar/ui-trading-shared']).toBeUndefined()
+		expect(imports['@zoltar/ui-trading-shared/']).toBeUndefined()
 
 		for (const mappedPath of Object.values(imports)) {
 			expect(mappedPath.endsWith(',') || mappedPath.endsWith('}')).toBe(false)

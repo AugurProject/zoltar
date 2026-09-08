@@ -40,8 +40,8 @@ test('keeps runnable applications as dependency leaves behind shared-library API
 	expect(findUiLayerBoundaryViolations('ui/statoblast/ts/app/App.tsx', "import { helper } from '@zoltar/ui-zoltar/protocol/core.js'").map(finding => finding.rule)).toEqual(['cross-package-import-boundary'])
 	expect(findUiLayerBoundaryViolations('ui/statoblast/ts/app/App.tsx', "import { helper } from '@zoltar/ui-zoltar-shared/protocol/core.js'")).toEqual([])
 	expect(findUiLayerBoundaryViolations('ui/trading/ts/app/App.tsx', "import { helper } from '@zoltar/ui-statoblast/app/App.js'").map(finding => finding.rule)).toEqual(['cross-package-import-boundary'])
-	expect(findUiLayerBoundaryViolations('ui/trading/ts/app/App.tsx', "import { helper } from '@zoltar/ui-statoblast-shared/protocol/index.js'")).toEqual([])
-	expect(findUiLayerBoundaryViolations('ui/trading/ts/features/LivePortfolio.tsx', "import { maximumInsuredExit } from '@zoltar/ui-trading-shared'")).toEqual([])
+	expect(findUiLayerBoundaryViolations('ui/trading/ts/app/App.tsx', "import { helper } from '@zoltar/ui-statoblast-shared/protocol/trading.js'")).toEqual([])
+	expect(findUiLayerBoundaryViolations('ui/trading/ts/features/LivePortfolio.tsx', "import { maximumInsuredExit } from '@zoltar/shared/trading/positions'")).toEqual([])
 })
 
 test('prevents shared libraries from reaching back into applications', () => {
@@ -55,7 +55,7 @@ test('requires cross-package imports to use an explicitly exported shared-librar
 })
 
 test('shared libraries expose intentional entry points instead of wildcard internals', () => {
-	for (const packageId of ['zoltarShared', 'statoblastShared', 'tradingShared']) {
+	for (const packageId of ['zoltarShared', 'statoblastShared']) {
 		const manifest = JSON.parse(readFileSync(`ui/${packageId}/package.json`, 'utf8')) as { exports: Record<string, unknown> }
 		expect(Object.keys(manifest.exports).some(exportPath => exportPath.includes('*'))).toBe(false)
 	}
