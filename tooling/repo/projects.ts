@@ -64,7 +64,6 @@ const sharedDependencyTask = (projectPath: string): ProjectTask => ({
 const rootTask = (command: readonly string[], inputs: readonly string[], groups?: readonly string[]): ProjectTask => ({ command, cwd: '.', inputs, ...(groups === undefined ? {} : { groups }) })
 
 const botAudit = ['bun', 'audit'] as const
-const augurScanAudit = ['bun', 'audit', '--ignore', 'GHSA-52f5-9888-hmc6', '--ignore', 'GHSA-ph9p-34f9-6g65'] as const
 
 /**
  * Canonical repository project graph. Package boundaries remain independent:
@@ -316,7 +315,7 @@ export const projects: readonly Project[] = [
 			check: packageTask('augurScan', 'check', { covers: ['lint'] }),
 			lint: packageTask('augurScan', 'check'),
 			typecheck: packageTask('augurScan', 'typecheck'),
-			audit: { ...packageTask('augurScan', 'audit'), command: augurScanAudit },
+			audit: packageAuditTask('augurScan'),
 			'dependency-update': sharedDependencyTask('augurScan'),
 			integration: { ...packageTask('augurScan', 'test:integration'), inputs: ['shared/**', 'augurScan/schema.sql', 'augurScan/migrations/**', 'augurScan/config/**', 'augurScan/src/**', 'augurScan/tests/**', 'augurScan/scripts/**', 'augurScan/package.json', 'augurScan/bun.lock', 'augurScan/tsconfig.json'] },
 		},

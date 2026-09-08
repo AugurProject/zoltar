@@ -41,7 +41,7 @@ test('registered AugurScan CI runs its complete non-database suite while bots av
 	expect(augurScanPlan.map(entry => entry.command.slice(0, 3))).toEqual([
 		['bun', 'run', 'test:ci'],
 		['bun', 'run', 'check'],
-		['bun', 'audit', '--ignore'],
+		['bun', 'audit'],
 	])
 	expect(createComponentCiPlan('chaos').map(entry => entry.command.slice(0, 3))).toEqual([
 		['bun', 'run', 'check'],
