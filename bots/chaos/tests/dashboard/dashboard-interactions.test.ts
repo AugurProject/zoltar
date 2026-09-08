@@ -1,6 +1,5 @@
 import { existsSync } from 'node:fs'
-import { mkdtemp, rm } from 'node:fs/promises'
-import { createServer } from 'node:net'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test } from 'bun:test'
@@ -19,6 +18,10 @@ type RecoveryScenario = {
 
 const chromium = process.env['CHROMIUM_PATH'] ?? '/usr/bin/chromium'
 const browserTest = existsSync(chromium) ? test : test.skip
+const chromiumStartupTimeoutMilliseconds = 30_000
+const chromiumShutdownTimeoutMilliseconds = 2_000
+const chromiumCommandTimeoutMilliseconds = 10_000
+const transientChromiumConnectionErrorCodes = new Set(['ECONNREFUSED', 'ECONNRESET', 'ConnectionRefused', 'ConnectionReset'])
 const transactionHash = `0x${'12'.repeat(32)}`
 const candidateHash = `0x${'34'.repeat(32)}`
 const cancellationHash = `0x${'56'.repeat(32)}`
@@ -225,37 +228,163 @@ const pausedWorkflowRenderingState = { ...workflowRenderingState, paused: true }
 const degradedWorkflowRenderingState = { ...workflowRenderingState, rpcEndpointHealth: [...degradedReadRpcHealth, ...degradedPrivateSubmissionHealth] }
 const staleSubmissionWorkflowRenderingState = { ...workflowRenderingState, rpcEndpointHealth: [...readRpcHealth, ...stalePrivateSubmissionHealth] }
 
-async function availablePort() {
-	const listener = createServer()
-	await new Promise<void>((resolve, reject) => {
-		listener.once('error', reject)
-		listener.listen(0, '127.0.0.1', resolve)
-	})
-	const address = listener.address()
-	if (address === null || typeof address === 'string') throw new Error('Could not allocate a Chromium debugging port')
-	await new Promise<void>((resolve, reject) => listener.close(error => (error === undefined ? resolve() : reject(error))))
-	return address.port
+type DashboardChromium = {
+	browser: ReturnType<typeof Bun.spawn>
+	debuggingPort: number
+	stderr: ChromiumStderrCapture
+	startupDeadline: number
+	userDataDirectory: string
 }
 
-async function connectToChromium(port: number) {
-	let tabs: unknown
-	for (let attempt = 0; attempt < 400; attempt += 1) {
+type ChromiumStderrCapture = {
+	cancel: () => void
+	text: Promise<string>
+}
+
+function captureChromiumStderr(stream: ReadableStream<Uint8Array> | null): ChromiumStderrCapture {
+	if (stream === null) return { cancel: () => {}, text: Promise.resolve('') }
+	const reader = stream.getReader()
+	let cancelled = false
+	const text = (async () => {
+		const decoder = new TextDecoder()
+		let output = ''
 		try {
-			const response: unknown = await fetch(`http://127.0.0.1:${port.toString()}/json/list`).then(value => value.json())
-			if (Array.isArray(response) && response.length > 0) {
-				tabs = response
-				break
+			while (true) {
+				const chunk = await reader.read()
+				if (chunk.done) return output + decoder.decode()
+				output += decoder.decode(chunk.value, { stream: true })
 			}
+		} catch {
+			return output + decoder.decode()
+		}
+	})()
+	return {
+		cancel: () => {
+			if (cancelled) return
+			cancelled = true
+			void reader.cancel().catch(() => {})
+		},
+		text,
+	}
+}
+
+function isTransientChromiumConnectionError(error: unknown) {
+	const visited = new Set<object>()
+	let current = error
+	while (typeof current === 'object' && current !== null && !visited.has(current)) {
+		visited.add(current)
+		const code = Reflect.get(current, 'code')
+		if (typeof code === 'string' && transientChromiumConnectionErrorCodes.has(code)) return true
+		current = Reflect.get(current, 'cause')
+	}
+	return false
+}
+
+async function readChromiumDebuggingPort(userDataDirectory: string) {
+	try {
+		const activePort = await readFile(join(userDataDirectory, 'DevToolsActivePort'), 'utf8')
+		const port = Number.parseInt(activePort.split('\n')[0] ?? '', 10)
+		return Number.isInteger(port) && port > 0 ? port : undefined
+	} catch (error) {
+		if (typeof error === 'object' && error !== null && Reflect.get(error, 'code') === 'ENOENT') return undefined
+		throw error
+	}
+}
+
+async function waitForChromiumExit(browser: ReturnType<typeof Bun.spawn>, timeoutMilliseconds: number) {
+	if (browser.exitCode !== null || browser.signalCode !== null) return true
+	return await Promise.race([browser.exited.then(() => true), Bun.sleep(timeoutMilliseconds).then(() => false)])
+}
+
+async function removeChromiumProfile(userDataDirectory: string) {
+	const removal = await Promise.race([rm(userDataDirectory, { force: true, recursive: true }).then(() => true), Bun.sleep(chromiumShutdownTimeoutMilliseconds).then(() => false)])
+	if (!removal) throw new Error('Chromium profile cleanup timed out')
+}
+
+async function stopChromium(chromiumProcess: DashboardChromium) {
+	try {
+		chromiumProcess.browser.kill()
+		if (!(await waitForChromiumExit(chromiumProcess.browser, chromiumShutdownTimeoutMilliseconds))) {
+			chromiumProcess.browser.kill('SIGKILL')
+			if (!(await waitForChromiumExit(chromiumProcess.browser, chromiumShutdownTimeoutMilliseconds))) throw new Error('Chromium did not exit after SIGKILL')
+		}
+		await chromiumProcess.browser.exited
+		const stderr = await Promise.race([chromiumProcess.stderr.text.then(text => ({ complete: true as const, text })), Bun.sleep(chromiumShutdownTimeoutMilliseconds).then(() => ({ complete: false as const, text: '' }))])
+		if (!stderr.complete) chromiumProcess.stderr.cancel()
+		return stderr.text
+	} finally {
+		chromiumProcess.stderr.cancel()
+		await removeChromiumProfile(chromiumProcess.userDataDirectory)
+	}
+}
+
+async function launchChromium(userDataDirectoryPrefix: string): Promise<DashboardChromium> {
+	const userDataDirectory = await mkdtemp(join(tmpdir(), userDataDirectoryPrefix))
+	let browser: ReturnType<typeof Bun.spawn>
+	try {
+		browser = Bun.spawn([chromium, '--headless=new', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0', `--user-data-dir=${userDataDirectory}`, 'about:blank'], { stderr: 'pipe', stdout: 'ignore' })
+	} catch (error) {
+		try {
+			await removeChromiumProfile(userDataDirectory)
+		} catch {
+			// Preserve the Chromium spawn failure; profile cleanup is best effort here.
+		}
+		throw error
+	}
+	const stderr = captureChromiumStderr(typeof browser.stderr === 'object' && browser.stderr !== null ? browser.stderr : null)
+	const startupDeadline = Date.now() + chromiumStartupTimeoutMilliseconds
+	const chromiumProcess = { browser, debuggingPort: 0, stderr, startupDeadline, userDataDirectory }
+	try {
+		while (Date.now() < startupDeadline) {
+			if (browser.exitCode !== null || browser.signalCode !== null) throw new Error('Chromium exited before publishing its DevTools port')
+			const debuggingPort = await readChromiumDebuggingPort(userDataDirectory)
+			if (debuggingPort !== undefined) return { ...chromiumProcess, debuggingPort }
+			await Bun.sleep(50)
+		}
+		throw new Error('Chromium did not publish its DevTools port')
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error)
+		let diagnostics = ''
+		try {
+			diagnostics = await stopChromium(chromiumProcess)
+		} catch {
+			// Preserve the startup failure; the profile cleanup still runs in stopChromium.
+		}
+		const suffix = diagnostics.trim() === '' ? '' : `: ${diagnostics.trim()}`
+		throw new Error(`${message}${suffix}`)
+	}
+}
+
+async function connectToChromium(port: number, browser: ReturnType<typeof Bun.spawn>, startupDeadline: number) {
+	let tab: unknown
+	while (Date.now() < startupDeadline) {
+		if (browser.exitCode !== null || browser.signalCode !== null) throw new Error('Chromium exited before a debugging tab became available')
+		const requestController = new AbortController()
+		let requestTimedOut = false
+		const requestTimeout = setTimeout(
+			() => {
+				requestTimedOut = true
+				requestController.abort()
+			},
+			Math.max(1, startupDeadline - Date.now()),
+		)
+		try {
+			const response: unknown = await fetch(`http://127.0.0.1:${port.toString()}/json/list`, { signal: requestController.signal }).then(value => value.json())
+			if (Array.isArray(response)) tab = response.find(candidate => typeof candidate === 'object' && candidate !== null && typeof Reflect.get(candidate, 'webSocketDebuggerUrl') === 'string')
+			if (tab !== undefined) break
 		} catch (error) {
-			if (!(error instanceof Error) || Reflect.get(error, 'code') !== 'ConnectionRefused') throw error
+			if (requestTimedOut) break
+			if (!isTransientChromiumConnectionError(error)) throw error
+		} finally {
+			clearTimeout(requestTimeout)
 		}
 		await Bun.sleep(50)
 	}
-	if (!Array.isArray(tabs) || tabs.length === 0) throw new Error('Chromium debugging tab did not become available')
-	const debuggerUrl = Reflect.get(tabs[0], 'webSocketDebuggerUrl')
+	if (tab === undefined) throw new Error('Chromium debugging tab did not become available')
+	const debuggerUrl = Reflect.get(tab, 'webSocketDebuggerUrl')
 	if (typeof debuggerUrl !== 'string') throw new Error('Chromium tab is missing a debugger URL')
 	const socket = new WebSocket(debuggerUrl)
-	const pending = new Map<number, { reject: (error: Error) => void; resolve: (value: unknown) => void }>()
+	const pending = new Map<number, { reject: (error: Error) => void; resolve: (value: unknown) => void; timeout: ReturnType<typeof setTimeout> }>()
 	let requestId = 0
 	socket.addEventListener('message', event => {
 		const response: unknown = JSON.parse(String(event.data))
@@ -265,6 +394,7 @@ async function connectToChromium(port: number) {
 		const callback = pending.get(responseId)
 		if (callback === undefined) return
 		pending.delete(responseId)
+		clearTimeout(callback.timeout)
 		const responseError = Reflect.get(response, 'error')
 		if (responseError === undefined) callback.resolve(Reflect.get(response, 'result'))
 		else {
@@ -272,24 +402,64 @@ async function connectToChromium(port: number) {
 			callback.reject(new Error(typeof message === 'string' ? message : 'CDP command failed'))
 		}
 	})
+	socket.addEventListener('close', () => {
+		const error = new Error('Chromium debugger connection closed')
+		for (const [pendingId, callback] of pending) {
+			pending.delete(pendingId)
+			clearTimeout(callback.timeout)
+			callback.reject(error)
+		}
+	})
 	await new Promise<void>((resolve, reject) => {
-		socket.addEventListener('open', () => resolve(), { once: true })
-		socket.addEventListener('error', () => reject(new Error('Chromium debugger connection failed')), { once: true })
+		let settled = false
+		const finish = (error?: Error) => {
+			if (settled) return
+			settled = true
+			clearTimeout(timeout)
+			if (error === undefined) resolve()
+			else reject(error)
+		}
+		const timeout = setTimeout(
+			() => {
+				socket.close()
+				finish(new Error('Chromium debugger connection timed out'))
+			},
+			Math.max(1, startupDeadline - Date.now()),
+		)
+		socket.addEventListener('open', () => finish(), { once: true })
+		socket.addEventListener('error', () => finish(new Error('Chromium debugger connection failed')), { once: true })
+		socket.addEventListener('close', () => finish(new Error('Chromium debugger connection closed')), { once: true })
 	})
 	const command = (method: string, params: Record<string, unknown> = {}) =>
 		new Promise<unknown>((resolve, reject) => {
 			requestId += 1
-			pending.set(requestId, { reject, resolve })
-			socket.send(JSON.stringify({ id: requestId, method, params }))
+			const currentRequestId = requestId
+			const timeout = setTimeout(() => {
+				pending.delete(currentRequestId)
+				reject(new Error(`Chromium CDP command ${method} timed out`))
+			}, chromiumCommandTimeoutMilliseconds)
+			pending.set(currentRequestId, { reject, resolve, timeout })
+			try {
+				socket.send(JSON.stringify({ id: currentRequestId, method, params }))
+			} catch (error) {
+				pending.delete(currentRequestId)
+				clearTimeout(timeout)
+				reject(error)
+			}
 		})
-	await command('Runtime.enable')
-	await command('Page.enable')
-	const evaluate = async (expression: string) => {
-		const response = await command('Runtime.evaluate', { awaitPromise: true, expression, returnByValue: true })
-		const result = typeof response === 'object' && response !== null ? Reflect.get(response, 'result') : undefined
-		return typeof result === 'object' && result !== null ? Reflect.get(result, 'value') : undefined
+	try {
+		await command('Runtime.enable')
+		await command('Page.enable')
+		const evaluate = async (expression: string) => {
+			const response = await command('Runtime.evaluate', { awaitPromise: true, expression, returnByValue: true })
+			const result = typeof response === 'object' && response !== null ? Reflect.get(response, 'result') : undefined
+			return typeof result === 'object' && result !== null ? Reflect.get(result, 'value') : undefined
+		}
+		return { command, evaluate, socket }
+	} catch (error) {
+		socket.close()
+		throw error
 	}
-	return { command, evaluate, socket }
 }
 
 browserTest(
@@ -378,12 +548,11 @@ browserTest(
 		})
 		const dashboardPort = dashboard.port
 		if (dashboardPort === undefined) throw new Error('Dashboard interaction fixture did not expose a port')
-		const debuggingPort = await availablePort()
-		const userDataDirectory = await mkdtemp(join(tmpdir(), 'chaos-dashboard-chromium-'))
-		const browser = Bun.spawn([chromium, '--headless', '--no-sandbox', '--disable-gpu', `--remote-debugging-port=${debuggingPort.toString()}`, `--user-data-dir=${userDataDirectory}`, 'about:blank'], { stderr: 'ignore', stdout: 'ignore' })
+		let chromiumProcess: DashboardChromium | undefined
 		let socket: WebSocket | undefined
 		try {
-			const cdp = await connectToChromium(debuggingPort)
+			chromiumProcess = await launchChromium('chaos-dashboard-chromium-')
+			const cdp = await connectToChromium(chromiumProcess.debuggingPort, chromiumProcess.browser, chromiumProcess.startupDeadline)
 			socket = cdp.socket
 			await cdp.command('Network.enable')
 			const waitFor = async (expression: string, message: string) => {
@@ -1689,10 +1858,11 @@ browserTest(
 			}
 		} finally {
 			socket?.close()
-			browser.kill()
-			await browser.exited
-			dashboard.stop(true)
-			await rm(userDataDirectory, { force: true, recursive: true })
+			try {
+				if (chromiumProcess !== undefined) await stopChromium(chromiumProcess)
+			} finally {
+				dashboard.stop(true)
+			}
 		}
 	},
 	60_000,
@@ -1730,12 +1900,11 @@ browserTest(
 			},
 			setWorkflow: () => {},
 		})
-		const debuggingPort = await availablePort()
-		const userDataDirectory = await mkdtemp(join(tmpdir(), 'chaos-dashboard-indeterminate-chromium-'))
-		const browser = Bun.spawn([chromium, '--headless', '--no-sandbox', '--disable-gpu', `--remote-debugging-port=${debuggingPort.toString()}`, `--user-data-dir=${userDataDirectory}`, 'about:blank'], { stderr: 'ignore', stdout: 'ignore' })
+		let chromiumProcess: DashboardChromium | undefined
 		let socket: WebSocket | undefined
 		try {
-			const cdp = await connectToChromium(debuggingPort)
+			chromiumProcess = await launchChromium('chaos-dashboard-indeterminate-chromium-')
+			const cdp = await connectToChromium(chromiumProcess.debuggingPort, chromiumProcess.browser, chromiumProcess.startupDeadline)
 			socket = cdp.socket
 			await cdp.command('Network.enable')
 			const waitFor = async (expression: string, message: string) => {
@@ -1784,13 +1953,14 @@ browserTest(
 			expect(await cdp.evaluate("document.querySelector('#pause-button')?.disabled === true && document.querySelector('#settings-fields')?.disabled === true && document.querySelector('#signer-fields')?.disabled === true")).toBe(true)
 		} finally {
 			socket?.close()
-			browser.kill()
-			await browser.exited
-			dashboard.stop(true)
-			await rm(userDataDirectory, { force: true, recursive: true })
+			try {
+				if (chromiumProcess !== undefined) await stopChromium(chromiumProcess)
+			} finally {
+				dashboard.stop(true)
+			}
 		}
 	},
-	30_000,
+	60_000,
 )
 
 test('recovery dashboard source has no generic manual-load fallback', async () => {

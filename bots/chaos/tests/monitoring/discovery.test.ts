@@ -1253,7 +1253,7 @@ describe('anchored ecosystem discovery', () => {
 		const client = new Proxy({} as ChaosReadClient, {
 			get(_target, property) {
 				if (property === 'readContract') {
-						return async (parameters: { args?: readonly AbiValue[]; functionName: string }) => {
+					return async (parameters: { args?: readonly AbiValue[]; functionName: string }) => {
 						if (parameters.functionName !== 'previewDepositOnOutcome') throw new Error(`Unexpected read ${parameters.functionName}`)
 						previews.push(parameters.args ?? [])
 						const outcome = parameters.args?.[0]
@@ -1263,7 +1263,7 @@ describe('anchored ecosystem discovery', () => {
 					}
 				}
 				if (property === 'simulateContract') {
-						return async (parameters: { args?: readonly AbiValue[]; functionName: string }) => {
+					return async (parameters: { args?: readonly AbiValue[]; functionName: string }) => {
 						if (parameters.functionName !== 'depositRepOnOutcome') throw new Error(`Unexpected simulation ${parameters.functionName}`)
 						simulations.push(parameters.args ?? [])
 						return { result: undefined }
@@ -1287,7 +1287,7 @@ describe('anchored ecosystem discovery', () => {
 		const client = new Proxy({} as ChaosReadClient, {
 			get(_target, property) {
 				if (property === 'readContract') {
-						return async (parameters: { args?: readonly AbiValue[] }) => {
+					return async (parameters: { args?: readonly AbiValue[] }) => {
 						const requested = parameters.args?.[1]
 						if (typeof requested !== 'bigint') throw new Error('Direct quote amount missing')
 						return [requested - 1n, requested - 1n] as const
@@ -1534,7 +1534,7 @@ describe('anchored ecosystem discovery', () => {
 		const client = new Proxy({} as ChaosReadClient, {
 			get(_target, property) {
 				if (property === 'readContract') {
-						return async (parameters: { args?: readonly AbiValue[]; functionName: string }) => {
+					return async (parameters: { args?: readonly AbiValue[]; functionName: string }) => {
 						if (parameters.functionName === 'getActiveStagedOperationCount') return 2n
 						if (parameters.functionName === 'getPendingSettlementOperationIds') return []
 						if (parameters.functionName === 'getActiveStagedOperations') {
@@ -1551,7 +1551,7 @@ describe('anchored ecosystem discovery', () => {
 					}
 				}
 				if (property === 'simulateContract') {
-						return async (parameters: { account?: Address; functionName: string; args?: readonly AbiValue[] }) => {
+					return async (parameters: { account?: Address; functionName: string; args?: readonly AbiValue[] }) => {
 						simulations.push(parameters)
 						if (simulationFailure !== undefined) throw simulationFailure
 						return { result: undefined }
