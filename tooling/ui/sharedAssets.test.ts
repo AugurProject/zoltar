@@ -406,11 +406,7 @@ test('shared browser import maps and required assets follow package export outpu
 		}
 	}
 
-	const exportedArtifacts = new Set(
-		Object.values(sharedPackageJson.exports).flatMap(packageExport =>
-			packageExport.default === undefined ? [] : [`shared/${packageExport.default.replace(/^\.\//, '')}`],
-		),
-	)
+	const exportedArtifacts = new Set(Object.values(sharedPackageJson.exports).flatMap(packageExport => (packageExport.default === undefined ? [] : [`shared/${packageExport.default.replace(/^\.\//, '')}`])))
 	for (const relativePath of sharedBrowserArtifactRelativePaths) {
 		expect(exportedArtifacts.has(relativePath), `${relativePath} is a current package export output`).toBe(true)
 	}
