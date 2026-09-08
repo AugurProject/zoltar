@@ -46,6 +46,7 @@ test('documentation landing keeps global navigation compact and omits a redundan
 	const shell = await loadShell('http://localhost/docs/documentation.html')
 	try {
 		expect(document.body.classList.contains('docs-landing-page')).toBeTrue()
+		expect(document.querySelector('.docs-brand-mark')?.getAttribute('aria-hidden')).toBe('true')
 		expect(document.querySelectorAll('.docs-navigation-section[open]')).toHaveLength(0)
 		expect(document.querySelector('.docs-right')?.hasAttribute('hidden')).toBeTrue()
 		expect(document.querySelector('.docs-mobile-outline')).toBeNull()

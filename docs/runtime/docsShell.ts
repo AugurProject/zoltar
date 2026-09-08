@@ -65,7 +65,9 @@
 	const topbar = element('header', 'docs-topbar')
 	const brand = element('a', 'docs-brand')
 	brand.href = docsUrl('documentation.html')
-	brand.append(element('span', 'docs-brand-mark', 'A'), element('span', '', 'Augur documentation'))
+	const brandMark = element('span', 'docs-brand-mark', 'A')
+	brandMark.setAttribute('aria-hidden', 'true')
+	brand.append(brandMark, element('span', '', 'Augur documentation'))
 
 	const actions = element('div', 'docs-top-actions')
 	const menuButton = element('button', 'docs-icon-button', '☰')
