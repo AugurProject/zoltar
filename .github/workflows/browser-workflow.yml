@@ -3,7 +3,6 @@ name: Production Browser Workflow
 on:
   workflow_dispatch:
   pull_request:
-    branches: [main]
   push:
     branches: [main]
 
@@ -21,6 +20,8 @@ env:
 jobs:
   browser-smoke:
     name: Production browser smoke
+    # Automatic smoke coverage is owned by CI Gate.
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

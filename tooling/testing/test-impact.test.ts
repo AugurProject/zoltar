@@ -9,6 +9,9 @@ import { deduplicateTestRecommendations, getImportGraphTestRecommendations, getT
 const commandsFor = (changedFiles: string[]) => getTestImpactRecommendations(changedFiles).map(recommendation => recommendation.command)
 
 describe('test impact recommendations', () => {
+	test('maps the subprocess formatter engine to its owning tests', () => {
+		expect(commandsFor(['tooling/contracts/prettier-solidity-batch.mjs'])).toEqual(['bun test tooling/contracts/format-solidity-one-line.test.ts'])
+	})
 	test('maps test infrastructure to its focused runner tests', () => {
 		expect(commandsFor(['tooling/testing/test-timings.mts'])).toEqual(['bun test tooling/testing/mutation-support.test.ts tooling/testing/test-discovery.test.ts tooling/testing/run-tests.test.ts tooling/testing/test-impact.test.ts'])
 		expect(commandsFor(['bun-test-setup.ts'])).toEqual(['bun test tooling/testing/mutation-support.test.ts tooling/testing/test-discovery.test.ts tooling/testing/run-tests.test.ts tooling/testing/test-impact.test.ts'])
@@ -37,7 +40,9 @@ describe('test impact recommendations', () => {
 	})
 
 	test('maps CI workflow changes to workflow contract tests', () => {
-		expect(commandsFor(['.github/workflows/browser-workflow.yml', '.github/workflows/coverage.yml', '.github/workflows/test-domains.yml', '.github/workflows/test-stability.yml', 'workflow/coverage.yml'])).toEqual(['bun test tooling/ui/ui-split-workflows.test.ts'])
+		expect(commandsFor(['.github/workflows/browser-workflow.yml', '.github/workflows/coverage.yml', '.github/workflows/test-domains.yml', '.github/workflows/test-stability.yml', 'workflow/coverage.yml', 'workflow/ci.yml', 'workflow/actions/setup-ci/action.yml'])).toEqual([
+			'bun test tooling/ui/ui-split-workflows.test.ts',
+		])
 	})
 
 	test('specialized external integration tiers replace ineffective raw test commands', () => {
