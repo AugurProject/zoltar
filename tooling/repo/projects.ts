@@ -63,7 +63,7 @@ const sharedDependencyTask = (projectPath: string): ProjectTask => ({
 
 const rootTask = (command: readonly string[], inputs: readonly string[], groups?: readonly string[]): ProjectTask => ({ command, cwd: '.', inputs, ...(groups === undefined ? {} : { groups }) })
 
-const botAudit = ['bun', 'audit', '--ignore', 'GHSA-8xcm-r25x-g524', '--ignore', 'GHSA-4cwx-7wf7-3272', '--ignore', 'GHSA-m8rv-5g2x-5cg5', '--ignore', 'GHSA-jr45-8vmc-qm54', '--ignore', 'GHSA-v3r7-h72x-cjcm'] as const
+const botAudit = ['bun', 'audit'] as const
 const augurScanAudit = ['bun', 'audit', '--ignore', 'GHSA-52f5-9888-hmc6', '--ignore', 'GHSA-ph9p-34f9-6g65'] as const
 
 /**

@@ -43,6 +43,10 @@ test('complete validation includes root and non-database AugurScan tests', () =>
 	expect(projects.find(project => project.id === 'augur-scan')?.tasks.test?.command).toEqual(['bun', 'run', 'test:ci'])
 })
 
+test('bot package audits run without advisory exclusions', () => {
+	for (const projectId of ['bot-shared', 'chaos', 'arbitrager', 'liquidator']) expect(projects.find(project => project.id === projectId)?.tasks.audit?.command).toEqual(['bun', 'audit'])
+})
+
 test('validates composite task coverage against supported non-self tasks', () => {
 	const base = project('package')
 	const task = { command: ['bun', 'run', 'check'], cwd: 'package', inputs: ['package/**'] }
