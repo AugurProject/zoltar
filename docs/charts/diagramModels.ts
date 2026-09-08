@@ -407,15 +407,15 @@ export const diagramGraphSpecs = {
 	),
 	'fig-zoltar-fork-branch-set': diagram(
 		{
-			ariaDescription: 'For the Aurora binary example, a fork creates Invalid, Yes, and No child universes; the contract does not privilege a branch.',
-			ariaLabel: 'The Aurora parent universe forks into Invalid, Yes, and No child universes',
+			ariaDescription: 'For a binary market example, a fork creates Invalid, Yes, and No child universes; the contract does not privilege a branch.',
+			ariaLabel: 'The parent universe for a binary market question forks into Invalid, Yes, and No child universes',
 			height: 390,
 			width: 920,
 		},
 		[
 			section(
 				'fork-branches',
-				[node('parent', 'Parent universe', 'gold', ['Aurora fork question']), node('invalid', 'Invalid', 'teal'), node('yes', 'Yes', 'blue'), node('no', 'No', 'blue')],
+				[node('parent', 'Parent universe', 'gold', ['Fork question']), node('invalid', 'Invalid', 'teal'), node('yes', 'Yes', 'blue'), node('no', 'No', 'blue')],
 				[edge('branch-parent-invalid', 'parent', 'invalid', 'deterministic child id'), edge('branch-parent-yes', 'parent', 'yes'), edge('branch-parent-no', 'parent', 'no')],
 				{ direction: 'DOWN' },
 			),
