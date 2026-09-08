@@ -174,7 +174,8 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		callbackShareToken = ITradingShareToken(request.shareToken);
 		uint256[3] memory priorBalances = _priorReceiveBalances(request, ids, values);
 		if (request.operation == ReceiveOperation.ExitPosition) _exitReceivedPosition(request, from, ids, values);
-		else if (request.operation == ReceiveOperation.RedeemCompleteSet) _redeemReceivedCompleteSet(request, ids, values);
+		else if (request.operation == ReceiveOperation.RedeemCompleteSet)
+			_redeemReceivedCompleteSet(request, ids, values);
 		else revert('Unsupported operation');
 		_requireReceiveBalances(priorBalances);
 		callbackPool = ISecurityPool(payable(address(0)));
@@ -208,7 +209,8 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		if (!wasApproved) callbackShareToken.setApprovalForAll(address(request.pair), false);
 		_redeemReceivedShares(request);
 		uint256 refund = request.maxLongSharesIn - totalLong;
-		if (refund > 0) callbackShareToken.safeTransferFrom(address(this), request.refundRecipient, longTokenId, refund, '');
+		if (refund > 0)
+			callbackShareToken.safeTransferFrom(address(this), request.refundRecipient, longTokenId, refund, '');
 		emit PositionExitedByTransfer(owner, address(request.pair), request.completeSetShares, totalLong, refund, request.payoutRecipient);
 	}
 

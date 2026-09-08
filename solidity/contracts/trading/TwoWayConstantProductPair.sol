@@ -274,5 +274,4 @@ contract TwoWayConstantProductPair is TradingLiquidityToken, IERC1155Receiver {
 	function _invalidBalance() private view returns (uint256) {
 		return shareToken.balanceOf(address(this), invalidTokenId);
 	}
-
 }
