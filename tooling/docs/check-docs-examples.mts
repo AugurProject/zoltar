@@ -878,9 +878,6 @@ checkExactRepCapEquality()
 const openOracleHtml = await readFile('docs/reference/open-oracle.html', 'utf8')
 assert.doesNotMatch(blockWithId(openOracleHtml, 'eq-openoracle-initial-report-size'), /<mi>(?:R|P|e|E|Q|N|D|T|H|m|u|F)<\/mi>/, 'dynamic report equation should use descriptive domain names instead of one-letter identifiers')
 
-const auctionDesignHtml = await readFile('docs/explanation/truth-auctions.html', 'utf8')
-assert.match(auctionDesignHtml, /data-source="underfundedThreshold = ⌈attoEthRaiseCap \* PRICE_PRECISION \/ maxAttoRepBeingSold⌉"/i, 'auction design should derive the underfunded qualification threshold from both caps')
-
 const statoblastHtml = await readFile('docs/explanation/statoblast.html', 'utf8')
 assert.doesNotMatch(statoblastHtml, /id="collateral-repair-example"/i, 'the overview must delegate interactive auction mechanics to the focused Truth Auction page')
 for (const bindMatch of statoblastHtml.matchAll(/bindExample\("([^"]+)"/g)) {

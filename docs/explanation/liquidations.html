@@ -35,40 +35,34 @@
 
 			<section id="rule">
 				<h2 id="punitive-liquidation">Funded transfer and bad debt</h2>
-				<p>The requested amount is ETH-denominated debt. Execution first caps a nominal quote by the target's live open interest and by the debt whose complete 5% REP bonus the target can fund. Capacity ownership is selected from that quote and rounded downward. The debt actually moved is then the exact increase in the receiver's live, upward-rounded open-interest allocation, which cannot exceed the nominal quote. On a delegated route, the coordinator additionally requires it not to exceed the staged approval reservation; the self-receiving path has no approval reservation. A positive quote that produces no receiver debt reverts. The target and receiver fee positions are checkpointed before their ownership changes; the operator is not checkpointed unless it is also one of those vaults.</p>
+					<p>The requested amount is ETH-denominated debt. Execution limits the transfer to the target's live debt and to the amount whose complete 5% REP award the target can fund. It then moves the corresponding backing and capacity ownership to the receiver. If a request covers the target's full position but some debt cannot be transferred safely, that remainder becomes target-local bad debt.</p>
 				<figure class="diagram" id="fig-liquidation-punitive-flow" aria-labelledby="liquidation-flow-title">
 					<p class="diagram-title" id="liquidation-flow-title">Delegated Liquidation Transfer</p>
 					<div class="plot-chart" data-plot-chart="fig-liquidation-punitive-flow" data-plot-width="900" data-plot-height="230" role="img" aria-label="Floor-rounded capacity ownership and ceiling-rounded REP backing units leave the target vault. The authorized receiver incurs the exact reported debt increase and receives those ownership and backing units. Residual target debt becomes bad debt only on a full-target request."><span class="plot-chart-fallback">Floor-rounded proportional capacity ownership and ceiling-rounded REP backing units leave the target. The authorized receiver incurs the exact reported debt increase and receives the ownership and backing units; target claims, fees, surplus, and unmatched ownership remain. Only a full-target request records residual target debt as bad debt.</span></div>
 					<p class="diagram-caption"><span class="figure-label">Liquidation accounting</span>The operator submits the transaction, while the authorized receiver accepts the funded liability and receives the award.</p>
 				</figure>
-				<div class="equation" id="eq-liquidation-rep-award">
-					<math display="block" aria-label="Gross REP award in attoREP equals debt moved times REP per ETH price times ten thousand five hundred divided by price precision times ten thousand, rounded upward" data-source="grossRepAwardAttoRep = ⌈debtMoved * repPerEthPrice * 10,500 / (PRICE_PRECISION * 10,000)⌉">
-						<mrow><mi>grossRepAwardAttoRep</mi><mo>=</mo><mo>&#x2308;</mo><mi>debtMoved</mi><mo>&#x22C5;</mo><mi>repPerEthPrice</mi><mo>&#x22C5;</mo><mn>10,500</mn><mo>/</mo><mo>(</mo><mi>PRICE_PRECISION</mi><mo>&#x22C5;</mo><mn>10,000</mn><mo>)</mo><mo>&#x2309;</mo></mrow>
-					</math>
-				</div>
-				<p>The gross award is converted into REP backing units with upward rounding. Because backing units are a proportional claim on the pool's current REP balance, the credited units can convert back to more current REP than <code>grossRepAwardAttoRep</code>; the excess is less than the current REP value of one backing unit.</p>
-				<p>On a full-target request, target-local bad debt is the target's live debt minus the receiver's exact settled increase. The residual may include debt excluded by the REP-award funding cap and a small amount left by integer ownership and open-interest allocation rounding. It is not an ETH collateral-shortfall test. Capacity ownership is conserved between the target and receiver; any ownership not transferred remains with the target.</p>
-				<p>After a funded transfer, the receiver's resulting debt must meet the configured debt minimum and its REP backing must meet the configured vault REP minimum. A transfer smaller than the debt floor can still succeed when the receiver's existing position keeps its resulting debt above the floor. The target's resulting debt must be zero or meet the debt floor; when target debt remains, its REP backing must also meet the vault REP floor. These receiver or target dust checks revert instead of converting otherwise funded debt into bad debt.</p>
+					<p>The receiver must remain healthy after accepting the position, and any remaining target position must still meet the protocol's minimum sizes. These checks prevent liquidation from creating unusable dust positions. The exact caps, rounding, and accounting fields are listed in the <a href="../reference/contracts.html#securitypool">SecurityPool contract reference</a>.</p>
 			</section>
 
 			<section id="receiver-approvals">
 				<h2>Bounded receiver approval</h2>
-				<p>A delegated route needs a pool-specific approval for the exact receiver and operator. It may name one target or use the zero-address wildcard for any target in that pool. Each approval defines a cumulative ETH debt limit, a per-liquidation limit, a minimum post-liquidation health factor, an activation time, an expiration time, and a nonce.</p>
-				<p>The receiver may install an approval directly or sign EIP-712 typed data. The domain binds the stable name and version, chain ID, and approval registry; the typed message explicitly binds the security pool. EOA signatures use ECDSA and contract-wallet signatures use ERC-1271. A contract-wallet signature is validated when installed and becomes explicit onchain state rather than an opaque signature retained until execution.</p>
-				<p>Each receiver-scoped nonce can install only one approval, and replaying it is rejected. The receiver can revoke unused approval capacity or advance its nonce floor to invalidate older nonces. Both actions prevent new reservations without cancelling reservations already attached to staged operations. Approval state exposes available, pending reserved, and permanently consumed amounts so indexers can reconstruct every transition.</p>
+					<p>A receiver can approve an operator directly or by a bounded signature. The approval is specific to a pool, limits how much debt the receiver will accept, sets a validity window and minimum resulting health, and can be revoked for future liquidations. Existing staged work retains its reservation so cleanup remains deterministic. See the <a href="../reference/contracts.html#liquidationapprovalregistry">LiquidationApprovalRegistry reference</a> for fields, nonce rules, and wallet-signature handling.</p>
 			</section>
 
 			<section id="queue-semantics">
 				<h2>Reservation and queued execution</h2>
-				<p>The coordinator reserves approval quota when it stages a liquidation. The reservation is no greater than the requested debt, the snapshotted target debt, the approval's remaining cumulative quota, or its per-operation limit. The approval must remain valid through the operation's latest possible execution time.</p>
-				<p>Successful execution permanently consumes exactly the debt moved and releases unused reservation. A bad-debt-only result consumes no receiver quota. Expiration and every terminal failure release the full reservation, including stale target snapshots, target rescue, price-distance failure, inactive or forked pools, caught pool reverts, panics, unknown failures, and pending-report recovery. Cleanup is permissionless and recognizes expiration before requiring a valid oracle price. A terminal operation cannot release or consume twice.</p>
-				<p>The coordinator snapshots target backing and ownership to prevent a stale quote from becoming a keeper windfall, then uses the settled price and live state at execution. Receiver state changes after staging can therefore cause a safe failure and reservation release.</p>
+					<p>The price coordinator reserves the receiver's approval quota while it obtains a fresh REP/ETH price. Execution then rechecks the live target and receiver rather than trusting the earlier preview. Success consumes only the debt actually moved and releases unused quota; expiration or terminal failure releases the reservation so the receiver is not blocked permanently. The <a href="../reference/operator-guardrails.html#repeth-oracle-operations">REP/ETH oracle operations reference</a> covers staging, recovery, and failure handling.</p>
 			</section>
 
-			<section id="fork-behavior">
+				<section id="fork-behavior">
 				<h2>Fork isolation</h2>
-				<p>Approvals and reservations belong to one pool and its coordinator. They are not copied into child pools or universes. A receiver approving liabilities in one universe has not approved them in a child. Pending parent operations remain permissionlessly cleanable after the parent becomes unable to execute, releasing their reservations.</p>
-			</section>
+					<p>Approvals and reservations belong to one pool and its coordinator. They are not copied into child pools or universes. A receiver approving liabilities in one universe has not approved them in a child. Pending parent operations remain permissionlessly cleanable after the parent becomes unable to execute, releasing their reservations.</p>
+				</section>
+
+				<section id="related-references">
+					<h2>Related references</h2>
+					<ul><li><a href="../reference/contracts.html#securitypool">SecurityPool functions and accounting</a></li><li><a href="../reference/contracts.html#liquidationapprovalregistry">Liquidation approval fields and signatures</a></li><li><a href="../reference/operator-guardrails.html#repeth-oracle-operations">Price-coordinator operations and recovery</a></li></ul>
+				</section>
 		</main>
 		<script src="../assets/js/chartRuntime.js"></script>
 		<script src="../assets/js/responsiveDocs.js"></script>

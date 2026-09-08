@@ -12,4 +12,4 @@
 - `hooks/` owns runtime-neutral Preact hooks.
 - `tests/testUtils/` owns shared test-only helpers.
 
-The forwarding modules under `lib/` preserve current public imports while consumers migrate to these owned subpaths. New reusable code should use the owned area directly.
+The focused modules under `lib/` own runtime-neutral helpers that do not fit a more specific area. New reusable code should import the narrow owning module directly.
