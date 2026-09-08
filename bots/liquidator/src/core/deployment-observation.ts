@@ -3,10 +3,13 @@ import type { SystemDeploymentStatus } from './deployment-gate.ts'
 
 export function recordSystemDeploymentCheck(state: RuntimeState, status: SystemDeploymentStatus, previousAddress: string | undefined) {
 	if (status.deployed) {
+		state.deploymentMissingName = undefined
 		state.deploymentCheckedBlock = undefined
 		state.deploymentCheckedTimestamp = undefined
 		return undefined
 	}
+	state.error = undefined
+	state.deploymentMissingName = status.name
 	state.deploymentCheckedBlock = status.block.number
 	state.deploymentCheckedTimestamp = status.block.timestamp
 	state.status = state.paused ? 'paused' : 'starting'

@@ -344,7 +344,10 @@ export async function validateDoctorCompanionState(settings: OperatorSettings) {
 }
 
 const defaultDependencies: ChaosDoctorDependencies = {
-	deploymentAvailability: async settings => (await checkDeploymentAvailability(settings, createChaosReadPool(settings))).notice,
+	deploymentAvailability: async settings => {
+		const check = await checkDeploymentAvailability(settings, createChaosReadPool(settings))
+		return check.blocking ? check.notice : undefined
+	},
 	acquireLocks: acquireDoctorLocks,
 	assertProfileIsolation: assertSettingsProfileIsolation,
 	load: loadSettings,

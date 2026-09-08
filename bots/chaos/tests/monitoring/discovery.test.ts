@@ -104,6 +104,7 @@ function topologyIdentity(): ImmutableTopologyIdentity {
 
 interface GraphOverrides {
 	missingContract?: Address
+	missingContracts?: readonly Address[]
 	baseFeePerGas?: bigint | null
 	childOutcomesByUniverse?: Readonly<Record<string, readonly bigint[]>>
 	delayUniswapPoolReads?: boolean
@@ -148,7 +149,7 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 		},
 		async getCode(parameters: { address: Address; blockNumber?: bigint }) {
 			pinnedReads.push(parameters.blockNumber)
-			if (parameters.address === graph.missingContract) return '0x'
+			if (parameters.address === graph.missingContract || graph.missingContracts?.includes(parameters.address) === true) return '0x'
 			if ([address(2), address(3), address(4), address(5), address(6), address(7), address(8), address(9)].includes(parameters.address)) return '0x01'
 			return graph.uniswapFactory !== undefined && parameters.address.toLowerCase() === graph.uniswapFactory.toLowerCase() ? '0x01' : '0x'
 		},
@@ -1781,13 +1782,17 @@ test('reports missing configured contract code before calling protocol getters',
 	expect(fake.contractReads).toHaveLength(0)
 })
 
-for (const [name, missingContract] of [
-	['tradingFactory', address(8)],
-	['tradingRouter', address(9)],
+for (const [name, missingContracts, expected] of [
+	['factory and router', [address(8), address(9)], { factory: false, router: false }],
+	['router', [address(9)], { factory: true, router: false }],
 ] as const) {
-	test(`reports missing required ${name} before protocol getters`, async () => {
-		const fake = fakeClient(10n, hash(10), { missingContract })
-		await expect(discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: fake.client, deployments: topologyIdentity(), wallet: address(1) })).rejects.toThrow(`No contract code on RPC chain 31337 at block 10: ${name} (${missingContract})`)
-		expect(fake.contractReads).toHaveLength(0)
+	test(`continues non-trading discovery without the trading ${name}`, async () => {
+		const fake = fakeClient(10n, hash(10), { missingContracts })
+		const snapshot = await discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: fake.client, deployments: topologyIdentity(), wallet: address(1) })
+		expect(snapshot.tradingDeployment).toEqual(expected)
+		expect(snapshot.universes.length).toBeGreaterThan(0)
+		expect(snapshot.wallet.ethBalanceAttoEth).toBe('10')
+		expect(fake.contractReads.length).toBeGreaterThan(0)
+		if (!expected.factory) expect(snapshot.pairs).toEqual([])
 	})
 }

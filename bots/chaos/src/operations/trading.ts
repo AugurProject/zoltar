@@ -940,6 +940,7 @@ function shareApprovalCleanup(snapshot: EcosystemSnapshot, context: OperationCon
 }
 
 const createPair: OperationDefinition = {
+	requiredTradingDeployment: ['factory'],
 	buildPlan(snapshot, options) {
 		const paired = new Set(snapshot.pairs.map(pair => pair.pool.toLowerCase()))
 		const pool = choose(
@@ -1196,6 +1197,7 @@ function routerEthDefinition(kind: 'create-and-initialize' | 'initialize' | 'add
 	} as const
 	const [id, method] = details[kind]
 	return {
+		requiredTradingDeployment: ['factory', 'router'],
 		buildPlan(snapshot, options) {
 			const spend = ethSpend(snapshot, options, id, kind === 'create-and-initialize' || kind === 'initialize' ? 2_002n : 1n)
 			if (spend === 0n) return undefined
@@ -1435,6 +1437,7 @@ function routerOwnedDefinition(kind: 'exit' | 'redeem' | 'remove'): OperationDef
 	} as const
 	const [id, method] = details[kind]
 	return {
+		requiredTradingDeployment: kind === 'remove' ? [] : ['router'],
 		buildPlan(snapshot, options) {
 			const pair = choose(
 				snapshot.pairs.filter(candidate => {

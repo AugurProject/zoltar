@@ -1251,3 +1251,26 @@ describe('chaos operation catalog', () => {
 		expect(plan?.deadlineTimestamp).toBe('2004837400')
 	})
 })
+
+for (const factory of [false, true]) {
+	test(`missing trading deployments preserve unrelated plans (factory=${factory})`, () => {
+		const base = snapshotFixture()
+		const snapshot = { ...base, pairs: factory ? base.pairs : [], tradingDeployment: { factory, router: false } }
+		const before = evaluateOperationCatalog({ ...snapshot, tradingDeployment: { factory: true, router: true } }, permissiveOptions)
+		const after = evaluateOperationCatalog(snapshot, permissiveOptions)
+		expect(after.filter(value => value.definition.ecosystem !== 'trading')).toEqual(before.filter(value => value.definition.ecosystem !== 'trading'))
+		expect(after.some(value => value.definition.ecosystem !== 'trading' && value.eligibility.eligible)).toBe(true)
+		for (const id of ['trading.pair.create-and-initialize', 'trading.position.enter', 'trading.position.exit', 'trading.complete-set.redeem', ...(factory ? [] : ['trading.pair.create'])]) {
+			const value = after.find(value => value.definition.id === id)
+			expect(value?.plan).toBeUndefined()
+			expect(value?.eligibility.blockers.join(' ')).toContain('not deployed')
+		}
+		if (factory) expect(after.find(value => value.definition.id === 'trading.liquidity.remove')).toEqual(before.find(value => value.definition.id === 'trading.liquidity.remove'))
+		const priorRouterPlan = before.find(value => value.definition.id === 'trading.complete-set.redeem')?.plan
+		if (factory) {
+			if (priorRouterPlan === undefined) throw new Error('Expected an executable router redemption before its deployment disappeared')
+			expect(before.find(value => value.definition.id === 'trading.liquidity.remove')?.plan).toBeDefined()
+			expect(reevaluateOperationContinuation(snapshot, priorRouterPlan, permissiveOptions).eligibility.blockers.join(' ')).toContain('not deployed')
+		}
+	})
+}

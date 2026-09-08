@@ -28,6 +28,7 @@ describe('liquidator dashboard server', () => {
 				],
 				alerts: [{ internalPath: protectedPath, message: 'Execution is paused', severity: 'warning' }],
 				execute: true,
+				deploymentMissingName: 'Zoltar',
 				deploymentCheckedBlock: '12345679',
 				deploymentCheckedTimestamp: '1786924812',
 				lastScannedBlock: '12345678',
@@ -139,6 +140,7 @@ describe('liquidator dashboard server', () => {
 		expect(body).not.toContain(protectedPath)
 		expect(body).not.toContain(rpcSecret)
 		expect(Reflect.get(snapshot, 'status')).toBe('connectivity-degraded')
+		expect(Reflect.get(snapshot, 'deploymentMissingName')).toBe('Zoltar')
 		expect(Reflect.get(snapshot, 'deploymentCheckedBlock')).toBe('12345679')
 		expect(Reflect.get(snapshot, 'deploymentCheckedTimestamp')).toBe('1786924812')
 		expect(Reflect.get(snapshot, 'lastScannedBlock')).toBe('12345678')

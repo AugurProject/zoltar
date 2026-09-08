@@ -1,8 +1,9 @@
+import { snapshotFixture } from '../operations/fixture.ts'
 import { createChaosReadPool } from '../../src/runtime/canonical-scan.ts'
 import { expect, test } from 'bun:test'
 import example from '../../config/operator.example.json'
 import { parseSettings } from '../../src/config/settings.ts'
-import { checkDeploymentAvailability, recordUnavailableDeploymentScan } from '../../src/runtime/deployment-availability.ts'
+import { checkDeploymentAvailability, recordUnavailableDeploymentScan, tradingDeploymentNotice } from '../../src/runtime/deployment-availability.ts'
 import { initialRuntimeState, resetRuntimeStateForProfile } from '../../src/state/operator-state.ts'
 
 const settings = parseSettings(example)
@@ -68,9 +69,11 @@ test('rechecks canonical addresses at the agreed block and recovers when code ap
 		expect(requested.every(params => params[1] === '0x64')).toBeTrue()
 		expect(requested.map(params => String(params[0]).toLowerCase())).toContain(configured.deployment.zoltar.toLowerCase())
 		missingTradingOnly = true
-		expect((await checkDeploymentAvailability(configured, pool)).notice).toContain('Trading factory, Trading router')
+		const partial = await checkDeploymentAvailability(configured, pool)
+		expect(partial.notice).toContain('Trading factory, Trading router')
+		expect(partial.blocking).toBe(false)
 		configured.strategy.initializeGenesisUniverse = true
-		expect((await checkDeploymentAvailability(configured, pool)).notice).toBeUndefined()
+		expect((await checkDeploymentAvailability(configured, pool)).blocking).toBe(false)
 		configured.strategy.initializeGenesisUniverse = false
 		deployed = true
 		expect((await checkDeploymentAvailability(configured, pool)).notice).toBeUndefined()
@@ -79,4 +82,15 @@ test('rechecks canonical addresses at the agreed block and recovers when code ap
 	} finally {
 		server.stop(true)
 	}
+})
+
+test('keeps partial trading availability visible without claiming all operations are unavailable', () => {
+	const snapshot = snapshotFixture()
+	snapshot.tradingDeployment = { factory: true, router: false }
+	const notice = tradingDeploymentNotice(snapshot)
+	expect(notice).toContain('at block 100: Trading router')
+	expect(notice).toContain('other eligible operations can continue')
+	expect(notice).not.toContain('Chaos operations are unavailable')
+	snapshot.tradingDeployment.router = true
+	expect(tradingDeploymentNotice(snapshot)).toBeUndefined()
 })

@@ -145,6 +145,7 @@ export function initialRuntimeState(paused: boolean, wallet: Address | undefined
 		marketConsensusByAsset: new Map(),
 		marketObservations: [],
 		error: undefined,
+		deploymentMissingName: undefined,
 		deploymentCheckedBlock: undefined,
 		deploymentCheckedTimestamp: undefined,
 		lastScanAt: undefined,
@@ -338,6 +339,7 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 			state.pendingStagedOperations.length === 0 &&
 			state.status === (execute ? 'running' : 'dry-run') &&
 			(!execute || state.wallet !== undefined),
+		deploymentMissingName: state.deploymentMissingName,
 		deploymentCheckedBlock: state.deploymentCheckedBlock?.toString(),
 		deploymentCheckedTimestamp: state.deploymentCheckedTimestamp?.toString(),
 		lastScanAt: state.lastScanAt,

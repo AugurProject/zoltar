@@ -12,6 +12,7 @@ export type RuntimeState = {
 	marketConsensusByAsset: Map<string, MarketConsensusEstimate>
 	marketObservations: MarketConsensusObservation[]
 	error: string | undefined
+	deploymentMissingName?: string | undefined
 	deploymentCheckedBlock?: bigint | undefined
 	deploymentCheckedTimestamp?: bigint | undefined
 	lastScanAt: string | undefined

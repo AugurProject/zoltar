@@ -117,17 +117,20 @@ test('pins missing-deployment reads to the reported observed block', async () =>
 
 test('publishes the checked block without claiming a completed or executable scan', () => {
 	const state = initialRuntimeState(false, undefined, 11155111)
+	state.error = 'Previous RPC failure'
 	const first = recordSystemDeploymentCheck(state, { deployed: false, address: zoltar, name: 'Zoltar', block: { number: 100n, timestamp: 123n } }, undefined)
 	recordSystemDeploymentCheck(state, { deployed: false, address: zoltar, name: 'Zoltar', block: { number: 101n, timestamp: 135n } }, first)
 	const snapshot = operatorSnapshot(state, false)
+	expect(snapshot.error).toBeUndefined()
 	expect(snapshot.lastScannedBlock).toBeUndefined()
 	expect(snapshot.lastScanAt).toBeUndefined()
 	expect(snapshot.operatorCapable).toBeFalse()
 	expect(snapshot.activities).toHaveLength(1)
-	expect(snapshot).toMatchObject({ deploymentCheckedBlock: '101', deploymentCheckedTimestamp: '135' })
+	expect(snapshot).toMatchObject({ deploymentCheckedBlock: '101', deploymentCheckedTimestamp: '135', deploymentMissingName: 'Zoltar' })
 	expect(blockStatusText(snapshot, 140000)).toBe('Block 101 · seen 5s ago')
 	expect(scanStatusText(snapshot)).toBe('Deployments checked at block 101')
 	recordSystemDeploymentCheck(state, { deployed: true }, first)
 	expect(state.deploymentCheckedBlock).toBeUndefined()
+	expect(state.deploymentMissingName).toBeUndefined()
 	expect(blockStatusText(operatorSnapshot(state, false))).toBe('Block — · waiting for first observation')
 })

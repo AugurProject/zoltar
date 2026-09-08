@@ -1,3 +1,4 @@
+import { readinessGuidance } from './readiness-status.js'
 import { blockStatusText, scanStatusText } from './block-status.js'
 import { createMetric, setAttentionBadge } from '../../../shared/src/dashboard/components.js'
 type Activity = {
@@ -86,6 +87,7 @@ type Snapshot = {
 	marketConsensus?: MarketConsensus
 	error?: string
 	execute: boolean
+	deploymentMissingName?: string
 	deploymentCheckedBlock?: string
 	deploymentCheckedTimestamp?: string
 	lastScanAt?: string
@@ -976,7 +978,7 @@ function render(snapshot: Snapshot) {
 	renderNetworkBadge()
 	modeBadge.textContent = snapshot.execute ? 'Live' : 'Dry run'
 	modeBadge.className = `badge ${snapshot.execute ? 'warning' : 'ok'}`
-	runStatusBadge.textContent = snapshot.status === 'connectivity-degraded' ? 'Connectivity degraded' : snapshot.error !== undefined ? 'Error' : snapshot.paused ? 'Paused' : snapshot.scanning ? 'Scanning' : 'Running'
+	runStatusBadge.textContent = snapshot.status === 'connectivity-degraded' ? 'Connectivity degraded' : snapshot.error !== undefined ? 'Error' : snapshot.paused ? 'Paused' : snapshot.scanning ? 'Scanning' : snapshot.deploymentMissingName !== undefined ? 'Waiting' : 'Running'
 	runStatusBadge.className = `badge ${snapshot.paused || snapshot.error !== undefined ? 'warning' : 'ok'}`
 	capabilityBadge.textContent = snapshot.operatorCapable ? 'Operator capable' : 'Operator blocked'
 	capabilityBadge.className = `badge ${snapshot.operatorCapable ? 'ok' : 'warning'}`
@@ -990,8 +992,8 @@ function render(snapshot: Snapshot) {
 			: snapshot.status === 'connectivity-degraded'
 				? 'RPC connectivity is degraded. Execution is blocked and the bot will retry automatically.'
 				: `${scanFailureDetail(snapshot.error)} Automatic retry is active. Check the bot logs if the next cycle also fails.`,
-		snapshot.error === undefined ? 'Operator blocked' : 'Scan failed',
-		snapshot.error === undefined ? 'warning' : 'error',
+		snapshot.error === undefined ? (capabilityBlockerGuidance(snapshot)?.title ?? 'Operator blocked') : 'Scan failed',
+		snapshot.error === undefined ? (capabilityBlockerGuidance(snapshot)?.pending === true ? 'info' : 'warning') : 'error',
 	)
 	renderMetrics(snapshot)
 	renderAlerts(snapshot)
@@ -1021,12 +1023,7 @@ function snapshotAttentionCount(snapshot: Snapshot) {
 }
 
 function capabilityBlockerGuidance(snapshot: Snapshot) {
-	if (snapshot.operatorCapable !== false || snapshotDetailedAttentionCount(snapshot) > 0) return undefined
-	if (snapshot.paused) return { pending: false, message: 'The bot is paused. Use Resume to continue scanning.' }
-	if (snapshot.scanning) return { pending: true, message: 'A scan is in progress. Readiness updates automatically when it completes.' }
-	if (snapshot.execute && snapshot.wallet === undefined) return { pending: false, message: 'Live execution needs an active signer. Open Settings and configure Execution signer.' }
-	if (snapshot.lastScanAt === undefined || snapshot.lastScannedBlock === undefined) return { pending: true, message: 'Waiting for the first successful scan. Readiness updates automatically; inspect the bot logs if scanning does not start.' }
-	return { pending: false, message: 'The operator is not ready. Status updates automatically; inspect the bot logs if it remains blocked.' }
+	return readinessGuidance(snapshot, snapshotDetailedAttentionCount(snapshot) > 0)
 }
 
 function renderAttention(snapshot: Snapshot) {
@@ -1039,8 +1036,8 @@ function renderAttention(snapshot: Snapshot) {
 	else if (snapshot.alerts.length > 0) attentionTarget = '/operations'
 	setAttentionBadge(attentionBadge, attentionCount, attentionTarget)
 	if (capabilityBlockerGuidance(snapshot)?.pending === true) {
-		attentionBadge.textContent = 'Checking readiness'
-		attentionBadge.removeAttribute('href')
+		attentionBadge.textContent = capabilityBlockerGuidance(snapshot)?.label ?? 'Awaiting first scan'
+		if (snapshot.deploymentMissingName === undefined) attentionBadge.removeAttribute('href')
 	}
 }
 
@@ -1250,7 +1247,7 @@ function scanFailureDetail(error: string) {
 	return 'The latest scan cycle returned an unexpected error.'
 }
 
-function setGlobalError(message?: string, title = 'Dashboard unavailable', tone: 'error' | 'warning' = 'error') {
+function setGlobalError(message?: string, title = 'Dashboard unavailable', tone: 'error' | 'warning' | 'info' = 'error') {
 	if (message === undefined) {
 		if (!globalError.classList.contains('hidden')) globalError.classList.add('hidden')
 		if (globalError.childNodes.length > 0) globalError.replaceChildren()
@@ -1259,6 +1256,7 @@ function setGlobalError(message?: string, title = 'Dashboard unavailable', tone:
 	}
 	const noticeKey = `${tone}\n${title}\n${message}`
 	if (globalError.dataset['noticeKey'] === noticeKey && !globalError.classList.contains('hidden')) return
+	globalError.setAttribute('role', tone === 'info' ? 'status' : 'alert')
 	globalError.classList.toggle('error', tone === 'error')
 	globalError.classList.toggle('warning', tone === 'warning')
 	globalError.dataset['noticeKey'] = noticeKey
