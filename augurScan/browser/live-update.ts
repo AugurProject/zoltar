@@ -1,3 +1,6 @@
+import type { JsonRecord, JsonValue } from './api-validation.ts'
+import { isJsonArray } from './api-validation.ts'
+
 export type LiveRecord = { key: string; signature: string }
 export type ClassifiedLiveRecord = LiveRecord & { state: 'added' | 'changed' | 'unchanged' }
 export type Page<T, Cursor = string> = { items: T[]; nextCursor?: Cursor }
@@ -52,18 +55,18 @@ export const knownNetworkName = (chainId: string): string => {
 }
 
 interface NetworkStatusPresentation {
-	readonly chain_id?: unknown
-	readonly name?: unknown
-	readonly explorer_base_url?: unknown
-	readonly start_block?: unknown
-	readonly indexed_block?: unknown
-	readonly indexed_hash?: unknown
-	readonly indexed_timestamp?: unknown
-	readonly observed_block?: unknown
-	readonly phase?: unknown
-	readonly consecutive_failures?: unknown
-	readonly next_retry_at?: unknown
-	readonly last_error?: unknown
+	readonly chain_id?: string
+	readonly name?: string
+	readonly explorer_base_url?: string
+	readonly start_block?: string
+	readonly indexed_block?: string | null
+	readonly indexed_hash?: string | null
+	readonly indexed_timestamp?: string | null
+	readonly observed_block?: string | null
+	readonly phase?: string
+	readonly consecutive_failures?: number
+	readonly next_retry_at?: string | null
+	readonly last_error?: string | null
 }
 
 export const networkStatusPresentationKey = (network: NetworkStatusPresentation): string =>
@@ -105,7 +108,8 @@ export const loadInitialNetworkStatus = async (restoredSnapshot: boolean, load: 
 	if (!restoredSnapshot) await load()
 }
 
-export const operationsForkChildCount = (formattedCount: string, value: unknown): string => `${formattedCount} ${Number(value) === 1 ? 'child' : 'children'}`
+export const operationsForkChildCount = (formattedCount: string, value: JsonValue | undefined): string =>
+	`${formattedCount} ${Number(value) === 1 ? 'child' : 'children'}`
 
 export interface RefreshGate {
 	runBackground<T>(operation: RefreshOperation<T>): Promise<T>
@@ -366,7 +370,7 @@ export const demoTimelineEvidenceStatus = (canonical: boolean, invalidationReaso
 	}
 }
 
-const enumValueLabel = (value: unknown, fallback: string): string => {
+const enumValueLabel = (value: JsonValue | undefined, fallback: string): string => {
 	if (typeof value !== 'string' || value.trim() === '') return fallback
 	const words = value.trim().split('-').filter(Boolean)
 	const [first, ...rest] = words
@@ -374,7 +378,7 @@ const enumValueLabel = (value: unknown, fallback: string): string => {
 	return [`${first.slice(0, 1).toUpperCase()}${first.slice(1)}`, ...rest].join(' ')
 }
 
-export const timelineEntityTypeLabel = (value: unknown): string => {
+export const timelineEntityTypeLabel = (value: JsonValue | undefined): string => {
 	switch (value) {
 		case 'question':
 			return 'Question'
@@ -409,7 +413,7 @@ export const timelineEntityTypeLabel = (value: unknown): string => {
 	}
 }
 
-export const evidenceStatusLabel = (value: unknown): string => {
+export const evidenceStatusLabel = (value: JsonValue | undefined): string => {
 	switch (value) {
 		case 'canonical':
 			return 'Canonical evidence'
@@ -430,7 +434,7 @@ export const evidenceStatusLabel = (value: unknown): string => {
 	}
 }
 
-export const historyInvalidationReasonLabel = (value: unknown): string => {
+export const historyInvalidationReasonLabel = (value: JsonValue | undefined): string => {
 	switch (value) {
 		case 'chain-reorg':
 			return 'Chain reorganization'
@@ -456,8 +460,8 @@ const invalidationOccurrenceLabels: Readonly<Record<string, string>> = {
 	'token-metadata': 'Affected token metadata observations',
 }
 
-export const historyInvalidationEvidencePresentation = (causes: unknown, occurrenceCounts: unknown) => {
-	const causeCodes = Array.isArray(causes) ? causes.filter((cause): cause is string => typeof cause === 'string') : []
+export const historyInvalidationEvidencePresentation = (causes: JsonValue | undefined, occurrenceCounts: JsonValue | undefined) => {
+	const causeCodes = isJsonArray(causes) ? causes.filter((cause): cause is string => typeof cause === 'string') : []
 	const countsRecord = typeof occurrenceCounts === 'object' && occurrenceCounts !== null && !Array.isArray(occurrenceCounts) ? occurrenceCounts : {}
 	const occurrenceFields: Array<readonly [label: string, value: string]> = []
 	let occurrenceTotal = 0n
@@ -475,12 +479,12 @@ export const historyInvalidationEvidencePresentation = (causes: unknown, occurre
 	}
 }
 
-const operationsInteger = (value: unknown): string => {
-	const serialized = typeof value === 'string' || typeof value === 'number' || typeof value === 'bigint' ? String(value) : ''
+const operationsInteger = (value: JsonValue | undefined): string => {
+	const serialized = typeof value === 'string' || typeof value === 'number' ? String(value) : ''
 	return /^-?\d+$/.test(serialized) ? BigInt(serialized).toLocaleString('en-US') : 'Unavailable'
 }
 
-export const operationsRouteFreshness = (asOf: Readonly<Record<string, unknown>>, liveConnected: boolean): string => {
+export const operationsRouteFreshness = (asOf: JsonRecord, liveConnected: boolean): string => {
 	if (asOf['historical'] === true || asOf['phase'] === 'historical')
 		return `Historical snapshot at block #${operationsInteger(asOf['blockNumber'])} · current indexed head #${operationsInteger(
 			asOf['indexedHead'],
@@ -488,6 +492,21 @@ export const operationsRouteFreshness = (asOf: Readonly<Record<string, unknown>>
 	return `As of indexed block #${operationsInteger(asOf['blockNumber'])} · ${operationsInteger(asOf['lagBlocks'])} blocks behind · ${
 		liveConnected ? 'live updates connected' : 'live updates reconnecting'
 	}`
+}
+
+export const riskPaginationForCollectedCursors = (
+	pagination: JsonRecord,
+	poolNextCursor: string | undefined,
+	vaultNextCursor: string | undefined,
+): JsonRecord => {
+	const paginationWithoutCursors = Object.fromEntries(Object.entries(pagination).filter(([key]) => key !== 'poolNextCursor' && key !== 'vaultNextCursor'))
+	return {
+		...paginationWithoutCursors,
+		poolHasMore: poolNextCursor !== undefined,
+		...(poolNextCursor === undefined ? {} : { poolNextCursor }),
+		vaultHasMore: vaultNextCursor !== undefined,
+		...(vaultNextCursor === undefined ? {} : { vaultNextCursor }),
+	}
 }
 
 export const decodedActionLabel = (
@@ -523,7 +542,7 @@ const operationsDetailCatalogPaths: Readonly<Record<OperationsDetailKind, string
 	vault: '/operations/risk',
 }
 
-export const operationsDetailHeaderPresentation = (kind: OperationsDetailKind, asOf: Readonly<Record<string, unknown>>, liveConnected: boolean) => {
+export const operationsDetailHeaderPresentation = (kind: OperationsDetailKind, asOf: JsonRecord, liveConnected: boolean) => {
 	const catalogPath = operationsDetailCatalogPaths[kind]
 	return {
 		backLabel: '← Back to catalog',
@@ -533,7 +552,7 @@ export const operationsDetailHeaderPresentation = (kind: OperationsDetailKind, a
 	}
 }
 
-const poolProtocolStateLabel = (value: unknown): string => {
+const poolProtocolStateLabel = (value: JsonValue | undefined): string => {
 	switch (String(value).toLowerCase()) {
 		case '0':
 			return 'Operational'
@@ -552,7 +571,7 @@ const poolProtocolStateLabel = (value: unknown): string => {
 	}
 }
 
-const vaultProtocolStateLabel = (value: unknown): string => {
+const vaultProtocolStateLabel = (value: JsonValue | undefined): string => {
 	switch (String(value).toLowerCase()) {
 		case 'healthy':
 			return 'Healthy'
@@ -567,7 +586,7 @@ const vaultProtocolStateLabel = (value: unknown): string => {
 	}
 }
 
-export const operationsRiskPresentation = (kind: 'pool' | 'vault', protocolState: unknown, scannerSeverity: unknown) => {
+export const operationsRiskPresentation = (kind: 'pool' | 'vault', protocolState: JsonValue | undefined, scannerSeverity: JsonValue | undefined) => {
 	const severity = String(scannerSeverity).toLowerCase()
 	switch (severity) {
 		case 'healthy':
@@ -606,11 +625,11 @@ export const operationsRiskPresentation = (kind: 'pool' | 'vault', protocolState
 export const operationsDetailSummaryPresentation = (
 	kind: OperationsDetailKind,
 	state: {
-		readonly currentEvent?: unknown
-		readonly lifecycleState?: unknown
-		readonly protocolState?: unknown
-		readonly scannerSeverity?: unknown
-		readonly snapshotReadStatus?: unknown
+		readonly currentEvent?: JsonValue
+		readonly lifecycleState?: JsonValue
+		readonly protocolState?: JsonValue
+		readonly scannerSeverity?: JsonValue
+		readonly snapshotReadStatus?: JsonValue
 	},
 ): { readonly label: string; readonly value: string } => {
 	if (kind === 'pool' || kind === 'vault')

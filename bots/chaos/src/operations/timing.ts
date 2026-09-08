@@ -13,7 +13,7 @@ export const MAXIMUM_WORKFLOW_PREREQUISITE_COUNT = 2
 /** Leaves one block after every supported prerequisite consumes its full transport and finality horizon. */
 export const MINIMUM_WORKFLOW_VALIDITY_BLOCKS = Number(BigInt(MAXIMUM_WORKFLOW_PREREQUISITE_COUNT) * (DEFAULT_TRANSACTION_VALIDITY_BLOCKS + EXECUTOR_FINALITY_BLOCKS) + 1n)
 
-export function assertWorkflowPrerequisiteLimit(plan: { id: string; steps: readonly unknown[] }) {
+export function assertWorkflowPrerequisiteLimit(plan: { id: string; steps: readonly object[] }) {
 	const prerequisiteCount = Math.max(0, plan.steps.length - 1)
 	if (prerequisiteCount > MAXIMUM_WORKFLOW_PREREQUISITE_COUNT) {
 		throw new Error(`${plan.id} has ${prerequisiteCount.toString()} pre-terminal steps; the configured workflow validity floor supports at most ${MAXIMUM_WORKFLOW_PREREQUISITE_COUNT.toString()} pre-terminal steps`)

@@ -1,4 +1,4 @@
-import type { Address, Hex } from '../ethereum.ts'
+import type { Address, Hex, JsonValue } from '../ethereum.ts'
 import { bigintToSafeNumber, getAddress, keccak256 } from '../ethereum.ts'
 import type { SubmissionSettings } from '../execution/transaction-submission.ts'
 import { authenticatedRelayHeaders, type RelayAuthentication } from '../execution/relay-authentication.ts'
@@ -53,8 +53,11 @@ type JsonRpcResponse = {
 	error?: {
 		code?: number
 		message?: string
+		data?: JsonValue
 	}
-	result?: unknown
+	id?: number | string | null
+	jsonrpc?: '2.0'
+	result?: JsonValue
 }
 
 export class EndpointCheckFailure extends Error {
@@ -269,22 +272,22 @@ async function rawCapabilityErrorResponse(url: string, body: string, headers: Re
 		if (response.status === 408 || response.status === 425 || response.status === 429 || response.status >= 500) throw new EndpointTransportError(message)
 		throw new EndpointSafetyError(message)
 	}
-	let value: unknown
+	let value: JsonValue
 	try {
 		value = await boundedJsonResponse(response, DEFAULT_RPC_RESPONSE_BYTES, parameters.label)
 	} catch (error) {
 		if (error instanceof SyntaxError) throw new EndpointSafetyError(`${parameters.label} returned a non-JSON response`)
 		throw error
 	}
-	const responseIdMatches = typeof value === 'object' && value !== null && !Array.isArray(value) && 'id' in value && (value.id === parameters.expectedId || (parameters.alternateExpectedId !== undefined && value.id === parameters.alternateExpectedId))
-	if (typeof value !== 'object' || value === null || Array.isArray(value) || !('jsonrpc' in value) || value.jsonrpc !== '2.0' || !responseIdMatches || !('error' in value) || 'result' in value) {
+	const responseIdMatches = typeof value === 'object' && value !== null && !Array.isArray(value) && 'id' in value && (value['id'] === parameters.expectedId || (parameters.alternateExpectedId !== undefined && value['id'] === parameters.alternateExpectedId))
+	if (typeof value !== 'object' || value === null || Array.isArray(value) || !('jsonrpc' in value) || value['jsonrpc'] !== '2.0' || !responseIdMatches || !('error' in value) || 'result' in value) {
 		throw new EndpointSafetyError(`${parameters.label} did not return the expected matching JSON-RPC 2.0 error`)
 	}
-	const error = value.error
-	if (typeof error !== 'object' || error === null || Array.isArray(error) || !('code' in error) || typeof error.code !== 'number' || !Number.isSafeInteger(error.code) || !('message' in error) || typeof error.message !== 'string' || error.message.trim() === '') {
+	const error = value['error']
+	if (typeof error !== 'object' || error === null || Array.isArray(error) || !('code' in error) || typeof error['code'] !== 'number' || !Number.isSafeInteger(error['code']) || !('message' in error) || typeof error['message'] !== 'string' || error['message'].trim() === '') {
 		throw new EndpointSafetyError(`${parameters.label} returned a malformed JSON-RPC error`)
 	}
-	return { code: error.code, message: error.message.trim(), status: response.status }
+	return { code: error['code'], message: error['message'].trim(), status: response.status }
 }
 
 async function rawTransactionSubmissionCapabilityError(
@@ -437,21 +440,21 @@ async function rawRelayCapabilityError(url: string, requestedMethod: string, cap
 		if (response.status === 408 || response.status === 425 || response.status === 429 || response.status >= 500) throw new EndpointTransportError(message)
 		throw new Error(message)
 	}
-	let value: unknown
+	let value: JsonValue
 	try {
 		value = await boundedJsonResponse(response, DEFAULT_RPC_RESPONSE_BYTES, 'Bundle relay capability check')
 	} catch (error) {
 		if (error instanceof SyntaxError) throw new Error(`Bundle relay capability check returned non-JSON HTTP ${response.status.toString()}`)
 		throw error
 	}
-	if (typeof value !== 'object' || value === null || Array.isArray(value) || !('jsonrpc' in value) || value.jsonrpc !== '2.0' || !('id' in value) || (value.id !== 1 && value.id !== null) || !('error' in value) || 'result' in value) {
+	if (typeof value !== 'object' || value === null || Array.isArray(value) || !('jsonrpc' in value) || value['jsonrpc'] !== '2.0' || !('id' in value) || (value['id'] !== 1 && value['id'] !== null) || !('error' in value) || 'result' in value) {
 		throw new Error(`Endpoint did not prove ${capabilityMethod} support: expected one matching JSON-RPC 2.0 error from the intentionally invalid request`)
 	}
-	const error = value.error
-	if (typeof error !== 'object' || error === null || Array.isArray(error) || !('code' in error) || typeof error.code !== 'number' || !Number.isSafeInteger(error.code) || !('message' in error) || typeof error.message !== 'string' || error.message.trim() === '') {
+	const error = value['error']
+	if (typeof error !== 'object' || error === null || Array.isArray(error) || !('code' in error) || typeof error['code'] !== 'number' || !Number.isSafeInteger(error['code']) || !('message' in error) || typeof error['message'] !== 'string' || error['message'].trim() === '') {
 		throw new Error(`Endpoint did not prove ${capabilityMethod} support: malformed JSON-RPC error`)
 	}
-	return { code: error.code, id: value.id, message: error.message.trim() }
+	return { code: error['code'], id: value['id'], message: error['message'].trim() }
 }
 
 async function rawAssertRelayMethodCapability(url: string, method: RelayMethod, timeoutMilliseconds: number) {

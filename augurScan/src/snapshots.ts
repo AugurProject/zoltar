@@ -1,4 +1,4 @@
-import { type Abi, type Address, getAddress, type PublicClient, parseAbi } from './ethereum.ts'
+import { type Abi, type AbiValue, type Address, getAddress, type PublicClient, parseAbi } from './ethereum.ts'
 
 export type StateSnapshotTarget = {
 	readonly entityType: 'auction' | 'escalation' | 'pool' | 'vault'
@@ -74,7 +74,7 @@ const auctionAbi = parseAbi([
 	'function computeClearing() view returns (bool hitCap, int256 clearingTickOut, uint256 accumulatedBidAttoEth, uint256 bidAtClearingTickAttoEth)',
 ])
 
-export type StateRead = (address: Address, abi: Abi, functionName: string, args?: readonly unknown[]) => Promise<unknown>
+export type StateRead = (address: Address, abi: Abi, functionName: string, args?: readonly AbiValue[]) => Promise<unknown>
 
 const exact = (value: unknown, name: string): string => {
 	if (typeof value !== 'bigint') throw new Error(`${name} returned an invalid value`)

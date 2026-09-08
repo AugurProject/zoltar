@@ -1,4 +1,5 @@
 import type { SQL } from 'bun'
+import type { JsonValue } from '../ethereum.ts'
 
 type CanonicalHistoryFilter = 'canonical' | 'orphaned' | 'all'
 
@@ -9,7 +10,7 @@ export type LogListQuery = {
 	readonly decoded: 'true' | 'false' | null
 	readonly canonical: CanonicalHistoryFilter
 	readonly limit: number
-	readonly cursor?: readonly unknown[]
+	readonly cursor?: readonly JsonValue[]
 }
 
 export const logListRows = async (sql: SQL, query: LogListQuery) => {
@@ -130,7 +131,7 @@ export const logDetailData = async (sql: SQL, chainId: number, blockHash: string
 	return { rows, related, logInterpretations, actionInterpretations }
 }
 
-export const reorganizationHistoryData = async (sql: SQL, chainId: number, snapshotInvalidationId: string, limit: number, cursor?: readonly unknown[]) => {
+export const reorganizationHistoryData = async (sql: SQL, chainId: number, snapshotInvalidationId: string, limit: number, cursor?: readonly JsonValue[]) => {
 	const cursorClause = cursor === undefined ? sql`` : sql`AND (reorganization.detected_at, reorganization.id) < (${String(cursor[8])}, ${String(cursor[9])})`
 	const rows = await sql`
 		SELECT reorganization.id::text, reorganization.chain_id, reorganization.previous_block::text,
@@ -154,7 +155,7 @@ export const reorganizationHistoryData = async (sql: SQL, chainId: number, snaps
 	return { rows, totalRows }
 }
 
-export const provenanceHistoryData = async (sql: SQL, limit: number, cursor?: readonly unknown[]) => {
+export const provenanceHistoryData = async (sql: SQL, limit: number, cursor?: readonly JsonValue[]) => {
 	const values: Array<string | number> = []
 	const cursorClause =
 		cursor === undefined

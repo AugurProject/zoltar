@@ -6,17 +6,17 @@ import { dlopen } from 'bun:ffi'
 import { getAddress, type Address } from '../ethereum.ts'
 
 type ProcessLockFileHandle = {
-	chmod: (mode: number) => Promise<unknown>
-	close: () => Promise<unknown>
+	chmod: (mode: number) => Promise<void>
+	close: () => Promise<void>
 	fd: number
-	sync: () => Promise<unknown>
-	truncate: (length?: number) => Promise<unknown>
-	writeFile: (data: string, options: { encoding: 'utf8' }) => Promise<unknown>
+	sync: () => Promise<void>
+	truncate: (length?: number) => Promise<void>
+	writeFile: (data: string, options: { encoding: 'utf8' }) => Promise<void>
 }
 
 export type ProcessLockFilesystem = {
 	lstat?: (path: string) => Promise<{ isDirectory: () => boolean; isSymbolicLink: () => boolean; mode: number; uid: number }>
-	mkdir: (path: string, options: { mode: number; recursive: true }) => Promise<unknown>
+	mkdir: (path: string, options: { mode: number; recursive: true }) => Promise<string | undefined>
 	open: (path: string, flags: number, mode: number) => Promise<ProcessLockFileHandle>
 	readFile: (path: string, encoding: 'utf8') => Promise<string>
 	tryLock: (fileDescriptor: number) => boolean

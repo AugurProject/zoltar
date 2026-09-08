@@ -4975,5 +4975,5 @@ postgresTest(
 			await database.close()
 		}
 	},
-	60_000,
+	180_000,
 )

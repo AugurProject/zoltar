@@ -1,5 +1,5 @@
 import type { SQL } from 'bun'
-import { decodeOpaqueCursor, encodeOpaqueCursor } from '../cursor-codec.ts'
+import { decodeOpaqueCursor, encodeOpaqueCursor, isJsonArray } from '../cursor-codec.ts'
 import { riskCatalogData } from '../repositories/operations.ts'
 import { riskHistoryRows } from '../repositories/risk.ts'
 import { snapshotBoundary } from './entity-details.ts'
@@ -94,7 +94,7 @@ const parseRiskHistoryCursor = (value: string | null, chainId: number, identity:
 	if (value === null) return undefined
 	try {
 		const decoded = decodeOpaqueCursor(value)
-		const parts = Array.isArray(decoded) ? decoded : []
+		const parts = isJsonArray(decoded) ? decoded : []
 		const positions = riskHistoryPositions(parts[11])
 		if (
 			parts.length !== 12 ||
