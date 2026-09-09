@@ -66,6 +66,7 @@ function identity(): ImmutableTopologyIdentity {
 		securityPoolForker: address(5),
 		tradingFactory: address(8),
 		tradingRouter: address(9),
+		uniswapV3Factory: address(10),
 		weth: address(7),
 		zoltar: address(2),
 	}
