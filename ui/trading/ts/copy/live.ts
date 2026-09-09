@@ -40,7 +40,6 @@ const noSecurityPoolsInUniverse = 'No SecurityPools are deployed in the selected
 const positions = 'Positions'
 const refresh = 'Refresh'
 const discoveringSecurityPools = 'Discovering SecurityPools…'
-const securityPools = 'SecurityPools'
 const securityPoolPages = 'SecurityPool pages'
 const previousPools = 'Previous pools'
 const nextPools = 'Next pools'
@@ -103,6 +102,12 @@ function poolPageRange(first: bigint, last: bigint, total: bigint) {
 }
 
 export const liveCopy = {
+	poolAlreadyExists: 'This pool already has a trading market.',
+	openPoolAddress: 'SecurityPool address',
+	poolAddressPlaceholder: '0x…',
+	invalidPoolAddress: 'Enter a valid, nonzero SecurityPool address.',
+	openPool: 'Open pool',
+	tradePool: 'Trade this pool',
 	marketDataUnavailable,
 	pairNotCreated,
 	tradingOpen,
@@ -145,7 +150,11 @@ export const liveCopy = {
 	positions,
 	refresh,
 	discoveringSecurityPools,
-	securityPools,
+	marketCreated: (title: string) => `Market created: ${title}`,
+	eligibleSecurityPools: 'Eligible SecurityPools',
+	noEligiblePools: 'No SecurityPools on this page are available for a new market.',
+	noMarketsOnPage: 'No trading markets on this page.',
+	notDeployed: 'Not deployed',
 	securityPoolPages,
 	previousPools,
 	nextPools,

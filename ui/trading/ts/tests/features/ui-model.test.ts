@@ -48,8 +48,8 @@ describe('standalone trading UI model', () => {
 	})
 
 	test('keeps the shared simulation banner as the only Browser Simulation disclosure', () => {
-		expect(liveWorkflowRoutePresentation('markets', 'Browser Simulation', true).description).toBe('Conditional prices only')
-		expect(liveWorkflowRoutePresentation('markets', 'Ethereum Mainnet', false).description).toBe('Ethereum Mainnet · conditional prices only')
+		expect(liveWorkflowRoutePresentation('markets', 'Browser Simulation', true).description).toBeUndefined()
+		expect(liveWorkflowRoutePresentation('markets', 'Ethereum Mainnet', false).description).toBe('Ethereum Mainnet')
 		expect(portfolioRouteSubtitle('Browser Simulation', true)).toBeUndefined()
 		expect(portfolioRouteSubtitle('Ethereum Mainnet', false)).toBe('Ethereum Mainnet')
 	})
@@ -60,7 +60,7 @@ describe('standalone trading UI model', () => {
 			title: 'Liquidity',
 		})
 		expect(liveWorkflowRoutePresentation('markets', 'Ethereum Mainnet', false)).toEqual({
-			description: 'Ethereum Mainnet · conditional prices only',
+			description: 'Ethereum Mainnet',
 			title: 'Markets',
 		})
 	})
