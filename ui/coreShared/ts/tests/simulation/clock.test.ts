@@ -1,6 +1,6 @@
 /// <reference types="bun-types" />
 
-import { createMemoryClient } from 'tevm'
+import { createMemoryClient } from '@tevm/memory-client'
 import { describe, expect, test } from 'bun:test'
 import { bytesToHex, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { SIMULATION_BLOCK_INTERVAL_SECONDS, SIMULATION_INITIAL_TIMESTAMP, advanceSimulationTime, getNextSimulationTimestamp, getSimulationChainTimestamp, initializeSimulationClock, mineNextSimulationBlock, minePendingSimulationTransactionAtTimestamp } from '../../simulation/clock.js'
