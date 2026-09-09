@@ -703,8 +703,9 @@ function renderTokenMarkets(snapshot: PublicOperatorSnapshot) {
 	universeExplorer ??= createUniverseExplorer(element('approved-universes'), {
 		onChange: next => {
 			approvedUniverseIds = next
+			setText('tokens-status', 'Selection updated. Save universe approvals to apply.')
 		},
-		savedMessage: 'Selection updated. Save universe approvals to apply.',
+		savedMessage: '',
 	})
 	universeExplorer.update({ universes: snapshot.universes ?? [], approved: approvedUniverseIds, network: snapshot.network, disabled: element<HTMLFieldSetElement>('tokens-fieldset').disabled })
 
