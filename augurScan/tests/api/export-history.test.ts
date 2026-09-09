@@ -106,5 +106,4 @@ test('rejects a bundled restore URL that does not identify the verified database
 	}
 })
 
-const processEnv = (): Record<string, string> =>
-	Object.fromEntries(Object.entries(process.env).flatMap(([name, value]) => (value === undefined ? [] : [[name, value]])))
+const processEnv = (): Record<string, string> => Object.fromEntries(Object.entries(process.env).flatMap(([name, value]) => (value === undefined ? [] : [[name, value]])))

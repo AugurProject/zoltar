@@ -1,21 +1,12 @@
 import { databaseJsonText } from '../database-json.ts'
 import type { Hash } from '../ethereum.ts'
-import {
-	canonicalHistoryPolicies,
-	captureDirectObservationInvalidation,
-	captureHistoryInvalidation,
-	type IndexerLease,
-	invalidateHistoryPolicy,
-	recordChainReorganization,
-	withIndexerLease,
-	withOptionalIndexerLease,
-} from './history.ts'
+import { canonicalHistoryPolicies, captureDirectObservationInvalidation, captureHistoryInvalidation, type IndexerLease, invalidateHistoryPolicy, recordChainReorganization, withIndexerLease, withOptionalIndexerLease } from './history.ts'
 import { ScannerObservationRepository } from './observation-repository.ts'
 import { assertRewindTarget, type EvidenceProvenance, type HistoryInvalidationReason, lockLiveEventWriter, rewindDepth } from './records.ts'
 
 export class ScannerHistoryRepository extends ScannerObservationRepository {
 	async checkpoint(chainId: number, lease?: IndexerLease): Promise<{ readonly number: bigint; readonly hash: Hash } | undefined> {
-		return await withOptionalIndexerLease(this.sql, lease, async (sql) => {
+		return await withOptionalIndexerLease(this.sql, lease, async sql => {
 			const rows = await sql`SELECT indexed_block, indexed_hash FROM networks WHERE chain_id = ${chainId}`
 			const row = rows[0]
 			if (row === undefined || row['indexed_block'] === null || row['indexed_hash'] === null) return undefined
@@ -24,7 +15,7 @@ export class ScannerHistoryRepository extends ScannerObservationRepository {
 	}
 
 	async networkStartBlock(chainId: number, lease?: IndexerLease): Promise<bigint | undefined> {
-		return await withOptionalIndexerLease(this.sql, lease, async (sql) => {
+		return await withOptionalIndexerLease(this.sql, lease, async sql => {
 			const rows = await sql`SELECT start_block FROM networks WHERE chain_id = ${chainId}`
 			const startBlock = rows[0]?.['start_block']
 			return startBlock === undefined ? undefined : BigInt(String(startBlock))
@@ -32,14 +23,14 @@ export class ScannerHistoryRepository extends ScannerObservationRepository {
 	}
 
 	async hasStoredBlocks(chainId: number, lease?: IndexerLease): Promise<boolean> {
-		return await withOptionalIndexerLease(this.sql, lease, async (sql) => {
+		return await withOptionalIndexerLease(this.sql, lease, async sql => {
 			const rows = await sql`SELECT EXISTS (SELECT 1 FROM blocks WHERE chain_id = ${chainId}) AS present`
 			return rows[0]?.['present'] === true
 		})
 	}
 
 	async storedBlockTip(chainId: number, lease?: IndexerLease): Promise<bigint | undefined> {
-		return await withOptionalIndexerLease(this.sql, lease, async (sql) => {
+		return await withOptionalIndexerLease(this.sql, lease, async sql => {
 			const rows = await sql`SELECT max(number) AS number FROM blocks WHERE chain_id = ${chainId}`
 			const number = rows[0]?.['number']
 			return number === null || number === undefined ? undefined : BigInt(String(number))
@@ -47,19 +38,15 @@ export class ScannerHistoryRepository extends ScannerObservationRepository {
 	}
 
 	async canonicalHash(chainId: number, number: bigint, lease?: IndexerLease): Promise<Hash | undefined> {
-		return await withOptionalIndexerLease(this.sql, lease, async (sql) => {
+		return await withOptionalIndexerLease(this.sql, lease, async sql => {
 			const rows = await sql`SELECT hash FROM blocks WHERE chain_id = ${chainId} AND number = ${number.toString()} AND canonical`
 			const hash = rows[0]?.['hash']
 			return hash === undefined ? undefined : (String(hash) as Hash)
 		})
 	}
 
-	async canonicalCheckpointAtOrBefore(
-		chainId: number,
-		number: bigint,
-		lease?: IndexerLease,
-	): Promise<{ readonly number: bigint; readonly hash: Hash } | undefined> {
-		return await withOptionalIndexerLease(this.sql, lease, async (sql) => {
+	async canonicalCheckpointAtOrBefore(chainId: number, number: bigint, lease?: IndexerLease): Promise<{ readonly number: bigint; readonly hash: Hash } | undefined> {
+		return await withOptionalIndexerLease(this.sql, lease, async sql => {
 			const rows = await sql`
 				SELECT number, hash FROM blocks
 				WHERE chain_id = ${chainId} AND number <= ${number.toString()} AND canonical
@@ -70,22 +57,12 @@ export class ScannerHistoryRepository extends ScannerObservationRepository {
 		})
 	}
 
-	async rewind(
-		chainId: number,
-		ancestor: bigint,
-		ancestorHash: Hash | undefined,
-		lease: IndexerLease,
-		reason: Extract<HistoryInvalidationReason, 'chain-reorg' | 'manifest-reset'> = 'chain-reorg',
-		provenance?: EvidenceProvenance,
-	): Promise<void> {
-		await withIndexerLease(lease, async (transaction) => {
+	async rewind(chainId: number, ancestor: bigint, ancestorHash: Hash | undefined, lease: IndexerLease, reason: Extract<HistoryInvalidationReason, 'chain-reorg' | 'manifest-reset'> = 'chain-reorg', provenance?: EvidenceProvenance): Promise<void> {
+		await withIndexerLease(lease, async transaction => {
 			const checkpointRows = await transaction`SELECT start_block, indexed_block, indexed_hash FROM networks WHERE chain_id = ${chainId} FOR UPDATE`
 			const checkpoint = checkpointRows[0]
 			if (checkpoint === undefined) throw new Error(`Network ${chainId} must be seeded before rewinding`)
-			const targetRows =
-				ancestor < 0n
-					? []
-					: await transaction`SELECT 1 FROM blocks WHERE chain_id = ${chainId} AND number = ${ancestor.toString()} AND hash = ${ancestorHash ?? ''} AND canonical`
+			const targetRows = ancestor < 0n ? [] : await transaction`SELECT 1 FROM blocks WHERE chain_id = ${chainId} AND number = ${ancestor.toString()} AND hash = ${ancestorHash ?? ''} AND canonical`
 			assertRewindTarget(
 				ancestor,
 				ancestorHash,
@@ -97,18 +74,7 @@ export class ScannerHistoryRepository extends ScannerObservationRepository {
 			)
 			const previousBlock = BigInt(String(checkpoint['indexed_block']))
 			const reorgDepth = rewindDepth(previousBlock, BigInt(String(checkpoint['start_block'])), ancestor)
-			const invalidationId = await recordChainReorganization(
-				transaction,
-				chainId,
-				previousBlock,
-				typeof checkpoint['indexed_hash'] === 'string' ? checkpoint['indexed_hash'] : undefined,
-				ancestor,
-				ancestorHash,
-				reorgDepth,
-				reason,
-				[reason],
-				provenance,
-			)
+			const invalidationId = await recordChainReorganization(transaction, chainId, previousBlock, typeof checkpoint['indexed_hash'] === 'string' ? checkpoint['indexed_hash'] : undefined, ancestor, ancestorHash, reorgDepth, reason, [reason], provenance)
 			await captureHistoryInvalidation(transaction, invalidationId, chainId, ancestor)
 			await captureDirectObservationInvalidation(transaction, invalidationId, chainId, { afterBlock: ancestor })
 			for (const policy of canonicalHistoryPolicies) await invalidateHistoryPolicy(transaction, policy, chainId, { comparison: '>', block: ancestor })

@@ -1,16 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import {
-	type Address,
-	concatHex,
-	encodeAbiParameters,
-	encodeEventTopics,
-	encodeFunctionData,
-	getAddress,
-	type Hex,
-	parseAbi,
-	toHex,
-	zeroAddress,
-} from '../../src/ethereum.ts'
+import { type Address, concatHex, encodeAbiParameters, encodeEventTopics, encodeFunctionData, getAddress, type Hex, parseAbi, toHex, zeroAddress } from '../../src/ethereum.ts'
 import { abiForKind, decodeAction, decodeLogRecord, discoveriesFrom, referencedAddressesFrom, tokenAddressesFrom } from '../../src/metadata.ts'
 import { projectionsFrom } from '../../src/projections.ts'
 import type { StoredLog, TokenMetadata } from '../../src/types.ts'
@@ -18,7 +7,7 @@ import type { StoredLog, TokenMetadata } from '../../src/types.ts'
 const account = getAddress('0x1111111111111111111111111111111111111111')
 const childToken = getAddress('0x2222222222222222222222222222222222222222')
 const requireTopics = (topics: readonly (Hex | readonly Hex[] | null)[]): readonly Hex[] =>
-	topics.map((topic) => {
+	topics.map(topic => {
 		if (typeof topic !== 'string') throw new Error('Expected one encoded topic per event input')
 		return topic
 	})
@@ -71,14 +60,9 @@ describe('ABI metadata', () => {
 	})
 
 	test('formats native event and action values with the network currency symbol', () => {
-		const eventAbi = parseAbi([
-			'event CompleteSetCreated(address indexed creator,uint256 settlementCollateralProvidedAttoEth,uint256 completeSetsMintedAttoShares,uint256 resultingShareTokenSupplyAttoShares,uint256 resultingSettlementCollateralAttoEth)',
-		])
+		const eventAbi = parseAbi(['event CompleteSetCreated(address indexed creator,uint256 settlementCollateralProvidedAttoEth,uint256 completeSetsMintedAttoShares,uint256 resultingShareTokenSupplyAttoShares,uint256 resultingSettlementCollateralAttoEth)'])
 		const topics = requireTopics(encodeEventTopics({ abi: eventAbi, eventName: 'CompleteSetCreated', args: { creator: account } }))
-		const data = encodeAbiParameters(
-			[{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }],
-			[2_000_000_000_000_000_000n, 3_000_000_000_000_000_000n, 4_000_000_000_000_000_000n, 5_000_000_000_000_000_000n],
-		)
+		const data = encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [2_000_000_000_000_000_000n, 3_000_000_000_000_000_000n, 4_000_000_000_000_000_000n, 5_000_000_000_000_000_000n])
 		const context = { nativeSymbol: 'SepoliaETH' }
 		const decodedEvent = decodeLogRecord('securityPool', topics, data, new Map(), new Map(), account, new Map(), context)
 		expect(decodedEvent.displayArguments?.['settlementCollateralProvidedAttoEth']).toBe('2 SepoliaETH')
@@ -96,9 +80,7 @@ describe('ABI metadata', () => {
 		if (abi === undefined) throw new Error('WETH ABI missing')
 		const misleading: TokenMetadata = { address: account, symbol: 'WRONG', decimals: 6, readBlock: 10n }
 		for (const eventName of ['Transfer', 'Approval'] as const) {
-			const topics = requireTopics(
-				encodeEventTopics({ abi, eventName, args: eventName === 'Transfer' ? { src: account, dst: childToken } : { src: account, guy: childToken } }),
-			)
+			const topics = requireTopics(encodeEventTopics({ abi, eventName, args: eventName === 'Transfer' ? { src: account, dst: childToken } : { src: account, guy: childToken } }))
 			const data = encodeAbiParameters([{ type: 'uint256' }], [1_500_000_000_000_000_000n])
 			const decoded = decodeLogRecord('weth', topics, data, new Map(), new Map([[account.toLowerCase(), misleading]]), account)
 			expect(decoded.arguments?.['wad']).toBe('1500000000000000000')
@@ -220,17 +202,7 @@ describe('ABI metadata', () => {
 		const disputeInput = encodeFunctionData({
 			abi,
 			functionName: 'dispute',
-			args: [
-				17n,
-				3_000_001n,
-				4_000_000_000_000_000_000n,
-				account,
-				false,
-				false,
-				params,
-				{ reportId: 17n, creator: account, blockTimestamp: 15n, blockNumber: 13n },
-				timing,
-			],
+			args: [17n, 3_000_001n, 4_000_000_000_000_000_000n, account, false, false, params, { reportId: 17n, creator: account, blockTimestamp: 15n, blockNumber: 13n }, timing],
 		})
 		const dispute = decodeAction(contract, disputeInput, new Map(), metadataByAddress)
 		expect(dispute.arguments).toMatchObject({
@@ -302,9 +274,7 @@ describe('ABI metadata', () => {
 	})
 
 	test('discovers a child REP contract from a decoded Zoltar event', () => {
-		const abi = parseAbi([
-			'event DeployChild(address deployer,uint248 indexed universeId,uint256 indexed outcomeIndex,uint248 indexed childUniverseId,address childReputationToken,uint256 childUniverseTheoreticalSupplyAttoRep)',
-		])
+		const abi = parseAbi(['event DeployChild(address deployer,uint248 indexed universeId,uint256 indexed outcomeIndex,uint248 indexed childUniverseId,address childReputationToken,uint256 childUniverseTheoreticalSupplyAttoRep)'])
 		const topics = encodeEventTopics({ abi, eventName: 'DeployChild', args: { universeId: 2n, outcomeIndex: 3n, childUniverseId: 7n } })
 		const data = encodeAbiParameters([{ type: 'address' }, { type: 'address' }, { type: 'uint256' }], [account, childToken, 99_000_000_000_000_000_000n])
 		const decoded = decodeLogRecord('zoltar', requireTopics(topics), data, new Map())
@@ -345,36 +315,16 @@ describe('ABI metadata', () => {
 		const v2Abi = abiForKind('uniswapV2Factory')
 		const v3Abi = abiForKind('uniswapV3Factory')
 		if (v2Abi === undefined || v3Abi === undefined) throw new Error('Uniswap factory ABI missing')
-		const v2 = decodeLogRecord(
-			'uniswapV2Factory',
-			requireTopics(encodeEventTopics({ abi: v2Abi, eventName: 'PairCreated', args: { token0: account, token1: childToken } })),
-			encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [pair, 1n]),
-			new Map(),
-		)
+		const v2 = decodeLogRecord('uniswapV2Factory', requireTopics(encodeEventTopics({ abi: v2Abi, eventName: 'PairCreated', args: { token0: account, token1: childToken } })), encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [pair, 1n]), new Map())
 		expect(discoveriesFrom(v2, contracts)).toEqual([{ address: pair, kind: 'uniswapV2Pair', label: 'Uniswap V2 REP / WETH Pair' }])
 
-		const unrelatedV2 = decodeLogRecord(
-			'uniswapV2Factory',
-			requireTopics(encodeEventTopics({ abi: v2Abi, eventName: 'PairCreated', args: { token0: account, token1: unrelated } })),
-			encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [pair, 1n]),
-			new Map(),
-		)
+		const unrelatedV2 = decodeLogRecord('uniswapV2Factory', requireTopics(encodeEventTopics({ abi: v2Abi, eventName: 'PairCreated', args: { token0: account, token1: unrelated } })), encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [pair, 1n]), new Map())
 		expect(discoveriesFrom(unrelatedV2, contracts)).toEqual([])
 
-		const v3 = decodeLogRecord(
-			'uniswapV3Factory',
-			requireTopics(encodeEventTopics({ abi: v3Abi, eventName: 'PoolCreated', args: { token0: account, token1: childToken, fee: 500 } })),
-			encodeAbiParameters([{ type: 'int24' }, { type: 'address' }], [10, pair]),
-			new Map(),
-		)
+		const v3 = decodeLogRecord('uniswapV3Factory', requireTopics(encodeEventTopics({ abi: v3Abi, eventName: 'PoolCreated', args: { token0: account, token1: childToken, fee: 500 } })), encodeAbiParameters([{ type: 'int24' }, { type: 'address' }], [10, pair]), new Map())
 		expect(discoveriesFrom(v3, contracts)).toEqual([{ address: pair, kind: 'uniswapV3Pool', label: 'Uniswap V3 REP / WETH Pool' }])
 
-		const usdcV3 = decodeLogRecord(
-			'uniswapV3Factory',
-			requireTopics(encodeEventTopics({ abi: v3Abi, eventName: 'PoolCreated', args: { token0: account, token1: usdc, fee: 3000 } })),
-			encodeAbiParameters([{ type: 'int24' }, { type: 'address' }], [60, pair]),
-			new Map(),
-		)
+		const usdcV3 = decodeLogRecord('uniswapV3Factory', requireTopics(encodeEventTopics({ abi: v3Abi, eventName: 'PoolCreated', args: { token0: account, token1: usdc, fee: 3000 } })), encodeAbiParameters([{ type: 'int24' }, { type: 'address' }], [60, pair]), new Map())
 		expect(discoveriesFrom(usdcV3, contracts)).toEqual([{ address: pair, kind: 'uniswapV3Pool', label: 'Uniswap V3 REP / USDC Pool' }])
 	})
 
@@ -454,18 +404,7 @@ describe('ABI metadata', () => {
 	})
 
 	test('maps all supported manifest contract kinds to ABIs', () => {
-		for (const kind of [
-			'ammFactory',
-			'ammPair',
-			'proxyDeployer',
-			'multicall3',
-			'priceCoordinatorFactory',
-			'scalarOutcomes',
-			'securityPoolUtils',
-			'securityPoolOperationsDelegate',
-			'shareTokenFactory',
-			'truthAuctionFactory',
-		]) {
+		for (const kind of ['ammFactory', 'ammPair', 'proxyDeployer', 'multicall3', 'priceCoordinatorFactory', 'scalarOutcomes', 'securityPoolUtils', 'securityPoolOperationsDelegate', 'shareTokenFactory', 'truthAuctionFactory']) {
 			expect(abiForKind(kind)).toBeDefined()
 		}
 	})

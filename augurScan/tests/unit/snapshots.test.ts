@@ -71,7 +71,7 @@ test('allows pruning failures to escape for provider-floor rediscovery', async (
 			async () => {
 				throw pruned
 			},
-			(error) => {
+			error => {
 				throw error
 			},
 		),
@@ -89,7 +89,7 @@ test('prioritizes delayed pruning over an earlier ordinary snapshot failure', as
 				await Promise.resolve()
 				throw pruned
 			},
-			(error) => {
+			error => {
 				if (error === pruned) throw error
 			},
 		),

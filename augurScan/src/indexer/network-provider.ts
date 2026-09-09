@@ -1,25 +1,11 @@
 import { runtimeConfig } from '../config.ts'
 import type { EvidenceProvenance, HistoryInvalidationReason, IndexerLease, ScannerDatabase } from '../database.ts'
 import { type Address, createPublicClient, http, type PublicClient, zeroAddress } from '../ethereum.ts'
-import {
-	ChainConfigurationError,
-	createLogClient,
-	createRpcDiagnosticContext,
-	findEarliestAvailableStateBlock,
-	isPrunedHistoricalStateError,
-	rpcProviderLabel,
-} from '../indexer-runtime.ts'
+import { ChainConfigurationError, createLogClient, createRpcDiagnosticContext, findEarliestAvailableStateBlock, isPrunedHistoricalStateError, rpcProviderLabel } from '../indexer-runtime.ts'
 import { createRpcLoggingFetch } from '../logging.ts'
 import { withRpcRequestQueue } from '../rpc-request-queue.ts'
 import type { NetworkConfig } from '../types.ts'
-import {
-	findManifestContractDeployment,
-	type IndexerRpcProvider,
-	type RpcBlockHeader,
-	requireRpcBlockHeader,
-	rpcExchangeLog,
-	rpcRequestQueue,
-} from './planning.ts'
+import { findManifestContractDeployment, type IndexerRpcProvider, type RpcBlockHeader, requireRpcBlockHeader, rpcExchangeLog, rpcRequestQueue } from './planning.ts'
 export abstract class NetworkIndexerProvider {
 	protected abstract rpcFailureReason(error: unknown): string
 	protected network: NetworkConfig
@@ -107,17 +93,10 @@ export abstract class NetworkIndexerProvider {
 		const unavailable = this.historicalCodeUnavailable()
 		if (unavailable.has(key)) return
 		unavailable.add(key)
-		console.warn(
-			`[${this.network.id}] historical contract code unavailable for ${address}; scanning complete available coverage from block #${this.network.startBlock} instead: ${this.rpcFailureReason(error)}`,
-		)
+		console.warn(`[${this.network.id}] historical contract code unavailable for ${address}; scanning complete available coverage from block #${this.network.startBlock} instead: ${this.rpcFailureReason(error)}`)
 	}
 
-	protected async findManifestDeployment(
-		address: Address,
-		startBlock: bigint,
-		indexedBoundary: bigint,
-		startBlockKnownAbsent: boolean,
-	): Promise<{ readonly block: bigint; readonly exact: boolean } | undefined> {
+	protected async findManifestDeployment(address: Address, startBlock: bigint, indexedBoundary: bigint, startBlockKnownAbsent: boolean): Promise<{ readonly block: bigint; readonly exact: boolean } | undefined> {
 		if (this.historicalCodeUnavailable().has(address.toLowerCase())) return { block: startBlock, exact: false }
 		for (let attempt = 0; attempt < 2; attempt++) {
 			const searchStart = this.stateStartBlock > startBlock ? this.stateStartBlock : startBlock
@@ -130,7 +109,7 @@ export abstract class NetworkIndexerProvider {
 					(candidate, blockNumber) => this.client.getBytecode({ address: candidate, blockNumber }),
 					5_000,
 					Date.now,
-					(error) => this.rememberHistoricalCodeUnavailable(address, error),
+					error => this.rememberHistoricalCodeUnavailable(address, error),
 				)
 			} catch (error) {
 				if (!isPrunedHistoricalStateError(error) || attempt > 0) throw error
@@ -148,7 +127,7 @@ export abstract class NetworkIndexerProvider {
 		const stateStartBlock = await findEarliestAvailableStateBlock(
 			searchStart,
 			observedHead,
-			async (blockNumber) => {
+			async blockNumber => {
 				await this.client.getBalance({ address: zeroAddress, blockNumber })
 			},
 			searchStartKnownUnavailable,
@@ -156,9 +135,6 @@ export abstract class NetworkIndexerProvider {
 		this.stateStartBlock = stateStartBlock
 		this.stateBoundaryDiscovered = true
 		this.providerStateBoundaries.set(this.activeProvider, { startBlock: stateStartBlock, discovered: true })
-		if (stateStartBlock > this.network.startBlock)
-			console.warn(
-				`[${this.network.id}] RPC historical state before block #${stateStartBlock} is pruned; state-dependent reads will begin at the earliest retrievable state block while log indexing independently begins at its earliest retrievable log block`,
-			)
+		if (stateStartBlock > this.network.startBlock) console.warn(`[${this.network.id}] RPC historical state before block #${stateStartBlock} is pruned; state-dependent reads will begin at the earliest retrievable state block while log indexing independently begins at its earliest retrievable log block`)
 	}
 }

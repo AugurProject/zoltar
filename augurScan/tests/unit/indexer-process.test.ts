@@ -30,7 +30,7 @@ runIndexerProcess({
 	)
 
 	await Bun.sleep(500)
-	const earlyExit = await Promise.race([child.exited.then((code) => ({ exited: true, code })), Bun.sleep(50).then(() => ({ exited: false as const }))])
+	const earlyExit = await Promise.race([child.exited.then(code => ({ exited: true, code })), Bun.sleep(50).then(() => ({ exited: false as const }))])
 	expect(earlyExit).toEqual({ exited: false })
 
 	child.kill('SIGTERM')
@@ -41,7 +41,7 @@ runIndexerProcess({
 
 test('signal-triggered shutdown aborts active indexers before recording and closing', async () => {
 	let terminate: (() => void) | undefined
-	const untilTerminated = new Promise<void>((resolve) => {
+	const untilTerminated = new Promise<void>(resolve => {
 		terminate = resolve
 	})
 	const events: string[] = []
@@ -59,7 +59,7 @@ test('signal-triggered shutdown aborts active indexers before recording and clos
 			indexerRunId: '1',
 		}),
 		start: (_networks, _database, signal) => [
-			new Promise<void>((resolve) => {
+			new Promise<void>(resolve => {
 				signal.addEventListener('abort', () => {
 					events.push('indexer-stopped')
 					resolve()
@@ -79,10 +79,10 @@ test('signal-triggered shutdown aborts active indexers before recording and clos
 test('termination during initialization cleans up without starting indexers', async () => {
 	let finishInitialization: (() => void) | undefined
 	let terminate: (() => void) | undefined
-	const initialization = new Promise<void>((resolve) => {
+	const initialization = new Promise<void>(resolve => {
 		finishInitialization = resolve
 	})
-	const untilTerminated = new Promise<void>((resolve) => {
+	const untilTerminated = new Promise<void>(resolve => {
 		terminate = resolve
 	})
 	const events: string[] = []

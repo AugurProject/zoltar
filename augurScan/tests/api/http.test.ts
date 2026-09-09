@@ -1,16 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { reconcileIndexerOwnership } from '../../src/database.ts'
-import {
-	basicAccessRequiredResponse,
-	createFixedWindowRateLimiter,
-	createRequestMetrics,
-	hasBasicAccess,
-	indexerHealthUnavailableResponse,
-	metricRoute,
-	parseBasicAccessCredentials,
-	requestAccessGuard,
-	staticAssetResponse,
-} from '../../src/http.ts'
+import { basicAccessRequiredResponse, createFixedWindowRateLimiter, createRequestMetrics, hasBasicAccess, indexerHealthUnavailableResponse, metricRoute, parseBasicAccessCredentials, requestAccessGuard, staticAssetResponse } from '../../src/http.ts'
 
 describe('HTTP response policy', () => {
 	test('reconciles durable ownership heartbeats with actual PostgreSQL advisory locks', () => {

@@ -2,15 +2,7 @@ import { runtimeConfig } from '../config.ts'
 import { type ContractDeploymentObservation, DatabaseConsistencyError, type LogScanCursor, manifestContractSetChanged } from '../database.ts'
 import { errorChainIncludes } from '../error-chain.ts'
 import { type Address, type Block, type Hash, type Hex, type PublicClient, parseAbi, parseAbiItem, zeroAddress } from '../ethereum.ts'
-import {
-	deploymentReadBudget,
-	isPermanentHistoricalCodeError,
-	isProtocolActivitySource,
-	isPrunedHistoricalStateError,
-	type RpcProvider,
-	requiresManifestHistoryCoverage,
-	safeIndexerFailureReason,
-} from '../indexer-runtime.ts'
+import { deploymentReadBudget, isPermanentHistoricalCodeError, isProtocolActivitySource, isPrunedHistoricalStateError, type RpcProvider, requiresManifestHistoryCoverage, safeIndexerFailureReason } from '../indexer-runtime.ts'
 import { RotatingJsonLog } from '../logging.ts'
 import { createRpcRequestQueue, rpcQueueSaturationFrom } from '../rpc-request-queue.ts'
 import { bigintToSafeNumber } from '../time.ts'
@@ -35,34 +27,23 @@ export const requireRpcBlockHeader = (block: Block, blockNumber: bigint): RpcBlo
 const RPC_CONCURRENCY = 5
 const RPC_MAX_PENDING = 100
 
-export const erc20MetadataAbi = parseAbi([
-	'function decimals() view returns (uint8)',
-	'function name() view returns (string)',
-	'function symbol() view returns (string)',
-])
+export const erc20MetadataAbi = parseAbi(['function decimals() view returns (uint8)', 'function name() view returns (string)', 'function symbol() view returns (string)'])
 export const erc20BalanceAbi = parseAbi(['function balanceOf(address owner) view returns (uint256)'])
 export const priceCoordinatorDependenciesAbi = parseAbi(['function liquidationApprovalRegistry() view returns (address)'])
-export const uniswapV4InitializeEvent = parseAbiItem(
-	'event Initialize(bytes32 indexed id,address indexed currency0,address indexed currency1,uint24 fee,int24 tickSpacing,address hooks,uint160 sqrtPriceX96,int24 tick)',
-)
+export const uniswapV4InitializeEvent = parseAbiItem('event Initialize(bytes32 indexed id,address indexed currency0,address indexed currency1,uint24 fee,int24 tickSpacing,address hooks,uint160 sqrtPriceX96,int24 tick)')
 export const uniswapV2PairCreatedEvent = parseAbiItem('event PairCreated(address indexed token0,address indexed token1,address pair,uint256 pairIndex)')
-export const uniswapV3PoolCreatedEvent = parseAbiItem(
-	'event PoolCreated(address indexed token0,address indexed token1,uint24 indexed fee,int24 tickSpacing,address pool)',
-)
-export const uniswapV4SwapEvent = parseAbiItem(
-	'event Swap(bytes32 indexed id,address indexed sender,int128 amount0,int128 amount1,uint160 sqrtPriceX96,uint128 liquidity,int24 tick,uint24 fee)',
-)
+export const uniswapV3PoolCreatedEvent = parseAbiItem('event PoolCreated(address indexed token0,address indexed token1,uint24 indexed fee,int24 tickSpacing,address pool)')
+export const uniswapV4SwapEvent = parseAbiItem('event Swap(bytes32 indexed id,address indexed sender,int128 amount0,int128 amount1,uint160 sqrtPriceX96,uint128 liquidity,int24 tick,uint24 fee)')
 export const uniswapV4PoolIds = (contracts: ReadonlyMap<string, ContractMetadata>): readonly Hex[] =>
 	[...contracts.values()]
 		.filter(({ kind }) => kind === 'reputationToken')
 		.flatMap(({ address }) => {
 			const quotes = [zeroAddress, ...[...contracts.values()].filter(({ kind }) => kind === 'usdc').map(({ address: quote }) => quote)]
-			return quotes.flatMap((quote) => uniswapV4PoolConfigurations.map(({ fee, tickSpacing }) => uniswapV4PoolId(address, fee, tickSpacing, quote)))
+			return quotes.flatMap(quote => uniswapV4PoolConfigurations.map(({ fee, tickSpacing }) => uniswapV4PoolId(address, fee, tickSpacing, quote)))
 		})
 
 export const tokenMetadataNeedsRead = (metadata: TokenMetadata | undefined, blockNumber: bigint, stateStartBlock = 0n): boolean =>
-	blockNumber >= stateStartBlock &&
-	(metadata === undefined || (metadata.decimals === undefined && (metadata.readError === prunedTokenMetadataError || blockNumber >= metadata.readBlock + 25n)))
+	blockNumber >= stateStartBlock && (metadata === undefined || (metadata.decimals === undefined && (metadata.readError === prunedTokenMetadataError || blockNumber >= metadata.readBlock + 25n)))
 
 export const reorgSearchFloor = (startBlock: bigint, checkpoint: bigint, confirmationDepth: bigint): bigint => {
 	const candidate = checkpoint > confirmationDepth ? checkpoint - confirmationDepth : startBlock
@@ -98,8 +79,7 @@ export const readTokenMetadata = async (address: Address, blockNumber: bigint, c
 	try {
 		const decimals = await metadataCall(calls.decimals)
 		if (decimals.status === 'pruned') return { address, readError: prunedTokenMetadataError, readBlock: blockNumber }
-		if (decimals.status !== 'available' || !Number.isSafeInteger(decimals.value) || decimals.value < 0 || decimals.value > 255)
-			return { address, readError: 'ERC-20 metadata unavailable', readBlock: blockNumber }
+		if (decimals.status !== 'available' || !Number.isSafeInteger(decimals.value) || decimals.value < 0 || decimals.value > 255) return { address, readError: 'ERC-20 metadata unavailable', readBlock: blockNumber }
 		const [nameOutcome, symbolOutcome] = await Promise.allSettled([metadataCall(calls.name), metadataCall(calls.symbol)])
 		const name = nameOutcome.status === 'fulfilled' ? nameOutcome.value : undefined
 		const symbol = symbolOutcome.status === 'fulfilled' ? symbolOutcome.value : undefined
@@ -119,12 +99,7 @@ export const readTokenMetadata = async (address: Address, blockNumber: bigint, c
 	}
 }
 
-export const findContractDeploymentBlock = async (
-	startBlock: bigint,
-	observedHead: bigint,
-	codeAt: (block: bigint) => Promise<Hex | undefined>,
-	startBlockKnownAbsent = false,
-): Promise<{ readonly block: bigint; readonly exact: boolean } | undefined> => {
+export const findContractDeploymentBlock = async (startBlock: bigint, observedHead: bigint, codeAt: (block: bigint) => Promise<Hex | undefined>, startBlockKnownAbsent = false): Promise<{ readonly block: bigint; readonly exact: boolean } | undefined> => {
 	// A single block cannot establish an absent-to-present code boundary. Some
 	// lagging or non-archive RPC nodes report head #0 while answering historical
 	// eth_getCode calls from newer state, which previously produced a false #0
@@ -179,12 +154,7 @@ export const planManifestBackfill = async (
 	cursors: ReadonlyMap<string, LogScanCursor>,
 	checkpoint: bigint,
 	configuredStartBlock: bigint,
-	findDeployment: (
-		address: Address,
-		startBlock: bigint,
-		checkpoint: bigint,
-		startBlockKnownAbsent: boolean,
-	) => Promise<{ readonly block: bigint; readonly exact: boolean } | undefined>,
+	findDeployment: (address: Address, startBlock: bigint, checkpoint: bigint, startBlockKnownAbsent: boolean) => Promise<{ readonly block: bigint; readonly exact: boolean } | undefined>,
 	coverageStartBlock = configuredStartBlock,
 ): Promise<bigint | undefined> => {
 	const activeStartBlock = coverageStartBlock > configuredStartBlock ? coverageStartBlock : configuredStartBlock
@@ -200,33 +170,16 @@ export const planManifestBackfill = async (
 		}
 		if (!requiresManifestHistoryCoverage(contract)) continue
 		const cursor = cursors.get(address.toLowerCase())
-		const requiresFreshDeploymentSearch =
-			configuredDeploymentBlock === undefined &&
-			storedContract !== undefined &&
-			storedContract.deploymentBlockExact !== true &&
-			(storedContract.provenance !== 'manifest' || !requiresManifestHistoryCoverage(storedContract))
-		const knownDeploymentBlock =
-			configuredDeploymentBlock ?? (requiresFreshDeploymentSearch || contract.deploymentBlockExact !== true ? undefined : contract.deploymentBlock)
+		const requiresFreshDeploymentSearch = configuredDeploymentBlock === undefined && storedContract !== undefined && storedContract.deploymentBlockExact !== true && (storedContract.provenance !== 'manifest' || !requiresManifestHistoryCoverage(storedContract))
+		const knownDeploymentBlock = configuredDeploymentBlock ?? (requiresFreshDeploymentSearch || contract.deploymentBlockExact !== true ? undefined : contract.deploymentBlock)
 		let deploymentBlock = knownDeploymentBlock === undefined || knownDeploymentBlock > activeStartBlock ? knownDeploymentBlock : activeStartBlock
-		if (
-			!requiresFreshDeploymentSearch &&
-			cursor !== undefined &&
-			cursor.lastRetrievedBlock >= checkpoint &&
-			cursor.startBlock <= (deploymentBlock ?? activeStartBlock)
-		)
-			continue
+		if (!requiresFreshDeploymentSearch && cursor !== undefined && cursor.lastRetrievedBlock >= checkpoint && cursor.startBlock <= (deploymentBlock ?? activeStartBlock)) continue
 		if (deploymentBlock === undefined) {
 			const hasInexactDeployment = contract.deploymentBlock !== undefined && contract.deploymentBlockExact !== true
-			const previousSearchStart =
-				requiresFreshDeploymentSearch || hasInexactDeployment ? configuredStartBlock : (contract.deploymentCheckedBlock ?? configuredStartBlock)
+			const previousSearchStart = requiresFreshDeploymentSearch || hasInexactDeployment ? configuredStartBlock : (contract.deploymentCheckedBlock ?? configuredStartBlock)
 			const searchStart = previousSearchStart > activeStartBlock ? previousSearchStart : activeStartBlock
 			if (searchStart >= checkpoint && contract.deploymentCheckedBlock !== undefined && !requiresFreshDeploymentSearch && !hasInexactDeployment) continue
-			const deployment = await findDeployment(
-				address,
-				searchStart,
-				checkpoint,
-				!requiresFreshDeploymentSearch && !hasInexactDeployment && contract.deploymentCheckedBlock !== undefined,
-			)
+			const deployment = await findDeployment(address, searchStart, checkpoint, !requiresFreshDeploymentSearch && !hasInexactDeployment && contract.deploymentCheckedBlock !== undefined)
 			if (deployment === undefined) continue
 			deploymentBlock = deployment.exact && deployment.block > activeStartBlock ? deployment.block : activeStartBlock
 		}
@@ -250,12 +203,7 @@ export const findManifestContractDeployment = async (
 ): Promise<{ readonly block: bigint; readonly exact: boolean } | undefined> => {
 	const readWithinBudget = deploymentReadBudget(timeoutMs, now)
 	try {
-		return await findContractDeploymentBlock(
-			startBlock,
-			checkpoint,
-			(blockNumber) => readWithinBudget(() => codeAt(address, blockNumber)),
-			startBlockKnownAbsent,
-		)
+		return await findContractDeploymentBlock(startBlock, checkpoint, blockNumber => readWithinBudget(() => codeAt(address, blockNumber)), startBlockKnownAbsent)
 	} catch (error) {
 		if (isPrunedHistoricalStateError(error)) throw error
 		if (rpcQueueSaturationFrom(error) !== undefined || !isPermanentHistoricalCodeError(error)) throw error
@@ -264,19 +212,12 @@ export const findManifestContractDeployment = async (
 	}
 }
 
-export const logScanCursorUpdates = (
-	contracts: ReadonlyMap<string, ContractMetadata>,
-	scanInputs: readonly LogScanInput[],
-	endBlock: bigint,
-	configuredStartBlock: bigint,
-	coverageStartBlock = configuredStartBlock,
-): readonly LogScanCursor[] =>
-	[...contracts.values()].flatMap((contract) => {
+export const logScanCursorUpdates = (contracts: ReadonlyMap<string, ContractMetadata>, scanInputs: readonly LogScanInput[], endBlock: bigint, configuredStartBlock: bigint, coverageStartBlock = configuredStartBlock): readonly LogScanCursor[] =>
+	[...contracts.values()].flatMap(contract => {
 		const scanInput = scanInputs.find(({ address }) => address.toLowerCase() === contract.address.toLowerCase())
 		const tracksFilteredHistory = contract.kind === 'reputationToken' || contract.kind === 'weth' || contract.kind === 'usdc'
 		if (!tracksFilteredHistory && (!isProtocolActivitySource(contract) || (scanInput === undefined && contract.discoveryBlock === undefined))) return []
-		const startBlock =
-			scanInput?.startBlock ?? contract.deploymentBlock ?? contract.discoveryBlock ?? (tracksFilteredHistory ? coverageStartBlock : configuredStartBlock)
+		const startBlock = scanInput?.startBlock ?? contract.deploymentBlock ?? contract.discoveryBlock ?? (tracksFilteredHistory ? coverageStartBlock : configuredStartBlock)
 		const coveredStartBlock = startBlock > configuredStartBlock ? startBlock : configuredStartBlock
 		return coveredStartBlock > endBlock ? [] : [{ contractAddress: contract.address, startBlock: coveredStartBlock, lastRetrievedBlock: endBlock }]
 	})
@@ -288,9 +229,7 @@ export const rpcLogQueryGroups = (inputs: readonly LogScanInput[]): readonly Log
 		addresses.push(input.address)
 		byStart.set(input.fromBlock, addresses)
 	}
-	return [...byStart]
-		.sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
-		.flatMap(([fromBlock, addresses]) => rpcLogAddressGroups(addresses).map((group) => ({ addresses: group, fromBlock })))
+	return [...byStart].sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0)).flatMap(([fromBlock, addresses]) => rpcLogAddressGroups(addresses).map(group => ({ addresses: group, fromBlock })))
 }
 
 export const mapLimit = async <T, R>(items: readonly T[], limit: number, operation: (item: T) => Promise<R>): Promise<R[]> => {
@@ -304,8 +243,8 @@ export const mapLimit = async <T, R>(items: readonly T[], limit: number, operati
 		}
 	})
 	const outcomes = await Promise.allSettled(workers)
-	const failures = outcomes.flatMap((outcome) => (outcome.status === 'rejected' ? [outcome.reason] : []))
-	if (failures.length > 0) throw failures.find((error) => isPrunedHistoricalStateError(error)) ?? failures[0]
+	const failures = outcomes.flatMap(outcome => (outcome.status === 'rejected' ? [outcome.reason] : []))
+	if (failures.length > 0) throw failures.find(error => isPrunedHistoricalStateError(error)) ?? failures[0]
 	return result
 }
 
@@ -330,10 +269,7 @@ export const planDeploymentAwareLogScan = async (
 		if (knownStart !== undefined) {
 			const coverageStart = knownStart > configuredStartBlock ? knownStart : configuredStartBlock
 			return {
-				inputs:
-					coverageStart > toBlock
-						? []
-						: [{ address: contract.address, fromBlock: coverageStart > fromBlock ? coverageStart : fromBlock, startBlock: coverageStart }],
+				inputs: coverageStart > toBlock ? [] : [{ address: contract.address, fromBlock: coverageStart > fromBlock ? coverageStart : fromBlock, startBlock: coverageStart }],
 				observations: [],
 			}
 		}
@@ -348,12 +284,7 @@ export const planDeploymentAwareLogScan = async (
 			const recordedSearchStart = hasInexactDeployment ? configuredStartBlock : (contract.deploymentCheckedBlock ?? configuredStartBlock)
 			const searchStart = stateStartBlock > recordedSearchStart ? stateStartBlock : recordedSearchStart
 			if (toBlock <= searchStart) return { inputs: [{ address: contract.address, fromBlock, startBlock: configuredStartBlock }], observations: [] }
-			deployment = await findContractDeploymentBlock(
-				searchStart,
-				toBlock,
-				(block) => codeAt(contract.address, block),
-				!hasInexactDeployment && contract.deploymentCheckedBlock !== undefined && searchStart === recordedSearchStart,
-			)
+			deployment = await findContractDeploymentBlock(searchStart, toBlock, block => codeAt(contract.address, block), !hasInexactDeployment && contract.deploymentCheckedBlock !== undefined && searchStart === recordedSearchStart)
 		} catch (error) {
 			if (isPrunedHistoricalStateError(error)) throw error
 			if (rpcQueueSaturationFrom(error) !== undefined || !isPermanentHistoricalCodeError(error)) throw error
@@ -414,12 +345,7 @@ export const initialIndexStartBlock = async (
 	manifestContracts: readonly ManifestContract[],
 	configuredStartBlock: bigint,
 	observedHead: bigint,
-	findDeployment: (
-		address: Address,
-		startBlock: bigint,
-		checkpoint: bigint,
-		startBlockKnownAbsent: boolean,
-	) => Promise<{ readonly block: bigint; readonly exact: boolean } | undefined>,
+	findDeployment: (address: Address, startBlock: bigint, checkpoint: bigint, startBlockKnownAbsent: boolean) => Promise<{ readonly block: bigint; readonly exact: boolean } | undefined>,
 ): Promise<bigint> => {
 	if (observedHead < configuredStartBlock) return configuredStartBlock
 	const deployments = await mapLimit(manifestContracts, 4, async ([address, label, kind, configuredDeploymentBlock]) => {
@@ -437,11 +363,7 @@ export const initialIndexStartBlock = async (
 }
 
 export const manifestReplayAncestor = (replayStart: bigint, storedStartBlock: bigint): bigint => {
-	if (replayStart < storedStartBlock)
-		throw new DatabaseConsistencyError(
-			`Newly tracked deployment block ${replayStart} predates the stored index start ${storedStartBlock}; rebuild the augurScan database to capture its complete history`,
-			{ code: 'manifest-history-before-start', replayStart, storedStartBlock },
-		)
+	if (replayStart < storedStartBlock) throw new DatabaseConsistencyError(`Newly tracked deployment block ${replayStart} predates the stored index start ${storedStartBlock}; rebuild the augurScan database to capture its complete history`, { code: 'manifest-history-before-start', replayStart, storedStartBlock })
 	return replayStart === storedStartBlock ? -1n : replayStart - 1n
 }
 
@@ -452,24 +374,11 @@ export const manifestChangeRequiresFullReplay = async (
 	checkpoint: bigint,
 	configuredStartBlock: bigint,
 	storedStartBlock: bigint,
-	findDeployment: (
-		address: Address,
-		startBlock: bigint,
-		indexedBoundary: bigint,
-		startBlockKnownAbsent: boolean,
-	) => Promise<{ readonly block: bigint; readonly exact: boolean } | undefined>,
+	findDeployment: (address: Address, startBlock: bigint, indexedBoundary: bigint, startBlockKnownAbsent: boolean) => Promise<{ readonly block: bigint; readonly exact: boolean } | undefined>,
 ): Promise<boolean> => {
 	const storedManifest = [...storedContracts.values()].filter(({ provenance }) => provenance === 'manifest')
 	if (!manifestContractSetChanged(manifestContracts, storedManifest)) return false
-	const replayStart = await planManifestBackfill(
-		manifestContracts,
-		storedContracts,
-		cursors,
-		checkpoint,
-		configuredStartBlock,
-		findDeployment,
-		storedStartBlock,
-	)
+	const replayStart = await planManifestBackfill(manifestContracts, storedContracts, cursors, checkpoint, configuredStartBlock, findDeployment, storedStartBlock)
 	if (replayStart !== undefined) manifestReplayAncestor(replayStart, storedStartBlock)
 	return true
 }

@@ -51,6 +51,17 @@ test('registry paths, local dependencies, cache inputs, and generated outputs ar
 	expect(() => validateProjectRegistryFiles(repositoryRoot)).not.toThrow()
 })
 
+test('independent service formatters own the canonical repository rules', async () => {
+	const rootConfig = JSON.parse(await fs.readFile(path.join(repositoryRoot, 'biome.json'), 'utf8')) as Record<string, unknown>
+	const formatter = Reflect.get(rootConfig, 'formatter')
+	const javascriptFormatter = Reflect.get(Reflect.get(rootConfig, 'javascript'), 'formatter')
+	for (const projectPath of ['augurScan', 'bots/chaos', 'bots/liquidator', 'bots/open-oracle-arbitrager', 'bots/shared']) {
+		const config = JSON.parse(await fs.readFile(path.join(repositoryRoot, projectPath, 'biome.json'), 'utf8')) as Record<string, unknown>
+		expect(Reflect.get(config, 'formatter'), `${projectPath} formatter`).toEqual(formatter)
+		expect(Reflect.get(Reflect.get(config, 'javascript'), 'formatter'), `${projectPath} JavaScript formatter`).toEqual(javascriptFormatter)
+	}
+})
+
 test('local installation and CI use the package-manager Bun version', async () => {
 	const rootManifest: unknown = JSON.parse(await fs.readFile(path.join(repositoryRoot, 'package.json'), 'utf8'))
 	if (typeof rootManifest !== 'object' || rootManifest === null) throw new Error('package.json must contain an object')

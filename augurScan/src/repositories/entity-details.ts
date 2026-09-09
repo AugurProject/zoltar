@@ -61,10 +61,7 @@ export const reportDetailData = async (
 	return { rows, current: currentRows[0], coordinatorDecisions }
 }
 
-export const eventEntityRows = async (
-	sql: SQL,
-	query: { readonly chainId: number; readonly address: string; readonly domain: 'auction' | 'escalation'; readonly page: PageBoundary },
-) => {
+export const eventEntityRows = async (sql: SQL, query: { readonly chainId: number; readonly address: string; readonly domain: 'auction' | 'escalation'; readonly page: PageBoundary }) => {
 	const { chainId, address, domain, page } = query
 	return domain === 'auction'
 		? await sql`SELECT event.*, block.timestamp AS block_timestamp FROM truth_auction_events event JOIN blocks block ON block.chain_id = event.chain_id AND block.hash = event.block_hash WHERE event.chain_id = ${chainId} AND event.auction_address = ${address} AND event.canonical AND (event.block_number, event.log_index, event.tx_hash) < (${page.block}::bigint, ${page.log}::integer, ${page.tx}) ORDER BY event.block_number DESC, event.log_index DESC, event.tx_hash DESC LIMIT ${page.limit}`

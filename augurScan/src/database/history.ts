@@ -72,26 +72,10 @@ export const captureHistoryInvalidation = async (transaction: SQL, invalidationI
 	`
 }
 
-export const captureDirectObservationInvalidation = async (
-	transaction: SQL,
-	invalidationId: string,
-	chainId: number,
-	boundary: { readonly afterBlock?: bigint; readonly beforeBlock?: bigint },
-): Promise<void> => {
-	if (boundary.afterBlock !== undefined && boundary.beforeBlock !== undefined)
-		throw new DatabaseConsistencyError('Direct observation invalidation must use one block boundary')
-	const balanceBoundary =
-		boundary.afterBlock !== undefined
-			? transaction`AND block_number > ${boundary.afterBlock.toString()}`
-			: boundary.beforeBlock !== undefined
-				? transaction`AND block_number < ${boundary.beforeBlock.toString()}`
-				: transaction``
-	const metadataBoundary =
-		boundary.afterBlock !== undefined
-			? transaction`AND read_block > ${boundary.afterBlock.toString()}`
-			: boundary.beforeBlock !== undefined
-				? transaction`AND read_block < ${boundary.beforeBlock.toString()}`
-				: transaction``
+export const captureDirectObservationInvalidation = async (transaction: SQL, invalidationId: string, chainId: number, boundary: { readonly afterBlock?: bigint; readonly beforeBlock?: bigint }): Promise<void> => {
+	if (boundary.afterBlock !== undefined && boundary.beforeBlock !== undefined) throw new DatabaseConsistencyError('Direct observation invalidation must use one block boundary')
+	const balanceBoundary = boundary.afterBlock !== undefined ? transaction`AND block_number > ${boundary.afterBlock.toString()}` : boundary.beforeBlock !== undefined ? transaction`AND block_number < ${boundary.beforeBlock.toString()}` : transaction``
+	const metadataBoundary = boundary.afterBlock !== undefined ? transaction`AND read_block > ${boundary.afterBlock.toString()}` : boundary.beforeBlock !== undefined ? transaction`AND read_block < ${boundary.beforeBlock.toString()}` : transaction``
 	await transaction`
 		INSERT INTO history_invalidation_occurrences
 			(invalidation_id, occurrence_kind, chain_id, block_hash, occurrence_id, sub_index)
@@ -198,35 +182,18 @@ export const canonicalTablePolicies = [
 	{ kind: 'contract-registry', table: 'contracts' },
 ] as const satisfies readonly CanonicalTablePolicy[]
 
-export const canonicalHistoryPolicies = canonicalTablePolicies.filter(
-	(policy): policy is (typeof canonicalTablePolicies)[number] & CanonicalHistoryTablePolicy => policy.kind === 'history',
-)
+export const canonicalHistoryPolicies = canonicalTablePolicies.filter((policy): policy is (typeof canonicalTablePolicies)[number] & CanonicalHistoryTablePolicy => policy.kind === 'history')
 
-export const invalidateHistoryPolicy = async (
-	transaction: SQL,
-	policy: CanonicalHistoryTablePolicy,
-	chainId: number,
-	boundary?: { readonly comparison: '<' | '>'; readonly block: bigint },
-): Promise<void> => {
-	const assignments = [
-		policy.staleOnInvalidation ? "read_status = 'stale'" : undefined,
-		'canonical = false',
-		policy.clearFinalized ? 'finalized = false' : undefined,
-	]
-		.filter((assignment) => assignment !== undefined)
-		.join(', ')
+export const invalidateHistoryPolicy = async (transaction: SQL, policy: CanonicalHistoryTablePolicy, chainId: number, boundary?: { readonly comparison: '<' | '>'; readonly block: bigint }): Promise<void> => {
+	const assignments = [policy.staleOnInvalidation ? "read_status = 'stale'" : undefined, 'canonical = false', policy.clearFinalized ? 'finalized = false' : undefined].filter(assignment => assignment !== undefined).join(', ')
 	const boundaryClause = boundary === undefined ? '' : ` AND ${policy.rewindColumn} ${boundary.comparison} $2`
-	await transaction.unsafe(
-		`UPDATE ${policy.table} SET ${assignments} WHERE chain_id = $1${boundaryClause} AND canonical`,
-		boundary === undefined ? [chainId] : [chainId, boundary.block.toString()],
-	)
+	await transaction.unsafe(`UPDATE ${policy.table} SET ${assignments} WHERE chain_id = $1${boundaryClause} AND canonical`, boundary === undefined ? [chainId] : [chainId, boundary.block.toString()])
 }
 
 export const invalidateCanonicalHistory = async (transaction: SQL, chainId: number, discoveryRetirementFloor?: bigint): Promise<void> => {
 	for (const policy of canonicalHistoryPolicies) {
 		if (policy.invalidateOnFullReplay) await invalidateHistoryPolicy(transaction, policy, chainId)
-		else if (discoveryRetirementFloor !== undefined)
-			await invalidateHistoryPolicy(transaction, policy, chainId, { comparison: '<', block: discoveryRetirementFloor })
+		else if (discoveryRetirementFloor !== undefined) await invalidateHistoryPolicy(transaction, policy, chainId, { comparison: '<', block: discoveryRetirementFloor })
 	}
 	await transaction`DELETE FROM log_scan_cursors WHERE chain_id = ${chainId}`
 	await transaction`
@@ -301,8 +268,7 @@ export const withIndexerLease = async <T>(lease: IndexerLease, operation: (trans
 		}
 	})
 
-export const withOptionalIndexerLease = async <T>(sql: SQL, lease: IndexerLease | undefined, operation: (sql: SQL) => Promise<T>): Promise<T> =>
-	lease === undefined ? await operation(sql) : await withIndexerLease(lease, operation)
+export const withOptionalIndexerLease = async <T>(sql: SQL, lease: IndexerLease | undefined, operation: (sql: SQL) => Promise<T>): Promise<T> => (lease === undefined ? await operation(sql) : await withIndexerLease(lease, operation))
 
 export const scannerDatabaseOptions = (maxConnections: number, connectionTimeoutSeconds: number) => ({
 	max: maxConnections,

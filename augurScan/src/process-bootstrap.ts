@@ -21,7 +21,7 @@ const packageVersion = async (): Promise<string> => {
 }
 
 const networkConfiguration = (networks: readonly NetworkConfig[]): readonly JsonValue[] =>
-	networks.map((network) => ({
+	networks.map(network => ({
 		id: network.id,
 		chainId: network.chainId,
 		startBlock: network.startBlock.toString(),

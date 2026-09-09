@@ -139,7 +139,7 @@ test('places and reanchors the activity detail drawer after the clicked row acro
 	}
 	document.body.append(feed)
 	expect(placeActivityDetailDrawer(feed, drawer)).toBeTrue()
-	expect([...feed.children].map((child) => child.className)).toEqual(['log-row', 'log-row', 'event-detail-drawer', 'log-row'])
+	expect([...feed.children].map(child => child.className)).toEqual(['log-row', 'log-row', 'event-detail-drawer', 'log-row'])
 	expect(visibleActivityLogCount(feed)).toBe(3)
 
 	feed.replaceChildren()
@@ -150,7 +150,7 @@ test('places and reanchors the activity detail drawer after the clicked row acro
 		feed.append(row)
 	}
 	expect(placeActivityDetailDrawer(feed, drawer)).toBeTrue()
-	expect([...feed.children].map((child) => child.className)).toEqual(['log-row', 'log-row', 'event-detail-drawer', 'log-row'])
+	expect([...feed.children].map(child => child.className)).toEqual(['log-row', 'log-row', 'event-detail-drawer', 'log-row'])
 	expect(visibleActivityLogCount(feed)).toBe(3)
 
 	feed.replaceChildren()
@@ -161,7 +161,7 @@ test('places and reanchors the activity detail drawer after the clicked row acro
 		feed.append(row)
 	}
 	expect(placeActivityDetailDrawer(feed, drawer)).toBeFalse()
-	expect([...feed.children].map((child) => child.className)).toEqual(['log-row', 'log-row'])
+	expect([...feed.children].map(child => child.className)).toEqual(['log-row', 'log-row'])
 	expect(visibleActivityLogCount(feed)).toBe(2)
 })
 
@@ -331,8 +331,7 @@ test('presents every evidence and invalidation enum while preserving its raw val
 })
 
 test('presents every live history invalidation by its actual cause', () => {
-	for (const reason of ['chain-reorg', 'manifest-reset', 'start-boundary-advanced', 'abi-redecode', 'projection-rebuild'])
-		expect(isHistoryInvalidationReason(reason)).toBeTrue()
+	for (const reason of ['chain-reorg', 'manifest-reset', 'start-boundary-advanced', 'abi-redecode', 'projection-rebuild']) expect(isHistoryInvalidationReason(reason)).toBeTrue()
 	expect(isHistoryInvalidationReason('unknown-reset')).toBeFalse()
 	expect(historyInvalidationNotice('chain-reorg', '1')).toEqual({
 		title: 'Chain reorganization detected',
@@ -405,13 +404,7 @@ test('distinguishes historical Operations snapshots from the live indexed view',
 })
 
 test('drops stale risk cursors when one collection is exhausted before the other', () => {
-	expect(
-		riskPaginationForCollectedCursors(
-			{ poolTotal: 1, poolHasMore: true, poolNextCursor: 'pool-2', vaultTotal: 3, vaultHasMore: true, vaultNextCursor: 'vault-2' },
-			undefined,
-			'vault-2',
-		),
-	).toEqual({ poolTotal: 1, poolHasMore: false, vaultTotal: 3, vaultHasMore: true, vaultNextCursor: 'vault-2' })
+	expect(riskPaginationForCollectedCursors({ poolTotal: 1, poolHasMore: true, poolNextCursor: 'pool-2', vaultTotal: 3, vaultHasMore: true, vaultNextCursor: 'vault-2' }, undefined, 'vault-2')).toEqual({ poolTotal: 1, poolHasMore: false, vaultTotal: 3, vaultHasMore: true, vaultNextCursor: 'vault-2' })
 })
 
 test('labels historical pool and vault detail headers as fixed snapshots', () => {
@@ -430,10 +423,7 @@ test('labels historical pool and vault detail headers as fixed snapshots', () =>
 			freshness: 'Historical snapshot at block #23,184,690 · current head #23,184,712 · 22 blocks earlier · fixed point-in-time evidence',
 			riskPanelTitle: 'Risk state at snapshot',
 		})
-	for (const kind of ['pool', 'vault'] as const)
-		expect(
-			operationsDetailHeaderPresentation(kind, { ...asOf, blockNumber: '23184712', historyDepthBlocks: '0', historical: false }, true).riskPanelTitle,
-		).toBe('Current risk state')
+	for (const kind of ['pool', 'vault'] as const) expect(operationsDetailHeaderPresentation(kind, { ...asOf, blockNumber: '23184712', historyDepthBlocks: '0', historical: false }, true).riskPanelTitle).toBe('Current risk state')
 })
 
 test('labels protocol risk state separately from scanner assessment', () => {
@@ -491,8 +481,7 @@ test('omits an empty generic lifecycle panel when risk-specific evidence already
 		expect(operationsDetailEvidencePanelVisible(kind, 0, true, false)).toBeTrue()
 		expect(operationsDetailEvidencePanelVisible(kind, 0, false, true)).toBeTrue()
 	}
-	for (const kind of ['auction', 'escalation', 'fork', 'report', 'trading'] as const)
-		expect(operationsDetailEvidencePanelVisible(kind, 0, false, false)).toBeTrue()
+	for (const kind of ['auction', 'escalation', 'fork', 'report', 'trading'] as const) expect(operationsDetailEvidencePanelVisible(kind, 0, false, false)).toBeTrue()
 })
 
 test('retains detail evidence to the prior visible depth using canonical log identity', async () => {
@@ -523,7 +512,7 @@ test('retains detail evidence to the prior visible depth using canonical log ide
 test('loads and combines snapshot-bound risk-history pages through the requested offset', async () => {
 	const requestedCursors: Array<string | undefined> = []
 	const result = await collectCursorCollections(
-		async (cursor) => {
+		async cursor => {
 			requestedCursors.push(cursor)
 			if (cursor === undefined)
 				return {
@@ -566,26 +555,21 @@ test('paginates pool and vault risk catalogs independently and restores both vis
 		},
 		275,
 		325,
-		(item) => item.address,
-		(item) => item.address,
+		item => item.address,
+		item => item.address,
 	)
 	expect(result.left.length).toBeGreaterThanOrEqual(275)
 	expect(result.right.length).toBeGreaterThanOrEqual(325)
 	expect(result.leftNextCursor).toBe(300)
 	expect(result.rightNextCursor).toBe(325)
-	expect(requests).toEqual([
-		{ limit: 100 },
-		{ leftCursor: 100, rightCursor: 100, limit: 100 },
-		{ leftCursor: 200, rightCursor: 200, limit: 100 },
-		{ rightCursor: 300, limit: 25 },
-	])
+	expect(requests).toEqual([{ limit: 100 }, { leftCursor: 100, rightCursor: 100, limit: 100 }, { leftCursor: 200, rightCursor: 200, limit: 100 }, { rightCursor: 300, limit: 25 }])
 })
 
 test('makes a state-history series larger than the API page limit fully reachable', async () => {
 	const records = Array.from({ length: 1_001 }, (_, index) => ({ block_number: String(23_000_000 + index) }))
 	const requestedCursors: Array<string | undefined> = []
 	const result = await collectCursorCollections(
-		async (cursor) => {
+		async cursor => {
 			requestedCursors.push(cursor)
 			const offset = cursor === undefined ? 0 : 1_000
 			const snapshots = records.slice(offset, offset + 1_000)
@@ -638,11 +622,7 @@ test('orders lifecycle evidence by canonical block, transaction, and log positio
 	const consumed = { event_name: 'LiquidationApprovalConsumed', block_number: '23184712', transaction_index: 0, log_index: 0 }
 	const released = { event_name: 'LiquidationApprovalReleased', block_number: '23184711', transaction_index: 2, tx_hash: '0x01', log_index: 2 }
 	const reserved = { event_name: 'LiquidationApprovalReserved', block_number: '23184711', transaction_index: 1, tx_hash: '0xff', log_index: 3 }
-	expect([consumed, released, reserved].sort(compareCanonicalEventPosition).map((event) => event.event_name)).toEqual([
-		'LiquidationApprovalReserved',
-		'LiquidationApprovalReleased',
-		'LiquidationApprovalConsumed',
-	])
+	expect([consumed, released, reserved].sort(compareCanonicalEventPosition).map(event => event.event_name)).toEqual(['LiquidationApprovalReserved', 'LiquidationApprovalReleased', 'LiquidationApprovalConsumed'])
 })
 
 test('labels every approval transition field without hiding consumed debt', () => {
@@ -709,7 +689,7 @@ test('serializes pagination ahead of multiple queued live refreshes', async () =
 		false,
 		false,
 		() =>
-			new Promise<boolean>((resolve) => {
+			new Promise<boolean>(resolve => {
 				finishInitial = resolve
 			}),
 	)
@@ -743,7 +723,7 @@ test('runs the final route after rapid operations navigation returns to a supers
 	const firstReports = execute(
 		currentContext,
 		() =>
-			new Promise<boolean>((resolve) => {
+			new Promise<boolean>(resolve => {
 				finishReports = resolve
 			}),
 	)
@@ -769,7 +749,7 @@ const take = <T>(items: T[]): T => {
 test('does not misclassify status elements whose ids contain button-like words', () => {
 	expect(requiredElementRole('#activity-more-status')).toBe('element')
 	expect(requiredElementRole('#more')).toBe('button')
-	expect(requiredElementRole('#detail-canonical-retry')).toBe('button')
+	expect(requiredElementRole('#close-detail')).toBe('button')
 	expect(requiredElementRole('#operations-route-select')).toBe('select')
 })
 
@@ -791,7 +771,7 @@ test('resolves activity refresh depth after queued pagination settles', async ()
 	let visibleDepth = 100
 	const pagination = gate.runForeground(
 		() =>
-			new Promise<void>((resolve) => {
+			new Promise<void>(resolve => {
 				releasePagination = () => {
 					visibleDepth = 200
 					resolve()
@@ -819,7 +799,7 @@ test('rejects activity and rich-list pagination queued during canonical recovery
 		let appendRequests = 0
 		const refresh = gate.runBackground(
 			() =>
-				new Promise<boolean>((resolve) => {
+				new Promise<boolean>(resolve => {
 					canonicalRefreshRequired = true
 					releaseRefresh = () => resolve(false)
 				}),
@@ -843,7 +823,7 @@ test('shows local pagination feedback before activity and rich-list work enters 
 		let releaseRefresh: () => void = unexpectedCall
 		const refresh = gate.runBackground(
 			() =>
-				new Promise<void>((resolve) => {
+				new Promise<void>(resolve => {
 					releaseRefresh = resolve
 				}),
 		)
@@ -863,7 +843,7 @@ test('drops in-flight activity, account, and rich-list appends from an older can
 		const requestGeneration = canonicalGeneration
 		const retained = [`${surface} retained`]
 		let resolveRequest: (items: string[]) => void = unexpectedCall
-		const response = new Promise<string[]>((resolve) => {
+		const response = new Promise<string[]>(resolve => {
 			resolveRequest = resolve
 		})
 		const append = (async () => {
@@ -884,14 +864,14 @@ test('drops a multi-page canonical snapshot when a newer invalidation arrives', 
 	const requestGeneration = canonicalGeneration
 	const retained = [{ id: 'retained' }]
 	let resolveFirstPage: (page: { items: Array<{ id: string }>; nextCursor?: string }) => void = unexpectedCall
-	const firstPage = new Promise<{ items: Array<{ id: string }>; nextCursor?: string }>((resolve) => {
+	const firstPage = new Promise<{ items: Array<{ id: string }>; nextCursor?: string }>(resolve => {
 		resolveFirstPage = resolve
 	})
 	const refresh = (async () => {
 		const snapshot = await collectCanonicalPages(
-			async (cursor) => (cursor === undefined ? await firstPage : { items: [{ id: 'stale-2' }], nextCursor: undefined }),
+			async cursor => (cursor === undefined ? await firstPage : { items: [{ id: 'stale-2' }], nextCursor: undefined }),
 			2,
-			(item) => item.id,
+			item => item.id,
 		)
 		if (!isCurrentCanonicalGeneration(requestGeneration, canonicalGeneration)) return false
 		retained.splice(0, retained.length, ...snapshot.items)
@@ -922,7 +902,7 @@ test('defers background refreshes until an explicit log load settles', async () 
 	const calls: string[] = []
 	const foreground = gate.runForeground(
 		() =>
-			new Promise<void>((resolve) => {
+			new Promise<void>(resolve => {
 				calls.push('foreground')
 				releaseForeground = resolve
 			}),
@@ -944,7 +924,7 @@ test('queues foreground pagination behind an active background refresh', async (
 	const calls: string[] = []
 	const background = gate.runBackground(
 		() =>
-			new Promise<void>((resolve) => {
+			new Promise<void>(resolve => {
 				calls.push('background')
 				releaseBackground = resolve
 			}),
@@ -966,7 +946,7 @@ test('drops queued detail work after its lifecycle context is invalidated', asyn
 	let context = 2
 	const active = gate.runForeground(
 		() =>
-			new Promise<void>((resolve) => {
+			new Promise<void>(resolve => {
 				release = resolve
 			}),
 	)
@@ -1006,7 +986,7 @@ test('commits a staged system snapshot only while its detail gate is reserved', 
 	const calls: string[] = []
 	const oldDetail = gate.runForeground(
 		() =>
-			new Promise<void>((resolve) => {
+			new Promise<void>(resolve => {
 				calls.push('old detail')
 				releaseOldDetail = resolve
 			}),
@@ -1035,18 +1015,18 @@ test('collects a canonical snapshot to the prior visible depth without retaining
 	])
 	const requested: Array<string | undefined> = []
 	const snapshot = await collectCanonicalPages(
-		async (cursor) => {
+		async cursor => {
 			requested.push(cursor)
 			const page = pages.get(cursor)
 			if (page === undefined) throw new Error(`Unexpected page cursor ${cursor}`)
 			return page
 		},
 		4,
-		(item) => String(item.id),
+		item => String(item.id),
 	)
 	expect(requested).toEqual([undefined, 'page-2'])
 	expect(snapshot).toEqual({ items: [{ id: 'new' }, { id: 'kept-3' }, { id: 'kept-2' }, { id: 'kept-1' }], nextCursor: 'page-3' })
-	expect(snapshot.items.some((item) => item.id === 'orphaned')).toBe(false)
+	expect(snapshot.items.some(item => item.id === 'orphaned')).toBe(false)
 })
 
 test('requests only the remaining canonical depth on a partial final page', async () => {
@@ -1060,7 +1040,7 @@ test('requests only the remaining canonical depth on a partial final page', asyn
 			return { items, nextCursor: offset + pageLimit }
 		},
 		150,
-		(item) => String(item.id),
+		item => String(item.id),
 	)
 	expect(requestedLimits).toEqual([100, 50])
 	expect(snapshot.items).toHaveLength(150)
@@ -1081,12 +1061,12 @@ test('keeps every log reachable when a live burst exceeds the first refreshed pa
 			return { items, nextCursor }
 		},
 		retention.replaceDepth ?? 0,
-		(item) => String(item.id),
+		item => String(item.id),
 	)
 	const appended = current.slice(refreshed.nextCursor ?? current.length)
 	expect(requestedLimits).toEqual([100, 100, 20])
 	expect(refreshed.nextCursor).toBe(220)
-	expect([...refreshed.items, ...appended].map((item) => item.id)).toEqual(current.map((item) => item.id))
+	expect([...refreshed.items, ...appended].map(item => item.id)).toEqual(current.map(item => item.id))
 })
 
 test('preserves the selected network label while navigating between product tabs', () => {
@@ -1133,7 +1113,7 @@ test('degrades to an empty cache when session storage is denied', () => {
 			throw new DOMException('Storage denied', 'SecurityError')
 		},
 	}
-	const cache = createSessionSnapshotCache(throwingStorage, 'network', (value) => value)
+	const cache = createSessionSnapshotCache(throwingStorage, 'network', value => value)
 	expect(cache.read()).toBeUndefined()
 	expect(() => cache.write({ indexed_block: '1' })).not.toThrow()
 })
@@ -1211,24 +1191,16 @@ test('calculates bounded indexer completion and estimates remaining time from ob
 		eta: 'Estimating ETA',
 		sample: { indexedBlock: 549, sampledAt: 1_000, blocksPerSecond: undefined },
 	})
-	expect(
-		indexerProgressEstimate(
-			{ start_block: '100', indexed_block: '549', observed_block: '999', phase: 'backfilling' },
-			{ indexedBlock: 449, sampledAt: 1_000, blocksPerSecond: undefined },
-			11_000,
-		),
-	).toEqual({ percentage: '50.00', eta: 'ETA 45s', sample: { indexedBlock: 549, sampledAt: 11_000, blocksPerSecond: 10 } })
+	expect(indexerProgressEstimate({ start_block: '100', indexed_block: '549', observed_block: '999', phase: 'backfilling' }, { indexedBlock: 449, sampledAt: 1_000, blocksPerSecond: undefined }, 11_000)).toEqual({
+		percentage: '50.00',
+		eta: 'ETA 45s',
+		sample: { indexedBlock: 549, sampledAt: 11_000, blocksPerSecond: 10 },
+	})
 	expect(indexerProgressEstimate({ start_block: '100', indexed_block: '1000', observed_block: '1000', phase: 'live' })).toEqual({
 		percentage: '100.00',
 		eta: 'Caught up',
 	})
-	expect(
-		indexerProgressEstimate(
-			{ start_block: '100', indexed_block: '1000', observed_block: '1000', indexed_timestamp: '2026-08-17T11:58:59.000Z', phase: 'live' },
-			undefined,
-			Date.parse('2026-08-17T12:00:00.000Z'),
-		),
-	).toEqual({ percentage: '100.00', eta: 'RPC head stale' })
+	expect(indexerProgressEstimate({ start_block: '100', indexed_block: '1000', observed_block: '1000', indexed_timestamp: '2026-08-17T11:58:59.000Z', phase: 'live' }, undefined, Date.parse('2026-08-17T12:00:00.000Z'))).toEqual({ percentage: '100.00', eta: 'RPC head stale' })
 	expect(indexerProgressEstimate({ start_block: '100', indexed_block: '999', observed_block: '1000', phase: 'live' }, undefined, 1_000)).toEqual({
 		percentage: '99.89',
 		eta: 'Estimating ETA',
@@ -1238,30 +1210,10 @@ test('calculates bounded indexer completion and estimates remaining time from ob
 
 test('hides completed sync details only while the live indexer is current and caught up', () => {
 	const now = Date.parse('2026-08-17T12:00:00.000Z')
-	expect(
-		showIndexerSyncDetails(
-			{ start_block: '100', indexed_block: '1000', observed_block: '1000', indexed_timestamp: '2026-08-17T11:59:30.000Z', phase: 'live' },
-			now,
-		),
-	).toBeFalse()
-	expect(
-		showIndexerSyncDetails(
-			{ start_block: '100', indexed_block: '999', observed_block: '1000', indexed_timestamp: '2026-08-17T11:59:30.000Z', phase: 'live' },
-			now,
-		),
-	).toBeTrue()
-	expect(
-		showIndexerSyncDetails(
-			{ start_block: '100', indexed_block: '1000', observed_block: '1000', indexed_timestamp: '2026-08-17T11:58:59.000Z', phase: 'live' },
-			now,
-		),
-	).toBeTrue()
-	expect(
-		showIndexerSyncDetails(
-			{ start_block: '100', indexed_block: '1000', observed_block: '1000', indexed_timestamp: '2026-08-17T11:59:30.000Z', phase: 'backfilling' },
-			now,
-		),
-	).toBeTrue()
+	expect(showIndexerSyncDetails({ start_block: '100', indexed_block: '1000', observed_block: '1000', indexed_timestamp: '2026-08-17T11:59:30.000Z', phase: 'live' }, now)).toBeFalse()
+	expect(showIndexerSyncDetails({ start_block: '100', indexed_block: '999', observed_block: '1000', indexed_timestamp: '2026-08-17T11:59:30.000Z', phase: 'live' }, now)).toBeTrue()
+	expect(showIndexerSyncDetails({ start_block: '100', indexed_block: '1000', observed_block: '1000', indexed_timestamp: '2026-08-17T11:58:59.000Z', phase: 'live' }, now)).toBeTrue()
+	expect(showIndexerSyncDetails({ start_block: '100', indexed_block: '1000', observed_block: '1000', indexed_timestamp: '2026-08-17T11:59:30.000Z', phase: 'backfilling' }, now)).toBeTrue()
 })
 
 test('warns when a caught-up chain head is more than one minute old', () => {
@@ -1279,11 +1231,9 @@ test('warns when a caught-up chain head is more than one minute old', () => {
 	expect(indexerHeadFreshness({ indexed_block: '41', observed_block: '42', indexed_timestamp: '2026-08-17T11:00:00.000Z', phase: 'live' }, now)).toEqual({
 		stale: false,
 	})
-	expect(indexerHeadFreshness({ indexed_block: '42', observed_block: '42', indexed_timestamp: '2026-08-17T11:00:00.000Z', phase: 'backfilling' }, now)).toEqual(
-		{
-			stale: false,
-		},
-	)
+	expect(indexerHeadFreshness({ indexed_block: '42', observed_block: '42', indexed_timestamp: '2026-08-17T11:00:00.000Z', phase: 'backfilling' }, now)).toEqual({
+		stale: false,
+	})
 	for (const indexedTimestamp of [null, undefined, 'not-a-date']) {
 		const network = { indexed_block: '42', observed_block: '42', indexed_timestamp: indexedTimestamp, phase: 'live' }
 		expect(indexerHeadFreshness(network, now)).toEqual({ stale: false })
@@ -1323,18 +1273,7 @@ test('clears a log deep link from the current activity entry before route naviga
 })
 
 test('groups protocol contracts, configured dependencies, and discovered contracts in the system registry', () => {
-	for (const kind of [
-		'multicall3',
-		'proxyDeployer',
-		'reputationToken',
-		'scalarOutcomes',
-		'uniswapV2Factory',
-		'uniswapV3Factory',
-		'uniswapV4PoolManager',
-		'usdc',
-		'weth',
-	])
-		expect(contractRegistrySection({ kind, provenance: 'manifest' })).toBe('System dependencies')
+	for (const kind of ['multicall3', 'proxyDeployer', 'reputationToken', 'scalarOutcomes', 'uniswapV2Factory', 'uniswapV3Factory', 'uniswapV4PoolManager', 'usdc', 'weth']) expect(contractRegistrySection({ kind, provenance: 'manifest' })).toBe('System dependencies')
 	expect(contractRegistrySection({ kind: 'openOracle', provenance: 'manifest' })).toBe('Protocol contracts')
 	expect(contractRegistrySection({ kind: 'securityPool', provenance: 'DeploySecurityPool' })).toBe('Discovered contracts')
 })
@@ -1361,14 +1300,9 @@ test('classifies appended, changed, and stable live records by canonical key', (
 test('reconciles refreshed and paginated records without duplicating retained history', () => {
 	const oldPage = [{ id: 'old-2' }, { id: 'old-1' }]
 	const refreshedPage = [{ id: 'new-1' }, { id: 'old-2' }]
-	const reconciled = mergeUniqueRecords(refreshedPage, oldPage, (item) => item.id)
-	expect(reconciled.map((item) => item.id)).toEqual(['new-1', 'old-2', 'old-1'])
-	expect(mergeUniqueRecords(reconciled, [{ id: 'old-1' }, { id: 'older' }], (item) => item.id).map((item) => item.id)).toEqual([
-		'new-1',
-		'old-2',
-		'old-1',
-		'older',
-	])
+	const reconciled = mergeUniqueRecords(refreshedPage, oldPage, item => item.id)
+	expect(reconciled.map(item => item.id)).toEqual(['new-1', 'old-2', 'old-1'])
+	expect(mergeUniqueRecords(reconciled, [{ id: 'old-1' }, { id: 'older' }], item => item.id).map(item => item.id)).toEqual(['new-1', 'old-2', 'old-1', 'older'])
 })
 
 test('does not lower a live total while consuming a cursor from an older snapshot', () => {
@@ -1386,7 +1320,7 @@ test('coalesces refresh bursts into one active request and one latest-state foll
 	const calls: Array<{ count: number; force: boolean }> = []
 	const requestRefresh = createLatestRefreshCoordinator(
 		(count, force) =>
-			new Promise<boolean>((resolve) => {
+			new Promise<boolean>(resolve => {
 				calls.push({ count, force })
 				releases.push(resolve)
 			}),
@@ -1430,7 +1364,7 @@ test('continues with the newest queued refresh when an in-flight refresh fails',
 
 test('completes a periodic route refresh without waiting for network status', async () => {
 	let releaseNetworkStatus: (() => void) | undefined
-	const networkStatus = new Promise<void>((resolve) => {
+	const networkStatus = new Promise<void>(resolve => {
 		releaseNetworkStatus = resolve
 	})
 	const refreshed = refreshRouteAlongsideNetworkStatus(
@@ -1461,11 +1395,11 @@ test('serializes a reorg behind an in-flight refresh and uses current recovery s
 	let recovery: { id: string } | undefined
 	const requestRefresh = createLiveRouteRefreshCoordinator(
 		(count, force, currentRecovery) =>
-			new Promise<boolean>((resolve) => {
+			new Promise<boolean>(resolve => {
 				active++
 				maximumActive = Math.max(maximumActive, active)
 				calls.push({ count, force, recovery: currentRecovery?.id })
-				releases.push((result) => {
+				releases.push(result => {
 					active--
 					resolve(result)
 				})

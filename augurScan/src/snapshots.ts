@@ -40,11 +40,7 @@ const poolAbi = parseAbi([
 	'function backingUnitsToAttoRep(uint256 repBackingUnits) view returns (uint256)',
 ])
 
-const coordinatorAbi = parseAbi([
-	'function lastPrice() view returns (uint256)',
-	'function lastSettlementTimestamp() view returns (uint256)',
-	'function isPriceValid() view returns (bool)',
-])
+const coordinatorAbi = parseAbi(['function lastPrice() view returns (uint256)', 'function lastSettlementTimestamp() view returns (uint256)', 'function isPriceValid() view returns (bool)'])
 
 const escalationAbi = parseAbi([
 	'function activationTime() view returns (uint256)',
@@ -132,11 +128,7 @@ const poolSnapshot = async (target: StateSnapshotTarget, read: StateRead): Promi
 	}
 	if (target.coordinatorAddress !== undefined) {
 		const coordinator = target.coordinatorAddress
-		const price = await Promise.all([
-			read(coordinator, coordinatorAbi, 'lastPrice'),
-			read(coordinator, coordinatorAbi, 'lastSettlementTimestamp'),
-			read(coordinator, coordinatorAbi, 'isPriceValid'),
-		])
+		const price = await Promise.all([read(coordinator, coordinatorAbi, 'lastPrice'), read(coordinator, coordinatorAbi, 'lastSettlementTimestamp'), read(coordinator, coordinatorAbi, 'isPriceValid')])
 		result['price'] = {
 			repPerEth1e18: exact(price[0], 'lastPrice'),
 			settlementTimestamp: exact(price[1], 'lastSettlementTimestamp'),
@@ -151,22 +143,12 @@ const vaultSnapshot = async (target: StateSnapshotTarget, read: StateRead): Prom
 	if (target.poolAddress === undefined) throw new Error('Vault snapshot target is missing its pool')
 	const pool = target.poolAddress
 	const vault = target.address
-	const values = await Promise.all([
-		read(pool, poolAbi, 'securityVaults', [vault]),
-		read(pool, poolAbi, 'vaultTargetHealthFactorBps', [vault]),
-		read(pool, poolAbi, 'getVaultOpenInterestAttoEth', [vault]),
-		read(pool, poolAbi, 'vaultBadDebtAttoEth', [vault]),
-		read(pool, poolAbi, 'statoblastSecurityMultiplierBps'),
-	])
+	const values = await Promise.all([read(pool, poolAbi, 'securityVaults', [vault]), read(pool, poolAbi, 'vaultTargetHealthFactorBps', [vault]), read(pool, poolAbi, 'getVaultOpenInterestAttoEth', [vault]), read(pool, poolAbi, 'vaultBadDebtAttoEth', [vault]), read(pool, poolAbi, 'statoblastSecurityMultiplierBps')])
 	const state = tuple(values[0], 4, 'securityVaults')
 	const repBackingUnits = exact(state[0], 'securityVaults.repBackingUnits')
 	const backingAttoRep = await read(pool, poolAbi, 'backingUnitsToAttoRep', [BigInt(repBackingUnits)])
 	let disputeStakedAttoRep = '0'
-	if (target.escalationAddress !== undefined)
-		disputeStakedAttoRep = exact(
-			await read(target.escalationAddress, escalationAbi, 'disputeStakedRepByVaultAttoRep', [vault]),
-			'disputeStakedRepByVaultAttoRep',
-		)
+	if (target.escalationAddress !== undefined) disputeStakedAttoRep = exact(await read(target.escalationAddress, escalationAbi, 'disputeStakedRepByVaultAttoRep', [vault]), 'disputeStakedRepByVaultAttoRep')
 	return {
 		poolAddress: pool.toLowerCase(),
 		vaultAddress: vault.toLowerCase(),
@@ -246,11 +228,7 @@ const auctionSnapshot = async (target: StateSnapshotTarget, read: StateRead): Pr
 	}
 }
 
-export const sampleEntityStateWithRead = async (
-	target: StateSnapshotTarget,
-	read: StateRead,
-	onFailure: (error: unknown) => void = () => {},
-): Promise<EntityStateSnapshot> => {
+export const sampleEntityStateWithRead = async (target: StateSnapshotTarget, read: StateRead, onFailure: (error: unknown) => void = () => {}): Promise<EntityStateSnapshot> => {
 	const sourceMethod = `augurscan.${target.entityType}-state.v1`
 	const failures: unknown[] = []
 	const pending = new Set<Promise<unknown>>()
@@ -267,14 +245,7 @@ export const sampleEntityStateWithRead = async (
 		return operation
 	}
 	try {
-		const readResult =
-			target.entityType === 'pool'
-				? await poolSnapshot(target, observedRead)
-				: target.entityType === 'vault'
-					? await vaultSnapshot(target, observedRead)
-					: target.entityType === 'escalation'
-						? await escalationSnapshot(target, observedRead)
-						: await auctionSnapshot(target, observedRead)
+		const readResult = target.entityType === 'pool' ? await poolSnapshot(target, observedRead) : target.entityType === 'vault' ? await vaultSnapshot(target, observedRead) : target.entityType === 'escalation' ? await escalationSnapshot(target, observedRead) : await auctionSnapshot(target, observedRead)
 		return { entityType: target.entityType, entityIdentity: target.entityIdentity, sourceMethod, readStatus: 'success', readResult }
 	} catch (error) {
 		await Promise.allSettled([...pending])
@@ -290,21 +261,14 @@ export const sampleEntityStateWithRead = async (
 	}
 }
 
-export const sampleEntityState = async (
-	client: Pick<PublicClient, 'readContract'>,
-	target: StateSnapshotTarget,
-	blockNumber: bigint,
-	onFailure: (error: unknown) => void = () => {},
-): Promise<EntityStateSnapshot> => {
-	const read: StateRead = async (address, abi, functionName, args) =>
-		await client.readContract({ address, abi, functionName, ...(args === undefined ? {} : { args }), blockNumber })
+export const sampleEntityState = async (client: Pick<PublicClient, 'readContract'>, target: StateSnapshotTarget, blockNumber: bigint, onFailure: (error: unknown) => void = () => {}): Promise<EntityStateSnapshot> => {
+	const read: StateRead = async (address, abi, functionName, args) => await client.readContract({ address, abi, functionName, ...(args === undefined ? {} : { args }), blockNumber })
 	return await sampleEntityStateWithRead(target, read, onFailure)
 }
 
 export const normalizeSnapshotTarget = (row: Record<string, unknown>): StateSnapshotTarget => {
 	const entityType = String(row['entity_type'])
-	if (entityType !== 'auction' && entityType !== 'escalation' && entityType !== 'pool' && entityType !== 'vault')
-		throw new Error(`Unsupported snapshot entity type ${entityType}`)
+	if (entityType !== 'auction' && entityType !== 'escalation' && entityType !== 'pool' && entityType !== 'vault') throw new Error(`Unsupported snapshot entity type ${entityType}`)
 	const optionalAddress = (key: string): Address | undefined => {
 		const value = row[key]
 		return value === null || value === undefined ? undefined : getAddress(String(value))

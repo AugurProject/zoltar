@@ -40,9 +40,7 @@ export const logListRows = async (sql: SQL, query: LogListQuery) => {
 	if (query.decoded === 'true') clauses.push("l.decode_status = 'decoded'")
 	if (query.decoded === 'false') clauses.push("l.decode_status <> 'decoded'")
 	if (query.cursor !== undefined) {
-		clauses.push(
-			`(b.timestamp, l.block_number, l.transaction_index, l.log_index, l.block_hash) < (${bind(String(query.cursor[12]))}::timestamptz, ${bind(String(query.cursor[13]))}::bigint, ${bind(Number(query.cursor[14]))}, ${bind(Number(query.cursor[15]))}, ${bind(String(query.cursor[16]))})`,
-		)
+		clauses.push(`(b.timestamp, l.block_number, l.transaction_index, l.log_index, l.block_hash) < (${bind(String(query.cursor[12]))}::timestamptz, ${bind(String(query.cursor[13]))}::bigint, ${bind(Number(query.cursor[14]))}, ${bind(Number(query.cursor[15]))}, ${bind(String(query.cursor[16]))})`)
 	}
 	values.push(query.limit + 1)
 	return await sql.unsafe(

@@ -9,17 +9,7 @@ import { listLogs, logDetail, provenanceHistory, reorganizationHistory } from '.
 import { domainCatalogResponse, operationsResponse } from './operations.ts'
 import { addressPortfolioResponse, richList } from './portfolio.ts'
 import { riskDetailResponse } from './risk.ts'
-import {
-	ApiConflictError,
-	ApiRequestError,
-	actionCursorFor,
-	actionJsonColumns,
-	decodedJsonColumns,
-	integer,
-	json,
-	parseActionCursor,
-	routeInteger,
-} from './shared.ts'
+import { ApiConflictError, ApiRequestError, actionCursorFor, actionJsonColumns, decodedJsonColumns, integer, json, parseActionCursor, routeInteger } from './shared.ts'
 import { operationsAsOfForContinuations } from './snapshot.ts'
 import { stateHistory } from './state-history.ts'
 import { stateCatalog, timelineCatalogResponse, timelineResponse } from './timeline-catalog.ts'
@@ -54,20 +44,15 @@ export const handleApi = async (request: Request, sql: SQL, freshnessThresholdMs
 		if (url.pathname === '/api/v1/state/trading') return await tradingCatalogResponse(sql, url)
 		if (url.pathname === '/api/v1/state/integrity') return await integrityCatalogResponse(sql, url)
 		if (url.pathname === '/api/v1/state/direct-observations') return await directObservationsResponse(sql, url)
-		if (url.pathname.startsWith('/api/v1/state/reports/'))
-			return await reportDetailResponse(sql, url.pathname.slice('/api/v1/state/reports/'.length).split('/'), url)
-		if (url.pathname.startsWith('/api/v1/state/escalations/'))
-			return await eventEntityDetailResponse(sql, url.pathname.slice('/api/v1/state/escalations/'.length).split('/'), url, 'escalation')
-		if (url.pathname.startsWith('/api/v1/state/auctions/'))
-			return await eventEntityDetailResponse(sql, url.pathname.slice('/api/v1/state/auctions/'.length).split('/'), url, 'auction')
+		if (url.pathname.startsWith('/api/v1/state/reports/')) return await reportDetailResponse(sql, url.pathname.slice('/api/v1/state/reports/'.length).split('/'), url)
+		if (url.pathname.startsWith('/api/v1/state/escalations/')) return await eventEntityDetailResponse(sql, url.pathname.slice('/api/v1/state/escalations/'.length).split('/'), url, 'escalation')
+		if (url.pathname.startsWith('/api/v1/state/auctions/')) return await eventEntityDetailResponse(sql, url.pathname.slice('/api/v1/state/auctions/'.length).split('/'), url, 'auction')
 		if (url.pathname.startsWith('/api/v1/state/forks/')) return await forkDetailResponse(sql, url.pathname.slice('/api/v1/state/forks/'.length).split('/'), url)
 		if (url.pathname.startsWith('/api/v1/state/risk/')) return await riskDetailResponse(sql, url.pathname.slice('/api/v1/state/risk/'.length).split('/'), url)
-		if (url.pathname.startsWith('/api/v1/state/trading/'))
-			return await tradingDetailResponse(sql, url.pathname.slice('/api/v1/state/trading/'.length).split('/'), url)
+		if (url.pathname.startsWith('/api/v1/state/trading/')) return await tradingDetailResponse(sql, url.pathname.slice('/api/v1/state/trading/'.length).split('/'), url)
 		if (url.pathname === '/api/v1/state/address-portfolio') return await addressPortfolioResponse(sql, url)
 		if (url.pathname === '/api/v1/state/timeline') return await timelineCatalogResponse(sql, url)
-		if (url.pathname.startsWith('/api/v1/state/timeline/'))
-			return await timelineResponse(sql, url.pathname.slice('/api/v1/state/timeline/'.length).split('/'), url)
+		if (url.pathname.startsWith('/api/v1/state/timeline/')) return await timelineResponse(sql, url.pathname.slice('/api/v1/state/timeline/'.length).split('/'), url)
 		if (url.pathname === '/api/v1/state/catalog') return await stateCatalog(sql, url)
 		if (url.pathname.startsWith('/api/v1/state/')) return await stateHistory(sql, url.pathname.slice('/api/v1/state/'.length).split('/'), url)
 		if (url.pathname === '/api/v1/richlist') return await richList(sql, url)
@@ -96,8 +81,7 @@ export const handleApi = async (request: Request, sql: SQL, freshnessThresholdMs
 			const parts = url.pathname.slice('/api/v1/contracts/'.length).split('/')
 			const [chain, address] = parts
 			const chainId = routeInteger(chain)
-			if (parts.length !== 2 || chainId === undefined || address === undefined || !/^0x[0-9a-fA-F]{40}$/.test(address))
-				return json({ error: 'Invalid contract identifier' }, 400)
+			if (parts.length !== 2 || chainId === undefined || address === undefined || !/^0x[0-9a-fA-F]{40}$/.test(address)) return json({ error: 'Invalid contract identifier' }, 400)
 			const rows = await contractDetail(sql, chainId, address.toLowerCase())
 			return rows.length === 0 ? json({ error: 'Contract not found' }, 404) : json(rows[0])
 		}

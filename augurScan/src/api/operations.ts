@@ -1,13 +1,5 @@
 import type { SQL } from 'bun'
-import {
-	auctionCatalogData,
-	escalationCatalogData,
-	forkCatalogData,
-	forkCatalogTotal,
-	operationsOverviewSupplement,
-	reportCatalogData,
-	riskCatalogData,
-} from '../repositories/operations.ts'
+import { auctionCatalogData, escalationCatalogData, forkCatalogData, forkCatalogTotal, operationsOverviewSupplement, reportCatalogData, riskCatalogData } from '../repositories/operations.ts'
 import { detailPage, paged, parseRiskCursor, protocolCursorFor, protocolCursorForRequest, riskCursorFor } from './entity-details.ts'
 import { ApiRequestError, integer, json, jsonRecord, postgresBigint } from './shared.ts'
 import { operationsAsOfForContinuations, operationsAsOfFromUrl } from './snapshot.ts'
@@ -35,7 +27,7 @@ export const domainCatalogResponse = async (sql: SQL, url: URL, domain: 'reports
 		const limit = Math.min(Math.max(requestedLimit, 1), 250)
 		const poolCursor = parseRiskCursor(url.searchParams.get('poolCursor'), chainId, 'pool')
 		const vaultCursor = parseRiskCursor(url.searchParams.get('vaultCursor'), chainId, 'vault')
-		const cursors = [poolCursor, vaultCursor].flatMap((cursor) => (cursor === undefined ? [] : [{ parts: cursor, offset: 2 }]))
+		const cursors = [poolCursor, vaultCursor].flatMap(cursor => (cursor === undefined ? [] : [{ parts: cursor, offset: 2 }]))
 		const asOf = await operationsAsOfForContinuations(sql, chainId, cursors, postgresBigint(url.searchParams.get('atBlock'), 'atBlock'))
 		const poolAfter = poolCursor?.[8]
 		const vaultAfter = vaultCursor?.[8]
@@ -68,7 +60,7 @@ export const domainCatalogResponse = async (sql: SQL, url: URL, domain: 'reports
 				: domain === 'auctions'
 					? await auctionCatalogData(sql, chainId, asOf, cursorBlock, cursorTx, cursorLog, page.queryLimit)
 					: await forkCatalogData(sql, chainId, cursorBlock, cursorTx, cursorLog, page.queryLimit, String(asOf['blockNumber']))
-	const pageData = paged(rows, page.limit, (row) => protocolCursorFor(chainId, `${domain}-catalog`, 'catalog', asOf, row))
+	const pageData = paged(rows, page.limit, row => protocolCursorFor(chainId, `${domain}-catalog`, 'catalog', asOf, row))
 	return json({
 		chainId,
 		asOf,
