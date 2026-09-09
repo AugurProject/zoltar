@@ -439,15 +439,8 @@ export function validateImmutableTopologyCache(value: CanonicalImmutableTopology
 }
 
 function sameIdentity(left: ImmutableTopologyIdentity, right: ImmutableTopologyIdentity) {
-	return (
-		left.chainId === right.chainId && left.openOracle.toLowerCase() === right.openOracle.toLowerCase() &&
-		left.questionData.toLowerCase() === right.questionData.toLowerCase() &&
-		left.securityPoolFactory.toLowerCase() === right.securityPoolFactory.toLowerCase() &&
-		left.securityPoolForker.toLowerCase() === right.securityPoolForker.toLowerCase() &&
-		left.tradingFactory.toLowerCase() === right.tradingFactory.toLowerCase() && left.tradingRouter.toLowerCase() === right.tradingRouter.toLowerCase() &&
-		left.uniswapV3Factory?.toLowerCase() === right.uniswapV3Factory?.toLowerCase() &&
-		left.weth.toLowerCase() === right.weth.toLowerCase() && left.zoltar.toLowerCase() === right.zoltar.toLowerCase()
-	)
+	const addressFields = ['openOracle', 'questionData', 'securityPoolFactory', 'securityPoolForker', 'tradingFactory', 'tradingRouter', 'uniswapV3Factory', 'weth', 'zoltar'] as const
+	return left.chainId === right.chainId && addressFields.every(field => left[field]?.toLowerCase() === right[field]?.toLowerCase())
 }
 
 function sha256(value: string | Uint8Array) {

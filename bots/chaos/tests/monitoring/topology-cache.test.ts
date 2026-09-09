@@ -339,6 +339,7 @@ describe('immutable topology sidecar', () => {
 		await mkdir(join(storePath, '.tmp-999-deadbeef-dead-beef-dead-beefdeadbeef'), { mode: 0o700 })
 		expect(await loadImmutableTopologyCache(statePath, identity())).toEqual(expected)
 		expect(await loadImmutableTopologyCache(statePath, { ...identity(), tradingFactory: address(99) })).toBeUndefined()
+		expect(await loadImmutableTopologyCache(statePath, { ...identity(), uniswapV3Factory: address(99) })).toBeUndefined()
 		expect(await validateImmutableTopologySidecarIfPresent(statePath, identity())).toBe('valid')
 		await expect(validateImmutableTopologySidecarIfPresent(statePath, { ...identity(), tradingFactory: address(99) })).rejects.toThrow('different deployment identity')
 	})
