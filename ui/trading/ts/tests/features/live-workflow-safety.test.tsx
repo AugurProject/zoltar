@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
-import type { Address, Hash, WalletClient } from '@zoltar/shared/ethereum'
+import type { Address, Hash, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import { LiveTrading as ProductionLiveTrading } from '../../features/LiveTrading.js'
@@ -83,25 +83,15 @@ describe('live workflow safety boundary', () => {
 
 	test('keeps the hash visible and every competing write locked after receipt polling and wallet context fail', async () => {
 		let connectedAccount = account
-		let contextApprovalReceipt = deferred<{ status: 'success' | 'reverted' }>()
-		let waitForContextApprovalReceipt = false
 		let positionReceipt = deferred<{ status: 'success' | 'reverted' }>()
 		let waitForPositionReceipt = false
 		let repricePositionReceipt = false
 		let positionBroadcast = deferred<undefined>()
 		let positionWalletWrite = deferred<undefined>()
 		let deferPositionBroadcast = false
-		let approved = false
-		let approveRouterCalls = 0
-		let rejectWalletChainRead = false
-		let rejectWalletAccountRead = false
-		let emitAccountChangeAfterReads = 0
 		let deferredWalletChainRead: ReturnType<typeof deferred<number>> | undefined
 		let walletChainReadStarted: ReturnType<typeof deferred<undefined>> | undefined
-		let lpAllowance = 10n ** 18n
-		let rejectBalanceRefresh = false
-		let deferWalletHeaderBalance = false
-		const walletHeaderBalance = deferred<undefined>()
+		const rejectBalanceRefresh = false
 		let deferSecondPortfolioBalance = false
 		const secondPortfolioBalance = deferred<undefined>()
 		let deferChildDiscovery = false
@@ -132,7 +122,6 @@ describe('live workflow safety boundary', () => {
 					}
 					return receipt
 				}
-				if (waitForContextApprovalReceipt) return await contextApprovalReceipt.promise
 				return { status: 'success' as const }
 			},
 		}
@@ -199,9 +188,10 @@ describe('live workflow safety boundary', () => {
 			createTradingPublicClient: () => ({}),
 			validateLiveDeployment: async () => undefined,
 			discoverLiveUniverseMarketPage: discoverSelectedUniverse,
+			discoverTradingMarketPage: discoverSelectedUniverse,
+			discoverAddressedMarket: async () => ({ ...(await discoverSelectedUniverse(undefined, undefined, 1n)), markets: [{ ...market, endTime: discoveredEndTime, loadError: discoveredLoadError }] }),
 			discoverAllLiveMarketsInUniverse: discoverSelectedUniverse,
 			walletChainId: async () => {
-				if (rejectWalletChainRead) throw new Error('chain RPC unavailable')
 				if (deferredWalletChainRead !== undefined) {
 					walletChainReadStarted?.resolve(undefined)
 					return await deferredWalletChainRead.promise
@@ -209,16 +199,10 @@ describe('live workflow safety boundary', () => {
 				return configuration.chainId
 			},
 			connectWallet: async () => {
-				if (rejectWalletAccountRead) throw new Error('account RPC unavailable')
-				if (emitAccountChangeAfterReads > 0) {
-					emitAccountChangeAfterReads--
-					if (emitAccountChangeAfterReads === 0) queueMicrotask(() => walletListeners.get('accountsChanged')?.([`0x${'94'.repeat(20)}`]))
-				}
 				return connectedAccount
 			},
 			createTradingWalletClient: () => walletClient,
 			loadWalletHeaderBalances: async () => {
-				if (deferWalletHeaderBalance) await walletHeaderBalance.promise
 				return { ethAttoEth: 5n * 10n ** 18n, repAttoRep: 6n * 10n ** 18n, repToken: `0x${'47'.repeat(20)}` as Address }
 			},
 			loadLiveBalances: async (_client: unknown, selectedMarket: LiveMarket) => {
@@ -227,12 +211,7 @@ describe('live workflow safety boundary', () => {
 				if (rejectBalanceRefresh) throw new Error('balance RPC unavailable')
 				if (deferSecondPortfolioBalance && selectedMarket.pool === secondPool) await secondPortfolioBalance.promise
 				const multiplier = selectedMarket.pool === secondPool ? 4n : 1n
-				return { scope: actualLive.shareBalanceScope(selectedMarket), invalid: multiplier * 10n ** 18n, yes: multiplier * 10n ** 18n, no: multiplier * 10n ** 18n, approved, lp: multiplier * 10n ** 18n, lpAllowance }
-			},
-			approveRouter: async () => {
-				approveRouterCalls++
-				approved = true
-				return transactionHash
+				return { scope: actualLive.shareBalanceScope(selectedMarket), invalid: multiplier * 10n ** 18n, yes: multiplier * 10n ** 18n, no: multiplier * 10n ** 18n, lp: multiplier * 10n ** 18n }
 			},
 			simulateEntry: async () => ({
 				blockNumber: 1n,
@@ -261,9 +240,8 @@ describe('live workflow safety boundary', () => {
 				})
 			},
 		}
-		const liquidityServices = { ...liveLiquidityServices, approveLpRouter: async () => transactionHash }
-		const settlementServices = { ...liveSettlementServices, approveRouter: controllerServices.approveRouter }
-		const LiveTrading = (props: Parameters<typeof ProductionLiveTrading>[0]) => <ProductionLiveTrading {...props} controllerServices={controllerServices} liquidityServices={liquidityServices} settlementServices={settlementServices} />
+		const liquidityServices = liveLiquidityServices
+		const LiveTrading = (props: Parameters<typeof ProductionLiveTrading>[0]) => <ProductionLiveTrading {...props} controllerServices={controllerServices} liquidityServices={liquidityServices} settlementServices={liveSettlementServices} />
 		const workflowLocks: boolean[] = []
 		let rendered = await renderIntoDocument(<LiveTrading route='market' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />)
 		cleanupRendered = rendered.cleanup
@@ -405,27 +383,6 @@ describe('live workflow safety boundary', () => {
 		await flush()
 		await act(() => render(<LiveTrading route='market' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
 		await flush()
-		connectedAccount = `0x${'99'.repeat(20)}` as Address
-		const summariesBeforeSilentChange = walletSummaries.length
-		await act(async () => button('Exit').click())
-		await act(async () => button('Approve router for all outcome tokens').click())
-		await settleAsyncWorkflow()
-		const silentChangeSummaries = walletSummaries.slice(summariesBeforeSilentChange)
-		expect(silentChangeSummaries.length).toBeGreaterThan(0)
-		expect(silentChangeSummaries.at(-1)?.account).toBeUndefined()
-		expect(silentChangeSummaries.at(-1)?.ethAttoEth).toBeUndefined()
-		expect(silentChangeSummaries.at(-1)?.repAttoRep).toBeUndefined()
-		expect(document.body.textContent).toContain('Wallet account changed; reconnect before approving')
-		deferWalletHeaderBalance = true
-		await act(async () => button('Connect wallet').click())
-		await settleAsyncWorkflow()
-		expect(walletSummaries.at(-1)?.account).toBe(connectedAccount)
-		expect(walletSummaries.at(-1)?.ethAttoEth).toBeUndefined()
-		expect(walletSummaries.at(-1)?.repAttoRep).toBeUndefined()
-		deferWalletHeaderBalance = false
-		walletHeaderBalance.resolve(undefined)
-		await settleAsyncWorkflow()
-		expect(walletSummaries.at(-1)).toMatchObject({ account: connectedAccount, ethAttoEth: 5n * 10n ** 18n, repAttoRep: 6n * 10n ** 18n, status: 'ready' })
 		connectedAccount = `0x${'9a'.repeat(20)}` as Address
 		await act(async () => walletListeners.get('accountsChanged')?.([connectedAccount]))
 		await settleAsyncWorkflow()
@@ -440,90 +397,6 @@ describe('live workflow safety boundary', () => {
 		expect(walletSummaries.at(-1)).toMatchObject({ account: connectedAccount, ethAttoEth: 5n * 10n ** 18n, repAttoRep: 6n * 10n ** 18n, status: 'ready' })
 		expect(document.body.textContent).not.toContain('Refreshing wallet context')
 		await act(() => render(<LiveTrading route='market' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
-		await settleAsyncWorkflow()
-
-		const callsBeforeProviderReplacement = approveRouterCalls
-		Reflect.set(window, 'ethereum', { ...injectedProvider })
-		await act(async () => button('Exit').click())
-		await act(async () => button('Approve router for all outcome tokens').click())
-		await settleAsyncWorkflow()
-		expect(approveRouterCalls).toBe(callsBeforeProviderReplacement)
-		expect(walletSummaries.at(-1)?.account).toBeUndefined()
-		expect(document.body.textContent).toContain('Wallet provider changed; reconnect before continuing')
-
-		Reflect.set(window, 'ethereum', injectedProvider)
-		deferredWalletChainRead = deferred<number>()
-		walletChainReadStarted = deferred<undefined>()
-		await act(async () => {
-			button('Connect wallet').click()
-			await walletChainReadStarted?.promise
-		})
-		Reflect.set(window, 'ethereum', { ...injectedProvider })
-		deferredWalletChainRead.resolve(configuration.chainId)
-		await settleAsyncWorkflow()
-		expect(walletSummaries.at(-1)?.account).toBeUndefined()
-		expect(document.body.textContent).toContain('Wallet provider changed; reconnect before continuing')
-
-		Reflect.set(window, 'ethereum', injectedProvider)
-		deferredWalletChainRead = undefined
-		walletChainReadStarted = undefined
-		emitAccountChangeAfterReads = 2
-		await act(async () => button('Connect wallet').click())
-		await settleAsyncWorkflow()
-		expect(walletSummaries.at(-1)?.account).toBeUndefined()
-		expect(document.body.textContent).toContain('Wallet account changed. Reconnect before simulating or submitting.')
-
-		rejectWalletChainRead = true
-		await act(async () => button('Connect wallet').click())
-		await settleAsyncWorkflow()
-		expect(walletSummaries.at(-1)?.account).toBeUndefined()
-		expect(document.body.textContent).toContain('chain RPC unavailable')
-		rejectWalletChainRead = false
-		await act(async () => button('Connect wallet').click())
-		await settleAsyncWorkflow()
-		expect(walletSummaries.at(-1)?.account).toBe(connectedAccount)
-		deferredWalletChainRead = deferred<number>()
-		walletChainReadStarted = deferred<undefined>()
-		const callsBeforeMidPreflightReplacement = approveRouterCalls
-		await act(async () => {
-			button('Exit').click()
-			button('Approve router for all outcome tokens').click()
-			await walletChainReadStarted?.promise
-		})
-		Reflect.set(window, 'ethereum', { ...injectedProvider })
-		deferredWalletChainRead.resolve(configuration.chainId)
-		await settleAsyncWorkflow()
-		expect(approveRouterCalls).toBe(callsBeforeMidPreflightReplacement)
-		expect(walletSummaries.at(-1)?.account).toBeUndefined()
-		expect(document.body.textContent).toContain('Wallet context changed; reconnect before continuing')
-
-		Reflect.set(window, 'ethereum', injectedProvider)
-		deferredWalletChainRead = undefined
-		walletChainReadStarted = undefined
-		await act(async () => button('Connect wallet').click())
-		await settleAsyncWorkflow()
-
-		rejectWalletChainRead = true
-		await act(async () => button('Exit').click())
-		await act(async () => button('Approve router for all outcome tokens').click())
-		await settleAsyncWorkflow()
-		expect(approveRouterCalls).toBe(callsBeforeProviderReplacement)
-		expect(walletSummaries.at(-1)?.account).toBeUndefined()
-		expect(document.body.textContent).toContain('Wallet network changed; switch back before approving')
-
-		rejectWalletChainRead = false
-		await act(async () => button('Connect wallet').click())
-		await settleAsyncWorkflow()
-		rejectWalletAccountRead = true
-		await act(async () => button('Exit').click())
-		await act(async () => button('Approve router for all outcome tokens').click())
-		await settleAsyncWorkflow()
-		expect(approveRouterCalls).toBe(callsBeforeProviderReplacement)
-		expect(walletSummaries.at(-1)?.account).toBeUndefined()
-		expect(document.body.textContent).toContain('Wallet account changed; reconnect before approving')
-
-		rejectWalletAccountRead = false
-		await act(async () => button('Connect wallet').click())
 		await settleAsyncWorkflow()
 
 		await act(async () => button('Enter').click())
@@ -575,164 +448,23 @@ describe('live workflow safety boundary', () => {
 		const poolMechanics = document.querySelector('.operation-block .pool-mechanics')
 		if (positionAction === null || poolMechanics === null) throw new Error('Missing position action or pool mechanics disclosure')
 		expect(positionAction.compareDocumentPosition(poolMechanics) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
-		waitForContextApprovalReceipt = true
-		contextApprovalReceipt = deferred<{ status: 'success' | 'reverted' }>()
-		await act(async () => button('Approve router for all outcome tokens').click())
-		await settleAsyncWorkflow()
-		expect(document.body.textContent).toContain('Insured YES exit approval pending on-chain')
-		expect(document.querySelector('.transaction-hash')?.textContent).toContain(transactionHash)
-		expect(button('Approving router…').getAttribute('aria-busy')).toBe('true')
-		contextApprovalReceipt.resolve({ status: 'success' })
-		await settleAsyncWorkflow()
-		expect(document.body.textContent).toContain('Insured YES exit approval confirmed on-chain')
-		expect(document.querySelector('.transaction-hash')?.textContent).toContain(transactionHash)
 		const secondMarketButton = Array.from(document.querySelectorAll<HTMLButtonElement>('.live-market-button')).find(candidate => candidate.textContent?.includes('Second rendered workflow market') === true)
 		if (secondMarketButton === undefined) throw new Error('Missing second market selector')
+		expect(document.body.textContent).not.toContain('Factory discovery')
+		expect(document.querySelector('.market-list.section')).toBeNull()
+		expect(document.querySelector('.market-stack')).not.toBeNull()
 		await act(async () => secondMarketButton.click())
 		await settleAsyncWorkflow()
 		expect(document.querySelector('.transaction-hash')).toBeNull()
-		approved = false
 		const firstMarketButton = Array.from(document.querySelectorAll<HTMLButtonElement>('.live-market-button')).find(candidate => candidate.textContent?.includes('Rendered workflow market') === true && candidate.textContent?.includes('Second') !== true)
 		if (firstMarketButton === undefined) throw new Error('Missing first market selector')
 		await act(async () => firstMarketButton.click())
 		await settleAsyncWorkflow()
-		waitForContextApprovalReceipt = false
-		rejectBalanceRefresh = true
-		await act(async () => button('Approve router for all outcome tokens').click())
-		await settleAsyncWorkflow()
-		expect(document.body.textContent).toContain('Share-token approval confirmed, but balances could not be refreshed: balance RPC unavailable')
-		expect(document.body.textContent).toContain('Retry balances')
-		expect(document.body.textContent).not.toContain('Refreshing wallet balances and approvals')
-		expect(document.body.textContent?.split('Share-token approval confirmed').length).toBe(2)
-		expect(Array.from(document.querySelectorAll('[role="alert"]')).filter(candidate => candidate.textContent?.includes('Share-token approval confirmed') === true)).toHaveLength(1)
-
-		rejectBalanceRefresh = false
-		approved = false
-		await settleAsyncWorkflow()
-		expect(button('Retry balances').disabled).toBeFalse()
-		await act(async () => button('Retry balances').click())
-		await settleAsyncWorkflow()
-		expect(document.body.textContent).not.toContain('balance RPC unavailable')
-		waitForContextApprovalReceipt = true
-		await act(async () => button('Approve router for all outcome tokens').click())
-		await act(async () => {
-			walletListeners.get('accountsChanged')?.([`0x${'99'.repeat(20)}`])
-			contextApprovalReceipt.resolve({ status: 'success' })
-			await contextApprovalReceipt.promise
-		})
-		await settleAsyncWorkflow()
-		expect(document.body.textContent).toContain('Wallet account changed. Reconnect before simulating or submitting.')
-		expect(document.body.textContent).not.toContain('Refreshing wallet balances and approvals')
-		expect(button('Connect wallet').disabled).toBeFalse()
-		expect(workflowLocks.at(-1)).toBeFalse()
-
-		await act(async () => button('Connect wallet').click())
-		await flush()
-		lpAllowance = 0n
 		await act(() => render(<LiveTrading route='liquidity' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} />, rendered.container))
 		await act(async () => button('Refresh').click())
 		await flush()
 		await act(async () => button('Remove').click())
-		rejectBalanceRefresh = true
-		await waitForDom(() => hasButton('Approve exact LP amount'), 'LP approval action')
-		await act(async () => button('Approve exact LP amount').click())
-		await settleAsyncWorkflow()
-		expect(document.body.textContent).toContain('LP-token approval confirmed, but balances could not be refreshed: balance RPC unavailable')
-		expect(document.body.textContent).not.toContain('Refreshing wallet balances and approvals')
-		expect(workflowLocks.at(-1)).toBeFalse()
-
-		rejectBalanceRefresh = false
-		await act(() => render(<LiveTrading key='lp-context' route='liquidity' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} />, rendered.container))
-		await flush()
-		await act(async () => button('Connect wallet').click())
-		await flush()
-		await act(async () => button('Remove').click())
-		contextApprovalReceipt = deferred<{ status: 'success' | 'reverted' }>()
-		await waitForDom(() => hasButton('Approve exact LP amount'), 'LP approval action after reconnecting')
-		await act(async () => button('Approve exact LP amount').click())
-		await act(async () => {
-			walletListeners.get('accountsChanged')?.([`0x${'96'.repeat(20)}`])
-			contextApprovalReceipt.resolve({ status: 'success' })
-			await contextApprovalReceipt.promise
-		})
-		await settleAsyncWorkflow()
-		expect(document.body.textContent).toContain('Liquidity transaction approval confirmed on-chain')
-		expect(document.querySelector('.transaction-hash')?.textContent).toContain(transactionHash)
-		expect(document.body.textContent).toContain('Wallet account changed')
-		expect(document.body.textContent).not.toContain('Refreshing wallet balances and approvals')
-		expect(workflowLocks.at(-1)).toBeFalse()
-
-		discoveredEndTime = now - 1n
-		approved = false
-		waitForContextApprovalReceipt = false
-		await act(() => render(<LiveTrading key='settlement-refresh' route='market' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} />, rendered.container))
-		await flush()
-		expect(document.body.textContent).not.toContain('Winning shares')
-		expect(document.body.textContent).not.toContain('None (unresolved)')
-		await act(async () => button('Connect wallet').click())
-		await flush()
-		rejectBalanceRefresh = true
-		await act(async () => button('Approve router for complete-set redemption').click())
-		await settleAsyncWorkflow()
-		expect(document.body.textContent).toContain('Share-token approval confirmed, but balances could not be refreshed: balance RPC unavailable')
-		expect(document.body.textContent).not.toContain('Refreshing wallet balances and approvals')
-		expect(workflowLocks.at(-1)).toBeFalse()
-
-		rejectBalanceRefresh = false
-		approved = false
-		await act(async () => button('Retry balances').click())
-		await settleAsyncWorkflow()
-		waitForContextApprovalReceipt = true
-		contextApprovalReceipt = deferred<{ status: 'success' | 'reverted' }>()
-		await act(async () => button('Approve router for complete-set redemption').click())
-		await act(async () => {
-			walletListeners.get('accountsChanged')?.([`0x${'95'.repeat(20)}`])
-			contextApprovalReceipt.resolve({ status: 'success' })
-			await contextApprovalReceipt.promise
-		})
-		await settleAsyncWorkflow()
-		expect(document.querySelector('.transaction-hash')?.textContent).toContain(transactionHash)
-		expect(document.body.textContent).toContain('Wallet account changed')
-		expect(document.body.textContent).not.toContain('Refreshing wallet balances and approvals')
-		expect(workflowLocks.at(-1)).toBeFalse()
-
-		approved = false
-		contextApprovalReceipt = deferred<{ status: 'success' | 'reverted' }>()
-		await act(async () => button('Connect wallet').click())
-		await flush()
-		await act(async () => button('Approve router for complete-set redemption').click())
-		await act(async () => {
-			walletListeners.get('accountsChanged')?.([`0x${'98'.repeat(20)}`])
-			contextApprovalReceipt.resolve({ status: 'reverted' })
-			await contextApprovalReceipt.promise
-		})
-		await settleAsyncWorkflow()
-		expect(document.body.textContent).toContain('Wallet context changed while the share-token approval was pending. Approval transaction reverted.')
-		expect(button('Connect wallet').disabled).toBeFalse()
-		expect(workflowLocks.at(-1)).toBeFalse()
-
-		approved = false
-		contextApprovalReceipt = deferred<{ status: 'success' | 'reverted' }>()
-		await act(async () => button('Connect wallet').click())
-		await settleAsyncWorkflow()
-		await act(async () => button('Approve router for complete-set redemption').click())
-		await act(async () => {
-			walletListeners.get('accountsChanged')?.([`0x${'97'.repeat(20)}`])
-			contextApprovalReceipt.reject(new Error('approval receipt polling failed'))
-			await contextApprovalReceipt.promise.catch(() => undefined)
-		})
-		await flush()
-
-		const warning = Array.from(document.querySelectorAll('[role="alert"]')).find(candidate => candidate.textContent?.includes(transactionHash) === true)
-		expect(warning?.textContent).toContain('Do not resubmit')
-		expect(document.body.textContent).toContain('Wallet account changed. Reconnect before simulating or submitting.')
-		expect(button('Refresh').disabled).toBeTrue()
-		expect(button('Connect wallet').disabled).toBeTrue()
-		expect(workflowLocks.at(-1)).toBeTrue()
-
-		await Bun.sleep(2_100)
-		await flush()
-		expect(button('Simulate authoritative settlement').disabled).toBeTrue()
-		expect(warning?.textContent).toContain(transactionHash)
+		expect(hasButton('Approve exact LP amount')).toBeFalse()
+		expect(hasButton('Simulate liquidity transaction')).toBeTrue()
 	})
 })

@@ -1,14 +1,14 @@
-import { rpcFailureWithContext, type Address, type TransactionLog } from '#ethereum'
-import { OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_FLAG_TRACK_DISPUTES, OPEN_ORACLE_REPORT_SETTLED_TOPIC } from '@zoltar/shared/openOracle'
+import { rpcFailureWithContext, type Address, type TransactionLog } from '@zoltar/bot-shared/ethereum'
+import { OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_FLAG_TRACK_DISPUTES, OPEN_ORACLE_REPORT_SETTLED_TOPIC } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { openOraclePriceCoordinatorAbi } from '#contracts/abi'
 import { type Configuration } from '#config/configuration'
 import { authenticateDeploymentManifest, validateDeploymentManifestRequirements, type DeploymentRole } from '#config/deployment-auth'
 import { coordinatorPolicySafetyMismatch, retainedReportIds, type CoordinatorGamePolicy } from '#core/game-policy'
 import { applyLogs, logBlockNumber, reportId, type ActiveReport } from '#monitoring/oracle-log-state'
-import { compactFinalityWindow, ConnectivityDegradedError, operationalFailureDisposition } from '#monitoring/resilience'
+import { compactFinalityWindow, ConnectivityDegradedError, operationalFailureDisposition } from '@zoltar/bot-shared/monitoring/resilience'
 import type { ReadClient } from '#core/operator-types'
 import { errorMessage } from '#core/rpc-validation'
-import { settledQuorumValue } from '#monitoring/read-quorum'
+import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { rpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 import { endpointLabel } from '#monitoring/connectivity'
 
@@ -71,7 +71,6 @@ export function requiredDeploymentIdentities(config: Configuration) {
 		{ address: config.network.factory, role: 'uniswap-factory' },
 		{ address: config.network.quoter, role: 'uniswap-quoter' },
 		...config.coordinatorAddresses.map(address => ({ address, role: 'coordinator' as const })),
-		...config.tokenAddresses.map(address => ({ address, role: 'token' as const })),
 	]
 	if (config.executor !== undefined) identities.push({ address: config.executor, role: 'executor' })
 	if (config.router !== undefined) identities.push({ address: config.router, role: 'uniswap-router' })

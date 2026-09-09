@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { signerCandidate } from '#config/signer'
+import { signerCandidate } from '@zoltar/bot-shared/config/signer'
 
 describe('operator signer candidate', () => {
 	test('derives valid keys and rejects invalid curve scalars before returning state', () => {

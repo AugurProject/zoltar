@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { createVaultControlsFixture, useSecurityPoolWorkflowSectionTestDom } from './fixture'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
-import { ChainTimestampContext } from '@zoltar/ui-core-shared/lib/chainTimestamp.js'
+import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import { createMarketDetails } from './builders.js'
 import { render } from 'preact'
 

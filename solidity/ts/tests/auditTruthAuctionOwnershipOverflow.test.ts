@@ -1,5 +1,5 @@
 import { beforeEach, describe, test } from 'bun:test'
-import { decodeEventLog, zeroAddress } from '@zoltar/shared/ethereum'
+import { decodeEventLog, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { getMaxRepBeingSoldAttoRep, getMinBidSizeAttoEth } from '../testSupport/simulator/utils/contracts/auction'
 import { getActiveStagedOperationCount, getStagedOperation, getStagedOperationCounter } from '../testSupport/simulator/utils/contracts/statoblast'
 import { addRepToMigrationBalance, splitMigrationRep } from '../testSupport/simulator/utils/contracts/zoltar'

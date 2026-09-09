@@ -1,12 +1,12 @@
 /// <reference types='bun-types' />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { getAddress } from '@zoltar/shared/ethereum'
+import { getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
-import type { ChainBackend } from '../lib/chainBackend.js'
-import { MAINNET_NETWORK_PROFILE } from '../lib/networkProfile.js'
-import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFailed, markTransactionFinished, markTransactionRequested, TRANSACTION_ACTION_LOCK_REASON } from '../lib/transactionTray.js'
-import { buildWriteActionConfig, runWriteAction } from '../lib/writeAction.js'
+import type { ChainBackend } from '../wallet/chainBackend.js'
+import { MAINNET_NETWORK_PROFILE } from '../wallet/networkProfile.js'
+import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFailed, markTransactionFinished, markTransactionRequested, TRANSACTION_ACTION_LOCK_REASON } from '../transactions/transactionTray.js'
+import { buildWriteActionConfig, runWriteAction } from '../transactions/writeAction.js'
 import { createFakeBackend, createFakeSimulationProfile } from './testUtils/fakeBackend.js'
 
 const walletAddress = getAddress('0x00000000000000000000000000000000000000a1')

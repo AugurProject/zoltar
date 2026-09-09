@@ -2,7 +2,7 @@ import { formatOutcomeAmount, formatShareAmount, formatUnits } from '../lib/form
 import { Status } from '../components/Status.js'
 import { SecurityPoolAddressLink } from '../components/TradingAddress.js'
 import type { LiveBalances, LiveMarket } from '../protocol/live.js'
-import { maximumInsuredExit } from '@zoltar/shared/trading/positions'
+import { maximumInsuredExit } from '@zoltar/trading-shared/trading/positions'
 import type { BalanceState, PortfolioBalanceEntry } from './live/liveTradingTypes.js'
 import { BalanceLoadError } from './LiveTradingTransactionUi.js'
 import * as portfolioCopy from '../copy/portfolio.js'
@@ -55,16 +55,6 @@ function LivePortfolioBalanceMetrics({ market, balances }: { market: LiveMarket;
 				<div>
 					<dt>{portfolioCopy.maximumInsuredNoExit}</dt>
 					<dd>{formatOutcomeAmount(maximumNoExit, portfolioCopy.no)}</dd>
-				</div>
-				<div>
-					<dt>{portfolioCopy.shareApproval}</dt>
-					<dd>{balances.approved ? portfolioCopy.routerApproved : portfolioCopy.approvalRequiredForExit}</dd>
-				</div>
-				<div>
-					<dt>{portfolioCopy.lpAllowance}</dt>
-					<dd>
-						{formatUnits(balances.lpAllowance)} {portfolioCopy.lp}
-					</dd>
 				</div>
 			</dl>
 			<p>{portfolioCopy.invalidOwnershipNotice}</p>

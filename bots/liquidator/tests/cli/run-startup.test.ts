@@ -3,8 +3,8 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { initialRuntimeState, saveDurableState } from '../../src/state/operator-state.ts'
-import { keccak256, privateKeyToAccount } from '../helpers/ethereum.ts'
-import { acquireFileProcessLock } from '../helpers/process-lock.ts'
+import { keccak256, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
+import { acquireFileProcessLock } from '@zoltar/bot-shared/execution/process-lock'
 
 const directories: string[] = []
 const servers: Bun.Server<unknown>[] = []
@@ -393,7 +393,7 @@ test('rejects a wrong-chain private relay during startup validation', async () =
 	expect(output).toContain('Expected chain 11155111, received 1')
 })
 
-test('queries only deployment bytecode when the configured system is undeployed', async () => {
+test('pins deployment bytecode to the observed block without scanning an undeployed system', async () => {
 	const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-undeployed-'))
 	directories.push(directory)
 	const methods: string[] = []
@@ -401,6 +401,7 @@ test('queries only deployment bytecode when the configured system is undeployed'
 		async fetch(request) {
 			const body = (await request.json()) as { id: unknown; method: string }
 			methods.push(body.method)
+			if (body.method === 'eth_getBlockByNumber') return Response.json({ id: body.id, jsonrpc: '2.0', result: { hash: `0x${'11'.repeat(32)}`, number: '0x64', timestamp: '0x7b', transactions: [] } })
 			return Response.json({ id: body.id, jsonrpc: '2.0', result: body.method === 'eth_chainId' ? '0xaa36a7' : '0x' })
 		},
 		hostname: '127.0.0.1',
@@ -430,6 +431,7 @@ test('queries only deployment bytecode when the configured system is undeployed'
 	children.push(child)
 
 	await waitForRpcMethod(methods, 'eth_getCode')
+	expect(methods).toContain('eth_getBlockByNumber')
 	const deploymentCheckIndex = methods.indexOf('eth_getCode')
 	await Bun.sleep(100)
 	expect(methods.slice(deploymentCheckIndex)).toEqual(['eth_getCode'])

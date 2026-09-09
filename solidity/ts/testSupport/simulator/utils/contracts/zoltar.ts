@@ -1,10 +1,10 @@
 import { ReputationToken_ReputationToken, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData } from '../../../../types/contractArtifact'
-import { createRepTokenAddressHelper } from '@zoltar/shared/addressDerivation'
-import { createZoltarAddressHelpers } from '@zoltar/shared/deploymentAddresses'
-import { getProtocolConfig } from '../protocolConfig'
+import { createRepTokenAddressHelper } from '@zoltar/zoltar-shared/evm/addressDerivation'
+import { createZoltarAddressHelpers } from '@zoltar/zoltar-shared/deployment/deploymentAddresses'
+import { getProtocolConfig } from '@zoltar/core-shared/deployment/protocolConfig'
 import { ReadClient, WriteClient, writeContractAndWait } from '../clients'
 import { GENESIS_REPUTATION_TOKEN, PROXY_DEPLOYER_ADDRESS } from '../constants'
-import { encodeDeployData, getAddress, type Address, type Hex, toHex } from '@zoltar/shared/ethereum'
+import { encodeDeployData, getAddress, type Address, type Hex, toHex } from '@zoltar/core-shared/evm/ethereum'
 import { addressString } from '../bigint'
 import { ensureProxyDeployerDeployed, requireAddress, requireArray, requireBigInt } from '../utilities'
 
@@ -139,11 +139,11 @@ export const splitMigrationRep = async (client: WriteClient, universeId: bigint,
 	)
 }
 
-export async function getTotalTheoreticalSupplyAttoRep(client: ReadClient, repToken: Address) {
+export async function getTotalTheoreticalSupply(client: ReadClient, repToken: Address) {
 	return requireBigInt(
 		await client.readContract({
 			abi: ReputationToken_ReputationToken.abi,
-			functionName: 'getTotalTheoreticalSupplyAttoRep',
+			functionName: 'getTotalTheoreticalSupply',
 			address: repToken,
 			args: [],
 		}),

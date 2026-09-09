@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
-import { getAddress, keccak256, parseTransaction, recoverTransactionAddress, type Address, type Hex } from '#ethereum'
+import { getAddress, keccak256, parseTransaction, recoverTransactionAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { acquireExclusiveProcessLock } from '@zoltar/bot-shared/execution/process-lock'
 
 export type ExecutorDeploymentIntent = {

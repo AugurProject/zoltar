@@ -1,7 +1,12 @@
+import { buildDashboardScript } from '../../../shared/src/dashboard/assets.js'
+import { operatorHeader } from './header.ts'
+import { record, safeString, stringField, booleanField, scalar, safeIntegerField, isoTimestampField, compact } from './public-fields.ts'
 import { join } from 'node:path'
 import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
 import { boundedDashboardJson } from '@zoltar/bot-shared/dashboard/security'
 import { CONFIGURATION_REVISION_CONFLICT } from '../config/settings.ts'
+import { browserScript } from './browser-assets.ts'
+import { publicAlert, publicRetirement } from './public-retirement.ts'
 import { CONFIGURATION_COMMIT_INDETERMINATE, CONFIGURATION_COMMITTED_SAFELY_PAUSED } from '../runtime/dashboard-controller.ts'
 import { requiredLiveInventory } from '../runtime/live-readiness.ts'
 
@@ -13,9 +18,11 @@ export type ChaosDashboardController = {
 	setCancellation: (value: unknown) => unknown | Promise<unknown>
 	setCandidate: (value: unknown) => unknown | Promise<unknown>
 	setConnectivity?: ((value: unknown) => unknown | Promise<unknown>) | undefined
+	setOperation?: ((value: unknown) => unknown | Promise<unknown>) | undefined
 	setObligation: (value: unknown) => unknown | Promise<unknown>
 	setReplacement: (value: unknown) => unknown | Promise<unknown>
 	setPaused: (value: unknown) => unknown | Promise<unknown>
+	setRetirement?: ((value: unknown) => unknown | Promise<unknown>) | undefined
 	setSettings: (value: unknown) => unknown | Promise<unknown>
 	setSigner: (value: unknown) => unknown | Promise<unknown>
 	setWorkflow: (value: unknown) => unknown | Promise<unknown>
@@ -38,53 +45,6 @@ function securityHeaders(contentType: string) {
 
 function json(value: unknown, status = 200) {
 	return Response.json(value, { headers: securityHeaders('application/json; charset=utf-8'), status })
-}
-
-function record(value: unknown): Record<string, unknown> | undefined {
-	return typeof value === 'object' && value !== null && !Array.isArray(value) ? Object.fromEntries(Object.entries(value)) : undefined
-}
-
-function safeString(value: unknown) {
-	if (typeof value !== 'string') return undefined
-	const sensitive =
-		/(?:authorization|bearer|password|private[_-]?key|secret|token|api[_-]?key|rpc[_-]?(?:url|endpoint)|calldata|raw[_-]?(?:transaction|tx)|signed[_-]?(?:transaction|tx))\s*[=:]/i.test(value) ||
-		/https?:\/\//i.test(value) ||
-		/(?:[a-z]:\\|\/(?:etc|home|root|tmp|var|workspace)\/)/i.test(value) ||
-		/0x[0-9a-f]{130,}/i.test(value)
-	return sensitive ? undefined : value.slice(0, 1_000)
-}
-
-function stringField(source: Record<string, unknown>, key: string) {
-	return safeString(source[key])
-}
-
-function booleanField(source: Record<string, unknown>, key: string) {
-	return typeof source[key] === 'boolean' ? source[key] : undefined
-}
-
-function numberField(source: Record<string, unknown>, key: string) {
-	return typeof source[key] === 'number' && Number.isFinite(source[key]) ? source[key] : undefined
-}
-
-function scalar(source: Record<string, unknown>, key: string) {
-	const value = source[key]
-	return stringField(source, key) ?? numberField(source, key) ?? booleanField(source, key) ?? (typeof value === 'bigint' ? value.toString() : undefined)
-}
-
-function safeIntegerField(source: Record<string, unknown>, key: string) {
-	const value = source[key]
-	return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined
-}
-
-function isoTimestampField(source: Record<string, unknown>, key: string) {
-	const value = source[key]
-	if (typeof value !== 'string') return undefined
-	const milliseconds = Date.parse(value)
-	return Number.isFinite(milliseconds) ? new Date(milliseconds).toISOString() : undefined
-}
-
-function compact<T extends Record<string, unknown>>(value: T) {
-	return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined))
 }
 
 function publicStrings(value: unknown) {
@@ -584,12 +544,6 @@ function publicActivity(value: unknown) {
 	})
 }
 
-function publicAlert(value: unknown) {
-	const source = record(value)
-	if (source === undefined) return undefined
-	return compact({ message: stringField(source, 'message'), severity: stringField(source, 'severity') })
-}
-
 export function publicChaosState(value: unknown, configurationValue?: unknown, nowMilliseconds = Date.now()) {
 	const source = record(value)
 	if (source === undefined) return {}
@@ -620,6 +574,8 @@ export function publicChaosState(value: unknown, configurationValue?: unknown, n
 		inventory: publicInventory(source['inventory']),
 		inventoryAvailable: booleanField(source, 'inventoryAvailable') ?? source['inventory'] !== undefined,
 		lastScanAt: stringField(source, 'lastScanAt'),
+		lastDeploymentCheckedBlock: scalar(source, 'lastDeploymentCheckedBlock'),
+		lastDeploymentCheckAt: stringField(source, 'lastDeploymentCheckAt'),
 		lastScannedBlock: scalar(source, 'lastScannedBlock') ?? scalar(source, 'block'),
 		network: stringField(source, 'network'),
 		obligations: Array.isArray(source['obligations'])
@@ -639,6 +595,8 @@ export function publicChaosState(value: unknown, configurationValue?: unknown, n
 					return transaction === undefined ? [] : [transaction]
 				})
 			: [],
+		profileId: stringField(source, 'profileId'),
+		retirement: publicRetirement(source['retirement']),
 		rpcHealth: publicRpcHealth(source['rpcEndpointHealth'], configurationValue),
 		submissionHealth: publicSubmissionHealth(source['rpcEndpointHealth'], configurationValue, nowMilliseconds, publicSubmissionHealthMaximumAgeSeconds(configurationValue)),
 		safetyPaused: booleanField(source, 'safetyPaused'),
@@ -910,6 +868,7 @@ function publicFailure(operation: string, error: unknown) {
 			409,
 		)
 	}
+	if (operation === 'mutation:/api/operation' && error instanceof Error && error.name === 'ManualOperationInputError') return json({ error: error.message }, 400)
 	if (operation === 'mutation:/api/connectivity') return json({ error: publicConnectivityFailure(error) }, 400)
 	return json({ error: 'The dashboard request could not be completed. Review the submitted values and protected bot logs.' }, 400)
 }
@@ -939,7 +898,6 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 		throw new Error('Non-loopback chaos dashboard exposure is disabled; bind to 127.0.0.1 or publish a 0.0.0.0 container listener through a host-loopback-only port')
 	}
 	const directory = import.meta.dir
-	const browserSource = Bun.file(join(directory, 'dashboard.ts'))
 	const transpiler = new Bun.Transpiler({ loader: 'ts', target: 'browser' })
 	let authority = ''
 	let configurationCommitIndeterminate = false
@@ -984,13 +942,17 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 				const page = url.pathname === '/' ? 'overview' : url.pathname.slice(1)
 				if (dashboardPages.has(page)) {
 					const html = await Bun.file(join(directory, 'index.html')).text()
-					return new Response(html.replace('<body>', `<body data-page="${page}">`), { headers: securityHeaders('text/html; charset=utf-8') })
+					return new Response(html.replace('<!-- operator-header -->', operatorHeader).replace('<body>', `<body data-page="${page}">`), { headers: securityHeaders('text/html; charset=utf-8') })
 				}
 				if (url.pathname === '/dashboard.css') return new Response(Bun.file(join(directory, 'styles.css')), { headers: securityHeaders('text/css; charset=utf-8') })
 				if (url.pathname === '/operator-console.css') {
 					return new Response(Bun.file(join(directory, '..', '..', '..', 'shared', 'src', 'dashboard', 'operator-console.css')), { headers: securityHeaders('text/css; charset=utf-8') })
 				}
-				if (url.pathname === '/dashboard.js') return new Response(transpiler.transformSync(await browserSource.text()), { headers: securityHeaders('text/javascript; charset=utf-8') })
+				if (request.method === 'GET' && url.pathname === '/header-notices.js') {
+					return new Response(await buildDashboardScript(join(directory, '..', '..', '..', 'shared', 'src', 'dashboard', 'header-notices.ts')), { headers: securityHeaders('text/javascript; charset=utf-8') })
+				}
+				const script = await browserScript(url.pathname, directory, transpiler)
+				if (script !== undefined) return new Response(script, { headers: securityHeaders('text/javascript; charset=utf-8') })
 				if (url.pathname === '/api/state') {
 					try {
 						await mutationBarrier
@@ -1027,6 +989,8 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 					['/api/settings', controller.setSettings],
 					['/api/signer', controller.setSigner],
 				])
+				if (controller.setOperation !== undefined) handlers.set('/api/operation', controller.setOperation)
+				if (controller.setRetirement !== undefined) handlers.set('/api/retirement', controller.setRetirement)
 				if (controller.setConnectivity !== undefined) handlers.set('/api/connectivity', controller.setConnectivity)
 				const handler = handlers.get(url.pathname)
 				if (handler !== undefined) {
@@ -1034,8 +998,8 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 						if (configurationCommitIndeterminate) return indeterminateConfigurationFailure()
 						try {
 							const value = await boundedDashboardJson(request)
-							await handler(value)
-							return json({ saved: true })
+							const result = await handler(value)
+							return json(url.pathname === '/api/operation' ? result : { saved: true })
 						} catch (error) {
 							if (error instanceof Error && error.name === CONFIGURATION_COMMIT_INDETERMINATE) configurationCommitIndeterminate = true
 							return publicFailure(`mutation:${url.pathname}`, error)

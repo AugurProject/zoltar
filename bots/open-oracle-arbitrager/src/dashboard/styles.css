@@ -158,8 +158,7 @@ textarea:focus-visible,
 }
 
 .app-header,
-main,
-footer {
+main {
 	width: min(1480px, calc(100% - 48px));
 	margin-inline: auto;
 }
@@ -772,23 +771,6 @@ a {
 	height: 92px;
 }
 
-footer {
-	display: flex;
-	justify-content: space-between;
-	gap: 20px;
-	padding: 22px 0 32px;
-	border-top: 1px solid var(--border);
-	color: var(--muted);
-	font-size: 0.75rem;
-}
-
-footer .mono {
-	overflow: visible;
-	overflow-wrap: anywhere;
-	text-overflow: clip;
-	white-space: normal;
-}
-
 @media (max-width: 980px) {
 	.metric-grid {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -833,14 +815,8 @@ footer .mono {
 	}
 
 	.app-header,
-	main,
-	footer {
+	main {
 		width: min(100% - 28px, 1480px);
-	}
-
-	footer {
-		align-items: flex-start;
-		flex-direction: column;
 	}
 
 	.app-header {

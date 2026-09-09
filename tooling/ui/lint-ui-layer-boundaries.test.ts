@@ -1,0 +1,76 @@
+import { expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
+import { findUiLayerBoundaryViolations } from './lint-ui-layer-boundaries.mts'
+
+test('rejects static, dynamic, exported, and type imports from UI features', () => {
+	const findings = findUiLayerBoundaryViolations(
+		'ui/zoltar/ts/protocol/example.ts',
+		["import { helper } from '../features/reporting/lib/helper.js'", "export { value } from '../features/markets/lib/value.js'", "type State = import('../features/universes/lib/state.js').State", "const feature = import('../features/open-oracle/lib/feature.js')"].join('\n'),
+	)
+
+	expect(findings.map(finding => finding.specifier)).toEqual(['../features/reporting/lib/helper.js', '../features/markets/lib/value.js', '../features/universes/lib/state.js', '../features/open-oracle/lib/feature.js'])
+})
+
+test('rejects feature imports from app composition', () => {
+	const findings = findUiLayerBoundaryViolations('ui/zoltar/ts/features/markets/Market.tsx', "import { AppShell } from '../../app/AppShell.js'")
+
+	expect(findings.map(finding => finding.rule)).toEqual(['features-must-not-import-app'])
+})
+
+test('rejects shared component imports from app and features', () => {
+	const findings = findUiLayerBoundaryViolations('ui/zoltar/ts/components/Overview.tsx', ["import { AppShell } from '../app/AppShell.js'", "import { Market } from '../features/markets/Market.js'"].join('\n'))
+
+	expect(findings.map(finding => finding.rule)).toEqual(['shared-layers-must-not-import-app', 'shared-layers-must-not-import-features'])
+})
+
+test('rejects app and feature imports from every non-composition layer', () => {
+	for (const layer of ['components', 'hooks', 'lib', 'protocol', 'simulation', 'types']) {
+		const findings = findUiLayerBoundaryViolations(`ui/zoltar/ts/${layer}/example.ts`, ["import { AppShell } from '../app/AppShell.js'", "import { Market } from '../features/markets/Market.js'"].join('\n'))
+		expect(findings.map(finding => finding.rule)).toEqual(['shared-layers-must-not-import-app', 'shared-layers-must-not-import-features'])
+	}
+})
+
+test('allows dependencies within protocol and shared UI libraries', () => {
+	const findings = findUiLayerBoundaryViolations('ui/zoltar/ts/protocol/example.ts', ["import { helper } from './helpers.js'", "import { format } from '../lib/format.js'", "import { getAddress } from '@zoltar/core-shared/evm/ethereum'"].join('\n'))
+
+	expect(findings).toEqual([])
+})
+
+test('keeps runnable applications as dependency leaves behind shared-library APIs', () => {
+	expect(findUiLayerBoundaryViolations('ui/statoblast/ts/app/App.tsx', "import { helper } from '@zoltar/ui-zoltar/protocol/core.js'").map(finding => finding.rule)).toEqual(['cross-package-import-boundary'])
+	expect(findUiLayerBoundaryViolations('ui/statoblast/ts/app/App.tsx', "import { helper } from '@zoltar/ui-zoltar-shared/protocol/core.js'")).toEqual([])
+	expect(findUiLayerBoundaryViolations('ui/trading/ts/app/App.tsx', "import { helper } from '@zoltar/ui-statoblast/app/App.js'").map(finding => finding.rule)).toEqual(['cross-package-import-boundary'])
+	expect(findUiLayerBoundaryViolations('ui/trading/ts/app/App.tsx', "import { helper } from '@zoltar/ui-statoblast-shared/protocol/trading.js'")).toEqual([])
+	expect(findUiLayerBoundaryViolations('ui/trading/ts/features/LivePortfolio.tsx', "import { maximumInsuredExit } from '@zoltar/trading-shared/trading/positions'")).toEqual([])
+})
+
+test('prevents shared libraries from reaching back into applications', () => {
+	const findings = findUiLayerBoundaryViolations('ui/statoblastShared/ts/protocol/example.ts', "import { App } from '@zoltar/ui-zoltar/app/App.js'")
+	expect(findings.map(finding => finding.rule)).toEqual(['cross-package-import-boundary'])
+})
+
+test('requires cross-package imports to use an explicitly exported shared-library entry point', () => {
+	expect(findUiLayerBoundaryViolations('ui/zoltar/ts/app/App.tsx', "import { helper } from '@zoltar/ui-zoltar-shared/protocol/private-helper.js'").map(finding => finding.rule)).toEqual(['cross-package-private-subpath'])
+	expect(findUiLayerBoundaryViolations('ui/zoltar/ts/app/App.tsx', "import { helper } from '@zoltar/ui-zoltar-shared/protocol/core.js'")).toEqual([])
+})
+
+test('shared libraries expose intentional entry points instead of wildcard internals', () => {
+	for (const packageId of ['zoltarShared', 'statoblastShared']) {
+		const manifest = JSON.parse(readFileSync(`ui/${packageId}/package.json`, 'utf8')) as { exports: Record<string, unknown> }
+		expect(Object.keys(manifest.exports).some(exportPath => exportPath.includes('*'))).toBe(false)
+	}
+})
+
+test('rejects test imports that bypass mirrored ownership', () => {
+	const cases = [
+		['ui/zoltar/ts/tests/root.test.ts', "import { client } from '../protocol/client.js'"],
+		['ui/zoltar/ts/tests/testUtils/helper.ts', "import { Market } from '../../features/markets/Market.js'"],
+		['ui/zoltar/ts/tests/features/markets/market.test.ts', "import { AppShell } from '../../../app/AppShell.js'"],
+		['ui/zoltar/ts/tests/protocol/client.test.ts', "import { Market } from '../../features/markets/Market.js'"],
+		['ui/zoltar/ts/tests/simulation/bootstrap.test.ts', "import { AppShell } from '../../app/AppShell.js'"],
+	] as const
+
+	for (const [sourcePath, sourceText] of cases) {
+		expect(findUiLayerBoundaryViolations(sourcePath, sourceText).map(finding => finding.rule)).toEqual(['test-layers-must-follow-ownership'])
+	}
+})

@@ -1,6 +1,7 @@
 export type {
 	Abi,
 	AbiParameter,
+	AbiValue,
 	Account,
 	Address,
 	Block,
@@ -10,6 +11,7 @@ export type {
 	EIP1193Provider,
 	Hash,
 	Hex,
+	JsonValue,
 	MulticallFailureResult,
 	MulticallReturnType,
 	MulticallSuccessResult,
@@ -21,7 +23,7 @@ export type {
 	TransactionReceipt,
 	TransactionReplacement,
 	Transport,
-} from '@zoltar/shared/ethereum'
+} from '@zoltar/core-shared/evm/ethereum'
 export {
 	bigintToSafeNumber,
 	bytesToHex,
@@ -52,7 +54,7 @@ export {
 	toHex,
 	zeroAddress,
 	zeroHash,
-} from '@zoltar/shared/ethereum'
+} from '@zoltar/core-shared/evm/ethereum'
 export type { PublicActions, PublicClient, WalletClient } from './ethereum/client'
 export type { RpcEndpointHealth, RpcEndpointPoolOptions, RpcEndpointStatus } from './ethereum/rpc-resilience'
 export {

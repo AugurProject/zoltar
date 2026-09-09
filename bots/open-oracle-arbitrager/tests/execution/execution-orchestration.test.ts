@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
-import { createPublicClient, custom, decodeFunctionData, encodeFunctionData, mainnet, type Address, type EIP1193Provider, type Hex, type TransactionReceipt, type TransactionReplacement } from '#ethereum'
+import { createPublicClient, custom, decodeFunctionData, encodeFunctionData, mainnet, type Address, type EIP1193Provider, type Hex, type TransactionReceipt, type TransactionReplacement } from '@zoltar/bot-shared/ethereum'
 import { openOracleArbitrageExecutorAbi } from '#contracts/abi'
 import {
 	assertCanonicalExecutionSnapshot,
@@ -43,7 +43,7 @@ import {
 import { loadPositionJournal, savePositionJournal, type PositionJournalFilesystem, type PositionRecord } from '#state/position-store'
 import { assertSubmissionWindowOpen } from '#execution/transaction-submission'
 import { v4QuotePlan } from '#core/uniswap-v4'
-import { ConnectivityDegradedError, operationalFailureDisposition } from '#monitoring/resilience'
+import { ConnectivityDegradedError, operationalFailureDisposition } from '@zoltar/bot-shared/monitoring/resilience'
 
 const address = '0x0000000000000000000000000000000000000001' as Address
 const reporter = '0x0000000000000000000000000000000000000002' as Address

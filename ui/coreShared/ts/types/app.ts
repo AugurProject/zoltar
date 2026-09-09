@@ -1,6 +1,6 @@
-import type { Address, Hash } from '@zoltar/shared/ethereum'
+import type { Address, Hash } from '@zoltar/core-shared/evm/ethereum'
 import type { GlobalTransactionPresentation, TransactionIntent } from './components.js'
-import type { TransactionRequestPreview } from '../lib/chainBackend.js'
+import type { TransactionRequestPreview } from '../wallet/chainBackend.js'
 
 export type RefreshStateOptions = {
 	loadChainClock?: boolean

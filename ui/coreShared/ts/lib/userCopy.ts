@@ -1,8 +1,8 @@
 import * as commonCopy from '../copy/common.js'
 import * as userMessagesCopy from '../copy/userMessages.js'
-import type { Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { assertNever } from './assert.js'
-import { getWrongNetworkReason } from './network.js'
+import { getWrongNetworkReason } from '../wallet/network.js'
 import type { LoadableValueState } from './loadState.js'
 
 export type UserMessageKey = 'not_checked' | 'loading' | 'not_found' | 'empty' | 'action_needed' | 'wrong_network' | 'wallet_disconnected' | 'unavailable' | 'load_failed'

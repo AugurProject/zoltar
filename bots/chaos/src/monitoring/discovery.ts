@@ -119,7 +119,7 @@ export interface DiscoveryLimits {
 }
 
 export interface EcosystemDiscoveryContext {
-	allowMissingTradingDeployment?: boolean
+	discoverGenesisDeployment?: boolean
 	client: ChaosReadClient
 	deployments: EcosystemDeployments
 	wallet: Address
@@ -517,26 +517,17 @@ async function authenticateConfiguredGraph(context: EcosystemDiscoveryContext, b
 	const requiredRoots = ['zoltar', 'questionData', 'securityPoolFactory', 'securityPoolForker', 'openOracle', 'weth'] as const
 	await requireDeployedContracts(
 		client,
-		[
-			...requiredRoots.map(name => ({ name, address: deployments[name] })),
-			...(context.allowMissingTradingDeployment
-				? []
-				: [
-						{ name: 'tradingFactory', address: deployments.tradingFactory },
-						{ name: 'tradingRouter', address: deployments.tradingRouter },
-					]),
-		],
+		requiredRoots.map(name => ({ name, address: deployments[name] })),
 		blockNumber,
 	)
 	const [forkerZoltar, tradingFactoryCode, tradingRouterCode] = await drainConcurrent([
 		client.readContract({ abi: securityPoolForkerAbi, address: deployments.securityPoolForker, blockNumber, functionName: 'zoltar' }),
-		context.allowMissingTradingDeployment ? client.getCode({ address: deployments.tradingFactory, blockNumber }) : Promise.resolve('deployed'),
-		context.allowMissingTradingDeployment ? client.getCode({ address: deployments.tradingRouter, blockNumber }) : Promise.resolve('deployed'),
+		client.getCode({ address: deployments.tradingFactory, blockNumber }),
+		client.getCode({ address: deployments.tradingRouter, blockNumber }),
 	])
 	requireGraphEdge(getAddress(forkerZoltar), deployments.zoltar, 'SecurityPoolForker Zoltar edge')
 	const factory = tradingFactoryCode !== undefined && tradingFactoryCode !== '0x'
 	const router = tradingRouterCode !== undefined && tradingRouterCode !== '0x'
-	if ((!factory || !router) && !context.allowMissingTradingDeployment) throw new Error('Configured trading factory and router must both have deployed code')
 	if (router && !factory) throw new Error('Configured trading router exists without its factory')
 	if (!factory) return { factory, router }
 	const tradingSecurityPoolFactory = await client.readContract({ abi: tradingFactoryAbi, address: deployments.tradingFactory, blockNumber, functionName: 'securityPoolFactory' })
@@ -752,7 +743,7 @@ async function discoverUniverses(context: EcosystemDiscoveryContext, blockNumber
 		])
 		const [forkTime, forkQuestionId, forkingOutcomeIndex, reputationToken, parentUniverseId] = raw
 		if (reputationToken === zeroAddress) throw new Error(`Universe ${universeId.toString()} has no REP token`)
-		const theoreticalSupply = await client.readContract({ abi: erc20Abi, address: reputationToken, blockNumber, functionName: 'getTotalTheoreticalSupplyAttoRep' })
+		const theoreticalSupply = await client.readContract({ abi: erc20Abi, address: reputationToken, blockNumber, functionName: 'getTotalTheoreticalSupply' })
 		const supplyBasedDeposit = theoreticalSupply / 10_000_000n
 		const initialEscalationDeposit = supplyBasedDeposit < 10n ** 18n ? 10n ** 18n : supplyBasedDeposit
 		const cachedChildren = topology.universeChildren[universeId.toString()]
@@ -1813,10 +1804,10 @@ export async function discoverEcosystemSnapshot(context: EcosystemDiscoveryConte
 	])
 	const { pools, staged } = await discoverPools(context, blockNumber, block.timestamp, block.baseFeePerGas, limits, warnings, universes, questions, topology, topologyMutation)
 	const pairs = tradingDeployment.factory ? await discoverPairs(context, pools, blockNumber, topology, topologyMutation) : []
-	const universeUniswap = context.deployments.uniswapV3Factory !== undefined || context.allowMissingTradingDeployment ? await discoverUniverseUniswap(context, universes, blockNumber) : undefined
+	const universeUniswap = context.deployments.uniswapV3Factory !== undefined || context.discoverGenesisDeployment ? await discoverUniverseUniswap(context, universes, blockNumber) : undefined
 	const genesis = universeUniswap?.pools.find(pool => pool.universeId === '0')
 	const genesisUniswap =
-		context.allowMissingTradingDeployment && universeUniswap !== undefined
+		context.discoverGenesisDeployment && universeUniswap !== undefined
 			? { factory: universeUniswap.factory, initialized: genesis?.initialized ?? false, liquidity: genesis?.liquidity ?? '0', ...(genesis?.pool === undefined ? {} : { pool: genesis.pool }), proxy: universeUniswap.proxy, seeder: universeUniswap.seeder }
 			: undefined
 	const indexedReports = trustedIndexedReportsForDiscovery({ deployments: context.deployments, pools, reports: context.indexedReports ?? [], universes, wallet: context.wallet })

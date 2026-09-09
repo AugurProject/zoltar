@@ -1,4 +1,4 @@
-import { encodeDeployData } from '@zoltar/shared/ethereum'
+import { encodeDeployData } from '@zoltar/core-shared/evm/ethereum'
 import { ReputationToken_ReputationToken, statoblast_EscalationGame_EscalationGame, statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier } from '../../../../types/contractArtifact'
 import { AccountAddress, QuestionOutcome } from '../../types/types'
 import { ReadClient, WriteClient, writeContractAndWait } from '../clients'

@@ -46,6 +46,7 @@ export interface ImmutableTopologyIdentity {
 	securityPoolForker: Address
 	tradingFactory: Address
 	tradingRouter: Address
+	uniswapV3Factory?: Address | undefined
 	weth: Address
 	zoltar: Address
 }
@@ -254,7 +255,7 @@ function parseManifestDiscoveryCursors(value: unknown, label: string): ManifestD
 function parseIdentity(value: unknown, label: string): ImmutableTopologyIdentity {
 	const identity = requiredRecord(value, label)
 	const addressFields = ['openOracle', 'questionData', 'securityPoolFactory', 'securityPoolForker', 'tradingFactory', 'tradingRouter', 'weth', 'zoltar'] as const
-	assertExactKeys(identity, ['chainId', ...addressFields], label)
+	assertExactKeys(identity, ['chainId', ...addressFields, ...('uniswapV3Factory' in identity ? ['uniswapV3Factory'] : [])], label)
 	if (typeof identity['chainId'] !== 'number' || !Number.isSafeInteger(identity['chainId']) || identity['chainId'] <= 0) throw new Error(`${label}.chainId must be a positive safe integer`)
 	return {
 		chainId: identity['chainId'],
@@ -264,6 +265,7 @@ function parseIdentity(value: unknown, label: string): ImmutableTopologyIdentity
 		securityPoolForker: address(identity['securityPoolForker'], `${label}.securityPoolForker`),
 		tradingFactory: address(identity['tradingFactory'], `${label}.tradingFactory`),
 		tradingRouter: address(identity['tradingRouter'], `${label}.tradingRouter`),
+		...('uniswapV3Factory' in identity ? { uniswapV3Factory: address(identity['uniswapV3Factory'], `${label}.uniswapV3Factory`) } : {}),
 		weth: address(identity['weth'], `${label}.weth`),
 		zoltar: address(identity['zoltar'], `${label}.zoltar`),
 	}
@@ -437,17 +439,8 @@ export function validateImmutableTopologyCache(value: CanonicalImmutableTopology
 }
 
 function sameIdentity(left: ImmutableTopologyIdentity, right: ImmutableTopologyIdentity) {
-	return (
-		left.chainId === right.chainId &&
-		left.openOracle.toLowerCase() === right.openOracle.toLowerCase() &&
-		left.questionData.toLowerCase() === right.questionData.toLowerCase() &&
-		left.securityPoolFactory.toLowerCase() === right.securityPoolFactory.toLowerCase() &&
-		left.securityPoolForker.toLowerCase() === right.securityPoolForker.toLowerCase() &&
-		left.tradingFactory.toLowerCase() === right.tradingFactory.toLowerCase() &&
-		left.tradingRouter.toLowerCase() === right.tradingRouter.toLowerCase() &&
-		left.weth.toLowerCase() === right.weth.toLowerCase() &&
-		left.zoltar.toLowerCase() === right.zoltar.toLowerCase()
-	)
+	const addressFields = ['openOracle', 'questionData', 'securityPoolFactory', 'securityPoolForker', 'tradingFactory', 'tradingRouter', 'uniswapV3Factory', 'weth', 'zoltar'] as const
+	return left.chainId === right.chainId && addressFields.every(field => left[field]?.toLowerCase() === right[field]?.toLowerCase())
 }
 
 function sha256(value: string | Uint8Array) {

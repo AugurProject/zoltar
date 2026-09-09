@@ -2,14 +2,14 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { h } from 'preact'
-import { zeroAddress } from '@zoltar/shared/ethereum'
+import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
-import { ZoltarSection } from '../../../features/zoltarSurface/components/ZoltarSection.js'
-import type { MarketRouteContentProps } from '../../../features/types.js'
-import { UniverseDirectorySection } from '../../../features/universes/components/UniverseDirectorySection.js'
+import { UniverseDirectorySection } from '@zoltar/ui-zoltar-shared/features/universes/components/UniverseDirectorySection.js'
+import { ZoltarSection } from '@zoltar/ui-zoltar-shared/features/zoltarSurface/components/ZoltarSection.js'
+import type { MarketRouteContentProps } from '@zoltar/ui-zoltar-shared/features/types.js'
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 
 function createUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarUniverseSummary {
@@ -47,14 +47,16 @@ describe('UniverseDirectorySection', () => {
 		restoreDomEnvironment = undefined
 	})
 
-	test('links deployed universe IDs and offers deployment for missing children', async () => {
-		const renderedComponent = await renderIntoDocument(h(UniverseDirectorySection, { activeUniverseId: 1n, accountAddress: zeroAddress, isOnActiveAppChain: true, onDeployChildUniverse: () => undefined, pendingOutcomeIndex: undefined, zoltarUniverse: createUniverse() }))
+	test('shows current universe details without duplicating child universes', async () => {
+		const renderedComponent = await renderIntoDocument(h(UniverseDirectorySection, { zoltarUniverse: createUniverse() }))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
+		expect(document.body.querySelector('time')?.getAttribute('datetime')).toBe('1970-01-01T00:00:01.000Z')
+		expect(document.body.querySelector('time')?.textContent).toContain('ago')
 		expect(documentQueries.queryByRole('link', { name: 'Select' })).toBeNull()
-		expect(documentQueries.getAllByRole('link').some(link => link.textContent?.includes('Universe'))).toBe(true)
-		expect(documentQueries.getByRole('button', { name: 'Deploy universe' })).toBeTruthy()
+		expect(documentQueries.queryByRole('heading', { name: 'Child Universes' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Deploy universe' })).toBeNull()
 	})
 
 	for (const hasForked of [false, true]) {
@@ -70,13 +72,14 @@ describe('UniverseDirectorySection', () => {
 				zoltarForkQuestionId: '',
 				zoltarMigrationForm: { amount: '', outcomeIndexes: '' },
 				zoltarMigrationChildRepBalancesAttoRep: {},
+				zoltarMigrationChildSplitAmountsAttoRep: {},
 				zoltarQuestions: [],
 				zoltarUniverse: createUniverse({ hasForked }),
 				onApproveZoltarForkRep: () => undefined,
 				onCreateChildUniverseForOutcomeIndex: () => undefined,
 				onForkZoltar: () => undefined,
 				onMigrateInternalRep: () => undefined,
-				onPrepareRepForMigration: () => undefined,
+				onRetryMigrationBalances: () => undefined,
 				onActiveViewChange: () => undefined,
 				loadingZoltarQuestionCount: false,
 				loadingZoltarQuestion: false,
@@ -114,10 +117,13 @@ describe('UniverseDirectorySection', () => {
 			const rendered = await renderIntoDocument(h(ZoltarSection, props))
 			cleanupRenderedComponent = rendered.cleanup
 			const queries = within(document.body)
-			expect(queries.getByRole('heading', { name: 'Universe' })).toBeTruthy()
+			expect(queries.queryByRole('heading', { name: 'Universe' })).toBeNull()
 			if (hasForked) {
-				expect(queries.getByRole('button', { name: 'Prepare REP' })).toBeTruthy()
-				expect(document.body.textContent?.indexOf('Migrate REP')).toBeLessThan(document.body.textContent?.indexOf('Child Universes') ?? 0)
+				expect(queries.queryByRole('button', { name: 'Prepare REP' })).toBeNull()
+				expect(document.querySelectorAll('.migration-outcome-list')).toHaveLength(1)
+				expect(queries.queryByRole('heading', { name: 'Child Universes' })).toBeNull()
+				expect(queries.getByRole('heading', { name: 'Outcome Universes' })).toBeTruthy()
+				expect(queries.getByRole('button', { name: 'Deploy universe' })).toBeTruthy()
 				expect(queries.getByRole('button', { name: 'Split REP' })).toBeTruthy()
 				expect(queries.queryByRole('button', { name: 'Fork Universe' })).toBeNull()
 			} else {

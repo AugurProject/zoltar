@@ -1,4 +1,4 @@
-import { encodeAbiParameters, encodeDeployData, getAddress, type Address } from '#ethereum'
+import { encodeAbiParameters, encodeDeployData, getAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import { beforeAll, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../../../solidity/ts/testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../../../../solidity/ts/testSupport/simulator/utils/clients'

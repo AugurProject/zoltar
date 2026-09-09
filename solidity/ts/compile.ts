@@ -1,3 +1,4 @@
+import { isContractProjectSource, parseContractProject } from './contractProjects.js'
 import { createHash } from 'crypto'
 import { promises as fs } from 'fs'
 import * as path from 'path'
@@ -8,8 +9,9 @@ import * as url from 'url'
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const CONTRACT_PATH_APP = path.join(directoryOfThisFile, '..', 'ts', 'types', 'contractArtifact.ts')
-const HASH_CACHE_PATH = path.join(process.cwd(), '.contract-hash.json')
-const ARTIFACTS_DIR = path.join(process.cwd(), 'artifacts')
+const selectedProject = process.argv[2] === undefined ? undefined : parseContractProject(process.argv[2])
+const HASH_CACHE_PATH = path.join(process.cwd(), ...(selectedProject === undefined ? [] : ['artifacts', selectedProject]), '.contract-hash.json')
+const ARTIFACTS_DIR = path.join(process.cwd(), 'artifacts', ...(selectedProject === undefined ? [] : [selectedProject]))
 const ARTIFACTS_JSON = path.join(ARTIFACTS_DIR, 'Contracts.json')
 const OPEN_ORACLE_LOCAL_PATH = 'contracts/statoblast/openOracle/OpenOracle.sol'
 const OPEN_ORACLE_LOCAL_PREFIX = 'contracts/statoblast/openOracle/'
@@ -81,11 +83,15 @@ const ContractData = funtypes.ReadonlyPartial({
 			object: funtypes.String,
 			opcodes: funtypes.String,
 			sourceMap: funtypes.String,
+			immutableReferences: funtypes.Unknown,
+			linkReferences: funtypes.Unknown,
 		}),
 		deployedBytecode: funtypes.ReadonlyPartial({
 			object: funtypes.String,
 			opcodes: funtypes.String,
 			sourceMap: funtypes.String,
+			immutableReferences: funtypes.Unknown,
+			linkReferences: funtypes.Unknown,
 		}),
 	}),
 	storageLayout: funtypes.Unknown,
@@ -120,7 +126,20 @@ const mainCompilerSettings = {
 	},
 	outputSelection: {
 		'*': {
-			'*': ['abi', 'evm.bytecode.object', 'evm.bytecode.opcodes', 'evm.bytecode.sourceMap', 'evm.deployedBytecode.object', 'evm.deployedBytecode.opcodes', 'evm.deployedBytecode.sourceMap', 'storageLayout'],
+			'*': [
+				'abi',
+				'evm.bytecode.object',
+				'evm.bytecode.opcodes',
+				'evm.bytecode.sourceMap',
+				'evm.bytecode.immutableReferences',
+				'evm.bytecode.linkReferences',
+				'evm.deployedBytecode.object',
+				'evm.deployedBytecode.opcodes',
+				'evm.deployedBytecode.sourceMap',
+				'evm.deployedBytecode.immutableReferences',
+				'evm.deployedBytecode.linkReferences',
+				'storageLayout',
+			],
 		},
 	},
 }
@@ -329,7 +348,7 @@ function addOpenOracleImportAliases(targetSources: Map<string, string>, sourceFi
 function createMainCompilerSources(sourceFiles: Map<string, string>) {
 	const mainSources = new Map(sourceFiles)
 	const openOracleSource = sourceFiles.get(OPEN_ORACLE_LOCAL_PATH)
-	if (openOracleSource === undefined) throw new Error(`Missing ${OPEN_ORACLE_LOCAL_PATH}`)
+	if (openOracleSource === undefined) return mainSources
 	if (!openOracleSource.includes(OPEN_ORACLE_EXACT_PRAGMA)) throw new Error(`Expected ${OPEN_ORACLE_LOCAL_PATH} to include ${OPEN_ORACLE_EXACT_PRAGMA}`)
 	for (const [sourcePath, content] of sourceFiles) {
 		if (!sourcePath.startsWith(OPEN_ORACLE_LOCAL_PREFIX) || !content.includes(OPEN_ORACLE_EXACT_PRAGMA)) continue
@@ -501,7 +520,7 @@ const compileContracts = async () => {
 	const sources = new Map<string, string>()
 	for (const file of files) {
 		const relativePath = path.relative(process.cwd(), file).replace(/\\/g, '/')
-		sources.set(relativePath, normalizeSoliditySourceLineEndings(await fs.readFile(file, 'utf8')))
+		if (selectedProject === undefined || isContractProjectSource(relativePath, selectedProject)) sources.set(relativePath, normalizeSoliditySourceLineEndings(await fs.readFile(file, 'utf8')))
 	}
 
 	const openOracleCompiler = await loadOpenOracleCompiler()
@@ -524,16 +543,15 @@ const compileContracts = async () => {
 	if (needsRecompilation) {
 		console.log('Changes detected or first run. Compiling Solidity contracts...')
 		const mainResult = compileSourceMap('main contracts', solc, createMainCompilerSources(sources), mainCompilerSettings)
-		const openOracleResult = compileSourceMap('OpenOracle', openOracleCompiler, createOpenOracleCompilerSources(sources), openOracleCompilerSettings)
-		const mergedResult = CompileResult.parse(mergeCompileResults(mainResult, openOracleResult, openOracleCompiler))
+		const mergedResult = sources.has(OPEN_ORACLE_LOCAL_PATH) ? CompileResult.parse(mergeCompileResults(mainResult, compileSourceMap('OpenOracle', openOracleCompiler, createOpenOracleCompilerSources(sources), openOracleCompilerSettings), openOracleCompiler)) : mainResult
 
-		if (!(await exists(ARTIFACTS_DIR))) await fs.mkdir(ARTIFACTS_DIR, { recursive: false })
+		if (!(await exists(ARTIFACTS_DIR))) await fs.mkdir(ARTIFACTS_DIR, { recursive: true })
 		await fs.writeFile(ARTIFACTS_JSON, JSON.stringify(mergedResult))
 		await saveHashCache(currentContractHash)
 		console.log('Compilation complete. Hash cache updated.')
 	}
 
-	await copySolidityContractArtifact(ARTIFACTS_JSON)
+	if (selectedProject === undefined) await copySolidityContractArtifact(ARTIFACTS_JSON)
 	console.log('TypeScript artifact generated.')
 }
 

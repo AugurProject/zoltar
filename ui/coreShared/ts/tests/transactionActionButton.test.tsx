@@ -4,9 +4,9 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { fireEvent, within } from './testUtils/queries'
 import { h } from 'preact'
 import { act } from 'preact/test-utils'
-import { TransactionActionButton, TransactionActionButtonLockProvider } from '../components/TransactionActionButton.js'
+import { TransactionActionButton, TransactionActionGroup, TransactionActionButtonLockProvider } from '../components/TransactionActionButton.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
-import { TRANSACTION_ACTION_LOCK_REASON } from '../lib/transactionTray.js'
+import { TRANSACTION_ACTION_LOCK_REASON } from '../transactions/transactionTray.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 import { GlobalTransactionPresentationProvider } from '../components/GlobalTransactionPresentationContext.js'
 
@@ -24,6 +24,32 @@ describe('TransactionActionButton', () => {
 		cleanupRenderedComponent = undefined
 		restoreDomEnvironment?.()
 		restoreDomEnvironment = undefined
+	})
+
+	test('keeps the feedback region after the initiating button when there is no notice', async () => {
+		const rendered = await renderIntoDocument(<TransactionActionButton idleLabel='Submit' pendingLabel='Submitting...' onClick={() => undefined} />)
+		cleanupRenderedComponent = rendered.cleanup
+		const action = rendered.container.querySelector('.tx-action')
+		expect(action?.firstElementChild?.className).toBe('tx-action-row')
+		expect(action?.lastElementChild?.className).toBe('tx-action-feedback')
+	})
+
+	test('shares a global transaction blocker while keeping both grouped actions disabled', async () => {
+		const rendered = await renderIntoDocument(
+			<TransactionActionButtonLockProvider disabledReason={TRANSACTION_ACTION_LOCK_REASON}>
+				<TransactionActionGroup message={undefined}>
+					<TransactionActionButton idleLabel='Approve' pendingLabel='Approving' onClick={() => undefined} />
+					<TransactionActionButton idleLabel='Submit' pendingLabel='Submitting' onClick={() => undefined} />
+				</TransactionActionGroup>
+			</TransactionActionButtonLockProvider>,
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		const notice = within(document.body).getByRole('note')
+		expect(notice.textContent).toBe(TRANSACTION_ACTION_LOCK_REASON)
+		for (const button of document.querySelectorAll('button')) {
+			expect(button.disabled).toBe(true)
+			expect(button.getAttribute('aria-describedby')).toBe(notice.id)
+		}
 	})
 
 	test('renders pending button text while the action is in flight', async () => {
@@ -57,17 +83,12 @@ describe('TransactionActionButton', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('button', { name: 'Submit' })).not.toBeNull()
-		const hintToggle = documentQueries.getByRole('button', { name: 'Submit details' })
-		expect(documentQueries.getByText('Connect a wallet before submitting.')).not.toBeNull()
-		await act(() => {
-			fireEvent.click(hintToggle)
-		})
-		const hintPopover = documentQueries.getByRole('note')
+		const notice = documentQueries.getByRole('note', { name: 'Submit details' })
+		expect(notice.textContent).toContain('Connect a wallet before submitting.')
 		const button = documentQueries.getByRole('button', { name: 'Submit' })
 		const descriptionId = button.getAttribute('aria-describedby')
 		expect(descriptionId).not.toBeNull()
-		expect(hintPopover.getAttribute('id')).not.toBe(descriptionId)
-		expect(document.getElementById(descriptionId ?? '')).not.toBeNull()
+		expect(notice.getAttribute('id')).toBe(descriptionId)
 	})
 
 	test('adds a spinner to a loading disabled reason', async () => {
@@ -108,9 +129,9 @@ describe('TransactionActionButton', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const button = within(document.body).getByRole('button', { name: 'Deploy Scalar Outcomes' })
-		const inlineHint = within(document.body).getByRole('button', { name: 'Deploy Scalar Outcomes details' })
+		const notice = within(document.body).getByRole('note', { name: 'Deploy Scalar Outcomes details' })
 		expect(button.textContent).toBe('Deploy')
-		expect(inlineHint).not.toBeNull()
+		expect(notice.textContent).toContain('Confirm the scalar deployment inputs before continuing.')
 	})
 
 	test('blocks new actions while another transaction is still in flight', async () => {

@@ -1,5 +1,5 @@
 import { beforeEach, describe, test } from 'bun:test'
-import type { Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_SecurityPool_SecurityPool } from '../../types/contractArtifact'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { createCarryProof, readCarryLeafHash, SparseNullifierTree } from '../carryProofHelpers'
@@ -70,7 +70,7 @@ describe('Statoblast: escalation migration', () => {
 		getQuestionResolution,
 		forkUniverse,
 		getRepTokenAddress,
-		getTotalTheoreticalSupplyAttoRep,
+		getTotalTheoreticalSupply,
 		getZoltarAddress,
 		getZoltarForkThreshold,
 		createCompleteSet,
@@ -180,7 +180,7 @@ describe('Statoblast: escalation migration', () => {
 	test('external fork escalation claims expose Own fork required and preserve unresolved deposits', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
-		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
+		const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		await approveAndDepositRepToVault(client, 3n * forkThresholdAttoRep, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
@@ -216,7 +216,7 @@ describe('Statoblast: escalation migration', () => {
 	test('forked escalation claim exposes Child not migrating after the selected child activates', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
-		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
+		const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		await approveAndDepositRepToVault(client, 3n * forkThresholdAttoRep, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
@@ -255,7 +255,7 @@ describe('Statoblast: escalation migration', () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		const otherVault = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const parentRepToken = await getRepToken(client, securityPoolAddresses.securityPool)
-		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, parentRepToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
+		const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, parentRepToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		await approveAndDepositRepToVault(otherVault, repDeposit, questionId)
 		await approveAndDepositRepToVault(client, 3n * forkThresholdAttoRep, questionId)
 		await mockWindow.setTime(endTime + 10000n)
@@ -381,7 +381,7 @@ describe('Statoblast: escalation migration', () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		const depositCount = 65
 		const totalUnresolvedDeposit = BigInt(depositCount) * reportBond
-		const minimumRemainingVaultRep = (await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 100_000n
+		const minimumRemainingVaultRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 100_000n
 		const requiredVaultRep = totalUnresolvedDeposit + minimumRemainingVaultRep
 		const vaultBeforeTopUp = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const vaultRepBeforeTopUp = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vaultBeforeTopUp.repBackingUnits)
@@ -428,7 +428,7 @@ describe('Statoblast: escalation migration', () => {
 	test('own-fork unresolved migration rejects after the child branch is already priced', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
-		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
+		const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const vaultBeforeTopUp = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const vaultRepBeforeTopUp = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vaultBeforeTopUp.repBackingUnits)
 		const repAmountNeeded = vaultRepBeforeTopUp < 3n * forkThresholdAttoRep ? 3n * forkThresholdAttoRep - vaultRepBeforeTopUp : 0n
@@ -463,7 +463,7 @@ describe('Statoblast: escalation migration', () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		const securityPoolCapacityOwnershipAttoRep = reportBond * 2n
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
-		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
+		const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const vaultBeforeTopUp = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const vaultRepBeforeTopUp = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vaultBeforeTopUp.repBackingUnits)
 		if (vaultRepBeforeTopUp < 3n * forkThresholdAttoRep) {
@@ -551,7 +551,7 @@ describe('Statoblast: escalation migration', () => {
 	test('migrateVaultWithUnresolvedEscalation clears parent escrow as dust when the child allocation rounds to zero', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
-		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
+		const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const vaultBeforeTopUp = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const vaultRepBeforeTopUp = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vaultBeforeTopUp.repBackingUnits)
 		const repAmountNeeded = vaultRepBeforeTopUp < 3n * forkThresholdAttoRep ? 3n * forkThresholdAttoRep - vaultRepBeforeTopUp : 0n
@@ -695,7 +695,7 @@ describe('Statoblast: escalation migration', () => {
 			nullifierSiblings: new SparseNullifierTree().getProof(0n),
 		})
 		const childRepToken = getRepTokenAddress(yesUniverse)
-		const theoreticalSupplyBeforeClaim = await getTotalTheoreticalSupplyAttoRep(client, childRepToken)
+		const theoreticalSupplyBeforeClaim = await getTotalTheoreticalSupply(client, childRepToken)
 		const hash = await client.writeContract({
 			abi: statoblast_SecurityPool_SecurityPool.abi,
 			address: yesPool.securityPool,
@@ -703,7 +703,7 @@ describe('Statoblast: escalation migration', () => {
 			args: [QuestionOutcome.Yes, [winningProof]],
 		})
 		await client.waitForTransactionReceipt({ hash })
-		strictEqualTypeSafe(theoreticalSupplyBeforeClaim - (await getTotalTheoreticalSupplyAttoRep(client, childRepToken)), (reportBond * 2n) / 5n, 'the unrelated continuation should burn the winner haircut at settlement')
+		strictEqualTypeSafe(theoreticalSupplyBeforeClaim - (await getTotalTheoreticalSupply(client, childRepToken)), (reportBond * 2n) / 5n, 'the unrelated continuation should burn the winner haircut at settlement')
 	})
 
 	test('each lazily created continuation starts from the complete parent escalation totals', async () => {
@@ -755,7 +755,7 @@ describe('Statoblast: escalation migration', () => {
 
 	test('late children retain the canonical fork snapshot after an own-fork parent claim', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
+		const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const vault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const vaultAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.repBackingUnits)
 		if (vaultAttoRep < 2n * forkThresholdAttoRep) await approveAndDepositRepToVault(client, 2n * forkThresholdAttoRep - vaultAttoRep, questionId)
@@ -902,7 +902,7 @@ describe('Statoblast: escalation migration', () => {
 		const winningDeposit = reportBond
 		const relayerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRepToVault(relayerClient, repDeposit, questionId)
-		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
+		const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 		await mockWindow.setTime(endTime + 10000n)
 		await refreshCurrentPrice()
@@ -917,7 +917,7 @@ describe('Statoblast: escalation migration', () => {
 
 	test('claimForkedEscalationDeposits requires an actual universe fork', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		const nonDecisionThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
+		const nonDecisionThresholdAttoRep = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		await depositRepToVault(client, securityPoolAddresses.securityPool, 4n * nonDecisionThresholdAttoRep)
 		await mockWindow.setTime(endTime + 10000n)
 		await refreshCurrentPrice()
@@ -938,7 +938,7 @@ describe('Statoblast: escalation migration', () => {
 	test('an underfunded child remains incomplete instead of scaling per-vault escalation claims', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
-		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
+		const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const vaultBeforeTopUp = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const vaultRepBeforeTopUp = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vaultBeforeTopUp.repBackingUnits)
 		const repAmountNeeded = vaultRepBeforeTopUp < 3n * forkThresholdAttoRep ? 3n * forkThresholdAttoRep - vaultRepBeforeTopUp : 0n
@@ -1132,7 +1132,7 @@ describe('Statoblast: escalation migration', () => {
 	test('a migrated winner settles from aggregate child backing when the losing vault does not migrate', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		const losingClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
+		const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const winningVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const winningVaultRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, winningVault.repBackingUnits)
 		if (winningVaultRep < forkThresholdAttoRep) await approveAndDepositRepToVault(client, forkThresholdAttoRep - winningVaultRep, questionId)
@@ -1203,7 +1203,7 @@ describe('Statoblast: escalation migration', () => {
 			nullifierSiblings: new SparseNullifierTree().getProof(0n),
 		})
 		const childRepToken = getRepTokenAddress(yesUniverse)
-		const theoreticalSupplyBeforeClaim = await getTotalTheoreticalSupplyAttoRep(client, childRepToken)
+		const theoreticalSupplyBeforeClaim = await getTotalTheoreticalSupply(client, childRepToken)
 		const winnerBalanceBefore = await getERC20Balance(client, childRepToken, client.account.address)
 		const hash = await client.writeContract({
 			abi: statoblast_SecurityPool_SecurityPool.abi,
@@ -1213,14 +1213,14 @@ describe('Statoblast: escalation migration', () => {
 		})
 		await client.waitForTransactionReceipt({ hash })
 		assert.ok((await getERC20Balance(client, childRepToken, client.account.address)) - winnerBalanceBefore > forkThresholdAttoRep, 'the migrated winner should receive principal plus its preserved reward without the losing vault migrating')
-		strictEqualTypeSafe(await getTotalTheoreticalSupplyAttoRep(client, childRepToken), theoreticalSupplyBeforeClaim, 'settlement must not burn a second haircut after the own-question fork paid it')
+		strictEqualTypeSafe(await getTotalTheoreticalSupply(client, childRepToken), theoreticalSupplyBeforeClaim, 'settlement must not burn a second haircut after the own-question fork paid it')
 	})
 
 	test("multiple migrated winners settle in reverse order without using another vault owner's logical entitlement", async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		const secondWinner = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const losingClient = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
-		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
+		const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const firstWinningPrincipal = forkThresholdAttoRep / 2n
 		const secondWinningPrincipal = forkThresholdAttoRep - firstWinningPrincipal
 		const firstWinnerVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
@@ -1300,7 +1300,7 @@ describe('Statoblast: escalation migration', () => {
 
 	test('a directly claimed parent deposit is invalid in every current and late child while its same-outcome remainder stays claimable', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		const forkThresholdAttoRep = (((await getTotalTheoreticalSupplyAttoRep(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
+		const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const firstYesDeposit = forkThresholdAttoRep / 3n
 		const secondYesDeposit = forkThresholdAttoRep - firstYesDeposit
 		const vault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)

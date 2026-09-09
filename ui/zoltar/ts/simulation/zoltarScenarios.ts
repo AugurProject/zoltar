@@ -1,13 +1,13 @@
-import { sortStringArrayByKeccak } from '@zoltar/shared/sortStringArrayByKeccak'
+import { sortStringArrayByKeccak } from '@zoltar/core-shared/serialization/sortStringArrayByKeccak'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { getSimulationChainTimestamp } from '@zoltar/ui-core-shared/simulation/clock.js'
 import { deploySimulationAppContracts, reportBootstrapProgress, requireQaAccount, type BootstrapScenarioApplyParameters } from '@zoltar/ui-core-shared/simulation/bootstrap.js'
 import type { QuestionData } from '@zoltar/ui-core-shared/types/contracts.js'
-import { getDeploymentSteps } from '../protocol/deployment.js'
-import { approveErc20 } from '../protocol/tokenActions.js'
-import { createMarket, loadZoltarUniverseSummary } from '../protocol/zoltar.js'
-import { createZoltarChildUniverse, forkZoltarUniverse } from '../protocol/zoltarForks.js'
-import { getZoltarAddress } from '../protocol/zoltarDeploymentHelpers.js'
+import { getDeploymentSteps } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
+import { approveErc20 } from '@zoltar/ui-zoltar-shared/protocol/tokenActions.js'
+import { createMarket, loadZoltarUniverseSummary } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
+import { createZoltarChildUniverse, forkZoltarUniverse } from '@zoltar/ui-zoltar-shared/protocol/zoltarForks.js'
+import { getZoltarAddress } from '@zoltar/ui-zoltar-shared/protocol/zoltarDeploymentHelpers.js'
 
 const defaultScenarioProtocol = { approveErc20, createMarket, createZoltarChildUniverse, forkZoltarUniverse, getDeploymentSteps, getZoltarAddress, loadZoltarUniverseSummary }
 

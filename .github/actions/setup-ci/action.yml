@@ -2,6 +2,14 @@ name: Set up Zoltar CI proposal
 description: Install pinned tools and dependencies, then restore or generate build inputs
 
 inputs:
+  profile:
+    description: Dependency and artifact scope (full, contracts, or root).
+    required: false
+    default: full
+  foundry:
+    description: Install Foundry for jobs that execute EVM tests.
+    required: false
+    default: "true"
   verify-generated:
     description: Always regenerate and verify generated inputs
     required: false
@@ -10,6 +18,18 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Validate setup profile
+      shell: bash
+      env:
+        PROFILE: ${{ inputs.profile }}
+        VERIFY_GENERATED: ${{ inputs.verify-generated }}
+      run: |
+        case "${PROFILE}" in full|contracts|root) ;; *) echo "Unknown setup profile: ${PROFILE}"; exit 1 ;; esac
+        if [[ "${VERIFY_GENERATED}" == "true" && "${PROFILE}" != "full" ]]; then
+          echo 'Generated freshness verification requires the full profile.'
+          exit 1
+        fi
+
     - name: Fetch repository comparison history
       if: github.job == 'checks'
       shell: bash
@@ -26,71 +46,67 @@ runs:
         bun-version: ${{ env.BUN_VERSION }}
 
     - name: Setup Foundry / Anvil
+      if: inputs.foundry == 'true' && inputs.profile != 'root'
       uses: foundry-rs/foundry-toolchain@v1
       with:
         version: ${{ env.FOUNDRY_VERSION }}
+
+    - name: Read canonical project metadata
+      id: projects
+      shell: bash
+      run: bun ./tooling/repo/query-projects.mts --github-output
 
     - name: Cache Bun dependencies
       uses: actions/cache@v5
       with:
         path: ~/.bun/install/cache
-        key: ${{ runner.os }}-bun-${{ env.BUN_VERSION }}-${{ hashFiles('bun.lock', 'ui/*/bun.lock', 'solidity/bun.lock') }}
+        key: ${{ runner.os }}-bun-${{ env.BUN_VERSION }}-${{ steps.projects.outputs.dependency_cache_key }}
 
     - name: Install dependencies
       shell: bash
+      env:
+        PROFILE: ${{ inputs.profile }}
       run: |
-        bun ./scripts/install-frozen.mts
-        bun ./scripts/install-frozen.mts ui/coreShared
-        bun ./scripts/install-frozen.mts ui/zoltar
-        bun ./scripts/install-frozen.mts ui/statoblast
-        bun ./scripts/install-frozen.mts ui/trading
-        bun ./scripts/install-frozen.mts solidity
+        if [[ "${PROFILE}" == "full" ]]; then
+          bun run projects:setup
+        else
+          bun ./tooling/repo/run-project-tasks.mts setup repository
+          if [[ "${PROFILE}" == "contracts" ]]; then
+            bun ./tooling/repo/run-project-tasks.mts setup contracts --dependencies
+          else
+            bun ./tooling/repo/run-project-tasks.mts setup --path-prefix shared/
+          fi
+        fi
 
-    - name: Install bot workspace dependencies for dead code analysis
-      if: github.job == 'knip'
-      shell: bash
-      run: |
-        bun ./scripts/install-frozen.mts bots/shared
-        bun ./scripts/install-frozen.mts bots/open-oracle-arbitrager
-        bun ./scripts/install-frozen.mts bots/liquidator
-        bun ./scripts/install-frozen.mts bots/chaos
-
-    - name: Cache generated shared package
-      id: shared-cache
+    - name: Cache generated project outputs
+      if: inputs.profile != 'root'
+      id: generated-cache
       uses: actions/cache@v5
       with:
-        path: shared/js
-        key: ${{ runner.os }}-shared-${{ env.BUN_VERSION }}-${{ hashFiles('bun.lock', 'package.json', 'shared/package.json', 'shared/tsconfig.json', 'shared/ts/**') }}
-
-    - name: Cache generated contract artifacts
-      id: contract-cache
-      uses: actions/cache@v5
-      with:
-        path: |
-          solidity/artifacts
-          solidity/.contract-hash.json
-          solidity/ts/types/contractArtifact.ts
-          solidity/types/contractArtifact.ts
-          ui/coreShared/ts/abis.ts
-          ui/coreShared/ts/contractArtifact.ts
-          ui/trading/ts/generated/contractArtifact.ts
-        key: ${{ runner.os }}-contracts-${{ env.BUN_VERSION }}-${{ env.FOUNDRY_VERSION }}-${{ hashFiles('bun.lock', 'solidity/bun.lock', 'solidity/package.json', 'solidity/tsconfig-compile.json', 'solidity/ts/abi/abis.ts', 'solidity/ts/compile.ts', 'solidity/contracts/**', 'ui/coreShared/build/projectArtifacts.mts') }}
-
-    - name: Cache UI vendor assets
-      id: vendor-cache
-      uses: actions/cache@v5
-      with:
-        path: |
-          ui/zoltar/vendor
-          ui/statoblast/vendor
-          ui/trading/vendor
-        key: ${{ runner.os }}-ui-vendor-${{ env.BUN_VERSION }}-${{ hashFiles('bun.lock', 'ui/*/bun.lock', 'ui/*/package.json', 'ui/coreShared/build/bundlerPaths.mts', 'ui/coreShared/build/vendor.mts') }}
+        path: ${{ inputs.profile == 'contracts' && steps.projects.outputs.component_artifact_outputs || steps.projects.outputs.generated_cache_paths }}
+        key: ${{ runner.os }}-generated-${{ inputs.profile }}-${{ env.BUN_VERSION }}-${{ env.FOUNDRY_VERSION }}-${{ steps.projects.outputs.generated_cache_key }}
 
     - name: Generate and verify generated artifacts
-      if: inputs.verify-generated == 'true' || steps.shared-cache.outputs.cache-hit != 'true' || steps.contract-cache.outputs.cache-hit != 'true' || steps.vendor-cache.outputs.cache-hit != 'true'
+      if: inputs.profile != 'root' && (inputs.verify-generated == 'true' || steps.generated-cache.outputs.cache-hit != 'true')
       shell: bash
-      run: bun run check:generated-clean
+      env:
+        PROFILE: ${{ inputs.profile }}
+      run: |
+        if [[ "${PROFILE}" == "contracts" ]]; then
+          bun ./tooling/contracts/ensure-contract-artifacts.mts --headless
+        else
+          bun run check:generated-clean
+        fi
 
     - name: Refresh generated shared package installs
+      if: inputs.profile != 'root'
       shell: bash
-      run: bun run refresh:shared-dependencies
+      env:
+        PROFILE: ${{ inputs.profile }}
+      run: |
+        if [[ "${PROFILE}" == "contracts" ]]; then
+          bun ./tooling/repo/ensure-shared-package-fresh.mts --refresh
+          (cd solidity && bun ../tooling/repo/ensure-shared-package-fresh.mts --refresh)
+        else
+          bun run refresh:shared-dependencies
+        fi

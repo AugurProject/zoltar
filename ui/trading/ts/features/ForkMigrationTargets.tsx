@@ -1,5 +1,5 @@
 import { normalizeNumericInput } from '@zoltar/ui-core-shared/lib/numericInput.js'
-import { formatScalarOutcomeLabel, getScalarOutcomeIndex } from '@zoltar/shared/scalarOutcome'
+import { formatScalarOutcomeLabel, getScalarOutcomeIndex } from '@zoltar/zoltar-shared/questions/scalarOutcome'
 import { OutcomeSelectionList } from '@zoltar/ui-core-shared/components/OutcomeSelectionList.js'
 import { ScalarOutcomePicker } from '@zoltar/ui-core-shared/components/ScalarOutcomePicker.js'
 import { useMemo, useState } from 'preact/hooks'

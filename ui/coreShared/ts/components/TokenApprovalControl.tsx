@@ -1,3 +1,4 @@
+import type { ComponentChildren } from 'preact'
 import * as commonCopy from '../copy/common.js'
 import { useEffect, useId, useMemo, useState } from 'preact/hooks'
 import { ApprovedAmountValue } from './ApprovedAmountValue.js'
@@ -9,14 +10,16 @@ import { MetricGrid } from './MetricGrid.js'
 import { MetricField } from './MetricField.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { formatCurrencyBalance } from '../lib/formatters.js'
-import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, parseTokenApprovalAmountInput, resolveTokenApprovalStatusMessage } from '../lib/tokenApproval.js'
+import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, parseTokenApprovalAmountInput, resolveTokenApprovalStatusMessage } from '../transactions/tokenApproval.js'
 type TokenApprovalControlProps = {
+	renderActions?: (approval: { button: ComponentChildren; notice: string | undefined; noticeId: string }) => ComponentChildren
 	actionLabel: string
 	allowanceError: string | undefined
 	allowanceLoading: boolean
 	approvedAmount: bigint | undefined
 	disabled?: boolean | undefined
 	guardMessage: string | undefined
+	guardMessageElementId?: string | undefined
 	onApprove: (amount?: bigint) => void
 	pending: boolean
 	pendingLabel: string
@@ -52,7 +55,7 @@ function resolveApprovalButtonLabel({
 	if (isMaxAmount) return commonCopy.formatApproveMaxValue(tokenSymbol)
 	return commonCopy.formatApproveTokenAmount(formatCurrencyBalance(nextApprovalAmount, tokenUnits), tokenSymbol)
 }
-export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoading, approvedAmount, disabled = false, guardMessage, onApprove, pending, pendingLabel, requiredAmount, resetKey, tokenSymbol, tokenUnits }: TokenApprovalControlProps) {
+export function TokenApprovalControl({ renderActions, guardMessageElementId, actionLabel, allowanceError, allowanceLoading, approvedAmount, disabled = false, guardMessage, onApprove, pending, pendingLabel, requiredAmount, resetKey, tokenSymbol, tokenUnits }: TokenApprovalControlProps) {
 	const [draftAmount, setDraftAmount] = useState('')
 	const amountValidationMessageId = useId()
 	const requirement = useMemo(() => deriveTokenApprovalRequirement(requiredAmount, approvedAmount), [approvedAmount, requiredAmount])
@@ -113,6 +116,19 @@ export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoa
 		tokenSymbol,
 		tokenUnits,
 	})
+	const approvalButton = (
+		<TransactionActionButton
+			idleLabel={buttonLabel}
+			inlineHint={allowanceMessage === undefined && amountValidationMessage === undefined && canApprove ? visibleStatusMessage : undefined}
+			pendingLabel={pendingLabel}
+			onClick={() => onApprove(nextApprovalAmount)}
+			pending={pending}
+			tone='secondary'
+			availability={{ disabled: !canApprove, reason: allowanceMessage ?? visibleStatusMessage ?? guardMessage }}
+			disabledReasonElementId={allowanceMessage === undefined && amountValidationMessage !== undefined ? amountValidationMessageId : guardMessageElementId}
+			showDisabledReason={allowanceMessage === undefined && amountValidationMessage === undefined && (guardMessage === undefined || guardMessageElementId === undefined)}
+		/>
+	)
 	return (
 		<div className='form-grid'>
 			<MetricGrid>
@@ -141,27 +157,15 @@ export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoa
 					</button>
 				</div>
 			</label>
-			{amountValidationMessage === undefined ? undefined : (
+			{renderActions !== undefined || amountValidationMessage === undefined ? undefined : (
 				<p className='field-error' id={amountValidationMessageId} role='alert'>
 					{amountValidationMessage}
 				</p>
 			)}
 
-			<div className='actions'>
-				<TransactionActionButton
-					idleLabel={buttonLabel}
-					inlineHint={allowanceMessage === undefined && amountValidationMessage === undefined && canApprove ? visibleStatusMessage : undefined}
-					pendingLabel={pendingLabel}
-					onClick={() => onApprove(nextApprovalAmount)}
-					pending={pending}
-					tone='secondary'
-					availability={{ disabled: !canApprove, reason: allowanceMessage ?? visibleStatusMessage ?? guardMessage }}
-					disabledReasonElementId={allowanceMessage === undefined && amountValidationMessage !== undefined ? amountValidationMessageId : undefined}
-					showDisabledReason={allowanceMessage === undefined && amountValidationMessage === undefined}
-				/>
-			</div>
+			{renderActions === undefined ? <div className='actions'>{approvalButton}</div> : renderActions({ button: approvalButton, notice: allowanceMessage ?? amountValidationMessage ?? visibleStatusMessage ?? guardMessage, noticeId: amountValidationMessageId })}
 
-			{allowanceMessage === undefined ? undefined : <ErrorNotice message={allowanceMessage} />}
+			{renderActions !== undefined || allowanceMessage === undefined ? undefined : <ErrorNotice message={allowanceMessage} />}
 		</div>
 	)
 }

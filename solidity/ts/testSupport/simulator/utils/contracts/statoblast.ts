@@ -1,4 +1,4 @@
-import type { Address, Hash, Hex, TransactionLog } from '@zoltar/shared/ethereum'
+import type { Address, Hash, Hex, TransactionLog } from '@zoltar/core-shared/evm/ethereum'
 import {
 	decodeOpenOracleStatePreimage,
 	getOpenOracleGameTuple,
@@ -11,14 +11,14 @@ import {
 	OPEN_ORACLE_REPORT_SETTLED_TOPIC,
 	OPEN_ORACLE_REPORT_SUBMITTED_TOPIC,
 	type OpenOracleStatePreimage,
-} from '@zoltar/shared/openOracle'
+} from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { ReadClient, WriteClient, writeContractAndWait } from '../clients'
 import { WETH_ADDRESS } from '../constants'
 import { statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction, statoblast_openOracle_OpenOracle_OpenOracle, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_tokens_ShareToken_ShareToken, ZoltarQuestionData_ZoltarQuestionData } from '../../../../types/contractArtifact'
 import { QuestionOutcome } from '../../types/types'
 import { getInfraContractAddresses } from './deployStatoblast'
 import { threeAttoShareArrayToAttoEth } from './securityPool'
-import { priceToClosestTick, tickToPrice } from '../tickMath'
+import { priceToClosestTick, tickToPrice } from '@zoltar/statoblast-shared/statoblast/truthAuctionTickMath'
 import { HIGH_GAS_SIMULATOR_WRITE_GAS } from '../constants'
 import { requireAddress } from '../utilities'
 

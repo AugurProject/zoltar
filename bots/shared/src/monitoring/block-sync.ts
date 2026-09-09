@@ -1,4 +1,4 @@
-import { fetchLogsWithAdaptiveRanges as fetchLogsWithAdaptiveRangesFromBlocks, logRangeLimitError, LogScanError, type LogRange } from '@zoltar/shared/logScan'
+import { fetchLogsWithAdaptiveRanges as fetchLogsWithAdaptiveRangesFromBlocks, logRangeLimitError, LogScanError, type LogRange } from '@zoltar/core-shared/evm/logScan'
 
 export { logRangeLimitError, LogScanError, type LogRange }
 

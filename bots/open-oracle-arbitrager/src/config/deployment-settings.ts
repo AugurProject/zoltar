@@ -1,6 +1,9 @@
-import { getAddress, type Address } from '#ethereum'
+import mainnet from '../../../../docs/mainnet-deployment-addresses.json'
+import sepolia from '../../../../docs/sepolia-deployment-addresses.json'
+import { canonicalCoreDeployment, canonicalNetworkDeployment } from '@zoltar/bot-shared/config/canonical-deployment'
+import { getAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import { parseDeploymentManifest, type DeploymentManifest } from '#config/deployment-auth'
-import { validateReadRpcUrls } from '#monitoring/connectivity'
+import { validateReadRpcUrls, type NetworkName } from '#monitoring/connectivity'
 
 export type DeploymentSettings = {
 	coordinatorAddresses: readonly Address[]
@@ -39,11 +42,13 @@ function urlArray(value: unknown) {
 	return validateReadRpcUrls(value.map(item => String(item)))
 }
 
-export function validateDeploymentSettings(value: unknown): DeploymentSettings {
+export function validateDeploymentSettings(value: unknown, network: NetworkName = 'mainnet'): DeploymentSettings {
 	const settings = record(value)
 	const keys = ['coordinatorAddresses', 'deploymentManifest', 'executor', 'openOracle', 'quorumRpcUrls', 'rep', 'uniswapFactory', 'uniswapQuoter', 'uniswapRouter', 'uniswapV2Router', 'uniswapV4PoolManager', 'uniswapV4Quoter', 'weth']
-	const requiredKeys = ['coordinatorAddresses', 'openOracle', 'quorumRpcUrls', 'rep', 'uniswapFactory', 'uniswapQuoter', 'weth']
+	const requiredKeys = ['coordinatorAddresses', 'quorumRpcUrls', 'uniswapFactory', 'uniswapQuoter']
 	if (Object.keys(settings).some(key => !keys.includes(key)) || requiredKeys.some(key => !(key in settings))) throw new Error('Deployment settings require the supported core deployment fields')
+	const manifest = network === 'mainnet' ? mainnet : sepolia
+	const identity = canonicalNetworkDeployment(manifest)
 	const v4PoolManager = optionalAddress(settings['uniswapV4PoolManager'], 'Uniswap V4 PoolManager')
 	const v4Quoter = optionalAddress(settings['uniswapV4Quoter'], 'Uniswap V4 Quoter')
 	if ((v4PoolManager === undefined) !== (v4Quoter === undefined)) throw new Error('Uniswap V4 requires both PoolManager and Quoter')
@@ -51,16 +56,16 @@ export function validateDeploymentSettings(value: unknown): DeploymentSettings {
 		coordinatorAddresses: addressArray(settings['coordinatorAddresses'], 'Coordinator addresses'),
 		deploymentManifest: settings['deploymentManifest'] === undefined || settings['deploymentManifest'] === null ? undefined : parseDeploymentManifest(settings['deploymentManifest']),
 		executor: optionalAddress(settings['executor'], 'Executor'),
-		openOracle: getAddress(String(settings['openOracle'])),
+		openOracle: canonicalCoreDeployment(manifest).openOracle,
 		quorumRpcUrls: urlArray(settings['quorumRpcUrls']),
-		rep: getAddress(String(settings['rep'])),
+		rep: identity.rep,
 		uniswapFactory: getAddress(String(settings['uniswapFactory'])),
 		uniswapQuoter: getAddress(String(settings['uniswapQuoter'])),
 		uniswapRouter: optionalAddress(settings['uniswapRouter'], 'Uniswap V3 router'),
 		uniswapV2Router: optionalAddress(settings['uniswapV2Router'], 'Uniswap V2 router'),
 		uniswapV4PoolManager: v4PoolManager,
 		uniswapV4Quoter: v4Quoter,
-		weth: getAddress(String(settings['weth'])),
+		weth: identity.weth,
 	}
 }
 
@@ -79,4 +84,14 @@ export function prepareDeploymentTokenTransition(activeTokenAddresses: readonly 
 		active: replacePrimaryRepToken(activeTokenAddresses, previousRep, nextRep),
 		persisted: replacePrimaryRepToken(persistedTokenAddresses ?? activeTokenAddresses, previousRep, nextRep),
 	}
+}
+
+export function monitoringTokensForDeployment(value: readonly string[], previousRep: Address, deployment: DeploymentSettings) {
+	const parsedAddresses: Address[] = [deployment.rep]
+	for (const address of value) {
+		const token = getAddress(address)
+		if (token.toLowerCase() === previousRep.toLowerCase() && token.toLowerCase() !== deployment.rep.toLowerCase()) continue
+		parsedAddresses.push(token)
+	}
+	return [...new Map(parsedAddresses.map(address => [address.toLowerCase(), address])).values()]
 }

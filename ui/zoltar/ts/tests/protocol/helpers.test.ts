@@ -1,8 +1,8 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { getAddress, zeroAddress } from '@zoltar/shared/ethereum'
-import { getGenesisReputationTokenAddress } from '../../protocol/activeProtocolAddresses.js'
+import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { getGenesisReputationTokenAddress } from '@zoltar/ui-zoltar-shared/protocol/activeProtocolAddresses.js'
 import {
 	bigintToAddress,
 	getEscalationSideLabel,
@@ -22,7 +22,7 @@ import {
 	requireEscalationGameTuple,
 	requireUniverseTupleArray,
 	requireSecurityVaultTupleArray,
-} from '../../protocol/helpers.js'
+} from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 
 const questionData = {
 	title: 'Test question',

@@ -1,4 +1,4 @@
-import { bytesToHex, concatHex, encodeAbiParameters, getAddress, hexToBytes, keccak256, type Address, type Hex } from '@zoltar/shared/ethereum'
+import { bytesToHex, concatHex, encodeAbiParameters, getAddress, hexToBytes, keccak256, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 
 export type ReplayLog = {
 	chainId: bigint

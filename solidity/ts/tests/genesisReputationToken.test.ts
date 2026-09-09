@@ -1,6 +1,6 @@
 import { beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
-import { SEPOLIA_REP_ALLOCATIONS, SEPOLIA_REP_TOTAL_THEORETICAL_SUPPLY } from '@zoltar/shared/sepoliaRepAllocations'
-import { encodeDeployData, type Address } from '@zoltar/shared/ethereum'
+import { SEPOLIA_REP_ALLOCATIONS, SEPOLIA_REP_TOTAL_THEORETICAL_SUPPLY } from '@zoltar/zoltar-shared/deployment/sepoliaRepAllocations'
+import { encodeDeployData, type Address } from '@zoltar/core-shared/evm/ethereum'
 import assert from '../testSupport/simulator/utils/assert'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
@@ -20,6 +20,14 @@ describe('GenesisReputationToken', () => {
 		mockWindow = getAnvilWindowEthereum()
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		await setupTestAccounts(mockWindow)
+	})
+
+	test('matches external REPv2 by exposing approval-based ERC-20 authorization only', () => {
+		const functionNames = new Set<string>(GenesisReputationToken_GenesisReputationToken.abi.flatMap(item => (item.type === 'function' ? [item.name] : [])))
+		assert.ok(functionNames.has('getTotalTheoreticalSupply'), 'genesis REP must expose the mainnet REPv2 theoretical-supply selector')
+		for (const unsupportedFunction of ['permit', 'nonces', 'transferWithAuthorization', 'receiveWithAuthorization', 'cancelAuthorization', 'authorizationState']) {
+			assert.ok(!functionNames.has(unsupportedFunction), `genesis REP must not advertise unsupported ${unsupportedFunction}`)
+		}
 	})
 
 	test('mints the configured Sepolia balances and fixes theoretical supply to their sum', async () => {
@@ -52,7 +60,7 @@ describe('GenesisReputationToken', () => {
 		const theoreticalSupply = await client.readContract({
 			abi: GenesisReputationToken_GenesisReputationToken.abi,
 			address: tokenAddress,
-			functionName: 'getTotalTheoreticalSupplyAttoRep',
+			functionName: 'getTotalTheoreticalSupply',
 			args: [],
 		})
 		assert.strictEqual(totalSupply, SEPOLIA_REP_TOTAL_THEORETICAL_SUPPLY)
@@ -92,10 +100,27 @@ describe('GenesisReputationToken', () => {
 			client.writeContract({
 				abi: ReputationToken_ReputationToken.abi,
 				address: tokenAddress,
-				functionName: 'setMaxTheoreticalSupplyAttoRep',
-				args: [11_000_000n * 10n ** 18n + 1n],
+				functionName: 'initialize',
+				args: [1n, 11_000_000n * 10n ** 18n + 1n, 1n],
 			}),
 			/exceeds maximum REP|reverted/i,
 		)
+	})
+
+	test('child REP initialization is Zoltar-only and one-time', async () => {
+		const data = encodeDeployData({
+			abi: ReputationToken_ReputationToken.abi,
+			bytecode: `0x${ReputationToken_ReputationToken.evm.bytecode.object}`,
+			args: [client.account.address],
+		})
+		const receipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data }) })
+		const tokenAddress = receipt.contractAddress
+		if (tokenAddress === undefined || tokenAddress === null) throw new Error('Child REP deployment address missing')
+		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		await assert.rejects(attacker.writeContract({ abi: ReputationToken_ReputationToken.abi, address: tokenAddress, functionName: 'initialize', args: [1n, 100n, 1n] }), /ReputationToken caller must be the Zoltar contract|reverted/i)
+		await client.waitForTransactionReceipt({ hash: await client.writeContract({ abi: ReputationToken_ReputationToken.abi, address: tokenAddress, functionName: 'initialize', args: [1n, 100n, 1n] }) })
+		await assert.rejects(client.writeContract({ abi: ReputationToken_ReputationToken.abi, address: tokenAddress, functionName: 'initialize', args: [2n, 200n, 2n] }), /already initialized|reverted/i)
+		assert.strictEqual(await client.readContract({ abi: ReputationToken_ReputationToken.abi, address: tokenAddress, functionName: 'name' }), 'Augur Reputation 1')
+		assert.strictEqual(await client.readContract({ abi: ReputationToken_ReputationToken.abi, address: tokenAddress, functionName: 'symbol' }), 'REP1')
 	})
 })

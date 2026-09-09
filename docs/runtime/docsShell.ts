@@ -34,7 +34,7 @@
 	const requiredMain: HTMLElement = main
 	const favicon = document.createElement('link')
 	favicon.rel = 'icon'
-	favicon.href = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#176653"/><text x="16" y="22" fill="white" font-family="Georgia,serif" font-size="20" text-anchor="middle">S</text></svg>')}`
+	favicon.href = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#176653"/><text x="16" y="22" fill="white" font-family="Georgia,serif" font-size="20" text-anchor="middle">A</text></svg>')}`
 	document.head.append(favicon)
 
 	document.body.classList.add('docs-shell-page')
@@ -65,7 +65,9 @@
 	const topbar = element('header', 'docs-topbar')
 	const brand = element('a', 'docs-brand')
 	brand.href = docsUrl('documentation.html')
-	brand.append(element('span', 'docs-brand-mark', 'S'), element('span', '', 'Statoblast documentation'))
+	const brandMark = element('span', 'docs-brand-mark', 'A')
+	brandMark.setAttribute('aria-hidden', 'true')
+	brand.append(brandMark, element('span', '', 'Augur documentation'))
 
 	const actions = element('div', 'docs-top-actions')
 	const menuButton = element('button', 'docs-icon-button', '☰')

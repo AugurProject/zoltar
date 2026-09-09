@@ -121,6 +121,64 @@ function presence(value: OperationPlan, blocksNovelty = true) {
 }
 
 describe('durable lifecycle obligations', () => {
+	test('reconciles a blocker observed during suffix backfill after that coverage catches up', () => {
+		const state = obligationState()
+		const value = plan('10')
+		synchronizeLifecycleObligationsAtAnchor(state, [], presence(value), false, 10n, 0n, undefined, 5n)
+		expect(state.lifecyclePresenceBlocker).toBeDefined()
+		// Another identity can become due while backfilling; neither should leave
+		// the aggregate blocker latched once ordinary obligations represent them.
+		const next = { ...plan('11'), metadata: { reportId: '8' } }
+		synchronizeLifecycleObligationsAtAnchor(state, [evaluation(value), evaluation(next)], [...presence(value), ...presence(next)], false, 11n, 0n, 5n, 5n)
+		expect(state.obligations).toHaveLength(2)
+		expect(state.lifecyclePresenceBlocker).toBeUndefined()
+	})
+
+	test('preserves unknown and reduced-coverage blockers but reconciles exactly represented older blockers', () => {
+		const value = plan('10')
+		for (const observedStart of [undefined, 5n]) {
+			const state = obligationState()
+			synchronizeLifecycleObligationsAtAnchor(state, [], presence(value), false, 10n, 0n, undefined, observedStart)
+			synchronizeLifecycleObligationsAtAnchor(state, [], [], false, 11n, 0n, 6n)
+			expect(state.lifecyclePresenceBlocker).toBeDefined()
+		}
+		const state = obligationState()
+		synchronizeLifecycleObligationsAtAnchor(state, [], presence(value), false, 10n, 0n)
+		synchronizeLifecycleObligationsAtAnchor(state, [evaluation(value)], presence(value), false, 11n, 0n, 5n)
+		expect(state.lifecyclePresenceBlocker).toBeUndefined()
+		const carry = { ...value, definitionId: 'statoblast.escalation.withdraw-forked' }
+		synchronizeLifecycleObligationsAtAnchor(state, [], presence(carry), false, 12n, 0n, undefined, 5n)
+		synchronizeLifecycleObligationsAtAnchor(state, [], [], false, 13n, 0n, 5n)
+		expect(state.lifecyclePresenceBlocker).toBeDefined()
+	})
+
+	test('reconciles carry claims only while the authenticated carry journal is complete', () => {
+		const state = obligationState()
+		const carry = { ...plan('10'), definitionId: 'statoblast.escalation.withdraw-forked' }
+		synchronizeLifecycleObligationsAtAnchor(state, [], presence(carry), false, 10n, 0n, 5n, 5n, true)
+		synchronizeLifecycleObligationsAtAnchor(state, [], [], false, 11n, 0n, 5n, 5n, false)
+		expect(state.lifecyclePresenceBlocker).toBeDefined()
+		synchronizeLifecycleObligationsAtAnchor(state, [evaluation(carry)], presence(carry), false, 12n, 0n, 5n, 5n, true)
+		expect(state.lifecyclePresenceBlocker).toBeUndefined()
+		synchronizeLifecycleObligationsAtAnchor(state, [], [], false, 13n, 0n, 5n, 5n, true)
+		expect(state.obligations[0]?.status).toBe('abandoned')
+	})
+
+	test('resolves only known obligations covered by the available history boundary', () => {
+		for (const [definitionId, block, resolves] of [
+			['open-oracle.settle', '10', true],
+			['open-oracle.settle', '4', false],
+			['statoblast.escalation.withdraw-forked', '10', false],
+			['statoblast.auction.withdraw-refund', '10', true],
+		] as const) {
+			const value = { ...plan(block), definitionId }
+			const state = obligationState()
+			synchronizeLifecycleObligations(state, [evaluation(value)], presence(value), true, 10n)
+			synchronizeLifecycleObligationsAtAnchor(state, [], [], false, 11n, 0n, 5n)
+			expect(state.obligations[0]?.status === 'abandoned').toBe(resolves)
+		}
+	})
+
 	test('durably blocks novelty for a fresh canonical identity without fabricating executable work', () => {
 		const value = plan('10')
 		const state = obligationState()

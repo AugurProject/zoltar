@@ -1,12 +1,12 @@
 import type { ComponentProps } from 'preact'
-import { DeploymentRouteContent } from '@zoltar/ui-zoltar/features/deployment/components/DeploymentRouteContent.js'
+import { DeploymentRouteContent } from '@zoltar/ui-zoltar-shared/features/deployment/components/DeploymentRouteContent.js'
 import { NotFoundSection } from '@zoltar/ui-core-shared/app/components/NotFoundSection.js'
-import { OpenOracleSection } from '@zoltar/ui-zoltar/features/open-oracle/components/OpenOracleSection.js'
-import { SecurityPoolsSection } from '../../features/security-pools/components/SecurityPoolsSection.js'
-import type { Route } from '../../types/app.js'
+import { OpenOracleSection } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/OpenOracleSection.js'
+import { SecurityPoolsSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolsSection.js'
+import type { Route } from '@zoltar/ui-statoblast-shared/types/app.js'
 import { shouldRenderAppRouteContent } from '@zoltar/ui-core-shared/app/lib/appRouteGate.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import * as statoblastAppCopy from '../../copy/app.js'
+import * as statoblastAppCopy from '@zoltar/ui-statoblast-shared/copy/app.js'
 
 export const STATOBLAST_NOT_FOUND_LINKS = [
 	{ href: '#/deploy', label: commonCopy.deploy },

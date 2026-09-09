@@ -11,129 +11,159 @@ RUN apk add --no-cache git
 WORKDIR /source
 RUN git init
 
-# Copy preinstall hook scripts before running bun install
-COPY ./scripts/ /source/scripts/
-COPY ./ui/coreShared/scripts/ /source/ui/coreShared/scripts/
+# Build scripts import shared repository, contract, and UI tooling.
+# Copy the complete tool tree before any install hook or generation command.
+COPY ./tooling/ /source/tooling/
 
 # Shared package metadata and source for local package resolution
-COPY ./shared/package.json /source/shared/package.json
-COPY ./shared/tsconfig.json /source/shared/tsconfig.json
-COPY ./shared/ts/ /source/shared/ts/
-RUN mkdir -p /source/shared/js
+COPY ./shared/core/package.json ./shared/core/bun.lock ./shared/core/tsconfig.json /source/shared/core/
+COPY ./shared/zoltar/package.json ./shared/zoltar/bun.lock ./shared/zoltar/tsconfig.json /source/shared/zoltar/
+COPY ./shared/openOracle/package.json /source/shared/openOracle/package.json
+COPY ./shared/statoblast/package.json /source/shared/statoblast/package.json
+COPY ./shared/trading/package.json /source/shared/trading/package.json
+COPY ./shared/core/ts/ /source/shared/core/ts/
+COPY ./shared/zoltar/ts/ /source/shared/zoltar/ts/
 
 # Install root dependencies and build generated shared outputs from tracked source.
 COPY ./package.json ./bun.lock /source/
 RUN bun install --frozen-lockfile
-RUN bun run shared:build
+RUN bun ./tooling/repo/build-shared.mts zoltar
 
 # Install Solidity dependencies
 COPY ./solidity/package.json ./solidity/bun.lock /source/solidity/
 RUN cd /source/solidity && bun install --frozen-lockfile
 
 # Solidity contracts and TypeScript source
-COPY ./ui/coreShared/build/appPaths.mts /source/ui/coreShared/build/appPaths.mts
-COPY ./ui/coreShared/build/projectArtifacts.mts /source/ui/coreShared/build/projectArtifacts.mts
 COPY ./solidity/tsconfig.json /source/solidity/tsconfig.json
 COPY ./solidity/tsconfig-compile.json /source/solidity/tsconfig-compile.json
-COPY ./solidity/contracts/ /source/solidity/contracts/
-COPY ./solidity/ts/ /source/solidity/ts/
-RUN mkdir -p /source/ui/coreShared/ts && bun run compile-contracts
+COPY ./solidity/contracts/*.sol /source/solidity/contracts/
+COPY ./solidity/contracts/vendor/ /source/solidity/contracts/vendor/
+COPY ./solidity/contracts/statoblast/WETH9.sol ./solidity/contracts/statoblast/Multicall3.sol /source/solidity/contracts/statoblast/
+COPY ./solidity/ts/compile.ts ./solidity/ts/contractProjects.ts /source/solidity/ts/
+COPY ./solidity/ts/abi/ /source/solidity/ts/abi/
+RUN mkdir -p /source/ui/coreShared/ts && bun ./tooling/contracts/build-app-contracts.mts zoltar
 
 # Common UI build inputs.
 COPY ./ui/coreShared/package.json /source/ui/coreShared/package.json
 COPY ./ui/coreShared/bun.lock /source/ui/coreShared/bun.lock
-COPY ./ui/coreShared/build/ /source/ui/coreShared/build/
 COPY ./docs/mainnet-deployment-addresses.json /source/docs/mainnet-deployment-addresses.json
 COPY ./docs/sepolia-deployment-addresses.json /source/docs/sepolia-deployment-addresses.json
 COPY ./ui/tsconfig.base.json /source/ui/tsconfig.base.json
 COPY ./ui/coreShared/tsconfig.json /source/ui/coreShared/tsconfig.json
 COPY ./ui/coreShared/css/ /source/ui/coreShared/css/
 COPY ./ui/coreShared/ts/ /source/ui/coreShared/ts/
-RUN bun ./scripts/install-frozen.mts ui/coreShared
+RUN bun ./tooling/repo/install-frozen.mts ui/coreShared
 RUN cd /source/ui/coreShared && bun x tsc --project tsconfig.json
 
+# Build reusable shared libraries before any dependency-leaf application.
+COPY ./ui/zoltarShared/package.json /source/ui/zoltarShared/package.json
+COPY ./ui/zoltarShared/bun.lock /source/ui/zoltarShared/bun.lock
+COPY ./ui/zoltarShared/tsconfig.json /source/ui/zoltarShared/tsconfig.json
+COPY ./ui/zoltarShared/ts/ /source/ui/zoltarShared/ts/
+RUN bun ./tooling/repo/install-frozen.mts ui/zoltarShared && cd /source/ui/zoltarShared && bun run build
 # Build Zoltar from only its inward dependencies.
 FROM common-builder AS zoltar-builder
 
 COPY ./ui/zoltar/package.json /source/ui/zoltar/package.json
 COPY ./ui/zoltar/bun.lock /source/ui/zoltar/bun.lock
-RUN bun ./scripts/install-frozen.mts ui/zoltar
-RUN bun ./ui/coreShared/build/vendor.mts zoltar
+RUN bun ./tooling/repo/install-frozen.mts ui/zoltar
+RUN bun ./tooling/ui/vendor.mts zoltar --scoped-artifacts
 COPY ./ui/zoltar/tsconfig.json /source/ui/zoltar/tsconfig.json
 COPY ./ui/zoltar/index.html /source/ui/zoltar/index.html
 COPY ./ui/zoltar/favicon.svg /source/ui/zoltar/favicon.svg
 COPY ./ui/zoltar/ts/ /source/ui/zoltar/ts/
-RUN cd /source/ui/zoltar && bun x tsc --project tsconfig.json && bun ../coreShared/build/production.mts zoltar
+RUN cd /source/ui/zoltar && bun x tsc --project tsconfig.json && bun ../../tooling/ui/production.mts zoltar
 
 # Local runtime images contain only the selected application artifact.
 FROM oven/bun:${BUN_VERSION}-alpine AS local-runtime-zoltar
 
 WORKDIR /app
 COPY --from=zoltar-builder --chown=bun:bun /source/ui/zoltar/dist/ /app/ui/zoltar/
-COPY --chown=bun:bun ./ui/coreShared/build/dockerServe.mts /app/dockerServe.mts
-COPY --chown=bun:bun ./ui/coreShared/build/appPaths.mts /app/appPaths.mts
+COPY --chown=bun:bun ./tooling/ui/dockerServe.mts /app/tooling/ui/dockerServe.mts
+COPY --chown=bun:bun ./tooling/ui/appIds.mts /app/tooling/ui/appIds.mts
 USER bun
 EXPOSE 8012
 ENV UI_APP=zoltar
 ENV PORT=8012
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:8012/'); process.exit(response.ok ? 0 : 1)" ]
-CMD [ "bun", "/app/dockerServe.mts" ]
+CMD [ "bun", "/app/tooling/ui/dockerServe.mts" ]
 
-# Build Statoblast on top of its Zoltar dependency, without Trading.
-FROM zoltar-builder AS statoblast-builder
+# Extend the common Zoltar libraries only for downstream applications.
+FROM common-builder AS statoblast-dependencies
+COPY ./shared/openOracle/bun.lock ./shared/openOracle/tsconfig.json /source/shared/openOracle/
+COPY ./shared/statoblast/bun.lock ./shared/statoblast/tsconfig.json /source/shared/statoblast/
+COPY ./shared/openOracle/ts/ /source/shared/openOracle/ts/
+COPY ./shared/statoblast/ts/ /source/shared/statoblast/ts/
+COPY ./solidity/contracts/statoblast/ /source/solidity/contracts/statoblast/
+RUN bun ./tooling/repo/build-shared.mts statoblast && bun ./tooling/contracts/build-app-contracts.mts statoblast
+COPY ./ui/statoblastShared/package.json /source/ui/statoblastShared/package.json
+COPY ./ui/statoblastShared/bun.lock /source/ui/statoblastShared/bun.lock
+COPY ./ui/statoblastShared/tsconfig.json /source/ui/statoblastShared/tsconfig.json
+COPY ./ui/statoblastShared/ts/ /source/ui/statoblastShared/ts/
+RUN bun ./tooling/repo/install-frozen.mts ui/statoblastShared && cd /source/ui/statoblastShared && bun run build
+
+# Build Statoblast as an application leaf.
+FROM statoblast-dependencies AS statoblast-builder
 
 COPY ./ui/statoblast/package.json /source/ui/statoblast/package.json
 COPY ./ui/statoblast/bun.lock /source/ui/statoblast/bun.lock
-RUN bun ./scripts/install-frozen.mts ui/statoblast
-RUN bun ./ui/coreShared/build/vendor.mts statoblast
+RUN bun ./tooling/repo/install-frozen.mts ui/statoblast
+RUN bun ./tooling/ui/vendor.mts statoblast --scoped-artifacts
 COPY ./ui/statoblast/tsconfig.json /source/ui/statoblast/tsconfig.json
 COPY ./ui/statoblast/index.html /source/ui/statoblast/index.html
 COPY ./ui/statoblast/favicon.svg /source/ui/statoblast/favicon.svg
 COPY ./ui/statoblast/ts/ /source/ui/statoblast/ts/
-RUN cd /source/ui/statoblast && bun x tsc --project tsconfig.json && bun ../coreShared/build/production.mts statoblast
+RUN cd /source/ui/statoblast && bun x tsc --project tsconfig.json && bun ../../tooling/ui/production.mts statoblast
 
 FROM oven/bun:${BUN_VERSION}-alpine AS local-runtime-statoblast
 
 WORKDIR /app
 COPY --from=statoblast-builder --chown=bun:bun /source/ui/statoblast/dist/ /app/ui/statoblast/
-COPY --chown=bun:bun ./ui/coreShared/build/dockerServe.mts /app/dockerServe.mts
-COPY --chown=bun:bun ./ui/coreShared/build/appPaths.mts /app/appPaths.mts
+COPY --chown=bun:bun ./tooling/ui/dockerServe.mts /app/tooling/ui/dockerServe.mts
+COPY --chown=bun:bun ./tooling/ui/appIds.mts /app/tooling/ui/appIds.mts
 USER bun
 EXPOSE 8011
 ENV UI_APP=statoblast
 ENV PORT=8011
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:8011/'); process.exit(response.ok ? 0 : 1)" ]
-CMD [ "bun", "/app/dockerServe.mts" ]
+CMD [ "bun", "/app/tooling/ui/dockerServe.mts" ]
 
-# Trading is the only application that reaches the complete UI dependency DAG.
-FROM statoblast-builder AS trading-builder
+# Build Trading as an application leaf.
+FROM statoblast-dependencies AS trading-builder
+COPY ./shared/trading/bun.lock ./shared/trading/tsconfig.json /source/shared/trading/
+COPY ./shared/trading/ts/ /source/shared/trading/ts/
+COPY ./solidity/contracts/trading/ /source/solidity/contracts/trading/
+RUN bun ./tooling/repo/build-shared.mts trading && bun ./tooling/contracts/build-app-contracts.mts trading
 
 COPY ./ui/trading/package.json /source/ui/trading/package.json
 COPY ./ui/trading/bun.lock /source/ui/trading/bun.lock
-RUN bun ./scripts/install-frozen.mts ui/trading
+RUN bun ./tooling/repo/install-frozen.mts ui/trading
 COPY ./ui/trading/tsconfig.json /source/ui/trading/tsconfig.json
 COPY ./ui/trading/index.html /source/ui/trading/index.html
 COPY ./ui/trading/favicon.svg /source/ui/trading/favicon.svg
 COPY ./ui/trading/ts/ /source/ui/trading/ts/
 COPY ./ui/trading/css/ /source/ui/trading/css/
 COPY ./ui/trading/build/ /source/ui/trading/build/
-RUN bun ./ui/coreShared/build/vendor.mts trading
-RUN cd /source/ui/trading && bun x tsc --project tsconfig.json && bun ../coreShared/build/production.mts trading
+RUN bun ./tooling/ui/vendor.mts trading --scoped-artifacts
+RUN cd /source/ui/trading && bun x tsc --project tsconfig.json && bun ../../tooling/ui/production.mts trading
 
 FROM oven/bun:${BUN_VERSION}-alpine AS local-runtime-trading
 
 WORKDIR /app
 COPY --from=trading-builder --chown=bun:bun /source/ui/trading/dist/ /app/ui/trading/
-COPY --chown=bun:bun ./ui/coreShared/build/dockerServe.mts /app/dockerServe.mts
-COPY --chown=bun:bun ./ui/coreShared/build/appPaths.mts /app/appPaths.mts
+COPY --chown=bun:bun ./tooling/ui/dockerServe.mts /app/tooling/ui/dockerServe.mts
+COPY --chown=bun:bun ./tooling/ui/appIds.mts /app/tooling/ui/appIds.mts
 USER bun
 EXPOSE 8080
 ENV UI_APP=trading
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD [ "bun", "-e", "const response = await fetch('http://127.0.0.1:8080/'); process.exit(response.ok ? 0 : 1)" ]
-CMD [ "bun", "/app/dockerServe.mts" ]
+CMD [ "bun", "/app/tooling/ui/dockerServe.mts" ]
 
-# The publisher intentionally includes every application.
-FROM trading-builder AS builder
+# The publisher intentionally includes every independently built application.
+FROM common-builder AS builder
+COPY --from=zoltar-builder /source/ui/zoltar/dist/ /source/ui/zoltar/dist/
+COPY --from=statoblast-builder /source/ui/statoblast/dist/ /source/ui/statoblast/dist/
+COPY --from=trading-builder /source/ui/trading/dist/ /source/ui/trading/dist/
 
 # -------------------------------------------------
 # Publisher: Upload the production UI to host IPFS
@@ -177,7 +207,7 @@ RUN ipfs add --cid-version 1 --quieter --only-hash --recursive /export > ipfs_ha
 # Print the hash for visibility
 RUN cat ipfs_hash.txt
 
-COPY --chmod=755 ./ui/coreShared/scripts/docker-entrypoint.sh /entrypoint.sh
+COPY --chmod=755 ./tooling/ui/docker-publisher-entrypoint.sh /entrypoint.sh
 
 WORKDIR /temp
 

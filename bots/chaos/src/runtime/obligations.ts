@@ -44,7 +44,11 @@ function uniqueCanonicalPresence(canonicalPresence: readonly CanonicalLifecycleP
 	return unique
 }
 
-function lifecyclePresenceBlocker(instances: ReadonlyMap<string, CanonicalLifecyclePresence>, currentBlock: bigint, presenceComplete: boolean, reason: DurableLifecyclePresenceBlocker['reason']): DurableLifecyclePresenceBlocker | undefined {
+function historyWithholdsLifecycleIdentity(definitionId: string) {
+	return definitionId === 'statoblast.escalation.withdraw-forked'
+}
+
+function lifecyclePresenceBlocker(instances: ReadonlyMap<string, CanonicalLifecyclePresence>, currentBlock: bigint, presenceComplete: boolean, reason: DurableLifecyclePresenceBlocker['reason'], historyStartBlock?: bigint, carryPresenceComplete = false): DurableLifecyclePresenceBlocker | undefined {
 	const sorted = [...instances.entries()].sort(([left], [right]) => left.localeCompare(right))
 	const first = sorted[0]
 	if (first === undefined) return undefined
@@ -52,7 +56,9 @@ function lifecyclePresenceBlocker(instances: ReadonlyMap<string, CanonicalLifecy
 		.update('chaos-bot:unplanned-lifecycle-presence:v1\0')
 		.update(sorted.map(([id]) => `${id.length.toString()}:${id}`).join('\0'))
 		.digest('hex')
+	const includesCarry = sorted.some(([, instance]) => historyWithholdsLifecycleIdentity(instance.definitionId))
 	return {
+		...(historyStartBlock === undefined || (includesCarry && !carryPresenceComplete) ? {} : { historyStartBlock: historyStartBlock.toString(), ...(includesCarry ? { requiresCarryHistory: true as const } : {}) }),
 		count: sorted.length,
 		digest: `0x${digest}`,
 		firstDefinitionId: first[1].definitionId,
@@ -227,6 +233,9 @@ export function synchronizeLifecycleObligations(
 	presenceComplete: boolean,
 	currentBlock: bigint,
 	currentTimestamp: bigint,
+	availableHistoryStartBlock?: bigint,
+	observedHistoryStartBlock = availableHistoryStartBlock,
+	carryPresenceComplete = false,
 ) {
 	if (currentBlock < 0n) throw new Error('Lifecycle synchronization block cannot be negative')
 	if (currentTimestamp < 0n) {
@@ -249,6 +258,15 @@ export function synchronizeLifecycleObligations(
 	const terminalIds = new Set(state.obligationTombstones.map(tombstone => tombstone.id))
 	const obligationsById = new Map(state.obligations.map(obligation => [obligation.id, obligation]))
 	const workflowsById = new Map(state.workflows.map(workflow => [workflow.id, workflow]))
+	function identityPresenceComplete(id: string) {
+		if (presenceComplete) return true
+		const obligation = obligationsById.get(id)
+		const workflow = obligation === undefined ? undefined : workflowsById.get(obligation.workflowId)
+		// Carry identities remain unavailable without their verified proofs.
+		if (workflow === undefined) return false
+		if (historyWithholdsLifecycleIdentity(workflow.operationId)) return carryPresenceComplete
+		return availableHistoryStartBlock !== undefined && BigInt(workflow.createdAtBlock) >= availableHistoryStartBlock
+	}
 	let activeObligationCount = state.obligations.filter(obligation => obligation.status !== 'abandoned' && obligation.status !== 'completed').length
 	let reservedTombstoneCount = terminalIds.size + state.obligations.filter(obligation => obligation.status !== 'abandoned' && obligation.status !== 'completed' && !terminalIds.has(obligation.id)).length
 	if (reservedTombstoneCount > MAXIMUM_OBLIGATION_TOMBSTONE_COUNT) {
@@ -323,7 +341,7 @@ export function synchronizeLifecycleObligations(
 			continue
 		}
 		const hasPendingIntent = state.pendingTransactions.some(intent => intent.workflowId === obligation.workflowId)
-		if (presenceComplete && !present.has(obligation.id) && !hasPendingIntent && !hasSemanticFailure(workflow)) {
+		if (identityPresenceComplete(obligation.id) && !present.has(obligation.id) && !hasPendingIntent && !hasSemanticFailure(workflow)) {
 			if (workflow.status === 'waiting-obligation') {
 				completeWorkflowFromCanonicalConfirmation(workflow)
 				recoverCompletedObligation(state, obligation, workflow, currentBlock)
@@ -343,7 +361,7 @@ export function synchronizeLifecycleObligations(
 		}
 		if (obligation.status !== 'failed') {
 			const canonical = canonicalById.get(obligation.id)
-			const canDefer = presenceComplete && canonical?.blocksNovelty === false && !hasPendingIntent && workflow.status !== 'waiting-obligation' && !hasSemanticFailure(workflow)
+			const canDefer = identityPresenceComplete(obligation.id) && canonical?.blocksNovelty === false && !hasPendingIntent && workflow.status !== 'waiting-obligation' && !hasSemanticFailure(workflow)
 			obligation.blockers = [canDefer ? 'The lifecycle item is tracked but not currently actionable; unrelated random work may continue' : 'The lifecycle item is not currently eligible at the canonical snapshot']
 			obligation.status = canDefer ? 'deferred' : 'pending'
 			obligation.updatedAt = now()
@@ -352,7 +370,7 @@ export function synchronizeLifecycleObligations(
 	for (const tombstone of state.obligationTombstones) {
 		if (present.has(tombstone.id)) {
 			tombstone.lastSeenBlock = currentBlock.toString()
-		} else if (presenceComplete) {
+		} else if (identityPresenceComplete(tombstone.id)) {
 			const lastSeenBlock = tombstone.lastSeenBlock === undefined ? undefined : BigInt(tombstone.lastSeenBlock)
 			const observedAbsentAtBlock = tombstone.observedAbsentAtBlock === undefined ? undefined : BigInt(tombstone.observedAbsentAtBlock)
 			if (observedAbsentAtBlock === undefined || (lastSeenBlock !== undefined && lastSeenBlock >= observedAbsentAtBlock)) {
@@ -362,7 +380,7 @@ export function synchronizeLifecycleObligations(
 	}
 	const retiredIds = new Set(
 		state.obligationTombstones.flatMap(tombstone => {
-			if (!presenceComplete || present.has(tombstone.id)) return []
+			if (!identityPresenceComplete(tombstone.id) || present.has(tombstone.id)) return []
 			if (tombstone.observedAbsentAtBlock === undefined) return []
 			const retainedThrough = BigInt(tombstone.observedAbsentAtBlock)
 			return currentBlock > retainedThrough + OBLIGATION_TOMBSTONE_RETENTION_BLOCKS ? [tombstone.id] : []
@@ -386,10 +404,18 @@ export function synchronizeLifecycleObligations(
 	const uncovered = new Map([...canonicalById].filter(([id, instance]) => instance.blocksNovelty && !represented.has(id)))
 	const blockerInstances = completedIdentityReturned.size === 0 ? uncovered : completedIdentityReturned
 	const blockerReason = completedIdentityReturned.size === 0 ? 'unplanned-due-identity' : 'completed-identity-returned'
-	if (presenceComplete) {
-		state.lifecyclePresenceBlocker = lifecyclePresenceBlocker(blockerInstances, currentBlock, true, blockerReason)
-	} else if (state.lifecyclePresenceBlocker === undefined && blockerInstances.size !== 0) {
-		state.lifecyclePresenceBlocker = lifecyclePresenceBlocker(blockerInstances, currentBlock, false, blockerReason)
+	const previousBlocker = state.lifecyclePresenceBlocker
+	const coveredBlocker =
+		availableHistoryStartBlock !== undefined && previousBlocker?.reason === 'unplanned-due-identity' && previousBlocker.historyStartBlock !== undefined && availableHistoryStartBlock <= BigInt(previousBlocker.historyStartBlock) && (previousBlocker.requiresCarryHistory !== true || carryPresenceComplete)
+	// Older durable blockers have only a digest. Clear one without historical
+	// coverage only when every fingerprinted identity is observed and represented.
+	const representedPresence = new Map([...canonicalById].filter(([id]) => represented.has(id)))
+	const representedDigest = previousBlocker?.historyStartBlock === undefined && availableHistoryStartBlock !== undefined ? lifecyclePresenceBlocker(representedPresence, currentBlock, false, 'unplanned-due-identity')?.digest : undefined
+	const representedBlocker = previousBlocker?.reason === 'unplanned-due-identity' && representedDigest !== undefined && representedDigest === previousBlocker.digest
+	if (presenceComplete || coveredBlocker || representedBlocker) {
+		state.lifecyclePresenceBlocker = lifecyclePresenceBlocker(blockerInstances, currentBlock, presenceComplete, blockerReason, observedHistoryStartBlock, carryPresenceComplete)
+	} else if (previousBlocker === undefined && blockerInstances.size !== 0) {
+		state.lifecyclePresenceBlocker = lifecyclePresenceBlocker(blockerInstances, currentBlock, false, blockerReason, observedHistoryStartBlock, carryPresenceComplete)
 	}
 	return plans
 }

@@ -3,7 +3,6 @@ name: CI Gate
 on:
   workflow_call:
   pull_request:
-    branches: [main]
   push:
     branches: [main]
   workflow_dispatch:
@@ -26,11 +25,10 @@ jobs:
     outputs:
       docs: ${{ steps.scope.outputs.docs }}
       core: ${{ steps.scope.outputs.core }}
-      trading: ${{ steps.scope.outputs.trading }}
       bot_shared: ${{ steps.scope.outputs.bot_shared }}
+      chaos: ${{ steps.scope.outputs.chaos }}
       arbitrager: ${{ steps.scope.outputs.arbitrager }}
       liquidator: ${{ steps.scope.outputs.liquidator }}
-      chaos: ${{ steps.scope.outputs.chaos }}
       augur_scan: ${{ steps.scope.outputs.augur_scan }}
       infrastructure: ${{ steps.scope.outputs.infrastructure }}
       package_matrix: ${{ steps.scope.outputs.package_matrix }}
@@ -45,6 +43,8 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
+      - name: Check production source size
+        run: bun run check:source-size
       - name: Select CI scope
         id: scope
         shell: bash
@@ -52,25 +52,29 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
-            bun scripts/classify-ci-change.mts --github-output --base-ref "${BASE_SHA}"
+            bun tooling/ci/classify-ci-change.mts --github-output --base-ref "${BASE_SHA}"
           else
-            bun scripts/classify-ci-change.mts --github-output --full
+            bun tooling/ci/classify-ci-change.mts --github-output --full
           fi
-      - name: Validate test ownership
+      - name: Validate canonical project and test ownership
         run: bun run test:preflight
 
   docs-checks:
     name: Documentation checks
     needs: changes
-    if: needs.changes.outputs.docs == 'true'
+    if: needs.changes.outputs.docs == 'true' || needs.changes.outputs.core == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-ci
+        with:
+          foundry: "false"
       - run: bun run docs:check:current
-      - run: bun run format:check
-      - run: bun run check:agents
+      - if: needs.changes.outputs.core != 'true'
+        run: bun run format:check
+      - if: needs.changes.outputs.core != 'true'
+        run: bun run check:agents
 
   component-inputs:
     name: Prepare component build inputs
@@ -81,16 +85,15 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-ci
+        with:
+          foundry: "false"
+      - name: Read canonical artifact metadata
+        id: projects
+        run: bun ./tooling/repo/query-projects.mts --github-output
       - uses: actions/upload-artifact@v4
         with:
           name: component-build-inputs
-          path: |
-            shared/js
-            solidity/artifacts
-            solidity/ts/types/contractArtifact.ts
-            ui/coreShared/ts/abis.ts
-            ui/coreShared/ts/contractArtifact.ts
-            ui/trading/ts/generated/contractArtifact.ts
+          path: ${{ steps.projects.outputs.component_artifact_outputs }}
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 1
@@ -108,13 +111,14 @@ jobs:
       - uses: ./.github/actions/setup-ci
         with:
           verify-generated: "true"
+          foundry: "false"
       - name: Format
         run: bun run format
       - name: Cache TypeScript incremental state
         uses: actions/cache@v5
         with:
           path: .tsbuildinfo
-          key: ${{ runner.os }}-tsbuildinfo-${{ env.BUN_VERSION }}-${{ hashFiles('bun.lock', 'package.json', 'tsconfig.json') }}-${{ hashFiles('shared/ts/**', 'ui/*/ts/**') }}
+          key: ${{ runner.os }}-tsbuildinfo-${{ env.BUN_VERSION }}-${{ hashFiles('bun.lock', 'package.json', 'tsconfig.json') }}-${{ hashFiles('shared/*/ts/**', 'ui/*/ts/**') }}
           restore-keys: |
             ${{ runner.os }}-tsbuildinfo-${{ env.BUN_VERSION }}-${{ hashFiles('bun.lock', 'package.json', 'tsconfig.json') }}-
       - name: Verify pre-task worktree cleanliness
@@ -134,7 +138,7 @@ jobs:
           fi
           # Refresh the built local packages before preflight so the deployment
           # manifest check does not emit declarations while tsc:app reads them.
-          bun ./scripts/install-frozen.mts ui/statoblast
+          bun ./tooling/repo/run-project-tasks.mts setup --project-path ui/statoblast
           refresh_status="$?"
           if [[ "${refresh_status}" -ne 0 ]]; then
             exit "${refresh_status}"
@@ -145,17 +149,21 @@ jobs:
           duration="$((SECONDS - started_at))"
           echo "| Preflight and production build | ${duration}s |" >> "${GITHUB_STEP_SUMMARY}"
           exit "${status}"
+      - name: Read canonical artifact metadata
+        id: projects
+        run: bun ./tooling/repo/query-projects.mts --github-output
+      - name: Upload production UI inputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: domain-production-ui
+          path: ${{ steps.projects.outputs.ui_artifact_outputs }}
+          if-no-files-found: error
+          retention-days: 1
       - name: Upload component build inputs
         uses: actions/upload-artifact@v4
         with:
           name: component-build-inputs
-          path: |
-            shared/js
-            solidity/artifacts
-            solidity/ts/types/contractArtifact.ts
-            ui/coreShared/ts/abis.ts
-            ui/coreShared/ts/contractArtifact.ts
-            ui/trading/ts/generated/contractArtifact.ts
+          path: ${{ steps.projects.outputs.component_artifact_outputs }}
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 1
@@ -169,21 +177,41 @@ jobs:
   domain-tests:
     name: Domain tests
     needs: changes
+    if: needs.changes.outputs.core == 'true' || needs.changes.outputs.infrastructure == 'true'
+    uses: ./.github/workflows/test-domains.yml
+    with:
+      invocation: ci-solidity
+      application: false
+
+  application-tests:
+    name: Application tests
+    needs: [changes, prepare]
     if: needs.changes.outputs.core == 'true'
     uses: ./.github/workflows/test-domains.yml
     with:
-      invocation: ci-gate
+      invocation: ci-application
+      solidity: false
+      prepared: true
 
   browser-smoke:
     name: Required production browser smoke
-    needs: changes
+    needs: [changes, prepare]
     if: needs.changes.outputs.core == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-ci
+      - uses: actions/download-artifact@v5
+        with:
+          name: domain-production-ui
+          path: ui
+      - name: Refresh split UI package installs
+        run: bun ./tooling/repo/run-project-tasks.mts setup --path-prefix ui/
       - run: bun run test:browser:smoke
+        env:
+          ZOLTAR_USE_EXISTING_PRODUCTION_BUILD: "1"
+          ZOLTAR_RUN_PRODUCTION_REBUILD_INVARIANTS: "1"
 
   checks:
     name: Repository checks
@@ -196,7 +224,9 @@ jobs:
         with:
           fetch-depth: 0
       - uses: ./.github/actions/setup-ci
-      - run: bun run check:ci:current
+        with:
+          foundry: "false"
+      - run: bun run check:static && bun run check:repository
 
   knip:
     name: Dead code analysis
@@ -206,6 +236,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-ci
+        with:
+          foundry: "false"
       - run: bun run knip
 
   audit:
@@ -219,20 +251,23 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
       - name: Run dependency audits
-        run: bun audit && (cd ui/coreShared && bun audit) && (cd ui/zoltar && bun audit) && (cd ui/statoblast && bun audit) && (cd ui/trading && bun audit) && (cd solidity && bun audit)
+        run: bun ./tooling/repo/run-project-tasks.mts audit --group core-audit
 
   infrastructure-checks:
     name: Infrastructure checks
     needs: changes
-    if: needs.changes.outputs.infrastructure == 'true'
+    # Core jobs already own Solidity formatting, typechecking, and auditing.
+    if: needs.changes.outputs.infrastructure == 'true' && needs.changes.outputs.core != 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-ci
+        with:
+          profile: contracts
+          foundry: "false"
       - run: bun run check:solidity-format
       - run: bun run tsc:solidity:current
-      - run: bun test --preload ./bun-test-setup-solidity.ts --timeout 300000 ./solidity/ts/tests/
       - run: cd solidity && bun audit
 
   packages:
@@ -255,8 +290,7 @@ jobs:
       - uses: ./.github/actions/setup-component
         with:
           directory: ${{ matrix.directory }}
-          artifacts: ${{ matrix.artifacts }}
-      - run: bun scripts/run-component-ci.mts "${{ matrix.package }}"
+      - run: bun tooling/ci/run-component-ci.mts "${{ matrix.package }}"
 
   augur-scan-integration:
     name: augurScan PostgreSQL integration
@@ -291,27 +325,29 @@ jobs:
   required:
     name: Required
     if: always()
-    needs: [changes, docs-checks, component-inputs, prepare, domain-tests, browser-smoke, checks, knip, audit, infrastructure-checks, packages, augur-scan-integration]
+    needs: [changes, docs-checks, component-inputs, prepare, domain-tests, application-tests, browser-smoke, checks, knip, audit, infrastructure-checks, packages, augur-scan-integration]
     runs-on: ubuntu-latest
     steps:
       - name: Verify required jobs
         env:
           FORCED_FULL: ${{ needs.changes.outputs.forced_full }}
-          DOCS_SELECTED: ${{ needs.changes.outputs.docs }}
+          DOCS_SELECTED: ${{ needs.changes.outputs.docs == 'true' || needs.changes.outputs.core == 'true' }}
           CORE_SELECTED: ${{ needs.changes.outputs.core }}
-          TRADING_SELECTED: ${{ needs.changes.outputs.trading }}
           BOT_SHARED_SELECTED: ${{ needs.changes.outputs.bot_shared }}
+          CHAOS_SELECTED: ${{ needs.changes.outputs.chaos }}
           ARBITRAGER_SELECTED: ${{ needs.changes.outputs.arbitrager }}
           LIQUIDATOR_SELECTED: ${{ needs.changes.outputs.liquidator }}
-          CHAOS_SELECTED: ${{ needs.changes.outputs.chaos }}
           AUGUR_SCAN_SELECTED: ${{ needs.changes.outputs.augur_scan }}
           INFRA_SELECTED: ${{ needs.changes.outputs.infrastructure }}
+          INFRA_CHECKS_SELECTED: ${{ needs.changes.outputs.infrastructure == 'true' && needs.changes.outputs.core != 'true' }}
+          DOMAIN_TESTS_SELECTED: ${{ needs.changes.outputs.core == 'true' || needs.changes.outputs.infrastructure == 'true' }}
           PACKAGES_SELECTED: ${{ needs.changes.outputs.has_packages }}
           INTEGRATION_SELECTED: ${{ needs.changes.outputs.augur_scan_integration }}
           CHANGES_RESULT: ${{ needs.changes.result }}
           DOCS_RESULT: ${{ needs.docs-checks.result }}
           COMPONENT_INPUTS_RESULT: ${{ needs.component-inputs.result }}
           PREPARE_RESULT: ${{ needs.prepare.result }}
+          APPLICATION_TESTS_RESULT: ${{ needs.application-tests.result }}
           DOMAIN_TESTS_RESULT: ${{ needs.domain-tests.result }}
           BROWSER_SMOKE_RESULT: ${{ needs.browser-smoke.result }}
           CHECKS_RESULT: ${{ needs.checks.result }}
@@ -334,13 +370,14 @@ jobs:
           }
           [[ "${CHANGES_RESULT}" == "success" ]] || exit 1
           require_result "${DOCS_SELECTED}" "${DOCS_RESULT}" docs
-          require_result "${INFRA_SELECTED}" "${INFRA_RESULT}" infrastructure
+          require_result "${INFRA_CHECKS_SELECTED}" "${INFRA_RESULT}" infrastructure
+          require_result "${DOMAIN_TESTS_SELECTED}" "${DOMAIN_TESTS_RESULT}" domain-tests
           require_result "${PACKAGES_SELECTED}" "${PACKAGES_RESULT}" packages
           require_result "${INTEGRATION_SELECTED}" "${INTEGRATION_RESULT}" augurScan-integration
-          for result in PREPARE_RESULT DOMAIN_TESTS_RESULT BROWSER_SMOKE_RESULT CHECKS_RESULT KNIP_RESULT AUDIT_RESULT; do
+          for result in PREPARE_RESULT APPLICATION_TESTS_RESULT BROWSER_SMOKE_RESULT CHECKS_RESULT KNIP_RESULT AUDIT_RESULT; do
             require_result "${CORE_SELECTED}" "${!result}" "${result}"
           done
-          if [[ "${FORCED_FULL}" == "true" && ( "${DOCS_SELECTED}" != "true" || "${CORE_SELECTED}" != "true" || "${TRADING_SELECTED}" != "true" || "${BOT_SHARED_SELECTED}" != "true" || "${ARBITRAGER_SELECTED}" != "true" || "${LIQUIDATOR_SELECTED}" != "true" || "${CHAOS_SELECTED}" != "true" || "${AUGUR_SCAN_SELECTED}" != "true" || "${INFRA_SELECTED}" != "true" || "${PACKAGES_SELECTED}" != "true" ) ]]; then
+          if [[ "${FORCED_FULL}" == "true" && ( "${DOCS_SELECTED}" != "true" || "${CORE_SELECTED}" != "true" || "${BOT_SHARED_SELECTED}" != "true" || "${CHAOS_SELECTED}" != "true" || "${ARBITRAGER_SELECTED}" != "true" || "${LIQUIDATOR_SELECTED}" != "true" || "${AUGUR_SCAN_SELECTED}" != "true" || "${INFRA_SELECTED}" != "true" || "${PACKAGES_SELECTED}" != "true" ) ]]; then
             echo 'Forced full run did not select every ordinary route.'
             exit 1
           fi

@@ -4,7 +4,7 @@ The chaos bot is a long-running operator that exercises the Zoltar, Statoblast, 
 
 ## Safety at a glance
 
-- The shipped configuration starts **paused**, in **dry-run**, with no private key or usable deployment.
+- The shipped configuration starts **paused**, in **dry-run**, with no private key or configured RPC.
 - The bot cannot acquire its initial ETH or REP. Use a dedicated signer and fund only assets and positions you are prepared to risk.
 - Each live step is rediscovered and simulated against a quorum-agreed block before signing. This avoids knowingly submitted reverts, but concurrent transactions, provider faults, and reorganizations mean success can never be guaranteed.
 - Irreversible operations are disabled by default. Deadline-bound operations and prepared oracle sponsorship require private submission.
@@ -23,7 +23,7 @@ cp config/operator.example.json .state/operator.json
 chmod 600 .state/operator.json
 ```
 
-The default template is intentionally unconfigured, paused, dry, and keyless. The Sepolia and custom-chain placeholder files are parser-tested shape references only: their `.invalid` URLs and patterned addresses must never be used as deployments.
+The default template is intentionally unconfigured, paused, dry, and keyless. The Sepolia and custom-chain placeholder files are parser-tested shape references only: replace their `.invalid` RPC and relay URLs before connecting.
 
 ### 2. Create a dedicated signer and budget it
 
@@ -48,7 +48,7 @@ cp config/operator.custom-chain-placeholder.json .state/operator.json
 chmod 600 .state/operator.json
 ```
 
-Replace every placeholder RPC, relay, and deployment root from an independently authenticated deployment manifest. Keep `paused: true` and `runtime.execute: false`, and choose a new unused `runtime.stateFile` for this chain, deployment, and signer. Never repoint an operated state path at another identity; preserve its main file and companion stores together.
+Replace every placeholder RPC and relay URL. Chaos derives its expected deployment addresses from the canonical CREATE2 deployment graph; there are no address overrides. Keep `paused: true` and `runtime.execute: false`, and choose a new unused `runtime.stateFile` for this chain, deployment, and signer. Never repoint an operated state path at another identity; preserve its main file and companion stores together.
 
 Live execution requires the primary reader and at least two independent quorum-reader origins. Keep `runtime.protocolStartBlock` at `"0"` unless you have verified the earliest relevant deployment or carry event. Configure authenticated private relays before enabling deadline-bound operations. The [network and deployment profile](./OPERATOR_REFERENCE.md#network-and-deployment-profile) and [RPC and submission configuration](./OPERATOR_REFERENCE.md#rpc-and-submission-configuration) are the canonical sources for exact fields, graph checks, reader limits, custom-chain requirements, and relay rules.
 
@@ -58,7 +58,7 @@ With every operator for this state stopped, run the early bootstrap check:
 bun run doctor
 ```
 
-At this keyless, dry stage, `doctor` validates the configuration, network, public transaction-submission method, deployment, and any durable state already present. Because no signer is configured, it does **not** validate signer inventory or funding and does **not** acquire a signer-scoped lock. Private submission capability cannot pass keylessly because its relay evidence must authenticate the configured signer. A pass means the keyless public-mode bootstrap is coherent; it is not signer-aware live readiness. The full stopped preflight for a saved signer comes in step 6.
+At this keyless, dry stage, `doctor` validates the configuration, network, public transaction-submission method, deployment, and any durable state already present. Because no signer is configured, it does **not** validate signer inventory or funding and does **not** acquire a signer-scoped lock. Private submission capability cannot pass keylessly because its relay evidence must authenticate the configured signer. Missing core scan deployments produce a waiting result and allow the dashboard to start with operations unavailable. Funding and graph readiness remain unchecked until those contracts exist. A pass means the keyless public-mode bootstrap is coherent; it is not signer-aware live readiness. The full stopped preflight for a saved signer comes in step 6.
 
 ### 4. Start paused and dry
 
@@ -124,6 +124,36 @@ For a consistent backup or restore:
 
 State may contain a remembered key, signed transactions, and credentialed endpoints. Never move only one sidecar, delete corruption, or stage a backup in shared storage. See [configuration and durable state](./OPERATOR_REFERENCE.md#configuration-and-durable-state) for the canonical state-unit inventory and recovery boundaries.
 
+### Drain & Retire a deployment
+
+Drain & Retire is a durable, restart-safe retirement workflow for one deployment profile. It is different from pause: pause stops signing, while drain stops new random exposure but continues pending-transaction recovery, partial-workflow cleanup, matured lifecycle obligations, claims, withdrawals, redemptions, allowance revocation, and asset recovery. A safety pause always overrides drain. `SIGINT` and `SIGTERM` retain their normal graceful-boundary behavior.
+
+Request drain from the dashboard or CLI with an exact confirmation containing both the active profile and recipient:
+
+```sh
+bun run run -- --drain 0xRecipient --confirm "DRAIN profile:id TO 0xRecipient"
+```
+
+Optional flags are `--migrate-existing-claims`, `--exit-unmatched-shares=<maximum-loss-bps>`, and `--exit-after-completion`. The unmatched-share limit is enforced against the plan's guaranteed minimum ETH output, not merely used as an enable flag. Inspect progress with `bun run run -- --retirement-status`. Cancellation remains available until the first irreversible final sweep with `bun run run -- --cancel-drain --confirm "CANCEL DRAIN"`.
+
+Exact `drained-with-residuals` completion still forbids deployment-profile replacement by default. After reviewing the current block-bound completion evidence, recipient, and residual list, explicitly accept replacement for one target profile in the dashboard or CLI. The acceptance is bound to the source profile, recipient, target profile, and current completion block; any later retirement assessment resets it.
+
+```sh
+bun run run -- --accept-residuals profile:next --reason "Reviewed current residuals and accepted replacement." --confirm "ACCEPT RESIDUALS FOR profile:next"
+```
+
+The planner executes one durable workflow and performs a fresh canonical scan after every confirmation. It distinguishes actionable work, time-locked work, ownership or discovery blockers, and accepted residuals. An empty plan is never completion. `drained` requires a complete canonical proof with no pending transaction, unresolved or failed workflow, actionable lifecycle obligation, owned V3 liquidity, collectable V3 amount, claimable asset, or known approval. A transaction whose receipt succeeded but whose semantic postcondition could not be proved remains an operator-action blocker until the paused workflow-reconciliation control records an explicit disposition. `drained-with-residuals` requires the same proof and records accepted dust, losing shares, mandatory sentinels, the retained gas reserve, irreversible burns, or deployment-specific assets. Terminal retirement state is valid only with its block-bound completion evidence; a journal cannot declare completion without that proof.
+
+The bot journals every Uniswap V3 position it creates by profile, signer/owner, pool, token pair, fee tier, ticks, position key, creation workflow, and transaction hash. Workflow-created positions require a successful canonical creation receipt, and every position is checked against the pool's token and fee identity before use. Current liquidity is always read from `positions(positionKey)`; pool-wide `liquidity()` is never treated as wallet ownership. Drain burns the wallet's full current liquidity and collects all principal and fees, including collect-only positions. Confirmed historical seed workflows are backfilled automatically. Missing or ambiguous receipt, owner, pool, token, fee, or tick evidence becomes a structured blocker. Register verified legacy coordinates without editing state through the dashboard or CLI:
+
+```sh
+bun run run -- --register-v3-position '{"owner":"0x…","pool":"0x…","token0":"0x…","token1":"0x…","fee":3000,"tickLower":-120,"tickUpper":120,"workflowId":"receipt:0x…"}' --confirm "REGISTER V3 profile:id"
+```
+
+Retirement reuses canonical discovery, simulation, receipt evidence, and transaction recovery. Its fail-closed operation catalog is independent of ordinary random-operation ecosystem and allowlist settings. It removes custom Trading LP, redeems complete sets and resolved winning shares, claims vault fees and eligible REP, processes escalation, fork, auction, and refund obligations, withdraws OpenOracle token and native credits while retaining exactly their mandatory one-unit sentinel, optionally performs only claim-required migration, unwraps WETH, revokes known ERC-20, ERC-1155, LP, router, and OpenOracle internal approvals, transfers reusable tokens, and sends native ETH last while retaining both the configured ETH reserve and one maximum gas-cost budget. Disabled sweeping or WETH unwrapping produces an explicit accepted residual. Unresolved shares remain time-locked; only canonically resolved losing shares or zero-payout winning dust become residuals. Recovered balances are cumulative increases observed between complete canonical retirement scans.
+
+For safe testnet redeployment, drain the old profile, review any residuals, archive the owner-only state and completion proof, and configure a distinct state file for the new profile. An operated deployment must use a distinct state file. The shipped zero-root bootstrap has a narrowly checked upgrade migration that preserves its signer and audit history.
+
 ## Run with Docker
 
 The Compose service runs as a non-root user, binds the dashboard to `127.0.0.1:4193`, and persists `.state` in the private `chaos-state` volume. Its fixed `zoltar-chaos-signer-locks` volume fences the same signer across Compose projects on one Docker host; it does not fence another host.
@@ -134,7 +164,7 @@ docker compose up --build -d
 docker compose logs --tail 100 chaos
 ```
 
-First boot copies the safe paused, dry, keyless template. Stop the service and complete steps 3–6 before live use. The shipped Compose service and image's default `bun run run` command automatically run the full stopped preflight when the persisted configuration is live-capable; startup aborts if it cannot validate state, signer, network, or funding. An alternate container command does not receive that automatic gate, so run `bun src/cli/doctor.ts --if-live-capable` before any alternate operator launcher. `start.bat doctor` exposes the explicit gate on Windows. Do not copy a remembered key through an ordinary host directory; provision the protected volume through a secret manager.
+First boot copies the safe paused, dry, keyless template. Stop the service and complete steps 3–6 before live use. The shipped Compose service and image's default `bun run run` command automatically run the full stopped preflight when the persisted configuration is live-capable; startup aborts on failed state, signer, network, or funding checks. Missing core scan deployments instead allow startup in the waiting state; deployment-graph and funding readiness remain incomplete until the contracts exist. An alternate container command does not receive that automatic gate, so run `bun src/cli/doctor.ts --if-live-capable` before any alternate operator launcher. `start.bat doctor` exposes the explicit gate on Windows. Do not copy a remembered key through an ordinary host directory; provision the protected volume through a secret manager.
 
 For the keyless first-boot edit, export only the safe template to a protected Linux directory, choose a new state path and replace every placeholder, then restore its ownership in the volume:
 

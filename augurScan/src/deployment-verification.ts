@@ -1,5 +1,4 @@
-const record = (value: unknown): Record<string, unknown> =>
-	typeof value === 'object' && value !== null && !Array.isArray(value) ? Object.fromEntries(Object.entries(value)) : {}
+const record = (value: unknown): Record<string, unknown> => (typeof value === 'object' && value !== null && !Array.isArray(value) ? Object.fromEntries(Object.entries(value)) : {})
 
 const requiredSourceError = 'Bundled mode requires the resolved app POSTGRES_URL to use augurscan@postgres:5432/augurscan; use external mode otherwise'
 
@@ -15,16 +14,6 @@ export const bundledComposeSourceUrl = (configuration: unknown): string => {
 	} catch (error) {
 		throw new Error(requiredSourceError, { cause: error })
 	}
-	if (
-		(url.protocol !== 'postgres:' && url.protocol !== 'postgresql:') ||
-		url.username !== 'augurscan' ||
-		url.password.length === 0 ||
-		url.hostname !== 'postgres' ||
-		url.port !== '5432' ||
-		url.pathname !== '/augurscan' ||
-		url.search !== '' ||
-		url.hash !== ''
-	)
-		throw new Error(requiredSourceError)
+	if ((url.protocol !== 'postgres:' && url.protocol !== 'postgresql:') || url.username !== 'augurscan' || url.password.length === 0 || url.hostname !== 'postgres' || url.port !== '5432' || url.pathname !== '/augurscan' || url.search !== '' || url.hash !== '') throw new Error(requiredSourceError)
 	return value
 }

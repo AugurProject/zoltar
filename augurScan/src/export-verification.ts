@@ -1,4 +1,5 @@
-import { decodeOpaqueCursor } from './cursor-codec.ts'
+import { decodeOpaqueCursor, isJsonArray } from './cursor-codec.ts'
+import type { JsonValue } from './ethereum.ts'
 
 const POSTGRES_BIGINT_MAX = 9_223_372_036_854_775_807n
 
@@ -39,12 +40,10 @@ type CursorBoundary = {
 	readonly lastKey: ExportKey
 }
 
-const record = (value: unknown): Record<string, unknown> =>
-	typeof value === 'object' && value !== null && !Array.isArray(value) ? Object.fromEntries(Object.entries(value)) : {}
+const record = (value: unknown): Record<string, unknown> => (typeof value === 'object' && value !== null && !Array.isArray(value) ? Object.fromEntries(Object.entries(value)) : {})
 
 const decimal = (value: unknown, name: string): string => {
-	if (typeof value !== 'string' || !/^(0|[1-9]\d*)$/.test(value) || BigInt(value) > POSTGRES_BIGINT_MAX)
-		throw new Error(`${name} must be a non-negative PostgreSQL bigint`)
+	if (typeof value !== 'string' || !/^(0|[1-9]\d*)$/.test(value) || BigInt(value) > POSTGRES_BIGINT_MAX) throw new Error(`${name} must be a non-negative PostgreSQL bigint`)
 	return value
 }
 
@@ -110,8 +109,7 @@ export const parseExportValidationState = (value: unknown): ExportValidationStat
 	if (truncated !== (nextCursor !== undefined)) throw new Error('truncated state and next cursor do not agree')
 	const total = decimal(state['total'], 'snapshot total')
 	const returnedTotal = decimal(state['returnedTotal'], 'cumulative returned count')
-	if (BigInt(returnedTotal) > BigInt(total) || (truncated ? BigInt(returnedTotal) >= BigInt(total) : returnedTotal !== total))
-		throw new Error('validation state counts do not agree')
+	if (BigInt(returnedTotal) > BigInt(total) || (truncated ? BigInt(returnedTotal) >= BigInt(total) : returnedTotal !== total)) throw new Error('validation state counts do not agree')
 	return {
 		snapshot,
 		total,
@@ -152,11 +150,11 @@ const ndjsonRecords = (body: string): readonly Record<string, unknown>[] => {
 	return body
 		.slice(0, -1)
 		.split('\n')
-		.map((line) => {
+		.map(line => {
 			if (line.length === 0) throw new Error('NDJSON body contains an empty record')
-			let parsed: unknown
+			let parsed: JsonValue
 			try {
-				parsed = JSON.parse(line)
+				parsed = JSON.parse(line) as JsonValue
 			} catch (error) {
 				throw new Error('NDJSON body contains malformed JSON', { cause: error })
 			}
@@ -167,31 +165,14 @@ const ndjsonRecords = (body: string): readonly Record<string, unknown>[] => {
 }
 
 const sameSnapshot = (left: ExportSnapshot, right: ExportSnapshot): boolean =>
-	left.block === right.block &&
-	left.hash === right.hash &&
-	left.invalidationId === right.invalidationId &&
-	left.abiSourceHash === right.abiSourceHash &&
-	left.applicationSourceHash === right.applicationSourceHash &&
-	left.projectionSourceHash === right.projectionSourceHash
+	left.block === right.block && left.hash === right.hash && left.invalidationId === right.invalidationId && left.abiSourceHash === right.abiSourceHash && left.applicationSourceHash === right.applicationSourceHash && left.projectionSourceHash === right.projectionSourceHash
 
-const sameScope = (left: ExportRequestScope, right: ExportRequestScope): boolean =>
-	left.dataset === right.dataset &&
-	left.chainId === right.chainId &&
-	left.canonical === right.canonical &&
-	left.fromBlock === right.fromBlock &&
-	left.toBlock === right.toBlock
+const sameScope = (left: ExportRequestScope, right: ExportRequestScope): boolean => left.dataset === right.dataset && left.chainId === right.chainId && left.canonical === right.canonical && left.fromBlock === right.fromBlock && left.toBlock === right.toBlock
 
-const keyFor = (dataset: ExportDataset, value: Record<string, unknown> | readonly unknown[], cursor: boolean): ExportKey => {
+const keyFor = (dataset: ExportDataset, value: Record<string, unknown> | readonly JsonValue[], cursor: boolean): ExportKey => {
 	const fields = record(value)
 	const field = (name: string, index: number): unknown => (cursor && Array.isArray(value) ? value[index] : fields[name])
-	if (dataset === 'logs')
-		return [
-			rowDecimal(field('block_number', 0), 'log block number'),
-			rowDecimal(field('transaction_index', 1), 'log transaction index'),
-			rowDecimal(field('log_index', 2), 'log index'),
-			blockHash(field('block_hash', 3), 'log block hash'),
-			blockHash(field('tx_hash', 4), 'log transaction hash'),
-		]
+	if (dataset === 'logs') return [rowDecimal(field('block_number', 0), 'log block number'), rowDecimal(field('transaction_index', 1), 'log transaction index'), rowDecimal(field('log_index', 2), 'log index'), blockHash(field('block_hash', 3), 'log block hash'), blockHash(field('tx_hash', 4), 'log transaction hash')]
 	if (dataset === 'timeline')
 		return [
 			rowDecimal(field('block_number', 0), 'timeline block number'),
@@ -204,8 +185,7 @@ const keyFor = (dataset: ExportDataset, value: Record<string, unknown> | readonl
 	return [rowDecimal(field('id', 0), 'reorganization ID')]
 }
 
-const numericKeyIndex = (dataset: ExportDataset, index: number): boolean =>
-	dataset === 'logs' ? index <= 2 : dataset === 'timeline' ? index === 0 || index === 3 : index === 0
+const numericKeyIndex = (dataset: ExportDataset, index: number): boolean => (dataset === 'logs' ? index <= 2 : dataset === 'timeline' ? index === 0 || index === 3 : index === 0)
 
 const compareKeys = (dataset: ExportDataset, left: ExportKey, right: ExportKey): number => {
 	if (left.length !== right.length) throw new Error('export row identity shape changed')
@@ -223,13 +203,13 @@ const compareKeys = (dataset: ExportDataset, left: ExportKey, right: ExportKey):
 const sameKey = (dataset: ExportDataset, left: ExportKey, right: ExportKey): boolean => compareKeys(dataset, left, right) === 0
 
 const parseCursor = (cursor: string): CursorBoundary => {
-	let value: unknown
+	let value: JsonValue
 	try {
 		value = decodeOpaqueCursor(cursor)
 	} catch (error) {
 		throw new Error('export cursor is not valid base64url JSON', { cause: error })
 	}
-	if (!Array.isArray(value) || value.length !== 14 || value[0] !== 1) throw new Error('export cursor shape is invalid')
+	if (!isJsonArray(value) || value.length !== 14 || value[0] !== 1) throw new Error('export cursor shape is invalid')
 	const rawChainId = value[2]
 	if (typeof rawChainId !== 'number' || !Number.isSafeInteger(rawChainId) || rawChainId < 0) throw new Error('export cursor chain ID is invalid')
 	const scope = exportRequestScope(value[1], String(rawChainId), value[3], value[4], value[5])
@@ -242,7 +222,7 @@ const parseCursor = (cursor: string): CursorBoundary => {
 		projectionSourceHash: nonEmptyString(value[12], 'cursor projection source hash'),
 	}
 	const lastKeyValue = value[13]
-	if (!Array.isArray(lastKeyValue)) throw new Error('export cursor row identity is invalid')
+	if (lastKeyValue === undefined || !isJsonArray(lastKeyValue)) throw new Error('export cursor row identity is invalid')
 	return {
 		scope,
 		snapshot,
@@ -255,17 +235,14 @@ const validateRowScope = (row: Record<string, unknown>, scope: ExportRequestScop
 	if (rowDecimal(row['chain_id'], 'row chain ID') !== scope.chainId) throw new Error('export row chain ID does not match the request')
 	if (scope.dataset === 'logs' || scope.dataset === 'timeline') {
 		const block = rowDecimal(row['block_number'], 'row block number')
-		if (BigInt(block) < BigInt(scope.fromBlock) || BigInt(block) > BigInt(scope.toBlock) || BigInt(block) > BigInt(snapshot.block))
-			throw new Error('export row block is outside the request snapshot range')
+		if (BigInt(block) < BigInt(scope.fromBlock) || BigInt(block) > BigInt(scope.toBlock) || BigInt(block) > BigInt(snapshot.block)) throw new Error('export row block is outside the request snapshot range')
 		const canonical = row['canonical']
 		if (typeof canonical !== 'boolean') throw new Error('export row canonical state must be boolean')
-		if ((scope.canonical === 'canonical' && !canonical) || (scope.canonical === 'orphaned' && canonical))
-			throw new Error('export row canonical state does not match the request')
+		if ((scope.canonical === 'canonical' && !canonical) || (scope.canonical === 'orphaned' && canonical)) throw new Error('export row canonical state does not match the request')
 		return
 	}
 	if (scope.canonical !== 'all') throw new Error('reorganization exports require canonical scope all')
-	if (BigInt(rowDecimal(row['id'], 'reorganization ID')) > BigInt(snapshot.invalidationId))
-		throw new Error('reorganization row is outside the snapshot invalidation boundary')
+	if (BigInt(rowDecimal(row['id'], 'reorganization ID')) > BigInt(snapshot.invalidationId)) throw new Error('reorganization row is outside the snapshot invalidation boundary')
 	if (row['reason'] === 'start-boundary-advanced') return
 	const boundary = row['previous_block'] ?? row['ancestor_block']
 	const block = rowDecimal(boundary, 'reorganization boundary block')
@@ -277,13 +254,7 @@ const validateCursorBoundary = (cursor: CursorBoundary, scope: ExportRequestScop
 	if (!sameSnapshot(cursor.snapshot, snapshot) || cursor.total !== total) throw new Error('export cursor boundary does not match the response headers')
 }
 
-export const verifyExportPage = (
-	headerSource: string,
-	body: string,
-	scope: ExportRequestScope,
-	previous?: ExportValidationState,
-	requestCursor?: string,
-): ExportValidationState => {
+export const verifyExportPage = (headerSource: string, body: string, scope: ExportRequestScope, previous?: ExportValidationState, requestCursor?: string): ExportValidationState => {
 	const headers = responseHeaders(headerSource)
 	const contentType = requiredHeader(headers, 'content-type').toLowerCase()
 	if (contentType.split(';', 1)[0]?.trim() !== 'application/x-ndjson') throw new Error('content-type must be application/x-ndjson')
@@ -324,13 +295,11 @@ export const verifyExportPage = (
 		priorKey = key
 		lastBodyKey = key
 	}
-	if (nextBoundary !== undefined && (lastBodyKey === undefined || !sameKey(scope.dataset, lastBodyKey, nextBoundary.lastKey)))
-		throw new Error('next cursor does not identify the final export row')
+	if (nextBoundary !== undefined && (lastBodyKey === undefined || !sameKey(scope.dataset, lastBodyKey, nextBoundary.lastKey))) throw new Error('next cursor does not identify the final export row')
 	const returnedTotal = BigInt(previous?.returnedTotal ?? '0') + BigInt(returned)
 	const exactTotal = BigInt(total)
 	if (returnedTotal > exactTotal) throw new Error('cumulative returned count exceeds snapshot total')
-	if (truncated ? returnedTotal >= exactTotal : returnedTotal !== exactTotal)
-		throw new Error(truncated ? 'truncated page must leave records remaining' : 'final page count does not match snapshot total')
+	if (truncated ? returnedTotal >= exactTotal : returnedTotal !== exactTotal) throw new Error(truncated ? 'truncated page must leave records remaining' : 'final page count does not match snapshot total')
 	return {
 		snapshot,
 		total,

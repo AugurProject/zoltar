@@ -2,8 +2,8 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import type { ComponentChildren } from 'preact'
-import type { Address } from '@zoltar/shared/ethereum'
-import { TruthAuctionBidsSection, ViewerTruthAuctionBidsSection } from '../../../features/truth-auctions/components/TruthAuctionBidsSection.js'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
+import { TruthAuctionBidsSection, ViewerTruthAuctionBidsSection } from '@zoltar/ui-statoblast-shared/features/truth-auctions/components/TruthAuctionBidsSection.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'

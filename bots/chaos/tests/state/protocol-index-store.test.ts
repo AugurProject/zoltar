@@ -2,7 +2,7 @@ import { chmod, link, mkdir, mkdtemp, open, readFile, readdir, rename, rm, stat,
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test } from 'bun:test'
-import { encodeAbiParameters, getAddress, keccak256 } from '../support/bot-shared.ts'
+import { encodeAbiParameters, getAddress, keccak256 } from '@zoltar/bot-shared/ethereum'
 import type { ChaosProtocolIndex } from '../../src/monitoring/protocol-index.ts'
 import { initialDurableState, loadDurableState, saveDurableState, serializedDurableState, type StateFilesystem } from '../../src/state/operator-state.ts'
 import { MAXIMUM_PROTOCOL_INDEX_BYTES, MAXIMUM_PROTOCOL_INDEX_CHUNK_BYTES, MAXIMUM_PROTOCOL_INDEX_CHUNK_RECORDS, MAXIMUM_PROTOCOL_INDEX_RECORDS, parseProtocolIndex, protocolIndexSidecarDirectory } from '../../src/state/protocol-index-store.ts'
@@ -95,6 +95,17 @@ function protocolIndex(cursorBlockNumber = '50', cursorByte = '44'): ChaosProtoc
 		zoltar: address(31),
 	}
 }
+
+test('persists and validates the pruned log coverage boundary in the index sidecar', async () => {
+	const path = await statePath()
+	const index = { ...protocolIndex(), availableStartBlock: '20' }
+	await saveIndex(path, index)
+	const loaded = await loadDurableState(path, 1)
+	expect(loaded.protocolIndex?.availableStartBlock).toBe('20')
+	for (const availableStartBlock of ['9', '10', '51', '-1', '020']) {
+		expect(() => parseProtocolIndex({ ...index, availableStartBlock }, 1)).toThrow()
+	}
+})
 
 async function storedReference(path: string) {
 	const state = JSON.parse(await readFile(path, 'utf8')) as { protocolIndex: { kind: string; manifestDigest: `0x${string}`; schemaVersion: number } }

@@ -2,10 +2,10 @@
 
 import { describe, expect, test } from 'bun:test'
 import { shouldRenderRouteContent, ZOLTAR_NOT_FOUND_LINKS } from '../../app/components/AppRouteContent.js'
-import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/lib/networkProfile.js'
+import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { onchainStateDependencies } from '../../app/onchainStateDependencies.js'
-import { getDeploymentSteps } from '../../protocol/deployment.js'
-import { isUniverseIndependentZoltarView } from '../../lib/routing.js'
+import { getDeploymentSteps } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
+import { isUniverseIndependentZoltarView } from '@zoltar/ui-zoltar-shared/lib/routing.js'
 
 describe('AppRouteContent', () => {
 	test('keeps only global question views available without a universe', () => {

@@ -1,5 +1,5 @@
 import type { ComponentChildren } from 'preact'
-import type { Hash } from '@zoltar/shared/ethereum'
+import type { Hash } from '@zoltar/core-shared/evm/ethereum'
 
 export type ActionAvailability = {
 	disabled: boolean
@@ -270,6 +270,7 @@ export type OutcomeSelectionListProps = {
 	className?: string
 	emptyMessage?: ComponentChildren
 	items: Array<{
+		actions?: ComponentChildren
 		key: string
 		label: ComponentChildren
 		details?: ComponentChildren

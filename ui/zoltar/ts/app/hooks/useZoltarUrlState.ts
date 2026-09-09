@@ -1,7 +1,7 @@
 import { useSignal } from '@preact/signals'
 import { useCallback, useEffect } from 'preact/hooks'
-import { buildRouteHref, getCurrentRouteHash, getRouteHashSearch, getTopLevelRouteSearch } from '@zoltar/ui-core-shared/lib/routing.js'
-import { readUniverseQueryParam, readZoltarViewQueryParam, writeUniverseQueryParam, writeZoltarViewQueryParam } from '@zoltar/ui-core-shared/lib/urlParams.js'
+import { buildRouteHref, getCurrentRouteHash, getRouteHashSearch, getTopLevelRouteSearch } from '@zoltar/ui-core-shared/navigation/routing.js'
+import { readUniverseQueryParam, readZoltarViewQueryParam, writeUniverseQueryParam, writeZoltarViewQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
 
 type ZoltarUrlState = {
 	activeUniverseId: bigint

@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { parseStrategy } from '../../src/config/settings.ts'
 import { BPS_DENOMINATOR, PRICE_PRECISION, calculateLiquidationTransfer, conservativeLiquidationRep, evaluateCandidate, liquidationExecutionAllowed, requiredRepForOpenInterest, selectAllowedCandidate, surplusRepForWithdrawal, vaultHealthBps, type PoolRiskContext, type VaultPosition } from '../../src/core/strategy.ts'
 import { candidateScreeningPrice, hasVaultRep } from '../../src/monitoring/pool-monitor.ts'
-import { getAddress } from '../helpers/ethereum.ts'
+import { getAddress } from '@zoltar/bot-shared/ethereum'
 
 const poolAddress = getAddress('0x0000000000000000000000000000000000000010')
 const managerAddress = getAddress('0x0000000000000000000000000000000000000020')

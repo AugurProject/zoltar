@@ -5,7 +5,21 @@
 		"moduleResolution": "bundler",
 		"baseUrl": ".",
 		"paths": {
-			"@zoltar/shared/*": ["../shared/ts/*"]
+			"@zoltar/core-shared/*": [
+				"../shared/core/ts/*"
+			],
+			"@zoltar/zoltar-shared/*": [
+				"../shared/zoltar/ts/*"
+			],
+			"@zoltar/open-oracle-shared/*": [
+				"../shared/openOracle/ts/*"
+			],
+			"@zoltar/statoblast-shared/*": [
+				"../shared/statoblast/ts/*"
+			],
+			"@zoltar/trading-shared/*": [
+				"../shared/trading/ts/*"
+			]
 		},
 		"rootDir": "ts",
 		"outDir": "js",
@@ -20,11 +34,16 @@
 		"noImplicitReturns": true,
 		"noFallthroughCasesInSwitch": true,
 		"esModuleInterop": true,
-		"lib": ["ESNext", "DOM"],
+		"lib": [
+			"ESNext",
+			"DOM"
+		],
 		"skipLibCheck": true,
-		"types": ["bun-types"]
+		"types": [
+			"bun-types"
+		]
 	},
 	"include": [
-		"./ts/**/*.ts",
+		"./ts/**/*.ts"
 	]
 }

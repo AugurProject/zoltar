@@ -22,8 +22,7 @@ const collectSources = async (directory: string, relativeRoot: string): Promise<
 	return sources
 }
 
-export const contractSources = async (projectRoot: string): Promise<ContractSources> =>
-	await collectSources(path.join(projectRoot, 'solidity/contracts'), path.join(projectRoot, 'solidity'))
+export const contractSources = async (projectRoot: string): Promise<ContractSources> => await collectSources(path.join(projectRoot, 'solidity/contracts'), path.join(projectRoot, 'solidity'))
 
 export const contractSourceHash = (sources: Readonly<ContractSources>): string =>
 	createHash('sha256')

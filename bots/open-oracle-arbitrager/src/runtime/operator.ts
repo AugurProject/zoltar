@@ -1,12 +1,14 @@
-import { bigintToSafeNumber, createContextualPublicClient, createWalletClient, privateKeyToAccount, type Address, type Chain, type PublicClient, type TransactionLog, type Transport, zeroAddress } from '#ethereum'
+import { loadApprovedUniverses } from '#monitoring/approved-universes'
+import { logMarketDiscoveryFailure, recordMarketDiscoveryFailure, recordObservedHead } from '#monitoring/market-discovery-status'
+import { bigintToSafeNumber, createContextualPublicClient, createWalletClient, privateKeyToAccount, type Address, type Chain, type PublicClient, type TransactionLog, type Transport, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
-import { OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SETTLED_TOPIC, OPEN_ORACLE_REPORT_SUBMITTED_TOPIC } from '@zoltar/shared/openOracle'
+import { OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SETTLED_TOPIC, OPEN_ORACLE_REPORT_SUBMITTED_TOPIC } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { constantProductPairAbi } from '#contracts/abi'
-import { advanceCursorAfterSuccessfulHead, cursorForHeadScan, fetchLogsWithAdaptiveRanges, finalityAnchorRequiresReset, initialCursor, latestLogRange, newestFirstScanRanges, operatorStatusAfterPause, withFinalityAnchor, type SyncCursor } from '#monitoring/block-sync'
+import { advanceCursorAfterSuccessfulHead, cursorForHeadScan, fetchLogsWithAdaptiveRanges, finalityAnchorRequiresReset, initialCursor, latestLogRange, newestFirstScanRanges, operatorStatusAfterPause, withFinalityAnchor, type SyncCursor } from '@zoltar/bot-shared/monitoring/block-sync'
 import { checkConnectivity, checkSubmissionEndpoints, endpointLabel } from '#monitoring/connectivity'
 import type { Configuration } from '#config/configuration'
 import type { DeploymentSettings } from '#config/deployment-settings'
-import { createSignerOperationGate } from '#execution/signer-operation-gate'
+import { createSignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
 import { canonicalBlockHashWithQuorum, executionFailureDecision, executionTokenAllowed, isExecutionPausedError, selectBestExecution } from '#execution/execution-orchestration'
 import { appendExecutionHistoryIfMissing, clearPollFailureMetadata, decimalSignedEth, ensureExecutionHistoryWritable, gameCapitalSnapshot, loadExecutionHistory, recordOperation, type OperatorState, type OpportunitySnapshot } from '#state/operator-state'
 import { applyCoordinatorReports, applyLogs, compareLogs, logBlockNumber, reportId, type ActiveReport } from '#monitoring/oracle-log-state'
@@ -15,8 +17,8 @@ import { centralizedMarketConfigurationAllowsExecution, centralizedMarketConsens
 import { clearOrphanedDexEvidenceForHeadReplacement, discardDexMarketObservations, estimateMarketConsensus, marketConsensusAllowsExecution, marketConsensusDeviationBps, requireCanonicalBlock, requireCanonicalDexEvidence, type MarketConsensusObservation } from '@zoltar/bot-shared/monitoring/market-consensus'
 import { observeConstantProductMarkets, readConstantProductPairWithQuorum, requireCurrentConstantProductMarketEvidence } from '@zoltar/bot-shared/monitoring/constant-product-markets'
 import { archivedUtcDayGasSpentWeth, loadPositionJournalState, savePositionJournalState, type ExclusiveProcessLock, type PositionRecord } from '#state/position-store'
-import { availableSettledValues, quorumValue, settledQuorumValue } from '#monitoring/read-quorum'
-import { ConnectivityDegradedError, operationalFailureDisposition, pollUntilStopped, retryDelayMilliseconds } from '#monitoring/resilience'
+import { availableSettledValues, quorumValue, settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
+import { ConnectivityDegradedError, operationalFailureDisposition, pollUntilStopped, retryDelayMilliseconds } from '@zoltar/bot-shared/monitoring/resilience'
 import { rpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 import { positionConsumesRisk } from '#core/safety-controls'
 import type { NetworkConfiguration } from '#config/network'
@@ -39,10 +41,11 @@ import type { ArbitragerShutdownController } from './shutdown.ts'
 const REORG_OVERLAP_BLOCKS = 12n
 const MAX_LOG_SCAN_RANGE = 256n
 
-type SuccessfulPollState = Pick<OperatorState, 'consecutivePollFailures' | 'lastError' | 'lastPollFailureAt' | 'lastRetryAt' | 'nextRetryAt' | 'paused' | 'retryInProgress' | 'status'>
+type SuccessfulPollState = Pick<OperatorState, 'marketAvailability' | 'consecutivePollFailures' | 'lastError' | 'lastPollFailureAt' | 'lastRetryAt' | 'nextRetryAt' | 'paused' | 'retryInProgress' | 'status'>
 
 export function completeSuccessfulPoll(state: SuccessfulPollState, nextError: string | undefined, stopAfterPoll: boolean) {
 	clearPollFailureMetadata(state)
+	if (state.marketAvailability?.kind === 'missing-deployment') state.marketAvailability = undefined
 	state.lastError = nextError
 	state.status = operatorStatusAfterPause(state.paused, true, nextError !== undefined)
 	return stopAfterPoll
@@ -143,7 +146,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 		operationLog: [],
 		paused: config.paused,
 		status: config.networkConfigured ? 'syncing' : 'paused',
-		tokenAddresses: config.tokenAddresses,
+		tokenAddresses: [],
 		tokenMarkets: [],
 		priceHistory: await loadPriceHistory(config.priceHistoryFile, config.network.chain.id),
 		reportPaths: [],
@@ -540,6 +543,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						return { ...value, hash: value.hash, number: value.number }
 					})
 					const blockNumber = block.number
+					recordObservedHead(state, block)
 					console.log(`observedBlock=${blockNumber.toString()} blockAgeSeconds=${(BigInt(Math.floor(Date.now() / 1_000)) - block.timestamp).toString()}`)
 					const blockHash = block.hash
 					const finalityAnchorForHead = async () => {
@@ -763,10 +767,13 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 							.filter(observation => observation.observedAt <= marketObservedAt && marketObservedAt - observation.observedAt <= config.centralizedMarkets.maximumObservationAgeMilliseconds)
 							.slice(-2_000)
 						const observedTokens = [...reports.values()].flatMap(report => [report.latest.game.token1, report.latest.game.token2]).filter(address => address !== zeroAddress && address.toLowerCase() !== config.network.weth.toLowerCase())
-						const { executionTokens, monitoringTokens: discoveredTokens } = await catalogForScan(config.tokenAddresses, observedTokens)
+						const { universes, approvedTokens } = await loadApprovedUniverses(readClients, config, blockNumber)
+						state.universes = universes
+						const { executionTokens, monitoringTokens: discoveredTokens } = await catalogForScan(config.tokenAddresses, [...universes.map(universe => universe.repToken), ...observedTokens], approvedTokens)
 						if (stopHead()) return
 						state.tokenAddresses = [...executionTokens]
 						state.tokenMarkets = await loadTokenMarkets(client, {
+							blockNumber,
 							chainId: config.network.chain.id,
 							explorerUrl: config.network.explorerUrl,
 							factory: config.network.factory,
@@ -779,9 +786,9 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						const samples = missingPricePoints(state.priceHistory, pricePoints(state.tokenMarkets, blockNumber, sampledAt))
 						await appendPriceHistory(config.priceHistoryFile, samples, config.network.chain.id)
 						state.priceHistory = [...state.priceHistory, ...samples]
-						const pools = (await Promise.all(discoveredTokens.map(token => poolsForToken(client, config, token)))).flat()
+						const pools = (await Promise.all(discoveredTokens.map(token => poolsForToken(client, config, token, blockNumber)))).flat()
 						if (stopHead()) return
-						if (pools.length === 0) console.log('status=no-liquid-rep-weth-v3-pool')
+						state.marketAvailability = pools.length === 0 ? { kind: 'no-v3-liquidity', chainId: config.network.chain.id } : undefined
 						const balances = await contextualRpcRead('eth_call', requestClient => loadBalances(requestClient, wallet, config, pools, discoveredTokens))
 						if (stopHead()) return
 						const gasPrice = (block.baseFeePerGas ?? 0n) * 2n + 2n * 10n ** 9n
@@ -907,7 +914,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 									state.marketConsensus = undefined
 									throw error
 								}
-								console.error(`report=${reportId} skipped=${message}`)
+								logMarketDiscoveryFailure(`report=${reportId} skipped=`, error)
 								recordOperation(state, {
 									category: 'decision',
 									details: undefined,
@@ -1054,21 +1061,8 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 			config.once,
 			error => {
 				if (shutdown?.isRequested()) return
-				const message = errorMessage(error)
 				state.rpcEndpointHealth = readPool.snapshot()
-				state.lastError = message
-				state.lastPollFailureAt = new Date().toISOString()
-				state.retryInProgress = false
-				state.status = operationalFailureDisposition(error) === 'connectivity-degraded' ? 'connectivity-degraded' : 'error'
-				recordOperation(state, {
-					category: 'scan',
-					details: undefined,
-					level: 'error',
-					message: 'Scan failed',
-					reason: message,
-					reportId: undefined,
-				})
-				console.error(`pollFailed=${message}`)
+				recordMarketDiscoveryFailure(state, error)
 			},
 		)
 	} finally {

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-product="trading">
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width" />
@@ -18,23 +18,6 @@
 					"preact/compat": "./vendor/preact/compat/compat.module.js",
 					"@preact/signals": "./vendor/@preact/signals/signals.module.js",
 					"@preact/signals-core": "./vendor/@preact/signals-core/signals-core.module.js",
-					"@zoltar/shared/bigInt": "../shared/js/bigInt.js",
-					"@zoltar/shared/constants": "../shared/js/constants.js",
-					"@zoltar/shared/deploymentAddresses": "../shared/js/deploymentAddresses.js",
-					"@zoltar/shared/escalationMath": "../shared/js/escalationMath.js",
-					"@zoltar/shared/ethereum": "../shared/js/ethereum.js",
-					"@zoltar/shared/liquidation": "../shared/js/liquidation.js",
-					"@zoltar/shared/logScan": "../shared/js/logScan.js",
-					"@zoltar/shared/openOracle": "../shared/js/openOracle.js",
-					"@zoltar/shared/oracleInitialReport": "../shared/js/oracleInitialReport.js",
-					"@zoltar/shared/protocolConfig": "../shared/js/protocolConfig.js",
-					"@zoltar/shared/scalarOutcome": "../shared/js/scalarOutcome.js",
-					"@zoltar/shared/sepoliaRepAllocations": "../shared/js/sepoliaRepAllocations.js",
-					"@zoltar/shared/sortStringArrayByKeccak": "../shared/js/sortStringArrayByKeccak.js",
-					"@zoltar/shared/truthAuctionTickMath": "../shared/js/truthAuctionTickMath.js",
-					"@zoltar/shared/trading/math": "../shared/js/trading/math.js",
-					"@zoltar/shared/trading/positions": "../shared/js/trading/positions.js",
-					"@zoltar/shared/trading/transactions": "../shared/js/trading/transactions.js",
 					"abitype": "./vendor/abitype/exports/index.js",
 					"micro-eth-signer": "./vendor/micro-eth-signer/index.js",
 					"micro-eth-signer/advanced/abi.js": "./vendor/micro-eth-signer/advanced/abi.js",
@@ -104,11 +87,33 @@
 					"ox/Ens": "./vendor/ox/core/Ens.js",
 					"ox/erc6492": "./vendor/ox/erc6492/index.js",
 					"ox/erc8010": "./vendor/ox/erc8010/index.js",
-					"tevm": "./vendor/tevm/index.js",
-					"tevm/common": "./vendor/tevm/common/index.js",
+					"@tevm/memory-client": "./vendor/tevm/index.js",
+					"@tevm/common": "./vendor/tevm/common/index.js",
 					"@zoltar/ui-core-shared/": "/ui/coreShared/js/",
-					"@zoltar/ui-zoltar/": "/ui/zoltar/js/",
-					"@zoltar/ui-statoblast/": "/ui/statoblast/js/"
+					"@zoltar/ui-zoltar-shared/": "/ui/zoltarShared/js/",
+					"@zoltar/ui-statoblast-shared/": "/ui/statoblastShared/js/",
+					"@zoltar/core-shared/deployment/deploymentAddresses": "../shared/core/js/deployment/deploymentAddresses.js",
+					"@zoltar/core-shared/deployment/protocolConfig": "../shared/core/js/deployment/protocolConfig.js",
+					"@zoltar/core-shared/evm/addressDerivation": "../shared/core/js/evm/addressDerivation.js",
+					"@zoltar/core-shared/evm/ethereum": "../shared/core/js/evm/ethereum.js",
+					"@zoltar/core-shared/evm/logScan": "../shared/core/js/evm/logScan.js",
+					"@zoltar/core-shared/serialization/bigInt": "../shared/core/js/serialization/bigInt.js",
+					"@zoltar/core-shared/serialization/sortStringArrayByKeccak": "../shared/core/js/serialization/sortStringArrayByKeccak.js",
+					"@zoltar/zoltar-shared/constants": "../shared/zoltar/js/constants.js",
+					"@zoltar/zoltar-shared/deployment/deploymentAddresses": "../shared/zoltar/js/deployment/deploymentAddresses.js",
+					"@zoltar/zoltar-shared/deployment/sepoliaRepAllocations": "../shared/zoltar/js/deployment/sepoliaRepAllocations.js",
+					"@zoltar/zoltar-shared/evm/addressDerivation": "../shared/zoltar/js/evm/addressDerivation.js",
+					"@zoltar/zoltar-shared/questions/scalarOutcome": "../shared/zoltar/js/questions/scalarOutcome.js",
+					"@zoltar/open-oracle-shared/openOracle/openOracle": "../shared/openOracle/js/openOracle/openOracle.js",
+					"@zoltar/statoblast-shared/deployment/deploymentAddresses": "../shared/statoblast/js/deployment/deploymentAddresses.js",
+					"@zoltar/statoblast-shared/escalationGame/escalationMath": "../shared/statoblast/js/escalationGame/escalationMath.js",
+					"@zoltar/statoblast-shared/evm/addressDerivation": "../shared/statoblast/js/evm/addressDerivation.js",
+					"@zoltar/statoblast-shared/initialReport/oracleInitialReport": "../shared/statoblast/js/initialReport/oracleInitialReport.js",
+					"@zoltar/statoblast-shared/statoblast/liquidation": "../shared/statoblast/js/statoblast/liquidation.js",
+					"@zoltar/statoblast-shared/statoblast/truthAuctionTickMath": "../shared/statoblast/js/statoblast/truthAuctionTickMath.js",
+					"@zoltar/trading-shared/trading/math": "../shared/trading/js/trading/math.js",
+					"@zoltar/trading-shared/trading/positions": "../shared/trading/js/trading/positions.js",
+					"@zoltar/trading-shared/trading/transactions": "../shared/trading/js/trading/transactions.js"
 				}
 			}
 		</script>

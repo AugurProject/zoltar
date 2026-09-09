@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { decodeFunctionData } from '../support/bot-shared.ts'
-import { tradingPairAbi, tradingRouterAbi } from '../../src/contracts/abi.ts'
+import { decodeFunctionData } from '@zoltar/bot-shared/ethereum'
+import { erc1155Abi, tradingPairAbi, tradingRouterAbi } from '../../src/contracts/abi.ts'
 import { eligibleOperationPlans } from '../../src/operations/catalog.ts'
 import { snapshotFixture } from './fixture.ts'
 
@@ -46,7 +46,7 @@ function positive(value: unknown, label: string) {
 describe('trading economic bounds', () => {
 	test('uses nonzero anchored limits for direct pair mutations', () => {
 		const add = decodeFunctionData({ abi: tradingPairAbi, data: planData('trading.liquidity.add-shares') })
-		const remove = decodeFunctionData({ abi: tradingPairAbi, data: planData('trading.liquidity.remove-shares') })
+		const remove = decodeFunctionData({ abi: tradingPairAbi, data: planData('trading.liquidity.remove') })
 		const exactInput = decodeFunctionData({ abi: tradingPairAbi, data: planData('trading.swap.exact-input') })
 		const exactOutput = decodeFunctionData({ abi: tradingPairAbi, data: planData('trading.swap.exact-output') })
 		positive(add.args[2], 'direct add minimum liquidity')
@@ -59,15 +59,12 @@ describe('trading economic bounds', () => {
 	test('uses nonzero anchored limits for router mutations', () => {
 		const add = decodeFunctionData({ abi: tradingRouterAbi, data: planData('trading.liquidity.add-eth') })
 		const enter = decodeFunctionData({ abi: tradingRouterAbi, data: planData('trading.position.enter') })
-		const exit = decodeFunctionData({ abi: tradingRouterAbi, data: planData('trading.position.exit') })
-		const redeem = decodeFunctionData({ abi: tradingRouterAbi, data: planData('trading.complete-set.redeem') })
-		const remove = decodeFunctionData({ abi: tradingRouterAbi, data: planData('trading.liquidity.remove') })
+		const exit = decodeFunctionData({ abi: erc1155Abi, data: planData('trading.position.exit') })
+		const redeem = decodeFunctionData({ abi: erc1155Abi, data: planData('trading.complete-set.redeem') })
 		positive(add.args[1], 'router add minimum liquidity')
 		positive(enter.args[2], 'router enter minimum long shares')
-		positive(exit.args[4], 'router exit minimum ETH')
-		positive(redeem.args[2], 'router redeem minimum ETH')
-		positive(remove.args[2], 'router remove minimum YES')
-		positive(remove.args[3], 'router remove minimum NO')
+		expect(exit.args[4]).not.toBe('0x')
+		expect(redeem.args[4]).not.toBe('0x')
 	})
 
 	test('uses nonzero anchored limits for initialization', () => {

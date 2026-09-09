@@ -2,17 +2,17 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
-import { zeroAddress } from '@zoltar/shared/ethereum'
-import { SecurityVaultSection } from '../../../features/security-pools/components/SecurityVaultSection.js'
-import { SelectedVaultSummarySection } from '../../../features/security-pools/components/SelectedVaultSummarySection.js'
-import { evaluateSecurityPoolState } from '../../../features/security-pools/lib/securityPoolState.js'
-import type { AccountState } from '@zoltar/ui-zoltar/types/app.js'
+import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { SecurityVaultSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityVaultSection.js'
+import { SelectedVaultSummarySection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SelectedVaultSummarySection.js'
+import { evaluateSecurityPoolState } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolState.js'
+import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import type { SecurityVaultDetails } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { SecurityVaultSectionProps } from '@zoltar/ui-zoltar/features/types.js'
+import type { SecurityVaultSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled, getTransactionButtonState } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
-import { ChainTimestampContext } from '@zoltar/ui-core-shared/lib/chainTimestamp.js'
+import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {
@@ -166,6 +166,15 @@ describe('SecurityVaultSection', () => {
 		restoreDomEnvironment = undefined
 	})
 
+	test('shows the selected child REP symbol on vault action controls', async () => {
+		const renderedComponent = await renderIntoDocument(<SecurityVaultSection {...createSecurityVaultSectionProps({ securityVaultDetails: createSecurityVaultDetails({ repTokenSymbol: 'REP4' }) })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getAllByRole('button', { name: 'Deposit REP4' }).length).toBeGreaterThan(0)
+		expect(documentQueries.getAllByRole('button', { name: 'Withdraw REP4' }).length).toBeGreaterThan(0)
+	})
+
 	test('renders the shared selected-vault metric summary', async () => {
 		const renderedComponent = await renderIntoDocument(<SecurityVaultSection {...createSecurityVaultSectionProps({ repPerEthPrice: 3n * 10n ** 18n })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -263,6 +272,22 @@ describe('SecurityVaultSection', () => {
 		expect(within(document.body).queryByText('Healthy')).toBeNull()
 		expect(within(document.body).queryByText('Near minimum')).toBeNull()
 		expect(within(document.body).queryByText('Underwater')).toBeNull()
+	})
+
+	test.each(['', '0'])('shares one amount notice above approval and deposit for %s in the dialog', async amount => {
+		const props = createSecurityVaultSectionProps({ modalFirst: true })
+		const rendered = await renderIntoDocument(<SecurityVaultSection {...props} securityVaultForm={{ ...props.securityVaultForm, depositAmount: amount }} />)
+		cleanupRenderedComponent = rendered.cleanup
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Deposit REP' }))
+		const dialog = within(document.body).getByRole('dialog', { name: 'Deposit REP' })
+		const group = dialog.querySelector('.tx-action-group')
+		expect(group?.querySelectorAll('[role="note"]').length).toBe(1)
+		const notice = group?.querySelector('[role="note"]')
+		expect(notice?.textContent).toBe(amount === '' ? 'Enter a valid REP deposit amount.' : 'Enter an amount greater than zero.')
+		for (const button of group?.querySelectorAll('.tx-action-button') ?? []) {
+			expect(button.getAttribute('aria-describedby')).toBe(notice?.id)
+		}
+		expect(group?.firstElementChild?.className).toBe('tx-action-feedback')
 	})
 
 	test('distinguishes a wallet REP balance failure from an unloaded balance', async () => {

@@ -2,11 +2,12 @@ import { chmod, link, mkdir, mkdtemp, open, readFile, readdir, rename, rm, stat,
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test } from 'bun:test'
-import { encodeAbiParameters, getAddress, keccak256, privateKeyToAccount } from '../support/bot-shared.ts'
+import { encodeAbiParameters, getAddress, keccak256, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
 import {
 	DURABLE_STATE_VERSION,
 	MAXIMUM_LIFECYCLE_PRESENCE_BLOCKER_COUNT,
 	MAXIMUM_TERMINAL_WORKFLOW_COUNT,
+	bindRuntimeStateToSigner,
 	compactDurableState,
 	initialDurableState,
 	initialRuntimeState,
@@ -20,6 +21,7 @@ import {
 	type PendingTransactionIntent,
 	type StateFilesystem,
 } from '../../src/state/operator-state.ts'
+import { acceptResidualProfileReplacement } from '../../src/state/retirement.ts'
 
 const directories: string[] = []
 
@@ -247,6 +249,38 @@ describe('chaos-bot durable state', () => {
 		expect(runtime.wallet).toBe(signer)
 	})
 
+	test('rejects an active keyless retirement targeting the configured signer before recovery or binding', async () => {
+		const path = await statePath()
+		const configuredSigner = privateKeyToAccount(`0x${'22'.repeat(32)}`).address
+		const durable = initialDurableState(1, false, 'profile:test')
+		durable.retirement.status = 'draining'
+		durable.retirement.recipient = configuredSigner
+		durable.retirement.requestedAt = createdAt
+		const pendingRetirementWorkflow = workflow()
+		pendingRetirementWorkflow.id = 'workflow:retirement-sweep'
+		pendingRetirementWorkflow.operationId = 'retirement.sweep.native-last'
+		pendingRetirementWorkflow.planId = 'retirement.sweep.native-last:1'
+		pendingRetirementWorkflow.status = 'planned'
+		const pendingStep = pendingRetirementWorkflow.steps[0]
+		if (pendingStep === undefined) throw new Error('Expected retirement workflow step')
+		pendingStep.status = 'planned'
+		pendingStep.transactionIntentId = undefined
+		durable.workflows = [pendingRetirementWorkflow]
+		await saveDurableState(path, durable)
+
+		let recoveryStateReturned = false
+		await expect(
+			loadRuntimeState(path, false, configuredSigner, 1).then(() => {
+				recoveryStateReturned = true
+			}),
+		).rejects.toThrow('durable signer')
+		expect(recoveryStateReturned).toBeFalse()
+		const keylessRuntime = initialRuntimeState(false, undefined, 1, durable)
+		expect(() => bindRuntimeStateToSigner(keylessRuntime, configuredSigner)).toThrow('durable signer')
+		expect(keylessRuntime.signerAddress).toBeUndefined()
+		expect(keylessRuntime.workflows[0]?.status).toBe('planned')
+	})
+
 	test('honors a durable safety pause across process restart', () => {
 		const durable = initialDurableState(1, false)
 		durable.safetyPaused = true
@@ -289,15 +323,136 @@ describe('chaos-bot durable state', () => {
 		expect(restored.lifecyclePresenceBlocker).toEqual(state.lifecyclePresenceBlocker)
 		expect(restored.obligationTombstones).toEqual(state.obligationTombstones)
 
+		state.lifecyclePresenceBlocker = { ...state.lifecyclePresenceBlocker, historyStartBlock: '42', requiresCarryHistory: true, presenceComplete: false }
+		await saveDurableState(path, state)
+		expect((await loadDurableState(path, 1)).lifecyclePresenceBlocker).toEqual(state.lifecyclePresenceBlocker)
 		const validBlocker = state.lifecyclePresenceBlocker
+		state.lifecyclePresenceBlocker = { ...validBlocker, historyStartBlock: '89' }
+		await expect(saveDurableState(path, state)).rejects.toThrow('after its observation')
 		state.lifecyclePresenceBlocker = { ...validBlocker, count: MAXIMUM_LIFECYCLE_PRESENCE_BLOCKER_COUNT + 1 }
 		await expect(saveDurableState(path, state)).rejects.toThrow('identity safety limit')
 		expect((await loadDurableState(path, 1)).lifecyclePresenceBlocker).toEqual(validBlocker)
 
 		const stored = JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>
-		stored['version'] = DURABLE_STATE_VERSION - 1
+		stored['version'] = DURABLE_STATE_VERSION - 2
 		await writeFile(path, `${JSON.stringify(stored)}\n`)
 		await expect(loadDurableState(path, 1)).rejects.toThrow('version is unsupported')
+	})
+
+	test('migrates version 3 state to an inactive retirement journal', async () => {
+		const path = await statePath()
+		await saveDurableState(path, initialDurableState(1))
+		const stored = JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>
+		stored['version'] = 3
+		delete stored['retirement']
+		await writeFile(path, `${JSON.stringify(stored)}\n`)
+		const restored = await loadDurableState(path, 1)
+		expect(restored.version).toBe(4)
+		expect(restored.retirement).toMatchObject({ blockers: [], lastObservedBalances: {}, positions: [], status: 'inactive' })
+	})
+
+	test('migrates balance evidence and restarts durably from every retirement phase', async () => {
+		const path = await statePath()
+		const state = initialDurableState(1)
+		for (const status of ['requested', 'draining', 'waiting', 'blocked', 'drained', 'drained-with-residuals'] as const) {
+			state.retirement.status = status
+			state.retirement.completionEvidence =
+				status === 'drained' || status === 'drained-with-residuals'
+					? {
+							blockHash: topic0,
+							blockNumber: '50',
+							completedAt: createdAt,
+							proof: { actionableObligations: 0, claimableAssets: 0, collectableV3Positions: 0, knownApprovals: 0, ownedLiquidityPositions: 0, partialWorkflows: 0, pendingTransactions: 0 },
+							residuals: status === 'drained' ? [] : [{ amount: '1', asset: 'dust', category: 'accepted-dust', reason: 'Accepted test dust' }],
+						}
+					: undefined
+			state.retirement.lastObservedBalances = { ETH: '9' }
+			state.retirement.recoveredBalances = { ETH: '4' }
+			await saveDurableState(path, state)
+			const restored = await loadDurableState(path, 1)
+			expect(restored.retirement).toMatchObject({ lastObservedBalances: { ETH: '9' }, recoveredBalances: { ETH: '4' }, status })
+		}
+		const stored = JSON.parse(await readFile(path, 'utf8')) as { retirement: Record<string, unknown> }
+		delete stored.retirement['lastObservedBalances']
+		await writeFile(path, `${JSON.stringify(stored)}\n`)
+		expect((await loadDurableState(path, 1)).retirement.lastObservedBalances).toEqual({})
+	})
+
+	test('fails closed when persisted retirement state targets zero or the durable signer', async () => {
+		const path = await statePath()
+		const signer = getAddress('0x0000000000000000000000000000000000000099')
+		const state = initialDurableState(1, true, 'profile:test', signer)
+		await saveDurableState(path, state)
+		const stored = JSON.parse(await readFile(path, 'utf8')) as { retirement: Record<string, unknown> }
+		stored.retirement['status'] = 'requested'
+		stored.retirement['requestedAt'] = createdAt
+		for (const recipient of [getAddress('0x0000000000000000000000000000000000000000'), signer]) {
+			stored.retirement['recipient'] = recipient
+			await writeFile(path, `${JSON.stringify(stored)}\n`)
+			await expect(loadDurableState(path, 1)).rejects.toThrow(recipient === signer ? 'durable signer' : 'zero address')
+		}
+	})
+
+	test('persists proof-bound residual replacement acceptance and discards the legacy unbound shape', async () => {
+		const path = await statePath()
+		const signer = getAddress('0x0000000000000000000000000000000000000021')
+		const state = initialDurableState(1, true, 'profile:test', signer)
+		state.profileId = 'profile:test'
+		state.retirement.status = 'drained-with-residuals'
+		state.retirement.recipient = emitter
+		state.retirement.completionEvidence = {
+			blockHash: topic0,
+			blockNumber: '50',
+			completedAt: createdAt,
+			profileId: state.profileId,
+			proof: { actionableObligations: 0, claimableAssets: 0, collectableV3Positions: 0, knownApprovals: 0, ownedLiquidityPositions: 0, partialWorkflows: 0, pendingTransactions: 0 },
+			residuals: [{ amount: '1', asset: 'dust', category: 'accepted-dust', reason: 'Accepted test dust' }],
+			signerAddress: signer,
+		}
+		acceptResidualProfileReplacement(state.retirement, state.profileId, 'profile:next', 'Reviewed current residual assets.', 'ACCEPT RESIDUALS FOR profile:next', createdAt)
+		await saveDurableState(path, state)
+		const restored = await loadDurableState(path, 1)
+		expect(restored.retirement.profileReplacementOverride).toEqual(state.retirement.profileReplacementOverride)
+
+		const stored = JSON.parse(await readFile(path, 'utf8')) as { retirement: Record<string, unknown> }
+		const boundOverride = stored.retirement['profileReplacementOverride'] as Record<string, unknown>
+		boundOverride['completionBlockNumber'] = '51'
+		await writeFile(path, `${JSON.stringify(stored)}\n`)
+		await expect(loadDurableState(path, 1)).rejects.toThrow('does not match current completion evidence')
+
+		stored.retirement['profileReplacementOverride'] = { acceptedAt: createdAt, reason: 'Legacy unbound acceptance.', targetProfileId: 'profile:next' }
+		await writeFile(path, `${JSON.stringify(stored)}\n`)
+		expect((await loadDurableState(path, 1)).retirement.profileReplacementOverride).toBeUndefined()
+	})
+
+	test('rejects retirement completion states whose canonical evidence is missing or inconsistent', async () => {
+		const path = await statePath()
+		const state = initialDurableState(1)
+		await saveDurableState(path, state)
+		const original = JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>
+		const completionEvidence = {
+			blockHash: topic0,
+			blockNumber: '50',
+			completedAt: createdAt,
+			proof: { actionableObligations: 0, claimableAssets: 0, collectableV3Positions: 0, knownApprovals: 0, ownedLiquidityPositions: 0, partialWorkflows: 0, pendingTransactions: 0 },
+			residuals: [],
+		}
+		const writeRetirement = async (status: string, evidence?: unknown) => {
+			const candidate = structuredClone(original)
+			const retirement = candidate['retirement'] as Record<string, unknown>
+			retirement['status'] = status
+			if (evidence === undefined) delete retirement['completionEvidence']
+			else retirement['completionEvidence'] = evidence
+			await writeFile(path, `${JSON.stringify(candidate)}\n`)
+		}
+		await writeRetirement('drained')
+		await expect(loadDurableState(path, 1)).rejects.toThrow('requires completion evidence')
+		await writeRetirement('draining', completionEvidence)
+		await expect(loadDurableState(path, 1)).rejects.toThrow('cannot retain completion evidence')
+		await writeRetirement('drained', { ...completionEvidence, residuals: [{ amount: '1', asset: 'dust', category: 'accepted-dust', reason: 'Accepted test dust' }] })
+		await expect(loadDurableState(path, 1)).rejects.toThrow('requires zero residuals')
+		await writeRetirement('drained-with-residuals', completionEvidence)
+		await expect(loadDurableState(path, 1)).rejects.toThrow('requires at least one residual')
 	})
 
 	test('preserves an interrupted scheduler marker until startup schedules a fresh wait', () => {

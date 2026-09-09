@@ -1,6 +1,6 @@
 import * as appCopy from '../copy/app.js'
 import { ViewTabs } from './ViewTabs.js'
-import { buildRouteHref, getTopLevelRouteSearch } from '../lib/routing.js'
+import { buildRouteHref, getTopLevelRouteSearch } from '../navigation/routing.js'
 import type { RouteTabDefinition } from '../types/components.js'
 
 type TabNavigationProps = {

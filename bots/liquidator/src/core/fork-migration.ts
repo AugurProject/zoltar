@@ -1,3 +1,5 @@
+import { validateApprovedUniverseSelection } from '@zoltar/bot-shared/monitoring/universe-policy'
+export { validateApprovedUniverseSelection } from '@zoltar/bot-shared/monitoring/universe-policy'
 import { zeroAddress } from '@zoltar/bot-shared/ethereum'
 import type { OperatorSettings } from '#config/settings'
 import type { PoolObservation, UniverseObservation } from '#state/operator-state'
@@ -37,31 +39,6 @@ export function inheritedChildPoolSelections(pools: readonly PoolObservation[], 
 		const parent = pools.find(candidate => candidate.address.toLowerCase() === pool.parent.toLowerCase())
 		return parent?.selected === true
 	})
-}
-
-export function validateApprovedUniverseSelection(universes: readonly UniverseObservation[], approvedUniverses: readonly bigint[]) {
-	const universesById = new Map(universes.map(universe => [universe.id.toString(), universe]))
-	const unknown = approvedUniverses.find(universe => !universesById.has(universe.toString()))
-	if (unknown !== undefined) throw new Error(`Universe ${unknown.toString()} is not present in the Zoltar universe tree`)
-	const childChoiceByParent = new Map<string, string>()
-	for (const approvedId of approvedUniverses) {
-		let child = universesById.get(approvedId.toString())
-		const visited = new Set<string>()
-		while (child?.parentId !== undefined) {
-			const childId = child.id.toString()
-			if (visited.has(childId)) throw new Error(`Universe ${childId} has a cyclic parent lineage`)
-			visited.add(childId)
-			const parentId = child.parentId.toString()
-			const selectedChild = childChoiceByParent.get(parentId)
-			if (selectedChild !== undefined && selectedChild !== childId) {
-				throw new Error(`Select only one truthful child of universe ${parentId}`)
-			}
-			childChoiceByParent.set(parentId, childId)
-			const parent = universesById.get(parentId)
-			if (parent === undefined) throw new Error(`Universe ${childId} references unknown parent universe ${parentId}`)
-			child = parent
-		}
-	}
 }
 
 export function selectVaultMigration(pools: readonly PoolObservation[], universes: readonly UniverseObservation[], settings: OperatorSettings, currentTimestamp: bigint): VaultMigration | undefined {

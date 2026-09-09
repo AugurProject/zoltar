@@ -1,6 +1,6 @@
 import { beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
 import assert from '../testSupport/simulator/utils/assert'
-import { encodeDeployData, type Hex, zeroAddress } from '@zoltar/shared/ethereum'
+import { encodeDeployData, type Hex, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { applyLibraries } from '../testSupport/simulator/utils/contracts/deployStatoblast'
@@ -159,7 +159,7 @@ describe('Safe ERC20 Operations', () => {
 		await assert.rejects(client.writeContract({ abi: proxyAbi, address: proxy, functionName: 'sweepChildRep', args: [client.account.address, reputationToken, 1n] }), reason)
 	})
 
-	test('security pool deployment worker bubbles constructor revert reasons', async () => {
+	test('security pool deployment worker reports constructor failures without revert data', async () => {
 		const fakeZoltar = await deployContract(
 			encodeDeployData({
 				abi: test_statoblast_SecurityPoolConstructorFailureZoltar_SecurityPoolConstructorFailureZoltar.abi,
@@ -183,7 +183,7 @@ describe('Safe ERC20 Operations', () => {
 					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, fakeZoltar, 0n, 0n, 2n, zeroAddress],
 				}),
 			),
-			/SafeERC20Ops token address must contain contract code/,
+			/Security pool deployment failed/,
 		)
 	})
 })

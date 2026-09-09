@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+	<head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><meta name="description" content="Canonical definitions for Zoltar and Statoblast terminology." /><title>Protocol glossary</title><link rel="stylesheet" href="../assets/css/shared-docs.css" /><link rel="stylesheet" href="../assets/css/docsShell.css" /></head>
+	<body class="doc-openoracle">
+		<main id="main-content">
+			<header><p class="kicker">Reference</p><h1>Protocol glossary</h1><p>Canonical, plain-language definitions for terms used throughout the documentation.</p></header>
+			<dl>
+				<dt id="universe">Universe</dt><dd>A Zoltar ledger and identity for universe-specific REP and application state. Universe 0 is the initialized root; later universes are descendants created through forks.</dd>
+				<dt id="child-universe">Child universe</dt><dd>A deterministic descendant that represents one valid answer to its parent's fork question. In a binary-market example, a Statoblast fork on its own question creates Invalid, Yes, and No children. If an unrelated fork interrupts that market, its children instead follow the unrelated categorical or scalar fork question's valid answers.</dd>
+				<dt id="question">Question</dt><dd>A global Zoltar object that identifies a proposition, its end time, and its eligibility for a fork.</dd>
+				<dt id="outcome">Outcome</dt><dd>One possible answer to a question. Statoblast binary markets use Invalid, Yes, and No.</dd>
+				<dt id="invalid">Invalid</dt><dd>The legitimate third outcome for ambiguous, malformed, or otherwise unanswerable market wording.</dd>
+				<dt id="rep">REP</dt><dd>Universe-specific reputation tokens used as reporting, dispute, and security capital.</dd>
+				<dt id="security-pool">SecurityPool</dt><dd>The Statoblast contract for one question and universe. It holds settlement collateral and coordinates shares, vaults, resolution, migration, and repair.</dd>
+				<dt id="settlement-collateral">Settlement collateral</dt><dd>ETH recorded by a SecurityPool to back outstanding outcome-share claims.</dd>
+				<dt id="open-interest">Open interest</dt><dd>The amount of settlement collateral backing complete sets that remain outstanding.</dd>
+				<dt id="complete-set">Complete set</dt><dd>One matching unit each of Invalid, Yes, and No shares, minted against ETH and redeemable together while the pool is operational.</dd>
+				<dt id="outcome-share">Outcome share</dt><dd>An ERC-1155 token representing one outcome claim in one universe-specific SecurityPool.</dd>
+				<dt id="vault">Vault</dt><dd>A SecurityPool account that records a participant's REP backing, capacity ownership, obligations, and fees.</dd>
+				<dt id="backing-units">Backing units</dt><dd>Accounting units that represent a proportional claim on REP held for SecurityPool vaults.</dd>
+				<dt id="capacity-ownership">Capacity ownership</dt><dd>A vault's proportional ownership of the pool's REP-denominated security capacity and fee eligibility.</dd>
+				<dt id="escalation-game">Escalation Game</dt><dd>The local Statoblast dispute mechanism in which REP-backed balances accumulate behind Invalid, Yes, and No.</dd>
+				<dt id="binding-capital">Binding capital</dt><dd>The median of the three outcome balances that determines the Escalation Game's scheduled deadline.</dd>
+				<dt id="non-decision-threshold">Non-decision threshold</dt><dd>The balance that two outcomes must each reach for the Escalation Game to enter local non-decision.</dd>
+				<dt id="fork-threshold">Fork threshold</dt><dd>The amount of parent-universe REP that a fork initiator supplies and burns to begin a fork, derived by <code>getForkThresholdAttoRep</code> from that universe's theoretical REP supply. See <a href="../explanation/zoltar.html#accounting">migration accounting</a>.</dd>
+				<dt id="migration-balance">Migration balance</dt><dd>A parent-universe credit created when REP is burned or committed for a fork. The same credited amount can be minted independently in each valid child, while per-child accounting prevents an account from consuming more than that amount in any one child.</dd>
+				<dt id="child-rep">Child REP</dt><dd>REP minted for one child universe. Its ledger and economic value are separate from parent and sibling REP.</dd>
+				<dt id="truth-auction">Truth Auction</dt><dd>A Statoblast auction that sells child REP to repair a child pool's ETH collateral shortfall. It does not select truth.</dd>
+				<dt id="open-oracle">OpenOracle</dt><dd>An economically contestable price-reporting contract used by Statoblast for fresh REP/ETH prices, not market outcomes.</dd>
+				<dt id="price-coordinator">Price coordinator</dt><dd>The per-pool contract that requests OpenOracle prices, caches accepted reports, and queues solvency-sensitive SecurityPool operations.</dd>
+			</dl>
+		</main>
+		<script src="../assets/js/docsData.js"></script><script src="../assets/js/docsShell.js"></script>
+	</body>
+</html>

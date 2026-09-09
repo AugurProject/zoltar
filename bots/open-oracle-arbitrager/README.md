@@ -83,7 +83,7 @@ for the report lifecycle assumptions and economics used by the arbitrager.
   journal without durable dispute evidence is marked for manual reconciliation
   instead of starting an unbounded recovery scan. Coordinator-free diagnostic mode
   reads only the configured latest-block window.
-- The deployed OpenOracle contract address.
+- OpenOracle deployed at the address in the selected network manifest.
 - At least one reviewed Zoltar `OpenOraclePriceCoordinator` address for every
   coordinator whose games this wallet may dispute.
 - A deployed `OpenOracleArbitrageExecutor`. Deploy the stateless executor at a
@@ -204,9 +204,11 @@ apply automatically at the next scan boundary.
 In **Chain and RPC connectivity**, select the chain, enter its read and public RPC URLs, and
 save so every endpoint is checked against that chain. Reload the dashboard, open
 Settings, then open [**Complete bot configuration**](http://127.0.0.1:4173/settings#complete-configuration).
-Add the reviewed deployment settings, set the centralized-market REP address to
-match `deployment.rep`, choose chain-specific history, price, and position paths,
-and save. Supported live configuration changes apply automatically at the next
+Add the reviewed coordinator, executor, and venue settings, choose chain-specific
+history, price, and position paths, and save. OpenOracle, genesis REP, and WETH
+come from `docs/mainnet-deployment-addresses.json` or
+`docs/sepolia-deployment-addresses.json`. The root market asset and chain are
+derived from the same manifest; saved settings omit these identities. Supported live configuration changes apply automatically at the next
 scan boundary.
 
 Run `docker compose down` to stop the bot and `docker compose up --detach` to start
@@ -284,8 +286,9 @@ browser reconnects automatically.
 The first switch creates a clean Sepolia profile from the reviewed defaults. Its
 settings, signer, deployment addresses, tokens, strategy, submission policy, and
 history, price, and position journals are independent from mainnet. Configure its
-Sepolia RPCs and reviewed deployment addresses, then set
-`centralizedMarkets.assetAddress` to the same REP address as `deployment.rep`.
+Sepolia RPCs and reviewed coordinator, executor, and venue addresses. OpenOracle,
+genesis REP, WETH, and the root market identity are selected automatically from
+the Sepolia manifest.
 Switching back to Mainnet restores the saved mainnet profile and journals, but the
 bot remains paused until you explicitly resume it.
 
@@ -453,8 +456,8 @@ Before each dispute, the bot:
    block settlement windows above 50,400 blocks, and multipliers above 2x even when
    a configured coordinator exposes them.
 2. Checks that the game is WETH plus a usable token and inside its dispute window.
-   In execute mode, token 2 must be an Augur-discovered REP or an address explicitly
-   configured by the operator; a permissionlessly observed token is monitor-only.
+   In execute mode, token 2 must be the REP of an explicitly approved Zoltar universe
+   and authenticated in the execution manifest. Other observed tokens are monitor-only.
 3. Finds an active Uniswap V3 pool and rejects excessive spot/TWAP deviation.
 4. Models both directions across configured venues: QuoterV2 for V3, exact
    constant-product reserve math for V2, and the authenticated V4 Quoter across
@@ -812,16 +815,24 @@ currently include:
 | REPv2_Yes_1 | `0xCf6A0A7826fa124B7705d6f3c675eAD76f1e540D` |
 | REPv2_No_1 | `0x2F4005456c2F098358213f01DbE34abDAa2989A4` |
 
-These are discovered from contract state rather than trusted as a hardcoded trading
-list. Tokens present only in retained approved-coordinator games are monitored and
-shown with their pools, but cannot trigger execution. A coordinator-free diagnostic
-run additionally samples at most 64 permissionlessly observed tokens.
-Augur-discovered REP tokens and addresses explicitly entered in the dashboard or
-listed in `tokenAddresses` form the execution allowlist. Explicitly adding
-a token is a security decision: the atomic executor still enforces exact transfers,
-but it cannot establish the token's issuer, economic value, or pool legitimacy. The
-primary `deployment.rep` remains the token used in the top-level REP portfolio
-summary.
+These tokens are discovered for monitoring only. Neither Augur discovery nor
+`tokenAddresses` authorizes execution. The latter adds monitoring tokens; the
+primary `deployment.rep` is used for the top-level REP portfolio summary.
+
+Both the arbitrager and liquidator use `approvedUniverses` from the canonical
+Zoltar universe tree. In **Settings → Approved universes**, select the root or
+the truthful child outcome and save the selection. Both example configurations
+start with no approvals. Approvals are saved per network profile; root universe
+`0` also requires approval. Only one child path per fork can be approved,
+including when selecting deeper descendants.
+
+The arbitrager resolves approved universes to their exact onchain REP tokens
+on each scan. A newly deployed universe remains monitoring-only until approved;
+an arbitrary token address or an authenticated token contract does not grant
+universe approval. Approved tokens must additionally pass execution-manifest
+authentication, coordinator, liquidity, pricing, and profitability checks.
+Approval changes apply before the next execution scan. Revoking approval stops
+new positions; existing positions continue settlement and recovery.
 
 ### Uniswap venue execution
 
@@ -889,10 +900,9 @@ The shared market observer uses CCXT's public unified `fetchTicker` and
 `centralizedMarkets.sources` with an exchange id, a unified `REP/QUOTE` market,
 and an `ETH/QUOTE` reference market unless REP is quoted directly in ETH. The
 cross market must be exactly `ETH/<REP quote>`; direct `REP/ETH` books must omit
-it. The
-configuration also declares `assetAddress`, `assetChainId`, and the required
-`REP` base symbol; startup rejects a mapping that does not match the configured
-REP deployment and chain. CEX and DEX source IDs share one global namespace so
+it. Set `assetSymbol` to `REP`; the bot derives the root market address and chain
+from the selected network manifest. Existing `assetAddress` and `assetChainId`
+values cannot override that identity and are omitted when settings are saved. CEX and DEX source IDs share one global namespace so
 one failure domain cannot vote in both groups. The dashboard shows each
 normalized REP/ETH observation and its executable bid and
 ask depth inside the configured `depthBps` band. A cross-quoted observation is
@@ -1047,7 +1057,7 @@ conservative. Increasing that maximum permits larger Spot/TWAP deviations.
 Parameter changes do not disable contract-side deadline, ratio, state-hash,
 quote-refresh, simulation, or inventory guards.
 
-All other startup values are in `deployment`, `submission`, `tokenAddresses`, and
+All other startup values are in `deployment`, `submission`, `approvedUniverses`, `tokenAddresses`, and
 `runtime`; `network` and `connectivity` are absent until the focused dashboard form
 saves them. The UI's complete JSON editor can change the remaining fields;
 deployment, execution-mode, and risk changes take effect at the next scan boundary.

@@ -1,5 +1,6 @@
 import { startIndexers } from './indexer.ts'
 import { initializeProcessContext, recordProcessStop } from './process-bootstrap.ts'
+import type { NetworkConfig } from './types.ts'
 
 type RuntimeSettings = {
 	readonly disableIndexer: boolean
@@ -7,7 +8,7 @@ type RuntimeSettings = {
 
 type ProcessContext = {
 	readonly database: { close: () => Promise<void> }
-	readonly networks: readonly unknown[]
+	readonly networks: readonly NetworkConfig[]
 	readonly evidenceProvenance: {
 		readonly indexerRunId: string
 		readonly abiSourceHash: string
@@ -20,18 +21,13 @@ type ProcessContext = {
 type RunnerDependencies<TContext extends ProcessContext> = {
 	readonly runtimeConfig: RuntimeSettings
 	readonly initialize: (indexerEnabled: boolean) => Promise<TContext>
-	readonly start: (
-		networks: TContext['networks'],
-		database: TContext['database'],
-		signal: AbortSignal,
-		options: { readonly provenance: TContext['evidenceProvenance'] },
-	) => readonly Promise<void>[]
+	readonly start: (networks: TContext['networks'], database: TContext['database'], signal: AbortSignal, options: { readonly provenance: TContext['evidenceProvenance'] }) => readonly Promise<void>[]
 	readonly recordStop: (database: TContext['database'], indexerRunId: string) => Promise<void>
 	readonly untilTerminated: Promise<void>
 }
 
 export const terminationSignal = (): Promise<void> =>
-	new Promise((resolve) => {
+	new Promise(resolve => {
 		let resolved = false
 		const keepAlive = setInterval(() => {}, 1 << 30)
 		const finish = (): void => {
@@ -44,13 +40,7 @@ export const terminationSignal = (): Promise<void> =>
 		process.once('SIGTERM', finish)
 	})
 
-export const runIndexerProcess = async <TContext extends ProcessContext>({
-	runtimeConfig,
-	initialize,
-	start,
-	recordStop,
-	untilTerminated,
-}: RunnerDependencies<TContext>): Promise<void> => {
+export const runIndexerProcess = async <TContext extends ProcessContext>({ runtimeConfig, initialize, start, recordStop, untilTerminated }: RunnerDependencies<TContext>): Promise<void> => {
 	let terminationRequested = false
 	void untilTerminated.then(() => {
 		terminationRequested = true
@@ -58,8 +48,7 @@ export const runIndexerProcess = async <TContext extends ProcessContext>({
 	const { database, networks, evidenceProvenance, indexerRunId } = await initialize(!runtimeConfig.disableIndexer)
 	const abortController = new AbortController()
 	if (terminationRequested) abortController.abort()
-	const indexers =
-		runtimeConfig.disableIndexer || terminationRequested ? [] : start(networks, database, abortController.signal, { provenance: evidenceProvenance })
+	const indexers = runtimeConfig.disableIndexer || terminationRequested ? [] : start(networks, database, abortController.signal, { provenance: evidenceProvenance })
 
 	let shutdownPromise: Promise<void> | undefined
 	const shutdown = async (): Promise<void> => {
@@ -71,7 +60,7 @@ export const runIndexerProcess = async <TContext extends ProcessContext>({
 			} finally {
 				await database.close()
 			}
-			const failure = outcomes.find((outcome) => outcome.status === 'rejected')
+			const failure = outcomes.find(outcome => outcome.status === 'rejected')
 			if (failure !== undefined) throw failure.reason
 		})()
 		return await shutdownPromise
@@ -86,13 +75,10 @@ export const runIndexerProcess = async <TContext extends ProcessContext>({
 
 	try {
 		const completed = Promise.allSettled(indexers)
-		const result = await Promise.race([
-			completed.then((outcomes) => ({ kind: 'completed' as const, outcomes })),
-			untilTerminated.then(() => ({ kind: 'terminated' as const })),
-		])
+		const result = await Promise.race([completed.then(outcomes => ({ kind: 'completed' as const, outcomes })), untilTerminated.then(() => ({ kind: 'terminated' as const }))])
 		await shutdown()
 		if (result.kind === 'completed') {
-			const failure = result.outcomes.find((outcome) => outcome.status === 'rejected')
+			const failure = result.outcomes.find(outcome => outcome.status === 'rejected')
 			if (failure !== undefined) throw failure.reason
 		}
 	} catch (error) {

@@ -65,6 +65,10 @@ export function workflowNeedsContinuation(workflow: DurableWorkflow) {
 	return (workflow.status === 'blocked' || workflow.status === 'waiting-continuation') && workflow.steps.some(step => step.status === 'confirmed') && workflow.steps.some(step => step.status !== 'confirmed')
 }
 
+export function workflowNeedsOperatorReconciliation(workflow: DurableWorkflow) {
+	return workflowNeedsContinuation(workflow) || (workflow.classification === 'selectable' && workflow.status === 'failed' && workflow.steps.some(step => step.status === 'failed' && step.failureKind === 'semantic-failure'))
+}
+
 function sameConfirmedStep(existing: DurableWorkflowStep, fresh: DurableWorkflowStep) {
 	return existing.to.toLowerCase() === fresh.to.toLowerCase() && existing.data.toLowerCase() === fresh.data.toLowerCase() && existing.value === fresh.value
 }
@@ -112,6 +116,8 @@ export function refreshWorkflowContinuation(workflow: DurableWorkflow, plan: Ope
 	workflow.obligation = plan.obligation
 	workflow.planId = plan.id
 	workflow.planningSeed = plan.planningSeed
+	if (plan.operationInputs !== undefined) workflow.operationInputs = { ...plan.operationInputs }
+	if (plan.inputSources !== undefined) workflow.inputSources = { ...plan.inputSources }
 	workflow.postconditions = [...plan.postconditions]
 	workflow.priority = plan.priority
 	workflow.risk = plan.risk
@@ -146,6 +152,8 @@ export function durableWorkflowPlan(workflow: DurableWorkflow): OperationPlan {
 		postconditions: [...workflow.postconditions],
 		priority: workflow.priority,
 		planningSeed: workflow.planningSeed,
+		...(workflow.operationInputs === undefined ? {} : { operationInputs: { ...workflow.operationInputs } }),
+		...(workflow.inputSources === undefined ? {} : { inputSources: { ...workflow.inputSources } }),
 		risk: workflow.risk,
 		steps: workflow.steps.map(step => ({
 			data: step.data,
@@ -190,6 +198,8 @@ export function createDurableWorkflow(plan: OperationPlan): DurableWorkflow {
 		operationId: plan.definitionId,
 		planId: plan.id,
 		planningSeed: plan.planningSeed,
+		...(plan.operationInputs === undefined ? {} : { operationInputs: { ...plan.operationInputs } }),
+		...(plan.inputSources === undefined ? {} : { inputSources: { ...plan.inputSources } }),
 		postconditions: [...plan.postconditions],
 		priority: plan.priority,
 		risk: plan.risk,
@@ -437,6 +447,12 @@ export function blockInterruptedWorkflows(state: { pendingTransactions: readonly
 
 export function workflowFailureHasTransaction(workflow: DurableWorkflow) {
 	return workflow.steps.some(step => step.status === 'failed' && step.transactionHash !== undefined)
+}
+
+export function retirementCleanupBlocker(workflow: DurableWorkflow, hasCanonicalContinuation: boolean) {
+	if (!hasCanonicalContinuation) return `Partial workflow ${workflow.label} has no safe cleanup-only continuation`
+	workflow.continuationDisposition = 'cleanup-only'
+	return undefined
 }
 
 export function markWorkflowForRediscovery(workflow: DurableWorkflow, error: unknown) {

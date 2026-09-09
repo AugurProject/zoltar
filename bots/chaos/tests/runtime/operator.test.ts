@@ -1,8 +1,10 @@
+import { getAddress } from '@zoltar/bot-shared/ethereum'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import example from '../../config/operator.example.json'
-import { EndpointCheckFailure, privateKeyToAccount, zeroAddress, zeroHash, type Address, type EndpointCheck } from '../support/bot-shared.ts'
+import { privateKeyToAccount, zeroAddress, zeroHash, type Address } from '@zoltar/bot-shared/ethereum'
+import { EndpointCheckFailure, type EndpointCheck } from '@zoltar/bot-shared/monitoring/connectivity'
 import { parseSettings, serializedSettings, type OperatorSettings } from '../../src/config/settings.ts'
 import { createChaosShutdownController, type ChaosProcessLocks } from '../../src/core/process-locks.ts'
 import { OperationRediscoveryRequired } from '../../src/execution/transaction-executor.ts'
@@ -28,7 +30,7 @@ import { planningOptions } from '../../src/runtime/canonical-scan.ts'
 import { assertSubmissionPreflightFresh, submissionPreflightConfigurationIdentity, submissionPreflightIsDue } from '../../src/runtime/submission-preflight.ts'
 import { initialDurableState, initialRuntimeState, loadDurableState, recordActivity, saveDurableState } from '../../src/state/operator-state.ts'
 import { randomOperationPlans, urgentOperationPlans } from '../../src/runtime/selection.ts'
-import { createDurableWorkflow, markWorkflowFailed, markWorkflowStepConfirmed } from '../../src/runtime/workflows.ts'
+import { createDurableWorkflow, markWorkflowFailed, markWorkflowStepConfirmed, retirementCleanupBlocker } from '../../src/runtime/workflows.ts'
 import { beginLifecycleObligation, failLifecycleObligation, synchronizeLifecycleObligations } from '../../src/runtime/obligations.ts'
 import type { EvaluatedOperation, OperationPlan } from '../../src/operations/types.ts'
 import { address, snapshotFixture } from '../operations/fixture.ts'
@@ -73,12 +75,8 @@ const FIRST_PRIVATE_KEY = `0x${'11'.repeat(32)}` as const
 const SECOND_PRIVATE_KEY = `0x${'22'.repeat(32)}` as const
 
 function restartSettings(stateFile: string, deploymentIdentity: number, privateKey: `0x${string}` | null) {
-	return parseSettings({
+	const settings = parseSettings({
 		...example,
-		deployment: {
-			...example.deployment,
-			zoltar: `0x${deploymentIdentity.toString(16).padStart(40, '0')}`,
-		},
 		privateKey,
 		runtime: {
 			...example.runtime,
@@ -87,6 +85,9 @@ function restartSettings(stateFile: string, deploymentIdentity: number, privateK
 			ui: false,
 		},
 	})
+	// Inject a distinct historical deployment identity only for persistence tests.
+	settings.deployment.zoltar = getAddress(`0x${deploymentIdentity.toString(16).padStart(40, '0')}`)
+	return settings
 }
 
 function lifecyclePlan(): OperationPlan {
@@ -315,9 +316,7 @@ describe('chaos operator runtime', () => {
 		if (firstVault === undefined) throw new Error('Topology fixture requires one vault')
 		const summary = runtimeTopologySummary({
 			anchor: { baseFeePerGas: 1n, blockHash: zeroHash, blockNumber: 77n, timestamp: 1n },
-			canonicalLifecyclePresenceComplete: true,
-			carryProofJournalComplete: true,
-			indexComplete: false,
+			executionReady: false,
 			snapshot,
 			topologyCache: topologyCacheWithVaults(firstPool.address, [firstVault.address]),
 		})
@@ -350,9 +349,7 @@ describe('chaos operator runtime', () => {
 
 		const summary = runtimeTopologySummary({
 			anchor: { baseFeePerGas: 1n, blockHash: zeroHash, blockNumber: 77n, timestamp: 1n },
-			canonicalLifecyclePresenceComplete: true,
-			carryProofJournalComplete: true,
-			indexComplete: true,
+			executionReady: true,
 			snapshot,
 			topologyCache: topologyCacheWithVaults(firstPool.address, registeredVaults),
 		})
@@ -502,13 +499,7 @@ describe('chaos operator runtime', () => {
 			...serialized,
 			privateKey: `0x${'11'.repeat(32)}`,
 		})
-		const withDeployment = parseSettings({
-			...serialized,
-			deployment: {
-				...serialized.deployment,
-				zoltar: '0x0000000000000000000000000000000000000001',
-			},
-		})
+		const withDeployment = { ...base, deployment: { ...base.deployment, zoltar: getAddress('0x0000000000000000000000000000000000000001') } }
 		const withProtocolOrigin = parseSettings({
 			...serialized,
 			runtime: { ...serialized.runtime, protocolStartBlock: '1' },
@@ -927,6 +918,25 @@ describe('chaos operator runtime', () => {
 		workflow.continuationDisposition = selection.continuationDisposition
 		await saveDurableState(stateFile, state)
 		expect((await loadDurableState(stateFile, settings.network.chainId)).workflows[0]?.continuationDisposition).toBe('cleanup-only')
+	})
+
+	test('forces a partially prepared selectable workflow to cleanup-only during retirement', () => {
+		const settings = parseSettings(example)
+		const snapshot = snapshotFixture()
+		const original = eligibleOperationPlans(snapshot, planningOptions(settings, 17)).find(plan => plan.definitionId === 'open-oracle.deposit')
+		if (original === undefined) throw new Error('Retirement cleanup fixture requires an OpenOracle deposit')
+		const approval = original.steps.find(step => step.id.startsWith('approve-'))
+		if (approval === undefined) throw new Error('Retirement cleanup fixture requires an approval')
+		const workflow = createDurableWorkflow(original)
+		markWorkflowStepConfirmed(workflow, approval.id, zeroHash)
+		expect(retirementCleanupBlocker(workflow, true)).toBeUndefined()
+		const selection = evaluatePolicySafeContinuation(snapshot, workflow, { ...settings, strategy: { ...settings.strategy, enabledEcosystems: [] } }, snapshot.anchor.blockNumber, true)
+		expect(workflow.continuationDisposition).toBe('cleanup-only')
+		expect(selection.evaluation.plan?.steps.every(step => step.id.startsWith('revoke-'))).toBeTrue()
+		workflow.classification = 'lifecycle-obligation'
+		workflow.continuationDisposition = undefined
+		expect(retirementCleanupBlocker(workflow, true)).toBeUndefined()
+		expect(workflow).toMatchObject({ continuationDisposition: 'cleanup-only' })
 	})
 
 	test('latches cleanup-only after unsigned rediscovery of a partially confirmed selectable workflow', () => {

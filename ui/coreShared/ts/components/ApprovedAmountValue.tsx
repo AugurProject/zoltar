@@ -1,7 +1,6 @@
 import * as commonCopy from '../copy/common.js'
+import { shouldDisplayMaxTokenApprovalAmount } from '../transactions/tokenApproval.js'
 import { CurrencyValue } from './CurrencyValue.js'
-
-export const APPROVAL_MAX_DISPLAY_THRESHOLD = (1n << 200n) - 1n
 
 type ApprovedAmountValueProps = {
 	className?: string
@@ -14,10 +13,6 @@ type ApprovedAmountValueProps = {
 	value: bigint | undefined
 }
 
-export function isApprovalAmountMaxDisplay(value: bigint | undefined) {
-	return value !== undefined && value > APPROVAL_MAX_DISPLAY_THRESHOLD
-}
-
 export function getApprovedAmountTone(value: bigint | undefined, requiredAmount: bigint | undefined) {
 	if (value === undefined || requiredAmount === undefined) return undefined
 	return value >= requiredAmount ? 'sufficient' : 'insufficient'
@@ -26,7 +21,7 @@ export function getApprovedAmountTone(value: bigint | undefined, requiredAmount:
 export function ApprovedAmountValue({ className = '', copyable = true, decimals = 2, loading = false, requiredAmount, suffix = '', units = 18, value }: ApprovedAmountValueProps) {
 	const toneClassName = getApprovedAmountTone(value, requiredAmount)
 
-	if (isApprovalAmountMaxDisplay(value))
+	if (shouldDisplayMaxTokenApprovalAmount(value))
 		return (
 			<span className={['currency-value', 'approval-max', toneClassName === undefined ? '' : `approval-${toneClassName}`, className].filter(Boolean).join(' ')} title={commonCopy.unlimitedApproval}>
 				{commonCopy.max}

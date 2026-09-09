@@ -23,6 +23,7 @@ function controller(overrides: Partial<Parameters<typeof startDashboardServer>[1
 		setObligation: (value: unknown) => value,
 		setPaused: (value: unknown) => value,
 		setReplacement: (value: unknown) => value,
+		setRetirement: (value: unknown) => value,
 		setSettings: (value: unknown) => value,
 		setSigner: (value: unknown) => value,
 		setWorkflow: (value: unknown) => value,
@@ -71,6 +72,7 @@ describe('chaos dashboard server', () => {
 		expect(overview).toContain('type="password"')
 		expect(overview).toContain('id="countdown"')
 		expect(overview).toContain('id="replacement-hash"')
+		expect(overview).toContain('id="retirement-residual-form"')
 		expect(overview).toContain('id="cancellation-confirmation"')
 		expect(overview).toContain('id="candidate-confirmation"')
 		expect(overview).toContain('id="workflow-confirmation"')
@@ -81,6 +83,10 @@ describe('chaos dashboard server', () => {
 		const sharedStyles = await dashboardFetch(new URL('/operator-console.css', server.url))
 		expect(sharedStyles.status).toBe(200)
 		expect(await sharedStyles.text()).toContain('.operator-shell')
+		const headerScript = await dashboardFetch(new URL('/header-notices.js', server.url))
+		expect(headerScript.status).toBe(200)
+		expect(headerScript.headers.get('content-type')).toContain('text/javascript')
+		expect(await headerScript.text()).toContain('MutationObserver')
 		const favicon = await dashboardFetch(new URL('/favicon.svg', server.url))
 		expect(favicon.status).toBe(200)
 		expect(favicon.headers.get('content-type')).toBe('image/svg+xml')

@@ -1,4 +1,9 @@
 #!/usr/bin/env bun
+import { parseApprovedUniverses } from '@zoltar/bot-shared/monitoring/universe-policy'
+
+import { parseRootMarketSettings } from '#config/canonical-deployment'
+
+import { recordSystemDeploymentCheck } from '../core/deployment-observation.ts'
 
 import { createPublicClient, createWalletClient, getAddress, privateKeyToAccount, type Address, type Hash } from '@zoltar/bot-shared/ethereum'
 import { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
@@ -294,11 +299,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				},
 				setApprovedUniverses: value =>
 					configurationMutationGate.run(async () => {
-						if (!Array.isArray(value) || value.some(universe => typeof universe !== 'string' || !/^(?:0|[1-9]\d*)$/.test(universe))) {
-							throw new Error('Approved universes must be an array of non-negative integer strings')
-						}
-						const approvedUniverses = [...new Set(value.map(universe => BigInt(String(universe))))]
-						if (approvedUniverses.some(universe => universe >= 2n ** 248n)) throw new Error('Approved universe must fit in uint248')
+						const approvedUniverses = parseApprovedUniverses(value)
 						validateApprovedUniverseSelection(state.universes, approvedUniverses)
 						await persistSettings(current => ({ ...current, approvedUniverses }))
 						for (const universe of state.universes) universe.approved = approvedUniverses.includes(universe.id)
@@ -325,7 +326,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 									universeId: pool.universeId.toString(),
 								})),
 						)
-						const centralizedMarkets = parseCentralizedMarketSettings(rootValue ?? value)
+						const centralizedMarkets = parseRootMarketSettings(rootValue ?? value, settings.network.chainId)
 						if (childrenValue !== undefined && !Array.isArray(childrenValue)) throw new Error('Market configuration children must be an array')
 						const childMarketConfigurations = (childrenValue ?? []).map(parseCentralizedMarketSettings)
 						if (centralizedMarkets.assetChainId !== settings.network.chainId) throw new Error('Market consensus configuration targets another chain')
@@ -505,20 +506,8 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				chain = currentChain
 				client = createPrimaryClient()
 				const deploymentStatus = await checkSystemDeployment(client, settings.network.chainId, settings.deployment)
-				if (!deploymentStatus.deployed) {
-					state.status = state.paused ? 'paused' : 'starting'
-					if (missingDeploymentAddress !== deploymentStatus.address) {
-						recordActivity(state, {
-							details: `chain=${settings.network.chainId.toString()} contract=${deploymentStatus.address}`,
-							kind: 'deployment',
-							message: `${deploymentStatus.name} is not deployed; waiting before checking again`,
-							status: 'info',
-						})
-						missingDeploymentAddress = deploymentStatus.address
-					}
-					return 'deferred'
-				}
-				missingDeploymentAddress = undefined
+				missingDeploymentAddress = recordSystemDeploymentCheck(state, deploymentStatus, missingDeploymentAddress)
+				if (!deploymentStatus.deployed) return 'deferred'
 				let primary
 				if (settings.runtime.execute) {
 					const endpoints = [settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls]

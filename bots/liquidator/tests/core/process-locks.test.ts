@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { acquireLiquidatorProcessLocks, LiquidatorProcessLockAcquisitionError } from '../../src/core/process-locks.ts'
-import { privateKeyToAccount } from '../helpers/ethereum.ts'
+import { privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
 
 const directories: string[] = []
 const releases: (() => Promise<void>)[] = []

@@ -1,6 +1,6 @@
 /// <reference types="bun-types" />
 import { describe, expect, test } from 'bun:test'
-import { createPublicClient, getAddress, http, zeroAddress, type Address } from '@zoltar/shared/ethereum'
+import { createPublicClient, getAddress, http, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import {
 	DEFAULT_POOL_CONFIG,
 	ETH_ADDRESS,
@@ -20,10 +20,10 @@ import {
 	quoteRepForEth,
 	quoteRepForUsdcV4WithSource,
 	quoteTokenForEth,
-} from '../../protocol/uniswapQuoter.js'
-import type { ReadClient } from '@zoltar/ui-core-shared/lib/clients.js'
+} from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
+import type { ReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/lib/networkProfile.js'
+import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 type SimulateArgs = Parameters<ReadClient['simulateContract']>[0]
 type RawSimulateParam = {

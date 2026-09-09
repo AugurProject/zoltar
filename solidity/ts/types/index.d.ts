@@ -30,6 +30,9 @@ declare module 'solc' {
 		readonly object: string
 		readonly opcodes?: string
 		readonly sourceMap?: string
+		readonly immutableReferences?: {
+			readonly [astId: string]: readonly { readonly start: number; readonly length: number }[]
+		}
 		readonly linkReferences?:
 			| {}
 			| {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { getAddress } from '@zoltar/shared/ethereum'
+import { getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { coreDeploymentFromManifest } from '../../../build/core-deployments.mts'
 import { defaultCoreDeploymentRpcUrls } from '../../protocol/coreDeploymentDefaults.ts'
 import { parseCoreDeployments } from '../../protocol/coreDeployments.ts'

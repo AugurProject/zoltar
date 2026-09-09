@@ -1,7 +1,9 @@
+import type { UniverseIdentity } from '@zoltar/bot-shared/monitoring/universe-policy'
+import type { MissingContractDeployment } from '../../../shared/src/monitoring/deployed-contracts.ts'
 import { mkdir, open, readFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import { bigintToSafeNumber, type Address, type Hex } from '#ethereum'
-import type { OpenOracleGame } from '@zoltar/shared/openOracle'
+import { bigintToSafeNumber, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import type { OpenOracleGame } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import type { DeploymentSettings } from '#config/deployment-settings'
 import type { ConnectivitySettings, EndpointCheck, NetworkName } from '#monitoring/connectivity'
 import type { SubmissionSettings, SubmissionTargetResult } from '#execution/transaction-submission'
@@ -153,7 +155,19 @@ export type PublicOperationEntry = Omit<OperationEntry, 'details' | 'reason'> & 
 	reason?: string | undefined
 }
 
-export type OperatorSnapshot = {
+export type MarketAvailabilityNotice = ({ kind: 'missing-deployment' } & MissingContractDeployment) | { kind: 'no-v3-liquidity'; chainId: number }
+
+type PollStatus = {
+	marketAvailability?: MarketAvailabilityNotice | undefined
+	lastError: string | undefined
+	lastPollAt: string | undefined
+	lastPollFailureAt?: string | undefined
+	lastRetryAt?: string | undefined
+	nextRetryAt?: string | undefined
+	retryInProgress?: boolean | undefined
+}
+
+export type OperatorSnapshot = PollStatus & {
 	activeReportCount: number
 	consecutivePollFailures?: number | undefined
 	balances: BalanceSnapshot | undefined
@@ -171,12 +185,6 @@ export type OperatorSnapshot = {
 	endpointChecks: readonly EndpointCheck[]
 	rpcEndpointHealth?: readonly RpcEndpointHealth[] | undefined
 	gameCapital: GameCapitalSnapshot
-	lastError: string | undefined
-	lastPollAt: string | undefined
-	lastPollFailureAt?: string | undefined
-	lastRetryAt?: string | undefined
-	nextRetryAt?: string | undefined
-	retryInProgress?: boolean | undefined
 	mode: 'dry-run' | 'execute'
 	network: NetworkName
 	networkConfigured: boolean
@@ -191,6 +199,7 @@ export type OperatorSnapshot = {
 	settings: StrategySettings
 	status: 'connectivity-degraded' | 'error' | 'paused' | 'running' | 'stopped' | 'syncing'
 	submission: SubmissionSettings
+	universes?: readonly { id: string; parentId: string | undefined; outcomeIndex: string | undefined; repToken: Address }[] | undefined
 	tokenAddresses: readonly Address[]
 	tokenMarkets: readonly TokenMarketSnapshot[]
 	priceHistory: readonly MarketPricePoint[]
@@ -240,60 +249,52 @@ export type PublicTransactionActivity = Pick<TransactionActivity, 'acceptedTarge
 	failedTargets: readonly SubmissionTargetResult[]
 }
 
-export type PublicOperatorSnapshot = {
-	activeReportCount: number
-	consecutivePollFailures?: number | undefined
-	balances: BalanceSnapshot | undefined
-	blockNumber: string | undefined
-	blockTimestamp: string | undefined
-	centralizedMarket?: ReturnType<typeof serializeCentralizedMarketEstimate>
-	marketConsensus?: ReturnType<typeof serializeMarketConsensusEstimate>
-	execute: boolean
-	executor: Address | undefined
-	executionHistory: readonly PublicExecutionRecord[]
-	executionHistoryRecordCount: number
-	positionRecordCount: number
-	expectedChainId: number
-	explorerUrl: string
-	endpointChecks: readonly EndpointCheck[]
-	rpcEndpointHealth?: readonly RpcEndpointHealth[] | undefined
-	gameCapital: GameCapitalSnapshot
-	lastError: string | undefined
-	lastPollAt: string | undefined
-	lastPollFailureAt?: string | undefined
-	lastRetryAt?: string | undefined
-	nextRetryAt?: string | undefined
-	retryInProgress?: boolean | undefined
-	mode: 'dry-run' | 'execute'
-	network: NetworkName
-	networkConfigured: boolean
-	openOracle: Address
-	operatorCapable: boolean
-	operationLog: readonly PublicOperationEntry[]
-	opportunities: readonly OpportunitySnapshot[]
-	positions: readonly PublicPositionRecord[]
-	paused: boolean
-	queuedWallet: Address | null | undefined
-	savedWallet: Address | undefined
-	status: OperatorSnapshot['status']
-	submission: Pick<SubmissionSettings, 'minimumBundleRelaySuccesses' | 'mode'>
-	tokenAddresses: readonly Address[]
-	tokenMarkets: readonly TokenMarketSnapshot[]
-	priceHistory: readonly MarketPricePoint[]
-	reportPaths: readonly ReportPathSnapshot[]
-	risk: {
-		limits: OperatorSnapshot['risk']['limits']
-		usage: Pick<OperatorSnapshot['risk']['usage'], 'dailyGasSpentWeth' | 'lockedWeth' | 'openPositions'>
+export type PublicOperatorSnapshot = PollStatus &
+	Pick<OperatorSnapshot, 'universes' | 'tokenAddresses' | 'tokenMarkets' | 'priceHistory'> & {
+		activeReportCount: number
+		consecutivePollFailures?: number | undefined
+		balances: BalanceSnapshot | undefined
+		blockNumber: string | undefined
+		blockTimestamp: string | undefined
+		centralizedMarket?: ReturnType<typeof serializeCentralizedMarketEstimate>
+		marketConsensus?: ReturnType<typeof serializeMarketConsensusEstimate>
+		execute: boolean
+		executor: Address | undefined
+		executionHistory: readonly PublicExecutionRecord[]
+		executionHistoryRecordCount: number
+		positionRecordCount: number
+		expectedChainId: number
+		explorerUrl: string
+		endpointChecks: readonly EndpointCheck[]
+		rpcEndpointHealth?: readonly RpcEndpointHealth[] | undefined
+		gameCapital: GameCapitalSnapshot
+		mode: 'dry-run' | 'execute'
+		network: NetworkName
+		networkConfigured: boolean
+		openOracle: Address
+		operatorCapable: boolean
+		operationLog: readonly PublicOperationEntry[]
+		opportunities: readonly OpportunitySnapshot[]
+		positions: readonly PublicPositionRecord[]
+		paused: boolean
+		queuedWallet: Address | null | undefined
+		savedWallet: Address | undefined
+		status: OperatorSnapshot['status']
+		submission: Pick<SubmissionSettings, 'minimumBundleRelaySuccesses' | 'mode'>
+		reportPaths: readonly ReportPathSnapshot[]
+		risk: {
+			limits: OperatorSnapshot['risk']['limits']
+			usage: Pick<OperatorSnapshot['risk']['usage'], 'dailyGasSpentWeth' | 'lockedWeth' | 'openPositions'>
+		}
+		totalActualGasCostEth: string
+		totalHedgedProfitBeforeGasEth: string
+		totalOpenHedgedNetProfitEth: string
+		totalRealizedNetProfitEth: string
+		transactionActivity: readonly PublicTransactionActivity[]
+		wallet: Address | undefined
 	}
-	totalActualGasCostEth: string
-	totalHedgedProfitBeforeGasEth: string
-	totalOpenHedgedNetProfitEth: string
-	totalRealizedNetProfitEth: string
-	transactionActivity: readonly PublicTransactionActivity[]
-	wallet: Address | undefined
-}
 
-export type OperatorState = {
+export type OperatorState = PollStatus & {
 	activeReportCount: number
 	consecutivePollFailures?: number | undefined
 	balances: BalanceSnapshot | undefined
@@ -306,18 +307,13 @@ export type OperatorState = {
 	endpointChecks: EndpointCheck[]
 	rpcEndpointHealth?: readonly RpcEndpointHealth[] | undefined
 	gameCapital: GameCapitalSnapshot
-	lastError: string | undefined
-	lastPollAt: string | undefined
-	lastPollFailureAt?: string | undefined
-	lastRetryAt?: string | undefined
-	nextRetryAt?: string | undefined
-	retryInProgress?: boolean | undefined
 	opportunities: OpportunitySnapshot[]
 	positions: PositionRecord[]
 	positionArchive?: PositionJournalArchive | undefined
 	operationLog: OperationEntry[]
 	paused: boolean
 	status: OperatorSnapshot['status']
+	universes?: UniverseIdentity[] | undefined
 	tokenAddresses: Address[]
 	tokenMarkets: TokenMarketSnapshot[]
 	priceHistory: MarketPricePoint[]
@@ -487,7 +483,8 @@ export function publicOperatorSnapshot(snapshot: OperatorSnapshot): PublicOperat
 			totalEthWeth: snapshot.gameCapital.totalEthWeth,
 			weth: snapshot.gameCapital.weth,
 		},
-		lastError: snapshot.lastError === undefined ? undefined : snapshot.lastPollFailureAt === undefined ? publicOperatorFailure(snapshot.lastError) : publicPollFailure(snapshot.lastError),
+		marketAvailability: snapshot.marketAvailability,
+		lastError: snapshot.marketAvailability?.kind === 'missing-deployment' || snapshot.lastError === undefined ? undefined : snapshot.lastPollFailureAt === undefined ? publicOperatorFailure(snapshot.lastError) : publicPollFailure(snapshot.lastError),
 		lastPollAt: snapshot.lastPollAt,
 		lastPollFailureAt: snapshot.lastPollFailureAt,
 		lastRetryAt: snapshot.lastRetryAt,
@@ -549,6 +546,7 @@ export function publicOperatorSnapshot(snapshot: OperatorSnapshot): PublicOperat
 			minimumBundleRelaySuccesses: snapshot.submission.minimumBundleRelaySuccesses,
 			mode: snapshot.submission.mode,
 		},
+		universes: snapshot.universes,
 		tokenAddresses: [...snapshot.tokenAddresses],
 		tokenMarkets: snapshot.tokenMarkets.map(token => ({
 			address: token.address,
@@ -965,6 +963,7 @@ export function operatorSnapshot(
 		endpointChecks: state.endpointChecks,
 		rpcEndpointHealth: state.rpcEndpointHealth ?? [],
 		gameCapital: state.gameCapital,
+		marketAvailability: state.marketAvailability,
 		lastError: state.lastError,
 		lastPollAt: state.lastPollAt,
 		lastPollFailureAt: state.lastPollFailureAt,
@@ -985,6 +984,7 @@ export function operatorSnapshot(
 		settings: strategySettings(strategy),
 		status: state.status,
 		submission,
+		universes: state.universes?.map(universe => ({ id: universe.id.toString(), parentId: universe.parentId?.toString(), outcomeIndex: universe.outcomeIndex?.toString(), repToken: universe.repToken })),
 		tokenAddresses: state.tokenAddresses,
 		tokenMarkets: state.tokenMarkets,
 		priceHistory: state.priceHistory,

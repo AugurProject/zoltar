@@ -1,13 +1,13 @@
 /// <reference types='bun-types' />
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import { type Address, zeroAddress } from '@zoltar/shared/ethereum'
+import { type Address, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { WalletAssetControl } from '../components/WalletAssetControl.js'
-import { createInjectedBackend } from '../lib/chainBackend.js'
+import { createInjectedBackend } from '../wallet/chainBackend.js'
 import { installActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
-import type { WalletAssetWatchResult } from '../lib/walletAsset.js'
+import type { WalletAssetWatchResult } from '../wallet/walletAsset.js'
 import { createFakeBackend, createFakeSimulationProfile } from './testUtils/fakeBackend.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { fireEvent, waitFor, within } from './testUtils/queries.js'

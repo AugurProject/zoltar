@@ -1,6 +1,6 @@
-import { encodeFunctionData, type Address, type Hex, zeroAddress } from '#ethereum'
+import { encodeFunctionData, type Address, type Hex, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { STANDARD_UNISWAP_FEES } from '#core/uniswap-v4'
-import { getOpenOracleGameTuple, getOpenOracleHelperTuple, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_TIME_TYPE, type OpenOracleStatePreimage } from '@zoltar/shared/openOracle'
+import { getOpenOracleGameTuple, getOpenOracleHelperTuple, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_TIME_TYPE, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { erc20Abi, openOracleArbitrageExecutorAbi } from '#contracts/abi'
 import { type Configuration } from '#config/configuration'
 import {
@@ -29,7 +29,7 @@ import { marketConsensusAllowsExecution, type MarketConsensusEstimate } from '@z
 const FEES = STANDARD_UNISWAP_FEES
 import { expectedWithdrawalToken2, hedgedProfitBeforeGasWeth } from '#core/position-accounting'
 import { type PositionRecord } from '#state/position-store'
-import { bestSuccessful } from '#monitoring/resilience'
+import { bestSuccessful } from '@zoltar/bot-shared/monitoring/resilience'
 import { positionRiskLimitMismatch, projectedLifecycleGasReserveAttoWeth } from '#core/safety-controls'
 import {
 	calculateFee,
@@ -53,7 +53,7 @@ import type { Venue } from '#core/venue-strategy'
 import type { Pool, ReadClient, WriteClient } from '#core/operator-types'
 import { errorMessage } from '#core/rpc-validation'
 import { executionReadQuorum, quoteInput, safetyAdjustedQuote } from '#monitoring/opportunity-evaluation'
-import { operationalFailureDisposition } from '#monitoring/resilience'
+import { operationalFailureDisposition } from '@zoltar/bot-shared/monitoring/resilience'
 import { confirmedGasExpenditures, currentBlockNumberWithQuorum, dateFromBlockTimestamp, durableTransactionIntent, hedgeExecutionFromLogs, pendingNonceWithQuorum, recoveredTransactionIntentMismatchWithQuorum } from '#execution/recovery-support'
 import { executionRecordForConfirmedPosition, recoverPendingEntryWithQuorum } from '#execution/position-lifecycle'
 

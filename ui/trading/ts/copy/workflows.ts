@@ -7,22 +7,16 @@ export const invalidRequired = 'INVALID required'
 export const tradingFee = 'Trading fee'
 export const transaction = 'Transaction'
 export const liquidityTransaction = 'Liquidity transaction'
-export const approveExactLp = 'Approve exact LP amount'
-export const approvingExactLp = 'Approving exact LP amount…'
 export const simulateLiquidity = 'Simulate liquidity transaction'
 export const simulatingLiquidity = 'Simulating liquidity transaction…'
 export const submitLiquidity = 'Submit liquidity transaction'
 export const submittingLiquidity = 'Submitting liquidity transaction…'
-export const approveSettlement = 'Approve router for complete-set redemption'
-export const approveOutcomeTokens = 'Approve router for all outcome tokens'
-export const approvingRouter = 'Approving router…'
 export const simulateSettlement = 'Simulate authoritative settlement'
 export const simulatingSettlement = 'Simulating authoritative settlement…'
 export const submitSettlement = 'Submit settlement transaction'
 export const submittingSettlement = 'Submitting settlement transaction…'
 export const previewTrade = 'Preview trade'
 export const submittingTrade = 'Submitting trade…'
-export const erc1155ApprovalScopeWarning = "This ERC-1155 approval covers every token ID in the pool's share token, including other universe branches. Revoke it through a compatible wallet or share-token contract interface when it is no longer needed."
 export const unsupportedOnchainTimestamp = 'Unsupported on-chain timestamp'
 export const timestamp = 'Timestamp'
 export const utc = 'UTC'
@@ -44,7 +38,7 @@ export const retryBalances = 'Retry balances'
 export const walletYes = 'Wallet YES'
 export const walletNo = 'Wallet NO'
 export const walletInvalid = 'Wallet INVALID'
-export const refreshingWalletBalances = 'Refreshing wallet balances and approvals…'
+export const refreshingWalletBalances = 'Refreshing wallet balances…'
 export const balanceRefreshFailed = 'Balance refresh failed.'
 export const livePositionOperation = 'Live position operation'
 export const enter = 'Enter'
@@ -129,18 +123,6 @@ export function timestampFormattingFailedDetail(message: string) {
 
 export function preparingAction(action: string) {
 	return `Preparing ${action}…`
-}
-
-export function actionApprovalPendingInWallet(action: string) {
-	return `${action} approval pending in wallet…`
-}
-
-export function actionApprovalPendingOnchain(action: string) {
-	return `${action} approval pending on-chain…`
-}
-
-export function actionApprovalConfirmedOnchain(action: string) {
-	return `${action} approval confirmed on-chain`
 }
 
 export function actionPendingInWallet(action: string) {
