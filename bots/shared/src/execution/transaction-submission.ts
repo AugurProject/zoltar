@@ -228,7 +228,8 @@ function bundleIdentity(transactions: readonly Hex[]) {
 }
 
 async function authenticatedRelayRequest(parameters: RelayAuthentication & { body: string; relayUrl: string; timeoutMilliseconds: number }) {
-	const response = await fetch(parameters.relayUrl, {
+	const endpoint = relayUrl(parameters.relayUrl)
+	const response = await fetch(endpoint, {
 		body: parameters.body,
 		headers: await authenticatedRelayHeaders(parameters.body, parameters),
 		method: 'POST',

@@ -22,26 +22,26 @@ function declaredResponseLength(response: Response) {
 export async function boundedJsonResponse(response: Response, maximumBytes: number, label: string): Promise<JsonValue> {
 	if (!Number.isSafeInteger(maximumBytes) || maximumBytes < 1) throw new Error('JSON response byte limit must be a positive safe integer')
 	const maximumDescription = byteLimitDescription(maximumBytes)
-	if ((declaredResponseLength(response) ?? 0) > maximumBytes) throw new Error(`${label} response exceeds ${maximumDescription}`)
-	if (response.body === null) throw new SyntaxError(`${label} returned an empty response body`)
-
-	const reader = response.body.getReader()
+	const reader = response.body?.getReader()
 	const chunks: Uint8Array[] = []
 	let length = 0
 	try {
+		if ((declaredResponseLength(response) ?? 0) > maximumBytes) throw new Error(`${label} response exceeds ${maximumDescription}`)
+		if (reader === undefined) throw new SyntaxError(`${label} returned an empty response body`)
 		for (;;) {
 			const chunk = await reader.read()
 			if (chunk.done) break
 			length += chunk.value.byteLength
 			if (length > maximumBytes) {
-				await reader.cancel().catch(() => undefined)
 				throw new Error(`${label} response exceeds ${maximumDescription}`)
 			}
 			chunks.push(chunk.value)
 		}
 	} catch (error) {
-		await reader.cancel().catch(() => undefined)
+		await reader?.cancel().catch(() => undefined)
 		throw error
+	} finally {
+		reader?.releaseLock()
 	}
 
 	const body = new Uint8Array(length)
