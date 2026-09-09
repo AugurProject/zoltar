@@ -727,6 +727,35 @@ describe('shared bot primitives', () => {
 		}
 	})
 
+	test('keeps a pruned-log endpoint available for recent logs and other RPC methods', async () => {
+		const server = Bun.serve({
+			port: 0,
+			async fetch(request) {
+				const body: unknown = await request.json()
+				if (typeof body !== 'object' || body === null) throw new Error('Invalid test RPC request')
+				const method = Reflect.get(body, 'method')
+				const params = Reflect.get(body, 'params')
+				const id = Reflect.get(body, 'id')
+				const filter = Array.isArray(params) ? params[0] : undefined
+				if (method === 'eth_getLogs' && typeof filter === 'object' && filter !== null && 'fromBlock' in filter && filter.fromBlock === '0x0') return Response.json({ error: { code: 4444, message: 'pruned history unavailable' }, id, jsonrpc: '2.0' })
+				return Response.json({ id, jsonrpc: '2.0', result: method === 'eth_getLogs' ? [] : '0x64' })
+			},
+		})
+		try {
+			const url = server.url.origin
+			const pool = createRpcEndpointPool([url])
+			for (const transport of [pool.transport, pool.transportFor(url)]) {
+				const client = createPublicClient({ transport })
+				await expect(client.getLogs({ fromBlock: 0n, toBlock: 1n })).rejects.toThrow('pruned history unavailable')
+				expect(await client.getLogs({ fromBlock: 100n, toBlock: 100n })).toEqual([])
+				expect(await client.getBlockNumber()).toBe(100n)
+				expect(pool.snapshot()[0]?.nextRetryAt).toBeUndefined()
+			}
+		} finally {
+			server.stop(true)
+		}
+	})
+
 	test('fails over pruned log history to an endpoint that can serve the range', async () => {
 		let healthyRequests = 0
 		const pruned = Bun.serve({ port: 0, fetch: () => Response.json({ error: { code: -32_000, message: 'historical data unavailable on pruned endpoint' }, id: 1, jsonrpc: '2.0' }) })

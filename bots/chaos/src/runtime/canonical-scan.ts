@@ -1,3 +1,4 @@
+import { snapshotWithProtocolIndex } from './protocol-index-snapshot.ts'
 import { createPublicClient, createRpcEndpointPool, defineChain, zeroAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import { endpointLabel } from '@zoltar/bot-shared/monitoring/connectivity'
 import { availableSettledValues, settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
@@ -5,10 +6,11 @@ import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilie
 import { MAXIMUM_DISCOVERY_AGGREGATE_ITEMS, type OperatorSettings } from '../config/settings.ts'
 import { assertCanonicalAnchorFreshness } from '../core/canonical-freshness.ts'
 import { MUTATING_CONTRACT_SURFACE } from '../contracts/surface.ts'
-import { discoverEcosystemSnapshot, drainConcurrent, limitDiscoveryConcurrency, type ChaosReadClient } from '../monitoring/discovery.ts'
+import { discoverEcosystemSnapshot, limitDiscoveryConcurrency, type ChaosReadClient } from '../monitoring/discovery.ts'
 import { CARRY_PROOF_SCAN_MAXIMUM_WITHDRAWAL_CANDIDATES, carryProofDeploymentProfileId, carryUpdateMatchingCommitment, updateCarryProofJournal } from '../monitoring/carry-proof-scan.ts'
 import { carryProofJournalDigest, loadCarryProofJournal, saveCarryProofJournal, type CarryProofJournal, type CarryProofJournalIdentity } from '../monitoring/carry-proof-journal.ts'
-import { OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT, protocolIndexDiscoveryInputs, updateProtocolIndex, type ChaosProtocolIndex } from '../monitoring/protocol-index.ts'
+import { OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT, protocolIndexDiscoveryInputs, type ChaosProtocolIndex } from '../monitoring/protocol-index.ts'
+import { updateProtocolIndexWithQuorum } from '../monitoring/protocol-index-quorum.ts'
 import { snapshotProtocolIndex } from '../state/protocol-index-store.ts'
 import { immutableTopologyCacheExceedsConfiguredResidentLimits, loadImmutableTopologyCache, saveImmutableTopologyCache, validateImmutableTopologyCache, type CanonicalImmutableTopologyCache, type ImmutableTopologyIdentity, type ImmutableTopologyResidentLimits } from '../monitoring/topology-cache.ts'
 import { CHAOS_OPERATION_CATALOG, canonicalLifecyclePresence, evaluateOperationCatalog } from '../operations/catalog.ts'
@@ -237,36 +239,34 @@ export async function discoverWithQuorum(settings: OperatorSettings, pool: RpcPo
 	)
 }
 
-async function updateIndexWithQuorum(settings: OperatorSettings, pool: RpcPool, wallet: Address, anchor: CanonicalAnchor, topology: EcosystemSnapshot, previous: ChaosProtocolIndex | undefined) {
+async function updateIndexWithQuorum(settings: OperatorSettings, pool: RpcPool, wallet: Address, anchor: CanonicalAnchor, topology: EcosystemSnapshot, previous: ChaosProtocolIndex | undefined, carryJournal: CarryProofJournal) {
 	const connectivity = requiredConnectivity(settings)
 	const auctionAddresses = uniqueAddresses(topology.auctions.map(auction => auction.address))
 	const games = escalationRoutes(topology)
+	const carryFromBlock = carryJournal.scanStarted ? BigInt(carryJournal.cursor.blockNumber) + 1n : BigInt(carryJournal.startBlock)
 	const coordinatorReports = topology.pools.filter(candidate => candidate.pendingReportId !== '0').map(candidate => ({ coordinator: candidate.coordinator, pendingReportId: candidate.pendingReportId, repToken: candidate.repToken }))
 	const trustedRepTokens = uniqueAddresses(topology.universes.map(candidate => candidate.repToken))
-	return await settledQuorumValue(
-		`protocol event index through ${anchor.blockNumber.toString()}`,
-		chaosReadClients(settings, pool).map(async ({ client, endpoint }) => ({
-			endpoint,
-			value: await updateProtocolIndex({
-				anchorBlockNumber: anchor.blockNumber,
-				auctionAddresses,
-				chainId: settings.network.chainId,
-				client,
-				coordinatorReports,
-				escalationGames: games,
-				expectedAnchorHash: anchor.blockHash,
-				maxBlockSpan: BigInt(settings.runtime.protocolLogBlockSpan),
-				maximumSettlementStepGasLimit: OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT,
-				openOracle: settings.deployment.openOracle,
-				securityPoolForker: settings.deployment.securityPoolForker,
-				...(previous === undefined ? {} : { previous }),
-				startBlock: settings.runtime.protocolStartBlock,
-				trustedRepTokens,
-				wallet,
-				weth: settings.deployment.weth,
-				zoltar: settings.deployment.zoltar,
-			}),
-		})),
+	return await updateProtocolIndexWithQuorum(
+		{
+			anchorBlockNumber: anchor.blockNumber,
+			auctionAddresses,
+			chainId: settings.network.chainId,
+			coordinatorReports,
+			escalationGames: games,
+			expectedAnchorHash: anchor.blockHash,
+			maxBlockSpan: BigInt(settings.runtime.protocolLogBlockSpan),
+			maximumSettlementStepGasLimit: OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT,
+			openOracle: settings.deployment.openOracle,
+			securityPoolForker: settings.deployment.securityPoolForker,
+			...(previous === undefined ? {} : { previous }),
+			startBlock: settings.runtime.protocolStartBlock,
+			...(carryFromBlock <= anchor.blockNumber ? { requiredLogStartBlock: carryFromBlock } : {}),
+			trustedRepTokens,
+			wallet,
+			weth: settings.deployment.weth,
+			zoltar: settings.deployment.zoltar,
+		},
+		chaosReadClients(settings, pool),
 		connectivity.rpcQuorum,
 	)
 }
@@ -319,62 +319,6 @@ async function updateCarryWithQuorum(settings: OperatorSettings, pool: RpcPool, 
 		candidates.map(candidate => candidate.update),
 		commitment,
 	)
-}
-
-function authenticatedRefundGenerationAtCompleteIndex(auction: EcosystemSnapshot['auctions'][number], index: ChaosProtocolIndex) {
-	const pendingAttoEth = BigInt(auction.pendingEthRefund)
-	const indexed = index.auctionRefunds[auction.address.toLowerCase()]
-	if (pendingAttoEth === 0n) {
-		if (indexed !== undefined) throw new Error(`Auction ${auction.address} has an authenticated active refund episode but zero anchored pending storage`)
-		return undefined
-	}
-	if (indexed === undefined) {
-		throw new Error(`Auction ${auction.address} has positive pending ETH refund storage without an authenticated EthRefundCredited episode; protocolStartBlock may be after the episode start or the indexed history is incomplete`)
-	}
-	if (BigInt(indexed.pendingAttoEth) !== pendingAttoEth) throw new Error(`Auction ${auction.address} pending ETH refund storage does not match its authenticated event episode`)
-	return indexed.generation
-}
-
-export function snapshotWithProtocolIndex(snapshot: EcosystemSnapshot, index: ChaosProtocolIndex): EcosystemSnapshot {
-	const childRepSplitsByPool = new Map<string, Record<string, string>>()
-	for (const progress of index.childRepSplits) {
-		const key = progress.pool.toLowerCase()
-		const routes = childRepSplitsByPool.get(key) ?? {}
-		routes[progress.outcomeIndex] = progress.childPoolRepSplitAttoRep
-		childRepSplitsByPool.set(key, routes)
-	}
-	const migrationRepSplitsByUniverse = new Map<string, Record<string, string>>()
-	for (const progress of index.migrationRepSplits) {
-		const routes = migrationRepSplitsByUniverse.get(progress.universeId) ?? {}
-		routes[progress.outcomeIndex] = progress.childMigrationRepAmountAttoRep
-		migrationRepSplitsByUniverse.set(progress.universeId, routes)
-	}
-	return {
-		...snapshot,
-		auctions: snapshot.auctions.map(auction => {
-			const refundGeneration = authenticatedRefundGenerationAtCompleteIndex(auction, index)
-			const { pendingEthRefundGeneration: _partialGeneration, ...topologyAuction } = auction
-			return {
-				...topologyAuction,
-				bids: [...(index.auctionBids[auction.address.toLowerCase()] ?? [])],
-				...(refundGeneration === undefined ? {} : { pendingEthRefundGeneration: refundGeneration }),
-			}
-		}),
-		escalationDeposits: index.escalationDeposits.map(deposit => ({ ...deposit })),
-		pools: snapshot.pools.map(pool => ({
-			...pool,
-			forkRepMigrationProgressByOutcome: { ...(childRepSplitsByPool.get(pool.address.toLowerCase()) ?? {}) },
-		})),
-		reports: index.reports.map(report => ({
-			...report,
-			game: { ...report.game },
-			helper: { ...report.helper },
-		})),
-		universes: snapshot.universes.map(universe => ({
-			...universe,
-			migrationRepSplitProgressByOutcome: { ...(migrationRepSplitsByUniverse.get(universe.id) ?? {}) },
-		})),
-	}
 }
 
 export function planningOptions(settings: OperatorSettings, seed: number): PlanningOptions {
@@ -598,7 +542,15 @@ export async function performCanonicalScan(
 	if (discovery.topologyChanged) await saveImmutableTopologyCache(settings.runtime.stateFile, topologyIdentity, discovery.topologyCache, settings.discovery)
 	const topology = discovery.snapshot
 	const discoveryComplete = discoveryCoverageIsComplete(topology.warnings)
-	const [updatedCandidate, carryUpdated] = discoveryComplete ? await drainConcurrent([updateIndexWithQuorum(settings, pool, wallet, anchor, topology, compatibleIndex), updateCarryWithQuorum(settings, pool, wallet, anchor, topology, compatibleCarryJournal)]) : [undefined, undefined]
+	const updatedCandidate = discoveryComplete ? await updateIndexWithQuorum(settings, pool, wallet, anchor, topology, compatibleIndex, compatibleCarryJournal) : undefined
+	const partialIndex = updatedCandidate?.index ?? compatibleIndex
+	const historyWarning =
+		partialIndex?.availableStartBlock === undefined
+			? undefined
+			: `Protocol log history is unavailable for blocks ${partialIndex.startBlock} through ${(BigInt(partialIndex.availableStartBlock) - 1n).toString()}; indexing available logs from block ${partialIndex.availableStartBlock} through ${partialIndex.cursor.blockNumber}. Transactions and carry proofs require complete history.`
+	// A suffix cannot reconstruct the cumulative carry-proof frontier. Preserve
+	// the authenticated journal rather than advancing its cursor across a gap.
+	const carryUpdated = discoveryComplete && historyWarning === undefined ? await updateCarryWithQuorum(settings, pool, wallet, anchor, topology, compatibleCarryJournal) : undefined
 	const updated = updatedCandidate === undefined ? undefined : { ...updatedCandidate, index: snapshotProtocolIndex(updatedCandidate.index, settings.network.chainId) }
 	const carryJournal = carryUpdated?.journal ?? compatibleCarryJournal
 	await saveCarryProofJournal(settings.runtime.stateFile, carryJournal, {
@@ -608,7 +560,7 @@ export async function performCanonicalScan(
 	const indexedThroughBlock = updated?.toBlock ?? compatibleIndex?.cursor.blockNumber ?? 'not started'
 	const carryIndexedThroughBlock = carryUpdated?.toBlock ?? carryJournal.cursor.blockNumber
 	const indexedSnapshot =
-		updated?.complete === true
+		updated !== undefined && updated.toBlock === anchor.blockNumber.toString()
 			? snapshotWithProtocolIndex(topology, updated.index)
 			: {
 					...topology,
@@ -620,7 +572,10 @@ export async function performCanonicalScan(
 		forkedCarryWithdrawals: carryUpdated?.complete === true ? carryUpdated.withdrawals.map(candidate => ({ ...candidate, proof: { ...candidate.proof, merkleMountainRangeSiblings: [...candidate.proof.merkleMountainRangeSiblings], nullifierSiblings: [...candidate.proof.nullifierSiblings] } })) : [],
 		warnings: [
 			...indexedSnapshot.warnings,
-			...(carryUpdated?.complete === true ? [] : [discoveryComplete ? `Carry proof journal is backfilling through block ${carryIndexedThroughBlock} of ${anchor.blockNumber.toString()}` : `Carry proof journal is paused at block ${carryIndexedThroughBlock} until canonical discovery is complete`]),
+			...(historyWarning === undefined ? [] : [historyWarning]),
+			...(carryUpdated?.complete === true || historyWarning !== undefined
+				? []
+				: [discoveryComplete ? `Carry proof journal is backfilling through block ${carryIndexedThroughBlock} of ${anchor.blockNumber.toString()}` : `Carry proof journal is paused at block ${carryIndexedThroughBlock} until canonical discovery is complete`]),
 			...(carryUpdated?.complete === true && carryUpdated.withdrawalCandidateCount > CARRY_PROOF_SCAN_MAXIMUM_WITHDRAWAL_CANDIDATES
 				? [`Carry proof action verification is rotating up to ${CARRY_PROOF_SCAN_MAXIMUM_WITHDRAWAL_CANDIDATES.toString()} anchored proofs across ${carryUpdated.withdrawalCandidateCount.toString()} raw unconsumed wallet identities; lifecycle presence remains complete`]
 				: []),
@@ -630,7 +585,7 @@ export async function performCanonicalScan(
 	const evaluated = completeOperationCoverage(evaluateOperationCatalog(snapshot, planningOptions(settings, seed)))
 	const lifecyclePresence = canonicalLifecyclePresence(snapshot, planningOptions(settings, seed))
 	const inventory = walletInventory(snapshot)
-	let evaluations = applyExecutionPolicy(evaluated, settings, allIndexesComplete, updated?.complete === true ? carryIndexedThroughBlock : indexedThroughBlock, anchor.blockNumber.toString(), BigInt(snapshot.wallet.ethBalanceAttoEth))
+	let evaluations = historyWarning === undefined ? applyExecutionPolicy(evaluated, settings, allIndexesComplete, updated?.complete === true ? carryIndexedThroughBlock : indexedThroughBlock, anchor.blockNumber.toString(), BigInt(snapshot.wallet.ethBalanceAttoEth)) : blockExecutableEvaluations(evaluated, historyWarning)
 	if (settings.runtime.execute) evaluations = applyLiveNoveltyInventoryReadiness(evaluations, inventory, snapshot.universes, settings.strategy)
 	if (!discoveryCoverageIsComplete(topology.warnings)) {
 		evaluations = blockExecutableEvaluations(evaluations, 'Canonical discovery reached a configured scan limit; raise the discovery limit and complete a full scan before execution')

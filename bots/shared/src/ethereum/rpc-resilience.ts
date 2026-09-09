@@ -1,6 +1,7 @@
 import { custom } from './rpc-transport.ts'
 import { http, requestTransport, RpcError } from './rpc-transport.ts'
 import { historyUnavailableError } from '../monitoring/block-sync.ts'
+import { permanentHistoricalLogError } from '../monitoring/log-availability.ts'
 
 export type RpcEndpointStatus = 'degraded' | 'healthy' | 'offline' | 'unknown'
 
@@ -31,9 +32,9 @@ type MutableEndpointHealth = RpcEndpointHealth & {
 }
 
 export class RpcEndpointPoolFailure extends Error {
-	readonly failures: readonly { error: string; target: string }[]
+	readonly failures: readonly { error: string; target: string; historicalLogsUnavailable?: boolean }[]
 
-	constructor(failures: readonly { error: string; target: string }[]) {
+	constructor(failures: readonly { error: string; target: string; historicalLogsUnavailable?: boolean }[]) {
 		super(`Every read RPC is unavailable: ${failures.map(failure => `${failure.target}: ${failure.error}`).join('; ')}`)
 		this.name = 'RpcEndpointPoolFailure'
 		this.failures = failures
@@ -145,6 +146,7 @@ export function createRpcEndpointPool(urls: readonly string[], options: RpcEndpo
 			return value
 		} catch (error) {
 			if (!endpointFailoverEligible(method, error)) throw error
+			if (method === 'eth_getLogs' && permanentHistoricalLogError(error)) throw error
 			const failedAt = now()
 			endpoint.consecutiveFailures += 1
 			endpoint.error = safeErrorMessage(error, endpoint.url, endpoint.target)
@@ -170,7 +172,7 @@ export function createRpcEndpointPool(urls: readonly string[], options: RpcEndpo
 
 	const provider = (onSuccess?: (context: RpcRequestContext) => void) => ({
 		request: async ({ method, params }: { method: string; params?: unknown }) => {
-			const failures: { error: string; target: string }[] = []
+			const failures: { error: string; target: string; historicalLogsUnavailable?: boolean }[] = []
 			const candidates = orderedEndpoints(now())
 			if (candidates.length === 0) {
 				throw new RpcEndpointPoolFailure(endpoints.map(endpoint => ({ error: `cooling down until ${endpoint.nextRetryAt ?? 'the next retry window'} before calling ${method}`, target: endpoint.target })))
@@ -182,7 +184,7 @@ export function createRpcEndpointPool(urls: readonly string[], options: RpcEndpo
 					return value
 				} catch (error) {
 					if (!endpointFailoverEligible(method, error)) throw endpointRequestFailure(error, endpoint, method)
-					failures.push({ error: endpointRequestFailureDetail(error, endpoint, method), target: endpoint.target })
+					failures.push({ error: endpointRequestFailureDetail(error, endpoint, method), target: endpoint.target, ...(method === 'eth_getLogs' && permanentHistoricalLogError(error) ? { historicalLogsUnavailable: true } : {}) })
 				}
 			}
 			throw new RpcEndpointPoolFailure(failures)
@@ -201,7 +203,7 @@ export function createRpcEndpointPool(urls: readonly string[], options: RpcEndpo
 						return await requestEndpoint(endpoint, method, params, onSuccess)
 					} catch (error) {
 						if (!endpointFailoverEligible(method, error)) throw endpointRequestFailure(error, endpoint, method)
-						throw new RpcEndpointPoolFailure([{ error: endpointRequestFailureDetail(error, endpoint, method), target: endpoint.target }])
+						throw new RpcEndpointPoolFailure([{ error: endpointRequestFailureDetail(error, endpoint, method), target: endpoint.target, ...(method === 'eth_getLogs' && permanentHistoricalLogError(error) ? { historicalLogsUnavailable: true } : {}) }])
 					}
 				},
 			},
