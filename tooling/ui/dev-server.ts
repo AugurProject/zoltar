@@ -111,7 +111,8 @@ server.on('request', async (request, response) => {
 // Initiate the server on `port` and print a message
 const ports: Record<UiAppId, number> = { statoblast: 12347, trading: 4163, zoltar: 4153 }
 const port = ports[appId]
-server.listen(port)
+// Repository files and live reload are intended only for local development.
+server.listen(port, '127.0.0.1')
 server.on('listening', () => {
 	const address = server.address()
 	if (address === null) throw new Error('Server address unavailable after listen')
