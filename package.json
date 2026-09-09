@@ -24,7 +24,8 @@
 	"dependencies": {
 		"@preact/signals": "2.0.1",
 		"solc": "0.8.17",
-		"tevm": "1.0.0-rc.151",
+		"@tevm/memory-client": "1.0.0-rc.151",
+		"@tevm/common": "1.0.0-rc.151",
 		"@zoltar/core-shared": "file:shared/core",
 		"@zoltar/open-oracle-shared": "file:shared/openOracle",
 		"@zoltar/statoblast-shared": "file:shared/statoblast",
@@ -34,7 +35,6 @@
 	"overrides": {
 		"@tevm/actions": "1.0.0-rc.151",
 		"@tevm/node": "1.0.0-rc.151",
-		"@tevm/server": "1.0.0-rc.151",
 		"brace-expansion": "5.0.9",
 		"browserslist": "4.28.8",
 		"fast-uri": "3.1.6",

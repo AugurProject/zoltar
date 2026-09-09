@@ -14,7 +14,7 @@
 				"tooling/ui/projectArtifacts.mts!"
 			],
 			"project": ["docs/runtime/**/*.ts!", "docs/charts/**/*.ts", "tooling/**/*.{ts,mts}", "bun-test-setup*.ts"],
-			"ignoreDependencies": ["@preact/signals", "tevm", "@zoltar/core-shared", "@zoltar/zoltar-shared", "@zoltar/open-oracle-shared", "@zoltar/statoblast-shared", "@zoltar/trading-shared"],
+			"ignoreDependencies": ["@preact/signals", "@tevm/memory-client", "@tevm/common", "@zoltar/core-shared", "@zoltar/zoltar-shared", "@zoltar/open-oracle-shared", "@zoltar/statoblast-shared", "@zoltar/trading-shared"],
 			"paths": {
 				"@zoltar/core-shared/*": ["shared/core/ts/*"],
 				"@zoltar/zoltar-shared/*": ["shared/zoltar/ts/*"],
@@ -79,7 +79,7 @@
 				"@zoltar/statoblast-shared/*": ["../../shared/statoblast/ts/*"],
 				"@zoltar/trading-shared/*": ["../../shared/trading/ts/*"]
 			},
-			"ignoreDependencies": ["tevm"],
+			"ignoreDependencies": ["@tevm/memory-client", "@tevm/common"],
 			"ignoreUnresolved": ["./bun-test-setup-solidity.ts"]
 		},
 		"ui/statoblast": {
@@ -96,7 +96,7 @@
 				"@zoltar/statoblast-shared/*": ["../../shared/statoblast/ts/*"],
 				"@zoltar/trading-shared/*": ["../../shared/trading/ts/*"]
 			},
-			"ignoreDependencies": ["tevm"],
+			"ignoreDependencies": ["@tevm/memory-client", "@tevm/common"],
 			"ignoreUnresolved": ["./bun-test-setup-solidity.ts"]
 		},
 		"ui/trading": {
@@ -113,7 +113,7 @@
 				"@zoltar/statoblast-shared/*": ["../../shared/statoblast/ts/*"],
 				"@zoltar/trading-shared/*": ["../../shared/trading/ts/*"]
 			},
-			"ignoreDependencies": ["tevm", "@preact/signals", "bun-types"]
+			"ignoreDependencies": ["@tevm/memory-client", "@tevm/common", "@preact/signals", "bun-types"]
 		},
 		"solidity": {
 			"entry": ["ts/compile.ts!", "ts/gas-costs.ts!", "ts/trading/deploy/*.mts!", "ts/tests/**/*.ts", "ts/fuzz/**/*.ts", "ts/types/*.d.ts"],

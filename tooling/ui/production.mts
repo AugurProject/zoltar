@@ -37,8 +37,6 @@ const APP_TITLES: Record<string, string> = {
 function createBrowserVendorAliasPlugin() {
 	const aliasEntries: Array<[RegExp, string]> = [
 		[/^pino$/, resolveBundlerSpecifierPath('pino/browser.js')],
-		[/^tevm$/, resolveBundlerSpecifierPath('@tevm/memory-client')],
-		[/^tevm\/common$/, resolveBundlerSpecifierPath('@tevm/common')],
 		[/^@tevm\/memory-client$/, resolveBundlerSpecifierPath('@tevm/memory-client')],
 		[/^@tevm\/common$/, resolveBundlerSpecifierPath('@tevm/common')],
 	]

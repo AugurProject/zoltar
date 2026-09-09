@@ -1,4 +1,4 @@
-import { createMemoryClient } from 'tevm'
+import { createMemoryClient } from '@tevm/memory-client'
 import { bytesToHex, hexToBytes, type Hash } from '@zoltar/core-shared/evm/ethereum'
 
 export const SIMULATION_INITIAL_TIMESTAMP = 1_735_689_600n
