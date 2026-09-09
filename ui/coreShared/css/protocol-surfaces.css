@@ -2222,6 +2222,11 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	flex: 0 0 auto;
 }
 
+.field-inline > button.field-inline-action {
+	border: 1px solid var(--control-border);
+	background: var(--control-bg);
+}
+
 .approval-amount-field {
 	display: flex;
 	flex-wrap: wrap;

@@ -113,6 +113,10 @@
 	gap: var(--space-2);
 }
 
+.actions > .tx-action {
+	width: min(100%, 24rem);
+}
+
 .tx-action-row {
 	display: flex;
 	align-items: center;
@@ -124,13 +128,32 @@
 }
 
 .tx-action-notice {
-	padding: 0.7rem 0.8rem;
-	border: 1px solid color-mix(in srgb, var(--warning-border-strong) 66%, transparent 34%);
-	border-radius: var(--radius-record);
-	background: color-mix(in srgb, var(--notice-warning-gradient) 18%, transparent 82%);
+	padding: 0;
 	color: var(--text-secondary);
 	font-size: var(--font-caption);
 	line-height: 1.45;
+}
+
+.tx-action-feedback {
+	min-block-size: 2.9em;
+	font-size: var(--font-caption);
+}
+
+.tx-action-button-labels {
+	display: grid;
+	align-items: center;
+}
+
+.tx-action-button-labels > span {
+	grid-area: 1 / 1;
+}
+
+.tx-action-label-placeholder {
+	visibility: hidden;
+}
+
+.tx-action-label-placeholder::after {
+	content: attr(data-label);
 }
 
 .transaction-action-status {
@@ -178,6 +201,7 @@
 
 .tx-action-button {
 	width: 100%;
+	min-block-size: 3rem;
 }
 
 .tx-action-button .loading-value {

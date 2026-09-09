@@ -2,6 +2,7 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as marketCopy from '@zoltar/ui-zoltar-shared/copy/market.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
+import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { EntityCard } from '@zoltar/ui-core-shared/components/EntityCard.js'
@@ -64,7 +65,15 @@ export function UniverseDirectorySection({ activeUniverseId, loadingSecurityPool
 			<SectionBlock variant='plain'>
 				<DataGrid>
 					<MetricField label={commonCopy.universe}>{formatUniverseLabel(zoltarUniverse.universeId)}</MetricField>
-					<MetricField label={commonCopy.status}>{zoltarUniverse.hasForked ? commonCopy.forked : commonCopy.operational}</MetricField>
+					<MetricField label={commonCopy.status}>
+						{zoltarUniverse.hasForked ? commonCopy.forked : commonCopy.operational}
+						{zoltarUniverse.hasForked && zoltarUniverse.forkTime > 0n ? (
+							<>
+								{' '}
+								<TimestampValue timestamp={zoltarUniverse.forkTime} />
+							</>
+						) : undefined}
+					</MetricField>
 					<MetricField label={marketCopy.parentUniverse}>{zoltarUniverse.universeId === 0n ? commonCopy.none : <UniverseLink universeId={zoltarUniverse.parentUniverseId} />}</MetricField>
 					<MetricField label={zoltarUniverse.reputationTokenName ?? commonCopy.rep}>
 						<CurrencyValue value={zoltarUniverse.totalTheoreticalSupplyAttoRep} suffix={zoltarUniverse.reputationTokenSymbol ?? commonCopy.rep} />

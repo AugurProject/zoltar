@@ -39,12 +39,18 @@ export function TransactionActionButton({ ariaLabel, availability, className = '
 	}
 	return (
 		<div className={`tx-action ${className}`.trim()}>
-			{resolvedInlineHint === undefined ? undefined : <InlineHint {...(resolvedInlineHintAriaLabel === undefined ? {} : { ariaLabel: resolvedInlineHintAriaLabel })} id={disabledReasonId} message={resolvedInlineHint} />}
 			<div className='tx-action-row'>
 				<button aria-label={ariaLabel} aria-busy={pending} className={`tx-action-button ${tone}`} type={type} onClick={handleClick} disabled={isDisabled} title={disabledReason} aria-describedby={describedBy}>
-					{pending ? <LoadingText announce={!isPendingGlobalTransactionPresentation(globalTransaction)}>{pendingLabel}</LoadingText> : idleLabel}
+					<span className='tx-action-button-labels'>
+						<span aria-hidden='true' className='tx-action-label-placeholder' data-label={typeof idleLabel === 'string' ? idleLabel : undefined} />
+						<span aria-hidden='true' className='tx-action-label-placeholder' data-label={typeof pendingLabel === 'string' ? pendingLabel : undefined} />
+						<span>{pending ? <LoadingText announce={!isPendingGlobalTransactionPresentation(globalTransaction)}>{pendingLabel}</LoadingText> : idleLabel}</span>
+					</span>
 				</button>
 			</div>
+			{showDisabledReason || resolvedInlineHint !== undefined ? (
+				<div className='tx-action-feedback'>{resolvedInlineHint === undefined ? undefined : <InlineHint {...(resolvedInlineHintAriaLabel === undefined ? {} : { ariaLabel: resolvedInlineHintAriaLabel })} id={disabledReasonId} message={resolvedInlineHint} />}</div>
+			) : undefined}
 		</div>
 	)
 }

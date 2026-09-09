@@ -26,6 +26,14 @@ describe('TransactionActionButton', () => {
 		restoreDomEnvironment = undefined
 	})
 
+	test('keeps the feedback region after the initiating button when there is no notice', async () => {
+		const rendered = await renderIntoDocument(<TransactionActionButton idleLabel='Submit' pendingLabel='Submitting...' onClick={() => undefined} />)
+		cleanupRenderedComponent = rendered.cleanup
+		const action = rendered.container.querySelector('.tx-action')
+		expect(action?.firstElementChild?.className).toBe('tx-action-row')
+		expect(action?.lastElementChild?.className).toBe('tx-action-feedback')
+	})
+
 	test('renders pending button text while the action is in flight', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<GlobalTransactionPresentationProvider transaction={{ title: 'Submitting transaction', tone: 'pending' }}>

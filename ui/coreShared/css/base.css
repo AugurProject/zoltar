@@ -1781,6 +1781,10 @@ button.wallet-asset-action-pending:disabled {
 	border-top: 0;
 }
 
+.migration-amount-hint {
+	min-block-size: 2.9em;
+}
+
 .migration-outcome-list {
 	display: grid;
 	gap: 0.6rem 0;
@@ -1795,6 +1799,12 @@ button.wallet-asset-action-pending:disabled {
 	width: 100%;
 	border: 1px solid var(--control-border);
 	background: var(--control-bg);
+}
+
+.migration-outcome-row:hover,
+.migration-outcome-row:focus-within {
+	background: var(--interactive-bg-hover);
+	border-color: var(--interactive-border-hover);
 }
 
 .migration-outcome-row.active {
@@ -1819,11 +1829,41 @@ button.wallet-asset-action-pending:disabled {
 	text-align: left;
 }
 
+.migration-outcome-select:hover:not(:disabled) {
+	background: transparent;
+}
+
 .migration-outcome-actions {
 	display: flex;
 	align-items: flex-start;
 	justify-content: flex-end;
-	padding: 0.75rem 0.75rem 0 0;
+	padding: 0.75rem;
+	width: 12rem;
+	min-width: 0;
+}
+
+.migration-outcome-actions > * {
+	width: 100%;
+}
+
+.migration-outcome-actions .tx-action-button,
+.migration-outcome-actions .button-link {
+	min-height: 4rem;
+}
+
+@media (max-width: 600px) {
+	.migration-amount-hint {
+		min-block-size: 2.9em;
+	}
+
+	.migration-outcome-list {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.migration-outcome-actions {
+		justify-self: end;
+		padding-top: 0;
+	}
 }
 
 .migration-outcome-label {
