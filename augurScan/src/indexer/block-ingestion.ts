@@ -1,34 +1,13 @@
 import type { IndexedBlock, RichListBalance, StoredTransaction } from '../database.ts'
 import { readRichListBalance } from '../direct-observations.ts'
 import { type Address, getAddress, type Hash, type Log, type Transaction, type TransactionReceipt, zeroAddress } from '../ethereum.ts'
-import {
-	addressActivityFrom,
-	ChainContinuityError,
-	commitCanonicalRead,
-	confirmCanonicalBlock,
-	isProtocolEvidenceEmitter,
-	isPrunedHistoricalStateError,
-	jsonEvidence,
-	labelsFrom,
-	readWithPrunedStateFallback,
-	requireLogPosition,
-	requireReceiptPosition,
-} from '../indexer-runtime.ts'
+import { addressActivityFrom, ChainContinuityError, commitCanonicalRead, confirmCanonicalBlock, isProtocolEvidenceEmitter, isPrunedHistoricalStateError, jsonEvidence, labelsFrom, readWithPrunedStateFallback, requireLogPosition, requireReceiptPosition } from '../indexer-runtime.ts'
 import { decodeAction, decodeLogRecord, discoveriesFrom, tokenAddressesFrom } from '../metadata.ts'
 import { sampleEntityState } from '../snapshots.ts'
 import { bigintToSafeNumber, unixSecondsToDate } from '../time.ts'
 import type { ContractMetadata, StoredLog, TokenMetadata } from '../types.ts'
 import { NetworkIndexerLogScanner } from './log-scanner.ts'
-import {
-	erc20BalanceAbi,
-	erc20MetadataAbi,
-	mapLimit,
-	priceCoordinatorDependenciesAbi,
-	prunedTokenMetadataError,
-	type RpcBlockHeader,
-	readTokenMetadata,
-	tokenMetadataNeedsRead,
-} from './planning.ts'
+import { erc20BalanceAbi, erc20MetadataAbi, mapLimit, priceCoordinatorDependenciesAbi, prunedTokenMetadataError, type RpcBlockHeader, readTokenMetadata, tokenMetadataNeedsRead } from './planning.ts'
 
 export class NetworkIndexer extends NetworkIndexerLogScanner {
 	protected async indexBlock(
@@ -48,24 +27,22 @@ export class NetworkIndexer extends NetworkIndexerLogScanner {
 		const knownLogs = [...prefetchedLogs]
 		for (const log of knownLogs) {
 			const position = requireLogPosition(log)
-			if (position.blockHash !== block.hash || position.blockNumber !== number)
-				throw new ChainContinuityError(`RPC log response changed while indexing block ${number}`)
+			if (position.blockHash !== block.hash || position.blockNumber !== number) throw new ChainContinuityError(`RPC log response changed while indexing block ${number}`)
 		}
-		const relevantHashes = new Set<Hash>(knownLogs.map((log) => requireLogPosition(log).transactionHash))
+		const relevantHashes = new Set<Hash>(knownLogs.map(log => requireLogPosition(log).transactionHash))
 		const transactionByHash = new Map<Hash, { transaction: Transaction; index: number }>()
 
 		const receipts: TransactionReceipt[] = []
 		const receiptByHash = new Map<Hash, TransactionReceipt>()
 		const fetchMissingEvidence = async (): Promise<void> => {
-			const missing = [...relevantHashes].filter((hash) => !receiptByHash.has(hash))
-			for (const { receipt, transaction } of await mapLimit(missing, 8, async (hash) => {
+			const missing = [...relevantHashes].filter(hash => !receiptByHash.has(hash))
+			for (const { receipt, transaction } of await mapLimit(missing, 8, async hash => {
 				const [receipt, transaction] = await Promise.all([this.client.getTransactionReceipt({ hash }), this.client.getTransaction({ hash })])
 				return { receipt, transaction }
 			})) {
 				requireReceiptPosition(receipt, block.hash, number)
 				if (receipt.status !== 'success') throw new ChainContinuityError(`Log-selected transaction ${transaction.hash} did not succeed`)
-				if (transaction.blockHash !== block.hash || transaction.blockNumber !== number || transaction.transactionIndex === undefined)
-					throw new ChainContinuityError(`Transaction ${transaction.hash} no longer belongs to block ${number}`)
+				if (transaction.blockHash !== block.hash || transaction.blockNumber !== number || transaction.transactionIndex === undefined) throw new ChainContinuityError(`Transaction ${transaction.hash} no longer belongs to block ${number}`)
 				const transactionIndex = bigintToSafeNumber(transaction.transactionIndex, `Transaction ${transaction.hash} index`)
 				receipts.push(receipt)
 				receiptByHash.set(receipt.transactionHash, receipt)
@@ -98,24 +75,21 @@ export class NetworkIndexer extends NetworkIndexerLogScanner {
 					}
 				}
 			}
-			for (const coordinator of discovered.filter((contract) => contract.kind === 'priceCoordinator')) {
+			for (const coordinator of discovered.filter(contract => contract.kind === 'priceCoordinator')) {
 				const requestedStateBlock = number < this.stateStartBlock ? observedHead : number
 				const registryRead = await readWithPrunedStateFallback(
 					requestedStateBlock,
 					observedHead,
-					async (blockNumber) =>
+					async blockNumber =>
 						await this.client.readContract({
 							address: coordinator.address,
 							abi: priceCoordinatorDependenciesAbi,
 							functionName: 'liquidationApprovalRegistry',
 							blockNumber,
 						}),
-					async (prunedBlock) => this.discoverStateStartBlock(observedHead, prunedBlock, true),
+					async prunedBlock => this.discoverStateStartBlock(observedHead, prunedBlock, true),
 				)
-				if (registryRead.blockNumber !== number)
-					console.warn(
-						`[${this.network.id}] historical state unavailable at block #${number} while discovering ${coordinator.label} dependencies; used observed head #${registryRead.blockNumber} instead`,
-					)
+				if (registryRead.blockNumber !== number) console.warn(`[${this.network.id}] historical state unavailable at block #${number} while discovering ${coordinator.label} dependencies; used observed head #${registryRead.blockNumber} instead`)
 				const registryResult = registryRead.value
 				if (typeof registryResult !== 'string') throw new Error(`${coordinator.label}.liquidationApprovalRegistry returned an invalid address`)
 				const registry = getAddress(registryResult)
@@ -145,8 +119,7 @@ export class NetworkIndexer extends NetworkIndexerLogScanner {
 		const tokenCandidates = new Set<Address>()
 		for (const metadata of tokenMetadata.values()) if (metadata.decimals === undefined) tokenCandidates.add(metadata.address)
 		for (const contract of contracts.values()) {
-			if (contract.kind === 'reputationToken' || contract.kind === 'shareToken' || contract.kind === 'weth' || contract.kind === 'usdc')
-				tokenCandidates.add(contract.address)
+			if (contract.kind === 'reputationToken' || contract.kind === 'shareToken' || contract.kind === 'weth' || contract.kind === 'usdc') tokenCandidates.add(contract.address)
 		}
 		for (const receipt of receipts) {
 			for (const item of receipt.logs) {
@@ -165,11 +138,11 @@ export class NetworkIndexer extends NetworkIndexerLogScanner {
 			for (const candidate of tokenAddressesFrom(contract.kind, decoded, contract.address)) tokenCandidates.add(candidate)
 		}
 		const readTokenMetadata = await mapLimit(
-			[...tokenCandidates].filter((candidate) => tokenMetadataNeedsRead(tokenMetadata.get(candidate.toLowerCase()), number, this.stateStartBlock)),
+			[...tokenCandidates].filter(candidate => tokenMetadataNeedsRead(tokenMetadata.get(candidate.toLowerCase()), number, this.stateStartBlock)),
 			4,
-			(candidate) => this.readTokenMetadata(candidate, number),
+			candidate => this.readTokenMetadata(candidate, number),
 		)
-		if (readTokenMetadata.some((metadata) => metadata.readError === prunedTokenMetadataError)) await this.discoverStateStartBlock(observedHead, number, true)
+		if (readTokenMetadata.some(metadata => metadata.readError === prunedTokenMetadataError)) await this.discoverStateStartBlock(observedHead, number, true)
 		for (const metadata of readTokenMetadata) tokenMetadata.set(metadata.address.toLowerCase(), metadata)
 		const displayLabels = new Map(labels)
 		const contractKinds = new Map([...contracts].map(([address, contract]) => [address, contract.kind] as const))
@@ -212,19 +185,12 @@ export class NetworkIndexer extends NetworkIndexerLogScanner {
 				status: receipt.status,
 				gasUsed: receipt.gasUsed,
 				receipt: jsonEvidence(receipt),
-				decoded: decodeAction(
-					to === null ? undefined : contracts.get(to.toLowerCase()),
-					pair.transaction.input,
-					displayLabels,
-					tokenMetadata,
-					contractKinds,
-					displayContext,
-				),
+				decoded: decodeAction(to === null ? undefined : contracts.get(to.toLowerCase()), pair.transaction.input, displayLabels, tokenMetadata, contractKinds, displayContext),
 			})
 		}
 
 		const finalizedThrough = observedHead > this.network.confirmationDepth ? observedHead - this.network.confirmationDepth : 0n
-		await confirmCanonicalBlock(number, block.hash, async (blockNumber) => (await this.getBlockHeader(blockNumber)).hash)
+		await confirmCanonicalBlock(number, block.hash, async blockNumber => (await this.getBlockHeader(blockNumber)).hash)
 		return {
 			contracts,
 			tokenMetadata,
@@ -256,17 +222,17 @@ export class NetworkIndexer extends NetworkIndexerLogScanner {
 				blockHash,
 				async () => {
 					const balances: RichListBalance[] = []
-					const nativeBalances = await mapLimit(targets.addresses, 8, async (owner) =>
+					const nativeBalances = await mapLimit(targets.addresses, 8, async owner =>
 						readRichListBalance(
 							{ owner, assetAddress: zeroAddress, assetKind: 'native' },
 							() => this.client.getBalance({ address: owner, blockNumber }),
-							(error) => {
+							error => {
 								if (isPrunedHistoricalStateError(error)) throw error
 							},
 						),
 					)
 					balances.push(...nativeBalances)
-					const tokenRequests = targets.addresses.flatMap((owner) => targets.assets.map((asset) => ({ owner, asset })))
+					const tokenRequests = targets.addresses.flatMap(owner => targets.assets.map(asset => ({ owner, asset })))
 					balances.push(
 						...(await mapLimit(tokenRequests, 8, async ({ owner, asset }) =>
 							readRichListBalance(
@@ -279,7 +245,7 @@ export class NetworkIndexer extends NetworkIndexerLogScanner {
 										args: [owner],
 										blockNumber,
 									}),
-								(error) => {
+								error => {
 									if (isPrunedHistoricalStateError(error)) throw error
 								},
 							),
@@ -287,8 +253,8 @@ export class NetworkIndexer extends NetworkIndexerLogScanner {
 					)
 					return balances
 				},
-				async (number) => (await this.getBlockHeader(number)).hash,
-				async (balances) => {
+				async number => (await this.getBlockHeader(number)).hash,
+				async balances => {
 					await this.assertLease()
 					await this.database.storeRichListBalances(this.network.chainId, blockNumber, blockHash, balances, this.requireLease(), this.provenance)
 				},
@@ -310,25 +276,17 @@ export class NetworkIndexer extends NetworkIndexerLogScanner {
 				async () => {
 					const header = await this.getBlockHeader(blockNumber)
 					if (header.hash !== blockHash) throw new ChainContinuityError(`Canonical chain changed while sampling block ${blockNumber}`)
-					const snapshots = await mapLimit(targets, 4, (target) =>
-						sampleEntityState(this.client, target, blockNumber, (error) => {
+					const snapshots = await mapLimit(targets, 4, target =>
+						sampleEntityState(this.client, target, blockNumber, error => {
 							if (isPrunedHistoricalStateError(error)) throw error
 						}),
 					)
 					return { snapshots, timestamp: unixSecondsToDate(header.timestamp, 'State snapshot block timestamp') }
 				},
-				async (number) => (await this.getBlockHeader(number)).hash,
+				async number => (await this.getBlockHeader(number)).hash,
 				async ({ snapshots, timestamp }) => {
 					await this.assertLease()
-					await this.database.storeEntityStateSnapshots(
-						this.network.chainId,
-						blockNumber,
-						blockHash,
-						timestamp,
-						snapshots,
-						this.requireLease(),
-						this.provenance,
-					)
+					await this.database.storeEntityStateSnapshots(this.network.chainId, blockNumber, blockHash, timestamp, snapshots, this.requireLease(), this.provenance)
 				},
 			)
 		} catch (error) {

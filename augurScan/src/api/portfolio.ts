@@ -3,17 +3,7 @@ import { decodeOpaqueCursor, encodeOpaqueCursor, isJsonArray } from '../cursor-c
 import type { JsonValue } from '../ethereum.ts'
 import { addressPortfolioRows, type RichListSort, richListRows } from '../repositories/portfolio.ts'
 import { snapshotBoundary } from './entity-details.ts'
-import {
-	ApiConflictError,
-	ApiRequestError,
-	boundedInteger,
-	evmAddress,
-	integer,
-	isNonNegativeSafeInteger,
-	isPostgresBigint,
-	json,
-	jsonRecord,
-} from './shared.ts'
+import { ApiConflictError, ApiRequestError, boundedInteger, evmAddress, integer, isNonNegativeSafeInteger, isPostgresBigint, json, jsonRecord } from './shared.ts'
 import { operationsAsOfForContinuations } from './snapshot.ts'
 
 export const richList = async (sql: SQL, url: URL): Promise<Response> => {
@@ -24,8 +14,7 @@ export const richList = async (sql: SQL, url: URL): Promise<Response> => {
 	const limit = Math.min(Math.max(requestedLimit, 1), 100)
 	const offset = boundedInteger(url.searchParams.get('offset'), 'offset', 100_000) ?? 0
 	const requestedSort = url.searchParams.get('sort') ?? 'transactions'
-	if (requestedSort !== 'eth' && requestedSort !== 'weth' && requestedSort !== 'transactions')
-		throw new ApiRequestError('sort must be eth, weth, or transactions')
+	if (requestedSort !== 'eth' && requestedSort !== 'weth' && requestedSort !== 'transactions') throw new ApiRequestError('sort must be eth, weth, or transactions')
 	const sort: RichListSort = requestedSort
 	const rows = await richListRows(sql, { chainId, address, limit, offset, sort })
 	return json({
@@ -42,12 +31,7 @@ export const richList = async (sql: SQL, url: URL): Promise<Response> => {
 type PortfolioCollection = 'forks' | 'lp' | 'reports'
 type PortfolioCursor = readonly [number, string, PortfolioCollection, string, string, string, string, string, string, number, number]
 
-const parsePortfolioCursor = (
-	value: string | null,
-	chainId: number,
-	address: string,
-	kind: PortfolioCollection,
-): { readonly total: number; readonly offset: number; readonly cursor?: PortfolioCursor } => {
+const parsePortfolioCursor = (value: string | null, chainId: number, address: string, kind: PortfolioCollection): { readonly total: number; readonly offset: number; readonly cursor?: PortfolioCursor } => {
 	if (value === null) return { total: 0, offset: 0 }
 	let parts: readonly JsonValue[]
 	try {
@@ -65,7 +49,7 @@ const parsePortfolioCursor = (
 		typeof parts[4] !== 'string' ||
 		!/^0x[0-9a-f]{64}$/.test(parts[4]) ||
 		!isPostgresBigint(parts[5]) ||
-		!parts.slice(6, 9).every((part) => typeof part === 'string') ||
+		!parts.slice(6, 9).every(part => typeof part === 'string') ||
 		!isNonNegativeSafeInteger(parts[9]) ||
 		!isNonNegativeSafeInteger(parts[10]) ||
 		parts[10] > parts[9]
@@ -79,14 +63,7 @@ const parsePortfolioCursor = (
 	}
 }
 
-const portfolioCursorFor = (
-	chainId: number,
-	address: string,
-	kind: PortfolioCollection,
-	asOf: Record<string, unknown>,
-	total: number,
-	offset: number,
-): string => encodeOpaqueCursor([chainId, address, kind, ...snapshotBoundary(asOf), total, offset] satisfies PortfolioCursor)
+const portfolioCursorFor = (chainId: number, address: string, kind: PortfolioCollection, asOf: Record<string, unknown>, total: number, offset: number): string => encodeOpaqueCursor([chainId, address, kind, ...snapshotBoundary(asOf), total, offset] satisfies PortfolioCursor)
 
 export const addressPortfolioResponse = async (sql: SQL, url: URL): Promise<Response> => {
 	const chainId = integer(url.searchParams.get('chainId'), 'chainId')
@@ -101,7 +78,7 @@ export const addressPortfolioResponse = async (sql: SQL, url: URL): Promise<Resp
 	const asOf = await operationsAsOfForContinuations(
 		sql,
 		chainId,
-		[lpPage.cursor, forkPage.cursor, reportPage.cursor].flatMap((cursor) => (cursor === undefined ? [] : [{ parts: cursor, offset: 3 }])),
+		[lpPage.cursor, forkPage.cursor, reportPage.cursor].flatMap(cursor => (cursor === undefined ? [] : [{ parts: cursor, offset: 3 }])),
 	)
 	const snapshotBlock = String(asOf['blockNumber'])
 	const requestUrl = new URL(url)
@@ -121,17 +98,10 @@ export const addressPortfolioResponse = async (sql: SQL, url: URL): Promise<Resp
 	const payload: JsonValue = await portfolioResponse.json()
 	const payloadRecord = jsonRecord(payload)
 	const items = Array.isArray(payloadRecord['items']) ? payloadRecord['items'] : []
-	const collection = (
-		kind: PortfolioCollection,
-		rows: readonly Record<string, unknown>[],
-		page: { readonly total: number; readonly offset: number },
-		identityField: string,
-	) => {
+	const collection = (kind: PortfolioCollection, rows: readonly Record<string, unknown>[], page: { readonly total: number; readonly offset: number }, identityField: string) => {
 		const total = Number(rows[0]?.['total'] ?? 0)
 		if (page.offset > 0 && page.total !== total) throw new ApiConflictError('Portfolio history changed; restart pagination')
-		const collectionItems = rows
-			.filter((row) => row[identityField] !== null)
-			.map((row) => Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'total')))
+		const collectionItems = rows.filter(row => row[identityField] !== null).map(row => Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'total')))
 		const nextOffset = page.offset + collectionItems.length
 		const hasMore = nextOffset < total
 		return {

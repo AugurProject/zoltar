@@ -6,7 +6,7 @@ import { decodeOpaqueCursor, encodeOpaqueCursor } from '../../src/cursor-codec.t
 const databases: SQL[] = []
 
 afterEach(async () => {
-	await Promise.all(databases.splice(0).map(async (database) => await database.close()))
+	await Promise.all(databases.splice(0).map(async database => await database.close()))
 })
 
 test('round-trips Unicode opaque cursors with unpadded base64url encoding', () => {
@@ -29,12 +29,7 @@ test('rejects malformed address filters before querying', async () => {
 	const database = new SQL('postgres://user:unused@127.0.0.1:1/unused', { connectionTimeout: 1 })
 	databases.push(database)
 	for (const address of ['0x1234', `0x${'g'.repeat(40)}`, `0x${'1'.repeat(41)}`]) {
-		for (const path of [
-			`logs?address=${address}`,
-			`richlist?chainId=1&address=${address}`,
-			`address-identity?chainId=1&address=${address}`,
-			`address-interactions?chainId=1&address=${address}`,
-		]) {
+		for (const path of [`logs?address=${address}`, `richlist?chainId=1&address=${address}`, `address-identity?chainId=1&address=${address}`, `address-interactions?chainId=1&address=${address}`]) {
 			const response = await handleApi(new Request(`http://localhost/api/v1/${path}`), database)
 			expect(response?.status).toBe(400)
 			expect(await response?.json()).toEqual({ error: 'address must be a complete 20-byte EVM address' })
@@ -95,13 +90,7 @@ test('rejects overlong state and contract identifiers before querying', async ()
 	const database = new SQL('postgres://user:unused@127.0.0.1:1/unused', { connectionTimeout: 1 })
 	databases.push(database)
 	const address = `0x${'1'.repeat(40)}`
-	for (const path of [
-		`state/pools/1/${address}/extra`,
-		`state/vaults/1/${address}/${address}/extra`,
-		'state/universes/1/0/extra',
-		'state/questions/1/0/extra',
-		`contracts/1/${address}/extra`,
-	]) {
+	for (const path of [`state/pools/1/${address}/extra`, `state/vaults/1/${address}/${address}/extra`, 'state/universes/1/0/extra', 'state/questions/1/0/extra', `contracts/1/${address}/extra`]) {
 		const response = await handleApi(new Request(`http://localhost/api/v1/${path}`), database)
 		expect(response?.status).toBe(400)
 	}
@@ -153,16 +142,7 @@ test('rejects raw offsets for every snapshot-bound offset cursor before querying
 	const database = new SQL('postgres://user:unused@127.0.0.1:1/unused', { connectionTimeout: 1 })
 	databases.push(database)
 	const address = `0x${'1'.repeat(40)}`
-	for (const path of [
-		'logs?chainId=1&offset=1',
-		'reorgs?chainId=1&offset=1',
-		'actions?chainId=1&offset=1',
-		'state/trading?chainId=1&offset=1',
-		'state/integrity?chainId=1&offset=1',
-		'state/direct-observations?chainId=1&offset=1',
-		`state/risk/pools/1/${address}?offset=1`,
-		`state/pools/1/${address}?offset=1`,
-	]) {
+	for (const path of ['logs?chainId=1&offset=1', 'reorgs?chainId=1&offset=1', 'actions?chainId=1&offset=1', 'state/trading?chainId=1&offset=1', 'state/integrity?chainId=1&offset=1', 'state/direct-observations?chainId=1&offset=1', `state/risk/pools/1/${address}?offset=1`, `state/pools/1/${address}?offset=1`]) {
 		const response = await handleApi(new Request(`http://localhost/api/v1/${path}`), database)
 		expect(response?.status).toBe(400)
 		expect(await response?.json()).toEqual({ error: 'offset requires a snapshot-bound cursor' })
@@ -171,33 +151,14 @@ test('rejects raw offsets for every snapshot-bound offset cursor before querying
 
 test('keeps direct observation totals inside the safe snapshot pagination range', () => {
 	expect(directObservationTotal(String(Number.MAX_SAFE_INTEGER))).toBe(Number.MAX_SAFE_INTEGER)
-	expect(() => directObservationTotal(String(BigInt(Number.MAX_SAFE_INTEGER) + 1n))).toThrow(
-		'direct observation result set exceeds the safe pagination range; narrow kind, address, or canonical filters',
-	)
+	expect(() => directObservationTotal(String(BigInt(Number.MAX_SAFE_INTEGER) + 1n))).toThrow('direct observation result set exceeds the safe pagination range; narrow kind, address, or canonical filters')
 })
 
 test('accepts snapshot-bound export cursors and rejects legacy offsets', async () => {
 	const snapshotHash = `0x${'1'.repeat(64)}`
 	const blockHash = `0x${'2'.repeat(64)}`
 	const transactionHash = `0x${'3'.repeat(64)}`
-	const cursor = btoa(
-		JSON.stringify([
-			1,
-			'logs',
-			1,
-			'canonical',
-			'0',
-			'1000',
-			'100',
-			snapshotHash,
-			'9',
-			'500',
-			'abi-hash',
-			'application-hash',
-			'projection-hash',
-			['42', '3', '7', blockHash, transactionHash],
-		]),
-	)
+	const cursor = btoa(JSON.stringify([1, 'logs', 1, 'canonical', '0', '1000', '100', snapshotHash, '9', '500', 'abi-hash', 'application-hash', 'projection-hash', ['42', '3', '7', blockHash, transactionHash]]))
 	expect(parseHistoricalExportCursor(cursor)?.slice(0, 4)).toEqual([1, 'logs', 1, 'canonical'])
 	expect(() => parseHistoricalExportCursor(btoa(JSON.stringify([1, 'logs'])))).toThrow('export cursor is invalid')
 	const database = new SQL('postgres://user:unused@127.0.0.1:1/unused', { connectionTimeout: 1 })
@@ -214,13 +175,8 @@ test('rejects export cursor indexes outside PostgreSQL integer bounds before que
 	const snapshotHash = `0x${'1'.repeat(64)}`
 	const blockHash = `0x${'2'.repeat(64)}`
 	const transactionHash = `0x${'3'.repeat(64)}`
-	const cursorFor = (dataset: 'logs' | 'timeline', lastKey: readonly string[]) =>
-		btoa(JSON.stringify([1, dataset, 1, 'canonical', '0', '1000', '100', snapshotHash, '9', '500', 'abi-hash', 'application-hash', 'projection-hash', lastKey]))
-	const cursors = [
-		cursorFor('logs', ['42', '2147483648', '7', blockHash, transactionHash]),
-		cursorFor('logs', ['42', '3', '2147483648', blockHash, transactionHash]),
-		cursorFor('timeline', ['42', blockHash, transactionHash, '2147483648', 'report', '7']),
-	]
+	const cursorFor = (dataset: 'logs' | 'timeline', lastKey: readonly string[]) => btoa(JSON.stringify([1, dataset, 1, 'canonical', '0', '1000', '100', snapshotHash, '9', '500', 'abi-hash', 'application-hash', 'projection-hash', lastKey]))
+	const cursors = [cursorFor('logs', ['42', '2147483648', '7', blockHash, transactionHash]), cursorFor('logs', ['42', '3', '2147483648', blockHash, transactionHash]), cursorFor('timeline', ['42', blockHash, transactionHash, '2147483648', 'report', '7'])]
 	const database = new SQL('postgres://user:unused@127.0.0.1:1/unused', { connectionTimeout: 1 })
 	databases.push(database)
 	for (const cursor of cursors) {
@@ -233,28 +189,12 @@ test('rejects export cursor indexes outside PostgreSQL integer bounds before que
 test('validates operations catalogs and timeline identities before querying', async () => {
 	const database = new SQL('postgres://user:unused@127.0.0.1:1/unused', { connectionTimeout: 1 })
 	databases.push(database)
-	for (const path of [
-		'operations',
-		'state/reports',
-		'state/escalations',
-		'state/auctions',
-		'state/risk',
-		'state/forks',
-		'state/trading',
-		'state/direct-observations',
-		'state/timeline',
-		'state/address-portfolio',
-	]) {
+	for (const path of ['operations', 'state/reports', 'state/escalations', 'state/auctions', 'state/risk', 'state/forks', 'state/trading', 'state/direct-observations', 'state/timeline', 'state/address-portfolio']) {
 		const response = await handleApi(new Request(`http://localhost/api/v1/${path}`), database)
 		expect(response?.status).toBe(400)
 		expect(await response?.json()).toEqual({ error: 'chainId is required' })
 	}
-	for (const path of [
-		'state/timeline?chainId=1&entityType=INVALID',
-		'state/timeline?chainId=1&event=not-an-event',
-		'state/timeline?chainId=1&fromBlock=2&toBlock=1',
-		`state/timeline?chainId=1&q=${'a'.repeat(129)}`,
-	]) {
+	for (const path of ['state/timeline?chainId=1&entityType=INVALID', 'state/timeline?chainId=1&event=not-an-event', 'state/timeline?chainId=1&fromBlock=2&toBlock=1', `state/timeline?chainId=1&q=${'a'.repeat(129)}`]) {
 		const response = await handleApi(new Request(`http://localhost/api/v1/${path}`), database)
 		expect(response?.status).toBe(400)
 	}
@@ -294,36 +234,12 @@ test('requires a complete network and address for account transactions', async (
 		expect(response?.status).toBe(400)
 	}
 	for (const cursor of ['not-base64', btoa(JSON.stringify([1, 2, 3])), btoa(JSON.stringify(['3', 2, '4', 1]))]) {
-		const response = await handleApi(
-			new Request(
-				`http://localhost/api/v1/address-transactions?chainId=1&address=0x1111111111111111111111111111111111111111&cursor=${encodeURIComponent(cursor)}`,
-			),
-			database,
-		)
+		const response = await handleApi(new Request(`http://localhost/api/v1/address-transactions?chainId=1&address=0x1111111111111111111111111111111111111111&cursor=${encodeURIComponent(cursor)}`), database)
 		expect(response?.status).toBe(400)
 		expect(await response?.json()).toEqual({ error: 'cursor is invalid' })
 	}
-	const cursor = btoa(
-		JSON.stringify([
-			1,
-			'sent',
-			1,
-			'0x1111111111111111111111111111111111111111',
-			'3',
-			`0x${'a'.repeat(64)}`,
-			'0',
-			'abi',
-			'application',
-			'projection',
-			2,
-			'2',
-			1,
-		]),
-	)
-	for (const request of [
-		`chainId=2&address=0x1111111111111111111111111111111111111111&cursor=${encodeURIComponent(cursor)}`,
-		`chainId=1&address=0x2222222222222222222222222222222222222222&cursor=${encodeURIComponent(cursor)}`,
-	]) {
+	const cursor = btoa(JSON.stringify([1, 'sent', 1, '0x1111111111111111111111111111111111111111', '3', `0x${'a'.repeat(64)}`, '0', 'abi', 'application', 'projection', 2, '2', 1]))
+	for (const request of [`chainId=2&address=0x1111111111111111111111111111111111111111&cursor=${encodeURIComponent(cursor)}`, `chainId=1&address=0x2222222222222222222222222222222222222222&cursor=${encodeURIComponent(cursor)}`]) {
 		const response = await handleApi(new Request(`http://localhost/api/v1/address-transactions?${request}`), database)
 		expect(response?.status).toBe(400)
 		expect(await response?.json()).toEqual({ error: 'cursor does not match the requested account' })

@@ -1,39 +1,17 @@
 import type { SQL } from 'bun'
 import { databaseJsonText } from '../database-json.ts'
 import { storeLogProjections } from '../database-projections.ts'
-import {
-	captureDirectObservationInvalidation,
-	captureHistoryInvalidation,
-	type IndexerLease,
-	invalidateCanonicalHistory,
-	recordChainReorganization,
-	withIndexerLease,
-} from './history.ts'
+import { captureDirectObservationInvalidation, captureHistoryInvalidation, type IndexerLease, invalidateCanonicalHistory, recordChainReorganization, withIndexerLease } from './history.ts'
 import { ScannerHistoryRepository } from './history-repository.ts'
-import {
-	assertBlockAppend,
-	assertContractDeploymentObservation,
-	assertLogScanCursorUpdate,
-	DatabaseConsistencyError,
-	type EvidenceProvenance,
-	type IndexedBlock,
-	lockLiveEventWriter,
-	serializedInterpretation,
-} from './records.ts'
+import { assertBlockAppend, assertContractDeploymentObservation, assertLogScanCursorUpdate, DatabaseConsistencyError, type EvidenceProvenance, type IndexedBlock, lockLiveEventWriter, serializedInterpretation } from './records.ts'
 
 export class ScannerDatabase extends ScannerHistoryRepository {
 	async storeBlock(chainId: number, block: IndexedBlock, lease: IndexerLease, provenance?: EvidenceProvenance): Promise<void> {
 		await this.storeBlocks(chainId, [block], lease, provenance)
 	}
 
-	async storeBlocks(
-		chainId: number,
-		blocks: readonly IndexedBlock[],
-		lease: IndexerLease,
-		provenance?: EvidenceProvenance,
-		validateBeforeCommit: () => Promise<void> = async () => {},
-	): Promise<void> {
-		await withIndexerLease(lease, async (transaction) => {
+	async storeBlocks(chainId: number, blocks: readonly IndexedBlock[], lease: IndexerLease, provenance?: EvidenceProvenance, validateBeforeCommit: () => Promise<void> = async () => {}): Promise<void> {
+		await withIndexerLease(lease, async transaction => {
 			for (const block of blocks) await this.#storeBlock(transaction, chainId, block, provenance)
 			await validateBeforeCommit()
 		})
@@ -83,8 +61,7 @@ export class ScannerDatabase extends ScannerHistoryRepository {
 				`
 		}
 		for (const contract of block.contracts) {
-			if (contract.discoveryTxHash === undefined || contract.discoveryBlock === undefined)
-				throw new Error('Dynamic contract discovery is missing its chain position')
+			if (contract.discoveryTxHash === undefined || contract.discoveryBlock === undefined) throw new Error('Dynamic contract discovery is missing its chain position')
 			await transaction`
 					INSERT INTO contract_discoveries (chain_id, address, block_hash, block_number, tx_hash, label, kind, provenance, canonical)
 					VALUES (${chainId}, ${contract.address.toLowerCase()}, ${block.hash}, ${contract.discoveryBlock.toString()}, ${contract.discoveryTxHash}, ${contract.label}, ${contract.kind}, ${contract.provenance}, true)
@@ -188,7 +165,7 @@ export class ScannerDatabase extends ScannerHistoryRepository {
 	}
 
 	async updateObservedHead(chainId: number, head: bigint, phase: string, lease: IndexerLease): Promise<void> {
-		await withIndexerLease(lease, async (transaction) => {
+		await withIndexerLease(lease, async transaction => {
 			await transaction`UPDATE networks SET observed_block = ${head.toString()}, phase = ${phase}, last_poll_at = now(), last_success_at = now(), last_error = null, failure_started_at = null, consecutive_failures = 0, next_retry_at = null, updated_at = now() WHERE chain_id = ${chainId}`
 			await lockLiveEventWriter(transaction)
 			await transaction`INSERT INTO live_events (event, payload) VALUES ('status', (${databaseJsonText({ chainId, blockNumber: head.toString() })}::text)::jsonb)`
@@ -196,7 +173,7 @@ export class ScannerDatabase extends ScannerHistoryRepository {
 	}
 
 	async advanceNetworkStartBlock(chainId: number, startBlock: bigint, lease: IndexerLease, provenance?: EvidenceProvenance): Promise<boolean> {
-		return await withIndexerLease(lease, async (transaction) => {
+		return await withIndexerLease(lease, async transaction => {
 			const rows = await transaction`SELECT start_block, indexed_block, indexed_hash FROM networks WHERE chain_id = ${chainId} FOR UPDATE`
 			const row = rows[0]
 			if (row === undefined) throw new DatabaseConsistencyError(`Network ${chainId} is not initialized`)
@@ -204,18 +181,7 @@ export class ScannerDatabase extends ScannerHistoryRepository {
 			if (startBlock <= storedStartBlock) return false
 			const previousBlock = row['indexed_block'] === null || row['indexed_block'] === undefined ? undefined : BigInt(String(row['indexed_block']))
 			const invalidatedDepth = previousBlock === undefined ? 0n : previousBlock - storedStartBlock + 1n
-			const invalidationId = await recordChainReorganization(
-				transaction,
-				chainId,
-				previousBlock,
-				typeof row['indexed_hash'] === 'string' ? row['indexed_hash'] : undefined,
-				-1n,
-				undefined,
-				invalidatedDepth,
-				'start-boundary-advanced',
-				['start-boundary-advanced'],
-				provenance,
-			)
+			const invalidationId = await recordChainReorganization(transaction, chainId, previousBlock, typeof row['indexed_hash'] === 'string' ? row['indexed_hash'] : undefined, -1n, undefined, invalidatedDepth, 'start-boundary-advanced', ['start-boundary-advanced'], provenance)
 			await captureHistoryInvalidation(transaction, invalidationId, chainId)
 			await captureDirectObservationInvalidation(transaction, invalidationId, chainId, { beforeBlock: startBlock })
 			await invalidateCanonicalHistory(transaction, chainId, startBlock)
@@ -237,7 +203,7 @@ export class ScannerDatabase extends ScannerHistoryRepository {
 	}
 
 	async recordFailure(chainId: number, message: string, nextRetryAt: Date, lease: IndexerLease): Promise<void> {
-		await withIndexerLease(lease, async (transaction) => {
+		await withIndexerLease(lease, async transaction => {
 			const rows = await transaction`
 				UPDATE networks SET phase = 'degraded', last_error = ${message.slice(0, 2000)}, last_poll_at = now(),
 					failure_started_at = COALESCE(failure_started_at, now()), consecutive_failures = consecutive_failures + 1,

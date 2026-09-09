@@ -6,16 +6,8 @@ import { ScannerNetworkRepository } from './network-repository.ts'
 import { DatabaseConsistencyError, type EvidenceProvenance, type RichListBalance } from './records.ts'
 
 export class ScannerObservationRepository extends ScannerNetworkRepository {
-	async storeEntityStateSnapshots(
-		chainId: number,
-		blockNumber: bigint,
-		blockHash: Hash,
-		blockTimestamp: Date,
-		snapshots: readonly EntityStateSnapshot[],
-		lease: IndexerLease,
-		provenance?: EvidenceProvenance,
-	): Promise<void> {
-		await withIndexerLease(lease, async (transaction) => {
+	async storeEntityStateSnapshots(chainId: number, blockNumber: bigint, blockHash: Hash, blockTimestamp: Date, snapshots: readonly EntityStateSnapshot[], lease: IndexerLease, provenance?: EvidenceProvenance): Promise<void> {
+		await withIndexerLease(lease, async transaction => {
 			const canonicalRows = await transaction`
 				SELECT 1 FROM blocks WHERE chain_id = ${chainId} AND number = ${blockNumber.toString()}
 					AND hash = ${blockHash} AND canonical
@@ -55,16 +47,9 @@ export class ScannerObservationRepository extends ScannerNetworkRepository {
 		})
 	}
 
-	async storeRichListBalances(
-		chainId: number,
-		blockNumber: bigint,
-		blockHash: Hash,
-		balances: readonly RichListBalance[],
-		lease: IndexerLease,
-		provenance?: EvidenceProvenance,
-	): Promise<void> {
+	async storeRichListBalances(chainId: number, blockNumber: bigint, blockHash: Hash, balances: readonly RichListBalance[], lease: IndexerLease, provenance?: EvidenceProvenance): Promise<void> {
 		if (balances.length === 0) return
-		await withIndexerLease(lease, async (transaction) => {
+		await withIndexerLease(lease, async transaction => {
 			const canonicalRows = await transaction`
 				SELECT 1 FROM blocks WHERE chain_id = ${chainId} AND number = ${blockNumber.toString()} AND hash = ${blockHash} AND canonical
 			`

@@ -29,10 +29,7 @@ export const actionCatalog = async (sql: SQL, chainId: number, limit: number, cu
 		return `$${values.length}`
 	}
 	clauses.push(`a.chain_id = ${bind(chainId)}`)
-	if (cursor !== undefined)
-		clauses.push(
-			`(block.timestamp, t.block_number, t.transaction_index, a.block_hash, a.tx_hash) < (${bind(String(cursor[8]))}::timestamptz, ${bind(String(cursor[9]))}::bigint, ${bind(Number(cursor[10]))}, ${bind(String(cursor[11]))}, ${bind(String(cursor[12]))})`,
-		)
+	if (cursor !== undefined) clauses.push(`(block.timestamp, t.block_number, t.transaction_index, a.block_hash, a.tx_hash) < (${bind(String(cursor[8]))}::timestamptz, ${bind(String(cursor[9]))}::bigint, ${bind(Number(cursor[10]))}, ${bind(String(cursor[11]))}, ${bind(String(cursor[12]))})`)
 	values.push(limit + 1)
 	return await sql.unsafe(
 		`SELECT a.*, t.block_number, t.transaction_index, t.from_address, t.to_address, t.status, t.value,

@@ -5,8 +5,7 @@ export type BasicAccessCredentials = {
 
 export const parseBasicAccessCredentials = (username: string | undefined, password: string | undefined): BasicAccessCredentials | undefined => {
 	if ((username === undefined || username === '') && (password === undefined || password === '')) return undefined
-	if (username === undefined || username === '' || password === undefined || password === '')
-		throw new Error('AUGURSCAN_ACCESS_USERNAME and AUGURSCAN_ACCESS_PASSWORD must be configured together')
+	if (username === undefined || username === '' || password === undefined || password === '') throw new Error('AUGURSCAN_ACCESS_USERNAME and AUGURSCAN_ACCESS_PASSWORD must be configured together')
 	if (username.includes(':')) throw new Error('AUGURSCAN_ACCESS_USERNAME must not contain a colon')
 	return { username, password }
 }
@@ -24,7 +23,7 @@ export const hasBasicAccess = (request: Request, credentials: BasicAccessCredent
 	if (authorization === null || !authorization.startsWith('Basic ')) return false
 	try {
 		const encodedBytes = atob(authorization.slice('Basic '.length))
-		const decoded = new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from(encodedBytes, (value) => value.charCodeAt(0)))
+		const decoded = new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from(encodedBytes, value => value.charCodeAt(0)))
 		const separator = decoded.indexOf(':')
 		if (separator < 0) return false
 		return exactString(decoded.slice(0, separator), credentials.username) && exactString(decoded.slice(separator + 1), credentials.password)
@@ -34,8 +33,7 @@ export const hasBasicAccess = (request: Request, credentials: BasicAccessCredent
 	}
 }
 
-export const basicAccessRequiredResponse = (headers: Readonly<Record<string, string>> = {}): Response =>
-	Response.json({ error: 'Authentication required' }, { status: 401, headers: { ...headers, 'www-authenticate': 'Basic realm="augurScan", charset="UTF-8"' } })
+export const basicAccessRequiredResponse = (headers: Readonly<Record<string, string>> = {}): Response => Response.json({ error: 'Authentication required' }, { status: 401, headers: { ...headers, 'www-authenticate': 'Basic realm="augurScan", charset="UTF-8"' } })
 
 export const createFixedWindowRateLimiter = (limit: number, windowMs: number, maximumClients = 10_000) => {
 	if (!Number.isSafeInteger(limit) || limit < 0) throw new Error('Rate limit must be a non-negative safe integer')
@@ -75,10 +73,7 @@ export const requestAccessGuard = (
 		if (!admission.allowed)
 			return {
 				reason: 'rate-limit',
-				response: Response.json(
-					{ error: 'Rate limit exceeded; retry shortly' },
-					{ status: 429, headers: { ...headers, 'retry-after': String(admission.retryAfterSeconds ?? 1) } },
-				),
+				response: Response.json({ error: 'Rate limit exceeded; retry shortly' }, { status: 429, headers: { ...headers, 'retry-after': String(admission.retryAfterSeconds ?? 1) } }),
 			}
 	}
 	if (!hasBasicAccess(request, credentials)) return { reason: 'authentication', response: basicAccessRequiredResponse(headers) }
@@ -120,8 +115,7 @@ export const createRequestMetrics = () => {
 			}
 			lines.push('# HELP augurscan_http_request_duration_seconds_sum Cumulative request time by bounded route.')
 			lines.push('# TYPE augurscan_http_request_duration_seconds_sum counter')
-			for (const [route, seconds] of [...durationSums].toSorted(([left], [right]) => left.localeCompare(right)))
-				lines.push(`augurscan_http_request_duration_seconds_sum{route="${prometheusLabel(route)}"} ${seconds}`)
+			for (const [route, seconds] of [...durationSums].toSorted(([left], [right]) => left.localeCompare(right))) lines.push(`augurscan_http_request_duration_seconds_sum{route="${prometheusLabel(route)}"} ${seconds}`)
 			lines.push('# HELP augurscan_rate_limit_rejections_total Requests rejected by the process-local API limiter.')
 			lines.push('# TYPE augurscan_rate_limit_rejections_total counter')
 			lines.push(`augurscan_rate_limit_rejections_total ${rateLimitRejections}`)
@@ -136,18 +130,11 @@ type RequestTimeoutServer = {
 
 export const STATIC_ASSET_CACHE_CONTROL = 'no-cache'
 
-export const staticAssetResponse = (body: BodyInit, securityHeaders: Readonly<Record<string, string>>, contentType: string) =>
-	new Response(body, { headers: { ...securityHeaders, 'cache-control': STATIC_ASSET_CACHE_CONTROL, 'content-type': contentType } })
+export const staticAssetResponse = (body: BodyInit, securityHeaders: Readonly<Record<string, string>>, contentType: string) => new Response(body, { headers: { ...securityHeaders, 'cache-control': STATIC_ASSET_CACHE_CONTROL, 'content-type': contentType } })
 
-export const indexerHealthUnavailableResponse = (ownership: readonly { readonly networkId: string }[]): Response =>
-	Response.json({ status: 'unknown', ownership }, { status: 503 })
+export const indexerHealthUnavailableResponse = (ownership: readonly { readonly networkId: string }[]): Response => Response.json({ status: 'unknown', ownership }, { status: 503 })
 
-export const liveStreamResponse = (
-	stream: ReadableStream<Uint8Array>,
-	request: Request,
-	server: RequestTimeoutServer,
-	baseHeaders: Readonly<Record<string, string>> = {},
-): Response => {
+export const liveStreamResponse = (stream: ReadableStream<Uint8Array>, request: Request, server: RequestTimeoutServer, baseHeaders: Readonly<Record<string, string>> = {}): Response => {
 	server.timeout(request, 0)
 	return new Response(stream, {
 		headers: {

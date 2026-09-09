@@ -90,13 +90,7 @@ const vaultCheckpoint = (hash: ReturnType<typeof blockHash>): StoredLog => ({
 	},
 })
 
-const decodedLog = (
-	hash: ReturnType<typeof blockHash>,
-	logIndex: number,
-	emitter: ReturnType<typeof getAddress>,
-	name: string,
-	argumentsValue: Record<string, unknown>,
-): StoredLog => ({
+const decodedLog = (hash: ReturnType<typeof blockHash>, logIndex: number, emitter: ReturnType<typeof getAddress>, name: string, argumentsValue: Record<string, unknown>): StoredLog => ({
 	...log(hash, name),
 	logIndex,
 	address: emitter,
@@ -164,13 +158,7 @@ const priceHistoryLogs = (hash: ReturnType<typeof blockHash>): readonly StoredLo
 	}),
 ]
 
-const indexedBlock = (
-	name: string,
-	parentHash: ReturnType<typeof blockHash>,
-	contracts: readonly ContractMetadata[] = [],
-	summary?: string,
-	tokenMetadata: readonly TokenMetadata[] = [],
-): IndexedBlock => {
+const indexedBlock = (name: string, parentHash: ReturnType<typeof blockHash>, contracts: readonly ContractMetadata[] = [], summary?: string, tokenMetadata: readonly TokenMetadata[] = []): IndexedBlock => {
 	const hash = blockHash(name)
 	const number = name.includes('one') ? 1n : 2n
 	return {
@@ -206,8 +194,7 @@ const indexedBlock = (
 const expectBehaviorChangingSchemaObjectsRejected = async (database: ScannerDatabase): Promise<void> => {
 	const cases = [
 		{
-			create:
-				'CREATE TRIGGER augurscan_unexpected_trigger BEFORE UPDATE ON public.actions FOR EACH ROW EXECUTE FUNCTION pg_catalog.suppress_redundant_updates_trigger()',
+			create: 'CREATE TRIGGER augurscan_unexpected_trigger BEFORE UPDATE ON public.actions FOR EACH ROW EXECUTE FUNCTION pg_catalog.suppress_redundant_updates_trigger()',
 			remove: 'DROP TRIGGER augurscan_unexpected_trigger ON public.actions',
 		},
 		{
@@ -252,7 +239,7 @@ describe('database checkpoint fencing', () => {
 		let settled = false
 		const release = releaseReservedConnection({
 			release: () =>
-				new Promise<void>((resolve) => {
+				new Promise<void>(resolve => {
 					finishRelease = resolve
 				}),
 		}).then(() => {
@@ -289,9 +276,7 @@ describe('database checkpoint fencing', () => {
 		expect(() => assertBlockAppend({ number: 11n, parentHash }, { startBlock: 10n, indexedBlock: 10n, indexedHash: parentHash })).not.toThrow()
 		expect(() => assertBlockAppend({ number: 12n, parentHash }, { startBlock: 10n, indexedBlock: 10n, indexedHash: parentHash })).not.toThrow()
 		expect(() => assertBlockAppend({ number: 10n, parentHash }, { startBlock: 10n, indexedBlock: 10n, indexedHash: parentHash })).toThrow('already block 10')
-		expect(() => assertBlockAppend({ number: 11n, parentHash: otherHash }, { startBlock: 10n, indexedBlock: 10n, indexedHash: parentHash })).toThrow(
-			'does not extend the current database checkpoint',
-		)
+		expect(() => assertBlockAppend({ number: 11n, parentHash: otherHash }, { startBlock: 10n, indexedBlock: 10n, indexedHash: parentHash })).toThrow('does not extend the current database checkpoint')
 	})
 
 	test('persists a log dataset cursor only at the block committed with it', () => {
@@ -315,12 +300,8 @@ describe('database checkpoint fencing', () => {
 	test('rejects changing the configured start boundary after indexing has begun', () => {
 		expect(() => assertStartBlockCompatible(100n, 100n, 125n)).not.toThrow()
 		expect(() => assertStartBlockCompatible(200n, 100n, undefined)).not.toThrow()
-		expect(() => assertStartBlockCompatible(200n, 200n, 125n)).toThrow(
-			'Stored checkpoint 125 is below configured start block 200; rebuild the augurScan database from the configured start block',
-		)
-		expect(() => assertStartBlockCompatible(200n, 100n, 125n)).toThrow(
-			'Cannot change the configured start block from 100 to 200 while checkpoint 125 exists; rebuild the augurScan database from the new start block',
-		)
+		expect(() => assertStartBlockCompatible(200n, 200n, 125n)).toThrow('Stored checkpoint 125 is below configured start block 200; rebuild the augurScan database from the configured start block')
+		expect(() => assertStartBlockCompatible(200n, 100n, 125n)).toThrow('Cannot change the configured start block from 100 to 200 while checkpoint 125 exists; rebuild the augurScan database from the new start block')
 		expect(() => assertStartBlockCompatible(100n, 75n, undefined, true)).toThrow('while an effective index start is retained')
 	})
 
@@ -380,11 +361,7 @@ postgresTest('rolls back every sparse batch table when final canonical validatio
 		expect(liveEventsAfterFailure[0]?.['count']).toBe(liveEventsBefore[0]?.['count'])
 
 		await database.storeBlocks(sparseChainId, [first, second], lease)
-		expect(
-			(await database.sql`SELECT number FROM blocks WHERE chain_id = ${sparseChainId} ORDER BY number`).map((row: Record<string, unknown>) =>
-				String(row['number']),
-			),
-		).toEqual(['1', '2'])
+		expect((await database.sql`SELECT number FROM blocks WHERE chain_id = ${sparseChainId} ORDER BY number`).map((row: Record<string, unknown>) => String(row['number']))).toEqual(['1', '2'])
 		expect(await database.checkpoint(sparseChainId, lease)).toEqual({ number: 2n, hash: second.hash })
 	} finally {
 		await lease?.release()
@@ -439,9 +416,7 @@ postgresTest('rejects incomplete, altered, and extended layouts despite a curren
 		try {
 			await expect(initializeSchema(database.sql)).rejects.toThrow(UNSUPPORTED_SCHEMA_MESSAGE)
 		} finally {
-			await database.sql.unsafe(
-				'CREATE INDEX protocol_timeline_recent ON public.protocol_timeline_entries USING btree (chain_id, block_number DESC, log_index DESC) WHERE canonical',
-			)
+			await database.sql.unsafe('CREATE INDEX protocol_timeline_recent ON public.protocol_timeline_entries USING btree (chain_id, block_number DESC, log_index DESC) WHERE canonical')
 		}
 
 		await database.sql.unsafe('ALTER TABLE public.actions ALTER COLUMN summary TYPE character varying USING summary::character varying')
@@ -484,24 +459,16 @@ postgresTest('migrates v1 canonical and orphan timeline evidence through current
 		await database.sql.unsafe(
 			'DROP TABLE public.indexer_ownership, public.address_balance_observations, public.token_metadata_observations, public.entity_state_observations, public.history_invalidation_causes, public.action_interpretations, public.log_interpretations, public.history_invalidation_occurrences, public.chain_reorganizations, public.indexer_runs, public.augurscan_schema_migrations',
 		)
-		await database.sql.unsafe(
-			'ALTER TABLE public.entity_state_snapshots DROP COLUMN indexer_run_id, DROP COLUMN abi_source_hash, DROP COLUMN application_source_hash, DROP COLUMN projection_source_hash',
-		)
-		await database.sql.unsafe(
-			'ALTER TABLE public.networks DROP COLUMN applied_abi_source_hash, DROP COLUMN applied_application_source_hash, DROP COLUMN applied_projection_source_hash',
-		)
+		await database.sql.unsafe('ALTER TABLE public.entity_state_snapshots DROP COLUMN indexer_run_id, DROP COLUMN abi_source_hash, DROP COLUMN application_source_hash, DROP COLUMN projection_source_hash')
+		await database.sql.unsafe('ALTER TABLE public.networks DROP COLUMN applied_abi_source_hash, DROP COLUMN applied_application_source_hash, DROP COLUMN applied_projection_source_hash')
 		await database.sql.unsafe('ALTER TABLE public.contracts DROP COLUMN configured_deployment_block')
-		await database.sql.unsafe(
-			'DROP INDEX public.pool_snapshots_detail_page, public.protocol_timeline_entity_history_page, public.protocol_timeline_history_page, public.vault_snapshots_detail_page',
-		)
+		await database.sql.unsafe('DROP INDEX public.pool_snapshots_detail_page, public.protocol_timeline_entity_history_page, public.protocol_timeline_history_page, public.vault_snapshots_detail_page')
 		await database.sql`UPDATE augurscan_schema SET schema_version = '1' WHERE singleton`
 		await database.sql.unsafe('DROP INDEX public.protocol_timeline_recent')
 		try {
 			await expect(initializeSchema(database.sql)).rejects.toThrow(UNSUPPORTED_SCHEMA_MESSAGE)
 		} finally {
-			await database.sql.unsafe(
-				'CREATE INDEX protocol_timeline_recent ON public.protocol_timeline_entries USING btree (chain_id, block_number DESC, log_index DESC) WHERE canonical',
-			)
+			await database.sql.unsafe('CREATE INDEX protocol_timeline_recent ON public.protocol_timeline_entries USING btree (chain_id, block_number DESC, log_index DESC) WHERE canonical')
 		}
 		await database.sql.unsafe('CREATE TABLE public.augurscan_v1_layout_intruder (id integer)')
 		try {
@@ -686,9 +653,7 @@ postgresTest('migrates v1 canonical and orphan timeline evidence through current
 			SELECT read_status, balance::text, read_failure_reason, canonical, indexer_run_id, application_source_hash
 			FROM address_balance_observations WHERE chain_id = ${migrationChainId}
 		`
-		expect(migratedBalanceObservations).toEqual([
-			{ read_status: 'success', balance: '77', read_failure_reason: null, canonical: true, indexer_run_id: null, application_source_hash: null },
-		])
+		expect(migratedBalanceObservations).toEqual([{ read_status: 'success', balance: '77', read_failure_reason: null, canonical: true, indexer_run_id: null, application_source_hash: null }])
 		const migratedMetadataObservations = await database.sql`
 			SELECT name, symbol, decimals, read_status, read_error, canonical, indexer_run_id, application_source_hash
 			FROM token_metadata_observations WHERE chain_id = ${migrationChainId}
@@ -705,10 +670,7 @@ postgresTest('migrates v1 canonical and orphan timeline evidence through current
 				application_source_hash: null,
 			},
 		])
-		const migratedRiskResponse = await handleApi(
-			new Request(`http://localhost/api/v1/state/risk/pools/${migrationChainId}/${discoveredAddress.toLowerCase()}`),
-			database.sql,
-		)
+		const migratedRiskResponse = await handleApi(new Request(`http://localhost/api/v1/state/risk/pools/${migrationChainId}/${discoveredAddress.toLowerCase()}`), database.sql)
 		if (migratedRiskResponse === undefined) throw new Error('migrated risk response was not returned')
 		expect(migratedRiskResponse.status).toBe(200)
 		expect(await migratedRiskResponse.json()).toMatchObject({
@@ -764,7 +726,7 @@ postgresTest('limits health continuity auditing to the latest 10,000 indexed blo
 			WHERE chain_id = ${auditChainId}
 		`
 
-		const oldDiscontinuityOutsideWindow = (await database.auditIntegrity()).filter((issue) => issue.chainId === auditChainId)
+		const oldDiscontinuityOutsideWindow = (await database.auditIntegrity()).filter(issue => issue.chainId === auditChainId)
 		expect(oldDiscontinuityOutsideWindow).toEqual([])
 
 		await database.sql`
@@ -821,7 +783,7 @@ postgresTest('drains lease operations queued before release and rejects later wo
 	let lease: IndexerLease | undefined
 	let unblockRow: (() => void) | undefined
 	let blockingTransaction: Promise<void> | undefined
-	const rowBlocked = new Promise<void>((resolve) => {
+	const rowBlocked = new Promise<void>(resolve => {
 		unblockRow = resolve
 	})
 	try {
@@ -830,10 +792,10 @@ postgresTest('drains lease operations queued before release and rejects later wo
 		lease = await database.tryAcquireIndexerLock(releaseChainId)
 		if (lease === undefined) throw new Error('release-ordering writer did not acquire its lock')
 		let confirmRowLocked: (() => void) | undefined
-		const rowLocked = new Promise<void>((resolve) => {
+		const rowLocked = new Promise<void>(resolve => {
 			confirmRowLocked = resolve
 		})
-		blockingTransaction = blocker.sql.begin(async (transaction) => {
+		blockingTransaction = blocker.sql.begin(async transaction => {
 			await transaction`SELECT 1 FROM networks WHERE chain_id = ${releaseChainId} FOR UPDATE`
 			confirmRowLocked?.()
 			await rowBlocked
@@ -944,17 +906,17 @@ postgresTest('reconciles cross-process ownership heartbeats with the advisory-lo
 		lease = await database.tryAcquireIndexerLock(ownershipChainId)
 		if (lease === undefined) throw new Error('ownership writer did not acquire its lock')
 		await database.recordIndexerOwnership(ownershipChainId, network.id, 'owned', lease.backendPid, undefined)
-		const owned = await database.read(async (sql) => await readIndexerHealth(sql, (transaction) => database.auditIntegrity(transaction), 60_000), 3_000)
+		const owned = await database.read(async sql => await readIndexerHealth(sql, transaction => database.auditIntegrity(transaction), 60_000), 3_000)
 		expect(owned.ownership.find(({ chainId: current }) => current === ownershipChainId)?.state).toBe('owned')
 
 		await database.sql`UPDATE indexer_ownership SET heartbeat_at = now() - interval '2 minutes' WHERE chain_id = ${ownershipChainId}`
-		const stale = await database.read(async (sql) => await readIndexerHealth(sql, (transaction) => database.auditIntegrity(transaction), 60_000), 3_000)
+		const stale = await database.read(async sql => await readIndexerHealth(sql, transaction => database.auditIntegrity(transaction), 60_000), 3_000)
 		expect(stale.ownership.find(({ chainId: current }) => current === ownershipChainId)?.state).toBe('stale-owner')
 
 		await lease.release()
 		lease = undefined
 		await database.recordIndexerOwnership(ownershipChainId, network.id, 'released', undefined, undefined)
-		const standby = await database.read(async (sql) => await readIndexerHealth(sql, (transaction) => database.auditIntegrity(transaction), 60_000), 3_000)
+		const standby = await database.read(async sql => await readIndexerHealth(sql, transaction => database.auditIntegrity(transaction), 60_000), 3_000)
 		expect(standby.ownership.find(({ chainId: current }) => current === ownershipChainId)?.state).toBe('standby')
 	} finally {
 		await lease?.release().catch(() => undefined)
@@ -1005,7 +967,7 @@ postgresTest('prevents standby and stale release writers from clobbering a curre
 		expect(rows).toEqual([{ state: 'owned', backend_pid: restartedLease.backendPid }])
 
 		await restarted.recordIndexerOwnership(ownershipChainId, network.id, 'release-failed', restartedLease.backendPid, undefined)
-		const health = await owner.read(async (sql) => await readIndexerHealth(sql, (transaction) => owner.auditIntegrity(transaction), 60_000), 3_000)
+		const health = await owner.read(async sql => await readIndexerHealth(sql, transaction => owner.auditIntegrity(transaction), 60_000), 3_000)
 		expect(health.ownership.find(({ chainId: current }) => current === ownershipChainId)?.state).toBe('release-failed')
 	} finally {
 		await ownerLease?.release().catch(() => undefined)
@@ -1072,10 +1034,7 @@ postgresTest('advances the canonical coverage floor when RPC log history is prun
 				event: 'reorg',
 				payload: { ancestor: '-1', depth: '2', startBlock: '2', reason: 'start-boundary-advanced' },
 			})
-			const boundaryExportResponse = await handleApi(
-				new Request(`http://localhost/api/v1/export?chainId=${boundaryChainId}&dataset=reorgs&fromBlock=100&toBlock=200`),
-				database.sql,
-			)
+			const boundaryExportResponse = await handleApi(new Request(`http://localhost/api/v1/export?chainId=${boundaryChainId}&dataset=reorgs&fromBlock=100&toBlock=200`), database.sql)
 			const boundaryExport = (await boundaryExportResponse?.text())?.trim().split('\n').filter(Boolean) ?? []
 			expect(boundaryExport).toHaveLength(1)
 			expect(JSON.parse(boundaryExport[0] ?? '{}')).toMatchObject({
@@ -1142,11 +1101,7 @@ postgresTest('advances the canonical coverage floor when RPC log history is prun
 			const promotedNetwork = {
 				...network,
 				startBlock: 2n,
-				contracts: [
-					...network.contracts,
-					[discoveredAddress, 'Promoted retained pool', 'securityPool'],
-					[orphanOnlyAddress, 'Promoted orphan', 'securityPool'],
-				],
+				contracts: [...network.contracts, [discoveredAddress, 'Promoted retained pool', 'securityPool'], [orphanOnlyAddress, 'Promoted orphan', 'securityPool']],
 			} satisfies NetworkConfig
 			expect(await database.seedNetwork(promotedNetwork, { lease, resetCanonicalHistoryOnManifestChange: true, preserveStoredStart: true })).toBe(true)
 			expect((await database.contracts(boundaryChainId, lease)).get(discoveredAddress.toLowerCase())).toMatchObject({
@@ -1159,9 +1114,7 @@ postgresTest('advances the canonical coverage floor when RPC log history is prun
 				provenance: 'manifest',
 			})
 			await database.storeBlock(boundaryChainId, retrievableBlock('retrievable-during-promotion', new Date('2026-02-14T00:00:00Z')), lease)
-			expect(
-				await database.seedNetwork({ ...network, startBlock: 2n }, { lease, resetCanonicalHistoryOnManifestChange: true, preserveStoredStart: true }),
-			).toBe(true)
+			expect(await database.seedNetwork({ ...network, startBlock: 2n }, { lease, resetCanonicalHistoryOnManifestChange: true, preserveStoredStart: true })).toBe(true)
 			const contractsAfterPromotionRemoval = await database.contracts(boundaryChainId, lease)
 			expect(contractsAfterPromotionRemoval.get(discoveredAddress.toLowerCase())).toMatchObject(dynamicContract)
 			expect(contractsAfterPromotionRemoval.has(orphanOnlyAddress.toLowerCase())).toBe(false)
@@ -1249,14 +1202,7 @@ postgresTest(
 			if (initialLease === undefined) throw new Error('direct observation writer did not acquire its initial lock')
 			try {
 				await database.storeBlock(observationChainId, evidence, initialLease, initialRun)
-				await database.storeRichListBalances(
-					observationChainId,
-					1n,
-					evidenceHash,
-					[{ owner: address, assetAddress: discoveredAddress, assetKind: 'rep', balance: 77n }],
-					initialLease,
-					initialRun,
-				)
+				await database.storeRichListBalances(observationChainId, 1n, evidenceHash, [{ owner: address, assetAddress: discoveredAddress, assetKind: 'rep', balance: 77n }], initialLease, initialRun)
 				await database.storeRichListBalances(
 					observationChainId,
 					1n,
@@ -1280,14 +1226,7 @@ postgresTest(
 					initialLease,
 					initialRun,
 				)
-				await database.storeRichListBalances(
-					observationChainId,
-					1n,
-					evidenceHash,
-					[{ owner: address, assetAddress: discoveredAddress, assetKind: 'rep', balance: 88n }],
-					initialLease,
-					replayRun,
-				)
+				await database.storeRichListBalances(observationChainId, 1n, evidenceHash, [{ owner: address, assetAddress: discoveredAddress, assetKind: 'rep', balance: 88n }], initialLease, replayRun)
 			} finally {
 				await initialLease.release()
 			}
@@ -1329,10 +1268,7 @@ postgresTest(
 								AND occurrence.occurrence_kind IN ('address-balance', 'token-metadata')) AS direct_replay_associations
 				`
 				expect(directReplayEvidence).toEqual([{ canonical_balance_attempts: 4, canonical_metadata_attempts: 1, direct_replay_associations: 0 }])
-				const unavailableDuringReplay = await handleApi(
-					new Request(`http://localhost/api/v1/richlist?chainId=${observationChainId}&address=${address.toLowerCase()}`),
-					database.sql,
-				)
+				const unavailableDuringReplay = await handleApi(new Request(`http://localhost/api/v1/richlist?chainId=${observationChainId}&address=${address.toLowerCase()}`), database.sql)
 				expect(await unavailableDuringReplay?.json()).toMatchObject({ items: [], total: 0 })
 
 				await database.storeBlock(
@@ -1373,25 +1309,17 @@ postgresTest(
 				decimals: 17,
 				readBlock: 1n,
 			})
-			const replayedResponse = await handleApi(
-				new Request(`http://localhost/api/v1/richlist?chainId=${observationChainId}&address=${address.toLowerCase()}`),
-				database.sql,
-			)
+			const replayedResponse = await handleApi(new Request(`http://localhost/api/v1/richlist?chainId=${observationChainId}&address=${address.toLowerCase()}`), database.sql)
 			if (replayedResponse === undefined) throw new Error('direct observation rich-list response was not returned')
 			expect(await replayedResponse.json()).toMatchObject({
 				total: 1,
 				items: [
 					expect.objectContaining({
-						rep_balances: [
-							expect.objectContaining({ address: discoveredAddress.toLowerCase(), balance: '88', name: 'Replayed REP', symbol: 'RREP', decimals: 17 }),
-						],
+						rep_balances: [expect.objectContaining({ address: discoveredAddress.toLowerCase(), balance: '88', name: 'Replayed REP', symbol: 'RREP', decimals: 17 })],
 					}),
 				],
 			})
-			const firstObservationResponse = await handleApi(
-				new Request(`http://localhost/api/v1/state/direct-observations?chainId=${observationChainId}&canonical=all&limit=4`),
-				database.sql,
-			)
+			const firstObservationResponse = await handleApi(new Request(`http://localhost/api/v1/state/direct-observations?chainId=${observationChainId}&canonical=all&limit=4`), database.sql)
 			if (firstObservationResponse === undefined) throw new Error('direct observation audit response was not returned')
 			const firstObservationPage = (await firstObservationResponse.json()) as {
 				data: { items: Array<Record<string, unknown>>; total: number; nextCursor: string }
@@ -1402,24 +1330,14 @@ postgresTest(
 			if (!Array.isArray(observationCursorParts) || observationCursorParts.length !== 14) throw new Error('direct observation cursor is malformed')
 			const overflowingObservationCursor = [...observationCursorParts]
 			overflowingObservationCursor[10] = firstObservationPage.data.total + 1
-			const overflowingObservationResponse = await handleApi(
-				new Request(
-					`http://localhost/api/v1/state/direct-observations?chainId=${observationChainId}&canonical=all&limit=4&cursor=${encodeURIComponent(btoa(JSON.stringify(overflowingObservationCursor)))}`,
-				),
-				database.sql,
-			)
+			const overflowingObservationResponse = await handleApi(new Request(`http://localhost/api/v1/state/direct-observations?chainId=${observationChainId}&canonical=all&limit=4&cursor=${encodeURIComponent(btoa(JSON.stringify(overflowingObservationCursor)))}`), database.sql)
 			expect(overflowingObservationResponse?.status).toBe(400)
-			const secondObservationResponse = await handleApi(
-				new Request(
-					`http://localhost/api/v1/state/direct-observations?chainId=${observationChainId}&canonical=all&limit=4&cursor=${encodeURIComponent(firstObservationPage.data.nextCursor)}`,
-				),
-				database.sql,
-			)
+			const secondObservationResponse = await handleApi(new Request(`http://localhost/api/v1/state/direct-observations?chainId=${observationChainId}&canonical=all&limit=4&cursor=${encodeURIComponent(firstObservationPage.data.nextCursor)}`), database.sql)
 			if (secondObservationResponse === undefined) throw new Error('direct observation continuation was not returned')
 			const secondObservationPage = (await secondObservationResponse.json()) as { data: { items: Array<Record<string, unknown>>; hasMore: boolean } }
 			const retainedAttempts = [...firstObservationPage.data.items, ...secondObservationPage.data.items]
 			expect(secondObservationPage.data.hasMore).toBeFalse()
-			expect(new Set(retainedAttempts.map((item) => `${String(item['observation_kind'])}:${String(item['observation_id'])}`)).size).toBe(7)
+			expect(new Set(retainedAttempts.map(item => `${String(item['observation_kind'])}:${String(item['observation_id'])}`)).size).toBe(7)
 			expect(retainedAttempts).toEqual(
 				expect.arrayContaining([
 					expect.objectContaining({
@@ -1480,19 +1398,14 @@ postgresTest(
 			`
 			expect(directOccurrenceKinds).toEqual(expect.arrayContaining([{ occurrence_kind: 'address-balance' }, { occurrence_kind: 'token-metadata' }]))
 			expect(directOccurrenceKinds).toHaveLength(7)
-			const orphanedObservationResponse = await handleApi(
-				new Request(`http://localhost/api/v1/state/direct-observations?chainId=${observationChainId}&canonical=orphaned`),
-				database.sql,
-			)
+			const orphanedObservationResponse = await handleApi(new Request(`http://localhost/api/v1/state/direct-observations?chainId=${observationChainId}&canonical=orphaned`), database.sql)
 			if (orphanedObservationResponse === undefined) throw new Error('orphaned direct observation audit response was not returned')
 			const orphanedObservations = (await orphanedObservationResponse.json()) as {
 				data: { items: Array<Record<string, unknown>>; total: number }
 			}
 			expect(orphanedObservations.data.total).toBe(7)
 			expect(orphanedObservations.data.items).toHaveLength(7)
-			expect(orphanedObservations.data.items).toEqual(
-				expect.arrayContaining([expect.objectContaining({ evidence_status: 'chain-orphaned', invalidation_reason: 'chain-reorg' })]),
-			)
+			expect(orphanedObservations.data.items).toEqual(expect.arrayContaining([expect.objectContaining({ evidence_status: 'chain-orphaned', invalidation_reason: 'chain-reorg' })]))
 
 			const manifestSourceLease = await database.tryAcquireIndexerLock(observationChainId)
 			if (manifestSourceLease === undefined) throw new Error('direct observation manifest fixture did not acquire its writer lock')
@@ -1541,10 +1454,7 @@ postgresTest(
 				ORDER BY occurrence.occurrence_kind
 			`
 			expect(manifestOccurrenceKinds).toEqual([{ occurrence_kind: 'address-balance' }, { occurrence_kind: 'token-metadata' }])
-			const manifestObservationResponse = await handleApi(
-				new Request(`http://localhost/api/v1/state/direct-observations?chainId=${observationChainId}&canonical=orphaned`),
-				database.sql,
-			)
+			const manifestObservationResponse = await handleApi(new Request(`http://localhost/api/v1/state/direct-observations?chainId=${observationChainId}&canonical=orphaned`), database.sql)
 			if (manifestObservationResponse === undefined) throw new Error('manifest-invalidated direct observation audit response was not returned')
 			const manifestObservations = (await manifestObservationResponse.json()) as { data: { items: Array<Record<string, unknown>>; total: number } }
 			expect(manifestObservations.data.total).toBe(9)
@@ -1775,10 +1685,7 @@ postgresTest(
 			`
 		}
 		const expectHistoricalRisk = async (applicationSourceHash: string) => {
-			const response = await handleApi(
-				new Request(`http://localhost/api/v1/state/risk/pools/${provenanceChainId}/${discoveredAddress.toLowerCase()}?atBlock=1`),
-				database.sql,
-			)
+			const response = await handleApi(new Request(`http://localhost/api/v1/state/risk/pools/${provenanceChainId}/${discoveredAddress.toLowerCase()}?atBlock=1`), database.sql)
 			if (response === undefined) throw new Error('historical risk response was not returned')
 			expect(response.status).toBe(200)
 			expect(await response.json()).toMatchObject({
@@ -1831,8 +1738,7 @@ postgresTest(
 			}
 			await restorePoolIdentity()
 			await expectHistoricalRisk('application-one')
-			const firstInterpretations =
-				await database.sql`SELECT interpretation_kind, interpretation_key FROM log_interpretations WHERE chain_id = ${provenanceChainId} ORDER BY interpretation_kind, interpretation_key`
+			const firstInterpretations = await database.sql`SELECT interpretation_kind, interpretation_key FROM log_interpretations WHERE chain_id = ${provenanceChainId} ORDER BY interpretation_kind, interpretation_key`
 			expect([...firstInterpretations]).toEqual([
 				expect.objectContaining({ interpretation_kind: 'decode', interpretation_key: 'decode' }),
 				expect.objectContaining({ interpretation_kind: 'decode', interpretation_key: 'decode' }),
@@ -1876,10 +1782,7 @@ postgresTest(
 				overflowingCursorParts[1] = dataset
 				overflowingCursorParts[13] = lastKey
 				const overflowingCursor = btoa(JSON.stringify(overflowingCursorParts))
-				const overflowingResponse = await handleApi(
-					new Request(`http://localhost/api/v1/export?chainId=${provenanceChainId}&dataset=${dataset}&limit=1&cursor=${encodeURIComponent(overflowingCursor)}`),
-					database.sql,
-				)
+				const overflowingResponse = await handleApi(new Request(`http://localhost/api/v1/export?chainId=${provenanceChainId}&dataset=${dataset}&limit=1&cursor=${encodeURIComponent(overflowingCursor)}`), database.sql)
 				expect(overflowingResponse?.status).toBe(400)
 			}
 			const applicationOnlyRun = await insertRun('application-only', 'abi-one', 'projection-one')
@@ -1915,10 +1818,7 @@ postgresTest(
 			`
 			expect(observationsAfterProjectionReset).toEqual([{ read_status: 'success', canonical: true, application_source_hash: 'application-one' }])
 			expect(await database.sourceReplayPlan(provenanceChainId, applicationOnlyRun)).toBeUndefined()
-			const staleExportResponse = await handleApi(
-				new Request(`http://localhost/api/v1/export?chainId=${provenanceChainId}&dataset=logs&limit=1&cursor=${encodeURIComponent(firstExportCursor)}`),
-				database.sql,
-			)
+			const staleExportResponse = await handleApi(new Request(`http://localhost/api/v1/export?chainId=${provenanceChainId}&dataset=logs&limit=1&cursor=${encodeURIComponent(firstExportCursor)}`), database.sql)
 			expect(staleExportResponse?.status).toBe(409)
 
 			const invalidations = await database.sql`
@@ -1928,16 +1828,11 @@ postgresTest(
 				WHERE replacement.chain_id = ${provenanceChainId}
 				ORDER BY occurrence.occurrence_kind
 			`
-			expect(new Set(invalidations.map((row: Record<string, unknown>) => row['occurrence_kind']))).toEqual(
-				new Set(['block', 'entity-state', 'log', 'transaction']),
-			)
+			expect(new Set(invalidations.map((row: Record<string, unknown>) => row['occurrence_kind']))).toEqual(new Set(['block', 'entity-state', 'log', 'transaction']))
 			expect(invalidations.every((row: Record<string, unknown>) => row['reason'] === 'projection-rebuild')).toBeTrue()
 			expect(Number((await database.sql`SELECT count(*) AS count FROM protocol_timeline_entries WHERE chain_id = ${provenanceChainId}`)[0]?.['count'])).toBe(0)
 			expect(Number((await database.sql`SELECT count(*) AS count FROM log_interpretations WHERE chain_id = ${provenanceChainId}`)[0]?.['count'])).toBe(3)
-			const supersededResponse = await handleApi(
-				new Request(`http://localhost/api/v1/logs/${provenanceChainId}/${evidenceBlockHash}/${evidenceTxHash}/0?canonical=all`),
-				database.sql,
-			)
+			const supersededResponse = await handleApi(new Request(`http://localhost/api/v1/logs/${provenanceChainId}/${evidenceBlockHash}/${evidenceTxHash}/0?canonical=all`), database.sql)
 			if (supersededResponse === undefined) throw new Error('superseded log detail was not returned')
 			expect(await supersededResponse.json()).toMatchObject({
 				evidence_status: 'projection-superseded',
@@ -1984,9 +1879,7 @@ postgresTest(
 			])
 			expect(Number((await database.sql`SELECT count(*) AS count FROM action_interpretations WHERE chain_id = ${provenanceChainId}`)[0]?.['count'])).toBe(2)
 			expect(Number((await database.sql`SELECT count(*) AS count FROM log_interpretations WHERE chain_id = ${provenanceChainId}`)[0]?.['count'])).toBe(6)
-			expect(
-				Number((await database.sql`SELECT count(*) AS count FROM protocol_timeline_entries WHERE chain_id = ${provenanceChainId} AND canonical`)[0]?.['count']),
-			).toBe(1)
+			expect(Number((await database.sql`SELECT count(*) AS count FROM protocol_timeline_entries WHERE chain_id = ${provenanceChainId} AND canonical`)[0]?.['count'])).toBe(1)
 			const combinedRun = await insertRun('combined', 'abi-two', 'projection-two')
 			const combinedReplayPlan = await database.sourceReplayPlan(provenanceChainId, combinedRun)
 			expect(combinedReplayPlan).toEqual({ reason: 'abi-redecode', causes: ['abi-redecode', 'projection-rebuild'] })
@@ -2080,7 +1973,7 @@ postgresTest(
 			const exportedInvalidations = (await invalidationExport.text())
 				.trim()
 				.split('\n')
-				.map((line) => JSON.parse(line) as Record<string, unknown>)
+				.map(line => JSON.parse(line) as Record<string, unknown>)
 			expect(exportedInvalidations).toContainEqual(
 				expect.objectContaining({
 					reason: 'abi-redecode',
@@ -2101,10 +1994,7 @@ postgresTest(
 			}
 			await restorePoolIdentity()
 			await database.sql`UPDATE protocol_timeline_entries SET canonical = false WHERE chain_id = ${provenanceChainId}`
-			const multiCauseTimelineResponse = await handleApi(
-				new Request(`http://localhost/api/v1/state/timeline?chainId=${provenanceChainId}&canonical=orphaned`),
-				database.sql,
-			)
+			const multiCauseTimelineResponse = await handleApi(new Request(`http://localhost/api/v1/state/timeline?chainId=${provenanceChainId}&canonical=orphaned`), database.sql)
 			if (multiCauseTimelineResponse === undefined) throw new Error('multi-cause timeline response was not returned')
 			expect(await multiCauseTimelineResponse.json()).toMatchObject({
 				data: {
@@ -2205,20 +2095,12 @@ postgresTest(
 			if (firstLease === undefined) throw new Error('manifest replay writer did not acquire its first lock')
 			await database.storeBlock(manifestChainId, evidenceBlock('ReportSubmitted', '1'), firstLease)
 			await firstLease.release()
-			const submittedEvents =
-				await database.sql`SELECT event_name, round_number::text, report_data, canonical FROM open_oracle_report_events WHERE chain_id = ${manifestChainId}`
-			expect(submittedEvents).toEqual([
-				{ event_name: 'ReportSubmitted', round_number: '1', report_data: { marker: 'ReportSubmitted', numReports: '1', reportId: '7' }, canonical: true },
-			])
+			const submittedEvents = await database.sql`SELECT event_name, round_number::text, report_data, canonical FROM open_oracle_report_events WHERE chain_id = ${manifestChainId}`
+			expect(submittedEvents).toEqual([{ event_name: 'ReportSubmitted', round_number: '1', report_data: { marker: 'ReportSubmitted', numReports: '1', reportId: '7' }, canonical: true }])
 
 			const resetLease = await database.tryAcquireIndexerLock(manifestChainId)
 			if (resetLease === undefined) throw new Error('manifest replay writer did not acquire its reset lock')
-			expect(
-				await database.seedNetwork(
-					{ ...network, contracts: [[discoveredAddress, 'Reclassified contract', 'zoltar']] },
-					{ lease: resetLease, resetCanonicalHistoryOnManifestChange: true },
-				),
-			).toBeTrue()
+			expect(await database.seedNetwork({ ...network, contracts: [[discoveredAddress, 'Reclassified contract', 'zoltar']] }, { lease: resetLease, resetCanonicalHistoryOnManifestChange: true })).toBeTrue()
 			await resetLease.release()
 			const manifestResetEvents = await database.sql`
 				SELECT payload FROM live_events
@@ -2232,11 +2114,8 @@ postgresTest(
 			if (replayLease === undefined) throw new Error('manifest replay writer did not acquire its replay lock')
 			await database.storeBlock(manifestChainId, evidenceBlock('ReportDisputed', '2'), replayLease)
 			await replayLease.release()
-			const disputedEvents =
-				await database.sql`SELECT event_name, round_number::text, report_data, canonical FROM open_oracle_report_events WHERE chain_id = ${manifestChainId}`
-			expect(disputedEvents).toEqual([
-				{ event_name: 'ReportDisputed', round_number: '2', report_data: { marker: 'ReportDisputed', numReports: '2', reportId: '7' }, canonical: true },
-			])
+			const disputedEvents = await database.sql`SELECT event_name, round_number::text, report_data, canonical FROM open_oracle_report_events WHERE chain_id = ${manifestChainId}`
+			expect(disputedEvents).toEqual([{ event_name: 'ReportDisputed', round_number: '2', report_data: { marker: 'ReportDisputed', numReports: '2', reportId: '7' }, canonical: true }])
 		} finally {
 			await database.sql.unsafe('TRUNCATE TABLE networks CASCADE')
 			void database.close(0)
@@ -2356,9 +2235,7 @@ postgresTest(
 					contracts: [[discoveredAddress, 'OpenOracle', 'openOracle', 1n]],
 				} satisfies NetworkConfig
 				expect(await database.seedNetwork(earlierBoundaryNetwork, { lease, resetCanonicalHistoryOnManifestChange: true, preserveStoredStart: true })).toBe(true)
-				expect(await database.seedNetwork(earlierBoundaryNetwork, { lease, resetCanonicalHistoryOnManifestChange: true, preserveStoredStart: true })).toBe(
-					false,
-				)
+				expect(await database.seedNetwork(earlierBoundaryNetwork, { lease, resetCanonicalHistoryOnManifestChange: true, preserveStoredStart: true })).toBe(false)
 
 				const invalidation = await database.sql`
 					SELECT id::text, reason FROM chain_reorganizations WHERE chain_id = ${manifestChainId} ORDER BY id DESC LIMIT 1
@@ -2415,13 +2292,13 @@ postgresTest(
 			try {
 				let firstLocked: (() => void) | undefined
 				let releaseFirst: (() => void) | undefined
-				const locked = new Promise<void>((resolve) => {
+				const locked = new Promise<void>(resolve => {
 					firstLocked = resolve
 				})
-				const release = new Promise<void>((resolve) => {
+				const release = new Promise<void>(resolve => {
 					releaseFirst = resolve
 				})
-				const firstWrite = database.sql.begin(async (transaction) => {
+				const firstWrite = database.sql.begin(async transaction => {
 					await lockLiveEventWriter(transaction)
 					const rows = await transaction`INSERT INTO live_events (event, payload) VALUES ('status', '{"writer":1}'::jsonb) RETURNING id`
 					firstLocked?.()
@@ -2430,7 +2307,7 @@ postgresTest(
 				})
 				await locked
 				let secondInserted = false
-				const secondWrite = concurrentWriter.sql.begin(async (transaction) => {
+				const secondWrite = concurrentWriter.sql.begin(async transaction => {
 					await lockLiveEventWriter(transaction)
 					const rows = await transaction`INSERT INTO live_events (event, payload) VALUES ('status', '{"writer":2}'::jsonb) RETURNING id`
 					secondInserted = true
@@ -2452,7 +2329,7 @@ postgresTest(
 			const requestedLiveCursors: number[] = []
 			const liveBus = new LiveBus({
 				latestEventId: async () => await database.latestEventId(),
-				eventsAfter: async (id) => {
+				eventsAfter: async id => {
 					requestedLiveCursors.push(id)
 					return await database.eventsAfter(id)
 				},
@@ -2478,15 +2355,11 @@ postgresTest(
 			}
 			expect(await database.seedNetwork(network)).toBe(false)
 			expect(await database.networkStartBlock(chainId)).toBe(1n)
-			await expect(database.seedNetwork({ ...network, startBlock: 3n }, { preserveStoredStart: true })).rejects.toThrow(
-				'while an effective index start is retained',
-			)
+			await expect(database.seedNetwork({ ...network, startBlock: 3n }, { preserveStoredStart: true })).rejects.toThrow('while an effective index start is retained')
 			expect(await database.networkStartBlock(chainId)).toBe(1n)
 			const zeroBoundaryNetwork = { ...network, id: 'zero-boundary', chainId: chainId + 1, startBlock: 0n }
 			expect(await database.seedNetwork(zeroBoundaryNetwork)).toBe(false)
-			await expect(database.seedNetwork({ ...zeroBoundaryNetwork, startBlock: 100n }, { preserveStoredStart: true })).rejects.toThrow(
-				'while an effective index start is retained',
-			)
+			await expect(database.seedNetwork({ ...zeroBoundaryNetwork, startBlock: 100n }, { preserveStoredStart: true })).rejects.toThrow('while an effective index start is retained')
 			expect(await database.networkStartBlock(zeroBoundaryNetwork.chainId)).toBe(0n)
 			const contender = new ScannerDatabase(postgresUrl)
 			try {
@@ -2550,27 +2423,19 @@ postgresTest(
 			}
 			await database.storeBlock(chainId, first, writeLease)
 			expect(await database.checkpoint(chainId)).toEqual({ number: 1n, hash: first.hash })
-			expect(await database.logScanCursors(chainId)).toEqual(
-				new Map([[address.toLowerCase(), { contractAddress: address, startBlock: 1n, lastRetrievedBlock: 1n }]]),
-			)
-			expect(() => assertStartBlockCompatible(3n, 1n, 1n, true)).toThrow(
-				'Cannot change the configured start block from 1 to 3 while checkpoint 1 exists; rebuild the augurScan database from the new start block',
-			)
+			expect(await database.logScanCursors(chainId)).toEqual(new Map([[address.toLowerCase(), { contractAddress: address, startBlock: 1n, lastRetrievedBlock: 1n }]]))
+			expect(() => assertStartBlockCompatible(3n, 1n, 1n, true)).toThrow('Cannot change the configured start block from 1 to 3 while checkpoint 1 exists; rebuild the augurScan database from the new start block')
 			expect(await database.checkpoint(chainId)).toEqual({ number: 1n, hash: first.hash })
 			const unchangedBoundary = await database.sql`SELECT start_block FROM networks WHERE chain_id = ${chainId}`
 			expect(unchangedBoundary[0]?.['start_block']).toBe('1')
 			await database.sql`UPDATE networks SET start_block = 3 WHERE chain_id = ${chainId}`
-			expect(() => assertStartBlockCompatible(3n, 3n, 1n, true)).toThrow(
-				'Stored checkpoint 1 is below configured start block 3; rebuild the augurScan database from the configured start block',
-			)
+			expect(() => assertStartBlockCompatible(3n, 3n, 1n, true)).toThrow('Stored checkpoint 1 is below configured start block 3; rebuild the augurScan database from the configured start block')
 			expect(await database.checkpoint(chainId)).toEqual({ number: 1n, hash: first.hash })
 			const inconsistentBoundary = await database.sql`SELECT start_block FROM networks WHERE chain_id = ${chainId}`
 			expect(inconsistentBoundary[0]?.['start_block']).toBe('3')
 			await database.sql`UPDATE networks SET start_block = 1 WHERE chain_id = ${chainId}`
 			const invalidParent = indexedBlock('block-two-invalid-parent', genesisHash)
-			expect(() => assertBlockAppend(invalidParent, { startBlock: 1n, indexedBlock: 1n, indexedHash: first.hash })).toThrow(
-				'does not extend the current database checkpoint',
-			)
+			expect(() => assertBlockAppend(invalidParent, { startBlock: 1n, indexedBlock: 1n, indexedHash: first.hash })).toThrow('does not extend the current database checkpoint')
 			expect(await database.checkpoint(chainId)).toEqual({ number: 1n, hash: first.hash })
 
 			const restarted = new ScannerDatabase(postgresUrl)
@@ -2669,12 +2534,9 @@ postgresTest(
 				ORDER BY id DESC LIMIT 1
 			`
 			expect(chainReorganizationEvents[0]?.['payload']).toMatchObject({ reason: 'chain-reorg' })
-			const canonicalOrphanPrices =
-				await database.sql`SELECT * FROM rep_eth_price_snapshots WHERE chain_id = ${chainId} AND block_hash = ${orphan.hash} AND canonical`
+			const canonicalOrphanPrices = await database.sql`SELECT * FROM rep_eth_price_snapshots WHERE chain_id = ${chainId} AND block_hash = ${orphan.hash} AND canonical`
 			expect(canonicalOrphanPrices).toHaveLength(0)
-			expect(await database.logScanCursors(chainId)).toEqual(
-				new Map([[address.toLowerCase(), { contractAddress: address, startBlock: 1n, lastRetrievedBlock: 1n }]]),
-			)
+			expect(await database.logScanCursors(chainId)).toEqual(new Map([[address.toLowerCase(), { contractAddress: address, startBlock: 1n, lastRetrievedBlock: 1n }]]))
 			expect((await database.contracts(chainId)).get(address.toLowerCase())).not.toHaveProperty('deploymentBlock')
 			expect((await database.contracts(chainId)).get(address.toLowerCase())).not.toHaveProperty('deploymentCheckedBlock')
 			expect((await database.contracts(chainId)).get(promotedAddress.toLowerCase())?.provenance).toBe('manifest')
@@ -2692,9 +2554,7 @@ postgresTest(
 			const orphanContractResponse = await handleApi(new Request(`http://localhost/api/v1/contracts/${chainId}/${orphanOnlyAddress}`), database.sql)
 			expect(orphanContractResponse?.status).toBe(404)
 
-			const replacementBase = indexedBlock('block-two-replacement', first.hash, [discovery], 'replacement event', [
-				{ address: discoveredAddress, name: 'Replacement token', symbol: 'NEW', decimals: 18, readBlock: 2n },
-			])
+			const replacementBase = indexedBlock('block-two-replacement', first.hash, [discovery], 'replacement event', [{ address: discoveredAddress, name: 'Replacement token', symbol: 'NEW', decimals: 18, readBlock: 2n }])
 			const uniswapPairDiscovery: ContractMetadata = {
 				address: uniswapPairAddress,
 				label: 'Uniswap V2 REP / WETH Pair',
@@ -2723,22 +2583,10 @@ postgresTest(
 				],
 			}
 			await database.storeBlock(chainId, replacement, writeLease)
-			const poolHistoryResponse = await handleApi(
-				new Request(`http://localhost/api/v1/state/pools/${chainId}/${discoveredAddress.toLowerCase()}`),
-				database.sql,
-			)
+			const poolHistoryResponse = await handleApi(new Request(`http://localhost/api/v1/state/pools/${chainId}/${discoveredAddress.toLowerCase()}`), database.sql)
 			if (poolHistoryResponse === undefined) throw new Error('pool history API did not return a response')
 			const poolHistory = await poolHistoryResponse.json()
-			if (
-				typeof poolHistory !== 'object' ||
-				poolHistory === null ||
-				Array.isArray(poolHistory) ||
-				!('market' in poolHistory) ||
-				!('ammPrices' in poolHistory) ||
-				!('repEthPrices' in poolHistory) ||
-				!('uniswapRepEthPrices' in poolHistory)
-			)
-				throw new Error('pool history API returned an invalid price payload')
+			if (typeof poolHistory !== 'object' || poolHistory === null || Array.isArray(poolHistory) || !('market' in poolHistory) || !('ammPrices' in poolHistory) || !('repEthPrices' in poolHistory) || !('uniswapRepEthPrices' in poolHistory)) throw new Error('pool history API returned an invalid price payload')
 			expect(poolHistory.market).toEqual({
 				chain_id: chainId.toString(),
 				block_hash: replacement.hash,
@@ -2865,8 +2713,7 @@ postgresTest(
 			expect(blockRows).toHaveLength(2)
 			expect(blockRows.filter((row: Record<string, unknown>) => row['canonical'] === true)).toHaveLength(1)
 			expect(blockRows.find((row: Record<string, unknown>) => row['hash'] === orphan.hash)?.['canonical']).toBe(false)
-			const metadataRows =
-				await database.sql`SELECT block_hash, decimals, canonical FROM token_metadata WHERE chain_id = ${chainId} AND address = ${discoveredAddress.toLowerCase()} ORDER BY block_hash`
+			const metadataRows = await database.sql`SELECT block_hash, decimals, canonical FROM token_metadata WHERE chain_id = ${chainId} AND address = ${discoveredAddress.toLowerCase()} ORDER BY block_hash`
 			expect(metadataRows).toHaveLength(2)
 			expect(metadataRows.find((row: Record<string, unknown>) => row['block_hash'] === orphan.hash)?.['canonical']).toBe(false)
 			expect(metadataRows.find((row: Record<string, unknown>) => row['block_hash'] === replacement.hash)).toMatchObject({ canonical: true, decimals: 18 })
@@ -2897,12 +2744,7 @@ postgresTest(
 			})
 			const thirdLogs = [v4Initialize(1, standardV4MarketId, '3000', '60'), v4Initialize(2, nonstandardV4MarketId, '250', '5')]
 			const third: IndexedBlock = {
-				...indexedBlock(
-					'block-three',
-					replacement.hash,
-					[{ ...uniswapV4PoolManagerDiscovery, discoveryTxHash: thirdTransactionHash }],
-					'batched V4 initializations',
-				),
+				...indexedBlock('block-three', replacement.hash, [{ ...uniswapV4PoolManagerDiscovery, discoveryTxHash: thirdTransactionHash }], 'batched V4 initializations'),
 				number: 3n,
 				timestamp: new Date('2026-01-03T00:00:00Z'),
 				observedHead: 3n,
@@ -2925,20 +2767,18 @@ postgresTest(
 			await database.storeBlock(chainId, third, thirdWriteLease)
 			expect(await database.checkpoint(chainId)).toEqual({ number: 3n, hash: third.hash })
 			await thirdWriteLease.release()
-			const storedV4Markets =
-				await database.sql`SELECT market_id FROM uniswap_rep_eth_markets WHERE chain_id = ${chainId} AND block_hash = ${third.hash} AND canonical ORDER BY market_id`
+			const storedV4Markets = await database.sql`SELECT market_id FROM uniswap_rep_eth_markets WHERE chain_id = ${chainId} AND block_hash = ${third.hash} AND canonical ORDER BY market_id`
 			expect(storedV4Markets).toEqual([{ market_id: standardV4MarketId }])
-			const storedV4Observations =
-				await database.sql`SELECT market_id FROM uniswap_rep_eth_price_observations WHERE chain_id = ${chainId} AND block_hash = ${third.hash} AND canonical ORDER BY market_id`
+			const storedV4Observations = await database.sql`SELECT market_id FROM uniswap_rep_eth_price_observations WHERE chain_id = ${chainId} AND block_hash = ${third.hash} AND canonical ORDER BY market_id`
 			expect(storedV4Observations).toEqual([{ market_id: standardV4MarketId }])
-			const readIsolation = await database.read(async (sql) => {
+			const readIsolation = await database.read(async sql => {
 				const rows = await sql`SELECT current_setting('transaction_isolation') AS isolation, current_setting('transaction_read_only') AS read_only`
 				return rows[0]
 			})
 			expect(readIsolation).toMatchObject({ isolation: 'repeatable read', read_only: 'on' })
 			const reorgWriter = new ScannerDatabase(postgresUrl)
 			try {
-				const snapshotStayedCanonical = await database.read(async (sql) => {
+				const snapshotStayedCanonical = await database.read(async sql => {
 					const before = await sql`SELECT canonical FROM blocks WHERE chain_id = ${chainId} AND hash = ${third.hash}`
 					expect(before[0]?.['canonical']).toBe(true)
 					await reorgWriter.sql`UPDATE blocks SET canonical = false WHERE chain_id = ${chainId} AND hash = ${third.hash}`
@@ -2965,20 +2805,14 @@ postgresTest(
 			const orphanHistory = (await orphanHistoryResponse?.json()) as { items: unknown[]; canonical: string }
 			expect(orphanHistory.canonical).toBe('orphaned')
 			expect(orphanHistory.items).toContainEqual(expect.objectContaining({ block_hash: orphan.hash, canonical: false, summary: 'orphan event' }))
-			const orphanHistoryDetailResponse = await handleApi(
-				new Request(`http://localhost/api/v1/logs/${chainId}/${orphan.hash}/${transactionHash}/0?canonical=all`),
-				database.sql,
-			)
+			const orphanHistoryDetailResponse = await handleApi(new Request(`http://localhost/api/v1/logs/${chainId}/${orphan.hash}/${transactionHash}/0?canonical=all`), database.sql)
 			expect(orphanHistoryDetailResponse?.status).toBe(200)
 			expect(await orphanHistoryDetailResponse?.json()).toMatchObject({ block_hash: orphan.hash, canonical: false, summary: 'orphan event' })
 			const firstLogPageResponse = await handleApi(new Request(`http://localhost/api/v1/logs?chainId=${chainId}&limit=1`), database.sql)
 			const firstLogPage = (await firstLogPageResponse?.json()) as { items: Array<Record<string, unknown>>; nextCursor?: string }
 			expect(firstLogPage.items).toHaveLength(1)
 			expect(firstLogPage.nextCursor).toBeString()
-			const mismatchedLogFilterResponse = await handleApi(
-				new Request(`http://localhost/api/v1/logs?chainId=${chainId}&event=replacement&limit=1&cursor=${encodeURIComponent(firstLogPage.nextCursor ?? '')}`),
-				database.sql,
-			)
+			const mismatchedLogFilterResponse = await handleApi(new Request(`http://localhost/api/v1/logs?chainId=${chainId}&event=replacement&limit=1&cursor=${encodeURIComponent(firstLogPage.nextCursor ?? '')}`), database.sql)
 			expect(mismatchedLogFilterResponse?.status).toBe(400)
 			const advancedHeadHash = blockHash('cursor-head-advance')
 			await database.sql`
@@ -2990,10 +2824,7 @@ postgresTest(
 					indexed_timestamp = '2026-01-04T00:00:00Z', observed_block = 4
 				WHERE chain_id = ${chainId}
 			`
-			const secondLogPageResponse = await handleApi(
-				new Request(`http://localhost/api/v1/logs?chainId=${chainId}&limit=1&cursor=${encodeURIComponent(firstLogPage.nextCursor ?? '')}`),
-				database.sql,
-			)
+			const secondLogPageResponse = await handleApi(new Request(`http://localhost/api/v1/logs?chainId=${chainId}&limit=1&cursor=${encodeURIComponent(firstLogPage.nextCursor ?? '')}`), database.sql)
 			const secondLogPage = (await secondLogPageResponse?.json()) as {
 				items: Array<Record<string, unknown>>
 				asOf: { blockNumber: string; blockHash: string; indexedHead: string; historical: boolean }
@@ -3005,10 +2836,7 @@ postgresTest(
 				log_index: firstLogPage.items[0]?.['log_index'],
 			})
 			await database.sql`UPDATE blocks SET canonical = false WHERE chain_id = ${chainId} AND hash = ${third.hash}`
-			const displacedSnapshotResponse = await handleApi(
-				new Request(`http://localhost/api/v1/logs?chainId=${chainId}&limit=1&cursor=${encodeURIComponent(firstLogPage.nextCursor ?? '')}`),
-				database.sql,
-			)
+			const displacedSnapshotResponse = await handleApi(new Request(`http://localhost/api/v1/logs?chainId=${chainId}&limit=1&cursor=${encodeURIComponent(firstLogPage.nextCursor ?? '')}`), database.sql)
 			expect(displacedSnapshotResponse?.status).toBe(409)
 			await database.sql`UPDATE blocks SET canonical = true WHERE chain_id = ${chainId} AND hash = ${third.hash}`
 			await database.sql`
@@ -3027,19 +2855,13 @@ postgresTest(
 				(chain_id, previous_block, previous_hash, ancestor_block, ancestor_hash, depth, reason)
 			VALUES (${chainId}, 2, ${replacement.hash}, 1, ${first.hash}, 1, 'manifest-reset')
 		`
-			const staleLogPageResponse = await handleApi(
-				new Request(`http://localhost/api/v1/logs?chainId=${chainId}&limit=1&cursor=${encodeURIComponent(firstLogPage.nextCursor ?? '')}`),
-				database.sql,
-			)
+			const staleLogPageResponse = await handleApi(new Request(`http://localhost/api/v1/logs?chainId=${chainId}&limit=1&cursor=${encodeURIComponent(firstLogPage.nextCursor ?? '')}`), database.sql)
 			expect(staleLogPageResponse?.status).toBe(409)
 			const firstReorganizationPageResponse = await handleApi(new Request(`http://localhost/api/v1/reorgs?chainId=${chainId}&limit=1`), database.sql)
 			const firstReorganizationPage = (await firstReorganizationPageResponse?.json()) as { items: Array<{ id: string }>; nextCursor?: string }
 			expect(firstReorganizationPage.items).toHaveLength(1)
 			expect(firstReorganizationPage.nextCursor).toBeString()
-			const mismatchedReorganizationChainResponse = await handleApi(
-				new Request(`http://localhost/api/v1/reorgs?chainId=${chainId + 1}&limit=1&cursor=${encodeURIComponent(firstReorganizationPage.nextCursor ?? '')}`),
-				database.sql,
-			)
+			const mismatchedReorganizationChainResponse = await handleApi(new Request(`http://localhost/api/v1/reorgs?chainId=${chainId + 1}&limit=1&cursor=${encodeURIComponent(firstReorganizationPage.nextCursor ?? '')}`), database.sql)
 			expect(mismatchedReorganizationChainResponse?.status).toBe(400)
 			const transientReorganization = await database.sql`
 				INSERT INTO chain_reorganizations
@@ -3047,10 +2869,7 @@ postgresTest(
 				VALUES (${chainId}, 2, ${replacement.hash}, 1, ${first.hash}, 1, 'projection-rebuild')
 				RETURNING id::text
 			`
-			const staleReorganizationPageResponse = await handleApi(
-				new Request(`http://localhost/api/v1/reorgs?chainId=${chainId}&limit=1&cursor=${encodeURIComponent(firstReorganizationPage.nextCursor ?? '')}`),
-				database.sql,
-			)
+			const staleReorganizationPageResponse = await handleApi(new Request(`http://localhost/api/v1/reorgs?chainId=${chainId}&limit=1&cursor=${encodeURIComponent(firstReorganizationPage.nextCursor ?? '')}`), database.sql)
 			expect(staleReorganizationPageResponse?.status).toBe(409)
 			await database.sql`DELETE FROM chain_reorganizations WHERE id = ${transientReorganization[0]?.['id']}`
 			const firstIntegrityPageResponse = await handleApi(new Request(`http://localhost/api/v1/state/integrity?chainId=${chainId}&limit=1`), database.sql)
@@ -3072,18 +2891,7 @@ postgresTest(
 				}
 			}
 			const firstTradingCursor = btoa(
-				JSON.stringify([
-					chainId,
-					'trading-catalog',
-					'',
-					firstTradingPage.asOf.blockNumber,
-					firstTradingPage.asOf.blockHash,
-					firstTradingPage.asOf.invalidationId,
-					firstTradingPage.asOf.abiSourceHash,
-					firstTradingPage.asOf.applicationSourceHash,
-					firstTradingPage.asOf.projectionSourceHash,
-					1,
-				]),
+				JSON.stringify([chainId, 'trading-catalog', '', firstTradingPage.asOf.blockNumber, firstTradingPage.asOf.blockHash, firstTradingPage.asOf.invalidationId, firstTradingPage.asOf.abiSourceHash, firstTradingPage.asOf.applicationSourceHash, firstTradingPage.asOf.projectionSourceHash, 1]),
 			)
 			const insertedReorganization = await database.sql`
 				INSERT INTO chain_reorganizations
@@ -3091,17 +2899,9 @@ postgresTest(
 				VALUES (${chainId}, 3, ${third.hash}, -1, NULL, 3, 'projection-rebuild')
 				RETURNING id::text
 			`
-			const secondIntegrityPageResponse = await handleApi(
-				new Request(
-					`http://localhost/api/v1/state/integrity?chainId=${chainId}&limit=1&cursor=${encodeURIComponent(firstIntegrityPage.data.nextCursor ?? '')}`,
-				),
-				database.sql,
-			)
+			const secondIntegrityPageResponse = await handleApi(new Request(`http://localhost/api/v1/state/integrity?chainId=${chainId}&limit=1&cursor=${encodeURIComponent(firstIntegrityPage.data.nextCursor ?? '')}`), database.sql)
 			expect(secondIntegrityPageResponse?.status).toBe(409)
-			const staleTradingPageResponse = await handleApi(
-				new Request(`http://localhost/api/v1/state/trading?chainId=${chainId}&cursor=${encodeURIComponent(firstTradingCursor)}`),
-				database.sql,
-			)
+			const staleTradingPageResponse = await handleApi(new Request(`http://localhost/api/v1/state/trading?chainId=${chainId}&cursor=${encodeURIComponent(firstTradingCursor)}`), database.sql)
 			expect(staleTradingPageResponse?.status).toBe(409)
 			const refreshedIntegrityPageResponse = await handleApi(new Request(`http://localhost/api/v1/state/integrity?chainId=${chainId}&limit=1`), database.sql)
 			const refreshedIntegrityPage = (await refreshedIntegrityPageResponse?.json()) as {
@@ -3115,10 +2915,7 @@ postgresTest(
 			if (integrityCursor === undefined) throw new Error('integrity catalog did not return a continuation')
 			const integrityCursorParts = decodeOpaqueCursor(integrityCursor)
 			if (!Array.isArray(integrityCursorParts) || integrityCursorParts.length !== 14) throw new Error('integrity cursor is malformed')
-			const continuedIntegrityResponse = await handleApi(
-				new Request(`http://localhost/api/v1/state/integrity?chainId=${chainId}&limit=1&cursor=${encodeURIComponent(integrityCursor)}`),
-				database.sql,
-			)
+			const continuedIntegrityResponse = await handleApi(new Request(`http://localhost/api/v1/state/integrity?chainId=${chainId}&limit=1&cursor=${encodeURIComponent(integrityCursor)}`), database.sql)
 			expect(continuedIntegrityResponse?.status).toBe(200)
 			const continuedIntegrity = (await continuedIntegrityResponse?.json()) as { data: { items: Array<{ id: string }>; offset: number } }
 			expect(continuedIntegrity.data.offset).toBe(1)
@@ -3126,12 +2923,7 @@ postgresTest(
 			expect(continuedIntegrity.data.items[0]?.id).not.toBe(insertedReorganization[0]?.['id'])
 			const overflowingIntegrityCursor = [...integrityCursorParts]
 			overflowingIntegrityCursor[11] = Number(integrityCursorParts[4]) + 1
-			const overflowingIntegrityResponse = await handleApi(
-				new Request(
-					`http://localhost/api/v1/state/integrity?chainId=${chainId}&limit=250&cursor=${encodeURIComponent(btoa(JSON.stringify(overflowingIntegrityCursor)))}`,
-				),
-				database.sql,
-			)
+			const overflowingIntegrityResponse = await handleApi(new Request(`http://localhost/api/v1/state/integrity?chainId=${chainId}&limit=250&cursor=${encodeURIComponent(btoa(JSON.stringify(overflowingIntegrityCursor)))}`), database.sql)
 			expect(overflowingIntegrityResponse?.status).toBe(400)
 			const tradingCatalogResponse = await handleApi(new Request(`http://localhost/api/v1/state/trading?chainId=${chainId}`), database.sql)
 			const tradingCatalog = (await tradingCatalogResponse?.json()) as {
@@ -3145,24 +2937,8 @@ postgresTest(
 				}
 			}
 			for (const offset of [100_000, 100_250]) {
-				const cursor = btoa(
-					JSON.stringify([
-						chainId,
-						'trading-catalog',
-						'',
-						tradingCatalog.asOf.blockNumber,
-						tradingCatalog.asOf.blockHash,
-						tradingCatalog.asOf.invalidationId,
-						tradingCatalog.asOf.abiSourceHash,
-						tradingCatalog.asOf.applicationSourceHash,
-						tradingCatalog.asOf.projectionSourceHash,
-						offset,
-					]),
-				)
-				const boundaryResponse = await handleApi(
-					new Request(`http://localhost/api/v1/state/trading?chainId=${chainId}&cursor=${encodeURIComponent(cursor)}`),
-					database.sql,
-				)
+				const cursor = btoa(JSON.stringify([chainId, 'trading-catalog', '', tradingCatalog.asOf.blockNumber, tradingCatalog.asOf.blockHash, tradingCatalog.asOf.invalidationId, tradingCatalog.asOf.abiSourceHash, tradingCatalog.asOf.applicationSourceHash, tradingCatalog.asOf.projectionSourceHash, offset]))
+				const boundaryResponse = await handleApi(new Request(`http://localhost/api/v1/state/trading?chainId=${chainId}&cursor=${encodeURIComponent(cursor)}`), database.sql)
 				expect(boundaryResponse?.status).toBe(200)
 				expect(await boundaryResponse?.json()).toMatchObject({ data: { items: [], offset, hasMore: false } })
 			}
@@ -3202,10 +2978,7 @@ postgresTest(
 					remainingTotal: runCount,
 				})
 				if (runCount === 101) {
-					const continuationResponse = await handleApi(
-						new Request(`http://localhost/api/v1/provenance?cursor=${encodeURIComponent(runProvenance.nextCursor ?? '')}`),
-						database.sql,
-					)
+					const continuationResponse = await handleApi(new Request(`http://localhost/api/v1/provenance?cursor=${encodeURIComponent(runProvenance.nextCursor ?? '')}`), database.sql)
 					expect(await continuationResponse?.json()).toMatchObject({
 						runs: [expect.any(Object)],
 						runsTruncated: false,
@@ -3217,11 +2990,8 @@ postgresTest(
 			const provenanceResponse = await handleApi(new Request('http://localhost/api/v1/provenance'), database.sql)
 			const provenance = await provenanceResponse?.json()
 			if (!isRecord(provenance) || !Array.isArray(provenance['migrations'])) throw new Error('Provenance migrations are malformed')
-			expect(provenance['migrations'].some((migration) => isRecord(migration) && migration['schema_version'] === CURRENT_SCHEMA_VERSION)).toBe(true)
-			const orphanExportResponse = await handleApi(
-				new Request(`http://localhost/api/v1/export?chainId=${chainId}&dataset=logs&canonical=orphaned&fromBlock=2&toBlock=2`),
-				database.sql,
-			)
+			expect(provenance['migrations'].some(migration => isRecord(migration) && migration['schema_version'] === CURRENT_SCHEMA_VERSION)).toBe(true)
+			const orphanExportResponse = await handleApi(new Request(`http://localhost/api/v1/export?chainId=${chainId}&dataset=logs&canonical=orphaned&fromBlock=2&toBlock=2`), database.sql)
 			expect(orphanExportResponse?.headers.get('content-type')).toContain('application/x-ndjson')
 			expect((await orphanExportResponse?.text())?.trim()).toContain(orphan.hash)
 			const readSingleRowExport = async (dataset: 'logs' | 'timeline'): Promise<readonly Record<string, unknown>[]> => {
@@ -3245,15 +3015,15 @@ postgresTest(
 				const secondRead = await readSingleRowExport(dataset)
 				expect(firstRead.length).toBeGreaterThan(1)
 				expect(secondRead).toEqual(firstRead)
-				const identities = firstRead.map((row) => [row['block_hash'], row['tx_hash'], row['log_index'], row['entity_type'], row['entity_identity']].join(':'))
+				const identities = firstRead.map(row => [row['block_hash'], row['tx_hash'], row['log_index'], row['entity_type'], row['entity_identity']].join(':'))
 				expect(new Set(identities).size).toBe(firstRead.length)
 			}
 			const senderLogsResponse = await handleApi(new Request(`http://localhost/api/v1/logs?chainId=${chainId}&address=${address.toLowerCase()}`), database.sql)
 			if (senderLogsResponse === undefined) throw new Error('sender-filtered logs API did not return a response')
 			const senderLogs = (await senderLogsResponse.json()) as { items: Array<{ origin_address: string; arguments: Record<string, unknown> }> }
 			expect(senderLogs.items.length).toBeGreaterThanOrEqual(2)
-			expect(senderLogs.items.every((item) => item.origin_address === address.toLowerCase())).toBe(true)
-			expect(senderLogs.items.some((item) => !JSON.stringify(item.arguments).toLowerCase().includes(address.toLowerCase()))).toBe(true)
+			expect(senderLogs.items.every(item => item.origin_address === address.toLowerCase())).toBe(true)
+			expect(senderLogs.items.some(item => !JSON.stringify(item.arguments).toLowerCase().includes(address.toLowerCase()))).toBe(true)
 			const detailResponse = await handleApi(new Request(`http://localhost/api/v1/logs/${chainId}/${replacement.hash}/${transactionHash}/0`), database.sql)
 			if (detailResponse === undefined) throw new Error('log detail API did not return a response')
 			const detail = (await detailResponse.json()) as { receipt: { logs: unknown[] }; argument_schema: unknown[]; origin_address: string }
@@ -3266,16 +3036,11 @@ postgresTest(
 				const identitylessListResponse = await handleApi(new Request(`http://localhost/api/v1/logs?chainId=${chainId}`), database.sql)
 				if (identitylessListResponse === undefined) throw new Error('identityless logs API did not return a response')
 				const identitylessList = (await identitylessListResponse.json()) as { items: Array<Record<string, unknown>> }
-				expect(
-					identitylessList.items.find((item) => item['block_hash'] === replacement.hash && item['emitter_address'] === discoveredAddress.toLowerCase()),
-				).toMatchObject({
+				expect(identitylessList.items.find(item => item['block_hash'] === replacement.hash && item['emitter_address'] === discoveredAddress.toLowerCase())).toMatchObject({
 					contract_label: null,
 					contract_kind: null,
 				})
-				const identitylessDetailResponse = await handleApi(
-					new Request(`http://localhost/api/v1/logs/${chainId}/${replacement.hash}/${transactionHash}/0`),
-					database.sql,
-				)
+				const identitylessDetailResponse = await handleApi(new Request(`http://localhost/api/v1/logs/${chainId}/${replacement.hash}/${transactionHash}/0`), database.sql)
 				if (identitylessDetailResponse === undefined) throw new Error('identityless log detail API did not return a response')
 				expect(await identitylessDetailResponse.json()).toMatchObject({
 					contract_label: null,
@@ -3325,10 +3090,7 @@ postgresTest(
 			VALUES (${chainId}, ${replacement.hash}, 2, ${transactionHash}, ${referencedOnlyAddress.toLowerCase()},
 				'0x0000000000000000000000000000000000000000', 'referenced', true)
 		`
-			const interactionsResponse = await handleApi(
-				new Request(`http://localhost/api/v1/address-interactions?chainId=${chainId}&address=${referencedOnlyAddress}&limit=1`),
-				database.sql,
-			)
+			const interactionsResponse = await handleApi(new Request(`http://localhost/api/v1/address-interactions?chainId=${chainId}&address=${referencedOnlyAddress}&limit=1`), database.sql)
 			if (interactionsResponse === undefined) throw new Error('address interactions API did not return a response')
 			if (!interactionsResponse.ok) throw new Error(`address interactions API failed: ${await interactionsResponse.text()}`)
 			const interactionsPayload: unknown = await interactionsResponse.json()
@@ -3349,12 +3111,7 @@ postgresTest(
 			expect(interactionsPayload['items'].every(isAccountTransactionValue)).toBeTrue()
 			const interactionCursor = interactionsPayload['nextCursor']
 			if (typeof interactionCursor !== 'string') throw new Error('address interactions API omitted its continuation')
-			const olderInteractionsResponse = await handleApi(
-				new Request(
-					`http://localhost/api/v1/address-interactions?chainId=${chainId}&address=${referencedOnlyAddress}&limit=1&cursor=${encodeURIComponent(interactionCursor)}`,
-				),
-				database.sql,
-			)
+			const olderInteractionsResponse = await handleApi(new Request(`http://localhost/api/v1/address-interactions?chainId=${chainId}&address=${referencedOnlyAddress}&limit=1&cursor=${encodeURIComponent(interactionCursor)}`), database.sql)
 			expect(await olderInteractionsResponse?.json()).toMatchObject({
 				items: [expect.objectContaining({ tx_hash: transactionHash })],
 				total: 2,
@@ -3363,33 +3120,21 @@ postgresTest(
 			const firstActions = (await firstActionsResponse?.json()) as { items: Array<{ tx_hash: string }>; nextCursor?: string }
 			expect(firstActions.items).toHaveLength(1)
 			expect(firstActions.nextCursor).toBeString()
-			const mismatchedActionChainResponse = await handleApi(
-				new Request(`http://localhost/api/v1/actions?chainId=${chainId + 1}&limit=1&cursor=${encodeURIComponent(firstActions.nextCursor ?? '')}`),
-				database.sql,
-			)
+			const mismatchedActionChainResponse = await handleApi(new Request(`http://localhost/api/v1/actions?chainId=${chainId + 1}&limit=1&cursor=${encodeURIComponent(firstActions.nextCursor ?? '')}`), database.sql)
 			expect(mismatchedActionChainResponse?.status).toBe(400)
-			const secondActionsResponse = await handleApi(
-				new Request(`http://localhost/api/v1/actions?chainId=${chainId}&limit=1&cursor=${encodeURIComponent(firstActions.nextCursor ?? '')}`),
-				database.sql,
-			)
+			const secondActionsResponse = await handleApi(new Request(`http://localhost/api/v1/actions?chainId=${chainId}&limit=1&cursor=${encodeURIComponent(firstActions.nextCursor ?? '')}`), database.sql)
 			const secondActions = (await secondActionsResponse?.json()) as { items: Array<{ tx_hash: string }> }
 			expect(secondActions.items).toHaveLength(1)
 			expect(secondActions.items[0]?.tx_hash).not.toBe(firstActions.items[0]?.tx_hash)
 			const originalProjectionSource = await database.sql`SELECT applied_projection_source_hash FROM networks WHERE chain_id = ${chainId}`
 			await database.sql`UPDATE networks SET applied_projection_source_hash = 'changed-projection-source' WHERE chain_id = ${chainId}`
-			const staleActionsResponse = await handleApi(
-				new Request(`http://localhost/api/v1/actions?chainId=${chainId}&limit=1&cursor=${encodeURIComponent(firstActions.nextCursor ?? '')}`),
-				database.sql,
-			)
+			const staleActionsResponse = await handleApi(new Request(`http://localhost/api/v1/actions?chainId=${chainId}&limit=1&cursor=${encodeURIComponent(firstActions.nextCursor ?? '')}`), database.sql)
 			expect(staleActionsResponse?.status).toBe(409)
 			await database.sql`
 				UPDATE networks SET applied_projection_source_hash = ${originalProjectionSource[0]?.['applied_projection_source_hash']}
 				WHERE chain_id = ${chainId}
 			`
-			const transactionsResponse = await handleApi(
-				new Request(`http://localhost/api/v1/address-transactions?chainId=${chainId}&address=${address}&limit=50`),
-				database.sql,
-			)
+			const transactionsResponse = await handleApi(new Request(`http://localhost/api/v1/address-transactions?chainId=${chainId}&address=${address}&limit=50`), database.sql)
 			if (transactionsResponse === undefined) throw new Error('address transactions API did not return a response')
 			const transactions = (await transactionsResponse.json()) as {
 				items: Array<Record<string, unknown>>
@@ -3400,29 +3145,16 @@ postgresTest(
 			expect(transactions).toMatchObject({ total: 62, snapshotBlock: '3' })
 			expect(transactions.items).toHaveLength(50)
 			await database.sql`UPDATE blocks SET canonical = false WHERE chain_id = ${chainId} AND hash = ${third.hash}`
-			const staleCursorResponse = await handleApi(
-				new Request(
-					`http://localhost/api/v1/address-transactions?chainId=${chainId}&address=${address}&limit=50&cursor=${encodeURIComponent(transactions.nextCursor)}`,
-				),
-				database.sql,
-			)
+			const staleCursorResponse = await handleApi(new Request(`http://localhost/api/v1/address-transactions?chainId=${chainId}&address=${address}&limit=50&cursor=${encodeURIComponent(transactions.nextCursor)}`), database.sql)
 			expect(staleCursorResponse?.status).toBe(409)
 			expect(await staleCursorResponse?.json()).toEqual({ error: 'Transaction history changed; restart pagination' })
-			const canonicalOnlyTransactionsResponse = await handleApi(
-				new Request(`http://localhost/api/v1/address-transactions?chainId=${chainId}&address=${address}&limit=50`),
-				database.sql,
-			)
+			const canonicalOnlyTransactionsResponse = await handleApi(new Request(`http://localhost/api/v1/address-transactions?chainId=${chainId}&address=${address}&limit=50`), database.sql)
 			if (canonicalOnlyTransactionsResponse === undefined) throw new Error('canonical-only address transaction page did not return a response')
 			expect(await canonicalOnlyTransactionsResponse.json()).toMatchObject({ total: 1, snapshotBlock: '2' })
 			await database.sql`UPDATE blocks SET canonical = true WHERE chain_id = ${chainId} AND hash = ${third.hash}`
 			const alteredCursorParts = decodeOpaqueCursor(transactions.nextCursor) as unknown[]
 			alteredCursorParts[10] = Number(alteredCursorParts[10]) + 1
-			const alteredTotalResponse = await handleApi(
-				new Request(
-					`http://localhost/api/v1/address-transactions?chainId=${chainId}&address=${address}&limit=50&cursor=${encodeURIComponent(btoa(JSON.stringify(alteredCursorParts)))}`,
-				),
-				database.sql,
-			)
+			const alteredTotalResponse = await handleApi(new Request(`http://localhost/api/v1/address-transactions?chainId=${chainId}&address=${address}&limit=50&cursor=${encodeURIComponent(btoa(JSON.stringify(alteredCursorParts)))}`), database.sql)
 			expect(alteredTotalResponse?.status).toBe(409)
 			expect(await alteredTotalResponse?.json()).toEqual({ error: 'Transaction history changed; restart pagination' })
 			const fourthHash = blockHash('block-four-direct')
@@ -3431,19 +3163,14 @@ postgresTest(
 			INSERT INTO transactions (chain_id, hash, block_hash, block_number, transaction_index, from_address, to_address, value, input, status, gas_used, receipt, canonical)
 			VALUES (${chainId}, ${blockHash('newer-address-transaction')}, ${fourthHash}, 4, 0, ${address.toLowerCase()}, ${discoveredAddress.toLowerCase()}, 0, '0x', 'success', 21000, '{}'::jsonb, true)
 		`
-			const secondPageResponse = await handleApi(
-				new Request(
-					`http://localhost/api/v1/address-transactions?chainId=${chainId}&address=${address}&limit=50&cursor=${encodeURIComponent(transactions.nextCursor)}`,
-				),
-				database.sql,
-			)
+			const secondPageResponse = await handleApi(new Request(`http://localhost/api/v1/address-transactions?chainId=${chainId}&address=${address}&limit=50&cursor=${encodeURIComponent(transactions.nextCursor)}`), database.sql)
 			if (secondPageResponse === undefined) throw new Error('second address transaction page did not return a response')
 			const secondPage = (await secondPageResponse.json()) as { items: Array<Record<string, unknown>>; nextCursor?: string; total: number }
 			const snapshotItems = [...transactions.items, ...secondPage.items]
 			expect(secondPage).toMatchObject({ total: 62 })
 			expect(secondPage.nextCursor).toBeUndefined()
 			expect(snapshotItems).toHaveLength(62)
-			expect(new Set(snapshotItems.map((item) => item['tx_hash'])).size).toBe(62)
+			expect(new Set(snapshotItems.map(item => item['tx_hash'])).size).toBe(62)
 			expect(snapshotItems).toContainEqual(
 				expect.objectContaining({
 					tx_hash: transactionHash,
@@ -3452,11 +3179,8 @@ postgresTest(
 					action_summary: 'Unknown call',
 				}),
 			)
-			expect(snapshotItems.some((item) => item['block_hash'] === fourthHash)).toBe(false)
-			const currentTransactionsResponse = await handleApi(
-				new Request(`http://localhost/api/v1/address-transactions?chainId=${chainId}&address=${address}&limit=1`),
-				database.sql,
-			)
+			expect(snapshotItems.some(item => item['block_hash'] === fourthHash)).toBe(false)
+			const currentTransactionsResponse = await handleApi(new Request(`http://localhost/api/v1/address-transactions?chainId=${chainId}&address=${address}&limit=1`), database.sql)
 			if (currentTransactionsResponse === undefined) throw new Error('current address transaction page did not return a response')
 			expect(await currentTransactionsResponse.json()).toMatchObject({ total: 63, snapshotBlock: '4' })
 			const richListResponse = await handleApi(new Request(`http://localhost/api/v1/richlist?chainId=${chainId}`), database.sql)
@@ -3474,7 +3198,7 @@ postgresTest(
 				total: number
 			}
 			expect(richList.total).toBe(2)
-			const addressRichList = richList.items.find((item) => item['address'] === address.toLowerCase())
+			const addressRichList = richList.items.find(item => item['address'] === address.toLowerCase())
 			expect(addressRichList).toMatchObject({
 				address: address.toLowerCase(),
 				transaction_count: '1',
@@ -3493,10 +3217,7 @@ postgresTest(
 				total: 1,
 				items: [expect.objectContaining({ address: address.toLowerCase(), pool_count: '1', vault_count: '1' })],
 			})
-			const addressIdentityResponse = await handleApi(
-				new Request(`http://localhost/api/v1/address-identity?chainId=${chainId}&address=${discoveredAddress}`),
-				database.sql,
-			)
+			const addressIdentityResponse = await handleApi(new Request(`http://localhost/api/v1/address-identity?chainId=${chainId}&address=${discoveredAddress}`), database.sql)
 			if (addressIdentityResponse === undefined) throw new Error('address identity query did not return a response')
 			expect(await addressIdentityResponse.json()).toMatchObject({
 				address: discoveredAddress.toLowerCase(),
@@ -3511,10 +3232,7 @@ postgresTest(
 					contractLabel: 'Original discovery',
 				}),
 			])
-			expect(addressRichList?.weth_balances).toEqual([
-				expect.objectContaining({ address: wethAddress.toLowerCase(), balance: '1234567890123456789', symbol: 'WETH' }),
-				expect.objectContaining({ address: secondWethAddress.toLowerCase(), balance: '222222222222222222', symbol: 'WETH2' }),
-			])
+			expect(addressRichList?.weth_balances).toEqual([expect.objectContaining({ address: wethAddress.toLowerCase(), balance: '1234567890123456789', symbol: 'WETH' }), expect.objectContaining({ address: secondWethAddress.toLowerCase(), balance: '222222222222222222', symbol: 'WETH2' })])
 			expect(addressRichList?.native_balance_detail).toEqual({ balance: '2000000000456789123', blockNumber: '2' })
 			expect(addressRichList?.pool_associations).toEqual([expect.objectContaining({ address: discoveredAddress.toLowerCase() })])
 			expect(addressRichList?.vault_positions).toEqual([
@@ -3550,9 +3268,7 @@ postgresTest(
 			expect(refreshed.items[0]).toMatchObject({ rep_token_count: '2', sampled_rep_token_count: '2' })
 			expect(refreshed.items[0]).not.toHaveProperty('rep_balance')
 
-			const extraRepTokens = Array.from({ length: 101 }, (_, index) =>
-				getAddress(`0x${(0x7000000000000000000000000000000000000000n + BigInt(index)).toString(16)}`),
-			)
+			const extraRepTokens = Array.from({ length: 101 }, (_, index) => getAddress(`0x${(0x7000000000000000000000000000000000000000n + BigInt(index)).toString(16)}`))
 			await database.seedNetwork({
 				...network,
 				contracts: extraRepTokens.map((token, index) => [token, `Extra REP ${index + 1}`, 'reputationToken']),
@@ -3572,9 +3288,9 @@ postgresTest(
 			const capped = (await cappedResponse.json()) as { items: Array<Record<string, unknown> & { rep_balances: Array<{ address: string }> }> }
 			expect(capped.items[0]).toMatchObject({ sampled_rep_token_count: '102', returned_rep_token_count: '100', rep_balances_truncated: true })
 			expect(capped.items[0]?.rep_balances).toHaveLength(100)
-			expect(capped.items[0]?.rep_balances.map((balance) => balance.address)).toEqual(
+			expect(capped.items[0]?.rep_balances.map(balance => balance.address)).toEqual(
 				[rediscoveredAddress, ...extraRepTokens]
-					.map((token) => token.toLowerCase())
+					.map(token => token.toLowerCase())
 					.toSorted()
 					.slice(0, 100),
 			)
@@ -3587,36 +3303,25 @@ postgresTest(
 			FROM generate_series(1, 5000) participant
 			ON CONFLICT DO NOTHING
 		`
-			const largePageResponse = await database.read((sql) => handleApi(new Request(`http://localhost/api/v1/richlist?chainId=${chainId}&limit=10`), sql), 8_000)
+			const largePageResponse = await database.read(sql => handleApi(new Request(`http://localhost/api/v1/richlist?chainId=${chainId}&limit=10`), sql), 8_000)
 			if (largePageResponse === undefined) throw new Error('large rich-list page did not return a response')
 			const largePage = (await largePageResponse.json()) as { items: Array<{ address: string }>; total: number }
 			expect(largePage).toMatchObject({ total: 5002 })
 			expect(largePage.items).toHaveLength(10)
-			const secondLargePageResponse = await database.read(
-				(sql) => handleApi(new Request(`http://localhost/api/v1/richlist?chainId=${chainId}&limit=10&offset=10`), sql),
-				8_000,
-			)
+			const secondLargePageResponse = await database.read(sql => handleApi(new Request(`http://localhost/api/v1/richlist?chainId=${chainId}&limit=10&offset=10`), sql), 8_000)
 			if (secondLargePageResponse === undefined) throw new Error('second large rich-list page did not return a response')
 			const secondLargePage = (await secondLargePageResponse.json()) as { items: Array<{ address: string }>; total: number; offset: number }
 			expect(secondLargePage).toMatchObject({ total: 5002, offset: 10 })
 			expect(secondLargePage.items).toHaveLength(10)
-			expect(new Set([...largePage.items.map((item) => item.address), ...secondLargePage.items.map((item) => item.address)]).size).toBe(20)
-			const largeBeyondEndResponse = await database.read(
-				(sql) => handleApi(new Request(`http://localhost/api/v1/richlist?chainId=${chainId}&limit=10&offset=100000`), sql),
-				8_000,
-			)
+			expect(new Set([...largePage.items.map(item => item.address), ...secondLargePage.items.map(item => item.address)]).size).toBe(20)
+			const largeBeyondEndResponse = await database.read(sql => handleApi(new Request(`http://localhost/api/v1/richlist?chainId=${chainId}&limit=10&offset=100000`), sql), 8_000)
 			if (largeBeyondEndResponse === undefined) throw new Error('large beyond-end rich-list page did not return a response')
 			const largeBeyondEnd = (await largeBeyondEndResponse.json()) as { items: unknown[]; total: number }
 			expect(largeBeyondEnd).toMatchObject({ items: [], total: 5002 })
 
 			const manifestResetLease = await database.tryAcquireIndexerLock(chainId)
 			if (manifestResetLease === undefined) throw new Error('manifest reset did not acquire its lock')
-			expect(
-				await database.seedNetwork(
-					{ ...network, contracts: [[address, 'Final manifest', 'zoltar']] },
-					{ lease: manifestResetLease, resetCanonicalHistoryOnManifestChange: true },
-				),
-			).toBe(true)
+			expect(await database.seedNetwork({ ...network, contracts: [[address, 'Final manifest', 'zoltar']] }, { lease: manifestResetLease, resetCanonicalHistoryOnManifestChange: true })).toBe(true)
 			await manifestResetLease.release()
 			expect(await database.checkpoint(chainId)).toBeUndefined()
 			expect(await database.networkStartBlock(chainId)).toBe(1n)
@@ -3820,33 +3525,13 @@ postgresTest(
 				observed_rounds: 1,
 				report_data: { marker: 'historical' },
 			})
-			expect(operations.data.escalations).toEqual([
-				expect.objectContaining({ block_number: '1', event_name: 'DepositOnOutcome', invalid_stake_atto_rep: '10' }),
-			])
-			expect(operations.data.auctions).toEqual([
-				expect.objectContaining({ block_number: '1', event_name: 'BidSubmitted', bid_count: 1, bidder_count: 1, settlement_count: 0 }),
-			])
+			expect(operations.data.escalations).toEqual([expect.objectContaining({ block_number: '1', event_name: 'DepositOnOutcome', invalid_stake_atto_rep: '10' })])
+			expect(operations.data.auctions).toEqual([expect.objectContaining({ block_number: '1', event_name: 'BidSubmitted', bid_count: 1, bidder_count: 1, settlement_count: 0 })])
 			expect(operations.data.totals).toMatchObject({ reports: 1, escalations: 1, auctions: 1, reorganizations: 1 })
 			const reportCursor = btoa(
-				JSON.stringify([
-					historicalChainId,
-					'reports-catalog',
-					'catalog',
-					operations.asOf.blockNumber,
-					operations.asOf.blockHash,
-					operations.asOf.invalidationId,
-					operations.asOf.abiSourceHash,
-					operations.asOf.applicationSourceHash,
-					operations.asOf.projectionSourceHash,
-					'1',
-					firstTransactionHash,
-					0,
-				]),
+				JSON.stringify([historicalChainId, 'reports-catalog', 'catalog', operations.asOf.blockNumber, operations.asOf.blockHash, operations.asOf.invalidationId, operations.asOf.abiSourceHash, operations.asOf.applicationSourceHash, operations.asOf.projectionSourceHash, '1', firstTransactionHash, 0]),
 			)
-			const crossScopeResponse = await handleApi(
-				new Request(`http://localhost/api/v1/state/escalations?chainId=${historicalChainId}&cursor=${encodeURIComponent(reportCursor)}`),
-				database.sql,
-			)
+			const crossScopeResponse = await handleApi(new Request(`http://localhost/api/v1/state/escalations?chainId=${historicalChainId}&cursor=${encodeURIComponent(reportCursor)}`), database.sql)
 			expect(crossScopeResponse?.status).toBe(400)
 			expect(await crossScopeResponse?.json()).toEqual({ error: 'cursor does not match the requested entity' })
 			await database.sql`
@@ -3854,10 +3539,7 @@ postgresTest(
 						(chain_id, previous_block, previous_hash, ancestor_block, ancestor_hash, depth, reason)
 					VALUES (${historicalChainId}, 2, ${secondHash}, 1, ${firstHash}, 1, 'projection-rebuild')
 				`
-			const staleGenerationResponse = await handleApi(
-				new Request(`http://localhost/api/v1/state/reports?chainId=${historicalChainId}&cursor=${encodeURIComponent(reportCursor)}`),
-				database.sql,
-			)
+			const staleGenerationResponse = await handleApi(new Request(`http://localhost/api/v1/state/reports?chainId=${historicalChainId}&cursor=${encodeURIComponent(reportCursor)}`), database.sql)
 			expect(staleGenerationResponse?.status).toBe(409)
 		} finally {
 			await database.sql.unsafe('TRUNCATE TABLE networks CASCADE')
@@ -3957,21 +3639,14 @@ postgresTest(
 					SELECT event_name FROM liquidation_approval_events
 					WHERE chain_id = ${operationsChainId} AND canonical ORDER BY log_index
 				`
-				expect(storedApprovalEvents.map((row: Record<string, unknown>) => row['event_name'])).toEqual([
-					'LiquidationApprovalSet',
-					'LiquidationApprovalReserved',
-					'LiquidationApprovalReleased',
-					'LiquidationApprovalConsumed',
-					'LiquidationApprovalRevoked',
-					'LiquidationApprovalNonceInvalidated',
-				])
+				expect(storedApprovalEvents.map((row: Record<string, unknown>) => row['event_name'])).toEqual(['LiquidationApprovalSet', 'LiquidationApprovalReserved', 'LiquidationApprovalReleased', 'LiquidationApprovalConsumed', 'LiquidationApprovalRevoked', 'LiquidationApprovalNonceInvalidated'])
 				const indexedOperationsResponse = await handleApi(new Request(`http://localhost/api/v1/operations?chainId=${operationsChainId}`), database.sql)
 				if (indexedOperationsResponse === undefined) throw new Error('indexed operations endpoint did not return a response')
 				const indexedOperations = (await indexedOperationsResponse.json()) as {
 					data: { risk: { approvalEvents: Array<{ event_name: string }> } }
 				}
 				expect(indexedOperations.data.risk.approvalEvents).toHaveLength(6)
-				expect(indexedOperations.data.risk.approvalEvents.map((event) => event.event_name)).toContain('LiquidationApprovalNonceInvalidated')
+				expect(indexedOperations.data.risk.approvalEvents.map(event => event.event_name)).toContain('LiquidationApprovalNonceInvalidated')
 				await database.storeEntityStateSnapshots(
 					operationsChainId,
 					1n,
@@ -4001,29 +3676,16 @@ postgresTest(
 					(${operationsChainId}, ${hash}, ${transactionHash}, 0, 1, 'audit-link', 'b', 'AuditTwin', '{"side":"b","query":"🔮"}'::jsonb,
 						'[]'::jsonb, ${oracle.toLowerCase()}, 'ReportSubmitted', true)
 			`
-			const firstTimelinePageResponse = await handleApi(
-				new Request(`http://localhost/api/v1/state/timeline?chainId=${operationsChainId}&event=AuditTwin&q=${encodeURIComponent('🔮')}&limit=1`),
-				database.sql,
-			)
+			const firstTimelinePageResponse = await handleApi(new Request(`http://localhost/api/v1/state/timeline?chainId=${operationsChainId}&event=AuditTwin&q=${encodeURIComponent('🔮')}&limit=1`), database.sql)
 			const firstTimelinePage = (await firstTimelinePageResponse?.json()) as {
 				data: { items: Array<{ entity_identity: string }>; total: string; hasMore: boolean; nextCursor?: string }
 			}
 			expect(firstTimelinePage.data).toMatchObject({ items: [expect.objectContaining({ entity_identity: 'b' })], total: '2', hasMore: true })
 			const timelineCursor = firstTimelinePage.data.nextCursor
 			if (typeof timelineCursor !== 'string') throw new Error('global timeline omitted its continuation')
-			const mismatchedTimelineFilterResponse = await handleApi(
-				new Request(
-					`http://localhost/api/v1/state/timeline?chainId=${operationsChainId}&event=AuditTwin&q=${encodeURIComponent('🪐')}&limit=1&cursor=${encodeURIComponent(timelineCursor)}`,
-				),
-				database.sql,
-			)
+			const mismatchedTimelineFilterResponse = await handleApi(new Request(`http://localhost/api/v1/state/timeline?chainId=${operationsChainId}&event=AuditTwin&q=${encodeURIComponent('🪐')}&limit=1&cursor=${encodeURIComponent(timelineCursor)}`), database.sql)
 			expect(mismatchedTimelineFilterResponse?.status).toBe(400)
-			const secondTimelinePageResponse = await handleApi(
-				new Request(
-					`http://localhost/api/v1/state/timeline?chainId=${operationsChainId}&event=AuditTwin&q=${encodeURIComponent('🔮')}&limit=1&cursor=${encodeURIComponent(timelineCursor)}`,
-				),
-				database.sql,
-			)
+			const secondTimelinePageResponse = await handleApi(new Request(`http://localhost/api/v1/state/timeline?chainId=${operationsChainId}&event=AuditTwin&q=${encodeURIComponent('🔮')}&limit=1&cursor=${encodeURIComponent(timelineCursor)}`), database.sql)
 			expect(await secondTimelinePageResponse?.json()).toMatchObject({
 				data: { items: [expect.objectContaining({ entity_identity: 'a' })], total: '2', hasMore: false },
 			})
@@ -4297,10 +3959,7 @@ postgresTest(
 			`
 
 			const unicodeTradingQuery = encodeURIComponent('🔮')
-			const firstUnicodeTradingPageResponse = await handleApi(
-				new Request(`http://localhost/api/v1/state/trading?chainId=${operationsChainId}&q=${unicodeTradingQuery}&limit=1`),
-				database.sql,
-			)
+			const firstUnicodeTradingPageResponse = await handleApi(new Request(`http://localhost/api/v1/state/trading?chainId=${operationsChainId}&q=${unicodeTradingQuery}&limit=1`), database.sql)
 			const firstUnicodeTradingPage = (await firstUnicodeTradingPageResponse?.json()) as {
 				data: { items: Array<{ question_title: string }>; total: number; hasMore: boolean; nextCursor?: string }
 			}
@@ -4311,19 +3970,9 @@ postgresTest(
 			})
 			const unicodeTradingCursor = firstUnicodeTradingPage.data.nextCursor
 			if (typeof unicodeTradingCursor !== 'string') throw new Error('Unicode trading catalog omitted its continuation')
-			const mismatchedUnicodeTradingFilterResponse = await handleApi(
-				new Request(
-					`http://localhost/api/v1/state/trading?chainId=${operationsChainId}&q=${encodeURIComponent('🪐')}&limit=1&cursor=${encodeURIComponent(unicodeTradingCursor)}`,
-				),
-				database.sql,
-			)
+			const mismatchedUnicodeTradingFilterResponse = await handleApi(new Request(`http://localhost/api/v1/state/trading?chainId=${operationsChainId}&q=${encodeURIComponent('🪐')}&limit=1&cursor=${encodeURIComponent(unicodeTradingCursor)}`), database.sql)
 			expect(mismatchedUnicodeTradingFilterResponse?.status).toBe(400)
-			const secondUnicodeTradingPageResponse = await handleApi(
-				new Request(
-					`http://localhost/api/v1/state/trading?chainId=${operationsChainId}&q=${unicodeTradingQuery}&limit=1&cursor=${encodeURIComponent(unicodeTradingCursor)}`,
-				),
-				database.sql,
-			)
+			const secondUnicodeTradingPageResponse = await handleApi(new Request(`http://localhost/api/v1/state/trading?chainId=${operationsChainId}&q=${unicodeTradingQuery}&limit=1&cursor=${encodeURIComponent(unicodeTradingCursor)}`), database.sql)
 			expect(await secondUnicodeTradingPageResponse?.json()).toMatchObject({
 				data: {
 					items: [expect.objectContaining({ question_title: 'Will the 🔮 forecast resolve?' })],
@@ -4333,10 +3982,7 @@ postgresTest(
 				},
 			})
 
-			const firstResponse = await handleApi(
-				new Request(`http://localhost/api/v1/state/reports/${operationsChainId}/${oracle.toLowerCase()}/7?limit=1&decisionLimit=1`),
-				database.sql,
-			)
+			const firstResponse = await handleApi(new Request(`http://localhost/api/v1/state/reports/${operationsChainId}/${oracle.toLowerCase()}/7?limit=1&decisionLimit=1`), database.sql)
 			if (firstResponse === undefined) throw new Error('report detail endpoint did not return a response')
 			const first = (await firstResponse.json()) as {
 				data: {
@@ -4355,12 +4001,7 @@ postgresTest(
 			const decisionItems = [...first.data.coordinatorDecisions.items]
 			let decisionCursor: string | undefined = first.data.coordinatorDecisions.nextCursor
 			while (decisionCursor !== undefined) {
-				const decisionResponse = await handleApi(
-					new Request(
-						`http://localhost/api/v1/state/reports/${operationsChainId}/${oracle.toLowerCase()}/7?limit=1&decisionLimit=1&decisionCursor=${encodeURIComponent(decisionCursor)}`,
-					),
-					database.sql,
-				)
+				const decisionResponse = await handleApi(new Request(`http://localhost/api/v1/state/reports/${operationsChainId}/${oracle.toLowerCase()}/7?limit=1&decisionLimit=1&decisionCursor=${encodeURIComponent(decisionCursor)}`), database.sql)
 				if (decisionResponse === undefined) throw new Error('coordinator decision continuation did not return a response')
 				const decisionPage = (await decisionResponse.json()) as {
 					data: { coordinatorDecisions: { items: Array<Record<string, unknown>>; hasMore: boolean; nextCursor?: string } }
@@ -4369,37 +4010,22 @@ postgresTest(
 				decisionCursor = decisionPage.data.coordinatorDecisions.nextCursor
 			}
 			expect(decisionItems).toHaveLength(3)
-			expect(new Set(decisionItems.map((item) => `${String(item['tx_hash'])}:${String(item['log_index'])}`)).size).toBe(3)
+			expect(new Set(decisionItems.map(item => `${String(item['tx_hash'])}:${String(item['log_index'])}`)).size).toBe(3)
 			await database.sql`
 				UPDATE networks SET applied_application_source_hash = 'changed-during-decision-pagination'
 				WHERE chain_id = ${operationsChainId}
 			`
-			const staleDecisionResponse = await handleApi(
-				new Request(
-					`http://localhost/api/v1/state/reports/${operationsChainId}/${oracle.toLowerCase()}/7?decisionLimit=1&decisionCursor=${encodeURIComponent(first.data.coordinatorDecisions.nextCursor)}`,
-				),
-				database.sql,
-			)
+			const staleDecisionResponse = await handleApi(new Request(`http://localhost/api/v1/state/reports/${operationsChainId}/${oracle.toLowerCase()}/7?decisionLimit=1&decisionCursor=${encodeURIComponent(first.data.coordinatorDecisions.nextCursor)}`), database.sql)
 			expect(staleDecisionResponse?.status).toBe(409)
 			await database.sql`
 				UPDATE networks SET applied_application_source_hash = NULL WHERE chain_id = ${operationsChainId}
 			`
-			const secondResponse = await handleApi(
-				new Request(
-					`http://localhost/api/v1/state/reports/${operationsChainId}/${oracle.toLowerCase()}/7?limit=1&cursor=${encodeURIComponent(first.data.rounds.nextCursor)}`,
-				),
-				database.sql,
-			)
+			const secondResponse = await handleApi(new Request(`http://localhost/api/v1/state/reports/${operationsChainId}/${oracle.toLowerCase()}/7?limit=1&cursor=${encodeURIComponent(first.data.rounds.nextCursor)}`), database.sql)
 			if (secondResponse === undefined) throw new Error('report detail continuation did not return a response')
 			const second = (await secondResponse.json()) as { data: { rounds: { items: unknown[]; hasMore: boolean; nextCursor: string } } }
 			expect(second.data.rounds).toMatchObject({ hasMore: true })
 			expect(second.data.rounds.items).toHaveLength(1)
-			const thirdResponse = await handleApi(
-				new Request(
-					`http://localhost/api/v1/state/reports/${operationsChainId}/${oracle.toLowerCase()}/7?limit=1&cursor=${encodeURIComponent(second.data.rounds.nextCursor)}`,
-				),
-				database.sql,
-			)
+			const thirdResponse = await handleApi(new Request(`http://localhost/api/v1/state/reports/${operationsChainId}/${oracle.toLowerCase()}/7?limit=1&cursor=${encodeURIComponent(second.data.rounds.nextCursor)}`), database.sql)
 			if (thirdResponse === undefined) throw new Error('report detail final continuation did not return a response')
 			const third = (await thirdResponse.json()) as { data: { rounds: { items: unknown[]; hasMore: boolean } } }
 			expect(third.data.rounds).toMatchObject({ hasMore: false })
@@ -4440,13 +4066,10 @@ postgresTest(
 			}
 			expect(firstCatalog.data.items).toHaveLength(1)
 			expect(firstCatalog.data.items[0]).toMatchObject({ report_id: '103', tx_hash: `0x${(20103).toString(16).padStart(64, '0')}` })
-			const secondCatalogResponse = await handleApi(
-				new Request(`http://localhost/api/v1/state/reports?chainId=${operationsChainId}&limit=1&cursor=${encodeURIComponent(firstCatalog.data.nextCursor)}`),
-				database.sql,
-			)
+			const secondCatalogResponse = await handleApi(new Request(`http://localhost/api/v1/state/reports?chainId=${operationsChainId}&limit=1&cursor=${encodeURIComponent(firstCatalog.data.nextCursor)}`), database.sql)
 			if (secondCatalogResponse === undefined) throw new Error('report catalog continuation did not return a response')
 			const secondCatalog = (await secondCatalogResponse.json()) as { data: { items: Array<{ report_id: string }> } }
-			expect(secondCatalog.data.items.map((item) => item.report_id)).toEqual(['102'])
+			expect(secondCatalog.data.items.map(item => item.report_id)).toEqual(['102'])
 			const generationRows = await database.sql`
 					INSERT INTO chain_reorganizations
 						(chain_id, previous_block, previous_hash, ancestor_block, ancestor_hash, depth, reason)
@@ -4455,10 +4078,7 @@ postgresTest(
 				`
 			const generationId = generationRows[0]?.['id']
 			if (typeof generationId !== 'string') throw new Error('same-head projection generation was not recorded')
-			const staleCatalogResponse = await handleApi(
-				new Request(`http://localhost/api/v1/state/reports?chainId=${operationsChainId}&limit=1&cursor=${encodeURIComponent(firstCatalog.data.nextCursor)}`),
-				database.sql,
-			)
+			const staleCatalogResponse = await handleApi(new Request(`http://localhost/api/v1/state/reports?chainId=${operationsChainId}&limit=1&cursor=${encodeURIComponent(firstCatalog.data.nextCursor)}`), database.sql)
 			expect(staleCatalogResponse?.status).toBe(409)
 			await database.sql`DELETE FROM chain_reorganizations WHERE id = ${generationId}`
 
@@ -4480,10 +4100,7 @@ postgresTest(
 			})
 
 			const selfTransferMarket = `0x${(1000002).toString(16).padStart(40, '0')}`
-			const selfTransferResponse = await handleApi(
-				new Request(`http://localhost/api/v1/state/trading/${operationsChainId}/${selfTransferMarket}`),
-				database.sql,
-			)
+			const selfTransferResponse = await handleApi(new Request(`http://localhost/api/v1/state/trading/${operationsChainId}/${selfTransferMarket}`), database.sql)
 			if (selfTransferResponse === undefined) throw new Error('self-transfer trading endpoint did not return a response')
 			const selfTransfer = (await selfTransferResponse.json()) as {
 				data: { lpPositions: Array<{ address: string; received_liquidity: string; sent_liquidity: string; balance: string }> }
@@ -4495,10 +4112,7 @@ postgresTest(
 				balance: '2',
 			})
 
-			const portfolioResponse = await handleApi(
-				new Request(`http://localhost/api/v1/state/address-portfolio?chainId=${operationsChainId}&address=${address.toLowerCase()}`),
-				database.sql,
-			)
+			const portfolioResponse = await handleApi(new Request(`http://localhost/api/v1/state/address-portfolio?chainId=${operationsChainId}&address=${address.toLowerCase()}`), database.sql)
 			if (portfolioResponse === undefined) throw new Error('portfolio endpoint did not return a response')
 			const portfolio = (await portfolioResponse.json()) as {
 				data: {
@@ -4527,19 +4141,13 @@ postgresTest(
 			expect(portfolioContinuation.data.lp_positions).toHaveLength(2)
 			expect(portfolioContinuation.data.fork_participation).toHaveLength(2)
 			expect(portfolioContinuation.data.report_participation).toHaveLength(2)
-			for (const kind of ['lp', 'forks', 'reports'] as const)
-				expect(portfolioContinuation.data.portfolioPagination[kind]).toMatchObject({ total: 102, hasMore: false })
-			expect(new Set([...portfolio.data.lp_positions, ...portfolioContinuation.data.lp_positions].map((item) => item.market_address)).size).toBe(102)
-			expect(portfolioContinuation.data.lp_positions.find((item) => item.market_address === selfTransferMarket)).toMatchObject({ balance: '2' })
+			for (const kind of ['lp', 'forks', 'reports'] as const) expect(portfolioContinuation.data.portfolioPagination[kind]).toMatchObject({ total: 102, hasMore: false })
+			expect(new Set([...portfolio.data.lp_positions, ...portfolioContinuation.data.lp_positions].map(item => item.market_address)).size).toBe(102)
+			expect(portfolioContinuation.data.lp_positions.find(item => item.market_address === selfTransferMarket)).toMatchObject({ balance: '2' })
 
 			const changedPortfolioCursor = decodeOpaqueCursor(portfolio.data.portfolioPagination.lp.nextCursor) as unknown[]
 			changedPortfolioCursor[9] = 103
-			const changedPortfolioResponse = await handleApi(
-				new Request(
-					`http://localhost/api/v1/state/address-portfolio?chainId=${operationsChainId}&address=${address.toLowerCase()}&lpCursor=${encodeURIComponent(btoa(JSON.stringify(changedPortfolioCursor)))}`,
-				),
-				database.sql,
-			)
+			const changedPortfolioResponse = await handleApi(new Request(`http://localhost/api/v1/state/address-portfolio?chainId=${operationsChainId}&address=${address.toLowerCase()}&lpCursor=${encodeURIComponent(btoa(JSON.stringify(changedPortfolioCursor)))}`), database.sql)
 			expect(changedPortfolioResponse?.status).toBe(409)
 
 			const riskCatalogResponse = await handleApi(new Request(`http://localhost/api/v1/state/risk?chainId=${operationsChainId}&limit=250`), database.sql)
@@ -4566,12 +4174,7 @@ postgresTest(
 				vaultTotal: 261,
 				vaultHasMore: true,
 			})
-			const riskContinuationResponse = await handleApi(
-				new Request(
-					`http://localhost/api/v1/state/risk?chainId=${operationsChainId}&limit=250&poolCursor=${encodeURIComponent(riskCatalog.data.pagination.poolNextCursor)}&vaultCursor=${encodeURIComponent(riskCatalog.data.pagination.vaultNextCursor)}`,
-				),
-				database.sql,
-			)
+			const riskContinuationResponse = await handleApi(new Request(`http://localhost/api/v1/state/risk?chainId=${operationsChainId}&limit=250&poolCursor=${encodeURIComponent(riskCatalog.data.pagination.poolNextCursor)}&vaultCursor=${encodeURIComponent(riskCatalog.data.pagination.vaultNextCursor)}`), database.sql)
 			if (riskContinuationResponse === undefined) throw new Error('risk catalog continuation did not return a response')
 			const riskContinuation = (await riskContinuationResponse.json()) as typeof riskCatalog
 			expect(riskContinuation.data.pools).toHaveLength(11)
@@ -4590,15 +4193,12 @@ postgresTest(
 			}
 			expect(forkCatalog.data).toMatchObject({ total: 260, hasMore: true })
 			expect(forkCatalog.data.items).toHaveLength(250)
-			const forkContinuationResponse = await handleApi(
-				new Request(`http://localhost/api/v1/state/forks?chainId=${operationsChainId}&limit=250&cursor=${encodeURIComponent(forkCatalog.data.nextCursor)}`),
-				database.sql,
-			)
+			const forkContinuationResponse = await handleApi(new Request(`http://localhost/api/v1/state/forks?chainId=${operationsChainId}&limit=250&cursor=${encodeURIComponent(forkCatalog.data.nextCursor)}`), database.sql)
 			if (forkContinuationResponse === undefined) throw new Error('fork catalog continuation did not return a response')
 			const forkContinuation = (await forkContinuationResponse.json()) as typeof forkCatalog
 			expect(forkContinuation.data).toMatchObject({ total: 260, hasMore: false })
 			expect(forkContinuation.data.items).toHaveLength(10)
-			expect(new Set([...forkCatalog.data.items, ...forkContinuation.data.items].map((item) => item.universe_identity)).size).toBe(260)
+			expect(new Set([...forkCatalog.data.items, ...forkContinuation.data.items].map(item => item.universe_identity)).size).toBe(260)
 
 			const sameBlockPool = `0x${(4000002).toString(16).padStart(40, '0')}`
 			await database.sql`
@@ -4613,10 +4213,7 @@ postgresTest(
 					${oracle.toLowerCase()}, ${address.toLowerCase()}, 15000, 0, 0, 0, true
 				)
 			`
-			const firstQuestionHistoryResponse = await handleApi(
-				new Request(`http://localhost/api/v1/state/questions/${operationsChainId}/1?fromBlock=2&toBlock=2&limit=1`),
-				database.sql,
-			)
+			const firstQuestionHistoryResponse = await handleApi(new Request(`http://localhost/api/v1/state/questions/${operationsChainId}/1?fromBlock=2&toBlock=2&limit=1`), database.sql)
 			if (firstQuestionHistoryResponse === undefined) throw new Error('question history did not return a response')
 			const firstQuestionHistory = (await firstQuestionHistoryResponse.json()) as {
 				pools: Array<{ pool_address: string }>
@@ -4624,22 +4221,12 @@ postgresTest(
 			}
 			expect(firstQuestionHistory.pools).toHaveLength(1)
 			expect(firstQuestionHistory.coverage.nextCursor).toBeString()
-			const secondQuestionHistoryResponse = await handleApi(
-				new Request(
-					`http://localhost/api/v1/state/questions/${operationsChainId}/1?fromBlock=2&toBlock=2&limit=1&cursor=${encodeURIComponent(firstQuestionHistory.coverage.nextCursor)}`,
-				),
-				database.sql,
-			)
+			const secondQuestionHistoryResponse = await handleApi(new Request(`http://localhost/api/v1/state/questions/${operationsChainId}/1?fromBlock=2&toBlock=2&limit=1&cursor=${encodeURIComponent(firstQuestionHistory.coverage.nextCursor)}`), database.sql)
 			if (secondQuestionHistoryResponse === undefined) throw new Error('question history continuation did not return a response')
 			const secondQuestionHistory = (await secondQuestionHistoryResponse.json()) as { pools: Array<{ pool_address: string }> }
 			expect(secondQuestionHistory.pools).toHaveLength(1)
 			expect(secondQuestionHistory.pools[0]?.pool_address).not.toBe(firstQuestionHistory.pools[0]?.pool_address)
-			const mismatchedQuestionHistoryResponse = await handleApi(
-				new Request(
-					`http://localhost/api/v1/state/questions/${operationsChainId}/1?fromBlock=1&toBlock=2&limit=1&cursor=${encodeURIComponent(firstQuestionHistory.coverage.nextCursor)}`,
-				),
-				database.sql,
-			)
+			const mismatchedQuestionHistoryResponse = await handleApi(new Request(`http://localhost/api/v1/state/questions/${operationsChainId}/1?fromBlock=1&toBlock=2&limit=1&cursor=${encodeURIComponent(firstQuestionHistory.coverage.nextCursor)}`), database.sql)
 			expect(mismatchedQuestionHistoryResponse?.status).toBe(400)
 			const stateHistoryGeneration = await database.sql`
 				INSERT INTO chain_reorganizations
@@ -4648,12 +4235,7 @@ postgresTest(
 					${`0x${(10003).toString(16).padStart(64, '0')}`}, 0, 'projection-rebuild')
 				RETURNING id::text
 			`
-			const staleQuestionHistoryResponse = await handleApi(
-				new Request(
-					`http://localhost/api/v1/state/questions/${operationsChainId}/1?fromBlock=2&toBlock=2&limit=1&cursor=${encodeURIComponent(firstQuestionHistory.coverage.nextCursor)}`,
-				),
-				database.sql,
-			)
+			const staleQuestionHistoryResponse = await handleApi(new Request(`http://localhost/api/v1/state/questions/${operationsChainId}/1?fromBlock=2&toBlock=2&limit=1&cursor=${encodeURIComponent(firstQuestionHistory.coverage.nextCursor)}`), database.sql)
 			expect(staleQuestionHistoryResponse?.status).toBe(409)
 			await database.sql`DELETE FROM chain_reorganizations WHERE id = ${stateHistoryGeneration[0]?.['id']}`
 
@@ -4723,10 +4305,7 @@ postgresTest(
 					(${operationsChainId}, ${`0x${'f'.repeat(64)}`}, ${`0x${'d'.repeat(64)}`}, 0, 0, 'amm', ${uniswapOnlyMarket},
 						'Swap', jsonb_build_object('sqrtPriceX96', '79228162514264337593543950336'), '[]'::jsonb, ${uniswapOnlyMarket}, 'Swap', true)
 			`
-			const uniswapSyncOnlyResponse = await handleApi(
-				new Request(`http://localhost/api/v1/state/trading/${operationsChainId}/${uniswapSyncOnlyMarket}`),
-				database.sql,
-			)
+			const uniswapSyncOnlyResponse = await handleApi(new Request(`http://localhost/api/v1/state/trading/${operationsChainId}/${uniswapSyncOnlyMarket}`), database.sql)
 			expect(uniswapSyncOnlyResponse?.status).toBe(404)
 			await database.sql`
 				DELETE FROM protocol_timeline_entries WHERE chain_id = ${operationsChainId}
@@ -4785,10 +4364,7 @@ postgresTest(
 			const boundedApprovals = (await boundedApprovalsResponse.json()) as { data: { risk: { approvalEvents: unknown[] } } }
 			expect(boundedApprovals.data.risk.approvalEvents).toHaveLength(100)
 
-			const riskResponse = await handleApi(
-				new Request(`http://localhost/api/v1/state/risk/vaults/${operationsChainId}/${oracle.toLowerCase()}/${address.toLowerCase()}`),
-				database.sql,
-			)
+			const riskResponse = await handleApi(new Request(`http://localhost/api/v1/state/risk/vaults/${operationsChainId}/${oracle.toLowerCase()}/${address.toLowerCase()}`), database.sql)
 			if (riskResponse === undefined) throw new Error('vault risk endpoint did not return a response')
 			const risk = (await riskResponse.json()) as {
 				data: Record<string, unknown> & { approvalEvents: Array<{ approval_identity: string; event_name: string; event_data: Record<string, unknown> }> }
@@ -4803,10 +4379,8 @@ postgresTest(
 			})
 			expect(risk.data['scanner_reason']).toContain('different evidence blocks')
 			expect(risk.data.approvalEvents).toHaveLength(100)
-			expect(risk.data.approvalEvents).toContainEqual(
-				expect.objectContaining({ approval_identity: linkedApprovalId, event_name: 'LiquidationApprovalReserved' }),
-			)
-			expect(risk.data.approvalEvents.some((event) => event.event_data['securityPool'] === uniswapOnlyMarket)).toBe(false)
+			expect(risk.data.approvalEvents).toContainEqual(expect.objectContaining({ approval_identity: linkedApprovalId, event_name: 'LiquidationApprovalReserved' }))
+			expect(risk.data.approvalEvents.some(event => event.event_data['securityPool'] === uniswapOnlyMarket)).toBe(false)
 
 			await database.sql`
 				INSERT INTO entity_state_observations (
@@ -4821,22 +4395,14 @@ postgresTest(
 				WHERE chain_id = ${operationsChainId} AND entity_type = 'vault'
 				LIMIT 1
 			`
-			const firstRiskHistoryResponse = await handleApi(
-				new Request(`http://localhost/api/v1/state/risk/vaults/${operationsChainId}/${oracle.toLowerCase()}/${address.toLowerCase()}?limit=1`),
-				database.sql,
-			)
+			const firstRiskHistoryResponse = await handleApi(new Request(`http://localhost/api/v1/state/risk/vaults/${operationsChainId}/${oracle.toLowerCase()}/${address.toLowerCase()}?limit=1`), database.sql)
 			if (firstRiskHistoryResponse === undefined) throw new Error('vault risk history did not return a response')
 			const firstRiskHistory = (await firstRiskHistoryResponse.json()) as {
 				data: { history: { stateSnapshots: Array<{ id: string }>; nextCursor: string } }
 			}
 			expect(firstRiskHistory.data.history.stateSnapshots).toHaveLength(1)
 			expect(firstRiskHistory.data.history.nextCursor).toBeString()
-			const secondRiskHistoryResponse = await handleApi(
-				new Request(
-					`http://localhost/api/v1/state/risk/vaults/${operationsChainId}/${oracle.toLowerCase()}/${address.toLowerCase()}?limit=1&cursor=${encodeURIComponent(firstRiskHistory.data.history.nextCursor)}`,
-				),
-				database.sql,
-			)
+			const secondRiskHistoryResponse = await handleApi(new Request(`http://localhost/api/v1/state/risk/vaults/${operationsChainId}/${oracle.toLowerCase()}/${address.toLowerCase()}?limit=1&cursor=${encodeURIComponent(firstRiskHistory.data.history.nextCursor)}`), database.sql)
 			expect(secondRiskHistoryResponse?.status).toBe(200)
 			const secondRiskHistory = (await secondRiskHistoryResponse?.json()) as {
 				data: { history: { stateSnapshots: Array<{ id: string }> } }
@@ -4850,12 +4416,7 @@ postgresTest(
 					${`0x${(10003).toString(16).padStart(64, '0')}`}, 0, 'projection-rebuild')
 				RETURNING id::text
 			`
-			const staleRiskHistoryResponse = await handleApi(
-				new Request(
-					`http://localhost/api/v1/state/risk/vaults/${operationsChainId}/${oracle.toLowerCase()}/${address.toLowerCase()}?limit=1&cursor=${encodeURIComponent(firstRiskHistory.data.history.nextCursor)}`,
-				),
-				database.sql,
-			)
+			const staleRiskHistoryResponse = await handleApi(new Request(`http://localhost/api/v1/state/risk/vaults/${operationsChainId}/${oracle.toLowerCase()}/${address.toLowerCase()}?limit=1&cursor=${encodeURIComponent(firstRiskHistory.data.history.nextCursor)}`), database.sql)
 			expect(staleRiskHistoryResponse?.status).toBe(409)
 			await database.sql`DELETE FROM chain_reorganizations WHERE id = ${riskHistoryGeneration[0]?.['id']}`
 
@@ -4868,10 +4429,7 @@ postgresTest(
 				UPDATE entity_state_snapshots SET read_result = jsonb_set(read_result, '{price,protocolValid}', 'false'::jsonb, true)
 				WHERE chain_id = ${operationsChainId} AND entity_type = 'pool'
 			`
-			const invalidPriceResponse = await handleApi(
-				new Request(`http://localhost/api/v1/state/risk/vaults/${operationsChainId}/${oracle.toLowerCase()}/${address.toLowerCase()}`),
-				database.sql,
-			)
+			const invalidPriceResponse = await handleApi(new Request(`http://localhost/api/v1/state/risk/vaults/${operationsChainId}/${oracle.toLowerCase()}/${address.toLowerCase()}`), database.sql)
 			if (invalidPriceResponse === undefined) throw new Error('invalid-price risk endpoint did not return a response')
 			const invalidPrice = (await invalidPriceResponse.json()) as { data: Record<string, unknown> }
 			expect(invalidPrice.data).toMatchObject({ protocol_state: 'unavailable', scanner_severity: 'unavailable' })
@@ -4885,14 +4443,8 @@ postgresTest(
 					END
 				WHERE chain_id = ${operationsChainId} AND entity_type IN ('pool', 'vault')
 			`
-			const badDebtPoolResponse = await handleApi(
-				new Request(`http://localhost/api/v1/state/risk/pools/${operationsChainId}/${oracle.toLowerCase()}`),
-				database.sql,
-			)
-			const badDebtVaultResponse = await handleApi(
-				new Request(`http://localhost/api/v1/state/risk/vaults/${operationsChainId}/${oracle.toLowerCase()}/${address.toLowerCase()}`),
-				database.sql,
-			)
+			const badDebtPoolResponse = await handleApi(new Request(`http://localhost/api/v1/state/risk/pools/${operationsChainId}/${oracle.toLowerCase()}`), database.sql)
+			const badDebtVaultResponse = await handleApi(new Request(`http://localhost/api/v1/state/risk/vaults/${operationsChainId}/${oracle.toLowerCase()}/${address.toLowerCase()}`), database.sql)
 			if (badDebtPoolResponse === undefined || badDebtVaultResponse === undefined) throw new Error('bad-debt risk endpoint did not return a response')
 			const badDebtPool = (await badDebtPoolResponse.json()) as { data: Record<string, unknown> }
 			const badDebtVault = (await badDebtVaultResponse.json()) as { data: Record<string, unknown> }
@@ -4917,7 +4469,7 @@ postgresTest(
 			const plans = await Promise.all(explainQueries)
 			expect(plans).toHaveLength(7)
 			for (const plan of plans) expect(JSON.stringify(plan)).toContain('Plan')
-			const paginationPlans = await database.sql.begin(async (transaction) => {
+			const paginationPlans = await database.sql.begin(async transaction => {
 				await transaction.unsafe('SET LOCAL enable_seqscan = off')
 				return {
 					balance: await transaction`EXPLAIN (FORMAT JSON) SELECT * FROM address_balance_observations
@@ -4945,12 +4497,7 @@ postgresTest(
 
 			const resetLease = await database.tryAcquireIndexerLock(operationsChainId)
 			if (resetLease === undefined) throw new Error('operations manifest-reset writer did not acquire its lock')
-			expect(
-				await database.seedNetwork(
-					{ ...network, contracts: [[address, 'Replacement manifest contract', 'openOracle']] },
-					{ lease: resetLease, resetCanonicalHistoryOnManifestChange: true },
-				),
-			).toBe(true)
+			expect(await database.seedNetwork({ ...network, contracts: [[address, 'Replacement manifest contract', 'openOracle']] }, { lease: resetLease, resetCanonicalHistoryOnManifestChange: true })).toBe(true)
 			await resetLease.release()
 			const retainedSnapshots = await database.sql`
 				SELECT DISTINCT read_status, canonical FROM entity_state_snapshots WHERE chain_id = ${operationsChainId}
@@ -5013,7 +4560,7 @@ postgresTest('returns the originating transaction action on every log row', asyn
 				...indexedBlock('log-action-one', blockHash('log-action-parent')),
 				hash: evidenceHash,
 				transactions: [{ ...transaction(), to: proxy.address, input, decoded }],
-				logs: [0, 1].map((logIndex) => ({ ...log(evidenceHash, 'Constructor event'), address: created, blockNumber: 1n, logIndex })),
+				logs: [0, 1].map(logIndex => ({ ...log(evidenceHash, 'Constructor event'), address: created, blockNumber: 1n, logIndex })),
 			},
 			lease,
 		)
@@ -5031,8 +4578,7 @@ postgresTest('returns the originating transaction action on every log row', asyn
 		}
 	} finally {
 		await lease?.release()
-		for (const table of ['actions', 'logs', 'transactions', 'contracts', 'blocks', 'networks'])
-			await database.sql.unsafe(`DELETE FROM ${table} WHERE chain_id = $1`, [actionChainId])
+		for (const table of ['actions', 'logs', 'transactions', 'contracts', 'blocks', 'networks']) await database.sql.unsafe(`DELETE FROM ${table} WHERE chain_id = $1`, [actionChainId])
 		await database.sql`DELETE FROM live_events WHERE payload ->> 'chainId' = ${String(actionChainId)}`
 		await database.close()
 	}

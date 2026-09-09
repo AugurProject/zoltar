@@ -6,7 +6,7 @@ import { bigintToSafeNumber } from '../time.ts'
 import type { ContractMetadata, StoredLog } from '../types.ts'
 
 export const waitForIndexerDelay = (milliseconds: number, signal: AbortSignal): Promise<void> =>
-	new Promise((resolve) => {
+	new Promise(resolve => {
 		const finish = (): void => {
 			clearTimeout(timeout)
 			signal.removeEventListener('abort', finish)
@@ -19,7 +19,7 @@ export const waitForIndexerDelay = (milliseconds: number, signal: AbortSignal): 
 
 export const normalizedRpcDescription = (value: string): string =>
 	[...value]
-		.map((character) => {
+		.map(character => {
 			const codePoint = character.codePointAt(0)
 			return codePoint !== undefined && (codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f)) ? ' ' : character
 		})
@@ -47,7 +47,7 @@ const withoutAnsiControlSequences = (value: string): string => {
 
 export const singleLineErrorDescription = (value: string): string =>
 	[...withoutAnsiControlSequences(value)]
-		.map((character) => {
+		.map(character => {
 			const codePoint = character.codePointAt(0)
 			return codePoint !== undefined && (codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f)) ? ' ' : character
 		})
@@ -78,15 +78,8 @@ const rpcDescriptionCategory = (value: string): RpcDescriptionCategory | undefin
 		return 'rate-limit'
 	if (description.includes('too many logs') || /\bmore than\b.*\blogs\b/u.test(description)) return 'too-many-logs'
 	if (description.includes('too many results') || /\bmore than\b.*\bresults\b/u.test(description)) return 'too-many-results'
-	if (description.includes('response size') || description.includes('response too large') || description.includes('response body too large'))
-		return 'response-size'
-	if (
-		description.includes('query timeout') ||
-		description.includes('query timed out') ||
-		description.includes('request timeout') ||
-		description.includes('request timed out')
-	)
-		return 'timeout'
+	if (description.includes('response size') || description.includes('response too large') || description.includes('response body too large')) return 'response-size'
+	if (description.includes('query timeout') || description.includes('query timed out') || description.includes('request timeout') || description.includes('request timed out')) return 'timeout'
 	if (description.includes('block range') || description.includes('too wide') || description.includes('please reduce')) return 'block-range'
 	if (description.includes('limit exceeded') || /\bexceeds? (?:the )?maximum\b/u.test(description) || description.includes('more than')) return 'result-limit'
 	return undefined
@@ -186,12 +179,7 @@ export const isPrunedHistoricalStateError = (error: unknown): boolean => {
 	return false
 }
 
-export const readWithPrunedStateFallback = async <T>(
-	requestedBlock: bigint,
-	fallbackBlock: bigint,
-	read: (blockNumber: bigint) => Promise<T>,
-	onPrunedFallback: (requestedBlock: bigint, fallbackBlock: bigint) => Promise<void> = async () => {},
-): Promise<{ readonly blockNumber: bigint; readonly value: T }> => {
+export const readWithPrunedStateFallback = async <T>(requestedBlock: bigint, fallbackBlock: bigint, read: (blockNumber: bigint) => Promise<T>, onPrunedFallback: (requestedBlock: bigint, fallbackBlock: bigint) => Promise<void> = async () => {}): Promise<{ readonly blockNumber: bigint; readonly value: T }> => {
 	try {
 		return { blockNumber: requestedBlock, value: await read(requestedBlock) }
 	} catch (error) {
@@ -222,12 +210,7 @@ export const createLogClient = (rpcUrl: string, endpoint: string, queue: RpcRequ
 		),
 	})
 
-export const findEarliestAvailableLogBlock = async (
-	startBlock: bigint,
-	observedHead: bigint,
-	logsAt: (blockNumber: bigint) => Promise<void>,
-	startBlockKnownUnavailable = false,
-): Promise<bigint> => {
+export const findEarliestAvailableLogBlock = async (startBlock: bigint, observedHead: bigint, logsAt: (blockNumber: bigint) => Promise<void>, startBlockKnownUnavailable = false): Promise<bigint> => {
 	if (startBlock > observedHead) throw new Error('The log availability search start must not exceed the observed head')
 	const isAvailable = async (blockNumber: bigint): Promise<boolean> => {
 		try {
@@ -250,12 +233,7 @@ export const findEarliestAvailableLogBlock = async (
 	return upper
 }
 
-export const findEarliestAvailableStateBlock = async (
-	startBlock: bigint,
-	observedHead: bigint,
-	stateAt: (blockNumber: bigint) => Promise<void>,
-	startBlockKnownUnavailable = false,
-): Promise<bigint> => {
+export const findEarliestAvailableStateBlock = async (startBlock: bigint, observedHead: bigint, stateAt: (blockNumber: bigint) => Promise<void>, startBlockKnownUnavailable = false): Promise<bigint> => {
 	if (startBlock > observedHead) throw new Error('The state availability search start must not exceed the observed head')
 	const isAvailable = async (blockNumber: bigint): Promise<boolean> => {
 		try {
@@ -290,7 +268,7 @@ export const findEarliestAvailableLogProvider = async <TProvider>(
 		try {
 			const head = await observedHead(provider)
 			if (head < startBlock) continue
-			const availableStart = await findEarliestAvailableLogBlock(startBlock, head, (blockNumber) => logsAt(provider, blockNumber))
+			const availableStart = await findEarliestAvailableLogBlock(startBlock, head, blockNumber => logsAt(provider, blockNumber))
 			if (earliest === undefined || availableStart < earliest.startBlock) earliest = { provider, startBlock: availableStart }
 		} catch (error) {
 			if (!(error instanceof ChainConfigurationError) && !(error instanceof RpcRequestMethodError)) throw error
@@ -302,8 +280,7 @@ export const findEarliestAvailableLogProvider = async <TProvider>(
 	return earliest
 }
 
-export const labelsFrom = (contracts: ReadonlyMap<string, ContractMetadata>): Map<string, string> =>
-	new Map([['0x0000000000000000000000000000000000000000', 'Zero address'], ...[...contracts].map(([address, contract]) => [address, contract.label] as const)])
+export const labelsFrom = (contracts: ReadonlyMap<string, ContractMetadata>): Map<string, string> => new Map([['0x0000000000000000000000000000000000000000', 'Zero address'], ...[...contracts].map(([address, contract]) => [address, contract.label] as const)])
 
 export const jsonEvidence = (value: unknown): unknown => {
 	if (typeof value === 'bigint') return value.toString()
@@ -312,15 +289,11 @@ export const jsonEvidence = (value: unknown): unknown => {
 	return value
 }
 
-export const addressActivityFrom = (
-	transactions: readonly StoredTransaction[],
-	logs: readonly StoredLog[],
-	contracts: ReadonlyMap<string, ContractMetadata>,
-): readonly AddressActivity[] => {
+export const addressActivityFrom = (transactions: readonly StoredTransaction[], logs: readonly StoredLog[], contracts: ReadonlyMap<string, ContractMetadata>): readonly AddressActivity[] => {
 	const result = new Map<string, AddressActivity>()
 	for (const transaction of transactions) {
-		const transactionLogs = logs.filter((log) => log.transactionHash === transaction.hash)
-		const referencedAddresses = [...(transaction.decoded.referencedAddresses ?? []), ...transactionLogs.flatMap((log) => log.decoded.referencedAddresses ?? [])]
+		const transactionLogs = logs.filter(log => log.transactionHash === transaction.hash)
+		const referencedAddresses = [...(transaction.decoded.referencedAddresses ?? []), ...transactionLogs.flatMap(log => log.decoded.referencedAddresses ?? [])]
 		const pools = new Set<Address>()
 		if (transaction.to !== null && contracts.get(transaction.to.toLowerCase())?.kind === 'securityPool') pools.add(transaction.to)
 		for (const log of transactionLogs) if (contracts.get(log.address.toLowerCase())?.kind === 'securityPool') pools.add(log.address)
@@ -349,13 +322,7 @@ export const addressActivityFrom = (
 }
 
 export const requireLogPosition = (log: Log): { transactionHash: Hash; transactionIndex: number; logIndex: number; blockHash: Hash; blockNumber: bigint } => {
-	if (
-		log.transactionHash === undefined ||
-		log.transactionIndex === undefined ||
-		log.logIndex === undefined ||
-		log.blockHash === undefined ||
-		log.blockNumber === undefined
-	) {
+	if (log.transactionHash === undefined || log.transactionIndex === undefined || log.logIndex === undefined || log.blockHash === undefined || log.blockNumber === undefined) {
 		throw new Error('RPC returned a pending log while indexing a confirmed block')
 	}
 	const transactionIndex = bigintToSafeNumber(log.transactionIndex, 'RPC log transaction index')

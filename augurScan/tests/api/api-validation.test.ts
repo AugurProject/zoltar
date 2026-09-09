@@ -37,29 +37,21 @@ const operationsAsOf = {
 
 test('fails closed on malformed Operations boundaries, pagination, and records', () => {
 	expect(decodeOperationsResponseValue({ chainId: 1, asOf: operationsAsOf, data: { items: [] } })).toMatchObject({ chainId: 1 })
-	expect(() => decodeOperationsResponseValue({ chainId: 1, asOf: { ...operationsAsOf, blockHash: 'bad' }, data: {} })).toThrow(
-		'Operations response is malformed',
-	)
+	expect(() => decodeOperationsResponseValue({ chainId: 1, asOf: { ...operationsAsOf, blockHash: 'bad' }, data: {} })).toThrow('Operations response is malformed')
 	expect(() => decodeOperationsResponseValue({ chainId: 1, asOf: operationsAsOf, data: { offset: -1 } })).toThrow('Operations offset is malformed')
 	expect(decodeOperationsResponseValue({ chainId: 1, asOf: operationsAsOf, data: { total: '9007199254740992' } })).toMatchObject({ chainId: 1 })
 	expect(operationRecords(undefined)).toEqual([])
 	expect(() => operationRecords([{ id: '1' }, null])).toThrow('Operations records are malformed')
 	expect(() => operationsCatalogRecords('reports', undefined, true)).toThrow('Operations reports are malformed')
-	expect(operationsCatalogRecords('integrity', [{ id: '1', reason: 'chain-reorg', causes: ['chain-reorg'], occurrence_counts: { block: '2' } }])).toHaveLength(
-		1,
-	)
-	expect(() => operationsCatalogRecords('integrity', [{ id: '1', reason: 'chain-reorg', causes: [], occurrence_counts: { block: 2 } }])).toThrow(
-		'Operations integrity records are malformed',
-	)
+	expect(operationsCatalogRecords('integrity', [{ id: '1', reason: 'chain-reorg', causes: ['chain-reorg'], occurrence_counts: { block: '2' } }])).toHaveLength(1)
+	expect(() => operationsCatalogRecords('integrity', [{ id: '1', reason: 'chain-reorg', causes: [], occurrence_counts: { block: 2 } }])).toThrow('Operations integrity records are malformed')
 	expect(operationsCatalogRecords('reports', [{ open_oracle_address: '0x529dcaC57677451CBfe766d88CcC133D082500df', report_id: '1842' }])).toHaveLength(1)
 	expect(operationsRiskRecords('vaults', [{ pool_address: `0x${'2'.repeat(40)}`, vault_address: `0x${'3'.repeat(40)}` }])).toHaveLength(1)
 	expect(() => operationsRiskRecords('vaults', [{ pool_address: `0x${'2'.repeat(40)}` }])).toThrow('Operations risk vaults records are malformed')
 	expect(operationsRiskPagination({ poolTotal: 1, poolHasMore: true, poolNextCursor: 'pool-2', vaultTotal: 0, vaultHasMore: false }, true)).toMatchObject({
 		poolNextCursor: 'pool-2',
 	})
-	expect(() => operationsRiskPagination({ poolTotal: 1, poolHasMore: true, vaultTotal: 0, vaultHasMore: false }, true)).toThrow(
-		'Operations risk poolNextCursor is malformed',
-	)
+	expect(() => operationsRiskPagination({ poolTotal: 1, poolHasMore: true, vaultTotal: 0, vaultHasMore: false }, true)).toThrow('Operations risk poolNextCursor is malformed')
 })
 
 test('validates state-history range and completeness metadata', () => {
@@ -357,9 +349,6 @@ test('requires complete, renderable state catalog entities', () => {
 })
 
 test('validates the originating transaction action on activity records', () => {
-	expect(
-		isActivityRecordValue({ ...activity, function_name: 'deploy', function_signature: null, action_summary: 'Deploy Zoltar', to_address: '0x1234' }),
-	).toBeTrue()
-	for (const field of ['function_name', 'function_signature', 'action_summary', 'to_address'])
-		expect(isActivityRecordValue({ ...activity, [field]: 42 })).toBeFalse()
+	expect(isActivityRecordValue({ ...activity, function_name: 'deploy', function_signature: null, action_summary: 'Deploy Zoltar', to_address: '0x1234' })).toBeTrue()
+	for (const field of ['function_name', 'function_signature', 'action_summary', 'to_address']) expect(isActivityRecordValue({ ...activity, [field]: 42 })).toBeFalse()
 })

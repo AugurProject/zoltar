@@ -1,20 +1,6 @@
 import { type ReservedSQL, SQL } from 'bun'
-import {
-	destroyReservedConnection,
-	type IndexerLease,
-	type PersistedIndexerOwnershipState,
-	releaseReservedConnection,
-	runSerializedIndexerLeaseOperation,
-	scannerDatabaseOptions,
-} from './history.ts'
-import {
-	assertIndexerLeaseObservation,
-	assertIndexerLeaseReleaseObservation,
-	IndexerLeaseReleaseError,
-	type IntegrityIssue,
-	type LiveEvent,
-	lockLiveEventWriter,
-} from './records.ts'
+import { destroyReservedConnection, type IndexerLease, type PersistedIndexerOwnershipState, releaseReservedConnection, runSerializedIndexerLeaseOperation, scannerDatabaseOptions } from './history.ts'
+import { assertIndexerLeaseObservation, assertIndexerLeaseReleaseObservation, IndexerLeaseReleaseError, type IntegrityIssue, type LiveEvent, lockLiveEventWriter } from './records.ts'
 
 export class ScannerDatabaseConnection {
 	readonly sql: SQL
@@ -28,7 +14,7 @@ export class ScannerDatabaseConnection {
 	}
 
 	async read<T>(operation: (sql: SQL) => Promise<T>, timeoutMs = 10_000): Promise<T> {
-		return await this.sql.begin(async (transaction) => {
+		return await this.sql.begin(async transaction => {
 			await transaction.unsafe('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY')
 			await transaction`SELECT set_config('statement_timeout', ${timeoutMs.toString()}, true)`
 			const versions = await transaction`SELECT current_setting('server_version_num')::integer AS version`
@@ -37,14 +23,7 @@ export class ScannerDatabaseConnection {
 		})
 	}
 
-	async recordIndexerOwnership(
-		chainId: number,
-		networkId: string,
-		state: PersistedIndexerOwnershipState,
-		backendPid: number | undefined,
-		ownerRunId: string | undefined,
-		sql: SQL = this.sql,
-	): Promise<void> {
+	async recordIndexerOwnership(chainId: number, networkId: string, state: PersistedIndexerOwnershipState, backendPid: number | undefined, ownerRunId: string | undefined, sql: SQL = this.sql): Promise<void> {
 		if (state === 'owned') {
 			if (backendPid === undefined) throw new Error('Owned indexer state requires its PostgreSQL backend PID')
 			await sql`
@@ -101,7 +80,7 @@ export class ScannerDatabaseConnection {
 	}
 
 	async latestEventId(): Promise<number> {
-		return await this.read(async (sql) => {
+		return await this.read(async sql => {
 			const rows = await sql`
 				SELECT GREATEST(state.pruned_through_id, COALESCE((SELECT max(id) FROM live_events), 0)) AS id
 				FROM live_event_state state WHERE singleton
@@ -111,7 +90,7 @@ export class ScannerDatabaseConnection {
 	}
 
 	async eventsAfter(id: number, limit = 250): Promise<readonly LiveEvent[]> {
-		return await this.read(async (sql) => {
+		return await this.read(async sql => {
 			const rows = await sql`
 				WITH event_window AS (
 					SELECT state.pruned_through_id,
@@ -135,7 +114,7 @@ export class ScannerDatabaseConnection {
 	}
 
 	async pruneLiveEvents(): Promise<void> {
-		await this.sql.begin(async (transaction) => {
+		await this.sql.begin(async transaction => {
 			await lockLiveEventWriter(transaction)
 			const rows = await transaction`SELECT COALESCE(max(id), 0) AS id FROM live_events WHERE created_at < now() - interval '7 days'`
 			const prunedThroughId = String(rows[0]?.['id'] ?? 0)
@@ -279,20 +258,10 @@ export class ScannerDatabaseConnection {
 								try {
 									await destroyReservedConnection(connection)
 								} catch (expectedConnectionCleanupError) {
-									cleanupError =
-										cleanupError === undefined ? expectedConnectionCleanupError : new AggregateError([cleanupError, expectedConnectionCleanupError])
+									cleanupError = cleanupError === undefined ? expectedConnectionCleanupError : new AggregateError([cleanupError, expectedConnectionCleanupError])
 								}
-							if (!releaseConfirmed)
-								throw new IndexerLeaseReleaseError(
-									'Indexer lease unlock failed and release of its expected PostgreSQL session could not be confirmed',
-									false,
-									cleanupError === undefined ? error : new AggregateError([error, cleanupError]),
-								)
-							throw new IndexerLeaseReleaseError(
-								'Indexer lease unlock failed; release of its expected PostgreSQL session was confirmed',
-								true,
-								cleanupError === undefined ? error : new AggregateError([error, cleanupError]),
-							)
+							if (!releaseConfirmed) throw new IndexerLeaseReleaseError('Indexer lease unlock failed and release of its expected PostgreSQL session could not be confirmed', false, cleanupError === undefined ? error : new AggregateError([error, cleanupError]))
+							throw new IndexerLeaseReleaseError('Indexer lease unlock failed; release of its expected PostgreSQL session was confirmed', true, cleanupError === undefined ? error : new AggregateError([error, cleanupError]))
 						}
 					})
 					return releasePromise

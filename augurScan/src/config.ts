@@ -25,13 +25,11 @@ type NetworkFile = {
 
 const configRoot = path.resolve(import.meta.dir, '../config')
 
-export const resolveRpcLogPath = (configuredPath: string | undefined): string =>
-	configuredPath === undefined ? path.resolve(import.meta.dir, '../logs/rpc.jsonl') : path.resolve(configuredPath)
+export const resolveRpcLogPath = (configuredPath: string | undefined): string => (configuredPath === undefined ? path.resolve(import.meta.dir, '../logs/rpc.jsonl') : path.resolve(configuredPath))
 
 const requirePositiveInteger = (value: string, name: string, allowZero = false): number => {
 	const parsed = Number(value)
-	if (!Number.isSafeInteger(parsed) || (allowZero ? parsed < 0 : parsed <= 0))
-		throw new Error(`${name} must be a ${allowZero ? 'non-negative' : 'positive'} safe integer`)
+	if (!Number.isSafeInteger(parsed) || (allowZero ? parsed < 0 : parsed <= 0)) throw new Error(`${name} must be a ${allowZero ? 'non-negative' : 'positive'} safe integer`)
 	return parsed
 }
 
@@ -39,15 +37,7 @@ export const parseManifestValue = (value: { contracts?: unknown }, filename: str
 	if (!Array.isArray(value.contracts)) throw new Error(`${filename} must contain a contracts array`)
 	const addresses = new Set<string>()
 	return value.contracts.map((entry, index) => {
-		if (
-			!Array.isArray(entry) ||
-			(entry.length !== 3 && entry.length !== 4) ||
-			typeof entry[0] !== 'string' ||
-			!isAddress(entry[0]) ||
-			typeof entry[1] !== 'string' ||
-			typeof entry[2] !== 'string' ||
-			(entry[3] !== undefined && (typeof entry[3] !== 'string' || !/^\d+$/.test(entry[3])))
-		) {
+		if (!Array.isArray(entry) || (entry.length !== 3 && entry.length !== 4) || typeof entry[0] !== 'string' || !isAddress(entry[0]) || typeof entry[1] !== 'string' || typeof entry[2] !== 'string' || (entry[3] !== undefined && (typeof entry[3] !== 'string' || !/^\d+$/.test(entry[3])))) {
 			throw new Error(`${filename} contract ${index} is invalid`)
 		}
 		const address = getAddress(entry[0])
@@ -58,23 +48,22 @@ export const parseManifestValue = (value: { contracts?: unknown }, filename: str
 	})
 }
 
-const parseManifest = async (filename: string): Promise<readonly ManifestContract[]> =>
-	parseManifestValue((await Bun.file(path.join(configRoot, 'manifests', filename)).json()) as { contracts?: unknown }, filename)
+const parseManifest = async (filename: string): Promise<readonly ManifestContract[]> => parseManifestValue((await Bun.file(path.join(configRoot, 'manifests', filename)).json()) as { contracts?: unknown }, filename)
 
 export const loadNetworks = async (): Promise<readonly NetworkConfig[]> => {
 	const definitions = (await Bun.file(path.join(configRoot, 'networks.json')).json()) as readonly NetworkFile[]
 	if (!Array.isArray(definitions) || definitions.length === 0) throw new Error('At least one network must be configured')
-	const enabled = new Set((process.env['NETWORKS'] ?? definitions.map(({ id }) => id).join(',')).split(',').map((value) => value.trim()))
+	const enabled = new Set((process.env['NETWORKS'] ?? definitions.map(({ id }) => id).join(',')).split(',').map(value => value.trim()))
 	const configuredIds = new Set(definitions.map(({ id }) => id))
-	const unknownIds = [...enabled].filter((id) => !configuredIds.has(id))
+	const unknownIds = [...enabled].filter(id => !configuredIds.has(id))
 	if (unknownIds.length > 0) throw new Error(`NETWORKS contains unknown network${unknownIds.length === 1 ? '' : 's'}: ${unknownIds.join(', ')}`)
 	const networks = await Promise.all(
 		definitions
 			.filter(({ id }) => enabled.has(id))
-			.map(async (definition) => {
+			.map(async definition => {
 				const rpcUrls = (process.env[definition.rpcUrlEnv] ?? definition.defaultRpcUrl)
 					.split(',')
-					.map((value) => value.trim())
+					.map(value => value.trim())
 					.filter(Boolean)
 				if (rpcUrls.length === 0) throw new Error(`${definition.rpcUrlEnv} must contain at least one RPC URL`)
 				for (const rpcUrl of rpcUrls) {
@@ -85,15 +74,13 @@ export const loadNetworks = async (): Promise<readonly NetworkConfig[]> => {
 				if (startBlock < 0n) throw new Error(`${definition.startBlockEnv} must not be negative`)
 				const contracts = [...(await parseManifest(definition.manifest))]
 				for (const [, label, , deploymentBlock] of contracts) {
-					if (deploymentBlock !== undefined && deploymentBlock < startBlock)
-						throw new Error(`${definition.manifest} deployment block for ${label} must not precede ${definition.startBlockEnv}`)
+					if (deploymentBlock !== undefined && deploymentBlock < startBlock) throw new Error(`${definition.manifest} deployment block for ${label} must not precede ${definition.startBlockEnv}`)
 				}
 				const ammFactoryAddress = process.env[definition.ammFactoryAddressEnv]?.trim()
 				if (ammFactoryAddress !== undefined && ammFactoryAddress !== '') {
 					if (!isAddress(ammFactoryAddress)) throw new Error(`${definition.ammFactoryAddressEnv} must be a complete 20-byte EVM address`)
 					const normalized = getAddress(ammFactoryAddress)
-					if (!contracts.some(([address]) => address.toLowerCase() === normalized.toLowerCase()))
-						contracts.push([normalized, 'Augur AMM Factory', 'ammFactory'])
+					if (!contracts.some(([address]) => address.toLowerCase() === normalized.toLowerCase())) contracts.push([normalized, 'Augur AMM Factory', 'ammFactory'])
 				}
 				for (const [environmentName, defaultAddress, label, kind] of [
 					[definition.uniswapV2FactoryAddressEnv, definition.defaultUniswapV2FactoryAddress, 'Uniswap V2 Factory', 'uniswapV2Factory'],

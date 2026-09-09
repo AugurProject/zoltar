@@ -29,35 +29,27 @@ export abstract class NetworkIndexerLifecycle extends NetworkIndexerProvider {
 		console.info(`[${this.network.id}] RPC providers: ${this.providers.map(({ endpoint }) => endpoint).join(', ')}`)
 		await runIndexerOwnershipLifecycle({
 			networkId: this.network.id,
-			onEvent: async (event) => {
+			onEvent: async event => {
 				recordOwnershipEvent(this.network.id, event)
 				await this.database.recordIndexerOwnership(
 					this.network.chainId,
 					this.network.id,
-					event.type === 'acquired'
-						? 'owned'
-						: event.type === 'standby'
-							? 'standby'
-							: event.type === 'released'
-								? 'released'
-								: event.type === 'release-failed'
-									? 'release-failed'
-									: 'unknown',
+					event.type === 'acquired' ? 'owned' : event.type === 'standby' ? 'standby' : event.type === 'released' ? 'released' : event.type === 'release-failed' ? 'release-failed' : 'unknown',
 					'backendPid' in event ? event.backendPid : undefined,
 					this.provenance?.indexerRunId,
 				)
 			},
 			acquire: () => this.database.tryAcquireIndexerLock(this.network.chainId),
-			seed: (lease) => this.seed(lease),
-			runOwned: async (lease) => {
+			seed: lease => this.seed(lease),
+			runOwned: async lease => {
 				this.lease = lease
 				try {
 					await runOwnedNetworkLifecycle({
 						reconcile: () => this.reconcileManifestBackfill(),
 						poll: () => this.poll(),
-						runWithProvider: (operation) => this.withProviderFailover(operation),
+						runWithProvider: operation => this.withProviderFailover(operation),
 						failure: (message, nextRetryAt, reason) => this.recordFailure(message, nextRetryAt, this.requireLease(), reason),
-						recover: (error) => this.recoverPrunedLogFailure(error),
+						recover: error => this.recoverPrunedLogFailure(error),
 						intervalMs: runtimeConfig.pollIntervalMs,
 						signal: this.signal,
 					})
@@ -79,11 +71,7 @@ export abstract class NetworkIndexerLifecycle extends NetworkIndexerProvider {
 	}
 
 	protected async seed(lease: IndexerLease): Promise<void> {
-		const [checkpoint, storedStartBlock, storedBlockTip] = await Promise.all([
-			this.database.checkpoint(this.network.chainId, lease),
-			this.database.networkStartBlock(this.network.chainId, lease),
-			this.database.storedBlockTip(this.network.chainId, lease),
-		])
+		const [checkpoint, storedStartBlock, storedBlockTip] = await Promise.all([this.database.checkpoint(this.network.chainId, lease), this.database.networkStartBlock(this.network.chainId, lease), this.database.storedBlockTip(this.network.chainId, lease)])
 		let retainedBoundary = checkpoint?.number ?? storedBlockTip
 		if (storedStartBlock !== undefined) {
 			if (this.configuredStartBlock > storedStartBlock) {
@@ -110,17 +98,9 @@ export abstract class NetworkIndexerLifecycle extends NetworkIndexerProvider {
 		await this.withProviderFailover(async () => {
 			const observedHead = await this.client.getBlockNumber()
 			await this.discoverStateStartBlock(observedHead)
-			const startBlock = await initialIndexStartBlock(
-				this.network.contracts,
-				this.configuredStartBlock,
-				observedHead,
-				(address, searchStart, indexedBoundary, startBlockKnownAbsent) =>
-					this.findManifestDeployment(address, searchStart, indexedBoundary, startBlockKnownAbsent),
-			)
+			const startBlock = await initialIndexStartBlock(this.network.contracts, this.configuredStartBlock, observedHead, (address, searchStart, indexedBoundary, startBlockKnownAbsent) => this.findManifestDeployment(address, searchStart, indexedBoundary, startBlockKnownAbsent))
 			this.network = { ...this.network, startBlock }
-			console.info(
-				`[${this.network.id}] initial index boundary: block #${startBlock}; earliest tracked deployment discovered through observed head #${observedHead}`,
-			)
+			console.info(`[${this.network.id}] initial index boundary: block #${startBlock}; earliest tracked deployment discovered through observed head #${observedHead}`)
 		})
 		const manifestChanged = await this.seedNetwork(lease)
 		if (checkpoint !== undefined && manifestChanged) this.reportManifestReplay(checkpoint)
@@ -140,35 +120,16 @@ export abstract class NetworkIndexerLifecycle extends NetworkIndexerProvider {
 	}
 
 	protected async validateManifestChange(checkpoint: bigint, storedStartBlock: bigint, lease: IndexerLease): Promise<void> {
-		const [storedContracts, cursors] = await Promise.all([
-			this.database.contracts(this.network.chainId, lease),
-			this.database.logScanCursors(this.network.chainId, lease),
-		])
+		const [storedContracts, cursors] = await Promise.all([this.database.contracts(this.network.chainId, lease), this.database.logScanCursors(this.network.chainId, lease)])
 		await this.withProviderFailover(() =>
-			manifestChangeRequiresFullReplay(
-				this.network.contracts,
-				storedContracts,
-				cursors,
-				checkpoint,
-				this.configuredStartBlock,
-				storedStartBlock,
-				(address, searchStart, indexedBoundary, startBlockKnownAbsent) =>
-					this.findManifestDeployment(address, searchStart, indexedBoundary, startBlockKnownAbsent),
-			),
+			manifestChangeRequiresFullReplay(this.network.contracts, storedContracts, cursors, checkpoint, this.configuredStartBlock, storedStartBlock, (address, searchStart, indexedBoundary, startBlockKnownAbsent) => this.findManifestDeployment(address, searchStart, indexedBoundary, startBlockKnownAbsent)),
 		)
 	}
 
 	protected reportManifestReplay(checkpoint: { readonly number: bigint; readonly hash: Hash }): void {
-		const reason =
-			this.lastSeedReplayReason === 'abi-redecode'
-				? 'ABI snapshot changed'
-				: this.lastSeedReplayReason === 'projection-rebuild'
-					? 'projection source changed'
-					: 'canonical manifest changed'
+		const reason = this.lastSeedReplayReason === 'abi-redecode' ? 'ABI snapshot changed' : this.lastSeedReplayReason === 'projection-rebuild' ? 'projection source changed' : 'canonical manifest changed'
 		this.lastSeedReplayReason = undefined
-		console.info(
-			`[${this.network.id}] ${reason} at indexed block #${checkpoint.number}; replaying canonical interpretations from block #${this.network.startBlock}`,
-		)
+		console.info(`[${this.network.id}] ${reason} at indexed block #${checkpoint.number}; replaying canonical interpretations from block #${this.network.startBlock}`)
 	}
 
 	protected async withProviderFailover<T>(operation: () => Promise<T>): Promise<T> {
@@ -176,12 +137,12 @@ export abstract class NetworkIndexerLifecycle extends NetworkIndexerProvider {
 		return await withVerifiedProvider(
 			this.providers,
 			this.network.chainId,
-			async (provider) => {
+			async provider => {
 				this.selectProvider(provider)
 				return await operation()
 			},
 			isLocalIndexerFailure,
-			(provider) => this.selectProvider(provider),
+			provider => this.selectProvider(provider),
 			this.verifiedProviders,
 			(_provider, error) => {
 				if (isPermanentHistoricalLogError(error)) this.failoverSawPrunedLogFailure = true
@@ -196,9 +157,7 @@ export abstract class NetworkIndexerLifecycle extends NetworkIndexerProvider {
 	protected async recordFailure(message: string, nextRetryAt: Date, lease: IndexerLease, reason?: string): Promise<void> {
 		await this.database.recordFailure(this.network.chainId, message, nextRetryAt, lease)
 		const localFailure = message === databaseFailureMessage || message === rpcQueueSaturatedMessage
-		const logMessage = localFailure
-			? `${message}${reason === undefined ? '' : ` (reason: ${reason})`}`
-			: rpcFailureLogMessage(message, this.rpcDiagnostics.activeEndpoint(), reason)
+		const logMessage = localFailure ? `${message}${reason === undefined ? '' : ` (reason: ${reason})`}` : rpcFailureLogMessage(message, this.rpcDiagnostics.activeEndpoint(), reason)
 		this.lastReportedPhase = 'degraded'
 		console.error(`[${this.network.id}] indexer state: degraded; ${logMessage}`)
 	}
@@ -207,9 +166,7 @@ export abstract class NetworkIndexerLifecycle extends NetworkIndexerProvider {
 		const previousStart = this.network.startBlock
 		this.selectProvider(provider)
 		if (availableStart === previousStart) {
-			console.warn(
-				`[${this.network.id}] selected ${provider.endpoint}, which can serve the existing log coverage floor #${availableStart}; continuing without changing coverage`,
-			)
+			console.warn(`[${this.network.id}] selected ${provider.endpoint}, which can serve the existing log coverage floor #${availableStart}; continuing without changing coverage`)
 			return
 		}
 		await this.assertLease()
@@ -221,9 +178,7 @@ export abstract class NetworkIndexerLifecycle extends NetworkIndexerProvider {
 		this.progressSample = undefined
 		this.lastReportedPhase = undefined
 		this.lastDeploymentScanAt = undefined
-		console.warn(
-			`[${this.network.id}] RPC log history before block #${availableStart} is pruned; advanced index coverage from block #${previousStart} to earliest retrievable block #${availableStart} using ${provider.endpoint} and continuing`,
-		)
+		console.warn(`[${this.network.id}] RPC log history before block #${availableStart} is pruned; advanced index coverage from block #${previousStart} to earliest retrievable block #${availableStart} using ${provider.endpoint} and continuing`)
 	}
 
 	protected async recoverPrunedLogFailure(error: unknown): Promise<boolean> {
@@ -232,11 +187,10 @@ export abstract class NetworkIndexerLifecycle extends NetworkIndexerProvider {
 		const availability = await findEarliestAvailableLogProvider(
 			this.providers,
 			this.network.startBlock,
-			async (provider) => {
+			async provider => {
 				if (!this.verifiedProviders.has(provider)) {
 					const remoteChainId = await provider.getChainId()
-					if (remoteChainId !== this.network.chainId)
-						throw new ChainConfigurationError(`RPC chain mismatch: configured ${this.network.chainId}, received ${remoteChainId}`)
+					if (remoteChainId !== this.network.chainId) throw new ChainConfigurationError(`RPC chain mismatch: configured ${this.network.chainId}, received ${remoteChainId}`)
 					this.verifiedProviders.add(provider)
 				}
 				return await provider.client.getBlockNumber()

@@ -47,7 +47,7 @@ const runtimeDependencyPath = async (importer: string, specifier: string): Promi
 }
 
 const runtimeSourceFiles = async (projectRoot: string, sourceFiles: readonly string[]): Promise<string[]> => {
-	const files = new Map(sourceFiles.map((relativePath) => [path.resolve(projectRoot, relativePath), relativePath]))
+	const files = new Map(sourceFiles.map(relativePath => [path.resolve(projectRoot, relativePath), relativePath]))
 	const pending = [...files.keys()]
 	while (pending.length > 0) {
 		const current = pending.pop()

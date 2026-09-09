@@ -3,17 +3,7 @@ import { decodeOpaqueCursor, encodeOpaqueCursor, isJsonArray } from '../cursor-c
 import type { JsonValue } from '../ethereum.ts'
 import { auctionDemandCurve, reportLifecycle, reportRoundChanges } from '../operations.ts'
 import { auctionDetailData, eventEntityRows, forkDetailData, latestEntitySnapshot, reportDetailData } from '../repositories/entity-details.ts'
-import {
-	ApiConflictError,
-	ApiRequestError,
-	integer,
-	isNonNegativeSafeInteger,
-	isPostgresBigint,
-	isPostgresInteger,
-	json,
-	jsonRecord,
-	routeInteger,
-} from './shared.ts'
+import { ApiConflictError, ApiRequestError, integer, isNonNegativeSafeInteger, isPostgresBigint, isPostgresInteger, json, jsonRecord, routeInteger } from './shared.ts'
 import { operationsAsOfForContinuations, snapshotBoundaryMatches } from './snapshot.ts'
 
 export const snapshotBoundary = (asOf: Record<string, unknown>): readonly [string, string, string, string, string, string] => [
@@ -42,7 +32,7 @@ export const parseRiskCursor = (value: string | null, chainId: number, kind: 'po
 			typeof parts[3] !== 'string' ||
 			!/^0x[0-9a-f]{64}$/.test(parts[3]) ||
 			!isPostgresBigint(parts[4]) ||
-			!parts.slice(5, 8).every((part) => typeof part === 'string') ||
+			!parts.slice(5, 8).every(part => typeof part === 'string') ||
 			typeof parts[8] !== 'string' ||
 			(kind === 'pool' ? !/^0x[0-9a-f]{40}$/.test(parts[8]) : !/^0x[0-9a-f]{40}:0x[0-9a-f]{40}$/.test(parts[8]))
 		)
@@ -54,8 +44,7 @@ export const parseRiskCursor = (value: string | null, chainId: number, kind: 'po
 	return parts as [number, 'pool' | 'vault', string, string, string, string, string, string, string]
 }
 
-export const riskCursorFor = (chainId: number, kind: 'pool' | 'vault', asOf: Record<string, unknown>, key: string): string =>
-	encodeOpaqueCursor([chainId, kind, ...snapshotBoundary(asOf), key] satisfies RiskCursor)
+export const riskCursorFor = (chainId: number, kind: 'pool' | 'vault', asOf: Record<string, unknown>, key: string): string => encodeOpaqueCursor([chainId, kind, ...snapshotBoundary(asOf), key] satisfies RiskCursor)
 
 const parseProtocolCursor = (value: string | null): ProtocolCursor | undefined => {
 	if (value === null) return undefined
@@ -71,7 +60,7 @@ const parseProtocolCursor = (value: string | null): ProtocolCursor | undefined =
 			typeof parts[4] !== 'string' ||
 			!/^0x[0-9a-f]{64}$/.test(parts[4]) ||
 			!isPostgresBigint(parts[5]) ||
-			!parts.slice(6, 9).every((part) => typeof part === 'string') ||
+			!parts.slice(6, 9).every(part => typeof part === 'string') ||
 			!isPostgresBigint(parts[9]) ||
 			typeof parts[10] !== 'string' ||
 			!/^0x[0-9a-f]{64}$/.test(parts[10]) ||
@@ -87,53 +76,21 @@ const parseProtocolCursor = (value: string | null): ProtocolCursor | undefined =
 
 export const protocolCursorForRequest = (url: URL, chainId: number, domain: string, identity: string): ProtocolCursor | undefined => {
 	const cursor = parseProtocolCursor(url.searchParams.get('cursor'))
-	if (cursor !== undefined && (cursor[0] !== chainId || cursor[1] !== domain || cursor[2] !== identity))
-		throw new ApiRequestError('cursor does not match the requested entity')
+	if (cursor !== undefined && (cursor[0] !== chainId || cursor[1] !== domain || cursor[2] !== identity)) throw new ApiRequestError('cursor does not match the requested entity')
 	return cursor
 }
 
 export const protocolCursorFor = (chainId: number, domain: string, identity: string, asOf: Record<string, unknown>, row: Record<string, unknown>): string =>
-	encodeOpaqueCursor([
-		chainId,
-		domain,
-		identity,
-		...snapshotBoundary(asOf),
-		String(row['block_number']),
-		String(row['tx_hash']),
-		Number(row['log_index']),
-	] satisfies ProtocolCursor)
+	encodeOpaqueCursor([chainId, domain, identity, ...snapshotBoundary(asOf), String(row['block_number']), String(row['tx_hash']), Number(row['log_index'])] satisfies ProtocolCursor)
 
-export const detailPage = (
-	url: URL,
-	chainId: number,
-	domain: string,
-	identity: string,
-	asOf: Record<string, unknown>,
-	cursor = protocolCursorForRequest(url, chainId, domain, identity),
-) => {
+export const detailPage = (url: URL, chainId: number, domain: string, identity: string, asOf: Record<string, unknown>, cursor = protocolCursorForRequest(url, chainId, domain, identity)) => {
 	const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 100
 	const limit = Math.min(Math.max(requestedLimit, 1), 250)
 	if (cursor !== undefined && !snapshotBoundaryMatches(cursor, 3, asOf)) throw new ApiConflictError('Indexed state changed; restart pagination')
 	return { limit, queryLimit: limit + 1, cursor }
 }
 
-export type TimelineCatalogCursor = readonly [
-	number,
-	string,
-	string,
-	string,
-	string,
-	string,
-	string,
-	string,
-	string,
-	number,
-	string,
-	string,
-	string,
-	string,
-	'v2',
-]
+export type TimelineCatalogCursor = readonly [number, string, string, string, string, string, string, string, string, number, string, string, string, string, 'v2']
 
 export const parseTimelineCatalogCursor = (value: string | null, chainId: number, filterIdentity: string): TimelineCatalogCursor | undefined => {
 	if (value === null) return undefined
@@ -149,7 +106,7 @@ export const parseTimelineCatalogCursor = (value: string | null, chainId: number
 			typeof parts[3] !== 'string' ||
 			!/^0x[0-9a-f]{64}$/.test(parts[3]) ||
 			!isPostgresBigint(parts[4]) ||
-			!parts.slice(5, 8).every((part) => typeof part === 'string') ||
+			!parts.slice(5, 8).every(part => typeof part === 'string') ||
 			!isPostgresBigint(parts[8]) ||
 			!isPostgresInteger(parts[9]) ||
 			typeof parts[10] !== 'string' ||
@@ -165,38 +122,11 @@ export const parseTimelineCatalogCursor = (value: string | null, chainId: number
 		throw new ApiRequestError('cursor is invalid', { cause: error })
 	}
 	if (parts[0] !== chainId || parts[1] !== filterIdentity) throw new ApiRequestError('cursor does not match the requested timeline filters')
-	return [
-		Number(parts[0]),
-		String(parts[1]),
-		String(parts[2]),
-		String(parts[3]),
-		String(parts[4]),
-		String(parts[5]),
-		String(parts[6]),
-		String(parts[7]),
-		String(parts[8]),
-		Number(parts[9]),
-		String(parts[10]),
-		String(parts[11]),
-		String(parts[12]),
-		String(parts[13]),
-		'v2',
-	]
+	return [Number(parts[0]), String(parts[1]), String(parts[2]), String(parts[3]), String(parts[4]), String(parts[5]), String(parts[6]), String(parts[7]), String(parts[8]), Number(parts[9]), String(parts[10]), String(parts[11]), String(parts[12]), String(parts[13]), 'v2']
 }
 
 export const timelineCatalogCursorFor = (chainId: number, filterIdentity: string, asOf: Record<string, unknown>, row: Record<string, unknown>): string =>
-	encodeOpaqueCursor([
-		chainId,
-		filterIdentity,
-		...snapshotBoundary(asOf),
-		String(row['block_number']),
-		Number(row['log_index']),
-		String(row['tx_hash']),
-		String(row['block_hash']),
-		String(row['entity_type']),
-		String(row['entity_identity']),
-		'v2',
-	] satisfies TimelineCatalogCursor)
+	encodeOpaqueCursor([chainId, filterIdentity, ...snapshotBoundary(asOf), String(row['block_number']), Number(row['log_index']), String(row['tx_hash']), String(row['block_hash']), String(row['entity_type']), String(row['entity_identity']), 'v2'] satisfies TimelineCatalogCursor)
 
 const snapshotFor = async (sql: SQL, chainId: number, entityType: string, entityIdentity: string) => {
 	return await latestEntitySnapshot(sql, chainId, entityType, entityIdentity)
@@ -212,15 +142,7 @@ export const reportDetailResponse = async (sql: SQL, parts: readonly string[], u
 	const chainId = routeInteger(parts[0])
 	const openOracleAddress = parts[1]?.toLowerCase()
 	const reportId = parts[2]
-	if (
-		parts.length !== 3 ||
-		chainId === undefined ||
-		openOracleAddress === undefined ||
-		!/^0x[0-9a-f]{40}$/.test(openOracleAddress) ||
-		reportId === undefined ||
-		!/^\d+$/.test(reportId)
-	)
-		return json({ error: 'Invalid report identifier' }, 400)
+	if (parts.length !== 3 || chainId === undefined || openOracleAddress === undefined || !/^0x[0-9a-f]{40}$/.test(openOracleAddress) || reportId === undefined || !/^\d+$/.test(reportId)) return json({ error: 'Invalid report identifier' }, 400)
 	const identity = `${openOracleAddress}:${reportId}`
 	const cursor = protocolCursorForRequest(url, chainId, 'report', identity)
 	const decisionUrl = new URL(url)
@@ -234,7 +156,7 @@ export const reportDetailResponse = async (sql: SQL, parts: readonly string[], u
 	const asOf = await operationsAsOfForContinuations(
 		sql,
 		chainId,
-		[cursor, decisionCursor].flatMap((item) => (item === undefined ? [] : [{ parts: item, offset: 3 }])),
+		[cursor, decisionCursor].flatMap(item => (item === undefined ? [] : [{ parts: item, offset: 3 }])),
 	)
 	const page = detailPage(url, chainId, 'report', identity, asOf, cursor)
 	const decisionPage = detailPage(decisionUrl, chainId, 'report-decisions', identity, asOf, decisionCursor)
@@ -257,8 +179,7 @@ export const reportDetailResponse = async (sql: SQL, parts: readonly string[], u
 		current === undefined
 			? undefined
 			: reportLifecycle({
-					eventName:
-						current['event_name'] === 'ReportSettled' ? 'ReportSettled' : current['event_name'] === 'ReportDisputed' ? 'ReportDisputed' : 'ReportSubmitted',
+					eventName: current['event_name'] === 'ReportSettled' ? 'ReportSettled' : current['event_name'] === 'ReportDisputed' ? 'ReportDisputed' : 'ReportSubmitted',
 					flags: typeof currentData['flags'] === 'string' ? currentData['flags'] : undefined,
 					reportTimestamp: typeof currentData['reportTimestamp'] === 'string' ? currentData['reportTimestamp'] : undefined,
 					disputeDelay: typeof currentData['disputeDelay'] === 'string' ? currentData['disputeDelay'] : undefined,
@@ -272,8 +193,8 @@ export const reportDetailResponse = async (sql: SQL, parts: readonly string[], u
 		data: {
 			identity: { openOracleAddress, reportId },
 			current: current === undefined ? undefined : { ...current, report_data: currentData, lifecycle },
-			rounds: paged(reportRoundChanges(rows), page.limit, (row) => protocolCursorFor(chainId, 'report', identity, asOf, row)),
-			coordinatorDecisions: paged(coordinatorDecisions, decisionPage.limit, (row) => protocolCursorFor(chainId, 'report-decisions', identity, asOf, row)),
+			rounds: paged(reportRoundChanges(rows), page.limit, row => protocolCursorFor(chainId, 'report', identity, asOf, row)),
+			coordinatorDecisions: paged(coordinatorDecisions, decisionPage.limit, row => protocolCursorFor(chainId, 'report-decisions', identity, asOf, row)),
 		},
 	})
 }
@@ -281,8 +202,7 @@ export const reportDetailResponse = async (sql: SQL, parts: readonly string[], u
 export const eventEntityDetailResponse = async (sql: SQL, parts: readonly string[], url: URL, domain: 'auction' | 'escalation'): Promise<Response> => {
 	const chainId = routeInteger(parts[0])
 	const address = parts[1]?.toLowerCase()
-	if (parts.length !== 2 || chainId === undefined || address === undefined || !/^0x[0-9a-f]{40}$/.test(address))
-		return json({ error: `Invalid ${domain} identifier` }, 400)
+	if (parts.length !== 2 || chainId === undefined || address === undefined || !/^0x[0-9a-f]{40}$/.test(address)) return json({ error: `Invalid ${domain} identifier` }, 400)
 	const cursor = protocolCursorForRequest(url, chainId, domain, address)
 	const asOf = await operationsAsOfForContinuations(sql, chainId, cursor === undefined ? [] : [{ parts: cursor, offset: 3 }])
 	const page = detailPage(url, chainId, domain, address, asOf, cursor)
@@ -300,13 +220,11 @@ export const eventEntityDetailResponse = async (sql: SQL, parts: readonly string
 	const result: Record<string, unknown> = {
 		identity: address,
 		snapshot,
-		events: paged(rows, page.limit, (row) => protocolCursorFor(chainId, domain, address, asOf, row)),
+		events: paged(rows, page.limit, row => protocolCursorFor(chainId, domain, address, asOf, row)),
 	}
 	if (domain === 'auction') {
 		const { bids, finalization } = await auctionDetailData(sql, chainId, address)
-		result['demandCurve'] = auctionDemandCurve(
-			bids.slice(0, 1000).map((row: Record<string, unknown>) => ({ tick: String(row['tick']), amountAttoEth: String(row['amount_atto_eth']) })),
-		)
+		result['demandCurve'] = auctionDemandCurve(bids.slice(0, 1000).map((row: Record<string, unknown>) => ({ tick: String(row['tick']), amountAttoEth: String(row['amount_atto_eth']) })))
 		result['demandCurveTruncated'] = bids.length > 1000
 		result['finalization'] = finalization
 	} else {
@@ -319,8 +237,7 @@ export const eventEntityDetailResponse = async (sql: SQL, parts: readonly string
 export const forkDetailResponse = async (sql: SQL, parts: readonly string[], url: URL): Promise<Response> => {
 	const chainId = routeInteger(parts[0])
 	const identity = parts[1] === undefined ? undefined : decodeURIComponent(parts[1]).toLowerCase()
-	if (parts.length !== 2 || chainId === undefined || identity === undefined || identity.length === 0 || identity.length > 128)
-		return json({ error: 'Invalid fork identifier' }, 400)
+	if (parts.length !== 2 || chainId === undefined || identity === undefined || identity.length === 0 || identity.length > 128) return json({ error: 'Invalid fork identifier' }, 400)
 	const cursor = protocolCursorForRequest(url, chainId, 'fork', identity)
 	const asOf = await operationsAsOfForContinuations(sql, chainId, cursor === undefined ? [] : [{ parts: cursor, offset: 3 }])
 	const page = detailPage(url, chainId, 'fork', identity, asOf, cursor)
@@ -336,6 +253,6 @@ export const forkDetailResponse = async (sql: SQL, parts: readonly string[], url
 	return json({
 		chainId,
 		asOf,
-		data: { identity, summary, branches, events: paged(rows, page.limit, (row) => protocolCursorFor(chainId, 'fork', identity, asOf, row)) },
+		data: { identity, summary, branches, events: paged(rows, page.limit, row => protocolCursorFor(chainId, 'fork', identity, asOf, row)) },
 	})
 }

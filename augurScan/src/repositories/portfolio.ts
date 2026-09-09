@@ -2,10 +2,7 @@ import type { SQL } from 'bun'
 
 export type RichListSort = 'eth' | 'weth' | 'transactions'
 
-export const richListRows = async (
-	sql: SQL,
-	query: { readonly chainId?: number; readonly address?: string; readonly limit: number; readonly offset: number; readonly sort: RichListSort },
-) => {
+export const richListRows = async (sql: SQL, query: { readonly chainId?: number; readonly address?: string; readonly limit: number; readonly offset: number; readonly sort: RichListSort }) => {
 	const { chainId, address, limit, offset } = query
 	const orderBy = {
 		eth: 'native_balance DESC, transaction_count DESC',

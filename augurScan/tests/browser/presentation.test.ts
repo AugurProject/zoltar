@@ -84,29 +84,13 @@ for (const viewport of [
 				await session.send('Page.navigate', { url: `${origin}/contracts?demo=1` })
 				await waitFor(`document.querySelectorAll('.contract-row').length > 1`)
 				expect(await evaluate(`document.querySelector('.contract-deployment time').dateTime.length > 0`)).toBe(true)
-				expect(
-					await evaluate(
-						`(() => { const deployment = document.querySelector('.contract-deployment'); return deployment.querySelector('time').getBoundingClientRect().top >= deployment.querySelector('.deployment-status').getBoundingClientRect().bottom })()`,
-					),
-				).toBe(true)
+				expect(await evaluate(`(() => { const deployment = document.querySelector('.contract-deployment'); return deployment.querySelector('time').getBoundingClientRect().top >= deployment.querySelector('.deployment-status').getBoundingClientRect().bottom })()`)).toBe(true)
 				expect(await evaluate(`document.querySelector('.brand-block img').src === document.querySelector('link[rel="icon"]').href`)).toBe(true)
-				expect(
-					await evaluate(
-						`document.querySelectorAll('.contract-row .eyebrow, .contract-group-heading, .contract-row-facts, .contract-row .detail-tools').length`,
-					),
-				).toBe(0)
+				expect(await evaluate(`document.querySelectorAll('.contract-row .eyebrow, .contract-group-heading, .contract-row-facts, .contract-row .detail-tools').length`)).toBe(0)
 				expect(await evaluate(`document.querySelector('.contract-row .deployment-status').getAttribute('href').includes('/block/')`)).toBe(true)
 				expect(await evaluate(`document.querySelector('.contract-address-link').getAttribute('href').includes('/address/')`)).toBe(true)
-				expect(
-					await evaluate(
-						`(() => { const rows = [...document.querySelectorAll('.contract-row')]; return rows[1].getBoundingClientRect().top >= rows[0].getBoundingClientRect().bottom })()`,
-					),
-				).toBe(true)
-				expect(
-					await evaluate(
-						`(() => { const block = document.querySelector('.block-number').getBoundingClientRect(); const badge = document.querySelector('.network-title .badge').getBoundingClientRect(); return badge.top < block.bottom && block.top < badge.bottom })()`,
-					),
-				).toBe(true)
+				expect(await evaluate(`(() => { const rows = [...document.querySelectorAll('.contract-row')]; return rows[1].getBoundingClientRect().top >= rows[0].getBoundingClientRect().bottom })()`)).toBe(true)
+				expect(await evaluate(`(() => { const block = document.querySelector('.block-number').getBoundingClientRect(); const badge = document.querySelector('.network-title .badge').getBoundingClientRect(); return badge.top < block.bottom && block.top < badge.bottom })()`)).toBe(true)
 				expect(await evaluate(`document.documentElement.scrollWidth <= innerWidth`)).toBe(true)
 				await session.send('Page.navigate', { url: `${origin}/?demo=1&detailState=error` })
 				await waitFor(`document.querySelectorAll('.log-row').length > 2`)
@@ -115,9 +99,7 @@ for (const viewport of [
 				expect(await evaluate(`document.querySelectorAll('.event-detail-drawer').length`)).toBe(2)
 				await evaluate(`document.querySelector('.detail-error .state-retry').click()`)
 				await waitFor(`document.querySelectorAll('.event-detail-content .detail-grid').length === 2`)
-				await evaluate(
-					`document.querySelectorAll('.event-detail-drawer')[1].focus(); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`,
-				)
+				await evaluate(`document.querySelectorAll('.event-detail-drawer')[1].focus(); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`)
 				expect(await evaluate(`document.querySelectorAll('.event-detail-drawer').length`)).toBe(1)
 				await session.send('Page.navigate', { url: `${origin}/?demo=1&streamDemo=1&reorgDemo=1&logRemovedOnReorg=1` })
 				await waitFor(`document.querySelectorAll('.log-row').length > 2`)

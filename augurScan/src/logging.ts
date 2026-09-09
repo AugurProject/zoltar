@@ -10,13 +10,12 @@ const JSON_RPC_ERROR_NAMES = new Map<number, string>([
 	[-32603, 'Internal error'],
 ])
 
-export const jsonRpcErrorName = (code: number): string | undefined =>
-	JSON_RPC_ERROR_NAMES.get(code) ?? (code >= -32099 && code <= -32000 ? 'Server error' : undefined)
+export const jsonRpcErrorName = (code: number): string | undefined => JSON_RPC_ERROR_NAMES.get(code) ?? (code >= -32099 && code <= -32000 ? 'Server error' : undefined)
 
 export const safeRpcProviderMessage = (value: unknown): string | undefined => {
 	if (typeof value !== 'string') return undefined
 	const message = [...value]
-		.map((character) => {
+		.map(character => {
 			const codePoint = character.codePointAt(0)
 			return codePoint !== undefined && (codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f)) ? ' ' : character
 		})
@@ -121,12 +120,7 @@ const rpcErrorFrom = (envelope: RpcEnvelope | undefined): { readonly code: numbe
 
 const isRpcIdentifier = (value: unknown): value is number | string | null => value === null || typeof value === 'number' || typeof value === 'string'
 
-const isSuccessfulRpcResponse = (request: RpcEnvelope | undefined, response: RpcEnvelope | undefined): boolean =>
-	response?.jsonrpc === '2.0' &&
-	isRpcIdentifier(request?.id) &&
-	response.id === request.id &&
-	Object.hasOwn(response, 'result') &&
-	!Object.hasOwn(response, 'error')
+const isSuccessfulRpcResponse = (request: RpcEnvelope | undefined, response: RpcEnvelope | undefined): boolean => response?.jsonrpc === '2.0' && isRpcIdentifier(request?.id) && response.id === request.id && Object.hasOwn(response, 'result') && !Object.hasOwn(response, 'error')
 
 const responseHeaders = (response: Response): Record<string, string> => Object.fromEntries(response.headers.entries())
 
@@ -140,13 +134,7 @@ const appendRpcRecord = async (log: RotatingJsonLog, logPath: string, record: un
 
 const historicalStateMethods = new Set(['eth_call', 'eth_getBalance', 'eth_getCode', 'eth_getProof', 'eth_getStorageAt', 'eth_getTransactionCount'])
 
-export const createRpcLoggingFetch = (
-	rpcUrl: string,
-	consoleEndpoint: string,
-	logPath: string,
-	log: RotatingJsonLog,
-	fetchFn: RpcFetchFn = fetch,
-): RpcFetchFn => {
+export const createRpcLoggingFetch = (rpcUrl: string, consoleEndpoint: string, logPath: string, log: RotatingJsonLog, fetchFn: RpcFetchFn = fetch): RpcFetchFn => {
 	let reportedPrunedState = false
 	return async (input, init) => {
 		const requestBody = init?.body
@@ -172,15 +160,11 @@ export const createRpcLoggingFetch = (
 				const method = typeof requestEnvelope?.method === 'string' ? requestEnvelope.method : 'unknown'
 				const message = `RPC error from ${consoleEndpoint}; method ${method}; code ${rpcError.code}${name === undefined ? '' : ` (${name})`}${providerMessage === undefined ? '' : `; message: ${providerMessage}`}; full exchange logged to ${logPath}`
 				if (method === 'eth_getLogs' && rpcError.code === 4444 && providerMessage !== undefined) {
-					console.warn(
-						`Historical log history unavailable from ${consoleEndpoint}; method ${method}; message: ${providerMessage}; locating earliest retrievable block; full exchange logged to ${logPath}`,
-					)
+					console.warn(`Historical log history unavailable from ${consoleEndpoint}; method ${method}; message: ${providerMessage}; locating earliest retrievable block; full exchange logged to ${logPath}`)
 				} else if (historicalStateMethods.has(method) && prunedStateMessage !== undefined) {
 					if (!reportedPrunedState) {
 						reportedPrunedState = true
-						console.warn(
-							`Historical state unavailable from ${consoleEndpoint}; method ${method}; message: ${providerMessage ?? prunedStateMessage}; locating earliest retrievable state block; repeated pruned-state exchanges remain in ${logPath}`,
-						)
+						console.warn(`Historical state unavailable from ${consoleEndpoint}; method ${method}; message: ${providerMessage ?? prunedStateMessage}; locating earliest retrievable state block; repeated pruned-state exchanges remain in ${logPath}`)
 					}
 				} else console.error(message)
 			}
@@ -192,9 +176,7 @@ export const createRpcLoggingFetch = (
 				request: { body: requestBody, headers: init?.headers, method: init?.method },
 				transportError: error instanceof Error ? { message: error.message, name: error.name, stack: error.stack } : String(error),
 			})
-			console.error(
-				`RPC transport error from ${consoleEndpoint}; method ${typeof requestEnvelope?.method === 'string' ? requestEnvelope.method : 'unknown'}; full exchange logged to ${logPath}`,
-			)
+			console.error(`RPC transport error from ${consoleEndpoint}; method ${typeof requestEnvelope?.method === 'string' ? requestEnvelope.method : 'unknown'}; full exchange logged to ${logPath}`)
 			throw error
 		}
 	}
