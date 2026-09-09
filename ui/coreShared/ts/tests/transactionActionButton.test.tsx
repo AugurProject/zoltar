@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { fireEvent, within } from './testUtils/queries'
 import { h } from 'preact'
 import { act } from 'preact/test-utils'
-import { TransactionActionButton, TransactionActionButtonLockProvider } from '../components/TransactionActionButton.js'
+import { TransactionActionButton, TransactionActionGroup, TransactionActionButtonLockProvider } from '../components/TransactionActionButton.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { TRANSACTION_ACTION_LOCK_REASON } from '../transactions/transactionTray.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
@@ -24,6 +24,32 @@ describe('TransactionActionButton', () => {
 		cleanupRenderedComponent = undefined
 		restoreDomEnvironment?.()
 		restoreDomEnvironment = undefined
+	})
+
+	test('keeps the feedback region after the initiating button when there is no notice', async () => {
+		const rendered = await renderIntoDocument(<TransactionActionButton idleLabel='Submit' pendingLabel='Submitting...' onClick={() => undefined} />)
+		cleanupRenderedComponent = rendered.cleanup
+		const action = rendered.container.querySelector('.tx-action')
+		expect(action?.firstElementChild?.className).toBe('tx-action-row')
+		expect(action?.lastElementChild?.className).toBe('tx-action-feedback')
+	})
+
+	test('shares a global transaction blocker while keeping both grouped actions disabled', async () => {
+		const rendered = await renderIntoDocument(
+			<TransactionActionButtonLockProvider disabledReason={TRANSACTION_ACTION_LOCK_REASON}>
+				<TransactionActionGroup message={undefined}>
+					<TransactionActionButton idleLabel='Approve' pendingLabel='Approving' onClick={() => undefined} />
+					<TransactionActionButton idleLabel='Submit' pendingLabel='Submitting' onClick={() => undefined} />
+				</TransactionActionGroup>
+			</TransactionActionButtonLockProvider>,
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		const notice = within(document.body).getByRole('note')
+		expect(notice.textContent).toBe(TRANSACTION_ACTION_LOCK_REASON)
+		for (const button of document.querySelectorAll('button')) {
+			expect(button.disabled).toBe(true)
+			expect(button.getAttribute('aria-describedby')).toBe(notice.id)
+		}
 	})
 
 	test('renders pending button text while the action is in flight', async () => {

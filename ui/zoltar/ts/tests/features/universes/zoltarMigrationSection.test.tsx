@@ -103,6 +103,21 @@ describe('ZoltarMigrationSection', () => {
 		restoreDomEnvironment = undefined
 	})
 
+	test('stops outcome balance spinners when reads finish without a value', async () => {
+		const rendered = await renderIntoDocument(
+			h(
+				ZoltarMigrationSection,
+				createProps({
+					zoltarUniverse: createUniverse({ childUniverses: [{ exists: true, forkTime: 0n, outcomeIndex: 1n, outcomeLabel: 'Yes', parentUniverseId: 1n, reputationToken: CHILD_REP_ADDRESS, universeId: 2n }] }),
+					zoltarMigrationChildRepBalancesAttoRep: {},
+					zoltarMigrationChildSplitAmountsAttoRep: {},
+				}),
+			),
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		expect(rendered.container.querySelectorAll('.migration-outcome-metric .loading').length).toBe(0)
+	})
+
 	test('Max includes prepared REP and explains the total without requiring it from the wallet again', async () => {
 		const updates: Partial<ZoltarMigrationFormState>[] = []
 		const rendered = await renderIntoDocument(
@@ -136,8 +151,23 @@ describe('ZoltarMigrationSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(Array.from(document.body.querySelectorAll('.migration-workflow-steps span')).map(step => step.textContent)).toEqual(['1. Choose destinations', '2. Split REP'])
+		expect(document.body.querySelector('.migration-workflow-steps')).toBeNull()
 		expectTransactionButtonDisabled(document.body, 'Split REP', 'Enter an amount greater than zero.')
+	})
+
+	test('shares one amount notice above approval and split buttons', async () => {
+		const rendered = await renderIntoDocument(h(ZoltarMigrationSection, createProps({ zoltarMigrationForm: createForm({ amount: '' }) })))
+		cleanupRenderedComponent = rendered.cleanup
+		const notices = rendered.container.querySelectorAll('.tx-action-notice')
+		expect(notices.length).toBe(1)
+		const notice = notices[0]
+		if (notice === undefined) throw new Error('Missing migration notice')
+		expect(notice.textContent).toBe('Enter an amount greater than zero.')
+		for (const name of ['Approve REP', 'Split REP']) {
+			const button = within(rendered.container).getByRole('button', { name })
+			expect(button.getAttribute('aria-describedby')).toBe(notice.id)
+			expect(notice.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
+		}
 	})
 
 	test('labels the irreversible migration amount and requires an explicit destination', async () => {
@@ -219,7 +249,7 @@ describe('ZoltarMigrationSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const queries = within(document.body)
-		const deployedLink = queries.getByRole('link', { name: 'Deployed' })
+		const deployedLink = queries.getByRole('link', { name: 'Open universe' })
 		expect(deployedLink.getAttribute('href')).toBe(getUniverseLinkHref(3n))
 		expect(deployedLink.querySelector('[role="button"]')).toBeNull()
 		expect(document.body.textContent).toContain('0x3')
@@ -271,13 +301,13 @@ describe('ZoltarMigrationSection', () => {
 		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(true)
 	})
 
-	test('shows the final workflow stage when destinations and prepared REP are ready', async () => {
+	test('places the migration summary below outcomes and before approval controls', async () => {
 		const renderedComponent = await renderIntoDocument(h(ZoltarMigrationSection, createProps()))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const currentSteps = document.body.querySelectorAll('.migration-workflow-steps .current')
-		expect(currentSteps).toHaveLength(1)
-		expect(currentSteps[0]?.textContent).toBe('2. Split REP')
+		const outcomes = document.body.querySelector('.migration-outcome-section')
+		expect(outcomes?.nextElementSibling?.textContent).toContain('Selected Destinations')
+		expect(outcomes?.nextElementSibling?.nextElementSibling?.textContent).toContain('Approval Amount')
 		expect(document.body.textContent?.includes('Ready to split.')).toBe(false)
 	})
 
@@ -339,7 +369,7 @@ describe('ZoltarMigrationSection', () => {
 		)
 		cleanupRenderedComponent = rendered.cleanup
 		expect(within(document.body).queryByRole('button', { name: /^Approve [0-9]/ })).toBeNull()
-		expect(document.body.textContent).not.toContain('Wallet REP Used')
+		expect(document.body.textContent).toContain('Wallet REP Used—')
 		expectTransactionButtonDisabled(document.body, 'Split REP', 'Could not read migration balances. Retry to continue.')
 		within(document.body).getByRole('button', { name: 'Retry' }).click()
 		expect(retries).toBe(1)

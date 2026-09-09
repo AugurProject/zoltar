@@ -149,6 +149,8 @@ export function useZoltarFork(
 	}: UseZoltarForkParameters,
 	dependencies: UseZoltarForkDependencies = defaultUseZoltarForkDependencies,
 ) {
+	const currentUniverseRef = useRef(zoltarUniverse)
+	currentUniverseRef.current = zoltarUniverse
 	const forkAccessLoad = useLoadController()
 	const zoltarForkError = useSignal<string | undefined>(undefined)
 	const zoltarForkPending = useSignal(false)
@@ -178,7 +180,7 @@ export function useZoltarFork(
 	const getSuccessTitle = (actionName: 'approve' | 'fork') => (actionName === 'approve' ? 'REP approved for fork' : 'Universe fork submitted')
 	const getFailureTitle = (actionName: 'approve' | 'fork') => (actionName === 'approve' ? 'Fork REP approval failed' : 'Universe fork failed')
 
-	const loadZoltarForkAccess = async (universe: ZoltarUniverseSummary | undefined = zoltarUniverse) => {
+	const loadZoltarForkAccess = async (universe: ZoltarUniverseSummary | undefined = currentUniverseRef.current) => {
 		const isCurrent = nextForkAccessLoad()
 		const isCurrentScope = () => isCurrent() && currentForkAccessScope.current.generation === forkAccessScopeGeneration
 		const reputationToken = universe?.reputationToken ?? (activeUniverseId === 0n ? getGenesisReputationTokenAddress() : undefined)
@@ -204,10 +206,6 @@ export function useZoltarFork(
 				error: undefined,
 				loading: true,
 			}
-		if (isCurrentScope()) {
-			zoltarMigrationChildRepBalancesAttoRep.value = {}
-			zoltarMigrationChildSplitAmountsAttoRep.value = {}
-		}
 
 		await forkAccessLoad.track(async () => {
 			const accessResults = await dependencies.loadZoltarForkAccess(accountAddress, reputationToken, universeId, childUniverses).catch(error => {

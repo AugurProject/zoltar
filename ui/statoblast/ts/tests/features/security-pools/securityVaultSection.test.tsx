@@ -274,6 +274,22 @@ describe('SecurityVaultSection', () => {
 		expect(within(document.body).queryByText('Underwater')).toBeNull()
 	})
 
+	test.each(['', '0'])('shares one amount notice above approval and deposit for %s in the dialog', async amount => {
+		const props = createSecurityVaultSectionProps({ modalFirst: true })
+		const rendered = await renderIntoDocument(<SecurityVaultSection {...props} securityVaultForm={{ ...props.securityVaultForm, depositAmount: amount }} />)
+		cleanupRenderedComponent = rendered.cleanup
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Deposit REP' }))
+		const dialog = within(document.body).getByRole('dialog', { name: 'Deposit REP' })
+		const group = dialog.querySelector('.tx-action-group')
+		expect(group?.querySelectorAll('[role="note"]').length).toBe(1)
+		const notice = group?.querySelector('[role="note"]')
+		expect(notice?.textContent).toBe(amount === '' ? 'Enter a valid REP deposit amount.' : 'Enter an amount greater than zero.')
+		for (const button of group?.querySelectorAll('.tx-action-button') ?? []) {
+			expect(button.getAttribute('aria-describedby')).toBe(notice?.id)
+		}
+		expect(group?.firstElementChild?.className).toBe('tx-action-feedback')
+	})
+
 	test('distinguishes a wallet REP balance failure from an unloaded balance', async () => {
 		const renderedComponent = await renderIntoDocument(<SecurityVaultSection {...createSecurityVaultSectionProps({ walletRepBalanceError: 'Wallet REP balance RPC failed' })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
