@@ -24,7 +24,6 @@ import { getDefaultMarketFormState } from '../../markets/lib/marketForm.js'
 import { validateMarketForm } from '@zoltar/ui-zoltar-shared/features/questions/lib/questionCreation.js'
 import type { SecurityPoolSectionProps } from '../../types.js'
 import { formatUniverseIdHex } from '@zoltar/ui-zoltar-shared/features/universes/lib/universe.js'
-import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
 import * as marketCopy from '@zoltar/ui-zoltar-shared/copy/market.js'
 
@@ -173,12 +172,6 @@ export function SecurityPoolSection({
 	const createdPoolResult =
 		securityPoolResult === undefined ? undefined : (
 			<>
-				{securityPoolResult.universeId === activeUniverseId ? undefined : (
-					<WarningSurface role='alert' surface='flat' variant='compact'>
-						<strong>{securityPoolCopy.universeMismatch}</strong>
-						<p>{securityPoolCopy.formatBrowsePoolUniverseMismatch(formatUniverseIdHex(securityPoolResult.universeId), formatUniverseIdHex(activeUniverseId))}</p>
-					</WarningSurface>
-				)}
 				<EntityCard
 					surface='flat'
 					title={securityPoolCopy.poolCreated}
@@ -210,6 +203,7 @@ export function SecurityPoolSection({
 						</div>
 					}
 				>
+					{securityPoolResult.universeId === activeUniverseId ? undefined : <p className='detail'>{securityPoolCopy.formatBrowsePoolUniverseMismatch(formatUniverseIdHex(securityPoolResult.universeId))}</p>}
 					<Question question={createdQuestionDetails} loading={createdQuestionDetails === undefined} />
 					<ul className='status-list hashes'>
 						<li>

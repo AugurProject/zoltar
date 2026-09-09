@@ -1530,3 +1530,48 @@
 		letter-spacing: 0.02em;
 	}
 }
+
+/* Horizontal navigation shares one tab treatment across route levels. */
+.view-tabs[data-orientation="horizontal"]:is(.route, .subroute) {
+	gap: var(--space-3);
+	border-bottom: 1px solid var(--divider-subtle);
+}
+
+.view-tabs[data-orientation="horizontal"]:is(.route, .subroute) .view-tab {
+	position: relative;
+	flex: 0 0 auto;
+	border: 0;
+	border-bottom: 2px solid transparent;
+	border-radius: 0;
+	padding: 0.75rem 0.5rem;
+	background: transparent;
+	box-shadow: none;
+	color: var(--text-muted);
+	font-size: var(--font-subtab);
+	font-weight: 600;
+	letter-spacing: 0;
+	text-transform: none;
+	text-decoration: none;
+}
+
+.view-tabs[data-orientation="horizontal"]:is(.route, .subroute) .view-tab::after {
+	content: none;
+}
+
+.view-tabs[data-orientation="horizontal"]:is(.route, .subroute) .view-tab:hover:not(:disabled):not([aria-disabled="true"]) {
+	background: transparent;
+	border-bottom-color: var(--border-active);
+	color: var(--text);
+}
+
+.view-tabs[data-orientation="horizontal"]:is(.route, .subroute) .view-tab.active {
+	background: transparent;
+	border-bottom-color: var(--accent);
+	color: var(--text);
+	box-shadow: none;
+}
+
+.universe-fork-notice {
+	padding: var(--space-3);
+	margin: var(--space-3) var(--space-4);
+}
