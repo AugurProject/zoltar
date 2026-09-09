@@ -24,7 +24,7 @@ test('Chromium discovery is shell-independent and accepts Windows executable pat
 	})
 
 	expect(chromiumPath).toBe('C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe')
-	expect(attemptedCommands).toEqual(['chromium', 'chromium-browser', 'google-chrome'])
+	expect(attemptedCommands).toEqual(['google-chrome'])
 })
 
 test('Chromium discovery returns undefined when no candidate is on PATH', () => {
@@ -96,4 +96,9 @@ test('Chromium test lock is released when an owning process exits', async () => 
 		{ port },
 	)
 	expect(replacementAcquired).toBe(true)
+})
+
+test('Chromium discovery prefers the native Chrome binary when both Chrome and Chromium are installed', () => {
+	expect(getChromiumPath({ which: name => (['chromium', 'google-chrome'].includes(name) ? `/usr/bin/${name}` : null) })).toBe('/usr/bin/google-chrome')
+	expect(getChromiumPath({ which: name => (name === 'chromium' ? '/usr/bin/chromium' : null) })).toBe('/usr/bin/chromium')
 })

@@ -1,7 +1,9 @@
+import { ethSpend, repSpend } from './input-funding.ts'
+import { inputInteger, inputMatches } from './input-values.ts'
 import { getAddress, zeroAddress, type AbiValue } from '@zoltar/bot-shared/ethereum'
 import { maximumFeePerGas } from '@zoltar/bot-shared/execution/transaction-submission'
 import { auctionAbi, coordinatorAbi, erc20Abi, escalationGameAbi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi } from '../contracts/abi.ts'
-import { allowance, amount, cappedSpend, choose, disabled, eligible, encodePreflightCall, encodeStep, erc1155WalletDebit, erc20AllowanceEvidence, erc20WalletDebit, eventEvidence, eventTopic, mixSeed, ONE_TOKEN, optionAmount, planBase, securityPoolVaultRepDebit, tokenInventory } from './planning.ts'
+import { allowance, amount, choose, disabled, eligible, encodePreflightCall, encodeStep, erc1155WalletDebit, erc20AllowanceEvidence, erc20WalletDebit, eventEvidence, eventTopic, mixSeed, ONE_TOKEN, optionAmount, planBase, securityPoolVaultRepDebit, tokenInventory } from './planning.ts'
 import type { EcosystemSnapshot, OperationContinuationContext, OperationDefinition, OperationEvidence, OperationPlan, OperationWalletAssetDebit, PlanningOptions, PoolSnapshot } from './types.ts'
 import { validForkOutcomeRoutes } from './fork-outcomes.ts'
 import { assertOracleRequestFundingEnvelope, isOracleRequestFundingError, oracleRequestFundingEnvelope, oracleRequestSettlementCollateralCeiling, type OracleRequestFundingBounds } from './oracle-request-funding.ts'
@@ -167,15 +169,6 @@ function escalationWithdrawalSafe(snapshot: EcosystemSnapshot, pool: PoolSnapsho
 	if (universe === undefined) return false
 	const forkTime = amount(universe.forkTime)
 	return forkTime === 0n || forkTime >= amount(pool.escalationGameEndTime) || pool.escalationHasReachedNonDecision
-}
-
-function ethSpend(snapshot: EcosystemSnapshot, options: PlanningOptions, salt: string, minimum = 1n) {
-	return cappedSpend(amount(snapshot.wallet.ethBalanceAttoEth), optionAmount(options, 'minimumEthReserveAttoEth', 10n ** 16n), optionAmount(options, 'maxEthSpendAttoEth', 10n ** 16n), mixSeed(options.seed, salt), minimum)
-}
-
-function repSpend(snapshot: EcosystemSnapshot, pool: PoolSnapshot, options: PlanningOptions, salt: string, minimum = 1n) {
-	const token = tokenInventory(snapshot, pool.repToken)
-	return cappedSpend(token === undefined ? 0n : amount(token.balance), optionAmount(options, 'minimumRepReserveAttoRep', ONE_TOKEN), optionAmount(options, 'maxRepSpendAttoRep', ONE_TOKEN), mixSeed(options.seed, salt), minimum)
 }
 
 function approvePool(snapshot: EcosystemSnapshot, pool: PoolSnapshot, required: bigint) {
@@ -450,7 +443,9 @@ function walletVaultMigrationRouteCapacityBlocker(snapshot: EcosystemSnapshot, p
 }
 
 function vaultDepositCandidates(snapshot: EcosystemSnapshot, options: PlanningOptions) {
-	return operationalPools(snapshot).filter(pool => repSpend(snapshot, pool, options, depositVault.id, amount(pool.minimumSafeWalletVaultDepositAttoRep)) >= amount(pool.minimumSafeWalletVaultDepositAttoRep) && walletVaultRegistrationCapacityBlocker(pool, options, 'Wallet vault deposit registration') === undefined)
+	return operationalPools(snapshot)
+		.filter(pool => inputMatches(options, 'pool', pool.address))
+		.filter(pool => repSpend(snapshot, pool, options, depositVault.id, amount(pool.minimumSafeWalletVaultDepositAttoRep)) >= amount(pool.minimumSafeWalletVaultDepositAttoRep) && walletVaultRegistrationCapacityBlocker(pool, options, 'Wallet vault deposit registration') === undefined)
 }
 
 const depositVault: OperationDefinition = {
@@ -630,6 +625,7 @@ function completeSetDefinition(kind: 'create' | 'redeem' | 'winning'): Operation
 	return {
 		buildPlan(snapshot, options) {
 			const candidates = snapshot.pools.filter(pool => {
+				if (!inputMatches(options, 'pool', pool.address)) return false
 				if (kind === 'create') return operationalPools(snapshot).includes(pool) && safeOraclePriceDeadline(snapshot, pool, options) !== undefined && canCreateCompleteSet(pool, ethSpend(snapshot, options, id))
 				const shares = snapshot.wallet.shares.find(candidate => candidate.shareToken.toLowerCase() === pool.shareToken.toLowerCase() && candidate.universeId === pool.universeId)
 				if (shares === undefined) return false
@@ -648,6 +644,8 @@ function completeSetDefinition(kind: 'create' | 'redeem' | 'winning'): Operation
 				const shares = snapshot.wallet.shares.find(candidate => candidate.shareToken.toLowerCase() === pool.shareToken.toLowerCase() && candidate.universeId === pool.universeId)
 				if (shares === undefined) return undefined
 				spend = [amount(shares.invalid), amount(shares.yes), amount(shares.no)].reduce((minimum, value) => (value < minimum ? value : minimum))
+				spend = inputInteger(options, 'amount', spend, 1n, spend)
+				if (sharesToEth(pool, spend) === 0n) return undefined
 			}
 			const args = kind === 'redeem' ? [spend] : undefined
 			const shares = walletShares(snapshot, pool)
@@ -1944,15 +1942,17 @@ function auctionDefinition(kind: 'bid' | 'withdraw-refund'): OperationDefinition
 	const method = kind === 'bid' ? 'submitBid' : 'withdrawPendingEthRefund'
 	const candidates = (snapshot: EcosystemSnapshot, options: PlanningOptions) => {
 		const now = amount(snapshot.anchor.timestamp)
-		return snapshot.auctions.filter(candidate =>
-			kind === 'bid'
-				? !candidate.finalized && amount(candidate.startTime) > 0n && timestampDeadlineHasRequiredSafety(now, amount(candidate.endTime), options) && ethSpend(snapshot, options, id, amount(candidate.minimumBidAttoEth)) >= amount(candidate.minimumBidAttoEth)
-				: amount(candidate.pendingEthRefund) > 0n && candidate.pendingEthRefundGeneration !== undefined,
-		)
+		return snapshot.auctions
+			.filter(candidate => inputMatches(options, 'auction', candidate.address))
+			.filter(candidate =>
+				kind === 'bid'
+					? !candidate.finalized && amount(candidate.startTime) > 0n && timestampDeadlineHasRequiredSafety(now, amount(candidate.endTime), options) && ethSpend(snapshot, options, id, amount(candidate.minimumBidAttoEth)) >= amount(candidate.minimumBidAttoEth)
+					: amount(candidate.pendingEthRefund) > 0n && candidate.pendingEthRefundGeneration !== undefined,
+			)
 	}
 	const build = (snapshot: EcosystemSnapshot, options: PlanningOptions, auction: EcosystemSnapshot['auctions'][number]) => {
 		const bid = kind === 'bid' ? ethSpend(snapshot, options, id, amount(auction.minimumBidAttoEth)) : 0n
-		const tick = (mixSeed(options.seed, 'auction-tick') % 20_001) - 10_000
+		const tick = Number(inputInteger(options, 'tick', BigInt((mixSeed(options.seed, 'auction-tick') % 20_001) - 10_000), -10_000n, 10_000n))
 		const signature = kind === 'bid' ? 'BidSubmitted(address,int256,uint256,uint256,uint256)' : 'PendingEthRefundWithdrawn(address,uint256)'
 		let metadata: Record<string, string | number | boolean>
 		if (kind === 'bid') {

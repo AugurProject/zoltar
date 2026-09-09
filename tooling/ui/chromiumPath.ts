@@ -3,7 +3,7 @@ import { createConnection, createServer, type Server } from 'node:net'
 import { win32 } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 
-const CHROMIUM_COMMAND_NAMES = ['chromium', 'chromium-browser', 'google-chrome', 'chrome', 'msedge'] as const
+const CHROMIUM_COMMAND_NAMES = ['google-chrome', 'chromium', 'chromium-browser', 'chrome', 'msedge'] as const
 const CHROMIUM_TEST_LOCK_HOST = '127.0.0.1'
 const CHROMIUM_TEST_LOCK_PORT = 43871
 const CHROMIUM_TEST_LOCK_SIGNATURE = 'zoltar-chromium-test-lock-v1'

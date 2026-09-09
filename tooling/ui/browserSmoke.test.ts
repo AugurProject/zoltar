@@ -212,11 +212,20 @@ test('default DevTools port polling continues beyond the former 300-attempt limi
 test.skipIf(process.platform === 'win32')('default initialization waits beyond the former page target retry limit', async () => {
 	const fixtureRoot = await mkdtemp(join(tmpdir(), 'zoltar-browser-delayed-target-'))
 	const executablePath = join(fixtureRoot, 'fake-chromium')
-	const server = createFakeDevToolsServer(220)
+	const server = createFakeDevToolsServer(0)
+	let targetListRequests = 0
 	await writeFakeChromium(executablePath, server.port, '0')
 	try {
-		const session = await createDevToolsSession(executablePath, 'http://127.0.0.1', viewport, { initializationTimeoutMilliseconds: 5_000, pollMilliseconds: 1 })
+		const session = await createDevToolsSession(executablePath, 'http://127.0.0.1', viewport, {
+			initializationTimeoutMilliseconds: 5_000,
+			pollMilliseconds: 0,
+			targetListRequest: async () => {
+				targetListRequests += 1
+				return targetListRequests <= 220 ? [] : [{ type: 'page', webSocketDebuggerUrl: `ws://127.0.0.1:${server.port.toString()}/ws` }]
+			},
+		})
 		await session.close()
+		expect(targetListRequests).toBe(221)
 	} finally {
 		server.stop(true)
 		await rm(fixtureRoot, { force: true, recursive: true })
