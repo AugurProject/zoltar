@@ -32,21 +32,15 @@ describe('AugurScan runtime logging', () => {
 	test('includes the RPC method, server, and mapped code in safe console diagnostics', () => {
 		const rpcError = Object.assign(new Error('provider detail'), { code: -32603, name: 'RpcError' })
 		const wrapped = new RpcRequestMethodError('eth_getCode', rpcError, '#1 https://*.tenderly.co')
-		expect(safeIndexerFailureReason(wrapped)).toBe(
-			'RpcRequestMethodError caused by RpcError; method eth_getCode; RPC #1 https://*.tenderly.co; code -32603 (Internal error)',
-		)
+		expect(safeIndexerFailureReason(wrapped)).toBe('RpcRequestMethodError caused by RpcError; method eth_getCode; RPC #1 https://*.tenderly.co; code -32603 (Internal error)')
 		const pruned = Object.assign(new Error('state at block #1 is pruned'), {
 			code: -32603,
 			details: 'state at block #1 is pruned',
 			name: 'RpcRequestError',
 		})
-		expect(safeIndexerFailureReason(new RpcRequestMethodError('eth_getCode', pruned, '#1 http://reth:8545'))).toBe(
-			'RpcRequestMethodError caused by RpcRequestError; method eth_getCode; RPC #1 http://reth:8545; code -32603 (Internal error); message: state at block #1 is pruned',
-		)
+		expect(safeIndexerFailureReason(new RpcRequestMethodError('eth_getCode', pruned, '#1 http://reth:8545'))).toBe('RpcRequestMethodError caused by RpcRequestError; method eth_getCode; RPC #1 http://reth:8545; code -32603 (Internal error); message: state at block #1 is pruned')
 		const wrappedRpcError = Object.assign(new Error('state at block #1 is pruned'), { code: -32603, name: 'RpcError' })
-		expect(safeIndexerFailureReason(new RpcRequestMethodError('eth_getCode', wrappedRpcError, '#1 http://reth:8545'))).toBe(
-			'RpcRequestMethodError caused by RpcError; method eth_getCode; RPC #1 http://reth:8545; code -32603 (Internal error); message: state at block #1 is pruned',
-		)
+		expect(safeIndexerFailureReason(new RpcRequestMethodError('eth_getCode', wrappedRpcError, '#1 http://reth:8545'))).toBe('RpcRequestMethodError caused by RpcError; method eth_getCode; RPC #1 http://reth:8545; code -32603 (Internal error); message: state at block #1 is pruned')
 	})
 
 	test('prefixes console values with an ISO timestamp', () => {
@@ -102,9 +96,7 @@ describe('AugurScan runtime logging', () => {
 				request: { body: requestBody },
 				response: { body: responseBody, headers: { 'x-provider': 'example' } },
 			})
-			expect(consoleError).toHaveBeenCalledWith(
-				`RPC error from #1 https://rpc.example; method eth_getCode; code -32603 (Internal error); full exchange logged to ${filename}`,
-			)
+			expect(consoleError).toHaveBeenCalledWith(`RPC error from #1 https://rpc.example; method eth_getCode; code -32603 (Internal error); full exchange logged to ${filename}`)
 			const consoleOutput = consoleError.mock.calls.flat().join(' ')
 			expect(consoleOutput).not.toContain('private-key')
 			expect(consoleOutput).not.toContain('injected line')
@@ -116,9 +108,7 @@ describe('AugurScan runtime logging', () => {
 	test('does not log successful RPC exchanges', async () => {
 		const directory = await temporaryDirectory()
 		const filename = path.join(directory, 'rpc.jsonl')
-		const loggingFetch = createRpcLoggingFetch('http://reth:8545', '#1 http://reth:8545', filename, new RotatingJsonLog(filename), async () =>
-			Response.json({ id: 1, jsonrpc: '2.0', result: '0xaa36a7' }),
-		)
+		const loggingFetch = createRpcLoggingFetch('http://reth:8545', '#1 http://reth:8545', filename, new RotatingJsonLog(filename), async () => Response.json({ id: 1, jsonrpc: '2.0', result: '0xaa36a7' }))
 		await loggingFetch('http://reth:8545', {
 			body: JSON.stringify({ id: 1, jsonrpc: '2.0', method: 'eth_chainId', params: [] }),
 			method: 'POST',
@@ -144,7 +134,7 @@ describe('AugurScan runtime logging', () => {
 		const records = (await readFile(filename, 'utf8'))
 			.trim()
 			.split('\n')
-			.map((line) => JSON.parse(line))
+			.map(line => JSON.parse(line))
 		expect(records).toHaveLength(2)
 		expect(records[0]).toMatchObject({ request: { body: expect.stringContaining('"id":1') }, response: { body: 'not json', status: 200 } })
 		expect(records[1]).toMatchObject({
@@ -159,16 +149,12 @@ describe('AugurScan runtime logging', () => {
 		const consoleError = spyOn(console, 'error').mockImplementation(() => {})
 		const consoleWarn = spyOn(console, 'warn').mockImplementation(() => {})
 		try {
-			const loggingFetch = createRpcLoggingFetch('http://reth:8545', '#1 http://reth:8545', filename, new RotatingJsonLog(filename), async () =>
-				Response.json({ error: { code: -32603, message: 'state at block #1 is pruned' }, id: 1, jsonrpc: '2.0' }),
-			)
+			const loggingFetch = createRpcLoggingFetch('http://reth:8545', '#1 http://reth:8545', filename, new RotatingJsonLog(filename), async () => Response.json({ error: { code: -32603, message: 'state at block #1 is pruned' }, id: 1, jsonrpc: '2.0' }))
 			await loggingFetch('http://reth:8545', {
 				body: JSON.stringify({ id: 1, jsonrpc: '2.0', method: 'eth_getCode', params: ['0x1234', '0x1'] }),
 				method: 'POST',
 			})
-			expect(consoleWarn).toHaveBeenCalledWith(
-				`Historical state unavailable from #1 http://reth:8545; method eth_getCode; message: state at block #1 is pruned; locating earliest retrievable state block; repeated pruned-state exchanges remain in ${filename}`,
-			)
+			expect(consoleWarn).toHaveBeenCalledWith(`Historical state unavailable from #1 http://reth:8545; method eth_getCode; message: state at block #1 is pruned; locating earliest retrievable state block; repeated pruned-state exchanges remain in ${filename}`)
 			expect(consoleError).not.toHaveBeenCalled()
 		} finally {
 			consoleError.mockRestore()
@@ -184,8 +170,7 @@ describe('AugurScan runtime logging', () => {
 		try {
 			const loggingFetch = createRpcLoggingFetch('http://reth:8545', '#1 http://reth:8545', filename, new RotatingJsonLog(filename), async (_input, init) => {
 				const request: unknown = JSON.parse(String(init?.body))
-				if (typeof request !== 'object' || request === null || Array.isArray(request) || !('id' in request) || typeof request.id !== 'number')
-					throw new Error('Expected a numeric JSON-RPC request identifier')
+				if (typeof request !== 'object' || request === null || Array.isArray(request) || !('id' in request) || typeof request.id !== 'number') throw new Error('Expected a numeric JSON-RPC request identifier')
 				return Response.json({ error: { code: -32603, message: `state at block #${request.id} is pruned` }, id: request.id, jsonrpc: '2.0' })
 			})
 			for (const id of [1, 2, 3]) {
@@ -236,16 +221,12 @@ describe('AugurScan runtime logging', () => {
 		const consoleError = spyOn(console, 'error').mockImplementation(() => {})
 		const consoleWarn = spyOn(console, 'warn').mockImplementation(() => {})
 		try {
-			const loggingFetch = createRpcLoggingFetch('http://reth:8545', '#1 http://reth:8545', filename, new RotatingJsonLog(filename), async () =>
-				Response.json({ error: { code: 4444, message: 'pruned history unavailable' }, id: 1, jsonrpc: '2.0' }),
-			)
+			const loggingFetch = createRpcLoggingFetch('http://reth:8545', '#1 http://reth:8545', filename, new RotatingJsonLog(filename), async () => Response.json({ error: { code: 4444, message: 'pruned history unavailable' }, id: 1, jsonrpc: '2.0' }))
 			await loggingFetch('http://reth:8545', {
 				body: JSON.stringify({ id: 1, jsonrpc: '2.0', method: 'eth_getLogs', params: [{ fromBlock: '0x1', toBlock: '0x1' }] }),
 				method: 'POST',
 			})
-			expect(consoleWarn).toHaveBeenCalledWith(
-				`Historical log history unavailable from #1 http://reth:8545; method eth_getLogs; message: pruned history unavailable; locating earliest retrievable block; full exchange logged to ${filename}`,
-			)
+			expect(consoleWarn).toHaveBeenCalledWith(`Historical log history unavailable from #1 http://reth:8545; method eth_getLogs; message: pruned history unavailable; locating earliest retrievable block; full exchange logged to ${filename}`)
 			expect(consoleError).not.toHaveBeenCalled()
 		} finally {
 			consoleError.mockRestore()
@@ -275,11 +256,7 @@ describe('AugurScan runtime logging', () => {
 			active--
 		}
 
-		await Promise.all([
-			runSerializedIndexerLeaseOperation(lease, operation),
-			runSerializedIndexerLeaseOperation(lease, operation),
-			runSerializedIndexerLeaseOperation(lease, operation),
-		])
+		await Promise.all([runSerializedIndexerLeaseOperation(lease, operation), runSerializedIndexerLeaseOperation(lease, operation), runSerializedIndexerLeaseOperation(lease, operation)])
 		expect(maximumActive).toBe(1)
 	})
 

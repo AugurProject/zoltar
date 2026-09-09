@@ -66,7 +66,7 @@ const usdcAddress = {
 } as const
 
 const serializeManifest = (contracts: readonly (readonly [string, string, string])[]): string => {
-	const entries = contracts.map((entry) => `\t\t[${entry.map((value) => JSON.stringify(value)).join(', ')}]`).join(',\n')
+	const entries = contracts.map(entry => `\t\t[${entry.map(value => JSON.stringify(value)).join(', ')}]`).join(',\n')
 	return `{\n\t"contracts": [\n${entries}\n\t]\n}\n`
 }
 const manifestEntry = (address: string, label: string, kind: string): [string, string, string] => [address, label, kind]
@@ -79,12 +79,8 @@ async function projectManifest(projectRoot: string, networkId: keyof typeof usdc
 		const kind = deploymentKind[id]
 		return kind === undefined ? [] : [manifestEntry(address, label, kind)]
 	})
-	configured.push(
-		manifestEntry(deployment.network.genesisRepTokenAddress, 'Genesis REP', 'reputationToken'),
-		manifestEntry(deployment.network.wethAddress, 'Wrapped Ether', 'weth'),
-		manifestEntry(usdcAddress[networkId], 'USD Coin', 'usdc'),
-	)
-	const current = [...new Map(configured.map((entry) => [entry[0].toLowerCase(), entry])).values()]
+	configured.push(manifestEntry(deployment.network.genesisRepTokenAddress, 'Genesis REP', 'reputationToken'), manifestEntry(deployment.network.wethAddress, 'Wrapped Ether', 'weth'), manifestEntry(usdcAddress[networkId], 'USD Coin', 'usdc'))
+	const current = [...new Map(configured.map(entry => [entry[0].toLowerCase(), entry])).values()]
 	return serializeManifest(current)
 }
 

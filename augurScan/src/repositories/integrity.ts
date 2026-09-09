@@ -1,7 +1,6 @@
 import type { SQL } from 'bun'
 
-export const latestInvalidationId = async (sql: SQL, chainId: number) =>
-	await sql`SELECT COALESCE(max(id), 0)::text AS id FROM chain_reorganizations WHERE chain_id = ${chainId}`
+export const latestInvalidationId = async (sql: SQL, chainId: number) => await sql`SELECT COALESCE(max(id), 0)::text AS id FROM chain_reorganizations WHERE chain_id = ${chainId}`
 
 export const integrityCatalogData = async (
 	sql: SQL,

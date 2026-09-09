@@ -30,35 +30,13 @@ const logRow = (block: number): Record<string, unknown> => ({
 	canonical: block === 3,
 })
 
-const body = (...rows: readonly Record<string, unknown>[]): string => `${rows.map((row) => JSON.stringify(row)).join('\n')}\n`
+const body = (...rows: readonly Record<string, unknown>[]): string => `${rows.map(row => JSON.stringify(row)).join('\n')}\n`
 
-const cursor = (lastBlock: number): string =>
-	btoa(
-		JSON.stringify([
-			1,
-			'logs',
-			1,
-			'all',
-			'0',
-			'10',
-			'10',
-			hash('1'),
-			'3',
-			'3',
-			'abi',
-			'application',
-			'projection',
-			[String(lastBlock), '0', '0', hash(String(lastBlock)), hash(String(lastBlock + 3))],
-		]),
-	)
+const cursor = (lastBlock: number): string => btoa(JSON.stringify([1, 'logs', 1, 'all', '0', '10', '10', hash('1'), '3', '3', 'abi', 'application', 'projection', [String(lastBlock), '0', '0', hash(String(lastBlock)), hash(String(lastBlock + 3))]]))
 
 test('proves exact multi-page NDJSON exports at one ordered cursor boundary', () => {
 	const pageTwo = cursor(2)
-	const first = verifyExportPage(
-		headers({ 'x-augurscan-returned': '2', 'x-augurscan-truncated': 'true', 'x-augurscan-next-cursor': pageTwo }),
-		body(logRow(1), logRow(2)),
-		logScope,
-	)
+	const first = verifyExportPage(headers({ 'x-augurscan-returned': '2', 'x-augurscan-truncated': 'true', 'x-augurscan-next-cursor': pageTwo }), body(logRow(1), logRow(2)), logScope)
 	expect(first).toMatchObject({ total: '3', returnedTotal: '2', truncated: true, nextCursor: pageTwo })
 	const second = verifyExportPage(headers({ 'x-augurscan-returned': '1', 'x-augurscan-truncated': 'false' }), body(logRow(3)), logScope, first, pageTwo)
 	expect(second).toMatchObject({ total: '3', returnedTotal: '3', truncated: false })
@@ -81,19 +59,13 @@ test('rejects incomplete, malformed, duplicate, skipped-boundary, or cross-snaps
 			logScope,
 		),
 	).toThrow('content-type must be application/x-ndjson')
-	expect(() => verifyExportPage(headers({ 'x-augurscan-returned': '2', 'x-augurscan-truncated': 'true' }), firstBody, logScope)).toThrow(
-		'truncated response and next cursor do not agree',
-	)
+	expect(() => verifyExportPage(headers({ 'x-augurscan-returned': '2', 'x-augurscan-truncated': 'true' }), firstBody, logScope)).toThrow('truncated response and next cursor do not agree')
 	expect(() => verifyExportPage(firstHeaders, `${JSON.stringify(logRow(1))}\nnot-json\n`, logScope)).toThrow('NDJSON body contains malformed JSON')
 	expect(() => verifyExportPage(firstHeaders, body(logRow(1)), logScope)).toThrow('NDJSON line count does not match x-augurscan-returned')
-	expect(() =>
-		verifyExportPage(headers({ 'x-augurscan-returned': '0', 'x-augurscan-truncated': 'true', 'x-augurscan-next-cursor': cursor(0) }), '', logScope),
-	).toThrow('next cursor does not identify the final export row')
+	expect(() => verifyExportPage(headers({ 'x-augurscan-returned': '0', 'x-augurscan-truncated': 'true', 'x-augurscan-next-cursor': cursor(0) }), '', logScope)).toThrow('next cursor does not identify the final export row')
 	expect(() => verifyExportPage(firstHeaders, body(logRow(1), logRow(1)), logScope)).toThrow('export row identities are not strictly increasing')
 	expect(() => verifyExportPage(firstHeaders, firstBody, logScope, first, pageTwo)).toThrow('export row identities are not strictly increasing')
-	expect(() =>
-		verifyExportPage(headers({ 'x-augurscan-returned': '2', 'x-augurscan-truncated': 'true', 'x-augurscan-next-cursor': cursor(3) }), firstBody, logScope),
-	).toThrow('next cursor does not identify the final export row')
+	expect(() => verifyExportPage(headers({ 'x-augurscan-returned': '2', 'x-augurscan-truncated': 'true', 'x-augurscan-next-cursor': cursor(3) }), firstBody, logScope)).toThrow('next cursor does not identify the final export row')
 	expect(() =>
 		verifyExportPage(
 			headers({
@@ -107,9 +79,7 @@ test('rejects incomplete, malformed, duplicate, skipped-boundary, or cross-snaps
 			pageTwo,
 		),
 	).toThrow('export snapshot headers changed between pages')
-	expect(() => verifyExportPage(headers({ 'x-augurscan-returned': '0', 'x-augurscan-truncated': 'false' }), '', logScope, first, pageTwo)).toThrow(
-		'final page count does not match snapshot total',
-	)
+	expect(() => verifyExportPage(headers({ 'x-augurscan-returned': '0', 'x-augurscan-truncated': 'false' }), '', logScope, first, pageTwo)).toThrow('final page count does not match snapshot total')
 })
 
 test('validates timeline and reorganization identity order and request scope', () => {
@@ -119,25 +89,13 @@ test('validates timeline and reorganization identity order and request scope', (
 		{ chain_id: '1', block_number: '1', block_hash: hash('1'), tx_hash: hash('4'), log_index: 0, entity_type: 'report', entity_identity: 'a', canonical: true },
 		{ chain_id: '1', block_number: '2', block_hash: hash('2'), tx_hash: hash('5'), log_index: 0, entity_type: 'report', entity_identity: 'b', canonical: true },
 	]
-	expect(() =>
-		verifyExportPage(
-			headers({ 'x-augurscan-snapshot-total': '2', 'x-augurscan-returned': '2', 'x-augurscan-truncated': 'false' }),
-			body(...timelineRows),
-			timelineScope,
-		),
-	).not.toThrow()
+	expect(() => verifyExportPage(headers({ 'x-augurscan-snapshot-total': '2', 'x-augurscan-returned': '2', 'x-augurscan-truncated': 'false' }), body(...timelineRows), timelineScope)).not.toThrow()
 	const reorgScope = exportRequestScope('reorgs', '1', 'all', '0', '10')
 	const reorgRows = [
 		{ chain_id: '1', id: '1', reason: 'chain-reorg', previous_block: '2', ancestor_block: '1' },
 		{ chain_id: '1', id: '2', reason: 'start-boundary-advanced', previous_block: null, ancestor_block: null },
 	]
-	expect(() =>
-		verifyExportPage(
-			headers({ 'x-augurscan-snapshot-total': '2', 'x-augurscan-returned': '2', 'x-augurscan-truncated': 'false' }),
-			body(...reorgRows),
-			reorgScope,
-		),
-	).not.toThrow()
+	expect(() => verifyExportPage(headers({ 'x-augurscan-snapshot-total': '2', 'x-augurscan-returned': '2', 'x-augurscan-truncated': 'false' }), body(...reorgRows), reorgScope)).not.toThrow()
 	expect(() =>
 		verifyExportPage(
 			headers({

@@ -48,7 +48,7 @@ export const startIndexers = (
 	options: {
 		readonly provenance?: EvidenceProvenance
 	} = {},
-): readonly Promise<void>[] => networks.map((network) => runIndexerTask(network.id, () => new NetworkIndexer(network, database, signal, options).run()))
+): readonly Promise<void>[] => networks.map(network => runIndexerTask(network.id, () => new NetworkIndexer(network, database, signal, options).run()))
 
 export const runIndexerTask = async (networkId: string, run: () => Promise<void>): Promise<void> => {
 	try {

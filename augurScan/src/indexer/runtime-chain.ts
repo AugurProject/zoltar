@@ -1,11 +1,7 @@
 import type { Hash, PublicClient } from '../ethereum.ts'
 import { ChainConfigurationError, ChainContinuityError } from './runtime-rpc.ts'
 
-export const queryCanonicalLogRange = async <T>(
-	throughBlock: bigint,
-	readEndBlockHash: () => Promise<Hash>,
-	query: () => Promise<readonly T[]>,
-): Promise<{ readonly items: readonly T[]; readonly endBlockHash: Hash }> => {
+export const queryCanonicalLogRange = async <T>(throughBlock: bigint, readEndBlockHash: () => Promise<Hash>, query: () => Promise<readonly T[]>): Promise<{ readonly items: readonly T[]; readonly endBlockHash: Hash }> => {
 	const before = await readEndBlockHash()
 	const items = await query()
 	const after = await readEndBlockHash()
@@ -26,8 +22,7 @@ const rpcEndpointLabel = (rpcUrl: string): string => {
 
 export const rpcProviderLabel = (rpcUrl: string, index: number): string => `#${index + 1} ${rpcEndpointLabel(rpcUrl)}`
 
-export const rpcFailureLogMessage = (message: string, endpoint: string, reason?: string): string =>
-	`${message} (RPC: ${endpoint}${reason === undefined ? '' : `; reason: ${reason}`})`
+export const rpcFailureLogMessage = (message: string, endpoint: string, reason?: string): string => `${message} (RPC: ${endpoint}${reason === undefined ? '' : `; reason: ${reason}`})`
 
 export const withVerifiedProvider = async <TProvider extends ChainProvider, TResult>(
 	providers: readonly TProvider[],
@@ -77,11 +72,7 @@ export const findSparseCanonicalAncestor = async (
 	return undefined
 }
 
-export const commitSparseCanonicalBatch = async (
-	anchors: readonly { readonly number: bigint; readonly hash: Hash }[],
-	lookup: (blockNumber: bigint) => Promise<Hash>,
-	commit: (validateBeforeCommit: () => Promise<void>) => Promise<void>,
-): Promise<void> => {
+export const commitSparseCanonicalBatch = async (anchors: readonly { readonly number: bigint; readonly hash: Hash }[], lookup: (blockNumber: bigint) => Promise<Hash>, commit: (validateBeforeCommit: () => Promise<void>) => Promise<void>): Promise<void> => {
 	const validate = async (): Promise<void> => {
 		for (const anchor of anchors) await confirmCanonicalBlock(anchor.number, anchor.hash, lookup)
 	}
@@ -89,13 +80,7 @@ export const commitSparseCanonicalBatch = async (
 	await commit(validate)
 }
 
-export const commitCanonicalRead = async <T>(
-	number: bigint,
-	expectedHash: Hash,
-	read: () => Promise<T>,
-	lookup: (blockNumber: bigint) => Promise<Hash>,
-	commit: (value: T) => Promise<void>,
-): Promise<void> => {
+export const commitCanonicalRead = async <T>(number: bigint, expectedHash: Hash, read: () => Promise<T>, lookup: (blockNumber: bigint) => Promise<Hash>, commit: (value: T) => Promise<void>): Promise<void> => {
 	const value = await read()
 	await confirmCanonicalBlock(number, expectedHash, lookup)
 	await commit(value)

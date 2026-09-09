@@ -79,7 +79,7 @@ export const runOwnedNetworkLifecycle = async ({ reconcile, poll, runWithProvide
 		...lifecycle,
 		verify: () => runWithProvider(reconcile),
 		poll: () => runWithProvider(poll),
-		shouldRethrow: (error) => error instanceof DatabaseConsistencyError || lifecycle.shouldRethrow?.(error) === true,
+		shouldRethrow: error => error instanceof DatabaseConsistencyError || lifecycle.shouldRethrow?.(error) === true,
 	})
 
 export type LeaseControl = Pick<IndexerLease, 'assertHeld' | 'release'> & { readonly backendPid?: number }
@@ -112,12 +112,7 @@ type IndexerOwnershipStatus = {
 
 const ownershipStatuses = new Map<string, IndexerOwnershipStatus>()
 
-export const nextIndexerOwnershipStatus = (
-	networkId: string,
-	current: IndexerOwnershipStatus | undefined,
-	event: IndexerOwnershipEvent,
-	now = new Date(),
-): IndexerOwnershipStatus => {
+export const nextIndexerOwnershipStatus = (networkId: string, current: IndexerOwnershipStatus | undefined, event: IndexerOwnershipEvent, now = new Date()): IndexerOwnershipStatus => {
 	const previous = current ?? {
 		networkId,
 		active: false,
@@ -178,14 +173,7 @@ const ownershipFailureReason = (error: unknown): string => {
 	return reason
 }
 
-export const ownershipFailureLogMessage = (
-	networkId: string,
-	stage: OwnershipStage,
-	error: unknown,
-	consecutiveFailures: number,
-	retryDelay: number,
-	backendPid?: number,
-): string =>
+export const ownershipFailureLogMessage = (networkId: string, stage: OwnershipStage, error: unknown, consecutiveFailures: number, retryDelay: number, backendPid?: number): string =>
 	`[${networkId}] indexer ownership failed; stage: ${stage}; consecutive failures: ${consecutiveFailures}; retry delay: ${retryDelay}ms; backend PID: ${backendPid ?? 'unavailable'}; reason: ${ownershipFailureReason(error)}`
 
 export type OwnershipLifecycle<TLease extends LeaseControl> = {
@@ -203,20 +191,7 @@ export type OwnershipLifecycle<TLease extends LeaseControl> = {
 	readonly signal: AbortSignal
 }
 
-export const runIndexerOwnershipLifecycle = async <TLease extends LeaseControl>({
-	networkId,
-	acquire,
-	seed,
-	runOwned,
-	failure,
-	standby,
-	intervalMs,
-	now = Date.now,
-	onEvent = () => {},
-	random,
-	wait = waitForIndexerDelay,
-	signal,
-}: OwnershipLifecycle<TLease>): Promise<void> => {
+export const runIndexerOwnershipLifecycle = async <TLease extends LeaseControl>({ networkId, acquire, seed, runOwned, failure, standby, intervalMs, now = Date.now, onEvent = () => {}, random, wait = waitForIndexerDelay, signal }: OwnershipLifecycle<TLease>): Promise<void> => {
 	let standbyReported = false
 	let wasStandby = false
 	let consecutiveFailures = 0
@@ -224,9 +199,7 @@ export const runIndexerOwnershipLifecycle = async <TLease extends LeaseControl>(
 		try {
 			await onEvent(event)
 		} catch (error) {
-			console.error(
-				`[${networkId}] indexer ownership diagnostics failed; event: ${event.type}; backend PID: ${'backendPid' in event ? (event.backendPid ?? 'unavailable') : 'unavailable'}; reason: ${ownershipFailureReason(error)}`,
-			)
+			console.error(`[${networkId}] indexer ownership diagnostics failed; event: ${event.type}; backend PID: ${'backendPid' in event ? (event.backendPid ?? 'unavailable') : 'unavailable'}; reason: ${ownershipFailureReason(error)}`)
 		}
 	}
 	while (!signal.aborted) {
@@ -265,9 +238,7 @@ export const runIndexerOwnershipLifecycle = async <TLease extends LeaseControl>(
 				})
 				if (recoveredAfterFailures > 0 || acquiredAfterStandby) {
 					const source = acquiredAfterStandby ? (recoveredAfterFailures > 0 ? 'standby and failures' : 'standby') : 'failures'
-					console.info(
-						`[${networkId}] indexer ownership reacquired; backend PID: ${lease.backendPid ?? 'unavailable'}; source: ${source}; previous consecutive failures: ${recoveredAfterFailures}`,
-					)
+					console.info(`[${networkId}] indexer ownership reacquired; backend PID: ${lease.backendPid ?? 'unavailable'}; source: ${source}; previous consecutive failures: ${recoveredAfterFailures}`)
 				}
 				wasStandby = false
 				stage = 'owned-run'
@@ -279,8 +250,7 @@ export const runIndexerOwnershipLifecycle = async <TLease extends LeaseControl>(
 		} catch (error) {
 			if (signal.aborted) continue
 			const failureStage = error instanceof IndexerOwnershipStageError ? error.stage : stage
-			if (failureStage === 'owned-run' && ownedRunStartedAt !== undefined && now() - ownedRunStartedAt >= Math.max(intervalMs * 4, 60_000))
-				consecutiveFailures = 0
+			if (failureStage === 'owned-run' && ownedRunStartedAt !== undefined && now() - ownedRunStartedAt >= Math.max(intervalMs * 4, 60_000)) consecutiveFailures = 0
 			consecutiveFailures++
 			retryDelay = retryDelayMs(consecutiveFailures, intervalMs, random)
 			await emitOwnershipEvent({
@@ -316,11 +286,9 @@ export const runIndexerOwnershipLifecycle = async <TLease extends LeaseControl>(
 					})
 				}
 				console.error(ownershipFailureLogMessage(networkId, 'release', error, consecutiveFailures, retryDelay, lease?.backendPid))
-				if (lease !== undefined && !released)
-					await emitOwnershipEvent({ type: 'release-failed', ...(lease.backendPid === undefined ? {} : { backendPid: lease.backendPid }) })
+				if (lease !== undefined && !released) await emitOwnershipEvent({ type: 'release-failed', ...(lease.backendPid === undefined ? {} : { backendPid: lease.backendPid }) })
 			}
-			if (lease !== undefined && released)
-				await emitOwnershipEvent({ type: 'released', ...(lease.backendPid === undefined ? {} : { backendPid: lease.backendPid }) })
+			if (lease !== undefined && released) await emitOwnershipEvent({ type: 'released', ...(lease.backendPid === undefined ? {} : { backendPid: lease.backendPid }) })
 		}
 		if (!signal.aborted) await wait(retryDelay ?? intervalMs, signal)
 	}

@@ -7,13 +7,8 @@ export type EventDomainDefinition = {
 	readonly identityFields?: readonly string[]
 }
 
-const definitions = (
-	domain: DomainEventProjection['domain'],
-	entityType: string,
-	eventNames: readonly string[],
-	identityFields?: readonly string[],
-): Readonly<Record<string, EventDomainDefinition>> =>
-	Object.fromEntries(eventNames.map((eventName) => [eventName, { domain, entityType, ...(identityFields === undefined ? {} : { identityFields }) }]))
+const definitions = (domain: DomainEventProjection['domain'], entityType: string, eventNames: readonly string[], identityFields?: readonly string[]): Readonly<Record<string, EventDomainDefinition>> =>
+	Object.fromEntries(eventNames.map(eventName => [eventName, { domain, entityType, ...(identityFields === undefined ? {} : { identityFields }) }]))
 
 // This is the scanner's explicit semantic taxonomy. It intentionally excludes
 // generic ERC approvals/transfers while covering every protocol lifecycle event
@@ -24,19 +19,7 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 	...definitions('system', 'reputation-token', ['TheoreticalSupplySet', 'Mint', 'Burn']),
 	...definitions('system', 'share-token', ['AuthorizationUpdated', 'TransferSingle', 'TransferBatch', 'Migrate']),
 	...definitions('report', 'open-oracle-report', ['ReportSubmitted', 'ReportDisputed', 'ReportSettled'], ['reportId']),
-	...definitions('oracle', 'price-coordinator', [
-		'CoordinatorStateCheckpoint',
-		'ExecutedStagedOperation',
-		'LiquidationRouteStaged',
-		'PendingReportRecovered',
-		'PriceReportRejected',
-		'PriceReported',
-		'PriceRequested',
-		'RepEthPriceSet',
-		'SecurityPoolSet',
-		'StagedOperationQueued',
-		'InternalApproval',
-	]),
+	...definitions('oracle', 'price-coordinator', ['CoordinatorStateCheckpoint', 'ExecutedStagedOperation', 'LiquidationRouteStaged', 'PendingReportRecovered', 'PriceReportRejected', 'PriceReported', 'PriceRequested', 'RepEthPriceSet', 'SecurityPoolSet', 'StagedOperationQueued', 'InternalApproval']),
 	...definitions('escalation', 'escalation', [
 		'CarryDepositConsumed',
 		'ClaimDeposit',
@@ -61,56 +44,12 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 	...definitions(
 		'risk',
 		'pool',
-		[
-			'DeploySecurityPool',
-			'SecurityPoolRegistered',
-			'AwaitingForkContinuationSet',
-			'CompleteSetCreated',
-			'CompleteSetRedeemed',
-			'EscalationGameSet',
-			'PoolAccountingCheckpoint',
-			'PoolForkModeActivated',
-			'ShareTokenSupplySet',
-			'SharesRedeemed',
-			'SystemStateSet',
-			'TotalRepBackingUnitsSet',
-		],
+		['DeploySecurityPool', 'SecurityPoolRegistered', 'AwaitingForkContinuationSet', 'CompleteSetCreated', 'CompleteSetRedeemed', 'EscalationGameSet', 'PoolAccountingCheckpoint', 'PoolForkModeActivated', 'ShareTokenSupplySet', 'SharesRedeemed', 'SystemStateSet', 'TotalRepBackingUnitsSet'],
 		['securityPool'],
 	),
-	...definitions(
-		'risk',
-		'vault',
-		[
-			'DepositToEscalationGame',
-			'RepDepositedToVault',
-			'RepRedeemedFromVault',
-			'RepWithdrawnFromVault',
-			'VaultAccountingCheckpoint',
-			'VaultBadDebtRecorded',
-			'VaultLiquidated',
-			'VaultDepositTargetHealthFactorRecorded',
-		],
-		['vault', 'targetVault'],
-	),
-	...definitions(
-		'approval',
-		'liquidation-approval',
-		[
-			'LiquidationApprovalSet',
-			'LiquidationApprovalReserved',
-			'LiquidationApprovalReleased',
-			'LiquidationApprovalConsumed',
-			'LiquidationApprovalRevoked',
-			'LiquidationApprovalNonceInvalidated',
-		],
-		['approvalId', 'receiverVault'],
-	),
-	...definitions(
-		'trading',
-		'amm',
-		['PairCreated', 'LiquidityAdded', 'LiquidityInitialized', 'LiquidityRemoved', 'PredeploymentSharesQuarantined', 'Swap', 'Sync', 'Transfer', 'Approval'],
-		['pair'],
-	),
+	...definitions('risk', 'vault', ['DepositToEscalationGame', 'RepDepositedToVault', 'RepRedeemedFromVault', 'RepWithdrawnFromVault', 'VaultAccountingCheckpoint', 'VaultBadDebtRecorded', 'VaultLiquidated', 'VaultDepositTargetHealthFactorRecorded'], ['vault', 'targetVault']),
+	...definitions('approval', 'liquidation-approval', ['LiquidationApprovalSet', 'LiquidationApprovalReserved', 'LiquidationApprovalReleased', 'LiquidationApprovalConsumed', 'LiquidationApprovalRevoked', 'LiquidationApprovalNonceInvalidated'], ['approvalId', 'receiverVault']),
+	...definitions('trading', 'amm', ['PairCreated', 'LiquidityAdded', 'LiquidityInitialized', 'LiquidityRemoved', 'PredeploymentSharesQuarantined', 'Swap', 'Sync', 'Transfer', 'Approval'], ['pair']),
 	...definitions(
 		'fork',
 		'fork',
@@ -154,30 +93,15 @@ const domainProjectionFrom = (log: StoredLog): DomainEventProjection | undefined
 	// Augur's two-way pair emits reserve-oriented Swap evidence. Uniswap V3/V4
 	// also emit an event named Swap, but their sqrt-price shape belongs to the
 	// dedicated Uniswap projection and cannot be interpreted as Augur reserves.
-	if (
-		eventName === 'Swap' &&
-		!(
-			typeof data['yesForNo'] === 'boolean' &&
-			typeof data['amountIn'] === 'string' &&
-			typeof data['amountOut'] === 'string' &&
-			typeof data['resultingYesReserve'] === 'string' &&
-			typeof data['resultingNoReserve'] === 'string'
-		)
-	)
-		return undefined
+	if (eventName === 'Swap' && !(typeof data['yesForNo'] === 'boolean' && typeof data['amountIn'] === 'string' && typeof data['amountOut'] === 'string' && typeof data['resultingYesReserve'] === 'string' && typeof data['resultingNoReserve'] === 'string')) return undefined
 	// Uniswap V2 also emits Sync, but its reserve0/reserve1 payload does not
 	// describe Augur YES/NO reserves and must remain in the dedicated Uniswap
 	// observation path only.
 	if (eventName === 'Sync' && !(typeof data['yesReserve'] === 'string' && typeof data['noReserve'] === 'string')) return undefined
 	const reportId = data['reportId']
 	const approvalId = data['approvalId']
-	const approvalIdentity =
-		typeof approvalId === 'string'
-			? approvalId.toLowerCase()
-			: typeof data['receiverVault'] === 'string'
-				? `nonce:${data['receiverVault'].toLowerCase()}`
-				: undefined
-	const fieldIdentity = definition.identityFields?.map((field) => data[field]).find((value) => typeof value === 'string')
+	const approvalIdentity = typeof approvalId === 'string' ? approvalId.toLowerCase() : typeof data['receiverVault'] === 'string' ? `nonce:${data['receiverVault'].toLowerCase()}` : undefined
+	const fieldIdentity = definition.identityFields?.map(field => data[field]).find(value => typeof value === 'string')
 	const identitySuffix = typeof fieldIdentity === 'string' ? fieldIdentity.toLowerCase() : undefined
 	const entityIdentity =
 		definition.domain === 'report' && typeof reportId === 'string'
@@ -194,7 +118,7 @@ const domainProjectionFrom = (log: StoredLog): DomainEventProjection | undefined
 		entityIdentity,
 		semanticEventKind: eventName,
 		data,
-		relatedEntities: log.decoded.referencedAddresses?.map((item) => item.toLowerCase()) ?? [],
+		relatedEntities: log.decoded.referencedAddresses?.map(item => item.toLowerCase()) ?? [],
 	}
 }
 

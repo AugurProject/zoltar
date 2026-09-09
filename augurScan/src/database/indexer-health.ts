@@ -15,15 +15,10 @@ export type IndexerOwnershipDiagnostic = {
 
 type OwnershipRow = Record<string, unknown>
 
-export const reconcileIndexerOwnership = (
-	networks: readonly OwnershipRow[],
-	ownership: readonly OwnershipRow[],
-	locks: readonly OwnershipRow[],
-	staleBefore: number,
-): readonly IndexerOwnershipDiagnostic[] => {
-	const recordedByChain = new Map(ownership.map((row) => [Number(row['chain_id']), row]))
-	const lockByChain = new Map(locks.map((row) => [Number(row['chain_id']), Number(row['backend_pid'])]))
-	return networks.map((network) => {
+export const reconcileIndexerOwnership = (networks: readonly OwnershipRow[], ownership: readonly OwnershipRow[], locks: readonly OwnershipRow[], staleBefore: number): readonly IndexerOwnershipDiagnostic[] => {
+	const recordedByChain = new Map(ownership.map(row => [Number(row['chain_id']), row]))
+	const lockByChain = new Map(locks.map(row => [Number(row['chain_id']), Number(row['backend_pid'])]))
+	return networks.map(network => {
 		const chainId = Number(network['chain_id'])
 		const networkId = String(network['id'])
 		const recorded = recordedByChain.get(chainId)

@@ -31,7 +31,7 @@ export const offsetPage = (url: URL, chainId: number, domain: string, identity: 
 		typeof parts[4] !== 'string' ||
 		!/^0x[0-9a-f]{64}$/.test(parts[4]) ||
 		!isPostgresBigint(parts[5]) ||
-		!parts.slice(6, 9).every((part) => typeof part === 'string') ||
+		!parts.slice(6, 9).every(part => typeof part === 'string') ||
 		!isNonNegativeSafeInteger(parts[9])
 	)
 		throw new ApiRequestError('cursor is invalid')
@@ -39,8 +39,7 @@ export const offsetPage = (url: URL, chainId: number, domain: string, identity: 
 	return { identity: parts[2], offset: parts[9], cursor: parts as [number, string, string, string, string, string, string, string, string, number] }
 }
 
-export const offsetCursorFor = (chainId: number, domain: string, identity: string, asOf: Record<string, unknown>, offset: number): string =>
-	encodeOpaqueCursor([chainId, domain, identity, ...snapshotBoundary(asOf), offset] satisfies OffsetCursor)
+export const offsetCursorFor = (chainId: number, domain: string, identity: string, asOf: Record<string, unknown>, offset: number): string => encodeOpaqueCursor([chainId, domain, identity, ...snapshotBoundary(asOf), offset] satisfies OffsetCursor)
 
 export const tradingCatalogResponse = async (sql: SQL, url: URL): Promise<Response> => {
 	const chainId = integer(url.searchParams.get('chainId'), 'chainId')

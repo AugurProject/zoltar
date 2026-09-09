@@ -3,20 +3,7 @@ import { decodeOpaqueCursor, encodeOpaqueCursor, isJsonArray } from '../cursor-c
 import type { JsonValue } from '../ethereum.ts'
 import { directObservationMaxima, directObservationRows } from '../repositories/direct-observations.ts'
 import { snapshotBoundary } from './entity-details.ts'
-import {
-	ApiRequestError,
-	type CanonicalHistoryFilter,
-	canonicalHistoryFilter,
-	cursorTimestamp,
-	directObservationTotal,
-	evmAddress,
-	integer,
-	isCursorTimestamp,
-	isNonNegativeSafeInteger,
-	isPostgresBigint,
-	json,
-	jsonRecord,
-} from './shared.ts'
+import { ApiRequestError, type CanonicalHistoryFilter, canonicalHistoryFilter, cursorTimestamp, directObservationTotal, evmAddress, integer, isCursorTimestamp, isNonNegativeSafeInteger, isPostgresBigint, json, jsonRecord } from './shared.ts'
 import { operationsAsOfForContinuations } from './snapshot.ts'
 import { rejectRawSnapshotOffset } from './trading-catalog.ts'
 
@@ -63,7 +50,7 @@ const parseDirectObservationCursor = (value: string | null, chainId: number): Di
 			typeof parts[5] !== 'string' ||
 			!/^0x[0-9a-f]{64}$/.test(parts[5]) ||
 			!isPostgresBigint(parts[6]) ||
-			!parts.slice(7, 10).every((part) => typeof part === 'string') ||
+			!parts.slice(7, 10).every(part => typeof part === 'string') ||
 			!isNonNegativeSafeInteger(parts[10]) ||
 			typeof parts[11] !== 'string' ||
 			!isCursorTimestamp(parts[11]) ||
@@ -71,47 +58,16 @@ const parseDirectObservationCursor = (value: string | null, chainId: number): Di
 			!isPostgresBigint(parts[13])
 		)
 			throw new Error('shape')
-		return [
-			1,
-			chainId,
-			'direct-observations',
-			String(parts[3]),
-			String(parts[4]),
-			String(parts[5]),
-			String(parts[6]),
-			String(parts[7]),
-			String(parts[8]),
-			String(parts[9]),
-			Number(parts[10]),
-			String(parts[11]),
-			parts[12],
-			String(parts[13]),
-		]
+		return [1, chainId, 'direct-observations', String(parts[3]), String(parts[4]), String(parts[5]), String(parts[6]), String(parts[7]), String(parts[8]), String(parts[9]), Number(parts[10]), String(parts[11]), parts[12], String(parts[13])]
 	} catch (error) {
 		throw new ApiRequestError('cursor is invalid', { cause: error })
 	}
 }
 
-const directObservationCursorFor = (
-	chainId: number,
-	snapshot: DirectObservationSnapshot,
-	asOf: Record<string, unknown>,
-	offset: number,
-	row: Record<string, unknown>,
-): string => {
+const directObservationCursorFor = (chainId: number, snapshot: DirectObservationSnapshot, asOf: Record<string, unknown>, offset: number, row: Record<string, unknown>): string => {
 	const observationKind = row['observation_kind']
 	if (observationKind !== 'address-balance' && observationKind !== 'token-metadata') throw new Error('Direct observation kind is unavailable')
-	return encodeOpaqueCursor([
-		1,
-		chainId,
-		'direct-observations',
-		JSON.stringify(snapshot),
-		...snapshotBoundary(asOf),
-		offset,
-		cursorTimestamp(row['cursor_observed_at']),
-		observationKind,
-		String(row['observation_id']),
-	] satisfies DirectObservationCursor)
+	return encodeOpaqueCursor([1, chainId, 'direct-observations', JSON.stringify(snapshot), ...snapshotBoundary(asOf), offset, cursorTimestamp(row['cursor_observed_at']), observationKind, String(row['observation_id'])] satisfies DirectObservationCursor)
 }
 
 const directObservationSnapshot = (value: string): DirectObservationSnapshot => {
@@ -148,8 +104,7 @@ export const directObservationsResponse = async (sql: SQL, url: URL): Promise<Re
 	const requestedLimit = integer(url.searchParams.get('limit'), 'limit') ?? 100
 	const limit = Math.min(Math.max(requestedLimit, 1), 250)
 	const requestedKind = url.searchParams.get('kind') ?? 'all'
-	if (requestedKind !== 'all' && requestedKind !== 'address-balance' && requestedKind !== 'token-metadata')
-		throw new ApiRequestError('kind must be all, address-balance, or token-metadata')
+	if (requestedKind !== 'all' && requestedKind !== 'address-balance' && requestedKind !== 'token-metadata') throw new ApiRequestError('kind must be all, address-balance, or token-metadata')
 	const address = evmAddress(url.searchParams.get('address'), 'address')
 	const canonical = canonicalHistoryFilter(url)
 	const cursor = parseDirectObservationCursor(url.searchParams.get('cursor'), chainId)
@@ -166,8 +121,7 @@ export const directObservationsResponse = async (sql: SQL, url: URL): Promise<Re
 		}
 	} else {
 		snapshot = directObservationSnapshot(cursor[3])
-		if (snapshot.kind !== requestedKind || snapshot.address !== address || snapshot.canonical !== canonical)
-			throw new ApiRequestError('cursor does not match filters')
+		if (snapshot.kind !== requestedKind || snapshot.address !== address || snapshot.canonical !== canonical) throw new ApiRequestError('cursor does not match filters')
 		if (cursor[10] > Number(snapshot.total)) throw new ApiRequestError('cursor is invalid')
 	}
 	const asOf = await operationsAsOfForContinuations(sql, chainId, cursor === undefined ? [] : [{ parts: cursor, offset: 4 }])
@@ -180,9 +134,7 @@ export const directObservationsResponse = async (sql: SQL, url: URL): Promise<Re
 	if (cursor === undefined) snapshot = { ...snapshot, total: String(rows[0]?.['total'] ?? '0') }
 	const total = directObservationTotal(snapshot.total)
 	const pageRows = rows.slice(0, limit)
-	const items = pageRows.map((row: Record<string, unknown>) =>
-		Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'total' && key !== 'cursor_observed_at')),
-	)
+	const items = pageRows.map((row: Record<string, unknown>) => Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'total' && key !== 'cursor_observed_at')))
 	const offset = cursor?.[10] ?? 0
 	const returnedOffset = offset + items.length
 	const hasMore = rows.length > limit

@@ -47,7 +47,7 @@ test('replays durable events after the browser Last-Event-ID and closes cleanly'
 	]
 	const bus = new LiveBus({
 		latestEventId: async () => 2,
-		eventsAfter: async (id) => events.filter((event) => event.id > id),
+		eventsAfter: async id => events.filter(event => event.id > id),
 	})
 	const reader = streamFrom(bus, 1).getReader()
 	expect(decoder.decode((await reader.read()).value)).toBe('retry: 5000\n: connected\n\n')
@@ -66,7 +66,7 @@ test('new streams start at the latest durable event without replaying history', 
 	let requestedAfter: number | undefined
 	const bus = new LiveBus({
 		latestEventId: async () => 41,
-		eventsAfter: async (id) => {
+		eventsAfter: async id => {
 			requestedAfter = id
 			return []
 		},
@@ -83,7 +83,7 @@ test('new streams refresh the durable cursor after an idle period', async () => 
 	const requestedAfter: number[] = []
 	const bus = new LiveBus({
 		latestEventId: async () => latest,
-		eventsAfter: async (id) => {
+		eventsAfter: async id => {
 			requestedAfter.push(id)
 			return []
 		},
@@ -106,7 +106,7 @@ test('delivers a reset when a reconnect cursor is ahead of the durable event hea
 	let events: LiveEvent[] = [{ id: 50, event: 'reset', payload: { reason: 'cursor-ahead-of-head', refreshRequired: true } }]
 	const bus = new LiveBus({
 		latestEventId: async () => 50,
-		eventsAfter: async (id) => events.filter((event) => (event.event === 'reset' ? id > event.id : event.id > id)),
+		eventsAfter: async id => events.filter(event => (event.event === 'reset' ? id > event.id : event.id > id)),
 	})
 	const reader = streamFrom(bus, 1_000).getReader()
 	expect(decoder.decode((await reader.read()).value)).toContain('connected')
@@ -147,7 +147,7 @@ test('delivers the current cursor cohort without waiting for a replaying client'
 	const requested: number[] = []
 	const bus = new LiveBus({
 		latestEventId: async () => 1_000,
-		eventsAfter: async (id) => {
+		eventsAfter: async id => {
 			requested.push(id)
 			return [{ id: id + 1, event: 'block', payload: { cursor: id } }]
 		},
@@ -191,7 +191,7 @@ test('evicts a client that remains backpressured and releases its admission slot
 test('coalesces cursor initialization for concurrent new streams', async () => {
 	let latestQueries = 0
 	let resolveLatest: ((cursor: number) => void) | undefined
-	const latest = new Promise<number>((resolve) => {
+	const latest = new Promise<number>(resolve => {
 		resolveLatest = resolve
 	})
 	const bus = new LiveBus({

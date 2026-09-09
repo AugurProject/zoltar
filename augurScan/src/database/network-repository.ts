@@ -4,28 +4,8 @@ import { type Address, getAddress } from '../ethereum.ts'
 import { normalizeSnapshotTarget, type StateSnapshotTarget } from '../snapshots.ts'
 import type { ContractMetadata, NetworkConfig, TokenMetadata } from '../types.ts'
 import { ScannerDatabaseConnection } from './connection.ts'
-import {
-	captureHistoryInvalidation,
-	clearInvalidatedDerivedProjections,
-	type IndexerLease,
-	invalidateCanonicalHistory,
-	recordChainReorganization,
-	type SeedNetworkOptions,
-	type SourceReplayPlan,
-	withIndexerLease,
-	withOptionalIndexerLease,
-} from './history.ts'
-import {
-	assertStartBlockCompatible,
-	contractMetadataFromRow,
-	DatabaseConsistencyError,
-	type HistoryInvalidationReason,
-	type InterpretationSourceHashes,
-	type LogScanCursor,
-	lockLiveEventWriter,
-	manifestContractSetChanged,
-	type RichListBalanceTargets,
-} from './records.ts'
+import { captureHistoryInvalidation, clearInvalidatedDerivedProjections, type IndexerLease, invalidateCanonicalHistory, recordChainReorganization, type SeedNetworkOptions, type SourceReplayPlan, withIndexerLease, withOptionalIndexerLease } from './history.ts'
+import { assertStartBlockCompatible, contractMetadataFromRow, DatabaseConsistencyError, type HistoryInvalidationReason, type InterpretationSourceHashes, type LogScanCursor, lockLiveEventWriter, manifestContractSetChanged, type RichListBalanceTargets } from './records.ts'
 
 export class ScannerNetworkRepository extends ScannerDatabaseConnection {
 	async seedNetwork(network: NetworkConfig, options: SeedNetworkOptions = {}): Promise<boolean> {
@@ -39,9 +19,7 @@ export class ScannerNetworkRepository extends ScannerDatabaseConnection {
 				FOR UPDATE
 			`
 			const existing = existingRows[0]
-			const hasStoredBlocks =
-				existing !== undefined &&
-				(await transaction`SELECT EXISTS (SELECT 1 FROM blocks WHERE chain_id = ${network.chainId}) AS present`)[0]?.['present'] === true
+			const hasStoredBlocks = existing !== undefined && (await transaction`SELECT EXISTS (SELECT 1 FROM blocks WHERE chain_id = ${network.chainId}) AS present`)[0]?.['present'] === true
 			const storedManifestRows =
 				existing === undefined
 					? []
@@ -59,19 +37,12 @@ export class ScannerNetworkRepository extends ScannerDatabaseConnection {
 							address: String(row['address']),
 							label: String(row['label']),
 							kind: String(row['kind']),
-							...(configuredDeploymentBlock === null || configuredDeploymentBlock === undefined
-								? {}
-								: { configuredDeploymentBlock: BigInt(String(configuredDeploymentBlock)) }),
+							...(configuredDeploymentBlock === null || configuredDeploymentBlock === undefined ? {} : { configuredDeploymentBlock: BigInt(String(configuredDeploymentBlock)) }),
 						}
 					}),
 				)
 			if (existing !== undefined) {
-				assertStartBlockCompatible(
-					network.startBlock,
-					BigInt(String(existing['start_block'])),
-					existing['indexed_block'] === null || existing['indexed_block'] === undefined ? undefined : BigInt(String(existing['indexed_block'])),
-					hasStoredBlocks || preserveStoredStart,
-				)
+				assertStartBlockCompatible(network.startBlock, BigInt(String(existing['start_block'])), existing['indexed_block'] === null || existing['indexed_block'] === undefined ? undefined : BigInt(String(existing['indexed_block'])), hasStoredBlocks || preserveStoredStart)
 			}
 			await transaction`
 				INSERT INTO networks
@@ -92,11 +63,7 @@ export class ScannerNetworkRepository extends ScannerDatabaseConnection {
 			`
 			await transaction`UPDATE contracts SET canonical = false WHERE chain_id = ${network.chainId} AND provenance = 'manifest'`
 			for (const [address, label, kind, configuredDeploymentBlock] of network.contracts) {
-				await this.upsertContract(
-					network.chainId,
-					{ address, label, kind, provenance: 'manifest', ...(configuredDeploymentBlock === undefined ? {} : { configuredDeploymentBlock }) },
-					transaction,
-				)
+				await this.upsertContract(network.chainId, { address, label, kind, provenance: 'manifest', ...(configuredDeploymentBlock === undefined ? {} : { configuredDeploymentBlock }) }, transaction)
 			}
 			await transaction`
 				UPDATE contracts AS contract SET
@@ -146,29 +113,14 @@ export class ScannerNetworkRepository extends ScannerDatabaseConnection {
 			`
 			const manifestResetReason = manifestChanged && resetCanonicalHistoryOnManifestChange ? ('manifest-reset' as const) : undefined
 			const resetReason = sourceReplayPlan?.reason ?? manifestResetReason
-			const resetCauses =
-				resetReason === undefined
-					? []
-					: [...new Set([resetReason, ...(sourceReplayPlan?.causes ?? []), manifestResetReason].filter((reason) => reason !== undefined))]
+			const resetCauses = resetReason === undefined ? [] : [...new Set([resetReason, ...(sourceReplayPlan?.causes ?? []), manifestResetReason].filter(reason => reason !== undefined))]
 			if (resetReason !== undefined && existing?.['indexed_block'] !== null && existing?.['indexed_block'] !== undefined) {
 				const previousBlock = BigInt(String(existing['indexed_block']))
 				const depth = previousBlock - network.startBlock + 1n
-				const invalidationId = await recordChainReorganization(
-					transaction,
-					network.chainId,
-					previousBlock,
-					typeof existing['indexed_hash'] === 'string' ? existing['indexed_hash'] : undefined,
-					-1n,
-					undefined,
-					depth,
-					resetReason,
-					resetCauses,
-					appliedSourceHashes,
-				)
+				const invalidationId = await recordChainReorganization(transaction, network.chainId, previousBlock, typeof existing['indexed_hash'] === 'string' ? existing['indexed_hash'] : undefined, -1n, undefined, depth, resetReason, resetCauses, appliedSourceHashes)
 				await captureHistoryInvalidation(transaction, invalidationId, network.chainId)
 				await invalidateCanonicalHistory(transaction, network.chainId)
-				if (resetReason === 'manifest-reset' || resetReason === 'abi-redecode' || resetReason === 'projection-rebuild')
-					await clearInvalidatedDerivedProjections(transaction, invalidationId)
+				if (resetReason === 'manifest-reset' || resetReason === 'abi-redecode' || resetReason === 'projection-rebuild') await clearInvalidatedDerivedProjections(transaction, invalidationId)
 				await transaction`
 					UPDATE networks SET indexed_block = NULL, indexed_hash = NULL, indexed_timestamp = NULL, finalized_block = NULL, phase = 'backfilling',
 						last_reorg_at = now(), last_reorg_depth = ${depth.toString()}, updated_at = now()
@@ -187,7 +139,7 @@ export class ScannerNetworkRepository extends ScannerDatabaseConnection {
 	}
 
 	async sourceReplayPlan(chainId: number, sourceHashes: InterpretationSourceHashes, lease?: IndexerLease): Promise<SourceReplayPlan | undefined> {
-		return await withOptionalIndexerLease(this.sql, lease, async (sql) => {
+		return await withOptionalIndexerLease(this.sql, lease, async sql => {
 			const rows = await sql`
 					SELECT applied_abi_source_hash, applied_application_source_hash, applied_projection_source_hash, indexed_block
 				FROM networks
@@ -198,12 +150,10 @@ export class ScannerNetworkRepository extends ScannerDatabaseConnection {
 			const appliedApplicationSourceHash = row?.['applied_application_source_hash']
 			const appliedProjectionSourceHash = row?.['applied_projection_source_hash']
 			if (row?.['indexed_block'] === null || row?.['indexed_block'] === undefined) return undefined
-			if (typeof appliedAbiSourceHash !== 'string' || typeof appliedApplicationSourceHash !== 'string' || typeof appliedProjectionSourceHash !== 'string')
-				return { reason: 'abi-redecode', causes: ['abi-redecode', 'projection-rebuild'] }
+			if (typeof appliedAbiSourceHash !== 'string' || typeof appliedApplicationSourceHash !== 'string' || typeof appliedProjectionSourceHash !== 'string') return { reason: 'abi-redecode', causes: ['abi-redecode', 'projection-rebuild'] }
 			const causes: Array<Extract<HistoryInvalidationReason, 'abi-redecode' | 'projection-rebuild'>> = []
 			if (appliedAbiSourceHash !== sourceHashes.abiSourceHash) causes.push('abi-redecode')
-			if (appliedApplicationSourceHash !== sourceHashes.applicationSourceHash || appliedProjectionSourceHash !== sourceHashes.projectionSourceHash)
-				causes.push('projection-rebuild')
+			if (appliedApplicationSourceHash !== sourceHashes.applicationSourceHash || appliedProjectionSourceHash !== sourceHashes.projectionSourceHash) causes.push('projection-rebuild')
 			const reason = causes[0]
 			return reason === undefined ? undefined : { reason, causes }
 		})
@@ -227,16 +177,15 @@ export class ScannerNetworkRepository extends ScannerDatabaseConnection {
 	}
 
 	async contracts(chainId: number, lease?: IndexerLease): Promise<Map<string, ContractMetadata>> {
-		return await withOptionalIndexerLease(this.sql, lease, async (sql) => {
-			const rows =
-				await sql`SELECT address, label, kind, provenance, discovery_block, discovery_tx_hash, configured_deployment_block, deployment_block, deployment_timestamp, deployment_block_exact, deployment_checked_block FROM contracts WHERE chain_id = ${chainId} AND canonical ORDER BY address`
+		return await withOptionalIndexerLease(this.sql, lease, async sql => {
+			const rows = await sql`SELECT address, label, kind, provenance, discovery_block, discovery_tx_hash, configured_deployment_block, deployment_block, deployment_timestamp, deployment_block_exact, deployment_checked_block FROM contracts WHERE chain_id = ${chainId} AND canonical ORDER BY address`
 			return new Map(rows.map((row: Record<string, unknown>) => [String(row['address']), contractMetadataFromRow(row)]))
 		})
 	}
 
 	async contractDeploymentCandidates(chainId: number, observedHead: bigint, lease: IndexerLease): Promise<readonly ContractMetadata[]> {
 		const staleBefore = observedHead >= 100n ? observedHead - 100n : -1n
-		return await withIndexerLease(lease, async (transaction) => {
+		return await withIndexerLease(lease, async transaction => {
 			const rows = await transaction`
 				SELECT address, label, kind, provenance, discovery_block, discovery_tx_hash, configured_deployment_block, deployment_block, deployment_timestamp,
 					deployment_block_exact, deployment_checked_block
@@ -249,14 +198,8 @@ export class ScannerNetworkRepository extends ScannerDatabaseConnection {
 		})
 	}
 
-	async recordContractDeployment(
-		chainId: number,
-		address: Address,
-		checkedBlock: bigint,
-		deployment: { readonly block: bigint; readonly timestamp: Date; readonly exact: boolean } | undefined,
-		lease: IndexerLease,
-	): Promise<void> {
-		await withIndexerLease(lease, async (transaction) => {
+	async recordContractDeployment(chainId: number, address: Address, checkedBlock: bigint, deployment: { readonly block: bigint; readonly timestamp: Date; readonly exact: boolean } | undefined, lease: IndexerLease): Promise<void> {
+		await withIndexerLease(lease, async transaction => {
 			await transaction`
 				UPDATE contracts SET
 					deployment_block = ${deployment?.block.toString() ?? null},
@@ -269,7 +212,7 @@ export class ScannerNetworkRepository extends ScannerDatabaseConnection {
 	}
 
 	async tokenMetadata(chainId: number, lease?: IndexerLease): Promise<Map<string, TokenMetadata>> {
-		return await withOptionalIndexerLease(this.sql, lease, async (sql) => {
+		return await withOptionalIndexerLease(this.sql, lease, async sql => {
 			const rows = await sql`
 				SELECT metadata.address, metadata.name, metadata.symbol, metadata.decimals, metadata.read_error, metadata.read_block
 				FROM token_metadata metadata
@@ -297,7 +240,7 @@ export class ScannerNetworkRepository extends ScannerDatabaseConnection {
 	}
 
 	async logScanCursors(chainId: number, lease?: IndexerLease): Promise<Map<string, LogScanCursor>> {
-		return await withOptionalIndexerLease(this.sql, lease, async (sql) => {
+		return await withOptionalIndexerLease(this.sql, lease, async sql => {
 			const rows = await sql`
 				SELECT contract_address, start_block, last_retrieved_block
 				FROM log_scan_cursors
@@ -321,7 +264,7 @@ export class ScannerNetworkRepository extends ScannerDatabaseConnection {
 	}
 
 	async richListBalanceTargets(chainId: number, limit = 10, lease?: IndexerLease): Promise<RichListBalanceTargets> {
-		return await withOptionalIndexerLease(this.sql, lease, async (sql) => {
+		return await withOptionalIndexerLease(this.sql, lease, async sql => {
 			const addressRows = await sql`
 				WITH assets AS (
 					SELECT address FROM contracts WHERE chain_id = ${chainId} AND canonical AND kind IN ('reputationToken', 'weth')
@@ -359,7 +302,7 @@ export class ScannerNetworkRepository extends ScannerDatabaseConnection {
 	}
 
 	async stateSnapshotTargets(chainId: number, throughBlock: bigint, limit = 25, lease?: IndexerLease): Promise<readonly StateSnapshotTarget[]> {
-		return await withOptionalIndexerLease(this.sql, lease, async (sql) => {
+		return await withOptionalIndexerLease(this.sql, lease, async sql => {
 			const rows = await sql`
 				WITH latest_pools AS (
 					SELECT DISTINCT ON (pool_address) pool_address, coordinator_address

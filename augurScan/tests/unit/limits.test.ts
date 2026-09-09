@@ -3,7 +3,7 @@ import { createConcurrencyGate } from '../../src/limits.ts'
 
 test('rejects excess concurrent work and recovers capacity after completion', async () => {
 	let release: (() => void) | undefined
-	const stalled = new Promise<void>((resolve) => {
+	const stalled = new Promise<void>(resolve => {
 		release = resolve
 	})
 	const gate = createConcurrencyGate(2, () => 'busy')

@@ -2,18 +2,7 @@ import type { SQL } from 'bun'
 import { decodeOpaqueCursor, encodeOpaqueCursor, isJsonArray } from '../cursor-codec.ts'
 import type { JsonValue } from '../ethereum.ts'
 import { historicalExportRows, historicalExportSnapshot, historicalExportSnapshotCanonical, historicalExportTotal } from '../repositories/exports.ts'
-import {
-	ApiConflictError,
-	ApiRequestError,
-	type CanonicalHistoryFilter,
-	canonicalHistoryFilter,
-	integer,
-	isNonNegativeSafeInteger,
-	isPostgresBigint,
-	isPostgresIntegerString,
-	normalize,
-	postgresBigint,
-} from './shared.ts'
+import { ApiConflictError, ApiRequestError, type CanonicalHistoryFilter, canonicalHistoryFilter, integer, isNonNegativeSafeInteger, isPostgresBigint, isPostgresIntegerString, normalize, postgresBigint } from './shared.ts'
 
 type HistoricalExportDataset = 'logs' | 'timeline' | 'reorgs'
 export type HistoricalExportCursor = readonly [
@@ -34,26 +23,9 @@ export type HistoricalExportCursor = readonly [
 ]
 
 const historicalExportKeyValid = (dataset: HistoricalExportDataset, key: readonly JsonValue[]): key is readonly string[] => {
-	if (!key.every((item) => typeof item === 'string')) return false
-	if (dataset === 'logs')
-		return (
-			key.length === 5 &&
-			isPostgresBigint(key[0]) &&
-			isPostgresIntegerString(key[1]) &&
-			isPostgresIntegerString(key[2]) &&
-			/^0x[0-9a-f]{64}$/.test(key[3] ?? '') &&
-			/^0x[0-9a-f]{64}$/.test(key[4] ?? '')
-		)
-	if (dataset === 'timeline')
-		return (
-			key.length === 6 &&
-			isPostgresBigint(key[0]) &&
-			/^0x[0-9a-f]{64}$/.test(key[1] ?? '') &&
-			/^0x[0-9a-f]{64}$/.test(key[2] ?? '') &&
-			isPostgresIntegerString(key[3]) &&
-			(key[4]?.length ?? 0) > 0 &&
-			(key[5]?.length ?? 0) > 0
-		)
+	if (!key.every(item => typeof item === 'string')) return false
+	if (dataset === 'logs') return key.length === 5 && isPostgresBigint(key[0]) && isPostgresIntegerString(key[1]) && isPostgresIntegerString(key[2]) && /^0x[0-9a-f]{64}$/.test(key[3] ?? '') && /^0x[0-9a-f]{64}$/.test(key[4] ?? '')
+	if (dataset === 'timeline') return key.length === 6 && isPostgresBigint(key[0]) && /^0x[0-9a-f]{64}$/.test(key[1] ?? '') && /^0x[0-9a-f]{64}$/.test(key[2] ?? '') && isPostgresIntegerString(key[3]) && (key[4]?.length ?? 0) > 0 && (key[5]?.length ?? 0) > 0
 	return key.length === 1 && isPostgresBigint(key[0])
 }
 
@@ -108,8 +80,7 @@ export const historicalExport = async (sql: SQL, url: URL): Promise<Response> =>
 	if (url.searchParams.has('offset')) throw new ApiRequestError('offset pagination is unavailable for exports; follow x-augurscan-next-cursor')
 	const canonical = dataset === 'reorgs' ? 'all' : canonicalHistoryFilter(url)
 	const cursor = parseHistoricalExportCursor(url.searchParams.get('cursor'))
-	if (cursor !== undefined && (cursor[1] !== dataset || cursor[2] !== chainId || cursor[3] !== canonical || cursor[4] !== fromBlock || cursor[5] !== toBlock))
-		throw new ApiRequestError('export cursor does not match the requested dataset, chain, canonical scope, or block range')
+	if (cursor !== undefined && (cursor[1] !== dataset || cursor[2] !== chainId || cursor[3] !== canonical || cursor[4] !== fromBlock || cursor[5] !== toBlock)) throw new ApiRequestError('export cursor does not match the requested dataset, chain, canonical scope, or block range')
 	const snapshotRows = await historicalExportSnapshot(sql, chainId)
 	const snapshotRow = snapshotRows[0]
 	if (snapshotRow === undefined) throw new ApiRequestError('chainId is not configured')
@@ -121,14 +92,7 @@ export const historicalExport = async (sql: SQL, url: URL): Promise<Response> =>
 	const currentProjectionHash = String(snapshotRow['projection_source_hash'])
 	if (cursor !== undefined) {
 		const snapshotCanonicalRows = await historicalExportSnapshotCanonical(sql, chainId, cursor[6], cursor[7])
-		if (
-			snapshotCanonicalRows[0]?.['snapshot_canonical'] !== true ||
-			currentInvalidationId !== cursor[8] ||
-			currentAbiHash !== cursor[10] ||
-			currentApplicationHash !== cursor[11] ||
-			currentProjectionHash !== cursor[12]
-		)
-			throw new ApiConflictError('Export snapshot changed; restart pagination')
+		if (snapshotCanonicalRows[0]?.['snapshot_canonical'] !== true || currentInvalidationId !== cursor[8] || currentAbiHash !== cursor[10] || currentApplicationHash !== cursor[11] || currentProjectionHash !== cursor[12]) throw new ApiConflictError('Export snapshot changed; restart pagination')
 	}
 	const snapshotBlock = cursor?.[6] ?? currentSnapshotBlock
 	const snapshotHash = cursor?.[7] ?? currentSnapshotHash
@@ -137,8 +101,7 @@ export const historicalExport = async (sql: SQL, url: URL): Promise<Response> =>
 	const applicationHash = cursor?.[11] ?? currentApplicationHash
 	const projectionHash = cursor?.[12] ?? currentProjectionHash
 	const lastKey = cursor?.[13]
-	const totalRows =
-		cursor === undefined ? await historicalExportTotal(sql, { dataset, chainId, canonical, fromBlock, toBlock, snapshotBlock, snapshotInvalidationId }) : []
+	const totalRows = cursor === undefined ? await historicalExportTotal(sql, { dataset, chainId, canonical, fromBlock, toBlock, snapshotBlock, snapshotInvalidationId }) : []
 	const snapshotTotal = cursor?.[9] ?? String(totalRows[0]?.['total'] ?? '0')
 	const rows = await historicalExportRows(sql, {
 		dataset,
@@ -158,38 +121,11 @@ export const historicalExport = async (sql: SQL, url: URL): Promise<Response> =>
 		finalRow === undefined
 			? undefined
 			: dataset === 'logs'
-				? [
-						String(finalRow['block_number']),
-						String(finalRow['transaction_index']),
-						String(finalRow['log_index']),
-						String(finalRow['block_hash']),
-						String(finalRow['tx_hash']),
-					]
+				? [String(finalRow['block_number']), String(finalRow['transaction_index']), String(finalRow['log_index']), String(finalRow['block_hash']), String(finalRow['tx_hash'])]
 				: dataset === 'timeline'
-					? [
-							String(finalRow['block_number']),
-							String(finalRow['block_hash']),
-							String(finalRow['tx_hash']),
-							String(finalRow['log_index']),
-							String(finalRow['entity_type']),
-							String(finalRow['entity_identity']),
-						]
+					? [String(finalRow['block_number']), String(finalRow['block_hash']), String(finalRow['tx_hash']), String(finalRow['log_index']), String(finalRow['entity_type']), String(finalRow['entity_identity'])]
 					: [String(finalRow['id'])]
-	const snapshotPrefix = [
-		1,
-		dataset,
-		chainId,
-		canonical,
-		fromBlock,
-		toBlock,
-		snapshotBlock,
-		snapshotHash,
-		snapshotInvalidationId,
-		snapshotTotal,
-		abiHash,
-		applicationHash,
-		projectionHash,
-	] as const
+	const snapshotPrefix = [1, dataset, chainId, canonical, fromBlock, toBlock, snapshotBlock, snapshotHash, snapshotInvalidationId, snapshotTotal, abiHash, applicationHash, projectionHash] as const
 	const nextCursor = truncated && exportedLastKey !== undefined ? historicalExportCursorFor(snapshotPrefix, exportedLastKey) : undefined
 	const body = `${exported.map((row: Record<string, unknown>) => JSON.stringify(normalize(row))).join('\n')}${exported.length === 0 ? '' : '\n'}`
 	return new Response(body, {
