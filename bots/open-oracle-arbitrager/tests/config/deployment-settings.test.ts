@@ -1,3 +1,7 @@
+import mainnet from '../../../../docs/mainnet-deployment-addresses.json'
+import sepolia from '../../../../docs/sepolia-deployment-addresses.json'
+import { canonicalCoreDeployment } from '@zoltar/bot-shared/config/canonical-deployment'
+import example from '../../config/operator.example.json'
 import { expect, test } from 'bun:test'
 import { assertFocusedDeploymentCompatible, prepareDeploymentTokenTransition, replacePrimaryRepToken, validateDeploymentSettings } from '#config/deployment-settings'
 import type { Address } from '@zoltar/bot-shared/ethereum'
@@ -48,3 +52,16 @@ test('rejects a focused REP update that leaves centralized-market identity stale
 	expect(() => assertFocusedDeploymentCompatible(address('2'), { assetAddress: currentAsset })).toThrow('centralized market configuration')
 	expect(() => assertFocusedDeploymentCompatible(currentAsset, { assetAddress: currentAsset })).not.toThrow()
 })
+
+for (const [network, manifest] of [
+	['mainnet', mainnet],
+	['sepolia', sepolia],
+] as const) {
+	test(`always uses the ${network} CREATE2 manifest for OpenOracle`, () => {
+		const expected = canonicalCoreDeployment(manifest).openOracle
+		for (const openOracle of [undefined, address('0'), address('1'), 'invalid']) {
+			expect(validateDeploymentSettings({ ...example.deployment, openOracle }, network).openOracle).toBe(expected)
+		}
+		expect(validateDeploymentSettings(example.deployment, network).openOracle).toBe(expected)
+	})
+}

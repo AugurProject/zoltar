@@ -438,10 +438,10 @@ export function startOperatorControlPlane(parameters: {
 			})
 		},
 		updateDeployment: value => {
-			const next = validateDeploymentSettings(value)
 			return queueSettingsUpdate(async () => {
 				const latest = await loadOperatorSettingsWithRevision(config.settingsFile)
 				if (latest === undefined) throw configurationRevisionConflict()
+				const next = validateDeploymentSettings(value, latest.settings.network)
 				if ((config.execute || latest.settings.runtime.execute) && next.quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(latest.settings.rpcQuorum)) throw new Error('Live execution requires at least two independent quorum RPCs (three read endpoints total)')
 				assertFocusedDeploymentCompatible(next.rep, latest.settings.centralizedMarkets)
 				validateIndependentReadRpcUrls(latest.settings.connectivity.readRpcUrl, next.quorumRpcUrls)

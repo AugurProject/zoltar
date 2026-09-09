@@ -1,6 +1,9 @@
+import mainnet from '../../../../docs/mainnet-deployment-addresses.json'
+import sepolia from '../../../../docs/sepolia-deployment-addresses.json'
+import { canonicalCoreDeployment } from '@zoltar/bot-shared/config/canonical-deployment'
 import { getAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import { parseDeploymentManifest, type DeploymentManifest } from '#config/deployment-auth'
-import { validateReadRpcUrls } from '#monitoring/connectivity'
+import { validateReadRpcUrls, type NetworkName } from '#monitoring/connectivity'
 
 export type DeploymentSettings = {
 	coordinatorAddresses: readonly Address[]
@@ -39,10 +42,10 @@ function urlArray(value: unknown) {
 	return validateReadRpcUrls(value.map(item => String(item)))
 }
 
-export function validateDeploymentSettings(value: unknown): DeploymentSettings {
+export function validateDeploymentSettings(value: unknown, network: NetworkName = 'mainnet'): DeploymentSettings {
 	const settings = record(value)
 	const keys = ['coordinatorAddresses', 'deploymentManifest', 'executor', 'openOracle', 'quorumRpcUrls', 'rep', 'uniswapFactory', 'uniswapQuoter', 'uniswapRouter', 'uniswapV2Router', 'uniswapV4PoolManager', 'uniswapV4Quoter', 'weth']
-	const requiredKeys = ['coordinatorAddresses', 'openOracle', 'quorumRpcUrls', 'rep', 'uniswapFactory', 'uniswapQuoter', 'weth']
+	const requiredKeys = ['coordinatorAddresses', 'quorumRpcUrls', 'rep', 'uniswapFactory', 'uniswapQuoter', 'weth']
 	if (Object.keys(settings).some(key => !keys.includes(key)) || requiredKeys.some(key => !(key in settings))) throw new Error('Deployment settings require the supported core deployment fields')
 	const v4PoolManager = optionalAddress(settings['uniswapV4PoolManager'], 'Uniswap V4 PoolManager')
 	const v4Quoter = optionalAddress(settings['uniswapV4Quoter'], 'Uniswap V4 Quoter')
@@ -51,7 +54,7 @@ export function validateDeploymentSettings(value: unknown): DeploymentSettings {
 		coordinatorAddresses: addressArray(settings['coordinatorAddresses'], 'Coordinator addresses'),
 		deploymentManifest: settings['deploymentManifest'] === undefined || settings['deploymentManifest'] === null ? undefined : parseDeploymentManifest(settings['deploymentManifest']),
 		executor: optionalAddress(settings['executor'], 'Executor'),
-		openOracle: getAddress(String(settings['openOracle'])),
+		openOracle: canonicalCoreDeployment(network === 'mainnet' ? mainnet : sepolia).openOracle,
 		quorumRpcUrls: urlArray(settings['quorumRpcUrls']),
 		rep: getAddress(String(settings['rep'])),
 		uniswapFactory: getAddress(String(settings['uniswapFactory'])),

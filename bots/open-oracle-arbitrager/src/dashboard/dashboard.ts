@@ -214,10 +214,9 @@ function lines(id: string) {
 		.filter(Boolean)
 }
 
-function loadDeployment(deployment: DeploymentSettings) {
+function loadDeployment(deployment: Omit<DeploymentSettings, 'openOracle'>) {
 	element<HTMLInputElement>('deployment-rep').value = deployment.rep
 	element<HTMLInputElement>('deployment-weth').value = deployment.weth
-	element<HTMLInputElement>('deployment-open-oracle').value = deployment.openOracle
 	element<HTMLInputElement>('deployment-executor').value = deployment.executor ?? ''
 	element<HTMLInputElement>('deployment-v3-factory').value = deployment.uniswapFactory
 	element<HTMLInputElement>('deployment-v3-quoter').value = deployment.uniswapQuoter
@@ -600,9 +599,9 @@ function isSubmissionSettings(value: unknown): value is SubmissionSettings {
 	return (mode === 'private' || mode === 'public') && typeof Reflect.get(value, 'minimumBundleRelaySuccesses') === 'number' && isStringArray(Reflect.get(value, 'relayUrls'))
 }
 
-function isDeploymentSettings(value: unknown): value is DeploymentSettings {
+function isDeploymentSettings(value: unknown): value is Omit<DeploymentSettings, 'openOracle'> {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
-	for (const key of ['openOracle', 'rep', 'uniswapFactory', 'uniswapQuoter', 'weth']) {
+	for (const key of ['rep', 'uniswapFactory', 'uniswapQuoter', 'weth']) {
 		if (typeof Reflect.get(value, key) !== 'string') return false
 	}
 	for (const key of ['executor', 'uniswapRouter', 'uniswapV2Router', 'uniswapV4PoolManager', 'uniswapV4Quoter']) {
@@ -1052,11 +1051,8 @@ function render(snapshot: PublicOperatorSnapshot) {
 	setText('risk-daily-gas', `${exactAmount(snapshot.risk.usage.dailyGasSpentWeth, 'ETH')} / ${exactAmount(snapshot.risk.limits.maxDailyGasSpendWeth, 'ETH')}`)
 	setText('risk-position-limit', exactAmount(snapshot.risk.limits.maxPositionNotionalWeth, 'WETH'))
 	setText('risk-lifecycle-reserve', exactAmount(snapshot.risk.limits.lifecycleGasReserveWeth, 'ETH'))
-	setText('oracle-address', `Oracle ${snapshot.openOracle}`)
-	setText('executor-address', snapshot.executor === undefined ? 'Executor not configured' : `Executor ${snapshot.executor}`)
 	setText('network-value', snapshot.networkConfigured ? `Active: ${snapshot.network} · chain ${snapshot.expectedChainId.toString()}` : 'Network not configured')
 	updateNetworkTargetStatus()
-	setText('chain-safety', snapshot.networkConfigured ? '' : 'Set the chain and RPC endpoints in RPC connectivity before scanning.')
 	renderSignerStatus(snapshot)
 	const launchNotice = element('launch-notice')
 	if (!snapshot.networkConfigured) {
@@ -1574,7 +1570,6 @@ element<HTMLFormElement>('deployment-form').addEventListener('submit', async eve
 			coordinatorAddresses: lines('deployment-coordinators'),
 			deploymentManifest: manifestText === '' ? undefined : JSON.parse(manifestText),
 			executor: optionalInput('deployment-executor'),
-			openOracle: element<HTMLInputElement>('deployment-open-oracle').value.trim(),
 			quorumRpcUrls: lines('deployment-quorum-rpcs'),
 			rep: element<HTMLInputElement>('deployment-rep').value.trim(),
 			uniswapFactory: element<HTMLInputElement>('deployment-v3-factory').value.trim(),

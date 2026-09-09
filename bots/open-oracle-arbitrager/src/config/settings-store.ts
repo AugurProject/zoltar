@@ -102,7 +102,7 @@ type StoredRuntimeSettings = Omit<RuntimeSettings, 'lookbackBlocks' | 'maxHedgeS
 export type StoredOperatorSettings = {
 	centralizedMarkets: ReturnType<typeof serializeCentralizedMarketSettings>
 	connectivity?: ConnectivitySettings | undefined
-	deployment: DeploymentSettings
+	deployment: Omit<DeploymentSettings, 'openOracle'>
 	network?: NetworkName | undefined
 	networkConfigured?: boolean | undefined
 	paused: boolean
@@ -224,10 +224,10 @@ export function parseOperatorSettings(value: unknown, preservedPrivateKey?: Hex)
 	const rpcQuorum = Object.hasOwn(record, 'rpcQuorum') ? record['rpcQuorum'] : 1
 	if (rpcQuorum !== 1 && rpcQuorum !== 2) throw new Error('Operator rpcQuorum must be 1 or 2')
 	if (!Array.isArray(record['tokenAddresses']) || record['tokenAddresses'].some(address => typeof address !== 'string')) throw new Error('Operator tokenAddresses must be an array of addresses')
-	const deployment = validateDeploymentSettings(record['deployment'])
+	const network = record['network'] === 'sepolia' ? 'sepolia' : 'mainnet'
+	const deployment = validateDeploymentSettings(record['deployment'], network)
 	const connectivity = networkConfigured ? validateConnectivitySettings(record['connectivity']) : { publicRpcUrls: [], readRpcUrl: 'http://127.0.0.1:1' }
 	validateIndependentReadRpcUrls(connectivity.readRpcUrl, deployment.quorumRpcUrls)
-	const network = record['network'] === 'sepolia' ? 'sepolia' : 'mainnet'
 	const chainId = network === 'mainnet' ? 1 : 11_155_111
 	const centralizedMarkets = parseCentralizedMarketSettings(record['centralizedMarkets'] ?? defaultCentralizedMarkets(deployment.rep, chainId))
 	if (centralizedMarkets.assetAddress.toLowerCase() !== deployment.rep.toLowerCase() || centralizedMarkets.assetChainId !== chainId) throw new Error('Centralized market configuration must target the configured REP deployment and chain')
@@ -252,10 +252,11 @@ export function parseOperatorSettings(value: unknown, preservedPrivateKey?: Hex)
 }
 
 export function serializeOperatorSettings(settings: PersistedOperatorSettings, redactPrivateKey = false): StoredOperatorSettings {
+	const { openOracle: _openOracle, ...deployment } = settings.deployment
 	return {
 		centralizedMarkets: serializeCentralizedMarketSettings(settings.centralizedMarkets),
 		connectivity: settings.networkConfigured ? settings.connectivity : undefined,
-		deployment: settings.deployment,
+		deployment,
 		network: settings.network,
 		networkConfigured: settings.networkConfigured,
 		paused: settings.paused,
@@ -369,6 +370,7 @@ export async function switchOperatorNetworkProfile(path: string, network: Networ
 		const chainId = network === 'mainnet' ? 1 : 11_155_111
 		target = {
 			...template,
+			deployment: validateDeploymentSettings(template.deployment, network),
 			centralizedMarkets: { ...template.centralizedMarkets, assetChainId: chainId },
 			network,
 			networkConfigured: false,
