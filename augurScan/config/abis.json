@@ -1,5 +1,5 @@
 {
-  "sourceHash": "b2c300291e643eb4020767eb243604cc1ffe48d94aeef2d4114da0db5f5857c8",
+  "sourceHash": "4f70ae08387a5035e3d93310c1f405483d2c5b2204d3104551bd6506fcdee81f",
   "contracts": {
     "DeploymentStatusOracle": {
       "source": "contracts/DeploymentStatusOracle.sol",
@@ -2324,6 +2324,35 @@
         {
           "inputs": [
             {
+              "internalType": "address",
+              "name": "migrator",
+              "type": "address"
+            },
+            {
+              "internalType": "uint248",
+              "name": "universeId",
+              "type": "uint248"
+            },
+            {
+              "internalType": "uint248[]",
+              "name": "childUniverseIds",
+              "type": "uint248[]"
+            }
+          ],
+          "name": "getChildMigrationRepAmountsAttoRep",
+          "outputs": [
+            {
+              "internalType": "uint256[]",
+              "name": "amountsAttoRep",
+              "type": "uint256[]"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
               "internalType": "uint248",
               "name": "universeId",
               "type": "uint248"
@@ -2528,6 +2557,34 @@
             }
           ],
           "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "uint248",
+              "name": "universeId",
+              "type": "uint248"
+            },
+            {
+              "internalType": "uint256",
+              "name": "amountAttoRep",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256[]",
+              "name": "outcomeIndexes",
+              "type": "uint256[]"
+            },
+            {
+              "internalType": "uint256",
+              "name": "preparationAttoRep",
+              "type": "uint256"
+            }
+          ],
+          "name": "prepareAndSplitMigrationRep",
+          "outputs": [],
+          "stateMutability": "nonpayable",
           "type": "function"
         },
         {

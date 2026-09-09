@@ -82,8 +82,6 @@ export function useZoltarOperations({
 		refreshState,
 		refreshZoltarForkAccess,
 		refreshZoltarUniverse,
-		zoltarForkRepBalanceAttoRep: fork.zoltarForkRepBalanceAttoRep,
-		zoltarMigrationPreparedRepBalanceAttoRep: fork.zoltarMigrationPreparedRepBalanceAttoRep,
 	})
 
 	const createChildUniverse = useCallback(
