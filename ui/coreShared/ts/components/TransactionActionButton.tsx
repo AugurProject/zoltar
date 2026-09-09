@@ -7,6 +7,8 @@ import { InlineHint } from './InlineHint.js'
 import type { TransactionActionButtonProps } from '../types/components.js'
 import { isPendingGlobalTransactionPresentation, useGlobalTransactionPresentation } from './GlobalTransactionPresentationContext.js'
 
+const TransactionActionGroupContext = createContext<{ noticeId: string; hasNotice: boolean } | undefined>(undefined)
+
 const TransactionActionButtonLockContext = createContext<string | undefined>(undefined)
 
 function getInlineHintAriaLabel(ariaLabel: string | undefined, inlineHintAriaLabel: string | undefined, idleLabel: ComponentChildren) {
@@ -20,7 +22,25 @@ export function TransactionActionButtonLockProvider({ children, disabledReason }
 	return <TransactionActionButtonLockContext.Provider value={disabledReason}>{children}</TransactionActionButtonLockContext.Provider>
 }
 
+export function TransactionActionGroup({ children, id, message }: { children: ComponentChildren; id?: string | undefined; message: string | undefined }) {
+	const generatedId = useId()
+	const noticeId = id ?? generatedId
+	const globalDisabledReason = useContext(TransactionActionButtonLockContext)
+	const notice = message ?? globalDisabledReason
+	return (
+		<TransactionActionGroupContext.Provider value={{ noticeId, hasNotice: notice !== undefined }}>
+			<div className='tx-action-group'>
+				<div className='tx-action-feedback' aria-live='polite' aria-atomic='true'>
+					{notice === undefined ? undefined : <InlineHint id={noticeId} message={notice} />}
+				</div>
+				<div className='actions'>{children}</div>
+			</div>
+		</TransactionActionGroupContext.Provider>
+	)
+}
+
 export function TransactionActionButton({ ariaLabel, availability, className = '', disabled = false, disabledReasonElementId, idleLabel, inlineHint, inlineHintAriaLabel, onClick, pending = false, pendingLabel, showDisabledReason = true, tone = 'primary', type = 'button' }: TransactionActionButtonProps) {
+	const group = useContext(TransactionActionGroupContext)
 	const disabledReasonId = useId()
 	const globalTransaction = useGlobalTransactionPresentation()
 	const globalDisabledReason = useContext(TransactionActionButtonLockContext)
@@ -31,7 +51,8 @@ export function TransactionActionButton({ ariaLabel, availability, className = '
 	const resolvedInlineHint = shouldShowDisabledReason ? disabledReason : inlineHint
 	const resolvedInlineHintAriaLabel = getInlineHintAriaLabel(ariaLabel, inlineHintAriaLabel, idleLabel)
 	let describedBy: string | undefined
-	if (resolvedInlineHint !== undefined) describedBy = disabledReasonId
+	if (group !== undefined) describedBy = group.hasNotice ? group.noticeId : undefined
+	else if (resolvedInlineHint !== undefined) describedBy = disabledReasonId
 	else if (isDisabled && disabledReason !== undefined) describedBy = disabledReasonElementId
 	const handleClick = () => {
 		if (isDisabled) return
@@ -48,7 +69,7 @@ export function TransactionActionButton({ ariaLabel, availability, className = '
 					</span>
 				</button>
 			</div>
-			{showDisabledReason || resolvedInlineHint !== undefined ? (
+			{group === undefined && (showDisabledReason || resolvedInlineHint !== undefined) ? (
 				<div className='tx-action-feedback'>{resolvedInlineHint === undefined ? undefined : <InlineHint {...(resolvedInlineHintAriaLabel === undefined ? {} : { ariaLabel: resolvedInlineHintAriaLabel })} id={disabledReasonId} message={resolvedInlineHint} />}</div>
 			) : undefined}
 		</div>

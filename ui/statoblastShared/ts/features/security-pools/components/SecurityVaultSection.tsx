@@ -1,3 +1,4 @@
+import type { ComponentChildren } from 'preact'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import * as transactionReviewCopy from '@zoltar/ui-core-shared/copy/transactionReview.js'
@@ -17,7 +18,7 @@ import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
-import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
+import { TransactionActionButton, TransactionActionGroup } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { TransactionNetworkValue } from '@zoltar/ui-core-shared/components/TransactionNetworkValue.js'
 import { normalizeAddress, sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance, formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
@@ -196,7 +197,31 @@ export function SecurityVaultSection({
 		walletRepShortfallAttoRep: hasInsufficientRepBalance ? walletRepShortfallAttoRep : undefined,
 	})
 	const targetHealthFactorGuardMessage = hasPositiveDepositAmount ? getTargetHealthFactorGuardMessage(normalizedSecurityVaultForm.targetHealthFactor) : undefined
-	const depositActionGuardMessage = targetHealthFactorGuardMessage === undefined ? depositGuardMessage : undefined
+	const depositActionGuardMessage = targetHealthFactorGuardMessage === undefined ? (depositGuardMessage ?? (!hasPositiveDepositAmount ? commonCopy.positiveAmountRequired : undefined)) : undefined
+
+	const depositAmountNotice =
+		walletRepShortfallAttoRep !== undefined && walletRepShortfallAttoRep > 0n
+			? securityPoolCopy.formatInsufficientRepBalanceDetail(formatCurrencyBalance(walletRepShortfallAttoRep))
+			: isDepositBelowMinimum
+				? getVaultDepositGuardMessage({ approvalSatisfied: true, depositAmount, isDepositBelowMinimum, minimumVaultRepDepositAttoRep, walletRepShortfallAttoRep: undefined })
+				: undefined
+	const renderDepositActions = (approvalButton: ComponentChildren, approvalNotice: string | undefined, noticeId: string, showCancel = false) => (
+		<TransactionActionGroup id={noticeId} message={approvalNotice ?? (canUseLoadedVaultActions ? depositActionGuardMessage : undefined)}>
+			{approvalButton}
+			<TransactionActionButton
+				idleLabel={depositRepActionLabel}
+				pendingLabel={securityPoolCopy.formatDepositingRep(repTokenSymbol)}
+				onClick={onDepositRepToVault}
+				pending={securityVaultActiveAction === 'depositRepToVault'}
+				availability={{ disabled: !depositRepToVaultEnabled || !canUseLoadedVaultActions || !hasPositiveDepositAmount || depositGuardMessage !== undefined, reason: canUseLoadedVaultActions ? depositActionGuardMessage : undefined }}
+			/>
+			{showCancel ? (
+				<button className='secondary' type='button' onClick={() => setVaultActionModal(undefined)}>
+					{commonCopy.cancel}
+				</button>
+			) : undefined}
+		</TransactionActionGroup>
+	)
 	const withdrawRepFunding = resolveOracleOperationEthFunding({
 		managerDetails: oracleManagerDetails,
 		priceUsable: hasValidOraclePrice,
@@ -414,11 +439,12 @@ export function SecurityVaultSection({
 						</MetricGrid>
 						<ErrorNotice message={walletRepBalanceError} />
 						<TokenApprovalControl
+							renderActions={({ button, notice, noticeId }) => renderDepositActions(button, notice, noticeId, true)}
 							actionLabel={depositRepActionLabel}
 							allowanceError={securityVaultRepApproval.error}
 							allowanceLoading={securityVaultRepApproval.loading}
 							approvedAmount={securityVaultRepApproval.value}
-							guardMessage={undefined}
+							guardMessage={depositAmountNotice}
 							onApprove={amount => onApproveRep(amount)}
 							pending={securityVaultActiveAction === 'approveRep'}
 							pendingLabel={commonCopy.formatApprovingToken(repTokenSymbol)}
@@ -428,18 +454,6 @@ export function SecurityVaultSection({
 							tokenUnits={18}
 							disabled={!approveRepEnabled || !canUseLoadedVaultActions || !depositRepToVaultEnabled}
 						/>
-						<div className='actions'>
-							<button className='secondary' type='button' onClick={() => setVaultActionModal(undefined)}>
-								{commonCopy.cancel}
-							</button>
-							<TransactionActionButton
-								idleLabel={depositRepActionLabel}
-								pendingLabel={securityPoolCopy.formatDepositingRep(repTokenSymbol)}
-								onClick={onDepositRepToVault}
-								pending={securityVaultActiveAction === 'depositRepToVault'}
-								availability={{ disabled: !depositRepToVaultEnabled || !canUseLoadedVaultActions || !hasPositiveDepositAmount || depositGuardMessage !== undefined, reason: canUseLoadedVaultActions ? depositActionGuardMessage : undefined }}
-							/>
-						</div>
 					</>
 				)}
 			</OperationModal>
@@ -606,11 +620,12 @@ export function SecurityVaultSection({
 					</small>
 				</label>
 				<TokenApprovalControl
+					renderActions={({ button, notice, noticeId }) => renderDepositActions(button, notice, noticeId)}
 					actionLabel={depositRepActionLabel}
 					allowanceError={securityVaultRepApproval.error}
 					allowanceLoading={securityVaultRepApproval.loading}
 					approvedAmount={securityVaultRepApproval.value}
-					guardMessage={undefined}
+					guardMessage={depositAmountNotice}
 					onApprove={amount => onApproveRep(amount)}
 					pending={securityVaultActiveAction === 'approveRep'}
 					pendingLabel={commonCopy.formatApprovingToken(repTokenSymbol)}
@@ -620,26 +635,6 @@ export function SecurityVaultSection({
 					tokenUnits={18}
 					disabled={!approveRepEnabled || !canUseLoadedVaultActions || !depositRepToVaultEnabled}
 				/>
-				<div className='actions'>
-					<TransactionActionButton
-						idleLabel={depositRepActionLabel}
-						pendingLabel={securityPoolCopy.formatDepositingRep(repTokenSymbol)}
-						onClick={onDepositRepToVault}
-						pending={securityVaultActiveAction === 'depositRepToVault'}
-						availability={{ disabled: !depositRepToVaultEnabled || !canUseLoadedVaultActions || !hasPositiveDepositAmount || depositGuardMessage !== undefined, reason: canUseLoadedVaultActions ? depositActionGuardMessage : undefined }}
-					/>
-				</div>
-				{(() => {
-					if (walletRepShortfallAttoRep !== undefined && walletRepShortfallAttoRep > 0n) return <ErrorNotice message={securityPoolCopy.formatInsufficientRepBalanceDetail(formatCurrencyBalance(walletRepShortfallAttoRep))} />
-					if (isDepositBelowMinimum)
-						return (
-							<p className='detail'>
-								{securityPoolCopy.newVaultsRequireAtLeast} <CurrencyValue value={minimumVaultRepDepositAttoRep} suffix={commonCopy.rep} copyable={false} /> {securityPoolCopy.firstDepositTail}
-							</p>
-						)
-
-					return undefined
-				})()}
 			</SectionBlock>
 
 			<SectionBlock title={repExitActionLabel} variant='embedded'>

@@ -155,6 +155,21 @@ describe('ZoltarMigrationSection', () => {
 		expectTransactionButtonDisabled(document.body, 'Split REP', 'Enter an amount greater than zero.')
 	})
 
+	test('shares one amount notice above approval and split buttons', async () => {
+		const rendered = await renderIntoDocument(h(ZoltarMigrationSection, createProps({ zoltarMigrationForm: createForm({ amount: '' }) })))
+		cleanupRenderedComponent = rendered.cleanup
+		const notices = rendered.container.querySelectorAll('.tx-action-notice')
+		expect(notices.length).toBe(1)
+		const notice = notices[0]
+		if (notice === undefined) throw new Error('Missing migration notice')
+		expect(notice.textContent).toBe('Enter an amount greater than zero.')
+		for (const name of ['Approve REP', 'Split REP']) {
+			const button = within(rendered.container).getByRole('button', { name })
+			expect(button.getAttribute('aria-describedby')).toBe(notice.id)
+			expect(notice.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
+		}
+	})
+
 	test('labels the irreversible migration amount and requires an explicit destination', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(

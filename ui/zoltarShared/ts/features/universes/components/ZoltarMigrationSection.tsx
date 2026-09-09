@@ -1,5 +1,6 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as zoltarCopy from '../../../copy/zoltar.js'
+import type { ComponentChildren } from 'preact'
 import { useMemo } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
@@ -10,7 +11,7 @@ import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
-import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
+import { TransactionActionButton, TransactionActionGroup } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
 import { WalletAssetControl } from '@zoltar/ui-core-shared/components/WalletAssetControl.js'
 import { getMigrationOutcomeSplitLimit, MigrationOutcomeUniversesSection } from './MigrationOutcomeUniversesSection.js'
@@ -160,6 +161,23 @@ export function ZoltarMigrationSection({
 		if (missingPreparationAmount === 0n) return getAlreadyPreparedHint()
 		return zoltarCopy.formatAddMigrationRepDetail(formatCurrencyBalance(missingPreparationAmount))
 	})()
+	const renderMigrationActions = (approvalButton?: ComponentChildren, approvalNotice?: string, noticeId?: string) => (
+		<TransactionActionGroup id={noticeId} message={approvalNotice ?? splitHintMessage}>
+			{approvalButton}
+			{accountAddress !== undefined && hasForked && !loadingZoltarForkAccess && !loadingZoltarUniverse && (hasUnavailableRequiredBalance || hasUnavailableOutcomeBalance) ? (
+				<button className='quiet' type='button' onClick={onRetryMigrationBalances} disabled={zoltarMigrationPending || !isOnActiveAppChain}>
+					{commonCopy.retry}
+				</button>
+			) : undefined}
+			<TransactionActionButton
+				idleLabel={zoltarCopy.splitRep}
+				pendingLabel={zoltarCopy.splittingRepPending}
+				onClick={() => onMigrateInternalRep(missingPreparationAmount)}
+				pending={zoltarMigrationActiveAction === 'split'}
+				availability={{ disabled: !canSplit, reason: isOnActiveAppChain ? splitHintMessage : getWrongNetworkReason() }}
+			/>
+		</TransactionActionGroup>
+	)
 	const selectAllAmount = () => {
 		onZoltarMigrationFormChange({ amount: formatCurrencyInputBalance(migrationAmountSource) })
 	}
@@ -261,6 +279,7 @@ export function ZoltarMigrationSection({
 
 					{requiresApproval ? (
 						<TokenApprovalControl
+							renderActions={({ button, notice, noticeId }) => renderMigrationActions(button, notice, noticeId)}
 							actionLabel={zoltarCopy.preparingCurrentAmountLabel}
 							allowanceError={zoltarForkApproval.error}
 							allowanceLoading={zoltarForkApproval.loading}
@@ -275,22 +294,9 @@ export function ZoltarMigrationSection({
 							tokenSymbol={rootUniverse?.reputationTokenSymbol ?? 'REP'}
 							tokenUnits={18}
 						/>
-					) : undefined}
-
-					<div className='actions'>
-						{accountAddress !== undefined && hasForked && !loadingZoltarForkAccess && !loadingZoltarUniverse && (hasUnavailableRequiredBalance || hasUnavailableOutcomeBalance) ? (
-							<button className='quiet' type='button' onClick={onRetryMigrationBalances} disabled={zoltarMigrationPending || !isOnActiveAppChain}>
-								{commonCopy.retry}
-							</button>
-						) : undefined}
-						<TransactionActionButton
-							idleLabel={zoltarCopy.splitRep}
-							pendingLabel={zoltarCopy.splittingRepPending}
-							onClick={() => onMigrateInternalRep(missingPreparationAmount)}
-							pending={zoltarMigrationActiveAction === 'split'}
-							availability={{ disabled: !canSplit, reason: isOnActiveAppChain ? splitHintMessage : getWrongNetworkReason() }}
-						/>
-					</div>
+					) : (
+						renderMigrationActions()
+					)}
 
 					{heldChildUniverses.length === 0 ? undefined : (
 						<WorkflowSubsection title={zoltarCopy.walletRepTokens}>

@@ -810,6 +810,8 @@ void describe('OpenOracleSection', () => {
 		if (disputeButton === undefined) throw new Error('Expected dispute action button to render')
 		expect(getButtonDisabled(disputeButton)).toBe(true)
 		expect(getButtonDisabledReason(disputeButton)).toBe('Switch to Ethereum mainnet.')
+		expect(disputeButton.props.showDisabledReason).toBe(false)
+		expect(disputeButton.props.disabledReasonElementId).toContain('open-oracle-dispute-approval-guard-')
 
 		const settleSection = renderSettleActionSection({ isOnActiveAppChain: false })
 		const settleButton = findButton(settleSection, 'Settle report')

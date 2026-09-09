@@ -1,3 +1,4 @@
+import type { ComponentChildren } from 'preact'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as zoltarCopy from '../../../copy/zoltar.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
@@ -9,7 +10,7 @@ import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { Question } from '@zoltar/ui-core-shared/components/Question.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
-import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
+import { TransactionActionButton, TransactionActionGroup } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
 import { normalizeQuestionId } from '@zoltar/ui-core-shared/lib/questionId.js'
 import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
@@ -130,6 +131,22 @@ export function ForkZoltarSection({
 		return undefined
 	})()
 
+	const renderForkActions = (approvalButton?: ComponentChildren, approvalNotice?: string, noticeId?: string) => (
+		<TransactionActionGroup id={noticeId} message={approvalNotice ?? forkGuardMessage}>
+			{approvalButton}
+			<TransactionActionButton
+				idleLabel={zoltarCopy.forkZoltar}
+				pendingLabel={zoltarCopy.forkSubmissionPending}
+				onClick={() => {
+					if (selectedQuestionId === '') return
+					onForkZoltar()
+				}}
+				pending={zoltarForkActiveAction === 'fork'}
+				availability={{ disabled: !canFork, reason: forkGuardMessage }}
+			/>
+		</TransactionActionGroup>
+	)
+
 	if (universeMissing) {
 		const presentation = getUniversePresentation(zoltarUniverseState)
 		return (
@@ -158,24 +175,6 @@ export function ForkZoltarSection({
 					<FormInput aria-describedby={selectedQuestionDescriptionId} disabled={hasForked || zoltarForkPending} invalid={selectedQuestionDescriptionId !== undefined} onInput={event => onZoltarForkQuestionIdChange(event.currentTarget.value)} placeholder={commonCopy.hexValuePlaceholder} value={zoltarForkQuestionId} />
 				</label>
 
-				{hasForked || !requiresApproval ? undefined : (
-					<TokenApprovalControl
-						actionLabel={zoltarCopy.forkingActionLabel}
-						allowanceError={zoltarForkApproval.error}
-						allowanceLoading={zoltarForkApproval.loading}
-						approvedAmount={zoltarForkApproval.value}
-						disabled={!isOnActiveAppChain}
-						guardMessage={approvalGuardMessage}
-						onApprove={amount => onApproveZoltarForkRep(amount)}
-						pending={zoltarForkActiveAction === 'approve'}
-						pendingLabel={zoltarCopy.forkRepApprovalPending}
-						requiredAmount={rootUniverse?.forkThresholdAttoRep}
-						resetKey={`${rootUniverse?.reputationToken ?? ''}:${rootUniverse?.universeId.toString() ?? ''}:${rootUniverse?.forkThresholdAttoRep.toString() ?? ''}`}
-						tokenSymbol={rootUniverse?.reputationTokenSymbol ?? 'REP'}
-						tokenUnits={18}
-					/>
-				)}
-
 				{selectedQuestion === undefined ? undefined : (
 					<WorkflowSubsection title={commonCopy.question}>
 						<Question question={selectedQuestion} />
@@ -191,19 +190,25 @@ export function ForkZoltarSection({
 					</div>
 				)}
 
-				{hasForked ? undefined : (
-					<div className='actions'>
-						<TransactionActionButton
-							idleLabel={zoltarCopy.forkZoltar}
-							pendingLabel={zoltarCopy.forkSubmissionPending}
-							onClick={() => {
-								if (selectedQuestionId === '') return
-								onForkZoltar()
-							}}
-							pending={zoltarForkActiveAction === 'fork'}
-							availability={{ disabled: !canFork, reason: forkGuardMessage }}
-						/>
-					</div>
+				{hasForked ? undefined : requiresApproval ? (
+					<TokenApprovalControl
+						renderActions={({ button, notice, noticeId }) => renderForkActions(button, notice, noticeId)}
+						actionLabel={zoltarCopy.forkingActionLabel}
+						allowanceError={zoltarForkApproval.error}
+						allowanceLoading={zoltarForkApproval.loading}
+						approvedAmount={zoltarForkApproval.value}
+						disabled={!isOnActiveAppChain}
+						guardMessage={approvalGuardMessage}
+						onApprove={amount => onApproveZoltarForkRep(amount)}
+						pending={zoltarForkActiveAction === 'approve'}
+						pendingLabel={zoltarCopy.forkRepApprovalPending}
+						requiredAmount={rootUniverse?.forkThresholdAttoRep}
+						resetKey={`${rootUniverse?.reputationToken ?? ''}:${rootUniverse?.universeId.toString() ?? ''}:${rootUniverse?.forkThresholdAttoRep.toString() ?? ''}`}
+						tokenSymbol={rootUniverse?.reputationTokenSymbol ?? 'REP'}
+						tokenUnits={18}
+					/>
+				) : (
+					renderForkActions()
 				)}
 			</div>
 

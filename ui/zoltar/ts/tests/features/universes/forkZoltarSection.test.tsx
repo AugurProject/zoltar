@@ -97,7 +97,8 @@ describe('ForkZoltarSection', () => {
 			.find(button => button.textContent?.startsWith('Approve ') === true)
 		if (approveButton === undefined) throw new Error('Expected approval button')
 		expect(approveButton.hasAttribute('disabled')).toBe(true)
-		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(true)
+		expect(document.body.textContent?.match(/Switch to Ethereum mainnet/g)?.length).toBe(1)
+		expect(document.body.querySelectorAll('.tx-action-group .tx-action-notice').length).toBe(1)
 	})
 
 	test('describes automatically loading fork data without asking for a manual refresh', async () => {
