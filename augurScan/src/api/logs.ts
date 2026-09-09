@@ -3,23 +3,7 @@ import { decodeOpaqueCursor, encodeOpaqueCursor, isJsonArray } from '../cursor-c
 import type { JsonValue } from '../ethereum.ts'
 import { logDetailData, logListRows, provenanceHistoryData, reorganizationHistoryData } from '../repositories/logs.ts'
 import { snapshotBoundary } from './entity-details.ts'
-import {
-	ApiRequestError,
-	actionJsonColumns,
-	canonicalHistoryFilter,
-	cursorTimestamp,
-	decodedJsonColumns,
-	directObservationTotal,
-	evmAddress,
-	integer,
-	isCursorTimestamp,
-	isNonNegativeSafeInteger,
-	isPostgresBigint,
-	json,
-	logCursorFor,
-	parseLogCursor,
-	routeInteger,
-} from './shared.ts'
+import { ApiRequestError, actionJsonColumns, canonicalHistoryFilter, cursorTimestamp, decodedJsonColumns, directObservationTotal, evmAddress, integer, isCursorTimestamp, isNonNegativeSafeInteger, isPostgresBigint, json, logCursorFor, parseLogCursor, routeInteger } from './shared.ts'
 import { operationsAsOfForContinuations } from './snapshot.ts'
 
 export const listLogs = async (sql: SQL, url: URL): Promise<Response> => {
@@ -43,10 +27,7 @@ export const listLogs = async (sql: SQL, url: URL): Promise<Response> => {
 		items,
 		canonical,
 		asOf,
-		nextCursor:
-			hasMore && items.length > 0
-				? logCursorFor(chainId, event, address, decodedFilter, canonical, asOf, items[items.length - 1] as Record<string, unknown>)
-				: undefined,
+		nextCursor: hasMore && items.length > 0 ? logCursorFor(chainId, event, address, decodedFilter, canonical, asOf, items[items.length - 1] as Record<string, unknown>) : undefined,
 	})
 }
 
@@ -55,29 +36,13 @@ export const logDetail = async (sql: SQL, parts: readonly string[], url: URL): P
 	const blockHash = parts[1]
 	const hash = parts[2]
 	const logIndex = routeInteger(parts[3], true)
-	if (
-		parts.length !== 4 ||
-		chainId === undefined ||
-		blockHash === undefined ||
-		!/^0x[0-9a-fA-F]{64}$/.test(blockHash) ||
-		hash === undefined ||
-		!/^0x[0-9a-fA-F]{64}$/.test(hash) ||
-		logIndex === undefined
-	)
-		return json({ error: 'Invalid log identifier' }, 400)
+	if (parts.length !== 4 || chainId === undefined || blockHash === undefined || !/^0x[0-9a-fA-F]{64}$/.test(blockHash) || hash === undefined || !/^0x[0-9a-fA-F]{64}$/.test(hash) || logIndex === undefined) return json({ error: 'Invalid log identifier' }, 400)
 	const canonical = canonicalHistoryFilter(url)
 	const canonicalOnly = canonical === 'canonical'
 	if (canonical === 'orphaned') throw new ApiRequestError('log detail canonical filter must be canonical or all')
 	const normalizedBlockHash = blockHash.toLowerCase()
 	const normalizedHash = hash.toLowerCase()
-	const { rows, related, logInterpretations, actionInterpretations } = await logDetailData(
-		sql,
-		chainId,
-		normalizedBlockHash,
-		normalizedHash,
-		logIndex,
-		canonicalOnly,
-	)
+	const { rows, related, logInterpretations, actionInterpretations } = await logDetailData(sql, chainId, normalizedBlockHash, normalizedHash, logIndex, canonicalOnly)
 	if (rows.length === 0) return json({ error: 'Log not found' }, 404)
 	const detail = decodedJsonColumns(rows[0] ?? {}, actionJsonColumns)
 	return json({
@@ -90,18 +55,7 @@ export const logDetail = async (sql: SQL, parts: readonly string[], url: URL): P
 	})
 }
 
-type ReorganizationCursor = readonly [
-	version: 1,
-	chainId: number,
-	snapshotBlock: string,
-	snapshotHash: string,
-	invalidationId: string,
-	abiSourceHash: string,
-	applicationSourceHash: string,
-	projectionSourceHash: string,
-	detectedAt: string,
-	id: string,
-]
+type ReorganizationCursor = readonly [version: 1, chainId: number, snapshotBlock: string, snapshotHash: string, invalidationId: string, abiSourceHash: string, applicationSourceHash: string, projectionSourceHash: string, detectedAt: string, id: string]
 
 const isReorganizationCursor = (parts: readonly JsonValue[]): parts is ReorganizationCursor =>
 	parts.length === 10 &&
@@ -111,7 +65,7 @@ const isReorganizationCursor = (parts: readonly JsonValue[]): parts is Reorganiz
 	typeof parts[3] === 'string' &&
 	/^0x[0-9a-f]{64}$/.test(parts[3]) &&
 	isPostgresBigint(parts[4]) &&
-	parts.slice(5, 8).every((part) => typeof part === 'string') &&
+	parts.slice(5, 8).every(part => typeof part === 'string') &&
 	typeof parts[8] === 'string' &&
 	isCursorTimestamp(parts[8]) &&
 	isPostgresBigint(parts[9])
@@ -130,8 +84,7 @@ const parseReorganizationCursor = (value: string | null, chainId: number): Reorg
 	return parts
 }
 
-const reorganizationCursorFor = (chainId: number, asOf: Record<string, unknown>, row: Record<string, unknown>): string =>
-	encodeOpaqueCursor([1, chainId, ...snapshotBoundary(asOf), cursorTimestamp(row['cursor_detected_at']), String(row['id'])] satisfies ReorganizationCursor)
+const reorganizationCursorFor = (chainId: number, asOf: Record<string, unknown>, row: Record<string, unknown>): string => encodeOpaqueCursor([1, chainId, ...snapshotBoundary(asOf), cursorTimestamp(row['cursor_detected_at']), String(row['id'])] satisfies ReorganizationCursor)
 
 export const reorganizationHistory = async (sql: SQL, url: URL): Promise<Response> => {
 	const chainId = integer(url.searchParams.get('chainId'), 'chainId')
@@ -164,8 +117,7 @@ const parseProvenanceCursor = (value: string | null): ProvenanceCursor | undefin
 	try {
 		const parsed = decodeOpaqueCursor(value)
 		const parts = isJsonArray(parsed) ? parsed : []
-		if (parts.length !== 3 || parts[0] !== 1 || typeof parts[1] !== 'string' || !isCursorTimestamp(parts[1]) || !isPostgresBigint(parts[2]))
-			throw new Error('shape')
+		if (parts.length !== 3 || parts[0] !== 1 || typeof parts[1] !== 'string' || !isCursorTimestamp(parts[1]) || !isPostgresBigint(parts[2])) throw new Error('shape')
 		return [1, parts[1], parts[2]]
 	} catch (error) {
 		throw new ApiRequestError('cursor is invalid', { cause: error })
@@ -178,9 +130,7 @@ export const provenanceHistory = async (sql: SQL, url: URL): Promise<Response> =
 	const cursor = parseProvenanceCursor(url.searchParams.get('cursor'))
 	const { migrations, runRows } = await provenanceHistoryData(sql, limit, cursor)
 	const pageRows = runRows.slice(0, limit)
-	const runs = pageRows.map((row: Record<string, unknown>) =>
-		Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'remaining_total' && key !== 'cursor_started_at')),
-	)
+	const runs = pageRows.map((row: Record<string, unknown>) => Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'remaining_total' && key !== 'cursor_started_at')))
 	const hasMore = runRows.length > limit
 	const last = pageRows[pageRows.length - 1]
 	return json({
@@ -189,9 +139,6 @@ export const provenanceHistory = async (sql: SQL, url: URL): Promise<Response> =
 		runLimit: limit,
 		runsTruncated: hasMore,
 		remainingTotal: Number(runRows[0]?.['remaining_total'] ?? 0),
-		nextCursor:
-			hasMore && last !== undefined
-				? encodeOpaqueCursor([1, cursorTimestamp(last['cursor_started_at']), String(last['id'])] satisfies ProvenanceCursor)
-				: undefined,
+		nextCursor: hasMore && last !== undefined ? encodeOpaqueCursor([1, cursorTimestamp(last['cursor_started_at']), String(last['id'])] satisfies ProvenanceCursor) : undefined,
 	})
 }

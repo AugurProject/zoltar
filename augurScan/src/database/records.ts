@@ -75,12 +75,11 @@ export const manifestContractSetChanged = (
 		readonly configuredDeploymentBlock?: bigint
 	}[],
 ): boolean => {
-	const identity = ({ address, label, kind }: { readonly address: string; readonly label: string; readonly kind: string }): string =>
-		`${address.toLowerCase()}\u0000${label}\u0000${kind}`
+	const identity = ({ address, label, kind }: { readonly address: string; readonly label: string; readonly kind: string }): string => `${address.toLowerCase()}\u0000${label}\u0000${kind}`
 	const configuredIdentities = configured.map(([address, label, kind]) => identity({ address, label, kind })).sort()
 	const storedIdentities = stored.map(identity).sort()
 	if (configuredIdentities.length !== storedIdentities.length || configuredIdentities.some((value, index) => value !== storedIdentities[index])) return true
-	const storedByIdentity = new Map(stored.map((contract) => [identity(contract), contract]))
+	const storedByIdentity = new Map(stored.map(contract => [identity(contract), contract]))
 	return configured.some(([address, label, kind, deploymentBlock]) => {
 		const storedContract = storedByIdentity.get(identity({ address, label, kind }))
 		return storedContract?.configuredDeploymentBlock !== deploymentBlock
@@ -149,19 +148,11 @@ export const contractMetadataFromRow = (row: Record<string, unknown>): ContractM
 		provenance: String(row['provenance']),
 		...(row['discovery_block'] === null || row['discovery_block'] === undefined ? {} : { discoveryBlock: BigInt(String(row['discovery_block'])) }),
 		...(row['discovery_tx_hash'] === null || row['discovery_tx_hash'] === undefined ? {} : { discoveryTxHash: String(row['discovery_tx_hash']) as Hash }),
-		...(row['configured_deployment_block'] === null || row['configured_deployment_block'] === undefined
-			? {}
-			: { configuredDeploymentBlock: BigInt(String(row['configured_deployment_block'])) }),
+		...(row['configured_deployment_block'] === null || row['configured_deployment_block'] === undefined ? {} : { configuredDeploymentBlock: BigInt(String(row['configured_deployment_block'])) }),
 		...(row['deployment_block'] === null || row['deployment_block'] === undefined ? {} : { deploymentBlock: BigInt(String(row['deployment_block'])) }),
-		...(row['deployment_timestamp'] === null || row['deployment_timestamp'] === undefined
-			? {}
-			: { deploymentTimestamp: new Date(String(row['deployment_timestamp'])) }),
-		...(row['deployment_block_exact'] === null || row['deployment_block_exact'] === undefined
-			? {}
-			: { deploymentBlockExact: row['deployment_block_exact'] === true || row['deployment_block_exact'] === 'true' }),
-		...(row['deployment_checked_block'] === null || row['deployment_checked_block'] === undefined
-			? {}
-			: { deploymentCheckedBlock: BigInt(String(row['deployment_checked_block'])) }),
+		...(row['deployment_timestamp'] === null || row['deployment_timestamp'] === undefined ? {} : { deploymentTimestamp: new Date(String(row['deployment_timestamp'])) }),
+		...(row['deployment_block_exact'] === null || row['deployment_block_exact'] === undefined ? {} : { deploymentBlockExact: row['deployment_block_exact'] === true || row['deployment_block_exact'] === 'true' }),
+		...(row['deployment_checked_block'] === null || row['deployment_checked_block'] === undefined ? {} : { deploymentCheckedBlock: BigInt(String(row['deployment_checked_block'])) }),
 	}
 }
 
@@ -239,19 +230,14 @@ export const databaseConsistencyDiagnosticMessage = (error: DatabaseConsistencyE
 		return `Cannot change the configured start block from ${diagnostic.storedStartBlock} to ${diagnostic.configuredStartBlock} while an effective index start is retained; rebuild the augurScan database from the new start block`
 	}
 	if (diagnostic?.code === 'start-block-mismatch') {
-		if (typeof diagnostic.configuredStartBlock !== 'bigint' || typeof diagnostic.storedStartBlock !== 'bigint' || typeof diagnostic.indexedBlock !== 'bigint')
-			return undefined
+		if (typeof diagnostic.configuredStartBlock !== 'bigint' || typeof diagnostic.storedStartBlock !== 'bigint' || typeof diagnostic.indexedBlock !== 'bigint') return undefined
 		return `Cannot change the configured start block from ${diagnostic.storedStartBlock} to ${diagnostic.configuredStartBlock} while checkpoint ${diagnostic.indexedBlock} exists; rebuild the augurScan database from the new start block`
 	}
 	return undefined
 }
 
 export const assertIndexerLeaseObservation = (expectedBackendPid: number, observedBackendPid: number, held: boolean): void => {
-	if (observedBackendPid !== expectedBackendPid)
-		throw new DatabaseConsistencyError(
-			`Indexer lease moved from PostgreSQL backend ${expectedBackendPid} to ${observedBackendPid}; use a direct connection or a session-mode pooler`,
-			{ code: 'lease-backend-moved', expectedBackendPid, observedBackendPid },
-		)
+	if (observedBackendPid !== expectedBackendPid) throw new DatabaseConsistencyError(`Indexer lease moved from PostgreSQL backend ${expectedBackendPid} to ${observedBackendPid}; use a direct connection or a session-mode pooler`, { code: 'lease-backend-moved', expectedBackendPid, observedBackendPid })
 	if (!held)
 		throw new DatabaseConsistencyError(`Indexer lease is no longer held by PostgreSQL backend ${expectedBackendPid}`, {
 			code: 'lease-not-held',
@@ -271,57 +257,38 @@ export const assertIndexerLeaseReleaseObservation = (expectedBackendPid: number,
 export const assertBlockAppend = (block: Pick<IndexedBlock, 'number' | 'parentHash'>, checkpoint: StoredCheckpoint): void => {
 	if (checkpoint.indexedBlock === undefined) {
 		if (checkpoint.indexedHash !== undefined) throw new DatabaseConsistencyError('The database checkpoint has a block hash without a block number')
-		if (block.number < checkpoint.startBlock)
-			throw new DatabaseConsistencyError(`Cannot index block ${block.number}; the network starts at block ${checkpoint.startBlock}`)
+		if (block.number < checkpoint.startBlock) throw new DatabaseConsistencyError(`Cannot index block ${block.number}; the network starts at block ${checkpoint.startBlock}`)
 		return
 	}
 	if (checkpoint.indexedHash === undefined) throw new DatabaseConsistencyError('The database checkpoint has a block number without a block hash')
 	const expectedNumber = checkpoint.indexedBlock + 1n
-	if (block.number < expectedNumber)
-		throw new DatabaseConsistencyError(`Cannot index block ${block.number}; the database checkpoint is already block ${checkpoint.indexedBlock}`)
-	if (block.number === expectedNumber && block.parentHash !== checkpoint.indexedHash)
-		throw new DatabaseConsistencyError(`Block ${block.number} does not extend the current database checkpoint`)
+	if (block.number < expectedNumber) throw new DatabaseConsistencyError(`Cannot index block ${block.number}; the database checkpoint is already block ${checkpoint.indexedBlock}`)
+	if (block.number === expectedNumber && block.parentHash !== checkpoint.indexedHash) throw new DatabaseConsistencyError(`Block ${block.number} does not extend the current database checkpoint`)
 }
 
 export const assertStartBlockCompatible = (configuredStartBlock: bigint, storedStartBlock: bigint, indexedBlock?: bigint, hasStoredBlocks = false): void => {
 	if (indexedBlock === undefined) {
 		if (!hasStoredBlocks || configuredStartBlock === storedStartBlock) return
-		throw new DatabaseConsistencyError(
-			`Cannot change the configured start block from ${storedStartBlock} to ${configuredStartBlock} while an effective index start is retained; rebuild the augurScan database from the new start block`,
-			{ code: 'start-block-history-mismatch', configuredStartBlock, storedStartBlock },
-		)
+		throw new DatabaseConsistencyError(`Cannot change the configured start block from ${storedStartBlock} to ${configuredStartBlock} while an effective index start is retained; rebuild the augurScan database from the new start block`, { code: 'start-block-history-mismatch', configuredStartBlock, storedStartBlock })
 	}
-	if (indexedBlock < storedStartBlock)
-		throw new DatabaseConsistencyError(
-			`Stored checkpoint ${indexedBlock} is below configured start block ${storedStartBlock}; rebuild the augurScan database from the configured start block`,
-			{ code: 'checkpoint-before-start', indexedBlock, storedStartBlock },
-		)
+	if (indexedBlock < storedStartBlock) throw new DatabaseConsistencyError(`Stored checkpoint ${indexedBlock} is below configured start block ${storedStartBlock}; rebuild the augurScan database from the configured start block`, { code: 'checkpoint-before-start', indexedBlock, storedStartBlock })
 	if (configuredStartBlock === storedStartBlock) return
-	throw new DatabaseConsistencyError(
-		`Cannot change the configured start block from ${storedStartBlock} to ${configuredStartBlock} while checkpoint ${indexedBlock} exists; rebuild the augurScan database from the new start block`,
-		{ code: 'start-block-mismatch', configuredStartBlock, storedStartBlock, indexedBlock },
-	)
+	throw new DatabaseConsistencyError(`Cannot change the configured start block from ${storedStartBlock} to ${configuredStartBlock} while checkpoint ${indexedBlock} exists; rebuild the augurScan database from the new start block`, { code: 'start-block-mismatch', configuredStartBlock, storedStartBlock, indexedBlock })
 }
 
 export const assertLogScanCursorUpdate = (blockNumber: bigint, cursor: LogScanCursor): void => {
-	if (cursor.lastRetrievedBlock !== blockNumber)
-		throw new DatabaseConsistencyError(`Log cursor ${cursor.contractAddress} must advance to committed block ${blockNumber}`)
-	if (cursor.startBlock < 0n || cursor.lastRetrievedBlock < cursor.startBlock)
-		throw new DatabaseConsistencyError(`Log cursor ${cursor.contractAddress} has an invalid retrieval boundary`)
+	if (cursor.lastRetrievedBlock !== blockNumber) throw new DatabaseConsistencyError(`Log cursor ${cursor.contractAddress} must advance to committed block ${blockNumber}`)
+	if (cursor.startBlock < 0n || cursor.lastRetrievedBlock < cursor.startBlock) throw new DatabaseConsistencyError(`Log cursor ${cursor.contractAddress} has an invalid retrieval boundary`)
 }
 
 export const assertContractDeploymentObservation = (blockNumber: bigint, observation: ContractDeploymentObservation): void => {
-	if (observation.checkedBlock !== blockNumber)
-		throw new DatabaseConsistencyError(`Contract deployment observation ${observation.contractAddress} must be anchored to committed block ${blockNumber}`)
-	if (observation.deployment !== undefined && (observation.deployment.block < 0n || observation.deployment.block > observation.checkedBlock))
-		throw new DatabaseConsistencyError(`Contract deployment observation ${observation.contractAddress} has an invalid deployment boundary`)
+	if (observation.checkedBlock !== blockNumber) throw new DatabaseConsistencyError(`Contract deployment observation ${observation.contractAddress} must be anchored to committed block ${blockNumber}`)
+	if (observation.deployment !== undefined && (observation.deployment.block < 0n || observation.deployment.block > observation.checkedBlock)) throw new DatabaseConsistencyError(`Contract deployment observation ${observation.contractAddress} has an invalid deployment boundary`)
 }
 
 export const assertRewindTarget = (ancestor: bigint, ancestorHash: string | undefined, checkpoint: RewindCheckpoint, targetIsCanonical: boolean): void => {
-	if (checkpoint.indexedBlock === undefined || checkpoint.indexedHash === undefined)
-		throw new DatabaseConsistencyError('Cannot rewind a network without a complete indexed checkpoint')
-	if (ancestor < -1n || ancestor >= checkpoint.indexedBlock)
-		throw new DatabaseConsistencyError('The rewind target must precede the current database checkpoint')
+	if (checkpoint.indexedBlock === undefined || checkpoint.indexedHash === undefined) throw new DatabaseConsistencyError('Cannot rewind a network without a complete indexed checkpoint')
+	if (ancestor < -1n || ancestor >= checkpoint.indexedBlock) throw new DatabaseConsistencyError('The rewind target must precede the current database checkpoint')
 	if (ancestor === -1n) {
 		if (ancestorHash !== undefined) throw new DatabaseConsistencyError('A full rewind must not specify an ancestor hash')
 		return

@@ -8,8 +8,7 @@ import { operationsAsOfForContinuations } from './snapshot.ts'
 export const tradingDetailResponse = async (sql: SQL, parts: readonly string[], url: URL): Promise<Response> => {
 	const chainId = routeInteger(parts[0])
 	const market = parts[1]?.toLowerCase()
-	if (parts.length !== 2 || chainId === undefined || market === undefined || !/^0x[0-9a-f]{40}$/.test(market))
-		return json({ error: 'Invalid AMM identifier' }, 400)
+	if (parts.length !== 2 || chainId === undefined || market === undefined || !/^0x[0-9a-f]{40}$/.test(market)) return json({ error: 'Invalid AMM identifier' }, 400)
 	const cursor = protocolCursorForRequest(url, chainId, 'trading', market)
 	const asOf = await operationsAsOfForContinuations(sql, chainId, cursor === undefined ? [] : [{ parts: cursor, offset: 3 }])
 	const page = detailPage(url, chainId, 'trading', market, asOf, cursor)
@@ -64,16 +63,13 @@ export const tradingDetailResponse = async (sql: SQL, parts: readonly string[], 
 			market,
 			summary: summaries[0],
 			lpPositions,
-			events: paged(eventRows, page.limit, (row) => protocolCursorFor(chainId, 'trading', market, asOf, row)),
+			events: paged(eventRows, page.limit, row => protocolCursorFor(chainId, 'trading', market, asOf, row)),
 			twap24h: fixedWindowTwap(exactObservations, (endValue > 86_400n ? endValue - 86_400n : 0n).toString(), end),
 			twap7d: fixedWindowTwap(exactObservations, (endValue > 604_800n ? endValue - 604_800n : 0n).toString(), end),
 			candles: candlestickBuckets(exactObservations, '3600'),
 			observationLimit: 10_000,
 			observationsTruncated: observations.length > 10_000,
-			observationRange:
-				firstObservation === undefined || lastObservation === undefined
-					? undefined
-					: { firstTimestamp: firstObservation.timestamp, lastTimestamp: lastObservation.timestamp, count: exactObservations.length },
+			observationRange: firstObservation === undefined || lastObservation === undefined ? undefined : { firstTimestamp: firstObservation.timestamp, lastTimestamp: lastObservation.timestamp, count: exactObservations.length },
 		},
 	})
 }

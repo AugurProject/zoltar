@@ -15,5 +15,5 @@ if (!result.success) {
 	throw new AggregateError(result.logs, 'Could not build the AugurScan browser application')
 }
 
-const entrypoint = result.outputs.find((output) => output.kind === 'entry-point')
+const entrypoint = result.outputs.find(output => output.kind === 'entry-point')
 if (entrypoint === undefined) throw new Error('AugurScan browser build did not produce app.js')

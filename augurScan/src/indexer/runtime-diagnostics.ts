@@ -4,26 +4,14 @@ import { RpcRequestMethodError, rpcQueueSaturationFrom } from '../rpc-request-qu
 import { bigintToSafeNumber } from '../time.ts'
 import type { ContractMetadata } from '../types.ts'
 import type { RpcProvider } from './runtime-chain.ts'
-import {
-	ChainConfigurationError,
-	ChainContinuityError,
-	isPermanentHistoricalCodeError,
-	isPrunedHistoricalStateError,
-	LeaseLostError,
-	normalizedRpcDescription,
-	preferredRpcDescriptions,
-	type RpcDescriptionCategory,
-	rpcErrorCategory,
-	singleLineErrorDescription,
-} from './runtime-rpc.ts'
+import { ChainConfigurationError, ChainContinuityError, isPermanentHistoricalCodeError, isPrunedHistoricalStateError, LeaseLostError, normalizedRpcDescription, preferredRpcDescriptions, type RpcDescriptionCategory, rpcErrorCategory, singleLineErrorDescription } from './runtime-rpc.ts'
 
 export const databaseFailureMessage = 'Database request failed; retrying'
 export const rpcQueueSaturatedMessage = 'RPC queue saturated; retrying'
 const databaseFailureNames = new Set(['DatabaseConsistencyError', 'PostgresError'])
 export const leaseFailureNames = new Set([...databaseFailureNames, 'LeaseLostError'])
 
-export const isLocalIndexerFailure = (error: unknown): boolean =>
-	error instanceof LeaseLostError || rpcQueueSaturationFrom(error) !== undefined || errorChainIncludes(error, databaseFailureNames)
+export const isLocalIndexerFailure = (error: unknown): boolean => error instanceof LeaseLostError || rpcQueueSaturationFrom(error) !== undefined || errorChainIncludes(error, databaseFailureNames)
 
 export const indexingCompletion = (configuredStartBlock: bigint, indexedBlock: bigint, observedHead: bigint) => {
 	if (observedHead < configuredStartBlock) return { completedBlocks: 0n, percentage: '100.00', remainingBlocks: 0n, totalBlocks: 0n }
@@ -56,24 +44,13 @@ export const compactIndexerDuration = (seconds: number): string => {
 	return `${Math.floor(totalHours / 24)}d${hours === 0 ? '' : ` ${hours}h`}`
 }
 
-export const indexerWaitingMessage = (networkId: string, configuredStartBlock: bigint, observedHead: bigint): string =>
-	`[${networkId}] indexer state: live; observed head #${observedHead}; 100.00% complete; caught up; waiting for configured start block #${configuredStartBlock}`
+export const indexerWaitingMessage = (networkId: string, configuredStartBlock: bigint, observedHead: bigint): string => `[${networkId}] indexer state: live; observed head #${observedHead}; 100.00% complete; caught up; waiting for configured start block #${configuredStartBlock}`
 
-export const indexerProgressMessage = (
-	networkId: string,
-	startBlock: bigint,
-	endBlock: bigint,
-	observedHead: bigint,
-	configuredStartBlock: bigint,
-	blocksPerSecond?: number,
-): string => {
+export const indexerProgressMessage = (networkId: string, startBlock: bigint, endBlock: bigint, observedHead: bigint, configuredStartBlock: bigint, blocksPerSecond?: number): string => {
 	const state = endBlock >= observedHead ? 'live' : 'backfilling'
 	const indexed = startBlock === endBlock ? `indexed block #${endBlock}` : `indexed blocks #${startBlock}–#${endBlock}`
 	const completion = indexingCompletion(configuredStartBlock, endBlock, observedHead)
-	const progress =
-		state === 'live'
-			? 'caught up'
-			: `${completion.remainingBlocks} blocks behind; ${blocksPerSecond === undefined ? 'estimating ETA' : `ETA ${compactIndexerDuration(bigintToSafeNumber(completion.remainingBlocks, 'Remaining block count') / blocksPerSecond)}`}`
+	const progress = state === 'live' ? 'caught up' : `${completion.remainingBlocks} blocks behind; ${blocksPerSecond === undefined ? 'estimating ETA' : `ETA ${compactIndexerDuration(bigintToSafeNumber(completion.remainingBlocks, 'Remaining block count') / blocksPerSecond)}`}`
 	return `[${networkId}] indexer state: ${state}; ${indexed}; observed head #${observedHead}; ${completion.percentage}% complete; ${progress}`
 }
 
@@ -118,12 +95,7 @@ const safeErrorIdentifier = (value: unknown): string | undefined => (typeof valu
 const safeNamedErrorCodes = new Set(['ECONNREFUSED', 'ECONNRESET', 'ENETUNREACH', 'ENOTFOUND', 'ETIMEDOUT', 'ERR_POSTGRES_CONNECTION_CLOSED'])
 
 const safeErrorCode = (value: unknown): string | undefined => {
-	if (
-		typeof value === 'number' &&
-		Number.isSafeInteger(value) &&
-		(value === -32700 || (value >= -32603 && value <= -32600) || (value >= -32099 && value <= -32000))
-	)
-		return value.toString()
+	if (typeof value === 'number' && Number.isSafeInteger(value) && (value === -32700 || (value >= -32603 && value <= -32600) || (value >= -32099 && value <= -32000))) return value.toString()
 	return typeof value === 'string' && (/^HTTP_[1-5][0-9]{2}$/.test(value) || safeNamedErrorCodes.has(value)) ? value : undefined
 }
 
@@ -151,8 +123,7 @@ const safeStandardRpcProviderMessage = (value: unknown): string | undefined => {
 	return safeStandardRpcMessages.get(normalized.replace(/[.!]$/u, '')) ?? safeRpcProviderMessage(value)
 }
 
-const safeRpcRequestMethod = (value: unknown): string | undefined =>
-	typeof value === 'string' && /^(?:eth|net|web3)_[A-Za-z0-9_]+$/u.test(value) ? value : undefined
+const safeRpcRequestMethod = (value: unknown): string | undefined => (typeof value === 'string' && /^(?:eth|net|web3)_[A-Za-z0-9_]+$/u.test(value) ? value : undefined)
 
 const rpcRequestMethodFrom = (error: unknown): string | undefined => {
 	const seen = new Set<unknown>()
@@ -168,8 +139,7 @@ const rpcRequestMethodFrom = (error: unknown): string | undefined => {
 
 const indexerFailureReason = (error: unknown, includeErrorDescriptions: boolean): string => {
 	const saturation = rpcQueueSaturationFrom(error)
-	if (saturation !== undefined)
-		return `RpcQueueSaturatedError; active ${saturation.active}; queued ${saturation.pending}; maximum queued ${saturation.maximumPending}; high-water mark ${saturation.highWaterMark}; saturation count ${saturation.saturationCount}`
+	if (saturation !== undefined) return `RpcQueueSaturatedError; active ${saturation.active}; queued ${saturation.pending}; maximum queued ${saturation.maximumPending}; high-water mark ${saturation.highWaterMark}; saturation count ${saturation.saturationCount}`
 	const names: string[] = []
 	const descriptions: string[] = []
 	let status: number | undefined
@@ -192,7 +162,7 @@ const indexerFailureReason = (error: unknown, includeErrorDescriptions: boolean)
 		const actualMessage =
 			singleLineErrorDescription(
 				preferredRpcDescriptions(current)
-					.find((value) => value.trim() !== '')
+					.find(value => value.trim() !== '')
 					?.trim() ?? '',
 			) || undefined
 		if (actualName !== undefined || actualMessage !== undefined) {
@@ -205,15 +175,7 @@ const indexerFailureReason = (error: unknown, includeErrorDescriptions: boolean)
 			previousDescriptionName = actualName
 			previousDescriptionMessage = actualMessage
 		}
-		if (
-			status === undefined &&
-			'status' in current &&
-			typeof current.status === 'number' &&
-			Number.isInteger(current.status) &&
-			current.status >= 100 &&
-			current.status <= 599
-		)
-			status = current.status
+		if (status === undefined && 'status' in current && typeof current.status === 'number' && Number.isInteger(current.status) && current.status >= 100 && current.status <= 599) status = current.status
 		if (code === undefined && 'code' in current) code = safeErrorCode(current.code)
 		if (rpcEndpoint === undefined && current instanceof RpcRequestMethodError) rpcEndpoint = current.endpoint
 		if (standardMessage === undefined) {
@@ -228,9 +190,7 @@ const indexerFailureReason = (error: unknown, includeErrorDescriptions: boolean)
 	const category = rpcErrorCategory(error)
 	const message = category === undefined ? standardMessage : safeRpcCategoryMessages[category]
 	const fallbackDescription = descriptions.length === 0 ? 'UnknownError' : descriptions.slice(0, 4).join(' caused by ')
-	const details = [
-		includeErrorDescriptions && message === undefined ? fallbackDescription : names.length === 0 ? 'UnknownError' : names.slice(0, 4).join(' caused by '),
-	]
+	const details = [includeErrorDescriptions && message === undefined ? fallbackDescription : names.length === 0 ? 'UnknownError' : names.slice(0, 4).join(' caused by ')]
 	const method = rpcRequestMethodFrom(error)
 	if (method !== undefined) details.push(`method ${method}`)
 	if (rpcEndpoint !== undefined) details.push(`RPC ${rpcEndpoint}`)
@@ -264,8 +224,7 @@ export const createRpcDiagnosticContext = (initialProvider: RpcDiagnosticProvide
 	}
 }
 
-export const indexerOperationFailureReason = (error: unknown, rpcNumber: number, source: 'rpc' | 'storage'): string =>
-	source === 'rpc' ? rpcFailureReason(error, rpcNumber) : safeIndexerFailureReason(error)
+export const indexerOperationFailureReason = (error: unknown, rpcNumber: number, source: 'rpc' | 'storage'): string => (source === 'rpc' ? rpcFailureReason(error, rpcNumber) : safeIndexerFailureReason(error))
 
 const deploymentReadTimeoutError = (): Error => {
 	const error = new Error('Contract deployment history read timed out')
@@ -294,18 +253,11 @@ export const deploymentReadBudget = (timeoutMs = 5_000, now = Date.now): (<T>(re
 	}
 }
 
-export const contractDeploymentScanDue = (lastCompletedAt: number | undefined, now: number, cooldownMs = 60_000): boolean =>
-	lastCompletedAt === undefined || now - lastCompletedAt >= cooldownMs
+export const contractDeploymentScanDue = (lastCompletedAt: number | undefined, now: number, cooldownMs = 60_000): boolean => lastCompletedAt === undefined || now - lastCompletedAt >= cooldownMs
 
-export const contractDeploymentCandidateFrom = (
-	candidates: readonly ContractMetadata[],
-	historicalCodeUnavailable: ReadonlySet<string>,
-): ContractMetadata | undefined => candidates.find(({ address }) => !historicalCodeUnavailable.has(address.toLowerCase()))
+export const contractDeploymentCandidateFrom = (candidates: readonly ContractMetadata[], historicalCodeUnavailable: ReadonlySet<string>): ContractMetadata | undefined => candidates.find(({ address }) => !historicalCodeUnavailable.has(address.toLowerCase()))
 
-export const readHistoricalCodeWithPermanentFallback = async <T>(
-	read: () => Promise<T>,
-	onHistoricalCodeUnavailable: (error: unknown) => void,
-): Promise<{ readonly status: 'success'; readonly value: T } | { readonly status: 'unavailable' }> => {
+export const readHistoricalCodeWithPermanentFallback = async <T>(read: () => Promise<T>, onHistoricalCodeUnavailable: (error: unknown) => void): Promise<{ readonly status: 'success'; readonly value: T } | { readonly status: 'unavailable' }> => {
 	try {
 		return { status: 'success', value: await read() }
 	} catch (error) {

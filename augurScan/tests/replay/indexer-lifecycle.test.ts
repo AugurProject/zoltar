@@ -1,30 +1,8 @@
 import { describe, expect, mock, spyOn, test } from 'bun:test'
 import { getEventListeners } from 'node:events'
-import {
-	assertIndexerLeaseObservation,
-	assertIndexerLeaseReleaseObservation,
-	DatabaseConsistencyError,
-	type IndexedBlock,
-	type IndexerLease,
-	manifestContractSetChanged,
-	ScannerDatabase,
-	type StoredTransaction,
-} from '../../src/database.ts'
+import { assertIndexerLeaseObservation, assertIndexerLeaseReleaseObservation, DatabaseConsistencyError, type IndexedBlock, type IndexerLease, manifestContractSetChanged, ScannerDatabase, type StoredTransaction } from '../../src/database.ts'
 import { readRichListBalance } from '../../src/direct-observations.ts'
-import {
-	type Address,
-	createPublicClient,
-	decodeFunctionResult,
-	encodeAbiParameters,
-	encodeEventTopics,
-	getAddress,
-	type Hex,
-	http,
-	type Log,
-	parseAbi,
-	RpcError,
-	toHex,
-} from '../../src/ethereum.ts'
+import { type Address, createPublicClient, decodeFunctionResult, encodeAbiParameters, encodeEventTopics, getAddress, type Hex, http, type Log, parseAbi, RpcError, toHex } from '../../src/ethereum.ts'
 import {
 	addressActivityFrom,
 	boundedDeploymentRead,
@@ -175,8 +153,7 @@ const malformedDecimalsResult = (): Error => {
 }
 
 const parseRpcRequestBody = (value: unknown): { readonly id: number | string | null; readonly method: string; readonly params?: readonly unknown[] } => {
-	if (typeof value !== 'object' || value === null || Array.isArray(value) || !('method' in value) || typeof value.method !== 'string' || !('id' in value))
-		throw new Error('Unexpected RPC request')
+	if (typeof value !== 'object' || value === null || Array.isArray(value) || !('method' in value) || typeof value.method !== 'string' || !('id' in value)) throw new Error('Unexpected RPC request')
 	if (value.id !== null && typeof value.id !== 'number' && typeof value.id !== 'string') throw new Error('Unexpected RPC request ID')
 	if ('params' in value && value.params !== undefined && !Array.isArray(value.params)) throw new Error('Unexpected RPC request parameters')
 	return { id: value.id, method: value.method, ...('params' in value && Array.isArray(value.params) ? { params: value.params } : {}) }
@@ -185,17 +162,8 @@ const parseRpcRequestBody = (value: unknown): { readonly id: number | string | n
 describe('network indexer lifecycle', () => {
 	test('keeps private runtime plumbing out of the public indexer facade', async () => {
 		const indexerFacade = await import('../../src/indexer.ts')
-		const privateRuntimeNames = [
-			'databaseFailureMessage',
-			'jsonEvidence',
-			'labelsFrom',
-			'leaseFailureNames',
-			'requireLogPosition',
-			'requireReceiptPosition',
-			'rpcQueueSaturatedMessage',
-			'rpcQueueSaturationFrom',
-		]
-		expect(privateRuntimeNames.filter((name) => name in indexerFacade)).toEqual([])
+		const privateRuntimeNames = ['databaseFailureMessage', 'jsonEvidence', 'labelsFrom', 'leaseFailureNames', 'requireLogPosition', 'requireReceiptPosition', 'rpcQueueSaturatedMessage', 'rpcQueueSaturationFrom']
+		expect(privateRuntimeNames.filter(name => name in indexerFacade)).toEqual([])
 	})
 
 	test('detects manifest contract replacements independently of ordering and address casing', () => {
@@ -249,7 +217,7 @@ describe('network indexer lifecycle', () => {
 		const operations = Array.from({ length: 12 }, (_, index) =>
 			queue.run(
 				() =>
-					new Promise<number>((resolve) => {
+					new Promise<number>(resolve => {
 						active++
 						maximumActive = Math.max(maximumActive, active)
 						releases.push(() => {
@@ -285,7 +253,7 @@ describe('network indexer lifecycle', () => {
 		let releaseActive: (() => void) | undefined
 		const active = queue.run(
 			() =>
-				new Promise<number>((resolve) => {
+				new Promise<number>(resolve => {
 					started.push(0)
 					releaseActive = () => resolve(0)
 				}),
@@ -318,7 +286,7 @@ describe('network indexer lifecycle', () => {
 			withVerifiedProvider(
 				providers,
 				1,
-				async (provider) => {
+				async provider => {
 					attempts.push(provider.id)
 					throw saturation
 				},
@@ -327,9 +295,7 @@ describe('network indexer lifecycle', () => {
 		).rejects.toBe(saturation)
 		expect(attempts).toEqual(['first'])
 		expect(safeIndexerFailure(saturation)).toBe('RPC queue saturated; retrying')
-		expect(safeIndexerFailureReason(saturation)).toBe(
-			'RpcQueueSaturatedError; active 5; queued 100; maximum queued 100; high-water mark 100; saturation count 1',
-		)
+		expect(safeIndexerFailureReason(saturation)).toBe('RpcQueueSaturatedError; active 5; queued 100; maximum queued 100; high-water mark 100; saturation count 1')
 	})
 
 	test('recognizes adapter-wrapped queue saturation from a contract read without provider failover', async () => {
@@ -337,7 +303,7 @@ describe('network indexer lifecycle', () => {
 		let releaseActive: (() => void) | undefined
 		const active = queue.run(
 			() =>
-				new Promise<void>((resolve) => {
+				new Promise<void>(resolve => {
 					releaseActive = resolve
 				}),
 		)
@@ -366,7 +332,7 @@ describe('network indexer lifecycle', () => {
 			await withVerifiedProvider(
 				providers,
 				1,
-				async (provider) => {
+				async provider => {
 					attempts.push(provider.id)
 					return await client.readContract({ address, abi: metadataAbi, functionName: 'decimals' })
 				},
@@ -406,7 +372,7 @@ describe('network indexer lifecycle', () => {
 		let releaseBlocker: (() => void) | undefined
 		const blocker = queue.run(
 			() =>
-				new Promise<void>((resolve) => {
+				new Promise<void>(resolve => {
 					releaseBlocker = resolve
 				}),
 		)
@@ -465,17 +431,14 @@ describe('network indexer lifecycle', () => {
 			return Response.json({ error: { code: 4444, message: 'pruned history unavailable' }, id: request.id, jsonrpc: '2.0' })
 		})
 
-		const failure = await client.getLogs({ fromBlock: 1n, toBlock: 1n }).catch((error) => error)
+		const failure = await client.getLogs({ fromBlock: 1n, toBlock: 1n }).catch(error => error)
 		expect(isPermanentHistoricalLogError(failure)).toBe(true)
 		expect(fetches).toBe(1)
 		expect(filters).toEqual([{ fromBlock: '0x1', toBlock: '0x1' }])
 	})
 
 	test('retains rate-limit retries for log requests', async () => {
-		for (const responseFrom of [
-			(_id: string | number | null) => new Response(undefined, { status: 429 }),
-			(id: string | number | null) => Response.json({ error: { code: -32_005, message: 'request rate exceeded' }, id, jsonrpc: '2.0' }),
-		]) {
+		for (const responseFrom of [(_id: string | number | null) => new Response(undefined, { status: 429 }), (id: string | number | null) => Response.json({ error: { code: -32_005, message: 'request rate exceeded' }, id, jsonrpc: '2.0' })]) {
 			let fetches = 0
 			const client = createLogClient(
 				'https://rpc.example',
@@ -502,7 +465,7 @@ describe('network indexer lifecycle', () => {
 				fetchFn: async (_input, init) => {
 					fetches++
 					const body = parseRpcRequestBody(JSON.parse(String(init?.body)))
-					await new Promise<void>((resolve) => {
+					await new Promise<void>(resolve => {
 						releaseFetches.push(resolve)
 					})
 					return Response.json({ id: body.id, jsonrpc: '2.0', result: '0x1' })
@@ -522,10 +485,7 @@ describe('network indexer lifecycle', () => {
 	})
 
 	test('retries queued HTTP and JSON-RPC provider throttling responses', async () => {
-		for (const throttled of [
-			new Response(undefined, { status: 429 }),
-			Response.json({ error: { code: -32_005, message: 'request rate exceeded' }, id: 1, jsonrpc: '2.0' }),
-		]) {
+		for (const throttled of [new Response(undefined, { status: 429 }), Response.json({ error: { code: -32_005, message: 'request rate exceeded' }, id: 1, jsonrpc: '2.0' })]) {
 			const responses = [throttled, Response.json({ id: 1, jsonrpc: '2.0', result: '0x1' })]
 			const transport = withRpcRequestQueue(
 				http('https://rpc.example', {
@@ -570,7 +530,7 @@ describe('network indexer lifecycle', () => {
 		expect(ids).toHaveLength(8)
 		expect(new Set(ids).size).toBe(8)
 		expect(ids).toContain(uniswapV4PoolId(address, 3_000, 60, usdc))
-		expect(ids.every((id) => /^0x[0-9a-f]{64}$/.test(id))).toBeTrue()
+		expect(ids.every(id => /^0x[0-9a-f]{64}$/.test(id))).toBeTrue()
 	})
 
 	test('accepts only canonical supported V4 native ETH and REP market identities', () => {
@@ -654,14 +614,9 @@ describe('network indexer lifecycle', () => {
 		const availableStart = await findEarliestAvailableLogBlock(
 			10n,
 			100n,
-			async (blockNumber) => {
+			async blockNumber => {
 				attempts.push(blockNumber)
-				if (blockNumber < 42n)
-					throw new RpcRequestMethodError(
-						'eth_getLogs',
-						new RpcError('pruned history unavailable', { code: 4444, shortMessage: 'pruned history unavailable' }),
-						'#1 http://reth:8545',
-					)
+				if (blockNumber < 42n) throw new RpcRequestMethodError('eth_getLogs', new RpcError('pruned history unavailable', { code: 4444, shortMessage: 'pruned history unavailable' }), '#1 http://reth:8545')
 			},
 			true,
 		)
@@ -672,7 +627,7 @@ describe('network indexer lifecycle', () => {
 
 	test('locates the earliest retrievable historical state block', async () => {
 		const attempts: bigint[] = []
-		const availableStart = await findEarliestAvailableStateBlock(10n, 100n, async (blockNumber) => {
+		const availableStart = await findEarliestAvailableStateBlock(10n, 100n, async blockNumber => {
 			attempts.push(blockNumber)
 			if (blockNumber < 42n)
 				throw new RpcRequestMethodError(
@@ -687,13 +642,13 @@ describe('network indexer lifecycle', () => {
 		expect(availableStart).toBe(42n)
 		expect(attempts[0]).toBe(10n)
 		expect(attempts).toContain(100n)
-		expect(attempts.filter((block) => block === 10n)).toHaveLength(1)
+		expect(attempts.filter(block => block === 10n)).toHaveLength(1)
 		const knownUnavailableAttempts: bigint[] = []
 		expect(
 			await findEarliestAvailableStateBlock(
 				10n,
 				100n,
-				async (blockNumber) => {
+				async blockNumber => {
 					knownUnavailableAttempts.push(blockNumber)
 					if (blockNumber < 42n) throw new RpcError(`state at block #${blockNumber} is pruned`, { code: -32603 })
 				},
@@ -711,27 +666,15 @@ describe('network indexer lifecycle', () => {
 	})
 
 	test('only treats pruned eth_getLogs history as a recoverable availability boundary', () => {
-		const prunedLogs = new RpcRequestMethodError(
-			'eth_getLogs',
-			new RpcError('pruned history unavailable', { code: 4444, shortMessage: 'pruned history unavailable' }),
-			'#1 http://reth:8545',
-		)
+		const prunedLogs = new RpcRequestMethodError('eth_getLogs', new RpcError('pruned history unavailable', { code: 4444, shortMessage: 'pruned history unavailable' }), '#1 http://reth:8545')
 		expect(isPermanentHistoricalLogError(prunedLogs)).toBe(true)
 		expect(isSplittableLogRangeError(prunedLogs)).toBe(false)
-		expect(
-			isPermanentHistoricalLogError(
-				new RpcRequestMethodError('eth_getCode', new RpcError('pruned history unavailable', { code: 4444 }), '#1 http://reth:8545'),
-			),
-		).toBe(false)
+		expect(isPermanentHistoricalLogError(new RpcRequestMethodError('eth_getCode', new RpcError('pruned history unavailable', { code: 4444 }), '#1 http://reth:8545'))).toBe(false)
 		expect(isPermanentHistoricalLogError(new RpcRequestMethodError('eth_getLogs', new RpcError('temporary failure'), '#1 http://reth:8545'))).toBe(false)
 	})
 
 	test('chooses the earliest complete log boundary across providers', async () => {
-		const prunedLogs = new RpcRequestMethodError(
-			'eth_getLogs',
-			new RpcError('pruned history unavailable', { code: 4444, shortMessage: 'pruned history unavailable' }),
-			'#1 http://reth:8545',
-		)
+		const prunedLogs = new RpcRequestMethodError('eth_getLogs', new RpcError('pruned history unavailable', { code: 4444, shortMessage: 'pruned history unavailable' }), '#1 http://reth:8545')
 		const providers = [
 			{ id: 'earlier', floor: 42n },
 			{ id: 'later', floor: 75n },
@@ -751,11 +694,7 @@ describe('network indexer lifecycle', () => {
 	})
 
 	test('keeps the existing coverage floor when a recovered provider can serve it', async () => {
-		const prunedLogs = new RpcRequestMethodError(
-			'eth_getLogs',
-			new RpcError('pruned history unavailable', { code: 4444, shortMessage: 'pruned history unavailable' }),
-			'#2 http://reth:8545',
-		)
+		const prunedLogs = new RpcRequestMethodError('eth_getLogs', new RpcError('pruned history unavailable', { code: 4444, shortMessage: 'pruned history unavailable' }), '#2 http://reth:8545')
 		const providers = [
 			{ id: 'temporarily unavailable during polling', floor: 10n },
 			{ id: 'pruned', floor: 75n },
@@ -775,11 +714,7 @@ describe('network indexer lifecycle', () => {
 	})
 
 	test('excludes wrong-chain providers from log boundary discovery', async () => {
-		const prunedLogs = new RpcRequestMethodError(
-			'eth_getLogs',
-			new RpcError('pruned history unavailable', { code: 4444, shortMessage: 'pruned history unavailable' }),
-			'#2 http://reth:8545',
-		)
+		const prunedLogs = new RpcRequestMethodError('eth_getLogs', new RpcError('pruned history unavailable', { code: 4444, shortMessage: 'pruned history unavailable' }), '#2 http://reth:8545')
 		const providers = [
 			{ chainId: 2, floor: 10n },
 			{ chainId: 1, floor: 42n },
@@ -788,7 +723,7 @@ describe('network indexer lifecycle', () => {
 		const availability = await findEarliestAvailableLogProvider(
 			providers,
 			10n,
-			async (provider) => {
+			async provider => {
 				if (provider.chainId !== 1) throw new ChainConfigurationError('RPC chain mismatch')
 				return 100n
 			},
@@ -811,7 +746,7 @@ describe('network indexer lifecycle', () => {
 			findEarliestAvailableLogProvider(
 				[{ id: 'broken' }, { id: 'unused' }],
 				10n,
-				async (provider) => {
+				async provider => {
 					if (provider.id === 'broken') throw unexpectedFailure
 					return 100n
 				},
@@ -822,11 +757,7 @@ describe('network indexer lifecycle', () => {
 
 	test('recovers pruned log coverage without recording a lifecycle failure', async () => {
 		const controller = new AbortController()
-		const prunedLogs = new RpcRequestMethodError(
-			'eth_getLogs',
-			new RpcError('pruned history unavailable', { code: 4444, shortMessage: 'pruned history unavailable' }),
-			'#1 http://reth:8545',
-		)
+		const prunedLogs = new RpcRequestMethodError('eth_getLogs', new RpcError('pruned history unavailable', { code: 4444, shortMessage: 'pruned history unavailable' }), '#1 http://reth:8545')
 		let polls = 0
 		let recoveries = 0
 		let failures = 0
@@ -837,7 +768,7 @@ describe('network indexer lifecycle', () => {
 				polls++
 				throw prunedLogs
 			},
-			recover: async (error) => {
+			recover: async error => {
 				expect(error).toBe(prunedLogs)
 				recoveries++
 				const providers = [{ floor: 42n }, { floor: 75n }]
@@ -864,11 +795,7 @@ describe('network indexer lifecycle', () => {
 	})
 
 	test('recovers when any failed provider reports pruned logs regardless of failure order', async () => {
-		const prunedLogs = new RpcRequestMethodError(
-			'eth_getLogs',
-			new RpcError('pruned history unavailable', { code: 4444, shortMessage: 'pruned history unavailable' }),
-			'#1 http://reth:8545',
-		)
+		const prunedLogs = new RpcRequestMethodError('eth_getLogs', new RpcError('pruned history unavailable', { code: 4444, shortMessage: 'pruned history unavailable' }), '#1 http://reth:8545')
 		for (const errors of [
 			[prunedLogs, new Error('timeout')],
 			[new Error('timeout'), prunedLogs],
@@ -881,9 +808,9 @@ describe('network indexer lifecycle', () => {
 				poll: async () => {
 					sawPrunedLogs = false
 					await withVerifiedProvider(
-						errors.map((error) => ({ getChainId: async () => 1, read: async () => Promise.reject(error) })),
+						errors.map(error => ({ getChainId: async () => 1, read: async () => Promise.reject(error) })),
 						1,
-						(provider) => provider.read(),
+						provider => provider.read(),
 						() => false,
 						() => {},
 						undefined,
@@ -893,7 +820,7 @@ describe('network indexer lifecycle', () => {
 					)
 					return false
 				},
-				recover: async (error) => {
+				recover: async error => {
 					if (!isPermanentHistoricalLogError(error) && !sawPrunedLogs) return false
 					controller.abort()
 					return true
@@ -943,9 +870,7 @@ describe('network indexer lifecycle', () => {
 			url: 'https://rpc.example/rate-limit/',
 		})
 		expect(isSplittableLogRangeError(structuredRangeFailure)).toBe(true)
-		expect(safeIndexerFailureReason(structuredRangeFailure)).toBe(
-			'RpcRequestError; code -32600 (Invalid Request); message: provider rejected the requested block range',
-		)
+		expect(safeIndexerFailureReason(structuredRangeFailure)).toBe('RpcRequestError; code -32600 (Invalid Request); message: provider rejected the requested block range')
 		const unrelatedStructuredFailure = new RpcRequestError({
 			body: { method: 'eth_getLogs', params: ['request timed out'] },
 			error: { code: -32600, message: 'upstream rejected query' },
@@ -955,9 +880,7 @@ describe('network indexer lifecycle', () => {
 		expect(safeIndexerFailureReason(unrelatedStructuredFailure)).toBe('RpcRequestError; code -32600 (Invalid Request)')
 		const conflictingCause = new Error('request rate exceeded', { cause: structuredRangeFailure })
 		expect(isSplittableLogRangeError(conflictingCause)).toBe(false)
-		expect(safeIndexerFailureReason(conflictingCause)).toBe(
-			'Error caused by RpcRequestError; code -32600 (Invalid Request); message: provider rate limit exceeded',
-		)
+		expect(safeIndexerFailureReason(conflictingCause)).toBe('Error caused by RpcRequestError; code -32600 (Invalid Request); message: provider rate limit exceeded')
 
 		for (const details of ['more than 10 requests per second', 'request limit exceeded', 'please reduce your request rate']) {
 			const attempts: Array<readonly [bigint, bigint]> = []
@@ -1047,8 +970,7 @@ describe('network indexer lifecycle', () => {
 					if (toBlock - fromBlock + 1n > 26n) throw failure
 					return [fromBlock, toBlock]
 				},
-				(failedFrom, failedTo, retryTo, error) =>
-					warnings.push(`RPC log range #${failedFrom}-#${failedTo} failed (${safeIndexerFailureReason(error)}); retrying #${failedFrom}-#${retryTo}`),
+				(failedFrom, failedTo, retryTo, error) => warnings.push(`RPC log range #${failedFrom}-#${failedTo} failed (${safeIndexerFailureReason(error)}); retrying #${failedFrom}-#${retryTo}`),
 				isSplittableLogRangeError,
 			)
 			expect(result).toEqual({ fromBlock: 0n, toBlock: 25n, items: [0n, 25n] })
@@ -1059,10 +981,7 @@ describe('network indexer lifecycle', () => {
 			])
 			if (failure === oversizedFailure) {
 				expect(safeIndexerFailureReason(failure)).toBe('ResponseBodyTooLargeError; message: provider response size limit exceeded')
-				expect(warnings).toEqual([
-					'RPC log range #0-#100 failed (ResponseBodyTooLargeError; message: provider response size limit exceeded); retrying #0-#50',
-					'RPC log range #0-#50 failed (ResponseBodyTooLargeError; message: provider response size limit exceeded); retrying #0-#25',
-				])
+				expect(warnings).toEqual(['RPC log range #0-#100 failed (ResponseBodyTooLargeError; message: provider response size limit exceeded); retrying #0-#50', 'RPC log range #0-#50 failed (ResponseBodyTooLargeError; message: provider response size limit exceeded); retrying #0-#25'])
 				expect(warnings.join(' ')).not.toContain('provider-key-sentinel')
 			}
 		}
@@ -1143,26 +1062,20 @@ describe('network indexer lifecycle', () => {
 		expect(indexingCompletion(100n, 1_005n, 1_000n)).toEqual({ completedBlocks: 901n, percentage: '100.00', remainingBlocks: 0n, totalBlocks: 901n })
 		expect(indexingCompletion(100n, 99n, 100n)).toEqual({ completedBlocks: 0n, percentage: '0.00', remainingBlocks: 1n, totalBlocks: 1n })
 		expect(indexingCompletion(100n, 99n, 99n)).toEqual({ completedBlocks: 0n, percentage: '100.00', remainingBlocks: 0n, totalBlocks: 0n })
-		expect(indexerWaitingMessage('mainnet', 100n, 99n)).toBe(
-			'[mainnet] indexer state: live; observed head #99; 100.00% complete; caught up; waiting for configured start block #100',
-		)
+		expect(indexerWaitingMessage('mainnet', 100n, 99n)).toBe('[mainnet] indexer state: live; observed head #99; 100.00% complete; caught up; waiting for configured start block #100')
 		expect(indexingCompletion(0n, 99_998n, 99_999n).percentage).toBe('99.99')
 		expect(compactIndexerDuration(3_600)).toBe('1h')
 		expect(compactIndexerDuration(86_400)).toBe('1d')
 		expect(compactIndexerDuration(172_800)).toBe('2d')
-		expect(indexerProgressMessage('mainnet', 100n, 119n, 1_000n, 0n, 10)).toBe(
-			'[mainnet] indexer state: backfilling; indexed blocks #100–#119; observed head #1000; 11.99% complete; 881 blocks behind; ETA 1m 29s',
-		)
+		expect(indexerProgressMessage('mainnet', 100n, 119n, 1_000n, 0n, 10)).toBe('[mainnet] indexer state: backfilling; indexed blocks #100–#119; observed head #1000; 11.99% complete; 881 blocks behind; ETA 1m 29s')
 		expect(indexerProgressMessage('mainnet', 100n, 119n, 1_000n, 0n)).toEndWith('11.99% complete; 881 blocks behind; estimating ETA')
-		expect(indexerProgressMessage('sepolia', 1_000n, 1_000n, 1_000n, 0n)).toBe(
-			'[sepolia] indexer state: live; indexed block #1000; observed head #1000; 100.00% complete; caught up',
-		)
+		expect(indexerProgressMessage('sepolia', 1_000n, 1_000n, 1_000n, 0n)).toBe('[sepolia] indexer state: live; indexed block #1000; observed head #1000; 100.00% complete; caught up')
 	})
 
 	test('finds the first block containing contract code and distinguishes a bounded result', async () => {
-		expect(await findContractDeploymentBlock(0n, 100n, async (block) => (block >= 42n ? '0x01' : undefined))).toEqual({ block: 42n, exact: true })
+		expect(await findContractDeploymentBlock(0n, 100n, async block => (block >= 42n ? '0x01' : undefined))).toEqual({ block: 42n, exact: true })
 		expect(await findContractDeploymentBlock(50n, 100n, async () => '0x01')).toEqual({ block: 50n, exact: false })
-		expect(await findContractDeploymentBlock(50n, 100n, async (block) => (block >= 51n ? '0x01' : undefined), true)).toEqual({ block: 51n, exact: true })
+		expect(await findContractDeploymentBlock(50n, 100n, async block => (block >= 51n ? '0x01' : undefined), true)).toEqual({ block: 51n, exact: true })
 		expect(await findContractDeploymentBlock(0n, 100n, async () => undefined)).toBeUndefined()
 		expect(await findContractDeploymentBlock(0n, 0n, async () => '0x01')).toBeUndefined()
 		expect(await findContractDeploymentBlock(0n, 100n, async () => '0x01')).toBeUndefined()
@@ -1171,7 +1084,7 @@ describe('network indexer lifecycle', () => {
 	test('does not treat pruned historical state as absent contract code', async () => {
 		const checkedBlocks: bigint[] = []
 		await expect(
-			findContractDeploymentBlock(1n, 100n, async (block) => {
+			findContractDeploymentBlock(1n, 100n, async block => {
 				checkedBlocks.push(block)
 				if (block <= 50n) throw new RpcRequestError({ body: {}, error: { code: -32603, message: `state at block #${block} is pruned` }, url: '' })
 				return block >= 70n ? '0x01' : undefined
@@ -1194,7 +1107,7 @@ describe('network indexer lifecycle', () => {
 				},
 				5_000,
 				Date.now,
-				(error) => failures.push(error),
+				error => failures.push(error),
 			),
 		).rejects.toThrow('state at block #1 is pruned')
 		expect(failures).toEqual([])
@@ -1218,7 +1131,7 @@ describe('network indexer lifecycle', () => {
 				checkedBlocks.push(block)
 				return candidate === address && block >= 75n ? '0x01' : undefined
 			},
-			async (block) => unixSecondsToDate(block),
+			async block => unixSecondsToDate(block),
 		)
 		expect(plan.inputs).toEqual([{ address, fromBlock: 75n, startBlock: 75n }])
 		expect(plan.observations).toEqual([
@@ -1297,7 +1210,7 @@ describe('network indexer lifecycle', () => {
 				10n,
 				100n,
 				10n,
-				async (candidate) => {
+				async candidate => {
 					if (candidate === address) throw ordinary
 					await Promise.resolve()
 					throw pruned
@@ -1413,9 +1326,7 @@ describe('network indexer lifecycle', () => {
 			async () => new Date(0),
 		)
 		expect(plan).toEqual({ inputs: [{ address, fromBlock: 42n, startBlock: 42n }], observations: [] })
-		expect(logScanCursorUpdates(new Map([[address.toLowerCase(), contract]]), plan.inputs, 42n, 42n)).toEqual([
-			{ contractAddress: address, startBlock: 42n, lastRetrievedBlock: 42n },
-		])
+		expect(logScanCursorUpdates(new Map([[address.toLowerCase(), contract]]), plan.inputs, 42n, 42n)).toEqual([{ contractAddress: address, startBlock: 42n, lastRetrievedBlock: 42n }])
 	})
 
 	test('stores retained dynamic contract coverage from the active retrievable floor', async () => {
@@ -1440,9 +1351,7 @@ describe('network indexer lifecycle', () => {
 			new Set([address.toLowerCase()]),
 		)
 		expect(plan).toEqual({ inputs: [{ address, fromBlock: 50n, startBlock: 42n }], observations: [] })
-		expect(logScanCursorUpdates(new Map([[address.toLowerCase(), contract]]), plan.inputs, 100n, 42n)).toEqual([
-			{ contractAddress: address, startBlock: 42n, lastRetrievedBlock: 100n },
-		])
+		expect(logScanCursorUpdates(new Map([[address.toLowerCase(), contract]]), plan.inputs, 100n, 42n)).toEqual([{ contractAddress: address, startBlock: 42n, lastRetrievedBlock: 100n }])
 	})
 
 	test('keeps a pruned candidate eligible while its provider state floor is rediscovered', async () => {
@@ -1602,7 +1511,7 @@ describe('network indexer lifecycle', () => {
 			poll: async () => {
 				throw wrapped
 			},
-			failure: async (message) => {
+			failure: async message => {
 				messages.push(message)
 				controller.abort()
 			},
@@ -1627,17 +1536,7 @@ describe('network indexer lifecycle', () => {
 
 	test('preserves available log history when a manifest deployment bound is inexact', async () => {
 		const contract = { address, label: 'New manifest source', kind: 'openOracle', provenance: 'manifest' } satisfies ContractMetadata
-		expect(
-			await planManifestBackfill(
-				[[address, contract.label, contract.kind]],
-				new Map([[address.toLowerCase(), contract]]),
-				new Map(),
-				100n,
-				10n,
-				async () => ({ block: 50n, exact: false }),
-				10n,
-			),
-		).toBe(10n)
+		expect(await planManifestBackfill([[address, contract.label, contract.kind]], new Map([[address.toLowerCase(), contract]]), new Map(), 100n, 10n, async () => ({ block: 50n, exact: false }), 10n)).toBe(10n)
 	})
 
 	test('does not trust a persisted inexact deployment as a manifest log floor', async () => {
@@ -1650,17 +1549,7 @@ describe('network indexer lifecycle', () => {
 			kind: 'openOracle',
 			provenance: 'manifest',
 		} satisfies ContractMetadata
-		expect(
-			await planManifestBackfill(
-				[[address, contract.label, contract.kind]],
-				new Map([[address.toLowerCase(), contract]]),
-				new Map([[address.toLowerCase(), { contractAddress: address, startBlock: 50n, lastRetrievedBlock: 100n }]]),
-				100n,
-				10n,
-				async () => ({ block: 50n, exact: false }),
-				10n,
-			),
-		).toBe(10n)
+		expect(await planManifestBackfill([[address, contract.label, contract.kind]], new Map([[address.toLowerCase(), contract]]), new Map([[address.toLowerCase(), { contractAddress: address, startBlock: 50n, lastRetrievedBlock: 100n }]]), 100n, 10n, async () => ({ block: 50n, exact: false }), 10n)).toBe(10n)
 	})
 
 	test('starts a fresh index at the earliest tracked contract deployment', async () => {
@@ -1676,7 +1565,7 @@ describe('network indexer lifecycle', () => {
 				],
 				0n,
 				1_000n,
-				async (candidate) => {
+				async candidate => {
 					searches.push(candidate)
 					return { block: candidate === address ? 750n : 800n, exact: true }
 				},
@@ -1699,7 +1588,7 @@ describe('network indexer lifecycle', () => {
 				],
 				0n,
 				1_000n,
-				async (candidate) => ({ block: candidate === scalar ? 100n : 750n, exact: true }),
+				async candidate => ({ block: candidate === scalar ? 100n : 750n, exact: true }),
 			),
 		).toBe(750n)
 	})
@@ -1718,33 +1607,14 @@ describe('network indexer lifecycle', () => {
 		const contract = { address, label: 'New manifest source', kind: 'openOracle', provenance: 'manifest' } satisfies ContractMetadata
 		const contracts = new Map([[address.toLowerCase(), contract]])
 		const detection = mock(async () => ({ block: 90n, exact: true }))
-		expect(
-			await planManifestBackfill(
-				[[address, contract.label, contract.kind, 75n]],
-				contracts,
-				new Map([[address.toLowerCase(), { contractAddress: address, startBlock: 75n, lastRetrievedBlock: 80n }]]),
-				100n,
-				0n,
-				detection,
-			),
-		).toBe(81n)
+		expect(await planManifestBackfill([[address, contract.label, contract.kind, 75n]], contracts, new Map([[address.toLowerCase(), { contractAddress: address, startBlock: 75n, lastRetrievedBlock: 80n }]]), 100n, 0n, detection)).toBe(81n)
 		expect(detection).not.toHaveBeenCalled()
 	})
 
 	test('resumes a pre-boundary manifest contract from the active retrievable floor', async () => {
 		const contract = { address, label: 'Pre-boundary source', kind: 'openOracle', provenance: 'manifest' } satisfies ContractMetadata
 		const detection = mock(async () => ({ block: 50n, exact: true }))
-		expect(
-			await planManifestBackfill(
-				[[address, contract.label, contract.kind, 50n]],
-				new Map([[address.toLowerCase(), contract]]),
-				new Map([[address.toLowerCase(), { contractAddress: address, startBlock: 75n, lastRetrievedBlock: 80n }]]),
-				100n,
-				0n,
-				detection,
-				75n,
-			),
-		).toBe(81n)
+		expect(await planManifestBackfill([[address, contract.label, contract.kind, 50n]], new Map([[address.toLowerCase(), contract]]), new Map([[address.toLowerCase(), { contractAddress: address, startBlock: 75n, lastRetrievedBlock: 80n }]]), 100n, 0n, detection, 75n)).toBe(81n)
 		expect(detection).not.toHaveBeenCalled()
 	})
 
@@ -1801,7 +1671,7 @@ describe('network indexer lifecycle', () => {
 				100n,
 				0n,
 				75n,
-				async (candidate) => ({ block: candidate === replacement ? 50n : 75n, exact: true }),
+				async candidate => ({ block: candidate === replacement ? 50n : 75n, exact: true }),
 			),
 		).toBe(true)
 		expect(
@@ -1815,12 +1685,10 @@ describe('network indexer lifecycle', () => {
 				100n,
 				0n,
 				75n,
-				async (candidate) => ({ block: candidate === replacement ? 80n : 75n, exact: true }),
+				async candidate => ({ block: candidate === replacement ? 80n : 75n, exact: true }),
 			),
 		).toBe(true)
-		const storedHelper = new Map([
-			[address.toLowerCase(), { address, label: 'Multicall3', kind: 'multicall3', provenance: 'manifest' } satisfies ContractMetadata],
-		])
+		const storedHelper = new Map([[address.toLowerCase(), { address, label: 'Multicall3', kind: 'multicall3', provenance: 'manifest' } satisfies ContractMetadata]])
 		expect(
 			await manifestChangeRequiresFullReplay([[address, 'OpenOracle', 'openOracle']], storedHelper, new Map(), 100n, 0n, 75n, async () => ({
 				block: 50n,
@@ -1843,18 +1711,10 @@ describe('network indexer lifecycle', () => {
 		])
 		const searches: Array<{ start: bigint; knownAbsent: boolean }> = []
 		expect(
-			await manifestChangeRequiresFullReplay(
-				[[address, 'OpenOracle', 'openOracle']],
-				inexactStoredHelper,
-				new Map(),
-				100n,
-				0n,
-				75n,
-				async (_candidate, start, _checkpoint, knownAbsent) => {
-					searches.push({ start, knownAbsent })
-					return { block: 50n, exact: true }
-				},
-			),
+			await manifestChangeRequiresFullReplay([[address, 'OpenOracle', 'openOracle']], inexactStoredHelper, new Map(), 100n, 0n, 75n, async (_candidate, start, _checkpoint, knownAbsent) => {
+				searches.push({ start, knownAbsent })
+				return { block: 50n, exact: true }
+			}),
 		).toBe(true)
 		expect(searches).toEqual([{ start: 75n, knownAbsent: false }])
 		const promotedDiscovery = new Map([
@@ -1873,18 +1733,10 @@ describe('network indexer lifecycle', () => {
 		])
 		const promotionSearches: bigint[] = []
 		expect(
-			await manifestChangeRequiresFullReplay(
-				[[address, 'Promoted pool', 'securityPool']],
-				promotedDiscovery,
-				new Map([[address.toLowerCase(), { contractAddress: address, startBlock: 75n, lastRetrievedBlock: 100n }]]),
-				100n,
-				0n,
-				75n,
-				async (_candidate, start) => {
-					promotionSearches.push(start)
-					return { block: 50n, exact: true }
-				},
-			),
+			await manifestChangeRequiresFullReplay([[address, 'Promoted pool', 'securityPool']], promotedDiscovery, new Map([[address.toLowerCase(), { contractAddress: address, startBlock: 75n, lastRetrievedBlock: 100n }]]), 100n, 0n, 75n, async (_candidate, start) => {
+				promotionSearches.push(start)
+				return { block: 50n, exact: true }
+			}),
 		).toBe(true)
 		expect(promotionSearches).toEqual([75n])
 	})
@@ -1934,8 +1786,8 @@ describe('network indexer lifecycle', () => {
 			{ address: wethAddress, label: 'WETH', kind: 'weth', provenance: 'manifest' },
 			{ address: oracleAddress, label: 'Oracle', kind: 'openOracle', provenance: 'manifest' },
 		] satisfies readonly ContractMetadata[]
-		expect(indexerLogSources(contracts).map((contract) => contract.address)).toEqual([repAddress, oracleAddress])
-		const contractMap = new Map<string, ContractMetadata>(contracts.map((contract) => [contract.address.toLowerCase(), contract]))
+		expect(indexerLogSources(contracts).map(contract => contract.address)).toEqual([repAddress, oracleAddress])
+		const contractMap = new Map<string, ContractMetadata>(contracts.map(contract => [contract.address.toLowerCase(), contract]))
 		expect(discoveryLogAddresses([repAddress, wethAddress, oracleAddress], contractMap)).toEqual([repAddress, oracleAddress])
 		const factoryAddress = '0x6000000000000000000000000000000000000006'
 		contractMap.set(factoryAddress, { address: factoryAddress, label: 'V3 factory', kind: 'uniswapV3Factory', provenance: 'manifest' })
@@ -1971,7 +1823,7 @@ describe('network indexer lifecycle', () => {
 			12n,
 			[repAddress, wethAddress],
 			contracts,
-			async (addresses) => {
+			async addresses => {
 				currentQueries.push(addresses)
 				return [currentLog]
 			},
@@ -1998,23 +1850,14 @@ describe('network indexer lifecycle', () => {
 			[11n, hash('b')],
 			[12n, hash('c')],
 		])
-		const deployAbi = parseAbi([
-			'event DeployChild(address deployer,uint248 indexed universeId,uint256 indexed outcomeIndex,uint248 indexed childUniverseId,address childReputationToken,uint256 childUniverseTheoreticalSupplyAttoRep)',
-		])
+		const deployAbi = parseAbi(['event DeployChild(address deployer,uint248 indexed universeId,uint256 indexed outcomeIndex,uint248 indexed childUniverseId,address childReputationToken,uint256 childUniverseTheoreticalSupplyAttoRep)'])
 		const transferAbi = parseAbi(['event Transfer(address indexed from,address indexed to,uint256 value)'])
 		const topicsFrom = (topics: readonly (string | readonly string[] | null)[]): readonly string[] =>
-			topics.map((topic) => {
+			topics.map(topic => {
 				if (typeof topic !== 'string') throw new Error('Expected one topic per indexed event argument')
 				return topic
 			})
-		const rawLog = (
-			contractAddress: Address,
-			blockNumber: bigint,
-			transactionDigit: string,
-			transactionIndex: number,
-			topics: readonly string[],
-			data: string,
-		) => ({
+		const rawLog = (contractAddress: Address, blockNumber: bigint, transactionDigit: string, transactionIndex: number, topics: readonly string[], data: string) => ({
 			address: contractAddress,
 			blockHash: blockHashes.get(blockNumber),
 			blockNumber: toHex(blockNumber),
@@ -2025,30 +1868,9 @@ describe('network indexer lifecycle', () => {
 			transactionHash: hash(transactionDigit),
 			transactionIndex: toHex(transactionIndex),
 		})
-		const deployLog = rawLog(
-			zoltarAddress,
-			10n,
-			'1',
-			0,
-			topicsFrom(encodeEventTopics({ abi: deployAbi, eventName: 'DeployChild', args: { universeId: 1n, outcomeIndex: 2n, childUniverseId: 3n } })),
-			encodeAbiParameters([{ type: 'address' }, { type: 'address' }, { type: 'uint256' }], [sender, repAddress, 1_000n]),
-		)
-		const sameBlockRepLog = rawLog(
-			repAddress,
-			10n,
-			'2',
-			1,
-			topicsFrom(encodeEventTopics({ abi: transferAbi, eventName: 'Transfer', args: { from: sender, to: holder } })),
-			encodeAbiParameters([{ type: 'uint256' }], [100n]),
-		)
-		const laterRepLog = rawLog(
-			repAddress,
-			12n,
-			'3',
-			0,
-			topicsFrom(encodeEventTopics({ abi: transferAbi, eventName: 'Transfer', args: { from: sender, to: holder } })),
-			encodeAbiParameters([{ type: 'uint256' }], [50n]),
-		)
+		const deployLog = rawLog(zoltarAddress, 10n, '1', 0, topicsFrom(encodeEventTopics({ abi: deployAbi, eventName: 'DeployChild', args: { universeId: 1n, outcomeIndex: 2n, childUniverseId: 3n } })), encodeAbiParameters([{ type: 'address' }, { type: 'address' }, { type: 'uint256' }], [sender, repAddress, 1_000n]))
+		const sameBlockRepLog = rawLog(repAddress, 10n, '2', 1, topicsFrom(encodeEventTopics({ abi: transferAbi, eventName: 'Transfer', args: { from: sender, to: holder } })), encodeAbiParameters([{ type: 'uint256' }], [100n]))
+		const laterRepLog = rawLog(repAddress, 12n, '3', 0, topicsFrom(encodeEventTopics({ abi: transferAbi, eventName: 'Transfer', args: { from: sender, to: holder } })), encodeAbiParameters([{ type: 'uint256' }], [50n]))
 		const allLogs = [deployLog, sameBlockRepLog, laterRepLog]
 		const rpcLogQueries: Array<{ readonly addresses: readonly string[]; readonly fromBlock: bigint; readonly toBlock: bigint }> = []
 		const stateQueries: bigint[] = []
@@ -2057,7 +1879,7 @@ describe('network indexer lifecycle', () => {
 		const headerQueryBlocks: bigint[] = []
 		const rpcServer = Bun.serve({
 			port: 0,
-			fetch: async (rpcRequest) => {
+			fetch: async rpcRequest => {
 				const request = parseRpcRequestBody(await rpcRequest.json())
 				if (request.method === 'eth_getBalance') {
 					const blockNumber = BigInt(String(request.params?.[1]))
@@ -2098,22 +1920,16 @@ describe('network indexer lifecycle', () => {
 					}
 					if (request.method === 'eth_getLogs') {
 						const filter = request.params?.[0]
-						if (typeof filter !== 'object' || filter === null || !('address' in filter) || !('fromBlock' in filter) || !('toBlock' in filter))
-							throw new Error('Unexpected log filter')
+						if (typeof filter !== 'object' || filter === null || !('address' in filter) || !('fromBlock' in filter) || !('toBlock' in filter)) throw new Error('Unexpected log filter')
 						const rawAddresses = filter.address
 						const addresses = (Array.isArray(rawAddresses) ? rawAddresses : [rawAddresses]).map(String)
 						const fromBlock = BigInt(String(filter.fromBlock))
 						const toBlock = BigInt(String(filter.toBlock))
 						rpcLogQueries.push({ addresses, fromBlock, toBlock })
-						return allLogs.filter(
-							(log) =>
-								addresses.some((candidate) => candidate.toLowerCase() === log.address.toLowerCase()) &&
-								BigInt(log.blockNumber) >= fromBlock &&
-								BigInt(log.blockNumber) <= toBlock,
-						)
+						return allLogs.filter(log => addresses.some(candidate => candidate.toLowerCase() === log.address.toLowerCase()) && BigInt(log.blockNumber) >= fromBlock && BigInt(log.blockNumber) <= toBlock)
 					}
 					const transactionHash = String(request.params?.[0])
-					const sourceLog = allLogs.find((log) => log.transactionHash === transactionHash)
+					const sourceLog = allLogs.find(log => log.transactionHash === transactionHash)
 					if (sourceLog === undefined) throw new Error(`Unexpected ${request.method} for ${transactionHash}`)
 					if (request.method === 'eth_getTransactionByHash')
 						return {
@@ -2153,14 +1969,8 @@ describe('network indexer lifecycle', () => {
 		const database = new ScannerDatabase('postgres://unused')
 		const storedBlocks: IndexedBlock[] = []
 		const contracts = new Map<string, ContractMetadata>([
-			[
-				zoltarAddress.toLowerCase(),
-				{ address: zoltarAddress, deploymentBlock: 10n, deploymentBlockExact: true, kind: 'zoltar', label: 'Zoltar', provenance: 'manifest' },
-			],
-			[
-				wethAddress.toLowerCase(),
-				{ address: wethAddress, deploymentBlock: 10n, deploymentBlockExact: true, kind: 'weth', label: 'WETH', provenance: 'manifest' },
-			],
+			[zoltarAddress.toLowerCase(), { address: zoltarAddress, deploymentBlock: 10n, deploymentBlockExact: true, kind: 'zoltar', label: 'Zoltar', provenance: 'manifest' }],
+			[wethAddress.toLowerCase(), { address: wethAddress, deploymentBlock: 10n, deploymentBlockExact: true, kind: 'weth', label: 'WETH', provenance: 'manifest' }],
 		])
 		const lease: IndexerLease = {
 			backendPid: 1,
@@ -2176,16 +1986,12 @@ describe('network indexer lifecycle', () => {
 		spyOn(database, 'contracts').mockResolvedValue(contracts)
 		spyOn(database, 'logScanCursors').mockResolvedValue(new Map())
 		spyOn(database, 'seedNetwork').mockResolvedValue(false)
-		spyOn(database, 'tokenMetadata').mockResolvedValue(
-			new Map([[wethAddress.toLowerCase(), { address: wethAddress, decimals: 18, name: 'Wrapped Ether', readBlock: 10n, symbol: 'WETH' }]]),
-		)
+		spyOn(database, 'tokenMetadata').mockResolvedValue(new Map([[wethAddress.toLowerCase(), { address: wethAddress, decimals: 18, name: 'Wrapped Ether', readBlock: 10n, symbol: 'WETH' }]]))
 		spyOn(database, 'storeBlocks').mockImplementation(async (_chainId, blocks, _lease, _provenance, validateBeforeCommit) => {
 			await validateBeforeCommit?.()
 			storedBlocks.push(...blocks)
 		})
-		spyOn(database, 'contractDeploymentCandidates').mockResolvedValue([
-			{ address: repAddress, kind: 'reputationToken', label: 'Reputation', provenance: 'Zoltar.DeployChild' },
-		])
+		spyOn(database, 'contractDeploymentCandidates').mockResolvedValue([{ address: repAddress, kind: 'reputationToken', label: 'Reputation', provenance: 'Zoltar.DeployChild' }])
 		const recordContractDeployment = spyOn(database, 'recordContractDeployment').mockResolvedValue()
 		spyOn(database, 'recordFailure').mockResolvedValue()
 		const info = spyOn(console, 'info').mockImplementation(() => {})
@@ -2209,26 +2015,20 @@ describe('network indexer lifecycle', () => {
 			}
 			await Promise.all(startIndexers([network], database, controller.signal))
 			expect(error.mock.calls).toEqual([])
-			expect(storedBlocks.map((block) => block.number)).toEqual([10n, 12n])
+			expect(storedBlocks.map(block => block.number)).toEqual([10n, 12n])
 			expect(headerQueryBlocks).not.toContain(11n)
-			const storedRepLogs = storedBlocks.flatMap((block) => block.logs).filter((log) => log.address === repAddress)
-			expect(storedRepLogs.map((log) => log.blockNumber)).toEqual([10n, 12n])
-			expect(storedBlocks.flatMap((block) => block.addressActivity).some((activity) => activity.address === holder)).toBe(true)
-			expect(rpcLogQueries.some((query) => query.fromBlock === 10n && query.toBlock === 10n && query.addresses.includes(repAddress))).toBe(true)
-			expect(rpcLogQueries.some((query) => query.fromBlock === 11n && query.toBlock === 12n && query.addresses.includes(repAddress))).toBe(true)
-			expect(rpcLogQueries.every((query) => !query.addresses.includes(wethAddress))).toBe(true)
+			const storedRepLogs = storedBlocks.flatMap(block => block.logs).filter(log => log.address === repAddress)
+			expect(storedRepLogs.map(log => log.blockNumber)).toEqual([10n, 12n])
+			expect(storedBlocks.flatMap(block => block.addressActivity).some(activity => activity.address === holder)).toBe(true)
+			expect(rpcLogQueries.some(query => query.fromBlock === 10n && query.toBlock === 10n && query.addresses.includes(repAddress))).toBe(true)
+			expect(rpcLogQueries.some(query => query.fromBlock === 11n && query.toBlock === 12n && query.addresses.includes(repAddress))).toBe(true)
+			expect(rpcLogQueries.every(query => !query.addresses.includes(wethAddress))).toBe(true)
 			expect(stateQueries).toEqual([10n, 12n, 11n])
 			expect(metadataQueryBlocks).toEqual([12n])
 			expect(codeQueryBlocks).toEqual([12n, 11n])
-			expect(codeQueryBlocks.every((blockNumber) => blockNumber >= 11n)).toBe(true)
+			expect(codeQueryBlocks.every(blockNumber => blockNumber >= 11n)).toBe(true)
 			expect(recordContractDeployment.mock.calls[0]?.[3]).toMatchObject({ block: 12n, exact: true })
-			expect(
-				warn.mock.calls.some((call) =>
-					String(call[0]).includes(
-						'state-dependent reads will begin at the earliest retrievable state block while log indexing independently begins at its earliest retrievable log block',
-					),
-				),
-			).toBe(true)
+			expect(warn.mock.calls.some(call => String(call[0]).includes('state-dependent reads will begin at the earliest retrievable state block while log indexing independently begins at its earliest retrievable log block'))).toBe(true)
 		} finally {
 			clearTimeout(timeout)
 			controller.abort()
@@ -2304,7 +2104,7 @@ describe('network indexer lifecycle', () => {
 	test('does not record a failure when shutdown arrives during recovery', async () => {
 		const controller = new AbortController()
 		let finishRecovery: (() => void) | undefined
-		const recovery = new Promise<void>((resolve) => {
+		const recovery = new Promise<void>(resolve => {
 			finishRecovery = resolve
 		})
 		let failures = 0
@@ -2337,7 +2137,7 @@ describe('network indexer lifecycle', () => {
 			{ name: 'wrong-chain', getChainId: async () => 11155111, read: async () => 'wrong data' },
 		]
 		await expect(
-			withVerifiedProvider(providers, 1, async (provider) => {
+			withVerifiedProvider(providers, 1, async provider => {
 				operations.push(provider.name)
 				return await provider.read()
 			}),
@@ -2350,7 +2150,7 @@ describe('network indexer lifecycle', () => {
 			{ name: 'primary', getChainId: async () => 1, read: async () => Promise.reject(new Error('offline')) },
 			{ name: 'fallback', getChainId: async () => 1, read: async () => 'canonical data' },
 		]
-		expect(await withVerifiedProvider(providers, 1, (provider) => provider.read())).toBe('canonical data')
+		expect(await withVerifiedProvider(providers, 1, provider => provider.read())).toBe('canonical data')
 	})
 
 	test('caches only successful provider chain verification', async () => {
@@ -2369,7 +2169,7 @@ describe('network indexer lifecycle', () => {
 			withVerifiedProvider(
 				[provider],
 				1,
-				(candidate) => candidate.read(),
+				candidate => candidate.read(),
 				() => false,
 				() => {},
 				verifiedProviders,
@@ -2380,7 +2180,7 @@ describe('network indexer lifecycle', () => {
 			await withVerifiedProvider(
 				[provider],
 				1,
-				(candidate) => candidate.read(),
+				candidate => candidate.read(),
 				() => false,
 				() => {},
 				verifiedProviders,
@@ -2390,7 +2190,7 @@ describe('network indexer lifecycle', () => {
 			await withVerifiedProvider(
 				[provider],
 				1,
-				(candidate) => candidate.read(),
+				candidate => candidate.read(),
 				() => false,
 				() => {},
 				verifiedProviders,
@@ -2437,9 +2237,7 @@ describe('network indexer lifecycle', () => {
 		const reason = safeIndexerFailureReason(error)
 
 		expect(reason).toBe('ContractFunctionExecutionError caused by HttpRequestError; HTTP 429; code HTTP_429; message: provider rate limit exceeded')
-		expect(rpcFailureLogMessage('RPC request failed; retrying', '#1 https://rpc.example', reason)).toBe(
-			'RPC request failed; retrying (RPC: #1 https://rpc.example; reason: ContractFunctionExecutionError caused by HttpRequestError; HTTP 429; code HTTP_429; message: provider rate limit exceeded)',
-		)
+		expect(rpcFailureLogMessage('RPC request failed; retrying', '#1 https://rpc.example', reason)).toBe('RPC request failed; retrying (RPC: #1 https://rpc.example; reason: ContractFunctionExecutionError caused by HttpRequestError; HTTP 429; code HTTP_429; message: provider rate limit exceeded)')
 		expect(reason).not.toContain(secret)
 		expect(reason).not.toContain('rpc.example')
 		expect(safeIndexerFailureReason(Object.assign(new Error(secret), { code: 'PROVIDER_KEY_SENTINEL', name: `${secret}Error` }))).toBe('UnknownError')
@@ -2450,9 +2248,7 @@ describe('network indexer lifecycle', () => {
 		const error = new TypeError('fetch failed', { cause })
 
 		expect(rpcIndexerFailureReason(error)).toBe('TypeError: fetch failed caused by ConnectTimeoutError: connection timed out; code ETIMEDOUT')
-		expect(rpcIndexerFailureReason({ code: 'ECONNREFUSED', message: 'provider connection refused' })).toBe(
-			'UnknownError: provider connection refused; code ECONNREFUSED',
-		)
+		expect(rpcIndexerFailureReason({ code: 'ECONNREFUSED', message: 'provider connection refused' })).toBe('UnknownError: provider connection refused; code ECONNREFUSED')
 		expect(rpcIndexerFailureReason(new Error('request failed', { cause: 'socket closed' }))).toBe('Error: request failed caused by UnknownError: socket closed')
 		expect(rpcIndexerFailureReason(new Error('fetch failed', { cause: new TypeError('fetch failed') }))).toBe('Error: fetch failed caused by TypeError')
 		expect(rpcIndexerFailureReason(new TypeError('fetch failed\n\u001b[31mconnection refused\u001b[0m'))).toBe('TypeError: fetch failed connection refused')
@@ -2491,9 +2287,9 @@ describe('network indexer lifecycle', () => {
 			await withVerifiedProvider(
 				providers,
 				1,
-				(provider) => provider.read(),
+				provider => provider.read(),
 				() => false,
-				(provider) => diagnostics.select(provider),
+				provider => diagnostics.select(provider),
 			)
 		} catch (error) {
 			rejected = error
@@ -2538,8 +2334,7 @@ describe('network indexer lifecycle', () => {
 				if (fromBlock !== toBlock) throw numericRangeError
 				return []
 			},
-			(failedFrom, failedTo, retryTo, error) =>
-				numericWarnings.push(`RPC log range #${failedFrom}-#${failedTo} failed (${safeIndexerFailureReason(error)}); retrying #${failedFrom}-#${retryTo}`),
+			(failedFrom, failedTo, retryTo, error) => numericWarnings.push(`RPC log range #${failedFrom}-#${failedTo} failed (${safeIndexerFailureReason(error)}); retrying #${failedFrom}-#${retryTo}`),
 			isSplittableLogRangeError,
 		)
 		expect(numericWarnings).toEqual(['RPC log range #0-#1 failed (RpcRequestError; message: provider rejected the requested block range); retrying #0-#0'])
@@ -2625,12 +2420,7 @@ describe('network indexer lifecycle', () => {
 		expect(bearerReason).not.toContain(secret)
 		expect(bearerReason).toContain('provider rejected the requested block range')
 
-		for (const unsafeDetails of [
-			String.raw`{\"token\":\"${secret}\"}`,
-			String.raw`\`token\`=\`${secret}\``,
-			String.raw`request https:\/\/rpc.example\/${secret} failed`,
-			String.raw`echoed body {\"params\":[\"${secret}\"]}`,
-		]) {
+		for (const unsafeDetails of [String.raw`{\"token\":\"${secret}\"}`, String.raw`\`token\`=\`${secret}\``, String.raw`request https:\/\/rpc.example\/${secret} failed`, String.raw`echoed body {\"params\":[\"${secret}\"]}`]) {
 			const escapedReason = safeIndexerFailureReason(
 				new RpcRequestError({
 					body: { method: 'eth_getLogs' },
@@ -2650,7 +2440,7 @@ describe('network indexer lifecycle', () => {
 		})
 		const controlReason = safeIndexerFailureReason(controlMessage)
 		expect(
-			[...controlReason].some((character) => {
+			[...controlReason].some(character => {
 				const codePoint = character.codePointAt(0)
 				return codePoint !== undefined && (codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f))
 			}),
@@ -2682,11 +2472,7 @@ describe('network indexer lifecycle', () => {
 
 	test('identifies RPC providers during failover without exposing credentials, paths, or credential subdomains', async () => {
 		const secret = 'provider-key-sentinel'
-		const providers = [
-			`https://rpc-user:${secret}@rpc.example/first`,
-			`https://rpc.example/${secret}?token=${secret}`,
-			`https://${secret}.rpc.example/third`,
-		].map((rpcUrl, index) => ({
+		const providers = [`https://rpc-user:${secret}@rpc.example/first`, `https://rpc.example/${secret}?token=${secret}`, `https://${secret}.rpc.example/third`].map((rpcUrl, index) => ({
 			endpoint: rpcProviderLabel(rpcUrl, index),
 			getChainId: async () => 1,
 			read: async () => Promise.reject(new Error('offline')),
@@ -2696,9 +2482,9 @@ describe('network indexer lifecycle', () => {
 			withVerifiedProvider(
 				providers,
 				1,
-				(provider) => provider.read(),
+				provider => provider.read(),
 				() => false,
-				(provider) => {
+				provider => {
 					attemptedEndpoint = provider.endpoint
 				},
 			),
@@ -2737,7 +2523,7 @@ describe('network indexer lifecycle', () => {
 				failures.push(message)
 				reasons.push(reason)
 			},
-			runWithProvider: async (operation) => await operation(),
+			runWithProvider: async operation => await operation(),
 			intervalMs: 1,
 			signal: controller.signal,
 			random: () => 0.5,
@@ -2770,7 +2556,7 @@ describe('network indexer lifecycle', () => {
 				failure: async () => {
 					failures++
 				},
-				runWithProvider: async (operation) => await operation(),
+				runWithProvider: async operation => await operation(),
 				intervalMs: 1,
 				signal: controller.signal,
 			}),
@@ -2795,7 +2581,7 @@ describe('network indexer lifecycle', () => {
 				controller.abort()
 				return true
 			},
-			failure: async (message) => {
+			failure: async message => {
 				failures.push(message)
 			},
 			intervalMs: 1,
@@ -2836,16 +2622,14 @@ describe('network indexer lifecycle', () => {
 				},
 				standby: () => {},
 				intervalMs: 10,
-				onEvent: (event) => events.push(event),
+				onEvent: event => events.push(event),
 				random: () => 0.5,
 				signal: controller.signal,
 			})
 
 			expect(recordings).toBe(1)
 			expect(events).toContainEqual({ type: 'failure', stage: 'record-failure', consecutiveFailures: 1, retryDelayMs: 10, backendPid: 42 })
-			expect(logged).toHaveBeenCalledWith(
-				'[mainnet] indexer ownership failed; stage: record-failure; consecutive failures: 1; retry delay: 10ms; backend PID: 42; reason: IndexerOwnershipStageError caused by Error',
-			)
+			expect(logged).toHaveBeenCalledWith('[mainnet] indexer ownership failed; stage: record-failure; consecutive failures: 1; retry delay: 10ms; backend PID: 42; reason: IndexerOwnershipStageError caused by Error')
 		} finally {
 			logged.mockRestore()
 		}
@@ -2886,10 +2670,7 @@ describe('network indexer lifecycle', () => {
 	})
 
 	test('retains independent native and token balance outcomes when one read fails', async () => {
-		const native = await readRichListBalance(
-			{ owner: address, assetAddress: getAddress('0x0000000000000000000000000000000000000000'), assetKind: 'native' },
-			async () => 42n,
-		)
+		const native = await readRichListBalance({ owner: address, assetAddress: getAddress('0x0000000000000000000000000000000000000000'), assetKind: 'native' }, async () => 42n)
 		const token = await readRichListBalance({ owner: address, assetAddress: address, assetKind: 'rep' }, async () => {
 			const failure = new Error('provider unavailable')
 			failure.name = 'HttpRequestError'
@@ -2916,7 +2697,7 @@ describe('network indexer lifecycle', () => {
 				async () => {
 					throw pruned
 				},
-				(error) => {
+				error => {
 					throw error
 				},
 			),
@@ -2950,11 +2731,7 @@ describe('network indexer lifecycle', () => {
 	})
 
 	test('records a distinct boundary signal when any historical metadata field is pruned', async () => {
-		const pruned = new RpcRequestMethodError(
-			'eth_call',
-			new RpcError('state at block #11000001 is pruned', { code: -32603, shortMessage: 'state at block #11000001 is pruned' }),
-			'#1 http://reth:8545',
-		)
+		const pruned = new RpcRequestMethodError('eth_call', new RpcError('state at block #11000001 is pruned', { code: -32603, shortMessage: 'state at block #11000001 is pruned' }), '#1 http://reth:8545')
 		for (const prunedField of ['decimals', 'name', 'symbol'] as const) {
 			const metadata = await readTokenMetadata(address, 11_000_001n, {
 				decimals: async () => {
@@ -2977,11 +2754,7 @@ describe('network indexer lifecycle', () => {
 	})
 
 	test('prioritizes pruned token metadata when a concurrent field fails ordinarily', async () => {
-		const pruned = new RpcRequestMethodError(
-			'eth_call',
-			new RpcError('state at block #11000001 is pruned', { code: -32603, shortMessage: 'state at block #11000001 is pruned' }),
-			'#1 http://reth:8545',
-		)
+		const pruned = new RpcRequestMethodError('eth_call', new RpcError('state at block #11000001 is pruned', { code: -32603, shortMessage: 'state at block #11000001 is pruned' }), '#1 http://reth:8545')
 		for (const prunedField of ['name', 'symbol'] as const) {
 			const ordinary = new Error('temporary provider failure')
 			ordinary.name = 'HttpRequestError'
@@ -3002,14 +2775,9 @@ describe('network indexer lifecycle', () => {
 
 	test('retries an essential historical state read at the observed head only when state is pruned', async () => {
 		const attemptedBlocks: bigint[] = []
-		const result = await readWithPrunedStateFallback(11_000_001n, 12_000_000n, async (blockNumber) => {
+		const result = await readWithPrunedStateFallback(11_000_001n, 12_000_000n, async blockNumber => {
 			attemptedBlocks.push(blockNumber)
-			if (blockNumber === 11_000_001n)
-				throw new RpcRequestMethodError(
-					'eth_call',
-					new RpcError('state at block #11000001 is pruned', { code: -32603, shortMessage: 'state at block #11000001 is pruned' }),
-					'#1 http://reth:8545',
-				)
+			if (blockNumber === 11_000_001n) throw new RpcRequestMethodError('eth_call', new RpcError('state at block #11000001 is pruned', { code: -32603, shortMessage: 'state at block #11000001 is pruned' }), '#1 http://reth:8545')
 			return 'available'
 		})
 		expect(result).toEqual({ blockNumber: 12_000_000n, value: 'available' })
@@ -3026,7 +2794,7 @@ describe('network indexer lifecycle', () => {
 				await readWithPrunedStateFallback(
 					requestedBlock < stateFloor ? observedHead : requestedBlock,
 					observedHead,
-					async (blockNumber) => {
+					async blockNumber => {
 						attemptedBlocks.push(blockNumber)
 						if (blockNumber < 100n)
 							throw new RpcRequestMethodError(
@@ -3052,7 +2820,7 @@ describe('network indexer lifecycle', () => {
 	test('does not move ordinary historical state failures to another block', async () => {
 		const attemptedBlocks: bigint[] = []
 		await expect(
-			readWithPrunedStateFallback(11_000_001n, 12_000_000n, async (blockNumber) => {
+			readWithPrunedStateFallback(11_000_001n, 12_000_000n, async blockNumber => {
 				attemptedBlocks.push(blockNumber)
 				throw new Error('temporary provider failure')
 			}),
@@ -3061,10 +2829,7 @@ describe('network indexer lifecycle', () => {
 	})
 
 	test('records metadata fallback from actual zero-data and revert RPC responses', async () => {
-		for (const response of [
-			Response.json({ id: 1, jsonrpc: '2.0', result: '0x' }),
-			Response.json({ error: { code: 3, message: 'execution reverted' }, id: 1, jsonrpc: '2.0' }),
-		]) {
+		for (const response of [Response.json({ id: 1, jsonrpc: '2.0', result: '0x' }), Response.json({ error: { code: 3, message: 'execution reverted' }, id: 1, jsonrpc: '2.0' })]) {
 			const client = createPublicClient({
 				transport: withRpcRequestQueue(
 					http('https://rpc.example', {
@@ -3149,15 +2914,15 @@ describe('network indexer lifecycle', () => {
 		const ancestor = await findSparseCanonicalAncestor(
 			12n,
 			10n,
-			async (atOrBefore) => {
+			async atOrBefore => {
 				checkpointReads.push(atOrBefore)
-				const number = [...hashes.keys()].filter((candidate) => candidate <= atOrBefore).toSorted((left, right) => (left < right ? 1 : -1))[0]
+				const number = [...hashes.keys()].filter(candidate => candidate <= atOrBefore).toSorted((left, right) => (left < right ? 1 : -1))[0]
 				if (number === undefined) return undefined
 				const hash = hashes.get(number)
 				if (hash === undefined) throw new Error(`Missing stored hash for block ${number}`)
 				return { number, hash }
 			},
-			async (number) => {
+			async number => {
 				headerReads.push(number)
 				return number === 10n ? matchingHash : (`0x${'3'.repeat(64)}` as const)
 			},
@@ -3174,7 +2939,7 @@ describe('network indexer lifecycle', () => {
 			199n,
 			164n,
 			async () => ({ number: 100n, hash }),
-			async (number) => {
+			async number => {
 				headerReads.push(number)
 				return hash
 			},
@@ -3187,9 +2952,7 @@ describe('network indexer lifecycle', () => {
 		const indexedHash = `0x${'1'.repeat(64)}` as const
 		const replacementHash = `0x${'2'.repeat(64)}` as const
 		await expect(confirmCanonicalBlock(100n, indexedHash, async () => replacementHash)).rejects.toThrow('Block 100 changed while it was being indexed')
-		expect(safeIndexerFailure(await confirmCanonicalBlock(100n, indexedHash, async () => replacementHash).catch((error) => error))).toBe(
-			'The remote canonical chain changed while indexing; retrying',
-		)
+		expect(safeIndexerFailure(await confirmCanonicalBlock(100n, indexedHash, async () => replacementHash).catch(error => error))).toBe('The remote canonical chain changed while indexing; retrying')
 		await expect(confirmCanonicalBlock(100n, indexedHash, async () => indexedHash)).resolves.toBeUndefined()
 	})
 
@@ -3205,12 +2968,12 @@ describe('network indexer lifecycle', () => {
 					{ number: 100n, hash: checkpointHash },
 					{ number: 200n, hash: endHash },
 				],
-				async (blockNumber) => {
+				async blockNumber => {
 					if (blockNumber !== 100n) return endHash
 					checkpointReads += 1
 					return checkpointReads === 1 ? checkpointHash : replacementHash
 				},
-				async (validateBeforeCommit) => {
+				async validateBeforeCommit => {
 					const staged = [150, 200]
 					try {
 						await validateBeforeCommit()
@@ -3286,10 +3049,7 @@ describe('network indexer lifecycle', () => {
 
 	test('logs an actionable configured-boundary failure during ownership seeding', async () => {
 		const controller = new AbortController()
-		const error = new DatabaseConsistencyError(
-			'Cannot change the configured start block from 100 to 200 while checkpoint 125 exists; rebuild the augurScan database from the new start block',
-			{ code: 'start-block-mismatch', configuredStartBlock: 200n, storedStartBlock: 100n, indexedBlock: 125n },
-		)
+		const error = new DatabaseConsistencyError('Cannot change the configured start block from 100 to 200 while checkpoint 125 exists; rebuild the augurScan database from the new start block', { code: 'start-block-mismatch', configuredStartBlock: 200n, storedStartBlock: 100n, indexedBlock: 125n })
 		let seeds = 0
 		const logged = spyOn(console, 'error').mockImplementation(() => {})
 		try {
@@ -3306,9 +3066,7 @@ describe('network indexer lifecycle', () => {
 				intervalMs: 1,
 				signal: controller.signal,
 			})
-			expect(logged).toHaveBeenCalledWith(
-				`[sepolia] indexer ownership failed; stage: seed; consecutive failures: 1; retry delay: 1ms; backend PID: unavailable; reason: DatabaseConsistencyError: ${error.message}`,
-			)
+			expect(logged).toHaveBeenCalledWith(`[sepolia] indexer ownership failed; stage: seed; consecutive failures: 1; retry delay: 1ms; backend PID: unavailable; reason: DatabaseConsistencyError: ${error.message}`)
 		} finally {
 			logged.mockRestore()
 		}
@@ -3342,7 +3100,7 @@ describe('network indexer lifecycle', () => {
 				failure: async () => {},
 				standby: () => {},
 				intervalMs: 10,
-				onEvent: async (event) => {
+				onEvent: async event => {
 					if (event.type === 'acquired' && !rejected) {
 						rejected = true
 						throw new Error('diagnostics unavailable')
@@ -3384,7 +3142,7 @@ describe('network indexer lifecycle', () => {
 				},
 				standby: () => {},
 				intervalMs: 10,
-				onEvent: async (event) => {
+				onEvent: async event => {
 					if (event.type === 'failure') throw new Error('diagnostics unavailable')
 				},
 				wait: async () => {},
@@ -3421,7 +3179,7 @@ describe('network indexer lifecycle', () => {
 				failure: async () => {},
 				standby: () => {},
 				intervalMs: 10,
-				onEvent: async (event) => {
+				onEvent: async event => {
 					if (event.type === 'released' && !rejected) {
 						rejected = true
 						throw new Error('diagnostics unavailable')
@@ -3466,7 +3224,7 @@ describe('network indexer lifecycle', () => {
 				failure: async () => {},
 				standby: () => {},
 				intervalMs: 10,
-				onEvent: async (event) => {
+				onEvent: async event => {
 					if (event.type === 'release-failed') throw new Error('diagnostics unavailable')
 				},
 				wait: async () => {},
@@ -3506,9 +3264,9 @@ describe('network indexer lifecycle', () => {
 				failure: async () => {},
 				standby: () => {},
 				intervalMs: 10,
-				onEvent: (event) => ownershipEvents.push(event),
+				onEvent: event => ownershipEvents.push(event),
 				random: () => 0.5,
-				wait: async (delay) => {
+				wait: async delay => {
 					delays.push(delay)
 				},
 				signal: controller.signal,
@@ -3522,14 +3280,8 @@ describe('network indexer lifecycle', () => {
 				{ type: 'acquired', backendPid: 42, recoveredAfterFailures: 2, acquiredAfterStandby: false },
 				{ type: 'released', backendPid: 42 },
 			])
-			expect(logged).toHaveBeenNthCalledWith(
-				1,
-				'[mainnet] indexer ownership failed; stage: acquire; consecutive failures: 1; retry delay: 10ms; backend PID: unavailable; reason: Error; code ECONNRESET',
-			)
-			expect(logged).toHaveBeenNthCalledWith(
-				2,
-				'[mainnet] indexer ownership failed; stage: verify; consecutive failures: 2; retry delay: 20ms; backend PID: 42; reason: Error',
-			)
+			expect(logged).toHaveBeenNthCalledWith(1, '[mainnet] indexer ownership failed; stage: acquire; consecutive failures: 1; retry delay: 10ms; backend PID: unavailable; reason: Error; code ECONNRESET')
+			expect(logged).toHaveBeenNthCalledWith(2, '[mainnet] indexer ownership failed; stage: verify; consecutive failures: 2; retry delay: 20ms; backend PID: 42; reason: Error')
 			expect(logged.mock.calls.flat().join(' ')).not.toContain('secret')
 		} finally {
 			logged.mockRestore()
@@ -3538,23 +3290,15 @@ describe('network indexer lifecycle', () => {
 
 	test('formats ownership recovery failures without exposing arbitrary messages', () => {
 		const secret = 'postgres://user:password@database/augurscan'
-		expect(ownershipFailureLogMessage('sepolia', 'owned-run', Object.assign(new Error(secret), { name: `${secret}Error` }), 3, 40, 123)).toBe(
-			'[sepolia] indexer ownership failed; stage: owned-run; consecutive failures: 3; retry delay: 40ms; backend PID: 123; reason: UnknownError',
-		)
-		expect(ownershipFailureLogMessage('sepolia', 'seed', Object.assign(new Error(secret), { name: 'DatabaseConsistencyError' }), 1, 10)).toBe(
-			'[sepolia] indexer ownership failed; stage: seed; consecutive failures: 1; retry delay: 10ms; backend PID: unavailable; reason: DatabaseConsistencyError',
-		)
-		expect(ownershipFailureLogMessage('sepolia', 'seed', new DatabaseConsistencyError(secret), 1, 10)).toBe(
-			'[sepolia] indexer ownership failed; stage: seed; consecutive failures: 1; retry delay: 10ms; backend PID: unavailable; reason: DatabaseConsistencyError',
-		)
+		expect(ownershipFailureLogMessage('sepolia', 'owned-run', Object.assign(new Error(secret), { name: `${secret}Error` }), 3, 40, 123)).toBe('[sepolia] indexer ownership failed; stage: owned-run; consecutive failures: 3; retry delay: 40ms; backend PID: 123; reason: UnknownError')
+		expect(ownershipFailureLogMessage('sepolia', 'seed', Object.assign(new Error(secret), { name: 'DatabaseConsistencyError' }), 1, 10)).toBe('[sepolia] indexer ownership failed; stage: seed; consecutive failures: 1; retry delay: 10ms; backend PID: unavailable; reason: DatabaseConsistencyError')
+		expect(ownershipFailureLogMessage('sepolia', 'seed', new DatabaseConsistencyError(secret), 1, 10)).toBe('[sepolia] indexer ownership failed; stage: seed; consecutive failures: 1; retry delay: 10ms; backend PID: unavailable; reason: DatabaseConsistencyError')
 		const moved = new DatabaseConsistencyError('unsafe original message', {
 			code: 'lease-backend-moved',
 			expectedBackendPid: 41,
 			observedBackendPid: 42,
 		})
-		expect(ownershipFailureLogMessage('sepolia', 'owned-run', new Error('wrapper secret', { cause: moved }), 1, 10)).toContain(
-			'Error caused by DatabaseConsistencyError: Indexer lease moved from PostgreSQL backend 41 to 42; use a direct connection or a session-mode pooler',
-		)
+		expect(ownershipFailureLogMessage('sepolia', 'owned-run', new Error('wrapper secret', { cause: moved }), 1, 10)).toContain('Error caused by DatabaseConsistencyError: Indexer lease moved from PostgreSQL backend 41 to 42; use a direct connection or a session-mode pooler')
 	})
 
 	test('backs off repeated immediate owned-run failures across reacquisition', async () => {
@@ -3576,7 +3320,7 @@ describe('network indexer lifecycle', () => {
 				standby: () => {},
 				intervalMs: 10,
 				random: () => 0.5,
-				wait: async (delay) => {
+				wait: async delay => {
 					delays.push(delay)
 					if (delays.length === 3) controller.abort()
 				},
@@ -3614,16 +3358,12 @@ describe('network indexer lifecycle', () => {
 				failure: async () => {},
 				standby: () => {},
 				intervalMs: 10,
-				onEvent: (event) => ownershipEvents.push(event),
+				onEvent: event => ownershipEvents.push(event),
 				wait: async () => {},
 				signal: controller.signal,
 			})
 
-			expect(ownershipEvents).toEqual([
-				{ type: 'standby' },
-				{ type: 'acquired', backendPid: 52, recoveredAfterFailures: 0, acquiredAfterStandby: true },
-				{ type: 'released', backendPid: 52 },
-			])
+			expect(ownershipEvents).toEqual([{ type: 'standby' }, { type: 'acquired', backendPid: 52, recoveredAfterFailures: 0, acquiredAfterStandby: true }, { type: 'released', backendPid: 52 }])
 			expect(recovered).toHaveBeenCalledWith('[sepolia] indexer ownership reacquired; backend PID: 52; source: standby; previous consecutive failures: 0')
 		} finally {
 			recovered.mockRestore()
@@ -3631,12 +3371,7 @@ describe('network indexer lifecycle', () => {
 	})
 
 	test('tracks process-local ownership failures and reacquisitions for health diagnostics', () => {
-		const failed = nextIndexerOwnershipStatus(
-			'sepolia',
-			undefined,
-			{ type: 'failure', stage: 'verify', consecutiveFailures: 2, retryDelayMs: 24_000, backendPid: 41 },
-			new Date('2026-08-13T10:00:00Z'),
-		)
+		const failed = nextIndexerOwnershipStatus('sepolia', undefined, { type: 'failure', stage: 'verify', consecutiveFailures: 2, retryDelayMs: 24_000, backendPid: 41 }, new Date('2026-08-13T10:00:00Z'))
 		expect(failed).toEqual({
 			networkId: 'sepolia',
 			active: false,
@@ -3647,26 +3382,22 @@ describe('network indexer lifecycle', () => {
 			lastFailureAt: '2026-08-13T10:00:00.000Z',
 			lastFailureStage: 'verify',
 		})
-		expect(nextIndexerOwnershipStatus('sepolia', failed, { type: 'acquired', backendPid: 42, recoveredAfterFailures: 2, acquiredAfterStandby: false })).toEqual(
-			{
-				...failed,
-				active: true,
-				backendPid: 42,
-				reacquisitionsTotal: 1,
-				consecutiveFailures: 0,
-			},
-		)
+		expect(nextIndexerOwnershipStatus('sepolia', failed, { type: 'acquired', backendPid: 42, recoveredAfterFailures: 2, acquiredAfterStandby: false })).toEqual({
+			...failed,
+			active: true,
+			backendPid: 42,
+			reacquisitionsTotal: 1,
+			consecutiveFailures: 0,
+		})
 		const standby = nextIndexerOwnershipStatus('mainnet', undefined, { type: 'standby' })
-		expect(nextIndexerOwnershipStatus('mainnet', standby, { type: 'acquired', backendPid: 52, recoveredAfterFailures: 0, acquiredAfterStandby: true })).toEqual(
-			{
-				networkId: 'mainnet',
-				active: true,
-				backendPid: 52,
-				failuresTotal: 0,
-				reacquisitionsTotal: 1,
-				consecutiveFailures: 0,
-			},
-		)
+		expect(nextIndexerOwnershipStatus('mainnet', standby, { type: 'acquired', backendPid: 52, recoveredAfterFailures: 0, acquiredAfterStandby: true })).toEqual({
+			networkId: 'mainnet',
+			active: true,
+			backendPid: 52,
+			failuresTotal: 0,
+			reacquisitionsTotal: 1,
+			consecutiveFailures: 0,
+		})
 	})
 
 	test('reports a lease release failure through ownership diagnostics', async () => {
@@ -3688,7 +3419,7 @@ describe('network indexer lifecycle', () => {
 				failure: async () => {},
 				standby: () => {},
 				intervalMs: 10,
-				onEvent: (event) => ownershipEvents.push(event),
+				onEvent: event => ownershipEvents.push(event),
 				random: () => 0.5,
 				signal: controller.signal,
 			})
@@ -3698,9 +3429,7 @@ describe('network indexer lifecycle', () => {
 				{ type: 'failure', stage: 'release', consecutiveFailures: 1, retryDelayMs: 10, backendPid: 42 },
 				{ type: 'release-failed', backendPid: 42 },
 			])
-			expect(logged).toHaveBeenCalledWith(
-				'[mainnet] indexer ownership failed; stage: release; consecutive failures: 1; retry delay: 10ms; backend PID: 42; reason: Error; code ERR_POSTGRES_CONNECTION_CLOSED',
-			)
+			expect(logged).toHaveBeenCalledWith('[mainnet] indexer ownership failed; stage: release; consecutive failures: 1; retry delay: 10ms; backend PID: 42; reason: Error; code ERR_POSTGRES_CONNECTION_CLOSED')
 			expect(logged.mock.calls.flat().join(' ')).not.toContain('secret')
 		} finally {
 			logged.mockRestore()
@@ -3709,9 +3438,7 @@ describe('network indexer lifecycle', () => {
 
 	test('rejects an indexer lease that moves to another PostgreSQL backend', () => {
 		expect(() => assertIndexerLeaseObservation(41, 41, true)).not.toThrow()
-		expect(() => assertIndexerLeaseObservation(41, 42, true)).toThrow(
-			'Indexer lease moved from PostgreSQL backend 41 to 42; use a direct connection or a session-mode pooler',
-		)
+		expect(() => assertIndexerLeaseObservation(41, 42, true)).toThrow('Indexer lease moved from PostgreSQL backend 41 to 42; use a direct connection or a session-mode pooler')
 		expect(() => assertIndexerLeaseObservation(41, 41, false)).toThrow(DatabaseConsistencyError)
 		expect(() => assertIndexerLeaseObservation(41, 41, false)).toThrow('Indexer lease is no longer held by PostgreSQL backend 41')
 	})
@@ -3719,9 +3446,7 @@ describe('network indexer lifecycle', () => {
 	test('rejects an indexer lease release on another backend or without an unlocked lock', () => {
 		expect(() => assertIndexerLeaseReleaseObservation(41, 41, true)).not.toThrow()
 		expect(() => assertIndexerLeaseReleaseObservation(41, 42, false)).toThrow('Indexer lease moved from PostgreSQL backend 41 to 42')
-		expect(() => assertIndexerLeaseReleaseObservation(41, 41, false)).toThrow(
-			'Indexer lease unlock failed on PostgreSQL backend 41; lock ownership may already be lost',
-		)
+		expect(() => assertIndexerLeaseReleaseObservation(41, 41, false)).toThrow('Indexer lease unlock failed on PostgreSQL backend 41; lock ownership may already be lost')
 	})
 
 	test('does not select shared tokens as standalone activity sources', () => {

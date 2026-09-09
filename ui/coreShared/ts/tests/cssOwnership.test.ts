@@ -95,7 +95,7 @@ test('persistent operational text and AugurScan disclosures keep accessible mini
 	for (const selector of ['.operations-detail-header > a', '.operations-raw-evidence summary', '.operations-round-changes summary', '.chart-data-disclosure summary', '.detail-disclosure summary', '.rich-assets summary', '.account-transaction-action summary', '.explorer-link']) {
 		expect(augurScan).toContain(selector)
 	}
-	expect(augurScan).toMatch(/\.explorer-link\s*\n\s*\) \{[^}]*min-height: var\(--control-height\);/s)
+	expect(augurScan).toMatch(/\.explorer-link\s*\) \{[^}]*min-height: var\(--control-height\);/s)
 })
 
 test('production styles reserve sub-13px type for nonessential eyebrows and decorative glyphs', () => {

@@ -87,15 +87,7 @@ export const operationsOverviewSupplement = async (sql: SQL, chainId: number, sn
 	return { prices, recentChanges, totals: totals[0] }
 }
 
-export const reportCatalogData = async (
-	sql: SQL,
-	chainId: number,
-	asOf: Record<string, unknown>,
-	cursorBlock = String(asOf['blockNumber']),
-	cursorTx = `0x${'f'.repeat(64)}`,
-	cursorLog = 2_147_483_647,
-	queryLimit = 250,
-) => {
+export const reportCatalogData = async (sql: SQL, chainId: number, asOf: Record<string, unknown>, cursorBlock = String(asOf['blockNumber']), cursorTx = `0x${'f'.repeat(64)}`, cursorLog = 2_147_483_647, queryLimit = 250) => {
 	const snapshotBlock = String(asOf['blockNumber'])
 	const rows = await sql`
 		WITH identities AS (
@@ -146,15 +138,7 @@ export const reportCatalogData = async (
 	})
 }
 
-export const escalationCatalogData = async (
-	sql: SQL,
-	chainId: number,
-	snapshotBlock: string,
-	cursorBlock = snapshotBlock,
-	cursorTx = `0x${'f'.repeat(64)}`,
-	cursorLog = 2_147_483_647,
-	queryLimit = 250,
-) =>
+export const escalationCatalogData = async (sql: SQL, chainId: number, snapshotBlock: string, cursorBlock = snapshotBlock, cursorTx = `0x${'f'.repeat(64)}`, cursorLog = 2_147_483_647, queryLimit = 250) =>
 	await sql`
 		WITH games AS (
 			SELECT DISTINCT game_address FROM escalation_game_events
@@ -182,15 +166,7 @@ export const escalationCatalogData = async (
 		ORDER BY latest.block_number DESC, latest.log_index DESC, latest.tx_hash DESC LIMIT ${queryLimit}
 	`
 
-export const auctionCatalogData = async (
-	sql: SQL,
-	chainId: number,
-	asOf: Record<string, unknown>,
-	cursorBlock = String(asOf['blockNumber']),
-	cursorTx = `0x${'f'.repeat(64)}`,
-	cursorLog = 2_147_483_647,
-	queryLimit = 250,
-) => {
+export const auctionCatalogData = async (sql: SQL, chainId: number, asOf: Record<string, unknown>, cursorBlock = String(asOf['blockNumber']), cursorTx = `0x${'f'.repeat(64)}`, cursorLog = 2_147_483_647, queryLimit = 250) => {
 	const snapshotBlock = String(asOf['blockNumber'])
 	const rows = await sql`
 		WITH auctions AS (
@@ -241,11 +217,7 @@ export const auctionCatalogData = async (
 	})
 }
 
-export const riskCatalogData = async (
-	sql: SQL,
-	chainId: number,
-	options: { poolAddress?: string; vaultAddress?: string; poolAfter?: string; vaultAfter?: string; limit?: number; snapshotBlock?: string } = {},
-) => {
+export const riskCatalogData = async (sql: SQL, chainId: number, options: { poolAddress?: string; vaultAddress?: string; poolAfter?: string; vaultAfter?: string; limit?: number; snapshotBlock?: string } = {}) => {
 	const queryLimit = (options.limit ?? 250) + 1
 	const snapshotBlock = options.snapshotBlock ?? '9223372036854775807'
 	const [pools, vaults, liquidations, approvalEvents, totals] = await Promise.all([
@@ -363,12 +335,7 @@ export const riskCatalogData = async (
 			price_provenance: price,
 			protocol_state: badDebt > 0n ? 'bad-debt' : priceRequired && !priceValid ? 'unavailable' : String(state['systemState'] ?? '0'),
 			scanner_severity: badDebt > 0n ? 'critical' : priceRequired && !priceValid ? 'unavailable' : 'healthy',
-			scanner_reason:
-				badDebt > 0n
-					? 'Pool has recorded bad debt'
-					: priceRequired && !priceValid
-						? 'Accounting price is invalid at the tagged evidence block; capacity is not usable for risk decisions'
-						: 'Tagged pool accounting read completed',
+			scanner_reason: badDebt > 0n ? 'Pool has recorded bad debt' : priceRequired && !priceValid ? 'Accounting price is invalid at the tagged evidence block; capacity is not usable for risk decisions' : 'Tagged pool accounting read completed',
 		}
 	})
 	const vaultData = vaults.slice(0, options.limit ?? 250).map((row: Record<string, unknown>) => {
@@ -385,11 +352,7 @@ export const riskCatalogData = async (
 				snapshot_evidence: snapshotEvidence,
 				protocol_state: 'unavailable',
 				scanner_severity: 'unavailable',
-				scanner_reason:
-					row['read_failure_reason'] ??
-					(row['read_status'] === 'success' && row['pool_read_status'] === 'success'
-						? 'Vault and pool tagged reads have different evidence blocks; coherent risk state is awaiting completion'
-						: 'Coherent tagged vault and pool reads are awaiting completion'),
+				scanner_reason: row['read_failure_reason'] ?? (row['read_status'] === 'success' && row['pool_read_status'] === 'success' ? 'Vault and pool tagged reads have different evidence blocks; coherent risk state is awaiting completion' : 'Coherent tagged vault and pool reads are awaiting completion'),
 			}
 		const badDebt = BigInt(String(state['badDebtAttoEth'] ?? '0'))
 		if (badDebt > 0n)
@@ -444,10 +407,7 @@ export const riskCatalogData = async (
 			poolNextCursor: pools.length > (options.limit ?? 250) && lastPool !== undefined ? String(lastPool['pool_address']) : undefined,
 			vaultTotal: Number(totals[0]?.['vault_total'] ?? 0),
 			vaultHasMore: vaults.length > (options.limit ?? 250),
-			vaultNextCursor:
-				vaults.length > (options.limit ?? 250) && lastVault !== undefined
-					? `${String(lastVault['pool_address'])}:${String(lastVault['vault_address'])}`
-					: undefined,
+			vaultNextCursor: vaults.length > (options.limit ?? 250) && lastVault !== undefined ? `${String(lastVault['pool_address'])}:${String(lastVault['vault_address'])}` : undefined,
 		},
 	}
 }
@@ -462,15 +422,7 @@ export const forkCatalogTotal = async (sql: SQL, chainId: number, snapshotBlock:
 	return Number(rows[0]?.['total'] ?? 0)
 }
 
-export const forkCatalogData = async (
-	sql: SQL,
-	chainId: number,
-	cursorBlock: string,
-	cursorTx = `0x${'f'.repeat(64)}`,
-	cursorLog = 2_147_483_647,
-	queryLimit = 100,
-	snapshotBlock = cursorBlock,
-) =>
+export const forkCatalogData = async (sql: SQL, chainId: number, cursorBlock: string, cursorTx = `0x${'f'.repeat(64)}`, cursorLog = 2_147_483_647, queryLimit = 100, snapshotBlock = cursorBlock) =>
 	await sql`
 		WITH roots AS (
 			SELECT DISTINCT ON (universe_identity) * FROM fork_migration_events

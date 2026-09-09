@@ -44,6 +44,33 @@ env:
   FOUNDRY_VERSION: v1.5.1
 
 jobs:
+  timing-history-input:
+    name: Prepare ${{ matrix.domain }} timing history
+    if: inputs.application || inputs.solidity
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        domain: ${{ fromJSON(inputs.application && inputs.solidity && '["application", "solidity"]' || (inputs.application && '["application"]' || '["solidity"]')) }}
+    steps:
+      - uses: actions/cache/restore@v5
+        with:
+          path: .ci/test-timings-${{ matrix.domain }}.json
+          key: ${{ runner.os }}-test-timings-v2-${{ matrix.domain }}-${{ github.sha }}
+          restore-keys: ${{ runner.os }}-test-timings-v2-${{ matrix.domain }}-
+      - name: Provide an empty history on the first run
+        run: |
+          mkdir -p .ci
+          if [[ ! -f ".ci/test-timings-${{ matrix.domain }}.json" ]]; then
+            printf '{"version":1,"samplesByFile":{}}\n' > ".ci/test-timings-${{ matrix.domain }}.json"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.domain }}-test-timing-history-input
+          path: .ci/test-timings-${{ matrix.domain }}.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
   prepare:
     name: Prepare domain test inputs
     if: inputs.application && !inputs.prepared
@@ -70,8 +97,8 @@ jobs:
 
   application-tests:
     name: Application tests (${{ matrix.shard }}/4)
-    needs: prepare
-    if: always() && !cancelled() && inputs.application && (needs.prepare.result == 'success' || (inputs.prepared && needs.prepare.result == 'skipped'))
+    needs: [prepare, timing-history-input]
+    if: always() && !cancelled() && inputs.application && needs.timing-history-input.result == 'success' && (needs.prepare.result == 'success' || (inputs.prepared && needs.prepare.result == 'skipped'))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -87,11 +114,10 @@ jobs:
           path: ui
       - name: Refresh split UI package installs
         run: bun ./tooling/repo/run-project-tasks.mts setup --path-prefix ui/
-      - uses: actions/cache/restore@v5
+      - uses: actions/download-artifact@v5
         with:
-          path: .ci/test-timings-application.json
-          key: ${{ runner.os }}-test-timings-v2-application-${{ github.sha }}
-          restore-keys: ${{ runner.os }}-test-timings-v2-application-
+          name: application-test-timing-history-input
+          path: .ci
       - name: Run balanced application shard
         env:
           ZOLTAR_USE_EXISTING_PRODUCTION_BUILD: "1"
@@ -108,7 +134,8 @@ jobs:
 
   solidity-tests:
     name: Solidity tests (${{ matrix.shard }}/4)
-    if: inputs.solidity
+    needs: timing-history-input
+    if: inputs.solidity && needs.timing-history-input.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -120,11 +147,10 @@ jobs:
       - uses: ./.github/actions/setup-ci
         with:
           profile: contracts
-      - uses: actions/cache/restore@v5
+      - uses: actions/download-artifact@v5
         with:
-          path: .ci/test-timings-solidity.json
-          key: ${{ runner.os }}-test-timings-v2-solidity-${{ github.sha }}
-          restore-keys: ${{ runner.os }}-test-timings-v2-solidity-
+          name: solidity-test-timing-history-input
+          path: .ci
       - name: Run balanced Solidity shard
         env:
           ZOLTAR_TEST_TIMING_HISTORY: .ci/test-timings-solidity.json
@@ -140,7 +166,7 @@ jobs:
 
   timing-history:
     name: Update ${{ matrix.domain }} timing history
-    needs: [application-tests, solidity-tests]
+    needs: [application-tests, solidity-tests, timing-history-input]
     if: always() && !cancelled() && (needs.solidity-tests.result == 'success' || needs.application-tests.result == 'success') && (needs.solidity-tests.result == 'success' || needs.solidity-tests.result == 'skipped') && (needs.application-tests.result == 'success' || needs.application-tests.result == 'skipped')
     runs-on: ubuntu-latest
     strategy:
@@ -151,11 +177,10 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
-      - uses: actions/cache/restore@v5
+      - uses: actions/download-artifact@v5
         with:
-          path: .ci/test-timings-${{ matrix.domain }}.json
-          key: ${{ runner.os }}-test-timings-v2-${{ matrix.domain }}-${{ github.sha }}
-          restore-keys: ${{ runner.os }}-test-timings-v2-${{ matrix.domain }}-
+          name: ${{ matrix.domain }}-test-timing-history-input
+          path: .ci
       - uses: actions/download-artifact@v5
         with:
           pattern: ${{ matrix.domain }}-test-timing-*

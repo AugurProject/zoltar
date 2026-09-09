@@ -54,8 +54,7 @@ export const cursorTimestamp = (value: unknown): string => {
 export const isNonNegativeSafeInteger = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
 const POSTGRES_INTEGER_MAX = 2_147_483_647
 export const isPostgresInteger = (value: unknown): value is number => isNonNegativeSafeInteger(value) && value <= POSTGRES_INTEGER_MAX
-export const isPostgresIntegerString = (value: unknown): value is string =>
-	typeof value === 'string' && /^\d+$/.test(value) && BigInt(value) <= BigInt(POSTGRES_INTEGER_MAX)
+export const isPostgresIntegerString = (value: unknown): value is string => typeof value === 'string' && /^\d+$/.test(value) && BigInt(value) <= BigInt(POSTGRES_INTEGER_MAX)
 export const routeInteger = (value: string | undefined, postgresInteger = false): number | undefined => {
 	if (value === undefined || !/^\d+$/.test(value)) return undefined
 	const result = Number(value)
@@ -94,7 +93,7 @@ const isLogCursor = (parts: readonly JsonValue[]): parts is LogCursor =>
 	typeof parts[7] === 'string' &&
 	/^0x[0-9a-f]{64}$/.test(parts[7]) &&
 	isPostgresBigint(parts[8]) &&
-	parts.slice(9, 12).every((part) => typeof part === 'string') &&
+	parts.slice(9, 12).every(part => typeof part === 'string') &&
 	typeof parts[12] === 'string' &&
 	isExactIsoTimestamp(parts[12]) &&
 	isPostgresBigint(parts[13]) &&
@@ -103,14 +102,7 @@ const isLogCursor = (parts: readonly JsonValue[]): parts is LogCursor =>
 	typeof parts[16] === 'string' &&
 	/^0x[0-9a-f]{64}$/.test(parts[16])
 
-export const parseLogCursor = (
-	value: string | null,
-	chainId: number,
-	event: string | null,
-	address: string | null,
-	decoded: 'true' | 'false' | null,
-	canonical: CanonicalHistoryFilter,
-): LogCursor | undefined => {
+export const parseLogCursor = (value: string | null, chainId: number, event: string | null, address: string | null, decoded: 'true' | 'false' | null, canonical: CanonicalHistoryFilter): LogCursor | undefined => {
 	if (value === null) return undefined
 	let parts: readonly JsonValue[]
 	try {
@@ -120,52 +112,16 @@ export const parseLogCursor = (
 	} catch (error) {
 		throw new ApiRequestError('cursor is invalid', { cause: error })
 	}
-	if (parts[1] !== chainId || parts[2] !== event || parts[3] !== address || parts[4] !== decoded || parts[5] !== canonical)
-		throw new ApiRequestError('cursor does not match the requested log collection')
+	if (parts[1] !== chainId || parts[2] !== event || parts[3] !== address || parts[4] !== decoded || parts[5] !== canonical) throw new ApiRequestError('cursor does not match the requested log collection')
 	return parts
 }
 
-export const logCursorFor = (
-	chainId: number,
-	event: string | null,
-	address: string | null,
-	decoded: 'true' | 'false' | null,
-	canonical: CanonicalHistoryFilter,
-	asOf: Record<string, unknown>,
-	row: Record<string, unknown>,
-): string =>
-	encodeOpaqueCursor([
-		1,
-		chainId,
-		event,
-		address,
-		decoded,
-		canonical,
-		...snapshotBoundary(asOf),
-		cursorTimestamp(row['block_timestamp']),
-		String(row['block_number']),
-		Number(row['transaction_index']),
-		Number(row['log_index']),
-		String(row['block_hash']),
-	] satisfies LogCursor)
+export const logCursorFor = (chainId: number, event: string | null, address: string | null, decoded: 'true' | 'false' | null, canonical: CanonicalHistoryFilter, asOf: Record<string, unknown>, row: Record<string, unknown>): string =>
+	encodeOpaqueCursor([1, chainId, event, address, decoded, canonical, ...snapshotBoundary(asOf), cursorTimestamp(row['block_timestamp']), String(row['block_number']), Number(row['transaction_index']), Number(row['log_index']), String(row['block_hash'])] satisfies LogCursor)
 
 export type AddressHistoryKind = 'referenced' | 'sent'
 
-export type AddressHistoryCursor = readonly [
-	version: 1,
-	kind: AddressHistoryKind,
-	chainId: number,
-	address: string,
-	snapshotBlock: string,
-	snapshotHash: string,
-	invalidationId: string,
-	abiSourceHash: string,
-	applicationSourceHash: string,
-	projectionSourceHash: string,
-	total: number,
-	block: string,
-	transaction: number,
-]
+export type AddressHistoryCursor = readonly [version: 1, kind: AddressHistoryKind, chainId: number, address: string, snapshotBlock: string, snapshotHash: string, invalidationId: string, abiSourceHash: string, applicationSourceHash: string, projectionSourceHash: string, total: number, block: string, transaction: number]
 
 export const POSTGRES_BIGINT_MAX = 9_223_372_036_854_775_807n
 
@@ -175,8 +131,7 @@ export const isPostgresBigint = (value: unknown): value is string => {
 }
 
 export const directObservationTotal = (value: unknown): number => {
-	if (!isPostgresBigint(value) || BigInt(value) > BigInt(Number.MAX_SAFE_INTEGER))
-		throw new ApiRequestError('direct observation result set exceeds the safe pagination range; narrow kind, address, or canonical filters')
+	if (!isPostgresBigint(value) || BigInt(value) > BigInt(Number.MAX_SAFE_INTEGER)) throw new ApiRequestError('direct observation result set exceeds the safe pagination range; narrow kind, address, or canonical filters')
 	return Number(value)
 }
 
@@ -202,7 +157,7 @@ export const parseAddressHistoryCursor = (value: string | null, kind: AddressHis
 			typeof parts[5] !== 'string' ||
 			!/^0x[0-9a-f]{64}$/.test(parts[5]) ||
 			!isPostgresBigint(parts[6]) ||
-			!parts.slice(7, 10).every((part) => typeof part === 'string') ||
+			!parts.slice(7, 10).every(part => typeof part === 'string') ||
 			!isNonNegativeSafeInteger(parts[10]) ||
 			!isPostgresBigint(parts[11]) ||
 			!isPostgresInteger(parts[12]) ||
@@ -215,47 +170,10 @@ export const parseAddressHistoryCursor = (value: string | null, kind: AddressHis
 	}
 }
 
-export const addressHistoryCursorFor = (
-	kind: AddressHistoryKind,
-	chainId: number,
-	address: string,
-	snapshotBlock: string,
-	snapshotHash: string,
-	asOf: Record<string, unknown>,
-	total: number,
-	row: Record<string, unknown>,
-): string =>
-	encodeOpaqueCursor([
-		1,
-		kind,
-		chainId,
-		address,
-		snapshotBlock,
-		snapshotHash,
-		String(asOf['invalidationId']),
-		String(asOf['abiSourceHash']),
-		String(asOf['applicationSourceHash']),
-		String(asOf['projectionSourceHash']),
-		total,
-		String(row['block_number']),
-		Number(row['transaction_index']),
-	] satisfies AddressHistoryCursor)
+export const addressHistoryCursorFor = (kind: AddressHistoryKind, chainId: number, address: string, snapshotBlock: string, snapshotHash: string, asOf: Record<string, unknown>, total: number, row: Record<string, unknown>): string =>
+	encodeOpaqueCursor([1, kind, chainId, address, snapshotBlock, snapshotHash, String(asOf['invalidationId']), String(asOf['abiSourceHash']), String(asOf['applicationSourceHash']), String(asOf['projectionSourceHash']), total, String(row['block_number']), Number(row['transaction_index'])] satisfies AddressHistoryCursor)
 
-export type ActionCursor = readonly [
-	version: 1,
-	chainId: number,
-	snapshotBlock: string,
-	snapshotHash: string,
-	invalidationId: string,
-	abiSourceHash: string,
-	applicationSourceHash: string,
-	projectionSourceHash: string,
-	timestamp: string,
-	blockNumber: string,
-	transactionIndex: number,
-	blockHash: string,
-	txHash: string,
-]
+export type ActionCursor = readonly [version: 1, chainId: number, snapshotBlock: string, snapshotHash: string, invalidationId: string, abiSourceHash: string, applicationSourceHash: string, projectionSourceHash: string, timestamp: string, blockNumber: string, transactionIndex: number, blockHash: string, txHash: string]
 
 const isActionCursor = (parts: readonly JsonValue[]): parts is ActionCursor =>
 	parts.length === 13 &&
@@ -265,7 +183,7 @@ const isActionCursor = (parts: readonly JsonValue[]): parts is ActionCursor =>
 	typeof parts[3] === 'string' &&
 	/^0x[0-9a-f]{64}$/.test(parts[3]) &&
 	isPostgresBigint(parts[4]) &&
-	parts.slice(5, 8).every((part) => typeof part === 'string') &&
+	parts.slice(5, 8).every(part => typeof part === 'string') &&
 	typeof parts[8] === 'string' &&
 	isCursorTimestamp(parts[8]) &&
 	isPostgresBigint(parts[9]) &&
@@ -290,16 +208,7 @@ export const parseActionCursor = (value: string | null, chainId: number): Action
 }
 
 export const actionCursorFor = (chainId: number, asOf: Record<string, unknown>, row: Record<string, unknown>): string =>
-	encodeOpaqueCursor([
-		1,
-		chainId,
-		...snapshotBoundary(asOf),
-		cursorTimestamp(row['block_timestamp']),
-		String(row['block_number']),
-		Number(row['transaction_index']),
-		String(row['block_hash']),
-		String(row['tx_hash']),
-	] satisfies ActionCursor)
+	encodeOpaqueCursor([1, chainId, ...snapshotBoundary(asOf), cursorTimestamp(row['block_timestamp']), String(row['block_number']), Number(row['transaction_index']), String(row['block_hash']), String(row['tx_hash'])] satisfies ActionCursor)
 
 export type CanonicalHistoryFilter = 'canonical' | 'orphaned' | 'all'
 

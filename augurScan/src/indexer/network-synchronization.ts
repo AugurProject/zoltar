@@ -23,15 +23,7 @@ import { rpcQueueSaturationFrom } from '../rpc-request-queue.ts'
 import { bigintToSafeNumber, unixSecondsToDate } from '../time.ts'
 import type { ContractMetadata, TokenMetadata } from '../types.ts'
 import { NetworkIndexerLifecycle } from './network-lifecycle.ts'
-import {
-	findContractDeploymentBlock,
-	type LogScanInput,
-	logScanCursorUpdates,
-	manifestReplayAncestor,
-	planManifestBackfill,
-	type RpcBlockHeader,
-	reorgSearchFloor,
-} from './planning.ts'
+import { findContractDeploymentBlock, type LogScanInput, logScanCursorUpdates, manifestReplayAncestor, planManifestBackfill, type RpcBlockHeader, reorgSearchFloor } from './planning.ts'
 
 export abstract class NetworkIndexerSynchronization extends NetworkIndexerLifecycle {
 	protected abstract refreshRichListBalances(blockNumber: bigint, blockHash: Hash): Promise<void>
@@ -49,19 +41,8 @@ export abstract class NetworkIndexerSynchronization extends NetworkIndexerLifecy
 		readonly deploymentObservations: readonly ContractDeploymentObservation[]
 	}>
 	protected abstract mergeLogs(target: Map<bigint, Log[]>, logs: readonly Log[]): void
-	protected abstract getKnownLogs(
-		blockNumber: bigint,
-		addresses: readonly Address[],
-		contracts: ReadonlyMap<string, ContractMetadata>,
-		blockHash: Hash,
-	): Promise<Log[]>
-	protected abstract getAllLogs(
-		fromBlock: bigint,
-		toBlock: bigint,
-		addresses: readonly Address[],
-		contracts: ReadonlyMap<string, ContractMetadata>,
-		expectedBlockHash: (blockNumber: bigint) => Promise<Hash>,
-	): Promise<readonly Log[]>
+	protected abstract getKnownLogs(blockNumber: bigint, addresses: readonly Address[], contracts: ReadonlyMap<string, ContractMetadata>, blockHash: Hash): Promise<Log[]>
+	protected abstract getAllLogs(fromBlock: bigint, toBlock: bigint, addresses: readonly Address[], contracts: ReadonlyMap<string, ContractMetadata>, expectedBlockHash: (blockNumber: bigint) => Promise<Hash>): Promise<readonly Log[]>
 	protected abstract indexBlock(
 		number: bigint,
 		observedHead: bigint,
@@ -125,10 +106,7 @@ export abstract class NetworkIndexerSynchronization extends NetworkIndexerLifecy
 		await this.assertLease()
 		const checkpoint = await this.database.checkpoint(this.network.chainId, this.requireLease())
 		if (checkpoint === undefined) return
-		const [storedContracts, cursors] = await Promise.all([
-			this.database.contracts(this.network.chainId, this.requireLease()),
-			this.database.logScanCursors(this.network.chainId, this.requireLease()),
-		])
+		const [storedContracts, cursors] = await Promise.all([this.database.contracts(this.network.chainId, this.requireLease()), this.database.logScanCursors(this.network.chainId, this.requireLease())])
 		const replayStart = await planManifestBackfill(
 			this.network.contracts,
 			storedContracts,
@@ -140,17 +118,14 @@ export abstract class NetworkIndexerSynchronization extends NetworkIndexerLifecy
 		)
 		if (replayStart === undefined) return
 		const requestedAncestor = manifestReplayAncestor(replayStart, this.network.startBlock)
-		const storedAncestor =
-			requestedAncestor < 0n ? undefined : await this.database.canonicalCheckpointAtOrBefore(this.network.chainId, requestedAncestor, this.requireLease())
+		const storedAncestor = requestedAncestor < 0n ? undefined : await this.database.canonicalCheckpointAtOrBefore(this.network.chainId, requestedAncestor, this.requireLease())
 		const ancestor = storedAncestor?.number ?? -1n
 		const ancestorHash = storedAncestor?.hash
 		await this.assertLease()
 		await this.database.rewind(this.network.chainId, ancestor, ancestorHash, this.requireLease(), 'manifest-reset', this.provenance)
 		this.indexingStartReported = false
 		this.lastReportedPhase = undefined
-		console.info(
-			`[${this.network.id}] manifest history gap detected; rewound to ${ancestor < 0n ? 'before the configured start block' : `block #${ancestor}`} to replay from block #${replayStart}`,
-		)
+		console.info(`[${this.network.id}] manifest history gap detected; rewound to ${ancestor < 0n ? 'before the configured start block' : `block #${ancestor}`} to replay from block #${replayStart}`)
 	}
 
 	protected async reconcileReorg(): Promise<void> {
@@ -162,8 +137,8 @@ export abstract class NetworkIndexerSynchronization extends NetworkIndexerLifecy
 		const ancestor = await findSparseCanonicalAncestor(
 			checkpoint.number - 1n,
 			floor,
-			(blockNumber) => this.database.canonicalCheckpointAtOrBefore(this.network.chainId, blockNumber, this.requireLease()),
-			async (blockNumber) => (await this.getBlockHeader(blockNumber)).hash,
+			blockNumber => this.database.canonicalCheckpointAtOrBefore(this.network.chainId, blockNumber, this.requireLease()),
+			async blockNumber => (await this.getBlockHeader(blockNumber)).hash,
 		)
 		if (ancestor !== undefined) {
 			await this.assertLease()
@@ -184,9 +159,7 @@ export abstract class NetworkIndexerSynchronization extends NetworkIndexerLifecy
 				candidate = contractDeploymentCandidateFrom(candidates, this.historicalCodeUnavailable())
 			} catch (error) {
 				if (errorChainIncludes(error, leaseFailureNames)) throw error
-				console.warn(
-					`[${this.network.id}] contract deployment check skipped: ${indexerOperationFailureReason(error, this.rpcDiagnostics.activeNumber(), 'storage')}`,
-				)
+				console.warn(`[${this.network.id}] contract deployment check skipped: ${indexerOperationFailureReason(error, this.rpcDiagnostics.activeNumber(), 'storage')}`)
 				return
 			}
 			if (candidate === undefined) return
@@ -199,11 +172,8 @@ export abstract class NetworkIndexerSynchronization extends NetworkIndexerLifecy
 					if (indexedBoundary <= searchStart) return
 					try {
 						const historicalRead = await readHistoricalCodeWithPermanentFallback(
-							() =>
-								findContractDeploymentBlock(searchStart, indexedBoundary, (blockNumber) =>
-									readWithinBudget(() => this.client.getBytecode({ address: candidate.address, blockNumber })),
-								),
-							(error) => this.rememberHistoricalCodeUnavailable(candidate.address, error),
+							() => findContractDeploymentBlock(searchStart, indexedBoundary, blockNumber => readWithinBudget(() => this.client.getBytecode({ address: candidate.address, blockNumber }))),
+							error => this.rememberHistoricalCodeUnavailable(candidate.address, error),
 						)
 						if (historicalRead.status === 'unavailable') return
 						deployment = historicalRead.value
@@ -222,9 +192,7 @@ export abstract class NetworkIndexerSynchronization extends NetworkIndexerLifecy
 							}
 			} catch (error) {
 				if (rpcQueueSaturationFrom(error) !== undefined) throw error
-				console.warn(
-					`[${this.network.id}] contract deployment check skipped: ${indexerOperationFailureReason(error, this.rpcDiagnostics.activeNumber(), 'rpc')}`,
-				)
+				console.warn(`[${this.network.id}] contract deployment check skipped: ${indexerOperationFailureReason(error, this.rpcDiagnostics.activeNumber(), 'rpc')}`)
 				return
 			}
 			try {
@@ -232,9 +200,7 @@ export abstract class NetworkIndexerSynchronization extends NetworkIndexerLifecy
 				await this.database.recordContractDeployment(this.network.chainId, candidate.address, indexedBoundary, resolved, this.requireLease())
 			} catch (error) {
 				if (errorChainIncludes(error, leaseFailureNames)) throw error
-				console.warn(
-					`[${this.network.id}] contract deployment check skipped: ${indexerOperationFailureReason(error, this.rpcDiagnostics.activeNumber(), 'storage')}`,
-				)
+				console.warn(`[${this.network.id}] contract deployment check skipped: ${indexerOperationFailureReason(error, this.rpcDiagnostics.activeNumber(), 'storage')}`)
 			}
 		} finally {
 			this.lastDeploymentScanAt = Date.now()
@@ -243,14 +209,7 @@ export abstract class NetworkIndexerSynchronization extends NetworkIndexerLifecy
 
 	protected async poll(): Promise<boolean> {
 		await this.assertLease()
-		await this.database.recordIndexerOwnership(
-			this.network.chainId,
-			this.network.id,
-			'owned',
-			this.requireLease().backendPid,
-			this.provenance?.indexerRunId,
-			this.requireLease().connection,
-		)
+		await this.database.recordIndexerOwnership(this.network.chainId, this.network.id, 'owned', this.requireLease().backendPid, this.provenance?.indexerRunId, this.requireLease().connection)
 		await this.reconcileReorg()
 		const observedHead = await this.client.getBlockNumber()
 		if (!this.stateBoundaryDiscovered && observedHead >= this.network.startBlock) await this.discoverStateStartBlock(observedHead)
@@ -271,9 +230,7 @@ export abstract class NetworkIndexerSynchronization extends NetworkIndexerLifecy
 
 		if (!this.indexingStartReported) {
 			const completion = indexingCompletion(this.network.startBlock, nextBlock - 1n, observedHead)
-			console.info(
-				`[${this.network.id}] indexer state: backfilling; fetching from block #${nextBlock}; observed head #${observedHead}; ${completion.percentage}% complete; ${completion.remainingBlocks} blocks behind; estimating ETA`,
-			)
+			console.info(`[${this.network.id}] indexer state: backfilling; fetching from block #${nextBlock}; observed head #${observedHead}; ${completion.percentage}% complete; ${completion.remainingBlocks} blocks behind; estimating ETA`)
 			this.progressSample = { block: nextBlock - 1n, sampledAt: Date.now() }
 			this.indexingStartReported = true
 		}
@@ -285,8 +242,7 @@ export abstract class NetworkIndexerSynchronization extends NetworkIndexerLifecy
 		const initialAddresses = initialContracts.map(({ address }) => address)
 		for (const address of initialAddresses) {
 			const cursor = storedCursors.get(address.toLowerCase())
-			if (cursor !== undefined && cursor.lastRetrievedBlock >= nextBlock)
-				throw new DatabaseConsistencyError(`Log cursor ${address} is ahead of the network checkpoint`)
+			if (cursor !== undefined && cursor.lastRetrievedBlock >= nextBlock) throw new DatabaseConsistencyError(`Log cursor ${address} is ahead of the network checkpoint`)
 		}
 		let segment: {
 			readonly toBlock: bigint
@@ -298,8 +254,7 @@ export abstract class NetworkIndexerSynchronization extends NetworkIndexerLifecy
 		}
 		try {
 			segment = await this.getNextLogSegment(nextBlock, observedHead, initialContracts)
-			if (segment.endBlockHash !== undefined && segment.endBlockHeader?.hash !== segment.endBlockHash)
-				throw new ChainContinuityError(`Canonical chain changed after querying logs through block ${segment.toBlock}`)
+			if (segment.endBlockHash !== undefined && segment.endBlockHeader?.hash !== segment.endBlockHash) throw new ChainContinuityError(`Canonical chain changed after querying logs through block ${segment.toBlock}`)
 		} catch (error) {
 			if (error instanceof ChainContinuityError) return false
 			throw error
@@ -338,36 +293,24 @@ export abstract class NetworkIndexerSynchronization extends NetworkIndexerLifecy
 		let previousStoredNumber = checkpoint?.number
 		let previousStoredHash = checkpoint?.hash
 		while (!processedBlocks.has(end) && !this.signal.aborted) {
-			const targetBlock = [...new Set([...logsByBlock.keys(), end])]
-				.filter((blockNumber) => blockNumber >= batchStart && blockNumber <= end && !processedBlocks.has(blockNumber))
-				.sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))[0]
+			const targetBlock = [...new Set([...logsByBlock.keys(), end])].filter(blockNumber => blockNumber >= batchStart && blockNumber <= end && !processedBlocks.has(blockNumber)).sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))[0]
 			if (targetBlock === undefined) throw new Error(`Sparse log segment did not retain its end checkpoint at block ${end}`)
 			const header = await headerAt(targetBlock)
 			const expectedParentHash = previousStoredNumber !== undefined && targetBlock === previousStoredNumber + 1n ? previousStoredHash : undefined
 			let indexed: { block: IndexedBlock; contracts: Map<string, ContractMetadata>; tokenMetadata: Map<string, TokenMetadata> }
 			try {
-				indexed = await this.indexBlock(
-					targetBlock,
-					observedHead,
-					contracts,
-					tokenMetadata,
-					expectedParentHash,
-					header,
-					logsByBlock.get(targetBlock) ?? [],
-					async (discoveredAddresses, discoveredContracts) => {
-						const coverage = await scanDiscoveredLogCoverage(
-							targetBlock,
-							end,
-							discoveredAddresses,
-							discoveredContracts,
-							(addresses) => this.getKnownLogs(targetBlock, addresses, discoveredContracts, header.hash),
-							(fromBlock, toBlock, addresses) =>
-								this.getAllLogs(fromBlock, toBlock, addresses, discoveredContracts, async (blockNumber) => (await headerAt(blockNumber)).hash),
-						)
-						this.mergeLogs(logsByBlock, coverage.remainingLogs)
-						return coverage.currentBlockLogs
-					},
-				)
+				indexed = await this.indexBlock(targetBlock, observedHead, contracts, tokenMetadata, expectedParentHash, header, logsByBlock.get(targetBlock) ?? [], async (discoveredAddresses, discoveredContracts) => {
+					const coverage = await scanDiscoveredLogCoverage(
+						targetBlock,
+						end,
+						discoveredAddresses,
+						discoveredContracts,
+						addresses => this.getKnownLogs(targetBlock, addresses, discoveredContracts, header.hash),
+						(fromBlock, toBlock, addresses) => this.getAllLogs(fromBlock, toBlock, addresses, discoveredContracts, async blockNumber => (await headerAt(blockNumber)).hash),
+					)
+					this.mergeLogs(logsByBlock, coverage.remainingLogs)
+					return coverage.currentBlockLogs
+				})
 			} catch (error) {
 				if (error instanceof ChainContinuityError) {
 					await this.reconcileReorg()
@@ -401,8 +344,8 @@ export abstract class NetworkIndexerSynchronization extends NetworkIndexerLifecy
 			try {
 				await commitSparseCanonicalBatch(
 					anchors,
-					async (blockNumber) => (await this.getBlockHeader(blockNumber)).hash,
-					async (validateBeforeCommit) => {
+					async blockNumber => (await this.getBlockHeader(blockNumber)).hash,
+					async validateBeforeCommit => {
 						this.signal.throwIfAborted()
 						await this.assertLease()
 						await this.database.storeBlocks(this.network.chainId, blocksToStore, this.requireLease(), this.provenance, async () => {

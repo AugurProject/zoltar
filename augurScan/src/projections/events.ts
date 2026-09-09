@@ -142,19 +142,7 @@ export type DomainEventProjection = {
 	relatedEntities: readonly string[]
 }
 
-export type Projection =
-	| QuestionProjection
-	| PoolProjection
-	| PoolSnapshotProjection
-	| VaultSnapshotProjection
-	| PoolStateProjection
-	| UniverseProjection
-	| AmmMarketProjection
-	| AmmPriceProjection
-	| RepEthPriceProjection
-	| UniswapMarketProjection
-	| UniswapPriceProjection
-	| DomainEventProjection
+export type Projection = QuestionProjection | PoolProjection | PoolSnapshotProjection | VaultSnapshotProjection | PoolStateProjection | UniverseProjection | AmmMarketProjection | AmmPriceProjection | RepEthPriceProjection | UniswapMarketProjection | UniswapPriceProjection | DomainEventProjection
 
 const record = (value: unknown, name: string): Record<string, unknown> => {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`${name} must be an object`)
@@ -192,7 +180,7 @@ const timestamp = (value: unknown, name: string): Date => {
 
 const strings = (value: unknown, name: string): readonly string[] => {
 	if (!Array.isArray(value)) throw new Error(`${name} must be a string array`)
-	return value.map((item) => string(item, name))
+	return value.map(item => string(item, name))
 }
 
 const poolStateFields: Readonly<Record<string, readonly string[]>> = {
@@ -394,10 +382,7 @@ export const eventProjectionsFrom = (log: StoredLog): readonly Projection[] => {
 				feeIndex: integerString(args['feeIndex'], 'feeIndex'),
 				feeIndexRemainder: integerString(args['feeIndexRemainder'], 'feeIndexRemainder'),
 				totalFeesOwedRemainder: integerString(args['totalFeesOwedRemainder'], 'totalFeesOwedRemainder'),
-				uncheckpointedFeeEligibleCapacityOwnershipAttoRep: integerString(
-					args['uncheckpointedFeeEligibleCapacityOwnershipAttoRep'],
-					'uncheckpointedFeeEligibleCapacityOwnershipAttoRep',
-				),
+				uncheckpointedFeeEligibleCapacityOwnershipAttoRep: integerString(args['uncheckpointedFeeEligibleCapacityOwnershipAttoRep'], 'uncheckpointedFeeEligibleCapacityOwnershipAttoRep'),
 				lastUpdatedFeeAccumulator: timestamp(args['lastUpdatedFeeAccumulator'], 'lastUpdatedFeeAccumulator'),
 				currentRetentionRate: integerString(args['currentRetentionRate'], 'currentRetentionRate'),
 			},
@@ -414,10 +399,7 @@ export const eventProjectionsFrom = (log: StoredLog): readonly Projection[] => {
 				feeIndex: integerString(args['feeIndex'], 'feeIndex'),
 				vaultFeeRemainder: integerString(args['vaultFeeRemainder'], 'vaultFeeRemainder'),
 				resultingTotalRepBackingUnits: integerString(args['resultingTotalRepBackingUnits'], 'resultingTotalRepBackingUnits'),
-				resultingFeeEligibleCapacityOwnershipAttoRep: integerString(
-					args['resultingFeeEligibleCapacityOwnershipAttoRep'],
-					'resultingFeeEligibleCapacityOwnershipAttoRep',
-				),
+				resultingFeeEligibleCapacityOwnershipAttoRep: integerString(args['resultingFeeEligibleCapacityOwnershipAttoRep'], 'resultingFeeEligibleCapacityOwnershipAttoRep'),
 			},
 			{
 				type: 'poolState',
@@ -428,7 +410,7 @@ export const eventProjectionsFrom = (log: StoredLog): readonly Projection[] => {
 		]
 	const poolFields = poolStateFields[name]
 	if (poolFields !== undefined) {
-		const state = Object.fromEntries(poolFields.flatMap((field) => (args[field] === undefined ? [] : [[field, args[field]]])))
+		const state = Object.fromEntries(poolFields.flatMap(field => (args[field] === undefined ? [] : [[field, args[field]]])))
 		if (state['resultingShareTokenSupplyAttoShares'] !== undefined) {
 			state['shareTokenSupplyAttoShares'] = state['resultingShareTokenSupplyAttoShares']
 			delete state['resultingShareTokenSupplyAttoShares']
@@ -489,9 +471,7 @@ export const eventProjectionsFrom = (log: StoredLog): readonly Projection[] => {
 				eventName: name,
 				universeId: integerString(args['universeId'], 'universeId'),
 				theoreticalSupplyAttoRep: integerString(args['universeTheoreticalSupplyAttoRep'], 'universeTheoreticalSupplyAttoRep'),
-				...(name === 'MigrationRepAdded'
-					? { migrationRepBalanceAttoRep: integerString(args['migrationRepBalanceAttoRep'], 'migrationRepBalanceAttoRep') }
-					: {}),
+				...(name === 'MigrationRepAdded' ? { migrationRepBalanceAttoRep: integerString(args['migrationRepBalanceAttoRep'], 'migrationRepBalanceAttoRep') } : {}),
 			},
 		]
 	return []

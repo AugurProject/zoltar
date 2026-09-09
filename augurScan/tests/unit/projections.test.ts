@@ -26,10 +26,8 @@ describe('state projections', () => {
 		const catalog = (await Bun.file(new URL('../../config/abis.json', import.meta.url)).json()) as {
 			contracts: Record<string, { abi: Array<{ type?: unknown; name?: unknown }> }>
 		}
-		const abiEvents = new Set(
-			Object.values(catalog.contracts).flatMap(({ abi }) => abi.flatMap((item) => (item.type === 'event' && typeof item.name === 'string' ? [item.name] : []))),
-		)
-		expect(semanticEventNames.filter((eventName) => !abiEvents.has(eventName))).toEqual([])
+		const abiEvents = new Set(Object.values(catalog.contracts).flatMap(({ abi }) => abi.flatMap(item => (item.type === 'event' && typeof item.name === 'string' ? [item.name] : []))))
+		expect(semanticEventNames.filter(eventName => !abiEvents.has(eventName))).toEqual([])
 	})
 	test('captures immutable question metadata', () => {
 		const [projection] = projectionsFrom(
@@ -187,9 +185,7 @@ describe('state projections', () => {
 		})
 		const [roundedPrice] = projectionsFrom(log('Sync', { yesReserve: '1', noReserve: '2' }, pair))
 		expect(roundedPrice).toMatchObject({ conditionalYesBps: '6666', conditionalNoBps: '3334' })
-		expect(projectionsFrom(log('Sync', { yesReserve: '0', noReserve: '0' }, pair))).toEqual([
-			expect.objectContaining({ type: 'domainEvent', domain: 'trading', semanticEventKind: 'Sync' }),
-		])
+		expect(projectionsFrom(log('Sync', { yesReserve: '0', noReserve: '0' }, pair))).toEqual([expect.objectContaining({ type: 'domainEvent', domain: 'trading', semanticEventKind: 'Sync' })])
 	})
 
 	test('retains an Augur AMM Swap as trading evidence without treating it as a reserve snapshot', () => {
@@ -227,16 +223,14 @@ describe('state projections', () => {
 	})
 
 	test('does not classify Uniswap-shaped Swap events as Augur AMM trades', () => {
-		const projected = projectionsFrom(
-			log('Swap', { sender: pool, recipient: vault, amount0: '-1', amount1: '2', sqrtPriceX96: String(2n ** 96n), liquidity: '100' }),
-		)
-		expect(projected.some((item) => item.type === 'domainEvent' && item.domain === 'trading')).toBe(false)
+		const projected = projectionsFrom(log('Swap', { sender: pool, recipient: vault, amount0: '-1', amount1: '2', sqrtPriceX96: String(2n ** 96n), liquidity: '100' }))
+		expect(projected.some(item => item.type === 'domainEvent' && item.domain === 'trading')).toBe(false)
 	})
 
 	test('does not classify Uniswap V2 Sync events as Augur AMM trades', () => {
 		const projected = projectionsFrom(log('Sync', { reserve0: '300', reserve1: '700' }))
-		expect(projected.some((item) => item.type === 'domainEvent' && item.domain === 'trading')).toBe(false)
-		expect(projected.some((item) => item.type === 'ammPrice')).toBe(false)
+		expect(projected.some(item => item.type === 'domainEvent' && item.domain === 'trading')).toBe(false)
+		expect(projected.some(item => item.type === 'ammPrice')).toBe(false)
 	})
 
 	test('retains LP share transfers and approvals only when the emitter is an Augur AMM pair', () => {
@@ -248,14 +242,14 @@ describe('state projections', () => {
 			entityType: 'amm',
 			semanticEventKind: 'Transfer',
 		})
-		expect(projectionsFrom(log('Transfer', { from: pool, to: vault, value: '50' })).some((item) => item.type === 'domainEvent')).toBe(false)
+		expect(projectionsFrom(log('Transfer', { from: pool, to: vault, value: '50' })).some(item => item.type === 'domainEvent')).toBe(false)
 		expect(projectionsFrom(approval).at(-1)).toMatchObject({
 			type: 'domainEvent',
 			domain: 'trading',
 			entityType: 'amm',
 			semanticEventKind: 'Approval',
 		})
-		expect(projectionsFrom(log('Approval', { owner: pool, spender: vault, value: '50' })).some((item) => item.type === 'domainEvent')).toBe(false)
+		expect(projectionsFrom(log('Approval', { owner: pool, spender: vault, value: '50' })).some(item => item.type === 'domainEvent')).toBe(false)
 	})
 
 	test('adds stable timeline identities for registries, markets, and universes', () => {
@@ -282,9 +276,7 @@ describe('state projections', () => {
 			entityType: 'question',
 			entityIdentity: '42',
 		})
-		expect(
-			projectionsFrom(log('PairCreated', { pair: vault, securityPool: pool, shareToken: vault, universeId: '7', feeBps: '30' }, pool, 'ammFactory')).at(-1),
-		).toMatchObject({
+		expect(projectionsFrom(log('PairCreated', { pair: vault, securityPool: pool, shareToken: vault, universeId: '7', feeBps: '30' }, pool, 'ammFactory')).at(-1)).toMatchObject({
 			domain: 'trading',
 			entityType: 'amm',
 			entityIdentity: vault.toLowerCase(),
@@ -346,7 +338,7 @@ describe('state projections', () => {
 			marketId: pool.toLowerCase(),
 			feeHundredthsBip: '3000',
 		})
-		expect(uniswapPairCreated.some((projection) => projection.type === 'domainEvent')).toBe(false)
+		expect(uniswapPairCreated.some(projection => projection.type === 'domainEvent')).toBe(false)
 		expect(projectionsFrom(log('Sync', { reserve0: '900', reserve1: '50' }))[0]).toEqual({
 			type: 'uniswapPrice',
 			venue: 'v2',
@@ -378,10 +370,7 @@ describe('state projections', () => {
 					sqrtPriceX96: String(2n ** 96n),
 				}),
 			),
-		).toEqual([
-			expect.objectContaining({ type: 'uniswapMarket', venue: 'v4', marketId }),
-			expect.objectContaining({ type: 'uniswapPrice', venue: 'v4', marketId, eventName: 'Initialize' }),
-		])
+		).toEqual([expect.objectContaining({ type: 'uniswapMarket', venue: 'v4', marketId }), expect.objectContaining({ type: 'uniswapPrice', venue: 'v4', marketId, eventName: 'Initialize' })])
 	})
 
 	test('adds typed domain evidence for operations and unified timelines', () => {
@@ -430,14 +419,7 @@ describe('state projections', () => {
 			domain: 'escalation',
 			entityIdentity: pool.toLowerCase(),
 		})
-		for (const eventName of [
-			'LiquidationApprovalSet',
-			'LiquidationApprovalReserved',
-			'LiquidationApprovalReleased',
-			'LiquidationApprovalConsumed',
-			'LiquidationApprovalRevoked',
-			'LiquidationApprovalNonceInvalidated',
-		])
+		for (const eventName of ['LiquidationApprovalSet', 'LiquidationApprovalReserved', 'LiquidationApprovalReleased', 'LiquidationApprovalConsumed', 'LiquidationApprovalRevoked', 'LiquidationApprovalNonceInvalidated'])
 			expect(projectionsFrom(log(eventName, { approvalId: `0x${'a'.repeat(64)}`, receiverVault: vault })).at(-1)).toMatchObject({
 				domain: 'approval',
 				entityType: 'liquidation-approval',

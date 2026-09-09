@@ -1,9 +1,6 @@
 import type { SQL } from 'bun'
 
-export const tradingCatalogRows = async (
-	sql: SQL,
-	query: { readonly chainId: number; readonly asOfBlock: string; readonly search?: string; readonly limit: number; readonly offset: number },
-) => {
+export const tradingCatalogRows = async (sql: SQL, query: { readonly chainId: number; readonly asOfBlock: string; readonly search?: string; readonly limit: number; readonly offset: number }) => {
 	const { chainId, asOfBlock, search, limit, offset } = query
 	return await sql`
 		WITH markets AS (

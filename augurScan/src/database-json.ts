@@ -4,7 +4,7 @@ const databaseJsonValue = (value: unknown): DatabaseJsonValue | undefined => {
 	if (value === null || typeof value === 'boolean' || typeof value === 'string') return value
 	if (typeof value === 'number') return Number.isFinite(value) ? value : null
 	if (typeof value === 'bigint') return value.toString()
-	if (Array.isArray(value)) return value.map((item) => databaseJsonValue(item) ?? null)
+	if (Array.isArray(value)) return value.map(item => databaseJsonValue(item) ?? null)
 	if (value instanceof Date) return value.toJSON()
 	if (typeof value !== 'object') return undefined
 	if ('toJSON' in value && typeof value.toJSON === 'function') return databaseJsonValue(value.toJSON())

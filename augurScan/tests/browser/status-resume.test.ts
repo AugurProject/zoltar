@@ -98,16 +98,12 @@ for (const viewport of [
 				await evaluate(`window.changeVisibility(true); window.pollStatus()`)
 				expect(await evaluate(`window.networkRequests`)).toBe(requests)
 				await evaluate(`window.networkMode = 'stale'; window.changeVisibility(true); window.changeVisibility(false)`)
-				await waitFor(
-					`document.querySelector('#freshness-title').textContent === 'RPC chain head is stale' && !document.querySelector('#freshness-banner').hidden`,
-				)
+				await waitFor(`document.querySelector('#freshness-title').textContent === 'RPC chain head is stale' && !document.querySelector('#freshness-banner').hidden`)
 				await capture('stale')
 				expect(await evaluate(`document.documentElement.scrollWidth <= innerWidth`)).toBe(true)
 				await evaluate(`window.networkMode = 'current'; dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))`)
 				await waitFor(`document.querySelector('#freshness-banner').hidden`)
-				await evaluate(
-					`window.routeFails = true; window.testStream.dispatchEvent(new MessageEvent('reorg', { data: JSON.stringify({ chainId: 1, depth: 1, reason: 'chain-reorg' }) }))`,
-				)
+				await evaluate(`window.routeFails = true; window.testStream.dispatchEvent(new MessageEvent('reorg', { data: JSON.stringify({ chainId: 1, depth: 1, reason: 'chain-reorg' }) }))`)
 				await waitFor(`document.querySelector('#freshness-title').textContent === 'Chain update refresh incomplete'`)
 				expect(await evaluate(`document.querySelector('#freshness-detail').textContent`)).toContain('Retrying automatically.')
 				expect(await evaluate(`[...document.querySelectorAll('button')].some(button => button.textContent === 'Retry now')`)).toBe(false)

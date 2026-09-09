@@ -133,5 +133,4 @@ export const addressInteractionHistory = async (sql: SQL, query: AddressHistoryQ
 	)
 }
 
-export const addressContractIdentity = async (sql: SQL, chainId: number, address: string) =>
-	await sql`SELECT label, kind, provenance FROM contracts WHERE canonical AND chain_id = ${chainId} AND address = ${address}`
+export const addressContractIdentity = async (sql: SQL, chainId: number, address: string) => await sql`SELECT label, kind, provenance FROM contracts WHERE canonical AND chain_id = ${chainId} AND address = ${address}`

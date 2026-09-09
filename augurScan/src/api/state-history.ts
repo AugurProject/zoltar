@@ -33,16 +33,12 @@ export const stateHistory = async (sql: SQL, parts: readonly string[], url: URL)
 	const indexedThroughBlock = network['indexed_block'] === null ? undefined : String(network['indexed_block'])
 	const requestedFromBlock = url.searchParams.has('fromBlock') ? fromBlock : indexedFromBlock
 	const requestedToBlock = url.searchParams.has('toBlock') ? toBlock : indexedThroughBlock
-	const historyIdentity = JSON.stringify({ type, identity: parts.slice(2).map((part) => part.toLowerCase()), fromBlock, toBlock, indexedFromBlock })
+	const historyIdentity = JSON.stringify({ type, identity: parts.slice(2).map(part => part.toLowerCase()), fromBlock, toBlock, indexedFromBlock })
 	const page = offsetPage(url, chainId, 'state-history', historyIdentity)
 	if (page.identity !== historyIdentity) throw new ApiRequestError('cursor does not match filters')
 	if (page.cursor !== undefined && !snapshotBoundaryMatches(page.cursor, 3, asOf)) throw new ApiConflictError('Indexed state changed; restart pagination')
 	const offset = page.offset
-	const rangeCovered =
-		indexedThroughBlock !== undefined &&
-		requestedToBlock !== undefined &&
-		BigInt(requestedFromBlock) >= BigInt(indexedFromBlock) &&
-		BigInt(requestedToBlock) <= BigInt(indexedThroughBlock)
+	const rangeCovered = indexedThroughBlock !== undefined && requestedToBlock !== undefined && BigInt(requestedFromBlock) >= BigInt(indexedFromBlock) && BigInt(requestedToBlock) <= BigInt(indexedThroughBlock)
 	const coverage = (truncated: boolean, series: Record<string, number>) => ({
 		requestedFromBlock,
 		requestedToBlock: requestedToBlock ?? toBlock,
@@ -67,13 +63,7 @@ export const stateHistory = async (sql: SQL, parts: readonly string[], url: URL)
 			queryLimit,
 			offset,
 		})
-		const truncated =
-			snapshots.length > limit ||
-			events.length > limit ||
-			ammPrices.length > limit ||
-			repEthPrices.length > limit ||
-			uniswapRepEthPrices.length > limit ||
-			openOracleHistory.length > limit
+		const truncated = snapshots.length > limit || events.length > limit || ammPrices.length > limit || repEthPrices.length > limit || uniswapRepEthPrices.length > limit || openOracleHistory.length > limit
 		return json({
 			snapshots: chronological(snapshots),
 			events: chronological(events),
@@ -98,8 +88,7 @@ export const stateHistory = async (sql: SQL, parts: readonly string[], url: URL)
 	if (type === 'vaults') {
 		const pool = parts[2]?.toLowerCase()
 		const vault = parts[3]?.toLowerCase()
-		if (parts.length !== 4 || pool === undefined || vault === undefined || !/^0x[0-9a-f]{40}$/.test(pool) || !/^0x[0-9a-f]{40}$/.test(vault))
-			return json({ error: 'Invalid vault identifier' }, 400)
+		if (parts.length !== 4 || pool === undefined || vault === undefined || !/^0x[0-9a-f]{40}$/.test(pool) || !/^0x[0-9a-f]{40}$/.test(vault)) return json({ error: 'Invalid vault identifier' }, 400)
 		const snapshots = await vaultStateHistory(sql, pool, vault, { chainId, fromBlock, toBlock, queryLimit, offset })
 		const truncated = snapshots.length > limit
 		return json({

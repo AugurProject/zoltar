@@ -37,15 +37,12 @@ describe('network configuration', () => {
 	test('uses a 100000 block default log scan range', async () => {
 		const environment = { ...process.env }
 		delete environment['LOG_SCAN_RANGE_SIZE']
-		const child = Bun.spawn(
-			[process.execPath, '-e', "const { runtimeConfig } = await import('./src/config.ts'); console.log(runtimeConfig.logScanRangeSize)"],
-			{
-				cwd: projectRoot,
-				env: environment,
-				stdout: 'pipe',
-				stderr: 'pipe',
-			},
-		)
+		const child = Bun.spawn([process.execPath, '-e', "const { runtimeConfig } = await import('./src/config.ts'); console.log(runtimeConfig.logScanRangeSize)"], {
+			cwd: projectRoot,
+			env: environment,
+			stdout: 'pipe',
+			stderr: 'pipe',
+		})
 		expect(await child.exited).toBe(0)
 		expect(await new Response(child.stdout).text()).toBe('100000\n')
 		expect(await new Response(child.stderr).text()).toBe('')
@@ -72,15 +69,7 @@ describe('network configuration', () => {
 		]) {
 			const manifestEntries = parseManifestValue(manifest, `${id}.json`)
 			const usdcAddress = id === 'mainnet' ? '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' : '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238'
-			const expectedAddresses = new Set(
-				[
-					...deployment.deploymentSteps,
-					...deployment.derivedContracts,
-					{ address: deployment.network.genesisRepTokenAddress },
-					{ address: deployment.network.wethAddress },
-					{ address: usdcAddress },
-				].map(({ address }) => address.toLowerCase()),
-			)
+			const expectedAddresses = new Set([...deployment.deploymentSteps, ...deployment.derivedContracts, { address: deployment.network.genesisRepTokenAddress }, { address: deployment.network.wethAddress }, { address: usdcAddress }].map(({ address }) => address.toLowerCase()))
 			expect(new Set(manifestEntries.map(([address]) => address.toLowerCase()))).toEqual(expectedAddresses)
 			expect(manifestEntries).toHaveLength(expectedAddresses.size)
 			expect(new Set(manifestEntries.map(([_address, _label, kind]) => kind)).size).toBe(manifestEntries.length)
@@ -88,12 +77,8 @@ describe('network configuration', () => {
 	})
 
 	test('accepts an optional exact deployment block in manifest entries', () => {
-		expect(
-			parseManifestValue({ contracts: [['0x1000000000000000000000000000000000000001', 'Factory', 'securityPoolFactory', '900000']] }, 'test.json'),
-		).toEqual([['0x1000000000000000000000000000000000000001', 'Factory', 'securityPoolFactory', 900_000n]])
-		expect(() =>
-			parseManifestValue({ contracts: [['0x1000000000000000000000000000000000000001', 'Factory', 'securityPoolFactory', 900000]] }, 'test.json'),
-		).toThrow('test.json contract 0 is invalid')
+		expect(parseManifestValue({ contracts: [['0x1000000000000000000000000000000000000001', 'Factory', 'securityPoolFactory', '900000']] }, 'test.json')).toEqual([['0x1000000000000000000000000000000000000001', 'Factory', 'securityPoolFactory', 900_000n]])
+		expect(() => parseManifestValue({ contracts: [['0x1000000000000000000000000000000000000001', 'Factory', 'securityPoolFactory', 900000]] }, 'test.json')).toThrow('test.json contract 0 is invalid')
 	})
 
 	test('rejects duplicate manifest addresses regardless of casing or metadata', () => {
@@ -130,11 +115,7 @@ describe('network configuration', () => {
 	test('accepts a configured testnet V4 PoolManager and rejects malformed values', async () => {
 		process.env['NETWORKS'] = 'sepolia'
 		process.env['SEPOLIA_UNISWAP_V4_POOL_MANAGER_ADDRESS'] = '0x1000000000000000000000000000000000000004'
-		expect((await loadNetworks())[0]?.contracts).toContainEqual([
-			'0x1000000000000000000000000000000000000004',
-			'Uniswap V4 PoolManager',
-			'uniswapV4PoolManager',
-		])
+		expect((await loadNetworks())[0]?.contracts).toContainEqual(['0x1000000000000000000000000000000000000004', 'Uniswap V4 PoolManager', 'uniswapV4PoolManager'])
 		process.env['SEPOLIA_UNISWAP_V4_POOL_MANAGER_ADDRESS'] = '0x1234'
 		expect(loadNetworks()).rejects.toThrow('SEPOLIA_UNISWAP_V4_POOL_MANAGER_ADDRESS must be a complete 20-byte EVM address')
 	})

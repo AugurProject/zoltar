@@ -2,31 +2,18 @@ import type { Address, Hash, Log, TransactionReceipt } from '../ethereum.ts'
 import type { ContractMetadata } from '../types.ts'
 import { ChainContinuityError, requireLogPosition } from './runtime-rpc.ts'
 
-export const isProtocolActivitySource = (contract: ContractMetadata | undefined): boolean =>
-	contract !== undefined &&
-	contract.kind !== 'weth' &&
-	contract.kind !== 'usdc' &&
-	contract.kind !== 'reputationToken' &&
-	contract.kind !== 'multicall3' &&
-	contract.kind !== 'proxyDeployer' &&
-	contract.kind !== 'scalarOutcomes'
+export const isProtocolActivitySource = (contract: ContractMetadata | undefined): boolean => contract !== undefined && contract.kind !== 'weth' && contract.kind !== 'usdc' && contract.kind !== 'reputationToken' && contract.kind !== 'multicall3' && contract.kind !== 'proxyDeployer' && contract.kind !== 'scalarOutcomes'
 
-export const indexerLogSources = (contracts: readonly ContractMetadata[]): readonly ContractMetadata[] =>
-	contracts.filter((contract) => isProtocolActivitySource(contract) || contract.kind === 'reputationToken')
+export const indexerLogSources = (contracts: readonly ContractMetadata[]): readonly ContractMetadata[] => contracts.filter(contract => isProtocolActivitySource(contract) || contract.kind === 'reputationToken')
 
 export const discoveryLogAddresses = (discoveredAddresses: readonly Address[], contracts: ReadonlyMap<string, ContractMetadata>): readonly Address[] => {
-	const sources = discoveredAddresses.filter((address) => {
+	const sources = discoveredAddresses.filter(address => {
 		const contract = contracts.get(address.toLowerCase())
 		return isProtocolActivitySource(contract) || contract?.kind === 'reputationToken'
 	})
-	if (!sources.some((address) => contracts.get(address.toLowerCase())?.kind === 'reputationToken')) return sources
-	const addresses = [
-		...sources,
-		...[...contracts.values()]
-			.filter(({ kind }) => kind === 'uniswapV2Factory' || kind === 'uniswapV3Factory' || kind === 'uniswapV4PoolManager')
-			.map(({ address }) => address),
-	]
-	return [...new Map(addresses.map((address) => [address.toLowerCase(), address])).values()]
+	if (!sources.some(address => contracts.get(address.toLowerCase())?.kind === 'reputationToken')) return sources
+	const addresses = [...sources, ...[...contracts.values()].filter(({ kind }) => kind === 'uniswapV2Factory' || kind === 'uniswapV3Factory' || kind === 'uniswapV4PoolManager').map(({ address }) => address)]
+	return [...new Map(addresses.map(address => [address.toLowerCase(), address])).values()]
 }
 
 export const scanDiscoveredLogCoverage = async (
@@ -44,8 +31,7 @@ export const scanDiscoveredLogCoverage = async (
 	return { currentBlockLogs, remainingLogs }
 }
 
-export const requiresManifestHistoryCoverage = (contract: ContractMetadata | undefined): boolean =>
-	isProtocolActivitySource(contract) || contract?.kind === 'reputationToken' || contract?.kind === 'weth' || contract?.kind === 'usdc'
+export const requiresManifestHistoryCoverage = (contract: ContractMetadata | undefined): boolean => isProtocolActivitySource(contract) || contract?.kind === 'reputationToken' || contract?.kind === 'weth' || contract?.kind === 'usdc'
 
 export const isProtocolEvidenceEmitter = (contract: ContractMetadata | undefined): contract is ContractMetadata => contract !== undefined
 

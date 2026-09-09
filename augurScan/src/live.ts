@@ -33,14 +33,8 @@ export class LiveBus {
 	#closed = false
 	#cohortOffset = 0
 
-	constructor(
-		store: LiveEventStore,
-		maxClients = DEFAULT_MAX_LIVE_CLIENTS,
-		backpressureTimeoutMs = DEFAULT_BACKPRESSURE_TIMEOUT_MS,
-		now: () => number = Date.now,
-	) {
-		if (!Number.isSafeInteger(backpressureTimeoutMs) || backpressureTimeoutMs <= 0)
-			throw new Error('Live stream backpressure timeout must be a positive safe integer')
+	constructor(store: LiveEventStore, maxClients = DEFAULT_MAX_LIVE_CLIENTS, backpressureTimeoutMs = DEFAULT_BACKPRESSURE_TIMEOUT_MS, now: () => number = Date.now) {
+		if (!Number.isSafeInteger(backpressureTimeoutMs) || backpressureTimeoutMs <= 0) throw new Error('Live stream backpressure timeout must be a positive safe integer')
 		this.#store = store
 		this.#maxClients = maxClients
 		this.#backpressureTimeoutMs = backpressureTimeoutMs
@@ -61,7 +55,7 @@ export class LiveBus {
 			if (client !== undefined) this.#clients.delete(client)
 		}
 		return new ReadableStream({
-			start: async (controller) => {
+			start: async controller => {
 				try {
 					const cursor = lastEventId ?? (await this.#initialCursor())
 					if (released) return
@@ -99,7 +93,7 @@ export class LiveBus {
 		const run = (async () => {
 			try {
 				this.#evictStaleClients()
-				const readyClients = [...this.#clients].filter((client) => client.controller.desiredSize === null || client.controller.desiredSize > 0)
+				const readyClients = [...this.#clients].filter(client => client.controller.desiredSize === null || client.controller.desiredSize > 0)
 				if (readyClients.length === 0) return
 				const cohorts = new Map<number, Client[]>()
 				for (const client of readyClients) cohorts.set(client.cursor, [...(cohorts.get(client.cursor) ?? []), client])

@@ -4,12 +4,14 @@
 	"formatter": {
 		"enabled": true,
 		"indentStyle": "tab",
-		"lineWidth": 160
+		"lineWidth": 320
 	},
 	"javascript": {
 		"formatter": {
 			"quoteStyle": "single",
-			"semicolons": "asNeeded"
+			"jsxQuoteStyle": "single",
+			"semicolons": "asNeeded",
+			"arrowParentheses": "asNeeded"
 		}
 	},
 	"linter": {

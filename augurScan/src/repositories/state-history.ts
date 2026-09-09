@@ -9,8 +9,7 @@ export type StateHistoryQuery = {
 	readonly offset: number
 }
 
-export const stateHistoryNetwork = async (sql: SQL, chainId: number) =>
-	await sql`SELECT start_block::text, indexed_block::text, indexed_hash FROM networks WHERE chain_id = ${chainId}`
+export const stateHistoryNetwork = async (sql: SQL, chainId: number) => await sql`SELECT start_block::text, indexed_block::text, indexed_hash FROM networks WHERE chain_id = ${chainId}`
 
 export const poolStateHistory = async (sql: SQL, address: string, query: StateHistoryQuery) => {
 	const { chainId, fromBlock, toBlock, queryLimit, offset } = query
