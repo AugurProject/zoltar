@@ -11,17 +11,11 @@ const cssRule = (selector: string) => {
 	return match[1]
 }
 
-test('activity explorer links use full-height compact-row targets', () => {
+test('activity row fields use full-height compact targets', () => {
 	const targetRule = cssRule('.activity-target')
 	expect(targetRule).toContain('min-height: var(--control-height)')
 	expect(targetRule).toContain('display: flex')
 	expect(targetRule).toContain('overflow: hidden')
-
-	for (const className of ['address-link activity-target', 'cell address-link activity-target activity-contract-link', 'cell cell-tx activity-target']) {
-		expect(appSource).toContain(`className = '${className}'`)
-	}
-	expect(appSource).toContain("className: 'cell cell-origin address-link activity-target'")
-	expect(appSource).toContain('contractLink.replaceChildren(')
 })
 
 test('filtered empty activity keeps only its specific no-match status', () => {

@@ -170,7 +170,12 @@ export function OverviewPanels({
 						</span>
 					}
 					description={headerDescription}
-					title={applicationTitle}
+					title={
+						<span className='application-brand'>
+							<img src='./favicon.svg' alt='' width='32' height='32' />
+							{applicationTitle}
+						</span>
+					}
 				/>
 				{accountActions}
 

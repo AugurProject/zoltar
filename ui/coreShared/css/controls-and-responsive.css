@@ -1530,3 +1530,13 @@
 		letter-spacing: 0.02em;
 	}
 }
+
+.application-brand {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.application-brand img {
+	flex-shrink: 0;
+}

@@ -33,8 +33,12 @@ for (const viewport of [
 				await session.send('Emulation.setDeviceMetricsOverride', { ...viewport, deviceScaleFactor: 1, mobile: false })
 				await session.send('Page.navigate', { url: session.pageUrl })
 				await waitFor(`document.querySelectorAll('.event-name').length > 5`)
-				expect(await evaluate(`document.querySelector('.activity-contract-link').textContent`)).toBe('OpenOracle')
+				expect(await evaluate(`document.querySelector('.activity-contract-link .contract-name').textContent`)).toBe('OpenOracle')
 				expect(await evaluate(`document.querySelector('.cell-function')?.textContent`)).toBe('checkpoint')
+				expect(await evaluate(`document.querySelectorAll('.log-row a').length`)).toBe(0)
+				for (const selector of ['.chain-block .activity-target', '.activity-contract-link', '.cell-tx', '.cell-origin']) {
+					expect(await evaluate(`document.querySelector('.log-row ${selector}').classList.contains('activity-target')`)).toBe(true)
+				}
 				await evaluate(`document.querySelector('.event-name').click()`)
 				await waitFor(`!!document.querySelector('.event-detail-content .detail-grid')`)
 				await evaluate(`document.querySelector('.event-name').click()`)
@@ -42,6 +46,10 @@ for (const viewport of [
 				await evaluate(`document.querySelector('.event-name').click()`)
 				await waitFor(`!!document.querySelector('.event-detail-content .detail-grid')`)
 				expect(await evaluate(`document.querySelector('.event-name').getAttribute('aria-expanded')`)).toBe('true')
+				await evaluate(`document.querySelectorAll('.log-row')[1].querySelector('.activity-contract-link').click()`)
+				await waitFor(`document.querySelectorAll('.event-detail-content .detail-grid').length === 2`)
+				expect(await evaluate(`document.querySelectorAll('.event-name[aria-expanded="true"]').length`)).toBe(2)
+				expect(await evaluate(`document.querySelector('.event-contract-link').href.includes('/address/')`)).toBe(true)
 				expect(await evaluate(`document.querySelectorAll('.log-integrity, .event-detail-header button').length`)).toBe(0)
 				await evaluate(`document.querySelector('details[data-disclosure-key="transaction-receipt"]').open = true; window.scrollTo(0, 650)`)
 				const scroll = await evaluate('window.scrollY')
@@ -50,8 +58,15 @@ for (const viewport of [
 				await Bun.sleep(500)
 				expect(await evaluate('window.scrollY')).toBe(scroll)
 				expect(await evaluate(`document.querySelector('details[data-disclosure-key="transaction-receipt"]').open`)).toBe(true)
+				expect(await evaluate(`document.querySelectorAll('.event-detail-drawer').length`)).toBe(2)
+				await evaluate(`document.querySelectorAll('.event-name[aria-expanded="true"]')[1].click()`)
+				expect(await evaluate(`document.querySelectorAll('.event-detail-drawer').length`)).toBe(1)
 				await session.send('Page.navigate', { url: `${origin}/system?demo=1&streamDemo=1&tab=universes` })
 				await waitFor(`document.querySelector('#state-detail')?.textContent.includes('Genesis universe')`)
+				expect(await evaluate(`document.querySelector('.lineage-node rect').getBoundingClientRect().width <= 210`)).toBe(true)
+				expect(await evaluate(`document.querySelector('.lineage-card h4').textContent`)).toBe('Zoltar universes')
+				expect(await evaluate(`document.querySelector('.lineage-card').textContent.includes('Each edge')`)).toBe(false)
+				expect(await evaluate(`document.querySelector('.history-coverage')?.hidden`)).toBe(true)
 				await evaluate(`
 					window.scrollTo(0, 600)
 					window.qaStateUpdates = 0
@@ -68,6 +83,13 @@ for (const viewport of [
 				expect(await evaluate('window.qaStateFlashed')).toBe(false)
 				await session.send('Page.navigate', { url: `${origin}/contracts?demo=1` })
 				await waitFor(`document.querySelectorAll('.contract-row').length > 1`)
+				expect(await evaluate(`document.querySelector('.contract-deployment time').dateTime.length > 0`)).toBe(true)
+				expect(
+					await evaluate(
+						`(() => { const deployment = document.querySelector('.contract-deployment'); return deployment.querySelector('time').getBoundingClientRect().top >= deployment.querySelector('.deployment-status').getBoundingClientRect().bottom })()`,
+					),
+				).toBe(true)
+				expect(await evaluate(`document.querySelector('.brand-block img').src === document.querySelector('link[rel="icon"]').href`)).toBe(true)
 				expect(
 					await evaluate(
 						`document.querySelectorAll('.contract-row .eyebrow, .contract-group-heading, .contract-row-facts, .contract-row .detail-tools').length`,
@@ -86,6 +108,29 @@ for (const viewport of [
 					),
 				).toBe(true)
 				expect(await evaluate(`document.documentElement.scrollWidth <= innerWidth`)).toBe(true)
+				await session.send('Page.navigate', { url: `${origin}/?demo=1&detailState=error` })
+				await waitFor(`document.querySelectorAll('.log-row').length > 2`)
+				await evaluate(`document.querySelectorAll('.log-row')[0].click(); document.querySelectorAll('.log-row')[1].click()`)
+				await waitFor(`document.querySelector('.detail-error') && document.querySelector('.detail-grid')`)
+				expect(await evaluate(`document.querySelectorAll('.event-detail-drawer').length`)).toBe(2)
+				await evaluate(`document.querySelector('.detail-error .state-retry').click()`)
+				await waitFor(`document.querySelectorAll('.event-detail-content .detail-grid').length === 2`)
+				await evaluate(
+					`document.querySelectorAll('.event-detail-drawer')[1].focus(); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`,
+				)
+				expect(await evaluate(`document.querySelectorAll('.event-detail-drawer').length`)).toBe(1)
+				await session.send('Page.navigate', { url: `${origin}/?demo=1&streamDemo=1&reorgDemo=1&logRemovedOnReorg=1` })
+				await waitFor(`document.querySelectorAll('.log-row').length > 2`)
+				await evaluate(`document.querySelectorAll('.log-row')[0].click(); document.querySelectorAll('.log-row')[1].click()`)
+				await waitFor(`document.querySelectorAll('.event-detail-content .detail-grid').length === 2`)
+				await waitFor(`document.querySelectorAll('.event-detail-content .detail-error').length === 2`)
+				expect(await evaluate(`[...document.querySelectorAll('.detail-error')].every(error => error.textContent.includes('replaced'))`)).toBe(true)
+				await session.send('Page.navigate', { url: `${origin}/?demo=1&detailState=loading` })
+				await waitFor(`document.querySelectorAll('.log-row').length > 2`)
+				await evaluate(`document.querySelectorAll('.log-row')[0].click(); document.querySelectorAll('.log-row')[1].click()`)
+				await waitFor(`document.querySelectorAll('.event-detail-content[aria-busy="true"]').length === 2`)
+				await evaluate(`document.querySelector('.log-row').click()`)
+				expect(await evaluate(`document.querySelectorAll('.event-detail-drawer').length`)).toBe(1)
 				expect(session.issues).toEqual([])
 			} finally {
 				await session.close()
