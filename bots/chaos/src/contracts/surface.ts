@@ -89,6 +89,7 @@ export const MUTATING_CONTRACT_SURFACE: readonly ContractMethodClassification[] 
 	entry('Zoltar', 'deployChild', 'selectable', 'zoltar.child.deploy'),
 	entry('Zoltar', 'addRepToMigrationBalance', 'selectable', 'zoltar.migration.add'),
 	entry('Zoltar', 'splitMigrationRep', 'selectable', 'zoltar.migration.split'),
+	entry('Zoltar', 'prepareAndSplitMigrationRep', 'excluded-dangerous', undefined, 'Atomic preparation can burn wallet REP; chaos budgets preparation and indexed child-route splitting through separate guarded operations.'),
 	entry('GenesisReputationToken', 'approve', 'prerequisite', 'token.rep.approve'),
 	entry('GenesisReputationToken', 'transfer', 'excluded-dangerous', undefined, 'Raw transfers have no ecosystem postcondition and can strand funded genesis REP.'),
 	entry('GenesisReputationToken', 'transferFrom', 'excluded-dangerous', undefined, 'Delegated raw transfers are not chaos workflows.'),

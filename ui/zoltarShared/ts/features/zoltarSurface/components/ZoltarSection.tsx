@@ -129,8 +129,8 @@ export function ZoltarSection({
 	onForkZoltar,
 	onLoadZoltarQuestion,
 	onLoadZoltarQuestionPage,
+	onRetryMigrationBalances,
 	onMigrateInternalRep,
-	onPrepareRepForMigration,
 	onQuestionFormChange,
 	onResetQuestion,
 	onZoltarForkQuestionIdChange,
@@ -144,6 +144,7 @@ export function ZoltarSection({
 	zoltarForkQuestionId,
 	zoltarForkRepBalanceAttoRep,
 	zoltarMigrationActiveAction,
+	zoltarMigrationChildSplitAmountsAttoRep,
 	zoltarMigrationChildRepBalancesAttoRep,
 	zoltarMigrationError,
 	zoltarMigrationForm,
@@ -208,27 +209,28 @@ export function ZoltarSection({
 			universeActionContent = (
 				<SectionBlock title={zoltarCopy.migrateRep} variant='plain'>
 					<ZoltarMigrationSection
+						onDeployChildUniverse={onCreateChildUniverseForOutcomeIndex}
+						pendingChildUniverseOutcomeIndex={zoltarChildUniversePendingOutcomeIndex}
 						accountAddress={accountState.address}
 						isOnActiveAppChain={isOnActiveAppChain}
 						loadingZoltarForkAccess={loadingZoltarForkAccess}
 						loadingZoltarUniverse={loadingZoltarUniverse}
 						onApproveZoltarForkRep={amount => onApproveZoltarForkRep(amount)}
 						onMigrateInternalRep={onMigrateInternalRep}
-						onDeployChildUniverse={onCreateChildUniverseForOutcomeIndex}
-						onPrepareRepForMigration={onPrepareRepForMigration}
+						onRetryMigrationBalances={onRetryMigrationBalances}
 						onZoltarMigrationFormChange={onZoltarMigrationFormChange}
 						zoltarForkActiveAction={zoltarForkActiveAction}
 						zoltarForkApproval={zoltarForkApproval}
 						zoltarForkRepBalanceAttoRep={zoltarForkRepBalanceAttoRep}
 						zoltarMigrationActiveAction={zoltarMigrationActiveAction}
 						zoltarMigrationChildRepBalancesAttoRep={zoltarMigrationChildRepBalancesAttoRep}
+						zoltarMigrationChildSplitAmountsAttoRep={zoltarMigrationChildSplitAmountsAttoRep}
 						zoltarMigrationError={zoltarMigrationError}
 						zoltarMigrationForm={zoltarMigrationForm}
 						zoltarMigrationPending={zoltarMigrationPending}
 						zoltarMigrationPreparedRepBalanceAttoRep={zoltarMigrationPreparedRepBalanceAttoRep}
 						zoltarUniverse={zoltarUniverse}
 						zoltarUniverseState={zoltarUniverseState}
-						pendingChildUniverseOutcomeIndex={zoltarChildUniversePendingOutcomeIndex}
 					/>
 				</SectionBlock>
 			)

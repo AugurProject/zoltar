@@ -25,7 +25,7 @@ export const EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<R
 	reputationToken: '0x1939fc9070edce2ad78392d5145b884e58d307171bc2e24a95927db370002b86',
 	scalarOutcomes: '0x3c55237b3869f93f3e570793afec9785f20a4ee7cd0a7798a418838c833228e0',
 	weth: '0x664399615dc3e489416583855e1125048c92043bc544f20dc1de8f1a78106b20',
-	zoltar: '0xa2f78a7065da0833f82ab007c4ad88bdb1ed0c7f03ace7dfab9f93bebbc25d17',
+	zoltar: '0xce0f32efa6776e07ed2972c37d68bafe22b8828385330b4ea8e2a886817cc272',
 	zoltarQuestionData: '0xcacb1ffe2a738ceda0aced156f7ff50b405b57d66a6c1307e5d8ff87789a4340',
 }
 
@@ -58,7 +58,7 @@ const EXPECTED_MAINNET_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<D
 	multicall3: '0x1ff11a2c64e95bb3d4e330d0235adbe3c3f78eeecb5c5104ac38c89673dfaade',
 	proxyDeployer: '0x5acaad953250bec20933f7c72a25bb03bfa54767ebd3a750396276512c46a79c',
 	scalarOutcomes: '0x3c55237b3869f93f3e570793afec9785f20a4ee7cd0a7798a418838c833228e0',
-	zoltar: '0x6733ee2928ae750548967ac827c2f036b62847650db144f8c7556a591d8bfce8',
+	zoltar: '0x10ca7ba3ab7777c9819b542b1efe7e4b5cc2cabe2900caed51e5f067c587f687',
 	zoltarQuestionData: '0xcacb1ffe2a738ceda0aced156f7ff50b405b57d66a6c1307e5d8ff87789a4340',
 }
 const ATOMIC_FUNDING_CONSTRUCTOR_ABI = [

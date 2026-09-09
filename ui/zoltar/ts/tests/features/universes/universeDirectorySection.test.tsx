@@ -70,13 +70,14 @@ describe('UniverseDirectorySection', () => {
 				zoltarForkQuestionId: '',
 				zoltarMigrationForm: { amount: '', outcomeIndexes: '' },
 				zoltarMigrationChildRepBalancesAttoRep: {},
+				zoltarMigrationChildSplitAmountsAttoRep: {},
 				zoltarQuestions: [],
 				zoltarUniverse: createUniverse({ hasForked }),
 				onApproveZoltarForkRep: () => undefined,
 				onCreateChildUniverseForOutcomeIndex: () => undefined,
 				onForkZoltar: () => undefined,
 				onMigrateInternalRep: () => undefined,
-				onPrepareRepForMigration: () => undefined,
+				onRetryMigrationBalances: () => undefined,
 				onActiveViewChange: () => undefined,
 				loadingZoltarQuestionCount: false,
 				loadingZoltarQuestion: false,
@@ -116,7 +117,9 @@ describe('UniverseDirectorySection', () => {
 			const queries = within(document.body)
 			expect(queries.queryByRole('heading', { name: 'Universe' })).toBeNull()
 			if (hasForked) {
-				expect(queries.getByRole('button', { name: 'Prepare REP' })).toBeTruthy()
+				expect(queries.queryByRole('button', { name: 'Prepare REP' })).toBeNull()
+				expect(document.querySelectorAll('.migration-outcome-list')).toHaveLength(1)
+				expect(queries.queryByRole('heading', { name: 'Child Universes' })).toBeNull()
 				expect(queries.getByRole('heading', { name: 'Outcome Universes' })).toBeTruthy()
 				expect(queries.getByRole('button', { name: 'Deploy universe' })).toBeTruthy()
 				expect(queries.getByRole('button', { name: 'Split REP' })).toBeTruthy()

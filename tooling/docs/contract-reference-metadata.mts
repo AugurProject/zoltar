@@ -39,7 +39,7 @@ export type AssemblyDelegateCall = {
 }
 
 export const outputPath = 'docs/reference/contracts.html'
-export const expectedProductionSoliditySourceFingerprint = 'a2feaab8f77f5b40a8a84e04981b2cb560868503ee687c553d03216211b88c8a'
+export const expectedProductionSoliditySourceFingerprint = 'e9c2fad94b0bb693e16a50f3bec0679bb226d793a5730173639333c9a5f1a20c'
 
 export const eventSourceByName: Record<string, string> = {
 	VaultBadDebtMigrated: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
@@ -371,6 +371,7 @@ export const entrypointSignaturesBySource: Record<string, Record<string, string[
 		deployChild: ['public(uint248,uint256)'],
 		forkUniverse: ['public(uint248,uint256)'],
 		splitMigrationRep: ['public(uint248,uint256,uint256[])'],
+		prepareAndSplitMigrationRep: ['external(uint248,uint256,uint256[],uint256)'],
 	},
 	'solidity/contracts/ReputationToken.sol': {
 		burn: ['external(address,uint256)'],
@@ -510,7 +511,7 @@ export const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/Context.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/ERC20.sol': '6c4161bf27a2ed1bc2de94b58253a8ec4201e28d125571cb2124238753387a22',
 	'solidity/contracts/ReputationToken.sol': '30c2987453109942297ab8ee8256c53fc68cd5c22f9fd16e168cd6bbb12b8608',
-	'solidity/contracts/Zoltar.sol': '6479e6b24905f8f3299e486703df934aa7811152a9d20517596da64cbcd4b471',
+	'solidity/contracts/Zoltar.sol': '7820943e20dcb5ea796e2c00af55219042cb772133f0844c8d79dcd2ae30c938',
 	'solidity/contracts/ZoltarQuestionData.sol': '904b4369195f070fa3b04bbcbc1acba529810ffa2da4667569cd9168ac568d65',
 	'solidity/contracts/statoblast/EscalationGame.sol': '22346007107d60d8dac5545122037fa8bc457ac604c733c03edd992276604e85',
 	'solidity/contracts/statoblast/EscalationGameCalculations.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
@@ -573,12 +574,12 @@ export const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: 'aae115c225ff97708c3ab5dee1b8131e1aff2d3a543b944d815563433a33a275',
+		compiledAbiFingerprint: '9aec957d945308eaeaa9a2d497f6a1efefe2253de96b527a02b121a58d9dc2ec',
 		name: 'Zoltar',
 		purpose: 'Registers universe forks, charges the fork admission haircut, and mints branch-specific child REP.',
-		readAbiFingerprint: '1fc117bbe886565313a38c6c17e400355eaa11a02daeb87cffd633b7b09ceea6',
+		readAbiFingerprint: '888b513263619c6b31966cd009e078c19223641b9c4a6df0909bce3f797e37e2',
 		readSurface:
-			'Use `universes`, `forkThresholdDivisor`, `forkBurnDivisor`, `zoltarQuestionData`, `genesisReputationToken`, `childReputationTokenCount`, `getForkTime`, `forkQuestionMatches`, `getRepToken`, `getForkThresholdAttoRep`, `getNonDecisionThresholdAttoRep`, `getUniverseTheoreticalSupplyAttoRep`, `getChildUniverseId`, `getDeployedChildUniverses`, and `getMigrationRepBalanceAttoRep` to reconstruct universe and migration state. The fork threshold is the live universe theoretical supply divided by `forkThresholdDivisor`, rounded up, so every nonzero-supply universe has a positive fork cost. Construction requires a deployed genesis REP token with the REPv2 `getTotalTheoreticalSupply()` selector, theoretical supply from one attoREP through 11 million REP, and `forkBurnDivisor >= 5`, which caps the uncredited fork haircut at 20% of the threshold. Genesis REP uses ordinary ERC-20 approvals because the configured mainnet REPv2 token does not implement ERC-2612 or ERC-3009.',
+			'Use `universes`, `forkThresholdDivisor`, `forkBurnDivisor`, `zoltarQuestionData`, `genesisReputationToken`, `childReputationTokenCount`, `getForkTime`, `forkQuestionMatches`, `getRepToken`, `getForkThresholdAttoRep`, `getNonDecisionThresholdAttoRep`, `getUniverseTheoreticalSupplyAttoRep`, `getChildUniverseId`, `getDeployedChildUniverses`, `getMigrationRepBalanceAttoRep`, and `getChildMigrationRepAmountsAttoRep` to reconstruct universe and migration state. The child migration getter accepts an array of child universe IDs and returns cumulative amounts in the same order, with zero for unused IDs. The fork threshold is the live universe theoretical supply divided by `forkThresholdDivisor`, rounded up, so every nonzero-supply universe has a positive fork cost. Construction requires a deployed genesis REP token with the REPv2 `getTotalTheoreticalSupply()` selector, theoretical supply from one attoREP through 11 million REP, and `forkBurnDivisor >= 5`, which caps the uncredited fork haircut at 20% of the threshold. Genesis REP uses ordinary ERC-20 approvals because the configured mainnet REPv2 token does not implement ERC-2612 or ERC-3009.',
 		securityBoundary: 'Security boundaries for these calls are [A15 intended question selection](./security-model.html#assumption-a15) and [A25 safe immutable parameters](./security-model.html#assumption-a25).',
 		readDeclarations: [
 			{ name: 'getForkTime' },
@@ -590,6 +591,7 @@ export const contractReferences: ContractReference[] = [
 			{ name: 'getChildUniverseId' },
 			{ name: 'getDeployedChildUniverses' },
 			{ name: 'getMigrationRepBalanceAttoRep' },
+			{ name: 'getChildMigrationRepAmountsAttoRep' },
 		],
 		readStorageDeclarations: [{ name: 'universes' }, { name: 'forkThresholdDivisor' }, { name: 'forkBurnDivisor' }, { name: 'zoltarQuestionData' }, { name: 'genesisReputationToken' }, { name: 'childReputationTokenCount' }],
 		sourcePath: 'solidity/contracts/Zoltar.sol',
@@ -625,6 +627,15 @@ export const contractReferences: ContractReference[] = [
 				declarations: [{ name: 'addRepToMigrationBalance' }],
 				preconditions: 'Universe forked; sufficient caller REP. Genesis REP requires allowance; child REP is burned directly without allowance.',
 				signals: '`MigrationRepAdded`',
+			},
+			{
+				call: '`prepareAndSplitMigrationRep`(`universeId`, `amountAttoRep`, `outcomeIndexes`, `preparationAttoRep`)',
+				caller: 'Parent REP holder',
+				effect:
+					'Adds the supplied preparation amount to migration credit, then splits the requested REP into the supplied outcomes using the existing migration checks. Both steps revert together on failure. Callers compute any preparation shortfall from cumulative child migration amounts, rather than current child token holdings.',
+				declarations: [{ name: 'prepareAndSplitMigrationRep' }],
+				preconditions: 'Forked universe; positive split amount; nonempty valid outcomes; sufficient parent REP for the exact preparationAttoRep supplied and sufficient migration credit for every split. Outcome order is unrestricted. Genesis REP requires allowance for preparation; child REP needs no allowance.',
+				signals: '`MigrationRepAdded` when preparationAttoRep is positive; `DeployChild` and `ChildReputationTokenInitialized` when children are deployed; child REP `Transfer`, `Mint`, and `MigrationRepSplit` for each destination',
 			},
 			{
 				call: '`splitMigrationRep(universeId, amountAttoRep, outcomeIndexes)`',
