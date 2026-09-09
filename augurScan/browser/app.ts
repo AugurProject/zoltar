@@ -646,8 +646,7 @@ const showCanonicalDialogStatus = (title: string, detail: string) => {
 		$('#detail-canonical-retry').hidden = activeReorgRecovery !== undefined || !canonicalRefreshRequired
 		$('#detail-canonical-status').hidden = false
 	}
-	const drawerStatus = document.querySelector<HTMLElement>('.event-detail-canonical-status')
-	if (drawerStatus) {
+	for (const drawerStatus of document.querySelectorAll<HTMLElement>('.event-detail-canonical-status')) {
 		const message = element('div')
 		message.append(element('strong', '', title), element('span', '', detail))
 		const retry = element('button', 'secondary compact', 'Retry now')
@@ -661,7 +660,7 @@ const showCanonicalDialogStatus = (title: string, detail: string) => {
 
 const hideCanonicalDialogStatus = () => {
 	$('#detail-canonical-status').hidden = true
-	document.querySelector<HTMLElement>('.event-detail-canonical-status')?.setAttribute('hidden', '')
+	for (const status of document.querySelectorAll<HTMLElement>('.event-detail-canonical-status')) status.hidden = true
 }
 
 const syncCanonicalDialogStatus = () => {
@@ -4260,30 +4259,29 @@ const rowFor = (log: ActivityRecord) => {
 	const chain = element('span', 'cell chain-block')
 	const openCue = element('span', 'row-open-cue', '›')
 	openCue.setAttribute('aria-hidden', 'true')
-	const blockLink = explorerLink(log.explorer_base_url, 'block', log.block_number, `#${number(log.block_number)}`)
+	const blockLink = element('span', '', `#${number(log.block_number)}`)
 	blockLink.className = 'address-link activity-target'
 	chain.append(blockLink, openCue)
 	const timestamp = element('time', 'cell cell-time', `${time(log.block_timestamp)} · ${age(log.block_timestamp)}`)
 	timestamp.dataset.time = log.block_timestamp
 	timestamp.dateTime = exactTimestamp(log.block_timestamp)
 	timestamp.title = exactTimestamp(log.block_timestamp)
-	const contractLink = explorerLink(log.explorer_base_url, 'address', log.emitter_address, log.contract_label ?? short(log.emitter_address, 10, 8))
+	const contractLink = element('span')
 	contractLink.className = 'cell address-link activity-target activity-contract-link'
 	contractLink.title = log.contract_label ? `${log.contract_label} · ${log.emitter_address}` : log.emitter_address
 	contractLink.replaceChildren(element('span', 'contract-name', log.contract_label || short(log.emitter_address, 10, 8)))
 	const event = element('button', 'cell event-name', log.event_name ?? 'Unknown event')
 	event.type = 'button'
 	event.setAttribute('aria-label', `Toggle ${log.event_name ?? 'unknown event'} log details from block ${log.block_number}`)
-	event.setAttribute('aria-expanded', String(document.querySelector<HTMLElement>('.event-detail-drawer')?.dataset.triggerKey === key))
-	const tx = explorerLink(log.explorer_base_url, 'tx', log.tx_hash, `${short(log.tx_hash, 7, 5)} · ${log.log_index}`)
+	event.setAttribute('aria-expanded', String(eventDrawerFor(key) !== undefined))
+	const tx = element('span', '', `${short(log.tx_hash, 7, 5)} · ${log.log_index}`)
 	tx.className = 'cell cell-tx activity-target'
-	const origin = protocolAddressLink(log.origin_address, { chainId: log.chain_id, className: 'cell cell-origin address-link activity-target', compact: true })
+	const origin = element('span', 'cell cell-origin activity-target', log.origin_address ? short(log.origin_address, 6, 4) : '—')
 	const action = element('span', 'cell cell-function', log.function_name === 'deploy' ? (log.action_summary ?? 'Deploy contract') : (log.function_name ?? (log.to_address === null ? 'Deploy contract' : 'Unknown call')))
 	action.title = `Transaction action: ${log.function_signature ?? log.action_summary ?? action.textContent ?? ''}`
 	row.append(chain, timestamp, contractLink, event, action, tx, origin)
-	row.addEventListener('click', (clickEvent: MouseEvent) => {
-		if (clickEvent.target instanceof Element && clickEvent.target.closest('a')) return
-		if (document.querySelector<HTMLElement>('.event-detail-drawer')?.dataset.triggerKey === key) closeEventDrawer({ restoreFocus: true })
+	row.addEventListener('click', () => {
+		if (eventDrawerFor(key)) closeEventDrawer({ restoreFocus: true, key })
 		else void openDetail(log)
 	})
 	return row
@@ -4382,10 +4380,11 @@ const performLoadLogs = async ({ append = false, live = false, replaceDepth, con
 		const anchorKey = anchor?.dataset.liveKey
 		const anchorTop = anchor?.getBoundingClientRect().top
 		const renderScrollY = window.scrollY
-		const activeDrawer = append ? undefined : document.querySelector<HTMLElement>('.event-detail-drawer')
-		const activeDrawerContext = activeDrawer?.contains(document.activeElement) ? captureDetailContext() : undefined
+		const retainedDrawers = append ? [] : eventDrawers()
+		const activeDrawer = retainedDrawers.find(drawer => drawer.contains(document.activeElement)) ?? retainedDrawers[0]
+		const activeDrawerContext = activeDrawer ? captureDetailContext(activeDrawer) : undefined
 		if (!append) {
-			activeDrawer?.remove()
+			for (const drawer of retainedDrawers) drawer.remove()
 			feed.replaceChildren()
 		}
 		const refreshedKeys = new Set(append ? [...feed.querySelectorAll<HTMLElement>('.log-row[data-live-key]')].flatMap(row => (row.dataset.liveKey === undefined ? [] : [row.dataset.liveKey])) : [])
@@ -4397,7 +4396,9 @@ const performLoadLogs = async ({ append = false, live = false, replaceDepth, con
 			feed.append(row)
 		}
 		applyLiveChanges(feed, previousRows, { live, selector: '.log-row[data-live-key]' })
-		const drawerReanchored = activeDrawer ? placeEventDrawer(activeDrawer, { allowOutsideShellFallback: false }) : false
+		for (const drawer of retainedDrawers) placeEventDrawer(drawer, { allowOutsideShellFallback: false })
+		const drawerReanchored = activeDrawer?.isConnected ?? false
+		updateLogDisclosures()
 		if (activeDrawer && !drawerReanchored) {
 			detailContextVersion++
 			detailRequestVersion++
@@ -4411,7 +4412,7 @@ const performLoadLogs = async ({ append = false, live = false, replaceDepth, con
 			const currentAnchor = [...feed.querySelectorAll<HTMLElement>('.log-row[data-live-key]')].find(row => row.dataset.liveKey === anchorKey)
 			if (currentAnchor !== undefined) window.scrollBy(0, currentAnchor.getBoundingClientRect().top - anchorTop)
 		}
-		if (drawerReanchored && activeDrawerContext) restoreDetailContext(activeDrawerContext)
+		if (drawerReanchored && activeDrawerContext) restoreDetailContext(activeDrawerContext, activeDrawer)
 		nextCursor = payload.nextCursor
 		$('#more').hidden = !retainedPaginationAvailable(nextCursor !== undefined, canonicalRefreshRequired)
 		paginationStatus.hidden = true
@@ -4495,6 +4496,14 @@ const loadLogs = (options: LoadOptions = {}): Promise<boolean> => {
 const detailCard = (term: string, description: string, wide = false) => {
 	const card = element('dl', `detail-card${wide ? ' wide' : ''}`)
 	card.append(element('dt', '', term), element('dd', '', description ?? '—'))
+	return card
+}
+
+const explorerDetailCard = (term: string, base: string, type: string, value: string, label = value) => {
+	const card = element('dl', 'detail-card')
+	const description = element('dd')
+	description.append(explorerLink(base, type, value, label))
+	card.append(element('dt', '', term), description)
 	return card
 }
 
@@ -4638,17 +4647,36 @@ interface DetailContextSnapshot extends ActivityDetailFocusSnapshot {
 	scrollTop: number
 }
 
-const closeEventDrawer = ({ clearUrl = true, restoreFocus = false } = {}) => {
-	const drawer = document.querySelector<HTMLElement>('.event-detail-drawer')
+const eventDrawers = () => [...document.querySelectorAll<HTMLElement>('.event-detail-drawer')]
+const eventDrawerFor = (key: string) => eventDrawers().find(drawer => drawer.dataset.triggerKey === key)
+const drawerRequests = new WeakMap<HTMLElement, number>()
+const drawerLogs = new WeakMap<HTMLElement, ActivityRecord | LogReference>()
+const updateLogDisclosures = () => {
+	for (const row of feed.querySelectorAll<HTMLElement>('.log-row')) row.querySelector('.event-name')?.setAttribute('aria-expanded', String(eventDrawerFor(row.dataset.liveKey ?? '') !== undefined))
+}
+
+const removeEventDrawers = () => {
+	for (const drawer of eventDrawers()) drawer.remove()
+	updateLogDisclosures()
+}
+
+const closeEventDrawer = ({ clearUrl = true, restoreFocus = false, key }: { clearUrl?: boolean; restoreFocus?: boolean; key?: string } = {}) => {
+	const drawer = key === undefined ? eventDrawers().at(-1) : eventDrawerFor(key)
 	const triggerKey = drawer?.dataset.triggerKey
-	detailContextVersion++
-	detailRequestVersion++
-	activeLog = undefined
-	pendingCanonicalLog = undefined
-	if (activeReorgRecovery !== undefined) activeReorgRecovery.logToRefresh = undefined
-	drawer?.remove()
-	for (const trigger of feed.querySelectorAll('.event-name')) trigger.setAttribute('aria-expanded', 'false')
-	if (clearUrl) clearDetailUrl()
+	if (key === undefined) {
+		detailContextVersion++
+		detailRequestVersion++
+		removeEventDrawers()
+	} else {
+		drawer?.remove()
+	}
+	if (activeLog && (key === undefined || logKeyFor(activeLog) === key)) {
+		activeLog = undefined
+		pendingCanonicalLog = undefined
+		if (activeReorgRecovery !== undefined) activeReorgRecovery.logToRefresh = undefined
+	}
+	updateLogDisclosures()
+	if (clearUrl && (key === undefined || new URL(location.href).searchParams.get('log') === key)) clearDetailUrl()
 	if (restoreFocus && triggerKey)
 		[...feed.querySelectorAll<HTMLElement>('.log-row[data-live-key]')]
 			.find(row => row.dataset.liveKey === triggerKey)
@@ -4656,14 +4684,12 @@ const closeEventDrawer = ({ clearUrl = true, restoreFocus = false } = {}) => {
 			?.focus({ preventScroll: true })
 }
 
-const captureDetailContext = (): DetailContextSnapshot => {
-	const drawer = document.querySelector<HTMLElement>('.event-detail-drawer')
+const captureDetailContext = (drawer = eventDrawers().find(item => item.contains(document.activeElement)) ?? eventDrawers()[0]): DetailContextSnapshot => {
 	if (!drawer) return { scrollTop: window.scrollY, drawerFocused: false, focusIndex: -1 }
 	return { scrollTop: window.scrollY, ...captureActivityDetailFocus(drawer, document.activeElement) }
 }
 
-const restoreDetailContext = (snapshot: DetailContextSnapshot) => {
-	const drawer = document.querySelector<HTMLElement>('.event-detail-drawer')
+const restoreDetailContext = (snapshot: DetailContextSnapshot, drawer = eventDrawers()[0]) => {
 	if (!drawer) return
 	window.scrollTo({ top: snapshot.scrollTop })
 	restoreActivityDetailFocus(drawer, snapshot, (nextFocus, previousTop) => window.scrollBy(0, nextFocus.getBoundingClientRect().top - previousTop))
@@ -4674,7 +4700,7 @@ const placeEventDrawer = (drawer: HTMLElement, { allowOutsideShellFallback = tru
 	if (feedShell) drawer.style.width = `${feedShell.clientWidth}px`
 	else drawer.style.removeProperty('width')
 	if (placeActivityDetailDrawer(feed, drawer)) {
-		for (const row of feed.querySelectorAll<HTMLElement>('.log-row')) row.querySelector('.event-name')?.setAttribute('aria-expanded', String(row.dataset.liveKey === drawer.dataset.triggerKey))
+		updateLogDisclosures()
 		return true
 	}
 	if (allowOutsideShellFallback && feedShell && drawer.previousElementSibling !== feedShell) {
@@ -4691,9 +4717,8 @@ const collapsibleDetailCard = (title: string, disclosureKey: string, ...content:
 	return card
 }
 
-const detailContextIsUnchanged = (snapshot: DetailContextSnapshot): boolean => {
+const detailContextIsUnchanged = (snapshot: DetailContextSnapshot, drawer: HTMLElement): boolean => {
 	if (Math.abs(window.scrollY - snapshot.scrollTop) > 1) return false
-	const drawer = document.querySelector<HTMLElement>('.event-detail-drawer')
 	if (snapshot.drawerFocused) return document.activeElement === drawer
 	if (snapshot.focusIndex < 0) return true
 	const focusable = drawer ? [...drawer.querySelectorAll<HTMLElement>('a, button, summary')] : []
@@ -4703,8 +4728,13 @@ const detailContextIsUnchanged = (snapshot: DetailContextSnapshot): boolean => {
 const performOpenDetail = async (log: ActivityRecord | LogReference, { live = false, canonicalRecovery = false, contextVersion }: DetailOptions = {}): Promise<boolean> => {
 	if (contextVersion !== detailContextVersion) return false
 	const canonicalGeneration = canonicalDataGeneration
-	const requestVersion = ++detailRequestVersion
-	const previousContext = live ? captureDetailContext() : undefined
+	const existingDrawer = eventDrawerFor(logKeyFor(log))
+	const drawer = existingDrawer ?? element('section', 'event-detail-drawer')
+	const requestVersion = (drawerRequests.get(drawer) ?? 0) + 1
+	drawerRequests.set(drawer, requestVersion)
+	drawerLogs.set(drawer, log)
+	const requestIsCurrent = () => drawer.isConnected && drawerRequests.get(drawer) === requestVersion && contextVersion === detailContextVersion && isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)
+	const previousContext = live ? captureDetailContext(drawer) : undefined
 	if (isActivityRecord(log)) activeLog = log
 	if (!canonicalRecovery && isActivityRecord(log)) {
 		pendingCanonicalLog = activeReorgRecovery === undefined && !canonicalRefreshRequired ? undefined : log
@@ -4718,8 +4748,6 @@ const performOpenDetail = async (log: ActivityRecord | LogReference, { live = fa
 	activeAccount = undefined
 	activeAccountTransactions = undefined
 	activeAccountLoadMore = undefined
-	const existingDrawer = document.querySelector<HTMLElement>('.event-detail-drawer')
-	const drawer = existingDrawer ?? element('section', 'event-detail-drawer')
 	drawer.setAttribute('aria-label', 'Event details')
 	const drawerContent = existingDrawer?.querySelector<HTMLElement>('.event-detail-content') ?? element('div', 'event-detail-content')
 	if (!existingDrawer) {
@@ -4730,7 +4758,7 @@ const performOpenDetail = async (log: ActivityRecord | LogReference, { live = fa
 		drawer.append(canonicalStatus, drawerContent)
 	}
 	drawer.dataset.triggerKey = logKeyFor(log)
-	for (const row of feed.querySelectorAll<HTMLElement>('.log-row')) row.querySelector('.event-name')?.setAttribute('aria-expanded', String(row.dataset.liveKey === drawer.dataset.triggerKey))
+	updateLogDisclosures()
 	placeEventDrawer(drawer)
 	syncCanonicalDialogStatus()
 	drawerContent.setAttribute('aria-busy', String(refreshPresentation({ live }).busy))
@@ -4741,13 +4769,15 @@ const performOpenDetail = async (log: ActivityRecord | LogReference, { live = fa
 		drawer.tabIndex = -1
 		drawer.focus({ preventScroll: true })
 	}
-	const url = new URL(location.href)
-	url.searchParams.delete('account')
-	url.searchParams.set('log', `${log.chain_id}:${log.block_hash}:${log.tx_hash}:${log.log_index}`)
-	history.replaceState(null, '', url)
+	if (!live) {
+		const url = new URL(location.href)
+		url.searchParams.delete('account')
+		url.searchParams.set('log', logKeyFor(log))
+		history.replaceState(null, '', url)
+	}
 	try {
 		const detail = decodeValue(await api(`/api/v1/logs/${log.chain_id}/${log.block_hash}/${log.tx_hash}/${log.log_index}`), isLogDetail, 'Log detail')
-		if (!isCurrentContextRequest(contextVersion, detailContextVersion, requestVersion, detailRequestVersion) || !isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)) return false
+		if (!requestIsCurrent()) return false
 		activeLog = detail
 		const deployedContractAddress = typeof detail.receipt['contractAddress'] === 'string' ? detail.receipt['contractAddress'] : undefined
 		const disclosureState = live ? captureDisclosureState(drawerContent) : {}
@@ -4761,6 +4791,9 @@ const performOpenDetail = async (log: ActivityRecord | LogReference, { live = fa
 			detailCard('Gas used', number(detail.gas_used)),
 			detailCard('Transaction action', decodedActionLabel(detail.action_summary, detail.to_address, detail.contract_label, detail.emitter_address, deployedContractAddress)),
 		)
+		const contractCard = explorerDetailCard('Contract', detail.explorer_base_url, 'address', detail.emitter_address)
+		contractCard.querySelector('a')?.classList.add('event-contract-link')
+		grid.prepend(contractCard, explorerDetailCard('Block', detail.explorer_base_url, 'block', detail.block_number, `#${number(detail.block_number)}`), explorerDetailCard('Transaction', detail.explorer_base_url, 'tx', detail.tx_hash))
 		const argumentsCard = element('div', 'detail-card wide')
 		argumentsCard.append(element('p', 'eyebrow', 'Decoded arguments'))
 		argumentsCard.append(decodedArgumentsTable(detail.argument_schema, detail.arguments, detail.display_arguments, detail.chain_id))
@@ -4771,18 +4804,18 @@ const performOpenDetail = async (log: ActivityRecord | LogReference, { live = fa
 		grid.append(collapsibleDetailCard('Transaction calldata and decoded action', 'transaction-action', ...actionContent))
 		grid.append(collapsibleDetailCard('Complete raw transaction receipt', 'transaction-receipt', element('pre', 'raw', JSON.stringify(detail.receipt, null, 2))))
 		restoreDisclosureState(grid, disclosureState)
-		const contextToRestore = captureDetailContext()
+		const contextToRestore = captureDetailContext(drawer)
 		if (!live || !drawerContent.firstElementChild?.isEqualNode(grid)) drawerContent.replaceChildren(grid)
 		placeEventDrawer(drawer)
-		if (contextToRestore) restoreDetailContext(contextToRestore)
+		if (contextToRestore) restoreDetailContext(contextToRestore, drawer)
 		if (canonicalRecovery) pendingCanonicalLog = undefined
 		return true
 	} catch (error) {
-		if (!isCurrentContextRequest(contextVersion, detailContextVersion, requestVersion, detailRequestVersion) || !isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)) return false
+		if (!requestIsCurrent()) return false
 		const noncanonical = isNoncanonicalDetailFailure(canonicalRecovery, error instanceof Error ? error.status : undefined)
 		if (canonicalRecovery && !noncanonical && canonicalRefreshRequired) {
 			drawerContent.querySelector<HTMLElement>('.detail-refresh-error')?.remove()
-			if (previousContext && detailContextIsUnchanged(previousContext)) restoreDetailContext(previousContext)
+			if (previousContext && detailContextIsUnchanged(previousContext, drawer)) restoreDetailContext(previousContext, drawer)
 			return false
 		}
 		const alert = element('div', `detail-error${live ? ' detail-refresh-error' : ''}`)
@@ -4793,26 +4826,22 @@ const performOpenDetail = async (log: ActivityRecord | LogReference, { live = fa
 		retry.addEventListener('click', () => openDetail(log, { live: !noncanonical, canonicalRecovery }))
 		if (!noncanonical) alert.append(retry)
 		if (live && !noncanonical) {
-			const contextToRestore = drawerContent.contains(document.activeElement) ? captureDetailContext() : undefined
+			const contextToRestore = drawerContent.contains(document.activeElement) ? captureDetailContext(drawer) : undefined
 			drawerContent.querySelector<HTMLElement>('.detail-refresh-error')?.remove()
 			drawerContent.prepend(alert)
-			if (contextToRestore) restoreDetailContext(contextToRestore)
+			if (contextToRestore) restoreDetailContext(contextToRestore, drawer)
 		} else drawerContent.replaceChildren(alert)
 		if (noncanonical) pendingCanonicalLog = undefined
 		return noncanonical
 	} finally {
-		if (isCurrentContextRequest(contextVersion, detailContextVersion, requestVersion, detailRequestVersion)) drawerContent.setAttribute('aria-busy', 'false')
+		if (requestIsCurrent()) drawerContent.setAttribute('aria-busy', 'false')
 	}
 }
 
 const openDetail = (log: ActivityRecord | LogReference, options: DetailOptions = {}): Promise<boolean> => {
-	if (options.live !== true && options.canonicalRecovery !== true) {
-		detailContextVersion++
-		detailRequestVersion++
-	}
-	const contextVersion = detailContextVersion
-	const operation = () => performOpenDetail(log, { ...options, contextVersion })
-	return options.live === true ? detailRefreshGate.runBackground(operation) : detailRefreshGate.runForeground(operation)
+	if (options.live === true && eventDrawerFor(logKeyFor(log)) === undefined) return Promise.resolve(true)
+	if (options.live !== true) detailRequestVersion++
+	return performOpenDetail(log, { ...options, contextVersion: detailContextVersion })
 }
 
 const restorePendingCanonicalLog = async () => {
@@ -4884,7 +4913,7 @@ const performOpenAccountTransactions = async (account: AccountReference, { live 
 	const stagedSnapshot = canonicalRecovery ? restoreSnapshot : stagedLiveRefresh ? captureAccountDialogSnapshot() : undefined
 	const refreshPrevious = stagedRefresh ? liveSnapshot(detailContent, '.account-transaction[data-live-key]') : undefined
 	activeLog = undefined
-	document.querySelector('.event-detail-drawer')?.remove()
+	removeEventDrawers()
 	pendingCanonicalLog = undefined
 	if (restoreSnapshot === undefined && !live) {
 		pendingCanonicalAccount = activeReorgRecovery === undefined && !canonicalRefreshRequired ? undefined : account
@@ -5243,7 +5272,7 @@ const closeDetail = ({ preservePendingCanonicalAccount = false, preservePendingC
 	detailContextVersion++
 	detailRequestVersion++
 	activeLog = undefined
-	document.querySelector('.event-detail-drawer')?.remove()
+	removeEventDrawers()
 	activeAccount = undefined
 	activeAccountTransactions = undefined
 	activeAccountLoadMore = undefined
@@ -5530,7 +5559,15 @@ const renderContracts = () => {
 		const deployment = contract.deployment_block ? explorerLink(contract.explorer_base_url, 'block', contract.deployment_block, `${contract.deployment_block_exact === false ? 'Deployed at or before' : 'Deployed at'} #${number(contract.deployment_block)}`) : element('span', '', status.label)
 		deployment.className = `deployment-status ${status.tone}`
 		deployment.dataset.contractAction = `${addressKey}:deployment`
-		head.append(element('strong', '', contract.label), deployment)
+		const deploymentDetails = element('span', 'contract-deployment')
+		deploymentDetails.append(deployment)
+		head.append(element('strong', '', contract.label), deploymentDetails)
+		if (contract.deployment_timestamp) {
+			const deployed = element('time', 'data-note', `${contract.deployment_block_exact === false ? 'At or before ' : ''}${new Date(contract.deployment_timestamp).toLocaleDateString('en-GB')} · ${age(contract.deployment_timestamp)}`)
+			deployed.dateTime = exactTimestamp(contract.deployment_timestamp)
+			deployed.title = exactTimestamp(contract.deployment_timestamp)
+			deploymentDetails.append(deployed)
+		}
 		const address = explorerLink(contract.explorer_base_url, 'address', contract.address, contract.address)
 		address.className = 'contract-address-link'
 		address.dataset.contractAction = `${addressKey}:address`
@@ -6281,6 +6318,15 @@ const historySeriesLabel = (key: string): string => {
 const historyCoverageNotice = (history: EntityHistory, type: StateTab, item: StateEntity): HTMLElement => {
 	const notice = element('section', `history-coverage${history.coverage?.complete === false ? ' incomplete' : ''}`)
 	const coverage = history.coverage
+	if (coverage?.complete === true && coverage.rangeCovered !== false && coverage.nextCursor === undefined) {
+		if ((history.loadedOffset ?? 0) > 0) {
+			notice.className = 'sr-only state-history-complete'
+			notice.tabIndex = -1
+			notice.setAttribute('role', 'status')
+			notice.textContent = 'History complete'
+		} else notice.hidden = true
+		return notice
+	}
 	if (coverage === undefined) {
 		notice.append(element('strong', '', 'History coverage unavailable'), element('span', '', 'This response did not include an indexed range boundary.'))
 		return notice
@@ -6607,15 +6653,13 @@ const renderLineage = (universes: UniverseRecord[], selected: UniverseRecord): S
 	const rowGap = 70
 	const width = 60 + maximumLevel * columnGap + nodeWidth
 	const height = 40 + maximumMembers * rowGap
-	const renderedWidth = Math.max(900, width)
-	const renderedHeight = Math.round((height * renderedWidth) / width)
 	const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
 	svg.setAttribute('class', 'lineage-graph')
 	svg.setAttribute('viewBox', `0 0 ${width} ${height}`)
-	svg.setAttribute('width', String(renderedWidth))
-	svg.setAttribute('height', String(renderedHeight))
+	svg.setAttribute('width', String(width))
+	svg.setAttribute('height', String(height))
 	svg.setAttribute('role', 'img')
-	svg.setAttribute('aria-label', 'Returned Zoltar universe parent and child relationships')
+	svg.setAttribute('aria-label', 'Zoltar universe parent and child relationships')
 	for (const [level, members] of levels)
 		members.forEach((universe, index) => {
 			positions.set(`${universe.chain_id}:${universe.universe_id}`, { x: 30 + level * columnGap, y: 20 + index * rowGap })
@@ -6685,10 +6729,10 @@ const renderUniverseDetail = async (universe: UniverseRecord, requestVersion: nu
 	const heading = element('div', 'chart-heading')
 	const catalog = stateData
 	if (catalog === undefined) throw new Error('System state catalog is unavailable')
-	heading.append(element('h4', '', 'Returned Zoltar universes'), element('span', 'data-note', `${catalog.universes.length} returned records`))
+	heading.append(element('h4', '', 'Zoltar universes'), element('span', 'data-note', counted(catalog.universes.length, 'universe')))
 	const scroll = element('div', 'lineage-scroll')
 	scroll.append(renderLineage(catalog.universes, universe))
-	lineage.append(heading, scroll, element('p', 'data-note', 'Each edge links a child universe to the parent fork and outcome that created it.'))
+	lineage.append(heading, scroll)
 	fragment.append(lineage)
 	const identity = element('section', 'static-card')
 	identity.append(element('h4', '', 'Immutable universe identity'))
@@ -7111,12 +7155,14 @@ dialog.addEventListener('close', () => {
 	clearDetailUrl()
 })
 window.addEventListener('resize', () => {
-	const drawer = document.querySelector<HTMLElement>('.event-detail-drawer')
-	if (drawer) placeEventDrawer(drawer)
+	for (const drawer of eventDrawers()) placeEventDrawer(drawer)
 })
 document.addEventListener('keydown', event => {
 	if (!document.querySelector('.event-detail-drawer')) return
-	handleActivityDetailDrawerEscape(event, () => closeEventDrawer({ restoreFocus: true }))
+	handleActivityDetailDrawerEscape(event, () => {
+		const drawer = eventDrawers().find(item => item.contains(document.activeElement)) ?? eventDrawers().at(-1)
+		closeEventDrawer({ restoreFocus: true, ...(drawer?.dataset.triggerKey === undefined ? {} : { key: drawer.dataset.triggerKey }) })
+	})
 })
 const isStateTab = (value: string | undefined | null): value is StateTab => value === 'pools' || value === 'vaults' || value === 'questions' || value === 'universes'
 
@@ -7211,7 +7257,7 @@ const resetSelectedNetworkContext = () => {
 	stateDetailRequestVersion++
 	activeReorgRecovery = undefined
 	activeLog = undefined
-	document.querySelector('.event-detail-drawer')?.remove()
+	removeEventDrawers()
 	pendingCanonicalLog = undefined
 	pendingCanonicalActivityCount = undefined
 	pendingCanonicalAccount = undefined
@@ -7356,8 +7402,15 @@ const refreshAfterUpdates = async (_count: number, _forceContentRefresh: boolean
 		live: true,
 		...activityRetention,
 	})
-	if (contentRefreshed && activeReorgRecovery === undefined && pendingCanonicalLog === undefined && activeLog && document.querySelector('.event-detail-drawer')) await openDetail(activeLog, { live: true })
-	const canonicalDetailRefreshed = contentRefreshed && pendingCanonicalLog && activeReorgRecovery === undefined ? await restorePendingCanonicalLog() : true
+	const detailResults = contentRefreshed
+		? await Promise.all(
+				eventDrawers().map(drawer => {
+					const log = drawerLogs.get(drawer)
+					return log === undefined ? Promise.resolve(true) : openDetail(log, { live: true, canonicalRecovery: canonicalRefreshRequired })
+				}),
+			)
+		: []
+	const canonicalDetailRefreshed = detailResults.every(Boolean)
 	const fullyRefreshed = contentRefreshed && canonicalDetailRefreshed
 	if (fullyRefreshed && canonicalRefreshRequired && activeReorgRecovery === undefined) completeCanonicalRefresh()
 	return fullyRefreshed
