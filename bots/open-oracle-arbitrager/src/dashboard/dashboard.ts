@@ -1274,7 +1274,7 @@ element('tokens-form').addEventListener('submit', async event => {
 	const requestEpoch = profileRequestEpoch
 	universeSavePending = true
 	setControlsEnabled(connected)
-	const button = element<HTMLFormElement>('tokens-form').querySelector('button')
+	const button = element<HTMLFormElement>('tokens-form').querySelector<HTMLButtonElement>('button[type="submit"]')
 	if (button === null) throw new Error('Universe approval submit button is missing')
 	button.disabled = true
 	setText('tokens-status', 'Saving universe approvals…')
