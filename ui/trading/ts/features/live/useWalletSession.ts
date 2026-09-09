@@ -1,3 +1,5 @@
+import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { requireInjectedAccount } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'
 import type { Address, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import type { createLatestRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
@@ -203,7 +205,7 @@ export function useWalletSessionController({
 		session.setWalletSummaryReceiptNonce(current => current + 1)
 	}, [onWalletSummaryChange, selectedUniverseId, walletSummaryRequests])
 
-	async function establish(provider: InjectedEthereum, expectedContext: string, requestIsCurrent: () => boolean, eventName?: WalletContextChangeEvent) {
+	async function establish(provider: InjectedEthereum, expectedContext: string, requestIsCurrent: () => boolean, eventName?: WalletContextChangeEvent, restoreExisting = false) {
 		const requireCurrent = () => {
 			if (!mounted.current || !requestIsCurrent() || getInjectedEthereum() !== provider) return false
 			if (renderContextKeyRef.current !== expectedContext) {
@@ -215,20 +217,30 @@ export function useWalletSessionController({
 		if (configuration === undefined) throw new Error('Deployment configuration is unavailable')
 		let chainId = await services.walletChainId(provider)
 		if (!requireCurrent()) return
-		if (chainId !== configuration.chainId && eventName === undefined) {
+		if (chainId !== configuration.chainId && eventName === undefined && !restoreExisting) {
 			await services.switchWalletChain(provider, configuration.chainId)
 			if (!requireCurrent()) return
 			chainId = await services.walletChainId(provider)
 		}
 		if (!requireCurrent()) return
 		if (chainId !== configuration.chainId) throw new Error(`Wallet must use ${configuration.chainName}`)
-		const connected = await services.connectWallet(provider)
+		const connected = await (restoreExisting ? requireInjectedAccount(provider) : services.connectWallet(provider))
 		if (!requireCurrent()) return
 		subscriptionCleanup.current?.()
-		subscriptionCleanup.current = subscribeToWalletContextChanges(provider, changedEvent => contextChangeHandler.current(provider, changedEvent, false))
+		const backend = getActiveBackend()
+		if (backend.getProvider() === provider) {
+			const unsubscribeAccounts = backend.subscribeAccountsChanged(() => contextChangeHandler.current(provider, 'accountsChanged', false))
+			const unsubscribeChain = backend.subscribeChainChanged(() => contextChangeHandler.current(provider, 'chainChanged', false))
+			subscriptionCleanup.current = () => {
+				unsubscribeAccounts()
+				unsubscribeChain()
+			}
+		} else {
+			subscriptionCleanup.current = subscribeToWalletContextChanges(provider, changedEvent => contextChangeHandler.current(provider, changedEvent, false))
+		}
 		const confirmedChainId = await services.walletChainId(provider)
 		if (!requireCurrent()) return
-		const confirmedAccount = await services.connectWallet(provider)
+		const confirmedAccount = await (restoreExisting ? requireInjectedAccount(provider) : services.connectWallet(provider))
 		if (!requireCurrent()) return
 		if (confirmedChainId !== configuration.chainId || confirmedAccount !== connected) throw new Error(eventName === undefined ? 'Wallet account changed while connecting; reconnect to continue' : 'Wallet account changed while refreshing; reconnect to continue')
 		balanceRequests.invalidate()
@@ -270,6 +282,28 @@ export function useWalletSessionController({
 		}
 	}
 	connectHandler.current = () => void connect()
+
+	useEffect(() => {
+		if (configuration === undefined || session.accountRef.current !== undefined) return
+		const backend = getActiveBackend()
+		const request = connectionRequests.begin()
+		let active = true
+		const isCurrent = () => active && connectionRequests.isCurrent(request)
+		void (async () => {
+			try {
+				const accounts = await backend.getAccounts()
+				if (!isCurrent() || accounts[0] === undefined) return
+				const provider = backend.getProvider()
+				if (provider === undefined) return
+				await establish(provider, renderContextKeyRef.current, isCurrent, undefined, true)
+			} catch (error) {
+				if (isCurrent()) invalidateIdentity(publicErrorMessage(error, 'Wallet connection could not be restored'))
+			}
+		})()
+		return () => {
+			active = false
+		}
+	}, [configuration])
 
 	async function refreshAfterEvent(provider: InjectedEthereum, eventName: WalletContextChangeEvent, allowDisconnectedRefresh: boolean) {
 		const label = eventName === 'accountsChanged' ? 'Wallet account changed' : 'Wallet network changed'
@@ -343,22 +377,23 @@ export function useWalletSummaryEffects({
 			session.setWalletSummaryStatus('disconnected')
 			return
 		}
-		const availability = walletSummaryAvailability(configuration !== undefined, configurationError, discoveryState, discoveryError, selected !== undefined)
+		const availability = walletSummaryAvailability(configuration !== undefined, configurationError, discoveryState, discoveryError, selected !== undefined || selectedUniverseId !== undefined)
 		if (availability !== undefined) {
 			session.setWalletSummaryStatus(availability.status)
 			session.setWalletSummaryError(availability.error)
 			session.setWalletSummaryErrorLabel(availability.errorLabel)
 			return
 		}
-		if (configuration === undefined || selected === undefined) throw new Error('Wallet summary availability was resolved without a SecurityPool configuration')
-		if (selected.loadError !== undefined) {
+		if (configuration === undefined) throw new Error('Wallet summary availability was resolved without a deployment configuration')
+		if (selected?.loadError !== undefined) {
 			session.setWalletSummaryStatus('error')
 			session.setWalletSummaryError(`Wallet balances could not be loaded because the selected SecurityPool is unavailable: ${selected.loadError}`)
 			session.setWalletSummaryErrorLabel('SecurityPool unavailable')
 			return
 		}
+		const walletMarket = selected ?? { zoltar: configuration.zoltar, universeId: BigInt(selectedUniverseId ?? '0') }
 		session.setWalletSummaryStatus('loading')
-		void services.loadWalletHeaderBalances(services.createTradingPublicClient(configuration), selected, session.account).then(
+		void services.loadWalletHeaderBalances(services.createTradingPublicClient(configuration), walletMarket, session.account).then(
 			loaded => {
 				if (!requests.isCurrent(request) || session.accountRef.current !== session.account) return
 				session.setWalletEthAttoEth(loaded.ethAttoEth)
