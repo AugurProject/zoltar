@@ -1,6 +1,6 @@
 {
 	"version": 1,
-	"approvedUniverses": ["0"],
+	"approvedUniverses": [],
 	"childMarketConfigurations": [],
 	"desiredPools": [],
 	"centralizedMarkets": {

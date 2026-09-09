@@ -1,10 +1,11 @@
+import { monitoringTokensForDeployment } from '../../src/config/deployment-settings.ts'
 import sepolia from '../../../../docs/sepolia-deployment-addresses.json'
 import { getAddress } from '@zoltar/bot-shared/ethereum'
 import { describe, expect, test } from 'bun:test'
 import { parseOperatorSettings, type PersistedOperatorSettings } from '#config/settings-store'
 import { checkIndependentRpcChains, updateOperatorConnectivity } from '../../src/runtime/connectivity-update.ts'
 import { EndpointCheckFailure, type EndpointCheck } from '#monitoring/connectivity'
-import { deploymentIdentityChanged, deploymentUpdateMustWait, requireSafeDeploymentTransition, tokenUpdateForDeployment } from '../../src/runtime/operator-control-plane.ts'
+import { deploymentIdentityChanged, deploymentUpdateMustWait, requireSafeDeploymentTransition } from '../../src/runtime/operator-control-plane.ts'
 
 async function exampleSettings() {
 	const settings = parseOperatorSettings(JSON.parse(await Bun.file(new URL('../../config/operator.example.json', import.meta.url)).text()))
@@ -31,7 +32,7 @@ describe('operator connectivity updates', () => {
 		expect(() => requireSafeDeploymentTransition({ positions: [{ status: 'open' }] }, current, { ...current, executor: '0x0000000000000000000000000000000000000002' })).toThrow('cannot change while a position still consumes risk')
 		expect(() => requireSafeDeploymentTransition({ positions: [{ status: 'open' }] }, current, { ...current, executor: current.executor })).not.toThrow()
 		const nextRep = '0x0000000000000000000000000000000000000002'
-		expect(tokenUpdateForDeployment([current.rep], current.rep, { ...current, rep: nextRep }, false)).toEqual([nextRep])
+		expect(monitoringTokensForDeployment([current.rep], current.rep, { ...current, rep: nextRep })).toEqual([nextRep])
 	})
 
 	test('persists a dashboard switch to the isolated-development quorum for live application', async () => {

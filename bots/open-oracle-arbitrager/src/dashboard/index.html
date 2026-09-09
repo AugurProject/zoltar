@@ -433,14 +433,14 @@
 
 				<details class="settings-group panel" open>
 					<summary>
-						<span class="settings-summary-copy"><strong>Execution token allowlist</strong><small>Observed-only tokens remain monitor-only until approved</small></span>
+						<span class="settings-summary-copy"><strong>Approved universes</strong><small>Only explicitly approved universe REP can be traded</small></span>
 					</summary>
 					<div class="settings-body">
 						<form id="tokens-form">
 							<fieldset id="tokens-fieldset" disabled>
-								<label><span>Execution token allowlist · one address per line</span><textarea id="token-addresses" rows="3" spellcheck="false"></textarea></label>
-								<p class="section-note">Tracked REP: <output id="tracked-token-addresses" class="mono">Waiting for token discovery</output></p>
-								<div class="form-actions"><span id="tokens-status" class="muted" aria-live="polite">Tracked REP addresses appear above. The primary REP is automatic; on mainnet, discovered Augur fork REP is automatic too. Observed-only tokens remain monitor-only until added.</span><button class="button" type="submit">Save token list</button></div>
+								<div id="approved-universes" class="universe-approvals">Universe discovery has not completed.</div>
+								<p class="section-note">Approved REP: <output id="tracked-token-addresses" class="mono">Waiting for token discovery</output></p>
+								<div class="form-actions"><span id="tokens-status" class="muted" aria-live="polite">Approve the root or a truthful fork outcome. Select only one outcome per fork.</span><button class="button" type="submit">Save universe approvals</button></div>
 							</fieldset>
 						</form>
 					</div>

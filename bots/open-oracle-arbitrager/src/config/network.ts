@@ -1,6 +1,6 @@
 import mainnet from '../../../../docs/mainnet-deployment-addresses.json'
 import sepolia from '../../../../docs/sepolia-deployment-addresses.json'
-import { canonicalNetworkDeployment } from '@zoltar/bot-shared/config/canonical-deployment'
+import { canonicalCoreDeployment, canonicalNetworkDeployment } from '@zoltar/bot-shared/config/canonical-deployment'
 import { defineChain, getAddress, type Address, type Chain } from '@zoltar/bot-shared/ethereum'
 import type { NetworkName } from '#monitoring/connectivity'
 
@@ -69,4 +69,8 @@ export function networkConfiguration(
 
 export function networkDeployment(name: NetworkName) {
 	return canonicalNetworkDeployment(name === 'mainnet' ? mainnet : sepolia)
+}
+
+export function canonicalZoltar(name: NetworkName) {
+	return canonicalCoreDeployment(name === 'mainnet' ? mainnet : sepolia).zoltar
 }

@@ -1,3 +1,4 @@
+import { parseApprovedUniverses } from '@zoltar/bot-shared/monitoring/universe-policy'
 import { networkDeployment } from '#config/network'
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
@@ -32,6 +33,7 @@ export type RuntimeSettings = {
 }
 
 export type PersistedOperatorSettings = {
+	approvedUniverses: readonly bigint[]
 	centralizedMarkets: CentralizedMarketSettings
 	connectivity: ConnectivitySettings
 	deployment: DeploymentSettings
@@ -101,6 +103,7 @@ type StoredRuntimeSettings = Omit<RuntimeSettings, 'lookbackBlocks' | 'maxHedgeS
 }
 
 export type StoredOperatorSettings = {
+	approvedUniverses: readonly string[]
 	centralizedMarkets: Omit<ReturnType<typeof serializeCentralizedMarketSettings>, 'assetAddress' | 'assetChainId'>
 	connectivity?: ConnectivitySettings | undefined
 	deployment: Omit<DeploymentSettings, 'openOracle' | 'rep' | 'weth'>
@@ -122,7 +125,7 @@ function requiredRecord(value: unknown, name = 'Operator configuration') {
 }
 
 function validatedKeys(record: Record<string, unknown>) {
-	const allowed = new Set(['centralizedMarkets', 'connectivity', 'deployment', 'network', 'networkConfigured', 'paused', 'privateKey', 'rpcQuorum', 'runtime', 'strategy', 'submission', 'tokenAddresses', 'version'])
+	const allowed = new Set(['approvedUniverses', 'centralizedMarkets', 'connectivity', 'deployment', 'network', 'networkConfigured', 'paused', 'privateKey', 'rpcQuorum', 'runtime', 'strategy', 'submission', 'tokenAddresses', 'version'])
 	for (const key of Object.keys(record)) {
 		if (!allowed.has(key)) throw new Error(`Unknown operator configuration field: ${key}`)
 	}
@@ -248,6 +251,7 @@ export function parseOperatorSettings(value: unknown, preservedPrivateKey?: Hex)
 		runtime,
 		strategy,
 		submission,
+		approvedUniverses: parseApprovedUniverses(record['approvedUniverses'] ?? []),
 		tokenAddresses: record['tokenAddresses'].map(address => getAddress(String(address))),
 	}
 }
@@ -293,6 +297,7 @@ export function serializeOperatorSettings(settings: PersistedOperatorSettings, r
 			twapSeconds: settings.strategy.twapSeconds,
 		},
 		submission: settings.submission,
+		approvedUniverses: settings.approvedUniverses.map(id => id.toString()),
 		tokenAddresses: settings.tokenAddresses,
 		version: 4,
 	}

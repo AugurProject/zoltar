@@ -19,6 +19,7 @@ afterEach(async () => {
 
 function settings(privateKeyValue: Hex | undefined) {
 	return {
+		approvedUniverses: [],
 		centralizedMarkets: {
 			assetAddress: canonicalNetworkDeployment(mainnet).rep,
 			assetChainId: 1,
@@ -444,3 +445,11 @@ for (const [network, manifest] of [
 		expect(parseOperatorSettings(serializeOperatorSettings(parsed)).deployment.openOracle).toBe(parsed.deployment.openOracle)
 	})
 }
+
+test('universe approvals round-trip independently of monitoring tokens and missing approval defaults to none', () => {
+	const stored = serializeOperatorSettings({ ...settings(undefined), approvedUniverses: [0n, 123n] })
+	expect(parseOperatorSettings(stored).approvedUniverses).toEqual([0n, 123n])
+	const { approvedUniverses, ...withoutApprovals } = stored
+	expect(approvedUniverses).toEqual(['0', '123'])
+	expect(parseOperatorSettings(withoutApprovals).approvedUniverses).toEqual([])
+})

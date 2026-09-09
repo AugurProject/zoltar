@@ -26,6 +26,7 @@ type DashboardController = {
 	switchNetworkProfile?: (value: unknown) => unknown | Promise<unknown>
 	updateStrategy: (value: unknown) => StrategySettings | Promise<StrategySettings>
 	updateSubmission: (value: unknown) => SubmissionSettings | Promise<SubmissionSettings>
+	setApprovedUniverses?: (value: unknown) => readonly string[] | Promise<readonly string[]>
 	updateTokens?: (value: unknown) => readonly string[] | Promise<readonly string[]>
 }
 
@@ -309,6 +310,16 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					return json(await controller.predictExecutor(await boundedDashboardJson(request)))
 				} catch (error) {
 					return publicError(error, 400, 'executor-prediction', 'Executor prediction could not be completed. Review the submitted salt and protected bot logs.')
+				}
+			}
+			if (request.method === 'PUT' && url.pathname === '/api/approved-universes') {
+				if (!dashboardRequestIsSameOrigin(request, acceptedAuthorities)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
+				try {
+					await requireConfiguredChain(controller)
+					if (controller.setApprovedUniverses === undefined) throw new Error('Universe approval is unavailable')
+					return json({ approvedUniverses: await controller.setApprovedUniverses(await boundedDashboardJson(request)) })
+				} catch (error) {
+					return publicError(error, 400, 'universe-approval', 'Universe approval could not be saved. Select only one outcome per fork and review protected bot logs.')
 				}
 			}
 			if (request.method === 'PUT' && url.pathname === '/api/tokens') {

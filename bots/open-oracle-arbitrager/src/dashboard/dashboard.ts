@@ -1,3 +1,5 @@
+let approvedUniverseIds = new Set<string>()
+
 import { operatorNoticePresentation } from './dashboard-notice.ts'
 import { setAttentionBadge } from '../../../shared/src/dashboard/components.js'
 import type { ConnectivitySettings } from '#monitoring/connectivity'
@@ -614,8 +616,8 @@ function synchronizeFocusedConfiguration(configuration: unknown) {
 	const strategy = Reflect.get(configuration, 'strategy')
 	const submission = Reflect.get(configuration, 'submission')
 	const deployment = Reflect.get(configuration, 'deployment')
-	const tokenAddresses = Reflect.get(configuration, 'tokenAddresses')
-	if (!isStrategySettings(strategy) || !isSubmissionSettings(submission) || !isDeploymentSettings(deployment) || !isStringArray(tokenAddresses)) throw new Error('Bot returned an invalid configuration document')
+	const approvedUniverses = Reflect.get(configuration, 'approvedUniverses')
+	if (!isStrategySettings(strategy) || !isSubmissionSettings(submission) || !isDeploymentSettings(deployment) || !isStringArray(approvedUniverses)) throw new Error('Bot returned an invalid configuration document')
 	loadSettings(strategy)
 	settingsLoaded = true
 	loadSubmission(submission)
@@ -623,7 +625,7 @@ function synchronizeFocusedConfiguration(configuration: unknown) {
 	synchronizePersistedConnectivity(configuration)
 	loadDeployment(deployment)
 	deploymentLoaded = true
-	element<HTMLTextAreaElement>('token-addresses').value = tokenAddresses.join('\n')
+	approvedUniverseIds = new Set(approvedUniverses)
 	tokensLoaded = true
 }
 
@@ -695,6 +697,25 @@ function renderOperations(operations: readonly PublicOperationEntry[]) {
 }
 
 function renderTokenMarkets(snapshot: PublicOperatorSnapshot) {
+	const universeList = element('approved-universes')
+	universeList.replaceChildren()
+	for (const universe of snapshot.universes ?? []) {
+		const label = document.createElement('label')
+		const input = document.createElement('input')
+		input.type = 'checkbox'
+		input.checked = approvedUniverseIds.has(universe.id)
+		input.dataset['focusKey'] = `universe:${universe.id}`
+		input.addEventListener('change', () => {
+			if (input.checked) approvedUniverseIds.add(universe.id)
+			else approvedUniverseIds.delete(universe.id)
+		})
+		const text = document.createElement('span')
+		text.textContent = `${universe.id === '0' ? 'Root universe' : `Universe ${universe.id} · Parent ${universe.parentId} · Outcome ${universe.outcomeIndex}`} · REP ${universe.repToken}`
+		label.append(input, text)
+		universeList.append(label)
+	}
+	if ((snapshot.universes?.length ?? 0) === 0) universeList.textContent = 'Universe discovery has not completed.'
+
 	setText('tracked-token-addresses', snapshot.tokenAddresses.length === 0 ? 'None observed' : snapshot.tokenAddresses.join(' · '))
 	const body = element<HTMLTableSectionElement>('token-markets-body')
 	body.replaceChildren()
@@ -1258,19 +1279,21 @@ element<HTMLSelectElement>('price-token').addEventListener('change', () => {
 })
 element('tokens-form').addEventListener('submit', async event => {
 	event.preventDefault()
-	const addresses = element<HTMLTextAreaElement>('token-addresses')
-		.value.split('\n')
-		.map(value => value.trim())
-		.filter(Boolean)
+	const button = element<HTMLFormElement>('tokens-form').querySelector('button')
+	if (button === null) throw new Error('Universe approval submit button is missing')
+	button.disabled = true
+	setText('tokens-status', 'Saving universe approvals…')
 	try {
-		await api('/api/tokens', {
-			body: JSON.stringify(addresses),
+		await api('/api/approved-universes', {
+			body: JSON.stringify([...approvedUniverseIds]),
 			headers: { 'content-type': 'application/json' },
 			method: 'PUT',
 		})
-		setText('tokens-status', 'Token list checked and saved. Discovery refreshes on the next block.')
+		setText('tokens-status', 'Universe approvals saved. They apply before the next execution scan.')
 	} catch (error) {
 		setText('tokens-status', error instanceof Error ? error.message : String(error))
+	} finally {
+		button.disabled = !connected
 	}
 })
 

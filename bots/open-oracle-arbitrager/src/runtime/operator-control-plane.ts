@@ -1,7 +1,8 @@
+import { parseApprovedUniverses, validateApprovedUniverseSelection } from '@zoltar/bot-shared/monitoring/universe-policy'
 import { resolve } from 'node:path'
-import { getAddress, privateKeyToAccount, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import { privateKeyToAccount, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { assertDistinctPersistentPaths, mutableStrategy, runnableOperatorSettings, type Configuration } from '#config/configuration'
-import { assertFocusedDeploymentCompatible, prepareDeploymentTokenTransition, validateDeploymentSettings, type DeploymentSettings } from '#config/deployment-settings'
+import { monitoringTokensForDeployment, assertFocusedDeploymentCompatible, prepareDeploymentTokenTransition, validateDeploymentSettings, type DeploymentSettings } from '#config/deployment-settings'
 import { configurationRevisionConflict, loadOperatorSettingsWithRevision, parseOperatorSettings, saveOperatorSettings, serializeOperatorSettings, switchOperatorNetworkProfile, type PersistedOperatorSettings } from '#config/settings-store'
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
 import { startDashboardServer } from '#dashboard/dashboard-server'
@@ -51,18 +52,6 @@ export function deploymentIdentityChanged(current: DeploymentSettings, next: Dep
 
 export function deploymentUpdateMustWait(current: DeploymentSettings, next: DeploymentSettings, positions: readonly Pick<PositionRecord, 'status'>[]) {
 	return deploymentIdentityChanged(current, next) && positions.some(position => positionConsumesRisk(position.status))
-}
-
-export function tokenUpdateForDeployment(value: readonly string[], previousRep: Address, deployment: DeploymentSettings, execute: boolean) {
-	const parsedAddresses: Address[] = [deployment.rep]
-	for (const address of value) {
-		const token = getAddress(address)
-		if (token.toLowerCase() === previousRep.toLowerCase() && token.toLowerCase() !== deployment.rep.toLowerCase()) continue
-		const authenticated = !execute || deployment.deploymentManifest?.contracts.some(entry => entry.role === 'token' && entry.address.toLowerCase() === token.toLowerCase()) === true
-		if (!authenticated) throw new Error(`Execution token ${token} is not authenticated by the deployment manifest`)
-		parsedAddresses.push(token)
-	}
-	return [...new Map(parsedAddresses.map(address => [address.toLowerCase(), address])).values()]
 }
 
 export function requireSafeDeploymentTransition(state: { positions: readonly Pick<PositionRecord, 'status'>[] }, current: DeploymentSettings, next: DeploymentSettings) {
@@ -309,6 +298,7 @@ export function startOperatorControlPlane(parameters: {
 				let nextPendingSignerLock: ExclusiveProcessLock | undefined
 				let savedRevision = ''
 				try {
+					if (next.approvedUniverses.length > 0) validateApprovedUniverseSelection(state.universes ?? [], next.approvedUniverses)
 					requireSafeDeploymentTransition(state, pending.deployment ?? fixedState.deployment, next.deployment)
 					if (next.runtime.execute && signer.address !== undefined && !keepsActiveSigner && !keepsPendingSigner) {
 						if (lockManager === undefined) throw new Error('Execution signer lock management is unavailable')
@@ -644,6 +634,18 @@ export function startOperatorControlPlane(parameters: {
 				return next
 			})
 		},
+		setApprovedUniverses: value =>
+			queueSettingsUpdate(() =>
+				runConfigurationSignerOperation(signerOperationGate, async () => {
+					const approvedUniverses = parseApprovedUniverses(value)
+					validateApprovedUniverseSelection(state.universes ?? [], approvedUniverses)
+					const next = await persistFocusedSettings(settings => ({ ...settings, approvedUniverses }))
+					pending.operatorSettings = next
+					state.tokenAddresses = []
+					recordOperation(state, { category: 'configuration', details: approvedUniverses.map(id => id.toString()).join(', '), level: 'info', message: 'Approved universe selection saved', reason: 'Applies before the next execution scan; existing positions continue recovery', reportId: undefined })
+					return approvedUniverses.map(id => id.toString())
+				}),
+			),
 		updateTokens: value => {
 			if (!Array.isArray(value)) throw new Error('Token configuration must be an array of addresses')
 			const tokenAddresses = value.map(address => {
@@ -652,8 +654,7 @@ export function startOperatorControlPlane(parameters: {
 			})
 			return queueSettingsUpdate(async () => {
 				const effectiveDeployment = pending.deployment ?? fixedState.deployment
-				const executionEnabled = pending.execute ?? config.execute
-				const next = tokenUpdateForDeployment(tokenAddresses, fixedState.deployment.rep, effectiveDeployment, executionEnabled)
+				const next = monitoringTokensForDeployment(tokenAddresses, fixedState.deployment.rep, effectiveDeployment)
 				await persistFocusedSettings(settings => ({
 					...settings,
 					tokenAddresses: next,
@@ -664,8 +665,8 @@ export function startOperatorControlPlane(parameters: {
 					category: 'configuration',
 					details: next.join(', '),
 					level: 'info',
-					message: 'Execution token allowlist saved and queued',
-					reason: 'Explicitly configured tokens become executable at the next block scan',
+					message: 'Monitoring token list saved and queued',
+					reason: 'Monitoring tokens do not grant universe approval',
 					reportId: undefined,
 				})
 				return next

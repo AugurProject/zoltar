@@ -85,3 +85,13 @@ export function prepareDeploymentTokenTransition(activeTokenAddresses: readonly 
 		persisted: replacePrimaryRepToken(persistedTokenAddresses ?? activeTokenAddresses, previousRep, nextRep),
 	}
 }
+
+export function monitoringTokensForDeployment(value: readonly string[], previousRep: Address, deployment: DeploymentSettings) {
+	const parsedAddresses: Address[] = [deployment.rep]
+	for (const address of value) {
+		const token = getAddress(address)
+		if (token.toLowerCase() === previousRep.toLowerCase() && token.toLowerCase() !== deployment.rep.toLowerCase()) continue
+		parsedAddresses.push(token)
+	}
+	return [...new Map(parsedAddresses.map(address => [address.toLowerCase(), address])).values()]
+}

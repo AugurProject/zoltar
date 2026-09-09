@@ -171,7 +171,10 @@ and forked pool counts, pool selection, and whether a bot vault can migrate into
 that universe.
 
 The canonical Zoltar contract identifies the universe registry, and
-`approvedUniverses` is the operator's explicit truth policy. A root universe or
+`approvedUniverses` is the operator's explicit truth policy, shared with the
+arbitrager. Both example configurations start with no approvals. Select the
+root or truthful child in the universe UI; approvals are saved per network
+profile and REP addresses come from the canonical universe registry. A root universe or
 fork-created child remains inert until it is approved. For a given forked parent
 universe, the bot rejects configuration that approves more than one direct child
 outcome. This prevents an ambiguous vault route. Universe approval does not

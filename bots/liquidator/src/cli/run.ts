@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { parseApprovedUniverses } from '@zoltar/bot-shared/monitoring/universe-policy'
 
 import { parseRootMarketSettings } from '#config/canonical-deployment'
 
@@ -298,11 +299,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				},
 				setApprovedUniverses: value =>
 					configurationMutationGate.run(async () => {
-						if (!Array.isArray(value) || value.some(universe => typeof universe !== 'string' || !/^(?:0|[1-9]\d*)$/.test(universe))) {
-							throw new Error('Approved universes must be an array of non-negative integer strings')
-						}
-						const approvedUniverses = [...new Set(value.map(universe => BigInt(String(universe))))]
-						if (approvedUniverses.some(universe => universe >= 2n ** 248n)) throw new Error('Approved universe must fit in uint248')
+						const approvedUniverses = parseApprovedUniverses(value)
 						validateApprovedUniverseSelection(state.universes, approvedUniverses)
 						await persistSettings(current => ({ ...current, approvedUniverses }))
 						for (const universe of state.universes) universe.approved = approvedUniverses.includes(universe.id)

@@ -1,3 +1,4 @@
+import { parseApprovedUniverses } from '@zoltar/bot-shared/monitoring/universe-policy'
 import { canonicalDeployment, canonicalRootMarketIdentity, parseRootMarketSettings } from './canonical-deployment.ts'
 import { createHash, randomBytes } from 'node:crypto'
 import { dirname, extname, resolve } from 'node:path'
@@ -275,9 +276,7 @@ export function parseSettings(value: unknown): OperatorSettings {
 	const connectivity = networkConfigured ? parseConnectivity(root['connectivity']) : { publicRpcUrls: [], quorumRpcUrls: [], readRpcUrl: 'http://127.0.0.1:1', rpcQuorum: rpcQuorumRequirement() }
 	const selectedPools = root['selectedPools']
 	if (!Array.isArray(selectedPools)) throw new Error('selectedPools must be an array')
-	const approvedUniverses = root['approvedUniverses']
-	if (!Array.isArray(approvedUniverses)) throw new Error('approvedUniverses must be an array')
-	const parsedApprovedUniverses = [...new Set(approvedUniverses.map(value => universeId(value, 'approved universe')))]
+	const parsedApprovedUniverses = parseApprovedUniverses(root['approvedUniverses'])
 	const parsedSelectedPools = [
 		...new Map(
 			selectedPools.map(value => {
