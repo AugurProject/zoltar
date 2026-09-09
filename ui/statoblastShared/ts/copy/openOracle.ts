@@ -51,7 +51,6 @@ export const currentReporter = 'Current Reporter'
 export const submittingDispute = 'Submitting dispute…'
 export const disputingTheReport = 'disputing the report'
 export const disputeOccurred = 'Dispute Occurred'
-export const formatDisconnectedWalletApprovalReason = (tokenSymbol: string) => `Connect a wallet before approving ${tokenSymbol}.`
 export const disputeWalletRequiredReason = 'Connect a wallet before disputing the report.'
 export const settlementWalletRequiredReason = 'Connect a wallet before settling the report.'
 export const economics = 'Economics'

@@ -19,3 +19,8 @@ test('check-changed keeps Biome-supported source files while filtering prose and
 
 	expect(biomeChangedFiles).toEqual(['docs/explanation/fees.html', 'ui/zoltar/ts/app/App.tsx', 'ui/trading/ts/app/App.tsx', 'ui/trading/css/app.css', 'tooling/repo/check-changed.mts'])
 })
+
+test('check-changed covers shared UI and protocol package sources and configuration', () => {
+	const paths = ['ui/zoltarShared/ts/features/universes/components/ForkZoltarSection.tsx', 'ui/statoblastShared/ts/features/security-pools/components/SecurityVaultSection.tsx', 'ui/zoltarShared/package.json', 'shared/core/ts/evm/ethereum.ts', 'shared/trading/package.json', 'shared/trading/tsconfig.json']
+	expect(getBiomeChangedFiles(paths)).toEqual(paths)
+})

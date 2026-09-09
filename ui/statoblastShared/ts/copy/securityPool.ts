@@ -174,8 +174,6 @@ export const missingVaultDepositDetail = 'This vault does not exist. Deposit REP
 export const currentCapacityOwnershipAttoRep = 'Current capacity ownership'
 export const repBackingLabel = 'REP backing'
 export const depositRepToVaultPendingLabel = 'Depositing REP…'
-export const firstDepositTail = 'in the first deposit.'
-export const newVaultsRequireAtLeast = 'New vaults require at least'
 export const formatInsufficientRepBalanceDetail = (amount: string) => `Insufficient REP balance. Deposit amount exceeds your wallet balance by ${amount}\u00a0REP.`
 export const connectWalletBeforeClaimingFees = 'Connect a wallet before claiming fees.'
 export const connectWalletBeforeDepositingRep = 'Connect a wallet before depositing REP.'

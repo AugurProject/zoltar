@@ -4,7 +4,6 @@ import * as marketCopy from '../../../copy/market.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { OutcomeSelectionList } from '@zoltar/ui-core-shared/components/OutcomeSelectionList.js'
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
-import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { UniverseLink } from './UniverseLink.js'
 import { formatUniverseIdHex } from '../lib/universe.js'
@@ -12,6 +11,7 @@ import type { ZoltarChildUniverseSummary } from '@zoltar/ui-core-shared/types/co
 
 type MigrationOutcomeUniversesSectionProps = {
 	childUniverses: ZoltarChildUniverseSummary[]
+	loadingBalances: boolean
 	disabled: boolean
 	migrationBalance: bigint | undefined
 	isScalarFork: boolean
@@ -51,6 +51,7 @@ export function MigrationOutcomeUniversesSection({
 	childUniverseSplitAmounts,
 	deploymentDisabledReason,
 	disabled,
+	loadingBalances,
 	isScalarFork,
 	migrationBalance,
 	onAddNextOutcome,
@@ -59,6 +60,8 @@ export function MigrationOutcomeUniversesSection({
 	pendingOutcomeIndex,
 	selectedOutcomeIndexSet,
 }: MigrationOutcomeUniversesSectionProps) {
+	const undeployedChild = childUniverses.find(child => !child.exists)
+	const deploymentReason = undeployedChild === undefined ? undefined : deploymentDisabledReason(undeployedChild)
 	const hasAddableOutcome = childUniverses.some(child => !selectedOutcomeIndexSet.has(child.outcomeIndex.toString()))
 
 	return (
@@ -73,6 +76,7 @@ export function MigrationOutcomeUniversesSection({
 			className='migration-outcome-section'
 			title={zoltarCopy.outcomeUniverses}
 		>
+			{deploymentReason === undefined ? undefined : <p className='detail'>{deploymentReason}</p>}
 			{childUniverses.length === 0 ? (
 				<p className='detail'>{zoltarCopy.outcomeUniversesEmpty}</p>
 			) : (
@@ -80,15 +84,16 @@ export function MigrationOutcomeUniversesSection({
 					items={childUniverses.map(child => {
 						const selected = selectedOutcomeIndexSet.has(child.outcomeIndex.toString())
 						const heldBalance = getMigrationOutcomeHeldBalance(child, childUniverseRepBalances)
-						const isHeldBalanceLoading = child.exists && heldBalance === undefined
+						const isHeldBalanceLoading = loadingBalances && child.exists && heldBalance === undefined
 						return {
 							actions: child.exists ? (
-								<UniverseLink universeId={child.universeId}>
-									<Badge tone='ok'>{commonCopy.deployed}</Badge>
+								<UniverseLink className='button-link secondary-link' universeId={child.universeId}>
+									{zoltarCopy.openUniverse}
 								</UniverseLink>
 							) : (
 								<TransactionActionButton
 									tone='secondary'
+									showDisabledReason={false}
 									idleLabel={marketCopy.deployUniverse}
 									pendingLabel={marketCopy.deployingUniverse}
 									pending={pendingOutcomeIndex === child.outcomeIndex}
@@ -115,8 +120,8 @@ export function MigrationOutcomeUniversesSection({
 									<span className='migration-outcome-metric'>
 										<span className='migration-outcome-metric-label'>{zoltarCopy.migratedBalanceLabel}</span>
 										<strong>
-											<CurrencyValue copyable={false} loading={child.exists && childUniverseSplitAmounts[child.universeId.toString()] === undefined} value={child.exists ? childUniverseSplitAmounts[child.universeId.toString()] : 0n} suffix={commonCopy.rep} /> /{' '}
-											<CurrencyValue copyable={false} loading={migrationBalance === undefined} value={migrationBalance} suffix={commonCopy.rep} />
+											<CurrencyValue copyable={false} loading={loadingBalances && child.exists && childUniverseSplitAmounts[child.universeId.toString()] === undefined} value={child.exists ? childUniverseSplitAmounts[child.universeId.toString()] : 0n} suffix={commonCopy.rep} /> /{' '}
+											<CurrencyValue copyable={false} loading={loadingBalances && migrationBalance === undefined} value={migrationBalance} suffix={commonCopy.rep} />
 										</strong>
 									</span>
 								</>

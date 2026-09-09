@@ -632,6 +632,7 @@ describe('useZoltarFork', () => {
 			await Promise.resolve()
 		})
 		expect(loadZoltarForkAccess).toHaveBeenCalledTimes(1)
+		const refreshFromDeployment = requireHookState(hookState).loadZoltarForkAccess
 
 		await act(async () => {
 			render(h(Harness, { universe: createForkedUniverse(deployedChildUniverse) }), renderedComponent.container)
@@ -640,7 +641,12 @@ describe('useZoltarFork', () => {
 			await Promise.resolve()
 		})
 
-		expect(loadZoltarForkAccess).toHaveBeenCalledTimes(2)
+		await act(async () => {
+			await refreshFromDeployment()
+		})
+
+		expect(loadZoltarForkAccess).toHaveBeenCalledTimes(3)
+		expect(loadZoltarForkAccess.mock.calls[2]?.[3]).toEqual([deployedChildUniverse])
 		expect(loadZoltarForkAccess.mock.calls[1]?.[3]).toEqual([deployedChildUniverse])
 		expect(requireHookState(hookState).zoltarMigrationChildSplitAmountsAttoRep).toEqual({ '2': 25n })
 		expect(requireHookState(hookState).zoltarMigrationChildRepBalancesAttoRep).toEqual({ '2': 10n })

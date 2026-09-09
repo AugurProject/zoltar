@@ -13,6 +13,7 @@ import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
+import { InlineHint } from '@zoltar/ui-core-shared/components/InlineHint.js'
 import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
@@ -257,22 +258,21 @@ export function renderSelectedReportActionSection({
 
 				return undefined
 			})()
-			const disputeToken1ApprovalGuardMessage = (() => {
-				if (!isConnected) return openOracleCopy.formatDisconnectedWalletApprovalReason(token1Symbol)
+			const sharedApprovalGuardMessage = (() => {
+				if (!isConnected) return openOracleCopy.disputeWalletRequiredReason
 				if (!isOnActiveAppChain) return getWrongNetworkReason()
-				return token1ApprovalGuardMessage
+				if (openOracleReportDetails === undefined) return openOracleCopy.reportLoadRequired
+				return undefined
 			})()
-			const disputeToken2ApprovalGuardMessage = (() => {
-				if (!isConnected) return openOracleCopy.formatDisconnectedWalletApprovalReason(token2Symbol)
-				if (!isOnActiveAppChain) return getWrongNetworkReason()
-				return token2ApprovalGuardMessage
-			})()
+			const disputeToken1ApprovalGuardMessage = sharedApprovalGuardMessage ?? token1ApprovalGuardMessage
+			const disputeToken2ApprovalGuardMessage = sharedApprovalGuardMessage ?? token2ApprovalGuardMessage
 			const disputeActionDisabledReason = (() => {
 				if (!isConnected) return openOracleCopy.disputeWalletRequiredReason
 				if (!isOnActiveAppChain) return getWrongNetworkReason()
 				return disputeDisabledMessage ?? (disputeSubmission?.blockMessage?.kind === 'visible' ? disputeSubmission.blockMessage.message : undefined)
 			})()
 			const disputeReportId = openOracleForm.reportId.trim() || 'unselected'
+			const sharedApprovalGuardMessageId = `open-oracle-dispute-approval-guard-${disputeReportId}`
 			const disputeInputFieldErrors = disputeSubmission?.inputFieldErrors ?? {}
 			const firstDisputeInputErrorField = OPEN_ORACLE_DISPUTE_INPUT_FIELD_ORDER.find(field => disputeInputFieldErrors[field] !== undefined)
 			const disputeInputBlockMessageId = firstDisputeInputErrorField === undefined ? `open-oracle-dispute-input-blocker-${disputeReportId}` : getOpenOracleDisputeFieldErrorId(firstDisputeInputErrorField, disputeReportId)
@@ -280,6 +280,11 @@ export function renderSelectedReportActionSection({
 			const disputeNewAmount2Error = disputeInputFieldErrors.disputeNewAmount2
 			const disputeTokenToSwapError = disputeInputFieldErrors.disputeTokenToSwap
 			const disputeActionReasonUsesInputBlockMessage = disputeSubmission?.inputBlockMessage?.kind === 'visible' && disputeActionDisabledReason === disputeSubmission.inputBlockMessage.message
+			const disputeActionReasonElementId = (() => {
+				if (sharedApprovalGuardMessage !== undefined) return sharedApprovalGuardMessageId
+				if (disputeActionReasonUsesInputBlockMessage) return disputeInputBlockMessageId
+				return undefined
+			})()
 			const disputeInputBlockDetail =
 				disputeSubmission?.inputBlockMessage !== undefined && firstDisputeInputErrorField === undefined ? (
 					<p className='detail' id={disputeInputBlockMessageId}>
@@ -335,6 +340,7 @@ export function renderSelectedReportActionSection({
 							</label>
 						</div>
 						{disputeSubmission?.expectedNewAmount1 === undefined || disputeSubmission.token1Decimals === undefined ? undefined : <p className='detail'>{openOracleCopy.formatNewAmountMustBeExactDetail(token1Symbol, formatCurrencyInputBalance(disputeSubmission.expectedNewAmount1, disputeSubmission.token1Decimals))}</p>}
+						{sharedApprovalGuardMessage === undefined ? undefined : <InlineHint id={sharedApprovalGuardMessageId} message={sharedApprovalGuardMessage} />}
 						{disputeSubmission?.inputBlockMessage === undefined ? (
 							<>
 								<SectionBlock headingLevel={4} title={openOracleCopy.formatTokenApprovalTitle(token1Symbol)} variant='embedded'>
@@ -345,6 +351,7 @@ export function renderSelectedReportActionSection({
 										approvedAmount={openOracleTokenAccessState.token1Approval.value}
 										disabled={!isConnected || !isOnActiveAppChain}
 										guardMessage={disputeToken1ApprovalGuardMessage}
+										guardMessageElementId={sharedApprovalGuardMessage === undefined ? undefined : sharedApprovalGuardMessageId}
 										onApprove={amount => onApproveToken1(amount)}
 										pending={openOracleActiveAction === 'approveToken1'}
 										pendingLabel={openOracleCopy.formatApprovingTokenPendingLabel(token1Symbol)}
@@ -362,6 +369,7 @@ export function renderSelectedReportActionSection({
 										approvedAmount={openOracleTokenAccessState.token2Approval.value}
 										disabled={!isConnected || !isOnActiveAppChain}
 										guardMessage={disputeToken2ApprovalGuardMessage}
+										guardMessageElementId={sharedApprovalGuardMessage === undefined ? undefined : sharedApprovalGuardMessageId}
 										onApprove={amount => onApproveToken2(amount)}
 										pending={openOracleActiveAction === 'approveToken2'}
 										pendingLabel={openOracleCopy.formatApprovingTokenPendingLabel(token2Symbol)}
@@ -387,8 +395,8 @@ export function renderSelectedReportActionSection({
 									disabled: !isConnected || !isOnActiveAppChain || openOracleForm.reportId.trim() === '' || !disputeAvailability.canAct || disputeSubmission?.canSubmit === false,
 									reason: disputeActionDisabledReason,
 								}}
-								disabledReasonElementId={disputeActionReasonUsesInputBlockMessage ? disputeInputBlockMessageId : undefined}
-								showDisabledReason={!disputeActionReasonUsesInputBlockMessage}
+								disabledReasonElementId={disputeActionReasonElementId}
+								showDisabledReason={sharedApprovalGuardMessage === undefined && !disputeActionReasonUsesInputBlockMessage}
 							/>
 						</div>
 					</div>

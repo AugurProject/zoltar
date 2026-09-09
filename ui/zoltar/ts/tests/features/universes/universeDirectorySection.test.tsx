@@ -52,6 +52,8 @@ describe('UniverseDirectorySection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
+		expect(document.body.querySelector('time')?.getAttribute('datetime')).toBe('1970-01-01T00:00:01.000Z')
+		expect(document.body.querySelector('time')?.textContent).toContain('ago')
 		expect(documentQueries.queryByRole('link', { name: 'Select' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Child Universes' })).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Deploy universe' })).toBeNull()
