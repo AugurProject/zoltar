@@ -913,9 +913,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await driver.resize({ height: 844, width: 390 })
 			await driver.navigate(`${baseUrl}/statoblast/?workflow=pool#/security-pools?simulate=1&simScenario=security-pool`)
 			await driver.waitForBodyText('Will this resolve?')
-			const poolOpened = await driver.evaluate(
-				`(() => { const link = document.querySelector('article.comparison-record h3 a[aria-label^="Open pool:"]'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`,
-			)
+			const poolOpened = await driver.evaluate(`(() => { const link = document.querySelector('article.comparison-record h3 a[aria-label^="Open pool:"]'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
 			expect(poolOpened).toBe(true)
 			await driver.waitForBodyWithoutText('Loading vault details…')
 			await driver.waitForButtonEnabled('Deposit REP')
