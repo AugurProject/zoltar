@@ -1,4 +1,4 @@
-import type { Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { normalizeCaseInsensitiveText, sameCaseInsensitiveText } from './caseInsensitive.js'
 
 export function normalizeAddress(address: Address | string | undefined) {

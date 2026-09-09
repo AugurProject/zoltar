@@ -4,33 +4,82 @@
 			"entry": [
 				"docs/charts/chartRuntime.ts!",
 				"docs/runtime/{auctionClearing,deploymentMaskDecoder,docsShell,responsiveDocs,interactiveTools,invariantExplorer,mmrProofPlanner,openOracleTools}.ts!",
-				"scripts/**/*.test.ts",
+				"tooling/**/*.test.ts",
+				"tooling/contracts/prettier-solidity-batch.mjs!",
 				"bun-test-setup*.ts",
 				"docs/{charts/virtualModules,runtime/globals}.d.ts!",
-				"scripts/knip-baseline.mts"
+				"tooling/repo/knip-baseline.mts",
+				"tooling/repo/build-shared.mts!",
+				"tooling/contracts/build-app-contracts.mts!",
+				"tooling/ui/projectArtifacts.mts!"
 			],
-			"project": ["docs/runtime/**/*.ts!", "docs/charts/**/*.ts", "scripts/**/*.{ts,mts}", "bun-test-setup*.ts"],
-			"ignoreDependencies": ["@preact/signals", "tevm"]
+			"project": ["docs/runtime/**/*.ts!", "docs/charts/**/*.ts", "tooling/**/*.{ts,mts}", "bun-test-setup*.ts"],
+			"ignoreDependencies": ["@preact/signals", "@tevm/memory-client", "@tevm/common", "@zoltar/core-shared", "@zoltar/zoltar-shared", "@zoltar/open-oracle-shared", "@zoltar/statoblast-shared", "@zoltar/trading-shared"],
+			"paths": {
+				"@zoltar/core-shared/*": ["shared/core/ts/*"],
+				"@zoltar/zoltar-shared/*": ["shared/zoltar/ts/*"],
+				"@zoltar/open-oracle-shared/*": ["shared/openOracle/ts/*"],
+				"@zoltar/statoblast-shared/*": ["shared/statoblast/ts/*"],
+				"@zoltar/trading-shared/*": ["shared/trading/ts/*"]
+			}
 		},
 		"ui/coreShared": {
-			"entry": ["ts/tests/**/*.{ts,tsx}", "build/**/*.test.ts", "build/{apps,watch,vendor,workers,production,tests,browserSmoke,dockerServe,projectArtifacts}.mts!", "dev-server.ts!"],
-			"project": ["ts/**/*.{ts,tsx}!", "build/*.{ts,mts}!", "dev-server.ts!"],
+			"entry": ["ts/tests/**/*.{ts,tsx}"],
+			"project": ["ts/**/*.{ts,tsx}!"],
 			"paths": {
 				"@zoltar/ui-core-shared/*": ["./ts/*"],
-				"@zoltar/shared/*": ["../../shared/ts/*"]
+				"@zoltar/core-shared/*": ["../../shared/core/ts/*"],
+				"@zoltar/zoltar-shared/*": ["../../shared/zoltar/ts/*"],
+				"@zoltar/open-oracle-shared/*": ["../../shared/openOracle/ts/*"],
+				"@zoltar/statoblast-shared/*": ["../../shared/statoblast/ts/*"],
+				"@zoltar/trading-shared/*": ["../../shared/trading/ts/*"]
 			},
 			"ignoreDependencies": ["@noble/curves", "@noble/hashes", "micro-eth-signer", "micro-packed"],
 			"ignoreUnresolved": ["./bun-test-setup-solidity.ts"]
+		},
+		"ui/zoltarShared": {
+			"entry": ["ts/**/*.ts", "ts/**/*.tsx"],
+			"project": ["ts/**/*.ts", "ts/**/*.tsx"],
+			"paths": {
+				"@zoltar/ui-core-shared/*": ["../coreShared/ts/*"],
+				"@zoltar/ui-zoltar-shared/*": ["./ts/*"],
+				"@zoltar/core-shared/*": ["../../shared/core/ts/*"],
+				"@zoltar/zoltar-shared/*": ["../../shared/zoltar/ts/*"],
+				"@zoltar/open-oracle-shared/*": ["../../shared/openOracle/ts/*"],
+				"@zoltar/statoblast-shared/*": ["../../shared/statoblast/ts/*"],
+				"@zoltar/trading-shared/*": ["../../shared/trading/ts/*"]
+			},
+			"ignoreDependencies": ["bun-types"]
+		},
+		"ui/statoblastShared": {
+			"entry": ["ts/**/*.ts", "ts/**/*.tsx"],
+			"project": ["ts/**/*.ts", "ts/**/*.tsx"],
+			"paths": {
+				"@zoltar/ui-core-shared/*": ["../coreShared/ts/*"],
+				"@zoltar/ui-zoltar-shared/*": ["../zoltarShared/ts/*"],
+				"@zoltar/ui-statoblast-shared/*": ["./ts/*"],
+				"@zoltar/core-shared/*": ["../../shared/core/ts/*"],
+				"@zoltar/zoltar-shared/*": ["../../shared/zoltar/ts/*"],
+				"@zoltar/open-oracle-shared/*": ["../../shared/openOracle/ts/*"],
+				"@zoltar/statoblast-shared/*": ["../../shared/statoblast/ts/*"],
+				"@zoltar/trading-shared/*": ["../../shared/trading/ts/*"]
+			},
+			"ignoreDependencies": ["bun-types"]
 		},
 		"ui/zoltar": {
 			"entry": ["ts/tests/**/*.{ts,tsx}", "ts/index.ts!", "ts/index.dev.ts!", "ts/simulation/tevmWorker.ts!"],
 			"project": ["ts/**/*.{ts,tsx}!"],
 			"paths": {
 				"@zoltar/ui-core-shared/*": ["../coreShared/ts/*"],
+				"@zoltar/ui-zoltar-shared/*": ["../zoltarShared/ts/*"],
 				"@zoltar/ui-zoltar/*": ["./ts/*"],
-				"@zoltar/shared/*": ["../../shared/ts/*"]
+				"@zoltar/core-shared/*": ["../../shared/core/ts/*"],
+				"@zoltar/zoltar-shared/*": ["../../shared/zoltar/ts/*"],
+				"@zoltar/open-oracle-shared/*": ["../../shared/openOracle/ts/*"],
+				"@zoltar/statoblast-shared/*": ["../../shared/statoblast/ts/*"],
+				"@zoltar/trading-shared/*": ["../../shared/trading/ts/*"]
 			},
-			"ignoreDependencies": ["@noble/curves", "@noble/hashes", "micro-eth-signer", "micro-packed", "tevm"],
+			"ignoreDependencies": ["@tevm/memory-client", "@tevm/common"],
 			"ignoreUnresolved": ["./bun-test-setup-solidity.ts"]
 		},
 		"ui/statoblast": {
@@ -38,11 +87,16 @@
 			"project": ["ts/**/*.{ts,tsx}!"],
 			"paths": {
 				"@zoltar/ui-core-shared/*": ["../coreShared/ts/*"],
-				"@zoltar/ui-zoltar/*": ["../zoltar/ts/*"],
+				"@zoltar/ui-zoltar-shared/*": ["../zoltarShared/ts/*"],
+				"@zoltar/ui-statoblast-shared/*": ["../statoblastShared/ts/*"],
 				"@zoltar/ui-statoblast/*": ["./ts/*"],
-				"@zoltar/shared/*": ["../../shared/ts/*"]
+				"@zoltar/core-shared/*": ["../../shared/core/ts/*"],
+				"@zoltar/zoltar-shared/*": ["../../shared/zoltar/ts/*"],
+				"@zoltar/open-oracle-shared/*": ["../../shared/openOracle/ts/*"],
+				"@zoltar/statoblast-shared/*": ["../../shared/statoblast/ts/*"],
+				"@zoltar/trading-shared/*": ["../../shared/trading/ts/*"]
 			},
-			"ignoreDependencies": ["@noble/curves", "@noble/hashes", "micro-eth-signer", "micro-packed", "tevm"],
+			"ignoreDependencies": ["@tevm/memory-client", "@tevm/common"],
 			"ignoreUnresolved": ["./bun-test-setup-solidity.ts"]
 		},
 		"ui/trading": {
@@ -50,41 +104,144 @@
 			"project": ["ts/**/*.{ts,tsx}!"],
 			"paths": {
 				"@zoltar/ui-core-shared/*": ["../coreShared/ts/*"],
-				"@zoltar/ui-zoltar/*": ["../zoltar/ts/*"],
-				"@zoltar/ui-statoblast/*": ["../statoblast/ts/*"],
+				"@zoltar/ui-zoltar-shared/*": ["../zoltarShared/ts/*"],
+				"@zoltar/ui-statoblast-shared/*": ["../statoblastShared/ts/*"],
 				"@zoltar/ui-trading/*": ["./ts/*"],
-				"@zoltar/shared/*": ["../../shared/ts/*"]
+				"@zoltar/core-shared/*": ["../../shared/core/ts/*"],
+				"@zoltar/zoltar-shared/*": ["../../shared/zoltar/ts/*"],
+				"@zoltar/open-oracle-shared/*": ["../../shared/openOracle/ts/*"],
+				"@zoltar/statoblast-shared/*": ["../../shared/statoblast/ts/*"],
+				"@zoltar/trading-shared/*": ["../../shared/trading/ts/*"]
 			},
-			"ignoreDependencies": ["tevm", "@preact/signals", "bun-types"]
+			"ignoreDependencies": ["@tevm/memory-client", "@tevm/common", "@preact/signals", "bun-types"]
 		},
 		"solidity": {
 			"entry": ["ts/compile.ts!", "ts/gas-costs.ts!", "ts/trading/deploy/*.mts!", "ts/tests/**/*.ts", "ts/fuzz/**/*.ts", "ts/types/*.d.ts"],
-			"project": ["ts/**/*.{ts,mts}!", "!ts/testSupport/**!", "!ts/tests/**!"]
-		},
-		"shared": {
-			"entry": ["ts/**/*.test.ts"],
-			"project": ["ts/**/*.ts!"],
-			"ignoreUnresolved": ["./bun-test-setup-solidity.ts"]
+			"project": ["ts/**/*.{ts,mts}!", "!ts/testSupport/**!", "!ts/tests/**!"],
+			"paths": {
+				"@zoltar/core-shared/*": ["../shared/core/ts/*"],
+				"@zoltar/zoltar-shared/*": ["../shared/zoltar/ts/*"],
+				"@zoltar/open-oracle-shared/*": ["../shared/openOracle/ts/*"],
+				"@zoltar/statoblast-shared/*": ["../shared/statoblast/ts/*"],
+				"@zoltar/trading-shared/*": ["../shared/trading/ts/*"]
+			}
 		},
 		"augurScan": {
-			"entry": ["src/server.ts!", "src/indexer-process.ts!", "browser/app.ts!", "tests/**/*.ts", "scripts/{build-browser,check-ethereum-imports,check-project-metadata,dev,serve-demo,snapshot-project-metadata,verify-compose-source,verify-export-page}.ts!"],
-			"project": ["{src,browser,scripts}/**/*.ts!", "tests/**/*.ts"]
+			"entry": ["src/server.ts!", "src/indexer-process.ts!", "browser/app.ts!", "tests/**/*.ts", "scripts/{build-browser,check-ethereum-imports,check-import-boundaries,check-project-metadata,dev,serve-demo,snapshot-project-metadata,verify-compose-source,verify-export-page}.ts!"],
+			"project": ["{src,browser,scripts}/**/*.ts!", "tests/**/*.ts"],
+			"ignoreDependencies": ["@noble/hashes", "micro-eth-signer"],
+			"paths": {
+				"@zoltar/core-shared/*": ["../shared/core/ts/*"],
+				"@zoltar/zoltar-shared/*": ["../shared/zoltar/ts/*"],
+				"@zoltar/open-oracle-shared/*": ["../shared/openOracle/ts/*"],
+				"@zoltar/statoblast-shared/*": ["../shared/statoblast/ts/*"],
+				"@zoltar/trading-shared/*": ["../shared/trading/ts/*"]
+			}
 		},
 		"bots/shared": {
-			"entry": ["tests/**/*.ts"],
-			"project": ["src/**/*.ts!", "tests/**/*.ts"]
+			"entry": ["src/dashboard/header-notices.ts!", "tests/**/*.ts"],
+			"project": ["src/**/*.ts!", "tests/**/*.ts"],
+			"paths": {
+				"@zoltar/core-shared/*": ["../../shared/core/ts/*"],
+				"@zoltar/zoltar-shared/*": ["../../shared/zoltar/ts/*"],
+				"@zoltar/open-oracle-shared/*": ["../../shared/openOracle/ts/*"],
+				"@zoltar/statoblast-shared/*": ["../../shared/statoblast/ts/*"],
+				"@zoltar/trading-shared/*": ["../../shared/trading/ts/*"]
+			}
 		},
 		"bots/chaos": {
-			"entry": ["src/cli/*.ts!", "scripts/*.mts!", "tests/**/*.ts", "src/dashboard/dashboard.ts!"],
-			"project": ["src/**/*.ts!", "scripts/*.{ts,mts}!", "tests/**/*.ts"]
+			"entry": ["src/cli/*.ts!", "scripts/*.mts!", "tests/**/*.ts", "src/dashboard/{dashboard,formatting,retirement-dashboard}.ts!"],
+			"project": ["src/**/*.ts!", "scripts/*.{ts,mts}!", "tests/**/*.ts"],
+			"paths": {
+				"@zoltar/core-shared/*": ["../../shared/core/ts/*"],
+				"@zoltar/zoltar-shared/*": ["../../shared/zoltar/ts/*"],
+				"@zoltar/open-oracle-shared/*": ["../../shared/openOracle/ts/*"],
+				"@zoltar/statoblast-shared/*": ["../../shared/statoblast/ts/*"],
+				"@zoltar/trading-shared/*": ["../../shared/trading/ts/*"]
+			}
 		},
 		"bots/liquidator": {
 			"entry": ["src/cli/*.ts!", "scripts/*.mts!", "tests/**/*.ts", "src/dashboard/dashboard.ts!"],
-			"project": ["src/**/*.ts!", "scripts/*.{ts,mts}!", "tests/**/*.ts"]
+			"project": ["src/**/*.ts!", "scripts/*.{ts,mts}!", "tests/**/*.ts"],
+			"paths": {
+				"@zoltar/core-shared/*": ["../../shared/core/ts/*"],
+				"@zoltar/zoltar-shared/*": ["../../shared/zoltar/ts/*"],
+				"@zoltar/open-oracle-shared/*": ["../../shared/openOracle/ts/*"],
+				"@zoltar/statoblast-shared/*": ["../../shared/statoblast/ts/*"],
+				"@zoltar/trading-shared/*": ["../../shared/trading/ts/*"]
+			}
 		},
 		"bots/open-oracle-arbitrager": {
 			"entry": ["src/cli/*.ts!", "scripts/*.mts!", "tests/**/*.ts", "src/dashboard/dashboard.ts!", "docs/chart-runtime.ts!", "src/config/execution-manifest.ts!"],
-			"project": ["src/**/*.ts!", "scripts/*.{ts,mts}!", "tests/**/*.ts", "docs/*.ts!"]
+			"project": ["src/**/*.ts!", "scripts/*.{ts,mts}!", "tests/**/*.ts", "docs/*.ts!"],
+			"ignoreDependencies": ["prettier-plugin-solidity"],
+			"paths": {
+				"@zoltar/core-shared/*": ["../../shared/core/ts/*"],
+				"@zoltar/zoltar-shared/*": ["../../shared/zoltar/ts/*"],
+				"@zoltar/open-oracle-shared/*": ["../../shared/openOracle/ts/*"],
+				"@zoltar/statoblast-shared/*": ["../../shared/statoblast/ts/*"],
+				"@zoltar/trading-shared/*": ["../../shared/trading/ts/*"]
+			}
+		},
+		"shared/core": {
+			"entry": ["ts/**/*.test.ts"],
+			"project": ["ts/**/*.ts!"],
+			"ignoreUnresolved": ["./bun-test-setup-solidity.ts"],
+			"paths": {
+				"@zoltar/core-shared/*": ["ts/*"],
+				"@zoltar/zoltar-shared/*": ["../zoltar/ts/*"],
+				"@zoltar/open-oracle-shared/*": ["../openOracle/ts/*"],
+				"@zoltar/statoblast-shared/*": ["../statoblast/ts/*"],
+				"@zoltar/trading-shared/*": ["../trading/ts/*"]
+			}
+		},
+		"shared/zoltar": {
+			"entry": ["ts/**/*.test.ts"],
+			"project": ["ts/**/*.ts!"],
+			"ignoreUnresolved": ["./bun-test-setup-solidity.ts"],
+			"paths": {
+				"@zoltar/core-shared/*": ["../core/ts/*"],
+				"@zoltar/zoltar-shared/*": ["ts/*"],
+				"@zoltar/open-oracle-shared/*": ["../openOracle/ts/*"],
+				"@zoltar/statoblast-shared/*": ["../statoblast/ts/*"],
+				"@zoltar/trading-shared/*": ["../trading/ts/*"]
+			}
+		},
+		"shared/openOracle": {
+			"entry": ["ts/**/*.test.ts"],
+			"project": ["ts/**/*.ts!"],
+			"ignoreUnresolved": ["./bun-test-setup-solidity.ts"],
+			"paths": {
+				"@zoltar/core-shared/*": ["../core/ts/*"],
+				"@zoltar/zoltar-shared/*": ["../zoltar/ts/*"],
+				"@zoltar/open-oracle-shared/*": ["ts/*"],
+				"@zoltar/statoblast-shared/*": ["../statoblast/ts/*"],
+				"@zoltar/trading-shared/*": ["../trading/ts/*"]
+			}
+		},
+		"shared/statoblast": {
+			"entry": ["ts/**/*.test.ts"],
+			"project": ["ts/**/*.ts!"],
+			"ignoreUnresolved": ["./bun-test-setup-solidity.ts"],
+			"paths": {
+				"@zoltar/core-shared/*": ["../core/ts/*"],
+				"@zoltar/zoltar-shared/*": ["../zoltar/ts/*"],
+				"@zoltar/open-oracle-shared/*": ["../openOracle/ts/*"],
+				"@zoltar/statoblast-shared/*": ["ts/*"],
+				"@zoltar/trading-shared/*": ["../trading/ts/*"]
+			}
+		},
+		"shared/trading": {
+			"entry": ["ts/**/*.test.ts"],
+			"project": ["ts/**/*.ts!"],
+			"ignoreUnresolved": ["./bun-test-setup-solidity.ts"],
+			"paths": {
+				"@zoltar/core-shared/*": ["../core/ts/*"],
+				"@zoltar/zoltar-shared/*": ["../zoltar/ts/*"],
+				"@zoltar/open-oracle-shared/*": ["../openOracle/ts/*"],
+				"@zoltar/statoblast-shared/*": ["../statoblast/ts/*"],
+				"@zoltar/trading-shared/*": ["ts/*"]
+			}
 		}
 	},
 	"ignoreDependencies": ["better-typescript-lib"]

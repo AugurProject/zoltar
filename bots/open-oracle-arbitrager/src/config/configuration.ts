@@ -1,5 +1,5 @@
 import { resolve } from 'node:path'
-import type { Address, Hex } from '#ethereum'
+import type { Address, Hex } from '@zoltar/bot-shared/ethereum'
 import type { DeploymentManifest } from '#config/deployment-auth'
 import { validateIndependentReadRpcUrls, type ConnectivitySettings } from '#monitoring/connectivity'
 import { type MutableStrategy } from '#state/operator-state'
@@ -57,8 +57,6 @@ export function runnableOperatorSettings(settingsFile: string, saved: PersistedO
 	const network = networkConfiguration(saved.network, {
 		factory: deployment.uniswapFactory,
 		quoter: deployment.uniswapQuoter,
-		rep: deployment.rep,
-		weth: deployment.weth,
 	})
 	const quorumRpcUrls = [...validateIndependentReadRpcUrls(saved.connectivity.readRpcUrl, deployment.quorumRpcUrls)]
 	if (saved.runtime.execute && quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(saved.rpcQuorum)) throw new Error('Execution is enabled, but live operation requires at least two independent quorum RPCs (three read endpoints total)')

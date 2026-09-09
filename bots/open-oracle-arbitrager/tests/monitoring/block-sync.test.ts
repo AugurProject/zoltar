@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { advanceCursor, advanceCursorAfterSuccessfulHead, assertFinalityAnchor, cursorForHeadScan, finalityAnchorMatches, finalityAnchorRequiresReset, initialCursor, operatorStatusAfterPause, scanRanges, withFinalityAnchor } from '#monitoring/block-sync'
+import { advanceCursor, advanceCursorAfterSuccessfulHead, assertFinalityAnchor, cursorForHeadScan, finalityAnchorMatches, finalityAnchorRequiresReset, initialCursor, operatorStatusAfterPause, scanRanges, withFinalityAnchor } from '@zoltar/bot-shared/monitoring/block-sync'
 
 describe('block-driven synchronization', () => {
 	test('chunks the startup lookback and catches every block', () => {

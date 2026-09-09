@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { zeroAddress } from '@zoltar/shared/ethereum'
+import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import {
 	MARKET_NOT_FINALIZED_MESSAGE,
 	NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE,
@@ -29,7 +29,7 @@ import {
 	getVaultCollateralizationPercent,
 	hasRepBackedPoolWithNoActiveCapacityOwnership,
 	isTradingSystemDeployed,
-} from '../../../features/markets/lib/trading.js'
+} from '@zoltar/ui-statoblast-shared/features/markets/lib/trading.js'
 import { getScalarOutcomeIndex } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 import type { DeploymentStatus, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 

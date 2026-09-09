@@ -30,3 +30,8 @@ interface IEscalationGameEvents {
 	/// claims, losing settlement, export, direct parent claim, and forked-escrow claim.
 	event CarryDepositConsumed(uint256 indexed parentDepositIndex, uint256 indexed sourceNodeId, address indexed depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 attoRepAmount, CarryConsumptionReason reason, uint256 resultingUnresolvedTotalAttoRep, bytes32 resultingNullifierRoot, bytes32 resultingCarryRoot);
 }
+
+interface IEscalationGameAuthorization {
+	function depositRepOnOutcomeWithPermit(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external;
+	function depositRepOnOutcomeWithAuthorization(address owner, BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external;
+}

@@ -24,14 +24,7 @@ interface DemoUniswapMarket {
 	quote?: 'ETH' | 'USDC' | 'WETH'
 }
 
-const demoRepEthValues = [
-	'18250000000000000000',
-	'17980000000000000000',
-	'18420000000000000000',
-	'19110000000000000000',
-	'18860000000000000000',
-	'19640000000000000000',
-]
+const demoRepEthValues = ['18250000000000000000', '17980000000000000000', '18420000000000000000', '19110000000000000000', '18860000000000000000', '19640000000000000000']
 
 export const demoAmmPriceHistory = (now = Date.now()): AmmPriceHistoryRecord[] =>
 	Array.from({ length: 12 }, (_, index) => {
@@ -72,10 +65,7 @@ const demoUniswapHistory = (markets: readonly DemoUniswapMarket[], now: number):
 			fee_hundredths_bip: fee,
 			quote_symbol: quote ?? (venue === 'v4' ? 'ETH' : 'WETH'),
 			event_name: index === 0 && venue !== 'v2' ? 'Initialize' : venue === 'v2' ? 'Sync' : 'Swap',
-			rep_per_eth_1e18:
-				quote === 'USDC'
-					? (4_200_000_000_000_000n + BigInt(index) * 90_000_000_000_000n).toString()
-					: (BigInt(value) + (BigInt(venueIndex) - 1n) * 300_000_000_000_000_000n).toString(),
+			rep_per_eth_1e18: quote === 'USDC' ? (4_200_000_000_000_000n + BigInt(index) * 90_000_000_000_000n).toString() : (BigInt(value) + (BigInt(venueIndex) - 1n) * 300_000_000_000_000_000n).toString(),
 			liquidity_value: (10n ** 24n + BigInt(venueIndex * 7 + index) * 10n ** 22n).toString(),
 		})),
 	)

@@ -1,3 +1,4 @@
+import { operatorHeader } from './header.ts'
 import { buildDashboardScript } from '../../../shared/src/dashboard/assets.js'
 import { join } from 'node:path'
 import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
@@ -25,6 +26,7 @@ type DashboardController = {
 	switchNetworkProfile?: (value: unknown) => unknown | Promise<unknown>
 	updateStrategy: (value: unknown) => StrategySettings | Promise<StrategySettings>
 	updateSubmission: (value: unknown) => SubmissionSettings | Promise<SubmissionSettings>
+	setApprovedUniverses?: (value: unknown) => readonly string[] | Promise<readonly string[]>
 	updateTokens?: (value: unknown) => readonly string[] | Promise<readonly string[]>
 }
 
@@ -149,7 +151,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 		const page = pathname === '/' ? 'overview' : pathname.slice(1)
 		if (!dashboardPages.has(page)) return undefined
 		const source = await Bun.file(join(directory, 'index.html')).text()
-		return source.replace('<body>', `<body data-page="${page}">`)
+		return source.replace('<!-- operator-header -->', operatorHeader).replace('<body>', `<body data-page="${page}">`)
 	}
 	const transpiler = new Bun.Transpiler({ loader: 'ts', target: 'browser' })
 	const hostname = controller.hostname ?? '127.0.0.1'
@@ -205,6 +207,9 @@ export function startDashboardServer(port: number, controller: DashboardControll
 			}
 			if (request.method === 'GET' && url.pathname === '/assets/dashboard-markets.png') {
 				return new Response(Bun.file(join(documentationDirectory, 'assets', 'dashboard-markets.png')), { headers: securityHeaders('image/png') })
+			}
+			if (request.method === 'GET' && url.pathname === '/header-notices.js') {
+				return new Response(await buildDashboardScript(join(directory, '..', '..', '..', 'shared', 'src', 'dashboard', 'header-notices.ts')), { headers: securityHeaders('text/javascript; charset=utf-8') })
 			}
 			if (request.method === 'GET' && url.pathname === '/dashboard.js') {
 				return new Response(await buildDashboardScript(browserEntrypoint), {
@@ -308,6 +313,16 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					return json(await controller.predictExecutor(await boundedDashboardJson(request)))
 				} catch (error) {
 					return publicError(error, 400, 'executor-prediction', 'Executor prediction could not be completed. Review the submitted salt and protected bot logs.')
+				}
+			}
+			if (request.method === 'PUT' && url.pathname === '/api/approved-universes') {
+				if (!dashboardRequestIsSameOrigin(request, acceptedAuthorities)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
+				try {
+					await requireConfiguredChain(controller)
+					if (controller.setApprovedUniverses === undefined) throw new Error('Universe approval is unavailable')
+					return json({ approvedUniverses: await controller.setApprovedUniverses(await boundedDashboardJson(request)) })
+				} catch (error) {
+					return publicError(error, 400, 'universe-approval', 'Universe approval could not be saved. Select only one outcome per fork and review protected bot logs.')
 				}
 			}
 			if (request.method === 'PUT' && url.pathname === '/api/tokens') {

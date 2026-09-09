@@ -1,7 +1,7 @@
 import type { ComponentProps } from 'preact'
-import { DeploymentRouteContent } from '../../features/deployment/components/DeploymentRouteContent.js'
+import { DeploymentRouteContent } from '@zoltar/ui-zoltar-shared/features/deployment/components/DeploymentRouteContent.js'
 import { NotFoundSection } from '@zoltar/ui-core-shared/app/components/NotFoundSection.js'
-import { ZoltarSection } from '../../features/zoltarSurface/components/ZoltarSection.js'
+import { ZoltarSection } from '@zoltar/ui-zoltar-shared/features/zoltarSurface/components/ZoltarSection.js'
 import { shouldRenderAppRouteContent } from '@zoltar/ui-core-shared/app/lib/appRouteGate.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 

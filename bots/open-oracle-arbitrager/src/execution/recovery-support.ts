@@ -1,16 +1,16 @@
-import { bigintToSafeNumber, decodeEventLog, readContractAtBlock, rpcFailureWithContext, toHex, type Address, type Hex } from '#ethereum'
+import { bigintToSafeNumber, decodeEventLog, readContractAtBlock, rpcFailureWithContext, toHex, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { erc20Abi, openOracleAbi, openOracleArbitrageExecutorAbi, openOraclePriceCoordinatorAbi } from '#contracts/abi'
 import type { Configuration } from '#config/configuration'
 import { receiptGasExpendituresWithQuorum, recoveredTransactionIntentMismatch, transactionIntentWithQuorum } from '#execution/execution-orchestration'
 import type { ReadClient, RecoveryConfiguration } from '#core/operator-types'
 import { requiredBigint, requiredRpcAddress, requiredTuple } from '#core/rpc-validation'
 import { compareLogs, type ActiveReport } from '#monitoring/oracle-log-state'
-import { fetchLogsWithAdaptiveRanges } from '#monitoring/block-sync'
+import { fetchLogsWithAdaptiveRanges } from '@zoltar/bot-shared/monitoring/block-sync'
 import { endpointLabel } from '#monitoring/connectivity'
-import { settledQuorumValue } from '#monitoring/read-quorum'
+import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import type { DurableTransactionIntent, PositionRecord } from '#state/position-store'
 import { decimalWeth } from '#state/operator-state'
-import { decodeOpenOracleStatePreimage, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, type OpenOracleStatePreimage } from '@zoltar/shared/openOracle'
+import { decodeOpenOracleStatePreimage, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 
 export function dateFromBlockTimestamp(timestamp: bigint) {
 	const milliseconds = timestamp * 1_000n

@@ -1,3 +1,5 @@
+import { parseApprovedUniverses } from '@zoltar/bot-shared/monitoring/universe-policy'
+import { canonicalDeployment, canonicalRootMarketIdentity, parseRootMarketSettings } from './canonical-deployment.ts'
 import { createHash, randomBytes } from 'node:crypto'
 import { dirname, extname, resolve } from 'node:path'
 import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
@@ -265,18 +267,16 @@ function parseConnectivity(value: unknown): OperatorSettings['connectivity'] {
 export function parseSettings(value: unknown): OperatorSettings {
 	const root = record(value, 'operator settings')
 	if (root['version'] !== 1) throw new Error('operator settings version must be 1')
-	const deployment = record(root['deployment'], 'deployment')
 	const networkConfigured = root['networkConfigured'] === undefined ? root['connectivity'] !== undefined : boolean(root['networkConfigured'], 'networkConfigured')
 	if (networkConfigured && (root['network'] === undefined || root['connectivity'] === undefined)) throw new Error('A configured operator requires network and connectivity')
 	if (!networkConfigured && root['connectivity'] !== undefined) throw new Error('An unconfigured operator cannot retain RPC connectivity')
 	const network = root['network'] === undefined ? { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' } : record(root['network'], 'network')
+	const chainId = integer(network['chainId'], 'network.chainId', 1, 2 ** 31 - 1)
 	const runtime = record(root['runtime'], 'runtime')
 	const connectivity = networkConfigured ? parseConnectivity(root['connectivity']) : { publicRpcUrls: [], quorumRpcUrls: [], readRpcUrl: 'http://127.0.0.1:1', rpcQuorum: rpcQuorumRequirement() }
 	const selectedPools = root['selectedPools']
 	if (!Array.isArray(selectedPools)) throw new Error('selectedPools must be an array')
-	const approvedUniverses = root['approvedUniverses']
-	if (!Array.isArray(approvedUniverses)) throw new Error('approvedUniverses must be an array')
-	const parsedApprovedUniverses = [...new Set(approvedUniverses.map(value => universeId(value, 'approved universe')))]
+	const parsedApprovedUniverses = parseApprovedUniverses(root['approvedUniverses'])
 	const parsedSelectedPools = [
 		...new Map(
 			selectedPools.map(value => {
@@ -294,16 +294,12 @@ export function parseSettings(value: unknown): OperatorSettings {
 			if (!Array.isArray(values)) throw new Error('childMarketConfigurations must be an array')
 			return values.map(parseCentralizedMarketSettings)
 		})(),
-		centralizedMarkets: parseCentralizedMarketSettings(root['centralizedMarkets']),
+		centralizedMarkets: parseRootMarketSettings(root['centralizedMarkets'], chainId),
 		connectivity,
-		deployment: {
-			securityPoolFactory: getAddress(string(deployment['securityPoolFactory'], 'deployment.securityPoolFactory')),
-			weth: getAddress(string(deployment['weth'], 'deployment.weth')),
-			zoltar: getAddress(string(deployment['zoltar'], 'deployment.zoltar')),
-		},
+		deployment: canonicalDeployment(chainId),
 		desiredPools: parsedDesiredPools,
 		network: {
-			chainId: integer(network['chainId'], 'network.chainId', 1, 2 ** 31 - 1),
+			chainId,
 			explorerUrl: string(network['explorerUrl'], 'network.explorerUrl'),
 			name: parseNetworkName(network['name']),
 		},
@@ -335,26 +331,22 @@ export function parseSettings(value: unknown): OperatorSettings {
 	}
 	const canonicalChainId = settings.network.name === 'mainnet' ? 1 : 11_155_111
 	if (settings.network.chainId !== canonicalChainId) throw new Error('network name and chainId must identify the same supported chain')
-	if (settings.networkConfigured && settings.centralizedMarkets.assetChainId !== settings.network.chainId) throw new Error('Centralized market configuration must target the configured chain')
 	if (settings.networkConfigured && settings.childMarketConfigurations.some(configuration => configuration.assetChainId !== settings.network.chainId)) throw new Error('Child market configurations must target the configured chain')
 	const marketAssetIds = [settings.centralizedMarkets, ...settings.childMarketConfigurations].map(configuration => configuration.assetAddress.toLowerCase())
 	if (new Set(marketAssetIds).size !== marketAssetIds.length) throw new Error('Market configurations must target distinct REP assets')
 	if (settings.runtime.execute && settings.privateKey === undefined) throw new Error('Live execution requires privateKey')
 	if (settings.runtime.execute && settings.connectivity.quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(settings.connectivity.rpcQuorum)) throw new Error('Live execution with RPC quorum 2 requires at least two independent quorum RPCs (three read endpoints total)')
-	if (settings.runtime.execute && settings.deployment.securityPoolFactory === getAddress('0x0000000000000000000000000000000000000000')) throw new Error('Live execution requires a deployed security-pool factory')
-	if (settings.runtime.execute && settings.deployment.weth === getAddress('0x0000000000000000000000000000000000000000')) throw new Error('Live execution requires a deployed WETH contract')
-	if (settings.runtime.execute && settings.deployment.zoltar === getAddress('0x0000000000000000000000000000000000000000')) throw new Error('Live execution requires a deployed Zoltar contract')
 	if (!settings.networkConfigured && (!settings.paused || settings.runtime.execute)) throw new Error('An unconfigured network requires paused dry-run mode')
 	return settings
 }
 
 export function serializedSettings(settings: OperatorSettings, redactPrivateKey = false) {
+	const { assetAddress: _assetAddress, assetChainId: _assetChainId, ...centralizedMarkets } = serializeCentralizedMarketSettings(settings.centralizedMarkets)
 	return {
 		approvedUniverses: settings.approvedUniverses.map(value => value.toString()),
 		childMarketConfigurations: settings.childMarketConfigurations.map(serializeCentralizedMarketSettings),
-		centralizedMarkets: serializeCentralizedMarketSettings(settings.centralizedMarkets),
+		centralizedMarkets,
 		connectivity: settings.networkConfigured ? { ...settings.connectivity } : undefined,
-		deployment: settings.deployment,
 		desiredPools: settings.desiredPools.map(pool => ({
 			initialReportPriorityFeeAttoEthPerGas: pool.initialReportPriorityFeeAttoEthPerGas.toString(),
 			questionId: pool.questionId.toString(),
@@ -505,7 +497,8 @@ export async function switchSettingsNetworkProfile(path: string, network: Networ
 		const chainId = network === 'mainnet' ? 1 : 11_155_111
 		target = {
 			...template,
-			centralizedMarkets: { ...template.centralizedMarkets, assetChainId: chainId },
+			deployment: canonicalDeployment(chainId),
+			centralizedMarkets: { ...template.centralizedMarkets, ...canonicalRootMarketIdentity(chainId) },
 			network: { chainId, explorerUrl: network === 'mainnet' ? 'https://etherscan.io' : 'https://sepolia.etherscan.io', name: network },
 			networkConfigured: false,
 			paused: true,

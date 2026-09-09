@@ -1,3 +1,4 @@
+import { restoreOperationPlanningInputs } from './manual-inputs.ts'
 import { OPEN_ORACLE_OPERATIONS } from './open-oracle.ts'
 import { STATOBLAST_OPERATIONS } from './statoblast.ts'
 import { assertWorkflowPrerequisiteLimit } from './timing.ts'
@@ -45,7 +46,14 @@ function evaluatedPlan(definition: OperationDefinition, plan: Omit<OperationPlan
 	}
 }
 
+function missingTradingDeployment(definition: OperationDefinition, snapshot: EcosystemSnapshot): EvaluatedOperation | undefined {
+	const blockers = (definition.requiredTradingDeployment ?? []).filter(root => snapshot.tradingDeployment?.[root] === false).map(root => `Trading ${root} is not deployed`)
+	return blockers.length === 0 ? undefined : { definition: publicDefinition(definition), eligibility: { blockers, eligible: false } }
+}
+
 function evaluateDefinition(definition: OperationDefinition, snapshot: EcosystemSnapshot, options: PlanningOptions): EvaluatedOperation {
+	const missing = missingTradingDeployment(definition, snapshot)
+	if (missing !== undefined) return missing
 	const eligibility = definition.evaluate(snapshot, options)
 	const evaluated: EvaluatedOperation = { definition: publicDefinition(definition), eligibility }
 	if (!eligibility.eligible || definition.classification !== 'selectable') return evaluated
@@ -62,6 +70,8 @@ export function evaluateSelectableOperationDefinition(definitionId: string, snap
 }
 
 function evaluateLifecycleDefinition(definition: OperationDefinition, snapshot: EcosystemSnapshot, options: PlanningOptions): EvaluatedOperation[] {
+	const missing = missingTradingDeployment(definition, snapshot)
+	if (missing !== undefined) return [missing]
 	const eligibility = definition.evaluate(snapshot, options)
 	if (!eligibility.eligible) return [{ definition: publicDefinition(definition), eligibility }]
 	if (definition.buildLifecyclePlans === undefined) throw new Error(`Lifecycle definition ${definition.id} has no single-pass instance enumerator`)
@@ -71,8 +81,8 @@ function evaluateLifecycleDefinition(definition: OperationDefinition, snapshot: 
 	return plans.map(plan => evaluatedPlan(definition, plan, options.seed))
 }
 
-export function evaluateOperationCatalog(snapshot: EcosystemSnapshot, options: PlanningOptions): EvaluatedOperation[] {
-	return CHAOS_OPERATION_CATALOG.flatMap(definition => {
+export function evaluateOperationCatalog(snapshot: EcosystemSnapshot, options: PlanningOptions, definitionId?: string): EvaluatedOperation[] {
+	return CHAOS_OPERATION_CATALOG.filter(definition => definitionId === undefined || definition.id === definitionId).flatMap(definition => {
 		if (definition.classification !== 'lifecycle-obligation') return [evaluateDefinition(definition, snapshot, options)]
 		return evaluateLifecycleDefinition(definition, snapshot, options)
 	})
@@ -169,8 +179,15 @@ function isolateSelectableContinuation(snapshot: EcosystemSnapshot, metadata: Op
 export function reevaluateOperationContinuation(snapshot: EcosystemSnapshot, previousPlan: OperationPlan, options: Omit<PlanningOptions, 'seed'>, context: Partial<Pick<OperationContinuationContext, 'confirmedStepIds' | 'continuationDisposition'>> = {}): EvaluatedOperation {
 	const definition = CHAOS_OPERATION_CATALOG.find(candidate => candidate.id === previousPlan.definitionId)
 	if (definition === undefined) throw new Error(`Unknown durable operation definition ${previousPlan.definitionId}`)
+	const missing = missingTradingDeployment(definition, snapshot)
+	if (missing !== undefined) return missing
 	if (definition.classification === 'lifecycle-obligation') {
-		const evaluations = evaluateLifecycleDefinition(definition, snapshot, { ...options, seed: previousPlan.planningSeed })
+		const evaluations = evaluateLifecycleDefinition(definition, snapshot, restoreOperationPlanningInputs({ ...options, seed: previousPlan.planningSeed }, previousPlan.operationInputs))
+		for (const evaluation of evaluations) {
+			if (evaluation.plan === undefined) continue
+			if (previousPlan.operationInputs !== undefined) evaluation.plan.operationInputs = { ...previousPlan.operationInputs }
+			if (previousPlan.inputSources !== undefined) evaluation.plan.inputSources = { ...previousPlan.inputSources }
+		}
 		const expected = canonicalMetadata(previousPlan.metadata)
 		const exact = evaluations.find(evaluation => evaluation.plan !== undefined && canonicalMetadata(evaluation.plan.metadata) === expected)
 		return (
@@ -180,8 +197,8 @@ export function reevaluateOperationContinuation(snapshot: EcosystemSnapshot, pre
 			}
 		)
 	}
-	const planningOptions = { ...options, seed: previousPlan.planningSeed }
-	const continuationSnapshot = previousPlan.steps.length > 1 ? isolateSelectableContinuation(snapshot, previousPlan.metadata, options) : snapshot
+	const planningOptions = restoreOperationPlanningInputs({ ...options, seed: previousPlan.planningSeed }, previousPlan.operationInputs)
+	const continuationSnapshot = previousPlan.steps.length > 1 ? isolateSelectableContinuation(snapshot, previousPlan.metadata, planningOptions) : snapshot
 	if (definition.buildContinuationPlan !== undefined) {
 		const continuationDisposition = context.continuationDisposition ?? previousPlan.continuationDisposition
 		const plan = definition.buildContinuationPlan(continuationSnapshot, planningOptions, {
@@ -193,7 +210,7 @@ export function reevaluateOperationContinuation(snapshot: EcosystemSnapshot, pre
 			throw new Error(`Cleanup-only continuation builder ${definition.id} returned an unmarked plan`)
 		}
 		if (plan !== undefined && canonicalMetadata(plan.metadata) === canonicalMetadata(previousPlan.metadata)) {
-			return evaluatedPlan(definition, plan, previousPlan.planningSeed)
+			return evaluatedPlan(definition, { ...plan, ...(previousPlan.operationInputs === undefined ? {} : { operationInputs: previousPlan.operationInputs }), ...(previousPlan.inputSources === undefined ? {} : { inputSources: previousPlan.inputSources }) }, previousPlan.planningSeed)
 		}
 		return {
 			definition: publicDefinition(definition),
@@ -201,6 +218,10 @@ export function reevaluateOperationContinuation(snapshot: EcosystemSnapshot, pre
 		}
 	}
 	const evaluated = evaluateDefinition(definition, continuationSnapshot, planningOptions)
+	if (evaluated.plan !== undefined) {
+		if (previousPlan.operationInputs !== undefined) evaluated.plan.operationInputs = { ...previousPlan.operationInputs }
+		if (previousPlan.inputSources !== undefined) evaluated.plan.inputSources = { ...previousPlan.inputSources }
+	}
 	if (previousPlan.steps.length <= 1 || (evaluated.plan !== undefined && canonicalMetadata(evaluated.plan.metadata) === canonicalMetadata(previousPlan.metadata))) return evaluated
 	return {
 		definition: publicDefinition(definition),

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { keccak256, privateKeyToAccount, type Hex } from '#ethereum'
+import { keccak256, privateKeyToAccount, type Hex } from '@zoltar/bot-shared/ethereum'
 import { loadOperatorSettings, operatorProfilePath, saveOperatorSettings, type PersistedOperatorSettings } from '#config/settings-store'
 import { assertDistinctPersistentPaths } from '#config/configuration'
 import { deterministicDeploymentProxy, executorDeploymentPlan } from '#execution/create2-executor'
@@ -34,6 +34,7 @@ async function temporaryDirectory() {
 function settings(rpcUrl: string, uiPort: number, privateKey?: Hex): PersistedOperatorSettings {
 	const address = '0x0000000000000000000000000000000000000001'
 	return {
+		approvedUniverses: [],
 		centralizedMarkets: {
 			assetAddress: address,
 			assetChainId: 1,

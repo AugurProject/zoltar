@@ -1,4 +1,4 @@
-import { keccak256, type Address, type BlockTransaction, type Hex } from '../ethereum.ts'
+import { keccak256, type Address, type BlockTransaction, type Hex, type JsonValue } from '../ethereum.ts'
 import { endpointLabel } from '../monitoring/connectivity.ts'
 import { boundedJsonResponse, RELAY_RESPONSE_BYTES } from '../infrastructure/bounded-json.ts'
 import { authenticatedRelayHeaders, type RelayAuthentication } from './relay-authentication.ts'
@@ -54,10 +54,11 @@ type JsonRpcResponse = {
 	error?: {
 		code?: number
 		message?: string
+		data?: JsonValue
 	}
-	id?: unknown
-	jsonrpc?: unknown
-	result?: unknown
+	id?: number | string | null
+	jsonrpc?: '2.0'
+	result?: JsonValue
 }
 
 function relayUrl(value: string) {
@@ -235,7 +236,7 @@ async function authenticatedRelayRequest(parameters: RelayAuthentication & { bod
 		redirect: 'error',
 		signal: AbortSignal.timeout(parameters.timeoutMilliseconds),
 	})
-	let decoded: unknown
+	let decoded: JsonValue
 	try {
 		decoded = await boundedJsonResponse(response, RELAY_RESPONSE_BYTES, 'Relay')
 	} catch (error) {

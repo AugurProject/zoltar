@@ -1,9 +1,9 @@
 import { beforeEach, describe, test } from 'bun:test'
-import { encodeDeployData, encodeFunctionData, getAddress, type Address, type Hex, zeroAddress } from '@zoltar/shared/ethereum'
+import { encodeDeployData, encodeFunctionData, getAddress, type Address, type Hex, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
 import { getSettlementCollateralAttoEth, getCurrentRetentionRate, getTotalRepBackingUnits, getSecurityPoolsEscalationGame, getSecurityVault, getTotalPoolHeldAttoRep, getTotalCapacityOwnershipAttoRep } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { getERC20Balance, getETHBalance } from '../../testSupport/simulator/utils/utilities'
-import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool, ReputationToken_ReputationToken } from '../../types/contractArtifact'
+import { ReputationToken_ReputationToken, statoblast_EscalationGame_EscalationGame, statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate, statoblast_SecurityPool_SecurityPool } from '../../types/contractArtifact'
 import { useStatoblastVaultAccountingFixture, type StatoblastVaultAccountingFixture } from './fixture'
 
 describe('Statoblast: privileged authorization matrix', () => {
@@ -41,8 +41,8 @@ describe('Statoblast: privileged authorization matrix', () => {
 			client.writeContract({
 				abi: ReputationToken_ReputationToken.abi,
 				address: reputationToken,
-				functionName: 'setMaxTheoreticalSupplyAttoRep',
-				args: [1_000n],
+				functionName: 'initialize',
+				args: [1n, 1_000n, 1n],
 			}),
 		)
 
@@ -52,7 +52,7 @@ describe('Statoblast: privileged authorization matrix', () => {
 			theoreticalSupply: await client.readContract({
 				abi: ReputationToken_ReputationToken.abi,
 				address: reputationToken,
-				functionName: 'getTotalTheoreticalSupplyAttoRep',
+				functionName: 'getTotalTheoreticalSupply',
 				args: [],
 			}),
 			totalSupply: await client.readContract({
@@ -73,8 +73,8 @@ describe('Statoblast: privileged authorization matrix', () => {
 				attacker.writeContract({
 					abi: ReputationToken_ReputationToken.abi,
 					address: reputationToken,
-					functionName: 'setMaxTheoreticalSupplyAttoRep',
-					args: [2_000n],
+					functionName: 'initialize',
+					args: [2n, 2_000n, 2n],
 				}),
 			),
 		)
@@ -253,6 +253,9 @@ describe('Statoblast: privileged authorization matrix', () => {
 		const escalationGame = await getSecurityPoolsEscalationGame(client, securityPool)
 		const deposits = await getEscalationGameDeposits(client, escalationGame, QuestionOutcome.Yes)
 		assert.strictEqual(deposits.length, 1, 'authorized pool path should record one escalation deposit')
+		const existingDeposit = deposits[0]
+		if (existingDeposit === undefined) throw new Error('expected initial escalation deposit')
+		const repToken = await fixture.getRepToken(client, securityPool)
 
 		const readSnapshot = async () => ({
 			attackerEscrow: await client.readContract({
@@ -262,7 +265,14 @@ describe('Statoblast: privileged authorization matrix', () => {
 				args: [attacker.account.address],
 			}),
 			deposits: await getEscalationGameDeposits(client, escalationGame, QuestionOutcome.Yes),
-			gameRepBalance: await getERC20Balance(client, await fixture.getRepToken(client, securityPool), escalationGame),
+			attackerRepBalance: await getERC20Balance(client, repToken, attacker.account.address),
+			gameRepBalance: await getERC20Balance(client, repToken, escalationGame),
+			ownerLocalUnresolved: await client.readContract({
+				abi: statoblast_EscalationGame_EscalationGame.abi,
+				address: escalationGame,
+				functionName: 'getLocalUnresolvedPrincipalByVaultAndOutcome',
+				args: [client.account.address, QuestionOutcome.Yes],
+			}),
 			ownerEscrow: await client.readContract({
 				abi: statoblast_EscalationGame_EscalationGame.abi,
 				address: escalationGame,
@@ -294,6 +304,59 @@ describe('Statoblast: privileged authorization matrix', () => {
 				),
 			/Only security pool/,
 		)
+		const internalDelegateCalls = [
+			{
+				name: 'recordDeposit',
+				data: encodeFunctionData({
+					abi: statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate.abi,
+					functionName: 'recordDeposit',
+					args: [attacker.account.address, QuestionOutcome.Yes, repDeposit, existingDeposit.cumulativeAmountAttoRep + repDeposit],
+				}),
+			},
+			{
+				name: 'recordForkedEscrowForOutcome',
+				data: encodeFunctionData({
+					abi: statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate.abi,
+					functionName: 'recordForkedEscrowForOutcome',
+					args: [attacker.account.address, QuestionOutcome.Yes, 1n, 1n],
+				}),
+			},
+			{
+				name: 'consumeEscrowedRepForOwner',
+				data: encodeFunctionData({
+					abi: statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate.abi,
+					functionName: 'consumeEscrowedRepForOwner',
+					args: [client.account.address, 1n],
+				}),
+			},
+			{
+				name: 'consumeUnresolvedRepForClaimOwners',
+				data: encodeFunctionData({
+					abi: statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate.abi,
+					functionName: 'consumeUnresolvedRepForClaimOwners',
+					args: [client.account.address, QuestionOutcome.Yes, 1n],
+				}),
+			},
+			{
+				name: 'creditClaimOwners',
+				data: encodeFunctionData({
+					abi: statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate.abi,
+					functionName: 'creditClaimOwners',
+					args: [attacker.account.address, 1n],
+				}),
+			},
+			{
+				name: 'creditExternalClaimOwners',
+				data: encodeFunctionData({
+					abi: statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate.abi,
+					functionName: 'creditExternalClaimOwners',
+					args: [zeroAddress, attacker.account.address, 0n, 1n, 0n],
+				}),
+			},
+		]
+		for (const call of internalDelegateCalls) {
+			await assertUnauthorizedUnchanged(() => attacker.sendTransaction({ to: escalationGame, data: call.data }), /revert/i)
+		}
 		await assertUnauthorizedUnchanged(
 			() =>
 				writeContractAndWait(attacker, () =>

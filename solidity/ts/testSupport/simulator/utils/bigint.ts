@@ -1,4 +1,4 @@
-import type { Address, Hex } from '@zoltar/shared/ethereum'
+import type { Address, Hex } from '@zoltar/core-shared/evm/ethereum'
 
 function bigintToSafeNumber(value: bigint): number {
 	if (value < BigInt(Number.MIN_SAFE_INTEGER) || value > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error(`Bigint ${value.toString()} cannot be represented safely as a number`)

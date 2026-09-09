@@ -3,16 +3,17 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
-import { getAddress, zeroAddress, zeroHash, type Address, type Hash } from '@zoltar/shared/ethereum'
+import { getAddress, zeroAddress, zeroHash, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import type { DeploymentStatus, MarketCreationResult } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { UseQuestionCreationDependencies } from '../../../features/questions/hooks/useQuestionCreation.js'
-import type { CreateWriteClientCallbacks, TransactionRequestPreview } from '@zoltar/ui-core-shared/lib/chainBackend.js'
+import type { UseQuestionCreationDependencies } from '@zoltar/ui-zoltar-shared/features/questions/hooks/useQuestionCreation.js'
+import type { CreateWriteClientCallbacks, TransactionRequestPreview } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 
-type UseQuestionCreation = typeof import('../../../features/questions/hooks/useQuestionCreation.js')['useQuestionCreation']
+type UseQuestionCreation = typeof import('@zoltar/ui-zoltar-shared/features/questions/hooks/useQuestionCreation.js')['useQuestionCreation']
 type UseQuestionCreationState = ReturnType<UseQuestionCreation>
 
 const WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000a1')
@@ -31,14 +32,6 @@ const DEPLOYED_QUESTION_DATA: DeploymentStatus = {
 	deployed: true,
 	id: 'zoltarQuestionData',
 	label: 'ZoltarQuestionData',
-}
-
-function createDeferred<T>() {
-	let resolve: (value: T) => void = () => undefined
-	const promise = new Promise<T>(promiseResolve => {
-		resolve = promiseResolve
-	})
-	return { promise, resolve }
 }
 
 function requireHookState(state: UseQuestionCreationState | undefined) {
@@ -83,10 +76,10 @@ describe('useQuestionCreation', () => {
 	) {
 		const loadZoltarQuestions = mock(options.loadZoltarQuestions ?? (async () => undefined))
 		const setZoltarForkQuestionId = mock(() => undefined)
-		mock.module('../../../features/universes/hooks/useZoltarOperations.js', () => ({
+		mock.module('@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarOperations.js', () => ({
 			useZoltarOperations: () => ({ loadZoltarQuestions, setZoltarForkQuestionId }),
 		}))
-		const { useQuestionCreation } = await import(`../../../features/questions/hooks/useQuestionCreation.js?case=${crypto.randomUUID()}`)
+		const { useQuestionCreation } = await import(`@zoltar/ui-zoltar-shared/features/questions/hooks/useQuestionCreation.js?case=${crypto.randomUUID()}`)
 		const createQuestion = mock(options.createQuestion ?? (async () => CREATION_RESULT))
 		const onTransactionFailed = mock(() => undefined)
 		const onTransactionFinished = mock(options.onTransactionFinished ?? (() => undefined))
@@ -404,10 +397,10 @@ describe('useQuestionCreation', () => {
 	})
 
 	test('keeps global question drafts across universe changes and isolates them by account', async () => {
-		mock.module('../../../features/universes/hooks/useZoltarOperations.js', () => ({
+		mock.module('@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarOperations.js', () => ({
 			useZoltarOperations: () => ({ loadZoltarQuestions: async () => undefined, setZoltarForkQuestionId: () => undefined }),
 		}))
-		const { useQuestionCreation } = await import(`../../../features/questions/hooks/useQuestionCreation.js?case=${crypto.randomUUID()}`)
+		const { useQuestionCreation } = await import(`@zoltar/ui-zoltar-shared/features/questions/hooks/useQuestionCreation.js?case=${crypto.randomUUID()}`)
 		let hookState: UseQuestionCreationState | undefined
 		const Harness = function QuestionDraftHarness({ accountAddress, activeUniverseId }: { accountAddress: typeof WALLET_ADDRESS; activeUniverseId: bigint }) {
 			hookState = useQuestionCreation({

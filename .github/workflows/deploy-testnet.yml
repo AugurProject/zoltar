@@ -62,10 +62,10 @@ jobs:
           (cd solidity && bun install --frozen-lockfile)
 
       - name: Prepare contract artifacts
-        run: bun ./scripts/ensure-contract-artifacts.mts --headless
+        run: bun ./tooling/contracts/ensure-contract-artifacts.mts --headless
 
       - name: Validate deployment entrypoint
-        run: bun ./scripts/run-deploy-testnet.mts --help > /dev/null
+        run: bun ./tooling/contracts/run-deploy-testnet.mts --help > /dev/null
 
       - name: Deploy deterministic infrastructure
         env:

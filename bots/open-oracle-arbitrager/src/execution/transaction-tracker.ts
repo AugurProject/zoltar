@@ -1,4 +1,4 @@
-import type { Account, Address, Chain, Hex, PublicClient, TransactionReplacement, Transport, WalletClient } from '#ethereum'
+import type { Account, Address, Chain, Hex, PublicClient, TransactionReplacement, Transport, WalletClient } from '@zoltar/bot-shared/ethereum'
 import type { Configuration } from '#config/configuration'
 import { sendRawTransactionToRpc } from '#monitoring/connectivity'
 import { attemptConfirmationRecovery, guardedExecutionStep, guardedTransactionSubmission, isExecutionPausedError, journaledSubmission, retryPrivateSubmissionWithinWindow, waitForResolvedTransaction } from '#execution/execution-orchestration'

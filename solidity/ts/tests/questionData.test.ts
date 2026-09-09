@@ -11,7 +11,7 @@ import assert from '../testSupport/simulator/utils/assert'
 import { combineUint256FromTwoWithInvalid, createQuestion, getAnswerOptionName, getOutcomeLabels, getQuestionData, getQuestionId, isMalformedAnswerOption } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { areEqualArrays } from '../testSupport/simulator/utils/array-utils'
 import { ZoltarQuestionData_ZoltarQuestionData } from '../types/contractArtifact'
-import { decodeEventLog } from '@zoltar/shared/ethereum'
+import { decodeEventLog } from '@zoltar/core-shared/evm/ethereum'
 import {
 	SCALAR_PARITY_ENCODING_FIXTURES,
 	SCALAR_PARITY_LABEL_FIXTURES,
@@ -24,8 +24,8 @@ import {
 	getScalarParityOutcomeIndex,
 	getScalarParityQuestion,
 	isScalarParityMalformedOutcomeIndex,
-} from '@zoltar/shared/testing/scalarOutcomeParityFixtures'
-import type { ScalarParityQuestion } from '@zoltar/shared/testing/scalarOutcomeParityFixtures'
+} from '@zoltar/zoltar-shared/testing/scalarOutcomeParityFixtures'
+import type { ScalarParityQuestion } from '@zoltar/zoltar-shared/testing/scalarOutcomeParityFixtures'
 
 const MAX_UINT256 = 2n ** 256n - 1n
 const SCALAR_ENCODING_FUZZ_SAMPLE_COUNT = 12

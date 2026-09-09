@@ -19,22 +19,28 @@
 	"scripts": {
 		"check": "bun run typecheck && bun run lint && bun run test && bun run format:check",
 		"doctor": "bun ./src/cli/doctor.ts",
-		"ensure-contract-artifacts": "bun ../../scripts/ensure-contract-artifacts.mts",
-		"format": "bun x @biomejs/biome format --write package.json tsconfig.json bunfig.toml README.md OPERATOR_REFERENCE.md src tests scripts config",
-		"format:check": "bun x @biomejs/biome format package.json tsconfig.json bunfig.toml README.md OPERATOR_REFERENCE.md src tests scripts config",
+		"ensure-contract-artifacts": "bun ../../tooling/contracts/ensure-contract-artifacts.mts",
+		"format": "bun x @biomejs/biome format --write biome.json package.json tsconfig.json bunfig.toml README.md OPERATOR_REFERENCE.md src tests scripts config",
+		"format:check": "bun x @biomejs/biome format biome.json package.json tsconfig.json bunfig.toml README.md OPERATOR_REFERENCE.md src tests scripts config",
 		"lint": "bun x @biomejs/biome lint package.json tsconfig.json bunfig.toml src tests scripts config",
 		"run": "bun ./src/cli/run.ts",
 		"test": "bun run ensure-contract-artifacts && bun test ./tests --timeout 300000",
 		"typecheck": "bun run ensure-contract-artifacts && bun x tsc --project tsconfig.json --noEmit"
 	},
 	"dependencies": {
+		"@zoltar/bot-shared": "file:../shared"
+	},
+	"overrides": {
+		"tmp": "0.2.7",
+		"undici": "7.29.0",
 		"@zoltar/bot-shared": "file:../shared",
-		"@zoltar/shared": "file:../../shared"
+		"@zoltar/core-shared": "file:../../shared/core"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.3.11",
 		"bun-types": "1.4.2",
 		"micro-eth-signer": "0.18.1",
+		"solc": "0.8.17",
 		"typescript": "5.8.2"
 	}
 }

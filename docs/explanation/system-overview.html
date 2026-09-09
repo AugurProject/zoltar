@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content="A five-minute introduction to Zoltar, Statoblast, Trading, and OpenOracle." />
+		<title>System overview</title>
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../assets/css/docsShell.css" />
+	</head>
+	<body class="doc-openoracle">
+		<main id="main-content">
+			<header>
+				<p class="kicker">Start here</p>
+				<h1>System overview</h1>
+				<p>Consider one recurring example: “Will the fictional Aurora spacecraft launch before 31 December 2030?” Its possible <a href="../reference/glossary.html#outcome">outcomes</a> are Yes, No, and <a href="../reference/glossary.html#invalid">Invalid</a>. The system registers that question, creates a collateralized market, lets people trade its shares, and then resolves or branches the market.</p>
+			</header>
+			<section id="components">
+				<h2>Four separate components</h2>
+				<dl>
+					<dt>Zoltar</dt><dd>Registers global <a href="../reference/glossary.html#question">questions</a>, defines branching <a href="../reference/glossary.html#universe">universes</a>, manages universe-specific <a href="../reference/glossary.html#rep">REP</a>, and coordinates forks. It neither resolves market truth nor manages Statoblast settlement collateral.</dd>
+					<dt>Statoblast core</dt><dd>Deploys a <a href="../reference/glossary.html#security-pool">SecurityPool</a> for a question in a universe, holds ETH <a href="../reference/glossary.html#settlement-collateral">settlement collateral</a>, mints and burns Yes, No, and Invalid <a href="../reference/glossary.html#outcome-share">outcome shares</a>, tracks <a href="../reference/glossary.html#vault">vault</a> REP and <a href="../reference/glossary.html#capacity-ownership">capacity ownership</a>, resolves ordinary disputes locally, and handles migration and collateral repair after a fork.</dd>
+					<dt>Statoblast Trading</dt><dd>One separate on-chain trading implementation built around Statoblast shares. Other trading implementations can be built on top of Statoblast. It does not create or resolve markets.</dd>
+					<dt>OpenOracle</dt><dd>Supplies fresh, economically contestable REP/ETH prices for solvency-sensitive operations. It does not decide prediction-market outcomes.</dd>
+				</dl>
+			</section>
+			<section id="lifecycle">
+				<h2>One market lifecycle</h2>
+				<p>Alice registers the example question. A creator deploys its SecurityPool in a selected universe. Vault owners deposit REP to provide security capacity, and traders deposit ETH to mint <a href="../reference/glossary.html#complete-set">complete sets</a>. After the question ends, reporting begins.</p>
+				<figure class="diagram" aria-labelledby="market-lifecycle-caption">
+					<ol class="protocol-flow">
+						<li>Register question</li><li>Deploy SecurityPool</li><li>Deposit vault REP</li><li>Mint complete sets</li><li>Trade shares</li><li>Question ends</li><li>Initial report and <a href="./escalation-game.html">Escalation Game</a></li><li>Local resolution or Zoltar fork</li><li>Migrate into child pools</li><li>Repair missing collateral through a <a href="../reference/glossary.html#truth-auction">Truth Auction</a></li><li>Redeem</li>
+					</ol>
+					<figcaption id="market-lifecycle-caption"><span class="figure-label">Market lifecycle.</span> The ordinary path resolves locally and skips branching, migration, and repair. The fork path creates branch-specific pools whose collateral depends on migration and auction demand.</figcaption>
+				</figure>
+					<p>In the ordinary path, one outcome has a strict local reporting lead and its shares redeem from the original pool. If two outcomes reach the <a href="../reference/glossary.html#non-decision-threshold">non-decision threshold</a>, Statoblast forks on the market question and can migrate into its Invalid, Yes, and No children. While the pool is still unresolved and operational, a fork of its universe on another question can also interrupt it; those children follow that other categorical or scalar question's valid answers. A finalized pool remains settled and rejects later fork migration. Users choose <a href="../reference/glossary.html#child-universe">child universes</a>; ETH follows specific migration claims and is never copied. A child with insufficient collateral may try to raise the difference by selling <a href="../reference/glossary.html#child-rep">child REP</a> in a Truth Auction.</p>
+			</section>
+			<section id="assets">
+				<h2>Assets and custody</h2>
+				<table>
+					<thead><tr><th>Asset or claim</th><th>What it represents</th><th>Where it is held or recorded</th></tr></thead>
+					<tbody>
+						<tr><td>ETH settlement collateral</td><td>Backing for outstanding complete sets</td><td>The SecurityPool; it is allocated, not copied, during migration</td></tr>
+						<tr><td>REP</td><td>Universe-specific reporting and security capital</td><td>Wallets, SecurityPool vault accounting, Escalation Games, or migration contracts</td></tr>
+						<tr><td>Outcome shares</td><td>Yes, No, or Invalid claims for one pool and universe</td><td>The shared ERC-1155 ShareToken ledger</td></tr>
+						<tr><td>Capacity ownership</td><td>A vault's proportional claim on fee-eligible security capacity</td><td>SecurityPool vault accounting</td></tr>
+						<tr><td>Escalation claims</td><td>REP-backed positions on reported outcomes</td><td>The Escalation Game until claimed or migrated</td></tr>
+						<tr><td>Trading LP tokens</td><td>A claim on one pair's Yes and No reserves</td><td>The Trading pair's ERC-20 ledger</td></tr>
+					</tbody>
+				</table>
+			</section>
+			<nav aria-label="Continue reading"><a href="./statoblast.html">Follow a market in Statoblast</a> · <a href="./zoltar.html">Understand branching universes</a> · <a href="../reference/glossary.html">Look up terminology</a></nav>
+		</main>
+		<script src="../assets/js/responsiveDocs.js"></script><script src="../assets/js/docsData.js"></script><script src="../assets/js/docsShell.js"></script>
+	</body>
+</html>

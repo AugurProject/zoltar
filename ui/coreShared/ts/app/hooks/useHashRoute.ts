@@ -1,6 +1,6 @@
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
-import { buildRouteHref, ensureRouteHash, getCurrentRoute, getRouteHash, getTopLevelRouteSearch } from '../../lib/routing.js'
+import { buildRouteHref, ensureRouteHash, getCurrentRoute, getRouteHash, getTopLevelRouteSearch } from '../../navigation/routing.js'
 
 type Route = string
 

@@ -1,7 +1,7 @@
 /// <reference types='bun-types' />
 
 import { describe, expect, mock, test } from 'bun:test'
-import { normalizeAccount } from '../../lib/chainBackend.js'
+import { normalizeAccount } from '../../wallet/chainBackend.js'
 import { createSimulationBackend } from '../../simulation/tevmBackend.js'
 import type { SimulationWorkerEvent, SimulationWorkerMessage, SimulationWorkerState } from '../../simulation/tevmWorkerProtocol.js'
 

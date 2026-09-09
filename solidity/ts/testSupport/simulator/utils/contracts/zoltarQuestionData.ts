@@ -1,4 +1,4 @@
-import { encodeAbiParameters, keccak256 } from '@zoltar/shared/ethereum'
+import { encodeAbiParameters, keccak256 } from '@zoltar/core-shared/evm/ethereum'
 import { ZoltarQuestionData_ZoltarQuestionData } from '../../../../types/contractArtifact'
 import { ReadClient, WriteClient, writeContractAndWait } from '../clients'
 import { getInfraContractAddresses } from './deployStatoblast'

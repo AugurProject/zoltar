@@ -1,9 +1,9 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { zeroAddress } from '@zoltar/shared/ethereum'
-import { MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/shared/oracleInitialReport'
-import { getInitialReportPriorityFeeValidationMessage, getSecurityPoolCreateDisabledReason, getStatoblastSecurityMultiplierValidationMessage } from '../../../features/security-pools/lib/securityPoolCreationGuards.js'
+import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
+import { getInitialReportPriorityFeeValidationMessage, getSecurityPoolCreateDisabledReason, getStatoblastSecurityMultiplierValidationMessage } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolCreationGuards.js'
 import type { MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 
 function createMarketDetails(overrides: Partial<MarketDetails> = {}): MarketDetails {

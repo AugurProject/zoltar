@@ -1,5 +1,5 @@
 import { createElement } from 'preact'
-import { createPublicClient, custom, getAddress } from '@zoltar/shared/ethereum'
+import { createPublicClient, custom, getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { mountApp } from '@zoltar/ui-core-shared/app/appRoot.js'
 import { App } from './app/App.js'
 import { initializeTradingActiveEnvironment } from './app/activeEnvironment.js'
@@ -53,8 +53,14 @@ function pendingDeploymentFixture() {
 	}
 }
 
-document.querySelector('body > main')?.remove()
 const root = document.querySelector('#app') ?? document.body
+async function initializeTradingForMount() {
+	try {
+		await initializeTradingActiveEnvironment()
+	} finally {
+		document.querySelector('body > main')?.remove()
+	}
+}
 installTradingRouting()
 registerTradingSimulationScenario()
 if (new URLSearchParams(window.location.search).get('simulate') === '1' && !new URLSearchParams(window.location.search).has('simScenario')) {
@@ -62,4 +68,4 @@ if (new URLSearchParams(window.location.search).get('simulate') === '1' && !new 
 	url.searchParams.set('simScenario', TRADING_SIMULATION_SCENARIO)
 	window.history.replaceState({}, '', url)
 }
-void mountApp({ initialize: initializeTradingActiveEnvironment, root: () => createElement(App, qaDeploymentPending ? pendingDeploymentFixture() : {}), target: root })
+void mountApp({ initialize: initializeTradingForMount, root: () => createElement(App, qaDeploymentPending ? pendingDeploymentFixture() : {}), target: root })

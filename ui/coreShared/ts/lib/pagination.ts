@@ -37,4 +37,4 @@ export function formatPaginationSummary(pageIndex: number, pageCount: bigint | u
 	const displayedPageCount = pageCount === 0n ? 1n : pageCount
 	return `Page ${currentPage.toString()} of ${displayedPageCount.toString()}`
 }
-import { bigintToSafeNumber } from '@zoltar/shared/ethereum'
+import { bigintToSafeNumber } from '@zoltar/core-shared/evm/ethereum'

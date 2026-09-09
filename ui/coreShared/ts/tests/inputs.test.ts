@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { getAddress } from '@zoltar/shared/ethereum'
+import { getAddress } from '@zoltar/core-shared/evm/ethereum'
 import {
 	approvalShortage,
 	approvalTargetAmount,
@@ -16,7 +16,7 @@ import {
 	parseReportIdInput,
 	resolveOptionalAddressInput,
 	resolveOptionalBigIntListInput,
-} from '../lib/inputs.js'
+} from '../forms/inputs.js'
 
 void describe('input helpers', () => {
 	void test('parses and trims required address inputs', () => {

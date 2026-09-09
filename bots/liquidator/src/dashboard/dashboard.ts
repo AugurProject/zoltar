@@ -1,3 +1,6 @@
+import { createUniverseExplorer } from '../../../shared/src/dashboard/universe-explorer.js'
+import { readinessGuidance } from './readiness-status.js'
+import { blockStatusText, scanStatusText } from './block-status.js'
 import { createMetric, setAttentionBadge } from '../../../shared/src/dashboard/components.js'
 type Activity = {
 	at: string
@@ -34,6 +37,8 @@ type Pool = {
 }
 
 type Universe = {
+	repToken?: string
+
 	forkedPoolCount: number
 	forkQuestionId: string
 	id: string
@@ -85,6 +90,9 @@ type Snapshot = {
 	marketConsensus?: MarketConsensus
 	error?: string
 	execute: boolean
+	deploymentMissingName?: string
+	deploymentCheckedBlock?: string
+	deploymentCheckedTimestamp?: string
 	lastScanAt?: string
 	lastScannedBlock?: string
 	lastScannedTimestamp?: string
@@ -204,9 +212,8 @@ let profileRequestEpoch = 0
 let approvedUniverses = new Set<string>()
 let selectedPools = new Set<string>()
 let pendingPoolMutations = 0
-let pendingUniverseMutations = 0
 const poolActionStates = new Map<string, { failed: boolean; message: string }>()
-const universeActionStates = new Map<string, { failed: boolean; message: string }>()
+let universeExplorer: ReturnType<typeof createUniverseExplorer> | undefined
 const recoveryActionStates = new Map<string, { failed: boolean; message: string }>()
 let renderedAlertKey: string | undefined
 let marketSourceProbeRows: MarketSourceRow[] | undefined
@@ -220,37 +227,9 @@ const CONFIGURATION_REQUEST_TIMEOUT_MS = 2_000
 const PROFILE_SWITCH_REQUEST_TIMEOUT_MS = 2_000
 const PROFILE_SWITCH_REQUEST_TIMEOUT_MESSAGE = 'Profile switch request timed out.'
 
-function compactDuration(seconds: number) {
-	if (seconds < 60) return `${seconds.toString()}s`
-	const minutes = Math.floor(seconds / 60)
-	if (minutes < 60) return `${minutes.toString()}m`
-	const hours = Math.floor(minutes / 60)
-	return hours < 24 ? `${hours.toString()}h` : `${Math.floor(hours / 24).toString()}d`
-}
-
 function renderBlockStatus(snapshot = currentSnapshot) {
-	const headerBlockStatus = element('header-block-status', HTMLParagraphElement)
-	if (snapshot?.lastScannedBlock === undefined) {
-		blockStatus.textContent = 'Block — · waiting for first observation'
-		headerBlockStatus.textContent = blockStatus.textContent
-		return
-	}
-	const timestamp = snapshot.lastScannedTimestamp
-	if (timestamp === undefined || !/^(?:0|[1-9]\d*)$/.test(timestamp)) {
-		blockStatus.textContent = `Block ${snapshot.lastScannedBlock} · timestamp unavailable`
-		headerBlockStatus.textContent = blockStatus.textContent
-		return
-	}
-	const timestampMilliseconds = Number(timestamp) * 1_000
-	if (!Number.isSafeInteger(timestampMilliseconds)) {
-		blockStatus.textContent = `Block ${snapshot.lastScannedBlock} · timestamp unavailable`
-		headerBlockStatus.textContent = blockStatus.textContent
-		return
-	}
-	const differenceSeconds = Math.floor(Math.abs(Date.now() - timestampMilliseconds) / 1_000)
-	const age = compactDuration(differenceSeconds)
-	blockStatus.textContent = Date.now() >= timestampMilliseconds ? `Block ${snapshot.lastScannedBlock} · seen ${age} ago` : `Block ${snapshot.lastScannedBlock} · ${age} ahead of local clock`
-	headerBlockStatus.textContent = blockStatus.textContent
+	blockStatus.textContent = blockStatusText(snapshot)
+	element('header-block-status', HTMLParagraphElement).textContent = blockStatus.textContent
 }
 
 function setMutationControlsEnabled(enabled: boolean) {
@@ -276,8 +255,9 @@ function setMutationControlsEnabled(enabled: boolean) {
 	testMarketSourcesButton.disabled = !chainSettingsAvailable
 	recheckRecovery.disabled = !chainSettingsAvailable
 	if (!chainSettingsAvailable) {
-		for (const control of document.querySelectorAll<HTMLInputElement | HTMLButtonElement>('#pool-rows input, #universe-rows input, #recovery-list input, #recovery-list button')) control.disabled = true
+		for (const control of document.querySelectorAll<HTMLInputElement | HTMLButtonElement>('#pool-rows input, #recovery-list input, #recovery-list button')) control.disabled = true
 	}
+	if (currentSnapshot !== undefined) renderUniverses(currentSnapshot, !chainSettingsAvailable)
 }
 
 async function requestWithTimeout<T>(request: (signal: AbortSignal) => Promise<T>, timeoutMilliseconds: number, timeoutMessage = 'Dashboard state request timed out') {
@@ -523,14 +503,6 @@ function renderCentralizedMarket(snapshot: Snapshot) {
 	)
 }
 
-function forkOutcome(outcomeIndex?: string) {
-	if (outcomeIndex === undefined) return 'Origin'
-	if (outcomeIndex === '0') return 'Invalid'
-	if (outcomeIndex === '1') return 'Yes'
-	if (outcomeIndex === '2') return 'No'
-	return `Outcome ${outcomeIndex}`
-}
-
 function universeState(universe: Universe) {
 	if (universe.poolCount === 0) return 'No security pool yet'
 	if (universe.operationalPoolCount > 0) return `${universe.operationalPoolCount.toString()} operational`
@@ -553,229 +525,25 @@ function restoreRecordFocus(container: HTMLElement, recordKey?: string) {
 	}
 }
 
-function universeMetadata(universe: Universe, includeOutcome: boolean) {
-	const metadata = document.createElement('p')
-	metadata.className = 'truth-metadata'
-	const values = [
-		`${universe.poolCount.toString()} pool${universe.poolCount === 1 ? '' : 's'} · question #${universe.forkQuestionId}`,
-		universeState(universe),
-		`${universe.selectedPoolCount.toString()} selected`,
-		universe.migratableVaultCount > 0 ? `${universe.migratableVaultCount.toString()} migratable vault${universe.migratableVaultCount === 1 ? '' : 's'}` : 'No vault migration',
-	]
-	if (includeOutcome) values.unshift(forkOutcome(universe.outcomeIndex))
-	for (const value of values) {
-		const item = document.createElement('span')
-		item.textContent = value
-		metadata.append(item)
-	}
-	return metadata
-}
-
-async function saveUniversePolicy(actionKey: string, next: Set<string>, status: HTMLElement) {
-	if (pendingUniverseMutations > 0) return
-	pendingUniverseMutations += 1
-	for (const control of universeRows.querySelectorAll<HTMLInputElement>('input')) control.disabled = true
-	universeActionStates.set(actionKey, { failed: false, message: 'Saving…' })
-	actionStatus(status, 'Saving…')
-	try {
-		await put('/api/approved-universes', [...next])
-		approvedUniverses = next
-		universeActionStates.set(actionKey, { failed: false, message: 'Saved' })
-	} catch (error) {
-		universeActionStates.set(actionKey, { failed: true, message: publicFailure(error, 'Could not save universe approval. Retry this selection.') })
-	} finally {
-		pendingUniverseMutations -= 1
-		if (currentSnapshot !== undefined) renderUniverses(currentSnapshot)
-	}
-}
-
-function selectUniversePath(universe: Universe) {
-	const next = new Set(approvedUniverses)
-	if (currentSnapshot === undefined) {
-		next.add(universe.id)
-		return next
-	}
-	const universesById = new Map(currentSnapshot.universes.map(candidate => [candidate.id, candidate]))
-	let selected: Universe | undefined = universe
-	const visited = new Set<string>()
-	while (selected !== undefined && !visited.has(selected.id)) {
-		visited.add(selected.id)
-		next.add(selected.id)
-		if (selected.parentId === undefined) break
-		const selectedId = selected.id
-		const parentId = selected.parentId
-		removeUniverseSubtrees(
-			next,
-			currentSnapshot.universes.filter(candidate => candidate.parentId === parentId && candidate.id !== selectedId).map(candidate => candidate.id),
-		)
-		selected = universesById.get(parentId)
-	}
-	return next
-}
-
-function removeUniverseSubtrees(next: Set<string>, rootIds: readonly string[]) {
-	if (currentSnapshot === undefined) {
-		for (const rootId of rootIds) next.delete(rootId)
-		return
-	}
-	const childrenByParent = new Map<string, string[]>()
-	for (const universe of currentSnapshot.universes) {
-		if (universe.parentId === undefined) continue
-		const children = childrenByParent.get(universe.parentId) ?? []
-		children.push(universe.id)
-		childrenByParent.set(universe.parentId, children)
-	}
-	const pending = [...rootIds]
-	for (let index = 0; index < pending.length; index += 1) {
-		const universeId = pending[index]
-		if (universeId === undefined) continue
-		next.delete(universeId)
-		pending.push(...(childrenByParent.get(universeId) ?? []))
-	}
-}
-
-function universeChoice(universe: Universe) {
-	const choice = document.createElement('label')
-	choice.className = 'truth-choice'
-	const input = document.createElement('input')
-	input.type = 'radio'
-	input.name = `truth-path-${universe.parentId ?? 'root'}`
-	input.value = universe.id
-	input.dataset['recordKey'] = `universe:${universe.id}`
-	input.checked = approvedUniverses.has(universe.id)
-	input.disabled = pendingNetworkProfile !== undefined || currentConfiguration?.networkConfigured !== true || !stateConnected
-	const copy = document.createElement('span')
-	copy.className = 'truth-choice-copy'
-	const title = document.createElement('strong')
-	title.textContent = `${forkOutcome(universe.outcomeIndex)} · universe #${universe.id}`
-	copy.append(title, universeMetadata(universe, false))
-	const status = document.createElement('span')
-	status.className = 'action-status'
-	const saved = universeActionStates.get(universe.id)
-	if (saved !== undefined) actionStatus(status, saved.message, saved.failed)
-	input.addEventListener('change', () => {
-		if (!input.checked) return
-		void saveUniversePolicy(universe.id, selectUniversePath(universe), status)
+function renderUniverses(snapshot: Snapshot, disabled?: boolean) {
+	universeExplorer ??= createUniverseExplorer(universeRows, {
+		savedMessage: 'Universe approvals saved.',
+		onChange: async next => {
+			const epoch = profileRequestEpoch
+			try {
+				await put('/api/approved-universes', [...next])
+				if (epoch === profileRequestEpoch) approvedUniverses = next
+			} catch (error) {
+				throw new Error(publicFailure(error, 'Could not save universe approval. Retry this selection.'))
+			}
+		},
 	})
-	choice.append(copy, input, status)
-	return choice
-}
-
-function universeFamily(parent: Universe, children: readonly Universe[]) {
-	const family = document.createElement('div')
-	family.className = 'truth-family'
-	const heading = document.createElement('div')
-	heading.className = 'truth-parent'
-	const copy = document.createElement('div')
-	const title = document.createElement('h3')
-	title.textContent = `${parent.parentId === undefined ? 'Root' : 'Parent'} universe #${parent.id}`
-	copy.append(title, universeMetadata(parent, parent.parentId !== undefined))
-	heading.append(copy)
-	if (parent.parentId === undefined) {
-		const toggleTarget = document.createElement('label')
-		toggleTarget.className = 'pool-toggle truth-root-toggle'
-		const toggle = document.createElement('input')
-		toggle.type = 'checkbox'
-		toggle.dataset['recordKey'] = `universe:${parent.id}`
-		toggle.checked = approvedUniverses.has(parent.id)
-		toggle.disabled = pendingNetworkProfile !== undefined || currentConfiguration?.networkConfigured !== true || !stateConnected
-		toggle.setAttribute('aria-label', `Approve root universe ${parent.id}`)
-		toggle.addEventListener('change', () => {
-			const next = new Set(approvedUniverses)
-			if (toggle.checked) next.add(parent.id)
-			else removeUniverseSubtrees(next, [parent.id])
-			void saveUniversePolicy(parent.id, next, status)
-		})
-		const status = document.createElement('span')
-		status.className = 'action-status truth-parent-status'
-		const saved = universeActionStates.get(parent.id)
-		if (saved !== undefined) actionStatus(status, saved.message, saved.failed)
-		toggleTarget.append(toggle)
-		heading.append(toggleTarget, status)
-	} else {
-		const approval = document.createElement('span')
-		approval.className = `badge ${approvedUniverses.has(parent.id) ? 'ok' : ''}`
-		approval.textContent = approvedUniverses.has(parent.id) ? 'Approved path' : 'Not approved'
-		heading.append(approval)
-	}
-	family.append(heading)
-	if (children.length === 0) return family
-	const options = document.createElement('fieldset')
-	options.className = 'truth-options'
-	const legend = document.createElement('legend')
-	legend.append(document.createTextNode('Truth outcome'))
-	const legendContext = document.createElement('span')
-	legendContext.className = 'visually-hidden'
-	legendContext.textContent = ` for universe #${parent.id}`
-	legend.append(legendContext)
-	options.append(legend)
-	const childIds = children.map(child => child.id)
-	const none = document.createElement('label')
-	none.className = 'truth-choice'
-	const noneInput = document.createElement('input')
-	noneInput.type = 'radio'
-	noneInput.name = `truth-path-${parent.id}`
-	noneInput.value = ''
-	noneInput.dataset['recordKey'] = `universe:none:${parent.id}`
-	noneInput.checked = childIds.every(childId => !approvedUniverses.has(childId))
-	noneInput.disabled = pendingNetworkProfile !== undefined || currentConfiguration?.networkConfigured !== true || !stateConnected
-	const noneCopy = document.createElement('span')
-	noneCopy.className = 'truth-choice-copy'
-	const noneTitle = document.createElement('strong')
-	noneTitle.textContent = 'No child approved'
-	const noneDescription = document.createElement('small')
-	noneDescription.textContent = 'Keep every child universe inert'
-	noneCopy.append(noneTitle, noneDescription)
-	const noneStatus = document.createElement('span')
-	noneStatus.className = 'action-status'
-	const saved = universeActionStates.get(`none:${parent.id}`)
-	if (saved !== undefined) actionStatus(noneStatus, saved.message, saved.failed)
-	noneInput.addEventListener('change', () => {
-		if (!noneInput.checked) return
-		const next = new Set(approvedUniverses)
-		removeUniverseSubtrees(next, childIds)
-		void saveUniversePolicy(`none:${parent.id}`, next, noneStatus)
+	universeExplorer.update({
+		universes: snapshot.universes.map(universe => ({ ...universe, summary: `${universe.poolCount} pools · ${universeState(universe)} · ${universe.selectedPoolCount} selected · ${universe.migratableVaultCount} migratable vaults` })),
+		approved: approvedUniverses,
+		network: snapshot.network,
+		disabled: disabled ?? (pendingNetworkProfile !== undefined || currentConfiguration?.networkConfigured !== true || !stateConnected),
 	})
-	none.append(noneCopy, noneInput, noneStatus)
-	options.append(none, ...children.map(child => universeChoice(child)))
-	family.append(options)
-	return family
-}
-
-function renderUniverses(snapshot: Snapshot) {
-	if (pendingUniverseMutations > 0) return
-	const focusedRecord = activeRecordKey(universeRows)
-	if (snapshot.universes.length === 0) {
-		const empty = document.createElement('p')
-		empty.className = 'empty'
-		empty.textContent = 'No universes are registered.'
-		universeRows.replaceChildren(empty)
-		return
-	}
-	const childrenByParent = new Map<string, Universe[]>()
-	for (const universe of snapshot.universes) {
-		if (universe.parentId === undefined) continue
-		const children = childrenByParent.get(universe.parentId) ?? []
-		children.push(universe)
-		childrenByParent.set(universe.parentId, children)
-	}
-	const families: HTMLElement[] = []
-	const visited = new Set<string>()
-	const appendFamily = (parent: Universe) => {
-		if (visited.has(parent.id)) return
-		visited.add(parent.id)
-		const children = childrenByParent.get(parent.id) ?? []
-		families.push(universeFamily(parent, children))
-		for (const child of children) {
-			if (childrenByParent.has(child.id)) appendFamily(child)
-		}
-	}
-	for (const root of snapshot.universes.filter(universe => universe.parentId === undefined)) appendFamily(root)
-	for (const universe of snapshot.universes) {
-		if (!visited.has(universe.id) && childrenByParent.has(universe.id)) appendFamily(universe)
-	}
-	universeRows.replaceChildren(...families)
-	restoreRecordFocus(universeRows, focusedRecord)
 }
 
 function cell(...children: (Node | string)[]) {
@@ -1001,13 +769,13 @@ function render(snapshot: Snapshot) {
 	renderNetworkBadge()
 	modeBadge.textContent = snapshot.execute ? 'Live' : 'Dry run'
 	modeBadge.className = `badge ${snapshot.execute ? 'warning' : 'ok'}`
-	runStatusBadge.textContent = snapshot.status === 'connectivity-degraded' ? 'Connectivity degraded' : snapshot.error !== undefined ? 'Error' : snapshot.paused ? 'Paused' : snapshot.scanning ? 'Scanning' : 'Running'
+	runStatusBadge.textContent = snapshot.status === 'connectivity-degraded' ? 'Connectivity degraded' : snapshot.error !== undefined ? 'Error' : snapshot.paused ? 'Paused' : snapshot.scanning ? 'Scanning' : snapshot.deploymentMissingName !== undefined ? 'Waiting' : 'Running'
 	runStatusBadge.className = `badge ${snapshot.paused || snapshot.error !== undefined ? 'warning' : 'ok'}`
 	capabilityBadge.textContent = snapshot.operatorCapable ? 'Operator capable' : 'Operator blocked'
 	capabilityBadge.className = `badge ${snapshot.operatorCapable ? 'ok' : 'warning'}`
 	renderAttention(snapshot)
 	recoveryGuidance.hidden = snapshot.paused
-	lastScan.textContent = snapshot.lastScanAt === undefined ? (snapshot.scanning ? 'Scanning configured pools…' : 'Waiting for first scan') : `Last scan ${new Date(snapshot.lastScanAt).toLocaleString()}`
+	lastScan.textContent = scanStatusText(snapshot)
 	walletAddress.textContent = snapshot.wallet ?? 'No active signer'
 	setGlobalError(
 		snapshot.error === undefined
@@ -1015,8 +783,8 @@ function render(snapshot: Snapshot) {
 			: snapshot.status === 'connectivity-degraded'
 				? 'RPC connectivity is degraded. Execution is blocked and the bot will retry automatically.'
 				: `${scanFailureDetail(snapshot.error)} Automatic retry is active. Check the bot logs if the next cycle also fails.`,
-		snapshot.error === undefined ? 'Operator blocked' : 'Scan failed',
-		snapshot.error === undefined ? 'warning' : 'error',
+		snapshot.error === undefined ? (capabilityBlockerGuidance(snapshot)?.title ?? 'Operator blocked') : 'Scan failed',
+		snapshot.error === undefined ? (capabilityBlockerGuidance(snapshot)?.pending === true ? 'info' : 'warning') : 'error',
 	)
 	renderMetrics(snapshot)
 	renderAlerts(snapshot)
@@ -1046,12 +814,7 @@ function snapshotAttentionCount(snapshot: Snapshot) {
 }
 
 function capabilityBlockerGuidance(snapshot: Snapshot) {
-	if (snapshot.operatorCapable !== false || snapshotDetailedAttentionCount(snapshot) > 0) return undefined
-	if (snapshot.paused) return { pending: false, message: 'The bot is paused. Use Resume to continue scanning.' }
-	if (snapshot.scanning) return { pending: true, message: 'A scan is in progress. Readiness updates automatically when it completes.' }
-	if (snapshot.execute && snapshot.wallet === undefined) return { pending: false, message: 'Live execution needs an active signer. Open Settings and configure Execution signer.' }
-	if (snapshot.lastScanAt === undefined || snapshot.lastScannedBlock === undefined) return { pending: true, message: 'Waiting for the first successful scan. Readiness updates automatically; inspect the bot logs if scanning does not start.' }
-	return { pending: false, message: 'The operator is not ready. Status updates automatically; inspect the bot logs if it remains blocked.' }
+	return readinessGuidance(snapshot, snapshotDetailedAttentionCount(snapshot) > 0)
 }
 
 function renderAttention(snapshot: Snapshot) {
@@ -1064,8 +827,8 @@ function renderAttention(snapshot: Snapshot) {
 	else if (snapshot.alerts.length > 0) attentionTarget = '/operations'
 	setAttentionBadge(attentionBadge, attentionCount, attentionTarget)
 	if (capabilityBlockerGuidance(snapshot)?.pending === true) {
-		attentionBadge.textContent = 'Checking readiness'
-		attentionBadge.removeAttribute('href')
+		attentionBadge.textContent = capabilityBlockerGuidance(snapshot)?.label ?? 'Awaiting first scan'
+		if (snapshot.deploymentMissingName === undefined) attentionBadge.removeAttribute('href')
 	}
 }
 
@@ -1275,7 +1038,7 @@ function scanFailureDetail(error: string) {
 	return 'The latest scan cycle returned an unexpected error.'
 }
 
-function setGlobalError(message?: string, title = 'Dashboard unavailable', tone: 'error' | 'warning' = 'error') {
+function setGlobalError(message?: string, title = 'Dashboard unavailable', tone: 'error' | 'warning' | 'info' = 'error') {
 	if (message === undefined) {
 		if (!globalError.classList.contains('hidden')) globalError.classList.add('hidden')
 		if (globalError.childNodes.length > 0) globalError.replaceChildren()
@@ -1284,6 +1047,7 @@ function setGlobalError(message?: string, title = 'Dashboard unavailable', tone:
 	}
 	const noticeKey = `${tone}\n${title}\n${message}`
 	if (globalError.dataset['noticeKey'] === noticeKey && !globalError.classList.contains('hidden')) return
+	globalError.setAttribute('role', tone === 'info' ? 'status' : 'alert')
 	globalError.classList.toggle('error', tone === 'error')
 	globalError.classList.toggle('warning', tone === 'warning')
 	globalError.dataset['noticeKey'] = noticeKey

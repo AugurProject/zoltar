@@ -1,10 +1,11 @@
+import { zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { chmod, mkdir, mkdtemp, open, readFile, readdir, rename, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { CONFIGURATION_REVISION_CONFLICT, PRESERVE_PRIVATE_KEY, assertSettingsProfileIsolation, loadSettings, parseSettings, saveSettings, serializedSettings, settingsProfilePath, settingsProfilePathForNetwork, switchSettingsNetworkProfile, type SettingsFilesystem } from '../../src/config/settings.ts'
 import { publicChaosConfiguration } from '../../src/dashboard/dashboard-server.ts'
-import { carryProofDeploymentProfileId } from '../../src/monitoring/carry-proof-scan.ts'
+import { executionProfileId } from '../../src/config/execution-profile.ts'
 import { chaosChain } from '../../src/runtime/canonical-scan.ts'
 
 const directories: string[] = []
@@ -76,7 +77,7 @@ describe('chaos-bot settings', () => {
 		expect(configured.connectivity?.quorumRpcUrls).toHaveLength(2)
 		const configuredRpcUrls = configured.connectivity === undefined ? [] : [configured.connectivity.readRpcUrl, ...configured.connectivity.quorumRpcUrls, ...configured.connectivity.publicRpcUrls]
 		expect(configuredRpcUrls.every(url => new URL(url).hostname.endsWith('.invalid'))).toBeTrue()
-		expect(Object.values(configured.deployment).every(address => typeof address === 'string' && address.startsWith('0x11111111111111111111111111111111111111'))).toBeTrue()
+		expect(Object.values(configured.deployment).every(address => typeof address === 'string' && address !== zeroAddress)).toBeTrue()
 		const privateSettings = parseSettings({
 			...serializedSettings(configured),
 			submission: {
@@ -122,12 +123,12 @@ describe('chaos-bot settings', () => {
 		const profilePath = settingsProfilePathForNetwork('/tmp/operator.json', settings.network)
 		expect(profilePath).toBe('/tmp/operator.json.custom-chain-4242424242.profile')
 		expect(profilePath).not.toContain(settings.network.name)
-		expect(carryProofDeploymentProfileId(roundTripped)).toBe(carryProofDeploymentProfileId(settings))
+		expect(executionProfileId(roundTripped)).toBe(executionProfileId(settings))
 		const differentChain = parseSettings({
 			...serialized,
 			network: { ...serialized.network, chainId: 4_242_424_243 },
 		})
-		expect(carryProofDeploymentProfileId(differentChain)).not.toBe(carryProofDeploymentProfileId(settings))
+		expect(executionProfileId(differentChain)).not.toBe(executionProfileId(settings))
 		expect(settingsProfilePathForNetwork('/tmp/operator.json', differentChain.network)).toBe('/tmp/operator.json.custom-chain-4242424243.profile')
 
 		const directory = await temporaryDirectory()
@@ -319,11 +320,11 @@ describe('chaos-bot settings', () => {
 		expect(() => parseSettings(redacted)).toThrow('only preserve an existing saved signer')
 	})
 
-	test('requires configured, funded deployment inputs before live execution', async () => {
+	test('requires a signer and independent readers before live execution', async () => {
 		const configured = await configuredExample()
 		expect(() => parseSettings({ ...configured, runtime: { ...record(configured['runtime']), execute: true } })).toThrow('Live execution requires privateKey')
 		const privateKey = `0x${'22'.repeat(32)}` as const
-		expect(() => parseSettings({ ...configured, privateKey, runtime: { ...record(configured['runtime']), execute: true } })).toThrow('every ecosystem deployment address')
+		expect(() => parseSettings({ ...configured, privateKey, runtime: { ...record(configured['runtime']), execute: true } })).toThrow('Live execution requires RPC quorum 2 with three independent read origins')
 	})
 
 	test('rejects a zero ETH reserve in live execution mode', async () => {
@@ -393,10 +394,8 @@ describe('chaos-bot settings', () => {
 	test('requires quorum 2 across three independent read origins for live execution', async () => {
 		const configured = await configuredExample()
 		const privateKey = `0x${'22'.repeat(32)}` as const
-		const deploymentAddress = '0x0000000000000000000000000000000000000001'
 		const live = {
 			...configured,
-			deployment: Object.fromEntries(Object.keys(record(configured['deployment'])).map(key => [key, deploymentAddress])),
 			privateKey,
 			runtime: { ...record(configured['runtime']), execute: true },
 		}

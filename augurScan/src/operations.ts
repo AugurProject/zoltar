@@ -38,8 +38,7 @@ type ReportFieldChange = {
 
 type ReportRoundEvidence = Record<string, unknown>
 
-const reportRecord = (value: unknown): Record<string, unknown> =>
-	typeof value === 'object' && value !== null && !Array.isArray(value) ? Object.fromEntries(Object.entries(value)) : {}
+const reportRecord = (value: unknown): Record<string, unknown> => (typeof value === 'object' && value !== null && !Array.isArray(value) ? Object.fromEntries(Object.entries(value)) : {})
 
 const flattenReportFields = (value: unknown, path: string, fields: Map<string, unknown>): void => {
 	const record = reportRecord(value)
@@ -220,17 +219,13 @@ export const vaultRisk = (input: VaultRiskInput) => {
 		}
 	const baseRequired = ceilDiv(openInterest * price, PRICE_PRECISION)
 	const associatedBeforeFactor = ceilDiv(baseRequired * securityMultiplier, BPS_DENOMINATOR)
-	const migrationMultiplier = [BPS_DENOMINATOR + (securityMultiplier - BPS_DENOMINATOR) / 2n, BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS].reduce(
-		(maximum, candidate) => (candidate > maximum ? candidate : maximum),
-		0n,
-	)
+	const migrationMultiplier = [BPS_DENOMINATOR + (securityMultiplier - BPS_DENOMINATOR) / 2n, BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS].reduce((maximum, candidate) => (candidate > maximum ? candidate : maximum), 0n)
 	const freeBeforeFactor = ceilDiv(baseRequired * migrationMultiplier, BPS_DENOMINATOR)
 	const associatedFactor = associatedBeforeFactor === 0n ? 0n : ((backing + dispute) * BPS_DENOMINATOR) / associatedBeforeFactor
 	const freeFactor = freeBeforeFactor === 0n ? 0n : (backing * BPS_DENOMINATOR) / freeBeforeFactor
 	const healthFactor = associatedFactor < freeFactor ? associatedFactor : freeFactor
 	const protocolState = badDebt > 0n ? ('bad-debt' as const) : healthFactor < BPS_DENOMINATOR ? ('liquidatable' as const) : ('healthy' as const)
-	const scannerSeverity =
-		protocolState !== 'healthy' ? ('critical' as const) : healthFactor < VAULT_WARNING_HEALTH_FACTOR_BPS ? ('warning' as const) : ('healthy' as const)
+	const scannerSeverity = protocolState !== 'healthy' ? ('critical' as const) : healthFactor < VAULT_WARNING_HEALTH_FACTOR_BPS ? ('warning' as const) : ('healthy' as const)
 	return {
 		protocolState,
 		scannerSeverity,
@@ -336,7 +331,7 @@ export const fixedWindowTwap = (observations: readonly ExactPriceObservation[], 
 	const end = positiveInteger(windowEnd, 'windowEnd')
 	if (end <= start) throw new Error('TWAP window end must be after its start')
 	const ordered = observations
-		.map((observation) => ({
+		.map(observation => ({
 			timestamp: positiveInteger(observation.timestamp, 'observation timestamp'),
 			numerator: positiveInteger(observation.numerator, 'price numerator'),
 			denominator: positiveInteger(observation.denominator, 'price denominator'),

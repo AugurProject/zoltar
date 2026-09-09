@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>Contract Interaction Map</title>
+		<title>Contract architecture</title>
 		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 		<link rel="stylesheet" href="../assets/css/docsShell.css" />
 	</head>
@@ -11,13 +11,26 @@
 		<main>
 			<header>
 				<p><a href="../documentation.html">Documentation index</a></p>
-				<h1>Contract Interaction Map</h1>
+				<h1>Contract architecture</h1>
 				<p><strong>Mental model:</strong> actors enter through pools, oracle coordination, Zoltar universes, and child repair; custody boundaries explain the call graph.</p>
 				<p>This map connects the primary deployed Zoltar registry and Statoblast market contracts. It emphasizes contract-to-contract calls and asset movement, not every public user entrypoint. Factory-only deployment workers, delegate modules, event emitters, and compatibility contracts are summarized separately so the runtime path stays legible.</p>
-				<p class="security-assumption-ref"><strong>Related reading:</strong> <a href="../reference/contracts.html">the generated transaction reference</a> for exact caller and prerequisite rules, <a href="../explanation/statoblast.html">the Statoblast whitepaper</a> for lifecycle context, and <a href="../reference/invariants.html">the invariant catalog</a> for cross-contract safety properties.</p>
+				<p class="security-assumption-ref"><strong>Related reading:</strong> <a href="../reference/contracts.html">the generated transaction reference</a> for exact caller and prerequisite rules, <a href="../explanation/statoblast.html">How Statoblast works</a> for lifecycle context, and <a href="../reference/invariants.html">the invariant catalog</a> for cross-contract safety properties.</p>
 			</header>
+			<section id="product-layers">
+				<h2>Product layers</h2>
+				<figure class="diagram" aria-labelledby="product-layer-caption">
+					<div class="protocol-flow" role="img" aria-label="Zoltar supplies questions, universes, and REP to Statoblast core. Statoblast Trading is one implementation of trading built on Statoblast shares; other implementations can also build on Statoblast. OpenOracle supplies a contestable REP/ETH price to Statoblast. AugurScan indexes protocol activity, and bots perform permissionless operations.">
+						<p><strong>Zoltar</strong> — questions, universes, REP, forks</p>
+						<p><strong>Statoblast core</strong> — pools, collateral, shares, resolution, migration</p>
+						<p><strong>Statoblast Trading</strong> — one implementation of swaps and liquidity around shares</p>
+						<p><strong>OpenOracle</strong> — contestable REP/ETH prices</p>
+						<p><strong>AugurScan and bots</strong> — indexing, evidence, and permissionless operations</p>
+					</div>
+					<figcaption id="product-layer-caption"><span class="figure-label">Product-layer map.</span> These products share protocol data but retain separate responsibilities and deployment boundaries.</figcaption>
+				</figure>
+			</section>
 			<section id="conceptual-model">
-				<h2>Conceptual Model Before the Graph</h2>
+				<h2>Conceptual model before the graph</h2>
 				<p>Statoblast separates identity, market accounting, price-sensitive execution, dispute escrow, and fork repair:</p>
 				<ul>
 					<li><code>ZoltarQuestionData</code> stores question state and answer encoding; <code>Zoltar</code> manages universes, forks, and REP branches.</li>
@@ -31,7 +44,7 @@
 			</section>
 
 			<section id="overview">
-				<h2>Primary Interaction Flow</h2>
+				<h2>Primary interaction flow</h2>
 				<p>Arrows point from the contract initiating an interaction to the contract receiving it. The map repeats a contract when it participates in more than one phase, separating construction-time wiring, recurring runtime calls, and fork repair into three readable panels. Users and keepers enter through several of these contracts, but are omitted so the plot can focus on contract-to-contract boundaries.</p>
 				<figure class="diagram diagram-wide" id="fig-contract-interaction-map">
 					<div class="plot-chart" data-plot-chart="fig-contract-interaction-map" data-plot-width="1142" data-plot-height="1814" role="img" aria-label="Zoltar and Statoblast contract interactions grouped into deployment, runtime, and fork phases"><span class="plot-chart-fallback">Contract interactions are separated into three phases. During deployment, the pool factory validates question and universe data before deploying the pool, share token, and price coordinator. During runtime, the pool manages claims and escalation escrow while guarded actions travel through the price coordinator and OpenOracle. During a fork, the share token enters the pool forker, which snapshots escalation, migrates REP through a proxy, creates and migrates child pools, and repairs backing through the truth auction.</span></div>
@@ -40,7 +53,7 @@
 			</section>
 
 			<section id="edges">
-				<h2>What Each Arrow Means</h2>
+				<h2>What each arrow means</h2>
 				<div class="table-scroll" tabindex="0" role="region" aria-label="Contract interaction details">
 					<table>
 						<thead>
@@ -172,7 +185,7 @@
 			</section>
 
 			<section id="paths">
-				<h2>Four Useful Reading Paths</h2>
+				<h2>Four useful reading paths</h2>
 				<ol>
 					<li>
 						<strong>Deploy a market:</strong>
@@ -195,7 +208,7 @@
 			</section>
 
 			<section id="supporting-contracts">
-				<h2>Supporting Contracts Not Expanded in the Plot</h2>
+				<h2>Supporting contracts not expanded in the plot</h2>
 				<p>The diagram groups construction helpers and delegate modules behind the deployed component whose behavior they implement:</p>
 				<ul>
 					<li><code>ShareTokenFactory</code>, <code>EscalationGameFactory</code>, <code>PriceOracleManagerAndOperatorQueuerFactory</code>, <code>UniformPriceDualCapBatchAuctionFactory</code>, and <code>SecurityPoolDeployer</code> construct the displayed runtime contracts.</li>
@@ -206,7 +219,7 @@
 			</section>
 
 			<section id="sources">
-				<h2>Source Contracts</h2>
+				<h2>Source contracts</h2>
 				<ul>
 					<li>
 						<a href="../../solidity/contracts/ZoltarQuestionData.sol"><code>ZoltarQuestionData.sol</code></a>
@@ -230,16 +243,6 @@
 						<a href="../../solidity/contracts/statoblast/UniformPriceDualCapBatchAuction.sol"><code>UniformPriceDualCapBatchAuction.sol</code></a>
 					</li>
 				</ul>
-			</section>
-			<section id="actors-and-boundaries">
-				<h2>Actors, custody, and one operation</h2>
-				<p>The protocol consists of several participants with distinct responsibilities. Market creators configure security pools, traders mint and hold complete sets and outcome shares, vault owners provide REP backing, liquidators repair under-collateralized vaults, auction bidders recapitalize child pools after forks, keepers execute permissionless maintenance operations, and indexers reconstruct protocol state from emitted events.</p>
-
-				<p>Each contract handles a specific part of the protocol. Security pools hold user funds and manage market state. The Oracle Coordinator runs price-sensitive operations that need a REP/ETH price. Zoltar manages universes, questions, REP, and forks. An operation may involve several contracts, but that does not move every asset or piece of state between them.</p>
-
-				<p>For example, when a trader mints a complete set, they send ETH to the security pool. The pool accepts the deposit, mints one outcome share for every possible outcome, and updates its accounting. Each contract changes only the state it manages, while emitted events let external indexers reconstruct the operation.</p>
-
-				<p>The deployment graph above illustrates the primary contract interactions in this release. Supporting factories, delegates, callbacks, emitters, and compatibility contracts are omitted for clarity. Contract addresses and call relationships are deployment details, while the custody and responsibility boundaries described above remain stable across deployments.</p>
 			</section>
 		</main>
 		<script src="../assets/js/chartRuntime.js"></script>

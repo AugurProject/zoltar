@@ -1,7 +1,7 @@
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import type { InjectedEthereum } from '@zoltar/ui-core-shared/injectedEthereum.js'
-export { createWalletContextSubscription, subscribeToWalletContextChanges } from '@zoltar/ui-core-shared/injectedEthereum.js'
-export type { InjectedEthereum, WalletContextChangeEvent } from '@zoltar/ui-core-shared/injectedEthereum.js'
+import type { InjectedEthereum } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'
+export { createWalletContextSubscription, subscribeToWalletContextChanges } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'
+export type { InjectedEthereum, WalletContextChangeEvent } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'
 
 declare global {
 	interface Window {

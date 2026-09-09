@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { getActiveNetworkProfile } from '../../lib/activeEnvironment.js'
-import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '../../lib/networkProfile.js'
-import { readNetworkRpcUrls, saveNetworkRpcUrl, type RpcNetworkId } from '../../lib/rpcConfig.js'
+import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '../../wallet/networkProfile.js'
+import { readNetworkRpcUrls, saveNetworkRpcUrl, type RpcNetworkId } from '../../wallet/rpcConfig.js'
 import * as appCopy from '../../copy/app.js'
 import type { ComponentChildren } from 'preact'
 

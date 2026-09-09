@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { getPoolUniverseTransactionRows, humanizeTransactionAction } from '../lib/transactionPresentations.js'
+import { getPoolUniverseTransactionRows, humanizeTransactionAction } from '../transactions/transactionPresentations.js'
 
 describe('shared transaction presentation helpers', () => {
 	test('humanizes camel-case actions with protocol units', () => {

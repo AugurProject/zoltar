@@ -1,5 +1,5 @@
 import { applyStrategy, type Configuration } from '#config/configuration'
-import type { Address } from '#ethereum'
+import type { Address } from '@zoltar/bot-shared/ethereum'
 import type { ExecutionLockManager } from '#execution/execution-locks'
 import { clearWalletDerivedState, type OperatorSnapshotFixedState, type OperatorState } from '#state/operator-state'
 import type { ExclusiveProcessLock } from '#state/position-store'
@@ -91,7 +91,7 @@ export function applyQueuedExecutionSettings(config: Configuration, state: Opera
 	}
 	if (pending.tokenAddresses !== undefined) {
 		config.tokenAddresses = pending.tokenAddresses
-		state.tokenAddresses = pending.tokenAddresses
+		state.tokenAddresses = []
 		pending.tokenAddresses = undefined
 		pending.persistedTokenAddresses = undefined
 	}

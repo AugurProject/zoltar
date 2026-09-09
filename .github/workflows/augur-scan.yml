@@ -5,13 +5,13 @@ on:
     branches: [main]
     paths:
       - "augurScan/**"
-      - "shared/ts/ethereum.ts"
+      - "shared/core/ts/evm/**"
       - ".github/workflows/augur-scan.yml"
   push:
     branches: [main]
     paths:
       - "augurScan/**"
-      - "shared/ts/ethereum.ts"
+      - "shared/core/ts/evm/**"
       - ".github/workflows/augur-scan.yml"
   workflow_dispatch:
 
@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   checks:
-    name: Typecheck, unit tests, static checks, and browser build
+    name: Typecheck, unit/API/replay tests, static checks, and browser build
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
@@ -51,8 +51,8 @@ jobs:
         run: bun install --frozen-lockfile
       - name: Typecheck
         run: bun run typecheck
-      - name: Unit tests
-        run: bun run test:unit
+      - name: Unit, API, and replay tests
+        run: bun run test:ci
       - name: PostgreSQL integration tests
         run: bun run test:integration
         env:

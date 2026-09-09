@@ -20,7 +20,7 @@ import {
 	validateReceiptExpectation,
 } from '../../src/execution/liquidation-executor.ts'
 import { initialRuntimeState } from '../../src/state/operator-state.ts'
-import { encodeAbiParameters, encodeEventTopics, getAddress, type TransactionReceipt } from '../helpers/ethereum.ts'
+import { encodeAbiParameters, encodeEventTopics, getAddress, type TransactionReceipt } from '@zoltar/bot-shared/ethereum'
 import { nextStagedHistoricalRecoveryRange, recordStagedRecoveryChunk, recordStagedRecoveryGap, stagedOperationRecoveryRanges, stagedRecoveryAnchorMatches } from '../../src/execution/recovery.ts'
 import { availableExecutionObservations, liquidationExecutionSnapshotObservation } from '../../src/monitoring/execution-quorum.ts'
 

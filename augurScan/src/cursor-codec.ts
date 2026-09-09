@@ -1,14 +1,16 @@
+import type { JsonValue } from './ethereum.ts'
+
 const encoder = new TextEncoder()
 const decoder = new TextDecoder('utf-8', { fatal: true })
 
-export const encodeOpaqueCursor = (value: unknown): string => {
+export const encodeOpaqueCursor = (value: JsonValue): string => {
 	const bytes = encoder.encode(JSON.stringify(value))
 	let binary = ''
 	for (const byte of bytes) binary += String.fromCharCode(byte)
 	return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')
 }
 
-export const decodeOpaqueCursor = (value: string): unknown => {
+export const decodeOpaqueCursor = (value: string): JsonValue => {
 	if (!/^[A-Za-z0-9+/_-]+={0,2}$/.test(value)) throw new Error('cursor encoding')
 	const unpadded = value.replace(/=+$/, '')
 	const remainder = unpadded.length % 4
@@ -17,5 +19,7 @@ export const decodeOpaqueCursor = (value: string): unknown => {
 	const binary = atob(padded)
 	const bytes = new Uint8Array(binary.length)
 	for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index)
-	return JSON.parse(decoder.decode(bytes)) as unknown
+	return JSON.parse(decoder.decode(bytes)) as JsonValue
 }
+
+export const isJsonArray = (value: JsonValue): value is readonly JsonValue[] => Array.isArray(value)

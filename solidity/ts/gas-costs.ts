@@ -1,5 +1,5 @@
-import { bigintToSafeNumber, zeroAddress } from '@zoltar/shared/ethereum'
-import type { Hash } from '@zoltar/shared/ethereum'
+import { bigintToSafeNumber, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import type { Hash } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_openOracle_OpenOracle_OpenOracle, Zoltar_Zoltar } from './types/contractArtifact'
 import { createAnvilNodeForConnectionMode, getGasCostsAnvilConnectionMode } from './testSupport/simulator/anvilNode'
 import { submitBid, refundLosingBids } from './testSupport/simulator/utils/contracts/auction'
@@ -8,7 +8,7 @@ import { getPendingReportId, getRequestPriceCostAttoEth, migrateShares, openOrac
 import { manipulatePriceOracle, manipulatePriceOracleAndPerformOperation } from './testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { claimAuctionProceeds, claimForkedEscalationDeposits, createChildUniverse, finalizeTruthAuction, forkZoltarWithOwnEscalationGame, getSecurityPoolForkerForkData, initiateSecurityPoolFork, migrateRepToZoltar, migrateVault, startTruthAuction } from './testSupport/simulator/utils/contracts/securityPoolForker'
 import { createCompleteSet, depositRepToVault, depositToEscalationGame, getRepToken, redeemCompleteSet, redeemFees, redeemRepFromVault, redeemShares, updateVaultFees, withdrawFromEscalationGame } from './testSupport/simulator/utils/contracts/securityPool'
-import { ensureZoltarDeployed, forkUniverse, getTotalTheoreticalSupplyAttoRep, getZoltarAddress } from './testSupport/simulator/utils/contracts/zoltar'
+import { ensureZoltarDeployed, forkUniverse, getTotalTheoreticalSupply, getZoltarAddress } from './testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from './testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from './testSupport/simulator/utils/constants'
 import { addressString } from './testSupport/simulator/utils/bigint'
@@ -173,7 +173,7 @@ const confirmApproveAndDepositRepToVault = async (client: WriteClient, context: 
 
 const prepareEscalationFork = async (context: PoolContext) => {
 	const repToken = await getRepToken(alice, context.addresses.securityPool)
-	const forkThresholdAttoRep = (await getTotalTheoreticalSupplyAttoRep(alice, repToken)) / 20n
+	const forkThresholdAttoRep = (await getTotalTheoreticalSupply(alice, repToken)) / 20n
 	await anvil.setTime(context.questionData.endTime + 10_000n)
 	await manipulatePriceOracle(alice, anvil, context.addresses.priceOracleManagerAndOperatorQueuer)
 	await confirmTx(alice, approveToken(alice, addressString(GENESIS_REPUTATION_TOKEN), context.addresses.securityPool))

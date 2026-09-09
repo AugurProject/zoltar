@@ -1,3 +1,5 @@
+import type { JsonValue } from '../ethereum.ts'
+
 const MEBIBYTE = 1024 * 1024
 
 export const DEFAULT_RPC_RESPONSE_BYTES = 4 * MEBIBYTE
@@ -17,7 +19,7 @@ function declaredResponseLength(response: Response) {
 	return length
 }
 
-export async function boundedJsonResponse(response: Response, maximumBytes: number, label: string): Promise<unknown> {
+export async function boundedJsonResponse(response: Response, maximumBytes: number, label: string): Promise<JsonValue> {
 	if (!Number.isSafeInteger(maximumBytes) || maximumBytes < 1) throw new Error('JSON response byte limit must be a positive safe integer')
 	const maximumDescription = byteLimitDescription(maximumBytes)
 	const reader = response.body?.getReader()
@@ -48,5 +50,5 @@ export async function boundedJsonResponse(response: Response, maximumBytes: numb
 		body.set(chunk, offset)
 		offset += chunk.byteLength
 	}
-	return JSON.parse(new TextDecoder().decode(body)) as unknown
+	return JSON.parse(new TextDecoder().decode(body)) as JsonValue
 }

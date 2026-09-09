@@ -3,16 +3,16 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { render } from 'preact'
-import { SecurityPoolsOverviewSection } from '../../../features/security-pools/components/SecurityPoolsOverviewSection.js'
-import { deriveHasForkActivity } from '../../../features/truth-auctions/lib/forkAuction.js'
-import { getWalletScopedAccountAddress } from '@zoltar/ui-core-shared/lib/network.js'
-import type { AccountState } from '@zoltar/ui-zoltar/types/app.js'
+import { SecurityPoolsOverviewSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolsOverviewSection.js'
+import { deriveHasForkActivity } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/forkAuction.js'
+import { getWalletScopedAccountAddress } from '@zoltar/ui-core-shared/wallet/network.js'
+import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import type { ListedSecurityPool, MarketDetails, SecurityPoolBrowsePage, SecurityPoolPage } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { SecurityPoolsOverviewSectionProps } from '@zoltar/ui-zoltar/features/types.js'
+import type { SecurityPoolsOverviewSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { act } from 'preact/test-utils'
-import { zeroAddress } from '@zoltar/shared/ethereum'
+import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
@@ -193,11 +193,33 @@ describe('SecurityPoolsOverviewSection', () => {
 		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ activeUniverseId: 1n, securityPools: [sameUniversePool, mismatchedPool] })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const alerts = within(document.body).getAllByRole('alert')
-		expect(alerts).toHaveLength(1)
-		expect(alerts[0]?.textContent).toContain('Universe Mismatch')
-		expect(alerts[0]?.textContent).toContain('This pool belongs to 0xb, while the header shows 0x1.')
-		expect(getSecurityPoolCard('Same universe pool').textContent).not.toContain('Universe Mismatch')
+		expect(within(document.body).queryByText('Mismatched pool')).toBeNull()
+		await act(async () => {
+			fireEvent.change(within(document.body).getByRole('combobox', { name: 'Universe' }), { target: { value: 'all' } })
+		})
+		expect(getSecurityPoolCard('Mismatched pool').textContent).toContain('This pool belongs to universe 0xb')
+		expect(getSecurityPoolCard('Same universe pool').textContent).not.toContain('This pool belongs')
+	})
+
+	test('keeps a selected universe visible when a replacement page has no pools in that universe', async () => {
+		const view = (environmentRefreshKey: number, securityPools: ListedSecurityPool[]) => <SecurityPoolsOverviewSection {...createProps({ environmentRefreshKey, securityPools })} />
+		const renderedComponent = await renderIntoDocument(view(0, [createSecurityPool({ universeId: 11n })]))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await act(async () => {
+			fireEvent.change(within(document.body).getByRole('combobox', { name: 'Universe' }), { target: { value: '11' } })
+		})
+		await act(async () => {
+			render(view(1, [createSecurityPool({ universeId: 1n })]), renderedComponent.container)
+		})
+		const selector = document.querySelector<HTMLSelectElement>('.filter-toolbar select')
+		if (selector === null) throw new Error('Expected universe selector')
+		expect(selector.value).toBe('11')
+		expect(selector.selectedOptions[0]?.textContent).toBe('0xb')
+		expect(within(document.body).getByText('No pools match the current search and filter settings.')).toBeDefined()
+		await act(async () => {
+			fireEvent.change(selector, { target: { value: 'current' } })
+		})
+		expect(getSecurityPoolCard('Will this resolve?')).toBeDefined()
 	})
 
 	test('renders oracle-priced ETH minting capacity separately from REP ownership', async () => {
@@ -276,8 +298,8 @@ describe('SecurityPoolsOverviewSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(within(document.body).getByRole('button', { name: `Open pool: Will this resolve? (${firstAddress})` })).not.toBeNull()
-		expect(within(document.body).getByRole('button', { name: `Open pool: Will this resolve? (${secondAddress})` })).not.toBeNull()
+		expect(within(document.body).getByRole('link', { name: `Open pool: Will this resolve? (${firstAddress})` })).not.toBeNull()
+		expect(within(document.body).getByRole('link', { name: `Open pool: Will this resolve? (${secondAddress})` })).not.toBeNull()
 	})
 
 	test('preserves the pool universe when opening a child-universe pool', async () => {
@@ -286,11 +308,11 @@ describe('SecurityPoolsOverviewSection', () => {
 			universeId: 11n,
 		})
 		const onSelectSecurityPool = mock((..._args: unknown[]) => undefined)
-		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ onSelectSecurityPool, securityPools: [pool] })} />)
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ activeUniverseId: 11n, onSelectSecurityPool, securityPools: [pool] })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			fireEvent.click(within(document.body).getByRole('button', { name: 'Open pool: Will this resolve? (0x0000000000000000000000000000000000000101)' }))
+			fireEvent.click(within(document.body).getByRole('link', { name: 'Open pool: Will this resolve? (0x0000000000000000000000000000000000000101)' }))
 		})
 
 		expect(onSelectSecurityPool).toHaveBeenCalledWith(pool.securityPoolAddress, 11n)

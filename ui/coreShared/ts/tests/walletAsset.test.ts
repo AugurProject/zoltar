@@ -1,8 +1,8 @@
 /// <reference types='bun-types' />
 
 import { describe, expect, mock, test } from 'bun:test'
-import { getAddress, type Address } from '@zoltar/shared/ethereum'
-import { requestWalletWatchAsset, type WalletAssetMetadata, type WalletAssetRequest } from '../lib/walletAsset.js'
+import { getAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { requestWalletWatchAsset, type WalletAssetMetadata, type WalletAssetRequest } from '../wallet/walletAsset.js'
 
 const GENESIS_REP_ADDRESS = '0x221657776846890989a759ba2973e427dff5c9bb'
 const CHILD_REP_ADDRESS = '0x00000000000000000000000000000000000000a1'

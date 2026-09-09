@@ -3,23 +3,23 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>Operator guardrails</title>
+		<title>Statoblast operator reference</title>
 		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 		<link rel="stylesheet" href="../assets/css/docsShell.css" />
 	</head>
 	<body class="doc-openoracle reference-page">
 		<main>
 			<article>
-				<h1 id="statoblast-operator-reference">Statoblast Operator Reference</h1>
-				<p>Operators, indexers, reviewers, and UI maintainers consult this reference for contract-accurate guardrails, launch procedures, and edge-case behavior in one subsystem at a time. The explanations carry the full protocol story.</p>
-				<p>Each section answers a different operational question: how the immutable launch posture constrains releases, what a security pool or escalation game will and will not accept, how fork migration behaves, how auction settlement works, and how the REP/ETH coordinator stages or recovers operations.</p>
+				<h1 id="statoblast-operator-reference">Statoblast operator reference</h1>
+				<p>Operators, indexers, reviewers, and user interface (UI) maintainers consult this reference for contract-accurate guardrails, launch procedures, and edge-case behavior in one subsystem at a time. The broader protocol lifecycle appears in the explanation pages.</p>
+				<p>Each section answers a different operational question: how the immutable launch posture constrains releases, what a security pool or Escalation Game will and will not accept, how fork migration behaves, how auction settlement works, and how the Reputation-to-Ether (REP/ETH) coordinator stages or recovers operations.</p>
 				<p>Implementation guardrails map to their contract sources so operators can check each rule against the exact Solidity implementation.</p>
-				<p>The <a href="./invariants.html">Protocol Invariants</a> catalog connects those local guardrails to cross-contract conservation, lifecycle, liveness, and economic security properties, including launch-critical properties that the current contracts do not preserve.</p>
+				<p>The <a href="./invariants.html">Protocol Invariants</a> catalog connects those local guardrails to automated release checks, cross-contract conservation, lifecycle, liveness, and the explicitly stated economic assumptions.</p>
 				<p>The <a href="./security-model.html">Protocol Security Model</a> is normative for the protocol's external assumptions.</p>
-				<h2 id="security-review-orientation">Security Review Orientation</h2>
+				<h2 id="security-review-orientation">Security review orientation</h2>
 				<p>Before classifying an economic or liveness concern, use the security model's <a href="./security-model.html">grouped assumptions</a> to identify external dependencies, then follow its canonical mechanics links. The invariant catalog owns the current requirement, status, and evidence for <a href="./invariants.html#ext-05"><code>EXT-05</code> recursive-fork gas behavior</a>.</p>
-				<p>Operator work relies particularly on <a href="./security-model.html#assumption-a23">A23 verified deployments</a>, <a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>, <a href="./security-model.html#assumption-a20">A20 chain-data and proof availability</a>, <a href="./security-model.html#assumption-a26">A26 Ethereum execution and finality</a>, <a href="./security-model.html#assumption-a27">A27 cryptographic security</a>, <a href="./security-model.html#assumption-a15">A15 intended question selection</a>, <a href="./security-model.html#assumption-a25">A25 safe immutable parameters</a>, <a href="./security-model.html#assumption-a22">A22 asset-recipient compatibility</a>, <a href="./security-model.html#assumption-a24">A24 client, RPC, and wallet integrity</a>, and <a href="./security-model.html#assumption-a28">A28 account authority</a>.</p>
-				<h2 id="assumption-monitoring">Assumption Monitoring</h2>
+				<p>Operator work relies particularly on <a href="./security-model.html#assumption-a23">A23 verified deployments</a>, <a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>, <a href="./security-model.html#assumption-a20">A20 chain-data and proof availability</a>, <a href="./security-model.html#assumption-a26">A26 Ethereum execution and finality</a>, <a href="./security-model.html#assumption-a27">A27 cryptographic security</a>, <a href="./security-model.html#assumption-a15">A15 intended question selection</a>, <a href="./security-model.html#assumption-a25">A25 safe immutable parameters</a>, <a href="./security-model.html#assumption-a22">A22 asset-recipient compatibility</a>, <a href="./security-model.html#assumption-a24">A24 client, remote procedure call (RPC), and wallet integrity</a>, and <a href="./security-model.html#assumption-a28">A28 account authority</a>.</p>
+				<h2 id="assumption-monitoring">Assumption monitoring</h2>
 				<p>The security model is the canonical definition of each boundary. This table assigns operational evidence and response for assumptions whose truth can change with market or service conditions. Evaluate each signal at the same lineage, pool, timestamp, numeraire, and decision horizon as the protected action.</p>
 				<table>
 					<thead>
@@ -59,7 +59,7 @@
 							<td>A12</td>
 							<td>Auction demand, indicative REP/ETH depth, expected discount, and bidder operating cost</td>
 							<td>Before and during every repair auction</td>
-							<td>Disclose likely under-repair and plan operation of the child at only migrated collateral plus accepted auction ETH</td>
+							<td>Disclose likely incomplete repair and plan operation of the child at only migrated collateral plus accepted auction ETH</td>
 						</tr>
 						<tr>
 							<td>A16, A26</td>
@@ -69,13 +69,13 @@
 						</tr>
 						<tr>
 							<td>A17, A18, A19</td>
-							<td>Independent corrector availability, ownership and payoff independence, scenario-dependent WETH and REP replacement capital, reference-market depth, manipulation cost, correction profit after fees/gas/impact, transaction budget, and settlement inclusion</td>
+							<td>Independent corrector availability, ownership and payoff independence, scenario-dependent wrapped Ether (WETH) and REP replacement capital, reference-market depth, manipulation cost, correction profit after fees, gas, and price impact, transaction budget, and settlement inclusion</td>
 							<td>Continuously while a report is pending or a cached price can authorize operations</td>
 							<td>Block or discourage new price-sensitive operations and disclose that an incorrect report may settle</td>
 						</tr>
 						<tr>
 							<td>A21, A22</td>
-							<td>Mainnet external-token code and behavior; Sepolia reviewed Genesis REP/WETH runtime bytecode, constructor allocations, and wiring; WETH redeemability; burn-sink status; recipient ETH/ERC-1155 compatibility</td>
+							<td>Mainnet external-token code and behavior; reviewed Sepolia genesis REP/WETH runtime bytecode, constructor allocations, and wiring; WETH redeemability; burn-sink status; recipient ETH and Ethereum Request for Comments 1155 (ERC-1155) compatibility</td>
 							<td>At deployment verification and before first use of a new recipient or integration</td>
 							<td>Reject the deployment or incompatible recipient; do not rely on redirected recovery</td>
 						</tr>
@@ -99,16 +99,16 @@
 						</tr>
 					</tbody>
 				</table>
-				<h2 id="immutable-protocol-release-posture">Immutable Protocol Release Posture</h2>
-				<p>Zoltar and Statoblast are intended to launch as immutable, permissionless contracts. Launch documentation should not assume an operator can pause, upgrade, roll back, or disable protocol behavior after deployment. Release work should instead publish verifiable provenance: final commit and tag, deterministic addresses, CI and local QA results, production UI artifact hash, and any known limitations. UI deployments may describe data freshness and route users to verified artifacts, but they must not be documented as emergency controls over the protocol. This is the protocol's <a href="./security-model.html#excluded-guarantee-eg05">EG05 no-pause, upgrade, rollback, or rescue boundary</a>.</p>
-				<h2 id="launch-release-checklist">Launch Release Checklist</h2>
-				<p>Before tagging a launch release, run <code>bun run ui:build:prod</code> from a fresh dependency install and run <code>bun run check:mainnet-deployment</code>. This command fails when either generated deployment manifest is stale. Refresh and review both manifests with <code>bun ./scripts/check-mainnet-deployment.mts --write</code> before rerunning the check. That command writes and checks both <a href="../mainnet-deployment-addresses.json"><code>mainnet-deployment-addresses.json</code></a> and <a href="../sepolia-deployment-addresses.json"><code>sepolia-deployment-addresses.json</code></a>. Use the pinned compiler configuration in <a href="../../solidity/ts/compile.ts"><code>solidity/ts/compile.ts</code></a>, the exact tool versions in <a href="../../solidity/package.json"><code>solidity/package.json</code></a>, and the imported OpenOracle profile in <a href="../../solidity/contracts/statoblast/openOracle/UPSTREAM.md"><code>UPSTREAM.md</code></a>. Publish the reproducible-build runtime hashes with the release, keyed to the manifest addresses, and compare both a clean local rebuild and deployed runtime code with those reviewed hashes before marking the release canonical. Push the final <code>v*</code> tag only after the CI Gate succeeds on the same commit. The <code>Build and Push to IPFS</code> workflow must succeed for that tag, and the resulting GitHub release must record the IPFS hash emitted from the published artifact.</p>
-				<p>Production UI release notes should state that <code>?simulate=1</code> is a browser-local sandbox. Mainnet and Sepolia quote-dependent actions use live RPC data plus available network-local Uniswap liquidity, while simulation uses its configured mock where supported. The <a href="../explanation/open-oracle.html#openoracle-role">OpenOracle integration guide</a> owns the quote-source order and network-address details. RPC and client integrity remain covered by <a href="./security-model.html#assumption-a24">A24</a>, while quote availability and representativeness are official-client limitations rather than protocol security assumptions. Stale, unavailable, or unsupported quotes are production blockers for the affected client action, not inputs that should be replaced with simulation prices.</p>
-				<h2 id="genesis-rep-deployment">Genesis REP Deployment</h2>
-				<p>Sepolia genesis REP allocations are canonical source data in <a href="../../shared/ts/sepoliaRepAllocations.ts"><code>sepoliaRepAllocations.ts</code></a>. The configured 11 million REP mint cap is divided equally among the listed holders; adding a holder automatically reduces every holder's allocation. Integer division may leave the total minted supply below the cap by less than one attoREP per holder. Review both the holder list and the computed bigint total before deployment. The <code>GenesisReputationToken</code> constructor requires at least one allocation, matching holder and balance array lengths, unique nonzero holders, nonzero balances, and a total supply no greater than 11 million REP. It emits the standard ERC-20 mint <code>Transfer</code> event once for each allocation.</p>
-				<p>The sum of the constructor balances is immutable and is returned by <code>getTotalTheoreticalSupplyAttoRep()</code>. There is no administrator, post-deployment mint, allocation correction, or recovery entrypoint. An incorrect allocation must be fixed in the source list before deployment and the deterministic manifests must then be regenerated. Because constructor arguments are part of CREATE2 init code, any allocation change produces a new genesis REP address and new addresses for every deployment step whose constructor wiring depends on it. Never continue a deployment from a manifest generated for a different allocation list. A future release that intentionally changes starting holders must follow the same source review and full-manifest regeneration procedure.</p>
-				<h2 id="security-pool-guardrails">Security Pool Guardrails</h2>
-				<p>Pool creation, minting, withdrawal, and direct-ETH rules are collected here in contract-first form. Participant-controlled payout and share-receiving addresses must satisfy <a href="./security-model.html#assumption-a22">A22 asset-recipient compatibility</a>. Deterministic identity depends on <a href="./security-model.html#assumption-a27">A27 cryptographic security</a>, while vault and token authority depends on <a href="./security-model.html#assumption-a28">A28 account authority</a>.</p>
+				<h2 id="immutable-protocol-release-posture">Immutable protocol release posture</h2>
+				<p>Zoltar and Statoblast are intended to launch as immutable, permissionless contracts. Launch documentation should not assume an operator can pause, upgrade, roll back, or disable protocol behavior after deployment. Release work should instead publish verifiable provenance: final commit and tag, deterministic addresses, continuous integration (CI) and local quality assurance (QA) results, production UI artifact hash, and any known limitations. UI deployments may describe data freshness and route users to verified artifacts, but they must not be documented as emergency controls over the protocol. This is the protocol's <a href="./security-model.html#excluded-guarantee-eg05">EG05 no-pause, upgrade, rollback, or rescue boundary</a>.</p>
+				<h2 id="launch-release-checklist">Launch release checklist</h2>
+				<p>Before tagging a launch release, run <code>bun run ui:build:prod</code> from a fresh dependency install and run <code>bun run check:mainnet-deployment</code>. This command fails when either generated deployment manifest is stale. Refresh and review both manifests with <code>bun ./tooling/contracts/check-mainnet-deployment.mts --write</code> before rerunning the check. That command writes and checks both <a href="../mainnet-deployment-addresses.json"><code>mainnet-deployment-addresses.json</code></a> and <a href="../sepolia-deployment-addresses.json"><code>sepolia-deployment-addresses.json</code></a>. Use the pinned compiler configuration in <a href="../../solidity/ts/compile.ts"><code>solidity/ts/compile.ts</code></a>, the exact tool versions in <a href="../../solidity/package.json"><code>solidity/package.json</code></a>, and the imported OpenOracle profile in <a href="../../solidity/contracts/statoblast/openOracle/UPSTREAM.md"><code>UPSTREAM.md</code></a>. Publish the reproducible-build runtime hashes with the release, keyed to the manifest addresses, and compare both a clean local rebuild and deployed runtime code with those reviewed hashes before marking the release canonical. Push the final <code>v*</code> tag only after the CI gate succeeds on the same commit. The <code>Build and Push to IPFS</code> workflow must succeed for that tag. The resulting GitHub release must record the InterPlanetary File System (IPFS) hash emitted from the published artifact.</p>
+				<p>Production UI release notes should state that <code>?simulate=1</code> is a browser-local sandbox. Mainnet and Sepolia quote-dependent actions use live RPC data plus available network-local Uniswap liquidity, while simulation uses its configured mock where supported. RPC and client integrity remain covered by <a href="./security-model.html#assumption-a24">A24</a>, while quote availability and representativeness are official-client limitations rather than protocol security assumptions. Stale, unavailable, or unsupported quotes are production blockers for the affected client action, not inputs that should be replaced with simulation prices.</p>
+				<h2 id="genesis-rep-deployment">Genesis REP deployment</h2>
+				<p>Sepolia genesis REP allocations are canonical source data in <a href="../../shared/zoltar/ts/deployment/sepoliaRepAllocations.ts"><code>sepoliaRepAllocations.ts</code></a>. The configured 11 million REP mint cap is divided equally among the listed holders; adding a holder automatically reduces every holder's allocation. Integer division may leave the total minted supply below the cap by less than one attoREP per holder. Review both the holder list and the computed total before deployment. The <code>GenesisReputationToken</code> constructor requires at least one allocation, matching holder and balance array lengths, unique nonzero holders, nonzero balances, and a total supply no greater than 11 million REP. It emits the standard ERC-20 mint <code>Transfer</code> event once for each allocation.</p>
+				<p>The sum of the constructor balances is immutable and is returned by the REPv2-compatible <code>getTotalTheoreticalSupply()</code> selector. There is no administrator, post-deployment mint, allocation correction, or recovery entrypoint. An incorrect allocation must be fixed in the source list before deployment and the deterministic manifests must then be regenerated. Because constructor arguments are part of CREATE2 init code, any allocation change produces a new genesis REP address and new addresses for every deployment step whose constructor wiring depends on it. Never continue a deployment from a manifest generated for a different allocation list. A future release that intentionally changes starting holders must follow the same source review and full-manifest regeneration procedure.</p>
+				<h2 id="security-pool-guardrails">Security pool guardrails</h2>
+				<p>The following pool-creation, minting, withdrawal, and direct-ETH rules are enforced by contracts. Participant-controlled payout and share-receiving addresses must satisfy <a href="./security-model.html#assumption-a22">A22 asset-recipient compatibility</a>. Deterministic identity depends on <a href="./security-model.html#assumption-a27">A27 cryptographic security</a>, while vault and token authority depends on <a href="./security-model.html#assumption-a28">A28 account authority</a>.</p>
 				<table>
 					<thead>
 						<tr>
@@ -210,7 +210,7 @@
 						</tr>
 					</tbody>
 				</table>
-				<h2 id="share-migration">Share Migration</h2>
+				<h2 id="share-migration">Share migration</h2>
 				<p>Share migration after a fork is user-facing asset migration, not vault REP migration. Canonical rules live in <a href="./invariants.html#fork-10"><code>FORK-10</code></a> for persistent per-child materialization, <a href="./invariants.html#share-04"><code>SHARE-04</code></a> for the economic-claim denominator, and <a href="./invariants.html#fork-11"><code>FORK-11</code></a> for unequal materialized supplies.</p>
 				<table>
 					<thead>
@@ -269,8 +269,8 @@
 						</tr>
 					</tbody>
 				</table>
-				<h2 id="escalation-resolution-and-deposits">Escalation Resolution and Deposits</h2>
-				<p>Accepted deposits, edge-case resolution results, and carry-proof or residual-REP consumption all live in this section.</p>
+				<h2 id="escalation-resolution-and-deposits">Escalation resolution and deposits</h2>
+				<p>This section specifies accepted deposits, edge-case resolution results, and the consumption of carry proofs or residual REP.</p>
 				<table>
 					<thead>
 						<tr>
@@ -386,7 +386,7 @@
 						</tr>
 						<tr>
 							<td>Continuation withdrawal</td>
-							<td>Anyone may relay a batch of winning carried proofs for one depositor after a child continuation resolves. A proof authenticates the original deposit and consumes its stable index once; the committed depositor remains the payout address. One mantissa/exponent ratio applies every intervening auction haircut exactly once to both proof amount and cumulative reward position without walking ancestors, and excludes losses before a continuation-local deposit was created. Consumption asks the immediate source game for retained cumulative-prefix differences, so per-leaf source-basis allocations telescope exactly to the aggregate checkpoint in every proof order. Inherited losing outcomes retire in constant-size work when the result is final and require no proof transaction; locally created losing deposits retain ordinary settlement. Child initialization freezes the carry root/count and retention metadata and performs no claim or owner import. The 64 MMR peaks are a logarithmic frontier, not a participant cap. Continuation resumes in one bounded call once aggregate backing is complete, and liquidation never processes or moves claims.</td>
+							<td>Anyone may relay a batch of winning carried proofs for one depositor after a child continuation resolves. A proof authenticates the original deposit and consumes its stable index once; the committed depositor remains the payout address. One mantissa/exponent ratio applies every intervening auction haircut exactly once to both proof amount and cumulative reward position without walking ancestors, and excludes losses before a continuation-local deposit was created. Consumption asks the immediate source game for retained cumulative-prefix differences, so per-leaf source-basis allocations telescope exactly to the aggregate checkpoint in every proof order. Inherited losing outcomes retire in constant-size work when the result is final and require no proof transaction; locally created losing deposits retain ordinary settlement. Child initialization freezes the carry root/count and retention metadata and performs no claim or owner import. The 64 Merkle Mountain Range (MMR) peaks are a logarithmic frontier, not a participant cap. Continuation resumes in one bounded call once aggregate backing is complete, and liquidation never processes or moves claims.</td>
 							<td>
 								<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>SecurityPool.withdrawForkedEscalationDeposits</code></a
 								>, <a href="../../solidity/contracts/statoblast/EscalationGameSettlement.sol"><code>EscalationGameSettlement.withdrawDeposit</code></a
@@ -411,8 +411,8 @@
 						</tr>
 					</tbody>
 				</table>
-				<h2 id="fork-migration">Fork Migration</h2>
-				<p>Pool-level migration mechanics after a universe fork live here: proxies, child-pool creation, pool-proxy REP splitting, and child outcome selection.</p>
+				<h2 id="fork-migration">Fork migration</h2>
+				<p>This section specifies pool-level migration after a universe fork: proxies, child-pool creation, pool-proxy REP splitting, and child outcome selection.</p>
 				<table>
 					<thead>
 						<tr>
@@ -439,7 +439,7 @@
 						</tr>
 						<tr>
 							<td>Vault fees during migration</td>
-							<td>Migration uses one fixed, fee-exclusive snapshot and a cumulative REP ceiling. The parent vault is checkpointed before its capacity ownership is cleared, so earned fees remain redeemable, and parent-to-child ETH transfers cannot consume the balance reserved by <code>totalAccruedFeesAttoEth()</code>. The <a href="../explanation/statoblast.html#migration">Fork Migration Proportion</a> and <a href="../explanation/statoblast.html#migration">Fork Collateral Ceiling</a> own checkpoint order, cumulative allocation, and repair derivation.</td>
+							<td>Migration uses one fixed, fee-exclusive snapshot and a cumulative REP ceiling. The parent vault is checkpointed before its capacity ownership is cleared, so earned fees remain redeemable, and parent-to-child ETH transfers cannot consume the balance reserved by <code>totalAccruedFeesAttoEth()</code>. The invariant catalog specifies <a href="./invariants.html#bal-07"><code>BAL-07</code> fee-reserve protection</a>, <a href="./invariants.html#fork-09"><code>FORK-09</code> cumulative child collateral</a>, and <a href="./invariants.html#fork-08"><code>FORK-08</code> continuation backing</a>.</td>
 							<td><a href="../../solidity/contracts/statoblast/SecurityPoolForker.sol">SecurityPoolForker.sol</a>, <a href="../../solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationBase.sol">SecurityPoolForkerVaultMigrationBase.sol</a>, <a href="../../solidity/contracts/statoblast/SecurityPool.sol">SecurityPool.sol</a></td>
 						</tr>
 						<tr>
@@ -459,7 +459,7 @@
 						<tr>
 							<td>Aggregate escalation backing</td>
 							<td>
-								An external unrelated fork reproduces the drained game's dispute-staked REP one-for-one in each selected child. The escalation's own fork transfers post-haircut aggregate backing instead; ordinary pool-held REP remains one-to-one. Each selected child receives its applicable aggregate backing once, and <code>resumeFromFork</code> remains paused until that backing is present after accounting for child REP already exported by valid direct pre-resume claims. See the canonical <a href="../explanation/statoblast.html#migration">fork-migration derivation</a> and <a href="./invariants.html#fork-08"><code>FORK-08</code></a> for the raw and effective principal definitions and exact funding bound. Neither path scales or releases per-vault child escrow.
+								An external unrelated fork reproduces the drained game's dispute-staked REP one-for-one in each selected child. The escalation's own fork transfers post-haircut aggregate backing instead; ordinary pool-held REP remains one-to-one. Each selected child receives its applicable aggregate backing once, and <code>resumeFromFork</code> remains paused until that backing is present after accounting for child REP already exported by valid direct pre-resume claims. See <a href="./invariants.html#fork-08"><code>FORK-08</code></a> for the raw and effective principal definitions and exact funding bound. Neither path scales or releases per-vault child escrow.
 							</td>
 							<td>
 								<a href="../../solidity/contracts/statoblast/SecurityPoolForker.sol"><code>SecurityPoolForker.initiateSecurityPoolFork</code></a
@@ -487,7 +487,7 @@
 						</tr>
 						<tr>
 							<td>Independent continuation liveness</td>
-							<td>Child creation installs the canonical carry commitment, retention checkpoint, and aggregate backing without waiting for vault transactions or copying claims and owners. The fixed 64-peak MMR frontier is logarithmic commitment storage for up to <code>2^64 - 1</code> leaves, not a participant cap; see <a href="../reference/merkle-mountain-range.html#peaks">Merkle Mountain Range Carry Proofs</a>. Once the child is operational and fully funded, <code>resumeForkedEscalationGame</code> resumes it in one bounded permissionless call. Authenticated winning proofs can then be relayed permissionlessly to pay their committed depositors, inherited losers retire without proofs, and optional parent cleanup may happen independently.</td>
+							<td>Child creation installs the canonical carry commitment, retention checkpoint, and aggregate backing without waiting for vault transactions or copying claims and owners. The fixed 64-peak MMR frontier is logarithmic commitment storage for up to <code>2^64 - 1</code> leaves, not a participant cap; see <a href="../reference/merkle-mountain-range.html#peaks">Merkle Mountain Range carry-proof peaks</a>. Once the child is operational and fully funded, <code>resumeForkedEscalationGame</code> resumes it in one bounded permissionless call. Authenticated winning proofs can then be relayed permissionlessly to pay their committed depositors, inherited losers retire without proofs, and optional parent cleanup may happen independently.</td>
 							<td>
 								<a href="../../solidity/contracts/statoblast/SecurityPoolForkerBase.sol"><code>SecurityPoolForkerBase._finalizeAwaitingForkContinuationIfReady</code></a
 								>, <a href="../../solidity/contracts/statoblast/EscalationGameSettlement.sol"><code>EscalationGameSettlement.withdrawDeposit</code></a
@@ -510,7 +510,7 @@
 						</tr>
 						<tr>
 							<td>Matching-question child outcome</td>
-							<td>When the parent universe forks on the pool's question, the child stores its selected branch as a fixed result. <code>depositToEscalationGame</code> rejects new local deposits, and <code>activateForkMode</code> rejects every later pool fork transition. See <a href="../explanation/statoblast.html#child-outcome-resolution">Child Outcome Resolution</a> for the collateral and REP-liveness rationale.</td>
+							<td>When the parent universe forks on the pool's question, the child stores its selected branch as a fixed result. <code>depositToEscalationGame</code> rejects new local deposits, and <code>activateForkMode</code> rejects every later pool fork transition. See <a href="../explanation/statoblast.html#forks-migration">Child Outcome Resolution</a> for the collateral and REP-liveness rationale.</td>
 							<td><a href="../../solidity/contracts/statoblast/SecurityPool.sol">SecurityPool.sol</a>, <a href="../../solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationBase.sol">SecurityPoolForkerVaultMigrationBase.sol</a>, <a href="../../solidity/contracts/statoblast/SecurityPoolForker.sol">SecurityPoolForker.sol</a></td>
 						</tr>
 						<tr>
@@ -520,7 +520,7 @@
 						</tr>
 					</tbody>
 				</table>
-				<h2 id="truth-auction-operations">Truth Auction Operations</h2>
+				<h2 id="truth-auction-operations">Truth Auction operations</h2>
 				<p>Collateral-repair auctions have three operator-critical boundaries: forker ownership, a one-week bidding window, and paged settlement into vault accounting. Bids close at <code>auctionStarted + AUCTION_TIME</code>; direct auction finalization is allowed at <code>&gt;=</code> that boundary, but the public forker wrapper requires the boundary to have passed. The canonical clearing rules and examples are in <a href="../explanation/truth-auctions.html#clearing">Truth Auction</a>.</p>
 				<table>
 					<thead>
@@ -548,8 +548,8 @@
 						</tr>
 					</tbody>
 				</table>
-				<h2 id="repeth-oracle-operations">REP/ETH Oracle Operations</h2>
-				<p>The coordinator quick reference below covers staging, callback recovery, stale-operation handling, and liquidation boundaries. Report sizing, request cost, and current OpenOracle parameters are canonical in <a href="../explanation/open-oracle.html#parameters">OpenOracle Integration</a>.</p>
+				<h2 id="repeth-oracle-operations">REP/ETH oracle operations</h2>
+				<p>This section covers coordinator staging, callback recovery, stale-operation handling, and liquidation boundaries. Report sizing, request cost, and current OpenOracle parameters are canonical in <a href="./open-oracle.html#parameters">the OpenOracle integration parameters</a>.</p>
 				<table>
 					<thead>
 						<tr>
@@ -561,12 +561,12 @@
 					<tbody>
 						<tr>
 							<td>Atomic initial report</td>
-							<td>The sponsor funds the ETH bounty and WETH/REP position; the coordinator submits that position atomically as the initial reporter. A caller-selected WETH amount above the dynamic minimum is allowed. See <a href="../explanation/open-oracle.html#security-guarantee">OpenOracle sizing and funding</a> for derivation, reporter withdrawals, application buffering, and escalation effects.</td>
-							<td><a href="../../solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol">OpenOraclePriceCoordinator.sol</a>, <a href="../../ui/zoltar/ts/protocol/openOracle.ts">openOracle.ts</a></td>
+							<td>The sponsor funds the ETH bounty and WETH/REP position; the coordinator submits that position atomically as the initial reporter. A caller-selected WETH amount above the dynamic minimum is allowed. See <a href="./open-oracle.html#security-guarantee">OpenOracle sizing and funding</a> for derivation, reporter withdrawals, application buffering, and escalation effects.</td>
+							<td><a href="../../solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol">OpenOraclePriceCoordinator.sol</a>, <a href="../../ui/statoblastShared/ts/protocol/openOracle.ts">openOracle.ts</a></td>
 						</tr>
 						<tr>
 							<td>Immediate execution</td>
-							<td>If a price is still valid, the operation executes immediately and positive unused ETH is refunded. A contract caller must accept the refund callback or the execution rolls back; the <a href="../explanation/open-oracle.html#refund-callback">canonical refund warning</a> also covers newly opened reports.</td>
+							<td>If a price is still valid, the operation executes immediately and positive unused ETH is refunded. A contract caller must accept the refund callback or the execution rolls back; the <a href="./open-oracle.html#refund-callback">canonical refund warning</a> also covers newly opened reports.</td>
 							<td><a href="../../solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol">OpenOraclePriceCoordinator.sol</a></td>
 						</tr>
 						<tr>
@@ -581,8 +581,8 @@
 						</tr>
 						<tr>
 							<td>Delegated receiver approvals</td>
-							<td><code>LiquidationApprovalRegistry</code> supports direct receiver approvals and EIP-712 permits from EOAs or ERC-1271 wallets. An approval binds pool, receiver, exact operator, exact or wildcard target, cumulative and per-operation ETH debt limits, minimum post-health factor, validity window, and nonce. Revocation blocks new reservations without disturbing pending ones; nonce invalidation blocks stale approvals.</td>
-							<td><a href="../../solidity/contracts/statoblast/LiquidationApprovalRegistry.sol">LiquidationApprovalRegistry.sol</a>, <a href="../../ui/zoltar/ts/protocol/openOracle.ts">openOracle.ts</a></td>
+							<td><code>LiquidationApprovalRegistry</code> supports direct receiver approvals and Ethereum Improvement Proposal 712 (EIP-712) permits from externally owned accounts (EOAs) or ERC-1271 contract wallets. An approval binds pool, receiver, exact operator, exact or wildcard target, cumulative and per-operation ETH debt limits, minimum post-health factor, validity window, and nonce. Revocation blocks new reservations without disturbing pending ones; nonce invalidation blocks stale approvals.</td>
+							<td><a href="../../solidity/contracts/statoblast/LiquidationApprovalRegistry.sol">LiquidationApprovalRegistry.sol</a>, <a href="../../ui/statoblastShared/ts/protocol/openOracle.ts">openOracle.ts</a></td>
 						</tr>
 						<tr>
 							<td>Approval reservation lifecycle</td>
@@ -596,7 +596,7 @@
 						</tr>
 						<tr>
 							<td>Sponsor exclusivity</td>
-							<td>Once the cached price is stale and a caller funds a fresh coordinator report, only that <code>pendingReportSponsor</code> can append more staged operations until settlement. Valid disputes reset the settlement clock, so this paid exclusive lane can be extended indefinitely; the coordinator makes no bounded-availability guarantee. The <a href="../explanation/open-oracle.html#intentional-economic-tradeoffs">economic tradeoffs</a>, <a href="../explanation/open-oracle.html#attack-model">attack model</a>, and <a href="../explanation/open-oracle.html#parameters">parameter table</a> own dispute funding, escalation, and rounding details.</td>
+							<td>Once the cached price is stale and a caller funds a fresh coordinator report, only that <code>pendingReportSponsor</code> can append more staged operations until settlement. Valid disputes reset the settlement clock, so this paid exclusive lane can be extended indefinitely; the coordinator makes no bounded-availability guarantee. The <a href="./open-oracle.html#intentional-economic-tradeoffs">economic tradeoffs</a>, <a href="./open-oracle.html#attack-model">attack model</a>, and <a href="./open-oracle.html#parameters">parameter table</a> own dispute funding, escalation, and rounding details.</td>
 							<td><a href="../../solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol">OpenOraclePriceCoordinator.sol</a>, <a href="../../solidity/contracts/statoblast/openOracle/OpenOracle.sol">OpenOracle.sol</a></td>
 						</tr>
 						<tr>
@@ -636,8 +636,8 @@
 						</tr>
 					</tbody>
 				</table>
-				<h2 id="support-module-inventory">Support Module Inventory</h2>
-				<p>The explanation focuses on protocol flow. The table below names the remaining support contracts that matter for integrators, code reviewers, and interface inventory work.</p>
+				<h2 id="support-module-inventory">Support module inventory</h2>
+				<p>The explanation pages focus on protocol flow. The following table identifies the remaining support contracts that matter for integrators, code reviewers, and interface inventory work.</p>
 				<h3 id="caller-and-trust-boundaries">Caller and trust boundaries</h3>
 				<p>Deployment helpers are not interchangeable with canonical protocol discovery. Several are intentionally permissionless and namespace <code>CREATE2</code> salts by <code>msg.sender</code>; an application must discover canonical instances through <code>SecurityPoolFactory</code>, recognized pools, and recognized forker events rather than treating every factory-created address as canonical.</p>
 				<table>
@@ -717,12 +717,12 @@
 						<tr>
 							<td><code>calculateFeeAccrual(settlementCollateralAttoEth, retentionRate, timeDelta, indexRemainder, feeEligibleCapacityOwnershipAttoRep, feesOwedRemainder)</code></td>
 							<td>Applies fixed-point retention over elapsed time, carries the global index remainder, and returns whole credited fees plus the next fee remainder. Canonical callers avoid zero eligible capacity ownership before this division.</td>
-							<td><a href="../explanation/statoblast.html#pools">Fee accrual</a></td>
+							<td><a href="../explanation/fees.html">Fee accrual</a></td>
 						</tr>
 						<tr>
 							<td><code>calculateVaultFee(capacityOwnershipAttoRep, feeIndexDelta, remainder)</code></td>
 							<td>Floors the vault's whole fee credit and returns the remaining fixed-point numerator for its next checkpoint.</td>
-							<td><a href="../explanation/statoblast.html#pools">Fee accrual</a></td>
+							<td><a href="../explanation/fees.html">Fee accrual</a></td>
 						</tr>
 						<tr>
 							<td><code>calculateMintingCapacityAttoEth(capacityOwnershipAttoRep, repEthPrice, securityMultiplierBps)</code></td>
@@ -747,7 +747,7 @@
 						<tr>
 							<td><code>calculateRetentionRate(settlementCollateralAttoEth, mintingCapacityAttoEth)</code></td>
 							<td>Zero live minting capacity returns the maximum retention rate. Otherwise retention decreases linearly through the 80% utilization dip and remains at the minimum rate above it.</td>
-							<td><a href="../explanation/statoblast.html#pools">Retention rate</a></td>
+							<td><a href="../explanation/fees.html">Retention rate</a></td>
 						</tr>
 					</tbody>
 				</table>
@@ -797,13 +797,14 @@
 							<td>
 								<a href="../../solidity/contracts/ERC20.sol"><code>ERC20.sol</code></a
 								>, <a href="../../solidity/contracts/IERC20.sol"><code>IERC20.sol</code></a
+								>, <a href="../../solidity/contracts/IExternalGenesisReputationToken.sol"><code>IExternalGenesisReputationToken.sol</code></a
 								>, <a href="../../solidity/contracts/IERC20Metadata.sol"><code>IERC20Metadata.sol</code></a
 								>, <a href="../../solidity/contracts/Context.sol"><code>Context.sol</code></a
 								>, <a href="../../solidity/contracts/SafeERC20Ops.sol"><code>SafeERC20Ops.sol</code></a
 								>, <a href="../../solidity/contracts/GenesisReputationToken.sol"><code>GenesisReputationToken.sol</code></a
 								>, <a href="../../solidity/contracts/ReputationToken.sol"><code>ReputationToken.sol</code></a>
 							</td>
-							<td>Base REP token implementation, interfaces, metadata, execution context, safe transfer wrappers, the constructor-allocated genesis token with fixed theoretical supply, and the inherited <code>transfer</code>, <code>approve</code>, and <code>transferFrom</code> entrypoints.</td>
+							<td>Base REP token implementation, ERC-20 and external genesis REPv2 interfaces, metadata, execution context, safe transfer wrappers, the constructor-allocated genesis token with fixed theoretical supply, and the inherited <code>transfer</code>, <code>approve</code>, and <code>transferFrom</code> entrypoints.</td>
 						</tr>
 						<tr>
 							<td>ERC-1155 and token ids</td>
@@ -849,7 +850,7 @@
 								>, <a href="../../solidity/contracts/statoblast/SecurityPoolEventEmitter.sol"><code>SecurityPoolEventEmitter.sol</code></a> , <a href="../../solidity/contracts/statoblast/LiquidationApprovalRegistry.sol"><code>LiquidationApprovalRegistry.sol</code></a
 								>, <a href="../../solidity/contracts/statoblast/SignatureValidation.sol"><code>SignatureValidation.sol</code></a>
 							</td>
-							<td>Defines shared pool storage, delegated liquidation accounting and bounded approval reservations, ECDSA/ERC-1271 signature validation, funded continuation delegatecalls, fork-time state, truth-auction settlement, vault and unresolved-escalation migration, event encoding, and stable proxy identity used while routing parent state into child pools.</td>
+							<td>Defines shared pool storage, delegated liquidation accounting and bounded approval reservations, Elliptic Curve Digital Signature Algorithm (ECDSA) and ERC-1271 signature validation, funded continuation delegatecalls, fork-time state, truth-auction settlement, vault and unresolved-escalation migration, event encoding, and stable proxy identity used while routing parent state into child pools.</td>
 						</tr>
 						<tr>
 							<td>Protocol interfaces</td>
@@ -887,6 +888,7 @@
 							<td>Trading protocol</td>
 							<td>
 								<a href="../../solidity/contracts/trading/PredeploymentShareSink.sol"><code>PredeploymentShareSink.sol</code></a
+								>, <a href="../../solidity/contracts/trading/TradingLiquidityToken.sol"><code>TradingLiquidityToken.sol</code></a
 								>, <a href="../../solidity/contracts/trading/TwoWayConstantProductFactory.sol"><code>TwoWayConstantProductFactory.sol</code></a
 								>, <a href="../../solidity/contracts/trading/TwoWayConstantProductMath.sol"><code>TwoWayConstantProductMath.sol</code></a
 								>, <a href="../../solidity/contracts/trading/TwoWayConstantProductPair.sol"><code>TwoWayConstantProductPair.sol</code></a
@@ -896,7 +898,17 @@
 								>, <a href="../../solidity/contracts/trading/interfaces/ITwoWayConstantProductPair.sol"><code>ITwoWayConstantProductPair.sol</code></a
 								>.
 							</td>
-							<td>Deterministic two-outcome pool deployment, constant-product pricing and reserves, routed liquidity and swap operations, canonical Statoblast share-token integration, and quarantine of shares sent to counterfactual pair addresses before deployment.</td>
+							<td>Deterministic two-outcome pool deployment, constant-product pricing and reserves, routed liquidity and swap operations, receive-based share authorization, permit-enabled liquidity tokens, canonical Statoblast share-token integration, and quarantine of shares sent to counterfactual pair addresses before deployment.</td>
+						</tr>
+						<tr>
+							<td>REP authorization support</td>
+							<td>
+								<a href="../../solidity/contracts/vendor/authorization/AuthorizationSignatures.sol"><code>AuthorizationSignatures.sol</code></a
+								>, <a href="../../solidity/contracts/vendor/authorization/ERC20Authorization.sol"><code>ERC20Authorization.sol</code></a
+								>, <a href="../../solidity/contracts/vendor/authorization/IERC20Authorization.sol"><code>IERC20Authorization.sol</code></a
+								>.
+							</td>
+							<td>Pinned signature recovery, EIP-712 domain handling, ERC-2612 permits, and recipient-bound ERC-3009 transfers used by newly deployed child REP.</td>
 						</tr>
 						<tr>
 							<td>Imported oracle integration</td>
@@ -917,7 +929,7 @@
 								>, <a href="../../solidity/contracts/statoblast/openOracle/openzeppelin/contracts/utils/math/Math.sol"><code>Math.sol</code></a
 								>, <a href="../../solidity/contracts/statoblast/openOracle/openzeppelin/contracts/utils/math/SafeCast.sol"><code>SafeCast.sol</code></a>
 							</td>
-							<td>OpenOracle's imported source, exact SlimStorage revision, compiler profile, and dependency provenance are owned by <code>UPSTREAM.md</code>. The coordinator submits attoETH/attoREP reports with dispute history and full game storage enabled; OpenOracle's packed event stream remains separate from Zoltar replay.</td>
+							<td>OpenOracle's imported source, exact <code>openPunt</code> revision, compiler profile, and dependency provenance are owned by <code>UPSTREAM.md</code>. The coordinator submits attoETH/attoREP reports with dispute history and full game storage enabled; it does not enable the new optional flags. OpenOracle's packed event stream remains separate from Zoltar replay.</td>
 						</tr>
 					</tbody>
 				</table>

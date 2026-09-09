@@ -2,7 +2,7 @@ import { requireDeployedContracts } from '../../../shared/src/monitoring/deploye
 import { randomUUID } from 'node:crypto'
 import { appendFile, mkdir, open, rename, rm } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import { bigintToSafeNumber, formatUnits, getAddress, isAddress, keccak256, type Address, type Chain, type Hex, type PublicClient, type Transport, zeroAddress } from '#ethereum'
+import { bigintToSafeNumber, formatUnits, getAddress, isAddress, keccak256, type Address, type Chain, type Hex, type PublicClient, type Transport, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { augurMarketAbi, augurUniverseAbi, constantProductFactoryAbi, constantProductPairAbi, erc20Abi, factoryAbi, poolAbi } from '#contracts/abi'
 
 const MAINNET_AUGUR_GENESIS_UNIVERSE = getAddress('0x49244BD018Ca9fd1f06ecC07B9E9De773246e5AA')
@@ -77,22 +77,23 @@ function uniqueAddresses(addresses: readonly Address[]) {
 	return [...unique.values()]
 }
 
-export function tokenCatalogForScan(discoveredAugurTokens: readonly Address[], configuredTokens: readonly Address[], observedTokens: readonly Address[]) {
-	const executionTokens = uniqueAddresses([...discoveredAugurTokens, ...configuredTokens])
-	const executionKeys = new Set(executionTokens.map(address => address.toLowerCase()))
+export function tokenCatalogForScan(discoveredAugurTokens: readonly Address[], configuredTokens: readonly Address[], observedTokens: readonly Address[], approvedTokens: readonly Address[] = []) {
+	const executionTokens = uniqueAddresses(approvedTokens)
+	const monitoringTokens = uniqueAddresses([...executionTokens, ...discoveredAugurTokens, ...configuredTokens])
+	const monitoringKeys = new Set(monitoringTokens.map(address => address.toLowerCase()))
 	const boundedObservedTokens = uniqueAddresses(observedTokens)
-		.filter(address => !executionKeys.has(address.toLowerCase()))
+		.filter(address => !monitoringKeys.has(address.toLowerCase()))
 		.slice(0, MAX_OBSERVED_MONITORING_TOKENS)
 	return {
 		executionTokens,
-		monitoringTokens: [...executionTokens, ...boundedObservedTokens],
+		monitoringTokens: [...monitoringTokens, ...boundedObservedTokens],
 	}
 }
 
 export function createTokenCatalogTracker(discoverAugurTokens: (configured: readonly Address[], observed: readonly Address[]) => Promise<readonly Address[]>) {
-	return async (configuredTokens: readonly Address[], observedTokens: readonly Address[]) => {
+	return async (configuredTokens: readonly Address[], observedTokens: readonly Address[], approvedTokens: readonly Address[] = []) => {
 		const discoveredAugurTokens = await discoverAugurTokens([], [])
-		return tokenCatalogForScan(discoveredAugurTokens, configuredTokens, observedTokens)
+		return tokenCatalogForScan(discoveredAugurTokens, configuredTokens, observedTokens, approvedTokens)
 	}
 }
 
@@ -197,6 +198,7 @@ async function loadConstantProductPools(client: ReadClient, chainId: number, tok
 export async function loadTokenMarkets(
 	client: ReadClient,
 	parameters: {
+		blockNumber?: bigint | undefined
 		explorerUrl: string
 		factory: Address
 		chainId: number
@@ -206,7 +208,7 @@ export async function loadTokenMarkets(
 	},
 ) {
 	const snapshots: TokenMarketSnapshot[] = []
-	await requireDeployedContracts(client, [{ name: 'Uniswap V3 factory', address: parameters.factory }])
+	await requireDeployedContracts(client, [{ name: 'Uniswap V3 factory', address: parameters.factory }], parameters.blockNumber)
 	for (const token of parameters.tokens) {
 		const poolAddresses = []
 		for (const fee of UNISWAP_V3_FEES) {

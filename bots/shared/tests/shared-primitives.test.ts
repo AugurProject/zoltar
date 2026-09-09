@@ -9,7 +9,7 @@ import { boundedDashboardJson, dashboardAuthorities, dashboardRequestAuthorityIs
 import { acquireExclusiveProcessLock } from '../src/execution/process-lock.ts'
 import { createSignerOperationGate } from '../src/execution/signer-operation-gate.ts'
 import { maximumFeePerGas, paddedTransactionGas, prepareSignedTransaction, submitSignedTransaction, validateSubmissionSettings } from '../src/execution/transaction-submission.ts'
-import { createContextualPublicClient, createPublicClient, custom, encodeAbiParameters, http, mainnet, parseTransaction, privateKeyToAccount, RpcError, type Hex } from '../src/ethereum.ts'
+import { createContextualPublicClient, createPublicClient, custom, encodeAbiParameters, http, mainnet, parseTransaction, privateKeyToAccount, readContractAtBlock, RpcError, type Abi, type AbiValue, type Hex } from '../src/ethereum.ts'
 import { createRpcEndpointPool, rpcFailureWithContext, RpcEndpointPoolFailure } from '../src/ethereum/rpc-resilience.ts'
 import { LOG_RPC_RESPONSE_BYTES } from '../src/infrastructure/bounded-json.ts'
 import { ConnectivityDegradedError, operationalFailureDisposition } from '../src/monitoring/resilience.ts'
@@ -25,8 +25,10 @@ afterEach(async () => {
 })
 
 describe('shared bot primitives', () => {
-	test('resolves the root Ethereum package without generated JavaScript under Bun', () => {
-		expect(Bun.resolveSync('@zoltar/shared/ethereum', import.meta.dir)).toBe(join(import.meta.dir, '../../../shared/ts/ethereum.ts'))
+	test('resolves the shared Ethereum TypeScript source without generated JavaScript under Bun', () => {
+		const resolvedPath = Bun.resolveSync('@zoltar/core-shared/evm/ethereum', import.meta.dir).replaceAll('\\', '/')
+		expect(resolvedPath).toEndWith('/shared/core/ts/evm/ethereum.ts')
+		expect(resolvedPath).not.toContain('/shared/js/')
 	})
 
 	test('exposes raw transport requests only through the dedicated subpath', async () => {
@@ -84,6 +86,28 @@ describe('shared bot primitives', () => {
 				'zeroHash',
 			].sort(),
 		)
+	})
+
+	test('preserves undefined results for no-output calls through a widened ABI', async () => {
+		const calls: string[] = []
+		const client = createPublicClient({
+			chain: mainnet,
+			transport: custom({
+				request: async ({ method }) => {
+					calls.push(method)
+					if (method !== 'eth_call') throw new Error(`Unexpected RPC method: ${method}`)
+					return '0x'
+				},
+			}),
+		})
+		const noOutputAbi = [{ inputs: [], name: 'touch', outputs: [], stateMutability: 'view', type: 'function' }] as const
+		const widenedAbi: Abi = noOutputAbi
+		const result: AbiValue | undefined = await readContractAtBlock(client, { abi: widenedAbi, address: '0x0000000000000000000000000000000000000001', functionName: 'touch' }, 42n)
+		const typedUndefinedResult: Awaited<ReturnType<typeof readContractAtBlock>> = undefined
+
+		expect(result).toBeUndefined()
+		expect(typedUndefinedResult).toBeUndefined()
+		expect(calls).toEqual(['eth_call'])
 	})
 
 	test('converts bigint values only inside the safe integer range', () => {
@@ -700,6 +724,35 @@ describe('shared bot primitives', () => {
 		} finally {
 			malformed.stop(true)
 			healthy.stop(true)
+		}
+	})
+
+	test('keeps a pruned-log endpoint available for recent logs and other RPC methods', async () => {
+		const server = Bun.serve({
+			port: 0,
+			async fetch(request) {
+				const body: unknown = await request.json()
+				if (typeof body !== 'object' || body === null) throw new Error('Invalid test RPC request')
+				const method = Reflect.get(body, 'method')
+				const params = Reflect.get(body, 'params')
+				const id = Reflect.get(body, 'id')
+				const filter = Array.isArray(params) ? params[0] : undefined
+				if (method === 'eth_getLogs' && typeof filter === 'object' && filter !== null && 'fromBlock' in filter && filter.fromBlock === '0x0') return Response.json({ error: { code: 4444, message: 'pruned history unavailable' }, id, jsonrpc: '2.0' })
+				return Response.json({ id, jsonrpc: '2.0', result: method === 'eth_getLogs' ? [] : '0x64' })
+			},
+		})
+		try {
+			const url = server.url.origin
+			const pool = createRpcEndpointPool([url])
+			for (const transport of [pool.transport, pool.transportFor(url)]) {
+				const client = createPublicClient({ transport })
+				await expect(client.getLogs({ fromBlock: 0n, toBlock: 1n })).rejects.toThrow('pruned history unavailable')
+				expect(await client.getLogs({ fromBlock: 100n, toBlock: 100n })).toEqual([])
+				expect(await client.getBlockNumber()).toBe(100n)
+				expect(pool.snapshot()[0]?.nextRetryAt).toBeUndefined()
+			}
+		} finally {
+			server.stop(true)
 		}
 	})
 

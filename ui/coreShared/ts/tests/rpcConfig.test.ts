@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { DEFAULT_RPC_URL, readNetworkRpcUrls, resolveConfiguredRpcConfig, resolveConfiguredRpcUrl, saveNetworkRpcUrl } from '../lib/rpcConfig.js'
+import { DEFAULT_RPC_URL, readNetworkRpcUrls, resolveConfiguredRpcConfig, resolveConfiguredRpcUrl, saveNetworkRpcUrl } from '../wallet/rpcConfig.js'
 
 describe('rpc config', () => {
 	test('prefers explicit overrides over every other source', () => {

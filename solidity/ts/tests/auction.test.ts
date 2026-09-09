@@ -4,7 +4,7 @@ import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereu
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { contractExists, getETHBalance, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
-import { decodeEventLog, encodeAbiParameters, encodeDeployData, encodeFunctionData, isHex, keccak256, type Address, type Hash, type Hex } from '@zoltar/shared/ethereum'
+import { decodeEventLog, encodeAbiParameters, encodeDeployData, encodeFunctionData, isHex, keccak256, type Address, type Hash, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import {
 	computeClearing,
 	deployUniformPriceDualCapBatchAuction,
@@ -31,7 +31,7 @@ import {
 	getEthRaisedAttoEth,
 } from '../testSupport/simulator/utils/contracts/auction'
 import { approximatelyEqual, ensureDefined, strictEqual18Decimal, strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
-import { priceToClosestTick, tickToPrice } from '../testSupport/simulator/utils/tickMath'
+import { priceToClosestTick, tickToPrice } from '@zoltar/statoblast-shared/statoblast/truthAuctionTickMath'
 import assert from '../testSupport/simulator/utils/assert'
 import { ensureZoltarDeployed } from '../testSupport/simulator/utils/contracts/zoltar'
 import { ensureInfraDeployed } from '../testSupport/simulator/utils/contracts/deployStatoblast'

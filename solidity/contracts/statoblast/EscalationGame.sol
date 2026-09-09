@@ -78,11 +78,17 @@ contract EscalationGame is EscalationGameSettlement {
 
 	fallback() external {
 		address claimDelegateAddress = address(claimDelegate);
+		address depositDelegateAddress = address(depositDelegate);
 		assembly ('memory-safe') {
-			// Every selector not implemented by the inherited game belongs to the
-			// shared claim module. Its normal dispatcher also rejects unknown calls.
+			let selector := shr(224, calldataload(0))
+			let delegate := claimDelegateAddress
+			// Only the two signed public deposit entrypoints may reach the deposit
+			// delegate. Other selectors remain on the claim delegate's narrow surface.
+			if or(eq(selector, 0x8c18a0e1), eq(selector, 0x5a3df812)) {
+				delegate := depositDelegateAddress
+			}
 			calldatacopy(0, 0, calldatasize())
-			if iszero(delegatecall(gas(), claimDelegateAddress, 0, calldatasize(), 0, 0)) {
+			if iszero(delegatecall(gas(), delegate, 0, calldatasize(), 0, 0)) {
 				returndatacopy(0, 0, returndatasize())
 				revert(0, returndatasize())
 			}

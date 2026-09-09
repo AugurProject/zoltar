@@ -1,8 +1,8 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { maxUint256 } from '@zoltar/shared/ethereum'
-import { deriveTokenApprovalRequirement, formatTokenApprovalNeededMessage, formatTokenApprovalPartialMessage, formatTokenApprovalUnavailableMessage, maxUint200, parseTokenApprovalAmountInput, resolveTokenApprovalStatusMessage, shouldDisplayMaxTokenApprovalAmount } from '../lib/tokenApproval.js'
+import { maxUint256 } from '@zoltar/core-shared/evm/ethereum'
+import { deriveTokenApprovalRequirement, formatTokenApprovalNeededMessage, formatTokenApprovalPartialMessage, formatTokenApprovalUnavailableMessage, maxUint200, parseTokenApprovalAmountInput, resolveTokenApprovalStatusMessage, shouldDisplayMaxTokenApprovalAmount } from '../transactions/tokenApproval.js'
 
 const ONE = 10n ** 18n
 
@@ -44,10 +44,15 @@ describe('token approval helpers', () => {
 		})
 	})
 
-	test('flags approvals above uint200 max for compact max display', () => {
-		expect(shouldDisplayMaxTokenApprovalAmount(maxUint200)).toBe(false)
-		expect(shouldDisplayMaxTokenApprovalAmount(maxUint200 + 1n)).toBe(true)
-		expect(shouldDisplayMaxTokenApprovalAmount(undefined)).toBe(false)
+	test.each([
+		{ amount: undefined, expected: false, label: 'unavailable' },
+		{ amount: 0n, expected: false, label: 'zero' },
+		{ amount: maxUint200 - 1n, expected: false, label: 'below maxUint200' },
+		{ amount: maxUint200, expected: false, label: 'maxUint200 boundary' },
+		{ amount: maxUint200 + 1n, expected: true, label: 'above maxUint200' },
+		{ amount: maxUint256, expected: true, label: 'maxUint256' },
+	])('reports $label as max display: $expected', ({ amount, expected }) => {
+		expect(shouldDisplayMaxTokenApprovalAmount(amount)).toBe(expected)
 	})
 
 	test('parses custom approval input using token decimals', () => {

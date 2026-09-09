@@ -1,5 +1,5 @@
-import type { Address } from '@zoltar/shared/ethereum'
-import type { InjectedEthereum } from '../injectedEthereum.js'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
+import type { InjectedEthereum } from '../wallet/injectedEthereum.js'
 
 export type SimulationProviderRequest = {
 	method: string

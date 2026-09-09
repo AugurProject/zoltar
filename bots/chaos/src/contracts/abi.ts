@@ -5,7 +5,6 @@ const universeComponents = [
 	{ name: 'reputationToken', type: 'address' },
 	{ name: 'parentUniverseId', type: 'uint248' },
 ] as const
-
 const questionComponents = [
 	{ name: 'title', type: 'string' },
 	{ name: 'description', type: 'string' },
@@ -18,7 +17,7 @@ const questionComponents = [
 ] as const
 
 export const erc20Abi = [
-	{ inputs: [], name: 'getTotalTheoreticalSupplyAttoRep', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [], name: 'getTotalTheoreticalSupply', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
 	{ inputs: [{ name: 'account', type: 'address' }], name: 'balanceOf', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
 	{
 		inputs: [
@@ -115,6 +114,19 @@ export const genesisUniswapSeederAbi = [
 ] as const
 
 export const erc1155Abi = [
+	{
+		inputs: [
+			{ name: 'from', type: 'address' },
+			{ name: 'to', type: 'address' },
+			{ name: 'ids', type: 'uint256[]' },
+			{ name: 'values', type: 'uint256[]' },
+			{ name: 'data', type: 'bytes' },
+		],
+		name: 'safeBatchTransferFrom',
+		outputs: [],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
 	{
 		inputs: [
 			{ name: 'account', type: 'address' },
@@ -1432,11 +1444,11 @@ export const tradingPairAbi = [
 		type: 'function',
 	},
 	{ inputs: [], name: 'totalSupply', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
-	{ inputs: [{ name: '', type: 'address' }], name: 'balanceOf', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
+	{ inputs: [{ name: 'account', type: 'address' }], name: 'balanceOf', outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
 	{
 		inputs: [
-			{ name: '', type: 'address' },
-			{ name: '', type: 'address' },
+			{ name: 'owner', type: 'address' },
+			{ name: 'spender', type: 'address' },
 		],
 		name: 'allowance',
 		outputs: [{ name: '', type: 'uint256' }],
@@ -1446,7 +1458,7 @@ export const tradingPairAbi = [
 	{
 		inputs: [
 			{ name: 'spender', type: 'address' },
-			{ name: 'amount', type: 'uint256' },
+			{ name: 'value', type: 'uint256' },
 		],
 		name: 'approve',
 		outputs: [{ name: '', type: 'bool' }],
@@ -1487,6 +1499,7 @@ export const tradingPairAbi = [
 			{ name: 'minYes', type: 'uint256' },
 			{ name: 'minNo', type: 'uint256' },
 			{ name: 'recipient', type: 'address' },
+			{ name: 'deadline', type: 'uint256' },
 		],
 		name: 'removeLiquidity',
 		outputs: [
@@ -1541,15 +1554,6 @@ const enterPositionResultComponents = [
 	{ name: 'conditionalYesBpsAfter', type: 'uint256' },
 ] as const
 
-const exitPositionResultComponents = [
-	{ name: 'completeSetShares', type: 'uint256' },
-	{ name: 'longSharesSwapped', type: 'uint256' },
-	{ name: 'totalLongShares', type: 'uint256' },
-	{ name: 'invalidInsurance', type: 'uint256' },
-	{ name: 'ethOut', type: 'uint256' },
-	{ name: 'feeAmount', type: 'uint256' },
-] as const
-
 const liquidityResultComponents = [
 	{ name: 'pair', type: 'address' },
 	{ name: 'completeSetShares', type: 'uint256' },
@@ -1578,29 +1582,34 @@ export const tradingRouterAbi = [
 	},
 	{
 		inputs: [
-			{ name: 'pair', type: 'address' },
-			{ name: 'longOutcome', type: 'uint8' },
-			{ name: 'completeSetSharesToRedeem', type: 'uint256' },
-			{ name: 'maxLongSharesIn', type: 'uint256' },
-			{ name: 'minEthOut', type: 'uint256' },
-			{ name: 'recipient', type: 'address' },
-			{ name: 'deadline', type: 'uint256' },
+			{ name: 'operator', type: 'address' },
+			{ name: 'from', type: 'address' },
+			{ name: 'ids', type: 'uint256[]' },
+			{ name: 'values', type: 'uint256[]' },
+			{ name: 'data', type: 'bytes' },
 		],
-		name: 'exitPosition',
-		outputs: [{ components: exitPositionResultComponents, name: 'result', type: 'tuple' }],
+		name: 'onERC1155BatchReceived',
+		outputs: [{ name: '', type: 'bytes4' }],
 		stateMutability: 'nonpayable',
 		type: 'function',
 	},
 	{
 		inputs: [
-			{ name: 'pool', type: 'address' },
-			{ name: 'completeSetSharesToRedeem', type: 'uint256' },
-			{ name: 'minEthOut', type: 'uint256' },
+			{ name: 'pair', type: 'address' },
+			{ name: 'liquidity', type: 'uint256' },
+			{ name: 'minYesOut', type: 'uint256' },
+			{ name: 'minNoOut', type: 'uint256' },
 			{ name: 'recipient', type: 'address' },
 			{ name: 'deadline', type: 'uint256' },
+			{ name: 'v', type: 'uint8' },
+			{ name: 'r', type: 'bytes32' },
+			{ name: 's', type: 'bytes32' },
 		],
-		name: 'redeemCompleteSet',
-		outputs: [{ name: 'ethOut', type: 'uint256' }],
+		name: 'removeLiquidityWithPermit',
+		outputs: [
+			{ name: 'yesOut', type: 'uint256' },
+			{ name: 'noOut', type: 'uint256' },
+		],
 		stateMutability: 'nonpayable',
 		type: 'function',
 	},
@@ -1640,23 +1649,6 @@ export const tradingRouterAbi = [
 		name: 'addLiquidityWithEth',
 		outputs: [{ components: liquidityResultComponents, name: 'result', type: 'tuple' }],
 		stateMutability: 'payable',
-		type: 'function',
-	},
-	{
-		inputs: [
-			{ name: 'pair', type: 'address' },
-			{ name: 'liquidity', type: 'uint256' },
-			{ name: 'minYesOut', type: 'uint256' },
-			{ name: 'minNoOut', type: 'uint256' },
-			{ name: 'recipient', type: 'address' },
-			{ name: 'deadline', type: 'uint256' },
-		],
-		name: 'removeLiquidity',
-		outputs: [
-			{ name: 'yesOut', type: 'uint256' },
-			{ name: 'noOut', type: 'uint256' },
-		],
-		stateMutability: 'nonpayable',
 		type: 'function',
 	},
 ] as const

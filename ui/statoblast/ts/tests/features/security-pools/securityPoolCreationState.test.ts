@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { resolveSecurityPoolQuestionLookupInput } from '../../../features/security-pools/hooks/useSecurityPoolCreation.js'
+import { resolveSecurityPoolQuestionLookupInput } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolCreation.js'
 
 void describe('security pool creation question lookup input', () => {
 	void test('returns a normalized question id only for loadable inputs', () => {

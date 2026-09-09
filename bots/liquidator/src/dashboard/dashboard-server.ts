@@ -1,3 +1,4 @@
+import { operatorHeader } from './header.ts'
 import { buildDashboardScript } from '../../../shared/src/dashboard/assets.js'
 import { join } from 'node:path'
 import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
@@ -191,7 +192,7 @@ function publicRpcEndpointHealth(value: unknown) {
 function publicOperatorSnapshot(value: unknown) {
 	const source = record(value)
 	if (source === undefined) return {}
-	const snapshot = publicFields(value, ['execute', 'lastScanAt', 'lastScannedBlock', 'lastScannedTimestamp', 'network', 'operatorCapable', 'paused', 'scanning', 'status', 'wallet'])
+	const snapshot = publicFields(value, ['deploymentMissingName', 'deploymentCheckedBlock', 'deploymentCheckedTimestamp', 'execute', 'lastScanAt', 'lastScannedBlock', 'lastScannedTimestamp', 'network', 'operatorCapable', 'paused', 'scanning', 'status', 'wallet'])
 	const error = source['error']
 	if (typeof error === 'string') snapshot['error'] = publicOperatorFailure(error)
 	if (Array.isArray(source['activities'])) snapshot['activities'] = publicList(source['activities'], publicActivity)
@@ -227,7 +228,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 		const page = pathname === '/' ? 'overview' : pathname.slice(1)
 		if (!dashboardPages.has(page)) return undefined
 		const source = await Bun.file(join(directory, 'index.html')).text()
-		return source.replace('<body>', `<body data-page="${page}">`)
+		return source.replace('<!-- operator-header -->', operatorHeader).replace('<body>', `<body data-page="${page}">`)
 	}
 	let acceptedAuthorities: ReadonlySet<string> = new Set()
 	const server = Bun.serve({
@@ -255,6 +256,9 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				return new Response(Bun.file(join(directory, '..', '..', '..', 'shared', 'src', 'dashboard', 'operator-console.css')), {
 					headers: headers('text/css; charset=utf-8'),
 				})
+			}
+			if (request.method === 'GET' && url.pathname === '/header-notices.js') {
+				return new Response(await buildDashboardScript(join(directory, '..', '..', '..', 'shared', 'src', 'dashboard', 'header-notices.ts')), { headers: headers('text/javascript; charset=utf-8') })
 			}
 			if (request.method === 'GET' && url.pathname === '/dashboard.js') {
 				return new Response(await buildDashboardScript(browserEntrypoint), {

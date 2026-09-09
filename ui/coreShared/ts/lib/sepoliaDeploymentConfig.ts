@@ -1,5 +1,5 @@
-import { SEPOLIA_REP_ALLOCATIONS } from '@zoltar/shared/sepoliaRepAllocations'
-import { encodeDeployData, getCreate2Address, toHex, type Hex } from '@zoltar/shared/ethereum'
+import { SEPOLIA_REP_ALLOCATIONS } from '@zoltar/zoltar-shared/deployment/sepoliaRepAllocations'
+import { encodeDeployData, getCreate2Address, toHex, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { GenesisReputationToken_GenesisReputationToken, statoblast_WETH9_WETH9 } from '../contractArtifact.js'
 
 const PROXY_DEPLOYER_ADDRESS = '0x7A0D94F55792C434D74A40883c6ED8545e406D12'

@@ -8,34 +8,29 @@ This repository contains two protocol layers:
 The codebase is split into these main areas:
 
 - `solidity/` contains contracts, protocol test support, tests, and generated contract artifacts
-- `ui/coreShared/` contains the shared Preact primitives, application-shell framework, simulation engine, and per-app build tooling used by all three interfaces
+- `ui/coreShared/` contains runtime-neutral UI primitives, wallet and chain integration, shared workflows, and the simulation engine used by all three interfaces
+- `ui/zoltarShared/` and `ui/statoblastShared/` expose reusable product libraries without application bootstrap, routing, or pages; Trading-specific capabilities currently live in the Trading application because no implementation is shared with another consumer
 - `ui/zoltar/` contains the Zoltar oracle operations interface (its own package, dev server, and production build)
 - `ui/statoblast/` contains the Augur Statoblast prediction-market operations interface (its own package, dev server, and production build)
 - `ui/trading/` contains the Statoblast Trading interface (its own package, dev server, and production build)
-- `solidity/contracts/trading/` contains the Trading contracts, `shared/ts/trading/` contains reusable AMM math, and contract-facing tooling and tests live under `solidity/ts`
-- `shared/` contains runtime-neutral TypeScript used by Solidity tooling and the UI
+- `solidity/contracts/trading/` contains the Trading contracts, `shared/trading/ts/trading/` contains reusable AMM math, and contract-facing tooling and tests live under `solidity/ts`
+- [`shared/`](./shared/README.md) contains independently built Core, Zoltar, OpenOracle, Statoblast, and Trading runtime packages used by Solidity tooling and the UI
 - `docs/` contains the published protocol documentation
-- `scripts/` contains repository-wide build, validation, and test orchestration
-- `bots/` contains liquidator and open oracle arbitrager bots
+- `tooling/` contains typed repository metadata plus CI, contract-safety, documentation, testing, and UI build/development orchestration; `scripts/` retains only the pinned Uniswap deployment artifact
+- `bots/` contains chaos, liquidator, and OpenOracle arbitrager bots
 
-Each interface package (`ui/zoltar`, `ui/statoblast`, `ui/trading`) keeps route-specific code under `ts/features`, application composition in `ts/app`, and contract reads and writes in `ts/protocol`. Cross-feature primitives, hooks, lib helpers, the simulation engine, and the app-shell framework live in `ui/coreShared/ts`. Imports point inward along `coreShared ← Zoltar ← Statoblast ← Trading`; shared packages never import an application that consumes them.
+The runnable packages (`ui/zoltar`, `ui/statoblast`, and `ui/trading`) are dependency leaves: they own bootstrap, routes, application composition, and tests. Reusable product capabilities live in the matching shared library, while runtime-neutral primitives, hooks, wallet/chain integration, transactions, and simulation infrastructure live in `ui/coreShared/ts`. Package exports and the UI boundary checker prevent shared libraries from importing runnable applications or applications from importing one another.
 
 Protocol documentation lives in [docs/documentation.html](https://augurproject.github.io/zoltar/docs/documentation.html)
 
 ## Prerequisites
 
-- Bun 1.3+
+- Bun 1.4.2 (the version pinned by `packageManager` and CI)
 - Node.js 20+ for the repository-wide TypeScript check
 
 ## Setup
 
-On a fresh checkout, start with the root dependency install:
-
-```bash
-bun install --frozen-lockfile
-```
-
-Then run the full bootstrap:
+On a fresh checkout, run the complete bootstrap:
 
 ```bash
 bun run setup
@@ -43,10 +38,10 @@ bun run setup
 
 Important:
 
-- `bun run setup` is the fastest way to get to a working repo after the root install.
+- `bun run setup` installs every independent package from its own frozen lockfile exactly once, generates shared contract and vendor inputs once, and builds the UI and test outputs in dependency order.
+- Repository install helpers automatically use Bun 1.4.2 when invoked from another Bun version, avoiding local-package resolution differences between Bun releases.
 - The root install includes the repository-pinned native Anvil binary on supported platforms. Set `ANVIL_BIN` to another installation only when overriding it intentionally.
 - Standalone commands like `bun tsc`, `bun run tsc`, and `bun run test` assume the root dependencies are already installed.
-- If you skip the initial `bun install --frozen-lockfile`, fresh checkouts can fail with missing packages such as `bun-types`.
 
 ## Local Development
 
@@ -85,7 +80,7 @@ and Sepolia-specific deterministic contract addresses.
 The Sepolia deployment flow includes WETH and genesis REP before the contracts
 that depend on them. Initial Sepolia REP holders and exact 18-decimal balances
 are defined in
-[`shared/ts/sepoliaRepAllocations.ts`](./shared/ts/sepoliaRepAllocations.ts).
+[`shared/zoltar/ts/deployment/sepoliaRepAllocations.ts`](./shared/zoltar/ts/deployment/sepoliaRepAllocations.ts).
 Changing that list also changes the deterministic genesis REP address and every
 dependent deployment address.
 
@@ -257,6 +252,23 @@ Run the root test suite:
 ```bash
 bun run test
 ```
+
+Run the normal affected-project checks and print the narrower test-plan explanation:
+
+```bash
+bun run check:affected
+bun run test:plan
+```
+
+Changes to global, unowned, CI, or repository-tooling paths make `check:affected` select the full registered check set. Project-owned changes select the owning project and its registry dependents. When a package's canonical `check` command already covers its typecheck, lint, or tests, affected validation runs that composite once instead of repeating the covered work.
+
+Run the complete local validation suite used for CI/release parity:
+
+```bash
+bun run validate
+```
+
+`bun run validate` runs the root suite, every independent package `check` command, formatting, repository checks, dead-code analysis, and generated-output freshness. CI component selection, dependency expansion, cache inputs, generated outputs, and local component commands come from `tooling/repo/projects.ts`. A CI failure names the same root or component command used locally. Contract-size and delegate-layout failures reproduce with `bun run check:contract-safety`; source-size failures reproduce with `bun run check:source-size`.
 
 Run every local package suite and the required browser smoke tier (after the complete fresh-checkout setup above):
 

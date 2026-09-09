@@ -10,7 +10,6 @@
 		"#contracts/*": "./src/contracts/*.ts",
 		"#core/*": "./src/core/*.ts",
 		"#dashboard/*": "./src/dashboard/*.ts",
-		"#ethereum": "./src/infrastructure/ethereum.ts",
 		"#execution/*": "./src/execution/*.ts",
 		"#monitoring/*": "./src/monitoring/*.ts",
 		"#state/*": "./src/state/*.ts"
@@ -23,8 +22,8 @@
 		"check:docs": "bun ./scripts/check-docs.mts && bun ./scripts/check-market-fixture.mts",
 		"typecheck": "bun x tsc --project tsconfig.json --noEmit",
 		"test": "bun ./scripts/compile-contracts.mts --check && bun test ./tests --timeout 300000",
-		"format": "bun x @biomejs/biome format --write package.json tsconfig.json bunfig.toml README.md src tests scripts docs/*.ts docs/*.html docs/*.css docs/*.json config && bun x prettier --write 'contracts/**/*.sol'",
-		"format:check": "bun x @biomejs/biome format package.json tsconfig.json bunfig.toml README.md src tests scripts docs/*.ts docs/*.html docs/*.css docs/*.json config && bun x prettier --check 'contracts/**/*.sol'",
+		"format": "bun x @biomejs/biome format --write biome.json package.json tsconfig.json bunfig.toml README.md src tests scripts docs/*.ts docs/*.html docs/*.css docs/*.json config && bun x prettier --write 'contracts/**/*.sol'",
+		"format:check": "bun x @biomejs/biome format biome.json package.json tsconfig.json bunfig.toml README.md src tests scripts docs/*.ts docs/*.html docs/*.css docs/*.json config && bun x prettier --check 'contracts/**/*.sol'",
 		"check": "bun run typecheck && bun run check:generated && bun run test && bun run check:docs && bun run format:check",
 		"run": "bun ./src/cli/run.ts",
 		"deploy-executor": "bun run compile-contracts && bun ./src/cli/deploy-executor.ts",
@@ -32,18 +31,23 @@
 		"manifest": "bun ./src/config/execution-manifest.ts"
 	},
 	"dependencies": {
-		"@noble/hashes": "2.2.0",
 		"@zoltar/bot-shared": "file:../shared",
-		"@zoltar/shared": "file:../../shared",
-		"micro-eth-signer": "0.18.1"
+		"@zoltar/open-oracle-shared": "file:../../shared/openOracle",
+		"@zoltar/statoblast-shared": "file:../../shared/statoblast"
 	},
 	"overrides": {
-		"tmp": "0.2.7"
+		"tmp": "0.2.7",
+		"undici": "7.29.0",
+		"@zoltar/bot-shared": "file:../shared",
+		"@zoltar/core-shared": "file:../../shared/core",
+		"@zoltar/open-oracle-shared": "file:../../shared/openOracle",
+		"@zoltar/statoblast-shared": "file:../../shared/statoblast"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.3.11",
 		"bun-types": "1.4.2",
 		"happy-dom": "20.10.6",
+		"micro-eth-signer": "0.18.1",
 		"prettier": "3.8.4",
 		"prettier-plugin-solidity": "2.3.1",
 		"solc": "0.8.35",

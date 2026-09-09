@@ -1,28 +1,21 @@
 /// <reference types="bun-types" />
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
-import { getAddress } from '@zoltar/shared/ethereum'
-import { loadDeploymentStatusOracleSnapshot, loadErc20Balance } from '../../protocol/index.js'
-import { getChainDisplayLabel, getChainIdDecimalLabel, getWalletScopedAccountAddress, getWrongNetworkMessage, getWrongNetworkReason, isActiveAppChain, isSupportedAppChain } from '@zoltar/ui-core-shared/lib/network.js'
+import { getAddress } from '@zoltar/core-shared/evm/ethereum'
+import { loadDeploymentStatusOracleSnapshot, loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
+import { getChainDisplayLabel, getChainIdDecimalLabel, getWalletScopedAccountAddress, getWrongNetworkMessage, getWrongNetworkReason, isActiveAppChain, isSupportedAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import { getActiveBackend, initializeActiveEnvironment, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting, shouldUseSimulationLocation } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { SIMULATION_BLOCK_INTERVAL_SECONDS, SIMULATION_INITIAL_TIMESTAMP } from '@zoltar/ui-core-shared/simulation/clock.js'
 import { parseSavedSimulationStateEnvelope, persistSavedSimulationState, serializeSavedSimulationStateEnvelope } from '@zoltar/ui-core-shared/simulation/savedStates.js'
 import { createSimulationBackend } from '@zoltar/ui-core-shared/simulation/tevmBackend.js'
 import { createFakeBackend, createFakeSimulationProfile } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
-import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE, type NetworkProfile } from '@zoltar/ui-core-shared/lib/networkProfile.js'
+import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE, type NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { createBootstrappedSimulationBackendWithRetry, resetSelectedAccountAndTransactionDelay, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulationTestUtils.js'
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 
 const DEFAULT_SIMULATION_REP_PER_ETH_PRICE = 3n * 10n ** 18n
 const SIMULATION_REP_MINT_AMOUNT = 1_000_000n * 10n ** 18n
-
-function createDeferred<T>() {
-	let resolve: (value: T) => void = () => undefined
-	const promise = new Promise<T>(promiseResolve => {
-		resolve = promiseResolve
-	})
-	return { promise, resolve }
-}
 
 afterEach(() => {
 	resetActiveEnvironmentForTesting()
@@ -319,7 +312,7 @@ void describe('active environment', () => {
 		expect(firstDisposeCalls).toBe(1)
 		expect(secondBootstrapCalls).toBe(1)
 
-		initialDispose.resolve()
+		initialDispose.resolve(undefined)
 		const firstResult = await firstInitialization
 
 		expect(firstResult).toBe(secondBackend)

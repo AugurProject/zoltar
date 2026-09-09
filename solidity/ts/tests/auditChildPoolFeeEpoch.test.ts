@@ -90,7 +90,7 @@ describe('Child-pool fee epoch regression', () => {
 		strictEqualTypeSafe(await getSystemState(client, child.securityPool), SystemState.Operational, 'complete migration should finalize without an auction')
 		const childLiveSupply = await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'getUniverseTheoreticalSupplyAttoRep', args: [childUniverse] })
 		const childRepToken = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: child.securityPool, functionName: 'repToken' })
-		strictEqualTypeSafe(await client.readContract({ abi: ReputationToken_ReputationToken.abi, address: childRepToken, functionName: 'getTotalTheoreticalSupplyAttoRep' }), childLiveSupply, 'child REP and Zoltar live supply should retain their existing equality')
+		strictEqualTypeSafe(await client.readContract({ abi: ReputationToken_ReputationToken.abi, address: childRepToken, functionName: 'getTotalTheoreticalSupply' }), childLiveSupply, 'child REP and Zoltar live supply should retain their existing equality')
 		strictEqualTypeSafe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: child.securityPool, functionName: 'initialEscalationGameDepositAttoRep' }), childLiveSupply / 10_000_000n, 'child escalation economics should remain based on its unchanged live supply')
 		strictEqualTypeSafe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: child.securityPool, functionName: 'minimumVaultRepDepositAttoRep' }), childLiveSupply / 100_000n, 'child vault economics should remain based on its unchanged live supply')
 

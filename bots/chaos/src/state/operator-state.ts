@@ -1,10 +1,15 @@
+import { storedInputSources, storedInputValues } from '../operations/input-values.ts'
+import type { RuntimeState } from './runtime-state.ts'
+export type { RuntimeState, RuntimeTopologySummary, WalletBalanceState } from './runtime-state.ts'
 import { randomUUID } from 'node:crypto'
 import { constants } from 'node:fs'
 import { link, mkdir, open, readFile, readdir, rename, rm } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { getAddress, keccak256, parseTransaction, recoverTransactionAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import type { ChaosProtocolIndex } from '#monitoring/protocol-index'
-import type { ChaosEcosystem, EvaluatedOperation, OperationContinuationDisposition, OperationEvidence, OperationPreflightCall, OperationRisk, OperationTerminalSubmission, OperationWalletAssetDebit } from '#operations/types'
+import type { ChaosEcosystem, OperationContinuationDisposition, OperationEvidence, OperationPreflightCall, OperationRisk, OperationTerminalSubmission, OperationWalletAssetDebit } from '#operations/types'
+import { assertSafeRetirementRecipient, initialRetirementState, parseRetirementState, type DurableRetirementState } from './retirement.ts'
+import { serializedScheduler } from './state-serialization.ts'
 import {
 	loadPersistedProtocolIndex,
 	parseProtocolIndex as parseStoredProtocolIndex,
@@ -17,7 +22,7 @@ import {
 	type ProtocolIndexReference,
 } from './protocol-index-store.ts'
 
-export const DURABLE_STATE_VERSION = 3
+export const DURABLE_STATE_VERSION = 4
 export const MAXIMUM_ACTIVITY_COUNT = 500
 export const MAXIMUM_LIFECYCLE_PRESENCE_BLOCKER_COUNT = 1_000_000
 export const MAXIMUM_TERMINAL_OBLIGATION_COUNT = 500
@@ -48,6 +53,9 @@ export type SchedulerState = {
 export type DurableMetadata = Record<string, boolean | number | string>
 
 export type DurableLifecyclePresenceBlocker = {
+	/** Retained log boundary for an ordinary-identity blocker observed in partial-history mode. */
+	historyStartBlock?: string
+	requiresCarryHistory?: true
 	count: number
 	digest: Hex
 	firstDefinitionId: string
@@ -96,6 +104,8 @@ export type DurableWorkflow = {
 	obligation: boolean
 	planId: string
 	planningSeed: number
+	operationInputs?: Record<string, string>
+	inputSources?: Record<string, 'custom' | 'chaosbot'>
 	postconditions: string[]
 	priority: 'random' | 'urgent'
 	risk: OperationRisk
@@ -190,52 +200,12 @@ export type DurableState = {
 	pendingTransactions: PendingTransactionIntent[]
 	profileId: string
 	protocolIndex: ChaosProtocolIndex | undefined
+	retirement: DurableRetirementState
 	safetyPaused: boolean
 	scheduler: SchedulerState
 	signerAddress: Address | undefined
-	version: 3
+	version: 4
 	workflows: DurableWorkflow[]
-}
-
-export type WalletBalanceState = {
-	eth: string
-	rep: readonly { balance: string; symbol: string; token: Address; universeId: string }[]
-	weth: string
-}
-
-export type RuntimeTopologySummary = {
-	anchor: { blockNumber: bigint; timestamp: bigint }
-	auctions: { address: string; bidCount: number; endTime: string; finalized: boolean; pool: string; startTime: string }[]
-	complete: boolean
-	pairs: { address: string; feeBps: number; pool: string; status: number; universeId: string }[]
-	pools: {
-		address: string
-		awaitingForkContinuation: boolean
-		coordinator: string
-		questionId: string
-		systemState: number
-		universeId: string
-		/** Total canonical registry entries, independent of how many vault states this scan inspected. */
-		vaultCount: number
-	}[]
-	reports: { currentReporter: string; flags: number; reportId: string; settlementTime: string; token1: string; token2: string }[]
-	universes: { forkQuestionId: string; forkTime: string; id: string; knownChildOutcomeCount: number; parentUniverseId?: string | undefined; repToken: string }[]
-}
-
-export type RuntimeState = DurableState & {
-	error: string | undefined
-	evaluations: EvaluatedOperation[]
-	inventory: WalletBalanceState
-	lastScanAt: string | undefined
-	lastScannedBlock: bigint | undefined
-	paused: boolean
-	rpcEndpointHealth: readonly unknown[]
-	scanning: boolean
-	startedAt: string
-	status: 'connectivity-degraded' | 'dry-run' | 'error' | 'paused' | 'running' | 'starting'
-	topology: RuntimeTopologySummary | undefined
-	wallet: Address | undefined
-	warnings: string[]
 }
 
 export type StateFilesystem = ProtocolIndexFilesystem
@@ -273,6 +243,7 @@ export function initialDurableState(chainId: number, paused = true, profileId = 
 		pendingTransactions: [],
 		profileId: identifier(profileId, 'profileId'),
 		protocolIndex: undefined,
+		retirement: initialRetirementState(),
 		safetyPaused: false,
 		scheduler: emptySchedulerState(paused),
 		signerAddress,
@@ -283,6 +254,7 @@ export function initialDurableState(chainId: number, paused = true, profileId = 
 
 export function initialRuntimeState(paused: boolean, wallet: Address | undefined, chainId: number, durableState: DurableState = initialDurableState(chainId, paused)): RuntimeState {
 	if (durableState.chainId !== chainId) throw new Error(`Durable state belongs to chain ${durableState.chainId.toString()}, expected chain ${chainId.toString()}`)
+	if (durableState.retirement.recipient !== undefined) assertSafeRetirementRecipient(durableState.retirement.recipient, wallet ?? durableState.signerAddress)
 	const restoredSchedulerStatus = durableState.scheduler.status
 	const effectivePaused = paused || durableState.safetyPaused
 	let activeSchedulerStatus = restoredSchedulerStatus
@@ -296,6 +268,9 @@ export function initialRuntimeState(paused: boolean, wallet: Address | undefined
 		error: durableSafetyError,
 		evaluations: [],
 		inventory: { eth: '0', rep: [], weth: '0' },
+		deploymentNotice: undefined,
+		lastDeploymentCheckedBlock: undefined,
+		lastDeploymentCheckAt: undefined,
 		lastScanAt: undefined,
 		lastScannedBlock: undefined,
 		lifecyclePresenceBlocker: durableState.lifecyclePresenceBlocker === undefined ? undefined : { ...durableState.lifecyclePresenceBlocker },
@@ -316,6 +291,7 @@ export function initialRuntimeState(paused: boolean, wallet: Address | undefined
 }
 
 export function bindRuntimeStateToSigner(state: RuntimeState, address: Address) {
+	if (state.retirement.recipient !== undefined) assertSafeRetirementRecipient(state.retirement.recipient, address)
 	if (state.signerAddress !== undefined && state.signerAddress.toLowerCase() !== address.toLowerCase()) {
 		throw new Error(`Durable runtime is scoped to signer ${state.signerAddress}, not ${address}`)
 	}
@@ -456,12 +432,17 @@ function parseMetadata(value: unknown, label: string): DurableMetadata {
 function parseLifecyclePresenceBlocker(value: unknown): DurableLifecyclePresenceBlocker {
 	const label = 'chaos-bot state.lifecyclePresenceBlocker'
 	const blocker = requiredRecord(value, label)
-	assertExactKeys(blocker, ['count', 'digest', 'firstDefinitionId', 'firstEcosystem', 'observedAtBlock', 'presenceComplete', 'reason'], [], label)
+	assertExactKeys(blocker, ['count', 'digest', 'firstDefinitionId', 'firstEcosystem', 'observedAtBlock', 'presenceComplete', 'reason'], ['historyStartBlock', 'requiresCarryHistory'], label)
 	const count = blocker['count']
 	if (typeof count !== 'number' || !Number.isSafeInteger(count) || count < 1 || count > MAXIMUM_LIFECYCLE_PRESENCE_BLOCKER_COUNT) {
 		throw new Error(`${label}.count must be a positive integer within the ${MAXIMUM_LIFECYCLE_PRESENCE_BLOCKER_COUNT.toString()}-identity safety limit`)
 	}
 	if (typeof blocker['presenceComplete'] !== 'boolean') throw new Error(`${label}.presenceComplete must be a boolean`)
+	const historyStartBlock = blocker['historyStartBlock'] === undefined ? undefined : unsignedIntegerString(blocker['historyStartBlock'], `${label}.historyStartBlock`)
+	const requiresCarryHistory = blocker['requiresCarryHistory']
+	if (requiresCarryHistory !== undefined && (requiresCarryHistory !== true || historyStartBlock === undefined)) throw new Error(`${label}.requiresCarryHistory requires a scoped history boundary`)
+	const observedAtBlock = unsignedIntegerString(blocker['observedAtBlock'], `${label}.observedAtBlock`)
+	if (historyStartBlock !== undefined && BigInt(historyStartBlock) > BigInt(observedAtBlock)) throw new Error(`${label}.historyStartBlock is after its observation`)
 	const reason = blocker['reason']
 	if (reason !== 'completed-identity-returned' && reason !== 'unplanned-due-identity') throw new Error(`${label}.reason is invalid`)
 	return {
@@ -469,7 +450,9 @@ function parseLifecyclePresenceBlocker(value: unknown): DurableLifecyclePresence
 		digest: hash(blocker['digest'], `${label}.digest`),
 		firstDefinitionId: identifier(blocker['firstDefinitionId'], `${label}.firstDefinitionId`),
 		firstEcosystem: ecosystem(blocker['firstEcosystem'], `${label}.firstEcosystem`),
-		observedAtBlock: unsignedIntegerString(blocker['observedAtBlock'], `${label}.observedAtBlock`),
+		observedAtBlock,
+		...(historyStartBlock === undefined ? {} : { historyStartBlock }),
+		...(requiresCarryHistory === true ? { requiresCarryHistory: true } : {}),
 		presenceComplete: blocker['presenceComplete'],
 		reason,
 	}
@@ -737,7 +720,7 @@ function parseWorkflow(value: unknown, index: number): DurableWorkflow {
 	assertExactKeys(
 		workflow,
 		['classification', 'createdAt', 'createdAtBlock', 'ecosystem', 'id', 'label', 'metadata', 'obligation', 'operationId', 'planId', 'planningSeed', 'postconditions', 'priority', 'risk', 'status', 'steps', 'updatedAt'],
-		['completedAt', 'continuationDisposition', 'deadlineTimestamp', 'lastValidBlockNumber', 'maximumCleanupTransactionCount', 'semanticDeadlineBlockNumber', 'startedAt', 'terminalSubmission'],
+		['operationInputs', 'inputSources', 'completedAt', 'continuationDisposition', 'deadlineTimestamp', 'lastValidBlockNumber', 'maximumCleanupTransactionCount', 'semanticDeadlineBlockNumber', 'startedAt', 'terminalSubmission'],
 		label,
 	)
 	const status = workflow['status']
@@ -823,6 +806,8 @@ function parseWorkflow(value: unknown, index: number): DurableWorkflow {
 		operationId: identifier(workflow['operationId'], `${label}.operationId`),
 		planId: identifier(workflow['planId'], `${label}.planId`),
 		planningSeed,
+		...(workflow['operationInputs'] === undefined ? {} : { operationInputs: storedInputValues(workflow['operationInputs']) }),
+		...(workflow['inputSources'] === undefined ? {} : { inputSources: storedInputSources(workflow['inputSources']) }),
 		postconditions: stringArray(workflow['postconditions'], `${label}.postconditions`),
 		priority,
 		risk,
@@ -1098,8 +1083,9 @@ async function loadDurableStateFile(path: string, expectedChainId: number, files
 		throw error
 	}
 	const state = requiredRecord(value, 'chaos-bot state')
-	assertExactKeys(state, ['activities', 'chainId', 'lifecyclePresenceBlocker', 'obligationTombstones', 'obligations', 'pendingTransactions', 'profileId', 'protocolIndex', 'safetyPaused', 'scheduler', 'signerAddress', 'version', 'workflows'], [], 'chaos-bot state')
-	if (state['version'] !== DURABLE_STATE_VERSION) throw new Error('Chaos-bot state version is unsupported')
+	const storedVersion = state['version']
+	if (storedVersion !== 3 && storedVersion !== DURABLE_STATE_VERSION) throw new Error('Chaos-bot state version is unsupported')
+	assertExactKeys(state, ['activities', 'chainId', 'lifecyclePresenceBlocker', 'obligationTombstones', 'obligations', 'pendingTransactions', 'profileId', 'protocolIndex', ...(storedVersion === 3 ? [] : ['retirement']), 'safetyPaused', 'scheduler', 'signerAddress', 'version', 'workflows'], [], 'chaos-bot state')
 	if (state['chainId'] !== expectedChainId) throw new Error(`Chaos-bot state belongs to chain ${String(state['chainId'])}, expected chain ${expectedChainId.toString()}`)
 	if (typeof state['safetyPaused'] !== 'boolean') {
 		throw new Error('chaos-bot state.safetyPaused must be a boolean')
@@ -1174,6 +1160,7 @@ async function loadDurableStateFile(path: string, expectedChainId: number, files
 		pendingTransactions,
 		profileId: identifier(state['profileId'], 'profileId'),
 		protocolIndex,
+		retirement: storedVersion === 3 || state['retirement'] === undefined ? initialRetirementState() : parseRetirementState(state['retirement'], signerAddress),
 		safetyPaused: state['safetyPaused'],
 		scheduler: parseScheduler(state['scheduler']),
 		signerAddress,
@@ -1186,18 +1173,8 @@ export async function loadDurableState(path: string, expectedChainId: number, fi
 	return loadDurableStateFile(path, expectedChainId, filesystem, path, undefined)
 }
 
-function serializedScheduler(scheduler: SchedulerState) {
-	return {
-		lastDelaySeconds: scheduler.lastDelaySeconds ?? null,
-		lastRunAt: scheduler.lastRunAt ?? null,
-		nextRunAt: scheduler.nextRunAt ?? null,
-		selectedOperationId: scheduler.selectedOperationId ?? null,
-		status: scheduler.status,
-	}
-}
-
 export function serializedDurableState(
-	state: Pick<DurableState, 'activities' | 'chainId' | 'lifecyclePresenceBlocker' | 'obligationTombstones' | 'obligations' | 'pendingTransactions' | 'profileId' | 'protocolIndex' | 'safetyPaused' | 'scheduler' | 'signerAddress' | 'workflows'>,
+	state: Pick<DurableState, 'activities' | 'chainId' | 'lifecyclePresenceBlocker' | 'obligationTombstones' | 'obligations' | 'pendingTransactions' | 'profileId' | 'protocolIndex' | 'retirement' | 'safetyPaused' | 'scheduler' | 'signerAddress' | 'workflows'>,
 	persistedProtocolIndex: ChaosProtocolIndex | ProtocolIndexReference | null = state.protocolIndex ?? null,
 ) {
 	return {
@@ -1215,6 +1192,7 @@ export function serializedDurableState(
 		})),
 		profileId: state.profileId,
 		protocolIndex: persistedProtocolIndex,
+		retirement: state.retirement,
 		safetyPaused: state.safetyPaused,
 		scheduler: serializedScheduler(state.scheduler),
 		signerAddress: state.signerAddress ?? null,
@@ -1274,7 +1252,7 @@ export function compactDurableState(state: Pick<DurableState, 'activities' | 'ob
 	return state
 }
 
-type PersistableDurableState = Pick<DurableState, 'activities' | 'chainId' | 'lifecyclePresenceBlocker' | 'obligationTombstones' | 'obligations' | 'pendingTransactions' | 'profileId' | 'protocolIndex' | 'safetyPaused' | 'scheduler' | 'signerAddress' | 'workflows'>
+type PersistableDurableState = Pick<DurableState, 'activities' | 'chainId' | 'lifecyclePresenceBlocker' | 'obligationTombstones' | 'obligations' | 'pendingTransactions' | 'profileId' | 'protocolIndex' | 'retirement' | 'safetyPaused' | 'scheduler' | 'signerAddress' | 'workflows'>
 
 function snapshotDurableState(state: PersistableDurableState) {
 	compactDurableState(state)
@@ -1289,6 +1267,7 @@ function snapshotDurableState(state: PersistableDurableState) {
 		pendingTransactions: [...state.pendingTransactions],
 		profileId: state.profileId,
 		protocolIndex: undefined,
+		retirement: structuredClone(state.retirement),
 		safetyPaused: state.safetyPaused,
 		scheduler: { ...state.scheduler },
 		signerAddress: state.signerAddress,

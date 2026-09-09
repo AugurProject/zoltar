@@ -4,6 +4,7 @@
 	"private": true,
 	"type": "module",
 	"exports": {
+		"./config/canonical-deployment": "./src/config/canonical-deployment.ts",
 		"./config/persistent-path": "./src/config/persistent-path.ts",
 		"./config/signer": "./src/config/signer.ts",
 		"./dashboard/connectivity-error": "./src/dashboard/connectivity-error.ts",
@@ -14,10 +15,12 @@
 		"./execution/canonical-finality": "./src/execution/canonical-finality.ts",
 		"./execution/process-lock": "./src/execution/process-lock.ts",
 		"./execution/transaction-submission": "./src/execution/transaction-submission.ts",
+		"./monitoring/universe-policy": "./src/monitoring/universe-policy.ts",
 		"./monitoring/block-sync": "./src/monitoring/block-sync.ts",
 		"./monitoring/connectivity": "./src/monitoring/connectivity.ts",
 		"./monitoring/centralized-markets": "./src/monitoring/centralized-markets.ts",
 		"./monitoring/constant-product-markets": "./src/monitoring/constant-product-markets.ts",
+		"./monitoring/log-availability": "./src/monitoring/log-availability.ts",
 		"./monitoring/market-consensus": "./src/monitoring/market-consensus.ts",
 		"./monitoring/read-quorum": "./src/monitoring/read-quorum.ts",
 		"./monitoring/rpc-quorum-policy": "./src/monitoring/rpc-quorum-policy.ts",
@@ -25,14 +28,18 @@
 	},
 	"scripts": {
 		"check": "bun run typecheck && bun run test && bun run format:check",
-		"format": "bun x @biomejs/biome format --write package.json tsconfig.json src tests",
-		"format:check": "bun x @biomejs/biome format package.json tsconfig.json src tests",
+		"format": "bun x @biomejs/biome format --write biome.json package.json tsconfig.json src tests",
+		"format:check": "bun x @biomejs/biome format biome.json package.json tsconfig.json src tests",
 		"test": "bun test ./tests",
 		"typecheck": "bun x tsc --project tsconfig.json --noEmit"
 	},
 	"dependencies": {
-		"@zoltar/shared": "file:../../shared",
-		"ccxt": "4.5.70"
+		"ccxt": "4.5.70",
+		"@zoltar/core-shared": "file:../../shared/core"
+	},
+	"overrides": {
+		"undici": "7.29.0",
+		"@zoltar/core-shared": "file:../../shared/core"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.3.11",

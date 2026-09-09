@@ -1,12 +1,13 @@
 /// <reference types="bun-types" />
 
 import { afterEach, describe, expect, mock, test } from 'bun:test'
-import { MAINNET_NETWORK_PROFILE, MAINNET_WETH_ADDRESS, type NetworkProfile } from '@zoltar/ui-core-shared/lib/networkProfile.js'
+import { MAINNET_NETWORK_PROFILE, MAINNET_WETH_ADDRESS, type NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { SIMULATION_INITIAL_TIMESTAMP } from '@zoltar/ui-core-shared/simulation/clock.js'
 import { bootstrapSimulationChain, mintSimulationGenesisRep, predictSimulationTokenAddresses, type BootstrapScenarioApplyParameters } from '@zoltar/ui-core-shared/simulation/bootstrap.js'
-import { applyStatoblastScenario, installStatoblastScenarioProtocolForTesting } from '../../simulation/statoblastScenarios.js'
+import { installStatoblastScenarioProtocolForTesting } from '@zoltar/ui-statoblast-shared/simulation/statoblastScenarioProtocol.js'
+import { applyStatoblastScenario } from '@zoltar/ui-statoblast-shared/simulation/statoblastScenarios.js'
 import type { DeploymentStep } from '@zoltar/ui-core-shared/types/contracts.js'
-import { type Address, getAddress, getCreateAddress, toHex, zeroAddress } from '@zoltar/shared/ethereum'
+import { type Address, getAddress, getCreateAddress, toHex, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 
 const MOCK_PRIMARY_ACCOUNT = getAddress('0x00000000000000000000000000000000000000a1')
 const MOCK_SECONDARY_ACCOUNT = getAddress('0x00000000000000000000000000000000000000a2')
@@ -59,7 +60,7 @@ function createRepTokenWriteClient({ accountAddress, repAddress, repState, zolta
 						if (typeof requestedAddress !== 'string') throw new Error('Missing balanceOf account argument')
 						return repState.balances.get(requestedAddress.toLowerCase()) ?? 0n
 					}
-					case 'getTotalTheoreticalSupplyAttoRep':
+					case 'getTotalTheoreticalSupply':
 						return repState.theoreticalSupply
 					case 'totalSupply':
 						return repState.totalSupply
@@ -91,12 +92,6 @@ function createRepTokenWriteClient({ accountAddress, repAddress, repState, zolta
 					const normalizedRecipient = recipient.toLowerCase()
 					repState.balances.set(normalizedRecipient, (repState.balances.get(normalizedRecipient) ?? 0n) + amount)
 					repState.totalSupply += amount
-					break
-				}
-				case 'setMaxTheoreticalSupplyAttoRep': {
-					const nextTheoreticalSupply = args?.[0]
-					if (typeof nextTheoreticalSupply !== 'bigint') throw new Error('Invalid theoretical supply argument')
-					repState.theoreticalSupply = nextTheoreticalSupply
 					break
 				}
 				default:
@@ -593,7 +588,9 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 		getBlock: async () => ({ timestamp: 1_000n }),
 		getBalance: async () => 0n,
 		getStorageAt: async () => toHex(0n, { size: 32 }),
-		setStorageAt: async () => undefined,
+		setStorageAt: async ({ address, value }: { address: Address; value: string }) => {
+			if (address.toLowerCase() === profile.genesisRepTokenAddress.toLowerCase()) repState.theoreticalSupply = BigInt(value)
+		},
 		getCode: async ({ address }: { address: Address }) => {
 			state.deploymentCodeRequests.push(address)
 			return deployedCodes.get(address) ?? '0x'
@@ -616,7 +613,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 			readContract: async ({ address, args, functionName }: { address: Address; args?: unknown[]; functionName: string }) => {
 				if (address.toLowerCase() !== profile.genesisRepTokenAddress.toLowerCase()) throw new Error(`Unexpected contract read for ${address}`)
 				switch (functionName) {
-					case 'getTotalTheoreticalSupplyAttoRep':
+					case 'getTotalTheoreticalSupply':
 						return repState.theoreticalSupply
 					case 'totalSupply':
 						return repState.totalSupply
@@ -647,12 +644,6 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 						const normalizedRecipient = recipient.toLowerCase()
 						repState.balances.set(normalizedRecipient, (repState.balances.get(normalizedRecipient) ?? 0n) + amount)
 						repState.totalSupply += amount
-						return '0x01'
-					}
-					if (functionName === 'setMaxTheoreticalSupplyAttoRep') {
-						const nextTheoreticalSupply = args?.[0]
-						if (typeof nextTheoreticalSupply !== 'bigint') throw new Error('Invalid theoretical supply argument')
-						repState.theoreticalSupply = nextTheoreticalSupply
 						return '0x01'
 					}
 					throw new Error(`Unexpected REP write function ${functionName}`)
@@ -751,6 +742,7 @@ describe('simulation bootstrap', () => {
 		const repState = createRepTokenMockState()
 		const setStorageAt = mock(async (payload: { address: string; index: string; value: string }) => {
 			storageWrites.push(payload)
+			if (payload.address.toLowerCase() === repAddress.toLowerCase()) repState.theoreticalSupply = BigInt(payload.value)
 		})
 		const memoryClient = {
 			setStorageAt,
@@ -774,7 +766,7 @@ describe('simulation bootstrap', () => {
 		expect(repState.totalSupply).toBe(11n)
 		expect(repState.theoreticalSupply).toBe(11n)
 		expect(repState.balances.get(MOCK_PRIMARY_ACCOUNT.toLowerCase())).toBe(11n)
-		expect(storageWrites).toHaveLength(0)
+		expect(storageWrites.filter(write => write.address === zoltarAddress)).toHaveLength(0)
 	})
 
 	test('updates Zoltar genesis pointer when the REP token is already deployed', async () => {
@@ -785,6 +777,7 @@ describe('simulation bootstrap', () => {
 		const memoryClient = {
 			setStorageAt: async (payload: { address: string; index: string; value: string }) => {
 				storageWrites.push(payload)
+				if (payload.address.toLowerCase() === repAddress.toLowerCase()) repState.theoreticalSupply = BigInt(payload.value)
 			},
 			getCode: async ({ address }: { address: string }) => (address.toLowerCase() === repAddress.toLowerCase() ? '0x01' : '0x01'),
 			getBalance: async () => 0n,

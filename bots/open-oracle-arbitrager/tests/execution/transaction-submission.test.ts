@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { keccak256, parseTransaction, privateKeyToAccount, type Address, type Hex } from '#ethereum'
+import { keccak256, parseTransaction, privateKeyToAccount, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { assertSubmissionWindowOpen, maximumFeePerGas, mergeSubmissionFailures, prepareSignedTransaction, simulateBundle, simulateSignedBundleEveryRelay, SubmissionFailure, submitConfiguredSignedBundle, submitSignedBundle, submitSignedTransaction, validateSubmissionSettings } from '#execution/transaction-submission'
 
 const servers: Bun.Server<unknown>[] = []

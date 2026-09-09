@@ -3,14 +3,14 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { h } from 'preact'
 import { act } from 'preact/test-utils'
-import { getAddress, zeroAddress, type Address } from '@zoltar/shared/ethereum'
+import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import type { OracleManagerDetails, SecurityVaultDetails } from '@zoltar/ui-core-shared/types/contracts.js'
-import { useSecurityVaultOperations, type UseSecurityVaultOperationsDependencies } from '../../../features/security-pools/hooks/useSecurityVaultOperations.js'
+import { useSecurityVaultOperations, type UseSecurityVaultOperationsDependencies } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityVaultOperations.js'
 
 type UseSecurityVaultOperationsState = ReturnType<typeof useSecurityVaultOperations>
 type TestSecurityVaultWriteClient = { kind: 'injected-write-client' }

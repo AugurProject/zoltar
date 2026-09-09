@@ -1,5 +1,5 @@
-import type { Address } from '#ethereum'
-import { OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TIME_TYPE, type OpenOracleStatePreimage } from '@zoltar/shared/openOracle'
+import type { Address } from '@zoltar/bot-shared/ethereum'
+import { OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TIME_TYPE, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 
 export const MAX_SAFE_CALLBACK_GAS_LIMIT = 10_000_000n
 export const MAX_SAFE_SETTLEMENT_BLOCKS = 50_400n

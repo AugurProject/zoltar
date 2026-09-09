@@ -3,12 +3,34 @@ name: Test Domains
 on:
   workflow_call:
     inputs:
+      solidity:
+        description: Run Solidity tests.
+        type: boolean
+        default: true
+      prepared:
+        description: Reuse the caller's domain-production-ui artifact and preflight checks.
+        type: boolean
+        default: false
+      application:
+        description: Run application preparation, tests, and mutation smoke alongside Solidity.
+        required: false
+        type: boolean
+        default: true
       invocation:
         description: Identifies the caller in concurrency groups.
         required: false
         type: string
         default: reusable
   workflow_dispatch:
+    inputs:
+      solidity:
+        description: Run Solidity tests.
+        type: boolean
+        default: true
+      application:
+        description: Run application preparation, tests, and mutation smoke alongside Solidity.
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -22,8 +44,36 @@ env:
   FOUNDRY_VERSION: v1.5.1
 
 jobs:
+  timing-history-input:
+    name: Prepare ${{ matrix.domain }} timing history
+    if: inputs.application || inputs.solidity
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        domain: ${{ fromJSON(inputs.application && inputs.solidity && '["application", "solidity"]' || (inputs.application && '["application"]' || '["solidity"]')) }}
+    steps:
+      - uses: actions/cache/restore@v5
+        with:
+          path: .ci/test-timings-${{ matrix.domain }}.json
+          key: ${{ runner.os }}-test-timings-v2-${{ matrix.domain }}-${{ github.sha }}
+          restore-keys: ${{ runner.os }}-test-timings-v2-${{ matrix.domain }}-
+      - name: Provide an empty history on the first run
+        run: |
+          mkdir -p .ci
+          if [[ ! -f ".ci/test-timings-${{ matrix.domain }}.json" ]]; then
+            printf '{"version":1,"samplesByFile":{}}\n' > ".ci/test-timings-${{ matrix.domain }}.json"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.domain }}-test-timing-history-input
+          path: .ci/test-timings-${{ matrix.domain }}.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
   prepare:
     name: Prepare domain test inputs
+    if: inputs.application && !inputs.prepared
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -33,25 +83,22 @@ jobs:
       - name: TypeScript checks and production UI build
         run: |
           bun run ui:build:apps
-          bun ./scripts/install-frozen.mts ui/statoblast
+          bun ./tooling/repo/install-frozen.mts ui/statoblast
           bun run ci:preflight:current
+      - name: Read canonical UI artifact metadata
+        id: projects
+        run: bun ./tooling/repo/query-projects.mts --github-output
       - uses: actions/upload-artifact@v4
         with:
           name: domain-production-ui
-          path: |
-            ui/coreShared/js
-            ui/zoltar/js
-            ui/statoblast/js
-            ui/trading/js
-            ui/zoltar/dist
-            ui/statoblast/dist
-            ui/trading/dist
+          path: ${{ steps.projects.outputs.ui_artifact_outputs }}
           if-no-files-found: error
           retention-days: 1
 
   application-tests:
     name: Application tests (${{ matrix.shard }}/4)
-    needs: prepare
+    needs: [prepare, timing-history-input]
+    if: always() && !cancelled() && inputs.application && needs.timing-history-input.result == 'success' && (needs.prepare.result == 'success' || (inputs.prepared && needs.prepare.result == 'skipped'))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -66,16 +113,11 @@ jobs:
           name: domain-production-ui
           path: ui
       - name: Refresh split UI package installs
-        run: |
-          bun ./scripts/install-frozen.mts ui/coreShared
-          bun ./scripts/install-frozen.mts ui/zoltar
-          bun ./scripts/install-frozen.mts ui/statoblast
-          bun ./scripts/install-frozen.mts ui/trading
-      - uses: actions/cache/restore@v5
+        run: bun ./tooling/repo/run-project-tasks.mts setup --path-prefix ui/
+      - uses: actions/download-artifact@v5
         with:
-          path: .ci/test-timings-application.json
-          key: ${{ runner.os }}-test-timings-v2-application-${{ github.sha }}
-          restore-keys: ${{ runner.os }}-test-timings-v2-application-
+          name: application-test-timing-history-input
+          path: .ci
       - name: Run balanced application shard
         env:
           ZOLTAR_USE_EXISTING_PRODUCTION_BUILD: "1"
@@ -92,6 +134,8 @@ jobs:
 
   solidity-tests:
     name: Solidity tests (${{ matrix.shard }}/4)
+    needs: timing-history-input
+    if: inputs.solidity && needs.timing-history-input.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -101,11 +145,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-ci
-      - uses: actions/cache/restore@v5
         with:
-          path: .ci/test-timings-solidity.json
-          key: ${{ runner.os }}-test-timings-v2-solidity-${{ github.sha }}
-          restore-keys: ${{ runner.os }}-test-timings-v2-solidity-
+          profile: contracts
+      - uses: actions/download-artifact@v5
+        with:
+          name: solidity-test-timing-history-input
+          path: .ci
       - name: Run balanced Solidity shard
         env:
           ZOLTAR_TEST_TIMING_HISTORY: .ci/test-timings-solidity.json
@@ -121,28 +166,27 @@ jobs:
 
   timing-history:
     name: Update ${{ matrix.domain }} timing history
-    needs: [application-tests, solidity-tests]
-    if: always() && needs.application-tests.result == 'success' && needs.solidity-tests.result == 'success'
+    needs: [application-tests, solidity-tests, timing-history-input]
+    if: always() && !cancelled() && (needs.solidity-tests.result == 'success' || needs.application-tests.result == 'success') && (needs.solidity-tests.result == 'success' || needs.solidity-tests.result == 'skipped') && (needs.application-tests.result == 'success' || needs.application-tests.result == 'skipped')
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        domain: [application, solidity]
+        domain: ${{ fromJSON(needs.application-tests.result != 'success' && '["solidity"]' || (needs.solidity-tests.result == 'success' && '["application", "solidity"]' || '["application"]')) }}
     steps:
       - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
-      - uses: actions/cache/restore@v5
+      - uses: actions/download-artifact@v5
         with:
-          path: .ci/test-timings-${{ matrix.domain }}.json
-          key: ${{ runner.os }}-test-timings-v2-${{ matrix.domain }}-${{ github.sha }}
-          restore-keys: ${{ runner.os }}-test-timings-v2-${{ matrix.domain }}-
+          name: ${{ matrix.domain }}-test-timing-history-input
+          path: .ci
       - uses: actions/download-artifact@v5
         with:
           pattern: ${{ matrix.domain }}-test-timing-*
           path: test-results
           merge-multiple: true
-      - run: bun ./scripts/merge-test-timings.mts --observations test-results --history ".ci/test-timings-${{ matrix.domain }}.json"
+      - run: bun ./tooling/testing/merge-test-timings.mts --observations test-results --history ".ci/test-timings-${{ matrix.domain }}.json"
       - uses: actions/cache/save@v5
         with:
           path: .ci/test-timings-${{ matrix.domain }}.json
@@ -150,8 +194,47 @@ jobs:
 
   mutation-smoke:
     name: Critical mutation smoke
+    if: inputs.application
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-ci
+        with:
+          profile: root
+          foundry: "false"
       - run: bun run test:mutation:smoke
+
+  required:
+    name: Required domain results
+    if: always()
+    needs: [prepare, application-tests, solidity-tests, timing-history, mutation-smoke]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify selected domains
+        env:
+          SOLIDITY_SELECTED: ${{ inputs.solidity }}
+          PREPARED: ${{ inputs.prepared }}
+          APPLICATION_SELECTED: ${{ inputs.application }}
+          PREPARE_RESULT: ${{ needs.prepare.result }}
+          APPLICATION_RESULT: ${{ needs.application-tests.result }}
+          SOLIDITY_RESULT: ${{ needs.solidity-tests.result }}
+          TIMING_RESULT: ${{ needs.timing-history.result }}
+          MUTATION_RESULT: ${{ needs.mutation-smoke.result }}
+        run: |
+          require_result() {
+            local selected="$1" result="$2" label="$3"
+            local expected="skipped"
+            if [[ "${selected}" == "true" ]]; then expected="success"; fi
+            if [[ "${result}" != "${expected}" ]]; then
+              echo "${label} ended as ${result}; expected ${expected}."
+              exit 1
+            fi
+          }
+          [[ "${APPLICATION_SELECTED}" == "true" || "${SOLIDITY_SELECTED}" == "true" ]] || exit 1
+          require_result "${SOLIDITY_SELECTED}" "${SOLIDITY_RESULT}" solidity
+          require_result "${APPLICATION_SELECTED}" "${APPLICATION_RESULT}" application
+          require_result "${APPLICATION_SELECTED}" "${MUTATION_RESULT}" mutation
+          prepare_selected="false"
+          if [[ "${APPLICATION_SELECTED}" == "true" && "${PREPARED}" != "true" ]]; then prepare_selected="true"; fi
+          require_result "${prepare_selected}" "${PREPARE_RESULT}" prepare
+          [[ "${TIMING_RESULT}" == "success" ]] || exit 1

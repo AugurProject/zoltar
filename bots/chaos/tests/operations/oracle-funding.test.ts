@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { decodeFunctionData } from '../support/bot-shared.ts'
+import { decodeFunctionData } from '@zoltar/bot-shared/ethereum'
 import { coordinatorAbi, erc20Abi } from '../../src/contracts/abi.ts'
 import { assertOperationEthFunding } from '../../src/execution/safety.ts'
 import { anchoredMinimumToken1ReportAttoEth, anchoredRequestPriceCostAttoEth, assertAnchoredOracleRequestFunding, assertOracleRequestFundingEnvelope, oracleRequestFundingBounds, oracleRequestFundingEnvelope, oracleRequestFundingForMaximumBaseFee } from '../../src/operations/oracle-request-funding.ts'

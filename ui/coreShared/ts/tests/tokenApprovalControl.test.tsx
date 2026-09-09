@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { fireEvent, within } from './testUtils/queries'
 import { act } from 'preact/test-utils'
+import { TransactionActionButton, TransactionActionGroup } from '../components/TransactionActionButton.js'
 import { TokenApprovalControl } from '../components/TokenApprovalControl.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
@@ -21,6 +22,40 @@ describe('TokenApprovalControl', () => {
 		cleanupRenderedComponent = undefined
 		restoreDomEnvironment?.()
 		restoreDomEnvironment = undefined
+	})
+
+	test('keeps invalid approval input in the single shared notice above both actions', async () => {
+		const rendered = await renderIntoDocument(
+			<TokenApprovalControl
+				actionLabel='splitting REP'
+				allowanceError={undefined}
+				allowanceLoading={false}
+				approvedAmount={0n}
+				guardMessage={undefined}
+				onApprove={() => undefined}
+				pending={false}
+				pendingLabel='Approving REP…'
+				requiredAmount={1n}
+				resetKey='grouped'
+				tokenSymbol='REP'
+				tokenUnits={18}
+				renderActions={({ button, notice, noticeId }) => (
+					<TransactionActionGroup id={noticeId} message={notice}>
+						{button}
+						<TransactionActionButton idleLabel='Split REP' pendingLabel='Splitting REP…' onClick={() => undefined} availability={{ disabled: true, reason: 'Approval required' }} />
+					</TransactionActionGroup>
+				)}
+			/>,
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		const input = within(rendered.container).getByRole('textbox')
+		await act(() => fireEvent.input(input, { target: { value: 'invalid' } }))
+		const notices = rendered.container.querySelectorAll('.tx-action-notice')
+		expect(notices.length).toBe(1)
+		expect(input.getAttribute('aria-describedby')).toBe(notices[0]?.id)
+		expect(notices[0]?.textContent).toBe('Approval amount must be a decimal number.')
+		expect(rendered.container.querySelectorAll('.field-error').length).toBe(0)
+		expect(within(rendered.container).getByRole('button', { name: 'Approve REP' }).hasAttribute('disabled')).toBe(true)
 	})
 
 	test('disables non-increasing custom approvals without rendering the removed validation copy', async () => {

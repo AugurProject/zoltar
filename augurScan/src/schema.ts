@@ -2,13 +2,13 @@ import path from 'node:path'
 import { SQL } from 'bun'
 import { runtimeConfig } from './config.ts'
 
-export const CURRENT_SCHEMA_VERSION = '2'
+export const CURRENT_SCHEMA_VERSION = '3'
 export const SUPPORTED_POSTGRES_VERSION = '17.11'
 export const UNSUPPORTED_POSTGRES_VERSION_MESSAGE = `Unsupported PostgreSQL server version. augurScan requires PostgreSQL ${SUPPORTED_POSTGRES_VERSION} because schema fingerprints are version-specific; the database was not modified.`
-export const UNSUPPORTED_SCHEMA_MESSAGE =
-	'Unsupported augurScan database schema. Restore a compatible backup or upgrade through a supported augurScan release; the database was not modified.'
+export const UNSUPPORTED_SCHEMA_MESSAGE = 'Unsupported augurScan database schema. Restore a compatible backup or upgrade through a supported augurScan release; the database was not modified.'
 
-const PREVIOUS_SCHEMA_VERSION = '1'
+const PREVIOUS_SCHEMA_VERSION = '2'
+const INITIAL_MIGRATABLE_SCHEMA_VERSION = '1'
 const postgresVersionNumber = (release: string): string => {
 	const match = /^(\d+)\.(\d+)$/u.exec(release)
 	if (match?.[1] === undefined || match[2] === undefined) throw new Error(`Invalid supported PostgreSQL release: ${release}`)
@@ -16,7 +16,7 @@ const postgresVersionNumber = (release: string): string => {
 }
 export const SUPPORTED_POSTGRES_VERSION_NUM = postgresVersionNumber(SUPPORTED_POSTGRES_VERSION)
 
-type SupportedSchemaVersion = typeof PREVIOUS_SCHEMA_VERSION | typeof CURRENT_SCHEMA_VERSION
+type SupportedSchemaVersion = typeof INITIAL_MIGRATABLE_SCHEMA_VERSION | typeof PREVIOUS_SCHEMA_VERSION | typeof CURRENT_SCHEMA_VERSION
 
 export interface SchemaLayout {
 	readonly relations: readonly string[]
@@ -35,8 +35,8 @@ export const schemaLayoutDifferences = (expected: SchemaLayout, actual: SchemaLa
 	for (const key of schemaLayoutKeys) {
 		const expectedValues = new Set(expected[key])
 		const actualValues = new Set(actual[key])
-		const missing = expected[key].filter((value) => !actualValues.has(value))
-		const unexpected = actual[key].filter((value) => !expectedValues.has(value))
+		const missing = expected[key].filter(value => !actualValues.has(value))
+		const unexpected = actual[key].filter(value => !expectedValues.has(value))
 		if (missing.length > 0 || unexpected.length > 0) differences[key] = { missing, unexpected }
 	}
 	return differences
@@ -64,30 +64,25 @@ const historicalIntegrityColumns = new Set([
 	'entity_state_snapshots.application_source_hash',
 	'entity_state_snapshots.projection_source_hash',
 ])
-const historicalIntegrityIndexes = new Set([
-	'pool_snapshots_detail_page',
-	'protocol_timeline_entity_history_page',
-	'protocol_timeline_history_page',
-	'vault_snapshots_detail_page',
-])
-const normalizeDefinition = (value: string): string => value.replaceAll('public.', '').replace(/\s+/g, ' ').trim().replace(/;$/, '')
+const historicalIntegrityIndexes = new Set(['pool_snapshots_detail_page', 'protocol_timeline_entity_history_page', 'protocol_timeline_history_page', 'vault_snapshots_detail_page'])
+const ownershipTables = new Set(['indexer_ownership'])
+const ownershipIndexes = new Set(['indexer_ownership_heartbeat'])
+const normalizeDefinition = (value: string): string => {
+	const normalized = value.replaceAll('public.', '').replace(/\s+/g, ' ').trim().replace(/;$/, '')
+	// PostgreSQL 17 preserves one additional pair of parentheses around some
+	// CHECK expressions compared with the canonical schema source. The pair is
+	// formatting only, so normalize it before comparing otherwise exact layouts.
+	return normalized.replace(/^CHECK \(\((.*)\)\)$/, 'CHECK ($1)')
+}
 const sorted = (values: Iterable<string>): string[] => [...values].sort()
 
-const columnSignature = (table: string, column: string, type: string, notNull: boolean, identity: string, defaultExpression: string | undefined): string =>
-	`${table}.${column}|${normalizeDefinition(type)}|${notNull ? 'not-null' : 'nullable'}|${identity}|${normalizeDefinition(defaultExpression ?? '')}`
+const columnSignature = (table: string, column: string, type: string, notNull: boolean, identity: string, defaultExpression: string | undefined): string => `${table}.${column}|${normalizeDefinition(type)}|${notNull ? 'not-null' : 'nullable'}|${identity}|${normalizeDefinition(defaultExpression ?? '')}`
 
 export const expectedSchemaLayout = (schema: string, version: SupportedSchemaVersion): SchemaLayout => {
 	const normalizedSchema = schema.replaceAll('\r\n', '\n')
 	const relations = new Set<string>(['table:augurscan_schema'])
-	const columns = new Set<string>([
-		columnSignature('augurscan_schema', 'singleton', 'boolean', true, '', 'true'),
-		columnSignature('augurscan_schema', 'schema_version', 'text', true, '', undefined),
-		columnSignature('augurscan_schema', 'initialized_at', 'timestamp with time zone', true, '', 'now()'),
-	])
-	const constraints = new Set<string>([
-		'augurscan_schema.augurscan_schema_pkey|PRIMARY KEY (singleton)',
-		'augurscan_schema.augurscan_schema_singleton_check|CHECK (singleton)',
-	])
+	const columns = new Set<string>([columnSignature('augurscan_schema', 'singleton', 'boolean', true, '', 'true'), columnSignature('augurscan_schema', 'schema_version', 'text', true, '', undefined), columnSignature('augurscan_schema', 'initialized_at', 'timestamp with time zone', true, '', 'now()')])
+	const constraints = new Set<string>(['augurscan_schema.augurscan_schema_pkey|PRIMARY KEY (singleton)', 'augurscan_schema.augurscan_schema_singleton_check|CHECK (singleton)'])
 	const indexes = new Set<string>()
 	const defaultOverrides = new Map<string, string>()
 	for (const match of normalizedSchema.matchAll(/ALTER TABLE ONLY public\.([a-z_][a-z0-9_]*) ALTER COLUMN ([a-z_][a-z0-9_]*) SET DEFAULT ([\s\S]*?);/g)) {
@@ -96,7 +91,7 @@ export const expectedSchemaLayout = (schema: string, version: SupportedSchemaVer
 	}
 	for (const match of normalizedSchema.matchAll(/CREATE TABLE public\.([a-z_][a-z0-9_]*) \(\n([\s\S]*?)\n\);/g)) {
 		const [, table, body] = match
-		if (table === undefined || body === undefined || (version === PREVIOUS_SCHEMA_VERSION && historicalIntegrityTables.has(table))) continue
+		if (table === undefined || body === undefined || (version === INITIAL_MIGRATABLE_SCHEMA_VERSION && historicalIntegrityTables.has(table)) || (version !== CURRENT_SCHEMA_VERSION && ownershipTables.has(table))) continue
 		relations.add(`table:${table}`)
 		for (const sourceLine of body.split('\n')) {
 			const line = sourceLine.trim().replace(/,$/, '')
@@ -106,14 +101,12 @@ export const expectedSchemaLayout = (schema: string, version: SupportedSchemaVer
 				if (name !== undefined && definition !== undefined) constraints.add(`${table}.${name}|${normalizeDefinition(definition)}`)
 				continue
 			}
-			const columnMatch = /^(?:"([^"]+)"|([a-z_][a-z0-9_]*))\s+(timestamp with time zone|numeric\(\d+,\d+\)|bigint|integer|text|boolean|jsonb)([\s\S]*)$/.exec(
-				line,
-			)
+			const columnMatch = /^(?:"([^"]+)"|([a-z_][a-z0-9_]*))\s+(timestamp with time zone|numeric\(\d+,\d+\)|bigint|integer|text|boolean|jsonb)([\s\S]*)$/.exec(line)
 			if (columnMatch === null) continue
 			const [, quotedColumn, plainColumn, type, remainderValue] = columnMatch
 			const column = quotedColumn ?? plainColumn
 			if (column === undefined || type === undefined) continue
-			if (version === PREVIOUS_SCHEMA_VERSION && historicalIntegrityColumns.has(`${table}.${column}`)) continue
+			if (version === INITIAL_MIGRATABLE_SCHEMA_VERSION && historicalIntegrityColumns.has(`${table}.${column}`)) continue
 			const remainder = remainderValue ?? ''
 			const defaultMatch = /\bDEFAULT ([\s\S]*?)(?=\s+NOT NULL|\s+GENERATED (?:ALWAYS|BY DEFAULT) AS IDENTITY|$)/.exec(remainder)
 			const identity = /\bGENERATED ALWAYS AS IDENTITY\b/.test(remainder) ? 'a' : /\bGENERATED BY DEFAULT AS IDENTITY\b/.test(remainder) ? 'd' : ''
@@ -125,13 +118,15 @@ export const expectedSchemaLayout = (schema: string, version: SupportedSchemaVer
 	for (const match of normalizedSchema.matchAll(/ALTER TABLE ONLY public\.([a-z_][a-z0-9_]*)\s+ADD CONSTRAINT ([a-z_][a-z0-9_]*) ([\s\S]*?);/g)) {
 		const [, table, name, definition] = match
 		if (table === undefined || name === undefined || definition === undefined) continue
-		if (version === PREVIOUS_SCHEMA_VERSION && historicalIntegrityTables.has(table)) continue
+		if (version === INITIAL_MIGRATABLE_SCHEMA_VERSION && historicalIntegrityTables.has(table)) continue
+		if (version !== CURRENT_SCHEMA_VERSION && ownershipTables.has(table)) continue
 		constraints.add(`${table}.${name}|${normalizeDefinition(definition)}`)
 	}
 	for (const match of normalizedSchema.matchAll(/CREATE (UNIQUE )?INDEX ([a-z_][a-z0-9_]*)\s+ON public\.([a-z_][a-z0-9_]*)\s+([\s\S]*?);/g)) {
 		const [, unique, name, table, definition] = match
 		if (name === undefined || table === undefined || definition === undefined) continue
-		if (version === PREVIOUS_SCHEMA_VERSION && (historicalIntegrityTables.has(table) || historicalIntegrityIndexes.has(name))) continue
+		if (version === INITIAL_MIGRATABLE_SCHEMA_VERSION && (historicalIntegrityTables.has(table) || historicalIntegrityIndexes.has(name))) continue
+		if (version !== CURRENT_SCHEMA_VERSION && (ownershipTables.has(table) || ownershipIndexes.has(name))) continue
 		indexes.add(`${name}|${normalizeDefinition(`CREATE ${unique ?? ''}INDEX ${name} ON public.${table} ${definition}`)}`)
 	}
 	for (const match of normalizedSchema.matchAll(/CREATE SEQUENCE public\.([a-z_][a-z0-9_]*)/g)) {
@@ -147,8 +142,7 @@ export const expectedSchemaLayout = (schema: string, version: SupportedSchemaVer
 	}
 }
 
-export const schemaLayoutsMatch = (expected: SchemaLayout, actual: SchemaLayout): boolean =>
-	schemaLayoutKeys.every((key) => JSON.stringify(expected[key]) === JSON.stringify(actual[key]))
+export const schemaLayoutsMatch = (expected: SchemaLayout, actual: SchemaLayout): boolean => schemaLayoutKeys.every(key => JSON.stringify(expected[key]) === JSON.stringify(actual[key]))
 
 const actualSchemaLayout = async (connection: Awaited<ReturnType<SQL['reserve']>>): Promise<SchemaLayout> => {
 	const [relations, columns, constraints, indexes, unsupportedObjects] = await Promise.all([
@@ -244,40 +238,12 @@ const actualSchemaLayout = async (connection: Awaited<ReturnType<SQL['reserve']>
 		relations: sorted(relations.flatMap((row: { signature?: unknown }) => (typeof row.signature === 'string' ? [row.signature] : []))),
 		columns: sorted(
 			columns.flatMap((row: Record<string, unknown>) => {
-				if (
-					typeof row['table_name'] !== 'string' ||
-					typeof row['column_name'] !== 'string' ||
-					typeof row['formatted_type'] !== 'string' ||
-					typeof row['not_null'] !== 'boolean' ||
-					typeof row['identity'] !== 'string'
-				)
-					return []
-				return [
-					columnSignature(
-						row['table_name'],
-						row['column_name'],
-						row['formatted_type'],
-						row['not_null'],
-						row['identity'],
-						typeof row['default_expression'] === 'string' ? row['default_expression'] : undefined,
-					),
-				]
+				if (typeof row['table_name'] !== 'string' || typeof row['column_name'] !== 'string' || typeof row['formatted_type'] !== 'string' || typeof row['not_null'] !== 'boolean' || typeof row['identity'] !== 'string') return []
+				return [columnSignature(row['table_name'], row['column_name'], row['formatted_type'], row['not_null'], row['identity'], typeof row['default_expression'] === 'string' ? row['default_expression'] : undefined)]
 			}),
 		),
-		constraints: sorted(
-			constraints.flatMap((row: Record<string, unknown>) =>
-				typeof row['table_name'] === 'string' && typeof row['constraint_name'] === 'string' && typeof row['definition'] === 'string'
-					? [`${row['table_name']}.${row['constraint_name']}|${normalizeDefinition(row['definition'])}`]
-					: [],
-			),
-		),
-		indexes: sorted(
-			indexes.flatMap((row: Record<string, unknown>) =>
-				typeof row['index_name'] === 'string' && typeof row['definition'] === 'string'
-					? [`${row['index_name']}|${normalizeDefinition(row['definition'])}`]
-					: [],
-			),
-		),
+		constraints: sorted(constraints.flatMap((row: Record<string, unknown>) => (typeof row['table_name'] === 'string' && typeof row['constraint_name'] === 'string' && typeof row['definition'] === 'string' ? [`${row['table_name']}.${row['constraint_name']}|${normalizeDefinition(row['definition'])}`] : []))),
+		indexes: sorted(indexes.flatMap((row: Record<string, unknown>) => (typeof row['index_name'] === 'string' && typeof row['definition'] === 'string' ? [`${row['index_name']}|${normalizeDefinition(row['definition'])}`] : []))),
 		unsupportedObjects: sorted(unsupportedObjects.flatMap((row: { signature?: unknown }) => (typeof row.signature === 'string' ? [row.signature] : []))),
 	}
 }
@@ -287,12 +253,7 @@ const assertSchemaLayout = async (connection: Awaited<ReturnType<SQL['reserve']>
 	if (Object.keys(differences).length > 0) throw new Error(`${UNSUPPORTED_SCHEMA_MESSAGE} Differences: ${JSON.stringify(differences)}`)
 }
 
-export const runSchemaTransaction = async <T>(
-	begin: () => Promise<unknown>,
-	commit: () => Promise<unknown>,
-	rollback: () => Promise<unknown>,
-	operation: () => Promise<T>,
-): Promise<T> => {
+export const runSchemaTransaction = async <T>(begin: () => Promise<unknown>, commit: () => Promise<unknown>, rollback: () => Promise<unknown>, operation: () => Promise<T>): Promise<T> => {
 	await begin()
 	try {
 		const result = await operation()
@@ -308,9 +269,10 @@ export const runSchemaTransaction = async <T>(
 	}
 }
 
-export const schemaInitializationAction = (markerVersion: string | undefined, publicObjects: readonly string[]): 'initialize' | 'migrate' | 'current' => {
+export const schemaInitializationAction = (markerVersion: string | undefined, publicObjects: readonly string[]): 'initialize' | 'migrate-from-1' | 'migrate-from-2' | 'current' => {
 	if (markerVersion === CURRENT_SCHEMA_VERSION) return 'current'
-	if (markerVersion === PREVIOUS_SCHEMA_VERSION) return 'migrate'
+	if (markerVersion === PREVIOUS_SCHEMA_VERSION) return 'migrate-from-2'
+	if (markerVersion === INITIAL_MIGRATABLE_SCHEMA_VERSION) return 'migrate-from-1'
 	if (markerVersion !== undefined || publicObjects.length > 0) throw new Error(UNSUPPORTED_SCHEMA_MESSAGE)
 	return 'initialize'
 }
@@ -350,8 +312,7 @@ export const initializeSchema = async (sql: SQL): Promise<void> => {
 				JOIN pg_catalog.pg_namespace namespace ON namespace.oid = class.relnamespace
 				WHERE namespace.nspname = 'public' AND class.relname = 'augurscan_schema'
 			`
-			if (markerShape.length !== 1 || markerShape[0]?.relkind !== 'r' || markerShape[0]?.has_singleton !== true || markerShape[0]?.has_schema_version !== true)
-				throw new Error(UNSUPPORTED_SCHEMA_MESSAGE)
+			if (markerShape.length !== 1 || markerShape[0]?.relkind !== 'r' || markerShape[0]?.has_singleton !== true || markerShape[0]?.has_schema_version !== true) throw new Error(UNSUPPORTED_SCHEMA_MESSAGE)
 			const markers = await connection`SELECT schema_version FROM public.augurscan_schema WHERE singleton`
 			if (markers.length !== 1 || typeof markers[0]?.schema_version !== 'string') throw new Error(UNSUPPORTED_SCHEMA_MESSAGE)
 			markerVersion = markers[0].schema_version
@@ -371,19 +332,20 @@ export const initializeSchema = async (sql: SQL): Promise<void> => {
 			await assertSchemaLayout(connection, schema, CURRENT_SCHEMA_VERSION)
 			return
 		}
-		if (action === 'migrate') {
-			await assertSchemaLayout(connection, schema, PREVIOUS_SCHEMA_VERSION)
-			const migration = await Bun.file(path.resolve(import.meta.dir, '../migrations/002-historical-integrity.sql')).text()
+		if (action === 'migrate-from-1' || action === 'migrate-from-2') {
+			const startingVersion = action === 'migrate-from-1' ? INITIAL_MIGRATABLE_SCHEMA_VERSION : PREVIOUS_SCHEMA_VERSION
+			await assertSchemaLayout(connection, schema, startingVersion)
+			const migrations = [...(action === 'migrate-from-1' ? [await Bun.file(path.resolve(import.meta.dir, '../migrations/002-historical-integrity.sql')).text()] : []), await Bun.file(path.resolve(import.meta.dir, '../migrations/003-indexer-ownership.sql')).text()]
 			await runSchemaTransaction(
 				async () => await connection.unsafe('BEGIN'),
 				async () => await connection.unsafe('COMMIT'),
 				async () => await connection.unsafe('ROLLBACK'),
 				async () => {
-					await connection.unsafe(migration)
+					for (const migration of migrations) await connection.unsafe(migration)
 					await assertSchemaLayout(connection, schema, CURRENT_SCHEMA_VERSION)
 					await connection`
 						INSERT INTO public.augurscan_schema_migrations (schema_version, description)
-						VALUES (${CURRENT_SCHEMA_VERSION}, ${'Durable reorganization evidence and indexer-run provenance'})
+						VALUES (${CURRENT_SCHEMA_VERSION}, ${'Durable, reconciled indexer ownership diagnostics'})
 					`
 					await connection`UPDATE public.augurscan_schema SET schema_version = ${CURRENT_SCHEMA_VERSION} WHERE singleton`
 				},

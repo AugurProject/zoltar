@@ -2,7 +2,7 @@ import { afterEach, expect, test } from 'bun:test'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { keccak256, type Hex } from '#ethereum'
+import { keccak256, type Hex } from '@zoltar/bot-shared/ethereum'
 
 const executable = process.execPath
 const manifestSource = join(import.meta.dir, '..', '..', 'src', 'config', 'execution-manifest.ts')

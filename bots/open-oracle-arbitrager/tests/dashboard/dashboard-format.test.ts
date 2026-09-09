@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { Address } from '#ethereum'
+import type { Address } from '@zoltar/bot-shared/ethereum'
 import {
 	blockAgeLabel,
 	botStatusLabels,
@@ -9,6 +9,7 @@ import {
 	countLabel,
 	exactAmount,
 	marketPoolStrategyUse,
+	marketAvailabilityPresentation,
 	marketPriceChartDescription,
 	networkTargetStatus,
 	opportunityDecisionReason,
@@ -217,4 +218,21 @@ describe('dashboard exact ETH formatting', () => {
 
 test('hides JSON parser internals when the state response is unreadable', () => {
 	expect(statePollingFailureMessage(new SyntaxError('Unexpected token U in JSON'))).toBe('The state server returned an unreadable response. Automatic retry remains active; check the dashboard server if the next attempt also fails.')
+})
+
+test('presents unavailable deployments and liquidity as informative status', () => {
+	const notice = {
+		kind: 'missing-deployment' as const,
+		chainId: 11155111,
+		contracts: [
+			{ name: 'Uniswap V3 factory', address: '0x0000000000000000000000000000000000000000' as const },
+			{ name: 'OpenOracle', address: '0x0000000000000000000000000000000000000000' as const },
+		],
+	}
+	expect(marketAvailabilityPresentation(notice)).toEqual({ title: 'Deployment unavailable', detail: 'Uniswap V3 factory, OpenOracle: no contract at the configured addresses on chain 11155111. Availability is checked automatically.' })
+	expect(botStatusLabels({ paused: false, status: 'error', mode: 'dry-run', marketAvailability: notice }).status).toBe('Not deployed')
+	expect(marketAvailabilityPresentation({ kind: 'no-v3-liquidity', chainId: 1 })?.title).toBe('No V3 liquidity')
+	expect(marketAvailabilityPresentation(undefined)).toBeUndefined()
+	expect(botStatusLabels({ paused: false, status: 'stopped', mode: 'dry-run', marketAvailability: notice }).status).toBe('Stopped')
+	expect(botStatusLabels({ paused: false, status: 'error', mode: 'dry-run', marketAvailability: { kind: 'no-v3-liquidity', chainId: 1 } }).status).toBe('Error')
 })

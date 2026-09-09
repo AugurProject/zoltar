@@ -1,0 +1,205 @@
+{
+	"description": "Reusable Zoltar protocol and workflow UI capabilities",
+	"name": "@zoltar/ui-zoltar-shared",
+	"private": true,
+	"repository": {},
+	"license": "Unlicense",
+	"type": "module",
+	"devDependencies": {
+		"better-typescript-lib": "2.11.0",
+		"bun-types": "1.4.2",
+		"typescript": "5.8.2"
+	},
+	"dependencies": {
+		"@preact/signals": "2.0.1",
+		"@zoltar/ui-core-shared": "file:../coreShared",
+		"preact": "10.26.4",
+		"@tevm/memory-client": "1.0.0-rc.151",
+		"@tevm/common": "1.0.0-rc.151",
+		"@zoltar/core-shared": "file:../../shared/core",
+		"@zoltar/zoltar-shared": "file:../../shared/zoltar"
+	},
+	"overrides": {
+		"@tevm/actions": "1.0.0-rc.151",
+		"@tevm/node": "1.0.0-rc.151",
+		"brace-expansion": "5.0.9",
+		"fast-uri": "3.1.6",
+		"nanoid": "3.3.18",
+		"postcss": "8.5.23",
+		"tmp": "0.2.7",
+		"ws": "8.21.0",
+		"@zoltar/core-shared": "file:../../shared/core",
+		"@zoltar/zoltar-shared": "file:../../shared/zoltar",
+		"@zoltar/ui-core-shared": "file:../coreShared"
+	},
+	"scripts": {
+		"build": "bun x tsc --project tsconfig.json",
+		"typecheck": "bun x tsc --project tsconfig.json --noEmit"
+	},
+	"exports": {
+		"./copy/market.js": {
+			"bun": "./ts/copy/market.ts",
+			"default": "./js/copy/market.js"
+		},
+		"./copy/zoltar.js": {
+			"bun": "./ts/copy/zoltar.ts",
+			"default": "./js/copy/zoltar.js"
+		},
+		"./features/deployment/components/DeploymentRouteContent.js": {
+			"bun": "./ts/features/deployment/components/DeploymentRouteContent.tsx",
+			"default": "./js/features/deployment/components/DeploymentRouteContent.js"
+		},
+		"./features/deployment/components/DeploymentSection.js": {
+			"bun": "./ts/features/deployment/components/DeploymentSection.tsx",
+			"default": "./js/features/deployment/components/DeploymentSection.js"
+		},
+		"./features/deployment/hooks/useDeploymentFlow.js": {
+			"bun": "./ts/features/deployment/hooks/useDeploymentFlow.ts",
+			"default": "./js/features/deployment/hooks/useDeploymentFlow.js"
+		},
+		"./features/deployment/lib/deployment.js": {
+			"bun": "./ts/features/deployment/lib/deployment.ts",
+			"default": "./js/features/deployment/lib/deployment.js"
+		},
+		"./features/deployment/lib/deploymentRoute.js": {
+			"bun": "./ts/features/deployment/lib/deploymentRoute.ts",
+			"default": "./js/features/deployment/lib/deploymentRoute.js"
+		},
+		"./features/overview/OverviewPanels.js": {
+			"bun": "./ts/features/overview/OverviewPanels.tsx",
+			"default": "./js/features/overview/OverviewPanels.js"
+		},
+		"./features/questions/components/QuestionCreateSection.js": {
+			"bun": "./ts/features/questions/components/QuestionCreateSection.tsx",
+			"default": "./js/features/questions/components/QuestionCreateSection.js"
+		},
+		"./features/questions/hooks/useQuestionCreation.js": {
+			"bun": "./ts/features/questions/hooks/useQuestionCreation.ts",
+			"default": "./js/features/questions/hooks/useQuestionCreation.js"
+		},
+		"./features/questions/lib/questionCreation.js": {
+			"bun": "./ts/features/questions/lib/questionCreation.ts",
+			"default": "./js/features/questions/lib/questionCreation.js"
+		},
+		"./features/questions/lib/questionForm.js": {
+			"bun": "./ts/features/questions/lib/questionForm.ts",
+			"default": "./js/features/questions/lib/questionForm.js"
+		},
+		"./features/types.js": {
+			"bun": "./ts/features/types.ts",
+			"default": "./js/features/types.js"
+		},
+		"./features/universes/components/ChildUniverseDeploymentModal.js": {
+			"bun": "./ts/features/universes/components/ChildUniverseDeploymentModal.tsx",
+			"default": "./js/features/universes/components/ChildUniverseDeploymentModal.js"
+		},
+		"./features/universes/components/ChildUniverseDeploymentSection.js": {
+			"bun": "./ts/features/universes/components/ChildUniverseDeploymentSection.tsx",
+			"default": "./js/features/universes/components/ChildUniverseDeploymentSection.js"
+		},
+		"./features/universes/components/ChildUniverseDetails.js": {
+			"bun": "./ts/features/universes/components/ChildUniverseDetails.tsx",
+			"default": "./js/features/universes/components/ChildUniverseDetails.js"
+		},
+		"./features/universes/components/ChildUniversesSection.js": {
+			"bun": "./ts/features/universes/components/ChildUniversesSection.tsx",
+			"default": "./js/features/universes/components/ChildUniversesSection.js"
+		},
+		"./features/universes/components/ForkZoltarSection.js": {
+			"bun": "./ts/features/universes/components/ForkZoltarSection.tsx",
+			"default": "./js/features/universes/components/ForkZoltarSection.js"
+		},
+		"./features/universes/components/MigrationOutcomeUniversesSection.js": {
+			"bun": "./ts/features/universes/components/MigrationOutcomeUniversesSection.tsx",
+			"default": "./js/features/universes/components/MigrationOutcomeUniversesSection.js"
+		},
+		"./features/universes/components/UniverseDirectorySection.js": {
+			"bun": "./ts/features/universes/components/UniverseDirectorySection.tsx",
+			"default": "./js/features/universes/components/UniverseDirectorySection.js"
+		},
+		"./features/universes/components/UniverseLink.js": {
+			"bun": "./ts/features/universes/components/UniverseLink.tsx",
+			"default": "./js/features/universes/components/UniverseLink.js"
+		},
+		"./features/universes/components/ZoltarMigrationSection.js": {
+			"bun": "./ts/features/universes/components/ZoltarMigrationSection.tsx",
+			"default": "./js/features/universes/components/ZoltarMigrationSection.js"
+		},
+		"./features/universes/hooks/useZoltarFork.js": {
+			"bun": "./ts/features/universes/hooks/useZoltarFork.ts",
+			"default": "./js/features/universes/hooks/useZoltarFork.js"
+		},
+		"./features/universes/hooks/useZoltarMigration.js": {
+			"bun": "./ts/features/universes/hooks/useZoltarMigration.ts",
+			"default": "./js/features/universes/hooks/useZoltarMigration.js"
+		},
+		"./features/universes/hooks/useZoltarOperations.js": {
+			"bun": "./ts/features/universes/hooks/useZoltarOperations.ts",
+			"default": "./js/features/universes/hooks/useZoltarOperations.js"
+		},
+		"./features/universes/hooks/useZoltarUniverse.js": {
+			"bun": "./ts/features/universes/hooks/useZoltarUniverse.ts",
+			"default": "./js/features/universes/hooks/useZoltarUniverse.js"
+		},
+		"./features/universes/lib/universe.js": {
+			"bun": "./ts/features/universes/lib/universe.ts",
+			"default": "./js/features/universes/lib/universe.js"
+		},
+		"./features/universes/lib/zoltarMigrationGuards.js": {
+			"bun": "./ts/features/universes/lib/zoltarMigrationGuards.ts",
+			"default": "./js/features/universes/lib/zoltarMigrationGuards.js"
+		},
+		"./features/zoltarSurface/components/ZoltarSection.js": {
+			"bun": "./ts/features/zoltarSurface/components/ZoltarSection.tsx",
+			"default": "./js/features/zoltarSurface/components/ZoltarSection.js"
+		},
+		"./lib/routing.js": {
+			"bun": "./ts/lib/routing.ts",
+			"default": "./js/lib/routing.js"
+		},
+		"./protocol/activeProtocolAddresses.js": {
+			"bun": "./ts/protocol/activeProtocolAddresses.ts",
+			"default": "./js/protocol/activeProtocolAddresses.js"
+		},
+		"./protocol/core.js": {
+			"bun": "./ts/protocol/core.ts",
+			"default": "./js/protocol/core.js"
+		},
+		"./protocol/deployment.js": {
+			"bun": "./ts/protocol/deployment.ts",
+			"default": "./js/protocol/deployment.js"
+		},
+		"./protocol/helpers.js": {
+			"bun": "./ts/protocol/helpers.ts",
+			"default": "./js/protocol/helpers.js"
+		},
+		"./protocol/tokenActions.js": {
+			"bun": "./ts/protocol/tokenActions.ts",
+			"default": "./js/protocol/tokenActions.js"
+		},
+		"./protocol/uniswapQuoter.js": {
+			"bun": "./ts/protocol/uniswapQuoter.ts",
+			"default": "./js/protocol/uniswapQuoter.js"
+		},
+		"./protocol/zoltar.js": {
+			"bun": "./ts/protocol/zoltar.ts",
+			"default": "./js/protocol/zoltar.js"
+		},
+		"./protocol/zoltarDeploymentHelpers.js": {
+			"bun": "./ts/protocol/zoltarDeploymentHelpers.ts",
+			"default": "./js/protocol/zoltarDeploymentHelpers.js"
+		},
+		"./protocol/zoltarForks.js": {
+			"bun": "./ts/protocol/zoltarForks.ts",
+			"default": "./js/protocol/zoltarForks.js"
+		},
+		"./types/app.js": {
+			"bun": "./ts/types/app.ts",
+			"default": "./js/types/app.js"
+		},
+		"./lib/formDefaults.js": {
+			"bun": "./ts/lib/formDefaults.ts",
+			"default": "./js/lib/formDefaults.js"
+		}
+	}
+}

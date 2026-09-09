@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { createPublicClient, custom, encodeAbiParameters, getAddress } from '@zoltar/shared/ethereum'
+import { createPublicClient, custom, encodeAbiParameters, getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { parseDeploymentSetupInput } from '../../protocol/config.js'
 import { parseCoreDeployments } from '../../protocol/coreDeployments.js'
 import { loadWalletHeaderBalances, validateRpcChainId } from '../../protocol/live.js'

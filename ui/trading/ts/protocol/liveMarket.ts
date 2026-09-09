@@ -1,4 +1,4 @@
-import type { Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 
 export type LiveMarket = Readonly<{
 	loadError?: string
@@ -6,6 +6,7 @@ export type LiveMarket = Readonly<{
 	pair: Address | undefined
 	shareToken: Address
 	universeId: bigint
+	originUniverseId?: bigint
 	questionId: bigint
 	title: string
 	description: string
@@ -63,7 +64,7 @@ export function marketAcceptsNewRisk(market: MarketLifecycle, nowSeconds: bigint
 
 type ShareBalanceScope = Readonly<{ pool: Address; shareToken: Address; invalidTokenId: bigint; yesTokenId: bigint; noTokenId: bigint }>
 
-export type LiveBalances = Readonly<{ scope: ShareBalanceScope; yes: bigint; no: bigint; invalid: bigint; lp: bigint; approved: boolean; lpAllowance: bigint }>
+export type LiveBalances = Readonly<{ scope: ShareBalanceScope; yes: bigint; no: bigint; invalid: bigint; lp: bigint }>
 
 export function shareBalanceScope(market: Pick<LiveMarket, 'pool' | 'shareToken' | 'universeId'>) {
 	const invalidTokenId = market.universeId << 8n

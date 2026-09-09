@@ -1,7 +1,8 @@
+import { loadUniverseTree } from '@zoltar/bot-shared/monitoring/universe-policy'
 import { getAddress, zeroAddress, type Address, type Chain, type PublicClient, type Transport } from '@zoltar/bot-shared/ethereum'
 import { fetchLogsWithAdaptiveRanges } from '@zoltar/bot-shared/monitoring/block-sync'
 import type { OperatorSettings } from '#config/settings'
-import { coordinatorAbi, deploySecurityPoolEvent, erc20Abi, escalationGameAbi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi, truthAuctionHaircutAppliedEvent, vaultAccountingCheckpointEvent, vaultEscrowUpdatedEvent, zoltarAbi } from '#contracts/abi'
+import { coordinatorAbi, deploySecurityPoolEvent, erc20Abi, escalationGameAbi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi, truthAuctionHaircutAppliedEvent, vaultAccountingCheckpointEvent, vaultEscrowUpdatedEvent } from '#contracts/abi'
 import { isPoolExecutionEligible } from '#core/fork-migration'
 import { evaluateCandidate, repForBackingUnits, sortCandidates, type VaultPosition } from '#core/strategy'
 import { hasStagedLiquidation } from '#core/staged-operations'
@@ -62,63 +63,6 @@ function emptyVault(address: Address): VaultPosition {
 		claimableFeesAttoEth: 0n,
 		disputeStakedAttoRep: 0n,
 	}
-}
-
-async function loadUniverses(client: ReadClient, settings: OperatorSettings, blockNumber: bigint) {
-	const root = await client.readContract({
-		abi: zoltarAbi,
-		address: settings.deployment.zoltar,
-		args: [0n],
-		blockNumber,
-		functionName: 'universes',
-	})
-	const universes: UniverseObservation[] = [
-		{
-			approved: settings.approvedUniverses.includes(0n),
-			forkQuestionId: root.forkQuestionId,
-			forkTime: root.forkTime,
-			id: 0n,
-			outcomeIndex: undefined,
-			parentId: undefined,
-			repToken: getAddress(root.reputationToken),
-		},
-	]
-	const seen = new Set(['0'])
-	for (let universeIndex = 0; universeIndex < universes.length; universeIndex += 1) {
-		const universe = universes[universeIndex]
-		if (universe === undefined) throw new Error('Universe traversal lost its current entry')
-		for (let start = 0n; ; start += 100n) {
-			const [outcomeIndexes, childUniverseIds, children] = await client.readContract({
-				abi: zoltarAbi,
-				address: settings.deployment.zoltar,
-				args: [universe.id, start, 100n],
-				blockNumber,
-				functionName: 'getDeployedChildUniverses',
-			})
-			if (outcomeIndexes.length !== childUniverseIds.length || childUniverseIds.length !== children.length) {
-				throw new Error(`Zoltar returned mismatched children for universe ${universe.id.toString()}`)
-			}
-			for (const [index, childId] of childUniverseIds.entries()) {
-				const child = children[index]
-				const outcomeIndex = outcomeIndexes[index]
-				if (child === undefined || outcomeIndex === undefined) throw new Error('Zoltar returned an incomplete child universe')
-				const key = childId.toString()
-				if (seen.has(key)) throw new Error(`Zoltar universe ${key} appears more than once in the universe tree`)
-				seen.add(key)
-				universes.push({
-					approved: settings.approvedUniverses.includes(childId),
-					forkQuestionId: child.forkQuestionId,
-					forkTime: child.forkTime,
-					id: childId,
-					outcomeIndex,
-					parentId: universe.id,
-					repToken: getAddress(child.reputationToken),
-				})
-			}
-			if (children.length < 100) break
-		}
-	}
-	return universes
 }
 
 function requireBigint(value: unknown, label: string) {
@@ -509,7 +453,7 @@ export async function scanPools(client: ReadClient, settings: OperatorSettings, 
 	if (isStopping()) throw new Error('Operator stopping during pool scan')
 	if (block.hash === undefined || block.number === undefined) throw new Error('Security pool scan block is missing canonical identity')
 	const snapshotBlock = { hash: block.hash, number: block.number, timestamp: block.timestamp }
-	const universes = await loadUniverses(client, settings, snapshotBlock.number)
+	const universes = (await loadUniverseTree(client, settings.deployment.zoltar, snapshotBlock.number)).map(universe => ({ ...universe, approved: settings.approvedUniverses.includes(universe.id) }))
 	if (isStopping()) throw new Error('Operator stopping during pool scan')
 	const deployments = await loadRelevantPoolDeployments(client, settings, snapshotBlock)
 	if (isStopping()) throw new Error('Operator stopping during pool scan')

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe as baseDescribe, expect, test } from 'bun:test'
-import { createPublicClient, http, mainnet } from '@zoltar/shared/ethereum'
+import { createPublicClient, http, mainnet } from '@zoltar/core-shared/evm/ethereum'
 import { resolveAnvilBinary } from '../../../../../solidity/ts/testSupport/simulator/anvilNode'
-import { ETH_ADDRESS, REP_ADDRESS, USDC_ADDRESS, quoteExactInput, quoteRepForEthV3 } from '../../protocol/uniswapQuoter.js'
+import { ETH_ADDRESS, REP_ADDRESS, USDC_ADDRESS, quoteExactInput, quoteRepForEthV3 } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
 
 const PINNED_MAINNET_BLOCK = 22_000_000n
 const ANVIL_START_TIMEOUT_MS = 30_000

@@ -34,8 +34,6 @@ export async function updateOperatorConnectivity(parameters: {
 	const selectedNetwork = networkConfiguration(networkName, {
 		factory: parameters.deployment.uniswapFactory,
 		quoter: parameters.deployment.uniswapQuoter,
-		rep: parameters.deployment.rep,
-		weth: parameters.deployment.weth,
 	})
 	const connectivity = validateConnectivitySettingsForQuorum(value.connectivity, parameters.deployment.quorumRpcUrls)
 	if (parameters.execute && parameters.deployment.quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(rpcQuorum)) throw new Error('Live execution requires at least two independent quorum RPCs (three read endpoints total)')
@@ -48,7 +46,7 @@ export async function updateOperatorConnectivity(parameters: {
 	let centralizedMarkets: PersistedOperatorSettings['centralizedMarkets'] | undefined
 	await parameters.persist(settings => {
 		validateIndependentReadRpcUrls(connectivity.readRpcUrl, settings.deployment.quorumRpcUrls)
-		centralizedMarkets = { ...settings.centralizedMarkets, assetChainId: selectedNetwork.chain.id }
+		centralizedMarkets = { ...settings.centralizedMarkets, assetAddress: selectedNetwork.rep, assetChainId: selectedNetwork.chain.id }
 		return { ...settings, centralizedMarkets, connectivity, network: networkName, networkConfigured: true, rpcQuorum }
 	})
 	if (centralizedMarkets === undefined) throw new Error('Connectivity persistence did not apply the operator settings update')

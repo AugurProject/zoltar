@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { requireDefined } from '../lib/required.js'
+import { requireDefined } from '../forms/required.js'
 
 describe('requireDefined', () => {
 	test('returns defined values', () => {

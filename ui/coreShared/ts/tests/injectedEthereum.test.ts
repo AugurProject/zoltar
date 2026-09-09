@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { createWalletContextSubscription, subscribeToWalletContextChanges } from '../injectedEthereum.js'
+import { createWalletContextSubscription, subscribeToWalletContextChanges } from '../wallet/injectedEthereum.js'
 
 describe('injected wallet context events', () => {
 	test('invalidates for account and chain changes, then removes both listeners', () => {
