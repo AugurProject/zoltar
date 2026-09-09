@@ -912,8 +912,9 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 
 			await driver.resize({ height: 844, width: 390 })
 			await driver.navigate(`${baseUrl}/statoblast/?workflow=pool#/security-pools?simulate=1&simScenario=security-pool`)
-			await driver.waitForBodyText('Open pool')
-			await driver.clickButton('Open pool')
+			await driver.waitForBodyText('Will this resolve?')
+			const poolOpened = await driver.evaluate(`(() => { const link = document.querySelector('article.comparison-record h3 a[aria-label^="Open pool:"]'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
+			expect(poolOpened).toBe(true)
 			await driver.waitForBodyWithoutText('Loading vault details…')
 			await driver.waitForButtonEnabled('Deposit REP')
 			await driver.clickButton('Deposit REP')
@@ -943,9 +944,9 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 
 			await driver.resize({ height: 900, width: 1440 })
 			await driver.navigate(`${baseUrl}/statoblast/?workflow=reporting#/security-pools?simulate=1&simScenario=securitypoolx2`)
-			await driver.waitForBodyText('Open pool')
+			await driver.waitForBodyText('Will this resolve?')
 			const reportingPoolOpened = await driver.evaluate(
-				`(() => { const record = [...document.querySelectorAll('article.comparison-record')].find(candidate => candidate.textContent?.includes('Will this resolve? (securitypoolx2 #1)')); const button = [...(record?.querySelectorAll('button') ?? [])].find(candidate => candidate.textContent?.trim() === 'Open pool'); if (!(button instanceof HTMLButtonElement)) return false; button.click(); return true })()`,
+				`(() => { const record = [...document.querySelectorAll('article.comparison-record')].find(candidate => candidate.textContent?.includes('Will this resolve? (securitypoolx2 #1)')); const link = record?.querySelector('h3 a[aria-label^="Open pool:"]'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`,
 			)
 			expect(reportingPoolOpened).toBe(true)
 			await driver.waitForBodyWithoutText('Loading vault details…')
@@ -1086,10 +1087,14 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 
 			await driver.resize({ height: 900, width: 1440 })
 			await driver.navigate(`${baseUrl}/statoblast/?workflow=auction#/security-pools?simulate=1&simScenario=securitypoolx2-auction`)
-			await driver.waitForBodyText('Open pool')
+			await driver.waitForBodyText('Will this resolve?')
+			const allUniversesSelected = await driver.evaluate(
+				`(() => { const label = [...document.querySelectorAll('.filter-toolbar label')].find(candidate => candidate.querySelector('span')?.textContent?.trim() === 'Universe'); const select = label?.querySelector('select'); if (!(select instanceof HTMLSelectElement)) return false; select.value = 'all'; select.dispatchEvent(new Event('change', { bubbles: true })); return true })()`,
+			)
+			expect(allUniversesSelected).toBe(true)
 			await driver.clickButton('+1 month')
 			const auctionPoolOpened = await driver.evaluate(
-				`(() => { const record = [...document.querySelectorAll('article.comparison-record')].find(candidate => candidate.textContent?.toLowerCase().includes('truth auction')); const button = [...(record?.querySelectorAll('button') ?? [])].find(candidate => candidate.textContent?.trim() === 'Open pool'); if (!(button instanceof HTMLButtonElement)) return false; button.click(); return true })()`,
+				`(() => { const record = [...document.querySelectorAll('article.comparison-record')].find(candidate => candidate.textContent?.toLowerCase().includes('truth auction')); const link = record?.querySelector('h3 a[aria-label^="Open pool:"]'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`,
 			)
 			expect(auctionPoolOpened).toBe(true)
 			const auctionPoolBody = await driver.waitForBodyText('Fork & Migration')

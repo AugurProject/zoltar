@@ -10,33 +10,7 @@
 		<link rel="stylesheet" href="/operator-console.css" />
 	</head>
 	<body>
-		<header class="app-header operator-shell">
-			<div class="operator-primary">
-				<div>
-					<p class="eyebrow">Zoltar operator console</p>
-					<h1>OpenOracle Arbitrager</h1>
-					<p id="header-block-status" class="header-block-status">Block — · waiting for first observation</p>
-				</div>
-				<div class="header-actions operator-safety" aria-label="Bot safety status">
-					<span id="mode-badge" class="badge">Mode —</span>
-					<span id="run-status-badge" class="badge">Run —</span>
-					<span id="capability-badge" class="badge">Capability —</span>
-					<span id="retry-status-badge" class="badge badge-warning" hidden>Retry —</span>
-					<span id="header-network-badge" class="badge">Network —</span>
-					<a id="attention-badge" class="badge attention-badge">No blockers</a>
-					<button id="refresh-button" class="button button-secondary" type="button">Refresh</button>
-					<button id="pause-button" class="button" type="button" disabled>Pause bot</button>
-				</div>
-			</div>
-			<nav class="section-nav" aria-label="Dashboard sections">
-				<a href="/overview">Overview</a>
-				<a href="/operations">Opportunities</a>
-				<a href="/games">Games</a>
-				<a href="/markets">Markets</a>
-				<a href="/settings">Settings</a>
-				<a href="/documentation">Operator guide</a>
-			</nav>
-		</header>
+		<!-- operator-header -->
 
 		<main>
 			<section id="launch-notice" class="notice" data-page-content="overview" aria-live="polite">
@@ -50,7 +24,7 @@
 
 			<section id="overview" class="metric-grid operator-metrics" data-page-content="overview" aria-label="Bot summary">
 				<div class="metric"><span class="metric-label">Status</span><strong id="status-value">—</strong><small id="last-poll-value">No poll completed</small></div>
-				<div class="metric"><span class="metric-label">Active reports</span><strong id="active-report-value">0</strong><small id="block-value">Block — · waiting for first observation</small></div>
+				<div class="metric"><span class="metric-label">Active reports</span><strong id="active-report-value">0</strong></div>
 				<div class="metric"><span class="metric-label">Realized net P&amp;L</span><strong id="profit-value">0 ETH</strong><small>Exact automatic closes, including settler rewards, plus acknowledged all-in manual records</small></div>
 				<div class="metric"><span class="metric-label">Open hedged P&amp;L</span><strong id="open-profit-value">0 ETH</strong><small>Actual hedge result less gas so far; unrealized until exact withdrawal</small></div>
 				<div class="metric"><span class="metric-label">Hedged P&amp;L before gas</span><strong id="hedged-profit-value">0 ETH</strong><small>Actual swap execution economics across durable positions</small></div>

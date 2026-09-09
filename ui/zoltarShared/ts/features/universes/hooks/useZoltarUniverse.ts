@@ -84,6 +84,7 @@ export function useZoltarUniverse(
 	const zoltarUniverseLoadedId = useSignal<bigint | undefined>(undefined)
 	const zoltarUniverseResolvedId = useSignal<bigint | undefined>(undefined)
 	const hasLoadedZoltarQuestions = useSignal(false)
+	const requestedQuestionPage = useRef<{ pageIndex: number; pageSize: number }>()
 	const zoltarQuestionCount = useSignal<bigint | undefined>(undefined)
 	const zoltarQuestionPage = useSignal<MarketDetailsPage | undefined>(undefined)
 	const zoltarQuestions = useSignal<MarketDetails[]>([])
@@ -278,6 +279,7 @@ export function useZoltarUniverse(
 
 	const loadQuestionsPage = async (pageIndex: number, pageSize: number): Promise<void> => {
 		if (!isMounted.current) return
+		requestedQuestionPage.current = { pageIndex, pageSize }
 		if (!zoltarDeployed) return
 		const isCountCurrent = nextQuestionCountLoad()
 		const isQuestionsCurrent = nextQuestionsLoad()
@@ -445,7 +447,10 @@ export function useZoltarUniverse(
 	useLayoutEffect(() => {
 		if (!autoLoadInitialData) return
 		const initialLoads: Promise<unknown>[] = [loadZoltarUniverse()]
-		if (zoltarDeployed) initialLoads.push(loadZoltarQuestionCountData())
+		if (zoltarDeployed) {
+			const page = requestedQuestionPage.current
+			initialLoads.push(page === undefined ? loadZoltarQuestionCountData() : loadQuestionsPage(page.pageIndex, page.pageSize))
+		}
 		void Promise.allSettled(initialLoads)
 	}, [activeUniverseId, autoLoadInitialData, environmentRefreshKey, zoltarDeployed])
 

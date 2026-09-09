@@ -1,3 +1,4 @@
+import { operatorHeader } from './header.ts'
 import { buildDashboardScript } from '../../../shared/src/dashboard/assets.js'
 import { join } from 'node:path'
 import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
@@ -149,7 +150,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 		const page = pathname === '/' ? 'overview' : pathname.slice(1)
 		if (!dashboardPages.has(page)) return undefined
 		const source = await Bun.file(join(directory, 'index.html')).text()
-		return source.replace('<body>', `<body data-page="${page}">`)
+		return source.replace('<!-- operator-header -->', operatorHeader).replace('<body>', `<body data-page="${page}">`)
 	}
 	const transpiler = new Bun.Transpiler({ loader: 'ts', target: 'browser' })
 	const hostname = controller.hostname ?? '127.0.0.1'

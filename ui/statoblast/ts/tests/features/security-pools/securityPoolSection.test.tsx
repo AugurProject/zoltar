@@ -650,11 +650,9 @@ describe('SecurityPoolSection', () => {
 			render(h(SecurityPoolSection, { ...initialProps, activeUniverseId: 2n }), renderedComponent.container)
 		})
 
-		const warning = within(document.body).getByRole('alert')
-		expect(warning.classList.contains('flat')).toBe(true)
-		expect(warning.classList.contains('compact')).toBe(true)
-		expect(warning.textContent).toContain('Universe Mismatch')
-		expect(warning.textContent).toContain('This pool belongs to 0x1, while the header shows 0x2.')
+		const warning = within(document.body).getByText('This pool belongs to universe 0x1')
+		expect(warning.closest('.entity-card') !== null).toBe(true)
+		expect(within(document.body).queryByText('Universe Mismatch') === null).toBe(true)
 	})
 
 	test('uses carried market details when created market does not match loaded market details', async () => {

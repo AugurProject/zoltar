@@ -947,7 +947,7 @@ browserTest(
 				).toEqual({ auctions: 1, pairs: 1, pools: 1, reports: 1, universes: 1 })
 				const topologyPresentation = await cdp.evaluate(`({
 					summaryHeights: [...document.querySelectorAll('.topology-grid summary')].map(summary => summary.getBoundingClientRect().height),
-					topbarBackground: getComputedStyle(document.querySelector('.topbar')).backgroundColor,
+					topbarBackground: getComputedStyle(document.querySelector('.operator-shell')).backgroundColor,
 				})`)
 				expect(Reflect.get(topologyPresentation, 'topbarBackground')).toBe('rgb(8, 11, 16)')
 				const summaryHeights = Reflect.get(topologyPresentation, 'summaryHeights')
