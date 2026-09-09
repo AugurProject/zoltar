@@ -1,3 +1,4 @@
+import { discoverAddressedMarket, discoverTradingMarketPage } from '../protocol/marketDiscovery.js'
 import { getAddress, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { parseUnitsOrUndefined } from '../lib/format.js'
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
@@ -24,6 +25,8 @@ export type GuardedWalletWrite = <T>(write: () => Promise<T>) => Promise<T>
 export type WorkflowOwner = 'position' | 'liquidity'
 
 export const liveTradingControllerServices: LiveTradingControllerServices = {
+	discoverAddressedMarket,
+	discoverTradingMarketPage,
 	connectWallet,
 	createTradingPublicClient,
 	createTradingWalletClient,
@@ -92,7 +95,7 @@ export function discoveryCommitAllowed(owner: WorkflowOwner | undefined, positio
 }
 
 export function securityPoolAddressFromRoute(route: string) {
-	const match = /^security-pool\/(0x[0-9a-fA-F]{40})$/.exec(route)
+	const match = /^(?:security-pool|market|liquidity|create-market)\/(0x[0-9a-fA-F]{40})$/.exec(route)
 	return match?.[1] === undefined ? undefined : getAddress(match[1])
 }
 

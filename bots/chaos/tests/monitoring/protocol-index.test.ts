@@ -1,6 +1,8 @@
+import { ChaosProtocolIndexReorgError } from '../../src/monitoring/protocol-index-context.ts'
 import { describe, expect, test } from 'bun:test'
 import { bytesToHex, encodeAbiParameters, keccak256, toHex, type Address } from '@zoltar/bot-shared/ethereum'
-import { ChaosProtocolIndexReorgError, decodePackedOracleReport, deriveChildUniverseId, OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT, updateProtocolIndex, type ChaosProtocolIndex } from '../../src/monitoring/protocol-index.ts'
+import { decodePackedOracleReport, deriveChildUniverseId, OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT, updateProtocolIndex, type ChaosProtocolIndex } from '../../src/monitoring/protocol-index.ts'
+import { updateProtocolIndexWithQuorum } from '../../src/monitoring/protocol-index-quorum.ts'
 import type { ChaosReadClient } from '../../src/monitoring/discovery.ts'
 import { address, hash } from '../operations/fixture.ts'
 
@@ -126,7 +128,7 @@ function refundGeneration(log: ReturnType<typeof refundLog>) {
 	return keccak256(encodeAbiParameters([{ type: 'bytes32' }, { type: 'bytes32' }, { type: 'uint256' }], [log.blockHash, log.transactionHash, BigInt(log.logIndex)]))
 }
 
-function eventIndexClient(logs: ReturnType<typeof canonicalLog>[], oracleReads: bigint[] = [], canonicalBlockHash = (blockNumber: bigint) => hash(Number(blockNumber)), maximumLogRange?: bigint, logFailure?: Error) {
+function eventIndexClient(logs: ReturnType<typeof canonicalLog>[], oracleReads: bigint[] = [], canonicalBlockHash = (blockNumber: bigint) => hash(Number(blockNumber)), maximumLogRange?: bigint, logFailure?: Error | ((fromBlock: bigint, toBlock: bigint) => Error | undefined)) {
 	const implementation = {
 		async getBlock(parameters: { blockNumber?: bigint }) {
 			const number = parameters.blockNumber
@@ -134,9 +136,10 @@ function eventIndexClient(logs: ReturnType<typeof canonicalLog>[], oracleReads: 
 			return { hash: canonicalBlockHash(number), number, timestamp: 1_000n }
 		},
 		async getLogs(parameters: { address?: Address | Address[]; fromBlock?: bigint; toBlock?: bigint }) {
-			if (logFailure !== undefined) throw logFailure
 			const { fromBlock, toBlock } = parameters
 			if (fromBlock === undefined || toBlock === undefined) throw new Error('Bounded log range required')
+			const failure = typeof logFailure === 'function' ? logFailure(fromBlock, toBlock) : logFailure
+			if (failure !== undefined) throw failure
 			if (maximumLogRange !== undefined && toBlock - fromBlock + 1n > maximumLogRange) throw new Error(`eth_getLogs range is too large; maximum ${maximumLogRange.toString()} blocks`)
 			let requested: Address[] = []
 			if (Array.isArray(parameters.address)) requested = parameters.address
@@ -161,6 +164,80 @@ function eventIndexClient(logs: ReturnType<typeof canonicalLog>[], oracleReads: 
 }
 
 describe('durable protocol index', () => {
+	test('selects the oldest history supported by the configured quorum across retention windows', async () => {
+		const context = { ...indexDeployments, ...indexTrust, anchorBlockNumber: 100n, auctionAddresses: [], chainId: 31337, escalationGames: [], maxBlockSpan: 101n, startBlock: 0n, wallet: address(1) }
+		const readers = [42n, 60n, 80n].map((floor, position) => ({ endpoint: `reader-${position}`, client: eventIndexClient([], [], undefined, undefined, from => (from < floor ? new Error('pruned history unavailable') : undefined)) }))
+		expect((await updateProtocolIndexWithQuorum(context, readers, 1)).index.availableStartBlock).toBe('42')
+		const quorum = await updateProtocolIndexWithQuorum(context, readers, 2)
+		expect(quorum.index.availableStartBlock).toBe('60')
+		expect(quorum.complete).toBe(false)
+		const archive = { endpoint: 'archive', client: eventIndexClient([]) }
+		const full = await updateProtocolIndexWithQuorum(context, [...readers, archive], 1)
+		expect(full.index.availableStartBlock).toBeUndefined()
+		expect(full.complete).toBe(true)
+		const partial = await updateProtocolIndexWithQuorum({ ...context, maxBlockSpan: 10n }, readers, 2)
+		const prunedReader = readers[1]
+		if (prunedReader === undefined) throw new Error('Missing pruned reader fixture')
+		const resumed = await updateProtocolIndexWithQuorum({ ...context, maxBlockSpan: 10n, previous: partial.index }, [archive, prunedReader], 2)
+		expect(resumed.index.availableStartBlock).toBe('60')
+		expect(resumed.toBlock).toBe('79')
+	})
+
+	test('continues to reject disagreements between providers serving the same suffix', async () => {
+		const context = { ...indexDeployments, ...indexTrust, anchorBlockNumber: 100n, auctionAddresses: [], chainId: 31337, escalationGames: [], maxBlockSpan: 101n, startBlock: 0n, wallet: address(1) }
+		const readers = [7n, 8n].map((cumulative, position) => ({ endpoint: `reader-${position}`, client: eventIndexClient([migrationRepSplitLog({ amount: 2n, blockNumber: 42n, cumulative, logIndex: 0 })], [], undefined, undefined, from => (from < 42n ? new Error('pruned history unavailable') : undefined)) }))
+		await expect(updateProtocolIndexWithQuorum(context, readers, 2)).rejects.toThrow('RPC disagreement')
+	})
+
+	test('locates pruned history, indexes the available suffix, and resumes without forgetting the gap', async () => {
+		const requested: bigint[] = []
+		const logs = [migrationRepSplitLog({ amount: 5n, blockNumber: 1n, cumulative: 5n, logIndex: 0 }), migrationRepSplitLog({ amount: 2n, blockNumber: 42n, cumulative: 7n, logIndex: 0 }), migrationRepSplitLog({ amount: 3n, blockNumber: 51n, cumulative: 10n, logIndex: 0 })]
+		const client = eventIndexClient(logs, [], undefined, undefined, fromBlock => {
+			requested.push(fromBlock)
+			return fromBlock < 42n ? new Error('pruned history unavailable') : undefined
+		})
+		const context = { ...indexDeployments, ...indexTrust, anchorBlockNumber: 100n, auctionAddresses: [], chainId: 31337, client, escalationGames: [], maxBlockSpan: 10n, startBlock: 0n, wallet: address(1) }
+		const first = await updateProtocolIndex(context)
+		expect(first).toMatchObject({ complete: false, fromBlock: '42', toBlock: '51', index: { availableStartBlock: '42', startBlock: '0', migrationRepSplits: [{ childMigrationRepAmountAttoRep: '10' }] } })
+		expect(requested.length).toBeLessThan(20)
+		requested.length = 0
+		const resumed = await updateProtocolIndex({ ...context, maxBlockSpan: 100n, previous: first.index })
+		expect(resumed).toMatchObject({ complete: false, fromBlock: '52', toBlock: '100', index: { availableStartBlock: '42' } })
+		expect(requested[0]).toBe(0n)
+		expect(requested.slice(1).every(block => block >= 52n)).toBe(true)
+		const caughtUp = await updateProtocolIndex({ ...context, previous: resumed.index })
+		expect(caughtUp.complete).toBe(false)
+		const restored = await updateProtocolIndex({ ...context, client: eventIndexClient(logs), maxBlockSpan: 101n, previous: resumed.index })
+		expect(restored.complete).toBe(true)
+		expect(restored.index.availableStartBlock).toBeUndefined()
+		expect(restored.index.migrationRepSplits).toEqual(resumed.index.migrationRepSplits)
+	})
+
+	test('locates pruning behind a caught-up protocol cursor when carry proofs still need older logs', async () => {
+		const context = { ...indexDeployments, ...indexTrust, anchorBlockNumber: 100n, auctionAddresses: [], chainId: 31337, escalationGames: [], startBlock: 0n, wallet: address(1) }
+		const previous = (await updateProtocolIndex({ ...context, client: eventIndexClient([]) })).index
+		const client = eventIndexClient([], [], undefined, undefined, from => (from < 42n ? new Error('pruned history unavailable') : undefined))
+		const update = await updateProtocolIndex({ ...context, client, previous, requiredLogStartBlock: 0n })
+		expect(update.index.availableStartBlock).toBe('42')
+		expect(update.complete).toBe(false)
+		expect(update.toBlock).toBe('100')
+	})
+
+	test('does not invent refund episodes when the available history begins mid-episode', async () => {
+		const knownEpisode = refundLog({ amount: 4n, blockNumber: 45n, logIndex: 0 })
+		const client = eventIndexClient([refundLog({ amount: 2n, pending: 7n, blockNumber: 42n, logIndex: 0 }), refundLog({ amount: 7n, withdrawn: true, blockNumber: 43n, logIndex: 0 }), knownEpisode], [], undefined, undefined, from => (from < 42n ? new Error('pruned history unavailable') : undefined))
+		const update = await updateProtocolIndex({ ...indexDeployments, ...indexTrust, anchorBlockNumber: 50n, auctionAddresses: [address(20)], chainId: 31337, client, escalationGames: [], startBlock: 0n, wallet: address(1) })
+		expect(update.complete).toBe(false)
+		expect(update.index.auctionRefunds[address(20).toLowerCase()]).toEqual({ generation: refundGeneration(knownEpisode), pendingAttoEth: '4' })
+	})
+
+	test('preserves failures when even the anchor logs are pruned or a boundary probe times out', async () => {
+		for (const failure of [(from: bigint) => (from < 100n ? new Error('pruned history unavailable') : new Error('request timed out')), () => new Error('pruned history unavailable')]) {
+			const client = eventIndexClient([], [], undefined, undefined, failure)
+			await expect(updateProtocolIndex({ ...indexDeployments, ...indexTrust, anchorBlockNumber: 100n, auctionAddresses: [], chainId: 31337, client, escalationGames: [], startBlock: 0n, wallet: address(1) })).rejects.toThrow()
+		}
+	})
+
 	test('subdivides provider-limited log ranges without losing or duplicating canonical history', async () => {
 		const update = await updateProtocolIndex({
 			anchorBlockNumber: 120n,

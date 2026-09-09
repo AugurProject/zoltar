@@ -1,3 +1,4 @@
+import { discoverAddressedMarket, discoverTradingMarketPage } from '../../protocol/marketDiscovery.js'
 import type { Address, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import type {
@@ -29,6 +30,8 @@ export type TransactionState = TransactionPhase
 export type BalanceState = 'disconnected' | 'loading' | 'ready' | 'error'
 export type PortfolioBalanceEntry = Readonly<{ market: LiveMarket; balances: LiveBalances | undefined; error: string | undefined }>
 export type LiveTradingControllerServices = Readonly<{
+	discoverAddressedMarket: typeof discoverAddressedMarket
+	discoverTradingMarketPage: typeof discoverTradingMarketPage
 	connectWallet: typeof connectWallet
 	createTradingPublicClient: typeof createTradingPublicClient
 	createTradingWalletClient: typeof createTradingWalletClient

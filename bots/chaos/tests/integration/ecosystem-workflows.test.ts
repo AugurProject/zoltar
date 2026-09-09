@@ -166,6 +166,33 @@ async function executeCanonicalOperation(context: ReturnType<typeof runtimeConte
 }
 
 describe('real ecosystem workflows through the production chaos runtime', () => {
+	test('continues canonical discovery on pruned RPC history while withholding execution and carry proofs', async () => {
+		const current = requiredFixture()
+		await current.restoreBaseline()
+		const proxy = current.createRpcProxy({ prunedLogStartBlock: 1n })
+		const stateFile = await temporaryStateFile()
+		try {
+			const context = runtimeContext(settingsFor(current, proxy, stateFile.path))
+			const scan = await performCanonicalScan(context.environment.settings, context.pool, context.account.address, SCAN_SEED, undefined, undefined, false, undefined, { clock: ANVIL_CLOCK })
+			expect(scan.index?.availableStartBlock).toBe('1')
+			expect(scan.index?.cursor.blockNumber).toBe(scan.anchor.blockNumber.toString())
+			expect(scan.indexComplete).toBe(false)
+			expect(scan.carryProofJournalComplete).toBe(false)
+			expect(scan.canonicalLifecyclePresenceComplete).toBe(false)
+			expect(scan.carryProofJournal.scanStarted).toBe(false)
+			expect(scan.snapshot.warnings.join(' ')).toContain('unavailable for blocks 0 through 0')
+			expect(scan.evaluations.every(evaluation => !evaluation.eligibility.eligible && evaluation.plan === undefined)).toBe(true)
+			const resumed = await performCanonicalScan(context.environment.settings, context.pool, context.account.address, SCAN_SEED, scan.index, scan.carryProofJournal, false, scan.topologyCache, { clock: ANVIL_CLOCK })
+			expect(resumed.index?.availableStartBlock).toBe('1')
+			expect(resumed.indexComplete).toBe(false)
+			expect(resumed.carryProofJournal).toEqual(scan.carryProofJournal)
+			expect(proxy.rawTransactions).toEqual([])
+		} finally {
+			proxy.dispose()
+			await stateFile.dispose()
+		}
+	})
+
 	test('proves public and authenticated private submission methods without broadcasting a transaction', async () => {
 		const current = requiredFixture()
 		await current.restoreBaseline()

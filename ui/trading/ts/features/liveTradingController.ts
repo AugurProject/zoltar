@@ -3,7 +3,7 @@ import { useCallback, useMemo, useRef } from 'preact/hooks'
 import { parseUnits } from '../lib/format.js'
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
 import { createLatestRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
-import { liveBalancesForMarket, publicErrorMessage, type LiveMarket } from '../protocol/live.js'
+import { liveBalancesForMarket, marketAcceptsNewRisk, publicErrorMessage, type LiveMarket } from '../protocol/live.js'
 import type { DeploymentConfiguration } from '../protocol/config.js'
 import type { LiveTradingControllerServices } from './live/liveTradingTypes.js'
 import { useQuestionClock } from './live/useLiveTradingState.js'
@@ -59,16 +59,18 @@ export function useLiveTradingController({
 	const transactionRequestRevision = useRef(0)
 	const nextTransactionContext = useCallback((expectedAccount: Address, market: LiveMarket, chainId: number) => ({ account: expectedAccount, market: market.pool, chainId, requestRevision: ++transactionRequestRevision.current }), [])
 
-	const visibleMarkets = filterMarketsByUniverse(markets, selectedUniverseId)
-	const visiblePortfolioEntries = portfolioEntries.filter(entry => entry.market.universeId.toString() === selectedUniverseId)
 	const routePool = securityPoolAddressFromRoute(route)
-	const routeSelected = routePool === undefined ? undefined : visibleMarkets.find(market => market.pool.toLowerCase() === routePool)
-	const selected = routePool === undefined ? (visibleMarkets.find(market => market.pool.toLowerCase() === selectedPool?.toLowerCase()) ?? visibleMarkets[0]) : routeSelected
+	const visibleMarkets = routePool === undefined ? filterMarketsByUniverse(markets, selectedUniverseId) : markets.filter(market => market.pool.toLowerCase() === routePool.toLowerCase())
+	const visiblePortfolioEntries = portfolioEntries.filter(entry => entry.market.universeId.toString() === selectedUniverseId)
+	const routeSelected = routePool === undefined ? undefined : visibleMarkets.find(market => market.pool.toLowerCase() === routePool.toLowerCase())
+	const nowSeconds = useQuestionClock(undefined, configuration, services)
+	const selectableMarkets = visibleMarkets.filter(market => (route === 'create-market' ? market.pair === undefined && market.loadError === undefined && marketAcceptsNewRisk(market, nowSeconds) : route === 'portfolio' || routePool !== undefined || market.pair !== undefined || market.loadError !== undefined))
+	const selected = routePool === undefined ? (selectableMarkets.find(market => market.pool.toLowerCase() === selectedPool?.toLowerCase()) ?? selectableMarkets[0]) : routeSelected
+	const walletUniverseId = routePool === undefined ? selectedUniverseId : selected?.universeId.toString()
 	const selectedBalances = balanceState === 'ready' ? liveBalancesForMarket(balances, selected) : undefined
 	let selectedBalanceState = balanceState
 	if (balanceState !== 'error' && balances !== undefined && selectedBalances === undefined) selectedBalanceState = account === undefined ? 'disconnected' : 'loading'
 	const selectedPairInitialized = selected === undefined ? false : livePairInitialized(selected)
-	const nowSeconds = useQuestionClock(selected?.endTime, configuration, services)
 	const { refresh, refreshFromControl, loadMarketPage } = useMarketDiscoveryController({
 		route,
 		configuration,
@@ -92,7 +94,7 @@ export function useLiveTradingController({
 	const { connect, executeWithCurrentWalletContext, createGuardedWalletWrite, refreshWalletSummaryAfterReceipt, walletContextIsCurrent } = useWalletSessionController({
 		route,
 		configuration,
-		selectedUniverseId,
+		selectedUniverseId: walletUniverseId,
 		onWalletSummaryChange,
 		services,
 		session: walletSession,
@@ -105,8 +107,8 @@ export function useLiveTradingController({
 		simulationRequests,
 		refresh,
 	})
-	usePortfolioRefreshEffects({ route, configuration, account, selected, visibleMarkets, marketRevision: markets, selectedUniverseId, walletContextInvalidated, accountRef, queries: portfolioQueries, services, portfolioBalanceRequests, balanceRequests })
-	useWalletSummaryEffects({ configuration, configurationError, selectedUniverseId, discoveryState, discoveryError, selected, retryNonce: walletSummaryRetryNonce, onWalletSummaryChange, session: walletSession, services, requests: walletSummaryRequests })
+	usePortfolioRefreshEffects({ route, configuration, account, selected, visibleMarkets, marketRevision: markets, selectedUniverseId: walletUniverseId, walletContextInvalidated, accountRef, queries: portfolioQueries, services, portfolioBalanceRequests, balanceRequests })
+	useWalletSummaryEffects({ configuration, configurationError, selectedUniverseId: walletUniverseId, discoveryState, discoveryError, selected: selected ?? visibleMarkets[0], retryNonce: walletSummaryRetryNonce, onWalletSummaryChange, session: walletSession, services, requests: walletSummaryRequests })
 	const parsedAmount = useMemo(() => {
 		try {
 			return { value: parseUnits(amount), error: undefined }
@@ -213,6 +215,7 @@ export function useLiveTradingController({
 		},
 		discovery: {
 			visibleMarkets,
+			listedMarkets: selectableMarkets,
 			selected,
 			selectedPairInitialized,
 			routePool,

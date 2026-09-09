@@ -1,5 +1,5 @@
 import { createWalletClient, custom, getAddress, type Address, type PublicClient } from '@zoltar/core-shared/evm/ethereum'
-import { ReputationToken_ReputationToken } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { ReputationToken_ReputationToken, Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { statoblast_SecurityPool_SecurityPool } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { tradingContracts } from '../generated/contractArtifact.js'
@@ -26,8 +26,11 @@ export function createTradingWalletClient(provider: InjectedEthereum, account: A
 	return createWalletClient({ account, transport: custom(provider) })
 }
 
-export async function loadWalletHeaderBalances(client: PublicClient, market: Pick<LiveMarket, 'pool'>, account: Address) {
-	const [ethAttoEth, repToken] = await Promise.all([client.getBalance({ address: account }), client.readContract({ abi: securityPoolAbi, address: market.pool, functionName: 'repToken' })])
+export async function loadWalletHeaderBalances(client: PublicClient, market: Pick<LiveMarket, 'pool'> | { zoltar: Address; universeId: bigint }, account: Address) {
+	const [ethAttoEth, repToken] = await Promise.all([
+		client.getBalance({ address: account }),
+		'pool' in market ? client.readContract({ abi: securityPoolAbi, address: market.pool, functionName: 'repToken' }) : client.readContract({ abi: Zoltar_Zoltar.abi, address: market.zoltar, functionName: 'getRepToken', args: [market.universeId] }),
+	])
 	const repAttoRep = await client.readContract({ abi: erc20BalanceAbi, address: getAddress(repToken), functionName: 'balanceOf', args: [account] })
 	return { ethAttoEth, repAttoRep, repToken: getAddress(repToken) }
 }

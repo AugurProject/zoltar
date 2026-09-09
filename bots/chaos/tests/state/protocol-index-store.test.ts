@@ -96,6 +96,17 @@ function protocolIndex(cursorBlockNumber = '50', cursorByte = '44'): ChaosProtoc
 	}
 }
 
+test('persists and validates the pruned log coverage boundary in the index sidecar', async () => {
+	const path = await statePath()
+	const index = { ...protocolIndex(), availableStartBlock: '20' }
+	await saveIndex(path, index)
+	const loaded = await loadDurableState(path, 1)
+	expect(loaded.protocolIndex?.availableStartBlock).toBe('20')
+	for (const availableStartBlock of ['9', '10', '51', '-1', '020']) {
+		expect(() => parseProtocolIndex({ ...index, availableStartBlock }, 1)).toThrow()
+	}
+})
+
 async function storedReference(path: string) {
 	const state = JSON.parse(await readFile(path, 'utf8')) as { protocolIndex: { kind: string; manifestDigest: `0x${string}`; schemaVersion: number } }
 	return state.protocolIndex
