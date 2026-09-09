@@ -3053,3 +3053,9 @@ dialog::backdrop {
 .contract-row-head {
 	flex-wrap: wrap;
 }
+
+.contract-deployment {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+}
