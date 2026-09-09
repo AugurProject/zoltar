@@ -4,17 +4,6 @@ import type { CoreDeployment } from './deployment.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { getInfraContractAddresses, PROXY_DEPLOYER_ADDRESS } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 
-export function isKnownDefaultRpcUrl(rpcUrl: string) {
-	let normalizedRpcUrl: string
-	try {
-		normalizedRpcUrl = new URL(rpcUrl).toString()
-	} catch (error) {
-		if (error instanceof TypeError) return false
-		throw error
-	}
-	return Object.values(defaultCoreDeploymentRpcUrls).some(defaultRpcUrl => new URL(defaultRpcUrl).toString() === normalizedRpcUrl)
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null
 }
