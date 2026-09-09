@@ -1575,3 +1575,13 @@
 	padding: var(--space-3);
 	margin: var(--space-3) var(--space-4);
 }
+
+.application-brand {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.application-brand img {
+	flex-shrink: 0;
+}
