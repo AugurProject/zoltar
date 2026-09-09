@@ -1,3 +1,4 @@
+import { securityPoolAddressFromRoute } from '../features/liveTradingControllerHelpers.js'
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 import type { PublicClient } from '@zoltar/core-shared/evm/ethereum'
 import { Help } from '../features/Help.js'
@@ -20,7 +21,7 @@ import { AppHeaderShell } from '@zoltar/ui-core-shared/app/components/AppHeaderS
 import { AppPageHeading } from '@zoltar/ui-core-shared/app/components/AppPageHeading.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { initializeTradingActiveEnvironment } from './activeEnvironment.js'
-import { getTradingEnvironmentLocationKey, getTradingRouteHref, tradingRouting, type TradingRoute } from '../lib/routing.js'
+import { getTradingEnvironmentLocationKey, getTradingRouteHref, tradingRouting, tradingWorkflowRoute, type TradingRoute } from '../lib/routing.js'
 
 type ResolvedTradingRoute = TradingRoute | 'not-found'
 
@@ -31,7 +32,9 @@ export function currentRoute(): ResolvedTradingRoute {
 export function tradingDocumentTitle(route: ResolvedTradingRoute) {
 	let label = `${route.charAt(0).toUpperCase()}${route.slice(1)}`
 	if (route === 'not-found') label = appCopy.notFound
-	if (route === 'market') label = appCopy.market
+	if (route === 'create-market' || route.startsWith('create-market/')) label = appCopy.createMarket
+	if (route === 'market' || route.startsWith('market/')) label = appCopy.market
+	if (route.startsWith('liquidity/')) label = appCopy.liquidity
 	if (route.startsWith('security-pool/')) label = appCopy.securityPool
 	return appCopy.documentTitle(label)
 }
@@ -139,7 +142,10 @@ export function App({
 	}, [])
 	const updateDeploymentWalletState = useCallback((state: DeploymentWalletState) => setDeploymentWalletState(state), [])
 	const deploymentSetupActive = route !== 'not-found' && route !== 'help' && (route === 'deploy' || liveDeploymentStatus === 'unavailable')
-	const displayedRoute = deploymentSetupActive ? 'deploy' : route
+	const addressedPool = securityPoolAddressFromRoute(route)
+	const workflowRoute = tradingWorkflowRoute(route)
+	const navigationRoute = workflowRoute === 'market' ? 'markets' : workflowRoute
+	const displayedRoute = deploymentSetupActive ? 'deploy' : navigationRoute
 	const refreshActiveEnvironment = useCallback(async () => {
 		const previousLocationKey = activeEnvironmentLocationRef.current
 		const nextLocationKey = getTradingEnvironmentLocationKey()
@@ -264,11 +270,14 @@ export function App({
 								<a aria-current={displayedRoute === 'markets' ? 'page' : undefined} aria-disabled={workflowLocked} href={getTradingRouteHref('#/markets')} onClick={workflowLocked ? event => event.preventDefault() : undefined}>
 									{appCopy.markets}
 								</a>
-								<a aria-current={displayedRoute === 'liquidity' ? 'page' : undefined} aria-disabled={workflowLocked} href={getTradingRouteHref('#/liquidity')} onClick={workflowLocked ? event => event.preventDefault() : undefined}>
+								<a aria-current={displayedRoute === 'liquidity' ? 'page' : undefined} aria-disabled={workflowLocked} href={getTradingRouteHref(addressedPool === undefined ? '#/liquidity' : `#/liquidity/${addressedPool}`)} onClick={workflowLocked ? event => event.preventDefault() : undefined}>
 									{appCopy.liquidity}
 								</a>
 								<a aria-current={displayedRoute === 'portfolio' ? 'page' : undefined} aria-disabled={workflowLocked} href={getTradingRouteHref('#/portfolio')} onClick={workflowLocked ? event => event.preventDefault() : undefined}>
 									{appCopy.portfolio}
+								</a>
+								<a aria-current={displayedRoute === 'create-market' ? 'page' : undefined} aria-disabled={workflowLocked} href={getTradingRouteHref('#/create-market')} onClick={workflowLocked ? event => event.preventDefault() : undefined}>
+									{appCopy.createMarket}
 								</a>
 								<a aria-current={displayedRoute === 'help' ? 'page' : undefined} aria-disabled={workflowLocked} href={getTradingRouteHref('#/help')} onClick={workflowLocked ? event => event.preventDefault() : undefined}>
 									{appCopy.help}

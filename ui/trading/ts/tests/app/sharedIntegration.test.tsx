@@ -111,7 +111,7 @@ test('Trading force-refreshes the active environment after saving the active net
 		/>,
 	)
 	try {
-		await waitFor(() => expect(rendered.container.textContent).toContain('Ethereum Mainnet · conditional prices only'))
+		await waitFor(() => expect(rendered.container.textContent).toContain('Ethereum Mainnet'))
 		const queries = within(rendered.container)
 		await act(async () => fireEvent.click(queries.getByRole('button', { name: 'Settings' })))
 		const networkSelect = queries.getByRole('combobox', { name: 'RPC network' }) as HTMLSelectElement
@@ -184,7 +184,7 @@ test('the removed demo query cannot select a parallel simulated-data application
 	expect(rendered.container.querySelector('.demo-banner')).toBeNull()
 	expect(rendered.container.textContent).not.toContain('SIMULATED DATA')
 	expect(rendered.container.textContent).not.toContain('Demo mode')
-	expect(rendered.container.textContent).toContain('SecurityPools')
+	expect(rendered.container.textContent).toContain('Markets')
 	await rendered.cleanup()
 	dom.cleanup()
 })

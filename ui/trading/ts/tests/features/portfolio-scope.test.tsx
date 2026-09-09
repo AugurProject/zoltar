@@ -114,10 +114,10 @@ describe('live portfolio scope', () => {
 		expect(rendered.container.textContent).toContain('System stateOperational')
 		expect(rendered.container.textContent).toContain('Security multiplier2×')
 		expect(rendered.container.textContent).not.toContain('OutcomeNone (unresolved)')
-		expect(rendered.container.querySelector('a[href="#/liquidity"]')?.textContent).toContain('Deploy trading pool')
+		expect(rendered.container.querySelector(`a[href="#/create-market/${pool}"]`)?.textContent).toContain('Deploy trading pool')
 		expect(rendered.container.textContent).toContain('available to browse')
 		expect(rendered.container.textContent).toContain('Trading fee: 0.47%')
-		rendered.container.querySelector<HTMLAnchorElement>('a[href="#/liquidity"]')?.click()
+		rendered.container.querySelector<HTMLAnchorElement>(`a[href="#/create-market/${pool}"]`)?.click()
 		expect(selectedPool).toBe(pool)
 	})
 
@@ -126,7 +126,7 @@ describe('live portfolio scope', () => {
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.textContent).toContain('needs initial liquidity')
 		expect(rendered.container.textContent).toContain('Trading fee: 1.25%')
-		expect(rendered.container.querySelector('a[href="#/liquidity"]')?.textContent).toContain('Initialize trading pool')
+		expect(rendered.container.querySelector(`a[href="#/liquidity/${pool}"]`)?.textContent).toContain('Initialize trading pool')
 	})
 
 	test('does not present placeholder operational facts when live pool reads fail', async () => {

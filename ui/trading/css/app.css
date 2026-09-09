@@ -2298,3 +2298,22 @@ summary {
 		grid-template-columns: minmax(0, 1fr);
 	}
 }
+
+.open-pool-form {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: end;
+	gap: 0.75rem;
+	margin-bottom: 2rem;
+}
+.open-pool-form .field {
+	margin: 0;
+}
+.open-pool-form > button {
+	grid-column: 2;
+	grid-row: 1;
+}
+.open-pool-form > [role="status"] {
+	grid-column: 1 / -1;
+	margin: 0;
+}

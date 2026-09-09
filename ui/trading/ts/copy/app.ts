@@ -9,7 +9,6 @@ export const tradingContext = 'Trading context'
 export { connectWallet, deploy, eth, rep, retry, unavailable } from '@zoltar/ui-core-shared/copy/common.js'
 export const help = 'Help'
 export const securityPool = 'Security pool'
-export const pairNotCreated = 'Not created'
 export const notFound = 'Not found'
 export const pageNotFound = 'Page not found'
 export const returnToMarkets = 'Return to markets'
@@ -87,3 +86,5 @@ export function openSecurityPoolLabel(address: string) {
 export const invalidDeploymentSettings = 'Invalid deployment settings'
 export const completeDeploymentSettings = 'Complete deployment settings'
 export const deploymentComplete = 'Deployment complete'
+
+export const createMarket = 'Create new pool'

@@ -140,7 +140,7 @@ export type SecurityPoolDeployment = Readonly<{
 	initialReportPriorityFeeAttoEthPerGas: bigint
 }>
 
-function unavailableMarket(deployment: SecurityPoolDeployment, error: unknown, feeBps: number): LiveMarket {
+export function unavailableMarket(deployment: SecurityPoolDeployment, error: unknown, feeBps: number): LiveMarket {
 	return {
 		loadError: publicErrorMessage(error, 'Market reads failed'),
 		pool: getAddress(deployment.securityPool),
@@ -182,7 +182,7 @@ export function collateMarketDiscoveryResults(deployments: readonly SecurityPool
 	})
 }
 
-async function loadLiveMarket(client: PublicClient, configuration: DeploymentConfiguration, deployment: SecurityPoolDeployment): Promise<LiveMarket> {
+export async function loadLiveMarket(client: PublicClient, configuration: DeploymentConfiguration, deployment: SecurityPoolDeployment): Promise<LiveMarket> {
 	const { securityPool: poolAddress, shareToken: shareTokenAddress, universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas } = deployment
 	const pool = getAddress(poolAddress)
 	const shareToken = getAddress(shareTokenAddress)
@@ -398,13 +398,14 @@ function securityPoolDeploymentFromEvent(log: Readonly<{ args?: unknown }>): Sec
 	}
 }
 
-async function loadUniverseIds(client: PublicClient, configuration: DeploymentConfiguration) {
+export async function loadUniverseIds(client: PublicClient, configuration: DeploymentConfiguration, isCurrent = () => true) {
 	const universeIds = [0n]
 	const seen = new Set(['0'])
 	for (let universeIndex = 0; universeIndex < universeIds.length; universeIndex += 1) {
 		const universeId = universeIds[universeIndex]
 		if (universeId === undefined) throw new Error('Universe discovery lost its current entry')
 		for (let start = 0n; ; start += 100n) {
+			if (!isCurrent()) throw new Error('Market discovery cancelled')
 			const [, childUniverseIds, children] = await client.readContract({ abi: zoltarAbi, address: configuration.zoltar, functionName: 'getDeployedChildUniverses', args: [universeId, start, 100n] })
 			if (childUniverseIds.length !== children.length) throw new Error('Zoltar returned mismatched child universe arrays')
 			for (const childUniverseId of childUniverseIds) {
