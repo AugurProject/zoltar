@@ -997,7 +997,7 @@ describe('liquidator dashboard refresh behavior', () => {
 })
 
 test('keeps a large universe registry compact and finds collapsed descendants with their lineage', async () => {
-	const universes = [universe('0'), ...Array.from({ length: 5000 }, (_, index) => universe(String(index + 1), '0', String(index + 1))), universe('6000', '1', '2')]
+	const universes = [universe('0'), ...Array.from({ length: 5000 }, (_, index) => universe(String(index + 1), '0', String(index + 1))), universe('6000', '1', '2'), universe('6001', '5000', '1')]
 	const page = await dashboard(mainnetConfiguration(['0']), state(undefined, [], { universes }))
 	expect(page.window.document.querySelectorAll('.ue-row')).toHaveLength(60)
 	const more = page.window.document.querySelector('.ue-more')
@@ -1006,6 +1006,16 @@ test('keeps a large universe registry compact and finds collapsed descendants wi
 	expect(page.window.document.querySelectorAll('.ue-row')).toHaveLength(120)
 	const search = page.window.document.querySelector('.ue-search')
 	if (!(search instanceof page.window.HTMLInputElement)) throw new Error('Expected universe search')
+	search.value = '5000'
+	search.dispatchEvent(new page.window.Event('input'))
+	const distant = page.window.document.querySelector('.ue-node')
+	if (!(distant instanceof page.window.HTMLButtonElement)) throw new Error('Expected distant parent')
+	distant.click()
+	const children = Array.from(page.window.document.querySelectorAll('.ue-parent-link')).find(button => button.textContent?.startsWith('View 1 child'))
+	if (!(children instanceof page.window.HTMLButtonElement)) throw new Error('Expected child navigation')
+	children.click()
+	expect(page.window.document.querySelector('input[value="6001"]')).not.toBeNull()
+	expect(page.window.document.querySelectorAll('.ue-row').length).toBeLessThanOrEqual(60)
 	search.value = '6000'
 	search.dispatchEvent(new page.window.Event('input'))
 	expect(page.window.document.querySelectorAll('.ue-row')).toHaveLength(1)

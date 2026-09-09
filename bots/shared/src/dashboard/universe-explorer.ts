@@ -51,6 +51,8 @@ export function createUniverseExplorer(host: HTMLElement, options: { onChange: (
 	const count = make('span', 'ue-count')
 	const collapse = button('ue-text-button', 'Collapse branches', () => {
 		expanded.clear()
+		if (branchRoot !== undefined) for (const root of tree.roots) expanded.add(root.id)
+		branchRoot = undefined
 		render()
 	})
 	context.append(count, collapse)
@@ -74,6 +76,7 @@ export function createUniverseExplorer(host: HTMLElement, options: { onChange: (
 	let state: ExplorerState = { universes: [], approved: new Set(), network: '', disabled: true }
 	let tree = indexUniverseTree([])
 	const expanded = new Set<string>()
+	let branchRoot: string | undefined
 	let focused: string | undefined
 	let limit = PAGE_SIZE
 	let pending = false
@@ -96,10 +99,15 @@ export function createUniverseExplorer(host: HTMLElement, options: { onChange: (
 		filter.value = 'all'
 		for (const ancestor of universeLineage(tree, id)) expanded.add(ancestor.id)
 		focused = id
-		// Search an exact ID if its branch falls beyond the current rendered page.
-		if (!visibleUniverseRows(tree, expanded, state.approved, '', false, limit).rows.some(row => row.node.id === id)) search.value = id
+		branchRoot = undefined
+		// Keep distant lineage navigation bounded without filtering out children.
+		if (!visibleUniverseRows(tree, expanded, state.approved, '', false, limit).rows.some(row => row.node.id === id)) {
+			branchRoot = id
+			limit = PAGE_SIZE
+		}
 		render()
 		for (const control of host.querySelectorAll<HTMLElement>('[data-universe-focus]')) if (control.dataset['universeFocus'] === `inspect:${id}`) control.focus({ preventScroll: true })
+		scrollOnMobile(browser)
 	}
 	async function changeApproval(id: string, checked: boolean) {
 		if (pending || state.disabled) return
@@ -166,7 +174,8 @@ export function createUniverseExplorer(host: HTMLElement, options: { onChange: (
 		const active = document.activeElement
 		const focusKey = active?.getAttribute('data-universe-focus')
 		const scrollTop = list.scrollTop
-		const visible = visibleUniverseRows(tree, expanded, state.approved, search.value, filter.value === 'approved', limit)
+		const branch = branchRoot === undefined ? undefined : tree.byId.get(branchRoot)
+		const visible = visibleUniverseRows(branch === undefined ? tree : { ...tree, roots: [branch] }, expanded, state.approved, search.value, filter.value === 'approved', limit)
 		count.textContent = `${state.network} · ${tree.byId.size.toLocaleString()} universes · ${state.approved.size.toLocaleString()} approved`
 		list.replaceChildren()
 		for (const { node, depth } of visible.rows) {
@@ -212,7 +221,8 @@ export function createUniverseExplorer(host: HTMLElement, options: { onChange: (
 		empty.textContent = tree.byId.size === 0 ? 'Universe discovery has not completed.' : 'No universes match this view.'
 		more.hidden = visible.rows.length >= visible.total
 		more.textContent = `Show ${Math.min(PAGE_SIZE, visible.total - visible.rows.length).toLocaleString()} more · ${visible.rows.length.toLocaleString()} of ${visible.total.toLocaleString()}`
-		collapse.disabled = expanded.size === 0 || visible.filtering
+		collapse.textContent = branch === undefined ? 'Collapse branches' : 'Show whole tree'
+		collapse.disabled = (branch === undefined && expanded.size === 0) || visible.filtering
 		search.disabled = state.disabled
 		filter.disabled = state.disabled
 		renderDetails()
@@ -235,6 +245,7 @@ export function createUniverseExplorer(host: HTMLElement, options: { onChange: (
 			if (networkChanged) {
 				networkRevision += 1
 				expanded.clear()
+				branchRoot = undefined
 				focused = undefined
 				search.value = ''
 				filter.value = 'all'
