@@ -40,7 +40,6 @@ const noSecurityPoolsInUniverse = 'No SecurityPools are deployed in the selected
 const positions = 'Positions'
 const refresh = 'Refresh'
 const discoveringSecurityPools = 'Discovering SecurityPools…'
-const factoryDiscovery = 'Factory discovery'
 const securityPools = 'SecurityPools'
 const securityPoolPages = 'SecurityPool pages'
 const previousPools = 'Previous pools'
@@ -146,7 +145,6 @@ export const liveCopy = {
 	positions,
 	refresh,
 	discoveringSecurityPools,
-	factoryDiscovery,
 	securityPools,
 	securityPoolPages,
 	previousPools,

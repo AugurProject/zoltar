@@ -398,13 +398,10 @@ export function LiveTrading({
 					{connectionMessage ?? message ?? parsedAmount.error}
 				</p>
 			)}
-			<div class={selected === undefined ? 'two-column two-column--single' : 'two-column'}>
-				<section class='section live-focus-target' id='security-pool-list' ref={marketListRef} tabIndex={-1} aria-busy={discoveryState === 'loading'}>
+			<div class='market-stack'>
+				<section class='market-list live-focus-target' id='security-pool-list' ref={marketListRef} tabIndex={-1} aria-busy={discoveryState === 'loading'}>
 					<div class='section-heading'>
-						<div>
-							<span class='section-kicker'>{liveCopy.factoryDiscovery}</span>
-							<h2>{liveCopy.securityPools}</h2>
-						</div>
+						<h2>{liveCopy.securityPools}</h2>
 						<button class='secondary-action' disabled={discoveryState === 'loading' || workflowLocked} onClick={refreshFromControl}>
 							{liveCopy.refresh}
 						</button>

@@ -1,11 +1,12 @@
 import { createPublicClient, http, type Hash, type PublicClient } from '@zoltar/core-shared/evm/ethereum'
-import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { getActiveBackend, getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import type { ChainBackend } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
+import { resolveConfiguredRpcUrl } from '@zoltar/ui-core-shared/wallet/rpcConfig.js'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { Status } from '../components/Status.js'
 import { TradingAddressValue } from '../components/TradingAddress.js'
 import { parseDeploymentSetupInput, type DeploymentConfiguration } from '../protocol/config.js'
-import { isKnownDefaultRpcUrl, loadCoreDeployments } from '../protocol/coreDeployments.js'
+import { loadCoreDeployments } from '../protocol/coreDeployments.js'
 import { deployTradingStep, deploymentConfigurationForPlan, getTradingDeploymentPlan, isTradingDeploymentComplete, loadTradingDeploymentStatus, nextTradingDeploymentStep, type CoreDeployment, type TradingDeploymentPlan, type TradingDeploymentStep } from '../protocol/deployment.js'
 import { createWalletContextSubscription, getInjectedEthereum, type InjectedEthereum } from '../protocol/injected.js'
 import { connectedWalletAccount, connectWallet, createTradingWalletClient, publicErrorMessage, switchWalletChain, validateRpcChainId, walletChainId } from '../protocol/live.js'
@@ -57,10 +58,6 @@ const defaultServices: TradingDeploymentSetupServices = {
 
 type DeploymentStatus = Readonly<{ factory: boolean; router: boolean }>
 
-function initialQueryValue(name: string) {
-	return new URLSearchParams(window.location.search).get(name) ?? ''
-}
-
 function deploymentProgress(status: DeploymentStatus | undefined, total = 3) {
 	if (status === undefined) return '—'
 	return `${Number(status.factory) + Number(status.router)} / ${total.toString()}`
@@ -109,12 +106,14 @@ export function TradingDeploymentSetup({
 	services?: TradingDeploymentSetupServices
 	walletControlRequestNonce?: number
 }) {
+	const activeNetwork = getActiveNetworkProfile()
+	const configuredRpcUrl = resolveConfiguredRpcUrl({ fallbackRpcUrl: activeNetwork.chain.rpcUrls.default.http[0] ?? '', networkId: activeNetwork.id })
 	const [coreDeployments, setCoreDeployments] = useState<readonly CoreDeployment[]>([])
 	const [registryLoading, setRegistryLoading] = useState(true)
 	const [registryError, setRegistryError] = useState<string>()
-	const [chainId, setChainId] = useState(initialQueryValue('chainId') || currentConfiguration?.chainId.toString() || '')
-	const [rpcUrl, setRpcUrl] = useState(initialQueryValue('rpcUrl') || currentConfiguration?.rpcUrl || '')
-	const [rpcOverride, setRpcOverride] = useState(initialQueryValue('rpcUrl') !== '' || (currentConfiguration !== undefined && !isKnownDefaultRpcUrl(currentConfiguration.rpcUrl)))
+	const [chainId, setChainId] = useState(currentConfiguration?.chainId.toString() ?? activeNetwork.chain.id.toString())
+	const [rpcUrl, setRpcUrl] = useState(configuredRpcUrl)
+	const [rpcOverride, setRpcOverride] = useState(true)
 	const feeBps = '30'
 	const [walletAccount, setWalletAccount] = useState<string>()
 	const [walletChain, setWalletChain] = useState<number>()
@@ -148,20 +147,26 @@ export function TradingDeploymentSetup({
 	useEffect(() => {
 		if (busy || currentConfiguration === undefined) return
 		const nextChainId = currentConfiguration.chainId.toString()
-		const nextRpcUrl = currentConfiguration.rpcUrl
-		const nextRpcOverride = !isKnownDefaultRpcUrl(nextRpcUrl)
-		if (chainId === nextChainId && rpcUrl === nextRpcUrl) {
-			if (rpcOverride !== nextRpcOverride) setRpcOverride(nextRpcOverride)
-			return
-		}
+		const nextRpcUrl = configuredRpcUrl
+		if (chainId === nextChainId && rpcUrl === nextRpcUrl && rpcOverride) return
 		inputRevision.current += 1
 		setChainId(nextChainId)
 		setRpcUrl(nextRpcUrl)
-		setRpcOverride(nextRpcOverride)
-	}, [busy, currentConfiguration])
+		setRpcOverride(true)
+	}, [busy, chainId, configuredRpcUrl, currentConfiguration, rpcOverride, rpcUrl])
+	useEffect(() => {
+		if (busy || currentConfiguration !== undefined) return
+		const nextChainId = activeNetwork.chain.id.toString()
+		if (coreDeployments.length > 0 && !coreDeployments.some(deployment => deployment.chainId.toString() === nextChainId)) return
+		if (chainId === nextChainId && rpcUrl === configuredRpcUrl && rpcOverride) return
+		inputRevision.current += 1
+		setChainId(nextChainId)
+		setRpcUrl(configuredRpcUrl)
+		setRpcOverride(true)
+	}, [activeNetwork.chain.id, busy, chainId, configuredRpcUrl, coreDeployments, currentConfiguration, rpcOverride, rpcUrl])
 	const selectedCore = coreDeployments.find(deployment => deployment.chainId.toString() === chainId)
 	useEffect(() => {
-		if (busy || coreDeployments.length === 0 || selectedCore !== undefined || chainId !== '') return
+		if (busy || coreDeployments.length === 0 || selectedCore !== undefined) return
 		inputRevision.current += 1
 		setChainId(coreDeployments[0]?.chainId.toString() ?? '')
 	}, [busy, chainId, coreDeployments, selectedCore])
@@ -430,55 +435,10 @@ export function TradingDeploymentSetup({
 			onWorkflowLockChange(false)
 		}
 	}
-	const settingsPanel = (
-		<section class='deployment-settings' aria-labelledby='deployment-connection-title'>
-			<h2 id='deployment-connection-title'>{appCopy.deploymentConnection}</h2>
-			<div class='deployment-settings__panel'>
-				<label class='field'>
-					<span>Network</span>
-					<select
-						value={chainId}
-						disabled={busy || registryLoading || coreDeployments.length === 0}
-						onChange={event => {
-							inputRevision.current += 1
-							const nextChainId = event.currentTarget.value
-							setChainId(nextChainId)
-							const nextDeployment = coreDeployments.find(deployment => deployment.chainId.toString() === nextChainId)
-							setRpcOverride(false)
-							setRpcUrl(nextDeployment?.defaultRpcUrl ?? '')
-						}}
-					>
-						{coreDeployments.map(deployment => (
-							<option key={deployment.chainId} value={deployment.chainId.toString()}>
-								{deployment.chainName}
-							</option>
-						))}
-					</select>
-				</label>
-				<label class='field'>
-					<span>RPC URL</span>
-					<input
-						type='url'
-						disabled={busy}
-						value={rpcOverride ? rpcUrl : (selectedCore?.defaultRpcUrl ?? '')}
-						placeholder={selectedCore?.defaultRpcUrl ?? 'https://…'}
-						spellcheck={false}
-						onInput={event => {
-							inputRevision.current += 1
-							setRpcOverride(true)
-							setRpcUrl(event.currentTarget.value)
-						}}
-					/>
-				</label>
-			</div>
-		</section>
-	)
-
 	return (
 		<main class='route' id='main-content'>
 			<RouteHeader eyebrow={appCopy.standaloneLiveClient} title={appCopy.deploy} actions={standaloneWalletButton} />
 			<section class='section deployment-setup'>
-				{settingsPanel}
 				{registryError === undefined ? null : (
 					<p class='error' role='alert'>
 						{registryError}

@@ -11,6 +11,7 @@ import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/rende
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
+import { saveNetworkRpcUrl } from '@zoltar/ui-core-shared/wallet/rpcConfig.js'
 
 const core = {
 	chainId: 11_155_111,
@@ -50,18 +51,6 @@ async function waitForText(text: string) {
 		if (document.body.textContent?.includes(text)) return
 	}
 	throw new Error(`Timed out waiting for ${text}: ${document.body.textContent ?? ''}`)
-}
-
-async function enterNetworkSettings(container: HTMLElement, rpc: string = 'https://rpc.example') {
-	await act(async () => {
-		const details = container.querySelector<HTMLDetailsElement>('.deployment-settings')
-		if (details === null) throw new Error('Advanced deployment configuration is unavailable')
-		details.open = true
-		const rpcInput = details.querySelector<HTMLInputElement>('input[type="url"]')
-		if (rpcInput === null) throw new Error('Deployment RPC field is unavailable')
-		rpcInput.value = rpc
-		rpcInput.dispatchEvent(new Event('input', { bubbles: true }))
-	})
 }
 
 const testWalletAccount = getAddress(`0x${'ab'.repeat(20)}`)
@@ -229,7 +218,7 @@ describe('trading deployment setup', () => {
 		expect(rendered.container.textContent).toContain('0 / 2')
 	})
 
-	test('shows deployment connection fields without a second settings disclosure', async () => {
+	test('uses shared settings without repeating network or RPC fields', async () => {
 		const canonicalRpcUrl = 'https://ethereum-sepolia-rpc.publicnode.com'
 		const canonicalCore = { ...core, defaultRpcUrl: canonicalRpcUrl }
 		const configuration = deploymentConfigurationForPlan(getTradingDeploymentPlan(canonicalCore, 30), `${canonicalRpcUrl}/`)
@@ -237,9 +226,41 @@ describe('trading deployment setup', () => {
 		const rendered = await renderIntoDocument(<TradingDeploymentSetup currentConfiguration={configuration} onComplete={() => undefined} services={services} />)
 		cleanupRendered = rendered.cleanup
 		await waitForText('Deploy Trading factory')
-		expect(rendered.container.querySelector('.deployment-settings')?.tagName).toBe('SECTION')
-		expect(rendered.container.querySelector('.deployment-settings summary')).toBeNull()
-		expect(rendered.container.textContent).not.toContain('Use default RPC')
+		expect(rendered.container.querySelector('.deployment-settings')).toBeNull()
+		expect(rendered.container.querySelector('input[type="url"]')).toBeNull()
+		expect(Array.from(rendered.container.querySelectorAll('label')).some(label => label.textContent?.includes('Network'))).toBe(false)
+	})
+
+	test('uses the RPC saved in shared settings when hydrating a canonical configuration', async () => {
+		const restoreEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: SEPOLIA_NETWORK_PROFILE }))
+		const savedRpcUrl = 'https://saved-rpc.example'
+		const localStorageDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
+		Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: window.localStorage })
+		saveNetworkRpcUrl('sepolia', savedRpcUrl)
+		const requestedRpcUrls: string[] = []
+		try {
+			const configuration = deploymentConfigurationForPlan(getTradingDeploymentPlan(core, 30), core.defaultRpcUrl)
+			const rendered = await renderIntoDocument(
+				<TradingDeploymentSetup
+					currentConfiguration={configuration}
+					onComplete={() => undefined}
+					services={{
+						createPublicClient: rpcUrl => {
+							requestedRpcUrls.push(rpcUrl)
+							return deploymentClient()
+						},
+						loadCoreDeployments: async () => [core],
+					}}
+				/>,
+			)
+			cleanupRendered = rendered.cleanup
+			await waitForText('Deploy Trading factory')
+			expect(requestedRpcUrls).toEqual([`${savedRpcUrl}/`])
+		} finally {
+			if (localStorageDescriptor === undefined) Reflect.deleteProperty(globalThis, 'localStorage')
+			else Object.defineProperty(globalThis, 'localStorage', localStorageDescriptor)
+			restoreEnvironment()
+		}
 	})
 
 	test('rejects a wallet snapshot changed between authoritative account and chain reads', async () => {
@@ -329,7 +350,7 @@ describe('trading deployment setup', () => {
 		expect(rendered.container.querySelector('nav a[aria-current="page"]')?.textContent?.trim()).toBe('Deploy')
 		await waitFor(() => expect(document.title).toBe('Deploy · Statoblast trading'))
 		expect(rendered.container.querySelector('.site-header .deployment-settings')).toBeNull()
-		expect(rendered.container.querySelector('.deployment-setup input[type="url"]')).not.toBeNull()
+		expect(rendered.container.querySelector('.deployment-setup input[type="url"]')).toBeNull()
 		const walletButton = rendered.container.querySelector<HTMLButtonElement>('.site-header .wallet-button')
 		if (walletButton === null) throw new Error('Persistent wallet button is unavailable')
 		expect(walletButton.disabled).toBe(true)
@@ -357,9 +378,7 @@ describe('trading deployment setup', () => {
 		const rendered = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} services={services} />)
 		cleanupRendered = rendered.cleanup
 		await waitForText('Loading networks')
-		const select = rendered.container.querySelector<HTMLSelectElement>('select')
-		if (select === null) throw new Error('Deployment network field is unavailable')
-		expect(select.disabled).toBe(true)
+		expect(rendered.container.querySelector('.deployment-settings')).toBeNull()
 		if (rejectInitial === undefined) throw new Error('Initial registry rejection is unavailable')
 		rejectInitial(new Error('Registry unavailable'))
 		await waitForText('Registry unavailable')
@@ -393,9 +412,6 @@ describe('trading deployment setup', () => {
 		const rendered = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} services={services} />)
 		cleanupRendered = rendered.cleanup
 		await act(async () => await Bun.sleep(0))
-		const select = rendered.container.querySelector<HTMLSelectElement>('select')
-		if (select === null) throw new Error('Deployment setup fields are unavailable')
-		await enterNetworkSettings(rendered.container)
 		await waitForText('RPC unavailable')
 		const retry = Array.from(rendered.container.querySelectorAll('button')).find(button => button.textContent?.trim() === 'Retry checks')
 		if (!(retry instanceof HTMLButtonElement)) throw new Error('Retry checks button is unavailable')
@@ -407,9 +423,7 @@ describe('trading deployment setup', () => {
 		expect(rendered.container.textContent).toContain('Networks unavailable')
 		expect(rendered.container.textContent).not.toContain('SecurityPoolFactory')
 		expect(rendered.container.textContent).not.toContain('Deploy Trading factory')
-		expect(select.disabled).toBe(true)
-		const rpcInput = rendered.container.querySelector<HTMLInputElement>('.deployment-settings input[type="url"]')
-		expect(rpcInput?.value).toBe('https://rpc.example')
+		expect(rendered.container.querySelector('.deployment-settings')).toBeNull()
 	})
 
 	test('retries a failed automatic RPC inspection without losing the selected settings', async () => {
@@ -423,9 +437,6 @@ describe('trading deployment setup', () => {
 		await act(async () => {
 			await Bun.sleep(0)
 		})
-		const select = rendered.container.querySelector<HTMLSelectElement>('select')
-		if (select === null) throw new Error('Deployment setup fields are unavailable')
-		await enterNetworkSettings(rendered.container)
 		await waitForText('RPC unavailable')
 		expect(rendered.container.textContent).toContain('RPC unavailable')
 		expect(Array.from(rendered.container.querySelectorAll('.deployment-step .status')).map(status => status.textContent?.trim())).toEqual(['Checking', 'Checking'])
@@ -436,44 +447,8 @@ describe('trading deployment setup', () => {
 			retry.click()
 		})
 		await waitForText('Deploy Trading factory')
-		expect(select.value).toBe(core.chainId.toString())
-		const rpcInput = rendered.container.querySelector<HTMLInputElement>('.deployment-settings input[type="url"]')
-		expect(rpcInput?.value).toBe('https://rpc.example')
+		expect(rendered.container.querySelector('.deployment-settings')).toBeNull()
 		expect(rendered.container.textContent).not.toContain('Ready to deploy')
-	})
-
-	test('invalidates a verified plan synchronously when deployment inputs change', async () => {
-		let deployCount = 0
-		let rpcAvailable = true
-		const services: TradingDeploymentSetupServices = {
-			createPublicClient: () => deploymentClient(() => rpcAvailable),
-			deployStep: async () => {
-				deployCount += 1
-			},
-			loadCoreDeployments: async () => [core],
-		}
-		const rendered = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} services={{ ...services, ...walletServices }} />)
-		cleanupRendered = rendered.cleanup
-		await act(async () => await Bun.sleep(0))
-		const rpcInput = rendered.container.querySelector<HTMLInputElement>('.deployment-settings input[type="url"]')
-		if (rpcInput === null) throw new Error('Deployment RPC setting is unavailable')
-		await waitForText('Deploy Trading factory')
-		await connectDeploymentWallet(rendered.container)
-		const action = Array.from(rendered.container.querySelectorAll('button')).find(button => button.textContent?.includes('Deploy Trading factory') === true)
-		if (!(action instanceof HTMLButtonElement)) throw new Error('Factory deployment action is unavailable')
-		await act(async () => {
-			rpcAvailable = false
-			rpcInput.value = 'https://changed.example'
-			rpcInput.dispatchEvent(new Event('input', { bubbles: true }))
-			action.click()
-		})
-		expect(deployCount).toBe(0)
-		await act(() => {
-			rpcInput.value = 'invalid RPC URL'
-			rpcInput.dispatchEvent(new Event('input', { bubbles: true }))
-		})
-		expect(rendered.container.querySelector('.deployment-setup__status')?.textContent).toContain('Invalid deployment settings')
-		expect(rendered.container.querySelector('.deployment-setup__status')?.textContent).not.toContain('Select a network')
 	})
 
 	test('reports a failed recovery read without hiding the deployment error', async () => {
@@ -613,10 +588,7 @@ describe('trading deployment setup', () => {
 		if (resolveConfiguration === undefined) throw new Error('Configuration resolver is unavailable')
 		resolveConfiguration(configuration)
 		await waitForText('Deployment complete')
-		const select = rendered.container.querySelector<HTMLSelectElement>('.deployment-settings select')
-		const rpcInput = rendered.container.querySelector<HTMLInputElement>('.deployment-settings input[type="url"]')
-		expect(select?.value).toBe(core.chainId.toString())
-		expect(rpcInput?.value).toBe(new URL(configuration.rpcUrl).toString())
+		expect(rendered.container.querySelector('.deployment-settings')).toBeNull()
 		expect(rendered.container.textContent).not.toContain('Immutable trading fee')
 		expect(rendered.container.textContent).not.toContain('Core network')
 		expect(rendered.container.textContent).not.toContain('Use default RPC')
