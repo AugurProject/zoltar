@@ -769,7 +769,7 @@ const take = <T>(items: T[]): T => {
 test('does not misclassify status elements whose ids contain button-like words', () => {
 	expect(requiredElementRole('#activity-more-status')).toBe('element')
 	expect(requiredElementRole('#more')).toBe('button')
-	expect(requiredElementRole('#detail-canonical-retry')).toBe('button')
+	expect(requiredElementRole('#close-detail')).toBe('button')
 	expect(requiredElementRole('#operations-route-select')).toBe('select')
 })
 
