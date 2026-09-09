@@ -1,5 +1,7 @@
 #!/usr/bin/env bun
 
+import { parseRootMarketSettings } from '#config/canonical-deployment'
+
 import { recordSystemDeploymentCheck } from '../core/deployment-observation.ts'
 
 import { createPublicClient, createWalletClient, getAddress, privateKeyToAccount, type Address, type Hash } from '@zoltar/bot-shared/ethereum'
@@ -327,7 +329,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 									universeId: pool.universeId.toString(),
 								})),
 						)
-						const centralizedMarkets = parseCentralizedMarketSettings(rootValue ?? value)
+						const centralizedMarkets = parseRootMarketSettings(rootValue ?? value, settings.network.chainId)
 						if (childrenValue !== undefined && !Array.isArray(childrenValue)) throw new Error('Market configuration children must be an array')
 						const childMarketConfigurations = (childrenValue ?? []).map(parseCentralizedMarketSettings)
 						if (centralizedMarkets.assetChainId !== settings.network.chainId) throw new Error('Market consensus configuration targets another chain')

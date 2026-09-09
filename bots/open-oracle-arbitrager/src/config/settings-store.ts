@@ -1,3 +1,4 @@
+import { networkDeployment } from '#config/network'
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
 import { dirname, extname, resolve } from 'node:path'
@@ -100,9 +101,9 @@ type StoredRuntimeSettings = Omit<RuntimeSettings, 'lookbackBlocks' | 'maxHedgeS
 }
 
 export type StoredOperatorSettings = {
-	centralizedMarkets: ReturnType<typeof serializeCentralizedMarketSettings>
+	centralizedMarkets: Omit<ReturnType<typeof serializeCentralizedMarketSettings>, 'assetAddress' | 'assetChainId'>
 	connectivity?: ConnectivitySettings | undefined
-	deployment: Omit<DeploymentSettings, 'openOracle'>
+	deployment: Omit<DeploymentSettings, 'openOracle' | 'rep' | 'weth'>
 	network?: NetworkName | undefined
 	networkConfigured?: boolean | undefined
 	paused: boolean
@@ -228,9 +229,9 @@ export function parseOperatorSettings(value: unknown, preservedPrivateKey?: Hex)
 	const deployment = validateDeploymentSettings(record['deployment'], network)
 	const connectivity = networkConfigured ? validateConnectivitySettings(record['connectivity']) : { publicRpcUrls: [], readRpcUrl: 'http://127.0.0.1:1' }
 	validateIndependentReadRpcUrls(connectivity.readRpcUrl, deployment.quorumRpcUrls)
-	const chainId = network === 'mainnet' ? 1 : 11_155_111
-	const centralizedMarkets = parseCentralizedMarketSettings(record['centralizedMarkets'] ?? defaultCentralizedMarkets(deployment.rep, chainId))
-	if (centralizedMarkets.assetAddress.toLowerCase() !== deployment.rep.toLowerCase() || centralizedMarkets.assetChainId !== chainId) throw new Error('Centralized market configuration must target the configured REP deployment and chain')
+	const { chainId } = networkDeployment(network)
+	const marketSettings = requiredRecord(record['centralizedMarkets'] ?? defaultCentralizedMarkets(deployment.rep, chainId), 'Centralized market settings')
+	const centralizedMarkets = parseCentralizedMarketSettings({ ...marketSettings, assetAddress: deployment.rep, assetChainId: chainId })
 	const submission = validateSubmissionSettings(record['submission'])
 	const runtime = validateRuntimeSettings(record['runtime'])
 	if (!networkConfigured && (!record['paused'] || runtime.execute)) throw new Error('An unconfigured network requires paused dry-run mode')
@@ -252,9 +253,10 @@ export function parseOperatorSettings(value: unknown, preservedPrivateKey?: Hex)
 }
 
 export function serializeOperatorSettings(settings: PersistedOperatorSettings, redactPrivateKey = false): StoredOperatorSettings {
-	const { openOracle: _openOracle, ...deployment } = settings.deployment
+	const { openOracle: _openOracle, rep: _rep, weth: _weth, ...deployment } = settings.deployment
+	const { assetAddress: _assetAddress, assetChainId: _assetChainId, ...centralizedMarkets } = serializeCentralizedMarketSettings(settings.centralizedMarkets)
 	return {
-		centralizedMarkets: serializeCentralizedMarketSettings(settings.centralizedMarkets),
+		centralizedMarkets,
 		connectivity: settings.networkConfigured ? settings.connectivity : undefined,
 		deployment,
 		network: settings.network,
@@ -367,11 +369,11 @@ export async function switchOperatorNetworkProfile(path: string, network: Networ
 	let target = network === 'mainnet' ? mainnet : sepolia
 	if (target === undefined) {
 		const template = parseOperatorSettings(JSON.parse(await readFile(examplePath, 'utf8')))
-		const chainId = network === 'mainnet' ? 1 : 11_155_111
+		const { chainId } = networkDeployment(network)
 		target = {
 			...template,
 			deployment: validateDeploymentSettings(template.deployment, network),
-			centralizedMarkets: { ...template.centralizedMarkets, assetChainId: chainId },
+			centralizedMarkets: { ...template.centralizedMarkets, assetAddress: networkDeployment(network).rep, assetChainId: chainId },
 			network,
 			networkConfigured: false,
 			paused: true,

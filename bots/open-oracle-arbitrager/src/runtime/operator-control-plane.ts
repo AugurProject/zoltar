@@ -334,8 +334,6 @@ export function startOperatorControlPlane(parameters: {
 						pending.network = networkConfiguration(next.network, {
 							factory: next.deployment.uniswapFactory,
 							quoter: next.deployment.uniswapQuoter,
-							rep: next.deployment.rep,
-							weth: next.deployment.weth,
 						})
 					}
 					pending.operatorSettings = normalizedNext
@@ -415,8 +413,6 @@ export function startOperatorControlPlane(parameters: {
 					pending.network = networkConfiguration(next.network, {
 						factory: latest.settings.deployment.uniswapFactory,
 						quoter: latest.settings.deployment.uniswapQuoter,
-						rep: latest.settings.deployment.rep,
-						weth: latest.settings.deployment.weth,
 					})
 				}
 				pending.centralizedMarkets = next.centralizedMarkets

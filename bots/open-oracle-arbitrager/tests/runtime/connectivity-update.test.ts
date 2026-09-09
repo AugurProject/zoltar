@@ -1,3 +1,5 @@
+import sepolia from '../../../../docs/sepolia-deployment-addresses.json'
+import { getAddress } from '@zoltar/bot-shared/ethereum'
 import { describe, expect, test } from 'bun:test'
 import { parseOperatorSettings, type PersistedOperatorSettings } from '#config/settings-store'
 import { checkIndependentRpcChains, updateOperatorConnectivity } from '../../src/runtime/connectivity-update.ts'
@@ -68,6 +70,8 @@ describe('operator connectivity updates', () => {
 			submission: settings.submission,
 			value: request('sepolia', 'https://rpc.example/', 1),
 		})
+		expect(result.centralizedMarkets.assetAddress).toBe(getAddress(sepolia.network.genesisRepTokenAddress))
+		expect(settings.centralizedMarkets.assetAddress).toBe(getAddress(sepolia.network.genesisRepTokenAddress))
 		expect(result.centralizedMarkets.assetChainId).toBe(11_155_111)
 		expect(settings.centralizedMarkets.assetChainId).toBe(11_155_111)
 	})

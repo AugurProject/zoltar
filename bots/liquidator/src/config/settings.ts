@@ -1,4 +1,4 @@
-import { canonicalDeployment } from './canonical-deployment.ts'
+import { canonicalDeployment, canonicalRootMarketIdentity, parseRootMarketSettings } from './canonical-deployment.ts'
 import { createHash, randomBytes } from 'node:crypto'
 import { dirname, extname, resolve } from 'node:path'
 import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
@@ -295,7 +295,7 @@ export function parseSettings(value: unknown): OperatorSettings {
 			if (!Array.isArray(values)) throw new Error('childMarketConfigurations must be an array')
 			return values.map(parseCentralizedMarketSettings)
 		})(),
-		centralizedMarkets: parseCentralizedMarketSettings(root['centralizedMarkets']),
+		centralizedMarkets: parseRootMarketSettings(root['centralizedMarkets'], chainId),
 		connectivity,
 		deployment: canonicalDeployment(chainId),
 		desiredPools: parsedDesiredPools,
@@ -332,7 +332,6 @@ export function parseSettings(value: unknown): OperatorSettings {
 	}
 	const canonicalChainId = settings.network.name === 'mainnet' ? 1 : 11_155_111
 	if (settings.network.chainId !== canonicalChainId) throw new Error('network name and chainId must identify the same supported chain')
-	if (settings.networkConfigured && settings.centralizedMarkets.assetChainId !== settings.network.chainId) throw new Error('Centralized market configuration must target the configured chain')
 	if (settings.networkConfigured && settings.childMarketConfigurations.some(configuration => configuration.assetChainId !== settings.network.chainId)) throw new Error('Child market configurations must target the configured chain')
 	const marketAssetIds = [settings.centralizedMarkets, ...settings.childMarketConfigurations].map(configuration => configuration.assetAddress.toLowerCase())
 	if (new Set(marketAssetIds).size !== marketAssetIds.length) throw new Error('Market configurations must target distinct REP assets')
@@ -343,10 +342,11 @@ export function parseSettings(value: unknown): OperatorSettings {
 }
 
 export function serializedSettings(settings: OperatorSettings, redactPrivateKey = false) {
+	const { assetAddress: _assetAddress, assetChainId: _assetChainId, ...centralizedMarkets } = serializeCentralizedMarketSettings(settings.centralizedMarkets)
 	return {
 		approvedUniverses: settings.approvedUniverses.map(value => value.toString()),
 		childMarketConfigurations: settings.childMarketConfigurations.map(serializeCentralizedMarketSettings),
-		centralizedMarkets: serializeCentralizedMarketSettings(settings.centralizedMarkets),
+		centralizedMarkets,
 		connectivity: settings.networkConfigured ? { ...settings.connectivity } : undefined,
 		desiredPools: settings.desiredPools.map(pool => ({
 			initialReportPriorityFeeAttoEthPerGas: pool.initialReportPriorityFeeAttoEthPerGas.toString(),
@@ -499,7 +499,7 @@ export async function switchSettingsNetworkProfile(path: string, network: Networ
 		target = {
 			...template,
 			deployment: canonicalDeployment(chainId),
-			centralizedMarkets: { ...template.centralizedMarkets, assetChainId: chainId },
+			centralizedMarkets: { ...template.centralizedMarkets, ...canonicalRootMarketIdentity(chainId) },
 			network: { chainId, explorerUrl: network === 'mainnet' ? 'https://etherscan.io' : 'https://sepolia.etherscan.io', name: network },
 			networkConfigured: false,
 			paused: true,

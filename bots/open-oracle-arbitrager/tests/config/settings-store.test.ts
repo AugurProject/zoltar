@@ -1,6 +1,6 @@
 import mainnet from '../../../../docs/mainnet-deployment-addresses.json'
 import sepolia from '../../../../docs/sepolia-deployment-addresses.json'
-import { canonicalCoreDeployment } from '@zoltar/bot-shared/config/canonical-deployment'
+import { canonicalCoreDeployment, canonicalNetworkDeployment } from '@zoltar/bot-shared/config/canonical-deployment'
 import example from '../../config/operator.example.json'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdir, mkdtemp, open, readFile, rename, rm, stat, symlink, writeFile } from 'node:fs/promises'
@@ -20,7 +20,7 @@ afterEach(async () => {
 function settings(privateKeyValue: Hex | undefined) {
 	return {
 		centralizedMarkets: {
-			assetAddress: '0x0000000000000000000000000000000000000005' as const,
+			assetAddress: canonicalNetworkDeployment(mainnet).rep,
 			assetChainId: 1,
 			assetSymbol: 'REP',
 			depthBps: 500n,
@@ -45,14 +45,14 @@ function settings(privateKeyValue: Hex | undefined) {
 			executor: '0x0000000000000000000000000000000000000003' as const,
 			openOracle: canonicalCoreDeployment(mainnet).openOracle,
 			quorumRpcUrls: ['https://quorum.example/'],
-			rep: '0x0000000000000000000000000000000000000005' as const,
+			rep: canonicalNetworkDeployment(mainnet).rep,
 			uniswapFactory: '0x0000000000000000000000000000000000000006' as const,
 			uniswapQuoter: '0x0000000000000000000000000000000000000007' as const,
 			uniswapRouter: '0x0000000000000000000000000000000000000008' as const,
 			uniswapV2Router: undefined,
 			uniswapV4PoolManager: undefined,
 			uniswapV4Quoter: undefined,
-			weth: '0x0000000000000000000000000000000000000009' as const,
+			weth: canonicalNetworkDeployment(mainnet).weth,
 		},
 		network: 'mainnet' as const,
 		networkConfigured: true,
@@ -432,8 +432,14 @@ for (const [network, manifest] of [
 	['sepolia', sepolia],
 ] as const) {
 	test(`loads the ${network} canonical oracle from an existing zero-address configuration`, () => {
-		const parsed = parseOperatorSettings({ ...example, network, deployment: { ...example.deployment, openOracle: '0x0000000000000000000000000000000000000000' }, centralizedMarkets: { ...example.centralizedMarkets, assetChainId: network === 'mainnet' ? 1 : 11_155_111 } })
+		const parsed = parseOperatorSettings({ ...example, network, deployment: { ...example.deployment, openOracle: '0x0000000000000000000000000000000000000000' }, centralizedMarkets: { ...example.centralizedMarkets, assetChainId: 999 } })
 		expect(parsed.deployment.openOracle).toBe(canonicalCoreDeployment(manifest).openOracle)
+		expect(parsed.centralizedMarkets.assetAddress).toBe(canonicalNetworkDeployment(manifest).rep)
+		expect(parsed.centralizedMarkets.assetChainId).toBe(manifest.network.chainId)
+		expect(serializeOperatorSettings(parsed).centralizedMarkets).not.toHaveProperty('assetAddress')
+		expect(serializeOperatorSettings(parsed).centralizedMarkets).not.toHaveProperty('assetChainId')
+		expect(serializeOperatorSettings(parsed).deployment).not.toHaveProperty('rep')
+		expect(serializeOperatorSettings(parsed).deployment).not.toHaveProperty('weth')
 		expect(serializeOperatorSettings(parsed).deployment).not.toHaveProperty('openOracle')
 		expect(parseOperatorSettings(serializeOperatorSettings(parsed)).deployment.openOracle).toBe(parsed.deployment.openOracle)
 	})

@@ -83,7 +83,7 @@ for the report lifecycle assumptions and economics used by the arbitrager.
   journal without durable dispute evidence is marked for manual reconciliation
   instead of starting an unbounded recovery scan. Coordinator-free diagnostic mode
   reads only the configured latest-block window.
-- The deployed OpenOracle contract address.
+- OpenOracle deployed at the address in the selected network manifest.
 - At least one reviewed Zoltar `OpenOraclePriceCoordinator` address for every
   coordinator whose games this wallet may dispute.
 - A deployed `OpenOracleArbitrageExecutor`. Deploy the stateless executor at a
@@ -204,9 +204,11 @@ apply automatically at the next scan boundary.
 In **Chain and RPC connectivity**, select the chain, enter its read and public RPC URLs, and
 save so every endpoint is checked against that chain. Reload the dashboard, open
 Settings, then open [**Complete bot configuration**](http://127.0.0.1:4173/settings#complete-configuration).
-Add the reviewed deployment settings, set the centralized-market REP address to
-match `deployment.rep`, choose chain-specific history, price, and position paths,
-and save. Supported live configuration changes apply automatically at the next
+Add the reviewed coordinator, executor, and venue settings, choose chain-specific
+history, price, and position paths, and save. OpenOracle, genesis REP, and WETH
+come from `docs/mainnet-deployment-addresses.json` or
+`docs/sepolia-deployment-addresses.json`. The root market asset and chain are
+derived from the same manifest; saved settings omit these identities. Supported live configuration changes apply automatically at the next
 scan boundary.
 
 Run `docker compose down` to stop the bot and `docker compose up --detach` to start
@@ -284,8 +286,9 @@ browser reconnects automatically.
 The first switch creates a clean Sepolia profile from the reviewed defaults. Its
 settings, signer, deployment addresses, tokens, strategy, submission policy, and
 history, price, and position journals are independent from mainnet. Configure its
-Sepolia RPCs and reviewed deployment addresses, then set
-`centralizedMarkets.assetAddress` to the same REP address as `deployment.rep`.
+Sepolia RPCs and reviewed coordinator, executor, and venue addresses. OpenOracle,
+genesis REP, WETH, and the root market identity are selected automatically from
+the Sepolia manifest.
 Switching back to Mainnet restores the saved mainnet profile and journals, but the
 bot remains paused until you explicitly resume it.
 
@@ -889,10 +892,9 @@ The shared market observer uses CCXT's public unified `fetchTicker` and
 `centralizedMarkets.sources` with an exchange id, a unified `REP/QUOTE` market,
 and an `ETH/QUOTE` reference market unless REP is quoted directly in ETH. The
 cross market must be exactly `ETH/<REP quote>`; direct `REP/ETH` books must omit
-it. The
-configuration also declares `assetAddress`, `assetChainId`, and the required
-`REP` base symbol; startup rejects a mapping that does not match the configured
-REP deployment and chain. CEX and DEX source IDs share one global namespace so
+it. Set `assetSymbol` to `REP`; the bot derives the root market address and chain
+from the selected network manifest. Existing `assetAddress` and `assetChainId`
+values cannot override that identity and are omitted when settings are saved. CEX and DEX source IDs share one global namespace so
 one failure domain cannot vote in both groups. The dashboard shows each
 normalized REP/ETH observation and its executable bid and
 ask depth inside the configured `depthBps` band. A cross-quoted observation is

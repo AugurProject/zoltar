@@ -1,3 +1,5 @@
+import mainnetManifest from '../../../../docs/mainnet-deployment-addresses.json'
+import example from '../../config/operator.example.json'
 import sepoliaManifest from '../../../../docs/sepolia-deployment-addresses.json'
 import { createHash } from 'node:crypto'
 import { mkdir, mkdtemp, readFile, rm, symlink } from 'node:fs/promises'
@@ -116,6 +118,8 @@ describe('liquidator settings', () => {
 			expect(sepolia.settings).toMatchObject({ network: { name: 'sepolia' }, networkConfigured: false, paused: true, privateKey: undefined })
 			expect(sepolia.settings.runtime.stateFile).toContain('.sepolia.')
 			expect(sepolia.settings.deployment.weth).toBe(getAddress(sepoliaManifest.network.wethAddress))
+			expect(sepolia.settings.centralizedMarkets.assetAddress).toBe(getAddress(sepoliaManifest.network.genesisRepTokenAddress))
+			expect(sepolia.settings.centralizedMarkets.assetChainId).toBe(sepoliaManifest.network.chainId)
 			expect(sepolia.settings.deployment).not.toEqual(mainnet.deployment)
 			await saveSettings(
 				path,
@@ -413,3 +417,14 @@ describe('liquidator settings', () => {
 		expect(events).toEqual(['mkdir', 'wx:write', 'wx:sync', 'wx:close', 'rename', 'r:sync', 'r:close'])
 	})
 })
+
+for (const manifest of [mainnetManifest, sepoliaManifest]) {
+	test(`derives the ${manifest.network.id} root market identity and omits it from saved settings`, () => {
+		const parsed = parseSettings({ ...example, centralizedMarkets: { ...example.centralizedMarkets, assetAddress: '0x0000000000000000000000000000000000000001', assetChainId: 999 }, network: { name: manifest.network.id, chainId: manifest.network.chainId, explorerUrl: 'https://example.com' } })
+		expect(parsed.centralizedMarkets.assetAddress).toBe(getAddress(manifest.network.genesisRepTokenAddress))
+		expect(parsed.centralizedMarkets.assetChainId).toBe(manifest.network.chainId)
+		expect(serializedSettings(parsed).centralizedMarkets).not.toHaveProperty('assetAddress')
+		expect(serializedSettings(parsed).centralizedMarkets).not.toHaveProperty('assetChainId')
+		expect(parseSettings(serializedSettings(parsed)).centralizedMarkets).toEqual(parsed.centralizedMarkets)
+	})
+}

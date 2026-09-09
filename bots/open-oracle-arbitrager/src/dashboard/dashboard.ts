@@ -214,9 +214,7 @@ function lines(id: string) {
 		.filter(Boolean)
 }
 
-function loadDeployment(deployment: Omit<DeploymentSettings, 'openOracle'>) {
-	element<HTMLInputElement>('deployment-rep').value = deployment.rep
-	element<HTMLInputElement>('deployment-weth').value = deployment.weth
+function loadDeployment(deployment: Omit<DeploymentSettings, 'openOracle' | 'rep' | 'weth'>) {
 	element<HTMLInputElement>('deployment-executor').value = deployment.executor ?? ''
 	element<HTMLInputElement>('deployment-v3-factory').value = deployment.uniswapFactory
 	element<HTMLInputElement>('deployment-v3-quoter').value = deployment.uniswapQuoter
@@ -599,9 +597,9 @@ function isSubmissionSettings(value: unknown): value is SubmissionSettings {
 	return (mode === 'private' || mode === 'public') && typeof Reflect.get(value, 'minimumBundleRelaySuccesses') === 'number' && isStringArray(Reflect.get(value, 'relayUrls'))
 }
 
-function isDeploymentSettings(value: unknown): value is Omit<DeploymentSettings, 'openOracle'> {
+function isDeploymentSettings(value: unknown): value is Omit<DeploymentSettings, 'openOracle' | 'rep' | 'weth'> {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
-	for (const key of ['rep', 'uniswapFactory', 'uniswapQuoter', 'weth']) {
+	for (const key of ['uniswapFactory', 'uniswapQuoter']) {
 		if (typeof Reflect.get(value, key) !== 'string') return false
 	}
 	for (const key of ['executor', 'uniswapRouter', 'uniswapV2Router', 'uniswapV4PoolManager', 'uniswapV4Quoter']) {
@@ -1571,14 +1569,12 @@ element<HTMLFormElement>('deployment-form').addEventListener('submit', async eve
 			deploymentManifest: manifestText === '' ? undefined : JSON.parse(manifestText),
 			executor: optionalInput('deployment-executor'),
 			quorumRpcUrls: lines('deployment-quorum-rpcs'),
-			rep: element<HTMLInputElement>('deployment-rep').value.trim(),
 			uniswapFactory: element<HTMLInputElement>('deployment-v3-factory').value.trim(),
 			uniswapQuoter: element<HTMLInputElement>('deployment-v3-quoter').value.trim(),
 			uniswapRouter: optionalInput('deployment-v3-router'),
 			uniswapV2Router: optionalInput('deployment-v2-router'),
 			uniswapV4PoolManager: optionalInput('deployment-v4-pool-manager'),
 			uniswapV4Quoter: optionalInput('deployment-v4-quoter'),
-			weth: element<HTMLInputElement>('deployment-weth').value.trim(),
 		}
 		const response = await api<{ deployment: DeploymentSettings }>('/api/deployment', {
 			body: JSON.stringify(deployment),

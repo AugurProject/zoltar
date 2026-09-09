@@ -309,11 +309,16 @@ Example source entries (only use venues where these exact markets exist):
 ]
 ```
 
-Set `assetAddress`, `assetChainId`, and `assetSymbol: "REP"` to the exact REP
-deployment before adding sources. Put root REP in `centralizedMarkets` and child
-REP configurations in `childMarketConfigurations`. The bot rejects another token
-base, chain, or address, and CEX exchange IDs cannot be reused as DEX
-failure-domain IDs.
+Put root REP sources in `centralizedMarkets` with `assetSymbol: "REP"`. The root
+asset address and chain come from `docs/mainnet-deployment-addresses.json` or
+`docs/sepolia-deployment-addresses.json`; saved settings omit those two fields
+and cannot override them. WETH and protocol deployment addresses also come from
+the selected manifest.
+
+Put child REP configurations in `childMarketConfigurations`, including each
+child's exact `assetAddress`, `assetChainId`, and `assetSymbol: "REP"`. Child assets
+remain separately configurable and must match the selected chain and discovered
+universe REP. CEX exchange IDs cannot be reused as DEX failure-domain IDs.
 
 Example DEX source entries (addresses are intentionally placeholders):
 

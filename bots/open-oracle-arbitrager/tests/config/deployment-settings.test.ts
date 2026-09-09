@@ -65,3 +65,15 @@ for (const [network, manifest] of [
 		expect(validateDeploymentSettings(example.deployment, network).openOracle).toBe(expected)
 	})
 }
+
+for (const network of ['mainnet', 'sepolia'] as const) {
+	test(`derives ${network} REP and WETH even when old settings supply other addresses`, () => {
+		const manifest = network === 'mainnet' ? mainnet : sepolia
+		const deployment = example.deployment
+		for (const supplied of [deployment, { ...deployment, rep: address('0'), weth: address('1') }]) {
+			const parsed = validateDeploymentSettings(supplied, network)
+			expect(parsed.rep.toLowerCase()).toBe(manifest.network.genesisRepTokenAddress.toLowerCase())
+			expect(parsed.weth.toLowerCase()).toBe(manifest.network.wethAddress.toLowerCase())
+		}
+	})
+}
