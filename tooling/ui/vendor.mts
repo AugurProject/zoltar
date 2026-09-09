@@ -108,14 +108,14 @@ async function bundleTevm(vendorOutputPath = getVendorOutputPath()) {
 	const tevmOutRoot = path.join(vendorOutputPath, 'tevm')
 	const results = await Promise.all([
 		Bun.build({
-			entrypoints: [resolveBundlerSpecifierPath('tevm')],
+			entrypoints: [resolveBundlerSpecifierPath('@tevm/memory-client')],
 			naming: { entry: 'index.js' },
 			outdir: tevmOutRoot,
 			target: 'browser',
 			sourcemap: 'linked',
 		}),
 		Bun.build({
-			entrypoints: [resolveBundlerSpecifierPath('tevm/common')],
+			entrypoints: [resolveBundlerSpecifierPath('@tevm/common')],
 			naming: { entry: 'index.js' },
 			outdir: normalizeBundlerPath(path.join(tevmOutRoot, 'common')),
 			target: 'browser',
