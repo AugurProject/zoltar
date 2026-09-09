@@ -688,7 +688,7 @@ try {
 				panel.scrollIntoView({ block: 'start' })
 				requestAnimationFrame(() => requestAnimationFrame(() => {
 					const bounds = panel.getBoundingClientRect()
-					const topbarColor = getComputedStyle(document.querySelector('.topbar')).backgroundColor
+					const topbarColor = getComputedStyle(document.querySelector('.operator-shell')).backgroundColor
 					const topbarAlpha = topbarColor.startsWith('rgba(') ? Number(topbarColor.match(/,\\s*([0-9.]+)\\)$/)?.[1]) : 1
 					const identifiers = [...panel.querySelectorAll('.compact-identifier')].map(identifier => {
 						const full = identifier.querySelector('.identifier-full')

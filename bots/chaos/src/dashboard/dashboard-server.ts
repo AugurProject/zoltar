@@ -1,3 +1,4 @@
+import { operatorHeader } from './header.ts'
 import { record, safeString, stringField, booleanField, scalar, safeIntegerField, isoTimestampField, compact } from './public-fields.ts'
 import { join } from 'node:path'
 import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
@@ -938,7 +939,7 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 				const page = url.pathname === '/' ? 'overview' : url.pathname.slice(1)
 				if (dashboardPages.has(page)) {
 					const html = await Bun.file(join(directory, 'index.html')).text()
-					return new Response(html.replace('<body>', `<body data-page="${page}">`), { headers: securityHeaders('text/html; charset=utf-8') })
+					return new Response(html.replace('<!-- operator-header -->', operatorHeader).replace('<body>', `<body data-page="${page}">`), { headers: securityHeaders('text/html; charset=utf-8') })
 				}
 				if (url.pathname === '/dashboard.css') return new Response(Bun.file(join(directory, 'styles.css')), { headers: securityHeaders('text/css; charset=utf-8') })
 				if (url.pathname === '/operator-console.css') {

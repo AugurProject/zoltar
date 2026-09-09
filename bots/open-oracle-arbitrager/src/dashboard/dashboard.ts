@@ -975,7 +975,6 @@ function renderSignerStatus(snapshot: PublicOperatorSnapshot) {
 
 function renderBlockStatus(snapshot = latestSnapshot) {
 	const value = snapshot?.blockNumber === undefined ? 'Block — · waiting for first observation' : `Block ${snapshot.blockNumber} · ${blockAgeLabel(snapshot.blockTimestamp)}`
-	setText('block-value', value)
 	setText('header-block-status', value)
 }
 

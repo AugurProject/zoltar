@@ -23,12 +23,6 @@
 	background: color-mix(in srgb, var(--surface-section-opaque) 94%, var(--accent) 6%);
 }
 
-:root[data-product="zoltar"] .view-tabs.route .view-tab.active,
-:root[data-product="statoblast"] .view-tabs.route .view-tab.active {
-	border-color: var(--border-active);
-	background: color-mix(in srgb, var(--accent) 14%, var(--surface-interactive));
-}
-
 :root[data-product="zoltar"] .route-header h1,
 :root[data-product="statoblast"] .route-header h1 {
 	font-size: clamp(1.625rem, 3vw, 2.5rem);

@@ -484,3 +484,42 @@ main .panel {
 		grid-column: span 2;
 	}
 }
+
+.operator-shell h1 {
+	margin: 0;
+	font-family: inherit;
+	font-size: clamp(1.4rem, 2.5vw, 1.85rem);
+	font-weight: 650;
+	line-height: 1.2;
+	letter-spacing: -0.025em;
+}
+
+.operator-shell .eyebrow {
+	margin: 0 0 0.35rem;
+	color: var(--operator-accent);
+	font-size: 0.7rem;
+	font-weight: 600;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+}
+
+body button:disabled,
+body .button:disabled {
+	border: 1px dashed var(--operator-muted);
+	background: var(--operator-surface-raised);
+	color: var(--operator-muted);
+	box-shadow: none;
+	opacity: 1;
+	cursor: not-allowed;
+}
+
+.operator-shell .eyebrow,
+.operator-shell .badge {
+	font-family: ui-sans-serif, system-ui, sans-serif;
+}
+
+.operator-shell .badge {
+	font-weight: 600;
+	letter-spacing: 0;
+	text-transform: none;
+}

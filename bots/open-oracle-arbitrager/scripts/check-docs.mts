@@ -1,3 +1,4 @@
+import { operatorHeader } from '../src/dashboard/header.ts'
 import assert from 'node:assert/strict'
 import { access, readFile } from 'node:fs/promises'
 import path from 'node:path'
@@ -6,7 +7,7 @@ const projectRoot = path.resolve(import.meta.dir, '..')
 const guidePath = path.join(projectRoot, 'docs', 'operator-guide.html')
 const guide = await readFile(guidePath, 'utf8')
 const readme = await readFile(path.join(projectRoot, 'README.md'), 'utf8')
-const dashboard = await readFile(path.join(projectRoot, 'src', 'dashboard', 'index.html'), 'utf8')
+const dashboard = (await readFile(path.join(projectRoot, 'src', 'dashboard', 'index.html'), 'utf8')).replace('<!-- operator-header -->', operatorHeader)
 const diagramSpecs = JSON.parse(await readFile(path.join(projectRoot, 'docs', 'diagram-specs.json'), 'utf8')) as Record<string, unknown>
 
 const markdownAnchors = (contents: string) =>

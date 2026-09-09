@@ -128,7 +128,9 @@ export const stagedOperationId = 'Staged Operation ID'
 export const zeroPlaceholder = '0'
 export const stagedOperations = 'Staged Operations'
 export const universeMismatch = 'Universe Mismatch'
-export const formatBrowsePoolUniverseMismatch = (poolUniverse: string, activeUniverse: string) => `This pool belongs to ${poolUniverse}, while the header shows ${activeUniverse}.`
+export const currentUniverse = 'Current universe'
+export const allUniverses = 'All universes'
+export const formatBrowsePoolUniverseMismatch = (poolUniverse: string) => `This pool belongs to universe ${poolUniverse}`
 export const poolUniverseLead = 'This pool belongs to'
 export const activeUniverseSeparator = 'but the app is currently set to'
 export const missingPoolDetail = 'Pool actions are locked until the app uses the same universe.'

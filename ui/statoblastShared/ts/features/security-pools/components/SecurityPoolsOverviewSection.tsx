@@ -19,7 +19,7 @@ import { Question, getQuestionTitle } from '@zoltar/ui-core-shared/components/Qu
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { formatUniverseIdHex } from '@zoltar/ui-zoltar-shared/features/universes/lib/universe.js'
-import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
+import { buildRouteHref, getRouteHashSearch } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { getWalletScopedAccountAddress } from '@zoltar/ui-core-shared/wallet/network.js'
 import { formatPaginationSummary, getHasNextPaginationPage, getPaginationPageCount, resolvePaginationPageIndex, SECURITY_POOL_PAGE_SIZE } from '@zoltar/ui-core-shared/lib/pagination.js'
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
@@ -50,6 +50,7 @@ export function SecurityPoolsOverviewSection({
 	const [activePageRequestKey, setActivePageRequestKey] = useState<string | undefined>(undefined)
 	const [pageLoadError, setPageLoadError] = useState<string | undefined>(undefined)
 	const [searchText, setSearchText] = useState('')
+	const [universeFilter, setUniverseFilter] = useState('current')
 	const [systemStateFilter, setSystemStateFilter] = useState<'all' | SecurityPoolLifecycleState>('all')
 	const loadSecurityPoolPageRef = useRef(onLoadSecurityPoolPage)
 	loadSecurityPoolPageRef.current = onLoadSecurityPoolPage
@@ -124,11 +125,15 @@ export function SecurityPoolsOverviewSection({
 	}, [currentPageRequestKey, environmentRefreshKey, resolvedPageIndex])
 	const filteredSecurityPools = securityPoolsWithState.filter(({ pool, poolState }) => {
 		const displayState = poolState.lifecycleState
+		if (universeFilter === 'current' && pool.universeId !== activeUniverseId) return false
+		if (universeFilter !== 'current' && universeFilter !== 'all' && pool.universeId.toString() !== universeFilter) return false
 		if (systemStateFilter !== 'all' && displayState !== systemStateFilter) return false
 		if (normalizedSearchText === '') return true
 		return pool.securityPoolAddress.toLowerCase().includes(normalizedSearchText) || pool.questionId.toLowerCase().includes(normalizedSearchText) || pool.marketDetails.title.toLowerCase().includes(normalizedSearchText) || pool.marketDetails.description.toLowerCase().includes(normalizedSearchText)
 	})
-	const hasActiveFilters = normalizedSearchText !== '' || systemStateFilter !== 'all'
+	const universeOptions = new Set(pagedSecurityPools.map(pool => pool.universeId.toString()))
+	if (universeFilter !== 'current' && universeFilter !== 'all') universeOptions.add(universeFilter)
+	const hasActiveFilters = normalizedSearchText !== '' || systemStateFilter !== 'all' || (universeFilter !== 'all' && filteredSecurityPools.length !== pagedSecurityPools.length)
 	return (
 		<SectionBlock
 			density='compact'
@@ -158,6 +163,18 @@ export function SecurityPoolsOverviewSection({
 				</div>
 			)}
 			<div className='filter-toolbar'>
+				<label className='field'>
+					<span>{commonCopy.universe}</span>
+					<select value={universeFilter} onChange={event => setUniverseFilter(event.currentTarget.value)}>
+						<option value='current'>{securityPoolCopy.currentUniverse}</option>
+						<option value='all'>{securityPoolCopy.allUniverses}</option>
+						{[...universeOptions].map(universeId => (
+							<option key={universeId} value={universeId}>
+								{formatUniverseIdHex(BigInt(universeId))}
+							</option>
+						))}
+					</select>
+				</label>
 				<label className='field'>
 					<span>{securityPoolCopy.searchLoadedPage}</span>
 					<FormInput value={searchText} onInput={event => setSearchText(event.currentTarget.value)} placeholder={securityPoolCopy.poolSearchPlaceholder} />
@@ -213,25 +230,34 @@ export function SecurityPoolsOverviewSection({
 							})()
 							return (
 								<div className='security-pool-overview-record' key={pool.securityPoolAddress}>
-									{pool.universeId === activeUniverseId ? undefined : (
-										<WarningSurface role='alert' variant='compact'>
-											<strong>{securityPoolCopy.universeMismatch}</strong>
-											<p>{securityPoolCopy.formatBrowsePoolUniverseMismatch(formatUniverseIdHex(pool.universeId), formatUniverseIdHex(activeUniverseId))}</p>
-										</WarningSurface>
-									)}
 									<ComparisonRecord
-										title={getQuestionTitle(pool.marketDetails)}
+										title={
+											onSelectSecurityPool === undefined ? (
+												getQuestionTitle(pool.marketDetails)
+											) : (
+												<a
+													href={(() => {
+														const params = new URLSearchParams(getRouteHashSearch())
+														params.set('securityPool', pool.securityPoolAddress)
+														params.set('universe', formatUniverseIdHex(pool.universeId))
+														params.set('securityPoolsView', 'operate')
+														return buildRouteHref('#/security-pools', `?${params.toString()}`)
+													})()}
+													aria-label={securityPoolCopy.formatOpenPoolLabel(getQuestionTitle(pool.marketDetails), pool.securityPoolAddress)}
+													onClick={event => {
+														if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+														event.preventDefault()
+														onSelectSecurityPool(pool.securityPoolAddress, pool.universeId)
+													}}
+												>
+													{getQuestionTitle(pool.marketDetails)}
+												</a>
+											)
+										}
 										badge={
 											<Badge ariaLabel={statusBadgeLabel} tone={badgeTone}>
 												{statusBadgeLabel}
 											</Badge>
-										}
-										action={
-											onSelectSecurityPool === undefined ? undefined : (
-												<button aria-label={securityPoolCopy.formatOpenPoolLabel(getQuestionTitle(pool.marketDetails), pool.securityPoolAddress)} className='primary' onClick={() => onSelectSecurityPool(pool.securityPoolAddress, pool.universeId)}>
-													{securityPoolCopy.openPool}
-												</button>
-											)
 										}
 										metrics={[
 											{ label: securityPoolCopy.vaultCount, value: pool.vaultCount.toString() },
@@ -254,6 +280,7 @@ export function SecurityPoolsOverviewSection({
 											},
 										]}
 									>
+										{pool.universeId === activeUniverseId ? undefined : <p className='detail'>{securityPoolCopy.formatBrowsePoolUniverseMismatch(formatUniverseIdHex(pool.universeId))}</p>}
 										<ReadOnlyDetailAccordion title={commonCopy.technicalDetails}>
 											<div className='comparison-record-expanded'>
 												<Question question={pool.marketDetails} showTitle={false} variant='preview' />
