@@ -1,3 +1,4 @@
+import { getChromiumPath } from '../../../../tooling/ui/chromiumPath.js'
 import { expect, test } from 'bun:test'
 import { mkdir } from 'node:fs/promises'
 import { startDashboardServer } from '../../src/dashboard/dashboard-server.ts'
@@ -50,7 +51,9 @@ test('catalog groups and manual operation dialog at desktop and mobile widths', 
 		setSigner: () => undefined,
 		setWorkflow: () => undefined,
 	})
-	const session = await startChromiumSession(process.env['CHROMIUM_PATH'] ?? '/usr/bin/chromium')
+	const chromium = process.env['CHROMIUM_PATH'] ?? getChromiumPath()
+	if (chromium === undefined) throw new Error('Chromium or Chrome is required for the operation dialog test')
+	const session = await startChromiumSession(chromium)
 	async function evaluate(expression: string) {
 		const response = await session.send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })
 		const details = Reflect.get(response, 'exceptionDetails')
@@ -109,7 +112,7 @@ test('catalog groups and manual operation dialog at desktop and mobile widths', 
 			expect(await evaluate("document.querySelector('#operation-input-seed').disabled")).toBe(true)
 			await capture(`${viewport.label}-inputs`)
 			await evaluate(`(() => {
-				const source = document.querySelector('[aria-label="Maximum ETH spend (wei) source"]')
+				const source = document.querySelector('[aria-label="Maximum ETH spend (attoETH) source"]')
 				source.value = 'custom'; source.dispatchEvent(new Event('change'))
 				const exactSource = document.querySelector('#operation-input-amount').parentElement.querySelector('select')
 				exactSource.value = 'custom'; exactSource.dispatchEvent(new Event('change'))
@@ -122,7 +125,7 @@ test('catalog groups and manual operation dialog at desktop and mobile widths', 
 			await waitFor("document.querySelector('#operation-dialog .operation-actions button:nth-child(2)').disabled === false")
 			expect(await evaluate("document.querySelector('#operation-input-maxEthSpendAttoEth').value")).toBe('100')
 			expect(await evaluate("document.querySelector('#operation-input-amount').value")).toBe('0.000000000000000073')
-			expect(await evaluate("document.querySelector('.operation-transactions').textContent.includes('73 wei')")).toBe(true)
+			expect(await evaluate("document.querySelector('.operation-transactions').textContent.includes('73 attoETH')")).toBe(true)
 			await evaluate("document.querySelector('.operation-transactions details').open = true")
 			await evaluate("document.querySelector('#operation-dialog').scrollTop = document.querySelector('#operation-dialog').scrollHeight")
 			await capture(`${viewport.label}-preview`)

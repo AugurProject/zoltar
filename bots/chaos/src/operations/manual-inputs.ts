@@ -4,9 +4,9 @@ export type ManualInput = { source: 'chaosbot' } | { source: 'custom'; value: st
 export type ManualInputs = Record<string, ManualInput>
 
 const amountFields = [
-	['maxEthSpendAttoEth', 'Maximum ETH spend (wei)', 'maximum'],
+	['maxEthSpendAttoEth', 'Maximum ETH spend (attoETH)', 'maximum'],
 	['maxRepSpendAttoRep', 'Maximum REP spend (attoREP)', 'maximum'],
-	['minimumEthReserveAttoEth', 'ETH reserve (wei)', 'minimum'],
+	['minimumEthReserveAttoEth', 'ETH reserve (attoETH)', 'minimum'],
 	['minimumRepReserveAttoRep', 'REP reserve (attoREP)', 'minimum'],
 ] as const
 

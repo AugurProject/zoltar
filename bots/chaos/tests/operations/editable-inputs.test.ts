@@ -4,7 +4,7 @@ import { CHAOS_OPERATION_CATALOG, evaluateOperationCatalog, reevaluateOperationC
 import { operationInputCoverage } from '../../src/operations/input-coverage.ts'
 import { inputFieldValue, operationInputSchema, resolveOperationInputs } from '../../src/operations/input-schema.ts'
 import { restoreOperationPlanningInputs, type ManualInput, type ManualInputs } from '../../src/operations/manual-inputs.ts'
-import { decodedTransaction } from '../../src/operations/transaction-description.ts'
+import { decodedTransaction, readableTransaction } from '../../src/operations/transaction-description.ts'
 import { erc20Abi, openOracleAbi } from '../../src/contracts/abi.ts'
 import { createDurableWorkflow, durableWorkflowPlan } from '../../src/runtime/workflows.ts'
 import { initialDurableState, loadDurableState, saveDurableState } from '../../src/state/operator-state.ts'
@@ -19,10 +19,10 @@ const options = {
 	maximumBlockIntervalSeconds: 15,
 	allowHighRisk: true,
 	allowIrreversibleOperations: true,
-	maxEthSpendAttoEth: '1000000000000000',
-	maxRepSpendAttoRep: '1000000000000000',
-	minimumEthReserveAttoEth: '10000000000000000',
-	minimumRepReserveAttoRep: '1000000000000000000',
+	maxEthSpendAttoEth: 1000000000000000n.toString(),
+	maxRepSpendAttoRep: 1000000000000000n.toString(),
+	minimumEthReserveAttoEth: 10000000000000000n.toString(),
+	minimumRepReserveAttoRep: 1000000000000000000n.toString(),
 	immutableTopologyCapacity: { maxPools: 100, maxQuestions: 100, maxStagedOperationsPerPool: 100, maxUniverses: 100, maxVaultsPerPool: 100, maximumAggregateItems: 10000 },
 }
 
@@ -53,6 +53,15 @@ function transaction(plan: ReturnType<typeof build>) {
 	return transaction
 }
 
+test('transaction descriptions skip unknown selectors but surface invalid transaction data', () => {
+	const step = build('open-oracle.weth.wrap', {}).steps.at(-1)
+	if (step === undefined) throw new Error('Missing transaction')
+	expect(decodedTransaction({ ...step, data: '0xdeadbeef' })).toBeUndefined()
+	expect(readableTransaction({ ...step, data: '0xdeadbeef' }).method).toBe('Deployment')
+	expect(() => decodedTransaction({ ...step, data: '0xzz' })).toThrow()
+	expect(() => readableTransaction({ ...step, data: '0xzz' })).toThrow()
+})
+
 test('all catalog entries expose coverage and every supported field resolves from an eligible plan', () => {
 	const baseline = editableSnapshot()
 	const initializing = editableSnapshot()
@@ -69,7 +78,7 @@ test('all catalog entries expose coverage and every supported field resolves fro
 	const pool = winning.pools[0]
 	if (pool === undefined) throw new Error('Missing pool')
 	pool.questionOutcome = 1
-	baseline.auctions.push({ address: address(90), pool: pool.address, startTime: '1999999999', endTime: '2000001000', finalized: false, minimumBidAttoEth: '100', hasClearingPrice: false, clearingTick: '0', underfunded: false, underfundedWinningAttoEth: '0', pendingEthRefund: '0', bids: [] })
+	baseline.auctions.push({ address: address(90), pool: pool.address, startTime: '1999999999', endTime: '2000001000', finalized: false, minimumBidAttoEth: 100n.toString(), hasClearingPrice: false, clearingTick: '0', underfunded: false, underfundedWinningAttoEth: 0n.toString(), pendingEthRefund: '0', bids: [] })
 	const covered = new Set<string>()
 	for (const snapshot of [baseline, initializing, deploying, forked, winning])
 		for (const definition of CHAOS_OPERATION_CATALOG) {
@@ -166,7 +175,7 @@ test('trading controls affect amounts, direction, quote bounds, and deadlines', 
 
 test('stored inputs and sources survive disk reload and approval continuation under tighter policy', async () => {
 	const original = build('open-oracle.deposit', { token: address(7), amount: '12345' })
-	original.operationInputs = { token: address(7), amount: '12345', maxEthSpendAttoEth: '20000' }
+	original.operationInputs = { token: address(7), amount: '12345', maxEthSpendAttoEth: 20000n.toString() }
 	original.inputSources = { token: 'custom', amount: 'custom', maxEthSpendAttoEth: 'chaosbot' }
 	const workflow = createDurableWorkflow(original)
 	const state = initialDurableState(1)
@@ -184,7 +193,7 @@ test('stored inputs and sources survive disk reload and approval continuation un
 		const continued = reevaluateOperationContinuation(editableSnapshot(), restored, options)
 		expect(continued.plan?.steps.at(-1)?.data).toBe(original.steps.at(-1)?.data)
 		expect(continued.plan?.operationInputs).toEqual(original.operationInputs)
-		expect(restoreOperationPlanningInputs({ ...options, maxEthSpendAttoEth: '10000' }, restored.operationInputs).maxEthSpendAttoEth).toBe('10000')
+		expect(restoreOperationPlanningInputs({ ...options, maxEthSpendAttoEth: 10000n.toString() }, restored.operationInputs).maxEthSpendAttoEth).toBe('10000')
 	} finally {
 		await rm(directory, { recursive: true, force: true })
 	}

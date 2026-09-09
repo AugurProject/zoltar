@@ -132,7 +132,8 @@ export function createManualOperationController(options: Options) {
 			plan.inputSources = Object.fromEntries(Object.keys(plan.operationInputs).map(key => [key, inputs[key]?.source ?? 'chaosbot']))
 			try {
 				assertOperationPrincipalCaps(plan, settings.strategy)
-			} catch {
+			} catch (error) {
+				console.error('chaosManualOperation principal validation failed', error)
 				blockers.push('The operation exceeds the configured spending caps')
 			}
 		}

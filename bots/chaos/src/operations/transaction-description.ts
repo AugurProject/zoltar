@@ -38,7 +38,8 @@ export function readableTransaction(step: OperationPlan['steps'][number]) {
 		try {
 			const decoded = decodeFunctionData({ abi, data: step.data })
 			return { label: step.label, to: step.to, value: step.value ?? '0', method: decoded.functionName, arguments: JSON.stringify(jsonValue(decoded.args), undefined, 2) ?? '[]' }
-		} catch {
+		} catch (error) {
+			if (!(error instanceof Error) || error.message !== 'Function selector was not found in the ABI') throw error
 			// Try the next canonical ABI; deployment bytecode has no function selector.
 		}
 	}
@@ -50,7 +51,8 @@ export function decodedTransaction(step: OperationPlan['steps'][number]) {
 		try {
 			const decoded = decodeFunctionData({ abi, data: step.data })
 			return { method: decoded.functionName, args: decoded.args, value: step.value ?? '0' }
-		} catch {
+		} catch (error) {
+			if (!(error instanceof Error) || error.message !== 'Function selector was not found in the ABI') throw error
 			/* Try the next canonical ABI. */
 		}
 	}

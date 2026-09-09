@@ -239,7 +239,7 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 			for (const step of value.steps) {
 				const details = element('details')
 				details.append(element('summary', step.label))
-				details.append(element('p', `To: ${step.to}`), element('p', `ETH value: ${step.value} wei`), element('p', step.method), element('pre', step.arguments))
+				details.append(element('p', `To: ${step.to}`), element('p', `ETH value: ${step.value} attoETH`), element('p', step.method), element('pre', step.arguments))
 				transactions.append(details)
 			}
 		}
@@ -311,8 +311,9 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 				if (selected?.id !== undefined) retainedExecutions.delete(selected.id)
 				executionReference = undefined
 			}
-		} catch {
+		} catch (error) {
 			if (requestGeneration !== generation) return
+			console.warn('Checking execution status failed', error)
 			status.textContent = 'Checking execution status failed. Retrying…'
 			window.setTimeout(() => void poll(reference, requestGeneration), 3000)
 		}
