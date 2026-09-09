@@ -169,14 +169,31 @@ describe('split UI workflow paths', () => {
 		expect(requireRecord(ciJobs['infrastructure-checks'], 'infrastructure checks')['if']).toBe("needs.changes.outputs.infrastructure == 'true' && needs.changes.outputs.core != 'true'")
 		expect(requireRecord(domainJobs['prepare'], 'prepare')['if']).toBe('inputs.application && !inputs.prepared')
 		expect(requireRecord(domainJobs['mutation-smoke'], 'mutation smoke')['if']).toBe('inputs.application')
-		expect(requireRecord(domainJobs['application-tests'], 'application tests')['needs']).toBe('prepare')
+		expect(requireRecord(domainJobs['application-tests'], 'application tests')['needs']).toEqual(['prepare', 'timing-history-input'])
 		const solidity = requireRecord(domainJobs['solidity-tests'], 'Solidity tests')
-		expect(solidity['needs']).toBeUndefined()
-		expect(solidity['if']).toBe('inputs.solidity')
+		expect(solidity['needs']).toBe('timing-history-input')
+		expect(solidity['if']).toBe("inputs.solidity && needs.timing-history-input.result == 'success'")
 		expect(requireRecord(requireRecord(solidity['strategy'], 'strategy')['matrix'], 'matrix')['shard']).toEqual([1, 2, 3, 4])
 		const history = requireRecord(domainJobs['timing-history'], 'timing history')
 		expect(history['if']).toContain("needs.solidity-tests.result == 'success' || needs.application-tests.result == 'success'")
 		expect(requireRecord(requireRecord(history['strategy'], 'strategy')['matrix'], 'matrix')['domain']).toBe("${{ fromJSON(needs.application-tests.result != 'success' && '[\"solidity\"]' || (needs.solidity-tests.result == 'success' && '[\"application\", \"solidity\"]' || '[\"application\"]')) }}")
+	})
+
+	test('every balanced shard consumes one immutable timing-history snapshot', async () => {
+		const jobs = workflowJobs(await readWorkflow(testDomainsWorkflowPath))
+		const input = requireRecord(jobs['timing-history-input'], 'timing history input')
+		const inputSteps = workflowSteps(input)
+		expect(inputSteps.some(step => step['uses'] === 'actions/cache/restore@v5')).toBe(true)
+		expect(inputSteps.some(step => step['uses'] === 'actions/upload-artifact@v4')).toBe(true)
+
+		for (const jobName of ['application-tests', 'solidity-tests', 'timing-history']) {
+			const job = requireRecord(jobs[jobName], jobName)
+			expect(requireRecord(job, jobName)['needs']).toContain('timing-history-input')
+			const steps = workflowSteps(job)
+			expect(steps.some(step => step['uses'] === 'actions/cache/restore@v5')).toBe(false)
+			const download = steps.find(step => step['uses'] === 'actions/download-artifact@v5' && String(requireRecord(step['with'], `${jobName} timing input`)['name']).includes('test-timing-history-input'))
+			expect(requireRecord(download?.['with'], `${jobName} timing input`)).toMatchObject({ path: '.ci' })
+		}
 	})
 
 	test('required gates reject failures, cancellations, and unexpected skips for every selected route', async () => {
@@ -266,7 +283,7 @@ describe('split UI workflow paths', () => {
 		expect(requireRecord(browser['on'], 'browser triggers')['pull_request']).toBeNull()
 		expect(requireRecord(workflowJobs(browser)['browser-smoke'], 'manual smoke')['if']).toBe("github.event_name == 'workflow_dispatch'")
 		const domains = workflowJobs(await readWorkflow(testDomainsWorkflowPath))
-		expect(requireRecord(domains['application-tests'], 'application shards')['if']).toBe("always() && !cancelled() && inputs.application && (needs.prepare.result == 'success' || (inputs.prepared && needs.prepare.result == 'skipped'))")
+		expect(requireRecord(domains['application-tests'], 'application shards')['if']).toBe("always() && !cancelled() && inputs.application && needs.timing-history-input.result == 'success' && (needs.prepare.result == 'success' || (inputs.prepared && needs.prepare.result == 'skipped'))")
 	})
 
 	test('setup profiles isolate lightweight jobs and reject unsupported configuration', async () => {
