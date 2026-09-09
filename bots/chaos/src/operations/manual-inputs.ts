@@ -38,3 +38,18 @@ export function resolveManualInputs(defaults: PlanningOptions, inputs: ManualInp
 	}
 	return result
 }
+
+export function restoreOperationPlanningInputs(defaults: PlanningOptions, values: Record<string, string> | undefined): PlanningOptions {
+	if (values === undefined) return defaults
+	const result = { ...defaults, operationInputs: values }
+	for (const [key, , boundary] of amountFields) {
+		const stored = values[key]
+		if (stored === undefined) continue
+		if (!/^(0|[1-9]\d*)$/.test(stored) || stored.length > 78) throw new Error('Invalid stored planning limit')
+		const current = BigInt(defaults[key] ?? '0')
+		const previous = BigInt(stored)
+		const keepStored = boundary === 'maximum' ? previous < current : previous > current
+		result[key] = (keepStored ? previous : current).toString()
+	}
+	return result
+}

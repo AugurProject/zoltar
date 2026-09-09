@@ -1615,6 +1615,7 @@ fieldset {
 }
 
 .operation-input input,
+.operation-input textarea,
 .operation-input select {
 	width: 100%;
 	min-width: 0;
@@ -1624,6 +1625,7 @@ fieldset {
 	margin-top: 0.75rem;
 }
 
+.operation-coverage p,
 .operation-transactions p,
 .operation-transactions pre {
 	white-space: pre-wrap;

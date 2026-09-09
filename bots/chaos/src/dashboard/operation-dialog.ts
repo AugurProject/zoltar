@@ -1,9 +1,13 @@
+import { displayOperationInput, serializeOperationInput } from './operation-input-format.js'
+
 type Operation = { id?: string | undefined; label?: string | undefined; description?: string | undefined; blockers: string[] }
 type Input = { source: 'chaosbot' } | { source: 'custom'; value: string }
+type Field = { key: string; label: string; value: string; kind: string; advanced: boolean; choices?: Array<{ label: string; value: string }> }
 type Result = {
 	blockers: string[]
 	candidates: Array<{ value: string; label: string }>
-	fields: Array<{ key: string; label: string; value: string }>
+	fields: Field[]
+	coverage: Array<{ label: string; type: string; source: string; reason: string }>
 	mode: string
 	previewId: string | undefined
 	expiresAt: number | undefined
@@ -22,6 +26,12 @@ function string(value: unknown) {
 function result(value: unknown): Result {
 	const source = record(value)
 	return {
+		coverage: Array.isArray(source['coverage'])
+			? source['coverage'].map(value => {
+					const item = record(value)
+					return { label: string(item['label']), type: string(item['type']), source: string(item['source']), reason: string(item['reason']) }
+				})
+			: [],
 		blockers: Array.isArray(source['blockers']) ? source['blockers'].map(string) : [],
 		candidates: Array.isArray(source['candidates'])
 			? source['candidates'].map(value => {
@@ -32,7 +42,21 @@ function result(value: unknown): Result {
 		fields: Array.isArray(source['fields'])
 			? source['fields'].map(value => {
 					const item = record(value)
-					return { key: string(item['key']), label: string(item['label']), value: string(item['value']) }
+					return {
+						key: string(item['key']),
+						label: string(item['label']),
+						value: string(item['value']),
+						kind: string(item['kind']),
+						advanced: item['advanced'] === true,
+						...(Array.isArray(item['choices'])
+							? {
+									choices: item['choices'].map(choice => {
+										const entry = record(choice)
+										return { value: string(entry['value']), label: string(entry['label']) }
+									}),
+								}
+							: {}),
+					}
 				})
 			: [],
 		mode: string(source['mode']),
@@ -71,6 +95,8 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 	const form = element('form')
 	const fields = element('fieldset')
 	fields.className = 'operation-inputs'
+	const coverage = element('details')
+	coverage.className = 'operation-coverage'
 	const mode = element('p')
 	const status = element('p')
 	status.setAttribute('role', 'status')
@@ -93,13 +119,14 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 	workflowLink.href = '/overview#current-workflow'
 	workflowLink.className = 'text-link'
 	workflowLink.hidden = true
-	form.append(fields, mode, transactions, status, actions, workflowLink)
+	form.append(fields, coverage, mode, transactions, status, actions, workflowLink)
 	dialog.append(heading, description, form)
 	document.body.append(dialog)
 	let selected: Operation | undefined
 	let generation = 0
 	let previewId: string | undefined
 	let inputs: Record<string, Input> = {}
+	let fieldDefinitions: Field[] = []
 	let candidate: string | undefined
 	let busy = false
 	let executionReference: string | undefined
@@ -112,20 +139,25 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 		status.textContent = 'Preview your changes before execution.'
 	}
 
-	function inputControl(key: string, labelText: string, value: string, choices?: Array<{ label: string; value: string }>) {
+	function inputControl(key: string, labelText: string, rawValue: string, choices?: Array<{ label: string; value: string }>, kind = 'integer') {
+		const value = displayOperationInput(kind, rawValue)
 		const wrapper = element('div')
 		wrapper.className = 'operation-input'
 		const label = element('label', labelText)
 		const source = element('select')
+		source.id = `operation-source-${key}`
 		source.setAttribute('aria-label', `${labelText} source`)
 		source.append(new Option('Use chaosbot input', 'chaosbot'), new Option('Custom value', 'custom'))
-		const input = choices === undefined ? element('input') : element('select')
+		const freeformTag = kind === 'text' || kind === 'list' ? 'textarea' : 'input'
+		const input = choices !== undefined ? element('select') : element(freeformTag)
 		input.id = `operation-input-${key}`
 		label.htmlFor = input.id
 		if (input instanceof HTMLSelectElement) for (const choice of choices ?? []) input.append(new Option(choice.label, choice.value))
-		else {
+		else if (input instanceof HTMLInputElement) {
 			input.type = 'text'
-			input.inputMode = 'numeric'
+			input.inputMode = 'text'
+			if (kind === 'amount') input.inputMode = 'decimal'
+			if (kind === 'integer') input.inputMode = 'numeric'
 			input.autocomplete = 'off'
 		}
 		input.value = inputs[key]?.source === 'custom' ? inputs[key].value : value
@@ -140,20 +172,44 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 		source.addEventListener('change', () => {
 			if (source.value === 'chaosbot') input.value = value
 			update()
+			if (source.value === 'chaosbot' && input instanceof HTMLSelectElement && key !== 'candidate') void load('inspect')
 		})
 		input.addEventListener('input', update)
+		if (input instanceof HTMLSelectElement && key !== 'candidate') input.addEventListener('change', () => void load('inspect'))
+		if (input instanceof HTMLTextAreaElement) input.rows = kind === 'list' ? 4 : 2
 		wrapper.append(label, source, input)
 		return wrapper
 	}
 
 	function show(value: Result) {
+		fieldDefinitions = value.fields
+		coverage.replaceChildren(element('summary', 'Automatically derived arguments'))
+		const derived = value.coverage.filter(field => field.source === 'derived')
+		coverage.hidden = derived.length === 0
+		for (const reason of new Set(derived.map(field => field.reason))) {
+			const row = element('p')
+			row.append(
+				element(
+					'strong',
+					derived
+						.filter(field => field.reason === reason)
+						.map(field => `${field.label} (${field.type})`)
+						.join(', '),
+				),
+				element('br'),
+				document.createTextNode(reason),
+			)
+			coverage.append(row)
+		}
+		const limitsOpen = fields.querySelector('details')?.open === true
 		const advanced = element('details')
+		advanced.open = limitsOpen
 		advanced.className = 'operation-limits'
-		advanced.append(element('summary', 'Limits and reserves'))
+		advanced.append(element('summary', 'Planning limits and seed'))
 		fields.replaceChildren()
 		for (const field of value.fields) {
-			const control = inputControl(field.key, field.label, field.value)
-			if (field.key.startsWith('minimum')) advanced.append(control)
+			const control = inputControl(field.key, field.label, field.value, field.choices, field.kind)
+			if (field.advanced) advanced.append(control)
 			else fields.append(control)
 		}
 		if (advanced.childElementCount > 1) fields.append(advanced)
@@ -192,6 +248,7 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 	async function load(action: 'inspect' | 'preview') {
 		if (selected === undefined || busy) return
 		const requestGeneration = generation
+		const focusedId = document.activeElement instanceof HTMLElement && fields.contains(document.activeElement) ? document.activeElement.id : undefined
 		busy = true
 		fields.disabled = true
 		preview.disabled = true
@@ -200,7 +257,19 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 		previewId = undefined
 		status.textContent = 'Preparing operation…'
 		try {
-			const submitted = Object.fromEntries(Object.entries(inputs).filter(([key]) => key !== 'candidate'))
+			const submitted = Object.fromEntries(
+				Object.entries(inputs)
+					.filter(([key]) => key !== 'candidate')
+					.map(([key, input]) => {
+						if (input.source === 'chaosbot') return [key, input]
+						const field = fieldDefinitions.find(field => field.key === key)
+						try {
+							return [key, { source: 'custom', value: serializeOperationInput(field?.kind ?? 'integer', input.value) }]
+						} catch (error) {
+							throw new Error(`${field?.label ?? key}: ${error instanceof Error ? error.message : 'Invalid value'}`)
+						}
+					}),
+			)
 			const value = result(await options.request({ action, definitionId: selected.id, inputs: submitted, ...(candidate === undefined ? {} : { candidate }) }))
 			if (requestGeneration !== generation) return
 			show(value)
@@ -213,6 +282,8 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 			if (requestGeneration === generation) {
 				busy = false
 				fields.disabled = false
+				const focusedControl = focusedId === undefined ? undefined : document.getElementById(focusedId)
+				if (focusedControl instanceof HTMLElement) focusedControl.focus()
 			}
 		}
 	}
@@ -294,9 +365,11 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 			title.textContent = operation.label ?? 'Operation'
 			description.textContent = operation.description ?? ''
 			inputs = {}
+			fieldDefinitions = []
 			candidate = undefined
 			previewId = undefined
 			fields.replaceChildren()
+			coverage.hidden = true
 			transactions.replaceChildren()
 			mode.textContent = ''
 			workflowLink.hidden = true

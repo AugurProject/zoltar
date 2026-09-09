@@ -189,7 +189,7 @@ describe('real ecosystem workflows through the production chaos runtime', () => 
 				},
 				state: context.state,
 			})
-			const preview = await controller.handle({ action: 'preview', definitionId: 'open-oracle.weth.wrap', inputs: { seed: { source: 'custom', value: '7' }, maxEthSpendAttoEth: { source: 'custom', value: '100' } } })
+			const preview = await controller.handle({ action: 'preview', definitionId: 'open-oracle.weth.wrap', inputs: { seed: { source: 'custom', value: '7' }, maxEthSpendAttoEth: { source: 'custom', value: '100' }, amount: { source: 'custom', value: '73' } } })
 			if (typeof preview !== 'object' || preview === null) throw new Error('Manual preview unavailable')
 			expect(Reflect.get(preview, 'blockers')).toEqual([])
 			const previewId = Reflect.get(preview, 'previewId')
@@ -210,6 +210,9 @@ describe('real ecosystem workflows through the production chaos runtime', () => 
 			const workflow = context.state.workflows.find(item => item.operationId === 'open-oracle.weth.wrap')
 			expect(workflow?.status).toBe('completed')
 			expect(workflow?.steps[0]?.status).toBe('confirmed')
+			expect(workflow?.steps[0]?.value).toBe('73')
+			expect(workflow?.operationInputs?.['amount']).toBe('73')
+			expect(workflow?.inputSources?.['amount']).toBe('custom')
 			expect(context.state.pendingTransactions).toEqual([])
 		} finally {
 			proxy.dispose()

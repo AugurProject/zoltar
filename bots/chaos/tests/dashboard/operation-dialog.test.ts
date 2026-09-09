@@ -9,6 +9,7 @@ import { startChromiumSession } from './chromium-session.ts'
 
 test('catalog groups and manual operation dialog at desktop and mobile widths', async () => {
 	const fixture = manualOperationFixture()
+	fixture.configuration.settings.strategy.selectableOperationAllowlist = ['open-oracle.weth.wrap', 'zoltar.question.create-binary', 'open-oracle.deposit']
 	fixture.state.evaluations = evaluateOperationCatalog(fixture.scan.snapshot, planningOptions(fixture.configuration.settings, 7))
 	let holdExecution = false
 	let executionStatus = 'pending'
@@ -110,12 +111,18 @@ test('catalog groups and manual operation dialog at desktop and mobile widths', 
 			await evaluate(`(() => {
 				const source = document.querySelector('[aria-label="Maximum ETH spend (wei) source"]')
 				source.value = 'custom'; source.dispatchEvent(new Event('change'))
+				const exactSource = document.querySelector('#operation-input-amount').parentElement.querySelector('select')
+				exactSource.value = 'custom'; exactSource.dispatchEvent(new Event('change'))
+				const exactAmount = document.querySelector('#operation-input-amount')
+				exactAmount.value = '0.000000000000000073'; exactAmount.dispatchEvent(new Event('input'))
 				const input = document.querySelector('#operation-input-maxEthSpendAttoEth')
 				input.value = '100'; input.dispatchEvent(new Event('input'))
 				document.querySelector('#operation-dialog form').requestSubmit()
 			})()`)
 			await waitFor("document.querySelector('#operation-dialog .operation-actions button:nth-child(2)').disabled === false")
 			expect(await evaluate("document.querySelector('#operation-input-maxEthSpendAttoEth').value")).toBe('100')
+			expect(await evaluate("document.querySelector('#operation-input-amount').value")).toBe('0.000000000000000073')
+			expect(await evaluate("document.querySelector('.operation-transactions').textContent.includes('73 wei')")).toBe(true)
 			await evaluate("document.querySelector('.operation-transactions details').open = true")
 			await evaluate("document.querySelector('#operation-dialog').scrollTop = document.querySelector('#operation-dialog').scrollHeight")
 			await capture(`${viewport.label}-preview`)
@@ -149,6 +156,51 @@ test('catalog groups and manual operation dialog at desktop and mobile widths', 
 			expect(await evaluate("document.querySelector('#operation-dialog .operation-actions button:nth-child(2)').disabled")).toBe(true)
 			await evaluate("document.querySelector('#operation-dialog').close()")
 			fixture.configuration.settings.runtime.execute = false
+			await evaluate("[...document.querySelectorAll('.operation-open')].find(button => button.getAttribute('aria-label') === 'Open Create binary question').click()")
+			await waitFor("document.querySelector('#operation-input-title') !== null && document.querySelector('#operation-dialog fieldset').disabled === false")
+			await evaluate(`(() => {
+				for (const [key, value] of [['title', 'Will the custom question preserve all of its inputs?'], ['description', 'A multi-line description\\nwith custom content.'], ['labels', 'Cold\\nHot']]) {
+					const input = document.querySelector('#operation-input-' + key)
+					const source = input.parentElement.querySelector('select')
+					source.value = 'custom'; source.dispatchEvent(new Event('change'))
+					input.value = value; input.dispatchEvent(new Event('input'))
+				}
+				document.querySelector('#operation-dialog').scrollTop = 0
+			})()`)
+			await capture(`${viewport.label}-question-inputs`)
+			await evaluate("document.querySelector('#operation-dialog form').requestSubmit()")
+			await waitFor("document.querySelector('#operation-dialog .operation-actions button:nth-child(2)').disabled === false")
+			await evaluate("document.querySelector('.operation-transactions details').open = true")
+			await capture(`${viewport.label}-question-preview`)
+			expect(await evaluate("document.querySelector('.operation-transactions').textContent.includes('Will the custom question preserve all of its inputs?')")).toBe(true)
+			await evaluate("document.querySelector('#operation-input-title').value += ' Changed'; document.querySelector('#operation-input-title').dispatchEvent(new Event('input'))")
+			expect(await evaluate("document.querySelector('#operation-dialog .operation-actions button:nth-child(2)').disabled")).toBe(true)
+			expect(await evaluate("document.querySelector('#operation-input-labels').value")).toBe('Cold\nHot')
+			expect(await evaluate("document.body.scrollWidth <= document.documentElement.clientWidth && document.querySelector('#operation-dialog').scrollWidth <= document.querySelector('#operation-dialog').clientWidth")).toBe(true)
+			await evaluate("document.querySelector('#operation-dialog').close()")
+			await evaluate("[...document.querySelectorAll('.operation-open')].find(button => button.getAttribute('aria-label') === 'Open Deposit OpenOracle credit').click()")
+			await waitFor("document.querySelector('#operation-input-token') !== null && document.querySelector('#operation-dialog fieldset').disabled === false")
+			await evaluate(`(() => {
+				const input = document.querySelector('#operation-input-token')
+				const source = input.parentElement.querySelector('select')
+				source.value = 'custom'; source.dispatchEvent(new Event('change'))
+				input.focus()
+				input.selectedIndex = input.selectedIndex === 0 ? 1 : 0
+				input.dispatchEvent(new Event('input')); input.dispatchEvent(new Event('change'))
+			})()`)
+			await waitFor("document.querySelector('#operation-dialog fieldset').disabled === false")
+			await evaluate("document.querySelector('.operation-coverage').open = true")
+			await capture(`${viewport.label}-token-inputs`)
+			expect(await evaluate("document.querySelector('#operation-input-token').disabled")).toBe(false)
+			expect(await evaluate('document.activeElement.id')).toBe('operation-input-token')
+			await evaluate("document.querySelector('#operation-dialog').close()")
+			await evaluate("[...document.querySelectorAll('.operation-open')].find(button => button.getAttribute('aria-label') === 'Open Approve WETH').click()")
+			await waitFor("document.querySelector('#operation-dialog [role=status]').textContent.includes('not independently executable')")
+			await evaluate("document.querySelector('.operation-coverage').open = true")
+			expect(await evaluate("document.querySelector('.operation-coverage').textContent.includes('Linked to the parent operation')")).toBe(true)
+			expect(await evaluate("document.querySelector('#operation-dialog .operation-actions button:nth-child(2)').disabled")).toBe(true)
+			await capture(`${viewport.label}-prerequisite-inputs`)
+			await evaluate("document.querySelector('#operation-dialog').close()")
 			for (const route of ['overview', 'ecosystem', 'activity', 'settings']) {
 				await session.send('Page.navigate', { url: new URL(`/${route}`, dashboard.url).href })
 				await waitFor(`document.querySelector('#last-block')?.textContent === 'Block ${fixture.state.lastScannedBlock}'`)

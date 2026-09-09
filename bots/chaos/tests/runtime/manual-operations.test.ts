@@ -238,3 +238,23 @@ test('controller disposal drains an in-flight inspection scan', async () => {
 	}
 	expect(disposed).toBe(true)
 })
+
+test('exact input and its source are preserved when executing after incoming funds', async () => {
+	const { controller, executed, scan } = fixture()
+	const preview = object(await controller.handle({ action: 'preview', definitionId: 'open-oracle.weth.wrap', inputs: { amount: { source: 'custom', value: '73' } } }))
+	expect(preview['blockers']).toEqual([])
+	scan.snapshot.wallet.ethBalanceAttoEth = (BigInt(scan.snapshot.wallet.ethBalanceAttoEth) + 1000000n).toString()
+	await controller.handle({ action: 'execute', previewId: preview['previewId'] })
+	expect((await finished(controller, preview['previewId']))['status']).toBe('completed')
+	expect(executed[0]?.steps[0]?.value).toBe('73')
+	expect(executed[0]?.operationInputs?.['amount']).toBe('73')
+	expect(executed[0]?.inputSources?.['amount']).toBe('custom')
+	expect(executed[0]?.inputSources?.['seed']).toBe('chaosbot')
+})
+
+test('exact input above the policy cap is blocked rather than silently clamped', async () => {
+	const { controller } = fixture()
+	const response = object(await controller.handle({ action: 'preview', definitionId: 'open-oracle.weth.wrap', inputs: { amount: { source: 'custom', value: '101' }, maxEthSpendAttoEth: { source: 'custom', value: '100' } } }))
+	expect(response['previewId']).toBeUndefined()
+	expect(response['blockers']).not.toEqual([])
+})
