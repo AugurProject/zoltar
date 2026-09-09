@@ -88,6 +88,7 @@ export function MigrationOutcomeUniversesSection({
 								</UniverseLink>
 							) : (
 								<TransactionActionButton
+									tone='secondary'
 									idleLabel={marketCopy.deployUniverse}
 									pendingLabel={marketCopy.deployingUniverse}
 									pending={pendingOutcomeIndex === child.outcomeIndex}
