@@ -1,4 +1,7 @@
+import { createUniverseExplorer } from '../../../shared/src/dashboard/universe-explorer.js'
 let approvedUniverseIds = new Set<string>()
+let universeSavePending = false
+let universeExplorer: ReturnType<typeof createUniverseExplorer> | undefined
 
 import { operatorNoticePresentation } from './dashboard-notice.ts'
 import { setAttentionBadge } from '../../../shared/src/dashboard/components.js'
@@ -111,7 +114,7 @@ function setControlsEnabled(enabled: boolean) {
 		if (!(fieldset instanceof HTMLFieldSetElement)) throw new Error(`Missing ${id}`)
 		if (id === 'connectivity-fieldset') fieldset.disabled = connectivityControlsDisabled(configurationEnabled, connectivityRequestPending) || !connectivityLoaded
 		else if (id === 'deployment-fieldset' || id === 'create2-fieldset') fieldset.disabled = !focusedSettingsEnabled || !deploymentLoaded
-		else if (id === 'tokens-fieldset') fieldset.disabled = !focusedSettingsEnabled || !tokensLoaded
+		else if (id === 'tokens-fieldset') fieldset.disabled = !focusedSettingsEnabled || !tokensLoaded || universeSavePending
 		else fieldset.disabled = !focusedSettingsEnabled
 	}
 	element<HTMLSelectElement>('network-name').disabled = !enabled || pendingNetworkProfile !== undefined || persistedNetwork === undefined
@@ -697,26 +700,14 @@ function renderOperations(operations: readonly PublicOperationEntry[]) {
 }
 
 function renderTokenMarkets(snapshot: PublicOperatorSnapshot) {
-	const universeList = element('approved-universes')
-	universeList.replaceChildren()
-	for (const universe of snapshot.universes ?? []) {
-		const label = document.createElement('label')
-		const input = document.createElement('input')
-		input.type = 'checkbox'
-		input.checked = approvedUniverseIds.has(universe.id)
-		input.dataset['focusKey'] = `universe:${universe.id}`
-		input.addEventListener('change', () => {
-			if (input.checked) approvedUniverseIds.add(universe.id)
-			else approvedUniverseIds.delete(universe.id)
-		})
-		const text = document.createElement('span')
-		text.textContent = `${universe.id === '0' ? 'Root universe' : `Universe ${universe.id} · Parent ${universe.parentId} · Outcome ${universe.outcomeIndex}`} · REP ${universe.repToken}`
-		label.append(input, text)
-		universeList.append(label)
-	}
-	if ((snapshot.universes?.length ?? 0) === 0) universeList.textContent = 'Universe discovery has not completed.'
+	universeExplorer ??= createUniverseExplorer(element('approved-universes'), {
+		onChange: next => {
+			approvedUniverseIds = next
+		},
+		savedMessage: 'Selection updated. Save universe approvals to apply.',
+	})
+	universeExplorer.update({ universes: snapshot.universes ?? [], approved: approvedUniverseIds, network: snapshot.network, disabled: element<HTMLFieldSetElement>('tokens-fieldset').disabled })
 
-	setText('tracked-token-addresses', snapshot.tokenAddresses.length === 0 ? 'None observed' : snapshot.tokenAddresses.join(' · '))
 	const body = element<HTMLTableSectionElement>('token-markets-body')
 	body.replaceChildren()
 	const executableTokens = new Set(snapshot.tokenAddresses.map(address => address.toLowerCase()))
@@ -1279,6 +1270,9 @@ element<HTMLSelectElement>('price-token').addEventListener('change', () => {
 })
 element('tokens-form').addEventListener('submit', async event => {
 	event.preventDefault()
+	const requestEpoch = profileRequestEpoch
+	universeSavePending = true
+	setControlsEnabled(connected)
 	const button = element<HTMLFormElement>('tokens-form').querySelector('button')
 	if (button === null) throw new Error('Universe approval submit button is missing')
 	button.disabled = true
@@ -1289,11 +1283,14 @@ element('tokens-form').addEventListener('submit', async event => {
 			headers: { 'content-type': 'application/json' },
 			method: 'PUT',
 		})
+		if (requestEpoch !== profileRequestEpoch) return
 		setText('tokens-status', 'Universe approvals saved. They apply before the next execution scan.')
 	} catch (error) {
-		setText('tokens-status', error instanceof Error ? error.message : String(error))
+		if (requestEpoch === profileRequestEpoch) setText('tokens-status', error instanceof Error ? error.message : String(error))
 	} finally {
+		universeSavePending = false
 		button.disabled = !connected
+		setControlsEnabled(connected)
 	}
 })
 

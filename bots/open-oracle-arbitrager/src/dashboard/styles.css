@@ -1005,23 +1005,3 @@ a {
 		scroll-behavior: auto !important;
 	}
 }
-
-.universe-approvals label {
-	display: flex;
-	align-items: flex-start;
-	gap: 0.75rem;
-	padding-block: 0.5rem;
-}
-.universe-approvals input {
-	width: auto;
-	flex: none;
-}
-.universe-approvals span {
-	overflow-wrap: anywhere;
-	min-width: 0;
-}
-
-#tracked-token-addresses {
-	white-space: normal;
-	overflow-wrap: anywhere;
-}
