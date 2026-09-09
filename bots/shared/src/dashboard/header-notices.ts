@@ -2,11 +2,10 @@ function initializeHeaderNotices() {
 	const disclosure = document.getElementById('header-notices')
 	const toggle = document.getElementById('header-notices-toggle')
 	const count = document.getElementById('header-notices-count')
-	const close = document.getElementById('header-notices-close')
 	const empty = document.getElementById('header-notices-empty')
 	const status = document.getElementById('header-notices-status')
 	const notices = disclosure?.querySelector('.operator-notices')
-	if (!(disclosure instanceof HTMLDetailsElement) || !(toggle instanceof HTMLElement) || count === null || close === null || !(empty instanceof HTMLElement) || status === null || notices === undefined || notices === null) throw new Error('Bot notice controls are missing')
+	if (!(disclosure instanceof HTMLDetailsElement) || !(toggle instanceof HTMLElement) || count === null || !(empty instanceof HTMLElement) || status === null || notices === undefined || notices === null) throw new Error('Bot notice controls are missing')
 
 	const update = () => {
 		const visible = [...notices.querySelectorAll<HTMLElement>('.notice')].filter(notice => notice.textContent?.trim() !== '' && notice.closest('[hidden], .hidden') === null)
@@ -22,7 +21,6 @@ function initializeHeaderNotices() {
 		disclosure.open = false
 		if (restoreFocus) toggle.focus()
 	}
-	close.addEventListener('click', () => dismiss(true))
 	document.addEventListener('click', event => {
 		if (disclosure.open && !event.composedPath().includes(disclosure)) dismiss(false)
 	})

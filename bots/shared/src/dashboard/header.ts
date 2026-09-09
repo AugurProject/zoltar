@@ -26,7 +26,6 @@ export function renderOperatorHeader({ title, eyebrow, blockStatus, safety, navi
 			<div class="header-notices-panel" role="region" aria-labelledby="header-notices-title">
 				<div class="header-notices-heading">
 					<strong id="header-notices-title">Bot notices</strong>
-					<button id="header-notices-close" type="button" aria-label="Close bot notices">×</button>
 				</div>
 				<div class="operator-notices">${notices}</div>
 				<p id="header-notices-empty" hidden>No errors or warnings.</p>

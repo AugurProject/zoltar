@@ -62,14 +62,13 @@ test('dismisses the list, restores keyboard focus, and reveals linked notices', 
 		window.eval(source)
 		const disclosure = window.document.querySelector('details')
 		const toggle = window.document.getElementById('header-notices-toggle')
-		const close = window.document.getElementById('header-notices-close')
-		if (disclosure === null || !(toggle instanceof window.HTMLElement) || !(close instanceof window.HTMLButtonElement)) throw new Error('Missing notice fixture')
+		if (disclosure === null || !(toggle instanceof window.HTMLElement)) throw new Error('Missing notice fixture')
 		expect(disclosure.open).toBe(true)
 		window.document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
 		expect(disclosure.open).toBe(false)
 		expect(window.document.activeElement).toBe(toggle)
 		disclosure.open = true
-		close.click()
+		toggle.click()
 		expect(disclosure.open).toBe(false)
 		expect(window.document.activeElement).toBe(toggle)
 		disclosure.open = true
