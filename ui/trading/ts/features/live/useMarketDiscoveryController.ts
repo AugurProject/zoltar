@@ -79,10 +79,11 @@ export function useMarketDiscoveryController({
 			await services.validateLiveDeployment(client, nextConfiguration)
 			if (!discoveryRequests.isCurrent(request)) return
 			const requestedUniverseId = parsedUniverseId(selectedUniverseId)
-			const discovered =
-				route === 'portfolio' || routePool !== undefined
-					? await services.discoverAllLiveMarketsInUniverse(client, nextConfiguration, requestedUniverseId, 25n, market.deploymentIndex)
-					: await services.discoverLiveUniverseMarketPage(client, nextConfiguration, requestedUniverseId, requestedStart, 25n, market.deploymentIndex)
+			let discovered
+			if (routePool !== undefined) discovered = await services.discoverAddressedMarket(client, nextConfiguration, routePool)
+			else if (route === 'portfolio') discovered = await services.discoverAllLiveMarketsInUniverse(client, nextConfiguration, requestedUniverseId, 25n, market.deploymentIndex)
+			else if (route === 'create-market') discovered = await services.discoverLiveUniverseMarketPage(client, nextConfiguration, requestedUniverseId, requestedStart, 25n, market.deploymentIndex)
+			else discovered = await services.discoverTradingMarketPage(client, nextConfiguration, requestedUniverseId, requestedStart, 25n, market.pairIndex, () => discoveryRequests.isCurrent(request))
 			if (!discoveryRequests.isCurrent(request)) return
 			if (!discoveryCommitAllowed(owner, transaction.positionWorkflowLockedRef.current, transaction.liquidityWorkflowLockedRef.current)) {
 				market.setDiscoveryState('ready')
@@ -122,7 +123,7 @@ export function useMarketDiscoveryController({
 			return
 		}
 		void refresh(configuration, 0n)
-	}, [configuration, configurationError, selectedUniverseId])
+	}, [configuration, configurationError, routePool === undefined ? selectedUniverseId : undefined])
 
 	useEffect(() => {
 		if (previousWalletSummaryRetryNonce.current === walletSummaryRetryNonce) return

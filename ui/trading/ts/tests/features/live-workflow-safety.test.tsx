@@ -188,6 +188,8 @@ describe('live workflow safety boundary', () => {
 			createTradingPublicClient: () => ({}),
 			validateLiveDeployment: async () => undefined,
 			discoverLiveUniverseMarketPage: discoverSelectedUniverse,
+			discoverTradingMarketPage: discoverSelectedUniverse,
+			discoverAddressedMarket: async () => ({ ...(await discoverSelectedUniverse(undefined, undefined, 1n)), markets: [{ ...market, endTime: discoveredEndTime, loadError: discoveredLoadError }] }),
 			discoverAllLiveMarketsInUniverse: discoverSelectedUniverse,
 			walletChainId: async () => {
 				if (deferredWalletChainRead !== undefined) {

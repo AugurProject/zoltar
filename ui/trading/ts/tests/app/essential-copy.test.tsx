@@ -1,8 +1,11 @@
-import { describe, expect, test } from 'bun:test'
+import { installTradingRouting } from '../../lib/routing.js'
+import { beforeEach, describe, expect, test } from 'bun:test'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { App, currentRoute } from '../../app/App.js'
 import { ExecutionProtectionFields, renderLiveTradeSummary } from '../../features/LiveTradingTransactionUi.js'
+
+beforeEach(() => installTradingRouting())
 
 const forbiddenCopy = ['illustrative', 'Demo preview only', 'Demo discovery snapshot', 'Simulated account', 'Demo configuration', 'Demo data is simulated', 'Simulate enter', 'Simulate insured']
 
