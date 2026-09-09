@@ -21,3 +21,11 @@ export function canonicalCoreDeployment(manifest: DeploymentManifest) {
 		weth: getAddress(manifest.network.wethAddress),
 	}
 }
+
+export function canonicalNetworkDeployment(manifest: { network: { chainId: number; genesisRepTokenAddress: string; wethAddress: string } }) {
+	return {
+		chainId: manifest.network.chainId,
+		rep: getAddress(manifest.network.genesisRepTokenAddress),
+		weth: getAddress(manifest.network.wethAddress),
+	}
+}

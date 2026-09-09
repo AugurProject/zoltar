@@ -733,9 +733,7 @@ describe('liquidator dashboard refresh behavior', () => {
 	test('prunes approved descendants when changing or clearing a truth path', async () => {
 		const universes = [universe('1'), universe('2', '1', '1'), universe('3', '1', '2'), universe('4', '2', '1')]
 		const siblingPage = await dashboard(mainnetConfiguration(['1', '2', '4']), state(undefined, [], { universes }))
-		const legend = siblingPage.window.document.querySelector('.truth-options legend')
-		expect(legend?.firstChild?.textContent).toBe('Truth outcome')
-		expect(legend?.textContent).toBe('Truth outcome for universe #1')
+		expect(siblingPage.window.document.querySelector('.ue-detail-title')?.textContent).toBe('Root universe')
 		const sibling = siblingPage.window.document.querySelector('input[value="3"]')
 		if (!(sibling instanceof siblingPage.window.HTMLInputElement)) throw new Error('Expected sibling truth control')
 		sibling.click()
@@ -744,7 +742,7 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(siblingPage.approvedUniverseRequests.at(-1)?.sort()).toEqual(['1', '3'])
 
 		const nonePage = await dashboard(mainnetConfiguration(['1', '2', '4']), state(undefined, [], { universes }))
-		const none = nonePage.window.document.querySelector('input[data-record-key="universe:none:1"]')
+		const none = nonePage.window.document.querySelector('input[value="2"]')
 		if (!(none instanceof nonePage.window.HTMLInputElement)) throw new Error('Expected no-child truth control')
 		none.click()
 		await nonePage.waitUntilComplete()
@@ -755,6 +753,9 @@ describe('liquidator dashboard refresh behavior', () => {
 	test('switches a nested truth selection across the complete ancestor path', async () => {
 		const universes = [universe('1'), universe('2', '1', '1'), universe('3', '1', '2'), universe('4', '2', '1'), universe('5', '3', '1')]
 		const page = await dashboard(mainnetConfiguration(['1', '2', '4']), state(undefined, [], { universes }))
+		const expand = page.window.document.querySelector('button[data-universe-focus="expand:3"]')
+		if (!(expand instanceof page.window.HTMLButtonElement)) throw new Error('Expected branch expansion')
+		expand.click()
 		const destination = page.window.document.querySelector('input[value="5"]')
 		if (!(destination instanceof page.window.HTMLInputElement)) throw new Error('Expected nested truth control')
 
@@ -774,7 +775,9 @@ describe('liquidator dashboard refresh behavior', () => {
 		if (!(firstUniverse instanceof universePage.window.HTMLInputElement) || !(secondUniverse instanceof universePage.window.HTMLInputElement)) throw new Error('Expected universe controls')
 		firstUniverse.click()
 		await Bun.sleep(1)
-		expect(secondUniverse.disabled).toBe(true)
+		const pendingSecondUniverse = universePage.window.document.querySelector('input[value="3"]')
+		if (!(pendingSecondUniverse instanceof universePage.window.HTMLInputElement)) throw new Error('Expected pending universe control')
+		expect(pendingSecondUniverse.disabled).toBe(true)
 		secondUniverse.click()
 		expect(universePage.approvedUniverseRequests).toHaveLength(1)
 		universePage.releaseApprovedUniverseRequest()
@@ -991,4 +994,39 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(page.pauseRequests.length).toBeGreaterThan(0)
 		expect(page.pauseRequests).toEqual(page.pauseRequests.map(() => ({ paused: false })))
 	})
+})
+
+test('keeps a large universe registry compact and finds collapsed descendants with their lineage', async () => {
+	const universes = [universe('0'), ...Array.from({ length: 5000 }, (_, index) => universe(String(index + 1), '0', String(index + 1))), universe('6000', '1', '2'), universe('6001', '5000', '1')]
+	const page = await dashboard(mainnetConfiguration(['0']), state(undefined, [], { universes }))
+	expect(page.window.document.querySelectorAll('.ue-row')).toHaveLength(60)
+	const more = page.window.document.querySelector('.ue-more')
+	if (!(more instanceof page.window.HTMLButtonElement)) throw new Error('Expected universe pagination')
+	more.click()
+	expect(page.window.document.querySelectorAll('.ue-row')).toHaveLength(120)
+	const search = page.window.document.querySelector('.ue-search')
+	if (!(search instanceof page.window.HTMLInputElement)) throw new Error('Expected universe search')
+	search.value = '5000'
+	search.dispatchEvent(new page.window.Event('input'))
+	const distant = page.window.document.querySelector('.ue-node')
+	if (!(distant instanceof page.window.HTMLButtonElement)) throw new Error('Expected distant parent')
+	distant.click()
+	const children = Array.from(page.window.document.querySelectorAll('.ue-parent-link')).find(button => button.textContent?.startsWith('View 1 child'))
+	if (!(children instanceof page.window.HTMLButtonElement)) throw new Error('Expected child navigation')
+	children.click()
+	expect(page.window.document.querySelector('input[value="6001"]')).not.toBeNull()
+	expect(page.window.document.querySelectorAll('.ue-row').length).toBeLessThanOrEqual(60)
+	search.value = '6000'
+	search.dispatchEvent(new page.window.Event('input'))
+	expect(page.window.document.querySelectorAll('.ue-row')).toHaveLength(1)
+	const inspect = page.window.document.querySelector('.ue-node')
+	if (!(inspect instanceof page.window.HTMLButtonElement)) throw new Error('Expected matching universe')
+	inspect.click()
+	expect(page.window.document.querySelector('.ue-lineage')?.textContent).toBe('Root universe › Outcome 1 › Outcome 2')
+	const approval = page.window.document.querySelector('.ue-approve')
+	if (!(approval instanceof page.window.HTMLInputElement)) throw new Error('Expected approval control')
+	approval.click()
+	await page.waitUntilComplete()
+	await Bun.sleep(1)
+	expect(page.approvedUniverseRequests.at(-1)).toEqual(['0', '1', '6000'])
 })

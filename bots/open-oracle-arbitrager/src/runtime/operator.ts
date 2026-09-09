@@ -1,3 +1,4 @@
+import { loadApprovedUniverses } from '#monitoring/approved-universes'
 import { logMarketDiscoveryFailure, recordMarketDiscoveryFailure, recordObservedHead } from '#monitoring/market-discovery-status'
 import { bigintToSafeNumber, createContextualPublicClient, createWalletClient, privateKeyToAccount, type Address, type Chain, type PublicClient, type TransactionLog, type Transport, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
@@ -145,7 +146,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 		operationLog: [],
 		paused: config.paused,
 		status: config.networkConfigured ? 'syncing' : 'paused',
-		tokenAddresses: config.tokenAddresses,
+		tokenAddresses: [],
 		tokenMarkets: [],
 		priceHistory: await loadPriceHistory(config.priceHistoryFile, config.network.chain.id),
 		reportPaths: [],
@@ -766,7 +767,9 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 							.filter(observation => observation.observedAt <= marketObservedAt && marketObservedAt - observation.observedAt <= config.centralizedMarkets.maximumObservationAgeMilliseconds)
 							.slice(-2_000)
 						const observedTokens = [...reports.values()].flatMap(report => [report.latest.game.token1, report.latest.game.token2]).filter(address => address !== zeroAddress && address.toLowerCase() !== config.network.weth.toLowerCase())
-						const { executionTokens, monitoringTokens: discoveredTokens } = await catalogForScan(config.tokenAddresses, observedTokens)
+						const { universes, approvedTokens } = await loadApprovedUniverses(readClients, config, blockNumber)
+						state.universes = universes
+						const { executionTokens, monitoringTokens: discoveredTokens } = await catalogForScan(config.tokenAddresses, [...universes.map(universe => universe.repToken), ...observedTokens], approvedTokens)
 						if (stopHead()) return
 						state.tokenAddresses = [...executionTokens]
 						state.tokenMarkets = await loadTokenMarkets(client, {
