@@ -7,7 +7,7 @@ function runCommand(command: string, args: string[]) {
 }
 
 const BIOME_COVERED_FILE_PATTERNS = [
-	/^(package\.json|\.prettierrc\.json|shared\/package\.json|ui\/(?:coreShared|zoltar|statoblast|trading)\/package\.json|solidity\/package\.json|tsconfig\.scripts\.json)$/,
+	/^(package\.json|\.prettierrc\.json|shared\/package\.json|ui\/(?:coreShared|zoltarShared|statoblastShared|zoltar|statoblast|trading)\/package\.json|solidity\/package\.json|tsconfig\.scripts\.json)$/,
 	/^bun-test-setup[^/]*\.ts$/,
 	/^README\.md$/,
 	/^AGENTS\.md$/,
@@ -15,7 +15,8 @@ const BIOME_COVERED_FILE_PATTERNS = [
 	/^docs\//,
 	/^scripts\//,
 	/^tooling\//,
-	/^shared\/ts\//,
+	/^shared\/[^/]+\/(?:ts\/|(?:package|tsconfig)\.json$)/,
+	/^ui\/[^/]*Shared\/ts\//,
 	/^solidity\/ts\//,
 	/^ui\/AGENTS\.md$/,
 	/^ui\/coreShared\/ts\//,

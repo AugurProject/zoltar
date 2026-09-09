@@ -190,7 +190,7 @@ export function ForkZoltarSection({
 					</div>
 				)}
 
-				{hasForked ? undefined : requiresApproval ? (
+				{!hasForked && requiresApproval ? (
 					<TokenApprovalControl
 						renderActions={({ button, notice, noticeId }) => renderForkActions(button, notice, noticeId)}
 						actionLabel={zoltarCopy.forkingActionLabel}
@@ -207,9 +207,8 @@ export function ForkZoltarSection({
 						tokenSymbol={rootUniverse?.reputationTokenSymbol ?? 'REP'}
 						tokenUnits={18}
 					/>
-				) : (
-					renderForkActions()
-				)}
+				) : undefined}
+				{!hasForked && !requiresApproval ? renderForkActions() : undefined}
 			</div>
 
 			<ErrorNotice message={zoltarForkError} />

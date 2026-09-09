@@ -199,12 +199,11 @@ export function SecurityVaultSection({
 	const targetHealthFactorGuardMessage = hasPositiveDepositAmount ? getTargetHealthFactorGuardMessage(normalizedSecurityVaultForm.targetHealthFactor) : undefined
 	const depositActionGuardMessage = targetHealthFactorGuardMessage === undefined ? (depositGuardMessage ?? (!hasPositiveDepositAmount ? commonCopy.positiveAmountRequired : undefined)) : undefined
 
-	const depositAmountNotice =
-		walletRepShortfallAttoRep !== undefined && walletRepShortfallAttoRep > 0n
-			? securityPoolCopy.formatInsufficientRepBalanceDetail(formatCurrencyBalance(walletRepShortfallAttoRep))
-			: isDepositBelowMinimum
-				? getVaultDepositGuardMessage({ approvalSatisfied: true, depositAmount, isDepositBelowMinimum, minimumVaultRepDepositAttoRep, walletRepShortfallAttoRep: undefined })
-				: undefined
+	const depositAmountNotice = (() => {
+		if (walletRepShortfallAttoRep !== undefined && walletRepShortfallAttoRep > 0n) return securityPoolCopy.formatInsufficientRepBalanceDetail(formatCurrencyBalance(walletRepShortfallAttoRep))
+		if (isDepositBelowMinimum) return getVaultDepositGuardMessage({ approvalSatisfied: true, depositAmount, isDepositBelowMinimum, minimumVaultRepDepositAttoRep, walletRepShortfallAttoRep: undefined })
+		return undefined
+	})()
 	const renderDepositActions = (approvalButton: ComponentChildren, approvalNotice: string | undefined, noticeId: string, showCancel = false) => (
 		<TransactionActionGroup id={noticeId} message={approvalNotice ?? (canUseLoadedVaultActions ? depositActionGuardMessage : undefined)}>
 			{approvalButton}

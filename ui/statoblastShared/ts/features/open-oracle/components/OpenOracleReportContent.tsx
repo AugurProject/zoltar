@@ -258,7 +258,12 @@ export function renderSelectedReportActionSection({
 
 				return undefined
 			})()
-			const sharedApprovalGuardMessage = !isConnected ? openOracleCopy.disputeWalletRequiredReason : !isOnActiveAppChain ? getWrongNetworkReason() : openOracleReportDetails === undefined ? openOracleCopy.reportLoadRequired : undefined
+			const sharedApprovalGuardMessage = (() => {
+				if (!isConnected) return openOracleCopy.disputeWalletRequiredReason
+				if (!isOnActiveAppChain) return getWrongNetworkReason()
+				if (openOracleReportDetails === undefined) return openOracleCopy.reportLoadRequired
+				return undefined
+			})()
 			const disputeToken1ApprovalGuardMessage = sharedApprovalGuardMessage ?? token1ApprovalGuardMessage
 			const disputeToken2ApprovalGuardMessage = sharedApprovalGuardMessage ?? token2ApprovalGuardMessage
 			const disputeActionDisabledReason = (() => {
@@ -275,6 +280,11 @@ export function renderSelectedReportActionSection({
 			const disputeNewAmount2Error = disputeInputFieldErrors.disputeNewAmount2
 			const disputeTokenToSwapError = disputeInputFieldErrors.disputeTokenToSwap
 			const disputeActionReasonUsesInputBlockMessage = disputeSubmission?.inputBlockMessage?.kind === 'visible' && disputeActionDisabledReason === disputeSubmission.inputBlockMessage.message
+			const disputeActionReasonElementId = (() => {
+				if (sharedApprovalGuardMessage !== undefined) return sharedApprovalGuardMessageId
+				if (disputeActionReasonUsesInputBlockMessage) return disputeInputBlockMessageId
+				return undefined
+			})()
 			const disputeInputBlockDetail =
 				disputeSubmission?.inputBlockMessage !== undefined && firstDisputeInputErrorField === undefined ? (
 					<p className='detail' id={disputeInputBlockMessageId}>
@@ -385,7 +395,7 @@ export function renderSelectedReportActionSection({
 									disabled: !isConnected || !isOnActiveAppChain || openOracleForm.reportId.trim() === '' || !disputeAvailability.canAct || disputeSubmission?.canSubmit === false,
 									reason: disputeActionDisabledReason,
 								}}
-								disabledReasonElementId={sharedApprovalGuardMessage !== undefined ? sharedApprovalGuardMessageId : disputeActionReasonUsesInputBlockMessage ? disputeInputBlockMessageId : undefined}
+								disabledReasonElementId={disputeActionReasonElementId}
 								showDisabledReason={sharedApprovalGuardMessage === undefined && !disputeActionReasonUsesInputBlockMessage}
 							/>
 						</div>
