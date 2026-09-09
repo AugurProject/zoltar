@@ -47,7 +47,7 @@ export type ChaosPrivateRelay = {
 export type ChaosAnvilFixture = {
 	baselineQuestionCount: bigint
 	createPrivateRelay: () => ChaosPrivateRelay
-	createRpcProxy: (options?: { lostAcknowledgementOrdinal?: number | undefined }) => ChaosRpcProxy
+	createRpcProxy: (options?: { lostAcknowledgementOrdinal?: number | undefined; prunedLogStartBlock?: bigint }) => ChaosRpcProxy
 	dispose: () => Promise<void>
 	infra: ReturnType<typeof getInfraContractAddresses>
 	node: AnvilNode
@@ -164,7 +164,7 @@ async function mineFinalityBlocks(node: AnvilNode) {
 	}
 }
 
-function createRpcProxy(node: AnvilNode, options: { lostAcknowledgementOrdinal?: number | undefined } = {}): ChaosRpcProxy {
+function createRpcProxy(node: AnvilNode, options: { lostAcknowledgementOrdinal?: number | undefined; prunedLogStartBlock?: bigint } = {}): ChaosRpcProxy {
 	const rawTransactions: Hex[] = []
 	const successfulSendRawTransactionParams: unknown[][] = []
 	const server = Bun.serve({
@@ -172,6 +172,11 @@ function createRpcProxy(node: AnvilNode, options: { lostAcknowledgementOrdinal?:
 		async fetch(request) {
 			const requestText = await request.text()
 			const body = jsonRpcRequest(JSON.parse(requestText))
+			if (body.method === 'eth_getLogs' && options.prunedLogStartBlock !== undefined) {
+				const filter = body.params[0]
+				if (typeof filter !== 'object' || filter === null || !('fromBlock' in filter) || typeof filter.fromBlock !== 'string') throw new Error('Pruned log fixture requires a bounded range')
+				if (BigInt(filter.fromBlock) < options.prunedLogStartBlock) return Response.json({ error: { code: 4444, message: 'pruned history unavailable' }, id: body.id, jsonrpc: '2.0' })
+			}
 			const upstream = await fetch(node.rpcUrl, {
 				body: requestText,
 				headers: { 'content-type': 'application/json' },
