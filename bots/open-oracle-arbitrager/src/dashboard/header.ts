@@ -12,6 +12,14 @@ export const operatorHeader = renderOperatorHeader({
 					<a id="attention-badge" class="badge attention-badge">No blockers</a>
 					<button id="refresh-button" class="button button-secondary" type="button">Refresh</button>
 					<button id="pause-button" class="button" type="button" disabled>Pause bot</button>`,
+	notices: `<section id="launch-notice" class="notice" aria-live="polite">
+				<strong id="launch-notice-title">Checking execution network</strong>
+				<span id="launch-notice-copy">Waiting for the selected network.</span>
+			</section>
+			<section id="notice" class="notice" aria-live="polite">
+				<strong id="notice-title">Connecting to bot</strong>
+				<span id="notice-copy">Waiting for the first local state snapshot.</span>
+			</section>`,
 	navigation: `<a href="/overview">Overview</a>
 				<a href="/operations">Opportunities</a>
 				<a href="/games">Games</a>

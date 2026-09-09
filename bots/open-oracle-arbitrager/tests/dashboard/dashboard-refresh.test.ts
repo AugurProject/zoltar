@@ -53,6 +53,7 @@ function strategy(minimumProfitBps: bigint): MutableStrategy {
 
 test('keeps all mutations locked and ignores deferred old-chain responses until matching state and configuration arrive', async () => {
 	let network: 'mainnet' | 'sepolia' = 'mainnet'
+	let networkConfigured = true
 	let currentStrategy = strategy(111n)
 	let stateGate: Promise<void> | undefined
 	let configurationGate: Promise<void> | undefined
@@ -83,7 +84,7 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 		connectivity,
 		deployment,
 		network,
-		networkConfigured: true,
+		networkConfigured,
 		rpcQuorum: 1,
 		strategy: {
 			maxSpotTwapTicks: currentStrategy.maxSpotTwapTicks.toString(),
@@ -113,6 +114,7 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 			expectedChainId: network === 'mainnet' ? 1 : 11_155_111,
 			explorerUrl: network === 'mainnet' ? 'https://etherscan.io' : 'https://sepolia.etherscan.io',
 			network,
+			networkConfigured,
 			openOracle: address,
 			queuedWallet: undefined,
 			savedWallet: undefined,
@@ -278,6 +280,21 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	const profitInput = window.document.querySelector('[name="minimumProfitBps"]')
 	if (!(profitInput instanceof window.HTMLInputElement)) throw new Error('Missing minimum profit input')
 	expect(profitInput.value).toBe('333')
+
+	networkConfigured = false
+	window.history.replaceState({}, '', '/settings')
+	window.dispatchEvent(new window.PopStateEvent('popstate'))
+	element(window, 'refresh-button', window.HTMLButtonElement).click()
+	await page.waitUntilComplete()
+	const launchNotice = element(window, 'launch-notice', window.HTMLElement)
+	expect(launchNotice.hidden).toBe(false)
+	expect(launchNotice.closest('header')).not.toBeNull()
+	expect(launchNotice.textContent).toContain('Network setup required')
+	expect(launchNotice.textContent).toContain('in Settings')
+	networkConfigured = true
+	element(window, 'refresh-button', window.HTMLButtonElement).click()
+	await page.waitUntilComplete()
+	expect(launchNotice.hidden).toBe(true)
 })
 
 function element<T extends Element>(window: BrowserWindow, id: string, constructor: { new (): T }): T {

@@ -523,3 +523,61 @@ body .button:disabled {
 	letter-spacing: 0;
 	text-transform: none;
 }
+
+.operator-notices {
+	display: grid;
+	gap: 0.5rem;
+	max-height: 30vh;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+
+.operator-notices:has(> .notice:not([hidden], .hidden), > .operator-alerts:not(.hidden)) {
+	margin-top: 0.65rem;
+}
+
+.operator-notices .operator-alerts {
+	display: grid;
+	gap: 0.5rem;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.operator-notices .notice {
+	--notice-accent: var(--operator-info, #73b7ff);
+	display: flex;
+	align-items: flex-start;
+	flex-direction: column;
+	gap: 0.25rem;
+	min-width: 0;
+	margin: 0;
+	padding: 0.65rem 0.85rem;
+	border: 1px solid var(--operator-border);
+	border-left: 3px solid var(--notice-accent);
+	border-radius: 0.5rem;
+	background: color-mix(in srgb, var(--notice-accent), var(--operator-background) 94%);
+	color: var(--operator-text);
+	font-size: 0.85rem;
+	line-height: 1.5;
+	overflow-wrap: anywhere;
+}
+
+.operator-notices .notice.warning,
+.operator-notices .notice[data-tone="warning"] {
+	--notice-accent: var(--operator-warning, #f6be5a);
+}
+
+.operator-notices .notice.error,
+.operator-notices .notice[data-tone="danger"] {
+	--notice-accent: var(--operator-error, #ff756f);
+}
+
+.operator-notices .notice[hidden],
+.operator-notices .hidden {
+	display: none;
+}
+
+.operator-notices .operator-alerts li + li {
+	margin-top: 0;
+}
