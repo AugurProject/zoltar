@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { getAddress } from '@zoltar/bot-shared/ethereum'
+import { encodeAbiParameters, getAddress, keccak256 } from '@zoltar/bot-shared/ethereum'
 import { loadCarryStorageCandidates } from '../../src/monitoring/carry-proof-storage.ts'
 
 test('an empty discovered graph needs no historical logs or journal', async () => {
@@ -96,8 +96,7 @@ test('bounds storage traversal and rejects reorgs or mismatched simulated payout
 	await expect(scan(fixture)).rejects.toThrow('canonical')
 })
 
-test('matches the Statoblast UI proof encoding for multiple MMR peaks and consumed indexes', async () => {
-	const { buildCarryMerkleMountainRangeProof, createSparseNullifier } = await import('../../../../ui/statoblastShared/ts/protocol/reportingCarryProof.ts')
+test('matches Statoblast UI reference vectors for multiple MMR peaks and consumed indexes', async () => {
 	const fixture = storageFixture()
 	const origin = fixture.games[0]
 	const target = fixture.games[1]
@@ -107,18 +106,36 @@ test('matches the Statoblast UI proof encoding for multiple MMR peaks and consum
 	target.inherited = leaves
 	target.consumed.push(fixture.leaf.leaf.parentDepositIndex)
 	const candidates = await load(fixture)
-	for (const candidate of candidates) {
-		if (candidate.proof === undefined) throw new Error('Missing selected proof')
-		const index = leaves.findIndex(leaf => leaf.leaf.parentDepositIndex === candidate.parentDepositIndex)
-		const uiProof = buildCarryMerkleMountainRangeProof(
-			leaves.map(leaf => leaf.hash),
-			index,
-		)
-		expect(candidate.proof.merkleMountainRangeSiblings).toEqual(uiProof.merkleMountainRangeSiblings)
-		expect(candidate.proof.merkleMountainRangePeakIndex).toBe(uiProof.merkleMountainRangePeakIndex.toString())
-		expect(candidate.proof.leafIndex).toBe(uiProof.peakRelativeLeafIndex.toString())
-		expect(candidate.proof.nullifierSiblings).toEqual(createSparseNullifier([BigInt(fixture.leaf.leaf.parentDepositIndex)]).getProof(BigInt(candidate.parentDepositIndex)))
-	}
+	// Reference vectors from ui/statoblastShared/ts/protocol/reportingCarryProof.ts at 707342ba5.
+	// Three slot(source, index) leaves, index 0 consumed; hash ABI-encoded bytes32[] nullifier siblings.
+	// Keep these fixed so the isolated bot package does not require a UI build.
+	expect(
+		candidates.map(candidate => {
+			if (candidate.proof === undefined) throw new Error('Missing selected proof')
+			return {
+				parentDepositIndex: candidate.parentDepositIndex,
+				leafIndex: candidate.proof.leafIndex,
+				merkleMountainRangePeakIndex: candidate.proof.merkleMountainRangePeakIndex,
+				merkleMountainRangeSiblings: candidate.proof.merkleMountainRangeSiblings,
+				nullifierSiblingsHash: keccak256(encodeAbiParameters([{ type: 'bytes32[]' }], [candidate.proof.nullifierSiblings])),
+			}
+		}),
+	).toEqual([
+		{
+			parentDepositIndex: '7922816251426433759354395033601',
+			leafIndex: '1',
+			merkleMountainRangePeakIndex: '1',
+			merkleMountainRangeSiblings: ['0xa0ebcd7d728cddad423416b7e319cf69a5e7af4d5702891f3f7b55282b9bb242', '0xe1eea733fcdf27da77be796af99d98288d5a9966e69b65bfb26705f0d1b677b8'],
+			nullifierSiblingsHash: '0xa676fe0e06d31936e21d2b993fc1f7903742856f4f7cd9a925a72bf4e67c437f',
+		},
+		{
+			parentDepositIndex: '7922816251426433759354395033602',
+			leafIndex: '0',
+			merkleMountainRangePeakIndex: '0',
+			merkleMountainRangeSiblings: ['0xc408daae22afc1ac502346d55051a1afca1778a34b4b4df97771c07e856b453d'],
+			nullifierSiblingsHash: '0xa676fe0e06d31936e21d2b993fc1f7903742856f4f7cd9a925a72bf4e67c437f',
+		},
+	])
 })
 
 test('pages stored leaves without losing known identities', async () => {
