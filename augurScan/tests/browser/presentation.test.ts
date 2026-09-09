@@ -33,8 +33,12 @@ for (const viewport of [
 				await session.send('Emulation.setDeviceMetricsOverride', { ...viewport, deviceScaleFactor: 1, mobile: false })
 				await session.send('Page.navigate', { url: session.pageUrl })
 				await waitFor(`document.querySelectorAll('.event-name').length > 5`)
-				expect(await evaluate(`document.querySelector('.activity-contract-link').textContent`)).toBe('OpenOracle')
+				expect(await evaluate(`document.querySelector('.activity-contract-link .contract-name').textContent`)).toBe('OpenOracle')
 				expect(await evaluate(`document.querySelector('.cell-function')?.textContent`)).toBe('checkpoint')
+				expect(await evaluate(`document.querySelectorAll('.log-row a').length`)).toBe(0)
+				for (const selector of ['.chain-block .activity-target', '.activity-contract-link', '.cell-tx', '.cell-origin']) {
+					expect(await evaluate(`document.querySelector('.log-row ${selector}').classList.contains('activity-target')`)).toBe(true)
+				}
 				await evaluate(`document.querySelector('.event-name').click()`)
 				await waitFor(`!!document.querySelector('.event-detail-content .detail-grid')`)
 				await evaluate(`document.querySelector('.event-name').click()`)
