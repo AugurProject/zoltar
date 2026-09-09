@@ -7,7 +7,7 @@ import { zeroAddress, zeroHash } from '@zoltar/bot-shared/ethereum'
 import example from '../../config/operator.example.json'
 import { parseSettings } from '../../src/config/settings.ts'
 import { createChaosShutdownController } from '../../src/core/process-locks.ts'
-import { carryProofDeploymentProfileId } from '../../src/monitoring/carry-proof-scan.ts'
+import { executionProfileId } from '../../src/config/execution-profile.ts'
 import { runChaosOperator } from '../../src/runtime/operator.ts'
 import { initialDurableState, loadDurableState, saveDurableState } from '../../src/state/operator-state.ts'
 
@@ -21,7 +21,7 @@ test('restarts an empty bootstrap that recorded the previous zero-address deploy
 	const directory = await mkdtemp('/tmp/chaos-bootstrap-migration-')
 	try {
 		const stateFile = join(directory, 'state.json')
-		const old = initialDurableState(11155111, true, carryProofDeploymentProfileId(obsoleteSettings()))
+		const old = initialDurableState(11155111, true, executionProfileId(obsoleteSettings()))
 		expect(old.profileId).toBe('profile:v1:5cdcef7d8af58831a1093e7b976163b2af8a3fc02e201ede57a9f93514075115')
 		old.signerAddress = '0x1111111111111111111111111111111111111111'
 		old.safetyPaused = true
@@ -31,7 +31,7 @@ test('restarts an empty bootstrap that recorded the previous zero-address deploy
 		using shutdown = createChaosShutdownController()
 		await runChaosOperator({ path: join(directory, 'settings.json'), revision: 'fixture', settings }, { acquireSigner: async () => undefined, commitSigner: async () => undefined, discardSigner: async () => undefined, release: async () => undefined }, shutdown)
 		const migrated = await loadDurableState(stateFile, 11155111)
-		expect(migrated.profileId).toBe(carryProofDeploymentProfileId(settings))
+		expect(migrated.profileId).toBe(executionProfileId(settings))
 		expect(migrated.activities).toEqual(old.activities)
 		expect(migrated.signerAddress).toBe(old.signerAddress)
 		expect(migrated.safetyPaused).toBeFalse()
@@ -42,12 +42,12 @@ test('restarts an empty bootstrap that recorded the previous zero-address deploy
 
 test('preserves unrelated safety failures and refuses state with transaction or execution history', () => {
 	const settings = parseSettings(example)
-	const old = () => initialDurableState(11155111, true, carryProofDeploymentProfileId(obsoleteSettings()))
+	const old = () => initialDurableState(11155111, true, executionProfileId(obsoleteSettings()))
 	const failed = old()
 	failed.safetyPaused = true
 	failed.activities.push({ at: new Date().toISOString(), message: 'RPC chain mismatch', type: 'error', status: 'failed' })
 	const migrated = migrateEmptyBootstrapState(failed, settings)
-	expect(migrated.profileId).toBe(carryProofDeploymentProfileId(settings))
+	expect(migrated.profileId).toBe(executionProfileId(settings))
 	expect(migrated.safetyPaused).toBeTrue()
 	expect(migrated.activities).toBe(failed.activities)
 	const pending = old()
@@ -81,7 +81,7 @@ test('preserves unrelated safety failures and refuses state with transaction or 
 
 test('doctor accepts the same bootstrap migration without writing or mutating saved state', async () => {
 	const settings = parseSettings({ ...example, networkConfigured: true, connectivity: { readRpcUrl: 'http://localhost:8545', publicRpcUrls: ['http://localhost:8545'], quorumRpcUrls: [], rpcQuorum: 1 } })
-	const old = initialDurableState(11155111, true, carryProofDeploymentProfileId(obsoleteSettings()))
+	const old = initialDurableState(11155111, true, executionProfileId(obsoleteSettings()))
 	old.activities.push({ at: new Date().toISOString(), message: 'Configured the network', type: 'configuration', status: 'info' })
 	const profile = old.profileId
 	const result = await runChaosDoctor({
@@ -90,7 +90,7 @@ test('doctor accepts the same bootstrap migration without writing or mutating sa
 		acquireLocks: async () => ({ release: async () => undefined }),
 		assertProfileIsolation: async () => undefined,
 		verifyStateParent: async () => undefined,
-		validateCompanionState: async () => ({ carryProofJournal: 'absent', immutableTopology: 'absent' }),
+		validateCompanionState: async () => ({ immutableTopology: 'absent' }),
 		preflightSubmission: async () => [],
 		deploymentAvailability: async () => 'Waiting for deployments',
 		probe: async () => {

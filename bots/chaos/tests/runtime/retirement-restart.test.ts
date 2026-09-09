@@ -1,3 +1,4 @@
+import { resetPristineStateForDeploymentProfile } from '../../src/runtime/deployment-profile.ts'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -63,7 +64,7 @@ async function cycle(path: string, state: RuntimeState, snapshot: EcosystemSnaps
 		},
 		persist: async () => await saveDurableState(path, state),
 		prepareExecution: async () => {},
-		scan: { anchor: { baseFeePerGas: 1n, blockHash: hash(1), blockNumber: 1n, timestamp: 1n }, canonicalLifecyclePresenceComplete: true, carryProofJournalComplete: true, indexComplete: true, snapshot },
+		scan: { anchor: { baseFeePerGas: 1n, blockHash: hash(1), blockNumber: 1n, timestamp: 1n }, executionReady: true, canonicalLifecyclePresenceComplete: true, carryProofsComplete: true, indexComplete: true, snapshot },
 		settings: liveSettings(),
 		state,
 		v3: [],
@@ -71,6 +72,49 @@ async function cycle(path: string, state: RuntimeState, snapshot: EcosystemSnaps
 }
 
 describe('Drain & Retire persisted restart behavior', () => {
+	test('persists known-only recovery without permitting full-retirement exit or profile replacement', async () => {
+		const path = await statePath()
+		const snapshot = emptySnapshot()
+		let state = requestedState(snapshot)
+		state.retirement.policies.exitAfterCompletion = true
+		const settings = liveSettings()
+		settings.runtime.once = false
+		const scan = { anchor: { baseFeePerGas: 1n, blockHash: hash(1), blockNumber: 1n, timestamp: 1n }, executionReady: true, canonicalLifecyclePresenceComplete: false, carryProofsComplete: false, indexComplete: false, snapshot }
+		const result = await processRetirementCycle({
+			execute: async () => {
+				throw new Error('Nothing known remains to recover')
+			},
+			persist: async () => {
+				await saveDurableState(path, state)
+			},
+			prepareExecution: async () => {},
+			scan,
+			settings,
+			state,
+			v3: [],
+		})
+		expect(result).toBeFalse()
+		state = await reload(path, state)
+		expect(state.retirement.status).toBe('known-claims-recovered')
+		expect(state.retirement.completionEvidence).toBeUndefined()
+		await expect(resetPristineStateForDeploymentProfile(state, 'profile:replacement', false, state.wallet, path, async () => {})).rejects.toThrow('drain it first')
+		snapshot.wallet.openOracleEthCredit = '9'
+		let recovered = false
+		await processRetirementCycle({
+			execute: async () => {
+				recovered = true
+			},
+			persist: async () => {},
+			prepareExecution: async () => {},
+			scan,
+			settings,
+			state,
+			v3: [],
+		})
+		expect(recovered).toBeTrue()
+		expect(state.retirement.status).toBe('draining')
+	})
+
 	test('rescans requested, draining, waiting, blocked, drained, and residual phases idempotently', async () => {
 		const path = await statePath()
 		const executed: string[] = []

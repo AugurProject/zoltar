@@ -8,7 +8,7 @@ import { applyRetirementAssessment, assessRetirement, buildV3RetirementPlan, rea
 import { recordCanonicalRecoveredBalances } from './retirement-balance-evidence.ts'
 import { retirementCleanupBlocker } from './workflows.ts'
 
-type RetirementScan = Pick<CanonicalScanResult, 'anchor' | 'canonicalLifecyclePresenceComplete' | 'carryProofJournalComplete' | 'indexComplete' | 'snapshot'>
+type RetirementScan = Pick<CanonicalScanResult, 'anchor' | 'executionReady' | 'canonicalLifecyclePresenceComplete' | 'carryProofsComplete' | 'indexComplete' | 'snapshot'>
 
 export function enforceRetirementContinuation(state: RuntimeState, workflow: DurableWorkflow, hasCanonicalContinuation: boolean, operationAllowed: boolean) {
 	if (state.retirement.status === 'inactive' || operationAllowed) return true
@@ -31,8 +31,8 @@ function retirementEvaluationsForScan(scan: RetirementScan, settings: OperatorSe
 export function updateRetirementAssessment(scan: RetirementScan, settings: OperatorSettings, state: RuntimeState, v3: readonly V3PositionObservation[]) {
 	if (state.retirement.status === 'inactive') return undefined
 	state.evaluations = retirementEvaluationsForScan(scan, settings, state)
-	const canonicalScanComplete = scan.canonicalLifecyclePresenceComplete && scan.carryProofJournalComplete && scan.indexComplete
-	if (canonicalScanComplete) recordCanonicalRecoveredBalances(state.retirement, scan.snapshot)
+	const canonicalScanComplete = scan.canonicalLifecyclePresenceComplete && scan.carryProofsComplete && scan.indexComplete
+	if (scan.executionReady) recordCanonicalRecoveredBalances(state.retirement, scan.snapshot)
 	const assessment = assessRetirement({
 		blockHash: scan.anchor.blockHash,
 		blockNumber: scan.anchor.blockNumber,
@@ -43,6 +43,7 @@ export function updateRetirementAssessment(scan: RetirementScan, settings: Opera
 		state,
 		v3,
 		canonicalScanComplete,
+		executionReady: scan.executionReady,
 		sweepLimits: { maximumEthAttoEth: settings.strategy.maximumEthPerOperationAttoEth, maximumGasCostAttoEth: settings.strategy.maximumGasCostAttoEth, maximumRepAttoRep: settings.strategy.maximumRepPerOperationAttoRep, minimumEthReserveAttoEth: settings.strategy.minimumEthReserveAttoEth },
 	})
 	applyRetirementAssessment(state.retirement, assessment, scan.anchor.blockHash, scan.anchor.blockNumber, { profileId: state.profileId, scannedWallet: scan.snapshot.wallet.address, signerAddress: state.signerAddress })
@@ -93,8 +94,7 @@ export async function processRetirementCycle(parameters: { execute: (plan: Opera
 	const assessment = updateRetirementAssessment(scan, settings, state, parameters.v3)
 	if (assessment === undefined) throw new Error('Active retirement did not produce an assessment')
 	await parameters.persist()
-	const canonicalScanComplete = scan.canonicalLifecyclePresenceComplete && scan.carryProofJournalComplete && scan.indexComplete
-	if (!canonicalScanComplete || state.paused || !settings.runtime.execute || assessment.action === undefined) {
+	if (!scan.executionReady || state.paused || !settings.runtime.execute || assessment.action === undefined) {
 		return settings.runtime.once || (state.retirement.policies.exitAfterCompletion && (state.retirement.status === 'drained' || state.retirement.status === 'drained-with-residuals'))
 	}
 	await parameters.prepareExecution()

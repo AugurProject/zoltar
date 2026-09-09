@@ -316,9 +316,7 @@ describe('chaos operator runtime', () => {
 		if (firstVault === undefined) throw new Error('Topology fixture requires one vault')
 		const summary = runtimeTopologySummary({
 			anchor: { baseFeePerGas: 1n, blockHash: zeroHash, blockNumber: 77n, timestamp: 1n },
-			canonicalLifecyclePresenceComplete: true,
-			carryProofJournalComplete: true,
-			indexComplete: false,
+			executionReady: false,
 			snapshot,
 			topologyCache: topologyCacheWithVaults(firstPool.address, [firstVault.address]),
 		})
@@ -351,9 +349,7 @@ describe('chaos operator runtime', () => {
 
 		const summary = runtimeTopologySummary({
 			anchor: { baseFeePerGas: 1n, blockHash: zeroHash, blockNumber: 77n, timestamp: 1n },
-			canonicalLifecyclePresenceComplete: true,
-			carryProofJournalComplete: true,
-			indexComplete: true,
+			executionReady: true,
 			snapshot,
 			topologyCache: topologyCacheWithVaults(firstPool.address, registeredVaults),
 		})

@@ -18,8 +18,7 @@ import { schedulerWaitMilliseconds } from '../core/scheduler.ts'
 import { startDashboardServer } from '../dashboard/dashboard-server.ts'
 import { recoverPendingTransactions } from '../execution/recovery.ts'
 import { executeOperationPlan, OperationRediscoveryRequired, TransactionAwaitingRecovery, type ExecutionEnvironment } from '../execution/transaction-executor.ts'
-import { carryProofDeploymentProfileId as executionProfileId } from '../monitoring/carry-proof-scan.ts'
-import type { CarryProofJournal } from '../monitoring/carry-proof-journal.ts'
+import { executionProfileId } from '../config/execution-profile.ts'
 import { ChaosProtocolIndexReorgError } from '../monitoring/protocol-index-context.ts'
 import type { CanonicalImmutableTopologyCache } from '../monitoring/topology-cache.ts'
 import { evaluateSelectableOperationDefinition, operationHasCanonicalContinuationBuilder, reevaluateOperationContinuation } from '../operations/catalog.ts'
@@ -96,7 +95,7 @@ function assertDurableSignerScope(state: RuntimeState, wallet: Address | undefin
 	}
 }
 
-export { carryProofDeploymentProfileId as executionProfileId } from '../monitoring/carry-proof-scan.ts'
+export { executionProfileId } from '../config/execution-profile.ts'
 
 function currentStatus(settings: OperatorSettings) {
 	if (settings.paused) return 'paused' as const
@@ -687,12 +686,9 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 		},
 		state,
 	})
-	let carryProofJournal: CarryProofJournal | undefined
-	let carryProofJournalStateFile: string | undefined
 	let topologyCache: CanonicalImmutableTopologyCache | undefined
 	let topologyCacheProfileId: string | undefined
 	let topologyCacheStateFile: string | undefined
-	let carryProfileResetAuthorized = initialCarryProfileResetAuthorized
 	await using manualOperations = createManualOperationController({
 		configuration,
 		gate: signerOperationGate,
@@ -711,23 +707,29 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 				throw error
 			}
 			assertDurableSignerScope(state, configuredWallet(settings), settings.runtime.stateFile)
-			if (carryProofJournalStateFile !== settings.runtime.stateFile) carryProofJournal = undefined
 			if (topologyCacheStateFile !== settings.runtime.stateFile || topologyCacheProfileId !== expectedProfile) topologyCache = undefined
 			await ensureReadPreflight(resources, settings)
-			const scan = await performCanonicalScan(settings, resources.pool, state.wallet, 0, state.protocolIndex, carryProofJournal, carryProfileResetAuthorized, topologyCache)
+			const scan = await performCanonicalScan(settings, resources.pool, state.wallet, 0, state.protocolIndex, topologyCache)
 			state.protocolIndex = scan.index
-			carryProofJournal = scan.carryProofJournal
-			carryProofJournalStateFile = settings.runtime.stateFile
 			topologyCache = scan.topologyCache
 			topologyCacheStateFile = settings.runtime.stateFile
 			topologyCacheProfileId = executionProfileId(settings)
-			carryProfileResetAuthorized = false
 			state.evaluations = scan.evaluations
 			state.inventory = scan.inventory
 			state.topology = runtimeTopologySummary(scan)
 			state.lastScanAt = new Date().toISOString()
 			state.lastScannedBlock = scan.anchor.blockNumber
-			synchronizeLifecycleObligations(state, scan.evaluations, scan.canonicalLifecyclePresence, scan.canonicalLifecyclePresenceComplete, scan.anchor.blockNumber, scan.anchor.timestamp)
+			synchronizeLifecycleObligations(
+				state,
+				scan.evaluations,
+				scan.canonicalLifecyclePresence,
+				scan.canonicalLifecyclePresenceComplete,
+				scan.anchor.blockNumber,
+				scan.anchor.timestamp,
+				scan.executionReady && scan.index?.availableStartBlock !== undefined ? BigInt(scan.index.availableStartBlock) : undefined,
+				scan.index?.availableStartBlock === undefined ? undefined : BigInt(scan.index.availableStartBlock),
+				scan.carryProofsComplete,
+			)
 			await persistState(configuration, state)
 			return scan
 		},
@@ -775,12 +777,9 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 					const wallet = configuredWallet(settings)
 					assertDurableSignerScope(state, wallet, settings.runtime.stateFile)
 					await resetPristineStateForDeploymentProfile(state, expectedProfileId, settings.paused, wallet, settings.runtime.stateFile, async evidence => verifyRetirementCompletionFinality(settings, evidence))
-					carryProofJournal = undefined
-					carryProofJournalStateFile = undefined
 					topologyCache = undefined
 					topologyCacheProfileId = undefined
 					topologyCacheStateFile = undefined
-					carryProfileResetAuthorized = true
 					recordActivity(state, {
 						message: 'Durable runtime reset because the canonical deployment changed',
 						status: 'info',
@@ -828,18 +827,14 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 					return settings.runtime.once
 				}
 				const discoveryWallet = state.wallet ?? zeroAddress
-				if (carryProofJournalStateFile !== settings.runtime.stateFile) carryProofJournal = undefined
 				if (topologyCacheStateFile !== settings.runtime.stateFile || topologyCacheProfileId !== expectedProfileId) topologyCache = undefined
-				const scan = await performCanonicalScan(settings, resources.pool, discoveryWallet, randomInteger(0, 0x1_0000_0000), state.protocolIndex, carryProofJournal, carryProfileResetAuthorized, topologyCache)
+				const scan = await performCanonicalScan(settings, resources.pool, discoveryWallet, randomInteger(0, 0x1_0000_0000), state.protocolIndex, topologyCache)
 				if (!acquireCycleGate()) return 'deferred'
 				if (!configurationIsCurrent()) return 'deferred'
 				state.protocolIndex = scan.index
-				carryProofJournal = scan.carryProofJournal
-				carryProofJournalStateFile = settings.runtime.stateFile
 				topologyCache = scan.topologyCache
 				topologyCacheProfileId = expectedProfileId
 				topologyCacheStateFile = settings.runtime.stateFile
-				carryProfileResetAuthorized = false
 				state.evaluations = state.wallet === undefined ? blockExecutableEvaluations(scan.evaluations, 'Configure the dedicated transaction signer before execution') : scan.evaluations
 				state.inventory = scan.inventory
 				state.topology = runtimeTopologySummary(scan)
@@ -851,7 +846,17 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 				state.error = undefined
 				state.warnings = [...scan.snapshot.warnings]
 				state.rpcEndpointHealth = resourceHealth(resources)
-				synchronizeLifecycleObligations(state, state.evaluations, scan.canonicalLifecyclePresence, scan.canonicalLifecyclePresenceComplete, scan.anchor.blockNumber, scan.anchor.timestamp)
+				synchronizeLifecycleObligations(
+					state,
+					state.evaluations,
+					scan.canonicalLifecyclePresence,
+					scan.canonicalLifecyclePresenceComplete,
+					scan.anchor.blockNumber,
+					scan.anchor.timestamp,
+					scan.executionReady && scan.index?.availableStartBlock !== undefined ? BigInt(scan.index.availableStartBlock) : undefined,
+					scan.index?.availableStartBlock === undefined ? undefined : BigInt(scan.index.availableStartBlock),
+					scan.carryProofsComplete,
+				)
 				if (state.lifecyclePresenceBlocker !== undefined) {
 					state.error = lifecyclePresenceBlockerMessage(state.lifecyclePresenceBlocker)
 					state.evaluations = blockNovelEvaluations(state.evaluations, state.lifecyclePresenceBlocker)
@@ -859,7 +864,7 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 				const retirementV3 = await retirementPositionsForScan({ anchor: scan.anchor, pool: resources.pool, profileId: expectedProfileId, settings, state, wallet: state.wallet })
 				updateRetirementAssessment(scan, settings, state, retirementV3)
 				await persistState(configuration, state)
-				if (!scan.canonicalLifecyclePresenceComplete || !scan.indexComplete || !scan.carryProofJournalComplete) {
+				if (!scan.executionReady) {
 					backfillIncomplete = true
 					return settings.runtime.once
 				}
@@ -1024,7 +1029,7 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 									}),
 								],
 								settings,
-								scan.indexComplete,
+								scan.executionReady,
 								scan.anchor.blockNumber.toString(),
 								scan.anchor.blockNumber.toString(),
 								BigInt(scan.snapshot.wallet.ethBalanceAttoEth),

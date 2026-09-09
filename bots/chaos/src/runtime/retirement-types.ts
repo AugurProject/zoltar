@@ -31,5 +31,5 @@ export type RetirementAssessment = {
 	blockers: RetirementBlocker[]
 	proof: RetirementProofCounts
 	residuals: RetirementResidual[]
-	status: 'blocked' | 'drained' | 'drained-with-residuals' | 'draining' | 'waiting'
+	status: 'blocked' | 'known-claims-recovered' | 'drained' | 'drained-with-residuals' | 'draining' | 'waiting'
 }

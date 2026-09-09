@@ -10,8 +10,7 @@ import { fetchLogsWithAdaptiveRanges } from '@zoltar/bot-shared/monitoring/block
 import { assertSettingsProfileIsolation, CHAOS_ECOSYSTEMS, loadSettings, type OperatorSettings } from '../config/settings.ts'
 import { acquireChaosProcessLocks, ChaosProcessLockAcquisitionError, type ChaosProcessLocks } from '../core/process-locks.ts'
 import type { CanonicalUintString } from '../core/units.ts'
-import { validateCarryProofJournalSidecarIfPresent } from '../monitoring/carry-proof-journal.ts'
-import { carryProofDeploymentProfileId } from '../monitoring/carry-proof-scan.ts'
+import { executionProfileId } from '../config/execution-profile.ts'
 import { validateImmutableTopologySidecarIfPresent } from '../monitoring/topology-cache.ts'
 import { CHAOS_OPERATION_CATALOG } from '../operations/catalog.ts'
 import { CONSENSUS_FINALITY_HORIZON_BLOCKS } from '../operations/timing.ts'
@@ -58,7 +57,7 @@ export type ChaosDoctorDependencies = {
 	loadState: typeof loadDurableState
 	preflightSubmission: typeof preflightTransactionSubmissionNetwork
 	probe: (settings: OperatorSettings, wallet: `0x${string}`) => Promise<ChaosDoctorProbeResult>
-	validateCompanionState: (settings: OperatorSettings) => Promise<{ carryProofJournal: 'absent' | 'valid'; immutableTopology: 'absent' | 'valid' }>
+	validateCompanionState: (settings: OperatorSettings) => Promise<{ immutableTopology: 'absent' | 'valid' }>
 	verifyStateParent: (stateFile: string) => Promise<void>
 }
 
@@ -322,23 +321,8 @@ async function acquireDoctorLocks(settings: OperatorSettings) {
 }
 
 export async function validateDoctorCompanionState(settings: OperatorSettings) {
-	const [carryProofJournal, immutableTopology] = await Promise.all([
-		validateCarryProofJournalSidecarIfPresent(settings.runtime.stateFile, {
-			chainId: settings.network.chainId,
-			profileId: carryProofDeploymentProfileId(settings),
-			securityPoolForker: settings.deployment.securityPoolForker,
-			startBlock: settings.runtime.protocolStartBlock.toString(),
-		}),
-		validateImmutableTopologySidecarIfPresent(
-			settings.runtime.stateFile,
-			{
-				chainId: settings.network.chainId,
-				...settings.deployment,
-			},
-			settings.discovery,
-		),
-	])
-	return { carryProofJournal, immutableTopology }
+	const immutableTopology = await validateImmutableTopologySidecarIfPresent(settings.runtime.stateFile, { chainId: settings.network.chainId, ...settings.deployment }, settings.discovery)
+	return { immutableTopology }
 }
 
 const defaultDependencies: ChaosDoctorDependencies = {
@@ -405,7 +389,7 @@ function familyReachability(settings: OperatorSettings, result: ChaosDoctorProbe
 }
 
 export function assertDoctorDurableStateScope(settings: OperatorSettings, state: DurableState, wallet: Address | undefined, stateFile = settings.runtime.stateFile) {
-	const expectedProfileId = carryProofDeploymentProfileId(settings)
+	const expectedProfileId = executionProfileId(settings)
 	if (state.profileId !== expectedProfileId && !isPristineBootstrapState(state)) {
 		throw new Error(`Durable state ${stateFile} belongs to deployment profile ${state.profileId}, expected ${expectedProfileId}`)
 	}

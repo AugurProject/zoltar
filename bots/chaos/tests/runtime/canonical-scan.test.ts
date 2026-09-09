@@ -1,4 +1,5 @@
-import { snapshotWithProtocolIndex } from '../../src/runtime/protocol-index-snapshot.ts'
+import { availableHistoryExecutionReady } from '../../src/runtime/scan-readiness.ts'
+import { indexWithCurrentRefunds, snapshotWithProtocolIndex } from '../../src/runtime/protocol-index-snapshot.ts'
 import { describe, expect, test } from 'bun:test'
 import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -14,6 +15,33 @@ import { deriveChildUniverseId } from '../../src/monitoring/protocol-index.ts'
 import { IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, immutableTopologySidecarDirectory, saveImmutableTopologyCache, type CanonicalImmutableTopologyCache, type ImmutableTopologyIdentity } from '../../src/monitoring/topology-cache.ts'
 import { hash, snapshotFixture } from '../operations/fixture.ts'
 import { applyLiveNoveltyInventoryReadiness, liveInventoryReadinessBlockers } from '../../src/runtime/live-readiness.ts'
+
+test('execution waits for the retained range and discovery, without requiring the unavailable prefix', () => {
+	const index: ChaosProtocolIndex = {
+		schemaVersion: 3,
+		chainId: 1,
+		openOracle: wallet,
+		zoltar: wallet,
+		securityPoolForker: wallet,
+		wallet,
+		startBlock: '0',
+		availableStartBlock: '11000000',
+		cursor: { blockNumber: '11185999', blockHash: zeroHash },
+		reports: [],
+		auctionBids: {},
+		auctionRefunds: {},
+		escalationDeposits: [],
+		migrationRepSplits: [],
+		childRepSplits: [],
+	}
+	expect(availableHistoryExecutionReady(index, 11185999n, true, false)).toBeTrue()
+	expect(availableHistoryExecutionReady(index, 11186000n, true, false)).toBeFalse()
+	expect(availableHistoryExecutionReady(index, 11185999n, false, false)).toBeFalse()
+	expect(availableHistoryExecutionReady(undefined, 11185999n, true, true)).toBeFalse()
+	delete index.availableStartBlock
+	expect(availableHistoryExecutionReady(index, 11185999n, true, false)).toBeFalse()
+	expect(availableHistoryExecutionReady(index, 11185999n, true, true)).toBeTrue()
+})
 
 const wallet = getAddress('0x0000000000000000000000000000000000000001')
 const weth = getAddress('0x0000000000000000000000000000000000000002')
@@ -185,7 +213,7 @@ describe('canonical scan policy', () => {
 		})
 	})
 
-	test('keeps partial refund backfill non-executable and requires complete index storage continuity', () => {
+	test('requires current refund storage continuity without requiring complete history', () => {
 		const partial = snapshot()
 		const partialAuction = partial.auctions[0]
 		if (partialAuction === undefined) throw new Error('Auction fixture missing')
@@ -210,12 +238,26 @@ describe('canonical scan policy', () => {
 			wallet: partial.wallet.address,
 			zoltar: partial.deployments.zoltar,
 		}
+		const missing = { ...completeIndex, availableStartBlock: '5', auctionRefunds: {} }
+		const observed = indexWithCurrentRefunds(partial, missing)
+		const observedGeneration = observed.auctionRefunds[auction.toLowerCase()]?.generation
+		expect(observedGeneration).toBeString()
+		expect(missing.auctionRefunds).toEqual({})
+		expect(indexWithCurrentRefunds(partial, observed).auctionRefunds).toEqual(observed.auctionRefunds)
+		expect(snapshotWithProtocolIndex(partial, observed).auctions[0]?.pendingEthRefundGeneration).toBe(observedGeneration)
+		expect(() => indexWithCurrentRefunds(partial, { ...missing, cursor: { ...missing.cursor, blockNumber: '9' } })).toThrow('snapshot anchor')
+		expect(() => indexWithCurrentRefunds(partial, { ...missing, wallet: weth })).toThrow('indexed chain and wallet')
+
+		const retained = snapshotWithProtocolIndex(partial, { ...completeIndex, availableStartBlock: '5' })
+		expect(retained.auctions[0]?.pendingEthRefundGeneration).toBe(generation)
+		expect(canonicalLifecyclePresence(retained, options).some(item => item.definitionId === 'statoblast.auction.withdraw-refund')).toBeTrue()
+
 		const complete = snapshotWithProtocolIndex(partial, completeIndex)
 		expect(complete.auctions[0]?.pendingEthRefundGeneration).toBe(generation)
 		expect(canonicalLifecyclePresence(complete, options).some(item => item.definitionId === 'statoblast.auction.withdraw-refund')).toBeTrue()
 
-		expect(() => snapshotWithProtocolIndex(partial, { ...completeIndex, auctionRefunds: {} })).toThrow('without an authenticated EthRefundCredited episode')
-		expect(() => snapshotWithProtocolIndex(partial, { ...completeIndex, auctionRefunds: { [auction.toLowerCase()]: { generation, pendingAttoEth: 7n.toString() } } })).toThrow('does not match its authenticated event episode')
+		expect(() => snapshotWithProtocolIndex(partial, { ...completeIndex, auctionRefunds: {} })).toThrow('without a tracked refund identity')
+		expect(() => snapshotWithProtocolIndex(partial, { ...completeIndex, auctionRefunds: { [auction.toLowerCase()]: { generation, pendingAttoEth: 7n.toString() } } })).toThrow('does not match its indexed refund balance')
 
 		const withdrawn = snapshot()
 		expect(() => snapshotWithProtocolIndex(withdrawn, completeIndex)).toThrow('authenticated active refund episode but zero anchored pending storage')

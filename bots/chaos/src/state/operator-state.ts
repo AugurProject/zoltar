@@ -53,6 +53,9 @@ export type SchedulerState = {
 export type DurableMetadata = Record<string, boolean | number | string>
 
 export type DurableLifecyclePresenceBlocker = {
+	/** Retained log boundary for an ordinary-identity blocker observed in partial-history mode. */
+	historyStartBlock?: string
+	requiresCarryHistory?: true
 	count: number
 	digest: Hex
 	firstDefinitionId: string
@@ -429,12 +432,17 @@ function parseMetadata(value: unknown, label: string): DurableMetadata {
 function parseLifecyclePresenceBlocker(value: unknown): DurableLifecyclePresenceBlocker {
 	const label = 'chaos-bot state.lifecyclePresenceBlocker'
 	const blocker = requiredRecord(value, label)
-	assertExactKeys(blocker, ['count', 'digest', 'firstDefinitionId', 'firstEcosystem', 'observedAtBlock', 'presenceComplete', 'reason'], [], label)
+	assertExactKeys(blocker, ['count', 'digest', 'firstDefinitionId', 'firstEcosystem', 'observedAtBlock', 'presenceComplete', 'reason'], ['historyStartBlock', 'requiresCarryHistory'], label)
 	const count = blocker['count']
 	if (typeof count !== 'number' || !Number.isSafeInteger(count) || count < 1 || count > MAXIMUM_LIFECYCLE_PRESENCE_BLOCKER_COUNT) {
 		throw new Error(`${label}.count must be a positive integer within the ${MAXIMUM_LIFECYCLE_PRESENCE_BLOCKER_COUNT.toString()}-identity safety limit`)
 	}
 	if (typeof blocker['presenceComplete'] !== 'boolean') throw new Error(`${label}.presenceComplete must be a boolean`)
+	const historyStartBlock = blocker['historyStartBlock'] === undefined ? undefined : unsignedIntegerString(blocker['historyStartBlock'], `${label}.historyStartBlock`)
+	const requiresCarryHistory = blocker['requiresCarryHistory']
+	if (requiresCarryHistory !== undefined && (requiresCarryHistory !== true || historyStartBlock === undefined)) throw new Error(`${label}.requiresCarryHistory requires a scoped history boundary`)
+	const observedAtBlock = unsignedIntegerString(blocker['observedAtBlock'], `${label}.observedAtBlock`)
+	if (historyStartBlock !== undefined && BigInt(historyStartBlock) > BigInt(observedAtBlock)) throw new Error(`${label}.historyStartBlock is after its observation`)
 	const reason = blocker['reason']
 	if (reason !== 'completed-identity-returned' && reason !== 'unplanned-due-identity') throw new Error(`${label}.reason is invalid`)
 	return {
@@ -442,7 +450,9 @@ function parseLifecyclePresenceBlocker(value: unknown): DurableLifecyclePresence
 		digest: hash(blocker['digest'], `${label}.digest`),
 		firstDefinitionId: identifier(blocker['firstDefinitionId'], `${label}.firstDefinitionId`),
 		firstEcosystem: ecosystem(blocker['firstEcosystem'], `${label}.firstEcosystem`),
-		observedAtBlock: unsignedIntegerString(blocker['observedAtBlock'], `${label}.observedAtBlock`),
+		observedAtBlock,
+		...(historyStartBlock === undefined ? {} : { historyStartBlock }),
+		...(requiresCarryHistory === true ? { requiresCarryHistory: true } : {}),
 		presenceComplete: blocker['presenceComplete'],
 		reason,
 	}

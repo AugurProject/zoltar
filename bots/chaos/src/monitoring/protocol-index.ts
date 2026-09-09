@@ -58,8 +58,6 @@ export interface UpdateProtocolIndexContext {
 	escalationGames: readonly { pool: Address; escalationGame: Address }[]
 	startBlock: bigint
 	availableStartBlock?: bigint
-	/** Also establish availability for an older dependent carry-proof cursor. */
-	requiredLogStartBlock?: bigint
 	anchorBlockNumber: bigint
 	expectedAnchorHash?: Hash
 	maxBlockSpan?: bigint
@@ -439,7 +437,6 @@ export async function updateProtocolIndex(context: UpdateProtocolIndexContext): 
 
 async function scanProtocolIndex(context: UpdateProtocolIndexContext): Promise<ProtocolIndexUpdate> {
 	if (context.anchorBlockNumber < context.startBlock) throw new Error('Protocol index anchor precedes its start block')
-	if (context.requiredLogStartBlock !== undefined && (context.requiredLogStartBlock < context.startBlock || context.requiredLogStartBlock > context.anchorBlockNumber)) throw new Error('Required protocol log start is outside its requested range')
 	const trustedReport = trustedOpenOracleReportPredicate(context)
 	const span = context.maxBlockSpan ?? 2_000n
 	if (span <= 0n) throw new Error('Protocol index maxBlockSpan must be positive')
@@ -476,9 +473,7 @@ async function scanProtocolIndex(context: UpdateProtocolIndexContext): Promise<P
 		migrationRepSplits = indexedMigrationProgress(context.previous.migrationRepSplits)
 		childRepSplits = indexedChildProgress(context.previous.childRepSplits)
 	}
-	if (!partialHistory && context.requiredLogStartBlock !== undefined && context.requiredLogStartBlock < fromBlock) {
-		await fetchProtocolLogs(context.client, { address: context.securityPoolForker, fromBlock: context.requiredLogStartBlock, toBlock: context.requiredLogStartBlock })
-	}
+
 	if (fromBlock > context.anchorBlockNumber) {
 		if (context.previous === undefined) throw new Error('Protocol index has no previous state at the requested anchor')
 		requireTrustedReportBounds(context, reports, trustedReport)
@@ -703,7 +698,7 @@ async function scanProtocolIndex(context: UpdateProtocolIndexContext): Promise<P
 export function protocolIndexDiscoveryInputs(index: ChaosProtocolIndex) {
 	return {
 		indexedAuctionBids: index.auctionBids,
-		indexedAuctionRefunds: index.availableStartBlock === undefined ? index.auctionRefunds : {},
+		indexedAuctionRefunds: index.auctionRefunds,
 		indexedChildRepSplits: index.childRepSplits,
 		indexedEscalationDeposits: index.escalationDeposits,
 		indexedMigrationRepSplits: index.migrationRepSplits,

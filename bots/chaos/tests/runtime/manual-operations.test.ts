@@ -17,6 +17,20 @@ function object(value: unknown): Record<string, unknown> {
 
 const wrap = { definitionId: 'open-oracle.weth.wrap', inputs: { seed: { source: 'custom', value: '7' }, maxEthSpendAttoEth: { source: 'custom', value: '100' }, maxRepSpendAttoRep: { source: 'chaosbot' } } }
 
+test('available history permits state-based manual execution without claiming historical completeness', async () => {
+	const { controller, executed, scan } = fixture()
+	scan.executionReady = true
+	scan.indexComplete = false
+	scan.carryProofsComplete = false
+	scan.canonicalLifecyclePresenceComplete = false
+	const preview = object(await controller.handle({ ...wrap, action: 'preview' }))
+	expect(preview['blockers']).toEqual([])
+	expect(preview['previewId']).toBeString()
+	await controller.handle({ action: 'execute', previewId: preview['previewId'] })
+	expect((await finished(controller, preview['previewId']))['status']).toBe('completed')
+	expect(executed).toHaveLength(1)
+})
+
 async function finished(controller: ReturnType<typeof createManualOperationController>, previewId: unknown) {
 	for (let count = 0; count < 100; count += 1) {
 		const response = object(await controller.handle({ action: 'status', previewId }))
@@ -90,10 +104,10 @@ test('coverage entries remain inspectable and never receive an execution preview
 
 test('incomplete scans and paused live mode block manual execution', async () => {
 	const { controller, scan, configuration } = fixture()
-	scan.canonicalLifecyclePresenceComplete = false
+	scan.executionReady = false
 	const incomplete = object(await controller.handle({ ...wrap, action: 'preview' }))
 	expect(incomplete['previewId']).toBeUndefined()
-	scan.canonicalLifecyclePresenceComplete = true
+	scan.executionReady = true
 	configuration.settings.runtime.execute = true
 	const paused = object(await controller.handle({ ...wrap, action: 'preview' }))
 	expect(paused['blockers']).toContain('Resume the bot before live execution')

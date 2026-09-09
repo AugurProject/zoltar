@@ -3,7 +3,7 @@ import type { CanonicalImmutableTopologyCache } from '../monitoring/topology-cac
 import type { RuntimeTopologySummary } from '../state/operator-state.ts'
 import type { CanonicalScanResult } from './canonical-scan.ts'
 
-export function runtimeTopologySummary(scan: Pick<CanonicalScanResult, 'anchor' | 'canonicalLifecyclePresenceComplete' | 'carryProofJournalComplete' | 'indexComplete' | 'snapshot' | 'topologyCache'>): RuntimeTopologySummary {
+export function runtimeTopologySummary(scan: Pick<CanonicalScanResult, 'anchor' | 'executionReady' | 'snapshot' | 'topologyCache'>): RuntimeTopologySummary {
 	return {
 		anchor: { blockNumber: scan.anchor.blockNumber, timestamp: scan.anchor.timestamp },
 		auctions: scan.snapshot.auctions.map(auction => ({
@@ -14,7 +14,7 @@ export function runtimeTopologySummary(scan: Pick<CanonicalScanResult, 'anchor' 
 			pool: auction.pool,
 			startTime: auction.startTime,
 		})),
-		complete: scan.canonicalLifecyclePresenceComplete && scan.carryProofJournalComplete && scan.indexComplete,
+		complete: scan.executionReady,
 		pairs: scan.snapshot.pairs.map(pair => ({ address: pair.address, feeBps: pair.feeBps, pool: pair.pool, status: pair.status, universeId: pair.universeId })),
 		pools: scan.snapshot.pools.map(pool => ({
 			address: pool.address,

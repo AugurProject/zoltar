@@ -15,8 +15,9 @@ export function manualOperationFixture() {
 	const scan: ManualScan = {
 		anchor: { baseFeePerGas: 1n, blockHash: snapshot.anchor.blockHash, blockNumber: 100n, timestamp: 2_000_000_000n },
 		canonicalLifecyclePresenceComplete: true,
-		carryProofJournalComplete: true,
+		carryProofsComplete: true,
 		indexComplete: true,
+		executionReady: true,
 		inventory: { eth: snapshot.wallet.ethBalanceAttoEth, rep: [], weth: '0' },
 		snapshot,
 	}

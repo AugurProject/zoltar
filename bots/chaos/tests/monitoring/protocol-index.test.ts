@@ -1,10 +1,12 @@
+import { indexWithCurrentRefunds, snapshotWithProtocolIndex } from '../../src/runtime/protocol-index-snapshot.ts'
+import { snapshotProtocolIndex } from '../../src/state/protocol-index-store.ts'
 import { ChaosProtocolIndexReorgError } from '../../src/monitoring/protocol-index-context.ts'
 import { describe, expect, test } from 'bun:test'
 import { bytesToHex, encodeAbiParameters, keccak256, toHex, type Address } from '@zoltar/bot-shared/ethereum'
 import { decodePackedOracleReport, deriveChildUniverseId, OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT, updateProtocolIndex, type ChaosProtocolIndex } from '../../src/monitoring/protocol-index.ts'
 import { updateProtocolIndexWithQuorum } from '../../src/monitoring/protocol-index-quorum.ts'
 import type { ChaosReadClient } from '../../src/monitoring/discovery.ts'
-import { address, hash } from '../operations/fixture.ts'
+import { address, hash, snapshotFixture } from '../operations/fixture.ts'
 
 const indexDeployments = { openOracle: address(6), securityPoolForker: address(5), zoltar: address(2) } as const
 const indexTrust = {
@@ -164,6 +166,30 @@ function eventIndexClient(logs: ReturnType<typeof canonicalLog>[], oracleReads: 
 }
 
 describe('durable protocol index', () => {
+	test('tracks storage-observed refunds across restart, later credits, withdrawal, and a same-amount new claim', async () => {
+		const logs = [refundLog({ amount: 3n, pending: 11n, blockNumber: 51n, logIndex: 0 }), refundLog({ amount: 11n, withdrawn: true, blockNumber: 52n, logIndex: 0 }), refundLog({ amount: 8n, blockNumber: 53n, logIndex: 0 })]
+		const client = eventIndexClient(logs, [], undefined, undefined, from => (from < 42n ? new Error('pruned history unavailable') : undefined))
+		const context = { ...indexDeployments, ...indexTrust, anchorBlockNumber: 50n, auctionAddresses: [address(20)], chainId: 31337, client, escalationGames: [], startBlock: 0n, wallet: address(1) }
+		const initial = await updateProtocolIndex(context)
+		const snapshot = snapshotFixture()
+		snapshot.chainId = context.chainId
+		snapshot.wallet.address = context.wallet
+		snapshot.anchor.blockNumber = '50'
+		snapshot.anchor.blockHash = hash(50)
+		snapshot.auctions = [{ address: address(20), bids: [], clearingTick: '0', endTime: '10000', finalized: false, hasClearingPrice: false, minimumBidAttoEth: 1n.toString(), pendingEthRefund: '8', pool: address(22), startTime: '1', underfunded: false, underfundedWinningAttoEth: 0n.toString() }]
+		const observed = snapshotProtocolIndex(indexWithCurrentRefunds(snapshot, initial.index), context.chainId)
+		const generation = observed.auctionRefunds[address(20).toLowerCase()]?.generation
+		if (generation === undefined) throw new Error('Expected a storage-observed refund identity')
+		expect(snapshotWithProtocolIndex(snapshot, observed).auctions[0]?.pendingEthRefundGeneration).toBe(generation)
+		const credited = await updateProtocolIndex({ ...context, anchorBlockNumber: 51n, previous: observed })
+		expect(credited.index.auctionRefunds[address(20).toLowerCase()]).toEqual({ generation, pendingAttoEth: 11n.toString() })
+		const withdrawn = await updateProtocolIndex({ ...context, anchorBlockNumber: 52n, previous: credited.index })
+		expect(withdrawn.index.auctionRefunds).toEqual({})
+		const renewed = await updateProtocolIndex({ ...context, anchorBlockNumber: 53n, previous: withdrawn.index })
+		expect(renewed.index.auctionRefunds[address(20).toLowerCase()]?.pendingAttoEth).toBe('8')
+		expect(renewed.index.auctionRefunds[address(20).toLowerCase()]?.generation).not.toBe(generation)
+	})
+
 	test('selects the oldest history supported by the configured quorum across retention windows', async () => {
 		const context = { ...indexDeployments, ...indexTrust, anchorBlockNumber: 100n, auctionAddresses: [], chainId: 31337, escalationGames: [], maxBlockSpan: 101n, startBlock: 0n, wallet: address(1) }
 		const readers = [42n, 60n, 80n].map((floor, position) => ({ endpoint: `reader-${position}`, client: eventIndexClient([], [], undefined, undefined, from => (from < floor ? new Error('pruned history unavailable') : undefined)) }))
@@ -213,13 +239,13 @@ describe('durable protocol index', () => {
 		expect(restored.index.migrationRepSplits).toEqual(resumed.index.migrationRepSplits)
 	})
 
-	test('locates pruning behind a caught-up protocol cursor when carry proofs still need older logs', async () => {
+	test('does not fetch older logs for carry proofs behind a caught-up protocol cursor', async () => {
 		const context = { ...indexDeployments, ...indexTrust, anchorBlockNumber: 100n, auctionAddresses: [], chainId: 31337, escalationGames: [], startBlock: 0n, wallet: address(1) }
 		const previous = (await updateProtocolIndex({ ...context, client: eventIndexClient([]) })).index
 		const client = eventIndexClient([], [], undefined, undefined, from => (from < 42n ? new Error('pruned history unavailable') : undefined))
-		const update = await updateProtocolIndex({ ...context, client, previous, requiredLogStartBlock: 0n })
-		expect(update.index.availableStartBlock).toBe('42')
-		expect(update.complete).toBe(false)
+		const update = await updateProtocolIndex({ ...context, client, previous })
+		expect(update.index.availableStartBlock).toBeUndefined()
+		expect(update.complete).toBe(true)
 		expect(update.toBlock).toBe('100')
 	})
 

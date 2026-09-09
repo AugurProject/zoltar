@@ -1,12 +1,12 @@
 import { zeroAddress } from '@zoltar/bot-shared/ethereum'
 import type { OperatorSettings } from '../config/settings.ts'
-import { carryProofDeploymentProfileId } from '../monitoring/carry-proof-scan.ts'
+import { executionProfileId } from '../config/execution-profile.ts'
 import type { Activity, DurableState } from './operator-state.ts'
 import { isPristineBootstrapState } from './pristine.ts'
 
 function obsoleteEmptyProfile(settings: OperatorSettings) {
 	// Identify only the previously shipped zero-root bootstrap, never an operated deployment.
-	return carryProofDeploymentProfileId({ ...settings, deployment: { openOracle: zeroAddress, questionData: zeroAddress, securityPoolFactory: zeroAddress, securityPoolForker: zeroAddress, tradingFactory: zeroAddress, tradingRouter: zeroAddress, weth: zeroAddress, zoltar: zeroAddress } })
+	return executionProfileId({ ...settings, deployment: { openOracle: zeroAddress, questionData: zeroAddress, securityPoolFactory: zeroAddress, securityPoolForker: zeroAddress, tradingFactory: zeroAddress, tradingRouter: zeroAddress, weth: zeroAddress, zoltar: zeroAddress } })
 }
 
 function isMissingBootstrapDeployment(activity: Activity, chainId: number) {
@@ -25,5 +25,5 @@ export function migrateEmptyBootstrapState<T extends DurableState>(state: T, set
 	// Keep the signer and every audit entry. This only clears the obsolete absence
 	// latch; the persisted pause and all current readiness checks still apply.
 	const onlyAbsenceFailures = missingDeploymentErrors.length > 0 && state.activities.filter(activity => activity.type === 'error').length === missingDeploymentErrors.length
-	return { ...state, profileId: carryProofDeploymentProfileId(settings), safetyPaused: state.safetyPaused && !onlyAbsenceFailures }
+	return { ...state, profileId: executionProfileId(settings), safetyPaused: state.safetyPaused && !onlyAbsenceFailures }
 }
