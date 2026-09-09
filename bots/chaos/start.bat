@@ -9,6 +9,7 @@ echo.
 echo Chaos bot started with its persisted configuration.
 echo A first-ever volume uses the paused dry-run template; an existing volume may resume due live work immediately.
 echo Open http://127.0.0.1:4193/ and inspect docker compose logs and Activity before changing execution.
+docker compose logs --follow chaos || exit /b 1
 goto finish
 
 :doctor
