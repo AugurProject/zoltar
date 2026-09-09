@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test'
+import { beforeEach, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { registerTradingSimulationScenario, TRADING_SIMULATION_SCENARIO } from '../../simulation/index.js'
 import { getRegisteredSimulationScenarios } from '@zoltar/ui-core-shared/simulation/scenarios.js'
@@ -19,6 +19,8 @@ import { getActiveNetworkProfile, installActiveEnvironmentForTesting, resetActiv
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { createPublicClient, custom } from '@zoltar/core-shared/evm/ethereum'
 import { createTradingPublicClient } from '../../protocol/live.js'
+
+beforeEach(() => installTradingRouting())
 
 test('Trading registers its shared TEVM scenario and selects its own worker', () => {
 	registerTradingSimulationScenario()
@@ -151,7 +153,7 @@ test('Trading preserves its route headers and does not restyle shared disclosure
 	expect(css).toContain('.route-header {')
 	expect(css).toContain('padding: 0;')
 	expect(css).toContain('background: transparent;')
-	expect(css).toContain('details:not(.wallet-summary):not(.simulation-banner-details) > summary::after')
+	expect(css).toContain('details:not(.simulation-banner-details) > summary::after')
 })
 
 test('Trading keeps the initial loading fallback visible until the environment settles', async () => {
@@ -187,4 +189,43 @@ test('the removed demo query cannot select a parallel simulated-data application
 	expect(rendered.container.textContent).toContain('Markets')
 	await rendered.cleanup()
 	dom.cleanup()
+})
+
+test('shared header navigation preserves hash settings once and keeps addressed liquidity context', async () => {
+	const pool = '0x1111111111111111111111111111111111111111'
+	const search = 'universe=1&network=sepolia&simulate=1&simScenario=trading-funded'
+	const dom = installDomEnvironment(`http://localhost/#/market/${pool}?${search}`)
+	const rendered = await renderIntoDocument(
+		<App
+			initializeEnvironment={async () => undefined}
+			loadLiveDeployment={async () => {
+				throw new Error('Deployment unavailable in navigation fixture')
+			}}
+		/>,
+	)
+	try {
+		const link = Array.from(rendered.container.querySelectorAll<HTMLAnchorElement>('.tab-nav a')).find(anchor => anchor.textContent === 'Liquidity')
+		if (link === undefined) throw new Error('Liquidity link is unavailable')
+		const href = link.getAttribute('href')
+		expect(href).toBe(`#/liquidity/${pool}?${search}`)
+		if (href === null) throw new Error('Liquidity link has no destination')
+		await act(() => {
+			link.click()
+			window.location.hash = href
+			window.dispatchEvent(new Event('hashchange'))
+		})
+		expect(currentRoute()).toBe(`liquidity/${pool}`)
+		const select = rendered.container.querySelector<HTMLSelectElement>('.mobile-route-select select')
+		if (select === null) throw new Error('Mobile route selector is unavailable')
+		await act(() => {
+			select.value = 'liquidity'
+			select.dispatchEvent(new Event('change', { bubbles: true }))
+		})
+		expect(window.location.hash).toBe(`#/liquidity/${pool}?${search}`)
+		const parameters = new URLSearchParams(window.location.hash.split('?')[1])
+		for (const [key, value] of new URLSearchParams(search)) expect(parameters.getAll(key)).toEqual([value])
+	} finally {
+		await rendered.cleanup()
+		dom.cleanup()
+	}
 })
