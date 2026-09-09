@@ -1,4 +1,5 @@
-import { describe, expect, test } from 'bun:test'
+import { installTradingRouting } from '../../lib/routing.js'
+import { beforeEach, describe, expect, test } from 'bun:test'
 import { createPublicClient, custom, encodeAbiParameters, getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { act } from 'preact/test-utils'
@@ -12,6 +13,8 @@ import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/a
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { saveNetworkRpcUrl } from '@zoltar/ui-core-shared/wallet/rpcConfig.js'
+
+beforeEach(() => installTradingRouting())
 
 const core = {
 	chainId: 11_155_111,
@@ -351,13 +354,13 @@ describe('trading deployment setup', () => {
 		await waitFor(() => expect(document.title).toBe('Deploy · Statoblast trading'))
 		expect(rendered.container.querySelector('.site-header .deployment-settings')).toBeNull()
 		expect(rendered.container.querySelector('.deployment-setup input[type="url"]')).toBeNull()
-		const walletButton = rendered.container.querySelector<HTMLButtonElement>('.site-header .wallet-button')
+		const walletButton = rendered.container.querySelector<HTMLButtonElement>('.trading-wallet-actions .wallet-button')
 		if (walletButton === null) throw new Error('Persistent wallet button is unavailable')
 		expect(walletButton.disabled).toBe(true)
 		await act(async () => walletButton.click())
 		expect(connectCount).toBe(0)
 		expect(rendered.container.querySelector('.route-header .wallet-button')).toBeNull()
-		const headerWallet = rendered.container.querySelector('.site-header .wallet-button')
+		const headerWallet = rendered.container.querySelector('.trading-wallet-actions .wallet-button')
 		if (headerWallet === null) throw new Error('Deployment header wallet control is unavailable')
 	})
 
@@ -502,20 +505,20 @@ describe('trading deployment setup', () => {
 		}
 		const rendered = await renderIntoDocument(<App deploymentSetupServices={{ ...services, ...walletServices }} loadLiveDeployment={async () => await configurationPending} />)
 		cleanupRendered = rendered.cleanup
-		expect(rendered.container.querySelector('.site-header .wallet-button')).not.toBeNull()
+		expect(rendered.container.querySelector('.trading-wallet-actions .wallet-button')).not.toBeNull()
 		expect(rendered.container.querySelector('.route-header .wallet-button')).toBeNull()
 		await waitForText('Deploy Trading factory')
 		await connectDeploymentWallet(rendered.container)
 		await waitForConnectedWallet(rendered.container)
-		expect(rendered.container.querySelector('.site-header .network-pill')?.textContent).toContain(core.chainName)
-		expect(rendered.container.querySelector('.site-header .wallet-button')?.textContent).toContain(testWalletAccount)
+		expect(rendered.container.querySelector('.trading-overview .badge')?.textContent).toContain(core.chainName)
+		expect(rendered.container.querySelector('.trading-wallet-actions .wallet-button')?.textContent).toContain(testWalletAccount)
 		for (let attempt = 0; attempt < 30; attempt++) {
-			if (rendered.container.querySelector('.site-header .wallet-button')?.getAttribute('aria-label') === `Disconnect wallet ${testWalletAccount}`) break
+			if (rendered.container.querySelector('.trading-wallet-actions .wallet-button')?.getAttribute('aria-label') === `Disconnect wallet ${testWalletAccount}`) break
 			await act(async () => {
 				await Bun.sleep(10)
 			})
 		}
-		expect(rendered.container.querySelector('.site-header .wallet-button')?.getAttribute('aria-label')).toBe(`Disconnect wallet ${testWalletAccount}`)
+		expect(rendered.container.querySelector('.trading-wallet-actions .wallet-button')?.getAttribute('aria-label')).toBe(`Disconnect wallet ${testWalletAccount}`)
 		const action = Array.from(rendered.container.querySelectorAll('button')).find(button => button.textContent?.includes('Deploy Trading factory') === true)
 		if (!(action instanceof HTMLButtonElement)) throw new Error('Factory deployment action is unavailable')
 		await act(async () => {
