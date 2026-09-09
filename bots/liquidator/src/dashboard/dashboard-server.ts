@@ -257,6 +257,9 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					headers: headers('text/css; charset=utf-8'),
 				})
 			}
+			if (request.method === 'GET' && url.pathname === '/header-notices.js') {
+				return new Response(await buildDashboardScript(join(directory, '..', '..', '..', 'shared', 'src', 'dashboard', 'header-notices.ts')), { headers: headers('text/javascript; charset=utf-8') })
+			}
 			if (request.method === 'GET' && url.pathname === '/dashboard.js') {
 				return new Response(await buildDashboardScript(browserEntrypoint), {
 					headers: headers('text/javascript; charset=utf-8'),

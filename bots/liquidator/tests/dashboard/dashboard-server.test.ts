@@ -304,6 +304,10 @@ describe('liquidator dashboard server', () => {
 		const sharedStyles = await fetch(new URL('/operator-console.css', server.url))
 		expect(sharedStyles.status).toBe(200)
 		expect(await sharedStyles.text()).toContain('.operator-shell')
+		const headerScript = await fetch(new URL('/header-notices.js', server.url))
+		expect(headerScript.status).toBe(200)
+		expect(headerScript.headers.get('content-type')).toContain('text/javascript')
+		expect(await headerScript.text()).toContain('MutationObserver')
 		const rejected = await fetch(new URL('/api/paused', server.url), {
 			body: JSON.stringify({ paused: true }),
 			headers: {

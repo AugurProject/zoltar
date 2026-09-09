@@ -1069,7 +1069,7 @@ function render(snapshot: PublicOperatorSnapshot) {
 	if (!snapshot.networkConfigured) {
 		launchNotice.hidden = false
 		setText('launch-notice-title', 'Network setup required')
-		setText('launch-notice-copy', 'Choose the chain and verified RPC endpoints below. They apply to the next scan; the bot remains paused until you resume it.')
+		setText('launch-notice-copy', 'Choose the chain and verified RPC endpoints in Settings. They apply to the next scan; the bot remains paused until you resume it.')
 		launchNotice.dataset['tone'] = 'warning'
 	} else if (snapshot.network === 'mainnet') {
 		launchNotice.hidden = true
