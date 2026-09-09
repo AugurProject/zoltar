@@ -198,7 +198,7 @@ describe('durable protocol index', () => {
 		})
 		const context = { ...indexDeployments, ...indexTrust, anchorBlockNumber: 100n, auctionAddresses: [], chainId: 31337, client, escalationGames: [], maxBlockSpan: 10n, startBlock: 0n, wallet: address(1) }
 		const first = await updateProtocolIndex(context)
-		expect(first).toMatchObject({ complete: false, fromBlock: '42', toBlock: '51', index: { availableStartBlock: '42', startBlock: '0', migrationRepSplits: [{ childMigrationRepAmountAttoRep: '10' }] } })
+		expect(first).toMatchObject({ complete: false, fromBlock: '42', toBlock: '51', index: { availableStartBlock: '42', startBlock: '0', migrationRepSplits: [{ childMigrationRepAmountAttoRep: 10n.toString() }] } })
 		expect(requested.length).toBeLessThan(20)
 		requested.length = 0
 		const resumed = await updateProtocolIndex({ ...context, maxBlockSpan: 100n, previous: first.index })
@@ -228,7 +228,7 @@ describe('durable protocol index', () => {
 		const client = eventIndexClient([refundLog({ amount: 2n, pending: 7n, blockNumber: 42n, logIndex: 0 }), refundLog({ amount: 7n, withdrawn: true, blockNumber: 43n, logIndex: 0 }), knownEpisode], [], undefined, undefined, from => (from < 42n ? new Error('pruned history unavailable') : undefined))
 		const update = await updateProtocolIndex({ ...indexDeployments, ...indexTrust, anchorBlockNumber: 50n, auctionAddresses: [address(20)], chainId: 31337, client, escalationGames: [], startBlock: 0n, wallet: address(1) })
 		expect(update.complete).toBe(false)
-		expect(update.index.auctionRefunds[address(20).toLowerCase()]).toEqual({ generation: refundGeneration(knownEpisode), pendingAttoEth: '4' })
+		expect(update.index.auctionRefunds[address(20).toLowerCase()]).toEqual({ generation: refundGeneration(knownEpisode), pendingAttoEth: 4n.toString() })
 	})
 
 	test('preserves failures when even the anchor logs are pruned or a boundary probe times out', async () => {

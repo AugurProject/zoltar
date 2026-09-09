@@ -1,3 +1,4 @@
+import type { OperationInputValues } from './input-values.ts'
 import type { OperationDefinition } from './operation-definition.ts'
 export type { OperationDefinition } from './operation-definition.ts'
 import type { Address, Hash, Hex } from '@zoltar/bot-shared/ethereum'
@@ -522,6 +523,8 @@ export interface OperationPlan {
 	lastValidBlockNumber?: string
 	/** Seed that must be reused when rebuilding a durable workflow after restart. */
 	planningSeed: number
+	operationInputs?: OperationInputValues
+	inputSources?: Record<string, 'custom' | 'chaosbot'>
 	steps: OperationStep[]
 	/** Explicitly identifies a continuation plan that only unwinds confirmed preparation. */
 	continuationDisposition?: OperationContinuationDisposition
@@ -546,6 +549,8 @@ export interface ImmutableTopologyPlanningCapacity {
 }
 
 export interface PlanningOptions {
+	operationInputs?: OperationInputValues
+
 	seed: number
 	/** Exact linked topology selected by the genesis initializer. Ordinary random planning leaves this absent. */
 	genesisInitializationTarget?: {

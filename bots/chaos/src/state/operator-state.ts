@@ -1,3 +1,4 @@
+import { storedInputSources, storedInputValues } from '../operations/input-values.ts'
 import type { RuntimeState } from './runtime-state.ts'
 export type { RuntimeState, RuntimeTopologySummary, WalletBalanceState } from './runtime-state.ts'
 import { randomUUID } from 'node:crypto'
@@ -100,6 +101,8 @@ export type DurableWorkflow = {
 	obligation: boolean
 	planId: string
 	planningSeed: number
+	operationInputs?: Record<string, string>
+	inputSources?: Record<string, 'custom' | 'chaosbot'>
 	postconditions: string[]
 	priority: 'random' | 'urgent'
 	risk: OperationRisk
@@ -707,7 +710,7 @@ function parseWorkflow(value: unknown, index: number): DurableWorkflow {
 	assertExactKeys(
 		workflow,
 		['classification', 'createdAt', 'createdAtBlock', 'ecosystem', 'id', 'label', 'metadata', 'obligation', 'operationId', 'planId', 'planningSeed', 'postconditions', 'priority', 'risk', 'status', 'steps', 'updatedAt'],
-		['completedAt', 'continuationDisposition', 'deadlineTimestamp', 'lastValidBlockNumber', 'maximumCleanupTransactionCount', 'semanticDeadlineBlockNumber', 'startedAt', 'terminalSubmission'],
+		['operationInputs', 'inputSources', 'completedAt', 'continuationDisposition', 'deadlineTimestamp', 'lastValidBlockNumber', 'maximumCleanupTransactionCount', 'semanticDeadlineBlockNumber', 'startedAt', 'terminalSubmission'],
 		label,
 	)
 	const status = workflow['status']
@@ -793,6 +796,8 @@ function parseWorkflow(value: unknown, index: number): DurableWorkflow {
 		operationId: identifier(workflow['operationId'], `${label}.operationId`),
 		planId: identifier(workflow['planId'], `${label}.planId`),
 		planningSeed,
+		...(workflow['operationInputs'] === undefined ? {} : { operationInputs: storedInputValues(workflow['operationInputs']) }),
+		...(workflow['inputSources'] === undefined ? {} : { inputSources: storedInputSources(workflow['inputSources']) }),
 		postconditions: stringArray(workflow['postconditions'], `${label}.postconditions`),
 		priority,
 		risk,

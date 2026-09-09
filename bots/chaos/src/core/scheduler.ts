@@ -89,9 +89,10 @@ export function createChaosScheduler(options: ChaosSchedulerOptions) {
 			if (!schedulerIsDue(options.state, currentMilliseconds(clock))) return cloneSchedulerState(options.state)
 			return await persistAndCommit({ ...options.state, status: 'due' })
 		},
-		async begin(operationId: string) {
+		async begin(operationId: string, trigger: 'scheduled' | 'manual' = 'scheduled') {
 			if (operationId.trim() === '') throw new Error('A scheduler operation ID is required')
-			if (!schedulerIsDue(options.state, currentMilliseconds(clock)) && options.state.status !== 'due') throw new Error('Chaos scheduler is not due')
+			if (trigger === 'manual' && (options.state.status === 'paused' || options.state.status === 'running')) throw new Error('Chaos scheduler is paused or already running')
+			if (trigger === 'scheduled' && !schedulerIsDue(options.state, currentMilliseconds(clock)) && options.state.status !== 'due') throw new Error('Chaos scheduler is not due')
 			return await persistAndCommit({ ...options.state, selectedOperationId: operationId, status: 'running' })
 		},
 		async complete(operationId?: string) {

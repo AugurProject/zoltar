@@ -116,6 +116,8 @@ export function refreshWorkflowContinuation(workflow: DurableWorkflow, plan: Ope
 	workflow.obligation = plan.obligation
 	workflow.planId = plan.id
 	workflow.planningSeed = plan.planningSeed
+	if (plan.operationInputs !== undefined) workflow.operationInputs = { ...plan.operationInputs }
+	if (plan.inputSources !== undefined) workflow.inputSources = { ...plan.inputSources }
 	workflow.postconditions = [...plan.postconditions]
 	workflow.priority = plan.priority
 	workflow.risk = plan.risk
@@ -150,6 +152,8 @@ export function durableWorkflowPlan(workflow: DurableWorkflow): OperationPlan {
 		postconditions: [...workflow.postconditions],
 		priority: workflow.priority,
 		planningSeed: workflow.planningSeed,
+		...(workflow.operationInputs === undefined ? {} : { operationInputs: { ...workflow.operationInputs } }),
+		...(workflow.inputSources === undefined ? {} : { inputSources: { ...workflow.inputSources } }),
 		risk: workflow.risk,
 		steps: workflow.steps.map(step => ({
 			data: step.data,
@@ -194,6 +198,8 @@ export function createDurableWorkflow(plan: OperationPlan): DurableWorkflow {
 		operationId: plan.definitionId,
 		planId: plan.id,
 		planningSeed: plan.planningSeed,
+		...(plan.operationInputs === undefined ? {} : { operationInputs: { ...plan.operationInputs } }),
+		...(plan.inputSources === undefined ? {} : { inputSources: { ...plan.inputSources } }),
 		postconditions: [...plan.postconditions],
 		priority: plan.priority,
 		risk: plan.risk,

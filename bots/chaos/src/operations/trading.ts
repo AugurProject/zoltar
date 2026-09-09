@@ -1,3 +1,4 @@
+import { inputInteger, inputMatches, inputSpend } from './input-values.ts'
 import { decodeFunctionData, encodeAbiParameters, encodeDeployData, getAddress, getCreate2Address, isAddress, toHex, zeroAddress, type AbiValue, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory, trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter } from '../../../../solidity/ts/types/contractArtifact.ts'
 import { erc1155Abi, erc20Abi, genesisUniswapSeederAbi, shareTokenAbi, tradingFactoryAbi, tradingPairAbi, tradingRouterAbi, uniswapV3FactoryAbi, uniswapV3PoolAbi } from '../contracts/abi.ts'
@@ -584,7 +585,9 @@ function ethRouterDeadline(snapshot: EcosystemSnapshot, pool: PoolSnapshot, opti
 	if (question === undefined) return undefined
 	const questionBound = BigInt(question)
 	const oracleBound = oraclePriceExpiry(pool)
-	const deadline = questionBound < oracleBound ? questionBound : oracleBound
+	const bound = questionBound < oracleBound ? questionBound : oracleBound
+	const deadline = inputInteger(options, 'deadline', bound, 0n, amount(poolQuestion(snapshot, pool)?.endTime ?? '0') - 1n)
+	if (deadline > oracleBound) return undefined
 	return timestampDeadlineHasRequiredSafety(amount(snapshot.anchor.timestamp), deadline, options) ? deadline.toString() : undefined
 }
 
@@ -659,7 +662,14 @@ function minimumPositivePayoutShares(pool: PoolSnapshot) {
 }
 
 function ethSpend(snapshot: EcosystemSnapshot, options: PlanningOptions, salt: string, minimum = 1n) {
-	return cappedSpend(amount(snapshot.wallet.ethBalanceAttoEth), optionAmount(options, 'minimumEthReserveAttoEth', 10n ** 16n), optionAmount(options, 'maxEthSpendAttoEth', 10n ** 16n), mixSeed(options.seed, salt), minimum)
+	return inputSpend(
+		options,
+		cappedSpend(amount(snapshot.wallet.ethBalanceAttoEth), optionAmount(options, 'minimumEthReserveAttoEth', 10n ** 16n), optionAmount(options, 'maxEthSpendAttoEth', 10n ** 16n), mixSeed(options.seed, salt), minimum),
+		amount(snapshot.wallet.ethBalanceAttoEth),
+		optionAmount(options, 'minimumEthReserveAttoEth', 10n ** 16n),
+		optionAmount(options, 'maxEthSpendAttoEth', 10n ** 16n),
+		minimum,
+	)
 }
 
 type DirectLiquidityKind = 'initialize' | 'add'
@@ -1003,7 +1013,7 @@ function directLiquidity(kind: DirectLiquidityKind): OperationDefinition {
 	return {
 		buildPlan(snapshot, options) {
 			const pair = choose(
-				snapshot.pairs.filter(candidate => directLiquidityReady(snapshot, candidate, kind, options)),
+				snapshot.pairs.filter(candidate => inputMatches(options, 'pair', candidate.address)).filter(candidate => directLiquidityReady(snapshot, candidate, kind, options)),
 				mixSeed(options.seed, id),
 			)
 			if (pair === undefined) return undefined
@@ -1012,10 +1022,11 @@ function directLiquidity(kind: DirectLiquidityKind): OperationDefinition {
 			const shares = shareForPool(snapshot, pool)
 			if (shares === undefined) return undefined
 			const available = amount(shares.yes) < amount(shares.no) ? amount(shares.yes) : amount(shares.no)
-			const shareAmount = available > 10n ** 15n ? 10n ** 15n : available
+			const shareAmount = inputSpend(options, available > 10n ** 15n ? 10n ** 15n : available, available, 0n, 10n ** 15n)
+			if (shareAmount === 0n) return undefined
 			const expectedLiquidity = kind === 'initialize' ? shareAmount - 1_000n : proportionalLiquidity(pair, shareAmount, shareAmount)?.liquidity
 			if (expectedLiquidity === undefined || expectedLiquidity <= 0n) return undefined
-			const minimumLiquidity = minimumAfterSlippage(expectedLiquidity)
+			const minimumLiquidity = inputInteger(options, 'minimumLiquidity', minimumAfterSlippage(expectedLiquidity), 1n, expectedLiquidity)
 			const shareMethod = kind === 'initialize' ? 'initialize' : 'addLiquidity'
 			return buildDirectShareLiquidityPlan(snapshot, options, pair, kind, id, shareMethod, shareAmount, minimumLiquidity, { minimumLiquidity: minimumLiquidity.toString(), pair: pair.address, pool: pool.address, shareAmount: shareAmount.toString() })
 		},
@@ -1106,28 +1117,38 @@ function swapDefinition(mode: 'exact-input' | 'exact-output'): OperationDefiniti
 	const method = mode === 'exact-input' ? 'swapExactInput' : 'swapExactOutput'
 	return {
 		buildPlan(snapshot, options) {
-			const candidates = snapshot.pairs.flatMap(pair => {
-				if (pair.status !== 0) return []
-				const pool = poolForPair(snapshot, pair)
-				const shares = pool === undefined ? undefined : shareForPool(snapshot, pool)
-				if (pool === undefined || shares === undefined || !poolLifecycleOpen(snapshot, pool, options, shareApproval(shares, pair.address, snapshot.wallet.address).length)) return []
-				return [true, false].flatMap(yesForNo => {
-					const inputBalance = amount(yesForNo ? shares.yes : shares.no)
-					const spend = inputBalance > 10n ** 15n ? 10n ** 15n : inputBalance
-					const quote = mode === 'exact-input' ? quoteExactInput(pair, yesForNo, spend) : quoteExactOutput(pair, yesForNo, 1n)
-					if (quote === undefined || quote === 0n) return []
-					const maximumInput = mode === 'exact-output' ? maximumAfterSlippage(quote) : spend
-					if (maximumInput > spend) return []
-					return [{ maximumInput, pair, pool, quote, shares, spend, yesForNo }]
+			const candidates = snapshot.pairs
+				.filter(pair => inputMatches(options, 'pair', pair.address))
+				.flatMap(pair => {
+					if (pair.status !== 0) return []
+					const pool = poolForPair(snapshot, pair)
+					const shares = pool === undefined ? undefined : shareForPool(snapshot, pool)
+					if (pool === undefined || shares === undefined || !poolLifecycleOpen(snapshot, pool, options, shareApproval(shares, pair.address, snapshot.wallet.address).length)) return []
+					return [true, false]
+						.filter(yesForNo => inputMatches(options, 'direction', yesForNo ? 'YES-to-NO' : 'NO-to-YES'))
+						.flatMap(yesForNo => {
+							const inputBalance = amount(yesForNo ? shares.yes : shares.no)
+							const spend = inputSpend(options, inputBalance > 10n ** 15n ? 10n ** 15n : inputBalance, inputBalance, 0n, 10n ** 15n)
+							const quote = mode === 'exact-input' ? quoteExactInput(pair, yesForNo, spend) : quoteExactOutput(pair, yesForNo, inputInteger(options, 'outputAmount', 1n, 1n))
+							if (quote === undefined || quote === 0n) return []
+							const maximumInput = mode === 'exact-output' ? inputInteger(options, 'maximumInput', maximumAfterSlippage(quote), 1n) : spend
+							if (maximumInput > spend) return []
+							return [{ maximumInput, pair, pool, quote, shares, spend, yesForNo }]
+						})
 				})
-			})
 			const candidate = choose(candidates, mixSeed(options.seed, id))
 			if (candidate === undefined) return undefined
 			const { maximumInput, pair, pool, quote, spend, yesForNo } = candidate
 			const direction = yesForNo ? 'YES-to-NO' : 'NO-to-YES'
 			return mode === 'exact-input'
-				? buildSwapPlan(snapshot, options, pair, mode, yesForNo, spend, minimumAfterSlippage(quote), { direction, inputAmount: spend.toString(), minimumOutput: minimumAfterSlippage(quote).toString(), pair: pair.address, pool: pool.address })
-				: buildSwapPlan(snapshot, options, pair, mode, yesForNo, 1n, maximumInput, { direction, maximumInput: maximumInput.toString(), outputAmount: '1', pair: pair.address, pool: pool.address })
+				? buildSwapPlan(snapshot, options, pair, mode, yesForNo, spend, inputInteger(options, 'minimumOutput', minimumAfterSlippage(quote), 1n, quote), {
+						direction,
+						inputAmount: spend.toString(),
+						minimumOutput: inputInteger(options, 'minimumOutput', minimumAfterSlippage(quote), 1n, quote).toString(),
+						pair: pair.address,
+						pool: pool.address,
+					})
+				: buildSwapPlan(snapshot, options, pair, mode, yesForNo, inputInteger(options, 'outputAmount', 1n, 1n), maximumInput, { direction, maximumInput: maximumInput.toString(), outputAmount: inputInteger(options, 'outputAmount', 1n, 1n).toString(), pair: pair.address, pool: pool.address })
 		},
 		buildContinuationPlan(snapshot, options, context) {
 			return buildSwapContinuation(snapshot, options, context, mode)
@@ -1144,8 +1165,8 @@ function swapDefinition(mode: 'exact-input' | 'exact-output'): OperationDefiniti
 				if (pair.status !== 0 || pool === undefined || shares === undefined || !poolLifecycleOpen(snapshot, pool, options, shareApproval(shares, pair.address, snapshot.wallet.address).length)) return false
 				return [true, false].some(yesForNo => {
 					const inputBalance = amount(yesForNo ? shares.yes : shares.no)
-					const spend = inputBalance > 10n ** 15n ? 10n ** 15n : inputBalance
-					const quote = mode === 'exact-input' ? quoteExactInput(pair, yesForNo, spend) : quoteExactOutput(pair, yesForNo, 1n)
+					const spend = inputSpend(options, inputBalance > 10n ** 15n ? 10n ** 15n : inputBalance, inputBalance, 0n, 10n ** 15n)
+					const quote = mode === 'exact-input' ? quoteExactInput(pair, yesForNo, spend) : quoteExactOutput(pair, yesForNo, inputInteger(options, 'outputAmount', 1n, 1n))
 					return quote !== undefined && quote > 0n && (mode === 'exact-input' || maximumAfterSlippage(quote) <= spend)
 				})
 			})
@@ -1205,7 +1226,10 @@ function routerEthDefinition(kind: 'create-and-initialize' | 'initialize' | 'add
 			const pool =
 				kind === 'create-and-initialize'
 					? choose(
-							snapshot.pools.filter(candidate => !paired.has(candidate.address.toLowerCase()) && poolLifecycleOpen(snapshot, candidate, options) && ethRouterOraclePriceIsSafe(snapshot, candidate, options) && canCreateCompleteSet(candidate, spend) && ethToShares(candidate, spend) > 1_000n),
+							snapshot.pools.filter(
+								candidate =>
+									inputMatches(options, 'target', candidate.address) && !paired.has(candidate.address.toLowerCase()) && poolLifecycleOpen(snapshot, candidate, options) && ethRouterOraclePriceIsSafe(snapshot, candidate, options) && canCreateCompleteSet(candidate, spend) && ethToShares(candidate, spend) > 1_000n,
+							),
 							mixSeed(options.seed, id),
 						)
 					: undefined
@@ -1214,6 +1238,7 @@ function routerEthDefinition(kind: 'create-and-initialize' | 'initialize' | 'add
 					? undefined
 					: choose(
 							snapshot.pairs.filter(candidate => {
+								if (!inputMatches(options, 'target', candidate.address)) return false
 								if (options.genesisInitializationTarget?.pair !== undefined && candidate.address.toLowerCase() !== options.genesisInitializationTarget.pair.toLowerCase()) return false
 								if (candidate.status !== (kind === 'initialize' ? 6 : 0)) return false
 								const candidatePool = poolForPair(snapshot, candidate)
@@ -1233,23 +1258,23 @@ function routerEthDefinition(kind: 'create-and-initialize' | 'initialize' | 'add
 			const deadline = ethRouterDeadline(snapshot, candidatePool, options, mixSeed(options.seed, `${id}:deadline`))
 			if (deadline === undefined) return undefined
 			const minted = ethToShares(candidatePool, spend)
-			const enterOutcomes = pair === undefined ? [] : [1, 2].filter(outcome => quoteExactInput(pair, outcome === 2, minted) > 0n)
+			const enterOutcomes = pair === undefined ? [] : [1, 2].filter(outcome => inputMatches(options, 'longOutcome', String(outcome)) && quoteExactInput(pair, outcome === 2, minted) > 0n)
 			const longOutcome = kind === 'enter' ? choose(enterOutcomes, mixSeed(options.seed, 'long-outcome')) : undefined
 			if (kind === 'enter' && longOutcome === undefined) return undefined
 			let args: readonly AbiValue[]
 			let evidence: OperationEvidence[]
 			if (kind === 'create-and-initialize' || kind === 'initialize') {
-				args = [target, 5_000n, minimumAfterSlippage(minted - 1_000n), snapshot.wallet.address, BigInt(deadline)]
+				args = [target, 5_000n, inputInteger(options, 'minimumLiquidity', minimumAfterSlippage(minted - 1_000n), 1n, minted - 1_000n), snapshot.wallet.address, BigInt(deadline)]
 				evidence = kind === 'create-and-initialize' ? [eventEvidence(snapshot.deployments.tradingFactory, 'PairCreated(address,address,uint248,address,uint256)')] : [eventEvidence(target, 'LiquidityInitialized(address,address,uint256,uint256,uint256)')]
 			} else if (kind === 'add') {
 				const liquidity = pair === undefined ? undefined : proportionalLiquidity(pair, minted, minted)?.liquidity
 				if (liquidity === undefined) return undefined
-				args = [target, minimumAfterSlippage(liquidity), snapshot.wallet.address, BigInt(deadline)]
+				args = [target, inputInteger(options, 'minimumLiquidity', minimumAfterSlippage(liquidity), 1n, liquidity), snapshot.wallet.address, BigInt(deadline)]
 				evidence = [eventEvidence(target, 'LiquidityAdded(address,address,uint256,uint256,uint256)')]
 			} else {
 				if (pair === undefined || longOutcome === undefined) return undefined
 				const additionalLong = quoteExactInput(pair, longOutcome === 2, minted)
-				args = [target, longOutcome, minimumAfterSlippage(minted + additionalLong), snapshot.wallet.address, BigInt(deadline)]
+				args = [target, longOutcome, inputInteger(options, 'minimumOutput', minimumAfterSlippage(minted + additionalLong), 1n, minted + additionalLong), snapshot.wallet.address, BigInt(deadline)]
 				evidence = [eventEvidence(target, 'Swap(address,address,bool,bool,uint256,uint256,uint256,uint256,uint256)')]
 			}
 			return planBase({
@@ -1441,6 +1466,7 @@ function routerOwnedDefinition(kind: 'exit' | 'redeem' | 'remove'): OperationDef
 		buildPlan(snapshot, options) {
 			const pair = choose(
 				snapshot.pairs.filter(candidate => {
+					if (!inputMatches(options, 'pair', candidate.address)) return false
 					if (kind === 'remove') return removableLiquidity(candidate) > 0n
 					const pool = poolForPair(snapshot, candidate)
 					const shares = pool === undefined ? undefined : shareForPool(snapshot, pool)
@@ -1465,31 +1491,36 @@ function routerOwnedDefinition(kind: 'exit' | 'redeem' | 'remove'): OperationDef
 			const pool = poolForPair(snapshot, pair)
 			if (pool === undefined) return undefined
 			if (kind === 'remove') {
-				const liquidity = removableLiquidity(pair)
+				const liquidity = inputInteger(options, 'amount', removableLiquidity(pair), 1n, removableLiquidity(pair))
 				const quote = removableLiquidityQuote(pair, liquidity)
 				if (quote === undefined) return undefined
-				const minimumYes = minimumAfterSlippage(quote.yesOut)
-				const minimumNo = minimumAfterSlippage(quote.noOut)
+				const minimumYes = inputInteger(options, 'minimumYes', minimumAfterSlippage(quote.yesOut), 1n, quote.yesOut)
+				const minimumNo = inputInteger(options, 'minimumNo', minimumAfterSlippage(quote.noOut), 1n, quote.noOut)
 				return buildRouterRemovePlan(snapshot, options, pair, liquidity, minimumYes, minimumNo, { liquidity: liquidity.toString(), minimumNo: minimumNo.toString(), minimumYes: minimumYes.toString(), pair: pair.address, pool: pool.address, router: snapshot.deployments.tradingRouter })
 			}
 			const shares = shareForPool(snapshot, pool)
 			if (shares === undefined) return undefined
 			if (kind === 'redeem') {
-				const completeAmount = [amount(shares.invalid), amount(shares.yes), amount(shares.no)].reduce((minimum, value) => (value < minimum ? value : minimum))
-				const minimumEthAttoEth = minimumAfterSlippage(sharesToEth(pool, completeAmount))
+				const available = [amount(shares.invalid), amount(shares.yes), amount(shares.no)].reduce((minimum, value) => (value < minimum ? value : minimum))
+				const completeAmount = inputInteger(options, 'amount', available, 1n, available)
+				const minimumEthAttoEth = inputInteger(options, 'minimumEthAttoEth', minimumAfterSlippage(sharesToEth(pool, completeAmount)), 1n, sharesToEth(pool, completeAmount))
 				return buildRouterRedeemPlan(snapshot, options, pair, completeAmount, minimumEthAttoEth, { completeAmount: completeAmount.toString(), minimumEthAttoEth: minimumEthAttoEth.toString(), pair: pair.address, pool: pool.address, router: snapshot.deployments.tradingRouter })
 			}
-			const completeAmount = minimumPositivePayoutShares(pool)
+			const minimum = minimumPositivePayoutShares(pool)
+			if (minimum === undefined) return undefined
+			const completeAmount = inputInteger(options, 'amount', minimum, minimum, amount(shares.invalid))
 			if (completeAmount === undefined || amount(shares.invalid) < completeAmount) return undefined
-			const routes = [true, false].flatMap(longYes => {
-				const requiredSwapInput = quoteExactOutput(pair, longYes, completeAmount)
-				const longBalance = amount(longYes ? shares.yes : shares.no)
-				const maximumSwapInput = requiredSwapInput === undefined ? undefined : maximumAfterSlippage(requiredSwapInput)
-				return maximumSwapInput !== undefined && longBalance >= completeAmount + maximumSwapInput ? [{ longOutcome: longOutcome(longYes), maximumLong: completeAmount + maximumSwapInput }] : []
-			})
+			const routes = [true, false]
+				.filter(longYes => inputMatches(options, 'longOutcome', longOutcome(longYes)))
+				.flatMap(longYes => {
+					const requiredSwapInput = quoteExactOutput(pair, longYes, completeAmount)
+					const longBalance = amount(longYes ? shares.yes : shares.no)
+					const maximumSwapInput = requiredSwapInput === undefined ? undefined : maximumAfterSlippage(requiredSwapInput)
+					return maximumSwapInput !== undefined && longBalance >= completeAmount + maximumSwapInput ? [{ longOutcome: longOutcome(longYes), maximumLong: completeAmount + maximumSwapInput }] : []
+				})
 			const route = choose(routes, mixSeed(options.seed, `${id}:direction`))
 			if (route === undefined) return undefined
-			const minimumEthAttoEth = minimumAfterSlippage(sharesToEth(pool, completeAmount))
+			const minimumEthAttoEth = inputInteger(options, 'minimumEthAttoEth', minimumAfterSlippage(sharesToEth(pool, completeAmount)), 1n, sharesToEth(pool, completeAmount))
 			return buildRouterExitPlan(snapshot, options, pair, route.longOutcome, completeAmount, route.maximumLong, minimumEthAttoEth, {
 				completeAmount: completeAmount.toString(),
 				longOutcome: route.longOutcome,
