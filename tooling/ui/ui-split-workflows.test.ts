@@ -31,7 +31,7 @@ const developerDocumentation = [
 ]
 const uiPackageIds = ['coreShared', 'zoltarShared', 'statoblastShared', 'zoltar', 'statoblast', 'trading'] as const
 const tevmPackagePaths = ['package.json', 'ui/coreShared/package.json', 'ui/zoltarShared/package.json', 'ui/statoblastShared/package.json', 'ui/zoltar/package.json', 'ui/statoblast/package.json', 'ui/trading/package.json'] as const
-const pinnedTevmTransitives = ['@tevm/actions', '@tevm/node', '@tevm/server'] as const
+const pinnedTevmTransitives = ['@tevm/actions', '@tevm/node'] as const
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
 const requireRecord = (value: unknown, label: string) => {
 	if (!isRecord(value)) throw new Error(`${label} must be a YAML mapping`)
@@ -400,6 +400,10 @@ describe('split UI workflow paths', () => {
 			const parsed: unknown = JSON.parse(await readFile(join(repositoryRoot, packagePath), 'utf8'))
 			expect(isRecord(parsed)).toBe(true)
 			if (!isRecord(parsed)) throw new Error(`${packagePath} must contain a JSON object`)
+			const dependencies = parsed['dependencies']
+			if (!isRecord(dependencies)) throw new Error(`${packagePath} must define dependencies`)
+			expect(dependencies['tevm']).toBeUndefined()
+			for (const name of ['@tevm/memory-client', '@tevm/common']) expect(dependencies[name]).toBe('1.0.0-rc.151')
 			const overrides = parsed['overrides']
 			expect(isRecord(overrides)).toBe(true)
 			if (!isRecord(overrides)) throw new Error(`${packagePath} must define dependency overrides`)
@@ -407,6 +411,8 @@ describe('split UI workflow paths', () => {
 
 			const lockPath = packagePath === 'package.json' ? join(repositoryRoot, 'bun.lock') : join(repositoryRoot, packagePath, '..', 'bun.lock')
 			const lock = await readFile(lockPath, 'utf8')
+			expect(lock).not.toContain('"tevm": [')
+			expect(lock).not.toContain('"@tevm/server": [')
 			expect(lock).toContain('"@tevm/actions": ["@tevm/actions@1.0.0-rc.151"')
 			expect(lock).not.toContain('"@tevm/actions": ["@tevm/actions@1.0.0-rc.153"')
 		}
