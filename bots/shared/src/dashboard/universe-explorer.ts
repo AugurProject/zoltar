@@ -94,14 +94,14 @@ export function createUniverseExplorer(host: HTMLElement, options: { onChange: (
 		render()
 		scrollOnMobile(detail)
 	}
-	const reveal = (id: string) => {
+	const reveal = (id: string, showChildren = false) => {
 		search.value = ''
 		filter.value = 'all'
 		for (const ancestor of universeLineage(tree, id)) expanded.add(ancestor.id)
 		focused = id
 		branchRoot = undefined
 		// Keep distant lineage navigation bounded without filtering out children.
-		if (!visibleUniverseRows(tree, expanded, state.approved, '', false, limit).rows.some(row => row.node.id === id)) {
+		if (showChildren || !visibleUniverseRows(tree, expanded, state.approved, '', false, limit).rows.some(row => row.node.id === id)) {
 			branchRoot = id
 			limit = PAGE_SIZE
 		}
@@ -166,7 +166,7 @@ export function createUniverseExplorer(host: HTMLElement, options: { onChange: (
 			detail.append(
 				button('ue-parent-link', `View ${children.length.toLocaleString()} child universes →`, () => {
 					expanded.add(node.id)
-					reveal(node.id)
+					reveal(node.id, true)
 				}),
 			)
 	}
