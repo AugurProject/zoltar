@@ -54,6 +54,7 @@ function strategy(minimumProfitBps: bigint): MutableStrategy {
 test('keeps all mutations locked and ignores deferred old-chain responses until matching state and configuration arrive', async () => {
 	let network: 'mainnet' | 'sepolia' = 'mainnet'
 	let networkConfigured = true
+	let deploymentUnavailable = false
 	let currentStrategy = strategy(111n)
 	let stateGate: Promise<void> | undefined
 	let configurationGate: Promise<void> | undefined
@@ -100,6 +101,7 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	})
 	const snapshot = () => {
 		const state = operatorState()
+		if (deploymentUnavailable) state.marketAvailability = { kind: 'missing-deployment', chainId: 11_155_111, contracts: [{ name: 'Uniswap V3 factory', address }] }
 		if (capable) {
 			state.paused = false
 			state.status = 'running'
@@ -160,7 +162,7 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	browsers.push(browser)
 	const page = browser.newPage()
 	page.url = server.url.href
-	page.content = (await (await fetch(server.url)).text()).replace('<script type="module" src="/dashboard.js"></script>', '')
+	page.content = (await (await fetch(server.url)).text()).replace('<script type="module" src="/dashboard.js"></script>', '').replace('<script type="module" src="/header-notices.js"></script>', '')
 	const window = page.mainFrame.window
 	for (const [name, value] of Object.entries({ AbortController, Array, Boolean, Date, Error, Intl, JSON, Map, Math, Number, Object, Promise, Reflect, Set, String, SyntaxError, decodeURIComponent })) Reflect.set(window, name, value)
 	window.setInterval = () => {
@@ -281,6 +283,7 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	if (!(profitInput instanceof window.HTMLInputElement)) throw new Error('Missing minimum profit input')
 	expect(profitInput.value).toBe('333')
 
+	page.evaluate(await (await fetch(new URL('/header-notices.js', server.url))).text())
 	networkConfigured = false
 	window.history.replaceState({}, '', '/settings')
 	window.dispatchEvent(new window.PopStateEvent('popstate'))
@@ -295,6 +298,17 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	element(window, 'refresh-button', window.HTMLButtonElement).click()
 	await page.waitUntilComplete()
 	expect(launchNotice.hidden).toBe(true)
+	capable = true
+	deploymentUnavailable = true
+	element(window, 'refresh-button', window.HTMLButtonElement).click()
+	await page.waitUntilComplete()
+	expect(element(window, 'header-notices-count', window.HTMLElement).textContent).toBe('1')
+	expect(element(window, 'header-notices', window.HTMLDetailsElement).open).toBe(false)
+	expect(element(window, 'notice-title', window.HTMLElement).textContent).toBe('Deployment unavailable')
+	deploymentUnavailable = false
+	element(window, 'refresh-button', window.HTMLButtonElement).click()
+	await page.waitUntilComplete()
+	expect(element(window, 'header-notices-count', window.HTMLElement).textContent).toBe('0')
 })
 
 function element<T extends Element>(window: BrowserWindow, id: string, constructor: { new (): T }): T {

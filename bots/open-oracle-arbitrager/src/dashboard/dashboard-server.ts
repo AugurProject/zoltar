@@ -207,6 +207,9 @@ export function startDashboardServer(port: number, controller: DashboardControll
 			if (request.method === 'GET' && url.pathname === '/assets/dashboard-markets.png') {
 				return new Response(Bun.file(join(documentationDirectory, 'assets', 'dashboard-markets.png')), { headers: securityHeaders('image/png') })
 			}
+			if (request.method === 'GET' && url.pathname === '/header-notices.js') {
+				return new Response(await buildDashboardScript(join(directory, '..', '..', '..', 'shared', 'src', 'dashboard', 'header-notices.ts')), { headers: securityHeaders('text/javascript; charset=utf-8') })
+			}
 			if (request.method === 'GET' && url.pathname === '/dashboard.js') {
 				return new Response(await buildDashboardScript(browserEntrypoint), {
 					headers: securityHeaders('text/javascript; charset=utf-8'),
