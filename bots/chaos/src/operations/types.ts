@@ -265,7 +265,6 @@ export interface ForkedCarryWithdrawalSnapshot {
 	sourcePool: Address
 	sourceGame: Address
 	claimSourceGame: Address
-	snapshotId: Hash
 	outcome: 0 | 1 | 2
 	depositor: Address
 	amountAttoRep: CanonicalUintString
@@ -274,14 +273,13 @@ export interface ForkedCarryWithdrawalSnapshot {
 	proof: ForkedCarryDepositProofSnapshot
 	resultingCarryRoot: Hash
 	resultingNullifierRoot: Hash
-	resultingUnresolvedTotalAttoRep: CanonicalUintString
 	amountToWithdrawAttoRep: CanonicalUintString
 	burnAmountAttoRep: CanonicalUintString
 	preflightExpectedResult: Hex
 }
 
 /** Lightweight canonical identity retained independently of bounded proof work. */
-export interface ForkedCarryWithdrawalPresenceSnapshot {
+interface ForkedCarryWithdrawalPresenceSnapshot {
 	pool: Address
 	game: Address
 	sourceGame: Address

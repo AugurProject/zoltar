@@ -443,6 +443,8 @@ function classifyShares(snapshot: EcosystemSnapshot) {
 
 function canonicalClaimableAssetCount(snapshot: EcosystemSnapshot, retirement: DurableRetirementState) {
 	let count = snapshot.wallet.tokens.filter(token => BigInt(token.openOracleCredit) > 1n).length + snapshot.wallet.lpTokens.filter(token => BigInt(token.balance) > 0n).length
+	count += snapshot.auctions.filter(auction => BigInt(auction.pendingEthRefund) > 0n).length
+	count += (snapshot.forkedCarryWithdrawalPresence ?? snapshot.forkedCarryWithdrawals ?? []).length
 	if (BigInt(snapshot.wallet.openOracleEthCredit) > 1n) count += 1
 	if (retirement.policies.migrateExistingClaims) count += snapshot.universes.filter(universe => BigInt(universe.migrationBalance) > 0n).length
 	for (const pool of snapshot.pools) {
@@ -470,7 +472,11 @@ export function assessRetirement(parameters: {
 	sweepLimits?: RetirementSweepLimits | undefined
 	planning?: PlanningOptions | undefined
 	canonicalScanComplete: boolean
+	/** Ready to act on known current state, independently of historical completeness. */
+	executionReady?: boolean
 }): RetirementAssessment {
+	const executionReady = parameters.executionReady ?? parameters.canonicalScanComplete
+	const historyLimited = executionReady && !parameters.canonicalScanComplete
 	const unresolvedWorkflows = parameters.state.workflows.filter(workflow => workflow.status !== 'abandoned' && workflow.status !== 'completed')
 	const partialWorkflows = unresolvedWorkflows.length
 	const actionableObligations = parameters.state.obligations.filter(obligation => !['abandoned', 'completed', 'deferred'].includes(obligation.status)).length
@@ -491,8 +497,10 @@ export function assessRetirement(parameters: {
 			id: workflow.id,
 		})
 	}
-	if (!parameters.canonicalScanComplete) blockers.push({ category: 'incomplete-discovery', details: 'The canonical lifecycle, carry-proof, or topology scan is incomplete', id: 'canonical-scan-incomplete' })
-	if (parameters.snapshot.warnings.length !== 0) blockers.push({ category: 'incomplete-discovery', details: parameters.snapshot.warnings.join('; '), id: 'canonical-scan-warnings' })
+	if (!executionReady) blockers.push({ category: 'incomplete-discovery', details: 'The canonical lifecycle, carry-proof, or topology scan is incomplete', id: 'canonical-scan-incomplete' })
+	if (historyLimited) blockers.push({ category: 'incomplete-discovery', details: 'Earlier history is unavailable; recovery covers known claims only.', id: 'unavailable-history' })
+	const blockingWarnings = parameters.snapshot.warnings.filter(warning => !historyLimited || !warning.startsWith('Protocol log history is unavailable for blocks '))
+	if (blockingWarnings.length !== 0) blockers.push({ category: 'incomplete-discovery', details: blockingWarnings.join('; '), id: 'canonical-scan-warnings' })
 	for (const obligation of parameters.state.obligations.filter(candidate => candidate.status === 'deferred')) {
 		blockers.push({ category: 'temporarily-locked', details: `${obligation.label} is not yet eligible`, id: obligation.id, ...(obligation.notBefore === undefined ? {} : { nextEligibleAt: obligation.notBefore }) })
 	}
@@ -517,16 +525,18 @@ export function assessRetirement(parameters: {
 		pendingTransactions: parameters.state.pendingTransactions.length,
 	}
 	const recoveryPlan = claimPlan ?? fullLiquidityPlan ?? revocationPlan ?? nativeCreditPlan
-	const directPlan = recoveryPlan ?? (canonicalClaims === 0 && blockers.length === 0 ? sweepPlan : undefined)
+	const operationalBlockers = blockers.filter(blocker => blocker.id !== 'unavailable-history')
+	const directPlan = recoveryPlan ?? (canonicalClaims === 0 && operationalBlockers.length === 0 && actionableObligations === 0 && partialWorkflows === 0 && parameters.state.pendingTransactions.length === 0 ? sweepPlan : undefined)
 	let action: RetirementAssessment['action']
-	if (parameters.canonicalScanComplete && v3Action !== undefined) action = { kind: 'v3-position', observation: v3Action }
-	else if (parameters.canonicalScanComplete && directPlan !== undefined) action = { kind: 'existing-plan', plan: directPlan }
+	if (executionReady && v3Action !== undefined) action = { kind: 'v3-position', observation: v3Action }
+	else if (executionReady && directPlan !== undefined) action = { kind: 'existing-plan', plan: directPlan }
 	const outstanding = proof.actionableObligations + proof.claimableAssets + proof.collectableV3Positions + proof.knownApprovals + proof.ownedLiquidityPositions + proof.partialWorkflows + proof.pendingTransactions
 	if (action !== undefined) return { action, blockers, proof, residuals, status: 'draining' }
-	if (blockers.some(blocker => blocker.category !== 'temporarily-locked')) return { action, blockers, proof, residuals, status: 'blocked' }
-	if (blockers.length !== 0) return { action, blockers, proof, residuals, status: 'waiting' }
+	if (operationalBlockers.some(blocker => blocker.category !== 'temporarily-locked')) return { action, blockers, proof, residuals, status: 'blocked' }
+	if (operationalBlockers.length !== 0) return { action, blockers, proof, residuals, status: 'waiting' }
 	if (outstanding > 0) return { action, blockers, proof, residuals, status: 'draining' }
 	if (parameters.sweepLimits !== undefined && BigInt(parameters.snapshot.wallet.ethBalanceAttoEth) > 0n) residuals.push({ amount: parameters.snapshot.wallet.ethBalanceAttoEth, asset: 'ETH', category: 'mandatory-sentinel', reason: 'Configured ETH reserve and final-sweep gas budget retained after native sweeping' })
+	if (historyLimited) return { action, blockers, proof, residuals, status: 'known-claims-recovered' }
 	return { action, blockers, proof, residuals, status: residuals.length === 0 ? 'drained' : 'drained-with-residuals' }
 }
 

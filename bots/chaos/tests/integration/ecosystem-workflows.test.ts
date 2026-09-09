@@ -135,9 +135,9 @@ function runtimeContext(settings: OperatorSettings) {
 }
 
 async function canonicalPlans(context: ReturnType<typeof runtimeContext>) {
-	const scan = await performCanonicalScan(context.environment.settings, context.pool, context.account.address, SCAN_SEED, undefined, undefined, false, undefined, { clock: ANVIL_CLOCK })
+	const scan = await performCanonicalScan(context.environment.settings, context.pool, context.account.address, SCAN_SEED, undefined, undefined, { clock: ANVIL_CLOCK })
 	expect(scan.indexComplete).toBeTrue()
-	expect(scan.carryProofJournalComplete).toBeTrue()
+	expect(scan.carryProofsComplete).toBeTrue()
 	context.state.evaluations = scan.evaluations
 	context.state.inventory = scan.inventory
 	context.state.lastScannedBlock = scan.anchor.blockNumber
@@ -146,9 +146,9 @@ async function canonicalPlans(context: ReturnType<typeof runtimeContext>) {
 }
 
 async function canonicalRescan(context: ReturnType<typeof runtimeContext>, previous?: Awaited<ReturnType<typeof performCanonicalScan>>) {
-	const scan = await performCanonicalScan(context.environment.settings, context.pool, context.account.address, SCAN_SEED, previous?.index, previous?.carryProofJournal, false, previous?.topologyCache, { clock: ANVIL_CLOCK })
+	const scan = await performCanonicalScan(context.environment.settings, context.pool, context.account.address, SCAN_SEED, previous?.index, previous?.topologyCache, { clock: ANVIL_CLOCK })
 	expect(scan.indexComplete).toBeTrue()
-	expect(scan.carryProofJournalComplete).toBeTrue()
+	expect(scan.carryProofsComplete).toBeTrue()
 	context.state.evaluations = scan.evaluations
 	context.state.inventory = scan.inventory
 	context.state.lastScannedBlock = scan.anchor.blockNumber
@@ -220,26 +220,25 @@ describe('real ecosystem workflows through the production chaos runtime', () => 
 		}
 	})
 
-	test('continues canonical discovery on pruned RPC history while withholding execution and carry proofs', async () => {
+	test('continues execution and storage carry discovery on pruned RPC history', async () => {
 		const current = requiredFixture()
 		await current.restoreBaseline()
 		const proxy = current.createRpcProxy({ prunedLogStartBlock: 1n })
 		const stateFile = await temporaryStateFile()
 		try {
 			const context = runtimeContext(settingsFor(current, proxy, stateFile.path))
-			const scan = await performCanonicalScan(context.environment.settings, context.pool, context.account.address, SCAN_SEED, undefined, undefined, false, undefined, { clock: ANVIL_CLOCK })
+			const scan = await performCanonicalScan(context.environment.settings, context.pool, context.account.address, SCAN_SEED, undefined, undefined, { clock: ANVIL_CLOCK })
 			expect(scan.index?.availableStartBlock).toBe('1')
 			expect(scan.index?.cursor.blockNumber).toBe(scan.anchor.blockNumber.toString())
 			expect(scan.indexComplete).toBe(false)
-			expect(scan.carryProofJournalComplete).toBe(false)
+			expect(scan.carryProofsComplete).toBe(true)
 			expect(scan.canonicalLifecyclePresenceComplete).toBe(false)
-			expect(scan.carryProofJournal.scanStarted).toBe(false)
 			expect(scan.snapshot.warnings.join(' ')).toContain('unavailable for blocks 0 through 0')
-			expect(scan.evaluations.every(evaluation => !evaluation.eligibility.eligible && evaluation.plan === undefined)).toBe(true)
-			const resumed = await performCanonicalScan(context.environment.settings, context.pool, context.account.address, SCAN_SEED, scan.index, scan.carryProofJournal, false, scan.topologyCache, { clock: ANVIL_CLOCK })
+			expect(scan.executionReady).toBe(true)
+			const resumed = await performCanonicalScan(context.environment.settings, context.pool, context.account.address, SCAN_SEED, scan.index, scan.topologyCache, { clock: ANVIL_CLOCK })
 			expect(resumed.index?.availableStartBlock).toBe('1')
 			expect(resumed.indexComplete).toBe(false)
-			expect(resumed.carryProofJournal).toEqual(scan.carryProofJournal)
+			expect(resumed.carryProofsComplete).toBe(true)
 			expect(proxy.rawTransactions).toEqual([])
 		} finally {
 			proxy.dispose()

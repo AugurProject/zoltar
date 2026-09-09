@@ -258,8 +258,6 @@ function carryCandidate(snapshot: EcosystemSnapshot) {
 		},
 		resultingCarryRoot: hash(80),
 		resultingNullifierRoot: hash(81),
-		resultingUnresolvedTotalAttoRep: 0n.toString(),
-		snapshotId: hash(82),
 		sourceGame: address(83),
 		sourceNodeId: '9',
 		sourcePool: address(84),

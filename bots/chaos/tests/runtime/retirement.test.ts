@@ -148,6 +148,58 @@ describe('Drain & Retire state', () => {
 })
 
 describe('Drain & Retire planning', () => {
+	test('sweeps known assets with missing history but retains other blockers', () => {
+		const snapshot = emptySnapshot()
+		snapshot.wallet.ethBalanceAttoEth = '20'
+		snapshot.warnings = ['Protocol log history is unavailable for blocks 0 through 9; known claims only.']
+		const state = initialDurableState(snapshot.chainId)
+		const parameters = { blockHash: hash(100), blockNumber: 100n, canonicalScanComplete: false, executionReady: true, evaluations: [], retirement: request(), snapshot, state, v3: [], sweepLimits: { maximumEthAttoEth: 100n, maximumGasCostAttoEth: 4n, maximumRepAttoRep: 100n, minimumEthReserveAttoEth: 3n } }
+		const sweep = assessRetirement(parameters)
+		expect(sweep.action).toMatchObject({ kind: 'existing-plan', plan: { definitionId: 'retirement.sweep.native-last', metadata: { amount: '13' } } })
+		expect(assessRetirement({ ...parameters, executionReady: false }).action).toBeUndefined()
+		snapshot.warnings.push('Known position could not be verified')
+		expect(assessRetirement(parameters).action).toBeUndefined()
+	})
+
+	test('the retirement runner executes known recovery with a caught-up partial scan', async () => {
+		const snapshot = emptySnapshot()
+		snapshot.wallet.openOracleEthCredit = '9'
+		const state = initialRuntimeState(false, snapshot.wallet.address, snapshot.chainId)
+		request(state.retirement)
+		const settings = parseSettings(example)
+		settings.runtime.execute = true
+		let executed = false
+		await processRetirementCycle({
+			execute: async () => {
+				executed = true
+			},
+			persist: async () => {},
+			prepareExecution: async () => {},
+			scan: { anchor: { baseFeePerGas: 1n, blockHash: hash(100), blockNumber: 100n, timestamp: 1n }, executionReady: true, canonicalLifecyclePresenceComplete: false, carryProofsComplete: false, indexComplete: false, snapshot },
+			settings,
+			state,
+			v3: [],
+		})
+		expect(executed).toBeTrue()
+		expect(state.retirement.status).toBe('draining')
+	})
+
+	test('recovers known credits and reports only known completion with incomplete history', () => {
+		const snapshot = emptySnapshot()
+		snapshot.wallet.openOracleEthCredit = '9'
+		const state = initialDurableState(snapshot.chainId)
+		const retirement = request()
+		const parameters = { blockHash: hash(100), blockNumber: 100n, canonicalScanComplete: false, evaluations: [], retirement, snapshot, state, v3: [], executionReady: true }
+		const recover = assessRetirement(parameters)
+		expect(recover.action?.kind).toBe('existing-plan')
+		expect(recover.status).toBe('draining')
+		snapshot.wallet.openOracleEthCredit = '0'
+		const recovered = assessRetirement(parameters)
+		expect(recovered.status).toBe('known-claims-recovered')
+		applyRetirementAssessment(retirement, recovered, hash(100), 100n, completionBinding)
+		expect(retirement.completionEvidence).toBeUndefined()
+	})
+
 	test('fails closed before planning a self or zero-address sweep', () => {
 		const snapshot = emptySnapshot()
 		snapshot.wallet.ethBalanceAttoEth = '100'
@@ -173,7 +225,7 @@ describe('Drain & Retire planning', () => {
 				execute: async () => undefined,
 				persist: async () => undefined,
 				prepareExecution: async () => undefined,
-				scan: { anchor: { baseFeePerGas: 1n, blockHash: hash(1), blockNumber: 1n, timestamp: 1n }, canonicalLifecyclePresenceComplete: true, carryProofJournalComplete: true, indexComplete: true, snapshot },
+				scan: { anchor: { baseFeePerGas: 1n, blockHash: hash(1), blockNumber: 1n, timestamp: 1n }, executionReady: true, canonicalLifecyclePresenceComplete: true, carryProofsComplete: true, indexComplete: true, snapshot },
 				settings: parseSettings(example),
 				state,
 				v3: [],
@@ -199,7 +251,7 @@ describe('Drain & Retire planning', () => {
 			prepareExecution: async () => {
 				throw new Error('Paused retirement must not prepare execution')
 			},
-			scan: { anchor: { baseFeePerGas: 1n, blockHash: hash(1), blockNumber: 1n, timestamp: 1n }, canonicalLifecyclePresenceComplete: true, carryProofJournalComplete: true, indexComplete: true, snapshot },
+			scan: { anchor: { baseFeePerGas: 1n, blockHash: hash(1), blockNumber: 1n, timestamp: 1n }, executionReady: true, canonicalLifecyclePresenceComplete: true, carryProofsComplete: true, indexComplete: true, snapshot },
 			settings: parseSettings(example),
 			state,
 			v3: [],
@@ -445,7 +497,7 @@ describe('Drain & Retire planning', () => {
 			},
 			persist: async () => {},
 			prepareExecution: async () => {},
-			scan: { anchor: { baseFeePerGas: 1n, blockHash: hash(1), blockNumber: 1n, timestamp: 1n }, canonicalLifecyclePresenceComplete: false, carryProofJournalComplete: true, indexComplete: true, snapshot },
+			scan: { anchor: { baseFeePerGas: 1n, blockHash: hash(1), blockNumber: 1n, timestamp: 1n }, executionReady: false, canonicalLifecyclePresenceComplete: false, carryProofsComplete: true, indexComplete: true, snapshot },
 			settings,
 			state,
 			v3: [],

@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { CONFIGURATION_REVISION_CONFLICT, PRESERVE_PRIVATE_KEY, assertSettingsProfileIsolation, loadSettings, parseSettings, saveSettings, serializedSettings, settingsProfilePath, settingsProfilePathForNetwork, switchSettingsNetworkProfile, type SettingsFilesystem } from '../../src/config/settings.ts'
 import { publicChaosConfiguration } from '../../src/dashboard/dashboard-server.ts'
-import { carryProofDeploymentProfileId } from '../../src/monitoring/carry-proof-scan.ts'
+import { executionProfileId } from '../../src/config/execution-profile.ts'
 import { chaosChain } from '../../src/runtime/canonical-scan.ts'
 
 const directories: string[] = []
@@ -123,12 +123,12 @@ describe('chaos-bot settings', () => {
 		const profilePath = settingsProfilePathForNetwork('/tmp/operator.json', settings.network)
 		expect(profilePath).toBe('/tmp/operator.json.custom-chain-4242424242.profile')
 		expect(profilePath).not.toContain(settings.network.name)
-		expect(carryProofDeploymentProfileId(roundTripped)).toBe(carryProofDeploymentProfileId(settings))
+		expect(executionProfileId(roundTripped)).toBe(executionProfileId(settings))
 		const differentChain = parseSettings({
 			...serialized,
 			network: { ...serialized.network, chainId: 4_242_424_243 },
 		})
-		expect(carryProofDeploymentProfileId(differentChain)).not.toBe(carryProofDeploymentProfileId(settings))
+		expect(executionProfileId(differentChain)).not.toBe(executionProfileId(settings))
 		expect(settingsProfilePathForNetwork('/tmp/operator.json', differentChain.network)).toBe('/tmp/operator.json.custom-chain-4242424243.profile')
 
 		const directory = await temporaryDirectory()

@@ -1,3 +1,4 @@
+import { carryStorageAbi } from '../../src/contracts/carry-storage-abi.ts'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
@@ -30,6 +31,8 @@ const {
 } = contractAbis
 
 const curatedAbiBindings = [
+	{ abi: carryStorageAbi.filter(entry => entry.name !== 'rootClaimSourceGame'), artifactSource: 'contracts/statoblast/EscalationGame.sol', contract: 'EscalationGame', catalogSurface: false },
+	{ abi: carryStorageAbi.filter(entry => entry.name === 'rootClaimSourceGame'), artifactSource: 'contracts/statoblast/EscalationGameClaimDelegate.sol', contract: 'EscalationGameClaimDelegate', catalogSurface: false },
 	{ abi: questionDataAbi, artifactSource: 'contracts/ZoltarQuestionData.sol', contract: 'ZoltarQuestionData' },
 	{ abi: zoltarAbi, artifactSource: 'contracts/Zoltar.sol', contract: 'Zoltar' },
 	{ abi: erc20Abi, artifactSource: 'contracts/GenesisReputationToken.sol', contract: 'GenesisReputationToken' },
@@ -396,7 +399,7 @@ describe('contract operation classification', () => {
 	test('matches every curated function and event shape to its generated artifact', () => {
 		const contracts = loadArtifactContracts()
 		const boundAbis = new Set<readonly unknown[]>(curatedAbiBindings.map(binding => binding.abi))
-		expect(boundAbis.size).toBe(Object.keys(contractAbis).length)
+		expect(boundAbis.size).toBe(curatedAbiBindings.length)
 		for (const [name, abi] of Object.entries(contractAbis)) {
 			expect(Array.isArray(abi), `${name} ABI export`).toBeTrue()
 			if (Array.isArray(abi)) expect(boundAbis.has(abi), `${name} artifact binding`).toBeTrue()

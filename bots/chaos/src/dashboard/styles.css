@@ -32,6 +32,10 @@ body {
 	color: var(--operator-text);
 }
 
+#retirement-summary {
+	overflow-wrap: anywhere;
+}
+
 .warning-text {
 	color: var(--operator-warning);
 }

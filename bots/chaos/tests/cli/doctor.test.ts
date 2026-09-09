@@ -18,8 +18,7 @@ import {
 	type ChaosDoctorProbeResult,
 } from '../../src/cli/doctor.ts'
 import { MINIMUM_WORKFLOW_VALIDITY_BLOCKS, parseSettings } from '../../src/config/settings.ts'
-import { carryProofJournalSidecarPath } from '../../src/monitoring/carry-proof-journal.ts'
-import { carryProofDeploymentProfileId } from '../../src/monitoring/carry-proof-scan.ts'
+import { executionProfileId } from '../../src/config/execution-profile.ts'
 import { immutableTopologySidecarDirectory } from '../../src/monitoring/topology-cache.ts'
 import { preflightTransactionSubmissionNetwork } from '../../src/runtime/submission-preflight.ts'
 import { initialDurableState, loadDurableState, serializedDurableState } from '../../src/state/operator-state.ts'
@@ -61,10 +60,10 @@ function passiveDoctorDependencies(settings: Awaited<ReturnType<typeof settingsF
 		acquireLocks: async () => ({ release: async () => undefined }),
 		assertProfileIsolation: async () => undefined,
 		load: async () => ({ path: '/private/operator.json', revision: 'sha256:test', settings }),
-		loadState: async (_path, chainId) => initialDurableState(chainId, true, carryProofDeploymentProfileId(settings)),
+		loadState: async (_path, chainId) => initialDurableState(chainId, true, executionProfileId(settings)),
 		preflightSubmission: async () => [],
 		probe: async () => probeResult,
-		validateCompanionState: async () => ({ carryProofJournal: 'absent', immutableTopology: 'absent' }),
+		validateCompanionState: async () => ({ immutableTopology: 'absent' }),
 		verifyStateParent: async () => undefined,
 		...overrides,
 	}
@@ -353,10 +352,10 @@ describe('chaos launch doctor', () => {
 		wrongProfile.activities.push({ at: new Date(0).toISOString(), message: 'existing history', status: 'info', type: 'configuration' })
 		expect(() => assertDoctorDurableStateScope(settings, wrongProfile, wallet, '/state.json')).toThrow('belongs to deployment profile')
 
-		const wrongSigner = initialDurableState(settings.network.chainId, true, carryProofDeploymentProfileId(settings), privateKeyToAccount(`0x${'55'.repeat(32)}`).address)
+		const wrongSigner = initialDurableState(settings.network.chainId, true, executionProfileId(settings), privateKeyToAccount(`0x${'55'.repeat(32)}`).address)
 		expect(() => assertDoctorDurableStateScope(settings, wrongSigner, wallet, '/state.json')).toThrow('scoped to signer')
 
-		const wrongIndex = initialDurableState(settings.network.chainId, true, carryProofDeploymentProfileId(settings), wallet)
+		const wrongIndex = initialDurableState(settings.network.chainId, true, executionProfileId(settings), wallet)
 		wrongIndex.protocolIndex = {
 			auctionBids: {},
 			auctionRefunds: {},
@@ -421,7 +420,7 @@ describe('chaos launch doctor', () => {
 		await chmod(directory, 0o700)
 		const stateFile = join(directory, 'state.json')
 		const settings = { ...baseline, runtime: { ...baseline.runtime, stateFile } }
-		const state = initialDurableState(settings.network.chainId, true, carryProofDeploymentProfileId(settings))
+		const state = initialDurableState(settings.network.chainId, true, executionProfileId(settings))
 		const missingReference = { kind: 'protocol-index-sidecar' as const, manifestDigest: `0x${'aa'.repeat(32)}` as const, schemaVersion: 1 as const }
 		await writeFile(stateFile, `${JSON.stringify(serializedDurableState(state, missingReference))}\n`, { mode: 0o600 })
 		let locksReleased = false
@@ -465,7 +464,7 @@ describe('chaos launch doctor', () => {
 		expect(probed).toBe(false)
 	})
 
-	test('authenticates existing carry-journal and topology companions before probing the network', async () => {
+	test('ignores obsolete carry journals and authenticates topology before probing the network', async () => {
 		const baseline = await settingsFixture('operator.configured-placeholder.json')
 		for (const companion of ['carry', 'topology'] as const) {
 			const directory = await mkdtemp(join(tmpdir(), `zoltar-chaos-doctor-${companion}-`))
@@ -474,7 +473,7 @@ describe('chaos launch doctor', () => {
 			const stateFile = join(directory, 'state.json')
 			const settings = { ...baseline, runtime: { ...baseline.runtime, stateFile } }
 			if (companion === 'carry') {
-				await writeFile(carryProofJournalSidecarPath(stateFile), '{', { mode: 0o600 })
+				await writeFile(`${stateFile}.carry-proof-journal.json`, '{', { mode: 0o600 })
 			} else {
 				const store = immutableTopologySidecarDirectory(stateFile)
 				await mkdir(store, { mode: 0o700 })
@@ -489,8 +488,13 @@ describe('chaos launch doctor', () => {
 				validateCompanionState: validateDoctorCompanionState,
 			})
 
-			await expect(runChaosDoctor(dependencies)).rejects.toThrow('not valid JSON')
-			expect(probed).toBe(false)
+			if (companion === 'carry') {
+				await runChaosDoctor(dependencies)
+				expect(probed).toBe(true)
+			} else {
+				await expect(runChaosDoctor(dependencies)).rejects.toThrow('not valid JSON')
+				expect(probed).toBe(false)
+			}
 		}
 	})
 

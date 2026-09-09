@@ -14,7 +14,7 @@ import { liveInventoryReadinessBlockers } from './live-readiness.ts'
 import { workflowNeedsContinuation } from './workflows.ts'
 import { assertOperationPrincipalCaps } from '../execution/safety.ts'
 
-export type ManualScan = Pick<Awaited<ReturnType<typeof performCanonicalScan>>, 'snapshot' | 'anchor' | 'indexComplete' | 'carryProofJournalComplete' | 'canonicalLifecyclePresenceComplete' | 'inventory'>
+export type ManualScan = Pick<Awaited<ReturnType<typeof performCanonicalScan>>, 'snapshot' | 'executionReady' | 'anchor' | 'indexComplete' | 'carryProofsComplete' | 'canonicalLifecyclePresenceComplete' | 'inventory'>
 
 type Options = {
 	configuration: ConfigurationState
@@ -103,8 +103,7 @@ export function createManualOperationController(options: Options) {
 		} catch (error) {
 			failure(error instanceof Error ? error.message : 'Invalid operation inputs')
 		}
-		const evaluate = () =>
-			applyExecutionPolicy(evaluateOperationCatalog(scan.snapshot, resolved, id), settings, scan.indexComplete && scan.carryProofJournalComplete && scan.canonicalLifecyclePresenceComplete, scan.anchor.blockNumber.toString(), scan.anchor.blockNumber.toString(), BigInt(scan.snapshot.wallet.ethBalanceAttoEth))
+		const evaluate = () => applyExecutionPolicy(evaluateOperationCatalog(scan.snapshot, resolved, id), settings, scan.executionReady, scan.anchor.blockNumber.toString(), scan.anchor.blockNumber.toString(), BigInt(scan.snapshot.wallet.ethBalanceAttoEth))
 		let evaluated
 		try {
 			evaluated = evaluate()
@@ -112,7 +111,7 @@ export function createManualOperationController(options: Options) {
 			failure(error instanceof Error ? error.message : 'Operation inputs are invalid')
 		}
 		const blockers = runtimeBlockers()
-		if (!scan.canonicalLifecyclePresenceComplete) blockers.push('Wait for complete canonical discovery')
+		if (!scan.executionReady) blockers.push('Wait for canonical discovery and available logs to catch up')
 		const definition = CHAOS_OPERATION_CATALOG.find(item => item.id === id)
 		if (definition?.classification === 'selectable' && settings.runtime.execute) blockers.push(...liveInventoryReadinessBlockers(scan.inventory, scan.snapshot.universes, settings.strategy))
 		const obstructions = lifecycleObstructions(options.state)

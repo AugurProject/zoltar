@@ -13,13 +13,11 @@ const allowances = (reason: string, entries: readonly (readonly [path: string, m
  */
 export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	...allowances('Existing Chaos modules remain temporary responsibility debt; their reviewed ceilings prohibit further growth.', [
-		['bots/chaos/src/monitoring/carry-proof-journal.ts', 3668],
 		['bots/chaos/src/operations/statoblast.ts', 2616],
 		['bots/chaos/src/dashboard/dashboard.ts', 2380],
 		['bots/chaos/src/monitoring/discovery.ts', 1859],
 		['bots/chaos/src/operations/trading.ts', 1769],
 		['bots/chaos/src/contracts/abi.ts', 1668],
-		['bots/chaos/src/monitoring/carry-proof-index.ts', 1596],
 		['bots/chaos/src/state/operator-state.ts', 1352],
 		['bots/chaos/src/execution/transaction-executor.ts', 1315],
 		['bots/chaos/src/runtime/operator.ts', 1107],
@@ -28,11 +26,9 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['bots/chaos/src/state/protocol-index-store.ts', 1030],
 		['bots/chaos/src/operations/open-oracle.ts', 1028],
 		['bots/chaos/src/runtime/dashboard-controller.ts', 923],
-		['bots/chaos/src/monitoring/carry-proof-scan.ts', 859],
 		['bots/chaos/src/execution/recovery.ts', 798],
 		['bots/chaos/src/monitoring/protocol-index.ts', 716],
 		['bots/chaos/src/config/settings.ts', 685],
-		['bots/chaos/src/runtime/canonical-scan.ts', 651],
 		['bots/chaos/src/operations/zoltar.ts', 619],
 	]),
 	...allowances('Existing bot dashboard/runtime debt is outside this lane.', [

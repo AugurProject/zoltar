@@ -2468,7 +2468,6 @@ function carriedDepositEvidence(candidate: NonNullable<EcosystemSnapshot['forked
 		carryField('reason', 0),
 		carryField('outcome', candidate.outcome),
 		carryField('attoRepAmount', candidate.amountAttoRep),
-		carryField('resultingUnresolvedTotalAttoRep', candidate.resultingUnresolvedTotalAttoRep),
 		carryField('resultingNullifierRoot', candidate.resultingNullifierRoot),
 		carryField('resultingCarryRoot', candidate.resultingCarryRoot),
 		claimField('transferredRep', true),
@@ -2560,7 +2559,7 @@ const withdrawForkedCarry: OperationDefinition = {
 	classification: 'lifecycle-obligation',
 	contract: 'SecurityPool',
 	description: 'Withdraws one canonically replayed, anchor-verified inherited escalation deposit per private next-block transaction.',
-	discoveryInputs: ['durable carry journal', 'historical MMR proof', 'sparse nullifier proof', 'anchored source/child graph and direct-claim state'],
+	discoveryInputs: ['anchored contract storage', 'snapshot MMR proof', 'sparse nullifier proof', 'anchored source/child graph and direct-claim state'],
 	ecosystem: 'statoblast',
 	evaluate(snapshot, options) {
 		const verified = snapshot.forkedCarryWithdrawals ?? []

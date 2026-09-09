@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData, encodeAbiParameters } from '@zoltar/bot-shared/ethereum'
 import { coordinatorAbi, erc1155Abi, erc20Abi, escalationGameAbi } from '../../src/contracts/abi.ts'
 import { validateStepReceiptEvidence } from '../../src/execution/receipt-validation.ts'
-import { CARRY_PROOF_SCAN_MAXIMUM_WITHDRAWAL_CANDIDATES } from '../../src/monitoring/carry-proof-scan.ts'
+import { CARRY_STORAGE_MAXIMUM_WITHDRAWALS } from '../../src/monitoring/carry-proof-storage.ts'
 import { canonicalLifecyclePresence, CHAOS_OPERATION_CATALOG, eligibleOperationPlans, evaluateOperationCatalog, reevaluateOperationContinuation, urgentOperationPlans } from '../../src/operations/catalog.ts'
 import { validForkOutcomeRoutes } from '../../src/operations/fork-outcomes.ts'
 import type { OperationEvidence, OperationPlan } from '../../src/operations/types.ts'
@@ -671,8 +671,6 @@ describe('chaos operation catalog', () => {
 			},
 			resultingCarryRoot: hash(80),
 			resultingNullifierRoot: hash(81),
-			resultingUnresolvedTotalAttoRep: 90n.toString(),
-			snapshotId: hash(82),
 			sourceGame: address(83),
 			sourceNodeId: '9',
 			sourcePool: address(84),
@@ -687,10 +685,11 @@ describe('chaos operation catalog', () => {
 		expect(invalid?.steps[0]?.data.startsWith('0xcd8e4401')).toBeTrue()
 		expect(invalid?.steps[0]?.preflightCalls).toHaveLength(1)
 		expect(invalid?.steps[0]?.evidence).toContainEqual(expect.objectContaining({ equals: 0, field: 'reason', indexed: { depositor: snapshot.wallet.address, parentDepositIndex: '7', sourceNodeId: '9' } }))
-		expect(invalid?.steps[0]?.evidence).toContainEqual(expect.objectContaining({ equals: '90', field: 'resultingUnresolvedTotalAttoRep' }))
 		expect(invalid?.steps[0]?.evidence).toContainEqual(expect.objectContaining({ equals: true, field: 'transferredRep', indexed: { depositor: snapshot.wallet.address, outcome: '0', parentDepositIndex: '7' } }))
 		expect(invalid?.steps[0]?.evidence).toContainEqual(expect.objectContaining({ equals: '12', field: 'amountToWithdrawAttoRep' }))
 		expect(invalid?.steps[0]?.evidence).toContainEqual(expect.objectContaining({ equals: '3', field: 'burnAmountAttoRep' }))
+		expect(invalid?.steps[0]?.evidence).toContainEqual(expect.objectContaining({ equals: hash(80), field: 'resultingCarryRoot' }))
+		expect(invalid?.steps[0]?.evidence).toContainEqual(expect.objectContaining({ equals: hash(81), field: 'resultingNullifierRoot' }))
 		const presence = canonicalLifecyclePresence(snapshot, { ...permissiveOptions, maxEthSpendAttoEth: 0n.toString(), maxRepSpendAttoRep: 0n.toString() }).filter(entry => entry.definitionId === 'statoblast.escalation.withdraw-forked')
 		expect(presence.map(entry => entry.metadata['parentDepositIndex'])).toEqual(['7', '8'])
 	})
@@ -727,14 +726,12 @@ describe('chaos operation catalog', () => {
 			},
 			resultingCarryRoot: hash(80),
 			resultingNullifierRoot: hash(81),
-			resultingUnresolvedTotalAttoRep: 0n.toString(),
-			snapshotId: hash(82),
 			sourceGame: address(83),
 			sourceNodeId: '0',
 			sourcePool: address(84),
 		}
-		const identityCount = CARRY_PROOF_SCAN_MAXIMUM_WITHDRAWAL_CANDIDATES + 8
-		snapshot.forkedCarryWithdrawals = Array.from({ length: CARRY_PROOF_SCAN_MAXIMUM_WITHDRAWAL_CANDIDATES }, (_, index) => ({
+		const identityCount = CARRY_STORAGE_MAXIMUM_WITHDRAWALS + 8
+		snapshot.forkedCarryWithdrawals = Array.from({ length: CARRY_STORAGE_MAXIMUM_WITHDRAWALS }, (_, index) => ({
 			...candidate,
 			parentDepositIndex: index.toString(),
 			proof: { ...candidate.proof, parentDepositIndex: index.toString(), sourceNodeId: index.toString() },
@@ -753,7 +750,7 @@ describe('chaos operation catalog', () => {
 		const plans = urgentOperationPlans(snapshot, permissiveOptions).filter(plan => plan.definitionId === 'statoblast.escalation.withdraw-forked')
 		const presence = canonicalLifecyclePresence(snapshot, permissiveOptions).filter(entry => entry.definitionId === 'statoblast.escalation.withdraw-forked')
 
-		expect(plans).toHaveLength(CARRY_PROOF_SCAN_MAXIMUM_WITHDRAWAL_CANDIDATES)
+		expect(plans).toHaveLength(CARRY_STORAGE_MAXIMUM_WITHDRAWALS)
 		expect(presence).toHaveLength(identityCount)
 		expect(presence.at(-1)).toMatchObject({ blocksNovelty: true, metadata: { parentDepositIndex: (identityCount - 1).toString(), sourceNodeId: (identityCount - 1).toString() } })
 		expect(plans.some(plan => plan.metadata['parentDepositIndex'] === (identityCount - 1).toString())).toBeFalse()

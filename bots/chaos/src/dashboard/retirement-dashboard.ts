@@ -146,8 +146,10 @@ function createRetirementDashboard(options: RetirementDashboardOptions) {
 			else if (status === 'blocked') tone = 'error'
 			else if (status === 'inactive') tone = 'neutral'
 			statusElement.className = `badge ${tone}`
-			statusElement.textContent = status.replaceAll('-', ' ')
-			summary.textContent = status === 'inactive' ? 'No retirement has been requested.' : `${retirement?.positions.length.toString() ?? '0'} V3 position records; ${retirement?.blockers.length.toString() ?? '0'} blockers; recipient ${retirement?.recipient ?? 'not recorded'}.`
+			statusElement.textContent = status === 'known-claims-recovered' ? 'All known claims recovered' : status.replaceAll('-', ' ')
+			if (status === 'known-claims-recovered') summary.textContent = 'Earlier history remains unverified; additional claims may exist.'
+			else if (status === 'inactive') summary.textContent = 'No retirement has been requested.'
+			else summary.textContent = `${retirement?.positions.length.toString() ?? '0'} V3 position records; ${retirement?.blockers.length.toString() ?? '0'} blockers; recipient ${retirement?.recipient ?? 'not recorded'}.`
 			recipient.disabled = status !== 'inactive'
 			cancel.disabled = status === 'inactive' || retirement?.finalSweepStartedAt !== undefined || status === 'drained' || status === 'drained-with-residuals'
 			residualSubmit.disabled = status !== 'drained-with-residuals'

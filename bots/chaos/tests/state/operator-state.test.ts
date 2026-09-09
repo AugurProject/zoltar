@@ -323,7 +323,12 @@ describe('chaos-bot durable state', () => {
 		expect(restored.lifecyclePresenceBlocker).toEqual(state.lifecyclePresenceBlocker)
 		expect(restored.obligationTombstones).toEqual(state.obligationTombstones)
 
+		state.lifecyclePresenceBlocker = { ...state.lifecyclePresenceBlocker, historyStartBlock: '42', requiresCarryHistory: true, presenceComplete: false }
+		await saveDurableState(path, state)
+		expect((await loadDurableState(path, 1)).lifecyclePresenceBlocker).toEqual(state.lifecyclePresenceBlocker)
 		const validBlocker = state.lifecyclePresenceBlocker
+		state.lifecyclePresenceBlocker = { ...validBlocker, historyStartBlock: '89' }
+		await expect(saveDurableState(path, state)).rejects.toThrow('after its observation')
 		state.lifecyclePresenceBlocker = { ...validBlocker, count: MAXIMUM_LIFECYCLE_PRESENCE_BLOCKER_COUNT + 1 }
 		await expect(saveDurableState(path, state)).rejects.toThrow('identity safety limit')
 		expect((await loadDurableState(path, 1)).lifecyclePresenceBlocker).toEqual(validBlocker)

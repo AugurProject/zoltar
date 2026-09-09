@@ -1,6 +1,6 @@
 import { getAddress, keccak256, zeroAddress, type Address, type Hash, type Hex } from '@zoltar/bot-shared/ethereum'
 
-type RetirementStatus = 'inactive' | 'requested' | 'draining' | 'waiting' | 'blocked' | 'drained' | 'drained-with-residuals'
+type RetirementStatus = 'inactive' | 'requested' | 'draining' | 'waiting' | 'blocked' | 'known-claims-recovered' | 'drained' | 'drained-with-residuals'
 
 export type RetirementPolicies = {
 	exitAfterCompletion: boolean
@@ -250,7 +250,7 @@ export function parseRetirementState(value: unknown, signerAddress: Address | un
 	const retirement = record(value, 'retirement')
 	exactKeys(retirement, ['blockers', 'policies', 'positions', 'recoveredBalances', 'status'], ['cancelledAt', 'completionEvidence', 'finalSweepStartedAt', 'lastObservedBalances', 'profileReplacementOverride', 'recipient', 'requestedAt', 'updatedAt'], 'retirement')
 	const status = retirement['status']
-	if (!['inactive', 'requested', 'draining', 'waiting', 'blocked', 'drained', 'drained-with-residuals'].includes(String(status))) throw new Error('retirement.status is invalid')
+	if (!['inactive', 'requested', 'draining', 'waiting', 'blocked', 'known-claims-recovered', 'drained', 'drained-with-residuals'].includes(String(status))) throw new Error('retirement.status is invalid')
 	if (!Array.isArray(retirement['blockers']) || !Array.isArray(retirement['positions'])) throw new Error('retirement blockers and positions must be arrays')
 	const positions = retirement['positions'].map(parsePosition)
 	if (new Set(positions.map(position => position.id)).size !== positions.length) throw new Error('retirement.positions contains duplicate IDs')
