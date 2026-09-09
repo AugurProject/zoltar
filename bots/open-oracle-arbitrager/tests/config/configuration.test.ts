@@ -34,6 +34,7 @@ async function temporaryDirectory() {
 function settings(rpcUrl: string, uiPort: number, privateKey?: Hex): PersistedOperatorSettings {
 	const address = '0x0000000000000000000000000000000000000001'
 	return {
+		approvedUniverses: [],
 		centralizedMarkets: {
 			assetAddress: address,
 			assetChainId: 1,

@@ -171,7 +171,10 @@ and forked pool counts, pool selection, and whether a bot vault can migrate into
 that universe.
 
 The canonical Zoltar contract identifies the universe registry, and
-`approvedUniverses` is the operator's explicit truth policy. A root universe or
+`approvedUniverses` is the operator's explicit truth policy, shared with the
+arbitrager. Both example configurations start with no approvals. Select the
+root or truthful child in the universe UI; approvals are saved per network
+profile and REP addresses come from the canonical universe registry. A root universe or
 fork-created child remains inert until it is approved. For a given forked parent
 universe, the bot rejects configuration that approves more than one direct child
 outcome. This prevents an ambiguous vault route. Universe approval does not
@@ -309,11 +312,16 @@ Example source entries (only use venues where these exact markets exist):
 ]
 ```
 
-Set `assetAddress`, `assetChainId`, and `assetSymbol: "REP"` to the exact REP
-deployment before adding sources. Put root REP in `centralizedMarkets` and child
-REP configurations in `childMarketConfigurations`. The bot rejects another token
-base, chain, or address, and CEX exchange IDs cannot be reused as DEX
-failure-domain IDs.
+Put root REP sources in `centralizedMarkets` with `assetSymbol: "REP"`. The root
+asset address and chain come from `docs/mainnet-deployment-addresses.json` or
+`docs/sepolia-deployment-addresses.json`; saved settings omit those two fields
+and cannot override them. WETH and protocol deployment addresses also come from
+the selected manifest.
+
+Put child REP configurations in `childMarketConfigurations`, including each
+child's exact `assetAddress`, `assetChainId`, and `assetSymbol: "REP"`. Child assets
+remain separately configurable and must match the selected chain and discovered
+universe REP. CEX exchange IDs cannot be reused as DEX failure-domain IDs.
 
 Example DEX source entries (addresses are intentionally placeholders):
 

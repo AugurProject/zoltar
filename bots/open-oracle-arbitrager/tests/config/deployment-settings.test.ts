@@ -1,3 +1,7 @@
+import mainnet from '../../../../docs/mainnet-deployment-addresses.json'
+import sepolia from '../../../../docs/sepolia-deployment-addresses.json'
+import { canonicalCoreDeployment } from '@zoltar/bot-shared/config/canonical-deployment'
+import example from '../../config/operator.example.json'
 import { expect, test } from 'bun:test'
 import { assertFocusedDeploymentCompatible, prepareDeploymentTokenTransition, replacePrimaryRepToken, validateDeploymentSettings } from '#config/deployment-settings'
 import type { Address } from '@zoltar/bot-shared/ethereum'
@@ -48,3 +52,28 @@ test('rejects a focused REP update that leaves centralized-market identity stale
 	expect(() => assertFocusedDeploymentCompatible(address('2'), { assetAddress: currentAsset })).toThrow('centralized market configuration')
 	expect(() => assertFocusedDeploymentCompatible(currentAsset, { assetAddress: currentAsset })).not.toThrow()
 })
+
+for (const [network, manifest] of [
+	['mainnet', mainnet],
+	['sepolia', sepolia],
+] as const) {
+	test(`always uses the ${network} CREATE2 manifest for OpenOracle`, () => {
+		const expected = canonicalCoreDeployment(manifest).openOracle
+		for (const openOracle of [undefined, address('0'), address('1'), 'invalid']) {
+			expect(validateDeploymentSettings({ ...example.deployment, openOracle }, network).openOracle).toBe(expected)
+		}
+		expect(validateDeploymentSettings(example.deployment, network).openOracle).toBe(expected)
+	})
+}
+
+for (const network of ['mainnet', 'sepolia'] as const) {
+	test(`derives ${network} REP and WETH even when old settings supply other addresses`, () => {
+		const manifest = network === 'mainnet' ? mainnet : sepolia
+		const deployment = example.deployment
+		for (const supplied of [deployment, { ...deployment, rep: address('0'), weth: address('1') }]) {
+			const parsed = validateDeploymentSettings(supplied, network)
+			expect(parsed.rep.toLowerCase()).toBe(manifest.network.genesisRepTokenAddress.toLowerCase())
+			expect(parsed.weth.toLowerCase()).toBe(manifest.network.wethAddress.toLowerCase())
+		}
+	})
+}

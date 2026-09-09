@@ -1,3 +1,4 @@
+import { canonicalRootMarketIdentity } from '#config/canonical-deployment'
 import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, readRpcChainId, validateConnectivitySettings, validateIndependentReadRpcUrls } from '@zoltar/bot-shared/monitoring/connectivity'
 import { configuredQuorumRpcUrlMinimum } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 import type { OperatorSettings } from '#config/settings'
@@ -35,7 +36,7 @@ export async function updateNetworkConnectivity(parameters: { apply: (settings: 
 	await (checks.checkSubmissionEndpoints ?? checkSubmissionEndpoints)(settings.submission, network.chainId)
 	const next = await parameters.persist(current => ({
 		...current,
-		centralizedMarkets: { ...current.centralizedMarkets, assetChainId: network.chainId },
+		centralizedMarkets: { ...current.centralizedMarkets, ...canonicalRootMarketIdentity(network.chainId) },
 		childMarketConfigurations: current.childMarketConfigurations.map(configuration => ({ ...configuration, assetChainId: network.chainId })),
 		connectivity: { ...connectivity, quorumRpcUrls, rpcQuorum: rawRpcQuorum },
 		network,

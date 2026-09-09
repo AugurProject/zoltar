@@ -97,6 +97,7 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 			twapSeconds: currentStrategy.twapSeconds,
 		},
 		submission,
+		approvedUniverses: [],
 		tokenAddresses: [],
 	})
 	const snapshot = () => {

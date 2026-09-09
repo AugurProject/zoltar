@@ -297,7 +297,7 @@ describe('liquidator dashboard server', () => {
 		expect(pageSource).toContain('id="recovery-list"')
 		expect(pageSource).toContain('id="resume-dialog"')
 		expect(pageSource).toContain('class="section-nav"')
-		expect(pageSource).toContain('Universe truth policy')
+		expect(pageSource).toContain('Approved universes')
 		expect(pageSource).not.toContain('public CCXT sources')
 		expect(pageSource).toContain('id="metrics" class="metric-grid operator-metrics"')
 		expect(pageSource).not.toContain('id="metrics" class="metric-grid" aria-live')

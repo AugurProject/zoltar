@@ -57,8 +57,6 @@ export function runnableOperatorSettings(settingsFile: string, saved: PersistedO
 	const network = networkConfiguration(saved.network, {
 		factory: deployment.uniswapFactory,
 		quoter: deployment.uniswapQuoter,
-		rep: deployment.rep,
-		weth: deployment.weth,
 	})
 	const quorumRpcUrls = [...validateIndependentReadRpcUrls(saved.connectivity.readRpcUrl, deployment.quorumRpcUrls)]
 	if (saved.runtime.execute && quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(saved.rpcQuorum)) throw new Error('Execution is enabled, but live operation requires at least two independent quorum RPCs (three read endpoints total)')

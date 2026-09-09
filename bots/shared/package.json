@@ -15,6 +15,7 @@
 		"./execution/canonical-finality": "./src/execution/canonical-finality.ts",
 		"./execution/process-lock": "./src/execution/process-lock.ts",
 		"./execution/transaction-submission": "./src/execution/transaction-submission.ts",
+		"./monitoring/universe-policy": "./src/monitoring/universe-policy.ts",
 		"./monitoring/block-sync": "./src/monitoring/block-sync.ts",
 		"./monitoring/connectivity": "./src/monitoring/connectivity.ts",
 		"./monitoring/centralized-markets": "./src/monitoring/centralized-markets.ts",
