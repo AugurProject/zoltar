@@ -27,6 +27,12 @@ afterEach(async () => {
 })
 
 describe('Augur REP discovery helpers', () => {
+	test('discovery and raw token configuration never approve execution', () => {
+		const catalog = tokenCatalogForScan(['0x0000000000000000000000000000000000000001'], ['0x0000000000000000000000000000000000000002'], [])
+		expect(catalog.executionTokens).toEqual([])
+		expect(catalog.monitoringTokens).toHaveLength(2)
+	})
+
 	test('derives one complete payout vector per outcome', () => {
 		expect(childPayouts(1_000n, 3n)).toEqual([
 			[1_000n, 0n, 0n],
@@ -51,12 +57,12 @@ describe('Augur REP discovery helpers', () => {
 			return Promise.resolve(discoveryCalls.length === 1 ? [rep, ...discoveryConfigured, ...discoveryObserved] : [rep, forkRep, ...discoveryConfigured, ...discoveryObserved])
 		})
 
-		expect(await catalogForScan([configured], [observed])).toEqual({
+		expect(await catalogForScan([configured], [observed], [rep, configured])).toEqual({
 			executionTokens: [rep, configured],
 			monitoringTokens: [rep, configured, observed],
 		})
-		expect(await catalogForScan([], [configured, observed])).toEqual({
-			executionTokens: [rep, forkRep],
+		expect(await catalogForScan([], [configured, observed], [rep])).toEqual({
+			executionTokens: [rep],
 			monitoringTokens: [rep, forkRep, configured, observed],
 		})
 		expect(discoveryCalls).toEqual([
@@ -68,7 +74,7 @@ describe('Augur REP discovery helpers', () => {
 	test('prioritizes every execution token and caps permissionless observed monitoring work', () => {
 		const execution = Array.from({ length: 3 }, (_, index) => `0x${(index + 1).toString(16).padStart(40, '0')}` as Address)
 		const observed = Array.from({ length: MAX_OBSERVED_MONITORING_TOKENS + 500 }, (_, index) => `0x${(index + 100).toString(16).padStart(40, '0')}` as Address)
-		const catalog = tokenCatalogForScan(execution.slice(0, 1), execution.slice(1), observed)
+		const catalog = tokenCatalogForScan([], [], observed, execution)
 		expect(catalog.executionTokens).toEqual(execution)
 		expect(catalog.monitoringTokens.slice(0, execution.length)).toEqual(execution)
 		expect(catalog.monitoringTokens).toHaveLength(execution.length + MAX_OBSERVED_MONITORING_TOKENS)

@@ -115,39 +115,6 @@ export const securityPoolFactoryAbi = [
 	},
 ] as const
 
-const universeComponents = [
-	{ name: 'forkTime', type: 'uint256' },
-	{ name: 'forkQuestionId', type: 'uint256' },
-	{ name: 'forkingOutcomeIndex', type: 'uint256' },
-	{ name: 'reputationToken', type: 'address' },
-	{ name: 'parentUniverseId', type: 'uint248' },
-] as const
-
-export const zoltarAbi = [
-	{
-		inputs: [{ name: 'universeId', type: 'uint248' }],
-		name: 'universes',
-		outputs: universeComponents,
-		stateMutability: 'view',
-		type: 'function',
-	},
-	{
-		inputs: [
-			{ name: 'universeId', type: 'uint248' },
-			{ name: 'startIndex', type: 'uint256' },
-			{ name: 'count', type: 'uint256' },
-		],
-		name: 'getDeployedChildUniverses',
-		outputs: [
-			{ name: 'outcomeIndexes', type: 'uint256[]' },
-			{ name: 'childUniverseIds', type: 'uint248[]' },
-			{ components: universeComponents, name: 'childUniverses', type: 'tuple[]' },
-		],
-		stateMutability: 'view',
-		type: 'function',
-	},
-] as const
-
 export const vaultAccountingCheckpointEvent = {
 	inputs: [
 		{ indexed: true, name: 'vault', type: 'address' },

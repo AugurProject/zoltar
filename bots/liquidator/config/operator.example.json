@@ -1,11 +1,9 @@
 {
 	"version": 1,
-	"approvedUniverses": ["0"],
+	"approvedUniverses": [],
 	"childMarketConfigurations": [],
 	"desiredPools": [],
 	"centralizedMarkets": {
-		"assetAddress": "0x0000000000000000000000000000000000000000",
-		"assetChainId": 11155111,
 		"assetSymbol": "REP",
 		"depthBps": 500,
 		"maximumDexDeviationBps": 1000,

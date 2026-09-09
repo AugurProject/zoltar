@@ -6,7 +6,7 @@ import { networkConfiguration } from '#config/network'
 import { loadTokenMarkets } from '#monitoring/market-monitor'
 import { poolsForToken } from '#monitoring/opportunity-evaluation'
 
-const network = networkConfiguration('sepolia', { rep: zeroAddress })
+const network = networkConfiguration('sepolia', {})
 const config = { network, v2Router: undefined, twapSeconds: 60 }
 
 function clientWithFactory(code: '0x' | '0x01', poolResult = `0x${'0'.repeat(64)}`) {

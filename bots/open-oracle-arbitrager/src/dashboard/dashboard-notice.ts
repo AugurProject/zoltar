@@ -26,7 +26,7 @@ export function operatorNoticePresentation(snapshot: PublicOperatorSnapshot) {
 	if (availability !== undefined) {
 		noticeTitle = availability.title
 		noticeCopy = availability.detail
-		noticeTone = 'info'
+		noticeTone = 'warning'
 	}
 	if (snapshot.lastError !== undefined) {
 		const retry = pollRetryStatus(snapshot)

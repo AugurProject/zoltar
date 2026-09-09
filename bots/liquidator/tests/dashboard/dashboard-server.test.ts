@@ -297,13 +297,17 @@ describe('liquidator dashboard server', () => {
 		expect(pageSource).toContain('id="recovery-list"')
 		expect(pageSource).toContain('id="resume-dialog"')
 		expect(pageSource).toContain('class="section-nav"')
-		expect(pageSource).toContain('Universe truth policy')
+		expect(pageSource).toContain('Approved universes')
 		expect(pageSource).not.toContain('public CCXT sources')
 		expect(pageSource).toContain('id="metrics" class="metric-grid operator-metrics"')
 		expect(pageSource).not.toContain('id="metrics" class="metric-grid" aria-live')
 		const sharedStyles = await fetch(new URL('/operator-console.css', server.url))
 		expect(sharedStyles.status).toBe(200)
 		expect(await sharedStyles.text()).toContain('.operator-shell')
+		const headerScript = await fetch(new URL('/header-notices.js', server.url))
+		expect(headerScript.status).toBe(200)
+		expect(headerScript.headers.get('content-type')).toContain('text/javascript')
+		expect(await headerScript.text()).toContain('MutationObserver')
 		const rejected = await fetch(new URL('/api/paused', server.url), {
 			body: JSON.stringify({ paused: true }),
 			headers: {

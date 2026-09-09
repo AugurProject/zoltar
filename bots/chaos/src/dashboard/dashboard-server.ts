@@ -1,3 +1,4 @@
+import { buildDashboardScript } from '../../../shared/src/dashboard/assets.js'
 import { operatorHeader } from './header.ts'
 import { record, safeString, stringField, booleanField, scalar, safeIntegerField, isoTimestampField, compact } from './public-fields.ts'
 import { join } from 'node:path'
@@ -946,6 +947,9 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 				if (url.pathname === '/dashboard.css') return new Response(Bun.file(join(directory, 'styles.css')), { headers: securityHeaders('text/css; charset=utf-8') })
 				if (url.pathname === '/operator-console.css') {
 					return new Response(Bun.file(join(directory, '..', '..', '..', 'shared', 'src', 'dashboard', 'operator-console.css')), { headers: securityHeaders('text/css; charset=utf-8') })
+				}
+				if (request.method === 'GET' && url.pathname === '/header-notices.js') {
+					return new Response(await buildDashboardScript(join(directory, '..', '..', '..', 'shared', 'src', 'dashboard', 'header-notices.ts')), { headers: securityHeaders('text/javascript; charset=utf-8') })
 				}
 				const script = await browserScript(url.pathname, directory, transpiler)
 				if (script !== undefined) return new Response(script, { headers: securityHeaders('text/javascript; charset=utf-8') })

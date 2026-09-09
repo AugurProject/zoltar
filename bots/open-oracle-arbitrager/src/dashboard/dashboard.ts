@@ -1,3 +1,8 @@
+import { createUniverseExplorer } from '../../../shared/src/dashboard/universe-explorer.js'
+let approvedUniverseIds = new Set<string>()
+let universeSavePending = false
+let universeExplorer: ReturnType<typeof createUniverseExplorer> | undefined
+
 import { operatorNoticePresentation } from './dashboard-notice.ts'
 import { setAttentionBadge } from '../../../shared/src/dashboard/components.js'
 import type { ConnectivitySettings } from '#monitoring/connectivity'
@@ -109,7 +114,7 @@ function setControlsEnabled(enabled: boolean) {
 		if (!(fieldset instanceof HTMLFieldSetElement)) throw new Error(`Missing ${id}`)
 		if (id === 'connectivity-fieldset') fieldset.disabled = connectivityControlsDisabled(configurationEnabled, connectivityRequestPending) || !connectivityLoaded
 		else if (id === 'deployment-fieldset' || id === 'create2-fieldset') fieldset.disabled = !focusedSettingsEnabled || !deploymentLoaded
-		else if (id === 'tokens-fieldset') fieldset.disabled = !focusedSettingsEnabled || !tokensLoaded
+		else if (id === 'tokens-fieldset') fieldset.disabled = !focusedSettingsEnabled || !tokensLoaded || universeSavePending
 		else fieldset.disabled = !focusedSettingsEnabled
 	}
 	element<HTMLSelectElement>('network-name').disabled = !enabled || pendingNetworkProfile !== undefined || persistedNetwork === undefined
@@ -214,10 +219,7 @@ function lines(id: string) {
 		.filter(Boolean)
 }
 
-function loadDeployment(deployment: DeploymentSettings) {
-	element<HTMLInputElement>('deployment-rep').value = deployment.rep
-	element<HTMLInputElement>('deployment-weth').value = deployment.weth
-	element<HTMLInputElement>('deployment-open-oracle').value = deployment.openOracle
+function loadDeployment(deployment: Omit<DeploymentSettings, 'openOracle' | 'rep' | 'weth'>) {
 	element<HTMLInputElement>('deployment-executor').value = deployment.executor ?? ''
 	element<HTMLInputElement>('deployment-v3-factory').value = deployment.uniswapFactory
 	element<HTMLInputElement>('deployment-v3-quoter').value = deployment.uniswapQuoter
@@ -600,9 +602,9 @@ function isSubmissionSettings(value: unknown): value is SubmissionSettings {
 	return (mode === 'private' || mode === 'public') && typeof Reflect.get(value, 'minimumBundleRelaySuccesses') === 'number' && isStringArray(Reflect.get(value, 'relayUrls'))
 }
 
-function isDeploymentSettings(value: unknown): value is DeploymentSettings {
+function isDeploymentSettings(value: unknown): value is Omit<DeploymentSettings, 'openOracle' | 'rep' | 'weth'> {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
-	for (const key of ['openOracle', 'rep', 'uniswapFactory', 'uniswapQuoter', 'weth']) {
+	for (const key of ['uniswapFactory', 'uniswapQuoter']) {
 		if (typeof Reflect.get(value, key) !== 'string') return false
 	}
 	for (const key of ['executor', 'uniswapRouter', 'uniswapV2Router', 'uniswapV4PoolManager', 'uniswapV4Quoter']) {
@@ -617,8 +619,8 @@ function synchronizeFocusedConfiguration(configuration: unknown) {
 	const strategy = Reflect.get(configuration, 'strategy')
 	const submission = Reflect.get(configuration, 'submission')
 	const deployment = Reflect.get(configuration, 'deployment')
-	const tokenAddresses = Reflect.get(configuration, 'tokenAddresses')
-	if (!isStrategySettings(strategy) || !isSubmissionSettings(submission) || !isDeploymentSettings(deployment) || !isStringArray(tokenAddresses)) throw new Error('Bot returned an invalid configuration document')
+	const approvedUniverses = Reflect.get(configuration, 'approvedUniverses')
+	if (!isStrategySettings(strategy) || !isSubmissionSettings(submission) || !isDeploymentSettings(deployment) || !isStringArray(approvedUniverses)) throw new Error('Bot returned an invalid configuration document')
 	loadSettings(strategy)
 	settingsLoaded = true
 	loadSubmission(submission)
@@ -626,7 +628,7 @@ function synchronizeFocusedConfiguration(configuration: unknown) {
 	synchronizePersistedConnectivity(configuration)
 	loadDeployment(deployment)
 	deploymentLoaded = true
-	element<HTMLTextAreaElement>('token-addresses').value = tokenAddresses.join('\n')
+	approvedUniverseIds = new Set(approvedUniverses)
 	tokensLoaded = true
 }
 
@@ -698,7 +700,15 @@ function renderOperations(operations: readonly PublicOperationEntry[]) {
 }
 
 function renderTokenMarkets(snapshot: PublicOperatorSnapshot) {
-	setText('tracked-token-addresses', snapshot.tokenAddresses.length === 0 ? 'None observed' : snapshot.tokenAddresses.join(' · '))
+	universeExplorer ??= createUniverseExplorer(element('approved-universes'), {
+		onChange: next => {
+			approvedUniverseIds = next
+			setText('tokens-status', 'Selection updated. Save universe approvals to apply.')
+		},
+		savedMessage: '',
+	})
+	universeExplorer.update({ universes: snapshot.universes ?? [], approved: approvedUniverseIds, network: snapshot.network, disabled: element<HTMLFieldSetElement>('tokens-fieldset').disabled })
+
 	const body = element<HTMLTableSectionElement>('token-markets-body')
 	body.replaceChildren()
 	const executableTokens = new Set(snapshot.tokenAddresses.map(address => address.toLowerCase()))
@@ -1052,17 +1062,14 @@ function render(snapshot: PublicOperatorSnapshot) {
 	setText('risk-daily-gas', `${exactAmount(snapshot.risk.usage.dailyGasSpentWeth, 'ETH')} / ${exactAmount(snapshot.risk.limits.maxDailyGasSpendWeth, 'ETH')}`)
 	setText('risk-position-limit', exactAmount(snapshot.risk.limits.maxPositionNotionalWeth, 'WETH'))
 	setText('risk-lifecycle-reserve', exactAmount(snapshot.risk.limits.lifecycleGasReserveWeth, 'ETH'))
-	setText('oracle-address', `Oracle ${snapshot.openOracle}`)
-	setText('executor-address', snapshot.executor === undefined ? 'Executor not configured' : `Executor ${snapshot.executor}`)
 	setText('network-value', snapshot.networkConfigured ? `Active: ${snapshot.network} · chain ${snapshot.expectedChainId.toString()}` : 'Network not configured')
 	updateNetworkTargetStatus()
-	setText('chain-safety', snapshot.networkConfigured ? '' : 'Set the chain and RPC endpoints in RPC connectivity before scanning.')
 	renderSignerStatus(snapshot)
 	const launchNotice = element('launch-notice')
 	if (!snapshot.networkConfigured) {
 		launchNotice.hidden = false
 		setText('launch-notice-title', 'Network setup required')
-		setText('launch-notice-copy', 'Choose the chain and verified RPC endpoints below. They apply to the next scan; the bot remains paused until you resume it.')
+		setText('launch-notice-copy', 'Choose the chain and verified RPC endpoints in Settings. They apply to the next scan; the bot remains paused until you resume it.')
 		launchNotice.dataset['tone'] = 'warning'
 	} else if (snapshot.network === 'mainnet') {
 		launchNotice.hidden = true
@@ -1264,19 +1271,27 @@ element<HTMLSelectElement>('price-token').addEventListener('change', () => {
 })
 element('tokens-form').addEventListener('submit', async event => {
 	event.preventDefault()
-	const addresses = element<HTMLTextAreaElement>('token-addresses')
-		.value.split('\n')
-		.map(value => value.trim())
-		.filter(Boolean)
+	const requestEpoch = profileRequestEpoch
+	universeSavePending = true
+	setControlsEnabled(connected)
+	const button = element<HTMLFormElement>('tokens-form').querySelector<HTMLButtonElement>('button[type="submit"]')
+	if (button === null) throw new Error('Universe approval submit button is missing')
+	button.disabled = true
+	setText('tokens-status', 'Saving universe approvals…')
 	try {
-		await api('/api/tokens', {
-			body: JSON.stringify(addresses),
+		await api('/api/approved-universes', {
+			body: JSON.stringify([...approvedUniverseIds]),
 			headers: { 'content-type': 'application/json' },
 			method: 'PUT',
 		})
-		setText('tokens-status', 'Token list checked and saved. Discovery refreshes on the next block.')
+		if (requestEpoch !== profileRequestEpoch) return
+		setText('tokens-status', 'Universe approvals saved. They apply before the next execution scan.')
 	} catch (error) {
-		setText('tokens-status', error instanceof Error ? error.message : String(error))
+		if (requestEpoch === profileRequestEpoch) setText('tokens-status', error instanceof Error ? error.message : String(error))
+	} finally {
+		universeSavePending = false
+		button.disabled = !connected
+		setControlsEnabled(connected)
 	}
 })
 
@@ -1574,16 +1589,13 @@ element<HTMLFormElement>('deployment-form').addEventListener('submit', async eve
 			coordinatorAddresses: lines('deployment-coordinators'),
 			deploymentManifest: manifestText === '' ? undefined : JSON.parse(manifestText),
 			executor: optionalInput('deployment-executor'),
-			openOracle: element<HTMLInputElement>('deployment-open-oracle').value.trim(),
 			quorumRpcUrls: lines('deployment-quorum-rpcs'),
-			rep: element<HTMLInputElement>('deployment-rep').value.trim(),
 			uniswapFactory: element<HTMLInputElement>('deployment-v3-factory').value.trim(),
 			uniswapQuoter: element<HTMLInputElement>('deployment-v3-quoter').value.trim(),
 			uniswapRouter: optionalInput('deployment-v3-router'),
 			uniswapV2Router: optionalInput('deployment-v2-router'),
 			uniswapV4PoolManager: optionalInput('deployment-v4-pool-manager'),
 			uniswapV4Quoter: optionalInput('deployment-v4-quoter'),
-			weth: element<HTMLInputElement>('deployment-weth').value.trim(),
 		}
 		const response = await api<{ deployment: DeploymentSettings }>('/api/deployment', {
 			body: JSON.stringify(deployment),

@@ -71,7 +71,6 @@ export function requiredDeploymentIdentities(config: Configuration) {
 		{ address: config.network.factory, role: 'uniswap-factory' },
 		{ address: config.network.quoter, role: 'uniswap-quoter' },
 		...config.coordinatorAddresses.map(address => ({ address, role: 'coordinator' as const })),
-		...config.tokenAddresses.map(address => ({ address, role: 'token' as const })),
 	]
 	if (config.executor !== undefined) identities.push({ address: config.executor, role: 'executor' })
 	if (config.router !== undefined) identities.push({ address: config.router, role: 'uniswap-router' })

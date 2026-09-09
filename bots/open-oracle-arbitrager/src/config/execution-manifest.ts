@@ -2,7 +2,7 @@
 
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
-import { createPublicClient, getAddress, http, zeroAddress, type Address } from '@zoltar/bot-shared/ethereum'
+import { createPublicClient, getAddress, http, type Address } from '@zoltar/bot-shared/ethereum'
 import { createDeploymentManifest, parseDeploymentManifest, parseDeploymentRole, verifyDeploymentManifest } from '#config/deployment-auth'
 import { defaultRpcUrl, networkConfiguration, parseNetworkName } from '#config/network'
 
@@ -64,7 +64,7 @@ if (command !== 'generate' && command !== 'verify') {
 
 if (command === 'generate') {
 	const networkName = parseNetworkName(option('network'))
-	const network = networkConfiguration(networkName, { rep: networkName === 'sepolia' ? zeroAddress : undefined })
+	const network = networkConfiguration(networkName, {})
 	const rpcUrl = option('rpc-url') ?? process.env['ETH_RPC_URL'] ?? defaultRpcUrl(networkName)
 	const output = option('output')
 	if (output === undefined) throw new Error('generate requires --output=PATH')
@@ -79,7 +79,7 @@ if (command === 'generate') {
 	const manifestPath = option('manifest')
 	if (manifestPath === undefined) throw new Error('verify requires --manifest=PATH')
 	const manifest = await readManifest(manifestPath)
-	const network = networkConfiguration(manifest.network, { rep: manifest.network === 'sepolia' ? zeroAddress : undefined })
+	const network = networkConfiguration(manifest.network, {})
 	const rpcUrl = option('rpc-url') ?? process.env['ETH_RPC_URL'] ?? defaultRpcUrl(manifest.network)
 	const client = createPublicClient({ chain: network.chain, transport: http(rpcUrl) })
 	const chainId = await client.getChainId()

@@ -91,7 +91,7 @@ export function applyQueuedExecutionSettings(config: Configuration, state: Opera
 	}
 	if (pending.tokenAddresses !== undefined) {
 		config.tokenAddresses = pending.tokenAddresses
-		state.tokenAddresses = pending.tokenAddresses
+		state.tokenAddresses = []
 		pending.tokenAddresses = undefined
 		pending.persistedTokenAddresses = undefined
 	}
