@@ -468,9 +468,7 @@ function $(selector: '#event-filter' | '#address-filter' | '#entity-search'): HT
 function $(selector: '#global-network-filter' | '#operations-route-select' | '#rich-sort'): HTMLSelectElement
 function $(selector: '#filters'): HTMLFormElement
 function $(selector: '#address-back' | '.skip-link'): HTMLAnchorElement
-function $(
-	selector: '#refresh-stale' | '#detail-canonical-retry' | '#more' | '#clear-filters' | '#close-detail' | '#richlist-more' | '#filters button[type="submit"]',
-): HTMLButtonElement
+function $(selector: '#more' | '#clear-filters' | '#close-detail' | '#richlist-more' | '#filters button[type="submit"]'): HTMLButtonElement
 function $(selector: string): HTMLElement
 function $(selector: string): HTMLElement {
 	const found = document.querySelector<HTMLElement>(selector)
@@ -590,6 +588,8 @@ let logsAbortController: AbortController | undefined
 let serverClockOffsetMs = 0
 let networkFreshnessThresholdMs = 48_000
 let lastNetworkRequestFailed = false
+let awaitingResumedNetworkStatus = false
+let networkResumeGeneration = 0
 let activeReorgRecovery: CanonicalRecovery | undefined
 let canonicalRefreshRequired = false
 let canonicalDataGeneration = 0
@@ -642,23 +642,18 @@ const systemDetailRefreshGate = createForegroundRefreshGate()
 const detailRefreshGate = createForegroundRefreshGate()
 const accountPageRefreshGate = createForegroundRefreshGate()
 const canonicalIncompleteTitle = 'Chain update refresh incomplete'
-const canonicalIncompleteDetail = 'Showing the prior details. Retry the chain update refresh to confirm the current state.'
+const canonicalIncompleteDetail = 'Showing the prior details. Retrying automatically.'
 
 const showCanonicalDialogStatus = (title: string, detail: string) => {
 	if (dialog.open) {
 		$('#detail-canonical-title').textContent = title
 		$('#detail-canonical-detail').textContent = detail
-		$('#detail-canonical-retry').hidden = activeReorgRecovery !== undefined || !canonicalRefreshRequired
 		$('#detail-canonical-status').hidden = false
 	}
 	for (const drawerStatus of document.querySelectorAll<HTMLElement>('.event-detail-canonical-status')) {
 		const message = element('div')
 		message.append(element('strong', '', title), element('span', '', detail))
-		const retry = element('button', 'secondary compact', 'Retry now')
-		retry.type = 'button'
-		retry.hidden = activeReorgRecovery !== undefined || !canonicalRefreshRequired
-		retry.addEventListener('click', () => retryCanonicalRefresh(retry))
-		drawerStatus.replaceChildren(message, retry)
+		drawerStatus.replaceChildren(message)
 		drawerStatus.hidden = false
 	}
 }
@@ -2901,6 +2896,7 @@ const renderNetworks = (networks: NetworkRecord[]) => {
 		}, 0)
 	}
 	if (
+		!awaitingResumedNetworkStatus &&
 		previouslySelectedNetwork !== undefined &&
 		selectedNetwork !== undefined &&
 		selectedHeadFreshness !== undefined &&
@@ -2932,9 +2928,13 @@ const renderNetworks = (networks: NetworkRecord[]) => {
 			failures: network.consecutive_failures,
 		})
 		card.dataset.phase = network.phase
-		card.dataset.headFreshness = headFreshness.stale ? 'stale' : 'current'
+		card.dataset.headFreshness = awaitingResumedNetworkStatus ? 'refreshing' : headFreshness.stale ? 'stale' : 'current'
 		const title = element('div', 'network-title')
-		const badge = element('span', 'badge', headFreshness.stale ? 'stale head' : network.phase)
+		const badge = element(
+			'span',
+			'badge',
+			awaitingResumedNetworkStatus ? (lastNetworkRequestFailed ? 'status unavailable' : 'refreshing') : headFreshness.stale ? 'stale head' : network.phase,
+		)
 		title.append(badge)
 		const block = element(
 			network.indexed_block && network.explorer_base_url ? 'a' : 'p',
@@ -2969,7 +2969,7 @@ const renderNetworks = (networks: NetworkRecord[]) => {
 				: `${progress.percentage}% complete · ${progress.eta}`
 		title.prepend(block)
 		card.append(title, meta)
-		if (displaySyncDetails) card.append(element('p', 'network-progress', progressLabel))
+		if (displaySyncDetails && !awaitingResumedNetworkStatus) card.append(element('p', 'network-progress', progressLabel))
 		if (Number(network.consecutive_failures) > 0) {
 			const retry = network.next_retry_at ? `next retry ${until(network.next_retry_at)}` : 'retry scheduled'
 			card.append(element('p', 'network-retry', `${number(network.consecutive_failures)} consecutive failures · ${retry}`))
@@ -2992,24 +2992,29 @@ const renderNetworks = (networks: NetworkRecord[]) => {
 			)
 		}
 	}
-	networkCards.setAttribute('aria-busy', 'false')
+	networkCards.setAttribute('aria-busy', String(awaitingResumedNetworkStatus && !lastNetworkRequestFailed))
 	updateConnectionStatus()
 }
 
 const updateFreshness = () => {
 	if (activeReorgRecovery !== undefined) return
-	const retryCanonical = $('#refresh-stale')
+	delete $('#freshness-banner').dataset.status
 	if (canonicalRefreshRequired) {
 		const banner = $('#freshness-banner')
 		banner.hidden = false
-		retryCanonical.hidden = false
 		$('#freshness-title').textContent = 'Chain update refresh incomplete'
-		$('#freshness-detail').textContent = 'A chain update was recorded, but the content refresh failed. Retry before debugging current state.'
+		$('#freshness-detail').textContent = 'A chain update was recorded, but the content refresh failed. Retrying automatically.'
+		return
+	}
+	if (awaitingResumedNetworkStatus) {
+		$('#freshness-banner').dataset.status = lastNetworkRequestFailed ? 'failed' : 'refreshing'
+		$('#freshness-banner').hidden = false
+		$('#freshness-title').textContent = lastNetworkRequestFailed ? 'Unable to refresh status' : 'Refreshing status…'
+		$('#freshness-detail').textContent = lastNetworkRequestFailed ? 'Retrying automatically.' : ''
 		return
 	}
 	if (lastNetworkRequestFailed) {
 		$('#freshness-banner').hidden = true
-		retryCanonical.hidden = true
 		return
 	}
 	const staleHead = latestNetworks
@@ -3018,7 +3023,6 @@ const updateFreshness = () => {
 	if (staleHead !== undefined) {
 		const banner = $('#freshness-banner')
 		banner.hidden = false
-		retryCanonical.hidden = true
 		$('#freshness-title').textContent = 'RPC chain head is stale'
 		$('#freshness-detail').textContent = `Newest observed block is ${age(staleHead.indexed_timestamp)}; block-based catch-up status may be misleading.`
 		return
@@ -3029,7 +3033,6 @@ const updateFreshness = () => {
 			(network) => !network.last_success_at || Date.now() + serverClockOffsetMs - new Date(network.last_success_at).getTime() > networkFreshnessThresholdMs,
 		)
 	const banner = $('#freshness-banner')
-	retryCanonical.hidden = true
 	if (stale.length === 0) {
 		banner.hidden = true
 		return
@@ -4722,6 +4725,12 @@ const loadNetworks = async ({ synchronizeActivity = true, refreshAfterCurrent = 
 		if (refreshAfterCurrent) networkFollowUpPromise = followUp
 		return await followUp
 	}
+	const resumeGeneration = networkResumeGeneration
+	if (awaitingResumedNetworkStatus) {
+		lastNetworkRequestFailed = false
+		renderNetworks(latestNetworks)
+		updateFreshness()
+	}
 	const canonicalGeneration = canonicalDataGeneration
 	const run = (async () => {
 		try {
@@ -4734,8 +4743,9 @@ const loadNetworks = async ({ synchronizeActivity = true, refreshAfterCurrent = 
 			const previousNetwork = selectedChainId()
 			reconcileNetworkOptions(items)
 			if (previousNetwork !== selectedChainId()) resetSelectedNetworkContext()
-			renderNetworks(items)
+			if (resumeGeneration === networkResumeGeneration) awaitingResumedNetworkStatus = false
 			lastNetworkRequestFailed = false
+			renderNetworks(items)
 			updateFreshness()
 			updateConnectionStatus()
 			if (isActivity && synchronizeActivity && previousNetwork !== selectedChainId()) {
@@ -4751,6 +4761,7 @@ const loadNetworks = async ({ synchronizeActivity = true, refreshAfterCurrent = 
 			if (!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)) return false
 			console.error(`Network status refresh failed (${error instanceof Error ? error.name : typeof error})`)
 			lastNetworkRequestFailed = true
+			if (awaitingResumedNetworkStatus) renderNetworks(latestNetworks)
 			updateConnectionStatus()
 			networkCards.setAttribute('aria-busy', 'false')
 			if (networkCards.childElementCount === 0) networkCards.classList.add('empty')
@@ -8091,33 +8102,6 @@ $('#address-filter').addEventListener('input', () => validateAddressFilter())
 $('#filters').addEventListener('input', () => {
 	$('#clear-filters').disabled = !hasActivityFilters()
 })
-const retryCanonicalRefresh = async (button: HTMLButtonElement) => {
-	if (button.disabled) return
-	button.disabled = true
-	button.setAttribute('aria-busy', 'true')
-	button.textContent = 'Retrying…'
-	try {
-		if (canonicalRefreshRequired) {
-			const refreshed = await requestRouteRefresh(1, true)
-			if (refreshed) completeCanonicalRefresh()
-			else updateFreshness()
-		} else {
-			await loadNetworks({ refreshAfterCurrent: true })
-			if (isSystem) await loadSystemState()
-			else if (isOperations) await loadOperations()
-			else if (isContracts) await loadContracts()
-			else if (isRichList) await loadRichList()
-			else if (isAddress) await loadAddressProfile()
-			else await loadLogs()
-		}
-	} finally {
-		button.disabled = false
-		button.removeAttribute('aria-busy')
-		button.textContent = 'Retry now'
-	}
-}
-$('#refresh-stale').addEventListener('click', () => retryCanonicalRefresh($('#refresh-stale')))
-$('#detail-canonical-retry').addEventListener('click', () => retryCanonicalRefresh($('#detail-canonical-retry')))
 $('#more').addEventListener('click', () => loadLogs({ append: true }))
 $('#close-detail').addEventListener('click', () => closeDetail())
 dialog.addEventListener('click', (event) => {
@@ -8636,10 +8620,22 @@ addEventListener('pagehide', () => {
 	headFreshnessTimer = undefined
 	pendingBlockUpdates = 0
 })
+const refreshResumedPage = (force = false): Promise<boolean> => {
+	awaitingResumedNetworkStatus = true
+	networkResumeGeneration++
+	lastNetworkRequestFailed = false
+	renderNetworks(latestNetworks)
+	updateFreshness()
+	return refreshRouteAlongsideNetworkStatus(
+		() => loadNetworks({ refreshAfterCurrent: true }),
+		() => requestRouteRefresh(1, force),
+	)
+}
+
 addEventListener('pageshow', async (event: PageTransitionEvent) => {
 	if (!event.persisted) return
 	connectStream()
-	await requestRouteRefresh(1, true)
+	await refreshResumedPage(true)
 })
 
 setInterval(() => {
@@ -8648,11 +8644,10 @@ setInterval(() => {
 }, 1000)
 setInterval(() => {
 	if (document.hidden) return
-	if (isDemo) loadNetworks()
-	else void refreshRouteAlongsideNetworkStatus(loadNetworks, () => requestRouteRefresh(1))
+	void refreshRouteAlongsideNetworkStatus(loadNetworks, () => requestRouteRefresh(1))
 }, 12_000)
 document.addEventListener('visibilitychange', () => {
-	if (!document.hidden) void requestRouteRefresh(1)
+	if (!document.hidden) void refreshResumedPage()
 })
 
 $('#event-filter').value = initialActivityFilters.event
