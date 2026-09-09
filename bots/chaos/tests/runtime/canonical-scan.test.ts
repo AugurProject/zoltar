@@ -1,3 +1,4 @@
+import { snapshotWithProtocolIndex } from '../../src/runtime/protocol-index-snapshot.ts'
 import { describe, expect, test } from 'bun:test'
 import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -6,20 +7,7 @@ import { getAddress, zeroHash } from '@zoltar/bot-shared/ethereum'
 import { parseSettings, serializedSettings } from '../../src/config/settings.ts'
 import { CANONICAL_MUTATING_CONTRACT_MANIFEST, MUTATING_CONTRACT_SURFACE } from '../../src/contracts/surface.ts'
 import { canonicalLifecyclePresence } from '../../src/operations/catalog.ts'
-import {
-	applyExecutionPolicy,
-	blockExecutableEvaluations,
-	chaosReadClients,
-	completeOperationCoverage,
-	createChaosReadPool,
-	discoveryCoverageIsComplete,
-	loadTopologyCacheForScan,
-	planningOptions,
-	sharedCanonicalBlockNumber,
-	snapshotWithProtocolIndex,
-	unavailableOperationCatalog,
-	walletInventory,
-} from '../../src/runtime/canonical-scan.ts'
+import { applyExecutionPolicy, blockExecutableEvaluations, chaosReadClients, completeOperationCoverage, createChaosReadPool, discoveryCoverageIsComplete, loadTopologyCacheForScan, planningOptions, sharedCanonicalBlockNumber, unavailableOperationCatalog, walletInventory } from '../../src/runtime/canonical-scan.ts'
 import type { ChaosEcosystem, EcosystemSnapshot, EvaluatedOperation } from '../../src/operations/types.ts'
 import type { ChaosProtocolIndex } from '../../src/monitoring/protocol-index.ts'
 import { deriveChildUniverseId } from '../../src/monitoring/protocol-index.ts'

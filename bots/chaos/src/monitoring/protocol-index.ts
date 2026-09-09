@@ -1,5 +1,6 @@
 import { bigintToSafeNumber, encodeAbiParameters, getAddress, hexToBytes, keccak256, zeroAddress, zeroHash, type Address, type Chain, type Hash, type PublicClient, type Transport } from '@zoltar/bot-shared/ethereum'
 import { fetchLogsWithAdaptiveRanges } from '@zoltar/bot-shared/monitoring/block-sync'
+import { ChaosProtocolIndexReorgError, protocolLogPrefixAvailable, recoverPrunedProtocolLogs, requireCanonicalBlock, validatePreviousProtocolIndex } from './protocol-index-context.ts'
 import { openOracleAbi } from '../contracts/abi.ts'
 import type { CanonicalUintString } from '../core/units.ts'
 import { eventTopic } from '../operations/planning.ts'
@@ -31,6 +32,8 @@ export interface ChaosProtocolIndex {
 	securityPoolForker: Address
 	wallet: Address
 	startBlock: string
+	/** Earliest retained log coverage when the requested prefix is pruned. */
+	availableStartBlock?: string
 	cursor: ProtocolIndexCursor
 	reports: OracleGameSnapshot[]
 	auctionBids: Record<string, AuctionBidSnapshot[]>
@@ -54,6 +57,9 @@ export interface UpdateProtocolIndexContext {
 	auctionAddresses: readonly Address[]
 	escalationGames: readonly { pool: Address; escalationGame: Address }[]
 	startBlock: bigint
+	availableStartBlock?: bigint
+	/** Also establish availability for an older dependent carry-proof cursor. */
+	requiredLogStartBlock?: bigint
 	anchorBlockNumber: bigint
 	expectedAnchorHash?: Hash
 	maxBlockSpan?: bigint
@@ -80,16 +86,6 @@ export interface ProtocolIndexUpdate {
 	complete: boolean
 	fromBlock: string
 	toBlock: string
-}
-
-export class ChaosProtocolIndexReorgError extends Error {
-	readonly rescanFromBlock: bigint
-
-	constructor(message: string, rescanFromBlock: bigint) {
-		super(message)
-		this.name = 'ChaosProtocolIndexReorgError'
-		this.rescanFromBlock = rescanFromBlock
-	}
 }
 
 const REPORT_SUBMITTED = eventTopic('ReportSubmitted(uint256,bytes)')
@@ -345,25 +341,6 @@ export function decodePackedOracleReport(reportId: bigint, openOracle: Address, 
 	return snapshot
 }
 
-function validatePrevious(context: UpdateProtocolIndexContext, previous: ChaosProtocolIndex) {
-	if (previous.schemaVersion !== 3) throw new Error(`Unsupported protocol index schema ${previous.schemaVersion}`)
-	if (previous.chainId !== context.chainId) throw new Error('Protocol index chain does not match discovery chain')
-	if (previous.openOracle.toLowerCase() !== context.openOracle.toLowerCase()) throw new Error('Protocol index OpenOracle deployment changed')
-	if (previous.zoltar.toLowerCase() !== context.zoltar.toLowerCase()) throw new Error('Protocol index Zoltar deployment changed')
-	if (previous.securityPoolForker.toLowerCase() !== context.securityPoolForker.toLowerCase()) throw new Error('Protocol index SecurityPoolForker deployment changed')
-	if (previous.wallet.toLowerCase() !== context.wallet.toLowerCase()) throw new Error('Protocol index wallet changed')
-	if (previous.startBlock !== context.startBlock.toString()) throw new Error('Protocol index start block changed')
-}
-
-async function requireCanonicalBlock(client: IndexClient, blockNumber: bigint, expectedHash?: Hash) {
-	const block = await client.getBlock({ blockNumber })
-	if (block.number !== blockNumber || block.hash === null || block.hash === undefined) throw new Error(`RPC did not return canonical block ${blockNumber.toString()}`)
-	if (expectedHash !== undefined && block.hash.toLowerCase() !== expectedHash.toLowerCase()) {
-		throw new ChaosProtocolIndexReorgError(`Block ${blockNumber.toString()} changed from ${expectedHash} to ${block.hash}`, blockNumber)
-	}
-	return block.hash
-}
-
 function activeAuctionBids(source: Readonly<Record<string, readonly AuctionBidSnapshot[]>>) {
 	const copy: Record<string, AuctionBidSnapshot[]> = {}
 	for (const [address, bids] of Object.entries(source)) {
@@ -457,12 +434,20 @@ function indexedChildProgress(source: readonly ChildRepSplitProgressSnapshot[]) 
 }
 
 export async function updateProtocolIndex(context: UpdateProtocolIndexContext): Promise<ProtocolIndexUpdate> {
+	return await recoverPrunedProtocolLogs(context, scanProtocolIndex)
+}
+
+async function scanProtocolIndex(context: UpdateProtocolIndexContext): Promise<ProtocolIndexUpdate> {
 	if (context.anchorBlockNumber < context.startBlock) throw new Error('Protocol index anchor precedes its start block')
+	if (context.requiredLogStartBlock !== undefined && (context.requiredLogStartBlock < context.startBlock || context.requiredLogStartBlock > context.anchorBlockNumber)) throw new Error('Required protocol log start is outside its requested range')
 	const trustedReport = trustedOpenOracleReportPredicate(context)
 	const span = context.maxBlockSpan ?? 2_000n
 	if (span <= 0n) throw new Error('Protocol index maxBlockSpan must be positive')
 	const anchorHash = await requireCanonicalBlock(context.client, context.anchorBlockNumber, context.expectedAnchorHash)
-	let fromBlock = context.startBlock
+	const availableStartBlock = context.availableStartBlock ?? (context.previous?.availableStartBlock === undefined ? context.startBlock : BigInt(context.previous.availableStartBlock))
+	if (availableStartBlock < context.startBlock || availableStartBlock > context.anchorBlockNumber) throw new Error('Protocol index log coverage boundary is outside its requested range')
+	const partialHistory = availableStartBlock > context.startBlock
+	let fromBlock = availableStartBlock
 	const reports = new Map<string, OracleGameSnapshot>()
 	let auctionBids: Record<string, AuctionBidSnapshot[]> = {}
 	let auctionRefunds: Record<string, AuctionRefundSnapshot> = {}
@@ -470,10 +455,15 @@ export async function updateProtocolIndex(context: UpdateProtocolIndexContext): 
 	let migrationRepSplits = new Map<string, MigrationRepSplitProgressSnapshot>()
 	let childRepSplits = new Map<string, ChildRepSplitProgressSnapshot>()
 	if (context.previous !== undefined) {
-		validatePrevious(context, context.previous)
+		validatePreviousProtocolIndex(context, context.previous)
+		if ((context.previous.availableStartBlock ?? context.previous.startBlock) !== availableStartBlock.toString()) throw new Error('Protocol index log coverage changed without resetting the index')
 		const cursorNumber = BigInt(context.previous.cursor.blockNumber)
 		if (cursorNumber > context.anchorBlockNumber) throw new ChaosProtocolIndexReorgError('Persisted protocol index cursor is ahead of the requested anchor', context.startBlock)
 		await requireCanonicalBlock(context.client, cursorNumber, context.previous.cursor.blockHash)
+		if (await protocolLogPrefixAvailable(context)) {
+			const { previous: _previous, ...fresh } = context
+			return await scanProtocolIndex(fresh)
+		}
 		fromBlock = cursorNumber + 1n
 		for (const report of context.previous.reports) {
 			if (!trustedReport(report)) continue
@@ -486,11 +476,14 @@ export async function updateProtocolIndex(context: UpdateProtocolIndexContext): 
 		migrationRepSplits = indexedMigrationProgress(context.previous.migrationRepSplits)
 		childRepSplits = indexedChildProgress(context.previous.childRepSplits)
 	}
+	if (!partialHistory && context.requiredLogStartBlock !== undefined && context.requiredLogStartBlock < fromBlock) {
+		await fetchProtocolLogs(context.client, { address: context.securityPoolForker, fromBlock: context.requiredLogStartBlock, toBlock: context.requiredLogStartBlock })
+	}
 	if (fromBlock > context.anchorBlockNumber) {
 		if (context.previous === undefined) throw new Error('Protocol index has no previous state at the requested anchor')
 		requireTrustedReportBounds(context, reports, trustedReport)
 		return {
-			complete: true,
+			complete: !partialHistory,
 			fromBlock: fromBlock.toString(),
 			index: {
 				...context.previous,
@@ -543,7 +536,7 @@ export async function updateProtocolIndex(context: UpdateProtocolIndexContext): 
 			const routeKey = migrationProgressKey(universeId.toString(), outcomeIndex.toString())
 			const existing = migrationRepSplits.get(routeKey)
 			const previousCumulative = existing === undefined ? 0n : BigInt(existing.childMigrationRepAmountAttoRep)
-			if (cumulativeAttoRep !== previousCumulative + amountAttoRep) {
+			if (existing !== undefined || !partialHistory ? cumulativeAttoRep !== previousCumulative + amountAttoRep : cumulativeAttoRep < amountAttoRep) {
 				throw new Error(`MigrationRepSplit cumulative progress is discontinuous for universe ${universeId.toString()} outcome ${outcomeIndex.toString()}`)
 			}
 			const progress: MigrationRepSplitProgressSnapshot = {
@@ -597,6 +590,7 @@ export async function updateProtocolIndex(context: UpdateProtocolIndexContext): 
 					const existing = auctionRefunds[key]
 					if (existing === undefined) {
 						if (pendingAttoEth !== amountAttoEth) {
+							if (partialHistory && pendingAttoEth > amountAttoEth) continue
 							throw new Error(`EthRefundCredited for auction ${log.address} did not start from zero; protocolStartBlock is after the episode start or the event history is incomplete`)
 						}
 						auctionRefunds[key] = { generation: refundEpisodeGeneration(log), pendingAttoEth: pendingAttoEth.toString() }
@@ -609,6 +603,7 @@ export async function updateProtocolIndex(context: UpdateProtocolIndexContext): 
 					if (data.length !== 32) throw new Error('PendingEthRefundWithdrawn has an invalid data length')
 					const amountAttoEth = readUnsigned(data, 0, 32)
 					const existing = auctionRefunds[key]
+					if (existing === undefined && partialHistory && amountAttoEth > 0n) continue
 					if (existing === undefined) throw new Error(`PendingEthRefundWithdrawn for auction ${log.address} has no authenticated active refund episode`)
 					if (amountAttoEth === 0n || amountAttoEth !== BigInt(existing.pendingAttoEth)) throw new Error(`PendingEthRefundWithdrawn amount does not match the active refund episode for auction ${log.address}`)
 					delete auctionRefunds[key]
@@ -698,16 +693,17 @@ export async function updateProtocolIndex(context: UpdateProtocolIndexContext): 
 		schemaVersion: 3,
 		securityPoolForker: context.securityPoolForker,
 		startBlock: context.startBlock.toString(),
+		...(partialHistory ? { availableStartBlock: availableStartBlock.toString() } : {}),
 		wallet: context.wallet,
 		zoltar: context.zoltar,
 	}
-	return { complete: toBlock === context.anchorBlockNumber, fromBlock: fromBlock.toString(), index, toBlock: toBlock.toString() }
+	return { complete: !partialHistory && toBlock === context.anchorBlockNumber, fromBlock: fromBlock.toString(), index, toBlock: toBlock.toString() }
 }
 
 export function protocolIndexDiscoveryInputs(index: ChaosProtocolIndex) {
 	return {
 		indexedAuctionBids: index.auctionBids,
-		indexedAuctionRefunds: index.auctionRefunds,
+		indexedAuctionRefunds: index.availableStartBlock === undefined ? index.auctionRefunds : {},
 		indexedChildRepSplits: index.childRepSplits,
 		indexedEscalationDeposits: index.escalationDeposits,
 		indexedMigrationRepSplits: index.migrationRepSplits,
