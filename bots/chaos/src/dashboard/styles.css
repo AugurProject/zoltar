@@ -852,33 +852,27 @@ tbody tr:last-child td {
 	line-height: 1.4;
 }
 
-.operation-id-control {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: 0.35rem;
-	margin-top: 0.35rem;
+#catalog-rows {
+	display: grid;
+	gap: 1rem;
 }
 
-.operation-id-control small {
-	margin-top: 0;
+.catalog-group > summary {
+	display: list-item;
+	padding: 1rem;
+	cursor: pointer;
+	border: 1px solid var(--operator-border);
+	border-radius: 0.65rem;
+	background: var(--operator-surface);
 }
 
-button.operation-id-copy {
-	min-height: 2rem;
-	padding: 0.25rem 0.5rem;
-	border-color: var(--operator-border);
-	background: var(--operator-surface-raised);
-	color: var(--operator-accent);
-	font-size: 0.7rem;
+.catalog-group > summary span {
+	margin-left: 0.75rem;
+	font-size: 0.8rem;
 }
 
-.operation-id-feedback.success {
-	color: var(--operator-accent);
-}
-
-.operation-id-feedback.error {
-	color: var(--operator-error);
+.catalog-group[open] > summary {
+	margin-bottom: 0.75rem;
 }
 
 .resume-random-scope {
@@ -1390,13 +1384,13 @@ fieldset {
 		border: 0;
 	}
 
-	[data-page-content="catalog"] #catalog-rows {
+	[data-page-content="catalog"] .catalog-operation-rows {
 		display: grid;
 		width: 100%;
 		gap: 0.75rem;
 	}
 
-	[data-page-content="catalog"] #catalog-rows > tr {
+	[data-page-content="catalog"] .catalog-operation-rows > tr {
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 		width: 100%;
@@ -1407,7 +1401,7 @@ fieldset {
 		overflow: hidden;
 	}
 
-	[data-page-content="catalog"] #catalog-rows > tr > td {
+	[data-page-content="catalog"] .catalog-operation-rows > tr > td {
 		display: block;
 		width: auto;
 		min-width: 0;
@@ -1416,7 +1410,7 @@ fieldset {
 		overflow-wrap: anywhere;
 	}
 
-	[data-page-content="catalog"] #catalog-rows > tr > td[data-label]::before {
+	[data-page-content="catalog"] .catalog-operation-rows > tr > td[data-label]::before {
 		display: block;
 		margin-bottom: 0.4rem;
 		color: var(--operator-muted);
@@ -1428,14 +1422,14 @@ fieldset {
 		text-transform: uppercase;
 	}
 
-	[data-page-content="catalog"] #catalog-rows > tr > td:nth-child(1),
-	[data-page-content="catalog"] #catalog-rows > tr > td:nth-child(6),
-	[data-page-content="catalog"] #catalog-rows > tr > td.empty-state {
+	[data-page-content="catalog"] .catalog-operation-rows > tr > td:nth-child(1),
+	[data-page-content="catalog"] .catalog-operation-rows > tr > td:nth-child(5),
+	[data-page-content="catalog"] .catalog-operation-rows > tr > td.empty-state {
 		grid-column: 1 / -1;
 	}
 
-	[data-page-content="catalog"] #catalog-rows > tr > td:nth-child(6),
-	[data-page-content="catalog"] #catalog-rows > tr > td.empty-state {
+	[data-page-content="catalog"] .catalog-operation-rows > tr > td:nth-child(5),
+	[data-page-content="catalog"] .catalog-operation-rows > tr > td.empty-state {
 		border-bottom: 0;
 	}
 
@@ -1514,10 +1508,6 @@ fieldset {
 		min-height: 2.75rem;
 	}
 
-	button.operation-id-copy {
-		min-height: 2.75rem;
-	}
-
 	.panel {
 		padding: 1rem;
 	}
@@ -1581,4 +1571,91 @@ fieldset {
 	.countdown-track span {
 		transition: none;
 	}
+}
+
+.operation-open {
+	margin-top: 0.75rem;
+}
+
+.operation-dialog {
+	width: min(48rem, calc(100vw - 2rem));
+	max-height: calc(100dvh - 2rem);
+	padding: 1.5rem;
+	overflow: auto;
+	border: 1px solid var(--operator-border);
+	border-radius: 0.8rem;
+	background: var(--operator-surface);
+	color: var(--operator-text);
+}
+
+.operation-dialog::backdrop {
+	background: rgb(0 0 0 / 65%);
+}
+
+.operation-dialog h2 {
+	overflow-wrap: anywhere;
+}
+
+.operation-inputs {
+	display: grid;
+	gap: 1rem;
+	padding: 0;
+	border: 0;
+	min-width: 0;
+}
+
+.operation-input {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	gap: 0.5rem;
+}
+
+.operation-input label {
+	grid-column: 1 / -1;
+}
+
+.operation-input input,
+.operation-input select {
+	width: 100%;
+	min-width: 0;
+}
+
+.operation-transactions details {
+	margin-top: 0.75rem;
+}
+
+.operation-transactions p,
+.operation-transactions pre {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	font-size: 0.8rem;
+}
+
+.operation-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.75rem;
+}
+
+@media (max-width: 42rem) {
+	.operation-dialog {
+		padding: 1rem;
+	}
+
+	.operation-input {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+.operation-dialog .section-heading {
+	flex-direction: row;
+	align-items: flex-start;
+}
+
+.operation-limits > .operation-input {
+	margin-top: 1rem;
+}
+
+.operation-dialog [hidden] {
+	display: none;
 }

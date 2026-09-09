@@ -17,6 +17,7 @@ export type ChaosDashboardController = {
 	setCancellation: (value: unknown) => unknown | Promise<unknown>
 	setCandidate: (value: unknown) => unknown | Promise<unknown>
 	setConnectivity?: ((value: unknown) => unknown | Promise<unknown>) | undefined
+	setOperation?: ((value: unknown) => unknown | Promise<unknown>) | undefined
 	setObligation: (value: unknown) => unknown | Promise<unknown>
 	setReplacement: (value: unknown) => unknown | Promise<unknown>
 	setPaused: (value: unknown) => unknown | Promise<unknown>
@@ -866,6 +867,7 @@ function publicFailure(operation: string, error: unknown) {
 			409,
 		)
 	}
+	if (operation === 'mutation:/api/operation' && error instanceof Error && error.name === 'ManualOperationInputError') return json({ error: error.message }, 400)
 	if (operation === 'mutation:/api/connectivity') return json({ error: publicConnectivityFailure(error) }, 400)
 	return json({ error: 'The dashboard request could not be completed. Review the submitted values and protected bot logs.' }, 400)
 }
@@ -983,6 +985,7 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 					['/api/settings', controller.setSettings],
 					['/api/signer', controller.setSigner],
 				])
+				if (controller.setOperation !== undefined) handlers.set('/api/operation', controller.setOperation)
 				if (controller.setRetirement !== undefined) handlers.set('/api/retirement', controller.setRetirement)
 				if (controller.setConnectivity !== undefined) handlers.set('/api/connectivity', controller.setConnectivity)
 				const handler = handlers.get(url.pathname)
@@ -991,8 +994,8 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 						if (configurationCommitIndeterminate) return indeterminateConfigurationFailure()
 						try {
 							const value = await boundedDashboardJson(request)
-							await handler(value)
-							return json({ saved: true })
+							const result = await handler(value)
+							return json(url.pathname === '/api/operation' ? result : { saved: true })
 						} catch (error) {
 							if (error instanceof Error && error.name === CONFIGURATION_COMMIT_INDETERMINATE) configurationCommitIndeterminate = true
 							return publicFailure(`mutation:${url.pathname}`, error)

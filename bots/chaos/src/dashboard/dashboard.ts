@@ -1,3 +1,5 @@
+import { createCatalogGroups } from './catalog-groups.js'
+import { createOperationDialog } from './operation-dialog.js'
 import { renderOperatorAlerts } from './operator-alerts.js'
 type RepBalance = {
 	balance?: string | number | undefined
@@ -200,7 +202,6 @@ const modeBadge = element('mode-badge', HTMLSpanElement)
 const networkBadge = element('network-badge', HTMLSpanElement)
 const signerBadge = element('signer-badge', HTMLSpanElement)
 const recoveryBadge = element('recovery-badge', HTMLAnchorElement)
-const refreshButton = element('refresh-button', HTMLButtonElement)
 const pauseButton = element('pause-button', HTMLButtonElement)
 const pauseStatus = element('pause-status', HTMLSpanElement)
 const globalError = element('global-error', HTMLDivElement)
@@ -238,8 +239,8 @@ const coverageSummary = element('coverage-summary', HTMLDivElement)
 const catalogFilter = element('catalog-filter', HTMLSelectElement)
 const catalogClassificationFilter = element('catalog-classification-filter', HTMLSelectElement)
 const catalogEligibilityFilter = element('catalog-eligibility-filter', HTMLSelectElement)
-const catalogCaption = element('catalog-caption', HTMLTableCaptionElement)
-const catalogRows = element('catalog-rows', HTMLTableSectionElement)
+const catalogCaption = element('catalog-caption', HTMLParagraphElement)
+const catalogRows = element('catalog-rows', HTMLDivElement)
 const ecosystemGrid = element('ecosystem-grid', HTMLDivElement)
 const topologyAnchor = element('topology-anchor', HTMLSpanElement)
 const topologyStatus = element('topology-status', HTMLParagraphElement)
@@ -811,37 +812,6 @@ function compactIdentifier(value: string, type: string) {
 	return wrapper
 }
 
-function copyableOperationId(value: string) {
-	const wrapper = node('span', 'operation-id-control')
-	const identifier = node('small', 'mono', value)
-	const copy = node('button', 'operation-id-copy', 'Copy ID')
-	copy.setAttribute('aria-label', `Copy selectable operation definition ID: ${value}`)
-	copy.setAttribute('type', 'button')
-	const feedback = node('small', 'operation-id-feedback')
-	feedback.setAttribute('aria-live', 'polite')
-	feedback.setAttribute('role', 'status')
-	copy.addEventListener('click', () => {
-		copy.disabled = true
-		feedback.textContent = 'Copying…'
-		const clipboard = navigator.clipboard
-		const write = clipboard === undefined ? Promise.reject(new Error('Clipboard API unavailable')) : Promise.resolve().then(() => clipboard.writeText(value))
-		void write.then(
-			() => {
-				copy.disabled = false
-				feedback.className = 'operation-id-feedback success'
-				feedback.textContent = 'Copied'
-			},
-			() => {
-				copy.disabled = false
-				feedback.className = 'operation-id-feedback error'
-				feedback.textContent = 'Copy failed; select the ID shown'
-			},
-		)
-	})
-	wrapper.append(identifier, copy, feedback)
-	return wrapper
-}
-
 function identifierLine(prefix: string, value: string | undefined, type: string) {
 	const line = node('small', 'identifier-line')
 	line.append(node('span', undefined, prefix))
@@ -1213,10 +1183,19 @@ function normalizedCatalogCopy(value: string) {
 		.toLowerCase()
 }
 
+const operationDialog = createOperationDialog({ request: value => put('/api/operation', value, 120_000) })
+
+const renderCatalogGroups = createCatalogGroups(catalogRows, ecosystemOrder, ecosystemLabel)
+let catalogSignature = ''
+
 function renderCatalog(values: OperationEvaluation[]) {
+	if (document.querySelector('#operation-dialog[open]') !== null) return
 	const selectedEcosystem = catalogFilter.value
 	const selectedClassification = catalogClassificationFilter.value
 	const selectedEligibility = catalogEligibilityFilter.value
+	const signature = JSON.stringify({ values, selectedEcosystem, selectedClassification, selectedEligibility })
+	if (signature === catalogSignature) return
+	catalogSignature = signature
 	const filtered = values.filter(value => {
 		if (selectedEcosystem !== 'all' && normalizeEcosystem(value.ecosystem) !== selectedEcosystem) return false
 		if (selectedClassification !== 'all' && displayedClassification(value) !== selectedClassification) return false
@@ -1247,12 +1226,10 @@ function renderCatalog(values: OperationEvaluation[]) {
 		}
 		const nameCell = node('td', 'operation-name')
 		nameCell.append(node('strong', undefined, value.label ?? value.id ?? 'Unnamed operation'))
-		if (value.id !== undefined) nameCell.append(displayClassification === 'selectable' ? copyableOperationId(value.id) : node('small', 'mono', value.id))
 		const description = value.description?.trim()
 		if (description !== undefined && description !== '' && !displayedBlockers.some(blocker => normalizedCatalogCopy(blocker) === normalizedCatalogCopy(description))) {
 			nameCell.append(node('small', 'operation-description', description))
 		}
-		const ecosystemCell = node('td', undefined, ecosystemLabel(value.ecosystem))
 		const classificationCell = node('td')
 		const classificationBadge = node('span')
 		let classificationTone: Parameters<typeof setBadge>[2] = 'success'
@@ -1268,7 +1245,6 @@ function renderCatalog(values: OperationEvaluation[]) {
 		const candidatesCell = node('td', 'mono', String(publicCandidateCount(value.candidateCount) ?? 0))
 		const eligibilityCell = node('td')
 		nameCell.dataset['label'] = 'Operation'
-		ecosystemCell.dataset['label'] = 'Ecosystem'
 		classificationCell.dataset['label'] = 'Classification'
 		riskCell.dataset['label'] = 'Risk'
 		candidatesCell.dataset['label'] = 'Candidates'
@@ -1284,16 +1260,21 @@ function renderCatalog(values: OperationEvaluation[]) {
 			for (const reason of displayedBlockers) listValue.append(node('li', undefined, reason))
 			eligibilityCell.append(listValue)
 		}
-		row.append(nameCell, ecosystemCell, classificationCell, riskCell, candidatesCell, eligibilityCell)
+		const open = node('button', 'operation-open secondary', 'Open operation')
+		open.type = 'button'
+		open.setAttribute('aria-label', `Open ${value.label ?? 'operation'}`)
+		open.addEventListener('click', () => operationDialog.open(value))
+		nameCell.append(open)
+		row.dataset['ecosystem'] = normalizeEcosystem(value.ecosystem)
+		row.dataset['operationId'] = value.id ?? ''
+		row.append(nameCell, classificationCell, riskCell, candidatesCell, eligibilityCell)
 		return row
 	})
 	if (rows.length === 0) {
-		const row = document.createElement('tr')
-		const cell = node('td', 'empty-state', 'No operations match this filter.')
-		cell.setAttribute('colspan', '6')
-		row.append(cell)
-		catalogRows.replaceChildren(row)
-	} else catalogRows.replaceChildren(...rows)
+		catalogRows.replaceChildren(node('p', 'empty-state', 'No operations match this filter.'))
+		return
+	}
+	renderCatalogGroups(rows)
 }
 
 function renderEcosystems(values: OperationEvaluation[]) {
@@ -1360,7 +1341,12 @@ function topologyIdentifierFact(label: string, value: string | undefined, type: 
 	return fact
 }
 
+const topologyGroupSignatures = new WeakMap<HTMLDivElement, string>()
+
 function renderTopologyGroup(target: HTMLDivElement, values: readonly unknown[], render: (value: Record<string, unknown>) => HTMLElement) {
+	const signature = JSON.stringify(values)
+	if (topologyGroupSignatures.get(target) === signature) return
+	topologyGroupSignatures.set(target, signature)
 	if (values.length === 0) {
 		target.className = 'topology-list empty-state'
 		target.textContent = 'None discovered at this anchor.'
@@ -1689,8 +1675,6 @@ async function requestRecoveryContextRefresh(context: RecoveryContextRefresh) {
 function refresh() {
 	if (refreshPromise !== undefined) return refreshPromise
 	markRecoveryContextRefreshesLoading()
-	refreshButton.disabled = true
-	refreshButton.textContent = 'Refreshing…'
 	rpcHealthRetryButton.disabled = true
 	rpcHealthRetryButton.textContent = 'Refreshing…'
 	let stateAvailable = false
@@ -1727,8 +1711,6 @@ function refresh() {
 		return { configurationAvailable, stateAvailable }
 	})().finally(() => {
 		refreshPromise = undefined
-		refreshButton.disabled = false
-		refreshButton.textContent = stateAvailable ? 'Refresh' : 'Retry'
 		rpcHealthRetryButton.disabled = false
 		rpcHealthRetryButton.textContent = 'Retry'
 	})
@@ -1748,7 +1730,7 @@ async function reconcileUnknownMutation(error: unknown, status: HTMLElement, sco
 	const result = await refresh()
 	const reconciled = scope === 'state' ? result.stateAvailable : result.configurationAvailable && result.stateAvailable
 	const verb = scope === 'configuration and state' ? 'were' : 'was'
-	status.textContent = reconciled ? `The request outcome was unknown. Current ${scope} ${verb} reloaded; review it before another mutation.` : `The request outcome is still unknown because current ${scope} could not be reloaded. Controls remain frozen; retry the dashboard refresh.`
+	status.textContent = reconciled ? `The request outcome was unknown. Current ${scope} ${verb} reloaded; review it before another mutation.` : `The request outcome is still unknown because current ${scope} could not be reloaded. Controls remain frozen while automatic refresh retries.`
 	return { handled: true, reconciled }
 }
 
@@ -1890,7 +1872,6 @@ if (currentSectionLink !== undefined) {
 	})
 }
 
-refreshButton.addEventListener('click', () => void refresh())
 rpcHealthRetryButton.addEventListener('click', () => void refresh())
 for (const context of recoveryContexts) context.retryButton.addEventListener('click', () => void requestRecoveryContextRefresh(context))
 catalogFilter.addEventListener('change', () => {
@@ -2366,6 +2347,10 @@ clearSignerButton.addEventListener('click', () => {
 	})()
 })
 
+window.addEventListener('focus', () => void refresh())
+document.addEventListener('visibilitychange', () => {
+	if (document.visibilityState === 'visible') void refresh()
+})
 window.setInterval(renderCountdown, 1_000)
 window.setInterval(() => void refresh(), stateRefreshMilliseconds)
 void refresh()

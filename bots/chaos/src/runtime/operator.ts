@@ -1,3 +1,7 @@
+import { executeScheduledOperation, recordDryRun, schedulerFor } from './scheduled-operation.ts'
+import { actionableUrgentLifecyclePlan, lifecycleObstructions } from './lifecycle-readiness.ts'
+export { actionableUrgentLifecyclePlan, lifecycleObstructions } from './lifecycle-readiness.ts'
+import { createManualOperationController } from './manual-operations.ts'
 import { migrateEmptyBootstrapState } from '../state/bootstrap-migration.ts'
 import { runtimeTopologySummary } from './topology-summary.ts'
 export { runtimeTopologySummary } from './topology-summary.ts'
@@ -10,22 +14,22 @@ import { saveSettings, type OperatorSettings } from '../config/settings.ts'
 import { chaosDashboardLifecycle } from '../core/process-locks.ts'
 import type { ChaosProcessLocks, ChaosShutdownController } from '../core/process-locks.ts'
 import { randomInteger } from '../core/random.ts'
-import { createChaosScheduler, schedulerWaitMilliseconds } from '../core/scheduler.ts'
+import { schedulerWaitMilliseconds } from '../core/scheduler.ts'
 import { startDashboardServer } from '../dashboard/dashboard-server.ts'
 import { recoverPendingTransactions } from '../execution/recovery.ts'
 import { executeOperationPlan, OperationRediscoveryRequired, TransactionAwaitingRecovery, type ExecutionEnvironment } from '../execution/transaction-executor.ts'
-import { carryProofDeploymentProfileId } from '../monitoring/carry-proof-scan.ts'
+import { carryProofDeploymentProfileId as executionProfileId } from '../monitoring/carry-proof-scan.ts'
 import type { CarryProofJournal } from '../monitoring/carry-proof-journal.ts'
 import { ChaosProtocolIndexReorgError } from '../monitoring/protocol-index.ts'
 import type { CanonicalImmutableTopologyCache } from '../monitoring/topology-cache.ts'
 import { evaluateSelectableOperationDefinition, operationHasCanonicalContinuationBuilder, reevaluateOperationContinuation } from '../operations/catalog.ts'
 import type { EcosystemSnapshot, EvaluatedOperation, OperationContinuationDisposition, OperationPlan } from '../operations/types.ts'
-import { bindRuntimeStateToSigner, loadRuntimeState, recordActivity, saveDurableState, type DurableLifecyclePresenceBlocker, type DurableObligation, type DurableWorkflow, type RuntimeState } from '../state/operator-state.ts'
+import { bindRuntimeStateToSigner, loadRuntimeState, recordActivity, saveDurableState, type DurableLifecyclePresenceBlocker, type DurableWorkflow, type RuntimeState } from '../state/operator-state.ts'
 import { blockExecutableEvaluations, applyExecutionPolicy, chaosChain, createChaosReadPool, performCanonicalScan, planningOptions, unavailableOperationCatalog } from './canonical-scan.ts'
 import { createChaosDashboardController, restartSafeSettings, type ConfigurationState } from './dashboard-controller.ts'
 import { resetPristineStateForDeploymentProfile, verifyRetirementCompletionFinality } from './deployment-profile.ts'
-import { beginLifecycleObligation, completeLifecycleObligation, failLifecycleObligation, lifecyclePresenceBlockerMessage, MAXIMUM_AUTOMATIC_LIFECYCLE_ATTEMPTS, obligationForPlan, synchronizeLifecycleObligations, waitForCanonicalLifecycleConfirmation } from './obligations.ts'
-import { genesisInitializationDefinitionId, genesisInitializationPlan, randomOperationPlans, urgentOperationPlans } from './selection.ts'
+import { beginLifecycleObligation, completeLifecycleObligation, failLifecycleObligation, lifecyclePresenceBlockerMessage, obligationForPlan, synchronizeLifecycleObligations, waitForCanonicalLifecycleConfirmation } from './obligations.ts'
+import { genesisInitializationDefinitionId, genesisInitializationPlan, randomOperationPlans } from './selection.ts'
 import { enforceRetirementContinuation, processRetirementCycle, retirementPositionsForScan, updateRetirementAssessment } from './retirement-runner.ts'
 import { retirementPlanAllowed } from './retirement.ts'
 import { assertSubmissionPreflightFresh, preflightTransactionSubmissionNetwork, submissionPreflightConfigurationIdentity, submissionPreflightIsDue } from './submission-preflight.ts'
@@ -92,9 +96,7 @@ function assertDurableSignerScope(state: RuntimeState, wallet: Address | undefin
 	}
 }
 
-export function executionProfileId(settings: OperatorSettings) {
-	return carryProofDeploymentProfileId(settings)
-}
+export { carryProofDeploymentProfileId as executionProfileId } from '../monitoring/carry-proof-scan.ts'
 
 function currentStatus(settings: OperatorSettings) {
 	if (settings.paused) return 'paused' as const
@@ -103,19 +105,6 @@ function currentStatus(settings: OperatorSettings) {
 
 async function persistState(configuration: ConfigurationState, state: RuntimeState) {
 	await saveDurableState(configuration.settings.runtime.stateFile, state)
-}
-
-function schedulerFor(configuration: ConfigurationState, state: RuntimeState) {
-	return createChaosScheduler({
-		persist: async candidate => {
-			await saveDurableState(configuration.settings.runtime.stateFile, {
-				...state,
-				scheduler: candidate,
-			})
-		},
-		settings: configuration.settings.scheduler,
-		state: state.scheduler,
-	})
 }
 
 export async function scheduleAfterRecoveredTransaction(configuration: ConfigurationState, state: RuntimeState, operationId: string) {
@@ -344,43 +333,6 @@ export function repairDurableSelectableFailures(state: RuntimeState) {
 	return { repairedWorkflowIds, requiresSafetyStop: semanticFailures.length !== 0 }
 }
 
-function recordDryRun(state: RuntimeState, plan: OperationPlan) {
-	recordActivity(state, {
-		ecosystem: plan.ecosystem,
-		message: `Dry-run selection: ${plan.label}`,
-		operationId: plan.definitionId,
-		status: 'dry-run',
-		summary: `${plan.steps.length.toString()} step${plan.steps.length === 1 ? '' : 's'}; ${plan.risk} risk; no transaction signed`,
-		type: 'operation',
-	})
-}
-
-function retryableLifecycleObligation(state: Pick<RuntimeState, 'obligations' | 'workflows'>, obligation: DurableObligation) {
-	const workflow = state.workflows.find(candidate => candidate.id === obligation.workflowId)
-	return workflow !== undefined && retryableOnChainWorkflowFailure(workflow) && obligation.automaticRetryCount < MAXIMUM_AUTOMATIC_LIFECYCLE_ATTEMPTS
-}
-
-export function lifecycleObstructions(state: Pick<RuntimeState, 'obligations' | 'workflows'>) {
-	let automaticRetry: DurableObligation | undefined
-	for (const obligation of state.obligations) {
-		if (obligation.status === 'deferred' && obligation.notBefore !== undefined) {
-			automaticRetry ??= obligation
-			continue
-		}
-		if (obligation.status !== 'blocked' && obligation.status !== 'executing' && obligation.status !== 'failed') continue
-		if (obligation.status === 'failed' && retryableLifecycleObligation(state, obligation)) {
-			automaticRetry ??= obligation
-			continue
-		}
-		return { automaticRetry, hard: obligation }
-	}
-	return { automaticRetry, hard: undefined }
-}
-
-export function actionableUrgentLifecyclePlan(state: Pick<RuntimeState, 'evaluations' | 'obligations' | 'workflows'>, allow: (plan: OperationPlan) => boolean = () => true) {
-	return urgentOperationPlans(state.evaluations).find(plan => obligationForPlan(state, plan) !== undefined && allow(plan))
-}
-
 async function executeLifecyclePlan(configuration: ConfigurationState, state: RuntimeState, resources: RuntimeResources, plan: OperationPlan, executionCancelled: () => boolean) {
 	const obligation = obligationForPlan(state, plan)
 	if (obligation === undefined) throw new Error(`Lifecycle plan ${plan.id} has no durable obligation`)
@@ -451,50 +403,45 @@ async function executeLifecyclePlan(configuration: ConfigurationState, state: Ru
 	}
 }
 
-async function executeRandomPlan(configuration: ConfigurationState, state: RuntimeState, resources: RuntimeResources, plan: OperationPlan, executionCancelled: () => boolean) {
-	const scheduler = schedulerFor(configuration, state)
-	await scheduler.begin(plan.definitionId)
-	if (!configuration.settings.runtime.execute) {
-		recordDryRun(state, plan)
-		await scheduler.complete(plan.definitionId)
-		return
-	}
-	try {
-		await executeOperationPlan(
-			executionEnvironment(
-				configuration.settings,
-				state,
-				resources,
-				undefined,
-				async () => {
-					await ensureSubmissionPreflight(resources, configuration.settings)
-					state.rpcEndpointHealth = resourceHealth(resources)
-				},
-				executionCancelled,
-			),
-			plan,
-		)
-		await scheduler.complete(plan.definitionId)
-	} catch (error) {
-		if (error instanceof TransactionAwaitingRecovery) throw error
-		if (rediscoverableExecutionFailure(state, plan, error)) {
-			recordActivity(state, {
-				ecosystem: plan.ecosystem,
-				message: `Anchored preflight changed before signing: ${plan.label}`,
-				operationId: plan.definitionId,
-				status: 'skipped',
-				type: 'operation',
-			})
-			await scheduler.complete(plan.definitionId)
-			return
-		}
-		if (abandonRetryableSelectableFailure(state, plan)) {
-			await scheduler.complete(plan.definitionId)
-			return
-		}
-		await scheduler.complete(plan.definitionId)
-		throw error
-	}
+async function executeRandomPlan(configuration: ConfigurationState, state: RuntimeState, resources: RuntimeResources, plan: OperationPlan, executionCancelled: () => boolean, trigger: 'scheduled' | 'manual' = 'scheduled') {
+	await executeScheduledOperation(
+		configuration,
+		state,
+		plan,
+		async () => {
+			await executeOperationPlan(
+				executionEnvironment(
+					configuration.settings,
+					state,
+					resources,
+					undefined,
+					async () => {
+						await ensureSubmissionPreflight(resources, configuration.settings)
+						state.rpcEndpointHealth = resourceHealth(resources)
+					},
+					executionCancelled,
+				),
+				plan,
+			)
+		},
+		error => {
+			if (rediscoverableExecutionFailure(state, plan, error)) {
+				recordActivity(state, {
+					ecosystem: plan.ecosystem,
+					message: `Anchored preflight changed before signing: ${plan.label}`,
+					operationId: plan.definitionId,
+					status: 'skipped',
+					type: 'operation',
+				})
+				return true
+			}
+			if (abandonRetryableSelectableFailure(state, plan)) {
+				return true
+			}
+			return false
+		},
+		trigger,
+	)
 }
 
 async function executeRandomContinuation(configuration: ConfigurationState, state: RuntimeState, resources: RuntimeResources, plan: OperationPlan, executionCancelled: () => boolean) {
@@ -740,14 +687,70 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 		},
 		state,
 	})
-	const dashboard = loaded.settings.runtime.ui ? startDashboardServer(loaded.settings.runtime.uiPort, dashboardController) : undefined
-	await using _dashboardLifecycle = dashboard === undefined ? undefined : chaosDashboardLifecycle(dashboard)
 	let carryProofJournal: CarryProofJournal | undefined
 	let carryProofJournalStateFile: string | undefined
 	let topologyCache: CanonicalImmutableTopologyCache | undefined
 	let topologyCacheProfileId: string | undefined
 	let topologyCacheStateFile: string | undefined
 	let carryProfileResetAuthorized = initialCarryProfileResetAuthorized
+	await using manualOperations = createManualOperationController({
+		configuration,
+		gate: signerOperationGate,
+		state,
+		scan: async () => {
+			if (resources === undefined || state.wallet === undefined) {
+				const error = new Error('Configure the network and signer before planning an operation')
+				error.name = 'ManualOperationInputError'
+				throw error
+			}
+			const settings = configuration.settings
+			const expectedProfile = executionProfileId(settings)
+			if (state.profileId !== expectedProfile || shutdown.isRequested()) {
+				const error = new Error('Wait for the bot to initialize the current deployment profile')
+				error.name = 'ManualOperationInputError'
+				throw error
+			}
+			assertDurableSignerScope(state, configuredWallet(settings), settings.runtime.stateFile)
+			if (carryProofJournalStateFile !== settings.runtime.stateFile) carryProofJournal = undefined
+			if (topologyCacheStateFile !== settings.runtime.stateFile || topologyCacheProfileId !== expectedProfile) topologyCache = undefined
+			await ensureReadPreflight(resources, settings)
+			const scan = await performCanonicalScan(settings, resources.pool, state.wallet, 0, state.protocolIndex, carryProofJournal, carryProfileResetAuthorized, topologyCache)
+			state.protocolIndex = scan.index
+			carryProofJournal = scan.carryProofJournal
+			carryProofJournalStateFile = settings.runtime.stateFile
+			topologyCache = scan.topologyCache
+			topologyCacheStateFile = settings.runtime.stateFile
+			topologyCacheProfileId = executionProfileId(settings)
+			carryProfileResetAuthorized = false
+			state.evaluations = scan.evaluations
+			state.inventory = scan.inventory
+			state.topology = runtimeTopologySummary(scan)
+			state.lastScanAt = new Date().toISOString()
+			state.lastScannedBlock = scan.anchor.blockNumber
+			synchronizeLifecycleObligations(state, scan.evaluations, scan.canonicalLifecyclePresence, scan.canonicalLifecyclePresenceComplete, scan.anchor.blockNumber, scan.anchor.timestamp)
+			await persistState(configuration, state)
+			return scan
+		},
+		execute: async plan => {
+			if (resources === undefined) throw new Error('Operation RPC resources are unavailable')
+			try {
+				if (!configuration.settings.runtime.execute) {
+					recordDryRun(state, plan)
+					await persistState(configuration, state)
+				} else if (plan.classification === 'lifecycle-obligation') {
+					await executeLifecyclePlan(configuration, state, resources, plan, shutdown.isRequested)
+				} else {
+					await executeRandomPlan(configuration, state, resources, plan, shutdown.isRequested, 'manual')
+				}
+			} catch (error) {
+				await handleCycleFailure(error, configuration, state)
+				throw error
+			}
+		},
+	})
+	dashboardController.setOperation = manualOperations.handle
+	const dashboard = loaded.settings.runtime.ui ? startDashboardServer(loaded.settings.runtime.uiPort, dashboardController) : undefined
+	await using _dashboardLifecycle = dashboard === undefined ? undefined : chaosDashboardLifecycle(dashboard)
 	let backfillIncomplete = false
 	let consecutiveBackfillCycles = 0
 	await persistState(configuration, state)

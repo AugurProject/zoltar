@@ -1,3 +1,5 @@
+import { createManualOperationController } from '../../src/runtime/manual-operations.ts'
+import { createSignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -166,6 +168,55 @@ async function executeCanonicalOperation(context: ReturnType<typeof runtimeConte
 }
 
 describe('real ecosystem workflows through the production chaos runtime', () => {
+	test('executes a reviewed manual WETH operation once through the production executor', async () => {
+		const current = requiredFixture()
+		await current.restoreBaseline()
+		const proxy = current.createRpcProxy()
+		const stateFile = await temporaryStateFile()
+		try {
+			const settings = settingsFor(current, proxy, stateFile.path)
+			const context = runtimeContext(settings)
+			let previous = await canonicalRescan(context)
+			const controller = createManualOperationController({
+				configuration: { path: '/unused', rememberSigner: false, revision: 'manual-integration', settings },
+				execute: async plan => {
+					await executeOperationPlan(context.environment, plan)
+				},
+				gate: createSignerOperationGate(),
+				scan: async () => {
+					previous = await canonicalRescan(context, previous)
+					return previous
+				},
+				state: context.state,
+			})
+			const preview = await controller.handle({ action: 'preview', definitionId: 'open-oracle.weth.wrap', inputs: { seed: { source: 'custom', value: '7' }, maxEthSpendAttoEth: { source: 'custom', value: '100' } } })
+			if (typeof preview !== 'object' || preview === null) throw new Error('Manual preview unavailable')
+			expect(Reflect.get(preview, 'blockers')).toEqual([])
+			const previewId = Reflect.get(preview, 'previewId')
+			expect(previewId).toBeString()
+			await controller.handle({ action: 'execute', previewId })
+			await controller.handle({ action: 'execute', previewId })
+			let status: unknown = 'pending'
+			for (let attempt = 0; attempt < 600 && status === 'pending'; attempt += 1) {
+				await Bun.sleep(100)
+				const response = await controller.handle({ action: 'status', previewId })
+				if (typeof response !== 'object' || response === null) throw new Error('Manual status unavailable')
+				const execution = Reflect.get(response, 'execution')
+				if (typeof execution !== 'object' || execution === null) throw new Error('Manual execution unavailable')
+				status = Reflect.get(execution, 'status')
+			}
+			expect(status).toBe('completed')
+			expect(proxy.successfulSendRawTransactionParams).toHaveLength(1)
+			const workflow = context.state.workflows.find(item => item.operationId === 'open-oracle.weth.wrap')
+			expect(workflow?.status).toBe('completed')
+			expect(workflow?.steps[0]?.status).toBe('confirmed')
+			expect(context.state.pendingTransactions).toEqual([])
+		} finally {
+			proxy.dispose()
+			await stateFile.dispose()
+		}
+	})
+
 	test('proves public and authenticated private submission methods without broadcasting a transaction', async () => {
 		const current = requiredFixture()
 		await current.restoreBaseline()
