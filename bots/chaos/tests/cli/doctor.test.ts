@@ -10,6 +10,7 @@ import {
 	assertStableFinalizedCheckpointResults,
 	boundedAdaptiveLogRange,
 	commonFreshFinalizedBlockNumber,
+	launchGateSummary,
 	probeChaosDoctor,
 	runChaosDoctor,
 	runChaosLaunchGate,
@@ -548,6 +549,32 @@ describe('chaos launch doctor', () => {
 		expect(report).toMatchObject({ checks: { durableState: 'passed', processExclusivity: 'passed' } })
 		expect(liveLocks).toBe(1)
 		expect(liveProbes).toBe(1)
+	})
+
+	test('summarizes every launch gate outcome as readable sentences', async () => {
+		const pausedSettings = await settingsFixture('operator.example.json')
+		const skipped = await runChaosLaunchGate(passiveDoctorDependencies(pausedSettings))
+		expect(launchGateSummary(skipped)).toBe('Launch preflight skipped: persisted configuration has transaction execution disabled. The operator starts without submitting transactions.')
+
+		const configuredSettings = await settingsFixture('operator.configured-placeholder.json')
+		const privateKey = `0x${'66'.repeat(32)}` as const
+		const liveSettings = { ...configuredSettings, paused: false, privateKey, runtime: { ...configuredSettings.runtime, execute: true } }
+		const notice = 'Waiting for deployments on chain 1 at block 100: zoltar. Chaos operations are unavailable until these contracts are deployed. Availability is checked automatically.'
+		const waiting = await runChaosLaunchGate(passiveDoctorDependencies(liveSettings, { deploymentAvailability: async () => notice }))
+		expect(launchGateSummary(waiting)).toBe(`Launch preflight passed with the deployment still pending. ${notice}`)
+
+		const fundedProbeResult: ChaosDoctorProbeResult = {
+			...probeResult,
+			snapshot: {
+				...probeResult.snapshot,
+				wallet: {
+					ethBalanceAttoEth: (10n ** 30n).toString(),
+					tokens: [{ address: probeResult.snapshot.universes[0]?.repToken ?? '0x0000000000000000000000000000000000000001', balance: (10n ** 30n).toString(), symbol: 'REP' }],
+				},
+			},
+		}
+		const passed = await runChaosLaunchGate(passiveDoctorDependencies(liveSettings, { probe: async () => fundedProbeResult }))
+		expect(launchGateSummary(passed)).toBe('Launch preflight passed all 10 readiness checks at canonical block 100. Run `bun run doctor` for the detailed readiness report.')
 	})
 })
 
