@@ -10,13 +10,21 @@ const source = await output.text()
 test('counts active errors and warnings while preserving all notices and collapsed state', async () => {
 	const window = new Window({ settings: { enableJavaScriptEvaluation: true, disableJavaScriptFileLoading: true, suppressInsecureJavaScriptEnvironmentWarning: true } })
 	try {
-		window.document.write(renderOperatorHeader({ title: 'Bot', eyebrow: 'Operator', blockStatus: 'Block 1', safety: '', navigation: '', notices: '<div id="global-error" class="notice error hidden"></div><ul id="operator-alerts"></ul><section class="notice" data-tone="info">Dry-run mode</section>' }))
+		window.document.write(renderOperatorHeader({ title: 'Bot', eyebrow: 'Operator', blockStatus: 'Block 1', network: '', safety: '', navigation: '', notices: '<div id="global-error" class="notice error hidden"></div><ul id="operator-alerts"></ul><section class="notice" data-tone="info">Dry-run mode</section>' }))
 		window.eval(source)
 		const disclosure = window.document.querySelector('details')
 		const count = window.document.getElementById('header-notices-count')
 		const alerts = window.document.getElementById('operator-alerts')
 		const empty = window.document.getElementById('header-notices-empty')
 		if (disclosure === null || alerts === null || !(empty instanceof window.HTMLElement)) throw new Error('Missing notice fixture')
+		// Mutation observer callbacks can lag waitUntilComplete on loaded machines, so settle on the expected count.
+		const settledCount = async (expected: string) => {
+			for (let attempt = 0; attempt < 200 && count?.textContent !== expected; attempt += 1) {
+				await window.happyDOM.waitUntilComplete()
+				await Bun.sleep(5)
+			}
+			return count?.textContent
+		}
 		expect(count?.textContent).toBe('0')
 		expect(disclosure.open).toBe(false)
 		for (let index = 0; index < 100; index++) {
@@ -25,18 +33,15 @@ test('counts active errors and warnings while preserving all notices and collaps
 			item.textContent = `Failure ${index.toString()}`
 			alerts.append(item)
 		}
-		await window.happyDOM.waitUntilComplete()
-		expect(count?.textContent).toBe('100')
+		expect(await settledCount('100')).toBe('100')
 		expect(disclosure.classList.contains('has-errors')).toBe(true)
 		expect(disclosure.open).toBe(false)
 		disclosure.open = true
 		alerts.firstElementChild?.classList.add('hidden')
-		await window.happyDOM.waitUntilComplete()
-		expect(count?.textContent).toBe('99')
+		expect(await settledCount('99')).toBe('99')
 		expect(disclosure.open).toBe(true)
 		alerts.classList.add('hidden')
-		await window.happyDOM.waitUntilComplete()
-		expect(count?.textContent).toBe('0')
+		expect(await settledCount('0')).toBe('0')
 		expect(disclosure.classList.contains('has-errors')).toBe(false)
 		window.dispatchEvent(new window.PageTransitionEvent('pagehide'))
 		alerts.classList.remove('hidden')
@@ -58,7 +63,7 @@ test('counts active errors and warnings while preserving all notices and collaps
 test('dismisses the list, restores keyboard focus, and reveals linked notices', async () => {
 	const window = new Window({ url: 'http://localhost/overview#notice', settings: { enableJavaScriptEvaluation: true, disableJavaScriptFileLoading: true, suppressInsecureJavaScriptEnvironmentWarning: true } })
 	try {
-		window.document.write(renderOperatorHeader({ title: 'Bot', eyebrow: 'Operator', blockStatus: 'Block 1', safety: '', navigation: '', notices: '<section id="notice" class="notice" data-tone="danger">Scan failed <a href="/settings">Settings</a></section>' }))
+		window.document.write(renderOperatorHeader({ title: 'Bot', eyebrow: 'Operator', blockStatus: 'Block 1', network: '', safety: '', navigation: '', notices: '<section id="notice" class="notice" data-tone="danger">Scan failed <a href="/settings">Settings</a></section>' }))
 		window.eval(source)
 		const disclosure = window.document.querySelector('details')
 		const toggle = window.document.getElementById('header-notices-toggle')
