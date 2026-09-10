@@ -31,6 +31,8 @@
 							</div>
 							<span id="scheduler-state" class="badge neutral">Waiting</span>
 						</div>
+						<button id="run-next-now" type="button" class="secondary" disabled>Run next choice now</button>
+						<p id="schedule-action-status" role="status"></p>
 						<div class="countdown-track" aria-hidden="true"><span id="countdown-progress"></span></div>
 						<dl class="fact-grid">
 							<div>
@@ -205,7 +207,6 @@
 				<div class="section-heading">
 					<div>
 						<h2 id="catalog-title">Operation catalog</h2>
-						<p class="lede">Every catalog entry shows live eligibility. Blocked operations are never submitted.</p>
 					</div>
 					<div class="catalog-filters">
 						<label class="filter-control"
@@ -243,6 +244,8 @@
 					</div>
 				</div>
 				<p id="catalog-caption" class="muted">Waiting for operation discovery.</p>
+				<p id="catalog-selection-note" class="muted">Pause the bot to change random selection.</p>
+				<p id="catalog-selection-status" role="status"></p>
 				<div id="catalog-rows"></div>
 			</section>
 
@@ -466,7 +469,7 @@
 									<div class="switch-row">
 										<div>
 											<label for="all-selectable-operations">Allow every selectable operation</label>
-											<p id="selectable-operation-scope-help">Turn this off for a staged rollout, then enter exact selectable definition IDs from the <a id="selectable-operation-catalog-link" class="text-link" href="/catalog">Operation catalog</a>. An empty allowlist runs lifecycle obligations only unless genesis initialization is enabled; only its ordered initializer operations are exempt. Lifecycle discovery, recovery, and execution are never disabled by this control.</p>
+											<p id="selectable-operation-scope-help">Turn this off for a staged rollout, then enable operations in the <a id="selectable-operation-catalog-link" class="text-link" href="/catalog">Operation catalog</a>. An empty allowlist runs lifecycle obligations only unless genesis initialization is enabled; only its ordered initializer operations are exempt. Lifecycle discovery, recovery, and execution are never disabled by this control.</p>
 										</div>
 										<input id="all-selectable-operations" name="allSelectableOperations" type="checkbox" aria-describedby="selectable-operation-scope-help" />
 									</div>

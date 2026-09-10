@@ -1656,3 +1656,15 @@ fieldset {
 .operation-dialog [hidden] {
 	display: none;
 }
+
+.operation-selection {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	margin-top: 0.75rem;
+}
+
+.operation-selection input {
+	width: 1.25rem;
+	height: 1.25rem;
+}

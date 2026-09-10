@@ -328,7 +328,7 @@ export function applyExecutionPolicy(evaluations: readonly EvaluatedOperation[],
 		}
 		const genesisInitializerExemption = settings.strategy.initializeGenesisUniverse && genesisInitializationDefinitionIds.has(evaluation.definition.id)
 		if (scope === 'novel-selection' && evaluation.definition.classification === 'selectable' && !genesisInitializerExemption && selectableOperationAllowlist !== undefined && !selectableOperationAllowlist.has(evaluation.definition.id)) {
-			blockers.push('The selectable operation definition is not in strategy.selectableOperationAllowlist')
+			blockers.push('Random selection is disabled for this operation. Enable it in the operation catalog.')
 		}
 		if (settings.submission.mode === 'public' && evaluation.plan?.terminalSubmission !== undefined) {
 			blockers.push('Terminal next-block operations require private submission so their persisted fee and inclusion ceilings are enforceable')
@@ -336,7 +336,7 @@ export function applyExecutionPolicy(evaluations: readonly EvaluatedOperation[],
 			blockers.push('Deadline-bound operations require private submission so the inclusion horizon is enforceable')
 		}
 		if (!indexComplete && (evaluation.definition.classification === 'selectable' || evaluation.definition.classification === 'lifecycle-obligation')) {
-			blockers.push(`Canonical protocol index is backfilling through block ${indexedThroughBlock} of ${anchorBlock}`)
+			blockers.push(`Checking existing obligations before execution: protocol history is backfilling through block ${indexedThroughBlock} of ${anchorBlock}`)
 		}
 		if (evaluation.plan !== undefined) {
 			try {
