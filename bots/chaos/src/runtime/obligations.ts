@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { isoTimestampFromSeconds } from '../core/units.ts'
 import type { CanonicalLifecyclePresence, EvaluatedOperation, OperationPlan } from '../operations/types.ts'
 import { completeWorkflowFromCanonicalConfirmation, createDurableWorkflow, markWorkflowForRediscovery, markRetryableLifecycleWorkflowForRediscovery, refreshWorkflowContinuation, requireWorkflowStep, retryableOnChainWorkflowFailure } from './workflows.ts'
 import { MAXIMUM_LIFECYCLE_PRESENCE_BLOCKER_COUNT, MAXIMUM_OBLIGATION_TOMBSTONE_COUNT, type DurableLifecyclePresenceBlocker, type DurableMetadata, type DurableObligation, type DurableObligationTombstone, type DurableWorkflow, type RuntimeState } from '../state/operator-state.ts'
@@ -79,14 +80,6 @@ export function lifecyclePresenceBlockerMessage(blocker: DurableLifecyclePresenc
 	return `${observation} unplanned due ${noun}, beginning with ${blocker.firstDefinitionId} (${blocker.firstEcosystem}); random novelty remains blocked until complete discovery proves every due identity is represented by a durable obligation or terminal tombstone, or has left its obstructing protocol phase`
 }
 
-function timestampFromSeconds(value: string | undefined) {
-	if (value === undefined) return undefined
-	if (!/^(?:0|[1-9]\d*)$/.test(value)) throw new Error('Lifecycle obligation deadline is invalid')
-	const milliseconds = BigInt(value) * 1_000n
-	if (milliseconds > BigInt(8_640_000_000_000_000)) throw new Error('Lifecycle obligation deadline is outside the supported date range')
-	return new Date(Number(milliseconds)).toISOString()
-}
-
 function automaticLifecycleRetryDelaySeconds(automaticRetryCount: number) {
 	if (!Number.isSafeInteger(automaticRetryCount) || automaticRetryCount < 1) throw new Error('Automatic lifecycle retry requires a positive finalized-failure count')
 	const exponent = Math.min(automaticRetryCount - 1, 20)
@@ -105,7 +98,7 @@ function accountAutomaticLifecycleFailure(obligation: DurableObligation, current
 		obligation.automaticRetryCount = automaticRetryCount
 		return undefined
 	}
-	const retryAt = timestampFromSeconds((currentTimestamp + automaticLifecycleRetryDelaySeconds(automaticRetryCount)).toString())
+	const retryAt = isoTimestampFromSeconds((currentTimestamp + automaticLifecycleRetryDelaySeconds(automaticRetryCount)).toString(), 'Lifecycle obligation deadline')
 	if (retryAt === undefined) throw new Error('Automatic lifecycle retry timestamp is unavailable')
 	// Commit the count and its durable marker together after every fallible calculation.
 	obligation.automaticRetryCount = automaticRetryCount
@@ -173,7 +166,7 @@ function refreshPlannedWorkflow(workflow: DurableWorkflow, plan: OperationPlan) 
 
 function newObligation(plan: OperationPlan, workflow: DurableWorkflow): DurableObligation {
 	const createdAt = now()
-	const expiresAt = timestampFromSeconds(plan.deadlineTimestamp)
+	const expiresAt = isoTimestampFromSeconds(plan.deadlineTimestamp, 'Lifecycle obligation deadline')
 	return {
 		automaticRetryCount: 0,
 		attemptCount: 0,

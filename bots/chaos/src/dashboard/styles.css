@@ -43,7 +43,7 @@ body {
 body[data-page="overview"] [data-page-content]:not([data-page-content="overview"]):not([data-page-content="all"]),
 body[data-page="catalog"] [data-page-content]:not([data-page-content="catalog"]):not([data-page-content="all"]),
 body[data-page="ecosystem"] [data-page-content]:not([data-page-content="ecosystem"]):not([data-page-content="all"]),
-body[data-page="activity"] [data-page-content]:not([data-page-content="activity"]):not([data-page-content="all"]),
+body[data-page="recovery"] [data-page-content]:not([data-page-content="recovery"]):not([data-page-content="all"]),
 body[data-page="settings"] [data-page-content]:not([data-page-content="settings"]):not([data-page-content="all"]) {
 	display: none;
 }
@@ -1079,6 +1079,11 @@ tbody tr:last-child td {
 	border-top: 0;
 }
 
+/* Keep the status badge pinned to the first line instead of stretching beside long detail copy. */
+.timeline-item > span {
+	align-self: start;
+}
+
 .timeline-time,
 .timeline-detail {
 	color: var(--operator-muted);
@@ -1091,6 +1096,25 @@ tbody tr:last-child td {
 
 .timeline-main span {
 	margin-top: 0.25rem;
+}
+
+.activity-details {
+	margin-top: 0.45rem;
+}
+
+.activity-details > summary {
+	cursor: pointer;
+	color: var(--operator-muted);
+}
+
+.activity-details p {
+	margin: 0.35rem 0 0;
+	line-height: 1.5;
+	overflow-wrap: anywhere;
+}
+
+#activity-expand {
+	margin-top: 0.9rem;
 }
 
 .notice {

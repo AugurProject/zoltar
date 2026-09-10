@@ -46,7 +46,7 @@ describe('chaos dashboard server', () => {
 		expect(metrics.status).toBe(200)
 		expect(await metrics.text()).toContain('zoltar_chaos_ready 0')
 
-		for (const route of ['overview', 'catalog', 'ecosystem', 'activity', 'settings']) {
+		for (const route of ['overview', 'catalog', 'ecosystem', 'recovery', 'settings']) {
 			const response = await dashboardFetch(new URL(`/${route}`, server.url))
 			expect(response.status).toBe(200)
 			expect(response.headers.get('cache-control')).toBe('no-store')
@@ -65,7 +65,7 @@ describe('chaos dashboard server', () => {
 		expect(overview).toContain('<body data-page="overview">')
 		expect(overview).toContain('Operation catalog')
 		expect(overview).toContain('Ecosystem state')
-		expect(overview).toContain('Activity &amp; recovery')
+		expect(overview).toContain('<a href="/recovery">Recovery</a>')
 		expect(overview).toContain('id="private-key"')
 		expect(overview).toContain('id="connectivity-form"')
 		expect(overview).toContain('http://reth:8545')

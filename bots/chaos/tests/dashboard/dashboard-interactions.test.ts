@@ -449,7 +449,7 @@ browserTest(
 				recoveredDashboardState = scenario.recoveredState
 				failSecondStateRead = true
 				stateRequests = 0
-				await cdp.command('Page.navigate', { url: new URL('/activity', dashboard.url).href })
+				await cdp.command('Page.navigate', { url: new URL('/recovery', dashboard.url).href })
 				await waitFor("document.querySelector('#mode-badge')?.textContent === 'Paused'", `${scenario.label} fixture did not load`)
 				const loading = await cdp.evaluate(`(() => {
 					const form = document.querySelector('#${scenario.formId}')
@@ -716,7 +716,10 @@ browserTest(
 					}
 				}
 				expect(await cdp.evaluate(`({ scheduler: document.querySelector('#scheduler-state')?.textContent, workflow: document.querySelector('#current-workflow .workflow-heading .badge')?.textContent })`)).toEqual({ scheduler: 'Transaction recovery pending', workflow: 'Waiting transaction' })
-				await expectVisibleIdentifiers([{ type: 'wallet address', value: walletAddress }, ...workflowSteps.flatMap(step => (step.transactionHash === undefined ? [] : [{ type: 'workflow transaction hash', value: step.transactionHash }]))], viewport.width === 390 ? 44 : 32)
+				await expectVisibleIdentifiers(
+					[{ type: 'wallet address', value: walletAddress }, { type: 'activity transaction hash', value: activityHash }, ...workflowSteps.flatMap(step => (step.transactionHash === undefined ? [] : [{ type: 'workflow transaction hash', value: step.transactionHash }]))],
+					viewport.width === 390 ? 44 : 32,
+				)
 				if (viewport.width === 390) {
 					const contextualActionHeights = await cdp.evaluate(`[...document.querySelectorAll('.text-link')].flatMap(link => {
 						const bounds = link.getBoundingClientRect()
@@ -1004,25 +1007,23 @@ browserTest(
 				}
 				expect(await cdp.evaluate('document.body.scrollWidth === document.documentElement.clientWidth')).toBe(true)
 
-				await cdp.command('Page.navigate', { url: new URL('/activity', dashboard.url).href })
-				await waitFor("document.querySelector('#pending-transactions .identifier-copy') !== null && document.querySelector('#activity-list .identifier-copy') !== null", `${viewport.label} recovery identifiers did not render`)
+				await cdp.command('Page.navigate', { url: new URL('/recovery', dashboard.url).href })
+				await waitFor("document.querySelector('#pending-transactions .identifier-copy') !== null", `${viewport.label} recovery identifiers did not render`)
 				await expectVisibleIdentifiers(
 					[
 						{ type: 'pending transaction hash', value: transactionHash },
 						{ type: 'replacement transaction hash', value: candidateHash },
 						{ type: 'cancellation transaction hash', value: cancellationHash },
-						{ type: 'activity transaction hash', value: activityHash },
 					],
 					viewport.width === 390 ? 44 : 32,
 				)
 				expect(
 					await cdp.evaluate(`({
-						activity: document.querySelector('#activity-list .badge')?.textContent,
 						obligation: document.querySelector('#obligations .badge')?.textContent,
 						option: document.querySelector('#obligation-id option')?.textContent,
 						pending: document.querySelector('#pending-transactions .badge')?.textContent,
 					})`),
-				).toEqual({ activity: 'Dry run', obligation: 'Executing', option: 'Rendered obligation · Executing', pending: 'Waiting transaction' })
+				).toEqual({ obligation: 'Executing', option: 'Rendered obligation · Executing', pending: 'Waiting transaction' })
 				expect(
 					await cdp.evaluate(`(() => {
 						const row = [...document.querySelectorAll('#obligations .stack-row')].find(candidate => candidate.textContent?.includes('Deferred obligation'))
@@ -1083,6 +1084,15 @@ browserTest(
 				).toEqual({ focused: true, outlineStyle: 'solid', outlineWidth: '2px' })
 				initialDashboardState = previousInitialState
 				recoveredDashboardState = previousRecoveredState
+
+				await cdp.command('Page.navigate', { url: new URL('/overview', dashboard.url).href })
+				await waitFor("document.querySelector('#activity-list .identifier-copy') !== null", `${viewport.label} overview activity did not render`)
+				expect(
+					await cdp.evaluate(`({
+						activity: document.querySelector('#activity-list .badge')?.textContent,
+						expandHidden: document.querySelector('#activity-expand')?.classList.contains('hidden'),
+					})`),
+				).toEqual({ activity: 'Dry run', expandHidden: true })
 
 				await cdp.command('Page.navigate', { url: new URL('/settings', dashboard.url).href })
 				await waitFor("document.querySelector('#signer-summary .identifier-copy') !== null", `${viewport.label} signer identifier did not render`)
@@ -1601,7 +1611,7 @@ browserTest(
 			expect(formRight).toBeLessThanOrEqual(viewportWidth)
 			expect(buttonHeight).toBeGreaterThanOrEqual(44)
 
-			for (const route of ['activity', 'settings']) {
+			for (const route of ['ecosystem', 'settings']) {
 				await cdp.command('Page.navigate', { url: 'about:blank' })
 				await waitFor("document.readyState === 'complete'", `Chromium did not reset before the /${route} navigation check`)
 				stateRequests = 0
@@ -1641,7 +1651,7 @@ browserTest(
 				const navigationScrollLeft = Reflect.get(navigationBeforeRefresh, 'scrollLeft')
 				const maximumScrollLeft = Reflect.get(navigationBeforeRefresh, 'maximumScrollLeft')
 				if (typeof navigationScrollLeft !== 'number' || typeof maximumScrollLeft !== 'number') throw new Error(`/${route} navigation scroll metrics are unavailable`)
-				if (route === 'activity') {
+				if (route === 'ecosystem') {
 					expect(navigationScrollLeft).toBeGreaterThan(0)
 					expect(navigationScrollLeft).toBeLessThan(maximumScrollLeft)
 					expect(Reflect.get(navigationBeforeRefresh, 'centerDelta')).toBeLessThanOrEqual(1)
@@ -1780,6 +1790,8 @@ browserTest(
 		let scheduledAt = initialSchedule
 		let scheduleStatus = 'scheduled'
 		let rejectSelection = false
+		let selectionGate: Promise<void> | undefined
+		let scans = 0
 		const mutations: unknown[] = []
 		const dashboard = startDashboardServer(0, {
 			hostname: '127.0.0.1',
@@ -1790,7 +1802,8 @@ browserTest(
 					scheduler: { status: scheduleStatus, nextRunAt: scheduledAt, lastDelaySeconds: 60 },
 					evaluations: [
 						{ definition: { classification: 'selectable', ecosystem: 'open-oracle', id: 'open-oracle.weth.wrap', label: 'Wrap ETH', risk: 'low' }, eligibility: { eligible: false, blockers: ['No ETH available'] } },
-						{ definition: { classification: 'lifecycle-obligation', ecosystem: 'open-oracle', id: 'open-oracle.settle', label: 'Settle report', risk: 'low' }, eligibility: { eligible: false, blockers: ['No report due'] } },
+						{ definition: { classification: 'selectable', ecosystem: 'open-oracle', id: 'open-oracle.weth.unwrap', label: 'Unwrap WETH', risk: 'low' }, eligibility: { eligible: false, blockers: ['No WETH available'] } },
+						{ definition: { classification: 'lifecycle-obligation', ecosystem: 'open-oracle', id: 'open-oracle.settle', label: 'Settle report', risk: 'low' }, eligibility: { eligible: false, blockers: [`No report due after scan ${((scans += 1)).toString()}`] } },
 					],
 				}),
 			setSchedule: value => {
@@ -1798,10 +1811,11 @@ browserTest(
 				scheduledAt = new Date().toISOString()
 				scheduleStatus = 'due'
 			},
-			setSelection: value => {
+			setSelection: async value => {
+				await selectionGate
 				if (rejectSelection) throw new Error('Selection save failed')
 				mutations.push(value)
-				selection = ['open-oracle.weth.wrap']
+				selection = [...selection, String(Reflect.get(Object(value), 'operationId'))]
 				revision = 'controls-2'
 			},
 			setCancellation: () => {},
@@ -1849,10 +1863,24 @@ browserTest(
 			expect(await cdp.evaluate("document.querySelector('#schedule-action-status').textContent")).toBe('')
 			await cdp.command('Page.navigate', { url: `http://127.0.0.1:${port.toString()}/catalog` })
 			await waitFor("document.querySelector('[data-selection-toggle]')?.disabled === false")
-			expect(await cdp.evaluate("document.querySelectorAll('[data-selection-toggle]').length")).toBe(1)
+			expect(await cdp.evaluate("document.querySelectorAll('[data-selection-toggle]').length")).toBe(2)
 			await cdp.evaluate("document.querySelector('#catalog-rows summary').click()")
 			await capture('catalog-desktop-1440x900')
 			rejectSelection = true
+			// The refresh that follows a failed save renders a snapshot that throws once. A save that
+			// rejects inside its own recovery path must not strand every later save.
+			await cdp.evaluate(`(() => {
+				const countdown = document.querySelector('#countdown')
+				const descriptor = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent')
+				Object.defineProperty(countdown, 'textContent', {
+					configurable: true,
+					get: () => descriptor.get.call(countdown),
+					set: value => {
+						delete countdown.textContent
+						throw new Error('Injected render failure')
+					},
+				})
+			})()`)
 			await cdp.evaluate("document.querySelector('[data-selection-toggle]').click()")
 			await waitFor("document.querySelector('#catalog-selection-status')?.textContent.includes('Selection save failed')")
 			await waitFor("document.querySelector('[data-selection-toggle]')?.disabled === false")
@@ -1861,6 +1889,32 @@ browserTest(
 			await cdp.evaluate("document.querySelector('[data-selection-toggle]').click()")
 			await waitFor("document.querySelector('#selectable-operation-allowlist')?.value === 'open-oracle.weth.wrap'")
 			expect(mutations[1]).toEqual({ revision: 'controls-1', operationId: 'open-oracle.weth.wrap', enabled: true })
+			// A save must not blink the rest of the catalog: only the saving toggle changes state.
+			let releaseSelection = () => {}
+			selectionGate = new Promise(resolve => {
+				releaseSelection = resolve
+			})
+			await cdp.evaluate(`(() => {
+				const rows = [...document.querySelectorAll('#catalog-rows tbody tr')]
+				rows.forEach((row, index) => { row.dataset.stableRow = String(index) })
+				document.querySelector('[data-selection-toggle="open-oracle.weth.unwrap"]').click()
+			})()`)
+			await waitFor('document.querySelector(\'[data-selection-toggle="open-oracle.weth.unwrap"]\')?.disabled === true')
+			expect(
+				await cdp.evaluate(`({
+					otherChecked: document.querySelector('[data-selection-toggle="open-oracle.weth.wrap"]').checked,
+					otherDisabled: document.querySelector('[data-selection-toggle="open-oracle.weth.wrap"]').disabled,
+					savingChecked: document.querySelector('[data-selection-toggle="open-oracle.weth.unwrap"]').checked,
+				})`),
+			).toEqual({ otherChecked: true, otherDisabled: false, savingChecked: true })
+			releaseSelection()
+			await waitFor("document.querySelector('#selectable-operation-allowlist')?.value === 'open-oracle.weth.wrap\\nopen-oracle.weth.unwrap'")
+			selectionGate = undefined
+			// Only the row whose data changed is rebuilt; the rest keep their DOM nodes so the catalog never reflows.
+			const scansBeforeRefresh = scans
+			await cdp.evaluate("window.dispatchEvent(new Event('focus'))")
+			await waitFor(`document.querySelector('#catalog-rows')?.textContent?.includes('No report due after scan ${(scansBeforeRefresh + 1).toString()}') === true`)
+			expect(await cdp.evaluate("[...document.querySelectorAll('#catalog-rows tbody tr')].map(row => row.dataset.stableRow ?? 'rebuilt')")).toEqual(['0', '1', 'rebuilt'])
 			await cdp.command('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false })
 			await cdp.evaluate("document.querySelector('[data-selection-toggle]').scrollIntoView({ block: 'center' })")
 			await capture('catalog-mobile-390x844')
@@ -1938,6 +1992,92 @@ browserTest(
 					}
 				}
 			}
+		} finally {
+			await cdp.close()
+			await dashboard.stop(true)
+		}
+	},
+	60_000,
+)
+
+browserTest(
+	'collapses overview activity to the ten newest actions and discloses planned dry-run work',
+	async () => {
+		const activities: Record<string, unknown>[] = Array.from({ length: 14 }, (_, index) => ({
+			at: `2026-08-24T00:${index.toString().padStart(2, '0')}:00.000Z`,
+			details: index === 0 ? 'Execution is disabled, so the bot planned this operation and stopped before signing any transaction.' : undefined,
+			label: `Action ${index.toString()}`,
+			status: 'dry-run',
+			summary: '2 steps across 2 contracts; low risk; random priority; no transaction signed',
+		}))
+		const dashboard = startDashboardServer(0, {
+			getConfiguration: () => ({}),
+			getState: () => state({ activities }),
+			hostname: '127.0.0.1',
+			setCancellation: () => {},
+			setCandidate: () => {},
+			setObligation: () => {},
+			setPaused: () => {},
+			setReplacement: () => {},
+			setSettings: () => {},
+			setSigner: () => {},
+			setWorkflow: () => {},
+		})
+		const cdp = await connectToChromium()
+		try {
+			const waitFor = async (expression: string) => {
+				for (let attempt = 0; attempt < 400; attempt += 1) {
+					if ((await cdp.evaluate(expression)) === true) return
+					await Bun.sleep(25)
+				}
+				throw new Error(`Timed out: ${expression}`)
+			}
+			await cdp.command('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false })
+			await cdp.command('Page.navigate', { url: `http://127.0.0.1:${dashboard.port}/overview` })
+			await waitFor("document.querySelectorAll('#activity-list .timeline-item').length === 10")
+			expect(
+				await cdp.evaluate(`({
+					disclosure: document.querySelector('#activity-list .activity-details summary')?.textContent,
+					expandExpanded: document.querySelector('#activity-expand')?.getAttribute('aria-expanded'),
+					expandHidden: document.querySelector('#activity-expand')?.classList.contains('hidden'),
+					expandText: document.querySelector('#activity-expand')?.textContent,
+					newest: document.querySelector('#activity-list .timeline-item strong')?.textContent,
+				})`),
+			).toEqual({ disclosure: 'What was planned', expandExpanded: 'false', expandHidden: false, expandText: 'Show all 14 actions', newest: 'Action 0' })
+			await cdp.evaluate("document.querySelector('#activity-expand').click()")
+			await waitFor("document.querySelectorAll('#activity-list .timeline-item').length === 14")
+			expect(
+				await cdp.evaluate(`({
+					expandExpanded: document.querySelector('#activity-expand')?.getAttribute('aria-expanded'),
+					expandText: document.querySelector('#activity-expand')?.textContent,
+				})`),
+			).toEqual({ expandExpanded: 'true', expandText: 'Show fewer' })
+			await cdp.evaluate("document.querySelector('#activity-expand').click()")
+			await waitFor("document.querySelectorAll('#activity-list .timeline-item').length === 10")
+			expect(await cdp.evaluate('document.querySelector(\'[data-page-content="recovery"] #activity-list\')')).toBeNull()
+			// A poll must not close an opened disclosure or rebuild unchanged items.
+			await cdp.evaluate(`(() => {
+				document.querySelector('#activity-list .activity-details').open = true
+				;[...document.querySelectorAll('#activity-list .timeline-item')].forEach((item, index) => { item.dataset.stableItem = String(index) })
+			})()`)
+			activities[3] = { ...activities[3], summary: 'Rewritten summary' }
+			await waitFor("document.querySelector('#activity-list')?.textContent?.includes('Rewritten summary') === true")
+			expect(
+				await cdp.evaluate(`({
+					disclosureOpen: document.querySelector('#activity-list .activity-details').open,
+					items: [...document.querySelectorAll('#activity-list .timeline-item')].map(item => item.dataset.stableItem ?? 'rebuilt'),
+				})`),
+			).toEqual({ disclosureOpen: true, items: ['0', '1', '2', 'rebuilt', '4', '5', '6', '7', '8', '9'] })
+			activities.length = 0
+			await cdp.evaluate("window.dispatchEvent(new Event('focus'))")
+			await waitFor("document.querySelector('#activity-list .empty-state') !== null")
+			expect(
+				await cdp.evaluate(`({
+					expandHidden: document.querySelector('#activity-expand')?.classList.contains('hidden'),
+					occurrences: [...document.querySelectorAll('.activity-panel *')].filter(element => element.children.length === 0 && element.textContent?.trim() === 'No activity recorded.').length,
+				})`),
+			).toEqual({ expandHidden: true, occurrences: 1 })
+			expect(cdp.issues.filter(issue => issue.kind === 'pageerror')).toEqual([])
 		} finally {
 			await cdp.close()
 			await dashboard.stop(true)
