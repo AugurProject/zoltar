@@ -2,27 +2,18 @@ import { describe, expect, test } from 'bun:test'
 import example from '../../config/operator.example.json'
 import { address, hash, snapshotFixture } from '../operations/fixture.ts'
 import { buildRetirementLiquidityRemovalPlan } from '../../src/operations/retirement-liquidity.ts'
-import {
-	applyRetirementAssessment,
-	assessRetirement,
-	buildAllowanceRevocationPlan,
-	buildAssetSweepPlan,
-	buildNativeOpenOracleCreditPlan,
-	buildV3RetirementPlan,
-	operationAllowedDuringRetirement,
-	readV3PositionsWithQuorum,
-	reconcileV3PositionJournal,
-	retirementPlanFromEvaluations,
-	type V3PositionAnchor,
-	type V3PositionObservation,
-} from '../../src/runtime/retirement.ts'
+import { applyRetirementAssessment, assessRetirement } from '../../src/runtime/retirement-assessment.ts'
+import { buildAllowanceRevocationPlan, buildAssetSweepPlan, buildNativeOpenOracleCreditPlan } from '../../src/runtime/retirement-recovery-plans.ts'
+import { buildV3RetirementPlan, readV3PositionsWithQuorum, reconcileV3PositionJournal } from '../../src/runtime/retirement-v3-positions.ts'
+import type { V3PositionAnchor, V3PositionObservation } from '../../src/runtime/retirement-types.ts'
+import { operationAllowedDuringRetirement, retirementPlanFromEvaluations } from '../../src/runtime/retirement-operation-policy.ts'
 import { initialDurableState, initialRuntimeState, type DurableWorkflow } from '../../src/state/operator-state.ts'
 import { acceptResidualProfileReplacement, cancelRetirement, DEFAULT_RETIREMENT_POLICIES, initialRetirementState, registerV3Position, requestRetirement, uniswapV3PositionKey, type DurableV3Position } from '../../src/state/retirement.ts'
 import type { EvaluatedOperation, OperationPlan } from '../../src/operations/types.ts'
 import { parseSettings } from '../../src/config/settings.ts'
-import { processRetirementCycle, recordV3ScanFailure, recordV3ScanSuccess, updateV3PositionStatus } from '../../src/runtime/retirement-runner.ts'
+import { processRetirementCycle, recordCanonicalRecoveredBalances, recordV3ScanFailure, recordV3ScanSuccess, updateV3PositionStatus } from '../../src/runtime/retirement-runner.ts'
 import { assertOperationEthFunding } from '../../src/execution/safety.ts'
-import { recordCanonicalRecoveredBalances } from '../../src/runtime/retirement-balance-evidence.ts'
+
 import { CHAOS_OPERATION_CATALOG } from '../../src/operations/catalog.ts'
 import { unclassifiedRetirementOperations } from '../../src/runtime/retirement-operation-policy.ts'
 import { resetPristineStateForDeploymentProfile, verifyRetirementCompletionFinality } from '../../src/runtime/deployment-profile.ts'

@@ -7,7 +7,7 @@ import { boundedDashboardJson } from '@zoltar/bot-shared/dashboard/security'
 import { CONFIGURATION_REVISION_CONFLICT } from '../config/settings.ts'
 import { browserScript } from './browser-assets.ts'
 import { publicAlert, publicRetirement } from './public-retirement.ts'
-import { CONFIGURATION_COMMIT_INDETERMINATE, CONFIGURATION_COMMITTED_SAFELY_PAUSED } from '../runtime/dashboard-controller.ts'
+import { CONFIGURATION_COMMIT_INDETERMINATE, CONFIGURATION_COMMITTED_SAFELY_PAUSED } from '../runtime/configuration-commit.ts'
 import { requiredLiveInventory } from '../runtime/live-readiness.ts'
 
 export type ChaosDashboardController = {

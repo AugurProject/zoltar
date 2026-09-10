@@ -5,7 +5,7 @@ import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadControlle
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { finalizeSecurityPoolTruthAuction, refundTruthAuctionBid, settleTruthAuctionBids, startTruthAuctionForSecurityPool, submitTruthAuctionBid, withdrawTruthAuctionRefund } from '../../../protocol/truthAuctionActions.js'
 import { claimParentEscalationDeposits, createChildUniverseFromSecurityPool, forkUniverseDirectly, forkZoltarWithOwnEscalation, initiateSecurityPoolFork, loadForkAuctionDetails, migrateRepToZoltarFromSecurityPool, migrateSecurityVault, migrateVaultWithUnresolvedEscalation } from '../../../protocol/forks.js'
-import { buildForkCarriedEscalationProofs, withdrawForkedEscalationDeposits } from '../../../protocol/reporting.js'
+import { buildForkCarriedEscalationProofs, withdrawForkedEscalationDeposits } from '../../../protocol/reportingCarryState.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { getTruthAuctionBidGuardMessage, getTruthAuctionBidPriceValidationMessage, getTruthAuctionTickAtPrice } from '../lib/truthAuctionBook.js'

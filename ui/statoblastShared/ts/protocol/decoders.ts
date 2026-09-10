@@ -16,6 +16,16 @@ export function requireBigintValue(value: unknown, context: string) {
 	throw new Error(`Unexpected ${context} response`)
 }
 
+export function requireBigintArray(value: unknown, context: string) {
+	if (!Array.isArray(value)) throw new Error(`Unexpected ${context} response`)
+	const result: bigint[] = []
+	for (const item of value) {
+		if (typeof item !== 'bigint') throw new Error(`Unexpected ${context} response`)
+		result.push(item)
+	}
+	return result
+}
+
 export function requireIntegerLikeValue(value: unknown, context: string) {
 	if (typeof value === 'bigint') return value
 	if (typeof value === 'number' && Number.isInteger(value)) return value

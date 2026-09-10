@@ -202,10 +202,6 @@
 			"bun": "./ts/features/security-pools/lib/securityVaultGuards.ts",
 			"default": "./js/features/security-pools/lib/securityVaultGuards.js"
 		},
-		"./features/security-pools/lib/securityVaultHandlers.js": {
-			"bun": "./ts/features/security-pools/lib/securityVaultHandlers.ts",
-			"default": "./js/features/security-pools/lib/securityVaultHandlers.js"
-		},
 		"./features/security-pools/lib/uiPriceOracle.js": {
 			"bun": "./ts/features/security-pools/lib/uiPriceOracle.ts",
 			"default": "./js/features/security-pools/lib/uiPriceOracle.js"
@@ -358,10 +354,6 @@
 			"bun": "./ts/features/open-oracle/lib/openOracle.ts",
 			"default": "./js/features/open-oracle/lib/openOracle.js"
 		},
-		"./features/open-oracle/lib/openOracleNavigation.js": {
-			"bun": "./ts/features/open-oracle/lib/openOracleNavigation.ts",
-			"default": "./js/features/open-oracle/lib/openOracleNavigation.js"
-		},
 		"./features/open-oracle/lib/openOracleReadiness.js": {
 			"bun": "./ts/features/open-oracle/lib/openOracleReadiness.ts",
 			"default": "./js/features/open-oracle/lib/openOracleReadiness.js"
@@ -442,6 +434,10 @@
 			"bun": "./ts/protocol/openOraclePricing.ts",
 			"default": "./js/protocol/openOraclePricing.js"
 		},
+		"./protocol/oracleCoordinator.js": {
+			"bun": "./ts/protocol/oracleCoordinator.ts",
+			"default": "./js/protocol/oracleCoordinator.js"
+		},
 		"./protocol/oracleQueueOperation.js": {
 			"bun": "./ts/protocol/oracleQueueOperation.ts",
 			"default": "./js/protocol/oracleQueueOperation.js"
@@ -453,6 +449,10 @@
 		"./protocol/reporting.js": {
 			"bun": "./ts/protocol/reporting.ts",
 			"default": "./js/protocol/reporting.js"
+		},
+		"./protocol/reportingCarryState.js": {
+			"bun": "./ts/protocol/reportingCarryState.ts",
+			"default": "./js/protocol/reportingCarryState.js"
 		},
 		"./protocol/securityPoolAbi.js": {
 			"bun": "./ts/protocol/securityPoolAbi.ts",

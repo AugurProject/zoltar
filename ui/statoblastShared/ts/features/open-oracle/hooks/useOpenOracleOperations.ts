@@ -1,14 +1,8 @@
 import { useSignal } from '@preact/signals'
-import { zeroAddress, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
+import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { useEffect, useRef } from 'preact/hooks'
 import { useFormState } from '@zoltar/ui-core-shared/hooks/useFormState.js'
-import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
-import { ABIS } from '@zoltar/ui-core-shared/abis.js'
-import { readOptionalMulticall } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { getOpenOracleAddress } from '../../../protocol/deploymentHelpers.js'
-import { createOpenOracleReportInstance, disputeOracleReport, isOpenOracleReportMissingError, loadOpenOracleReportDetails, loadOpenOracleWithdrawableBalances, settleOracleReport, withdrawOpenOracleBalance } from '../../../protocol/openOracle.js'
-import { approveErc20 } from '@zoltar/ui-zoltar-shared/protocol/tokenActions.js'
-import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import {
 	deriveOpenOracleDisputeSubmissionDetails,
@@ -21,78 +15,29 @@ import {
 	parseOpenOracleCreateFormSubmission,
 } from '../lib/openOracle.js'
 import type { OpenOracleCreateContractFieldErrors } from '../lib/openOracle.js'
-import { parseAddressInput, parseReportIdInput } from '@zoltar/ui-core-shared/forms/inputs.js'
-import { getDefaultOpenOracleCreateFormState, getDefaultOpenOracleFormState } from '../lib/formDefaults.js'
+import { parseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
+import { getDefaultOpenOracleCreateFormState } from '../lib/formDefaults.js'
 import { requireDefined } from '@zoltar/ui-core-shared/forms/required.js'
-import type { TokenApprovalState } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback, type ActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
-import { createOpenOracleSuccessPresentation, createOpenOracleTransactionIntent, createOpenOracleWarningPresentation } from '../../reportingTransactionPresentations.js'
+import { createOpenOracleSuccessPresentation, createOpenOracleTransactionIntent, createOpenOracleWarningPresentation, getOpenOracleFailureTitle, getOpenOraclePendingTitle, getOpenOracleSuccessTitle } from '../../reportingTransactionPresentations.js'
 import { buildWriteActionConfig, runWriteAction } from '@zoltar/ui-core-shared/transactions/writeAction.js'
 import { refreshWalletStateOnly } from '@zoltar/ui-core-shared/lib/refreshState.js'
-import type { OpenOracleCreateFormState, OpenOracleFormState, WriteOperationsParameters } from '@zoltar/ui-zoltar-shared/types/app.js'
+import type { OpenOracleCreateFormState, OpenOracleFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import type { OpenOracleActionResult, OpenOracleReportDetails, OpenOracleWithdrawableBalances } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { OpenOracleReportLookupState } from '../../oracleTypes.js'
 import * as openOracleCopy from '../../../copy/openOracle.js'
-import { getOpenOracleFailureTitle, getOpenOraclePendingTitle, getOpenOracleSuccessTitle } from '../lib/openOracleActionTitles.js'
-import {
-	getRefreshedOpenOracleApprovalAmount,
-	readCreateTokenDecimals,
-	toBigIntReadResult,
-	toReadError,
-	type LoadedOracleReportResult,
-	type OpenOracleRawReadResult,
-	type OpenOracleReadClient,
-	type OpenOracleTokenAccessLoadResult,
-	type OptionalReadResult,
-	type RefreshOpenOracleTokenAccessOptions,
-	type TokenAccessLoadResult,
-} from '../lib/openOracleTokenAccess.js'
-type UseOpenOracleOperationsParameters = WriteOperationsParameters & {
-	enabled: boolean
-	onReportSettled?: () => Promise<void> | void
-}
-type OpenOracleProductionWriteClient = ReturnType<typeof createWalletWriteClient>
-export type UseOpenOracleOperationsDependencies<TWriteClient = OpenOracleProductionWriteClient> = {
-	approveErc20: (client: TWriteClient, tokenAddress: Address, spenderAddress: Address, amount: bigint, action: 'approveToken1' | 'approveToken2') => Promise<OpenOracleActionResult>
-	createConnectedReadClient: () => OpenOracleReadClient
-	createOpenOracleReportInstance: (client: TWriteClient, parameters: ReturnType<typeof parseOpenOracleCreateFormSubmission>) => Promise<OpenOracleActionResult>
-	createWalletWriteClient: (accountAddress: Address, callbacks?: Parameters<typeof createWalletWriteClient>[1]) => TWriteClient
-	disputeOracleReport: (client: TWriteClient, openOracleAddress: Address, reportId: bigint, tokenToSwap: Address, newAmount1: bigint, newAmount2: bigint, currentAmount2: bigint, stateHash: Hash) => Promise<OpenOracleActionResult>
-	loadOpenOracleReportDetails: (openOracleAddress: Address, reportId: bigint) => Promise<OpenOracleReportDetails>
-	loadOpenOracleWithdrawableBalances: (openOracleAddress: Address, holder: Address, token1: Address, token2: Address) => Promise<OpenOracleWithdrawableBalances>
-	readOptionalMulticall: (contracts: readonly unknown[]) => Promise<readonly OpenOracleRawReadResult[]>
-	settleOracleReport: (client: TWriteClient, openOracleAddress: Address, reportId: bigint) => Promise<OpenOracleActionResult>
-	withdrawOpenOracleBalance: (client: TWriteClient, openOracleAddress: Address, token: Address, amount: bigint, recipient: Address) => Promise<OpenOracleActionResult>
-}
+import { getRefreshedOpenOracleApprovalAmount, readCreateTokenDecimals } from '../lib/openOracleTokenAccess.js'
+import { defaultUseOpenOracleOperationsDependencies, type OpenOracleProductionWriteClient, type UseOpenOracleOperationsDependencies, type UseOpenOracleOperationsParameters } from './openOracleOperationDependencies.js'
+import { useOpenOracleSelectedReport } from './useOpenOracleSelectedReport.js'
+import { useOpenOracleTokenAccess } from './useOpenOracleTokenAccess.js'
 
-const defaultUseOpenOracleOperationsDependencies: UseOpenOracleOperationsDependencies = {
-	approveErc20: async (client, tokenAddress, spenderAddress, amount, action) => await approveErc20(client, tokenAddress, spenderAddress, amount, action),
-	createConnectedReadClient: () => {
-		const client = createConnectedReadClient()
-		return {
-			getBalance: async parameters => await client.getBalance(parameters),
-			readContract: async parameters => await client.readContract(parameters),
-		}
-	},
-	createOpenOracleReportInstance: async (client, parameters) => await createOpenOracleReportInstance(client, parameters),
-	createWalletWriteClient,
-	disputeOracleReport: async (client, openOracleAddress, reportId, tokenToSwap, newAmount1, newAmount2, currentAmount2, stateHash) => await disputeOracleReport(client, openOracleAddress, reportId, tokenToSwap, newAmount1, newAmount2, currentAmount2, stateHash),
-	loadOpenOracleReportDetails: async (openOracleAddress, reportId) => await loadOpenOracleReportDetails(createConnectedReadClient(), openOracleAddress, reportId),
-	loadOpenOracleWithdrawableBalances: async (openOracleAddress, holder, token1, token2) => await loadOpenOracleWithdrawableBalances(createConnectedReadClient(), openOracleAddress, holder, token1, token2),
-	readOptionalMulticall: async contracts => await readOptionalMulticall(createConnectedReadClient(), contracts),
-	settleOracleReport: async (client, openOracleAddress, reportId) => await settleOracleReport(client, openOracleAddress, reportId),
-	withdrawOpenOracleBalance: async (client, openOracleAddress, token, amount, recipient) => await withdrawOpenOracleBalance(client, openOracleAddress, token, amount, recipient),
-}
+export type { UseOpenOracleOperationsDependencies } from './openOracleOperationDependencies.js'
 
 function useOpenOracleOperationsWithDependencies<TWriteClient>(
 	{ accountAddress, enabled, onReportSettled, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState }: UseOpenOracleOperationsParameters,
 	dependencies: UseOpenOracleOperationsDependencies<TWriteClient>,
 ) {
 	const loadingOpenOracleCreate = useSignal(false)
-	const oracleReportLoad = useLoadController()
-	const openOracleTokenAccessLoad = useLoadController()
-	const openOracleWithdrawableBalanceLoad = useLoadController()
 	const { state: openOracleCreateForm, setState: setOpenOracleCreateFormState } = useFormState<OpenOracleCreateFormState>(getDefaultOpenOracleCreateFormState())
 	const openOracleCreateFieldErrors = useSignal<OpenOracleCreateContractFieldErrors>({})
 	const openOracleError = useSignal<string | undefined>(undefined)
@@ -100,35 +45,51 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 	type OpenOracleWithdrawableBalanceKey = 'ethAttoEth' | 'token1' | 'token2'
 	const openOracleActiveWithdrawalBalance = useSignal<OpenOracleWithdrawableBalanceKey | undefined>(undefined)
 	const openOracleFeedback = useSignal<ActionFeedback<OpenOracleActionResult['action']> | undefined>(undefined)
-	const { state: openOracleForm, setState: setOpenOracleFormState } = useFormState<OpenOracleFormState>(getDefaultOpenOracleFormState())
 	const openOracleResult = useSignal<OpenOracleActionResult | undefined>(undefined)
-	const openOracleReportDetails = useSignal<OpenOracleReportDetails | undefined>(undefined)
-	const openOracleReportLookupState = useSignal<OpenOracleReportLookupState>('unknown')
 	const openOracleWithdrawalBalanceChecking = useSignal(false)
 	const openOracleWithdrawalReviewMessage = useSignal<{ balance: keyof OpenOracleWithdrawableBalances; message: string } | undefined>(undefined)
-	const openOracleWithdrawableBalances = useSignal<OpenOracleWithdrawableBalances | undefined>(undefined)
-	const openOracleWithdrawableBalancesError = useSignal<string | undefined>(undefined)
-	const loadedOpenOracleReportId = useSignal<bigint | undefined>(undefined)
-	const openOracleToken1Approval = useSignal<TokenApprovalState>({
-		error: undefined,
-		loading: false,
-		value: undefined,
-	})
-	const openOracleToken2Approval = useSignal<TokenApprovalState>({
-		error: undefined,
-		loading: false,
-		value: undefined,
-	})
-	const openOracleToken1Balance = useSignal<bigint | undefined>(undefined)
-	const openOracleToken1BalanceError = useSignal<string | undefined>(undefined)
-	const openOracleToken2Balance = useSignal<bigint | undefined>(undefined)
-	const openOracleToken2BalanceError = useSignal<string | undefined>(undefined)
-	const openOracleTokenAccessLoadingInitial = useSignal(false)
-	const openOracleTokenAccessRefreshing = useSignal(false)
-	const nextOpenOracleTokenAccessLoad = useRequestGuard()
-	const nextOpenOracleWithdrawableBalanceLoad = useRequestGuard()
 	const nextOpenOracleWithdrawalAttempt = useRequestGuard()
-	const nextOracleReportLoad = useRequestGuard()
+	const currentSelectedReportIdRef = useRef('')
+	const isSelectedReportCurrent = (reportIdInput: string) => currentSelectedReportIdRef.current === reportIdInput.trim()
+	const {
+		openOracleToken1Approval,
+		openOracleToken1Balance,
+		openOracleToken1BalanceError,
+		openOracleToken2Approval,
+		openOracleToken2Balance,
+		openOracleToken2BalanceError,
+		openOracleTokenAccessLoad,
+		openOracleTokenAccessLoadingInitial,
+		openOracleTokenAccessRefreshing,
+		refreshOpenOracleTokenAccess,
+		resetOpenOracleTokenAccessState,
+	} = useOpenOracleTokenAccess({
+		accountAddress,
+		isSelectedReportCurrent,
+		readOptionalMulticall: dependencies.readOptionalMulticall,
+	})
+	const {
+		assertSelectedReportCurrent,
+		currentSelectedReportIdInput,
+		ensureLoadedSelectedReport,
+		loadOracleReport,
+		openOracleForm,
+		openOracleReportDetails,
+		openOracleReportLookupState,
+		openOracleWithdrawableBalanceLoad,
+		openOracleWithdrawableBalances,
+		openOracleWithdrawableBalancesError,
+		refreshOpenOracleWithdrawableBalances,
+		requireLoadedCurrentSelectedReport,
+		setOpenOracleForm,
+	} = useOpenOracleSelectedReport({
+		accountAddress,
+		currentSelectedReportIdRef,
+		loadOpenOracleReportDetails: dependencies.loadOpenOracleReportDetails,
+		loadOpenOracleWithdrawableBalances: dependencies.loadOpenOracleWithdrawableBalances,
+		openOracleError,
+		resetOpenOracleTokenAccessState,
+	})
 	const setOpenOracleCreateForm = (updater: (current: OpenOracleCreateFormState) => OpenOracleCreateFormState) => {
 		setOpenOracleCreateFormState(current => {
 			const next = updater(current)
@@ -140,275 +101,10 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 			return next
 		})
 	}
-	const currentSelectedReportIdInput = openOracleForm.value.reportId.trim()
 	const accountAddressRef = useRef(accountAddress)
 	accountAddressRef.current = accountAddress
 	const enabledRef = useRef(enabled)
 	enabledRef.current = enabled
-	const currentSelectedReportIdRef = useRef(currentSelectedReportIdInput)
-	currentSelectedReportIdRef.current = currentSelectedReportIdInput
-
-	const setOpenOracleTokenAccessMode = (mode: 'idle' | 'initial' | 'background') => {
-		openOracleTokenAccessLoadingInitial.value = mode === 'initial'
-		openOracleTokenAccessRefreshing.value = mode === 'background'
-	}
-	const isSelectedReportCurrent = (reportIdInput: string) => currentSelectedReportIdRef.current === reportIdInput.trim()
-
-	const resetOpenOracleTokenApprovalState = (loading: boolean) => {
-		openOracleToken1Approval.value = {
-			error: undefined,
-			loading,
-			value: undefined,
-		}
-		openOracleToken2Approval.value = {
-			error: undefined,
-			loading,
-			value: undefined,
-		}
-	}
-
-	const resetOpenOracleTokenBalanceState = () => {
-		openOracleToken1Balance.value = undefined
-		openOracleToken1BalanceError.value = undefined
-		openOracleToken2Balance.value = undefined
-		openOracleToken2BalanceError.value = undefined
-	}
-
-	const resetOpenOracleTokenAccessState = (approvalLoading: boolean) => {
-		resetOpenOracleTokenApprovalState(approvalLoading)
-		resetOpenOracleTokenBalanceState()
-		setOpenOracleTokenAccessMode('idle')
-	}
-
-	const getTokenApprovalState = (result: OptionalReadResult<bigint>): TokenApprovalState => {
-		if (result.status === 'success')
-			return {
-				error: undefined,
-				loading: false,
-				value: result.result,
-			}
-		return {
-			error: getErrorMessage(result.error, 'Failed to load token approval'),
-			loading: false,
-			value: undefined,
-		}
-	}
-
-	const getTokenBalanceState = (result: OptionalReadResult<bigint>): TokenAccessLoadResult => {
-		if (result.status === 'success')
-			return {
-				amount: result.result,
-				error: undefined,
-			}
-		return {
-			amount: undefined,
-			error: getErrorMessage(result.error, 'Failed to load token balance'),
-		}
-	}
-
-	const refreshOpenOracleWithdrawableBalances = async (details: OpenOracleReportDetails | undefined) => {
-		const isCurrent = nextOpenOracleWithdrawableBalanceLoad()
-		const holder = accountAddress
-		if (details === undefined || holder === undefined) {
-			openOracleWithdrawableBalances.value = undefined
-			openOracleWithdrawableBalancesError.value = undefined
-			return
-		}
-		const currentReportIdInput = details.reportId.toString()
-		await openOracleWithdrawableBalanceLoad.run({
-			isCurrent: () => isCurrent() && isSelectedReportCurrent(currentReportIdInput),
-			onStart: () => {
-				openOracleWithdrawableBalancesError.value = undefined
-			},
-			load: async () => await dependencies.loadOpenOracleWithdrawableBalances(getOpenOracleAddress(), holder, details.token1, details.token2),
-			onSuccess: balances => {
-				openOracleWithdrawableBalances.value = balances
-			},
-			onError: error => {
-				openOracleWithdrawableBalancesError.value = getErrorMessage(error, 'Failed to load Open Oracle balances')
-			},
-		})
-	}
-
-	const applyLoadedOracleReport = (details: OpenOracleReportDetails) => {
-		openOracleReportDetails.value = details
-		loadedOpenOracleReportId.value = details.reportId
-		openOracleForm.value = {
-			...openOracleForm.value,
-			reportId: details.reportId.toString(),
-			stateHash: details.stateHash,
-		}
-	}
-
-	const refreshOpenOracleTokenAccess = async (details: OpenOracleReportDetails | undefined, { preserveExisting = false }: RefreshOpenOracleTokenAccessOptions = {}) => {
-		const currentDetails = details
-		const isCurrent = nextOpenOracleTokenAccessLoad()
-		if (currentDetails === undefined) {
-			resetOpenOracleTokenAccessState(false)
-			return
-		}
-		const currentReportIdInput = currentDetails.reportId.toString()
-		const isCurrentSelectedReport = () => isSelectedReportCurrent(currentReportIdInput)
-
-		try {
-			await openOracleTokenAccessLoad.run({
-				isCurrent: () => isCurrent() && isCurrentSelectedReport(),
-				onStart: () => {
-					setOpenOracleTokenAccessMode(preserveExisting ? 'background' : 'initial')
-					if (!preserveExisting) {
-						resetOpenOracleTokenAccessState(accountAddress !== undefined)
-						setOpenOracleTokenAccessMode('initial')
-					} else {
-						openOracleToken1Approval.value = {
-							...openOracleToken1Approval.value,
-							loading: false,
-						}
-						openOracleToken2Approval.value = {
-							...openOracleToken2Approval.value,
-							loading: false,
-						}
-					}
-				},
-				load: async () => {
-					if (accountAddress === undefined)
-						return {
-							token1ApprovalResult: { error: undefined, loading: false, value: undefined },
-							token2ApprovalResult: { error: undefined, loading: false, value: undefined },
-							token1BalanceResult: { amount: undefined, error: undefined },
-							token2BalanceResult: { amount: undefined, error: undefined },
-						} satisfies OpenOracleTokenAccessLoadResult
-					const tokenAccessReadResults = await dependencies
-						.readOptionalMulticall([
-							{
-								abi: ABIS.mainnet.erc20,
-								functionName: 'allowance',
-								address: currentDetails.token1,
-								args: [accountAddress, getOpenOracleAddress()],
-							},
-							{
-								abi: ABIS.mainnet.erc20,
-								functionName: 'allowance',
-								address: currentDetails.token2,
-								args: [accountAddress, getOpenOracleAddress()],
-							},
-							{
-								abi: ABIS.mainnet.erc20,
-								functionName: 'balanceOf',
-								address: currentDetails.token1,
-								args: [accountAddress],
-							},
-							{
-								abi: ABIS.mainnet.erc20,
-								functionName: 'balanceOf',
-								address: currentDetails.token2,
-								args: [accountAddress],
-							},
-						])
-						.catch(error => {
-							const failureResult = {
-								error: toReadError(error),
-								status: 'failure',
-							} satisfies OptionalReadResult<bigint>
-							return [failureResult, failureResult, failureResult, failureResult]
-						})
-					const [token1ApprovalReadResult, token2ApprovalReadResult, token1BalanceReadResult, token2BalanceReadResult] = tokenAccessReadResults.map(toBigIntReadResult)
-					if (token1ApprovalReadResult === undefined || token2ApprovalReadResult === undefined || token1BalanceReadResult === undefined || token2BalanceReadResult === undefined) throw new Error('Unexpected token access response')
-
-					return {
-						token1ApprovalResult: getTokenApprovalState(token1ApprovalReadResult),
-						token2ApprovalResult: getTokenApprovalState(token2ApprovalReadResult),
-						token1BalanceResult: getTokenBalanceState(token1BalanceReadResult),
-						token2BalanceResult: getTokenBalanceState(token2BalanceReadResult),
-					} satisfies OpenOracleTokenAccessLoadResult
-				},
-				onSuccess: ({ token1ApprovalResult, token2ApprovalResult, token1BalanceResult, token2BalanceResult }: OpenOracleTokenAccessLoadResult) => {
-					openOracleToken1Approval.value = token1ApprovalResult
-					openOracleToken2Approval.value = token2ApprovalResult
-					openOracleToken1Balance.value = token1BalanceResult.amount
-					openOracleToken1BalanceError.value = token1BalanceResult.error
-					openOracleToken2Balance.value = token2BalanceResult.amount
-					openOracleToken2BalanceError.value = token2BalanceResult.error
-				},
-				onError: () => undefined,
-			})
-		} finally {
-			if (isCurrent() && isCurrentSelectedReport()) setOpenOracleTokenAccessMode('idle')
-		}
-	}
-
-	const loadOracleReportById = async (reportId: bigint) => await dependencies.loadOpenOracleReportDetails(getOpenOracleAddress(), reportId)
-	const setOpenOracleForm = (updater: (current: OpenOracleFormState) => OpenOracleFormState) => {
-		setOpenOracleFormState(current => {
-			const next = updater(current)
-			const nextReportId = next.reportId.trim()
-			if (nextReportId === current.reportId.trim()) return next
-
-			currentSelectedReportIdRef.current = nextReportId
-			openOracleReportLookupState.value = 'unknown'
-			openOracleReportDetails.value = undefined
-			loadedOpenOracleReportId.value = undefined
-			openOracleError.value = undefined
-			resetOpenOracleTokenAccessState(false)
-			return { ...getDefaultOpenOracleFormState(), reportId: next.reportId }
-		})
-	}
-
-	const loadOracleReport = async (reportIdInput?: string) => {
-		const requestedReportIdInput = reportIdInput?.trim() ?? currentSelectedReportIdInput
-		if (reportIdInput !== undefined) setOpenOracleForm(current => ({ ...current, reportId: requestedReportIdInput }))
-		const isCurrentLoad = nextOracleReportLoad()
-		await oracleReportLoad.run({
-			onStart: () => {
-				openOracleError.value = undefined
-				openOracleReportLookupState.value = 'loading'
-			},
-			load: async () => {
-				const reportIdValue = reportIdInput?.trim() ?? openOracleForm.value.reportId
-				const reportId = parseReportIdInput(reportIdValue)
-				const details = await loadOracleReportById(reportId)
-				if (!isCurrentLoad() || !isSelectedReportCurrent(requestedReportIdInput)) throw new Error('Stale oracle report load')
-				return { details, reportId } satisfies LoadedOracleReportResult
-			},
-			onSuccess: ({ details }: LoadedOracleReportResult) => {
-				if (!isCurrentLoad() || !isSelectedReportCurrent(requestedReportIdInput)) return
-				applyLoadedOracleReport(details)
-				openOracleReportLookupState.value = 'ready'
-			},
-			onError: (error: unknown) => {
-				if (!isCurrentLoad() || !isSelectedReportCurrent(requestedReportIdInput)) return
-				openOracleReportDetails.value = undefined
-				loadedOpenOracleReportId.value = undefined
-				resetOpenOracleTokenAccessState(false)
-				const reportMissing = isOpenOracleReportMissingError(error)
-				openOracleReportLookupState.value = reportMissing ? 'missing' : 'load-failed'
-				openOracleError.value = reportMissing ? undefined : getErrorMessage(error, 'Failed to load oracle report')
-			},
-		})
-	}
-	const ensureLoadedSelectedReport = async ({ forceReload = false, reportIdInput, requireCurrentSelection = false }: { forceReload?: boolean; reportIdInput?: string; requireCurrentSelection?: boolean } = {}) => {
-		const selectedReportIdInput = reportIdInput?.trim() ?? currentSelectedReportIdInput
-		const reportId = parseReportIdInput(selectedReportIdInput)
-		if (!forceReload && openOracleReportDetails.value !== undefined && loadedOpenOracleReportId.value === reportId) return { reportId, details: openOracleReportDetails.value }
-
-		const details = await loadOracleReportById(reportId)
-		if (requireCurrentSelection && !isSelectedReportCurrent(selectedReportIdInput)) throw new Error('Selected report changed. Review the current report and try again.')
-		applyLoadedOracleReport(details)
-
-		return {
-			details,
-			reportId,
-		}
-	}
-
-	const assertSelectedReportCurrent = (reportIdInput: string) => {
-		if (!isSelectedReportCurrent(reportIdInput)) throw new Error('Selected report changed. Review the current report and try again.')
-	}
-
-	const requireLoadedCurrentSelectedReport = () => {
-		const reportDetails = requireDefined(openOracleReportDetails.value, 'Select an oracle report first')
-		assertSelectedReportCurrent(reportDetails.reportId.toString())
-		return reportDetails
-	}
 
 	const getDisputeSubmission = (reportDetails: OpenOracleReportDetails, form: OpenOracleFormState = openOracleForm.value) =>
 		deriveOpenOracleDisputeSubmissionDetails({
