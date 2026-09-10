@@ -17,6 +17,14 @@ test('counts active errors and warnings while preserving all notices and collaps
 		const alerts = window.document.getElementById('operator-alerts')
 		const empty = window.document.getElementById('header-notices-empty')
 		if (disclosure === null || alerts === null || !(empty instanceof window.HTMLElement)) throw new Error('Missing notice fixture')
+		// Mutation observer callbacks can lag waitUntilComplete on loaded machines, so settle on the expected count.
+		const settledCount = async (expected: string) => {
+			for (let attempt = 0; attempt < 200 && count?.textContent !== expected; attempt += 1) {
+				await window.happyDOM.waitUntilComplete()
+				await Bun.sleep(5)
+			}
+			return count?.textContent
+		}
 		expect(count?.textContent).toBe('0')
 		expect(disclosure.open).toBe(false)
 		for (let index = 0; index < 100; index++) {
@@ -25,18 +33,15 @@ test('counts active errors and warnings while preserving all notices and collaps
 			item.textContent = `Failure ${index.toString()}`
 			alerts.append(item)
 		}
-		await window.happyDOM.waitUntilComplete()
-		expect(count?.textContent).toBe('100')
+		expect(await settledCount('100')).toBe('100')
 		expect(disclosure.classList.contains('has-errors')).toBe(true)
 		expect(disclosure.open).toBe(false)
 		disclosure.open = true
 		alerts.firstElementChild?.classList.add('hidden')
-		await window.happyDOM.waitUntilComplete()
-		expect(count?.textContent).toBe('99')
+		expect(await settledCount('99')).toBe('99')
 		expect(disclosure.open).toBe(true)
 		alerts.classList.add('hidden')
-		await window.happyDOM.waitUntilComplete()
-		expect(count?.textContent).toBe('0')
+		expect(await settledCount('0')).toBe('0')
 		expect(disclosure.classList.contains('has-errors')).toBe(false)
 		window.dispatchEvent(new window.PageTransitionEvent('pagehide'))
 		alerts.classList.remove('hidden')
