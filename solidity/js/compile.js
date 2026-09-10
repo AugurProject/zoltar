@@ -1,0 +1,528 @@
+import { isContractProjectSource, parseContractProject } from './contractProjects.js';
+import { createHash } from 'crypto';
+import { promises as fs } from 'fs';
+import * as path from 'path';
+import solc from 'solc';
+import openOracleSolc from 'solc-0-8-28';
+import * as funtypes from 'funtypes';
+import * as url from 'url';
+const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url));
+const CONTRACT_PATH_APP = path.join(directoryOfThisFile, '..', 'ts', 'types', 'contractArtifact.ts');
+const selectedProject = process.argv[2] === undefined ? undefined : parseContractProject(process.argv[2]);
+const HASH_CACHE_PATH = path.join(process.cwd(), ...(selectedProject === undefined ? [] : ['artifacts', selectedProject]), '.contract-hash.json');
+const ARTIFACTS_DIR = path.join(process.cwd(), 'artifacts', ...(selectedProject === undefined ? [] : [selectedProject]));
+const ARTIFACTS_JSON = path.join(ARTIFACTS_DIR, 'Contracts.json');
+const OPEN_ORACLE_LOCAL_PATH = 'contracts/statoblast/openOracle/OpenOracle.sol';
+const OPEN_ORACLE_LOCAL_PREFIX = 'contracts/statoblast/openOracle/';
+const OPEN_ORACLE_LOCAL_VENDOR_PREFIX = 'contracts/statoblast/openOracle/openzeppelin/contracts/';
+const OPEN_ORACLE_UPSTREAM_PATH = 'src/OpenOracleSlim.sol';
+const OPEN_ORACLE_UPSTREAM_PREFIX = 'src/';
+const OPEN_ORACLE_IMPORT_PREFIX = '@openzeppelin/contracts/';
+const MAIN_COMPILER_PROFILE_PREFIX = 'compiler-profiles/main/';
+const OPEN_ORACLE_COMPILER_PROFILE_PREFIX = 'compiler-profiles/open-oracle/';
+const OPEN_ORACLE_EXACT_PRAGMA = 'pragma solidity 0.8.28;';
+const OPEN_ORACLE_MAIN_PASS_PRAGMA = 'pragma solidity 0.8.35;';
+const allowedImmutableContractWarnings = [
+    {
+        sourcePath: 'contracts/statoblast/Multicall3.sol',
+        message: 'Since the VM version paris, "difficulty" was replaced by "prevrandao"',
+    },
+    {
+        sourcePath: 'contracts/statoblast/WETH9.sol',
+        message: "'transfer' is deprecated and scheduled for removal",
+    },
+    {
+        sourcePath: 'contracts/statoblast/openOracle/OpenOracle.sol',
+        message: 'Unnamed return variable can remain unassigned',
+    },
+    {
+        sourcePath: 'contracts/trading/test/TradingProtocolMocks.sol',
+        message: '"selfdestruct" has been deprecated',
+    },
+    {
+        sourcePath: OPEN_ORACLE_UPSTREAM_PATH,
+        message: 'Unnamed return variable can remain unassigned',
+    },
+];
+const CompileError = funtypes.ReadonlyObject({
+    severity: funtypes.String,
+    formattedMessage: funtypes.String,
+});
+const AbiParameter = funtypes.Lazy(() => funtypes.ReadonlyPartial({
+    name: funtypes.String,
+    type: funtypes.String,
+    internalType: funtypes.String,
+    indexed: funtypes.Boolean,
+    components: funtypes.ReadonlyArray(AbiParameter),
+}));
+const AbiEntry = funtypes.ReadonlyPartial({
+    type: funtypes.String,
+    name: funtypes.String,
+    stateMutability: funtypes.String,
+    anonymous: funtypes.Boolean,
+    inputs: funtypes.ReadonlyArray(AbiParameter),
+    outputs: funtypes.ReadonlyArray(AbiParameter),
+});
+const ContractData = funtypes.ReadonlyPartial({
+    abi: funtypes.ReadonlyArray(AbiEntry),
+    evm: funtypes.ReadonlyPartial({
+        bytecode: funtypes.ReadonlyPartial({
+            object: funtypes.String,
+            opcodes: funtypes.String,
+            sourceMap: funtypes.String,
+            immutableReferences: funtypes.Unknown,
+            linkReferences: funtypes.Unknown,
+        }),
+        deployedBytecode: funtypes.ReadonlyPartial({
+            object: funtypes.String,
+            opcodes: funtypes.String,
+            sourceMap: funtypes.String,
+            immutableReferences: funtypes.Unknown,
+            linkReferences: funtypes.Unknown,
+        }),
+    }),
+    storageLayout: funtypes.Unknown,
+});
+const CompileResult = funtypes.ReadonlyObject({
+    contracts: funtypes.Union(funtypes.Record(funtypes.String, funtypes.Record(funtypes.String, ContractData)), funtypes.Undefined),
+    sources: funtypes.Union(funtypes.Unknown, funtypes.Undefined),
+    errors: funtypes.Union(funtypes.ReadonlyArray(CompileError), funtypes.Undefined),
+    compilerProfiles: funtypes.Union(funtypes.Unknown, funtypes.Undefined),
+});
+const HashCache = funtypes.ReadonlyPartial({
+    hash: funtypes.String,
+});
+const mainCompilerSettings = {
+    viaIR: true,
+    evmVersion: 'osaka',
+    optimizer: {
+        enabled: true,
+        // The protocol favors deployability of the immutable coordination contracts.
+        // Their lifecycle paths are infrequent compared with deployment, so the
+        // size-oriented profile is the safer tradeoff as bounded claim accounting grows.
+        runs: 0,
+    },
+    metadata: {
+        // Deployment manifests already bind the compiler settings and complete
+        // bytecode, so an appended metadata trailer adds size without adding trust.
+        appendCBOR: false,
+        bytecodeHash: 'none',
+    },
+    outputSelection: {
+        '*': {
+            '*': [
+                'abi',
+                'evm.bytecode.object',
+                'evm.bytecode.opcodes',
+                'evm.bytecode.sourceMap',
+                'evm.bytecode.immutableReferences',
+                'evm.bytecode.linkReferences',
+                'evm.deployedBytecode.object',
+                'evm.deployedBytecode.opcodes',
+                'evm.deployedBytecode.sourceMap',
+                'evm.deployedBytecode.immutableReferences',
+                'evm.deployedBytecode.linkReferences',
+                'storageLayout',
+            ],
+        },
+    },
+};
+export const openOracleCompilerSettings = {
+    viaIR: true,
+    optimizer: {
+        enabled: true,
+        runs: 190,
+    },
+    outputSelection: mainCompilerSettings.outputSelection,
+    evmVersion: 'cancun',
+};
+let openOracleCompilerPromise;
+class CompilationError extends Error {
+    errors;
+    constructor(errors) {
+        super('compilation error');
+        this.name = 'CompilationError';
+        this.errors = errors;
+    }
+    toString() {
+        const unescape = (str) => str.replace(/\\n/g, '\n').replace(/\\t/g, '\t');
+        return `${this.name}: ${this.message}\n errors:\n${this.errors.map((error, index) => `  [${index}] ${unescape(error)}`).join('\n')}`;
+    }
+}
+async function exists(filePath) {
+    try {
+        await fs.stat(filePath);
+        return true;
+    }
+    catch (error) {
+        if (hasNodeErrorCode(error, 'ENOENT'))
+            return false;
+        throw error;
+    }
+}
+function hasNodeErrorCode(error, code) {
+    return isObjectRecord(error) && error['code'] === code;
+}
+function isObjectRecord(value) {
+    return typeof value === 'object' && value !== null;
+}
+function normalizeSoliditySourceLineEndings(source) {
+    return source.replace(/\r\n?/g, '\n');
+}
+function isCompileError(value) {
+    return isObjectRecord(value) && typeof value['severity'] === 'string' && typeof value['formattedMessage'] === 'string';
+}
+function isAllowedImmutableContractWarning(formattedMessage) {
+    return allowedImmutableContractWarnings.some(({ sourcePath, message }) => formattedMessage.includes(message) && formattedMessage.includes(sourcePath));
+}
+function isFuntypesValidationError(error) {
+    return error instanceof Error && error.name === 'ValidationError';
+}
+function getCompilerVersion(compiler) {
+    return compiler.version();
+}
+export async function loadOpenOracleCompiler() {
+    if (openOracleCompilerPromise)
+        return openOracleCompilerPromise;
+    openOracleCompilerPromise = Promise.resolve(openOracleSolc);
+    return openOracleCompilerPromise;
+}
+async function computeContractHash(sourceFiles, openOracleCompiler) {
+    const hasher = createHash('sha256');
+    hasher.update(getCompilerVersion(solc));
+    hasher.update('\n');
+    hasher.update(getCompilerVersion(openOracleCompiler));
+    hasher.update('\n');
+    hasher.update(JSON.stringify({
+        artifactMergeVersion: 3,
+        mainCompilerSettings,
+        openOracleCompilerSettings,
+        openOracleLocalPath: OPEN_ORACLE_LOCAL_PATH,
+        openOracleLocalPrefix: OPEN_ORACLE_LOCAL_PREFIX,
+        openOracleLocalVendorPrefix: OPEN_ORACLE_LOCAL_VENDOR_PREFIX,
+        openOracleUpstreamPath: OPEN_ORACLE_UPSTREAM_PATH,
+        openOracleUpstreamPrefix: OPEN_ORACLE_UPSTREAM_PREFIX,
+        openOracleImportPrefix: OPEN_ORACLE_IMPORT_PREFIX,
+        openOracleMainPassPragma: OPEN_ORACLE_MAIN_PASS_PRAGMA,
+    }));
+    hasher.update('\n');
+    const sortedPaths = Array.from(sourceFiles.keys()).sort();
+    for (const relativePath of sortedPaths) {
+        hasher.update(relativePath);
+        hasher.update('\n');
+        hasher.update(sourceFiles.get(relativePath) ?? '');
+        hasher.update('\n');
+    }
+    return hasher.digest('hex');
+}
+async function loadHashCache() {
+    try {
+        if (await exists(HASH_CACHE_PATH)) {
+            const data = await fs.readFile(HASH_CACHE_PATH, 'utf8');
+            const parsed = HashCache.parse(JSON.parse(data));
+            return { hash: parsed.hash };
+        }
+    }
+    catch (error) {
+        if (error instanceof SyntaxError || hasNodeErrorCode(error, 'ENOENT') || isFuntypesValidationError(error))
+            return { hash: undefined };
+        throw error;
+    }
+    return { hash: undefined };
+}
+async function saveHashCache(contractHash) {
+    await fs.mkdir(path.dirname(HASH_CACHE_PATH), { recursive: true });
+    await fs.writeFile(HASH_CACHE_PATH, JSON.stringify({ hash: contractHash, updated: Date.now() }));
+}
+const getAllFiles = async (dirPath, baseDir, fileList = [], visited) => {
+    if (!baseDir)
+        baseDir = await fs.realpath(dirPath);
+    const visitedSet = visited ?? new Set();
+    const canonicalDir = await fs.realpath(dirPath);
+    if (visitedSet.has(canonicalDir))
+        return fileList;
+    visitedSet.add(canonicalDir);
+    const files = await fs.readdir(dirPath, { withFileTypes: true });
+    for (const file of files) {
+        const filePath = path.join(dirPath, file.name);
+        let targetPath = filePath;
+        if (file.isSymbolicLink()) {
+            targetPath = await fs.realpath(filePath);
+        }
+        const relative = path.relative(baseDir, targetPath);
+        if (relative.startsWith('..') || path.isAbsolute(relative))
+            throw new Error(`Path traversal detected: ${filePath} resolves outside allowed directory`);
+        if (file.isDirectory() || (file.isSymbolicLink() && (await fs.stat(targetPath)).isDirectory())) {
+            await getAllFiles(targetPath, baseDir, fileList, visitedSet);
+            continue;
+        }
+        fileList.push(filePath);
+    }
+    return fileList;
+};
+const copySolidityContractArtifact = async (contractLocation) => {
+    const solidityContract = CompileResult.parse(JSON.parse(await fs.readFile(contractLocation, 'utf8')));
+    if (!solidityContract.contracts)
+        throw new Error('No contracts compiled');
+    const contracts = Object.entries(solidityContract.contracts).flatMap(([filename, contract]) => {
+        if (!isObjectRecord(contract))
+            throw new Error('missing contract');
+        return Object.entries(contract).map(([contractName, contractData]) => ({
+            contractName: `${filename
+                .replace('contracts/', '')
+                .replace(/-/g, '')
+                .replace(/\//g, '_')
+                .replace(/\\/g, '_')
+                .replace(/\.sol$/, '')}_${contractName}`,
+            contractData: {
+                abi: isObjectRecord(contractData) ? contractData['abi'] : undefined,
+                evm: isObjectRecord(contractData) ? contractData['evm'] : undefined,
+            },
+        }));
+    });
+    if (new Set(contracts.map(contract => contract.contractName)).size !== contracts.length)
+        throw new Error('duplicated contract name!');
+    const typescriptString = contracts.map(contract => `export const ${contract.contractName} = ${JSON.stringify(contract.contractData, null, 4)} as const`).join('\r\n\r\n');
+    await fs.writeFile(CONTRACT_PATH_APP, typescriptString);
+};
+function buildSourceObject(sources) {
+    const sourceObject = {};
+    for (const [sourcePath, content] of sources) {
+        sourceObject[sourcePath] = { content };
+    }
+    return sourceObject;
+}
+function addOpenOracleImportAliases(targetSources, sourceFiles) {
+    for (const [sourcePath, content] of sourceFiles) {
+        if (!sourcePath.startsWith(OPEN_ORACLE_LOCAL_VENDOR_PREFIX))
+            continue;
+        const aliasedPath = `${OPEN_ORACLE_IMPORT_PREFIX}${sourcePath.slice(OPEN_ORACLE_LOCAL_VENDOR_PREFIX.length)}`;
+        targetSources.set(aliasedPath, content);
+    }
+}
+function createMainCompilerSources(sourceFiles) {
+    const mainSources = new Map(sourceFiles);
+    const openOracleSource = sourceFiles.get(OPEN_ORACLE_LOCAL_PATH);
+    if (openOracleSource === undefined)
+        return mainSources;
+    if (!openOracleSource.includes(OPEN_ORACLE_EXACT_PRAGMA))
+        throw new Error(`Expected ${OPEN_ORACLE_LOCAL_PATH} to include ${OPEN_ORACLE_EXACT_PRAGMA}`);
+    for (const [sourcePath, content] of sourceFiles) {
+        if (!sourcePath.startsWith(OPEN_ORACLE_LOCAL_PREFIX) || !content.includes(OPEN_ORACLE_EXACT_PRAGMA))
+            continue;
+        mainSources.set(sourcePath, content.replace(OPEN_ORACLE_EXACT_PRAGMA, OPEN_ORACLE_MAIN_PASS_PRAGMA));
+    }
+    addOpenOracleImportAliases(mainSources, sourceFiles);
+    return mainSources;
+}
+export function createOpenOracleCompilerSources(sourceFiles) {
+    const openOracleSource = sourceFiles.get(OPEN_ORACLE_LOCAL_PATH);
+    if (openOracleSource === undefined)
+        throw new Error(`Missing ${OPEN_ORACLE_LOCAL_PATH}`);
+    if (!openOracleSource.includes(OPEN_ORACLE_EXACT_PRAGMA))
+        throw new Error(`Expected ${OPEN_ORACLE_LOCAL_PATH} to include ${OPEN_ORACLE_EXACT_PRAGMA}`);
+    const openOracleSources = new Map([[OPEN_ORACLE_UPSTREAM_PATH, normalizeSoliditySourceLineEndings(openOracleSource)]]);
+    for (const [sourcePath, content] of sourceFiles) {
+        if (sourcePath.startsWith(OPEN_ORACLE_LOCAL_VENDOR_PREFIX)) {
+            const remappedPath = `${OPEN_ORACLE_IMPORT_PREFIX}${sourcePath.slice(OPEN_ORACLE_LOCAL_VENDOR_PREFIX.length)}`;
+            openOracleSources.set(remappedPath, normalizeSoliditySourceLineEndings(content));
+            continue;
+        }
+        if (sourcePath === OPEN_ORACLE_LOCAL_PATH || !sourcePath.startsWith(OPEN_ORACLE_LOCAL_PREFIX))
+            continue;
+        const remappedPath = `${OPEN_ORACLE_UPSTREAM_PREFIX}${sourcePath.slice(OPEN_ORACLE_LOCAL_PREFIX.length)}`;
+        openOracleSources.set(remappedPath, normalizeSoliditySourceLineEndings(content));
+    }
+    return openOracleSources;
+}
+function compileSourceMap(label, compiler, sources, settings) {
+    const input = {
+        language: 'Solidity',
+        sources: buildSourceObject(sources),
+        settings,
+    };
+    console.time(`${label} compilation`);
+    const output = compiler.compile(JSON.stringify(input));
+    console.timeEnd(`${label} compilation`);
+    const result = CompileResult.parse(JSON.parse(output));
+    const diagnostics = Array.isArray(result.errors) ? result.errors : [];
+    const errors = [];
+    for (const diagnostic of diagnostics) {
+        if (!isCompileError(diagnostic))
+            continue;
+        if (diagnostic.severity === 'error')
+            errors.push(diagnostic.formattedMessage);
+        if (diagnostic.severity === 'warning' && !isAllowedImmutableContractWarning(diagnostic.formattedMessage))
+            errors.push(diagnostic.formattedMessage);
+    }
+    if (errors.length > 0)
+        throw new CompilationError(errors.map(error => `${label}: ${error}`));
+    return result;
+}
+function isTemporaryCompilerSourcePath(sourcePath) {
+    return sourcePath === OPEN_ORACLE_UPSTREAM_PATH || sourcePath.startsWith(OPEN_ORACLE_IMPORT_PREFIX);
+}
+function isReplacedLocalOracleSourcePath(sourcePath) {
+    return sourcePath.startsWith(OPEN_ORACLE_LOCAL_PREFIX);
+}
+function remapOpenOracleSourcePath(sourcePath) {
+    if (sourcePath === OPEN_ORACLE_UPSTREAM_PATH)
+        return OPEN_ORACLE_LOCAL_PATH;
+    if (sourcePath.startsWith(OPEN_ORACLE_UPSTREAM_PREFIX))
+        return `${OPEN_ORACLE_LOCAL_PREFIX}${sourcePath.slice(OPEN_ORACLE_UPSTREAM_PREFIX.length)}`;
+    if (sourcePath.startsWith(OPEN_ORACLE_IMPORT_PREFIX))
+        return `${OPEN_ORACLE_LOCAL_VENDOR_PREFIX}${sourcePath.slice(OPEN_ORACLE_IMPORT_PREFIX.length)}`;
+    return undefined;
+}
+function getOpenOracleSourceIdOffset(mainSources) {
+    let maximumSourceId = -1;
+    if (!isObjectRecord(mainSources))
+        return 0;
+    for (const [sourcePath, sourceData] of Object.entries(mainSources)) {
+        if (!isObjectRecord(sourceData) || typeof sourceData['id'] !== 'number')
+            throw new Error(`Invalid source metadata for ${sourcePath}`);
+        maximumSourceId = Math.max(maximumSourceId, sourceData['id']);
+    }
+    return maximumSourceId + 1;
+}
+function remapCompilerSourceMap(sourceMap, sourceIdOffset) {
+    return sourceMap
+        .split(';')
+        .map(segment => {
+        const fields = segment.split(':');
+        const sourceIdField = fields[2];
+        if (sourceIdField === undefined || sourceIdField === '' || sourceIdField === '-1')
+            return segment;
+        if (!/^[0-9]+$/.test(sourceIdField))
+            throw new Error(`Invalid Solidity source-map id ${sourceIdField}`);
+        fields[2] = (Number.parseInt(sourceIdField, 10) + sourceIdOffset).toString();
+        return fields.join(':');
+    })
+        .join(';');
+}
+function remapContractSourceMaps(contractData, sourceIdOffset) {
+    if (!isObjectRecord(contractData))
+        throw new Error('Invalid OpenOracle contract output');
+    if (!isObjectRecord(contractData['evm']))
+        return contractData;
+    const evm = { ...contractData['evm'] };
+    for (const sectionName of ['bytecode', 'deployedBytecode']) {
+        const section = evm[sectionName];
+        if (!isObjectRecord(section) || typeof section['sourceMap'] !== 'string')
+            continue;
+        evm[sectionName] = { ...section, sourceMap: remapCompilerSourceMap(section['sourceMap'], sourceIdOffset) };
+    }
+    return { ...contractData, evm };
+}
+function mergeCompileSources(mainSources, openOracleSources, sourceIdOffset) {
+    const mergedSources = {};
+    if (isObjectRecord(mainSources)) {
+        for (const [sourcePath, sourceData] of Object.entries(mainSources)) {
+            if (!isObjectRecord(sourceData) || typeof sourceData['id'] !== 'number')
+                throw new Error(`Invalid source metadata for ${sourcePath}`);
+            if (sourcePath.startsWith(OPEN_ORACLE_IMPORT_PREFIX)) {
+                const localSourcePath = remapOpenOracleSourcePath(sourcePath);
+                if (localSourcePath === undefined)
+                    throw new Error(`Cannot remap main compiler source ${sourcePath}`);
+                mergedSources[`${MAIN_COMPILER_PROFILE_PREFIX}${sourcePath}`] = { ...sourceData, sourcePath: localSourcePath };
+                continue;
+            }
+            mergedSources[sourcePath] = sourceData;
+        }
+    }
+    if (isObjectRecord(openOracleSources)) {
+        for (const [sourcePath, sourceData] of Object.entries(openOracleSources)) {
+            const remappedPath = remapOpenOracleSourcePath(sourcePath);
+            if (remappedPath === undefined)
+                throw new Error(`Cannot remap OpenOracle compiler source ${sourcePath}`);
+            if (!isObjectRecord(sourceData) || typeof sourceData['id'] !== 'number')
+                throw new Error(`Invalid OpenOracle source metadata for ${sourcePath}`);
+            mergedSources[`${OPEN_ORACLE_COMPILER_PROFILE_PREFIX}${sourcePath}`] = { ...sourceData, id: sourceData['id'] + sourceIdOffset, sourcePath: remappedPath };
+        }
+    }
+    return Object.keys(mergedSources).length > 0 ? mergedSources : undefined;
+}
+function mergeCompileResults(mainResult, openOracleResult, openOracleCompiler) {
+    const mergedContracts = {};
+    const openOracleSourceIdOffset = getOpenOracleSourceIdOffset(mainResult.sources);
+    if (mainResult.contracts) {
+        for (const [sourcePath, contractFile] of Object.entries(mainResult.contracts)) {
+            if (isTemporaryCompilerSourcePath(sourcePath) || isReplacedLocalOracleSourcePath(sourcePath))
+                continue;
+            if (!isObjectRecord(contractFile))
+                throw new Error(`Invalid contract output for ${sourcePath}`);
+            mergedContracts[sourcePath] = contractFile;
+        }
+    }
+    if (openOracleResult.contracts) {
+        for (const [sourcePath, contractFile] of Object.entries(openOracleResult.contracts)) {
+            if (sourcePath.startsWith(OPEN_ORACLE_IMPORT_PREFIX))
+                continue;
+            const remappedPath = remapOpenOracleSourcePath(sourcePath);
+            if (remappedPath === undefined)
+                continue;
+            if (!isObjectRecord(contractFile))
+                throw new Error(`Invalid contract output for ${sourcePath}`);
+            mergedContracts[remappedPath] = Object.fromEntries(Object.entries(contractFile).map(([contractName, contractData]) => [contractName, remapContractSourceMaps(contractData, openOracleSourceIdOffset)]));
+        }
+    }
+    return {
+        compilerProfiles: {
+            main: { settings: mainCompilerSettings, version: getCompilerVersion(solc) },
+            openOracle: { settings: openOracleCompilerSettings, version: getCompilerVersion(openOracleCompiler) },
+        },
+        contracts: mergedContracts,
+        sources: mergeCompileSources(mainResult.sources, openOracleResult.sources, openOracleSourceIdOffset),
+    };
+}
+const compileContracts = async () => {
+    console.log('Computing contract hash...');
+    const files = (await getAllFiles('contracts')).filter(file => path.extname(file) === '.sol');
+    const sources = new Map();
+    for (const file of files) {
+        const relativePath = path.relative(process.cwd(), file).replace(/\\/g, '/');
+        if (selectedProject === undefined || isContractProjectSource(relativePath, selectedProject))
+            sources.set(relativePath, normalizeSoliditySourceLineEndings(await fs.readFile(file, 'utf8')));
+    }
+    const openOracleCompiler = await loadOpenOracleCompiler();
+    const currentContractHash = await computeContractHash(sources, openOracleCompiler);
+    const cache = await loadHashCache();
+    let needsRecompilation = !(cache.hash === currentContractHash && (await exists(ARTIFACTS_JSON)));
+    if (!needsRecompilation) {
+        console.log('No changes detected in Solidity contracts. Skipping recompilation.');
+        try {
+            const artifactContent = await fs.readFile(ARTIFACTS_JSON, 'utf8');
+            CompileResult.parse(JSON.parse(artifactContent));
+        }
+        catch (error) {
+            if (!(error instanceof SyntaxError) && !hasNodeErrorCode(error, 'ENOENT') && !isFuntypesValidationError(error))
+                throw error;
+            console.log('Artifact file is missing, inaccessible, or corrupted, recompiling...');
+            needsRecompilation = true;
+        }
+    }
+    if (needsRecompilation) {
+        console.log('Changes detected or first run. Compiling Solidity contracts...');
+        const mainResult = compileSourceMap('main contracts', solc, createMainCompilerSources(sources), mainCompilerSettings);
+        const mergedResult = sources.has(OPEN_ORACLE_LOCAL_PATH) ? CompileResult.parse(mergeCompileResults(mainResult, compileSourceMap('OpenOracle', openOracleCompiler, createOpenOracleCompilerSources(sources), openOracleCompilerSettings), openOracleCompiler)) : mainResult;
+        if (!(await exists(ARTIFACTS_DIR)))
+            await fs.mkdir(ARTIFACTS_DIR, { recursive: true });
+        await fs.writeFile(ARTIFACTS_JSON, JSON.stringify(mergedResult));
+        await saveHashCache(currentContractHash);
+        console.log('Compilation complete. Hash cache updated.');
+    }
+    if (selectedProject === undefined)
+        await copySolidityContractArtifact(ARTIFACTS_JSON);
+    console.log('TypeScript artifact generated.');
+};
+if (import.meta.main) {
+    compileContracts().catch((error) => {
+        if (error instanceof CompilationError) {
+            console.error(error.toString());
+        }
+        else {
+            console.error(error);
+        }
+        process.exit(1);
+    });
+}

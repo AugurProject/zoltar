@@ -1,0 +1,53 @@
+{
+	"name": "@zoltar/zoltar-shared",
+	"version": "1.0.0",
+	"type": "module",
+	"exports": {
+		"./constants": {
+			"types": "./ts/constants.ts",
+			"bun": "./ts/constants.ts",
+			"default": "./js/constants.js"
+		},
+		"./deployment/deploymentAddresses": {
+			"types": "./ts/deployment/deploymentAddresses.ts",
+			"bun": "./ts/deployment/deploymentAddresses.ts",
+			"default": "./js/deployment/deploymentAddresses.js"
+		},
+		"./deployment/sepoliaRepAllocations": {
+			"types": "./ts/deployment/sepoliaRepAllocations.ts",
+			"bun": "./ts/deployment/sepoliaRepAllocations.ts",
+			"default": "./js/deployment/sepoliaRepAllocations.js"
+		},
+		"./evm/addressDerivation": {
+			"types": "./ts/evm/addressDerivation.ts",
+			"bun": "./ts/evm/addressDerivation.ts",
+			"default": "./js/evm/addressDerivation.js"
+		},
+		"./questions/scalarOutcome": {
+			"types": "./ts/questions/scalarOutcome.ts",
+			"bun": "./ts/questions/scalarOutcome.ts",
+			"default": "./js/questions/scalarOutcome.js"
+		},
+		"./testing/scalarOutcomeParityFixtures": {
+			"types": "./ts/testing/scalarOutcomeParityFixtures.ts",
+			"bun": "./ts/testing/scalarOutcomeParityFixtures.ts",
+			"default": "./js/testing/scalarOutcomeParityFixtures.js"
+		}
+	},
+	"files": [
+		"js",
+		"ts"
+	],
+	"scripts": {
+		"build": "bun x tsc --project tsconfig.json"
+	},
+	"dependencies": {
+		"@zoltar/core-shared": "file:../core"
+	},
+	"overrides": {
+		"@zoltar/core-shared": "file:../core"
+	},
+	"devDependencies": {
+		"typescript": "5.8.2"
+	}
+}

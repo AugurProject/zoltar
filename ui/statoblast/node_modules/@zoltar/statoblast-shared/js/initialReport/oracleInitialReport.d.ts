@@ -1,0 +1,33 @@
+export declare const ORACLE_PERCENTAGE_PRECISION = 10000000n;
+export declare const ORACLE_PROTOCOL_FEE = 100000;
+export declare const ORACLE_FEE_PERCENTAGE = 10000;
+export declare const ORACLE_MULTIPLIER = 115;
+export declare const ORACLE_GAS_UNITS_FOR_ONE_DISPUTE = 300000n;
+export declare const OPEN_ORACLE_SECURITY_MULTIPLIER_BPS = 100000n;
+export declare const ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE = 500000n;
+export declare const DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS: bigint;
+export declare const ORACLE_OPEN_INTEREST_DIVIDER = 100n;
+export declare const ORACLE_ESCALATION_HALT_MULTIPLIER_BPS = 100000n;
+export type OracleMinimumWethReportParameters = {
+    baseFeeAttoEthPerGas: bigint;
+    initialReportPriorityFeeAttoEthPerGas: bigint;
+    openInterestAttoEth: bigint;
+    openOracleSecurityMultiplierBps: bigint;
+    gasUnitsForOneDispute: bigint;
+    targetPriceErrorForDispute: bigint;
+    openOracleProtocolFee: number;
+    openOracleReporterFee: number;
+};
+export declare const DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS: {
+    baseFeeAttoEthPerGas: bigint;
+    gasUnitsForOneDispute: bigint;
+    initialReportPriorityFeeAttoEthPerGas: bigint;
+    openInterestAttoEth: bigint;
+    openOracleProtocolFee: number;
+    openOracleReporterFee: number;
+    openOracleSecurityMultiplierBps: bigint;
+    targetPriceErrorForDispute: bigint;
+};
+export declare function calculateMaximumOracleInitialReportPriorityFeeAttoEthPerGas(parameters?: OracleMinimumWethReportParameters, escalationHaltMultiplierBps?: bigint): bigint;
+export declare const MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS: bigint;
+export declare function calculateOracleMinimumWethReportAttoEth(parameters?: OracleMinimumWethReportParameters): bigint;

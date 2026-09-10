@@ -1,0 +1,51 @@
+import { type Address, type Hex } from '@zoltar/core-shared/evm/ethereum';
+type SecurityPoolFactoryAddressInputs = {
+    escalationGameFactory: Address;
+    openOracle: Address;
+    priceOracleManagerAndOperatorQueuerFactory: Address;
+    securityPoolForker: Address;
+    securityPoolOperationsDelegate: Address;
+    shareTokenFactory: Address;
+    uniformPriceDualCapBatchAuctionFactory: Address;
+    zoltar: Address;
+    zoltarQuestionData: Address;
+};
+type InfraContractAddressConfig = {
+    escalationGameClaimDelegateBytecode: Hex;
+    getEscalationGameFactoryByteCode: (claimDelegate: Address) => Hex;
+    getSecurityPoolFactoryByteCode: (inputs: SecurityPoolFactoryAddressInputs) => Hex;
+    getSecurityPoolForkerByteCode: (zoltarAddress: Address) => Hex;
+    getShareTokenFactoryByteCode: (zoltarAddress: Address) => Hex;
+    multicall3Bytecode: Hex;
+    openOracleBytecode: Hex;
+    priceOracleManagerAndOperatorQueuerFactoryBytecode: () => Hex;
+    proxyDeployerAddress: Address;
+    scalarOutcomesBytecode: Hex;
+    securityPoolUtilsBytecode: Hex;
+    securityPoolOperationsDelegateBytecode: Hex;
+    uniformPriceDualCapBatchAuctionFactoryBytecode: Hex;
+    zeroSalt: Hex;
+    getZoltarAddress: () => Address;
+    getZoltarQuestionDataAddress: () => Address;
+};
+type InfraContractAddresses = {
+    escalationGameClaimDelegate: Address;
+    escalationGameFactory: Address;
+    escalationGameProofVerifier: Address;
+    multicall3: Address;
+    openOracle: Address;
+    priceOracleManagerAndOperatorQueuerFactory: Address;
+    scalarOutcomes: Address;
+    securityPoolFactory: Address;
+    securityPoolForker: Address;
+    securityPoolOperationsDelegate: Address;
+    securityPoolUtils: Address;
+    shareTokenFactory: Address;
+    uniformPriceDualCapBatchAuctionFactory: Address;
+    zoltar: Address;
+    zoltarQuestionData: Address;
+};
+export declare function createInfraContractAddressHelper(config: InfraContractAddressConfig): {
+    getInfraContractAddresses: () => InfraContractAddresses;
+};
+export {};

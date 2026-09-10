@@ -1,0 +1,1 @@
+export declare const REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT = 5n;

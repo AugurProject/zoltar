@@ -1,0 +1,15 @@
+[
+  {
+    "type": "function",
+    "name": "unregisterDelegation",
+    "inputs": [
+      {
+        "name": "delegatee",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  }
+]
