@@ -45,25 +45,26 @@
 	font-size: 0.78rem;
 }
 
-.header-status-line > .badge {
+.operator-shell .header-status-line > .badge {
 	display: inline-flex;
-	align-items: center;
-	min-height: 1.6rem;
+	align-items: baseline;
+	min-height: 0;
 	margin: 0;
-	padding: 0.1rem 0.6rem;
-	border-radius: 99rem;
-	font-size: 0.72rem;
-	line-height: 1.25;
+	padding: 0;
+	border: 0;
+	border-radius: 0;
+	background: none;
+	font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+	font-size: 0.78rem;
+	font-weight: 400;
+	line-height: inherit;
 }
 
 .header-status-line > .badge::before {
-	content: "";
+	content: "·";
 	flex: none;
-	width: 0.35rem;
-	height: 0.35rem;
-	margin-right: 0.4rem;
-	border-radius: 50%;
-	background: currentColor;
+	margin-right: 0.6rem;
+	color: var(--operator-muted);
 }
 
 .section-nav {

@@ -10,7 +10,7 @@ const source = await output.text()
 test('counts active errors and warnings while preserving all notices and collapsed state', async () => {
 	const window = new Window({ settings: { enableJavaScriptEvaluation: true, disableJavaScriptFileLoading: true, suppressInsecureJavaScriptEnvironmentWarning: true } })
 	try {
-		window.document.write(renderOperatorHeader({ title: 'Bot', eyebrow: 'Operator', blockStatus: 'Block 1', safety: '', navigation: '', notices: '<div id="global-error" class="notice error hidden"></div><ul id="operator-alerts"></ul><section class="notice" data-tone="info">Dry-run mode</section>' }))
+		window.document.write(renderOperatorHeader({ title: 'Bot', eyebrow: 'Operator', blockStatus: 'Block 1', network: '', safety: '', navigation: '', notices: '<div id="global-error" class="notice error hidden"></div><ul id="operator-alerts"></ul><section class="notice" data-tone="info">Dry-run mode</section>' }))
 		window.eval(source)
 		const disclosure = window.document.querySelector('details')
 		const count = window.document.getElementById('header-notices-count')
@@ -58,7 +58,7 @@ test('counts active errors and warnings while preserving all notices and collaps
 test('dismisses the list, restores keyboard focus, and reveals linked notices', async () => {
 	const window = new Window({ url: 'http://localhost/overview#notice', settings: { enableJavaScriptEvaluation: true, disableJavaScriptFileLoading: true, suppressInsecureJavaScriptEnvironmentWarning: true } })
 	try {
-		window.document.write(renderOperatorHeader({ title: 'Bot', eyebrow: 'Operator', blockStatus: 'Block 1', safety: '', navigation: '', notices: '<section id="notice" class="notice" data-tone="danger">Scan failed <a href="/settings">Settings</a></section>' }))
+		window.document.write(renderOperatorHeader({ title: 'Bot', eyebrow: 'Operator', blockStatus: 'Block 1', network: '', safety: '', navigation: '', notices: '<section id="notice" class="notice" data-tone="danger">Scan failed <a href="/settings">Settings</a></section>' }))
 		window.eval(source)
 		const disclosure = window.document.querySelector('details')
 		const toggle = window.document.getElementById('header-notices-toggle')
