@@ -1034,7 +1034,8 @@ function render(snapshot: PublicOperatorSnapshot) {
 	runStatusBadge.textContent = statusLabels.status
 	runStatusBadge.className = `badge${runStatus === 'running' ? ' badge-ok' : runStatus === 'error' ? ' badge-danger' : ' badge-warning'}`
 	const capabilityBadge = element('capability-badge')
-	capabilityBadge.textContent = snapshot.operatorCapable ? 'Operator capable' : 'Operator blocked'
+	capabilityBadge.hidden = snapshot.operatorCapable
+	capabilityBadge.textContent = snapshot.operatorCapable ? '' : 'Operator blocked'
 	capabilityBadge.className = `badge${snapshot.operatorCapable ? ' badge-ok' : ' badge-warning'}`
 	renderPollRetry(snapshot)
 	const headerNetworkBadge = element('header-network-badge')
@@ -1153,6 +1154,7 @@ const refresh = singleFlight(async () => {
 		modeBadge.textContent = 'Mode unavailable'
 		modeBadge.className = 'badge badge-danger'
 		const capabilityBadge = element('capability-badge')
+		capabilityBadge.hidden = false
 		capabilityBadge.textContent = 'Capability unavailable'
 		capabilityBadge.className = 'badge badge-warning'
 		const runStatusBadge = element('run-status-badge')

@@ -771,7 +771,8 @@ function render(snapshot: Snapshot) {
 	modeBadge.className = `badge ${snapshot.execute ? 'warning' : 'ok'}`
 	runStatusBadge.textContent = snapshot.status === 'connectivity-degraded' ? 'Connectivity degraded' : snapshot.error !== undefined ? 'Error' : snapshot.paused ? 'Paused' : snapshot.scanning ? 'Scanning' : snapshot.deploymentMissingName !== undefined ? 'Waiting' : 'Running'
 	runStatusBadge.className = `badge ${snapshot.paused || snapshot.error !== undefined ? 'warning' : 'ok'}`
-	capabilityBadge.textContent = snapshot.operatorCapable ? 'Operator capable' : 'Operator blocked'
+	capabilityBadge.hidden = snapshot.operatorCapable
+	capabilityBadge.textContent = snapshot.operatorCapable ? '' : 'Operator blocked'
 	capabilityBadge.className = `badge ${snapshot.operatorCapable ? 'ok' : 'warning'}`
 	renderAttention(snapshot)
 	recoveryGuidance.hidden = snapshot.paused
@@ -1094,6 +1095,7 @@ function renderConnectionFailure(error: unknown) {
 	modeBadge.textContent = snapshot === undefined ? 'Mode unavailable' : `${snapshot.execute ? 'Live' : 'Dry run'} · last known`
 	modeBadge.className = 'badge warning'
 	renderNetworkBadge()
+	capabilityBadge.hidden = false
 	capabilityBadge.textContent = 'Capability unavailable'
 	capabilityBadge.className = 'badge warning'
 	runStatusBadge.textContent = 'Disconnected'

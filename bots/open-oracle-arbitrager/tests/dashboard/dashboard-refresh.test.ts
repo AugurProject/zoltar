@@ -202,7 +202,7 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	capable = true
 	element(window, 'refresh-button', window.HTMLButtonElement).click()
 	await page.waitUntilComplete()
-	expect(element(window, 'capability-badge', window.HTMLElement).textContent).toBe('Operator capable')
+	expect(element(window, 'capability-badge', window.HTMLElement).hidden).toBe(true)
 	expect(element(window, 'attention-badge', window.HTMLElement).dataset['tone']).toBe('ok')
 	stateFailure = true
 	element(window, 'refresh-button', window.HTMLButtonElement).click()
@@ -213,7 +213,7 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	stateFailure = false
 	element(window, 'refresh-button', window.HTMLButtonElement).click()
 	await page.waitUntilComplete()
-	expect(element(window, 'capability-badge', window.HTMLElement).textContent).toBe('Operator capable')
+	expect(element(window, 'capability-badge', window.HTMLElement).hidden).toBe(true)
 	expect(element(window, 'attention-badge', window.HTMLElement).dataset['tone']).toBe('ok')
 
 	capable = false

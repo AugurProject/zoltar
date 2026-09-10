@@ -452,7 +452,7 @@ describe('liquidator dashboard refresh behavior', () => {
 			page.setSnapshot({ ...state(), operatorCapable: true })
 			await page.refresh()
 			expect(page.window.document.getElementById('global-error')?.classList.contains('hidden')).toBe(true)
-			expect(page.window.document.getElementById('attention-badge')?.textContent).toBe('No blockers')
+			expect(page.window.document.getElementById('attention-badge')?.hasAttribute('hidden')).toBe(true)
 		})
 	}
 	test('provides a durable manual refresh action across success and failure', async () => {
@@ -542,8 +542,8 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(recovered.window.document.getElementById('mode-badge')?.textContent).toBe('Dry run')
 		expect(recovered.window.document.getElementById('network-badge')?.textContent).toBe('Mainnet · chain 1')
 		expect(recovered.window.document.getElementById('run-status-badge')?.textContent).toBe('Running')
-		expect(recovered.window.document.getElementById('attention-badge')?.textContent).toBe('No blockers')
-		expect(recovered.window.document.getElementById('capability-badge')?.textContent).toBe('Operator capable')
+		expect(recovered.window.document.getElementById('attention-badge')?.hasAttribute('hidden')).toBe(true)
+		expect(recovered.window.document.getElementById('capability-badge')?.hasAttribute('hidden')).toBe(true)
 		expect(recovered.window.document.getElementById('attention-badge')?.getAttribute('data-tone')).toBe('ok')
 		expect(recovered.window.document.getElementById('pause-button')?.hasAttribute('disabled')).toBe(false)
 		expect(recovered.window.document.getElementById('global-error')?.classList.contains('hidden')).toBe(true)
@@ -619,10 +619,10 @@ describe('liquidator dashboard refresh behavior', () => {
 		await unconfigured.refresh()
 		await Bun.sleep(1)
 		expect({
-			attention: unconfigured.window.document.getElementById('attention-badge')?.textContent,
+			attention: unconfigured.window.document.getElementById('attention-badge')?.hasAttribute('hidden'),
 			badge: unconfigured.window.document.getElementById('network-badge')?.textContent,
 			status: unconfigured.window.document.getElementById('network-status')?.textContent,
-		}).toEqual({ attention: 'No blockers', badge: 'Sepolia · chain 11155111', status: 'Chain and RPCs passed validation, were saved, and apply to the next scan.' })
+		}).toEqual({ attention: true, badge: 'Sepolia · chain 11155111', status: 'Chain and RPCs passed validation, were saved, and apply to the next scan.' })
 		expect(unconfigured.window.document.getElementById('settings-chain-scope')?.textContent).toContain('Editing the Sepolia profile')
 		expect(unconfigured.window.document.getElementById('network-scope-summary')?.textContent).toBe('Sepolia profile · switchable')
 		expect(networkName.disabled).toBe(false)

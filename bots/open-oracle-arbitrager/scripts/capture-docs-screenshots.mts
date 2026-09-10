@@ -1274,7 +1274,7 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 					typeof recovery !== 'object' ||
 					recovery === null ||
 					!('attentionText' in recovery) ||
-					recovery.attentionText !== 'No blockers' ||
+					recovery.attentionText !== '' ||
 					!('network' in recovery) ||
 					recovery.network !== 'mainnet · 1' ||
 					!('pauseDisabled' in recovery) ||

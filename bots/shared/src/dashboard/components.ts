@@ -1,5 +1,6 @@
 export function setAttentionBadge(element: HTMLAnchorElement, count: number, target: string) {
-	const label = count === 0 ? 'No blockers' : `${count.toString()} ${count === 1 ? 'action' : 'actions'}`
+	element.hidden = count === 0
+	const label = count === 0 ? '' : `${count.toString()} ${count === 1 ? 'action' : 'actions'}`
 	if (element.textContent !== label) element.textContent = label
 	element.className = 'badge attention-badge'
 	element.dataset['tone'] = count === 0 ? 'ok' : 'warning'

@@ -6,10 +6,10 @@ export const operatorHeader = renderOperatorHeader({
 	blockStatus: 'Block — · waiting for first observation',
 	safety: `<span id="mode-badge" class="badge">Mode —</span>
 					<span id="run-status-badge" class="badge">Run —</span>
-					<span id="capability-badge" class="badge">Capability —</span>
+					<span id="capability-badge" class="badge" hidden></span>
 					<span id="retry-status-badge" class="badge badge-warning" hidden>Retry —</span>
 					<span id="header-network-badge" class="badge">Network —</span>
-					<a id="attention-badge" class="badge attention-badge">No blockers</a>
+					<a id="attention-badge" class="badge attention-badge" hidden></a>
 					<button id="refresh-button" class="button button-secondary" type="button">Refresh</button>
 					<button id="pause-button" class="button" type="button" disabled>Pause bot</button>`,
 	notices: `<section id="launch-notice" class="notice" aria-live="polite">
