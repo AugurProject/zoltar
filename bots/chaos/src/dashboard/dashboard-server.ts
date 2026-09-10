@@ -30,7 +30,7 @@ export type ChaosDashboardController = {
 	setWorkflow: (value: unknown) => unknown | Promise<unknown>
 }
 
-const dashboardPages = new Set(['overview', 'catalog', 'ecosystem', 'activity', 'settings'])
+const dashboardPages = new Set(['overview', 'catalog', 'ecosystem', 'recovery', 'settings'])
 
 function securityHeaders(contentType: string) {
 	return {
@@ -537,6 +537,7 @@ function publicActivity(value: unknown) {
 	if (source === undefined) return undefined
 	return compact({
 		at: stringField(source, 'at'),
+		details: stringField(source, 'details'),
 		ecosystem: stringField(source, 'ecosystem'),
 		label: stringField(source, 'label') ?? stringField(source, 'message'),
 		operationId: stringField(source, 'operationId'),

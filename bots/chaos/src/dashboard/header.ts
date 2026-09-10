@@ -7,7 +7,7 @@ export const operatorHeader = renderOperatorHeader({
 	network: '<span id="network-badge" class="badge loading">Network loading</span>',
 	safety: `<span id="mode-badge" class="badge loading">Starting</span>
 					<span id="signer-badge" class="badge loading">Signer loading</span>
-					<a id="recovery-badge" class="badge hidden" href="/activity">Recovery items</a>
+					<a id="recovery-badge" class="badge hidden" href="/recovery">Recovery items</a>
 					<button id="pause-button" class="secondary" type="button">Pause</button>
 					<span id="pause-status" class="action-status" role="alert"></span>`,
 	notices: `<div id="global-error" class="notice error hidden" role="alert"></div>
@@ -15,6 +15,6 @@ export const operatorHeader = renderOperatorHeader({
 	navigation: `<a href="/overview">Overview</a>
 				<a href="/catalog">Operation catalog</a>
 				<a href="/ecosystem">Ecosystem state</a>
-				<a href="/activity">Activity &amp; recovery</a>
+				<a href="/recovery">Recovery</a>
 				<a href="/settings">Settings</a>`,
 })

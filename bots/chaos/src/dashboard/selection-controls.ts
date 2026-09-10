@@ -19,30 +19,36 @@ export function createSelectionControls(options: SelectionControlsOptions) {
 	const selectionStatus = document.querySelector('#catalog-selection-status')
 	if (!(run instanceof HTMLButtonElement) || !(scheduleStatus instanceof HTMLElement) || !(selectionStatus instanceof HTMLElement)) throw new Error('Selection controls are missing')
 	let state: ControlState = { available: false, frozen: false, paused: false, revision: undefined, selection: undefined, scheduledAt: undefined }
-	let pending = false
+	let pendingCount = 0
+	const pendingToggleIds = new Set<string>()
 	let clearScheduleNotice = false
+	let queue: Promise<void> = Promise.resolve()
 	const update = (value: ControlState) => {
 		state = value
-		if (clearScheduleNotice && !pending) {
+		if (clearScheduleNotice && pendingCount === 0) {
 			scheduleStatus.textContent = ''
 			clearScheduleNotice = false
 		}
 		document.querySelector('#catalog-selection-note')?.classList.toggle('hidden', state.paused)
-		run.disabled = pending || !state.available || state.frozen || state.scheduledAt === undefined
+		run.disabled = pendingCount !== 0 || !state.available || state.frozen || state.scheduledAt === undefined
 		for (const toggle of document.querySelectorAll('[data-selection-toggle]')) {
 			if (!(toggle instanceof HTMLInputElement)) continue
-			toggle.disabled = pending || !state.available || state.frozen || !state.paused || state.selection === undefined
-			toggle.checked = state.selection === null || state.selection?.includes(toggle.dataset['selectionToggle'] ?? '') === true
+			const id = toggle.dataset['selectionToggle'] ?? ''
+			// Only toggles awaiting their own save are disabled, and their checked state is left
+			// alone until the save lands. Disabling and rewriting every toggle for each save made
+			// the whole catalog flicker between checked/enabled and unchecked/disabled styling.
+			const awaitingSave = pendingToggleIds.has(id)
+			toggle.disabled = awaitingSave || !state.available || state.frozen || !state.paused || state.selection === undefined
+			if (!awaitingSave) toggle.checked = state.selection === null || state.selection?.includes(id) === true
 		}
 	}
-	const mutate = async (path: string, body: unknown, status: HTMLElement, success: string) => {
+	const mutate = async (path: string, body: () => unknown, status: HTMLElement, success: string, toggleId?: string) => {
 		let saved = false
 		clearScheduleNotice = false
-		pending = true
 		update(state)
 		status.textContent = 'Saving…'
 		try {
-			await options.put(path, body)
+			await options.put(path, body())
 			status.textContent = success
 			await options.refresh()
 			saved = true
@@ -53,14 +59,26 @@ export function createSelectionControls(options: SelectionControlsOptions) {
 				await options.refresh()
 			}
 		} finally {
-			pending = false
+			pendingCount -= 1
+			if (toggleId !== undefined) pendingToggleIds.delete(toggleId)
 			update(state)
 			clearScheduleNotice = saved && path === '/api/schedule'
 		}
 	}
+	// Saves are serialized so that each one reads the revision left behind by the previous refresh.
+	const enqueue = (path: string, body: () => unknown, status: HTMLElement, success: string, toggleId?: string) => {
+		if (toggleId !== undefined) pendingToggleIds.add(toggleId)
+		pendingCount += 1
+		update(state)
+		// A rejected link must not poison the chain and strand every later save.
+		const save = async () => {
+			await mutate(path, body, status, success, toggleId)
+		}
+		queue = queue.then(save).catch(() => undefined)
+	}
 	run.addEventListener('click', () => {
 		if (run.disabled) return
-		void mutate('/api/schedule', { revision: state.revision, nextRunAt: state.scheduledAt }, scheduleStatus, 'Next choice requested.')
+		enqueue('/api/schedule', () => ({ revision: state.revision, nextRunAt: state.scheduledAt }), scheduleStatus, 'Next choice requested.')
 	})
 	return {
 		update,
@@ -73,7 +91,8 @@ export function createSelectionControls(options: SelectionControlsOptions) {
 			toggle.setAttribute('aria-label', `Enable random selection for ${name}`)
 			toggle.addEventListener('change', () => {
 				if (toggle.disabled) return
-				void mutate('/api/selection', { revision: state.revision, operationId: id, enabled: toggle.checked }, selectionStatus, 'Random selection saved.')
+				const enabled = toggle.checked
+				enqueue('/api/selection', () => ({ revision: state.revision, operationId: id, enabled }), selectionStatus, 'Random selection saved.', id)
 			})
 			label.append(toggle, ' Random selection')
 			container.append(label)

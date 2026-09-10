@@ -204,7 +204,7 @@ test('catalog groups and manual operation dialog at desktop and mobile widths', 
 			expect(await evaluate("document.querySelector('#operation-dialog .operation-actions button:nth-child(2)').disabled")).toBe(true)
 			await capture(`${viewport.label}-prerequisite-inputs`)
 			await evaluate("document.querySelector('#operation-dialog').close()")
-			for (const route of ['overview', 'ecosystem', 'activity', 'settings']) {
+			for (const route of ['overview', 'ecosystem', 'recovery', 'settings']) {
 				await session.send('Page.navigate', { url: new URL(`/${route}`, dashboard.url).href })
 				await waitFor(`document.querySelector('#last-block')?.textContent === 'Block ${fixture.state.lastScannedBlock}'`)
 				expect(await evaluate("document.querySelector('#refresh-button') === null")).toBe(true)
