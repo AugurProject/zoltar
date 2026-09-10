@@ -6,7 +6,7 @@ import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadControlle
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { addOpenOracleBountyBuffer } from '../../open-oracle/lib/openOracle.js'
 import { loadErc20Allowance, loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
-import { loadCoordinatorInitialReportFundingRequirement, loadOracleManagerDetails, queueOracleManagerOperation } from '../../../protocol/openOracle.js'
+import { loadCoordinatorInitialReportFundingRequirement, loadOracleManagerDetails, queueOracleManagerOperation } from '../../../protocol/oracleCoordinator.js'
 import { approveErc20 } from '@zoltar/ui-zoltar-shared/protocol/tokenActions.js'
 import { isSecurityPoolVaultAdmissionClosed, loadSecurityVaultDetails } from '../../../protocol/securityPools.js'
 import { depositRepToVaultToSecurityPool, redeemRepFromVaultFromSecurityPool, redeemSecurityVaultFees, updateSecurityVaultFees } from '../../../protocol/securityVault.js'

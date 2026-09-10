@@ -25,7 +25,6 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['bots/chaos/src/dashboard/dashboard-server.ts', 1052],
 		['bots/chaos/src/state/protocol-index-store.ts', 1030],
 		['bots/chaos/src/operations/open-oracle.ts', 1028],
-		['bots/chaos/src/runtime/dashboard-controller.ts', 923],
 		['bots/chaos/src/execution/recovery.ts', 798],
 		['bots/chaos/src/monitoring/protocol-index.ts', 716],
 		['bots/chaos/src/config/settings.ts', 685],
@@ -46,12 +45,8 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	...allowances('Existing UI workflow debt is owned by the functional or visual lanes.', [
 		['ui/statoblastShared/ts/features/security-pools/components/SecurityPoolWorkflowSection.tsx', 987],
 		['ui/statoblastShared/ts/features/truth-auctions/components/ForkAuctionSection.tsx', 1070],
-		['ui/statoblastShared/ts/protocol/openOracle.ts', 954],
-		['ui/statoblastShared/ts/protocol/reporting.ts', 933], // Separate Zoltar and Statoblast artifact imports.
 		['ui/coreShared/ts/simulation/tevmEngine.ts', 876],
-		['ui/statoblastShared/ts/features/open-oracle/hooks/useOpenOracleOperations.ts', 831],
 		['ui/statoblastShared/ts/protocol/securityPools.ts', 837],
-		['ui/statoblast/ts/app/App.tsx', 762],
 		['ui/coreShared/ts/components/SimulationBanner.tsx', 696],
 		['ui/statoblastShared/ts/features/security-pools/components/SecurityVaultSection.tsx', 757],
 		['ui/statoblastShared/ts/features/reporting/components/ReportingSection.tsx', 751],

@@ -1,3 +1,18 @@
+import type { Hex } from '@zoltar/bot-shared/ethereum'
+import { configurationRevisionConflict } from '../config/settings.ts'
+
+export function expectedRevision(value: unknown, current: string) {
+	if (typeof value !== 'string' || value !== current) throw configurationRevisionConflict()
+	return value
+}
+
+export function transactionHash(value: unknown, label: string) {
+	if (typeof value !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(value)) {
+		throw new Error(`${label} must be a 32-byte transaction hash`)
+	}
+	return value as Hex
+}
+
 export function dashboardRecord(value: unknown, label: string) {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`${label} must be a JSON object`)
 	return Object.fromEntries(Object.entries(value))
