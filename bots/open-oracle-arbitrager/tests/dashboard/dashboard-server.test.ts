@@ -225,7 +225,7 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(browserScript.headers.get('content-type')).toContain('text/javascript')
 	const browserSource = await browserScript.text()
 	expect(browserSource).toContain('setInterval')
-	expect(browserSource).toContain('Refreshing…')
+	expect(browserSource).not.toContain('refresh-button')
 	expect(browserSource).toContain('Configuration request timed out.')
 	expect(browserSource).toContain('aria-labelledby')
 	expect(browserSource).toContain('Recent exact price samples')

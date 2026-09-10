@@ -292,7 +292,7 @@ describe('liquidator dashboard server', () => {
 		expect(pageSource).toContain('id="network-scope-summary"')
 		expect(pageSource).toContain('Select a chain profile first')
 		expect(pageSource).toContain('id="network-badge"')
-		expect(pageSource).toContain('id="refresh-button"')
+		expect(pageSource).not.toContain('id="refresh-button"')
 		expect(pageSource).toContain('id="test-market-sources"')
 		expect(pageSource).toContain('id="recovery-list"')
 		expect(pageSource).toContain('id="resume-dialog"')

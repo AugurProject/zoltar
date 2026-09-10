@@ -495,18 +495,24 @@ export async function runChaosLaunchGate(dependencies: ChaosDoctorDependencies =
 	return runChaosDoctorWithLoaded(loaded, dependencies)
 }
 
+export function launchGateSummary(report: Awaited<ReturnType<typeof runChaosLaunchGate>>) {
+	if ('reason' in report) return `Launch preflight skipped: ${report.reason}. The operator starts without submitting transactions.`
+	if ('deploymentNotice' in report) return `Launch preflight passed with the deployment still pending. ${report.deploymentNotice}`
+	return `Launch preflight passed all ${Object.keys(report.checks).length.toString()} readiness checks at canonical block ${report.anchor.blockNumber}. Run \`bun run doctor\` for the detailed readiness report.`
+}
+
 async function doctorCli() {
 	const argumentsAfterScript = process.argv.slice(2)
 	if (argumentsAfterScript.length > 1 || (argumentsAfterScript.length === 1 && argumentsAfterScript[0] !== '--if-live-capable')) {
 		throw new Error('Usage: bun src/cli/doctor.ts [--if-live-capable]')
 	}
-	const run = argumentsAfterScript[0] === '--if-live-capable' ? runChaosLaunchGate : runChaosDoctor
-	return run()
+	if (argumentsAfterScript[0] === '--if-live-capable') return launchGateSummary(await runChaosLaunchGate())
+	return JSON.stringify(await runChaosDoctor(), undefined, 2)
 }
 
 if (import.meta.main) {
 	doctorCli()
-		.then(report => console.log(JSON.stringify(report, undefined, 2)))
+		.then(output => console.log(output))
 		.catch(error => {
 			console.error(error instanceof Error ? error.message : String(error))
 			process.exitCode = 1
