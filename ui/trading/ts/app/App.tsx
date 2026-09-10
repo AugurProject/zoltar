@@ -12,7 +12,7 @@ import { TradingDeploymentSetup, type DeploymentWalletState, type TradingDeploym
 import type { DeploymentConfiguration } from '../protocol/config.js'
 import { loadCoreDeployments } from '../protocol/coreDeployments.js'
 import { resolveInstalledTradingDeployment, type CoreDeployment } from '../protocol/deployment.js'
-import { createTradingPublicClient, publicErrorMessage, validateRpcChainId } from '../protocol/live.js'
+import { createTradingPublicClient, publicErrorMessage, validateRpcChainId, waitForActiveEnvironmentReady } from '../protocol/live.js'
 import { getActiveNetworkProfile, getActiveSimulationController } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { withTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import * as appCopy from '../copy/app.js'
@@ -68,6 +68,7 @@ export async function resolveCanonicalLiveDeployment(coreDeployments: readonly C
 }
 
 async function resolveLiveDeployment() {
+	await waitForActiveEnvironmentReady()
 	return await resolveCanonicalLiveDeployment(await loadCoreDeployments())
 }
 
@@ -299,7 +300,7 @@ export function App({
 							{showUniverseSelector ? (
 								<WalletSummary simulation={simulationController !== undefined} summary={walletSummary} onRetry={retryWalletSummary}>
 									<MetricField className='overview-universe-metric' label={appCopy.universe} valueTagName='span'>
-										<UniverseSelector options={liveUniverseOptions} selectedId={selectedUniverseId} disabled={workflowLocked} onChange={setSelectedUniverseId} />
+										<UniverseSelector options={liveUniverseOptions} selectedId={selectedUniverseId} disabled={workflowLocked} loading={liveDeploymentStatus === 'loading'} onChange={setSelectedUniverseId} />
 									</MetricField>
 								</WalletSummary>
 							) : null}
