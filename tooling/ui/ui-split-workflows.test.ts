@@ -95,6 +95,27 @@ describe('split UI workflow paths', () => {
 		expect((await projectQuery()).setupProjectPaths.filter(projectPath => projectPath.startsWith('ui/'))).toEqual(uiPackageIds.map(packageId => `ui/${packageId}`))
 	})
 
+	test('browser workflow gates expensive steps using the canonical CI classifier', async () => {
+		const workflow = await readWorkflow(browserWorkflowPath)
+		const triggers = requireRecord(workflow['on'], 'browser workflow triggers')
+		expect(triggers).toHaveProperty('pull_request')
+		expect(triggers).toHaveProperty('workflow_dispatch')
+		const job = requireRecord(workflowJobs(workflow)['browser-workflow'], 'browser workflow job')
+		const steps = workflowSteps(job)
+		const checkout = steps.find(step => step['uses'] === 'actions/checkout@v7')
+		expect(requireRecord(checkout?.['with'], 'browser checkout options')['fetch-depth']).toBe(0)
+		const scope = steps.find(step => step['id'] === 'scope')
+		expect(scope).toBeDefined()
+		expect(requireRecord(scope?.['env'], 'browser scope environment')['BASE_SHA']).toBe('${{ github.event.pull_request.base.sha }}')
+		expect(scope?.['run']).toBe(workflowSteps(workflowJobs(await readWorkflow(activeCiWorkflowPath))['changes']).find(step => step['id'] === 'scope')?.['run'])
+		const setup = steps.find(step => step['uses'] === './.github/actions/setup-ci')
+		const run = steps.find(step => step['run'] === 'bun run test:browser:workflow')
+		for (const step of [setup, run]) {
+			expect(step?.['if']).toBe("steps.scope.outputs.core == 'true'")
+			expect(steps.indexOf(step ?? {})).toBeGreaterThan(steps.indexOf(scope ?? {}))
+		}
+	})
+
 	test('CI isolates the production browser workflow', async () => {
 		const workflow = await readWorkflow(browserWorkflowPath)
 		expect(workflow['name']).toBe('Production Browser Workflow')
