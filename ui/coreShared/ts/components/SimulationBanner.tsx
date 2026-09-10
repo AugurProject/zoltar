@@ -3,9 +3,8 @@ import * as simulationCopy from '../copy/simulation.js'
 import { useSignal } from '@preact/signals'
 import { useEffect, useLayoutEffect, useRef } from 'preact/hooks'
 import { getErrorMessage } from '../lib/errors.js'
-import { SIMULATION_QUERY_PARAM, SIMULATION_QUERY_VALUE } from '../lib/activeEnvironment.js'
-import { buildRouteHref, getCurrentRouteHash, getRouteHashSearch } from '../navigation/routing.js'
 import type { SimulationController } from '../simulation/controller.js'
+import { getBuiltInScenarioLocation, getSavedSimulationStateLocation, hasSavedSimulationStateRoute, refreshEnvironmentAtSimulationLocation } from '../simulation/scenarioNavigation.js'
 import { tryParseDecimalInput } from '../forms/decimal.js'
 import { formatCurrencyInputBalance, formatTimestampWithRelative } from '../lib/formatters.js'
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard.js'
@@ -36,59 +35,6 @@ type SimulationBannerProps = {
 
 type SimulationModal = 'cleanup' | 'delete' | 'export' | 'import' | 'save' | undefined
 type NavigationOperation = 'cleanup' | 'delete' | 'import' | 'navigation' | 'save'
-
-function buildSimulationSearch(update: (params: URLSearchParams) => void) {
-	const params = new URLSearchParams(getRouteHashSearch())
-	if (new URLSearchParams(window.location.search).get(SIMULATION_QUERY_PARAM) === SIMULATION_QUERY_VALUE) {
-		params.delete(SIMULATION_QUERY_PARAM)
-	} else {
-		params.set(SIMULATION_QUERY_PARAM, SIMULATION_QUERY_VALUE)
-	}
-	update(params)
-	const nextSearch = params.toString()
-	return nextSearch === '' ? '' : `?${nextSearch}`
-}
-
-function getSimulationLocation(nextSearch: string) {
-	return new URL(buildRouteHref(getCurrentRouteHash(), nextSearch), window.location.href).toString()
-}
-
-function stageSimulationLocation(nextUrl: string) {
-	window.history.replaceState({}, '', nextUrl)
-	window.dispatchEvent(new window.PopStateEvent('popstate'))
-}
-
-function restoreSimulationLocation(previousUrl: string) {
-	window.history.replaceState({}, '', previousUrl)
-	window.dispatchEvent(new window.PopStateEvent('popstate'))
-}
-
-function commitSimulationLocation(previousUrl: string, nextUrl: string) {
-	window.history.replaceState({}, '', previousUrl)
-	window.history.pushState({}, '', nextUrl)
-}
-
-function getBuiltInScenarioLocation(scenario: string) {
-	const nextSearch = buildSimulationSearch(params => {
-		params.set('simScenario', scenario)
-		params.delete('simState')
-	})
-	return getSimulationLocation(nextSearch)
-}
-
-function getSavedSimulationStateLocation(stateId: string) {
-	const nextSearch = buildSimulationSearch(params => {
-		params.delete('simScenario')
-		params.set('simState', stateId)
-	})
-	return getSimulationLocation(nextSearch)
-}
-
-function hasSavedSimulationStateRoute() {
-	const params = new URLSearchParams(getRouteHashSearch())
-	const stateId = params.get('simState')
-	return stateId !== null && stateId.trim() !== ''
-}
 
 function getSimulationAccountOptionLabel(accountIndex: number) {
 	return simulationCopy.formatQaAccountNumber((accountIndex + 1).toString())
@@ -276,15 +222,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 	}
 
 	const refreshEnvironmentAtLocation = async (nextUrl: string) => {
-		const previousUrl = window.location.href
-		stageSimulationLocation(nextUrl)
-		try {
-			await onEnvironmentChanged()
-		} catch (error) {
-			restoreSimulationLocation(previousUrl)
-			throw error
-		}
-		commitSimulationLocation(previousUrl, nextUrl)
+		await refreshEnvironmentAtSimulationLocation(nextUrl, onEnvironmentChanged)
 	}
 
 	const navigateAndRefreshEnvironment = async (getNextLocation: () => string) => {

@@ -52,7 +52,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['ui/statoblastShared/ts/features/open-oracle/hooks/useOpenOracleOperations.ts', 831],
 		['ui/statoblastShared/ts/protocol/securityPools.ts', 837],
 		['ui/statoblast/ts/app/App.tsx', 762],
-		['ui/coreShared/ts/components/SimulationBanner.tsx', 758],
+		['ui/coreShared/ts/components/SimulationBanner.tsx', 696],
 		['ui/statoblastShared/ts/features/security-pools/components/SecurityVaultSection.tsx', 757],
 		['ui/statoblastShared/ts/features/reporting/components/ReportingSection.tsx', 751],
 		['ui/statoblastShared/ts/features/security-pools/components/LiquidationModal.tsx', 701],
