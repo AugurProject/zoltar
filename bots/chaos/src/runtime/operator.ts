@@ -672,6 +672,7 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 	const signerOperationGate = createSignerOperationGate()
 	const dashboardController = createChaosDashboardController({
 		configuration,
+		onScheduleRequested: shutdown.wake,
 		gate: signerOperationGate,
 		hostname: loaded.settings.runtime.uiHost,
 		locks,
