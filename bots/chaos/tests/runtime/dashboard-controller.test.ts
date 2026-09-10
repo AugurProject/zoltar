@@ -3,20 +3,9 @@ import { describe, expect, test } from 'bun:test'
 import { privateKeyToAccount, zeroAddress, zeroHash, type Hex } from '@zoltar/bot-shared/ethereum'
 import { createSignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
 import example from '../../config/operator.example.json'
-import {
-	type DashboardControllerOptions,
-	assertSignerCompatibleWithPending,
-	assertSignerCompatibleWithDurableScope,
-	assertSettingsUpdatePaused,
-	ConfigurationCommitIndeterminate,
-	ConfigurationCommittedSafelyPaused,
-	connectivityCandidate,
-	createChaosDashboardController,
-	pausedCandidate,
-	restartSafeSettings,
-	settingsPatchCandidate,
-	signerCandidateSettings,
-} from '../../src/runtime/dashboard-controller.ts'
+import { type DashboardControllerOptions, createChaosDashboardController } from '../../src/runtime/dashboard-controller.ts'
+import { assertSignerCompatibleWithPending, assertSignerCompatibleWithDurableScope, assertSettingsUpdatePaused, connectivityCandidate, pausedCandidate, restartSafeSettings, settingsPatchCandidate, signerCandidateSettings } from '../../src/runtime/configuration-candidates.ts'
+import { ConfigurationCommitIndeterminate, ConfigurationCommittedSafelyPaused } from '../../src/runtime/configuration-commit.ts'
 import { parseSettings, serializedSettings, type OperatorSettings } from '../../src/config/settings.ts'
 import { bindRuntimeStateToSigner, initialDurableState, initialRuntimeState, type RuntimeState } from '../../src/state/operator-state.ts'
 import { createDurableWorkflow, markWorkflowFailed, markWorkflowStepConfirmed } from '../../src/runtime/workflows.ts'

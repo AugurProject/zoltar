@@ -2,21 +2,8 @@
 
 import { beforeAll, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { getAddress, maxUint256, zeroAddress, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
-import {
-	createOpenOracleReportInstance,
-	executeOracleManagerStagedOperation,
-	loadCoordinatorInitialReportFundingRequirement,
-	loadOpenOracleWithdrawableBalances,
-	loadOpenOracleReportDetails,
-	loadOpenOracleReportSummaries,
-	loadOracleManagerDetails,
-	queueOracleManagerOperation,
-	queueSecurityPoolLiquidation,
-	requestOraclePrice,
-	settleOracleReport,
-	withdrawOpenOracleBalance,
-	wrapWeth as wrapUiWeth,
-} from '@zoltar/ui-statoblast-shared/protocol/openOracle.js'
+import { createOpenOracleReportInstance, loadOpenOracleWithdrawableBalances, loadOpenOracleReportDetails, loadOpenOracleReportSummaries, settleOracleReport, withdrawOpenOracleBalance, wrapWeth as wrapUiWeth } from '@zoltar/ui-statoblast-shared/protocol/openOracle.js'
+import { executeOracleManagerStagedOperation, loadCoordinatorInitialReportFundingRequirement, loadOracleManagerDetails, queueOracleManagerOperation, queueSecurityPoolLiquidation, requestOraclePrice } from '@zoltar/ui-statoblast-shared/protocol/oracleCoordinator.js'
 import { loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
 import { getOpenOracleAddress } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import {

@@ -2,7 +2,6 @@ import { bigintToSafeNumber, type Abi, type AbiValue, type Address } from '@zolt
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { isRecoverableContractReadError } from '@zoltar/ui-core-shared/lib/errors.js'
 import { formatTokenApprovalUnavailableMessage, type TokenApprovalRequirement, type TokenApprovalState } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
-import type { OpenOracleReportDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 
 export type OpenOracleReadClient = {
 	getBalance: (parameters: { address: Address }) => Promise<bigint>
@@ -41,11 +40,6 @@ export type OpenOracleTokenAccessLoadResult = {
 	token2ApprovalResult: TokenApprovalState
 	token1BalanceResult: TokenAccessLoadResult
 	token2BalanceResult: TokenAccessLoadResult
-}
-
-export type LoadedOracleReportResult = {
-	details: OpenOracleReportDetails
-	reportId: bigint
 }
 
 export type RefreshOpenOracleTokenAccessOptions = {

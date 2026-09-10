@@ -1,6 +1,7 @@
 import { approveErc20 } from '@zoltar/ui-zoltar-shared/protocol/tokenActions.js'
 import { createChildUniverseFromSecurityPool, forkZoltarWithOwnEscalation, loadForkAuctionDetails, migrateRepToZoltarFromSecurityPool } from '../protocol/forks.js'
-import { loadOpenOracleReportDetails, loadOracleManagerDetails, requestOraclePrice, settleOracleReport } from '../protocol/openOracle.js'
+import { loadOpenOracleReportDetails, settleOracleReport } from '../protocol/openOracle.js'
+import { loadOracleManagerDetails, requestOraclePrice } from '../protocol/oracleCoordinator.js'
 import { loadReportingDetails, reportOutcomeInSecurityPool } from '../protocol/reporting.js'
 import { createMarket, loadZoltarUniverseSummary } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
 import { getDeploymentSteps } from '../protocol/deployment.js'
