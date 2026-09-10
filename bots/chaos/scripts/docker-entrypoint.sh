@@ -42,7 +42,7 @@ bun "$script_directory/validate-container-paths.mts" "$settings_file"
 
 if [ "$#" -eq 3 ]; then
 	if [ "$1" = 'bun' ] && [ "$2" = 'run' ] && [ "$3" = 'run' ]; then
-		echo 'Checking persisted chaos launch policy before starting the operator.'
+		echo 'Running the chaos launch preflight before starting the operator.'
 		bun "$script_directory/../src/cli/doctor.ts" --if-live-capable
 	fi
 fi
