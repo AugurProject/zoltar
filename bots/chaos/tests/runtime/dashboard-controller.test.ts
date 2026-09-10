@@ -548,7 +548,16 @@ describe('chaos dashboard configuration boundary', () => {
 		})
 
 		state.lastScanAt = '2026-08-29T00:00:00.000Z'
-		expect(await controller.getState()).toMatchObject({ inventoryAvailable: true })
+		expect(await controller.getState()).toMatchObject({ inventoryAvailable: false })
+		const address = privateKeyToAccount(firstPrivateKey).address
+		state.wallet = address
+		expect(await controller.getState()).toMatchObject({ inventoryAvailable: false, signerReady: false, wallet: address })
+		state.inventoryAddress = address
+		expect(await controller.getState()).toMatchObject({ inventoryAvailable: true, signerReady: false, wallet: address })
+		state.wallet = privateKeyToAccount(secondPrivateKey).address
+		expect(await controller.getState()).toMatchObject({ inventoryAvailable: false })
+		state.wallet = undefined
+		expect(await controller.getState()).toMatchObject({ inventoryAvailable: false })
 	})
 
 	test('keeps a deferred lifecycle obligation in the dashboard state', async () => {

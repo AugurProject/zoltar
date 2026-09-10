@@ -164,6 +164,7 @@ const workflowRenderingState = state({
 		{ definition: { classification: 'lifecycle-obligation', ecosystem: 'statoblast', id: 'surface.security-pool-forker.claim-auction-proceeds', independentlyExecutable: false, label: 'SecurityPoolForker.claimAuctionProceeds', risk: 'low' }, eligibility: { blockers: ['Covered by settleAuctionBids'], eligible: false } },
 		{ definition: { classification: 'selectable', ecosystem: 'trading', id: 'trading.position.enter', label: 'Router enter', risk: 'low' }, eligibility: { blockers: ['No safe route exists'], eligible: false } },
 	],
+	inventoryAvailable: true,
 	inventory: {
 		eth: '1000000000000000001',
 		rep: [{ balance: '123456789012345678901', symbol: 'REP', token: '0x9999999999999999999999999999999999999998', universeId: '0' }],
@@ -524,7 +525,7 @@ browserTest(
 			await waitFor("document.querySelector('#last-block')?.textContent === 'Block 100'", 'Deployment check block was not displayed before a complete scan')
 			expect(await cdp.evaluate("document.querySelector('#last-scan')?.textContent")).toContain('Deployments checked')
 			expect(await cdp.evaluate("document.querySelector('#recovery-badge')?.getClientRects().length")).toBe(0)
-			expect(await cdp.evaluate("document.querySelector('#rep-balances')?.textContent")).toBe('Inventory unavailable until the first canonical scan.')
+			expect(await cdp.evaluate("document.querySelector('#rep-balances')?.textContent")).toBe('—')
 			initialDashboardState = partialRecoveryDashboardState
 			recoveredDashboardState = partialRecoveryDashboardState
 			failSecondStateRead = false
@@ -551,7 +552,7 @@ browserTest(
 					rep: document.querySelector('#rep-balances')?.textContent,
 					weth: document.querySelector('#balance-weth')?.textContent,
 				})`),
-			).toEqual({ eth: '—', recovery: '1 recovery item', rep: 'Inventory unavailable until the first canonical scan.', weth: '—' })
+			).toEqual({ eth: '—', recovery: '1 recovery item', rep: '—', weth: '—' })
 			expect(await cdp.evaluate("document.querySelector('#recovery-badge')?.getClientRects().length")).toBe(1)
 			await cdp.evaluate("document.querySelector('#pause-button')?.click()")
 			await waitFor("document.querySelector('#resume-dialog')?.open === true", 'Safety-pause resume dialog did not open')
@@ -1869,6 +1870,74 @@ browserTest(
 			await cdp.evaluate("document.querySelector('#run-next-now').scrollIntoView({ block: 'center' })")
 			await capture('overview-paused-mobile-390x844')
 			expect(cdp.issues.filter(issue => issue.kind === 'pageerror')).toEqual([])
+		} finally {
+			await cdp.close()
+			await dashboard.stop(true)
+		}
+	},
+	60_000,
+)
+
+browserTest(
+	'shows unavailable, read-only, and signer-backed execution account inventory',
+	async () => {
+		let current = state({ inventoryAvailable: false, signerReady: false })
+		const dashboard = startDashboardServer(0, {
+			getConfiguration: () => ({}),
+			setCancellation: () => {},
+			setCandidate: () => {},
+			setObligation: () => {},
+			setReplacement: () => {},
+			setWorkflow: () => {},
+			getState: () => current,
+			hostname: '127.0.0.1',
+			setPaused: () => {},
+			setSettings: () => {},
+			setSigner: () => {},
+		})
+		const cdp = await connectToChromium()
+		try {
+			for (const viewport of [
+				{ width: 1440, height: 900 },
+				{ width: 390, height: 844 },
+			]) {
+				await cdp.command('Emulation.setDeviceMetricsOverride', { ...viewport, deviceScaleFactor: 1, mobile: false })
+				for (const mode of ['keyless', 'read-only', 'signer'] as const) {
+					current = state({
+						inventory: { eth: '1000000000000000000', rep: [], weth: '2000000000000000000' },
+						inventoryAvailable: mode !== 'keyless',
+						signerReady: mode === 'signer',
+						...(mode === 'keyless' ? {} : { wallet: walletAddress }),
+					})
+					await cdp.command('Page.navigate', { url: `http://127.0.0.1:${dashboard.port}/overview` })
+					const expectedEth = mode === 'keyless' ? '—' : '1.000000000000000000'
+					const expectedBadge = { keyless: 'Signer missing', 'read-only': 'Read-only — signer not loaded', signer: 'Signer ready' }[mode]
+					const ready = `document.getElementById('balance-eth')?.textContent === ${JSON.stringify(expectedEth)} && document.getElementById('signer-badge')?.textContent === ${JSON.stringify(expectedBadge)}`
+					for (let attempt = 0; attempt < 200; attempt += 1) {
+						if (await cdp.evaluate(ready)) break
+						await Bun.sleep(25)
+					}
+					expect(await cdp.evaluate(ready)).toBe(true)
+					if (mode === 'keyless') expect(await cdp.evaluate("document.getElementById('wallet-short')?.textContent")).toBe('No execution account configured')
+					else expect(await cdp.evaluate(`document.getElementById('wallet-short')?.innerHTML.includes(${JSON.stringify(walletAddress)})`)).toBe(true)
+					expect(await cdp.evaluate('document.documentElement.scrollWidth <= window.innerWidth')).toBe(true)
+					expect(cdp.issues).toEqual([])
+					const outputDirectory = process.env['CHAOS_INVENTORY_QA_DIRECTORY']
+					if (outputDirectory !== undefined) {
+						const capture = await cdp.command('Page.captureScreenshot', { format: 'png' })
+						const data = typeof capture === 'object' && capture !== null ? Reflect.get(capture, 'data') : undefined
+						if (typeof data !== 'string') throw new Error('Inventory QA screenshot is missing')
+						await Bun.write(join(outputDirectory, `${mode}-${viewport.width.toString()}.png`), Buffer.from(data, 'base64'))
+						if (viewport.width === 390) {
+							await cdp.evaluate("document.getElementById('wallet-short')?.scrollIntoView({ block: 'center' })")
+							const inventoryCapture = await cdp.command('Page.captureScreenshot', { format: 'png' })
+							const inventoryData = typeof inventoryCapture === 'object' && inventoryCapture !== null ? Reflect.get(inventoryCapture, 'data') : undefined
+							if (typeof inventoryData !== 'string') throw new Error('Inventory panel QA screenshot is missing')
+							await Bun.write(join(outputDirectory, `${mode}-390-inventory.png`), Buffer.from(inventoryData, 'base64'))
+						}
+					}
+				}
+			}
 		} finally {
 			await cdp.close()
 			await dashboard.stop(true)

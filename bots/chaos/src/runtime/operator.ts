@@ -6,7 +6,7 @@ import { migrateEmptyBootstrapState } from '../state/bootstrap-migration.ts'
 import { runtimeTopologySummary } from './topology-summary.ts'
 export { runtimeTopologySummary } from './topology-summary.ts'
 import { checkDeploymentAvailability, recordUnavailableDeploymentScan, tradingDeploymentNotice } from './deployment-availability.ts'
-import { createWalletClient, privateKeyToAccount, zeroAddress, type Address } from '@zoltar/bot-shared/ethereum'
+import { createWalletClient, privateKeyToAccount, type Address } from '@zoltar/bot-shared/ethereum'
 import { checkRpcEndpoint, EndpointCheckFailure, type EndpointCheck } from '@zoltar/bot-shared/monitoring/connectivity'
 import { createSignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
 import { operationalFailureDisposition, pollUntilStopped, retryDelayMilliseconds } from '@zoltar/bot-shared/monitoring/resilience'
@@ -23,7 +23,7 @@ import { ChaosProtocolIndexReorgError } from '../monitoring/protocol-index-conte
 import type { CanonicalImmutableTopologyCache } from '../monitoring/topology-cache.ts'
 import { evaluateSelectableOperationDefinition, operationHasCanonicalContinuationBuilder, reevaluateOperationContinuation } from '../operations/catalog.ts'
 import type { EcosystemSnapshot, EvaluatedOperation, OperationContinuationDisposition, OperationPlan } from '../operations/types.ts'
-import { bindRuntimeStateToSigner, loadRuntimeState, recordActivity, saveDurableState, type DurableLifecyclePresenceBlocker, type DurableWorkflow, type RuntimeState } from '../state/operator-state.ts'
+import { setRuntimeExecutionAddress, bindRuntimeStateToSigner, loadRuntimeState, recordActivity, saveDurableState, type DurableLifecyclePresenceBlocker, type DurableWorkflow, type RuntimeState } from '../state/operator-state.ts'
 import { blockExecutableEvaluations, applyExecutionPolicy, chaosChain, createChaosReadPool, performCanonicalScan, planningOptions, unavailableOperationCatalog } from './canonical-scan.ts'
 import { createChaosDashboardController, restartSafeSettings, type ConfigurationState } from './dashboard-controller.ts'
 import { resetPristineStateForDeploymentProfile, verifyRetirementCompletionFinality } from './deployment-profile.ts'
@@ -717,6 +717,7 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 			topologyCacheProfileId = executionProfileId(settings)
 			state.evaluations = scan.evaluations
 			state.inventory = scan.inventory
+			state.inventoryAddress = scan.inventoryAddress
 			state.topology = runtimeTopologySummary(scan)
 			state.lastScanAt = new Date().toISOString()
 			state.lastScannedBlock = scan.anchor.blockNumber
@@ -790,7 +791,7 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 				}
 				const profileMismatch = state.profileId !== expectedProfileId
 				state.paused = settings.paused || profileMismatch || state.safetyPaused
-				state.wallet = configuredWallet(settings) ?? state.signerAddress
+				setRuntimeExecutionAddress(state, configuredWallet(settings) ?? state.signerAddress)
 				state.status = profileMismatch || state.safetyPaused ? 'paused' : currentStatus(settings)
 				state.scanning = true
 				backfillIncomplete = false
@@ -827,7 +828,7 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 					await persistState(configuration, state)
 					return settings.runtime.once
 				}
-				const discoveryWallet = state.wallet ?? zeroAddress
+				const discoveryWallet = state.wallet
 				if (topologyCacheStateFile !== settings.runtime.stateFile || topologyCacheProfileId !== expectedProfileId) topologyCache = undefined
 				const scan = await performCanonicalScan(settings, resources.pool, discoveryWallet, randomInteger(0, 0x1_0000_0000), state.protocolIndex, topologyCache)
 				if (!acquireCycleGate()) return 'deferred'
@@ -838,6 +839,7 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 				topologyCacheStateFile = settings.runtime.stateFile
 				state.evaluations = state.wallet === undefined ? blockExecutableEvaluations(scan.evaluations, 'Configure the dedicated transaction signer before execution') : scan.evaluations
 				state.inventory = scan.inventory
+				state.inventoryAddress = scan.inventoryAddress
 				state.topology = runtimeTopologySummary(scan)
 				state.lastScanAt = new Date().toISOString()
 				state.lastScannedBlock = scan.anchor.blockNumber

@@ -34,6 +34,8 @@ export type RuntimeState = DurableState & {
 	error: string | undefined
 	evaluations: EvaluatedOperation[]
 	inventory: WalletBalanceState
+	/** Address whose inventory completed successfully in this process; never restored. */
+	inventoryAddress: Address | undefined
 	lastScanAt: string | undefined
 	lastScannedBlock: bigint | undefined
 	paused: boolean

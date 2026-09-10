@@ -10,7 +10,7 @@ import { scheduledStateAfterRun, schedulerIsDue } from '../core/scheduler.ts'
 import { abandonLifecycleObligation, lifecyclePresenceBlockerMessage, MAXIMUM_AUTOMATIC_LIFECYCLE_ATTEMPTS, retryLifecycleObligation } from './obligations.ts'
 import { liveInventoryReadinessBlockers } from './live-readiness.ts'
 import { workflowNeedsOperatorReconciliation } from './workflows.ts'
-import { bindRuntimeStateToSigner, MAXIMUM_OBLIGATION_TOMBSTONE_COUNT, recordActivity, saveDurableState, type RuntimeState } from '../state/operator-state.ts'
+import { setRuntimeExecutionAddress, bindRuntimeStateToSigner, MAXIMUM_OBLIGATION_TOMBSTONE_COUNT, recordActivity, saveDurableState, type RuntimeState } from '../state/operator-state.ts'
 import { createRetirementController } from './retirement-controller.ts'
 import { dashboardRecord as record, exactDashboardKeys as exactKeys } from './dashboard-input.ts'
 
@@ -241,7 +241,7 @@ function dashboardState(state: RuntimeState, configuration: ConfigurationState) 
 		],
 		currentWorkflow,
 		execute: configuration.settings.runtime.execute,
-		inventoryAvailable: state.lastScanAt !== undefined,
+		inventoryAvailable: state.wallet !== undefined && state.inventoryAddress?.toLowerCase() === state.wallet.toLowerCase(),
 		network: configuration.settings.network.name,
 		obligations: state.obligations.filter(obligation => obligation.status !== 'abandoned' && obligation.status !== 'completed').map(obligation => ({ ...obligation, automaticRetryLimit: MAXIMUM_AUTOMATIC_LIFECYCLE_ATTEMPTS })),
 		operationEvaluations: groupedOperationEvaluations(state, enabled),
@@ -337,7 +337,7 @@ function safetyFailureCheckpoint(checkpoint: RuntimeState, message: string) {
 function applyRuntimeSettings(state: RuntimeState, settings: OperatorSettings, address: Address | undefined) {
 	if (address !== undefined) bindRuntimeStateToSigner(state, address)
 	state.paused = settings.paused || state.safetyPaused
-	state.wallet = address ?? state.signerAddress
+	setRuntimeExecutionAddress(state, address ?? state.signerAddress)
 	if (state.paused) state.status = 'paused'
 	else state.status = settings.runtime.execute ? 'running' : 'dry-run'
 }

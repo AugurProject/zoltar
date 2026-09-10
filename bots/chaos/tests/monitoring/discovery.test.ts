@@ -1,8 +1,11 @@
+import example from '../../config/operator.example.json'
+import { parseSettings } from '../../src/config/settings.ts'
+import { chaosReadClients, createChaosReadPool, performCanonicalScan } from '../../src/runtime/canonical-scan.ts'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { encodeAbiParameters, getAddress, type Abi, type AbiValue, type Address } from '@zoltar/bot-shared/ethereum'
+import { encodeAbiParameters, getAddress, privateKeyToAccount, type Abi, type AbiValue, type Address } from '@zoltar/bot-shared/ethereum'
 import {
 	advanceVaultRegistryCursor,
 	assertCanonicalPairGraph,
@@ -35,6 +38,86 @@ const temporaryDirectories: string[] = []
 
 afterEach(async () => {
 	await Promise.all(temporaryDirectories.splice(0).map(path => rm(path, { force: true, recursive: true })))
+})
+
+test('keyless discovery scans protocol topology without querying account inventory', async () => {
+	const fake = fakeClient(10n)
+	const snapshot = await discoverEcosystemSnapshot({
+		anchorBlockNumber: 10n,
+		client: fake.client,
+		deployments: snapshotFixture().deployments,
+		wallet: undefined,
+	})
+	expect(snapshot.universes.length).toBeGreaterThan(0)
+	expect(fake.balanceAddresses).toEqual([])
+	expect(fake.contractReads.some(read => ['balanceOf', 'allowance', 'tokenHolder', 'internalAllowance', 'getMigrationRepBalanceAttoRep'].includes(read.functionName))).toBe(false)
+	expect(snapshot.wallet.tokens).toEqual([])
+})
+
+test('monitors inventory for a known execution address without requiring a signer', async () => {
+	const fake = fakeClient(10n)
+	const wallet = address(1)
+	const snapshot = await discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: fake.client, deployments: snapshotFixture().deployments, wallet })
+	expect(fake.balanceAddresses).toEqual([wallet])
+	expect(snapshot.wallet.address).toBe(wallet)
+	expect(snapshot.wallet.ethBalanceAttoEth).toBe('10')
+	expect(snapshot.wallet.tokens.length).toBeGreaterThan(0)
+	expect(fake.contractReads.filter(read => read.functionName === 'balanceOf').every(read => read.args?.[0] === wallet)).toBe(true)
+})
+
+test('keyless pool discovery keeps auctions and vault topology without execution-account reads', async () => {
+	const fake = refundBackfillClient(25n)
+	const snapshot = await discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: fake.client, deployments: snapshotFixture().deployments, wallet: undefined })
+	expect(snapshot.pools).toHaveLength(1)
+	expect(snapshot.auctions).toHaveLength(1)
+	expect(snapshot.wallet.tokens).toEqual([])
+	expect(snapshot.wallet.shares).toEqual([])
+	expect(snapshot.wallet.lpTokens).toEqual([])
+	for (const name of ['getEscalationMigrationEntitlementStatus', 'pendingEthRefundsAttoEth', 'isApprovedForAll', 'allowance', 'tokenHolder', 'internalAllowance']) expect(fake.contractReads).not.toContain(name)
+})
+
+test('canonical scans publish inventory only for a successfully scanned execution address', async () => {
+	const privateKey = `0x${'11'.repeat(32)}` as const
+	for (const account of [
+		{ wallet: undefined, privateKey: undefined },
+		{ wallet: address(1), privateKey: undefined },
+		{ wallet: privateKeyToAccount(privateKey).address, privateKey },
+	]) {
+		const wallet = account.wallet
+		const fake = fakeClient(10n, hash(10))
+		const settings = parseSettings({
+			...example,
+			privateKey: account.privateKey ?? null,
+			connectivity: { publicRpcUrls: ['http://127.0.0.1:1'], quorumRpcUrls: [], readRpcUrl: 'http://127.0.0.1:1', rpcQuorum: 1 },
+			deployment: snapshotFixture().deployments,
+			network: { chainId: 31337, name: 'local', explorerUrl: 'http://127.0.0.1', kind: 'custom', maximumBlockIntervalSeconds: 12 },
+			networkConfigured: true,
+			runtime: { ...example.runtime, protocolStartBlock: '0', stateFile: await temporaryStatePath() },
+		})
+		settings.deployment = snapshotFixture().deployments
+		const pool = createChaosReadPool(settings)
+		const read = chaosReadClients(settings, pool)[0]
+		if (read === undefined) throw new Error('Canonical scan fixture needs one client')
+		Object.assign(read.client, {
+			getBalance: fake.client.getBalance,
+			getBlock: fake.client.getBlock,
+			getBlockNumber: async () => 10n,
+			getChainId: fake.client.getChainId,
+			getCode: fake.client.getCode,
+			getLogs: async () => [],
+			readContract: fake.client.readContract,
+		})
+		const scan = await performCanonicalScan(settings, pool, wallet, 0, undefined, undefined, { clock: () => 1_000_000 })
+		expect(scan.snapshot.universes.length).toBeGreaterThan(0)
+		expect(scan.indexComplete).toBe(true)
+		expect(scan.index?.cursor.blockNumber).toBe('10')
+		expect(scan.inventoryAddress).toBe(wallet)
+		expect(fake.balanceAddresses).toEqual(wallet === undefined ? [] : [wallet])
+		if (wallet === undefined) {
+			expect(scan.executionReady).toBe(false)
+			expect(scan.evaluations.every(evaluation => !evaluation.eligibility.eligible)).toBe(true)
+		}
+	}
 })
 
 test('discovers and authenticates fixed-fee REP/WETH pools for every canonical universe', async () => {
@@ -130,11 +213,13 @@ interface GraphOverrides {
 }
 
 function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: GraphOverrides = {}, poisonToken?: Address) {
+	const balanceAddresses: Address[] = []
 	const pinnedReads: Array<bigint | undefined> = []
 	const contractReads: Array<{ args?: readonly AbiValue[]; functionName: string }> = []
 	let requestedBlock: bigint | undefined
 	const implementation = {
 		async getBalance(parameters: { address: Address; blockNumber?: bigint }) {
+			balanceAddresses.push(parameters.address)
 			pinnedReads.push(parameters.blockNumber)
 			return 10n
 		},
@@ -261,7 +346,7 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 			return value
 		},
 	})
-	return { client, contractReads, pinnedReads, requested: () => requestedBlock }
+	return { balanceAddresses, client, contractReads, pinnedReads, requested: () => requestedBlock }
 }
 
 interface RefundBackfillOverrides {

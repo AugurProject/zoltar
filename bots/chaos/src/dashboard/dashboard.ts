@@ -1012,7 +1012,10 @@ function renderHeader(value: Snapshot) {
 	const networkName = value.network ?? configuration?.network ?? 'Network unknown'
 	const chainId = value.chainId ?? configuration?.chainId
 	setBadge(networkBadge, chainId === undefined ? networkName : `${networkName} · ${String(chainId)}`, value.network === undefined && configuration?.network === undefined ? 'warning' : 'neutral')
-	setBadge(signerBadge, value.signerReady === true ? 'Signer ready' : 'Signer missing', value.signerReady === true ? 'success' : 'warning')
+	let signerLabel = 'Signer missing'
+	if (value.signerReady === true) signerLabel = 'Signer ready'
+	else if (value.wallet !== undefined) signerLabel = 'Read-only — signer not loaded'
+	setBadge(signerBadge, signerLabel, value.signerReady === true ? 'success' : 'warning')
 	const recoveryItems = recoveryItemCount(value)
 	setBadge(recoveryBadge, `${recoveryItems.toString()} recovery item${recoveryItems === 1 ? '' : 's'}`, 'warning')
 	recoveryBadge.classList.toggle('hidden', recoveryItems === 0)
@@ -1031,9 +1034,9 @@ function renderOverview(value: Snapshot) {
 	eligibleCount.textContent = `${eligible.length.toString()} of ${executable.length.toString()}`
 	const selected = value.operationEvaluations.find(operation => operation.id === value.scheduler.selectedOperationId)
 	selectedOperation.textContent = selected?.label ?? value.scheduler.selectedOperationId ?? 'None'
-	walletShort.replaceChildren(value.wallet === undefined ? document.createTextNode('No signer') : compactIdentifier(value.wallet, 'wallet address'))
+	walletShort.replaceChildren(value.wallet === undefined ? document.createTextNode('No execution account configured') : compactIdentifier(value.wallet, 'wallet address'))
 	walletShort.removeAttribute('title')
-	if (value.inventoryAvailable === true) {
+	if (value.wallet !== undefined && value.inventoryAvailable === true) {
 		balanceEth.textContent = formatAtomic18(value.inventory.eth)
 		balanceWeth.textContent = formatAtomic18(value.inventory.weth)
 		balanceRepTotal.textContent = value.inventory.rep.length === 0 ? '—' : `${value.inventory.rep.length.toString()} token${value.inventory.rep.length === 1 ? '' : 's'}`
@@ -1043,7 +1046,7 @@ function renderOverview(value: Snapshot) {
 		balanceWeth.textContent = '—'
 		balanceRepTotal.textContent = '—'
 		repBalances.className = 'token-list empty-state'
-		repBalances.textContent = 'Inventory unavailable until the first canonical scan.'
+		repBalances.textContent = value.wallet === undefined ? '—' : 'Inventory unavailable until this account is scanned.'
 	}
 	renderRpcHealth(value)
 	renderSubmissionHealth(value.submissionHealth)

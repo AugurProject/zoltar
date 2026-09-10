@@ -43,6 +43,7 @@ export type CanonicalScanResult = {
 	indexComplete: boolean
 	carryProofsComplete: boolean
 	inventory: WalletBalanceState
+	inventoryAddress?: Address | undefined
 	snapshot: EcosystemSnapshot
 	topologyCache: CanonicalImmutableTopologyCache
 }
@@ -210,7 +211,7 @@ export async function loadTopologyCacheForScan(parameters: { identity: Immutable
 	}
 }
 
-export async function discoverWithQuorum(settings: OperatorSettings, pool: RpcPool, wallet: Address, anchor: CanonicalAnchor, index: ChaosProtocolIndex | undefined, topologyCache: CanonicalImmutableTopologyCache | undefined) {
+export async function discoverWithQuorum(settings: OperatorSettings, pool: RpcPool, wallet: Address | undefined, anchor: CanonicalAnchor, index: ChaosProtocolIndex | undefined, topologyCache: CanonicalImmutableTopologyCache | undefined) {
 	const connectivity = requiredConnectivity(settings)
 	const indexed = index === undefined ? {} : protocolIndexDiscoveryInputs(index)
 	return await settledQuorumValue(
@@ -467,12 +468,15 @@ export function walletInventory(snapshot: EcosystemSnapshot): WalletBalanceState
 	}
 }
 
-export async function performCanonicalScan(settings: OperatorSettings, pool: RpcPool, wallet: Address, seed: number, previousIndex: ChaosProtocolIndex | undefined, previousTopologyCache?: CanonicalImmutableTopologyCache, options: CanonicalScanOptions = {}): Promise<CanonicalScanResult> {
+export async function performCanonicalScan(settings: OperatorSettings, pool: RpcPool, wallet: Address | undefined, seed: number, previousIndex: ChaosProtocolIndex | undefined, previousTopologyCache?: CanonicalImmutableTopologyCache, options: CanonicalScanOptions = {}): Promise<CanonicalScanResult> {
 	const anchor = await canonicalAnchor(settings, pool, options.clock?.() ?? Date.now())
 	if (settings.runtime.protocolStartBlock > anchor.blockNumber) {
 		throw new Error(`Configured protocol start block ${settings.runtime.protocolStartBlock.toString()} is ahead of canonical block ${anchor.blockNumber.toString()}`)
 	}
-	const compatibleIndex = previousIndex !== undefined && protocolIndexMatches(previousIndex, settings, wallet) ? previousIndex : undefined
+	// The event index uses an empty wallet scope for public protocol history only.
+	// Discovery always receives the actual optional account, never this index scope.
+	const indexWallet = wallet ?? zeroAddress
+	const compatibleIndex = previousIndex !== undefined && protocolIndexMatches(previousIndex, settings, indexWallet) ? previousIndex : undefined
 	const topologyIdentity = immutableTopologyIdentity(settings)
 	const cachedTopology = await loadTopologyCacheForScan({
 		identity: topologyIdentity,
@@ -484,13 +488,13 @@ export async function performCanonicalScan(settings: OperatorSettings, pool: Rpc
 	if (discovery.topologyChanged) await saveImmutableTopologyCache(settings.runtime.stateFile, topologyIdentity, discovery.topologyCache, settings.discovery)
 	const topology = discovery.snapshot
 	const discoveryComplete = discoveryCoverageIsComplete(topology.warnings)
-	const updatedCandidate = discoveryComplete ? await updateIndexWithQuorum(settings, pool, wallet, anchor, topology, compatibleIndex) : undefined
+	const updatedCandidate = discoveryComplete ? await updateIndexWithQuorum(settings, pool, indexWallet, anchor, topology, compatibleIndex) : undefined
 	const partialIndex = updatedCandidate?.index ?? compatibleIndex
 	const historyWarning =
 		partialIndex?.availableStartBlock === undefined
 			? undefined
 			: `Protocol log history is unavailable for blocks ${partialIndex.startBlock} through ${(BigInt(partialIndex.availableStartBlock) - 1n).toString()}; indexing available logs from block ${partialIndex.availableStartBlock} through ${partialIndex.cursor.blockNumber}. Known claims can be recovered, including carry claims verified from contract storage. Older claims may be undiscovered.`
-	const carryUpdated = discoveryComplete ? await updateCarryWithQuorum(settings, pool, wallet, anchor, topology) : undefined
+	const carryUpdated = wallet !== undefined && discoveryComplete ? await updateCarryWithQuorum(settings, pool, wallet, anchor, topology) : undefined
 	const updated = updatedCandidate === undefined ? undefined : { ...updatedCandidate, index: snapshotProtocolIndex(updatedCandidate.toBlock === anchor.blockNumber.toString() ? indexWithCurrentRefunds(topology, updatedCandidate.index) : updatedCandidate.index, settings.network.chainId) }
 	const indexedThroughBlock = updated?.toBlock ?? compatibleIndex?.cursor.blockNumber ?? 'not started'
 	const indexedSnapshot =
@@ -507,16 +511,16 @@ export async function performCanonicalScan(settings: OperatorSettings, pool: Rpc
 		warnings: [
 			...indexedSnapshot.warnings,
 			...(historyWarning === undefined ? [] : [historyWarning]),
-			...(carryUpdated?.complete === true ? [] : ['Carry proof storage discovery is incomplete']),
+			...(wallet === undefined || carryUpdated?.complete === true ? [] : ['Carry proof storage discovery is incomplete']),
 			...(carryUpdated?.complete === true && carryUpdated.withdrawalCandidateCount > CARRY_STORAGE_MAXIMUM_WITHDRAWALS
 				? [`Carry proof action verification is rotating up to ${CARRY_STORAGE_MAXIMUM_WITHDRAWALS.toString()} anchored proofs across ${carryUpdated.withdrawalCandidateCount.toString()} raw unconsumed wallet identities; lifecycle presence remains complete`]
 				: []),
 		],
 	}
 	const allIndexesComplete = updated?.complete === true && carryUpdated?.complete === true
-	const executionReady = availableHistoryExecutionReady(updated?.index, anchor.blockNumber, discoveryComplete, carryUpdated?.complete === true)
-	const evaluated = completeOperationCoverage(evaluateOperationCatalog(snapshot, planningOptions(settings, seed)))
-	const lifecyclePresence = canonicalLifecyclePresence(snapshot, planningOptions(settings, seed))
+	const executionReady = wallet !== undefined && availableHistoryExecutionReady(updated?.index, anchor.blockNumber, discoveryComplete, carryUpdated?.complete === true)
+	const evaluated = wallet === undefined ? unavailableOperationCatalog('No execution account configured') : completeOperationCoverage(evaluateOperationCatalog(snapshot, planningOptions(settings, seed)))
+	const lifecyclePresence = wallet === undefined ? [] : canonicalLifecyclePresence(snapshot, planningOptions(settings, seed))
 	const inventory = walletInventory(snapshot)
 	let evaluations = applyExecutionPolicy(evaluated, settings, executionReady, indexedThroughBlock, anchor.blockNumber.toString(), BigInt(snapshot.wallet.ethBalanceAttoEth))
 	if (settings.runtime.execute) evaluations = applyLiveNoveltyInventoryReadiness(evaluations, inventory, snapshot.universes, settings.strategy)
@@ -533,6 +537,7 @@ export async function performCanonicalScan(settings: OperatorSettings, pool: Rpc
 		index: updated?.index ?? compatibleIndex,
 		indexComplete: updated?.complete === true,
 		inventory,
+		inventoryAddress: discoveryComplete ? wallet : undefined,
 		snapshot,
 		topologyCache: discovery.topologyCache,
 	}
