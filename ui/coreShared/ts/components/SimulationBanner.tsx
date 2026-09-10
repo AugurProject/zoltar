@@ -50,7 +50,11 @@ function buildSimulationSearch(update: (params: URLSearchParams) => void) {
 }
 
 function getSimulationLocation(nextSearch: string) {
-	return new URL(buildRouteHref(getCurrentRouteHash(), nextSearch), window.location.href).toString()
+	const nextUrl = new URL(buildRouteHref(getCurrentRouteHash(), nextSearch), window.location.href)
+	// The hash search now carries the scenario or saved-state selection, so stale page-level copies would disagree with what is actually loaded.
+	nextUrl.searchParams.delete('simScenario')
+	nextUrl.searchParams.delete('simState')
+	return nextUrl.toString()
 }
 
 function stageSimulationLocation(nextUrl: string) {
