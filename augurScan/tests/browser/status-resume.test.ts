@@ -42,6 +42,8 @@ for (const viewport of [
 				await session.send('Page.addScriptToEvaluateOnNewDocument', {
 					source: `
 				const fixture = JSON.parse(sessionStorage.getItem('augurscan:network-status:v1'));
+				// Age the restored snapshot so the load must refresh instead of trusting 46-minute-old data.
+				sessionStorage.setItem('augurscan:network-status:v1', JSON.stringify({ ...fixture, writtenAt: Date.now() - 2760000, items: fixture.items.map(item => ({ ...item, indexed_timestamp: new Date(Date.now() - 2760000).toISOString() })) }));
 				window.networkMode = 'current';
 				window.runtimeErrors = [];
 				addEventListener('error', event => window.runtimeErrors.push(event.message));
@@ -73,6 +75,10 @@ for (const viewport of [
 				})
 				await session.send('Page.navigate', { url: `${origin}/?chainId=1` })
 				await waitFor(`!!window.pollStatus && !!document.querySelector('.network-card')`)
+				// The stale restored snapshot must trigger an immediate refresh instead of a false stale-head banner.
+				await waitFor(`window.networkRequests > 0`)
+				await waitFor(`document.querySelector('#freshness-banner').hidden && document.querySelector('.network-card .badge').textContent !== 'refreshing'`)
+				expect(await evaluate(`document.querySelector('#freshness-title').textContent`)).not.toBe('RPC chain head is stale')
 				await evaluate(`window.networkMode = 'pending'; window.changeVisibility(true); window.changeVisibility(false)`)
 				await waitFor(`window.pendingNetworks.length > 0`)
 				expect(await evaluate(`document.querySelector('#freshness-title').textContent`)).toBe('Refreshing status…')

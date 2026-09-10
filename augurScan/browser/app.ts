@@ -94,6 +94,7 @@ import {
 	resolveActivityRefreshDepth,
 	restoreActivityDetailFocus,
 	restoreDisclosureState,
+	restoredNetworkSnapshotIsCurrent,
 	retainedPaginationAvailable,
 	riskPaginationForCollectedCursors,
 	runSerializedOperationsLoad,
@@ -398,6 +399,7 @@ interface NetworkResponse extends ItemsPage<NetworkRecord> {
 	serverTime?: string
 	freshnessThresholdMs?: number
 	clientClockOffsetMs?: number
+	writtenAt?: number
 }
 
 interface RelatedLogRecord {
@@ -1536,14 +1538,17 @@ const decodeNetworkResponse = (value: unknown): NetworkResponse => {
 	const serverTime = value['serverTime']
 	const freshnessThresholdMs = value['freshnessThresholdMs']
 	const clientClockOffsetMs = value['clientClockOffsetMs']
+	const writtenAt = value['writtenAt']
 	if (serverTime !== undefined && !isString(serverTime)) throw new Error('Network server time is malformed')
 	if (freshnessThresholdMs !== undefined && (typeof freshnessThresholdMs !== 'number' || !Number.isFinite(freshnessThresholdMs) || freshnessThresholdMs <= 0)) throw new Error('Network freshness threshold is malformed')
 	if (clientClockOffsetMs !== undefined && (typeof clientClockOffsetMs !== 'number' || !Number.isFinite(clientClockOffsetMs))) throw new Error('Network client clock offset is malformed')
+	if (writtenAt !== undefined && (typeof writtenAt !== 'number' || !Number.isFinite(writtenAt))) throw new Error('Network snapshot write time is malformed')
 	return {
 		...page,
 		...(serverTime === undefined ? {} : { serverTime }),
 		...(freshnessThresholdMs === undefined ? {} : { freshnessThresholdMs }),
 		...(clientClockOffsetMs === undefined ? {} : { clientClockOffsetMs }),
+		...(writtenAt === undefined ? {} : { writtenAt }),
 	}
 }
 
@@ -4214,7 +4219,7 @@ const loadNetworks = async ({ synchronizeActivity = true, refreshAfterCurrent = 
 			const { items, serverTime, freshnessThresholdMs } = decodeNetworkResponse(await api('/api/v1/networks'))
 			if (!isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)) return false
 			if (serverTime) serverClockOffsetMs = new Date(serverTime).getTime() - Date.now()
-			networkSnapshotCache.write({ items, ...(freshnessThresholdMs === undefined ? {} : { freshnessThresholdMs }), clientClockOffsetMs: serverClockOffsetMs })
+			networkSnapshotCache.write({ items, ...(freshnessThresholdMs === undefined ? {} : { freshnessThresholdMs }), clientClockOffsetMs: serverClockOffsetMs, writtenAt: Date.now() })
 			if (freshnessThresholdMs !== undefined && Number.isFinite(freshnessThresholdMs) && freshnessThresholdMs > 0) networkFreshnessThresholdMs = freshnessThresholdMs
 			const previousNetwork = selectedChainId()
 			reconcileNetworkOptions(items)
@@ -7595,14 +7600,16 @@ if (initialChainId) {
 	updateNetworkLabels()
 }
 const cachedNetworkSnapshot = initialChainId === '' ? undefined : networkSnapshotCache.read()
-let restoredCachedNetworkSnapshot = false
+let restoredCurrentNetworkSnapshot = false
 if (cachedNetworkSnapshot?.items.some(network => String(network.chain_id) === initialChainId)) {
 	if (cachedNetworkSnapshot.clientClockOffsetMs !== undefined) serverClockOffsetMs = cachedNetworkSnapshot.clientClockOffsetMs
 	if (cachedNetworkSnapshot.freshnessThresholdMs !== undefined) networkFreshnessThresholdMs = cachedNetworkSnapshot.freshnessThresholdMs
+	restoredCurrentNetworkSnapshot = restoredNetworkSnapshotIsCurrent(cachedNetworkSnapshot.writtenAt)
+	// An old snapshot (restored session, discarded tab) must not be judged for freshness against the current clock.
+	if (!restoredCurrentNetworkSnapshot) awaitingResumedNetworkStatus = true
 	reconcileNetworkOptions(cachedNetworkSnapshot.items)
 	renderNetworks(cachedNetworkSnapshot.items)
 	updateFreshness()
-	restoredCachedNetworkSnapshot = true
 }
 
 connectStream()
@@ -7634,7 +7641,14 @@ addEventListener('pageshow', async (event: PageTransitionEvent) => {
 	await refreshResumedPage(true)
 })
 
+const suspendedTimersThresholdMs = 10_000
+let lastTimeTickAt = Date.now()
 setInterval(() => {
+	const now = Date.now()
+	const tickGapMs = now - lastTimeTickAt
+	lastTimeTickAt = now
+	// A large gap between ticks means timers were suspended (system sleep with the tab visible); hidden tabs resume via visibilitychange instead.
+	if (!document.hidden && tickGapMs > suspendedTimersThresholdMs) void refreshResumedPage()
 	for (const node of document.querySelectorAll<HTMLElement>('[data-time]')) node.textContent = node.classList.contains('cell-time') ? `${time(node.dataset.time)} · ${age(node.dataset.time)}` : age(node.dataset.time)
 }, 1000)
 setInterval(() => {
@@ -7688,7 +7702,7 @@ const requestedTab = pageUrl.searchParams.get('tab')
 if (isSystem) setStateTab(isStateTab(requestedTab) ? requestedTab : 'pools')
 if (isSystem) selectedEntityKey = pageUrl.searchParams.get('entity') ?? undefined
 
-const initialNetworkStatusLoad = loadInitialNetworkStatus(restoredCachedNetworkSnapshot, () => loadNetworks({ synchronizeActivity: false }))
+const initialNetworkStatusLoad = loadInitialNetworkStatus(restoredCurrentNetworkSnapshot, () => loadNetworks({ synchronizeActivity: false }))
 const loadVisibleRoute = async () => {
 	await initialNetworkStatusLoad
 	const context = `${selectedChainId()}:${location.pathname}`
