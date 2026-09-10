@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { publicChaosConfiguration, publicChaosReadiness, publicChaosState, startDashboardServer } from '../../src/dashboard/dashboard-server.ts'
-import { CONFIGURATION_COMMIT_INDETERMINATE, CONFIGURATION_COMMITTED_SAFELY_PAUSED } from '../../src/runtime/dashboard-controller.ts'
+import { CONFIGURATION_COMMIT_INDETERMINATE, CONFIGURATION_COMMITTED_SAFELY_PAUSED } from '../../src/runtime/configuration-commit.ts'
 import { EndpointCheckFailure } from '@zoltar/bot-shared/monitoring/connectivity'
 
 const servers: ReturnType<typeof startDashboardServer>[] = []

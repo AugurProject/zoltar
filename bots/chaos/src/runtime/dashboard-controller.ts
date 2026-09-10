@@ -1,18 +1,30 @@
-import { createSelectionController, settingsPatchCandidate } from './selection-controller.ts'
-export { settingsPatchCandidate } from './selection-controller.ts'
-import { privateKeyToAccount, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import { createSelectionController } from './selection-controller.ts'
 import type { SignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
-import { checkPublicTransactionSubmissionEndpoints, checkRpcEndpoint, EndpointCheckFailure, type EndpointCheck } from '@zoltar/bot-shared/monitoring/connectivity'
+import type { EndpointCheck } from '@zoltar/bot-shared/monitoring/connectivity'
 import type { ChaosDashboardController } from '../dashboard/dashboard-server.ts'
-import { CONFIGURATION_REVISION_CONFLICT, configurationRevisionConflict, parseSettings, saveSettings, serializedSettings, type OperatorSettings } from '../config/settings.ts'
+import { saveSettings, serializedSettings, type OperatorSettings } from '../config/settings.ts'
+import {
+	assertLiveExecutionReadiness,
+	assertSettingsUpdatePaused,
+	assertSignerCompatibleWithDurableScope,
+	assertSignerCompatibleWithPending,
+	connectivityCandidate,
+	pausedCandidate,
+	preflightConnectivityUpdate,
+	restartSafeSettings,
+	settingsPatchCandidate,
+	signerAddress,
+	signerCandidateSettings,
+} from './configuration-candidates.ts'
+import { acquireConfigurationGate, applyRuntimeSettings, commitRuntimeState, ConfigurationCommitIndeterminate, ConfigurationCommittedSafelyPaused, latchSafetyPause, runtimeStateCandidate, safelyPausedSettings, safetyFailureCheckpoint, SignerOperationBusy } from './configuration-commit.ts'
 import type { ChaosProcessLocks } from '../core/process-locks.ts'
 import { scheduledStateAfterRun, schedulerIsDue } from '../core/scheduler.ts'
-import { abandonLifecycleObligation, lifecyclePresenceBlockerMessage, MAXIMUM_AUTOMATIC_LIFECYCLE_ATTEMPTS, retryLifecycleObligation } from './obligations.ts'
-import { liveInventoryReadinessBlockers } from './live-readiness.ts'
+import { abandonLifecycleObligation, retryLifecycleObligation } from './obligations.ts'
 import { workflowNeedsOperatorReconciliation } from './workflows.ts'
-import { setRuntimeExecutionAddress, bindRuntimeStateToSigner, MAXIMUM_OBLIGATION_TOMBSTONE_COUNT, recordActivity, saveDurableState, type RuntimeState } from '../state/operator-state.ts'
+import { recordActivity, saveDurableState, type RuntimeState } from '../state/operator-state.ts'
 import { createRetirementController } from './retirement-controller.ts'
-import { dashboardRecord as record, exactDashboardKeys as exactKeys } from './dashboard-input.ts'
+import { dashboardRecord as record, exactDashboardKeys as exactKeys, expectedRevision, transactionHash } from './dashboard-input.ts'
+import { dashboardState } from './dashboard-state.ts'
 
 export type ConfigurationState = {
 	path: string
@@ -20,9 +32,6 @@ export type ConfigurationState = {
 	revision: string
 	settings: OperatorSettings
 }
-
-export const CONFIGURATION_COMMIT_INDETERMINATE = 'ConfigurationCommitIndeterminate'
-export const CONFIGURATION_COMMITTED_SAFELY_PAUSED = 'ConfigurationCommittedSafelyPaused'
 
 export type DashboardControllerOptions = {
 	checkConnectivityUpdate?: ((settings: OperatorSettings) => Promise<readonly EndpointCheck[]>) | undefined
@@ -36,314 +45,6 @@ export type DashboardControllerOptions = {
 	saveConfiguration?: typeof saveSettings | undefined
 	saveState?: ((path: string, state: RuntimeState) => Promise<void>) | undefined
 	state: RuntimeState
-}
-
-function expectedRevision(value: unknown, current: string) {
-	if (typeof value !== 'string' || value !== current) throw configurationRevisionConflict()
-	return value
-}
-
-function transactionHash(value: unknown, label: string) {
-	if (typeof value !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(value)) {
-		throw new Error(`${label} must be a 32-byte transaction hash`)
-	}
-	return value as Hex
-}
-
-export function connectivityCandidate(current: OperatorSettings, value: unknown) {
-	const body = record(value, 'Connectivity update')
-	exactKeys(body, ['connectivity', 'revision'], 'Connectivity update')
-	return {
-		revision: body['revision'],
-		settings: parseSettings(
-			{
-				...serializedSettings(current),
-				connectivity: body['connectivity'],
-				networkConfigured: true,
-			},
-			current.privateKey,
-		),
-	}
-}
-
-async function preflightConnectivityUpdate(settings: OperatorSettings) {
-	const connectivity = settings.connectivity
-	if (connectivity === undefined) throw new Error('RPC connectivity is required')
-	const primaryCheck = await checkRpcEndpoint(connectivity.readRpcUrl, settings.network.chainId, 'read-rpc')
-	if (primaryCheck.status === 'failed') throw new EndpointCheckFailure(primaryCheck.error ?? 'Primary read RPC check failed', [primaryCheck])
-	const submissionChecks = await checkPublicTransactionSubmissionEndpoints(connectivity.publicRpcUrls, settings.network.chainId)
-	const failedSubmissionChecks = submissionChecks.filter(check => check.status === 'failed')
-	if (failedSubmissionChecks.length !== 0) {
-		throw new EndpointCheckFailure(failedSubmissionChecks.map(check => (check.error?.includes(check.target) ? check.error : `${check.target}: ${check.error ?? 'public transaction endpoint check failed'}`)).join('; '), [primaryCheck, ...submissionChecks])
-	}
-	const quorumChecks = await Promise.all(connectivity.quorumRpcUrls.map(url => checkRpcEndpoint(url, settings.network.chainId, 'read-rpc')))
-	const failed = quorumChecks.filter(check => check.status === 'failed')
-	if (failed.length !== 0) {
-		throw new EndpointCheckFailure(failed.map(check => (check.error?.includes(check.target) ? check.error : `${check.target}: ${check.error ?? 'endpoint check failed'}`)).join('; '), [primaryCheck, ...submissionChecks, ...quorumChecks])
-	}
-	if (1 + quorumChecks.length < connectivity.rpcQuorum) throw new Error(`RPC quorum ${connectivity.rpcQuorum.toString()} requires at least ${connectivity.rpcQuorum.toString()} healthy read endpoints`)
-	return [primaryCheck, ...submissionChecks, ...quorumChecks]
-}
-
-export function pausedCandidate(current: OperatorSettings, value: unknown) {
-	const body = record(value, 'Pause update')
-	exactKeys(body, ['paused', 'revision'], 'Pause update')
-	return {
-		revision: body['revision'],
-		settings: parseSettings({ ...serializedSettings(current), paused: body['paused'] }, current.privateKey),
-	}
-}
-
-export function signerCandidateSettings(current: OperatorSettings, value: unknown) {
-	const body = record(value, 'Signer update')
-	exactKeys(body, ['privateKey', 'remember', 'revision'], 'Signer update')
-	if (typeof body['remember'] !== 'boolean') throw new Error('Signer remember must be a boolean')
-	const privateKey = body['privateKey']
-	if (privateKey !== null && (typeof privateKey !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(privateKey))) {
-		throw new Error('Private key must be null or a 32-byte 0x-prefixed value')
-	}
-	const serialized = serializedSettings(current)
-	return {
-		rememberSigner: privateKey === null ? false : body['remember'],
-		revision: body['revision'],
-		settings: parseSettings(
-			{
-				...serialized,
-				paused: privateKey === null ? true : serialized.paused,
-				privateKey,
-				runtime: {
-					...serialized.runtime,
-					execute: privateKey === null ? false : serialized.runtime.execute,
-				},
-			},
-			undefined,
-		),
-	}
-}
-
-export function restartSafeSettings(settings: OperatorSettings, rememberSigner: boolean) {
-	if (rememberSigner || settings.privateKey === undefined) return settings
-	return {
-		...settings,
-		paused: true,
-		privateKey: undefined,
-		runtime: { ...settings.runtime, execute: false },
-	}
-}
-
-function signerAddress(settings: OperatorSettings): Address | undefined {
-	return settings.privateKey === undefined ? undefined : privateKeyToAccount(settings.privateKey).address
-}
-
-function assertLiveExecutionReadiness(state: RuntimeState, settings: OperatorSettings) {
-	const address = signerAddress(settings)
-	if (address === undefined) throw new Error('Live execution requires a configured transaction signer')
-	const signerMatches = state.signerAddress?.toLowerCase() === address.toLowerCase() && state.wallet?.toLowerCase() === address.toLowerCase()
-	const topology = state.topology
-	if (!signerMatches || state.lastScanAt === undefined || state.lastScannedBlock === undefined || topology?.complete !== true || topology.anchor.blockNumber !== state.lastScannedBlock) {
-		throw new Error('Live execution requires a fresh, complete canonical scan for the configured signer')
-	}
-	const blocker = liveInventoryReadinessBlockers(state.inventory, topology.universes, settings.strategy)[0]
-	if (blocker !== undefined) throw new Error(blocker)
-}
-
-export function assertSignerCompatibleWithPending(pendingSender: Address | undefined, address: Address | undefined) {
-	if (pendingSender !== undefined && (address === undefined || address.toLowerCase() !== pendingSender.toLowerCase())) {
-		throw new Error('The signer cannot be cleared or replaced while a transaction intent is pending recovery')
-	}
-}
-
-export function assertSignerCompatibleWithDurableScope(recordedAddress: Address | undefined, configuredAddress: Address | undefined) {
-	if (recordedAddress !== undefined && configuredAddress !== undefined && recordedAddress.toLowerCase() !== configuredAddress.toLowerCase()) {
-		throw new Error(`This durable state file is scoped to signer ${recordedAddress}; configure a distinct state file before using ${configuredAddress}`)
-	}
-}
-
-export function assertSettingsUpdatePaused(current: OperatorSettings, runtimePaused: boolean) {
-	if (!current.paused || !runtimePaused) {
-		throw new Error('Pause both the persisted configuration and running chaos bot before changing execution policy')
-	}
-}
-
-function groupedOperationEvaluations(state: RuntimeState, enabled: ReadonlySet<string>) {
-	const rows = new Map<
-		string,
-		{
-			blockers: string[]
-			candidateCount: number
-			classification: (typeof state.evaluations)[number]['definition']['classification']
-			description: string
-			ecosystem: (typeof state.evaluations)[number]['definition']['ecosystem']
-			eligible: boolean
-			enabled: boolean
-			id: string
-			independentlyExecutable: boolean
-			label: string
-			prerequisites: string[]
-			risk: (typeof state.evaluations)[number]['definition']['risk']
-		}
-	>()
-	for (const evaluation of state.evaluations) {
-		const id = evaluation.definition.id
-		const existing = rows.get(id)
-		if (existing === undefined) {
-			rows.set(id, {
-				blockers: [...new Set(evaluation.eligibility.blockers)],
-				candidateCount: evaluation.plan === undefined ? 0 : 1,
-				classification: evaluation.definition.classification,
-				description: evaluation.definition.description,
-				ecosystem: evaluation.definition.ecosystem,
-				eligible: evaluation.eligibility.eligible,
-				enabled: enabled.has(evaluation.definition.ecosystem),
-				id,
-				independentlyExecutable: evaluation.definition.independentlyExecutable ?? (evaluation.definition.classification === 'selectable' || evaluation.definition.classification === 'lifecycle-obligation'),
-				label: evaluation.definition.label,
-				prerequisites: [...new Set(evaluation.definition.discoveryInputs)],
-				risk: evaluation.definition.risk,
-			})
-			continue
-		}
-		existing.candidateCount += evaluation.plan === undefined ? 0 : 1
-		existing.eligible ||= evaluation.eligibility.eligible
-		existing.blockers = [...new Set([...existing.blockers, ...evaluation.eligibility.blockers])]
-		existing.prerequisites = [...new Set([...existing.prerequisites, ...evaluation.definition.discoveryInputs])]
-	}
-	return [...rows.values()]
-}
-
-function dashboardState(state: RuntimeState, configuration: ConfigurationState) {
-	const currentWorkflow = state.workflows.find(workflow => workflow.status === 'running' || workflow.status === 'waiting-continuation' || workflow.status === 'waiting-obligation' || workflow.status === 'waiting-transaction' || workflowNeedsOperatorReconciliation(workflow))
-	const enabled = new Set(configuration.settings.strategy.enabledEcosystems)
-	const lifecyclePresenceAlert = state.lifecyclePresenceBlocker === undefined ? undefined : lifecyclePresenceBlockerMessage(state.lifecyclePresenceBlocker)
-	return {
-		...state,
-		alerts: [
-			...(state.deploymentNotice === undefined ? [] : [{ message: state.deploymentNotice, severity: 'info' }]),
-			...(state.error === undefined ? [] : [{ message: state.error, severity: 'error' }]),
-			...(lifecyclePresenceAlert === undefined || lifecyclePresenceAlert === state.error ? [] : [{ message: lifecyclePresenceAlert, severity: 'error' }]),
-			...(state.safetyPaused
-				? [
-						{
-							message: 'Safety pause is latched; review the failure activity and current recovery state before explicitly resuming execution',
-							severity: 'error',
-						},
-					]
-				: []),
-			...(state.obligationTombstones.length >= MAXIMUM_OBLIGATION_TOMBSTONE_COUNT * 0.8
-				? [
-						{
-							message: `Lifecycle tombstone journal is at ${state.obligationTombstones.length.toString()} of ${MAXIMUM_OBLIGATION_TOMBSTONE_COUNT.toString()} entries; complete canonical scans so retired identities can be pruned`,
-							severity: 'warning',
-						},
-					]
-				: []),
-			...state.warnings.map(message => ({ message, severity: 'warning' })),
-		],
-		currentWorkflow,
-		execute: configuration.settings.runtime.execute,
-		inventoryAvailable: state.wallet !== undefined && state.inventoryAddress?.toLowerCase() === state.wallet.toLowerCase(),
-		network: configuration.settings.network.name,
-		obligations: state.obligations.filter(obligation => obligation.status !== 'abandoned' && obligation.status !== 'completed').map(obligation => ({ ...obligation, automaticRetryLimit: MAXIMUM_AUTOMATIC_LIFECYCLE_ATTEMPTS })),
-		operationEvaluations: groupedOperationEvaluations(state, enabled),
-		scheduler: {
-			...state.scheduler,
-			due: schedulerIsDue(state.scheduler.status === 'due' ? { ...state.scheduler, status: 'scheduled' } : state.scheduler),
-		},
-		signerReady: configuration.settings.privateKey !== undefined,
-		topology:
-			state.topology === undefined
-				? undefined
-				: {
-						...state.topology,
-						auctions: state.topology.auctions.map(auction => ({ ...auction })),
-						pairs: state.topology.pairs.map(pair => ({ ...pair })),
-						pools: state.topology.pools.map(pool => ({ ...pool })),
-						reports: state.topology.reports.map(report => ({ ...report })),
-						universes: state.topology.universes.map(universe => ({ ...universe })),
-					},
-	}
-}
-
-export class SignerOperationBusy extends Error {
-	constructor() {
-		super('The operator is completing a transaction boundary; retry the configuration request')
-		this.name = 'SignerOperationBusy'
-	}
-}
-
-export class ConfigurationCommitIndeterminate extends Error {
-	constructor(cause: unknown) {
-		super('The configuration commit outcome is indeterminate. Treat the requested configuration as committed. Execution is safety-paused in this process; inspect and reload the owner configuration and runtime-state files before retry or restart.', { cause })
-		this.name = CONFIGURATION_COMMIT_INDETERMINATE
-	}
-}
-
-export class ConfigurationCommittedSafelyPaused extends Error {
-	constructor(stage: string, cause: unknown) {
-		super(`The configuration was committed, but ${stage} failed. The bot remains durably safety-paused; reload the committed configuration and explicitly resume after recovery.`, { cause })
-		this.name = CONFIGURATION_COMMITTED_SAFELY_PAUSED
-	}
-}
-
-function acquireConfigurationGate(gate: SignerOperationGate) {
-	if (!gate.acquire('configuration')) throw new SignerOperationBusy()
-}
-
-function runtimeStateCandidate(state: RuntimeState): RuntimeState {
-	return {
-		...state,
-		activities: [...state.activities],
-		scheduler: { ...state.scheduler },
-		topology:
-			state.topology === undefined
-				? undefined
-				: {
-						...state.topology,
-						auctions: state.topology.auctions.map(auction => ({ ...auction })),
-						pairs: state.topology.pairs.map(pair => ({ ...pair })),
-						pools: state.topology.pools.map(pool => ({ ...pool })),
-						reports: state.topology.reports.map(report => ({ ...report })),
-						universes: state.topology.universes.map(universe => ({ ...universe })),
-					},
-	}
-}
-
-function latchSafetyPause(state: RuntimeState) {
-	state.paused = true
-	state.safetyPaused = true
-	state.scheduler.status = 'paused'
-	state.status = 'paused'
-}
-
-function safelyPausedSettings(settings: OperatorSettings): OperatorSettings {
-	return {
-		...settings,
-		paused: true,
-		runtime: { ...settings.runtime, execute: false },
-	}
-}
-
-function safetyFailureCheckpoint(checkpoint: RuntimeState, message: string) {
-	const failed = runtimeStateCandidate(checkpoint)
-	failed.error = message
-	recordActivity(failed, {
-		message,
-		status: 'failed',
-		type: 'error',
-	})
-	return failed
-}
-
-function applyRuntimeSettings(state: RuntimeState, settings: OperatorSettings, address: Address | undefined) {
-	if (address !== undefined) bindRuntimeStateToSigner(state, address)
-	state.paused = settings.paused || state.safetyPaused
-	setRuntimeExecutionAddress(state, address ?? state.signerAddress)
-	if (state.paused) state.status = 'paused'
-	else state.status = settings.runtime.execute ? 'running' : 'dry-run'
-}
-
-function commitRuntimeState(target: RuntimeState, candidate: RuntimeState) {
-	Object.assign(target, candidate)
 }
 
 function dashboardConfiguration(configuration: ConfigurationState) {
@@ -877,8 +578,4 @@ export function createChaosDashboardController(options: DashboardControllerOptio
 			}
 		},
 	}
-}
-
-export function isConfigurationRevisionConflict(error: unknown) {
-	return error instanceof Error && error.name === CONFIGURATION_REVISION_CONFLICT
 }

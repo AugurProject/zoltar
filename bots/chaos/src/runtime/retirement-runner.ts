@@ -1,12 +1,30 @@
 import type { Address } from '@zoltar/bot-shared/ethereum'
 import type { OperatorSettings } from '../config/settings.ts'
-import type { OperationPlan } from '../operations/types.ts'
+import type { EcosystemSnapshot, OperationPlan } from '../operations/types.ts'
 import { evaluateOperationCatalog } from '../operations/catalog.ts'
+import type { DurableRetirementState } from '../state/retirement.ts'
 import type { DurableWorkflow, RuntimeState } from '../state/operator-state.ts'
 import { chaosReadClients, planningOptions, type CanonicalAnchor, type CanonicalScanResult } from './canonical-scan.ts'
-import { applyRetirementAssessment, assessRetirement, buildV3RetirementPlan, readV3Position, readV3PositionsWithQuorum, reconcileV3PositionJournal, type V3PositionObservation } from './retirement.ts'
-import { recordCanonicalRecoveredBalances } from './retirement-balance-evidence.ts'
+import { applyRetirementAssessment, assessRetirement } from './retirement-assessment.ts'
+import { buildV3RetirementPlan, readV3Position, readV3PositionsWithQuorum, reconcileV3PositionJournal } from './retirement-v3-positions.ts'
+import type { V3PositionObservation } from './retirement-types.ts'
 import { retirementCleanupBlocker } from './workflows.ts'
+
+export function recordCanonicalRecoveredBalances(retirement: DurableRetirementState, snapshot: EcosystemSnapshot) {
+	const observed = Object.fromEntries([
+		['ETH', snapshot.wallet.ethBalanceAttoEth],
+		...snapshot.wallet.tokens.map(token => [token.address, token.balance] as const),
+		...snapshot.wallet.lpTokens.map(token => [`LP:${token.pair}`, token.balance] as const),
+		...snapshot.wallet.shares.flatMap(shares => [[`${shares.shareToken}:INVALID`, shares.invalid] as const, [`${shares.shareToken}:YES`, shares.yes] as const, [`${shares.shareToken}:NO`, shares.no] as const]),
+	])
+	for (const [asset, balance] of Object.entries(observed)) {
+		const previous = retirement.lastObservedBalances[asset]
+		if (previous !== undefined && BigInt(balance) > BigInt(previous)) {
+			retirement.recoveredBalances[asset] = (BigInt(retirement.recoveredBalances[asset] ?? '0') + BigInt(balance) - BigInt(previous)).toString()
+		}
+		retirement.lastObservedBalances[asset] = balance
+	}
+}
 
 type RetirementScan = Pick<CanonicalScanResult, 'anchor' | 'executionReady' | 'canonicalLifecyclePresenceComplete' | 'carryProofsComplete' | 'indexComplete' | 'snapshot'>
 
