@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { encodeAbiParameters, keccak256, toHex, type Address, type Hash } from '@zoltar/bot-shared/ethereum'
-import { requireSuccessfulReceipt, validateStepReceiptEvidence } from '../../src/execution/receipt-validation.ts'
+import { receiptVisibilityDisposition, requireSuccessfulReceipt, validateStepReceiptEvidence } from '../../src/execution/receipt-validation.ts'
 import type { OperationStep } from '../../src/operations/types.ts'
 
 const emitter = '0x0000000000000000000000000000000000000001' as Address
@@ -94,5 +94,39 @@ describe('chaos semantic receipt validation', () => {
 
 	test('rejects reverted receipts before semantic validation', () => {
 		expect(() => requireSuccessfulReceipt('Test step', { ...receipt, status: 'reverted' })).toThrow(`reverted in transaction ${transactionHash}`)
+	})
+})
+
+describe('receipt visibility disposition', () => {
+	/** Mirrors the production propagation-grace and finality-grace constants in receipt-validation.ts. */
+	const GRACE_MILLISECONDS = 60_000
+	const FINALITY_GRACE_MILLISECONDS = 1_200_000
+
+	test('marks a freshly broadcast, unobserved receipt as pending rather than alarming', () => {
+		const submittedAt = new Date(Date.now() - GRACE_MILLISECONDS / 2).toISOString()
+
+		expect(receiptVisibilityDisposition(false, submittedAt)).toEqual(['not yet visible to the RPC quorum; this is expected immediately after broadcast', 'pending'])
+	})
+
+	test('escalates to alarming once an unobserved receipt outlives the propagation grace period', () => {
+		const submittedAt = new Date(Date.now() - GRACE_MILLISECONDS * 2).toISOString()
+
+		expect(receiptVisibilityDisposition(false, submittedAt)).toEqual(['receipt is not visible to the RPC quorum', 'alarming'])
+	})
+
+	test('treats an unknown submission time as alarming rather than assuming it is fresh', () => {
+		expect(receiptVisibilityDisposition(false, undefined)[1]).toBe('alarming')
+	})
+
+	test('treats an observed but not-yet-finalized receipt as pending while finality is still within its normal window', () => {
+		const submittedAt = new Date(Date.now() - GRACE_MILLISECONDS * 10).toISOString()
+
+		expect(receiptVisibilityDisposition(true, submittedAt)).toEqual(['awaiting canonical finality', 'pending'])
+	})
+
+	test('escalates to alarming once an observed but unfinalized receipt outlives the finality grace period', () => {
+		const submittedAt = new Date(Date.now() - FINALITY_GRACE_MILLISECONDS * 2).toISOString()
+
+		expect(receiptVisibilityDisposition(true, submittedAt)).toEqual(['awaiting canonical finality', 'alarming'])
 	})
 })
