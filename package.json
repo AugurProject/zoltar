@@ -103,6 +103,7 @@
 		"ui:vendor": "bun run projects:vendor",
 		"cleanup:foundry-anvil-state": "bun ./tooling/testing/cleanup-foundry-anvil-state.mts",
 		"deploy:testnet": "bun ./tooling/contracts/ensure-contract-artifacts.mts --headless && bun ./tooling/contracts/run-deploy-testnet.mts",
+		"verify:contracts": "bun ./tooling/contracts/ensure-contract-artifacts.mts --headless && bun ./tooling/contracts/verify-contracts.mts",
 		"gas-costs": "cd solidity && bun run gas-costs",
 		"test": "bun run ensure-contract-artifacts && bun run check:shared-dependencies && bun run tsc && bun run test:run",
 		"check:complete": "bun run format:check && bun run check && bun run knip && bun run check:generated-clean",

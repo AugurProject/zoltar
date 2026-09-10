@@ -47,6 +47,7 @@ type HeadlessDeploymentOptions = {
 	buildEntrypoint?: (sourceEntrypoint: string) => Promise<Blob>
 	removeTemporaryDirectory?: (temporaryDirectory: string) => Promise<void>
 	spawnChild?: (command: string[]) => DeploymentChild
+	spawnVerification?: (command: string[]) => DeploymentChild
 	temporaryRoot?: string
 }
 
@@ -58,6 +59,24 @@ const signalExitCodes: Readonly<Record<(typeof forwardedSignals)[number], number
 
 function isNoSuchProcessError(error: unknown): error is NodeJS.ErrnoException {
 	return error instanceof Error && 'code' in error && error.code === 'ESRCH'
+}
+
+function isHelpRequest(args: readonly string[]) {
+	return args.includes('--help') || args.includes('-h')
+}
+
+// Mirrors deploy-testnet.mts option/assignment precedence: the --chain-id
+// option wins, then the first CHAIN_ID= or --CHAIN_ID= assignment in argument
+// order, then the environment.
+export function resolveRequestedChainId(args: readonly string[], environment: Readonly<Record<string, string | undefined>> = process.env) {
+	const optionPrefix = '--chain-id='
+	const optionArgument = args.find(candidate => candidate.startsWith(optionPrefix))
+	if (optionArgument !== undefined) return optionArgument.slice(optionPrefix.length)
+	for (const argument of args) {
+		const assignmentPrefix = ['CHAIN_ID=', '--CHAIN_ID='].find(candidate => argument.startsWith(candidate))
+		if (assignmentPrefix !== undefined) return argument.slice(assignmentPrefix.length)
+	}
+	return environment['CHAIN_ID'] ?? '11155111'
 }
 
 async function buildHeadlessEntrypoint(sourceEntrypoint: string) {
@@ -105,6 +124,16 @@ export async function runHeadlessTestnetDeployment(args: readonly string[], opti
 				const command = [process.execPath, bundledEntrypoint, ...args]
 				activeChild = options.spawnChild?.(command) ?? Bun.spawn(command, { stdin: 'inherit', stdout: 'inherit', stderr: 'inherit' })
 				exitCode = await activeChild.exited
+			}
+			if (exitCode === 0 && receivedSignal === undefined && !isHelpRequest(args)) {
+				const chainId = resolveRequestedChainId(args)
+				const verificationCommand = [process.execPath, path.join(repositoryRoot, 'tooling', 'contracts', 'verify-contracts.mts'), `--chain-id=${chainId}`]
+				activeChild = options.spawnVerification?.(verificationCommand) ?? Bun.spawn(verificationCommand, { cwd: repositoryRoot, stdin: 'inherit', stdout: 'inherit', stderr: 'inherit' })
+				const verificationExitCode = await activeChild.exited
+				if (verificationExitCode !== 0 && receivedSignal === undefined) {
+					console.error(`Testnet deployment succeeded, but explorer source verification failed. Rerun it with: bun run verify:contracts -- --chain-id=${chainId}`)
+					exitCode = verificationExitCode
+				}
 			}
 		}
 	} catch (error) {
