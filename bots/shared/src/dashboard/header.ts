@@ -2,19 +2,23 @@ type OperatorHeaderOptions = {
 	title: string
 	eyebrow: string
 	blockStatus: string
+	network: string
 	safety: string
 	navigation: string
 	notices: string
 }
 
 // All inputs are repository-owned markup, never request or runtime data.
-export function renderOperatorHeader({ title, eyebrow, blockStatus, safety, navigation, notices }: OperatorHeaderOptions) {
+export function renderOperatorHeader({ title, eyebrow, blockStatus, network, safety, navigation, notices }: OperatorHeaderOptions) {
 	return `<header class="operator-shell">
 		<div class="operator-primary">
 			<div class="operator-identity">
 				<p class="eyebrow">${eyebrow}</p>
 				<h1>${title}</h1>
-				<p id="header-block-status" class="header-block-status">${blockStatus}</p>
+				<div class="header-status-line">
+					<p id="header-block-status" class="header-block-status">${blockStatus}</p>
+					${network}
+				</div>
 			</div>
 			<details id="header-notices" class="header-notices">
 				<summary id="header-notices-toggle" aria-label="Bot notices">
