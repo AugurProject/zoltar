@@ -6,6 +6,8 @@ const sourceByPath = new Map([
 	['/operation-dialog.js', 'operation-dialog.ts'],
 	['/operation-input-format.js', 'operation-input-format.ts'],
 	['/catalog-groups.js', 'catalog-groups.ts'],
+	['/dom.js', 'dom.ts'],
+	['/activity-timeline.js', 'activity-timeline.ts'],
 	['/formatting.js', 'formatting.ts'],
 	['/operator-alerts.js', 'operator-alerts.ts'],
 	['/retirement-dashboard.js', 'retirement-dashboard.ts'],

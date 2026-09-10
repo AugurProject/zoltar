@@ -1,3 +1,6 @@
+/** Longest string any sanitized public field publishes. Producers must truncate to this visibly. */
+export const MAXIMUM_PUBLIC_FIELD_LENGTH = 1_000
+
 export function record(value: unknown): Record<string, unknown> | undefined {
 	return typeof value === 'object' && value !== null && !Array.isArray(value) ? Object.fromEntries(Object.entries(value)) : undefined
 }
@@ -9,7 +12,7 @@ export function safeString(value: unknown) {
 		/https?:\/\//i.test(value) ||
 		/(?:[a-z]:\\|\/(?:etc|home|root|tmp|var|workspace)\/)/i.test(value) ||
 		/0x[0-9a-f]{130,}/i.test(value)
-	return sensitive ? undefined : value.slice(0, 1_000)
+	return sensitive ? undefined : value.slice(0, MAXIMUM_PUBLIC_FIELD_LENGTH)
 }
 
 export function stringField(source: Record<string, unknown>, key: string) {

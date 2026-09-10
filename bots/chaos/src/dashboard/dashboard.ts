@@ -1,5 +1,7 @@
 import { activeSchedulerWorkLabel, createSelectionControls } from './selection-controls.js'
 import { createCatalogGroups } from './catalog-groups.js'
+import { createActivityTimeline } from './activity-timeline.js'
+import { compactIdentifier, formatDate, node, setBadge, shortHex, statusLabel, statusTone } from './dom.js'
 import { createOperationDialog } from './operation-dialog.js'
 import { renderOperatorAlerts } from './operator-alerts.js'
 type RepBalance = {
@@ -87,6 +89,7 @@ type Obligation = {
 
 type Activity = {
 	at?: string | undefined
+	details?: string | undefined
 	ecosystem?: string | undefined
 	label?: string | undefined
 	operationId?: string | undefined
@@ -287,7 +290,7 @@ const obligationConfirmationInput = element('obligation-confirmation', HTMLInput
 const obligationConfirmationHelp = element('obligation-confirmation-help', HTMLParagraphElement)
 const obligationStatus = element('obligation-status', HTMLSpanElement)
 const obligationRetryButton = element('obligation-retry', HTMLButtonElement)
-const activityList = element('activity-list', HTMLOListElement)
+const renderActivities = createActivityTimeline()
 const settingsScope = element('settings-scope', HTMLSpanElement)
 const configurationStatus = element('configuration-status', HTMLDivElement)
 const settingsPauseNote = element('settings-pause-note', HTMLDivElement)
@@ -583,6 +586,7 @@ function parseSnapshot(value: unknown): Snapshot {
 	return {
 		activities: list(source['activities'], entry => ({
 			at: stringValue(entry['at']),
+			details: stringValue(entry['details']),
 			ecosystem: stringValue(entry['ecosystem']),
 			label: stringValue(entry['label']),
 			operationId: stringValue(entry['operationId']),
@@ -762,87 +766,12 @@ async function requestJson(path: string, timeoutMilliseconds: number, init?: Req
 	}
 }
 
-function node<Tag extends keyof HTMLElementTagNameMap>(tag: Tag, className?: string, text?: string): HTMLElementTagNameMap[Tag] {
-	const value = document.createElement(tag)
-	if (className !== undefined) value.className = className
-	if (text !== undefined) value.textContent = text
-	return value
-}
-
-let identifierSequence = 0
-
-function compactIdentifier(value: string, type: string) {
-	const wrapper = node('span', 'compact-identifier')
-	wrapper.dataset['identifierType'] = type
-	const display = node('span', 'identifier-value mono', shortHex(value))
-	const copy = document.createElement('button')
-	copy.className = 'identifier-copy'
-	copy.textContent = 'Copy'
-	copy.type = 'button'
-	copy.setAttribute('aria-label', `Copy ${type}: ${value}`)
-	identifierSequence += 1
-	const full = document.createElement('textarea')
-	full.className = 'identifier-full mono'
-	full.hidden = true
-	full.id = `identifier-full-${identifierSequence.toString()}`
-	full.readOnly = true
-	full.rows = 2
-	full.spellcheck = false
-	full.value = value
-	full.wrap = 'soft'
-	full.setAttribute('aria-label', `Full ${type}`)
-	const disclosure = document.createElement('button')
-	disclosure.className = 'identifier-disclosure'
-	disclosure.textContent = 'Show full'
-	disclosure.type = 'button'
-	disclosure.setAttribute('aria-controls', full.id)
-	disclosure.setAttribute('aria-expanded', 'false')
-	disclosure.setAttribute('aria-label', `Show full ${type}: ${value}`)
-	const feedback = node('span', 'identifier-feedback')
-	feedback.setAttribute('aria-live', 'polite')
-	feedback.setAttribute('role', 'status')
-	const setExpanded = (expanded: boolean) => {
-		full.hidden = !expanded
-		disclosure.textContent = expanded ? 'Hide full' : 'Show full'
-		disclosure.setAttribute('aria-expanded', expanded ? 'true' : 'false')
-		disclosure.setAttribute('aria-label', `${expanded ? 'Hide' : 'Show'} full ${type}: ${value}`)
-	}
-	disclosure.addEventListener('click', () => setExpanded(full.hidden))
-	copy.addEventListener('click', () => {
-		copy.disabled = true
-		feedback.className = 'identifier-feedback'
-		feedback.textContent = 'Copying…'
-		const clipboard = navigator.clipboard
-		const write = clipboard === undefined ? Promise.reject(new Error('Clipboard API unavailable')) : Promise.resolve().then(() => clipboard.writeText(value))
-		void write.then(
-			() => {
-				copy.disabled = false
-				feedback.className = 'identifier-feedback success'
-				feedback.textContent = 'Copied'
-			},
-			() => {
-				copy.disabled = false
-				feedback.className = 'identifier-feedback error'
-				feedback.textContent = 'Copy failed; full value shown'
-				setExpanded(true)
-			},
-		)
-	})
-	wrapper.append(display, copy, disclosure, feedback, full)
-	return wrapper
-}
-
 function identifierLine(prefix: string, value: string | undefined, type: string) {
 	const line = node('small', 'identifier-line')
 	line.append(node('span', undefined, prefix))
 	if (value === undefined) line.append(node('span', 'mono muted', 'Unavailable'))
 	else line.append(compactIdentifier(value, type))
 	return line
-}
-
-function setBadge(target: HTMLElement, label: string, tone: 'error' | 'info' | 'neutral' | 'success' | 'warning') {
-	target.textContent = label
-	target.className = `badge ${tone}`
 }
 
 function normalizeEcosystem(value: string | undefined): string {
@@ -875,11 +804,6 @@ function classificationLabel(value: string | undefined) {
 	return 'Classification unavailable'
 }
 
-function shortHex(value: string | undefined) {
-	if (value === undefined || value.length < 14) return value ?? '—'
-	return `${value.slice(0, 8)}…${value.slice(-6)}`
-}
-
 function parsePositiveNumber(value: string | number | undefined) {
 	let parsed = Number.NaN
 	if (typeof value === 'number') parsed = value
@@ -902,12 +826,6 @@ function formatDuration(totalSeconds: number) {
 	return hours > 0 ? `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}` : `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`
 }
 
-function formatDate(value: string | undefined) {
-	if (value === undefined) return 'Not scheduled'
-	const date = new Date(value)
-	return Number.isNaN(date.getTime()) ? 'Timestamp unavailable' : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'medium' }).format(date)
-}
-
 function formatRelative(value: string | undefined) {
 	if (value === undefined) return 'Waiting for first scan'
 	const timestamp = new Date(value).getTime()
@@ -916,22 +834,6 @@ function formatRelative(value: string | undefined) {
 	if (seconds < 60) return `Scanned ${seconds.toString()}s ago`
 	if (seconds < 3_600) return `Scanned ${Math.floor(seconds / 60).toString()}m ago`
 	return `Scanned ${Math.floor(seconds / 3_600).toString()}h ago`
-}
-
-function statusTone(status: string | undefined): 'error' | 'info' | 'neutral' | 'success' | 'warning' {
-	const normalized = status?.toLowerCase()
-	if (normalized === 'confirmed' || normalized === 'complete' || normalized === 'eligible' || normalized === 'healthy' || normalized === 'success') return 'success'
-	if (normalized === 'failed' || normalized === 'error' || normalized === 'blocked') return 'error'
-	if (normalized === 'pending' || normalized === 'submitted' || normalized === 'recovering' || normalized === 'due') return 'warning'
-	if (normalized === 'dry-run' || normalized === 'simulated') return 'info'
-	if (normalized === 'deferred') return 'neutral'
-	return 'neutral'
-}
-
-function statusLabel(status: string | undefined) {
-	const normalized = status?.trim().replaceAll('_', ' ').replaceAll('-', ' ')
-	if (normalized === undefined || normalized.length === 0) return 'Waiting'
-	return `${normalized.slice(0, 1).toUpperCase()}${normalized.slice(1).toLowerCase()}`
 }
 
 function obligationDetail(obligation: Obligation) {
@@ -1202,6 +1104,7 @@ function normalizedCatalogCopy(value: string) {
 const operationDialog = createOperationDialog({ request: value => put('/api/operation', value, 120_000) })
 
 const renderCatalogGroups = createCatalogGroups(catalogRows, ecosystemOrder, ecosystemLabel)
+const catalogRowCache = new Map<string, { row: HTMLTableRowElement; signature: string }>()
 let catalogSignature = ''
 
 function renderCatalog(values: OperationEvaluation[]) {
@@ -1226,6 +1129,11 @@ function renderCatalog(values: OperationEvaluation[]) {
 	const candidateTotal = filtered.reduce((total, value) => total + BigInt(publicCandidateCount(value.candidateCount) ?? 0), 0n)
 	catalogCaption.textContent = `${filtered.length.toString()} of ${values.length.toString()} classified catalog entr${values.length === 1 ? 'y' : 'ies'} shown · ${candidateTotal.toString()} live candidate${candidateTotal === 1n ? '' : 's'}.`
 	const rows = filtered.map(value => {
+		const key = value.id ?? ''
+		const rowSignature = JSON.stringify(value)
+		const reused = catalogRowCache.get(key)
+		// Reusing an unchanged row keeps its checkbox, focus, and layout untouched across polls.
+		if (reused !== undefined && reused.signature === rowSignature) return reused.row
 		const row = document.createElement('tr')
 		const enabled = value.enabled !== false
 		const independentlyExecutable = operationIsIndependentlyExecutable(value)
@@ -1283,8 +1191,9 @@ function renderCatalog(values: OperationEvaluation[]) {
 		nameCell.append(open)
 		if (value.classification === 'selectable' && independentlyExecutable && value.id !== undefined) selectionControls.appendToggle(nameCell, value.id, value.label ?? value.id)
 		row.dataset['ecosystem'] = normalizeEcosystem(value.ecosystem)
-		row.dataset['operationId'] = value.id ?? ''
+		row.dataset['operationId'] = key
 		row.append(nameCell, classificationCell, riskCell, candidatesCell, eligibilityCell)
+		catalogRowCache.set(key, { row, signature: rowSignature })
 		return row
 	})
 	if (rows.length === 0) {
@@ -1501,28 +1410,6 @@ function renderRecovery(value: Snapshot) {
 			}),
 		)
 	}
-	if (value.activities.length === 0) {
-		activityList.replaceChildren(node('li', 'empty-state', 'No activity recorded.'))
-	} else {
-		activityList.replaceChildren(
-			...value.activities.map(activity => {
-				const row = node('li', 'timeline-item')
-				row.append(node('time', 'timeline-time', formatDate(activity.at)))
-				const main = node('div', 'timeline-main')
-				main.append(node('strong', undefined, activity.label ?? activity.operationId ?? 'Bot activity'))
-				if (activity.summary !== undefined) main.append(node('span', 'timeline-detail', activity.summary))
-				if (activity.txHash !== undefined) {
-					const identifier = node('div', 'activity-identifier')
-					identifier.append(compactIdentifier(activity.txHash, 'activity transaction hash'))
-					main.append(identifier)
-				}
-				const status = node('span')
-				setBadge(status, statusLabel(activity.status ?? 'info'), statusTone(activity.status))
-				row.append(main, status)
-				return row
-			}),
-		)
-	}
 }
 
 function renderSnapshot(value: Snapshot) {
@@ -1532,6 +1419,7 @@ function renderSnapshot(value: Snapshot) {
 	renderEcosystems(value.operationEvaluations)
 	renderTopology(value.topology)
 	renderRecovery(value)
+	renderActivities(value.activities)
 	renderOperatorAlerts(operatorAlerts, value.alerts)
 	renderCountdown()
 	applyMutationControlLatches()
