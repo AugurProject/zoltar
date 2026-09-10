@@ -320,11 +320,11 @@ describe('chaos-bot settings', () => {
 		expect(() => parseSettings(redacted)).toThrow('only preserve an existing saved signer')
 	})
 
-	test('requires a signer and independent readers before live execution', async () => {
+	test('requires a signer before live execution and accepts a single quorum-1 reader', async () => {
 		const configured = await configuredExample()
 		expect(() => parseSettings({ ...configured, runtime: { ...record(configured['runtime']), execute: true } })).toThrow('Live execution requires privateKey')
 		const privateKey = `0x${'22'.repeat(32)}` as const
-		expect(() => parseSettings({ ...configured, privateKey, runtime: { ...record(configured['runtime']), execute: true } })).toThrow('Live execution requires RPC quorum 2 with three independent read origins')
+		expect(() => parseSettings({ ...configured, privateKey, runtime: { ...record(configured['runtime']), execute: true } })).not.toThrow()
 	})
 
 	test('rejects a zero ETH reserve in live execution mode', async () => {
@@ -391,7 +391,7 @@ describe('chaos-bot settings', () => {
 		expect(settings.strategy.minimumRepReserveAttoRep).toBe(1n)
 	})
 
-	test('requires quorum 2 across three independent read origins for live execution', async () => {
+	test('requires three independent read origins for live execution with quorum 2 and accepts a single reader with quorum 1', async () => {
 		const configured = await configuredExample()
 		const privateKey = `0x${'22'.repeat(32)}` as const
 		const live = {
@@ -400,7 +400,7 @@ describe('chaos-bot settings', () => {
 			runtime: { ...record(configured['runtime']), execute: true },
 		}
 
-		expect(() => parseSettings(live)).toThrow('Live execution requires RPC quorum 2 with three independent read origins')
+		expect(() => parseSettings(live)).not.toThrow()
 		expect(() =>
 			parseSettings({
 				...live,
@@ -410,7 +410,7 @@ describe('chaos-bot settings', () => {
 					rpcQuorum: 2,
 				},
 			}),
-		).toThrow('Live execution requires RPC quorum 2 with three independent read origins')
+		).toThrow('Live execution with RPC quorum 2 requires three independent read origins')
 		expect(() =>
 			parseSettings({
 				...live,

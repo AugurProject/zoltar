@@ -402,8 +402,8 @@ export function parseSettings(value: unknown, preservedPrivateKey?: Hex): Operat
 	if (settings.runtime.execute && settings.strategy.minimumEthReserveAttoEth < settings.strategy.maximumGasCostAttoEth) {
 		throw new Error('Live execution requires strategy.minimumEthReserve to retain at least one strategy.maximumGasCostEth-sized safety floor')
 	}
-	if (settings.runtime.execute && (settings.connectivity === undefined || settings.connectivity.rpcQuorum !== 2 || settings.connectivity.quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(2))) {
-		throw new Error('Live execution requires RPC quorum 2 with three independent read origins')
+	if (settings.runtime.execute && settings.connectivity !== undefined && settings.connectivity.quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(settings.connectivity.rpcQuorum)) {
+		throw new Error('Live execution with RPC quorum 2 requires three independent read origins')
 	}
 	return settings
 }

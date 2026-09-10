@@ -687,6 +687,36 @@ describe('chaos dashboard server', () => {
 		})
 	})
 
+	test('returns mutation error messages verbatim and keeps the generic fallback for non-Error throws', async () => {
+		let failure: unknown = new Error('Live execution with RPC quorum 2 requires three independent read origins')
+		const server = startDashboardServer(
+			0,
+			controller({
+				setSettings: () => {
+					throw failure
+				},
+			}),
+		)
+		servers.push(server)
+
+		const save = async () =>
+			await dashboardFetch(new URL('/api/settings', server.url), {
+				body: JSON.stringify({ patch: {}, revision: 'revision' }),
+				headers: {
+					'content-type': 'application/json',
+					origin: server.url.origin,
+				},
+				method: 'PUT',
+			})
+		const surfaced = await save()
+		expect(surfaced.status).toBe(400)
+		expect(await surfaced.json()).toEqual({ error: 'Live execution with RPC quorum 2 requires three independent read origins' })
+		failure = 'non-error throw'
+		const generic = await save()
+		expect(generic.status).toBe(400)
+		expect(await generic.json()).toEqual({ error: 'The dashboard request could not be completed. Review the submitted values and protected bot logs.' })
+	})
+
 	test('reports post-commit safety outcomes explicitly without exposing internal errors', async () => {
 		const committed = new Error('sensitive signer-lock path')
 		committed.name = CONFIGURATION_COMMITTED_SAFELY_PAUSED
