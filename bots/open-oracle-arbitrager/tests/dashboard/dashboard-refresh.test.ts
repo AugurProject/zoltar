@@ -166,10 +166,17 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	page.content = (await (await fetch(server.url)).text()).replace('<script type="module" src="/dashboard.js"></script>', '').replace('<script type="module" src="/header-notices.js"></script>', '')
 	const window = page.mainFrame.window
 	for (const [name, value] of Object.entries({ AbortController, Array, Boolean, Date, Error, Intl, JSON, Map, Math, Number, Object, Promise, Reflect, Set, String, SyntaxError, decodeURIComponent })) Reflect.set(window, name, value)
-	window.setInterval = () => {
+	const intervalCallbacks: (() => unknown)[] = []
+	window.setInterval = handler => {
+		if (typeof handler === 'function') intervalCallbacks.push(handler as () => unknown)
 		const timeout = window.setTimeout(() => undefined, 1)
 		window.clearTimeout(timeout)
 		return timeout
+	}
+	const triggerRefresh = () => {
+		const refresh = intervalCallbacks[0]
+		if (refresh === undefined) throw new Error('Dashboard did not register its refresh interval')
+		refresh()
 	}
 	const nativeSetTimeout = window.setTimeout.bind(window)
 	window.setTimeout = (handler, timeout, ...arguments_) => nativeSetTimeout(handler, timeout === 500 ? 0 : timeout, ...arguments_)
@@ -194,35 +201,35 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	expect(element(window, 'capability-badge', window.HTMLElement).textContent).toBe('Capability unavailable')
 	expect(element(window, 'attention-badge', window.HTMLElement).dataset['tone']).toBe('warning')
 	stateFailure = false
-	element(window, 'refresh-button', window.HTMLButtonElement).click()
+	triggerRefresh()
 	await page.waitUntilComplete()
 	expect(element(window, 'capability-badge', window.HTMLElement).textContent).toBe('Operator blocked')
 	expect(element(window, 'attention-badge', window.HTMLElement).textContent).toBe('1 action')
 
 	capable = true
-	element(window, 'refresh-button', window.HTMLButtonElement).click()
+	triggerRefresh()
 	await page.waitUntilComplete()
 	expect(element(window, 'capability-badge', window.HTMLElement).hidden).toBe(true)
 	expect(element(window, 'attention-badge', window.HTMLElement).dataset['tone']).toBe('ok')
 	stateFailure = true
-	element(window, 'refresh-button', window.HTMLButtonElement).click()
+	triggerRefresh()
 	await page.waitUntilComplete()
 	expect(element(window, 'launch-notice', window.HTMLElement).hidden).toBe(true)
 	expect(element(window, 'capability-badge', window.HTMLElement).textContent).toBe('Capability unavailable')
 	expect(element(window, 'attention-badge', window.HTMLElement).dataset['tone']).toBe('warning')
 	stateFailure = false
-	element(window, 'refresh-button', window.HTMLButtonElement).click()
+	triggerRefresh()
 	await page.waitUntilComplete()
 	expect(element(window, 'capability-badge', window.HTMLElement).hidden).toBe(true)
 	expect(element(window, 'attention-badge', window.HTMLElement).dataset['tone']).toBe('ok')
 
 	capable = false
-	element(window, 'refresh-button', window.HTMLButtonElement).click()
+	triggerRefresh()
 	await page.waitUntilComplete()
 
 	stateGate = new Promise(resolve => (releaseState = resolve))
 	configurationGate = new Promise(resolve => (releaseConfiguration = resolve))
-	element(window, 'refresh-button', window.HTMLButtonElement).click()
+	triggerRefresh()
 	element(window, 'reload-configuration-button', window.HTMLButtonElement).click()
 	await Bun.sleep(10)
 	const networkSelect = element(window, 'network-name', window.HTMLSelectElement)
@@ -288,7 +295,7 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	networkConfigured = false
 	window.history.replaceState({}, '', '/settings')
 	window.dispatchEvent(new window.PopStateEvent('popstate'))
-	element(window, 'refresh-button', window.HTMLButtonElement).click()
+	triggerRefresh()
 	await page.waitUntilComplete()
 	const launchNotice = element(window, 'launch-notice', window.HTMLElement)
 	expect(launchNotice.hidden).toBe(false)
@@ -296,18 +303,18 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	expect(launchNotice.textContent).toContain('Network setup required')
 	expect(launchNotice.textContent).toContain('in Settings')
 	networkConfigured = true
-	element(window, 'refresh-button', window.HTMLButtonElement).click()
+	triggerRefresh()
 	await page.waitUntilComplete()
 	expect(launchNotice.hidden).toBe(true)
 	capable = true
 	deploymentUnavailable = true
-	element(window, 'refresh-button', window.HTMLButtonElement).click()
+	triggerRefresh()
 	await page.waitUntilComplete()
 	expect(element(window, 'header-notices-count', window.HTMLElement).textContent).toBe('1')
 	expect(element(window, 'header-notices', window.HTMLDetailsElement).open).toBe(false)
 	expect(element(window, 'notice-title', window.HTMLElement).textContent).toBe('Deployment unavailable')
 	deploymentUnavailable = false
-	element(window, 'refresh-button', window.HTMLButtonElement).click()
+	triggerRefresh()
 	await page.waitUntilComplete()
 	expect(element(window, 'header-notices-count', window.HTMLElement).textContent).toBe('0')
 })

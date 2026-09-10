@@ -9,7 +9,6 @@ export const operatorHeader = renderOperatorHeader({
 					<span id="run-status-badge" class="badge loading">Loading</span>
 					<span id="capability-badge" class="badge" hidden></span>
 					<a id="attention-badge" class="badge attention-badge" hidden></a>
-					<button id="refresh-button" class="secondary" type="button">Refresh</button>
 					<button id="pause-button" class="secondary" type="button">Pause</button>
 					<span id="pause-status" class="action-status" role="alert"></span>`,
 	notices: `<div id="global-error" class="notice error hidden" role="alert"></div>

@@ -181,7 +181,6 @@ const networkBadge = element('network-badge', HTMLSpanElement)
 const runStatusBadge = element('run-status-badge', HTMLSpanElement)
 const capabilityBadge = element('capability-badge', HTMLSpanElement)
 const attentionBadge = element('attention-badge', HTMLAnchorElement)
-const refreshButton = element('refresh-button', HTMLButtonElement)
 const pauseButton = element('pause-button', HTMLButtonElement)
 const pauseStatus = element('pause-status', HTMLSpanElement)
 const lastScan = element('last-scan', HTMLParagraphElement)
@@ -934,7 +933,7 @@ async function waitForNetworkProfile(network: string) {
 		await refresh()
 		if (pendingNetworkProfile === undefined && currentConfiguration?.network?.name === network) return
 	}
-	actionStatus(networkStatus, 'The profile was saved, but the dashboard did not reconnect in time. Use Refresh to retry.', true)
+	actionStatus(networkStatus, 'The profile was saved, but the dashboard did not reconnect in time. It keeps retrying automatically.', true)
 }
 
 networkForm.addEventListener('submit', async event => {
@@ -1368,13 +1367,6 @@ clearSignerButton.addEventListener('click', async () => {
 let refreshInFlight: Promise<void> | undefined
 let refreshQueued = false
 
-function setRefreshControlPending(pending: boolean) {
-	refreshButton.disabled = pending
-	refreshButton.textContent = pending ? 'Refreshing…' : 'Refresh'
-	refreshButton.toggleAttribute('aria-busy', pending)
-	if (pending) refreshButton.setAttribute('aria-busy', 'true')
-}
-
 function refresh() {
 	if (refreshInFlight !== undefined) {
 		refreshQueued = true
@@ -1390,9 +1382,7 @@ function refresh() {
 	})()
 	refreshInFlight = operation.finally(() => {
 		refreshInFlight = undefined
-		setRefreshControlPending(false)
 	})
-	setRefreshControlPending(true)
 	return refreshInFlight
 }
 
@@ -1465,7 +1455,6 @@ async function loadConfiguration() {
 }
 
 void loadConfiguration()
-refreshButton.addEventListener('click', () => void refresh())
 void refresh()
 setInterval(refresh, 3_000)
 setInterval(renderBlockStatus, 1_000)

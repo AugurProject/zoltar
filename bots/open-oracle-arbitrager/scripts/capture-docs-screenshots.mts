@@ -187,7 +187,7 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 			const result = await command(
 				'Runtime.evaluate',
 				{
-					expression: `(() => Object.fromEntries(['refresh-button', 'pause-button'].map(id => {
+					expression: `(() => Object.fromEntries(['pause-button'].map(id => {
 						const element = document.getElementById(id)
 						if (!(element instanceof HTMLElement)) return [id, undefined]
 						const rect = element.getBoundingClientRect()
@@ -267,7 +267,7 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 						const navigation = document.querySelector('.section-nav')
 						const activeRect = active?.getBoundingClientRect()
 						const navigationRect = navigation?.getBoundingClientRect()
-						const safetyTargets = ['mode-badge', 'run-status-badge', 'header-network-badge', 'attention-badge', 'refresh-button', 'pause-button'].map(id => document.getElementById(id))
+						const safetyTargets = ['mode-badge', 'run-status-badge', 'header-network-badge', 'attention-badge', 'pause-button'].map(id => document.getElementById(id))
 						return {
 							activeHref: active?.getAttribute('href'),
 							activeVisible: activeRect !== undefined && navigationRect !== undefined && activeRect.left >= navigationRect.left - 1 && activeRect.right <= navigationRect.right + 1,
@@ -1112,8 +1112,7 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 					await replacePage(`${origin}/?status=${retrying ? 'retrying' : 'scheduled'}-disconnect-${mobile ? 'mobile' : 'desktop'}`, width, mobile ? 844 : 900)
 					await Bun.sleep(350)
 					fixtureStateUnavailable = true
-					await command('Runtime.evaluate', { expression: `document.querySelector('#refresh-button')?.click()` }, sessionId)
-					await Bun.sleep(250)
+					await Bun.sleep(2_300)
 					const disconnectedState = await command(
 						'Runtime.evaluate',
 						{
@@ -1155,14 +1154,7 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 						'Runtime.evaluate',
 						{
 							expression: `(() => {
-								const refresh = document.querySelector('#refresh-button')
-								const pause = document.querySelector('#pause-button')
-								const refreshBounds = refresh?.getBoundingClientRect()
-								const pauseBounds = pause?.getBoundingClientRect()
-								const refreshTextRange = document.createRange()
-								if (refresh !== null) refreshTextRange.selectNodeContents(refresh)
-								const refreshTextBounds = refreshTextRange.getBoundingClientRect()
-								const safetyVisible = ['mode-badge', 'run-status-badge', 'header-network-badge', 'attention-badge', 'refresh-button', 'pause-button'].every(id => {
+								const safetyVisible = ['mode-badge', 'run-status-badge', 'header-network-badge', 'attention-badge', 'pause-button'].every(id => {
 									const target = document.getElementById(id)
 									if (!(target instanceof HTMLElement)) return false
 									const rect = target.getBoundingClientRect()
@@ -1178,11 +1170,6 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 									noticeTitle: document.querySelector('#notice-title')?.textContent,
 									confirmDisabled: document.querySelector('#confirm-resume')?.disabled,
 									pauseDisabled: document.querySelector('#pause-button')?.disabled,
-									refreshBusy: document.querySelector('#refresh-button')?.getAttribute('aria-busy'),
-									refreshDisabled: document.querySelector('#refresh-button')?.disabled,
-									refreshTextFits: refreshBounds !== undefined && refreshTextBounds.left >= refreshBounds.left && refreshTextBounds.right <= refreshBounds.right,
-									refreshDoesNotOverlapPause: refreshBounds !== undefined && pauseBounds !== undefined && refreshBounds.right <= pauseBounds.left,
-									refreshText: document.querySelector('#refresh-button')?.textContent,
 									resumeOpen: document.querySelector('#resume-dialog')?.hasAttribute('open'),
 									runStatus: document.querySelector('#run-status-badge')?.textContent,
 									safetyVisible,
@@ -1231,8 +1218,7 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 				await replacePage(`${origin}/?connection=post-success-${mobile ? 'mobile' : 'desktop'}`, width, height)
 				await Bun.sleep(750)
 				fixtureStateUnavailable = true
-				await command('Runtime.evaluate', { expression: `document.querySelector('#refresh-button')?.click()` }, sessionId)
-				await Bun.sleep(250)
+				await Bun.sleep(2_300)
 				const postSuccessFailure = await readConnectionState()
 				if (mobile) assertStableSafetyActions(mobileSafetyActionPositions, await readSafetyActionPositions(), 'Post-success connection failure')
 				if (
@@ -1267,8 +1253,7 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 				if (fixturePauseRequests.length !== pauseRequestCount + 1 || fixturePauseRequests.at(-1) !== true) throw new Error('Emergency Pause did not reach the bot while state polling was unavailable')
 				paused = false
 				fixtureStateUnavailable = false
-				await command('Runtime.evaluate', { expression: `document.querySelector('#refresh-button')?.click()` }, sessionId)
-				await Bun.sleep(250)
+				await Bun.sleep(2_300)
 				const recovery = await readConnectionState()
 				if (
 					typeof recovery !== 'object' ||
@@ -1287,27 +1272,8 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 				await replacePage(`${origin}/?connection=hung-${mobile ? 'mobile' : 'desktop'}`, width, height)
 				await Bun.sleep(750)
 				fixtureStateHanging = true
-				await command('Runtime.evaluate', { expression: `document.querySelector('#refresh-button')?.click()` }, sessionId)
-				await Bun.sleep(100)
-				const pendingRefresh = await readConnectionState()
-				if (mobile) assertStableSafetyActions(mobileSafetyActionPositions, await readSafetyActionPositions(), 'Pending manual refresh')
-				if (
-					typeof pendingRefresh !== 'object' ||
-					pendingRefresh === null ||
-					!('refreshBusy' in pendingRefresh) ||
-					pendingRefresh.refreshBusy !== 'true' ||
-					!('refreshDisabled' in pendingRefresh) ||
-					pendingRefresh.refreshDisabled !== true ||
-					!('refreshText' in pendingRefresh) ||
-					pendingRefresh.refreshText !== 'Refreshing…' ||
-					!('refreshTextFits' in pendingRefresh) ||
-					pendingRefresh.refreshTextFits !== true ||
-					!('refreshDoesNotOverlapPause' in pendingRefresh) ||
-					pendingRefresh.refreshDoesNotOverlapPause !== true
-				) {
-					throw new Error(`Manual Refresh did not expose a busy control: ${JSON.stringify(pendingRefresh)}`)
-				}
-				await capturePng(`refresh-pending-${mobile ? 'mobile' : 'desktop'}.png`)
+				await Bun.sleep(2_300)
+				if (mobile) assertStableSafetyActions(mobileSafetyActionPositions, await readSafetyActionPositions(), 'Pending automatic refresh')
 				await Bun.sleep(1_150)
 				const hungRequest = await readConnectionState()
 				if (
@@ -1322,13 +1288,7 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 					!('resumeOpen' in hungRequest) ||
 					hungRequest.resumeOpen !== false ||
 					!('runStatus' in hungRequest) ||
-					hungRequest.runStatus !== 'Disconnected' ||
-					!('refreshBusy' in hungRequest) ||
-					hungRequest.refreshBusy !== null ||
-					!('refreshDisabled' in hungRequest) ||
-					hungRequest.refreshDisabled !== false ||
-					!('refreshText' in hungRequest) ||
-					hungRequest.refreshText !== 'Refresh'
+					hungRequest.runStatus !== 'Disconnected'
 				) {
 					throw new Error(`Hung state request did not fail closed after its deadline: ${JSON.stringify(hungRequest)}`)
 				}
@@ -1345,15 +1305,13 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 					throw new Error(`Resume preflight did not open from current state: ${JSON.stringify(openPreflight)}`)
 				}
 				fixtureStateUnavailable = true
-				await command('Runtime.evaluate', { expression: `document.querySelector('#refresh-button')?.click()` }, sessionId)
-				await Bun.sleep(250)
+				await Bun.sleep(2_300)
 				const stalePreflight = await readConnectionState()
 				if (typeof stalePreflight !== 'object' || stalePreflight === null || !('resumeOpen' in stalePreflight) || stalePreflight.resumeOpen !== false || !('confirmDisabled' in stalePreflight) || stalePreflight.confirmDisabled !== true) {
 					throw new Error(`Disconnected resume preflight remained actionable: ${JSON.stringify(stalePreflight)}`)
 				}
 				fixtureStateUnavailable = false
-				await command('Runtime.evaluate', { expression: `document.querySelector('#refresh-button')?.click()` }, sessionId)
-				await Bun.sleep(250)
+				await Bun.sleep(2_300)
 				const preflightRecovery = await readConnectionState()
 				if (typeof preflightRecovery !== 'object' || preflightRecovery === null || !('confirmDisabled' in preflightRecovery) || preflightRecovery.confirmDisabled !== false) {
 					throw new Error(`Resume confirmation did not recover after current state returned: ${JSON.stringify(preflightRecovery)}`)

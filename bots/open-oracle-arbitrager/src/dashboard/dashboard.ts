@@ -57,7 +57,6 @@ let connected = false
 let signerFeedback: { error: boolean; message: string } | undefined
 let signerRequestPending = false
 let pauseRequestPending: 'pause' | 'resume' | undefined
-let manualRefreshPending = false
 
 const STATE_REQUEST_TIMEOUT_MS = 1_000
 const CONFIGURATION_REQUEST_TIMEOUT_MS = 2_000
@@ -152,14 +151,6 @@ function updateSettingsLoadState() {
 	setText('settings-load-status', configurationLoadError === undefined ? 'Operator configuration is unavailable.' : `${configurationLoadError} Editable settings remain locked.`)
 	retry.hidden = false
 	retry.disabled = false
-}
-
-function updateManualRefreshState() {
-	const button = element<HTMLButtonElement>('refresh-button')
-	button.disabled = manualRefreshPending
-	button.textContent = manualRefreshPending ? 'Refreshing…' : 'Refresh'
-	if (manualRefreshPending) button.setAttribute('aria-busy', 'true')
-	else button.removeAttribute('aria-busy')
 }
 
 function updateNetworkTargetStatus() {
@@ -1178,19 +1169,6 @@ const refresh = singleFlight(async () => {
 	}
 })
 
-async function manualRefresh() {
-	if (manualRefreshPending) return
-	manualRefreshPending = true
-	updateManualRefreshState()
-	try {
-		await refresh()
-	} finally {
-		manualRefreshPending = false
-		updateManualRefreshState()
-	}
-}
-
-element('refresh-button').addEventListener('click', () => void manualRefresh())
 element('reload-configuration-button').addEventListener('click', () => void loadCompleteConfiguration())
 element<HTMLButtonElement>('profile-switch-retry-button').addEventListener('click', async event => {
 	const button = event.currentTarget

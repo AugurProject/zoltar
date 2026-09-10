@@ -455,27 +455,19 @@ describe('liquidator dashboard refresh behavior', () => {
 			expect(page.window.document.getElementById('attention-badge')?.hasAttribute('hidden')).toBe(true)
 		})
 	}
-	test('provides a durable manual refresh action across success and failure', async () => {
+	test('keeps polling automatically across success and failure', async () => {
 		const page = await dashboard()
-		const refreshButton = page.window.document.getElementById('refresh-button')
-		if (!(refreshButton instanceof page.window.HTMLButtonElement)) throw new Error('Expected refresh control')
+		expect(page.window.document.getElementById('refresh-button')).toBeNull()
 		const before = page.stateRequestCount()
 
-		refreshButton.click()
-		await page.waitUntilComplete()
+		await page.refresh()
 		await Bun.sleep(1)
 		expect(page.stateRequestCount()).toBe(before + 1)
-		expect(refreshButton.disabled).toBe(false)
-		expect(refreshButton.textContent).toBe('Refresh')
-		expect(refreshButton.hasAttribute('aria-busy')).toBe(false)
 
 		page.setStateRequestFailure(true)
-		refreshButton.click()
-		await page.waitUntilComplete()
+		await page.refresh()
 		await Bun.sleep(1)
 		expect(page.stateRequestCount()).toBe(before + 2)
-		expect(refreshButton.disabled).toBe(false)
-		expect(refreshButton.textContent).toBe('Refresh')
 		expect(page.window.document.getElementById('run-status-badge')?.textContent).toBe('Disconnected')
 	})
 
