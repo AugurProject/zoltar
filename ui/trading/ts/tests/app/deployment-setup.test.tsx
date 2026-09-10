@@ -153,6 +153,36 @@ describe('trading deployment setup', () => {
 		expect(rendered.container.textContent).not.toContain('Ready to deploy')
 	})
 
+	test('waits for the simulated environment before inspecting the deployment', async () => {
+		let releaseReady: (() => void) | undefined = undefined
+		const ready = new Promise<void>(resolve => {
+			releaseReady = resolve
+		})
+		const restoreEnvironment = installActiveEnvironmentForTesting({ ...createFakeBackend({ profile: SEPOLIA_NETWORK_PROFILE }), waitUntilReady: async () => await ready })
+		let inspectionClients = 0
+		const services: TradingDeploymentSetupServices = {
+			createPublicClient: () => {
+				inspectionClients += 1
+				return deploymentClient()
+			},
+			loadCoreDeployments: async () => [core],
+		}
+		try {
+			const rendered = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} services={services} />)
+			cleanupRendered = rendered.cleanup
+			await waitForText('Checking network')
+			for (let flush = 0; flush < 5; flush += 1) await act(async () => await Bun.sleep(10))
+			expect(inspectionClients).toBe(0)
+			expect(rendered.container.textContent).not.toContain('Deploy Trading factory')
+			if (releaseReady === undefined) throw new Error('Readiness resolver is unavailable')
+			releaseReady()
+			await waitForText('Deploy Trading factory')
+			expect(inspectionClients).toBe(1)
+		} finally {
+			restoreEnvironment()
+		}
+	})
+
 	test('keeps the router step available when a remounted deployment is partial', async () => {
 		const plan = getTradingDeploymentPlan(core, 30)
 		let contractReadCount = 0

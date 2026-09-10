@@ -9,7 +9,7 @@ import { parseDeploymentSetupInput, type DeploymentConfiguration } from '../prot
 import { loadCoreDeployments } from '../protocol/coreDeployments.js'
 import { deployTradingStep, deploymentConfigurationForPlan, getTradingDeploymentPlan, isTradingDeploymentComplete, loadTradingDeploymentStatus, nextTradingDeploymentStep, type CoreDeployment, type TradingDeploymentPlan, type TradingDeploymentStep } from '../protocol/deployment.js'
 import { createWalletContextSubscription, getInjectedEthereum, type InjectedEthereum } from '../protocol/injected.js'
-import { connectedWalletAccount, connectWallet, createTradingWalletClient, publicErrorMessage, switchWalletChain, validateRpcChainId, walletChainId } from '../protocol/live.js'
+import { connectedWalletAccount, connectWallet, createTradingWalletClient, publicErrorMessage, switchWalletChain, validateRpcChainId, waitForActiveEnvironmentReady, walletChainId } from '../protocol/live.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import * as appCopy from '../copy/app.js'
 
@@ -229,6 +229,7 @@ export function TradingDeploymentSetup({
 			try {
 				const input = parseDeploymentSetupInput({ chainId, feeBps, rpcUrl: effectiveRpcUrl })
 				const nextPlan = getTradingDeploymentPlan(selectedCore, input.feeBps)
+				await waitForActiveEnvironmentReady()
 				if (!active || revision !== inputRevision.current) return
 				setPlan(nextPlan)
 				const client = services.createPublicClient(input.rpcUrl)
