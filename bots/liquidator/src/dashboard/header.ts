@@ -4,9 +4,9 @@ export const operatorHeader = renderOperatorHeader({
 	title: 'Statoblast liquidator',
 	eyebrow: 'Statoblast operator',
 	blockStatus: 'Block — · waiting for first observation',
-	safety: `<span id="mode-badge" class="badge">Starting</span>
-					<span id="network-badge" class="badge">Network loading</span>
-					<span id="run-status-badge" class="badge">Loading</span>
+	network: '<span id="network-badge" class="badge loading">Network loading</span>',
+	safety: `<span id="mode-badge" class="badge loading">Starting</span>
+					<span id="run-status-badge" class="badge loading">Loading</span>
 					<span id="capability-badge" class="badge" hidden></span>
 					<a id="attention-badge" class="badge attention-badge" hidden></a>
 					<button id="refresh-button" class="secondary" type="button">Refresh</button>

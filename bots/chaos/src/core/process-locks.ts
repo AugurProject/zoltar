@@ -167,6 +167,9 @@ export function createChaosShutdownController() {
 		},
 		isRequested: () => requested,
 		requestShutdown,
+		wake: () => {
+			for (const finish of [...waiters]) finish()
+		},
 		wait: (milliseconds: number) => {
 			if (!Number.isSafeInteger(milliseconds) || milliseconds < 0) throw new Error('Shutdown wait must be a non-negative integer')
 			if (requested) return Promise.resolve()

@@ -231,7 +231,7 @@ describe('chaos-bot settings', () => {
 		const settings = parseSettings(await storedExample())
 		expect(settings.paused).toBe(true)
 		expect(settings.runtime.execute).toBe(false)
-		expect(settings.runtime.protocolLogBlockSpan).toBe(2_000)
+		expect(settings.runtime.protocolLogBlockSpan).toBe(50_000)
 		expect(settings.runtime.protocolStartBlock).toBe(0n)
 		expect(settings.discovery).toEqual({
 			maxPools: 100,

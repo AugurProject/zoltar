@@ -941,7 +941,7 @@ browserTest(
 					summaryHeights: [...document.querySelectorAll('.topology-grid summary')].map(summary => summary.getBoundingClientRect().height),
 					topbarBackground: getComputedStyle(document.querySelector('.operator-shell')).backgroundColor,
 				})`)
-				expect(Reflect.get(topologyPresentation, 'topbarBackground')).toBe('rgb(8, 11, 16)')
+				expect(Reflect.get(topologyPresentation, 'topbarBackground')).toBe('color(srgb 0.0627451 0.0823529 0.113725 / 0.82)')
 				const summaryHeights = Reflect.get(topologyPresentation, 'summaryHeights')
 				expect(summaryHeights).toHaveLength(5)
 				if (!Array.isArray(summaryHeights)) throw new Error('Missing topology summary bounds')
@@ -1117,7 +1117,7 @@ browserTest(
 					initializeGenesisUniverse: true,
 					readRpcUrl: `https://operator:${rpcSecret}@read-one.example/private`,
 					selectableScopeHelp:
-						'Turn this off for a staged rollout, then enter exact selectable definition IDs from the Operation catalog. An empty allowlist runs lifecycle obligations only unless genesis initialization is enabled; only its ordered initializer operations are exempt. Lifecycle discovery, recovery, and execution are never disabled by this control.',
+						'Turn this off for a staged rollout, then enable operations in the Operation catalog. An empty allowlist runs lifecycle obligations only unless genesis initialization is enabled; only its ordered initializer operations are exempt. Lifecycle discovery, recovery, and execution are never disabled by this control.',
 					executeDescription: 'execute-help',
 					executeHelp: 'Off is dry-run mode. Live mode can spend gas and protocol assets. It requires positive reserves and retains an ETH safety floor at least as large as one maximum gas-cost budget.',
 					lede: 'Changes apply before the next selection cycle.',
@@ -1771,6 +1771,114 @@ test('recovery dashboard source has no generic manual-load fallback', async () =
 })
 
 browserTest(
+	'schedule shortcut and catalog selection save through the dashboard',
+	async () => {
+		let paused = false
+		let revision = 'controls-1'
+		let selection: string[] = []
+		const initialSchedule = new Date(Date.now() + 60_000).toISOString()
+		let scheduledAt = initialSchedule
+		let scheduleStatus = 'scheduled'
+		let rejectSelection = false
+		const mutations: unknown[] = []
+		const dashboard = startDashboardServer(0, {
+			hostname: '127.0.0.1',
+			getConfiguration: () => ({ revision, settings: { paused, runtime: { execute: false }, scheduler: { minimumDelaySeconds: 60, maximumDelaySeconds: 3600 }, strategy: { selectableOperationAllowlist: selection } } }),
+			getState: () =>
+				state({
+					paused,
+					scheduler: { status: scheduleStatus, nextRunAt: scheduledAt, lastDelaySeconds: 60 },
+					evaluations: [
+						{ definition: { classification: 'selectable', ecosystem: 'open-oracle', id: 'open-oracle.weth.wrap', label: 'Wrap ETH', risk: 'low' }, eligibility: { eligible: false, blockers: ['No ETH available'] } },
+						{ definition: { classification: 'lifecycle-obligation', ecosystem: 'open-oracle', id: 'open-oracle.settle', label: 'Settle report', risk: 'low' }, eligibility: { eligible: false, blockers: ['No report due'] } },
+					],
+				}),
+			setSchedule: value => {
+				mutations.push(value)
+				scheduledAt = new Date().toISOString()
+				scheduleStatus = 'due'
+			},
+			setSelection: value => {
+				if (rejectSelection) throw new Error('Selection save failed')
+				mutations.push(value)
+				selection = ['open-oracle.weth.wrap']
+				revision = 'controls-2'
+			},
+			setCancellation: () => {},
+			setCandidate: () => {},
+			setObligation: () => {},
+			setPaused: () => {},
+			setReplacement: () => {},
+			setSettings: () => {},
+			setSigner: () => {},
+			setWorkflow: () => {},
+		})
+		const port = dashboard.port
+		if (port === undefined) throw new Error('Dashboard port is unavailable')
+		const cdp = await connectToChromium()
+		try {
+			const waitFor = async (expression: string) => {
+				for (let attempt = 0; attempt < 400; attempt += 1) {
+					if ((await cdp.evaluate(expression)) === true) return
+					await Bun.sleep(25)
+				}
+				throw new Error(`Timed out: ${expression}`)
+			}
+			const capture = async (name: string) => {
+				const result = await cdp.command('Page.captureScreenshot', { format: 'png' })
+				const data = typeof result === 'object' && result !== null ? Reflect.get(result, 'data') : undefined
+				if (typeof data !== 'string') throw new Error('Screenshot unavailable')
+				await Bun.write(`/tmp/chaos-controls-qa/${name}.png`, Buffer.from(data, 'base64'))
+			}
+			await cdp.command('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false })
+			await cdp.command('Page.navigate', { url: `http://127.0.0.1:${port.toString()}/overview` })
+			await waitFor("document.querySelector('#run-next-now')?.disabled === false")
+			await capture('overview-desktop-1440x900')
+			await cdp.command('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false })
+			await cdp.evaluate("document.querySelector('#run-next-now').scrollIntoView({ block: 'center' })")
+			await capture('overview-scheduled-mobile-390x844')
+			await cdp.evaluate("document.querySelector('#run-next-now').click()")
+			await waitFor("document.querySelector('#schedule-action-status')?.textContent.startsWith('Next choice requested.')")
+			expect(mutations[0]).toEqual({ revision: 'controls-1', nextRunAt: initialSchedule })
+			expect(await cdp.evaluate("document.querySelector('#run-next-now').disabled")).toBe(true)
+			await waitFor("document.querySelector('#schedule-action-status')?.textContent === ''")
+			await capture('overview-due-mobile-390x844')
+			await cdp.command('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false })
+			paused = true
+			await waitFor("document.querySelector('#countdown')?.textContent === 'Paused'")
+			expect(await cdp.evaluate("document.querySelector('#schedule-action-status').textContent")).toBe('')
+			await cdp.command('Page.navigate', { url: `http://127.0.0.1:${port.toString()}/catalog` })
+			await waitFor("document.querySelector('[data-selection-toggle]')?.disabled === false")
+			expect(await cdp.evaluate("document.querySelectorAll('[data-selection-toggle]').length")).toBe(1)
+			await cdp.evaluate("document.querySelector('#catalog-rows summary').click()")
+			await capture('catalog-desktop-1440x900')
+			rejectSelection = true
+			await cdp.evaluate("document.querySelector('[data-selection-toggle]').click()")
+			await waitFor("document.querySelector('#catalog-selection-status')?.textContent.includes('could not be completed')")
+			await waitFor("document.querySelector('[data-selection-toggle]')?.disabled === false")
+			expect(await cdp.evaluate("document.querySelector('[data-selection-toggle]').checked")).toBe(false)
+			rejectSelection = false
+			await cdp.evaluate("document.querySelector('[data-selection-toggle]').click()")
+			await waitFor("document.querySelector('#selectable-operation-allowlist')?.value === 'open-oracle.weth.wrap'")
+			expect(mutations[1]).toEqual({ revision: 'controls-1', operationId: 'open-oracle.weth.wrap', enabled: true })
+			await cdp.command('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false })
+			await cdp.evaluate("document.querySelector('[data-selection-toggle]').scrollIntoView({ block: 'center' })")
+			await capture('catalog-mobile-390x844')
+			expect(await cdp.evaluate('document.body.scrollWidth === document.documentElement.clientWidth')).toBe(true)
+			await cdp.command('Page.navigate', { url: `http://127.0.0.1:${port.toString()}/overview` })
+			await waitFor("document.querySelector('#countdown')?.textContent === 'Paused'")
+			await cdp.evaluate("document.querySelector('#run-next-now').scrollIntoView({ block: 'center' })")
+			await capture('overview-paused-mobile-390x844')
+			expect(cdp.issues.filter(issue => issue.kind === 'pageerror')).toEqual([])
+		} finally {
+			await cdp.close()
+			await dashboard.stop(true)
+		}
+	},
+	60_000,
+)
+
+browserTest(
 	'shows unavailable, read-only, and signer-backed execution account inventory',
 	async () => {
 		let current = state({ inventoryAvailable: false, signerReady: false })
@@ -1802,9 +1910,9 @@ browserTest(
 						...(mode === 'keyless' ? {} : { wallet: walletAddress }),
 					})
 					await cdp.command('Page.navigate', { url: `http://127.0.0.1:${dashboard.port}/overview` })
-					const expectedEth = mode === 'keyless' ? '—' : '1.000000000000000000'
+					const expectedEthText = mode === 'keyless' ? '—' : '1.000000000000000000'
 					const expectedBadge = { keyless: 'Signer missing', 'read-only': 'Read-only — signer not loaded', signer: 'Signer ready' }[mode]
-					const ready = `document.getElementById('balance-eth')?.textContent === ${JSON.stringify(expectedEth)} && document.getElementById('signer-badge')?.textContent === ${JSON.stringify(expectedBadge)}`
+					const ready = `document.getElementById('balance-eth')?.textContent === ${JSON.stringify(expectedEthText)} && document.getElementById('signer-badge')?.textContent === ${JSON.stringify(expectedBadge)}`
 					for (let attempt = 0; attempt < 200; attempt += 1) {
 						if (await cdp.evaluate(ready)) break
 						await Bun.sleep(25)

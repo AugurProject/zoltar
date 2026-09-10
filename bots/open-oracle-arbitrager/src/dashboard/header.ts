@@ -4,11 +4,11 @@ export const operatorHeader = renderOperatorHeader({
 	title: 'OpenOracle Arbitrager',
 	eyebrow: 'Zoltar operator console',
 	blockStatus: 'Block — · waiting for first observation',
-	safety: `<span id="mode-badge" class="badge">Mode —</span>
-					<span id="run-status-badge" class="badge">Run —</span>
+	network: '<span id="header-network-badge" class="badge loading">Network —</span>',
+	safety: `<span id="mode-badge" class="badge loading">Mode —</span>
+					<span id="run-status-badge" class="badge loading">Run —</span>
 					<span id="capability-badge" class="badge" hidden></span>
 					<span id="retry-status-badge" class="badge badge-warning" hidden>Retry —</span>
-					<span id="header-network-badge" class="badge">Network —</span>
 					<a id="attention-badge" class="badge attention-badge" hidden></a>
 					<button id="refresh-button" class="button button-secondary" type="button">Refresh</button>
 					<button id="pause-button" class="button" type="button" disabled>Pause bot</button>`,

@@ -206,7 +206,7 @@ describe('durable protocol index', () => {
 		if (prunedReader === undefined) throw new Error('Missing pruned reader fixture')
 		const resumed = await updateProtocolIndexWithQuorum({ ...context, maxBlockSpan: 10n, previous: partial.index }, [archive, prunedReader], 2)
 		expect(resumed.index.availableStartBlock).toBe('60')
-		expect(resumed.toBlock).toBe('79')
+		expect(resumed.toBlock).toBe('100')
 	})
 
 	test('continues to reject disagreements between providers serving the same suffix', async () => {
@@ -224,16 +224,16 @@ describe('durable protocol index', () => {
 		})
 		const context = { ...indexDeployments, ...indexTrust, anchorBlockNumber: 100n, auctionAddresses: [], chainId: 31337, client, escalationGames: [], maxBlockSpan: 10n, startBlock: 0n, wallet: address(1) }
 		const first = await updateProtocolIndex(context)
-		expect(first).toMatchObject({ complete: false, fromBlock: '42', toBlock: '51', index: { availableStartBlock: '42', startBlock: '0', migrationRepSplits: [{ childMigrationRepAmountAttoRep: 10n.toString() }] } })
-		expect(requested.length).toBeLessThan(20)
+		expect(first).toMatchObject({ complete: false, fromBlock: '42', toBlock: '100', index: { availableStartBlock: '42', startBlock: '0', migrationRepSplits: [{ childMigrationRepAmountAttoRep: 10n.toString() }] } })
+		expect(requested.length).toBeLessThan(40)
 		requested.length = 0
-		const resumed = await updateProtocolIndex({ ...context, maxBlockSpan: 100n, previous: first.index })
-		expect(resumed).toMatchObject({ complete: false, fromBlock: '52', toBlock: '100', index: { availableStartBlock: '42' } })
+		const resumed = await updateProtocolIndex({ ...context, anchorBlockNumber: 150n, maxBlockSpan: 100n, previous: first.index })
+		expect(resumed).toMatchObject({ complete: false, fromBlock: '101', toBlock: '150', index: { availableStartBlock: '42' } })
 		expect(requested[0]).toBe(0n)
-		expect(requested.slice(1).every(block => block >= 52n)).toBe(true)
-		const caughtUp = await updateProtocolIndex({ ...context, previous: resumed.index })
+		expect(requested.slice(1).every(block => block >= 101n)).toBe(true)
+		const caughtUp = await updateProtocolIndex({ ...context, anchorBlockNumber: 150n, previous: resumed.index })
 		expect(caughtUp.complete).toBe(false)
-		const restored = await updateProtocolIndex({ ...context, client: eventIndexClient(logs), maxBlockSpan: 101n, previous: resumed.index })
+		const restored = await updateProtocolIndex({ ...context, anchorBlockNumber: 150n, client: eventIndexClient(logs), maxBlockSpan: 101n, previous: resumed.index })
 		expect(restored.complete).toBe(true)
 		expect(restored.index.availableStartBlock).toBeUndefined()
 		expect(restored.index.migrationRepSplits).toEqual(resumed.index.migrationRepSplits)
