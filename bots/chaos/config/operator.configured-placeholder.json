@@ -26,7 +26,7 @@
 		"execute": false,
 		"lifecyclePollMilliseconds": 12000,
 		"once": false,
-		"protocolLogBlockSpan": 2000,
+		"protocolLogBlockSpan": 50000,
 		"protocolStartBlock": "0",
 		"stateFile": ".state/chaos.configured-placeholder.json",
 		"ui": true,
