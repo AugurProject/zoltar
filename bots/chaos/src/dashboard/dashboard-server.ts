@@ -870,8 +870,8 @@ function publicFailure(operation: string, error: unknown) {
 			409,
 		)
 	}
-	if (operation === 'mutation:/api/operation' && error instanceof Error && error.name === 'ManualOperationInputError') return json({ error: error.message }, 400)
 	if (operation === 'mutation:/api/connectivity') return json({ error: publicConnectivityFailure(error) }, 400)
+	if (error instanceof Error && error.message.length > 0) return json({ error: error.message }, 400)
 	return json({ error: 'The dashboard request could not be completed. Review the submitted values and protected bot logs.' }, 400)
 }
 
