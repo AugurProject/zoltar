@@ -673,13 +673,13 @@ async function scanProtocolIndex(context: UpdateProtocolIndexContext): Promise<P
 		reports.set(reportId, { ...report, stateHash })
 	}
 	requireTrustedReportBounds(context, reports, trustedReport)
-	const cursorHash = toBlock === context.anchorBlockNumber ? anchorHash : await requireCanonicalBlock(context.client, toBlock)
+	if (toBlock !== context.anchorBlockNumber) throw new Error('Protocol index scan ended before its anchor block')
 	const index: ChaosProtocolIndex = {
 		auctionBids: activeAuctionBids(auctionBids),
 		auctionRefunds: activeAuctionRefunds(auctionRefunds),
 		chainId: context.chainId,
 		childRepSplits: sortedChildRepSplits([...childRepSplits.values()]),
-		cursor: { blockHash: cursorHash, blockNumber: toBlock.toString() },
+		cursor: { blockHash: anchorHash, blockNumber: toBlock.toString() },
 		escalationDeposits: activeEscalationDeposits(escalationDeposits),
 		migrationRepSplits: sortedMigrationRepSplits([...migrationRepSplits.values()]),
 		openOracle: context.openOracle,
