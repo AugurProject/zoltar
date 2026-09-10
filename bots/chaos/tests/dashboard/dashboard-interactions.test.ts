@@ -1854,7 +1854,7 @@ browserTest(
 			await capture('catalog-desktop-1440x900')
 			rejectSelection = true
 			await cdp.evaluate("document.querySelector('[data-selection-toggle]').click()")
-			await waitFor("document.querySelector('#catalog-selection-status')?.textContent.includes('could not be completed')")
+			await waitFor("document.querySelector('#catalog-selection-status')?.textContent.includes('Selection save failed')")
 			await waitFor("document.querySelector('[data-selection-toggle]')?.disabled === false")
 			expect(await cdp.evaluate("document.querySelector('[data-selection-toggle]').checked")).toBe(false)
 			rejectSelection = false
