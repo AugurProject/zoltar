@@ -1,25 +1,11 @@
 import { bigintToSafeNumber, encodeAbiParameters, getAddress, hexToBytes, keccak256, zeroAddress, zeroHash, type Address, type Chain, type Hash, type PublicClient, type Transport } from '@zoltar/bot-shared/ethereum'
-import { fetchLogsWithAdaptiveRanges } from '@zoltar/bot-shared/monitoring/block-sync'
-import { ChaosProtocolIndexReorgError, protocolLogPrefixAvailable, recoverPrunedProtocolLogs, requireCanonicalBlock, validatePreviousProtocolIndex } from './protocol-index-context.ts'
+import { ChaosProtocolIndexReorgError, fetchProtocolLogs, protocolLogPrefixAvailable, recoverPrunedProtocolLogs, requireCanonicalBlock, validatePreviousProtocolIndex } from './protocol-index-context.ts'
 import { openOracleAbi } from '../contracts/abi.ts'
 import type { CanonicalUintString } from '../core/units.ts'
 import { eventTopic } from '../operations/planning.ts'
 import type { AuctionBidSnapshot, AuctionRefundSnapshot, ChildRepSplitProgressSnapshot, EscalationDepositSnapshot, MigrationRepSplitProgressSnapshot, OracleGameSnapshot } from '../operations/types.ts'
 
 type IndexClient = PublicClient<Transport, Chain>
-
-type ProtocolLogQuery = {
-	address: Address | Address[]
-	fromBlock: bigint
-	toBlock: bigint
-	/** Accepted topic0 alternatives, pushed to the RPC so nodes filter server-side. */
-	topics: readonly Hash[]
-}
-
-async function fetchProtocolLogs(client: IndexClient, query: ProtocolLogQuery) {
-	const maximumRange = query.toBlock - query.fromBlock + 1n
-	return await fetchLogsWithAdaptiveRanges({ nextBlock: query.fromBlock }, query.toBlock, maximumRange, async range => await client.getLogs({ address: query.address, fromBlock: range.fromBlock, toBlock: range.toBlock, topics: [query.topics] }))
-}
 
 export interface ProtocolIndexCursor {
 	blockNumber: string
