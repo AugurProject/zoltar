@@ -82,6 +82,14 @@ export const refreshRouteAlongsideNetworkStatus = <T>(refreshNetworkStatus: Refr
 	return Promise.resolve(refreshRoute())
 }
 
+const restoredNetworkSnapshotMaxAgeMs = 30_000
+
+export const restoredNetworkSnapshotIsCurrent = (writtenAt: number | undefined, now = Date.now()): boolean => {
+	if (writtenAt === undefined || !Number.isFinite(writtenAt)) return false
+	const ageMs = now - writtenAt
+	return ageMs >= 0 && ageMs <= restoredNetworkSnapshotMaxAgeMs
+}
+
 export const loadInitialNetworkStatus = async (restoredSnapshot: boolean, load: RefreshOperation<unknown>): Promise<void> => {
 	if (!restoredSnapshot) await load()
 }

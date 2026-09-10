@@ -65,6 +65,7 @@ import {
 	resolveActivityRefreshDepth,
 	restoreActivityDetailFocus,
 	restoreDisclosureState,
+	restoredNetworkSnapshotIsCurrent,
 	retainedPaginationAvailable,
 	riskPaginationForCollectedCursors,
 	runSerializedOperationsLoad,
@@ -1129,6 +1130,17 @@ test('reuses restored network status only for the rendered chain and current fre
 	expect(canReuseNetworkStatusPresentation(network, { ...network }, '1', 'current', '1', 'current')).toBe(true)
 	expect(canReuseNetworkStatusPresentation(network, { ...network }, '11155111', 'current', '1', 'current')).toBe(false)
 	expect(canReuseNetworkStatusPresentation(network, { ...network }, '1', 'current', '1', 'stale')).toBe(false)
+})
+
+test('trusts a restored network snapshot only when it was written recently', () => {
+	const now = 1_700_000_000_000
+	expect(restoredNetworkSnapshotIsCurrent(now - 5_000, now)).toBe(true)
+	expect(restoredNetworkSnapshotIsCurrent(now - 30_000, now)).toBe(true)
+	expect(restoredNetworkSnapshotIsCurrent(now - 30_001, now)).toBe(false)
+	expect(restoredNetworkSnapshotIsCurrent(now - 2_760_000, now)).toBe(false)
+	expect(restoredNetworkSnapshotIsCurrent(undefined, now)).toBe(false)
+	expect(restoredNetworkSnapshotIsCurrent(Number.NaN, now)).toBe(false)
+	expect(restoredNetworkSnapshotIsCurrent(now + 60_000, now)).toBe(false)
 })
 
 test('does not refresh network status when a product-tab load restores the cached snapshot', async () => {
