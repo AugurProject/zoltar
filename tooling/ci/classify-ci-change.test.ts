@@ -9,6 +9,22 @@ const scopes = (paths: readonly string[]) => classifyCiChange(paths).expandedSco
 
 const routingCases: readonly (readonly [readonly string[], readonly CiScope[]])[] = [
 	[['README.md'], ['docs']],
+	[['shared/README.md'], ['docs']],
+	[['ui/AGENTS.md', 'ui/trading/AGENTS.md'], ['docs']],
+	[['solidity/contracts/README.md', 'solidity/docs/trading/README.md'], ['docs']],
+	[['bots/chaos/README.md', 'bots/open-oracle-arbitrager/README.md', 'bots/liquidator/README.md'], ['docs']],
+	[['augurScan/src/ARCHITECTURE.md'], ['docs']],
+	[['.vscode/settings.json', '.vscode/tasks.json'], ['docs']],
+	[
+		['solidity/contracts/README.md', 'bots/chaos/src/run.ts'],
+		['chaos', 'docs'],
+	],
+	[['.agents/skills/babysit/SKILL.md', '.claude/skills/babysit'], ['docs']],
+	[['.claude/skills/babysit/SKILL.md'], ['docs']],
+	[
+		['.agents/skills/babysit/SKILL.md', 'ui/trading/ts/index.ts'],
+		['core', 'docs'],
+	],
 	[['shared/trading/ts/trading/math.ts'], ['core', 'infrastructure', 'chaos', 'arbitrager', 'liquidator', 'docs']],
 	[['ui/trading/ts/index.ts'], ['core']],
 	[['bots/open-oracle-arbitrager/src/run.ts'], ['arbitrager']],
@@ -27,7 +43,7 @@ const routingCases: readonly (readonly [readonly string[], readonly CiScope[]])[
 ]
 for (const [paths, expected] of routingCases) test(`routes ${paths.join(', ')}`, () => expect(scopes(paths)).toEqual(expected))
 
-test.each(['.github/workflows/ci.yml', 'package.json', 'tooling/ci/classify-ci-change.mts', 'future-component/file.ts'])('uses full CI for %s', path => {
+test.each(['.github/workflows/ci.yml', 'package.json', 'tooling/ci/classify-ci-change.mts', 'future-component/file.ts', '.agents/skills/example/scripts/run.ts', '.claude/skills/example/scripts/run.sh', '.claude/settings.json'])('uses full CI for %s', path => {
 	expect(scopes([path])).toEqual(ciScopes)
 	expect(classifyCiChange([path]).forcedFull).toBe(true)
 })
@@ -39,6 +55,8 @@ test('empty input and explicit full mode use the full matrix', () => {
 
 test('requires PostgreSQL integration for augurScan behavior and safe full runs', () => {
 	expect(classifyCiChange(['augurScan/README.md']).augurScanIntegration).toBe(false)
+	expect(classifyCiChange(['augurScan/src/ARCHITECTURE.md']).augurScanIntegration).toBe(false)
+	expect(classifyCiChange(['shared/README.md']).augurScanIntegration).toBe(false)
 	expect(classifyCiChange(['augurScan/src/database.ts']).augurScanIntegration).toBe(true)
 	expect(classifyCiChange(['augurScan/migrations/002.sql']).augurScanIntegration).toBe(true)
 	expect(classifyCiChange(['augurScan/config/abis.json']).augurScanIntegration).toBe(true)

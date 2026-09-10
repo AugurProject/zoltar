@@ -26,12 +26,13 @@ const packageEntries = new Map<CiScope, PackageMatrixEntry>(
 		return [ci.scope as CiScope, { package: ci.componentName, directory: project.path, artifacts: ci.requiresContractArtifacts === true }]
 	}),
 )
-const rootDocumentation = new Set(['AGENTS.md', 'LICENSE', 'README.md'])
+const instructionFiles = new Set(['LICENSE', '.vscode/settings.json', '.vscode/tasks.json'])
 const rootGlobalFiles = new Set(['.coverage-policy.json', '.dockerignore', '.editorconfig', '.gitattributes', '.gitignore', '.npmrc', '.prettierignore', '.prettierrc.json', 'biome.json', 'bun.lock', 'bunfig.toml', 'knip.json', 'package.json', 'tsconfig.json', 'tsconfig.scripts.json'])
 const ordered = (scopes: ReadonlySet<CiScope>): CiScope[] => ciScopes.filter(scope => scopes.has(scope))
 
 function directScopeForPath(filePath: string): CiScope | 'full' {
-	if (rootDocumentation.has(filePath) || filePath.startsWith('docs/') || filePath.startsWith('.codex/') || filePath.startsWith('.ci-agents/')) return 'docs'
+	if (/^\.(?:agents|claude)\/skills\/[a-z0-9-]+$/.test(filePath)) return 'docs'
+	if (filePath.endsWith('.md') || instructionFiles.has(filePath) || filePath.startsWith('docs/') || filePath.startsWith('.codex/') || filePath.startsWith('.ci-agents/')) return 'docs'
 	if (filePath.startsWith('.github/') || filePath.startsWith('scripts/') || filePath.startsWith('tooling/') || rootGlobalFiles.has(filePath)) return 'full'
 	return projectForPath(filePath)?.ci?.scope ?? 'full'
 }
@@ -72,14 +73,16 @@ export function classifyCiChange(filePaths: readonly string[], options: { readon
 		if (scope === 'full') forcedFull = true
 		else direct.add(scope)
 	}
-	const expanded = expandScopes(direct, changedFiles, forcedFull)
+	// Prose inside a project must not select that project's runtime consumers.
+	const runtimeFiles = changedFiles.filter(filePath => directScopeForPath(filePath) !== 'docs')
+	const expanded = expandScopes(direct, runtimeFiles, forcedFull)
 	const directScopes = ordered(direct)
 	const expandedScopes = ordered(expanded)
 	const packageMatrix = expandedScopes.flatMap(scope => packageEntries.get(scope) ?? [])
 	const packageMatrixJson = JSON.stringify({ include: packageMatrix })
 	const augurScan = projects.find(project => project.id === 'augur-scan')
 	if (augurScan === undefined) throw new Error('The project registry must contain augur-scan')
-	const augurScanIntegration = forcedFull || changedFiles.some(filePath => taskInputMatches('integration', filePath, augurScan))
+	const augurScanIntegration = forcedFull || runtimeFiles.some(filePath => taskInputMatches('integration', filePath, augurScan))
 	let reason = 'Selected direct scopes and expanded their verified local consumers.'
 	if (forcedFull) reason = 'A global or unknown path requires the full ordinary CI matrix.'
 	if (changedFiles.length === 0) reason = 'No changed paths were detected; using the safe full-run fallback.'
