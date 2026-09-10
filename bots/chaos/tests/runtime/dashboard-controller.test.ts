@@ -4,6 +4,7 @@ import { privateKeyToAccount, zeroAddress, zeroHash, type Hex } from '@zoltar/bo
 import { createSignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
 import example from '../../config/operator.example.json'
 import {
+	type DashboardControllerOptions,
 	assertSignerCompatibleWithPending,
 	assertSignerCompatibleWithDurableScope,
 	assertSettingsUpdatePaused,
@@ -105,7 +106,7 @@ function completeSignerScan(state: RuntimeState, current: OperatorSettings, bala
 	}
 }
 
-function noopController(current: OperatorSettings, state: RuntimeState) {
+function noopController(current: OperatorSettings, state: RuntimeState, overrides: Pick<DashboardControllerOptions, 'saveState' | 'onScheduleRequested'> = {}) {
 	const configuration = { path: '/tmp/unused-chaos-config.json', rememberSigner: true, revision: 'revision', settings: current }
 	let revision = 0
 	return {
@@ -125,6 +126,7 @@ function noopController(current: OperatorSettings, state: RuntimeState) {
 				return `revision:${revision.toString()}`
 			},
 			saveState: async () => undefined,
+			...overrides,
 			state,
 		}),
 	}
@@ -140,6 +142,70 @@ async function captureFailure(operation: () => unknown | Promise<unknown>): Prom
 }
 
 describe('chaos dashboard configuration boundary', () => {
+	test('brings only the current running schedule forward', async () => {
+		const current = configuredSettings(false, false)
+		const state = runtimeState(current)
+		state.scheduler = { ...state.scheduler, status: 'scheduled', nextRunAt: '2099-01-01T00:00:00.000Z' }
+		const { controller } = noopController(current, state)
+		if (controller.setSchedule === undefined) throw new Error('Schedule control is unavailable')
+		const request = { revision: 'revision', nextRunAt: state.scheduler.nextRunAt }
+		await expect(controller.setSchedule({ ...request, nextRunAt: 'stale' })).rejects.toThrow('changed')
+		await controller.setSchedule(request)
+		expect(state.scheduler.status).toBe('due')
+		expect(Date.parse(state.scheduler.nextRunAt ?? '')).toBeLessThanOrEqual(Date.now())
+		await expect(controller.setSchedule(request)).rejects.toThrow('changed')
+		state.paused = true
+		await expect(controller.setSchedule({ revision: 'revision', nextRunAt: state.scheduler.nextRunAt })).rejects.toThrow('Resume')
+	})
+
+	test('does not advance or wake a schedule whose persistence failed', async () => {
+		const current = configuredSettings(false, false)
+		const state = runtimeState(current)
+		state.scheduler = { ...state.scheduler, status: 'scheduled', nextRunAt: '2099-01-01T00:00:00.000Z' }
+		let woken = false
+		const { controller } = noopController(current, state, {
+			saveState: async () => {
+				throw new Error('disk unavailable')
+			},
+			onScheduleRequested: () => {
+				woken = true
+			},
+		})
+		if (controller.setSchedule === undefined) throw new Error('Schedule control is unavailable')
+		await expect(controller.setSchedule({ revision: 'revision', nextRunAt: state.scheduler.nextRunAt })).rejects.toThrow('disk unavailable')
+		expect(state.scheduler).toMatchObject({ status: 'scheduled', nextRunAt: '2099-01-01T00:00:00.000Z' })
+		expect(woken).toBe(false)
+	})
+
+	test('disabling one unrestricted catalog entry preserves all other selections', async () => {
+		const current = configuredSettings(true, false)
+		current.strategy.selectableOperationAllowlist = undefined
+		const state = runtimeState(current)
+		const { controller, configuration } = noopController(current, state)
+		if (controller.setSelection === undefined) throw new Error('Selection control is unavailable')
+		await controller.setSelection({ revision: 'revision', operationId: 'open-oracle.weth.wrap', enabled: false })
+		const allowed = configuration.settings.strategy.selectableOperationAllowlist
+		expect(allowed).not.toContain('open-oracle.weth.wrap')
+		expect(allowed).toContain('zoltar.question.create-binary')
+		expect(allowed).not.toContain('open-oracle.settle')
+	})
+
+	test('updates catalog selection without replacing other execution policy', async () => {
+		const current = configuredSettings(true, false)
+		const state = runtimeState(current)
+		const { controller, configuration } = noopController(current, state)
+		if (controller.setSelection === undefined) throw new Error('Selection control is unavailable')
+		await controller.setSelection({ revision: 'revision', operationId: 'open-oracle.weth.wrap', enabled: true })
+		expect(configuration.settings.strategy.selectableOperationAllowlist).toEqual(['open-oracle.weth.wrap'])
+		expect(configuration.settings.strategy).toEqual({ ...current.strategy, selectableOperationAllowlist: ['open-oracle.weth.wrap'] })
+		await expect(controller.setSelection({ revision: 'revision', operationId: 'open-oracle.weth.wrap', enabled: false })).rejects.toThrow('changed')
+		await expect(controller.setSelection({ revision: configuration.revision, operationId: 'open-oracle.settle', enabled: true })).rejects.toThrow('selectable')
+		await controller.setSelection({ revision: configuration.revision, operationId: 'open-oracle.weth.wrap', enabled: false })
+		expect(configuration.settings.strategy.selectableOperationAllowlist).toEqual([])
+		state.paused = false
+		await expect(controller.setSelection({ revision: configuration.revision, operationId: 'open-oracle.weth.wrap', enabled: true })).rejects.toThrow('Pause')
+	})
+
 	test('persists profile- and recipient-bound Drain & Retire controls', async () => {
 		const current = configuredSettings(false, true)
 		const state = runtimeState(current)

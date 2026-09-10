@@ -352,7 +352,7 @@ describe('canonical scan policy', () => {
 
 		const novel = applyExecutionPolicy([allowed, disabled, lifecycle], restricted, true, '10', '10', 10n ** 18n)
 		expect(novel[0]).toEqual(allowed)
-		expect(novel[1]?.eligibility).toEqual({ blockers: ['The selectable operation definition is not in strategy.selectableOperationAllowlist'], eligible: false })
+		expect(novel[1]?.eligibility).toEqual({ blockers: ['Random selection is disabled for this operation. Enable it in the operation catalog.'], eligible: false })
 		expect(novel[2]).toEqual(lifecycle)
 
 		const continuation = applyExecutionPolicy([disabled], restricted, true, '10', '10', 10n ** 18n, 'durable-continuation')
