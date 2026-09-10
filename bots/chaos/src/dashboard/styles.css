@@ -1458,15 +1458,6 @@ fieldset {
 		padding-inline: 0.85rem;
 	}
 
-	.operator-primary > .operator-safety {
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-	}
-
-	.operator-primary > .operator-safety > .badge,
-	.operator-primary > .operator-safety > button {
-		min-height: 2.75rem;
-	}
-
 	main {
 		padding: 1.35rem 0.85rem 4rem;
 	}

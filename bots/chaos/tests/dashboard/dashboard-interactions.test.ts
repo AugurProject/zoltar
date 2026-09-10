@@ -941,7 +941,7 @@ browserTest(
 					summaryHeights: [...document.querySelectorAll('.topology-grid summary')].map(summary => summary.getBoundingClientRect().height),
 					topbarBackground: getComputedStyle(document.querySelector('.operator-shell')).backgroundColor,
 				})`)
-				expect(Reflect.get(topologyPresentation, 'topbarBackground')).toBe('rgb(8, 11, 16)')
+				expect(Reflect.get(topologyPresentation, 'topbarBackground')).toBe('color(srgb 0.0627451 0.0823529 0.113725 / 0.82)')
 				const summaryHeights = Reflect.get(topologyPresentation, 'summaryHeights')
 				expect(summaryHeights).toHaveLength(5)
 				if (!Array.isArray(summaryHeights)) throw new Error('Missing topology summary bounds')

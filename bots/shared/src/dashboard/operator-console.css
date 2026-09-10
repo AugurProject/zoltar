@@ -3,21 +3,24 @@
 	top: 0;
 	z-index: 20;
 	border-bottom: 1px solid var(--operator-border);
-	background: var(--operator-background);
+	background: color-mix(in srgb, var(--operator-surface), transparent 18%);
+	backdrop-filter: blur(10px);
+	-webkit-backdrop-filter: blur(10px);
 }
 
 .operator-primary {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 1rem;
+	display: grid;
+	align-items: start;
+	grid-template-columns: minmax(0, 1fr) auto;
+	gap: 0.75rem;
 }
 
 .operator-safety {
 	display: flex;
 	align-items: center;
-	justify-content: flex-end;
-	gap: 0.65rem;
+	flex-wrap: wrap;
+	gap: 0.4rem;
+	grid-column: 1 / -1;
 	min-width: 0;
 }
 
@@ -37,8 +40,10 @@
 .section-nav {
 	display: flex;
 	gap: 0.5rem;
+	margin-top: 0.75rem;
 	overflow-x: auto;
-	padding-block: 0.75rem;
+	border-top: 1px solid color-mix(in srgb, var(--operator-border), transparent 45%);
+	padding-block: 0.25rem 0;
 	scrollbar-width: thin;
 }
 
@@ -47,22 +52,23 @@
 	align-items: center;
 	flex: 0 0 auto;
 	min-height: 2.75rem;
-	padding: 0.45rem 0.75rem;
-	border: 1px solid var(--operator-border);
-	border-radius: 99rem;
+	padding: 0.45rem 1rem;
+	border-bottom: 2px solid transparent;
+	border-radius: 0.4rem 0.4rem 0 0;
 	color: var(--operator-muted);
+	font-size: 0.9rem;
 	text-decoration: none;
 }
 
 .section-nav a:hover,
-.section-nav a:focus-visible,
-.section-nav a[aria-current="page"] {
-	border-color: var(--operator-accent);
+.section-nav a:focus-visible {
+	background: color-mix(in srgb, var(--operator-text), transparent 94%);
 	color: var(--operator-text);
 }
 
 .section-nav a[aria-current="page"] {
-	background: color-mix(in srgb, var(--operator-accent), transparent 88%);
+	border-bottom-color: var(--operator-accent);
+	color: var(--operator-text);
 }
 
 .settings-intro {
@@ -214,51 +220,8 @@
 }
 
 @media (max-width: 42rem) {
-	.operator-primary {
-		align-items: flex-start;
-		flex-direction: column;
-	}
-
-	.operator-primary > .operator-safety {
-		display: grid;
-		align-items: stretch;
-		grid-template-columns: repeat(4, minmax(0, 1fr));
-		width: 100%;
-	}
-
-	.operator-primary > .operator-safety > .badge {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		min-width: 0;
-		min-height: 2.75rem;
-		padding: 0.35rem 0.45rem;
-		overflow-wrap: anywhere;
-		text-align: center;
-		white-space: normal;
-	}
-
-	.operator-primary > .operator-safety > .badge[hidden] {
-		display: none;
-	}
-
-	.operator-primary > .operator-safety > button {
-		font-size: 0.82rem;
-		min-height: 2.75rem;
-		min-width: 0;
-		overflow-wrap: anywhere;
-		padding-inline: 0.5rem;
-		white-space: normal;
-		width: 100%;
-	}
-
-	.operator-primary > .operator-safety > .action-status {
-		grid-column: 1 / -1;
-	}
-
 	.section-nav {
 		margin-inline: -0.15rem;
-		padding-top: 0.65rem;
 	}
 
 	.settings-intro,
@@ -289,6 +252,10 @@
 	.operator-shell,
 	.section-nav {
 		scroll-behavior: auto !important;
+	}
+
+	.operator-primary > .operator-safety > .badge.loading {
+		animation: none;
 	}
 }
 
@@ -324,44 +291,66 @@ body {
 	padding: 1rem clamp(1rem, 3vw, 3rem) 0;
 }
 
-.operator-primary {
-	display: grid;
-	grid-template-columns: minmax(0, 1fr);
-	gap: 0.75rem;
-}
-
-.operator-primary > .operator-safety {
-	display: grid;
-	grid-template-columns: repeat(5, minmax(0, 1fr)) 6rem 6rem;
-	grid-template-areas: "mode network run capability attention refresh pause";
-	gap: 0.5rem;
-	width: 100%;
-	align-items: stretch;
-}
-
-.operator-primary > .operator-safety > .badge,
-.operator-primary > .operator-safety > button {
-	display: flex;
+.operator-primary > .operator-safety > .badge {
+	display: inline-flex;
 	align-items: center;
-	justify-content: center;
 	min-width: 0;
-	min-height: 3rem;
+	min-height: 2.25rem;
 	margin: 0;
-	padding: 0.4rem 0.55rem;
+	padding: 0.3rem 0.8rem;
+	border-radius: 99rem;
 	font-size: 0.78rem;
 	line-height: 1.25;
-	border-radius: 0.5rem;
-	text-align: center;
 	white-space: normal;
 	overflow-wrap: anywhere;
+}
+
+.operator-primary > .operator-safety > .badge::before {
+	content: "";
+	flex: none;
+	width: 0.4rem;
+	height: 0.4rem;
+	margin-right: 0.5rem;
+	border-radius: 50%;
+	background: currentColor;
+}
+
+.operator-primary > .operator-safety > button {
+	min-height: 2.25rem;
+	margin: 0;
+	padding: 0.3rem 0.95rem;
+	font-size: 0.8rem;
+	line-height: 1.25;
+	white-space: nowrap;
+}
+
+.operator-primary > .operator-safety > button:first-of-type {
+	margin-left: auto;
 }
 
 .operator-primary > .operator-safety > .badge[hidden] {
 	display: none;
 }
 
+.operator-primary > .operator-safety > .badge.loading {
+	color: var(--operator-muted);
+	animation: operator-badge-loading 1.6s ease-in-out infinite;
+}
+
+@keyframes operator-badge-loading {
+	50% {
+		opacity: 0.55;
+	}
+}
+
 .operator-safety > .action-status {
-	grid-column: 1 / -1;
+	flex-basis: 100%;
+	margin: 0;
+	text-align: right;
+}
+
+.operator-safety > .action-status:empty {
+	display: none;
 }
 
 .attention-badge[data-tone="ok"] {
@@ -419,49 +408,13 @@ main .panel {
 }
 
 @media (max-width: 42rem) {
-	.operator-primary > .operator-safety {
-		grid-template-columns: repeat(3, minmax(0, 1fr));
-	}
-	.operator-primary > .operator-safety > .badge,
-	.operator-primary > .operator-safety > button {
-		min-height: 3.25rem;
-	}
 	.operator-metrics {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 }
 
-.operator-primary > .operator-safety > #mode-badge {
-	grid-area: mode;
-}
-.operator-primary > .operator-safety > #network-badge,
-.operator-primary > .operator-safety > #header-network-badge {
-	grid-area: network;
-}
-.operator-primary > .operator-safety > #run-status-badge,
-.operator-primary > .operator-safety > #retry-status-badge,
-.operator-primary > .operator-safety > #signer-badge {
-	grid-area: run;
-}
-.operator-primary > .operator-safety > #capability-badge {
-	grid-area: capability;
-}
-.operator-primary > .operator-safety > #attention-badge,
-.operator-primary > .operator-safety > #recovery-badge {
-	grid-area: attention;
-}
-.operator-primary > .operator-safety > #refresh-button {
-	grid-area: refresh;
-}
-.operator-primary > .operator-safety > #pause-button {
-	grid-area: pause;
-}
 .operator-primary > .operator-safety[data-retry-active] > #run-status-badge {
 	display: none;
-}
-.operator-primary > .operator-safety:has(#signer-badge) {
-	grid-template-columns: repeat(4, minmax(0, 1fr)) 6rem 6rem;
-	grid-template-areas: "mode network run attention refresh pause";
 }
 .operator-metrics > .metric:last-child:nth-child(3n + 1) {
 	grid-column: span 3;
@@ -470,13 +423,6 @@ main .panel {
 	grid-column: span 2;
 }
 @media (max-width: 42rem) {
-	.operator-primary > .operator-safety {
-		grid-template-areas: "mode network run" "capability attention refresh" "pause pause pause";
-	}
-	.operator-primary > .operator-safety:has(#signer-badge) {
-		grid-template-columns: repeat(3, minmax(0, 1fr));
-		grid-template-areas: "mode network run" "attention refresh pause";
-	}
 	.operator-metrics > .metric:last-child:nth-child(n) {
 		grid-column: auto;
 	}
@@ -577,14 +523,12 @@ body .button:disabled {
 
 .operator-shell .operator-identity {
 	min-width: 0;
-	padding-right: 5.5rem;
 }
 
 .header-notices {
-	position: absolute;
-	top: 1rem;
-	right: clamp(1rem, 3vw, 3rem);
+	position: relative;
 	z-index: 30;
+	justify-self: end;
 }
 
 .header-notices > summary {
