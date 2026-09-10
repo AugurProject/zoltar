@@ -35,6 +35,7 @@ describe('universe selector', () => {
 				]}
 				selectedId={selected}
 				disabled={false}
+				loading={false}
 				onChange={next => {
 					selected = next
 				}}

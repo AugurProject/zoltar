@@ -11,6 +11,13 @@ const securityPoolAbi = statoblast_SecurityPool_SecurityPool.abi
 const erc20BalanceAbi = ReputationToken_ReputationToken.abi
 const router = tradingContracts['contracts/trading/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter
 
+// A simulated chain only holds the Statoblast security pool and the trading factory and router once
+// its scenario bootstrap finishes. Reads that must observe the deployed protocol wait here instead of
+// before mount, so the application shell renders immediately and reports its own loading state.
+export async function waitForActiveEnvironmentReady() {
+	await getActiveBackend().waitUntilReady?.()
+}
+
 export function validateRpcChainId(rpcChainId: number, deploymentChainId: number) {
 	if (rpcChainId !== deploymentChainId) throw new Error(`RPC chain ${rpcChainId} does not match deployment chain ${deploymentChainId}`)
 }

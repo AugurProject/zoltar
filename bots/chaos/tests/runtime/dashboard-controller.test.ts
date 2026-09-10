@@ -665,7 +665,7 @@ describe('chaos dashboard configuration boundary', () => {
 		expect(candidate.settings.strategy.initializeGenesisUniverse).toBe(true)
 	})
 
-	test('rejects a dashboard transition from single-reader dry run to live execution', () => {
+	test('accepts a dashboard transition from single-reader dry run to live execution', () => {
 		const configured = configuredSettings(true, false)
 		const singleReader = parseSettings({
 			...serializedSettings(configured),
@@ -677,7 +677,12 @@ describe('chaos dashboard configuration boundary', () => {
 			},
 		})
 
-		expect(() => settingsPatchCandidate(singleReader, settingsUpdate(singleReader, 'revision', true))).toThrow('Live execution requires RPC quorum 2 with three independent read origins')
+		const live = settingsPatchCandidate(singleReader, settingsUpdate(singleReader, 'revision', true))
+		expect(live.settings.runtime.execute).toBe(true)
+		expect(live.settings.connectivity).toMatchObject({
+			quorumRpcUrls: [],
+			rpcQuorum: 1,
+		})
 		expect(settingsPatchCandidate(singleReader, settingsUpdate(singleReader, 'revision', false)).settings.connectivity).toMatchObject({
 			quorumRpcUrls: [],
 			rpcQuorum: 1,

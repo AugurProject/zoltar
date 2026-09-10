@@ -12,7 +12,7 @@ import { shareBalanceScope, type LiveBalances, type LiveMarket } from './liveMar
 import { deadlineAtBlock, latestBlockIdentity, maximumAfterSlippage, minimumAfterSlippage, requireQuoteBlock, requireTransactionSlippageBps, requireTransactionValidityMinutes, retainApprovedMaximum, retainApprovedMinimum, stableSimulation, UI_SLIPPAGE_BPS, type TransactionExpiry } from './tradeQuote.js'
 import { receiveBasedExitArguments, shareOperationRouter, shareTokenAbi } from './authorization.js'
 
-export { createTradingPublicClient, createTradingWalletClient, loadWalletHeaderBalances, validateLiveDeployment, validateRpcChainId } from './runtimeClients.js'
+export { createTradingPublicClient, createTradingWalletClient, loadWalletHeaderBalances, validateLiveDeployment, validateRpcChainId, waitForActiveEnvironmentReady } from './runtimeClients.js'
 export { publicErrorMessage } from './publicError.js'
 export { settlementAvailability, simulateSettlement, submitFreshSettlement, type SettlementOperation, type ShareOutcome } from './settlement.js'
 export { simulateLiquidity, submitFreshLiquidity, type LiquidityOperation } from './liquidity.js'

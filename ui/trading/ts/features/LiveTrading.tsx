@@ -217,7 +217,6 @@ export function LiveTrading({
 	onWalletSummaryChange = ignoreWalletSummaryChange,
 	walletSummaryRetryNonce = 0,
 	walletConnectRequestNonce,
-	onDeploymentRetry = () => undefined,
 	controllerServices = liveTradingControllerServices,
 	liquidityServices = liveLiquidityServices,
 	settlementServices = liveSettlementServices,
@@ -231,7 +230,6 @@ export function LiveTrading({
 	onWalletSummaryChange?(summary: WalletSummaryState): void
 	walletSummaryRetryNonce?: number
 	walletConnectRequestNonce?: number
-	onDeploymentRetry?(): void
 	controllerServices?: LiveTradingControllerServices
 	liquidityServices?: LiveLiquidityServices
 	settlementServices?: LiveSettlementServices
@@ -265,25 +263,12 @@ export function LiveTrading({
 		previousWalletConnectRequestNonce.current = walletConnectRequestNonce
 		void connect()
 	}, [connect, walletConnectRequestNonce])
+	// A failed deployment lookup switches the application to the deployment setup route, which owns the
+	// error surface, so this route only ever renders while the deployment is still resolving.
 	if (configuration === undefined)
 		return (
 			<main class='route' id='main-content'>
-				<RouteHeader
-					eyebrow={appCopy.standaloneLiveClient}
-					title={appCopy.contractsUnavailable}
-					description={
-						<span class={configurationError === undefined ? undefined : 'error'} role={configurationError === undefined ? 'status' : 'alert'}>
-							{configurationError ?? message ?? appCopy.checkingContracts}
-						</span>
-					}
-					actions={
-						configurationError === undefined ? undefined : (
-							<button class='secondary-action' type='button' onClick={onDeploymentRetry}>
-								{liveCopy.retryDeployment}
-							</button>
-						)
-					}
-				/>
+				<RouteHeader eyebrow={appCopy.standaloneLiveClient} title={<span role='status'>{appCopy.loadingContracts}</span>} />
 			</main>
 		)
 	let discoveryContent
