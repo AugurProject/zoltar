@@ -34,7 +34,6 @@ const unknownDiscovery = 'unknown discovery error'
 const loadingSecurityPoolDetails = 'Loading security pool details…'
 const retryDiscovery = 'Retry discovery'
 const securityPoolUnavailableInUniverse = 'This security pool is not available in the selected universe.'
-const retryDeployment = 'Retry deployment'
 const discoveringSecurityPoolsFromFactory = 'Discovering SecurityPools from the configured factory…'
 const noSecurityPoolsInUniverse = 'No SecurityPools are deployed in the selected universe.'
 const positions = 'Positions'
@@ -144,7 +143,6 @@ export const liveCopy = {
 	loadingSecurityPoolDetails,
 	retryDiscovery,
 	securityPoolUnavailableInUniverse,
-	retryDeployment,
 	discoveringSecurityPoolsFromFactory,
 	noSecurityPoolsInUniverse,
 	positions,

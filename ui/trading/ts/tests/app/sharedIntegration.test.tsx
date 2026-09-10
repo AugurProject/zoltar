@@ -3,6 +3,7 @@ import { act } from 'preact/test-utils'
 import { registerTradingSimulationScenario, TRADING_SIMULATION_SCENARIO } from '../../simulation/index.js'
 import { getRegisteredSimulationScenarios } from '@zoltar/ui-core-shared/simulation/scenarios.js'
 import { tradingActiveEnvironmentDependencies } from '../../app/activeEnvironment.js'
+import * as appCopy from '../../copy/app.js'
 import { Status } from '../../components/Status.js'
 import { TradingAddressValue } from '../../components/TradingAddress.js'
 import { ReadOnlyAddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
@@ -16,7 +17,7 @@ import type { DeploymentConfiguration } from '../../protocol/config.js'
 import { getCurrentRouteHash, getRouteHashSearch, resetRoutingForTesting } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { getTradingRouteHref, installTradingRouting } from '../../lib/routing.js'
 import { getActiveNetworkProfile, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
+import { createFakeBackend, createFakeSimulationProfile } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { createPublicClient, custom } from '@zoltar/core-shared/evm/ethereum'
 import { createTradingPublicClient } from '../../protocol/live.js'
 
@@ -134,6 +135,83 @@ test('Trading force-refreshes the active environment after saving the active net
 		if (originalStorageDescriptor === undefined) Reflect.deleteProperty(globalThis, 'localStorage')
 		else Object.defineProperty(globalThis, 'localStorage', originalStorageDescriptor)
 		resetActiveEnvironmentForTesting()
+		dom.cleanup()
+	}
+})
+
+test('Trading renders its shell while the environment is still bootstrapping', async () => {
+	const dom = installDomEnvironment('http://localhost/#/markets')
+	installTradingRouting()
+	// A pending waitUntilReady stands in for an unfinished simulation bootstrap. The shell must render
+	// anyway; only the deployment lookup waits for it.
+	const restoreEnvironment = installActiveEnvironmentForTesting({ ...createFakeBackend(), waitUntilReady: async () => await new Promise<void>(() => undefined) })
+	const rendered = await renderIntoDocument(<App initializeEnvironment={async () => undefined} />)
+	try {
+		await waitFor(() => expect(rendered.container.textContent).toContain('Loading trading contracts'))
+		expect(within(rendered.container).queryByRole('alert')).toBe(null)
+		expect(within(rendered.container).getByRole('combobox', { name: 'Select universe' }).textContent).toBe('Loading…')
+	} finally {
+		await rendered.cleanup()
+		restoreEnvironment()
+		resetActiveEnvironmentForTesting()
+		resetRoutingForTesting()
+		dom.cleanup()
+	}
+})
+
+test('Trading issues no chain reads while the environment is bootstrapping', async () => {
+	const dom = installDomEnvironment('http://localhost/#/deploy')
+	installTradingRouting()
+	let readClientRequests = 0
+	const restoreEnvironment = installActiveEnvironmentForTesting({
+		...createFakeBackend({ profile: createFakeSimulationProfile() }),
+		createReadClient: () => {
+			readClientRequests += 1
+			return createPublicClient({
+				transport: custom({
+					request: async () => {
+						throw new Error('The simulated chain is still bootstrapping')
+					},
+				}),
+			})
+		},
+		waitUntilReady: async () => await new Promise<void>(() => undefined),
+	})
+	const rendered = await renderIntoDocument(<App initializeEnvironment={async () => undefined} />)
+	try {
+		await waitFor(() => expect(rendered.container.textContent).toContain('Deploy trading contracts'))
+		// Flush the inspection effect's pending continuations; without the readiness gate it reaches the
+		// chain here and reports a missing SecurityPoolFactory against a half-bootstrapped simulation.
+		for (let flush = 0; flush < 5; flush += 1) await act(async () => undefined)
+		expect(readClientRequests).toBe(0)
+		expect(rendered.container.textContent).not.toContain(appCopy.securityPoolFactoryNotDeployed)
+	} finally {
+		await rendered.cleanup()
+		restoreEnvironment()
+		resetActiveEnvironmentForTesting()
+		resetRoutingForTesting()
+		dom.cleanup()
+	}
+})
+
+test('Trading reports a failed environment on the deployment route', async () => {
+	const dom = installDomEnvironment('http://localhost/#/markets')
+	installTradingRouting()
+	const restoreEnvironment = installActiveEnvironmentForTesting({
+		...createFakeBackend({ profile: createFakeSimulationProfile() }),
+		waitUntilReady: async () => {
+			throw new Error('Simulation scenario bootstrap failed')
+		},
+	})
+	const rendered = await renderIntoDocument(<App initializeEnvironment={async () => undefined} />)
+	try {
+		await waitFor(() => expect(rendered.container.textContent).toContain('Simulation scenario bootstrap failed'))
+		expect(within(rendered.container).getByRole('alert').textContent).toContain('Simulation scenario bootstrap failed')
+	} finally {
+		await rendered.cleanup()
+		restoreEnvironment()
+		resetActiveEnvironmentForTesting()
+		resetRoutingForTesting()
 		dom.cleanup()
 	}
 })
