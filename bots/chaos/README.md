@@ -87,7 +87,7 @@ Wait for topology, protocol-event, carry-proof, and signer-scoped inventory disc
 2. the signer and ETH/WETH/REP inventory are exact;
 3. Operation catalog shows all four ecosystems and explains each eligibility decision;
 4. Ecosystem state contains the expected pools, universes, reports, auctions, and trading pairs;
-5. Activity & recovery has no unresolved transaction, workflow, obligation, or safety blocker.
+5. Recovery has no unresolved transaction, workflow, obligation, or safety blocker.
 
 Treat any discovery warning as an execution stop. Raise only supported resident limits while paused, then wait for a complete warning-free rescan; never bypass a fixed envelope or discard proof state. The [discovery and cache safety envelopes](./OPERATOR_REFERENCE.md#discovery-and-cache-safety-envelopes) own the exact warning meanings and limits.
 
@@ -104,15 +104,15 @@ Pause first. Take a stopped encrypted backup of the complete `.state` unit, then
 
 After resume, `/readyz` returns HTTP 200 only while the bot is ready and idle. Require its named `submission` check to pass. Private mode supports only the official Flashbots relay matching the selected mainnet or Sepolia chain, or a loopback test relay; the [RPC and submission reference](./OPERATOR_REFERENCE.md#rpc-and-submission-configuration) owns the exact non-broadcasting control sequence and responses. A generic parser or gateway error is not sufficient evidence. Submission evidence is timestamped after the checks complete and refreshed at the final signing and broadcast boundaries; the bot refuses to sign or submit if it expires during the intervening anchor and nonce checks.
 
-If due work starts immediately, the `recovery` check intentionally returns 503 while a transaction, workflow, lifecycle obligation, or automatic retry is active. Match that named blocker to the work shown in Overview and Activity & recovery; do not interrupt healthy in-flight work merely to restore 200. Pause for any other failed readiness check or an unexplained recovery blocker.
+If due work starts immediately, the `recovery` check intentionally returns 503 while a transaction, workflow, lifecycle obligation, or automatic retry is active. Match that named blocker to the work shown in Overview and Recovery; do not interrupt healthy in-flight work merely to restore 200. Pause for any other failed readiness check or an unexplained recovery blocker.
 
 Do not assume resume creates a fresh wait: due random work or lifecycle recovery may start immediately. Observe successful finalized receipt and semantic evidence for each canary family before pausing to expand the allowlist. Keep high-risk and irreversible gates off until each affected operation has been reviewed and tested on an isolated deployment.
 
 ## Operate and recover
 
-Monitor readiness, the durable countdown, signer inventory, active workflow, obligations, and Activity & recovery. If a dashboard mutation loses its response, reload and compare the current revision and state; never repeat it blindly. If the bot reports an indeterminate commit, stop and reconcile the owner configuration and runtime state before any further mutation.
+Monitor readiness, the durable countdown, signer inventory, active workflow, obligations, recent activity on Overview, and Recovery. If a dashboard mutation loses its response, reload and compare the current revision and state; never repeat it blindly. If the bot reports an indeterminate commit, stop and reconcile the owner configuration and runtime state before any further mutation.
 
-A pending nonce blocks novelty until its canonical result is known. Use only the audited replacement, cancellation, retry, or abandonment controls in Activity & recovery. Never replay a confirmed prerequisite or manually edit a workflow. A durable safety pause survives restart; correct the cause, inspect its audit entry, and resume deliberately. Exact recovery proofs, retry timing, and transaction finality are defined in [scheduler and execution controls](./OPERATOR_REFERENCE.md#scheduler-and-execution-controls).
+A pending nonce blocks novelty until its canonical result is known. Use only the audited replacement, cancellation, retry, or abandonment controls in Recovery. Never replay a confirmed prerequisite or manually edit a workflow. A durable safety pause survives restart; correct the cause, inspect its audit entry, and resume deliberately. Exact recovery proofs, retry timing, and transaction finality are defined in [scheduler and execution controls](./OPERATOR_REFERENCE.md#scheduler-and-execution-controls).
 
 For a consistent backup or restore:
 

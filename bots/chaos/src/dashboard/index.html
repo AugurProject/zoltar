@@ -186,7 +186,7 @@
 								<p class="eyebrow">Durable workflow</p>
 								<h3>Current operation</h3>
 							</div>
-							<a class="text-link" href="/activity">Open recovery</a>
+							<a class="text-link" href="/recovery">Open recovery</a>
 						</div>
 						<div id="current-workflow" class="empty-state">No operation is in progress.</div>
 					</article>
@@ -201,6 +201,18 @@
 						<div id="coverage-summary" class="coverage-grid"></div>
 					</article>
 				</div>
+				<article class="panel activity-panel">
+					<div class="panel-heading">
+						<div>
+							<p class="eyebrow">Newest first</p>
+							<h3>Recent activity</h3>
+						</div>
+					</div>
+					<ol id="activity-list" class="timeline">
+						<li class="empty-state">No activity recorded.</li>
+					</ol>
+					<button id="activity-expand" class="secondary hidden" type="button" aria-expanded="false" aria-controls="activity-list">Show all activity</button>
+				</article>
 			</section>
 
 			<section data-page-content="catalog" aria-labelledby="catalog-title">
@@ -292,11 +304,11 @@
 				</article>
 			</section>
 
-			<section data-page-content="activity" aria-labelledby="activity-title">
+			<section data-page-content="recovery" aria-labelledby="recovery-title">
 				<div class="section-heading">
 					<div>
 						<p class="eyebrow">Recovery before novelty</p>
-						<h2 id="activity-title">Activity &amp; recovery</h2>
+						<h2 id="recovery-title">Recovery</h2>
 						<p class="lede">Pending nonces and deadline-bound obligations take priority over the random scheduler.</p>
 					</div>
 				</div>
@@ -372,15 +384,6 @@
 						</form>
 					</article>
 				</div>
-				<article class="panel activity-panel">
-					<div class="panel-heading">
-						<h3>Recent activity</h3>
-						<span class="muted">Newest first</span>
-					</div>
-					<ol id="activity-list" class="timeline">
-						<li class="empty-state">No activity recorded.</li>
-					</ol>
-				</article>
 			</section>
 
 			<section data-page-content="settings" aria-labelledby="settings-title">
