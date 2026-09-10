@@ -11,6 +11,7 @@ import {
 	compactDurableState,
 	initialDurableState,
 	initialRuntimeState,
+	setRuntimeExecutionAddress,
 	loadDurableState,
 	loadRuntimeState,
 	parseProtocolIndex,
@@ -996,4 +997,38 @@ describe('chaos-bot durable state', () => {
 		await Promise.all([firstSave, secondSave])
 		expect((await loadDurableState(path, 1)).activities[0]?.message).toBe('second invocation')
 	})
+})
+
+test('invalidates inventory on execution address changes and removal, and never restores inventory', async () => {
+	const first = getAddress('0x0000000000000000000000000000000000000001')
+	const second = getAddress('0x0000000000000000000000000000000000000002')
+	const state = initialRuntimeState(false, undefined, 1)
+	expect(state.inventoryAddress).toBeUndefined()
+	expect(state.wallet).toBeUndefined()
+	setRuntimeExecutionAddress(state, first)
+	state.inventory = { eth: '123', rep: [], weth: '456' }
+	state.inventoryAddress = first
+	state.lastScanAt = '2026-09-10T00:00:00.000Z'
+	setRuntimeExecutionAddress(state, first)
+	expect(state.inventory.eth).toBe('123')
+	expect(state.inventoryAddress).toBe(first)
+	setRuntimeExecutionAddress(state, second)
+	expect(state.inventoryAddress).toBeUndefined()
+	expect(state.inventory.eth).toBe('0')
+	expect(state.lastScanAt).toBe('2026-09-10T00:00:00.000Z')
+	state.inventoryAddress = second
+	state.inventory.eth = '789'
+	setRuntimeExecutionAddress(state, undefined)
+	expect(state.inventoryAddress).toBeUndefined()
+	expect(state.inventory.eth).toBe('0')
+	bindRuntimeStateToSigner(state, first)
+	state.inventoryAddress = first
+	state.inventory.eth = '123'
+	const path = await statePath()
+	await saveDurableState(path, state)
+	const restored = await loadRuntimeState(path, false, undefined, 1)
+	expect(restored.wallet).toBe(first)
+	expect(restored.inventoryAddress).toBeUndefined()
+	expect(restored.inventory.eth).toBe('0')
+	expect(await readFile(path, 'utf8')).not.toContain('inventory')
 })

@@ -572,7 +572,7 @@ export function publicChaosState(value: unknown, configurationValue?: unknown, n
 		currentWorkflow,
 		execute: booleanField(source, 'execute'),
 		inventory: publicInventory(source['inventory']),
-		inventoryAvailable: booleanField(source, 'inventoryAvailable') ?? source['inventory'] !== undefined,
+		inventoryAvailable: booleanField(source, 'inventoryAvailable') === true && stringField(source, 'wallet') !== undefined,
 		lastScanAt: stringField(source, 'lastScanAt'),
 		lastDeploymentCheckedBlock: scalar(source, 'lastDeploymentCheckedBlock'),
 		lastDeploymentCheckAt: stringField(source, 'lastDeploymentCheckAt'),
