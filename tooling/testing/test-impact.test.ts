@@ -137,7 +137,7 @@ describe('test impact recommendations', () => {
 				},
 			])
 		} finally {
-			await rm(repositoryRoot, { recursive: true })
+			await rm(repositoryRoot, { force: true, recursive: true })
 		}
 	})
 
@@ -158,7 +158,7 @@ describe('test impact recommendations', () => {
 				},
 			])
 		} finally {
-			await rm(repositoryRoot, { recursive: true })
+			await rm(repositoryRoot, { force: true, recursive: true })
 		}
 	})
 
@@ -194,7 +194,7 @@ describe('test impact recommendations', () => {
 				}),
 			).toEqual(expected)
 		} finally {
-			await rm(repositoryRoot, { recursive: true })
+			await rm(repositoryRoot, { force: true, recursive: true })
 		}
 	})
 
@@ -218,7 +218,7 @@ describe('test impact recommendations', () => {
 				},
 			])
 		} finally {
-			await rm(repositoryRoot, { recursive: true })
+			await rm(repositoryRoot, { force: true, recursive: true })
 		}
 	})
 
@@ -242,7 +242,7 @@ describe('test impact recommendations', () => {
 				},
 			])
 		} finally {
-			await rm(repositoryRoot, { recursive: true })
+			await rm(repositoryRoot, { force: true, recursive: true })
 		}
 	})
 
@@ -270,7 +270,7 @@ describe('test impact recommendations', () => {
 
 			expect(await getImportGraphTestRecommendations([{ path: 'pkg/source.ts', status: 'deleted' }], repositoryRoot)).toEqual([{ command: 'bun test pkg/source.test.ts', reason: 'imports changed production source directly or transitively' }])
 		} finally {
-			await rm(repositoryRoot, { recursive: true })
+			await rm(repositoryRoot, { force: true, recursive: true })
 		}
 	})
 })
