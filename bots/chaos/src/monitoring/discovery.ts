@@ -122,7 +122,7 @@ export interface EcosystemDiscoveryContext {
 	discoverGenesisDeployment?: boolean
 	client: ChaosReadClient
 	deployments: EcosystemDeployments
-	wallet: Address
+	wallet: Address | undefined
 	anchorBlockNumber: bigint
 	expectedAnchorBaseFeePerGas?: bigint
 	expectedAnchorHash?: Hash
@@ -739,7 +739,7 @@ async function discoverUniverses(context: EcosystemDiscoveryContext, blockNumber
 			client.readContract({ abi: zoltarAbi, address: deployments.zoltar, args: [universeId], blockNumber, functionName: 'universes' }),
 			client.readContract({ abi: zoltarAbi, address: deployments.zoltar, args: [universeId], blockNumber, functionName: 'getForkThresholdAttoRep' }),
 			client.readContract({ abi: zoltarAbi, address: deployments.zoltar, args: [universeId], blockNumber, functionName: 'getNonDecisionThresholdAttoRep' }),
-			client.readContract({ abi: zoltarAbi, address: deployments.zoltar, args: [wallet, universeId], blockNumber, functionName: 'getMigrationRepBalanceAttoRep' }),
+			wallet === undefined ? Promise.resolve(0n) : client.readContract({ abi: zoltarAbi, address: deployments.zoltar, args: [wallet, universeId], blockNumber, functionName: 'getMigrationRepBalanceAttoRep' }),
 		])
 		const [forkTime, forkQuestionId, forkingOutcomeIndex, reputationToken, parentUniverseId] = raw
 		if (reputationToken === zeroAddress) throw new Error(`Universe ${universeId.toString()} has no REP token`)
@@ -1264,7 +1264,7 @@ async function discoverPools(
 			client.readContract({ abi: securityPoolForkerAbi, address: deployments.securityPoolForker, args: [address], blockNumber, functionName: 'forkData' }),
 			deployment.parent === zeroAddress ? Promise.resolve(undefined) : client.readContract({ abi: securityPoolForkerAbi, address: deployments.securityPoolForker, args: [deployment.parent], blockNumber, functionName: 'forkData' }),
 			client.readContract({ abi: securityPoolForkerAbi, address: deployments.securityPoolForker, args: [address], blockNumber, functionName: 'getOwnForkMigrationStatus' }),
-			client.readContract({ abi: securityPoolForkerAbi, address: deployments.securityPoolForker, args: [address, wallet], blockNumber, functionName: 'getEscalationMigrationEntitlementStatus' }),
+			wallet === undefined ? Promise.resolve([false, 0n, [false, false, false]] as const) : client.readContract({ abi: securityPoolForkerAbi, address: deployments.securityPoolForker, args: [address, wallet], blockNumber, functionName: 'getEscalationMigrationEntitlementStatus' }),
 			client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'getCurrentMintingCapacityAttoEth' }),
 			client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'statoblastSecurityMultiplierBps' }),
 			client.readContract({ abi: securityPoolForkerAbi, address: deployments.securityPoolForker, args: [address], blockNumber, functionName: 'getUnassignedPosition' }),
@@ -1375,7 +1375,7 @@ async function discoverPools(
 			client.readContract({ abi: securityPoolAbi, address, args: [unassignedPosition[0]], blockNumber, functionName: 'backingUnitsToAttoRep' }),
 		])
 		let escalationResidualSweepExpectedSuccess = false
-		if (escalationAddress !== zeroAddress) {
+		if (wallet !== undefined && escalationAddress !== zeroAddress) {
 			try {
 				await client.simulateContract({ abi: escalationGameAbi, account: wallet, address: escalationAddress, blockNumber, functionName: 'sweepResidualRepToSecurityPool' })
 				escalationResidualSweepExpectedSuccess = true
@@ -1386,7 +1386,7 @@ async function discoverPools(
 		}
 		const safeEscalationDepositMaximumsAttoRep: [CanonicalUintString, CanonicalUintString, CanonicalUintString] = [canonicalUintString(0n), canonicalUintString(0n), canonicalUintString(0n)]
 		const escalationMaximum = escalationAddress === zeroAddress ? initialEscalationDeposit : escalationStartBondAttoRep
-		if (systemState === 0n && !awaitingForkContinuation && escalationMaximum > 0n) {
+		if (wallet !== undefined && systemState === 0n && !awaitingForkContinuation && escalationMaximum > 0n) {
 			await drainConcurrent(
 				[0, 1, 2].map(async outcome => {
 					try {
@@ -1400,7 +1400,7 @@ async function discoverPools(
 			)
 		}
 		const directEscalationDepositQuotes =
-			escalationAddress !== zeroAddress && systemState === 0n && !awaitingForkContinuation && !escalationForkContinuation && universe.forkTime === '0'
+			wallet !== undefined && escalationAddress !== zeroAddress && systemState === 0n && !awaitingForkContinuation && !escalationForkContinuation && universe.forkTime === '0'
 				? await discoverDirectEscalationDepositQuotes(client, wallet, escalationAddress, escalationMaximum, escalationOutcomeBalancesAttoRep, escalationNonDecisionThresholdAttoRep, blockNumber)
 				: ([emptyDirectEscalationDepositQuote(), emptyDirectEscalationDepositQuote(), emptyDirectEscalationDepositQuote()] satisfies PoolSnapshot['directEscalationDepositQuotes'])
 		const pendingReportSettled = pendingReportId === 0n ? false : (await client.readContract({ abi: openOracleAbi, address: deployments.openOracle, args: [pendingReportId], blockNumber, functionName: 'storedGame' })).settlementTimestamp !== 0n
@@ -1419,23 +1419,23 @@ async function discoverPools(
 		if (vaultRegistry.cursor.retentionMode === 'overflow' || !vaultRegistry.complete) warnings.push(registryCatchUpWarning(`Vault ${address}`, vaultRegistry.cursor))
 		const inspectEveryVault = vaultRegistry.cursor.retentionMode === 'resident' && vaultRegistry.complete && forkMigrationWindowIsOpen(systemState, forkActivationTime, anchorTimestamp)
 		const uniqueVaults = new Map<string, Address>()
-		uniqueVaults.set(wallet.toLowerCase(), wallet)
+		if (wallet !== undefined) uniqueVaults.set(wallet.toLowerCase(), wallet)
 		if (inspectEveryVault) {
 			for (const vault of vaultRegistry.vaults) uniqueVaults.set(vault.toLowerCase(), getAddress(vault))
 		}
 		const vaults = await mapWithConcurrency([...uniqueVaults.values()], DISCOVERY_RPC_CONCURRENCY, async vault => await discoverVault(client, address, escalationAddress, vault, blockNumber))
-		const vaultDiscoveryComplete = vaultRegistry.cursor.retentionMode === 'resident' && vaultRegistry.complete && (inspectEveryVault || vaultRegistry.vaults.every(vault => sameAddress(vault, wallet)))
-		const walletVaultRegistered = vaultRegistry.cursor.retentionMode === 'resident' && vaultRegistry.complete && vaultRegistry.vaults.some(vault => sameAddress(vault, wallet))
-		const walletVault = vaults.find(vault => sameAddress(vault.address, wallet))
-		if (walletVault === undefined) throw new Error(`Pool ${address} omitted the requested wallet vault`)
-		const minimumSafeWalletVaultDepositAttoRep = minimumSafeVaultDeposit(minimumDeposit, BigInt(walletVault.repBackingUnits), totalRepBackingUnits, poolRepBalanceAttoRep)
+		const vaultDiscoveryComplete = vaultRegistry.cursor.retentionMode === 'resident' && vaultRegistry.complete && (inspectEveryVault || vaultRegistry.vaults.every(vault => wallet !== undefined && sameAddress(vault, wallet)))
+		const walletVaultRegistered = vaultRegistry.cursor.retentionMode === 'resident' && vaultRegistry.complete && vaultRegistry.vaults.some(vault => wallet !== undefined && sameAddress(vault, wallet))
+		const walletVault = vaults.find(vault => wallet !== undefined && sameAddress(vault.address, wallet))
+		if (wallet !== undefined && walletVault === undefined) throw new Error(`Pool ${address} omitted the requested wallet vault`)
+		const minimumSafeWalletVaultDepositAttoRep = minimumSafeVaultDeposit(minimumDeposit, BigInt(walletVault?.repBackingUnits ?? '0'), totalRepBackingUnits, poolRepBalanceAttoRep)
 		const poolQuestion = questionById.get(questionId.toString())
 		const forkQuestion = questionById.get(universe.forkQuestionId)
 		let feeEndTimestamp: bigint | undefined
 		if (universe !== undefined && poolQuestion !== undefined) feeEndTimestamp = BigInt(universe.forkTime) === 0n ? BigInt(poolQuestion.endTime) : BigInt(universe.forkTime)
 		const projectedSettlementCollateral = projectSettlementCollateral(accounting, feeEndTimestamp, anchorTimestamp)
 		const unresolvedEscalationMigrationReadyOutcomes: string[] = []
-		if (inspectEveryVault && forkData.unresolvedEscalationAtFork) {
+		if (wallet !== undefined && inspectEveryVault && forkData.unresolvedEscalationAtFork) {
 			for (const outcome of validForkOutcomeRoutes(forkQuestion, universe.knownChildOutcomes)) {
 				try {
 					await client.simulateContract({ abi: securityPoolForkerAbi, account: wallet, address: deployments.securityPoolForker, args: [address, wallet, BigInt(outcome)], blockNumber, functionName: 'migrateVaultWithUnresolvedEscalation' })
@@ -1540,7 +1540,7 @@ async function discoverPairs(context: EcosystemDiscoveryContext, pools: readonly
 			client.readContract({ abi: tradingPairAbi, address, blockNumber, functionName: 'getReserves' }),
 			client.readContract({ abi: tradingPairAbi, address, blockNumber, functionName: 'getEffectiveReserves' }),
 			client.readContract({ abi: tradingPairAbi, address, blockNumber, functionName: 'totalSupply' }),
-			client.readContract({ abi: tradingPairAbi, address, args: [wallet], blockNumber, functionName: 'balanceOf' }),
+			wallet === undefined ? Promise.resolve(0n) : client.readContract({ abi: tradingPairAbi, address, args: [wallet], blockNumber, functionName: 'balanceOf' }),
 			cachedPair === undefined ? client.readContract({ abi: tradingPairAbi, address, blockNumber, functionName: 'factory' }) : Promise.resolve(deployments.tradingFactory),
 			cachedPair === undefined ? client.readContract({ abi: tradingPairAbi, address, blockNumber, functionName: 'securityPool' }) : Promise.resolve(pool.address),
 			cachedPair === undefined ? client.readContract({ abi: tradingPairAbi, address, blockNumber, functionName: 'shareToken' }) : Promise.resolve(pool.shareToken),
@@ -1581,6 +1581,7 @@ async function discoverPairs(context: EcosystemDiscoveryContext, pools: readonly
 
 async function discoverTokenInventory(context: EcosystemDiscoveryContext, universes: readonly UniverseSnapshot[], pools: readonly PoolSnapshot[], blockNumber: bigint) {
 	const { client, deployments, wallet } = context
+	if (wallet === undefined) return []
 	const addresses = new Map<string, Address>()
 	addresses.set(deployments.weth.toLowerCase(), deployments.weth)
 	for (const universe of universes) addresses.set(universe.repToken.toLowerCase(), universe.repToken)
@@ -1632,6 +1633,7 @@ export function trustedIndexedReportsForDiscovery(parameters: { deployments: Eco
 
 export async function discoverShareInventory(context: EcosystemDiscoveryContext, pools: readonly PoolSnapshot[], pairs: readonly PairSnapshot[], universes: readonly UniverseSnapshot[], questions: readonly QuestionSnapshot[], blockNumber: bigint, warnings: string[]) {
 	const { client, deployments, wallet } = context
+	if (wallet === undefined) return []
 	const shares: ShareInventory[] = []
 	const universeById = new Map(universes.map(universe => [universe.id, universe]))
 	const questionById = new Map(questions.map(question => [question.id, question]))
@@ -1704,8 +1706,10 @@ export async function discoverShareInventory(context: EcosystemDiscoveryContext,
 }
 
 async function discoverLpInventory(context: EcosystemDiscoveryContext, pairs: readonly PairSnapshot[], blockNumber: bigint) {
+	const wallet = context.wallet
+	if (wallet === undefined) return []
 	return await mapWithConcurrency(pairs, DISCOVERY_RPC_CONCURRENCY, async pair => ({
-		allowanceToRouter: (await context.client.readContract({ abi: tradingPairAbi, address: pair.address, args: [context.wallet, context.deployments.tradingRouter], blockNumber, functionName: 'allowance' })).toString(),
+		allowanceToRouter: (await context.client.readContract({ abi: tradingPairAbi, address: pair.address, args: [wallet, context.deployments.tradingRouter], blockNumber, functionName: 'allowance' })).toString(),
 		balance: pair.walletLiquidity,
 		pair: pair.address,
 	}))
@@ -1727,7 +1731,7 @@ async function discoverAuctions(context: EcosystemDiscoveryContext, pools: reado
 				: await drainConcurrent([
 						context.client.readContract({ abi: auctionAbi, address: pool.truthAuction, blockNumber, functionName: 'minBidSizeAttoEth' }),
 						context.client.readContract({ abi: auctionAbi, address: pool.truthAuction, blockNumber, functionName: 'finalized' }),
-						context.client.readContract({ abi: auctionAbi, address: pool.truthAuction, args: [context.wallet], blockNumber, functionName: 'pendingEthRefundsAttoEth' }),
+						context.wallet === undefined ? Promise.resolve(0n) : context.client.readContract({ abi: auctionAbi, address: pool.truthAuction, args: [context.wallet], blockNumber, functionName: 'pendingEthRefundsAttoEth' }),
 						context.client.readContract({ abi: auctionAbi, address: pool.truthAuction, blockNumber, functionName: 'computeClearing' }),
 						context.client.readContract({ abi: auctionAbi, address: pool.truthAuction, blockNumber, functionName: 'clearingTick' }),
 						context.client.readContract({ abi: auctionAbi, address: pool.truthAuction, blockNumber, functionName: 'underfunded' }),
@@ -1797,10 +1801,10 @@ export async function discoverEcosystemSnapshot(context: EcosystemDiscoveryConte
 	const warnings: string[] = []
 	const [chainId, ethBalanceAttoEth, universes, questions, openOracleEthCredit] = await drainConcurrent([
 		context.client.getChainId(),
-		context.client.getBalance({ address: context.wallet, blockNumber }),
+		context.wallet === undefined ? Promise.resolve(0n) : context.client.getBalance({ address: context.wallet, blockNumber }),
 		discoverUniverses(context, blockNumber, limits, topology, topologyMutation, warnings),
 		discoverQuestions(context, blockNumber, limits, topology, topologyMutation, warnings),
-		context.client.readContract({ abi: openOracleAbi, address: context.deployments.openOracle, args: [context.wallet, zeroAddress], blockNumber, functionName: 'tokenHolder' }),
+		context.wallet === undefined ? Promise.resolve(0n) : context.client.readContract({ abi: openOracleAbi, address: context.deployments.openOracle, args: [context.wallet, zeroAddress], blockNumber, functionName: 'tokenHolder' }),
 	])
 	const { pools, staged } = await discoverPools(context, blockNumber, block.timestamp, block.baseFeePerGas, limits, warnings, universes, questions, topology, topologyMutation)
 	const pairs = tradingDeployment.factory ? await discoverPairs(context, pools, blockNumber, topology, topologyMutation) : []
@@ -1810,7 +1814,7 @@ export async function discoverEcosystemSnapshot(context: EcosystemDiscoveryConte
 		context.discoverGenesisDeployment && universeUniswap !== undefined
 			? { factory: universeUniswap.factory, initialized: genesis?.initialized ?? false, liquidity: genesis?.liquidity ?? '0', ...(genesis?.pool === undefined ? {} : { pool: genesis.pool }), proxy: universeUniswap.proxy, seeder: universeUniswap.seeder }
 			: undefined
-	const indexedReports = trustedIndexedReportsForDiscovery({ deployments: context.deployments, pools, reports: context.indexedReports ?? [], universes, wallet: context.wallet })
+	const indexedReports = context.wallet === undefined ? [] : trustedIndexedReportsForDiscovery({ deployments: context.deployments, pools, reports: context.indexedReports ?? [], universes, wallet: context.wallet })
 	context = { ...context, indexedReports }
 	const [tokens, shares, lpTokens, auctions, reports] = await drainConcurrent([
 		discoverTokenInventory(context, universes, pools, blockNumber),
@@ -1835,7 +1839,8 @@ export async function discoverEcosystemSnapshot(context: EcosystemDiscoveryConte
 		...(genesisUniswap === undefined ? {} : { genesisUniswap }),
 		...(universeUniswap === undefined ? {} : { universeUniswap }),
 		universes,
-		wallet: { address: context.wallet, ethBalanceAttoEth: ethBalanceAttoEth.toString(), lpTokens, openOracleEthCredit: openOracleEthCredit.toString(), shares, tokens },
+		// The empty wallet is inert planning data; no account RPC uses this placeholder.
+		wallet: { address: context.wallet ?? zeroAddress, ethBalanceAttoEth: ethBalanceAttoEth.toString(), lpTokens, openOracleEthCredit: openOracleEthCredit.toString(), shares, tokens },
 		warnings: canonicalDiscoveryWarnings(warnings),
 	}
 	context.recordTopologyCache?.(

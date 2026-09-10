@@ -268,6 +268,7 @@ export function initialRuntimeState(paused: boolean, wallet: Address | undefined
 		error: durableSafetyError,
 		evaluations: [],
 		inventory: { eth: '0', rep: [], weth: '0' },
+		inventoryAddress: undefined,
 		deploymentNotice: undefined,
 		lastDeploymentCheckedBlock: undefined,
 		lastDeploymentCheckAt: undefined,
@@ -290,6 +291,15 @@ export function initialRuntimeState(paused: boolean, wallet: Address | undefined
 	}
 }
 
+export function setRuntimeExecutionAddress(state: RuntimeState, address: Address | undefined) {
+	if (state.wallet?.toLowerCase() !== address?.toLowerCase() || (state.inventoryAddress !== undefined && state.inventoryAddress.toLowerCase() !== address?.toLowerCase())) {
+		state.inventory = { eth: '0', rep: [], weth: '0' }
+		state.inventoryAddress = undefined
+		state.evaluations = []
+	}
+	state.wallet = address
+}
+
 export function bindRuntimeStateToSigner(state: RuntimeState, address: Address) {
 	if (state.retirement.recipient !== undefined) assertSafeRetirementRecipient(state.retirement.recipient, address)
 	if (state.signerAddress !== undefined && state.signerAddress.toLowerCase() !== address.toLowerCase()) {
@@ -299,13 +309,14 @@ export function bindRuntimeStateToSigner(state: RuntimeState, address: Address) 
 	if (firstBinding) {
 		state.evaluations = []
 		state.inventory = { eth: '0', rep: [], weth: '0' }
+		state.inventoryAddress = undefined
 		state.lastScanAt = undefined
 		state.lastScannedBlock = undefined
 		state.topology = undefined
 		state.warnings = []
 	}
 	state.signerAddress = address
-	state.wallet = address
+	setRuntimeExecutionAddress(state, address)
 	const indexInvalidated = state.protocolIndex !== undefined && state.protocolIndex.wallet.toLowerCase() !== address.toLowerCase()
 	if (indexInvalidated) state.protocolIndex = undefined
 	return { firstBinding, indexInvalidated }
