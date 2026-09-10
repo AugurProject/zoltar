@@ -1,5 +1,5 @@
-import type { Hash } from '@zoltar/bot-shared/ethereum'
-import { LogScanError } from '@zoltar/bot-shared/monitoring/block-sync'
+import type { Address, Hash } from '@zoltar/bot-shared/ethereum'
+import { fetchLogsWithAdaptiveRanges, LogScanError } from '@zoltar/bot-shared/monitoring/block-sync'
 import { findEarliestAvailableLogBlock, permanentHistoricalLogError } from '@zoltar/bot-shared/monitoring/log-availability'
 import type { ChaosProtocolIndex, ProtocolIndexUpdate, UpdateProtocolIndexContext } from './protocol-index.ts'
 
@@ -11,6 +11,19 @@ export class ChaosProtocolIndexReorgError extends Error {
 		this.name = 'ChaosProtocolIndexReorgError'
 		this.rescanFromBlock = rescanFromBlock
 	}
+}
+
+type ProtocolLogQuery = {
+	address: Address | Address[]
+	fromBlock: bigint
+	toBlock: bigint
+	/** Accepted topic0 alternatives, pushed to the RPC so nodes filter server-side. */
+	topics: readonly Hash[]
+}
+
+export async function fetchProtocolLogs(client: UpdateProtocolIndexContext['client'], query: ProtocolLogQuery) {
+	const maximumRange = query.toBlock - query.fromBlock + 1n
+	return await fetchLogsWithAdaptiveRanges({ nextBlock: query.fromBlock }, query.toBlock, maximumRange, async range => await client.getLogs({ address: query.address, fromBlock: range.fromBlock, toBlock: range.toBlock, topics: [query.topics] }))
 }
 
 export function validatePreviousProtocolIndex(context: UpdateProtocolIndexContext, previous: ChaosProtocolIndex) {

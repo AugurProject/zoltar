@@ -1910,9 +1910,9 @@ browserTest(
 						...(mode === 'keyless' ? {} : { wallet: walletAddress }),
 					})
 					await cdp.command('Page.navigate', { url: `http://127.0.0.1:${dashboard.port}/overview` })
-					const expectedEth = mode === 'keyless' ? '—' : '1.000000000000000000'
+					const expectedEthText = mode === 'keyless' ? '—' : '1.000000000000000000'
 					const expectedBadge = { keyless: 'Signer missing', 'read-only': 'Read-only — signer not loaded', signer: 'Signer ready' }[mode]
-					const ready = `document.getElementById('balance-eth')?.textContent === ${JSON.stringify(expectedEth)} && document.getElementById('signer-badge')?.textContent === ${JSON.stringify(expectedBadge)}`
+					const ready = `document.getElementById('balance-eth')?.textContent === ${JSON.stringify(expectedEthText)} && document.getElementById('signer-badge')?.textContent === ${JSON.stringify(expectedBadge)}`
 					for (let attempt = 0; attempt < 200; attempt += 1) {
 						if (await cdp.evaluate(ready)) break
 						await Bun.sleep(25)
