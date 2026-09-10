@@ -1,6 +1,7 @@
 import { createElement } from 'preact'
 import { createPublicClient, custom, getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { mountApp } from '@zoltar/ui-core-shared/app/appRoot.js'
+import { parseRouteHash } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { App } from './app/App.js'
 import { initializeTradingActiveEnvironment } from './app/activeEnvironment.js'
 import { installTradingRouting } from './lib/routing.js'
@@ -63,7 +64,10 @@ async function initializeTradingForMount() {
 }
 installTradingRouting()
 registerTradingSimulationScenario()
-if (new URLSearchParams(window.location.search).get('simulate') === '1' && !new URLSearchParams(window.location.search).has('simScenario')) {
+const pageParams = new URLSearchParams(window.location.search)
+const hashParams = new URLSearchParams(parseRouteHash(window.location.hash).search)
+const hasSimulationSelection = ['simScenario', 'simState'].some(key => pageParams.has(key) || hashParams.has(key))
+if (pageParams.get('simulate') === '1' && !hasSimulationSelection) {
 	const url = new URL(window.location.href)
 	url.searchParams.set('simScenario', TRADING_SIMULATION_SCENARIO)
 	window.history.replaceState({}, '', url)
