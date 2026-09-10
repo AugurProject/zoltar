@@ -1,3 +1,5 @@
+import { createSelectionController, settingsPatchCandidate } from './selection-controller.ts'
+export { settingsPatchCandidate } from './selection-controller.ts'
 import { privateKeyToAccount, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import type { SignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
 import { checkPublicTransactionSubmissionEndpoints, checkRpcEndpoint, EndpointCheckFailure, type EndpointCheck } from '@zoltar/bot-shared/monitoring/connectivity'
@@ -25,6 +27,7 @@ export const CONFIGURATION_COMMITTED_SAFELY_PAUSED = 'ConfigurationCommittedSafe
 export type DashboardControllerOptions = {
 	checkConnectivityUpdate?: ((settings: OperatorSettings) => Promise<readonly EndpointCheck[]>) | undefined
 	configuration: ConfigurationState
+	onScheduleRequested?: (() => void) | undefined
 	gate: SignerOperationGate
 	hostname: ChaosDashboardController['hostname']
 	locks: ChaosProcessLocks
@@ -45,53 +48,6 @@ function transactionHash(value: unknown, label: string) {
 		throw new Error(`${label} must be a 32-byte transaction hash`)
 	}
 	return value as Hex
-}
-
-export function settingsPatchCandidate(current: OperatorSettings, value: unknown) {
-	const body = record(value, 'Settings update')
-	exactKeys(body, ['patch', 'revision'], 'Settings update')
-	const patch = record(body['patch'], 'Settings patch')
-	exactKeys(patch, ['runtime', 'scheduler', 'strategy'], 'Settings patch')
-	const runtime = record(patch['runtime'], 'Runtime patch')
-	exactKeys(runtime, ['execute'], 'Runtime patch')
-	const scheduler = record(patch['scheduler'], 'Scheduler patch')
-	exactKeys(scheduler, ['maximumDelaySeconds', 'minimumDelaySeconds'], 'Scheduler patch')
-	const strategy = record(patch['strategy'], 'Strategy patch')
-	exactKeys(
-		strategy,
-		['allowHighRiskOperations', 'allowIrreversibleOperations', 'enabledEcosystems', 'initializeGenesisUniverse', 'maximumEthPerOperation', 'maximumGasCostEth', 'maximumRepPerOperation', 'minimumEthReserve', 'minimumRepReserve', 'selectableOperationAllowlist', 'workflowValidForBlocks'],
-		'Strategy patch',
-	)
-	const serialized = serializedSettings(current)
-	return {
-		revision: body['revision'],
-		settings: parseSettings(
-			{
-				...serialized,
-				runtime: { ...serialized.runtime, execute: runtime['execute'] },
-				scheduler: {
-					...serialized.scheduler,
-					maximumDelaySeconds: scheduler['maximumDelaySeconds'],
-					minimumDelaySeconds: scheduler['minimumDelaySeconds'],
-				},
-				strategy: {
-					...serialized.strategy,
-					allowHighRiskOperations: strategy['allowHighRiskOperations'],
-					allowIrreversibleOperations: strategy['allowIrreversibleOperations'],
-					initializeGenesisUniverse: strategy['initializeGenesisUniverse'],
-					enabledEcosystems: strategy['enabledEcosystems'],
-					maximumEthPerOperation: strategy['maximumEthPerOperation'],
-					maximumGasCostEth: strategy['maximumGasCostEth'],
-					maximumRepPerOperation: strategy['maximumRepPerOperation'],
-					minimumEthReserve: strategy['minimumEthReserve'],
-					minimumRepReserve: strategy['minimumRepReserve'],
-					selectableOperationAllowlist: strategy['selectableOperationAllowlist'],
-					workflowValidForBlocks: strategy['workflowValidForBlocks'],
-				},
-			},
-			current.privateKey,
-		),
-	}
 }
 
 export function connectivityCandidate(current: OperatorSettings, value: unknown) {
@@ -867,6 +823,20 @@ export function createChaosDashboardController(options: DashboardControllerOptio
 				options.onConnectivityUpdated?.(candidate.settings, checks)
 			})
 		},
+		...createSelectionController({
+			configuration: options.configuration,
+			state: options.state,
+			update,
+			persist: persistRuntimeState,
+			expectedRevision,
+			assertPaused: assertSettingsUpdatePaused,
+			onScheduleRequested: options.onScheduleRequested,
+			applySelection: async (candidate, revision, message) => {
+				await apply(candidate, revision, options.configuration.rememberSigner, state => {
+					recordActivity(state, { message, status: 'info', type: 'configuration' })
+				})
+			},
+		}),
 		async setSettings(value) {
 			await update(async () => {
 				const candidate = settingsPatchCandidate(options.configuration.settings, value)

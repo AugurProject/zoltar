@@ -23,6 +23,8 @@ export type ChaosDashboardController = {
 	setReplacement: (value: unknown) => unknown | Promise<unknown>
 	setPaused: (value: unknown) => unknown | Promise<unknown>
 	setRetirement?: ((value: unknown) => unknown | Promise<unknown>) | undefined
+	setSchedule?: ((value: unknown) => unknown | Promise<unknown>) | undefined
+	setSelection?: ((value: unknown) => unknown | Promise<unknown>) | undefined
 	setSettings: (value: unknown) => unknown | Promise<unknown>
 	setSigner: (value: unknown) => unknown | Promise<unknown>
 	setWorkflow: (value: unknown) => unknown | Promise<unknown>
@@ -989,6 +991,8 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 					['/api/settings', controller.setSettings],
 					['/api/signer', controller.setSigner],
 				])
+				if (controller.setSchedule !== undefined) handlers.set('/api/schedule', controller.setSchedule)
+				if (controller.setSelection !== undefined) handlers.set('/api/selection', controller.setSelection)
 				if (controller.setOperation !== undefined) handlers.set('/api/operation', controller.setOperation)
 				if (controller.setRetirement !== undefined) handlers.set('/api/retirement', controller.setRetirement)
 				if (controller.setConnectivity !== undefined) handlers.set('/api/connectivity', controller.setConnectivity)

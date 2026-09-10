@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
-import { acquireChaosProcessLocks, ChaosProcessLockAcquisitionError } from '../../src/core/process-locks.ts'
+import { acquireChaosProcessLocks, createChaosShutdownController, ChaosProcessLockAcquisitionError } from '../../src/core/process-locks.ts'
 
 const directories: string[] = []
 const releases: Array<() => Promise<void>> = []
@@ -20,6 +20,15 @@ async function stateFile(name: string) {
 }
 
 describe('chaos-bot process locks', () => {
+	test('wakes the scheduler wait without requesting shutdown', async () => {
+		using shutdown = createChaosShutdownController()
+		const waiting = shutdown.wait(60_000)
+		shutdown.wake()
+		await waiting
+		expect(shutdown.isRequested()).toBe(false)
+		await shutdown.wait(1)
+	})
+
 	test('allows only one process to own a durable state journal', async () => {
 		const state = await stateFile('state.json')
 		const first = await acquireChaosProcessLocks({ chainId: 1, execute: false, privateKey: undefined, stateFile: state })

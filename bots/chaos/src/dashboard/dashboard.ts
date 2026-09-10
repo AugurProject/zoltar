@@ -1,3 +1,4 @@
+import { activeSchedulerWorkLabel, createSelectionControls } from './selection-controls.js'
 import { createCatalogGroups } from './catalog-groups.js'
 import { createOperationDialog } from './operation-dialog.js'
 import { renderOperatorAlerts } from './operator-alerts.js'
@@ -348,6 +349,25 @@ let connectivityMutationUnreconciled = false
 let signerMutationUnreconciled = false
 const retirementDashboard = createRetirementDashboard({ current: () => snapshot, put: async value => await put('/api/retirement', value), refresh: async () => await refresh() })
 let configurationCommitIndeterminate = false
+let selectionControlsAvailable = false
+const selectionControls = createSelectionControls({
+	put,
+	refresh,
+	reconcile: (error, status) => reconcileUnknownMutation(error, status, 'configuration and state', 'settings'),
+})
+function updateSelectionControls() {
+	selectionControls.update({
+		available: selectionControlsAvailable,
+		frozen: configurationCommitIndeterminate || settingsMutationUnreconciled || pauseMutationUnreconciled,
+		paused: configuration?.paused === true && snapshot?.paused === true,
+		revision: configuration?.revision,
+		selection: configuration?.selectableOperationAllowlist,
+		scheduledAt:
+			configuration?.paused === false && snapshot?.paused !== true && snapshot?.safetyPaused !== true && snapshot?.scheduler.status === 'scheduled' && (snapshot.retirement?.status === undefined || snapshot.retirement.status === 'inactive') && activeSchedulerWorkLabel(snapshot) === undefined
+				? snapshot.scheduler.nextRunAt
+				: undefined,
+	})
+}
 
 const configurationCommitIndeterminateRecoveryMessage = 'Dashboard mutation controls are permanently frozen in this server process and page. Stop the bot, inspect and reload the owner configuration and runtime-state files offline, then restart it before making another mutation.'
 const configurationCommitIndeterminateMessage = 'The configuration may have committed. Treat it as committed and stop the bot before inspecting and reloading the owner configuration and runtime-state files.'
@@ -923,6 +943,7 @@ function obligationDetail(obligation: Obligation) {
 }
 
 function applyMutationControlLatches() {
+	updateSelectionControls()
 	if (pauseMutationUnreconciled || configurationCommitIndeterminate) pauseButton.disabled = true
 	if (settingsMutationUnreconciled || configurationCommitIndeterminate) settingsFields.disabled = true
 	if (connectivityMutationUnreconciled || configurationCommitIndeterminate) connectivityFields.disabled = true
@@ -978,14 +999,6 @@ function latchConfigurationCommitIndeterminate(status?: HTMLElement, message = c
 function recoveryItemCount(value: Snapshot) {
 	const selectableContinuation = value.currentWorkflow?.classification === 'selectable' && value.currentWorkflow.status === 'waiting-continuation' ? 1 : 0
 	return value.pendingTransactions.length + value.obligations.length + selectableContinuation
-}
-
-function activeSchedulerWorkLabel(value: Snapshot) {
-	if (value.pendingTransactions.length !== 0 || value.currentWorkflow?.status === 'waiting-transaction') return 'Transaction recovery pending'
-	if (value.currentWorkflow?.status === 'waiting-continuation') return 'Workflow continuation pending'
-	if (value.currentWorkflow?.status === 'waiting-obligation') return 'Lifecycle confirmation pending'
-	if (value.currentWorkflow?.status === 'running') return 'Operation in progress'
-	return undefined
 }
 
 function renderHeader(value: Snapshot) {
@@ -1265,6 +1278,7 @@ function renderCatalog(values: OperationEvaluation[]) {
 		open.setAttribute('aria-label', `Open ${value.label ?? 'operation'}`)
 		open.addEventListener('click', () => operationDialog.open(value))
 		nameCell.append(open)
+		if (value.classification === 'selectable' && independentlyExecutable && value.id !== undefined) selectionControls.appendToggle(nameCell, value.id, value.label ?? value.id)
 		row.dataset['ecosystem'] = normalizeEcosystem(value.ecosystem)
 		row.dataset['operationId'] = value.id ?? ''
 		row.append(nameCell, classificationCell, riskCell, candidatesCell, eligibilityCell)
@@ -1275,6 +1289,7 @@ function renderCatalog(values: OperationEvaluation[]) {
 		return
 	}
 	renderCatalogGroups(rows)
+	updateSelectionControls()
 }
 
 function renderEcosystems(values: OperationEvaluation[]) {
@@ -1704,6 +1719,7 @@ function refresh() {
 			configurationStatus.textContent = configurationResult.reason instanceof Error ? configurationResult.reason.message : 'Configuration is unavailable.'
 			configurationStatus.className = 'notice error'
 		}
+		selectionControlsAvailable = stateAvailable && configurationAvailable
 		if (stateAvailable && configurationAvailable) {
 			resolveMutationReconciliations()
 		}
