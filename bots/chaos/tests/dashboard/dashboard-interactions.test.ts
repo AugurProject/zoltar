@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, test } from 'bun:test'
 import { startDashboardServer } from '../../src/dashboard/dashboard-server.ts'
-import { CONFIGURATION_COMMIT_INDETERMINATE } from '../../src/runtime/dashboard-controller.ts'
+import { CONFIGURATION_COMMIT_INDETERMINATE } from '../../src/runtime/configuration-commit.ts'
 
 type RecoveryScenario = {
 	fieldsId: string
