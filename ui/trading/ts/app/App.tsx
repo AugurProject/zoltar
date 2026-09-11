@@ -26,6 +26,13 @@ import { getTradingEnvironmentLocationKey, getTradingRouteHref, tradingRouting, 
 
 type ResolvedTradingRoute = TradingRoute | 'not-found'
 
+/** Browse routes highlight the workflow tab they feed: markets serve trading, SecurityPools serve market creation. */
+function tradingNavigationRoute(workflowRoute: ReturnType<typeof tradingWorkflowRoute<ResolvedTradingRoute>>) {
+	if (workflowRoute === 'markets') return 'market'
+	if (workflowRoute === 'security-pools') return 'create-market'
+	return workflowRoute
+}
+
 export function currentRoute(): ResolvedTradingRoute {
 	return tradingRouting.resolve(window.location.hash)
 }
@@ -35,6 +42,8 @@ export function tradingDocumentTitle(route: ResolvedTradingRoute) {
 	if (route === 'not-found') label = appCopy.notFound
 	if (route === 'create-market' || route.startsWith('create-market/')) label = appCopy.createMarket
 	if (route === 'market' || route.startsWith('market/')) label = appCopy.market
+	if (route === 'markets') label = appCopy.browseMarkets
+	if (route === 'security-pools') label = appCopy.browseSecurityPools
 	if (route.startsWith('liquidity/')) label = appCopy.liquidity
 	if (route.startsWith('security-pool/')) label = appCopy.securityPool
 	return appCopy.documentTitle(label)
@@ -48,8 +57,8 @@ function renderNotFoundRoute() {
 	return (
 		<main class='route' id='main-content'>
 			<RouteHeader title={appCopy.pageNotFound} />
-			<a class='primary-link' href={getTradingRouteHref('#/markets')}>
-				{appCopy.returnToMarkets}
+			<a class='primary-link' href={getTradingRouteHref('#/market')}>
+				{appCopy.returnToMarket}
 			</a>
 		</main>
 	)
@@ -139,7 +148,7 @@ export function App({
 	const deploymentSetupActive = route !== 'not-found' && route !== 'help' && (route === 'deploy' || liveDeploymentStatus === 'unavailable')
 	const addressedPool = securityPoolAddressFromRoute(route)
 	const workflowRoute = tradingWorkflowRoute(route)
-	const navigationRoute = workflowRoute === 'market' ? 'markets' : workflowRoute
+	const navigationRoute = tradingNavigationRoute(workflowRoute)
 	const displayedRoute = deploymentSetupActive ? 'deploy' : navigationRoute
 	const refreshActiveEnvironment = useCallback(async () => {
 		const previousLocationKey = activeEnvironmentLocationRef.current
@@ -240,7 +249,7 @@ export function App({
 	const simulationController = getActiveSimulationController()
 	return (
 		<div class='app-shell'>
-			<AppPageHeading mainElementId='main-content' formatDocumentTitle={appCopy.documentTitle} pageTitle={tradingPageTitle(displayedRoute)} />
+			<AppPageHeading mainElementId='main-content' formatDocumentTitle={appCopy.documentTitle} pageTitle={tradingPageTitle(deploymentSetupActive ? 'deploy' : route)} />
 			<AppHeaderShell
 				mainElementId='main-content'
 				simulationController={simulationController}
@@ -251,7 +260,7 @@ export function App({
 					showProtocolGuide: false,
 					tabs: [
 						...(liveDeploymentStatus !== 'verified' ? [{ route: 'deploy', hash: '#/deploy', label: appCopy.deploy }] : []),
-						{ route: 'markets', hash: '#/markets', label: appCopy.markets },
+						{ route: 'market', hash: addressedPool === undefined ? '#/market' : `#/market/${addressedPool}`, label: appCopy.market },
 						{ route: 'liquidity', hash: addressedPool === undefined ? '#/liquidity' : `#/liquidity/${addressedPool}`, label: appCopy.liquidity },
 						{ route: 'portfolio', hash: '#/portfolio', label: appCopy.portfolio },
 						{ route: 'create-market', hash: '#/create-market', label: appCopy.createMarket },
@@ -259,7 +268,7 @@ export function App({
 					].map(tab => ({ ...tab, disabled: workflowLocked })),
 					onRouteChange: nextRoute => {
 						if (workflowLocked) return
-						const hash = nextRoute === 'liquidity' && addressedPool !== undefined ? `#/liquidity/${addressedPool}` : `#/${nextRoute}`
+						const hash = (nextRoute === 'liquidity' || nextRoute === 'market') && addressedPool !== undefined ? `#/${nextRoute}/${addressedPool}` : `#/${nextRoute}`
 						window.location.hash = getTradingRouteHref(hash)
 					},
 				}}

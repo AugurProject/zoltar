@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
-import { bigintToSafeNumber, formatBpsMultiplier, formatCapacityOwnership, formatEthPerShare, formatOutcomeAmount, formatShareAmount, formatUnits, parseUnits, parseUnitsOrUndefined } from '../../lib/format.js'
+import { bigintToSafeNumber, formatBpsMultiplier, formatCapacityOwnership, formatRoundedUnits, formatUnits, parseUnits, parseUnitsOrUndefined } from '../../lib/format.js'
+import { attoSharesToCollateralAttoEth, averagePriceBps, collateralAttoEthToAttoShares, formatCollateralEth, formatCompleteSetValue, formatLpValue, formatOutcomeValue } from '../../lib/shareValue.js'
 import { liveWorkflowRoutePresentation, portfolioRouteSubtitle } from '../../features/LiveTrading.js'
 import { liquidityOperationAvailable } from '../../features/LiveLiquidityControls.js'
 import { forkMigrationBatchBlocker, forkMigrationBatchWarning, insuredExitLimitMessage, migrationSimulationSummary, settlementBalanceLabel, settlementInputBlocker } from '../../features/LiveSettlementModel.js'
@@ -31,7 +32,8 @@ import {
 	shareBalanceScope,
 	type LiveMarket,
 } from '../../protocol/live.js'
-import { broadcastUncertainMessage, discoveryCommitAllowed, failedSubmissionTransition, livePairInitialized, marketSelectionAfterDiscovery, parseSlippageBps, parseTransactionValidityMinutes, positionControlsWorkflowLocked, securityPoolAddressFromRoute } from '../../features/liveTradingControllerHelpers.js'
+import { broadcastUncertainMessage, discoveryCommitAllowed, failedSubmissionTransition, livePairInitialized, parseSlippageBps, parseTransactionValidityMinutes, positionControlsWorkflowLocked, securityPoolAddressFromRoute } from '../../features/liveTradingControllerHelpers.js'
+import { isTradingBrowseRoute, isTradingLookupRoute, tradingBrowseRouteFor, tradingRouting } from '../../lib/routing.js'
 import { initialQuestionClockTimestamp, questionClockShouldPollAgain } from '../../features/live/useLiveTradingState.js'
 
 describe('standalone trading UI model', () => {
@@ -54,15 +56,30 @@ describe('standalone trading UI model', () => {
 		expect(portfolioRouteSubtitle('Ethereum Mainnet', false)).toBe('Ethereum Mainnet')
 	})
 
-	test('presents liquidity as its own workflow instead of repeating the markets header', () => {
+	test('presents liquidity as its own workflow instead of repeating the market header', () => {
 		expect(liveWorkflowRoutePresentation('liquidity', 'Browser Simulation', true)).toEqual({
-			description: 'Manage YES and NO liquidity for the selected SecurityPool.',
+			description: undefined,
 			title: 'Liquidity',
 		})
-		expect(liveWorkflowRoutePresentation('markets', 'Ethereum Mainnet', false)).toEqual({
+		expect(liveWorkflowRoutePresentation('market', 'Ethereum Mainnet', false)).toEqual({
 			description: 'Ethereum Mainnet',
-			title: 'Markets',
+			title: 'Market',
 		})
+		expect(liveWorkflowRoutePresentation('create-market', 'Ethereum Mainnet', false).title).toBe('Create new market')
+	})
+
+	test('defaults to the address lookup and pairs each lookup workflow with its own browse route', () => {
+		expect(tradingRouting.resolve('#/')).toBe('market')
+		expect(tradingRouting.resolve('')).toBe('market')
+		expect(tradingRouting.resolve('#/markets')).toBe('markets')
+		expect(tradingRouting.resolve('#/security-pools')).toBe('security-pools')
+		expect(isTradingLookupRoute('market')).toBeTrue()
+		expect(isTradingLookupRoute('markets')).toBeFalse()
+		expect(isTradingBrowseRoute('security-pools')).toBeTrue()
+		expect(isTradingBrowseRoute('security-pool/0x1111111111111111111111111111111111111111')).toBeFalse()
+		expect(tradingBrowseRouteFor('market')).toBe('markets')
+		expect(tradingBrowseRouteFor('liquidity')).toBe('markets')
+		expect(tradingBrowseRouteFor('create-market')).toBe('security-pools')
 	})
 
 	test('validates a registry anchor at the current tip without requesting historical blocks', async () => {
@@ -139,7 +156,6 @@ describe('standalone trading UI model', () => {
 		expect(parseUnitsOrUndefined('../70', 2)).toBeUndefined()
 		expect(() => formatUnits(1n, -1)).toThrow('Decimals must be a nonnegative safe integer')
 		expect(() => formatUnits(1n, 18, -1)).toThrow('Maximum fraction digits must be a nonnegative safe integer')
-		expect(() => formatEthPerShare(1n, 2n, 0)).toThrow('Maximum significant digits must be a positive safe integer')
 	})
 
 	test('converts to a number only after proving the bigint is safe', () => {
@@ -147,14 +163,43 @@ describe('standalone trading UI model', () => {
 		expect(() => bigintToSafeNumber(9_007_199_254_740_992n)).toThrow('safe integer range')
 	})
 
-	test('formats 18-decimal shares and Statoblast settings for display', () => {
-		expect(formatShareAmount(1_234_500_000_000_000_000n)).toBe('1.2345 shares')
-		expect(formatOutcomeAmount(10n * 10n ** 18n, 'YES')).toBe('10 YES')
+	test('formats Statoblast settings for display', () => {
 		expect(formatBpsMultiplier(25_000n)).toBe('2.5×')
 		expect(formatCapacityOwnership(10_000n * 10n ** 18n, 9_500n * 10n ** 18n)).toBe('10,000 / 9,500 REP')
-		expect(formatEthPerShare(12_342_500_000_000_000_000n, 12_500_000_000_000_000_000n)).toBe('0.9874 ETH / share')
 		expect(formatUnits(999_999_996_848_000_000n, 18, 12)).toBe('0.999999996848')
 		expect(formatUnits(999_999_977_880_000_000n, 18, 12)).toBe('0.99999997788')
+		expect(formatRoundedUnits(999_999_996_848_000_000n)).toBe('1')
+		expect(formatRoundedUnits(4_999_500_000_000_000n)).toBe('0.005')
+		expect(formatRoundedUnits(4_949_999_999_999_999n)).toBe('0.0049')
+		expect(formatRoundedUnits(-4_999_500_000_000_000n)).toBe('-0.005')
+		expect(formatRoundedUnits(123n, 18, 18)).toBe('0.000000000000000123')
+	})
+
+	test('presents share amounts as their settlement-collateral value at the pool rate', () => {
+		// The pool mints 10^18 attoShares per attoETH at genesis, so raw share counts are unreadable without the rate.
+		const genesis = { settlementCollateralAttoEth: 0n, shareTokenSupplyAttoShares: 0n }
+		expect(attoSharesToCollateralAttoEth(5n * 10n ** 33n, genesis)).toBe(5n * 10n ** 15n)
+		expect(collateralAttoEthToAttoShares(5n * 10n ** 15n, genesis)).toBe(5n * 10n ** 33n)
+		const rate = { settlementCollateralAttoEth: 9n * 10n ** 18n, shareTokenSupplyAttoShares: 10n * 10n ** 36n }
+		expect(attoSharesToCollateralAttoEth(10n ** 36n, rate)).toBe(9n * 10n ** 17n)
+		expect(collateralAttoEthToAttoShares(9n * 10n ** 17n, rate)).toBe(10n ** 36n)
+		expect(collateralAttoEthToAttoShares(1n, rate)).toBe(1_111_111_111_111_111_111n)
+		expect(collateralAttoEthToAttoShares(1n, { settlementCollateralAttoEth: 0n, shareTokenSupplyAttoShares: 1n })).toBeUndefined()
+		expect(() => attoSharesToCollateralAttoEth(-1n, rate)).toThrow('cannot be negative')
+		expect(formatOutcomeValue(10n ** 36n, 'YES', rate)).toBe('0.9 YES')
+		expect(formatCompleteSetValue(10n ** 36n, rate)).toBe('0.9 complete sets')
+		// Exactly 0.005 ETH of shares under a rate that no longer divides evenly still reads as 0.005, while limits round down.
+		const drifted = { settlementCollateralAttoEth: 9_999_999_999_999_999n, shareTokenSupplyAttoShares: 10n * 10n ** 36n }
+		const shares = collateralAttoEthToAttoShares(5n * 10n ** 15n, drifted)
+		if (shares === undefined) throw new Error('Drifted rate must convert')
+		expect(formatOutcomeValue(shares, 'YES', drifted)).toBe('0.005 YES')
+		expect(formatOutcomeValue(shares, 'YES', drifted, 4, 'down')).toBe('0.0049 YES')
+		expect(formatCollateralEth(shares, drifted, 'down')).toBe('0.0049 ETH')
+		expect(formatCollateralEth(shares, drifted)).toBe('0.005 ETH')
+		expect(formatCompleteSetValue(10n ** 36n, { settlementCollateralAttoEth: 10n ** 18n, shareTokenSupplyAttoShares: 10n ** 36n })).toBe('1 complete set')
+		expect(formatLpValue(10n ** 36n, rate)).toBe('0.9 LP')
+		expect(averagePriceBps(6n * 10n ** 17n, 10n ** 36n, rate)).toBe(6_666n)
+		expect(averagePriceBps(1n, 0n, rate)).toBeUndefined()
 	})
 
 	test('derives displayed transaction bounds with LP-favoring rounding', () => {
@@ -582,31 +627,25 @@ describe('standalone trading UI model', () => {
 		expect(forkMigrationBatchWarning([ready, { ...ready, outcomeIndex: 3n }])).toBeUndefined()
 	})
 
-	test('preserves same-page market context but selects the first pool after navigation', () => {
-		const first = `0x${'11'.repeat(20)}` as const
-		const selected = `0x${'22'.repeat(20)}` as const
-		const markets = [{ pool: first }, { pool: selected }]
-		expect(marketSelectionAfterDiscovery(markets, selected, true)).toBe(selected)
-		expect(marketSelectionAfterDiscovery(markets, selected, false)).toBe(first)
-		expect(marketSelectionAfterDiscovery([{ pool: first }], selected, true)).toBe(first)
-	})
-
 	test('explains every settlement input that keeps simulation disabled', () => {
-		expect(settlementInputBlocker('redeem-complete-set', true, 5n, undefined, [], 'YES', 1n)).toBe('Enter a valid positive complete-set share amount')
-		expect(settlementInputBlocker('redeem-complete-set', true, 5n * 10n ** 18n, 6n * 10n ** 18n, [], 'YES', 1n)).toContain('complete-set balance of 5 shares')
-		expect(settlementInputBlocker('migrate-shares', true, 0n, undefined, [], 'YES', 1n)).toContain('at least one child branch')
-		expect(settlementInputBlocker('migrate-shares', true, 0n, undefined, [0n], 'YES', 0n)).toBe('The selected YES balance is zero')
-		expect(settlementInputBlocker('redeem-winning-shares', false, 0n, undefined, [], 'NO', 0n)).toContain('unavailable')
+		const unit = { settlementCollateralAttoEth: 10n ** 18n, shareTokenSupplyAttoShares: 10n ** 18n }
+		expect(settlementInputBlocker('redeem-complete-set', true, 5n, undefined, [], 'YES', 1n, unit)).toBe('Enter a valid positive complete-set value')
+		expect(settlementInputBlocker('redeem-complete-set', true, 5n * 10n ** 18n, 6n * 10n ** 18n, [], 'YES', 1n, unit)).toContain('complete-set balance of 5 ETH')
+		expect(settlementInputBlocker('redeem-complete-set', true, 5n * 10n ** 36n, 10n ** 17n, [], 'YES', 1n, { settlementCollateralAttoEth: 10n ** 18n, shareTokenSupplyAttoShares: 10n ** 36n })).toBe('Amount too small to redeem any ETH')
+		expect(settlementInputBlocker('migrate-shares', true, 0n, undefined, [], 'YES', 1n, unit)).toContain('at least one child branch')
+		expect(settlementInputBlocker('migrate-shares', true, 0n, undefined, [0n], 'YES', 0n, unit)).toBe('The selected YES balance is zero')
+		expect(settlementInputBlocker('redeem-winning-shares', false, 0n, undefined, [], 'NO', 0n, unit)).toContain('unavailable')
 	})
 
 	test('never presents unavailable settlement balances as zero', () => {
-		expect(settlementBalanceLabel('disconnected', undefined)).toBe('Not loaded')
-		expect(settlementBalanceLabel('loading', 0n)).toBe('Loading…')
-		expect(settlementBalanceLabel('error', 0n)).toBe('Unavailable')
-		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n)).toBe('5 shares')
-		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, 'YES')).toBe('5 YES')
-		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, 'NO')).toBe('5 NO')
-		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, 'INVALID')).toBe('5 INVALID')
+		const unit = { settlementCollateralAttoEth: 10n ** 18n, shareTokenSupplyAttoShares: 10n ** 18n }
+		expect(settlementBalanceLabel('disconnected', undefined, unit)).toBe('Not loaded')
+		expect(settlementBalanceLabel('loading', 0n, unit)).toBe('Loading…')
+		expect(settlementBalanceLabel('error', 0n, unit)).toBe('Unavailable')
+		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit)).toBe('5 ETH')
+		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit, 'YES')).toBe('5 YES')
+		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit, 'NO')).toBe('5 NO')
+		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit, 'INVALID')).toBe('5 INVALID')
 	})
 
 	test('discards failed submission quotes so every workflow can simulate again', () => {
@@ -640,7 +679,8 @@ describe('standalone trading UI model', () => {
 	})
 
 	test('attributes insured-exit limits to INVALID only when INVALID is insufficient', () => {
-		expect(insuredExitLimitMessage(11n * 10n ** 18n, 5n * 10n ** 18n, 10n * 10n ** 18n)).toContain('long-share balance and pair liquidity')
-		expect(insuredExitLimitMessage(11n * 10n ** 18n, 4n * 10n ** 18n, 4n * 10n ** 18n)).toContain('INVALID balance covers only 4 complete sets')
+		const unit = { settlementCollateralAttoEth: 10n ** 18n, shareTokenSupplyAttoShares: 10n ** 18n }
+		expect(insuredExitLimitMessage(11n * 10n ** 18n, 5n * 10n ** 18n, 10n * 10n ** 18n, unit)).toContain('insured exit of at most 5 ETH')
+		expect(insuredExitLimitMessage(11n * 10n ** 18n, 4n * 10n ** 18n, 4n * 10n ** 18n, unit)).toContain('INVALID balance covers only 4 ETH of complete sets')
 	})
 })

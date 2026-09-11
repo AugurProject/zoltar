@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { createWalletClient, custom, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { act } from 'preact/test-utils'
-import type { ComponentChildren } from 'preact'
+import { render, type ComponentChildren } from 'preact'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
@@ -80,27 +80,31 @@ function liquidityQuote(amount: bigint) {
 
 type Controller = ReturnType<typeof useLiquidityWorkflowController>
 
-function controllerProbe(walletClient: Parameters<typeof useLiquidityWorkflowController>[0]['walletClient'], services: LiveLiquidityServices, onController: (controller: Controller) => void, onLockChange: (locked: boolean) => void): ComponentChildren {
-	function Probe() {
-		const controller = useLiquidityWorkflowController({
-			configuration,
-			market,
-			balanceState: 'ready',
-			account,
-			walletClient,
-			externallyLocked: false,
-			nowSeconds: 1n,
-			refresh: async () => undefined,
-			onKnownReceipt: () => undefined,
-			executeWithCurrentWalletContext: async (_account, _networkFailure, _accountFailure, action) => await action(),
-			createGuardedWalletWrite: () => async write => await write(),
-			onWorkflowLockChange: onLockChange,
-			services,
-		})
-		onController(controller)
-		return null
-	}
-	return <Probe />
+type ProbeProps = Readonly<{ walletClient: Parameters<typeof useLiquidityWorkflowController>[0]['walletClient']; services: LiveLiquidityServices; onController: (controller: Controller) => void; onLockChange: (locked: boolean) => void; market: LiveMarket }>
+
+// One stable component type so re-rendering with a new market object updates the hook instead of remounting it.
+function Probe({ walletClient, services, onController, onLockChange, market: probeMarket }: ProbeProps) {
+	const controller = useLiquidityWorkflowController({
+		configuration,
+		market: probeMarket,
+		balanceState: 'ready',
+		account,
+		walletClient,
+		externallyLocked: false,
+		nowSeconds: 1n,
+		refresh: async () => undefined,
+		onKnownReceipt: () => undefined,
+		executeWithCurrentWalletContext: async (_account, _networkFailure, _accountFailure, action) => await action(),
+		createGuardedWalletWrite: () => async write => await write(),
+		onWorkflowLockChange: onLockChange,
+		services,
+	})
+	onController(controller)
+	return null
+}
+
+function controllerProbe(walletClient: ProbeProps['walletClient'], services: LiveLiquidityServices, onController: (controller: Controller) => void, onLockChange: (locked: boolean) => void, probeMarket: LiveMarket = market): ComponentChildren {
+	return <Probe walletClient={walletClient} services={services} onController={onController} onLockChange={onLockChange} market={probeMarket} />
 }
 
 async function flush() {
@@ -157,6 +161,68 @@ describe('liquidity workflow controller state', () => {
 		await rendered.cleanup()
 		thirdSimulation.resolve(liquidityQuote(30_000_000_000_000_000n))
 		await pendingSimulation
+	})
+
+	test('keeps an LP removal quote comparable across rate refreshes and retires it when the pool basis moves', async () => {
+		const walletClient = createWalletClient({ account, transport: custom({ request: async () => undefined }) })
+		const removals: bigint[] = []
+		const services: LiveLiquidityServices = {
+			publicErrorMessage: caught => (caught instanceof Error ? caught.message : 'unknown error'),
+			simulateLiquidity: async (_client, _configuration, quotedMarket, _account, operation, amount) => {
+				removals.push(amount)
+				return { ...liquidityQuote(amount), operation, market: quotedMarket }
+			},
+			submitFreshLiquidity: async () => transactionHash,
+		}
+		let controller: Controller | undefined
+		// Ten attoShares per attoETH: 0.01 ETH of LP converts to 10^17 LP units.
+		const ratedMarket: LiveMarket = { ...market, shareTokenSupplyAttoShares: 1_000n, settlementCollateralAttoEth: 100n }
+		const rendered = await renderIntoDocument(
+			controllerProbe(
+				walletClient,
+				services,
+				value => (controller = value),
+				() => undefined,
+				ratedMarket,
+			),
+		)
+		await act(() => controller?.selectOperation('remove'))
+		await act(async () => controller?.simulateCurrent())
+		expect(removals).toEqual([10n ** 17n])
+		expect(controller?.state).toBe('ready')
+		// A background refresh that only rebuilds the market object keeps the quote submittable.
+		await act(() =>
+			render(
+				controllerProbe(
+					walletClient,
+					services,
+					value => (controller = value),
+					() => undefined,
+					{ ...ratedMarket },
+				),
+				rendered.container,
+			),
+		)
+		await flush()
+		expect(controller?.quote?.amount).toBe(10n ** 17n)
+		// Moving the pool rate changes what the entered value means, so the quote is retired instead of failing at submit.
+		await act(() =>
+			render(
+				controllerProbe(
+					walletClient,
+					services,
+					value => (controller = value),
+					() => undefined,
+					{ ...ratedMarket, settlementCollateralAttoEth: 90n },
+				),
+				rendered.container,
+			),
+		)
+		await flush()
+		expect(controller?.quote).toBeUndefined()
+		expect(controller?.state).toBe('idle')
+		expect(controller?.parsed).toBe(111_111_111_111_111_111n)
+		await rendered.cleanup()
 	})
 
 	test('represents a broadcast with an unknown receipt as one locked uncertain state', async () => {
