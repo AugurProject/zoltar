@@ -159,69 +159,9 @@ if (import.meta.main) {
 	if (junitPath !== undefined) await fs.mkdir(path.dirname(junitPath), { recursive: true })
 	const startedAt = performance.now()
 	const preloadPath = domain === 'solidity' ? './bun-test-setup-solidity.ts' : './bun-test-setup-ui.ts'
-	// Temporary CI diagnostic for the shard-4 preact resolution failure; remove after diagnosis.
-	const reportPreactState = async (label: string) => {
-		const { lstatSync, readlinkSync, existsSync } = await import('node:fs')
-		const preactLink = path.join(repositoryRoot, 'ui', 'coreShared', 'node_modules', 'preact')
-		const rootPreact = path.join(repositoryRoot, 'node_modules', 'preact')
-		const describe = (target: string) => {
-			try {
-				const stat = lstatSync(target)
-				if (stat.isSymbolicLink()) return `symlink -> ${readlinkSync(target)}`
-				return stat.isDirectory() ? 'directory' : 'file'
-			} catch (error) {
-				return `missing (${error instanceof Error ? error.message : String(error)})`
-			}
-		}
-		console.error(`[preact-diagnostic ${label}] ui/coreShared/node_modules/preact: ${describe(preactLink)}`)
-		console.error(`[preact-diagnostic ${label}] node_modules/preact: ${describe(rootPreact)}; package.json exists: ${existsSync(path.join(rootPreact, 'package.json'))}; test-utils exists: ${existsSync(path.join(rootPreact, 'test-utils', 'package.json'))}`)
-		try {
-			console.error(`[preact-diagnostic ${label}] resolve from js testUtils: ${Bun.resolveSync('preact', path.join(repositoryRoot, 'ui', 'coreShared', 'js', 'tests', 'testUtils'))}`)
-		} catch (error) {
-			console.error(`[preact-diagnostic ${label}] resolve from js testUtils failed: ${error instanceof Error ? error.message : String(error)}`)
-		}
-		let ancestor = path.join(repositoryRoot, 'ui', 'coreShared', 'js', 'tests', 'testUtils')
-		const manifestReport: string[] = []
-		while (ancestor.length >= repositoryRoot.length - 1) {
-			for (const marker of ['package.json', 'bun.lock', 'node_modules']) {
-				if (existsSync(path.join(ancestor, marker))) manifestReport.push(`${path.relative(repositoryRoot, ancestor) || '.'}/${marker}`)
-			}
-			const parent = path.dirname(ancestor)
-			if (parent === ancestor) break
-			ancestor = parent
-		}
-		console.error(`[preact-diagnostic ${label}] ancestor markers: ${manifestReport.join(', ')}`)
-		const cacheRoot = path.join(process.env['HOME'] ?? '', '.bun', 'install', 'cache')
-		try {
-			const { readdirSync } = await import('node:fs')
-			const cacheEntries = readdirSync(cacheRoot).filter(entry => entry.startsWith('preact'))
-			console.error(`[preact-diagnostic ${label}] bun cache preact entries: ${cacheEntries.join(', ') || 'none'}`)
-		} catch (error) {
-			console.error(`[preact-diagnostic ${label}] bun cache unreadable: ${error instanceof Error ? error.message : String(error)}`)
-		}
-		const freshChild = Bun.spawnSync({
-			cmd: [process.execPath, '-e', `try { console.log(Bun.resolveSync('preact', ${JSON.stringify(path.join(repositoryRoot, 'ui', 'coreShared', 'js', 'tests', 'testUtils'))})) } catch (error) { console.log('failed: ' + (error instanceof Error ? error.message : String(error))) }`],
-			cwd: repositoryRoot,
-		})
-		console.error(`[preact-diagnostic ${label}] fresh child resolve: ${freshChild.stdout.toString().trim()}${freshChild.stderr.toString().trim()}`)
-		const probePaths = ['ui/coreShared/ts/tests/testUtils/renderIntoDocument.ts', 'ui/coreShared/js/tests/testUtils/renderIntoDocument.js', 'ui/coreShared/ts', 'ui/coreShared/js/tests/testUtils']
-		console.error(`[preact-diagnostic ${label}] path existence: ${probePaths.map(probe => `${probe}=${existsSync(path.join(repositoryRoot, probe))}`).join(' ')}`)
-		try {
-			console.error(`[preact-diagnostic ${label}] testUtils specifier resolves to: ${Bun.resolveSync('@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js', path.join(repositoryRoot, 'ui', 'statoblast', 'ts', 'tests', 'app'))}`)
-		} catch (error) {
-			console.error(`[preact-diagnostic ${label}] testUtils specifier failed: ${error instanceof Error ? error.message : String(error)}`)
-		}
-		const processList = Bun.spawnSync({ cmd: ['ps', '-eo', 'pid,ppid,etimes,command'] })
-			.stdout.toString()
-			.split('\n')
-			.filter(line => /bun|node|tsc/.test(line) && !/ps -eo/.test(line))
-		console.error(`[preact-diagnostic ${label}] bun/node processes:\n${processList.join('\n')}`)
-	}
-	await reportPreactState('before')
 	const exitCode = await runBunTestProcess({
 		cmd: [process.execPath, 'test', '--preload', preloadPath, ...reporterArguments, '--timeout', '300000', ...passthroughArgs, ...selectedShard.files.map(toBunTestPath)],
 	})
-	await reportPreactState('after')
 	const elapsedSeconds = (performance.now() - startedAt) / 1000
 	if (exitCode === 0 && timingOutputPath !== undefined && junitPath !== undefined) {
 		await writeTestTimingObservation(timingOutputPath, junitPath, elapsedSeconds, selectedShard.files, getTimingContextPaths(domain))
