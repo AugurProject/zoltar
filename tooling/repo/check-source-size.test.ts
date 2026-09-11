@@ -7,6 +7,19 @@ test('recognizes production sources and excludes generated, vendored, fixture, a
 	expect(isProductionSource('ui/zoltar/ts/app/App.tsx')).toBe(true)
 	expect(isProductionSource('augurScan/public/runtime.js')).toBe(true)
 	expect(isProductionSource('solidity/contracts/Zoltar.sol')).toBe(true)
+	for (const file of [
+		'augurScan/browser/app.ts',
+		'augurScan/scripts/build-browser.ts',
+		'bots/chaos/scripts/capture-dashboard-qa.mts',
+		'bots/open-oracle-arbitrager/contracts/OpenOracleArbitrageExecutor.sol',
+		'solidity/ts/coverage/traceToSource.ts',
+		'ui/trading/build/core-deployments.mts',
+		'ui/trading/scripts/browser-qa.mts',
+		'tooling/ui/dev-server.ts',
+		'docs/charts/chartRuntime.ts',
+		'docs/runtime/docsShell.ts',
+	])
+		expect(isProductionSource(file)).toBe(true)
 	for (const file of ['ui/zoltar/js/App.js', 'ui/zoltar/ts/tests/App.test.tsx', 'bots/chaos/src/contracts/abi.generated.ts', 'solidity/contracts/statoblast/openOracle/OpenOracle.sol']) expect(isProductionSource(file)).toBe(false)
 })
 
