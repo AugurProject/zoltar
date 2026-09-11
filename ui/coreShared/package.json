@@ -404,6 +404,10 @@
 			"bun": "./ts/components/HeaderMetricStrip.tsx",
 			"default": "./js/components/HeaderMetricStrip.js"
 		},
+		"./components/HeaderToolbar.js": {
+			"bun": "./ts/components/HeaderToolbar.tsx",
+			"default": "./js/components/HeaderToolbar.js"
+		},
 		"./components/IdentifierValue.js": {
 			"bun": "./ts/components/IdentifierValue.tsx",
 			"default": "./js/components/IdentifierValue.js"
@@ -500,6 +504,10 @@
 			"bun": "./ts/components/TokenApprovalControl.tsx",
 			"default": "./js/components/TokenApprovalControl.js"
 		},
+		"./components/ToolbarField.js": {
+			"bun": "./ts/components/ToolbarField.tsx",
+			"default": "./js/components/ToolbarField.js"
+		},
 		"./components/TransactionActionButton.js": {
 			"bun": "./ts/components/TransactionActionButton.tsx",
 			"default": "./js/components/TransactionActionButton.js"
@@ -531,6 +539,10 @@
 		"./components/WalletAssetControl.js": {
 			"bun": "./ts/components/WalletAssetControl.tsx",
 			"default": "./js/components/WalletAssetControl.js"
+		},
+		"./components/WalletChip.js": {
+			"bun": "./ts/components/WalletChip.tsx",
+			"default": "./js/components/WalletChip.js"
 		},
 		"./components/WarningSurface.js": {
 			"bun": "./ts/components/WarningSurface.tsx",

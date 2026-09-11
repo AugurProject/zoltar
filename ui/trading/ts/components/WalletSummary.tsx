@@ -1,22 +1,17 @@
 import { useState } from 'preact/hooks'
-import type { ComponentChildren } from 'preact'
-import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { HeaderMetricStrip } from '@zoltar/ui-core-shared/components/HeaderMetricStrip.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
 import * as copy from '../copy/app.js'
 
-export function WalletSummary({ summary, onRetry, children, simulation = false }: { summary: WalletSummaryState; onRetry?(): void; children?: ComponentChildren; simulation?: boolean }) {
+export function WalletSummary({ summary, onRetry, simulation = false }: { summary: WalletSummaryState; onRetry?(): void; simulation?: boolean }) {
 	const [expanded, setExpanded] = useState(false)
 	const loading = summary.status === 'loading'
 	const ready = summary.status === 'ready'
 	return (
 		<section class='trading-wallet-summary' aria-label={copy.connectedWalletBalances} aria-busy={loading}>
 			<HeaderMetricStrip expanded={expanded}>
-				<MetricField className='overview-address-metric' label={copy.connectedAccount}>
-					{summary.account === undefined ? copy.notConnected : <AddressValue address={summary.account} responsiveAbbreviation />}
-				</MetricField>
 				<MetricField className='overview-simulation-secondary' label={copy.eth}>
 					<span data-wallet-asset='ETH'>
 						<CurrencyValue value={ready ? summary.ethAttoEth : undefined} loading={loading} suffix={copy.eth} compactWhenOverflow exactWhenRoundedToZero />
@@ -27,7 +22,6 @@ export function WalletSummary({ summary, onRetry, children, simulation = false }
 						<CurrencyValue value={ready ? summary.repAttoRep : undefined} loading={loading} suffix={copy.rep} compactWhenOverflow exactWhenRoundedToZero />
 					</span>
 				</MetricField>
-				{children}
 			</HeaderMetricStrip>
 			{simulation && summary.account !== undefined ? (
 				<button class='overview-details-toggle secondary' type='button' aria-expanded={expanded} onClick={() => setExpanded(current => !current)}>

@@ -30,6 +30,13 @@ describe('OverviewPanels', () => {
 	let setMeasureWidthResolver = (_resolver: (element: MetricElement) => number) => undefined
 	let triggerResizeObservers = () => undefined
 
+	function openAccountMenu() {
+		const summary = document.body.querySelector('.account-menu > summary')
+		if (!(summary instanceof HTMLElement)) throw new Error('Expected the account menu summary')
+		expect(summary.getAttribute('aria-label')).toBe('Account Menu 0x123456…567890')
+		fireEvent.click(summary)
+	}
+
 	async function renderOverviewPanels(overrides: Partial<Parameters<typeof OverviewPanels>[0]> = {}) {
 		const baseProps: Parameters<typeof OverviewPanels>[0] = {
 			applicationTitle: 'Zoltar',
@@ -62,7 +69,6 @@ describe('OverviewPanels', () => {
 			repUsdcSourceUrl: undefined,
 			universeForkTime: undefined,
 			universeHasForked: false,
-			universeLabel: 'Genesis universe',
 			universePresentation: undefined,
 			universeRepBalanceAttoRep: undefined,
 			walletBootstrapComplete: true,
@@ -161,7 +167,7 @@ describe('OverviewPanels', () => {
 		const onGoToGenesisUniverse = mock(() => undefined)
 		const documentQueries = await renderOverviewPanels({
 			onGoToGenesisUniverse,
-			universeLabel: 'Universe 0x7',
+			activeUniverseId: 7n,
 			universePresentation: getUniversePresentation('missing'),
 		})
 
@@ -248,7 +254,7 @@ describe('OverviewPanels', () => {
 			onSwitchNetwork,
 		})
 
-		fireEvent.click(documentQueries.getByText('Account Menu'))
+		openAccountMenu()
 		expect(documentQueries.getByText('Sepolia (11155111)')).not.toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Copy Address' })).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Address Copied' })).toBeNull()
@@ -276,9 +282,11 @@ describe('OverviewPanels', () => {
 		if (!(walletPanel instanceof HTMLElement)) throw new Error('Expected wallet overview panel')
 		expect(walletPanel.classList.contains('is-simulation')).toBe(false)
 
+		expect(document.body.querySelector('.account-menu > summary .wallet-chip .address-value-abbreviated')?.textContent).toBe('0x123456…567890')
+		expect(document.body.querySelector('.account-menu > summary .wallet-chip .address-value')?.getAttribute('title')).toBe(address)
 		const addressButton = documentQueries.getByRole('button', { name: `Copy address ${address}` })
-		expect(addressButton.querySelector('.address-value-full')?.textContent).toBe(address)
-		expect(addressButton.querySelector('.address-value-abbreviated')?.textContent).toBe('0x123456…567890')
+		expect(addressButton.closest('.account-menu-popover')).not.toBeNull()
+		expect(addressButton.textContent).toBe(address)
 	})
 
 	test('identifies recognized and unknown wrong networks in the environment badge', async () => {
@@ -292,6 +300,7 @@ describe('OverviewPanels', () => {
 		})
 
 		expect(documentQueries.getByText('Wrong Network (Base)')).not.toBeNull()
+		expect(document.body.querySelector('.account-menu > summary .wallet-chip.is-danger')).not.toBeNull()
 
 		await cleanupRenderedComponent?.()
 		cleanupRenderedComponent = undefined
@@ -305,7 +314,7 @@ describe('OverviewPanels', () => {
 		})
 
 		expect(documentQueries.getByText('Wrong Network (52331)')).not.toBeNull()
-		fireEvent.click(documentQueries.getByText('Account Menu'))
+		openAccountMenu()
 		expect(document.body.querySelector('.account-menu-network strong')?.textContent).toBe('52331')
 	})
 
@@ -317,7 +326,7 @@ describe('OverviewPanels', () => {
 
 		if (!(connectButton instanceof HTMLButtonElement)) throw new Error('Expected connect button')
 		expect(connectButton.disabled).toBe(false)
-		expect(documentQueries.getByText('Connecting…')).toBeDefined()
+		expect([...document.body.querySelectorAll('.overview-inline-metrics .metric-field-value')].slice(0, 3).map(value => value.textContent?.trim())).toEqual(['Loading…', 'Loading…', 'Loading…'])
 	})
 
 	test('renders the REP/ETH panel from the canonical REP per ETH quote', async () => {
@@ -383,20 +392,20 @@ describe('OverviewPanels', () => {
 		expect(document.body.textContent).not.toContain('Migration required')
 	})
 
-	test('does not render a redundant forked badge in the route-header badge slot', async () => {
+	test('does not render a redundant forked badge in the toolbar badge slot', async () => {
 		await renderOverviewPanels({
 			universeHasForked: true,
 		})
 
-		const routeHeaderMain = document.body.querySelector('.route-header-main')
-		if (!(routeHeaderMain instanceof HTMLElement)) throw new Error('Expected route header main')
-		const routeTitleRow = routeHeaderMain.querySelector('.route-title-row')
-		if (!(routeTitleRow instanceof HTMLElement)) throw new Error('Expected route title row')
-		const badgeSlot = routeHeaderMain.querySelector('.route-header-badge')
-		if (!(badgeSlot instanceof HTMLElement)) throw new Error('Expected route header badge slot')
+		const brand = document.body.querySelector('.header-toolbar-brand')
+		if (!(brand instanceof HTMLElement)) throw new Error('Expected the toolbar brand')
+		const title = brand.querySelector('h2.application-brand')
+		if (!(title instanceof HTMLElement)) throw new Error('Expected the application title')
+		const badgeSlot = brand.querySelector('.environment-badge-row')
+		if (!(badgeSlot instanceof HTMLElement)) throw new Error('Expected the toolbar badge slot')
 
-		expect(routeTitleRow.querySelector('.route-header-badge')).toBeNull()
-		expect(routeHeaderMain.children[1]).toBe(badgeSlot)
+		expect(title.querySelector('.badge')).toBeNull()
+		expect(brand.children[1]).toBe(badgeSlot)
 		expect(badgeSlot.textContent).not.toContain('Read-only')
 		expect(badgeSlot.textContent).not.toContain('Forked')
 	})
@@ -421,37 +430,45 @@ describe('OverviewPanels', () => {
 
 	test('does not repeat a parent universe outside the header', async () => {
 		const documentQueries = await renderOverviewPanels({
-			universeLabel: 'Universe 11',
+			activeUniverseId: 11n,
 		})
 
 		expect(documentQueries.queryByText('Parent Universe')).toBeNull()
 	})
 
 	test('keeps every header metric slot rendered while the wallet bootstraps or stays disconnected', async () => {
-		const expectedSlots = ['overview-address-metric', 'overview-simulation-secondary', 'overview-metric-secondary', 'overview-simulation-secondary', 'overview-metric-secondary', 'overview-metric-secondary', 'overview-universe-metric']
+		const expectedSlots = ['overview-simulation-secondary', 'overview-metric-secondary', 'overview-simulation-secondary', 'overview-metric-secondary', 'overview-metric-secondary']
 		const readSlots = () => [...(document.body.querySelector('.overview-inline-metrics')?.children ?? [])].map(cell => cell.className)
 		const readMetricValues = () => [...document.body.querySelectorAll('.overview-inline-metrics .metric-field-value')].map(value => value.textContent?.trim())
+		const readColumns = () => {
+			const strip = document.body.querySelector('.overview-inline-metrics')
+			if (!(strip instanceof HTMLElement)) throw new Error('Expected the header metric strip')
+			return strip.style.getPropertyValue('--overview-metric-columns')
+		}
 
 		await renderOverviewPanels({ walletBootstrapComplete: false })
 		expect(readSlots()).toEqual(expectedSlots)
-		expect(readMetricValues().slice(0, 4)).toEqual(['Connecting…', 'Loading…', 'Loading…', 'Loading…'])
-		const strip = document.body.querySelector('.overview-inline-metrics')
-		if (!(strip instanceof HTMLElement)) throw new Error('Expected the header metric strip')
-		expect(strip.style.getPropertyValue('--overview-metric-columns')).toBe('6')
-		expect(strip.classList.contains('is-dense')).toBe(true)
+		expect(readMetricValues().slice(0, 3)).toEqual(['Loading…', 'Loading…', 'Loading…'])
+		expect(readColumns()).toBe('5')
+		expect(document.body.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toBe('Genesis (0x0)')
+		expect(document.body.querySelector('.header-toolbar-controls .toolbar-field-value > span')?.getAttribute('title')).toBe('Genesis (0x0)')
 		await cleanupRenderedComponent?.()
 
 		await renderOverviewPanels({ walletBootstrapComplete: false, showRepPrices: false })
-		expect(readSlots()).toEqual(['overview-address-metric', 'overview-simulation-secondary', 'overview-metric-secondary', 'overview-simulation-secondary', 'overview-universe-metric'])
-		const compactStrip = document.body.querySelector('.overview-inline-metrics')
-		if (!(compactStrip instanceof HTMLElement)) throw new Error('Expected the header metric strip')
-		expect(compactStrip.style.getPropertyValue('--overview-metric-columns')).toBe('4')
-		expect(compactStrip.classList.contains('is-dense')).toBe(false)
+		expect(readSlots()).toEqual(['overview-simulation-secondary', 'overview-metric-secondary', 'overview-simulation-secondary'])
+		expect(readColumns()).toBe('3')
+		await cleanupRenderedComponent?.()
+
+		const childUniverseId = 0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdn
+		await renderOverviewPanels({ activeUniverseId: childUniverseId })
+		expect(document.body.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toBe('Universe 0x12345678…90abcd')
+		expect(document.body.querySelector('.header-toolbar-controls .toolbar-field-value > span')?.getAttribute('title')).toBe(`Universe 0x${childUniverseId.toString(16)}`)
 		await cleanupRenderedComponent?.()
 
 		await renderOverviewPanels({ walletBootstrapComplete: true })
 		expect(readSlots()).toEqual(expectedSlots)
-		expect(readMetricValues().slice(0, 4)).toEqual(['Not connected', '—', '—', '—'])
+		expect(readMetricValues().slice(0, 3)).toEqual(['—', '—', '—'])
+		expect(document.body.querySelector('.header-toolbar-controls .wallet-button')?.textContent).toBe('Connect wallet')
 		await cleanupRenderedComponent?.()
 
 		await renderOverviewPanels({
@@ -459,7 +476,8 @@ describe('OverviewPanels', () => {
 			universeRepBalanceAttoRep: 5n * 10n ** 18n,
 		})
 		expect(readSlots()).toEqual(expectedSlots)
-		expect(readMetricValues().slice(1, 4)).toEqual(['≈ 2.00 ETH', '≈ 1.00 WETH', '≈ 5.00 REP'])
+		expect(readMetricValues().slice(0, 3)).toEqual(['≈ 2.00 ETH', '≈ 1.00 WETH', '≈ 5.00 REP'])
+		expect(document.body.querySelector('.header-toolbar-controls .wallet-chip .address-value-abbreviated')?.textContent).toBe('0x123456…567890')
 	})
 
 	test('compacts a large ETH balance without affecting the adjacent WETH metric', async () => {

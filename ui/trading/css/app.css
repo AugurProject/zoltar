@@ -1629,8 +1629,8 @@ summary {
 }
 .trading-wallet-actions {
 	display: flex;
+	align-items: center;
 	gap: var(--space-2);
-	margin-bottom: var(--space-3);
 }
 .trading-wallet-actions:empty {
 	display: none;
@@ -1645,26 +1645,46 @@ summary {
 	gap: var(--space-3);
 	margin-top: var(--space-3);
 }
+.trading-overview .toolbar-field {
+	min-width: 0;
+}
+/* A fixed control width keeps the universe field in place while its option labels load. */
 .trading-overview .universe-selector select {
+	width: 14rem;
 	min-width: 0;
 	max-width: 100%;
-	width: 100%;
 }
-
-@media (max-width: 640px) {
-	/* The universe selector is a full-width control, so it keeps row two under the address instead of sharing row one; revealed balances flow below it. */
-	.trading-overview.is-simulation .overview-inline-metrics.data-grid > .overview-address-metric,
-	.trading-overview.is-simulation .overview-inline-metrics.data-grid > .overview-universe-metric {
-		grid-column: 1 / -1;
+/* Trading's brand, deployment badge, wallet chip, and universe select only share one row from the desktop breakpoint. */
+@media (max-width: 1279px) {
+	.trading-overview .header-toolbar {
+		grid-template-columns: minmax(0, 1fr) auto;
 	}
-	.trading-overview.is-simulation .overview-inline-metrics.data-grid > .overview-universe-metric {
+	.trading-overview .header-toolbar-controls {
+		grid-column: 1 / -1;
 		grid-row: 2;
+		justify-content: flex-start;
+	}
+}
+@media (max-width: 42rem) {
+	/* The universe selector takes its own full toolbar row so option labels are not clipped. */
+	.trading-overview .header-toolbar-controls {
+		flex-wrap: wrap;
+	}
+	.trading-overview .header-toolbar-controls .toolbar-field {
+		flex-direction: row;
+		align-items: center;
 		text-align: left;
 	}
-}
-
-.trading-wallet-summary .overview-details-toggle {
-	margin-top: var(--space-2);
+	.trading-overview .toolbar-field,
+	.trading-overview .toolbar-field-value,
+	.trading-overview .universe-selector {
+		flex: 1 1 auto;
+		min-width: 0;
+	}
+	.trading-overview .universe-selector select {
+		width: 100%;
+		max-width: none;
+	}
 }
 /* Trading only collapses its simulation balances at 640px and below, so the toggle has nothing to reveal above that. */
 @media (min-width: 641px) {

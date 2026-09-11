@@ -5,20 +5,15 @@ type HeaderMetricStripProps = {
 	expanded?: boolean
 }
 
-/** Strips with more metric columns than this cannot share one legible row with the address, so they wrap into rows instead. */
-const SINGLE_ROW_METRIC_COLUMN_LIMIT = 4
-
 /**
- * Header metric grid with a fixed slot per metric. The first child is the address cell and every
- * following child is one metric cell; the stylesheet builds explicit tracks from the metric count so
- * each cell keeps its place while values load, fail, or stay disconnected.
+ * Toolbar stat strip with one fixed track per metric chip, so every chip keeps its place while
+ * values load, fail, or stay disconnected. Each child is one metric cell.
  */
 export function HeaderMetricStrip({ children, expanded = false }: HeaderMetricStripProps) {
-	const metricColumns = toChildArray(children).length - 1
-	if (metricColumns < 1) throw new Error('Header metric strip needs the address cell followed by at least one metric cell')
-	const classes = ['data-grid', 'overview-inline-metrics', metricColumns > SINGLE_ROW_METRIC_COLUMN_LIMIT ? 'is-dense' : '', expanded ? 'mobile-expanded' : ''].filter(Boolean).join(' ')
+	const metricColumns = toChildArray(children).length
+	if (metricColumns < 1) throw new Error('Header metric strip needs at least one metric cell')
 	return (
-		<div className={classes} style={{ '--overview-metric-columns': metricColumns.toString() }}>
+		<div className={`overview-inline-metrics${expanded ? ' mobile-expanded' : ''}`} style={{ '--overview-metric-columns': metricColumns.toString() }}>
 			{children}
 		</div>
 	)

@@ -531,21 +531,130 @@ button.quiet:disabled {
 .account-menu > summary {
 	display: inline-flex;
 	align-items: center;
-	min-height: var(--touch-target-min);
-	padding: 0.78rem 1rem;
-	border: 1px solid var(--control-border);
-	border-radius: var(--radius-control);
+	padding: 0;
+	border: 0;
 	background: transparent;
 	color: var(--text);
 	font: inherit;
-	font-size: var(--font-button);
 	cursor: pointer;
 	list-style: none;
 }
 
-.account-menu > summary:hover {
+.account-menu > summary:hover .wallet-chip,
+.account-menu[open] > summary .wallet-chip {
 	border-color: var(--interactive-border-hover);
 	background: var(--interactive-bg-active);
+}
+
+.account-menu > summary:focus-visible {
+	outline: 2px solid var(--focus);
+	outline-offset: 2px;
+	border-radius: 999px;
+}
+
+/* The popover is the only place the full account is shown, so it grows to fit one line of address. */
+.account-menu-popover {
+	width: max-content;
+	max-width: min(28rem, calc(100vw - 3rem));
+}
+
+.account-menu-popover .address-value,
+.account-menu-popover .address-value.copyable {
+	font-family: var(--font-family-mono);
+	font-size: var(--font-address);
+	white-space: nowrap;
+}
+
+/* Narrow screens cannot fit one line of address, so it wraps at a deterministic point instead of overflowing. */
+@media (max-width: 26rem) {
+	.account-menu-popover {
+		width: calc(100vw - 3rem);
+	}
+
+	.account-menu-popover .address-value {
+		white-space: normal;
+		word-break: break-all;
+	}
+}
+
+/* Toolbar wallet identity: abbreviated account with a copy affordance and a live-connection dot. */
+.wallet-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.45rem;
+	min-height: var(--touch-target-min);
+	max-width: 100%;
+	padding: 0 0.7rem 0 0.65rem;
+	border: 1px solid var(--control-border);
+	border-radius: 999px;
+	background: var(--surface-row);
+	font-family: var(--font-family-mono);
+	font-size: var(--font-address);
+	color: var(--text);
+}
+
+.wallet-chip.is-placeholder {
+	min-width: 10.75rem;
+	justify-content: center;
+	color: var(--muted);
+}
+
+.wallet-chip-dot {
+	flex-shrink: 0;
+	width: 0.5rem;
+	height: 0.5rem;
+	border-radius: 50%;
+	background: var(--success);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 22%, transparent);
+}
+
+.wallet-chip.is-danger .wallet-chip-dot {
+	background: var(--danger);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 22%, transparent);
+}
+
+.wallet-chip .address-value {
+	white-space: nowrap;
+}
+
+.wallet-chip .address-value.copyable {
+	min-height: 2rem;
+	margin: 0;
+}
+
+.wallet-chip .address-value-full {
+	display: none;
+}
+
+.wallet-chip .address-value-abbreviated {
+	display: inline;
+}
+
+/* Toolbar caption-plus-value pair, such as the selected universe. */
+.toolbar-field {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2);
+	min-width: 0;
+	min-height: var(--touch-target-min);
+}
+
+.toolbar-field-label {
+	font-family: var(--font-family-mono);
+	font-size: var(--font-xs);
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	white-space: nowrap;
+	color: var(--muted);
+}
+
+.toolbar-field-value {
+	min-width: 0;
+	font-family: var(--font-family-mono);
+	font-size: var(--font-value);
+	font-weight: 600;
+	color: var(--value);
+	overflow-wrap: anywhere;
 }
 
 .account-menu > summary::-webkit-details-marker {
@@ -1240,56 +1349,74 @@ button.wallet-asset-action-pending:disabled {
 	padding-top: 0.2rem;
 }
 
+/* Toolbar stat strip: one chip per metric on fixed tracks (see HeaderMetricStrip). */
 .overview-inline-metrics {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 0.75rem 1.15rem;
-	overflow-x: visible;
+	display: grid;
+	grid-template-columns: repeat(var(--overview-metric-columns, 4), minmax(0, 18rem));
+	gap: var(--space-2);
 	min-width: 0;
-	padding-bottom: 0;
+	margin-top: var(--space-2);
 }
 
 .overview-inline-metrics > div {
-	flex: 0 1 auto;
-	max-width: 100%;
+	display: grid;
+	grid-template-rows: auto minmax(0, 1fr);
+	gap: 0.15rem;
 	min-width: 0;
-	padding-top: 0.4rem;
-	border-top: 1px solid var(--border-default);
+	padding: 0.4rem 0.7rem;
+	border: 1px solid var(--divider-subtle);
+	border-radius: var(--radius-normal);
+	background: var(--surface-row);
+}
+
+.overview-inline-metrics .metric-label {
+	font-size: var(--font-xs);
+	letter-spacing: 0.06em;
+}
+
+.overview-inline-metrics .metric-label-with-action {
+	justify-content: space-between;
+	width: 100%;
+}
+
+.overview-inline-metrics .metric-label-refresh {
+	min-width: 1.6rem;
+	min-height: 1.6rem;
+	margin: -0.3rem 0;
+	padding: 0.15rem;
 }
 
 .overview-inline-metrics strong {
 	display: block;
-	margin-top: 0.15rem;
 	font-family: var(--font-family-mono);
 	font-size: var(--font-value);
 	font-weight: 600;
 	font-variant-numeric: tabular-nums;
-	line-height: 1.15;
+	line-height: 1.2;
 	color: var(--value);
 	overflow-wrap: anywhere;
 }
 
+/* Values sit on the chip's bottom row at one height, so a wrapped label elsewhere in the row does not push them apart. */
+.overview-inline-metrics .metric-field-value {
+	display: flex;
+	align-items: center;
+	align-self: end;
+	min-height: 1.75rem;
+}
+
+.overview-inline-metrics .metric-field-value > * {
+	min-width: 0;
+	max-width: 100%;
+}
+
+.overview-inline-metrics .currency-value.copyable {
+	min-height: 1.75rem;
+	margin: 0;
+}
+
 .overview-details-toggle {
 	display: none;
-}
-
-.overview-address-metric strong {
-	font-family: var(--font-family-mono);
-	font-size: var(--font-address);
-	letter-spacing: -0.01em;
-}
-
-.overview-universe-error {
-	color: var(--danger);
-}
-
-.overview-universe-actions {
-	margin-top: 0.5rem;
-}
-
-.overview-address-metric {
-	flex: 1 1 min(24rem, 100%);
-	min-width: 0;
 }
 
 .address-value {

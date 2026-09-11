@@ -5,6 +5,7 @@ import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/
 import { App, currentRoute, tradingDocumentTitle } from '../../app/App.js'
 import { UniverseSelector } from '../../components/UniverseSelector.js'
 import { WalletSummary } from '../../components/WalletSummary.js'
+import { hasTradingWalletControls, TradingWalletControls } from '../../components/TradingWalletControls.js'
 import { buildLiveUniverseOptions, compactUniqueUniverseIds } from '../../lib/universeOptions.js'
 import { routeOwnsLiveWallet, walletSummaryAfterRouteChange, walletSummaryForUniverse } from '../../lib/walletSummaryState.js'
 import { filterMarketsByUniverse, observeKnownReceipt, walletSummaryAvailability, walletSummaryDiscoveryRetryStart, walletSummaryRefreshState } from '../../features/liveTradingControllerHelpers.js'
@@ -122,10 +123,72 @@ describe('universe selector', () => {
 		expect(rendered.container.querySelector('main')?.textContent).toContain('No injected wallet was found')
 	})
 
+	test('reserves the toolbar wallet slot while the deployment is checked', async () => {
+		window.history.replaceState(undefined, '', '/#/markets')
+		let resolveDeployment: ((configuration: DeploymentConfiguration) => void) | undefined
+		const deployment = new Promise<DeploymentConfiguration>(resolve => {
+			resolveDeployment = resolve
+		})
+		const rendered = await renderIntoDocument(<App loadLiveDeployment={() => deployment} />)
+		cleanupRendered = rendered.cleanup
+		expect(rendered.container.querySelector('.trading-wallet-actions .wallet-chip.is-placeholder')?.textContent).toContain('Loading')
+		expect(rendered.container.querySelector('.trading-wallet-actions .wallet-button')).toBeNull()
+		if (resolveDeployment === undefined) throw new Error('Deployment resolver is unavailable')
+		resolveDeployment({ chainId: 31_337, chainName: 'Local', rpcUrl: 'http://127.0.0.1:1', securityPoolFactory: `0x${'11'.repeat(20)}`, factory: `0x${'22'.repeat(20)}`, router: `0x${'33'.repeat(20)}`, feeBps: 30 })
+		await act(async () => {
+			await Bun.sleep(10)
+		})
+		expect(rendered.container.querySelector('.trading-wallet-actions .wallet-chip.is-placeholder')).toBeNull()
+		expect(rendered.container.querySelector('.trading-wallet-actions .wallet-button')?.textContent).toBe('Connect wallet')
+	})
+
+	test('renders the live account chip with its change action outside simulation', async () => {
+		const account = '0x8ba1f109551bD432803012645Ac136ddd64DBA72'
+		const deploymentWalletState = { account: undefined, connecting: false, networkName: undefined, ready: true }
+		let connectRequests = 0
+		const baseProps = { deploymentSetupActive: false, deploymentWalletState, liveDeploymentStatus: 'verified' as const, onDeploymentWalletRequest: () => undefined, onWalletConnectRequest: () => connectRequests++, routeOwnsLiveWallet: true, workflowLocked: false }
+		const live = await renderIntoDocument(<TradingWalletControls {...baseProps} account={account} simulation={false} />)
+		cleanupRendered = live.cleanup
+		expect(live.container.querySelector('.wallet-chip .address-value-abbreviated')?.textContent).toBe('0x8ba1f1…4DBA72')
+		expect(live.container.querySelector('.wallet-chip button.address-value')?.getAttribute('title')).toBe(account)
+		const changeButton = live.container.querySelector<HTMLButtonElement>('.wallet-button')
+		expect(changeButton?.textContent).toBe('Change wallet')
+		await act(() => changeButton?.click())
+		expect(connectRequests).toBe(1)
+		await live.cleanup()
+
+		const simulated = await renderIntoDocument(<TradingWalletControls {...baseProps} account={account} simulation />)
+		cleanupRendered = simulated.cleanup
+		expect(simulated.container.querySelector('.wallet-chip .address-value-abbreviated')?.textContent).toBe('0x8ba1f1…4DBA72')
+		expect(simulated.container.querySelector('.wallet-button')).toBeNull()
+		await simulated.cleanup()
+
+		expect(hasTradingWalletControls({ deploymentSetupActive: false, liveDeploymentStatus: 'unavailable', routeOwnsLiveWallet: true })).toBe(false)
+		expect(hasTradingWalletControls({ deploymentSetupActive: false, liveDeploymentStatus: 'verified', routeOwnsLiveWallet: false })).toBe(false)
+		expect(hasTradingWalletControls({ deploymentSetupActive: true, liveDeploymentStatus: 'unavailable', routeOwnsLiveWallet: false })).toBe(true)
+	})
+
+	test('omits the toolbar controls slot on routes without wallet or universe context', async () => {
+		window.history.replaceState(undefined, '', '/#/help')
+		const rendered = await renderIntoDocument(
+			<App
+				loadLiveDeployment={async () => {
+					throw new Error('deployment unavailable')
+				}}
+			/>,
+		)
+		cleanupRendered = rendered.cleanup
+		await act(async () => {
+			await Bun.sleep(10)
+		})
+		expect(rendered.container.querySelector('.header-toolbar-controls')).toBeNull()
+		expect(rendered.container.querySelector('.header-toolbar-settings')).not.toBeNull()
+	})
+
 	test('uses shared overview and navigation with an accessible mobile route selector', async () => {
 		const rendered = await renderIntoDocument(<App />)
 		cleanupRendered = rendered.cleanup
-		expect(rendered.container.querySelector('.top-shell-content .overview-route-header .application-brand')?.textContent).toBe('Statoblast trading')
+		expect(rendered.container.querySelector('.top-shell-content .header-toolbar .application-brand')?.textContent).toBe('Statoblast trading')
 		expect(rendered.container.querySelector('.app-nav-stack .tab-nav')).not.toBeNull()
 		const select = rendered.container.querySelector<HTMLSelectElement>('.mobile-route-select select')
 		if (select === null) throw new Error('Shared mobile navigation is missing')
@@ -188,29 +251,19 @@ describe('universe selector', () => {
 		expect(() => compactUniqueUniverseIds(['7', '7'])).toThrow('Universe IDs must be unique')
 	})
 
-	test('keeps the balance and universe slots in place while the wallet is disconnected or loading', async () => {
-		const disconnected = await renderIntoDocument(
-			<WalletSummary summary={{ account: undefined, ethAttoEth: undefined, repAttoRep: undefined, status: 'disconnected', error: undefined, errorLabel: undefined, universeId: '1' }}>
-				<div class='overview-universe-metric'>Universe</div>
-			</WalletSummary>,
-		)
+	test('keeps the balance slots in place while the wallet is disconnected or loading', async () => {
+		const disconnected = await renderIntoDocument(<WalletSummary summary={{ account: undefined, ethAttoEth: undefined, repAttoRep: undefined, status: 'disconnected', error: undefined, errorLabel: undefined, universeId: '1' }} />)
 		cleanupRendered = disconnected.cleanup
 		const disconnectedCells = [...(disconnected.container.querySelector('.overview-inline-metrics')?.children ?? [])].map(cell => cell.className)
-		expect(disconnectedCells).toEqual(['overview-address-metric', 'overview-simulation-secondary', 'overview-simulation-secondary', 'overview-universe-metric'])
+		expect(disconnectedCells).toEqual(['overview-simulation-secondary', 'overview-simulation-secondary'])
 		const strip = disconnected.container.querySelector('.overview-inline-metrics')
 		if (!(strip instanceof HTMLElement)) throw new Error('Expected the header metric strip')
-		expect(strip.style.getPropertyValue('--overview-metric-columns')).toBe('3')
-		expect(strip.classList.contains('is-dense')).toBe(false)
-		expect(disconnected.container.querySelector('.overview-address-metric')?.textContent).toContain('Not connected')
+		expect(strip.style.getPropertyValue('--overview-metric-columns')).toBe('2')
 		expect(disconnected.container.querySelector('[data-wallet-asset="ETH"]')?.textContent).toContain('—')
 		expect(disconnected.container.querySelector('[data-wallet-asset="REP"]')?.textContent).toContain('—')
 		await disconnected.cleanup()
 
-		const loading = await renderIntoDocument(
-			<WalletSummary summary={{ account: '0x8ba1f109551bD432803012645Ac136ddd64DBA72', ethAttoEth: undefined, repAttoRep: undefined, status: 'loading', error: undefined, errorLabel: undefined, universeId: '1' }}>
-				<div class='overview-universe-metric'>Universe</div>
-			</WalletSummary>,
-		)
+		const loading = await renderIntoDocument(<WalletSummary summary={{ account: '0x8ba1f109551bD432803012645Ac136ddd64DBA72', ethAttoEth: undefined, repAttoRep: undefined, status: 'loading', error: undefined, errorLabel: undefined, universeId: '1' }} />)
 		cleanupRendered = loading.cleanup
 		const loadingCells = [...(loading.container.querySelector('.overview-inline-metrics')?.children ?? [])].map(cell => cell.className)
 		expect(loadingCells).toEqual(disconnectedCells)
@@ -218,12 +271,11 @@ describe('universe selector', () => {
 		expect(loading.container.querySelector('[data-wallet-asset="REP"]')?.textContent).toContain('Loading')
 	})
 
-	test('keeps wallet balance failures visible without abbreviating the account', async () => {
+	test('keeps wallet balance failures visible with a retry', async () => {
 		const account = '0x8ba1f109551bD432803012645Ac136ddd64DBA72'
 		let retries = 0
 		const rendered = await renderIntoDocument(<WalletSummary summary={{ account, ethAttoEth: undefined, repAttoRep: undefined, status: 'error', error: 'REP balance RPC failed', errorLabel: 'Wallet balance read failed', universeId: '1' }} onRetry={() => retries++} />)
 		cleanupRendered = rendered.cleanup
-		expect(rendered.container.querySelector('.overview-address-metric')?.textContent).toContain(account)
 		expect(rendered.container.querySelector('[data-wallet-asset="ETH"]')?.textContent).toContain('—')
 		expect(rendered.container.querySelector('[data-wallet-asset="REP"]')?.textContent).toContain('—')
 		expect(rendered.container.querySelector('[role="alert"]')?.textContent).toBe('Wallet balance read failed')
