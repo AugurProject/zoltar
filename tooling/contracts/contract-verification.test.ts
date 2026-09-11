@@ -3,7 +3,7 @@ import { promises as fs } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
-import { buildVerificationPlan, getExplorerTargets, parseDeploymentManifest, verifyContractsWithExplorer, type DeploymentManifest, type ExplorerFetch, type ExplorerTarget, type StandardJsonInputs, type VerificationJob } from './contract-verification.mts'
+import { buildVerificationPlan, getExplorerTargets, getSourcifyTarget, parseDeploymentManifest, verifyContractsWithExplorer, verifyContractsWithSourcify, type DeploymentManifest, type ExplorerFetch, type ExplorerTarget, type StandardJsonInputs, type VerificationJob } from './contract-verification.mts'
 import { createArtifactLookup, parseRequestedChainIds } from './verify-contracts.mts'
 
 const repositoryRoot = path.join(import.meta.dir, '..', '..')
@@ -202,4 +202,72 @@ test('explorer transport errors mark the contract as failed instead of aborting 
 	const outcomes = await verifyContractsWithExplorer({ fetchFn: failingFetch, inputs: testInputs, jobs: [testJob], log: () => {}, sleep: immediateSleep, target: testTarget })
 	expect(outcomes[0]?.status).toBe('failed')
 	expect(outcomes[0]?.detail).toContain('HTTP 502')
+})
+
+test('sourcify targets exist for mainnet and sepolia only', () => {
+	expect(getSourcifyTarget(1)?.apiUrl).toBe('https://sourcify.dev/server')
+	expect(getSourcifyTarget(11_155_111)?.chainId).toBe(11_155_111)
+	expect(getSourcifyTarget(17_000)).toBeUndefined()
+})
+
+type SourcifyRoute = (url: string, body: string | undefined) => { payload: unknown; status: number }
+
+function createSourcifyFetchStub(route: SourcifyRoute): { calls: { body: string | undefined; url: string }[]; fetchFn: ExplorerFetch } {
+	const calls: { body: string | undefined; url: string }[] = []
+	const fetchFn: ExplorerFetch = async (requestUrl, init) => {
+		calls.push({ body: init?.body, url: requestUrl })
+		const { payload, status } = route(requestUrl, init?.body)
+		return { json: async () => payload, ok: status >= 200 && status < 300, status }
+	}
+	return { calls, fetchFn }
+}
+
+const sourcifySepolia = { apiUrl: 'https://sourcify.example.invalid/server', chainId: 11_155_111, name: 'Sourcify' }
+
+test('sourcify verification submits the standard JSON object and polls the job until it matches', async () => {
+	let pollCount = 0
+	const { calls, fetchFn } = createSourcifyFetchStub(url => {
+		if (url.includes('/v2/contract/')) return { payload: { customCode: 'not_verified', errorId: '1', message: 'Contract is not verified' }, status: 404 }
+		if (url.endsWith(`/v2/verify/11155111/${testJob.address}`)) return { payload: { verificationId: 'sourcify-job-1' }, status: 202 }
+		pollCount += 1
+		return pollCount === 1 ? { payload: { isJobCompleted: false, verificationId: 'sourcify-job-1' }, status: 200 } : { payload: { contract: { match: 'exact_match' }, isJobCompleted: true }, status: 200 }
+	})
+	const outcomes = await verifyContractsWithSourcify({ fetchFn, inputs: testInputs, jobs: [testJob], log: () => {}, sleep: immediateSleep, target: sourcifySepolia })
+	expect(outcomes).toEqual([{ detail: 'exact_match', id: 'zoltar', status: 'verified' }])
+	const submission = calls.find(call => call.body !== undefined)
+	expect(submission?.url).toBe(`https://sourcify.example.invalid/server/v2/verify/11155111/${testJob.address}`)
+	expect(JSON.parse(submission?.body ?? '{}')).toEqual({ compilerVersion: '0.8.35+commit.47b9dedd', contractIdentifier: 'contracts/Zoltar.sol:Zoltar', stdJsonInput: { language: 'Solidity' } })
+})
+
+test('sourcify verification skips contracts it already lists as matched', async () => {
+	const { calls, fetchFn } = createSourcifyFetchStub(() => ({ payload: { address: testJob.address, match: 'match' }, status: 200 }))
+	const outcomes = await verifyContractsWithSourcify({ fetchFn, inputs: testInputs, jobs: [testJob], log: () => {}, sleep: immediateSleep, target: sourcifySepolia })
+	expect(outcomes).toEqual([{ id: 'zoltar', status: 'already-verified' }])
+	expect(calls).toHaveLength(1)
+})
+
+test('sourcify verification treats a conflict response as already verified', async () => {
+	const { fetchFn } = createSourcifyFetchStub(url => {
+		if (url.includes('/v2/contract/')) return { payload: { customCode: 'not_verified', errorId: '1', message: 'Contract is not verified' }, status: 404 }
+		return { payload: { customCode: 'already_verified', errorId: '2', message: 'Contract is already verified' }, status: 409 }
+	})
+	const outcomes = await verifyContractsWithSourcify({ fetchFn, inputs: testInputs, jobs: [testJob], log: () => {}, sleep: immediateSleep, target: sourcifySepolia })
+	expect(outcomes[0]?.status).toBe('already-verified')
+})
+
+test('sourcify verification classifies undeployed contracts and bytecode mismatches', async () => {
+	const notDeployed = createSourcifyFetchStub(url => {
+		if (url.includes('/v2/contract/')) return { payload: {}, status: 404 }
+		return { payload: { customCode: 'contract_not_deployed', errorId: '3', message: `Contract ${testJob.address} is not deployed` }, status: 400 }
+	})
+	const notDeployedOutcomes = await verifyContractsWithSourcify({ fetchFn: notDeployed.fetchFn, inputs: testInputs, jobs: [testJob], log: () => {}, sleep: immediateSleep, target: sourcifySepolia })
+	expect(notDeployedOutcomes[0]?.status).toBe('not-deployed')
+	const noMatch = createSourcifyFetchStub(url => {
+		if (url.includes('/v2/contract/')) return { payload: {}, status: 404 }
+		if (url.includes('/v2/verify/11155111/')) return { payload: { verificationId: 'sourcify-job-2' }, status: 202 }
+		return { payload: { error: { customCode: 'no_match', errorId: '4', message: "The onchain and recompiled bytecodes don't match." }, isJobCompleted: true }, status: 200 }
+	})
+	const noMatchOutcomes = await verifyContractsWithSourcify({ fetchFn: noMatch.fetchFn, inputs: testInputs, jobs: [testJob], log: () => {}, sleep: immediateSleep, target: sourcifySepolia })
+	expect(noMatchOutcomes[0]?.status).toBe('failed')
+	expect(noMatchOutcomes[0]?.detail).toContain('no_match')
 })

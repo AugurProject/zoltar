@@ -450,3 +450,108 @@ export async function verifyContractsWithExplorer(parameters: { fetchFn: Explore
 	}
 	return outcomes
 }
+
+export type SourcifyTarget = {
+	apiUrl: string
+	chainId: number
+	name: string
+}
+
+export function getSourcifyTarget(chainId: number): SourcifyTarget | undefined {
+	if (chainId !== 1 && chainId !== 11_155_111) return undefined
+	return { apiUrl: 'https://sourcify.dev/server', chainId, name: 'Sourcify' }
+}
+
+function sourcifyErrorText(payload: unknown, httpStatus: number): string {
+	const customCode = isRecord(payload) ? payload['customCode'] : undefined
+	const message = isRecord(payload) ? payload['message'] : undefined
+	const parts = [customCode, message].filter((part): part is string => typeof part === 'string' && part !== '')
+	return parts.length > 0 ? parts.join(': ') : `HTTP ${httpStatus.toString()}`
+}
+
+function sourcifyMatch(payload: unknown): string | undefined {
+	const match = isRecord(payload) ? payload['match'] : undefined
+	return typeof match === 'string' && match !== '' ? match : undefined
+}
+
+async function isContractVerifiedOnSourcify(fetchFn: ExplorerFetch, target: SourcifyTarget, address: Address): Promise<boolean> {
+	const response = await fetchFn(`${target.apiUrl}/v2/contract/${target.chainId.toString()}/${address}`)
+	if (!response.ok) return false
+	return sourcifyMatch(await response.json()) !== undefined
+}
+
+async function pollSourcifyVerification(fetchFn: ExplorerFetch, target: SourcifyTarget, verificationId: string, sleep: (milliseconds: number) => Promise<void>): Promise<{ detail: string; status: 'failed' | 'not-deployed' | 'verified' }> {
+	const deadline = Date.now() + POLL_TIMEOUT_MILLISECONDS
+	while (true) {
+		const response = await fetchFn(`${target.apiUrl}/v2/verify/${verificationId}`)
+		const payload = await response.json()
+		if (isRecord(payload) && payload['isJobCompleted'] === true) {
+			const jobError = payload['error']
+			if (isRecord(jobError)) {
+				const detail = sourcifyErrorText(jobError, response.status)
+				return { detail, status: isMissingContractMessage(detail) ? 'not-deployed' : 'failed' }
+			}
+			const match = sourcifyMatch(payload['contract'])
+			if (match !== undefined) return { detail: match, status: 'verified' }
+			return { detail: 'verification job completed without a match result', status: 'failed' }
+		}
+		if (!response.ok) return { detail: sourcifyErrorText(payload, response.status), status: 'failed' }
+		if (Date.now() >= deadline) return { detail: `verification did not finish before the ${(POLL_TIMEOUT_MILLISECONDS / 1_000).toString()}s polling deadline`, status: 'failed' }
+		await sleep(POLL_INTERVAL_MILLISECONDS)
+	}
+}
+
+export async function verifyContractsWithSourcify(parameters: { fetchFn: ExplorerFetch; inputs: StandardJsonInputs; jobs: readonly VerificationJob[]; log: (message: string) => void; sleep: (milliseconds: number) => Promise<void>; target: SourcifyTarget }): Promise<VerificationOutcome[]> {
+	const { fetchFn, inputs, jobs, log, sleep, target } = parameters
+	const outcomes: VerificationOutcome[] = []
+	const pendingSubmissions: { job: VerificationJob; verificationId: string }[] = []
+	for (const job of jobs) {
+		try {
+			if (await isContractVerifiedOnSourcify(fetchFn, target, job.address)) {
+				log(`  ${job.label} (${job.address}): already verified`)
+				outcomes.push({ id: job.id, status: 'already-verified' })
+				continue
+			}
+			const input = inputs[job.compilerProfile]
+			const response = await fetchFn(`${target.apiUrl}/v2/verify/${target.chainId.toString()}/${job.address}`, {
+				// Sourcify derives constructor arguments and match type from chain
+				// state, so the submission only carries the compiler input.
+				body: JSON.stringify({ compilerVersion: input.compilerVersion.replace(/^v/, ''), contractIdentifier: job.contractIdentifier, stdJsonInput: JSON.parse(input.inputJson) }),
+				headers: { 'content-type': 'application/json' },
+				method: 'POST',
+			})
+			const payload = await response.json()
+			const verificationId = isRecord(payload) ? payload['verificationId'] : undefined
+			if (response.status === 202 && typeof verificationId === 'string') {
+				log(`  ${job.label} (${job.address}): submitted (job ${verificationId})`)
+				pendingSubmissions.push({ job, verificationId })
+			} else if (response.status === 409) {
+				const detail = sourcifyErrorText(payload, response.status)
+				log(`  ${job.label} (${job.address}): already verified (${detail})`)
+				outcomes.push({ detail, id: job.id, status: 'already-verified' })
+			} else {
+				const detail = sourcifyErrorText(payload, response.status)
+				const status = isMissingContractMessage(detail) ? 'not-deployed' : 'failed'
+				log(`  ${job.label} (${job.address}): ${status} (${detail})`)
+				outcomes.push({ detail, id: job.id, status })
+			}
+		} catch (error) {
+			const detail = error instanceof Error ? error.message : String(error)
+			log(`  ${job.label} (${job.address}): failed (${detail})`)
+			outcomes.push({ detail, id: job.id, status: 'failed' })
+		}
+		await sleep(SUBMISSION_DELAY_MILLISECONDS)
+	}
+	for (const { job, verificationId } of pendingSubmissions) {
+		try {
+			const { detail, status } = await pollSourcifyVerification(fetchFn, target, verificationId, sleep)
+			log(`  ${job.label} (${job.address}): ${status} (${detail})`)
+			outcomes.push({ detail, id: job.id, status })
+		} catch (error) {
+			const detail = error instanceof Error ? error.message : String(error)
+			log(`  ${job.label} (${job.address}): failed (${detail})`)
+			outcomes.push({ detail, id: job.id, status: 'failed' })
+		}
+	}
+	return outcomes
+}

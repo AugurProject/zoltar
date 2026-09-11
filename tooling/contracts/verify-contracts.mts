@@ -5,7 +5,7 @@ import * as path from 'node:path'
 import process from 'node:process'
 import * as url from 'node:url'
 import type { Abi } from '@zoltar/core-shared/evm/ethereum'
-import { buildVerificationPlan, getExplorerTargets, parseDeploymentManifest, verifyContractsWithExplorer, type ArtifactLookup, type DeploymentManifest, type StandardJsonInputs, type VerificationOutcome, type VerificationPlan } from './contract-verification.mts'
+import { buildVerificationPlan, getExplorerTargets, getSourcifyTarget, parseDeploymentManifest, verifyContractsWithExplorer, verifyContractsWithSourcify, type ArtifactLookup, type DeploymentManifest, type StandardJsonInputs, type VerificationOutcome, type VerificationPlan } from './contract-verification.mts'
 
 const repositoryRoot = path.join(path.dirname(url.fileURLToPath(import.meta.url)), '..', '..')
 const CONTRACT_ARTIFACT_PATH = path.join(repositoryRoot, 'solidity', 'artifacts', 'Contracts.json')
@@ -112,7 +112,7 @@ export async function main(argv: readonly string[] = process.argv.slice(2), envi
 	for (const chainId of chainIds) {
 		const networkId = NETWORK_IDS_BY_CHAIN_ID[chainId]
 		if (networkId === undefined) {
-			console.log(`Chain ${chainId.toString()} has no known Etherscan or Blockscout instance; skipping contract source verification.`)
+			console.log(`Chain ${chainId.toString()} has no known Etherscan, Blockscout, or Sourcify support; skipping contract source verification.`)
 			continue
 		}
 		const manifest = await loadManifest(networkId)
@@ -137,6 +137,21 @@ export async function main(argv: readonly string[] = process.argv.slice(2), envi
 			})
 			const { failed, summary } = summarizeOutcomes(outcomes)
 			console.log(`${target.name} on ${networkId}: ${summary}`)
+			failures += failed
+		}
+		const sourcifyTarget = getSourcifyTarget(chainId)
+		if (sourcifyTarget !== undefined) {
+			console.log(`${sourcifyTarget.name} (${sourcifyTarget.apiUrl})`)
+			const outcomes = await verifyContractsWithSourcify({
+				fetchFn: fetch,
+				inputs,
+				jobs: plan.jobs,
+				log: console.log,
+				sleep: milliseconds => Bun.sleep(milliseconds),
+				target: sourcifyTarget,
+			})
+			const { failed, summary } = summarizeOutcomes(outcomes)
+			console.log(`${sourcifyTarget.name} on ${networkId}: ${summary}`)
 			failures += failed
 		}
 	}
