@@ -80,6 +80,202 @@
 			"bun": "./ts/tests/testUtils/transactionActionButton.ts",
 			"default": "./js/tests/testUtils/transactionActionButton.js"
 		},
+		"./app/components/AppErrorBoundary.js": {
+			"bun": "./ts/app/components/AppErrorBoundary.tsx",
+			"default": "./js/app/components/AppErrorBoundary.js"
+		},
+		"./app/components/AppSettingsMenu.js": {
+			"bun": "./ts/app/components/AppSettingsMenu.tsx",
+			"default": "./js/app/components/AppSettingsMenu.js"
+		},
+		"./app/components/ApplicationErrorNotice.js": {
+			"bun": "./ts/app/components/ApplicationErrorNotice.tsx",
+			"default": "./js/app/components/ApplicationErrorNotice.js"
+		},
+		"./components/ApprovedAmountValue.js": {
+			"bun": "./ts/components/ApprovedAmountValue.tsx",
+			"default": "./js/components/ApprovedAmountValue.js"
+		},
+		"./components/CopyErrorMessage.js": {
+			"bun": "./ts/components/CopyErrorMessage.tsx",
+			"default": "./js/components/CopyErrorMessage.js"
+		},
+		"./components/InlineHint.js": {
+			"bun": "./ts/components/InlineHint.tsx",
+			"default": "./js/components/InlineHint.js"
+		},
+		"./components/NoticeStack.js": {
+			"bun": "./ts/components/NoticeStack.tsx",
+			"default": "./js/components/NoticeStack.js"
+		},
+		"./components/SimulationBanner.js": {
+			"bun": "./ts/components/SimulationBanner.tsx",
+			"default": "./js/components/SimulationBanner.js"
+		},
+		"./components/TabNavigation.js": {
+			"bun": "./ts/components/TabNavigation.tsx",
+			"default": "./js/components/TabNavigation.js"
+		},
+		"./components/TransactionPresentationNotice.js": {
+			"bun": "./ts/components/TransactionPresentationNotice.tsx",
+			"default": "./js/components/TransactionPresentationNotice.js"
+		},
+		"./tests/actionLauncherButton.test.js": {
+			"bun": "./ts/tests/actionLauncherButton.test.tsx",
+			"default": "./js/tests/actionLauncherButton.test.js"
+		},
+		"./tests/actionLauncherCard.test.js": {
+			"bun": "./ts/tests/actionLauncherCard.test.tsx",
+			"default": "./js/tests/actionLauncherCard.test.js"
+		},
+		"./tests/addressValue.test.js": {
+			"bun": "./ts/tests/addressValue.test.tsx",
+			"default": "./js/tests/addressValue.test.js"
+		},
+		"./tests/app/appErrorBoundary.test.js": {
+			"bun": "./ts/tests/app/appErrorBoundary.test.tsx",
+			"default": "./js/tests/app/appErrorBoundary.test.js"
+		},
+		"./tests/app/appHeaderShell.test.js": {
+			"bun": "./ts/tests/app/appHeaderShell.test.tsx",
+			"default": "./js/tests/app/appHeaderShell.test.js"
+		},
+		"./tests/app/appStatusNotices.test.js": {
+			"bun": "./ts/tests/app/appStatusNotices.test.tsx",
+			"default": "./js/tests/app/appStatusNotices.test.js"
+		},
+		"./tests/app/notFoundSection.test.js": {
+			"bun": "./ts/tests/app/notFoundSection.test.tsx",
+			"default": "./js/tests/app/notFoundSection.test.js"
+		},
+		"./tests/app/routeSubNavigation.test.js": {
+			"bun": "./ts/tests/app/routeSubNavigation.test.tsx",
+			"default": "./js/tests/app/routeSubNavigation.test.js"
+		},
+		"./tests/app/useHashRoute.test.js": {
+			"bun": "./ts/tests/app/useHashRoute.test.tsx",
+			"default": "./js/tests/app/useHashRoute.test.js"
+		},
+		"./tests/app/useOnchainState.integration.test.js": {
+			"bun": "./ts/tests/app/useOnchainState.integration.test.tsx",
+			"default": "./js/tests/app/useOnchainState.integration.test.js"
+		},
+		"./tests/app/useTransactionTrayController.test.js": {
+			"bun": "./ts/tests/app/useTransactionTrayController.test.tsx",
+			"default": "./js/tests/app/useTransactionTrayController.test.js"
+		},
+		"./tests/app/useUrlState.test.js": {
+			"bun": "./ts/tests/app/useUrlState.test.tsx",
+			"default": "./js/tests/app/useUrlState.test.js"
+		},
+		"./tests/approvedAmountValueComponent.test.js": {
+			"bun": "./ts/tests/approvedAmountValueComponent.test.tsx",
+			"default": "./js/tests/approvedAmountValueComponent.test.js"
+		},
+		"./tests/components/simulationBanner.test.js": {
+			"bun": "./ts/tests/components/simulationBanner.test.tsx",
+			"default": "./js/tests/components/simulationBanner.test.js"
+		},
+		"./tests/copyErrorMessage.test.js": {
+			"bun": "./ts/tests/copyErrorMessage.test.tsx",
+			"default": "./js/tests/copyErrorMessage.test.js"
+		},
+		"./tests/currencyValue.test.js": {
+			"bun": "./ts/tests/currencyValue.test.tsx",
+			"default": "./js/tests/currencyValue.test.js"
+		},
+		"./tests/enumDropdown.test.js": {
+			"bun": "./ts/tests/enumDropdown.test.tsx",
+			"default": "./js/tests/enumDropdown.test.js"
+		},
+		"./tests/errorNotice.test.js": {
+			"bun": "./ts/tests/errorNotice.test.tsx",
+			"default": "./js/tests/errorNotice.test.js"
+		},
+		"./tests/identifierValue.test.js": {
+			"bun": "./ts/tests/identifierValue.test.tsx",
+			"default": "./js/tests/identifierValue.test.js"
+		},
+		"./tests/loadingText.test.js": {
+			"bun": "./ts/tests/loadingText.test.tsx",
+			"default": "./js/tests/loadingText.test.js"
+		},
+		"./tests/lookupFieldRow.test.js": {
+			"bun": "./ts/tests/lookupFieldRow.test.tsx",
+			"default": "./js/tests/lookupFieldRow.test.js"
+		},
+		"./tests/noticeStack.test.js": {
+			"bun": "./ts/tests/noticeStack.test.tsx",
+			"default": "./js/tests/noticeStack.test.js"
+		},
+		"./tests/operationModal.test.js": {
+			"bun": "./ts/tests/operationModal.test.tsx",
+			"default": "./js/tests/operationModal.test.js"
+		},
+		"./tests/requestGuard.test.js": {
+			"bun": "./ts/tests/requestGuard.test.tsx",
+			"default": "./js/tests/requestGuard.test.js"
+		},
+		"./tests/sectionBlock.test.js": {
+			"bun": "./ts/tests/sectionBlock.test.tsx",
+			"default": "./js/tests/sectionBlock.test.js"
+		},
+		"./tests/stateHint.test.js": {
+			"bun": "./ts/tests/stateHint.test.tsx",
+			"default": "./js/tests/stateHint.test.js"
+		},
+		"./tests/surfaceNesting.test.js": {
+			"bun": "./ts/tests/surfaceNesting.test.tsx",
+			"default": "./js/tests/surfaceNesting.test.js"
+		},
+		"./tests/tabNavigation.test.js": {
+			"bun": "./ts/tests/tabNavigation.test.tsx",
+			"default": "./js/tests/tabNavigation.test.js"
+		},
+		"./tests/timestampValue.test.js": {
+			"bun": "./ts/tests/timestampValue.test.tsx",
+			"default": "./js/tests/timestampValue.test.js"
+		},
+		"./tests/tokenApprovalControl.test.js": {
+			"bun": "./ts/tests/tokenApprovalControl.test.tsx",
+			"default": "./js/tests/tokenApprovalControl.test.js"
+		},
+		"./tests/transactionActionButton.test.js": {
+			"bun": "./ts/tests/transactionActionButton.test.tsx",
+			"default": "./js/tests/transactionActionButton.test.js"
+		},
+		"./tests/transactionHashLink.test.js": {
+			"bun": "./ts/tests/transactionHashLink.test.tsx",
+			"default": "./js/tests/transactionHashLink.test.js"
+		},
+		"./tests/transactionNetworkValue.test.js": {
+			"bun": "./ts/tests/transactionNetworkValue.test.tsx",
+			"default": "./js/tests/transactionNetworkValue.test.js"
+		},
+		"./tests/transactionPresentationHelpers.test.js": {
+			"bun": "./ts/tests/transactionPresentationHelpers.test.tsx",
+			"default": "./js/tests/transactionPresentationHelpers.test.js"
+		},
+		"./tests/transactionReview.test.js": {
+			"bun": "./ts/tests/transactionReview.test.tsx",
+			"default": "./js/tests/transactionReview.test.js"
+		},
+		"./tests/transactionStatusCard.test.js": {
+			"bun": "./ts/tests/transactionStatusCard.test.tsx",
+			"default": "./js/tests/transactionStatusCard.test.js"
+		},
+		"./tests/useCopyToClipboard.test.js": {
+			"bun": "./ts/tests/useCopyToClipboard.test.tsx",
+			"default": "./js/tests/useCopyToClipboard.test.js"
+		},
+		"./tests/viewTabs.test.js": {
+			"bun": "./ts/tests/viewTabs.test.tsx",
+			"default": "./js/tests/viewTabs.test.js"
+		},
+		"./tests/walletAssetControl.test.js": {
+			"bun": "./ts/tests/walletAssetControl.test.tsx",
+			"default": "./js/tests/walletAssetControl.test.js"
+		},
 		"./*": {
 			"bun": "./ts/*.ts",
 			"default": "./js/*.js"

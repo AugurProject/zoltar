@@ -67,6 +67,13 @@ function deploymentFromPairEvent(log: Readonly<{ args?: unknown }>): PairDeploym
 	return { securityPool: getAddress(securityPool), shareToken: getAddress(shareToken), universeId }
 }
 
+/** Loads only the universe list for routes that wait for an explicit SecurityPool address instead of listing markets. */
+export async function discoverUniverses(client: PublicClient, configuration: DeploymentConfiguration, requestedUniverseId: bigint | undefined, isCurrent = () => true) {
+	const universeIds = await loadUniverseIds(client, configuration, isCurrent)
+	const selectedUniverseId = requestedUniverseId !== undefined && universeIds.includes(requestedUniverseId) ? requestedUniverseId : universeIds[0]
+	return { ...marketDiscoveryPage(0n), total: 0n, markets: [], universeIds, selectedUniverseId }
+}
+
 export async function discoverTradingMarketPage(client: PublicClient, configuration: DeploymentConfiguration, requestedUniverseId: bigint | undefined, requestedStart = 0n, pageSize = 25n, index = createTradingPairIndex(), isCurrent = () => true) {
 	const universeIds = await loadUniverseIds(client, configuration, isCurrent)
 	const selectedUniverseId = requestedUniverseId !== undefined && universeIds.includes(requestedUniverseId) ? requestedUniverseId : universeIds[0]
