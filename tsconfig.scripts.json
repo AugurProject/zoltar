@@ -25,6 +25,6 @@
 			"@zoltar/ui-statoblast-shared/*": ["./ui/statoblastShared/ts/*"]
 		}
 	},
-	"include": ["bun-test-setup*.ts", "scripts/**/*.mts", "scripts/**/*.ts", "tooling/**/*.mts", "tooling/**/*.ts"],
+	"include": ["bun-test-setup*.ts", "scripts/**/*.mts", "scripts/**/*.ts", "solidity/ts/types/index.d.ts", "tooling/**/*.mts", "tooling/**/*.ts"],
 	"exclude": ["tooling/ui/browserSmoke.test.ts", "tooling/ui/productionBuild.test.ts"]
 }

@@ -17,9 +17,14 @@ test('counts active errors and warnings while preserving all notices and collaps
 		const alerts = window.document.getElementById('operator-alerts')
 		const empty = window.document.getElementById('header-notices-empty')
 		if (disclosure === null || alerts === null || !(empty instanceof window.HTMLElement)) throw new Error('Missing notice fixture')
-		// Mutation observer callbacks can lag waitUntilComplete on loaded machines, so settle on the expected count.
+		// Mutation observer callbacks can lag waitUntilComplete, so settle on the expected count
+		// against a wall-clock deadline kept below the test timeout so a genuine failure reports the
+		// stale count instead of timing out. Counts that never settled here were happy-dom < 20.14
+		// holding its observer callback only through a WeakRef, which let garbage collection silently
+		// stop mutation delivery.
 		const settledCount = async (expected: string) => {
-			for (let attempt = 0; attempt < 200 && count?.textContent !== expected; attempt += 1) {
+			const deadline = Date.now() + 4_000
+			while (count?.textContent !== expected && Date.now() < deadline) {
 				await window.happyDOM.waitUntilComplete()
 				await Bun.sleep(5)
 			}

@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
-import { findUiLayerBoundaryViolations } from './lint-ui-layer-boundaries.mts'
+import { findUiExportsManifestViolations, findUiLayerBoundaryViolations } from './lint-ui-layer-boundaries.mts'
 
 test('rejects static, dynamic, exported, and type imports from UI features', () => {
 	const findings = findUiLayerBoundaryViolations(
@@ -73,4 +73,24 @@ test('rejects test imports that bypass mirrored ownership', () => {
 	for (const [sourcePath, sourceText] of cases) {
 		expect(findUiLayerBoundaryViolations(sourcePath, sourceText).map(finding => finding.rule)).toEqual(['test-layers-must-follow-ownership'])
 	}
+})
+
+test('exports manifest guard requires existing source targets and explicit tsx entries', () => {
+	const sourceFiles = ['ts/components/Widget.tsx', 'ts/lib/helpers.ts']
+	expect(
+		findUiExportsManifestViolations(
+			'coreShared',
+			{
+				'./components/Widget.js': { bun: './ts/components/Widget.tsx', default: './js/components/Widget.js' },
+				'./lib/helpers.js': { bun: './ts/lib/helpers.ts', default: './js/lib/helpers.js' },
+				'./*': { bun: './ts/*.ts', default: './js/*.js' },
+			},
+			sourceFiles,
+		),
+	).toEqual([])
+	expect(findUiExportsManifestViolations('coreShared', { './components/Widget.js': { bun: './ts/components/Removed.tsx', default: './js/components/Widget.js' } }, sourceFiles)).toEqual([
+		{ detail: 'exports entry ./components/Widget.js points its bun condition at missing ./ts/components/Removed.tsx', packageId: 'coreShared' },
+	])
+	expect(findUiExportsManifestViolations('coreShared', { './components/Widget.js': { default: './js/components/Widget.js' } }, sourceFiles)).toEqual([{ detail: 'exports entry ./components/Widget.js has no bun-condition source target', packageId: 'coreShared' }])
+	expect(findUiExportsManifestViolations('coreShared', { './*': { bun: './ts/*.ts', default: './js/*.js' } }, sourceFiles)).toEqual([{ detail: '.tsx module ts/components/Widget.tsx needs an explicit exports entry so bun resolves it to sources when built output is absent', packageId: 'coreShared' }])
 })
