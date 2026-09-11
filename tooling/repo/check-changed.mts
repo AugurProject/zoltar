@@ -6,37 +6,15 @@ function runCommand(command: string, args: string[]) {
 	return execFileSync(command, args, { encoding: 'utf8', stdio: 'inherit' })
 }
 
-const BIOME_COVERED_FILE_PATTERNS = [
-	/^(package\.json|\.prettierrc\.json|shared\/package\.json|ui\/(?:coreShared|zoltarShared|statoblastShared|zoltar|statoblast|trading)\/package\.json|solidity\/package\.json|tsconfig\.scripts\.json)$/,
-	/^bun-test-setup[^/]*\.ts$/,
-	/^README\.md$/,
-	/^AGENTS\.md$/,
-	/^\.codex\/review-contract\.md$/,
-	/^docs\//,
-	/^scripts\//,
-	/^tooling\//,
-	/^shared\/[^/]+\/(?:ts\/|(?:package|tsconfig)\.json$)/,
-	/^ui\/[^/]*Shared\/ts\//,
-	/^solidity\/ts\//,
-	/^ui\/AGENTS\.md$/,
-	/^ui\/coreShared\/ts\//,
-	/^ui\/coreShared\/build\//,
-	/^ui\/coreShared\/dev-server\.ts$/,
-	/^ui\/coreShared\/css\//,
-	/^ui\/zoltar\/ts\//,
-	/^ui\/statoblast\/ts\//,
-	/^ui\/trading\/ts\//,
-	/^ui\/trading\/css\//,
-]
-
+/**
+ * Biome decides which of these paths it owns through `files.includes` in biome.json; with `--no-errors-on-unmatched` it skips
+ * excluded paths silently, so a change set made only of excluded files (regenerated docs bundles, for example) passes. This
+ * filter only removes file types Biome never processes.
+ */
 const BIOME_CHECKED_EXTENSIONS = /\.(?:cjs|css|cts|html|js|json|jsonc|jsx|mjs|mts|ts|tsx)$/
 
-function isBiomeCoveredChangedFile(filePath: string) {
-	return BIOME_COVERED_FILE_PATTERNS.some(pattern => pattern.test(filePath))
-}
-
 export function getBiomeChangedFiles(changedFiles: string[]) {
-	return changedFiles.filter(filePath => BIOME_CHECKED_EXTENSIONS.test(filePath) && isBiomeCoveredChangedFile(filePath))
+	return changedFiles.filter(filePath => BIOME_CHECKED_EXTENSIONS.test(filePath))
 }
 
 if (import.meta.main) {
@@ -56,9 +34,9 @@ if (import.meta.main) {
 	const biomeChangedFiles = getBiomeChangedFiles(changedFiles).filter(existsSync)
 
 	if (biomeChangedFiles.length === 0) {
-		console.log('check-changed: no Biome-covered changed files to audit')
+		console.log('check-changed: no Biome file types among the changed files')
 		process.exit(0)
 	}
 
-	runCommand('bunx', ['@biomejs/biome', 'check', ...biomeChangedFiles])
+	runCommand('bunx', ['@biomejs/biome', 'check', '--no-errors-on-unmatched', ...biomeChangedFiles])
 }

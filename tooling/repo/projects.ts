@@ -80,8 +80,17 @@ export const projects: readonly Project[] = [
 		tasks: {
 			setup: { command: ['bun', './tooling/repo/install-frozen.mts'], cwd: '.', inputs: ['package.json', 'bun.lock'], cacheInputs: ['package.json', 'bun.lock'] },
 			test: rootTask(['bun', 'run', 'test'], ['package.json', 'bun.lock', 'bun-test-setup*.ts', 'tooling/testing/**', 'shared/*/ts/**', 'solidity/ts/**', 'ui/*/ts/**'], ['complete-validation']),
-			check: { ...rootTask(['bun', 'run', 'check:complete'], ['package.json', 'bun.lock', 'biome.json', 'knip.json', '.prettierrc.json', 'tooling/**', 'docs/**', 'shared/*/ts/**', 'solidity/**', 'ui/**']), covers: ['lint'] },
-			lint: rootTask(['bun', 'run', 'check:static'], ['package.json', 'biome.json', 'tooling/**', 'shared/*/ts/**', 'solidity/ts/**', 'ui/**']),
+			check: {
+				...rootTask(
+					['bun', 'run', 'check:complete'],
+					['package.json', 'bun.lock', 'biome.json', 'knip.json', '.prettierrc.json', '.coverage-policy.json', '.vscode/**', 'tsconfig.json', 'tsconfig.scripts.json', 'bun-test-setup*.ts', 'scripts/**', 'tooling/**', 'docs/**', 'shared/*/ts/**', 'solidity/**', 'ui/**', 'bots/**', 'augurScan/**'],
+				),
+				covers: ['lint'],
+			},
+			lint: rootTask(
+				['bun', 'run', 'check:static'],
+				['package.json', 'biome.json', 'knip.json', '.prettierrc.json', '.coverage-policy.json', '.vscode/**', 'tsconfig.json', 'tsconfig.scripts.json', 'bun-test-setup*.ts', 'scripts/**', 'docs/**', 'tooling/**', 'shared/*/ts/**', 'solidity/ts/**', 'ui/**', 'bots/**', 'augurScan/**'],
+			),
 			typecheck: rootTask(['bun', 'run', 'tsc:root'], ['package.json', 'tsconfig.scripts.json', 'docs/tsconfig.json', 'tooling/**']),
 			knip: rootTask(['bun', 'run', 'knip'], ['package.json', 'knip.json', 'tooling/**', 'shared/*/ts/**', 'solidity/ts/**', 'ui/**', 'bots/**', 'augurScan/**']),
 			audit: rootTask(['bun', 'audit'], ['package.json', 'bun.lock'], ['core-audit']),
