@@ -10,6 +10,7 @@ import type { ChaosProtocolIndex } from '#monitoring/protocol-index'
 import type { ChaosEcosystem, OperationContinuationDisposition, OperationEvidence, OperationPreflightCall, OperationRisk, OperationTerminalSubmission, OperationWalletAssetDebit } from '#operations/types'
 import { DURABLE_STATE_VERSION, initialDurableState, initialRuntimeState } from './initial-state.ts'
 import { assertSafeRetirementRecipient, initialRetirementState, parseRetirementState, type DurableRetirementState } from './retirement.ts'
+import { parsePendingTransactionObservation, serializedPendingTransactionObservation, type PendingTransactionObservation } from './pending-transaction-observation.ts'
 import { serializedScheduler } from './state-serialization.ts'
 import { assertExactKeys, dataHex, hash, identifier, nonemptyString, optionalString, optionalTimestamp, positiveIntegerString, requiredRecord, timestamp, uint256String, unsignedIntegerString } from './validators.ts'
 import { loadPersistedProtocolIndex, parseProtocolIndexReference, persistProtocolIndexGeneration, pruneProtocolIndexGenerations, snapshotProtocolIndex, type ProtocolIndexFileHandle, type ProtocolIndexFilesystem, type ProtocolIndexReference } from './protocol-index-store.ts'
@@ -166,6 +167,7 @@ export type PendingTransactionIntent = {
 	maxBlockNumber: bigint
 	mode: 'private' | 'public'
 	nonce: bigint
+	observation?: PendingTransactionObservation | undefined
 	operationId: string
 	recoveryBlocker?: string | undefined
 	replacementHash?: Hex | undefined
@@ -775,7 +777,7 @@ async function parsePendingTransaction(value: unknown, index: number, expectedCh
 	assertExactKeys(
 		intent,
 		['data', 'hash', 'id', 'label', 'maxBlockNumber', 'mode', 'nonce', 'operationId', 'semanticExpectation', 'sender', 'serializedTransaction', 'signedAt', 'status', 'stepId', 'to', 'value', 'workflowId'],
-		['cancellationHash', 'recoveryBlocker', 'replacementHash', 'submissionBlock', 'submittedAt'],
+		['cancellationHash', 'observation', 'recoveryBlocker', 'replacementHash', 'submissionBlock', 'submittedAt'],
 		label,
 	)
 	const rawTransaction = serializedTransaction(intent['serializedTransaction'], `${label}.serializedTransaction`)
@@ -814,6 +816,7 @@ async function parsePendingTransaction(value: unknown, index: number, expectedCh
 		throw new Error(`${label} cannot queue both replacement and cancellation verification`)
 	}
 	const recoveryBlocker = optionalString(intent['recoveryBlocker'], `${label}.recoveryBlocker`, 2_048)
+	const observation = intent['observation'] === undefined ? undefined : parsePendingTransactionObservation(intent['observation'], `${label}.observation`)
 	if (status === 'signed' && (submissionBlock !== undefined || submittedAt !== undefined)) throw new Error(`${label} has submission metadata before broadcast`)
 	if (status !== 'signed' && (submissionBlock === undefined || submittedAt === undefined)) throw new Error(`${label} is missing submission metadata`)
 	const expectation = requiredRecord(intent['semanticExpectation'], `${label}.semanticExpectation`)
@@ -868,6 +871,7 @@ async function parsePendingTransaction(value: unknown, index: number, expectedCh
 		maxBlockNumber,
 		mode,
 		nonce,
+		...(observation === undefined ? {} : { observation }),
 		operationId: identifier(intent['operationId'], `${label}.operationId`),
 		...(recoveryBlocker === undefined ? {} : { recoveryBlocker }),
 		...(replacementHash === undefined ? {} : { replacementHash }),
@@ -1050,6 +1054,7 @@ function serializedDurableState(
 			...intent,
 			maxBlockNumber: intent.maxBlockNumber.toString(),
 			nonce: intent.nonce.toString(),
+			observation: intent.observation === undefined ? undefined : serializedPendingTransactionObservation(intent.observation),
 			submissionBlock: intent.submissionBlock?.toString(),
 			value: intent.value.toString(),
 		})),

@@ -324,6 +324,7 @@ function recoverySettings(readRpcUrl: string, quorumRpcUrls: string[], stateFile
 type FinalizedRecoveryRpcState = {
 	account: `0x${string}`
 	cancellationHash?: `0x${string}` | undefined
+	finalizedBlock: bigint
 	originalHash: `0x${string}`
 	receiptHash: `0x${string}`
 	receiptStatus: '0x0' | '0x1'
@@ -404,7 +405,7 @@ function finalizedRecoveryRpcServer(state: FinalizedRecoveryRpcState) {
 					return Response.json({ id, jsonrpc: '2.0', result: state.signerCode })
 				case 'eth_getBlockByNumber': {
 					if (typeof params[0] !== 'string') return new Response('Expected a numeric block request', { status: 400 })
-					const blockNumber = params[0] === 'finalized' ? 112n : BigInt(params[0])
+					const blockNumber = params[0] === 'finalized' ? state.finalizedBlock : BigInt(params[0])
 					return Response.json({
 						id,
 						jsonrpc: '2.0',
@@ -448,9 +449,10 @@ function finalizedRecoveryRpcServer(state: FinalizedRecoveryRpcState) {
 }
 
 type FinalizedRecoveryMode = 'cancellation' | 'original' | 'replacement'
-type FinalizedRecoveryOutcome = 'revert' | 'semantic-failure' | 'success'
+type FinalizedRecoveryOutcome = 'evidence-unavailable' | 'revert' | 'semantic-failure' | 'success'
 
 type FinalizedRecoveryOptions = {
+	finalizedBlock?: bigint | undefined
 	signerCode?: `0x${string}` | undefined
 	transactionType?: '0x2' | '0x4' | undefined
 }
@@ -476,6 +478,7 @@ async function finalizedRecoveryEnvironment(mode: FinalizedRecoveryMode, outcome
 	const rpcState: FinalizedRecoveryRpcState = {
 		account: account.address,
 		...(mode === 'cancellation' ? { cancellationHash } : {}),
+		finalizedBlock: options.finalizedBlock ?? 112n,
 		originalHash,
 		receiptHash: receiptHashByMode[mode],
 		receiptStatus: outcome === 'revert' ? '0x0' : '0x1',
@@ -491,6 +494,12 @@ async function finalizedRecoveryEnvironment(mode: FinalizedRecoveryMode, outcome
 	const workflow = createDurableWorkflow(plan)
 	const step = plan.steps[0]
 	if (step === undefined) throw new Error('Recovery test plan is missing its step')
+	const evidenceByOutcome = {
+		'evidence-unavailable': [{ account: account.address, asset: 'ETH', direction: 'any', kind: 'balance-change' }],
+		revert: step.evidence,
+		'semantic-failure': [{ emitter: target, kind: 'event', signature: childRepSplitSignature, topic0: childRepSplitTopic }],
+		success: step.evidence,
+	} as const satisfies Record<FinalizedRecoveryOutcome, PendingTransactionIntent['semanticExpectation']['evidence']>
 	const intent: PendingTransactionIntent = {
 		...(mode === 'cancellation' ? { cancellationHash } : {}),
 		data: '0x1234',
@@ -503,8 +512,8 @@ async function finalizedRecoveryEnvironment(mode: FinalizedRecoveryMode, outcome
 		operationId: plan.definitionId,
 		...(mode === 'replacement' ? { replacementHash } : {}),
 		semanticExpectation: {
-			balanceBaselines: [],
-			evidence: outcome === 'semantic-failure' ? [{ emitter: target, kind: 'event', signature: childRepSplitSignature, topic0: childRepSplitTopic }] : step.evidence,
+			balanceBaselines: outcome === 'evidence-unavailable' ? [{ account: account.address, asset: 'ETH', balance: '1' }] : [],
+			evidence: [...evidenceByOutcome[outcome]],
 			postconditions: plan.postconditions,
 			storageBaselines: [],
 		},
@@ -743,6 +752,38 @@ describe('pending chaos transaction recovery decisions', () => {
 		})
 	})
 
+	test('journals an included receipt as awaiting finality until the finalized checkpoint passes it', async () => {
+		const fixture = await finalizedRecoveryEnvironment('original', 'success', { finalizedBlock: 99n })
+		const staleIntent = fixture.environment.state.pendingTransactions[0]
+		if (staleIntent === undefined) throw new Error('Expected a pending intent fixture')
+		staleIntent.recoveryBlocker = 'Automatic resubmission window closed; verify a receipt, exact replacement, or nonce cancellation'
+
+		await expect(recoverPendingTransactions(fixture.environment, { resubmit: true })).resolves.toBeTrue()
+
+		const intent = fixture.environment.state.pendingTransactions[0]
+		expect(intent?.status).toBe('confirmation-unknown')
+		expect(intent?.recoveryBlocker).toBeUndefined()
+		expect(intent?.observation).toMatchObject({ head: 112n, includedBlock: 100n, kind: 'awaiting-finality' })
+		expect(Date.parse(intent?.observation?.checkedAt ?? '')).toBeGreaterThan(Date.now() - 60_000)
+		expect((await loadRuntimeState(fixture.stateFile, false, fixture.environment.state.wallet, 1)).pendingTransactions[0]?.observation).toEqual(intent?.observation)
+		for (const methods of fixture.requestedMethods) expect(methods).not.toContain('eth_getTransactionByHash')
+	})
+
+	test('journals a finalized receipt whose evidence cannot be read as included with evidence unavailable', async () => {
+		const fixture = await finalizedRecoveryEnvironment('original', 'evidence-unavailable')
+		const staleIntent = fixture.environment.state.pendingTransactions[0]
+		if (staleIntent === undefined) throw new Error('Expected a pending intent fixture')
+		staleIntent.recoveryBlocker = 'Automatic resubmission window closed; verify a receipt, exact replacement, or nonce cancellation'
+
+		await expect(recoverPendingTransactions(fixture.environment, { resubmit: true })).rejects.toThrow('confirmed receipt evidence is temporarily unavailable')
+
+		const intent = fixture.environment.state.pendingTransactions[0]
+		expect(intent?.status).toBe('confirmation-unknown')
+		expect(intent?.recoveryBlocker).toBeUndefined()
+		expect(intent?.observation).toMatchObject({ head: 112n, includedBlock: 100n, kind: 'evidence-unavailable' })
+		expect((await loadRuntimeState(fixture.stateFile, false, fixture.environment.state.wallet, 1)).pendingTransactions[0]?.observation).toEqual(intent?.observation)
+	})
+
 	test('restores a persisted successful empty-log receipt as waiting for canonical confirmation', async () => {
 		const fixture = await finalizedRecoveryEnvironment('original')
 
@@ -830,6 +871,7 @@ describe('pending chaos transaction recovery decisions', () => {
 		}
 		expect(fixture.requestedMethods[0]).toContain('eth_sendRawTransaction')
 		expect(fixture.environment.state.pendingTransactions[0]?.status).toBe('submitted')
+		expect(fixture.environment.state.pendingTransactions[0]?.observation).toMatchObject({ head: 99n, kind: 'resubmitted' })
 	})
 
 	test.each([
@@ -1036,6 +1078,7 @@ describe('pending chaos transaction recovery decisions', () => {
 		}
 		expect(fixture.environment.state.pendingTransactions[0]?.recoveryBlocker).toContain('resubmission window closed')
 		expect(fixture.environment.state.pendingTransactions[0]?.status).toBe('signed')
+		expect(fixture.environment.state.pendingTransactions[0]?.observation).toMatchObject({ head: 100n, kind: 'window-closed' })
 	})
 
 	test('rechecks the pending nonce after submission preflight before recovery simulation', async () => {
@@ -1067,6 +1110,7 @@ describe('pending chaos transaction recovery decisions', () => {
 			expect(methods).not.toContain('eth_sendRawTransaction')
 		}
 		expect(fixture.environment.state.pendingTransactions[0]?.recoveryBlocker).toBeUndefined()
+		expect(fixture.environment.state.pendingTransactions[0]?.observation).toMatchObject({ head: 99n, kind: 'in-mempool' })
 	})
 
 	test('enters manual reconciliation after exact transaction visibility is ruled out for a nonce mismatch', async () => {
@@ -1080,6 +1124,17 @@ describe('pending chaos transaction recovery decisions', () => {
 			expect(methods).not.toContain('eth_sendRawTransaction')
 		}
 		expect(fixture.environment.state.pendingTransactions[0]?.recoveryBlocker).toContain('was consumed without a quorum receipt')
+		expect(fixture.environment.state.pendingTransactions[0]?.observation).toMatchObject({ head: 99n, kind: 'manual-reconciliation' })
+	})
+
+	test('journals an invisible transaction as not visible when resubmission is disabled', async () => {
+		const fixture = await forkedRecoveryEnvironment()
+
+		await expect(recoverPendingTransactions(fixture.environment, { resubmit: false })).resolves.toBeTrue()
+
+		for (const methods of fixture.requestedMethods) expect(methods).not.toContain('eth_sendRawTransaction')
+		expect(fixture.environment.state.pendingTransactions[0]?.observation).toMatchObject({ head: 99n, kind: 'not-visible' })
+		expect(fixture.environment.state.pendingTransactions[0]?.observation?.includedBlock).toBeUndefined()
 	})
 
 	test('rechecks the pending nonce after recovery simulation before journaling a broadcast', async () => {
