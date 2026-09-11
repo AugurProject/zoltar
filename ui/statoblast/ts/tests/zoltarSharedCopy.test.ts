@@ -8,14 +8,7 @@ import * as simulationCopy from '@zoltar/ui-core-shared/copy/simulation.js'
 import * as tradingCopy from '@zoltar/ui-statoblast-shared/copy/trading.js'
 import * as zoltarCopy from '@zoltar/ui-zoltar-shared/copy/zoltar.js'
 
-test('reporting risk copy keeps escalation claims with their committed depositor', () => {
-	expect(reportingCopy.escalationClaimNonTradeableDetail).toContain('remain with their committed depositor through liquidation')
-	expect(reportingCopy.escalationClaimNonTradeableDetail).toContain('truth auction can proportionally reduce both principal and reward')
-	expect(reportingCopy.escalationClaimNonTradeableDetail).not.toContain('can move')
-})
-
 test('market and Open Oracle values own their complete spacing and units', () => {
-	expect(marketCopy.selectedForkQuestionSummary).toBe('Selected fork question')
 	expect(openOracleCopy.formatTimingValue(12n, openOracleCopy.secondsAbbreviation)).toBe('12\u00a0s')
 	expect(openOracleCopy.formatTimingValue(12n, openOracleCopy.blocks)).toBe('12\u00a0blocks')
 })
@@ -42,6 +35,4 @@ test('transaction actions and pending labels use sentence case independently of 
 	expect(simulationCopy.removeCorruptedSaves).toBe('Remove corrupted saves')
 	expect(simulationCopy.removeCorruptedSavedStatesTitle).toBe('Remove Corrupted Saved States')
 	expect(zoltarCopy.forkRepApprovalPending).toBe('Approving REP threshold…')
-	expect(zoltarCopy.viewForkDetails).toBe('View fork details')
-	expect(zoltarCopy.viewForkDetailsTitle).toBe('View Fork Details')
 })

@@ -3,24 +3,18 @@ import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { deriveHasForkActivity } from './forkActivity.js'
 import { Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { statoblast_SecurityPoolForker_SecurityPoolForker, statoblast_SecurityPool_SecurityPool, statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '../contractArtifact.js'
-import type { DeploymentStepId, ForkAuctionActionResult, ForkAuctionDetails, ReadClient, ReportingOutcomeKey, TruthAuctionMetrics, WriteClient, ZoltarChildUniverseActionResult, ZoltarForkActionResult, ZoltarMigrationActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
-import { getForkOutcomeKey, getQuestionIdHex, getReportingOutcomeKey, getReportingOutcomeValue, getSecurityPoolSystemState, hasTimestamp } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
-import { type ContractRevertReasonParams, readRequiredMulticall, writeContractAndWait } from '@zoltar/ui-zoltar-shared/protocol/core.js'
+import type { ForkAuctionActionResult, ForkAuctionDetails, ReadClient, ReportingOutcomeKey, TruthAuctionMetrics, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
+import { getForkOutcomeKey, getReportingOutcomeKey, getReportingOutcomeValue, getSecurityPoolSystemState, hasTimestamp } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
+import { readRequiredMulticall, writeContractAndWait } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { getInfraContractAddresses, getZoltarAddress } from './deploymentHelpers.js'
 import { requireForkDataView } from './forkData.js'
 import { executeForkAuctionAction } from './securityPoolActions.js'
 import { SECURITY_POOL_QUESTION_OUTCOME_ABI } from './securityPoolAbi.js'
-import { getDeploymentSteps } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
 import { loadMarketDetails } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
 
 const MIGRATION_TIME_LENGTH = 4838400n
 const TRUTH_AUCTION_TIME_LENGTH = 604800n
 type AuctionClearingTuple = readonly [boolean, bigint, bigint, bigint]
-function getDeploymentStep(id: DeploymentStepId) {
-	const step = getDeploymentSteps().find(candidate => candidate.id === id)
-	if (step === undefined) throw new Error(`Unknown deployment step: ${id}`)
-	return step
-}
 export async function loadForkOutcomeMigrationSeedStatus(
 	client: Pick<ReadClient, 'readContract'>,
 	{
@@ -343,48 +337,6 @@ export async function createChildUniverseFromSecurityPool(client: WriteClient, s
 			})),
 	)
 }
-export async function createZoltarChildUniverse(client: WriteClient, universeId: bigint, outcomeIndex: bigint) {
-	const hash = await writeContractAndWait(client, () => ({
-		address: getDeploymentStep('zoltar').address,
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'deployChild',
-		args: [universeId, outcomeIndex],
-	}))
-	return {
-		action: 'createChildUniverse',
-		hash,
-		outcomeIndex,
-		universeId,
-	} satisfies ZoltarChildUniverseActionResult
-}
-async function executeZoltarMigrationAction<TCallParams extends ContractRevertReasonParams>(client: WriteClient, action: ZoltarMigrationActionResult['action'], universeId: bigint, amountAttoRep: bigint, outcomeIndexes: bigint[], callParams: TCallParams) {
-	const hash = await writeContractAndWait(client, () => callParams)
-	return {
-		action,
-		amountAttoRep,
-		hash,
-		outcomeIndexes,
-		universeId,
-	} satisfies ZoltarMigrationActionResult
-}
-export async function prepareRepForMigrationInZoltar(client: WriteClient, universeId: bigint, amountAttoRep: bigint) {
-	const callParams = {
-		address: getDeploymentStep('zoltar').address,
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'addRepToMigrationBalance',
-		args: [universeId, amountAttoRep],
-	}
-	return await executeZoltarMigrationAction(client, 'addRepToMigrationBalance', universeId, amountAttoRep, [], callParams)
-}
-export async function migrateInternalRepInZoltar(client: WriteClient, universeId: bigint, amountAttoRep: bigint, outcomeIndexes: bigint[]) {
-	const callParams = {
-		address: getDeploymentStep('zoltar').address,
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'splitMigrationRep',
-		args: [universeId, amountAttoRep, outcomeIndexes],
-	}
-	return await executeZoltarMigrationAction(client, 'splitMigrationRep', universeId, amountAttoRep, outcomeIndexes, callParams)
-}
 export async function migrateRepToZoltarFromSecurityPool(client: WriteClient, securityPoolAddress: Address, universeId: bigint, outcomes: ReportingOutcomeKey[]) {
 	return await executeForkAuctionAction(
 		client,
@@ -455,18 +407,4 @@ export async function forkUniverseDirectly(client: WriteClient, universeId: bigi
 		securityPoolAddress,
 		universeId,
 	} satisfies ForkAuctionActionResult
-}
-export async function forkZoltarUniverse(client: WriteClient, universeId: bigint, questionId: bigint) {
-	const hash = await writeContractAndWait(client, () => ({
-		address: getInfraContractAddresses().zoltar,
-		abi: Zoltar_Zoltar.abi,
-		functionName: 'forkUniverse',
-		args: [universeId, questionId],
-	}))
-	return {
-		action: 'forkZoltar',
-		hash,
-		questionId: getQuestionIdHex(questionId),
-		universeId,
-	} satisfies ZoltarForkActionResult
 }

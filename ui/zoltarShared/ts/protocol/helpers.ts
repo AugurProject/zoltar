@@ -5,13 +5,13 @@ type IntegerLike = bigint | number
 
 type SecurityVaultTuple = readonly [bigint, bigint, bigint, bigint] | readonly [bigint, bigint, bigint, bigint, bigint]
 export type UniverseTuple = readonly [bigint, bigint, bigint, Address, bigint]
-export type StagedOperationTuple = {
+type StagedOperationTuple = {
 	operationAmountAttoRepOrAttoEth: bigint
 	operator: Address
 	operation: IntegerLike
 	targetVault: Address
 }
-export type DeployedChildUniverseTuple = {
+type DeployedChildUniverseTuple = {
 	forkQuestionId: bigint
 	forkTime: bigint
 	forkingOutcomeIndex: bigint
