@@ -159,9 +159,32 @@ if (import.meta.main) {
 	if (junitPath !== undefined) await fs.mkdir(path.dirname(junitPath), { recursive: true })
 	const startedAt = performance.now()
 	const preloadPath = domain === 'solidity' ? './bun-test-setup-solidity.ts' : './bun-test-setup-ui.ts'
+	// Temporary CI diagnostic for the shard-4 preact resolution failure; remove after diagnosis.
+	const reportPreactState = async (label: string) => {
+		const { lstatSync, readlinkSync, existsSync } = await import('node:fs')
+		const preactLink = path.join(repositoryRoot, 'ui', 'coreShared', 'node_modules', 'preact')
+		const rootPreact = path.join(repositoryRoot, 'node_modules', 'preact')
+		const describe = (target: string) => {
+			try {
+				const stat = lstatSync(target)
+				return stat.isSymbolicLink() ? `symlink -> ${readlinkSync(target)}` : stat.isDirectory() ? 'directory' : 'file'
+			} catch (error) {
+				return `missing (${error instanceof Error ? error.message : String(error)})`
+			}
+		}
+		console.error(`[preact-diagnostic ${label}] ui/coreShared/node_modules/preact: ${describe(preactLink)}`)
+		console.error(`[preact-diagnostic ${label}] node_modules/preact: ${describe(rootPreact)}; package.json exists: ${existsSync(path.join(rootPreact, 'package.json'))}; test-utils exists: ${existsSync(path.join(rootPreact, 'test-utils', 'package.json'))}`)
+		try {
+			console.error(`[preact-diagnostic ${label}] resolve from js testUtils: ${Bun.resolveSync('preact', path.join(repositoryRoot, 'ui', 'coreShared', 'js', 'tests', 'testUtils'))}`)
+		} catch (error) {
+			console.error(`[preact-diagnostic ${label}] resolve from js testUtils failed: ${error instanceof Error ? error.message : String(error)}`)
+		}
+	}
+	await reportPreactState('before')
 	const exitCode = await runBunTestProcess({
 		cmd: [process.execPath, 'test', '--preload', preloadPath, ...reporterArguments, '--timeout', '300000', ...passthroughArgs, ...selectedShard.files.map(toBunTestPath)],
 	})
+	await reportPreactState('after')
 	const elapsedSeconds = (performance.now() - startedAt) / 1000
 	if (exitCode === 0 && timingOutputPath !== undefined && junitPath !== undefined) {
 		await writeTestTimingObservation(timingOutputPath, junitPath, elapsedSeconds, selectedShard.files, getTimingContextPaths(domain))
