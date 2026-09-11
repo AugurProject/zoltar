@@ -26,6 +26,7 @@ export function useLiveTradingController({
 	walletSummaryRetryNonce,
 	defaultSlippage,
 	defaultValidityMinutes,
+	refreshIntervalMilliseconds,
 	services = liveTradingControllerServices,
 }: {
 	route: string
@@ -38,18 +39,17 @@ export function useLiveTradingController({
 	walletSummaryRetryNonce: number
 	defaultSlippage: string
 	defaultValidityMinutes: string
+	refreshIntervalMilliseconds?: number | undefined
 	services?: LiveTradingControllerServices
 }) {
 	const marketDiscovery = useMarketDiscovery()
-	const { markets, selectedPool, setSelectedPool, discoveryState, discoveryError, marketPage } = marketDiscovery
+	const { markets, discoveryState, discoveryError, marketPage } = marketDiscovery
 	const walletSession = useWalletSession()
 	const { account, accountRef, walletClient, walletContextInvalidated, walletConnectionFeedback } = walletSession
 	const portfolioQueries = usePortfolioQueries()
 	const { balances, setBalances, balanceState, setBalanceState, balanceError, setBalanceError, portfolioEntries, portfolioBalanceState, portfolioBalanceError, setPortfolioRefreshNonce } = portfolioQueries
 	const transactionWorkflow = useTransactionWorkflow(onWorkflowLockChange, defaultSlippage, defaultValidityMinutes)
-	const { mode, side, amount, slippage, transactionValidityMinutes, quote, setQuote, dispatchWorkflow, state, positionHash, message, positionReceiptWarning, positionWorkflowLockedRef, liquidityWorkflowLockedRef, workflowLocked, updateLiquidityWorkflowLock } = transactionWorkflow
-	const marketListRef = useRef<HTMLElement>(null)
-	const marketDetailRef = useRef<HTMLElement>(null)
+	const { mode, side, amount, slippage, transactionValidityMinutes, quote, setQuote, dispatchWorkflow, state, positionHash, message, positionReceiptWarning, positionWorkflowLockedRef, workflowLocked, updateLiquidityWorkflowLock } = transactionWorkflow
 	const portfolioBalanceRequests = useRef(createLatestRequestGuard()).current
 	const discoveryRequests = useRef(createLatestRequestGuard()).current
 	const balanceRequests = useRef(createLatestRequestGuard()).current
@@ -62,10 +62,10 @@ export function useLiveTradingController({
 	const routePool = securityPoolAddressFromRoute(route)
 	const visibleMarkets = routePool === undefined ? filterMarketsByUniverse(markets, selectedUniverseId) : markets.filter(market => market.pool.toLowerCase() === routePool.toLowerCase())
 	const visiblePortfolioEntries = portfolioEntries.filter(entry => entry.market.universeId.toString() === selectedUniverseId)
-	const routeSelected = routePool === undefined ? undefined : visibleMarkets.find(market => market.pool.toLowerCase() === routePool.toLowerCase())
+	// Only addressed routes work on a market; browse routes list candidates and lookup routes wait for an address.
+	const selected = routePool === undefined ? undefined : visibleMarkets.find(market => market.pool.toLowerCase() === routePool.toLowerCase())
 	const nowSeconds = useQuestionClock(undefined, configuration, services)
-	const selectableMarkets = visibleMarkets.filter(market => (route === 'create-market' ? market.pair === undefined && market.loadError === undefined && marketAcceptsNewRisk(market, nowSeconds) : route === 'portfolio' || routePool !== undefined || market.pair !== undefined || market.loadError !== undefined))
-	const selected = routePool === undefined ? (selectableMarkets.find(market => market.pool.toLowerCase() === selectedPool?.toLowerCase()) ?? selectableMarkets[0]) : routeSelected
+	const listedMarkets = visibleMarkets.filter(market => (route === 'security-pools' ? market.pair === undefined && market.loadError === undefined && marketAcceptsNewRisk(market, nowSeconds) : market.pair !== undefined || market.loadError !== undefined))
 	const walletUniverseId = routePool === undefined ? selectedUniverseId : selected?.universeId.toString()
 	const selectedBalances = balanceState === 'ready' ? liveBalancesForMarket(balances, selected) : undefined
 	let selectedBalanceState = balanceState
@@ -90,6 +90,7 @@ export function useLiveTradingController({
 		balanceRequests,
 		portfolioBalanceRequests,
 		simulationRequests,
+		refreshIntervalMilliseconds,
 	})
 	const { connect, executeWithCurrentWalletContext, createGuardedWalletWrite, refreshWalletSummaryAfterReceipt, walletContextIsCurrent } = useWalletSessionController({
 		route,
@@ -116,13 +117,6 @@ export function useLiveTradingController({
 			return { value: undefined, error: error instanceof Error ? error.message : 'Invalid amount' }
 		}
 	}, [amount])
-
-	function focusSection(section: Readonly<{ current: HTMLElement | null }>) {
-		requestAnimationFrame(() => {
-			section.current?.focus({ preventScroll: true })
-			section.current?.scrollIntoView({ block: 'start' })
-		})
-	}
 
 	async function retryBalances() {
 		if (configuration === undefined || selected === undefined) return
@@ -179,23 +173,6 @@ export function useLiveTradingController({
 		marketPageStart: marketPage.start,
 	})
 
-	function selectMarket(market: LiveMarket) {
-		if (positionWorkflowLockedRef.current || liquidityWorkflowLockedRef.current) return
-		// Only a market change re-runs the balance effect; resetting balances for the current
-		// market would leave them stuck in the loading state with no refresh to complete it.
-		if (selected?.pool.toLowerCase() !== market.pool.toLowerCase()) {
-			balanceRequests.invalidate()
-			setBalances(undefined)
-			setBalanceState(account === undefined ? 'disconnected' : 'loading')
-			setBalanceError(undefined)
-		}
-		simulationRequests.invalidate()
-		setSelectedPool(market.pool)
-		setQuote(undefined)
-		dispatchWorkflow({ type: 'reset' })
-		focusSection(marketDetailRef)
-	}
-
 	return {
 		wallet: {
 			account,
@@ -219,21 +196,17 @@ export function useLiveTradingController({
 		},
 		discovery: {
 			visibleMarkets,
-			listedMarkets: selectableMarkets,
+			listedMarkets,
 			selected,
 			selectedPairInitialized,
 			routePool,
 			discoveryState,
 			discoveryError,
 			marketPage,
-			marketListRef,
-			marketDetailRef,
 			nowSeconds,
 			refresh,
 			refreshFromControl,
 			loadMarketPage,
-			focusSection,
-			selectMarket,
 		},
 		position: {
 			parsedAmount,

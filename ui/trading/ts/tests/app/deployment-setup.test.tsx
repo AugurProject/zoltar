@@ -352,8 +352,8 @@ describe('trading deployment setup', () => {
 		window.location.hash = '#/markets'
 		const rendered = await renderIntoDocument(<App loadLiveDeployment={async () => await new Promise<never>(() => undefined)} />)
 		cleanupRendered = rendered.cleanup
-		expect(rendered.container.querySelector('nav a[aria-current="page"]')?.textContent?.trim()).toBe('Markets')
-		expect(document.title).toBe('Markets · Statoblast trading')
+		expect(rendered.container.querySelector('nav a[aria-current="page"]')?.textContent?.trim()).toBe('Market')
+		expect(document.title).toBe('Browse markets · Statoblast trading')
 		expect(rendered.container.querySelector('.site-header--deployment')).toBeNull()
 		expect(rendered.container.querySelector('.deployment-setup')).toBeNull()
 	})

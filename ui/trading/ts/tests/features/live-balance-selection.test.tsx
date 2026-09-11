@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
@@ -87,7 +88,7 @@ describe('live balance selection', () => {
 		url: 'http://localhost/?demo=0#/market',
 	})
 
-	async function renderController() {
+	async function renderController(initialRoute: string) {
 		const pendingBalanceLoads: Array<{ pool: Address; resolve: (balances: LiveBalances) => void }> = []
 		const walletListeners = new Map<string, (...args: unknown[]) => void>()
 		Reflect.set(window, 'ethereum', {
@@ -95,15 +96,22 @@ describe('live balance selection', () => {
 			on: (eventName: string, listener: (...args: unknown[]) => void) => walletListeners.set(eventName, listener),
 			removeListener: (eventName: string) => walletListeners.delete(eventName),
 		})
-		const discover = async () => ({ start: 0n, count: 2n, total: 2n, previousStart: undefined, nextStart: undefined, markets: [market, secondMarket], universeIds: [1n], selectedUniverseId: 1n })
 		const services = {
 			...liveTradingControllerServices,
 			createTradingPublicClient: () => ({}),
 			validateLiveDeployment: async () => undefined,
-			discoverLiveUniverseMarketPage: discover,
-			discoverTradingMarketPage: discover,
-			discoverAllLiveMarketsInUniverse: discover,
-			discoverAddressedMarket: async () => ({ ...(await discover()), markets: [market] }),
+			discoverUniverses: async () => {
+				throw new Error('Addressed routes must not run universe-only discovery')
+			},
+			discoverTradingMarketPage: async () => {
+				throw new Error('Addressed routes must not page through markets')
+			},
+			discoverAddressedMarket: async (_client: unknown, _configuration: unknown, address: Address) => {
+				const found = [market, secondMarket].find(candidate => candidate.pool.toLowerCase() === address.toLowerCase())
+				if (found === undefined) throw new Error(`Unknown pool ${address}`)
+				// Live discovery always builds fresh market objects; the balance read must key on the pool, not object identity.
+				return { start: 0n, count: 1n, total: 1n, previousStart: undefined, nextStart: undefined, markets: [{ ...found }], universeIds: [1n], selectedUniverseId: 1n }
+			},
 			walletChainId: async () => configuration.chainId,
 			connectWallet: async () => account,
 			createTradingWalletClient: () => ({}),
@@ -115,9 +123,9 @@ describe('live balance selection', () => {
 			},
 		}
 		let controller: Controller | undefined
-		const Harness = () => {
+		const Harness = ({ route }: { route: string }) => {
 			controller = useLiveTradingController({
-				route: 'market',
+				route,
 				configuration,
 				configurationError: undefined,
 				selectedUniverseId: '1',
@@ -127,16 +135,21 @@ describe('live balance selection', () => {
 				walletSummaryRetryNonce: 0,
 				defaultSlippage: '0.5',
 				defaultValidityMinutes: '20',
+				refreshIntervalMilliseconds: 60_000,
 				services,
 			})
 			return null
 		}
-		const rendered = await renderIntoDocument(<Harness />)
+		const rendered = await renderIntoDocument(<Harness route={initialRoute} />)
 		cleanupRendered = rendered.cleanup
 		await flush()
 		const current = () => {
 			if (controller === undefined) throw new Error('Controller has not rendered')
 			return controller
+		}
+		const setRoute = async (route: string) => {
+			await act(() => render(<Harness route={route} />, rendered.container))
+			await flush()
 		}
 		await act(async () => {
 			await current().wallet.connect()
@@ -144,7 +157,7 @@ describe('live balance selection', () => {
 		await flush()
 		expect(current().wallet.account).toBe(account)
 		expect(current().discovery.selected?.pool).toBe(pool)
-		return { current, pendingBalanceLoads }
+		return { current, pendingBalanceLoads, setRoute }
 	}
 
 	async function resolveBalanceLoad(pendingBalanceLoads: Array<{ pool: Address; resolve: (balances: LiveBalances) => void }>, index: number, multiplier: bigint) {
@@ -155,13 +168,12 @@ describe('live balance selection', () => {
 		await flush()
 	}
 
-	test('reselecting the current market while balances load still completes with fresh balances', async () => {
-		const { current, pendingBalanceLoads } = await renderController()
+	test('re-rendering the current market route while balances load still completes with fresh balances', async () => {
+		const { current, pendingBalanceLoads, setRoute } = await renderController(`market/${pool}`)
 		expect(current().balances.selectedBalanceState).toBe('loading')
 		expect(pendingBalanceLoads.map(load => load.pool)).toEqual([pool])
 
-		await act(async () => current().discovery.selectMarket(market))
-		await flush()
+		await setRoute(`market/${pool}`)
 		expect(current().balances.selectedBalanceState).toBe('loading')
 		expect(pendingBalanceLoads.map(load => load.pool)).toEqual([pool])
 		await resolveBalanceLoad(pendingBalanceLoads, 0, 1n)
@@ -171,13 +183,12 @@ describe('live balance selection', () => {
 		expect(current().balances.selectedBalances?.scope.pool).toBe(pool)
 	})
 
-	test('reselecting the current market after balances are ready leaves balances ready', async () => {
-		const { current, pendingBalanceLoads } = await renderController()
+	test('re-rendering the current market route after balances are ready leaves balances ready', async () => {
+		const { current, pendingBalanceLoads, setRoute } = await renderController(`market/${pool}`)
 		await resolveBalanceLoad(pendingBalanceLoads, 0, 1n)
 		expect(current().balances.selectedBalanceState).toBe('ready')
 
-		await act(async () => current().discovery.selectMarket(market))
-		await flush()
+		await setRoute(`market/${pool}`)
 
 		expect(pendingBalanceLoads.map(load => load.pool)).toEqual([pool])
 		expect(current().balances.selectedBalanceState).toBe('ready')
@@ -185,12 +196,11 @@ describe('live balance selection', () => {
 		expect(current().balances.selectedBalances?.yes).toBe(10n ** 18n)
 	})
 
-	test('switching markets discards balances that resolve for the previous market', async () => {
-		const { current, pendingBalanceLoads } = await renderController()
+	test('switching market routes discards balances that resolve for the previous market', async () => {
+		const { current, pendingBalanceLoads, setRoute } = await renderController(`market/${pool}`)
 		expect(pendingBalanceLoads.map(load => load.pool)).toEqual([pool])
 
-		await act(async () => current().discovery.selectMarket(secondMarket))
-		await flush()
+		await setRoute(`market/${secondPool}`)
 		expect(current().discovery.selected?.pool).toBe(secondPool)
 		expect(current().balances.selectedBalanceState).toBe('loading')
 		expect(pendingBalanceLoads.map(load => load.pool)).toEqual([pool, secondPool])
