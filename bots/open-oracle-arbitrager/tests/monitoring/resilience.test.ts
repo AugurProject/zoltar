@@ -39,6 +39,13 @@ describe('OpenOracle monitor resilience', () => {
 		expect(retryDelayMilliseconds(1_000, 1, () => 0)).toBe(1_000)
 		expect(retryDelayMilliseconds(1_000, 4, () => 0)).toBe(8_000)
 		expect(retryDelayMilliseconds(60_000, 20, () => 0)).toBe(300_000)
+		expect(retryDelayMilliseconds(1_000, 5, () => 1, 30_000)).toBe(19_200)
+		expect(retryDelayMilliseconds(1_000, 20, () => 1, 30_000)).toBe(30_000)
+		// A poll interval above the cap keeps its own pace instead of failing validation.
+		expect(retryDelayMilliseconds(3_600_000, 0)).toBe(3_600_000)
+		expect(retryDelayMilliseconds(3_600_000, 3, () => 0)).toBe(3_600_000)
+		expect(retryDelayMilliseconds(60_000, 3, () => 0, 30_000)).toBe(60_000)
+		expect(() => retryDelayMilliseconds(1_000, 1, () => 0, 0)).toThrow('positive integer')
 		const waits: number[] = []
 		const pollFailureCounts: number[] = []
 		let polls = 0

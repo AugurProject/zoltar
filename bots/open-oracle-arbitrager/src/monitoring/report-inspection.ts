@@ -5,20 +5,23 @@ import { opportunityDecision } from '#execution/execution-orchestration'
 import { gamePolicyMismatch, type CoordinatorGamePolicy } from '#core/game-policy'
 import { decimalSignedEth, decimalWeth, type OpportunitySnapshot } from '#state/operator-state'
 import { formatTokenAmount } from '#monitoring/market-monitor'
-import { requireCanonicalBlock, type MarketConsensusObservation } from '@zoltar/bot-shared/monitoring/market-consensus'
+import type { MarketConsensusObservation } from '@zoltar/bot-shared/monitoring/market-consensus'
 import { projectedLifecycleGasReserveAttoWeth } from '#core/safety-controls'
 import { calculateNextAmount1, deriveTokenToSwap, executorFunding, fundedCapitalAtRiskAttoWeth, hedgeWethLimitAttoEth, meetsProfitThreshold, spotTwapDeviationWithinLimit, type ArbitrageQuote } from '#core/strategy'
 import type { Venue } from '#core/venue-strategy'
-import type { EvaluatedOpportunity, Pool, RawBalances, ReadClient, WriteClient } from '#core/operator-types'
-import { evaluate, quoteInput } from '#monitoring/opportunity-evaluation'
+import type { EvaluatedOpportunity, Pool, RawBalances, WriteClient } from '#core/operator-types'
+import type { BatchReader } from '#core/batch-read'
+import { evaluate, type EvaluationConfiguration } from '#monitoring/opportunity-evaluation'
 import { STANDARD_UNISWAP_FEES } from '#core/uniswap-v4'
 
 const FEES = STANDARD_UNISWAP_FEES
 
+export type ReportInspectionConfiguration = EvaluationConfiguration & Pick<Configuration, 'execute' | 'maxSpotTwapTicks' | 'minimumProfitAttoWeth' | 'minimumProfitBps' | 'minimumRemainingBlocks' | 'minimumRemainingSeconds' | 'openOracle'>
+
 export async function inspectReport(
-	client: ReadClient,
-	wallet: WriteClient | undefined,
-	config: Configuration,
+	client: BatchReader,
+	wallet: Pick<WriteClient, 'account'> | undefined,
+	config: ReportInspectionConfiguration,
 	report: OpenOracleStatePreimage,
 	pools: readonly Pool[],
 	blockNumber: bigint,
@@ -60,15 +63,14 @@ export async function inspectReport(
 		recordDecision('Skipped report', `Only ${timeRemaining.toString()} ${timeType ? 'seconds' : 'blocks'} remain`)
 		return
 	}
-	let best: { hedgeFee: (typeof FEES)[number]; hedgePool: Address; pool: Pool; quote: ArbitrageQuote; venue: Venue } | undefined
+	let best: { hedgeFee: (typeof FEES)[number]; hedgePool: Address; pool: Pool; quote: ArbitrageQuote; replacementAmount2: bigint | undefined; replacementQuoteFailure: string | undefined; venue: Venue } | undefined
 	const dexObservations: MarketConsensusObservation[] = []
-	for (const pool of pools) {
-		if (pool.token.toLowerCase() !== game.token2.toLowerCase()) continue
-		if (!spotTwapDeviationWithinLimit(pool.spotTick, pool.twapTick, config.maxSpotTwapTicks)) continue
-		const evaluation = await evaluate(client, config, report, pool, gasPrice, { hash: blockHash, number: blockNumber, observedAt: bigintToSafeNumber(blockTimestamp * 1_000n, 'Report block timestamp') })
+	const marketBlock = { hash: blockHash, number: blockNumber, observedAt: bigintToSafeNumber(blockTimestamp * 1_000n, 'Report block timestamp') }
+	const evaluations = await Promise.all(pools.filter(pool => pool.token.toLowerCase() === game.token2.toLowerCase() && spotTwapDeviationWithinLimit(pool.spotTick, pool.twapTick, config.maxSpotTwapTicks)).map(async pool => ({ evaluation: await evaluate(client, config, report, pool, gasPrice, marketBlock), pool })))
+	for (const { evaluation, pool } of evaluations) {
 		dexObservations.push(...evaluation.observations)
 		if (evaluation.candidate === undefined) continue
-		if (best === undefined || evaluation.candidate.quote.netProfitAttoWeth > best.quote.netProfitAttoWeth) best = { ...evaluation.candidate, pool }
+		if (best === undefined || evaluation.candidate.quote.netProfitAttoWeth > best.quote.netProfitAttoWeth) best = { ...evaluation.candidate, pool, replacementAmount2: evaluation.replacementAmount2, replacementQuoteFailure: evaluation.replacementQuoteFailure }
 	}
 	if (best === undefined) {
 		console.log(`report=${report.helper.reportId.toString()} skipped=no-trusted-liquid-pool`)
@@ -76,8 +78,8 @@ export async function inspectReport(
 		return
 	}
 	const newAmount1 = calculateNextAmount1(game)
-	const replacementAmount2 = await quoteInput(client, config.network.quoter, config.network.weth, best.pool.token, newAmount1, best.pool.fee, blockNumber)
-	await requireCanonicalBlock(blockNumber, blockHash, async canonicalBlockNumber => (await client.getBlock({ blockNumber: canonicalBlockNumber })).hash)
+	const replacementAmount2 = best.replacementAmount2
+	if (replacementAmount2 === undefined) throw new Error(`Uniswap replacement exact-input quote failed for pool ${best.pool.address}: ${best.replacementQuoteFailure ?? 'unknown failure'}`)
 	const replacementTokenToSwap = deriveTokenToSwap(game, newAmount1, replacementAmount2)
 	if (replacementTokenToSwap.toLowerCase() !== best.quote.tokenToSwap.toLowerCase()) {
 		console.log(`report=${report.helper.reportId.toString()} skipped=replacement-ratio-direction-mismatch`)
