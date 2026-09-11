@@ -278,7 +278,7 @@ export const projects: readonly Project[] = [
 		id: 'chaos',
 		path: 'bots/chaos',
 		type: 'bot',
-		dependencies: ['bot-shared', 'contracts'],
+		dependencies: ['shared-core', 'bot-shared', 'contracts'],
 		tasks: {
 			setup: packageInstallTask('bots/chaos'),
 			test: packageTask('bots/chaos', 'test'),
@@ -306,14 +306,14 @@ export const projects: readonly Project[] = [
 			'dependency-update': sharedDependencyTask('bots/open-oracle-arbitrager'),
 		},
 		generatedDirectories: [],
-		generatedFiles: ['bots/open-oracle-arbitrager/src/contracts/artifacts.generated.ts'],
+		generatedFiles: ['bots/open-oracle-arbitrager/src/contracts/artifacts.generated.ts', 'bots/open-oracle-arbitrager/tests/contracts/harness-artifacts.generated.ts'],
 		ci: { scope: 'arbitrager', componentName: 'arbitrager', requiresContractArtifacts: true },
 	},
 	{
 		id: 'liquidator',
 		path: 'bots/liquidator',
 		type: 'bot',
-		dependencies: ['bot-shared', 'contracts'],
+		dependencies: ['shared-core', 'bot-shared', 'contracts'],
 		tasks: {
 			setup: packageInstallTask('bots/liquidator'),
 			test: packageTask('bots/liquidator', 'test'),

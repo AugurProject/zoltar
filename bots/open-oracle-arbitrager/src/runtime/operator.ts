@@ -4,13 +4,13 @@ import { bigintToSafeNumber, createContextualPublicClient, createWalletClient, p
 import { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import { OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SETTLED_TOPIC, OPEN_ORACLE_REPORT_SUBMITTED_TOPIC } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { constantProductPairAbi } from '#contracts/abi'
-import { advanceCursorAfterSuccessfulHead, cursorForHeadScan, fetchLogsWithAdaptiveRanges, finalityAnchorRequiresReset, initialCursor, latestLogRange, newestFirstScanRanges, operatorStatusAfterPause, withFinalityAnchor, type SyncCursor } from '@zoltar/bot-shared/monitoring/block-sync'
+import { advanceCursorAfterSuccessfulHead, cursorForHeadScan, fetchLogsWithAdaptiveRanges, finalityAnchorRequiresReset, initialCursor, latestLogRange, newestFirstScanRanges, withFinalityAnchor, type SyncCursor } from '@zoltar/bot-shared/monitoring/block-sync'
 import { checkConnectivity, checkSubmissionEndpoints, endpointLabel } from '#monitoring/connectivity'
 import type { Configuration } from '#config/configuration'
 import type { DeploymentSettings } from '#config/deployment-settings'
 import { createSignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
 import { canonicalBlockHashWithQuorum, executionFailureDecision, executionTokenAllowed, isExecutionPausedError, selectBestExecution } from '#execution/execution-orchestration'
-import { appendExecutionHistoryIfMissing, clearPollFailureMetadata, decimalSignedEth, ensureExecutionHistoryWritable, gameCapitalSnapshot, loadExecutionHistory, recordOperation, type OperatorState, type OpportunitySnapshot } from '#state/operator-state'
+import { appendExecutionHistoryIfMissing, decimalSignedEth, ensureExecutionHistoryWritable, gameCapitalSnapshot, loadExecutionHistory, recordOperation, type OperatorState, type OpportunitySnapshot } from '#state/operator-state'
 import { applyCoordinatorReports, applyLogs, compareLogs, logBlockNumber, reportId, type ActiveReport } from '#monitoring/oracle-log-state'
 import { appendPriceHistory, createTokenCatalogTracker, createTokenMetadataCache, discoverAugurRepTokens, discoverTokenPools, loadPriceHistory, loadTokenMarkets, missingPricePoints, pricePoints } from '#monitoring/market-monitor'
 import { centralizedMarketConfigurationAllowsExecution, centralizedMarketConsensusObservations, centralizedPriceAllowsExecution, centralizedPriceDeviationBps, marketConsensusSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
@@ -43,34 +43,21 @@ import type { ExecutionLockManager } from '#execution/execution-locks'
 import { loadCoordinatorPolicies, loadCoordinatorPoliciesWithQuorum, authenticatedExecutionToken, authenticateConfiguredDeployments, retainReportsAndLogs } from '#config/runtime-deployment'
 import { executeDispute, loadBalances } from '#execution/dispute-execution'
 import { inspectReport } from '#monitoring/report-inspection'
-import { acquireScanSignerOperation, deploymentUpdateMustWait, startOperatorControlPlane } from './operator-control-plane.ts'
+import { deploymentUpdateMustWait } from './deployment-transition.ts'
+import { startOperatorControlPlane } from './operator-control-plane.ts'
+import { acquireScanSignerOperation } from './signer-operations.ts'
 import { executorDeploymentIntentPath, loadExecutorDeploymentIntentForChain } from '#execution/executor-deployment-store'
 import { assertStoredExecutorDeploymentIntent } from '#execution/create2-executor'
 import { applyQueuedExecutionSettings, applyQueuedSigner, resetReportScanState } from './operator-execution-state.ts'
 import { selectQuorumHead } from './quorum-head.ts'
 import { createOperatorHeadWatcher, createScanWakeGate, startCentralizedMarketSampler } from './background-observers.ts'
 import type { ArbitragerShutdownController } from './shutdown.ts'
+import { completeSuccessfulPoll, completeUnconfiguredPoll } from './poll-completion.ts'
 
 const REORG_OVERLAP_BLOCKS = 12n
 const MAX_LOG_SCAN_RANGE = 256n
 /** A failing scan retries within this bound (or the poll interval when that is longer) so a transient fault never leaves the operator blind for minutes. */
 const MAXIMUM_SCAN_RETRY_DELAY_MILLISECONDS = 30_000
-
-type SuccessfulPollState = Pick<OperatorState, 'marketAvailability' | 'consecutivePollFailures' | 'lastError' | 'lastPollFailureAt' | 'lastRetryAt' | 'nextRetryAt' | 'paused' | 'retryInProgress' | 'status'>
-
-export function completeSuccessfulPoll(state: SuccessfulPollState, nextError: string | undefined, stopAfterPoll: boolean) {
-	clearPollFailureMetadata(state)
-	if (state.marketAvailability?.kind === 'missing-deployment') state.marketAvailability = undefined
-	state.lastError = nextError
-	state.status = operatorStatusAfterPause(state.paused, true, nextError !== undefined)
-	return stopAfterPoll
-}
-
-export function completeUnconfiguredPoll(state: SuccessfulPollState) {
-	const stop = completeSuccessfulPoll(state, undefined, false)
-	state.status = 'paused'
-	return stop
-}
 
 export async function runOperator(config: Configuration, lockManager: ExecutionLockManager | undefined, initialSignerLock: ExclusiveProcessLock | undefined, shutdown?: ArbitragerShutdownController) {
 	if (config.lookbackBlocks < 0n || config.lookbackBlocks > MAX_LOG_SCAN_RANGE) throw new Error('lookbackBlocks must be from 0 through 256')

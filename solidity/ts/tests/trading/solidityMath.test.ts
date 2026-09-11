@@ -4,10 +4,27 @@ import { useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnv
 import { createWriteClient, type WriteClient } from '../../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { compileArtifactsForTests } from './compileArtifactsForTests'
-import { quoteAddLiquidity, quoteExactInput, quoteExactOutput } from '@zoltar/trading-shared/trading/math'
-import { flushSolidityBytecodeCoverageForTest } from '../../coverage/traceToSource'
+import { quoteExactOutput } from '@zoltar/trading-shared/trading/math'
+import { flushSolidityBytecodeCoverageForTest } from '../../testSupport/coverage/traceToSource'
 
 type TradingContracts = Awaited<ReturnType<typeof compileArtifactsForTests>>
+
+const BPS_DENOMINATOR = 10_000n
+
+// Reference floor exact-input math for the Solidity parity check.
+function quoteExactInput(reserveIn: bigint, reserveOut: bigint, amountIn: bigint, feeBps: bigint) {
+	const netInput = (amountIn * (BPS_DENOMINATOR - feeBps)) / BPS_DENOMINATOR
+	const amountOut = (reserveOut * netInput) / (reserveIn + netInput)
+	return { amountIn, amountOut, netInput, feeAmount: amountIn - netInput }
+}
+
+// Reference proportional-deposit math for the Solidity parity check: the smaller side limits both deposits.
+function quoteAddLiquidity(yesReserve: bigint, noReserve: bigint, maxYes: bigint, maxNo: bigint) {
+	const yesLimited = maxYes * noReserve <= maxNo * yesReserve
+	const yesUsed = yesLimited ? maxYes : (maxNo * yesReserve) / noReserve
+	const noUsed = yesLimited ? (maxYes * noReserve) / yesReserve : maxNo
+	return { yesUsed, noUsed }
+}
 
 describe('Solidity and TypeScript AMM math parity', () => {
 	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()

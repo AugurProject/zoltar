@@ -1,4 +1,5 @@
-import { bytesToHex, decodeFunctionData, encodeAbiParameters, getAddress, hexToBytes, isHex, type Address, type EIP1193Provider, type Hex } from '@zoltar/bot-shared/ethereum'
+import { bytesToHex } from '@zoltar/core-shared/evm/ethereum'
+import { decodeFunctionData, encodeAbiParameters, getAddress, hexToBytes, isHex, type Address, type EIP1193Provider, type Hex } from '@zoltar/bot-shared/ethereum'
 
 const aggregate3Abi = [
 	{

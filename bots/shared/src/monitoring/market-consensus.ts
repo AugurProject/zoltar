@@ -51,7 +51,7 @@ export async function clearOrphanedDexEvidenceForHeadReplacement(
 	return true
 }
 
-export type MarketVenueKind = 'cex' | 'dex'
+type MarketVenueKind = 'cex' | 'dex'
 
 export type MarketConsensusObservation = {
 	assetId: string
@@ -304,7 +304,7 @@ export function estimateMarketConsensus(observations: readonly MarketConsensusOb
 	}
 }
 
-export function consensusAllowsCandidate(candidatePriceRepPerEth: bigint, estimate: MarketConsensusEstimate, maximumDeviationBps: bigint) {
+function consensusAllowsCandidate(candidatePriceRepPerEth: bigint, estimate: MarketConsensusEstimate, maximumDeviationBps: bigint) {
 	if (!estimate.reliable || estimate.priceRepPerEth === undefined || candidatePriceRepPerEth <= 0n) return false
 	return deviationBps(candidatePriceRepPerEth, estimate.priceRepPerEth) <= maximumDeviationBps
 }

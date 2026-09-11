@@ -1,9 +1,10 @@
 import { describe, expect, spyOn, test } from 'bun:test'
-import { createPublicClient, custom, decodeFunctionData, encodeAbiParameters, getAddress, type Hex } from '@zoltar/bot-shared/ethereum'
+import { createPublicClient, decodeFunctionData, encodeAbiParameters, getAddress, type Hex } from '@zoltar/bot-shared/ethereum'
+import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import type { OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { quoterAbi, v4QuoterAbi } from '#contracts/abi'
 import { networkConfiguration } from '#config/network'
-import { DEFAULT_RISK_LIMITS } from '#core/safety-controls'
+import type { RiskLimits } from '#core/safety-controls'
 import { evaluate, type EvaluationConfiguration } from '#monitoring/opportunity-evaluation'
 import { inspectReport, type ReportInspectionConfiguration } from '#monitoring/report-inspection'
 import type { Pool } from '#core/operator-types'
@@ -15,10 +16,17 @@ const v4Quoter = getAddress('0x0000000000000000000000000000000000000044')
 const v4PoolManager = getAddress('0x0000000000000000000000000000000000000045')
 const poolAddress = getAddress('0x0000000000000000000000000000000000000500')
 const reporter = getAddress('0x0000000000000000000000000000000000000004')
+const riskLimits: RiskLimits = {
+	lifecycleGasReserveAttoWeth: 10n ** 16n,
+	maxConcurrentPositions: 1,
+	maxDailyGasSpendAttoWeth: 5n * 10n ** 16n,
+	maxPositionNotionalAttoWeth: 5n * 10n ** 18n,
+	maxTotalLockedAttoWeth: 10n * 10n ** 18n,
+}
 const config: EvaluationConfiguration = {
 	maxHedgeSlippageBps: 50n,
 	network,
-	riskLimits: DEFAULT_RISK_LIMITS,
+	riskLimits,
 	submission: { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] },
 	v4PoolManager,
 	v4Quoter,

@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import { randomDelaySeconds, randomElement, randomIntegerExcept } from '../../src/core/random.ts'
+import { randomDelaySeconds, randomInteger } from '../../src/core/random.ts'
 
 describe('cryptographic random helpers', () => {
 	test('maps a uniform draw around an excluded previous value without retry bias', () => {
-		expect(randomIntegerExcept(60, 63, 61, () => 60)).toBe(60)
-		expect(randomIntegerExcept(60, 63, 61, () => 61)).toBe(62)
-		expect(randomIntegerExcept(60, 63, 61, () => 62)).toBe(63)
+		expect(randomDelaySeconds(60, 63, 61, () => 60)).toBe(60)
+		expect(randomDelaySeconds(60, 63, 61, () => 61)).toBe(62)
+		expect(randomDelaySeconds(60, 63, 61, () => 62)).toBe(63)
 	})
 
 	test('never repeats the previous delay and remains in the one-to-sixty-minute range', () => {
@@ -14,7 +14,7 @@ describe('cryptographic random helpers', () => {
 	})
 
 	test('validates injected randomness instead of trusting it', () => {
-		expect(() => randomElement(['a', 'b'], () => 2)).toThrow('outside')
+		expect(() => randomInteger(0, 2, () => 2)).toThrow('outside')
 		expect(() => randomDelaySeconds(60, 60, undefined)).toThrow('at least two')
 	})
 })

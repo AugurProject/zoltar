@@ -73,7 +73,8 @@ import { SystemState } from '../testSupport/simulator/types/statoblastTypes'
 import { ensureDefined, strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
 import { computeClearing, deployUniformPriceDualCapBatchAuction, finalize as finalizeAuction, getEthRaisedAttoEth, getTotalRepPurchasedAttoRep, simulateWithdrawBids, startAuction, submitBid, withdrawBids } from '../testSupport/simulator/utils/contracts/auction'
 import { getUniformPriceDualCapBatchAuctionAddress } from '../testSupport/simulator/utils/contracts/deployments'
-import { priceToClosestTick, tickToPrice } from '@zoltar/statoblast-shared/statoblast/truthAuctionTickMath'
+import { tickToPrice } from '@zoltar/statoblast-shared/statoblast/truthAuctionTickMath'
+import { priceToClosestTick } from '../testSupport/truthAuctionTicks'
 import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool, statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '../types/contractArtifact'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)

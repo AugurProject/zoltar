@@ -68,10 +68,9 @@ export function runnableOperatorSettings(settingsFile: string, saved: PersistedO
 	return { deployment, network, quorumRpcUrls }
 }
 
-export async function loadConfiguration(): Promise<Configuration> {
+export async function loadConfiguration(settingsFile = resolve(process.env['OPEN_ORACLE_ARBITRAGER_CONFIG'] ?? defaultConfigurationFile)): Promise<Configuration> {
 	const arguments_ = process.argv.slice(2)
-	if (arguments_.length > 0) throw new Error(`The arbitrager accepts no command-line arguments. Edit ${process.env['OPEN_ORACLE_ARBITRAGER_CONFIG'] ?? defaultConfigurationFile} or use the operator UI.`)
-	const settingsFile = resolve(process.env['OPEN_ORACLE_ARBITRAGER_CONFIG'] ?? defaultConfigurationFile)
+	if (arguments_.length > 0) throw new Error(`The arbitrager accepts no command-line arguments. Edit ${settingsFile} or use the operator UI.`)
 	const saved = await loadOperatorSettings(settingsFile)
 	if (saved === undefined) throw new Error(`Missing operator configuration at ${settingsFile}. Copy config/operator.example.json there, edit it, and start the bot again.`)
 	await assertOperatorProfileIsolation(settingsFile, saved)

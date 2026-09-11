@@ -1,22 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { encodeAbiParameters, getAddress, keccak256, toHex, zeroHash, type Address, type Hash } from '@zoltar/bot-shared/ethereum'
-import {
-	assertNoNullifierPathCollisions,
-	computeMerkleMountainRangeRootFromProof,
-	computeNullifierRootFromProof,
-	consumeSparseNullifier,
-	createMerkleMountainRangeProof,
-	createSparseNullifierProof,
-	emptySparseNullifierState,
-	hashCarryLeaf,
-	hashCarryParent,
-	nullifierPath,
-	sparseNullifierRoot,
-	verifyMerkleMountainRangeProof,
-	verifySparseNullifierAbsence,
-	type CarryLeaf,
-	type CarryOutcome,
-} from '../../src/monitoring/carry-proof-index.ts'
+import { computeNullifierRootFromProof, createMerkleMountainRangeProof, createSparseNullifierProof, hashCarryLeaf, nullifierPath, sparseNullifierRoot, type CarryLeaf, type CarryOutcome } from '../../src/monitoring/carry-proof-index.ts'
+import { computeMerkleMountainRangeRootFromProof, consumeSparseNullifier, emptySparseNullifierState, hashCarryParent, verifyMerkleMountainRangeProof, verifySparseNullifierAbsence } from '../support/carry-proof-verification.ts'
 
 function address(value: number): Address {
 	return getAddress(`0x${value.toString(16).padStart(40, '0')}`)
@@ -117,15 +102,16 @@ describe('fork-carry proof index', () => {
 		expect(verifySparseNullifierAbsence(afterFirst, '1', currentSecondProof)).toBe(sparseNullifierRoot(afterFirst))
 		const afterSecond = consumeSparseNullifier(afterFirst, '1')
 		expect(sparseNullifierRoot(afterSecond)).not.toBe(sparseNullifierRoot(afterFirst))
-		expect(() => consumeSparseNullifier(afterSecond, '1')).toThrow('already nullified')
 	})
 
 	test('detects explicit low-64-bit nullifier path collisions', () => {
 		expect(() =>
-			assertNoNullifierPathCollisions([
-				{ parentDepositIndex: '1', path: '9' },
-				{ parentDepositIndex: '2', path: '9' },
-			]),
+			sparseNullifierRoot({
+				consumed: [
+					{ parentDepositIndex: '1', path: '9' },
+					{ parentDepositIndex: '2', path: '9' },
+				],
+			}),
 		).toThrow('path collision')
 		expect(nullifierPath('1')).toBeLessThan(1n << 64n)
 	})

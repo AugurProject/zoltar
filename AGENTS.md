@@ -113,8 +113,8 @@ Run `bun run knip` when imports, exports, tests, package scripts or dependencies
 
 Run `bun run check:generated-clean` only for CI/release freshness work or when contracts, generation scripts, shared build output, UI contract artifacts, or artifact policy change.
 
-Generated outputs are intentionally untracked, except for the documentation outputs and
-vendored deployment input listed below. The documentation outputs are tracked because the
+Generated outputs are intentionally untracked, except for the documentation outputs, the
+arbitrager generated TypeScript, and the vendored deployment input listed below. The documentation outputs are tracked because the
 static documentation site loads them directly;
 `bun run docs:check-charts`, `bun run docs:check-runtime`, `bun run docs:check-contract-reference`, and
 `bun run docs:check-index` enforce their freshness. `bun run check:uniswap-deployment-artifact`
@@ -140,6 +140,8 @@ pins the deployment input and prevents its large upstream packages from entering
 | `docs/assets/js/docsSearchData.js` | `bun run docs:build-index` |
 | `docs/reference/contracts.html` and `docs/reference/contracts/*.html` | `bun run docs:generate-contract-reference` |
 | `bots/open-oracle-arbitrager/docs/chart-runtime.js` | `cd bots/open-oracle-arbitrager && bun run build:docs`; validate with `bun run check:generated` |
+| `bots/open-oracle-arbitrager/src/contracts/artifacts.generated.ts` and `bots/open-oracle-arbitrager/tests/contracts/harness-artifacts.generated.ts` | `cd bots/open-oracle-arbitrager && bun run compile-contracts`; validate with `bun run check:generated` |
+| `bots/open-oracle-arbitrager/src/contracts/executor-abi.generated.ts` | `cd bots/open-oracle-arbitrager && bun run generate:abi`; validate with `bun run check:generated` |
 | `scripts/artifacts/uniswap-deployment.json` | Pinned bytecode from the upstream package versions recorded in the artifact; validate with `bun run check:uniswap-deployment-artifact` |
 
 Do not regenerate or commit these outputs unless the task requires them or a required check reports a missing expected artifact. A deployment workflow that adds another tracked generated artifact must update this policy and add a dirty-diff freshness check in the same change.

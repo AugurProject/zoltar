@@ -2,7 +2,7 @@ import { decodeEventLog, type Address, type TransactionReceipt } from '@zoltar/b
 import { coordinatorAbi } from '#contracts/abi'
 import type { PendingTransactionIntent } from '#state/operator-state'
 
-export function requireSuccessfulStagedOperation(receipt: TransactionReceipt, coordinator: Address, operation: 0 | 1) {
+function requireSuccessfulStagedOperation(receipt: TransactionReceipt, coordinator: Address, operation: 0 | 1) {
 	for (const log of receipt.logs) {
 		if (log.address.toLowerCase() !== coordinator.toLowerCase()) continue
 		try {
@@ -17,7 +17,7 @@ export function requireSuccessfulStagedOperation(receipt: TransactionReceipt, co
 	throw new Error('Coordinator receipt did not confirm the staged operation outcome')
 }
 
-export function requirePendingStagedOperation(receipt: TransactionReceipt, coordinator: Address, operator: Address, receiver: Address, target: Address, amount: bigint) {
+function requirePendingStagedOperation(receipt: TransactionReceipt, coordinator: Address, operator: Address, receiver: Address, target: Address, amount: bigint) {
 	let queuedOperationId: bigint | undefined
 	let routedOperationId: bigint | undefined
 	for (const log of receipt.logs) {

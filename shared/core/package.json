@@ -13,11 +13,6 @@
 			"bun": "./ts/deployment/protocolConfig.ts",
 			"default": "./js/deployment/protocolConfig.js"
 		},
-		"./evm/addressDerivation": {
-			"types": "./ts/evm/addressDerivation.ts",
-			"bun": "./ts/evm/addressDerivation.ts",
-			"default": "./js/evm/addressDerivation.js"
-		},
 		"./evm/ethereum": {
 			"types": "./ts/evm/ethereum.ts",
 			"bun": "./ts/evm/ethereum.ts",
@@ -37,11 +32,6 @@
 			"types": "./ts/serialization/sortStringArrayByKeccak.ts",
 			"bun": "./ts/serialization/sortStringArrayByKeccak.ts",
 			"default": "./js/serialization/sortStringArrayByKeccak.js"
-		},
-		"./testing/pickFixtureProperties": {
-			"types": "./ts/testing/pickFixtureProperties.ts",
-			"bun": "./ts/testing/pickFixtureProperties.ts",
-			"default": "./js/testing/pickFixtureProperties.js"
 		}
 	},
 	"files": [

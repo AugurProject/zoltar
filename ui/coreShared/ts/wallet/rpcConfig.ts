@@ -1,4 +1,4 @@
-export const DEFAULT_RPC_URL = 'https://ethereum.dark.florist'
+const DEFAULT_RPC_URL = 'https://ethereum.dark.florist'
 const RPC_URL_SEARCH_PARAM = 'rpcUrl'
 const RPC_URL_STORAGE_KEY = 'zoltar.rpcUrl'
 const RPC_URLS_STORAGE_KEY = 'zoltar.rpcUrls'

@@ -13,7 +13,7 @@ type ApprovedAmountValueProps = {
 	value: bigint | undefined
 }
 
-export function getApprovedAmountTone(value: bigint | undefined, requiredAmount: bigint | undefined) {
+function getApprovedAmountTone(value: bigint | undefined, requiredAmount: bigint | undefined) {
 	if (value === undefined || requiredAmount === undefined) return undefined
 	return value >= requiredAmount ? 'sufficient' : 'insufficient'
 }

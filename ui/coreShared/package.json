@@ -64,6 +64,10 @@
 			"bun": "./ts/tests/testUtils/fakeBackend.ts",
 			"default": "./js/tests/testUtils/fakeBackend.js"
 		},
+		"./tests/testUtils/fetchStub.js": {
+			"bun": "./ts/tests/testUtils/fetchStub.ts",
+			"default": "./js/tests/testUtils/fetchStub.js"
+		},
 		"./tests/testUtils/protocolTestSupport.js": {
 			"bun": "./ts/tests/testUtils/protocolTestSupport.ts",
 			"default": "./js/tests/testUtils/protocolTestSupport.js"
@@ -79,10 +83,6 @@
 		"./tests/testUtils/transactionActionButton.js": {
 			"bun": "./ts/tests/testUtils/transactionActionButton.ts",
 			"default": "./js/tests/testUtils/transactionActionButton.js"
-		},
-		"./app/components/AppErrorBoundary.js": {
-			"bun": "./ts/app/components/AppErrorBoundary.tsx",
-			"default": "./js/app/components/AppErrorBoundary.js"
 		},
 		"./app/components/AppSettingsMenu.js": {
 			"bun": "./ts/app/components/AppSettingsMenu.tsx",
@@ -131,10 +131,6 @@
 		"./tests/addressValue.test.js": {
 			"bun": "./ts/tests/addressValue.test.tsx",
 			"default": "./js/tests/addressValue.test.js"
-		},
-		"./tests/app/appErrorBoundary.test.js": {
-			"bun": "./ts/tests/app/appErrorBoundary.test.tsx",
-			"default": "./js/tests/app/appErrorBoundary.test.js"
 		},
 		"./tests/app/appHeaderShell.test.js": {
 			"bun": "./ts/tests/app/appHeaderShell.test.tsx",
@@ -459,10 +455,6 @@
 		"./components/ReadOnlyDetailAccordion.js": {
 			"bun": "./ts/components/ReadOnlyDetailAccordion.tsx",
 			"default": "./js/components/ReadOnlyDetailAccordion.js"
-		},
-		"./components/RequirementsChecklist.js": {
-			"bun": "./ts/components/RequirementsChecklist.tsx",
-			"default": "./js/components/RequirementsChecklist.js"
 		},
 		"./components/RouteHeader.js": {
 			"bun": "./ts/components/RouteHeader.tsx",

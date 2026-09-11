@@ -1,7 +1,6 @@
 import type { Address, Hex } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_LiquidationApprovalRegistry_LiquidationApprovalRegistry, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '../contractArtifact.js'
-import type { LiquidationApprovalDetails, ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
-import { writeContractAndWait } from '@zoltar/ui-zoltar-shared/protocol/core.js'
+import type { LiquidationApprovalDetails, ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 
 export type LiquidationApprovalParams = {
 	securityPool: Address
@@ -16,7 +15,7 @@ export type LiquidationApprovalParams = {
 	nonce: bigint
 }
 
-export async function loadLiquidationApprovalRegistry(client: ReadClient, managerAddress: Address) {
+async function loadLiquidationApprovalRegistry(client: ReadClient, managerAddress: Address) {
 	return await client.readContract({
 		address: managerAddress,
 		abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
@@ -40,20 +39,4 @@ export async function loadLiquidationApproval(client: ReadClient, managerAddress
 		args: [approval.params.receiverVault],
 	})
 	return { registryAddress, ...approval, minimumValidNonce }
-}
-
-export async function setLiquidationApproval(client: WriteClient, registryAddress: Address, params: LiquidationApprovalParams) {
-	return await writeContractAndWait(client, () => ({ address: registryAddress, abi: statoblast_LiquidationApprovalRegistry_LiquidationApprovalRegistry.abi, functionName: 'setLiquidationApproval', args: [params] }))
-}
-
-export async function permitLiquidationApproval(client: WriteClient, registryAddress: Address, params: LiquidationApprovalParams, signature: Hex) {
-	return await writeContractAndWait(client, () => ({ address: registryAddress, abi: statoblast_LiquidationApprovalRegistry_LiquidationApprovalRegistry.abi, functionName: 'permitLiquidationApproval', args: [params, signature] }))
-}
-
-export async function revokeLiquidationApproval(client: WriteClient, registryAddress: Address, approvalId: Hex) {
-	return await writeContractAndWait(client, () => ({ address: registryAddress, abi: statoblast_LiquidationApprovalRegistry_LiquidationApprovalRegistry.abi, functionName: 'revokeLiquidationApproval', args: [approvalId] }))
-}
-
-export async function invalidateLiquidationApprovalNonce(client: WriteClient, registryAddress: Address, newNonce: bigint) {
-	return await writeContractAndWait(client, () => ({ address: registryAddress, abi: statoblast_LiquidationApprovalRegistry_LiquidationApprovalRegistry.abi, functionName: 'invalidateLiquidationApprovalNonce', args: [newNonce] }))
 }

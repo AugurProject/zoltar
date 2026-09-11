@@ -1,7 +1,7 @@
 import { createSignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
 import { parseSettings } from '../../src/config/settings.ts'
 import example from '../../config/operator.example.json'
-import { initialDurableState, initialRuntimeState } from '../../src/state/operator-state.ts'
+import { initialDurableState, initialRuntimeState } from '../../src/state/initial-state.ts'
 import { createManualOperationController, type ManualScan } from '../../src/runtime/manual-operations.ts'
 import type { ConfigurationState } from '../../src/runtime/dashboard-controller.ts'
 import { snapshotFixture } from '../operations/fixture.ts'

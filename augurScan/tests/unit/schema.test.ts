@@ -1,23 +1,15 @@
 import { expect, test } from 'bun:test'
-import {
-	assertSupportedPostgresVersion,
-	CURRENT_SCHEMA_VERSION,
-	expectedSchemaLayout,
-	runSchemaTransaction,
-	SUPPORTED_POSTGRES_VERSION,
-	SUPPORTED_POSTGRES_VERSION_NUM,
-	schemaInitializationAction,
-	schemaLayoutDifferences,
-	schemaLayoutsMatch,
-	UNSUPPORTED_POSTGRES_VERSION_MESSAGE,
-	UNSUPPORTED_SCHEMA_MESSAGE,
-} from '../../src/schema.ts'
+import { expectedSchemaLayout, schemaLayoutDifferences } from '../../src/schema-layout.ts'
+import { assertSupportedPostgresVersion, CURRENT_SCHEMA_VERSION, runSchemaTransaction, schemaInitializationAction, UNSUPPORTED_SCHEMA_MESSAGE } from '../../src/schema-policy.ts'
+
+// The PostgreSQL release that produced schema.sql; the policy module pins it as the only supported server.
+const SUPPORTED_POSTGRES_VERSION = '17.11'
+const UNSUPPORTED_POSTGRES_VERSION_MESSAGE = 'Unsupported PostgreSQL server version'
 
 test('accepts the PostgreSQL release used to generate the schema fingerprint across official image distributions', () => {
-	expect(SUPPORTED_POSTGRES_VERSION_NUM).toBe('170011')
-	expect(UNSUPPORTED_POSTGRES_VERSION_MESSAGE).toContain(SUPPORTED_POSTGRES_VERSION)
-	expect(() => assertSupportedPostgresVersion(SUPPORTED_POSTGRES_VERSION_NUM)).not.toThrow()
+	expect(() => assertSupportedPostgresVersion('170011')).not.toThrow()
 	expect(() => assertSupportedPostgresVersion('170006')).toThrow(UNSUPPORTED_POSTGRES_VERSION_MESSAGE)
+	expect(() => assertSupportedPostgresVersion('170006')).toThrow(SUPPORTED_POSTGRES_VERSION)
 	expect(() => assertSupportedPostgresVersion('180006')).toThrow(UNSUPPORTED_POSTGRES_VERSION_MESSAGE)
 	expect(() => assertSupportedPostgresVersion('unknown')).toThrow(UNSUPPORTED_POSTGRES_VERSION_MESSAGE)
 })
@@ -84,6 +76,7 @@ test('fingerprints every supported table, column, constraint, index, and sequenc
 	expect(initial.columns.some(signature => signature.startsWith('networks.applied_application_source_hash|'))).toBe(false)
 	expect(initial.columns.some(signature => signature.startsWith('networks.applied_projection_source_hash|'))).toBe(false)
 	expect(initial.columns.some(signature => signature.startsWith('entity_state_snapshots.indexer_run_id|'))).toBe(false)
+	const schemaLayoutsMatch = (expected: typeof current, actual: typeof current) => Object.keys(schemaLayoutDifferences(expected, actual)).length === 0
 	expect(schemaLayoutsMatch(current, current)).toBe(true)
 	expect(schemaLayoutsMatch(current, { ...current, columns: current.columns.slice(1) })).toBe(false)
 	expect(schemaLayoutsMatch(current, { ...current, constraints: [...current.constraints, 'unknown.constraint|CHECK (false)'].sort() })).toBe(false)

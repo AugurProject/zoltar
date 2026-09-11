@@ -7,7 +7,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/bot-shared/ethereum'
-import { assertSettingsProfileIsolation, loadSettings, parseSettings, parseStrategy, saveSettings, serializedSettings, settingsProfilePath, switchSettingsNetworkProfile, type SettingsFilesystem } from '../../src/config/settings.ts'
+import { parseSettings, parseStrategy, serializedSettings } from '../../src/config/settings.ts'
+import { assertSettingsProfileIsolation, loadSettings, saveSettings, switchSettingsNetworkProfile, type SettingsFilesystem } from '../../src/config/settings-store.ts'
+
+// Preset profiles live beside the active configuration under this suffix.
+function settingsProfilePath(path: string, network: 'mainnet' | 'sepolia') {
+	return `${path}.${network}.profile`
+}
 
 const settings = {
 	approvedUniverses: ['0'],

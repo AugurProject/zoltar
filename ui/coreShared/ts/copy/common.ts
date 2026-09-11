@@ -24,7 +24,6 @@ export const eth = 'ETH'
 export const failed = 'Failed'
 export const forked = 'Forked'
 export const forkThresholdAttoRep = 'Fork Threshold'
-export const forkTime = 'Fork Time'
 export const forkTriggered = 'Fork Triggered'
 export const gwei = 'gwei'
 export const hexValuePlaceholder = '0x...'
@@ -128,9 +127,7 @@ export const minutes = 'minutes'
 export const moreInfo = 'More info'
 export const formatActionDetailLabel = (actionLabel: CopyTemplateValue) => `${actionLabel} details`
 export const noneSelected = 'None selected'
-export const exists = 'Exists'
 export const notDeployed = 'Not deployed'
-export const working = 'Working…'
 export const formatSelectedTickLabel = (selectedTick: string, totalTicks: string) => `${selectedTick} / ${totalTicks}`
 export const mainnetRequiredReason = 'Switch to Ethereum mainnet.'
 export const formatNetworkRequiredReason = (networkName: CopyTemplateValue) => `Switch to ${networkName}.`

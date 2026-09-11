@@ -1,6 +1,7 @@
 import { afterEach, expect, test } from 'bun:test'
 import { SQL } from 'bun'
-import { directObservationTotal, handleApi, parseHistoricalExportCursor } from '../../src/api.ts'
+import { directObservationTotal } from '../../src/api/shared.ts'
+import { handleApi } from '../../src/api.ts'
 import { decodeOpaqueCursor, encodeOpaqueCursor } from '../../src/cursor-codec.ts'
 
 const databases: SQL[] = []
@@ -159,12 +160,13 @@ test('accepts snapshot-bound export cursors and rejects legacy offsets', async (
 	const blockHash = `0x${'2'.repeat(64)}`
 	const transactionHash = `0x${'3'.repeat(64)}`
 	const cursor = btoa(JSON.stringify([1, 'logs', 1, 'canonical', '0', '1000', '100', snapshotHash, '9', '500', 'abi-hash', 'application-hash', 'projection-hash', ['42', '3', '7', blockHash, transactionHash]]))
-	expect(parseHistoricalExportCursor(cursor)?.slice(0, 4)).toEqual([1, 'logs', 1, 'canonical'])
-	expect(() => parseHistoricalExportCursor(btoa(JSON.stringify([1, 'logs'])))).toThrow('export cursor is invalid')
 	const database = new SQL('postgres://user:unused@127.0.0.1:1/unused', { connectionTimeout: 1 })
 	databases.push(database)
 	const offsetResponse = await handleApi(new Request('http://localhost/api/v1/export?chainId=1&offset=1'), database)
 	expect(offsetResponse?.status).toBe(400)
+	const malformedCursorResponse = await handleApi(new Request(`http://localhost/api/v1/export?chainId=1&cursor=${encodeURIComponent(btoa(JSON.stringify([1, 'logs'])))}`), database)
+	expect(malformedCursorResponse?.status).toBe(400)
+	expect(await malformedCursorResponse?.json()).toEqual({ error: 'export cursor is invalid' })
 	const url = new URL('http://localhost/api/v1/export?chainId=1&dataset=logs&fromBlock=0&toBlock=1000')
 	url.searchParams.set('cursor', cursor)
 	const cursorResponse = await handleApi(new Request(url), database)
@@ -179,10 +181,11 @@ test('rejects export cursor indexes outside PostgreSQL integer bounds before que
 	const cursors = [cursorFor('logs', ['42', '2147483648', '7', blockHash, transactionHash]), cursorFor('logs', ['42', '3', '2147483648', blockHash, transactionHash]), cursorFor('timeline', ['42', blockHash, transactionHash, '2147483648', 'report', '7'])]
 	const database = new SQL('postgres://user:unused@127.0.0.1:1/unused', { connectionTimeout: 1 })
 	databases.push(database)
-	for (const cursor of cursors) {
-		expect(() => parseHistoricalExportCursor(cursor)).toThrow('export cursor is invalid')
-		const response = await handleApi(new Request(`http://localhost/api/v1/export?chainId=1&cursor=${encodeURIComponent(cursor)}`), database)
+	for (const [index, cursor] of cursors.entries()) {
+		const dataset = index === 2 ? 'timeline' : 'logs'
+		const response = await handleApi(new Request(`http://localhost/api/v1/export?chainId=1&dataset=${dataset}&fromBlock=0&toBlock=1000&cursor=${encodeURIComponent(cursor)}`), database)
 		expect(response?.status).toBe(400)
+		expect(await response?.json()).toEqual({ error: 'export cursor is invalid' })
 	}
 })
 

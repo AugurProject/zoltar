@@ -43,23 +43,6 @@ export function operationalFailureDisposition(error: unknown): OperationalFailur
 	return 'safety-paused'
 }
 
-export async function bestSuccessful<T>(attempts: readonly (() => Promise<T>)[], score: (value: T) => bigint, onError: (error: unknown) => void) {
-	let best: T | undefined
-	for (const attempt of attempts) {
-		try {
-			const value = await attempt()
-			if (best === undefined || score(value) > score(best)) best = value
-		} catch (error) {
-			onError(error)
-		}
-	}
-	return best
-}
-
-export function replaceOverlap<T>(cached: readonly T[], fetched: readonly T[], fromBlock: bigint, blockNumber: (value: T) => bigint, compare: (left: T, right: T) => number) {
-	return [...cached.filter(value => blockNumber(value) < fromBlock), ...fetched].sort(compare)
-}
-
 export function compactFinalityWindow<T, K>(values: readonly T[], head: bigint, overlapBlocks: bigint, key: (value: T) => K, blockNumber: (value: T) => bigint, isTerminal: (value: T) => boolean) {
 	const nextBlock = head + 1n
 	const overlapStart = nextBlock > overlapBlocks ? nextBlock - overlapBlocks : 0n
@@ -85,7 +68,7 @@ export function compactFinalityWindow<T, K>(values: readonly T[], head: bigint, 
 	return values.filter(value => retained.has(value))
 }
 
-export const DEFAULT_MAXIMUM_RETRY_DELAY_MILLISECONDS = 300_000
+const DEFAULT_MAXIMUM_RETRY_DELAY_MILLISECONDS = 300_000
 
 export function retryDelayMilliseconds(baseMilliseconds: number, consecutiveFailures: number, random: () => number = Math.random, maximumMilliseconds = DEFAULT_MAXIMUM_RETRY_DELAY_MILLISECONDS) {
 	if (!Number.isSafeInteger(baseMilliseconds) || baseMilliseconds < 1) throw new Error('Retry base delay must be a positive integer')

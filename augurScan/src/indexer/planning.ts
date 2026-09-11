@@ -50,8 +50,6 @@ export const reorgSearchFloor = (startBlock: bigint, checkpoint: bigint, confirm
 	return candidate > startBlock ? candidate : startBlock
 }
 
-export const requiresParentLookup = (nextBlock: bigint, startBlock: bigint): boolean => nextBlock > startBlock
-
 export type TokenMetadataCalls = {
 	readonly decimals: () => Promise<number>
 	readonly name: () => Promise<string>
@@ -135,7 +133,7 @@ export const chunks = <T>(items: readonly T[], size: number): T[][] => {
 export const rpcRequestQueue = createRpcRequestQueue(RPC_CONCURRENCY, RPC_MAX_PENDING)
 export const rpcExchangeLog = new RotatingJsonLog(runtimeConfig.rpcLogPath)
 
-export const rpcLogAddressGroups = <T>(addresses: readonly T[]): readonly T[][] => chunks(addresses, 5)
+const rpcLogAddressGroups = <T>(addresses: readonly T[]): readonly T[][] => chunks(addresses, 5)
 
 export type LogScanInput = {
 	readonly address: Address

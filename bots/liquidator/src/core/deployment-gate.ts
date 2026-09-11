@@ -13,7 +13,7 @@ type CoreDeployment = {
 
 export type SystemDeploymentStatus = { deployed: true } | { address: Address; deployed: false; name: string; block: { number: bigint; timestamp: bigint } }
 
-export async function systemDeploymentStatus(client: DeploymentReader, deployment: CoreDeployment): Promise<SystemDeploymentStatus> {
+async function systemDeploymentStatus(client: DeploymentReader, deployment: CoreDeployment): Promise<SystemDeploymentStatus> {
 	const observed = await client.getBlock()
 	if (observed.number === undefined) throw new Error('Deployment check block is missing its number')
 	const block = { number: observed.number, timestamp: observed.timestamp }

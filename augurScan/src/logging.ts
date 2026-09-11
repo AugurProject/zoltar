@@ -36,7 +36,7 @@ export const safePrunedStateProviderMessage = (value: unknown): string | undefin
 	return undefined
 }
 
-export const timestampedLogArguments = (values: readonly unknown[], now = new Date()): readonly unknown[] => [`[${now.toISOString()}]:`, ...values]
+const timestampedLogArguments = (values: readonly unknown[], now = new Date()): readonly unknown[] => [`[${now.toISOString()}]:`, ...values]
 
 let consoleTimestampsInstalled = false
 

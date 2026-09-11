@@ -79,3 +79,14 @@ export function assertSubmissionPreflightFresh(checks: readonly EndpointCheck[],
 	if (healthyOriginCount < requiredHealthyOriginCount) throw new EndpointCheckFailure('Submission preflight did not meet its healthy endpoint threshold', checks)
 	return checks
 }
+
+export async function recordEndpointPreflightChecks(run: () => Promise<readonly EndpointCheck[]>, recordChecks: (checks: readonly EndpointCheck[]) => void) {
+	try {
+		const checks = await run()
+		recordChecks(checks)
+		return checks
+	} catch (error) {
+		if (error instanceof EndpointCheckFailure) recordChecks(error.checks)
+		throw error
+	}
+}

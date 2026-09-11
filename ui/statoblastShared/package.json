@@ -66,14 +66,6 @@
 			"bun": "./ts/features/markets/components/MarketCreateQuestionSection.tsx",
 			"default": "./js/features/markets/components/MarketCreateQuestionSection.js"
 		},
-		"./features/markets/components/MarketOverviewSection.js": {
-			"bun": "./ts/features/markets/components/MarketOverviewSection.tsx",
-			"default": "./js/features/markets/components/MarketOverviewSection.js"
-		},
-		"./features/markets/components/ScalarDeploymentSection.js": {
-			"bun": "./ts/features/markets/components/ScalarDeploymentSection.tsx",
-			"default": "./js/features/markets/components/ScalarDeploymentSection.js"
-		},
 		"./features/markets/components/TradingSection.js": {
 			"bun": "./ts/features/markets/components/TradingSection.tsx",
 			"default": "./js/features/markets/components/TradingSection.js"
@@ -97,14 +89,6 @@
 		"./features/markets/lib/trading.js": {
 			"bun": "./ts/features/markets/lib/trading.ts",
 			"default": "./js/features/markets/lib/trading.js"
-		},
-		"./features/security-pools/components/CollateralizationCircle.js": {
-			"bun": "./ts/features/security-pools/components/CollateralizationCircle.tsx",
-			"default": "./js/features/security-pools/components/CollateralizationCircle.js"
-		},
-		"./features/security-pools/components/CollateralizationMetricField.js": {
-			"bun": "./ts/features/security-pools/components/CollateralizationMetricField.tsx",
-			"default": "./js/features/security-pools/components/CollateralizationMetricField.js"
 		},
 		"./features/security-pools/components/LiquidationModal.js": {
 			"bun": "./ts/features/security-pools/components/LiquidationModal.tsx",
@@ -406,10 +390,6 @@
 			"bun": "./ts/features/reportingTransactionPresentations.tsx",
 			"default": "./js/features/reportingTransactionPresentations.js"
 		},
-		"./features/universes/components/TransactionUniverseValue.js": {
-			"bun": "./ts/features/universes/components/TransactionUniverseValue.tsx",
-			"default": "./js/features/universes/components/TransactionUniverseValue.js"
-		},
 		"./protocol/deploymentHelpers.js": {
 			"bun": "./ts/protocol/deploymentHelpers.ts",
 			"default": "./js/protocol/deploymentHelpers.js"
@@ -425,6 +405,10 @@
 		"./protocol/liquidationApprovals.js": {
 			"bun": "./ts/protocol/liquidationApprovals.ts",
 			"default": "./js/protocol/liquidationApprovals.js"
+		},
+		"./protocol/openOracleMath.js": {
+			"bun": "./ts/protocol/openOracleMath.ts",
+			"default": "./js/protocol/openOracleMath.js"
 		},
 		"./protocol/openOracle.js": {
 			"bun": "./ts/protocol/openOracle.ts",

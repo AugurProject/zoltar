@@ -8,29 +8,19 @@ import { dirname, resolve } from 'node:path'
 import { getAddress, keccak256, parseTransaction, recoverTransactionAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import type { ChaosProtocolIndex } from '#monitoring/protocol-index'
 import type { ChaosEcosystem, OperationContinuationDisposition, OperationEvidence, OperationPreflightCall, OperationRisk, OperationTerminalSubmission, OperationWalletAssetDebit } from '#operations/types'
+import { DURABLE_STATE_VERSION, initialDurableState, initialRuntimeState } from './initial-state.ts'
 import { assertSafeRetirementRecipient, initialRetirementState, parseRetirementState, type DurableRetirementState } from './retirement.ts'
 import { parsePendingTransactionObservation, serializedPendingTransactionObservation, type PendingTransactionObservation } from './pending-transaction-observation.ts'
 import { serializedScheduler } from './state-serialization.ts'
-import { timestamp, unsignedIntegerString } from './state-parsing.ts'
-import {
-	loadPersistedProtocolIndex,
-	parseProtocolIndex as parseStoredProtocolIndex,
-	parseProtocolIndexReference,
-	persistProtocolIndexGeneration,
-	pruneProtocolIndexGenerations,
-	snapshotProtocolIndex,
-	type ProtocolIndexFileHandle,
-	type ProtocolIndexFilesystem,
-	type ProtocolIndexReference,
-} from './protocol-index-store.ts'
+import { assertExactKeys, dataHex, hash, identifier, nonemptyString, optionalString, optionalTimestamp, positiveIntegerString, requiredRecord, timestamp, uint256String, unsignedIntegerString } from './validators.ts'
+import { loadPersistedProtocolIndex, parseProtocolIndexReference, persistProtocolIndexGeneration, pruneProtocolIndexGenerations, snapshotProtocolIndex, type ProtocolIndexFileHandle, type ProtocolIndexFilesystem, type ProtocolIndexReference } from './protocol-index-store.ts'
 
-export const DURABLE_STATE_VERSION = 4
-export const MAXIMUM_ACTIVITY_COUNT = 500
+const MAXIMUM_ACTIVITY_COUNT = 500
 export const MAXIMUM_LIFECYCLE_PRESENCE_BLOCKER_COUNT = 1_000_000
-export const MAXIMUM_TERMINAL_OBLIGATION_COUNT = 500
+const MAXIMUM_TERMINAL_OBLIGATION_COUNT = 500
 export const MAXIMUM_OBLIGATION_TOMBSTONE_COUNT = 10_000
-export const MAXIMUM_TERMINAL_WORKFLOW_COUNT = 500
-export const MAXIMUM_STATE_BYTES = 5 * 1024 * 1024
+const MAXIMUM_TERMINAL_WORKFLOW_COUNT = 500
+const MAXIMUM_STATE_BYTES = 5 * 1024 * 1024
 
 export type Activity = {
 	at: string
@@ -152,7 +142,7 @@ export type DurableObligationTombstone = {
 	resolutionReason?: string | undefined
 }
 
-export type TransactionSemanticExpectation = {
+type TransactionSemanticExpectation = {
 	balanceBaselines: readonly {
 		account: Address
 		asset: 'ETH' | Address
@@ -225,75 +215,6 @@ const stateFilesystem: StateFilesystem = {
 
 const stateWriteQueues = new Map<string, Promise<void>>()
 
-function emptySchedulerState(paused = true): SchedulerState {
-	return {
-		lastDelaySeconds: undefined,
-		lastRunAt: undefined,
-		nextRunAt: undefined,
-		selectedOperationId: undefined,
-		status: paused ? 'paused' : 'idle',
-	}
-}
-
-export function initialDurableState(chainId: number, paused = true, profileId = 'profile:unconfigured', signerAddress?: Address | undefined): DurableState {
-	if (!Number.isSafeInteger(chainId) || chainId < 1) throw new Error('State chain ID must be a positive integer')
-	return {
-		activities: [],
-		chainId,
-		lifecyclePresenceBlocker: undefined,
-		obligationTombstones: [],
-		obligations: [],
-		pendingTransactions: [],
-		profileId: identifier(profileId, 'profileId'),
-		protocolIndex: undefined,
-		retirement: initialRetirementState(),
-		safetyPaused: false,
-		scheduler: emptySchedulerState(paused),
-		signerAddress,
-		version: DURABLE_STATE_VERSION,
-		workflows: [],
-	}
-}
-
-export function initialRuntimeState(paused: boolean, wallet: Address | undefined, chainId: number, durableState: DurableState = initialDurableState(chainId, paused)): RuntimeState {
-	if (durableState.chainId !== chainId) throw new Error(`Durable state belongs to chain ${durableState.chainId.toString()}, expected chain ${chainId.toString()}`)
-	if (durableState.retirement.recipient !== undefined) assertSafeRetirementRecipient(durableState.retirement.recipient, wallet ?? durableState.signerAddress)
-	const restoredSchedulerStatus = durableState.scheduler.status
-	const effectivePaused = paused || durableState.safetyPaused
-	let activeSchedulerStatus = restoredSchedulerStatus
-	if (restoredSchedulerStatus === 'running') activeSchedulerStatus = 'running'
-	else if (effectivePaused) activeSchedulerStatus = 'paused'
-	else if (restoredSchedulerStatus === 'paused') activeSchedulerStatus = 'idle'
-	const durableSafetyError = durableState.safetyPaused ? durableState.activities.find(activity => activity.type === 'error' && activity.status === 'failed')?.message : undefined
-	return {
-		...durableState,
-		activities: [...durableState.activities],
-		error: durableSafetyError,
-		evaluations: [],
-		inventory: { eth: '0', rep: [], weth: '0' },
-		inventoryAddress: undefined,
-		deploymentNotice: undefined,
-		lastDeploymentCheckedBlock: undefined,
-		lastDeploymentCheckAt: undefined,
-		lastScanAt: undefined,
-		lastScannedBlock: undefined,
-		lifecyclePresenceBlocker: durableState.lifecyclePresenceBlocker === undefined ? undefined : { ...durableState.lifecyclePresenceBlocker },
-		obligationTombstones: [...durableState.obligationTombstones],
-		obligations: [...durableState.obligations],
-		paused: effectivePaused,
-		pendingTransactions: [...durableState.pendingTransactions],
-		rpcEndpointHealth: [],
-		scanning: false,
-		scheduler: { ...durableState.scheduler, status: activeSchedulerStatus },
-		startedAt: new Date().toISOString(),
-		status: effectivePaused ? 'paused' : 'starting',
-		topology: undefined,
-		wallet: wallet ?? durableState.signerAddress,
-		warnings: [],
-		workflows: [...durableState.workflows],
-	}
-}
-
 export function setRuntimeExecutionAddress(state: RuntimeState, address: Address | undefined) {
 	if (state.wallet?.toLowerCase() !== address?.toLowerCase() || (state.inventoryAddress !== undefined && state.inventoryAddress.toLowerCase() !== address?.toLowerCase())) {
 		state.inventory = { eth: '0', rep: [], weth: '0' }
@@ -337,42 +258,6 @@ export function resetRuntimeStateForProfile(state: RuntimeState, profileId: stri
 	return state
 }
 
-function requiredRecord(value: unknown, label: string): Record<string, unknown> {
-	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`${label} must be an object`)
-	return value as Record<string, unknown>
-}
-
-function assertExactKeys(record: Record<string, unknown>, required: readonly string[], optional: readonly string[], label: string) {
-	const allowed = new Set([...required, ...optional])
-	const unknown = Object.keys(record).filter(key => !allowed.has(key))
-	const missing = required.filter(key => !(key in record))
-	if (unknown.length !== 0) throw new Error(`${label} contains unsupported field ${unknown[0] ?? 'unknown'}`)
-	if (missing.length !== 0) throw new Error(`${label} is missing ${missing[0] ?? 'a required field'}`)
-}
-
-function nonemptyString(value: unknown, label: string, maximumLength = 2_048) {
-	if (typeof value !== 'string' || value.trim() === '' || value.length > maximumLength) throw new Error(`${label} must be a non-empty string of at most ${maximumLength.toString()} characters`)
-	return value
-}
-
-function optionalString(value: unknown, label: string, maximumLength = 2_048) {
-	return value === undefined ? undefined : nonemptyString(value, label, maximumLength)
-}
-
-function identifier(value: unknown, label: string) {
-	const parsed = nonemptyString(value, label, 128)
-	if (!/^[a-zA-Z0-9](?:[a-zA-Z0-9._:-]*[a-zA-Z0-9])?$/.test(parsed)) throw new Error(`${label} contains unsupported characters`)
-	return parsed
-}
-
-const MAXIMUM_UINT256 = (1n << 256n) - 1n
-
-function uint256String(value: unknown, label: string) {
-	const parsed = unsignedIntegerString(value, label)
-	if (BigInt(parsed) > MAXIMUM_UINT256) throw new Error(`${label} exceeds uint256`)
-	return parsed
-}
-
 function parseTerminalSubmission(value: unknown, label: string): OperationTerminalSubmission {
 	const submission = requiredRecord(value, label)
 	assertExactKeys(submission, ['kind', 'maximumFeePerGas'], [], label)
@@ -381,26 +266,6 @@ function parseTerminalSubmission(value: unknown, label: string): OperationTermin
 		kind: submission['kind'],
 		maximumFeePerGas: uint256String(submission['maximumFeePerGas'], `${label}.maximumFeePerGas`),
 	}
-}
-
-function positiveIntegerString(value: unknown, label: string) {
-	const parsed = unsignedIntegerString(value, label)
-	if (parsed === '0') throw new Error(`${label} must be greater than zero`)
-	return parsed
-}
-
-function optionalTimestamp(value: unknown, label: string) {
-	return value === undefined ? undefined : timestamp(value, label)
-}
-
-function hash(value: unknown, label: string) {
-	if (typeof value !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(value)) throw new Error(`${label} must be a 32-byte hash`)
-	return value as Hex
-}
-
-function dataHex(value: unknown, label: string) {
-	if (typeof value !== 'string' || !/^0x(?:[0-9a-fA-F]{2})*$/.test(value)) throw new Error(`${label} must be even-length 0x-prefixed hex`)
-	return value as Hex
 }
 
 function serializedTransaction(value: unknown, label: string) {
@@ -1029,10 +894,6 @@ async function parsePendingTransaction(value: unknown, index: number, expectedCh
 	}
 }
 
-export function parseProtocolIndex(value: unknown, expectedChainId: number) {
-	return parseStoredProtocolIndex(value, expectedChainId)
-}
-
 type PrevalidatedProtocolIndex = {
 	index: ChaosProtocolIndex | undefined
 	reference: ProtocolIndexReference | undefined
@@ -1179,7 +1040,7 @@ export async function loadDurableState(path: string, expectedChainId: number, fi
 	return loadDurableStateFile(path, expectedChainId, filesystem, path, undefined)
 }
 
-export function serializedDurableState(
+function serializedDurableState(
 	state: Pick<DurableState, 'activities' | 'chainId' | 'lifecyclePresenceBlocker' | 'obligationTombstones' | 'obligations' | 'pendingTransactions' | 'profileId' | 'protocolIndex' | 'retirement' | 'safetyPaused' | 'scheduler' | 'signerAddress' | 'workflows'>,
 	persistedProtocolIndex: ChaosProtocolIndex | ProtocolIndexReference | null = state.protocolIndex ?? null,
 ) {
@@ -1221,7 +1082,7 @@ function replaceArrayContents<T>(target: T[], retained: readonly T[]) {
 	target.splice(0, target.length, ...retained)
 }
 
-export function compactDurableState(state: Pick<DurableState, 'activities' | 'obligationTombstones' | 'obligations' | 'pendingTransactions' | 'workflows'>) {
+function compactDurableState(state: Pick<DurableState, 'activities' | 'obligationTombstones' | 'obligations' | 'pendingTransactions' | 'workflows'>) {
 	if (state.activities.length > MAXIMUM_ACTIVITY_COUNT) state.activities.splice(MAXIMUM_ACTIVITY_COUNT)
 	const tombstones = new Map(state.obligationTombstones.map(tombstone => [tombstone.id, tombstone]))
 	for (const obligation of state.obligations) {
