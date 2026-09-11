@@ -120,6 +120,23 @@ test('documentation search loads on demand, normalizes Unicode, and links to the
 	}
 })
 
+test('documentation search resolves an invariant identifier to its own entry', async () => {
+	const shell = await loadShell('http://localhost/docs/explanation/open-oracle.html')
+	try {
+		document.querySelector<HTMLButtonElement>('.docs-search-button')?.click()
+		await finishSearchLoad()
+		const input = document.querySelector<HTMLInputElement>('.docs-search-input')
+		if (input === null) throw new Error('Search input is missing')
+		input.value = 'UNI-01'
+		input.dispatchEvent(new Event('input'))
+		const result = document.querySelector<HTMLAnchorElement>('.docs-search-results a')
+		expect(result?.href).toBe('http://localhost/docs/reference/invariants.html#uni-01')
+		expect(result?.querySelector('.docs-search-result-snippet')?.textContent).toStartWith('UNI-01 One fork per universe — ')
+	} finally {
+		shell.cleanup()
+	}
+})
+
 test('documentation search failure stays actionable and retries the lazy request', async () => {
 	const shell = await loadShell('http://localhost/docs/explanation/open-oracle.html')
 	try {
