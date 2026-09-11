@@ -9,7 +9,6 @@ function requiredElement<T extends Element>(root: ParentNode, selector: string, 
 	return found
 }
 
-const searchInput = requiredElement(explorer, '[data-invariant-search]', HTMLInputElement)
 const typeSelect = requiredElement(explorer, '[data-invariant-type]', HTMLSelectElement)
 const statusSelect = requiredElement(explorer, '[data-invariant-status]', HTMLSelectElement)
 const subsystemSelect = requiredElement(explorer, '[data-invariant-subsystem]', HTMLSelectElement)
@@ -111,7 +110,6 @@ for (const entry of entries) {
 	entry.dataset['invariantType'] = type
 	entry.dataset['invariantStatus'] = status
 	entry.dataset['invariantSubsystem'] = subsystem
-	entry.dataset['invariantSearchText'] = normalizedText(entry.textContent ?? '')
 	if (section instanceof HTMLElement) entrySections.add(section)
 	incrementCount(typeCounts, type)
 	incrementCount(statusCounts, status)
@@ -133,26 +131,18 @@ populateFacet(typeSelect, typeCounts)
 populateFacet(statusSelect, statusCounts)
 populateFacet(subsystemSelect, subsystemCounts, subsystemLabels)
 
-function queryTokens(): string[] {
-	return normalizedText(searchInput.value)
-		.split(/[^a-z0-9_/-]+/)
-		.filter(token => token.length > 0)
-}
-
-function matchesEntry(entry: HTMLDetailsElement, tokens: readonly string[]): boolean {
-	const matchesText = tokens.every(token => (entry.dataset['invariantSearchText'] ?? '').includes(token))
+function matchesEntry(entry: HTMLDetailsElement): boolean {
 	const matchesType = typeSelect.value.length === 0 || entry.dataset['invariantType'] === typeSelect.value
 	const matchesStatus = statusSelect.value.length === 0 || entry.dataset['invariantStatus'] === statusSelect.value
 	const matchesSubsystem = subsystemSelect.value.length === 0 || entry.dataset['invariantSubsystem'] === subsystemSelect.value
-	return matchesText && matchesType && matchesStatus && matchesSubsystem
+	return matchesType && matchesStatus && matchesSubsystem
 }
 
 function applyFilters(): void {
-	const tokens = queryTokens()
-	const hasActiveFilter = tokens.length > 0 || typeSelect.value.length > 0 || statusSelect.value.length > 0 || subsystemSelect.value.length > 0
+	const hasActiveFilter = typeSelect.value.length > 0 || statusSelect.value.length > 0 || subsystemSelect.value.length > 0
 	let visibleCount = 0
 	for (const entry of entries) {
-		const isVisible = matchesEntry(entry, tokens)
+		const isVisible = matchesEntry(entry)
 		entry.hidden = !isVisible
 		if (isVisible) visibleCount += 1
 	}
@@ -164,7 +154,6 @@ function applyFilters(): void {
 	empty.hidden = visibleCount > 0
 }
 
-searchInput.addEventListener('input', applyFilters)
 typeSelect.addEventListener('change', applyFilters)
 statusSelect.addEventListener('change', applyFilters)
 subsystemSelect.addEventListener('change', applyFilters)
@@ -177,12 +166,11 @@ collapse.addEventListener('click', () => {
 	for (const entry of entries) entry.open = false
 })
 reset.addEventListener('click', () => {
-	searchInput.value = ''
 	typeSelect.value = ''
 	statusSelect.value = ''
 	subsystemSelect.value = ''
 	applyFilters()
-	searchInput.focus()
+	typeSelect.focus()
 })
 
 let targetId = window.location.hash.slice(1)

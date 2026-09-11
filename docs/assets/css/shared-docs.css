@@ -418,7 +418,7 @@ body.doc-openoracle .invariant-explorer {
 
 body.doc-openoracle .invariant-explorer-controls {
 	display: grid;
-	grid-template-columns: minmax(13rem, 1.5fr) repeat(3, minmax(10rem, 1fr));
+	grid-template-columns: repeat(3, minmax(10rem, 1fr));
 	gap: 0.65rem;
 }
 
@@ -432,7 +432,6 @@ body.doc-openoracle .invariant-explorer-controls label {
 	text-transform: uppercase;
 }
 
-body.doc-openoracle .invariant-explorer-controls input,
 body.doc-openoracle .invariant-explorer-controls select {
 	width: 100%;
 	min-height: 2.6rem;
@@ -447,7 +446,6 @@ body.doc-openoracle .invariant-explorer-controls select {
 	text-transform: none;
 }
 
-body.doc-openoracle .invariant-explorer-controls input:focus-visible,
 body.doc-openoracle .invariant-explorer-controls select:focus-visible {
 	outline: 2px solid var(--blue);
 	outline-offset: 2px;
@@ -4187,7 +4185,7 @@ body.paper-zoltar .footer-note {
 	}
 
 	body.doc-openoracle .invariant-explorer-controls {
-		grid-template-columns: minmax(14rem, 1.6fr) repeat(3, minmax(8rem, 1fr));
+		grid-template-columns: repeat(3, minmax(8rem, 1fr));
 	}
 }
 
@@ -4275,15 +4273,7 @@ body.paper-zoltar .footer-note {
 	}
 
 	body.doc-openoracle .invariant-explorer-controls {
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-	}
-
-	body.doc-openoracle .invariant-explorer-controls label:first-child {
-		grid-column: 1 / -1;
-	}
-
-	body.doc-openoracle .invariant-explorer-controls label:last-child {
-		grid-column: 1 / -1;
+		grid-template-columns: 1fr;
 	}
 	body.doc-openoracle.docs-shell-page main,
 	body.paper-statoblast.docs-shell-page main,

@@ -237,25 +237,36 @@ test('invariant explorer filters, expands, resets, and opens a fragment target',
 	try {
 		await runGeneratedRuntime('invariantExplorer')
 		const entries = Array.from(document.querySelectorAll<HTMLDetailsElement>('details.invariant-entry'))
-		const search = document.querySelector<HTMLInputElement>('[data-invariant-search]')
+		const typeSelect = document.querySelector<HTMLSelectElement>('[data-invariant-type]')
+		const statusSelect = document.querySelector<HTMLSelectElement>('[data-invariant-status]')
 		const count = document.querySelector<HTMLElement>('[data-invariant-count]')
 		const empty = document.querySelector<HTMLElement>('[data-invariant-empty]')
 		const expand = document.querySelector<HTMLButtonElement>('[data-invariant-expand]')
 		const reset = document.querySelector<HTMLButtonElement>('[data-invariant-reset]')
-		if (entries.length === 0 || search === null || count === null || empty === null || expand === null || reset === null) throw new Error('Invariant explorer fixture is incomplete')
+		if (entries.length === 0 || typeSelect === null || statusSelect === null || count === null || empty === null || expand === null || reset === null) throw new Error('Invariant explorer fixture is incomplete')
+		expect(document.querySelector('[data-invariant-search]')).toBeNull()
 
 		expect(document.getElementById(firstIdentifier)?.hasAttribute('open')).toBeTrue()
 		expect(count.textContent).toBe(`${entries.length} of ${entries.length} invariants`)
 		expect(entries[0]?.querySelector('.invariant-entry-actions a')?.getAttribute('href')).toBe(`#${firstIdentifier}`)
 
-		search.value = 'no-invariant-can-match-this-token'
-		search.dispatchEvent(new Event('input'))
+		const livenessOption = Array.from(typeSelect.options).find(option => option.value === 'Liveness')
+		const toolingOption = Array.from(statusSelect.options).find(option => option.value === 'Automated tooling guard')
+		if (livenessOption === undefined || toolingOption === undefined) throw new Error('Invariant explorer facets are missing expected options')
+		typeSelect.value = livenessOption.value
+		typeSelect.dispatchEvent(new Event('change'))
+		const livenessCount = entries.filter(entry => !entry.hidden).length
+		expect(livenessCount).toBeGreaterThan(0)
+		expect(count.textContent).toBe(`${livenessCount} of ${entries.length} invariants`)
+		statusSelect.value = toolingOption.value
+		statusSelect.dispatchEvent(new Event('change'))
 		expect(count.textContent).toBe(`0 of ${entries.length} invariants`)
 		expect(empty.hidden).toBeFalse()
 		expect(entries.every(entry => entry.hidden)).toBeTrue()
 
 		reset.click()
-		expect(search.value).toBe('')
+		expect(typeSelect.value).toBe('')
+		expect(statusSelect.value).toBe('')
 		expect(empty.hidden).toBeTrue()
 		expand.click()
 		expect(entries.every(entry => entry.open)).toBeTrue()

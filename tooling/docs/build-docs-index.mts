@@ -62,8 +62,8 @@ function assertManifest(value: unknown): asserts value is DocsManifest {
 }
 
 async function filesIn(directory: string): Promise<string[]> {
-	const entries = await readdir(path.join(docsDirectory, directory), { withFileTypes: true })
-	return entries.filter(entry => entry.isFile() && entry.name.endsWith('.html')).map(entry => `${directory}/${entry.name}`)
+	const entries = await readdir(path.join(docsDirectory, directory), { recursive: true, withFileTypes: true })
+	return entries.filter(entry => entry.isFile() && entry.name.endsWith('.html')).map(entry => path.posix.join(directory, path.relative(path.join(docsDirectory, directory), path.join(entry.parentPath, entry.name)).split(path.sep).join('/')))
 }
 
 const checkOnly = process.argv.includes('--check')
@@ -100,10 +100,11 @@ for (const page of manifest.pages) {
 	const pageWindow = new Window()
 	pageWindow.document.write(source)
 	pageWindow.document.close()
+	const assetPrefix = '../'.repeat(page.path.split('/').length - 1)
 	for (const [selector, attribute, expectedValue] of [
-		['link[rel~="stylesheet"]', 'href', '../assets/css/docsShell.css'],
-		['script[src]', 'src', '../assets/js/docsData.js'],
-		['script[src]', 'src', '../assets/js/docsShell.js'],
+		['link[rel~="stylesheet"]', 'href', `${assetPrefix}assets/css/docsShell.css`],
+		['script[src]', 'src', `${assetPrefix}assets/js/docsData.js`],
+		['script[src]', 'src', `${assetPrefix}assets/js/docsShell.js`],
 	] as const) {
 		const matches = Array.from(pageWindow.document.querySelectorAll(selector)).filter(element => element.getAttribute(attribute) === expectedValue)
 		assert.equal(matches.length, 1, `${page.path} must load ${expectedValue} exactly once`)
