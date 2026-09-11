@@ -2,6 +2,11 @@ import { DatabaseConsistencyError, type IndexerLease, IndexerLeaseReleaseError }
 import { type NetworkLifecycle, retryDelayMs, runNetworkLifecycle } from './lifecycle-loop.ts'
 import { type IndexerOwnershipEvent, IndexerOwnershipStageError, type OwnershipStage, ownershipFailureLogMessage, ownershipFailureReason } from './ownership-status.ts'
 import { databaseFailureMessage } from './runtime-diagnostics.ts'
+const reacquisitionSource = (acquiredAfterStandby: boolean, recoveredAfterFailures: number) => {
+	if (!acquiredAfterStandby) return 'failures'
+	return recoveredAfterFailures > 0 ? 'standby and failures' : 'standby'
+}
+
 import { waitForIndexerDelay } from './runtime-rpc.ts'
 
 export type OwnedNetworkLifecycle = Omit<NetworkLifecycle, 'verify' | 'poll'> & {
@@ -81,7 +86,7 @@ export const runIndexerOwnershipLifecycle = async <TLease extends LeaseControl>(
 					acquiredAfterStandby,
 				})
 				if (recoveredAfterFailures > 0 || acquiredAfterStandby) {
-					const source = acquiredAfterStandby ? (recoveredAfterFailures > 0 ? 'standby and failures' : 'standby') : 'failures'
+					const source = reacquisitionSource(acquiredAfterStandby, recoveredAfterFailures)
 					console.info(`[${networkId}] indexer ownership reacquired; backend PID: ${lease.backendPid ?? 'unavailable'}; source: ${source}; previous consecutive failures: ${recoveredAfterFailures}`)
 				}
 				wasStandby = false

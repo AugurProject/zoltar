@@ -356,7 +356,10 @@ try {
 		const evaluated = await command('Runtime.evaluate', { expression: scenario.assertExpression, returnByValue: true, awaitPromise: true })
 		const result = evaluated.result
 		if (typeof result !== 'object' || result === null || !('value' in result) || result.value !== true) {
-			const diagnostic = await command('Runtime.evaluate', { expression: `({ title: document.title, text: document.body.textContent, hash: location.hash, overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth, hasSimulation: document.querySelector('.simulation-banner-details') !== null, hasOverview: document.querySelector('.top-shell .overview-panel') !== null, markets: document.querySelectorAll('.market-row').length })`, returnByValue: true })
+			const diagnostic = await command('Runtime.evaluate', {
+				expression: `({ title: document.title, text: document.body.textContent, hash: location.hash, overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth, hasSimulation: document.querySelector('.simulation-banner-details') !== null, hasOverview: document.querySelector('.top-shell .overview-panel') !== null, markets: document.querySelectorAll('.market-row').length })`,
+				returnByValue: true,
+			})
 			throw new Error(`Browser assertion failed for ${scenario.name}: ${JSON.stringify(evaluated)} ${JSON.stringify(diagnostic)}`)
 		}
 		if (injectedFailure === 'page-console') await command('Runtime.evaluate', { expression: `console.error('injected Trading QA page failure')` })

@@ -185,7 +185,11 @@ const keyFor = (dataset: ExportDataset, value: Record<string, unknown> | readonl
 	return [rowDecimal(field('id', 0), 'reorganization ID')]
 }
 
-const numericKeyIndex = (dataset: ExportDataset, index: number): boolean => (dataset === 'logs' ? index <= 2 : dataset === 'timeline' ? index === 0 || index === 3 : index === 0)
+const numericKeyIndex = (dataset: ExportDataset, index: number): boolean => {
+	if (dataset === 'logs') return index <= 2
+	if (dataset === 'timeline') return index === 0 || index === 3
+	return index === 0
+}
 
 const compareKeys = (dataset: ExportDataset, left: ExportKey, right: ExportKey): number => {
 	if (left.length !== right.length) throw new Error('export row identity shape changed')

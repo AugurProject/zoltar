@@ -5,7 +5,7 @@ import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import type { DesiredPoolSettings, OperatorSettings } from '#config/settings'
 import { coordinatorAbi, erc20Abi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi, wethAbi } from '#contracts/abi'
 import { isPoolExecutionEligible, type VaultMigration } from '#core/fork-migration'
-import { BPS_DENOMINATOR, LIQUIDATION_REP_BONUS_BPS, PRICE_PRECISION, conservativeLiquidationRep, type LiquidationCandidate } from '#core/strategy'
+import { BPS_DENOMINATOR, LIQUIDATION_REP_BONUS_BPS, PRICE_PRECISION, conservativeLiquidationRep, liquidationSubmissionLabel, type LiquidationCandidate } from '#core/strategy'
 import { recordActivity, saveDurableState, type PendingTransactionIntent, type PoolObservation, type RuntimeState } from '#state/operator-state'
 import { validateReceiptExpectation } from '#execution/receipt-validation'
 import { finalizedReceiptWithQuorum } from '#execution/recovery'
@@ -425,7 +425,7 @@ export async function executeLiquidation(wallet: WriteClient, settings: Operator
 				functionName: 'requestPriceIfNeededAndStageLiquidation',
 			}),
 			gas: pool.isPriceValid ? 1_000_000n : 2_000_000n,
-			label: pool.isPriceValid ? 'Execute security-pool liquidation' : usesExistingPendingReport ? 'Queue liquidation behind the existing price report' : 'Queue liquidation and request a fresh REP price',
+			label: liquidationSubmissionLabel(pool.isPriceValid, usesExistingPendingReport),
 			preSubmit: () => assertMarketPriceStillAllowed(priceStillAllowed),
 			receiptExpectation: pool.isPriceValid ? { coordinator: pool.manager, operation: 0, type: 'staged-success' } : { amount: candidate.requestedDebtAttoEth, coordinator: pool.manager, operator: wallet.account.address, receiver: wallet.account.address, target: candidate.target.address, type: 'pending-liquidation' },
 			to: pool.manager,

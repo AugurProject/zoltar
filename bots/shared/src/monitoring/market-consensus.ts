@@ -1,3 +1,4 @@
+import { compareBigint } from '../infrastructure/compare.ts'
 const BPS = 10_000n
 
 export async function requireCanonicalBlock(blockNumber: bigint, expectedHash: `0x${string}`, readCanonicalHash: (blockNumber: bigint) => Promise<`0x${string}` | undefined>) {
@@ -122,7 +123,7 @@ export type MarketConsensusEstimate = {
 
 function median(values: readonly bigint[]) {
 	if (values.length === 0) return undefined
-	const sorted = [...values].sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))
+	const sorted = [...values].sort(compareBigint)
 	const middle = Math.floor(sorted.length / 2)
 	const upper = sorted[middle]
 	if (upper === undefined) return undefined

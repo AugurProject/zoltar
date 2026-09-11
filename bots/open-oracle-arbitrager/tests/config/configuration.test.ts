@@ -703,7 +703,7 @@ describe('file-only startup configuration', () => {
 			port: 0,
 			async fetch(request) {
 				const requestValue = (await request.json()) as { id: unknown; method: string }
-				const result = requestValue.method === 'eth_chainId' ? '0x1' : requestValue.method === 'eth_blockNumber' ? '0x1' : '0x'
+				const result = requestValue.method === 'eth_chainId' || requestValue.method === 'eth_blockNumber' ? '0x1' : '0x'
 				return Response.json({ id: requestValue.id, jsonrpc: '2.0', result })
 			},
 		})
@@ -756,7 +756,11 @@ describe('file-only startup configuration', () => {
 			port: 0,
 			async fetch(request) {
 				const requestValue = (await request.json()) as { id: unknown; method: string }
-				const result = requestValue.method === 'eth_chainId' ? rpcChainId : requestValue.method === 'eth_blockNumber' ? '0x1' : '0x'
+				const result =
+					new Map([
+						['eth_chainId', rpcChainId],
+						['eth_blockNumber', '0x1'],
+					]).get(requestValue.method) ?? '0x'
 				return Response.json({ id: requestValue.id, jsonrpc: '2.0', result })
 			},
 		})

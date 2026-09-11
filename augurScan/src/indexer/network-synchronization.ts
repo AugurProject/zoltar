@@ -1,4 +1,5 @@
 import { type ContractDeploymentObservation, DatabaseConsistencyError, type IndexedBlock, type IndexerLease } from '../database.ts'
+import { compareBigint } from '../compare.ts'
 import { errorChainIncludes } from '../error-chain.ts'
 import type { Address, Hash, Log } from '../ethereum.ts'
 import {
@@ -293,7 +294,7 @@ export abstract class NetworkIndexerSynchronization extends NetworkIndexerLifecy
 		let previousStoredNumber = checkpoint?.number
 		let previousStoredHash = checkpoint?.hash
 		while (!processedBlocks.has(end) && !this.signal.aborted) {
-			const targetBlock = [...new Set([...logsByBlock.keys(), end])].filter(blockNumber => blockNumber >= batchStart && blockNumber <= end && !processedBlocks.has(blockNumber)).sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))[0]
+			const targetBlock = [...new Set([...logsByBlock.keys(), end])].filter(blockNumber => blockNumber >= batchStart && blockNumber <= end && !processedBlocks.has(blockNumber)).sort(compareBigint)[0]
 			if (targetBlock === undefined) throw new Error(`Sparse log segment did not retain its end checkpoint at block ${end}`)
 			const header = await headerAt(targetBlock)
 			const expectedParentHash = previousStoredNumber !== undefined && targetBlock === previousStoredNumber + 1n ? previousStoredHash : undefined

@@ -3,37 +3,17 @@
 	"compilerOptions": {
 		"baseUrl": ".",
 		"paths": {
-			"@zoltar/ui-core-shared/*": [
-				"../coreShared/js/*"
-			],
-			"@zoltar/ui-statoblast-shared/*": [
-				"../statoblastShared/js/*"
-			],
-			"@zoltar/ui-zoltar-shared/*": [
-				"../zoltarShared/js/*"
-			],
-			"@zoltar/core-shared/*": [
-				"../../shared/core/js/*"
-			],
-			"@zoltar/zoltar-shared/*": [
-				"../../shared/zoltar/js/*"
-			],
-			"@zoltar/open-oracle-shared/*": [
-				"../../shared/openOracle/js/*"
-			],
-			"@zoltar/statoblast-shared/*": [
-				"../../shared/statoblast/js/*"
-			]
+			"@zoltar/ui-core-shared/*": ["../coreShared/js/*"],
+			"@zoltar/ui-statoblast-shared/*": ["../statoblastShared/js/*"],
+			"@zoltar/ui-zoltar-shared/*": ["../zoltarShared/js/*"],
+			"@zoltar/core-shared/*": ["../../shared/core/js/*"],
+			"@zoltar/zoltar-shared/*": ["../../shared/zoltar/js/*"],
+			"@zoltar/open-oracle-shared/*": ["../../shared/openOracle/js/*"],
+			"@zoltar/statoblast-shared/*": ["../../shared/statoblast/js/*"]
 		},
 		"rootDir": "./ts",
 		"outDir": "./js"
 	},
-	"include": [
-		"./ts/**/*.ts",
-		"./ts/**/*.tsx"
-	],
-	"exclude": [
-		"./ts/tests/**/*.ts",
-		"./ts/tests/**/*.tsx"
-	]
+	"include": ["./ts/**/*.ts", "./ts/**/*.tsx"],
+	"exclude": ["./ts/tests/**/*.ts", "./ts/tests/**/*.tsx"]
 }

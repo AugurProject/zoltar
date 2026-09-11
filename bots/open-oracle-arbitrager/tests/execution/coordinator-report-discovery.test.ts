@@ -163,7 +163,9 @@ describe('configured coordinator report discovery', () => {
 				parameters => {
 					if (parameters.method === 'eth_getBlockByNumber') {
 						blockReads += 1
-						return { ...rawBlock, hash: missingBlockHash ? undefined : reorg && blockReads > 1 ? (`0x${'bc'.repeat(32)}` as Hex) : blockHash }
+						const reorganizedHash: Hex = `0x${'bc'.repeat(32)}`
+						if (missingBlockHash) return { ...rawBlock, hash: undefined }
+						return { ...rawBlock, hash: reorg && blockReads > 1 ? reorganizedHash : blockHash }
 					}
 					throw new Error(`Unexpected RPC method ${parameters.method}`)
 				},

@@ -51,14 +51,12 @@ test('registry paths, local dependencies, cache inputs, and generated outputs ar
 	expect(() => validateProjectRegistryFiles(repositoryRoot)).not.toThrow()
 })
 
-test('independent service formatters own the canonical repository rules', async () => {
-	const rootConfig = JSON.parse(await fs.readFile(path.join(repositoryRoot, 'biome.json'), 'utf8')) as Record<string, unknown>
-	const formatter = Reflect.get(rootConfig, 'formatter')
-	const javascriptFormatter = Reflect.get(Reflect.get(rootConfig, 'javascript'), 'formatter')
+test('independent service Biome configurations extend the root rules without local overrides', async () => {
 	for (const projectPath of ['augurScan', 'bots/chaos', 'bots/liquidator', 'bots/open-oracle-arbitrager', 'bots/shared']) {
 		const config = JSON.parse(await fs.readFile(path.join(repositoryRoot, projectPath, 'biome.json'), 'utf8')) as Record<string, unknown>
-		expect(Reflect.get(config, 'formatter'), `${projectPath} formatter`).toEqual(formatter)
-		expect(Reflect.get(Reflect.get(config, 'javascript'), 'formatter'), `${projectPath} JavaScript formatter`).toEqual(javascriptFormatter)
+		expect(Reflect.get(config, 'root'), `${projectPath} root`).toBe(false)
+		expect(Reflect.get(config, 'extends'), `${projectPath} extends`).toBe('//')
+		for (const overridden of ['formatter', 'javascript', 'linter', 'overrides', 'assist']) expect(Reflect.get(config, overridden), `${projectPath} ${overridden}`).toBeUndefined()
 	}
 })
 

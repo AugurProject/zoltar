@@ -87,6 +87,18 @@ const catalogEventNames = new Set(catalogAbis().flatMap(abi => abi.flatMap(item 
 const unbackedEventNames = Object.keys(eventDomains).filter(eventName => !catalogEventNames.has(eventName))
 if (unbackedEventNames.length > 0) throw new Error(`Semantic event taxonomy names events missing from the ABI catalog: ${unbackedEventNames.join(', ')}`)
 
+const liquidationApprovalIdentity = (approvalId: unknown, receiverVault: unknown): string | undefined => {
+	if (typeof approvalId === 'string') return approvalId.toLowerCase()
+	return typeof receiverVault === 'string' ? `nonce:${receiverVault.toLowerCase()}` : undefined
+}
+
+const domainEntityIdentity = (definition: { readonly domain: string; readonly entityType: string }, address: string, identity: { approvalIdentity: string | undefined; identitySuffix: string | undefined; reportId: unknown }): string => {
+	if (definition.domain === 'report' && typeof identity.reportId === 'string') return `${address}:${identity.reportId}`
+	if (definition.entityType === 'vault' && identity.identitySuffix !== undefined) return `${address}:${identity.identitySuffix}`
+	if (definition.entityType === 'liquidation-approval' && identity.approvalIdentity !== undefined) return `${address}:${identity.approvalIdentity}`
+	return identity.identitySuffix ?? address
+}
+
 const domainProjectionFrom = (log: StoredLog): DomainEventProjection | undefined => {
 	const eventName = log.decoded.name
 	const data = log.decoded.arguments
@@ -105,17 +117,10 @@ const domainProjectionFrom = (log: StoredLog): DomainEventProjection | undefined
 	if (eventName === 'Sync' && !(typeof data['yesReserve'] === 'string' && typeof data['noReserve'] === 'string')) return undefined
 	const reportId = data['reportId']
 	const approvalId = data['approvalId']
-	const approvalIdentity = typeof approvalId === 'string' ? approvalId.toLowerCase() : typeof data['receiverVault'] === 'string' ? `nonce:${data['receiverVault'].toLowerCase()}` : undefined
+	const approvalIdentity = liquidationApprovalIdentity(approvalId, data['receiverVault'])
 	const fieldIdentity = definition.identityFields?.map(field => data[field]).find(value => typeof value === 'string')
 	const identitySuffix = typeof fieldIdentity === 'string' ? fieldIdentity.toLowerCase() : undefined
-	const entityIdentity =
-		definition.domain === 'report' && typeof reportId === 'string'
-			? `${log.address.toLowerCase()}:${reportId}`
-			: definition.entityType === 'vault' && identitySuffix !== undefined
-				? `${log.address.toLowerCase()}:${identitySuffix}`
-				: definition.entityType === 'liquidation-approval' && approvalIdentity !== undefined
-					? `${log.address.toLowerCase()}:${approvalIdentity}`
-					: (identitySuffix ?? log.address.toLowerCase())
+	const entityIdentity = domainEntityIdentity(definition, log.address.toLowerCase(), { approvalIdentity, identitySuffix, reportId })
 	return {
 		type: 'domainEvent',
 		domain: definition.domain,

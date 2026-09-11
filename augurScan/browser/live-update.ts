@@ -149,13 +149,20 @@ export const historyInvalidationNotice = (reason: HistoryInvalidationReason, dep
 			return { title: 'Historical ABI re-decode', detail: `${blocks} invalidated so historical evidence can be decoded again; views are refreshing.` }
 		case 'projection-rebuild':
 			return { title: 'Historical projection rebuild', detail: `${blocks} invalidated so historical views can be rebuilt; views are refreshing.` }
+		default:
+			throw new Error(`Unknown history invalidation reason ${String(reason)}`)
 	}
+}
+
+const liveRecordState = (previousSignature: string | undefined, signature: string): ClassifiedLiveRecord['state'] => {
+	if (previousSignature === undefined) return 'added'
+	return previousSignature === signature ? 'unchanged' : 'changed'
 }
 
 export const classifyLiveRecords = (previous: ReadonlyMap<string, string>, current: readonly LiveRecord[]): ClassifiedLiveRecord[] =>
 	current.map(record => ({
 		...record,
-		state: previous.has(record.key) ? (previous.get(record.key) === record.signature ? 'unchanged' : 'changed') : 'added',
+		state: liveRecordState(previous.get(record.key), record.signature),
 	}))
 
 export const mergeUniqueRecords = <T>(primary: readonly T[], retained: readonly T[], keyFor: (record: T) => string): T[] => {
@@ -567,6 +574,12 @@ export const operationsRiskPresentation = (kind: 'pool' | 'vault', protocolState
 	}
 }
 
+const snapshotReadStatusLabel = (readStatus: unknown) => {
+	if (readStatus === 'success') return 'Current tagged read available'
+	if (readStatus === undefined || readStatus === null || readStatus === '') return 'Event-derived'
+	return `Tagged read ${String(readStatus)}`
+}
+
 export const operationsDetailSummaryPresentation = (
 	kind: OperationsDetailKind,
 	state: {
@@ -589,7 +602,7 @@ export const operationsDetailSummaryPresentation = (
 	const readStatus = state.snapshotReadStatus
 	return {
 		label: 'Evidence state',
-		value: readStatus === 'success' ? 'Current tagged read available' : readStatus === undefined || readStatus === null || readStatus === '' ? 'Event-derived' : `Tagged read ${String(readStatus)}`,
+		value: snapshotReadStatusLabel(readStatus),
 	}
 }
 
@@ -654,7 +667,8 @@ export const compareCanonicalEventPosition = (left: Readonly<Record<string, unkn
 	if (leftTransaction !== rightTransaction) return leftTransaction < rightTransaction ? -1 : 1
 	const leftLog = canonicalEventPosition(left, 'log_index')
 	const rightLog = canonicalEventPosition(right, 'log_index')
-	return leftLog === rightLog ? 0 : leftLog < rightLog ? -1 : 1
+	if (leftLog === rightLog) return 0
+	return leftLog < rightLog ? -1 : 1
 }
 
 export const canonicalPageLimit = (targetCount: number, loadedCount: number, pageSize: number): number => (targetCount > loadedCount ? Math.min(pageSize, targetCount - loadedCount) : pageSize)
@@ -967,6 +981,16 @@ const compactIndexerDuration = (seconds: number): string => {
 	return `${Math.floor(totalHours / 24)}d${hours === 0 ? '' : ` ${hours}h`}`
 }
 
+const exactIndexedBlockFor = (indexedBlock: string | number | bigint | null | undefined, exactStartBlock: bigint | undefined) => {
+	if (indexedBlock !== null && indexedBlock !== undefined) return decimalBlock(indexedBlock)
+	return exactStartBlock === undefined ? undefined : exactStartBlock - 1n
+}
+
+const clampBigint = (value: bigint, minimum: bigint, maximum: bigint) => {
+	if (value > maximum) return maximum
+	return value < minimum ? minimum : value
+}
+
 export const indexerProgressEstimate = (network: NetworkFreshnessRecord, previousSample: IndexerProgressSample | undefined = undefined, sampledAt = Date.now()) => {
 	if (network.start_block === null || network.start_block === undefined || network.observed_block === null || network.observed_block === undefined) return { percentage: undefined, eta: 'Estimating ETA' }
 	const startBlock = Number(network.start_block)
@@ -975,7 +999,7 @@ export const indexerProgressEstimate = (network: NetworkFreshnessRecord, previou
 	if (![startBlock, indexedBlock, observedBlock].every(Number.isSafeInteger)) return { percentage: undefined, eta: 'Estimating ETA' }
 	const exactStartBlock = decimalBlock(network.start_block)
 	const exactObservedBlock = decimalBlock(network.observed_block)
-	const exactIndexedBlock = network.indexed_block === null || network.indexed_block === undefined ? (exactStartBlock === undefined ? undefined : exactStartBlock - 1n) : decimalBlock(network.indexed_block)
+	const exactIndexedBlock = exactIndexedBlockFor(network.indexed_block, exactStartBlock)
 	if (exactStartBlock === undefined || exactObservedBlock === undefined || exactIndexedBlock === undefined) return { percentage: undefined, eta: 'Estimating ETA' }
 	if (exactObservedBlock < exactStartBlock) return { percentage: '100.00', eta: 'Caught up' }
 	const boundedHead = observedBlock
@@ -983,7 +1007,7 @@ export const indexerProgressEstimate = (network: NetworkFreshnessRecord, previou
 	const completedBlocks = boundedIndexed - startBlock + 1
 	const totalBlocks = boundedHead - startBlock + 1
 	const remainingBlocks = totalBlocks - completedBlocks
-	const exactBoundedIndexed = exactIndexedBlock > exactObservedBlock ? exactObservedBlock : exactIndexedBlock < exactStartBlock ? exactStartBlock - 1n : exactIndexedBlock
+	const exactBoundedIndexed = clampBigint(exactIndexedBlock, exactStartBlock - 1n, exactObservedBlock)
 	const exactCompletedBlocks = exactBoundedIndexed - exactStartBlock + 1n
 	const exactTotalBlocks = exactObservedBlock - exactStartBlock + 1n
 	const roundedHundredths = (exactCompletedBlocks * 10_000n + exactTotalBlocks / 2n) / exactTotalBlocks

@@ -228,6 +228,15 @@ const auctionSnapshot = async (target: StateSnapshotTarget, read: StateRead): Pr
 	}
 }
 
+const ENTITY_SNAPSHOTS: Record<StateSnapshotTarget['entityType'], (target: StateSnapshotTarget, read: StateRead) => Promise<Readonly<Record<string, unknown>>>> = {
+	auction: auctionSnapshot,
+	escalation: escalationSnapshot,
+	pool: poolSnapshot,
+	vault: vaultSnapshot,
+}
+
+const entitySnapshot = (target: StateSnapshotTarget, read: StateRead) => ENTITY_SNAPSHOTS[target.entityType](target, read)
+
 export const sampleEntityStateWithRead = async (target: StateSnapshotTarget, read: StateRead, onFailure: (error: unknown) => void = () => {}): Promise<EntityStateSnapshot> => {
 	const sourceMethod = `augurscan.${target.entityType}-state.v1`
 	const failures: unknown[] = []
@@ -245,7 +254,7 @@ export const sampleEntityStateWithRead = async (target: StateSnapshotTarget, rea
 		return operation
 	}
 	try {
-		const readResult = target.entityType === 'pool' ? await poolSnapshot(target, observedRead) : target.entityType === 'vault' ? await vaultSnapshot(target, observedRead) : target.entityType === 'escalation' ? await escalationSnapshot(target, observedRead) : await auctionSnapshot(target, observedRead)
+		const readResult = await entitySnapshot(target, observedRead)
 		return { entityType: target.entityType, entityIdentity: target.entityIdentity, sourceMethod, readStatus: 'success', readResult }
 	} catch (error) {
 		await Promise.allSettled([...pending])

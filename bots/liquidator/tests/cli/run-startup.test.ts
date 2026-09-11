@@ -143,7 +143,11 @@ test('keeps the active operator running and unpaused when a dormant profile is i
 	const rpc = Bun.serve({
 		async fetch(request) {
 			const body = (await request.json()) as { id: unknown; method: string }
-			const result = body.method === 'eth_chainId' ? '0x1' : body.method === 'eth_getCode' ? '0x' : '0x0'
+			const result =
+				new Map([
+					['eth_chainId', '0x1'],
+					['eth_getCode', '0x'],
+				]).get(body.method) ?? '0x0'
 			return Response.json({ id: body.id, jsonrpc: '2.0', result })
 		},
 		hostname: '127.0.0.1',

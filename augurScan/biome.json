@@ -1,26 +1,7 @@
 {
 	"$schema": "https://biomejs.dev/schemas/2.3.11/schema.json",
 	"root": false,
-	"formatter": {
-		"enabled": true,
-		"indentStyle": "tab",
-		"lineWidth": 320
-	},
-	"javascript": {
-		"formatter": {
-			"quoteStyle": "single",
-			"jsxQuoteStyle": "single",
-			"semicolons": "asNeeded",
-			"arrowParentheses": "asNeeded"
-		}
-	},
-	"linter": {
-		"rules": {
-			"complexity": {
-				"useLiteralKeys": "off"
-			}
-		}
-	},
+	"extends": "//",
 	"files": {
 		"includes": ["**", "!node_modules", "!bun.lock", "!config/abis.json", "!public/app.js"]
 	}

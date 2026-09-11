@@ -1,5 +1,5 @@
 import { runtimeConfig } from '../config.ts'
-import type { IndexerLease } from '../database.ts'
+import type { IndexerLease, PersistedIndexerOwnershipState } from '../database.ts'
 import type { Hash } from '../ethereum.ts'
 import {
 	ChainConfigurationError,
@@ -17,6 +17,19 @@ import {
 } from '../indexer-runtime.ts'
 import { NetworkIndexerProvider } from './network-provider.ts'
 import { type IndexerRpcProvider, initialIndexStartBlock, manifestChangeRequiresFullReplay } from './planning.ts'
+const OWNERSHIP_EVENT_STATES = new Map<string, PersistedIndexerOwnershipState>([
+	['acquired', 'owned'],
+	['standby', 'standby'],
+	['released', 'released'],
+	['release-failed', 'release-failed'],
+])
+
+const persistedOwnershipState = (eventType: string): PersistedIndexerOwnershipState => OWNERSHIP_EVENT_STATES.get(eventType) ?? 'unknown'
+
+const SEED_REPLAY_REASONS = new Map<string | undefined, string>([
+	['abi-redecode', 'ABI snapshot changed'],
+	['projection-rebuild', 'projection source changed'],
+])
 
 export abstract class NetworkIndexerLifecycle extends NetworkIndexerProvider {
 	protected abstract reconcileManifestBackfill(): Promise<void>
@@ -31,13 +44,7 @@ export abstract class NetworkIndexerLifecycle extends NetworkIndexerProvider {
 			networkId: this.network.id,
 			onEvent: async event => {
 				recordOwnershipEvent(this.network.id, event)
-				await this.database.recordIndexerOwnership(
-					this.network.chainId,
-					this.network.id,
-					event.type === 'acquired' ? 'owned' : event.type === 'standby' ? 'standby' : event.type === 'released' ? 'released' : event.type === 'release-failed' ? 'release-failed' : 'unknown',
-					'backendPid' in event ? event.backendPid : undefined,
-					this.provenance?.indexerRunId,
-				)
+				await this.database.recordIndexerOwnership(this.network.chainId, this.network.id, persistedOwnershipState(event.type), 'backendPid' in event ? event.backendPid : undefined, this.provenance?.indexerRunId)
 			},
 			acquire: () => this.database.tryAcquireIndexerLock(this.network.chainId),
 			seed: lease => this.seed(lease),
@@ -127,7 +134,7 @@ export abstract class NetworkIndexerLifecycle extends NetworkIndexerProvider {
 	}
 
 	protected reportManifestReplay(checkpoint: { readonly number: bigint; readonly hash: Hash }): void {
-		const reason = this.lastSeedReplayReason === 'abi-redecode' ? 'ABI snapshot changed' : this.lastSeedReplayReason === 'projection-rebuild' ? 'projection source changed' : 'canonical manifest changed'
+		const reason = SEED_REPLAY_REASONS.get(this.lastSeedReplayReason) ?? 'canonical manifest changed'
 		this.lastSeedReplayReason = undefined
 		console.info(`[${this.network.id}] ${reason} at indexed block #${checkpoint.number}; replaying canonical interpretations from block #${this.network.startBlock}`)
 	}

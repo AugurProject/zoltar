@@ -259,7 +259,8 @@ export async function evaluate(client: BatchReader, config: EvaluationConfigurat
 	// The replacement quote only matters for the pool that wins; a failed quote is reported when that pool is chosen.
 	const replacementQuote = results[2]
 	const replacementAmount2 = replacementQuote === undefined || replacementQuote.status === 'failure' ? undefined : quoteAmount(replacementQuote, 'Uniswap replacement exact-input quote')
-	const replacementQuoteFailure = replacementQuote === undefined ? 'missing batched quote' : replacementQuote.status === 'failure' ? replacementQuote.error.message : undefined
+	let replacementQuoteFailure: string | undefined = 'missing batched quote'
+	if (replacementQuote !== undefined) replacementQuoteFailure = replacementQuote.status === 'failure' ? replacementQuote.error.message : undefined
 	const v3 = selectBestExecution([...(v3Sell === undefined ? [] : [v3Sell]), ...(v3Buy === undefined ? [] : [v3Buy])], candidate => candidate.netProfitAttoWeth)
 	observeVenue('uniswap-v3', pool.address, v3Sell, v3Buy)
 	if (v3 !== undefined) candidates.push({ hedgeFee: pool.fee, hedgePool: pool.address, quote: v3, venue: 'uniswap-v3' })

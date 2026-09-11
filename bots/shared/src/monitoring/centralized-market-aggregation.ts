@@ -1,10 +1,11 @@
 import type { CentralizedMarketEstimate, CentralizedMarketObservation, CentralizedMarketSettings } from './centralized-markets.ts'
+import { compareBigint } from '../infrastructure/compare.ts'
 
 const BPS = 10_000n
 
 function median(values: readonly bigint[]) {
 	if (values.length === 0) throw new Error('Cannot calculate a median without observations')
-	const sorted = [...values].sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))
+	const sorted = [...values].sort(compareBigint)
 	const middle = Math.floor(sorted.length / 2)
 	const upper = sorted[middle]
 	if (upper === undefined) throw new Error('Median observation disappeared')
