@@ -43,14 +43,17 @@ export function assertStaticDeploymentArtifactRuntimeCodeHashes(
 		runtimeCodeByStepId: STATIC_DEPLOYMENT_ARTIFACT_RUNTIME_CODE_BY_STEP_ID,
 	},
 ) {
+	const verifiedStepIds: string[] = []
 	for (const [id, runtimeCode] of Object.entries(parameters.runtimeCodeByStepId)) {
 		const expectedRuntimeCodeHash = parameters.expectedRuntimeCodeHashes[id]
 		if (expectedRuntimeCodeHash === undefined) throw new Error(`Static deployment artifact ${id} has no pinned expected runtime code hash`)
 		const artifactRuntimeCodeHash = keccak256(runtimeCode)
+		verifiedStepIds.push(id)
 		if (artifactRuntimeCodeHash !== expectedRuntimeCodeHash) {
 			throw new Error(`Local runtime code for ${id} does not match its pinned expected hash: expected ${expectedRuntimeCodeHash}, artifact contains ${artifactRuntimeCodeHash}. Run bun run compile-contracts and refresh the pinned deployment hashes if the bytecode change is intentional.`)
 		}
 	}
+	return verifiedStepIds.sort()
 }
 
 const EXPECTED_MAINNET_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {

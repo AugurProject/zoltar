@@ -1,3 +1,4 @@
+import { CHAOS_OPERATION_CATALOG } from '../operations/catalog.ts'
 import type { EcosystemSnapshot, EvaluatedOperation, OperationPlan } from '../operations/types.ts'
 import type { DurableRetirementState } from '../state/retirement.ts'
 
@@ -93,6 +94,11 @@ const dispositions = new Map<string, RetirementOperationDisposition>([
 	...PROHIBITED_OPERATIONS.map(id => [id, 'prohibited'] as const),
 	['trading.position.exit', 'unmatched-exit'],
 ])
+
+// Every catalog operation needs an explicit retirement disposition; an unclassified
+// operation would otherwise be blocked silently and could stall drain-and-retire.
+const unclassifiedCatalogOperations = CHAOS_OPERATION_CATALOG.map(definition => definition.id).filter(id => !dispositions.has(id))
+if (unclassifiedCatalogOperations.length > 0) throw new Error(`Retirement policy has no disposition for catalog operations: ${unclassifiedCatalogOperations.join(', ')}`)
 
 function operationAllowedDuringRetirement(operationId: string, policies: Pick<DurableRetirementState['policies'], 'exitUnmatchedShares' | 'maximumExitLossBps' | 'migrateExistingClaims'>) {
 	const disposition = dispositions.get(operationId)

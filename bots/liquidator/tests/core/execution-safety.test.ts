@@ -19,6 +19,7 @@ import { validateReceiptExpectation } from '../../src/execution/receipt-validati
 import { initialRuntimeState } from '../../src/state/operator-state.ts'
 import { encodeEventTopics } from '@zoltar/core-shared/evm/ethereum'
 import { encodeAbiParameters, getAddress, type TransactionReceipt } from '@zoltar/bot-shared/ethereum'
+import { maximumFeePerGas, paddedTransactionGas } from '@zoltar/bot-shared/execution/transaction-submission'
 import { nextStagedHistoricalRecoveryRange, recordStagedRecoveryChunk, recordStagedRecoveryGap, stagedRecoveryAnchorMatches } from '../../src/execution/staged-recovery-journal.ts'
 import { availableExecutionObservations, liquidationExecutionSnapshotObservation } from '../../src/monitoring/execution-quorum.ts'
 
@@ -428,6 +429,9 @@ describe('liquidator execution safety', () => {
 		const baseFeePerGas = 10n * 10n ** 9n
 		const capThatOnlyCoversTheFormerDoubleBaseFeeEstimate = 3_000_000_000_000_000n
 		expect(() => assertGasCostLimitForBaseFee(100_000n, baseFeePerGas, capThatOnlyCoversTheFormerDoubleBaseFeeEstimate)).toThrow('maximumGasCostAttoEth')
+		const paddedCeiling = paddedTransactionGas(100_000n) * maximumFeePerGas(baseFeePerGas)
+		expect(() => assertGasCostLimitForBaseFee(100_000n, baseFeePerGas, paddedCeiling)).not.toThrow()
+		expect(() => assertGasCostLimitForBaseFee(100_000n, baseFeePerGas, paddedCeiling - 1n)).toThrow('maximumGasCostAttoEth')
 	})
 
 	test('does not treat a successful outer receipt as a successful failed staged operation', () => {

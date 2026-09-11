@@ -201,6 +201,7 @@
 			"entry": ["ts/**/*.test.ts"],
 			"includeEntryExports": true,
 			"project": ["ts/**/*.ts!", "!ts/testing/**!"],
+			"ignore": ["ts/testing/**"],
 			"paths": {
 				"@zoltar/core-shared/*": ["../core/ts/*"],
 				"@zoltar/zoltar-shared/*": ["ts/*"],

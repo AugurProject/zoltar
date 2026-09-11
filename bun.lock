@@ -12,7 +12,6 @@
         "@zoltar/open-oracle-shared": "file:shared/openOracle",
         "@zoltar/statoblast-shared": "file:shared/statoblast",
         "@zoltar/trading-shared": "file:shared/trading",
-        "solc": "0.8.17",
       },
       "devDependencies": {
         "@biomejs/biome": "2.3.11",
@@ -28,6 +27,7 @@
         "preact": "10.26.4",
         "prettier": "3.8.4",
         "prettier-plugin-solidity": "2.3.1",
+        "solc": "0.8.17",
         "typescript": "5.8.2",
       },
     },

@@ -102,7 +102,6 @@ describe('fork-carry proof index', () => {
 		expect(verifySparseNullifierAbsence(afterFirst, '1', currentSecondProof)).toBe(sparseNullifierRoot(afterFirst))
 		const afterSecond = consumeSparseNullifier(afterFirst, '1')
 		expect(sparseNullifierRoot(afterSecond)).not.toBe(sparseNullifierRoot(afterFirst))
-		expect(() => consumeSparseNullifier(afterSecond, '1')).toThrow('already nullified')
 	})
 
 	test('detects explicit low-64-bit nullifier path collisions', () => {

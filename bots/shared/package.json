@@ -23,7 +23,6 @@
 		"./monitoring/log-availability": "./src/monitoring/log-availability.ts",
 		"./monitoring/market-consensus": "./src/monitoring/market-consensus.ts",
 		"./monitoring/read-quorum": "./src/monitoring/read-quorum.ts",
-		"./monitoring/relay-compatibility": "./src/monitoring/relay-compatibility.ts",
 		"./monitoring/rpc-quorum-policy": "./src/monitoring/rpc-quorum-policy.ts",
 		"./monitoring/resilience": "./src/monitoring/resilience.ts"
 	},

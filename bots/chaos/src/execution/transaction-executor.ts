@@ -3,7 +3,7 @@ import { requestTransport } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { confirmCanonicalReceiptFinality, type CanonicalReceiptFinalityPolicy } from '@zoltar/bot-shared/execution/canonical-finality'
 import { assertSubmissionWindowOpen, prepareSignedTransaction, submitSignedTransaction } from '@zoltar/bot-shared/execution/transaction-submission'
 import { endpointLabel, sendRawTransactionToRpc } from '@zoltar/bot-shared/monitoring/connectivity'
-import { availableSettledValues, quorumValue, settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
+import { availableSettledValues, quorumValue, settledQuorumValue, sharedQuorumBlockNumber } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
 import type { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import type { OperatorSettings } from '../config/settings.ts'
@@ -146,22 +146,6 @@ export function assertExecutionActive(environment: ExecutionEnvironment) {
 	if (!environment.settings.runtime.execute) throw new Error('Transaction execution is disabled')
 	if (environment.settings.paused || environment.state.paused) throw new Error('Chaos bot paused before transaction submission')
 	if (environment.state.pendingTransactions.length > 1) throw new Error('Multiple pending transaction intents require manual reconciliation')
-}
-
-function sharedQuorumBlockNumber(heads: readonly bigint[], requirement: number) {
-	if (!Number.isSafeInteger(requirement) || requirement < 1) {
-		throw new Error('Shared block quorum must be a positive integer')
-	}
-	if (heads.length < requirement) {
-		throw new Error('Shared block selection does not have enough available heads')
-	}
-	const sorted = [...heads].sort((left, right) => {
-		if (left === right) return 0
-		return left > right ? -1 : 1
-	})
-	const selected = sorted[requirement - 1]
-	if (selected === undefined) throw new Error('Shared block selection returned no block')
-	return selected
 }
 
 export async function agreedLatestBlock(environment: ExecutionEnvironment, label: string): Promise<CanonicalExecutionAnchor> {

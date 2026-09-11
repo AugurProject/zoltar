@@ -22,6 +22,11 @@
 			"types": "./ts/questions/scalarOutcome.ts",
 			"bun": "./ts/questions/scalarOutcome.ts",
 			"default": "./js/questions/scalarOutcome.js"
+		},
+		"./testing/scalarOutcomeParityFixtures": {
+			"types": "./ts/testing/scalarOutcomeParityFixtures.ts",
+			"bun": "./ts/testing/scalarOutcomeParityFixtures.ts",
+			"default": "./js/testing/scalarOutcomeParityFixtures.js"
 		}
 	},
 	"files": [

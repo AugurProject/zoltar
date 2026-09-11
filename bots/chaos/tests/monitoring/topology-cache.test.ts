@@ -201,6 +201,8 @@ describe('immutable topology sidecar', () => {
 				statePath,
 			}),
 		).resolves.toBeUndefined()
+		// The same corrupted generation is rejected once the limits admit it, so the reset above came from the manifest check.
+		await expect(loadImmutableTopologyCacheWithinLimits({ identity: identity(), limits: generousLimits, statePath })).rejects.toThrow()
 	})
 
 	test('rejects aggregate vault payloads against live limits before decoding their chunks', async () => {
@@ -219,6 +221,7 @@ describe('immutable topology sidecar', () => {
 		await writeFile(join(generationPath, vaultChunk), '{not valid json', { mode: 0o600 })
 
 		await expect(loadImmutableTopologyCacheWithinLimits({ identity: identity(), limits: { maxPools: 1, maxQuestions: 2, maxUniverses: 3, maxVaultsPerPool: 1 }, statePath })).resolves.toBeUndefined()
+		await expect(loadImmutableTopologyCacheWithinLimits({ identity: identity(), limits: generousLimits, statePath })).rejects.toThrow()
 	})
 
 	test('rejects an underreported collection before appending records beyond its manifest commitment', async () => {

@@ -25,7 +25,7 @@ async function captureDeploymentInitCode(deploy: (client: WriteClient) => Promis
 
 describe('statoblast deployment steps', () => {
 	test('pins every directly deployed Statoblast artifact to its expected runtime code hash', () => {
-		expect(() => assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes()).not.toThrow()
+		expect(assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes()).toEqual(['escalationGameClaimDelegate', 'openOracle', 'securityPoolOperationsDelegate', 'securityPoolUtils', 'uniformPriceDualCapBatchAuctionFactory'])
 	})
 
 	test('the deployment status oracle step deploys the statoblast oracle, not the zoltar-only oracle', async () => {

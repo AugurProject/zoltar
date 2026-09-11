@@ -15,7 +15,7 @@ import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } 
 import { getInfraContractAddresses, PROXY_DEPLOYER_ADDRESS } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import { activateSimulationBackendProfile, createBootstrappedSimulationBackendWithRetry, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
 import { deploymentConfigurationForPlan, getTradingDeploymentPlan } from '../../protocol/deployment.js'
-import { discoverLiveUniverseMarketPage, loadLiveBalances } from '../../protocol/live.js'
+import { discoverLiveUniverseMarketPage, loadLiveBalances, marketNewRiskBlocker } from '../../protocol/live.js'
 import { DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIMULATION_SCENARIO } from '../../simulation/index.js'
 
 for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIMULATION_SCENARIO])
@@ -185,5 +185,30 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 			if (account === undefined) throw new Error('Simulation wallet is missing')
 			const balances = await loadLiveBalances(backend.createReadClient(), market, account)
 			for (const balance of [balances.yes, balances.no, balances.invalid, balances.lp]) expect(balance).toBeGreaterThan(0n)
+		}, 180_000)
+
+		test('isolates one failed market read into an explicit unavailable row without leaking provider detail', async () => {
+			activateSimulationBackendProfile(backend)
+			const addresses = getInfraContractAddresses(backend.profile)
+			const configuration = deploymentConfigurationForPlan(
+				getTradingDeploymentPlan({ chainId: backend.profile.chain.id, chainName: backend.profile.displayName, defaultRpcUrl: 'http://127.0.0.1/', id: 'simulation', proxyDeployer: PROXY_DEPLOYER_ADDRESS, securityPoolFactory: addresses.securityPoolFactory, zoltar: addresses.zoltar }, 30),
+				'http://127.0.0.1/',
+			)
+			const client = backend.createReadClient()
+			const seeded = await discoverLiveUniverseMarketPage(client, configuration, 0n)
+			const pool = seeded.markets[0]?.pool
+			if (pool === undefined) throw new Error('Seeded market is missing')
+			const readContract: typeof client.readContract = async parameters => {
+				if (parameters.address.toLowerCase() === pool.toLowerCase()) throw new Error(`Contract read failed at ${pool}: token ID 1793, call arguments unavailable`)
+				return await client.readContract(parameters)
+			}
+			const discovery = await discoverLiveUniverseMarketPage({ ...client, readContract }, configuration, 0n)
+			expect(discovery.total).toBe(1n)
+			const market = discovery.markets[0]
+			if (market === undefined) throw new Error('Expected an unavailable market row')
+			expect(market.pool).toBe(pool)
+			expect(market.loadError).toBe('Market reads failed')
+			expect(market.loadError).not.toContain('1793')
+			expect(marketNewRiskBlocker(market, 0n)).toBe('Market data unavailable')
 		}, 180_000)
 	})

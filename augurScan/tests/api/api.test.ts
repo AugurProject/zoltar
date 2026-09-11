@@ -181,9 +181,11 @@ test('rejects export cursor indexes outside PostgreSQL integer bounds before que
 	const cursors = [cursorFor('logs', ['42', '2147483648', '7', blockHash, transactionHash]), cursorFor('logs', ['42', '3', '2147483648', blockHash, transactionHash]), cursorFor('timeline', ['42', blockHash, transactionHash, '2147483648', 'report', '7'])]
 	const database = new SQL('postgres://user:unused@127.0.0.1:1/unused', { connectionTimeout: 1 })
 	databases.push(database)
-	for (const cursor of cursors) {
-		const response = await handleApi(new Request(`http://localhost/api/v1/export?chainId=1&cursor=${encodeURIComponent(cursor)}`), database)
+	for (const [index, cursor] of cursors.entries()) {
+		const dataset = index === 2 ? 'timeline' : 'logs'
+		const response = await handleApi(new Request(`http://localhost/api/v1/export?chainId=1&dataset=${dataset}&fromBlock=0&toBlock=1000&cursor=${encodeURIComponent(cursor)}`), database)
 		expect(response?.status).toBe(400)
+		expect(await response?.json()).toEqual({ error: 'export cursor is invalid' })
 	}
 })
 

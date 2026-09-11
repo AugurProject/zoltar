@@ -24,8 +24,8 @@ import {
 	getScalarParityOutcomeIndex,
 	getScalarParityQuestion,
 	isScalarParityMalformedOutcomeIndex,
-} from '../../../shared/zoltar/ts/testing/scalarOutcomeParityFixtures'
-import type { ScalarParityQuestion } from '../../../shared/zoltar/ts/testing/scalarOutcomeParityFixtures'
+} from '@zoltar/zoltar-shared/testing/scalarOutcomeParityFixtures'
+import type { ScalarParityQuestion } from '@zoltar/zoltar-shared/testing/scalarOutcomeParityFixtures'
 
 const MAX_UINT256 = 2n ** 256n - 1n
 const SCALAR_ENCODING_FUZZ_SAMPLE_COUNT = 12

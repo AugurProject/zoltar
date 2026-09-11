@@ -11,7 +11,8 @@ import type { InjectedEthereum } from '../../protocol/injected.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
-import { SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
+import { createSimulationProfile, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
+import { getInfraContractAddresses, PROXY_DEPLOYER_ADDRESS } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import { saveNetworkRpcUrl } from '@zoltar/ui-core-shared/wallet/rpcConfig.js'
 
 beforeEach(() => installTradingRouting())
@@ -303,6 +304,103 @@ describe('trading deployment setup', () => {
 		resolveConnection({ account: testWalletAccount, chainId: core.chainId, provider })
 		await Bun.sleep(0)
 		expect(listeners.size).toBe(0)
+	})
+
+	test('verifies the canonical deployment against the active network RPC chain and falls back to setup on a mismatch', async () => {
+		const plan = getTradingDeploymentPlan(core, 30)
+		const mainnetCore = { ...core, chainId: 1, chainName: 'Ethereum Mainnet', id: 'mainnet' }
+		let rpcChainId = '0x1'
+		let contractReadCount = 0
+		const client = createPublicClient({
+			transport: custom({
+				request: async ({ method, params }) => {
+					if (method === 'eth_chainId') return rpcChainId
+					if (method === 'eth_getCode' && Array.isArray(params)) {
+						const address = params[0]
+						if (typeof address !== 'string') throw new Error('Missing code address')
+						return address.toLowerCase() === core.proxyDeployer.toLowerCase() ? CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE : '0x01'
+					}
+					if (method === 'eth_call') {
+						contractReadCount += 1
+						if (contractReadCount === 1) return encodeAbiParameters([{ type: 'address' }], [core.securityPoolFactory])
+						if (contractReadCount === 2) return encodeAbiParameters([{ type: 'uint16' }], [30])
+						return encodeAbiParameters([{ type: 'address' }], [plan.factory.address])
+					}
+					throw new Error(`Unexpected RPC method ${method}`)
+				},
+			}),
+		})
+		const restoreEnvironment = installActiveEnvironmentForTesting({ ...createFakeBackend({ profile: SEPOLIA_NETWORK_PROFILE }), createReadClient: () => client })
+		const originalFetch = globalThis.fetch
+		globalThis.fetch = (async () => new Response(JSON.stringify([mainnetCore, core]), { headers: { 'content-type': 'application/json' } })) as typeof fetch
+		const services: TradingDeploymentSetupServices = { createPublicClient: () => client, loadCoreDeployments: async () => [core] }
+		try {
+			const mismatched = await renderIntoDocument(<App deploymentSetupServices={services} initializeEnvironment={async () => undefined} />)
+			cleanupRendered = mismatched.cleanup
+			await waitForText('Network unavailable')
+			expect(mismatched.container.querySelector('.deployment-setup')).not.toBeNull()
+			await mismatched.cleanup()
+			cleanupRendered = undefined
+
+			rpcChainId = '0xaa36a7'
+			contractReadCount = 0
+			const verified = await renderIntoDocument(<App deploymentSetupServices={services} initializeEnvironment={async () => undefined} />)
+			cleanupRendered = verified.cleanup
+			await waitForText('Sepolia')
+			expect(verified.container.textContent).not.toContain('Network unavailable')
+			expect(verified.container.querySelector('.deployment-setup')).toBeNull()
+		} finally {
+			globalThis.fetch = originalFetch
+			restoreEnvironment()
+		}
+	})
+
+	test('reads a simulated deployment through the active simulation client instead of the configured RPC URL', async () => {
+		const profile = createSimulationProfile({ genesisRepTokenAddress: getAddress(`0x${'aa'.repeat(20)}`), wethAddress: getAddress(`0x${'bb'.repeat(20)}`) })
+		const simulationCore = { ...core, chainId: profile.chain.id, proxyDeployer: PROXY_DEPLOYER_ADDRESS, securityPoolFactory: getInfraContractAddresses(profile).securityPoolFactory }
+		const plan = getTradingDeploymentPlan(simulationCore, 30)
+		let readClients = 0
+		let contractReadCount = 0
+		const client = createPublicClient({
+			transport: custom({
+				request: async ({ method, params }) => {
+					if (method === 'eth_chainId') return profile.chainIdHex
+					if (method === 'eth_getCode' && Array.isArray(params)) {
+						const address = params[0]
+						if (typeof address !== 'string') throw new Error('Missing code address')
+						if (address.toLowerCase() === PROXY_DEPLOYER_ADDRESS.toLowerCase()) return CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE
+						return address.toLowerCase() === simulationCore.securityPoolFactory.toLowerCase() ? '0x01' : '0x'
+					}
+					if (method === 'eth_call') {
+						contractReadCount += 1
+						if (contractReadCount === 1) return encodeAbiParameters([{ type: 'address' }], [simulationCore.securityPoolFactory])
+						return encodeAbiParameters([{ type: 'uint16' }], [30])
+					}
+					throw new Error(`Unexpected RPC method ${method}`)
+				},
+			}),
+		})
+		const restoreEnvironment = installActiveEnvironmentForTesting({
+			...createFakeBackend({ profile }),
+			createReadClient: () => {
+				readClients += 1
+				return client
+			},
+		})
+		const originalFetch = globalThis.fetch
+		globalThis.fetch = (async () => {
+			throw new Error('Simulated deployments must not fetch the registry or the configured RPC URL')
+		}) as typeof fetch
+		try {
+			const rendered = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} />)
+			cleanupRendered = rendered.cleanup
+			await waitForText('Deploy Trading factory')
+			expect(readClients).toBe(1)
+			expect(rendered.container.textContent).toContain(plan.factory.address)
+		} finally {
+			globalThis.fetch = originalFetch
+			restoreEnvironment()
+		}
 	})
 
 	test('keeps the trading route selected while deployment verification is pending', async () => {

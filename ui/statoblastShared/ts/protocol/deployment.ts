@@ -68,7 +68,7 @@ export function assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes(
 		runtimeCodeByStepId: STATIC_STATOBLAST_DEPLOYMENT_ARTIFACT_RUNTIME_CODE_BY_STEP_ID,
 	},
 ) {
-	assertStaticDeploymentArtifactRuntimeCodeHashes(parameters)
+	return assertStaticDeploymentArtifactRuntimeCodeHashes(parameters)
 }
 
 const EXPECTED_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {

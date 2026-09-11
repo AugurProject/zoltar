@@ -35,6 +35,6 @@ export function getSecurityPoolStatusBadgeLabel({ hasForkActivity, questionOutco
 		if (questionOutcome === undefined || questionOutcome === 'none') return 'Finalized'
 		return `Finalized as ${getReportingOutcomeLabel(questionOutcome)}`
 	}
-	if (hasForkActivity) return 'Fork Finalized'
-	return 'Operational'
+	if (lifecycleState === 'operational') return hasForkActivity ? 'Fork Finalized' : 'Operational'
+	return assertNever(lifecycleState)
 }

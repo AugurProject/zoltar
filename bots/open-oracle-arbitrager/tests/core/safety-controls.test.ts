@@ -85,6 +85,10 @@ describe('execution risk controls', () => {
 		expect(positionRiskLimitMismatch({ capitalAtRiskAttoWeth: 3n * 10n ** 18n + 1n, positions, projectedGasCostAttoWeth: 5n * 10n ** 15n }, limits, now)).toContain('position notional')
 		expect(positionRiskLimitMismatch({ capitalAtRiskAttoWeth: 3n * 10n ** 18n + 1n, positions: [], projectedGasCostAttoWeth: 0n }, { ...limits, maxPositionNotionalAttoWeth: 10n * 10n ** 18n, maxTotalLockedAttoWeth: 3n * 10n ** 18n }, now)).toContain('locked capital')
 		expect(positionRiskLimitMismatch({ capitalAtRiskAttoWeth: 1n, positions, projectedGasCostAttoWeth: 5n * 10n ** 15n + 1n }, limits, now)).toContain('UTC-day gas spend')
+		const open = positions[0]
+		if (open === undefined) throw new Error('Expected an open position fixture')
+		expect(positionRiskLimitMismatch({ capitalAtRiskAttoWeth: 1n, positions: [open, { ...open, gasExpenditures: [], status: 'closed' }], projectedGasCostAttoWeth: 0n }, limits, now)).toBeUndefined()
+		expect(positionRiskLimitMismatch({ capitalAtRiskAttoWeth: 1n, positions, projectedGasCostAttoWeth: 0n }, { ...limits, maxConcurrentPositions: 1 }, now)).toContain('concurrent')
 	})
 
 	test('charges gas to canonical mined UTC days instead of local staging or recovery time', () => {

@@ -150,7 +150,7 @@ describe('dynamic-capacity liquidation strategy', () => {
 		expect(requiredRepForOpenInterest(target.openInterestAttoEth, 20_000n, 10n * PRICE_PRECISION, 10_000n, target.disputeStakedAttoRep)).toBe(400n * PRICE_PRECISION)
 	})
 
-	test('screens stale pools with fallback price but never treats it as executable', () => {
+	test('never treats a stale pool price as executable', () => {
 		expect(liquidationExecutionAllowed(0n, true)).toBe(false)
 		expect(liquidationExecutionAllowed(10n * PRICE_PRECISION, true)).toBe(true)
 	})

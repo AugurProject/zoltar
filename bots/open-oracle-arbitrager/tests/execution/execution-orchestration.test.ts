@@ -356,6 +356,7 @@ describe('funded execution orchestration', () => {
 			failure = error
 		}
 		expect(executionFailureDecision(failure)).toBe('paused')
+		expect(executionFailureDecision(new Error('relay rejected the bundle'))).toBe('execution-failed')
 		expect(submitted).toBe(false)
 	})
 

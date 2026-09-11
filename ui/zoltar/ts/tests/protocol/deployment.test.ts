@@ -84,7 +84,7 @@ contract AtomicFunding {
 
 describe('contract deployment internals', () => {
 	test('rejects generated deployment artifacts that do not match the pinned runtime hashes', () => {
-		expect(() => assertStaticDeploymentArtifactRuntimeCodeHashes()).not.toThrow()
+		expect(assertStaticDeploymentArtifactRuntimeCodeHashes()).toEqual(['deploymentStatusOracle', 'multicall3', 'scalarOutcomes', 'weth', 'zoltarQuestionData'])
 		expect(() =>
 			assertStaticDeploymentArtifactRuntimeCodeHashes({
 				expectedRuntimeCodeHashes: { scalarOutcomes: keccak256('0x01') },

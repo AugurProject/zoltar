@@ -48,9 +48,11 @@ describe('OpenOracle arbitrage strategy', () => {
 		expect(cheapRepReplacement).toEqual({ amount1: 1_150_000n, amount2: 1_800_000n })
 
 		const expensiveRepReplacement = { amount1: newAmount1, amount2: 2_400_000n }
+		// The hedge repays the locked token2 plus both fees (2_000_000 + 20_000 + 2_000 REP); the executor funds only the replacement itself.
+		expect(evaluateBuyRep(game, 0n, 0n).hedgeAmountAttoRep).toBe(2_022_000n)
 		expect(executorFunding(game, expensiveRepReplacement.amount1, expensiveRepReplacement.amount2, 0n)).toEqual({
 			token1: 150_000n,
-			token2: expensiveRepReplacement.amount2,
+			token2: 2_400_000n,
 		})
 		expect(expensiveRepReplacement.amount1 - game.currentAmount1).toBe(150_000n)
 		expect(expensiveRepReplacement).toEqual({ amount1: 1_150_000n, amount2: 2_400_000n })
