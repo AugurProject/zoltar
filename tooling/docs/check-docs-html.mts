@@ -398,11 +398,12 @@ async function validateHtmlLinks(parsedDocument: ParsedHtmlDocument, parsedDocum
 		if (rawHref !== href) {
 			addFailure(parsedDocument, `${describeElement(link)} href has leading or trailing whitespace`, failures)
 		}
-		await validateLocalLink(parsedDocument.filePath, href, parsedDocumentsByPath, parsedDocument.relativePath, failures)
+		await validateLocalLink(parsedDocument, href, parsedDocumentsByPath, failures)
 	}
 }
 
-async function validateLocalLink(sourceFilePath: string, href: string, parsedDocumentsByPath: Map<string, ParsedHtmlDocument>, sourceRelativePath: string, failures: ValidationFailure[]): Promise<void> {
+async function validateLocalLink(parsedDocument: ParsedHtmlDocument, href: string, parsedDocumentsByPath: Map<string, ParsedHtmlDocument>, failures: ValidationFailure[]): Promise<void> {
+	const { docsDirectory, filePath: sourceFilePath, relativePath: sourceRelativePath } = parsedDocument
 	if (isExternalLink(href)) {
 		await validateRepositorySourceLink(href, sourceRelativePath, failures)
 		return
@@ -418,6 +419,14 @@ async function validateLocalLink(sourceFilePath: string, href: string, parsedDoc
 
 	const [targetPathPart, rawFragment] = splitHref(href)
 	const targetFilePath = targetPathPart.length === 0 ? sourceFilePath : path.resolve(path.dirname(sourceFilePath), decodeURIComponent(targetPathPart))
+	// The published site serves only docs/; a relative link into the rest of the checkout works locally but downloads or 404s once published.
+	if (!targetFilePath.startsWith(`${docsDirectory}${path.sep}`)) {
+		failures.push({
+			message: `links outside the documentation directory "${href}"; link repository files through their GitHub source URL`,
+			relativePath: sourceRelativePath,
+		})
+		return
+	}
 	try {
 		await access(targetFilePath)
 	} catch (error) {

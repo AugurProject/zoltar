@@ -237,18 +237,30 @@ test('invariant explorer filters, expands, resets, and opens a fragment target',
 	try {
 		await runGeneratedRuntime('invariantExplorer')
 		const entries = Array.from(document.querySelectorAll<HTMLDetailsElement>('details.invariant-entry'))
+		const keyword = document.querySelector<HTMLInputElement>('[data-invariant-filter]')
 		const typeSelect = document.querySelector<HTMLSelectElement>('[data-invariant-type]')
 		const statusSelect = document.querySelector<HTMLSelectElement>('[data-invariant-status]')
 		const count = document.querySelector<HTMLElement>('[data-invariant-count]')
 		const empty = document.querySelector<HTMLElement>('[data-invariant-empty]')
 		const expand = document.querySelector<HTMLButtonElement>('[data-invariant-expand]')
 		const reset = document.querySelector<HTMLButtonElement>('[data-invariant-reset]')
-		if (entries.length === 0 || typeSelect === null || statusSelect === null || count === null || empty === null || expand === null || reset === null) throw new Error('Invariant explorer fixture is incomplete')
-		expect(document.querySelector('[data-invariant-search]')).toBeNull()
+		if (entries.length === 0 || keyword === null || typeSelect === null || statusSelect === null || count === null || empty === null || expand === null || reset === null) throw new Error('Invariant explorer fixture is incomplete')
 
 		expect(document.getElementById(firstIdentifier)?.hasAttribute('open')).toBeTrue()
 		expect(count.textContent).toBe(`${entries.length} of ${entries.length} invariants`)
 		expect(entries[0]?.querySelector('.invariant-entry-actions a')?.getAttribute('href')).toBe(`#${firstIdentifier}`)
+
+		keyword.value = firstIdentifier
+		keyword.dispatchEvent(new Event('input'))
+		expect(entries.find(entry => entry.id === firstIdentifier)?.hidden).toBeFalse()
+		expect(entries.filter(entry => !entry.hidden).length).toBeLessThan(entries.length)
+		keyword.value = 'no-invariant-can-match-this-token'
+		keyword.dispatchEvent(new Event('input'))
+		expect(count.textContent).toBe(`0 of ${entries.length} invariants`)
+		expect(empty.hidden).toBeFalse()
+		reset.click()
+		expect(keyword.value).toBe('')
+		expect(count.textContent).toBe(`${entries.length} of ${entries.length} invariants`)
 
 		const livenessOption = Array.from(typeSelect.options).find(option => option.value === 'Liveness')
 		const toolingOption = Array.from(statusSelect.options).find(option => option.value === 'Automated tooling guard')

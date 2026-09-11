@@ -24,57 +24,57 @@
 						</tr>
 					</thead>
 					<tbody>
-						<tr>
+						<tr id="zoltarquestiondata">
 							<td><a href="./contracts/zoltarquestiondata.html">ZoltarQuestionData</a></td>
 							<td>Creates immutable, content-addressed scalar or categorical questions and exposes their display metadata.</td>
 							<td>1</td>
 						</tr>
-						<tr>
+						<tr id="zoltar">
 							<td><a href="./contracts/zoltar.html">Zoltar</a></td>
 							<td>Registers universe forks, charges the fork admission haircut, and mints branch-specific child REP.</td>
 							<td>6</td>
 						</tr>
-						<tr>
+						<tr id="reputationtoken">
 							<td><a href="./contracts/reputationtoken.html">ReputationToken</a></td>
 							<td>Implements universe-specific ERC-20 REP, ERC-2612 permits, and ERC-3009 transfers while enforcing the supply ceiling maintained by Zoltar.</td>
 							<td>10</td>
 						</tr>
-						<tr>
+						<tr id="securitypoolfactory">
 							<td><a href="./contracts/securitypoolfactory.html">SecurityPoolFactory</a></td>
 							<td>Creates and canonically registers origin and child security pools with their share token, oracle coordinator, and optional truth auction.</td>
 							<td>2</td>
 						</tr>
-						<tr>
+						<tr id="securitypool">
 							<td><a href="./contracts/securitypool.html">SecurityPool</a></td>
 							<td>Holds ETH collateral and REP underwriting, accounts for vaults and fees, mints shares, and routes local escalation.</td>
 							<td>31</td>
 						</tr>
-						<tr>
+						<tr id="securitypoolforker">
 							<td><a href="./contracts/securitypoolforker.html">SecurityPoolForker</a></td>
-							<td>Freezes parent pools, creates selected child pools, migrates vault and escalation state, and settles collateral-repair auctions.</td>
+							<td>Freezes parent pools, creates selected child pools, migrates vault and escalation state, and settles collateral-repair auctions. <a id="child-game-trust-boundary" href="./contracts/securitypoolforker.html#child-game-trust-boundary">Child-game trust boundary</a></td>
 							<td>13</td>
 						</tr>
-						<tr>
+						<tr id="escalationgame">
 							<td><a href="./contracts/escalationgame.html">EscalationGame</a></td>
 							<td>Escrows outcome REP, raises the running resolution cost, detects non-decision, and settles local or carried deposits.</td>
 							<td>19</td>
 						</tr>
-						<tr>
+						<tr id="liquidationapprovalregistry">
 							<td><a href="./contracts/liquidationapprovalregistry.html">LiquidationApprovalRegistry</a></td>
 							<td>Stores coordinator-local, bounded authorization for a receiver vault to accept liquidation debt from an exact operator.</td>
 							<td>8</td>
 						</tr>
-						<tr>
+						<tr id="openoraclepricecoordinator">
 							<td><a href="./contracts/openoraclepricecoordinator.html">OpenOraclePriceCoordinator</a></td>
 							<td>Obtains a fresh REP-per-ETH price and coordinates withdrawals, delegated liquidation routing, approval reservations, and terminal cleanup.</td>
 							<td>10</td>
 						</tr>
-						<tr>
+						<tr id="sharetoken">
 							<td><a href="./contracts/sharetoken.html">ShareToken</a></td>
 							<td>Stores universe-aware ERC-1155 outcome shares and materializes a holder's persistent source entitlement in selected fork branches.</td>
 							<td>8</td>
 						</tr>
-						<tr>
+						<tr id="uniformpricedualcapbatchauction">
 							<td><a href="./contracts/uniformpricedualcapbatchauction.html">UniformPriceDualCapBatchAuction</a></td>
 							<td>Collects ETH bids under ETH-raise and REP-sale caps, computes one clearing result, and supports paged settlement.</td>
 							<td>7</td>

@@ -55,6 +55,23 @@ test('documentation landing keeps global navigation compact and omits a redundan
 	}
 })
 
+test('contract reference index preserves the fragment ids of the former single page', async () => {
+	const shell = await loadShell('http://localhost/docs/reference/contracts.html')
+	try {
+		const contractPages = [...new Bun.Glob('docs/reference/contracts/*.html').scanSync('.')]
+		expect(contractPages.length).toBeGreaterThan(0)
+		for (const pagePath of contractPages) {
+			const slug = pagePath.replace(/^docs\/reference\/contracts\/|\.html$/g, '')
+			const row = document.getElementById(slug)
+			expect(row?.tagName).toBe('TR')
+			expect(row?.querySelector('a')?.getAttribute('href')).toBe(`./contracts/${slug}.html`)
+		}
+		expect(document.getElementById('child-game-trust-boundary')?.getAttribute('href')).toBe('./contracts/securitypoolforker.html#child-game-trust-boundary')
+	} finally {
+		shell.cleanup()
+	}
+})
+
 test('documentation navigation adds word-break opportunities inside camel-case contract titles', async () => {
 	const shell = await loadShell('http://localhost/docs/reference/contracts/uniformpricedualcapbatchauction.html')
 	try {

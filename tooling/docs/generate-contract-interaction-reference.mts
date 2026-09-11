@@ -213,12 +213,15 @@ ${rows}
 		return { content, outputPath: contractPageOutputPath(contractReference.name), title: contractReference.name }
 	})
 
+	// Index rows keep the fragment ids of the former single page (contract headings and trust-boundary headings), so historical deep links still land on the entry that links to the new page.
 	const indexRows = contractReferences
 		.map(contractReference => {
 			const pageHref = `./${path.posix.relative(path.posix.dirname(outputPath), contractPageOutputPath(contractReference.name))}`
-			return `<tr>
+			assert.equal(headingId(contractReference.name), path.basename(contractPageOutputPath(contractReference.name), '.html'), `${contractReference.name} page slug must match its former heading id`)
+			const boundaryLink = contractReference.securityBoundaryHeading === undefined ? '' : ` <a id="${headingId(contractReference.securityBoundaryHeading)}" href="${escapeHtml(pageHref)}#${headingId(contractReference.securityBoundaryHeading)}">${escapeHtml(contractReference.securityBoundaryHeading)}</a>`
+			return `<tr id="${headingId(contractReference.name)}">
 	<td><a href="${escapeHtml(pageHref)}">${escapeHtml(contractReference.name)}</a></td>
-	<td>${renderRichText(indexSummary(contractReference.purpose), outputPath)}</td>
+	<td>${renderRichText(indexSummary(contractReference.purpose), outputPath)}${boundaryLink}</td>
 	<td>${contractReference.interactions.length}</td>
 </tr>`
 		})
