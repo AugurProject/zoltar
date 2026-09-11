@@ -113,8 +113,8 @@ Run `bun run knip` when imports, exports, tests, package scripts or dependencies
 
 Run `bun run check:generated-clean` only for CI/release freshness work or when contracts, generation scripts, shared build output, UI contract artifacts, or artifact policy change.
 
-Generated outputs are intentionally untracked, except for the documentation outputs and
-vendored deployment input listed below. The documentation outputs are tracked because the
+Generated outputs are intentionally untracked, except for the documentation outputs, the
+arbitrager generated TypeScript, and the vendored deployment input listed below. The documentation outputs are tracked because the
 static documentation site loads them directly;
 `bun run docs:check-charts`, `bun run docs:check-runtime`, `bun run docs:check-contract-reference`, and
 `bun run docs:check-index` enforce their freshness. `bun run check:uniswap-deployment-artifact`

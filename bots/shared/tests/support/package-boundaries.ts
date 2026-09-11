@@ -3,7 +3,8 @@ import { join } from 'node:path'
 
 // Bot tsconfigs map @zoltar packages straight at workspace sources, so typecheck and local Bun accept any subpath.
 // Container images install production dependencies and resolve through the package exports maps instead, so every
-// imported subpath must be one the package publishes, and src/ may only reach packages listed under dependencies.
+// imported subpath must be one the package publishes, and src/ and scripts/ (some of which run inside the images)
+// may only reach packages listed under dependencies.
 type DependencyField = 'dependencies' | 'devDependencies'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -63,7 +64,7 @@ export async function unpublishedZoltarImports(botDirectory: string) {
 				violations.push(`${sourceDirectory}: ${packageName} is imported but not declared as a file: dependency`)
 				continue
 			}
-			if (sourceDirectory === 'src' && published.field !== 'dependencies') {
+			if (sourceDirectory !== 'tests' && published.field !== 'dependencies') {
 				violations.push(`${sourceDirectory}: ${packageName} is only a devDependency and is absent from production installs`)
 				continue
 			}
