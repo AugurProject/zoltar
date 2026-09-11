@@ -5,7 +5,8 @@ import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/querie
 import { act } from 'preact/test-utils'
 import { render } from 'preact'
 import { GlobalTransactionTray } from '@zoltar/ui-core-shared/app/components/GlobalTransactionTray.js'
-import { createMarketCreationSuccessPresentation, createMarketCreationTransactionIntent, createZoltarForkSuccessPresentation } from '@zoltar/ui-statoblast-shared/features/reportingTransactionPresentations.js'
+import { createMarketCreationSuccessPresentation, createMarketCreationTransactionIntent } from '@zoltar/ui-statoblast-shared/features/reportingTransactionPresentations.js'
+import { createSecurityPoolCreationWarningPresentation } from '@zoltar/ui-statoblast-shared/features/transactionPresentations.js'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
@@ -125,7 +126,10 @@ describe('GlobalTransactionTray', () => {
 
 	test('renders complete copyable question identifiers across success notices', async () => {
 		const questionId = '0x0000000000000000000000000000000000000000000000000000000000000001'
-		const presentations = [createMarketCreationSuccessPresentation({ createQuestionHash: '0x1001', marketType: 'binary', questionId }), createZoltarForkSuccessPresentation({ action: 'forkZoltar', hash: '0x1002', questionId, universeId: 0n })]
+		const presentations = [
+			createMarketCreationSuccessPresentation({ createQuestionHash: '0x1001', marketType: 'binary', questionId }),
+			createSecurityPoolCreationWarningPresentation({ deployPoolHash: '0x1002', initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n, questionId, securityPoolAddress: '0x00000000000000000000000000000000000000a1', statoblastSecurityMultiplierBps: 20_000n, universeId: 0n }, 'Pool created with a warning.'),
+		]
 		const renderedComponent = await renderIntoDocument(
 			<>
 				{presentations.map(presentation => (

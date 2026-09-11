@@ -10,7 +10,7 @@ export type TruthAuctionSettlementBidRow = {
 
 type TruthAuctionSettlementSelectionMode = 'claim' | 'mixed' | 'refund'
 
-export type TruthAuctionSettlementSelectionState = {
+type TruthAuctionSettlementSelectionState = {
 	rowKeys: string[]
 	selectedRows: TruthAuctionSettlementBidRow[]
 	selectedRefundRows: TruthAuctionSettlementBidRow[]
@@ -25,7 +25,7 @@ export type TruthAuctionSettlementSelectionState = {
 	selectionHasRefunds: boolean
 }
 
-export type TruthAuctionSettlementSelectionEstimate = {
+type TruthAuctionSettlementSelectionEstimate = {
 	estimatedAssignedCapacityOwnershipAttoRep: bigint | undefined
 	estimatedRefundedAttoEth: bigint
 	// Keep this concrete so the UI never needs a legacy underfunded fallback branch.
