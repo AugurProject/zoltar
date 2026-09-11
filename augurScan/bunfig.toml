@@ -1,9 +1,3 @@
-[test]
-root = "js/tests"
-threads = 2
-timeout = 300000
-preload = ['../bun-test-setup-solidity.ts']
-
 [install]
 # Runtime auto-install silently resolves bare imports from temp-directory
 # fixtures against the live npm registry (latest versions) and can poison

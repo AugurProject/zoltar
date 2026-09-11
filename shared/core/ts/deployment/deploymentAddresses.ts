@@ -35,6 +35,13 @@ export function createApplyLinkedLibrariesHelper(libraryReplacements: () => read
 	}
 }
 
+// Library linking replaces equal-length placeholders, so the compiled creation
+// bytecode length still marks where appended constructor arguments begin.
+export function constructorArgumentsFromInitCode(initCode: Hex, creationBytecode: string): string {
+	if (initCode.length < 2 + creationBytecode.length) throw new Error('Init code is shorter than the compiled creation bytecode it should extend')
+	return initCode.slice(2 + creationBytecode.length)
+}
+
 export function createDeploymentStatusOracleAddressHelper(config: DeploymentStatusOracleAddressConfig) {
 	const getDeploymentStatusOracleAddress = () => getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.deploymentStatusOracleBytecode())
 
