@@ -1,10 +1,8 @@
-import { executeScheduledOperation, recordDryRun, schedulerFor } from './scheduled-operation.ts'
+import { executeScheduledOperation, recordDryRun, scheduleAfterRecoveredTransaction, schedulerFor } from './scheduled-operation.ts'
 import { actionableUrgentLifecyclePlan, lifecycleObstructions } from './lifecycle-readiness.ts'
-export { actionableUrgentLifecyclePlan, lifecycleObstructions } from './lifecycle-readiness.ts'
 import { createManualOperationController } from './manual-operations.ts'
 import { migrateEmptyBootstrapState } from '../state/bootstrap-migration.ts'
 import { runtimeTopologySummary } from './topology-summary.ts'
-export { runtimeTopologySummary } from './topology-summary.ts'
 import { checkDeploymentAvailability, recordUnavailableDeploymentScan, tradingDeploymentNotice } from './deployment-availability.ts'
 import { createWalletClient, privateKeyToAccount, type Address } from '@zoltar/bot-shared/ethereum'
 import { checkRpcEndpoint, EndpointCheckFailure, type EndpointCheck } from '@zoltar/bot-shared/monitoring/connectivity'
@@ -13,26 +11,28 @@ import { operationalFailureDisposition, pollUntilStopped, retryDelayMilliseconds
 import { saveSettings, type OperatorSettings } from '../config/settings.ts'
 import { botDashboardLifecycle, type BotProcessLocks, type BotShutdownController } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { randomInteger } from '../core/random.ts'
-import { schedulerWaitMilliseconds } from '../core/scheduler.ts'
+import { backfillWaitMilliseconds, operatorWaitMilliseconds } from '../core/scheduler.ts'
 import { startDashboardServer } from '../dashboard/dashboard-server.ts'
 import { recoverPendingTransactions } from '../execution/recovery.ts'
-import { executeOperationPlan, OperationRediscoveryRequired, TransactionAwaitingRecovery, type ExecutionEnvironment } from '../execution/transaction-executor.ts'
+import { executeOperationPlan, TransactionAwaitingRecovery, type ExecutionEnvironment } from '../execution/transaction-executor.ts'
 import { executionProfileId } from '../config/execution-profile.ts'
 import { ChaosProtocolIndexReorgError } from '../monitoring/protocol-index-context.ts'
 import type { CanonicalImmutableTopologyCache } from '../monitoring/topology-cache.ts'
-import { evaluateSelectableOperationDefinition, operationHasCanonicalContinuationBuilder, reevaluateOperationContinuation } from '../operations/catalog.ts'
-import type { EcosystemSnapshot, EvaluatedOperation, OperationContinuationDisposition, OperationPlan } from '../operations/types.ts'
-import { setRuntimeExecutionAddress, bindRuntimeStateToSigner, loadRuntimeState, recordActivity, saveDurableState, type DurableLifecyclePresenceBlocker, type DurableWorkflow, type RuntimeState } from '../state/operator-state.ts'
+import { evaluateSelectableOperationDefinition, operationHasCanonicalContinuationBuilder } from '../operations/catalog.ts'
+import type { OperationPlan } from '../operations/types.ts'
+import { setRuntimeExecutionAddress, bindRuntimeStateToSigner, loadRuntimeState, recordActivity, saveDurableState, type RuntimeState } from '../state/operator-state.ts'
 import { blockExecutableEvaluations, applyExecutionPolicy, chaosChain, createChaosReadPool, performCanonicalScan, planningOptions, unavailableOperationCatalog } from './canonical-scan.ts'
 import { createChaosDashboardController, type ConfigurationState } from './dashboard-controller.ts'
 import { restartSafeSettings } from './configuration-candidates.ts'
 import { resetPristineStateForDeploymentProfile, verifyRetirementCompletionFinality } from './deployment-profile.ts'
-import { beginLifecycleObligation, completeLifecycleObligation, failLifecycleObligation, lifecyclePresenceBlockerMessage, obligationForPlan, synchronizeLifecycleObligations, waitForCanonicalLifecycleConfirmation } from './obligations.ts'
+import { beginLifecycleObligation, blockNovelEvaluations, completeLifecycleObligation, failLifecycleObligation, lifecyclePresenceBlockerMessage, obligationForPlan, synchronizeLifecycleObligations, waitForCanonicalLifecycleConfirmation } from './obligations.ts'
 import { genesisInitializationDefinitionId, genesisInitializationPlan, randomOperationPlans } from './selection.ts'
 import { enforceRetirementContinuation, processRetirementCycle, retirementPositionsForScan, updateRetirementAssessment } from './retirement-runner.ts'
 import { retirementPlanAllowed } from './retirement-operation-policy.ts'
-import { assertSubmissionPreflightFresh, preflightTransactionSubmissionNetwork, submissionPreflightConfigurationIdentity, submissionPreflightIsDue } from './submission-preflight.ts'
-import { blockInterruptedWorkflows, durableWorkflowPlan, markRetryableWorkflowForRediscovery, markWorkflowForRediscovery, refreshWorkflowContinuation, workflowFailureHasTransaction, workflowNeedsContinuation, retryableOnChainWorkflowFailure } from './workflows.ts'
+import { assertSubmissionPreflightFresh, preflightTransactionSubmissionNetwork, recordEndpointPreflightChecks, submissionPreflightConfigurationIdentity, submissionPreflightIsDue } from './submission-preflight.ts'
+import { evaluatePolicySafeContinuation } from './workflow-continuation.ts'
+import { abandonRetryableSelectableFailure, rediscoverableExecutionFailure, repairDurableSelectableFailures, workflowForPlan } from './workflow-repair.ts'
+import { blockInterruptedWorkflows, durableWorkflowPlan, refreshWorkflowContinuation, workflowNeedsContinuation, retryableOnChainWorkflowFailure } from './workflows.ts'
 
 type LoadedConfiguration = {
 	path: string
@@ -49,40 +49,6 @@ type RuntimeResources = {
 
 function errorMessage(error: unknown) {
 	return (error instanceof Error ? error.message : String(error)).slice(0, 1_500)
-}
-
-export function backfillWaitMilliseconds(lifecyclePollMilliseconds: number, consecutiveBackfillCycles: number) {
-	if (!Number.isSafeInteger(lifecyclePollMilliseconds) || lifecyclePollMilliseconds < 1_000 || lifecyclePollMilliseconds > 60_000) {
-		throw new Error('Backfill poll interval must be an integer from 1000 through 60000 milliseconds')
-	}
-	if (!Number.isSafeInteger(consecutiveBackfillCycles) || consecutiveBackfillCycles < 0) {
-		throw new Error('Consecutive backfill cycle count must be a non-negative integer')
-	}
-	const initialCadence = Math.min(lifecyclePollMilliseconds, 5_000)
-	const completedWindows = Math.min(Math.floor(consecutiveBackfillCycles / 16), 4)
-	return Math.min(lifecyclePollMilliseconds, initialCadence * 2 ** completedWindows)
-}
-
-export function operatorWaitMilliseconds(baseMilliseconds: number, state: Pick<RuntimeState, 'paused' | 'scheduler'>, nowMilliseconds = Date.now()) {
-	if (!Number.isSafeInteger(baseMilliseconds) || baseMilliseconds < 1) throw new Error('Operator wait must be a positive integer')
-	if (state.paused || (state.scheduler.status !== 'scheduled' && state.scheduler.status !== 'due')) return baseMilliseconds
-	const schedulerWait = schedulerWaitMilliseconds(state.scheduler, nowMilliseconds)
-	if (schedulerWait === undefined) return baseMilliseconds
-	return Math.min(baseMilliseconds, Math.max(1, schedulerWait))
-}
-
-export function blockNovelEvaluations(evaluations: readonly EvaluatedOperation[], blocker: DurableLifecyclePresenceBlocker) {
-	const reason = lifecyclePresenceBlockerMessage(blocker)
-	return evaluations.map(evaluation => {
-		if (evaluation.definition.classification !== 'selectable') return evaluation
-		return {
-			definition: evaluation.definition,
-			eligibility: {
-				blockers: [...evaluation.eligibility.blockers, reason],
-				eligible: false,
-			},
-		}
-	})
 }
 
 function configuredWallet(settings: OperatorSettings): Address | undefined {
@@ -104,14 +70,6 @@ function currentStatus(settings: OperatorSettings) {
 
 async function persistState(configuration: ConfigurationState, state: RuntimeState) {
 	await saveDurableState(configuration.settings.runtime.stateFile, state)
-}
-
-export async function scheduleAfterRecoveredTransaction(configuration: ConfigurationState, state: RuntimeState, operationId: string) {
-	if (state.scheduler.selectedOperationId !== operationId) return false
-	const scheduler = schedulerFor(configuration, state)
-	await scheduler.complete(operationId)
-	if (configuration.settings.paused || state.paused) await scheduler.pause()
-	return true
 }
 
 function workflowStartedAfterLastScheduledRun(state: RuntimeState) {
@@ -147,17 +105,6 @@ async function preflightReadNetwork(settings: OperatorSettings) {
 	const connectivity = settings.connectivity
 	if (connectivity === undefined) throw new Error('Network preflight requires configured connectivity')
 	return await preflightRpcSet([connectivity.readRpcUrl, ...connectivity.quorumRpcUrls], settings.network.chainId, 'read-rpc', connectivity.rpcQuorum)
-}
-
-export async function recordEndpointPreflightChecks(run: () => Promise<readonly EndpointCheck[]>, recordChecks: (checks: readonly EndpointCheck[]) => void) {
-	try {
-		const checks = await run()
-		recordChecks(checks)
-		return checks
-	} catch (error) {
-		if (error instanceof EndpointCheckFailure) recordChecks(error.checks)
-		throw error
-	}
 }
 
 async function ensureSubmissionPreflight(resources: RuntimeResources, settings: OperatorSettings) {
@@ -210,126 +157,6 @@ function executionEnvironment(settings: OperatorSettings, state: RuntimeState, r
 					}),
 				}),
 	}
-}
-
-function workflowForPlan(state: RuntimeState, plan: Pick<OperationPlan, 'definitionId' | 'id'>) {
-	return state.workflows.find(workflow => workflow.planId === plan.id && workflow.operationId === plan.definitionId)
-}
-
-export function rediscoverableExecutionFailure(state: RuntimeState, plan: OperationPlan, error: unknown) {
-	if (!(error instanceof OperationRediscoveryRequired)) return false
-	const workflow = workflowForPlan(state, plan)
-	if (workflow === undefined || workflowFailureHasTransaction(workflow)) return false
-	markWorkflowForRediscovery(workflow, error)
-	if (workflow.classification === 'selectable' && workflow.steps.some(step => step.status === 'confirmed') && operationHasCanonicalContinuationBuilder(workflow.operationId)) {
-		workflow.continuationDisposition = 'cleanup-only'
-	}
-	return true
-}
-
-export function evaluatePolicySafeContinuation(snapshot: EcosystemSnapshot, workflow: DurableWorkflow, settings: OperatorSettings, anchorBlock: string, retirementCleanup = false): { continuationDisposition?: OperationContinuationDisposition; evaluation: EvaluatedOperation } {
-	const evaluate = (continuationDisposition: OperationContinuationDisposition | undefined) => {
-		const evaluation = reevaluateOperationContinuation(snapshot, durableWorkflowPlan(workflow), planningOptions(settings, workflow.planningSeed), {
-			confirmedStepIds: workflow.steps.filter(step => step.status === 'confirmed').map(step => step.id),
-			...(continuationDisposition === undefined ? {} : { continuationDisposition }),
-		})
-		const policySettings = retirementCleanup ? { ...settings, strategy: { ...settings.strategy, allowHighRiskOperations: true, allowIrreversibleOperations: false, enabledEcosystems: ['zoltar', 'statoblast', 'open-oracle', 'trading'] as const } } : settings
-		const result = applyExecutionPolicy([evaluation], policySettings, true, anchorBlock, anchorBlock, BigInt(snapshot.wallet.ethBalanceAttoEth), 'durable-continuation')[0]
-		if (result === undefined) throw new Error('Canonical continuation evaluation returned no result')
-		return result
-	}
-
-	const continuation = evaluate(workflow.continuationDisposition)
-	if (continuation.eligibility.eligible && continuation.plan !== undefined) {
-		const continuationDisposition = continuation.plan.continuationDisposition ?? workflow.continuationDisposition
-		return {
-			...(continuationDisposition === undefined ? {} : { continuationDisposition }),
-			evaluation: continuation,
-		}
-	}
-	if (workflow.classification !== 'selectable' || workflow.continuationDisposition !== undefined || !workflow.steps.some(step => step.status === 'confirmed') || !operationHasCanonicalContinuationBuilder(workflow.operationId)) {
-		return { evaluation: continuation }
-	}
-
-	const cleanup = evaluate('cleanup-only')
-	if (cleanup.eligibility.eligible && cleanup.plan !== undefined) {
-		if (cleanup.plan.continuationDisposition !== 'cleanup-only') throw new Error(`Cleanup-only continuation ${workflow.operationId} returned an unmarked plan`)
-		return { continuationDisposition: 'cleanup-only', evaluation: cleanup }
-	}
-	const blockers = [...continuation.eligibility.blockers.map(blocker => `Action continuation: ${blocker}`), ...cleanup.eligibility.blockers.map(blocker => `Cleanup-only continuation: ${blocker}`)]
-	return {
-		evaluation: {
-			definition: continuation.definition,
-			eligibility: {
-				blockers: blockers.length === 0 ? ['Neither the action continuation nor its cleanup is executable under current policy'] : blockers,
-				eligible: false,
-			},
-		},
-	}
-}
-
-function repairRetryableSelectableWorkflow(state: RuntimeState, workflow: DurableWorkflow) {
-	if (workflow.classification !== 'selectable' || workflow.status !== 'failed' || !retryableOnChainWorkflowFailure(workflow)) {
-		return false
-	}
-	if (workflow.steps.some(step => step.status === 'confirmed') && operationHasCanonicalContinuationBuilder(workflow.operationId)) {
-		markRetryableWorkflowForRediscovery(workflow, 'A finalized on-chain failure left confirmed preparation on chain; canonical cleanup is required')
-		recordActivity(state, {
-			ecosystem: workflow.ecosystem,
-			message: `Finalized selectable transaction failure retained for canonical cleanup: ${workflow.label}`,
-			operationId: workflow.operationId,
-			status: 'skipped',
-			type: 'recovery',
-		})
-		return true
-	}
-	const timestamp = new Date().toISOString()
-	workflow.completedAt ??= timestamp
-	workflow.status = 'abandoned'
-	workflow.updatedAt = timestamp
-	recordActivity(state, {
-		ecosystem: workflow.ecosystem,
-		message: `Finalized selectable transaction failure retained as a completed attempt for fresh canonical discovery: ${workflow.label}`,
-		operationId: workflow.operationId,
-		status: 'skipped',
-		type: 'recovery',
-	})
-	return true
-}
-
-export function abandonRetryableSelectableFailure(state: RuntimeState, plan: Pick<OperationPlan, 'definitionId' | 'ecosystem' | 'id' | 'label'>) {
-	const workflow = workflowForPlan(state, plan)
-	return workflow === undefined ? false : repairRetryableSelectableWorkflow(state, workflow)
-}
-
-export function repairDurableSelectableFailures(state: RuntimeState) {
-	const repairedWorkflowIds: string[] = []
-	const semanticFailures = state.workflows.filter(workflow => workflow.classification === 'selectable' && workflow.status === 'failed' && workflow.steps.some(step => step.status === 'failed' && step.failureKind === 'semantic-failure'))
-	for (const workflow of state.workflows) {
-		if (workflow.classification !== 'selectable' || workflow.status !== 'failed' || !retryableOnChainWorkflowFailure(workflow)) continue
-		if (repairRetryableSelectableWorkflow(state, workflow)) {
-			repairedWorkflowIds.push(workflow.id)
-		}
-	}
-	if (semanticFailures.length !== 0) {
-		const newlyStopped = !state.safetyPaused
-		state.safetyPaused = true
-		state.paused = true
-		state.scheduler.status = 'paused'
-		state.status = 'paused'
-		const firstFailure = semanticFailures[0]
-		state.error = `Durable semantic transaction failure requires explicit operator review before novelty${firstFailure === undefined ? '' : `: ${firstFailure.label}`}`
-		if (newlyStopped) {
-			recordActivity(state, {
-				ecosystem: firstFailure?.ecosystem,
-				message: 'Durable semantic transaction failure restored the safety pause before novel execution',
-				operationId: firstFailure?.operationId,
-				status: 'failed',
-				type: 'recovery',
-			})
-		}
-	}
-	return { repairedWorkflowIds, requiresSafetyStop: semanticFailures.length !== 0 }
 }
 
 async function executeLifecyclePlan(configuration: ConfigurationState, state: RuntimeState, resources: RuntimeResources, plan: OperationPlan, executionCancelled: () => boolean) {

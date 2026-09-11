@@ -241,7 +241,17 @@ without making RPC calls. It will not scan until a verified chain and endpoint s
 has been saved. A configured bot also keeps the dashboard
 available when RPC validation is temporarily unavailable, reports
 `connectivity-degraded`, and retries with bounded backoff. The bot checks the chain
-before every scan.
+whenever it validates a new endpoint set.
+
+A head watcher polls `eth_blockNumber` once per second and logs each new head it
+observes as `observedBlock=<number> blockAgeSeconds=<age>`, adding
+`unobservedBlocks=<count>` when heights were skipped between polls. Outside failure
+backoff, a new head wakes the scan immediately; a completed scan logs
+`scanBlock=<number> durationMs=<duration>`. Scan reads are batched through the
+canonical Multicall3 deployment at one pinned block, so a scan costs a handful of RPC
+round trips regardless of how many tokens, pools, or reports are evaluated.
+Centralized-exchange sampling runs on its own timer; after the first sample it no
+longer sits in the block-scan path.
 
 With approved coordinators configured, startup discovers reports by reading each
 coordinator's `pendingReportId` at one fixed block and then reads the corresponding
@@ -331,9 +341,10 @@ path; both commands must use the same value.
 ### Executor ABI source
 
 The project compiles `contracts/OpenOracleArbitrageExecutor.sol` into
-`src/contracts/artifacts.generated.ts` and derives
-`src/contracts/executor-abi.generated.ts` from that local artifact. Never edit either
-generated file directly. After an executor contract change, run
+`src/contracts/artifacts.generated.ts`, compiles the test harness contracts into
+`tests/contracts/harness-artifacts.generated.ts`, and derives
+`src/contracts/executor-abi.generated.ts` from the executor artifact. Never edit these
+generated files directly. After an executor contract change, run
 `bun run compile-contracts && bun run generate:abi`, review the generated diff, and
 verify freshness with `bun run check:generated`. ABIs for repository contracts
 (OpenOracle, the price coordinator) come from `@zoltar/bot-shared/contracts/abi`,
@@ -1051,7 +1062,7 @@ scan. The same values live under `strategy` in the complete configuration:
 | TWAP window | `1800 seconds` | `twapSeconds` | Controls the Uniswap manipulation-resistance window. Minimum: 60 seconds. |
 | Remaining time | `36 seconds` | `minimumRemainingSeconds` | Inclusion buffer for timestamp-based games. |
 | Remaining blocks | `3 blocks` | `minimumRemainingBlocks` | Inclusion buffer for block-based games. |
-| Head poll interval | `1000 ms` | `pollMilliseconds` | Delay between latest-head checks. Coordinator-free diagnostic mode queries every unseen event-log height. |
+| Poll interval | `1000 ms` | `pollMilliseconds` | Longest idle wait between scans when no new head arrives; outside failure backoff a new block wakes the scan immediately. Also the centralized-exchange sampling cadence. Coordinator-free diagnostic mode queries every unseen event-log height. |
 
 Increasing profit thresholds reduces execution frequency. Increasing the TWAP
 window or remaining-time buffers is generally more conservative, while decreasing
@@ -1294,8 +1305,9 @@ entry from depending on wallet inventory already committed to recovery.
   changes beyond that retained anchor, execution stays blocked while the bot clears
   its report and market caches, resets the retained in-memory cursor, and rebuilds the latest
   configured bounded window automatically. Operators still need independent alerting.
-- Continuous mode retries transient poll failures with bounded exponential backoff.
-  The dashboard exposes per-endpoint health and the latest error, `/healthz` supports
+- Continuous mode retries transient poll failures with exponential backoff capped at
+  30 seconds or the poll interval, whichever is longer. The dashboard exposes per-endpoint
+  health and the latest error, `/healthz` supports
   container supervision, and Compose restarts an unexpectedly exited process.
   Production operation still requires external alerts.
 - Every public transaction and private entry bundle targets one block. The bot waits

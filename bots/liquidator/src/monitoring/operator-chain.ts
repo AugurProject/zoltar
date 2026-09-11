@@ -21,7 +21,7 @@ export function chainFor(settings: OperatorSettings) {
 	})
 }
 
-export async function canonicalBlockHashFromReaders(endpoints: readonly string[], requirement: 1 | 2, readBlockHash: (endpoint: string) => Promise<Hex | undefined>) {
+async function canonicalBlockHashFromReaders(endpoints: readonly string[], requirement: 1 | 2, readBlockHash: (endpoint: string) => Promise<Hex | undefined>) {
 	return await settledQuorumValue(
 		'market evidence canonical block',
 		endpoints.map(async endpoint => {

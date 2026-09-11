@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData } from '@zoltar/bot-shared/ethereum'
 import { securityPoolForkerAbi } from '@zoltar/bot-shared/contracts/abi'
-import { canonicalLifecyclePresence, classifiedMethod, eligibleOperationPlans, reevaluateOperationContinuation, urgentOperationPlans } from '../../src/operations/catalog.ts'
+import { canonicalLifecyclePresence, reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
+import { classifiedMethod } from '../support/canonical-contracts.ts'
+import { eligibleOperationPlans, urgentOperationPlans } from '../support/operation-plans.ts'
 import { address, hash, snapshotFixture } from './fixture.ts'
 
 const MIGRATION_TIME_SECONDS = 8n * 7n * 24n * 60n * 60n

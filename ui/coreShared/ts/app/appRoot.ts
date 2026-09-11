@@ -2,12 +2,7 @@ import { createElement, render, type ComponentChildren } from 'preact'
 import * as appCopy from '../copy/app.js'
 import { getErrorMessage } from '../lib/errors.js'
 import { initializeActiveEnvironment } from '../lib/activeEnvironment.js'
-import { AppErrorBoundary } from './components/AppErrorBoundary.js'
 import { ApplicationErrorNotice } from './components/ApplicationErrorNotice.js'
-
-export function createAppRoot(children: ComponentChildren) {
-	return createElement(AppErrorBoundary, {}, children)
-}
 
 type MountAppOptions = {
 	initialize?: () => Promise<unknown>

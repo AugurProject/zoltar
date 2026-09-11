@@ -4,22 +4,23 @@ import { availableHistoryExecutionReady } from './scan-readiness.ts'
 import { indexWithCurrentRefunds, snapshotWithProtocolIndex } from './protocol-index-snapshot.ts'
 import { createPublicClient, createRpcEndpointPool, defineChain, zeroAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import { endpointLabel } from '@zoltar/bot-shared/monitoring/connectivity'
-import { availableSettledValues, settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
+import { availableSettledValues, settledQuorumValue, sharedQuorumBlockNumber } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
 import { MAXIMUM_DISCOVERY_AGGREGATE_ITEMS, type OperatorSettings } from '../config/settings.ts'
 import { assertCanonicalAnchorFreshness } from '../core/canonical-freshness.ts'
-import { MUTATING_CONTRACT_SURFACE } from '../contracts/surface.ts'
-import { discoverEcosystemSnapshot, limitDiscoveryConcurrency, type ChaosReadClient } from '../monitoring/discovery.ts'
+import { limitDiscoveryConcurrency, type ChaosReadClient } from '../monitoring/discovery-client.ts'
+import { discoverEcosystemSnapshot, discoveryCoverageIsComplete } from '../monitoring/discovery.ts'
 import { OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT, protocolIndexDiscoveryInputs, type ChaosProtocolIndex } from '../monitoring/protocol-index.ts'
 import { updateProtocolIndexWithQuorum } from '../monitoring/protocol-index-quorum.ts'
 import { snapshotProtocolIndex } from '../state/protocol-index-store.ts'
-import { immutableTopologyCacheExceedsConfiguredResidentLimits, loadImmutableTopologyCache, saveImmutableTopologyCache, validateImmutableTopologyCache, type CanonicalImmutableTopologyCache, type ImmutableTopologyIdentity, type ImmutableTopologyResidentLimits } from '../monitoring/topology-cache.ts'
+import { loadImmutableTopologyCacheWithinLimits, saveImmutableTopologyCache, type CanonicalImmutableTopologyCache, type ImmutableTopologyIdentity } from '../monitoring/topology-cache.ts'
 import { CHAOS_OPERATION_CATALOG, canonicalLifecyclePresence, evaluateOperationCatalog } from '../operations/catalog.ts'
 import type { CanonicalLifecyclePresence, EcosystemSnapshot, EvaluatedOperation, PlanningOptions } from '../operations/types.ts'
-import type { WalletBalanceState } from '../state/operator-state.ts'
+import { walletInventory, type WalletBalanceState } from '../state/runtime-state.ts'
 import { assertOperationEthFunding } from '../execution/safety.ts'
 import { genesisInitializationDefinitionIds } from './selection.ts'
 import { applyLiveNoveltyInventoryReadiness } from './live-readiness.ts'
+import { completeOperationCoverage } from './surface-coverage.ts'
 
 type RpcPool = ReturnType<typeof createRpcEndpointPool>
 
@@ -96,22 +97,6 @@ export function chaosReadClients(settings: OperatorSettings, pool: RpcPool) {
 	}))
 }
 
-export function sharedCanonicalBlockNumber(heads: readonly bigint[], requiredQuorum: number) {
-	if (!Number.isSafeInteger(requiredQuorum) || requiredQuorum < 1) {
-		throw new Error('Canonical scan quorum must be a positive integer')
-	}
-	if (heads.length < requiredQuorum) {
-		throw new ConnectivityDegradedError('Canonical scan does not have enough independent RPC heads for the configured quorum')
-	}
-	const ordered = [...heads].sort((left, right) => {
-		if (left === right) return 0
-		return left > right ? -1 : 1
-	})
-	const shared = ordered[requiredQuorum - 1]
-	if (shared === undefined) throw new Error('Canonical scan quorum did not select a block')
-	return shared
-}
-
 export async function canonicalAnchor(settings: OperatorSettings, pool: RpcPool, nowMilliseconds = Date.now()): Promise<CanonicalAnchor> {
 	const connectivity = requiredConnectivity(settings)
 	const heads = availableSettledValues(
@@ -130,7 +115,7 @@ export async function canonicalAnchor(settings: OperatorSettings, pool: RpcPool,
 	if (wrongChain !== undefined) {
 		throw new Error(`RPC ${wrongChain.endpoint} returned chain ID ${wrongChain.chainId.toString()}, expected ${settings.network.chainId.toString()}`)
 	}
-	const sharedBlockNumber = sharedCanonicalBlockNumber(
+	const sharedBlockNumber = sharedQuorumBlockNumber(
 		heads.map(observation => observation.blockNumber),
 		connectivity.rpcQuorum,
 	)
@@ -199,15 +184,6 @@ function immutableTopologyIdentity(settings: OperatorSettings): ImmutableTopolog
 	return {
 		chainId: settings.network.chainId,
 		...settings.deployment,
-	}
-}
-
-export async function loadTopologyCacheForScan(parameters: { identity: ImmutableTopologyIdentity; limits: ImmutableTopologyResidentLimits; previous?: CanonicalImmutableTopologyCache; statePath: string }) {
-	try {
-		return parameters.previous === undefined ? await loadImmutableTopologyCache(parameters.statePath, parameters.identity, parameters.limits) : validateImmutableTopologyCache(parameters.previous, parameters.limits)
-	} catch (error) {
-		if (!immutableTopologyCacheExceedsConfiguredResidentLimits(error)) throw error
-		return undefined
 	}
 }
 
@@ -371,10 +347,6 @@ export function blockExecutableEvaluations(evaluations: readonly EvaluatedOperat
 	})
 }
 
-export function discoveryCoverageIsComplete(warnings: readonly string[]) {
-	return !warnings.some(warning => /\bdiscovery\b.*\btruncated\b/i.test(warning))
-}
-
 export function unavailableOperationCatalog(reason: string): EvaluatedOperation[] {
 	if (reason.trim() === '') throw new Error('An unavailable-catalog reason is required')
 	return completeOperationCoverage(
@@ -396,78 +368,6 @@ export function unavailableOperationCatalog(reason: string): EvaluatedOperation[
 	)
 }
 
-function surfaceEcosystem(contract: string): EvaluatedOperation['definition']['ecosystem'] {
-	if (contract === 'Zoltar' || contract === 'ZoltarQuestionData' || contract === 'GenesisReputationToken' || contract === 'ReputationToken') {
-		return 'zoltar'
-	}
-	if (contract === 'OpenOracle' || contract === 'WETH9') return 'open-oracle'
-	if (contract === 'ShareToken' || contract === 'TwoWayConstantProductFactory' || contract === 'TwoWayConstantProductPair' || contract === 'TwoWayConstantProductRouter') {
-		return 'trading'
-	}
-	return 'statoblast'
-}
-
-function surfaceBlocker(entry: (typeof MUTATING_CONTRACT_SURFACE)[number]) {
-	if (entry.reason !== undefined) return entry.reason
-	if (entry.classification === 'prerequisite') {
-		return 'This method is submitted only as a prerequisite inside an eligible durable workflow'
-	}
-	return 'This classified protocol method has no independently executable chaos plan'
-}
-
-function surfaceCoverageId(entry: (typeof MUTATING_CONTRACT_SURFACE)[number]) {
-	return `surface.${entry.contract.replaceAll(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()}.${entry.method.replaceAll(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()}`
-}
-
-export function completeOperationCoverage(evaluations: readonly EvaluatedOperation[]): EvaluatedOperation[] {
-	const completed = [...evaluations]
-	for (const entry of MUTATING_CONTRACT_SURFACE) {
-		const coverageId = surfaceCoverageId(entry)
-		const represented = completed.some(evaluation => evaluation.definition.contract === entry.contract && evaluation.definition.method === entry.method && (evaluation.definition.abiEntryKind ?? 'function') === entry.abiEntryKind)
-		if (represented) continue
-		const operationTarget = entry.operationId === undefined ? undefined : CHAOS_OPERATION_CATALOG.find(definition => definition.id === entry.operationId)
-		const coverageExplanation = surfaceBlocker(entry)
-		completed.push({
-			definition: {
-				abiEntryKind: entry.abiEntryKind,
-				classification: entry.classification,
-				contract: entry.contract,
-				description: coverageExplanation,
-				discoveryInputs: [],
-				ecosystem: surfaceEcosystem(entry.contract),
-				id: coverageId,
-				independentlyExecutable: false,
-				label: `${entry.contract}.${entry.method}`,
-				method: entry.method,
-				risk: operationTarget?.risk ?? (entry.classification === 'prerequisite' ? 'medium' : 'high'),
-			},
-			eligibility: {
-				blockers: [coverageExplanation],
-				eligible: false,
-			},
-		})
-	}
-	return completed
-}
-
-export function walletInventory(snapshot: EcosystemSnapshot): WalletBalanceState {
-	const tokenByAddress = new Map(snapshot.wallet.tokens.map(token => [token.address.toLowerCase(), token]))
-	const weth = tokenByAddress.get(snapshot.deployments.weth.toLowerCase())
-	return {
-		eth: snapshot.wallet.ethBalanceAttoEth,
-		rep: snapshot.universes.map(universe => {
-			const token = tokenByAddress.get(universe.repToken.toLowerCase())
-			return {
-				balance: token?.balance ?? '0',
-				symbol: token?.symbol ?? 'REP',
-				token: universe.repToken,
-				universeId: universe.id,
-			}
-		}),
-		weth: weth?.balance ?? '0',
-	}
-}
-
 export async function performCanonicalScan(settings: OperatorSettings, pool: RpcPool, wallet: Address | undefined, seed: number, previousIndex: ChaosProtocolIndex | undefined, previousTopologyCache?: CanonicalImmutableTopologyCache, options: CanonicalScanOptions = {}): Promise<CanonicalScanResult> {
 	const anchor = await canonicalAnchor(settings, pool, options.clock?.() ?? Date.now())
 	if (settings.runtime.protocolStartBlock > anchor.blockNumber) {
@@ -478,7 +378,7 @@ export async function performCanonicalScan(settings: OperatorSettings, pool: Rpc
 	const indexWallet = wallet ?? zeroAddress
 	const compatibleIndex = previousIndex !== undefined && protocolIndexMatches(previousIndex, settings, indexWallet) ? previousIndex : undefined
 	const topologyIdentity = immutableTopologyIdentity(settings)
-	const cachedTopology = await loadTopologyCacheForScan({
+	const cachedTopology = await loadImmutableTopologyCacheWithinLimits({
 		identity: topologyIdentity,
 		limits: settings.discovery,
 		...(previousTopologyCache === undefined ? {} : { previous: previousTopologyCache }),

@@ -15,7 +15,7 @@ import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import type { InjectedEthereum } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'
 import { createInjectedBackend } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
-import { formatOpenOracleFeePercentageInput, getOpenOracleSelectedReportActionMode } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracle.js'
+import { getOpenOracleSelectedReportActionMode } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracle.js'
 import type { OpenOracleView } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from '../../../../../../solidity/ts/testSupport/simulator/utils/constants.js'
 import { addressString } from '../../../../../../solidity/ts/testSupport/simulator/utils/bigint.js'
@@ -144,6 +144,11 @@ function getRefreshReportButton() {
 	return button
 }
 
+// The form takes fee percentages as decimals of the contract's 1e-5 % units.
+function formatFeePercentageInput(feePercentage: number) {
+	return (feePercentage / 100_000).toString()
+}
+
 async function setInputValue(label: string | RegExp, value: string, scope?: HTMLElement) {
 	const input = within(scope ?? document.body).getByLabelText(label) as HTMLInputElement
 	await act(() => {
@@ -168,12 +173,12 @@ async function fillOpenOracleCreateForm() {
 	await setInputValue('Settler Reward', formatCurrencyInputBalance(openOracleCreateParameters.settlerRewardAttoEth))
 	await setInputValue('ETH Value To Send', formatCurrencyInputBalance(openOracleCreateParameters.ethValueAttoEth))
 	await clickElement(within(document.body).getByText('Advanced Dispute & Timing Settings', { selector: 'summary' }))
-	await setInputValue('Dispute Fee (%)', formatOpenOracleFeePercentageInput(BigInt(openOracleCreateParameters.feePercentage)))
+	await setInputValue('Dispute Fee (%)', formatFeePercentageInput(openOracleCreateParameters.feePercentage))
 	await setInputValue('Multiplier', openOracleCreateParameters.multiplier.toString())
 	await setInputValue('Settlement Delay (seconds)', openOracleCreateParameters.settlementTime.toString())
 	await setInputValue('Escalation Halt', formatCurrencyInputBalance(openOracleCreateParameters.escalationHalt))
 	await setInputValue('Dispute Delay (seconds)', openOracleCreateParameters.disputeDelay.toString())
-	await setInputValue('Protocol Fee (%)', formatOpenOracleFeePercentageInput(BigInt(openOracleCreateParameters.protocolFee)))
+	await setInputValue('Protocol Fee (%)', formatFeePercentageInput(openOracleCreateParameters.protocolFee))
 }
 
 async function loadSelectedReportInUi() {

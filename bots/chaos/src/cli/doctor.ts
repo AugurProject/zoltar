@@ -14,8 +14,8 @@ import type { CanonicalUintString } from '../core/units.ts'
 import { executionProfileId } from '../config/execution-profile.ts'
 import { validateImmutableTopologySidecarIfPresent } from '../monitoring/topology-cache.ts'
 import { CHAOS_OPERATION_CATALOG } from '../operations/catalog.ts'
-import { CONSENSUS_FINALITY_HORIZON_BLOCKS } from '../operations/timing.ts'
-import type { ChaosReadClient } from '../monitoring/discovery.ts'
+import { EXECUTOR_FINALITY_BLOCKS } from '../operations/timing.ts'
+import type { ChaosReadClient } from '../monitoring/discovery-client.ts'
 import { canonicalAnchor, chaosReadClients, chaosReadEndpoints, createChaosReadPool, discoverWithQuorum } from '../runtime/canonical-scan.ts'
 import { checkDeploymentAvailability } from '../runtime/deployment-availability.ts'
 import { requiredLiveInventory } from '../runtime/live-readiness.ts'
@@ -138,8 +138,8 @@ export function commonFreshFinalizedBlockNumber(anchorBlockNumber: bigint, ident
 	for (const identity of identities) {
 		if (identity.number > anchorBlockNumber) throw new Error('RPC returned a finalized block ahead of the quorum anchor')
 		const lag = anchorBlockNumber - identity.number
-		if (lag > CONSENSUS_FINALITY_HORIZON_BLOCKS) {
-			throw new Error(`RPC finalized checkpoint is ${lag.toString()} blocks behind the quorum anchor, exceeding the ${CONSENSUS_FINALITY_HORIZON_BLOCKS.toString()}-block launch limit`)
+		if (lag > EXECUTOR_FINALITY_BLOCKS) {
+			throw new Error(`RPC finalized checkpoint is ${lag.toString()} blocks behind the quorum anchor, exceeding the ${EXECUTOR_FINALITY_BLOCKS.toString()}-block launch limit`)
 		}
 		if (identity.number < commonBlockNumber) commonBlockNumber = identity.number
 	}

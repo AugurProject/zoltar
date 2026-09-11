@@ -5,7 +5,7 @@ import { ZoltarSection } from '@zoltar/ui-zoltar-shared/features/zoltarSurface/c
 import { shouldRenderAppRouteContent } from '@zoltar/ui-core-shared/app/lib/appRouteGate.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
-export const ZOLTAR_NOT_FOUND_LINKS = [
+const ZOLTAR_NOT_FOUND_LINKS = [
 	{ href: '#/deploy', label: commonCopy.deploy },
 	{ href: '#/zoltar', label: commonCopy.zoltar },
 	{ href: '#/zoltar?zoltarView=universes', label: commonCopy.universe },
@@ -20,7 +20,7 @@ type Props = {
 	route: AppRoute
 }
 
-export function shouldRenderRouteContent({ readBackendMessage, route }: Pick<Props, 'readBackendMessage' | 'route'>) {
+function shouldRenderRouteContent({ readBackendMessage, route }: Pick<Props, 'readBackendMessage' | 'route'>) {
 	return shouldRenderAppRouteContent(route, readBackendMessage)
 }
 

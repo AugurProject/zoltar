@@ -202,3 +202,5 @@ export const augurMarketAbi = [
 ] as const
 
 export { openOracleArbitrageExecutorAbi } from '#contracts/executor-abi.generated'
+
+export const multicall3Abi = [{ type: 'function', name: 'getEthBalance', stateMutability: 'view', inputs: [{ name: 'addr', type: 'address' }], outputs: [{ name: 'balance', type: 'uint256' }] }] as const

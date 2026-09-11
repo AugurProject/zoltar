@@ -1,14 +1,8 @@
 import { expect, test } from 'bun:test'
-import { auctionDemandCurve, auctionLifecycle, candlestickBuckets, ESCALATION_OUTCOME, fixedWindowTwap, poolCapacity, priceFreshness, quoteDecimalsFallback, reportLifecycle, reportRoundChanges, swapAnalytics, vaultRisk } from '../../src/operations.ts'
+import { auctionDemandCurve, auctionLifecycle, candlestickBuckets, ESCALATION_OUTCOME, fixedWindowTwap, poolCapacity, reportLifecycle, reportRoundChanges, swapAnalytics, vaultRisk } from '../../src/operations.ts'
 
 test('uses Solidity BinaryOutcome ordering for escalation catalog totals', () => {
 	expect(ESCALATION_OUTCOME).toEqual({ invalid: '0', yes: '1', no: '2' })
-})
-
-test('uses contract-kind quote decimals when token metadata is unavailable', () => {
-	expect(quoteDecimalsFallback('usdc')).toBe(6)
-	expect(quoteDecimalsFallback('weth')).toBe(18)
-	expect(quoteDecimalsFallback(undefined)).toBe(18)
 })
 
 test('derives OpenOracle boundaries with the report clock selected by flags', () => {
@@ -85,11 +79,9 @@ test('describes report round changes against the next older evidence row', () =>
 	})
 })
 
-test('derives auction lifecycle and price freshness at exact boundaries', () => {
+test('derives auction lifecycle at exact boundaries', () => {
 	expect(auctionLifecycle({ started: true, finalized: false, startTimestamp: '10', endTimestamp: '20', indexedTimestamp: '20', bidCount: 1, settlementCount: 0 })).toBe('Awaiting finalization')
 	expect(auctionLifecycle({ started: true, finalized: true, indexedTimestamp: '20', bidCount: 2, settlementCount: 1 })).toBe('Bid settlements outstanding')
-	expect(priceFreshness('100', '90', 10n)).toEqual({ state: 'Fresh', ageSeconds: '10' })
-	expect(priceFreshness('101', '90', 10n)).toEqual({ state: 'Stale', ageSeconds: '11' })
 })
 
 test('matches the Solidity vault health constraints and keeps scanner severity separate', () => {

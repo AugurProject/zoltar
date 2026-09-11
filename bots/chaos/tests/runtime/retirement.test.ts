@@ -6,16 +6,17 @@ import { applyRetirementAssessment, assessRetirement } from '../../src/runtime/r
 import { buildAllowanceRevocationPlan, buildAssetSweepPlan, buildNativeOpenOracleCreditPlan } from '../../src/runtime/retirement-recovery-plans.ts'
 import { buildV3RetirementPlan, readV3PositionsWithQuorum, reconcileV3PositionJournal } from '../../src/runtime/retirement-v3-positions.ts'
 import type { V3PositionAnchor, V3PositionObservation } from '../../src/runtime/retirement-types.ts'
-import { operationAllowedDuringRetirement, retirementPlanFromEvaluations } from '../../src/runtime/retirement-operation-policy.ts'
-import { initialDurableState, initialRuntimeState, type DurableWorkflow } from '../../src/state/operator-state.ts'
+import { retirementPlanFromEvaluations } from '../../src/runtime/retirement-operation-policy.ts'
+import { type DurableWorkflow } from '../../src/state/operator-state.ts'
+import { initialDurableState, initialRuntimeState } from '../../src/state/initial-state.ts'
 import { acceptResidualProfileReplacement, cancelRetirement, DEFAULT_RETIREMENT_POLICIES, initialRetirementState, registerV3Position, requestRetirement, uniswapV3PositionKey, type DurableV3Position } from '../../src/state/retirement.ts'
 import type { EvaluatedOperation, OperationPlan } from '../../src/operations/types.ts'
 import { parseSettings } from '../../src/config/settings.ts'
-import { processRetirementCycle, recordCanonicalRecoveredBalances, recordV3ScanFailure, recordV3ScanSuccess, updateV3PositionStatus } from '../../src/runtime/retirement-runner.ts'
+import { processRetirementCycle } from '../../src/runtime/retirement-runner.ts'
+import { recordV3ScanFailure, recordV3ScanSuccess } from '../../src/runtime/retirement-v3-positions.ts'
+import { recordCanonicalRecoveredBalances } from '../../src/state/retirement.ts'
 import { assertOperationEthFunding } from '../../src/execution/safety.ts'
 
-import { CHAOS_OPERATION_CATALOG } from '../../src/operations/catalog.ts'
-import { unclassifiedRetirementOperations } from '../../src/runtime/retirement-operation-policy.ts'
 import { resetPristineStateForDeploymentProfile, verifyRetirementCompletionFinality } from '../../src/runtime/deployment-profile.ts'
 import { createDurableWorkflow, markWorkflowFailed } from '../../src/runtime/workflows.ts'
 
@@ -250,19 +251,19 @@ describe('Drain & Retire planning', () => {
 		expect(result).toBeFalse()
 		expect(persistCount).toBe(1)
 		expect(state.retirement.blockers).toEqual([])
-		expect(state.evaluations.filter(item => item.eligibility.eligible && item.plan !== undefined && operationAllowedDuringRetirement(item.plan.definitionId, state.retirement.policies)).map(item => item.plan?.definitionId)).toEqual([])
+		expect(retirementPlanFromEvaluations(state.evaluations, state.retirement.policies)).toBeUndefined()
 		expect(state.retirement.status).toBe('drained')
 		expect(state.retirement.completionEvidence).toMatchObject({ blockNumber: '1', profileId: 'profile:test', signerAddress: snapshot.wallet.address })
 	})
 
 	test('blocks exposure-creating operations but permits recovery', () => {
-		expect(unclassifiedRetirementOperations(CHAOS_OPERATION_CATALOG.map(definition => definition.id))).toEqual([])
-		expect(operationAllowedDuringRetirement('statoblast.vault.deposit-rep', DEFAULT_RETIREMENT_POLICIES)).toBeFalse()
-		expect(operationAllowedDuringRetirement('zoltar.universe.fork', DEFAULT_RETIREMENT_POLICIES)).toBeFalse()
-		expect(operationAllowedDuringRetirement('statoblast.oracle.recover-report', DEFAULT_RETIREMENT_POLICIES)).toBeTrue()
-		expect(operationAllowedDuringRetirement('trading.shares.migrate', DEFAULT_RETIREMENT_POLICIES)).toBeFalse()
-		expect(operationAllowedDuringRetirement('trading.shares.migrate', { ...DEFAULT_RETIREMENT_POLICIES, migrateExistingClaims: true })).toBeTrue()
-		expect(operationAllowedDuringRetirement('trading.position.exit', { ...DEFAULT_RETIREMENT_POLICIES, exitUnmatchedShares: true, maximumExitLossBps: 0 })).toBeTrue()
+		const allowed = (definitionId: string, policies: typeof DEFAULT_RETIREMENT_POLICIES, metadata: OperationPlan['metadata'] = {}) => retirementPlanFromEvaluations([evaluation({ ...plan(definitionId), metadata })], policies) !== undefined
+		expect(allowed('statoblast.vault.deposit-rep', DEFAULT_RETIREMENT_POLICIES)).toBeFalse()
+		expect(allowed('zoltar.universe.fork', DEFAULT_RETIREMENT_POLICIES)).toBeFalse()
+		expect(allowed('statoblast.oracle.recover-report', DEFAULT_RETIREMENT_POLICIES)).toBeTrue()
+		expect(allowed('trading.shares.migrate', DEFAULT_RETIREMENT_POLICIES)).toBeFalse()
+		expect(allowed('trading.shares.migrate', { ...DEFAULT_RETIREMENT_POLICIES, migrateExistingClaims: true })).toBeTrue()
+		expect(allowed('trading.position.exit', { ...DEFAULT_RETIREMENT_POLICIES, exitUnmatchedShares: true, maximumExitLossBps: 0 }, { maximumLong: 10n.toString(), minimumEthAttoEth: 10n.toString() })).toBeTrue()
 	})
 
 	test('selects recovery deterministically and one workflow at a time', () => {
@@ -322,10 +323,11 @@ describe('Drain & Retire planning', () => {
 	test('closes a canonically confirmed zeroed workflow position after restart', () => {
 		const current = position('pending-confirmation')
 		current.creationTransactionHash = hash(44)
-		updateV3PositionStatus({ liquidity: 0n, position: current, tokensOwed0: 0n, tokensOwed1: 0n }, 101n)
+		const state = { retirement: initialRetirementState() }
+		recordV3ScanSuccess(state, { liquidity: 0n, position: current, tokensOwed0: 0n, tokensOwed1: 0n }, 101n)
 		expect(current).toMatchObject({ lastCheckedAtBlock: '101', status: 'closed' })
 		const unconfirmed = position('pending-confirmation')
-		updateV3PositionStatus({ liquidity: 0n, position: unconfirmed, tokensOwed0: 0n, tokensOwed1: 0n }, 102n)
+		recordV3ScanSuccess(state, { liquidity: 0n, position: unconfirmed, tokensOwed0: 0n, tokensOwed1: 0n }, 102n)
 		expect(unconfirmed.status).toBe('pending-confirmation')
 	})
 

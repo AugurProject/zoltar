@@ -291,7 +291,7 @@ export function serializeSavedSimulationStateEnvelope(envelope: SavedSimulationS
 	return stringifySimulationValue(envelope)
 }
 
-export function parseSavedSimulationStateEnvelope(serialized: string) {
+function parseSavedSimulationStateEnvelope(serialized: string) {
 	let parsed: unknown
 	try {
 		parsed = parseSimulationValue(serialized)

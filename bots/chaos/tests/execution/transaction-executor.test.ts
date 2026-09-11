@@ -1,24 +1,16 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test } from 'bun:test'
-import { createRpcEndpointPool, createWalletClient, encodeAbiParameters, encodeFunctionData, getAddress, isHex, keccak256, mainnet, privateKeyToAccount, toHex } from '@zoltar/bot-shared/ethereum'
+import { createRpcEndpointPool, createWalletClient, encodeAbiParameters, encodeFunctionData, getAddress, isHex, keccak256, privateKeyToAccount, toHex } from '@zoltar/bot-shared/ethereum'
+import { mainnet } from '@zoltar/core-shared/evm/ethereum'
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
 import { securityPoolAbi } from '@zoltar/bot-shared/contracts/abi'
 import type { OperatorSettings } from '../../src/config/settings.ts'
-import {
-	OperationRediscoveryRequired,
-	TransactionAwaitingRecovery,
-	assertFreshWalletAssetDebits,
-	assertRequestedTransactionHash,
-	assertStepPreflightCalls,
-	executeOperationPlan,
-	finalizedReceiptWithQuorum,
-	operationStepSubmissionLastValidBlock,
-	sameCanonicalExecutionAnchor,
-	type ExecutionEnvironment,
-} from '../../src/execution/transaction-executor.ts'
+import { OperationRediscoveryRequired, TransactionAwaitingRecovery, assertFreshWalletAssetDebits, assertRequestedTransactionHash, assertStepPreflightCalls, executeOperationPlan, finalizedReceiptWithQuorum, sameCanonicalExecutionAnchor, type ExecutionEnvironment } from '../../src/execution/transaction-executor.ts'
+import { operationStepSubmissionLastValidBlock } from '../../src/execution/safety.ts'
 import type { OperationPlan, OperationStep } from '../../src/operations/types.ts'
-import { initialDurableState, initialRuntimeState, loadDurableState, saveDurableState } from '../../src/state/operator-state.ts'
+import { loadDurableState, saveDurableState } from '../../src/state/operator-state.ts'
+import { initialDurableState, initialRuntimeState } from '../../src/state/initial-state.ts'
 
 const servers: Array<{ stop: (closeActiveConnections?: boolean) => void }> = []
 const directories: string[] = []
@@ -228,9 +220,11 @@ const receiptBlockHash = `0x${'22'.repeat(32)}` as const
 const finalityBlockHash = `0x${'33'.repeat(32)}` as const
 const receiptClockTimestamp = 2_000_000n
 
-function receiptRpcServer(head: bigint, receiptVisible: boolean, returnedTransactionHash = receiptTransactionHash, blockTimestamp = receiptClockTimestamp, finalizedHead = head) {
+function receiptRpcServer(anchorHead: bigint, receiptVisible: boolean, returnedTransactionHash = receiptTransactionHash, blockTimestamp = receiptClockTimestamp, finalizedHead = anchorHead, headAfterAnchor = anchorHead) {
 	const requestedBlockTags: string[] = []
 	const requestedMethods: string[] = []
+	// The anchor is sampled before the receipt lookups, so a block may land in between.
+	let head = anchorHead
 	const server = Bun.serve({
 		port: 0,
 		async fetch(request) {
@@ -278,6 +272,7 @@ function receiptRpcServer(head: bigint, receiptVisible: boolean, returnedTransac
 				}
 				requestedBlockTags.push(body.params[0])
 				const blockNumber = body.params[0] === 'finalized' ? finalizedHead : BigInt(body.params[0])
+				head = headAfterAnchor
 				if (blockNumber > head) return Response.json({ id, jsonrpc: '2.0', result: null })
 				return Response.json({
 					id,
@@ -355,13 +350,22 @@ describe('transaction receipt quorum', () => {
 		expect(lagging.requestedMethods).not.toContain('eth_getBlockByNumber')
 	})
 
+	test('reports a head that is never below the inclusion block when the receipt lands after the anchor', async () => {
+		const first = receiptRpcServer(99n, true, receiptTransactionHash, receiptClockTimestamp, 99n, 100n)
+		const second = receiptRpcServer(99n, true, receiptTransactionHash, receiptClockTimestamp, 99n, 100n)
+
+		const result = await finalizedReceiptWithQuorum(environment(first.url, second.url), receiptTransactionHash)
+
+		expect(result).toEqual({ head: 100n, includedBlock: 100n, observed: true, receipt: undefined })
+	})
+
 	test('retains an observed receipt until the finalized checkpoint reaches its canonical block', async () => {
 		const first = receiptRpcServer(112n, true, receiptTransactionHash, receiptClockTimestamp, 99n)
 		const second = receiptRpcServer(112n, true, receiptTransactionHash, receiptClockTimestamp, 99n)
 
 		const result = await finalizedReceiptWithQuorum(environment(first.url, second.url), receiptTransactionHash)
 
-		expect(result).toEqual({ observed: true, receipt: undefined })
+		expect(result).toEqual({ head: 112n, includedBlock: 100n, observed: true, receipt: undefined })
 		for (const rpc of [first, second]) {
 			expect(rpc.requestedBlockTags.filter(tag => tag === toHex(112n))).toHaveLength(1)
 			expect(rpc.requestedBlockTags.filter(tag => tag === 'finalized')).toHaveLength(2)
@@ -918,7 +922,9 @@ describe('workflow-wide ETH funding', () => {
 })
 
 type FinalizedExecutionReceiptState = {
+	finalizedBlock?: bigint | undefined
 	head: bigint
+	receiptVisible?: boolean | undefined
 	logs: Array<{ address: typeof target; data: `0x${string}`; topics: `0x${string}`[] }>
 	status?: '0x0' | '0x1' | undefined
 	transactionHash?: `0x${string}` | undefined
@@ -957,7 +963,7 @@ function finalizedExecutionRpcServer(state: FinalizedExecutionReceiptState) {
 						id,
 						jsonrpc: '2.0',
 						result:
-							state.transactionHash === undefined
+							state.transactionHash === undefined || state.receiptVisible === false
 								? null
 								: {
 										blockHash: receiptBlockHash,
@@ -986,7 +992,7 @@ function finalizedExecutionRpcServer(state: FinalizedExecutionReceiptState) {
 					})
 				case 'eth_getBlockByNumber': {
 					if (!('params' in body) || !Array.isArray(body.params) || typeof body.params[0] !== 'string') return new Response('Expected a numeric block request', { status: 400 })
-					const blockNumber = body.params[0] === 'finalized' ? 112n : BigInt(body.params[0])
+					const blockNumber = body.params[0] === 'finalized' ? (state.finalizedBlock ?? 112n) : BigInt(body.params[0])
 					return Response.json({
 						id,
 						jsonrpc: '2.0',
@@ -1025,11 +1031,11 @@ function finalizedExecutionRpcServer(state: FinalizedExecutionReceiptState) {
 	return `http://127.0.0.1:${server.port.toString()}`
 }
 
-async function finalizedExecutionFixture(logs: FinalizedExecutionReceiptState['logs'], status: FinalizedExecutionReceiptState['status'] = '0x1') {
+async function finalizedExecutionFixture(logs: FinalizedExecutionReceiptState['logs'], status: FinalizedExecutionReceiptState['status'] = '0x1', finalizedBlock?: bigint, receiptVisible?: boolean) {
 	const directory = await mkdtemp('/tmp/zoltar-chaos-finalized-execution-')
 	directories.push(directory)
 	const account = privateKeyToAccount(`0x${'11'.repeat(32)}`)
-	const receiptState: FinalizedExecutionReceiptState = { head: 99n, logs, status }
+	const receiptState: FinalizedExecutionReceiptState = { finalizedBlock, head: 99n, logs, receiptVisible, status }
 	const firstUrl = finalizedExecutionRpcServer(receiptState)
 	const secondUrl = finalizedExecutionRpcServer(receiptState)
 	const configured = settings(firstUrl, [secondUrl])
@@ -1084,6 +1090,29 @@ function failFinalReceiptPersistence(environment: ExecutionEnvironment) {
 		},
 	}
 }
+
+describe('post-broadcast receipt observation', () => {
+	test('journals an included but unfinalized receipt as awaiting finality before handing off to recovery', async () => {
+		const { environment, state, stateFile } = await finalizedExecutionFixture([], '0x1', 99n)
+
+		await expect(executeOperationPlan(environment, executablePlan())).rejects.toMatchObject({ name: 'TransactionAwaitingRecovery', severity: 'pending' })
+
+		const intent = state.pendingTransactions[0]
+		expect(intent?.status).toBe('confirmation-unknown')
+		expect(intent?.observation).toMatchObject({ head: 112n, includedBlock: 100n, kind: 'awaiting-finality' })
+		expect(state.workflows[0]?.status).toBe('waiting-transaction')
+		expect((await loadDurableState(stateFile, 1)).pendingTransactions[0]?.observation).toEqual(intent?.observation)
+	})
+
+	test('leaves an absent receipt unjournaled because mempool visibility is only checked by recovery', async () => {
+		const { environment, state } = await finalizedExecutionFixture([], '0x1', undefined, false)
+
+		await expect(executeOperationPlan(environment, executablePlan())).rejects.toMatchObject({ name: 'TransactionAwaitingRecovery', severity: 'pending' })
+
+		expect(state.pendingTransactions[0]?.status).toBe('confirmation-unknown')
+		expect(state.pendingTransactions[0]?.observation).toBeUndefined()
+	})
+})
 
 describe('atomic receipt disposition persistence', () => {
 	test('retains the submitted intent when successful-receipt persistence fails', async () => {

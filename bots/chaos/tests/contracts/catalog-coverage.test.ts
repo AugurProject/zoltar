@@ -4,7 +4,8 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import * as ts from 'typescript'
 import * as contractAbis from '@zoltar/bot-shared/contracts/abi'
-import { CANONICAL_MUTATING_CONTRACT_MANIFEST, MUTATING_CONTRACT_SURFACE, classifiedMethod, type ContractAbiEntryKind } from '../../src/contracts/surface.ts'
+import { MUTATING_CONTRACT_SURFACE, type ContractAbiEntryKind } from '../../src/contracts/surface.ts'
+import { CANONICAL_MUTATING_CONTRACT_MANIFEST, classifiedMethod } from '../support/canonical-contracts.ts'
 import { CHAOS_OPERATION_CATALOG } from '../../src/operations/catalog.ts'
 
 /** The shared ABI exports the chaos bot executes against; every one must map to a compiled artifact below. */

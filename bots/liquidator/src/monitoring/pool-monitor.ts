@@ -1,20 +1,18 @@
 import { loadUniverseTree } from '@zoltar/bot-shared/monitoring/universe-policy'
-import { getAddress, zeroAddress, type Address, type Chain, type PublicClient, type Transport } from '@zoltar/bot-shared/ethereum'
+import { getAddress, zeroAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import { fetchLogsWithAdaptiveRanges } from '@zoltar/bot-shared/monitoring/block-sync'
 import type { OperatorSettings } from '#config/settings'
-import { openOraclePriceCoordinatorAbi, deploySecurityPoolEvent, reputationTokenAbi, escalationGameAbi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi, truthAuctionHaircutAppliedEvent, vaultAccountingCheckpointEvent, vaultEscrowUpdatedEvent } from '@zoltar/bot-shared/contracts/abi'
+import { openOraclePriceCoordinatorAbi, deploySecurityPoolEvent, reputationTokenAbi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi } from '@zoltar/bot-shared/contracts/abi'
 import { isPoolExecutionEligible } from '#core/fork-migration'
-import { evaluateCandidate, repForBackingUnits, sortCandidates, type VaultPosition } from '#core/strategy'
+import { evaluateCandidate, sortCandidates, type VaultPosition } from '#core/strategy'
 import { hasStagedLiquidation } from '#core/staged-operations'
-import type { PoolObservation, StagedOperationObservation, UniverseObservation } from '#state/operator-state'
-import { createVaultStateIndex, refreshVaultStateIndex, type VaultStateIndex } from './vault-state-index.ts'
+import type { PoolObservation, StagedOperationObservation } from '#state/operator-state'
+import { createVaultStateIndex } from './vault-state-index.ts'
 import { discoverRelevantDeployments } from './relevant-deployments.ts'
+import { validatePoolUniverseRep } from '#monitoring/pool-identity'
+import { createPoolMonitorIndex, currentVaultPositionForPoolAccounting, loadCurrentVaults, loadVaultPage, resolveOperatorVault, sameAddress, type PoolMonitorIndex, type ReadClient } from '#monitoring/vault-positions'
 
-type ReadClient = PublicClient<Transport, Chain>
-const MULTICALL3_ADDRESS = getAddress('0xB657B12CD9d80421DBC2bc70c43d6b2ff9409108')
 const MAXIMUM_DEPLOYMENT_LOG_RANGE = 10_000n
-const MAXIMUM_VAULT_CHANGE_LOG_RANGE = 10_000n
-
 type PoolDeployment = {
 	settlementCollateralAttoEth: bigint
 	currentRetentionRate: bigint
@@ -27,185 +25,8 @@ type PoolDeployment = {
 	universeId: bigint
 }
 
-export type PoolMonitorIndex = {
-	operatorVaultsByPool: Map<string, VaultPosition>
-	vaultsByPool: Map<string, VaultStateIndex<VaultPosition>>
-}
-
-export function createPoolMonitorIndex(): PoolMonitorIndex {
-	return { operatorVaultsByPool: new Map(), vaultsByPool: new Map() }
-}
-
-function sameAddress(left: Address, right: Address) {
-	return left.toLowerCase() === right.toLowerCase()
-}
-
-export function candidateScreeningPrice(lastPrice: bigint, fallbackPrice: bigint) {
+function candidateScreeningPrice(lastPrice: bigint, fallbackPrice: bigint) {
 	return lastPrice > 0n ? lastPrice : fallbackPrice
-}
-
-export function validatePoolUniverseRep(pool: Pick<PoolObservation, 'address' | 'repToken' | 'universeId'>, universes: readonly UniverseObservation[]) {
-	const universe = universes.find(candidate => candidate.id === pool.universeId)
-	if (universe === undefined) throw new Error(`Pool ${pool.address} belongs to unknown universe ${pool.universeId.toString()}`)
-	if (!sameAddress(pool.repToken, universe.repToken)) {
-		throw new Error(`Pool ${pool.address} REP token ${pool.repToken} does not match universe ${pool.universeId.toString()} REP ${universe.repToken}`)
-	}
-}
-
-function emptyVault(address: Address): VaultPosition {
-	return {
-		address,
-		capacityOwnershipAttoRep: 0n,
-		badDebtAttoEth: 0n,
-		openInterestAttoEth: 0n,
-		backingUnits: 0n,
-		vaultAttoRepBacking: 0n,
-		claimableFeesAttoEth: 0n,
-		disputeStakedAttoRep: 0n,
-	}
-}
-
-function requireBigint(value: unknown, label: string) {
-	if (typeof value !== 'bigint') throw new Error(`Security pool returned invalid ${label}`)
-	return value
-}
-
-function requireVaultPositionTuple(value: unknown) {
-	if (!Array.isArray(value)) throw new Error('Security pool returned invalid vault state')
-	return [requireBigint(value[0], 'vault backing units'), requireBigint(value[1], 'vault capacity ownership'), requireBigint(value[2], 'vault claimable fees')] as const
-}
-
-async function loadVaultPage(client: ReadClient, pool: Address, escalationGame: Address, vaultAddresses: readonly Address[], blockNumber: bigint) {
-	const [rawVaults, badDebt, disputeStake] = await Promise.all([
-		client.multicall({ allowFailure: false, blockNumber, contracts: vaultAddresses.map(vault => ({ abi: securityPoolAbi, address: pool, args: [vault], functionName: 'securityVaults' as const })), multicallAddress: MULTICALL3_ADDRESS }),
-		client.multicall({ allowFailure: false, blockNumber, contracts: vaultAddresses.map(vault => ({ abi: securityPoolAbi, address: pool, args: [vault], functionName: 'vaultBadDebtAttoEth' as const })), multicallAddress: MULTICALL3_ADDRESS }),
-		escalationGame === zeroAddress
-			? vaultAddresses.map(() => 0n)
-			: client.multicall({ allowFailure: false, blockNumber, contracts: vaultAddresses.map(vault => ({ abi: escalationGameAbi, address: escalationGame, args: [vault], functionName: 'disputeStakedRepByVaultAttoRep' as const })), multicallAddress: MULTICALL3_ADDRESS }),
-	])
-	return vaultAddresses.map((address, index) => {
-		const raw = rawVaults[index]
-		const badDebtAttoEth = badDebt[index]
-		const disputeStakedAttoRep = disputeStake[index]
-		if (raw === undefined || badDebtAttoEth === undefined || disputeStakedAttoRep === undefined) throw new Error('Security pool returned incomplete vault state')
-		const [repBackingUnits, capacityOwnershipAttoRep, claimableFeesAttoEth] = requireVaultPositionTuple(raw)
-		return {
-			address,
-			badDebtAttoEth: requireBigint(badDebtAttoEth, 'vault bad debt'),
-			capacityOwnershipAttoRep,
-			openInterestAttoEth: 0n,
-			backingUnits: repBackingUnits,
-			vaultAttoRepBacking: 0n,
-			claimableFeesAttoEth,
-			disputeStakedAttoRep: requireBigint(disputeStakedAttoRep, 'vault dispute stake'),
-		}
-	})
-}
-
-export function hasVaultRep(vault: VaultPosition) {
-	return vault.backingUnits > 0n || vault.disputeStakedAttoRep > 0n
-}
-
-type VaultChangeLog = Readonly<{ args?: unknown }>
-type VaultChangeSource = (range: Readonly<{ fromBlock: bigint; toBlock: bigint }>) => Promise<readonly VaultChangeLog[]>
-
-export async function loadChangedVaultAddresses(fromBlock: bigint, toBlock: bigint, sources: readonly VaultChangeSource[], globalDisputeStakeSources: readonly VaultChangeSource[] = [], disputeStakedVaults: readonly Address[] = []) {
-	const [logsBySource, globalLogsBySource] = await Promise.all([
-		Promise.all(sources.map(async source => await fetchLogsWithAdaptiveRanges({ nextBlock: fromBlock }, toBlock, MAXIMUM_VAULT_CHANGE_LOG_RANGE, source))),
-		Promise.all(globalDisputeStakeSources.map(async source => await fetchLogsWithAdaptiveRanges({ nextBlock: fromBlock }, toBlock, MAXIMUM_VAULT_CHANGE_LOG_RANGE, source))),
-	])
-	const addresses = new Map<string, Address>()
-	for (const log of logsBySource.flat()) {
-		if (typeof log.args !== 'object' || log.args === null) throw new Error('Vault change event is missing its arguments')
-		const vault = Reflect.get(log.args, 'vault')
-		if (typeof vault !== 'string') throw new Error('Vault change event is missing its vault address')
-		const address = getAddress(vault)
-		addresses.set(address.toLowerCase(), address)
-	}
-	if (globalLogsBySource.some(logs => logs.length > 0)) {
-		for (const vault of disputeStakedVaults) addresses.set(vault.toLowerCase(), vault)
-	}
-	return [...addresses.values()]
-}
-
-export function currentVaultPositionForPoolAccounting(vault: VaultPosition, totalAttoRep: bigint, denominator: bigint, settlementCollateralAttoEth: bigint, totalCapacityOwnershipAttoRep: bigint): VaultPosition {
-	const grossOpenInterestAttoEth = vault.capacityOwnershipAttoRep === 0n || totalCapacityOwnershipAttoRep === 0n ? 0n : (settlementCollateralAttoEth * vault.capacityOwnershipAttoRep + totalCapacityOwnershipAttoRep - 1n) / totalCapacityOwnershipAttoRep
-	return {
-		...vault,
-		openInterestAttoEth: grossOpenInterestAttoEth > vault.badDebtAttoEth ? grossOpenInterestAttoEth - vault.badDebtAttoEth : 0n,
-		vaultAttoRepBacking: repForBackingUnits(vault.backingUnits, totalAttoRep, denominator),
-	}
-}
-
-async function loadCurrentVaults(
-	client: ReadClient,
-	index: VaultStateIndex<VaultPosition>,
-	pool: Address,
-	escalationGame: Address,
-	knownVaultCount: bigint,
-	totalAttoRep: bigint,
-	denominator: bigint,
-	settlementCollateralAttoEth: bigint,
-	totalCapacityOwnershipAttoRep: bigint,
-	block: Readonly<{ hash: `0x${string}`; number: bigint }>,
-) {
-	const refresh = await refreshVaultStateIndex(index, {
-		block,
-		hasRep: hasVaultRep,
-		knownVaultCount,
-		loadChangedVaultAddresses: async (fromBlock, toBlock) => {
-			const sources: VaultChangeSource[] = [async range => await client.getLogs({ address: pool, event: vaultAccountingCheckpointEvent, fromBlock: range.fromBlock, toBlock: range.toBlock })]
-			if (escalationGame === zeroAddress) return await loadChangedVaultAddresses(fromBlock, toBlock, sources)
-			sources.push(async range => await client.getLogs({ address: escalationGame, event: vaultEscrowUpdatedEvent, fromBlock: range.fromBlock, toBlock: range.toBlock }))
-			const haircutSources: VaultChangeSource[] = [async range => await client.getLogs({ address: escalationGame, event: truthAuctionHaircutAppliedEvent, fromBlock: range.fromBlock, toBlock: range.toBlock })]
-			const disputeStakedVaults = [...index.activeVaults.values()].filter(vault => vault.disputeStakedAttoRep > 0n).map(vault => vault.address)
-			return await loadChangedVaultAddresses(fromBlock, toBlock, sources, haircutSources, disputeStakedVaults)
-		},
-		loadPositions: async vaults => await loadVaultPage(client, pool, escalationGame, vaults, block.number),
-		loadRegistryRange: async (start, count) => {
-			const page = await client.readContract({ abi: securityPoolAbi, address: pool, args: [start, count], blockNumber: block.number, functionName: 'getVaults' })
-			return page.map(address => getAddress(address))
-		},
-		readCanonicalBlockHash: async blockNumber => (await client.getBlock({ blockNumber })).hash,
-	})
-	index.activeVaults = new Map(
-		refresh.activeVaults.map(vault => {
-			const current = currentVaultPositionForPoolAccounting(vault, totalAttoRep, denominator, settlementCollateralAttoEth, totalCapacityOwnershipAttoRep)
-			return [current.address.toLowerCase(), current]
-		}),
-	)
-	return {
-		refreshedVaults: refresh.refreshedVaults.map(vault => currentVaultPositionForPoolAccounting(vault, totalAttoRep, denominator, settlementCollateralAttoEth, totalCapacityOwnershipAttoRep)),
-		reset: refresh.reset,
-		vaults: [...index.activeVaults.values()],
-	}
-}
-
-export async function resolveOperatorVault(
-	monitorIndex: PoolMonitorIndex,
-	pool: Address,
-	wallet: Address | undefined,
-	refresh: Awaited<ReturnType<typeof loadCurrentVaults>>,
-	accounting: Readonly<{ denominator: bigint; settlementCollateralAttoEth: bigint; totalAttoRep: bigint; totalCapacityOwnershipAttoRep: bigint }>,
-	loadPosition: (wallet: Address) => Promise<VaultPosition>,
-) {
-	const poolKey = pool.toLowerCase()
-	if (wallet === undefined) {
-		monitorIndex.operatorVaultsByPool.delete(poolKey)
-		return emptyVault(zeroAddress)
-	}
-	const refreshed = refresh.refreshedVaults.find(vault => sameAddress(vault.address, wallet))
-	const active = refresh.vaults.find(vault => sameAddress(vault.address, wallet))
-	const cached = monitorIndex.operatorVaultsByPool.get(poolKey)
-	let position = refreshed ?? active
-	if (position === undefined) {
-		if (refresh.reset) position = emptyVault(wallet)
-		else if (cached !== undefined && sameAddress(cached.address, wallet)) position = cached
-		else position = await loadPosition(wallet)
-	}
-	const current = currentVaultPositionForPoolAccounting(position, accounting.totalAttoRep, accounting.denominator, accounting.settlementCollateralAttoEth, accounting.totalCapacityOwnershipAttoRep)
-	monitorIndex.operatorVaultsByPool.set(poolKey, current)
-	return current
 }
 
 async function loadPool(client: ReadClient, settings: OperatorSettings, deployment: PoolDeployment, wallet: Address | undefined, monitorIndex: PoolMonitorIndex, block: Readonly<{ hash: `0x${string}`; number: bigint }>) {

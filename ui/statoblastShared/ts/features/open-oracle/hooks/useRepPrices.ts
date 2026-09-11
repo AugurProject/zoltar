@@ -15,13 +15,14 @@ type RepPriceQuoter = {
 	quoteRepForUsdcV4WithSource: typeof quoteRepForUsdcV4WithSource
 }
 
+/** @internal */
+export function installRepPriceQuoterForTesting(quoter: RepPriceQuoter | undefined) {
+	globalThis.__zoltarRepPriceQuoterOverride__ = quoter
+}
+
 declare global {
 	// eslint-disable-next-line no-var
 	var __zoltarRepPriceQuoterOverride__: RepPriceQuoter | undefined
-}
-
-export function installRepPriceQuoterForTesting(quoter: RepPriceQuoter | undefined) {
-	globalThis.__zoltarRepPriceQuoterOverride__ = quoter
 }
 
 function getRepPriceQuoter(): RepPriceQuoter {
@@ -94,6 +95,7 @@ function getNextRepPriceExpiry(cachedRepPrices: CachedRepPrices | undefined, bac
 	return Math.min(...cachedAtValues) + REP_PRICE_CACHE_TTL_MILLISECONDS
 }
 
+/** @internal */
 export function resetRepPriceCacheForTesting() {
 	repPriceCacheByBackend.clear()
 	repPriceRefreshByBackend.clear()

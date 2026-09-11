@@ -1,7 +1,7 @@
 import { carryStorageAbi as storageAbi } from '../contracts/carry-storage-abi.ts'
 import { getAddress, zeroAddress, zeroHash, type Address } from '@zoltar/bot-shared/ethereum'
 import { escalationGameAbi, securityPoolAbi, securityPoolForkerAbi } from '@zoltar/bot-shared/contracts/abi'
-import { drainConcurrent, type ChaosReadClient } from './discovery.ts'
+import { drainConcurrent, type ChaosReadClient } from './discovery-client.ts'
 import { carryCommitment, createMerkleMountainRangeProof, createSparseNullifierProof, hashCarryLeaf, nullifierPath, sparseNullifierRoot, type CarryLeafSlot, type CarryOutcome } from './carry-proof-index.ts'
 
 function compareIntegers(left: bigint, right: bigint) {

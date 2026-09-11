@@ -7,7 +7,7 @@ import type { AuctionBidSnapshot, AuctionRefundSnapshot, ChildRepSplitProgressSn
 
 type IndexClient = PublicClient<Transport, Chain>
 
-export interface ProtocolIndexCursor {
+interface ProtocolIndexCursor {
 	blockNumber: string
 	blockHash: Hash
 }
@@ -52,7 +52,7 @@ export interface UpdateProtocolIndexContext {
 	previous?: ChaosProtocolIndex
 }
 
-export interface CanonicalCoordinatorReportRoute {
+interface CanonicalCoordinatorReportRoute {
 	coordinator: Address
 	pendingReportId: string
 	repToken: Address
@@ -156,10 +156,6 @@ export function trustedOpenOracleReportPredicate(context: TrustedOpenOracleRepor
 	}
 }
 
-export function isTrustedOpenOracleReport(context: TrustedOpenOracleReportContext, report: OracleGameSnapshot) {
-	return trustedOpenOracleReportPredicate(context)(report)
-}
-
 function requireTrustedReportBounds(context: TrustedOpenOracleReportContext, reports: ReadonlyMap<string, OracleGameSnapshot>, trustedReport: (report: OracleGameSnapshot) => boolean) {
 	let signerReports = 0
 	for (const report of reports.values()) {
@@ -219,7 +215,7 @@ function abiWordAddress(bytes: Uint8Array, offset: number, label: string) {
 	return readAddress(bytes, offset + 12)
 }
 
-export function deriveChildUniverseId(universeId: bigint, outcomeIndex: bigint) {
+function deriveChildUniverseId(universeId: bigint, outcomeIndex: bigint) {
 	if (universeId < 0n || universeId >= UINT248_LIMIT) throw new Error('Parent universe ID exceeds uint248')
 	if (outcomeIndex < 0n || outcomeIndex >= 1n << 256n) throw new Error('Fork outcome exceeds uint256')
 	return BigInt(keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [universeId, outcomeIndex]))) & (UINT248_LIMIT - 1n)
@@ -280,7 +276,7 @@ function signed256(value: bigint) {
 	return value >= 1n << 255n ? value - (1n << 256n) : value
 }
 
-export function decodePackedOracleReport(reportId: bigint, openOracle: Address, packed: `0x${string}`): OracleGameSnapshot {
+function decodePackedOracleReport(reportId: bigint, openOracle: Address, packed: `0x${string}`): OracleGameSnapshot {
 	const bytes = hexToBytes(packed)
 	if (bytes.length !== 235) throw new Error(`OpenOracle report ${reportId.toString()} packed payload has ${bytes.length} bytes instead of 235`)
 	const flags = bigintToSafeNumber(readUnsigned(bytes, 202, 1), 'OpenOracle flags')

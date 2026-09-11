@@ -9,7 +9,7 @@ export type OperationRisk = 'low' | 'medium' | 'high' | 'irreversible'
 export type OperationClassification = 'selectable' | 'prerequisite' | 'lifecycle-obligation' | 'role-restricted' | 'excluded-dangerous'
 export type OperationAbiEntryKind = 'fallback' | 'function' | 'receive'
 
-export interface SnapshotAnchor {
+interface SnapshotAnchor {
 	baseFeePerGas: CanonicalUintString
 	blockNumber: string
 	blockHash: Hash
@@ -42,13 +42,13 @@ export interface ShareInventory {
 	migrationProgressByRoute: Record<string, string>
 }
 
-export interface LpInventory {
+interface LpInventory {
 	pair: Address
 	balance: string
 	allowanceToRouter: string
 }
 
-export interface WalletInventory {
+interface WalletInventory {
 	address: Address
 	ethBalanceAttoEth: CanonicalUintString
 	openOracleEthCredit: string
@@ -109,7 +109,7 @@ export interface OracleRequestFundingSnapshot {
 	targetPriceErrorForDispute: CanonicalUintString
 }
 
-export interface DirectEscalationDepositQuoteSnapshot {
+interface DirectEscalationDepositQuoteSnapshot {
 	/** Exact REP amount the game preview accepts from the wallet. */
 	acceptedAmountAttoRep: CanonicalUintString
 	/** Fixed calldata ceiling used by both the anchored preview and mutation. */
@@ -246,7 +246,7 @@ export interface EscalationDepositSnapshot {
 }
 
 /** A serialization-safe carried-deposit proof verified against one canonical anchor. */
-export interface ForkedCarryDepositProofSnapshot {
+interface ForkedCarryDepositProofSnapshot {
 	depositor: Address
 	amountAttoRep: CanonicalUintString
 	parentDepositIndex: string
@@ -382,7 +382,7 @@ export interface PairSnapshot {
 	walletLiquidity: string
 }
 
-export interface UniverseUniswapPoolSnapshot {
+interface UniverseUniswapPoolSnapshot {
 	universeId: string
 	repToken: Address
 	initialized: boolean
@@ -390,7 +390,7 @@ export interface UniverseUniswapPoolSnapshot {
 	pool?: Address | undefined
 }
 
-export interface UniverseUniswapSnapshot {
+interface UniverseUniswapSnapshot {
 	factory: boolean
 	proxy: boolean
 	seeder: boolean

@@ -32,10 +32,6 @@ body {
 	overflow-wrap: anywhere;
 }
 
-.warning-text {
-	color: var(--operator-warning);
-}
-
 body[data-page="overview"] [data-page-content]:not([data-page-content="overview"]):not([data-page-content="all"]),
 body[data-page="catalog"] [data-page-content]:not([data-page-content="catalog"]):not([data-page-content="all"]),
 body[data-page="ecosystem"] [data-page-content]:not([data-page-content="ecosystem"]):not([data-page-content="all"]),
@@ -260,6 +256,25 @@ button.identifier-disclosure {
 	background: var(--operator-surface-raised);
 	color: var(--operator-accent);
 	font-size: 0.7rem;
+}
+
+a.identifier-explorer {
+	display: inline-flex;
+	align-items: center;
+	min-height: 2rem;
+	padding: 0.25rem 0.5rem;
+	border: 1px solid var(--operator-border);
+	border-radius: 0.55rem;
+	background: var(--operator-surface-raised);
+	color: var(--operator-accent);
+	font-size: 0.7rem;
+	font-weight: 760;
+	text-decoration: none;
+}
+
+a.identifier-explorer:hover {
+	border-color: var(--operator-accent-strong);
+	text-decoration: underline;
 }
 
 .identifier-full {
@@ -634,6 +649,48 @@ dd {
 	margin: 0.25rem 0 0;
 	color: var(--operator-muted);
 	font-size: 0.8rem;
+}
+
+.transaction-wait {
+	display: grid;
+	gap: 0.2rem;
+	margin-top: 0.75rem;
+	padding: 0.6rem 0.75rem;
+	border: 1px solid var(--operator-border);
+	border-left: 3px solid var(--operator-info);
+	border-radius: 0.5rem;
+	background: rgb(8 11 13 / 55%);
+	font-size: 0.82rem;
+}
+
+.transaction-wait.warning {
+	border-left-color: var(--operator-warning);
+}
+
+.transaction-wait strong {
+	display: block;
+	overflow-wrap: anywhere;
+}
+
+.transaction-wait small {
+	display: block;
+	margin: 0;
+	overflow-wrap: anywhere;
+	color: var(--operator-muted);
+}
+
+.stack-row {
+	flex-wrap: wrap;
+}
+
+/* A zero basis keeps the status badge on the first line; the note alone wraps beneath. */
+.stack-row > div:first-child {
+	flex: 1 1 0;
+}
+
+.stack-row > .transaction-wait {
+	flex: 1 0 100%;
+	margin-top: 0;
 }
 
 .step-list {
@@ -1512,7 +1569,8 @@ tbody tr:last-child td {
 	}
 
 	button.identifier-copy,
-	button.identifier-disclosure {
+	button.identifier-disclosure,
+	a.identifier-explorer {
 		min-height: 2.75rem;
 	}
 
@@ -1557,6 +1615,16 @@ tbody tr:last-child td {
 	.form-actions {
 		align-items: stretch;
 		flex-direction: column;
+	}
+
+	/* In the column direction a percentage basis would resolve against the row height, so size both by content. */
+	.stack-row {
+		flex-wrap: nowrap;
+	}
+
+	.stack-row > div:first-child,
+	.stack-row > .transaction-wait {
+		flex: 0 0 auto;
 	}
 
 	.step-list li {

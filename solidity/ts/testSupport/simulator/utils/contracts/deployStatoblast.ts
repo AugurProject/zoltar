@@ -1,5 +1,5 @@
 import { concatHex, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, type Address, type Hex, toHex } from '@zoltar/core-shared/evm/ethereum'
-import { createSecurityPoolAddressHelper } from '@zoltar/statoblast-shared/evm/addressDerivation'
+import { createSecurityPoolAddressHelper } from '../../../evm/securityPoolAddressDerivation'
 import { createApplyLinkedLibrariesHelper, createDeploymentStatusOracleAddressHelper } from '@zoltar/core-shared/deployment/deploymentAddresses'
 import { createInfraContractAddressHelper } from '@zoltar/statoblast-shared/deployment/deploymentAddresses'
 import { createZoltarAddressHelpers } from '@zoltar/zoltar-shared/deployment/deploymentAddresses'

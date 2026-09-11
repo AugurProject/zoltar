@@ -210,7 +210,7 @@ export const createLogClient = (rpcUrl: string, endpoint: string, queue: RpcRequ
 		),
 	})
 
-export const findEarliestAvailableLogBlock = async (startBlock: bigint, observedHead: bigint, logsAt: (blockNumber: bigint) => Promise<void>, startBlockKnownUnavailable = false): Promise<bigint> => {
+const findEarliestAvailableLogBlock = async (startBlock: bigint, observedHead: bigint, logsAt: (blockNumber: bigint) => Promise<void>, startBlockKnownUnavailable = false): Promise<bigint> => {
 	if (startBlock > observedHead) throw new Error('The log availability search start must not exceed the observed head')
 	const isAvailable = async (blockNumber: bigint): Promise<boolean> => {
 		try {

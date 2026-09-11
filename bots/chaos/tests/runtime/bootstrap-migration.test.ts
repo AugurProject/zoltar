@@ -9,7 +9,8 @@ import { parseSettings } from '../../src/config/settings.ts'
 import { createBotShutdownController } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { executionProfileId } from '../../src/config/execution-profile.ts'
 import { runChaosOperator } from '../../src/runtime/operator.ts'
-import { initialDurableState, loadDurableState, saveDurableState } from '../../src/state/operator-state.ts'
+import { loadDurableState, saveDurableState } from '../../src/state/operator-state.ts'
+import { initialDurableState } from '../../src/state/initial-state.ts'
 
 function obsoleteSettings() {
 	const settings = parseSettings(example)

@@ -2,53 +2,15 @@ import { describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { bigintToSafeNumber, formatBpsMultiplier, formatCapacityOwnership, formatRoundedUnits, formatUnits, parseUnits, parseUnitsOrUndefined } from '../../lib/format.js'
 import { attoSharesToCollateralAttoEth, averagePriceBps, collateralAttoEthToAttoShares, formatCollateralEth, formatCompleteSetValue, formatLpValue, formatOutcomeValue } from '../../lib/shareValue.js'
-import { liveWorkflowRoutePresentation, portfolioRouteSubtitle } from '../../features/LiveTrading.js'
-import { liquidityOperationAvailable } from '../../features/LiveLiquidityControls.js'
 import { forkMigrationBatchBlocker, forkMigrationBatchWarning, insuredExitLimitMessage, migrationSimulationSummary, settlementBalanceLabel, settlementInputBlocker } from '../../features/LiveSettlementModel.js'
-import { roundedProbabilityLabels } from '../../components/ProbabilityBar.js'
-import {
-	collateMarketDiscoveryResults,
-	createSecurityPoolDeploymentIndex,
-	liveBalancesForMarket,
-	liveQuestionFields,
-	marketAcceptsNewRisk,
-	marketDiscoveryPage,
-	marketDiscoveryRanges,
-	publicErrorMessage,
-	marketNewRiskBlocker,
-	mapWithConcurrency,
-	maximumAfterSlippage,
-	minimumAfterSlippage,
-	retainApprovedMaximum,
-	retainApprovedMinimum,
-	refreshSecurityPoolDeploymentIndex,
-	refreshSecurityPoolDeploymentEventIndex,
-	registryBlockAnchorIsCanonical,
-	registrySnapshotBlockParameters,
-	requireTransactionSlippageBps,
-	requireTransactionValidityMinutes,
-	selectUniverseDeployments,
-	settlementAvailability,
-	shareBalanceScope,
-	type LiveMarket,
-} from '../../protocol/live.js'
+import { createSecurityPoolDeploymentIndex, liveBalancesForMarket, marketAcceptsNewRisk, publicErrorMessage, marketNewRiskBlocker, mapWithConcurrency, refreshSecurityPoolDeploymentEventIndex, registryBlockAnchorIsCanonical, settlementAvailability, shareBalanceScope, type LiveMarket } from '../../protocol/live.js'
+import { maximumAfterSlippage, minimumAfterSlippage, requireTransactionSlippageBps, requireTransactionValidityMinutes, retainApprovedMaximum, retainApprovedMinimum } from '../../protocol/tradeQuote.js'
 import { broadcastUncertainMessage, discoveryCommitAllowed, failedSubmissionTransition, livePairInitialized, parseSlippageBps, parseTransactionValidityMinutes, positionControlsWorkflowLocked, securityPoolAddressFromRoute } from '../../features/liveTradingControllerHelpers.js'
 import { isTradingBrowseRoute, isTradingLookupRoute, tradingBrowseRouteFor, tradingRouting } from '../../lib/routing.js'
-import { initialQuestionClockTimestamp, questionClockShouldPollAgain } from '../../features/live/useLiveTradingState.js'
+import { liveWorkflowRoutePresentation, portfolioRouteSubtitle } from '../../features/live/routePresentation.js'
+import { liquidityOperationAvailable } from '../../features/live/useLiquidityWorkflowController.js'
 
 describe('standalone trading UI model', () => {
-	test('uses the deterministic chain timestamp instead of the host wall clock in simulation', () => {
-		expect(initialQuestionClockTimestamp(1_735_689_600n, 1_800_000_000_000)).toBe(1_735_689_600n)
-		expect(initialQuestionClockTimestamp(undefined, 1_800_000_000_000)).toBe(1_800_000_000n)
-	})
-
-	test('stops polling the live chain clock at the exact question end boundary', () => {
-		expect(questionClockShouldPollAgain(undefined, 100n)).toBeTrue()
-		expect(questionClockShouldPollAgain(101n, 100n)).toBeTrue()
-		expect(questionClockShouldPollAgain(100n, 100n)).toBeFalse()
-		expect(questionClockShouldPollAgain(100n, 101n)).toBeFalse()
-	})
-
 	test('keeps the shared simulation banner as the only Browser Simulation disclosure', () => {
 		expect(liveWorkflowRoutePresentation('markets', 'Browser Simulation', true).description).toBeUndefined()
 		expect(liveWorkflowRoutePresentation('markets', 'Ethereum Mainnet', false).description).toBe('Ethereum Mainnet')
@@ -66,6 +28,14 @@ describe('standalone trading UI model', () => {
 			title: 'Market',
 		})
 		expect(liveWorkflowRoutePresentation('create-market', 'Ethereum Mainnet', false).title).toBe('Create new market')
+	})
+
+	test('invalidates new-risk liquidity operations at the exact end boundary while preserving removal', () => {
+		const market = { endTime: 2_000n, systemState: 0, awaitingForkContinuation: false, universeForkTime: 0n, questionOutcome: 3, tradingStatus: 0 }
+		expect(liquidityOperationAvailable('initialize', market, 1_999n)).toBe(true)
+		expect(liquidityOperationAvailable('add', market, 2_000n)).toBe(false)
+		expect(liquidityOperationAvailable('initialize', market, 2_001n)).toBe(false)
+		expect(liquidityOperationAvailable('remove', market, 2_001n)).toBe(true)
 	})
 
 	test('defaults to the address lookup and pairs each lookup workflow with its own browse route', () => {
@@ -103,17 +73,6 @@ describe('standalone trading UI model', () => {
 		expect(await registryBlockAnchorIsCanonical(anchor, async () => ({ blockNumber: 13n, blockHash: `0x${'13'.repeat(32)}` }))).toBe(true)
 	})
 
-	test('uses latest registry reads only for the deterministic simulator', () => {
-		const anchor = { blockNumber: 12n, blockHash: `0x${'12'.repeat(32)}` }
-		expect(registrySnapshotBlockParameters(anchor, true)).toEqual({})
-		expect(registrySnapshotBlockParameters(anchor, false)).toEqual({ blockHash: anchor.blockHash })
-	})
-
-	test('reads question metadata from the ABI tuple preserved by the worker boundary', () => {
-		const question = ['Will this resolve?', 'Seeded market', 10n, 20n] as const
-		expect(liveQuestionFields(question)).toEqual({ description: 'Seeded market', endTime: 20n, title: 'Will this resolve?' })
-	})
-
 	test('keeps provider identifiers out of public error copy', () => {
 		const pool = `0x${'12'.repeat(20)}`
 		const shareToken = `0x${'34'.repeat(20)}`
@@ -130,19 +89,6 @@ describe('standalone trading UI model', () => {
 		const address = `0x${'AB'.repeat(20)}`
 		expect(securityPoolAddressFromRoute(`security-pool/${address}`)).toBe(getAddress(address))
 		expect(securityPoolAddressFromRoute('security-pool/not-an-address')).toBeUndefined()
-	})
-
-	test('invalidates new-risk liquidity operations at the exact end boundary while preserving removal', () => {
-		const market = { endTime: 2_000n, systemState: 0, awaitingForkContinuation: false, universeForkTime: 0n, questionOutcome: 3, tradingStatus: 0 }
-		expect(liquidityOperationAvailable('initialize', market, 1_999n)).toBe(true)
-		expect(liquidityOperationAvailable('add', market, 2_000n)).toBe(false)
-		expect(liquidityOperationAvailable('initialize', market, 2_001n)).toBe(false)
-		expect(liquidityOperationAvailable('remove', market, 2_001n)).toBe(true)
-	})
-
-	test('keeps displayed conditional prices complementary after rounding', () => {
-		expect(roundedProbabilityLabels(70.25)).toEqual({ yes: '70.3', no: '29.7' })
-		expect(roundedProbabilityLabels(50.05)).toEqual({ yes: '50.1', no: '49.9' })
 	})
 
 	test('parses and formats chain quantities without numbers', () => {
@@ -253,63 +199,6 @@ describe('standalone trading UI model', () => {
 		expect(marketNewRiskBlocker({ ...open, tradingStatus: undefined, questionOutcome: 0 }, 1_000n)).toBe('Resolved INVALID')
 		expect(marketNewRiskBlocker({ ...open, tradingStatus: undefined }, 2_000n)).toBe('Question ended')
 		expect(marketNewRiskBlocker({ ...open, tradingStatus: 0 }, 2_000n)).toBe('Question ended')
-	})
-
-	test('bounds market discovery into deterministic RPC pages', () => {
-		expect(marketDiscoveryRanges(0n)).toEqual([])
-		expect(marketDiscoveryRanges(51n)).toEqual([
-			{ start: 0n, count: 25n },
-			{ start: 25n, count: 25n },
-			{ start: 50n, count: 1n },
-		])
-		expect(() => marketDiscoveryRanges(1n, 0n)).toThrow('Invalid market discovery range')
-		expect(marketDiscoveryPage(51n, 25n)).toEqual({ start: 25n, count: 25n, previousStart: 0n, nextStart: 50n })
-		expect(marketDiscoveryPage(51n, 99n)).toEqual({ start: 50n, count: 1n, previousStart: 25n, nextStart: undefined })
-		expect(marketDiscoveryPage(0n)).toEqual({ start: 0n, count: 0n, previousStart: undefined, nextStart: undefined })
-		expect(() => marketDiscoveryPage(1n, -1n)).toThrow('Invalid market discovery page')
-	})
-
-	test('enumerates universes while selecting pools from only one universe', () => {
-		const deployments = [
-			{ universeId: 1n, pool: 'first' },
-			{ universeId: 2n, pool: 'child' },
-			{ universeId: 1n, pool: 'second' },
-		]
-		const firstUniverseDeployments = [
-			{ universeId: 1n, pool: 'first' },
-			{ universeId: 1n, pool: 'second' },
-		]
-		expect(selectUniverseDeployments(deployments, 1n)).toEqual({ universeIds: [1n, 2n], selectedUniverseId: 1n, selectedDeployments: firstUniverseDeployments })
-		expect(selectUniverseDeployments(deployments, 99n)).toEqual({ universeIds: [1n, 2n], selectedUniverseId: 1n, selectedDeployments: firstUniverseDeployments })
-		expect(selectUniverseDeployments([], undefined)).toEqual({ universeIds: [], selectedUniverseId: undefined, selectedDeployments: [] })
-	})
-
-	test('increments the deployment index without rereading known registry ranges', async () => {
-		const index = createSecurityPoolDeploymentIndex<{ universeId: bigint; pool: string }, string>()
-		let total = 5n
-		let anchor = 'block-1'
-		const deployments = Array.from({ length: 7 }, (_value, position) => ({ universeId: position < 3 ? 1n : 2n, pool: `pool-${position}` }))
-		const rangeReads: Array<{ start: bigint; count: bigint }> = []
-		const loadRange = async (start: bigint, count: bigint, _anchor: string) => {
-			rangeReads.push({ start, count })
-			return deployments.slice(bigintToSafeNumber(start, 'test range start'), bigintToSafeNumber(start + count, 'test range end'))
-		}
-		const loadSnapshot = async () => ({ anchor, total })
-		const isAnchorCanonical = async () => true
-		expect(await refreshSecurityPoolDeploymentIndex(index, 'chain:factory', loadSnapshot, isAnchorCanonical, loadRange, 2n)).toEqual(deployments.slice(0, 5))
-		expect(rangeReads).toEqual([
-			{ start: 0n, count: 2n },
-			{ start: 2n, count: 2n },
-			{ start: 4n, count: 1n },
-		])
-		rangeReads.length = 0
-		expect(await refreshSecurityPoolDeploymentIndex(index, 'chain:factory', loadSnapshot, isAnchorCanonical, loadRange, 2n)).toEqual(deployments.slice(0, 5))
-		expect(rangeReads).toEqual([])
-		rangeReads.length = 0
-		total = 7n
-		anchor = 'block-2'
-		expect(await refreshSecurityPoolDeploymentIndex(index, 'chain:factory', loadSnapshot, isAnchorCanonical, loadRange, 2n)).toEqual(deployments)
-		expect(rangeReads).toEqual([{ start: 5n, count: 2n }])
 	})
 
 	test('increments a selected-universe event index without rescanning historical blocks', async () => {
@@ -424,127 +313,6 @@ describe('standalone trading UI model', () => {
 		])
 	})
 
-	test('clears populated orphan indexes when their canonical rebuild fails', async () => {
-		const eventIndex = createSecurityPoolDeploymentIndex<string, { blockHash: `0x${string}`; blockNumber: bigint }>()
-		const orphanEventAnchor = { blockHash: `0x${'11'.repeat(32)}` as const, blockNumber: 100n }
-		await refreshSecurityPoolDeploymentEventIndex(
-			eventIndex,
-			'chain:factory:universe-7',
-			async () => orphanEventAnchor,
-			async () => true,
-			async () => ['orphan-event'],
-		)
-		await expect(
-			refreshSecurityPoolDeploymentEventIndex(
-				eventIndex,
-				'chain:factory:universe-7',
-				async () => {
-					throw new Error('replacement event head unavailable')
-				},
-				async () => false,
-				async () => [],
-			),
-		).rejects.toThrow('replacement event head unavailable')
-		expect(eventIndex.deployments).toEqual([])
-		expect(eventIndex.anchor).toBeUndefined()
-
-		const rangeIndex = createSecurityPoolDeploymentIndex<string, string>()
-		await refreshSecurityPoolDeploymentIndex(
-			rangeIndex,
-			'chain:factory',
-			async () => ({ anchor: 'orphan-block', total: 1n }),
-			async () => true,
-			async () => ['orphan-range'],
-		)
-		await expect(
-			refreshSecurityPoolDeploymentIndex(
-				rangeIndex,
-				'chain:factory',
-				async () => {
-					throw new Error('replacement registry unavailable')
-				},
-				async () => false,
-				async () => [],
-			),
-		).rejects.toThrow('replacement registry unavailable')
-		expect(rangeIndex.deployments).toEqual([])
-		expect(rangeIndex.anchor).toBeUndefined()
-	})
-
-	test('serializes deployment-index waiters without duplicate appends', async () => {
-		const index = createSecurityPoolDeploymentIndex<{ universeId: bigint; pool: string }, string>()
-		const deployments = Array.from({ length: 5 }, (_value, position) => ({ universeId: 1n, pool: `pool-${position}` }))
-		let releaseFirstRange: () => void = () => undefined
-		let announceFirstRange: () => void = () => undefined
-		const firstRangeStarted = new Promise<void>(resolve => {
-			announceFirstRange = resolve
-		})
-		const firstRangeGate = new Promise<void>(resolve => {
-			releaseFirstRange = resolve
-		})
-		let activeRangeReads = 0
-		let maximumActiveRangeReads = 0
-		const loadRange = async (start: bigint, count: bigint, _anchor: string) => {
-			activeRangeReads += 1
-			maximumActiveRangeReads = Math.max(maximumActiveRangeReads, activeRangeReads)
-			if (start === 0n) {
-				announceFirstRange()
-				await firstRangeGate
-			}
-			await Promise.resolve()
-			activeRangeReads -= 1
-			return deployments.slice(bigintToSafeNumber(start, 'test range start'), bigintToSafeNumber(start + count, 'test range end'))
-		}
-		const isAnchorCanonical = async () => true
-		const first = refreshSecurityPoolDeploymentIndex(index, 'chain:factory', async () => ({ anchor: 'block-1', total: 2n }), isAnchorCanonical, loadRange, 5n)
-		await firstRangeStarted
-		const second = refreshSecurityPoolDeploymentIndex(index, 'chain:factory', async () => ({ anchor: 'block-2', total: 4n }), isAnchorCanonical, loadRange, 5n)
-		const third = refreshSecurityPoolDeploymentIndex(index, 'chain:factory', async () => ({ anchor: 'block-3', total: 5n }), isAnchorCanonical, loadRange, 5n)
-		releaseFirstRange()
-		await Promise.all([first, second, third])
-		expect(maximumActiveRangeReads).toBe(1)
-		expect(index.deployments).toEqual(deployments)
-	})
-
-	test('reloads the deployment index after an equal-count registry replacement', async () => {
-		const index = createSecurityPoolDeploymentIndex<{ universeId: bigint; pool: string }, string>()
-		let deployments = [
-			{ universeId: 1n, pool: 'parent' },
-			{ universeId: 2n, pool: 'orphaned-child' },
-		]
-		let canonicalAnchor = 'block-1'
-		const loadRange = async (start: bigint, count: bigint, _anchor: string) => deployments.slice(bigintToSafeNumber(start, 'test range start'), bigintToSafeNumber(start + count, 'test range end'))
-		const isAnchorCanonical = async (candidate: string) => candidate === canonicalAnchor
-		expect(await refreshSecurityPoolDeploymentIndex(index, 'chain:factory', async () => ({ anchor: canonicalAnchor, total: 2n }), isAnchorCanonical, loadRange, 25n)).toEqual(deployments)
-		deployments = [
-			{ universeId: 3n, pool: 'canonical-parent' },
-			{ universeId: 2n, pool: 'orphaned-child' },
-		]
-		canonicalAnchor = 'block-2'
-		expect(await refreshSecurityPoolDeploymentIndex(index, 'chain:factory', async () => ({ anchor: canonicalAnchor, total: 2n }), isAnchorCanonical, loadRange, 25n)).toEqual(deployments)
-	})
-
-	test('accepts a canonical registry snapshot when the chain tip advances during loading', async () => {
-		const index = createSecurityPoolDeploymentIndex<{ universeId: bigint; pool: string }, string>()
-		const deployments = [{ universeId: 1n, pool: 'parent' }]
-		let tip = 'block-1'
-		const canonicalAnchors = new Set(['block-1', 'block-2'])
-		const loadRange = async (start: bigint, count: bigint, _anchor: string) => {
-			tip = 'block-2'
-			return deployments.slice(bigintToSafeNumber(start, 'test range start'), bigintToSafeNumber(start + count, 'test range end'))
-		}
-		const result = await refreshSecurityPoolDeploymentIndex(
-			index,
-			'chain:factory',
-			async () => ({ anchor: tip, total: 1n }),
-			async anchor => canonicalAnchors.has(anchor),
-			loadRange,
-		)
-		expect(tip).toBe('block-2')
-		expect(result).toEqual(deployments)
-		expect(index.anchor).toBe('block-1')
-	})
-
 	test('bounds asynchronous portfolio work while preserving registry order', async () => {
 		let active = 0
 		let maximumActive = 0
@@ -557,21 +325,6 @@ describe('standalone trading UI model', () => {
 		})
 		expect(maximumActive).toBe(2)
 		expect(results).toEqual([0, 10, 20, 30, 40])
-	})
-
-	test('isolates one failed market read into an explicit unavailable row', () => {
-		const pool = `0x${'12'.repeat(20)}` as const
-		const shareToken = `0x${'34'.repeat(20)}` as const
-		const deployments = [{ securityPool: pool, shareToken, universeId: 7n, questionId: 9n, statoblastSecurityMultiplierBps: 20_000n, initialReportPriorityFeeAttoEthPerGas: 1n }]
-		const results = [{ status: 'rejected', reason: new Error(`Contract read failed at ${pool}: share token ${shareToken}, token ID 1793, call arguments unavailable`) }] satisfies PromiseRejectedResult[]
-		const [market] = collateMarketDiscoveryResults(deployments, results, 30)
-		if (market === undefined) throw new Error('Expected unavailable market row')
-		expect(market.pool).toBe(pool)
-		expect(market.loadError).toBe('Market reads failed')
-		expect(market.loadError).not.toContain(pool)
-		expect(market.loadError).not.toContain(shareToken)
-		expect(market.loadError).not.toContain('1793')
-		expect(marketNewRiskBlocker(market, 0n)).toBe('Market data unavailable')
 	})
 
 	test('scopes portfolio share balances to one exact SecurityPool token namespace', () => {

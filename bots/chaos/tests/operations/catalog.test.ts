@@ -1,9 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData, encodeAbiParameters } from '@zoltar/bot-shared/ethereum'
 import { openOraclePriceCoordinatorAbi, erc1155Abi, genesisReputationTokenAbi, escalationGameAbi } from '@zoltar/bot-shared/contracts/abi'
-import { validateStepReceiptEvidence } from '../../src/execution/receipt-validation.ts'
+import { stepReceiptEvidenceDisposition } from '../../src/execution/receipt-validation.ts'
 import { CARRY_STORAGE_MAXIMUM_WITHDRAWALS } from '../../src/monitoring/carry-proof-storage.ts'
-import { canonicalLifecyclePresence, CHAOS_OPERATION_CATALOG, eligibleOperationPlans, evaluateOperationCatalog, reevaluateOperationContinuation, urgentOperationPlans } from '../../src/operations/catalog.ts'
+import { canonicalLifecyclePresence, CHAOS_OPERATION_CATALOG, evaluateOperationCatalog, reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
+import { eligibleOperationPlans, urgentOperationPlans } from '../support/operation-plans.ts'
 import { validForkOutcomeRoutes } from '../../src/operations/fork-outcomes.ts'
 import type { OperationEvidence, OperationPlan } from '../../src/operations/types.ts'
 import { address, hash, snapshotFixture } from './fixture.ts'
@@ -535,7 +536,7 @@ describe('chaos operation catalog', () => {
 		])
 		const step = plan?.steps[0]
 		if (step === undefined) throw new Error('Withdrawal step missing')
-		expect(() => validateStepReceiptEvidence(step, { blockHash: hash(101), blockNumber: 101n, logs: [], status: 'success', transactionHash: hash(102) }, { storage: [{ after: '1', before: '1', evidence }] })).toThrow('Transfer(address,address,uint256)')
+		expect(() => stepReceiptEvidenceDisposition(step, { blockHash: hash(101), blockNumber: 101n, logs: [], status: 'success', transactionHash: hash(102) }, { storage: [{ after: '1', before: '1', evidence }] })).toThrow('Transfer(address,address,uint256)')
 	})
 
 	test('excludes native deposits, withdrawals, and pushes while retaining WETH and REP deposits', () => {

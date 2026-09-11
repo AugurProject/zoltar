@@ -3,6 +3,13 @@
 		"target": "ESNext",
 		"module": "ESNext",
 		"moduleResolution": "bundler",
+		"paths": {
+			"@zoltar/bot-shared/contracts/abi": ["../shared/src/contracts/abi.generated.ts"],
+			"@zoltar/bot-shared/*": ["../shared/src/*"],
+			"@zoltar/core-shared/*": ["../../shared/core/ts/*"],
+			"@zoltar/open-oracle-shared/*": ["../../shared/openOracle/ts/*"],
+			"@zoltar/statoblast-shared/*": ["../../shared/statoblast/ts/*"]
+		},
 		"allowImportingTsExtensions": true,
 		"resolveJsonModule": true,
 		"strict": true,

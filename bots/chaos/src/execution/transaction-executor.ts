@@ -1,9 +1,9 @@
 import { createPublicClient, parseAbiItem, type Account, type Address, type Chain, type Hex, type TransactionReceipt, type Transport, type WalletClient, toHex, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { requestTransport } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { confirmCanonicalReceiptFinality, type CanonicalReceiptFinalityPolicy } from '@zoltar/bot-shared/execution/canonical-finality'
-import { assertSubmissionWindowOpen, maximumFeePerGas, prepareSignedTransaction, submitSignedTransaction } from '@zoltar/bot-shared/execution/transaction-submission'
+import { assertSubmissionWindowOpen, prepareSignedTransaction, submitSignedTransaction } from '@zoltar/bot-shared/execution/transaction-submission'
 import { endpointLabel, sendRawTransactionToRpc } from '@zoltar/bot-shared/monitoring/connectivity'
-import { availableSettledValues, quorumValue, settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
+import { availableSettledValues, quorumValue, settledQuorumValue, sharedQuorumBlockNumber } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
 import type { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import type { OperatorSettings } from '../config/settings.ts'
@@ -11,7 +11,9 @@ import { erc1155Abi, genesisReputationTokenAbi, openOracleAbi, securityPoolAbi }
 import { assertCanonicalAnchorFreshness } from '../core/canonical-freshness.ts'
 import { EXECUTOR_FINALITY_BLOCKS } from '../operations/timing.ts'
 import type { OperationEvidence, OperationPlan, OperationPreflightCall, OperationStep } from '../operations/types.ts'
-import { recordActivity, saveDurableState, type PendingTransactionIntent, type RuntimeState } from '../state/operator-state.ts'
+import { recordActivity, type PendingTransactionIntent, type RuntimeState } from '../state/operator-state.ts'
+import { observePendingTransaction } from '../state/pending-transaction-observation.ts'
+import { persist, retainUnreadableReceiptEvidence } from './recovery-journal.ts'
 import {
 	captureWorkflowIntentSubmissionJournal,
 	recoverableWorkflowForIntent,
@@ -29,7 +31,7 @@ import {
 	assertTerminalSubmissionBoundary,
 } from '../runtime/workflows.ts'
 import { TransactionAwaitingRecovery, receiptVisibilityDisposition, requireSuccessfulReceipt, stepReceiptEvidenceDisposition, type BalanceEvidenceObservation, type ReceiptEvidenceDisposition, type StorageEvidenceObservation } from './receipt-validation.ts'
-import { assertOperationEthFunding, assertOperationPlanFresh, assertOperationPrincipalCaps, assertStepSafety, operationSubmissionLastValidBlock, unsignedQuantity } from './safety.ts'
+import { assertOperationEthFunding, assertOperationPlanFresh, assertOperationPrincipalCaps, assertStepSafety, operationStepSubmissionLastValidBlock, unsignedQuantity } from './safety.ts'
 
 export { TransactionAwaitingRecovery }
 
@@ -84,31 +86,12 @@ type ExactRpcTransaction = {
 	value: Hex
 }
 
-export function sameCanonicalAttesters(left: ReadonlySet<string>, right: ReadonlySet<string>) {
+function sameCanonicalAttesters(left: ReadonlySet<string>, right: ReadonlySet<string>) {
 	return left.size === right.size && [...left].every(rpcUrl => right.has(rpcUrl))
 }
 
 export function sameCanonicalExecutionAnchor(left: CanonicalExecutionAnchor, right: CanonicalExecutionAnchor) {
 	return left.number === right.number && left.hash.toLowerCase() === right.hash.toLowerCase() && left.baseFeePerGas === right.baseFeePerGas && left.timestamp === right.timestamp && sameCanonicalAttesters(left.attestingRpcUrls, right.attestingRpcUrls)
-}
-
-export function operationStepSubmissionLastValidBlock(parameters: { baseFeePerGas: bigint; currentBlock: bigint; currentTimestamp: bigint; maximumBlockIntervalSeconds: number; mode: 'private' | 'public'; plan: OperationPlan; step: OperationStep }) {
-	assertTerminalSubmissionBoundary(parameters.plan)
-	if (!parameters.plan.steps.some(step => step.id === parameters.step.id)) {
-		throw new Error(`${parameters.plan.id} does not contain submission step ${parameters.step.id}`)
-	}
-	const planHorizon = operationSubmissionLastValidBlock(parameters.plan, parameters.currentBlock, parameters.currentTimestamp, parameters.mode, parameters.maximumBlockIntervalSeconds)
-	const terminalSubmission = parameters.plan.terminalSubmission
-	const terminalStep = parameters.plan.steps.at(-1)
-	if (terminalSubmission === undefined || terminalStep?.id !== parameters.step.id) return planHorizon
-	if (parameters.mode !== 'private') throw new Error(`${parameters.plan.id} terminal step requires private submission`)
-	const persistedMaximumFeePerGas = unsignedQuantity(terminalSubmission.maximumFeePerGas, `${parameters.plan.id} terminal maximum fee per gas`)
-	const signingFeePerGas = maximumFeePerGas(parameters.baseFeePerGas)
-	if (signingFeePerGas > persistedMaximumFeePerGas) {
-		throw new Error(`${parameters.plan.id} terminal signing fee per gas exceeds its persisted maximum fee ceiling`)
-	}
-	const nextBlockOnly = parameters.currentBlock + 1n
-	return planHorizon === undefined || nextBlockOnly < planHorizon ? nextBlockOnly : planHorizon
 }
 
 export function assertRequestedTransactionHash(returnedHash: Hex, requestedHash: Hex, label: string) {
@@ -167,22 +150,6 @@ export function assertExecutionActive(environment: ExecutionEnvironment) {
 	if (!environment.settings.runtime.execute) throw new Error('Transaction execution is disabled')
 	if (environment.settings.paused || environment.state.paused) throw new Error('Chaos bot paused before transaction submission')
 	if (environment.state.pendingTransactions.length > 1) throw new Error('Multiple pending transaction intents require manual reconciliation')
-}
-
-export function sharedQuorumBlockNumber(heads: readonly bigint[], requirement: number) {
-	if (!Number.isSafeInteger(requirement) || requirement < 1) {
-		throw new Error('Shared block quorum must be a positive integer')
-	}
-	if (heads.length < requirement) {
-		throw new Error('Shared block selection does not have enough available heads')
-	}
-	const sorted = [...heads].sort((left, right) => {
-		if (left === right) return 0
-		return left > right ? -1 : 1
-	})
-	const selected = sorted[requirement - 1]
-	if (selected === undefined) throw new Error('Shared block selection returned no block')
-	return selected
 }
 
 export async function agreedLatestBlock(environment: ExecutionEnvironment, label: string): Promise<CanonicalExecutionAnchor> {
@@ -286,7 +253,7 @@ async function agreedConfirmedNonce(environment: ExecutionEnvironment, address: 
 	)
 }
 
-export function assertNoUnmanagedPendingNonce(confirmedNonce: bigint, pendingNonce: bigint) {
+function assertNoUnmanagedPendingNonce(confirmedNonce: bigint, pendingNonce: bigint) {
 	if (confirmedNonce < 0n || pendingNonce < 0n) {
 		throw new Error('Signer nonces cannot be negative')
 	}
@@ -849,6 +816,11 @@ export async function finalizedReceiptWithQuorum(environment: ExecutionEnvironme
 	if (observations.length < connectivity.rpcQuorum) {
 		throw new ConnectivityDegradedError(`receipt ${hash} requires ${connectivity.rpcQuorum.toString()} available RPC endpoints with head evidence`)
 	}
+	// Heads sampled alongside the receipt lookups cannot precede an observed inclusion block, unlike the earlier anchor.
+	const head = sharedQuorumBlockNumber(
+		observations.map(observation => observation.head),
+		connectivity.rpcQuorum,
+	)
 	const receiptObservations = observations.flatMap(({ reader, receipt }) => {
 		if (receipt === undefined) return []
 		const value: ReceiptEvidence = {
@@ -865,7 +837,7 @@ export async function finalizedReceiptWithQuorum(environment: ExecutionEnvironme
 		return [{ endpoint: reader.endpoint, receipt, value }]
 	})
 	if (receiptObservations.length === 0) {
-		return { observed: false as const, receipt: undefined }
+		return { head, includedBlock: undefined, observed: false as const, receipt: undefined }
 	}
 	if (receiptObservations.length < connectivity.rpcQuorum) {
 		throw new ConnectivityDegradedError(`receipt ${hash} requires ${connectivity.rpcQuorum.toString()} available RPC endpoints with matching receipt evidence`)
@@ -912,15 +884,7 @@ export async function finalizedReceiptWithQuorum(environment: ExecutionEnvironme
 		undefined,
 		connectivity.rpcQuorum,
 	)
-	return finalized ? { observed: true as const, receipt } : { observed: true as const, receipt: undefined }
-}
-
-async function persist(environment: ExecutionEnvironment) {
-	if (environment.persistState !== undefined) {
-		await environment.persistState(environment.state)
-		return
-	}
-	await saveDurableState(environment.settings.runtime.stateFile, environment.state)
+	return { head, includedBlock: receipt.blockNumber, observed: true as const, receipt: finalized ? receipt : undefined }
 }
 
 function receiptDispositionJournal(environment: ExecutionEnvironment, workflow: ReturnType<typeof recoverableWorkflowForIntent>) {
@@ -1171,6 +1135,8 @@ async function executeStep(environment: ExecutionEnvironment, plan: OperationPla
 	const finalized = await finalizedReceiptWithQuorum(environment, intent.hash)
 	if (finalized.receipt === undefined) {
 		intent.status = 'confirmation-unknown'
+		// Mempool visibility is only checked by recovery, so an absent receipt is left for that pass to explain.
+		if (finalized.observed) observePendingTransaction(intent, { head: finalized.head, includedBlock: finalized.includedBlock, kind: 'awaiting-finality' })
 		await persist(environment)
 		throw new TransactionAwaitingRecovery(step.label, intent.hash, ...receiptVisibilityDisposition(finalized.observed, intent.submittedAt))
 	}
@@ -1198,9 +1164,7 @@ async function executeStep(environment: ExecutionEnvironment, plan: OperationPla
 		afterBalances = await captureBalanceEvidence(environment, step.evidence, receipt.blockNumber)
 		afterStorage = await captureStorageEvidence(environment, step.evidence, receipt.blockNumber)
 	} catch (error) {
-		intent.status = 'confirmation-unknown'
-		await persist(environment)
-		throw new TransactionAwaitingRecovery(step.label, intent.hash, `confirmed receipt evidence is temporarily unavailable: ${error instanceof Error ? error.message : String(error)}`)
+		throw await retainUnreadableReceiptEvidence(environment, intent, finalized.head, receipt.blockNumber, error)
 	}
 	let evidenceDisposition: ReceiptEvidenceDisposition
 	try {

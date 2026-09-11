@@ -1,6 +1,6 @@
 import { applyLibraries, getInfraContractAddresses } from './deployStatoblast'
 import { addressString, bytes32String } from '../bigint'
-import { getCallerScopedSalt } from '@zoltar/core-shared/evm/addressDerivation'
+import { getCallerScopedSalt } from '../../../evm/callerScopedSalt'
 import { Address, encodeDeployData, getCreate2Address } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '../../../../types/contractArtifact'
 import { TEST_ADDRESSES } from '../constants'

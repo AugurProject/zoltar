@@ -23,8 +23,13 @@ test('keeps extracted indexer and database capabilities behind their public faca
 		['src/indexer/block-ingestion.ts', "import { NetworkIndexerLogScanner } from './log-scanner.ts'"],
 		['src/database.ts', "export { ScannerDatabase } from './database/block-persistence.ts'"],
 		['src/database/block-persistence.ts', "import { ScannerHistoryRepository } from './history-repository.ts'"],
+		['src/schema-policy.ts', "import { CURRENT_SCHEMA_VERSION } from './schema.ts'"],
 	])
 	expect(importBoundaryViolations(sources)).toEqual([])
+
+	sources.set('src/schema-layout.ts', "import { projectionsFrom } from './projections.ts'")
+	expect(importBoundaryViolations(sources).map(({ file, reason }) => ({ file, reason }))).toEqual([{ file: 'src/schema-layout.ts', reason: 'Database infrastructure must not depend on API, indexer, or projection orchestration' }])
+	sources.delete('src/schema-layout.ts')
 
 	sources.set('src/server.ts', "import { NetworkIndexer } from './indexer/block-ingestion.ts'")
 	sources.set('src/api/routes.ts', "import { ScannerHistoryRepository } from '../database/history-repository.ts'")

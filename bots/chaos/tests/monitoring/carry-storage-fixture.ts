@@ -1,7 +1,9 @@
-import { createPublicClient, custom, decodeFunctionData, defineChain, encodeAbiParameters, getAddress, hexToBytes, isHex, toHex, zeroAddress, zeroHash, type AbiValue, type Address } from '@zoltar/bot-shared/ethereum'
+import { createPublicClient, decodeFunctionData, defineChain, encodeAbiParameters, getAddress, hexToBytes, isHex, toHex, zeroAddress, zeroHash, type AbiValue, type Address } from '@zoltar/bot-shared/ethereum'
+import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { carryStorageAbi } from '../../src/contracts/carry-storage-abi.ts'
 import { escalationGameAbi, securityPoolAbi, securityPoolForkerAbi, zoltarAbi } from '@zoltar/bot-shared/contracts/abi'
-import { carryCommitment, consumeSparseNullifier, emptySparseNullifierState, hashCarryLeaf, sparseNullifierRoot, type CarryLeafSlot } from '../../src/monitoring/carry-proof-index.ts'
+import { carryCommitment, hashCarryLeaf, sparseNullifierRoot, type CarryLeafSlot } from '../../src/monitoring/carry-proof-index.ts'
+import { consumeSparseNullifier, emptySparseNullifierState } from '../support/carry-proof-verification.ts'
 
 export const address = (value: number) => getAddress(`0x${value.toString(16).padStart(40, '0')}`)
 export const wallet = address(1)

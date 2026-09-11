@@ -3,7 +3,7 @@ import { deriveReportingStage } from '../../../reporting/lib/reporting.js'
 import type { SecurityPoolForkStage, SecurityPoolLifecycleState, SecurityPoolReportingStage } from './types.js'
 import type { ReportingDetails, ReportingOutcomeKey, SecurityPoolSystemState } from '@zoltar/ui-core-shared/types/contracts.js'
 
-export function isSecurityPoolEnded({
+function isSecurityPoolEnded({
 	hasForkActivity,
 	isChildPool,
 	questionOutcome,

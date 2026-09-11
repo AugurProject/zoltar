@@ -16,7 +16,7 @@ import { requireBigintValue } from './decoders.js'
 const OPEN_ORACLE_PRICE_UNITS = 30n
 const OPEN_ORACLE_REPORT_MISSING_ERROR_NAME = 'OpenOracleReportMissingError'
 
-export function createOpenOracleReportMissingError(reportId: bigint) {
+function createOpenOracleReportMissingError(reportId: bigint) {
 	const error = new Error(`Oracle report #${reportId.toString()} does not exist`)
 	error.name = OPEN_ORACLE_REPORT_MISSING_ERROR_NAME
 	return error
@@ -26,7 +26,7 @@ export function isOpenOracleReportMissingError(error: unknown) {
 	return error instanceof Error && error.name === OPEN_ORACLE_REPORT_MISSING_ERROR_NAME
 }
 
-export function getOpenOracleDisputeSwapToken(game: Pick<OpenOracleStatePreimage['game'], 'currentAmount1' | 'currentAmount2' | 'token1' | 'token2'>, newAmount1: bigint, newAmount2: bigint) {
+function getOpenOracleDisputeSwapToken(game: Pick<OpenOracleStatePreimage['game'], 'currentAmount1' | 'currentAmount2' | 'token1' | 'token2'>, newAmount1: bigint, newAmount2: bigint) {
 	return getOpenOracleDisputeSwapTokenKey({
 		currentAmount1: game.currentAmount1,
 		currentAmount2: game.currentAmount2,

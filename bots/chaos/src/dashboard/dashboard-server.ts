@@ -8,6 +8,7 @@ import { CONFIGURATION_REVISION_CONFLICT } from '../config/settings.ts'
 import { browserScript } from './browser-assets.ts'
 import { publicAlert, publicRetirement } from './public-retirement.ts'
 import { CONFIGURATION_COMMIT_INDETERMINATE, CONFIGURATION_COMMITTED_SAFELY_PAUSED } from '../runtime/configuration-commit.ts'
+import { pendingTransactionObservationKind } from '../state/pending-transaction-observation.ts'
 import { requiredLiveInventory } from '../runtime/live-readiness.ts'
 
 export type ChaosDashboardController = {
@@ -60,6 +61,15 @@ function publicStrings(value: unknown) {
 
 function configuredRpcUrls(value: unknown) {
 	return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string' && entry.length <= 2_048).slice(0, 8) : []
+}
+
+/** Publishes the operator-configured block explorer only as a plain http(s) base that `/tx/<hash>` can be appended to. */
+function publicExplorerUrl(value: unknown) {
+	// A bare `?` or `#` parses as an empty query or fragment, so reject the delimiters themselves.
+	if (typeof value !== 'string' || value.length > 2_048 || value.includes('?') || value.includes('#') || !URL.canParse(value)) return undefined
+	const url = new URL(value)
+	if ((url.protocol !== 'https:' && url.protocol !== 'http:') || url.username !== '' || url.password !== '') return undefined
+	return value
 }
 
 function nullablePublicStrings(value: unknown) {
@@ -159,7 +169,7 @@ function topologyItemCount(value: unknown) {
 }
 
 /** Sanitized, bounded view of the protocol graph observed at one canonical anchor. */
-export function publicChaosTopology(value: unknown) {
+function publicChaosTopology(value: unknown) {
 	const source = record(value)
 	const anchor = record(source?.['anchor'])
 	const totalCounts = {
@@ -496,6 +506,16 @@ function publicWorkflow(value: unknown) {
 	})
 }
 
+function publicPendingTransactionObservation(value: unknown) {
+	const source = record(value)
+	if (source === undefined) return undefined
+	const kind = pendingTransactionObservationKind(source['kind'])
+	const checkedAt = isoTimestampField(source, 'checkedAt')
+	const head = scalar(source, 'head')
+	if (kind === undefined || checkedAt === undefined || head === undefined) return undefined
+	return compact({ checkedAt, head, includedBlock: scalar(source, 'includedBlock'), kind })
+}
+
 function publicPendingTransaction(value: unknown) {
 	const source = record(value)
 	if (source === undefined) return undefined
@@ -503,7 +523,9 @@ function publicPendingTransaction(value: unknown) {
 		cancellationHash: stringField(source, 'cancellationHash'),
 		hash: stringField(source, 'hash'),
 		label: stringField(source, 'label'),
+		maxBlockNumber: scalar(source, 'maxBlockNumber'),
 		nonce: scalar(source, 'nonce'),
+		observation: publicPendingTransactionObservation(source['observation']),
 		operationId: stringField(source, 'operationId'),
 		recoveryBlocker: stringField(source, 'recoveryBlocker'),
 		replacementHash: stringField(source, 'replacementHash'),
@@ -637,6 +659,7 @@ export function publicChaosConfiguration(value: unknown) {
 		chainId: scalar(record(settings['network']) ?? {}, 'chainId'),
 		enabledEcosystems: publicStrings(strategy['enabledEcosystems']),
 		execute: booleanField(runtime, 'execute'),
+		explorerUrl: publicExplorerUrl((record(settings['network']) ?? {})['explorerUrl']),
 		hasSigner: booleanField(source, 'hasSigner') ?? booleanField(source, 'signerReady') ?? (privateKey === null || privateKey === undefined ? false : true),
 		maximumDelaySeconds: scalar(scheduler, 'maximumDelaySeconds'),
 		maximumEthPerOperation: scalar(strategy, 'maximumEthPerOperation'),

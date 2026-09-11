@@ -4,7 +4,7 @@ import type { ForkedCarryWithdrawalSnapshot } from '../operations/types.ts'
 import { computeNullifierRootFromProof } from './carry-proof-index.ts'
 import { CARRY_STORAGE_MAXIMUM_WITHDRAWALS, loadCarryStorageCandidates, type CarryStorageRoute } from './carry-proof-storage.ts'
 import { computeWinningEconomics } from './carry-withdrawal-economics.ts'
-import { DISCOVERY_RPC_CONCURRENCY, drainConcurrent, mapWithConcurrency, type ChaosReadClient } from './discovery.ts'
+import { DISCOVERY_RPC_CONCURRENCY, drainConcurrent, mapWithConcurrency, type ChaosReadClient } from './discovery-client.ts'
 
 export async function scanCarryStorage(context: { client: Pick<ChaosReadClient, 'readContract' | 'simulateContract' | 'getBlock'>; escalationGames: readonly CarryStorageRoute[]; wallet: Address; securityPoolForker: Address; anchorBlockNumber: bigint; expectedAnchorHash: Hash; maximumItems: number }) {
 	const { client, anchorBlockNumber: blockNumber } = context

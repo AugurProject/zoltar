@@ -39,6 +39,11 @@ export type AssemblyDelegateCall = {
 }
 
 export const outputPath = 'docs/reference/contracts.html'
+export const contractPagesDirectory = 'docs/reference/contracts'
+
+export function contractPageOutputPath(contractName: string): string {
+	return `${contractPagesDirectory}/${contractName.toLowerCase()}.html`
+}
 export const expectedProductionSoliditySourceFingerprint = 'e9c2fad94b0bb693e16a50f3bec0679bb226d793a5730173639333c9a5f1a20c'
 
 export const eventSourceByName: Record<string, string> = {
@@ -1807,7 +1812,7 @@ export const contractReferences: ContractReference[] = [
 		compiledAbiFingerprint: '3e9a23e31e07edd4ebbf7af8e14a7b01b1ea30d8483217d4cc4f6f7f8784a1d9',
 		name: 'UniformPriceDualCapBatchAuction',
 		purpose:
-			'Collects ETH bids under ETH-raise and REP-sale caps, computes one clearing result, and supports paged settlement. AVL, cumulative-allocation, and refund-prefix mechanics live in [UniformPriceDualCapBatchAuctionStorage](../../solidity/contracts/statoblast/UniformPriceDualCapBatchAuctionStorage.sol), an internal storage library.',
+			'Collects ETH bids under ETH-raise and REP-sale caps, computes one clearing result, and supports paged settlement. AVL, cumulative-allocation, and refund-prefix mechanics live in [UniformPriceDualCapBatchAuctionStorage](solidity/contracts/statoblast/UniformPriceDualCapBatchAuctionStorage.sol), an internal storage library.',
 		readAbiFingerprint: 'e4ad6ab91244711a2008716cfbdf62b6237d39321eefa984a4fdc7856267b8bc',
 		readSurface:
 			'Auction summary getters are `maxAttoRepBeingSold`, `attoEthRaiseCap`, `finalized`, `clearingTick`, `ethFilledAtClearingAttoEth`, `attoEthRaised`, `totalAttoRepPurchased`, `auctionStarted`, `minBidSizeAttoEth`, `owner`, `underfunded`, `underfundedThreshold`, `underfundedWinningAttoEth`, and `activeTickCount`. `pendingEthRefundsAttoEth` reports ETH credited during settlement and available for the bidder to pull. Use `computeClearing`, `previewFinalization`, `tickToPrice`, `getTickSummary`, `getTickCount`, `getTickPage`, `getActiveTickPage`, `getBidCountAtTick`, `getBidPageAtTick`, `getBidderBidCount`, and `getBidderBidPage` before finalizing or submitting settlement indexes.',

@@ -2,11 +2,11 @@ import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 import { access, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { resolveRpcLogPath } from '../../src/config.ts'
+import { runtimeConfig } from '../../src/config.ts'
 import { runSerializedIndexerLeaseOperation } from '../../src/database.ts'
 import { databaseJsonText } from '../../src/database-json.ts'
 import { safeIndexerFailureReason } from '../../src/indexer-runtime.ts'
-import { createRpcLoggingFetch, jsonRpcErrorName, RotatingJsonLog, timestampedLogArguments } from '../../src/logging.ts'
+import { createRpcLoggingFetch, jsonRpcErrorName, RotatingJsonLog } from '../../src/logging.ts'
 import { RpcRequestMethodError } from '../../src/rpc-request-queue.ts'
 
 const temporaryDirectories: string[] = []
@@ -43,21 +43,9 @@ describe('AugurScan runtime logging', () => {
 		expect(safeIndexerFailureReason(new RpcRequestMethodError('eth_getCode', wrappedRpcError, '#1 http://reth:8545'))).toBe('RpcRequestMethodError caused by RpcError; method eth_getCode; RPC #1 http://reth:8545; code -32603 (Internal error); message: state at block #1 is pruned')
 	})
 
-	test('prefixes console values with an ISO timestamp', () => {
-		expect(timestampedLogArguments(['indexer started'], new Date('2026-08-21T06:08:10.919Z'))).toEqual(['[2026-08-21T06:08:10.919Z]:', 'indexer started'])
-	})
-
-	test('resolves the default RPC log independently of the working directory', async () => {
-		const originalWorkingDirectory = process.cwd()
-		const directory = await temporaryDirectory()
-		try {
-			process.chdir(directory)
-			expect(resolveRpcLogPath(undefined)).toBe(path.resolve(import.meta.dir, '../../logs/rpc.jsonl'))
-			const configuredPath = path.join(directory, 'configured-rpc.jsonl')
-			expect(resolveRpcLogPath(configuredPath)).toBe(configuredPath)
-		} finally {
-			process.chdir(originalWorkingDirectory)
-		}
+	test('resolves the RPC log path absolutely at configuration load', () => {
+		const configuredPath = process.env['RPC_LOG_PATH']
+		expect(runtimeConfig.rpcLogPath).toBe(configuredPath === undefined ? path.resolve(import.meta.dir, '../../logs/rpc.jsonl') : path.resolve(configuredPath))
 	})
 
 	test('logs the full RPC request, response, endpoint, and readable error name', async () => {
