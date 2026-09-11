@@ -1,8 +1,10 @@
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { WalletChip, WalletChipPlaceholder } from '@zoltar/ui-core-shared/components/WalletChip.js'
-import type { DeploymentWalletState } from '../features/TradingDeploymentSetup.js'
 import { TradingAddressValue } from './TradingAddress.js'
 import * as appCopy from '../copy/app.js'
+
+/** The subset of the deployment wallet session the toolbar button presents. */
+type DeploymentWalletState = Readonly<{ account: string | undefined; connecting: boolean; ready: boolean }>
 
 export type TradingWalletControlsProps = Readonly<{
 	account: `0x${string}` | undefined

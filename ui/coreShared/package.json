@@ -192,6 +192,10 @@
 			"bun": "./ts/tests/errorNotice.test.tsx",
 			"default": "./js/tests/errorNotice.test.js"
 		},
+		"./tests/headerToolbar.test.js": {
+			"bun": "./ts/tests/headerToolbar.test.tsx",
+			"default": "./js/tests/headerToolbar.test.js"
+		},
 		"./tests/identifierValue.test.js": {
 			"bun": "./ts/tests/identifierValue.test.tsx",
 			"default": "./js/tests/identifierValue.test.js"
