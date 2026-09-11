@@ -1,5 +1,6 @@
 import { expect, spyOn, test } from 'bun:test'
-import { createPublicClient, custom, decodeFunctionData, encodeAbiParameters, getAddress, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
+import { createPublicClient, decodeFunctionData, encodeAbiParameters, getAddress, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
+import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { erc20Abi, multicall3Abi, quoterAbi } from '#contracts/abi'
 import { networkConfiguration } from '#config/network'
 import { loadBalances } from '#execution/dispute-execution'

@@ -144,12 +144,11 @@ export async function processPositionLifecycle(
 		if (activePosition.reportDisputeIndex === undefined) {
 			await persistPosition({ ...activePosition, status: 'recovery-required' })
 			throw new Error(`Position ${activePosition.reportId} lacks a durable dispute cursor; automatic historical log replay is disabled and manual reconciliation is required`)
-		} else {
-			const successorIndex = BigInt(activePosition.reportDisputeIndex) + 1n
-			const replacement = await replacementDisputeAmountsWithQuorum(readClients, config, id, successorIndex, blockNumber)
-			if (replacement.blockHash.toLowerCase() !== storedSnapshot.blockHash.toLowerCase()) throw new Error('Replacement dispute and report state use different canonical blocks')
-			if (replacement.record.reportTimestamp !== 0n) replacementAmounts = replacement.record
 		}
+		const successorIndex = BigInt(activePosition.reportDisputeIndex) + 1n
+		const replacement = await replacementDisputeAmountsWithQuorum(readClients, config, id, successorIndex, blockNumber)
+		if (replacement.blockHash.toLowerCase() !== storedSnapshot.blockHash.toLowerCase()) throw new Error('Replacement dispute and report state use different canonical blocks')
+		if (replacement.record.reportTimestamp !== 0n) replacementAmounts = replacement.record
 		if (replacementAmounts === undefined) throw new Error(`Position ${activePosition.reportId} replacement transition is not yet available in stored OpenOracle dispute history`)
 		const credit = replacementCredit({
 			feePercentage: BigInt(activePosition.reportFeePercentage),

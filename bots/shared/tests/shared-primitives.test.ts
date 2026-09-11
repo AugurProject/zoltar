@@ -3,13 +3,15 @@ import { chmod, mkdtemp, mkdir, open, readFile, rm, stat } from 'node:fs/promise
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { fetchLogsWithAdaptiveRanges, historyUnavailableError, initialCursor, latestLogRange, logRangeLimitError, LogScanError, newestFirstScanRanges, scanRanges } from '../src/monitoring/block-sync.ts'
-import { quorumValue, settledQuorumValue } from '../src/monitoring/read-quorum.ts'
+import { fetchLogsWithAdaptiveRanges, historyUnavailableError, initialCursor, latestLogRange, LogScanError, newestFirstScanRanges } from '../src/monitoring/block-sync.ts'
+import { quorumValue, settledQuorumValue, sharedQuorumBlockNumber } from '../src/monitoring/read-quorum.ts'
 import { boundedDashboardJson, dashboardAuthorities, dashboardRequestAuthorityIsAccepted, validateDashboardAuthentication } from '../src/dashboard/security.ts'
 import { acquireExclusiveProcessLock } from '../src/execution/process-lock.ts'
 import { createSignerOperationGate } from '../src/execution/signer-operation-gate.ts'
 import { maximumFeePerGas, paddedTransactionGas, prepareSignedTransaction, submitSignedTransaction, validateSubmissionSettings } from '../src/execution/transaction-submission.ts'
-import { createContextualPublicClient, createPublicClient, custom, encodeAbiParameters, http, mainnet, parseTransaction, privateKeyToAccount, readContractAtBlock, RpcError, type Abi, type AbiValue, type Hex } from '../src/ethereum.ts'
+import { mainnet } from '@zoltar/core-shared/evm/ethereum'
+import { createContextualPublicClient, createPublicClient, encodeAbiParameters, http, parseTransaction, privateKeyToAccount, readContractAtBlock, RpcError, type Abi, type AbiValue, type Hex } from '../src/ethereum.ts'
+import { custom } from '../src/ethereum/rpc-transport.ts'
 import { createRpcEndpointPool, rpcFailureWithContext, RpcEndpointPoolFailure } from '../src/ethereum/rpc-resilience.ts'
 import { LOG_RPC_RESPONSE_BYTES } from '../src/infrastructure/bounded-json.ts'
 import { ConnectivityDegradedError, operationalFailureDisposition } from '../src/monitoring/resilience.ts'
@@ -23,6 +25,21 @@ const temporaryDirectories: string[] = []
 afterEach(async () => {
 	await Promise.all(temporaryDirectories.splice(0).map(directory => rm(directory, { force: true, recursive: true })))
 })
+
+// A range-limit error makes the adaptive scanner split the two-block span; any other error propagates unchanged.
+async function logRangeLimitError(error: Error) {
+	const scan = fetchLogsWithAdaptiveRanges({ nextBlock: 0n }, 1n, 2n, async range => {
+		if (range.toBlock > range.fromBlock) throw error
+		return []
+	})
+	return await scan.then(
+		() => true,
+		(failure: unknown) => {
+			if (!(failure instanceof LogScanError) || failure.cause !== error) throw failure
+			return false
+		},
+	)
+}
 
 describe('shared bot primitives', () => {
 	test('resolves the shared Ethereum TypeScript source without generated JavaScript under Bun', () => {
@@ -40,44 +57,32 @@ describe('shared bot primitives', () => {
 		const facade = await import('../src/ethereum.ts')
 		expect(Object.keys(facade).sort()).toEqual(
 			[
-				'RpcEndpointPoolFailure',
 				'RpcError',
 				'bigintToSafeNumber',
-				'bytesToHex',
 				'concatHex',
 				'createContextualPublicClient',
 				'createPublicClient',
 				'createRpcEndpointPool',
 				'createWalletClient',
-				'custom',
 				'decodeEventLog',
 				'decodeFunctionData',
 				'defineChain',
 				'encodeAbiParameters',
 				'encodeDeployData',
-				'encodeEventTopics',
 				'encodeFunctionData',
 				'formatEther',
 				'formatUnits',
 				'getAddress',
-				'getBalanceAtBlock',
 				'getCreate2Address',
-				'getCreateAddress',
-				'getTransactionCountAtBlock',
 				'hexToBytes',
 				'http',
 				'isAddress',
 				'isHex',
 				'keccak256',
-				'mainnet',
-				'maxUint256',
-				'numberToBytes',
 				'parseAbiItem',
-				'parseAbiParameters',
 				'parseTransaction',
 				'parseUnits',
 				'privateKeyToAccount',
-				'publicActions',
 				'readContractAtBlock',
 				'recoverTransactionAddress',
 				'rpcFailureWithContext',
@@ -114,15 +119,6 @@ describe('shared bot primitives', () => {
 		expect(bigintToSafeNumber(9_007_199_254_740_991n)).toBe(Number.MAX_SAFE_INTEGER)
 		expect(() => bigintToSafeNumber(9_007_199_254_740_992n)).toThrow('safe integer range')
 	})
-	test('splits a block scan into bounded inclusive ranges', () => {
-		const cursor = initialCursor(25n, 25n)
-		expect(scanRanges(cursor, 25n, 10n)).toEqual([
-			{ fromBlock: 0n, toBlock: 9n },
-			{ fromBlock: 10n, toBlock: 19n },
-			{ fromBlock: 20n, toBlock: 25n },
-		])
-	})
-
 	test('bounds live log history and plans newest chunks first', () => {
 		expect(latestLogRange(1_000n)).toEqual({ fromBlock: 745n, toBlock: 1_000n })
 		expect(newestFirstScanRanges(1n, 600n, 256n)).toEqual([
@@ -163,19 +159,19 @@ describe('shared bot primitives', () => {
 		])
 	})
 
-	test('identifies provider range and payload rejections without retrying other failures', () => {
-		expect(logRangeLimitError(new Error('query returned more than 10000 results'))).toBe(true)
-		expect(logRangeLimitError(new Error('Log response size exceeded the maximum'))).toBe(true)
-		expect(logRangeLimitError(new Error('Block range is invalid: fromBlock exceeds toBlock'))).toBe(false)
-		expect(logRangeLimitError(new Error('invalid params: block range is too large'))).toBe(true)
-		expect(logRangeLimitError(new Error('log response too large'))).toBe(true)
-		expect(logRangeLimitError(new Error('You can query up to 10 blocks at a time'))).toBe(true)
-		expect(logRangeLimitError(new Error('HTTP 400 while calling eth_getLogs'))).toBe(false)
-		expect(logRangeLimitError(new Error('HTTP 429 while calling eth_getLogs'))).toBe(false)
-		expect(logRangeLimitError(Object.assign(new Error('rate limited'), { code: 429 }))).toBe(false)
-		expect(logRangeLimitError(Object.assign(new Error('rate limited'), { code: -32_005 }))).toBe(false)
-		expect(logRangeLimitError(new Error('execution reverted'))).toBe(false)
-		expect(logRangeLimitError(new Error('Malformed JSON-RPC response'))).toBe(false)
+	test('identifies provider range and payload rejections without retrying other failures', async () => {
+		expect(await logRangeLimitError(new Error('query returned more than 10000 results'))).toBe(true)
+		expect(await logRangeLimitError(new Error('Log response size exceeded the maximum'))).toBe(true)
+		expect(await logRangeLimitError(new Error('Block range is invalid: fromBlock exceeds toBlock'))).toBe(false)
+		expect(await logRangeLimitError(new Error('invalid params: block range is too large'))).toBe(true)
+		expect(await logRangeLimitError(new Error('log response too large'))).toBe(true)
+		expect(await logRangeLimitError(new Error('You can query up to 10 blocks at a time'))).toBe(true)
+		expect(await logRangeLimitError(new Error('HTTP 400 while calling eth_getLogs'))).toBe(false)
+		expect(await logRangeLimitError(new Error('HTTP 429 while calling eth_getLogs'))).toBe(false)
+		expect(await logRangeLimitError(Object.assign(new Error('rate limited'), { code: 429 }))).toBe(false)
+		expect(await logRangeLimitError(Object.assign(new Error('rate limited'), { code: -32_005 }))).toBe(false)
+		expect(await logRangeLimitError(new Error('execution reverted'))).toBe(false)
+		expect(await logRangeLimitError(new Error('Malformed JSON-RPC response'))).toBe(false)
 	})
 
 	test('narrows invalid-params range-limit responses without retrying inverted ranges', async () => {
@@ -192,9 +188,9 @@ describe('shared bot primitives', () => {
 		])
 	})
 
-	test('recognizes the bounded transport response error for oversized log payloads', () => {
+	test('recognizes the bounded transport response error for oversized log payloads', async () => {
 		const label = 'RPC eth_getLogs'
-		expect(logRangeLimitError(new Error(`${label} response exceeds ${(LOG_RPC_RESPONSE_BYTES / (1024 * 1024)).toString()} MiB`))).toBe(true)
+		expect(await logRangeLimitError(new Error(`${label} response exceeds ${(LOG_RPC_RESPONSE_BYTES / (1024 * 1024)).toString()} MiB`))).toBe(true)
 	})
 
 	test('narrows the attempted span after a truncated range fails and always makes progress', async () => {
@@ -274,6 +270,13 @@ describe('shared bot primitives', () => {
 		expect(() => rpcQuorumRequirement({ ZOLTAR_BOT_RPC_QUORUM: '' })).toThrow('must be 1 or 2')
 		expect(() => rpcQuorumRequirement({ ZOLTAR_BOT_RPC_QUORUM: '0' })).toThrow('must be 1 or 2')
 		expect(() => rpcQuorumRequirement({ ZOLTAR_BOT_RPC_QUORUM: 'invalid' })).toThrow('must be 1 or 2')
+	})
+
+	test('selects the newest block head supported by the configured quorum', () => {
+		expect(sharedQuorumBlockNumber([112n, 112n, 80n], 2)).toBe(112n)
+		expect(sharedQuorumBlockNumber([112n, 111n, 80n], 2)).toBe(111n)
+		expect(() => sharedQuorumBlockNumber([112n], 2)).toThrow('enough independent RPC heads')
+		expect(() => sharedQuorumBlockNumber([112n], 0)).toThrow('positive integer quorum')
 	})
 
 	test('supports explicitly configured single-endpoint quorum reads and finality', async () => {

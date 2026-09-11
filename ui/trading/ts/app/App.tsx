@@ -34,11 +34,11 @@ function tradingNavigationRoute(workflowRoute: ReturnType<typeof tradingWorkflow
 	return workflowRoute
 }
 
-export function currentRoute(): ResolvedTradingRoute {
+function currentRoute(): ResolvedTradingRoute {
 	return tradingRouting.resolve(window.location.hash)
 }
 
-export function tradingDocumentTitle(route: ResolvedTradingRoute) {
+function tradingDocumentTitle(route: ResolvedTradingRoute) {
 	let label = `${route.charAt(0).toUpperCase()}${route.slice(1)}`
 	if (route === 'not-found') label = appCopy.notFound
 	if (route === 'create-market' || route.startsWith('create-market/')) label = appCopy.createMarket
@@ -67,7 +67,7 @@ function renderNotFoundRoute() {
 
 type LiveDeploymentStatus = 'loading' | 'verified' | 'unavailable'
 
-export async function resolveCanonicalLiveDeployment(coreDeployments: readonly CoreDeployment[], createPublicClient: (configuration: DeploymentConfiguration) => PublicClient = createTradingPublicClient) {
+async function resolveCanonicalLiveDeployment(coreDeployments: readonly CoreDeployment[], createPublicClient: (configuration: DeploymentConfiguration) => PublicClient = createTradingPublicClient) {
 	const activeChainId = getActiveNetworkProfile().chain.id
 	const core = coreDeployments.find(deployment => deployment.chainId === activeChainId)
 	if (core === undefined) throw new Error('No canonical deployment is available for the active network')
@@ -82,7 +82,7 @@ async function resolveLiveDeployment() {
 	return await resolveCanonicalLiveDeployment(await loadCoreDeployments())
 }
 
-export function tradingNetworkLabel(liveDeploymentStatus: LiveDeploymentStatus, liveConfiguration: DeploymentConfiguration | undefined, deploymentWalletState: DeploymentWalletState) {
+function tradingNetworkLabel(liveDeploymentStatus: LiveDeploymentStatus, liveConfiguration: DeploymentConfiguration | undefined, deploymentWalletState: DeploymentWalletState) {
 	const networkName = deploymentWalletState.networkName ?? liveConfiguration?.chainName
 	if (networkName !== undefined) return networkName
 	if (liveDeploymentStatus === 'unavailable') return appCopy.networkUnavailable

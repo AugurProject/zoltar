@@ -20,7 +20,7 @@ export type PairSnapshot = {
 
 export type ConstantProductPairReader = (pair: `0x${string}`) => Promise<PairSnapshot>
 
-export class DexPairSnapshotSafetyError extends Error {
+class DexPairSnapshotSafetyError extends Error {
 	constructor(pair: Address, cause: unknown) {
 		super(`DEX pair snapshot failed safety verification for ${pair}`, { cause })
 		this.name = 'DexPairSnapshotSafetyError'

@@ -3,11 +3,11 @@
 import { describe, expect, test } from 'bun:test'
 import { concatHex, decodeFunctionData, encodeAbiParameters, getAddress, keccak256, parseAbiParameters, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { claimParentEscalationDeposits, migrateVaultWithUnresolvedEscalation } from '@zoltar/ui-statoblast-shared/protocol/forks.js'
-import { loadEscalationDeposits, loadReportingDetails, reportOutcomeInSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/reporting.js'
+import { loadReportingDetails, reportOutcomeInSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/reporting.js'
 import { buildForkCarriedEscalationProofs, withdrawForkedEscalationDeposits } from '@zoltar/ui-statoblast-shared/protocol/reportingCarryState.js'
 import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool, statoblast_SecurityPoolForker_SecurityPoolForker } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import type { EscalationSide } from '@zoltar/ui-core-shared/types/contracts.js'
-import { asWriteClient, createBlockWithTimestamp, createMockReadClient, createMockWriteClient, createMulticallStub, createReadContractStub, getContractFunctionName, mockTransactionHash, type MockReadContractHandler } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+import { asWriteClient, createBlockWithTimestamp, createMockWriteClient, createMulticallStub, createReadContractStub, getContractFunctionName, mockTransactionHash } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 
 const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000a1')
 const vaultAddress = getAddress('0x00000000000000000000000000000000000000c1')
@@ -62,6 +62,48 @@ function buildCarrySnapshotPeaksForTest(leafHashes: readonly Hex[]) {
 		leafCount += 1n
 	}
 	return peaks
+}
+
+// Mocks the reads behind loadReportingDetails for an active escalation game; deposit pages come from the supplied reader.
+function createActiveReportingClient(getDepositsByOutcome: (outcomeIndex: number, startIndex: bigint) => unknown) {
+	const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
+	return {
+		getBlock: async () => createBlockWithTimestamp(88n),
+		getCode: async () => '0x1234' as Hex,
+		multicall: createMulticallStub(async request => {
+			const functionName = getContractFunctionName(request.contracts[0])
+			if (functionName === 'questionId') return [1n, escalationGameAddress, 20n, 3n, zoltarAddress, 5n, 0n, 3n, zeroAddress]
+			if (functionName === 'questions') return [questionTuple, 10n]
+			if (functionName === 'startBondAttoRep') return [7n, 50n, 12n, 22n, 11n, [1n, 14n, 3n], 150n, 3n, 0n, false]
+			throw new Error(`Unexpected multicall contract: ${functionName}`)
+		}),
+		readContract: createReadContractStub(async request => {
+			if (request.functionName === 'startBondAttoRep') return 7n
+			if (request.functionName === 'nonDecisionThresholdAttoRep') return 50n
+			if (request.functionName === 'activationTime') return 12n
+			if (request.functionName === 'totalCostAttoRep') return 22n
+			if (request.functionName === 'getBindingCapitalAttoRep') return 11n
+			if (request.functionName === 'getOutcomeState') {
+				const args = request.args
+				if (!Array.isArray(args) || typeof args[0] !== 'number') throw new Error('Expected outcome state args')
+				return { balance: [1n, 14n, 3n][args[0]] ?? 0n }
+			}
+			if (request.functionName === 'getEscalationGameEndDate') return 150n
+			if (request.functionName === 'getQuestionOutcome') return 3
+			if (request.functionName === 'getForkTime') return 0n
+			if (request.functionName === 'hasReachedNonDecision') return true
+			if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
+			if (request.functionName === 'getForkThresholdAttoRep') return 100n
+			if (request.functionName === 'escalationGame') return escalationGameAddress
+			if (request.functionName === 'forkContinuation') return false
+			if (request.functionName === 'getDepositsByOutcome') {
+				const args = request.args
+				if (!Array.isArray(args) || typeof args[0] !== 'number' || typeof args[1] !== 'bigint') throw new Error('Expected deposit outcome args')
+				return getDepositsByOutcome(args[0], args[1])
+			}
+			throw new Error(`Unexpected readContract function: ${request.functionName}`)
+		}),
+	} as unknown as Parameters<typeof loadReportingDetails>[0]
 }
 
 describe('reporting protocol client', () => {
@@ -432,8 +474,7 @@ describe('reporting protocol client', () => {
 		expect(details.parentWithdrawalEnabled).toBe(false)
 	})
 
-	test('loadEscalationDeposits continues paging past settled entries on a full page', async () => {
-		const escalationGameAddress = getAddress('0x00000000000000000000000000000000000000d4')
+	test('loadReportingDetails continues paging deposits past settled entries on a full page', async () => {
 		const depositor = getAddress('0x00000000000000000000000000000000000000e5')
 		const readCalls: bigint[] = []
 		const firstPage = Array.from({ length: 30 }, (_, index) => ({
@@ -441,27 +482,19 @@ describe('reporting protocol client', () => {
 			cumulativeAmountAttoRep: BigInt(index + 1),
 			depositor,
 		}))
-		const secondPage = [
-			{
-				amountAttoRep: 31n,
-				cumulativeAmountAttoRep: 31n,
-				depositor,
-			},
-		]
-		const readContract: MockReadContractHandler = async request => {
-			const args = Reflect.get(request, 'args')
-			const startIndex = Array.isArray(args) ? args[1] : undefined
-			if (typeof startIndex !== 'bigint') throw new Error('Expected pagination start index')
+		const secondPage = [{ amountAttoRep: 31n, cumulativeAmountAttoRep: 31n, depositor }]
+		const client = createActiveReportingClient((outcomeIndex, startIndex) => {
+			if (outcomeIndex !== 1) return []
 			readCalls.push(startIndex)
 			if (startIndex === 0n) return firstPage
 			if (startIndex === 30n) return secondPage
 			throw new Error(`Unexpected start index: ${startIndex.toString()}`)
-		}
-		const client = createMockReadClient(async request => {
-			return await readContract(request)
 		})
 
-		const deposits = await loadEscalationDeposits(client, escalationGameAddress, 'yes')
+		const details = await loadReportingDetails(client, securityPoolAddress, undefined)
+		if (details.status !== 'active') throw new Error('Expected active reporting details')
+		const deposits = details.sides.find(side => side.key === 'yes')?.deposits
+		if (deposits === undefined) throw new Error('Expected yes side deposits')
 
 		expect(readCalls).toEqual([0n, 30n])
 		expect(deposits).toHaveLength(30)
@@ -470,15 +503,10 @@ describe('reporting protocol client', () => {
 		expect(deposits[29]?.depositIndex).toBe(30n)
 	})
 
-	test('loadEscalationDeposits rejects malformed deposit pages instead of dropping entries', async () => {
-		const client = createMockReadClient(async request => {
-			if (request.functionName === 'getDepositsByOutcome') {
-				return [{ amountAttoRep: 1n, cumulativeAmountAttoRep: 1n, depositor: 'not-an-address' }]
-			}
-			throw new Error(`Unexpected readContract function: ${request.functionName}`)
-		})
+	test('loadReportingDetails rejects malformed deposit pages instead of dropping entries', async () => {
+		const client = createActiveReportingClient(() => [{ amountAttoRep: 1n, cumulativeAmountAttoRep: 1n, depositor: 'not-an-address' }])
 
-		await expect(loadEscalationDeposits(client, escalationGameAddress, 'yes')).rejects.toThrow('Unexpected escalation deposit page response')
+		await expect(loadReportingDetails(client, securityPoolAddress, undefined)).rejects.toThrow('Unexpected escalation deposit page response')
 	})
 
 	test('buildForkCarriedEscalationProofs rejects malformed historical carry nodes instead of dropping entries', async () => {

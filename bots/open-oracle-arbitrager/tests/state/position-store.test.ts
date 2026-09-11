@@ -3,7 +3,8 @@ import { chmod, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getAddress } from '@zoltar/bot-shared/ethereum'
-import { acquireExecutionSignerLock, acquirePositionJournalLock, archivedUtcDayGasSpentWeth, loadPositionJournal, loadPositionJournalState, manuallyReconcilePosition, savePositionJournal, savePositionJournalState, type PositionJournalFilesystem, type PositionRecord } from '#state/position-store'
+import { acquireExecutionSignerLock, acquirePositionJournalLock, archivedUtcDayGasSpentWeth, loadPositionJournal, loadPositionJournalState, manuallyReconcilePosition, savePositionJournalState, type PositionJournalFilesystem, type PositionRecord } from '#state/position-store'
+import { savePositionJournal } from '../support/position-journal.ts'
 
 const directories: string[] = []
 

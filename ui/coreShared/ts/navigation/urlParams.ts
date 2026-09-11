@@ -13,7 +13,7 @@ export function readStringQueryParam(search: string, key: string) {
 	return value
 }
 
-export function writeStringQueryParam(search: string, key: string, value: string | undefined) {
+function writeStringQueryParam(search: string, key: string, value: string | undefined) {
 	const params = new URLSearchParams(search)
 	if (value === undefined || value.trim() === '') {
 		params.delete(key)

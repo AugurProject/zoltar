@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData } from '@zoltar/bot-shared/ethereum'
 import { erc1155Abi, tradingPairAbi, tradingRouterAbi } from '../../src/contracts/abi.ts'
-import { eligibleOperationPlans } from '../../src/operations/catalog.ts'
+import { eligibleOperationPlans } from '../support/operation-plans.ts'
 import { snapshotFixture } from './fixture.ts'
 
 const options = {

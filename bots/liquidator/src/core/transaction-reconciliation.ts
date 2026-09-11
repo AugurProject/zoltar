@@ -33,7 +33,7 @@ export function validateReconciliationIntentChain(serializedTransaction: Hex, ch
 	if (parseTransaction(serializedTransaction).chainId !== BigInt(chainId)) throw new Error('Pending transaction intent was signed for a different chain')
 }
 
-export function validateFinalizedReplacement(intent: Pick<PendingTransactionIntent, 'hash' | 'nonce' | 'sender'>, requestedHash: Hex, replacement: FinalizedReplacementEvidence) {
+function validateFinalizedReplacement(intent: Pick<PendingTransactionIntent, 'hash' | 'nonce' | 'sender'>, requestedHash: Hex, replacement: FinalizedReplacementEvidence) {
 	if (replacement.hash.toLowerCase() === intent.hash.toLowerCase()) throw new Error('Use automatic receipt recovery for the original transaction hash')
 	if (replacement.hash.toLowerCase() !== requestedHash.toLowerCase()) throw new Error('Replacement RPC returned another transaction')
 	if (getAddress(replacement.from).toLowerCase() !== intent.sender.toLowerCase()) throw new Error('Replacement transaction was sent by another account')

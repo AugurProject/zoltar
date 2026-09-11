@@ -3,7 +3,6 @@ import { Window } from 'happy-dom'
 import { requiredElementRole } from '../../browser/dom-elements.ts'
 import {
 	accountStateDuringStagedRefresh,
-	activityDetailAnchorIndex,
 	activityRefreshRetention,
 	approvalTransitionFields,
 	availableSessionSnapshotStorage,
@@ -15,12 +14,10 @@ import {
 	collectCanonicalPages,
 	collectCursorCollections,
 	collectDualCursorCollections,
-	compactIndexerDuration,
 	compareCanonicalEventPosition,
 	contractDeploymentStatus,
 	contractRegistrySection,
 	createForegroundRefreshGate,
-	createLatestRefreshCoordinator,
 	createLiveRouteRefreshCoordinator,
 	createSessionSnapshotCache,
 	decodedActionLabel,
@@ -44,14 +41,12 @@ import {
 	knownNetworkName,
 	loadInitialNetworkStatus,
 	mergeUniqueRecords,
-	networkStatusPresentationKey,
 	operationsCatalogRecordKey,
 	operationsDetailEvidencePanelVisible,
 	operationsDetailHeaderPresentation,
 	operationsDetailRecordKey,
 	operationsDetailSummaryPresentation,
 	operationsForkChildCount,
-	operationsLoadDisposition,
 	operationsRiskPresentation,
 	operationsRouteFreshness,
 	paginatedSnapshotWasReplaced,
@@ -118,11 +113,6 @@ test('uses stable identities for historical operations catalogs', () => {
 			entity_identity: '0xvault',
 		}),
 	).toBe('0xblock:0xtx:2:vault:0xvault')
-})
-
-test('anchors an open activity detail drawer to the clicked log row', () => {
-	expect(activityDetailAnchorIndex(['first', 'second', 'third'], 'second')).toBe(1)
-	expect(activityDetailAnchorIndex(['first', 'second', 'third'], 'missing')).toBeUndefined()
 })
 
 test('places and reanchors the activity detail drawer after the clicked row across refreshes', () => {
@@ -660,13 +650,6 @@ test('labels every approval transition field without hiding consumed debt', () =
 	])
 })
 
-test('supersedes cross-network catalog appends and queues same-route live refreshes', () => {
-	expect(operationsLoadDisposition('1:/operations/reports', '11155111:/operations/reports', false, false)).toBe('supersede')
-	expect(operationsLoadDisposition('1:/operations/reports', '1:/operations/reports', true, false)).toBe('queue')
-	expect(operationsLoadDisposition('1:/operations/reports', '1:/operations/reports', false, true)).toBe('queue')
-	expect(operationsLoadDisposition('1:/operations/reports', '1:/operations/reports', false, false)).toBe('join')
-})
-
 test('serializes pagination ahead of multiple queued live refreshes', async () => {
 	const state: { promise?: Promise<boolean>; context?: string } = {}
 	const context = '1:/operations/reports'
@@ -1119,12 +1102,6 @@ test('degrades to an empty cache when session storage is denied', () => {
 	expect(() => cache.write({ indexed_block: '1' })).not.toThrow()
 })
 
-test('recognizes when restored and refreshed network status have identical presentation', () => {
-	const network = { chain_id: '1', phase: 'backfilling', indexed_block: '11052121', observed_block: '11053121' }
-	expect(networkStatusPresentationKey(network)).toBe(networkStatusPresentationKey({ ...network }))
-	expect(networkStatusPresentationKey(network)).not.toBe(networkStatusPresentationKey({ ...network, indexed_block: '11052122' }))
-})
-
 test('reuses restored network status only for the rendered chain and current freshness state', () => {
 	const network = { chain_id: '1', phase: 'backfilling', indexed_block: '11052121' }
 	expect(canReuseNetworkStatusPresentation(network, { ...network }, '1', 'current', '1', 'current')).toBe(true)
@@ -1180,9 +1157,6 @@ test('distinguishes indexer startup and backfill progress from stream connectivi
 })
 
 test('calculates bounded indexer completion and estimates remaining time from observed throughput', () => {
-	expect(compactIndexerDuration(3_600)).toBe('1h')
-	expect(compactIndexerDuration(86_400)).toBe('1d')
-	expect(compactIndexerDuration(172_800)).toBe('2d')
 	expect(indexerProgressEstimate({ start_block: '0', indexed_block: '99998', observed_block: '99999', phase: 'backfilling' }).percentage).toBe('99.99')
 	expect(indexerProgressEstimate({ start_block: '1', indexed_block: '107', observed_block: '4000', phase: 'backfilling' }).percentage).toBe('2.68')
 	expect(indexerProgressEstimate({ start_block: '100', indexed_block: null, observed_block: null, phase: 'backfilling' })).toEqual({
@@ -1330,12 +1304,13 @@ test('detects when pagination points into a replaced snapshot', () => {
 test('coalesces refresh bursts into one active request and one latest-state follow-up', async () => {
 	const releases: Array<(value: boolean) => void> = []
 	const calls: Array<{ count: number; force: boolean }> = []
-	const requestRefresh = createLatestRefreshCoordinator(
+	const requestRefresh = createLiveRouteRefreshCoordinator(
 		(count, force) =>
 			new Promise<boolean>(resolve => {
 				calls.push({ count, force })
 				releases.push(resolve)
 			}),
+		() => undefined,
 	)
 	const first = requestRefresh(1)
 	const joined = requestRefresh(2)
@@ -1355,12 +1330,13 @@ test('coalesces refresh bursts into one active request and one latest-state foll
 test('continues with the newest queued refresh when an in-flight refresh fails', async () => {
 	const releases: Array<{ resolve: (value: boolean) => void; reject: (reason?: unknown) => void }> = []
 	const calls: Array<{ count: number; force: boolean }> = []
-	const requestRefresh = createLatestRefreshCoordinator(
+	const requestRefresh = createLiveRouteRefreshCoordinator(
 		(count, force) =>
 			new Promise<boolean>((resolve, reject) => {
 				calls.push({ count, force })
 				releases.push({ resolve, reject })
 			}),
+		() => undefined,
 	)
 	const recovery = requestRefresh(1)
 	requestRefresh(1, true)

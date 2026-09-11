@@ -5,7 +5,7 @@ import { useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnv
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { compileArtifactsForTests } from './compileArtifactsForTests'
-import { flushSolidityBytecodeCoverageForTest, getSolidityBytecodeCoverageProfileHitCountForTest } from '../../coverage/traceToSource'
+import { flushSolidityBytecodeCoverageForTest, getSolidityBytecodeCoverageProfileHitCountForTest } from '../../testSupport/coverage/traceToSource'
 
 type TradingContracts = Awaited<ReturnType<typeof compileArtifactsForTests>>
 const rate = 10n ** 18n

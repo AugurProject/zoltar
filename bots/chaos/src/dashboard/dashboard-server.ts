@@ -169,7 +169,7 @@ function topologyItemCount(value: unknown) {
 }
 
 /** Sanitized, bounded view of the protocol graph observed at one canonical anchor. */
-export function publicChaosTopology(value: unknown) {
+function publicChaosTopology(value: unknown) {
 	const source = record(value)
 	const anchor = record(source?.['anchor'])
 	const totalCounts = {

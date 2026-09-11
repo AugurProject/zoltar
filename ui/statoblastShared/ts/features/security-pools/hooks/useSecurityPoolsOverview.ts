@@ -51,16 +51,6 @@ export type UseSecurityPoolsOverviewDependencies<TWriteClient = SecurityPoolsOve
 	waitForSecurityPoolReadBackend: () => Promise<void>
 }
 
-export function createSecurityPoolPageFromLoadedPools(pools: ListedSecurityPool[], pageIndex: number, pageSize: number): SecurityPoolPage {
-	const startIndex = pageIndex * pageSize
-	return {
-		pageIndex,
-		pageSize,
-		poolCount: BigInt(pools.length),
-		pools: pools.slice(startIndex, startIndex + pageSize),
-	}
-}
-
 function getLiquidationFundingPreviewRequestKey(managerAddress: Address, walletAddress: Address, environmentRefreshKey: number) {
 	return `${environmentRefreshKey}:${managerAddress.toLowerCase()}:${walletAddress.toLowerCase()}`
 }

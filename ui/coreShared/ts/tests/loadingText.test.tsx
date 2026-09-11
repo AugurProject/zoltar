@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { within } from './testUtils/queries'
-import { LoadingAwareText, LoadingText, isLoadingText } from '../components/LoadingText.js'
+import { LoadingAwareText, LoadingText } from '../components/LoadingText.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
@@ -50,10 +50,6 @@ describe('LoadingText', () => {
 	})
 
 	test('recognizes and decorates user-facing loading messages', async () => {
-		expect(isLoadingText('Loading truth auction status…')).toBe(true)
-		expect(isLoadingText('  loading auction bids…')).toBe(true)
-		expect(isLoadingText('Auction loaded.')).toBe(false)
-
 		const renderedComponent = await renderIntoDocument(<LoadingAwareText>Loading truth auction status…</LoadingAwareText>)
 		cleanupRenderedComponent = renderedComponent.cleanup
 

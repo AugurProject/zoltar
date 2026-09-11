@@ -341,9 +341,10 @@ path; both commands must use the same value.
 ### Executor ABI source
 
 The project compiles `contracts/OpenOracleArbitrageExecutor.sol` into
-`src/contracts/artifacts.generated.ts` and derives
-`src/contracts/executor-abi.generated.ts` from that local artifact. Never edit either
-generated file directly. After an executor contract change, run
+`src/contracts/artifacts.generated.ts`, compiles the test harness contracts into
+`tests/contracts/harness-artifacts.generated.ts`, and derives
+`src/contracts/executor-abi.generated.ts` from the executor artifact. Never edit these
+generated files directly. After an executor contract change, run
 `bun run compile-contracts && bun run generate:abi`, review the generated diff, and
 verify freshness with `bun run check:generated`. The remaining minimal ABIs in
 `src/contracts/abi.ts` are maintained separately and checked against compiled

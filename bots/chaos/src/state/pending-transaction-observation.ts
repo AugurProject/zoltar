@@ -1,4 +1,4 @@
-import { timestamp, unsignedIntegerString } from './state-parsing.ts'
+import { timestamp, unsignedIntegerString } from './validators.ts'
 
 type IncludedObservationKind = 'awaiting-finality' | 'evidence-unavailable'
 type UnincludedObservationKind = 'in-mempool' | 'manual-reconciliation' | 'not-visible' | 'resubmitted' | 'window-closed'

@@ -69,13 +69,6 @@ export type LifecycleStagePresentation = {
 	tone: 'critical' | 'default' | 'success' | 'warning'
 }
 
-export type ReadinessBlocker = {
-	detail?: string
-	key: string
-	label: string
-	resolved: boolean
-}
-
 export type ReadinessAction = {
 	actionLabel: string
 	blocker?: string

@@ -24,7 +24,7 @@ function walkErrorCauses(error: unknown, visit: (current: object) => boolean) {
 	return false
 }
 
-export function logRangeLimitError(error: unknown) {
+function logRangeLimitError(error: unknown) {
 	return walkErrorCauses(error, current => {
 		if (!('message' in current) || typeof current.message !== 'string') return false
 		const message = current.message.toLowerCase()

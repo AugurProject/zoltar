@@ -10,53 +10,11 @@ import type { OperatorSettings } from '#config/settings'
 import { stagedOperationOutcome } from '#core/staged-outcome'
 import { ambiguousRecoveryAction, PRIVATE_INTENT_FINALITY_BLOCKS, requireRecoveredTransactionSuccess } from '#core/cycle-control'
 import { canonicalBlockHash } from '#monitoring/operator-chain'
-import { initialRuntimeState, assertIntentSender, recordActivity, recoveredIntentCanBeResubmitted, resolveRecoveredIntentJournal, saveDurableState, type PendingStagedOperation } from '#state/operator-state'
+import { initialRuntimeState, assertIntentSender, recordActivity, recoveredIntentCanBeResubmitted, resolveRecoveredIntentJournal, saveDurableState } from '#state/operator-state'
 import { validateReceiptExpectation } from '#execution/receipt-validation'
+import { nextStagedHistoricalRecoveryRange, recordStagedRecoveryChunk, recordStagedRecoveryGap, stagedRecoveryAnchorMatches } from '#execution/staged-recovery-journal'
 
 const MAXIMUM_RECOVERY_LOG_RANGE = 256n
-
-export function stagedOperationRecoveryRanges(queuedBlock: bigint, head: bigint) {
-	const recent = latestLogRange(head, MAXIMUM_RECOVERY_LOG_RANGE)
-	return newestFirstScanRanges(recent.fromBlock > queuedBlock ? recent.fromBlock : queuedBlock, head, MAXIMUM_RECOVERY_LOG_RANGE)
-}
-
-export function recordStagedRecoveryChunk(pending: PendingStagedOperation, range: { fromBlock: bigint; toBlock: bigint }, outcome: PendingStagedOperation['candidateOutcome'], historical: boolean) {
-	if (outcome !== undefined) {
-		pending.candidateOutcome = outcome
-		return
-	}
-	if (historical) {
-		if (range.fromBlock === pending.queuedBlock) {
-			pending.nextHistoricalBlock = undefined
-			pending.historicalRecoveryComplete = true
-		} else pending.nextHistoricalBlock = range.fromBlock - 1n
-		return
-	}
-	pending.latestRecoveryBlock = range.toBlock > (pending.latestRecoveryBlock ?? 0n) ? range.toBlock : pending.latestRecoveryBlock
-	if (pending.nextHistoricalBlock === undefined && !pending.historicalRecoveryComplete && range.fromBlock > pending.queuedBlock) pending.nextHistoricalBlock = range.fromBlock - 1n
-}
-
-export function recordStagedRecoveryGap(pending: PendingStagedOperation, cursorFromBlock: bigint, latestFromBlock: bigint) {
-	if (latestFromBlock <= cursorFromBlock) return
-	const newestMissingBlock = latestFromBlock - 1n
-	if (pending.nextHistoricalBlock === undefined || newestMissingBlock > pending.nextHistoricalBlock) pending.nextHistoricalBlock = newestMissingBlock
-	pending.historicalRecoveryComplete = false
-}
-
-export function nextStagedHistoricalRecoveryRange(pending: PendingStagedOperation, maximumBlocks: bigint) {
-	if (pending.nextHistoricalBlock === undefined || pending.nextHistoricalBlock < pending.queuedBlock) return undefined
-	const availableBlocks = pending.nextHistoricalBlock - pending.queuedBlock + 1n
-	const requestedBlocks = maximumBlocks < availableBlocks ? maximumBlocks : availableBlocks
-	return {
-		fromBlock: pending.nextHistoricalBlock - requestedBlocks + 1n,
-		toBlock: pending.nextHistoricalBlock,
-	}
-}
-
-export function stagedRecoveryAnchorMatches(pending: Pick<PendingStagedOperation, 'recoveryAnchorBlock' | 'recoveryAnchorHash'>, head: bigint, observedHash: Hex | undefined) {
-	if (pending.recoveryAnchorBlock === undefined || pending.recoveryAnchorHash === undefined) return true
-	return pending.recoveryAnchorBlock <= head && observedHash?.toLowerCase() === pending.recoveryAnchorHash.toLowerCase()
-}
 
 function missingReceipt(error: unknown) {
 	return error instanceof Error && error.message.includes('could not be found')

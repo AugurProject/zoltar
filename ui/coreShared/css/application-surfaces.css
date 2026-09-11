@@ -275,174 +275,6 @@
 .outcome-chip.tone-danger {
 	border-color: var(--danger-border);
 }
-
-.collateralization-gauge {
-	--collateralization-font-size: clamp(1rem, 1.2vw, 1.35rem);
-	--collateralization-size: 5rem;
-	--collateralization-size-scale: 1;
-	--inner-size: calc(var(--collateralization-size) * var(--collateralization-size-scale) * 0.86);
-	--outer-size: calc(var(--collateralization-size) * var(--collateralization-size-scale));
-	--collateralization-track: rgba(255, 255, 255, 0.16);
-	--collateralization-track-size: 0.28rem;
-	display: inline-grid;
-	grid-template-columns: auto minmax(0, auto);
-	gap: 0.62rem;
-	min-width: 0;
-	align-items: center;
-	color: var(--text-secondary);
-	vertical-align: middle;
-}
-
-.collateralization-gauge-size-small {
-	--collateralization-size: 5rem;
-}
-
-.collateralization-gauge-size-medium {
-	--collateralization-size: 5.4rem;
-}
-
-.collateralization-gauge-size-large {
-	--collateralization-size: 5.8rem;
-	--collateralization-font-size: clamp(1.2rem, 1.4vw, 1.6rem);
-	--collateralization-track-size: 0.14rem;
-}
-
-.collateralization-gauge-ring {
-	grid-area: 1 / 1;
-	position: relative;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	justify-self: center;
-	align-self: center;
-	width: var(--outer-size);
-	height: var(--outer-size);
-	border-radius: 50%;
-}
-
-.collateralization-gauge-svg {
-	width: 100%;
-	height: 100%;
-	transform: rotate(-90deg);
-	border-radius: 50%;
-	overflow: visible;
-}
-
-.collateralization-gauge-track,
-.collateralization-gauge-progress {
-	fill: none;
-	stroke-width: var(--collateralization-track-size);
-	vector-effect: non-scaling-stroke;
-}
-
-.collateralization-gauge-track {
-	stroke: var(--collateralization-track);
-}
-
-.collateralization-gauge-progress {
-	stroke: currentColor;
-	stroke-linecap: round;
-	transition: stroke-dashoffset 0.45s ease;
-}
-
-.collateralization-gauge-value {
-	grid-area: 1 / 1;
-	width: var(--inner-size);
-	height: var(--inner-size);
-	justify-self: center;
-	align-self: center;
-	padding: 0.25rem;
-	font-family: var(--font-family-mono);
-	font-size: var(--collateralization-font-size);
-	line-height: 1;
-	font-variant-numeric: tabular-nums;
-	font-weight: 650;
-	color: currentColor;
-	display: grid;
-	place-items: center;
-	box-sizing: border-box;
-	text-align: center;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	text-shadow:
-		0 1px 1px var(--shadow-color-strong),
-		0 0 1px rgba(0, 0, 0, 0.3);
-	letter-spacing: 0.02em;
-}
-
-.collateralization-gauge-copy {
-	grid-area: 1 / 2;
-	display: grid;
-	gap: 0.18rem;
-}
-
-.collateralization-gauge-label {
-	font-size: var(--font-caption);
-	letter-spacing: 0.14em;
-	text-transform: uppercase;
-	color: var(--muted);
-	white-space: nowrap;
-}
-
-.collateralization-gauge-status {
-	color: currentColor;
-	font-size: var(--font-label);
-	line-height: 1.25;
-	white-space: nowrap;
-}
-
-.collateralization-gauge-exact {
-	color: var(--text);
-	font-family: var(--font-family-mono);
-	font-size: var(--font-caption);
-	font-variant-numeric: tabular-nums;
-	white-space: nowrap;
-}
-
-.collateralization-gauge-target {
-	color: var(--text-secondary);
-	font-family: var(--font-family-mono);
-	font-size: var(--font-caption);
-	font-variant-numeric: tabular-nums;
-	white-space: nowrap;
-}
-
-.collateralization-gauge.tone-success {
-	color: var(--success);
-	--collateralization-track: var(--success-soft);
-}
-
-.collateralization-gauge.tone-warning {
-	color: var(--warning);
-	--collateralization-track: var(--warning-soft);
-	--collateralization-size-scale: 1.5;
-}
-
-.collateralization-gauge.tone-danger {
-	color: var(--danger);
-	--collateralization-track: var(--danger-soft);
-}
-
-.collateralization-gauge.tone-muted,
-.collateralization-gauge.tone-default {
-	color: var(--text-secondary);
-	--collateralization-track: rgba(154, 179, 211, 0.17);
-}
-
-.security-pool-card-title-collateralization {
-	--collateralization-size: 4.8rem;
-}
-
-.security-pool-browse-vault-row-collateralization {
-	--collateralization-size: 4.8rem;
-}
-
-.security-pool-selected-vault-collateralization {
-	--collateralization-size: 7.2rem;
-	--collateralization-font-size: clamp(1.5rem, 1.8vw, 2.4rem);
-}
-
 .selected-vault-summary-title {
 	display: flex;
 	align-items: flex-start;
@@ -467,80 +299,12 @@
 .selected-vault-summary-title-copy strong {
 	font-size: var(--font-body);
 }
-
-.selected-vault-summary-title-collateralization {
-	--collateralization-size: 5.6rem;
-	--collateralization-font-size: clamp(1.3rem, 1.7vw, 2rem);
-	--collateralization-track-size: 0.4rem;
-}
-
 .selected-vault-summary-body {
 	grid-template-columns: repeat(2, minmax(0, 1fr));
 }
-
-.vault-preview-collateralization,
-.vault-detail-collateralization,
-.security-pool-hero-collateralization,
-.security-pool-collateralization-display {
-	--collateralization-size: 4.8rem;
-}
-
-.vault-position-title-collateralization {
-	--collateralization-size: 4.8rem;
-}
-
-.security-pool-card-title-row .collateralization-gauge,
-.security-pool-browse-vault-row-top .collateralization-gauge,
-.vault-position-strip-title .collateralization-gauge {
-	margin-top: 0;
-}
-
-.security-pool-card-title-row .collateralization-gauge-value,
-.security-pool-browse-vault-row-top .collateralization-gauge-value,
-.vault-position-strip-title .collateralization-gauge-value,
-.security-pool-card-title-collateralization .collateralization-gauge-value,
-.security-pool-browse-vault-row-collateralization .collateralization-gauge-value,
-.vault-position-title-collateralization .collateralization-gauge-value {
-	--collateralization-font-size: clamp(1rem, 1.1vw, 1.35rem);
-}
-
-.security-pool-selected-vault-collateralization .collateralization-gauge-value {
-	--collateralization-font-size: clamp(1.5rem, 1.8vw, 2.4rem);
-}
-
-.security-pool-hero-collateralization {
-	--collateralization-size: 8.7rem;
-	--collateralization-font-size: clamp(1.8rem, 2.1vw, 2.8rem);
-	justify-self: start;
-	align-self: start;
-}
-
-.security-pool-hero-collateralization .collateralization-gauge-value {
-	--collateralization-font-size: clamp(1.5rem, 1.8vw, 2.4rem);
-}
-
 .vault-detail-hero {
 	align-items: start;
 }
-
-.vault-detail-hero .collateralization-gauge,
-.security-pool-card-title-row .collateralization-gauge,
-.vault-position-strip-title .collateralization-gauge,
-.security-pool-browse-vault-row-top .collateralization-gauge,
-.security-pool-hero-metrics .collateralization-gauge {
-	align-items: flex-start;
-}
-
-.security-pool-card-title-collateralization .collateralization-gauge-label,
-.security-pool-browse-vault-row-collateralization .collateralization-gauge-label,
-.security-pool-selected-vault-collateralization .collateralization-gauge-label,
-.vault-preview-collateralization .collateralization-gauge-label,
-.vault-detail-collateralization .collateralization-gauge-label,
-.security-pool-hero-collateralization .collateralization-gauge-label,
-.security-pool-collateralization-display .collateralization-gauge-label {
-	display: none;
-}
-
 .progress-meter {
 	display: grid;
 	gap: 0.45rem;
@@ -1274,21 +1038,11 @@
 	align-items: start;
 	min-width: 0;
 }
-
-.security-pool-browse-vault-row-title > .collateralization-gauge {
-	flex: 0 0 auto;
-}
-
 .security-pool-browse-vault-row-title .security-pool-browse-vault-row-id {
 	align-self: center;
 	flex: 1 1 auto;
 	min-width: 0;
 }
-
-.security-pool-browse-vault-row-title .collateralization-gauge {
-	justify-self: start;
-}
-
 .vault-position-title-copy .address-value.copyable,
 .security-pool-browse-vault-row-id .address-value.copyable {
 	width: 100%;

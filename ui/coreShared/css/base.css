@@ -2572,14 +2572,6 @@ button.wallet-asset-action-pending:disabled {
 	font-weight: 500;
 }
 
-.comparison-record-collateralization {
-	--collateralization-size: 4.2rem;
-}
-
-.comparison-record-collateralization .collateralization-gauge-label {
-	display: none;
-}
-
 .comparison-record-details {
 	grid-column: 1 / -1;
 	padding-top: var(--space-1);

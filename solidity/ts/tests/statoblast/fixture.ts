@@ -8,7 +8,7 @@ import { sortBigIntsAscending } from '@zoltar/core-shared/serialization/bigInt'
 import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/zoltar-shared/constants'
 // The solidity worktree can temporarily see a stale @zoltar/statoblast-shared package through the shared node_modules link during refreshes.
 // Import the generated shared helper directly so this fixture stays stable across merge-validation runs.
-import { pickFixtureProperties } from '../../../../shared/core/js/testing/pickFixtureProperties.js'
+import { pickFixtureProperties } from '../../testSupport/pickFixtureProperties'
 import { createWriteClient, WriteClient } from '../../testSupport/simulator/utils/clients'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { approveToken, contractExists, getChildUniverseId, getERC20Balance, getETHBalance, ensureProxyDeployerDeployed, setupTestAccounts, sortStringArrayByKeccak } from '../../testSupport/simulator/utils/utilities'

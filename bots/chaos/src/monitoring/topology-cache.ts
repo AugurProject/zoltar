@@ -6,10 +6,10 @@ import { getAddress, zeroAddress, type Address, type Hash, type Hex } from '@zol
 import type { QuestionSnapshot } from '../operations/types.ts'
 
 export const IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION = 3
-export const IMMUTABLE_TOPOLOGY_SEGMENT_BYTES = 32 * 1024 * 1024
-export const IMMUTABLE_TOPOLOGY_MANIFEST_BYTES = 64 * 1024
-export const IMMUTABLE_TOPOLOGY_MAXIMUM_COMMITTED_BYTES = 64 * 1024 * 1024
-export const IMMUTABLE_TOPOLOGY_MAXIMUM_RESIDENT_ITEMS = 100_000
+const IMMUTABLE_TOPOLOGY_SEGMENT_BYTES = 32 * 1024 * 1024
+const IMMUTABLE_TOPOLOGY_MANIFEST_BYTES = 64 * 1024
+const IMMUTABLE_TOPOLOGY_MAXIMUM_COMMITTED_BYTES = 64 * 1024 * 1024
+const IMMUTABLE_TOPOLOGY_MAXIMUM_RESIDENT_ITEMS = 100_000
 export const IMMUTABLE_TOPOLOGY_MAXIMUM_QUESTION_LABEL_UTF8_BYTES = 4 * 1024 * 1024
 export const IMMUTABLE_TOPOLOGY_MAXIMUM_RECORD_BYTES = IMMUTABLE_TOPOLOGY_SEGMENT_BYTES - 1024
 
@@ -32,10 +32,6 @@ function configuredResidentLimitError(message: string) {
 	const error = new Error(message)
 	configuredResidentLimitErrors.add(error)
 	return error
-}
-
-export function immutableTopologyCacheExceedsConfiguredResidentLimits(error: unknown) {
-	return error instanceof Error && configuredResidentLimitErrors.has(error)
 }
 
 export interface ImmutableTopologyIdentity {
@@ -61,7 +57,7 @@ export interface CachedPoolDeployment {
 	universeId: string
 }
 
-export interface CachedUniverseChildren {
+interface CachedUniverseChildren {
 	childUniverseIds: string[]
 	outcomeIndexes: string[]
 }
@@ -74,7 +70,7 @@ export interface CountedRegistryCursor {
 	retentionMode: 'overflow' | 'resident'
 }
 
-export interface ImmutableTopologyDiscoveryCursors {
+interface ImmutableTopologyDiscoveryCursors {
 	poolDeployments: CountedRegistryCursor
 	questions: CountedRegistryCursor
 	vaultsByPool: Record<string, CountedRegistryCursor>
@@ -432,7 +428,7 @@ function assertTopologyResidentBounds(cache: CanonicalImmutableTopologyCache, li
 	}
 }
 
-export function validateImmutableTopologyCache(value: CanonicalImmutableTopologyCache, limits?: ImmutableTopologyResidentLimits) {
+function validateImmutableTopologyCache(value: CanonicalImmutableTopologyCache, limits?: ImmutableTopologyResidentLimits) {
 	const cache = parseTopologyCache(value)
 	assertTopologyResidentBounds(cache, limits)
 	return cache
@@ -524,7 +520,7 @@ async function syncDirectory(path: string) {
 	}
 }
 
-export function immutableTopologySidecarDirectory(statePath: string) {
+function immutableTopologySidecarDirectory(statePath: string) {
 	return `${resolve(statePath)}.immutable-topology-v1`
 }
 
@@ -871,7 +867,7 @@ async function loadGeneration(statePath: string, digest: Hex, expectedIdentity: 
 	return cache
 }
 
-export async function loadImmutableTopologyCache(statePath: string, expectedIdentity: ImmutableTopologyIdentity, limits?: ImmutableTopologyResidentLimits) {
+async function loadImmutableTopologyCache(statePath: string, expectedIdentity: ImmutableTopologyIdentity, limits?: ImmutableTopologyResidentLimits) {
 	const storePath = immutableTopologySidecarDirectory(statePath)
 	try {
 		await ownerDirectory(storePath, 'Immutable topology store')
@@ -1054,5 +1050,14 @@ export async function saveImmutableTopologyCache(statePath: string, identity: Im
 	} catch (error) {
 		if (!renamedGeneration) await rm(temporaryPath, { force: true, recursive: true })
 		throw error
+	}
+}
+
+export async function loadImmutableTopologyCacheWithinLimits(parameters: { identity: ImmutableTopologyIdentity; limits: ImmutableTopologyResidentLimits; previous?: CanonicalImmutableTopologyCache; statePath: string }) {
+	try {
+		return parameters.previous === undefined ? await loadImmutableTopologyCache(parameters.statePath, parameters.identity, parameters.limits) : validateImmutableTopologyCache(parameters.previous, parameters.limits)
+	} catch (error) {
+		if (!(error instanceof Error && configuredResidentLimitErrors.has(error))) throw error
+		return undefined
 	}
 }

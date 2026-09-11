@@ -17,7 +17,7 @@ import { ensureProxyDeployerDeployed, setupTestAccounts } from '../../../../../.
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
-import { SEPOLIA_REP_ALLOCATIONS, SEPOLIA_REP_TOTAL_THEORETICAL_SUPPLY } from '@zoltar/zoltar-shared/deployment/sepoliaRepAllocations'
+import { SEPOLIA_REP_ALLOCATIONS } from '@zoltar/zoltar-shared/deployment/sepoliaRepAllocations'
 import type { WriteClient as UiWriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { GenesisReputationToken_GenesisReputationToken, Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
 
@@ -158,7 +158,7 @@ void describe('deployment helpers', () => {
 					functionName: 'getTotalTheoreticalSupply',
 					args: [],
 				}),
-			).toBe(SEPOLIA_REP_TOTAL_THEORETICAL_SUPPLY)
+			).toBe(SEPOLIA_REP_ALLOCATIONS.reduce((total, allocation) => total + allocation.amount, 0n))
 			for (const allocation of SEPOLIA_REP_ALLOCATIONS) {
 				expect(
 					await readClient.readContract({

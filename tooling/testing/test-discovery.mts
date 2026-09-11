@@ -8,7 +8,7 @@ const TEST_ROOTS = [...APPLICATION_TEST_ROOTS, ...SOLIDITY_TEST_ROOTS] as const
 const TEST_DOMAINS = ['all', 'application', 'solidity'] as const
 export type TestDomain = (typeof TEST_DOMAINS)[number]
 const IGNORED_TEST_DIRECTORY_NAMES = new Set(['node_modules', 'js', 'dist', 'vendor'])
-export const EXPLICIT_TEST_TIER_FILES = new Set(['tooling/ui/browserSmoke.test.ts', 'tooling/ui/productionBuild.test.ts', 'ui/statoblast/ts/tests/features/security-pools/collateralizationCircle.browser.test.ts'])
+export const EXPLICIT_TEST_TIER_FILES = new Set(['tooling/ui/browserSmoke.test.ts', 'tooling/ui/productionBuild.test.ts'])
 export const MAXIMUM_TEST_PARALLELISM = 2
 
 export function getDefaultTestParallelism(availableParallelism: number) {

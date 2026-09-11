@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto'
 import { isoTimestampFromSeconds } from '../core/units.ts'
 import type { CanonicalLifecyclePresence, EvaluatedOperation, OperationPlan } from '../operations/types.ts'
-import { completeWorkflowFromCanonicalConfirmation, createDurableWorkflow, markWorkflowForRediscovery, markRetryableLifecycleWorkflowForRediscovery, refreshWorkflowContinuation, requireWorkflowStep, retryableOnChainWorkflowFailure } from './workflows.ts'
+import { completeWorkflowFromCanonicalConfirmation, createDurableWorkflow, markWorkflowForRediscovery, markRetryableLifecycleWorkflowForRediscovery, refreshWorkflowContinuation, retryableOnChainWorkflowFailure } from './workflows.ts'
 import { MAXIMUM_LIFECYCLE_PRESENCE_BLOCKER_COUNT, MAXIMUM_OBLIGATION_TOMBSTONE_COUNT, type DurableLifecyclePresenceBlocker, type DurableMetadata, type DurableObligation, type DurableObligationTombstone, type DurableWorkflow, type RuntimeState } from '../state/operator-state.ts'
 
-export const OBLIGATION_TOMBSTONE_RETENTION_BLOCKS = 64n
-export const MAXIMUM_ACTIVE_LIFECYCLE_OBLIGATIONS = 256
+const OBLIGATION_TOMBSTONE_RETENTION_BLOCKS = 64n
+const MAXIMUM_ACTIVE_LIFECYCLE_OBLIGATIONS = 256
 export const MAXIMUM_AUTOMATIC_LIFECYCLE_ATTEMPTS = 3
 const AUTOMATIC_LIFECYCLE_RETRY_BASE_SECONDS = 60n
 const AUTOMATIC_LIFECYCLE_RETRY_MAX_SECONDS = 3_600n
@@ -535,12 +535,16 @@ export function failLifecycleObligation(obligation: DurableObligation, error: un
 	obligation.updatedAt = timestamp
 }
 
-export function refreshObligationWorkflowForPlan(state: Pick<RuntimeState, 'obligations' | 'workflows'>, plan: OperationPlan) {
-	const obligation = obligationForPlan(state, plan)
-	if (obligation === undefined) return undefined
-	const workflow = state.workflows.find(candidate => candidate.id === obligation.workflowId)
-	if (workflow === undefined) throw new Error(`Lifecycle obligation ${obligation.id} references a missing workflow`)
-	refreshPlannedWorkflow(workflow, plan)
-	for (const step of workflow.steps) requireWorkflowStep(workflow, step.id)
-	return workflow
+export function blockNovelEvaluations(evaluations: readonly EvaluatedOperation[], blocker: DurableLifecyclePresenceBlocker) {
+	const reason = lifecyclePresenceBlockerMessage(blocker)
+	return evaluations.map(evaluation => {
+		if (evaluation.definition.classification !== 'selectable') return evaluation
+		return {
+			definition: evaluation.definition,
+			eligibility: {
+				blockers: [...evaluation.eligibility.blockers, reason],
+				eligible: false,
+			},
+		}
+	})
 }

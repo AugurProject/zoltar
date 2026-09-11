@@ -7,7 +7,7 @@ type LoadingTextProps = {
 	className?: string
 }
 
-export function isLoadingText(value: ComponentChildren): value is string {
+function isLoadingText(value: ComponentChildren): value is string {
 	return typeof value === 'string' && /^\s*loading\b/i.test(value)
 }
 

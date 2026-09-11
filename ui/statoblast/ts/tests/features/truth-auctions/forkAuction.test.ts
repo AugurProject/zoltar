@@ -3,7 +3,7 @@
 import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
-import { getForkAuctionStageLabel, getForkAuctionStageOrder, getForkAuctionStageView, getForkStageDescriptionForState, getOutcomeActionLabel, hasForkActivity } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/forkAuction.js'
+import { deriveHasForkActivity, getForkAuctionStageLabel, getForkAuctionStageView } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/forkAuction.js'
 import { buildTruthAuctionBidRows, buildViewerTruthAuctionBidRows, updateTruthAuctionSettlementBidSelection } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/truthAuctionBidViewModels.js'
 import {
 	buildTruthAuctionDepthPoints,
@@ -13,16 +13,16 @@ import {
 	getTruthAuctionBidPreview,
 	getTruthAuctionBidPriceValidationMessage,
 	getTruthAuctionWinningThresholdPrice,
-	TRUTH_AUCTION_MIN_SUPPORTED_TICK,
-	TRUTH_AUCTION_MIN_TICK,
 	getTruthAuctionOverviewProgress,
 	getTruthAuctionPriceAtTick,
 	getTruthAuctionTickAtPrice,
 	sortTruthAuctionBidsByPriority,
 	sortTruthAuctionTickSummariesDescending,
-	TRUTH_AUCTION_MAX_TICK,
-	TRUTH_AUCTION_PRICE_PRECISION,
 } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/truthAuctionBook.js'
+import { findTruthAuctionMinSupportedTick, TRUTH_AUCTION_MAX_TICK, TRUTH_AUCTION_PRICE_PRECISION } from '@zoltar/statoblast-shared/statoblast/truthAuctionTickMath'
+
+// UniformPriceDualCapBatchAuction's lowest representable tick, below the supported bidding range.
+const TRUTH_AUCTION_MIN_TICK = -524288n
 import { getTruthAuctionSettlementActionAvailabilityMessage, getTruthAuctionSettlementBidKey, getTruthAuctionSettlementBidRows, getTruthAuctionSettlementSelectionEstimate, getTruthAuctionSettlementSelectionState } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/truthAuctionSettlement.js'
 import type { TruthAuctionBidView, TruthAuctionMetrics, TruthAuctionTickSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
@@ -80,27 +80,9 @@ function createBid(overrides: { bidIndex: bigint; tick: bigint } & Partial<Omit<
 }
 
 void describe('fork auction helpers', () => {
-	void test('getOutcomeActionLabel reuses reporting labels', () => {
-		expect(getOutcomeActionLabel('invalid')).toBe('Invalid')
-		expect(getOutcomeActionLabel('yes')).toBe('Yes')
-		expect(getOutcomeActionLabel('no')).toBe('No')
-	})
-
-	void test('describes each fork stage from system state', () => {
-		expect(getForkStageDescriptionForState('operational')).toContain('operational')
-		expect(getForkStageDescriptionForState('poolForked')).toContain('Child universes')
-		const migrationDescription = getForkStageDescriptionForState('forkMigration')
-		expect(migrationDescription).toContain('Migration is active')
-		expect(migrationDescription).toContain('child snapshot and aggregate backing')
-		expect(migrationDescription).toContain('winning parent deposits may instead be claimed directly')
-		expect(migrationDescription).not.toMatch(/escalation deposits[^.]*\b(?:move|migrat)/i)
-		expect(getForkStageDescriptionForState('forkTruthAuction')).toContain('Truth auction is active')
-		expect(getForkStageDescriptionForState('forkTruthAuction')).toContain('capacity ownership')
-	})
-
 	void test('detects whether preview pool data reflects actual fork activity', () => {
 		expect(
-			hasForkActivity({
+			deriveHasForkActivity({
 				forkOutcome: 'none',
 				migratedAttoRep: 0n,
 				systemState: 'operational',
@@ -109,7 +91,7 @@ void describe('fork auction helpers', () => {
 		).toBe(false)
 
 		expect(
-			hasForkActivity({
+			deriveHasForkActivity({
 				forkOutcome: 'yes',
 				migratedAttoRep: 0n,
 				systemState: 'operational',
@@ -118,7 +100,7 @@ void describe('fork auction helpers', () => {
 		).toBe(true)
 
 		expect(
-			hasForkActivity({
+			deriveHasForkActivity({
 				forkOutcome: 'none',
 				migratedAttoRep: 0n,
 				systemState: 'forkMigration',
@@ -178,11 +160,6 @@ void describe('fork auction helpers', () => {
 		expect(getForkAuctionStageLabel('migration')).toBe('Migration')
 		expect(getForkAuctionStageLabel('auction')).toBe('Truth Auction')
 		expect(getForkAuctionStageLabel('settlement')).toBe('Settlement')
-
-		expect(getForkAuctionStageOrder('initiate')).toBe(0)
-		expect(getForkAuctionStageOrder('migration')).toBe(1)
-		expect(getForkAuctionStageOrder('auction')).toBe(2)
-		expect(getForkAuctionStageOrder('settlement')).toBe(3)
 	})
 
 	void test('maps exact truth auction prices back to their ticks', () => {
@@ -223,6 +200,7 @@ void describe('fork auction helpers', () => {
 	})
 
 	void test('rejects ticks outside the contract-supported truth auction range', () => {
+		const TRUTH_AUCTION_MIN_SUPPORTED_TICK = findTruthAuctionMinSupportedTick()
 		expect(TRUTH_AUCTION_MIN_SUPPORTED_TICK).toBeGreaterThan(TRUTH_AUCTION_MIN_TICK)
 		expect(getTruthAuctionPriceAtTick(TRUTH_AUCTION_MIN_SUPPORTED_TICK)).toBeGreaterThan(0n)
 		expect(() => getTruthAuctionPriceAtTick(TRUTH_AUCTION_MAX_TICK + 1n)).toThrow('Truth auction tick is outside the supported range.')

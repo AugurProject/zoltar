@@ -3,21 +3,16 @@ import { mkdtemp, open, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Address } from '@zoltar/bot-shared/ethereum'
-import {
-	appendPriceHistory,
-	childPayouts,
-	constantProductSpotPriceWeth,
-	createTokenCatalogTracker,
-	formatTokenAmount,
-	loadPriceHistory,
-	MAX_OBSERVED_MONITORING_TOKENS,
-	missingPricePoints,
-	payoutDistributionHash,
-	poolSpotPriceWeth,
-	pricePoints,
-	tokenCatalogForScan,
-	type TokenMarketSnapshot,
-} from '#monitoring/market-monitor'
+import { appendPriceHistory, createTokenCatalogTracker, formatTokenAmount, loadPriceHistory, missingPricePoints, pricePoints, type TokenMarketSnapshot } from '#monitoring/market-monitor'
+import { childPayouts, payoutDistributionHash } from '#monitoring/augur-payouts'
+import { constantProductSpotPriceWeth, poolSpotPriceWeth } from '#monitoring/spot-prices'
+
+const MAX_OBSERVED_MONITORING_TOKENS = 64
+
+// Resolves the scan catalog with already-discovered Augur tokens.
+function tokenCatalogForScan(discoveredAugurTokens: readonly Address[], configuredTokens: readonly Address[], observedTokens: readonly Address[], approvedTokens: readonly Address[] = []) {
+	return createTokenCatalogTracker(async () => discoveredAugurTokens)(configuredTokens, observedTokens, approvedTokens)
+}
 
 const temporaryDirectories: string[] = []
 
@@ -26,8 +21,8 @@ afterEach(async () => {
 })
 
 describe('Augur REP discovery helpers', () => {
-	test('discovery and raw token configuration never approve execution', () => {
-		const catalog = tokenCatalogForScan(['0x0000000000000000000000000000000000000001'], ['0x0000000000000000000000000000000000000002'], [])
+	test('discovery and raw token configuration never approve execution', async () => {
+		const catalog = await tokenCatalogForScan(['0x0000000000000000000000000000000000000001'], ['0x0000000000000000000000000000000000000002'], [])
 		expect(catalog.executionTokens).toEqual([])
 		expect(catalog.monitoringTokens).toHaveLength(2)
 	})
@@ -93,10 +88,10 @@ describe('Augur REP discovery helpers', () => {
 		expect(discoveries).toBe(2)
 	})
 
-	test('prioritizes every execution token and caps permissionless observed monitoring work', () => {
+	test('prioritizes every execution token and caps permissionless observed monitoring work', async () => {
 		const execution = Array.from({ length: 3 }, (_, index) => `0x${(index + 1).toString(16).padStart(40, '0')}` as Address)
 		const observed = Array.from({ length: MAX_OBSERVED_MONITORING_TOKENS + 500 }, (_, index) => `0x${(index + 100).toString(16).padStart(40, '0')}` as Address)
-		const catalog = tokenCatalogForScan([], [], observed, execution)
+		const catalog = await tokenCatalogForScan([], [], observed, execution)
 		expect(catalog.executionTokens).toEqual(execution)
 		expect(catalog.monitoringTokens.slice(0, execution.length)).toEqual(execution)
 		expect(catalog.monitoringTokens).toHaveLength(execution.length + MAX_OBSERVED_MONITORING_TOKENS)

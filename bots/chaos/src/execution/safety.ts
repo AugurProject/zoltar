@@ -2,6 +2,7 @@ import { maximumFeePerGas, paddedTransactionGas } from '@zoltar/bot-shared/execu
 import type { StrategySettings } from '../config/settings.ts'
 import { assertWorkflowPrerequisiteLimit, requiredTimestampSubmissionSafetySeconds } from '../operations/timing.ts'
 import type { OperationPlan, OperationStep } from '../operations/types.ts'
+import { assertTerminalSubmissionBoundary } from '../runtime/workflows.ts'
 
 export function unsignedQuantity(value: string | undefined, label: string, fallback = 0n) {
 	if (value === undefined) return fallback
@@ -9,9 +10,7 @@ export function unsignedQuantity(value: string | undefined, label: string, fallb
 	return BigInt(value)
 }
 
-export { maximumFeePerGas }
-
-export function transactionGasCeiling(gasEstimate: bigint, baseFeePerGas: bigint) {
+function transactionGasCeiling(gasEstimate: bigint, baseFeePerGas: bigint) {
 	if (gasEstimate <= 0n) throw new Error('Gas estimate must be positive')
 	return paddedTransactionGas(gasEstimate) * maximumFeePerGas(baseFeePerGas)
 }
@@ -32,7 +31,7 @@ export function assertOperationPlanFresh(plan: Pick<OperationPlan, 'createdAtBlo
 	assertWorkflowPrerequisiteLimit({ id: plan.id, steps: remainingSteps })
 }
 
-export function operationSubmissionLastValidBlock(plan: Pick<OperationPlan, 'deadlineTimestamp' | 'id' | 'lastValidBlockNumber'>, currentBlock: bigint, currentTimestamp: bigint, mode: 'private' | 'public', maximumBlockIntervalSeconds: number) {
+function operationSubmissionLastValidBlock(plan: Pick<OperationPlan, 'deadlineTimestamp' | 'id' | 'lastValidBlockNumber'>, currentBlock: bigint, currentTimestamp: bigint, mode: 'private' | 'public', maximumBlockIntervalSeconds: number) {
 	const lastValidBlockNumber = plan.lastValidBlockNumber === undefined ? undefined : unsignedQuantity(plan.lastValidBlockNumber, `${plan.id} last valid block`)
 	const deadlineTimestamp = plan.deadlineTimestamp === undefined ? undefined : unsignedQuantity(plan.deadlineTimestamp, `${plan.id} deadline timestamp`)
 	if (mode === 'public' && (lastValidBlockNumber !== undefined || deadlineTimestamp !== undefined)) {
@@ -83,7 +82,7 @@ export function assertOperationPrincipalCaps(plan: Pick<OperationPlan, 'id' | 's
 	return { nativeDebit, repDebit }
 }
 
-export function cleanupTransactionCount(plan: Pick<OperationPlan, 'id' | 'maximumCleanupTransactionCount'>) {
+function cleanupTransactionCount(plan: Pick<OperationPlan, 'id' | 'maximumCleanupTransactionCount'>) {
 	const count = plan.maximumCleanupTransactionCount ?? 0
 	if (!Number.isSafeInteger(count) || count < 0) throw new Error(`${plan.id} cleanup transaction count must be a non-negative safe integer`)
 	return count
@@ -121,4 +120,23 @@ export function assertStepSafety(parameters: { baseFeePerGas: bigint; ethBalance
 		throw new Error(`${parameters.step.label} would breach the wallet ETH reserve`)
 	}
 	return { maximumGasCost, paddedGas, value }
+}
+
+export function operationStepSubmissionLastValidBlock(parameters: { baseFeePerGas: bigint; currentBlock: bigint; currentTimestamp: bigint; maximumBlockIntervalSeconds: number; mode: 'private' | 'public'; plan: OperationPlan; step: OperationStep }) {
+	assertTerminalSubmissionBoundary(parameters.plan)
+	if (!parameters.plan.steps.some(step => step.id === parameters.step.id)) {
+		throw new Error(`${parameters.plan.id} does not contain submission step ${parameters.step.id}`)
+	}
+	const planHorizon = operationSubmissionLastValidBlock(parameters.plan, parameters.currentBlock, parameters.currentTimestamp, parameters.mode, parameters.maximumBlockIntervalSeconds)
+	const terminalSubmission = parameters.plan.terminalSubmission
+	const terminalStep = parameters.plan.steps.at(-1)
+	if (terminalSubmission === undefined || terminalStep?.id !== parameters.step.id) return planHorizon
+	if (parameters.mode !== 'private') throw new Error(`${parameters.plan.id} terminal step requires private submission`)
+	const persistedMaximumFeePerGas = unsignedQuantity(terminalSubmission.maximumFeePerGas, `${parameters.plan.id} terminal maximum fee per gas`)
+	const signingFeePerGas = maximumFeePerGas(parameters.baseFeePerGas)
+	if (signingFeePerGas > persistedMaximumFeePerGas) {
+		throw new Error(`${parameters.plan.id} terminal signing fee per gas exceeds its persisted maximum fee ceiling`)
+	}
+	const nextBlockOnly = parameters.currentBlock + 1n
+	return planHorizon === undefined || nextBlockOnly < planHorizon ? nextBlockOnly : planHorizon
 }

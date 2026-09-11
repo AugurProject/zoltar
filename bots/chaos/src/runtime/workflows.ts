@@ -46,7 +46,7 @@ export function assertTerminalSubmissionBoundary(plan: Pick<OperationPlan, 'id' 
 	}
 }
 
-export function assertCanonicalLifecycleConfirmationBoundary(plan: Pick<OperationPlan, 'classification' | 'id' | 'obligation' | 'steps'>) {
+function assertCanonicalLifecycleConfirmationBoundary(plan: Pick<OperationPlan, 'classification' | 'id' | 'obligation' | 'steps'>) {
 	if (!plan.steps.some(stepRequiresCanonicalLifecycleConfirmation)) return
 	if (plan.classification !== 'lifecycle-obligation' || !plan.obligation) {
 		throw new Error(`Plan ${plan.id} uses canonical lifecycle confirmation outside a lifecycle obligation`)
@@ -57,7 +57,7 @@ export function assertCanonicalLifecycleConfirmationBoundary(plan: Pick<Operatio
 	}
 }
 
-export function workflowMatchesContinuationPlan(workflow: DurableWorkflow, plan: OperationPlan) {
+function workflowMatchesContinuationPlan(workflow: DurableWorkflow, plan: OperationPlan) {
 	return workflow.ecosystem === plan.ecosystem && workflow.operationId === plan.definitionId && canonicalMetadata(workflow.metadata) === canonicalMetadata(plan.metadata)
 }
 

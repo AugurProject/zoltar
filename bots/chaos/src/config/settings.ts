@@ -2,7 +2,7 @@ import { canonicalDeployment } from './canonical-deployment.ts'
 import { createHash, randomUUID } from 'node:crypto'
 import { constants } from 'node:fs'
 import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
-import { dirname, extname, resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import { persistentPathIdentitiesMatch, persistentPathIdentity } from '@zoltar/bot-shared/config/persistent-path'
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
 import { type Address, type Hex } from '@zoltar/bot-shared/ethereum'
@@ -12,14 +12,13 @@ import { configuredQuorumRpcUrlMinimum, rpcQuorumRequirement, type RpcQuorumRequ
 import { CHAOS_OPERATION_CATALOG } from '../operations/catalog.ts'
 import { MINIMUM_WORKFLOW_VALIDITY_BLOCKS } from '../operations/timing.ts'
 
-export const PRESERVE_PRIVATE_KEY = '__PRESERVE_SAVED_PRIVATE_KEY__'
+const PRESERVE_PRIVATE_KEY = '__PRESERVE_SAVED_PRIVATE_KEY__'
 export const CONFIGURATION_REVISION_CONFLICT = 'ConfigurationRevisionConflict'
-export { MINIMUM_WORKFLOW_VALIDITY_BLOCKS }
-export const PRESET_MAXIMUM_BLOCK_INTERVAL_SECONDS = 60
-export const MAXIMUM_BLOCK_INTERVAL_SECONDS = 86_400
+const PRESET_MAXIMUM_BLOCK_INTERVAL_SECONDS = 60
+const MAXIMUM_BLOCK_INTERVAL_SECONDS = 86_400
 
 export const CHAOS_ECOSYSTEMS = ['zoltar', 'statoblast', 'open-oracle', 'trading'] as const
-export type ChaosEcosystem = (typeof CHAOS_ECOSYSTEMS)[number]
+type ChaosEcosystem = (typeof CHAOS_ECOSYSTEMS)[number]
 
 export type DeploymentSettings = {
 	openOracle: Address
@@ -33,7 +32,7 @@ export type DeploymentSettings = {
 	zoltar: Address
 }
 
-export type DiscoverySettings = {
+type DiscoverySettings = {
 	maxPools: number
 	maxQuestions: number
 	maxStagedOperationsPerPool: number
@@ -63,7 +62,7 @@ export type StrategySettings = {
 	workflowValidForBlocks: bigint
 }
 
-export type RuntimeSettings = {
+type RuntimeSettings = {
 	execute: boolean
 	lifecyclePollMilliseconds: number
 	once: boolean
@@ -75,7 +74,7 @@ export type RuntimeSettings = {
 	uiPort: number
 }
 
-export type PresetNetworkSettings = {
+type PresetNetworkSettings = {
 	chainId: number
 	explorerUrl: string
 	kind?: undefined
@@ -83,7 +82,7 @@ export type PresetNetworkSettings = {
 	name: NetworkName
 }
 
-export type CustomNetworkSettings = {
+type CustomNetworkSettings = {
 	chainId: number
 	explorerUrl: string
 	kind: 'custom'
@@ -91,7 +90,7 @@ export type CustomNetworkSettings = {
 	name: string
 }
 
-export type OperatorNetworkSettings = PresetNetworkSettings | CustomNetworkSettings
+type OperatorNetworkSettings = PresetNetworkSettings | CustomNetworkSettings
 
 export type OperatorSettings = {
 	connectivity: (ConnectivitySettings & { quorumRpcUrls: string[]; rpcQuorum: RpcQuorumRequirement }) | undefined
@@ -204,7 +203,7 @@ function unsignedIntegerString(value: unknown, label: string) {
 	return parsed
 }
 
-export function parseDecimalAmount(value: unknown, label: string) {
+function parseDecimalAmount(value: unknown, label: string) {
 	if (typeof value !== 'string' || !/^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(value)) {
 		throw new Error(`${label} must be a non-negative decimal with at most 18 places`)
 	}
@@ -212,7 +211,7 @@ export function parseDecimalAmount(value: unknown, label: string) {
 	return BigInt(whole) * unit + BigInt(fraction.padEnd(18, '0'))
 }
 
-export function formatDecimalAmount(value: bigint) {
+function formatDecimalAmount(value: bigint) {
 	if (value < 0n) throw new Error('Decimal amount cannot be negative')
 	const whole = value / unit
 	const fraction = (value % unit).toString().padStart(18, '0').replace(/0+$/, '')
@@ -533,17 +532,11 @@ export async function saveSettings(path: string, settings: OperatorSettings, exp
 	return savedRevision
 }
 
-export function chainSpecificPath(path: string, network: NetworkName) {
-	const extension = extname(path)
-	const stem = (extension === '' ? path : path.slice(0, -extension.length)).replace(/\.(?:mainnet|sepolia)$/, '')
-	return `${stem}.${network}${extension}`
-}
-
-export function settingsProfilePath(path: string, network: NetworkName) {
+function settingsProfilePath(path: string, network: NetworkName) {
 	return `${path}.${network}.profile`
 }
 
-export function settingsProfilePathForNetwork(path: string, network: OperatorNetworkSettings) {
+function settingsProfilePathForNetwork(path: string, network: OperatorNetworkSettings) {
 	if (network.kind !== 'custom') return settingsProfilePath(path, network.name)
 	const chainId = customNetworkChainId(network.chainId, 'Custom profile chain ID')
 	return `${path}.custom-chain-${chainId.toString()}.profile`
@@ -600,12 +593,6 @@ async function assertProfileCandidates(path: string, candidates: readonly Profil
 	}
 }
 
-function assertCompatibleProfileProcessMode(current: OperatorSettings, target: OperatorSettings) {
-	if (current.runtime.once !== target.runtime.once || current.runtime.ui !== target.runtime.ui || current.runtime.uiHost !== target.runtime.uiHost || current.runtime.uiPort !== target.runtime.uiPort) {
-		throw new Error('Chain profiles must use the same once mode and dashboard binding to switch in place')
-	}
-}
-
 export async function assertSettingsProfileIsolation(path: string, active: OperatorSettings) {
 	const mainnet = await loadProfile(path, 'mainnet')
 	const sepolia = await loadProfile(path, 'sepolia')
@@ -613,51 +600,4 @@ export async function assertSettingsProfileIsolation(path: string, active: Opera
 	if (mainnet !== undefined) candidates.push(presetProfileCandidate('mainnet', mainnet))
 	if (sepolia !== undefined) candidates.push(presetProfileCandidate('sepolia', sepolia))
 	await assertProfileCandidates(path, candidates)
-}
-
-export async function switchSettingsNetworkProfile(path: string, network: NetworkName, examplePath: string, preflight?: (target: OperatorSettings) => Promise<void>) {
-	const current = await loadSettings(path)
-	const mainnet = await loadProfile(path, 'mainnet')
-	const sepolia = await loadProfile(path, 'sepolia')
-	const stored: ProfileCandidate[] = [activeProfileCandidate(current.settings)]
-	if (mainnet !== undefined) stored.push(presetProfileCandidate('mainnet', mainnet))
-	if (sepolia !== undefined) stored.push(presetProfileCandidate('sepolia', sepolia))
-	await assertProfileCandidates(path, stored)
-	if (current.settings.network.kind !== 'custom' && current.settings.network.name === network) return current
-	let target = network === 'mainnet' ? mainnet : sepolia
-	if (target === undefined) {
-		const template = parseSettings(JSON.parse(await readFile(examplePath, 'utf8')))
-		const chainId = network === 'mainnet' ? 1 : 11_155_111
-		target = {
-			...template,
-			connectivity: undefined,
-			deployment: canonicalDeployment(chainId),
-			network: {
-				chainId,
-				explorerUrl: network === 'mainnet' ? 'https://etherscan.io' : 'https://sepolia.etherscan.io',
-				maximumBlockIntervalSeconds: PRESET_MAXIMUM_BLOCK_INTERVAL_SECONDS,
-				name: network,
-			},
-			networkConfigured: false,
-			paused: true,
-			privateKey: undefined,
-			runtime: {
-				...template.runtime,
-				execute: false,
-				once: false,
-				stateFile: chainSpecificPath(current.settings.runtime.stateFile, network),
-				ui: current.settings.runtime.ui,
-				uiHost: current.settings.runtime.uiHost,
-				uiPort: current.settings.runtime.uiPort,
-			},
-		}
-	}
-	target = { ...target, paused: true }
-	await assertProfileCandidates(path, [activeProfileCandidate(current.settings), presetProfileCandidate(network, target)])
-	assertCompatibleProfileProcessMode(current.settings, target)
-	await preflight?.(target)
-	await saveSettings(settingsProfilePathForNetwork(path, current.settings.network), { ...current.settings, paused: true })
-	await saveSettings(settingsProfilePath(path, network), target)
-	const savedRevision = await saveSettings(path, target, current.revision)
-	return { path, revision: savedRevision, settings: target }
 }

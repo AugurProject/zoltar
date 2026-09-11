@@ -1,15 +1,13 @@
-export type ReportClock = 'block' | 'timestamp'
+type ReportClock = 'block' | 'timestamp'
 
 // BinaryOutcome in EscalationGame.sol: Invalid = 0, Yes = 1, No = 2.
 export const ESCALATION_OUTCOME = { invalid: '0', yes: '1', no: '2' } as const
 export const ETH_QUOTE_DECIMALS = 18
 export const USDC_QUOTE_DECIMALS = 6
-export const VAULT_WARNING_HEALTH_FACTOR_BPS = 12_000n
+const VAULT_WARNING_HEALTH_FACTOR_BPS = 12_000n
 const BPS_DENOMINATOR = 10_000n
 const PRICE_PRECISION = 10n ** 18n
 const LIQUIDATION_REP_BONUS_BPS = 500n
-
-export const quoteDecimalsFallback = (contractKind: string | undefined): number => (contractKind === 'usdc' ? USDC_QUOTE_DECIMALS : ETH_QUOTE_DECIMALS)
 
 export type ReportLifecycleInput = {
 	readonly eventName: 'ReportSubmitted' | 'ReportDisputed' | 'ReportSettled'
@@ -160,14 +158,6 @@ export const auctionLifecycle = (input: AuctionLifecycleInput): string => {
 	if (current < start) return 'Scheduled'
 	if (current < end) return 'Open'
 	return 'Awaiting finalization'
-}
-
-export const priceFreshness = (indexedTimestamp: string, observedTimestamp: string | undefined, validitySeconds = 86_400n) => {
-	const indexed = nonNegative(indexedTimestamp)
-	const observed = nonNegative(observedTimestamp)
-	if (indexed === undefined || observed === undefined) return { state: 'Unavailable' as const }
-	const age = indexed > observed ? indexed - observed : 0n
-	return { state: age <= validitySeconds ? ('Fresh' as const) : ('Stale' as const), ageSeconds: age.toString() }
 }
 
 const positiveInteger = (value: unknown, name: string): bigint => {

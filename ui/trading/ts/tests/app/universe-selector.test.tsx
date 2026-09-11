@@ -1,14 +1,15 @@
-import { installTradingRouting } from '../../lib/routing.js'
+import { installTradingRouting, tradingRouting } from '../../lib/routing.js'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
-import { App, currentRoute, tradingDocumentTitle } from '../../app/App.js'
+import { App } from '../../app/App.js'
+import * as appCopy from '../../copy/app.js'
 import { UniverseSelector } from '../../components/UniverseSelector.js'
 import { WalletSummary } from '../../components/WalletSummary.js'
 import { hasTradingWalletControls, TradingWalletControls } from '../../components/TradingWalletControls.js'
-import { buildLiveUniverseOptions, compactUniqueUniverseIds } from '../../lib/universeOptions.js'
+import { buildLiveUniverseOptions } from '../../lib/universeOptions.js'
 import { routeOwnsLiveWallet, walletSummaryAfterRouteChange, walletSummaryForUniverse } from '../../lib/walletSummaryState.js'
-import { filterMarketsByUniverse, observeKnownReceipt, walletSummaryAvailability, walletSummaryDiscoveryRetryStart, walletSummaryRefreshState } from '../../features/liveTradingControllerHelpers.js'
+import { filterMarketsByUniverse, walletSummaryAvailability, walletSummaryDiscoveryRetryStart, walletSummaryRefreshState } from '../../features/liveTradingControllerHelpers.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import type { LiveMarket } from '../../protocol/live.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -59,7 +60,7 @@ describe('universe selector', () => {
 
 	test('renders an explicit not-found route and updates the document title', async () => {
 		window.history.replaceState(undefined, '', '/#/missing')
-		expect(currentRoute()).toBe('not-found')
+		expect(tradingRouting.resolve(window.location.hash)).toBe('not-found')
 		const rendered = await renderIntoDocument(<App />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.querySelector('main')?.textContent).toContain('Page not found')
@@ -68,23 +69,23 @@ describe('universe selector', () => {
 		if (skipButton === undefined) throw new Error('Shared application skip control is unavailable')
 		await act(() => skipButton.click())
 		expect(document.activeElement).toBe(rendered.container.querySelector('main'))
-		expect(document.title).toBe(tradingDocumentTitle('not-found'))
+		expect(document.title).toBe(appCopy.documentTitle(appCopy.notFound))
 		expect(document.title).toBe('Not found · Statoblast trading')
 	})
 
 	test('accepts only addressed security-pool routes', () => {
 		window.history.replaceState(undefined, '', '/#/security-pool')
-		expect(currentRoute()).toBe('not-found')
+		expect(tradingRouting.resolve(window.location.hash)).toBe('not-found')
 		const address = `0x${'44'.repeat(20)}`
 		window.history.replaceState(undefined, '', `/#/security-pool/${address}`)
-		expect(currentRoute()).toBe(`security-pool/${address}`)
+		expect(tradingRouting.resolve(window.location.hash)).toBe(`security-pool/${address}`)
 		window.history.replaceState(undefined, '', `/#security-pool/${address}`)
-		expect(currentRoute()).toBe(`security-pool/${address}`)
+		expect(tradingRouting.resolve(window.location.hash)).toBe(`security-pool/${address}`)
 	})
 
 	test('preserves slashless top-level route bookmarks', () => {
 		window.history.replaceState(undefined, '', '/#markets')
-		expect(currentRoute()).toBe('markets')
+		expect(tradingRouting.resolve(window.location.hash)).toBe('markets')
 	})
 
 	test('uses Statoblast branding without the removed footer disclaimers', async () => {
@@ -196,7 +197,7 @@ describe('universe selector', () => {
 			select.value = 'help'
 			select.dispatchEvent(new Event('change', { bubbles: true }))
 		})
-		expect(currentRoute()).toBe('help')
+		expect(tradingRouting.resolve(window.location.hash)).toBe('help')
 	})
 
 	test('shows wallet connection failures on live security-pool routes', async () => {
@@ -248,7 +249,7 @@ describe('universe selector', () => {
 		expect(options[2]?.label).not.toBe(options[3]?.label)
 		expect(options[2]?.accessibleLabel).toBe(`Universe ${firstCollision.toString()}`)
 		expect(options[3]?.accessibleLabel).toBe(`Universe ${secondCollision.toString()}`)
-		expect(() => compactUniqueUniverseIds(['7', '7'])).toThrow('Universe IDs must be unique')
+		expect(() => buildLiveUniverseOptions([7n, 7n])).toThrow('Universe IDs must be unique')
 	})
 
 	test('keeps the balance slots in place while the wallet is disconnected or loading', async () => {
@@ -334,13 +335,6 @@ describe('universe selector', () => {
 
 	test('clears header quantities for a known transaction receipt before reloading', () => {
 		expect(walletSummaryRefreshState('0x8ba1f109551bD432803012645Ac136ddd64DBA72', '2')).toEqual({ account: '0x8ba1f109551bD432803012645Ac136ddd64DBA72', ethAttoEth: undefined, repAttoRep: undefined, status: 'loading', error: undefined, errorLabel: undefined, universeId: '2' })
-	})
-
-	test('observes successful and reverted receipts through the shared refresh boundary', async () => {
-		const observed: string[] = []
-		await observeKnownReceipt(Promise.resolve({ status: 'success' as const }), () => observed.push('success'))
-		await observeKnownReceipt(Promise.resolve({ status: 'reverted' as const }), () => observed.push('reverted'))
-		expect(observed).toEqual(['success', 'reverted'])
 	})
 
 	test('preserves the current market page when retry must rerun discovery', () => {

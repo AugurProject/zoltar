@@ -3,17 +3,10 @@ import sepolia from '../../../../docs/sepolia-deployment-addresses.json'
 import { canonicalCoreDeployment } from '@zoltar/bot-shared/config/canonical-deployment'
 import example from '../../config/operator.example.json'
 import { expect, test } from 'bun:test'
-import { assertFocusedDeploymentCompatible, prepareDeploymentTokenTransition, replacePrimaryRepToken, validateDeploymentSettings } from '#config/deployment-settings'
+import { assertFocusedDeploymentCompatible, prepareDeploymentTokenTransition, validateDeploymentSettings } from '#config/deployment-settings'
 import type { Address } from '@zoltar/bot-shared/ethereum'
 
 const address = (digit: string) => `0x${digit.repeat(40)}` as Address
-
-test('replaces the derived primary REP without retaining stale deployment trust', () => {
-	const previousRep = address('1')
-	const nextRep = address('2')
-	const explicitToken = address('3')
-	expect(replacePrimaryRepToken([previousRep, explicitToken, nextRep], previousRep, nextRep)).toEqual([nextRep, explicitToken])
-})
 
 test('replaces the configured REP in both active and persisted live deployment settings', () => {
 	const activeRep = address('1')
