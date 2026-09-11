@@ -88,7 +88,7 @@ const waitForProcessExit = async (childProcess: ManagedProcess) => {
 const attachProcessErrorHandler = (childProcess: ManagedProcess, label: string) => {
 	childProcess.on('error', error => {
 		if (shuttingDown) return
-		console.error(`[ui:watch] ${label} failed to start`)
+		console.error(`[app:watch] ${label} failed to start`)
 		console.error(error)
 		void shutdown(1)
 	})
@@ -118,7 +118,7 @@ const stopProcess = async (childProcess: ManagedProcess | undefined) => {
 	try {
 		await waitForProcessExit(childProcess)
 	} catch (error) {
-		console.error('[ui:watch] Failed while waiting for child process exit')
+		console.error('[app:watch] Failed while waiting for child process exit')
 		console.error(error)
 		return
 	} finally {
@@ -165,31 +165,31 @@ const sendLiveReload = async (reason: string) => {
 	liveReloadQueued = false
 	try {
 		await fetch(`${LIVE_RELOAD_ENDPOINT}?reason=${encodeURIComponent(reason)}`, { method: 'POST' })
-		console.log(`[ui:watch] Reload requested (${reason})`)
+		console.log(`[app:watch] Reload requested (${reason})`)
 	} catch (error) {
-		console.error(`[ui:watch] Failed to signal browser reload because ${reason} changed`)
+		console.error(`[app:watch] Failed to signal browser reload because ${reason} changed`)
 		console.error(error)
 	}
 }
 
 const spawnServer = () => {
-	console.log('[ui:watch] Starting ui:serve')
+	console.log('[app:watch] Starting the dev server')
 	try {
 		serverProcess = spawn(BUN_EXECUTABLE_PATH, [DEV_SERVER_PATH, appId], {
 			cwd: REPOSITORY_ROOT_PATH,
 			stdio: 'inherit',
 		})
 	} catch (error) {
-		console.error('[ui:watch] Failed to start ui:serve')
+		console.error('[app:watch] Failed to start the dev server')
 		console.error(error)
 		void shutdown(1)
 		return
 	}
-	attachProcessErrorHandler(serverProcess, 'ui:serve')
+	attachProcessErrorHandler(serverProcess, 'dev server')
 	serverProcess.on('exit', (exitCode, signalCode) => {
 		if (shuttingDown || restartingServer) return
 		const failureCode = exitCode ?? 1
-		console.error(`[ui:watch] ui:serve exited unexpectedly (${signalCode ?? failureCode})`)
+		console.error(`[app:watch] dev server exited unexpectedly (${signalCode ?? failureCode})`)
 		void shutdown(failureCode)
 	})
 }
@@ -417,7 +417,7 @@ const runSharedBuildStep = async (command: string[], cwd: string, label: string)
 			stdio: 'inherit',
 		})
 	} catch (error) {
-		console.error(`[ui:watch] Failed to start ${label.toLowerCase()}`)
+		console.error(`[app:watch] Failed to start ${label.toLowerCase()}`)
 		console.error(error)
 		await shutdown(1)
 		return false
@@ -429,7 +429,7 @@ const runSharedBuildStep = async (command: string[], cwd: string, label: string)
 	try {
 		;({ exitCode, signalCode } = await waitForProcessExit(childProcess))
 	} catch (error) {
-		console.error(`[ui:watch] ${label} failed to start`)
+		console.error(`[app:watch] ${label} failed to start`)
 		console.error(error)
 		sharedBuildProcess = undefined
 		await shutdown(1)
@@ -438,7 +438,7 @@ const runSharedBuildStep = async (command: string[], cwd: string, label: string)
 	sharedBuildProcess = undefined
 	if (exitCode !== 0) {
 		const failureCode = exitCode ?? 1
-		console.error(`[ui:watch] ${label} failed (${signalCode ?? failureCode})`)
+		console.error(`[app:watch] ${label} failed (${signalCode ?? failureCode})`)
 		await shutdown(failureCode)
 		return false
 	}
@@ -447,7 +447,7 @@ const runSharedBuildStep = async (command: string[], cwd: string, label: string)
 
 const restartServer = async (reason: string) => {
 	if (shuttingDown) return
-	console.log(`[ui:watch] Restarting ui:serve because ${reason} changed`)
+	console.log(`[app:watch] Restarting the dev server because ${reason} changed`)
 	restartingServer = true
 	try {
 		await stopProcess(serverProcess)
@@ -468,7 +468,7 @@ const runVendorBuild = async (reason: string) => {
 		return
 	}
 	vendorBuildRunning = true
-	console.log(`[ui:watch] Rebuilding UI vendor assets because ${reason} changed`)
+	console.log(`[app:watch] Rebuilding UI vendor assets because ${reason} changed`)
 	try {
 		vendorBuildProcess = spawn(BUN_EXECUTABLE_PATH, [VENDOR_BUILD_PATH, appId, '--scoped-artifacts'], {
 			cwd: UI_ROOT_PATH,
@@ -476,7 +476,7 @@ const runVendorBuild = async (reason: string) => {
 		})
 	} catch (error) {
 		vendorBuildRunning = false
-		console.error('[ui:watch] Failed to start vendor rebuild')
+		console.error('[app:watch] Failed to start vendor rebuild')
 		console.error(error)
 		await shutdown(1)
 		return
@@ -488,7 +488,7 @@ const runVendorBuild = async (reason: string) => {
 	try {
 		;({ exitCode, signalCode } = await waitForProcessExit(childProcess))
 	} catch (error) {
-		console.error('[ui:watch] Vendor rebuild failed to start')
+		console.error('[app:watch] Vendor rebuild failed to start')
 		console.error(error)
 		vendorBuildRunning = false
 		vendorBuildProcess = undefined
@@ -499,7 +499,7 @@ const runVendorBuild = async (reason: string) => {
 	vendorBuildProcess = undefined
 	if (exitCode !== 0) {
 		const failureCode = exitCode ?? 1
-		console.error(`[ui:watch] Vendor rebuild failed (${signalCode ?? failureCode})`)
+		console.error(`[app:watch] Vendor rebuild failed (${signalCode ?? failureCode})`)
 		await shutdown(failureCode)
 		return
 	}
@@ -526,7 +526,7 @@ const runWorkerBuild = async (reason: string) => {
 		return
 	}
 	workerBuildRunning = true
-	console.log(`[ui:watch] Rebuilding simulation worker because ${reason} changed`)
+	console.log(`[app:watch] Rebuilding simulation worker because ${reason} changed`)
 	try {
 		workerBuildProcess = spawn(BUN_EXECUTABLE_PATH, [WORKER_BUILD_PATH, appId, '--artifacts-current'], {
 			cwd: UI_ROOT_PATH,
@@ -534,7 +534,7 @@ const runWorkerBuild = async (reason: string) => {
 		})
 	} catch (error) {
 		workerBuildRunning = false
-		console.error('[ui:watch] Failed to start simulation worker rebuild')
+		console.error('[app:watch] Failed to start simulation worker rebuild')
 		console.error(error)
 		await shutdown(1)
 		return
@@ -546,7 +546,7 @@ const runWorkerBuild = async (reason: string) => {
 	try {
 		;({ exitCode, signalCode } = await waitForProcessExit(childProcess))
 	} catch (error) {
-		console.error('[ui:watch] Simulation worker rebuild failed to start')
+		console.error('[app:watch] Simulation worker rebuild failed to start')
 		console.error(error)
 		workerBuildRunning = false
 		workerBuildProcess = undefined
@@ -557,7 +557,7 @@ const runWorkerBuild = async (reason: string) => {
 	workerBuildProcess = undefined
 	if (exitCode !== 0) {
 		const failureCode = exitCode ?? 1
-		console.error(`[ui:watch] Simulation worker rebuild failed (${signalCode ?? failureCode})`)
+		console.error(`[app:watch] Simulation worker rebuild failed (${signalCode ?? failureCode})`)
 		await shutdown(failureCode)
 		return
 	}
@@ -580,7 +580,7 @@ const runSharedBuild = async (reason: string) => {
 		return
 	}
 	sharedBuildRunning = true
-	console.log(`[ui:watch] Rebuilding shared package outputs because ${reason} changed`)
+	console.log(`[app:watch] Rebuilding shared package outputs because ${reason} changed`)
 	const builtSharedOutputs = await runSharedBuildStep([BUN_EXECUTABLE_PATH, './tooling/repo/build-shared.mts', appId], REPOSITORY_ROOT_PATH, 'Shared TypeScript build')
 	if (!builtSharedOutputs) return
 	sharedBuildRunning = false
@@ -604,7 +604,7 @@ const runProjectArtifactBuild = async (reason: string) => {
 		return
 	}
 	projectArtifactBuildRunning = true
-	console.log(`[ui:watch] Rebuilding UI contract artifacts because ${reason} changed`)
+	console.log(`[app:watch] Rebuilding UI contract artifacts because ${reason} changed`)
 	try {
 		projectArtifactBuildProcess = spawn(BUN_EXECUTABLE_PATH, ['./tooling/contracts/build-app-contracts.mts', appId], {
 			cwd: REPOSITORY_ROOT_PATH,
@@ -612,7 +612,7 @@ const runProjectArtifactBuild = async (reason: string) => {
 		})
 	} catch (error) {
 		projectArtifactBuildRunning = false
-		console.error('[ui:watch] Failed to start UI contract artifact rebuild')
+		console.error('[app:watch] Failed to start UI contract artifact rebuild')
 		console.error(error)
 		await shutdown(1)
 		return
@@ -624,7 +624,7 @@ const runProjectArtifactBuild = async (reason: string) => {
 	try {
 		;({ exitCode, signalCode } = await waitForProcessExit(childProcess))
 	} catch (error) {
-		console.error('[ui:watch] UI contract artifact rebuild failed to start')
+		console.error('[app:watch] UI contract artifact rebuild failed to start')
 		console.error(error)
 		projectArtifactBuildRunning = false
 		projectArtifactBuildProcess = undefined
@@ -635,7 +635,7 @@ const runProjectArtifactBuild = async (reason: string) => {
 	projectArtifactBuildProcess = undefined
 	if (exitCode !== 0) {
 		const failureCode = exitCode ?? 1
-		console.error(`[ui:watch] UI contract artifact rebuild failed (${signalCode ?? failureCode})`)
+		console.error(`[app:watch] UI contract artifact rebuild failed (${signalCode ?? failureCode})`)
 		await shutdown(failureCode)
 		return
 	}
@@ -654,7 +654,7 @@ const runContractBuild = async (reason: string) => {
 		return
 	}
 	contractBuildRunning = true
-	console.log(`[ui:watch] Rebuilding Solidity contracts and UI artifacts because ${reason} changed`)
+	console.log(`[app:watch] Rebuilding Solidity contracts and UI artifacts because ${reason} changed`)
 	try {
 		contractBuildProcess = spawn(BUN_EXECUTABLE_PATH, ['./tooling/contracts/build-app-contracts.mts', appId], {
 			cwd: REPOSITORY_ROOT_PATH,
@@ -662,7 +662,7 @@ const runContractBuild = async (reason: string) => {
 		})
 	} catch (error) {
 		contractBuildRunning = false
-		console.error('[ui:watch] Failed to start Solidity rebuild')
+		console.error('[app:watch] Failed to start Solidity rebuild')
 		console.error(error)
 		await shutdown(1)
 		return
@@ -674,7 +674,7 @@ const runContractBuild = async (reason: string) => {
 	try {
 		;({ exitCode, signalCode } = await waitForProcessExit(childProcess))
 	} catch (error) {
-		console.error('[ui:watch] Solidity rebuild failed to start')
+		console.error('[app:watch] Solidity rebuild failed to start')
 		console.error(error)
 		contractBuildRunning = false
 		contractBuildProcess = undefined
@@ -685,7 +685,7 @@ const runContractBuild = async (reason: string) => {
 	contractBuildProcess = undefined
 	if (exitCode !== 0) {
 		const failureCode = exitCode ?? 1
-		console.error(`[ui:watch] Solidity rebuild failed (${signalCode ?? failureCode})`)
+		console.error(`[app:watch] Solidity rebuild failed (${signalCode ?? failureCode})`)
 		await shutdown(failureCode)
 		return
 	}
@@ -728,7 +728,7 @@ const shutdown = async (exitCode: number) => {
 }
 
 const main = () => {
-	console.log('[ui:watch] Watching UI TypeScript output and serving static assets')
+	console.log('[app:watch] Watching UI TypeScript output and serving static assets')
 	for (const projectRoot of TYPE_SCRIPT_PROJECT_ROOT_PATHS) {
 		let typeScriptWatchProcess: ManagedProcess
 		try {
@@ -738,7 +738,7 @@ const main = () => {
 			})
 			typeScriptWatchProcesses.push(typeScriptWatchProcess)
 		} catch (error) {
-			console.error(`[ui:watch] Failed to start TypeScript watch for ${path.basename(projectRoot)}`)
+			console.error(`[app:watch] Failed to start TypeScript watch for ${path.basename(projectRoot)}`)
 			console.error(error)
 			void shutdown(1)
 			return
@@ -751,7 +751,7 @@ const main = () => {
 		typeScriptWatchProcess.on('exit', (exitCode, signalCode) => {
 			if (shuttingDown) return
 			const failureCode = exitCode ?? 1
-			console.error(`[ui:watch] ${label} exited unexpectedly (${signalCode ?? failureCode})`)
+			console.error(`[app:watch] ${label} exited unexpectedly (${signalCode ?? failureCode})`)
 			void shutdown(failureCode)
 		})
 	}
@@ -789,7 +789,7 @@ const main = () => {
 	})
 
 	void refreshTypeScriptOutputWatchers().catch(error => {
-		console.error('[ui:watch] Failed to watch TypeScript output files')
+		console.error('[app:watch] Failed to watch TypeScript output files')
 		console.error(error)
 		void shutdown(1)
 	})
@@ -800,19 +800,19 @@ const main = () => {
 		})
 
 	void refreshSharedSourceWatchers().catch(error => {
-		console.error('[ui:watch] Failed to watch shared TypeScript source files')
+		console.error('[app:watch] Failed to watch shared TypeScript source files')
 		console.error(error)
 		void shutdown(1)
 	})
 
 	void refreshTypeScriptSourceWatchers().catch(error => {
-		console.error('[ui:watch] Failed to watch TypeScript source files')
+		console.error('[app:watch] Failed to watch TypeScript source files')
 		console.error(error)
 		void shutdown(1)
 	})
 
 	void refreshContractSourceWatchers().catch(error => {
-		console.error('[ui:watch] Failed to watch Solidity contract source files')
+		console.error('[app:watch] Failed to watch Solidity contract source files')
 		console.error(error)
 		void shutdown(1)
 	})
@@ -829,7 +829,7 @@ const main = () => {
 				}
 			}
 		} catch (error) {
-			console.error('[ui:watch] Failed to load CSS files for watching')
+			console.error('[app:watch] Failed to load CSS files for watching')
 			console.error(error)
 		}
 	})()

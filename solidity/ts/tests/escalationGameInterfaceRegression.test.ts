@@ -193,5 +193,5 @@ test('EscalationGame bytecode stays within size budgets and preserves runtime sn
 
 	assert.ok(actualSnapshot.deployedBytes <= eip170DeployedBytecodeLimitBytes, `EscalationGame deployed bytecode exceeds EIP-170: ${actualSnapshot.deployedBytes}`)
 	assert.ok(actualSnapshot.deployedBytes <= escalationGameDeployedBytecodeBudgetBytes, `EscalationGame deployed bytecode exceeds project budget: ${actualSnapshot.deployedBytes}`)
-	assert.deepStrictEqual(actualSnapshot, getExpectedEscalationGameBytecodeSnapshot(actualSnapshot))
+	assert.deepStrictEqual(actualSnapshot, getExpectedEscalationGameBytecodeSnapshot(actualSnapshot), 'EscalationGame bytecode changed; review the change and refresh the snapshot with bun run update:escalation-game-bytecode-snapshot')
 })

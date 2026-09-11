@@ -201,6 +201,8 @@ After completing [Setup](#setup):
 1. Run `bun run app:serve:zoltar` (Zoltar on port 4153), `bun run app:serve:statoblast` (Statoblast on port 12347), or `bun run app:serve:trading` (Trading on port 4163)
 1. Open `http://localhost:4153/?simulate=1`, `http://localhost:12347/?simulate=1`, or `http://localhost:4163/?simulate=1`
 
+While a dev server is running, `UI_DEV_SERVER_URL=http://localhost:4153 bun run ui:browser-smoke:zoltar`, `UI_DEV_SERVER_URL=http://localhost:12347 bun run ui:browser-smoke:statoblast`, or `UI_DEV_SERVER_URL=http://localhost:4163 bun run ui:browser-smoke:trading` opens the app in headless Chromium and fails if it does not mount cleanly.
+
 This mode does not require a wallet extension or `anvil`. Instead, it boots a Tevm-backed in-browser chain and seeds the QA accounts with ETH, WETH, and REP. Zoltar and Statoblast scenarios control whether application contracts are already deployed. In Trading, `simScenario=deployed` deploys a seeded SecurityPool plus the Trading factory and router so its market routes are immediately usable, and the default `simScenario=trading-funded` additionally initializes pair liquidity and funds the simulation wallet with YES, NO, INVALID, and LP shares.
 
 Simulation mode details:
@@ -232,7 +234,7 @@ bun run app:watch:trading
 Build all UI apps:
 
 ```bash
-bun run app:build
+bun run ui:build
 ```
 
 Regenerate contract bindings and UI vendor assets:

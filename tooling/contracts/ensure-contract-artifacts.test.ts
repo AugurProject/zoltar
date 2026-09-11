@@ -46,7 +46,7 @@ test('artifact refresh does not require independently uninstalled UI packages', 
 	const scripts = Reflect.get(packageJson, 'scripts')
 	if (typeof scripts !== 'object' || scripts === null) throw new Error('Root package scripts must be an object')
 
-	expect(Reflect.get(scripts, 'refresh:shared-dependencies')).toBe('bun run projects:dependency-update')
+	expect(Reflect.get(scripts, 'refresh:shared-dependencies')).toBe('bun ./tooling/repo/run-project-tasks.mts dependency-update')
 	expect(Reflect.get(scripts, 'check:shared-dependencies')).toBe('bun run refresh:shared-dependencies && bun ./tooling/ui/ensure-ui-preact-singleton.mts')
 })
 
