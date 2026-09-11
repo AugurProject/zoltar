@@ -54,6 +54,26 @@ test('a manifest address that does not match the computed init code fails the pl
 	expect(() => buildVerificationPlan(tamperedManifest, artifactLookup)).toThrow('instead of the manifest address')
 })
 
+test('tampered manifest constructor arguments fail the CREATE2 validation', async () => {
+	const artifactLookup = await loadRealArtifactLookup()
+	const manifest = await loadRealManifest('sepolia')
+	const tamperedManifest = {
+		...manifest,
+		deploymentSteps: manifest.deploymentSteps.map(step => (step.id === 'shareTokenFactory' ? { ...step, constructorArguments: `${'00'.repeat(12)}${manifest.network.wethAddress.slice(2).toLowerCase()}` } : step)),
+	}
+	expect(() => buildVerificationPlan(tamperedManifest, artifactLookup)).toThrow('instead of the manifest address')
+})
+
+test('a verifiable step without recorded constructor arguments demands manifest regeneration', async () => {
+	const artifactLookup = await loadRealArtifactLookup()
+	const manifest = await loadRealManifest('sepolia')
+	const strippedManifest = {
+		...manifest,
+		deploymentSteps: manifest.deploymentSteps.map(step => (step.id === 'zoltar' ? { address: step.address, id: step.id, label: step.label } : step)),
+	}
+	expect(() => buildVerificationPlan(strippedManifest, artifactLookup)).toThrow('has no constructorArguments')
+})
+
 test('an unknown deployment step demands a verification definition', async () => {
 	const artifactLookup = await loadRealArtifactLookup()
 	const manifest = await loadRealManifest('sepolia')

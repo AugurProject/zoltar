@@ -1,29 +1,16 @@
 import { createApplyLinkedLibrariesHelper } from '@zoltar/core-shared/deployment/deploymentAddresses'
-import { encodeDeployData, getAddress, getCreate2Address, keccak256, toHex, type Abi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
-import { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_FEE_PERCENTAGE, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_MULTIPLIER, ORACLE_PROTOCOL_FEE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
-import { SEPOLIA_REP_ALLOCATIONS } from '@zoltar/zoltar-shared/deployment/sepoliaRepAllocations'
-
-// These operational oracle constants are duplicated from
-// ui/statoblastShared/ts/protocol/deploymentHelpers.ts, which cannot be
-// imported without a UI install. Drift is caught hard: every computed init
-// code must reproduce the manifest CREATE2 address before verification runs.
-const ORACLE_FEE_SINK_ADDRESS = '0x000000000000000000000000000000000000dEaD' satisfies Address
-const ORACLE_REPORT_GAS = 100000n
-const ORACLE_SETTLEMENT_GAS = 1000000
-const ORACLE_SETTLEMENT_TIME = 40 * 12
-const ORACLE_DISPUTE_DELAY = 0
-const ORACLE_TIME_TYPE = true
-const ORACLE_TRACK_DISPUTES = true
-const ORACLE_ESCALATION_HALT_MULTIPLIER_BPS = 100000n
-const ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS = 30000n
-const ORACLE_MIN_LIQUIDATION_PRICE_DISTANCE_BPS = 1000n
+import { getAddress, getCreate2Address, keccak256, toHex, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 
 const SCALAR_OUTCOMES_SOURCE_PATH = 'contracts/ScalarOutcomes.sol'
 const SECURITY_POOL_UTILS_SOURCE_PATH = 'contracts/statoblast/SecurityPoolUtils.sol'
 const ZERO_SALT = toHex(0, { size: 32 })
 
 export type DeploymentManifest = {
-	deploymentSteps: readonly { address: Address; id: string; label: string }[]
+	// constructorArguments carries the ABI-encoded arguments appended to each
+	// step's compiled init code (hex without a 0x prefix, '' when the
+	// constructor takes none); it is absent for steps not deployed from
+	// compiled init code, such as the raw proxy deployer.
+	deploymentSteps: readonly { address: Address; constructorArguments?: string; id: string; label: string }[]
 	network: { chainId: number; genesisRepTokenAddress: Address; id: 'mainnet' | 'sepolia'; wethAddress: Address }
 	protocolConfig: { forkBurnDivisor: bigint; forkThresholdDivisor: bigint; minimumSecurityBondDebtAttoEth: bigint; minimumVaultRepDepositAttoRep: bigint }
 }
@@ -31,7 +18,6 @@ export type DeploymentManifest = {
 type CompilerProfile = 'main' | 'openOracle'
 
 type ContractCreationArtifact = {
-	abi: Abi
 	// Unlinked creation bytecode without a 0x prefix, exactly as compiled.
 	creationBytecode: string
 }
@@ -86,8 +72,13 @@ export function parseDeploymentManifest(rawManifest: unknown, expectedNetworkId:
 	return {
 		deploymentSteps: deploymentSteps.map((step, index) => {
 			if (!isRecord(step)) throw new Error(`Deployment manifest step ${index.toString()} must be an object`)
+			const constructorArguments = step['constructorArguments']
+			if (constructorArguments !== undefined && (typeof constructorArguments !== 'string' || !/^[0-9a-fA-F]*$/.test(constructorArguments))) {
+				throw new Error(`Deployment manifest field deploymentSteps[${index.toString()}].constructorArguments must be a hex string without a 0x prefix`)
+			}
 			return {
 				address: getAddress(readString(step, 'address', `deploymentSteps[${index.toString()}].address`)),
+				...(constructorArguments === undefined ? {} : { constructorArguments }),
 				id: readString(step, 'id', `deploymentSteps[${index.toString()}].id`),
 				label: readString(step, 'label', `deploymentSteps[${index.toString()}].label`),
 			}
@@ -107,14 +98,8 @@ export function parseDeploymentManifest(rawManifest: unknown, expectedNetworkId:
 	}
 }
 
-type PlanContext = {
-	manifest: DeploymentManifest
-	stepAddress: (id: string) => Address
-}
-
 type StepDefinition = {
 	artifactPath: string
-	buildArgs?: (context: PlanContext) => readonly unknown[]
 	compilerProfile: CompilerProfile
 	contractName: string
 	// Source path inside the profile's standard JSON input when it differs
@@ -131,7 +116,6 @@ const UNVERIFIABLE_STEPS: Readonly<Record<string, string>> = {
 const STEP_DEFINITIONS: Readonly<Record<string, StepDefinition>> = {
 	deploymentStatusOracle: {
 		artifactPath: 'contracts/DeploymentStatusOracle.sol',
-		buildArgs: context => [context.manifest.deploymentSteps.filter(step => step.id !== 'deploymentStatusOracle').map(step => step.address)],
 		compilerProfile: 'main',
 		contractName: 'DeploymentStatusOracle',
 	},
@@ -142,7 +126,6 @@ const STEP_DEFINITIONS: Readonly<Record<string, StepDefinition>> = {
 	},
 	reputationToken: {
 		artifactPath: 'contracts/GenesisReputationToken.sol',
-		buildArgs: () => [SEPOLIA_REP_ALLOCATIONS.map(allocation => allocation.address), SEPOLIA_REP_ALLOCATIONS.map(allocation => allocation.amount)],
 		compilerProfile: 'main',
 		contractName: 'GenesisReputationToken',
 	},
@@ -164,7 +147,6 @@ const STEP_DEFINITIONS: Readonly<Record<string, StepDefinition>> = {
 	},
 	zoltar: {
 		artifactPath: 'contracts/Zoltar.sol',
-		buildArgs: context => [context.stepAddress('zoltarQuestionData'), context.manifest.network.genesisRepTokenAddress, context.manifest.protocolConfig.forkThresholdDivisor, context.manifest.protocolConfig.forkBurnDivisor],
 		compilerProfile: 'main',
 		contractName: 'Zoltar',
 	},
@@ -192,38 +174,17 @@ const STEP_DEFINITIONS: Readonly<Record<string, StepDefinition>> = {
 	},
 	shareTokenFactory: {
 		artifactPath: 'contracts/statoblast/factories/ShareTokenFactory.sol',
-		buildArgs: context => [context.stepAddress('zoltar')],
 		compilerProfile: 'main',
 		contractName: 'ShareTokenFactory',
 	},
 	priceOracleManagerAndOperatorQueuerFactory: {
 		artifactPath: 'contracts/statoblast/factories/PriceOracleManagerAndOperatorQueuerFactory.sol',
-		buildArgs: context => [
-			context.manifest.network.wethAddress,
-			ORACLE_REPORT_GAS,
-			ORACLE_SETTLEMENT_GAS,
-			ORACLE_GAS_UNITS_FOR_ONE_DISPUTE,
-			ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE,
-			OPEN_ORACLE_SECURITY_MULTIPLIER_BPS,
-			ORACLE_SETTLEMENT_TIME,
-			ORACLE_DISPUTE_DELAY,
-			ORACLE_PROTOCOL_FEE,
-			ORACLE_FEE_PERCENTAGE,
-			ORACLE_MULTIPLIER,
-			ORACLE_TIME_TYPE,
-			ORACLE_TRACK_DISPUTES,
-			ORACLE_FEE_SINK_ADDRESS,
-			ORACLE_ESCALATION_HALT_MULTIPLIER_BPS,
-			ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS,
-			ORACLE_MIN_LIQUIDATION_PRICE_DISTANCE_BPS,
-		],
 		compilerProfile: 'main',
 		contractName: 'PriceOracleManagerAndOperatorQueuerFactory',
 		linksLibraries: true,
 	},
 	securityPoolForker: {
 		artifactPath: 'contracts/statoblast/SecurityPoolForker.sol',
-		buildArgs: context => [context.stepAddress('zoltar')],
 		compilerProfile: 'main',
 		contractName: 'SecurityPoolForker',
 		linksLibraries: true,
@@ -235,25 +196,11 @@ const STEP_DEFINITIONS: Readonly<Record<string, StepDefinition>> = {
 	},
 	escalationGameFactory: {
 		artifactPath: 'contracts/statoblast/factories/EscalationGameFactory.sol',
-		buildArgs: context => [context.stepAddress('escalationGameClaimDelegate')],
 		compilerProfile: 'main',
 		contractName: 'EscalationGameFactory',
 	},
 	securityPoolFactory: {
 		artifactPath: 'contracts/statoblast/factories/SecurityPoolFactory.sol',
-		buildArgs: context => [
-			context.stepAddress('securityPoolForker'),
-			context.stepAddress('zoltarQuestionData'),
-			context.stepAddress('escalationGameFactory'),
-			context.stepAddress('openOracle'),
-			context.stepAddress('zoltar'),
-			context.stepAddress('shareTokenFactory'),
-			context.stepAddress('uniformPriceDualCapBatchAuctionFactory'),
-			context.stepAddress('priceOracleManagerAndOperatorQueuerFactory'),
-			context.manifest.protocolConfig.minimumSecurityBondDebtAttoEth,
-			context.manifest.protocolConfig.minimumVaultRepDepositAttoRep,
-			context.stepAddress('securityPoolOperationsDelegate'),
-		],
 		compilerProfile: 'main',
 		contractName: 'SecurityPoolFactory',
 		linksLibraries: true,
@@ -273,7 +220,6 @@ export function buildVerificationPlan(manifest: DeploymentManifest, getArtifact:
 		{ address: libraryAddresses.scalarOutcomes, hash: keccak256(toHex(`${SCALAR_OUTCOMES_SOURCE_PATH}:ScalarOutcomes`)).slice(2, 36) },
 		{ address: libraryAddresses.securityPoolUtils, hash: keccak256(toHex(`${SECURITY_POOL_UTILS_SOURCE_PATH}:SecurityPoolUtils`)).slice(2, 36) },
 	])
-	const context: PlanContext = { manifest, stepAddress }
 	const jobs: VerificationJob[] = []
 	const skipped: { id: string; reason: string }[] = []
 	for (const step of manifest.deploymentSteps) {
@@ -284,17 +230,18 @@ export function buildVerificationPlan(manifest: DeploymentManifest, getArtifact:
 		}
 		const definition = STEP_DEFINITIONS[step.id]
 		if (definition === undefined) throw new Error(`Deployment step ${step.id} has no contract-verification definition. Add one to tooling/contracts/contract-verification.mts.`)
+		if (step.constructorArguments === undefined) throw new Error(`Deployment manifest step ${step.id} has no constructorArguments. Regenerate the manifests with bun ./tooling/contracts/check-mainnet-deployment.mts --write.`)
 		const artifact = getArtifact(definition.artifactPath, definition.contractName)
 		const linkedBytecode: Hex = definition.linksLibraries === true ? applyLibraries(artifact.creationBytecode) : `0x${artifact.creationBytecode}`
-		const initCode = definition.buildArgs === undefined ? linkedBytecode : encodeDeployData({ abi: artifact.abi, args: definition.buildArgs(context), bytecode: linkedBytecode })
+		const initCode: Hex = `${linkedBytecode}${step.constructorArguments}`
 		const computedAddress = getCreate2Address({ bytecode: initCode, from: proxyDeployerAddress, salt: ZERO_SALT })
 		if (computedAddress !== step.address) {
-			throw new Error(`Computed init code for ${step.id} derives ${computedAddress} instead of the manifest address ${step.address}. The verification constants in tooling/contracts/contract-verification.mts have drifted from the deployment plan, or contract artifacts are stale.`)
+			throw new Error(`Computed init code for ${step.id} derives ${computedAddress} instead of the manifest address ${step.address}. The manifest constructor arguments or the contract artifacts are stale; regenerate them with bun run generate and bun ./tooling/contracts/check-mainnet-deployment.mts --write.`)
 		}
 		jobs.push({
 			address: step.address,
 			compilerProfile: definition.compilerProfile,
-			constructorArguments: initCode.slice(2 + artifact.creationBytecode.length),
+			constructorArguments: step.constructorArguments,
 			contractIdentifier: `${definition.inputPath ?? definition.artifactPath}:${definition.contractName}`,
 			id: step.id,
 			label: step.label,

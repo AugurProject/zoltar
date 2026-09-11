@@ -1,6 +1,7 @@
 import { concatHex, encodeAbiParameters, encodeDeployData, getCreate2Address, getCreateAddress, keccak256, toHex, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_FEE_PERCENTAGE, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_MULTIPLIER, ORACLE_PROTOCOL_FEE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
-import { createApplyLinkedLibrariesHelper } from '@zoltar/core-shared/deployment/deploymentAddresses'
+import { constructorArgumentsFromInitCode, createApplyLinkedLibrariesHelper } from '@zoltar/core-shared/deployment/deploymentAddresses'
+import type { DeploymentStepId } from '@zoltar/ui-core-shared/types/contracts.js'
 import { createInfraContractAddressHelper } from '@zoltar/statoblast-shared/deployment/deploymentAddresses'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/core-shared/deployment/protocolConfig'
 import { ScalarOutcomes_ScalarOutcomes } from '@zoltar/ui-core-shared/contractArtifact.js'
@@ -190,6 +191,38 @@ export function getInfraContractAddresses(profile: NetworkProfile = getRuntimeNe
 		uniformPriceDualCapBatchAuctionFactoryBytecode: `0x${statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object}`,
 		zeroSalt: ZERO_SALT,
 	}).getInfraContractAddresses()
+}
+
+// Constructor arguments for the statoblast infrastructure steps, keyed by step
+// id, as appended to each step's init code. Deployment manifests record these
+// so explorer source verification never re-derives deployment parameters.
+export function getInfraStepConstructorArguments(profile: NetworkProfile = getRuntimeNetworkProfile()): Partial<Record<DeploymentStepId, string>> {
+	const addresses = getInfraContractAddresses(profile)
+	return {
+		uniformPriceDualCapBatchAuctionFactory: '',
+		securityPoolUtils: '',
+		securityPoolOperationsDelegate: constructorArgumentsFromInitCode(getSecurityPoolOperationsDelegateByteCode(), statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate.evm.bytecode.object),
+		openOracle: '',
+		shareTokenFactory: constructorArgumentsFromInitCode(getShareTokenFactoryByteCode(addresses.zoltar), statoblast_factories_ShareTokenFactory_ShareTokenFactory.evm.bytecode.object),
+		priceOracleManagerAndOperatorQueuerFactory: constructorArgumentsFromInitCode(getPriceOracleManagerAndOperatorQueuerFactoryByteCode(profile.wethAddress), statoblast_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object),
+		securityPoolForker: constructorArgumentsFromInitCode(getSecurityPoolForkerByteCode(addresses.zoltar), statoblast_SecurityPoolForker_SecurityPoolForker.evm.bytecode.object),
+		escalationGameClaimDelegate: '',
+		escalationGameFactory: constructorArgumentsFromInitCode(getEscalationGameFactoryByteCode(addresses.escalationGameClaimDelegate), statoblast_factories_EscalationGameFactory_EscalationGameFactory.evm.bytecode.object),
+		securityPoolFactory: constructorArgumentsFromInitCode(
+			getSecurityPoolFactoryByteCode({
+				escalationGameFactory: addresses.escalationGameFactory,
+				openOracle: addresses.openOracle,
+				priceOracleManagerAndOperatorQueuerFactory: addresses.priceOracleManagerAndOperatorQueuerFactory,
+				securityPoolForker: addresses.securityPoolForker,
+				securityPoolOperationsDelegate: addresses.securityPoolOperationsDelegate,
+				shareTokenFactory: addresses.shareTokenFactory,
+				uniformPriceDualCapBatchAuctionFactory: addresses.uniformPriceDualCapBatchAuctionFactory,
+				zoltar: addresses.zoltar,
+				zoltarQuestionData: addresses.zoltarQuestionData,
+			}),
+			statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.evm.bytecode.object,
+		),
+	}
 }
 
 type BootstrapDescendantAddresses = {

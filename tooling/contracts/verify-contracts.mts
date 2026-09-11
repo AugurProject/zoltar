@@ -4,7 +4,6 @@ import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
 import process from 'node:process'
 import * as url from 'node:url'
-import type { Abi } from '@zoltar/core-shared/evm/ethereum'
 import { buildVerificationPlan, getExplorerTargets, getSourcifyTarget, parseDeploymentManifest, verifyContractsWithExplorer, verifyContractsWithSourcify, type ArtifactLookup, type DeploymentManifest, type StandardJsonInputs, type VerificationOutcome, type VerificationPlan } from './contract-verification.mts'
 
 const repositoryRoot = path.join(path.dirname(url.fileURLToPath(import.meta.url)), '..', '..')
@@ -28,22 +27,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null
 }
 
-function isAbi(value: unknown): value is Abi {
-	return Array.isArray(value) && value.every(entry => isRecord(entry) && typeof entry['type'] === 'string')
-}
-
 export function createArtifactLookup(rawArtifact: unknown): ArtifactLookup {
 	if (!isRecord(rawArtifact) || !isRecord(rawArtifact['contracts'])) throw new Error('Contract artifact must contain a contracts object')
 	const contracts = rawArtifact['contracts']
 	return (sourcePath, contractName) => {
 		const contractFile = contracts[sourcePath]
 		if (!isRecord(contractFile) || !isRecord(contractFile[contractName])) throw new Error(`Contract artifact is missing ${sourcePath}:${contractName}`)
-		const contractData = contractFile[contractName]
-		const abi = contractData['abi']
-		const evm = contractData['evm']
-		if (!isAbi(abi)) throw new Error(`Contract artifact ${sourcePath}:${contractName} has an invalid ABI`)
+		const evm = contractFile[contractName]['evm']
 		if (!isRecord(evm) || !isRecord(evm['bytecode']) || typeof evm['bytecode']['object'] !== 'string') throw new Error(`Contract artifact ${sourcePath}:${contractName} has no creation bytecode`)
-		return { abi, creationBytecode: evm['bytecode']['object'] }
+		return { creationBytecode: evm['bytecode']['object'] }
 	}
 }
 
