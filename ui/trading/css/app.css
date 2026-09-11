@@ -1713,13 +1713,13 @@ summary {
 }
 
 @media (max-width: 640px) {
-	/* The universe selector is a full-width control, so it keeps its own row instead of sharing row one with the address. */
+	/* The universe selector is a full-width control, so it keeps row two under the address instead of sharing row one; revealed balances flow below it. */
 	.trading-overview.is-simulation .overview-inline-metrics.data-grid > .overview-address-metric,
 	.trading-overview.is-simulation .overview-inline-metrics.data-grid > .overview-universe-metric {
 		grid-column: 1 / -1;
-		grid-row: auto;
 	}
-	.trading-overview.is-simulation .overview-universe-metric {
+	.trading-overview.is-simulation .overview-inline-metrics.data-grid > .overview-universe-metric {
+		grid-row: 2;
 		text-align: left;
 	}
 }

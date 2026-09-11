@@ -1580,6 +1580,25 @@
 		padding-inline: 0.3rem;
 		letter-spacing: 0.02em;
 	}
+
+	/* Long application titles wrap beside the brand icon instead of running under the header actions. */
+	.overview-route-header .route-title-row h2 {
+		min-width: 0;
+		white-space: normal;
+	}
+}
+
+@media (max-width: 359px) {
+	/* Two abbreviated columns no longer fit side by side: the address keeps row one and the universe row two. */
+	.overview-wallet-panel.is-simulation .overview-inline-metrics.data-grid > .overview-address-metric,
+	.overview-wallet-panel.is-simulation .overview-inline-metrics.data-grid > .overview-universe-metric {
+		grid-column: 1 / -1;
+	}
+
+	.overview-wallet-panel.is-simulation .overview-inline-metrics.data-grid > .overview-universe-metric {
+		grid-row: 2;
+		text-align: left;
+	}
 }
 
 /* Horizontal navigation shares one tab treatment across route levels. */
