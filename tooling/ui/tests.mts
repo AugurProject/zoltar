@@ -38,8 +38,11 @@ async function getAllFiles(dirPath: string, fileList: string[] = []) {
 	return fileList
 }
 
-export async function buildTests(target: TestBuildTarget, testOutputRoot = getTestBuildRoots(target).testOutputRoot) {
-	const { testSourceRoot } = getTestBuildRoots(target)
+export async function buildTests(target: TestBuildTarget, outputRootOverride?: string) {
+	const { testSourceRoot, testOutputRoot: defaultOutputRoot } = getTestBuildRoots(target)
+	// Overridable so tests of the build itself compile into a sandbox instead
+	// of writing a partial js tree into the real package outputs mid-run.
+	const testOutputRoot = outputRootOverride ?? defaultOutputRoot
 	const testFiles = (await getAllFiles(testSourceRoot)).filter(filePath => filePath.endsWith('.ts') || filePath.endsWith('.tsx'))
 	await fs.rm(testOutputRoot, { recursive: true, force: true })
 	await fs.mkdir(testOutputRoot, { recursive: true })
