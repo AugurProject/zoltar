@@ -17,9 +17,12 @@ test('counts active errors and warnings while preserving all notices and collaps
 		const alerts = window.document.getElementById('operator-alerts')
 		const empty = window.document.getElementById('header-notices-empty')
 		if (disclosure === null || alerts === null || !(empty instanceof window.HTMLElement)) throw new Error('Missing notice fixture')
-		// Mutation observer callbacks can lag waitUntilComplete on loaded machines, so settle on the expected count.
+		// Mutation observer callbacks can lag waitUntilComplete on loaded machines, so settle on the
+		// expected count against a wall-clock deadline; a fixed iteration budget exhausted in about a
+		// second on starved CI runners while the observer callback was still queued.
 		const settledCount = async (expected: string) => {
-			for (let attempt = 0; attempt < 200 && count?.textContent !== expected; attempt += 1) {
+			const deadline = Date.now() + 15_000
+			while (count?.textContent !== expected && Date.now() < deadline) {
 				await window.happyDOM.waitUntilComplete()
 				await Bun.sleep(5)
 			}
