@@ -14,7 +14,7 @@
 		"better-typescript-lib": "2.11.0",
 		"bun-types": "1.4.2",
 		"elkjs": "0.12.0",
-		"happy-dom": "20.10.6",
+		"happy-dom": "20.14.3",
 		"knip": "6.17.1",
 		"preact": "10.26.4",
 		"prettier": "3.8.4",
