@@ -2,23 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { coreDeploymentFromManifest } from '../../../build/core-deployments.mts'
 import { defaultCoreDeploymentRpcUrls } from '../../protocol/coreDeploymentDefaults.ts'
-import { loadCoreDeployments } from '../../protocol/coreDeployments.ts'
-import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
-import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
-import { installFetchStub } from '@zoltar/ui-core-shared/tests/testUtils/fetchStub.js'
-
-// Loads a core deployment registry through the public loader with a stubbed fetch and a non-simulation backend.
-async function loadCoreDeploymentsFrom(registry: unknown) {
-	const restoreEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: MAINNET_NETWORK_PROFILE }))
-	const restoreFetch = installFetchStub(async () => new Response(JSON.stringify(registry), { headers: { 'content-type': 'application/json' } }))
-	try {
-		return await loadCoreDeployments()
-	} finally {
-		restoreFetch()
-		restoreEnvironment()
-	}
-}
+import { loadCoreDeploymentsFrom } from '../support/coreDeployments.ts'
 
 describe('trading core deployment registry', () => {
 	test('copies the canonical deployment proxy and SecurityPoolFactory from a Zoltar manifest', () => {
