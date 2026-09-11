@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { htmlToDocumentationText } from './docs-html-text.mts'
+import { contractPagesDirectory } from './contract-reference-metadata.mts'
 
 const normalizeWhitespace = (text: string) => text.replace(/\s+/g, ' ')
 const parsedHtmlParagraphBodies = async (text: string, excludedContainers = 'script, style, template, noscript') => {
@@ -178,7 +179,7 @@ for await (const path of docsGlob.scan('.')) {
 }
 
 for (const path of paths.sort()) {
-	if (generatedDocumentationFiles.has(path)) {
+	if (generatedDocumentationFiles.has(path) || path.startsWith(`${contractPagesDirectory}/`)) {
 		continue
 	}
 	const text = await Bun.file(path).text()

@@ -3,22 +3,16 @@ import { mkdtemp, open, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Address } from '@zoltar/bot-shared/ethereum'
-import {
-	appendPriceHistory,
-	availableTokenBalances,
-	childPayouts,
-	constantProductSpotPriceWeth,
-	createTokenCatalogTracker,
-	formatTokenAmount,
-	loadPriceHistory,
-	MAX_OBSERVED_MONITORING_TOKENS,
-	missingPricePoints,
-	payoutDistributionHash,
-	poolSpotPriceWeth,
-	pricePoints,
-	tokenCatalogForScan,
-	type TokenMarketSnapshot,
-} from '#monitoring/market-monitor'
+import { appendPriceHistory, createTokenCatalogTracker, formatTokenAmount, loadPriceHistory, missingPricePoints, pricePoints, type TokenMarketSnapshot } from '#monitoring/market-monitor'
+import { childPayouts, payoutDistributionHash } from '#monitoring/augur-payouts'
+import { constantProductSpotPriceWeth, poolSpotPriceWeth } from '#monitoring/spot-prices'
+
+const MAX_OBSERVED_MONITORING_TOKENS = 64
+
+// Resolves the scan catalog with already-discovered Augur tokens.
+function tokenCatalogForScan(discoveredAugurTokens: readonly Address[], configuredTokens: readonly Address[], observedTokens: readonly Address[], approvedTokens: readonly Address[] = []) {
+	return createTokenCatalogTracker(async () => discoveredAugurTokens)(configuredTokens, observedTokens, approvedTokens)
+}
 
 const temporaryDirectories: string[] = []
 
@@ -27,8 +21,8 @@ afterEach(async () => {
 })
 
 describe('Augur REP discovery helpers', () => {
-	test('discovery and raw token configuration never approve execution', () => {
-		const catalog = tokenCatalogForScan(['0x0000000000000000000000000000000000000001'], ['0x0000000000000000000000000000000000000002'], [])
+	test('discovery and raw token configuration never approve execution', async () => {
+		const catalog = await tokenCatalogForScan(['0x0000000000000000000000000000000000000001'], ['0x0000000000000000000000000000000000000002'], [])
 		expect(catalog.executionTokens).toEqual([])
 		expect(catalog.monitoringTokens).toHaveLength(2)
 	})
@@ -52,10 +46,13 @@ describe('Augur REP discovery helpers', () => {
 		const observed = '0x0000000000000000000000000000000000000003' as Address
 		const forkRep = '0x0000000000000000000000000000000000000004' as Address
 		const discoveryCalls: { configured: readonly Address[]; observed: readonly Address[] }[] = []
-		const catalogForScan = createTokenCatalogTracker((discoveryConfigured, discoveryObserved) => {
-			discoveryCalls.push({ configured: discoveryConfigured, observed: discoveryObserved })
-			return Promise.resolve(discoveryCalls.length === 1 ? [rep, ...discoveryConfigured, ...discoveryObserved] : [rep, forkRep, ...discoveryConfigured, ...discoveryObserved])
-		})
+		const catalogForScan = createTokenCatalogTracker(
+			(discoveryConfigured, discoveryObserved) => {
+				discoveryCalls.push({ configured: discoveryConfigured, observed: discoveryObserved })
+				return Promise.resolve(discoveryCalls.length === 1 ? [rep, ...discoveryConfigured, ...discoveryObserved] : [rep, forkRep, ...discoveryConfigured, ...discoveryObserved])
+			},
+			{ refreshMilliseconds: 0 },
+		)
 
 		expect(await catalogForScan([configured], [observed], [rep, configured])).toEqual({
 			executionTokens: [rep, configured],
@@ -71,10 +68,30 @@ describe('Augur REP discovery helpers', () => {
 		])
 	})
 
-	test('prioritizes every execution token and caps permissionless observed monitoring work', () => {
+	test('reuses Augur discovery across scans until the refresh interval elapses', async () => {
+		const rep = '0x0000000000000000000000000000000000000001' as Address
+		let now = 0
+		let discoveries = 0
+		const catalogForScan = createTokenCatalogTracker(
+			() => {
+				discoveries += 1
+				return Promise.resolve([rep])
+			},
+			{ now: () => now, refreshMilliseconds: 1_000 },
+		)
+		await catalogForScan([], [], [])
+		now = 999
+		expect((await catalogForScan([], [], [])).monitoringTokens).toEqual([rep])
+		expect(discoveries).toBe(1)
+		now = 1_000
+		await catalogForScan([], [], [])
+		expect(discoveries).toBe(2)
+	})
+
+	test('prioritizes every execution token and caps permissionless observed monitoring work', async () => {
 		const execution = Array.from({ length: 3 }, (_, index) => `0x${(index + 1).toString(16).padStart(40, '0')}` as Address)
 		const observed = Array.from({ length: MAX_OBSERVED_MONITORING_TOKENS + 500 }, (_, index) => `0x${(index + 100).toString(16).padStart(40, '0')}` as Address)
-		const catalog = tokenCatalogForScan([], [], observed, execution)
+		const catalog = await tokenCatalogForScan([], [], observed, execution)
 		expect(catalog.executionTokens).toEqual(execution)
 		expect(catalog.monitoringTokens.slice(0, execution.length)).toEqual(execution)
 		expect(catalog.monitoringTokens).toHaveLength(execution.length + MAX_OBSERVED_MONITORING_TOKENS)
@@ -84,13 +101,6 @@ describe('Augur REP discovery helpers', () => {
 test('formats arbitrary token contribution units using token metadata decimals', () => {
 	expect(formatTokenAmount(12_345_678n, 6)).toBe('12.345678')
 	expect(formatTokenAmount(12_345_678n, 18)).toBe('0.000000000012345678')
-})
-
-test('isolates a reverting token balance without dropping healthy inventory', async () => {
-	const healthy = '0x0000000000000000000000000000000000000001' as Address
-	const reverting = '0x0000000000000000000000000000000000000002' as Address
-	const balances = await availableTokenBalances([healthy, reverting], token => (token === healthy ? Promise.resolve(42n) : Promise.reject(new Error('balanceOf reverted'))))
-	expect(balances).toEqual(new Map([[healthy.toLowerCase(), 42n]]))
 })
 
 test('normalizes Uniswap spot prices for both token orderings', () => {

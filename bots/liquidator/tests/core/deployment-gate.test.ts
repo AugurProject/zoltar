@@ -2,7 +2,14 @@ import { recordSystemDeploymentCheck } from '../../src/core/deployment-observati
 import { initialRuntimeState, operatorSnapshot } from '../../src/state/operator-state.ts'
 import { blockStatusText, scanStatusText } from '../../src/dashboard/block-status.ts'
 import { expect, test } from 'bun:test'
-import { createSystemDeploymentGate, systemDeploymentStatus } from '#core/deployment-gate'
+import { createSystemDeploymentGate } from '#core/deployment-gate'
+
+type DeploymentGate = ReturnType<typeof createSystemDeploymentGate>
+
+// A fresh gate has no cached verification, so it always performs the full deployment check.
+function systemDeploymentStatus(client: Parameters<DeploymentGate>[0], deployment: Parameters<DeploymentGate>[2]) {
+	return createSystemDeploymentGate()(client, 1, deployment)
+}
 
 const block = { number: 42n, timestamp: 123n }
 const zoltar = '0x0000000000000000000000000000000000000001' as const

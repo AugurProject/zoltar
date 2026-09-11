@@ -18,10 +18,13 @@ The codebase is split into these main areas:
 - `docs/` contains the published protocol documentation
 - `tooling/` contains typed repository metadata plus CI, contract-safety, documentation, testing, and UI build/development orchestration; `scripts/` retains only the pinned Uniswap deployment artifact
 - `bots/` contains chaos, liquidator, and OpenOracle arbitrager bots
+- [`augurScan/`](./augurScan/README.md) contains the read-only protocol explorer and indexer
+- [`testnetwork/`](./testnetwork/README.md) contains the Docker Compose setup for the repository-pinned local Anvil network
+- [`reth/`](./reth/README.md) contains the Docker Compose setup for a pruned Sepolia Reth and Lighthouse node
 
 The runnable packages (`ui/zoltar`, `ui/statoblast`, and `ui/trading`) are dependency leaves: they own bootstrap, routes, application composition, and tests. Reusable product capabilities live in the matching shared library, while runtime-neutral primitives, hooks, wallet/chain integration, transactions, and simulation infrastructure live in `ui/coreShared/ts`. Package exports and the UI boundary checker prevent shared libraries from importing runnable applications or applications from importing one another.
 
-Protocol documentation lives in [docs/documentation.html](https://augurproject.github.io/zoltar/docs/documentation.html)
+Protocol documentation lives in [docs/documentation.html](https://augurproject.github.io/zoltar/docs/documentation.html). Statoblast Trading has its own tutorials, how-to guides, and reference under [`solidity/docs/trading/`](./solidity/docs/trading/index.md).
 
 ## Prerequisites
 
@@ -209,7 +212,7 @@ Simulation mode details:
 - The flag is intentionally not restricted to localhost or development builds; production deployments may expose it as a browser-local demo and manual-QA path
 - Production users should treat any `?simulate=1` URL as a local sandbox. Simulated balances, deployments, blocks, quotes, and transactions are local to the browser and are not evidence of mainnet state.
 - Supported seeded scenarios are `simScenario=baseline`, `simScenario=deployed`, `simScenario=security-pool`, `simScenario=securitypoolx2`, `simScenario=securitypoolx2-auction`, and `simScenario=trading-funded`
-- The live simulation chain is ephemeral and exists only in the current brow
+- The live simulation chain is ephemeral and exists only in the current browser tab session; only states explicitly saved from the simulation banner persist in browser storage
 
 ## Common Commands
 

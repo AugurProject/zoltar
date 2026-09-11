@@ -1,14 +1,4 @@
-import { BPS_DENOMINATOR, quoteExactInput, quoteExactOutput, type SwapQuote } from './math.js'
-
-export type EnterPositionQuote = Readonly<{
-	longOutcome: 'YES' | 'NO'
-	completeSetShares: bigint
-	oppositeSharesSwapped: bigint
-	additionalLongShares: bigint
-	totalLongShares: bigint
-	invalidInsurance: bigint
-	feeAmount: bigint
-}>
+import { quoteExactOutput } from './math.js'
 
 export type ExitPositionQuote = Readonly<{
 	longOutcome: 'YES' | 'NO'
@@ -19,20 +9,7 @@ export type ExitPositionQuote = Readonly<{
 	feeAmount: bigint
 }>
 
-export function quoteEnterPosition(longOutcome: 'YES' | 'NO', completeSetShares: bigint, yesReserve: bigint, noReserve: bigint, feeBps: bigint): EnterPositionQuote {
-	const swap = longOutcome === 'YES' ? quoteExactInput(noReserve, yesReserve, completeSetShares, feeBps) : quoteExactInput(yesReserve, noReserve, completeSetShares, feeBps)
-	return {
-		longOutcome,
-		completeSetShares,
-		oppositeSharesSwapped: completeSetShares,
-		additionalLongShares: swap.amountOut,
-		totalLongShares: completeSetShares + swap.amountOut,
-		invalidInsurance: completeSetShares,
-		feeAmount: swap.feeAmount,
-	}
-}
-
-export function quoteExitPosition(longOutcome: 'YES' | 'NO', completeSetShares: bigint, yesReserve: bigint, noReserve: bigint, feeBps: bigint): ExitPositionQuote {
+function quoteExitPosition(longOutcome: 'YES' | 'NO', completeSetShares: bigint, yesReserve: bigint, noReserve: bigint, feeBps: bigint): ExitPositionQuote {
 	const swap = longOutcome === 'YES' ? quoteExactOutput(yesReserve, noReserve, completeSetShares, feeBps) : quoteExactOutput(noReserve, yesReserve, completeSetShares, feeBps)
 	return {
 		longOutcome,
@@ -68,26 +45,4 @@ export function maximumInsuredExit(parameters: MaximumExitParameters) {
 		else high = candidate - 1n
 	}
 	return low
-}
-
-export function minimumAfterSlippage(amount: bigint, slippageBps: bigint) {
-	if (slippageBps < 0n || slippageBps >= BPS_DENOMINATOR) throw new Error('slippageBps is out of range')
-	return (amount * (BPS_DENOMINATOR - slippageBps)) / BPS_DENOMINATOR
-}
-
-export function maximumAfterSlippage(amount: bigint, slippageBps: bigint) {
-	if (slippageBps < 0n || slippageBps >= BPS_DENOMINATOR) throw new Error('slippageBps is out of range')
-	return (amount * (BPS_DENOMINATOR + slippageBps) + BPS_DENOMINATOR - 1n) / BPS_DENOMINATOR
-}
-
-export function inputOutcomeConditionalPriceImpact(inputOutcome: 'YES' | 'NO', beforeInputReserve: bigint, beforeOutputReserve: bigint, quote: SwapQuote) {
-	const beforeNumerator = beforeOutputReserve
-	const beforeDenominator = beforeInputReserve + beforeOutputReserve
-	const afterIn = beforeInputReserve + quote.amountIn
-	const afterOut = beforeOutputReserve - quote.amountOut
-	return {
-		inputOutcome,
-		before: { numerator: beforeNumerator, denominator: beforeDenominator },
-		after: { numerator: afterOut, denominator: afterIn + afterOut },
-	}
 }

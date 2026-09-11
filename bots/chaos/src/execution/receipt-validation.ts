@@ -1,7 +1,7 @@
 import { decodeEventLog, parseAbiItem, type Address, type Hash, type Hex } from '@zoltar/bot-shared/ethereum'
 import type { OperationEvidence, OperationStep } from '../operations/types.ts'
 
-export type ReceiptLogEvidence = {
+type ReceiptLogEvidence = {
 	address: Address
 	data: Hex
 	topics: readonly Hash[]
@@ -180,13 +180,6 @@ export function stepReceiptEvidenceDisposition(step: { evidence: readonly Operat
 		validateStorageEvidence(evidence, observations)
 	}
 	return disposition
-}
-
-export function validateStepReceiptEvidence(step: { evidence: readonly OperationEvidence[]; label: OperationStep['label'] }, receipt: SuccessfulReceiptEvidence, observations: SemanticEvidenceObservations = {}) {
-	if (stepReceiptEvidenceDisposition(step, receipt, observations) === 'waiting-canonical') {
-		throw new Error(`${step.label} requires canonical lifecycle confirmation`)
-	}
-	return receipt
 }
 
 export function requireSuccessfulReceipt(label: string, receipt: Omit<SuccessfulReceiptEvidence, 'status'> & { status: 'reverted' | 'success' }) {

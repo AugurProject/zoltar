@@ -1,18 +1,18 @@
-export type JsonPrimitive = string | number | boolean | null
+type JsonPrimitive = string | number | boolean | null
 export type JsonValue = JsonPrimitive | readonly JsonValue[] | { readonly [key: string]: JsonValue }
 export type JsonRecord = { readonly [key: string]: JsonValue }
 
 export const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
 export const isString = (value: unknown): value is string => typeof value === 'string'
 export const isNullableString = (value: unknown): value is string | null => value === null || isString(value)
-export const isStringOrNumber = (value: unknown): value is string | number => isString(value) || typeof value === 'number'
+const isStringOrNumber = (value: unknown): value is string | number => isString(value) || typeof value === 'number'
 export const isJsonValue = (value: unknown): value is JsonValue => {
 	if (value === null || ['string', 'number', 'boolean'].includes(typeof value)) return true
 	if (Array.isArray(value)) return value.every(isJsonValue)
 	return isRecord(value) && Object.values(value).every(isJsonValue)
 }
 export const isJsonRecord = (value: unknown): value is JsonRecord => isRecord(value) && Object.values(value).every(isJsonValue)
-export const isNullableJsonRecord = (value: unknown): value is JsonRecord | null => value === null || isJsonRecord(value)
+const isNullableJsonRecord = (value: unknown): value is JsonRecord | null => value === null || isJsonRecord(value)
 export const isJsonArray = (value: unknown): value is readonly JsonValue[] => Array.isArray(value) && value.every(isJsonValue)
 
 export type OperationsCatalogSection = 'auctions' | 'escalations' | 'forks' | 'integrity' | 'reports' | 'timeline' | 'trading'
@@ -178,9 +178,9 @@ export const isUniswapPriceValue = (value: unknown): boolean =>
 	isString(value['rep_per_eth_1e18']) &&
 	(value['liquidity_value'] === undefined || isNullableString(value['liquidity_value']))
 
-export const isArgumentDefinition = (value: unknown): boolean => isRecord(value) && typeof value['index'] === 'number' && Number.isInteger(value['index']) && isString(value['name']) && isString(value['type']) && (value['indexed'] === undefined || typeof value['indexed'] === 'boolean')
+const isArgumentDefinition = (value: unknown): boolean => isRecord(value) && typeof value['index'] === 'number' && Number.isInteger(value['index']) && isString(value['name']) && isString(value['type']) && (value['indexed'] === undefined || typeof value['indexed'] === 'boolean')
 
-export const isNullableArgumentDefinitions = (value: unknown): boolean => value === null || (Array.isArray(value) && value.every(isArgumentDefinition))
+const isNullableArgumentDefinitions = (value: unknown): boolean => value === null || (Array.isArray(value) && value.every(isArgumentDefinition))
 
 export const isActivityRecordValue = (value: unknown): boolean =>
 	isRecord(value) &&
@@ -213,7 +213,7 @@ export const isActivityRecordValue = (value: unknown): boolean =>
 	(value['to_address'] === undefined || isNullableString(value['to_address'])) &&
 	isString(value['explorer_base_url'])
 
-export const isRelatedLogRecordValue = (value: unknown): boolean => isRecord(value) && typeof value['log_index'] === 'number' && isString(value['emitter_address']) && isNullableString(value['event_name']) && isString(value['summary'])
+const isRelatedLogRecordValue = (value: unknown): boolean => isRecord(value) && typeof value['log_index'] === 'number' && isString(value['emitter_address']) && isNullableString(value['event_name']) && isString(value['summary'])
 
 export const isLogDetailValue = (value: unknown): boolean =>
 	isActivityRecordValue(value) &&
@@ -258,7 +258,7 @@ export const isAccountTransactionValue = (value: unknown): boolean =>
 	(value['pool_addresses'] === undefined || value['pool_addresses'] === null || (Array.isArray(value['pool_addresses']) && value['pool_addresses'].every(isString))) &&
 	isString(value['explorer_base_url'])
 
-export const isTokenBalanceValue = (value: unknown): boolean =>
+const isTokenBalanceValue = (value: unknown): boolean =>
 	isRecord(value) &&
 	isString(value['address']) &&
 	isString(value['balance']) &&
@@ -269,12 +269,12 @@ export const isTokenBalanceValue = (value: unknown): boolean =>
 	(value['decimals'] === null || typeof value['decimals'] === 'number') &&
 	isString(value['blockNumber'])
 
-export const isPoolAssociationValue = (value: unknown): boolean => isRecord(value) && isString(value['address']) && isNullableString(value['label']) && isNullableString(value['questionTitle'])
+const isPoolAssociationValue = (value: unknown): boolean => isRecord(value) && isString(value['address']) && isNullableString(value['label']) && isNullableString(value['questionTitle'])
 
-export const isVaultPositionValue = (value: unknown): boolean =>
+const isVaultPositionValue = (value: unknown): boolean =>
 	isRecord(value) && isString(value['poolAddress']) && isNullableString(value['questionTitle']) && isString(value['repBackingUnits']) && isStringOrNumber(value['capacityOwnershipAttoRep']) && isStringOrNumber(value['claimableFeesAttoEth']) && isString(value['blockNumber'])
 
-export const isNativeBalanceDetailValue = (value: unknown): boolean => isRecord(value) && isString(value['balance']) && isString(value['blockNumber'])
+const isNativeBalanceDetailValue = (value: unknown): boolean => isRecord(value) && isString(value['balance']) && isString(value['blockNumber'])
 
 export const isRichListRecordValue = (value: unknown): boolean =>
 	isRecord(value) &&

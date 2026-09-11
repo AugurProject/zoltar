@@ -1,23 +1,19 @@
 import { createPublicClient, createWalletClient, encodeFunctionData, type Account, type Address, type Chain, type Hex, type Transport, type WalletClient } from '@zoltar/bot-shared/ethereum'
-import { maximumFeePerGas, paddedTransactionGas, prepareSignedTransaction, submitSignedTransaction } from '@zoltar/bot-shared/execution/transaction-submission'
+import { prepareSignedTransaction, submitSignedTransaction } from '@zoltar/bot-shared/execution/transaction-submission'
 import { sendRawTransactionToRpc } from '@zoltar/bot-shared/monitoring/connectivity'
 import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
-import type { DesiredPoolSettings, OperatorSettings, StrategySettings } from '#config/settings'
+import type { DesiredPoolSettings, OperatorSettings } from '#config/settings'
 import { coordinatorAbi, erc20Abi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi, wethAbi } from '#contracts/abi'
 import { isPoolExecutionEligible, type VaultMigration } from '#core/fork-migration'
-import { BPS_DENOMINATOR, LIQUIDATION_REP_BONUS_BPS, PRICE_PRECISION, conservativeLiquidationRep, liquidationSubmissionLabel, requiredRepForOpenInterest, surplusRepForWithdrawal, vaultHealthBps, type LiquidationCandidate } from '#core/strategy'
+import { BPS_DENOMINATOR, LIQUIDATION_REP_BONUS_BPS, PRICE_PRECISION, conservativeLiquidationRep, liquidationSubmissionLabel, type LiquidationCandidate } from '#core/strategy'
 import { recordActivity, saveDurableState, type PendingTransactionIntent, type PoolObservation, type RuntimeState } from '#state/operator-state'
 import { validateReceiptExpectation } from '#execution/receipt-validation'
 import { finalizedReceiptWithQuorum } from '#execution/recovery'
 import type { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
-
-export { requirePendingStagedOperation, requireSuccessfulStagedOperation, validateReceiptExpectation } from '#execution/receipt-validation'
+import { assertExecutionActive, assertGasCostLimitForBaseFee, assertMarketPriceStillAllowed, assertOperatorNotStopping, assertRepLimits, assertStaleLiquidationExposureBound, conservativeStaleTopUp, liquidationExecutionStep, planVaultMaintenance, requireFinalizedTransactionReceipt } from '#execution/execution-safety'
 
 type WriteClient = WalletClient<Transport, Chain, Account>
 type RpcPool = ReturnType<typeof createRpcEndpointPool>
-
-const MAX_UINT256 = 2n ** 256n - 1n
-const shutdownChecks = new WeakMap<object, () => boolean>()
 
 type Call = {
 	data: Hex
@@ -27,56 +23,6 @@ type Call = {
 	receiptExpectation?: PendingTransactionIntent['receiptExpectation'] | undefined
 	to: Address
 	value?: bigint | undefined
-}
-
-export class TransactionAwaitingCanonicalFinality extends Error {
-	readonly hash: Hex
-
-	constructor(label: string, hash: Hex) {
-		super(`${label} transaction ${hash} is awaiting canonical finality`)
-		this.name = 'TransactionAwaitingCanonicalFinality'
-		this.hash = hash
-	}
-}
-
-export class OperatorStopping extends Error {
-	constructor() {
-		super('Operator stopping before transaction submission')
-		this.name = 'OperatorStopping'
-	}
-}
-
-export function requireFinalizedTransactionReceipt(label: string, hash: Hex, result: Awaited<ReturnType<typeof finalizedReceiptWithQuorum>>) {
-	if (result.receipt !== undefined) return result.receipt
-	if (!result.observed) throw new Error(`${label} receipt disappeared before canonical finality`)
-	throw new TransactionAwaitingCanonicalFinality(label, hash)
-}
-
-export function assertGasCostLimit(gasEstimate: bigint, maxFeePerGas: bigint, maximumGasCost: bigint, label = 'Transaction') {
-	if (maxFeePerGas * paddedTransactionGas(gasEstimate) > maximumGasCost) {
-		throw new Error(`${label} estimated gas ceiling exceeds strategy.maximumGasCostAttoEth`)
-	}
-}
-
-export function assertGasCostLimitForBaseFee(gasEstimate: bigint, baseFeePerGas: bigint, maximumGasCost: bigint, label = 'Transaction') {
-	assertGasCostLimit(gasEstimate, maximumFeePerGas(baseFeePerGas), maximumGasCost, label)
-}
-
-export function assertExecutionActive(state: Pick<RuntimeState, 'paused'>) {
-	assertOperatorNotStopping(state)
-	if (state.paused) throw new Error('Operator paused before transaction submission')
-}
-
-function assertOperatorNotStopping(state: Pick<RuntimeState, 'paused'>) {
-	if (shutdownChecks.get(state)?.() ?? false) throw new OperatorStopping()
-}
-
-export function setExecutionShutdownCheck(state: RuntimeState, isRequested: () => boolean) {
-	shutdownChecks.set(state, isRequested)
-}
-
-export async function assertMarketPriceStillAllowed(priceStillAllowed: () => boolean | Promise<boolean>) {
-	if (!(await priceStillAllowed())) throw new Error('Market consensus expired or no longer confirms the price before transaction submission')
 }
 
 function executionReadClients(wallet: WriteClient, settings: OperatorSettings, pool: RpcPool) {
@@ -318,17 +264,7 @@ async function ensureAllowance(wallet: WriteClient, settings: OperatorSettings, 
 	)
 }
 
-export function assertRepLimits(parameters: { acquiredAmountAttoRep?: bigint | undefined; currentPoolAttoRep: bigint; currentTotalAttoRep: bigint; depositAmountAttoRep: bigint; maximumPoolAttoRep: bigint; maximumTotalAttoRep: bigint }) {
-	const acquiredAmountAttoRep = parameters.acquiredAmountAttoRep ?? 0n
-	if (parameters.currentPoolAttoRep + parameters.depositAmountAttoRep + acquiredAmountAttoRep > parameters.maximumPoolAttoRep) {
-		throw new Error('REP deployment would exceed strategy.maximumAttoRepPerPool')
-	}
-	if (parameters.currentTotalAttoRep + parameters.depositAmountAttoRep + acquiredAmountAttoRep > parameters.maximumTotalAttoRep) {
-		throw new Error('REP deployment would exceed strategy.maximumTotalDeployedRep')
-	}
-}
-
-export function assertRepExposureLimits(settings: OperatorSettings, state: RuntimeState, pool: PoolObservation, depositAmountAttoRep: bigint, acquiredAmountAttoRep = 0n) {
+function assertRepExposureLimits(settings: OperatorSettings, state: RuntimeState, pool: PoolObservation, depositAmountAttoRep: bigint, acquiredAmountAttoRep = 0n) {
 	const poolReservedAttoRep = reservedLiquidationRep(pool, settings)
 	const totalDeployedAttoRep = state.pools.reduce((total, observedPool) => total + observedPool.botVault.vaultAttoRepBacking + reservedLiquidationRep(observedPool, settings), 0n)
 	assertRepLimits({
@@ -382,30 +318,6 @@ async function depositRepToVault(wallet: WriteClient, settings: OperatorSettings
 		},
 		'deposit',
 	)
-}
-
-export function liquidationExecutionStep(topUpAttoRep: bigint) {
-	if (topUpAttoRep === 0n) return { kind: 'stage' as const }
-	const capacityOwnershipAddedAttoRep = (topUpAttoRep * BPS_DENOMINATOR) / MAX_UINT256
-	if (capacityOwnershipAddedAttoRep !== 0n) {
-		throw new Error('Liquidation top-up is too large for a backing-only deposit')
-	}
-	return { kind: 'deposit-and-rescreen' as const, targetHealthFactorBps: MAX_UINT256 }
-}
-
-export function conservativeStaleTopUp(parameters: { callerDisputeStakedAttoRep?: bigint; callerOpenInterestAttoEth: bigint; callerAttoRep: bigint; requestedDebtAttoEth: bigint; fallbackPrice: bigint; minimumTopUp: bigint; multiplierBps: bigint; referencePrice: bigint; safetyBps: bigint; targetHealthBps: bigint }) {
-	const referencePrice = parameters.referencePrice > 0n ? parameters.referencePrice : parameters.fallbackPrice
-	if (referencePrice === 0n) throw new Error('Stale unseeded oracle requires strategy.fallbackRepPerEthPrice')
-	const bufferedPrice = (referencePrice * parameters.safetyBps + BPS_DENOMINATOR - 1n) / BPS_DENOMINATOR
-	const requiredAttoRep = requiredRepForOpenInterest(parameters.callerOpenInterestAttoEth + parameters.requestedDebtAttoEth, parameters.multiplierBps, bufferedPrice, parameters.targetHealthBps, parameters.callerDisputeStakedAttoRep ?? 0n)
-	const conservativeTopUp = requiredAttoRep > parameters.callerAttoRep ? requiredAttoRep - parameters.callerAttoRep : 0n
-	return conservativeTopUp > parameters.minimumTopUp ? conservativeTopUp : parameters.minimumTopUp
-}
-
-export function assertStaleLiquidationExposureBound(candidate: Pick<LiquidationCandidate, 'requestedDebtAttoEth' | 'target'>) {
-	if (candidate.requestedDebtAttoEth >= candidate.target.openInterestAttoEth) {
-		throw new Error('Stale full-close liquidation cannot guarantee the configured REP exposure limits')
-	}
 }
 
 async function fundStaleOracle(wallet: WriteClient, settings: OperatorSettings, state: RuntimeState, rpcPool: RpcPool, pool: PoolObservation, reservedTopUpAttoRep: bigint, priceStillAllowed: () => boolean | Promise<boolean>) {
@@ -523,30 +435,6 @@ export async function executeLiquidation(wallet: WriteClient, settings: Operator
 	)
 }
 
-type VaultMaintenancePlan = { amountAttoRep: bigint; kind: 'deposit' | 'withdraw' } | { kind: 'fees' } | undefined
-
-export function planVaultMaintenance(
-	pool: Pick<PoolObservation, 'botVault' | 'isPriceValid' | 'lastPrice' | 'minimumVaultRepDepositAttoRep' | 'multiplierBps'>,
-	strategy: Pick<StrategySettings, 'allowAutomaticWithdrawals' | 'minimumRepWithdrawalAttoRep' | 'redeemFeesAboveAttoEth' | 'vaultTargetHealthBps' | 'vaultTopUpHealthBps' | 'vaultWithdrawHealthBps'>,
-	walletAddress: Address,
-	priceDependentMaintenanceAllowed: boolean,
-	prioritizeLiquidationCandidate = false,
-): VaultMaintenancePlan {
-	if (priceDependentMaintenanceAllowed && pool.lastPrice > 0n) {
-		const health = vaultHealthBps(pool.botVault.vaultAttoRepBacking, pool.botVault.openInterestAttoEth, pool.multiplierBps, pool.lastPrice, pool.botVault.disputeStakedAttoRep)
-		if (pool.botVault.openInterestAttoEth > 0n && health !== undefined && health < strategy.vaultTopUpHealthBps) {
-			const targetAttoRep = requiredRepForOpenInterest(pool.botVault.openInterestAttoEth, pool.multiplierBps, pool.lastPrice, strategy.vaultTargetHealthBps, pool.botVault.disputeStakedAttoRep)
-			return { amountAttoRep: targetAttoRep > pool.botVault.vaultAttoRepBacking ? targetAttoRep - pool.botVault.vaultAttoRepBacking : 0n, kind: 'deposit' }
-		}
-		if (!prioritizeLiquidationCandidate && strategy.allowAutomaticWithdrawals && pool.isPriceValid && pool.botVault.address.toLowerCase() === walletAddress.toLowerCase()) {
-			const surplusAttoRep = surplusRepForWithdrawal(pool.botVault, { minimumVaultRepDepositAttoRep: pool.minimumVaultRepDepositAttoRep, multiplierBps: pool.multiplierBps, price: pool.lastPrice }, strategy)
-			if (surplusAttoRep > 0n) return { amountAttoRep: surplusAttoRep, kind: 'withdraw' }
-		}
-	}
-	if (pool.botVault.claimableFeesAttoEth > 0n && pool.botVault.claimableFeesAttoEth >= strategy.redeemFeesAboveAttoEth) return { kind: 'fees' }
-	return undefined
-}
-
 export async function maintainVault(wallet: WriteClient, settings: OperatorSettings, state: RuntimeState, rpcPool: RpcPool, pool: PoolObservation, priceStillAllowed: () => boolean | Promise<boolean>) {
 	if (!isPoolExecutionEligible(pool)) return false
 	const plan = planVaultMaintenance(pool, settings.strategy, wallet.account.address, await priceStillAllowed(), pool.candidates.length > 0)
@@ -606,9 +494,4 @@ export function dryRunCandidate(state: RuntimeState, candidate: LiquidationCandi
 		message: 'Liquidation candidate selected',
 		status: 'dry-run',
 	})
-}
-
-export function isVaultHealthyEnoughForExecution(pool: PoolObservation) {
-	const health = vaultHealthBps(pool.botVault.vaultAttoRepBacking, pool.botVault.openInterestAttoEth, pool.multiplierBps, pool.lastPrice, pool.botVault.disputeStakedAttoRep)
-	return health === undefined || health >= BPS_DENOMINATOR
 }

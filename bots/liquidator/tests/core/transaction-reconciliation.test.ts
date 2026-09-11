@@ -1,23 +1,33 @@
 import { describe, expect, test } from 'bun:test'
 import { getAddress, privateKeyToAccount, type Hex } from '@zoltar/bot-shared/ethereum'
-import { parseTransactionReconciliation, validateFinalizedReplacement, validateReconciliationIntentChain, verifyFinalizedReplacement } from '../../src/core/transaction-reconciliation.ts'
+import { parseTransactionReconciliation, validateReconciliationIntentChain, verifyFinalizedReplacement, type FinalizedReplacementEvidence } from '../../src/core/transaction-reconciliation.ts'
 
 const intentHash = `0x${'11'.repeat(32)}` as Hex
 const replacementHash = `0x${'22'.repeat(32)}` as Hex
 const sender = getAddress('0x0000000000000000000000000000000000000010')
 
+// Verifies a replacement whose receipt is already final and canonical, isolating the intent/replacement validation.
+function verifyFinalReplacement(requestedHash: Hex, replacement: FinalizedReplacementEvidence) {
+	return verifyFinalizedReplacement({ hash: intentHash, nonce: 7n, sender }, requestedHash, 12n, {
+		canonicalBlockHash: async () => replacement.blockHash,
+		currentHeads: async () => [replacement.blockNumber + 12n],
+		replacement: async () => replacement,
+	})
+}
+
 describe('manual transaction reconciliation', () => {
-	test('parses exact transaction hashes and validates a same-sender same-nonce replacement', () => {
+	test('parses exact transaction hashes and validates a same-sender same-nonce replacement', async () => {
 		expect(parseTransactionReconciliation({ intentHash, replacementHash })).toEqual({ intentHash, replacementHash })
-		expect(() => validateFinalizedReplacement({ hash: intentHash, nonce: 7n, sender }, replacementHash, { blockHash: `0x${'33'.repeat(32)}`, blockNumber: 100n, from: sender, hash: replacementHash, nonce: 7n, status: 'success' })).not.toThrow()
+		const evidence = { blockHash: `0x${'33'.repeat(32)}` as Hex, blockNumber: 100n, from: sender, hash: replacementHash, nonce: 7n, status: 'success' as const }
+		await expect(verifyFinalReplacement(replacementHash, evidence)).resolves.toEqual(evidence)
 	})
 
-	test('rejects the original hash, another sender, and another nonce', () => {
+	test('rejects the original hash, another sender, and another nonce', async () => {
 		const evidence = { blockHash: `0x${'33'.repeat(32)}` as Hex, blockNumber: 100n, from: sender, hash: replacementHash, nonce: 7n, status: 'reverted' as const }
-		expect(() => validateFinalizedReplacement({ hash: intentHash, nonce: 7n, sender }, replacementHash, { ...evidence, hash: intentHash })).toThrow('automatic receipt recovery')
-		expect(() => validateFinalizedReplacement({ hash: intentHash, nonce: 7n, sender }, `0x${'44'.repeat(32)}`, evidence)).toThrow('another transaction')
-		expect(() => validateFinalizedReplacement({ hash: intentHash, nonce: 7n, sender }, replacementHash, { ...evidence, from: getAddress('0x0000000000000000000000000000000000000020') })).toThrow('another account')
-		expect(() => validateFinalizedReplacement({ hash: intentHash, nonce: 7n, sender }, replacementHash, { ...evidence, nonce: 8n })).toThrow('did not consume')
+		await expect(verifyFinalReplacement(replacementHash, { ...evidence, hash: intentHash })).rejects.toThrow('automatic receipt recovery')
+		await expect(verifyFinalReplacement(`0x${'44'.repeat(32)}`, evidence)).rejects.toThrow('another transaction')
+		await expect(verifyFinalReplacement(replacementHash, { ...evidence, from: getAddress('0x0000000000000000000000000000000000000020') })).rejects.toThrow('another account')
+		await expect(verifyFinalReplacement(replacementHash, { ...evidence, nonce: 8n })).rejects.toThrow('did not consume')
 	})
 
 	test('requires quorum evidence, canonical receipt ancestry, and finality before returning a replacement', async () => {

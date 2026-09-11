@@ -2,7 +2,6 @@ import { beforeEach, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIMULATION_SCENARIO, registerTradingSimulationScenario, withDefaultTradingSimulationScenario } from '../../simulation/index.js'
 import { getRegisteredSimulationScenarios, getSimulationScenarioDescription, getSimulationScenarioLabel } from '@zoltar/ui-core-shared/simulation/scenarios.js'
-import { tradingActiveEnvironmentDependencies } from '../../app/activeEnvironment.js'
 import * as appCopy from '../../copy/app.js'
 import { Status } from '../../components/Status.js'
 import { TradingAddressValue } from '../../components/TradingAddress.js'
@@ -12,10 +11,10 @@ import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUti
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { App, currentRoute, tradingNetworkLabel } from '../../app/App.js'
+import { App } from '../../app/App.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import { getCurrentRouteHash, getRouteHashSearch, resetRoutingForTesting } from '@zoltar/ui-core-shared/navigation/routing.js'
-import { getTradingRouteHref, installTradingRouting } from '../../lib/routing.js'
+import { getTradingRouteHref, installTradingRouting, tradingRouting } from '../../lib/routing.js'
 import { getActiveNetworkProfile, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createFakeBackend, createFakeSimulationProfile } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { createPublicClient, custom } from '@zoltar/core-shared/evm/ethereum'
@@ -25,7 +24,6 @@ beforeEach(() => installTradingRouting())
 
 test('Trading registers its shared TEVM scenarios and selects its own worker', () => {
 	registerTradingSimulationScenario()
-	expect(tradingActiveEnvironmentDependencies.appId).toBe('trading')
 	const scenarios = getRegisteredSimulationScenarios()
 	expect(scenarios.filter(scenario => scenario === DEPLOYED_TRADING_SIMULATION_SCENARIO)).toHaveLength(1)
 	expect(scenarios.indexOf(DEPLOYED_TRADING_SIMULATION_SCENARIO)).toBe(1)
@@ -51,7 +49,7 @@ test('Trading installs shared routing for simulation scenario navigation', () =>
 		installTradingRouting()
 		expect(getCurrentRouteHash()).toBe('#/liquidity')
 		expect(getRouteHashSearch()).toBe('?simulate=1&simScenario=deployed')
-		expect(currentRoute()).toBe('liquidity')
+		expect(tradingRouting.resolve(window.location.hash)).toBe('liquidity')
 		expect(getTradingRouteHref('#/markets')).toBe('#/markets?simulate=1&simScenario=deployed')
 	} finally {
 		resetRoutingForTesting()
@@ -257,13 +255,6 @@ test('Trading keeps the initial loading fallback visible until the environment s
 	expect(source).toContain('initialize: initializeTradingForMount')
 })
 
-test('verified deployment status stays accurate in live and simulated environments', () => {
-	const address = '0x00000000000000000000000000000000000000a1'
-	const configuration = { chainId: 1, chainName: 'Ethereum', factory: address, feeBps: 30, router: address, rpcUrl: 'https://rpc.example', securityPoolFactory: address, zoltar: address }
-	expect(tradingNetworkLabel('verified', configuration, { account: undefined, connecting: false, networkName: undefined, ready: true })).toBe('Ethereum')
-	expect(tradingNetworkLabel('verified', configuration, { account: undefined, connecting: false, networkName: 'Sepolia', ready: true })).toBe('Sepolia')
-})
-
 test('the removed demo query cannot select a parallel simulated-data application', async () => {
 	const dom = installDomEnvironment('http://localhost/?demo=1&scenario=baseline#/markets')
 	const configuration: DeploymentConfiguration = {
@@ -308,7 +299,7 @@ test('shared header navigation preserves hash settings once and keeps addressed 
 			window.location.hash = href
 			window.dispatchEvent(new Event('hashchange'))
 		})
-		expect(currentRoute()).toBe(`liquidity/${pool}`)
+		expect(tradingRouting.resolve(window.location.hash)).toBe(`liquidity/${pool}`)
 		const select = rendered.container.querySelector<HTMLSelectElement>('.mobile-route-select select')
 		if (select === null) throw new Error('Mobile route selector is unavailable')
 		await act(() => {

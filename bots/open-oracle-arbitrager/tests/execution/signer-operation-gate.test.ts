@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { createSignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
-import { runConfigurationSignerOperation } from '../../src/runtime/operator-control-plane.ts'
+import { runConfigurationSignerOperation } from '../../src/runtime/signer-operations.ts'
 
 test('serializes dashboard deployment with scan and lifecycle signer work', () => {
 	const gate = createSignerOperationGate()

@@ -12,8 +12,6 @@ import type { BalanceState } from './live/liveTradingTypes.js'
 import { BalanceLoadError, ExecutionProtectionFields, formatTimestamp, stateLabel, TradingTransactionHash } from './LiveTradingTransactionUi.js'
 import { liquidityOperationAvailable, useLiquidityWorkflowController } from './live/useLiquidityWorkflowController.js'
 
-export { liquidityOperationAvailable } from './live/useLiquidityWorkflowController.js'
-
 export type LiveLiquidityServices = Readonly<{
 	publicErrorMessage: typeof publicErrorMessage
 	simulateLiquidity: typeof simulateLiquidity

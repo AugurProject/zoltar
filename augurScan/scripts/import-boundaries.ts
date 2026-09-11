@@ -10,7 +10,7 @@ const capability = (file: string): 'api' | 'database' | 'repository' | 'projecti
 	if (file.startsWith('src/api/') || file === 'src/api.ts' || file === 'src/http.ts') return 'api'
 	if (file.startsWith('src/repositories/')) return 'repository'
 	if (file.startsWith('src/projections/') || file === 'src/database-projections.ts' || file === 'src/projections.ts') return 'projection'
-	if (file.startsWith('src/database/') || file === 'src/database.ts' || file.startsWith('src/database-') || file === 'src/schema.ts') return 'database'
+	if (file.startsWith('src/database/') || file === 'src/database.ts' || file.startsWith('src/database-') || file.startsWith('src/schema')) return 'database'
 	if (file.startsWith('src/indexer')) return 'indexer'
 	return 'other'
 }

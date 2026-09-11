@@ -4,8 +4,16 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { encodeAbiParameters, getAddress, keccak256 } from '@zoltar/bot-shared/ethereum'
 import type { ChaosProtocolIndex } from '../../src/monitoring/protocol-index.ts'
-import { initialDurableState, loadDurableState, saveDurableState, serializedDurableState, type StateFilesystem } from '../../src/state/operator-state.ts'
-import { MAXIMUM_PROTOCOL_INDEX_BYTES, MAXIMUM_PROTOCOL_INDEX_CHUNK_BYTES, MAXIMUM_PROTOCOL_INDEX_CHUNK_RECORDS, MAXIMUM_PROTOCOL_INDEX_RECORDS, parseProtocolIndex, protocolIndexSidecarDirectory } from '../../src/state/protocol-index-store.ts'
+import { loadDurableState, saveDurableState, type StateFilesystem } from '../../src/state/operator-state.ts'
+import { initialDurableState } from '../../src/state/initial-state.ts'
+import { snapshotProtocolIndex } from '../../src/state/protocol-index-store.ts'
+import { protocolIndexSidecarDirectory } from '../support/state-sidecars.ts'
+
+// Storage limits and the sidecar layout of the protocol index store, mirrored here so the tests observe them from the outside.
+const MAXIMUM_PROTOCOL_INDEX_CHUNK_RECORDS = 256
+const MAXIMUM_PROTOCOL_INDEX_CHUNK_BYTES = 1024 * 1024
+const MAXIMUM_PROTOCOL_INDEX_RECORDS = 100_000
+const MAXIMUM_PROTOCOL_INDEX_BYTES = 64 * 1024 * 1024
 
 const directories: string[] = []
 
@@ -103,7 +111,7 @@ test('persists and validates the pruned log coverage boundary in the index sidec
 	const loaded = await loadDurableState(path, 1)
 	expect(loaded.protocolIndex?.availableStartBlock).toBe('20')
 	for (const availableStartBlock of ['9', '10', '51', '-1', '020']) {
-		expect(() => parseProtocolIndex({ ...index, availableStartBlock }, 1)).toThrow()
+		expect(() => snapshotProtocolIndex({ ...index, availableStartBlock }, 1)).toThrow()
 	}
 })
 
@@ -393,8 +401,10 @@ describe('protocol-index sidecar generations', () => {
 	test('loads the current inline index schema and migrates it on the next save', async () => {
 		const path = await statePath()
 		const state = initialDurableState(1, true, 'profile:inline', address(22))
-		state.protocolIndex = protocolIndex()
-		await writeFile(path, `${JSON.stringify(serializedDurableState(state), undefined, 2)}\n`, { mode: 0o600 })
+		await saveDurableState(path, state)
+		const persisted: unknown = JSON.parse(await readFile(path, 'utf8'))
+		if (typeof persisted !== 'object' || persisted === null) throw new Error('Expected a persisted durable state object')
+		await writeFile(path, `${JSON.stringify({ ...persisted, protocolIndex: protocolIndex() }, undefined, 2)}\n`, { mode: 0o600 })
 		const loaded = await loadDurableState(path, 1)
 		expect(loaded.protocolIndex?.cursor.blockNumber).toBe('50')
 		await saveDurableState(path, loaded)
@@ -415,19 +425,28 @@ describe('protocol-index sidecar generations', () => {
 		await expect(saveDurableState(signerPath, state)).rejects.toThrow('Protocol index wallet does not match the durable signer scope')
 	})
 
-	test('rejects duplicate canonical records and an oversized aggregate index', () => {
-		expect(() => parseProtocolIndex({ ...protocolIndex(), schemaVersion: 2 }, 1)).toThrow('schemaVersion is unsupported')
+	test('rejects duplicate canonical records and an oversized aggregate index', async () => {
+		const path = await statePath()
+		const persistInlineIndex = async (inlineIndex: unknown) => {
+			await saveDurableState(path, initialDurableState(1, true, 'profile:inline', address(22)))
+			const persisted: unknown = JSON.parse(await readFile(path, 'utf8'))
+			if (typeof persisted !== 'object' || persisted === null) throw new Error('Expected a persisted durable state object')
+			await writeFile(path, `${JSON.stringify({ ...persisted, protocolIndex: inlineIndex }, undefined, 2)}\n`, { mode: 0o600 })
+		}
+		await persistInlineIndex({ ...protocolIndex(), schemaVersion: 2 })
+		await expect(loadDurableState(path, 1)).rejects.toThrow('schemaVersion is unsupported')
 		const { auctionRefunds: _missingRefundEpisodes, ...missingRefundEpisodes } = protocolIndex()
-		expect(() => parseProtocolIndex(missingRefundEpisodes, 1)).toThrow('missing auctionRefunds')
+		await persistInlineIndex(missingRefundEpisodes)
+		await expect(loadDurableState(path, 1)).rejects.toThrow('missing auctionRefunds')
 
 		const duplicateBid = protocolIndex()
 		const key = duplicateBid.openOracle.toLowerCase()
 		const bid = duplicateBid.auctionBids[key]?.[0]
 		if (bid === undefined) throw new Error('Expected bid fixture')
 		duplicateBid.auctionBids[key] = [bid, { ...bid }]
-		expect(() => parseProtocolIndex(duplicateBid, 1)).toThrow('canonical unique route order')
+		expect(() => snapshotProtocolIndex(duplicateBid, 1)).toThrow('canonical unique route order')
 
 		const many = largeProtocolIndex(Math.floor(MAXIMUM_PROTOCOL_INDEX_RECORDS / 4) + 1)
-		expect(() => parseProtocolIndex(many, 1)).toThrow('record aggregate safety limit')
+		expect(() => snapshotProtocolIndex(many, 1)).toThrow('record aggregate safety limit')
 	})
 })

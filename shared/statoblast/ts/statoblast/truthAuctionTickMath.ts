@@ -1,5 +1,5 @@
 export const TRUTH_AUCTION_PRICE_PRECISION = 10n ** 18n
-export const TRUTH_AUCTION_MIN_TICK = -524288n
+const TRUTH_AUCTION_MIN_TICK = -524288n
 export const TRUTH_AUCTION_MAX_TICK = 524288n
 
 const TRUTH_AUCTION_TICK_PRICE_POWERS = [
@@ -31,7 +31,7 @@ function getTruthAuctionTickPricePower(index: number) {
 	return power
 }
 
-export function assertTruthAuctionTickInContractDomain(tick: bigint) {
+function assertTruthAuctionTickInContractDomain(tick: bigint) {
 	if (tick < TRUTH_AUCTION_MIN_TICK || tick > TRUTH_AUCTION_MAX_TICK) throw new Error('Truth auction tick is outside the supported range.')
 }
 
@@ -44,29 +44,6 @@ export function tickToPrice(tick: bigint) {
 		if ((absoluteTick & bitMask) !== 0n) price = (price * getTruthAuctionTickPricePower(bitIndex)) / TRUTH_AUCTION_PRICE_PRECISION
 	}
 	return tick < 0n ? (TRUTH_AUCTION_PRICE_PRECISION * TRUTH_AUCTION_PRICE_PRECISION) / price : price
-}
-
-export function priceToClosestTick(price: bigint): bigint {
-	if (price <= 0n) throw new Error('price must be positive')
-	let lowerBoundTick = TRUTH_AUCTION_MIN_TICK
-	let upperBoundTick = TRUTH_AUCTION_MAX_TICK
-	while (lowerBoundTick <= upperBoundTick) {
-		const middleTick = (lowerBoundTick + upperBoundTick) / 2n
-		const middlePrice = tickToPrice(middleTick)
-		if (middlePrice === price) return middleTick
-		if (middlePrice < price) {
-			lowerBoundTick = middleTick + 1n
-			continue
-		}
-		upperBoundTick = middleTick - 1n
-	}
-	if (lowerBoundTick > TRUTH_AUCTION_MAX_TICK) return TRUTH_AUCTION_MAX_TICK
-	if (upperBoundTick < TRUTH_AUCTION_MIN_TICK) return TRUTH_AUCTION_MIN_TICK
-	const priceAtLowerTick = tickToPrice(lowerBoundTick)
-	const priceAtUpperTick = tickToPrice(upperBoundTick)
-	const distanceToLowerTick = priceAtLowerTick > price ? priceAtLowerTick - price : price - priceAtLowerTick
-	const distanceToUpperTick = priceAtUpperTick > price ? priceAtUpperTick - price : price - priceAtUpperTick
-	return distanceToLowerTick < distanceToUpperTick ? lowerBoundTick : upperBoundTick
 }
 
 export function findTruthAuctionMinSupportedTick() {

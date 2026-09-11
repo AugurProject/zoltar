@@ -35,7 +35,7 @@ export const indexingCompletion = (configuredStartBlock: bigint, indexedBlock: b
 	}
 }
 
-export const compactIndexerDuration = (seconds: number): string => {
+const compactIndexerDuration = (seconds: number): string => {
 	const rounded = Math.max(1, Math.ceil(seconds))
 	if (rounded < 60) return `${rounded}s`
 	if (rounded < 3_600) return `${Math.floor(rounded / 60)}m ${rounded % 60}s`
@@ -238,7 +238,7 @@ const deploymentReadTimeoutError = (): Error => {
 	return error
 }
 
-export const boundedDeploymentRead = async <T>(read: () => Promise<T>, timeoutMs: number): Promise<T> =>
+const boundedDeploymentRead = async <T>(read: () => Promise<T>, timeoutMs: number): Promise<T> =>
 	await new Promise<T>((resolve, reject) => {
 		const timeout = setTimeout(() => {
 			reject(deploymentReadTimeoutError())

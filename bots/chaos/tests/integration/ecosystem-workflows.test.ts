@@ -12,7 +12,8 @@ import type { EvaluatedOperation, OperationPlan } from '../../src/operations/typ
 import { chaosChain, createChaosReadPool, performCanonicalScan } from '../../src/runtime/canonical-scan.ts'
 import { executionProfileId } from '../../src/runtime/operator.ts'
 import { preflightTransactionSubmissionNetwork } from '../../src/runtime/submission-preflight.ts'
-import { initialDurableState, initialRuntimeState, loadRuntimeState } from '../../src/state/operator-state.ts'
+import { loadRuntimeState } from '../../src/state/operator-state.ts'
+import { initialDurableState, initialRuntimeState } from '../../src/state/initial-state.ts'
 import { ZoltarQuestionData_ZoltarQuestionData, statoblast_SecurityPool_SecurityPool, statoblast_WETH9_WETH9, trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory } from '../../../../solidity/ts/types/contractArtifact.ts'
 import { CHAOS_TEST_FINALITY_BLOCKS, CHAOS_TEST_PRIVATE_KEY, ONE_TOKEN, WETH_ADDRESS, createChaosAnvilFixture, type ChaosAnvilFixture, type ChaosRpcProxy } from './anvil-fixture.ts'
 

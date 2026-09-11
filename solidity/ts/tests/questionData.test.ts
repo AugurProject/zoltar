@@ -16,7 +16,7 @@ import {
 	SCALAR_PARITY_ENCODING_FIXTURES,
 	SCALAR_PARITY_LABEL_FIXTURES,
 	SCALAR_PARITY_QUESTIONS,
-	SCALAR_PARITY_UINT120_MAX,
+	SCALAR_PARITY_PART_MASK,
 	combineScalarParityOutcomeIndex,
 	describeScalarParityOutcomeIndex,
 	formatScalarParityLabel,
@@ -53,9 +53,9 @@ function getScalarEncodingFuzzSamples(question: ScalarParityQuestion, seed: bigi
 		state = advanceScalarEncodingFuzzState(state)
 		const invalid = (state & 1n) === 0n
 		state = advanceScalarEncodingFuzzState(state)
-		const firstPart = state & SCALAR_PARITY_UINT120_MAX
+		const firstPart = state & SCALAR_PARITY_PART_MASK
 		state = advanceScalarEncodingFuzzState(state)
-		const secondPart = state & SCALAR_PARITY_UINT120_MAX
+		const secondPart = state & SCALAR_PARITY_PART_MASK
 		const tickIndex = state % (question.numTicks + 1n)
 		samples.push({ invalid, firstPart, secondPart })
 		samples.push({ invalid: false, firstPart: question.numTicks - tickIndex, secondPart: tickIndex })

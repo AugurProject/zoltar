@@ -1,7 +1,7 @@
 import { encodeFunctionData, keccak256, toHex, type Abi, type AbiValue, type Address, type Hash, type Hex } from '@zoltar/bot-shared/ethereum'
 import type { EcosystemSnapshot, EligibilityResult, OperationEvidence, OperationPlan, OperationPlanDraft, OperationPreflightCall, OperationStep, OperationWalletAssetDebit, PlanningOptions, TokenInventory } from './types.ts'
 
-export const ONE_ATTO_TOKEN = 1n
+const ONE_ATTO_TOKEN = 1n
 export const ONE_TOKEN = 10n ** 18n
 
 export function eventTopic(signature: string): Hash {

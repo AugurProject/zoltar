@@ -1,5 +1,5 @@
 import type { Address } from '@zoltar/bot-shared/ethereum'
-import type { EvaluatedOperation } from '../operations/types.ts'
+import type { EcosystemSnapshot, EvaluatedOperation } from '../operations/types.ts'
 import type { DurableState } from './operator-state.ts'
 
 export type WalletBalanceState = {
@@ -46,4 +46,22 @@ export type RuntimeState = DurableState & {
 	topology: RuntimeTopologySummary | undefined
 	wallet: Address | undefined
 	warnings: string[]
+}
+
+export function walletInventory(snapshot: EcosystemSnapshot): WalletBalanceState {
+	const tokenByAddress = new Map(snapshot.wallet.tokens.map(token => [token.address.toLowerCase(), token]))
+	const weth = tokenByAddress.get(snapshot.deployments.weth.toLowerCase())
+	return {
+		eth: snapshot.wallet.ethBalanceAttoEth,
+		rep: snapshot.universes.map(universe => {
+			const token = tokenByAddress.get(universe.repToken.toLowerCase())
+			return {
+				balance: token?.balance ?? '0',
+				symbol: token?.symbol ?? 'REP',
+				token: universe.repToken,
+				universeId: universe.id,
+			}
+		}),
+		weth: weth?.balance ?? '0',
+	}
 }

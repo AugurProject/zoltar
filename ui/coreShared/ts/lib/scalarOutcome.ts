@@ -5,10 +5,8 @@ import { formatScalarOutcomeIndexLabel as formatSharedScalarOutcomeIndexLabel, f
 export {
 	clampScalarTickIndex,
 	formatScalarDisplayValue,
-	getScalarDisplayValue,
 	getScalarOutcomeIndex,
 	getScalarOutcomeIndexDescriptor,
-	getScalarTickIndexForDisplayValue,
 	isValidScalarOutcomeIndex,
 	MAX_PRECISE_SCALAR_TICK_COUNT,
 } from '@zoltar/zoltar-shared/questions/scalarOutcome'
@@ -36,12 +34,6 @@ const SCALAR_PART_BIT_LENGTH = 120n
 const SCALAR_PART_MASK = (1n << SCALAR_PART_BIT_LENGTH) - 1n
 const SCALAR_SIGNED_MIN = -(1n << 255n)
 const SCALAR_SIGNED_MAX = (1n << 255n) - 1n
-
-export function getScalarSliderProgress(tickIndex: bigint, numTicks: bigint) {
-	if (numTicks <= 0n) throw new Error('Scalar question numTicks must be positive')
-	if (tickIndex < 0n || tickIndex > numTicks) throw new Error('Tick index is out of range')
-	return Math.floor((getVisualRatio({ value: tickIndex, maxValue: numTicks }) ?? 0) * 100)
-}
 
 export function getScalarSliderFillWidth(tickIndex: bigint, numTicks: bigint) {
 	const fraction = getVisualRatio({ value: tickIndex, maxValue: numTicks }) ?? 0

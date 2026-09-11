@@ -922,7 +922,7 @@ assert.equal(
 	4n * payoutFixture,
 	'fork scaling should reduce even an above-cap principal-only withdrawal',
 )
-assert.match(chartRuntimeSource, /plot-statoblast-whitepaper-19[\s\S]*collateralRepairChart/, 'collateral repair chart should use its native Plot renderer')
+assert.match(chartRuntimeSource, /fig-statoblast-collateral-repair[\s\S]*collateralRepairChart/, 'collateral repair chart should use its native Plot renderer')
 assert.match(chartRuntimeSource, /x1: model\.received, x2: model\.received \+ model\.repairEth/, 'collateral repair Plot should append auction repair after migration-routed collateral')
 assert.match(chartRuntimeSource, /domain: \['Migration-routed', 'Auction repair'\]/, 'collateral repair Plot should preserve distinct migration and repair segment colors')
 const zeroUtilizationFee = calculateAnnualizedRetentionFeePercent(0)

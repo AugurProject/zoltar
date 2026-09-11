@@ -12,7 +12,7 @@ function scalarOutcome(numTicks: bigint, firstPart: bigint) {
  * Invalid plus evenly-spaced points across the full tick range so discovery
  * remains bounded even when numTicks approaches uint120.max.
  */
-export function validForkOutcomeCandidates(question: QuestionSnapshot | undefined): string[] {
+function validForkOutcomeCandidates(question: QuestionSnapshot | undefined): string[] {
 	if (question === undefined) return []
 	if (question.kind !== 'scalar') return Array.from({ length: question.outcomeLabels.length + 1 }, (_, outcome) => outcome.toString())
 	const numTicks = BigInt(question.numTicks)

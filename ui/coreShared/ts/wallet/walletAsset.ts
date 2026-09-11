@@ -13,7 +13,7 @@ export type WalletAssetMetadata = {
 	symbol: string
 }
 
-export type WalletAssetRequest = {
+type WalletAssetRequest = {
 	method: 'wallet_watchAsset'
 	params: {
 		options: {
@@ -59,7 +59,7 @@ export function normalizeWalletAssetFailure(_reason: unknown): WalletAssetWatchR
 	return { status: 'failed' }
 }
 
-export async function requestWalletWatchAsset(address: Address, dependencies: WalletAssetRequestDependencies): Promise<WalletAssetWatchResult> {
+async function requestWalletWatchAsset(address: Address, dependencies: WalletAssetRequestDependencies): Promise<WalletAssetWatchResult> {
 	let activeChainId: string
 	try {
 		activeChainId = await dependencies.getActiveChainId()

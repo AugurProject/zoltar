@@ -10,19 +10,11 @@ import type { DeploymentStatus } from '@zoltar/ui-core-shared/types/contracts.js
 import type { ReportingOutcomeKey, TradingShareBalances, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 
 const PRICE_PRECISION = 10n ** 18n
-const PERCENT_MULTIPLIER = 100n
 const BPS_DENOMINATOR = 10_000n
 
-type CollateralizationDisplayState = 'value' | 'noActiveCapacityOwnership' | 'unavailable'
-type CollateralizationTone = 'success' | 'danger'
-
-export const MARKET_NOT_FINALIZED_MESSAGE = 'This market has not finalized.'
-export const SHARE_MIGRATION_AFTER_FORK_MESSAGE = 'Share migration is only available after this universe has forked.'
 export const NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE = 'No mint capacity. No active capacity ownership.'
 export const NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE = 'Need matching Invalid, Yes, and No shares to redeem complete sets.'
 export const UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE = 'Minting is unavailable because this pool has complete-set shares but no collateral.'
-
-const HIDDEN_TRADING_GUARD_MESSAGES = [NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE, NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE]
 
 export function hasUndefinedCompleteSetExchangeRate(settlementCollateralAttoEth: bigint | undefined, shareTokenSupplyAttoShares: bigint | undefined) {
 	if (settlementCollateralAttoEth === undefined || shareTokenSupplyAttoShares === undefined) return undefined
@@ -101,44 +93,17 @@ export function estimateMintCheckpoint({
 	}
 }
 
-function getCollateralizationPercent(qualifyingRepBackingAttoRep: bigint | undefined, capacityOwnershipAttoRep: bigint | undefined, repPerEthPrice: bigint | undefined) {
-	if (qualifyingRepBackingAttoRep === undefined || capacityOwnershipAttoRep === undefined || repPerEthPrice === undefined || repPerEthPrice === 0n || capacityOwnershipAttoRep === 0n) return undefined
-	return (qualifyingRepBackingAttoRep * PERCENT_MULTIPLIER * PRICE_PRECISION * PRICE_PRECISION) / (capacityOwnershipAttoRep * repPerEthPrice)
-}
-
-export function getPoolCollateralizationPercent(totalPoolHeldAttoRep: bigint | undefined, totalCapacityOwnershipAttoRep: bigint | undefined, repPerEthPrice: bigint | undefined) {
-	return getCollateralizationPercent(totalPoolHeldAttoRep, totalCapacityOwnershipAttoRep, repPerEthPrice)
-}
-
-export function getVaultCollateralizationPercent(vaultAttoRepBacking: bigint | undefined, capacityOwnershipAttoRep: bigint | undefined, repPerEthPrice: bigint | undefined) {
-	return getCollateralizationPercent(vaultAttoRepBacking, capacityOwnershipAttoRep, repPerEthPrice)
-}
-
-export function getCollateralizationTone(collateralizationPercent: bigint | undefined, statoblastSecurityMultiplierBps: bigint | undefined): CollateralizationTone | undefined {
-	if (collateralizationPercent === undefined || statoblastSecurityMultiplierBps === undefined) return undefined
-	return collateralizationPercent < getStatoblastCollateralizationTargetPercent(statoblastSecurityMultiplierBps) ? 'danger' : 'success'
-}
-
-function getStatoblastCollateralizationTargetPercent(statoblastSecurityMultiplierBps: bigint) {
-	return (statoblastSecurityMultiplierBps * PERCENT_MULTIPLIER * PRICE_PRECISION) / BPS_DENOMINATOR
-}
-
 export function formatStatoblastSecurityMultiplier(statoblastSecurityMultiplierBps: bigint) {
 	const whole = statoblastSecurityMultiplierBps / BPS_DENOMINATOR
 	const fractional = (statoblastSecurityMultiplierBps % BPS_DENOMINATOR).toString().padStart(4, '0').replace(/0+$/, '')
 	return fractional === '' ? whole.toString() : `${whole}.${fractional}`
 }
 
-export function getCollateralizationDisplayState(capacityOwnershipAttoRep: bigint | undefined, collateralizationPercent: bigint | undefined): CollateralizationDisplayState {
-	if (capacityOwnershipAttoRep === 0n) return 'noActiveCapacityOwnership'
-	return collateralizationPercent === undefined ? 'unavailable' : 'value'
-}
-
 export function hasRepBackedPoolWithNoActiveCapacityOwnership(totalPoolHeldAttoRep: bigint | undefined, feeEligibleCapacityOwnershipAttoRep: bigint | undefined) {
 	return (totalPoolHeldAttoRep ?? 0n) > 0n && (feeEligibleCapacityOwnershipAttoRep ?? 0n) === 0n
 }
 
-export function getMaxRedeemableCompleteSets(shareBalances: TradingShareBalances | undefined) {
+function getMaxRedeemableCompleteSets(shareBalances: TradingShareBalances | undefined) {
 	if (shareBalances === undefined) return undefined
 	if (shareBalances.invalidAttoShares <= shareBalances.yesAttoShares && shareBalances.invalidAttoShares <= shareBalances.noAttoShares) return shareBalances.invalidAttoShares
 	if (shareBalances.yesAttoShares <= shareBalances.invalidAttoShares && shareBalances.yesAttoShares <= shareBalances.noAttoShares) return shareBalances.yesAttoShares
@@ -193,16 +158,6 @@ export function getSelectedOutcomeShareBalance(shareBalances: TradingShareBalanc
 		default:
 			return assertNever(outcome)
 	}
-}
-
-export function getTradingGuardDisplayMessage(message: string | undefined) {
-	if (message === undefined) return undefined
-
-	for (const hiddenMessage of HIDDEN_TRADING_GUARD_MESSAGES) {
-		if (message === hiddenMessage) return undefined
-	}
-
-	return message
 }
 
 function areShareMigrationTargetOutcomeIndexesValid(tradingForkUniverse: ZoltarUniverseSummary, targetOutcomeIndexes: bigint[]) {

@@ -11,7 +11,6 @@ import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/do
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { useOpenOracleOperations, type UseOpenOracleOperationsDependencies } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useOpenOracleOperations.js'
-import { createOpenOracleReportMissingError } from '@zoltar/ui-statoblast-shared/protocol/openOracle.js'
 
 type UseOpenOracleOperationsState = ReturnType<typeof useOpenOracleOperations>
 type TestOpenOracleWriteClient = { kind: 'injected-write-client' }
@@ -252,7 +251,7 @@ describe('useOpenOracleOperations', () => {
 		const secondReportId = 2n
 		const dependencies = createOpenOracleOperationsDependencies({
 			loadOpenOracleReportDetails: mock(async (_openOracleAddress: Address, reportId: bigint) => {
-				if (reportId === REPORT_ID) throw createOpenOracleReportMissingError(reportId)
+				if (reportId === REPORT_ID) throw Object.assign(new Error(`Oracle report #${reportId.toString()} does not exist`), { name: 'OpenOracleReportMissingError' })
 				throw new Error('RPC unavailable')
 			}),
 		})

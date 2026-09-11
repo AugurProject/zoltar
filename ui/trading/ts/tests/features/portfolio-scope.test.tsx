@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
-import { LiveSecurityPoolDetails, PairInitializationAction, SecurityPoolRouteEmptyState } from '../../features/LiveTrading.js'
+import { LiveSecurityPoolDetails, PairInitializationAction, SecurityPoolRouteEmptyState } from '../../features/LiveSecurityPoolDetails.js'
 import { LivePortfolio } from '../../features/LivePortfolio.js'
 import type { LiveMarket } from '../../protocol/live.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'

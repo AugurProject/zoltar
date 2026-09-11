@@ -1,4 +1,7 @@
 import { describe, expect, test } from 'bun:test'
+import { mkdtemp } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { EvaluatedOperation, OperationPlan } from '../../src/operations/types.ts'
 import {
 	abandonLifecycleObligation,
@@ -6,14 +9,14 @@ import {
 	completeLifecycleObligation,
 	failLifecycleObligation,
 	lifecyclePresenceBlockerMessage,
-	MAXIMUM_ACTIVE_LIFECYCLE_OBLIGATIONS,
 	obligationForPlan,
 	retryLifecycleObligation,
 	synchronizeLifecycleObligations as synchronizeLifecycleObligationsAtAnchor,
 	waitForCanonicalLifecycleConfirmation,
 } from '../../src/runtime/obligations.ts'
 import { markWorkflowStepWaitingCanonical } from '../../src/runtime/workflows.ts'
-import { compactDurableState, MAXIMUM_OBLIGATION_TOMBSTONE_COUNT, type DurableObligation, type DurableObligationTombstone, type DurableWorkflow } from '../../src/state/operator-state.ts'
+import { initialDurableState } from '../../src/state/initial-state.ts'
+import { MAXIMUM_OBLIGATION_TOMBSTONE_COUNT, saveDurableState, type DurableObligation, type DurableObligationTombstone, type DurableWorkflow } from '../../src/state/operator-state.ts'
 
 function obligationState() {
 	return {
@@ -288,6 +291,7 @@ describe('durable lifecycle obligations', () => {
 	})
 
 	test('bounds a maximum-size actionable backlog before durable state materialization', () => {
+		const MAXIMUM_ACTIVE_LIFECYCLE_OBLIGATIONS = 256
 		const values = Array.from({ length: 10_000 }, (_, index) => ({
 			...plan('10'),
 			id: `settle:${index.toString()}`,
@@ -311,7 +315,7 @@ describe('durable lifecycle obligations', () => {
 		})
 	})
 
-	test('reserves a durable tombstone slot before materializing lifecycle work', () => {
+	test('reserves a durable tombstone slot before materializing lifecycle work', async () => {
 		const value = plan('10')
 		const state = obligationState()
 		state.obligationTombstones = Array.from({ length: MAXIMUM_OBLIGATION_TOMBSTONE_COUNT }, (_, index) => ({
@@ -336,7 +340,11 @@ describe('durable lifecycle obligations', () => {
 		workflow.completedAt = new Date().toISOString()
 		expect(completeLifecycleObligation(state, obligation)).toBeTrue()
 		expect(state.obligationTombstones).toHaveLength(MAXIMUM_OBLIGATION_TOMBSTONE_COUNT)
-		expect(() => compactDurableState({ ...state, activities: [] })).not.toThrow()
+		const durable = initialDurableState(1)
+		durable.obligationTombstones = state.obligationTombstones
+		durable.obligations = state.obligations
+		durable.workflows = state.workflows
+		await expect(saveDurableState(join(await mkdtemp(join(tmpdir(), 'zoltar-chaos-obligations-')), 'state.json'), durable)).resolves.toBeUndefined()
 	})
 
 	test('fails closed when an actionable identity is absent from canonical presence', () => {

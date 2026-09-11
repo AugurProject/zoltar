@@ -1,6 +1,6 @@
 import { assertNever } from '../lib/assert.js'
 
-export const CORE_SIMULATION_SCENARIOS = ['baseline', 'deployed'] as const
+const CORE_SIMULATION_SCENARIOS = ['baseline', 'deployed'] as const
 
 export type CoreSimulationScenario = (typeof CORE_SIMULATION_SCENARIOS)[number]
 
@@ -33,15 +33,11 @@ export function getSimulationScenarioDescription(scenario: SimulationScenario) {
 	return isCoreSimulationScenario(scenario) ? getCoreSimulationScenarioDescription(scenario) : `Unregistered simulation scenario '${scenario}'.`
 }
 
-export function isCoreSimulationScenario(value: string): value is CoreSimulationScenario {
+function isCoreSimulationScenario(value: string): value is CoreSimulationScenario {
 	return (CORE_SIMULATION_SCENARIOS as readonly string[]).includes(value)
 }
 
-export function normalizeSimulationScenario(value: string | undefined): CoreSimulationScenario {
-	return value !== undefined && isCoreSimulationScenario(value) ? value : 'baseline'
-}
-
-export function getCoreSimulationScenarioLabel(scenario: CoreSimulationScenario) {
+function getCoreSimulationScenarioLabel(scenario: CoreSimulationScenario) {
 	switch (scenario) {
 		case 'baseline':
 			return 'Baseline'
@@ -52,7 +48,7 @@ export function getCoreSimulationScenarioLabel(scenario: CoreSimulationScenario)
 	}
 }
 
-export function getCoreSimulationScenarioDescription(scenario: CoreSimulationScenario) {
+function getCoreSimulationScenarioDescription(scenario: CoreSimulationScenario) {
 	switch (scenario) {
 		case 'baseline':
 			return 'Fresh walletless simulation with funded QA accounts and no app contracts deployed. Use it to test the Deploy flow from scratch.'

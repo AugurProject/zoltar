@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { parseStrategy } from '../../src/config/settings.ts'
-import { BPS_DENOMINATOR, PRICE_PRECISION, calculateLiquidationTransfer, conservativeLiquidationRep, evaluateCandidate, liquidationExecutionAllowed, requiredRepForOpenInterest, selectAllowedCandidate, surplusRepForWithdrawal, vaultHealthBps, type PoolRiskContext, type VaultPosition } from '../../src/core/strategy.ts'
-import { candidateScreeningPrice, hasVaultRep } from '../../src/monitoring/pool-monitor.ts'
+import { BPS_DENOMINATOR, PRICE_PRECISION, conservativeLiquidationRep, evaluateCandidate, liquidationExecutionAllowed, requiredRepForOpenInterest, selectAllowedCandidate, surplusRepForWithdrawal, vaultHealthBps, type PoolRiskContext, type VaultPosition } from '../../src/core/strategy.ts'
 import { getAddress } from '@zoltar/bot-shared/ethereum'
 
 const poolAddress = getAddress('0x0000000000000000000000000000000000000010')
@@ -65,29 +64,13 @@ function pool(): PoolRiskContext {
 }
 
 describe('dynamic-capacity liquidation strategy', () => {
-	test('active-vault indexing retains only positions backed by pool or dispute REP', () => {
-		const exited = vault(targetAddress, 0n, 0n)
-		expect(hasVaultRep(exited)).toBe(false)
-		expect(hasVaultRep({ ...exited, badDebtAttoEth: 1n })).toBe(false)
-		expect(hasVaultRep({ ...exited, claimableFeesAttoEth: 1n })).toBe(false)
-		expect(hasVaultRep({ ...exited, disputeStakedAttoRep: 1n })).toBe(true)
-		expect(hasVaultRep(vault(targetAddress, 1n, 0n))).toBe(true)
-	})
-
 	test('matches the protocol bundled debt, capacity, and fixed-bonus transfer', () => {
-		const transfer = calculateLiquidationTransfer({
-			currentPoolHeldAttoRepBalance: 1_000n * PRICE_PRECISION,
-			currentTargetBackingUnits: 1_000n * PRICE_PRECISION,
-			currentTotalRepBackingUnits: 1_000n * PRICE_PRECISION,
-			minimumRemainingAttoRep: 0n,
-			price: 10n * PRICE_PRECISION,
-			requestedDebtAttoEth: 75n * PRICE_PRECISION,
-			snapshotTargetCapacityOwnershipAttoRep: 750n * PRICE_PRECISION,
-			snapshotTargetOpenInterestAttoEth: 75n * PRICE_PRECISION,
-		})
-		expect(transfer.debtToMoveAttoEth).toBe(75n * PRICE_PRECISION)
-		expect(transfer.capacityOwnershipToMoveAttoRep).toBe(750n * PRICE_PRECISION)
-		expect(transfer.vaultAttoRepBackingToTransfer).toBe(787_500000000000000000n)
+		const settings = strategy()
+		settings.maximumLiquidationDebtAttoEth = 75n * PRICE_PRECISION
+		const candidate = evaluateCandidate(pool(), vault(targetAddress, 1_000n * PRICE_PRECISION, 75n * PRICE_PRECISION), vault(callerAddress, 0n, 0n), settings)
+		expect(candidate?.debtToMoveAttoEth).toBe(75n * PRICE_PRECISION)
+		expect(candidate?.capacityOwnershipToMoveAttoRep).toBe(750n * PRICE_PRECISION)
+		expect(candidate?.vaultAttoRepBackingToTransfer).toBe(787_500000000000000000n)
 	})
 
 	test('pre-funds both health branches for an empty self-receiving vault', () => {
@@ -167,8 +150,7 @@ describe('dynamic-capacity liquidation strategy', () => {
 		expect(requiredRepForOpenInterest(target.openInterestAttoEth, 20_000n, 10n * PRICE_PRECISION, 10_000n, target.disputeStakedAttoRep)).toBe(400n * PRICE_PRECISION)
 	})
 
-	test('screens stale pools with fallback price but never treats it as executable', () => {
-		expect(candidateScreeningPrice(0n, 10n * PRICE_PRECISION)).toBe(10n * PRICE_PRECISION)
+	test('never treats a stale pool price as executable', () => {
 		expect(liquidationExecutionAllowed(0n, true)).toBe(false)
 		expect(liquidationExecutionAllowed(10n * PRICE_PRECISION, true)).toBe(true)
 	})

@@ -2,14 +2,16 @@
 
 import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData, getAddress, toHex, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
-import { encodeOpenOracleStatePreimagePacked, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SUBMITTED_TOPIC, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
-import { getOpenOracleDisputeSwapToken, loadOpenOracleReportDetails, loadOpenOracleWithdrawableBalances, loadOpenOracleReportSummaries, settleOracleReport, withdrawOpenOracleBalance } from '@zoltar/ui-statoblast-shared/protocol/openOracle.js'
+import { hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SUBMITTED_TOPIC, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
+import { encodeOpenOracleStatePreimagePacked } from '../../../../../solidity/ts/testSupport/openOracle/statePreimage.js'
+import { loadOpenOracleReportDetails, loadOpenOracleWithdrawableBalances, loadOpenOracleReportSummaries, settleOracleReport, withdrawOpenOracleBalance } from '@zoltar/ui-statoblast-shared/protocol/openOracle.js'
 import { loadOracleManagerDetails } from '@zoltar/ui-statoblast-shared/protocol/oracleCoordinator.js'
 import { getOpenOracleAddress } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
-import { invalidateLiquidationApprovalNonce, loadLiquidationApproval, loadLiquidationApprovalRegistry, permitLiquidationApproval, revokeLiquidationApproval, setLiquidationApproval, type LiquidationApprovalParams } from '@zoltar/ui-statoblast-shared/protocol/liquidationApprovals.js'
-import { statoblast_LiquidationApprovalRegistry_LiquidationApprovalRegistry, statoblast_openOracle_OpenOracle_OpenOracle } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
+import { loadLiquidationApproval, type LiquidationApprovalParams } from '@zoltar/ui-statoblast-shared/protocol/liquidationApprovals.js'
+import { statoblast_openOracle_OpenOracle_OpenOracle } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { MAINNET_WETH_ADDRESS } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
-import { asWriteClient, createBlockWithTimestamp, createMockLoaderClient, createMockWriteClient, getContractFunctionName } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+import { createBlockWithTimestamp, createMockLoaderClient, createMockWriteClient, getContractFunctionName } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+import { getOpenOracleDisputeSwapTokenKey } from '@zoltar/ui-statoblast-shared/protocol/openOracleMath.js'
 
 const vaultAddress = getAddress('0x00000000000000000000000000000000000000c1')
 const alternateSecurityPoolAddress = getAddress('0x00000000000000000000000000000000000000a2')
@@ -60,10 +62,10 @@ function createOpenOracleStateLog(preimage: OpenOracleStatePreimage, topic = OPE
 
 describe('openOracle protocol client', () => {
 	test('derives the dispute contribution token from the strict proposed-price direction', () => {
-		const game = createOpenOraclePreimage().game
-		expect(getOpenOracleDisputeSwapToken(game, 100n, 11n)).toBe(token2Address)
-		expect(getOpenOracleDisputeSwapToken(game, 100n, 9n)).toBe(token1Address)
-		expect(getOpenOracleDisputeSwapToken(game, 100n, 10n)).toBe(token1Address)
+		const { currentAmount1, currentAmount2 } = createOpenOraclePreimage().game
+		expect(getOpenOracleDisputeSwapTokenKey({ currentAmount1, currentAmount2, newAmount1: 100n, newAmount2: 11n })).toBe('token2')
+		expect(getOpenOracleDisputeSwapTokenKey({ currentAmount1, currentAmount2, newAmount1: 100n, newAmount2: 9n })).toBe('token1')
+		expect(getOpenOracleDisputeSwapTokenKey({ currentAmount1, currentAmount2, newAmount1: 100n, newAmount2: 10n })).toBe('token1')
 	})
 
 	test('loadOpenOracleReportSummaries keeps reports disputed when dispute history returns to the initial reporter', async () => {
@@ -366,16 +368,6 @@ describe('openOracle protocol client', () => {
 			nonce: 7n,
 		} satisfies LiquidationApprovalParams
 		const approvalId = toHex(9n, { size: 32 })
-		const signature = '0x1234' satisfies Hex
-		const readClient = createMockLoaderClient({
-			getBlock: async () => ({ timestamp: 0n }),
-			multicall: async () => [],
-			readContract: async request => {
-				expect(request.functionName).toBe('liquidationApprovalRegistry')
-				return registryAddress
-			},
-		})
-		await expect(loadLiquidationApprovalRegistry(readClient, coordinatorAddress)).resolves.toBe(registryAddress)
 		const approvalState = {
 			params,
 			availableDebtAttoEth: 8n,
@@ -401,26 +393,5 @@ describe('openOracle protocol client', () => {
 			},
 		})
 		await expect(loadLiquidationApproval(approvalReadClient, coordinatorAddress, approvalId)).resolves.toEqual({ registryAddress, ...approvalState, minimumValidNonce: 9n })
-
-		const calls: { data: Hex; to: Address }[] = []
-		const writeClient = createMockWriteClient(request => {
-			if (request.data === undefined || request.to === undefined || request.to === null) throw new Error('Expected approval calldata and destination')
-			calls.push({ data: request.data, to: request.to })
-		})
-		await setLiquidationApproval(asWriteClient(writeClient), registryAddress, params)
-		await permitLiquidationApproval(asWriteClient(writeClient), registryAddress, params, signature)
-		await revokeLiquidationApproval(asWriteClient(writeClient), registryAddress, approvalId)
-		await invalidateLiquidationApprovalNonce(asWriteClient(writeClient), registryAddress, 9n)
-
-		expect(calls.map(call => call.to)).toEqual([registryAddress, registryAddress, registryAddress, registryAddress])
-		expect(
-			calls.map(
-				call =>
-					decodeFunctionData({
-						abi: statoblast_LiquidationApprovalRegistry_LiquidationApprovalRegistry.abi,
-						data: call.data,
-					}).functionName,
-			),
-		).toEqual(['setLiquidationApproval', 'permitLiquidationApproval', 'revokeLiquidationApproval', 'invalidateLiquidationApprovalNonce'])
 	})
 })

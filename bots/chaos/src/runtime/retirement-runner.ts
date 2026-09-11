@@ -1,30 +1,14 @@
 import type { Address } from '@zoltar/bot-shared/ethereum'
 import type { OperatorSettings } from '../config/settings.ts'
-import type { EcosystemSnapshot, OperationPlan } from '../operations/types.ts'
+import type { OperationPlan } from '../operations/types.ts'
 import { evaluateOperationCatalog } from '../operations/catalog.ts'
-import type { DurableRetirementState } from '../state/retirement.ts'
+import { recordCanonicalRecoveredBalances } from '../state/retirement.ts'
 import type { DurableWorkflow, RuntimeState } from '../state/operator-state.ts'
 import { chaosReadClients, planningOptions, type CanonicalAnchor, type CanonicalScanResult } from './canonical-scan.ts'
 import { applyRetirementAssessment, assessRetirement } from './retirement-assessment.ts'
-import { buildV3RetirementPlan, readV3Position, readV3PositionsWithQuorum, reconcileV3PositionJournal } from './retirement-v3-positions.ts'
+import { buildV3RetirementPlan, readV3Position, readV3PositionsWithQuorum, reconcileV3PositionJournal, recordV3ScanFailure, recordV3ScanSuccess } from './retirement-v3-positions.ts'
 import type { V3PositionObservation } from './retirement-types.ts'
 import { retirementCleanupBlocker } from './workflows.ts'
-
-export function recordCanonicalRecoveredBalances(retirement: DurableRetirementState, snapshot: EcosystemSnapshot) {
-	const observed = Object.fromEntries([
-		['ETH', snapshot.wallet.ethBalanceAttoEth],
-		...snapshot.wallet.tokens.map(token => [token.address, token.balance] as const),
-		...snapshot.wallet.lpTokens.map(token => [`LP:${token.pair}`, token.balance] as const),
-		...snapshot.wallet.shares.flatMap(shares => [[`${shares.shareToken}:INVALID`, shares.invalid] as const, [`${shares.shareToken}:YES`, shares.yes] as const, [`${shares.shareToken}:NO`, shares.no] as const]),
-	])
-	for (const [asset, balance] of Object.entries(observed)) {
-		const previous = retirement.lastObservedBalances[asset]
-		if (previous !== undefined && BigInt(balance) > BigInt(previous)) {
-			retirement.recoveredBalances[asset] = (BigInt(retirement.recoveredBalances[asset] ?? '0') + BigInt(balance) - BigInt(previous)).toString()
-		}
-		retirement.lastObservedBalances[asset] = balance
-	}
-}
 
 type RetirementScan = Pick<CanonicalScanResult, 'anchor' | 'executionReady' | 'canonicalLifecyclePresenceComplete' | 'carryProofsComplete' | 'indexComplete' | 'snapshot'>
 
@@ -67,24 +51,6 @@ export function updateRetirementAssessment(scan: RetirementScan, settings: Opera
 	applyRetirementAssessment(state.retirement, assessment, scan.anchor.blockHash, scan.anchor.blockNumber, { profileId: state.profileId, scannedWallet: scan.snapshot.wallet.address, signerAddress: state.signerAddress })
 	state.scheduler.status = 'paused'
 	return assessment
-}
-
-export function updateV3PositionStatus(observation: V3PositionObservation, blockNumber: bigint) {
-	observation.position.lastCheckedAtBlock = blockNumber.toString()
-	if (observation.liquidity > 0n) observation.position.status = 'active'
-	else if (observation.tokensOwed0 > 0n || observation.tokensOwed1 > 0n) observation.position.status = 'collect-only'
-	else if (observation.position.status !== 'pending-confirmation' || (observation.position.registeredBy === 'workflow' && observation.position.creationTransactionHash !== undefined)) observation.position.status = 'closed'
-}
-
-export function recordV3ScanFailure(state: RuntimeState, position: RuntimeState['retirement']['positions'][number], error: unknown) {
-	if (position.status !== 'pending-confirmation') position.status = 'blocked'
-	const details = error instanceof Error ? error.message : String(error)
-	state.retirement.blockers = [...state.retirement.blockers.filter(blocker => blocker.id !== position.id), { category: 'ambiguous-position', details, id: position.id }]
-}
-
-export function recordV3ScanSuccess(state: RuntimeState, observation: V3PositionObservation, blockNumber: bigint) {
-	state.retirement.blockers = state.retirement.blockers.filter(blocker => blocker.id !== observation.position.id)
-	updateV3PositionStatus(observation, blockNumber)
 }
 
 export async function retirementPositionsForScan(parameters: { anchor: Pick<CanonicalAnchor, 'blockHash' | 'blockNumber'>; pool: Parameters<typeof chaosReadClients>[1]; profileId: string; settings: OperatorSettings; state: RuntimeState; wallet: Address | undefined }) {

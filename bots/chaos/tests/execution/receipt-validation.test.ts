@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { encodeAbiParameters, keccak256, toHex, type Address, type Hash } from '@zoltar/bot-shared/ethereum'
-import { receiptVisibilityDisposition, requireSuccessfulReceipt, validateStepReceiptEvidence } from '../../src/execution/receipt-validation.ts'
+import { receiptVisibilityDisposition, requireSuccessfulReceipt, stepReceiptEvidenceDisposition } from '../../src/execution/receipt-validation.ts'
 import type { OperationStep } from '../../src/operations/types.ts'
 
 const emitter = '0x0000000000000000000000000000000000000001' as Address
@@ -32,8 +32,8 @@ const receipt = {
 
 describe('chaos semantic receipt validation', () => {
 	test('requires every declared event and accepts an exact emitter/topic match', () => {
-		expect(validateStepReceiptEvidence(step([{ emitter, kind: 'event', signature: 'Changed()', topic0: topic }]), receipt)).toEqual(receipt)
-		expect(() => validateStepReceiptEvidence(step([{ emitter, kind: 'event', signature: 'Other()', topic0: transactionHash }]), receipt)).toThrow('did not emit Other()')
+		expect(stepReceiptEvidenceDisposition(step([{ emitter, kind: 'event', signature: 'Changed()', topic0: topic }]), receipt)).toBe('confirmed')
+		expect(() => stepReceiptEvidenceDisposition(step([{ emitter, kind: 'event', signature: 'Other()', topic0: transactionHash }]), receipt)).toThrow('did not emit Other()')
 	})
 
 	test('validates captured balance and storage postconditions', () => {
@@ -48,11 +48,11 @@ describe('chaos semantic receipt validation', () => {
 			relation: 'at-least' as const,
 		}
 		expect(
-			validateStepReceiptEvidence(step([balanceEvidence, storageEvidence]), receipt, {
+			stepReceiptEvidenceDisposition(step([balanceEvidence, storageEvidence]), receipt, {
 				balances: [{ after: 9n, before: 10n, evidence: balanceEvidence }],
 				storage: [{ after: '4', before: '2', evidence: storageEvidence }],
 			}),
-		).toEqual(receipt)
+		).toBe('confirmed')
 	})
 
 	test('decodes staged-operation success instead of trusting the event topic alone', () => {
@@ -85,11 +85,11 @@ describe('chaos semantic receipt validation', () => {
 			signature,
 			topic0: stagedTopic,
 		}
-		expect(() => validateStepReceiptEvidence(step([evidence]), stagedReceipt)).toThrow('ExecutedStagedOperation(uint256,uint8,bool,string).success to equal true')
+		expect(() => stepReceiptEvidenceDisposition(step([evidence]), stagedReceipt)).toThrow('ExecutedStagedOperation(uint256,uint8,bool,string).success to equal true')
 	})
 
 	test('does not treat an empty evidence declaration as verified', () => {
-		expect(() => validateStepReceiptEvidence(step([]), receipt)).toThrow('does not declare semantic receipt evidence')
+		expect(() => stepReceiptEvidenceDisposition(step([]), receipt)).toThrow('does not declare semantic receipt evidence')
 	})
 
 	test('rejects reverted receipts before semantic validation', () => {

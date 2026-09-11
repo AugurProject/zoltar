@@ -922,7 +922,18 @@ describe('chaos dashboard server', () => {
 				inventory: { eth: '1', rep: [{ allowances: { spender: privateKey }, balance: '2', symbol: 'REP', token: '0x2222222222222222222222222222222222222222' }], weth: '3' },
 				lastScannedBlock: 42n,
 				obligations: [{ blockers: [`rpc_url=${rpc}`], dueAt: '2026-08-24T01:00:00.000Z', id: 'settle', label: 'Settle report', status: 'pending' }],
-				pendingTransactions: [{ data: calldata, hash: `0x${'02'.repeat(32)}`, label: 'Wrap WETH', nonce: 9n, serializedTransaction: signedTransaction, status: 'submitted' }],
+				pendingTransactions: [
+					{
+						data: calldata,
+						hash: `0x${'02'.repeat(32)}`,
+						label: 'Wrap WETH',
+						maxBlockNumber: 60n,
+						nonce: 9n,
+						observation: { checkedAt: '2026-08-24T00:03:00.000Z', head: 42n, includedBlock: 40n, kind: 'awaiting-finality', secret: privateKey },
+						serializedTransaction: signedTransaction,
+						status: 'submitted',
+					},
+				],
 				rpcEndpointHealth: [
 					{ chainId: 11_155_111, checkedAt: '2026-08-24T00:00:00.000Z', error: undefined, kind: 'read-rpc', status: 'healthy', target: rpc },
 					{ chainId: 11_155_111, checkedAt: '2026-08-24T00:01:00.000Z', error: undefined, kind: 'read-rpc', status: 'healthy', target: 'https://second.example/?token=private' },
@@ -963,7 +974,8 @@ describe('chaos dashboard server', () => {
 		expect(body).not.toContain('third.example')
 		expect(body).not.toContain('Bearer')
 		expect(Reflect.get(state, 'lastScannedBlock')).toBe('42')
-		expect(Reflect.get(state, 'pendingTransactions')).toEqual([{ hash: `0x${'02'.repeat(32)}`, label: 'Wrap WETH', nonce: '9', status: 'submitted' }])
+		expect(Reflect.get(state, 'pendingTransactions')).toEqual([{ hash: `0x${'02'.repeat(32)}`, label: 'Wrap WETH', maxBlockNumber: '60', nonce: '9', observation: { checkedAt: '2026-08-24T00:03:00.000Z', head: '42', includedBlock: '40', kind: 'awaiting-finality' }, status: 'submitted' }])
+		expect(Reflect.get(publicChaosState({ pendingTransactions: [{ hash: `0x${'02'.repeat(32)}`, observation: { checkedAt: '2026-08-24T00:03:00.000Z', head: 42n, kind: 'included' } }] }, {}), 'pendingTransactions')).toEqual([{ hash: `0x${'02'.repeat(32)}` }])
 		expect(Reflect.get(state, 'operationEvaluations')).toEqual([{ blockers: [], candidateCount: 1, description: 'Wrap bounded ETH', ecosystem: 'open-oracle', eligible: true, id: 'wrap', label: 'Wrap WETH', prerequisites: [], risk: 'low' }])
 		expect(Reflect.get(state, 'rpcHealth')).toEqual({
 			chainReady: false,
@@ -1386,6 +1398,7 @@ describe('chaos dashboard server', () => {
 			connectivity: { publicRpcUrls: ['https://submit.example'], quorumRpcUrls: ['https://second.example'], readRpcUrl: 'https://user:password@rpc.example', rpcQuorum: 2 },
 			enabledEcosystems: ['zoltar', 'statoblast', 'open-oracle', 'trading'],
 			execute: false,
+			explorerUrl: 'https://sepolia.etherscan.io',
 			hasSigner: true,
 			maximumDelaySeconds: 3_600,
 			maximumEthPerOperation: '0.05',
@@ -1406,6 +1419,22 @@ describe('chaos dashboard server', () => {
 		expect(body).toContain('rpc.example')
 		expect(body).not.toContain('private/path')
 		expect(body).not.toContain('444444')
+	})
+
+	test('publishes only credential-free http(s) explorer origins', () => {
+		const explorerUrl = (value: unknown) => Reflect.get(publicChaosConfiguration({ settings: { network: { chainId: 1, explorerUrl: value, name: 'mainnet' } } }), 'explorerUrl')
+		expect(explorerUrl('https://etherscan.io')).toBe('https://etherscan.io')
+		expect(explorerUrl('http://127.0.0.1:8080/')).toBe('http://127.0.0.1:8080/')
+		expect(explorerUrl('https://explorer.example/chain/sepolia')).toBe('https://explorer.example/chain/sepolia')
+		expect(explorerUrl('https://operator:secret@explorer.example')).toBeUndefined()
+		expect(explorerUrl('https://explorer.example/?lang=en')).toBeUndefined()
+		expect(explorerUrl('https://explorer.example/#/')).toBeUndefined()
+		expect(explorerUrl('https://explorer.example/#')).toBeUndefined()
+		expect(explorerUrl('https://explorer.example?')).toBeUndefined()
+		expect(explorerUrl('javascript:alert(1)')).toBeUndefined()
+		expect(explorerUrl('etherscan.io')).toBeUndefined()
+		expect(explorerUrl(`https://explorer.example/${'a'.repeat(2_048)}`)).toBeUndefined()
+		expect(explorerUrl(undefined)).toBeUndefined()
 	})
 
 	test('projects the internal all-selection sentinel as an explicit public null', () => {
