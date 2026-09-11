@@ -17,7 +17,6 @@ export function ProbabilityBar({ yesPercent, beforePercent }: { yesPercent: numb
 				<div class='probability__yes' style={{ width: `${yesPercent}%` }} />
 				{beforePercent === undefined ? null : <span class='probability__marker' style={{ left: `${beforePercent}%` }} aria-label={probabilityCopy.beforePriceLabel(beforePercent.toFixed(1))} />}
 			</div>
-			<figcaption>{probabilityCopy.currentSpotPriceCaption}</figcaption>
 		</figure>
 	)
 }

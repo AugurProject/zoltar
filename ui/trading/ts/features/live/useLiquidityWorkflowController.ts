@@ -1,13 +1,14 @@
 import type { Address, Hash, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { createExclusiveWorkflowGuard, createLatestRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { waitForSubmittedTransactionReceipt } from '@zoltar/ui-core-shared/transactions/transactionReceipt.js'
-import { useEffect, useMemo, useReducer, useRef, useState } from 'preact/hooks'
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'preact/hooks'
 import { parseUnitsOrUndefined } from '../../lib/format.js'
+import { collateralAttoEthToAttoShares } from '../../lib/shareValue.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import { marketAcceptsNewRisk, type LiquidityOperation, type LiveMarket } from '../../protocol/live.js'
 import type { LiveLiquidityServices } from '../LiveLiquidityControls.js'
 import { DEFAULT_SLIPPAGE_PERCENT, DEFAULT_TRANSACTION_VALIDITY_MINUTES } from '../LiveTradingTransactionUi.js'
-import { broadcastUncertainMessage, parseSlippageBps, parseTransactionValidityMinutes, positionControlsWorkflowLocked, type GuardedWalletWrite } from '../liveTradingControllerHelpers.js'
+import { broadcastUncertainMessage, parseSlippageBps, parseTransactionValidityMinutes, positionControlsWorkflowLocked, quoteBasisChanged, type GuardedWalletWrite } from '../liveTradingControllerHelpers.js'
 import type { BalanceState, QuoteContext } from './liveTradingTypes.js'
 import { idleTransactionWorkflow, transactionPhase, transactionWorkflowError, transactionWorkflowHash, transactionWorkflowReceiptWarning, transactionWorkflowReducer, type TransactionContext } from './transactionWorkflow.js'
 
@@ -61,7 +62,16 @@ export function useLiquidityWorkflowController({
 	const workflow = useRef(createExclusiveWorkflowGuard()).current
 	const mounted = useRef(true)
 	const inputRevision = useRef(0)
-	const parsed = useMemo(() => parseUnitsOrUndefined(amount), [amount])
+	// ETH entries fund the pair directly; LP removals are entered on the collateral-value scale shared with share amounts.
+	const requestedAmount = useCallback(
+		(rate: LiveMarket) => {
+			const value = parseUnitsOrUndefined(amount)
+			if (value === undefined || operation !== 'remove') return value
+			return collateralAttoEthToAttoShares(value, rate)
+		},
+		[amount, operation],
+	)
+	const parsed = useMemo(() => requestedAmount(market), [market, requestedAmount])
 	const slippageBps = useMemo(() => parseSlippageBps(slippage), [slippage])
 	const validityMinutes = useMemo(() => parseTransactionValidityMinutes(transactionValidityMinutes), [transactionValidityMinutes])
 	const conditionalBps = useMemo(() => {
@@ -89,6 +99,16 @@ export function useLiquidityWorkflowController({
 		if (!workflow.isActive()) dispatchWorkflow({ type: 'inputs-invalidated' })
 		return () => simulationRequests.invalidate()
 	}, [account, configuration, market.pool, receiptWarning, walletClient])
+
+	// A liquidity quote prices exact reserves and the pool rate; a background refresh that moves them retires it.
+	const quoteBasis = quote === undefined ? undefined : quote.market
+	useEffect(() => {
+		if (quoteBasis === undefined || !quoteBasisChanged(quoteBasis, market) || workflow.isActive()) return
+		inputRevision.current++
+		simulationRequests.invalidate()
+		setQuote(undefined)
+		dispatchWorkflow({ type: 'inputs-invalidated' })
+	}, [market, quoteBasis])
 
 	useEffect(() => {
 		if ((balanceState === 'ready' && operationAvailable) || receiptWarning !== undefined) return
@@ -151,7 +171,8 @@ export function useLiquidityWorkflowController({
 				quote.market.pool !== market.pool ||
 				quote.requestRevision !== inputRevision.current ||
 				quote.operation !== operation ||
-				quote.amount !== parsed ||
+				// Convert with the quoted market so a background rate refresh cannot masquerade as an input change.
+				quote.amount !== requestedAmount(quote.market) ||
 				(operation === 'initialize' && quote.conditionalYesBps !== conditionalBps)
 			)
 				throw new Error('Liquidity inputs changed; simulate the current selection again')

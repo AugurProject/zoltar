@@ -1,4 +1,4 @@
-import { discoverAddressedMarket, discoverTradingMarketPage } from '../../protocol/marketDiscovery.js'
+import { discoverAddressedMarket, discoverTradingMarketPage, discoverUniverses } from '../../protocol/marketDiscovery.js'
 import type { Address, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import type {
@@ -32,6 +32,7 @@ export type PortfolioBalanceEntry = Readonly<{ market: LiveMarket; balances: Liv
 export type LiveTradingControllerServices = Readonly<{
 	discoverAddressedMarket: typeof discoverAddressedMarket
 	discoverTradingMarketPage: typeof discoverTradingMarketPage
+	discoverUniverses: typeof discoverUniverses
 	connectWallet: typeof connectWallet
 	createTradingPublicClient: typeof createTradingPublicClient
 	createTradingWalletClient: typeof createTradingWalletClient
