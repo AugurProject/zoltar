@@ -3684,4 +3684,39 @@ describe('shared ethereum compatibility layer', () => {
 		).toBe(21_000n)
 		expect(calls.map(call => call.method)).toEqual(['eth_call', 'eth_estimateGas'])
 	})
+
+	test('multicall failures carry the decoded revert reason of the failed entry', async () => {
+		const aggregateOutputs = [
+			{
+				components: [
+					{ name: 'success', type: 'bool' },
+					{ name: 'returnData', type: 'bytes' },
+				],
+				name: 'returnData',
+				type: 'tuple[]',
+			},
+		] as const
+		const reasonData = `0x08c379a0${encodeAbiParameters([{ type: 'string' }], ['pool not initialized']).slice(2)}`
+		const client = createPublicClient({
+			transport: custom(
+				createProvider(
+					() =>
+						encodeAbiParameters(aggregateOutputs, [
+							[
+								[false, reasonData],
+								[false, '0x'],
+								[false, '0x4e487b71' + '11'.padStart(64, '0')],
+								[true, encodeAbiParameters([{ type: 'uint256' }], [7n])],
+							],
+						]),
+					[],
+				),
+			),
+		})
+		const contract = { abi: SINGLE_OUTPUT_ABI, address: TOKEN_ADDRESS, functionName: 'singleOutput' } as const
+		const contracts = [contract, contract, contract, contract]
+		const results = await client.multicall({ allowFailure: true, contracts, multicallAddress: MULTICALL_ADDRESS })
+		expect(results.map(result => (result.status === 'failure' ? result.error.message : result.result))).toEqual(['Multicall contract call failed: execution reverted: pool not initialized', 'Multicall contract call failed: empty return data', `Multicall contract call failed: panic 0x${'11'.padStart(64, '0')}`, 7n])
+		await expect(client.multicall({ allowFailure: false, contracts, multicallAddress: MULTICALL_ADDRESS })).rejects.toThrow('Multicall contract call failed: execution reverted: pool not initialized')
+	})
 })

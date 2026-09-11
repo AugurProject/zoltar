@@ -8,6 +8,7 @@ export type NetworkConfiguration = {
 	chain: Chain
 	explorerUrl: string
 	factory: Address
+	multicall3: Address
 	name: NetworkName
 	quoter: Address
 	rep: Address
@@ -60,6 +61,7 @@ export function networkConfiguration(
 		chain,
 		explorerUrl: defaults.explorerUrl,
 		factory: getAddress(overrides.factory ?? defaults.factory),
+		multicall3: canonicalCoreDeployment(name === 'mainnet' ? mainnet : sepolia).multicall3,
 		name,
 		quoter: getAddress(overrides.quoter ?? defaults.quoter),
 		rep: deployment.rep,

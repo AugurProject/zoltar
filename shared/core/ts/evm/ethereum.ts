@@ -2,6 +2,7 @@ import { keccak_256 } from '@noble/hashes/sha3.js'
 import { bytesToHex as nobleBytesToHex, concatBytes, hexToBytes as nobleHexToBytes, utf8ToBytes } from '@noble/hashes/utils.js'
 import { addr, amounts, eip191Signer, Transaction as MicroTransaction } from 'micro-eth-signer'
 import { Decoder, createContract, deployContract, events } from 'micro-eth-signer/advanced/abi.js'
+import { multicallFailureMessage } from './multicallFailure.js'
 
 export type Hex = `0x${string}`
 export type Address = Hex
@@ -1809,7 +1810,7 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 			if (parameters.allowFailure) {
 				return decoded.map((entry, index) => {
 					if (typeof entry !== 'object' || entry === null || !('success' in entry) || !('returnData' in entry)) return { error: new Error('Unexpected multicall response'), status: 'failure' }
-					if (entry.success !== true) return { error: new Error('Multicall contract call failed'), status: 'failure' }
+					if (entry.success !== true) return { error: new Error(multicallFailureMessage(entry.returnData)), status: 'failure' }
 					// A result that cannot be decoded only fails its own entry; the other results stay usable.
 					try {
 						return { result: decodeEntry(index, entry.returnData as Hex), status: 'success' }
@@ -1820,9 +1821,8 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 			}
 
 			return decoded.map((entry, index) => {
-				if (typeof entry !== 'object' || entry === null || !('success' in entry) || !('returnData' in entry) || entry.success !== true) {
-					throw new Error('Multicall contract call failed')
-				}
+				if (typeof entry !== 'object' || entry === null || !('success' in entry) || !('returnData' in entry)) throw new Error('Unexpected multicall response')
+				if (entry.success !== true) throw new Error(multicallFailureMessage(entry.returnData))
 				return decodeEntry(index, entry.returnData as Hex)
 			}) as MulticallReturnType<typeof parameters.contracts, typeof parameters.allowFailure>
 		},

@@ -14,6 +14,7 @@ export function canonicalCoreDeployment(manifest: DeploymentManifest) {
 	}
 	return {
 		zoltar: address('zoltar'),
+		multicall3: address('multicall3'),
 		questionData: address('zoltarQuestionData'),
 		openOracle: address('openOracle'),
 		securityPoolFactory: address('securityPoolFactory'),
