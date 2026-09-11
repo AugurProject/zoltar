@@ -66,13 +66,8 @@ function configuredRpcUrls(value: unknown) {
 /** Publishes the operator-configured block explorer only as a plain http(s) base that `/tx/<hash>` can be appended to. */
 function publicExplorerUrl(value: unknown) {
 	// A bare `?` or `#` parses as an empty query or fragment, so reject the delimiters themselves.
-	if (typeof value !== 'string' || value.length > 2_048 || value.includes('?') || value.includes('#')) return undefined
-	let url: URL
-	try {
-		url = new URL(value)
-	} catch {
-		return undefined
-	}
+	if (typeof value !== 'string' || value.length > 2_048 || value.includes('?') || value.includes('#') || !URL.canParse(value)) return undefined
+	const url = new URL(value)
 	if ((url.protocol !== 'https:' && url.protocol !== 'http:') || url.username !== '' || url.password !== '') return undefined
 	return value
 }

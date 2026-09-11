@@ -47,12 +47,8 @@ export function transactionExplorerUrl(explorerUrl: string | undefined, hash: st
 
 /** Keeps the visible label short; the explorer hostname stays in the accessible name and tooltip. */
 function explorerLink(url: string, type: string, value: string) {
-	let hostname: string
-	try {
-		hostname = new URL(url).hostname
-	} catch {
-		return undefined
-	}
+	if (!URL.canParse(url)) return undefined
+	const hostname = new URL(url).hostname
 	const link = node('a', 'identifier-explorer', 'Explorer')
 	link.href = url
 	link.rel = 'noreferrer'
