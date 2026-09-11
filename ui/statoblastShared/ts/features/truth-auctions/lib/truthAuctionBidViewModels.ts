@@ -35,7 +35,7 @@ export type ViewerTruthAuctionBidRowViewModel = {
 	statusToneClassName: string
 }
 
-export type ViewerTruthAuctionBidRowsViewModel = {
+type ViewerTruthAuctionBidRowsViewModel = {
 	rows: ViewerTruthAuctionBidRowViewModel[]
 	showSettlementActionColumn: boolean
 }

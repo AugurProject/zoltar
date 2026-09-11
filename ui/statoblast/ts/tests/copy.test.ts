@@ -4,7 +4,6 @@ import * as liquidationCopy from '@zoltar/ui-statoblast-shared/copy/liquidation.
 import * as securityPoolCopy from '@zoltar/ui-statoblast-shared/copy/securityPool.js'
 
 test('vault operation copy uses accounting roles', () => {
-	expect(securityPoolCopy.settingCapacityOwnership).toBe('Setting capacity ownership…')
 	expect(securityPoolCopy.withdrawingRep).toBe('Withdrawing REP…')
 })
 

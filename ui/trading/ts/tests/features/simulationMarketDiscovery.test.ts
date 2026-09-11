@@ -16,8 +16,9 @@ import { getInfraContractAddresses, PROXY_DEPLOYER_ADDRESS } from '@zoltar/ui-st
 import { activateSimulationBackendProfile, createBootstrappedSimulationBackendWithRetry, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulationTestUtils.js'
 import { deploymentConfigurationForPlan, getTradingDeploymentPlan } from '../../protocol/deployment.js'
 import { discoverLiveUniverseMarketPage, loadLiveBalances } from '../../protocol/live.js'
+import { DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIMULATION_SCENARIO } from '../../simulation/index.js'
 
-for (const scenario of ['trading', 'trading-funded'])
+for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIMULATION_SCENARIO])
 	describe(`${scenario} simulation market discovery`, () => {
 		let backend: SimulationBackend
 
@@ -148,7 +149,7 @@ for (const scenario of ['trading', 'trading-funded'])
 						await waitFor(() => expect(summary?.status).toBe('ready'), { timeout: 10_000 })
 						expect(rendered.container.textContent).not.toContain('Connect a wallet to load')
 						if (route !== 'portfolio') {
-							const expectedMarkets = (route === 'create-market') === (scenario === 'trading') ? 1 : 0
+							const expectedMarkets = (route === 'create-market') === (scenario === DEPLOYED_TRADING_SIMULATION_SCENARIO) ? 1 : 0
 							expect(rendered.container.querySelectorAll('.live-market-button')).toHaveLength(expectedMarkets)
 							expect(rendered.container.textContent).not.toContain('Pair not created')
 							expect(rendered.container.textContent).not.toContain('Conditional prices only')
@@ -168,7 +169,7 @@ for (const scenario of ['trading', 'trading-funded'])
 			expect(discovery.markets[0]?.originUniverseId).toBe(0n)
 			const market = discovery.markets[0]
 			if (market === undefined) throw new Error('Seeded market is missing')
-			if (scenario === 'trading') {
+			if (scenario === DEPLOYED_TRADING_SIMULATION_SCENARIO) {
 				expect(market.pair).toBeUndefined()
 				return
 			}

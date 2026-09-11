@@ -20,8 +20,7 @@ import { getWethAddress } from '@zoltar/ui-zoltar-shared/protocol/activeProtocol
 import { getRuntimeNetworkProfile, type NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { getZoltarContractAddresses, MULTICALL3_BYTECODE, PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from '@zoltar/ui-zoltar-shared/protocol/zoltarDeploymentHelpers.js'
 
-export { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
-export { getZoltarAddress, getZoltarInitCode, getZoltarQuestionDataByteCode, MULTICALL3_BYTECODE, PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from '@zoltar/ui-zoltar-shared/protocol/zoltarDeploymentHelpers.js'
+export { getZoltarAddress, PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from '@zoltar/ui-zoltar-shared/protocol/zoltarDeploymentHelpers.js'
 const ORACLE_FEE_SINK_ADDRESS = '0x000000000000000000000000000000000000dEaD' satisfies Address
 const ORACLE_REPORT_GAS = 100000n
 const ORACLE_SETTLEMENT_GAS = 1000000
@@ -234,8 +233,4 @@ export function getBootstrapDescendantAddresses(profile: NetworkProfile = getRun
 
 export function getOpenOracleAddress() {
 	return getInfraContractAddresses().openOracle
-}
-
-export function getMulticall3Address() {
-	return getZoltarContractAddresses().multicall3
 }
