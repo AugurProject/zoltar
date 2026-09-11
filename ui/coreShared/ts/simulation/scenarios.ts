@@ -18,19 +18,19 @@ export function registerSimulationScenario(scenario: SimulationScenario, present
 }
 
 export function getRegisteredSimulationScenarios(): readonly SimulationScenario[] {
-	return [...CORE_SIMULATION_SCENARIOS, ...scenarioPresentations.keys()]
+	return [...new Set([...CORE_SIMULATION_SCENARIOS, ...scenarioPresentations.keys()])]
 }
 
 export function getSimulationScenarioLabel(scenario: SimulationScenario) {
 	const registered = scenarioPresentations.get(scenario)
 	if (registered !== undefined) return registered.label
-	return getCoreSimulationScenarioLabel(scenario as CoreSimulationScenario)
+	return isCoreSimulationScenario(scenario) ? getCoreSimulationScenarioLabel(scenario) : scenario
 }
 
 export function getSimulationScenarioDescription(scenario: SimulationScenario) {
 	const registered = scenarioPresentations.get(scenario)
 	if (registered !== undefined) return registered.description
-	return getCoreSimulationScenarioDescription(scenario as CoreSimulationScenario)
+	return isCoreSimulationScenario(scenario) ? getCoreSimulationScenarioDescription(scenario) : `Unregistered simulation scenario '${scenario}'.`
 }
 
 export function isCoreSimulationScenario(value: string): value is CoreSimulationScenario {
