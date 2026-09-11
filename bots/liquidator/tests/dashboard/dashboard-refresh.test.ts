@@ -216,7 +216,7 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 	let releaseApprovedUniverseRequest: (() => void) | undefined
 	let releaseSelectedPoolRequest: (() => void) | undefined
 	window.fetch = async (input, init) => {
-		const inputUrl = typeof input === 'string' ? input : input instanceof window.URL ? input.href : Reflect.get(input, 'url')
+		const inputUrl = typeof input === 'string' || input instanceof window.URL ? input.toString() : Reflect.get(input, 'url')
 		if (typeof inputUrl !== 'string') throw new Error('Unexpected request URL')
 		const url = new URL(inputUrl, server.url)
 		if (url.pathname === '/api/configuration') {
@@ -444,7 +444,8 @@ describe('liquidator dashboard refresh behavior', () => {
 		test(`explains capability-only ${label} blockers`, async () => {
 			const pending = label === 'startup' || label === 'scanning'
 			const page = await dashboard(mainnetConfiguration(), snapshot)
-			expect(page.window.document.getElementById('attention-badge')?.textContent).toBe(pending ? (label === 'scanning' ? 'Scanning pools' : 'Awaiting first scan') : '1 action')
+			const pendingBadge = label === 'scanning' ? 'Scanning pools' : 'Awaiting first scan'
+			expect(page.window.document.getElementById('attention-badge')?.textContent).toBe(pending ? pendingBadge : '1 action')
 			expect(page.window.document.getElementById('attention-badge')?.getAttribute('href')).toBe(pending ? null : '/overview#global-error')
 			expect(page.window.document.getElementById('global-error')?.classList.contains('warning')).toBe(!pending)
 			if (pending) expect(page.window.document.getElementById('global-error')?.textContent).toContain('automatically')

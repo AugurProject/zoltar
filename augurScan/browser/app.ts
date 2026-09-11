@@ -685,7 +685,7 @@ const updateConnectionStatus = () => {
 		return
 	}
 	const network = latestNetworks.find(item => String(item.chain_id) === selectedChainId())
-	const streamState = connectionDemo === 'reconnecting' ? 'closed' : stream?.readyState === EventSource.OPEN ? 'open' : stream?.readyState === EventSource.CONNECTING || stream === undefined ? 'connecting' : 'closed'
+	const streamState = connectionDemo === 'reconnecting' ? 'closed' : eventStreamState(stream)
 	const status = indexerConnectionStatus(network, streamState, lastNetworkRequestFailed, streamHasOpened || connectionDemo === 'reconnecting')
 	connection.className = `connection ${status.tone}`
 	$('#connection-label').textContent = status.label
@@ -812,6 +812,43 @@ const demoNetworkItems = () => {
 		phase: 'live',
 	}))
 }
+const eventStreamState = (stream: EventSource | undefined): 'closed' | 'connecting' | 'open' => {
+	if (stream?.readyState === EventSource.OPEN) return 'open'
+	return stream?.readyState === EventSource.CONNECTING || stream === undefined ? 'connecting' : 'closed'
+}
+
+const demoManifestDeployment = (networkId: string, index: number, deploymentBlock: string | undefined): { deployment_block: string | null; deployment_timestamp: string | null } => {
+	if (networkId === 'mainnet') return { deployment_block: deploymentBlock ?? null, deployment_timestamp: deploymentBlock === undefined ? null : new Date(Date.now() - (5 - index) * 86_400_000).toISOString() }
+	if (index < 3) return { deployment_block: String(8_750_000 + index * 12), deployment_timestamp: networkId === 'sepolia' ? new Date(Date.now() - (3 - index) * 86_400_000).toISOString() : null }
+	return { deployment_block: null, deployment_timestamp: null }
+}
+
+const DEMO_LOG_CONTRACT_LABELS = ['Security Pool 0x8c2f', 'OpenOracle', 'Genesis REP', 'Security Pool Factory'] as const
+
+const demoPoolQuestionTitle = (networkId: string) => (networkId === 'sepolia' ? 'Which client ships the next protocol release first?' : 'Will the 2030 global mean temperature anomaly exceed 1.5°C?')
+
+const historyPageSlice = <T>(records: readonly T[], split: number, offset: number) => (offset === 0 ? records.slice(split) : records.slice(0, split))
+
+const demoDisplayedRepEthPrices = <T extends { rep_per_eth_1e18: string }>(repEthPrices: readonly T[], firstRepEthPrice: T): T[] => {
+	if (priceDemo === 'constant-zero') return [{ ...firstRepEthPrice, rep_per_eth_1e18: '0' }]
+	if (priceDemo === 'constant-nonzero') return [firstRepEthPrice]
+	if (priceDemo === 'constant-repeated') return repEthPrices.slice(0, 3).map(price => ({ ...price, rep_per_eth_1e18: firstRepEthPrice.rep_per_eth_1e18 }))
+	return [...repEthPrices]
+}
+
+const demoUniswapPrices = () => (priceDemo === 'eight' ? demoDenseUniswapRepEthPriceHistory() : demoUniswapRepEthPriceHistory())
+
+const DEMO_OPEN_ORACLE_HISTORY = [
+	{ event_name: 'ReportSubmitted', summary: 'REP/ETH report submitted' },
+	{ event_name: 'ReportDisputed', summary: 'Replacement round accepted' },
+	{ event_name: 'PriceReported', summary: 'Coordinator accepted the settled price' },
+] as const
+
+const demoSupplyEventName = (index: number) => {
+	if (index === 0) return 'UniverseInitialized'
+	return index === 4 ? 'UniverseForked' : 'MigrationRepAdded'
+}
+
 const demoContracts = demoNetworks.flatMap(network => {
 	const manifestDefinitions: readonly (readonly [address: string, label: string, kind: string, deploymentBlock: string | undefined, exact: boolean])[] = [
 		['0x7A0D94F55792C434d74a40883C6ed8545E406D12', 'Proxy Deployer', 'proxyDeployer', '22181455', true],
@@ -832,8 +869,7 @@ const demoContracts = demoNetworks.flatMap(network => {
 		provenance: 'manifest',
 		discovery_block: null,
 		discovery_tx_hash: null,
-		deployment_block: network.id === 'mainnet' ? (deploymentBlock ?? null) : index < 3 ? String(8_750_000 + index * 12) : null,
-		deployment_timestamp: network.id === 'mainnet' && deploymentBlock !== undefined ? new Date(Date.now() - (5 - index) * 86_400_000).toISOString() : network.id === 'sepolia' && index < 3 ? new Date(Date.now() - (3 - index) * 86_400_000).toISOString() : null,
+		...demoManifestDeployment(network.id, index, deploymentBlock),
 		deployment_block_exact: deploymentBlock === undefined ? null : exact,
 		deployment_checked_block: network.indexed_block,
 		explorer_base_url: network.explorer_base_url,
@@ -869,7 +905,7 @@ const demoLogs = Array.from({ length: 18 }, (_, index) => {
 		log_index: index + 2,
 		tx_hash: demoHash.slice(0, -2) + String(index).padStart(2, '0'),
 		emitter_address: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db',
-		contract_label: index % 4 === 0 ? 'Security Pool 0x8c2f' : index % 4 === 1 ? 'OpenOracle' : index % 4 === 2 ? 'Genesis REP' : 'Security Pool Factory',
+		contract_label: DEMO_LOG_CONTRACT_LABELS[index % DEMO_LOG_CONTRACT_LABELS.length],
 		contract_kind: 'securityPool',
 		event_name: demoEvents[index % demoEvents.length],
 		function_name: index % 2 === 0 ? 'report' : 'checkpoint',
@@ -976,7 +1012,7 @@ const demoRichList = Array.from({ length: 64 }, (_, index) => {
 		pool_associations: Array.from({ length: poolCount }, (_, poolIndex) => ({
 			address: `0x${(BigInt(index + 1) * 100n + BigInt(poolIndex + 1)).toString(16).padStart(40, 'a')}`,
 			label: poolIndex === 0 ? 'Security Pool' : null,
-			questionTitle: poolIndex === 0 ? (network.id === 'sepolia' ? 'Which client ships the next protocol release first?' : 'Will the 2030 global mean temperature anomaly exceed 1.5°C?') : null,
+			questionTitle: poolIndex === 0 ? demoPoolQuestionTitle(network.id) : null,
 		})),
 		vault_positions: Array.from({ length: vaultCount }, (_, vaultIndex) => ({
 			poolAddress: `0x${(BigInt(index + 1) * 100n + BigInt(vaultIndex + 1)).toString(16).padStart(40, 'a')}`,
@@ -1290,7 +1326,7 @@ const demoHistory = (path: string) => {
 		for (const key of seriesKeys) {
 			const records = Array.isArray(history[key]) ? history[key] : []
 			const split = Math.max(1, Math.ceil(records.length / 2))
-			page[key] = historyMore ? (offset === 0 ? records.slice(split) : records.slice(0, split)) : records
+			page[key] = historyMore ? historyPageSlice(records, split, offset) : records
 		}
 		const series = Object.fromEntries(seriesKeys.map(key => [key, Array.isArray(page[key]) ? page[key].length : 0]))
 		const truncated = historyMore && offset === 0
@@ -1323,8 +1359,7 @@ const demoHistory = (path: string) => {
 		const hasRepEthPrices = poolItem !== requiredArrayItem(demoPools, 2, 'REP price demo pool')
 		const repEthPrices = demoRepEthPriceHistory()
 		const firstRepEthPrice = requiredArrayItem(repEthPrices, 0, 'Demo REP/ETH price')
-		const displayedRepEthPrices =
-			priceDemo === 'constant-zero' ? [{ ...firstRepEthPrice, rep_per_eth_1e18: '0' }] : priceDemo === 'constant-nonzero' ? [firstRepEthPrice] : priceDemo === 'constant-repeated' ? repEthPrices.slice(0, 3).map(price => ({ ...price, rep_per_eth_1e18: firstRepEthPrice.rep_per_eth_1e18 })) : repEthPrices
+		const displayedRepEthPrices = demoDisplayedRepEthPrices(repEthPrices, firstRepEthPrice)
 		return pagedHistory(
 			{
 				snapshots: collateral.map((value, index) => ({
@@ -1347,13 +1382,12 @@ const demoHistory = (path: string) => {
 					: undefined,
 				ammPrices: hasAmm ? demoAmmPriceHistory() : [],
 				repEthPrices: hasRepEthPrices ? displayedRepEthPrices : [],
-				uniswapRepEthPrices: hasRepEthPrices ? (priceDemo === 'eight' ? demoDenseUniswapRepEthPriceHistory() : demoUniswapRepEthPriceHistory()) : [],
+				uniswapRepEthPrices: hasRepEthPrices ? demoUniswapPrices() : [],
 				openOracleHistory: hasRepEthPrices
 					? displayedRepEthPrices.slice(-3).map((price, index) => ({
 							timestamp: price.timestamp,
 							block_number: price.block_number,
-							event_name: index === 0 ? 'ReportSubmitted' : index === 1 ? 'ReportDisputed' : 'PriceReported',
-							summary: index === 0 ? 'REP/ETH report submitted' : index === 1 ? 'Replacement round accepted' : 'Coordinator accepted the settled price',
+							...DEMO_OPEN_ORACLE_HISTORY[Math.min(index, DEMO_OPEN_ORACLE_HISTORY.length - 1)],
 							coordinator_address: poolItem.coordinator_address,
 						}))
 					: [],
@@ -1386,7 +1420,7 @@ const demoHistory = (path: string) => {
 				events: supply.map((value, index) => ({
 					timestamp: new Date(Date.now() - (8 - index) * 12 * 86_400_000).toISOString(),
 					block_number: String(23080000 + index * 11000),
-					event_name: index === 0 ? 'UniverseInitialized' : index === 4 ? 'UniverseForked' : 'MigrationRepAdded',
+					event_name: demoSupplyEventName(index),
 					theoretical_supply_atto_rep: value,
 				})),
 			},
@@ -1481,7 +1515,8 @@ const exactTimestamp = (value: string | number | Date | null | undefined) => (va
 const until = (value: string | number | Date | null | undefined) => {
 	if (!value) return 'time unknown'
 	const seconds = Math.ceil((new Date(value).getTime() - Date.now()) / 1000)
-	return seconds <= 0 ? 'now' : seconds < 60 ? `in ${seconds}s` : `in ${Math.ceil(seconds / 60)}m`
+	if (seconds <= 0) return 'now'
+	return seconds < 60 ? `in ${seconds}s` : `in ${Math.ceil(seconds / 60)}m`
 }
 
 const isBooleanRecord = (value: unknown): value is Record<string, boolean> => isRecord(value) && Object.values(value).every(item => typeof item === 'boolean')
@@ -2176,47 +2211,45 @@ const api = async (path: string, { signal }: { signal?: AbortSignal } = {}): Pro
 					invalidation_reason: 'chain-reorg',
 				},
 			]
-			const fixtureItems =
-				section === 'reports'
-					? operations.data.reports
-					: section === 'escalations'
-						? operations.data.escalations
-						: section === 'auctions'
-							? operations.data.auctions
-							: section === 'forks'
-								? operations.data.forks
-								: section === 'trading'
-									? [
-											{
-												pair_address: demoAddress('fa'),
-												pool_address: demoPools[0]?.pool_address,
-												question_title: demoPools[0]?.question_title,
-												conditional_yes_bps: '5100',
-												swap_count: 63,
-												lp_holder_count: 4,
-												price_block_number: operations.asOf.blockNumber,
-											},
-										]
-									: section === 'timeline'
-										? timelineFixture.filter(item => request.searchParams.get('canonical') === 'all' || item.canonical)
-										: [
-												{
-													id: '1',
-													reason: pageUrl.searchParams.get('integrityCombinedCauses') === '1' ? 'projection-rebuild' : 'chain-reorg',
-													depth: '2',
-													previous_block: operations.asOf.blockNumber,
-													previous_hash: demoHash,
-													ancestor_block: String(BigInt(operations.asOf.blockNumber) - 2n),
-													ancestor_hash: `0x${'1834a6d2b779c501'.repeat(4)}`,
-													causes: pageUrl.searchParams.get('integrityCombinedCauses') === '1' ? ['abi-redecode', 'manifest-reset', 'projection-rebuild'] : ['chain-reorg'],
-													occurrence_counts: { block: '2', transaction: '9', log: '24', 'entity-state': '6' },
-													indexer_run_id: '1',
-													abi_source_hash: demoHash.slice(2),
-													application_source_hash: `sha256:${demoHash.slice(2)}`,
-													projection_source_hash: `sha256:${demoHash.slice(2)}`,
-													detected_at: '2026-08-26T12:34:57.814Z',
-												},
-											]
+			const demoTradingFixture = [
+				{
+					pair_address: demoAddress('fa'),
+					pool_address: demoPools[0]?.pool_address,
+					question_title: demoPools[0]?.question_title,
+					conditional_yes_bps: '5100',
+					swap_count: 63,
+					lp_holder_count: 4,
+					price_block_number: operations.asOf.blockNumber,
+				},
+			]
+			const integrityCombinedCauses = pageUrl.searchParams.get('integrityCombinedCauses') === '1'
+			const demoIntegrityFixture = [
+				{
+					id: '1',
+					reason: integrityCombinedCauses ? 'projection-rebuild' : 'chain-reorg',
+					depth: '2',
+					previous_block: operations.asOf.blockNumber,
+					previous_hash: demoHash,
+					ancestor_block: String(BigInt(operations.asOf.blockNumber) - 2n),
+					ancestor_hash: `0x${'1834a6d2b779c501'.repeat(4)}`,
+					causes: integrityCombinedCauses ? ['abi-redecode', 'manifest-reset', 'projection-rebuild'] : ['chain-reorg'],
+					occurrence_counts: { block: '2', transaction: '9', log: '24', 'entity-state': '6' },
+					indexer_run_id: '1',
+					abi_source_hash: demoHash.slice(2),
+					application_source_hash: `sha256:${demoHash.slice(2)}`,
+					projection_source_hash: `sha256:${demoHash.slice(2)}`,
+					detected_at: '2026-08-26T12:34:57.814Z',
+				},
+			]
+			const catalogFixtures = new Map<string, () => readonly Readonly<Record<string, unknown>>[]>([
+				['reports', () => operations.data.reports],
+				['escalations', () => operations.data.escalations],
+				['auctions', () => operations.data.auctions],
+				['forks', () => operations.data.forks],
+				['trading', () => demoTradingFixture],
+				['timeline', () => timelineFixture.filter(item => request.searchParams.get('canonical') === 'all' || item.canonical)],
+			])
+			const fixtureItems = catalogFixtures.get(section ?? '')?.() ?? demoIntegrityFixture
 			const items = pageUrl.searchParams.get('catalogEmpty') === '1' ? [] : fixtureItems
 			const continuationFixture = pageUrl.searchParams.get('catalogMore') === '1'
 			const cursor = request.searchParams.get('cursor')
@@ -2673,7 +2706,7 @@ const api = async (path: string, { signal }: { signal?: AbortSignal } = {}): Pro
 			const filtered = demoState === 'empty' ? [] : demoLogs.filter(item => (!chainId || item.chain_id === chainId) && (event === undefined || item.event_name?.toLowerCase().includes(event) === true) && (!address || [item.emitter_address, item.origin_address].some(candidate => candidate?.toLowerCase() === address)))
 			if (pageUrl.searchParams.get('logPaginationDemo') !== '1' || filtered.length === 0) return { items: filtered }
 			const expanded = Array.from({ length: 220 }, (_, index) => {
-				const ordinal = demoReorgObserved ? (index === 0 ? 10_000 : index - 1) : index
+				const ordinal = demoPaginationOrdinal(index, demoReorgObserved)
 				const template = requiredArrayItem(filtered, ordinal % filtered.length, 'Demo activity pagination template')
 				return {
 					...template,
@@ -2706,6 +2739,20 @@ const api = async (path: string, { signal }: { signal?: AbortSignal } = {}): Pro
 	}
 	return payload
 }
+
+const demoPaginationOrdinal = (index: number, reorgObserved: boolean) => {
+	if (!reorgObserved) return index
+	return index === 0 ? 10_000 : index - 1
+}
+
+const headFreshnessState = (stale: boolean) => (stale ? 'stale' : 'current')
+
+const networkBadgeLabel = (phase: string, stale: boolean, awaitingResumedNetworkStatus: boolean) => {
+	if (awaitingResumedNetworkStatus) return lastNetworkRequestFailed ? 'status unavailable' : 'refreshing'
+	return stale ? 'stale head' : phase
+}
+
+const progressCompletionLabel = (progress: { percentage: string | undefined; eta: string }) => (progress.percentage === undefined ? progress.eta : `${progress.percentage}% complete · ${progress.eta}`)
 
 const renderNetworks = (networks: NetworkRecord[]) => {
 	const previouslySelectedNetwork = latestNetworks.find(network => String(network.chain_id) === selectedChainId())
@@ -2757,9 +2804,9 @@ const renderNetworks = (networks: NetworkRecord[]) => {
 			failures: network.consecutive_failures,
 		})
 		card.dataset.phase = network.phase
-		card.dataset.headFreshness = awaitingResumedNetworkStatus ? 'refreshing' : headFreshness.stale ? 'stale' : 'current'
+		card.dataset.headFreshness = awaitingResumedNetworkStatus ? 'refreshing' : headFreshnessState(headFreshness.stale)
 		const title = element('div', 'network-title')
-		const badge = element('span', 'badge', awaitingResumedNetworkStatus ? (lastNetworkRequestFailed ? 'status unavailable' : 'refreshing') : headFreshness.stale ? 'stale head' : network.phase)
+		const badge = element('span', 'badge', networkBadgeLabel(network.phase, headFreshness.stale, awaitingResumedNetworkStatus))
 		title.append(badge)
 		const block = element(network.indexed_block && network.explorer_base_url ? 'a' : 'p', 'block-number', network.indexed_block ? `#${number(network.indexed_block)}` : 'Awaiting first block')
 		if (block instanceof HTMLAnchorElement) {
@@ -2779,7 +2826,7 @@ const renderNetworks = (networks: NetworkRecord[]) => {
 		const displaySyncDetails = showIndexerSyncDetails(network, currentTime)
 		meta.append(indexedTime, ageNode)
 		if (displaySyncDetails) meta.append(element('span', '', lag))
-		const progressLabel = headFreshness.stale ? `${progress.percentage ?? '100.00'}% indexed · RPC head ${age(network.indexed_timestamp).replace(/ ago$/, '')} old (limit 1m)` : progress.percentage === undefined ? progress.eta : `${progress.percentage}% complete · ${progress.eta}`
+		const progressLabel = headFreshness.stale ? `${progress.percentage ?? '100.00'}% indexed · RPC head ${age(network.indexed_timestamp).replace(/ ago$/, '')} old (limit 1m)` : progressCompletionLabel(progress)
 		title.prepend(block)
 		card.append(title, meta)
 		if (displaySyncDetails && !awaitingResumedNetworkStatus) card.append(element('p', 'network-progress', progressLabel))
@@ -2962,7 +3009,12 @@ const restoreOperationsRenderContext = (snapshot: OperationsRenderContext) => {
 	const historyCompletion = content.querySelector<HTMLElement>('.operations-history-complete')
 	const catalogRows = [...content.querySelectorAll<HTMLAnchorElement>('a.operations-row')]
 	const riskTarget = snapshot.focusRiskKind === undefined ? undefined : content.querySelector<HTMLElement>(`[data-risk-kind="${snapshot.focusRiskKind}"]`)
-	const target = riskTarget ?? (snapshot.focusHref === undefined ? (snapshot.focusHistoryMore ? (historyContinuation ?? historyCompletion) : snapshot.focusLoadMore ? (continuation ?? completion ?? catalogRows.at(-1)) : undefined) : catalogRows.find(candidate => candidate.href === snapshot.focusHref))
+	const focusTarget = () => {
+		if (snapshot.focusHref !== undefined) return catalogRows.find(candidate => candidate.href === snapshot.focusHref)
+		if (snapshot.focusHistoryMore) return historyContinuation ?? historyCompletion
+		return snapshot.focusLoadMore ? (continuation ?? completion ?? catalogRows.at(-1)) : undefined
+	}
+	const target = riskTarget ?? focusTarget()
 	window.scrollTo({ top: snapshot.scrollY, behavior: 'auto' })
 	if (target === undefined || target === null) return
 	target.focus({ preventScroll: true })
@@ -3289,74 +3341,76 @@ const renderOperations = (response: OperationsResponse, preservedContext?: Opera
 	const riskVaultPanel = operationsPanel('Vault risk evidence', vaultRiskRows, 'No vault accounting snapshots match this view.', {
 		label: `${operationCounted(vaults.length, 'vault')} shown · ${operationCounted(riskPagination['vaultTotal'], 'vault')} total`,
 	})
-	const panels =
-		selected === 'reports'
-			? [operationsPanel('OpenOracle reports', reportRows, 'No reports match this view.')]
-			: selected === 'escalations'
-				? [operationsPanel('Escalation games', escalationRows, 'No escalation games match this view.')]
-				: selected === 'auctions'
-					? [operationsPanel('Truth auctions', auctionRows, 'No auctions match this view.')]
-					: selected === 'risk'
-						? [riskPoolPanel, riskVaultPanel, operationsPanel('Liquidation approval lifecycle', approvalRows, 'No liquidation approvals match this view.'), operationsPanel('Recent liquidations', liquidationRows, 'No vault liquidations match this view.')]
-						: selected === 'trading'
-							? [operationsPanel('Augur AMM markets', tradingRows, 'No Augur AMM markets match this view.')]
-							: selected === 'timeline'
-								? [
-										operationsPanel('Cross-protocol historical timeline', timelineRows, 'No semantic evidence matches these filters.', {
-											label: `${operationCounted(selectedCatalogPage?.['total'], 'matching transition')} · canonical status and invalidation provenance included`,
-										}),
-									]
-								: selected === 'forks'
-									? [
-											operationsPanel('Zoltar forks and migration progress', forkRows, 'No universe forks match this view.', {
-												label: `${operationCounted(forkRows.length, 'fork')} shown · ${operationCounted(selectedCatalogPage?.['total'], 'fork')} total`,
-											}),
-										]
-									: selected === 'integrity'
-										? [
-												operationsPanel('Selected-chain replacements', integrityRows, 'No chain reorganizations have been recorded.', {
-													label: selectedNetworkScope,
-												}),
-												operationsPanel(
-													'Scanner-wide schema migration history',
-													operationRecords(data['migrations']).map(item => exactEvidenceRow(`Schema ${String(item['schema_version'] ?? '')}`, String(item['description'] ?? ''), [['Applied at', item['applied_at']]])),
-													'No migration records are available.',
-													{ label: 'Scanner-wide · all configured networks', scannerWide: true },
-												),
-												operationsPanel(
-													'Scanner-wide indexer provenance',
-													operationRecords(data['runs']).map(item =>
-														exactEvidenceRow(`augurScan ${String(item['app_version'] ?? '')}`, `Schema ${String(item['schema_version'] ?? '')} · process run ${String(item['id'] ?? 'not recorded')}`, [
-															['ABI source hash', item['abi_source_hash']],
-															['Application source hash', item['application_source_hash']],
-															['Projection source hash', item['projection_source_hash']],
-															['Indexer enabled', item['indexer_enabled']],
-															['Started at', item['started_at']],
-															['Stopped at', item['stopped_at']],
-														]),
-													),
-													'No indexer-run provenance is available.',
-													{ label: 'Scanner-wide · latest 25 process runs across all networks', scannerWide: true },
-												),
-												operationsPanel(
-													'Selected-chain historical exports',
-													[
-														operationRow('Export semantic timeline', 'Snapshot-bound canonical NDJSON with exact event data; response headers identify an opaque continuation cursor.', undefined, undefined, operationsHref('/api/v1/export?dataset=timeline&canonical=canonical&limit=50000')),
-														operationRow('Export canonical and orphan logs', 'Occurrence-level NDJSON including decoded arguments and canonical flags.', undefined, undefined, operationsHref('/api/v1/export?dataset=logs&canonical=all&limit=50000')),
-													],
-													'',
-													{ label: selectedNetworkScope },
-												),
-											]
-										: [
-												operationsPanel('Needs attention · reports', attentionReportRows.slice(0, 5), 'No reports need attention.'),
-												operationsPanel('Active escalations', activeEscalationRows, 'No escalation games are active.'),
-												operationsPanel('Active auctions', activeAuctionRows, 'No auctions are active.'),
-												operationsPanel('Pool and vault risk', riskRows, 'No risk snapshots are available.'),
-												operationsPanel('Fork and migration progress', forkRows, 'No forks or migrations match this view.'),
-												operationsPanel('Price provenance', priceRows, 'No accepted coordinator price is available.'),
-												operationsPanel('Recent semantic changes', changeRows, 'No changes match this view.'),
-											]
+	const sectionPanels = new Map<string, () => HTMLElement[]>([
+		['reports', () => [operationsPanel('OpenOracle reports', reportRows, 'No reports match this view.')]],
+		['escalations', () => [operationsPanel('Escalation games', escalationRows, 'No escalation games match this view.')]],
+		['auctions', () => [operationsPanel('Truth auctions', auctionRows, 'No auctions match this view.')]],
+		['risk', () => [riskPoolPanel, riskVaultPanel, operationsPanel('Liquidation approval lifecycle', approvalRows, 'No liquidation approvals match this view.'), operationsPanel('Recent liquidations', liquidationRows, 'No vault liquidations match this view.')]],
+		['trading', () => [operationsPanel('Augur AMM markets', tradingRows, 'No Augur AMM markets match this view.')]],
+		[
+			'timeline',
+			() => [
+				operationsPanel('Cross-protocol historical timeline', timelineRows, 'No semantic evidence matches these filters.', {
+					label: `${operationCounted(selectedCatalogPage?.['total'], 'matching transition')} · canonical status and invalidation provenance included`,
+				}),
+			],
+		],
+		[
+			'forks',
+			() => [
+				operationsPanel('Zoltar forks and migration progress', forkRows, 'No universe forks match this view.', {
+					label: `${operationCounted(forkRows.length, 'fork')} shown · ${operationCounted(selectedCatalogPage?.['total'], 'fork')} total`,
+				}),
+			],
+		],
+		[
+			'integrity',
+			() => [
+				operationsPanel('Selected-chain replacements', integrityRows, 'No chain reorganizations have been recorded.', {
+					label: selectedNetworkScope,
+				}),
+				operationsPanel(
+					'Scanner-wide schema migration history',
+					operationRecords(data['migrations']).map(item => exactEvidenceRow(`Schema ${String(item['schema_version'] ?? '')}`, String(item['description'] ?? ''), [['Applied at', item['applied_at']]])),
+					'No migration records are available.',
+					{ label: 'Scanner-wide · all configured networks', scannerWide: true },
+				),
+				operationsPanel(
+					'Scanner-wide indexer provenance',
+					operationRecords(data['runs']).map(item =>
+						exactEvidenceRow(`augurScan ${String(item['app_version'] ?? '')}`, `Schema ${String(item['schema_version'] ?? '')} · process run ${String(item['id'] ?? 'not recorded')}`, [
+							['ABI source hash', item['abi_source_hash']],
+							['Application source hash', item['application_source_hash']],
+							['Projection source hash', item['projection_source_hash']],
+							['Indexer enabled', item['indexer_enabled']],
+							['Started at', item['started_at']],
+							['Stopped at', item['stopped_at']],
+						]),
+					),
+					'No indexer-run provenance is available.',
+					{ label: 'Scanner-wide · latest 25 process runs across all networks', scannerWide: true },
+				),
+				operationsPanel(
+					'Selected-chain historical exports',
+					[
+						operationRow('Export semantic timeline', 'Snapshot-bound canonical NDJSON with exact event data; response headers identify an opaque continuation cursor.', undefined, undefined, operationsHref('/api/v1/export?dataset=timeline&canonical=canonical&limit=50000')),
+						operationRow('Export canonical and orphan logs', 'Occurrence-level NDJSON including decoded arguments and canonical flags.', undefined, undefined, operationsHref('/api/v1/export?dataset=logs&canonical=all&limit=50000')),
+					],
+					'',
+					{ label: selectedNetworkScope },
+				),
+			],
+		],
+	])
+	const panels = sectionPanels.get(selected)?.() ?? [
+		operationsPanel('Needs attention · reports', attentionReportRows.slice(0, 5), 'No reports need attention.'),
+		operationsPanel('Active escalations', activeEscalationRows, 'No escalation games are active.'),
+		operationsPanel('Active auctions', activeAuctionRows, 'No auctions are active.'),
+		operationsPanel('Pool and vault risk', riskRows, 'No risk snapshots are available.'),
+		operationsPanel('Fork and migration progress', forkRows, 'No forks or migrations match this view.'),
+		operationsPanel('Price provenance', priceRows, 'No accepted coordinator price is available.'),
+		operationsPanel('Recent semantic changes', changeRows, 'No changes match this view.'),
+	]
 	const grid = element('div', panels.length === 1 ? 'operations-grid operations-grid-single' : 'operations-grid')
 	grid.append(...panels)
 	const riskCatalogPage = isRecord(data['_riskCatalogPage']) ? data['_riskCatalogPage'] : undefined
@@ -3446,11 +3500,7 @@ const renderOperations = (response: OperationsResponse, preservedContext?: Opera
 	}
 	if (selected === 'overview') content.replaceChildren(...(historical ? [freshness] : []), metrics, grid)
 	else {
-		content.replaceChildren(
-			...(asOf['historical'] === true || asOf['phase'] === 'historical' ? [element('p', 'operations-route-freshness', operationsRouteFreshness(asOf, connection.classList.contains('live')))] : []),
-			...(selected === 'timeline' ? [operationsTimelineFilters()] : selected === 'risk' ? [operationsRiskSnapshotFilter()] : []),
-			grid,
-		)
+		content.replaceChildren(...(asOf['historical'] === true || asOf['phase'] === 'historical' ? [element('p', 'operations-route-freshness', operationsRouteFreshness(asOf, connection.classList.contains('live')))] : []), ...operationsSectionFilters(selected), grid)
 	}
 	content.setAttribute('aria-busy', 'false')
 	$('#operations-status').hidden = true
@@ -3474,10 +3524,31 @@ const operationsDetailRoute = (): OperationsDetailRoute | undefined => {
 	return undefined
 }
 
+const operationsSectionFilters = (selected: string): HTMLElement[] => {
+	if (selected === 'timeline') return [operationsTimelineFilters()]
+	return selected === 'risk' ? [operationsRiskSnapshotFilter()] : []
+}
+
+const OPERATIONS_DETAIL_RESOURCES: Record<OperationsDetailRoute['kind'], string> = {
+	auction: 'auctions',
+	escalation: 'escalations',
+	fork: 'forks',
+	pool: 'risk/pools',
+	report: 'reports',
+	trading: 'trading',
+	vault: 'risk/vaults',
+}
+
+const historyBlockRangeLabel = (oldestBlock: bigint | undefined, newestBlock: bigint | undefined, emptyLabel = 'No block-numbered evidence is loaded') => {
+	if (oldestBlock === undefined || newestBlock === undefined) return emptyLabel
+	if (oldestBlock === newestBlock) return `Loaded block #${oldestBlock.toLocaleString('en-US')}`
+	return `Loaded blocks #${oldestBlock.toLocaleString('en-US')}–#${newestBlock.toLocaleString('en-US')}`
+}
+
 const operationsDetailEndpoint = (route: OperationsDetailRoute, cursor?: string, limit = 100, decisionCursor?: string, decisionLimit = 100): string => {
 	const chainId = encodeURIComponent(requiredChainId())
 	const identity = route.identity.map(encodeURIComponent).join('/')
-	const resource = route.kind === 'report' ? 'reports' : route.kind === 'escalation' ? 'escalations' : route.kind === 'auction' ? 'auctions' : route.kind === 'pool' ? 'risk/pools' : route.kind === 'vault' ? 'risk/vaults' : route.kind === 'trading' ? 'trading' : 'forks'
+	const resource = OPERATIONS_DETAIL_RESOURCES[route.kind]
 	const query = new URLSearchParams({ limit: String(limit) })
 	const atBlock = pageUrl.searchParams.get('atBlock')
 	if ((route.kind === 'pool' || route.kind === 'vault') && atBlock !== null && atBlock !== '') query.set('atBlock', atBlock)
@@ -3553,6 +3624,11 @@ const reportEvidenceRows = (items: readonly JsonRecord[]) =>
 		row.append(rawEvidence(item))
 		return row
 	})
+
+const detailEvidenceRowsFor = (kind: OperationsDetailRoute['kind'], items: readonly JsonRecord[]) => {
+	if (kind === 'trading') return tradingEvidenceRows(items)
+	return kind === 'report' ? reportEvidenceRows(items) : detailEvidenceRows(items)
+}
 
 const detailPageRecord = (data: JsonRecord, key: string): JsonRecord => (isJsonRecord(data[key]) ? data[key] : {})
 
@@ -3719,12 +3795,7 @@ const renderOperationsDetail = (response: OperationsResponse, route: OperationsD
 			panels.push(operationsPanel(label, detailEvidenceRows(records), `No ${label.toLowerCase()} available in this view.`))
 		}
 		const historySummary = summarizeHistoryCollections(historyCollections, operationsRiskHistoryKeys)
-		const historyBlockRange =
-			historySummary.oldestBlock === undefined || historySummary.newestBlock === undefined
-				? 'No block-numbered evidence is loaded'
-				: historySummary.oldestBlock === historySummary.newestBlock
-					? `Loaded block #${historySummary.oldestBlock.toLocaleString('en-US')}`
-					: `Loaded blocks #${historySummary.oldestBlock.toLocaleString('en-US')}–#${historySummary.newestBlock.toLocaleString('en-US')}`
+		const historyBlockRange = historyBlockRangeLabel(historySummary.oldestBlock, historySummary.newestBlock)
 		const historyCounts = [`tagged state ${historySummary.counts['stateSnapshots'] ?? 0}`, `accounting ${historySummary.counts['accountingSnapshots'] ?? 0}`, `lifecycle ${historySummary.counts['lifecycleEvents'] ?? 0}`, `liquidations ${historySummary.counts['liquidations'] ?? 0}`].join(' · ')
 		const nextHistoryCursor = history['nextCursor']
 		if (history['truncated'] === true && typeof nextHistoryCursor !== 'string') throw new Error('Risk history continuation is malformed')
@@ -3842,7 +3913,7 @@ const renderOperationsDetail = (response: OperationsResponse, route: OperationsD
 	}
 	const evidenceHasMore = evidencePage['hasMore'] === true && typeof evidencePage['nextCursor'] === 'string'
 	if (operationsDetailEvidencePanelVisible(route.kind, evidenceItems.length, evidenceHasMore, renderContext.focusLoadMore)) {
-		const evidencePanel = operationsPanel(route.kind === 'report' ? 'Report rounds' : 'Lifecycle timeline', route.kind === 'trading' ? tradingEvidenceRows(evidenceItems) : route.kind === 'report' ? reportEvidenceRows(evidenceItems) : detailEvidenceRows(evidenceItems), 'No canonical evidence is available.')
+		const evidencePanel = operationsPanel(route.kind === 'report' ? 'Report rounds' : 'Lifecycle timeline', detailEvidenceRowsFor(route.kind, evidenceItems), 'No canonical evidence is available.')
 		if (evidenceHasMore) {
 			const loadMore = document.createElement('button')
 			loadMore.type = 'button'
@@ -4129,14 +4200,13 @@ const loadOperations = async ({
 				const retainedDetailCount = detailRoute !== undefined && operationsDetailState?.chainId === requiredChainId() && operationsDetailState.routeKey === operationsDetailRouteKey(detailRoute) ? operationsDetailState.items.length : 0
 				const retainedRiskHistoryOffset = detailRoute !== undefined && (detailRoute.kind === 'pool' || detailRoute.kind === 'vault') && operationsDetailState?.chainId === requiredChainId() && operationsDetailState.routeKey === operationsDetailRouteKey(detailRoute) ? operationsDetailState.riskHistoryOffset : 0
 				const retainedDecisionCount = detailRoute?.kind === 'report' && operationsDetailState?.chainId === requiredChainId() && operationsDetailState.routeKey === operationsDetailRouteKey(detailRoute) ? operationsDetailState.decisionItems.length : 0
-				const response =
-					detailRoute !== undefined
-						? await loadOperationsDetail(detailRoute, detailTargetCount ?? retainedDetailCount, historyTargetOffset ?? retainedRiskHistoryOffset, decisionTargetCount ?? retainedDecisionCount)
-						: catalogSection === undefined
-							? decodeOperationsResponse(await api(`/api/v1/operations?chainId=${encodeURIComponent(requiredChainId())}`))
-							: catalogSection === 'risk'
-								? await loadOperationsRiskCatalog(riskPoolTargetCount ?? retainedRiskPoolCount, riskVaultTargetCount ?? retainedRiskVaultCount)
-								: await loadOperationsCatalog(catalogSection, catalogTargetCount ?? retainedCatalogCount)
+				const loadResponse = async () => {
+					if (detailRoute !== undefined) return await loadOperationsDetail(detailRoute, detailTargetCount ?? retainedDetailCount, historyTargetOffset ?? retainedRiskHistoryOffset, decisionTargetCount ?? retainedDecisionCount)
+					if (catalogSection === undefined) return decodeOperationsResponse(await api(`/api/v1/operations?chainId=${encodeURIComponent(requiredChainId())}`))
+					if (catalogSection === 'risk') return await loadOperationsRiskCatalog(riskPoolTargetCount ?? retainedRiskPoolCount, riskVaultTargetCount ?? retainedRiskVaultCount)
+					return await loadOperationsCatalog(catalogSection, catalogTargetCount ?? retainedCatalogCount)
+				}
+				const response = await loadResponse()
 				if (requestVersion !== operationsRequestVersion) return false
 				if (detailRoute === undefined) renderOperations(response, preservedContext)
 				else renderOperationsDetail(response, detailRoute, preservedContext)
@@ -4907,6 +4977,11 @@ const restoreAccountDialogSnapshot = (snapshot: DialogSnapshot) => {
 	}
 }
 
+const stagedAccountDialogSnapshot = (canonicalRecovery: boolean, stagedLiveRefresh: boolean, restoreSnapshot: DialogSnapshot | undefined) => {
+	if (canonicalRecovery) return restoreSnapshot
+	return stagedLiveRefresh ? captureAccountDialogSnapshot() : undefined
+}
+
 const performOpenAccountTransactions = async (account: AccountReference, { live = false, restoreSnapshot, canonicalRecovery = false, contextVersion }: AccountDetailOptions = {}): Promise<boolean> => {
 	if (contextVersion !== detailContextVersion) return false
 	const canonicalGeneration = canonicalDataGeneration
@@ -4924,7 +4999,7 @@ const performOpenAccountTransactions = async (account: AccountReference, { live 
 	const requestVersion = live && previousMatches ? detailRequestVersion : ++detailRequestVersion
 	const stagedLiveRefresh = !canonicalRecovery && live && previousMatches
 	const stagedRefresh = canonicalRecovery || stagedLiveRefresh
-	const stagedSnapshot = canonicalRecovery ? restoreSnapshot : stagedLiveRefresh ? captureAccountDialogSnapshot() : undefined
+	const stagedSnapshot = stagedAccountDialogSnapshot(canonicalRecovery, stagedLiveRefresh, restoreSnapshot)
 	const refreshPrevious = stagedRefresh ? liveSnapshot(detailContent, '.account-transaction[data-live-key]') : undefined
 	activeLog = undefined
 	removeEventDrawers()
@@ -5101,7 +5176,7 @@ const performOpenAccountTransactions = async (account: AccountReference, { live 
 				state.pageLoading = false
 				return false
 			}
-			const retained = append ? previousLoaded : liveRefresh ? previousLoaded : []
+			const retained = append || liveRefresh ? previousLoaded : []
 			state.loaded = mergeUniqueRecords(append ? retained : result.items, append ? result.items : retained, transaction => `${transaction.chain_id}:${transaction.tx_hash}`)
 			state.total = reconcilePaginatedTotal(state.total, result.total ?? state.total, append)
 			state.nextPageCursor = liveRefresh && previousCursor !== undefined ? previousCursor : result.nextCursor
@@ -5149,7 +5224,7 @@ const performOpenAccountTransactions = async (account: AccountReference, { live 
 			}
 			state.pageLoading = false
 			state.pageErrorAppend = append
-			state.pageError = state.loaded.length > 0 ? (append ? `Could not load more transactions; showing the last known activity: ${errorMessage(error)}` : `Could not refresh sent transactions; showing the last known activity: ${errorMessage(error)}`) : `Could not load sent transactions: ${errorMessage(error)}`
+			state.pageError = accountTransactionsError(errorMessage(error), state.loaded.length > 0, append)
 			if (!stageOnly) render()
 			return false
 		} finally {
@@ -5809,9 +5884,7 @@ const performLoadRichList = async ({ append = false, live = false, contextVersio
 		if (!isCurrentContextRequest(contextVersion, viewContextVersion, requestVersion, richListRequestVersion) || !isCurrentCanonicalGeneration(canonicalGeneration, canonicalDataGeneration)) return false
 		$('#richlist-rows').setAttribute('aria-busy', 'false')
 		const failureStatus = append ? paginationStatus : status
-		renderRetryStatus(failureStatus, append ? `Could not load more; showing known rankings: ${errorMessage(error)}` : richListItems.length === 0 ? `Rich list unavailable: ${errorMessage(error)}` : `Refresh failed; showing last known rankings: ${errorMessage(error)}`, () =>
-			retryCanonicalViewOr(() => loadRichList({ append })),
-		)
+		renderRetryStatus(failureStatus, richListError(errorMessage(error), append, richListItems.length === 0), () => retryCanonicalViewOr(() => loadRichList({ append })))
 		more.hidden = !retainedPaginationAvailable(richListItems.length < richListTotal, canonicalRefreshRequired)
 		if (append) more.hidden = true
 		if (richListItems.length === 0) $('#richlist-summary').textContent = ''
@@ -5990,11 +6063,11 @@ const renderAddressProfile = (item: RichListRecord, transactions: AccountTransac
 	const appendPortfolioPagination = (kind: 'forks' | 'lp' | 'reports', panel: HTMLElement) => {
 		const page = portfolioPage(item, kind)
 		const items = portfolioItems(item, kind)
-		const singular = kind === 'lp' ? 'position' : kind === 'forks' ? 'fork event' : 'report event'
+		const singular = PORTFOLIO_KIND_LABELS[kind].singular
 		const total = typeof page['total'] === 'number' ? page['total'] : undefined
 		panel.querySelector('h3')?.after(element('p', 'operations-panel-scope', `${operationCounted(items.length, singular)} shown · ${operationCounted(total, singular)} total`))
 		if (page['hasMore'] === true && typeof page['nextCursor'] === 'string') {
-			const button = element('button', 'secondary compact portfolio-history-more', `Show more ${kind === 'lp' ? 'positions' : kind === 'forks' ? 'fork events' : 'report events'}`)
+			const button = element('button', 'secondary compact portfolio-history-more', `Show more ${PORTFOLIO_KIND_LABELS[kind].plural}`)
 			button.type = 'button'
 			button.dataset['portfolioKind'] = kind
 			const status = element('p', 'activity-summary')
@@ -6004,7 +6077,7 @@ const renderAddressProfile = (item: RichListRecord, transactions: AccountTransac
 				const scrollY = window.scrollY
 				button.disabled = true
 				button.setAttribute('aria-busy', 'true')
-				button.textContent = `Showing more ${kind === 'lp' ? 'positions' : kind === 'forks' ? 'fork events' : 'report events'}…`
+				button.textContent = `Showing more ${PORTFOLIO_KIND_LABELS[kind].plural}…`
 				status.textContent = 'Loading older account evidence…'
 				status.classList.add('sr-only')
 				const loaded = await loadAddressProfile({ live: true, portfolioTarget: { kind, count: items.length + 100 } })
@@ -6015,7 +6088,7 @@ const renderAddressProfile = (item: RichListRecord, transactions: AccountTransac
 				} else if (button.isConnected) {
 					button.disabled = false
 					button.removeAttribute('aria-busy')
-					button.textContent = `Retry more ${kind === 'lp' ? 'positions' : kind === 'forks' ? 'fork events' : 'report events'}`
+					button.textContent = `Retry more ${PORTFOLIO_KIND_LABELS[kind].plural}`
 					status.textContent = 'Additional account evidence could not be loaded.'
 					status.classList.remove('sr-only')
 					button.focus({ preventScroll: true })
@@ -6103,12 +6176,44 @@ const renderAddressProfile = (item: RichListRecord, transactions: AccountTransac
 
 type PortfolioData = JsonRecord | Pick<RichListRecord, 'lp_positions' | 'fork_participation' | 'report_participation' | 'portfolioPagination'>
 
+const accountTransactionsError = (detail: string, hasLoaded: boolean, append: boolean) => {
+	if (!hasLoaded) return `Could not load sent transactions: ${detail}`
+	return append ? `Could not load more transactions; showing the last known activity: ${detail}` : `Could not refresh sent transactions; showing the last known activity: ${detail}`
+}
+
+const richListError = (detail: string, append: boolean, empty: boolean) => {
+	if (append) return `Could not load more; showing known rankings: ${detail}`
+	return empty ? `Rich list unavailable: ${detail}` : `Refresh failed; showing last known rankings: ${detail}`
+}
+
+const PORTFOLIO_KIND_LABELS = {
+	forks: { collection: 'fork_participation', cursorParameter: 'forkCursor', plural: 'fork events', singular: 'fork event' },
+	lp: { collection: 'lp_positions', cursorParameter: 'lpCursor', plural: 'positions', singular: 'position' },
+	reports: { collection: 'report_participation', cursorParameter: 'reportCursor', plural: 'report events', singular: 'report event' },
+} as const
+
+const historyCoverageHeadline = (moreAvailable: boolean, partiallyIndexed: boolean) => {
+	if (moreAvailable) return 'More history available'
+	return partiallyIndexed ? 'Requested range is partially indexed' : 'History loaded'
+}
+
+const yesNoCheckpoint = (value: unknown) => {
+	if (value === undefined) return 'No checkpoint'
+	return value ? 'Yes' : 'No'
+}
+
+const nextTabIndex = (key: string, current: number, count: number) => {
+	if (key === 'Home') return 0
+	if (key === 'End') return count - 1
+	return (current + (key === 'ArrowRight' ? 1 : -1) + count) % count
+}
+
 const portfolioPage = (data: PortfolioData, kind: 'forks' | 'lp' | 'reports'): JsonRecord => {
 	const pagination = isJsonRecord(data['portfolioPagination']) ? data['portfolioPagination'] : {}
 	return isJsonRecord(pagination[kind]) ? pagination[kind] : {}
 }
 
-const portfolioItems = (data: PortfolioData, kind: 'forks' | 'lp' | 'reports'): JsonRecord[] => operationRecords(data[kind === 'lp' ? 'lp_positions' : kind === 'forks' ? 'fork_participation' : 'report_participation'])
+const portfolioItems = (data: PortfolioData, kind: 'forks' | 'lp' | 'reports'): JsonRecord[] => operationRecords(data[PORTFOLIO_KIND_LABELS[kind].collection])
 
 const portfolioItemKey = (kind: 'forks' | 'lp' | 'reports', item: JsonRecord): string => {
 	if (kind === 'lp') return String(item['market_address'] ?? '')
@@ -6132,7 +6237,7 @@ const loadAddressPortfolioSnapshot = async (address: string, targets: Readonly<R
 	for (const kind of ['lp', 'forks', 'reports'] as const) {
 		while (collections[kind].length < targets[kind] && pages[kind]['hasMore'] === true && typeof pages[kind]['nextCursor'] === 'string') {
 			const query = new URLSearchParams({ chainId: requiredChainId(), address, limit: '100' })
-			query.set(kind === 'lp' ? 'lpCursor' : kind === 'forks' ? 'forkCursor' : 'reportCursor', pages[kind]['nextCursor'])
+			query.set(PORTFOLIO_KIND_LABELS[kind].cursorParameter, pages[kind]['nextCursor'])
 			const response = decodeOperationsResponse(await api(`/api/v1/state/address-portfolio?${query.toString()}`))
 			const responseIdentity = `${response.chainId}:${String(response.asOf['blockNumber'] ?? '')}:${String(response.asOf['blockHash'] ?? '')}`
 			if (responseIdentity !== snapshotIdentity) throw new Error('Portfolio history changed while older evidence was loading; retry from the latest available block')
@@ -6348,19 +6453,14 @@ const historyCoverageNotice = (history: EntityHistory, type: StateTab, item: Sta
 	const collections = entityHistoryCollections(history)
 	const recordCollections = Object.fromEntries(entityHistoryCollectionKeys.map(key => [key, collections[key].filter(isRecord)]))
 	const summary = summarizeHistoryCollections(recordCollections, entityHistoryCollectionKeys)
-	const loadedRange =
-		summary.oldestBlock === undefined || summary.newestBlock === undefined
-			? 'No block-numbered records loaded'
-			: summary.oldestBlock === summary.newestBlock
-				? `Loaded block #${summary.oldestBlock.toLocaleString('en-US')}`
-				: `Loaded blocks #${summary.oldestBlock.toLocaleString('en-US')}–#${summary.newestBlock.toLocaleString('en-US')}`
+	const loadedRange = historyBlockRangeLabel(summary.oldestBlock, summary.newestBlock, 'No block-numbered records loaded')
 	const seriesCounts = Object.entries(coverage.series)
 		.map(([key, count]) => `${historySeriesLabel(key)} ${number(count)}`)
 		.join(' · ')
 	const indexedRange = `#${number(coverage.indexedFromBlock)}–${coverage.indexedThroughBlock === undefined ? 'pending' : `#${number(coverage.indexedThroughBlock)}`}`
 	const requestedRange = `#${number(coverage.requestedFromBlock)}–#${number(coverage.requestedToBlock)}`
 	notice.append(
-		element('strong', '', coverage.nextCursor !== undefined ? 'More history available' : coverage.rangeCovered === false ? 'Requested range is partially indexed' : 'History loaded'),
+		element('strong', '', historyCoverageHeadline(coverage.nextCursor !== undefined, coverage.rangeCovered === false)),
 		element('span', '', `${loadedRange} · ${seriesCounts || 'no historical series'}. Requested ${requestedRange}; scanner coverage ${indexedRange}.${coverage.rangeCovered === false ? ' Narrow the requested range or backfill the missing blocks.' : ''}`),
 	)
 	if (coverage.nextCursor !== undefined) {
@@ -6520,7 +6620,7 @@ const renderPoolDetail = async (poolItem: PoolRecord, requestVersion: number, ca
 	const currentState = poolItem.current_state ?? {}
 	currentGrid.append(
 		staticField('System state', currentState.systemState === undefined ? 'No lifecycle event yet' : (systemStates[Number(currentState.systemState)] ?? `State ${currentState.systemState}`)),
-		staticField('Awaiting fork continuation', currentState.awaitingForkContinuation === undefined ? 'No checkpoint' : currentState.awaitingForkContinuation ? 'Yes' : 'No'),
+		staticField('Awaiting fork continuation', yesNoCheckpoint(currentState.awaitingForkContinuation)),
 		staticField('Total REP backing units', currentState.totalRepBackingUnits === undefined ? 'No checkpoint' : exactUnit(chartNumericValue(currentState.totalRepBackingUnits), 18, '', 3)),
 		staticField('Share-token supply', currentState.shareTokenSupplyAttoShares === undefined ? 'No checkpoint' : exactUnit(chartNumericValue(currentState.shareTokenSupplyAttoShares), 18, 'shares', 3)),
 		staticField('Fee-eligible capacity ownership', exactUnit(poolItem.fee_eligible_capacity_ownership_atto_rep, 18, 'REP', 3)),
@@ -6908,13 +7008,12 @@ const renderEntityList = async ({ refreshSelected = false, live = false, selecte
 	if (items[0] !== undefined) {
 		const select = detailGateReserved ? selectEntityWhileReserved : selectEntity
 		return await select(items[0], { preserveDetail: live, quiet: live, suppliedHistory: selectedHistory })
-	} else {
-		stateDetailContextVersion++
-		stateDetailRequestVersion++
-		selectedEntityKey = undefined
-		$('#state-detail').setAttribute('aria-busy', 'false')
-		$('#state-detail').replaceChildren(element('div', 'state-placeholder', `No ${activeStateType} match this view.`))
 	}
+	stateDetailContextVersion++
+	stateDetailRequestVersion++
+	selectedEntityKey = undefined
+	$('#state-detail').setAttribute('aria-busy', 'false')
+	$('#state-detail').replaceChildren(element('div', 'state-placeholder', `No ${activeStateType} match this view.`))
 	return true
 }
 
@@ -7072,7 +7171,7 @@ const setStateTab = (type: StateTab, restoredEntityKey?: string) => {
 		tab.tabIndex = selected ? 0 : -1
 	}
 	$('#state-detail').setAttribute('aria-labelledby', `tab-${type}`)
-	if (stateData !== undefined) renderEntityList()
+	if (stateData !== undefined) void renderEntityList()
 }
 
 const resetActivityFilterContext = () => {
@@ -7100,7 +7199,7 @@ $('#filters').addEventListener('submit', event => {
 	logsAbortController?.abort()
 	logsRequestVersion++
 	resetActivityFilterContext()
-	loadLogs()
+	void loadLogs()
 })
 $('#clear-filters').addEventListener('click', () => {
 	$('#event-filter').value = ''
@@ -7112,7 +7211,7 @@ $('#clear-filters').addEventListener('click', () => {
 	logsAbortController?.abort()
 	logsRequestVersion++
 	resetActivityFilterContext()
-	loadLogs()
+	void loadLogs()
 })
 $('#address-filter').addEventListener('input', () => validateAddressFilter())
 $('#filters').addEventListener('input', () => {
@@ -7208,7 +7307,7 @@ for (const tab of stateTabs) {
 		if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
 		event.preventDefault()
 		const current = stateTabs.indexOf(tab)
-		const next = event.key === 'Home' ? 0 : event.key === 'End' ? stateTabs.length - 1 : (current + (event.key === 'ArrowRight' ? 1 : -1) + stateTabs.length) % stateTabs.length
+		const next = nextTabIndex(event.key, current, stateTabs.length)
 		const nextTab = stateTabs[next]
 		if (nextTab === undefined) return
 		nextTab.focus()
@@ -7218,7 +7317,7 @@ for (const tab of stateTabs) {
 $('#entity-search').addEventListener('input', () => {
 	stateDetailContextVersion++
 	stateDetailRequestVersion++
-	if (stateData !== undefined) renderEntityList()
+	if (stateData !== undefined) void renderEntityList()
 })
 $('#entity-search').addEventListener('keydown', event => {
 	const input = event.currentTarget
@@ -7227,7 +7326,7 @@ $('#entity-search').addEventListener('keydown', event => {
 	input.value = ''
 	stateDetailContextVersion++
 	stateDetailRequestVersion++
-	if (stateData !== undefined) renderEntityList()
+	if (stateData !== undefined) void renderEntityList()
 })
 
 const resetSelectedNetworkContext = () => {
@@ -7333,7 +7432,7 @@ $('#rich-sort').addEventListener('change', () => {
 	$('#richlist-more').disabled = true
 	$('#richlist-more-status').hidden = true
 	$('#richlist-more-status').replaceChildren()
-	loadRichList()
+	void loadRichList()
 })
 $('#richlist-more').addEventListener('click', () => loadRichList({ append: true }))
 
@@ -7671,6 +7770,14 @@ if (!isRichList && initialAccountDeepLink !== null) {
 	url.searchParams.delete('account')
 	history.replaceState(null, '', url)
 }
+const visibleRouteSkipTarget = () => {
+	if (isSystem) return '#system'
+	if (isOperations) return '#operations'
+	if (isContracts) return '#contracts'
+	if (isRichList) return '#richlist'
+	return isAddress ? '#address-profile' : '#activity'
+}
+
 const syncVisibleRoute = () => {
 	isSystem = location.pathname === '/system'
 	isOperations = location.pathname === '/operations' || location.pathname.startsWith('/operations/')
@@ -7684,7 +7791,7 @@ const syncVisibleRoute = () => {
 	$('#contracts').hidden = !isContracts
 	$('#richlist').hidden = !isRichList
 	$('#address-profile').hidden = !isAddress
-	$('.skip-link').href = isSystem ? '#system' : isOperations ? '#operations' : isContracts ? '#contracts' : isRichList ? '#richlist' : isAddress ? '#address-profile' : '#activity'
+	$('.skip-link').href = visibleRouteSkipTarget()
 	for (const link of document.querySelectorAll<HTMLAnchorElement>('.product-nav a')) {
 		const current = new URL(link.href).pathname === location.pathname || (isOperations && new URL(link.href).pathname === '/operations')
 		if (current) link.setAttribute('aria-current', 'page')

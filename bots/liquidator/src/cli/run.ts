@@ -40,6 +40,16 @@ const constantProductPairAbi = [
 	{ inputs: [], name: 'getReserves', outputs: [{ type: 'uint112' }, { type: 'uint112' }, { type: 'uint32' }], stateMutability: 'view', type: 'function' },
 ] as const
 
+function runningStatus(paused: boolean, execute: boolean): 'dry-run' | 'paused' | 'running' {
+	if (paused) return 'paused'
+	return execute ? 'running' : 'dry-run'
+}
+
+function cycleFailureMessage(disposition: ReturnType<typeof operationalFailureDisposition>, execute: boolean) {
+	if (disposition === 'connectivity-degraded') return 'RPC connectivity degraded; execution remains blocked until recovery'
+	return execute ? 'Live execution paused after a safety fault' : 'Scan cycle failed'
+}
+
 function errorMessage(error: unknown) {
 	return error instanceof Error ? error.message : String(error)
 }
@@ -617,7 +627,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				if (state.wallet !== undefined) {
 					state.walletAttoEth = await client.getBalance({ address: state.wallet })
 				}
-				state.status = state.paused ? 'paused' : settings.runtime.execute ? 'running' : 'dry-run'
+				state.status = runningStatus(state.paused, settings.runtime.execute)
 				if (shutdown.isRequested()) {
 					await saveDurableState(settings.runtime.stateFile, state)
 					return true
@@ -708,7 +718,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				recordActivity(state, {
 					details: state.error,
 					kind: 'error',
-					message: disposition === 'connectivity-degraded' ? 'RPC connectivity degraded; execution remains blocked until recovery' : settings.runtime.execute ? 'Live execution paused after a safety fault' : 'Scan cycle failed',
+					message: cycleFailureMessage(disposition, settings.runtime.execute),
 					status: 'failed',
 				})
 				await saveDurableState(settings.runtime.stateFile, state).catch(() => undefined)

@@ -74,11 +74,16 @@ function fallback(check: EndpointCheck, target: string, method: RpcMethod) {
 	return `RPC ${target} failed while calling eth_chainId. Review the endpoint and protected bot logs.`
 }
 
+function defaultCheckMethod(check: EndpointCheck): RpcMethod {
+	if (check.kind === 'private-relay') return 'eth_sendPrivateTransaction'
+	return check.kind === 'public-rpc' && check.chainId !== undefined ? 'eth_sendRawTransaction' : 'eth_chainId'
+}
+
 function checkFailure(check: EndpointCheck) {
 	const target = publicTarget(check.target)
 	if (target === undefined) return 'An RPC endpoint failed. Review the submitted endpoint and protected bot logs.'
 	const parsed = check.error === undefined ? undefined : methodFailure(check.error)
-	const method = parsed?.method ?? (check.kind === 'public-rpc' && check.chainId !== undefined ? 'eth_sendRawTransaction' : check.kind === 'private-relay' ? 'eth_sendPrivateTransaction' : 'eth_chainId')
+	const method = parsed?.method ?? defaultCheckMethod(check)
 	if (parsed !== undefined) return safeMethodFailure(parsed.target, method, parsed.detail) ?? fallback(check, target, method)
 	if (check.error !== undefined) {
 		const detail = check.error.startsWith(`${check.target}: `) ? check.error.slice(check.target.length + 2) : check.error

@@ -236,8 +236,7 @@ function setMutationControlsEnabled(enabled: boolean) {
 	const chainSettingsAvailable = configurationAvailable && pendingNetworkProfile === undefined && currentConfiguration?.networkConfigured === true
 	const resumeAvailable = configurationAvailable && pendingNetworkProfile === undefined && configurationConnected && currentConfiguration?.networkConfigured === true
 	const paused = currentSnapshot?.paused
-	const pendingLabel = pauseRequestPending === true ? 'Pausing…' : 'Resuming…'
-	pauseButton.textContent = pauseRequestPending === undefined ? (paused === true ? 'Resume' : 'Pause') : pendingLabel
+	pauseButton.textContent = pauseButtonLabel(pauseRequestPending, paused)
 	pauseButton.disabled = pauseRequestPending !== undefined || currentSnapshot === undefined || (paused === true && !resumeAvailable)
 	pauseButton.toggleAttribute('aria-busy', pauseRequestPending !== undefined)
 	if (pauseRequestPending !== undefined) pauseButton.setAttribute('aria-busy', 'true')
@@ -292,6 +291,62 @@ function put<T = unknown>(path: string, value: unknown, timeoutMilliseconds?: nu
 	const options = { body, headers: { 'content-type': 'application/json' }, method: 'PUT' }
 	if (timeoutMilliseconds === undefined) return api<T>(path, options)
 	return requestWithTimeout(signal => api<T>(path, { ...options, signal }), timeoutMilliseconds, timeoutMessage)
+}
+
+const MARKET_SOURCE_STATUS_PRESENTATION: Record<MarketSourceRow['status'], { badgeClass: string; defaultReason: string; label: string }> = {
+	admitted: { badgeClass: 'ok', defaultReason: 'Meets the active admission policy', label: 'Admitted' },
+	excluded: { badgeClass: 'warning', defaultReason: 'Excluded by the active admission policy', label: 'Excluded' },
+	failed: { badgeClass: 'warning', defaultReason: 'Probe did not return usable evidence', label: 'Failed' },
+	observed: { badgeClass: '', defaultReason: 'Probe succeeded; admission still requires the persistence and consensus policy', label: 'Observed' },
+}
+
+const NETWORK_LABELS = new Map<string | undefined, string>([
+	['mainnet', 'Mainnet'],
+	['sepolia', 'Sepolia'],
+])
+
+function pauseButtonLabel(pauseRequestPending: boolean | undefined, paused: boolean | undefined) {
+	if (pauseRequestPending !== undefined) return pauseRequestPending ? 'Pausing…' : 'Resuming…'
+	return paused === true ? 'Resume' : 'Pause'
+}
+
+function pauseButtonAction(snapshot: Snapshot) {
+	if (!snapshot.paused) return 'pause'
+	return snapshot.execute ? 'confirm-resume' : 'resume'
+}
+
+function consensusStatusText(consensus: { reasons: readonly string[]; reliable: boolean } | undefined, reliableLabel: string) {
+	if (consensus === undefined) return undefined
+	return consensus.reliable ? reliableLabel : consensus.reasons.join(' · ')
+}
+
+function poolStatusText(pool: { approvedUniverse: boolean; centralizedPriceAllowed: boolean; selected: boolean; systemState: string }) {
+	if (!pool.approvedUniverse) return 'Universe not approved'
+	if (pool.systemState !== '0') return 'Pool inactive'
+	if (!pool.centralizedPriceAllowed) return 'Market consensus guard'
+	return pool.selected ? 'Eligible' : ''
+}
+
+function activityBadgeClass(status: string) {
+	if (status === 'failed') return 'warning'
+	return status === 'confirmed' ? 'ok' : ''
+}
+
+function runStatusLabel(snapshot: Snapshot) {
+	if (snapshot.status === 'connectivity-degraded') return 'Connectivity degraded'
+	if (snapshot.error !== undefined) return 'Error'
+	if (snapshot.paused) return 'Paused'
+	if (snapshot.scanning) return 'Scanning'
+	return snapshot.deploymentMissingName !== undefined ? 'Waiting' : 'Running'
+}
+
+function globalErrorPresentation(snapshot: Snapshot): { message: string | undefined; title: string; tone: 'error' | 'info' | 'warning' } {
+	if (snapshot.error === undefined) {
+		const guidance = capabilityBlockerGuidance(snapshot)
+		return { message: guidance?.message, title: guidance?.title ?? 'Operator blocked', tone: guidance?.pending === true ? 'info' : 'warning' }
+	}
+	const message = snapshot.status === 'connectivity-degraded' ? 'RPC connectivity is degraded. Execution is blocked and the bot will retry automatically.' : `${scanFailureDetail(snapshot.error)} Automatic retry is active. Check the bot logs if the next cycle also fails.`
+	return { message, title: 'Scan failed', tone: 'error' }
 }
 
 function shortAddress(address: string) {
@@ -367,11 +422,10 @@ function renderMarketSources(sources: MarketSourceRow[]) {
 		...sources.map(source => {
 			const row = document.createElement('tr')
 			const badge = document.createElement('span')
-			badge.className = `badge ${source.status === 'admitted' ? 'ok' : source.status === 'excluded' || source.status === 'failed' ? 'warning' : ''}`
-			badge.textContent = source.status === 'admitted' ? 'Admitted' : source.status === 'excluded' ? 'Excluded' : source.status === 'observed' ? 'Observed' : 'Failed'
-			const defaultReason =
-				source.status === 'admitted' ? 'Meets the active admission policy' : source.status === 'observed' ? 'Probe succeeded; admission still requires the persistence and consensus policy' : source.status === 'failed' ? 'Probe did not return usable evidence' : 'Excluded by the active admission policy'
-			const cells = [cell(source.kind.toUpperCase()), cell(source.id), cell(shortAddress(source.assetId)), cell(source.market), cell(badge), cell(source.reason ?? defaultReason)]
+			const presentation = MARKET_SOURCE_STATUS_PRESENTATION[source.status]
+			badge.className = `badge ${presentation.badgeClass}`
+			badge.textContent = presentation.label
+			const cells = [cell(source.kind.toUpperCase()), cell(source.id), cell(shortAddress(source.assetId)), cell(source.market), cell(badge), cell(source.reason ?? presentation.defaultReason)]
 			const labels = ['Venue', 'Source', 'REP asset', 'Market', 'Status', 'Reason']
 			const headings = ['source-kind-heading', 'source-id-heading', 'source-asset-heading', 'source-market-heading', 'source-status-heading', 'source-reason-heading']
 			for (const [index, value] of cells.entries()) {
@@ -468,7 +522,7 @@ function renderCentralizedMarket(snapshot: Snapshot) {
 	updateText(dexMarketBidDepth, consensus === undefined ? '—' : `${consensus.dex.bidDepthEth} ETH`)
 	updateText(dexMarketAskDepth, consensus === undefined ? '—' : `${consensus.dex.askDepthEth} ETH`)
 	if (market === undefined) {
-		updateText(centralizedMarketStatus, consensus === undefined ? 'No market sources configured' : consensus.reliable ? 'Reliable DEX consensus' : consensus.reasons.join(' · '))
+		updateText(centralizedMarketStatus, consensusStatusText(consensus, 'Reliable DEX consensus') ?? 'No market sources configured')
 		updateText(centralizedMarketPrice, '—')
 		updateText(centralizedMarketBidDepth, '—')
 		updateText(centralizedMarketAskDepth, '—')
@@ -481,7 +535,7 @@ function renderCentralizedMarket(snapshot: Snapshot) {
 		centralizedMarketRows.replaceChildren(row)
 		return
 	}
-	updateText(centralizedMarketStatus, consensus === undefined ? (market.reliable ? 'Reliable CEX estimate' : market.reasons.join(' · ')) : consensus.reliable ? 'Reliable independent CEX + DEX consensus' : consensus.reasons.join(' · '))
+	updateText(centralizedMarketStatus, consensusStatusText(consensus, 'Reliable independent CEX + DEX consensus') ?? (market.reliable ? 'Reliable CEX estimate' : market.reasons.join(' · ')))
 	updateText(centralizedMarketPrice, market.priceRepPerEth)
 	updateText(centralizedMarketBidDepth, `${market.bidDepthEth} ETH`)
 	updateText(centralizedMarketAskDepth, `${market.askDepthEth} ETH`)
@@ -623,7 +677,7 @@ function renderPools(snapshot: Snapshot) {
 			poolStatus.className = 'action-status'
 			const savedActionState = poolActionStates.get(pool.address.toLowerCase())
 			if (savedActionState === undefined) {
-				poolStatus.textContent = !pool.approvedUniverse ? 'Universe not approved' : pool.systemState !== '0' ? 'Pool inactive' : !pool.centralizedPriceAllowed ? 'Market consensus guard' : pool.selected ? 'Eligible' : ''
+				poolStatus.textContent = poolStatusText(pool)
 			} else {
 				actionStatus(poolStatus, savedActionState.message, savedActionState.failed)
 				if (!savedActionState.failed && savedActionState.message === 'Saved') poolActionStates.delete(pool.address.toLowerCase())
@@ -708,7 +762,7 @@ function renderActivities(activities: Activity[]) {
 			const item = document.createElement('li')
 			item.className = 'activity'
 			const badge = document.createElement('span')
-			badge.className = `badge ${activity.status === 'failed' ? 'warning' : activity.status === 'confirmed' ? 'ok' : ''}`
+			badge.className = `badge ${activityBadgeClass(activity.status)}`
 			badge.textContent = activity.status
 			const body = document.createElement('div')
 			const message = document.createElement('p')
@@ -763,12 +817,12 @@ function render(snapshot: Snapshot) {
 	currentSnapshot = snapshot
 	renderBlockStatus(snapshot)
 	stateConnected = true
-	pauseButton.dataset['action'] = snapshot.paused ? (snapshot.execute ? 'confirm-resume' : 'resume') : 'pause'
+	pauseButton.dataset['action'] = pauseButtonAction(snapshot)
 	setMutationControlsEnabled(true)
 	renderNetworkBadge()
 	modeBadge.textContent = snapshot.execute ? 'Live' : 'Dry run'
 	modeBadge.className = `badge ${snapshot.execute ? 'warning' : 'ok'}`
-	runStatusBadge.textContent = snapshot.status === 'connectivity-degraded' ? 'Connectivity degraded' : snapshot.error !== undefined ? 'Error' : snapshot.paused ? 'Paused' : snapshot.scanning ? 'Scanning' : snapshot.deploymentMissingName !== undefined ? 'Waiting' : 'Running'
+	runStatusBadge.textContent = runStatusLabel(snapshot)
 	runStatusBadge.className = `badge ${snapshot.paused || snapshot.error !== undefined ? 'warning' : 'ok'}`
 	capabilityBadge.hidden = snapshot.operatorCapable
 	capabilityBadge.textContent = snapshot.operatorCapable ? '' : 'Operator blocked'
@@ -777,15 +831,8 @@ function render(snapshot: Snapshot) {
 	recoveryGuidance.hidden = snapshot.paused
 	lastScan.textContent = scanStatusText(snapshot)
 	walletAddress.textContent = snapshot.wallet ?? 'No active signer'
-	setGlobalError(
-		snapshot.error === undefined
-			? capabilityBlockerGuidance(snapshot)?.message
-			: snapshot.status === 'connectivity-degraded'
-				? 'RPC connectivity is degraded. Execution is blocked and the bot will retry automatically.'
-				: `${scanFailureDetail(snapshot.error)} Automatic retry is active. Check the bot logs if the next cycle also fails.`,
-		snapshot.error === undefined ? (capabilityBlockerGuidance(snapshot)?.title ?? 'Operator blocked') : 'Scan failed',
-		snapshot.error === undefined ? (capabilityBlockerGuidance(snapshot)?.pending === true ? 'info' : 'warning') : 'error',
-	)
+	const globalError = globalErrorPresentation(snapshot)
+	setGlobalError(globalError.message, globalError.title, globalError.tone)
 	renderMetrics(snapshot)
 	renderAlerts(snapshot)
 	renderCentralizedMarket(snapshot)
@@ -1077,7 +1124,7 @@ function renderNetworkBadge() {
 		return
 	}
 	if (currentConfiguration?.network === undefined || currentConfiguration.networkConfigured !== true) {
-		const networkLabel = currentConfiguration?.network?.name === 'mainnet' ? 'Mainnet' : currentConfiguration?.network?.name === 'sepolia' ? 'Sepolia' : undefined
+		const networkLabel = NETWORK_LABELS.get(currentConfiguration?.network?.name)
 		networkBadge.textContent = networkLabel === undefined ? 'Choose chain' : `${networkLabel} · RPC setup required`
 		networkBadge.className = 'badge warning'
 		return

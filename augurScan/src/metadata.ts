@@ -213,11 +213,21 @@ const addressValues = (value: unknown): Address[] => {
 	return []
 }
 
+const tupleValues = (parameterType: string, value: unknown): unknown[] => {
+	if (parameterType === 'tuple') return [value]
+	return Array.isArray(value) ? value : []
+}
+
+const UNISWAP_QUOTE_SYMBOLS = new Map<string | undefined, 'WETH' | 'USDC'>([
+	['weth', 'WETH'],
+	['usdc', 'USDC'],
+])
+
 const addressesFromParameter = (parameter: AbiParameter, value: unknown): Address[] => {
 	if (parameter.type === 'address' || parameter.type.startsWith('address[')) return addressValues(value)
 	const components = parameter.components
 	if (components === undefined) return []
-	const tuples = parameter.type === 'tuple' ? [value] : Array.isArray(value) ? value : []
+	const tuples = tupleValues(parameter.type, value)
 	return tuples.flatMap(tuple => {
 		if (typeof tuple !== 'object' || tuple === null) return []
 		return components.flatMap((component, index) => {
@@ -506,7 +516,7 @@ const knownRepQuotePair = (decoded: DecodedRecord, contracts: ReadonlyMap<string
 	const kinds = [contracts.get(token0.toLowerCase())?.kind, contracts.get(token1.toLowerCase())?.kind]
 	if (!kinds.includes('reputationToken')) return undefined
 	const quoteKind = kinds.find(knownUniswapQuoteKind)
-	return quoteKind === 'weth' ? 'WETH' : quoteKind === 'usdc' ? 'USDC' : undefined
+	return UNISWAP_QUOTE_SYMBOLS.get(quoteKind)
 }
 
 export const discoveriesFrom = (decoded: DecodedRecord, contracts: ReadonlyMap<string, ContractMetadata> = new Map()): readonly Omit<ContractMetadata, 'provenance'>[] => {

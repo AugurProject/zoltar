@@ -3,8 +3,23 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getAddress, keccak256, toHex } from '@zoltar/bot-shared/ethereum'
 import { startDashboardServer } from '#dashboard/dashboard-server'
-import { operatorSnapshot, publicOperatorFailure, publicPollFailure, type OperatorSnapshot, type OperatorState } from '#state/operator-state'
+import { operatorSnapshot, type OperatorSnapshot, type OperatorState } from '#state/operator-state'
+import { publicOperatorFailure, publicPollFailure } from '#state/public-failures'
 import type { PositionRecord } from '#state/position-store'
+
+const SECTION_PAGES = new Map<string | undefined, string>([
+	['operations', 'operations'],
+	['token-market-title', 'markets'],
+	['network-connectivity', 'settings'],
+	['deployment-configuration', 'settings'],
+	['create2-form', 'settings'],
+	['complete-configuration', 'settings'],
+])
+
+function fixtureLastError(attention: string, pollFailureMetadata: boolean, rawRpcFailure: string, rawNonPollFailure: string) {
+	if (attention !== 'error') return undefined
+	return pollFailureMetadata ? rawRpcFailure : rawNonPollFailure
+}
 
 const address = (value: number) => getAddress(`0x${value.toString(16).padStart(40, '0')}`)
 const transactionHash = (label: string) => keccak256(toHex(label))
@@ -235,8 +250,7 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 				: []),
 		] as const) {
 			const mobile = name === 'dashboard-network-mobile.png' || name === 'dashboard-markets-mobile.png' || name === 'dashboard-opportunities-mobile.png' || name === 'deployment-mobile.png' || name === 'configuration-mobile.png' || name === 'settings-mobile.png'
-			const fragment =
-				section === undefined ? 'overview' : section === 'operations' ? 'operations' : section === 'token-market-title' ? 'markets' : section === 'network-connectivity' || section === 'deployment-configuration' || section === 'create2-form' || section === 'complete-configuration' ? 'settings' : 'overview'
+			const fragment = SECTION_PAGES.get(section) ?? 'overview'
 			await replacePage(`${origin}/${fragment}`, mobile ? 390 : 1440, mobile ? 844 : 900)
 			await Bun.sleep(750)
 			if (section !== undefined) {
@@ -1831,7 +1845,7 @@ function currentFixtureSnapshot(): OperatorSnapshot {
 		networkConfigured: fixtureNetworkConfigured,
 		endpointChecks: fixtureAttention === 'error' ? endpointChecks.map((check, index) => (index === 0 ? { ...check, chainId: undefined, error: rawRpcFailure, status: 'failed' as const } : check)) : endpointChecks,
 		rpcEndpointHealth: snapshot.rpcEndpointHealth?.map(endpoint => ({ ...endpoint, target: fixtureNetwork === 'mainnet' ? endpoint.target : endpoint.target.replace('rpc.example', 'sepolia-rpc.example').replace('quorum.example', 'sepolia-quorum.example') })),
-		lastError: fixtureAttention === 'error' ? (fixturePollFailureMetadata ? rawRpcFailure : rawNonPollFailure) : undefined,
+		lastError: fixtureLastError(fixtureAttention, fixturePollFailureMetadata, rawRpcFailure, rawNonPollFailure),
 		lastPollFailureAt: fixtureAttention === 'error' && fixturePollFailureMetadata ? new Date(Date.now() - 2_000).toISOString() : undefined,
 		lastRetryAt: fixtureAttention === 'error' && fixturePollFailureMetadata && fixtureRetryInProgress ? new Date(Date.now() - 1_000).toISOString() : undefined,
 		nextRetryAt: fixtureAttention === 'error' && fixturePollFailureMetadata && !fixtureRetryInProgress ? (fixtureNextRetryAt ?? new Date(Date.now() + 10_000).toISOString()) : undefined,

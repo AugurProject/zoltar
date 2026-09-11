@@ -97,6 +97,11 @@ function settings(privateKeyValue: Hex | undefined) {
 	}
 }
 
+function reservedProfilePath(path: string, reservedName: 'active' | 'executor' | 'mainnet' | 'sepolia') {
+	if (reservedName === 'active') return path
+	return reservedName === 'executor' ? executorDeploymentIntentPath(path, 'mainnet') : operatorProfilePath(path, reservedName)
+}
+
 describe('operator settings persistence', () => {
 	test('keeps complete settings and durable journal paths isolated while switching chain profiles', async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'zoltar-arbitrager-profiles-'))
@@ -139,7 +144,7 @@ describe('operator settings persistence', () => {
 			const directory = await mkdtemp(join(tmpdir(), `zoltar-arbitrager-reserved-${reservedName}-`))
 			temporaryDirectories.push(directory)
 			const path = join(directory, 'operator.json')
-			const reservedPath = reservedName === 'active' ? path : reservedName === 'executor' ? executorDeploymentIntentPath(path, 'mainnet') : operatorProfilePath(path, reservedName)
+			const reservedPath = reservedProfilePath(path, reservedName)
 			const mainnet = settings(undefined)
 			mainnet.runtime.historyFile = join(directory, 'mainnet-history.jsonl')
 			mainnet.runtime.positionFile = join(directory, 'mainnet-positions.json')

@@ -13,11 +13,16 @@ export const leaseFailureNames = new Set([...databaseFailureNames, 'LeaseLostErr
 
 export const isLocalIndexerFailure = (error: unknown): boolean => error instanceof LeaseLostError || rpcQueueSaturationFrom(error) !== undefined || errorChainIncludes(error, databaseFailureNames)
 
+const clampBigint = (value: bigint, minimum: bigint, maximum: bigint) => {
+	if (value < minimum) return minimum
+	return value > maximum ? maximum : value
+}
+
 export const indexingCompletion = (configuredStartBlock: bigint, indexedBlock: bigint, observedHead: bigint) => {
 	if (observedHead < configuredStartBlock) return { completedBlocks: 0n, percentage: '100.00', remainingBlocks: 0n, totalBlocks: 0n }
 	const boundedHead = observedHead
 	const totalBlocks = boundedHead - configuredStartBlock + 1n
-	const boundedIndexed = indexedBlock < configuredStartBlock ? configuredStartBlock - 1n : indexedBlock > boundedHead ? boundedHead : indexedBlock
+	const boundedIndexed = clampBigint(indexedBlock, configuredStartBlock - 1n, boundedHead)
 	const completedBlocks = boundedIndexed - configuredStartBlock + 1n
 	const remainingBlocks = totalBlocks - completedBlocks
 	const roundedHundredths = (completedBlocks * 10_000n + totalBlocks / 2n) / totalBlocks
@@ -190,7 +195,8 @@ const indexerFailureReason = (error: unknown, includeErrorDescriptions: boolean)
 	const category = rpcErrorCategory(error)
 	const message = category === undefined ? standardMessage : safeRpcCategoryMessages[category]
 	const fallbackDescription = descriptions.length === 0 ? 'UnknownError' : descriptions.slice(0, 4).join(' caused by ')
-	const details = [includeErrorDescriptions && message === undefined ? fallbackDescription : names.length === 0 ? 'UnknownError' : names.slice(0, 4).join(' caused by ')]
+	const nameDescription = names.length === 0 ? 'UnknownError' : names.slice(0, 4).join(' caused by ')
+	const details = [includeErrorDescriptions && message === undefined ? fallbackDescription : nameDescription]
 	const method = rpcRequestMethodFrom(error)
 	if (method !== undefined) details.push(`method ${method}`)
 	if (rpcEndpoint !== undefined) details.push(`RPC ${rpcEndpoint}`)

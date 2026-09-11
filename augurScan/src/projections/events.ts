@@ -235,30 +235,29 @@ export const eventProjectionsFrom = (log: StoredLog): readonly Projection[] => {
 				initialSettlementCollateralAttoEth: integerString(args['settlementCollateralAttoEth'], 'settlementCollateralAttoEth'),
 			},
 		]
+	if (name === 'PairCreated' && args['token0'] !== undefined)
+		return [
+			{
+				type: 'uniswapMarket',
+				venue: 'v2',
+				marketId: address(args['pair'], 'pair'),
+				contractAddress: address(args['pair'], 'pair'),
+				token0Address: address(args['token0'], 'token0'),
+				token1Address: address(args['token1'], 'token1'),
+				feeHundredthsBip: '3000',
+			},
+		]
 	if (name === 'PairCreated')
-		if (args['token0'] !== undefined)
-			return [
-				{
-					type: 'uniswapMarket',
-					venue: 'v2',
-					marketId: address(args['pair'], 'pair'),
-					contractAddress: address(args['pair'], 'pair'),
-					token0Address: address(args['token0'], 'token0'),
-					token1Address: address(args['token1'], 'token1'),
-					feeHundredthsBip: '3000',
-				},
-			]
-		else
-			return [
-				{
-					type: 'ammMarket',
-					pairAddress: address(args['pair'], 'pair'),
-					poolAddress: address(args['securityPool'], 'securityPool'),
-					shareTokenAddress: address(args['shareToken'], 'shareToken'),
-					universeId: integerString(args['universeId'], 'universeId'),
-					feeBps: integerString(args['feeBps'], 'feeBps'),
-				},
-			]
+		return [
+			{
+				type: 'ammMarket',
+				pairAddress: address(args['pair'], 'pair'),
+				poolAddress: address(args['securityPool'], 'securityPool'),
+				shareTokenAddress: address(args['shareToken'], 'shareToken'),
+				universeId: integerString(args['universeId'], 'universeId'),
+				feeBps: integerString(args['feeBps'], 'feeBps'),
+			},
+		]
 	if (name === 'PoolCreated')
 		return [
 			{

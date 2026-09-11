@@ -5,6 +5,12 @@ import { historicalExportRows, historicalExportSnapshot, historicalExportSnapsho
 import { ApiConflictError, ApiRequestError, type CanonicalHistoryFilter, canonicalHistoryFilter, integer, isNonNegativeSafeInteger, isPostgresBigint, isPostgresIntegerString, normalize, postgresBigint } from './shared.ts'
 
 type HistoricalExportDataset = 'logs' | 'timeline' | 'reorgs'
+
+const EXPORT_KEY_COLUMNS: Record<HistoricalExportDataset, readonly string[]> = {
+	logs: ['block_number', 'transaction_index', 'log_index', 'block_hash', 'tx_hash'],
+	timeline: ['block_number', 'block_hash', 'tx_hash', 'log_index', 'entity_type', 'entity_identity'],
+	reorgs: ['id'],
+}
 export type HistoricalExportCursor = readonly [
 	version: 1,
 	dataset: HistoricalExportDataset,
@@ -117,14 +123,7 @@ export const historicalExport = async (sql: SQL, url: URL): Promise<Response> =>
 	const truncated = rows.length > limit
 	const exported = rows.slice(0, limit)
 	const finalRow = exported[exported.length - 1] as Record<string, unknown> | undefined
-	const exportedLastKey =
-		finalRow === undefined
-			? undefined
-			: dataset === 'logs'
-				? [String(finalRow['block_number']), String(finalRow['transaction_index']), String(finalRow['log_index']), String(finalRow['block_hash']), String(finalRow['tx_hash'])]
-				: dataset === 'timeline'
-					? [String(finalRow['block_number']), String(finalRow['block_hash']), String(finalRow['tx_hash']), String(finalRow['log_index']), String(finalRow['entity_type']), String(finalRow['entity_identity'])]
-					: [String(finalRow['id'])]
+	const exportedLastKey = finalRow === undefined ? undefined : EXPORT_KEY_COLUMNS[dataset].map(column => String(finalRow[column]))
 	const snapshotPrefix = [1, dataset, chainId, canonical, fromBlock, toBlock, snapshotBlock, snapshotHash, snapshotInvalidationId, snapshotTotal, abiHash, applicationHash, projectionHash] as const
 	const nextCursor = truncated && exportedLastKey !== undefined ? historicalExportCursorFor(snapshotPrefix, exportedLastKey) : undefined
 	const body = `${exported.map((row: Record<string, unknown>) => JSON.stringify(normalize(row))).join('\n')}${exported.length === 0 ? '' : '\n'}`

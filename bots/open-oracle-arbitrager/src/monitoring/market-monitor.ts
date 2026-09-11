@@ -71,6 +71,12 @@ export async function availableTokenBalances(tokens: readonly Address[], readBal
 	return new Map(entries.flat())
 }
 
+function completeLines(bytes: Buffer, fromStart: boolean) {
+	if (fromStart) return bytes
+	const firstNewline = bytes.indexOf(0x0a)
+	return firstNewline === -1 ? Buffer.alloc(0) : bytes.subarray(firstNewline + 1)
+}
+
 function uniqueAddresses(addresses: readonly Address[]) {
 	const unique = new Map<string, Address>()
 	for (const address of addresses) unique.set(address.toLowerCase(), getAddress(address))
@@ -299,8 +305,7 @@ async function readPriceHistoryTail(path: string, maximumBytes: number) {
 			offset += read.bytesRead
 		}
 		const bytes = buffer.subarray(0, offset)
-		const firstNewline = bytes.indexOf(0x0a)
-		const complete = start === 0 ? bytes : firstNewline === -1 ? Buffer.alloc(0) : bytes.subarray(firstNewline + 1)
+		const complete = completeLines(bytes, start === 0)
 		return complete.toString('utf8')
 	} finally {
 		await handle.close()

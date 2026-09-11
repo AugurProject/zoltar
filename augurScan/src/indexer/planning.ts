@@ -8,6 +8,7 @@ import { createRpcRequestQueue, rpcQueueSaturationFrom } from '../rpc-request-qu
 import { bigintToSafeNumber } from '../time.ts'
 import type { ContractMetadata, ManifestContract, TokenMetadata } from '../types.ts'
 import { uniswapV4PoolConfigurations, uniswapV4PoolId } from '../uniswap.ts'
+import { compareBigint } from '../compare.ts'
 
 export type RpcBlockHeader = {
 	readonly hash: Hash
@@ -229,7 +230,7 @@ export const rpcLogQueryGroups = (inputs: readonly LogScanInput[]): readonly Log
 		addresses.push(input.address)
 		byStart.set(input.fromBlock, addresses)
 	}
-	return [...byStart].sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0)).flatMap(([fromBlock, addresses]) => rpcLogAddressGroups(addresses).map(group => ({ addresses: group, fromBlock })))
+	return [...byStart].sort(([left], [right]) => compareBigint(left, right)).flatMap(([fromBlock, addresses]) => rpcLogAddressGroups(addresses).map(group => ({ addresses: group, fromBlock })))
 }
 
 export const mapLimit = async <T, R>(items: readonly T[], limit: number, operation: (item: T) => Promise<R>): Promise<R[]> => {
@@ -352,7 +353,8 @@ export const initialIndexStartBlock = async (
 		if (!requiresManifestHistoryCoverage({ address, label, kind, provenance: 'manifest' })) return undefined
 		if (configuredDeploymentBlock !== undefined) return configuredDeploymentBlock <= observedHead ? configuredDeploymentBlock : undefined
 		const deployment = await findDeployment(address, configuredStartBlock, observedHead, false)
-		return deployment === undefined ? undefined : deployment.exact ? deployment.block : configuredStartBlock
+		if (deployment === undefined) return undefined
+		return deployment.exact ? deployment.block : configuredStartBlock
 	})
 	return (
 		deployments.reduce<bigint | undefined>((earliest, deployment) => {

@@ -1,6 +1,7 @@
 import ccxt, { type Exchange } from 'ccxt'
 import { bigintToSafeNumber } from '../ethereum.ts'
 import type { MarketConsensusObservation, MarketConsensusSettings } from './market-consensus.ts'
+import { compareBigint } from '../infrastructure/compare.ts'
 
 const FIXED_UNIT = 10n ** 18n
 const BPS = 10_000n
@@ -492,7 +493,7 @@ async function observeSource(source: CentralizedMarketSource, settings: Centrali
 
 function median(values: readonly bigint[]) {
 	if (values.length === 0) throw new Error('Cannot calculate a median without observations')
-	const sorted = [...values].sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))
+	const sorted = [...values].sort(compareBigint)
 	const middle = Math.floor(sorted.length / 2)
 	const upper = sorted[middle]
 	if (upper === undefined) throw new Error('Median observation disappeared')

@@ -14,10 +14,11 @@
 		"#state/*": "./src/state/*.ts"
 	},
 	"scripts": {
-		"check": "bun run typecheck && bun run test && bun run format:check",
+		"check": "bun run typecheck && bun run lint && bun run test && bun run format:check",
 		"ensure-contract-artifacts": "bun ../../tooling/contracts/ensure-contract-artifacts.mts",
 		"format": "bun x @biomejs/biome format --write biome.json package.json tsconfig.json README.md src tests scripts config",
 		"format:check": "bun x @biomejs/biome format biome.json package.json tsconfig.json README.md src tests scripts config",
+		"lint": "bun x @biomejs/biome lint package.json tsconfig.json src tests scripts config",
 		"run": "bun ./src/cli/run.ts",
 		"smoke:markets": "bun ./scripts/check-market-sources.mts",
 		"test": "bun run ensure-contract-artifacts && bun test ./tests --timeout 300000",

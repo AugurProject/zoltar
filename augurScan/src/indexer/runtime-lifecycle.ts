@@ -2,6 +2,11 @@ import { DatabaseConsistencyError, databaseConsistencyDiagnosticMessage, type In
 import { databaseFailureMessage, rpcIndexerFailureReason, safeIndexerFailure, safeIndexerFailureReason } from './runtime-diagnostics.ts'
 import { LeaseLostError, waitForIndexerDelay } from './runtime-rpc.ts'
 
+const reacquisitionSource = (acquiredAfterStandby: boolean, recoveredAfterFailures: number) => {
+	if (!acquiredAfterStandby) return 'failures'
+	return recoveredAfterFailures > 0 ? 'standby and failures' : 'standby'
+}
+
 export type NetworkLifecycle = {
 	readonly verify: () => Promise<void>
 	readonly poll: () => Promise<boolean>
@@ -237,7 +242,7 @@ export const runIndexerOwnershipLifecycle = async <TLease extends LeaseControl>(
 					acquiredAfterStandby,
 				})
 				if (recoveredAfterFailures > 0 || acquiredAfterStandby) {
-					const source = acquiredAfterStandby ? (recoveredAfterFailures > 0 ? 'standby and failures' : 'standby') : 'failures'
+					const source = reacquisitionSource(acquiredAfterStandby, recoveredAfterFailures)
 					console.info(`[${networkId}] indexer ownership reacquired; backend PID: ${lease.backendPid ?? 'unavailable'}; source: ${source}; previous consecutive failures: ${recoveredAfterFailures}`)
 				}
 				wasStandby = false

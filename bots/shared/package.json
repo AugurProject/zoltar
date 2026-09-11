@@ -14,6 +14,7 @@
 		"./execution/signer-operation-gate": "./src/execution/signer-operation-gate.ts",
 		"./execution/canonical-finality": "./src/execution/canonical-finality.ts",
 		"./execution/process-lock": "./src/execution/process-lock.ts",
+		"./infrastructure/compare": "./src/infrastructure/compare.ts",
 		"./execution/transaction-submission": "./src/execution/transaction-submission.ts",
 		"./monitoring/universe-policy": "./src/monitoring/universe-policy.ts",
 		"./monitoring/block-sync": "./src/monitoring/block-sync.ts",
@@ -27,9 +28,10 @@
 		"./monitoring/resilience": "./src/monitoring/resilience.ts"
 	},
 	"scripts": {
-		"check": "bun run typecheck && bun run test && bun run format:check",
+		"check": "bun run typecheck && bun run lint && bun run test && bun run format:check",
 		"format": "bun x @biomejs/biome format --write biome.json package.json tsconfig.json src tests",
 		"format:check": "bun x @biomejs/biome format biome.json package.json tsconfig.json src tests",
+		"lint": "bun x @biomejs/biome lint package.json tsconfig.json src tests",
 		"test": "bun test ./tests",
 		"typecheck": "bun x tsc --project tsconfig.json --noEmit"
 	},

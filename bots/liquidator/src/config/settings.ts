@@ -137,6 +137,11 @@ const settingsFilesystem: SettingsFilesystem = {
 const defaultSettingsPath = resolve(import.meta.dir, '..', '..', '.state', 'operator.json')
 const UNIT = 10n ** 18n
 
+function uiHost(value: unknown): '0.0.0.0' | '127.0.0.1' {
+	if (value === '0.0.0.0' || value === '127.0.0.1') return value
+	throw new Error('runtime.uiHost must be 127.0.0.1 or 0.0.0.0')
+}
+
 function record(value: unknown, label: string): JsonRecord {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`${label} must be an object`)
 	return value as JsonRecord
@@ -314,14 +319,7 @@ export function parseSettings(value: unknown): OperatorSettings {
 			pollMilliseconds: integer(runtime['pollMilliseconds'], 'runtime.pollMilliseconds', 1_000, 3_600_000),
 			stateFile: resolve(string(runtime['stateFile'], 'runtime.stateFile')),
 			ui: boolean(runtime['ui'], 'runtime.ui'),
-			uiHost:
-				runtime['uiHost'] === '0.0.0.0'
-					? '0.0.0.0'
-					: runtime['uiHost'] === '127.0.0.1'
-						? '127.0.0.1'
-						: (() => {
-								throw new Error('runtime.uiHost must be 127.0.0.1 or 0.0.0.0')
-							})(),
+			uiHost: uiHost(runtime['uiHost']),
 			uiPort: integer(runtime['uiPort'], 'runtime.uiPort', 1, 65_535),
 		},
 		selectedPools: parsedSelectedPools,

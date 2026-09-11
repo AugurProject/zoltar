@@ -27,21 +27,22 @@ const relativeModuleSpecifiers = (source: string): string[] => {
 	return [...specifiers]
 }
 
+const COMPILED_EXTENSION_SOURCES = new Map([
+	['.js', '.ts'],
+	['.mjs', '.mts'],
+	['.cjs', '.cts'],
+])
+
+const typeScriptSourceCandidates = (unresolved: string, extension: string): string[] => {
+	if (extension === '') return [`${unresolved}.ts`, `${unresolved}.mts`, `${unresolved}.cts`, `${unresolved}.json`, path.join(unresolved, 'index.ts')]
+	const sourceExtension = COMPILED_EXTENSION_SOURCES.get(extension)
+	return sourceExtension === undefined ? [] : [`${unresolved.slice(0, -extension.length)}${sourceExtension}`]
+}
+
 const runtimeDependencyPath = async (importer: string, specifier: string): Promise<string | undefined> => {
 	const unresolved = path.resolve(path.dirname(importer), specifier)
 	const extension = path.extname(unresolved)
-	const candidates = [
-		unresolved,
-		...(extension === '.js'
-			? [`${unresolved.slice(0, -'.js'.length)}.ts`]
-			: extension === '.mjs'
-				? [`${unresolved.slice(0, -'.mjs'.length)}.mts`]
-				: extension === '.cjs'
-					? [`${unresolved.slice(0, -'.cjs'.length)}.cts`]
-					: extension === ''
-						? [`${unresolved}.ts`, `${unresolved}.mts`, `${unresolved}.cts`, `${unresolved}.json`, path.join(unresolved, 'index.ts')]
-						: []),
-	]
+	const candidates = [unresolved, ...typeScriptSourceCandidates(unresolved, extension)]
 	for (const candidate of candidates) if (await Bun.file(candidate).exists()) return candidate
 	return undefined
 }

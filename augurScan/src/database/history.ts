@@ -74,8 +74,15 @@ export const captureHistoryInvalidation = async (transaction: SQL, invalidationI
 
 export const captureDirectObservationInvalidation = async (transaction: SQL, invalidationId: string, chainId: number, boundary: { readonly afterBlock?: bigint; readonly beforeBlock?: bigint }): Promise<void> => {
 	if (boundary.afterBlock !== undefined && boundary.beforeBlock !== undefined) throw new DatabaseConsistencyError('Direct observation invalidation must use one block boundary')
-	const balanceBoundary = boundary.afterBlock !== undefined ? transaction`AND block_number > ${boundary.afterBlock.toString()}` : boundary.beforeBlock !== undefined ? transaction`AND block_number < ${boundary.beforeBlock.toString()}` : transaction``
-	const metadataBoundary = boundary.afterBlock !== undefined ? transaction`AND read_block > ${boundary.afterBlock.toString()}` : boundary.beforeBlock !== undefined ? transaction`AND read_block < ${boundary.beforeBlock.toString()}` : transaction``
+	let balanceBoundary = transaction``
+	let metadataBoundary = transaction``
+	if (boundary.afterBlock !== undefined) {
+		balanceBoundary = transaction`AND block_number > ${boundary.afterBlock.toString()}`
+		metadataBoundary = transaction`AND read_block > ${boundary.afterBlock.toString()}`
+	} else if (boundary.beforeBlock !== undefined) {
+		balanceBoundary = transaction`AND block_number < ${boundary.beforeBlock.toString()}`
+		metadataBoundary = transaction`AND read_block < ${boundary.beforeBlock.toString()}`
+	}
 	await transaction`
 		INSERT INTO history_invalidation_occurrences
 			(invalidation_id, occurrence_kind, chain_id, block_hash, occurrence_id, sub_index)

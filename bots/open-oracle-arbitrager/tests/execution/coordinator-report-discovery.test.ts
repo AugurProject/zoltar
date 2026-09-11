@@ -146,7 +146,9 @@ describe('configured coordinator report discovery', () => {
 					if (unavailable) throw new ConnectivityDegradedError('RPC connection unavailable')
 					if (parameters.method === 'eth_getBlockByNumber') {
 						blockReads += 1
-						return Promise.resolve({ ...rawBlock, hash: missingBlockHash ? undefined : reorg && blockReads > 1 ? (`0x${'bc'.repeat(32)}` as Hex) : blockHash })
+						const reorganizedHash: Hex = `0x${'bc'.repeat(32)}`
+						if (missingBlockHash) return Promise.resolve({ ...rawBlock, hash: undefined })
+						return Promise.resolve({ ...rawBlock, hash: reorg && blockReads > 1 ? reorganizedHash : blockHash })
 					}
 					if (parameters.method !== 'eth_call' || !Array.isArray(parameters.params)) throw new Error(`Unexpected RPC method ${parameters.method}`)
 					const request = parameters.params[0]
