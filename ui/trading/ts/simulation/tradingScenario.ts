@@ -6,10 +6,10 @@ import { reportBootstrapProgress, requireQaAccount } from '@zoltar/ui-core-share
 import { applyStatoblastScenario } from '@zoltar/ui-statoblast-shared/simulation/statoblastScenarios.js'
 import { getInfraContractAddresses, PROXY_DEPLOYER_ADDRESS } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import { deployTradingStep, deploymentConfigurationForPlan, getTradingDeploymentPlan } from '../protocol/deployment.js'
-import { FUNDED_TRADING_SIMULATION_SCENARIO, TRADING_SIMULATION_SCENARIO } from './index.js'
+import { DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIMULATION_SCENARIO } from './index.js'
 
 export async function applyTradingScenario(parameters: BootstrapScenarioApplyParameters): Promise<boolean> {
-	if (parameters.scenario !== TRADING_SIMULATION_SCENARIO && parameters.scenario !== FUNDED_TRADING_SIMULATION_SCENARIO) return false
+	if (parameters.scenario !== DEPLOYED_TRADING_SIMULATION_SCENARIO && parameters.scenario !== FUNDED_TRADING_SIMULATION_SCENARIO) return false
 	const seeded = await applyStatoblastScenario({ ...parameters, scenario: 'security-pool' })
 	if (!seeded) throw new Error('Trading simulation could not seed its Statoblast security pool')
 
