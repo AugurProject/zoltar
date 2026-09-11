@@ -1,24 +1,16 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test } from 'bun:test'
-import { createRpcEndpointPool, createWalletClient, encodeAbiParameters, encodeFunctionData, getAddress, isHex, keccak256, mainnet, privateKeyToAccount, toHex } from '@zoltar/bot-shared/ethereum'
+import { createRpcEndpointPool, createWalletClient, encodeAbiParameters, encodeFunctionData, getAddress, isHex, keccak256, privateKeyToAccount, toHex } from '@zoltar/bot-shared/ethereum'
+import { mainnet } from '@zoltar/core-shared/evm/ethereum'
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
 import { securityPoolAbi } from '../../src/contracts/abi.ts'
 import type { OperatorSettings } from '../../src/config/settings.ts'
-import {
-	OperationRediscoveryRequired,
-	TransactionAwaitingRecovery,
-	assertFreshWalletAssetDebits,
-	assertRequestedTransactionHash,
-	assertStepPreflightCalls,
-	executeOperationPlan,
-	finalizedReceiptWithQuorum,
-	operationStepSubmissionLastValidBlock,
-	sameCanonicalExecutionAnchor,
-	type ExecutionEnvironment,
-} from '../../src/execution/transaction-executor.ts'
+import { OperationRediscoveryRequired, TransactionAwaitingRecovery, assertFreshWalletAssetDebits, assertRequestedTransactionHash, assertStepPreflightCalls, executeOperationPlan, finalizedReceiptWithQuorum, sameCanonicalExecutionAnchor, type ExecutionEnvironment } from '../../src/execution/transaction-executor.ts'
+import { operationStepSubmissionLastValidBlock } from '../../src/execution/safety.ts'
 import type { OperationPlan, OperationStep } from '../../src/operations/types.ts'
-import { initialDurableState, initialRuntimeState, loadDurableState, saveDurableState } from '../../src/state/operator-state.ts'
+import { loadDurableState, saveDurableState } from '../../src/state/operator-state.ts'
+import { initialDurableState, initialRuntimeState } from '../../src/state/initial-state.ts'
 
 const servers: Array<{ stop: (closeActiveConnections?: boolean) => void }> = []
 const directories: string[] = []

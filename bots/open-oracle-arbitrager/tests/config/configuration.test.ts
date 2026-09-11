@@ -5,9 +5,10 @@ import { join } from 'node:path'
 import { keccak256, privateKeyToAccount, type Hex } from '@zoltar/bot-shared/ethereum'
 import { loadOperatorSettings, operatorProfilePath, saveOperatorSettings, type PersistedOperatorSettings } from '#config/settings-store'
 import { assertDistinctPersistentPaths } from '#config/configuration'
-import { deterministicDeploymentProxy, executorDeploymentPlan } from '#execution/create2-executor'
+import { deterministicDeploymentProxy, executorDeploymentPlan } from '#execution/executor-deployment-primitives'
 import { clearExecutorDeploymentIntent, executorDeploymentIntentPath, saveExecutorDeploymentIntent } from '#execution/executor-deployment-store'
-import { acquirePositionJournalLock, savePositionJournal } from '#state/position-store'
+import { acquirePositionJournalLock } from '#state/position-store'
+import { savePositionJournal } from '../support/position-journal.ts'
 
 const executable = process.execPath
 const runSource = join(import.meta.dir, '..', '..', 'src', 'cli', 'run.ts')

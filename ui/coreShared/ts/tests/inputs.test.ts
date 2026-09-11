@@ -2,21 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
-import {
-	approvalShortage,
-	approvalTargetAmount,
-	balanceShortage,
-	getReportingOutcomeKey,
-	parseAddressInput,
-	parseBytes32Input,
-	parseBigIntListInput,
-	parseOptionalBigIntInput,
-	parseReportingOutcomeInput,
-	parseReportingOutcomeListInput,
-	parseReportIdInput,
-	resolveOptionalAddressInput,
-	resolveOptionalBigIntListInput,
-} from '../forms/inputs.js'
+import { balanceShortage, getReportingOutcomeKey, parseAddressInput, parseBytes32Input, parseBigIntListInput, parseReportingOutcomeInput, parseReportingOutcomeListInput, parseReportIdInput, resolveOptionalAddressInput } from '../forms/inputs.js'
 
 void describe('input helpers', () => {
 	void test('parses and trims required address inputs', () => {
@@ -36,16 +22,6 @@ void describe('input helpers', () => {
 
 		expect(result).toBeInstanceOf(Error)
 		expect((result as Error).message).toContain('not-an-address')
-	})
-
-	void test('parseOptionalBigIntInput returns undefined for empty input', () => {
-		expect(parseOptionalBigIntInput('')).toBe(undefined)
-		expect(parseOptionalBigIntInput('   ')).toBe(undefined)
-	})
-
-	void test('parseOptionalBigIntInput parses whole numbers and ignores invalid values', () => {
-		expect(parseOptionalBigIntInput('123')).toBe(123n)
-		expect(parseOptionalBigIntInput('not-a-number')).toBe(undefined)
 	})
 
 	void test('parseReportIdInput enforces bigint parsing and handles malformed values', () => {
@@ -69,17 +45,11 @@ void describe('input helpers', () => {
 		expect(() => parseBytes32Input('abc', 'Bytes32')).toThrow('Bytes32')
 	})
 
-	void test('parseOptional functions cover whitespace and boundary behavior', () => {
-		expect(parseOptionalBigIntInput(' 3, 4 , ')).toBeUndefined()
-	})
-
 	void test('parses lists and report outcomes with boundary handling', () => {
 		expect(parseBigIntListInput('3, 4, 5', 'Outcome indexes')).toEqual([3n, 4n, 5n])
 		expect(() => parseBigIntListInput('3, foo', 'Outcome indexes')).toThrow('Outcome indexes #2 must be a whole number')
 		expect(parseBigIntListInput(' 1, 2, 3 ', 'Outcome indexes')).toEqual([1n, 2n, 3n])
 
-		expect(resolveOptionalBigIntListInput('', [1n, 2n], 'Outcome indexes')).toEqual([1n, 2n])
-		expect(resolveOptionalBigIntListInput('3,4', [1n, 2n], 'Outcome indexes')).toEqual([3n, 4n])
 		expect(parseReportingOutcomeInput('yes')).toBe('yes')
 		expect(parseReportingOutcomeListInput('YES, no, INVALID', 'Outcomes')).toEqual(['yes', 'no', 'invalid'])
 		expect(() => parseReportingOutcomeInput('maybe')).toThrow('Unknown reporting outcome')
@@ -99,9 +69,5 @@ void describe('input helpers', () => {
 		expect(balanceShortage(5n, undefined)).toBe(undefined)
 		expect(balanceShortage(5n, 5n)).toBe(0n)
 		expect(balanceShortage(6n, 5n)).toBe(1n)
-
-		expect(approvalShortage(11n, 10n)).toBe(1n)
-		expect(approvalTargetAmount(11n, 10n)).toBe(11n)
-		expect(approvalTargetAmount(10n, 10n)).toBe(undefined)
 	})
 })

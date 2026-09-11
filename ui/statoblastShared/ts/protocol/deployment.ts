@@ -52,7 +52,7 @@ function getSecurityPoolUtilsRuntimeCode() {
 	return bytesToHex(runtimeBytes)
 }
 
-export const STATIC_STATOBLAST_DEPLOYMENT_ARTIFACT_RUNTIME_CODE_BY_STEP_ID = {
+const STATIC_STATOBLAST_DEPLOYMENT_ARTIFACT_RUNTIME_CODE_BY_STEP_ID = {
 	escalationGameClaimDelegate: `0x${statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate.evm.deployedBytecode.object}`,
 	openOracle: `0x${statoblast_openOracle_OpenOracle_OpenOracle.evm.deployedBytecode.object}`,
 	securityPoolOperationsDelegate: getSecurityPoolOperationsDelegateRuntimeCode(),
@@ -189,7 +189,7 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 	}))
 }
 
-export function getStatoblastDeploymentStatusOracleStepAddresses(profile = getRuntimeNetworkProfile()): Address[] {
+function getStatoblastDeploymentStatusOracleStepAddresses(profile = getRuntimeNetworkProfile()): Address[] {
 	const addresses = getInfraContractAddresses(profile)
 	return [
 		...getZoltarDeploymentStatusOracleStepAddresses(profile),

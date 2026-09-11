@@ -1,6 +1,14 @@
 import { describe, expect, test } from 'bun:test'
-import { reconcileIndexerOwnership } from '../../src/database.ts'
-import { basicAccessRequiredResponse, createFixedWindowRateLimiter, createRequestMetrics, hasBasicAccess, indexerHealthUnavailableResponse, metricRoute, parseBasicAccessCredentials, requestAccessGuard, staticAssetResponse } from '../../src/http.ts'
+import { reconcileIndexerOwnership } from '../../src/database/indexer-ownership-reconciliation.ts'
+import { createFixedWindowRateLimiter, createRequestMetrics, indexerHealthUnavailableResponse, metricRoute, parseBasicAccessCredentials, requestAccessGuard, staticAssetResponse } from '../../src/http.ts'
+
+// Access checks are observable only through the request guard, which admits every API request here.
+const hasBasicAccess = (request: Request, credentials: Parameters<typeof requestAccessGuard>[3]) => requestAccessGuard(request, '/', 'client', credentials, () => ({ allowed: true })) === undefined
+const basicAccessRequiredResponse = (headers: Readonly<Record<string, string>>) => {
+	const denied = requestAccessGuard(new Request('http://localhost'), '/', 'client', parseBasicAccessCredentials('operator', 'secret'), () => ({ allowed: true }), headers)
+	if (denied?.reason !== 'authentication') throw new Error('Expected the request guard to require authentication')
+	return denied.response
+}
 
 describe('HTTP response policy', () => {
 	test('reconciles durable ownership heartbeats with actual PostgreSQL advisory locks', () => {

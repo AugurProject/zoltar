@@ -38,6 +38,7 @@ type StatoblastScenarioProtocol = typeof defaultScenarioProtocol
 
 let scenarioProtocolOverride: StatoblastScenarioProtocol | undefined
 
+/** @internal */
 export function installStatoblastScenarioProtocolForTesting(override: StatoblastScenarioProtocol | undefined) {
 	scenarioProtocolOverride = override
 }

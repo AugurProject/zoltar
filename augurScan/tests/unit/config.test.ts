@@ -4,7 +4,8 @@ import mainnetDeployment from '../../../docs/mainnet-deployment-addresses.json'
 import sepoliaDeployment from '../../../docs/sepolia-deployment-addresses.json'
 import mainnetManifest from '../../config/manifests/mainnet.json'
 import sepoliaManifest from '../../config/manifests/sepolia.json'
-import { loadNetworks, parseManifestValue } from '../../src/config.ts'
+import { loadNetworks } from '../../src/config.ts'
+import { parseManifestValue } from '../../src/manifest.ts'
 
 const projectRoot = path.resolve(import.meta.dir, '..', '..')
 

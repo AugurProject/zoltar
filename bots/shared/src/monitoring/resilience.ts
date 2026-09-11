@@ -56,10 +56,6 @@ export async function bestSuccessful<T>(attempts: readonly (() => Promise<T>)[],
 	return best
 }
 
-export function replaceOverlap<T>(cached: readonly T[], fetched: readonly T[], fromBlock: bigint, blockNumber: (value: T) => bigint, compare: (left: T, right: T) => number) {
-	return [...cached.filter(value => blockNumber(value) < fromBlock), ...fetched].sort(compare)
-}
-
 export function compactFinalityWindow<T, K>(values: readonly T[], head: bigint, overlapBlocks: bigint, key: (value: T) => K, blockNumber: (value: T) => bigint, isTerminal: (value: T) => boolean) {
 	const nextBlock = head + 1n
 	const overlapStart = nextBlock > overlapBlocks ? nextBlock - overlapBlocks : 0n

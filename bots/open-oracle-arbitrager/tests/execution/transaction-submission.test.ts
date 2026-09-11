@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { keccak256, parseTransaction, privateKeyToAccount, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
-import { assertSubmissionWindowOpen, maximumFeePerGas, mergeSubmissionFailures, prepareSignedTransaction, simulateBundle, simulateSignedBundleEveryRelay, SubmissionFailure, submitConfiguredSignedBundle, submitSignedBundle, submitSignedTransaction, validateSubmissionSettings } from '#execution/transaction-submission'
+import { assertSubmissionWindowOpen, maximumFeePerGas, mergeSubmissionFailures, prepareSignedTransaction, simulateSignedBundleEveryRelay, SubmissionFailure, submitConfiguredSignedBundle, submitSignedBundle, submitSignedTransaction, validateSubmissionSettings } from '#execution/transaction-submission'
 
 const servers: Bun.Server<unknown>[] = []
 const address = '0x0000000000000000000000000000000000000001' as Address
@@ -27,6 +27,15 @@ function relay(handler: (request: Request) => Response | Promise<Response>) {
 function expectedBundleHash(transactions: readonly Hex[]) {
 	const transactionHashes = transactions.map(transaction => keccak256(transaction).slice(2)).join('')
 	return keccak256(`0x${transactionHashes}` as Hex)
+}
+
+// Simulates through the every-relay path with one relay so single-relay behaviour stays observable.
+async function simulateBundle(parameters: { address: Address; relayUrl: string; signMessage: (message: string | Uint8Array) => Promise<Hex>; stateBlockNumber: bigint; targetBlockNumber: bigint; transactions: readonly Hex[] }) {
+	const { relayUrl, ...rest } = parameters
+	const result = await simulateSignedBundleEveryRelay({ ...rest, relayUrls: [relayUrl] })
+	const simulation = result.successful[0]?.simulation
+	if (simulation === undefined) throw new Error('Bundle simulation produced no successful relay result')
+	return simulation
 }
 
 describe('transaction submission settings', () => {

@@ -11,7 +11,7 @@ type WriteClient = WalletClient<Transport, Chain, Account>
 
 export type TrackTransaction = (activity: TransactionActivity) => void
 
-export const receiptWaitAttemptMilliseconds = (pollMilliseconds: number) => Math.min(pollMilliseconds, 5_000)
+const receiptWaitAttemptMilliseconds = (pollMilliseconds: number) => Math.min(pollMilliseconds, 5_000)
 
 export type TrackedSubmission = SignedTransaction &
 	SubmittedTransaction & {

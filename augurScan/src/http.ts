@@ -17,7 +17,7 @@ const exactString = (left: string, right: string): boolean => {
 	return difference === 0
 }
 
-export const hasBasicAccess = (request: Request, credentials: BasicAccessCredentials | undefined): boolean => {
+const hasBasicAccess = (request: Request, credentials: BasicAccessCredentials | undefined): boolean => {
 	if (credentials === undefined) return true
 	const authorization = request.headers.get('authorization')
 	if (authorization === null || !authorization.startsWith('Basic ')) return false
@@ -33,7 +33,7 @@ export const hasBasicAccess = (request: Request, credentials: BasicAccessCredent
 	}
 }
 
-export const basicAccessRequiredResponse = (headers: Readonly<Record<string, string>> = {}): Response => Response.json({ error: 'Authentication required' }, { status: 401, headers: { ...headers, 'www-authenticate': 'Basic realm="augurScan", charset="UTF-8"' } })
+const basicAccessRequiredResponse = (headers: Readonly<Record<string, string>> = {}): Response => Response.json({ error: 'Authentication required' }, { status: 401, headers: { ...headers, 'www-authenticate': 'Basic realm="augurScan", charset="UTF-8"' } })
 
 export const createFixedWindowRateLimiter = (limit: number, windowMs: number, maximumClients = 10_000) => {
 	if (!Number.isSafeInteger(limit) || limit < 0) throw new Error('Rate limit must be a non-negative safe integer')
@@ -128,7 +128,7 @@ type RequestTimeoutServer = {
 	readonly timeout: (request: Request, seconds: number) => void
 }
 
-export const STATIC_ASSET_CACHE_CONTROL = 'no-cache'
+const STATIC_ASSET_CACHE_CONTROL = 'no-cache'
 
 export const staticAssetResponse = (body: BodyInit, securityHeaders: Readonly<Record<string, string>>, contentType: string) => new Response(body, { headers: { ...securityHeaders, 'cache-control': STATIC_ASSET_CACHE_CONTROL, 'content-type': contentType } })
 

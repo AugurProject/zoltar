@@ -154,7 +154,7 @@ async function loadComputedManifest(manifestId: ManifestId): Promise<DeploymentM
 	const deploymentModulePath = path.join(repositoryRootPath, 'ui', 'statoblastShared', 'ts', 'protocol', 'deployment.ts')
 	const deploymentHelpersModulePath = path.join(repositoryRootPath, 'ui', 'statoblastShared', 'ts', 'protocol', 'deploymentHelpers.ts')
 	const networkProfileModulePath = path.join(repositoryRootPath, 'ui', 'coreShared', 'ts', 'wallet', 'networkProfile.ts')
-	const protocolConfigModulePath = path.join(repositoryRootPath, 'shared', 'core', 'ts', 'deployment', 'protocolConfig.ts')
+	const protocolConfigModulePath = path.join(repositoryRootPath, 'tooling', 'contracts', 'protocol-config.ts')
 
 	try {
 		await ensureDeploymentRuntimeDependencies()

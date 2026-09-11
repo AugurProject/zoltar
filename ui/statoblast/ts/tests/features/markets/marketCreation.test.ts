@@ -1,7 +1,8 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { createMarketParameters, createSecurityPoolParameters, validateMarketForm } from '@zoltar/ui-statoblast-shared/features/markets/lib/marketCreation.js'
+import { createMarketParameters, createSecurityPoolParameters } from '@zoltar/ui-statoblast-shared/features/markets/lib/marketCreation.js'
+import { validateMarketForm } from '@zoltar/ui-zoltar-shared/features/questions/lib/questionCreation.js'
 import { hasDeployedStep } from '@zoltar/ui-core-shared/lib/deploymentStatus.js'
 import { sortStringArrayByKeccak } from '@zoltar/core-shared/serialization/sortStringArrayByKeccak'
 import type { MarketFormState, SecurityPoolFormState } from '@zoltar/ui-zoltar-shared/types/app.js'

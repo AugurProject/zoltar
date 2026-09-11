@@ -5,7 +5,7 @@ import { historicalExportRows, historicalExportSnapshot, historicalExportSnapsho
 import { ApiConflictError, ApiRequestError, type CanonicalHistoryFilter, canonicalHistoryFilter, integer, isNonNegativeSafeInteger, isPostgresBigint, isPostgresIntegerString, normalize, postgresBigint } from './shared.ts'
 
 type HistoricalExportDataset = 'logs' | 'timeline' | 'reorgs'
-export type HistoricalExportCursor = readonly [
+type HistoricalExportCursor = readonly [
 	version: 1,
 	dataset: HistoricalExportDataset,
 	chainId: number,
@@ -29,7 +29,7 @@ const historicalExportKeyValid = (dataset: HistoricalExportDataset, key: readonl
 	return key.length === 1 && isPostgresBigint(key[0])
 }
 
-export const parseHistoricalExportCursor = (value: string | null): HistoricalExportCursor | undefined => {
+const parseHistoricalExportCursor = (value: string | null): HistoricalExportCursor | undefined => {
 	if (value === null) return undefined
 	try {
 		const parsed = decodeOpaqueCursor(value)

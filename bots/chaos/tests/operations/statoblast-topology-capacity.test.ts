@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { canonicalLifecyclePresence, eligibleOperationPlans, evaluateOperationCatalog, reevaluateOperationContinuation, urgentOperationPlans } from '../../src/operations/catalog.ts'
+import { canonicalLifecyclePresence, evaluateOperationCatalog, reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
+import { eligibleOperationPlans, urgentOperationPlans } from '../support/operation-plans.ts'
 import type { EcosystemSnapshot, PlanningOptions, PoolSnapshot } from '../../src/operations/types.ts'
 import { address, hash, snapshotFixture } from './fixture.ts'
 

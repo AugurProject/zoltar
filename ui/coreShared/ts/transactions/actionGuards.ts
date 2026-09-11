@@ -30,11 +30,6 @@ export function getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAp
 	return { blocked: false, reason: undefined }
 }
 
-export function getWalletActiveAppChainGuardMessage(parameters: WalletActiveAppChainGuardParameters) {
-	const guardState = getWalletActiveAppChainGuardState(parameters)
-	return guardState.reason
-}
-
 export function getWalletConnectionActiveAppChainGuardState({ isOnActiveAppChain, walletConnected, walletRequiredReason }: WalletConnectionActiveAppChainGuardParameters): WalletActiveAppChainGuardState {
 	if (!walletConnected) return { blocked: true, reason: getWalletRequiredReason(walletRequiredReason) }
 	if (!isOnActiveAppChain) return { blocked: true, reason: getWrongNetworkReason() }

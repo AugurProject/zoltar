@@ -4,8 +4,8 @@ import { createPublicClient, custom, encodeAbiParameters, getAddress } from '@zo
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { act } from 'preact/test-utils'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
-import { App, resolveCanonicalLiveDeployment } from '../../app/App.js'
-import { createDeploymentReadClient, TradingDeploymentSetup, type TradingDeploymentSetupServices } from '../../features/TradingDeploymentSetup.js'
+import { App } from '../../app/App.js'
+import { TradingDeploymentSetup, type TradingDeploymentSetupServices } from '../../features/TradingDeploymentSetup.js'
 import { CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE, deploymentConfigurationForPlan, getTradingDeploymentPlan } from '../../protocol/deployment.js'
 import type { InjectedEthereum } from '../../protocol/injected.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -81,49 +81,6 @@ async function waitForConnectedWallet(container: HTMLElement) {
 }
 
 describe('trading deployment setup', () => {
-	test('uses the active TEVM read client instead of the configured HTTP URL', () => {
-		const client = deploymentClient()
-		expect(createDeploymentReadClient('http://127.0.0.1/', { createReadClient: () => client, id: 'simulation' })).toBe(client)
-	})
-
-	test('derives and verifies the canonical CREATE2 trading deployment without configuration', async () => {
-		const restoreEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: SEPOLIA_NETWORK_PROFILE }))
-		const plan = getTradingDeploymentPlan(core, 30)
-		let contractReadCount = 0
-		let rpcChainId = '0xaa36a7'
-		const client = createPublicClient({
-			transport: custom({
-				request: async ({ method, params }) => {
-					if (method === 'eth_chainId') return rpcChainId
-					if (method === 'eth_getCode' && Array.isArray(params)) {
-						const address = params[0]
-						if (typeof address !== 'string') throw new Error('Missing code address')
-						if (address.toLowerCase() === core.proxyDeployer.toLowerCase()) return CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE
-						return '0x01'
-					}
-					if (method === 'eth_call') {
-						contractReadCount += 1
-						if (contractReadCount === 1) return encodeAbiParameters([{ type: 'address' }], [core.securityPoolFactory])
-						if (contractReadCount === 2) return encodeAbiParameters([{ type: 'uint16' }], [30])
-						return encodeAbiParameters([{ type: 'address' }], [plan.factory.address])
-					}
-					throw new Error(`Unexpected RPC method ${method}`)
-				},
-			}),
-		})
-		try {
-			const mainnetCore = { ...core, chainId: 1, chainName: 'Ethereum Mainnet', id: 'mainnet' }
-			const configuration = await resolveCanonicalLiveDeployment([mainnetCore, core], () => client)
-			expect(configuration.chainId).toBe(core.chainId)
-			expect(configuration.factory).toBe(plan.factory.address)
-			expect(configuration.router).toBe(plan.router.address)
-			expect(configuration.rpcUrl).toBe(core.defaultRpcUrl)
-			rpcChainId = '0x1'
-			await expect(resolveCanonicalLiveDeployment([mainnetCore, core], () => client)).rejects.toThrow('RPC chain 1 does not match deployment chain 11155111')
-		} finally {
-			restoreEnvironment()
-		}
-	})
 	let cleanupRendered: (() => Promise<void>) | undefined
 
 	installDomTestLifecycle({

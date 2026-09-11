@@ -14,7 +14,6 @@ import {
 	lockLiveEventWriter,
 	readIndexerHealth,
 	releaseReservedConnection,
-	replayCursorRequiresReset,
 	rewindDepth,
 	ScannerDatabase,
 	type StoredTransaction,
@@ -23,7 +22,8 @@ import {
 import { getAddress, keccak256, stringToHex, zeroAddress } from '../../src/ethereum.ts'
 import { LiveBus } from '../../src/live.ts'
 import { decodeAction } from '../../src/metadata.ts'
-import { CURRENT_SCHEMA_VERSION, initializeSchema, UNSUPPORTED_SCHEMA_MESSAGE } from '../../src/schema.ts'
+import { initializeSchema } from '../../src/schema.ts'
+import { CURRENT_SCHEMA_VERSION, UNSUPPORTED_SCHEMA_MESSAGE } from '../../src/schema-policy.ts'
 import type { ContractMetadata, NetworkConfig, StoredLog, TokenMetadata } from '../../src/types.ts'
 import { uniswapV4PoolId } from '../../src/uniswap.ts'
 
@@ -256,14 +256,6 @@ describe('database checkpoint fencing', () => {
 	test('measures a full rewind from the configured history boundary', () => {
 		expect(rewindDepth(1_250n, 1_000n, -1n)).toBe(251n)
 		expect(rewindDepth(1_250n, 1_000n, 1_200n)).toBe(50n)
-	})
-
-	test('requires a canonical refresh when an event cursor falls outside durable history', () => {
-		expect(replayCursorRequiresReset(8, 9, 12)).toBe(true)
-		expect(replayCursorRequiresReset(9, 9, 12)).toBe(false)
-		expect(replayCursorRequiresReset(12, 9, 12)).toBe(false)
-		expect(replayCursorRequiresReset(13, 9, 12)).toBe(true)
-		expect(replayCursorRequiresReset(0, 0, 0)).toBe(false)
 	})
 
 	test('accepts sparse canonical checkpoints and still fences direct children', () => {

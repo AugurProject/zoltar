@@ -3,19 +3,58 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { loadDeploymentStatusOracleSnapshot, loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
-import { getChainDisplayLabel, getChainIdDecimalLabel, getWalletScopedAccountAddress, getWrongNetworkMessage, getWrongNetworkReason, isActiveAppChain, isSupportedAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
-import { getActiveBackend, initializeActiveEnvironment, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting, shouldUseSimulationLocation } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { SIMULATION_BLOCK_INTERVAL_SECONDS, SIMULATION_INITIAL_TIMESTAMP } from '@zoltar/ui-core-shared/simulation/clock.js'
-import { parseSavedSimulationStateEnvelope, persistSavedSimulationState, serializeSavedSimulationStateEnvelope } from '@zoltar/ui-core-shared/simulation/savedStates.js'
+import { getChainDisplayLabel, getChainIdDecimalLabel, getWalletScopedAccountAddress, getWrongNetworkReason, isActiveAppChain, isSupportedAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
+import { getActiveBackend, initializeActiveEnvironment, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { getSavedSimulationStateEnvelope, persistSavedSimulationState, serializeSavedSimulationStateEnvelope } from '@zoltar/ui-core-shared/simulation/savedStates.js'
 import { createSimulationBackend } from '@zoltar/ui-core-shared/simulation/tevmBackend.js'
 import { createFakeBackend, createFakeSimulationProfile } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE, type NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
-import { createBootstrappedSimulationBackendWithRetry, resetSelectedAccountAndTransactionDelay, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulationTestUtils.js'
+import { createBootstrappedSimulationBackendWithRetry, resetSelectedAccountAndTransactionDelay, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 
 const DEFAULT_SIMULATION_REP_PER_ETH_PRICE = 3n * 10n ** 18n
+// The simulation clock starts at 2025-01-01T00:00:00Z and advances one second per block.
+const SIMULATION_INITIAL_TIMESTAMP = 1_735_689_600n
+const SIMULATION_BLOCK_INTERVAL_SECONDS = 1n
+
+// Reports whether initializeActiveEnvironment picks the simulation backend for a location by injecting both backend factories.
+async function selectsSimulationBackend(location: Parameters<typeof initializeActiveEnvironment>[0]) {
+	let simulation = false
+	const simulationBackend = { ...createFakeBackend({ profile: createFakeSimulationProfile() }), bootstrap: async () => undefined, dispose: async () => undefined }
+	await initializeActiveEnvironment(location, {
+		createInjectedBackend: ({ profile }) => createFakeBackend({ profile }),
+		createSimulationBackend: async () => {
+			simulation = true
+			return simulationBackend as never
+		},
+	})
+	resetActiveEnvironmentForTesting()
+	return simulation
+}
 const SIMULATION_REP_MINT_AMOUNT = 1_000_000n * 10n ** 18n
+
+// Parses an exported state through the public persist/read path using an in-memory Storage.
+function parseExportedSimulationState(serialized: string) {
+	const records = new Map<string, string>()
+	const storage: Storage = {
+		clear: () => records.clear(),
+		getItem: key => records.get(key) ?? null,
+		key: index => [...records.keys()][index] ?? null,
+		get length() {
+			return records.size
+		},
+		removeItem: key => {
+			records.delete(key)
+		},
+		setItem: (key, value) => {
+			records.set(key, value)
+		},
+	}
+	const envelope = getSavedSimulationStateEnvelope(persistSavedSimulationState(serialized, storage).id, storage)
+	if (envelope === undefined) throw new Error('Exported simulation state was not persisted')
+	return envelope
+}
 
 afterEach(() => {
 	resetActiveEnvironmentForTesting()
@@ -37,7 +76,7 @@ void describe('active environment', () => {
 		expect(isSupportedAppChain('0xaa36a7')).toBe(true)
 		expect(isActiveAppChain('0xaa36a7')).toBe(true)
 		expect(isActiveAppChain('0x1')).toBe(false)
-		expect(getWrongNetworkMessage()).toBe('Switch to Sepolia.')
+		expect(getWrongNetworkReason()).toBe('Switch to Sepolia.')
 		expect(getWrongNetworkReason()).toBe('Switch to Sepolia.')
 	})
 
@@ -108,16 +147,16 @@ void describe('active environment', () => {
 		expect(getActiveBackend().profile).toBe(MAINNET_NETWORK_PROFILE)
 	})
 
-	void test('enables simulation mode when the explicit URL flag is present', () => {
-		expect(shouldUseSimulationLocation({ hostname: 'localhost', search: '?simulate=1' })).toBe(true)
-		expect(shouldUseSimulationLocation({ hostname: '127.0.0.1', search: '?foo=bar&simulate=1' })).toBe(true)
-		expect(shouldUseSimulationLocation({ hostname: 'localhost', search: '?simulate=0' })).toBe(false)
-		expect(shouldUseSimulationLocation({ hostname: 'example.com', search: '?foo=bar' })).toBe(false)
+	void test('enables simulation mode when the explicit URL flag is present', async () => {
+		expect(await selectsSimulationBackend({ hostname: 'localhost', search: '?simulate=1' })).toBe(true)
+		expect(await selectsSimulationBackend({ hostname: '127.0.0.1', search: '?foo=bar&simulate=1' })).toBe(true)
+		expect(await selectsSimulationBackend({ hostname: 'localhost', search: '?simulate=0' })).toBe(false)
+		expect(await selectsSimulationBackend({ hostname: 'example.com', search: '?foo=bar' })).toBe(false)
 	})
 
-	void test('intentionally allows simulation mode on production-style hostnames', () => {
-		expect(shouldUseSimulationLocation({ hostname: 'example.com', search: '?simulate=1' })).toBe(true)
-		expect(shouldUseSimulationLocation({ hash: '#/zoltar?simulate=1', hostname: 'example.com', search: '' })).toBe(true)
+	void test('intentionally allows simulation mode on production-style hostnames', async () => {
+		expect(await selectsSimulationBackend({ hostname: 'example.com', search: '?simulate=1' })).toBe(true)
+		expect(await selectsSimulationBackend({ hash: '#/zoltar?simulate=1', hostname: 'example.com', search: '' })).toBe(true)
 	})
 
 	void test('treats both mainnet and simulation profiles as supported app chains', () => {
@@ -131,7 +170,6 @@ void describe('active environment', () => {
 		)
 
 		expect(isSupportedAppChain('0x539')).toBe(true)
-		expect(getWrongNetworkMessage()).toBeUndefined()
 		expect(getWrongNetworkReason()).toBe('Switch to Ethereum mainnet.')
 		resetEnvironment()
 	})
@@ -678,7 +716,7 @@ void describe('simulation backend', () => {
 			await sourceBackend.mintRep(SIMULATION_REP_MINT_AMOUNT)
 
 			const restoredBackend = await createSimulationBackend({
-				savedState: parseSavedSimulationStateEnvelope(await sourceBackend.exportState('Saved baseline')),
+				savedState: parseExportedSimulationState(await sourceBackend.exportState('Saved baseline')),
 				savedStateId: 'saved-baseline-20260602123456',
 			})
 			await restoredBackend.bootstrap()

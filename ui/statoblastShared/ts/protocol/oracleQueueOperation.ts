@@ -1,8 +1,8 @@
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import type { OracleQueueOperation } from '@zoltar/ui-core-shared/types/contracts.js'
 
-export const LIQUIDATION_OPERATION_TYPE = 0
-export const WITHDRAW_REP_OPERATION_TYPE = 1
+const LIQUIDATION_OPERATION_TYPE = 0
+const WITHDRAW_REP_OPERATION_TYPE = 1
 
 export function decodeOracleQueueOperation(operation: bigint | number): OracleQueueOperation {
 	const operationValue = typeof operation === 'bigint' ? operation : BigInt(operation)

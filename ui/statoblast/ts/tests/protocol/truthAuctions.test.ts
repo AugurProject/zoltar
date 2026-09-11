@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
-import { loadTruthAuctionActiveTickPage, loadTruthAuctionBidderBidPage, loadTruthAuctionTickBidPage, loadTruthAuctionTickPage, loadTruthAuctionTickSummary } from '@zoltar/ui-statoblast-shared/protocol/truthAuctions.js'
+import { loadTruthAuctionActiveTickPage, loadTruthAuctionBidderBidPage, loadTruthAuctionTickBidPage } from '@zoltar/ui-statoblast-shared/protocol/truthAuctions.js'
 import { createMockReadClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 
 const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000a1')
@@ -14,95 +14,10 @@ describe('truthAuctions protocol client', () => {
 			throw new Error('readContract should not be called for invalid pagination')
 		})
 
-		await expect(loadTruthAuctionTickPage(client, truthAuctionAddress, -1, 10)).rejects.toThrow('Page index must be a non-negative integer')
 		await expect(loadTruthAuctionActiveTickPage(client, truthAuctionAddress, -1, 10)).rejects.toThrow('Page index must be a non-negative integer')
-		await expect(loadTruthAuctionTickPage(client, truthAuctionAddress, 0, 0)).rejects.toThrow('Page size must be a positive integer')
 		await expect(loadTruthAuctionTickBidPage(client, truthAuctionAddress, 1n, 0, 0)).rejects.toThrow('Page size must be a positive integer')
 		await expect(loadTruthAuctionBidderBidPage(client, truthAuctionAddress, securityPoolAddress, -1, 10)).rejects.toThrow('Page index must be a non-negative integer')
 	})
-
-	test('truth auction page loaders allow large requested page sizes', async () => {
-		const readCalls: Array<{ functionName: string; args: unknown[] | undefined }> = []
-		const client = createMockReadClient(async request => {
-			readCalls.push({
-				functionName: String(request.functionName),
-				args: Array.isArray(request.args) ? [...request.args] : undefined,
-			})
-			if (request.functionName === 'getTickCount') return 1n
-			if (request.functionName === 'getTickPage') return []
-			throw new Error(`Unexpected readContract function: ${request.functionName}`)
-		})
-
-		await expect(loadTruthAuctionTickPage(client, truthAuctionAddress, 0, 500)).resolves.toEqual({
-			pageIndex: 0,
-			pageSize: 500,
-			tickCount: 1n,
-			ticks: [],
-		})
-		expect(readCalls).toEqual([
-			{ functionName: 'getTickCount', args: [] },
-			{ functionName: 'getTickPage', args: [0n, 500n] },
-		])
-	})
-
-	test('loadTruthAuctionTickPage maps tuple responses and converts page indexes to offsets', async () => {
-		const readCalls: Array<{ functionName: string; args: unknown[] | undefined }> = []
-		const client = createMockReadClient(async request => {
-			readCalls.push({
-				functionName: String(request.functionName),
-				args: Array.isArray(request.args) ? [...request.args] : undefined,
-			})
-			if (request.functionName === 'getTickCount') return 3n
-			if (request.functionName === 'getTickPage')
-				return [
-					{ tick: 1n, price: 2n, currentTotalBidAttoEth: 3n, submissionCount: 4n, active: true },
-					{ tick: 5n, price: 6n, currentTotalBidAttoEth: 7n, submissionCount: 8n, active: false },
-				]
-			throw new Error(`Unexpected readContract function: ${request.functionName}`)
-		})
-
-		const page = await loadTruthAuctionTickPage(client, truthAuctionAddress, 2, 5)
-
-		expect(readCalls).toEqual([
-			{ functionName: 'getTickCount', args: [] },
-			{ functionName: 'getTickPage', args: [10n, 5n] },
-		])
-		expect(page).toEqual({
-			pageIndex: 2,
-			pageSize: 5,
-			tickCount: 3n,
-			ticks: [
-				{ tick: 1n, price: 2n, currentTotalBidAttoEth: 3n, submissionCount: 4n, active: true },
-				{ tick: 5n, price: 6n, currentTotalBidAttoEth: 7n, submissionCount: 8n, active: false },
-			],
-		})
-	})
-
-	test('loadTruthAuctionTickSummary maps a direct tick summary read', async () => {
-		const client = createMockReadClient(async request => {
-			if (request.functionName === 'getTickSummary') return { tick: 9n, price: 10n, currentTotalBidAttoEth: 11n, submissionCount: 12n, active: false }
-			throw new Error(`Unexpected readContract function: ${request.functionName}`)
-		})
-
-		await expect(loadTruthAuctionTickSummary(client, truthAuctionAddress, 9n)).resolves.toEqual({
-			tick: 9n,
-			price: 10n,
-			currentTotalBidAttoEth: 11n,
-			submissionCount: 12n,
-			active: false,
-		})
-	})
-
-	test('loadTruthAuctionTickPage rejects malformed tick summary pages instead of trusting ABI shapes', async () => {
-		const client = createMockReadClient(async request => {
-			if (request.functionName === 'getTickCount') return 1n
-			if (request.functionName === 'getTickPage') return [{ tick: 1n, price: 2n, currentTotalBidAttoEth: 3n, submissionCount: 'bad-count', active: true }]
-			throw new Error(`Unexpected readContract function: ${request.functionName}`)
-		})
-
-		await expect(loadTruthAuctionTickPage(client, truthAuctionAddress, 0, 10)).rejects.toThrow('Unexpected truth auction tick page submission count response')
-	})
-
 	test('loadTruthAuctionActiveTickPage maps active ladder pages and converts page indexes to offsets', async () => {
 		const readCalls: Array<{ functionName: string; args: unknown[] | undefined }> = []
 		const client = createMockReadClient(async request => {

@@ -1,10 +1,19 @@
 import { expect, test } from 'bun:test'
-import { createPublicClient, custom, mainnet } from '@zoltar/bot-shared/ethereum'
+import { mainnet } from '@zoltar/core-shared/evm/ethereum'
+import { createPublicClient } from '@zoltar/bot-shared/ethereum'
+import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { parseSettings } from '#config/settings'
-import { isUnsafeVault, PRICE_PRECISION, type VaultPosition } from '#core/strategy'
-import { createPoolMonitorIndex, currentVaultPositionForPoolAccounting, loadChangedVaultAddresses, resolveOperatorVault, scanPools } from '#monitoring/pool-monitor'
+import { BPS_DENOMINATOR, PRICE_PRECISION, vaultHealthBps, type VaultPosition } from '#core/strategy'
+import { scanPools } from '#monitoring/pool-monitor'
+import { loadChangedVaultAddresses } from '#monitoring/vault-change-logs'
+import { createPoolMonitorIndex, currentVaultPositionForPoolAccounting, resolveOperatorVault } from '#monitoring/vault-positions'
 import { createVaultStateIndex, refreshVaultStateIndex } from '#monitoring/vault-state-index'
 import { getAddress } from '@zoltar/bot-shared/ethereum'
+
+function isUnsafeVault(candidate: VaultPosition) {
+	const health = vaultHealthBps(candidate.vaultAttoRepBacking, candidate.openInterestAttoEth, 20_000n, PRICE_PRECISION, candidate.disputeStakedAttoRep)
+	return health !== undefined && health < BPS_DENOMINATOR
+}
 
 const vault = getAddress('0x0000000000000000000000000000000000000001')
 const escrowVault = getAddress('0x0000000000000000000000000000000000000002')
@@ -214,7 +223,7 @@ test('a truth-auction haircut globally dirties every retained dispute-staked vau
 		loadRegistryRange: async () => [vault, escrowVault],
 		readCanonicalBlockHash: async () => `0x${'11'.repeat(32)}`,
 	})
-	expect(first.activeVaults.every(candidate => !isUnsafeVault(candidate.vaultAttoRepBacking, candidate.openInterestAttoEth, 20_000n, PRICE_PRECISION, candidate.disputeStakedAttoRep))).toBeTrue()
+	expect(first.activeVaults.every(candidate => !isUnsafeVault(candidate))).toBeTrue()
 	positions.set(vault.toLowerCase(), position(vault, haircuttedStake))
 	positions.set(escrowVault.toLowerCase(), position(escrowVault, haircuttedStake))
 
@@ -237,7 +246,7 @@ test('a truth-auction haircut globally dirties every retained dispute-staked vau
 
 	expect(second.refreshedVaults.map(candidate => candidate.address)).toEqual([vault, escrowVault])
 	expect(second.activeVaults.every(candidate => candidate.disputeStakedAttoRep === haircuttedStake)).toBeTrue()
-	expect(second.activeVaults.every(candidate => isUnsafeVault(candidate.vaultAttoRepBacking, candidate.openInterestAttoEth, 20_000n, PRICE_PRECISION, candidate.disputeStakedAttoRep))).toBeTrue()
+	expect(second.activeVaults.every(candidate => isUnsafeVault(candidate))).toBeTrue()
 })
 
 test('cached raw vault state recomputes backing and open interest from current pool accounting', () => {

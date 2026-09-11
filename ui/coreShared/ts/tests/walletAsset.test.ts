@@ -2,11 +2,58 @@
 
 import { describe, expect, mock, test } from 'bun:test'
 import { getAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { requestWalletWatchAsset, type WalletAssetMetadata, type WalletAssetRequest } from '../wallet/walletAsset.js'
+import { watchActiveWalletAsset, type WalletAssetMetadata, type WalletAssetRequest } from '../wallet/walletAsset.js'
+import { installActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
+import { createFakeBackend } from './testUtils/fakeBackend.js'
+import { MAINNET_NETWORK_PROFILE } from '../wallet/networkProfile.js'
 
 const GENESIS_REP_ADDRESS = '0x221657776846890989a759ba2973e427dff5c9bb'
 const CHILD_REP_ADDRESS = '0x00000000000000000000000000000000000000a1'
 const WALLET_ADDRESS: Address = '0x00000000000000000000000000000000000000b2'
+
+type WalletAssetRequestDependencies = {
+	expectedChainId: string
+	expectedAccount: Address
+	getActiveAccount: () => Promise<Address | undefined>
+	getActiveChainId: () => Promise<string>
+	isCurrent: () => boolean
+	readTokenMetadata: (address: Address) => Promise<WalletAssetMetadata>
+	request: (request: WalletAssetRequest) => Promise<unknown>
+}
+
+// Drives the public watchActiveWalletAsset through an injected fake backend built from the test dependencies.
+async function requestWalletWatchAsset(address: Address, dependencies: WalletAssetRequestDependencies) {
+	const metadataByAddress = new Map<string, Promise<WalletAssetMetadata>>()
+	const metadataFor = (tokenAddress: Address) => {
+		const key = tokenAddress.toLowerCase()
+		const pending = metadataByAddress.get(key) ?? dependencies.readTokenMetadata(tokenAddress)
+		metadataByAddress.set(key, pending)
+		return pending
+	}
+	const backend = {
+		...createFakeBackend({ profile: MAINNET_NETWORK_PROFILE }),
+		createReadClient: () =>
+			({
+				readContract: async ({ address: tokenAddress, functionName }: { address: Address; functionName: string }) => {
+					const metadata = await metadataFor(tokenAddress)
+					metadataByAddress.delete(tokenAddress.toLowerCase())
+					return functionName === 'symbol' ? metadata.symbol : BigInt(metadata.decimals)
+				},
+			}) as never,
+		getAccounts: async () => {
+			const account = await dependencies.getActiveAccount()
+			return account === undefined ? [] : [account]
+		},
+		getChainId: dependencies.getActiveChainId,
+		getProvider: () => ({ request: dependencies.request }) as never,
+	}
+	const restoreEnvironment = installActiveEnvironmentForTesting(backend)
+	try {
+		return await watchActiveWalletAsset(address, dependencies.expectedAccount, dependencies.isCurrent)
+	} finally {
+		restoreEnvironment()
+	}
+}
 
 function createDeferred<T>() {
 	let resolve: (value: T) => void = () => undefined

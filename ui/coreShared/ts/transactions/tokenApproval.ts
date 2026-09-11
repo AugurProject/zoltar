@@ -2,7 +2,7 @@ import { maxUint256 } from '@zoltar/core-shared/evm/ethereum'
 import { parseDecimalInput } from '../forms/decimal.js'
 import { sanitizeErrorDetail } from '../lib/errors.js'
 import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from '../lib/formatters.js'
-export const maxUint200 = 2n ** 200n - 1n
+const maxUint200 = 2n ** 200n - 1n
 export type TokenApprovalState = {
 	error: string | undefined
 	loading: boolean
@@ -118,13 +118,13 @@ export function resolveTokenApprovalStatusMessage({
 		tokenUnits,
 	})
 }
-export function formatTokenApprovalNeededMessage({ actionLabel, requirement, tokenLabel, tokenUnits }: { actionLabel: string; requirement: TokenApprovalRequirement; tokenLabel: string; tokenUnits: number }) {
+function formatTokenApprovalNeededMessage({ actionLabel, requirement, tokenLabel, tokenUnits }: { actionLabel: string; requirement: TokenApprovalRequirement; tokenLabel: string; tokenUnits: number }) {
 	if (requirement.neededAmount === undefined || requirement.neededAmount <= 0n) return undefined
 	const targetAmount = requirement.targetAmount ?? requirement.requiredAmount
 	if (targetAmount === undefined) return undefined
 	return `Need ${formatAdditionalCurrencyBalance(requirement.neededAmount, tokenLabel, tokenUnits)} approved before ${actionLabel}.`
 }
-export function formatTokenApprovalPartialMessage({ actionLabel, nextApprovedAmount, requiredAmount, tokenLabel, tokenUnits }: { actionLabel: string; nextApprovedAmount: bigint; requiredAmount: bigint; tokenLabel: string; tokenUnits: number }) {
+function formatTokenApprovalPartialMessage({ actionLabel, nextApprovedAmount, requiredAmount, tokenLabel, tokenUnits }: { actionLabel: string; nextApprovedAmount: bigint; requiredAmount: bigint; tokenLabel: string; tokenUnits: number }) {
 	if (nextApprovedAmount >= requiredAmount) return undefined
 	return `Approving ${formatCurrencyBalanceWithUnit(nextApprovedAmount, tokenLabel, tokenUnits)} will still leave ${formatAdditionalCurrencyBalance(requiredAmount - nextApprovedAmount, tokenLabel, tokenUnits)} needed before ${actionLabel}.`
 }

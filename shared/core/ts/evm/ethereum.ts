@@ -223,7 +223,7 @@ type EstimateContractGasParameters<TAbi extends Abi, TFunctionName extends strin
 	value?: bigint | undefined
 }
 
-export type EstimateGasParameters = {
+type EstimateGasParameters = {
 	account?: Account | Address | undefined
 	data?: Hex | undefined
 	gasPrice?: bigint | undefined
@@ -305,7 +305,7 @@ export type TransactionReplacement = {
 	transactionReceipt: TransactionReceipt
 }
 
-export type WaitForTransactionReceiptParameters = {
+type WaitForTransactionReceiptParameters = {
 	hash: Hash
 	onReplaced?: ((replacement: TransactionReplacement) => void) | undefined
 	pollingInterval?: number | undefined
@@ -378,9 +378,9 @@ export type ParsedTransaction = {
 	value?: bigint | undefined
 }
 
-export type RpcRequestScheduler = <TValue>(method: string, operation: () => Promise<TValue>) => Promise<TValue>
+type RpcRequestScheduler = <TValue>(method: string, operation: () => Promise<TValue>) => Promise<TValue>
 export type RpcFetchFn = (input: string | URL | Request, init?: RequestInit | undefined) => Promise<Response>
-export type RpcResponseParser = (response: Response, method: string) => Promise<JsonValue>
+type RpcResponseParser = (response: Response, method: string) => Promise<JsonValue>
 
 type TransportRetryOptions = {
 	batch?: { readonly wait?: number } | undefined
@@ -470,7 +470,7 @@ type BlockTag = 'earliest' | 'latest' | 'pending'
 type LogTopicFilter = Hex | readonly Hex[] | null
 
 const DEFAULT_RATE_LIMIT_RETRY_COUNT = 3
-export const RATE_LIMIT_RETRY_DELAY_MILLISECONDS = 10_000
+const RATE_LIMIT_RETRY_DELAY_MILLISECONDS = 10_000
 
 type PublicClientShape<TTransport extends Transport, TChain extends Chain | undefined> = {
 	chain: TChain
@@ -2289,13 +2289,6 @@ export function stringToHex(value: string): Hex {
 	return toHex(value)
 }
 
-export function numberToBytes(value: bigint | number, options: { size?: number | undefined } = {}) {
-	const bytes = bigintToBytes(normalizeQuantityValue(value))
-	if (options.size === undefined) return bytes
-	if (bytes.length > options.size) throw new Error(`Value exceeds requested size of ${options.size.toString()} bytes`)
-	return Uint8Array.from([...new Uint8Array(options.size - bytes.length), ...bytes])
-}
-
 export function keccak256(value: Hex | Uint8Array | string) {
 	if (typeof value === 'string' && value.startsWith('0x')) {
 		return ensure0x(nobleBytesToHex(keccak_256(hexToBytes(value))))
@@ -2325,6 +2318,7 @@ export function encodeFunctionData(parameters: { abi: readonly unknown[]; args?:
 }
 
 export function decodeFunctionData<TAbi extends Abi>(parameters: { abi: TAbi; data: Hex }): DecodedFunctionData<TAbi>
+
 export function decodeFunctionData(parameters: { abi: Abi; data: Hex }): {
 	args: readonly AbiValue[]
 	functionName: string
@@ -2347,6 +2341,7 @@ export function decodeFunctionData(parameters: { abi: Abi; data: Hex }) {
 	}
 }
 
+/** @internal Test fixtures decode call results with this; production reads through readContract. */
 export function decodeFunctionResult<TAbi extends Abi, TFunctionName extends string>(parameters: { abi: TAbi; data: Hex; functionName: TFunctionName }): ContractFunctionResult<TAbi, TFunctionName> {
 	return decodeFunctionOutput(getNamedFunctionAbi(parameters.abi, parameters.functionName), parameters.data) as ContractFunctionResult<TAbi, TFunctionName>
 }
@@ -2402,6 +2397,7 @@ export function decodeEventLog(parameters: { abi: Abi; data: Hex; topics: readon
 
 type EncodedEventTopic<TArgs> = TArgs extends readonly unknown[] ? (Extract<TArgs[number], readonly unknown[]> extends never ? Hex : Hex | readonly Hex[]) : TArgs extends Readonly<Record<string, unknown>> ? (Extract<TArgs[keyof TArgs], readonly unknown[]> extends never ? Hex : Hex | readonly Hex[]) : Hex
 
+/** @internal Production filters logs through getLogs; tests build topic fixtures with this encoder. */
 export function encodeEventTopics<const TArgs extends readonly unknown[] | Record<string, unknown> | undefined = undefined>(parameters: { abi: Abi; args?: TArgs; eventName: string }): readonly (EncodedEventTopic<TArgs> | null)[]
 export function encodeEventTopics(parameters: { abi: Abi; args?: readonly unknown[] | Record<string, unknown> | undefined; eventName: string }): readonly (Hex | readonly Hex[] | null)[] {
 	const eventAbi = getNamedEventAbi(parameters.abi, parameters.eventName)

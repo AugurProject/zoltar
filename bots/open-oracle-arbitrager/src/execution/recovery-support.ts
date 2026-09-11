@@ -1,16 +1,15 @@
-import { bigintToSafeNumber, decodeEventLog, readContractAtBlock, rpcFailureWithContext, toHex, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import { bigintToSafeNumber, decodeEventLog, readContractAtBlock, rpcFailureWithContext, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { erc20Abi, openOracleAbi, openOracleArbitrageExecutorAbi, openOraclePriceCoordinatorAbi } from '#contracts/abi'
 import type { Configuration } from '#config/configuration'
 import { receiptGasExpendituresWithQuorum, recoveredTransactionIntentMismatch, transactionIntentWithQuorum } from '#execution/execution-orchestration'
 import type { ReadClient, RecoveryConfiguration } from '#core/operator-types'
 import { requiredBigint, requiredRpcAddress, requiredTuple } from '#core/rpc-validation'
-import { compareLogs, type ActiveReport } from '#monitoring/oracle-log-state'
-import { fetchLogsWithAdaptiveRanges } from '@zoltar/bot-shared/monitoring/block-sync'
+import { type ActiveReport } from '#monitoring/oracle-log-state'
 import { endpointLabel } from '#monitoring/connectivity'
 import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import type { DurableTransactionIntent, PositionRecord } from '#state/position-store'
 import { decimalWeth } from '#state/operator-state'
-import { decodeOpenOracleStatePreimage, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
+import { type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 
 export function dateFromBlockTimestamp(timestamp: bigint) {
 	const milliseconds = timestamp * 1_000n
@@ -113,8 +112,6 @@ export function immediateReplacementAmounts(position: Pick<PositionRecord, 'entr
 	return { amount1: BigInt(successor.amount1), amount2: BigInt(successor.amount2) }
 }
 
-const LEGACY_REPLACEMENT_LOG_SCAN_RANGE = 100n
-
 async function canonicalBlockSnapshot<T>(client: ReadClient, endpoint: string, blockNumber: bigint, label: string, read: () => Promise<T>) {
 	const readBlock = async (phase: 'after' | 'before') => {
 		try {
@@ -130,41 +127,6 @@ async function canonicalBlockSnapshot<T>(client: ReadClient, endpoint: string, b
 	const blockAfter = await readBlock('after')
 	if (blockBefore.hash.toLowerCase() !== blockAfter.hash.toLowerCase()) throw new Error(`Canonical block ${blockNumber.toString()} changed during ${label}`)
 	return { blockHash: blockAfter.hash, blockTimestamp: blockAfter.timestamp, value }
-}
-
-async function legacyReplacementAmounts(client: ReadClient, openOracle: Address, position: Pick<PositionRecord, 'entrySubmissionBlockNumber' | 'entryTransactionHash' | 'reportId'>, blockNumber: bigint) {
-	if (position.entrySubmissionBlockNumber === undefined) return undefined
-	const reportId = BigInt(position.reportId)
-	let foundEntry = false
-	let fromBlock = BigInt(position.entrySubmissionBlockNumber)
-	while (fromBlock <= blockNumber) {
-		const toBlock = fromBlock + LEGACY_REPLACEMENT_LOG_SCAN_RANGE - 1n < blockNumber ? fromBlock + LEGACY_REPLACEMENT_LOG_SCAN_RANGE - 1n : blockNumber
-		const logs = [...(await fetchLogsWithAdaptiveRanges({ nextBlock: fromBlock }, toBlock, LEGACY_REPLACEMENT_LOG_SCAN_RANGE, range => client.getLogs({ address: openOracle, fromBlock: range.fromBlock, toBlock: range.toBlock, topics: [OPEN_ORACLE_REPORT_DISPUTED_TOPIC, toHex(reportId, { size: 32 })] })))].sort(
-			compareLogs,
-		)
-		for (const log of logs) {
-			if (!foundEntry) {
-				foundEntry = log.transactionHash?.toLowerCase() === position.entryTransactionHash.toLowerCase()
-				continue
-			}
-			const replacement = decodeOpenOracleStatePreimage(log.data, reportId)
-			return { amount1: replacement.game.currentAmount1, amount2: replacement.game.currentAmount2 }
-		}
-		fromBlock = toBlock + 1n
-	}
-	return undefined
-}
-
-export async function legacyReplacementAmountsWithQuorum(clients: readonly ReadClient[], config: Pick<Configuration, 'connectivity' | 'openOracle' | 'quorumRpcUrls'>, position: Pick<PositionRecord, 'entrySubmissionBlockNumber' | 'entryTransactionHash' | 'reportId'>, blockNumber: bigint) {
-	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
-	return settledQuorumValue(
-		`legacy replacement transition for report ${position.reportId} at block ${blockNumber.toString()}`,
-		clients.map(async (client, index) => {
-			const endpoint = endpointLabel(endpoints[index] ?? '')
-			const snapshot = await canonicalBlockSnapshot(client, endpoint, blockNumber, 'legacy replacement recovery', () => legacyReplacementAmounts(client, config.openOracle, position, blockNumber))
-			return { endpoint, value: { amounts: snapshot.value, blockHash: snapshot.blockHash } }
-		}),
-	)
 }
 
 export async function pendingNonceWithQuorum(clients: readonly ReadClient[], config: Configuration, account: Address) {
@@ -200,7 +162,7 @@ export async function currentBlockNumberWithQuorum(clients: readonly ReadClient[
 	)
 }
 
-export async function storedReport(client: ReadClient, openOracle: Address, id: bigint, blockNumber?: bigint | undefined): Promise<OpenOracleStatePreimage> {
+async function storedReport(client: ReadClient, openOracle: Address, id: bigint, blockNumber?: bigint | undefined): Promise<OpenOracleStatePreimage> {
 	const [rawGame, rawHelper] = await Promise.all([
 		blockNumber === undefined ? client.readContract({ address: openOracle, abi: openOracleAbi, functionName: 'storedGame', args: [id] }) : readContractAtBlock(client, { address: openOracle, abi: openOracleAbi, functionName: 'storedGame', args: [id] }, blockNumber),
 		blockNumber === undefined ? client.readContract({ address: openOracle, abi: openOracleAbi, functionName: 'storedHelper', args: [id] }) : readContractAtBlock(client, { address: openOracle, abi: openOracleAbi, functionName: 'storedHelper', args: [id] }, blockNumber),
@@ -267,7 +229,7 @@ export async function pendingCoordinatorReportsWithQuorum(clients: readonly Read
 	).then(result => result.reports)
 }
 
-export async function disputeRecord(client: ReadClient, openOracle: Address, reportId: bigint, disputeIndex: bigint, blockNumber: bigint) {
+async function disputeRecord(client: ReadClient, openOracle: Address, reportId: bigint, disputeIndex: bigint, blockNumber: bigint) {
 	const rawRecord = await readContractAtBlock(client, { address: openOracle, abi: openOracleAbi, functionName: 'disputeHistory', args: [reportId, disputeIndex] }, blockNumber)
 	const record = requiredTuple(rawRecord, 4, `OpenOracle report ${reportId.toString()} dispute ${disputeIndex.toString()}`)
 	return {

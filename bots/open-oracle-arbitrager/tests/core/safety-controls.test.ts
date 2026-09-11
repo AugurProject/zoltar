@@ -1,5 +1,13 @@
 import { describe, expect, test } from 'bun:test'
-import { DEFAULT_RISK_LIMITS, adjustedNetProfitWeth, positionConsumesRisk, positionRiskLimitMismatch, projectedLifecycleGasReserveAttoWeth, riskLimitMismatch } from '#core/safety-controls'
+import { adjustedNetProfitWeth, positionConsumesRisk, positionRiskLimitMismatch, projectedLifecycleGasReserveAttoWeth, type RiskLimits } from '#core/safety-controls'
+
+const DEFAULT_RISK_LIMITS: RiskLimits = {
+	lifecycleGasReserveAttoWeth: 10n ** 16n,
+	maxConcurrentPositions: 1,
+	maxDailyGasSpendAttoWeth: 5n * 10n ** 16n,
+	maxPositionNotionalAttoWeth: 5n * 10n ** 18n,
+	maxTotalLockedAttoWeth: 10n * 10n ** 18n,
+}
 
 describe('execution risk controls', () => {
 	test('does not reserve capital for a finalized non-included attempt', () => {
@@ -48,20 +56,6 @@ describe('execution risk controls', () => {
 		const dailyLimit = { ...DEFAULT_RISK_LIMITS, maxConcurrentPositions: 2, maxDailyGasSpendAttoWeth: privateReserve }
 		expect(positionRiskLimitMismatch({ capitalAtRiskAttoWeth: 0n, positions: noPositions, projectedGasCostAttoWeth: privateReserve }, dailyLimit)).toBeUndefined()
 		expect(positionRiskLimitMismatch({ capitalAtRiskAttoWeth: 0n, positions: noPositions, projectedGasCostAttoWeth: privateReserve + 1n }, dailyLimit)).toContain('UTC-day gas spend')
-	})
-
-	test('fails closed on every portfolio loss limit', () => {
-		const safe = {
-			capitalAtRiskAttoWeth: DEFAULT_RISK_LIMITS.maxPositionNotionalAttoWeth,
-			concurrentPositions: 0,
-			dailyGasSpentAttoWeth: 0n,
-			projectedLockedAttoWeth: DEFAULT_RISK_LIMITS.maxTotalLockedAttoWeth,
-		}
-		expect(riskLimitMismatch(safe, DEFAULT_RISK_LIMITS)).toBeUndefined()
-		expect(riskLimitMismatch({ ...safe, concurrentPositions: 1 }, DEFAULT_RISK_LIMITS)).toContain('concurrent')
-		expect(riskLimitMismatch({ ...safe, capitalAtRiskAttoWeth: safe.capitalAtRiskAttoWeth + 1n }, DEFAULT_RISK_LIMITS)).toContain('position notional')
-		expect(riskLimitMismatch({ ...safe, projectedLockedAttoWeth: safe.projectedLockedAttoWeth + 1n }, DEFAULT_RISK_LIMITS)).toContain('locked capital')
-		expect(riskLimitMismatch({ ...safe, dailyGasSpentAttoWeth: DEFAULT_RISK_LIMITS.maxDailyGasSpendAttoWeth + 1n }, DEFAULT_RISK_LIMITS)).toContain('UTC-day gas spend')
 	})
 
 	test('rechecks refreshed capital and relay-simulated gas against every portfolio cap', () => {

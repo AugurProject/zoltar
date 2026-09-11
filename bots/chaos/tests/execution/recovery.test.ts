@@ -1,15 +1,18 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test } from 'bun:test'
-import { createRpcEndpointPool, createWalletClient, encodeAbiParameters, encodeFunctionData, getAddress, keccak256, mainnet, privateKeyToAccount, toHex } from '@zoltar/bot-shared/ethereum'
+import { createRpcEndpointPool, createWalletClient, encodeAbiParameters, encodeFunctionData, getAddress, keccak256, privateKeyToAccount, toHex } from '@zoltar/bot-shared/ethereum'
+import { mainnet } from '@zoltar/core-shared/evm/ethereum'
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
 import type { OperatorSettings } from '../../src/config/settings.ts'
 import { securityPoolAbi } from '../../src/contracts/abi.ts'
-import { assertRecoverySubmissionMode, pendingIntentRecoveryAction, recoverPendingTransactions, transactionIsStrictNonceCancellation } from '../../src/execution/recovery.ts'
+import { recoverPendingTransactions } from '../../src/execution/recovery.ts'
+import { assertRecoverySubmissionMode, pendingIntentRecoveryAction, transactionIsStrictNonceCancellation } from '../../src/execution/recovery-policy.ts'
 import { TransactionAwaitingRecovery, type ExecutionEnvironment } from '../../src/execution/transaction-executor.ts'
 import type { OperationPlan } from '../../src/operations/types.ts'
 import { createDurableWorkflow, markWorkflowStepSigned, markWorkflowStepSubmitted } from '../../src/runtime/workflows.ts'
-import { initialDurableState, initialRuntimeState, loadDurableState, loadRuntimeState, saveDurableState, type PendingTransactionIntent } from '../../src/state/operator-state.ts'
+import { loadDurableState, loadRuntimeState, saveDurableState, type PendingTransactionIntent } from '../../src/state/operator-state.ts'
+import { initialDurableState, initialRuntimeState } from '../../src/state/initial-state.ts'
 
 const servers: Array<{ stop: (closeActiveConnections?: boolean) => void }> = []
 const directories: string[] = []

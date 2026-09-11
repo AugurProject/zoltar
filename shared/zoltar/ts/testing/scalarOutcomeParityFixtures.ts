@@ -36,15 +36,14 @@ export type ScalarParityEncodingFixture = {
 }
 
 const SCALAR_PARITY_DECIMAL_PLACES = 18
-export const SCALAR_PARITY_DECIMALS = BigInt(SCALAR_PARITY_DECIMAL_PLACES)
-export const SCALAR_PARITY_DECIMAL_BASE = 10n ** SCALAR_PARITY_DECIMALS
-export const SCALAR_PARITY_PART_BIT_LENGTH = 120n
-export const SCALAR_PARITY_TOTAL_BITS = 256n
+const SCALAR_PARITY_DECIMALS = BigInt(SCALAR_PARITY_DECIMAL_PLACES)
+const SCALAR_PARITY_DECIMAL_BASE = 10n ** SCALAR_PARITY_DECIMALS
+const SCALAR_PARITY_PART_BIT_LENGTH = 120n
+const SCALAR_PARITY_TOTAL_BITS = 256n
 export const SCALAR_PARITY_PART_MASK = (1n << SCALAR_PARITY_PART_BIT_LENGTH) - 1n
-export const SCALAR_PARITY_RESERVED_BITS_MASK = ((1n << 15n) - 1n) << 240n
-export const SCALAR_PARITY_UINT120_MAX = SCALAR_PARITY_PART_MASK
-export const SCALAR_PARITY_INT256_MIN = -(1n << 255n)
-export const SCALAR_PARITY_INT256_MAX = (1n << 255n) - 1n
+const SCALAR_PARITY_RESERVED_BITS_MASK = ((1n << 15n) - 1n) << 240n
+const SCALAR_PARITY_INT256_MIN = -(1n << 255n)
+const SCALAR_PARITY_INT256_MAX = (1n << 255n) - 1n
 
 const ONE = SCALAR_PARITY_DECIMAL_BASE
 
@@ -75,7 +74,7 @@ export const SCALAR_PARITY_QUESTIONS: ScalarParityQuestion[] = [
 		answerUnit: '',
 		displayValueMax: 1n,
 		displayValueMin: 0n,
-		numTicks: SCALAR_PARITY_UINT120_MAX,
+		numTicks: SCALAR_PARITY_PART_MASK,
 	},
 	{
 		name: 'int256-extreme',
@@ -101,7 +100,7 @@ export const SCALAR_PARITY_LABEL_FIXTURES: ScalarParityLabelFixture[] = [
 	{ name: 'repeating positive truncation', questionName: 'repeating-sevenths', tickIndex: 6n, expectedLabel: '1.571428571428571428' },
 	{ name: 'repeating upper endpoint', questionName: 'repeating-sevenths', tickIndex: 7n, expectedLabel: '2' },
 	{ name: 'uint120 lower endpoint', questionName: 'uint120-boundary', tickIndex: 0n, expectedLabel: '0' },
-	{ name: 'uint120 upper endpoint', questionName: 'uint120-boundary', tickIndex: SCALAR_PARITY_UINT120_MAX, expectedLabel: '0.000000000000000001' },
+	{ name: 'uint120 upper endpoint', questionName: 'uint120-boundary', tickIndex: SCALAR_PARITY_PART_MASK, expectedLabel: '0.000000000000000001' },
 	{
 		name: 'int256 lower endpoint',
 		questionName: 'int256-extreme',
@@ -173,15 +172,15 @@ export const SCALAR_PARITY_ENCODING_FIXTURES: ScalarParityEncodingFixture[] = [
 		questionName: 'uint120-boundary',
 		invalid: false,
 		firstPart: 0n,
-		secondPart: SCALAR_PARITY_UINT120_MAX,
-		expectedDescriptor: { kind: 'tick', tickIndex: SCALAR_PARITY_UINT120_MAX },
+		secondPart: SCALAR_PARITY_PART_MASK,
+		expectedDescriptor: { kind: 'tick', tickIndex: SCALAR_PARITY_PART_MASK },
 		expectedLabel: '0.000000000000000001',
 	},
 	{
 		name: 'masked overflow payload remains malformed',
 		questionName: 'tenths-positive',
 		invalid: false,
-		firstPart: SCALAR_PARITY_UINT120_MAX + 10n,
+		firstPart: SCALAR_PARITY_PART_MASK + 10n,
 		secondPart: 80n,
 		expectedDescriptor: { kind: 'malformed' },
 		expectedLabel: 'Malformed',

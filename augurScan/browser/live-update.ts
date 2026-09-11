@@ -69,7 +69,7 @@ interface NetworkStatusPresentation {
 	readonly last_error?: string | null
 }
 
-export const networkStatusPresentationKey = (network: NetworkStatusPresentation): string =>
+const networkStatusPresentationKey = (network: NetworkStatusPresentation): string =>
 	JSON.stringify([network.chain_id, network.name, network.explorer_base_url, network.start_block, network.indexed_block, network.indexed_hash, network.indexed_timestamp, network.observed_block, network.phase, network.consecutive_failures, network.next_retry_at, network.last_error])
 
 export const canReuseNetworkStatusPresentation = (previous: NetworkStatusPresentation, current: NetworkStatusPresentation, renderedChainId: string | undefined, renderedFreshness: string | undefined, expectedChainId: string, expectedFreshness: 'current' | 'stale'): boolean =>
@@ -168,7 +168,7 @@ export const mergeUniqueRecords = <T>(primary: readonly T[], retained: readonly 
 	})
 }
 
-export const activityDetailAnchorIndex = (rowKeys: readonly string[], triggerKey: string | undefined): number | undefined => {
+const activityDetailAnchorIndex = (rowKeys: readonly string[], triggerKey: string | undefined): number | undefined => {
 	if (triggerKey === undefined) return undefined
 	const index = rowKeys.indexOf(triggerKey)
 	return index >= 0 ? index : undefined
@@ -610,7 +610,7 @@ const approvalFieldDefinitions = [
 
 export const approvalTransitionFields = (data: Readonly<Record<string, unknown>>): Array<{ readonly label: string; readonly value: string; readonly unit: string }> => approvalFieldDefinitions.flatMap(([key, label, unit]) => (typeof data[key] === 'string' ? [{ label, value: data[key], unit }] : []))
 
-export const operationsLoadDisposition = (activeContext: string, requestedContext: string, live: boolean, hasPaginationTarget: boolean): 'join' | 'queue' | 'supersede' => {
+const operationsLoadDisposition = (activeContext: string, requestedContext: string, live: boolean, hasPaginationTarget: boolean): 'join' | 'queue' | 'supersede' => {
 	if (activeContext !== requestedContext) return 'supersede'
 	return live || hasPaginationTarget ? 'queue' : 'join'
 }
@@ -905,7 +905,7 @@ const decimalBlock = (value: string | number | bigint | null | undefined): bigin
 	return /^\d+$/.test(text) ? BigInt(text) : undefined
 }
 
-export const indexerWaitingForStart = (network: NetworkFreshnessRecord | undefined): boolean => {
+const indexerWaitingForStart = (network: NetworkFreshnessRecord | undefined): boolean => {
 	if (network === undefined || (network.indexed_block !== null && network.indexed_block !== undefined)) return false
 	const startBlock = decimalBlock(network.start_block)
 	const observedBlock = decimalBlock(network.observed_block)
@@ -953,7 +953,7 @@ export const showIndexerSyncDetails = (network: NetworkFreshnessRecord, sampledA
 	return observedBlock === undefined || indexedBlock === undefined || indexedBlock < observedBlock
 }
 
-export const compactIndexerDuration = (seconds: number): string => {
+const compactIndexerDuration = (seconds: number): string => {
 	const rounded = Math.max(1, Math.ceil(seconds))
 	if (rounded < 60) return `${rounded}s`
 	if (rounded < 3_600) return `${Math.floor(rounded / 60)}m ${rounded % 60}s`
@@ -1033,7 +1033,7 @@ export const reconcileTransactionDialogSnapshot = (snapshot: TransactionDialogSn
 	focusIndex: snapshot.focusKey !== undefined && availableKeys.has(snapshot.focusKey) ? snapshot.focusIndex : -1,
 })
 
-export const createLatestRefreshCoordinator = <T>(refresh: (count: number, force: boolean) => Promise<T>) => {
+const createLatestRefreshCoordinator = <T>(refresh: (count: number, force: boolean) => Promise<T>) => {
 	let inFlight: Promise<T> | undefined
 	let pendingCount = 0
 	let pendingForce = false

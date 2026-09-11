@@ -12,14 +12,6 @@ export type RiskLimits = {
 	maxTotalLockedAttoWeth: bigint
 }
 
-export const DEFAULT_RISK_LIMITS = {
-	lifecycleGasReserveAttoWeth: 10n ** 16n,
-	maxConcurrentPositions: 1,
-	maxDailyGasSpendAttoWeth: 5n * 10n ** 16n,
-	maxPositionNotionalAttoWeth: 5n * 10n ** 18n,
-	maxTotalLockedAttoWeth: 10n * 10n ** 18n,
-} satisfies RiskLimits
-
 export function positionConsumesRisk(status: string) {
 	return status !== 'closed' && status !== 'expired-not-included'
 }
@@ -34,7 +26,7 @@ export function projectedLifecycleGasReserveAttoWeth(parameters: { callbackGasLi
 	return projectedGasAttoWeth > parameters.configuredReserveAttoWeth ? projectedGasAttoWeth : parameters.configuredReserveAttoWeth
 }
 
-export function riskLimitMismatch(
+function riskLimitMismatch(
 	exposure: {
 		capitalAtRiskAttoWeth: bigint
 		concurrentPositions: number

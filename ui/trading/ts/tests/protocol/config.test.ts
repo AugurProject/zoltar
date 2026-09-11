@@ -1,11 +1,27 @@
 import { describe, expect, test } from 'bun:test'
 import { createPublicClient, custom, encodeAbiParameters, getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { parseDeploymentSetupInput } from '../../protocol/config.js'
-import { parseCoreDeployments } from '../../protocol/coreDeployments.js'
+import { loadCoreDeployments } from '../../protocol/coreDeployments.js'
+import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
+import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { loadWalletHeaderBalances, validateRpcChainId } from '../../protocol/live.js'
 
 const core = `0x${'34'.repeat(20)}`
 const zoltar = `0x${'56'.repeat(20)}`
+
+// Loads a core deployment registry through the public loader with a stubbed fetch and a non-simulation backend.
+async function loadCoreDeploymentsFrom(registry: unknown) {
+	const restoreEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: MAINNET_NETWORK_PROFILE }))
+	const originalFetch = globalThis.fetch
+	globalThis.fetch = (async () => new Response(JSON.stringify(registry), { headers: { 'content-type': 'application/json' } })) as typeof fetch
+	try {
+		return await loadCoreDeployments()
+	} finally {
+		globalThis.fetch = originalFetch
+		restoreEnvironment()
+	}
+}
 
 describe('trading UI deployment configuration', () => {
 	test('rejects an RPC chain that differs from the manifest', () => {
@@ -13,8 +29,8 @@ describe('trading UI deployment configuration', () => {
 		expect(validateRpcChainId(1, 1)).toBeUndefined()
 	})
 
-	test('loads canonical core deployment choices copied from the root manifests', () => {
-		const deployments = parseCoreDeployments([{ chainId: 11_155_111, chainName: 'Sepolia', id: 'sepolia', proxyDeployer: `0x${'45'.repeat(20)}`, securityPoolFactory: core, zoltar }])
+	test('loads canonical core deployment choices copied from the root manifests', async () => {
+		const deployments = await loadCoreDeploymentsFrom([{ chainId: 11_155_111, chainName: 'Sepolia', id: 'sepolia', proxyDeployer: `0x${'45'.repeat(20)}`, securityPoolFactory: core, zoltar }])
 		expect(deployments[0]?.chainId).toBe(11_155_111)
 		expect(deployments[0]?.securityPoolFactory.toLowerCase()).toBe(core)
 		expect(deployments[0]?.zoltar.toLowerCase()).toBe(zoltar)

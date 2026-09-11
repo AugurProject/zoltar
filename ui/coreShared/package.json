@@ -43,51 +43,6 @@
 	},
 	"types": "./js/index.d.ts",
 	"exports": {
-		"./tests/simulationTestUtils.js": "./ts/tests/simulation/testUtils.ts",
-		"./tests/testUtils/domEnvironment.js": {
-			"bun": "./ts/tests/testUtils/domEnvironment.ts",
-			"default": "./js/tests/testUtils/domEnvironment.js"
-		},
-		"./tests/testUtils/deferred.js": {
-			"bun": "./ts/tests/testUtils/deferred.ts",
-			"default": "./js/tests/testUtils/deferred.js"
-		},
-		"./tests/testUtils/coreSharedCss.js": {
-			"bun": "./ts/tests/testUtils/coreSharedCss.ts",
-			"default": "./js/tests/testUtils/coreSharedCss.js"
-		},
-		"./tests/testUtils/domTestLifecycle.js": {
-			"bun": "./ts/tests/testUtils/domTestLifecycle.ts",
-			"default": "./js/tests/testUtils/domTestLifecycle.js"
-		},
-		"./tests/testUtils/fakeBackend.js": {
-			"bun": "./ts/tests/testUtils/fakeBackend.ts",
-			"default": "./js/tests/testUtils/fakeBackend.js"
-		},
-		"./tests/testUtils/protocolTestSupport.js": {
-			"bun": "./ts/tests/testUtils/protocolTestSupport.ts",
-			"default": "./js/tests/testUtils/protocolTestSupport.js"
-		},
-		"./tests/testUtils/queries.js": {
-			"bun": "./ts/tests/testUtils/queries.ts",
-			"default": "./js/tests/testUtils/queries.js"
-		},
-		"./tests/testUtils/renderIntoDocument.js": {
-			"bun": "./ts/tests/testUtils/renderIntoDocument.tsx",
-			"default": "./js/tests/testUtils/renderIntoDocument.js"
-		},
-		"./tests/testUtils/transactionActionButton.js": {
-			"bun": "./ts/tests/testUtils/transactionActionButton.ts",
-			"default": "./js/tests/testUtils/transactionActionButton.js"
-		},
-		"./*": {
-			"bun": "./ts/*.ts",
-			"default": "./js/*.js"
-		},
-		"./tests/testUtils/testRouting.js": {
-			"bun": "./ts/tests/testUtils/testRouting.ts",
-			"default": "./js/tests/testUtils/testRouting.js"
-		},
 		"./abis.js": {
 			"bun": "./ts/abis.ts",
 			"default": "./js/abis.js"
@@ -263,10 +218,6 @@
 		"./components/ReadOnlyDetailAccordion.js": {
 			"bun": "./ts/components/ReadOnlyDetailAccordion.tsx",
 			"default": "./js/components/ReadOnlyDetailAccordion.js"
-		},
-		"./components/RequirementsChecklist.js": {
-			"bun": "./ts/components/RequirementsChecklist.tsx",
-			"default": "./js/components/RequirementsChecklist.js"
 		},
 		"./components/RouteHeader.js": {
 			"bun": "./ts/components/RouteHeader.tsx",

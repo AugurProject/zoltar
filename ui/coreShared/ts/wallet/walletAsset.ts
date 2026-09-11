@@ -59,7 +59,7 @@ export function normalizeWalletAssetFailure(_reason: unknown): WalletAssetWatchR
 	return { status: 'failed' }
 }
 
-export async function requestWalletWatchAsset(address: Address, dependencies: WalletAssetRequestDependencies): Promise<WalletAssetWatchResult> {
+async function requestWalletWatchAsset(address: Address, dependencies: WalletAssetRequestDependencies): Promise<WalletAssetWatchResult> {
 	let activeChainId: string
 	try {
 		activeChainId = await dependencies.getActiveChainId()

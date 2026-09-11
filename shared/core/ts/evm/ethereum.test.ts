@@ -23,14 +23,12 @@ import {
 	isHex,
 	keccak256,
 	mainnet,
-	numberToBytes,
 	parseAbiItem,
 	parseAbiParameters,
 	parseTransaction,
 	parseUnits,
 	privateKeyToAccount,
 	publicActions,
-	RATE_LIMIT_RETRY_DELAY_MILLISECONDS,
 	recoverTransactionAddress,
 	requestRpc,
 	toHex,
@@ -1236,7 +1234,6 @@ describe('shared ethereum compatibility layer', () => {
 		expect(() => toHex(-1)).toThrow('safe integer range')
 		expect(() => toHex(-1n)).toThrow('safe integer range')
 		expect(() => toHex(Number.MAX_SAFE_INTEGER + 1)).toThrow('safe integer range')
-		expect(() => numberToBytes(Number.MAX_SAFE_INTEGER + 1)).toThrow('safe integer range')
 		await expect(
 			account.signTransaction?.({
 				chainId: Number.MAX_SAFE_INTEGER + 1,
@@ -3273,8 +3270,7 @@ describe('shared ethereum compatibility layer', () => {
 	})
 
 	test('HTTP transport retries rate limits for reads, receipt requests, and raw transaction broadcasts', async () => {
-		expect(RATE_LIMIT_RETRY_DELAY_MILLISECONDS).toBe(10_000)
-		expect(http('https://rpc.example.test').retryDelay).toBe(RATE_LIMIT_RETRY_DELAY_MILLISECONDS)
+		expect(http('https://rpc.example.test').retryDelay).toBe(10_000)
 		expect(http('https://rpc.example.test').requestTimeout).toBe(30_000)
 		expect(() => http('https://rpc.example.test', { requestTimeout: 0 })).toThrow('request timeout')
 		const responses = [

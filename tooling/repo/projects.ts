@@ -306,7 +306,7 @@ export const projects: readonly Project[] = [
 			'dependency-update': sharedDependencyTask('bots/open-oracle-arbitrager'),
 		},
 		generatedDirectories: [],
-		generatedFiles: ['bots/open-oracle-arbitrager/src/contracts/artifacts.generated.ts'],
+		generatedFiles: ['bots/open-oracle-arbitrager/src/contracts/artifacts.generated.ts', 'bots/open-oracle-arbitrager/tests/contracts/harness-artifacts.generated.ts'],
 		ci: { scope: 'arbitrager', componentName: 'arbitrager', requiresContractArtifacts: true },
 	},
 	{

@@ -1812,15 +1812,6 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	gap: 0.2rem;
 	min-width: 0;
 }
-
-.stage-list,
-.requirements-checklist {
-	margin: 0;
-	padding-left: 1rem;
-	display: grid;
-	gap: 0.35rem;
-}
-
 .action-readiness-grid,
 .vault-action-launcher-grid {
 	grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));

@@ -1,7 +1,7 @@
 import type { StoredLog } from '../types.ts'
 import { type DomainEventProjection, eventProjectionsFrom, type Projection } from './events.ts'
 
-export type EventDomainDefinition = {
+type EventDomainDefinition = {
 	readonly domain: DomainEventProjection['domain']
 	readonly entityType: string
 	readonly identityFields?: readonly string[]
@@ -79,8 +79,6 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 		['universeId', 'parentUniverseId', 'parent', 'parentPool', 'securityPool', 'childUniverseId', 'childPool'],
 	),
 }
-
-export const semanticEventNames = Object.freeze(Object.keys(eventDomains).sort())
 
 const domainProjectionFrom = (log: StoredLog): DomainEventProjection | undefined => {
 	const eventName = log.decoded.name

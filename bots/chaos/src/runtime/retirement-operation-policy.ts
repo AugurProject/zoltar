@@ -94,11 +94,7 @@ const dispositions = new Map<string, RetirementOperationDisposition>([
 	['trading.position.exit', 'unmatched-exit'],
 ])
 
-export function unclassifiedRetirementOperations(operationIds: readonly string[]) {
-	return operationIds.filter(id => !dispositions.has(id)).sort()
-}
-
-export function operationAllowedDuringRetirement(operationId: string, policies: Pick<DurableRetirementState['policies'], 'exitUnmatchedShares' | 'maximumExitLossBps' | 'migrateExistingClaims'>) {
+function operationAllowedDuringRetirement(operationId: string, policies: Pick<DurableRetirementState['policies'], 'exitUnmatchedShares' | 'maximumExitLossBps' | 'migrateExistingClaims'>) {
 	const disposition = dispositions.get(operationId)
 	if (disposition === 'recovery') return true
 	if (disposition === 'claim-linked-migration') return policies.migrateExistingClaims

@@ -1,8 +1,8 @@
-import { installTradingRouting } from '../../lib/routing.js'
+import { installTradingRouting, tradingRouting } from '../../lib/routing.js'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import { App, currentRoute } from '../../app/App.js'
+import { App } from '../../app/App.js'
 import { ExecutionProtectionFields, renderLiveTradeSummary } from '../../features/LiveTradingTransactionUi.js'
 
 beforeEach(() => installTradingRouting())
@@ -56,10 +56,10 @@ describe('essential trading copy', () => {
 
 	test('maps the removed developer route to the markets browse route and defaults to the market lookup', () => {
 		window.history.replaceState(undefined, '', '/?demo=1#/developer?simulate=1')
-		expect(currentRoute()).toBe('markets')
+		expect(tradingRouting.resolve(window.location.hash)).toBe('markets')
 		window.history.replaceState(undefined, '', '/?demo=1#/')
-		expect(currentRoute()).toBe('market')
+		expect(tradingRouting.resolve(window.location.hash)).toBe('market')
 		window.history.replaceState(undefined, '', '/?demo=1#/security-pools')
-		expect(currentRoute()).toBe('security-pools')
+		expect(tradingRouting.resolve(window.location.hash)).toBe('security-pools')
 	})
 })

@@ -8,13 +8,13 @@
 				"tooling/contracts/prettier-solidity-batch.mjs!",
 				"bun-test-setup*.ts",
 				"docs/{charts/virtualModules,runtime/globals}.d.ts!",
-				"tooling/repo/knip-baseline.mts",
-				"tooling/repo/build-shared.mts!",
 				"tooling/contracts/build-app-contracts.mts!",
+				"tooling/contracts/{deploy-testnet,run-deploy-testnet,uniswap-deployment}.mts!",
+				"tooling/docs/{build-doc-charts,documentationChartBuild,check-doc-charts,check-docs-examples}.mts!",
 				"tooling/ui/projectArtifacts.mts!"
 			],
-			"project": ["docs/runtime/**/*.ts!", "docs/charts/**/*.ts", "tooling/**/*.{ts,mts}", "bun-test-setup*.ts"],
-			"ignoreDependencies": ["@preact/signals", "@tevm/memory-client", "@tevm/common", "@zoltar/core-shared", "@zoltar/zoltar-shared", "@zoltar/open-oracle-shared", "@zoltar/statoblast-shared", "@zoltar/trading-shared"],
+			"project": ["docs/runtime/**/*.ts!", "docs/charts/**/*.ts!", "tooling/**/*.{ts,mts}", "bun-test-setup*.ts"],
+			"ignoreDependencies": ["@preact/signals", "@tevm/memory-client", "@tevm/common", "@zoltar/core-shared", "@zoltar/open-oracle-shared", "@zoltar/statoblast-shared", "@zoltar/trading-shared"],
 			"paths": {
 				"@zoltar/core-shared/*": ["shared/core/ts/*"],
 				"@zoltar/zoltar-shared/*": ["shared/zoltar/ts/*"],
@@ -25,7 +25,8 @@
 		},
 		"ui/coreShared": {
 			"entry": ["ts/tests/**/*.{ts,tsx}"],
-			"project": ["ts/**/*.{ts,tsx}!"],
+			"includeEntryExports": true,
+			"project": ["ts/**/*.{ts,tsx}!", "!ts/tests/**!"],
 			"paths": {
 				"@zoltar/ui-core-shared/*": ["./ts/*"],
 				"@zoltar/core-shared/*": ["../../shared/core/ts/*"],
@@ -34,8 +35,7 @@
 				"@zoltar/statoblast-shared/*": ["../../shared/statoblast/ts/*"],
 				"@zoltar/trading-shared/*": ["../../shared/trading/ts/*"]
 			},
-			"ignoreDependencies": ["@noble/curves", "@noble/hashes", "micro-eth-signer", "micro-packed"],
-			"ignoreUnresolved": ["./bun-test-setup-solidity.ts"]
+			"ignoreDependencies": ["@noble/curves", "@noble/hashes", "micro-eth-signer", "micro-packed"]
 		},
 		"ui/zoltarShared": {
 			"entry": [],
@@ -81,8 +81,7 @@
 				"@zoltar/statoblast-shared/*": ["../../shared/statoblast/ts/*"],
 				"@zoltar/trading-shared/*": ["../../shared/trading/ts/*"]
 			},
-			"ignoreDependencies": ["@tevm/memory-client", "@tevm/common"],
-			"ignoreUnresolved": ["./bun-test-setup-solidity.ts"]
+			"ignoreDependencies": ["@tevm/memory-client", "@tevm/common"]
 		},
 		"ui/statoblast": {
 			"entry": ["ts/tests/**/*.{ts,tsx}", "ts/index.ts!", "ts/index.dev.ts!", "ts/simulation/tevmWorker.ts!"],
@@ -98,8 +97,7 @@
 				"@zoltar/statoblast-shared/*": ["../../shared/statoblast/ts/*"],
 				"@zoltar/trading-shared/*": ["../../shared/trading/ts/*"]
 			},
-			"ignoreDependencies": ["@tevm/memory-client", "@tevm/common"],
-			"ignoreUnresolved": ["./bun-test-setup-solidity.ts"]
+			"ignoreDependencies": ["@tevm/memory-client", "@tevm/common"]
 		},
 		"ui/trading": {
 			"entry": ["ts/tests/**/*.{ts,tsx}", "ts/index.ts!", "ts/index.dev.ts!", "ts/simulation/tevmWorker.ts!"],
@@ -118,7 +116,7 @@
 			"ignoreDependencies": ["@tevm/memory-client", "@tevm/common", "@preact/signals", "bun-types"]
 		},
 		"solidity": {
-			"entry": ["ts/compile.ts!", "ts/gas-costs.ts!", "ts/trading/deploy/*.mts!", "ts/tests/**/*.ts", "ts/fuzz/**/*.ts", "ts/types/*.d.ts"],
+			"entry": ["ts/compile.ts!", "ts/gas-costs.ts!", "ts/abi/abis.ts!", "ts/trading/deploy/*.mts!", "ts/tests/**/*.ts", "ts/fuzz/**/*.ts", "ts/types/*.d.ts"],
 			"project": ["ts/**/*.{ts,mts}!", "!ts/testSupport/**!", "!ts/tests/**!"],
 			"paths": {
 				"@zoltar/core-shared/*": ["../shared/core/ts/*"],
@@ -129,7 +127,7 @@
 			}
 		},
 		"augurScan": {
-			"entry": ["src/server.ts!", "src/indexer-process.ts!", "browser/app.ts!", "tests/**/*.ts", "scripts/{build-browser,check-ethereum-imports,check-import-boundaries,check-project-metadata,dev,serve-demo,snapshot-project-metadata,verify-compose-source,verify-export-page}.ts!"],
+			"entry": ["src/indexer-process.ts!", "browser/app.ts!", "tests/**/*.ts", "scripts/{build-browser,check-ethereum-imports,check-import-boundaries,check-project-metadata,dev,serve-demo,snapshot-project-metadata,verify-compose-source,verify-export-page}.ts!"],
 			"project": ["{src,browser,scripts}/**/*.ts!", "tests/**/*.ts"],
 			"ignoreDependencies": ["@noble/hashes", "micro-eth-signer"],
 			"paths": {
@@ -142,6 +140,7 @@
 		},
 		"bots/shared": {
 			"entry": ["src/dashboard/header-notices.ts!", "tests/**/*.ts"],
+			"includeEntryExports": true,
 			"project": ["src/**/*.ts!", "tests/**/*.ts"],
 			"paths": {
 				"@zoltar/core-shared/*": ["../../shared/core/ts/*"],
@@ -187,8 +186,8 @@
 		},
 		"shared/core": {
 			"entry": ["ts/**/*.test.ts"],
+			"includeEntryExports": true,
 			"project": ["ts/**/*.ts!"],
-			"ignoreUnresolved": ["./bun-test-setup-solidity.ts"],
 			"paths": {
 				"@zoltar/core-shared/*": ["ts/*"],
 				"@zoltar/zoltar-shared/*": ["../zoltar/ts/*"],
@@ -199,8 +198,8 @@
 		},
 		"shared/zoltar": {
 			"entry": ["ts/**/*.test.ts"],
-			"project": ["ts/**/*.ts!"],
-			"ignoreUnresolved": ["./bun-test-setup-solidity.ts"],
+			"includeEntryExports": true,
+			"project": ["ts/**/*.ts!", "!ts/testing/**!"],
 			"paths": {
 				"@zoltar/core-shared/*": ["../core/ts/*"],
 				"@zoltar/zoltar-shared/*": ["ts/*"],
@@ -211,8 +210,8 @@
 		},
 		"shared/openOracle": {
 			"entry": ["ts/**/*.test.ts"],
+			"includeEntryExports": true,
 			"project": ["ts/**/*.ts!"],
-			"ignoreUnresolved": ["./bun-test-setup-solidity.ts"],
 			"paths": {
 				"@zoltar/core-shared/*": ["../core/ts/*"],
 				"@zoltar/zoltar-shared/*": ["../zoltar/ts/*"],
@@ -223,8 +222,8 @@
 		},
 		"shared/statoblast": {
 			"entry": ["ts/**/*.test.ts"],
+			"includeEntryExports": true,
 			"project": ["ts/**/*.ts!"],
-			"ignoreUnresolved": ["./bun-test-setup-solidity.ts"],
 			"paths": {
 				"@zoltar/core-shared/*": ["../core/ts/*"],
 				"@zoltar/zoltar-shared/*": ["../zoltar/ts/*"],
@@ -235,8 +234,8 @@
 		},
 		"shared/trading": {
 			"entry": ["ts/**/*.test.ts"],
+			"includeEntryExports": true,
 			"project": ["ts/**/*.ts!"],
-			"ignoreUnresolved": ["./bun-test-setup-solidity.ts"],
 			"paths": {
 				"@zoltar/core-shared/*": ["../core/ts/*"],
 				"@zoltar/zoltar-shared/*": ["../zoltar/ts/*"],

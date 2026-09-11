@@ -1,5 +1,7 @@
 import { expect, test } from 'bun:test'
-import { createPublicClient, custom, mainnet, getAddress, zeroAddress } from '../src/ethereum.ts'
+import { mainnet } from '@zoltar/core-shared/evm/ethereum'
+import { createPublicClient, getAddress, zeroAddress } from '../src/ethereum.ts'
+import { custom } from '../src/ethereum/rpc-transport.ts'
 import { approvedUniverseRepTokens, loadUniverseTree, parseApprovedUniverses, validateApprovedUniverseSelection, type UniverseIdentity } from '../src/monitoring/universe-policy.ts'
 
 function universe(id: bigint, parentId: bigint | undefined): UniverseIdentity {

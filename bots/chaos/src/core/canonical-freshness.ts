@@ -1,8 +1,8 @@
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
 
-export const MAXIMUM_CANONICAL_HEAD_LAG_BLOCKS = 64n
-export const MAXIMUM_CANONICAL_ANCHOR_AGE_SECONDS = 15n * 60n
-export const MAXIMUM_CANONICAL_FUTURE_DRIFT_SECONDS = 2n * 60n
+const MAXIMUM_CANONICAL_HEAD_LAG_BLOCKS = 64n
+const MAXIMUM_CANONICAL_ANCHOR_AGE_SECONDS = 15n * 60n
+const MAXIMUM_CANONICAL_FUTURE_DRIFT_SECONDS = 2n * 60n
 
 function currentTimestampSeconds(nowMilliseconds: number) {
 	if (!Number.isSafeInteger(nowMilliseconds) || nowMilliseconds < 0) {

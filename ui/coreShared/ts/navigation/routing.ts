@@ -5,7 +5,7 @@ type RouteDefinitionBase = {
 	readonly queryParameters?: ReadonlySet<string>
 }
 
-export type RouteDefinition<TRoute extends AppRoute = AppRoute> = RouteDefinitionBase & ({ readonly hash: string; readonly match?: never; readonly name: TRoute } | { readonly hash?: never; readonly match: (routeHash: string) => TRoute | undefined; readonly name?: never })
+type RouteDefinition<TRoute extends AppRoute = AppRoute> = RouteDefinitionBase & ({ readonly hash: string; readonly match?: never; readonly name: TRoute } | { readonly hash?: never; readonly match: (routeHash: string) => TRoute | undefined; readonly name?: never })
 
 export type RoutingConfig<TRoute extends AppRoute = AppRoute> = {
 	readonly defaultRoute: TRoute
@@ -28,7 +28,7 @@ function shouldKeepHashQueryParam(key: string, value: string, pageParams = getPa
 	return pageValue === null || pageValue !== value
 }
 
-export function dedupeSearchAgainstPage(search: string, pageSearch = window.location.search) {
+function dedupeSearchAgainstPage(search: string, pageSearch = window.location.search) {
 	const pageParams = getPageSearchParams(pageSearch)
 	const params = new URLSearchParams(search)
 	for (const [key, value] of [...params.entries()]) {
@@ -77,10 +77,6 @@ function resolveRoutingStateRoute<TRoute extends AppRoute>(routing: RoutingState
 	return 'not-found'
 }
 
-export function resolveRoute<TRoute extends AppRoute>(config: RoutingConfig<TRoute>, hash: string): TRoute | 'not-found' {
-	return resolveRoutingStateRoute(buildRoutingState(config), hash)
-}
-
 declare global {
 	var __zoltarActiveRoutingState__: RoutingState | undefined
 }
@@ -93,6 +89,7 @@ export function installRouting(config: RoutingConfig) {
 	globalThis.__zoltarActiveRoutingState__ = buildRoutingState(config)
 }
 
+/** @internal */
 export function resetRoutingForTesting() {
 	globalThis.__zoltarActiveRoutingState__ = undefined
 }
@@ -103,7 +100,7 @@ function requireRouting(): RoutingState {
 	return activeRouting
 }
 
-export function getRouteHashForName(route: AppRoute) {
+function getRouteHashForName(route: AppRoute) {
 	const hash = requireRouting().hashByRoute[route]
 	if (hash === undefined) throw new Error(`Unknown route: ${route}`)
 	return hash
@@ -123,7 +120,7 @@ export function parseRouteHash(hash: string) {
 	}
 }
 
-export function normalizeRouteHash(hash: string) {
+function normalizeRouteHash(hash: string) {
 	const { routeHash, search } = parseRouteHash(hash)
 	const routePath = routeHash.replace(/^#\/?/, '')
 	return `${routePath === '' ? '' : `#/${routePath}`}${search}`

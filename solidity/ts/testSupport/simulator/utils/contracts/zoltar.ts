@@ -1,10 +1,9 @@
 import { ReputationToken_ReputationToken, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData } from '../../../../types/contractArtifact'
-import { createRepTokenAddressHelper } from '@zoltar/zoltar-shared/evm/addressDerivation'
 import { createZoltarAddressHelpers } from '@zoltar/zoltar-shared/deployment/deploymentAddresses'
-import { getProtocolConfig } from '@zoltar/core-shared/deployment/protocolConfig'
+import { getProtocolConfig } from '../../../../../../tooling/contracts/protocol-config'
 import { ReadClient, WriteClient, writeContractAndWait } from '../clients'
 import { GENESIS_REPUTATION_TOKEN, PROXY_DEPLOYER_ADDRESS } from '../constants'
-import { encodeDeployData, getAddress, type Address, type Hex, toHex } from '@zoltar/core-shared/evm/ethereum'
+import { encodeDeployData, getAddress, getCreate2Address, keccak256, type Address, type Hex, toHex } from '@zoltar/core-shared/evm/ethereum'
 import { addressString } from '../bigint'
 import { ensureProxyDeployerDeployed, requireAddress, requireArray, requireBigInt } from '../utilities'
 
@@ -41,16 +40,25 @@ const { getZoltarQuestionDataAddress } = createZoltarAddressHelpers({
 	zoltarQuestionDataBytecode: () => `0x${ZoltarQuestionData_ZoltarQuestionData.evm.bytecode.object}`,
 })
 
-export const { getRepTokenAddress } = createRepTokenAddressHelper({
-	genesisRepTokenAddress: getAddress(addressString(GENESIS_REPUTATION_TOKEN)),
-	getReputationTokenInitCode: zoltarAddress =>
-		encodeDeployData({
-			abi: ReputationToken_ReputationToken.abi,
-			bytecode: `0x${ReputationToken_ReputationToken.evm.bytecode.object}`,
-			args: [zoltarAddress],
-		}),
-	getZoltarAddress,
-})
+function deriveRepTokenAddress(universeId: bigint, genesisRepTokenAddress: Address, zoltarAddress: Address, reputationTokenInitCode: Hex): Address {
+	if (universeId === 0n) return getAddress(genesisRepTokenAddress)
+
+	return getCreate2Address({
+		from: zoltarAddress,
+		salt: toHex(universeId, { size: 32 }),
+		bytecodeHash: keccak256(reputationTokenInitCode),
+	})
+}
+
+export const getRepTokenAddress = (universeId: bigint) => {
+	const zoltarAddress = getZoltarAddress()
+	const reputationTokenInitCode = encodeDeployData({
+		abi: ReputationToken_ReputationToken.abi,
+		bytecode: `0x${ReputationToken_ReputationToken.evm.bytecode.object}`,
+		args: [zoltarAddress],
+	})
+	return deriveRepTokenAddress(universeId, getAddress(addressString(GENESIS_REPUTATION_TOKEN)), zoltarAddress, reputationTokenInitCode)
+}
 
 const isZoltarQuestionDataDeployed = async (client: ReadClient) => {
 	const expectedDeployedBytecode: Hex = `0x${ZoltarQuestionData_ZoltarQuestionData.evm.deployedBytecode.object}`

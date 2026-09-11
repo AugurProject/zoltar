@@ -13,11 +13,6 @@
 			"bun": "./ts/escalationGame/escalationMath.ts",
 			"default": "./js/escalationGame/escalationMath.js"
 		},
-		"./evm/addressDerivation": {
-			"types": "./ts/evm/addressDerivation.ts",
-			"bun": "./ts/evm/addressDerivation.ts",
-			"default": "./js/evm/addressDerivation.js"
-		},
 		"./initialReport/oracleInitialReport": {
 			"types": "./ts/initialReport/oracleInitialReport.ts",
 			"bun": "./ts/initialReport/oracleInitialReport.ts",

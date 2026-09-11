@@ -3,9 +3,9 @@ import type { ReadClient, WriteClient } from '../../types/contracts.js'
 
 export type MockReadClient = Pick<ReadClient, 'readContract'>
 export type MockLoaderClient = ReadClient
-export type MockReadContractRequest = Parameters<MockReadClient['readContract']>[0]
+type MockReadContractRequest = Parameters<MockReadClient['readContract']>[0]
 export type MockReadContractHandler = (request: MockReadContractRequest) => Promise<unknown>
-export type MockLoaderMulticallRequest = Parameters<MockLoaderClient['multicall']>[0]
+type MockLoaderMulticallRequest = Parameters<MockLoaderClient['multicall']>[0]
 export type MockLoaderMulticallHandler = (request: MockLoaderMulticallRequest) => Promise<unknown>
 export type MockWriteClient = {
 	readContract: ReadClient['readContract']

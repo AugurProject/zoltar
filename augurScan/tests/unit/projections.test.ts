@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { getAddress, type Hex } from '../../src/ethereum.ts'
-import { projectionsFrom, semanticEventNames } from '../../src/projections.ts'
+import { projectionsFrom } from '../../src/projections.ts'
 import type { StoredLog } from '../../src/types.ts'
 
 const hash = `0x${'12'.repeat(32)}` as Hex
@@ -22,13 +22,6 @@ const log = (name: string, argumentsValue: Record<string, unknown>, address = po
 })
 
 describe('state projections', () => {
-	test('keeps every semantic taxonomy entry backed by the pinned ABI catalog', async () => {
-		const catalog = (await Bun.file(new URL('../../config/abis.json', import.meta.url)).json()) as {
-			contracts: Record<string, { abi: Array<{ type?: unknown; name?: unknown }> }>
-		}
-		const abiEvents = new Set(Object.values(catalog.contracts).flatMap(({ abi }) => abi.flatMap(item => (item.type === 'event' && typeof item.name === 'string' ? [item.name] : []))))
-		expect(semanticEventNames.filter(eventName => !abiEvents.has(eventName))).toEqual([])
-	})
 	test('captures immutable question metadata', () => {
 		const [projection] = projectionsFrom(
 			log('QuestionCreated', {

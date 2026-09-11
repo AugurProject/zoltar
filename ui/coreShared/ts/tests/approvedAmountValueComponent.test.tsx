@@ -5,14 +5,13 @@ import { describe, expect, test } from 'bun:test'
 import { within } from './testUtils/queries'
 import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
-import { maxUint200 } from '../transactions/tokenApproval.js'
 import { ApprovedAmountValue } from '../components/ApprovedAmountValue.js'
 
 describe('ApprovedAmountValue', () => {
 	const { trackRendered } = installDomTestLifecycle()
 
 	test('renders the max label when approval exceeds max-display threshold', async () => {
-		trackRendered(await renderIntoDocument(<ApprovedAmountValue value={maxUint200 + 1n} requiredAmount={0n} suffix='REP' units={18} />))
+		trackRendered(await renderIntoDocument(<ApprovedAmountValue value={2n ** 200n} requiredAmount={0n} suffix='REP' units={18} />))
 
 		const documentQueries = within(document.body)
 		const valueBadge = documentQueries.getByText(commonCopy.max)

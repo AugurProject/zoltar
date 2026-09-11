@@ -18,7 +18,6 @@ type DeployedChildUniverseTuple = {
 	parentUniverseId: bigint
 	reputationToken: Address
 }
-type EscalationGameTuple = readonly [bigint, bigint, bigint, bigint, bigint, [bigint, bigint, bigint], bigint, IntegerLike, bigint, boolean]
 
 export function bigintToAddress(value: bigint): Address {
 	return getAddress(`0x${value.toString(16).padStart(40, '0')}`)
@@ -90,28 +89,6 @@ function isDeployedChildUniverseTuple(value: unknown): value is DeployedChildUni
 
 export function requireDeployedChildUniverseTupleArray(value: unknown, context: string): DeployedChildUniverseTuple[] {
 	if (Array.isArray(value) && value.every(isDeployedChildUniverseTuple)) return value
-	throw new Error(`Unexpected ${context} response`)
-}
-
-function isEscalationGameTuple(value: unknown): value is EscalationGameTuple {
-	return (
-		Array.isArray(value) &&
-		value.length === 10 &&
-		typeof value[0] === 'bigint' &&
-		typeof value[1] === 'bigint' &&
-		typeof value[2] === 'bigint' &&
-		typeof value[3] === 'bigint' &&
-		typeof value[4] === 'bigint' &&
-		isBigintTriple(value[5]) &&
-		typeof value[6] === 'bigint' &&
-		isIntegerLike(value[7]) &&
-		typeof value[8] === 'bigint' &&
-		typeof value[9] === 'boolean'
-	)
-}
-
-export function requireEscalationGameTuple(value: unknown, context: string): EscalationGameTuple {
-	if (isEscalationGameTuple(value)) return value
 	throw new Error(`Unexpected ${context} response`)
 }
 

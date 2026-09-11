@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import {
 	clearOrphanedDexEvidenceForHeadReplacement,
-	consensusAllowsCandidate,
 	discardDexMarketObservations,
 	estimateMarketConsensus,
 	marketConsensusAllowsExecution,
@@ -128,7 +127,7 @@ describe('cross-venue market consensus', () => {
 	test('excludes the candidate DEX source from its own reference', () => {
 		const estimate = estimateMarketConsensus([observation('cex', 'alpha', 200n), observation('cex', 'beta', 201n), observation('dex', 'candidate', 500n), observation('dex', 'uniswap-v2', 199n), observation('dex', 'sushiswap-v2', 200n)], settings, 'rep', 1, 10_000, 'candidate')
 		expect(estimate.dex.observations.map(value => value.sourceId)).not.toContain('candidate')
-		expect(consensusAllowsCandidate(500n * UNIT, estimate, 1_000n)).toBe(false)
+		expect(marketConsensusAllowsExecution(500n * UNIT, estimate, { maximumDeviationBps: 1_000n, maximumObservationAgeMilliseconds: 60_000, requiredForExecution: true }, 'rep', 1, 10_000)).toBe(false)
 	})
 
 	test('excludes an explicitly configured duplicate of the candidate market', () => {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { bestSuccessful, compactFinalityWindow, pollUntilStopped, replaceOverlap, retryDelayMilliseconds } from '@zoltar/bot-shared/monitoring/resilience'
-import { completeSuccessfulPoll, completeUnconfiguredPoll } from '../../src/runtime/operator.ts'
+import { bestSuccessful, compactFinalityWindow, pollUntilStopped, retryDelayMilliseconds } from '@zoltar/bot-shared/monitoring/resilience'
+import { completeSuccessfulPoll, completeUnconfiguredPoll } from '../../src/runtime/poll-completion.ts'
 
 describe('OpenOracle monitor resilience', () => {
 	test('keeps a healthy quote when another direction fails', async () => {
@@ -111,29 +111,6 @@ describe('OpenOracle monitor resilience', () => {
 		}
 		expect(completeUnconfiguredPoll(state)).toBe(false)
 		expect(state).toEqual({ consecutivePollFailures: 0, lastError: undefined, lastPollFailureAt: undefined, lastRetryAt: undefined, nextRetryAt: undefined, paused: false, retryInProgress: false, status: 'paused' })
-	})
-
-	test('removes orphaned overlap logs before replaying canonical replacements', () => {
-		type Log = { block: bigint; index: number; state: string }
-		const compare = (left: Log, right: Log) => {
-			if (left.block === right.block) return left.index - right.index
-			return left.block < right.block ? -1 : 1
-		}
-		const result = replaceOverlap(
-			[
-				{ block: 9n, index: 0, state: 'canonical-before-overlap' },
-				{ block: 10n, index: 0, state: 'orphaned-submission' },
-				{ block: 11n, index: 0, state: 'orphaned-settlement' },
-			],
-			[{ block: 10n, index: 1, state: 'canonical-dispute' }],
-			10n,
-			log => log.block,
-			compare,
-		)
-		expect(result).toEqual([
-			{ block: 9n, index: 0, state: 'canonical-before-overlap' },
-			{ block: 10n, index: 1, state: 'canonical-dispute' },
-		])
 	})
 
 	test('compacts each report to one finalized anchor plus its complete reorg window', () => {

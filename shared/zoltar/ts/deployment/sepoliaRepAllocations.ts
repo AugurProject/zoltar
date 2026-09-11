@@ -31,5 +31,3 @@ export const SEPOLIA_REP_ALLOCATIONS = Object.freeze(
 		}),
 	),
 ) satisfies readonly SepoliaRepAllocation[]
-
-export const SEPOLIA_REP_TOTAL_THEORETICAL_SUPPLY = SEPOLIA_REP_ALLOCATIONS.reduce((total, allocation) => total + allocation.amount, 0n)

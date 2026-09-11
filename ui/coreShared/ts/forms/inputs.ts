@@ -1,6 +1,5 @@
 import type { ReportingOutcomeKey } from '../types/contracts.js'
 import { getAddress, isAddress, isHex, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
-import { deriveTokenApprovalRequirement } from '../transactions/tokenApproval.js'
 import { parseBigIntInput, tryParseBigIntInput } from './integerInput.js'
 
 export function tryParseAddressInput(value: string): Address | undefined {
@@ -34,12 +33,6 @@ export function parseReportIdInput(value: string) {
 	const reportId = parseBigIntInput(value, 'Report ID')
 	if (reportId < 0n) throw new Error('Report ID must be non-negative')
 	return reportId
-}
-
-export function parseOptionalBigIntInput(value: string) {
-	const trimmed = value.trim()
-	if (trimmed === '') return undefined
-	return tryParseBigIntInput(trimmed)
 }
 
 function parseListInput<T>(value: string, label: string, parseItem: (entry: string, index: number) => T): T[] {
@@ -78,12 +71,6 @@ export function tryParseBigIntListInput(value: string) {
 	return parsedEntries
 }
 
-export function resolveOptionalBigIntListInput(value: string, fallback: bigint[], label: string) {
-	const trimmed = value.trim()
-	if (trimmed === '') return fallback
-	return parseBigIntListInput(trimmed, label)
-}
-
 export function parseReportingOutcomeInput(value: string): ReportingOutcomeKey {
 	switch (value) {
 		case 'invalid':
@@ -107,14 +94,6 @@ export function getReportingOutcomeKey(outcome: ReportingOutcomeKey | bigint): R
 		default:
 			throw new Error(`Unsupported child universe outcome index: ${outcome.toString()}`)
 	}
-}
-
-export function approvalShortage(amount: bigint | undefined, allowance: bigint | undefined): bigint | undefined {
-	return deriveTokenApprovalRequirement(amount, allowance).neededAmount
-}
-
-export function approvalTargetAmount(amount: bigint | undefined, allowance: bigint | undefined): bigint | undefined {
-	return deriveTokenApprovalRequirement(amount, allowance).targetAmount
 }
 
 export function balanceShortage(amount: bigint | undefined, balance: bigint | undefined): bigint | undefined {

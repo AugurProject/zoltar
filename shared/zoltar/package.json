@@ -18,20 +18,10 @@
 			"bun": "./ts/deployment/sepoliaRepAllocations.ts",
 			"default": "./js/deployment/sepoliaRepAllocations.js"
 		},
-		"./evm/addressDerivation": {
-			"types": "./ts/evm/addressDerivation.ts",
-			"bun": "./ts/evm/addressDerivation.ts",
-			"default": "./js/evm/addressDerivation.js"
-		},
 		"./questions/scalarOutcome": {
 			"types": "./ts/questions/scalarOutcome.ts",
 			"bun": "./ts/questions/scalarOutcome.ts",
 			"default": "./js/questions/scalarOutcome.js"
-		},
-		"./testing/scalarOutcomeParityFixtures": {
-			"types": "./ts/testing/scalarOutcomeParityFixtures.ts",
-			"bun": "./ts/testing/scalarOutcomeParityFixtures.ts",
-			"default": "./js/testing/scalarOutcomeParityFixtures.js"
 		}
 	},
 	"files": [

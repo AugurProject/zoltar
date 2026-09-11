@@ -2,21 +2,19 @@ import { requireDeployedContracts } from '../../../shared/src/monitoring/deploye
 import { randomUUID } from 'node:crypto'
 import { appendFile, mkdir, open, rename, rm } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import { bigintToSafeNumber, formatUnits, getAddress, isAddress, keccak256, type Address, type Chain, type Hex, type PublicClient, type Transport, zeroAddress } from '@zoltar/bot-shared/ethereum'
+import { bigintToSafeNumber, formatUnits, getAddress, isAddress, type Address, type Chain, type PublicClient, type Transport, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { augurMarketAbi, augurUniverseAbi, constantProductFactoryAbi, constantProductPairAbi, erc20Abi, factoryAbi, poolAbi } from '#contracts/abi'
+import { childPayouts, payoutDistributionHash } from '#monitoring/augur-payouts'
+import { constantProductSpotPriceWeth, poolSpotPriceWeth } from '#monitoring/spot-prices'
 
 const MAINNET_AUGUR_GENESIS_UNIVERSE = getAddress('0x49244BD018Ca9fd1f06ecC07B9E9De773246e5AA')
-export const UNISWAP_V3_FEES = [100, 500, 3000, 10000] as const
+const UNISWAP_V3_FEES = [100, 500, 3000, 10000] as const
 
 type ReadClient = PublicClient<Transport, Chain>
 
-export type TokenConfiguration = {
-	addresses: readonly Address[]
-}
+const MAX_OBSERVED_MONITORING_TOKENS = 64
 
-export const MAX_OBSERVED_MONITORING_TOKENS = 64
-
-export type MarketPoolSnapshot = {
+type MarketPoolSnapshot = {
 	address: Address
 	fee: number
 	liquidity: string
@@ -77,7 +75,7 @@ function uniqueAddresses(addresses: readonly Address[]) {
 	return [...unique.values()]
 }
 
-export function tokenCatalogForScan(discoveredAugurTokens: readonly Address[], configuredTokens: readonly Address[], observedTokens: readonly Address[], approvedTokens: readonly Address[] = []) {
+function tokenCatalogForScan(discoveredAugurTokens: readonly Address[], configuredTokens: readonly Address[], observedTokens: readonly Address[], approvedTokens: readonly Address[] = []) {
 	const executionTokens = uniqueAddresses(approvedTokens)
 	const monitoringTokens = uniqueAddresses([...executionTokens, ...discoveredAugurTokens, ...configuredTokens])
 	const monitoringKeys = new Set(monitoringTokens.map(address => address.toLowerCase()))
@@ -95,17 +93,6 @@ export function createTokenCatalogTracker(discoverAugurTokens: (configured: read
 		const discoveredAugurTokens = await discoverAugurTokens([], [])
 		return tokenCatalogForScan(discoveredAugurTokens, configuredTokens, observedTokens, approvedTokens)
 	}
-}
-
-export function childPayouts(numTicks: bigint, numberOfOutcomes: bigint) {
-	if (numberOfOutcomes < 2n || numberOfOutcomes > 32n) throw new Error(`Unsupported Augur outcome count: ${numberOfOutcomes.toString()}`)
-	const count = bigintToSafeNumber(numberOfOutcomes, 'Augur outcome count')
-	return Array.from({ length: count }, (_, winner) => Array.from({ length: count }, (_, index) => (index === winner ? numTicks : 0n)))
-}
-
-export function payoutDistributionHash(payout: readonly bigint[]) {
-	const packed = payout.map(value => value.toString(16).padStart(64, '0')).join('')
-	return keccak256(`0x${packed}` as Hex)
 }
 
 export async function discoverAugurRepTokens(client: ReadClient, chainId: number, configured: readonly Address[], observed: readonly Address[]) {
@@ -148,20 +135,6 @@ export async function discoverAugurRepTokens(client: ReadClient, chainId: number
 async function tokenMetadata(client: ReadClient, address: Address) {
 	const [name, symbol, decimals] = await Promise.all([client.readContract({ address, abi: erc20Abi, functionName: 'name' }), client.readContract({ address, abi: erc20Abi, functionName: 'symbol' }), client.readContract({ address, abi: erc20Abi, functionName: 'decimals' })])
 	return { decimals: bigintToSafeNumber(decimals, 'Token decimals'), name, symbol }
-}
-
-export function poolSpotPriceWeth(sqrtPriceX96: bigint, token: Address, weth: Address, decimals: number) {
-	if (sqrtPriceX96 === 0n) return undefined
-	const squared = sqrtPriceX96 * sqrtPriceX96
-	const q192 = 2n ** 192n
-	const oneToken = 10n ** BigInt(decimals)
-	const attoWeth = BigInt(token.toLowerCase()) < BigInt(weth.toLowerCase()) ? (oneToken * squared) / q192 : (oneToken * q192) / squared
-	return formatUnits(attoWeth, 18)
-}
-
-export function constantProductSpotPriceWeth(reserveToken: bigint, reserveAttoWeth: bigint, tokenDecimals: number) {
-	if (reserveToken === 0n || reserveAttoWeth === 0n) return undefined
-	return formatUnits((reserveAttoWeth * 10n ** BigInt(tokenDecimals)) / reserveToken, 18)
 }
 
 export function formatTokenAmount(value: bigint, decimals: number) {

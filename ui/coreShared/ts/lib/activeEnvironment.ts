@@ -48,7 +48,7 @@ function readLocationParams(location: LocationLike) {
 	return params
 }
 
-export function shouldUseSimulationLocation(location: LocationLike) {
+function shouldUseSimulationLocation(location: LocationLike) {
 	const params = readLocationParams(location)
 	// Simulation mode is intentionally available as a public URL opt-in on any hostname,
 	// including production deployments. It boots a browser-local chain instead of
@@ -189,6 +189,7 @@ function setActiveEnvironmentForTesting(backend: ChainBackend, simulationControl
 	setRuntimeNetworkProfile(backend.profile)
 }
 
+/** @internal */
 export function installActiveEnvironmentForTesting(backend: ChainBackend, simulationController?: SimulationController) {
 	setActiveEnvironmentForTesting(backend, simulationController)
 	return () => {
@@ -196,6 +197,7 @@ export function installActiveEnvironmentForTesting(backend: ChainBackend, simula
 	}
 }
 
+/** @internal */
 export function resetActiveEnvironmentForTesting() {
 	initializeActiveEnvironmentGeneration += 1
 	activeEnvironmentGeneration += 1

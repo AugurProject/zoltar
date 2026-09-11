@@ -298,8 +298,6 @@ export const assertRewindTarget = (ancestor: bigint, ancestorHash: string | unde
 
 export const rewindDepth = (previousBlock: bigint, startBlock: bigint, ancestor: bigint): bigint => previousBlock - (ancestor < 0n ? startBlock - 1n : ancestor)
 
-export const replayCursorRequiresReset = (cursor: number, prunedThroughId: number, latestId: number): boolean => cursor < prunedThroughId || cursor > latestId
-
 export const lockLiveEventWriter = async (sql: SQL): Promise<void> => {
 	await sql`SELECT singleton FROM live_event_state WHERE singleton FOR UPDATE`
 }

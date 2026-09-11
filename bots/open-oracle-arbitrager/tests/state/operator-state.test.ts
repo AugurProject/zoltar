@@ -1,12 +1,11 @@
 import { recordMarketDiscoveryFailure, recordObservedHead } from '#monitoring/market-discovery-status'
 import { requireDeployedContracts } from '../../../shared/src/monitoring/deployed-contracts.ts'
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { appendFile, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Address, Hex } from '@zoltar/bot-shared/ethereum'
 import {
-	appendExecutionHistory,
 	appendExecutionHistoryIfMissing,
 	clearPollFailureMetadata,
 	clearWalletDerivedState,
@@ -553,8 +552,10 @@ describe('operator execution history', () => {
 			trackedNetProfitEth: '0.05',
 			transactionHash: `0x${'12'.repeat(32)}` as Hex,
 		}
-		await appendExecutionHistory(path, record, 1)
-		await appendExecutionHistory(path, record, 1)
+		expect(await appendExecutionHistoryIfMissing(path, record, 1)).toBeTrue()
+		expect(await appendExecutionHistoryIfMissing(path, record, 1)).toBeFalse()
+		// A crash between the read and the append can still leave a duplicated line behind.
+		await appendFile(path, `${JSON.stringify({ chainId: 1, record })}\n`, { encoding: 'utf8' })
 		const history = await loadExecutionHistory(path, 1)
 		expect(history).toEqual([record])
 		const state: OperatorState = {
@@ -613,7 +614,7 @@ describe('operator execution history', () => {
 			trackedNetProfitEth: '0.05',
 			transactionHash: `0x${'12'.repeat(32)}` as Hex,
 		}
-		await appendExecutionHistory(path, record, 1)
+		await appendExecutionHistoryIfMissing(path, record, 1)
 		await expect(loadExecutionHistory(path, 11_155_111)).rejects.toThrow('belongs to another chain')
 	})
 
@@ -657,10 +658,11 @@ describe('operator execution history', () => {
 				return opened === 1 ? fileHandle : directoryHandle
 			},
 			readFile: async () => {
-				throw new Error('read is unexpected')
+				events.push('readFile')
+				throw Object.assign(new Error('missing history'), { code: 'ENOENT' })
 			},
 		}
-		await appendExecutionHistory(
+		await appendExecutionHistoryIfMissing(
 			'/history.jsonl',
 			{
 				actualGasCostEth: '0.002',
@@ -682,7 +684,7 @@ describe('operator execution history', () => {
 			1,
 			filesystem,
 		)
-		expect(events).toEqual(['mkdir', 'file:chmod', 'file:append', 'file:sync', 'file:close', 'directory:sync', 'directory:close'])
+		expect(events).toEqual(['readFile', 'mkdir', 'file:chmod', 'file:append', 'file:sync', 'file:close', 'directory:sync', 'directory:close'])
 	})
 
 	test('drains a replayed durable history outbox idempotently after restart', async () => {
