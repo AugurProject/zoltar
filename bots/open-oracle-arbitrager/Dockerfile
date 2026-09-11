@@ -32,6 +32,7 @@ RUN cd shared/core \
 	&& bun /tmp/tooling/repo/install-frozen.mts . --production \
 	&& rm -rf /tmp/tooling
 
+COPY docs/mainnet-deployment-addresses.json docs/sepolia-deployment-addresses.json ./docs/
 COPY bots/open-oracle-arbitrager/README.md ./bots/open-oracle-arbitrager/README.md
 COPY bots/open-oracle-arbitrager/config/ ./bots/open-oracle-arbitrager/config/
 COPY bots/open-oracle-arbitrager/docs/ ./bots/open-oracle-arbitrager/docs/

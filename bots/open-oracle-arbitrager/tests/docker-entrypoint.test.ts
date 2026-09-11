@@ -58,6 +58,15 @@ describe('Docker entrypoint', () => {
 		expect(await readFile(dockerignore, 'utf8')).not.toContain('ui/coreShared/favicon')
 	})
 
+	test('ships the canonical deployment manifests imported by the bot configuration', async () => {
+		const stages = parseDockerfile(await readFile(dockerfile, 'utf8'))
+		const runtime = stages.at(-1)
+		if (runtime === undefined) throw new Error('Missing runtime Docker stage')
+		const ignoreSource = await readFile(dockerignore, 'utf8')
+		expect(dockerInstructions(runtime, 'COPY')).toContain('docs/mainnet-deployment-addresses.json docs/sepolia-deployment-addresses.json ./docs/')
+		for (const network of ['mainnet', 'sepolia']) expect(ignoreSource).toContain(`!docs/${network}-deployment-addresses.json`)
+	})
+
 	test('has a Linux-compatible shell shebang', async () => {
 		const source = await readFile(entrypoint, 'utf8')
 		expect(source.startsWith('#!/bin/sh\n')).toBe(true)
