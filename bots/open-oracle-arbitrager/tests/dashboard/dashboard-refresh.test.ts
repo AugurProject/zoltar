@@ -181,7 +181,7 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	const nativeSetTimeout = window.setTimeout.bind(window)
 	window.setTimeout = (handler, timeout, ...arguments_) => nativeSetTimeout(handler, timeout === 500 ? 0 : timeout, ...arguments_)
 	window.fetch = async (input, init) => {
-		const inputUrl = typeof input === 'string' ? input : input instanceof window.URL ? input.href : Reflect.get(input, 'url')
+		const inputUrl = typeof input === 'string' || input instanceof window.URL ? input.toString() : Reflect.get(input, 'url')
 		if (typeof inputUrl !== 'string') throw new Error('Unexpected request URL')
 		const url = new URL(inputUrl, server.url)
 		const response = init?.method === undefined || init.method === 'GET' ? await fetch(url) : await fetch(url, { body: String(init.body), headers: { 'content-type': 'application/json', origin: server.url.origin }, method: init.method })

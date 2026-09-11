@@ -192,7 +192,9 @@ export function botStatusLabels(state: Pick<PublicOperatorSnapshot, 'mode' | 'pa
 		stopped: 'Stopped',
 		syncing: 'Syncing',
 	}
-	return { mode: state.mode, status: state.status === 'error' && state.marketAvailability?.kind === 'missing-deployment' ? 'Not deployed' : state.status === 'running' && state.marketAvailability?.kind === 'no-v3-liquidity' ? 'No V3 liquidity' : statuses[state.status] }
+	if (state.status === 'error' && state.marketAvailability?.kind === 'missing-deployment') return { mode: state.mode, status: 'Not deployed' }
+	if (state.status === 'running' && state.marketAvailability?.kind === 'no-v3-liquidity') return { mode: state.mode, status: 'No V3 liquidity' }
+	return { mode: state.mode, status: statuses[state.status] }
 }
 
 export function opportunityDecisionReason(opportunity: Pick<OpportunitySnapshot, 'decision' | 'tokenSymbol'>) {

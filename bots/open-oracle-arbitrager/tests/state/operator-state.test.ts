@@ -15,7 +15,6 @@ import {
 	loadExecutionHistory,
 	operatorSnapshot,
 	parseSignedDecimalEth,
-	publicPollFailure,
 	publicOperatorSnapshot,
 	updateStrategyFromRequest,
 	type ExecutionHistoryFilesystem,
@@ -23,6 +22,7 @@ import {
 	type MutableStrategy,
 	type OperatorState,
 } from '#state/operator-state'
+import { publicPollFailure } from '#state/public-failures'
 import type { PositionRecord } from '#state/position-store'
 
 const temporaryDirectories: string[] = []

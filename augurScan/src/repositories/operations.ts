@@ -1,7 +1,13 @@
 import type { SQL } from 'bun'
-import { auctionLifecycle, ESCALATION_OUTCOME, poolCapacity, reportLifecycle, vaultRisk } from '../operations.ts'
+import { auctionLifecycle, ESCALATION_OUTCOME, poolCapacity, reportLifecycle, reportLifecycleEventName, vaultRisk } from '../operations.ts'
 import { ApiRequestError } from '../query-errors.ts'
 import { jsonRecord } from '../record-serialization.ts'
+
+const poolRiskAssessment = (badDebt: bigint, priceUnavailable: boolean, systemState: string) => {
+	if (badDebt > 0n) return { protocol_state: 'bad-debt', scanner_severity: 'critical', scanner_reason: 'Pool has recorded bad debt' }
+	if (priceUnavailable) return { protocol_state: 'unavailable', scanner_severity: 'unavailable', scanner_reason: 'Accounting price is invalid at the tagged evidence block; capacity is not usable for risk decisions' }
+	return { protocol_state: systemState, scanner_severity: 'healthy', scanner_reason: 'Tagged pool accounting read completed' }
+}
 
 export const operationsAsOf = async (sql: SQL, chainId: number, atBlock?: string): Promise<Record<string, unknown>> => {
 	const rows =
@@ -126,7 +132,7 @@ export const reportCatalogData = async (sql: SQL, chainId: number, asOf: Record<
 		const data = jsonRecord(row['report_data'])
 		const eventName = String(row['event_name'])
 		const lifecycle = reportLifecycle({
-			eventName: eventName === 'ReportSettled' ? 'ReportSettled' : eventName === 'ReportDisputed' ? 'ReportDisputed' : 'ReportSubmitted',
+			eventName: reportLifecycleEventName(eventName),
 			flags: typeof data['flags'] === 'string' ? data['flags'] : undefined,
 			reportTimestamp: typeof data['reportTimestamp'] === 'string' ? data['reportTimestamp'] : undefined,
 			disputeDelay: typeof data['disputeDelay'] === 'string' ? data['disputeDelay'] : undefined,
@@ -333,9 +339,7 @@ export const riskCatalogData = async (sql: SQL, chainId: number, options: { pool
 			read_result: state,
 			capacity,
 			price_provenance: price,
-			protocol_state: badDebt > 0n ? 'bad-debt' : priceRequired && !priceValid ? 'unavailable' : String(state['systemState'] ?? '0'),
-			scanner_severity: badDebt > 0n ? 'critical' : priceRequired && !priceValid ? 'unavailable' : 'healthy',
-			scanner_reason: badDebt > 0n ? 'Pool has recorded bad debt' : priceRequired && !priceValid ? 'Accounting price is invalid at the tagged evidence block; capacity is not usable for risk decisions' : 'Tagged pool accounting read completed',
+			...poolRiskAssessment(badDebt, priceRequired && !priceValid, String(state['systemState'] ?? '0')),
 		}
 	})
 	const vaultData = vaults.slice(0, options.limit ?? 250).map((row: Record<string, unknown>) => {

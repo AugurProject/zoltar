@@ -93,7 +93,7 @@ function setControlsEnabled(enabled: boolean) {
 	})
 	const pauseButton = element<HTMLButtonElement>('pause-button')
 	pauseButton.disabled = pauseRequestPending !== undefined || pauseControls.pauseDisabled
-	pauseButton.textContent = pauseRequestPending === 'pause' ? 'Pausing…' : latestSnapshot?.paused === true ? 'Resume bot' : 'Pause bot'
+	pauseButton.textContent = pauseButtonLabel(pauseRequestPending === 'pause', latestSnapshot?.paused === true)
 	if (pauseRequestPending === 'pause') pauseButton.setAttribute('aria-busy', 'true')
 	else pauseButton.removeAttribute('aria-busy')
 	const confirmResume = element<HTMLButtonElement>('confirm-resume')
@@ -744,7 +744,7 @@ function renderCentralizedMarket(snapshot: PublicOperatorSnapshot) {
 	setText('dex-market-bid-depth', consensus === undefined ? '—' : `${consensus.dex.bidDepthEth} ETH`)
 	setText('dex-market-ask-depth', consensus === undefined ? '—' : `${consensus.dex.askDepthEth} ETH`)
 	if (market === undefined) {
-		setText('centralized-market-status', consensus === undefined ? 'No market sources configured' : consensus.reliable ? 'Reliable DEX consensus' : consensus.reasons.join(' · '))
+		setText('centralized-market-status', consensusStatusText(consensus, 'Reliable DEX consensus') ?? 'No market sources configured')
 		setText('centralized-market-price', '—')
 		setText('centralized-market-bid-depth', '—')
 		setText('centralized-market-ask-depth', '—')
@@ -752,7 +752,7 @@ function renderCentralizedMarket(snapshot: PublicOperatorSnapshot) {
 		element('centralized-market-empty').hidden = false
 		return
 	}
-	setText('centralized-market-status', consensus === undefined ? (market.reliable ? 'Reliable CEX estimate' : market.reasons.join(' · ')) : consensus.reliable ? 'Reliable independent CEX + DEX consensus' : consensus.reasons.join(' · '))
+	setText('centralized-market-status', consensusStatusText(consensus, 'Reliable independent CEX + DEX consensus') ?? (market.reliable ? 'Reliable CEX estimate' : market.reasons.join(' · ')))
 	setText('centralized-market-price', market.priceRepPerEth)
 	setText('centralized-market-bid-depth', `${market.bidDepthEth} ETH`)
 	setText('centralized-market-ask-depth', `${market.askDepthEth} ETH`)
@@ -1008,6 +1008,32 @@ function renderTransactions(transactions: readonly PublicTransactionActivity[]) 
 	setText('transaction-count', `${transactions.length.toString()} tracked`)
 }
 
+function pauseButtonLabel(pausing: boolean, paused: boolean) {
+	if (pausing) return 'Pausing…'
+	return paused ? 'Resume bot' : 'Pause bot'
+}
+
+function consensusStatusText(consensus: { reasons: readonly string[]; reliable: boolean } | undefined, reliableLabel: string) {
+	if (consensus === undefined) return undefined
+	return consensus.reliable ? reliableLabel : consensus.reasons.join(' · ')
+}
+
+function runStatusKey(snapshot: PublicOperatorSnapshot) {
+	if (snapshot.paused) return 'paused'
+	return snapshot.status === 'error' && snapshot.marketAvailability?.kind === 'missing-deployment' ? 'syncing' : snapshot.status
+}
+
+function runStatusBadgeClass(runStatus: string) {
+	if (runStatus === 'running') return ' badge-ok'
+	return runStatus === 'error' ? ' badge-danger' : ' badge-warning'
+}
+
+function attentionTarget(networkSetupCount: number, recoveryCount: number, uncertainTransactionCount: number) {
+	if (networkSetupCount > 0) return '/settings#network-connectivity'
+	if (recoveryCount > 0) return '/operations#position-lifecycle'
+	return uncertainTransactionCount > 0 ? '/operations#transaction-tracking' : '/overview#notice'
+}
+
 function render(snapshot: PublicOperatorSnapshot) {
 	const activeElement = document.activeElement
 	const focusKey = activeElement instanceof HTMLElement ? activeElement.dataset['focusKey'] : undefined
@@ -1020,10 +1046,10 @@ function render(snapshot: PublicOperatorSnapshot) {
 	modeBadge.dataset['mode'] = snapshot.mode
 	modeBadge.textContent = statusLabels.mode
 	const runStatusBadge = element('run-status-badge')
-	const runStatus = snapshot.paused ? 'paused' : snapshot.status === 'error' && snapshot.marketAvailability?.kind === 'missing-deployment' ? 'syncing' : snapshot.status
+	const runStatus = runStatusKey(snapshot)
 	runStatusBadge.dataset['status'] = runStatus
 	runStatusBadge.textContent = statusLabels.status
-	runStatusBadge.className = `badge${runStatus === 'running' ? ' badge-ok' : runStatus === 'error' ? ' badge-danger' : ' badge-warning'}`
+	runStatusBadge.className = `badge${runStatusBadgeClass(runStatus)}`
 	const capabilityBadge = element('capability-badge')
 	capabilityBadge.hidden = snapshot.operatorCapable
 	capabilityBadge.textContent = snapshot.operatorCapable ? '' : 'Operator blocked'
@@ -1038,7 +1064,7 @@ function render(snapshot: PublicOperatorSnapshot) {
 	const detailedAttentionCount = networkSetupCount + recoveryCount + uncertainTransactionCount + (snapshot.lastError === undefined ? 0 : 1)
 	const attentionCount = Math.max(snapshot.operatorCapable ? 0 : 1, detailedAttentionCount)
 	const attentionBadge = element<HTMLAnchorElement>('attention-badge')
-	setAttentionBadge(attentionBadge, attentionCount, networkSetupCount > 0 ? '/settings#network-connectivity' : recoveryCount > 0 ? '/operations#position-lifecycle' : uncertainTransactionCount > 0 ? '/operations#transaction-tracking' : '/overview#notice')
+	setAttentionBadge(attentionBadge, attentionCount, attentionTarget(networkSetupCount, recoveryCount, uncertainTransactionCount))
 	setText('status-value', statusLabels.status)
 	setText('last-poll-value', snapshot.lastPollAt === undefined ? 'No poll completed' : `Updated ${new Date(snapshot.lastPollAt).toLocaleTimeString()}`)
 	setText('active-report-value', snapshot.activeReportCount.toString())

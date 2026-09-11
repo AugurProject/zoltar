@@ -105,7 +105,12 @@ test('loads pool state for every discovered pool in one batch and drops empty po
 		[pool3000.toLowerCase(), { liquidity: 20n, tick: -7n, tickCumulatives: [0n, -601n] }],
 		[emptyPool.toLowerCase(), { liquidity: 0n, tick: 0n, tickCumulatives: [0n, 0n] }],
 	])
-	const deployed = clientWithFactory('0x01', { poolResult: fee => (fee === 500 ? pool500 : fee === 3000 ? pool3000 : fee === 10000 ? emptyPool : zeroAddress), pools })
+	const poolsByFee = new Map([
+		[500, pool500],
+		[3000, pool3000],
+		[10000, emptyPool],
+	])
+	const deployed = clientWithFactory('0x01', { poolResult: fee => poolsByFee.get(fee) ?? zeroAddress, pools })
 	const discovered = await discover(deployed.client, 100n)
 	expect(discovered[0]?.v3).toEqual([
 		{ address: pool500, fee: 500 },
@@ -127,7 +132,11 @@ test('market overview skips one unreadable pool while keeping the token and cach
 			[pool500.toLowerCase(), { liquidity: 10n, tick: 5n, tickCumulatives: [0n, 600n] }],
 			[pool3000.toLowerCase(), { liquidity: 20n, slot0: 'invalid', tick: 0n, tickCumulatives: [0n, 0n] }],
 		])
-		const deployed = clientWithFactory('0x01', { poolResult: fee => (fee === 500 ? pool500 : fee === 3000 ? pool3000 : zeroAddress), pools })
+		const poolsByFee = new Map([
+			[500, pool500],
+			[3000, pool3000],
+		])
+		const deployed = clientWithFactory('0x01', { poolResult: fee => poolsByFee.get(fee) ?? zeroAddress, pools })
 		const discovered = await discover(deployed.client, 100n)
 		const metadataCache = createTokenMetadataCache()
 		const parameters = { blockNumber: 100n, explorerUrl: 'https://explorer.example', metadataCache, multicall3: network.multicall3, pools: discovered, wallet: undefined, weth: network.weth }

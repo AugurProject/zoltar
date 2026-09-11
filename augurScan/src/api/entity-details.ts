@@ -1,7 +1,7 @@
 import type { SQL } from 'bun'
 import { decodeOpaqueCursor, encodeOpaqueCursor, isJsonArray } from '../cursor-codec.ts'
 import type { JsonValue } from '../ethereum.ts'
-import { auctionDemandCurve, reportLifecycle, reportRoundChanges } from '../operations.ts'
+import { auctionDemandCurve, reportLifecycle, reportLifecycleEventName, reportRoundChanges } from '../operations.ts'
 import { auctionDetailData, eventEntityRows, forkDetailData, latestEntitySnapshot, reportDetailData } from '../repositories/entity-details.ts'
 import { ApiConflictError, ApiRequestError, integer, isNonNegativeSafeInteger, isPostgresBigint, isPostgresInteger, json, jsonRecord, routeInteger } from './shared.ts'
 import { operationsAsOfForContinuations, snapshotBoundaryMatches } from './snapshot.ts'
@@ -179,7 +179,7 @@ export const reportDetailResponse = async (sql: SQL, parts: readonly string[], u
 		current === undefined
 			? undefined
 			: reportLifecycle({
-					eventName: current['event_name'] === 'ReportSettled' ? 'ReportSettled' : current['event_name'] === 'ReportDisputed' ? 'ReportDisputed' : 'ReportSubmitted',
+					eventName: reportLifecycleEventName(current['event_name']),
 					flags: typeof currentData['flags'] === 'string' ? currentData['flags'] : undefined,
 					reportTimestamp: typeof currentData['reportTimestamp'] === 'string' ? currentData['reportTimestamp'] : undefined,
 					disputeDelay: typeof currentData['disputeDelay'] === 'string' ? currentData['disputeDelay'] : undefined,

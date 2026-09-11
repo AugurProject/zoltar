@@ -24,12 +24,25 @@ const riskEventPosition = (value: unknown): RiskEventPosition | undefined => {
 	return [value[0], value[1], value[2], value[3]]
 }
 
+const riskStatePosition = (value: unknown): RiskStatePosition | undefined => {
+	if (!Array.isArray(value) || value.length !== 3) return undefined
+	const [blockNumber, observedAt, id] = value
+	if (!isPostgresBigint(blockNumber) || typeof observedAt !== 'string' || !isCursorTimestamp(observedAt) || !isPostgresBigint(id)) return undefined
+	return [blockNumber, observedAt, id]
+}
+
+const riskLiquidationPosition = (value: unknown, base: RiskEventPosition | undefined): RiskLiquidationPosition | undefined => {
+	if (!Array.isArray(value) || value.length !== 6 || base === undefined) return undefined
+	const [entityType, entityIdentity] = [value[4], value[5]]
+	if (typeof entityType !== 'string' || typeof entityIdentity !== 'string') return undefined
+	return [...base, entityType, entityIdentity]
+}
+
 const riskHistoryPositions = (value: unknown): RiskHistoryPositions | undefined => {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
 	const fields = jsonRecord(value)
 	const stateValue = fields['state']
-	const state =
-		stateValue === undefined ? undefined : Array.isArray(stateValue) && stateValue.length === 3 && isPostgresBigint(stateValue[0]) && typeof stateValue[1] === 'string' && isCursorTimestamp(stateValue[1]) && isPostgresBigint(stateValue[2]) ? ([stateValue[0], stateValue[1], stateValue[2]] as const) : undefined
+	const state = stateValue === undefined ? undefined : riskStatePosition(stateValue)
 	if (stateValue !== undefined && state === undefined) return undefined
 	const accounting = riskEventPosition(fields['accounting'])
 	if (fields['accounting'] !== undefined && accounting === undefined) return undefined
@@ -37,8 +50,7 @@ const riskHistoryPositions = (value: unknown): RiskHistoryPositions | undefined 
 	if (fields['lifecycle'] !== undefined && lifecycle === undefined) return undefined
 	const liquidationValue = fields['liquidations']
 	const liquidationBase = riskEventPosition(Array.isArray(liquidationValue) ? liquidationValue.slice(0, 4) : undefined)
-	const liquidations =
-		liquidationValue === undefined ? undefined : Array.isArray(liquidationValue) && liquidationValue.length === 6 && liquidationBase !== undefined && typeof liquidationValue[4] === 'string' && typeof liquidationValue[5] === 'string' ? ([...liquidationBase, liquidationValue[4], liquidationValue[5]] as const) : undefined
+	const liquidations = liquidationValue === undefined ? undefined : riskLiquidationPosition(liquidationValue, liquidationBase)
 	if (liquidationValue !== undefined && liquidations === undefined) return undefined
 	return {
 		...(state === undefined ? {} : { state }),

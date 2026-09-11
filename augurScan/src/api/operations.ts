@@ -19,6 +19,13 @@ export const operationsResponse = async (sql: SQL, url: URL): Promise<Response> 
 	return json({ chainId, asOf, data: { reports, escalations, auctions, risk, ...supplement, forks } })
 }
 
+const catalogRows = async (sql: SQL, domain: 'reports' | 'escalations' | 'auctions' | 'forks', chainId: number, asOf: Record<string, unknown>, cursor: { block: string; log: number; tx: string }, queryLimit: number) => {
+	if (domain === 'reports') return await reportCatalogData(sql, chainId, asOf, cursor.block, cursor.tx, cursor.log, queryLimit)
+	if (domain === 'escalations') return await escalationCatalogData(sql, chainId, String(asOf['blockNumber']), cursor.block, cursor.tx, cursor.log, queryLimit)
+	if (domain === 'auctions') return await auctionCatalogData(sql, chainId, asOf, cursor.block, cursor.tx, cursor.log, queryLimit)
+	return await forkCatalogData(sql, chainId, cursor.block, cursor.tx, cursor.log, queryLimit, String(asOf['blockNumber']))
+}
+
 export const domainCatalogResponse = async (sql: SQL, url: URL, domain: 'reports' | 'escalations' | 'auctions' | 'risk' | 'forks'): Promise<Response> => {
 	const chainId = integer(url.searchParams.get('chainId'), 'chainId')
 	if (chainId === undefined) throw new ApiRequestError('chainId is required')
@@ -52,14 +59,7 @@ export const domainCatalogResponse = async (sql: SQL, url: URL, domain: 'reports
 	const cursorBlock = page.cursor?.[9] ?? String(asOf['blockNumber'])
 	const cursorTx = page.cursor?.[10] ?? `0x${'f'.repeat(64)}`
 	const cursorLog = page.cursor?.[11] ?? 2_147_483_647
-	const rows =
-		domain === 'reports'
-			? await reportCatalogData(sql, chainId, asOf, cursorBlock, cursorTx, cursorLog, page.queryLimit)
-			: domain === 'escalations'
-				? await escalationCatalogData(sql, chainId, String(asOf['blockNumber']), cursorBlock, cursorTx, cursorLog, page.queryLimit)
-				: domain === 'auctions'
-					? await auctionCatalogData(sql, chainId, asOf, cursorBlock, cursorTx, cursorLog, page.queryLimit)
-					: await forkCatalogData(sql, chainId, cursorBlock, cursorTx, cursorLog, page.queryLimit, String(asOf['blockNumber']))
+	const rows = await catalogRows(sql, domain, chainId, asOf, { block: cursorBlock, log: cursorLog, tx: cursorTx }, page.queryLimit)
 	const pageData = paged(rows, page.limit, row => protocolCursorFor(chainId, `${domain}-catalog`, 'catalog', asOf, row))
 	return json({
 		chainId,

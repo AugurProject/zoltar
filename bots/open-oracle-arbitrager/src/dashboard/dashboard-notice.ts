@@ -1,6 +1,12 @@
 import type { PublicOperatorSnapshot } from '#state/operator-state'
 import { marketAvailabilityPresentation, pollRetryStatus } from './dashboard-format.ts'
 
+function failureNoticeTitle(snapshot: PublicOperatorSnapshot, retryState: string | undefined) {
+	if (snapshot.retryInProgress) return 'Automatic retry in progress'
+	if (retryState === 'due') return 'Automatic retry due'
+	return snapshot.lastPollFailureAt === undefined ? 'Operator attention required' : 'Latest poll failed'
+}
+
 export function operatorNoticePresentation(snapshot: PublicOperatorSnapshot) {
 	let noticeTitle = 'Dry-run mode'
 	let noticeCopy = 'Opportunities are monitored, but this process cannot submit transactions. Enable runtime.execute in the configuration to change modes.'
@@ -30,7 +36,7 @@ export function operatorNoticePresentation(snapshot: PublicOperatorSnapshot) {
 	}
 	if (snapshot.lastError !== undefined) {
 		const retry = pollRetryStatus(snapshot)
-		noticeTitle = snapshot.retryInProgress ? 'Automatic retry in progress' : retry?.state === 'due' ? 'Automatic retry due' : snapshot.lastPollFailureAt === undefined ? 'Operator attention required' : 'Latest poll failed'
+		noticeTitle = failureNoticeTitle(snapshot, retry?.state)
 		const failure = retry === undefined ? snapshot.lastError : snapshot.lastError.replace(/ Automatic retry remains active\.$/, '')
 		const failureTime = snapshot.lastPollFailureAt === undefined ? '' : ` Poll failed at ${new Date(snapshot.lastPollFailureAt).toLocaleTimeString()}.`
 		const nextRetry = retry?.state === 'scheduled' && snapshot.nextRetryAt !== undefined ? ` Next automatic retry is scheduled for ${new Date(snapshot.nextRetryAt).toLocaleTimeString()}.` : ''
