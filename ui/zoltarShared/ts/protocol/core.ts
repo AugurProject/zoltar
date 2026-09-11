@@ -9,7 +9,7 @@ export { waitForSubmittedTransactionReceipt } from '@zoltar/ui-core-shared/trans
 
 const RPC_STATE_RETRY_DELAYS_MILLISECONDS = [250, 500, 1_000, 2_000, 4_000] as const
 
-export type ContractLabelResolver = (abi: readonly unknown[], functionName: string) => string | undefined
+type ContractLabelResolver = (abi: readonly unknown[], functionName: string) => string | undefined
 
 let appContractLabelResolver: ContractLabelResolver | undefined
 
@@ -33,7 +33,7 @@ export async function readWithRpcStateRetries<T>(read: () => Promise<T>, isReady
 	return value
 }
 
-export type ContractRevertReasonParams = {
+type ContractRevertReasonParams = {
 	account?: Account | Address | undefined | null
 	abi: Abi | readonly unknown[]
 	address: Address
