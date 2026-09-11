@@ -18,19 +18,22 @@ const DEFAULT_SIMULATION_REP_PER_ETH_PRICE = 3n * 10n ** 18n
 const SIMULATION_INITIAL_TIMESTAMP = 1_735_689_600n
 const SIMULATION_BLOCK_INTERVAL_SECONDS = 1n
 
-// Reports whether initializeActiveEnvironment picks the simulation backend for a location by injecting both backend factories.
+// Reports whether initializeActiveEnvironment picks the simulation backend for a location by injecting both backend
+// factories. The simulation factory rejects with a sentinel so the test never has to build a full simulation backend.
 async function selectsSimulationBackend(location: Parameters<typeof initializeActiveEnvironment>[0]) {
-	let simulation = false
-	const simulationBackend = { ...createFakeBackend({ profile: createFakeSimulationProfile() }), bootstrap: async () => undefined, dispose: async () => undefined }
-	await initializeActiveEnvironment(location, {
+	const simulationFactoryReached = new Error('Simulation backend factory reached')
+	const selected = await initializeActiveEnvironment(location, {
 		createInjectedBackend: ({ profile }) => createFakeBackend({ profile }),
-		createSimulationBackend: async () => {
-			simulation = true
-			return simulationBackend as never
+		createSimulationBackend: () => Promise.reject(simulationFactoryReached),
+	}).then(
+		() => false,
+		(error: unknown) => {
+			if (error !== simulationFactoryReached) throw error
+			return true
 		},
-	})
+	)
 	resetActiveEnvironmentForTesting()
-	return simulation
+	return selected
 }
 const SIMULATION_REP_MINT_AMOUNT = 1_000_000n * 10n ** 18n
 

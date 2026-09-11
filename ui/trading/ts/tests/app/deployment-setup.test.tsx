@@ -14,6 +14,7 @@ import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBa
 import { createSimulationProfile, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { getInfraContractAddresses, PROXY_DEPLOYER_ADDRESS } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import { saveNetworkRpcUrl } from '@zoltar/ui-core-shared/wallet/rpcConfig.js'
+import { installFetchStub } from '@zoltar/ui-core-shared/tests/testUtils/fetchStub.js'
 
 beforeEach(() => installTradingRouting())
 
@@ -331,8 +332,7 @@ describe('trading deployment setup', () => {
 			}),
 		})
 		const restoreEnvironment = installActiveEnvironmentForTesting({ ...createFakeBackend({ profile: SEPOLIA_NETWORK_PROFILE }), createReadClient: () => client })
-		const originalFetch = globalThis.fetch
-		globalThis.fetch = (async () => new Response(JSON.stringify([mainnetCore, core]), { headers: { 'content-type': 'application/json' } })) as typeof fetch
+		const restoreFetch = installFetchStub(async () => new Response(JSON.stringify([mainnetCore, core]), { headers: { 'content-type': 'application/json' } }))
 		const services: TradingDeploymentSetupServices = { createPublicClient: () => client, loadCoreDeployments: async () => [core] }
 		try {
 			const mismatched = await renderIntoDocument(<App deploymentSetupServices={services} initializeEnvironment={async () => undefined} />)
@@ -350,7 +350,7 @@ describe('trading deployment setup', () => {
 			expect(verified.container.textContent).not.toContain('Network unavailable')
 			expect(verified.container.querySelector('.deployment-setup')).toBeNull()
 		} finally {
-			globalThis.fetch = originalFetch
+			restoreFetch()
 			restoreEnvironment()
 		}
 	})
@@ -387,10 +387,9 @@ describe('trading deployment setup', () => {
 				return client
 			},
 		})
-		const originalFetch = globalThis.fetch
-		globalThis.fetch = (async () => {
+		const restoreFetch = installFetchStub(async () => {
 			throw new Error('Simulated deployments must not fetch the registry or the configured RPC URL')
-		}) as typeof fetch
+		})
 		try {
 			const rendered = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} />)
 			cleanupRendered = rendered.cleanup
@@ -398,7 +397,7 @@ describe('trading deployment setup', () => {
 			expect(readClients).toBe(1)
 			expect(rendered.container.textContent).toContain(plan.factory.address)
 		} finally {
-			globalThis.fetch = originalFetch
+			restoreFetch()
 			restoreEnvironment()
 		}
 	})

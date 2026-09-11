@@ -2,50 +2,53 @@
 
 import { describe, expect, mock, test } from 'bun:test'
 import { getAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { watchActiveWalletAsset, type WalletAssetMetadata, type WalletAssetRequest } from '../wallet/walletAsset.js'
+import { watchActiveWalletAsset, type WalletAssetMetadata } from '../wallet/walletAsset.js'
+import type { ChainBackend } from '../wallet/chainBackend.js'
+import type { InjectedEthereum } from '../wallet/injectedEthereum.js'
 import { installActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import { createFakeBackend } from './testUtils/fakeBackend.js'
+import { createMockLoaderClient } from './testUtils/protocolTestSupport.js'
 import { MAINNET_NETWORK_PROFILE } from '../wallet/networkProfile.js'
 
 const GENESIS_REP_ADDRESS = '0x221657776846890989a759ba2973e427dff5c9bb'
 const CHILD_REP_ADDRESS = '0x00000000000000000000000000000000000000a1'
 const WALLET_ADDRESS: Address = '0x00000000000000000000000000000000000000b2'
 
+type WalletRequest = Parameters<InjectedEthereum['request']>[0]
+
 type WalletAssetRequestDependencies = {
-	expectedChainId: string
 	expectedAccount: Address
 	getActiveAccount: () => Promise<Address | undefined>
 	getActiveChainId: () => Promise<string>
 	isCurrent: () => boolean
 	readTokenMetadata: (address: Address) => Promise<WalletAssetMetadata>
-	request: (request: WalletAssetRequest) => Promise<unknown>
+	request: (request: WalletRequest) => Promise<unknown>
 }
 
-// Drives the public watchActiveWalletAsset through an injected fake backend built from the test dependencies.
+// Drives the public watchActiveWalletAsset through an injected mainnet backend built from the test dependencies.
 async function requestWalletWatchAsset(address: Address, dependencies: WalletAssetRequestDependencies) {
-	const metadataByAddress = new Map<string, Promise<WalletAssetMetadata>>()
-	const metadataFor = (tokenAddress: Address) => {
-		const key = tokenAddress.toLowerCase()
-		const pending = metadataByAddress.get(key) ?? dependencies.readTokenMetadata(tokenAddress)
-		metadataByAddress.set(key, pending)
-		return pending
-	}
-	const backend = {
+	// The production reader issues the symbol and decimals calls together, so one metadata read serves both.
+	let pendingMetadata: Promise<WalletAssetMetadata> | undefined
+	const readClient = createMockLoaderClient({
+		getBlock: () => Promise.reject(new Error('Wallet asset requests must not read blocks')),
+		multicall: () => Promise.reject(new Error('Wallet asset requests must not multicall')),
+		readContract: async ({ address: tokenAddress, functionName }) => {
+			if (functionName === 'symbol') pendingMetadata = dependencies.readTokenMetadata(tokenAddress)
+			if (pendingMetadata === undefined) throw new Error(`Unexpected ${functionName} read before the token symbol`)
+			const metadata = await pendingMetadata
+			return functionName === 'symbol' ? metadata.symbol : BigInt(metadata.decimals)
+		},
+	})
+	const provider: InjectedEthereum = { request: dependencies.request }
+	const backend: ChainBackend = {
 		...createFakeBackend({ profile: MAINNET_NETWORK_PROFILE }),
-		createReadClient: () =>
-			({
-				readContract: async ({ address: tokenAddress, functionName }: { address: Address; functionName: string }) => {
-					const metadata = await metadataFor(tokenAddress)
-					metadataByAddress.delete(tokenAddress.toLowerCase())
-					return functionName === 'symbol' ? metadata.symbol : BigInt(metadata.decimals)
-				},
-			}) as never,
+		createReadClient: () => readClient,
 		getAccounts: async () => {
 			const account = await dependencies.getActiveAccount()
 			return account === undefined ? [] : [account]
 		},
 		getChainId: dependencies.getActiveChainId,
-		getProvider: () => ({ request: dependencies.request }) as never,
+		getProvider: () => provider,
 	}
 	const restoreEnvironment = installActiveEnvironmentForTesting(backend)
 	try {
@@ -79,15 +82,14 @@ function createRequestDependencies({
 	requestResult?: unknown
 } = {}) {
 	const readTokenMetadata = mock(async (_address: Address) => metadata)
-	const requests: WalletAssetRequest[] = []
-	const request = mock(async (walletRequest: WalletAssetRequest) => {
+	const requests: WalletRequest[] = []
+	const request = mock(async (walletRequest: WalletRequest) => {
 		if (requestError !== undefined) throw requestError
 		requests.push(walletRequest)
 		return requestResult
 	})
 	return {
 		dependencies: {
-			expectedChainId: '0x1',
 			expectedAccount: WALLET_ADDRESS,
 			getActiveAccount: async () => activeAccount ?? undefined,
 			getActiveChainId: async () => activeChainId,
@@ -132,11 +134,7 @@ describe('wallet_watchAsset requests', () => {
 
 		expect(result).toEqual({ status: 'accepted' })
 		expect(readTokenMetadata).toHaveBeenCalledWith(getAddress(CHILD_REP_ADDRESS))
-		expect(requests[0]?.params.options).toEqual({
-			address: getAddress(CHILD_REP_ADDRESS),
-			decimals: 18,
-			symbol: 'REP',
-		})
+		expect(requests).toEqual([{ method: 'wallet_watchAsset', params: { options: { address: getAddress(CHILD_REP_ADDRESS), decimals: 18, symbol: 'REP' }, type: 'ERC20' } }])
 	})
 
 	test('stops before reading metadata when the wallet is on another chain', async () => {
@@ -153,10 +151,9 @@ describe('wallet_watchAsset requests', () => {
 		const activeChainIds = ['0x1', '0xaa36a7']
 		const getActiveChainId = mock(async () => activeChainIds.shift() ?? '0xaa36a7')
 		const readTokenMetadata = mock(async (_address: Address) => ({ decimals: 18, symbol: 'REP' }))
-		const request = mock(async (_walletRequest: WalletAssetRequest) => true)
+		const request = mock(async (_walletRequest: WalletRequest) => true)
 
 		const result = await requestWalletWatchAsset(GENESIS_REP_ADDRESS, {
-			expectedChainId: '0x1',
 			expectedAccount: WALLET_ADDRESS,
 			getActiveAccount: async () => WALLET_ADDRESS,
 			getActiveChainId,
@@ -196,9 +193,8 @@ describe('wallet_watchAsset requests', () => {
 	test('rechecks request scope after a deferred metadata read', async () => {
 		const metadata = createDeferred<WalletAssetMetadata>()
 		let isCurrent = true
-		const request = mock(async (_walletRequest: WalletAssetRequest) => true)
+		const request = mock(async (_walletRequest: WalletRequest) => true)
 		const pendingResult = requestWalletWatchAsset(GENESIS_REP_ADDRESS, {
-			expectedChainId: '0x1',
 			expectedAccount: WALLET_ADDRESS,
 			getActiveAccount: async () => WALLET_ADDRESS,
 			getActiveChainId: async () => '0x1',
@@ -219,9 +215,8 @@ describe('wallet_watchAsset requests', () => {
 		const initialChainIds = ['0x1', '0x1']
 		let activeChainId = '0x1'
 		const getActiveChainId = mock(async () => initialChainIds.shift() ?? activeChainId)
-		const request = mock(async (_walletRequest: WalletAssetRequest) => true)
+		const request = mock(async (_walletRequest: WalletRequest) => true)
 		const pendingResult = requestWalletWatchAsset(GENESIS_REP_ADDRESS, {
-			expectedChainId: '0x1',
 			expectedAccount: WALLET_ADDRESS,
 			getActiveAccount: async () => await activeAccount.promise,
 			getActiveChainId,

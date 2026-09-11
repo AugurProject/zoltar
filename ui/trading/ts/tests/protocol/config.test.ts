@@ -6,6 +6,7 @@ import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/a
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { loadWalletHeaderBalances, validateRpcChainId } from '../../protocol/live.js'
+import { installFetchStub } from '@zoltar/ui-core-shared/tests/testUtils/fetchStub.js'
 
 const core = `0x${'34'.repeat(20)}`
 const zoltar = `0x${'56'.repeat(20)}`
@@ -13,12 +14,11 @@ const zoltar = `0x${'56'.repeat(20)}`
 // Loads a core deployment registry through the public loader with a stubbed fetch and a non-simulation backend.
 async function loadCoreDeploymentsFrom(registry: unknown) {
 	const restoreEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: MAINNET_NETWORK_PROFILE }))
-	const originalFetch = globalThis.fetch
-	globalThis.fetch = (async () => new Response(JSON.stringify(registry), { headers: { 'content-type': 'application/json' } })) as typeof fetch
+	const restoreFetch = installFetchStub(async () => new Response(JSON.stringify(registry), { headers: { 'content-type': 'application/json' } }))
 	try {
 		return await loadCoreDeployments()
 	} finally {
-		globalThis.fetch = originalFetch
+		restoreFetch()
 		restoreEnvironment()
 	}
 }

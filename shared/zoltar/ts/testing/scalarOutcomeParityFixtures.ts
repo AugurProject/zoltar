@@ -6,14 +6,14 @@ export type ScalarParityQuestion = {
 	numTicks: bigint
 }
 
-export type ScalarParityLabelFixture = {
+type ScalarParityLabelFixture = {
 	name: string
 	expectedLabel: string
 	questionName: string
 	tickIndex: bigint
 }
 
-export type ScalarParityOutcomeIndexDescriptor =
+type ScalarParityOutcomeIndexDescriptor =
 	| {
 			kind: 'invalid'
 	  }
@@ -25,7 +25,7 @@ export type ScalarParityOutcomeIndexDescriptor =
 			tickIndex: bigint
 	  }
 
-export type ScalarParityEncodingFixture = {
+type ScalarParityEncodingFixture = {
 	name: string
 	expectedDescriptor: ScalarParityOutcomeIndexDescriptor
 	expectedLabel: string

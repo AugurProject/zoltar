@@ -6,16 +6,16 @@ import { loadCoreDeployments } from '../../protocol/coreDeployments.ts'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
+import { installFetchStub } from '@zoltar/ui-core-shared/tests/testUtils/fetchStub.js'
 
 // Loads a core deployment registry through the public loader with a stubbed fetch and a non-simulation backend.
 async function loadCoreDeploymentsFrom(registry: unknown) {
 	const restoreEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: MAINNET_NETWORK_PROFILE }))
-	const originalFetch = globalThis.fetch
-	globalThis.fetch = (async () => new Response(JSON.stringify(registry), { headers: { 'content-type': 'application/json' } })) as typeof fetch
+	const restoreFetch = installFetchStub(async () => new Response(JSON.stringify(registry), { headers: { 'content-type': 'application/json' } }))
 	try {
 		return await loadCoreDeployments()
 	} finally {
-		globalThis.fetch = originalFetch
+		restoreFetch()
 		restoreEnvironment()
 	}
 }

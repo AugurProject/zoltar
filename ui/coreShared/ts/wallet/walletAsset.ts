@@ -13,7 +13,7 @@ export type WalletAssetMetadata = {
 	symbol: string
 }
 
-export type WalletAssetRequest = {
+type WalletAssetRequest = {
 	method: 'wallet_watchAsset'
 	params: {
 		options: {

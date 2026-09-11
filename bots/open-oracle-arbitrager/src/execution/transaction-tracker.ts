@@ -135,7 +135,7 @@ export async function submitContractTransaction(
 
 export async function waitForTrackedTransaction(
 	client: ReadClient,
-	wallet: WriteClient,
+	wallet: Pick<WriteClient, 'account' | 'waitForTransactionReceipt'>,
 	config: Pick<Configuration, 'connectivity' | 'pollMilliseconds' | 'submission'>,
 	submission: TrackedSubmission,
 	track: TrackTransaction,

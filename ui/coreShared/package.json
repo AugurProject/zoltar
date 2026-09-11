@@ -64,6 +64,10 @@
 			"bun": "./ts/tests/testUtils/fakeBackend.ts",
 			"default": "./js/tests/testUtils/fakeBackend.js"
 		},
+		"./tests/testUtils/fetchStub.js": {
+			"bun": "./ts/tests/testUtils/fetchStub.ts",
+			"default": "./js/tests/testUtils/fetchStub.js"
+		},
 		"./tests/testUtils/protocolTestSupport.js": {
 			"bun": "./ts/tests/testUtils/protocolTestSupport.ts",
 			"default": "./js/tests/testUtils/protocolTestSupport.js"

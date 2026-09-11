@@ -1,7 +1,7 @@
 import { DEFAULT_PROTOCOL_CONFIG, type ProtocolConfig } from '../../shared/core/ts/deployment/protocolConfig'
 
-// Deployment-time protocol configuration: environment and global overrides for local deployments plus the frozen mainnet config.
-export type ProtocolConfigInput = Partial<{
+// Frozen mainnet protocol configuration, guarded against environment or global override drift.
+type ProtocolConfigInput = Partial<{
 	[key in keyof ProtocolConfig]: bigint | number | string | undefined
 }>
 
@@ -75,36 +75,6 @@ function getGlobalProtocolConfigOverrides(): ProtocolConfigInput {
 		...(minimumSecurityBondDebtAttoEth === undefined ? {} : { minimumSecurityBondDebtAttoEth }),
 		...(minimumVaultRepDepositAttoRep === undefined ? {} : { minimumVaultRepDepositAttoRep }),
 	}
-}
-
-export function validateProtocolConfig(config: ProtocolConfigInput): ProtocolConfig {
-	const forkBurnDivisor = parseConfigBigInt(config.forkBurnDivisor, 'forkBurnDivisor')
-	const forkThresholdDivisor = parseConfigBigInt(config.forkThresholdDivisor, 'forkThresholdDivisor')
-	const minimumSecurityBondDebtAttoEth = parseConfigBigInt(config.minimumSecurityBondDebtAttoEth, 'minimumSecurityBondDebtAttoEth')
-	const minimumVaultRepDepositAttoRep = parseConfigBigInt(config.minimumVaultRepDepositAttoRep, 'minimumVaultRepDepositAttoRep')
-	if (forkThresholdDivisor === undefined) throw new Error('Protocol config forkThresholdDivisor is required')
-	if (forkBurnDivisor === undefined) throw new Error('Protocol config forkBurnDivisor is required')
-	if (minimumSecurityBondDebtAttoEth === undefined) throw new Error('Protocol config minimumSecurityBondDebtAttoEth is required')
-	if (minimumVaultRepDepositAttoRep === undefined) throw new Error('Protocol config minimumVaultRepDepositAttoRep is required')
-	if (forkThresholdDivisor <= 1n) throw new Error('Protocol config forkThresholdDivisor must be greater than 1')
-	if (forkBurnDivisor < 5n) throw new Error('Protocol config forkBurnDivisor must be at least 5')
-	if (minimumSecurityBondDebtAttoEth <= 0n) throw new Error('Protocol config minimumSecurityBondDebtAttoEth must be positive')
-	if (minimumVaultRepDepositAttoRep < 0n) throw new Error('Protocol config minimumVaultRepDepositAttoRep cannot be negative')
-	return {
-		forkBurnDivisor,
-		forkThresholdDivisor,
-		minimumSecurityBondDebtAttoEth,
-		minimumVaultRepDepositAttoRep,
-	}
-}
-
-export function getProtocolConfig(overrides: ProtocolConfigInput = {}): ProtocolConfig {
-	return validateProtocolConfig({
-		...DEFAULT_PROTOCOL_CONFIG,
-		...getEnvironmentProtocolConfigOverrides(),
-		...getGlobalProtocolConfigOverrides(),
-		...overrides,
-	})
 }
 
 function collectProtocolConfigOverrideSources(overrides: ProtocolConfigInput) {
