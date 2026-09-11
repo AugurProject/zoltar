@@ -11,6 +11,9 @@
 !shared/*/tsconfig.json
 !shared/*/ts/
 !shared/*/ts/**
+!docs/
+!docs/mainnet-deployment-addresses.json
+!docs/sepolia-deployment-addresses.json
 !bots/
 !bots/open-oracle-arbitrager/
 !bots/open-oracle-arbitrager/package.json
