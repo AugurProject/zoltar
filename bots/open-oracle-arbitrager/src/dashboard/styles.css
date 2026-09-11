@@ -21,10 +21,6 @@
 	--operator-text: var(--text);
 }
 
-* {
-	box-sizing: border-box;
-}
-
 body {
 	min-width: 320px;
 	margin: 0;
@@ -132,13 +128,6 @@ input,
 select,
 textarea {
 	font: inherit;
-}
-
-fieldset {
-	min-width: 0;
-	margin: 0;
-	padding: 0;
-	border: 0;
 }
 
 .configuration-json.mono {

@@ -1,12 +1,12 @@
 import { decodeEventLog, type Address, type TransactionReceipt } from '@zoltar/bot-shared/ethereum'
-import { coordinatorAbi } from '#contracts/abi'
+import { openOraclePriceCoordinatorAbi } from '@zoltar/bot-shared/contracts/abi'
 import type { PendingTransactionIntent } from '#state/operator-state'
 
 export function requireSuccessfulStagedOperation(receipt: TransactionReceipt, coordinator: Address, operation: 0 | 1) {
 	for (const log of receipt.logs) {
 		if (log.address.toLowerCase() !== coordinator.toLowerCase()) continue
 		try {
-			const decoded = decodeEventLog({ abi: coordinatorAbi, data: log.data, topics: log.topics })
+			const decoded = decodeEventLog({ abi: openOraclePriceCoordinatorAbi, data: log.data, topics: log.topics })
 			if (decoded.eventName !== 'ExecutedStagedOperation' || decoded.args.operation !== BigInt(operation)) continue
 			if (!decoded.args.success) throw new Error(`Staged operation failed: ${decoded.args.errorMessage}`)
 			return
@@ -23,7 +23,7 @@ export function requirePendingStagedOperation(receipt: TransactionReceipt, coord
 	for (const log of receipt.logs) {
 		if (log.address.toLowerCase() !== coordinator.toLowerCase()) continue
 		try {
-			const decoded = decodeEventLog({ abi: coordinatorAbi, data: log.data, topics: log.topics })
+			const decoded = decodeEventLog({ abi: openOraclePriceCoordinatorAbi, data: log.data, topics: log.topics })
 			if (decoded.eventName === 'StagedOperationQueued' && decoded.args.operation === 0n && decoded.args.operator.toLowerCase() === operator.toLowerCase() && decoded.args.targetVault.toLowerCase() === target.toLowerCase() && decoded.args.operationAmountAttoRepOrAttoEth === amount && decoded.args.isPendingSlot)
 				queuedOperationId = decoded.args.operationId
 			if (decoded.eventName === 'LiquidationRouteStaged' && decoded.args.operator.toLowerCase() === operator.toLowerCase() && decoded.args.receiverVault.toLowerCase() === receiver.toLowerCase() && decoded.args.targetVault.toLowerCase() === target.toLowerCase() && decoded.args.requestedDebtAttoEth === amount)

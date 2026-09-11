@@ -1,16 +1,4 @@
-export const factoryAbi = [
-	{
-		type: 'function',
-		name: 'getPool',
-		stateMutability: 'view',
-		inputs: [
-			{ name: 'tokenA', type: 'address' },
-			{ name: 'tokenB', type: 'address' },
-			{ name: 'fee', type: 'uint24' },
-		],
-		outputs: [{ name: 'pool', type: 'address' }],
-	},
-] as const
+export { openOracleAbi, openOraclePriceCoordinatorAbi } from '@zoltar/bot-shared/contracts/abi'
 
 export const constantProductFactoryAbi = [
 	{
@@ -38,6 +26,20 @@ export const constantProductPairAbi = [
 			{ name: 'reserve1', type: 'uint112' },
 			{ name: 'blockTimestampLast', type: 'uint32' },
 		],
+	},
+] as const
+
+export const factoryAbi = [
+	{
+		type: 'function',
+		name: 'getPool',
+		stateMutability: 'view',
+		inputs: [
+			{ name: 'tokenA', type: 'address' },
+			{ name: 'tokenB', type: 'address' },
+			{ name: 'fee', type: 'uint24' },
+		],
+		outputs: [{ name: 'pool', type: 'address' }],
 	},
 ] as const
 
@@ -188,22 +190,6 @@ export const erc20Abi = [
 	},
 ] as const
 
-export const openOraclePriceCoordinatorAbi = [
-	{ type: 'function', name: 'openOracle', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address' }] },
-	{ type: 'function', name: 'pendingReportId', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256' }] },
-	{ type: 'function', name: 'reputationToken', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address' }] },
-	{ type: 'function', name: 'weth', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address' }] },
-	{ type: 'function', name: 'settlementTime', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint48' }] },
-	{ type: 'function', name: 'disputeDelay', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint24' }] },
-	{ type: 'function', name: 'protocolFee', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint24' }] },
-	{ type: 'function', name: 'feePercentage', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint24' }] },
-	{ type: 'function', name: 'multiplier', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint16' }] },
-	{ type: 'function', name: 'timeType', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'bool' }] },
-	{ type: 'function', name: 'trackDisputes', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'bool' }] },
-	{ type: 'function', name: 'protocolFeeRecipient', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address' }] },
-	{ type: 'function', name: 'getSettlementCallbackGasLimit', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint32' }] },
-] as const
-
 export const augurUniverseAbi = [
 	{ type: 'function', name: 'getForkingMarket', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address' }] },
 	{ type: 'function', name: 'getReputationToken', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address' }] },
@@ -215,130 +201,4 @@ export const augurMarketAbi = [
 	{ type: 'function', name: 'getNumberOfOutcomes', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256' }] },
 ] as const
 
-const gameComponents = [
-	{ name: 'currentAmount1', type: 'uint128' },
-	{ name: 'currentAmount2', type: 'uint128' },
-	{ name: 'currentReporter', type: 'address' },
-	{ name: 'reportTimestamp', type: 'uint48' },
-	{ name: 'settlementTimestamp', type: 'uint48' },
-	{ name: 'token1', type: 'address' },
-	{ name: 'lastReportOppoTime', type: 'uint48' },
-	{ name: 'settlementTime', type: 'uint48' },
-	{ name: 'escalationHalt', type: 'uint128' },
-	{ name: 'protocolFeeRecipient', type: 'address' },
-	{ name: 'settlerReward', type: 'uint96' },
-	{ name: 'token2', type: 'address' },
-	{ name: 'numReports', type: 'uint24' },
-	{ name: 'disputeDelay', type: 'uint24' },
-	{ name: 'feePercentage', type: 'uint24' },
-	{ name: 'multiplier', type: 'uint16' },
-	{ name: 'callbackContract', type: 'address' },
-	{ name: 'callbackGasLimit', type: 'uint32' },
-	{ name: 'protocolFee', type: 'uint24' },
-	{ name: 'flags', type: 'uint8' },
-] as const
-
-const helperComponents = [
-	{ name: 'reportId', type: 'uint256' },
-	{ name: 'creator', type: 'address' },
-	{ name: 'blockTimestamp', type: 'uint256' },
-	{ name: 'blockNumber', type: 'uint256' },
-] as const
-
-const timingComponents = [
-	{ name: 'blockNumber', type: 'uint256' },
-	{ name: 'blockNumberBound', type: 'uint256' },
-	{ name: 'blockTimestamp', type: 'uint256' },
-	{ name: 'blockTimestampBound', type: 'uint256' },
-] as const
-
-export const openOracleAbi = [
-	{ type: 'function', name: 'oracleGame', stateMutability: 'view', inputs: [{ name: '', type: 'uint256' }], outputs: [{ name: '', type: 'bytes32' }] },
-	{
-		type: 'function',
-		name: 'disputeHistory',
-		stateMutability: 'view',
-		inputs: [
-			{ name: '', type: 'uint256' },
-			{ name: '', type: 'uint256' },
-		],
-		outputs: [
-			{ name: 'amount1', type: 'uint128' },
-			{ name: 'amount2', type: 'uint128' },
-			{ name: 'baseFee', type: 'uint128' },
-			{ name: 'reportTimestamp', type: 'uint48' },
-		],
-	},
-	{ type: 'function', name: 'storedGame', stateMutability: 'view', inputs: [{ name: '', type: 'uint256' }], outputs: gameComponents },
-	{
-		type: 'function',
-		name: 'storedHelper',
-		stateMutability: 'view',
-		inputs: [{ name: '', type: 'uint256' }],
-		outputs: [
-			{ name: 'creator', type: 'address' },
-			{ name: 'blockTimestamp', type: 'uint48' },
-			{ name: 'blockNumber', type: 'uint48' },
-		],
-	},
-	{
-		type: 'function',
-		name: 'tokenHolder',
-		stateMutability: 'view',
-		inputs: [
-			{ name: '', type: 'address' },
-			{ name: '', type: 'address' },
-		],
-		outputs: [{ name: '', type: 'uint256' }],
-	},
-	{
-		type: 'function',
-		name: 'internalAllowance',
-		stateMutability: 'view',
-		inputs: [
-			{ name: '', type: 'address' },
-			{ name: '', type: 'address' },
-			{ name: '', type: 'address' },
-		],
-		outputs: [{ name: '', type: 'uint256' }],
-	},
-	{
-		type: 'function',
-		name: 'settle',
-		stateMutability: 'nonpayable',
-		inputs: [
-			{ name: 'reportId', type: 'uint256' },
-			{ name: 'params', type: 'tuple', components: gameComponents },
-			{ name: 'helper', type: 'tuple', components: helperComponents },
-		],
-		outputs: [],
-	},
-	{
-		type: 'function',
-		name: 'withdraw',
-		stateMutability: 'nonpayable',
-		inputs: [
-			{ name: 'tokenToGet', type: 'address' },
-			{ name: 'amount', type: 'uint256' },
-		],
-		outputs: [{ name: 'sent', type: 'uint256' }],
-	},
-	{
-		type: 'function',
-		name: 'dispute',
-		stateMutability: 'payable',
-		inputs: [
-			{ name: 'reportId', type: 'uint256' },
-			{ name: 'newAmount1', type: 'uint128' },
-			{ name: 'newAmount2', type: 'uint128' },
-			{ name: 'disputer', type: 'address' },
-			{ name: 'tryInternalBalance1', type: 'bool' },
-			{ name: 'tryInternalBalance2', type: 'bool' },
-			{ name: 'params', type: 'tuple', components: gameComponents },
-			{ name: 'helper', type: 'tuple', components: helperComponents },
-			{ name: 'timing', type: 'tuple', components: timingComponents },
-		],
-		outputs: [],
-	},
-] as const
 export { openOracleArbitrageExecutorAbi } from '#contracts/executor-abi.generated'

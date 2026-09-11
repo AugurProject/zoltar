@@ -6,7 +6,7 @@ import example from '../../config/operator.example.json'
 import { privateKeyToAccount, zeroAddress, zeroHash, type Address } from '@zoltar/bot-shared/ethereum'
 import { EndpointCheckFailure, type EndpointCheck } from '@zoltar/bot-shared/monitoring/connectivity'
 import { parseSettings, serializedSettings, type OperatorSettings } from '../../src/config/settings.ts'
-import { createChaosShutdownController, type ChaosProcessLocks } from '../../src/core/process-locks.ts'
+import { createBotShutdownController, type BotProcessLocks } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { OperationRediscoveryRequired } from '../../src/execution/transaction-executor.ts'
 import { IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, type CanonicalImmutableTopologyCache } from '../../src/monitoring/topology-cache.ts'
 import { eligibleOperationPlans, reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
@@ -45,7 +45,7 @@ afterEach(async () => {
 	)
 })
 
-function processLocks(): ChaosProcessLocks {
+function processLocks(): BotProcessLocks {
 	return {
 		acquireSigner: async () => undefined,
 		commitSigner: async () => undefined,
@@ -523,7 +523,7 @@ describe('chaos operator runtime', () => {
 				ui: false,
 			},
 		})
-		using shutdown = createChaosShutdownController()
+		using shutdown = createBotShutdownController()
 		await runChaosOperator({ path: join(directory, 'operator.json'), revision: 'test-revision', settings }, processLocks(), shutdown)
 		const durable = await loadDurableState(stateFile, settings.network.chainId)
 		expect(durable.scheduler.status).toBe('paused')
@@ -556,7 +556,7 @@ describe('chaos operator runtime', () => {
 		}
 		await saveDurableState(stateFile, durable)
 
-		using shutdown = createChaosShutdownController()
+		using shutdown = createBotShutdownController()
 		await runChaosOperator({ path: join(directory, 'operator.json'), revision: 'test-revision', settings }, processLocks(), shutdown)
 
 		const rebound = await loadDurableState(stateFile, settings.network.chainId)
@@ -665,7 +665,7 @@ describe('chaos operator runtime', () => {
 		await saveDurableState(stateFile, durable)
 
 		const before = Date.now()
-		using shutdown = createChaosShutdownController()
+		using shutdown = createBotShutdownController()
 		shutdown.requestShutdown()
 		await runChaosOperator({ path: join(directory, 'operator.json'), revision: 'test-revision', settings }, processLocks(), shutdown)
 
@@ -694,7 +694,7 @@ describe('chaos operator runtime', () => {
 		const expectedScheduler = { ...durable.scheduler }
 		await saveDurableState(stateFile, durable)
 
-		using shutdown = createChaosShutdownController()
+		using shutdown = createBotShutdownController()
 		await runChaosOperator({ path: join(directory, 'operator.json'), revision: 'test-revision', settings }, processLocks(), shutdown)
 
 		const restarted = await loadDurableState(stateFile, settings.network.chainId)
@@ -709,16 +709,16 @@ describe('chaos operator runtime', () => {
 		const configuredStateFile = join(directory, 'configured-state.json')
 		const bootstrapSettings = restartSettings(bootstrapStateFile, 0, null)
 
-		using bootstrapShutdown = createChaosShutdownController()
+		using bootstrapShutdown = createBotShutdownController()
 		await runChaosOperator({ path: join(directory, 'operator.json'), revision: 'bootstrap-revision', settings: bootstrapSettings }, processLocks(), bootstrapShutdown)
 		const bootstrapBefore = await readFile(bootstrapStateFile)
 		const changedAtOldPath = restartSettings(bootstrapStateFile, 1, null)
-		using rejectedShutdown = createChaosShutdownController()
+		using rejectedShutdown = createBotShutdownController()
 		await expect(runChaosOperator({ path: join(directory, 'operator.json'), revision: 'changed-revision', settings: changedAtOldPath }, processLocks(), rejectedShutdown)).rejects.toThrow('configure a distinct state file for the new deployment profile')
 		expect((await readFile(bootstrapStateFile)).equals(bootstrapBefore)).toBeTrue()
 
 		const changedAtFreshPath = restartSettings(configuredStateFile, 1, null)
-		using configuredShutdown = createChaosShutdownController()
+		using configuredShutdown = createBotShutdownController()
 		await runChaosOperator({ path: join(directory, 'operator.json'), revision: 'configured-revision', settings: changedAtFreshPath }, processLocks(), configuredShutdown)
 		const configured = await loadDurableState(configuredStateFile, changedAtFreshPath.network.chainId)
 		expect(configured.profileId).toBe(executionProfileId(changedAtFreshPath))
@@ -737,7 +737,7 @@ describe('chaos operator runtime', () => {
 		const before = await readFile(stateFile)
 		const changedSettings = restartSettings(stateFile, 2, SECOND_PRIVATE_KEY)
 
-		using shutdown = createChaosShutdownController()
+		using shutdown = createBotShutdownController()
 		await expect(runChaosOperator({ path: join(directory, 'operator.json'), revision: 'test-revision', settings: changedSettings }, processLocks(), shutdown)).rejects.toThrow(`Durable state ${stateFile} is scoped to signer ${previousSigner}`)
 
 		const after = await readFile(stateFile)
@@ -760,7 +760,7 @@ describe('chaos operator runtime', () => {
 		const before = await readFile(stateFile)
 		const changedSettings = restartSettings(stateFile, 2, FIRST_PRIVATE_KEY)
 
-		using shutdown = createChaosShutdownController()
+		using shutdown = createBotShutdownController()
 		await expect(runChaosOperator({ path: join(directory, 'operator.json'), revision: 'test-revision', settings: changedSettings }, processLocks(), shutdown)).rejects.toThrow('configure a distinct state file for the new deployment profile')
 
 		expect((await readFile(stateFile)).equals(before)).toBeTrue()
@@ -774,7 +774,7 @@ describe('chaos operator runtime', () => {
 		await saveDurableState(stateFile, initialDurableState(previousSettings.network.chainId, true, executionProfileId(previousSettings)))
 		const changedSettings = restartSettings(stateFile, 2, null)
 
-		using shutdown = createChaosShutdownController()
+		using shutdown = createBotShutdownController()
 		await runChaosOperator({ path: join(directory, 'operator.json'), revision: 'test-revision', settings: changedSettings }, processLocks(), shutdown)
 
 		const durable = await loadDurableState(stateFile, changedSettings.network.chainId)

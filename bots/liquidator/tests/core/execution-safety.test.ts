@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { coordinatorAbi } from '../../src/contracts/abi.ts'
+import { openOraclePriceCoordinatorAbi } from '@zoltar/bot-shared/contracts/abi'
 import { ambiguousRecoveryAction, PRIVATE_INTENT_FINALITY_BLOCKS, recoveryWorkBlocksExecution, requireRecoveredTransactionSuccess, shouldStopAfterSuccessfulCycle } from '../../src/core/cycle-control.ts'
 import { hasStagedLiquidation } from '../../src/core/staged-operations.ts'
 import { stagedOperationOutcome } from '../../src/core/staged-outcome.ts'
@@ -28,7 +28,7 @@ const coordinator = getAddress('0x0000000000000000000000000000000000000010')
 
 function stagedOperationReceipt(success: boolean): TransactionReceipt {
 	const topics = encodeEventTopics({
-		abi: coordinatorAbi,
+		abi: openOraclePriceCoordinatorAbi,
 		args: { errorMessage: success ? '' : 'liquidation too close to threshold', operation: 0n, operationId: 1n, success },
 		eventName: 'ExecutedStagedOperation',
 	})
@@ -66,11 +66,11 @@ function queuedLiquidationReceipt(isPendingSlot: boolean): TransactionReceipt {
 	const operator = getAddress('0x0000000000000000000000000000000000000020')
 	const target = getAddress('0x0000000000000000000000000000000000000030')
 	const queuedTopics = encodeEventTopics({
-		abi: coordinatorAbi,
+		abi: openOraclePriceCoordinatorAbi,
 		args: { operationId: 1n, operator, targetVault: target },
 		eventName: 'StagedOperationQueued',
 	})
-	const routeTopics = encodeEventTopics({ abi: coordinatorAbi, args: { operationId: 1n, operator, receiverVault: operator }, eventName: 'LiquidationRouteStaged' })
+	const routeTopics = encodeEventTopics({ abi: openOraclePriceCoordinatorAbi, args: { operationId: 1n, operator, receiverVault: operator }, eventName: 'LiquidationRouteStaged' })
 	if (queuedTopics.some(topic => topic === null) || routeTopics.some(topic => topic === null)) throw new Error('Test event topics must not contain wildcards')
 	return {
 		...stagedOperationReceipt(true),

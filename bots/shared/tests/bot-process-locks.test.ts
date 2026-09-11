@@ -3,8 +3,8 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { acquireLiquidatorProcessLocks, LiquidatorProcessLockAcquisitionError } from '../../src/core/process-locks.ts'
-import { privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
+import { privateKeyToAccount } from '../src/ethereum.ts'
+import { acquireBotProcessLocks, BotProcessLockAcquisitionError, createBotShutdownController, type BotProcessLockOptions } from '../src/execution/bot-process-locks.ts'
 
 const directories: string[] = []
 const releases: (() => Promise<void>)[] = []
@@ -15,12 +15,17 @@ afterEach(async () => {
 })
 
 async function stateFile(name: string) {
-	const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-lock-'))
+	const directory = await mkdtemp(join(tmpdir(), 'zoltar-bot-lock-'))
 	directories.push(directory)
 	return join(directory, name)
 }
 
-describe('liquidator process locks', () => {
+const LIVE_ONLY: BotProcessLockOptions = { label: 'liquidator', signerLocksInDryRun: false }
+const ALWAYS: BotProcessLockOptions = { label: 'chaos-bot', signerLocksInDryRun: true }
+const acquireLiquidatorProcessLocks = (settings: Parameters<typeof acquireBotProcessLocks>[0], acquirers?: BotProcessLockOptions['acquirers']) => acquireBotProcessLocks(settings, acquirers === undefined ? LIVE_ONLY : { ...LIVE_ONLY, acquirers })
+const acquireChaosProcessLocks = (settings: Parameters<typeof acquireBotProcessLocks>[0], acquirers?: BotProcessLockOptions['acquirers']) => acquireBotProcessLocks(settings, acquirers === undefined ? ALWAYS : { ...ALWAYS, acquirers })
+
+describe('bot process locks', () => {
 	test('retains a partially acquired state lock when its first cleanup attempt fails', async () => {
 		let stateReleases = 0
 		const stateLock = {
@@ -44,8 +49,8 @@ describe('liquidator process locks', () => {
 		} catch (error) {
 			failure = error
 		}
-		expect(failure).toBeInstanceOf(LiquidatorProcessLockAcquisitionError)
-		if (!(failure instanceof LiquidatorProcessLockAcquisitionError)) throw new Error('Expected retained acquisition failure')
+		expect(failure).toBeInstanceOf(BotProcessLockAcquisitionError)
+		if (!(failure instanceof BotProcessLockAcquisitionError)) throw new Error('Expected retained acquisition failure')
 		await failure.releaseProcessLocks()
 		expect(stateReleases).toBe(2)
 	})
@@ -125,14 +130,14 @@ describe('liquidator process locks', () => {
 	test('releases state and signer locks after graceful SIGTERM shutdown and dashboard drain', async () => {
 		const state = await stateFile('state.json')
 		const privateKey = `0x${'44'.repeat(32)}` as const
-		const moduleUrl = pathToFileURL(resolve(import.meta.dir, '../../src/core/process-locks.ts')).href
+		const moduleUrl = pathToFileURL(resolve(import.meta.dir, '../src/execution/bot-process-locks.ts')).href
 		const script = `
-			import { acquireLiquidatorProcessLocks, createLiquidatorShutdownController, liquidatorDashboardLifecycle } from ${JSON.stringify(moduleUrl)}
+			import { acquireBotProcessLocks, createBotShutdownController, botDashboardLifecycle } from ${JSON.stringify(moduleUrl)}
 			{
-				using shutdown = createLiquidatorShutdownController()
-				const locks = await acquireLiquidatorProcessLocks({ chainId: 1, execute: true, privateKey: ${JSON.stringify(privateKey)}, stateFile: ${JSON.stringify(state)} })
+				using shutdown = createBotShutdownController()
+				const locks = await acquireBotProcessLocks({ chainId: 1, execute: true, privateKey: ${JSON.stringify(privateKey)}, stateFile: ${JSON.stringify(state)} }, { label: 'liquidator', signerLocksInDryRun: false })
 				try {
-					await using dashboardLifecycle = liquidatorDashboardLifecycle({
+					await using dashboardLifecycle = botDashboardLifecycle({
 						stop: async () => {
 							console.log('draining')
 							await Bun.sleep(250)
@@ -145,7 +150,7 @@ describe('liquidator process locks', () => {
 				}
 			}
 		`
-		const child = Bun.spawn([process.execPath, '--eval', script], { cwd: resolve(import.meta.dir, '../..'), stderr: 'pipe', stdout: 'pipe' })
+		const child = Bun.spawn([process.execPath, '--eval', script], { cwd: resolve(import.meta.dir, '..'), stderr: 'pipe', stdout: 'pipe' })
 		try {
 			const reader = child.stdout.getReader()
 			const decoder = new TextDecoder()
@@ -174,20 +179,21 @@ describe('liquidator process locks', () => {
 	test('cleans up when SIGTERM arrives before asynchronous lock acquisition returns', async () => {
 		const state = await stateFile('state.json')
 		const privateKey = `0x${'55'.repeat(32)}` as const
-		const moduleUrl = pathToFileURL(resolve(import.meta.dir, '../../src/core/process-locks.ts')).href
+		const moduleUrl = pathToFileURL(resolve(import.meta.dir, '../src/execution/bot-process-locks.ts')).href
 		const script = `
-			import { acquireLiquidatorProcessLocks, acquireLiquidatorProcessLocksForShutdown, createLiquidatorShutdownController } from ${JSON.stringify(moduleUrl)}
-			using shutdown = createLiquidatorShutdownController()
+			import { acquireBotProcessLocks, acquireBotProcessLocksForShutdown, createBotShutdownController } from ${JSON.stringify(moduleUrl)}
+			using shutdown = createBotShutdownController()
+			const options = { label: 'liquidator', signerLocksInDryRun: false }
 			const settings = { chainId: 1, execute: true, privateKey: ${JSON.stringify(privateKey)}, stateFile: ${JSON.stringify(state)} }
-			const locks = await acquireLiquidatorProcessLocksForShutdown(settings, shutdown, async current => {
-				const acquired = await acquireLiquidatorProcessLocks(current)
+			const locks = await acquireBotProcessLocksForShutdown(settings, options, shutdown, async (current, currentOptions) => {
+				const acquired = await acquireBotProcessLocks(current, currentOptions)
 				console.log('locked-before-return')
 				await shutdown.wait(60_000)
 				return acquired
 			})
 			await locks?.release()
 		`
-		const child = Bun.spawn([process.execPath, '--eval', script], { cwd: resolve(import.meta.dir, '../..'), stderr: 'pipe', stdout: 'pipe' })
+		const child = Bun.spawn([process.execPath, '--eval', script], { cwd: resolve(import.meta.dir, '..'), stderr: 'pipe', stdout: 'pipe' })
 		try {
 			const reader = child.stdout.getReader()
 			const next = await reader.read()
@@ -201,5 +207,74 @@ describe('liquidator process locks', () => {
 		}
 		const replacement = await acquireLiquidatorProcessLocks({ chainId: 1, execute: true, privateKey, stateFile: state })
 		releases.push(replacement.release)
+	})
+
+	test('wakes the scheduler wait without requesting shutdown', async () => {
+		using shutdown = createBotShutdownController()
+		const waiting = shutdown.wait(60_000)
+		shutdown.wake()
+		await waiting
+		expect(shutdown.isRequested()).toBe(false)
+		await shutdown.wait(1)
+	})
+
+	test('allows only one chaos process to own a durable state journal', async () => {
+		const state = await stateFile('state.json')
+		const first = await acquireChaosProcessLocks({ chainId: 1, execute: false, privateKey: undefined, stateFile: state })
+		releases.push(first.release)
+		await expect(acquireChaosProcessLocks({ chainId: 1, execute: false, privateKey: undefined, stateFile: state })).rejects.toThrow('already locked')
+	})
+
+	test('uses the shared global chain-and-signer lock across separate chaos journals', async () => {
+		const privateKey = `0x${'33'.repeat(32)}` as const
+		const firstState = await stateFile('first.json')
+		const secondState = await stateFile('second.json')
+		const first = await acquireChaosProcessLocks({ chainId: 1, execute: true, privateKey, stateFile: firstState })
+		releases.push(first.release)
+		await expect(acquireChaosProcessLocks({ chainId: 1, execute: true, privateKey, stateFile: secondState })).rejects.toThrow('already locked')
+		const stateWasReleased = await acquireChaosProcessLocks({ chainId: 1, execute: false, privateKey: undefined, stateFile: secondState })
+		releases.push(stateWasReleased.release)
+	})
+
+	test('uses a configured durable lock root to coordinate one signer across instances', async () => {
+		const privateKey = `0x${'66'.repeat(32)}` as const
+		const lockRoot = join(await mkdtemp(join(tmpdir(), 'zoltar-chaos-signer-lock-')), 'locks')
+		directories.push(lockRoot.slice(0, -'/locks'.length))
+		const first = await acquireChaosProcessLocks({ chainId: 11_155_111, execute: true, privateKey, signerLockRoot: lockRoot, stateFile: await stateFile('durable-first.json') })
+		releases.push(first.release)
+		await expect(acquireChaosProcessLocks({ chainId: 11_155_111, execute: true, privateKey, signerLockRoot: lockRoot, stateFile: await stateFile('durable-second.json') })).rejects.toThrow('already locked')
+	})
+
+	test('acquires global signer exclusivity when a dry-run process transitions to live execution', async () => {
+		const privateKey = `0x${'55'.repeat(32)}` as const
+		const address = privateKeyToAccount(privateKey).address
+		const first = await acquireChaosProcessLocks({ chainId: 1, execute: false, privateKey, stateFile: await stateFile('dry-run.json') })
+		releases.push(first.release)
+		const liveSignerLock = await first.acquireSigner(address)
+		await first.commitSigner(address, liveSignerLock)
+		const competitor = await acquireChaosProcessLocks({ chainId: 1, execute: false, privateKey, stateFile: await stateFile('competitor.json') })
+		releases.push(competitor.release)
+		await expect(competitor.acquireSigner(address)).rejects.toThrow('already locked')
+	})
+
+	test('does not reserve a signer for a dry-run process whose policy locks signers only when executing', async () => {
+		const privateKey = `0x${'77'.repeat(32)}` as const
+		const address = privateKeyToAccount(privateKey).address
+		const dryRun = await acquireLiquidatorProcessLocks({ chainId: 1, execute: false, privateKey, stateFile: await stateFile('dry-run.json') })
+		releases.push(dryRun.release)
+		expect(await dryRun.acquireSigner(address)).toBeUndefined()
+		const live = await acquireLiquidatorProcessLocks({ chainId: 1, execute: true, privateKey, stateFile: await stateFile('live.json') })
+		releases.push(live.release)
+	})
+
+	test('shutdown request interrupts a long polling wait and remains idempotent', async () => {
+		using shutdown = createBotShutdownController()
+		const startedAt = Date.now()
+		const waiting = shutdown.wait(60_000)
+		shutdown.requestShutdown()
+		shutdown.requestShutdown()
+		await expect(Promise.race([waiting.then(() => 'stopped'), Bun.sleep(250).then(() => 'timed-out')])).resolves.toBe('stopped')
+		expect(Date.now() - startedAt).toBeLessThan(1_000)
+		expect(shutdown.isRequested()).toBe(true)
 	})
 })

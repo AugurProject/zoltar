@@ -16,10 +16,6 @@
 	font-synthesis: none;
 }
 
-* {
-	box-sizing: border-box;
-}
-
 html {
 	min-width: 20rem;
 	background: var(--operator-background);
@@ -1170,13 +1166,6 @@ tbody tr:last-child td {
 
 .settings-group summary strong {
 	font-size: 1rem;
-}
-
-fieldset {
-	min-width: 0;
-	margin: 0;
-	padding: 0;
-	border: 0;
 }
 
 .switch-row {

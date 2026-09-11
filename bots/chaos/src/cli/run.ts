@@ -2,7 +2,8 @@
 
 import { getAddress, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
 import { assertSettingsProfileIsolation, loadSettings } from '../config/settings.ts'
-import { acquireChaosProcessLocksForShutdown, ChaosProcessLockAcquisitionError, createChaosShutdownController, type ChaosProcessLocks } from '../core/process-locks.ts'
+import { acquireBotProcessLocksForShutdown, BotProcessLockAcquisitionError, createBotShutdownController, type BotProcessLocks } from '@zoltar/bot-shared/execution/bot-process-locks'
+import { CHAOS_PROCESS_LOCK_OPTIONS } from '../core/process-lock-options.ts'
 import { executionProfileId, runChaosOperator } from '../runtime/operator.ts'
 import { loadDurableState, saveDurableState } from '../state/operator-state.ts'
 import { acceptResidualProfileReplacement, assertSafeRetirementRecipient, cancelRetirement, DEFAULT_RETIREMENT_POLICIES, registerV3Position, requestRetirement } from '../state/retirement.ts'
@@ -105,12 +106,12 @@ async function applyRetirementCommand(command: Exclude<RunCommand, { kind: 'oper
 
 export async function main() {
 	const command = parseRunCommand(process.argv.slice(2))
-	using shutdown = createChaosShutdownController()
+	using shutdown = createBotShutdownController()
 	const loaded = await loadSettings()
 	await assertSettingsProfileIsolation(loaded.path, loaded.settings)
-	let locks: ChaosProcessLocks
+	let locks: BotProcessLocks
 	try {
-		const acquired = await acquireChaosProcessLocksForShutdown(
+		const acquired = await acquireBotProcessLocksForShutdown(
 			{
 				chainId: loaded.settings.network.chainId,
 				execute: loaded.settings.runtime.execute,
@@ -118,12 +119,13 @@ export async function main() {
 				signerLockRoot: process.env['ZOLTAR_BOT_SIGNER_LOCK_ROOT'],
 				stateFile: loaded.settings.runtime.stateFile,
 			},
+			CHAOS_PROCESS_LOCK_OPTIONS,
 			shutdown,
 		)
 		if (acquired === undefined) return
 		locks = acquired
 	} catch (error) {
-		if (error instanceof ChaosProcessLockAcquisitionError) {
+		if (error instanceof BotProcessLockAcquisitionError) {
 			await error.releaseProcessLocks()
 			throw error.acquisitionCause
 		}

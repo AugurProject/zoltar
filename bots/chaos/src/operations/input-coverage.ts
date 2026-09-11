@@ -1,27 +1,27 @@
 import type { Abi, AbiParameter } from '@zoltar/bot-shared/ethereum'
-import * as abis from '../contracts/abi.ts'
+import * as abis from '@zoltar/bot-shared/contracts/abi'
 import { operationInputSchema } from './input-schema.ts'
 import type { OperationDefinition } from './types.ts'
 
 const bindings: Record<string, Abi> = {
-	ZoltarQuestionData: abis.questionDataAbi,
+	ZoltarQuestionData: abis.zoltarQuestionDataAbi,
 	Zoltar: abis.zoltarAbi,
-	ReputationToken: abis.erc20Abi,
+	ReputationToken: abis.genesisReputationTokenAbi,
 	SecurityPoolFactory: abis.securityPoolFactoryAbi,
 	SecurityPool: abis.securityPoolAbi,
-	OpenOraclePriceCoordinator: abis.coordinatorAbi,
+	OpenOraclePriceCoordinator: abis.openOraclePriceCoordinatorAbi,
 	SecurityPoolForker: abis.securityPoolForkerAbi,
-	UniformPriceDualCapBatchAuction: abis.auctionAbi,
+	UniformPriceDualCapBatchAuction: abis.uniformPriceDualCapBatchAuctionAbi,
 	EscalationGame: abis.escalationGameAbi,
 	OpenOracle: abis.openOracleAbi,
-	WETH9: [...abis.wethAbi, ...abis.erc20Abi],
-	ShareToken: [...abis.shareTokenAbi, ...abis.erc1155Abi],
-	TwoWayConstantProductFactory: abis.tradingFactoryAbi,
-	TwoWayConstantProductPair: [...abis.tradingPairAbi, ...abis.erc20Abi],
-	TwoWayConstantProductRouter: abis.tradingRouterAbi,
-	GenesisUniswapV3Seeder: abis.genesisUniswapSeederAbi,
-	UniswapV3Factory: abis.uniswapV3FactoryAbi,
-	UniswapV3Pool: abis.uniswapV3PoolAbi,
+	WETH9: abis.weth9Abi,
+	ShareToken: abis.shareTokenAbi,
+	TwoWayConstantProductFactory: abis.twoWayConstantProductFactoryAbi,
+	TwoWayConstantProductPair: abis.twoWayConstantProductPairAbi,
+	TwoWayConstantProductRouter: abis.twoWayConstantProductRouterAbi,
+	GenesisUniswapV3Seeder: abis.genesisUniswapV3SeederAbi,
+	UniswapV3Factory: abis.genesisUniswapV3FactoryAbi,
+	UniswapV3Pool: abis.genesisUniswapV3PoolStateAbi,
 }
 
 // Fields read from durable metadata still own these transaction arguments.

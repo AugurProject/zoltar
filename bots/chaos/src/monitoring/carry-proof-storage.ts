@@ -1,6 +1,6 @@
 import { carryStorageAbi as storageAbi } from '../contracts/carry-storage-abi.ts'
 import { getAddress, zeroAddress, zeroHash, type Address } from '@zoltar/bot-shared/ethereum'
-import { escalationGameAbi, securityPoolAbi, securityPoolForkerAbi } from '../contracts/abi.ts'
+import { escalationGameAbi, securityPoolAbi, securityPoolForkerAbi } from '@zoltar/bot-shared/contracts/abi'
 import { drainConcurrent, type ChaosReadClient } from './discovery.ts'
 import { carryCommitment, createMerkleMountainRangeProof, createSparseNullifierProof, hashCarryLeaf, nullifierPath, sparseNullifierRoot, type CarryLeafSlot, type CarryOutcome } from './carry-proof-index.ts'
 

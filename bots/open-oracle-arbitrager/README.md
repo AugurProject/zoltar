@@ -335,9 +335,12 @@ The project compiles `contracts/OpenOracleArbitrageExecutor.sol` into
 `src/contracts/executor-abi.generated.ts` from that local artifact. Never edit either
 generated file directly. After an executor contract change, run
 `bun run compile-contracts && bun run generate:abi`, review the generated diff, and
-verify freshness with `bun run check:generated`. The remaining minimal ABIs in
-`src/contracts/abi.ts` are maintained separately and checked against compiled
-artifacts by `tests/contracts/abi.test.ts`.
+verify freshness with `bun run check:generated`. ABIs for repository contracts
+(OpenOracle, the price coordinator) come from `@zoltar/bot-shared/contracts/abi`,
+which `tooling/contracts/generate-bot-abis.mts` generates from the compiled
+artifacts and `bots/shared`'s `check:generated` keeps fresh. `src/contracts/abi.ts`
+holds only external-contract ABIs (Uniswap, Augur, generic ERC-20) that have no
+compiled artifact in this repository.
 
 ### Executor public surface
 

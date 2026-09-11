@@ -1,9 +1,12 @@
 import { getAddress, zeroAddress } from '@zoltar/bot-shared/ethereum'
-import { erc1155Abi, erc20Abi, openOracleAbi, wethAbi } from '../contracts/abi.ts'
+import { erc1155Abi, genesisReputationTokenAbi, openOracleAbi, twoWayConstantProductPairAbi, weth9Abi } from '@zoltar/bot-shared/contracts/abi'
 import { retirementErc20TransferAbi } from '../contracts/retirement-abi.ts'
 import { encodeStep, planBase } from '../operations/planning.ts'
 import type { EcosystemSnapshot, OperationPlan } from '../operations/types.ts'
 import { assertSafeRetirementRecipient, type DurableRetirementState } from '../state/retirement.ts'
+
+// Allowance revocation targets whichever ERC-20 the wallet approved; the REP artifact carries the standard ERC-20 surface.
+const erc20Abi = genesisReputationTokenAbi
 
 export function buildAllowanceRevocationPlan(snapshot: EcosystemSnapshot, seed: number): OperationPlan | undefined {
 	const internalApproval = [...snapshot.wallet.tokens].sort((left, right) => left.address.localeCompare(right.address)).find(token => BigInt(token.openOracleInternalAllowanceToSelf ?? '0') > 0n)
@@ -99,7 +102,7 @@ export function buildAllowanceRevocationPlan(snapshot: EcosystemSnapshot, seed: 
 			postconditions: ['The LP-token router allowance is zero'],
 			risk: 'low',
 			snapshot,
-			steps: [encodeStep({ abi: erc20Abi, args: [snapshot.deployments.tradingRouter, 0n], functionName: 'approve', id: 'revoke-lp', label: 'Revoke LP-token allowance', to: lpApproval.pair })],
+			steps: [encodeStep({ abi: twoWayConstantProductPairAbi, args: [snapshot.deployments.tradingRouter, 0n], functionName: 'approve', id: 'revoke-lp', label: 'Revoke LP-token allowance', to: lpApproval.pair })],
 		}),
 		planningSeed: seed,
 	}
@@ -161,7 +164,7 @@ export function buildAssetSweepPlan(snapshot: EcosystemSnapshot, retirement: Dur
 				postconditions: ['The selected WETH balance is converted to native ETH'],
 				risk: 'low',
 				snapshot,
-				steps: [encodeStep({ abi: wethAbi, args: [amount], functionName: 'withdraw', id: 'unwrap-weth', label: 'Unwrap WETH', to: snapshot.deployments.weth, walletAssetDebits: [{ amount: amount.toString(), asset: snapshot.deployments.weth, category: 'weth', kind: 'erc20' }] })],
+				steps: [encodeStep({ abi: weth9Abi, args: [amount], functionName: 'withdraw', id: 'unwrap-weth', label: 'Unwrap WETH', to: snapshot.deployments.weth, walletAssetDebits: [{ amount: amount.toString(), asset: snapshot.deployments.weth, category: 'weth', kind: 'erc20' }] })],
 			}),
 			planningSeed: seed,
 		}

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData } from '@zoltar/bot-shared/ethereum'
-import { coordinatorAbi, erc20Abi } from '../../src/contracts/abi.ts'
+import { openOraclePriceCoordinatorAbi, genesisReputationTokenAbi } from '@zoltar/bot-shared/contracts/abi'
 import { assertOperationEthFunding } from '../../src/execution/safety.ts'
 import { anchoredMinimumToken1ReportAttoEth, anchoredRequestPriceCostAttoEth, assertAnchoredOracleRequestFunding, assertOracleRequestFundingEnvelope, oracleRequestFundingBounds, oracleRequestFundingEnvelope, oracleRequestFundingForMaximumBaseFee } from '../../src/operations/oracle-request-funding.ts'
 import { eligibleOperationPlans, reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
@@ -196,14 +196,14 @@ describe('oracle request funding bounds', () => {
 		expect(plan.steps).toHaveLength(3)
 
 		for (const approval of plan.steps.slice(0, 2)) {
-			const decoded = decodeFunctionData({ abi: erc20Abi, data: approval.data })
+			const decoded = decodeFunctionData({ abi: genesisReputationTokenAbi, data: approval.data })
 			expect(decoded.functionName).toBe('approve')
 			expect(decoded.args).toEqual([pool.coordinator, 90_909_090_909_082n])
 		}
 
 		const request = plan.steps[2]
 		if (request === undefined) throw new Error('Request-price step missing')
-		const decoded = decodeFunctionData({ abi: coordinatorAbi, data: request.data })
+		const decoded = decodeFunctionData({ abi: openOraclePriceCoordinatorAbi, data: request.data })
 		expect(decoded.functionName).toBe('requestPrice')
 		expect(decoded.args[1]).toBe(90_909_090_909_082n)
 		expect(request.value).toBe('909090909090901')
@@ -304,7 +304,7 @@ describe('oracle request funding bounds', () => {
 		expect(oneConfirmedContinuation.plan?.maximumCleanupTransactionCount).toBe(2)
 		const remainingApproval = oneConfirmedContinuation.plan?.steps[0]
 		if (remainingApproval === undefined) throw new Error('Remaining REP approval missing')
-		expect(decodeFunctionData({ abi: erc20Abi, data: remainingApproval.data }).args).toEqual([pool.coordinator, BigInt(initialRepAttoRep)])
+		expect(decodeFunctionData({ abi: genesisReputationTokenAbi, data: remainingApproval.data }).args).toEqual([pool.coordinator, BigInt(initialRepAttoRep)])
 		const oneConfirmedCleanup = reevaluateOperationContinuation(snapshot, initial, options, {
 			confirmedStepIds: ['approve-oracle-weth'],
 			continuationDisposition: 'cleanup-only',
@@ -348,7 +348,7 @@ describe('oracle request funding bounds', () => {
 		expect(cleanup.plan?.terminalSubmission).toBeUndefined()
 		expect(cleanup.plan?.metadata).toEqual(initial.metadata)
 		for (const step of cleanup.plan?.steps ?? []) {
-			const decoded = decodeFunctionData({ abi: erc20Abi, data: step.data })
+			const decoded = decodeFunctionData({ abi: genesisReputationTokenAbi, data: step.data })
 			expect(decoded.functionName).toBe('approve')
 			expect(decoded.args).toEqual([pool.coordinator, 0n])
 			expect(step.walletAssetDebits).toEqual([])

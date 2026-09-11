@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { createRpcEndpointPool, createWalletClient, encodeAbiParameters, encodeFunctionData, getAddress, isHex, keccak256, mainnet, privateKeyToAccount, toHex } from '@zoltar/bot-shared/ethereum'
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
-import { securityPoolAbi } from '../../src/contracts/abi.ts'
+import { securityPoolAbi } from '@zoltar/bot-shared/contracts/abi'
 import type { OperatorSettings } from '../../src/config/settings.ts'
 import {
 	OperationRediscoveryRequired,

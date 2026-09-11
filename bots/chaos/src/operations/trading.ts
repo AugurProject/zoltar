@@ -1,7 +1,7 @@
 import { inputInteger, inputMatches, inputSpend } from './input-values.ts'
 import { decodeFunctionData, encodeAbiParameters, encodeDeployData, getAddress, getCreate2Address, isAddress, toHex, zeroAddress, type AbiValue, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory, trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter } from '../../../../solidity/ts/types/contractArtifact.ts'
-import { erc1155Abi, erc20Abi, genesisUniswapSeederAbi, shareTokenAbi, tradingFactoryAbi, tradingPairAbi, tradingRouterAbi, uniswapV3FactoryAbi, uniswapV3PoolAbi } from '../contracts/abi.ts'
+import { erc1155Abi, genesisReputationTokenAbi, genesisUniswapV3SeederAbi, shareTokenAbi, twoWayConstantProductFactoryAbi, twoWayConstantProductPairAbi, twoWayConstantProductRouterAbi, genesisUniswapV3FactoryAbi, genesisUniswapV3PoolStateAbi } from '@zoltar/bot-shared/contracts/abi'
 import { CANONICAL_UNISWAP_V3_FACTORY, GENESIS_UNISWAP_FEE, GENESIS_UNISWAP_SQRT_PRICE_X96, GENESIS_UNISWAP_TICK_LOWER, GENESIS_UNISWAP_TICK_UPPER, genesisUniswapSeederDeployment } from '../core/genesis-uniswap.ts'
 import { allowance, amount, cappedSpend, choose, disabled, eligible, encodeStep, erc1155WalletDebit, erc20AllowanceEvidence, erc20WalletDebit, eventEvidence, mixSeed, optionAmount, planBase, randomDeadline, tokenInventory } from './planning.ts'
 import { timestampDeadlineHasRequiredSafety } from './timing.ts'
@@ -187,7 +187,7 @@ const createGenesisUniswapPool: OperationDefinition = {
 			snapshot,
 			steps: [
 				encodeStep({
-					abi: uniswapV3FactoryAbi,
+					abi: genesisUniswapV3FactoryAbi,
 					args: [rep, snapshot.deployments.weth, GENESIS_UNISWAP_FEE],
 					evidence: [{ abi: 'function getPool(address tokenA,address tokenB,uint24 fee) view returns (address)', args: [rep, snapshot.deployments.weth, GENESIS_UNISWAP_FEE.toString()], contract: uniswapFactory, expected: '0', functionName: 'getPool', kind: 'storage-postcondition', relation: 'greater-than' }],
 					functionName: 'createPool',
@@ -223,7 +223,7 @@ const initializeGenesisUniswapPool: OperationDefinition = {
 			postconditions: ['The genesis REP/WETH pool has a 1:1 initial sqrt price'],
 			risk: 'medium',
 			snapshot,
-			steps: [encodeStep({ abi: uniswapV3PoolAbi, args: [GENESIS_UNISWAP_SQRT_PRICE_X96], functionName: 'initialize', id: 'initialize-genesis-uniswap-pool', label: 'Initialize REP/WETH pool', to: pool, walletAssetDebits: [] })],
+			steps: [encodeStep({ abi: genesisUniswapV3PoolStateAbi, args: [GENESIS_UNISWAP_SQRT_PRICE_X96], functionName: 'initialize', id: 'initialize-genesis-uniswap-pool', label: 'Initialize REP/WETH pool', to: pool, walletAssetDebits: [] })],
 		})
 	},
 	classification: 'selectable',
@@ -263,12 +263,12 @@ const seedGenesisUniswapPool: OperationDefinition = {
 		if (liquidity === 0n) return undefined
 		const steps = []
 		if (allowance(tokenInventory(snapshot, token0), seeder) !== maximum0)
-			steps.push(encodeStep({ abi: erc20Abi, args: [seeder, maximum0], evidence: [erc20AllowanceEvidence(token0, snapshot.wallet.address, seeder, maximum0)], functionName: 'approve', id: 'approve-genesis-token0', label: 'Approve genesis token0', to: token0, walletAssetDebits: [] }))
+			steps.push(encodeStep({ abi: genesisReputationTokenAbi, args: [seeder, maximum0], evidence: [erc20AllowanceEvidence(token0, snapshot.wallet.address, seeder, maximum0)], functionName: 'approve', id: 'approve-genesis-token0', label: 'Approve genesis token0', to: token0, walletAssetDebits: [] }))
 		if (allowance(tokenInventory(snapshot, token1), seeder) !== maximum1)
-			steps.push(encodeStep({ abi: erc20Abi, args: [seeder, maximum1], evidence: [erc20AllowanceEvidence(token1, snapshot.wallet.address, seeder, maximum1)], functionName: 'approve', id: 'approve-genesis-token1', label: 'Approve genesis token1', to: token1, walletAssetDebits: [] }))
+			steps.push(encodeStep({ abi: genesisReputationTokenAbi, args: [seeder, maximum1], evidence: [erc20AllowanceEvidence(token1, snapshot.wallet.address, seeder, maximum1)], functionName: 'approve', id: 'approve-genesis-token1', label: 'Approve genesis token1', to: token1, walletAssetDebits: [] }))
 		steps.push(
 			encodeStep({
-				abi: genesisUniswapSeederAbi,
+				abi: genesisUniswapV3SeederAbi,
 				args: [pool, token0, token1, GENESIS_UNISWAP_TICK_LOWER, GENESIS_UNISWAP_TICK_UPPER, liquidity, maximum0, maximum1, snapshot.wallet.address],
 				evidence: [{ kind: 'receipt-success' }],
 				functionName: 'seed',
@@ -301,7 +301,18 @@ const seedGenesisUniswapPool: OperationDefinition = {
 			const steps = [token0, token1].flatMap((token, index) =>
 				!plannedStepIds.has(`approve-genesis-token${index.toString()}`) || !confirmedStepIds.has(`approve-genesis-token${index.toString()}`) || allowance(tokenInventory(snapshot, token), seeder) === 0n
 					? []
-					: [encodeStep({ abi: erc20Abi, args: [seeder, 0n], evidence: [erc20AllowanceEvidence(token, snapshot.wallet.address, seeder, 0n)], functionName: 'approve', id: `revoke-genesis-token${index.toString()}`, label: `Revoke genesis token${index.toString()} allowance`, to: token, walletAssetDebits: [] })],
+					: [
+							encodeStep({
+								abi: genesisReputationTokenAbi,
+								args: [seeder, 0n],
+								evidence: [erc20AllowanceEvidence(token, snapshot.wallet.address, seeder, 0n)],
+								functionName: 'approve',
+								id: `revoke-genesis-token${index.toString()}`,
+								label: `Revoke genesis token${index.toString()} allowance`,
+								to: token,
+								walletAssetDebits: [],
+							}),
+						],
 			)
 			if (steps.length === 0) return undefined
 			return planBase({
@@ -388,7 +399,7 @@ const createUniverseUniswapPool: OperationDefinition = {
 			snapshot,
 			steps: [
 				encodeStep({
-					abi: uniswapV3FactoryAbi,
+					abi: genesisUniswapV3FactoryAbi,
 					args: [target.repToken, snapshot.deployments.weth, GENESIS_UNISWAP_FEE],
 					evidence: [{ abi: 'function getPool(address tokenA,address tokenB,uint24 fee) view returns (address)', args: [target.repToken, snapshot.deployments.weth, GENESIS_UNISWAP_FEE.toString()], contract: factory, expected: '0', functionName: 'getPool', kind: 'storage-postcondition', relation: 'greater-than' }],
 					functionName: 'createPool',
@@ -424,7 +435,7 @@ const initializeUniverseUniswapPool: OperationDefinition = {
 			postconditions: ['The canonical universe REP/WETH pool has the configured deterministic initial sqrt price'],
 			risk: 'medium',
 			snapshot,
-			steps: [encodeStep({ abi: uniswapV3PoolAbi, args: [GENESIS_UNISWAP_SQRT_PRICE_X96], functionName: 'initialize', id: 'initialize-universe-uniswap-pool', label: `Initialize universe ${target.universeId} REP/WETH pool`, to: target.pool, walletAssetDebits: [] })],
+			steps: [encodeStep({ abi: genesisUniswapV3PoolStateAbi, args: [GENESIS_UNISWAP_SQRT_PRICE_X96], functionName: 'initialize', id: 'initialize-universe-uniswap-pool', label: `Initialize universe ${target.universeId} REP/WETH pool`, to: target.pool, walletAssetDebits: [] })],
 		})
 	},
 	classification: 'selectable',
@@ -455,12 +466,12 @@ const seedUniverseUniswapPool: OperationDefinition = {
 		if (liquidity === 0n) return undefined
 		const steps = []
 		if (allowance(tokenInventory(snapshot, token0), seeder) !== maximum0)
-			steps.push(encodeStep({ abi: erc20Abi, args: [seeder, maximum0], evidence: [erc20AllowanceEvidence(token0, snapshot.wallet.address, seeder, maximum0)], functionName: 'approve', id: 'approve-universe-token0', label: 'Approve universe token0', to: token0, walletAssetDebits: [] }))
+			steps.push(encodeStep({ abi: genesisReputationTokenAbi, args: [seeder, maximum0], evidence: [erc20AllowanceEvidence(token0, snapshot.wallet.address, seeder, maximum0)], functionName: 'approve', id: 'approve-universe-token0', label: 'Approve universe token0', to: token0, walletAssetDebits: [] }))
 		if (allowance(tokenInventory(snapshot, token1), seeder) !== maximum1)
-			steps.push(encodeStep({ abi: erc20Abi, args: [seeder, maximum1], evidence: [erc20AllowanceEvidence(token1, snapshot.wallet.address, seeder, maximum1)], functionName: 'approve', id: 'approve-universe-token1', label: 'Approve universe token1', to: token1, walletAssetDebits: [] }))
+			steps.push(encodeStep({ abi: genesisReputationTokenAbi, args: [seeder, maximum1], evidence: [erc20AllowanceEvidence(token1, snapshot.wallet.address, seeder, maximum1)], functionName: 'approve', id: 'approve-universe-token1', label: 'Approve universe token1', to: token1, walletAssetDebits: [] }))
 		steps.push(
 			encodeStep({
-				abi: genesisUniswapSeederAbi,
+				abi: genesisUniswapV3SeederAbi,
 				args: [target.pool, token0, token1, GENESIS_UNISWAP_TICK_LOWER, GENESIS_UNISWAP_TICK_UPPER, liquidity, maximum0, maximum1, snapshot.wallet.address],
 				evidence: [{ kind: 'receipt-success' }],
 				functionName: 'seed',
@@ -493,7 +504,18 @@ const seedUniverseUniswapPool: OperationDefinition = {
 			const steps = [token0, token1].flatMap((token, index) =>
 				!planned.has(`approve-universe-token${index.toString()}`) || !confirmed.has(`approve-universe-token${index.toString()}`) || allowance(tokenInventory(snapshot, token), seeder) === 0n
 					? []
-					: [encodeStep({ abi: erc20Abi, args: [seeder, 0n], evidence: [erc20AllowanceEvidence(token, snapshot.wallet.address, seeder, 0n)], functionName: 'approve', id: `revoke-universe-token${index.toString()}`, label: `Revoke universe token${index.toString()} allowance`, to: token, walletAssetDebits: [] })],
+					: [
+							encodeStep({
+								abi: genesisReputationTokenAbi,
+								args: [seeder, 0n],
+								evidence: [erc20AllowanceEvidence(token, snapshot.wallet.address, seeder, 0n)],
+								functionName: 'approve',
+								id: `revoke-universe-token${index.toString()}`,
+								label: `Revoke universe token${index.toString()} allowance`,
+								to: token,
+								walletAssetDebits: [],
+							}),
+						],
 			)
 			if (steps.length === 0) return undefined
 			return planBase({
@@ -720,7 +742,7 @@ function buildDirectShareLiquidityPlan(
 	if (expectedLiquidity === undefined || expectedLiquidity < minimumLiquidity) return undefined
 	steps.push(
 		encodeStep({
-			abi: tradingPairAbi,
+			abi: twoWayConstantProductPairAbi,
 			args: [shareAmount, shareAmount, minimumLiquidity, snapshot.wallet.address],
 			evidence: [eventEvidence(pair.address, signature)],
 			functionName: method,
@@ -806,7 +828,7 @@ function previousDirectActionMatches(snapshot: EcosystemSnapshot, context: Opera
 	const step = previousAction(context, method)
 	if (step === undefined || step.to.toLowerCase() !== pair.address.toLowerCase()) return false
 	try {
-		const call = decodeFunctionData({ abi: tradingPairAbi, data: step.data })
+		const call = decodeFunctionData({ abi: twoWayConstantProductPairAbi, data: step.data })
 		if (method === 'initialize') {
 			return call.functionName === 'initialize' && call.args[0] === shareAmount && call.args[1] === shareAmount && call.args[2] === minimumLiquidity && sameAddress(call.args[3], snapshot.wallet.address)
 		}
@@ -822,7 +844,7 @@ function previousSwapActionMatches(snapshot: EcosystemSnapshot, context: Operati
 	const step = previousAction(context, method)
 	if (step === undefined || step.to.toLowerCase() !== pair.address.toLowerCase()) return false
 	try {
-		const call = decodeFunctionData({ abi: tradingPairAbi, data: step.data })
+		const call = decodeFunctionData({ abi: twoWayConstantProductPairAbi, data: step.data })
 		if (mode === 'exact-input') {
 			return call.functionName === 'swapExactInput' && call.args[0] === yesForNo && call.args[1] === principal && call.args[2] === bound && sameAddress(call.args[3], snapshot.wallet.address)
 		}
@@ -837,7 +859,7 @@ function previousRemoveActionMatches(snapshot: EcosystemSnapshot, context: Opera
 	const step = previousAction(context, 'removeLiquidity')
 	if (step === undefined || step.to.toLowerCase() !== pair.address.toLowerCase()) return false
 	try {
-		const call = decodeFunctionData({ abi: tradingPairAbi, data: step.data })
+		const call = decodeFunctionData({ abi: twoWayConstantProductPairAbi, data: step.data })
 		return call.functionName === 'removeLiquidity' && call.args[0] === liquidity && call.args[1] === minimumYes && call.args[2] === minimumNo && sameAddress(call.args[3], snapshot.wallet.address) && call.args[4] === BigInt(context.previousPlan.deadlineTimestamp ?? '0')
 	} catch (error) {
 		if (error instanceof Error) return false
@@ -968,7 +990,7 @@ const createPair: OperationDefinition = {
 			snapshot,
 			steps: [
 				encodeStep({
-					abi: tradingFactoryAbi,
+					abi: twoWayConstantProductFactoryAbi,
 					args: [pool.address],
 					evidence: [
 						{
@@ -1073,7 +1095,7 @@ function buildSwapPlan(snapshot: EcosystemSnapshot, options: PlanningOptions, pa
 	const method = mode === 'exact-input' ? 'swapExactInput' : 'swapExactOutput'
 	steps.push(
 		encodeStep({
-			abi: tradingPairAbi,
+			abi: twoWayConstantProductPairAbi,
 			args,
 			evidence: [eventEvidence(pair.address, 'Swap(address,address,bool,bool,uint256,uint256,uint256,uint256,uint256)')],
 			functionName: method,
@@ -1194,7 +1216,7 @@ const syncPair: OperationDefinition = {
 			postconditions: ['Stored reserves equal current pair share balances'],
 			risk: 'low',
 			snapshot,
-			steps: [encodeStep({ abi: tradingPairAbi, evidence: [eventEvidence(pair.address, 'Sync(uint256,uint256)')], functionName: 'sync', id: 'sync', label: 'Synchronize pair', to: pair.address })],
+			steps: [encodeStep({ abi: twoWayConstantProductPairAbi, evidence: [eventEvidence(pair.address, 'Sync(uint256,uint256)')], functionName: 'sync', id: 'sync', label: 'Synchronize pair', to: pair.address })],
 		})
 	},
 	classification: 'selectable',
@@ -1286,7 +1308,7 @@ function routerEthDefinition(kind: 'create-and-initialize' | 'initialize' | 'add
 				postconditions: [kind === 'enter' ? 'Wallet receives invalid insurance and directional long shares' : 'Wallet LP balance increases and unused shares return to the wallet'],
 				risk: 'medium',
 				snapshot,
-				steps: [encodeStep({ abi: tradingRouterAbi, args, evidence, functionName: method, id: method, label: `Router ${kind}`, to: snapshot.deployments.tradingRouter, value: spend })],
+				steps: [encodeStep({ abi: twoWayConstantProductRouterAbi, args, evidence, functionName: method, id: method, label: `Router ${kind}`, to: snapshot.deployments.tradingRouter, value: spend })],
 			})
 		},
 		classification: 'selectable',
@@ -1328,7 +1350,7 @@ export function buildRouterRemovePlan(snapshot: EcosystemSnapshot, options: Plan
 	if (!timestampDeadlineHasRequiredSafety(amount(snapshot.anchor.timestamp), BigInt(deadline), options, 0)) return undefined
 	steps.push(
 		encodeStep({
-			abi: tradingPairAbi,
+			abi: twoWayConstantProductPairAbi,
 			args: [liquidity, minimumYes, minimumNo, snapshot.wallet.address, BigInt(deadline)],
 			evidence: [eventEvidence(pair.address, 'LiquidityRemoved(address,address,uint256,uint256,uint256)')],
 			functionName: 'removeLiquidity',

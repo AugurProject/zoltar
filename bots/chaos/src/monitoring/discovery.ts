@@ -2,25 +2,25 @@ import { requireDeployedContracts } from '../../../shared/src/monitoring/deploye
 import { createHash } from 'node:crypto'
 import { bigintToSafeNumber, encodeAbiParameters, getAddress, zeroAddress, zeroHash, type Address, type Chain, type Hash, type Hex, type PublicClient, type Transport } from '@zoltar/bot-shared/ethereum'
 import {
-	auctionAbi,
-	coordinatorAbi,
+	uniformPriceDualCapBatchAuctionAbi,
+	openOraclePriceCoordinatorAbi,
 	erc1155Abi,
-	erc20Abi,
+	genesisReputationTokenAbi,
 	escalationGameAbi,
 	liquidationApprovalRegistryAbi,
 	openOracleAbi,
-	questionDataAbi,
+	zoltarQuestionDataAbi,
 	securityPoolAbi,
 	securityPoolFactoryAbi,
 	securityPoolForkerAbi,
 	shareTokenAbi,
-	tradingFactoryAbi,
-	tradingPairAbi,
-	tradingRouterAbi,
-	uniswapV3FactoryAbi,
-	uniswapV3PoolAbi,
+	twoWayConstantProductFactoryAbi,
+	twoWayConstantProductPairAbi,
+	twoWayConstantProductRouterAbi,
+	genesisUniswapV3FactoryAbi,
+	genesisUniswapV3PoolStateAbi,
 	zoltarAbi,
-} from '../contracts/abi.ts'
+} from '@zoltar/bot-shared/contracts/abi'
 import { MAXIMUM_DISCOVERY_AGGREGATE_ITEMS } from '../config/settings.ts'
 import { CANONICAL_PROXY_DEPLOYER, CANONICAL_PROXY_DEPLOYER_RUNTIME, CANONICAL_UNISWAP_V3_FACTORY, GENESIS_UNISWAP_FEE, genesisUniswapSeederDeployment } from '../core/genesis-uniswap.ts'
 import { canonicalUintString, type CanonicalUintString } from '../core/units.ts'
@@ -170,7 +170,7 @@ async function discoverOutcomeLabels(client: ChaosReadClient, questionData: Addr
 	for (;;) {
 		const remaining = limits.maxOutcomeLabelsPerQuestion - outcomeLabels.length
 		const requested = remaining === 0 ? 1n : BigInt(Math.min(remaining, Number(OUTCOME_LABEL_PAGE_SIZE)))
-		const page = await client.readContract({ abi: questionDataAbi, address: questionData, args: [questionId, BigInt(outcomeLabels.length), requested], blockNumber, functionName: 'getOutcomeLabels' })
+		const page = await client.readContract({ abi: zoltarQuestionDataAbi, address: questionData, args: [questionId, BigInt(outcomeLabels.length), requested], blockNumber, functionName: 'getOutcomeLabels' })
 		if (BigInt(page.length) > requested) throw new Error(`Question ${questionId.toString()} outcome-label page exceeded its requested size`)
 		if (remaining === 0) {
 			if (page.length === 0) return outcomeLabels
@@ -434,9 +434,9 @@ export async function authenticatePoolProtocolBindings(authentication: PoolProto
 	const { blockNumber, canonicalRepToken, client, configuredOpenOracle, configuredWeth, coordinator, pool } = authentication
 	const [poolOpenOracle, coordinatorOpenOracle, coordinatorWeth, coordinatorRepToken] = await drainConcurrent([
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'openOracle' }),
-		client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'openOracle' }),
-		client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'weth' }),
-		client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'reputationToken' }),
+		client.readContract({ abi: openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'openOracle' }),
+		client.readContract({ abi: openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'weth' }),
+		client.readContract({ abi: openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'reputationToken' }),
 	])
 	requireGraphEdge(getAddress(poolOpenOracle), configuredOpenOracle, `Pool ${pool} OpenOracle edge`)
 	requireGraphEdge(getAddress(coordinatorOpenOracle), configuredOpenOracle, `Coordinator ${coordinator} OpenOracle edge`)
@@ -530,10 +530,10 @@ async function authenticateConfiguredGraph(context: EcosystemDiscoveryContext, b
 	const router = tradingRouterCode !== undefined && tradingRouterCode !== '0x'
 	if (router && !factory) throw new Error('Configured trading router exists without its factory')
 	if (!factory) return { factory, router }
-	const tradingSecurityPoolFactory = await client.readContract({ abi: tradingFactoryAbi, address: deployments.tradingFactory, blockNumber, functionName: 'securityPoolFactory' })
+	const tradingSecurityPoolFactory = await client.readContract({ abi: twoWayConstantProductFactoryAbi, address: deployments.tradingFactory, blockNumber, functionName: 'securityPoolFactory' })
 	requireGraphEdge(getAddress(tradingSecurityPoolFactory), deployments.securityPoolFactory, 'Trading factory security-pool-factory edge')
 	if (router) {
-		const routerFactory = await client.readContract({ abi: tradingRouterAbi, address: deployments.tradingRouter, blockNumber, functionName: 'factory' })
+		const routerFactory = await client.readContract({ abi: twoWayConstantProductRouterAbi, address: deployments.tradingRouter, blockNumber, functionName: 'factory' })
 		requireGraphEdge(getAddress(routerFactory), deployments.tradingFactory, 'Trading router factory edge')
 	}
 	return { factory, router }
@@ -550,15 +550,15 @@ async function discoverUniverseUniswap(context: EcosystemDiscoveryContext, unive
 	const factory = factoryCode !== undefined && factoryCode !== '0x'
 	const pools = await mapWithConcurrency(universes, UNISWAP_POOL_DISCOVERY_CONCURRENCY, async universe => {
 		if (!factory) return { initialized: false, liquidity: '0', repToken: universe.repToken, universeId: universe.id }
-		const pool = getAddress(await context.client.readContract({ abi: uniswapV3FactoryAbi, address: uniswapFactory, args: [universe.repToken, context.deployments.weth, GENESIS_UNISWAP_FEE], blockNumber, functionName: 'getPool' }))
+		const pool = getAddress(await context.client.readContract({ abi: genesisUniswapV3FactoryAbi, address: uniswapFactory, args: [universe.repToken, context.deployments.weth, GENESIS_UNISWAP_FEE], blockNumber, functionName: 'getPool' }))
 		if (pool === zeroAddress) return { initialized: false, liquidity: '0', repToken: universe.repToken, universeId: universe.id }
 		const [poolFactory, token0, token1, fee, slot0, liquidity] = await drainConcurrent([
-			context.client.readContract({ abi: uniswapV3PoolAbi, address: pool, blockNumber, functionName: 'factory' }),
-			context.client.readContract({ abi: uniswapV3PoolAbi, address: pool, blockNumber, functionName: 'token0' }),
-			context.client.readContract({ abi: uniswapV3PoolAbi, address: pool, blockNumber, functionName: 'token1' }),
-			context.client.readContract({ abi: uniswapV3PoolAbi, address: pool, blockNumber, functionName: 'fee' }),
-			context.client.readContract({ abi: uniswapV3PoolAbi, address: pool, blockNumber, functionName: 'slot0' }),
-			context.client.readContract({ abi: uniswapV3PoolAbi, address: pool, blockNumber, functionName: 'liquidity' }),
+			context.client.readContract({ abi: genesisUniswapV3PoolStateAbi, address: pool, blockNumber, functionName: 'factory' }),
+			context.client.readContract({ abi: genesisUniswapV3PoolStateAbi, address: pool, blockNumber, functionName: 'token0' }),
+			context.client.readContract({ abi: genesisUniswapV3PoolStateAbi, address: pool, blockNumber, functionName: 'token1' }),
+			context.client.readContract({ abi: genesisUniswapV3PoolStateAbi, address: pool, blockNumber, functionName: 'fee' }),
+			context.client.readContract({ abi: genesisUniswapV3PoolStateAbi, address: pool, blockNumber, functionName: 'slot0' }),
+			context.client.readContract({ abi: genesisUniswapV3PoolStateAbi, address: pool, blockNumber, functionName: 'liquidity' }),
 		])
 		requireGraphEdge(getAddress(poolFactory), uniswapFactory, `Universe ${universe.id} Uniswap pool ${pool} factory edge`)
 		const expected = [universe.repToken.toLowerCase(), context.deployments.weth.toLowerCase()].sort()
@@ -743,7 +743,7 @@ async function discoverUniverses(context: EcosystemDiscoveryContext, blockNumber
 		])
 		const [forkTime, forkQuestionId, forkingOutcomeIndex, reputationToken, parentUniverseId] = raw
 		if (reputationToken === zeroAddress) throw new Error(`Universe ${universeId.toString()} has no REP token`)
-		const theoreticalSupply = await client.readContract({ abi: erc20Abi, address: reputationToken, blockNumber, functionName: 'getTotalTheoreticalSupply' })
+		const theoreticalSupply = await client.readContract({ abi: genesisReputationTokenAbi, address: reputationToken, blockNumber, functionName: 'getTotalTheoreticalSupply' })
 		const supplyBasedDeposit = theoreticalSupply / 10_000_000n
 		const initialEscalationDeposit = supplyBasedDeposit < 10n ** 18n ? 10n ** 18n : supplyBasedDeposit
 		const cachedChildren = topology.universeChildren[universeId.toString()]
@@ -821,7 +821,7 @@ async function discoverUniverses(context: EcosystemDiscoveryContext, blockNumber
 
 async function discoverQuestions(context: EcosystemDiscoveryContext, blockNumber: bigint, limits: DiscoveryLimits, topology: ImmutableTopologyData, mutation: TopologyMutationState, warnings: string[]) {
 	const { client, deployments } = context
-	const count = await client.readContract({ abi: questionDataAbi, address: deployments.questionData, blockNumber, functionName: 'getQuestionCount' })
+	const count = await client.readContract({ abi: zoltarQuestionDataAbi, address: deployments.questionData, blockNumber, functionName: 'getQuestionCount' })
 	let cursor = topology.discoveryCursors.questions
 	assertRegistryCountNotRegressed(cursor, count, 'Question registry')
 	let retentionMode: CountedRegistryCursor['retentionMode'] = count <= BigInt(limits.maxQuestions) ? 'resident' : 'overflow'
@@ -844,7 +844,7 @@ async function discoverQuestions(context: EcosystemDiscoveryContext, blockNumber
 		label: 'Question discovery',
 		maximumItems: limits.maxQuestions,
 		pageSize: limits.maxQuestions,
-		readPage: async (start, pageCount) => await client.readContract({ abi: questionDataAbi, address: deployments.questionData, args: [start, pageCount], blockNumber, functionName: 'getQuestions' }),
+		readPage: async (start, pageCount) => await client.readContract({ abi: zoltarQuestionDataAbi, address: deployments.questionData, args: [start, pageCount], blockNumber, functionName: 'getQuestions' }),
 		start: BigInt(cursor.nextIndex),
 	})
 	if (collected.values.length > 0) {
@@ -866,8 +866,8 @@ async function discoverQuestions(context: EcosystemDiscoveryContext, blockNumber
 		const discovered = await mapWithConcurrency(collected.values, DISCOVERY_RPC_CONCURRENCY, async questionId => {
 			if (overflowed) return undefined
 			const [question, createdAt, labels] = await drainConcurrent([
-				client.readContract({ abi: questionDataAbi, address: deployments.questionData, args: [questionId], blockNumber, functionName: 'questions' }),
-				client.readContract({ abi: questionDataAbi, address: deployments.questionData, args: [questionId], blockNumber, functionName: 'questionCreatedTimestamp' }),
+				client.readContract({ abi: zoltarQuestionDataAbi, address: deployments.questionData, args: [questionId], blockNumber, functionName: 'questions' }),
+				client.readContract({ abi: zoltarQuestionDataAbi, address: deployments.questionData, args: [questionId], blockNumber, functionName: 'questionCreatedTimestamp' }),
 				discoverOutcomeLabels(client, deployments.questionData, questionId, blockNumber, limits),
 			])
 			const [, , startTime, endTime, numTicks] = question
@@ -935,19 +935,19 @@ async function discoverVault(client: ChaosReadClient, pool: Address, escalationG
 }
 
 export async function discoverStagedOperations(client: ChaosReadClient, pool: PoolSnapshot, blockNumber: bigint, limit: number, warnings: string[]) {
-	const count = await client.readContract({ abi: coordinatorAbi, address: pool.coordinator, blockNumber, functionName: 'getActiveStagedOperationCount' })
+	const count = await client.readContract({ abi: openOraclePriceCoordinatorAbi, address: pool.coordinator, blockNumber, functionName: 'getActiveStagedOperationCount' })
 	if (count > BigInt(limit)) {
 		warnings.push(`Staged-operation discovery truncated for ${pool.coordinator}: exact canonical total ${count.toString()} exceeds the configured ${limit.toString()}-entry resident limit`)
 		return []
 	}
-	const pendingIds = await client.readContract({ abi: coordinatorAbi, address: pool.coordinator, blockNumber, functionName: 'getPendingSettlementOperationIds' })
+	const pendingIds = await client.readContract({ abi: openOraclePriceCoordinatorAbi, address: pool.coordinator, blockNumber, functionName: 'getPendingSettlementOperationIds' })
 	const collected = await collectCountedPages({
 		count,
 		label: `Staged-operation discovery for ${pool.coordinator}`,
 		maximumItems: limit,
 		pageSize: limit,
 		readPage: async (start, pageCount) => {
-			const [ids, operations] = await client.readContract({ abi: coordinatorAbi, address: pool.coordinator, args: [start, pageCount], blockNumber, functionName: 'getActiveStagedOperations' })
+			const [ids, operations] = await client.readContract({ abi: openOraclePriceCoordinatorAbi, address: pool.coordinator, args: [start, pageCount], blockNumber, functionName: 'getActiveStagedOperations' })
 			if (ids.length !== operations.length) throw new Error(`Coordinator ${pool.coordinator} returned mismatched staged-operation arrays`)
 			return ids.map((id, index) => {
 				const operation = operations[index]
@@ -963,8 +963,8 @@ export async function discoverStagedOperations(client: ChaosReadClient, pool: Po
 	let liquidationConfiguration: Promise<readonly [bigint, Address]> | undefined
 	const getLiquidationConfiguration = () => {
 		liquidationConfiguration ??= drainConcurrent([
-			client.readContract({ abi: coordinatorAbi, address: pool.coordinator, blockNumber, functionName: 'minLiquidationPriceDistanceBps' }),
-			client.readContract({ abi: coordinatorAbi, address: pool.coordinator, blockNumber, functionName: 'liquidationApprovalRegistry' }).then(getAddress),
+			client.readContract({ abi: openOraclePriceCoordinatorAbi, address: pool.coordinator, blockNumber, functionName: 'minLiquidationPriceDistanceBps' }),
+			client.readContract({ abi: openOraclePriceCoordinatorAbi, address: pool.coordinator, blockNumber, functionName: 'liquidationApprovalRegistry' }).then(getAddress),
 		])
 		return liquidationConfiguration
 	}
@@ -1241,23 +1241,23 @@ async function discoverPools(
 			client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'totalBadDebtAttoEth' }),
 			client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'minimumVaultRepDepositAttoRep' }),
 			client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'initialEscalationGameDepositAttoRep' }),
-			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'isPriceValid' }),
-			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'getRequestPriceCostAttoEth' }),
-			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'settlementTime' }),
-			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'lastPrice' }),
-			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'lastSettlementTimestamp' }),
-			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'stagedOperationCounter' }),
-			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'minimumToken1ReportAttoEth' }),
-			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'gasConsumedOpenOracleReportPrice' }),
-			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'getSettlementCallbackGasLimit' }),
-			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'gasUnitsForOneDispute' }),
-			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'initialReportPriorityFeeAttoEthPerGas' }),
-			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'targetPriceErrorForDispute' }),
-			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'openOracleSecurityMultiplierBps' }),
-			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'protocolFee' }),
-			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'feePercentage' }),
-			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'escalationHaltMultiplierBps' }),
-			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'pendingReportId' }),
+			client.readContract({ abi: openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'isPriceValid' }),
+			client.readContract({ abi: openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'getRequestPriceCostAttoEth' }),
+			client.readContract({ abi: openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'settlementTime' }),
+			client.readContract({ abi: openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'lastPrice' }),
+			client.readContract({ abi: openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'lastSettlementTimestamp' }),
+			client.readContract({ abi: openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'stagedOperationCounter' }),
+			client.readContract({ abi: openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'minimumToken1ReportAttoEth' }),
+			client.readContract({ abi: openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'gasConsumedOpenOracleReportPrice' }),
+			client.readContract({ abi: openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'getSettlementCallbackGasLimit' }),
+			client.readContract({ abi: openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'gasUnitsForOneDispute' }),
+			client.readContract({ abi: openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'initialReportPriorityFeeAttoEthPerGas' }),
+			client.readContract({ abi: openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'targetPriceErrorForDispute' }),
+			client.readContract({ abi: openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'openOracleSecurityMultiplierBps' }),
+			client.readContract({ abi: openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'protocolFee' }),
+			client.readContract({ abi: openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'feePercentage' }),
+			client.readContract({ abi: openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'escalationHaltMultiplierBps' }),
+			client.readContract({ abi: openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'pendingReportId' }),
 			client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'getTotalPoolHeldAttoRep' }),
 			client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'getVaultCount' }),
 			client.readContract({ abi: securityPoolForkerAbi, address: deployments.securityPoolForker, args: [address], blockNumber, functionName: 'getQuestionOutcome' }),
@@ -1273,7 +1273,7 @@ async function discoverPools(
 			cachedDeployment ? Promise.resolve(deployments.zoltar) : client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'zoltar' }),
 			cachedDeployment ? Promise.resolve(deployments.questionData) : client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'questionData' }),
 			cachedDeployment ? Promise.resolve(coordinator) : client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'priceOracleManagerAndOperatorQueuer' }),
-			cachedDeployment ? Promise.resolve(address) : client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'securityPool' }),
+			cachedDeployment ? Promise.resolve(address) : client.readContract({ abi: openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'securityPool' }),
 			authenticatePoolProtocolBindings({
 				blockNumber,
 				canonicalRepToken: authenticatedUniverse.repToken,
@@ -1370,8 +1370,8 @@ async function discoverPools(
 						client.readContract({ abi: escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'getFinalQuestionResolution' }),
 					])
 		const [poolRepBalanceAttoRep, escalationRepBalanceAttoRep, unassignedRepBackingAttoRep] = await drainConcurrent([
-			client.readContract({ abi: erc20Abi, address: getAddress(repToken), args: [address], blockNumber, functionName: 'balanceOf' }),
-			escalationAddress === zeroAddress ? Promise.resolve(0n) : client.readContract({ abi: erc20Abi, address: getAddress(repToken), args: [escalationAddress], blockNumber, functionName: 'balanceOf' }),
+			client.readContract({ abi: genesisReputationTokenAbi, address: getAddress(repToken), args: [address], blockNumber, functionName: 'balanceOf' }),
+			escalationAddress === zeroAddress ? Promise.resolve(0n) : client.readContract({ abi: genesisReputationTokenAbi, address: getAddress(repToken), args: [escalationAddress], blockNumber, functionName: 'balanceOf' }),
 			client.readContract({ abi: securityPoolAbi, address, args: [unassignedPosition[0]], blockNumber, functionName: 'backingUnitsToAttoRep' }),
 		])
 		let escalationResidualSweepExpectedSuccess = false
@@ -1530,22 +1530,22 @@ async function discoverPairs(context: EcosystemDiscoveryContext, pools: readonly
 	for (const pool of pools) {
 		const pairCacheKey = pool.address.toLowerCase()
 		const cachedPair = topology.pairsByPool[pairCacheKey]
-		const rawPair = cachedPair ?? (await client.readContract({ abi: tradingFactoryAbi, address: deployments.tradingFactory, args: [pool.address], blockNumber, functionName: 'getPair' }))
+		const rawPair = cachedPair ?? (await client.readContract({ abi: twoWayConstantProductFactoryAbi, address: deployments.tradingFactory, args: [pool.address], blockNumber, functionName: 'getPair' }))
 		if (rawPair === zeroAddress) continue
 		if (cachedPair === undefined) mutation.changed = true
 		const address = getAddress(rawPair)
 		const [status, feeBps, reserves, effectiveReserves, totalSupply, walletLiquidity, pairFactory, pairPool, pairShareToken, pairUniverseId, pairQuestionId] = await drainConcurrent([
-			client.readContract({ abi: tradingPairAbi, address, blockNumber, functionName: 'tradingStatus' }),
-			client.readContract({ abi: tradingPairAbi, address, blockNumber, functionName: 'feeBps' }),
-			client.readContract({ abi: tradingPairAbi, address, blockNumber, functionName: 'getReserves' }),
-			client.readContract({ abi: tradingPairAbi, address, blockNumber, functionName: 'getEffectiveReserves' }),
-			client.readContract({ abi: tradingPairAbi, address, blockNumber, functionName: 'totalSupply' }),
-			wallet === undefined ? Promise.resolve(0n) : client.readContract({ abi: tradingPairAbi, address, args: [wallet], blockNumber, functionName: 'balanceOf' }),
-			cachedPair === undefined ? client.readContract({ abi: tradingPairAbi, address, blockNumber, functionName: 'factory' }) : Promise.resolve(deployments.tradingFactory),
-			cachedPair === undefined ? client.readContract({ abi: tradingPairAbi, address, blockNumber, functionName: 'securityPool' }) : Promise.resolve(pool.address),
-			cachedPair === undefined ? client.readContract({ abi: tradingPairAbi, address, blockNumber, functionName: 'shareToken' }) : Promise.resolve(pool.shareToken),
-			cachedPair === undefined ? client.readContract({ abi: tradingPairAbi, address, blockNumber, functionName: 'universeId' }) : Promise.resolve(BigInt(pool.universeId)),
-			cachedPair === undefined ? client.readContract({ abi: tradingPairAbi, address, blockNumber, functionName: 'questionId' }) : Promise.resolve(BigInt(pool.questionId)),
+			client.readContract({ abi: twoWayConstantProductPairAbi, address, blockNumber, functionName: 'tradingStatus' }),
+			client.readContract({ abi: twoWayConstantProductPairAbi, address, blockNumber, functionName: 'feeBps' }),
+			client.readContract({ abi: twoWayConstantProductPairAbi, address, blockNumber, functionName: 'getReserves' }),
+			client.readContract({ abi: twoWayConstantProductPairAbi, address, blockNumber, functionName: 'getEffectiveReserves' }),
+			client.readContract({ abi: twoWayConstantProductPairAbi, address, blockNumber, functionName: 'totalSupply' }),
+			wallet === undefined ? Promise.resolve(0n) : client.readContract({ abi: twoWayConstantProductPairAbi, address, args: [wallet], blockNumber, functionName: 'balanceOf' }),
+			cachedPair === undefined ? client.readContract({ abi: twoWayConstantProductPairAbi, address, blockNumber, functionName: 'factory' }) : Promise.resolve(deployments.tradingFactory),
+			cachedPair === undefined ? client.readContract({ abi: twoWayConstantProductPairAbi, address, blockNumber, functionName: 'securityPool' }) : Promise.resolve(pool.address),
+			cachedPair === undefined ? client.readContract({ abi: twoWayConstantProductPairAbi, address, blockNumber, functionName: 'shareToken' }) : Promise.resolve(pool.shareToken),
+			cachedPair === undefined ? client.readContract({ abi: twoWayConstantProductPairAbi, address, blockNumber, functionName: 'universeId' }) : Promise.resolve(BigInt(pool.universeId)),
+			cachedPair === undefined ? client.readContract({ abi: twoWayConstantProductPairAbi, address, blockNumber, functionName: 'questionId' }) : Promise.resolve(BigInt(pool.questionId)),
 		])
 		assertCanonicalPairGraph({
 			configuredFactory: deployments.tradingFactory,
@@ -1588,13 +1588,13 @@ async function discoverTokenInventory(context: EcosystemDiscoveryContext, univer
 	const tokens: TokenInventory[] = []
 	for (const address of addresses.values()) {
 		const [balance, openOracleCredit, openOracleInternalAllowanceToSelf] = await drainConcurrent([
-			client.readContract({ abi: erc20Abi, address, args: [wallet], blockNumber, functionName: 'balanceOf' }),
+			client.readContract({ abi: genesisReputationTokenAbi, address, args: [wallet], blockNumber, functionName: 'balanceOf' }),
 			client.readContract({ abi: openOracleAbi, address: deployments.openOracle, args: [wallet, address], blockNumber, functionName: 'tokenHolder' }),
 			client.readContract({ abi: openOracleAbi, address: deployments.openOracle, args: [wallet, wallet, address], blockNumber, functionName: 'internalAllowance' }),
 		])
 		const allowances: Record<string, string> = {}
 		for (const spender of relevantTokenSpenders(deployments, pools, address)) {
-			allowances[spender] = (await client.readContract({ abi: erc20Abi, address, args: [wallet, spender], blockNumber, functionName: 'allowance' })).toString()
+			allowances[spender] = (await client.readContract({ abi: genesisReputationTokenAbi, address, args: [wallet, spender], blockNumber, functionName: 'allowance' })).toString()
 		}
 		tokens.push({
 			address,
@@ -1709,7 +1709,7 @@ async function discoverLpInventory(context: EcosystemDiscoveryContext, pairs: re
 	const wallet = context.wallet
 	if (wallet === undefined) return []
 	return await mapWithConcurrency(pairs, DISCOVERY_RPC_CONCURRENCY, async pair => ({
-		allowanceToRouter: (await context.client.readContract({ abi: tradingPairAbi, address: pair.address, args: [wallet, context.deployments.tradingRouter], blockNumber, functionName: 'allowance' })).toString(),
+		allowanceToRouter: (await context.client.readContract({ abi: twoWayConstantProductPairAbi, address: pair.address, args: [wallet, context.deployments.tradingRouter], blockNumber, functionName: 'allowance' })).toString(),
 		balance: pair.walletLiquidity,
 		pair: pair.address,
 	}))
@@ -1724,18 +1724,18 @@ async function discoverAuctions(context: EcosystemDiscoveryContext, pools: reado
 	const auctions: AuctionSnapshot[] = []
 	for (const pool of pools) {
 		if (pool.truthAuction === zeroAddress) continue
-		const started = await context.client.readContract({ abi: auctionAbi, address: pool.truthAuction, blockNumber, functionName: 'auctionStarted' })
+		const started = await context.client.readContract({ abi: uniformPriceDualCapBatchAuctionAbi, address: pool.truthAuction, blockNumber, functionName: 'auctionStarted' })
 		const [minimumBid, finalized, pendingRefund, clearing, storedClearingTick, underfunded, underfundedWinningAttoEth] =
 			started === 0n
 				? [0n, false, 0n, [false, 0n, 0n, 0n] as const, 0n, false, 0n]
 				: await drainConcurrent([
-						context.client.readContract({ abi: auctionAbi, address: pool.truthAuction, blockNumber, functionName: 'minBidSizeAttoEth' }),
-						context.client.readContract({ abi: auctionAbi, address: pool.truthAuction, blockNumber, functionName: 'finalized' }),
-						context.wallet === undefined ? Promise.resolve(0n) : context.client.readContract({ abi: auctionAbi, address: pool.truthAuction, args: [context.wallet], blockNumber, functionName: 'pendingEthRefundsAttoEth' }),
-						context.client.readContract({ abi: auctionAbi, address: pool.truthAuction, blockNumber, functionName: 'computeClearing' }),
-						context.client.readContract({ abi: auctionAbi, address: pool.truthAuction, blockNumber, functionName: 'clearingTick' }),
-						context.client.readContract({ abi: auctionAbi, address: pool.truthAuction, blockNumber, functionName: 'underfunded' }),
-						context.client.readContract({ abi: auctionAbi, address: pool.truthAuction, blockNumber, functionName: 'underfundedWinningAttoEth' }),
+						context.client.readContract({ abi: uniformPriceDualCapBatchAuctionAbi, address: pool.truthAuction, blockNumber, functionName: 'minBidSizeAttoEth' }),
+						context.client.readContract({ abi: uniformPriceDualCapBatchAuctionAbi, address: pool.truthAuction, blockNumber, functionName: 'finalized' }),
+						context.wallet === undefined ? Promise.resolve(0n) : context.client.readContract({ abi: uniformPriceDualCapBatchAuctionAbi, address: pool.truthAuction, args: [context.wallet], blockNumber, functionName: 'pendingEthRefundsAttoEth' }),
+						context.client.readContract({ abi: uniformPriceDualCapBatchAuctionAbi, address: pool.truthAuction, blockNumber, functionName: 'computeClearing' }),
+						context.client.readContract({ abi: uniformPriceDualCapBatchAuctionAbi, address: pool.truthAuction, blockNumber, functionName: 'clearingTick' }),
+						context.client.readContract({ abi: uniformPriceDualCapBatchAuctionAbi, address: pool.truthAuction, blockNumber, functionName: 'underfunded' }),
+						context.client.readContract({ abi: uniformPriceDualCapBatchAuctionAbi, address: pool.truthAuction, blockNumber, functionName: 'underfundedWinningAttoEth' }),
 					])
 		const pendingEthRefundGeneration = authenticatedAuctionRefundGeneration(context, pool.truthAuction, pendingRefund)
 		auctions.push({

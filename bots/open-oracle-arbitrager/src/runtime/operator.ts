@@ -36,7 +36,7 @@ import { acquireScanSignerOperation, deploymentUpdateMustWait, startOperatorCont
 import { executorDeploymentIntentPath, loadExecutorDeploymentIntentForChain } from '#execution/executor-deployment-store'
 import { assertStoredExecutorDeploymentIntent } from '#execution/create2-executor'
 import { applyQueuedExecutionSettings, applyQueuedSigner, resetReportScanState } from './operator-execution-state.ts'
-import type { ArbitragerShutdownController } from './shutdown.ts'
+import type { BotShutdownController } from '@zoltar/bot-shared/execution/bot-process-locks'
 
 const REORG_OVERLAP_BLOCKS = 12n
 const MAX_LOG_SCAN_RANGE = 256n
@@ -57,7 +57,7 @@ export function completeUnconfiguredPoll(state: SuccessfulPollState) {
 	return stop
 }
 
-export async function runOperator(config: Configuration, lockManager: ExecutionLockManager | undefined, initialSignerLock: ExclusiveProcessLock | undefined, shutdown?: ArbitragerShutdownController) {
+export async function runOperator(config: Configuration, lockManager: ExecutionLockManager | undefined, initialSignerLock: ExclusiveProcessLock | undefined, shutdown?: BotShutdownController) {
 	if (config.lookbackBlocks < 0n || config.lookbackBlocks > MAX_LOG_SCAN_RANGE) throw new Error('lookbackBlocks must be from 0 through 256')
 	if (!Number.isSafeInteger(config.uiPort) || config.uiPort < 1 || config.uiPort > 65_535) throw new Error('ui-port must be an integer from 1 to 65535')
 	if (config.ui && config.once) throw new Error('runtime.ui cannot be combined with runtime.once')

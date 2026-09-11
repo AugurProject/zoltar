@@ -270,7 +270,7 @@ export const projects: readonly Project[] = [
 		id: 'bot-shared',
 		path: 'bots/shared',
 		type: 'library',
-		dependencies: ['shared-core'],
+		dependencies: ['shared-core', 'contracts'],
 		tasks: {
 			setup: packageInstallTask('bots/shared'),
 			test: packageTask('bots/shared', 'test'),
@@ -281,7 +281,7 @@ export const projects: readonly Project[] = [
 			'dependency-update': sharedDependencyTask('bots/shared'),
 		},
 		generatedDirectories: [],
-		ci: { scope: 'bot-shared', componentName: 'bot-shared' },
+		ci: { scope: 'bot-shared', componentName: 'bot-shared', requiresContractArtifacts: true },
 	},
 	{
 		id: 'chaos',

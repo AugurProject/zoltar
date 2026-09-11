@@ -1,5 +1,5 @@
 import { keccak256, toHex, type Address, type Hash } from '@zoltar/bot-shared/ethereum'
-import { escalationGameAbi, securityPoolAbi, securityPoolForkerAbi, zoltarAbi } from '../contracts/abi.ts'
+import { escalationGameAbi, securityPoolAbi, securityPoolForkerAbi, zoltarAbi } from '@zoltar/bot-shared/contracts/abi'
 import type { ForkedCarryWithdrawalSnapshot } from '../operations/types.ts'
 import { computeNullifierRootFromProof } from './carry-proof-index.ts'
 import { CARRY_STORAGE_MAXIMUM_WITHDRAWALS, loadCarryStorageCandidates, type CarryStorageRoute } from './carry-proof-storage.ts'

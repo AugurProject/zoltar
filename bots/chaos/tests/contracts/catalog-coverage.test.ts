@@ -3,45 +3,68 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import * as ts from 'typescript'
-import * as contractAbis from '../../src/contracts/abi.ts'
+import * as contractAbis from '@zoltar/bot-shared/contracts/abi'
 import { CANONICAL_MUTATING_CONTRACT_MANIFEST, MUTATING_CONTRACT_SURFACE, classifiedMethod, type ContractAbiEntryKind } from '../../src/contracts/surface.ts'
 import { CHAOS_OPERATION_CATALOG } from '../../src/operations/catalog.ts'
 
+/** The shared ABI exports the chaos bot executes against; every one must map to a compiled artifact below. */
+const chaosContractAbis = {
+	uniformPriceDualCapBatchAuctionAbi: contractAbis.uniformPriceDualCapBatchAuctionAbi,
+	openOraclePriceCoordinatorAbi: contractAbis.openOraclePriceCoordinatorAbi,
+	erc1155Abi: contractAbis.erc1155Abi,
+	genesisReputationTokenAbi: contractAbis.genesisReputationTokenAbi,
+	escalationGameAbi: contractAbis.escalationGameAbi,
+	genesisUniswapV3SeederAbi: contractAbis.genesisUniswapV3SeederAbi,
+	liquidationApprovalRegistryAbi: contractAbis.liquidationApprovalRegistryAbi,
+	openOracleAbi: contractAbis.openOracleAbi,
+	zoltarQuestionDataAbi: contractAbis.zoltarQuestionDataAbi,
+	securityPoolAbi: contractAbis.securityPoolAbi,
+	securityPoolFactoryAbi: contractAbis.securityPoolFactoryAbi,
+	securityPoolForkerAbi: contractAbis.securityPoolForkerAbi,
+	shareTokenAbi: contractAbis.shareTokenAbi,
+	twoWayConstantProductFactoryAbi: contractAbis.twoWayConstantProductFactoryAbi,
+	twoWayConstantProductPairAbi: contractAbis.twoWayConstantProductPairAbi,
+	twoWayConstantProductRouterAbi: contractAbis.twoWayConstantProductRouterAbi,
+	genesisUniswapV3FactoryAbi: contractAbis.genesisUniswapV3FactoryAbi,
+	genesisUniswapV3PoolStateAbi: contractAbis.genesisUniswapV3PoolStateAbi,
+	weth9Abi: contractAbis.weth9Abi,
+	zoltarAbi: contractAbis.zoltarAbi,
+}
 const {
-	auctionAbi,
-	coordinatorAbi,
+	uniformPriceDualCapBatchAuctionAbi,
+	openOraclePriceCoordinatorAbi,
 	erc1155Abi,
-	erc20Abi,
+	genesisReputationTokenAbi,
 	escalationGameAbi,
-	genesisUniswapSeederAbi,
+	genesisUniswapV3SeederAbi,
 	liquidationApprovalRegistryAbi,
 	openOracleAbi,
-	questionDataAbi,
+	zoltarQuestionDataAbi,
 	securityPoolAbi,
 	securityPoolFactoryAbi,
 	securityPoolForkerAbi,
 	shareTokenAbi,
-	tradingFactoryAbi,
-	tradingPairAbi,
-	tradingRouterAbi,
-	uniswapV3FactoryAbi,
-	uniswapV3PoolAbi,
-	wethAbi,
+	twoWayConstantProductFactoryAbi,
+	twoWayConstantProductPairAbi,
+	twoWayConstantProductRouterAbi,
+	genesisUniswapV3FactoryAbi,
+	genesisUniswapV3PoolStateAbi,
+	weth9Abi,
 	zoltarAbi,
-} = contractAbis
+} = chaosContractAbis
 
 const curatedAbiBindings = [
 	{ abi: carryStorageAbi.filter(entry => entry.name !== 'rootClaimSourceGame'), artifactSource: 'contracts/statoblast/EscalationGame.sol', contract: 'EscalationGame', catalogSurface: false },
 	{ abi: carryStorageAbi.filter(entry => entry.name === 'rootClaimSourceGame'), artifactSource: 'contracts/statoblast/EscalationGameClaimDelegate.sol', contract: 'EscalationGameClaimDelegate', catalogSurface: false },
-	{ abi: questionDataAbi, artifactSource: 'contracts/ZoltarQuestionData.sol', contract: 'ZoltarQuestionData' },
+	{ abi: zoltarQuestionDataAbi, artifactSource: 'contracts/ZoltarQuestionData.sol', contract: 'ZoltarQuestionData' },
 	{ abi: zoltarAbi, artifactSource: 'contracts/Zoltar.sol', contract: 'Zoltar' },
-	{ abi: erc20Abi, artifactSource: 'contracts/GenesisReputationToken.sol', contract: 'GenesisReputationToken' },
+	{ abi: genesisReputationTokenAbi, artifactSource: 'contracts/GenesisReputationToken.sol', contract: 'GenesisReputationToken' },
 	{ abi: securityPoolFactoryAbi, artifactSource: 'contracts/statoblast/factories/SecurityPoolFactory.sol', contract: 'SecurityPoolFactory' },
 	{ abi: securityPoolAbi, artifactSource: 'contracts/statoblast/SecurityPool.sol', contract: 'SecurityPool' },
-	{ abi: coordinatorAbi, artifactSource: 'contracts/statoblast/OpenOraclePriceCoordinator.sol', contract: 'OpenOraclePriceCoordinator' },
+	{ abi: openOraclePriceCoordinatorAbi, artifactSource: 'contracts/statoblast/OpenOraclePriceCoordinator.sol', contract: 'OpenOraclePriceCoordinator' },
 	{ abi: liquidationApprovalRegistryAbi, artifactSource: 'contracts/statoblast/LiquidationApprovalRegistry.sol', contract: 'LiquidationApprovalRegistry' },
 	{ abi: securityPoolForkerAbi, artifactSource: 'contracts/statoblast/SecurityPoolForker.sol', contract: 'SecurityPoolForker' },
-	{ abi: auctionAbi, artifactSource: 'contracts/statoblast/UniformPriceDualCapBatchAuction.sol', contract: 'UniformPriceDualCapBatchAuction' },
+	{ abi: uniformPriceDualCapBatchAuctionAbi, artifactSource: 'contracts/statoblast/UniformPriceDualCapBatchAuction.sol', contract: 'UniformPriceDualCapBatchAuction' },
 	{
 		abi: escalationGameAbi,
 		artifactSource: 'contracts/statoblast/EscalationGame.sol',
@@ -55,15 +78,15 @@ const curatedAbiBindings = [
 		],
 	},
 	{ abi: openOracleAbi, artifactSource: 'contracts/statoblast/openOracle/OpenOracle.sol', contract: 'OpenOracle' },
-	{ abi: wethAbi, artifactSource: 'contracts/statoblast/WETH9.sol', contract: 'WETH9' },
+	{ abi: weth9Abi, artifactSource: 'contracts/statoblast/WETH9.sol', contract: 'WETH9' },
 	{ abi: shareTokenAbi, artifactSource: 'contracts/statoblast/tokens/ShareToken.sol', contract: 'ShareToken' },
-	{ abi: erc1155Abi, artifactSource: 'contracts/statoblast/tokens/ShareToken.sol', contract: 'ShareToken' },
-	{ abi: tradingFactoryAbi, artifactSource: 'contracts/trading/TwoWayConstantProductFactory.sol', contract: 'TwoWayConstantProductFactory' },
-	{ abi: tradingPairAbi, artifactSource: 'contracts/trading/TwoWayConstantProductPair.sol', contract: 'TwoWayConstantProductPair' },
-	{ abi: tradingRouterAbi, artifactSource: 'contracts/trading/TwoWayConstantProductRouter.sol', contract: 'TwoWayConstantProductRouter' },
-	{ abi: uniswapV3FactoryAbi, artifactSource: 'contracts/chaos/GenesisUniswapV3Seeder.sol', catalogSurface: false, contract: 'IGenesisUniswapV3Factory' },
-	{ abi: uniswapV3PoolAbi, artifactSource: 'contracts/chaos/GenesisUniswapV3Seeder.sol', catalogSurface: false, contract: 'IGenesisUniswapV3PoolState' },
-	{ abi: genesisUniswapSeederAbi, artifactSource: 'contracts/chaos/GenesisUniswapV3Seeder.sol', catalogSurface: false, contract: 'GenesisUniswapV3Seeder' },
+	{ abi: erc1155Abi, artifactSource: 'contracts/statoblast/tokens/ERC1155.sol', catalogSurface: false, contract: 'ERC1155' },
+	{ abi: twoWayConstantProductFactoryAbi, artifactSource: 'contracts/trading/TwoWayConstantProductFactory.sol', contract: 'TwoWayConstantProductFactory' },
+	{ abi: twoWayConstantProductPairAbi, artifactSource: 'contracts/trading/TwoWayConstantProductPair.sol', contract: 'TwoWayConstantProductPair' },
+	{ abi: twoWayConstantProductRouterAbi, artifactSource: 'contracts/trading/TwoWayConstantProductRouter.sol', contract: 'TwoWayConstantProductRouter' },
+	{ abi: genesisUniswapV3FactoryAbi, artifactSource: 'contracts/chaos/GenesisUniswapV3Seeder.sol', catalogSurface: false, contract: 'IGenesisUniswapV3Factory' },
+	{ abi: genesisUniswapV3PoolStateAbi, artifactSource: 'contracts/chaos/GenesisUniswapV3Seeder.sol', catalogSurface: false, contract: 'IGenesisUniswapV3PoolState' },
+	{ abi: genesisUniswapV3SeederAbi, artifactSource: 'contracts/chaos/GenesisUniswapV3Seeder.sol', catalogSurface: false, contract: 'GenesisUniswapV3Seeder' },
 ] as const
 
 const expectedCanonicalManifest = [
@@ -292,9 +315,9 @@ describe('contract operation classification', () => {
 				{ name: 'settled', type: 'bool' },
 			],
 		})
-		expect(coordinatorAbi.find(item => item.type === 'function' && item.name === 'lastSettlementTimestamp')).toMatchObject({ outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view' })
-		expect(coordinatorAbi.find(item => item.type === 'function' && item.name === 'stagedOperationCounter')).toMatchObject({ outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view' })
-		expect(coordinatorAbi.find(item => item.type === 'event' && item.name === 'LiquidationRouteStaged')).toMatchObject({
+		expect(openOraclePriceCoordinatorAbi.find(item => item.type === 'function' && item.name === 'lastSettlementTimestamp')).toMatchObject({ outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view' })
+		expect(openOraclePriceCoordinatorAbi.find(item => item.type === 'function' && item.name === 'stagedOperationCounter')).toMatchObject({ outputs: [{ name: '', type: 'uint256' }], stateMutability: 'view' })
+		expect(openOraclePriceCoordinatorAbi.find(item => item.type === 'event' && item.name === 'LiquidationRouteStaged')).toMatchObject({
 			inputs: [
 				{ indexed: true, name: 'operationId', type: 'uint256' },
 				{ indexed: true, name: 'operator', type: 'address' },
@@ -400,7 +423,7 @@ describe('contract operation classification', () => {
 		const contracts = loadArtifactContracts()
 		const boundAbis = new Set<readonly unknown[]>(curatedAbiBindings.map(binding => binding.abi))
 		expect(boundAbis.size).toBe(curatedAbiBindings.length)
-		for (const [name, abi] of Object.entries(contractAbis)) {
+		for (const [name, abi] of Object.entries(chaosContractAbis)) {
 			expect(Array.isArray(abi), `${name} ABI export`).toBeTrue()
 			if (Array.isArray(abi)) expect(boundAbis.has(abi), `${name} artifact binding`).toBeTrue()
 		}
@@ -421,6 +444,7 @@ describe('contract operation classification', () => {
 				}
 			}
 			for (const [index, item] of abi.entries()) {
+				if (item.type !== 'function' && item.type !== 'event') continue
 				const label = `${contract}.curated[${index.toString()}]`
 				const identity = abiEntryIdentity(item, label)
 				const generated = generatedEntries.get(identity)

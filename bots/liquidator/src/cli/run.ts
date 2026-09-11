@@ -23,7 +23,7 @@ import { inheritedChildPoolSelections, selectVaultMigration, validateApprovedUni
 import { createConfigurationMutationGate } from '#core/configuration-gate'
 import { commitSignerMutation } from '#core/signer-mutation'
 import { parseTransactionReconciliation, validateReconciliationIntentChain, verifyFinalizedReplacement } from '#core/transaction-reconciliation'
-import { acquireLiquidatorProcessLocks, acquireLiquidatorProcessLocksForShutdown, createLiquidatorShutdownController, liquidatorDashboardLifecycle, LiquidatorProcessLockAcquisitionError, type LiquidatorProcessLocks, type LiquidatorShutdownController } from '#core/process-locks'
+import { acquireBotProcessLocks, acquireBotProcessLocksForShutdown, BotProcessLockAcquisitionError, botDashboardLifecycle, createBotShutdownController, type BotProcessLockOptions, type BotProcessLocks, type BotShutdownController } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { createSettingsUpdateQueue } from '#core/settings-update-queue'
 import { updateNetworkConnectivity } from '#core/network-connectivity'
 import { centralizedMarketConsensusObservations, marketConsensusSettings, observeCentralizedMarkets, parseCentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
@@ -33,6 +33,9 @@ import { canonicalBlockHash, chainFor, desiredPoolStatus } from '#monitoring/ope
 import { canonicalMarketPriceAllowsExecution, marketConfigurations, marketPriceAllowsExecution, selectedCandidate } from '#core/candidate-selection'
 import { reconcilePendingStagedOperations, recoverPendingTransactions } from '#execution/recovery'
 import { createSystemDeploymentGate } from '#core/deployment-gate'
+
+/** The liquidator only reserves a signer while live execution is enabled; dry-run processes never hold signer locks. */
+const LIQUIDATOR_PROCESS_LOCK_OPTIONS: BotProcessLockOptions = { label: 'liquidator', signerLocksInDryRun: false }
 
 const constantProductPairAbi = [
 	{ inputs: [], name: 'token0', outputs: [{ type: 'address' }], stateMutability: 'view', type: 'function' },
@@ -63,12 +66,7 @@ async function preflightNetworkProfile(target: OperatorSettings) {
 		}
 		await checkSubmissionEndpoints(target.submission, target.network.chainId)
 	}
-	const locks = await acquireLiquidatorProcessLocks({
-		chainId: target.network.chainId,
-		execute: target.runtime.execute,
-		privateKey: target.privateKey,
-		stateFile: target.runtime.stateFile,
-	})
+	const locks = await acquireBotProcessLocks({ chainId: target.network.chainId, execute: target.runtime.execute, privateKey: target.privateKey, stateFile: target.runtime.stateFile }, LIQUIDATOR_PROCESS_LOCK_OPTIONS)
 	try {
 		const durable = await loadDurableState(target.runtime.stateFile, target.network.chainId)
 		const configuredSigner = target.privateKey === undefined ? undefined : privateKeyToAccount(target.privateKey).address
@@ -81,7 +79,7 @@ async function preflightNetworkProfile(target: OperatorSettings) {
 	}
 }
 
-async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, processLocks: LiquidatorProcessLocks, shutdown: LiquidatorShutdownController) {
+async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, processLocks: BotProcessLocks, shutdown: BotShutdownController) {
 	let settings = loaded.settings
 	let settingsRevision = loaded.revision
 	let activePrivateKey = settings.privateKey
@@ -464,7 +462,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 					}),
 			})
 		: undefined
-	await using _dashboardLifecycle = dashboard === undefined ? undefined : liquidatorDashboardLifecycle(dashboard)
+	await using _dashboardLifecycle = dashboard === undefined ? undefined : botDashboardLifecycle(dashboard)
 	if (dashboard !== undefined) {
 		console.log(`dashboard=${dashboard.url}`)
 	}
@@ -736,25 +734,26 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 
 async function main() {
 	if (process.argv.length > 2) throw new Error('The liquidator accepts no command-line arguments; use its operator file or dashboard')
-	using shutdown = createLiquidatorShutdownController()
+	using shutdown = createBotShutdownController()
 	for (;;) {
 		const loaded = await loadSettings()
 		await assertSettingsProfileIsolation(loaded.path, loaded.settings)
-		let locks: LiquidatorProcessLocks
+		let locks: BotProcessLocks
 		try {
-			const acquired = await acquireLiquidatorProcessLocksForShutdown(
+			const acquired = await acquireBotProcessLocksForShutdown(
 				{
 					chainId: loaded.settings.network.chainId,
 					execute: loaded.settings.runtime.execute,
 					privateKey: loaded.settings.privateKey,
 					stateFile: loaded.settings.runtime.stateFile,
 				},
+				LIQUIDATOR_PROCESS_LOCK_OPTIONS,
 				shutdown,
 			)
 			if (acquired === undefined) return
 			locks = acquired
 		} catch (error) {
-			if (error instanceof LiquidatorProcessLockAcquisitionError) {
+			if (error instanceof BotProcessLockAcquisitionError) {
 				await error.releaseProcessLocks()
 				throw error.acquisitionCause
 			}

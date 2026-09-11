@@ -3,7 +3,7 @@ import { maximumFeePerGas, paddedTransactionGas, prepareSignedTransaction, submi
 import { sendRawTransactionToRpc } from '@zoltar/bot-shared/monitoring/connectivity'
 import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import type { DesiredPoolSettings, OperatorSettings, StrategySettings } from '#config/settings'
-import { coordinatorAbi, erc20Abi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi, wethAbi } from '#contracts/abi'
+import { openOraclePriceCoordinatorAbi, reputationTokenAbi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi, weth9Abi } from '@zoltar/bot-shared/contracts/abi'
 import { isPoolExecutionEligible, type VaultMigration } from '#core/fork-migration'
 import { BPS_DENOMINATOR, LIQUIDATION_REP_BONUS_BPS, PRICE_PRECISION, conservativeLiquidationRep, liquidationSubmissionLabel, requiredRepForOpenInterest, surplusRepForWithdrawal, vaultHealthBps, type LiquidationCandidate } from '#core/strategy'
 import { recordActivity, saveDurableState, type PendingTransactionIntent, type PoolObservation, type RuntimeState } from '#state/operator-state'
@@ -17,6 +17,8 @@ type WriteClient = WalletClient<Transport, Chain, Account>
 type RpcPool = ReturnType<typeof createRpcEndpointPool>
 
 const MAX_UINT256 = 2n ** 256n - 1n
+// Generic ERC-20 reads and approvals target REP or WETH; the REP artifact carries the standard ERC-20 surface.
+const erc20Abi = reputationTokenAbi
 const shutdownChecks = new WeakMap<object, () => boolean>()
 
 type Call = {
@@ -304,11 +306,7 @@ async function ensureAllowance(wallet: WriteClient, settings: OperatorSettings, 
 		state,
 		pool,
 		{
-			data: encodeFunctionData({
-				abi: erc20Abi,
-				args: [spender, amount],
-				functionName: 'approve',
-			}),
+			data: encodeFunctionData({ abi: erc20Abi, args: [spender, amount], functionName: 'approve' }),
 			gas: 80_000n,
 			label: `Approve ${kind === 'deposit' ? 'pool' : 'oracle'} REP funding`,
 			...(priceStillAllowed === undefined ? {} : { preSubmit: () => assertMarketPriceStillAllowed(priceStillAllowed) }),
@@ -430,7 +428,7 @@ async function fundStaleOracle(wallet: WriteClient, settings: OperatorSettings, 
 			state,
 			rpcPool,
 			{
-				data: encodeFunctionData({ abi: wethAbi, args: [], functionName: 'deposit' }),
+				data: encodeFunctionData({ abi: weth9Abi, args: [], functionName: 'deposit' }),
 				gas: 80_000n,
 				label: 'Wrap ETH for oracle initial report',
 				preSubmit: () => assertMarketPriceStillAllowed(priceStillAllowed),
@@ -449,11 +447,7 @@ async function fundStaleOracle(wallet: WriteClient, settings: OperatorSettings, 
 			state,
 			rpcPool,
 			{
-				data: encodeFunctionData({
-					abi: erc20Abi,
-					args: [pool.manager, initialAttoWeth],
-					functionName: 'approve',
-				}),
+				data: encodeFunctionData({ abi: weth9Abi, args: [pool.manager, initialAttoWeth], functionName: 'approve' }),
 				gas: 80_000n,
 				label: 'Approve oracle WETH funding',
 				preSubmit: () => assertMarketPriceStillAllowed(priceStillAllowed),
@@ -508,7 +502,7 @@ export async function executeLiquidation(wallet: WriteClient, settings: Operator
 		rpcPool,
 		{
 			data: encodeFunctionData({
-				abi: coordinatorAbi,
+				abi: openOraclePriceCoordinatorAbi,
 				args: [candidate.target.address, wallet.account.address, candidate.requestedDebtAttoEth, `0x${'00'.repeat(32)}`, settings.strategy.stagedOperationValidForSeconds, oracleFunding.proposedPrice, oracleFunding.initialAttoWeth],
 				functionName: 'requestPriceIfNeededAndStageLiquidation',
 			}),
@@ -562,7 +556,7 @@ export async function maintainVault(wallet: WriteClient, settings: OperatorSetti
 			rpcPool,
 			{
 				data: encodeFunctionData({
-					abi: coordinatorAbi,
+					abi: openOraclePriceCoordinatorAbi,
 					args: [1, wallet.account.address, plan.amountAttoRep, settings.strategy.stagedOperationValidForSeconds, 0n, 0n],
 					functionName: 'requestPriceIfNeededAndStageOperation',
 				}),

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData, encodeAbiParameters } from '@zoltar/bot-shared/ethereum'
-import { coordinatorAbi, erc1155Abi, erc20Abi, escalationGameAbi } from '../../src/contracts/abi.ts'
+import { openOraclePriceCoordinatorAbi, erc1155Abi, genesisReputationTokenAbi, escalationGameAbi } from '@zoltar/bot-shared/contracts/abi'
 import { validateStepReceiptEvidence } from '../../src/execution/receipt-validation.ts'
 import { CARRY_STORAGE_MAXIMUM_WITHDRAWALS } from '../../src/monitoring/carry-proof-storage.ts'
 import { canonicalLifecyclePresence, CHAOS_OPERATION_CATALOG, eligibleOperationPlans, evaluateOperationCatalog, reevaluateOperationContinuation, urgentOperationPlans } from '../../src/operations/catalog.ts'
@@ -632,7 +632,7 @@ describe('chaos operation catalog', () => {
 		const outcome = plan.metadata['outcome']
 		if (approval === undefined || action === undefined || typeof outcome !== 'number') throw new Error('Direct escalation workflow is incomplete')
 
-		expect(decodeFunctionData({ abi: erc20Abi, data: approval.data })).toMatchObject({ args: [pool.escalationGame, 1000n], functionName: 'approve' })
+		expect(decodeFunctionData({ abi: genesisReputationTokenAbi, data: approval.data })).toMatchObject({ args: [pool.escalationGame, 1000n], functionName: 'approve' })
 		expect(decodeFunctionData({ abi: escalationGameAbi, data: action.data })).toMatchObject({ args: [BigInt(outcome), 1000n], functionName: 'depositRepOnOutcome' })
 		expect(action.walletAssetDebits).toEqual([{ amount: '1000', asset: pool.repToken, category: 'rep', kind: 'erc20' }])
 		expect(action.preflightCalls).toEqual([expect.objectContaining({ caller: snapshot.wallet.address, expectedResult: '0x', to: pool.escalationGame })])
@@ -1093,7 +1093,7 @@ describe('chaos operation catalog', () => {
 		if (plan === undefined) throw new Error('Prepared request-price plan missing')
 		const request = plan.steps.at(-1)
 		if (request === undefined) throw new Error('Request-price step missing')
-		const decoded = decodeFunctionData({ abi: coordinatorAbi, data: request.data })
+		const decoded = decodeFunctionData({ abi: openOraclePriceCoordinatorAbi, data: request.data })
 		const maximumWeth = plan.metadata['maximumInitialAttoWeth']
 		const maximumRep = plan.metadata['maximumInitialAttoRep']
 		const maximumBounty = plan.metadata['maximumRequestPriceCostAttoEth']

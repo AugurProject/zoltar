@@ -113,12 +113,14 @@ Run `bun run knip` when imports, exports, tests, package scripts or dependencies
 
 Run `bun run check:generated-clean` only for CI/release freshness work or when contracts, generation scripts, shared build output, UI contract artifacts, or artifact policy change.
 
-Generated outputs are intentionally untracked, except for the documentation outputs and
-vendored deployment input listed below. The documentation outputs are tracked because the
-static documentation site loads them directly;
+Generated outputs are intentionally untracked, except for the documentation outputs,
+the shared bot ABI module, and the vendored deployment input listed below. The documentation
+outputs are tracked because the static documentation site loads them directly;
 `bun run docs:check-charts`, `bun run docs:check-runtime`, `bun run docs:check-contract-reference`, and
 `bun run docs:check-index` enforce their freshness. `bun run check:uniswap-deployment-artifact`
 pins the deployment input and prevents its large upstream packages from entering the lockfile.
+The shared bot ABI module is tracked so the bots type-check and ship without compiling contracts;
+`cd bots/shared && bun run check:generated` enforces its freshness.
 
 | Output | Source or command |
 | --- | --- |
@@ -128,6 +130,7 @@ pins the deployment input and prevents its large upstream packages from entering
 | `solidity/ts/types/contractArtifact.ts` | `bun run compile-contracts` |
 | `ui/coreShared/ts/contractArtifact.ts`, `ui/coreShared/ts/abis.ts`, and `ui/statoblastShared/ts/contractArtifact.ts` | `bun run generate` or `bun run ui:build` |
 | `ui/*/js/**` | UI TypeScript builds per package |
+| `bots/shared/src/contracts/abi.generated.ts` | `bun tooling/contracts/generate-bot-abis.mts` (or `cd bots/shared && bun run generate:abi`); validate with `cd bots/shared && bun run check:generated` |
 | `ui/trading/ts/generated/contractArtifact.ts` | `bun ./tooling/ui/vendor.mts trading`, `bun run ui:vendor`, or `bun run trading:compile` |
 | `ui/*/vendor/**` | `bun run ui:vendor` |
 | `docs/assets/js/chartRuntime.js` | `bun run docs:build-charts` |
