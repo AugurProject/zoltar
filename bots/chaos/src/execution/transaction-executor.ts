@@ -28,23 +28,15 @@ import {
 	startWorkflow,
 	assertTerminalSubmissionBoundary,
 } from '../runtime/workflows.ts'
-import { requireSuccessfulReceipt, stepReceiptEvidenceDisposition, type BalanceEvidenceObservation, type ReceiptEvidenceDisposition, type StorageEvidenceObservation } from './receipt-validation.ts'
+import { TransactionAwaitingRecovery, receiptVisibilityDisposition, requireSuccessfulReceipt, stepReceiptEvidenceDisposition, type BalanceEvidenceObservation, type ReceiptEvidenceDisposition, type StorageEvidenceObservation } from './receipt-validation.ts'
 import { assertOperationEthFunding, assertOperationPlanFresh, assertOperationPrincipalCaps, assertStepSafety, operationSubmissionLastValidBlock, unsignedQuantity } from './safety.ts'
+
+export { TransactionAwaitingRecovery }
 
 type WriteClient = WalletClient<Transport, Chain, Account>
 type RpcPool = ReturnType<typeof createRpcEndpointPool>
 
 export const CHAOS_FINALITY_BLOCKS = EXECUTOR_FINALITY_BLOCKS
-
-export class TransactionAwaitingRecovery extends Error {
-	readonly hash: Hex
-
-	constructor(label: string, hash: Hex, reason: string) {
-		super(`${label} transaction ${hash} requires recovery: ${reason}`)
-		this.name = 'TransactionAwaitingRecovery'
-		this.hash = hash
-	}
-}
 
 export class OperationRediscoveryRequired extends Error {
 	constructor(message: string, cause?: unknown) {
@@ -1178,7 +1170,7 @@ async function executeStep(environment: ExecutionEnvironment, plan: OperationPla
 	if (finalized.receipt === undefined) {
 		intent.status = 'confirmation-unknown'
 		await persist(environment)
-		throw new TransactionAwaitingRecovery(step.label, intent.hash, finalized.observed ? 'awaiting canonical finality' : 'receipt is not visible to the RPC quorum')
+		throw new TransactionAwaitingRecovery(step.label, intent.hash, ...receiptVisibilityDisposition(finalized.observed, intent.submittedAt))
 	}
 	let receipt
 	try {

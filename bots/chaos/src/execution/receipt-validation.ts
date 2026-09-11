@@ -193,3 +193,31 @@ export function requireSuccessfulReceipt(label: string, receipt: Omit<Successful
 	if (receipt.status !== 'success') throw new Error(`${label} reverted in transaction ${receipt.transactionHash}`)
 	return { ...receipt, status: 'success' as const }
 }
+
+export class TransactionAwaitingRecovery extends Error {
+	readonly hash: Hex
+	readonly severity: 'alarming' | 'pending'
+	constructor(label: string, hash: Hex, reason: string, severity: 'alarming' | 'pending' = 'alarming') {
+		super(`${label} transaction ${hash} requires recovery: ${reason}`)
+		this.name = 'TransactionAwaitingRecovery'
+		this.hash = hash
+		this.severity = severity
+	}
+}
+
+/** A receipt is essentially never visible microseconds after broadcast; give normal propagation this long before treating absence as alarming. */
+const RECEIPT_VISIBILITY_GRACE_MILLISECONDS = 60_000
+/** Finality on healthy chains lands within minutes; give it generous room before treating a still-unfinalized receipt as alarming. */
+const FINALITY_VISIBILITY_GRACE_MILLISECONDS = 1_200_000
+
+export function receiptVisibilityDisposition(observed: boolean, submittedAt: string | undefined): readonly [reason: string, severity: 'alarming' | 'pending'] {
+	const elapsedMilliseconds = submittedAt === undefined ? undefined : Date.now() - Date.parse(submittedAt)
+	if (observed) {
+		const stillWithinGrace = elapsedMilliseconds !== undefined && elapsedMilliseconds < FINALITY_VISIBILITY_GRACE_MILLISECONDS
+		return ['awaiting canonical finality', stillWithinGrace ? 'pending' : 'alarming']
+	}
+	if (elapsedMilliseconds !== undefined && elapsedMilliseconds < RECEIPT_VISIBILITY_GRACE_MILLISECONDS) {
+		return ['not yet visible to the RPC quorum; this is expected immediately after broadcast', 'pending']
+	}
+	return ['receipt is not visible to the RPC quorum', 'alarming']
+}
