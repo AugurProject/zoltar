@@ -2,3 +2,9 @@
 timeout = 300000
 preload = ['./bun-test-setup.ts']
 pathIgnorePatterns = ['solidity/js/tests/**', 'ui/coreShared/js/tests/**', 'ui/zoltar/js/tests/**', 'ui/statoblast/js/tests/**', 'ui/trading/js/tests/**']
+
+[install]
+# Runtime auto-install silently resolves bare imports from temp-directory
+# fixtures against the live npm registry (latest versions) and can poison
+# in-process module resolution for the rest of a test run. Fail loudly instead.
+auto = "disable"
