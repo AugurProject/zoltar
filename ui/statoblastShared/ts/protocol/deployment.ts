@@ -191,9 +191,14 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 	}))
 }
 
-// Constructor arguments for every proxy-deployed step in the statoblast
-// deployment plan, keyed by step id. The statoblast deployment status oracle
-// monitors additional contracts, so its arguments replace the zoltar entry.
+/**
+ * Constructor arguments for every proxy-deployed step in the statoblast
+ * deployment plan, keyed by step id. The statoblast deployment status oracle
+ * monitors additional contracts, so its arguments replace the zoltar entry.
+ * Consumed through a dynamic import by the deployment manifest generator
+ * (tooling/contracts/check-mainnet-deployment.mts), which Knip cannot trace.
+ * @public
+ */
 export function getDeploymentStepConstructorArguments(profile: NetworkProfile = getRuntimeNetworkProfile()): Partial<Record<DeploymentStepId, string>> {
 	return {
 		...getZoltarDeploymentStepConstructorArguments(profile),
