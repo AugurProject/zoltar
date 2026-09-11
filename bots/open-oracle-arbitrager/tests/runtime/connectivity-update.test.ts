@@ -5,7 +5,7 @@ import { describe, expect, test } from 'bun:test'
 import { parseOperatorSettings, type PersistedOperatorSettings } from '#config/settings-store'
 import { checkIndependentRpcChains, updateOperatorConnectivity } from '../../src/runtime/connectivity-update.ts'
 import { EndpointCheckFailure, type EndpointCheck } from '#monitoring/connectivity'
-import { deploymentIdentityChanged, deploymentUpdateMustWait, requireSafeDeploymentTransition } from '../../src/runtime/operator-control-plane.ts'
+import { deploymentUpdateMustWait, requireSafeDeploymentTransition } from '../../src/runtime/deployment-transition.ts'
 
 async function exampleSettings() {
 	const settings = parseOperatorSettings(JSON.parse(await Bun.file(new URL('../../config/operator.example.json', import.meta.url)).text()))
@@ -24,9 +24,8 @@ function relayCheck(): EndpointCheck {
 describe('operator connectivity updates', () => {
 	test('distinguishes deployment identity switches from same-identity routing updates', async () => {
 		const current = (await exampleSettings()).deployment
-		expect(deploymentIdentityChanged(current, { ...current, uniswapRouter: current.rep })).toBe(false)
-		expect(deploymentIdentityChanged(current, { ...current, openOracle: '0x0000000000000000000000000000000000000002' })).toBe(true)
-		expect(deploymentIdentityChanged(current, { ...current, executor: '0x0000000000000000000000000000000000000002' })).toBe(true)
+		expect(deploymentUpdateMustWait(current, { ...current, uniswapRouter: current.rep }, [{ status: 'open' }])).toBe(false)
+		expect(deploymentUpdateMustWait(current, { ...current, executor: '0x0000000000000000000000000000000000000002' }, [{ status: 'open' }])).toBe(true)
 		expect(deploymentUpdateMustWait(current, { ...current, openOracle: '0x0000000000000000000000000000000000000002' }, [{ status: 'open' }])).toBe(true)
 		expect(deploymentUpdateMustWait(current, { ...current, openOracle: '0x0000000000000000000000000000000000000002' }, [{ status: 'closed' }])).toBe(false)
 		expect(() => requireSafeDeploymentTransition({ positions: [{ status: 'open' }] }, current, { ...current, executor: '0x0000000000000000000000000000000000000002' })).toThrow('cannot change while a position still consumes risk')

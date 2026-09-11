@@ -2,7 +2,7 @@ import type { EcosystemSnapshot, ImmutableTopologyPlanningCapacity, PlanningOpti
 
 export const INVALID_IMMUTABLE_TOPOLOGY_CAPACITY_BLOCKER = 'Immutable topology discovery capacity is unavailable or invalid'
 
-export function aggregateProductFits(left: number, right: number, maximum: number) {
+function aggregateProductFits(left: number, right: number, maximum: number) {
 	return Number.isSafeInteger(left) && left >= 0 && Number.isSafeInteger(right) && right >= 0 && Number.isSafeInteger(maximum) && maximum > 0 && (left === 0 || right <= Math.floor(maximum / left))
 }
 

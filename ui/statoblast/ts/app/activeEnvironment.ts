@@ -1,6 +1,6 @@
 import { initializeActiveEnvironment } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 
-export const statoblastActiveEnvironmentDependencies = {
+const statoblastActiveEnvironmentDependencies = {
 	appId: 'statoblast',
 } satisfies NonNullable<Parameters<typeof initializeActiveEnvironment>[1]>
 

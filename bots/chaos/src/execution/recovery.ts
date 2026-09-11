@@ -1,7 +1,7 @@
 import { keccak256, parseTransaction, toHex, type Hex } from '@zoltar/bot-shared/ethereum'
 import { submitSignedTransaction } from '@zoltar/bot-shared/execution/transaction-submission'
 import { sendRawTransactionToRpc } from '@zoltar/bot-shared/monitoring/connectivity'
-import { availableSettledValues, settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
+import { availableSettledValues, settledQuorumValue, sharedQuorumBlockNumber } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
 import {
 	captureWorkflowIntentSubmissionJournal,
@@ -15,7 +15,9 @@ import {
 	recoverableWorkflowForIntent,
 	restoreWorkflowIntentSubmissionJournal,
 } from '../runtime/workflows.ts'
-import { recordActivity, saveDurableState, type PendingTransactionIntent } from '../state/operator-state.ts'
+import { recordActivity, type PendingTransactionIntent } from '../state/operator-state.ts'
+import { observePendingTransaction } from '../state/pending-transaction-observation.ts'
+import { manualReconciliationBlocker, observeIntent, persist, retainClosedSubmissionWindow, retainManualReconciliation, retainUnreadableReceiptEvidence } from './recovery-journal.ts'
 import { requireSuccessfulReceipt, stepReceiptEvidenceDisposition, type ReceiptEvidenceDisposition } from './receipt-validation.ts'
 import {
 	balanceObservations,
@@ -40,9 +42,8 @@ import {
 	type CanonicalExecutionAnchor,
 	type ExecutionEnvironment,
 } from './transaction-executor.ts'
+import { assertRecoverySubmissionMode, BOT_COMPATIBLE_RECOVERY_TRANSACTION_TYPE, pendingIntentRecoveryAction, transactionIsStrictNonceCancellation, transactionMatchesIntent } from './recovery-policy.ts'
 import { assertOperationPrincipalCaps } from './safety.ts'
-
-const BOT_COMPATIBLE_RECOVERY_TRANSACTION_TYPE = 'eip1559'
 
 function baselineMap(intent: PendingTransactionIntent) {
 	return new Map(intent.semanticExpectation.balanceBaselines.map(baseline => [`${baseline.account.toLowerCase()}:${baseline.asset === 'ETH' ? 'ETH' : baseline.asset.toLowerCase()}`, BigInt(baseline.balance)]))
@@ -50,14 +51,6 @@ function baselineMap(intent: PendingTransactionIntent) {
 
 function storageBaselineMap(intent: PendingTransactionIntent) {
 	return new Map(intent.semanticExpectation.storageBaselines.map(baseline => [`${baseline.contract.toLowerCase()}:${baseline.functionName}:${JSON.stringify(baseline.args)}`, baseline.value]))
-}
-
-async function persist(environment: ExecutionEnvironment) {
-	if (environment.persistState !== undefined) {
-		await environment.persistState(environment.state)
-		return
-	}
-	await saveDurableState(environment.settings.runtime.stateFile, environment.state)
 }
 
 function removeIntent(environment: ExecutionEnvironment, id: string) {
@@ -174,41 +167,6 @@ function assertIntentIdentity(environment: ExecutionEnvironment, intent: Pending
 	}
 }
 
-export function transactionMatchesIntent(
-	transaction: {
-		from: string
-		input: string
-		nonce: bigint
-		to?: string | null | undefined
-		type?: string | undefined
-		value: bigint
-	},
-	intent: Pick<PendingTransactionIntent, 'data' | 'nonce' | 'sender' | 'to' | 'value'>,
-) {
-	return (
-		transaction.type === BOT_COMPATIBLE_RECOVERY_TRANSACTION_TYPE &&
-		transaction.from.toLowerCase() === intent.sender.toLowerCase() &&
-		transaction.nonce === intent.nonce &&
-		transaction.to?.toLowerCase() === intent.to.toLowerCase() &&
-		transaction.input.toLowerCase() === intent.data.toLowerCase() &&
-		transaction.value === intent.value
-	)
-}
-
-export function transactionIsStrictNonceCancellation(
-	transaction: {
-		from: string
-		input: string
-		nonce: bigint
-		to?: string | null | undefined
-		type?: string | undefined
-		value: bigint
-	},
-	intent: Pick<PendingTransactionIntent, 'nonce' | 'sender'>,
-) {
-	return transaction.type === BOT_COMPATIBLE_RECOVERY_TRANSACTION_TYPE && transaction.from.toLowerCase() === intent.sender.toLowerCase() && transaction.nonce === intent.nonce && transaction.to?.toLowerCase() === intent.sender.toLowerCase() && transaction.input.toLowerCase() === '0x' && transaction.value === 0n
-}
-
 async function exactIntentIsVisible(environment: ExecutionEnvironment, intent: PendingTransactionIntent) {
 	const connectivity = requiredConnectivity(environment.settings)
 	const settled = await Promise.allSettled(
@@ -233,35 +191,6 @@ async function exactIntentIsVisible(environment: ExecutionEnvironment, intent: P
 		throw new ConnectivityDegradedError(`Transaction ${intent.hash} visibility does not satisfy the configured RPC quorum requirement`)
 	}
 	return observations.filter(Boolean).length >= connectivity.rpcQuorum
-}
-
-export function assertRecoverySubmissionMode(intentMode: PendingTransactionIntent['mode'], configuredMode: PendingTransactionIntent['mode']) {
-	if (intentMode !== configuredMode) {
-		throw new Error(`Pending ${intentMode} transaction recovery requires submission.mode to remain ${intentMode}`)
-	}
-}
-
-export function pendingIntentRecoveryAction(intent: Pick<PendingTransactionIntent, 'maxBlockNumber' | 'mode' | 'nonce'>, pendingNonce: bigint, heads: readonly bigint[], finalityBlocks = CHAOS_FINALITY_BLOCKS, exactTransactionVisible = false, rpcQuorum = heads.length) {
-	if (heads.length === 0) throw new Error('Pending intent recovery requires at least one canonical head')
-	if (finalityBlocks < 1n) throw new Error('Pending intent recovery finality must be positive')
-	if (!Number.isSafeInteger(rpcQuorum) || rpcQuorum < 1 || rpcQuorum > heads.length) {
-		throw new Error('Pending intent recovery requires a valid RPC quorum')
-	}
-	if (pendingNonce < intent.nonce) return 'manual-reconciliation' as const
-	if (exactTransactionVisible) return 'wait-known-pending' as const
-	if (pendingNonce > intent.nonce) return 'manual-reconciliation' as const
-	const descendingHeads = [...heads].sort((left, right) => {
-		if (left === right) return 0
-		return left > right ? -1 : 1
-	})
-	const sharedHead = descendingHeads[rpcQuorum - 1]
-	if (sharedHead === undefined) {
-		throw new Error('Pending intent recovery could not determine a shared head')
-	}
-	if (sharedHead >= intent.maxBlockNumber) {
-		return 'submission-window-closed' as const
-	}
-	return 'resubmit-identical' as const
 }
 
 async function resolveReceipt(environment: ExecutionEnvironment, intent: PendingTransactionIntent) {
@@ -289,9 +218,7 @@ async function resolveReceipt(environment: ExecutionEnvironment, intent: Pending
 	try {
 		observations = await recoveredReceiptObservations(environment, intent, receipt)
 	} catch (error) {
-		intent.status = 'confirmation-unknown'
-		await persist(environment)
-		throw new TransactionAwaitingRecovery(intent.label, intent.hash, `confirmed receipt evidence is temporarily unavailable: ${error instanceof Error ? error.message : String(error)}`)
+		throw await retainUnreadableReceiptEvidence(environment, intent, result.head, receipt.blockNumber, error)
 	}
 	let evidenceDisposition: ReceiptEvidenceDisposition
 	try {
@@ -322,37 +249,7 @@ async function resolveReceipt(environment: ExecutionEnvironment, intent: Pending
 			type: 'recovery',
 		})
 	})
-	return { observed: true as const, receipt }
-}
-
-async function retainClosedSubmissionWindow(environment: ExecutionEnvironment, intent: PendingTransactionIntent) {
-	const blocker = 'Automatic resubmission window closed; verify a receipt, exact replacement, or nonce cancellation'
-	if (intent.recoveryBlocker !== blocker) {
-		intent.recoveryBlocker = blocker
-		recordActivity(environment.state, {
-			hash: intent.hash,
-			message: `Automatic resubmission window closed; exact intent retained for receipt or replacement verification: ${intent.label}`,
-			operationId: intent.operationId,
-			status: 'pending',
-			type: 'recovery',
-		})
-		await persist(environment)
-	}
-}
-
-function manualReconciliationBlocker(intent: PendingTransactionIntent, nonce: bigint) {
-	return nonce > intent.nonce
-		? `Signer nonce ${intent.nonce.toString()} was consumed without a quorum receipt; verify an exact replacement or nonce cancellation`
-		: `Signer pending nonce moved backward to ${nonce.toString()}, below journaled nonce ${intent.nonce.toString()}; manual reconciliation is required before any resubmission`
-}
-
-async function retainManualReconciliation(environment: ExecutionEnvironment, intent: PendingTransactionIntent, nonce: bigint): Promise<never> {
-	const blocker = manualReconciliationBlocker(intent, nonce)
-	if (intent.recoveryBlocker !== blocker) {
-		intent.recoveryBlocker = blocker
-		await persist(environment)
-	}
-	throw new Error(`Transaction ${intent.hash}: ${blocker}`)
+	return { head: result.head, includedBlock: result.includedBlock, observed: true as const, receipt }
 }
 
 class RecoveryPolicyBlocked extends Error {
@@ -417,6 +314,7 @@ async function resubmitIntent(environment: ExecutionEnvironment, intent: Pending
 	if (preflightNonce !== intent.nonce) await retainManualReconciliation(environment, intent, preflightNonce)
 	const anchor = await agreedLatestBlock(environment, `${intent.label} recovery block`)
 	if (anchor.number >= intent.maxBlockNumber) {
+		observePendingTransaction(intent, { head: anchor.number, kind: 'window-closed' })
 		await retainClosedSubmissionWindow(environment, intent)
 		return
 	}
@@ -558,6 +456,7 @@ async function resubmitIntent(environment: ExecutionEnvironment, intent: Pending
 	intent.status = 'submitted'
 	intent.submissionBlock ??= anchor.number
 	intent.submittedAt ??= new Date().toISOString()
+	observePendingTransaction(intent, { head: anchor.number, kind: 'resubmitted' })
 	markWorkflowStepSubmitted(workflow, intent.stepId)
 	recordActivity(environment.state, {
 		hash: intent.hash,
@@ -710,6 +609,9 @@ export async function recoverPendingTransactions(environment: ExecutionEnvironme
 	const receiptResult = await resolveReceipt(environment, intent)
 	if (receiptResult.receipt !== undefined) return true
 	if (receiptResult.observed) {
+		// An observed inclusion supersedes any earlier delivery blocker; the bot is tracking the receipt itself now.
+		delete intent.recoveryBlocker
+		await observeIntent(environment, intent, { head: receiptResult.head, includedBlock: receiptResult.includedBlock, kind: 'awaiting-finality' })
 		return true
 	}
 	if (await resolveQueuedCancellation(environment, intent)) return true
@@ -721,20 +623,22 @@ export async function recoverPendingTransactions(environment: ExecutionEnvironme
 	const finalityBlocks = environment.finalityBlocks ?? CHAOS_FINALITY_BLOCKS
 	const connectivity = requiredConnectivity(environment.settings)
 	const action = pendingIntentRecoveryAction(intent, nonce, heads, finalityBlocks, exactTransactionVisible, connectivity.rpcQuorum)
+	const head = sharedQuorumBlockNumber(heads, connectivity.rpcQuorum)
 	if (action === 'manual-reconciliation') {
+		observePendingTransaction(intent, { head, kind: 'manual-reconciliation' })
 		await retainManualReconciliation(environment, intent, nonce)
 	}
 	if (action === 'submission-window-closed') {
+		observePendingTransaction(intent, { head, kind: 'window-closed' })
 		await retainClosedSubmissionWindow(environment, intent)
 		return true
 	}
 	if (action === 'wait-known-pending') {
-		if (intent.recoveryBlocker !== undefined) {
-			delete intent.recoveryBlocker
-			await persist(environment)
-		}
+		delete intent.recoveryBlocker
+		await observeIntent(environment, intent, { head, kind: 'in-mempool' })
 		return true
 	}
+	await observeIntent(environment, intent, { head, kind: 'not-visible' })
 	const resubmit = options.resubmit ?? (environment.settings.runtime.execute && !environment.settings.paused && !environment.state.paused)
 	if (!resubmit) {
 		return true
@@ -744,7 +648,7 @@ export async function recoverPendingTransactions(environment: ExecutionEnvironme
 	return true
 }
 
-export async function verifyRecoveredReplacement(environment: ExecutionEnvironment, intent: PendingTransactionIntent, replacementHash: Hex) {
+async function verifyRecoveredReplacement(environment: ExecutionEnvironment, intent: PendingTransactionIntent, replacementHash: Hex) {
 	const connectivity = requiredConnectivity(environment.settings)
 	const readers = executionReadClients(environment)
 	const transaction = await settledQuorumValue(

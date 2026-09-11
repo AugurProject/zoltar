@@ -1,8 +1,8 @@
 import { createMemoryClient } from '@tevm/memory-client'
 import { bytesToHex, hexToBytes, type Hash } from '@zoltar/core-shared/evm/ethereum'
 
-export const SIMULATION_INITIAL_TIMESTAMP = 1_735_689_600n
-export const SIMULATION_BLOCK_INTERVAL_SECONDS = 1n
+const SIMULATION_INITIAL_TIMESTAMP = 1_735_689_600n
+const SIMULATION_BLOCK_INTERVAL_SECONDS = 1n
 
 type TevmLikeClient = ReturnType<typeof createMemoryClient>
 type SimulationBlock = {

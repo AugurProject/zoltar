@@ -3,7 +3,9 @@ import { chmod, mkdir, mkdtemp, open, readFile, readdir, rename, rm, stat, symli
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, test } from 'bun:test'
-import { CONFIGURATION_REVISION_CONFLICT, PRESERVE_PRIVATE_KEY, assertSettingsProfileIsolation, loadSettings, parseSettings, saveSettings, serializedSettings, settingsProfilePath, settingsProfilePathForNetwork, switchSettingsNetworkProfile, type SettingsFilesystem } from '../../src/config/settings.ts'
+import { CONFIGURATION_REVISION_CONFLICT, assertSettingsProfileIsolation, loadSettings, parseSettings, saveSettings, serializedSettings, type SettingsFilesystem } from '../../src/config/settings.ts'
+
+const PRESERVE_PRIVATE_KEY = '__PRESERVE_SAVED_PRIVATE_KEY__'
 import { publicChaosConfiguration } from '../../src/dashboard/dashboard-server.ts'
 import { executionProfileId } from '../../src/config/execution-profile.ts'
 import { chaosChain } from '../../src/runtime/canonical-scan.ts'
@@ -120,16 +122,12 @@ describe('chaos-bot settings', () => {
 		expect(JSON.stringify(dashboardConfiguration)).toContain('read-primary.custom-chain')
 		expect(JSON.stringify(dashboardConfiguration)).not.toContain(settings.deployment.zoltar)
 
-		const profilePath = settingsProfilePathForNetwork('/tmp/operator.json', settings.network)
-		expect(profilePath).toBe('/tmp/operator.json.custom-chain-4242424242.profile')
-		expect(profilePath).not.toContain(settings.network.name)
 		expect(executionProfileId(roundTripped)).toBe(executionProfileId(settings))
 		const differentChain = parseSettings({
 			...serialized,
 			network: { ...serialized.network, chainId: 4_242_424_243 },
 		})
 		expect(executionProfileId(differentChain)).not.toBe(executionProfileId(settings))
-		expect(settingsProfilePathForNetwork('/tmp/operator.json', differentChain.network)).toBe('/tmp/operator.json.custom-chain-4242424243.profile')
 
 		const directory = await temporaryDirectory()
 		const path = join(directory, 'custom-operator.json')
@@ -161,26 +159,6 @@ describe('chaos-bot settings', () => {
 		expect(() => parseSettings({ ...source, network: { ...network, kind: 'private' } })).toThrow('network.kind must be custom')
 		const implicitCustomNetwork = Object.fromEntries(Object.entries(network).filter(([key]) => key !== 'kind'))
 		expect(() => parseSettings({ ...source, network: implicitCustomNetwork })).toThrow('network.kind must explicitly be custom')
-
-		const pathLikeLabel = parseSettings({ ...source, network: { ...network, name: '../Zoltar QA / Chain' } })
-		expect(settingsProfilePathForNetwork('/tmp/operator.json', pathLikeLabel.network)).toBe('/tmp/operator.json.custom-chain-4242424242.profile')
-	})
-
-	test('stores a custom profile under its chain ID rather than its display label', async () => {
-		const directory = await temporaryDirectory()
-		const path = join(directory, 'operator.json')
-		const source = record(JSON.parse(await readFile(customChainPlaceholderPath, 'utf8')))
-		const custom = parseSettings({
-			...source,
-			network: { ...record(source['network']), name: '../Zoltar QA / Chain' },
-			runtime: { ...record(source['runtime']), stateFile: join(directory, 'custom-state.json') },
-		})
-		await saveSettings(path, custom)
-		await switchSettingsNetworkProfile(path, 'sepolia', examplePath)
-		const customProfilePath = join(directory, 'operator.json.custom-chain-4242424242.profile')
-		const storedCustom = await loadSettings(customProfilePath)
-		expect(storedCustom.settings.network).toEqual(custom.network)
-		expect(await readdir(directory)).toContain('operator.json.custom-chain-4242424242.profile')
 	})
 
 	test('parses the documented chain forms with distinct durable state paths', async () => {
@@ -223,7 +201,7 @@ describe('chaos-bot settings', () => {
 			network: { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' },
 			runtime: { ...serializedSettings(custom).runtime, stateFile: sharedStateFile },
 		})
-		await saveSettings(settingsProfilePath(path, 'mainnet'), mainnet)
+		await saveSettings(`${path}.mainnet.profile`, mainnet)
 		await expect(assertSettingsProfileIsolation(path, custom)).rejects.toThrow('different chain IDs must use distinct durable state paths')
 	})
 
@@ -497,7 +475,7 @@ describe('chaos-bot settings', () => {
 			network: { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' },
 			runtime: { ...serializedSettings(base).runtime, stateFile: statePath },
 		})
-		await saveSettings(settingsProfilePath(path, 'mainnet'), mainnet)
+		await saveSettings(`${path}.mainnet.profile`, mainnet)
 		await expect(assertSettingsProfileIsolation(path, base)).rejects.toThrow('distinct durable state paths')
 	})
 

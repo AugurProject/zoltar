@@ -1,30 +1,17 @@
 /// <reference types="bun-types" />
 import { describe, expect, test } from 'bun:test'
 import { createPublicClient, getAddress, http, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
-import {
-	DEFAULT_POOL_CONFIG,
-	ETH_ADDRESS,
-	REP_ADDRESS,
-	UNISWAP_V4_QUOTER_ADDRESS,
-	WETH_ADDRESS,
-	buildUniswapV3PoolUrl,
-	buildUniswapV4PoolId,
-	buildUniswapV4PoolUrl,
-	quoteBestExactInput,
-	quoteBestExactInputWithSource,
-	quoteBestV3ExactInput,
-	quoteBestV3ExactInputWithSource,
-	quoteEthForRep,
-	quoteEthForToken,
-	quoteExactInput,
-	quoteRepForEth,
-	quoteRepForUsdcV4WithSource,
-	quoteTokenForEth,
-} from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
+import { ETH_ADDRESS, getRepAddress, quoteBestExactInputWithSource, quoteBestV3ExactInputWithSource, quoteExactInput, quoteRepForUsdcV4WithSource } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
 import type { ReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
+
+const REP_ADDRESS = getAddress(MAINNET_NETWORK_PROFILE.genesisRepTokenAddress)
+const WETH_ADDRESS = MAINNET_NETWORK_PROFILE.wethAddress
+const UNISWAP_V4_QUOTER_ADDRESS = MAINNET_NETWORK_PROFILE.uniswapV4QuoterAddress
+// The quoter defaults to the 0.30% / 60-tick Uniswap V4 pool.
+const DEFAULT_POOL_CONFIG = { fee: 3000, tickSpacing: 60 }
 type SimulateArgs = Parameters<ReadClient['simulateContract']>[0]
 type RawSimulateParam = {
 	poolKey: {
@@ -198,12 +185,12 @@ void describe('quoteBestExactInput', () => {
 			500: 12n,
 			3000: 7n,
 		})
-		const result = await quoteBestExactInput(client, ETH_ADDRESS, REP_ADDRESS, 1n)
+		const result = (await quoteBestExactInputWithSource(client, ETH_ADDRESS, REP_ADDRESS, 1n)).amountOut
 		expect(result).toBe(12n)
 	})
 	void test('throws when every tested V4 pool config fails', async () => {
 		const client = createPoolAwareClient({})
-		await expect(quoteBestExactInput(client, ETH_ADDRESS, REP_ADDRESS, 1n)).rejects.toThrow('no pool for fee 10000')
+		await expect(quoteBestExactInputWithSource(client, ETH_ADDRESS, REP_ADDRESS, 1n)).rejects.toThrow('no pool for fee 10000')
 	})
 })
 void describe('quoteBestExactInputWithSource', () => {
@@ -223,8 +210,8 @@ void describe('quoteBestExactInputWithSource', () => {
 			amountOut: 12n,
 			source: {
 				poolConfig: poolConfigs[1],
-				poolId: buildUniswapV4PoolId(ETH_ADDRESS, REP_ADDRESS, poolConfigs[1]),
-				poolUrl: buildUniswapV4PoolUrl(ETH_ADDRESS, REP_ADDRESS, poolConfigs[1]),
+				poolId: expect.stringMatching(/^0x[0-9a-f]{64}$/),
+				poolUrl: expect.stringMatching(/^https:\/\/app\.uniswap\.org\/explore\/pools\/ethereum\/0x[0-9a-f]{64}$/),
 				protocol: 'v4',
 			},
 		})
@@ -237,7 +224,7 @@ void describe('quoteBestV3ExactInput', () => {
 			3000: 12n,
 			10000: 7n,
 		})
-		const result = await quoteBestV3ExactInput(client, ETH_ADDRESS, REP_ADDRESS, 1n)
+		const result = (await quoteBestV3ExactInputWithSource(client, ETH_ADDRESS, REP_ADDRESS, 1n)).amountOut
 		expect(result).toBe(12n)
 	})
 	void test('normalizes ETH to WETH for V3 quotes', async () => {
@@ -255,7 +242,7 @@ void describe('quoteBestV3ExactInput', () => {
 		}
 		client.simulateContract = simulateContract
 		client.readContract = async () => zeroAddress as never
-		await quoteBestV3ExactInput(client, ETH_ADDRESS, REP_ADDRESS, 1n, [100])
+		await quoteBestV3ExactInputWithSource(client, ETH_ADDRESS, REP_ADDRESS, 1n, [100])
 		expect(captured.tokenIn).toBe(WETH_ADDRESS)
 		expect(captured.tokenOut).toBe(REP_ADDRESS)
 	})
@@ -296,7 +283,7 @@ void describe('quoteBestV3ExactInput', () => {
 	})
 	void test('throws when every tested V3 fee tier fails', async () => {
 		const client = createV3FeeAwareClient({})
-		await expect(quoteBestV3ExactInput(client, ETH_ADDRESS, REP_ADDRESS, 1n)).rejects.toThrow('no v3 pool for fee 10000')
+		await expect(quoteBestV3ExactInputWithSource(client, ETH_ADDRESS, REP_ADDRESS, 1n)).rejects.toThrow('no v3 pool for fee 10000')
 	})
 })
 void describe('quoteBestV3ExactInputWithSource', () => {
@@ -338,7 +325,7 @@ void describe('quoteBestV3ExactInputWithSource', () => {
 			source: {
 				fee: 3000,
 				poolAddress,
-				poolUrl: buildUniswapV3PoolUrl(poolAddress),
+				poolUrl: `https://app.uniswap.org/explore/pools/ethereum/${poolAddress}`,
 				protocol: 'v3',
 			},
 		})
@@ -354,17 +341,17 @@ void describe('quoteBestV3ExactInputWithSource', () => {
 void describe('quoteTokenForEth', () => {
 	void test('returns ETH amount out for the given token amount', async () => {
 		const { client } = createCapturingClient(400000000000000000n)
-		const result = await quoteTokenForEth(client, REP_ADDRESS, 1000000000000000000n)
+		const result = await quoteExactInput(client, REP_ADDRESS, ETH_ADDRESS, 1000000000000000000n)
 		expect(result).toBe(400000000000000000n)
 	})
 	void test('routes token → ETH (zeroForOne = false for REP)', async () => {
 		const { client, captured } = createCapturingClient(1n)
-		await quoteTokenForEth(client, REP_ADDRESS, 1n)
+		await quoteExactInput(client, REP_ADDRESS, ETH_ADDRESS, 1n)
 		expect(captured.zeroForOne).toBe(false)
 	})
 	void test('uses the provided token as currency1 when it is numerically higher than ETH', async () => {
 		const { client, captured } = createCapturingClient(1n)
-		await quoteTokenForEth(client, REP_ADDRESS, 1n)
+		await quoteExactInput(client, REP_ADDRESS, ETH_ADDRESS, 1n)
 		expect(captured.currency1).toBe(REP_ADDRESS)
 		expect(captured.currency0).toBe(ETH_ADDRESS)
 	})
@@ -372,24 +359,24 @@ void describe('quoteTokenForEth', () => {
 void describe('quoteEthForToken', () => {
 	void test('returns token amount out for the given ETH amount', async () => {
 		const { client } = createCapturingClient(12000000000000000000n)
-		const result = await quoteEthForToken(client, REP_ADDRESS, 1000000000000000000n)
+		const result = await quoteExactInput(client, ETH_ADDRESS, REP_ADDRESS, 1000000000000000000n)
 		expect(result).toBe(12000000000000000000n)
 	})
 	void test('routes ETH → token (zeroForOne = true for REP)', async () => {
 		const { client, captured } = createCapturingClient(1n)
-		await quoteEthForToken(client, REP_ADDRESS, 1n)
+		await quoteExactInput(client, ETH_ADDRESS, REP_ADDRESS, 1n)
 		expect(captured.zeroForOne).toBe(true)
 	})
 })
 void describe('quoteRepForEth', () => {
 	void test('returns ETH amount out for REP input', async () => {
 		const { client } = createCapturingClient(300000000000000000n)
-		const result = await quoteRepForEth(client, 1000000000000000000n)
+		const result = (await quoteBestExactInputWithSource(client, getRepAddress(), ETH_ADDRESS, 1000000000000000000n)).amountOut
 		expect(result).toBe(300000000000000000n)
 	})
 	void test('uses REP_ADDRESS as the input token', async () => {
 		const { client, captured } = createCapturingClient(1n)
-		await quoteRepForEth(client, 1n)
+		await quoteBestExactInputWithSource(client, getRepAddress(), ETH_ADDRESS, 1n)
 		expect(captured.currency1.toLowerCase()).toBe(REP_ADDRESS.toLowerCase())
 		expect(captured.zeroForOne).toBe(false)
 	})
@@ -410,12 +397,12 @@ void describe('quoteRepForUsdcV4WithSource', () => {
 void describe('quoteEthForRep', () => {
 	void test('returns REP amount out for ETH input', async () => {
 		const { client } = createCapturingClient(8000000000000000000n)
-		const result = await quoteEthForRep(client, 1000000000000000000n)
+		const result = (await quoteBestExactInputWithSource(client, ETH_ADDRESS, getRepAddress(), 1000000000000000000n)).amountOut
 		expect(result).toBe(8000000000000000000n)
 	})
 	void test('uses REP_ADDRESS as the output token', async () => {
 		const { client, captured } = createCapturingClient(1n)
-		await quoteEthForRep(client, 1n)
+		await quoteBestExactInputWithSource(client, ETH_ADDRESS, getRepAddress(), 1n)
 		expect(captured.currency1.toLowerCase()).toBe(REP_ADDRESS.toLowerCase())
 		expect(captured.zeroForOne).toBe(true)
 	})

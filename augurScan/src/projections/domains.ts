@@ -1,7 +1,8 @@
+import { catalogAbis } from '../abi-catalog.ts'
 import type { StoredLog } from '../types.ts'
 import { type DomainEventProjection, eventProjectionsFrom, type Projection } from './events.ts'
 
-export type EventDomainDefinition = {
+type EventDomainDefinition = {
 	readonly domain: DomainEventProjection['domain']
 	readonly entityType: string
 	readonly identityFields?: readonly string[]
@@ -80,7 +81,11 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 	),
 }
 
-export const semanticEventNames = Object.freeze(Object.keys(eventDomains).sort())
+// Every taxonomy entry must name an event the pinned ABI catalog can decode;
+// otherwise a renamed contract event would silently stop projecting.
+const catalogEventNames = new Set(catalogAbis().flatMap(abi => abi.flatMap(item => (item.type === 'event' && typeof item.name === 'string' ? [item.name] : []))))
+const unbackedEventNames = Object.keys(eventDomains).filter(eventName => !catalogEventNames.has(eventName))
+if (unbackedEventNames.length > 0) throw new Error(`Semantic event taxonomy names events missing from the ABI catalog: ${unbackedEventNames.join(', ')}`)
 
 const liquidationApprovalIdentity = (approvalId: unknown, receiverVault: unknown): string | undefined => {
 	if (typeof approvalId === 'string') return approvalId.toLowerCase()

@@ -18,15 +18,4 @@ export const priceFromUniswapV3 = 'Price from Uniswap V3'
 export const targetCollateralizationAtUniswapV3Price = 'Target Collateralization @ Uniswap V3 Price'
 export const uniswapV3RepEth = 'Uniswap V3 REP / ETH'
 export const targetCollateralization = 'Target Collateralization'
-export const collateralizationLabel = 'Collateralization'
-export const aboveRingRange = '>999%'
-export const aboveDisplayRange = 'Above display range'
-export const aboveTarget = 'Above target'
-export const atTarget = 'At target'
-export const belowTarget = 'Below target'
-export const awaitingRepEthPrice = 'Awaiting REP/ETH price'
-export const noActiveCapacityOwnership = 'No active capacity ownership'
-export const formatValueUnavailable = (label: CopyTemplateValue) => `${label} unavailable`
-export const formatCollateralizationWithTarget = (label: CopyTemplateValue, value: CopyTemplateValue, target: CopyTemplateValue) => `${label}: ${value}; target: ${target}`
-export const formatTargetValue = (value: CopyTemplateValue) => `Target ${value}`
 export const formatCopyExactCurrencyValue = (exactValue: CopyTemplateValue) => `Copy exact value ${exactValue}`

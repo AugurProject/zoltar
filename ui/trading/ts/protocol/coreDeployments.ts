@@ -19,7 +19,7 @@ function requiredAddress(value: unknown, label: string) {
 	return getAddress(address)
 }
 
-export function parseCoreDeployments(candidate: unknown): readonly CoreDeployment[] {
+function parseCoreDeployments(candidate: unknown): readonly CoreDeployment[] {
 	if (!Array.isArray(candidate) || candidate.length === 0) throw new Error('Core deployment registry must contain at least one network')
 	const deployments = candidate.map((value, index) => {
 		if (!isRecord(value)) throw new Error(`Core deployment ${index.toString()} must be an object`)

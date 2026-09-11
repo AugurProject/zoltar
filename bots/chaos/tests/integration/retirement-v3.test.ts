@@ -11,8 +11,9 @@ import { addressString } from '../../../../solidity/ts/testSupport/simulator/uti
 import { buildAllowanceRevocationPlan, buildAssetSweepPlan, buildNativeOpenOracleCreditPlan } from '../../src/runtime/retirement-recovery-plans.ts'
 import { buildV3RetirementPlan, readV3Position, readV3PositionsWithQuorum } from '../../src/runtime/retirement-v3-positions.ts'
 import { DEFAULT_RETIREMENT_POLICIES, initialRetirementState, uniswapV3PositionKey, type DurableV3Position } from '../../src/state/retirement.ts'
-import { updateV3PositionStatus } from '../../src/runtime/retirement-runner.ts'
-import { initialDurableState, loadDurableState, saveDurableState } from '../../src/state/operator-state.ts'
+import { recordV3ScanSuccess } from '../../src/runtime/retirement-v3-positions.ts'
+import { loadDurableState, saveDurableState } from '../../src/state/operator-state.ts'
+import { initialDurableState } from '../../src/state/initial-state.ts'
 import { address, snapshotFixture } from '../operations/fixture.ts'
 import { encodeDeployData, getAddress, type Abi, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 
@@ -212,7 +213,7 @@ describe('Drain & Retire on a local chain', () => {
 			const confirmed = restored.retirement.positions[0]
 			if (confirmed === undefined) throw new Error('Confirmed V3 position was not restored')
 			let observation = await readV3Position(owner, confirmed, await currentV3Anchor(owner))
-			updateV3PositionStatus(observation, await owner.getBlockNumber())
+			recordV3ScanSuccess(restored, observation, await owner.getBlockNumber())
 			expect(confirmed.status).toBe('active')
 			await saveDurableState(path, restored)
 
@@ -235,7 +236,7 @@ describe('Drain & Retire on a local chain', () => {
 			if (afterCollectCrash === undefined) throw new Error('Collected V3 position was not restored')
 			const closed = await readV3Position(owner, afterCollectCrash, await currentV3Anchor(owner))
 			expect(closed).toMatchObject({ liquidity: 0n, tokensOwed0: 0n, tokensOwed1: 0n })
-			updateV3PositionStatus(closed, await owner.getBlockNumber())
+			recordV3ScanSuccess(restored, closed, await owner.getBlockNumber())
 			await saveDurableState(path, restored)
 			const terminal = await loadDurableState(path, 31_337)
 			expect(terminal.retirement.positions[0]?.status).toBe('closed')

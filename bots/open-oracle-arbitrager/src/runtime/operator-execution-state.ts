@@ -5,17 +5,17 @@ import { clearWalletDerivedState, type OperatorSnapshotFixedState, type Operator
 import type { ExclusiveProcessLock } from '#state/position-store'
 import type { PendingOperatorUpdates } from './operator-control-plane.ts'
 
-export function clearMarketEvidenceForSourceChange(state: { marketConsensus?: unknown; marketObservations?: unknown[] | undefined }) {
+function clearMarketEvidenceForSourceChange(state: { marketConsensus?: unknown; marketObservations?: unknown[] | undefined }) {
 	state.marketObservations = []
 	state.marketConsensus = undefined
 }
 
-export function applyCentralizedMarketSettings<TSettings>(config: { centralizedMarkets: TSettings }, state: { marketConsensus?: unknown; marketObservations?: unknown[] | undefined }, nextSettings: TSettings) {
+function applyCentralizedMarketSettings<TSettings>(config: { centralizedMarkets: TSettings }, state: { marketConsensus?: unknown; marketObservations?: unknown[] | undefined }, nextSettings: TSettings) {
 	config.centralizedMarkets = nextSettings
 	clearMarketEvidenceForSourceChange(state)
 }
 
-export function applyLookbackBlockSetting(config: { lookbackBlocks: bigint }, nextLookbackBlocks: bigint) {
+function applyLookbackBlockSetting(config: { lookbackBlocks: bigint }, nextLookbackBlocks: bigint) {
 	const changed = config.lookbackBlocks !== nextLookbackBlocks
 	config.lookbackBlocks = nextLookbackBlocks
 	return changed

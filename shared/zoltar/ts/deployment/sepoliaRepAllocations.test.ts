@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { getAddress, parseUnits } from '@zoltar/core-shared/evm/ethereum'
-import { SEPOLIA_REP_ALLOCATIONS, SEPOLIA_REP_TOTAL_THEORETICAL_SUPPLY } from './sepoliaRepAllocations.js'
+import { SEPOLIA_REP_ALLOCATIONS } from './sepoliaRepAllocations.js'
 
 describe('Sepolia REP allocations', () => {
 	test('divides the 11 million REP mint cap equally among configured holders', () => {
@@ -12,7 +12,7 @@ describe('Sepolia REP allocations', () => {
 			getAddress('0xcfCE1cA6166f0089a66A141A794f775d2Ea83817'),
 		])
 		for (const allocation of SEPOLIA_REP_ALLOCATIONS) expect(allocation.amount).toBe(parseUnits('2200000', 18))
-		expect(SEPOLIA_REP_TOTAL_THEORETICAL_SUPPLY).toBe(parseUnits('11000000', 18))
+		expect(SEPOLIA_REP_ALLOCATIONS.reduce((total, allocation) => total + allocation.amount, 0n)).toBe(parseUnits('11000000', 18))
 		expect(Object.isFrozen(SEPOLIA_REP_ALLOCATIONS)).toBe(true)
 		for (const allocation of SEPOLIA_REP_ALLOCATIONS) expect(Object.isFrozen(allocation)).toBe(true)
 	})

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { genesisInitializationPlan, randomOperationPlans, selectOperationPlan, urgentOperationPlans, type GenesisInitializationState } from '../../src/runtime/selection.ts'
+import { genesisInitializationPlan, randomOperationPlans, urgentOperationPlans, type GenesisInitializationState } from '../../src/runtime/selection.ts'
 import type { EvaluatedOperation, OperationPlan } from '../../src/operations/types.ts'
 
 function plan(id: string, priority: OperationPlan['priority'], deadlineTimestamp?: string): OperationPlan {
@@ -62,26 +62,23 @@ describe('chaos operation selection', () => {
 	test('selects the earliest urgent lifecycle obligation before random work', () => {
 		const evaluations = [evaluation(plan('random', 'random')), evaluation(plan('later', 'urgent', '20')), evaluation(plan('earlier', 'urgent', '10'))]
 		expect(urgentOperationPlans(evaluations).map(value => value.id)).toEqual(['earlier', 'later'])
-		expect(selectOperationPlan(evaluations, () => 0)?.id).toBe('earlier')
 	})
 
 	test('selects uniformly by eligible definition index and ignores blocked plans', () => {
 		const evaluations = [evaluation(plan('first', 'random')), evaluation(plan('blocked', 'random'), false), evaluation(plan('second', 'random'))]
 		expect(randomOperationPlans(evaluations).map(value => value.id)).toEqual(['first', 'second'])
-		expect(selectOperationPlan(evaluations, () => 1)?.id).toBe('second')
 	})
 
 	test('enforces the selectable-definition canary allowlist at the final random selection boundary', () => {
 		const evaluations = [evaluation(plan('first', 'random')), evaluation(plan('second', 'random'))]
 		expect(randomOperationPlans(evaluations, ['second']).map(value => value.id)).toEqual(['second'])
 		expect(randomOperationPlans(evaluations, [])).toEqual([])
-		expect(selectOperationPlan(evaluations, () => 0, ['second'])?.id).toBe('second')
-		expect(selectOperationPlan(evaluations, () => 0, [])).toBeUndefined()
 	})
 
 	test('keeps urgent lifecycle work selectable when the novelty allowlist is empty', () => {
 		const evaluations = [evaluation(plan('random', 'random')), evaluation(plan('urgent', 'urgent', '20'))]
-		expect(selectOperationPlan(evaluations, () => 0, [])?.id).toBe('urgent')
+		expect(urgentOperationPlans(evaluations).map(value => value.id)).toEqual(['urgent'])
+		expect(randomOperationPlans(evaluations, [])).toEqual([])
 	})
 
 	test('retries the earliest missing genesis prerequisite before later initialization work', () => {
@@ -91,12 +88,10 @@ describe('chaos operation selection', () => {
 		expect(genesisInitializationPlan(evaluations, initializedState({ genesisUniversePresent: false }))).toBeUndefined()
 	})
 
-	test('returns undefined when no operation has an eligible plan', () => {
-		expect(selectOperationPlan([evaluation(undefined), evaluation(plan('blocked', 'random'), false)])).toBeUndefined()
-	})
-
-	test('rejects an injected random source outside the candidate range', () => {
-		expect(() => selectOperationPlan([evaluation(plan('only', 'random'))], () => 1)).toThrow('Random operation index')
+	test('returns no candidates when no operation has an eligible plan', () => {
+		const evaluations = [evaluation(undefined), evaluation(plan('blocked', 'random'), false)]
+		expect(urgentOperationPlans(evaluations)).toEqual([])
+		expect(randomOperationPlans(evaluations)).toEqual([])
 	})
 
 	test('rejects malformed urgent deadlines instead of silently misordering work', () => {

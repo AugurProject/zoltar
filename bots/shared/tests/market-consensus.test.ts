@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'bun:test'
 import {
 	clearOrphanedDexEvidenceForHeadReplacement,
-	consensusAllowsCandidate,
 	discardDexMarketObservations,
 	estimateMarketConsensus,
 	marketConsensusAllowsExecution,
 	marketObservationsForAsset,
+	mergeMarketObservations,
 	requireCanonicalBlock,
 	requireCanonicalDexEvidence,
 	type MarketConsensusObservation,
@@ -128,7 +128,7 @@ describe('cross-venue market consensus', () => {
 	test('excludes the candidate DEX source from its own reference', () => {
 		const estimate = estimateMarketConsensus([observation('cex', 'alpha', 200n), observation('cex', 'beta', 201n), observation('dex', 'candidate', 500n), observation('dex', 'uniswap-v2', 199n), observation('dex', 'sushiswap-v2', 200n)], settings, 'rep', 1, 10_000, 'candidate')
 		expect(estimate.dex.observations.map(value => value.sourceId)).not.toContain('candidate')
-		expect(consensusAllowsCandidate(500n * UNIT, estimate, 1_000n)).toBe(false)
+		expect(marketConsensusAllowsExecution(500n * UNIT, estimate, { maximumDeviationBps: 1_000n, maximumObservationAgeMilliseconds: 60_000, requiredForExecution: true }, 'rep', 1, 10_000)).toBe(false)
 	})
 
 	test('excludes an explicitly configured duplicate of the candidate market', () => {
@@ -200,4 +200,26 @@ describe('cross-venue market consensus', () => {
 		expect(marketConsensusAllowsExecution(200n * UNIT, estimate, advisory, 'rep', 1, 40_001)).toBe(true)
 		expect(marketConsensusAllowsExecution(200n * UNIT, estimate, required, 'rep', 2, 10_000)).toBe(false)
 	})
+})
+
+test('merges repeated background market samples once and drops stale observations', () => {
+	const observation = (sourceId: string, observationId: string, observedAt: number, marketId?: string): MarketConsensusObservation => ({
+		assetId: '0x1',
+		askDepthAttoEth: 1n,
+		bidDepthAttoEth: 1n,
+		chainId: 1,
+		kind: 'cex',
+		...(marketId === undefined ? {} : { marketId }),
+		observationId,
+		observedAt,
+		priceRepPerEth: 1n,
+		sourceId,
+	})
+	const existing = [observation('binance', 'a', 899), observation('uniswap-v3', 'block:1', 950, '0xpool')]
+	const merged = mergeMarketObservations(existing, [observation('binance', 'a', 899), observation('binance', 'b', 990), observation('uniswap-v3', 'block:1', 950, '0xother')], 100, 1_000)
+	expect(merged.map(entry => [entry.sourceId, entry.observationId, entry.marketId])).toEqual([
+		['uniswap-v3', 'block:1', '0xpool'],
+		['binance', 'b', undefined],
+		['uniswap-v3', 'block:1', '0xother'],
+	])
 })

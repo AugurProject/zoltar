@@ -18,11 +18,13 @@ import {
 	type ChaosDoctorDependencies,
 	type ChaosDoctorProbeResult,
 } from '../../src/cli/doctor.ts'
-import { MINIMUM_WORKFLOW_VALIDITY_BLOCKS, parseSettings } from '../../src/config/settings.ts'
+import { parseSettings } from '../../src/config/settings.ts'
 import { executionProfileId } from '../../src/config/execution-profile.ts'
-import { immutableTopologySidecarDirectory } from '../../src/monitoring/topology-cache.ts'
+import { MINIMUM_WORKFLOW_VALIDITY_BLOCKS } from '../../src/operations/timing.ts'
+import { immutableTopologySidecarDirectory } from '../support/state-sidecars.ts'
 import { preflightTransactionSubmissionNetwork } from '../../src/runtime/submission-preflight.ts'
-import { initialDurableState, loadDurableState, serializedDurableState } from '../../src/state/operator-state.ts'
+import { loadDurableState, saveDurableState } from '../../src/state/operator-state.ts'
+import { initialDurableState } from '../../src/state/initial-state.ts'
 import { DEFAULT_RETIREMENT_POLICIES, registerV3Position, requestRetirement } from '../../src/state/retirement.ts'
 
 const temporaryDirectories: string[] = []
@@ -423,7 +425,10 @@ describe('chaos launch doctor', () => {
 		const settings = { ...baseline, runtime: { ...baseline.runtime, stateFile } }
 		const state = initialDurableState(settings.network.chainId, true, executionProfileId(settings))
 		const missingReference = { kind: 'protocol-index-sidecar' as const, manifestDigest: `0x${'aa'.repeat(32)}` as const, schemaVersion: 1 as const }
-		await writeFile(stateFile, `${JSON.stringify(serializedDurableState(state, missingReference))}\n`, { mode: 0o600 })
+		await saveDurableState(stateFile, state)
+		const persisted: unknown = JSON.parse(await readFile(stateFile, 'utf8'))
+		if (typeof persisted !== 'object' || persisted === null) throw new Error('Expected a persisted durable state object')
+		await writeFile(stateFile, `${JSON.stringify({ ...persisted, protocolIndex: missingReference })}\n`, { mode: 0o600 })
 		let locksReleased = false
 		let probed = false
 		const dependencies = passiveDoctorDependencies(settings, {

@@ -11,7 +11,6 @@ import {
 	deriveOpenOracleDisputeSubmissionDetails,
 	formatOpenOracleDisputeWriteErrorMessage,
 	formatOpenOracleFeePercentage,
-	formatOpenOracleFeePercentageInput,
 	formatOpenOracleMultiplier,
 	formatOpenOracleSettleWriteErrorMessage,
 	getOpenOracleCreateValidationMessage,
@@ -20,13 +19,16 @@ import {
 	getOpenOracleSelectedReportActionMode,
 	getOpenOracleSettleAvailability,
 	parseOpenOracleCreateFormSubmission,
-	parseOpenOracleFeePercentageInput,
 } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracle.js'
-import { loadOpenOracleInitialReportPrice, loadOpenOracleInitialReportPriceResult } from '@zoltar/ui-statoblast-shared/protocol/openOraclePricing.js'
+import { loadOpenOracleInitialReportPrice } from '@zoltar/ui-statoblast-shared/protocol/openOraclePricing.js'
 import { getDefaultOpenOracleCreateFormState } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/formDefaults.js'
-import { ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS } from '@zoltar/ui-statoblast-shared/protocol/oracleTiming.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
-import { ETH_ADDRESS, REP_ADDRESS, UNISWAP_V4_QUOTER_ADDRESS, USDC_ADDRESS } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
+import { ETH_ADDRESS } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
+import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
+
+const REP_ADDRESS = getAddress(MAINNET_NETWORK_PROFILE.genesisRepTokenAddress)
+const USDC_ADDRESS = MAINNET_NETWORK_PROFILE.usdcAddress
+const UNISWAP_V4_QUOTER_ADDRESS = MAINNET_NETWORK_PROFILE.uniswapV4QuoterAddress
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { statoblast_openOracle_OpenOracle_OpenOracle } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import type { InjectedEthereum } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'
@@ -398,7 +400,7 @@ describe('Open Oracle helpers', () => {
 		expect(preparedCount).toBe(0)
 	})
 
-	test('initial report price helpers derive a Uniswap default price and preserve quote failure metadata', async () => {
+	test('initial report price helpers derive a Uniswap default price and surface quote failures', async () => {
 		const quote = await loadOpenOracleInitialReportPrice(createQuoteClient(25n), getAddress('0x00000000000000000000000000000000000000a1'), getAddress('0x00000000000000000000000000000000000000a2'), 100n)
 		expect(quote).toEqual({
 			price: 4_000_000_000_000_000_000_000_000_000_000n,
@@ -406,13 +408,6 @@ describe('Open Oracle helpers', () => {
 			token2Amount: 25n,
 		})
 
-		const failure = await loadOpenOracleInitialReportPriceResult(createFailingQuoteClient('no pool'), getAddress('0x00000000000000000000000000000000000000a1'), getAddress('0x00000000000000000000000000000000000000a2'), 100n)
-		expect(failure).toEqual({
-			attemptedSources: ['Uniswap V4', 'Uniswap V3'],
-			failureKind: 'quote-failed',
-			reason: 'Failed to fetch price from Uniswap. Uniswap V4 quote failed: no pool. Uniswap V3 quote failed: no pool',
-			status: 'failure',
-		})
 		await expect(loadOpenOracleInitialReportPrice(createFailingQuoteClient('no pool'), getAddress('0x00000000000000000000000000000000000000a1'), getAddress('0x00000000000000000000000000000000000000a2'), 100n)).rejects.toThrow(
 			'Failed to fetch price from Uniswap. Uniswap V4 quote failed: no pool. Uniswap V3 quote failed: no pool',
 		)
@@ -584,18 +579,9 @@ describe('Open Oracle helpers', () => {
 
 	test('open oracle fee and multiplier formatters render human values', () => {
 		expect(formatOpenOracleFeePercentage(10_000n)).toBe('0.1%')
-		expect(formatOpenOracleFeePercentageInput(100n)).toBe('0.001')
 		expect(formatOpenOracleFeePercentage(BigInt(Number.MAX_SAFE_INTEGER) * 100_000n + 12_345n)).toBe('9,007,199,254,740,991.12345%')
 		expect(formatOpenOracleMultiplier(140n)).toBe('1.40x')
 		expect(formatOpenOracleMultiplier(BigInt(Number.MAX_SAFE_INTEGER) * 100n + 1n)).toBe('9007199254740991.01x')
-	})
-
-	test('open oracle fee percentage input parser accepts user-facing percentages', () => {
-		expect(parseOpenOracleFeePercentageInput('0.001', 'Protocol fee')).toBe(100)
-		expect(parseOpenOracleFeePercentageInput('1', 'Protocol fee')).toBe(100_000)
-		expect(() => parseOpenOracleFeePercentageInput('', 'Protocol fee')).toThrow('Protocol fee is required')
-		expect(() => parseOpenOracleFeePercentageInput('-0.1', 'Protocol fee')).toThrow('Protocol fee must be non-negative')
-		expect(() => parseOpenOracleFeePercentageInput('0.000001', 'Protocol fee')).toThrow('Protocol fee must be a decimal percentage')
 	})
 
 	test('open oracle create form parser accepts user-facing decimal values', () => {
@@ -699,6 +685,29 @@ describe('Open Oracle helpers', () => {
 
 		expect(parsed.exactToken1Report).toBe(1n)
 		expect(parsed.escalationHalt).toBe(1n)
+	})
+
+	test('open oracle create parser validates fee percentages as user-facing decimals', () => {
+		const validForm = {
+			...getDefaultOpenOracleCreateFormState(),
+			disputeDelay: '10',
+			exactToken1Report: '1',
+			initialToken2Amount: '1',
+			ethValue: '1',
+			feePercentage: '1',
+			multiplier: '100',
+			protocolFee: '0.001',
+			settlementTime: '60',
+			settlerRewardEthAmount: '1',
+			token1Address: addressString(GENESIS_REPUTATION_TOKEN),
+			token2Address: WETH_ADDRESS,
+		}
+		const parse = (protocolFee: string) => parseOpenOracleCreateFormSubmission({ form: { ...validForm, protocolFee }, token1Decimals: 18, token2Decimals: 18 })
+		expect(parse('0.001').protocolFee).toBe(100)
+		expect(parse('1').protocolFee).toBe(100_000)
+		expect(() => parse('')).toThrow('Enter a valid protocol fee.')
+		expect(() => parse('-0.1')).toThrow('Protocol fee must be non-negative')
+		expect(() => parse('0.000001')).toThrow('Enter a valid protocol fee.')
 	})
 
 	test('open oracle create parser throws invariant validation messages before preparing a write', () => {
@@ -965,7 +974,7 @@ describe('Open Oracle helpers', () => {
 		const seededReportId = (await loadOracleManagerDetails(uiReadClient, managerAddress)).pendingReportId
 		await mockWindow.advanceTime(DAY)
 		await settleOracleReport(uiWriteClient, getOpenOracleAddress(), seededReportId)
-		await mockWindow.advanceTime(ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS + 1n)
+		await mockWindow.advanceTime(5n * 60n + 1n)
 
 		await expect(requestOraclePrice(uiWriteClient, managerAddress)).rejects.toThrow('Failed to fetch price from Uniswap')
 		expect((await loadOracleManagerDetails(uiReadClient, managerAddress)).pendingReportId).toBe(0n)
@@ -1319,7 +1328,7 @@ describe('Open Oracle helpers', () => {
 		expect(managerDetails.pendingReportId).toBe(0n)
 		expect(managerDetails.lastSettlementTimestamp).toBeGreaterThan(0n)
 		expect(managerDetails.isPriceValid).toBe(true)
-		expect(managerDetails.priceValidUntilTimestamp).toBe(managerDetails.lastSettlementTimestamp + ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS)
+		expect(managerDetails.priceValidUntilTimestamp).toBe(managerDetails.lastSettlementTimestamp + 5n * 60n)
 	})
 
 	test('ui wrapWeth helper deposits ETH into WETH and reports the wrap action', async () => {

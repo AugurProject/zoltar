@@ -13,13 +13,6 @@ const SCALE = 1000000n
 const LN2_SCALED = 693147n
 const MAX_ATANH_ITERATIONS = 16
 
-export function getEscalationBindingCapitalAttoRep(balancesAttoRep: EscalationBalanceTuple) {
-	const [invalidBalanceAttoRep, yesBalanceAttoRep, noBalanceAttoRep] = balancesAttoRep
-	if ((invalidBalanceAttoRep >= yesBalanceAttoRep && invalidBalanceAttoRep <= noBalanceAttoRep) || (invalidBalanceAttoRep >= noBalanceAttoRep && invalidBalanceAttoRep <= yesBalanceAttoRep)) return invalidBalanceAttoRep
-	if ((yesBalanceAttoRep >= invalidBalanceAttoRep && yesBalanceAttoRep <= noBalanceAttoRep) || (yesBalanceAttoRep >= noBalanceAttoRep && yesBalanceAttoRep <= invalidBalanceAttoRep)) return yesBalanceAttoRep
-	return noBalanceAttoRep
-}
-
 function computeAtanhScaled(z: bigint) {
 	const z2 = (z * z) / SCALE
 	let term = z
@@ -46,7 +39,7 @@ function computeLnRatioScaled(lowValue: bigint, highValue: bigint) {
 	return log2Count * LN2_SCALED + 2n * computeAtanhScaled(z)
 }
 
-export function computeIterativeAttritionCostAttoRep(startBondAttoRep: bigint, nonDecisionThresholdAttoRep: bigint, lnRatioScaled: bigint, timeSinceStart: bigint) {
+function computeIterativeAttritionCostAttoRep(startBondAttoRep: bigint, nonDecisionThresholdAttoRep: bigint, lnRatioScaled: bigint, timeSinceStart: bigint) {
 	if (timeSinceStart <= 0n) return startBondAttoRep
 	if (timeSinceStart >= ESCALATION_TIME_LENGTH) return nonDecisionThresholdAttoRep
 	const exponent = (lnRatioScaled * timeSinceStart) / ESCALATION_TIME_LENGTH

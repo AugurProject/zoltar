@@ -1,4 +1,4 @@
-import { compactIdentifier, formatDate, node, replaceWhenChanged, setBadge, statusLabel, statusTone } from './dom.js'
+import { compactIdentifier, formatDate, node, replaceWhenChanged, setBadge, statusLabel, statusTone, transactionExplorerUrl } from './dom.js'
 
 export type TimelineActivity = {
 	at?: string | undefined
@@ -12,7 +12,7 @@ export type TimelineActivity = {
 
 const COLLAPSED_ACTIVITY_COUNT = 10
 
-function timelineItem(activity: TimelineActivity) {
+function timelineItem(activity: TimelineActivity, explorerUrl: string | undefined) {
 	const row = node('li', 'timeline-item')
 	row.append(node('time', 'timeline-time', formatDate(activity.at)))
 	const main = node('div', 'timeline-main')
@@ -25,7 +25,7 @@ function timelineItem(activity: TimelineActivity) {
 	}
 	if (activity.txHash !== undefined) {
 		const identifier = node('div', 'activity-identifier')
-		identifier.append(compactIdentifier(activity.txHash, 'activity transaction hash'))
+		identifier.append(compactIdentifier(activity.txHash, 'activity transaction hash', { explorerUrl: transactionExplorerUrl(explorerUrl, activity.txHash) }))
 		main.append(identifier)
 	}
 	const status = node('span')
@@ -47,8 +47,10 @@ export function createActivityTimeline() {
 	// Reusing an unchanged item keeps its open disclosure and copy feedback alive across polls.
 	let cache = new Map<string, HTMLLIElement[]>()
 	const empty = node('li', 'empty-state', 'No activity recorded.')
-	const render = (values: readonly TimelineActivity[]) => {
+	let renderedExplorerUrl: string | undefined
+	const render = (values: readonly TimelineActivity[], explorerUrl: string | undefined) => {
 		rendered = values
+		renderedExplorerUrl = explorerUrl
 		const expandable = values.length > COLLAPSED_ACTIVITY_COUNT
 		const shown = expandable && !expanded ? values.slice(0, COLLAPSED_ACTIVITY_COUNT) : values
 		expand.classList.toggle('hidden', !expandable)
@@ -61,8 +63,9 @@ export function createActivityTimeline() {
 		}
 		const retained = new Map<string, HTMLLIElement[]>()
 		const items = shown.map(activity => {
-			const key = JSON.stringify(activity)
-			const item = cache.get(key)?.pop() ?? timelineItem(activity)
+			// The explorer origin is part of the key so a network switch rebuilds the links.
+			const key = JSON.stringify([explorerUrl, activity])
+			const item = cache.get(key)?.pop() ?? timelineItem(activity, explorerUrl)
 			retained.set(key, [...(retained.get(key) ?? []), item])
 			return item
 		})
@@ -71,7 +74,7 @@ export function createActivityTimeline() {
 	}
 	expand.addEventListener('click', () => {
 		expanded = !expanded
-		render(rendered)
+		render(rendered, renderedExplorerUrl)
 	})
 	return render
 }

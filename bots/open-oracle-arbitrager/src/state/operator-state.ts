@@ -79,7 +79,7 @@ export type DisputeStepSnapshot = {
 	transactionHash: Hex | undefined
 }
 
-export type ReportPathSnapshot = {
+type ReportPathSnapshot = {
 	reportId: string
 	settled: boolean
 	steps: readonly DisputeStepSnapshot[]
@@ -786,7 +786,7 @@ async function syncExecutionHistoryDirectory(path: string, filesystem: Execution
 	}
 }
 
-export async function appendExecutionHistory(path: string, record: ExecutionRecord, chainId: number, filesystem: ExecutionHistoryFilesystem = executionHistoryFilesystem) {
+async function appendExecutionHistory(path: string, record: ExecutionRecord, chainId: number, filesystem: ExecutionHistoryFilesystem = executionHistoryFilesystem) {
 	if (!Number.isSafeInteger(chainId) || chainId < 1) throw new Error('Execution history chain ID must be a positive integer')
 	await filesystem.mkdir(dirname(path), { mode: 0o700, recursive: true })
 	const handle = await filesystem.open(path, 'a', 0o600)

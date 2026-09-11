@@ -8,6 +8,7 @@ const sourceByPath = new Map([
 	['/catalog-groups.js', 'catalog-groups.ts'],
 	['/dom.js', 'dom.ts'],
 	['/activity-timeline.js', 'activity-timeline.ts'],
+	['/pending-transaction-summary.js', 'pending-transaction-summary.ts'],
 	['/formatting.js', 'formatting.ts'],
 	['/operator-alerts.js', 'operator-alerts.ts'],
 	['/retirement-dashboard.js', 'retirement-dashboard.ts'],

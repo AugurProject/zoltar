@@ -1,3 +1,5 @@
+export * from './indexer/lifecycle-loop.ts'
+export * from './indexer/ownership-status.ts'
 export * from './indexer/runtime-chain.ts'
 export * from './indexer/runtime-diagnostics.ts'
 export * from './indexer/runtime-discovery.ts'

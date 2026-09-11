@@ -4,65 +4,32 @@ import { describe, expect, test } from 'bun:test'
 import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import {
 	getCurrentForkWorkflowSelectionStage,
+	getSelectedPoolViewForForkWorkflowSelectionStage,
+	isSelectedPoolForkWorkflowView,
+	resolveForkWorkflowSelectionStage,
 	getCurrentSelectedPoolForkAuctionDetails,
 	getCurrentSelectedPoolReportingDetails,
 	getCurrentSelectedPoolForkStage,
 	getCurrentPoolOracleManagerDetails,
 	getSelectedPoolCardTitle,
-	getSelectedPoolForkWorkflowView,
 	getForkWorkflowStageSelection,
 	getSelectedPoolOracleMetricValues,
-	getSelectedPoolViewForForkWorkflowSelectionStage,
-	getSelectedPoolViewForForkStage,
 	getSelectedPoolWorkflowGuardMessage,
 	getSelectedPoolWorkflowLockedPresentation,
-	isSelectedPoolForkWorkflowView,
-	normalizeForkWorkflowSelectionStage,
-	resolveForkWorkflowSelectionStage,
 	isForkWorkflowDisabled,
 	isSupportedSelectedPoolView,
 	resolveSelectedPoolView,
 	shouldShowSelectedPoolWorkflowDetails,
 } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolWorkflow.js'
 import { getOracleLastPriceDisplay, getOraclePriceValidityPresentation } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracle.js'
-import { ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityVault.js'
+
+// The oracle manager treats a settled price as usable for five minutes.
+const ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS = 5n * 60n
 
 void describe('selected pool workflow lookup state', () => {
-	void test('uses a single stable operate header title', () => {
-		expect(getSelectedPoolCardTitle('Will the event happen?')).toBe('Will the event happen?')
-
-		expect(getSelectedPoolCardTitle()).toBe('Manage Pool')
-
-		expect(getSelectedPoolCardTitle()).toBe('Manage Pool')
-	})
-
-	void test('maps the legacy resolution view alias to the reporting tab', () => {
-		expect(resolveSelectedPoolView(undefined)).toBe('vaults')
-		expect(resolveSelectedPoolView('resolution')).toBe('reporting')
-		expect(resolveSelectedPoolView('reporting')).toBe('reporting')
-		expect(resolveSelectedPoolView('fork')).toBe('vaults')
-		expect(resolveSelectedPoolView('fork-workflow')).toBe('fork-workflow')
-		expect(resolveSelectedPoolView('fork-auction')).toBe('fork-workflow')
-		expect(resolveSelectedPoolView('oracle')).toBe('staged-operations')
-		expect(resolveSelectedPoolView('price-oracle')).toBe('price-oracle')
-	})
-
-	void test('accepts only supported selected-pool view query values', () => {
-		expect(isSupportedSelectedPoolView(undefined)).toBe(true)
-		expect(isSupportedSelectedPoolView('')).toBe(true)
-		expect(isSupportedSelectedPoolView('vaults')).toBe(true)
-		expect(isSupportedSelectedPoolView('resolution')).toBe(true)
-		expect(isSupportedSelectedPoolView('fork-auction')).toBe(true)
-		expect(isSupportedSelectedPoolView('invalid')).toBe(false)
-	})
-
 	void test('maps fork workflow routing and legacy stage aliases', () => {
 		expect(isSelectedPoolForkWorkflowView('vaults')).toBe(false)
 		expect(isSelectedPoolForkWorkflowView('fork-workflow')).toBe(true)
-		expect(getSelectedPoolViewForForkStage('initiate')).toBe('fork-workflow')
-		expect(getSelectedPoolViewForForkStage('migration')).toBe('fork-workflow')
-		expect(getSelectedPoolViewForForkStage('auction')).toBe('fork-workflow')
-		expect(getSelectedPoolViewForForkStage('settlement')).toBe('fork-workflow')
 		expect(resolveForkWorkflowSelectionStage('fork-migration')).toBe('migration')
 		expect(resolveForkWorkflowSelectionStage('fork-auction')).toBe('auction')
 		expect(resolveForkWorkflowSelectionStage('fork-settlement')).toBe('settlement')
@@ -70,58 +37,9 @@ void describe('selected pool workflow lookup state', () => {
 		expect(getSelectedPoolViewForForkWorkflowSelectionStage('migration')).toBe('fork-migration')
 		expect(getSelectedPoolViewForForkWorkflowSelectionStage('auction')).toBe('fork-auction')
 		expect(getSelectedPoolViewForForkWorkflowSelectionStage('settlement')).toBe('fork-settlement')
-		expect(normalizeForkWorkflowSelectionStage('initiate')).toBe('fork-triggered')
 	})
 
 	void test('derives the best fork workflow stage from pool and fork-auction state', () => {
-		expect(
-			getSelectedPoolForkWorkflowView({
-				forkAuctionDetails: undefined,
-				selectedPool: undefined,
-			}),
-		).toBe('fork-workflow')
-
-		expect(
-			getSelectedPoolForkWorkflowView({
-				forkAuctionDetails: undefined,
-				selectedPool: {
-					forkOutcome: 'yes',
-					migratedAttoRep: 1n,
-					systemState: 'forkMigration',
-					truthAuctionStartedAt: 0n,
-				},
-			}),
-		).toBe('fork-workflow')
-
-		expect(
-			getSelectedPoolForkWorkflowView({
-				forkAuctionDetails: {
-					claimingAvailable: false,
-					forkOutcome: 'yes',
-					migratedAttoRep: 1n,
-					systemState: 'forkTruthAuction',
-					truthAuction: undefined,
-					truthAuctionStartedAt: 10n,
-				},
-				selectedPool: undefined,
-			}),
-		).toBe('fork-workflow')
-
-		expect(
-			getSelectedPoolForkWorkflowView({
-				forkAuctionDetails: {
-					claimingAvailable: true,
-					forkOutcome: 'yes',
-					migratedAttoRep: 1n,
-					systemState: 'operational',
-					truthAuction: {
-						finalized: true,
-					},
-					truthAuctionStartedAt: 10n,
-				},
-				selectedPool: undefined,
-			}),
-		).toBe('fork-workflow')
 		expect(
 			getCurrentSelectedPoolForkStage({
 				forkAuctionDetails: {
@@ -174,6 +92,34 @@ void describe('selected pool workflow lookup state', () => {
 				systemState: 'operational',
 			}),
 		).toBe('settlement')
+	})
+
+	void test('uses a single stable operate header title', () => {
+		expect(getSelectedPoolCardTitle('Will the event happen?')).toBe('Will the event happen?')
+
+		expect(getSelectedPoolCardTitle()).toBe('Manage Pool')
+
+		expect(getSelectedPoolCardTitle()).toBe('Manage Pool')
+	})
+
+	void test('maps the legacy resolution view alias to the reporting tab', () => {
+		expect(resolveSelectedPoolView(undefined)).toBe('vaults')
+		expect(resolveSelectedPoolView('resolution')).toBe('reporting')
+		expect(resolveSelectedPoolView('reporting')).toBe('reporting')
+		expect(resolveSelectedPoolView('fork')).toBe('vaults')
+		expect(resolveSelectedPoolView('fork-workflow')).toBe('fork-workflow')
+		expect(resolveSelectedPoolView('fork-auction')).toBe('fork-workflow')
+		expect(resolveSelectedPoolView('oracle')).toBe('staged-operations')
+		expect(resolveSelectedPoolView('price-oracle')).toBe('price-oracle')
+	})
+
+	void test('accepts only supported selected-pool view query values', () => {
+		expect(isSupportedSelectedPoolView(undefined)).toBe(true)
+		expect(isSupportedSelectedPoolView('')).toBe(true)
+		expect(isSupportedSelectedPoolView('vaults')).toBe(true)
+		expect(isSupportedSelectedPoolView('resolution')).toBe(true)
+		expect(isSupportedSelectedPoolView('fork-auction')).toBe(true)
+		expect(isSupportedSelectedPoolView('invalid')).toBe(false)
 	})
 
 	void test('derives current and selected fork workflow stages together', () => {

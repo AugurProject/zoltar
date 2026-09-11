@@ -31,7 +31,8 @@ import {
 	getEthRaisedAttoEth,
 } from '../testSupport/simulator/utils/contracts/auction'
 import { approximatelyEqual, ensureDefined, strictEqual18Decimal, strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
-import { priceToClosestTick, tickToPrice } from '@zoltar/statoblast-shared/statoblast/truthAuctionTickMath'
+import { tickToPrice } from '@zoltar/statoblast-shared/statoblast/truthAuctionTickMath'
+import { priceToClosestTick } from '../testSupport/truthAuctionTicks'
 import assert from '../testSupport/simulator/utils/assert'
 import { ensureZoltarDeployed } from '../testSupport/simulator/utils/contracts/zoltar'
 import { ensureInfraDeployed } from '../testSupport/simulator/utils/contracts/deployStatoblast'

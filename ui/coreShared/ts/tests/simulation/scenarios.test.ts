@@ -1,16 +1,9 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { getRegisteredSimulationScenarios, getSimulationScenarioDescription, getSimulationScenarioLabel, normalizeSimulationScenario, registerSimulationScenario } from '../../simulation/scenarios.js'
+import { getRegisteredSimulationScenarios, getSimulationScenarioDescription, getSimulationScenarioLabel, registerSimulationScenario } from '../../simulation/scenarios.js'
 
 void describe('simulation scenarios', () => {
-	void test('normalizes core scenarios and rejects unknown values', () => {
-		expect(normalizeSimulationScenario('baseline')).toBe('baseline')
-		expect(normalizeSimulationScenario('deployed')).toBe('deployed')
-		expect(normalizeSimulationScenario('securitypoolx2')).toBe('baseline')
-		expect(normalizeSimulationScenario(undefined)).toBe('baseline')
-	})
-
 	void test('returns labels and descriptions for core scenarios', () => {
 		expect(getSimulationScenarioLabel('baseline')).toBe('Baseline')
 		expect(getSimulationScenarioLabel('deployed')).toBe('Deployed')

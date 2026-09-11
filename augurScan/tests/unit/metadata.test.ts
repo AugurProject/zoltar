@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
+import { abiForKind } from '../../src/abi-catalog.ts'
 import { type Address, concatHex, encodeAbiParameters, encodeEventTopics, encodeFunctionData, getAddress, type Hex, parseAbi, toHex, zeroAddress } from '../../src/ethereum.ts'
-import { abiForKind, decodeAction, decodeLogRecord, discoveriesFrom, referencedAddressesFrom, tokenAddressesFrom } from '../../src/metadata.ts'
+import { decodeAction, decodeLogRecord, discoveriesFrom, tokenAddressesFrom } from '../../src/metadata.ts'
 import { projectionsFrom } from '../../src/projections.ts'
 import type { StoredLog, TokenMetadata } from '../../src/types.ts'
 
@@ -388,19 +389,6 @@ describe('ABI metadata', () => {
 				summary: 'deployment',
 			}),
 		).toEqual([])
-	})
-
-	test('extracts only ABI-typed addresses from decoded evidence', () => {
-		const nestedOwner = getAddress('0x3333333333333333333333333333333333333333')
-		const [event] = parseAbi(['event Evidence(string title,address vault,(string note,address owner) nested)'])
-		if (event?.type !== 'event' || event.inputs === undefined) throw new Error('Evidence event ABI missing')
-		expect(
-			referencedAddressesFrom(event.inputs, {
-				title: account,
-				vault: childToken,
-				nested: { note: account, owner: nestedOwner },
-			}),
-		).toEqual([childToken, nestedOwner])
 	})
 
 	test('maps all supported manifest contract kinds to ABIs', () => {

@@ -92,7 +92,7 @@ function requireLeaf(leaf: CarryLeaf, label = 'Carry leaf') {
 	if (sourceNodeId === 0n) throw new Error(`${label} sourceNodeId must be positive`)
 }
 
-export function hashCarryParent(left: Hash, right: Hash): Hash {
+function hashCarryParent(left: Hash, right: Hash): Hash {
 	requireHash(left, 'Left carry hash')
 	requireHash(right, 'Right carry hash')
 	return keccak256(concatHex([left, right]))
@@ -120,14 +120,6 @@ function requireSlots(slots: readonly CarryLeafSlot[], label: string) {
 			throw new Error(`${label}[${index.toString()}] hash does not match its carry leaf`)
 		}
 	}
-}
-
-function occupiedPeakCount(leafCount: bigint) {
-	let count = 0
-	for (let height = 0; height < CARRY_MMR_MAXIMUM_PEAKS; height += 1) {
-		if (((leafCount >> BigInt(height)) & 1n) === 1n) count += 1
-	}
-	return count
 }
 
 function computedPeaks(hashes: readonly Hash[]) {
@@ -263,55 +255,6 @@ export function createMerkleMountainRangeProof(hashes: readonly Hash[], globalLe
 	}
 }
 
-export function computeMerkleMountainRangeRootFromProof(leafHash: Hash, leafCountValue: string, proof: MerkleMountainRangeProof): Hash {
-	requireHash(leafHash, 'Carry proof leaf hash')
-	const leafCount = unsignedInteger(leafCountValue, 'Carry proof leaf count')
-	if (leafCount === 0n || leafCount >= MAXIMUM_CARRY_LEAF_COUNT) throw new Error('Carry proof leaf count is outside the MMR capacity')
-	const peakHeight = unsignedInteger(proof.merkleMountainRangePeakIndex, 'Carry proof peak height')
-	if (peakHeight >= BigInt(CARRY_MMR_MAXIMUM_PEAKS)) throw new Error('Carry proof peak height is too high')
-	if (((leafCount >> peakHeight) & 1n) !== 1n) throw new Error('Carry proof selected peak is absent')
-	const leafIndex = unsignedInteger(proof.leafIndex, 'Carry proof leaf index')
-	if (leafIndex >= 1n << peakHeight) throw new Error('Carry proof leaf index is outside its peak')
-	const peakCount = occupiedPeakCount(leafCount)
-	const expectedLength = Number(peakHeight) + peakCount - 1
-	if (proof.merkleMountainRangeSiblings.length !== expectedLength) throw new Error(`Carry proof has ${proof.merkleMountainRangeSiblings.length.toString()} siblings instead of ${expectedLength.toString()}`)
-	for (const sibling of proof.merkleMountainRangeSiblings) requireHash(sibling, 'Carry proof sibling')
-
-	let peakRoot = leafHash
-	for (let level = 0; level < Number(peakHeight); level += 1) {
-		const sibling = proof.merkleMountainRangeSiblings[level]
-		if (sibling === undefined) throw new Error(`Carry proof path sibling ${level.toString()} is missing`)
-		peakRoot = ((leafIndex >> BigInt(level)) & 1n) === 0n ? hashCarryParent(peakRoot, sibling) : hashCarryParent(sibling, peakRoot)
-	}
-	const peaks: Hash[] = []
-	let siblingIndex = Number(peakHeight)
-	for (let height = 0; height < CARRY_MMR_MAXIMUM_PEAKS; height += 1) {
-		if (((leafCount >> BigInt(height)) & 1n) === 0n) continue
-		if (BigInt(height) === peakHeight) peaks.push(peakRoot)
-		else {
-			const siblingPeak = proof.merkleMountainRangeSiblings[siblingIndex]
-			if (siblingPeak === undefined) throw new Error(`Carry proof other peak ${height.toString()} is missing`)
-			peaks.push(siblingPeak)
-			siblingIndex += 1
-		}
-	}
-	let root = peaks.at(-1)
-	if (root === undefined) throw new Error('Carry proof contains no peaks')
-	for (let index = peaks.length - 2; index >= 0; index -= 1) {
-		const peak = peaks[index]
-		if (peak === undefined) throw new Error(`Carry proof peak ${index.toString()} is missing`)
-		root = hashCarryParent(peak, root)
-	}
-	return root
-}
-
-export function verifyMerkleMountainRangeProof(leafHash: Hash, leafCount: string, expectedRoot: Hash, proof: MerkleMountainRangeProof) {
-	requireHash(expectedRoot, 'Expected carry root')
-	const actualRoot = computeMerkleMountainRangeRootFromProof(leafHash, leafCount, proof)
-	if (actualRoot.toLowerCase() !== expectedRoot.toLowerCase()) throw new Error(`Carry proof root ${actualRoot} does not match ${expectedRoot}`)
-	return actualRoot
-}
-
 function buildZeroHashes() {
 	const hashes: Hash[] = [zeroHash]
 	for (let depth = 0; depth < CARRY_NULLIFIER_DEPTH; depth += 1) {
@@ -329,7 +272,7 @@ export function nullifierPath(parentDepositIndex: string) {
 	return BigInt(keccak256(encodeAbiParameters([{ type: 'uint256' }], [value]))) & NULLIFIER_PATH_MASK
 }
 
-export function assertNoNullifierPathCollisions(entries: readonly SparseNullifierEntry[]) {
+function assertNoNullifierPathCollisions(entries: readonly SparseNullifierEntry[]) {
 	const ownerByPath = new Map<string, string>()
 	for (const entry of entries) {
 		unsignedInteger(entry.parentDepositIndex, 'Nullifier entry parentDepositIndex')
@@ -356,10 +299,6 @@ function validateSparseNullifierState(state: SparseNullifierState) {
 		const expectedPath = nullifierPath(entry.parentDepositIndex).toString()
 		if (entry.path !== expectedPath) throw new Error(`Nullifier path for parent deposit ${entry.parentDepositIndex} is invalid`)
 	}
-}
-
-export function emptySparseNullifierState(): SparseNullifierState {
-	return { consumed: [] }
 }
 
 function sparseNullifierNodes(state: SparseNullifierState) {
@@ -415,28 +354,4 @@ export function computeNullifierRootFromProof(parentDepositIndex: string, siblin
 		path >>= 1n
 	}
 	return root
-}
-
-export function verifySparseNullifierAbsence(state: SparseNullifierState, parentDepositIndex: string, siblings: readonly Hash[]) {
-	const rootFromProof = computeNullifierRootFromProof(parentDepositIndex, siblings, zeroHash)
-	const expectedRoot = sparseNullifierRoot(state)
-	if (rootFromProof.toLowerCase() !== expectedRoot.toLowerCase()) throw new Error(`Nullifier proof root ${rootFromProof} does not match ${expectedRoot}`)
-	return rootFromProof
-}
-
-export function consumeSparseNullifier(state: SparseNullifierState, parentDepositIndex: string): SparseNullifierState {
-	validateSparseNullifierState(state)
-	if (state.consumed.some(entry => entry.parentDepositIndex === parentDepositIndex)) throw new Error(`Parent deposit ${parentDepositIndex} is already nullified`)
-	const entry = { parentDepositIndex, path: nullifierPath(parentDepositIndex).toString() }
-	assertNoNullifierPathCollisions([...state.consumed, entry])
-	const consumed = [...state.consumed.map(value => ({ ...value })), entry].sort((left, right) => {
-		const leftParent = BigInt(left.parentDepositIndex)
-		const rightParent = BigInt(right.parentDepositIndex)
-		if (leftParent < rightParent) return -1
-		if (leftParent > rightParent) return 1
-		return 0
-	})
-	const next = { consumed }
-	validateSparseNullifierState(next)
-	return next
 }

@@ -24,7 +24,7 @@
 
 				<p>Fee accrual is lazy: state-changing pool operations checkpoint the global fee index, and vault operations checkpoint each vault against that index. Fractional amounts remain in explicit remainders until they accumulate into whole attoETH, so callers do not need to iterate over every vault when time advances.</p>
 				<p>Fee accrual is time-clamped. An initial pool accrues until its question ends or its universe forks. A child starts a new epoch when migration and any Truth Auction finalize, then accrues until local resolution or another fork; a child with a fixed outcome and no continuation game accrues no further fees.</p>
-				<p>Migrated capacity and sold auction capacity enter the fee denominator at finalization, even when a winning bidder claims later. The pool preserves each owner's accrued share while assigning late claims and reconciling rounding remainders. See the <a href="../reference/operator-guardrails.html">operator guardrails</a> for checkpoint and fork-reconciliation sequencing and the <a href="../reference/contracts.html#securitypool">SecurityPool contract reference</a> for exact state transitions.</p>
+				<p>Migrated capacity and sold auction capacity enter the fee denominator at finalization, even when a winning bidder claims later. The pool preserves each owner's accrued share while assigning late claims and reconciling rounding remainders. See the <a href="../reference/operator-guardrails.html">operator guardrails</a> for checkpoint and fork-reconciliation sequencing and the <a href="../reference/contracts/securitypool.html">SecurityPool contract reference</a> for exact state transitions.</p>
 			</section>
 		</main>
 

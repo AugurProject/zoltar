@@ -55,20 +55,6 @@ export function isSelectedPoolForkWorkflowView(view: SelectedPoolView) {
 	return view === 'fork-workflow'
 }
 
-export function getSelectedPoolViewForForkStage(stage: ForkAuctionStageView): SelectedPoolView {
-	switch (stage) {
-		case 'initiate':
-		case 'migration':
-			return 'fork-workflow'
-		case 'auction':
-			return 'fork-workflow'
-		case 'settlement':
-			return 'fork-workflow'
-		default:
-			return assertNever(stage)
-	}
-}
-
 export function resolveForkWorkflowSelectionStage(value: string | undefined): ForkWorkflowSelectionStage | undefined {
 	switch (value) {
 		case 'fork-migration':
@@ -97,7 +83,7 @@ export function getSelectedPoolViewForForkWorkflowSelectionStage(stage: ForkWork
 	}
 }
 
-export function normalizeForkWorkflowSelectionStage(stage: ForkAuctionStageView): ForkWorkflowSelectionStage {
+function normalizeForkWorkflowSelectionStage(stage: ForkAuctionStageView): ForkWorkflowSelectionStage {
 	return stage === 'initiate' ? 'fork-triggered' : stage
 }
 
@@ -174,46 +160,6 @@ export function getForkWorkflowStageSelection({
 		currentWorkflowStage,
 		selectedStage,
 	}
-}
-
-export function getSelectedPoolForkWorkflowView({
-	forkAuctionDetails,
-	selectedPool,
-}: {
-	forkAuctionDetails:
-		| {
-				claimingAvailable: boolean
-				forkOutcome: ListedSecurityPool['forkOutcome']
-				migratedAttoRep: bigint
-				systemState: SecurityPoolSystemState
-				truthAuction: Pick<TruthAuctionMetrics, 'finalized'> | undefined
-				truthAuctionStartedAt: bigint
-		  }
-		| undefined
-	selectedPool: (Pick<ListedSecurityPool, 'forkOutcome' | 'migratedAttoRep' | 'systemState' | 'truthAuctionStartedAt'> & { hasForkActivity?: boolean }) | undefined
-}) {
-	const currentForkAuctionDetails = getCurrentSelectedPoolForkAuctionDetails({
-		forkAuctionDetails,
-		selectedPool,
-	})
-	if (currentForkAuctionDetails !== undefined)
-		return getSelectedPoolViewForForkStage(
-			getForkAuctionStageView({
-				claimingAvailable: currentForkAuctionDetails.claimingAvailable,
-				forkOutcome: currentForkAuctionDetails.forkOutcome,
-				migratedAttoRep: currentForkAuctionDetails.migratedAttoRep,
-				systemState: currentForkAuctionDetails.systemState,
-				truthAuction: currentForkAuctionDetails.truthAuction,
-				truthAuctionStartedAt: currentForkAuctionDetails.truthAuctionStartedAt,
-			}),
-		)
-	if (selectedPool === undefined) return 'fork-workflow'
-	return getSelectedPoolViewForForkStage(
-		getCurrentSelectedPoolForkStage({
-			forkAuctionDetails,
-			selectedPool,
-		}),
-	)
 }
 
 export function getCurrentSelectedPoolForkStage({

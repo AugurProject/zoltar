@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test'
-import { createWalletClient, custom, defineChain, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
+import { createWalletClient, defineChain, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
+import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { parseSettings } from '#config/settings'
 import { finalizedReceiptWithQuorum } from '#execution/recovery'
 

@@ -1,7 +1,7 @@
 import { encodeDeployData, getAddress, keccak256, type Address, type Hash, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
-import { createDeploymentStatusOracleAddressHelper } from '@zoltar/core-shared/deployment/deploymentAddresses'
-import { DeploymentStatusOracle_DeploymentStatusOracle, ScalarOutcomes_ScalarOutcomes, ZoltarQuestionData_ZoltarQuestionData, statoblast_Multicall3_Multicall3, statoblast_WETH9_WETH9 } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { constructorArgumentsFromInitCode, createDeploymentStatusOracleAddressHelper } from '@zoltar/core-shared/deployment/deploymentAddresses'
+import { DeploymentStatusOracle_DeploymentStatusOracle, GenesisReputationToken_GenesisReputationToken, ScalarOutcomes_ScalarOutcomes, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData, statoblast_Multicall3_Multicall3, statoblast_WETH9_WETH9 } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { MULTICALL3_BYTECODE, PROXY_DEPLOYER_ADDRESS, ZERO_SALT, getZoltarContractAddresses, getZoltarInitCode, getZoltarQuestionDataByteCode } from './zoltarDeploymentHelpers.js'
 import { readWithRpcStateRetries, waitForSubmittedTransactionReceipt, type RpcStateRetryWait } from './core.js'
 import type { DeploymentStatusSnapshot, DeploymentStep, DeploymentStepId, ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -29,7 +29,7 @@ export const EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<R
 	zoltarQuestionData: '0xcacb1ffe2a738ceda0aced156f7ff50b405b57d66a6c1307e5d8ff87789a4340',
 }
 
-export const STATIC_DEPLOYMENT_ARTIFACT_RUNTIME_CODE_BY_STEP_ID = {
+const STATIC_DEPLOYMENT_ARTIFACT_RUNTIME_CODE_BY_STEP_ID = {
 	deploymentStatusOracle: `0x${DeploymentStatusOracle_DeploymentStatusOracle.evm.deployedBytecode.object}`,
 	multicall3: `0x${statoblast_Multicall3_Multicall3.evm.deployedBytecode.object}`,
 	scalarOutcomes: `0x${ScalarOutcomes_ScalarOutcomes.evm.deployedBytecode.object}`,
@@ -43,14 +43,17 @@ export function assertStaticDeploymentArtifactRuntimeCodeHashes(
 		runtimeCodeByStepId: STATIC_DEPLOYMENT_ARTIFACT_RUNTIME_CODE_BY_STEP_ID,
 	},
 ) {
+	const verifiedStepIds: string[] = []
 	for (const [id, runtimeCode] of Object.entries(parameters.runtimeCodeByStepId)) {
 		const expectedRuntimeCodeHash = parameters.expectedRuntimeCodeHashes[id]
 		if (expectedRuntimeCodeHash === undefined) throw new Error(`Static deployment artifact ${id} has no pinned expected runtime code hash`)
 		const artifactRuntimeCodeHash = keccak256(runtimeCode)
+		verifiedStepIds.push(id)
 		if (artifactRuntimeCodeHash !== expectedRuntimeCodeHash) {
 			throw new Error(`Local runtime code for ${id} does not match its pinned expected hash: expected ${expectedRuntimeCodeHash}, artifact contains ${artifactRuntimeCodeHash}. Run bun run compile-contracts and refresh the pinned deployment hashes if the bytecode change is intentional.`)
 		}
 	}
+	return verifiedStepIds.sort()
 }
 
 const EXPECTED_MAINNET_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
@@ -72,21 +75,7 @@ const ATOMIC_FUNDING_CONSTRUCTOR_ABI = [
 		type: 'constructor',
 	},
 ] as const
-// Compiled with solc 0.8.17, optimizer runs=200, metadata bytecodeHash=none.
-export const ATOMIC_FUNDING_SOURCE = `pragma solidity 0.8.17;
-contract AtomicFunding {
-    constructor(address payable signer, address expectedDeployer, uint256 requiredBalance) payable {
-        if (expectedDeployer.code.length == 0) {
-            uint256 balance = signer.balance;
-            if (balance < requiredBalance) {
-                (bool success,) = signer.call{value: requiredBalance - balance}("");
-                require(success, "Funding failed");
-            }
-        }
-        selfdestruct(payable(msg.sender));
-    }
-}`
-export const ATOMIC_FUNDING_BYTECODE =
+const ATOMIC_FUNDING_BYTECODE =
 	'0x608060405260405161016e38038061016e83398101604081905261002291610103565b816001600160a01b03163b6000036100e8576001600160a01b03831631818110156100e65760006001600160a01b03851661005d8385610146565b604051600081818185875af1925050503d8060008114610099576040519150601f19603f3d011682016040523d82523d6000602084013e61009e565b606091505b50509050806100e45760405162461bcd60e51b815260206004820152600e60248201526d119d5b991a5b99c819985a5b195960921b604482015260640160405180910390fd5b505b505b33ff5b6001600160a01b038116811461010057600080fd5b50565b60008060006060848603121561011857600080fd5b8351610123816100eb565b6020850151909350610134816100eb565b80925050604084015190509250925092565b8181038181111561016757634e487b7160e01b600052601160045260246000fd5b9291505056fe' satisfies Hex
 
 export async function getProxyDeployerFundingShortfall(client: Pick<ReadClient, 'getBalance'>) {
@@ -459,6 +448,25 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 		},
 	]
 	return withExpectedDeploymentRuntimeCodeHashes(steps, profile)
+}
+
+// Constructor arguments for the proxy-deployed steps, keyed by step id, as
+// appended to each step's init code. Deployment manifests record these so
+// explorer source verification never re-derives deployment parameters.
+export function getZoltarDeploymentStepConstructorArguments(profile: NetworkProfile = getRuntimeNetworkProfile()): Partial<Record<DeploymentStepId, string>> {
+	const addresses = getZoltarContractAddresses(profile)
+	const constructorArguments: Partial<Record<DeploymentStepId, string>> = {
+		deploymentStatusOracle: constructorArgumentsFromInitCode(getDeploymentStatusOracleByteCode(profile), DeploymentStatusOracle_DeploymentStatusOracle.evm.bytecode.object),
+		multicall3: constructorArgumentsFromInitCode(MULTICALL3_BYTECODE, statoblast_Multicall3_Multicall3.evm.bytecode.object),
+		scalarOutcomes: '',
+		zoltarQuestionData: constructorArgumentsFromInitCode(getZoltarQuestionDataByteCode(), ZoltarQuestionData_ZoltarQuestionData.evm.bytecode.object),
+		zoltar: constructorArgumentsFromInitCode(getZoltarInitCode(addresses.zoltarQuestionData, profile.genesisRepTokenAddress), Zoltar_Zoltar.evm.bytecode.object),
+	}
+	if (profile.id === 'sepolia') {
+		constructorArguments.weth = constructorArgumentsFromInitCode(SEPOLIA_WETH_INIT_CODE, statoblast_WETH9_WETH9.evm.bytecode.object)
+		constructorArguments.reputationToken = constructorArgumentsFromInitCode(SEPOLIA_GENESIS_REP_INIT_CODE, GenesisReputationToken_GenesisReputationToken.evm.bytecode.object)
+	}
+	return constructorArguments
 }
 
 export function withExpectedDeploymentRuntimeCodeHashes(steps: readonly DeploymentStep[], profile: NetworkProfile): DeploymentStep[] {

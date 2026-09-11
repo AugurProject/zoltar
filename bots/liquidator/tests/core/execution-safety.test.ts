@@ -5,23 +5,22 @@ import { hasStagedLiquidation } from '../../src/core/staged-operations.ts'
 import { stagedOperationOutcome } from '../../src/core/staged-outcome.ts'
 import {
 	assertExecutionActive,
-	assertGasCostLimit,
 	assertGasCostLimitForBaseFee,
 	assertMarketPriceStillAllowed,
 	assertRepLimits,
 	assertStaleLiquidationExposureBound,
 	conservativeStaleTopUp,
 	liquidationExecutionStep,
-	requireFinalizedTransactionReceipt,
 	planVaultMaintenance,
-	requirePendingStagedOperation,
-	requireSuccessfulStagedOperation,
+	requireFinalizedTransactionReceipt,
 	setExecutionShutdownCheck,
-	validateReceiptExpectation,
-} from '../../src/execution/liquidation-executor.ts'
+} from '../../src/execution/execution-safety.ts'
+import { validateReceiptExpectation } from '../../src/execution/receipt-validation.ts'
 import { initialRuntimeState } from '../../src/state/operator-state.ts'
-import { encodeAbiParameters, encodeEventTopics, getAddress, type TransactionReceipt } from '@zoltar/bot-shared/ethereum'
-import { nextStagedHistoricalRecoveryRange, recordStagedRecoveryChunk, recordStagedRecoveryGap, stagedOperationRecoveryRanges, stagedRecoveryAnchorMatches } from '../../src/execution/recovery.ts'
+import { encodeEventTopics } from '@zoltar/core-shared/evm/ethereum'
+import { encodeAbiParameters, getAddress, type TransactionReceipt } from '@zoltar/bot-shared/ethereum'
+import { maximumFeePerGas, paddedTransactionGas } from '@zoltar/bot-shared/execution/transaction-submission'
+import { nextStagedHistoricalRecoveryRange, recordStagedRecoveryChunk, recordStagedRecoveryGap, stagedRecoveryAnchorMatches } from '../../src/execution/staged-recovery-journal.ts'
 import { availableExecutionObservations, liquidationExecutionSnapshotObservation } from '../../src/monitoring/execution-quorum.ts'
 
 const coordinator = getAddress('0x0000000000000000000000000000000000000010')
@@ -153,10 +152,6 @@ describe('liquidator execution safety', () => {
 		const observations = await Promise.allSettled([Promise.resolve({ endpoint: 'rpc-a', scan }), Promise.resolve({ endpoint: 'rpc-b', scan: { ...scan, block: { ...scan.block, hash: `0x${'22'.repeat(32)}`, number: 2n } } })])
 		expect(() => availableExecutionObservations('liquidation execution snapshot', observations, liquidationExecutionSnapshotObservation, 2)).toThrow('RPC disagreement')
 	})
-	test('chunks staged-operation recovery across bounded inclusive log ranges', () => {
-		expect(stagedOperationRecoveryRanges(5n, 25_005n)).toEqual([{ fromBlock: 24_750n, toBlock: 25_005n }])
-	})
-
 	test('invalidates a staged-operation recovery cursor when its canonical anchor changes or moves above the head', () => {
 		const pending = { recoveryAnchorBlock: 100n, recoveryAnchorHash: `0x${'11'.repeat(32)}` as const }
 		expect(stagedRecoveryAnchorMatches(pending, 110n, `0x${'11'.repeat(32)}`)).toBe(true)
@@ -430,32 +425,26 @@ describe('liquidator execution safety', () => {
 		).toThrow('cannot guarantee')
 	})
 
-	test('applies the gas cap to the padded signed gas limit', () => {
-		expect(() => assertGasCostLimit(100_000n, 10n, 1_100_000n)).toThrow('maximumGasCostAttoEth')
-		expect(() => assertGasCostLimit(100_000n, 10n, 1_300_000n)).not.toThrow()
-	})
-
 	test('applies the exact signed-transaction fee horizon to the gas-cap precheck', () => {
 		const baseFeePerGas = 10n * 10n ** 9n
 		const capThatOnlyCoversTheFormerDoubleBaseFeeEstimate = 3_000_000_000_000_000n
 		expect(() => assertGasCostLimitForBaseFee(100_000n, baseFeePerGas, capThatOnlyCoversTheFormerDoubleBaseFeeEstimate)).toThrow('maximumGasCostAttoEth')
+		const paddedCeiling = paddedTransactionGas(100_000n) * maximumFeePerGas(baseFeePerGas)
+		expect(() => assertGasCostLimitForBaseFee(100_000n, baseFeePerGas, paddedCeiling)).not.toThrow()
+		expect(() => assertGasCostLimitForBaseFee(100_000n, baseFeePerGas, paddedCeiling - 1n)).toThrow('maximumGasCostAttoEth')
 	})
 
 	test('does not treat a successful outer receipt as a successful failed staged operation', () => {
-		expect(() => requireSuccessfulStagedOperation(stagedOperationReceipt(false), coordinator, 0)).toThrow('liquidation too close to threshold')
-		expect(() => requireSuccessfulStagedOperation(stagedOperationReceipt(true), coordinator, 0)).not.toThrow()
+		expect(() => validateReceiptExpectation(stagedOperationReceipt(false), { coordinator, operation: 0, type: 'staged-success' })).toThrow('liquidation too close to threshold')
+		expect(() => validateReceiptExpectation(stagedOperationReceipt(true), { coordinator, operation: 0, type: 'staged-success' })).not.toThrow()
 	})
 
 	test('requires a stale liquidation to occupy the pending settlement slot', () => {
 		const initiator = getAddress('0x0000000000000000000000000000000000000020')
 		const target = getAddress('0x0000000000000000000000000000000000000030')
-		expect(() => requirePendingStagedOperation(queuedLiquidationReceipt(false), coordinator, initiator, initiator, target, 10n)).toThrow('pending settlement slot')
-		expect(() => requirePendingStagedOperation(queuedLiquidationReceipt(true), coordinator, initiator, initiator, target, 10n)).not.toThrow()
-	})
-
-	test('applies the persisted semantic receipt expectation during recovery', () => {
-		expect(() => validateReceiptExpectation(stagedOperationReceipt(false), { coordinator, operation: 0, type: 'staged-success' })).toThrow('liquidation too close to threshold')
-		expect(() => validateReceiptExpectation(stagedOperationReceipt(true), { coordinator, operation: 0, type: 'staged-success' })).not.toThrow()
+		const expectation = { amount: 10n, coordinator, operator: initiator, receiver: initiator, target, type: 'pending-liquidation' as const }
+		expect(() => validateReceiptExpectation(queuedLiquidationReceipt(false), expectation)).toThrow('pending settlement slot')
+		expect(validateReceiptExpectation(queuedLiquidationReceipt(true), expectation).queuedOperationId).toBe(1n)
 	})
 
 	test('reconciles the eventual outcome of a queued stale liquidation', () => {

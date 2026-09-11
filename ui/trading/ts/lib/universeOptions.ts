@@ -2,7 +2,7 @@ import * as copy from '../copy/app.js'
 
 export type UniverseOption = Readonly<{ id: string; label: string; accessibleLabel?: string }>
 
-export function compactUniqueUniverseIds(universeIds: readonly string[]) {
+function compactUniqueUniverseIds(universeIds: readonly string[]) {
 	if (new Set(universeIds).size !== universeIds.length) throw new Error('Universe IDs must be unique')
 	let edgeLength = 3
 	while (true) {

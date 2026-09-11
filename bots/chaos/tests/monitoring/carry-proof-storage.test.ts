@@ -13,7 +13,8 @@ test('an empty discovered graph needs no historical logs or journal', async () =
 })
 
 import { zeroHash, toHex } from '@zoltar/bot-shared/ethereum'
-import { verifyMerkleMountainRangeProof, carryCommitment } from '../../src/monitoring/carry-proof-index.ts'
+import { carryCommitment } from '../../src/monitoring/carry-proof-index.ts'
+import { verifyMerkleMountainRangeProof } from '../support/carry-proof-verification.ts'
 import { scanCarryStorage } from '../../src/monitoring/carry-storage-scan.ts'
 import { anchor, blockHash, child, forker, grandchild, slot, source, storageFixture, wallet } from './carry-storage-fixture.ts'
 

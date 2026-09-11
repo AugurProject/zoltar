@@ -41,12 +41,12 @@
 					<div class="plot-chart" data-plot-chart="fig-liquidation-punitive-flow" data-plot-width="900" data-plot-height="230" role="img" aria-label="Floor-rounded capacity ownership and ceiling-rounded REP backing units leave the target vault. The authorized receiver incurs the exact reported debt increase and receives those ownership and backing units. Residual target debt becomes bad debt only on a full-target request."><span class="plot-chart-fallback">Floor-rounded proportional capacity ownership and ceiling-rounded REP backing units leave the target. The authorized receiver incurs the exact reported debt increase and receives the ownership and backing units; target claims, fees, surplus, and unmatched ownership remain. Only a full-target request records residual target debt as bad debt.</span></div>
 					<p class="diagram-caption"><span class="figure-label">Liquidation accounting</span>The operator submits the transaction, while the authorized receiver accepts the funded liability and receives the award.</p>
 				</figure>
-					<p>The receiver must remain healthy after accepting the position, and any remaining target position must still meet the protocol's minimum sizes. These checks prevent liquidation from creating unusable dust positions. The exact caps, rounding, and accounting fields are listed in the <a href="../reference/contracts.html#securitypool">SecurityPool contract reference</a>.</p>
+					<p>The receiver must remain healthy after accepting the position, and any remaining target position must still meet the protocol's minimum sizes. These checks prevent liquidation from creating unusable dust positions. The exact caps, rounding, and accounting fields are listed in the <a href="../reference/contracts/securitypool.html">SecurityPool contract reference</a>.</p>
 			</section>
 
 			<section id="receiver-approvals">
 				<h2>Bounded receiver approval</h2>
-					<p>A receiver can approve an operator directly or by a bounded signature. The approval is specific to a pool, limits how much debt the receiver will accept, sets a validity window and minimum resulting health, and can be revoked for future liquidations. Existing staged work retains its reservation so cleanup remains deterministic. See the <a href="../reference/contracts.html#liquidationapprovalregistry">LiquidationApprovalRegistry reference</a> for fields, nonce rules, and wallet-signature handling.</p>
+					<p>A receiver can approve an operator directly or by a bounded signature. The approval is specific to a pool, limits how much debt the receiver will accept, sets a validity window and minimum resulting health, and can be revoked for future liquidations. Existing staged work retains its reservation so cleanup remains deterministic. See the <a href="../reference/contracts/liquidationapprovalregistry.html">LiquidationApprovalRegistry reference</a> for fields, nonce rules, and wallet-signature handling.</p>
 			</section>
 
 			<section id="queue-semantics">
@@ -61,7 +61,7 @@
 
 				<section id="related-references">
 					<h2>Related references</h2>
-					<ul><li><a href="../reference/contracts.html#securitypool">SecurityPool functions and accounting</a></li><li><a href="../reference/contracts.html#liquidationapprovalregistry">Liquidation approval fields and signatures</a></li><li><a href="../reference/operator-guardrails.html#repeth-oracle-operations">Price-coordinator operations and recovery</a></li></ul>
+					<ul><li><a href="../reference/contracts/securitypool.html">SecurityPool functions and accounting</a></li><li><a href="../reference/contracts/liquidationapprovalregistry.html">Liquidation approval fields and signatures</a></li><li><a href="../reference/operator-guardrails.html#repeth-oracle-operations">Price-coordinator operations and recovery</a></li></ul>
 				</section>
 		</main>
 		<script src="../assets/js/chartRuntime.js"></script>
