@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'preact/hooks'
 import type { Address, PublicClient, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { formatUnits, parseUnitsOrUndefined } from '../lib/format.js'
+import { collateralAttoEthToAttoShares } from '../lib/shareValue.js'
 import { ForkMigrationTargets } from './ForkMigrationTargets.js'
 import type { DeploymentConfiguration } from '../protocol/config.js'
 import { loadForkMigrationContext, type ForkMigrationContext, type ForkTarget } from '../protocol/forks.js'
@@ -85,7 +86,8 @@ export function LiveSettlementControls({
 	const forkClient = useMemo(() => services.createPublicClient(configuration), [configuration, services])
 	const availability = settlementAvailability(market, balances)
 	const winningOutcome = resolvedQuestionOutcome(market.questionOutcome)
-	const parsedAmount = parseUnitsOrUndefined(amount)
+	const parsedAmountAttoEth = parseUnitsOrUndefined(amount)
+	const parsedAmount = parsedAmountAttoEth === undefined ? undefined : collateralAttoEthToAttoShares(parsedAmountAttoEth, market)
 	const targetOutcomeIndexes = useMemo(() => selectedForkTargets.map(target => target.outcomeIndex), [selectedForkTargets])
 	const targetOutcomeKey = targetOutcomeIndexes.map(target => target.toString()).join(',')
 	let operationAvailable = availability.canMigrateShares
@@ -96,7 +98,7 @@ export function LiveSettlementControls({
 	else if (sourceOutcome === 'YES') sourceBalance = balances?.yes
 	const slippageBps = parseSlippageBps(slippage)
 	const validityMinutes = parseTransactionValidityMinutes(transactionValidityMinutes)
-	let inputBlocker = settlementInputBlocker(operation, operationAvailable, availability.completeSets, parsedAmount, targetOutcomeIndexes, sourceOutcome, sourceBalance)
+	let inputBlocker = settlementInputBlocker(operation, operationAvailable, availability.completeSets, parsedAmount, targetOutcomeIndexes, sourceOutcome, sourceBalance, market)
 	if (operation === 'migrate-shares' && operationAvailable) {
 		if (forkContextState === 'loading' || forkContextState === 'idle') inputBlocker = 'Loading the universe fork question and child branches'
 		else if (forkContextState === 'error' || forkContext === undefined) inputBlocker = forkContextError ?? 'Fork question details are unavailable'
@@ -106,7 +108,8 @@ export function LiveSettlementControls({
 	if (operation === 'redeem-complete-set' && slippageBps === undefined) protectionInputBlocker = 'Enter a slippage tolerance from 0% to 5%'
 	else if (operation === 'redeem-complete-set' && validityMinutes === undefined) protectionInputBlocker = 'Enter a transaction validity from 1 to 1440 whole minutes'
 	if (protectionInputBlocker !== undefined) inputBlocker = protectionInputBlocker
-	const contextKey = `${account ?? ''}\u0000${configuration.chainId.toString()}\u0000${market.pool}\u0000${market.systemState}\u0000${market.awaitingForkContinuation ? '1' : '0'}\u0000${market.universeForkTime.toString()}\u0000${market.questionOutcome.toString()}\u0000${operation}\u0000${amount}\u0000${slippage}\u0000${sourceOutcome}\u0000${transactionValidityMinutes}\u0000${targetOutcomeKey}`
+	// The pool rate is part of the quote basis: a background refresh that moves it retires the quote deliberately.
+	const contextKey = `${account ?? ''}\u0000${configuration.chainId.toString()}\u0000${market.pool}\u0000${market.settlementCollateralAttoEth.toString()}\u0000${market.shareTokenSupplyAttoShares.toString()}\u0000${market.systemState}\u0000${market.awaitingForkContinuation ? '1' : '0'}\u0000${market.universeForkTime.toString()}\u0000${market.questionOutcome.toString()}\u0000${operation}\u0000${amount}\u0000${slippage}\u0000${sourceOutcome}\u0000${transactionValidityMinutes}\u0000${targetOutcomeKey}`
 	const workflowController = useSettlementWorkflowController({
 		configuration,
 		market,
@@ -131,7 +134,8 @@ export function LiveSettlementControls({
 	const { state, transactionHash, error, receiptWarning, actionableQuote, workflowLocked, invalidateInputs: invalidateSettlementInputs, submitCurrent } = workflowController
 	const simulateCurrent = () => workflowController.simulateCurrent({ validityMinutes, slippageBps })
 	const suppressRedundantProtectionStatus = protectionInputBlocker !== undefined && balanceState === 'ready' && state !== 'error'
-	let settlementStatus = 'Connect a wallet to load balances for settlement'
+	// Idle with valid inputs shows nothing, matching the position controls; the action button already says what comes next.
+	let settlementStatus: string | undefined = 'Connect a wallet to load balances for settlement'
 	if (state === 'confirmed') settlementStatus = 'Settlement transaction confirmed on-chain'
 	else if (balanceState === 'loading') settlementStatus = 'Loading wallet balances for settlement…'
 	else if (balanceState === 'ready') {
@@ -147,7 +151,7 @@ export function LiveSettlementControls({
 			else if (actionableQuote.operation === 'redeem-complete-set')
 				settlementStatus = `Authoritative redemption simulation at block ${actionableQuote.blockNumber.toString()}: ${formatUnits(actionableQuote.expectedAttoEth)} ETH expected, ${formatUnits(actionableQuote.minimumAttoEth)} ETH minimum at ${formatUnits(actionableQuote.slippageBps, 2, 2)}% slippage; valid until ${formatTimestamp(actionableQuote.deadline)}`
 			else settlementStatus = `Authoritative settlement simulation ready at block ${actionableQuote.blockNumber.toString()}`
-		} else settlementStatus = 'Ready to simulate an authoritative protocol action'
+		} else settlementStatus = undefined
 	}
 	function updateForkTargets(targets: readonly ForkTarget[]) {
 		invalidateSettlementInputs()
@@ -231,10 +235,10 @@ export function LiveSettlementControls({
 					return (
 						<>
 							<p>
-								{settlementCopy.completeSetRedemptionPrefix} {settlementBalanceLabel(balanceState, availability.completeSets)}.
+								{settlementCopy.completeSetRedemptionPrefix} {settlementBalanceLabel(balanceState, availability.completeSets, market)}.
 							</p>
 							<label class='field'>
-								<span>{settlementCopy.completeSetSharesToRedeem}</span>
+								<span>{settlementCopy.completeSetValueToRedeem}</span>
 								<div class='amount-input'>
 									<input
 										value={amount}
@@ -245,12 +249,12 @@ export function LiveSettlementControls({
 											setAmount(event.currentTarget.value)
 										}}
 									/>
-									<span>{settlementCopy.shares}</span>
+									<span>{settlementCopy.eth}</span>
 								</div>
 							</label>
 						</>
 					)
-				if (operation === 'redeem-winning-shares') return winningOutcome === undefined ? <p>{settlementCopy.winningRedemptionUnavailable}</p> : <p>{settlementCopy.winningRedemptionGuidance(winningOutcome, settlementBalanceLabel(balanceState, availability.winningBalance, winningOutcome))}</p>
+				if (operation === 'redeem-winning-shares') return winningOutcome === undefined ? <p>{settlementCopy.winningRedemptionUnavailable}</p> : <p>{settlementCopy.winningRedemptionGuidance(winningOutcome, settlementBalanceLabel(balanceState, availability.winningBalance, market, winningOutcome))}</p>
 				return (
 					<>
 						<p>{settlementCopy.migrationGuidance}</p>
@@ -273,7 +277,7 @@ export function LiveSettlementControls({
 							</select>
 						</label>
 						<p>
-							{settlementCopy.selectedSourceBalance} {settlementBalanceLabel(balanceState, sourceBalance, sourceOutcome)}
+							{settlementCopy.selectedSourceBalance} {settlementBalanceLabel(balanceState, sourceBalance, market, sourceOutcome)}
 						</p>
 						{forkContextState === 'loading' || forkContextState === 'idle' ? <p role='status'>{settlementCopy.loadingForkDetails}</p> : null}
 						{forkContextState === 'error' ? (
