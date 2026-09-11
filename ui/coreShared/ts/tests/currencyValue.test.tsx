@@ -164,6 +164,25 @@ describe('CurrencyValue', () => {
 		expect(documentQueries.getByRole('button', { name: 'Copy exact value 999 999 990 000' }).textContent).toBe('≈ 1T ETH')
 	})
 
+	test('measures the container above its own wrap even when the wrap is a blockified flex item', async () => {
+		setClientWidth(240)
+		setMeasureWidth(180)
+
+		const renderedComponent = await renderIntoDocument(<CurrencyValue compactWhenOverflow suffix='ETH' value={999999990000n * 10n ** 18n} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+		const wrap = documentQueries.getByRole('button', { name: 'Copy exact value 999 999 990 000' }).parentElement
+		if (!(wrap instanceof HTMLElement) || !wrap.classList.contains('currency-value-wrap')) throw new Error('Expected the value wrap')
+		wrap.style.display = 'block'
+		Object.defineProperty(wrap, 'clientWidth', { configurable: true, get: () => 60 })
+
+		await act(() => {
+			render(<CurrencyValue compactWhenOverflow suffix='ETH' value={999999990001n * 10n ** 18n} />, renderedComponent.container)
+		})
+
+		expect(documentQueries.getByRole('button', { name: 'Copy exact value 999 999 990 001' }).textContent).toBe('≈ 999 999 990 001.00 ETH')
+	})
+
 	test('re-expands from compact to full after a resize observer update', async () => {
 		setClientWidth(80)
 		setMeasureWidth(180)

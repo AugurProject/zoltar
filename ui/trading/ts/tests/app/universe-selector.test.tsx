@@ -254,18 +254,19 @@ describe('universe selector', () => {
 	test('keeps the balance slots in place while the wallet is disconnected or loading', async () => {
 		const disconnected = await renderIntoDocument(<WalletSummary summary={{ account: undefined, ethAttoEth: undefined, repAttoRep: undefined, status: 'disconnected', error: undefined, errorLabel: undefined, universeId: '1' }} />)
 		cleanupRendered = disconnected.cleanup
-		const disconnectedCells = [...(disconnected.container.querySelector('.overview-inline-metrics')?.children ?? [])].map(cell => cell.className)
+		const disconnectedCells = [...disconnected.container.querySelectorAll('.overview-inline-metrics .overview-metric-group-items > div')].map(cell => cell.className)
 		expect(disconnectedCells).toEqual(['overview-simulation-secondary', 'overview-simulation-secondary'])
-		const strip = disconnected.container.querySelector('.overview-inline-metrics')
-		if (!(strip instanceof HTMLElement)) throw new Error('Expected the header metric strip')
-		expect(strip.style.getPropertyValue('--overview-metric-columns')).toBe('2')
+		const group = disconnected.container.querySelector('.overview-inline-metrics > .overview-metric-group')
+		if (!(group instanceof HTMLElement)) throw new Error('Expected the balances group')
+		expect(group.getAttribute('aria-label')).toBe('Balances')
+		expect(group.style.getPropertyValue('--overview-metric-columns')).toBe('2')
 		expect(disconnected.container.querySelector('[data-wallet-asset="ETH"]')?.textContent).toContain('—')
 		expect(disconnected.container.querySelector('[data-wallet-asset="REP"]')?.textContent).toContain('—')
 		await disconnected.cleanup()
 
 		const loading = await renderIntoDocument(<WalletSummary summary={{ account: '0x8ba1f109551bD432803012645Ac136ddd64DBA72', ethAttoEth: undefined, repAttoRep: undefined, status: 'loading', error: undefined, errorLabel: undefined, universeId: '1' }} />)
 		cleanupRendered = loading.cleanup
-		const loadingCells = [...(loading.container.querySelector('.overview-inline-metrics')?.children ?? [])].map(cell => cell.className)
+		const loadingCells = [...loading.container.querySelectorAll('.overview-inline-metrics .overview-metric-group-items > div')].map(cell => cell.className)
 		expect(loadingCells).toEqual(disconnectedCells)
 		expect(loading.container.querySelector('[data-wallet-asset="ETH"]')?.textContent).toContain('Loading')
 		expect(loading.container.querySelector('[data-wallet-asset="REP"]')?.textContent).toContain('Loading')
@@ -310,8 +311,8 @@ describe('universe selector', () => {
 	test('preserves all 18 decimals in authoritative wallet balances', async () => {
 		const rendered = await renderIntoDocument(<WalletSummary summary={{ account: '0x8ba1f109551bD432803012645Ac136ddd64DBA72', ethAttoEth: 1n, repAttoRep: 2n ** 256n - 1n, status: 'ready', error: undefined, errorLabel: undefined, universeId: '1' }} />)
 		cleanupRendered = rendered.cleanup
-		expect(rendered.container.querySelector('[data-wallet-asset="ETH"] button')?.getAttribute('title')).toBe('0.000000000000000001 ETH')
-		expect(rendered.container.querySelector('[data-wallet-asset="REP"] button')?.getAttribute('title')).toEndWith('.584007913129639935 REP')
+		expect(rendered.container.querySelector('[data-wallet-asset="ETH"] button')?.getAttribute('title')).toBe('0.000000000000000001')
+		expect(rendered.container.querySelector('[data-wallet-asset="REP"] button')?.getAttribute('title')).toEndWith('.584007913129639935')
 	})
 
 	test('hides retained balances synchronously when the selected universe changes', () => {

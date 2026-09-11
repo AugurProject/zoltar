@@ -438,25 +438,29 @@ describe('OverviewPanels', () => {
 
 	test('keeps every header metric slot rendered while the wallet bootstraps or stays disconnected', async () => {
 		const expectedSlots = ['overview-simulation-secondary', 'overview-metric-secondary', 'overview-simulation-secondary', 'overview-metric-secondary', 'overview-metric-secondary']
-		const readSlots = () => [...(document.body.querySelector('.overview-inline-metrics')?.children ?? [])].map(cell => cell.className)
+		const readSlots = () => [...document.body.querySelectorAll('.overview-inline-metrics .overview-metric-group-items > div')].map(cell => cell.className)
 		const readMetricValues = () => [...document.body.querySelectorAll('.overview-inline-metrics .metric-field-value')].map(value => value.textContent?.trim())
-		const readColumns = () => {
-			const strip = document.body.querySelector('.overview-inline-metrics')
-			if (!(strip instanceof HTMLElement)) throw new Error('Expected the header metric strip')
-			return strip.style.getPropertyValue('--overview-metric-columns')
-		}
+		const readGroups = () =>
+			[...document.body.querySelectorAll('.overview-inline-metrics > .overview-metric-group')].map(group => {
+				if (!(group instanceof HTMLElement)) throw new Error('Expected a header metric group')
+				return { label: group.getAttribute('aria-label'), columns: group.style.getPropertyValue('--overview-metric-columns'), secondary: group.classList.contains('is-secondary') }
+			})
 
 		await renderOverviewPanels({ walletBootstrapComplete: false })
 		expect(readSlots()).toEqual(expectedSlots)
 		expect(readMetricValues().slice(0, 3)).toEqual(['Loading…', 'Loading…', 'Loading…'])
-		expect(readColumns()).toBe('5')
+		expect(readGroups()).toEqual([
+			{ label: 'Balances', columns: '3', secondary: false },
+			{ label: 'Prices', columns: '2', secondary: true },
+		])
+		expect(document.body.querySelector('.overview-metric-group.is-secondary .overview-metric-group-caption button')?.getAttribute('aria-label')).toBe('Refresh REP prices')
 		expect(document.body.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toBe('Genesis (0x0)')
 		expect(document.body.querySelector('.header-toolbar-controls .toolbar-field-value > span')?.getAttribute('title')).toBe('Genesis (0x0)')
 		await cleanupRenderedComponent?.()
 
 		await renderOverviewPanels({ walletBootstrapComplete: false, showRepPrices: false })
 		expect(readSlots()).toEqual(['overview-simulation-secondary', 'overview-metric-secondary', 'overview-simulation-secondary'])
-		expect(readColumns()).toBe('3')
+		expect(readGroups()).toEqual([{ label: 'Balances', columns: '3', secondary: false }])
 		await cleanupRenderedComponent?.()
 
 		const childUniverseId = 0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdn
@@ -476,7 +480,7 @@ describe('OverviewPanels', () => {
 			universeRepBalanceAttoRep: 5n * 10n ** 18n,
 		})
 		expect(readSlots()).toEqual(expectedSlots)
-		expect(readMetricValues().slice(0, 3)).toEqual(['≈ 2.00 ETH', '≈ 1.00 WETH', '≈ 5.00 REP'])
+		expect(readMetricValues().slice(0, 3)).toEqual(['≈ 2.00', '≈ 1.00', '≈ 5.00'])
 		expect(document.body.querySelector('.header-toolbar-controls .wallet-chip .address-value-abbreviated')?.textContent).toBe('0x123456…567890')
 	})
 
@@ -485,15 +489,15 @@ describe('OverviewPanels', () => {
 		setClientWidthResolver(element => {
 			if (element.classList.contains('currency-value') || element.classList.contains('currency-value-wrap')) return 0
 			const title = element.querySelector('.currency-value')?.getAttribute('title')
-			if (title === '999 999 990 000 ETH') return 80
-			if (title === '10 000 WETH') return 160
+			if (title === '999 999 990 000') return 80
+			if (title === '10 000') return 160
 			return 160
 		})
 
 		setMeasureWidthResolver(element => {
 			const parentTitle = element.parentElement?.firstElementChild?.getAttribute('title')
-			if (parentTitle === '999 999 990 000 ETH') return 180
-			if (parentTitle === '10 000 WETH') return 110
+			if (parentTitle === '999 999 990 000') return 180
+			if (parentTitle === '10 000') return 110
 			return 80
 		})
 
@@ -514,7 +518,7 @@ describe('OverviewPanels', () => {
 		const ethButton = documentQueries.getByRole('button', { name: 'Copy exact value 999 999 990 000' })
 		const wethButton = documentQueries.getByRole('button', { name: 'Copy exact value 10 000' })
 
-		expect(ethButton.textContent).toBe('≈ 1T ETH')
-		expect(wethButton.textContent).toBe('≈ 10 000.00 WETH')
+		expect(ethButton.textContent).toBe('≈ 1T')
+		expect(wethButton.textContent).toBe('≈ 10 000.00')
 	})
 })

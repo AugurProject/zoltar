@@ -5,7 +5,7 @@ import { HeaderToolbar } from '@zoltar/ui-core-shared/components/HeaderToolbar.j
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
-import { HeaderMetricStrip } from '@zoltar/ui-core-shared/components/HeaderMetricStrip.js'
+import { HeaderMetricGroup, HeaderMetricStrip } from '@zoltar/ui-core-shared/components/HeaderMetricStrip.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
@@ -187,52 +187,50 @@ export function OverviewPanels({
 					settings={settingsMenu}
 				/>
 				<HeaderMetricStrip expanded={showEnvironmentDetails}>
-					<MetricField className='overview-simulation-secondary' label={commonCopy.eth}>
-						<CurrencyValue value={showAccountBalances ? accountState.ethBalanceAttoEth : undefined} loading={isWalletAddressLoading || (showAccountBalances && isRefreshing && accountState.ethBalanceAttoEth === undefined)} suffix={commonCopy.eth} compactWhenOverflow />
-					</MetricField>
-					<MetricField className='overview-metric-secondary' label={commonCopy.weth}>
-						<CurrencyValue value={showAccountBalances ? accountState.wethBalanceAttoEth : undefined} loading={isWalletAddressLoading || (showAccountBalances && isRefreshing && accountState.wethBalanceAttoEth === undefined)} suffix={commonCopy.weth} compactWhenOverflow />
-					</MetricField>
-					<MetricField className='overview-simulation-secondary' label={commonCopy.rep}>
-						<CurrencyValue value={showAccountBalances ? universeRepBalanceAttoRep : undefined} loading={isWalletAddressLoading || (showAccountBalances && isLoadingUniverseRepBalance)} suffix={commonCopy.rep} compactWhenOverflow />
-					</MetricField>
+					<HeaderMetricGroup label={commonCopy.balances}>
+						<MetricField className='overview-simulation-secondary' label={commonCopy.eth}>
+							<CurrencyValue value={showAccountBalances ? accountState.ethBalanceAttoEth : undefined} loading={isWalletAddressLoading || (showAccountBalances && isRefreshing && accountState.ethBalanceAttoEth === undefined)} compactWhenOverflow />
+						</MetricField>
+						<MetricField className='overview-metric-secondary' label={commonCopy.weth}>
+							<CurrencyValue value={showAccountBalances ? accountState.wethBalanceAttoEth : undefined} loading={isWalletAddressLoading || (showAccountBalances && isRefreshing && accountState.wethBalanceAttoEth === undefined)} compactWhenOverflow />
+						</MetricField>
+						<MetricField className='overview-simulation-secondary' label={commonCopy.rep}>
+							<CurrencyValue value={showAccountBalances ? universeRepBalanceAttoRep : undefined} loading={isWalletAddressLoading || (showAccountBalances && isLoadingUniverseRepBalance)} compactWhenOverflow />
+						</MetricField>
+					</HeaderMetricGroup>
 					{showRepPrices ? (
-						<MetricField
-							className='overview-metric-secondary'
-							label={
-								<span className='metric-label-with-action'>
-									<span>
+						<HeaderMetricGroup
+							label={commonCopy.prices}
+							secondary
+							action={
+								isRepPricingUnavailable ? undefined : (
+									<button type='button' className='quiet metric-label-refresh' onClick={onRefreshRepPrices} disabled={isRefreshingRepPrices} aria-label={appCopy.refreshRepPrices} title={isRefreshingRepPrices ? appCopy.refreshingRepPrices : appCopy.refreshRepPrices}>
+										↻
+									</button>
+								)
+							}
+						>
+							<MetricField
+								className='overview-metric-secondary'
+								label={
+									<>
 										{appCopy.repPerEthCompact} {repPerEthSourceLabel ?? renderRepPriceSourceLabel(repPerEthSource, repPerEthSourceUrl)}
-									</span>
-									{isRepPricingUnavailable ? undefined : (
-										<button type='button' className='quiet metric-label-refresh' onClick={onRefreshRepPrices} disabled={isRefreshingRepPrices} aria-label={appCopy.refreshRepPrices} title={isRefreshingRepPrices ? appCopy.refreshingRepPrices : appCopy.refreshRepPrices}>
-											↻
-										</button>
-									)}
-								</span>
-							}
-						>
-							{isRepPricingUnavailable ? repPricingUnavailableLabel : (renderRepPriceFailure(repPerEthPrice === undefined && !isLoadingRepPrices ? repPerEthFailure : undefined) ?? <CurrencyValue value={repPerEthPrice} loading={isLoadingRepPrices} copyable={false} compactWhenOverflow />)}
-						</MetricField>
-					) : undefined}
-					{showRepPrices ? (
-						<MetricField
-							className='overview-metric-secondary'
-							label={
-								<span className='metric-label-with-action'>
-									<span>
+									</>
+								}
+							>
+								{isRepPricingUnavailable ? repPricingUnavailableLabel : (renderRepPriceFailure(repPerEthPrice === undefined && !isLoadingRepPrices ? repPerEthFailure : undefined) ?? <CurrencyValue value={repPerEthPrice} loading={isLoadingRepPrices} copyable={false} compactWhenOverflow />)}
+							</MetricField>
+							<MetricField
+								className='overview-metric-secondary'
+								label={
+									<>
 										{appCopy.repUsdc} {renderRepPriceSourceLabel(repUsdcSource, repUsdcSourceUrl)}
-									</span>
-									{isRepPricingUnavailable ? undefined : (
-										<button type='button' className='quiet metric-label-refresh' onClick={onRefreshRepPrices} disabled={isRefreshingRepPrices} aria-label={appCopy.refreshRepPrices} title={isRefreshingRepPrices ? appCopy.refreshingRepPrices : appCopy.refreshRepPrices}>
-											↻
-										</button>
-									)}
-								</span>
-							}
-						>
-							{isRepPricingUnavailable ? repPricingUnavailableLabel : (renderRepPriceFailure(repUsdcPrice === undefined && !isLoadingRepPrices ? repUsdcFailure : undefined) ?? <CurrencyValue value={repUsdcPrice} loading={isLoadingRepPrices} suffix={appCopy.usdc} units={6} compactWhenOverflow />)}
-						</MetricField>
+									</>
+								}
+							>
+								{isRepPricingUnavailable ? repPricingUnavailableLabel : (renderRepPriceFailure(repUsdcPrice === undefined && !isLoadingRepPrices ? repUsdcFailure : undefined) ?? <CurrencyValue value={repUsdcPrice} loading={isLoadingRepPrices} suffix={appCopy.usdc} units={6} compactWhenOverflow />)}
+							</MetricField>
+						</HeaderMetricGroup>
 					) : undefined}
 				</HeaderMetricStrip>
 				<button className='overview-details-toggle secondary' type='button' aria-expanded={showEnvironmentDetails} onClick={() => setShowEnvironmentDetails(current => !current)}>

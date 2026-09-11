@@ -1091,12 +1091,49 @@
 		font-size: var(--font-label);
 	}
 
-	.overview-inline-metrics {
-		grid-template-columns: repeat(2, minmax(0, 1fr));
+	/* Groups stack, each with its caption above two metric columns. */
+	.overview-metric-group,
+	.overview-metric-group.is-secondary {
+		flex: 1 1 100%;
+		flex-direction: column;
+		align-items: stretch;
+		gap: var(--space-1);
 	}
 
-	.overview-inline-metrics > div {
-		padding: 0.45rem 0.55rem;
+	.overview-metric-group + .overview-metric-group {
+		padding-top: var(--space-2);
+		padding-left: 0;
+		border-top: 1px solid var(--divider-subtle);
+		border-left: 0;
+	}
+
+	.overview-metric-group-items,
+	.overview-metric-group.is-secondary .overview-metric-group-items {
+		grid-auto-flow: row;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: var(--space-1) var(--space-3);
+	}
+
+	/* Narrow tracks stack every label above its value so rows stay even; the tap-target slack sits below the value text. */
+	.overview-metric-group-items > div {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 0.1rem;
+	}
+
+	.overview-inline-metrics .metric-field-value {
+		flex: 0 0 auto;
+		align-items: flex-start;
+	}
+
+	/* Copyable and plain values start at the same line so a mobile row reads level. */
+	.overview-inline-metrics .currency-value.copyable {
+		align-items: flex-start;
+		padding-top: 0;
+	}
+
+	.overview-metric-group-caption {
+		margin-bottom: var(--space-1);
 	}
 
 	.overview-inline-metrics .metric-field-value,
@@ -1105,7 +1142,8 @@
 		min-height: var(--touch-target-min);
 	}
 
-	.overview-inline-metrics:not(.mobile-expanded) .overview-metric-secondary {
+	.overview-inline-metrics:not(.mobile-expanded) .overview-metric-secondary,
+	.overview-inline-metrics:not(.mobile-expanded) .overview-metric-group.is-secondary {
 		display: none;
 	}
 
@@ -1359,11 +1397,12 @@
 		margin-left: 0;
 	}
 
-	.overview-wallet-panel.is-simulation .overview-inline-metrics:not(.mobile-expanded) .overview-simulation-secondary {
+	/* A simulation strip collapses entirely until the details toggle reveals it. */
+	.overview-wallet-panel.is-simulation .overview-inline-metrics:not(.mobile-expanded) .overview-simulation-secondary,
+	.overview-wallet-panel.is-simulation .overview-inline-metrics:not(.mobile-expanded) .overview-metric-group {
 		display: none;
 	}
 
-	/* A simulation strip with every chip collapsed takes no room until the details toggle reveals it. */
 	.overview-wallet-panel.is-simulation .overview-inline-metrics:not(.mobile-expanded) {
 		margin-top: 0;
 	}
@@ -1510,6 +1549,23 @@
 	background: var(--notice-warning-gradient);
 }
 
+/* Until both groups fit on one row, the balance and price groups take one row each, sized to their content with a shared caption column. */
+@media (min-width: 801px) and (max-width: 75rem) {
+	.overview-metric-group,
+	.overview-metric-group.is-secondary {
+		flex: 0 1 100%;
+	}
+
+	.overview-metric-group-caption {
+		min-width: 6.5rem;
+	}
+
+	.overview-metric-group + .overview-metric-group {
+		padding-left: 0;
+		border-left: 0;
+	}
+}
+
 /* Once the controls no longer fit beside the brand, brand and settings share row one and the wallet and universe controls take row two. */
 @media (max-width: 56rem) {
 	.header-toolbar {
@@ -1557,7 +1613,8 @@
 }
 
 @media (max-width: 359px) {
-	.overview-inline-metrics {
+	.overview-metric-group-items,
+	.overview-metric-group.is-secondary .overview-metric-group-items {
 		grid-template-columns: minmax(0, 1fr);
 	}
 }

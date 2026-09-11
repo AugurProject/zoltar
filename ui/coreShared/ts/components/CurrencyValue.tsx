@@ -30,9 +30,13 @@ function isInlineLevel(element: Element) {
 	return display === '' || display === 'inline' || display === 'contents' || display.startsWith('inline-')
 }
 
-/** The value and its wrap shrink to fit their text, so the room for the full value is the nearest block container's content box. */
+/**
+ * The value and its wrap shrink to fit their text (and a flex item reports `display: block` even when styled inline),
+ * so the room for the full value is the nearest block container above the component's own wrap.
+ */
 function getLayoutContainer(element: HTMLElement) {
-	let container = element
+	const wrap = element.parentElement
+	let container = wrap?.parentElement ?? element
 	while (container.parentElement !== null && isInlineLevel(container)) container = container.parentElement
 	return container
 }

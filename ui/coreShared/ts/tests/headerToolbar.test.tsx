@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { HeaderMetricStrip } from '../components/HeaderMetricStrip.js'
+import { HeaderMetricGroup, HeaderMetricStrip } from '../components/HeaderMetricStrip.js'
 import { HeaderToolbar } from '../components/HeaderToolbar.js'
 import { ToolbarField } from '../components/ToolbarField.js'
 import { WalletChip, WalletChipLabel, WalletChipPlaceholder } from '../components/WalletChip.js'
@@ -65,19 +65,30 @@ describe('header toolbar primitives', () => {
 		expect(rendered.container.querySelector('.wallet-chip.is-placeholder')?.textContent).toBe('Loading…')
 	})
 
-	test('sizes the metric strip from its cells and rejects an empty strip', async () => {
+	test('sizes each metric group from its cells and rejects an empty group', async () => {
 		const rendered = await renderIntoDocument(
 			<HeaderMetricStrip expanded>
-				<div>ETH</div>
-				<div>REP</div>
-				{undefined}
+				<HeaderMetricGroup label='Balances'>
+					<div>ETH</div>
+					<div>REP</div>
+					{undefined}
+				</HeaderMetricGroup>
+				<HeaderMetricGroup label='Prices' secondary action={<button type='button'>Refresh</button>}>
+					<div>REP/ETH</div>
+				</HeaderMetricGroup>
 			</HeaderMetricStrip>,
 		)
 		cleanupRenderedComponent = rendered.cleanup
 		const strip = rendered.container.querySelector('.overview-inline-metrics')
-		if (!(strip instanceof HTMLElement)) throw new Error('Expected the metric strip')
-		expect(strip.style.getPropertyValue('--overview-metric-columns')).toBe('2')
-		expect(strip.classList.contains('mobile-expanded')).toBe(true)
-		expect(() => HeaderMetricStrip({ children: undefined })).toThrow('at least one metric cell')
+		expect(strip?.classList.contains('mobile-expanded')).toBe(true)
+		const groups = [...(strip?.querySelectorAll(':scope > .overview-metric-group') ?? [])]
+		if (!groups.every(group => group instanceof HTMLElement)) throw new Error('Expected metric groups')
+		expect(groups.map(group => [group.getAttribute('role'), group.getAttribute('aria-label'), group.style.getPropertyValue('--overview-metric-columns'), group.classList.contains('is-secondary')])).toEqual([
+			['group', 'Balances', '2', false],
+			['group', 'Prices', '1', true],
+		])
+		expect(strip?.querySelector('section')).toBeNull()
+		expect(groups[1]?.querySelector('.overview-metric-group-caption button')?.textContent).toBe('Refresh')
+		expect(() => HeaderMetricGroup({ children: undefined, label: 'Empty' })).toThrow('at least one metric cell')
 	})
 })
