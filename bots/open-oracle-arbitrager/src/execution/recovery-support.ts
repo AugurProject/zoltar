@@ -4,6 +4,7 @@ import type { Configuration } from '#config/configuration'
 import { receiptGasExpendituresWithQuorum, recoveredTransactionIntentMismatch, transactionIntentWithQuorum } from '#execution/execution-orchestration'
 import type { ReadClient, RecoveryConfiguration } from '#core/operator-types'
 import { requiredBigint, requiredRpcAddress, requiredTuple } from '#core/rpc-validation'
+import { batchRead, batchValue, type BatchReader } from '#core/batch-read'
 import { type ActiveReport } from '#monitoring/oracle-log-state'
 import { endpointLabel } from '#monitoring/connectivity'
 import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
@@ -162,11 +163,7 @@ export async function currentBlockNumberWithQuorum(clients: readonly ReadClient[
 	)
 }
 
-async function storedReport(client: ReadClient, openOracle: Address, id: bigint, blockNumber?: bigint | undefined): Promise<OpenOracleStatePreimage> {
-	const [rawGame, rawHelper] = await Promise.all([
-		blockNumber === undefined ? client.readContract({ address: openOracle, abi: openOracleAbi, functionName: 'storedGame', args: [id] }) : readContractAtBlock(client, { address: openOracle, abi: openOracleAbi, functionName: 'storedGame', args: [id] }, blockNumber),
-		blockNumber === undefined ? client.readContract({ address: openOracle, abi: openOracleAbi, functionName: 'storedHelper', args: [id] }) : readContractAtBlock(client, { address: openOracle, abi: openOracleAbi, functionName: 'storedHelper', args: [id] }, blockNumber),
-	])
+function decodeStoredReport(rawGame: unknown, rawHelper: unknown, id: bigint): OpenOracleStatePreimage {
 	const game = requiredTuple(rawGame, 20, 'Stored OpenOracle game')
 	const helper = requiredTuple(rawHelper, 3, 'Stored OpenOracle helper')
 	return {
@@ -201,20 +198,42 @@ async function storedReport(client: ReadClient, openOracle: Address, id: bigint,
 	}
 }
 
-type CoordinatorReportConfiguration = Pick<Configuration, 'connectivity' | 'coordinatorAddresses' | 'openOracle' | 'quorumRpcUrls'>
+async function storedReport(client: ReadClient, openOracle: Address, id: bigint, blockNumber?: bigint | undefined): Promise<OpenOracleStatePreimage> {
+	const [rawGame, rawHelper] = await Promise.all([
+		blockNumber === undefined ? client.readContract({ address: openOracle, abi: openOracleAbi, functionName: 'storedGame', args: [id] }) : readContractAtBlock(client, { address: openOracle, abi: openOracleAbi, functionName: 'storedGame', args: [id] }, blockNumber),
+		blockNumber === undefined ? client.readContract({ address: openOracle, abi: openOracleAbi, functionName: 'storedHelper', args: [id] }) : readContractAtBlock(client, { address: openOracle, abi: openOracleAbi, functionName: 'storedHelper', args: [id] }, blockNumber),
+	])
+	return decodeStoredReport(rawGame, rawHelper, id)
+}
 
-export async function pendingCoordinatorReports(client: ReadClient, config: Pick<CoordinatorReportConfiguration, 'coordinatorAddresses' | 'openOracle'>, blockNumber: bigint) {
-	const reports = await Promise.all(
-		config.coordinatorAddresses.map(async coordinator => {
-			const rawReportId = await readContractAtBlock(client, { address: coordinator, abi: openOraclePriceCoordinatorAbi, functionName: 'pendingReportId' }, blockNumber)
-			const reportId = requiredBigint(rawReportId, `Coordinator ${coordinator} pending report id`)
-			if (reportId === 0n) return undefined
-			const report = await storedReport(client, config.openOracle, reportId, blockNumber)
-			if (report.helper.creator.toLowerCase() !== coordinator.toLowerCase()) throw new Error(`Coordinator ${coordinator} pending report ${reportId.toString()} was created by ${report.helper.creator}`)
-			return report
-		}),
+type CoordinatorReportConfiguration = Pick<Configuration, 'connectivity' | 'coordinatorAddresses' | 'openOracle' | 'quorumRpcUrls'> & { network: Pick<Configuration['network'], 'multicall3'> }
+
+/** Reads every coordinator's pending report id in one batch, then every pending report's stored state in a second. */
+export async function pendingCoordinatorReports(client: BatchReader, config: Pick<CoordinatorReportConfiguration, 'coordinatorAddresses' | 'network' | 'openOracle'>, blockNumber: bigint) {
+	const pendingIds = await batchRead(
+		client,
+		config.network.multicall3,
+		config.coordinatorAddresses.map(coordinator => ({ address: coordinator, abi: openOraclePriceCoordinatorAbi, functionName: 'pendingReportId' })),
+		blockNumber,
 	)
-	return reports.filter(report => report !== undefined)
+	const pending = config.coordinatorAddresses.flatMap((coordinator, index) => {
+		const reportId = requiredBigint(batchValue(pendingIds[index], `Coordinator ${coordinator} pending report id`), `Coordinator ${coordinator} pending report id`)
+		return reportId === 0n ? [] : [{ coordinator, reportId }]
+	})
+	const stored = await batchRead(
+		client,
+		config.network.multicall3,
+		pending.flatMap(({ reportId }) => [
+			{ address: config.openOracle, abi: openOracleAbi, functionName: 'storedGame', args: [reportId] },
+			{ address: config.openOracle, abi: openOracleAbi, functionName: 'storedHelper', args: [reportId] },
+		]),
+		blockNumber,
+	)
+	return pending.map(({ coordinator, reportId }, index) => {
+		const report = decodeStoredReport(batchValue(stored[index * 2], `Stored OpenOracle game ${reportId.toString()}`), batchValue(stored[index * 2 + 1], `Stored OpenOracle helper ${reportId.toString()}`), reportId)
+		if (report.helper.creator.toLowerCase() !== coordinator.toLowerCase()) throw new Error(`Coordinator ${coordinator} pending report ${reportId.toString()} was created by ${report.helper.creator}`)
+		return report
+	})
 }
 
 export async function pendingCoordinatorReportsWithQuorum(clients: readonly ReadClient[], config: CoordinatorReportConfiguration, blockNumber: bigint) {

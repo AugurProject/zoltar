@@ -1,4 +1,4 @@
-import { approvedUniverseRepTokens, loadUniverseTree } from '@zoltar/bot-shared/monitoring/universe-policy'
+import { approvedUniverseRepTokens, loadUniverseTreeBatched } from '@zoltar/bot-shared/monitoring/universe-policy'
 import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { canonicalZoltar } from '#config/network'
 import type { Configuration } from '#config/configuration'
@@ -10,7 +10,7 @@ export async function loadApprovedUniverses(readers: readonly ReadClient[], conf
 		'approved universe REP identities',
 		readers.map(async (reader, index) => ({
 			endpoint: endpoints[index] ?? '',
-			value: await loadUniverseTree(reader, canonicalZoltar(config.network.name), blockNumber),
+			value: await loadUniverseTreeBatched(reader, canonicalZoltar(config.network.name), blockNumber, config.network.multicall3),
 		})),
 	)
 	return { universes, approvedTokens: approvedUniverseRepTokens(universes, config.operatorSettings.approvedUniverses) }

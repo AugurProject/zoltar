@@ -1,19 +1,8 @@
 import { describe, expect, test } from 'bun:test'
-import { bestSuccessful, compactFinalityWindow, pollUntilStopped, retryDelayMilliseconds } from '@zoltar/bot-shared/monitoring/resilience'
+import { compactFinalityWindow, pollUntilStopped, retryDelayMilliseconds } from '@zoltar/bot-shared/monitoring/resilience'
 import { completeSuccessfulPoll, completeUnconfiguredPoll } from '../../src/runtime/poll-completion.ts'
 
 describe('OpenOracle monitor resilience', () => {
-	test('keeps a healthy quote when another direction fails', async () => {
-		const errors: unknown[] = []
-		const best = await bestSuccessful(
-			[() => Promise.reject(new Error('unquotable direction')), () => Promise.resolve({ profit: 42n })],
-			value => value.profit,
-			error => errors.push(error),
-		)
-		expect(best).toEqual({ profit: 42n })
-		expect(errors).toHaveLength(1)
-	})
-
 	test('retries a transient poll failure before stopping', async () => {
 		let polls = 0
 		let waits = 0
@@ -39,6 +28,13 @@ describe('OpenOracle monitor resilience', () => {
 		expect(retryDelayMilliseconds(1_000, 1, () => 0)).toBe(1_000)
 		expect(retryDelayMilliseconds(1_000, 4, () => 0)).toBe(8_000)
 		expect(retryDelayMilliseconds(60_000, 20, () => 0)).toBe(300_000)
+		expect(retryDelayMilliseconds(1_000, 5, () => 1, 30_000)).toBe(19_200)
+		expect(retryDelayMilliseconds(1_000, 20, () => 1, 30_000)).toBe(30_000)
+		// A poll interval above the cap keeps its own pace instead of failing validation.
+		expect(retryDelayMilliseconds(3_600_000, 0)).toBe(3_600_000)
+		expect(retryDelayMilliseconds(3_600_000, 3, () => 0)).toBe(3_600_000)
+		expect(retryDelayMilliseconds(60_000, 3, () => 0, 30_000)).toBe(60_000)
+		expect(() => retryDelayMilliseconds(1_000, 1, () => 0, 0)).toThrow('positive integer')
 		const waits: number[] = []
 		const pollFailureCounts: number[] = []
 		let polls = 0

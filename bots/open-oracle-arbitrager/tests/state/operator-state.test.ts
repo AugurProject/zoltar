@@ -787,8 +787,12 @@ test('publishes absent deployments without console errors, keeps execution block
 		error => error,
 	)
 	const logged = spyOn(console, 'error').mockImplementation(() => {})
+	const noticed = spyOn(console, 'log').mockImplementation(() => {})
 	try {
 		recordMarketDiscoveryFailure(state, failure)
+		recordMarketDiscoveryFailure(state, failure)
+		expect(noticed).toHaveBeenCalledTimes(1)
+		expect(String(noticed.mock.calls[0]?.[0])).toContain('deploymentUnavailable=No contract code')
 		const snapshot = publicOperatorSnapshot(operatorSnapshot(state, strategy(), submission, connectivity, fixed))
 		expect(snapshot.blockNumber).toBe('100')
 		expect(snapshot.blockTimestamp).toBe('123')
@@ -805,5 +809,6 @@ test('publishes absent deployments without console errors, keeps execution block
 		expect(logged).toHaveBeenCalledTimes(1)
 	} finally {
 		logged.mockRestore()
+		noticed.mockRestore()
 	}
 })

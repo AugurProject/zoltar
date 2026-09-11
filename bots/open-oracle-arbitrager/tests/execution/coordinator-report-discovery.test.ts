@@ -7,6 +7,7 @@ import { pendingCoordinatorReports, pendingCoordinatorReportsWithQuorum, replace
 import { applyCoordinatorReports, type ActiveReport } from '#monitoring/oracle-log-state'
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
 import { type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
+import { multicallProvider } from '../helpers/multicall-provider.ts'
 
 const activeCoordinator = getAddress('0x0000000000000000000000000000000000000001')
 const idleCoordinator = getAddress('0x0000000000000000000000000000000000000002')
@@ -14,6 +15,8 @@ const openOracle = getAddress('0x0000000000000000000000000000000000000003')
 const reporter = getAddress('0x0000000000000000000000000000000000000004')
 const weth = getAddress('0x0000000000000000000000000000000000000005')
 const rep = getAddress('0x0000000000000000000000000000000000000006')
+const multicall3 = getAddress('0x0000000000000000000000000000000000000007')
+const network = { multicall3 }
 
 function requiredHex(value: unknown) {
 	if (typeof value !== 'string' || !isHex(value, { strict: true })) throw new Error('Expected hex RPC request data')
@@ -75,40 +78,41 @@ describe('configured coordinator report discovery', () => {
 	test('loads current report state at one block without querying event history', async () => {
 		const methods: string[] = []
 		const blockTags: unknown[] = []
+		const contractReads: string[] = []
+		const inner = multicallProvider(multicall3, ({ blockTag, data, to }) => {
+			blockTags.push(blockTag)
+			const target = to.toLowerCase()
+			if (target === activeCoordinator.toLowerCase() || target === idleCoordinator.toLowerCase()) {
+				const decoded = decodeFunctionData({ abi: openOraclePriceCoordinatorAbi, data: requiredHex(data) })
+				if (decoded.functionName !== 'pendingReportId') throw new Error(`Unexpected coordinator read ${decoded.functionName}`)
+				contractReads.push(decoded.functionName)
+				return encodeAbiParameters([{ type: 'uint256' }], [target === activeCoordinator.toLowerCase() ? 7n : 0n])
+			}
+			if (target !== openOracle.toLowerCase()) throw new Error(`Unexpected contract ${target}`)
+			const decoded = decodeFunctionData({ abi: openOracleAbi, data: requiredHex(data) })
+			contractReads.push(decoded.functionName)
+			if (decoded.functionName === 'storedGame') {
+				return encodeAbiParameters(gameOutputs, [1_000n, 2_000n, reporter, 90n, 0n, weth, 89n, 300n, 10_000n, activeCoordinator, 1n, rep, 1n, 10n, 20n, 140n, activeCoordinator, 1_000_000n, 30n, 7n])
+			}
+			if (decoded.functionName === 'storedHelper') {
+				return encodeAbiParameters([{ type: 'address' }, { type: 'uint48' }, { type: 'uint48' }], [activeCoordinator, 80n, 79n])
+			}
+			throw new Error(`Unexpected OpenOracle read ${decoded.functionName}`)
+		})
 		const provider: EIP1193Provider = {
 			request: parameters => {
 				methods.push(parameters.method)
-				if (parameters.method !== 'eth_call' || !Array.isArray(parameters.params)) throw new Error(`Unexpected RPC method ${parameters.method}`)
-				const request = parameters.params[0]
-				if (typeof request !== 'object' || request === null || !('to' in request) || !('data' in request)) throw new Error('Malformed contract read')
-				blockTags.push(parameters.params[1])
-				const to = String(request.to).toLowerCase()
-				const data = requiredHex(request.data)
-				if (to === activeCoordinator.toLowerCase() || to === idleCoordinator.toLowerCase()) {
-					const decoded = decodeFunctionData({ abi: openOraclePriceCoordinatorAbi, data })
-					if (decoded.functionName !== 'pendingReportId') throw new Error(`Unexpected coordinator read ${decoded.functionName}`)
-					return Promise.resolve(encodeAbiParameters([{ type: 'uint256' }], [to === activeCoordinator.toLowerCase() ? 7n : 0n]))
-				}
-				if (to !== openOracle.toLowerCase()) throw new Error(`Unexpected contract ${to}`)
-				const decoded = decodeFunctionData({ abi: openOracleAbi, data })
-				if (decoded.functionName === 'storedGame') {
-					return Promise.resolve(encodeAbiParameters(gameOutputs, [1_000n, 2_000n, reporter, 90n, 0n, weth, 89n, 300n, 10_000n, activeCoordinator, 1n, rep, 1n, 10n, 20n, 140n, activeCoordinator, 1_000_000n, 30n, 7n]))
-				}
-				if (decoded.functionName === 'storedHelper') {
-					return Promise.resolve(encodeAbiParameters([{ type: 'address' }, { type: 'uint48' }, { type: 'uint48' }], [activeCoordinator, 80n, 79n]))
-				}
-				if (decoded.functionName === 'disputeHistory') {
-					return Promise.resolve(encodeAbiParameters([{ type: 'uint128' }, { type: 'uint128' }, { type: 'uint128' }, { type: 'uint48' }], [1_400n, 2_300n, 15n, 95n]))
-				}
-				throw new Error(`Unexpected OpenOracle read ${decoded.functionName}`)
+				return inner.request(parameters)
 			},
 		}
 		const client = createPublicClient({ chain: mainnet, transport: custom(provider) })
-		const reports = await pendingCoordinatorReports(client, { coordinatorAddresses: [activeCoordinator, idleCoordinator], openOracle }, 100n)
+		const reports = await pendingCoordinatorReports(client, { coordinatorAddresses: [activeCoordinator, idleCoordinator], network, openOracle }, 100n)
 
 		expect(reports.map(report => report.helper.reportId)).toEqual([7n])
 		expect(reports[0]?.game.currentAmount2).toBe(2_000n)
-		expect(methods).toEqual(['eth_call', 'eth_call', 'eth_call', 'eth_call'])
+		// Both coordinators share one batched request and the pending report's game and helper share another.
+		expect(methods).toEqual(['eth_call', 'eth_call'])
+		expect(contractReads).toEqual(['pendingReportId', 'pendingReportId', 'storedGame', 'storedHelper'])
 		expect(blockTags).toEqual(['0x64', '0x64', '0x64', '0x64'])
 	})
 
@@ -140,35 +144,40 @@ describe('configured coordinator report discovery', () => {
 		}
 		const provider = (reportId: bigint, unavailable = false, reorg = false, missingBlockHash = false): EIP1193Provider => {
 			let blockReads = 0
+			const inner = multicallProvider(
+				multicall3,
+				({ data, to }) => {
+					const target = to.toLowerCase()
+					if (target === activeCoordinator.toLowerCase()) {
+						const decoded = decodeFunctionData({ abi: openOraclePriceCoordinatorAbi, data: requiredHex(data) })
+						if (decoded.functionName !== 'pendingReportId') throw new Error(`Unexpected coordinator read ${decoded.functionName}`)
+						return encodeAbiParameters([{ type: 'uint256' }], [reportId])
+					}
+					if (target !== openOracle.toLowerCase()) throw new Error(`Unexpected contract ${target}`)
+					const decoded = decodeFunctionData({ abi: openOracleAbi, data: requiredHex(data) })
+					if (decoded.functionName === 'storedGame') return encodeAbiParameters(gameOutputs, [1_000n, 2_000n, reporter, 90n, 0n, weth, 89n, 300n, 10_000n, activeCoordinator, 1n, rep, 1n, 10n, 20n, 140n, activeCoordinator, 1_000_000n, 30n, 7n])
+					if (decoded.functionName === 'storedHelper') return encodeAbiParameters([{ type: 'address' }, { type: 'uint48' }, { type: 'uint48' }], [activeCoordinator, 80n, 79n])
+					if (decoded.functionName === 'disputeHistory') return encodeAbiParameters([{ type: 'uint128' }, { type: 'uint128' }, { type: 'uint128' }, { type: 'uint48' }], [1_400n, 2_300n, 15n, 95n])
+					throw new Error(`Unexpected OpenOracle read ${decoded.functionName}`)
+				},
+				parameters => {
+					if (parameters.method === 'eth_getBlockByNumber') {
+						blockReads += 1
+						return { ...rawBlock, hash: missingBlockHash ? undefined : reorg && blockReads > 1 ? (`0x${'bc'.repeat(32)}` as Hex) : blockHash }
+					}
+					throw new Error(`Unexpected RPC method ${parameters.method}`)
+				},
+			)
 			return {
 				request: parameters => {
 					methods.push(parameters.method)
 					if (unavailable) throw new ConnectivityDegradedError('RPC connection unavailable')
-					if (parameters.method === 'eth_getBlockByNumber') {
-						blockReads += 1
-						return Promise.resolve({ ...rawBlock, hash: missingBlockHash ? undefined : reorg && blockReads > 1 ? (`0x${'bc'.repeat(32)}` as Hex) : blockHash })
-					}
-					if (parameters.method !== 'eth_call' || !Array.isArray(parameters.params)) throw new Error(`Unexpected RPC method ${parameters.method}`)
-					const request = parameters.params[0]
-					if (typeof request !== 'object' || request === null || !('to' in request) || !('data' in request)) throw new Error('Malformed contract read')
-					const to = String(request.to).toLowerCase()
-					const data = requiredHex(request.data)
-					if (to === activeCoordinator.toLowerCase()) {
-						const decoded = decodeFunctionData({ abi: openOraclePriceCoordinatorAbi, data })
-						if (decoded.functionName !== 'pendingReportId') throw new Error(`Unexpected coordinator read ${decoded.functionName}`)
-						return Promise.resolve(encodeAbiParameters([{ type: 'uint256' }], [reportId]))
-					}
-					if (to !== openOracle.toLowerCase()) throw new Error(`Unexpected contract ${to}`)
-					const decoded = decodeFunctionData({ abi: openOracleAbi, data })
-					if (decoded.functionName === 'storedGame') return Promise.resolve(encodeAbiParameters(gameOutputs, [1_000n, 2_000n, reporter, 90n, 0n, weth, 89n, 300n, 10_000n, activeCoordinator, 1n, rep, 1n, 10n, 20n, 140n, activeCoordinator, 1_000_000n, 30n, 7n]))
-					if (decoded.functionName === 'storedHelper') return Promise.resolve(encodeAbiParameters([{ type: 'address' }, { type: 'uint48' }, { type: 'uint48' }], [activeCoordinator, 80n, 79n]))
-					if (decoded.functionName === 'disputeHistory') return Promise.resolve(encodeAbiParameters([{ type: 'uint128' }, { type: 'uint128' }, { type: 'uint128' }, { type: 'uint48' }], [1_400n, 2_300n, 15n, 95n]))
-					throw new Error(`Unexpected OpenOracle read ${decoded.functionName}`)
+					return inner.request(parameters)
 				},
 			}
 		}
 		const client = (reportId: bigint, unavailable = false, reorg = false, missingBlockHash = false) => createPublicClient({ chain: mainnet, transport: custom(provider(reportId, unavailable, reorg, missingBlockHash)) })
-		const config = { connectivity: { publicRpcUrls: ['https://public.example'], readRpcUrl: 'https://primary.example' }, coordinatorAddresses: [activeCoordinator], openOracle, quorumRpcUrls: ['https://secondary.example', 'https://tertiary.example'] }
+		const config = { connectivity: { publicRpcUrls: ['https://public.example'], readRpcUrl: 'https://primary.example' }, coordinatorAddresses: [activeCoordinator], network, openOracle, quorumRpcUrls: ['https://secondary.example', 'https://tertiary.example'] }
 
 		const reports = await pendingCoordinatorReportsWithQuorum([client(7n), client(7n), client(7n, true)], config, 100n)
 

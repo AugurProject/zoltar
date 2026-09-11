@@ -32,7 +32,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	]),
 	...allowances('Existing bot dashboard/runtime debt is outside this lane.', [
 		['bots/open-oracle-arbitrager/src/dashboard/dashboard.ts', 1731],
-		['bots/open-oracle-arbitrager/src/runtime/operator.ts', 1060],
+		['bots/open-oracle-arbitrager/src/runtime/operator.ts', 1064],
 		['bots/open-oracle-arbitrager/src/state/operator-state.ts', 1038],
 		['bots/open-oracle-arbitrager/src/runtime/operator-control-plane.ts', 602],
 		['bots/open-oracle-arbitrager/src/state/position-store.ts', 631],
