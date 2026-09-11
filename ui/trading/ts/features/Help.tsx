@@ -18,6 +18,8 @@ export function Help() {
 			<section class='section prose'>
 				<h2>{appCopy.priceMeaningTitle}</h2>
 				<p>{appCopy.priceMeaningDescription}</p>
+				<h2>{appCopy.shareValueTitle}</h2>
+				<p>{appCopy.shareValueDescription}</p>
 				<h2>{appCopy.remainingSharesTitle}</h2>
 				<p>{appCopy.remainingSharesDescription}</p>
 				<p>

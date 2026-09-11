@@ -1,4 +1,4 @@
-import { formatOutcomeAmount, formatShareAmount, formatUnits } from '../lib/format.js'
+import { formatCollateralEth, formatCompleteSetValue, formatLpValue, formatOutcomeValue } from '../lib/shareValue.js'
 import { Status } from '../components/Status.js'
 import { SecurityPoolAddressLink } from '../components/TradingAddress.js'
 import type { LiveBalances, LiveMarket } from '../protocol/live.js'
@@ -20,44 +20,41 @@ function LivePortfolioBalanceMetrics({ market, balances }: { market: LiveMarket;
 			<dl class='metrics'>
 				<div>
 					<dt>{portfolioCopy.yes}</dt>
-					<dd>{formatOutcomeAmount(balances.yes, portfolioCopy.yes)}</dd>
+					<dd>{formatOutcomeValue(balances.yes, portfolioCopy.yes, market)}</dd>
 				</div>
 				<div>
 					<dt>{portfolioCopy.no}</dt>
-					<dd>{formatOutcomeAmount(balances.no, portfolioCopy.no)}</dd>
+					<dd>{formatOutcomeValue(balances.no, portfolioCopy.no, market)}</dd>
 				</div>
 				<div>
 					<dt>{portfolioCopy.invalid}</dt>
-					<dd>{formatOutcomeAmount(balances.invalid, portfolioCopy.invalid)}</dd>
+					<dd>{formatOutcomeValue(balances.invalid, portfolioCopy.invalid, market)}</dd>
 				</div>
 				<div>
 					<dt>{portfolioCopy.lpTokens}</dt>
-					<dd>
-						{formatUnits(balances.lp)} {portfolioCopy.lp}
-					</dd>
+					<dd>{formatLpValue(balances.lp, market, 4, 'down')}</dd>
 				</div>
 				<div>
 					<dt>{portfolioCopy.lpYesClaim}</dt>
-					<dd>{formatOutcomeAmount(yesClaim, portfolioCopy.yes)}</dd>
+					<dd>{formatOutcomeValue(yesClaim, portfolioCopy.yes, market)}</dd>
 				</div>
 				<div>
 					<dt>{portfolioCopy.lpNoClaim}</dt>
-					<dd>{formatOutcomeAmount(noClaim, portfolioCopy.no)}</dd>
+					<dd>{formatOutcomeValue(noClaim, portfolioCopy.no, market)}</dd>
 				</div>
 				<div>
 					<dt>{portfolioCopy.claimCoveredByInvalid}</dt>
-					<dd>{formatShareAmount(coveredSets)}</dd>
+					<dd>{formatCompleteSetValue(coveredSets, market)}</dd>
 				</div>
 				<div>
 					<dt>{portfolioCopy.maximumInsuredYesExit}</dt>
-					<dd>{formatOutcomeAmount(maximumYesExit, portfolioCopy.yes)}</dd>
+					<dd>{formatCollateralEth(maximumYesExit, market, 'down')}</dd>
 				</div>
 				<div>
 					<dt>{portfolioCopy.maximumInsuredNoExit}</dt>
-					<dd>{formatOutcomeAmount(maximumNoExit, portfolioCopy.no)}</dd>
+					<dd>{formatCollateralEth(maximumNoExit, market, 'down')}</dd>
 				</div>
 			</dl>
-			<p>{portfolioCopy.invalidOwnershipNotice}</p>
 		</>
 	)
 }
