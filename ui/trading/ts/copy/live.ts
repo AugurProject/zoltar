@@ -1,3 +1,5 @@
+import * as appCopy from './app.js'
+
 const marketDataUnavailable = 'Market data unavailable'
 const pairNotCreated = 'Pair not created'
 const tradingOpen = 'Trading open'
@@ -28,8 +30,6 @@ const registeredVaults = 'Registered vaults'
 const perSecondRetentionMultiplier = 'Per-second retention multiplier'
 const totalAndFeeEligibleCapacityOwnership = 'Total / fee-eligible capacity ownership'
 const mintingCapacity = 'Minting capacity'
-const checkpointedCollateralShareRatio = 'Checkpointed collateral / share ratio'
-const noCompleteSetsYet = 'No complete sets yet'
 const unknownDiscovery = 'unknown discovery error'
 const loadingSecurityPoolDetails = 'Loading security pool details…'
 const retryDiscovery = 'Retry discovery'
@@ -37,12 +37,10 @@ const securityPoolUnavailableInUniverse = 'This security pool is not available i
 const discoveringSecurityPoolsFromFactory = 'Discovering SecurityPools from the configured factory…'
 const noSecurityPoolsInUniverse = 'No SecurityPools are deployed in the selected universe.'
 const positions = 'Positions'
-const refresh = 'Refresh'
 const discoveringSecurityPools = 'Discovering SecurityPools…'
 const securityPoolPages = 'SecurityPool pages'
 const previousPools = 'Previous pools'
 const nextPools = 'Next pools'
-const backToSecurityPools = 'Back to SecurityPools'
 const securityPool = 'SecurityPool'
 const securityPoolLabel = 'Security pool'
 const pair = 'Pair'
@@ -137,8 +135,6 @@ export const liveCopy = {
 	perSecondRetentionMultiplier,
 	totalAndFeeEligibleCapacityOwnership,
 	mintingCapacity,
-	checkpointedCollateralShareRatio,
-	noCompleteSetsYet,
 	unknownDiscovery,
 	loadingSecurityPoolDetails,
 	retryDiscovery,
@@ -146,17 +142,25 @@ export const liveCopy = {
 	discoveringSecurityPoolsFromFactory,
 	noSecurityPoolsInUniverse,
 	positions,
-	refresh,
 	discoveringSecurityPools,
 	marketCreated: (title: string) => `Market created: ${title}`,
-	eligibleSecurityPools: 'Eligible SecurityPools',
 	noEligiblePools: 'No SecurityPools on this page are available for a new market.',
 	noMarketsOnPage: 'No trading markets on this page.',
+	browseMarkets: appCopy.browseMarkets,
+	browseSecurityPools: appCopy.browseSecurityPools,
+	browseSecurityPoolsDescription: 'SecurityPools in the selected universe without a trading market.',
+	trade: 'Trade',
+	manageLiquidity: 'Liquidity',
+	createMarketAction: 'Create market',
+	poolDetails: 'Details',
+	backToMarket: '← Market',
+	backToCreateMarket: '← Create new market',
+	backToBrowseMarkets: '← Browse markets',
+	backToBrowseSecurityPools: '← Browse SecurityPools',
 	notDeployed: 'Not deployed',
 	securityPoolPages,
 	previousPools,
 	nextPools,
-	backToSecurityPools,
 	securityPool,
 	securityPoolLabel,
 	pair,

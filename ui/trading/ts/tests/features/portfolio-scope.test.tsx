@@ -26,8 +26,8 @@ const market: LiveMarket = {
 	awaitingForkContinuation: false,
 	universeForkTime: 0n,
 	vaultCount: 1n,
-	shareTokenSupplyAttoShares: 0n,
-	settlementCollateralAttoEth: 0n,
+	shareTokenSupplyAttoShares: 100n * 10n ** 18n,
+	settlementCollateralAttoEth: 100n * 10n ** 18n,
 	currentRetentionRate: 10n ** 18n,
 	totalCapacityOwnershipAttoRep: 1n,
 	feeEligibleCapacityOwnershipAttoRep: 1n,
@@ -89,6 +89,9 @@ describe('live portfolio scope', () => {
 		expect(rendered.container.textContent).not.toContain('Question ID')
 		expect(rendered.container.textContent).toContain('1 YES')
 		expect(rendered.container.textContent).toContain('4 YES')
+		expect(rendered.container.textContent).toContain('0 complete sets')
+		expect(rendered.container.textContent).toContain('Maximum insured YES exit0 ETH')
+		expect(rendered.container.textContent).not.toContain('Transferring LP tokens')
 		expect(rendered.container.querySelectorAll('[data-portfolio-pool]')).toHaveLength(2)
 		expect(rendered.container.textContent).not.toContain('These balances and LP claims belong only')
 		expect(rendered.container.textContent).not.toContain('live RPC')
@@ -96,17 +99,7 @@ describe('live portfolio scope', () => {
 	})
 
 	test('keeps live pool identifiers and operational details in the security pool view', async () => {
-		let selectedPool: Address | undefined
-		const rendered = await renderIntoDocument(
-			<LiveSecurityPoolDetails
-				market={{ ...market, feeBps: 47n }}
-				retry={() => undefined}
-				workflowLocked={false}
-				onSelect={selected => {
-					selectedPool = selected.pool
-				}}
-			/>,
-		)
+		const rendered = await renderIntoDocument(<LiveSecurityPoolDetails market={{ ...market, feeBps: 47n }} retry={() => undefined} workflowLocked={false} nowSeconds={market.endTime - 1n} />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.textContent).toContain(pool)
 		expect(rendered.container.textContent).toContain(shareToken)
@@ -117,8 +110,15 @@ describe('live portfolio scope', () => {
 		expect(rendered.container.querySelector(`a[href="#/create-market/${pool}"]`)?.textContent).toContain('Deploy trading pool')
 		expect(rendered.container.textContent).toContain('available to browse')
 		expect(rendered.container.textContent).toContain('Trading fee: 0.47%')
-		rendered.container.querySelector<HTMLAnchorElement>(`a[href="#/create-market/${pool}"]`)?.click()
-		expect(selectedPool).toBe(pool)
+		expect(rendered.container.textContent).not.toContain('Checkpointed collateral')
+		expect(rendered.container.querySelector('.route-header a[href="#/security-pools"]')).not.toBeNull()
+	})
+
+	test('returns from a pool with a trading pair to the markets browse route', async () => {
+		const rendered = await renderIntoDocument(<LiveSecurityPoolDetails market={{ ...market, pair: `0x${'90'.repeat(20)}` }} retry={() => undefined} workflowLocked={false} nowSeconds={market.endTime - 1n} />)
+		cleanupRendered = rendered.cleanup
+		expect(rendered.container.querySelector('.route-header a[href="#/markets"]')).not.toBeNull()
+		expect(rendered.container.querySelector(`a[href="#/market/${pool}"]`)?.textContent).toContain('Trade this pool')
 	})
 
 	test('shows the deployed fee when an existing trading pool needs initialization', async () => {

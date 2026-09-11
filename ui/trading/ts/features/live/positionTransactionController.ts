@@ -7,6 +7,7 @@ import type { LiveTradingControllerServices, Quote } from './liveTradingTypes.js
 import type { useTransactionWorkflow } from './useTransactionWorkflow.js'
 import type { TransactionContext } from './transactionWorkflow.js'
 import { broadcastUncertainMessage, failedSubmissionTransition, parseSlippageBps, parseTransactionValidityMinutes, type GuardedWalletWrite, type WorkflowOwner } from '../liveTradingControllerHelpers.js'
+import { collateralAttoEthToAttoShares } from '../../lib/shareValue.js'
 
 type RequestGuard = ReturnType<typeof createLatestRequestGuard>
 type TransactionWorkflow = ReturnType<typeof useTransactionWorkflow>
@@ -44,11 +45,15 @@ export function createPositionTransactionController({
 	marketPageStart: bigint
 }) {
 	const { mode, side, slippage, transactionValidityMinutes, quote, setQuote, workflowState, dispatchWorkflow, positionWorkflow, positionWorkflowLockedRef, liquidityWorkflowLockedRef, updatePositionWorkflowLock, setMode, setSide, setAmount, setSlippage, setTransactionValidityMinutes } = workflow
+	// Entries spend the entered ETH directly; exits redeem the complete-set share amount worth the entered collateral value.
+	const requestedAmount = (market: LiveMarket) => (mode === 'entry' || parsedAmount.value === undefined ? parsedAmount.value : collateralAttoEthToAttoShares(parsedAmount.value, market))
 
 	async function simulate() {
 		const slippageBps = parseSlippageBps(slippage)
 		const validityMinutes = parseTransactionValidityMinutes(transactionValidityMinutes)
-		if (configuration === undefined || selected === undefined || account === undefined || walletClient === undefined || parsedAmount.value === undefined || parsedAmount.value === 0n || slippageBps === undefined || validityMinutes === undefined) return
+		if (configuration === undefined || selected === undefined || account === undefined || walletClient === undefined || slippageBps === undefined || validityMinutes === undefined) return
+		const amount = requestedAmount(selected)
+		if (amount === undefined || amount === 0n) return
 		const request = simulationRequests.begin()
 		const context = nextTransactionContext(account, selected, configuration.chainId)
 		try {
@@ -56,8 +61,8 @@ export function createPositionTransactionController({
 			const quoteContext = { account, configuration, walletClient }
 			const nextQuote: Quote =
 				mode === 'entry'
-					? { ...quoteContext, kind: 'entry', value: await services.simulateEntry(walletClient, configuration, selected, account, side, parsedAmount.value, validityMinutes, slippageBps) }
-					: { ...quoteContext, kind: 'exit', value: await services.simulateExit(walletClient, configuration, selected, account, side, parsedAmount.value, validityMinutes, slippageBps) }
+					? { ...quoteContext, kind: 'entry', value: await services.simulateEntry(walletClient, configuration, selected, account, side, amount, validityMinutes, slippageBps) }
+					: { ...quoteContext, kind: 'exit', value: await services.simulateExit(walletClient, configuration, selected, account, side, amount, validityMinutes, slippageBps) }
 			if (!simulationRequests.isCurrent(request)) return
 			setQuote(nextQuote)
 			dispatchWorkflow({ type: 'simulation-succeeded', context })
@@ -87,7 +92,7 @@ export function createPositionTransactionController({
 				quote.value.market.pool !== selected.pool ||
 				quote.value.side !== side ||
 				quote.kind !== mode ||
-				parsedAmount.value !== quotedAmount
+				requestedAmount(quote.value.market) !== quotedAmount
 			)
 				throw new Error('Trade inputs changed; simulate the current selection again')
 			simulationRequests.invalidate()

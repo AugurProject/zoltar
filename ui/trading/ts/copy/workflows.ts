@@ -25,7 +25,6 @@ export const defaultTransactionAction = 'Transaction'
 export const simulatingRouterCall = 'Simulating router call…'
 export const authoritativeSimulationReady = 'Fresh authoritative simulation ready'
 export const transactionWorkflowNeedsAttention = 'Transaction workflow needs attention'
-export const readyToSimulate = 'Ready to simulate after wallet balances and inputs are valid'
 export const transactionProtection = 'Transaction protection'
 export const slippageTolerance = 'Slippage tolerance'
 export const percent = '%'
@@ -48,30 +47,23 @@ export const yes = 'YES'
 export const no = 'NO'
 export const invalid = 'INVALID'
 export const ethAmount = 'ETH amount'
-export const completeSetSharesToRedeem = 'Complete-set shares to redeem'
+export const completeSetValueToRedeem = 'Complete-set value to redeem'
 export const eth = 'ETH'
-export const shares = 'shares'
-export const poolAndReserveDetails = 'Pool and reserve details'
-export const submittedEthPoolPrefix = 'Submitted ETH goes to Statoblast security pool'
-export const submittedEthPoolSuffix = 'That exact pool reconciles collateral and mints complete-set shares at its live rate.'
-export const yesReserve = 'YES reserve'
-export const noReserve = 'NO reserve'
 export const fullTradeBreakdown = 'Full trade breakdown'
 export const simulationBlock = 'Simulation block'
-export const completeSetShares = 'Complete-set shares'
+export const completeSets = 'Complete sets'
 export const oppositeOutcomeSwapped = 'Opposite outcome swapped'
 export const invalidRequiredUppercase = 'INVALID required'
 export const estimatedEthOut = 'Estimated ETH out'
 export const ammFee = 'AMM fee'
-export const averageEthPerLongShare = 'Average ETH per long share'
 export const minimumEthReceived = 'Minimum ETH received'
-export const simulatedCompleteSetRate = 'Simulated effective complete-set rate'
 export const deadline = 'Deadline'
 export const conditionalYesBeforeAfter = 'Conditional YES before / after'
 export const conditionalYesPriceImpact = 'Conditional YES price impact'
 export const unavailableMetric = '—'
 export const positiveSign = '+'
 export const percentagePoints = 'percentage points'
+export const amountTooSmall = 'Amount too small to redeem any ETH'
 
 export function enterOutcome(outcome: 'YES' | 'NO') {
 	return `Enter ${outcome}`
@@ -141,6 +133,14 @@ export function migrationSubmission(count: number) {
 	return `Submit migration to ${count.toString()} child ${count === 1 ? 'branch' : 'branches'}`
 }
 
+export function revalidatingAfterReceipt(status: string) {
+	return `${status} · ${refreshingWalletBalances}`
+}
+
 export function simulatingTrade(mode: 'entry' | 'exit', side: 'YES' | 'NO') {
 	return `Simulating ${mode === 'entry' ? `Enter ${side}` : `insured ${side} exit`}…`
+}
+
+export function averageOutcomePrice(outcome: 'YES' | 'NO') {
+	return `Average ${outcome} price`
 }
