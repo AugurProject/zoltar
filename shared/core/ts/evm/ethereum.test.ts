@@ -3079,6 +3079,88 @@ describe('shared ethereum compatibility layer', () => {
 		expect(calls).toHaveLength(1)
 	})
 
+	test('chained public client extensions keep earlier extensions and receive the extended client', () => {
+		const client = createPublicClient({ transport: custom(createProvider(() => undefined, [])) })
+		const seenByFirst: object[] = []
+		const seenBySecond: object[] = []
+		const extended = client
+			.extend(base => {
+				seenByFirst.push(base)
+				return { first: () => 'first' as const }
+			})
+			.extend(withFirst => {
+				seenBySecond.push(withFirst)
+				return { second: () => withFirst.first() }
+			})
+			.extend(withBoth => ({ third: () => `${withBoth.first()}+${withBoth.second()}` as const }))
+
+		expect(seenByFirst).toHaveLength(1)
+		expect(seenBySecond).toHaveLength(1)
+		expect(seenBySecond[0]).toHaveProperty('first')
+		expect(seenBySecond[0]).toHaveProperty('extend')
+		expect(extended.first()).toBe('first')
+		expect(extended.second()).toBe('first')
+		expect(extended.third()).toBe('first+first')
+		expect(typeof extended.getBlockNumber).toBe('function')
+		expect(typeof extended.extend).toBe('function')
+	})
+
+	test('chained wallet client extensions keep earlier extensions and receive the extended client', () => {
+		const client = createWalletClient({ account: OWNER_ADDRESS, transport: custom(createProvider(() => undefined, [])) })
+		const extended = client
+			.extend(base => ({ first: () => base.account.address }))
+			.extend(withFirst => ({ second: () => withFirst.first() }))
+			.extend(publicActions)
+			.extend(withActions => ({ third: () => `${withActions.second()}!` }))
+
+		expect(extended.first()).toBe(getAddress(OWNER_ADDRESS))
+		expect(extended.second()).toBe(getAddress(OWNER_ADDRESS))
+		expect(extended.third()).toBe(`${getAddress(OWNER_ADDRESS)}!`)
+		expect(typeof extended.simulateContract).toBe('function')
+		expect(typeof extended.writeContract).toBe('function')
+		expect(extended.account.address).toBe(getAddress(OWNER_ADDRESS))
+	})
+
+	test('public client multicall isolates undecodable return data per entry when failures are allowed', async () => {
+		const provider = createProvider(({ method }) => {
+			if (method !== 'eth_call') throw new Error(`Unexpected rpc method: ${method}`)
+			return encodeAbiParameters(
+				[
+					{
+						components: [
+							{ name: 'success', type: 'bool' },
+							{ name: 'returnData', type: 'bytes' },
+						],
+						name: 'returnData',
+						type: 'tuple[]',
+					},
+				],
+				[
+					[
+						[true, encodeAbiParameters([{ type: 'uint256' }], [7n])],
+						[true, '0x01'],
+						[true, encodeAbiParameters([{ type: 'uint256' }], [9n])],
+					],
+				],
+			)
+		}, [])
+		const client = createPublicClient({ transport: custom(provider) })
+		const contracts = [
+			{ abi: BALANCE_OF_ABI, address: TOKEN_ADDRESS, args: [OWNER_ADDRESS], functionName: 'balanceOf' },
+			{ abi: BALANCE_OF_ABI, address: TOKEN_ADDRESS, args: [RECIPIENT_ADDRESS], functionName: 'balanceOf' },
+			{ abi: BALANCE_OF_ABI, address: TOKEN_ADDRESS, args: [MULTICALL_ADDRESS], functionName: 'balanceOf' },
+		] as const
+
+		const result = await client.multicall({ allowFailure: true, contracts, multicallAddress: MULTICALL_ADDRESS })
+		expect(result).toHaveLength(3)
+		expect(result[0]).toEqual({ result: 7n, status: 'success' })
+		expect(getObjectEntry(result[1], 'status', 'undecodable multicall entry')).toBe('failure')
+		expect(getObjectEntry(result[1], 'error', 'undecodable multicall entry')).toBeInstanceOf(Error)
+		expect(result[2]).toEqual({ result: 9n, status: 'success' })
+
+		await expect(client.multicall({ allowFailure: false, contracts, multicallAddress: MULTICALL_ADDRESS })).rejects.toThrow()
+	})
+
 	for (const allowFailure of [true, false] as const) {
 		test(`public client rejects truncated multicall responses when allowFailure is ${allowFailure.toString()}`, async () => {
 			const provider = createProvider(({ method }) => {

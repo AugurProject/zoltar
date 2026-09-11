@@ -181,11 +181,15 @@ export function useLiveTradingController({
 
 	function selectMarket(market: LiveMarket) {
 		if (positionWorkflowLockedRef.current || liquidityWorkflowLockedRef.current) return
-		balanceRequests.invalidate()
+		// Only a market change re-runs the balance effect; resetting balances for the current
+		// market would leave them stuck in the loading state with no refresh to complete it.
+		if (selected?.pool.toLowerCase() !== market.pool.toLowerCase()) {
+			balanceRequests.invalidate()
+			setBalances(undefined)
+			setBalanceState(account === undefined ? 'disconnected' : 'loading')
+			setBalanceError(undefined)
+		}
 		simulationRequests.invalidate()
-		setBalances(undefined)
-		setBalanceState(account === undefined ? 'disconnected' : 'loading')
-		setBalanceError(undefined)
 		setSelectedPool(market.pool)
 		setQuote(undefined)
 		dispatchWorkflow({ type: 'reset' })
