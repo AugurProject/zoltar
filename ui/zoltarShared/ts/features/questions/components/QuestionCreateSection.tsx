@@ -33,7 +33,7 @@ const MARKET_TYPE_OPTIONS: EnumDropdownOption<MarketFormState['marketType']>[] =
 	{ value: 'scalar', label: marketCopy.scalar },
 ]
 type MarketFormFieldName = keyof ReturnType<typeof validateMarketForm>['fieldErrors']
-export type QuestionCreateSectionProps = {
+type QuestionCreateSectionProps = {
 	allowedMarketTypes?: readonly MarketFormState['marketType'][]
 	accountAddress: Address | undefined
 	canUseForFork: boolean

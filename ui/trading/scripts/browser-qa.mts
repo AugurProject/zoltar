@@ -7,7 +7,7 @@ const baseUrl = process.env.TRADING_QA_URL ?? 'http://127.0.0.1:4163'
 const selectedNames = new Set((process.env.TRADING_QA_SCENARIOS ?? '').split(',').filter(name => name !== ''))
 const injectedFailure = process.env.TRADING_QA_INJECT_FAILURE
 const debuggingPort = 9227
-const simulationPath = '/?simulate=1&simScenario=trading'
+const simulationPath = '/?simulate=1&simScenario=trading-funded'
 await fs.mkdir(outputDirectory, { recursive: true })
 const userDataDirectory = await fs.mkdtemp('/tmp/zoltar-trading-qa-browser-')
 const browser = Bun.spawn({
@@ -229,10 +229,10 @@ const scenarios = [
 			history.back()
 			for (let attempt = 0; attempt < 600; attempt++) {
 				const currentSelect = document.querySelector('.simulation-control-select')
-				if (location.href.includes('simScenario=trading') && currentSelect instanceof HTMLSelectElement && currentSelect.value === 'scenario:trading' && document.querySelector('.live-market-button') !== null) break
+				if (location.href.includes('simScenario=trading-funded') && currentSelect instanceof HTMLSelectElement && currentSelect.value === 'scenario:trading-funded' && document.querySelector('.live-market-button') !== null) break
 				await new Promise(resolve => setTimeout(resolve, 100))
 			}
-			if (!location.href.includes('simScenario=trading') || document.querySelector('.simulation-control-select')?.value !== 'scenario:trading' || document.querySelector('.live-market-button') === null) throw new Error('Browser Back did not restore the seeded Trading environment: ' + location.href + ' / ' + document.querySelector('.simulation-control-select')?.value + ' / ' + document.querySelector('.error-notice')?.textContent)
+			if (!location.href.includes('simScenario=trading-funded') || document.querySelector('.simulation-control-select')?.value !== 'scenario:trading-funded' || document.querySelector('.live-market-button') === null) throw new Error('Browser Back did not restore the seeded Trading environment: ' + location.href + ' / ' + document.querySelector('.simulation-control-select')?.value + ' / ' + document.querySelector('.error-notice')?.textContent)
 			history.forward()
 			for (let attempt = 0; attempt < 600; attempt++) {
 				const currentSelect = document.querySelector('.simulation-control-select')
@@ -255,22 +255,22 @@ const scenarios = [
 			}
 			const restoredSelect = document.querySelector('.simulation-control-select')
 			if (!(restoredSelect instanceof HTMLSelectElement) || restoredSelect.value !== 'scenario:baseline') throw new Error('Browser Back did not restore the Baseline markets route')
-			restoredSelect.value = 'scenario:trading'
+			restoredSelect.value = 'scenario:trading-funded'
 			restoredSelect.dispatchEvent(new Event('change', { bubbles: true }))
 			for (let attempt = 0; attempt < 600; attempt++) {
-				if (location.hash.includes('simScenario=trading') && document.querySelector('.live-market-button') !== null) return true
+				if (location.hash.includes('simScenario=trading-funded') && document.querySelector('.live-market-button') !== null) return true
 				await new Promise(resolve => setTimeout(resolve, 100))
 			}
 			throw new Error('Trading did not restore its seeded environment after scenario navigation: ' + location.hash + ' / ' + document.querySelector('.simulation-control-select')?.value + ' / ' + document.querySelector('.error-notice')?.textContent)
 		})()`,
-		assertExpression: `(${commonAssertion}) && location.hash.includes('simScenario=trading') && document.querySelector('.live-market-button') !== null`,
+		assertExpression: `(${commonAssertion}) && location.hash.includes('simScenario=trading-funded') && document.querySelector('.live-market-button') !== null`,
 	},
 	{
 		name: 'simulation-scenario-direct-reload-desktop',
 		width: 1440,
 		height: 900,
-		path: '/#/markets?simulate=1&simScenario=trading',
-		assertExpression: `(async () => { await (${waitForSeededMarket}); return ${commonAssertion} && location.hash === '#/markets?simulate=1&simScenario=trading' && document.querySelector('a[aria-current="page"]')?.textContent === 'Markets' && !document.body.textContent?.includes('Page not found') })()`,
+		path: '/#/markets?simulate=1&simScenario=trading-funded',
+		assertExpression: `(async () => { await (${waitForSeededMarket}); return ${commonAssertion} && location.hash === '#/markets?simulate=1&simScenario=trading-funded' && document.querySelector('a[aria-current="page"]')?.textContent === 'Markets' && !document.body.textContent?.includes('Page not found') })()`,
 	},
 ] as const
 

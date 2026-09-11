@@ -14,7 +14,7 @@ import { isOpenOracleReportMissingError } from '../../../protocol/openOracle.js'
 import { getDefaultOpenOracleFormState } from '../lib/formDefaults.js'
 import type { OpenOracleReportLookupState } from '../../oracleTypes.js'
 
-export type LoadedOracleReportResult = {
+type LoadedOracleReportResult = {
 	details: OpenOracleReportDetails
 	reportId: bigint
 }

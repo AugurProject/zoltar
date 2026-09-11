@@ -9,7 +9,7 @@ import { tryParseTruthAuctionAmountInput, tryParseTruthAuctionPriceInput } from 
 export { TRUTH_AUCTION_MAX_TICK, TRUTH_AUCTION_MIN_TICK, TRUTH_AUCTION_PRICE_PRECISION }
 export { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice, TRUTH_AUCTION_MIN_SUPPORTED_TICK }
 
-export type TruthAuctionDisposition = {
+type TruthAuctionDisposition = {
 	label: string
 	tone: 'default' | 'danger' | 'success' | 'warning'
 }
@@ -36,7 +36,7 @@ export type TruthAuctionDepthPoint = {
 	submissionCount: bigint
 }
 
-export type TruthAuctionBidSettlementEstimate = {
+type TruthAuctionBidSettlementEstimate = {
 	purchasedRepAmountAttoRep: bigint
 	refundedBidAmountAttoEth: bigint
 	usedBidAmountAttoEth: bigint
