@@ -1,8 +1,9 @@
 import { activeSchedulerWorkLabel, createSelectionControls } from './selection-controls.js'
 import { createCatalogGroups } from './catalog-groups.js'
 import { createActivityTimeline } from './activity-timeline.js'
-import { compactIdentifier, formatDate, node, setBadge, shortHex, statusLabel, statusTone } from './dom.js'
+import { compactIdentifier, formatDate, node, setBadge, shortHex, statusLabel, statusTone, transactionExplorerUrl } from './dom.js'
 import { createOperationDialog } from './operation-dialog.js'
+import { pendingTransactionSummary, type PendingTransactionObservationView } from './pending-transaction-summary.js'
 import { renderOperatorAlerts } from './operator-alerts.js'
 type RepBalance = {
 	balance?: string | number | undefined
@@ -63,7 +64,9 @@ type PendingTransaction = {
 	cancellationHash?: string | undefined
 	hash?: string | undefined
 	label?: string | undefined
+	maxBlockNumber?: string | number | undefined
 	nonce?: string | number | undefined
+	observation?: PendingTransactionObservationView | undefined
 	operationId?: string | undefined
 	recoveryBlocker?: string | undefined
 	replacementHash?: string | undefined
@@ -165,6 +168,7 @@ type Configuration = {
 	connectivity?: { publicRpcUrls: string[]; quorumRpcUrls: string[]; readRpcUrl?: string | undefined; rpcQuorum?: string | number | undefined } | undefined
 	enabledEcosystems: string[]
 	execute?: boolean | undefined
+	explorerUrl?: string | undefined
 	hasSigner?: boolean | undefined
 	maximumDelaySeconds?: string | number | undefined
 	maximumEthPerOperation?: string | number | undefined
@@ -467,6 +471,12 @@ function nonnegativeIntegerValue(value: unknown) {
 	return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined
 }
 
+function parsePendingTransactionObservation(value: unknown): PendingTransactionObservationView | undefined {
+	const source = record(value)
+	if (source === undefined) return undefined
+	return { checkedAt: stringValue(source['checkedAt']), head: scalarValue(source['head']), includedBlock: scalarValue(source['includedBlock']), kind: stringValue(source['kind']) }
+}
+
 function rpcHealthStatusValue(value: unknown): RpcHealth['status'] {
 	return value === 'degraded' || value === 'not-checked' || value === 'not-configured' || value === 'ready' ? value : undefined
 }
@@ -647,7 +657,9 @@ function parseSnapshot(value: unknown): Snapshot {
 			cancellationHash: stringValue(entry['cancellationHash']),
 			hash: stringValue(entry['hash']),
 			label: stringValue(entry['label']),
+			maxBlockNumber: scalarValue(entry['maxBlockNumber']),
 			nonce: scalarValue(entry['nonce']),
+			observation: parsePendingTransactionObservation(entry['observation']),
 			operationId: stringValue(entry['operationId']),
 			recoveryBlocker: stringValue(entry['recoveryBlocker']),
 			replacementHash: stringValue(entry['replacementHash']),
@@ -713,6 +725,7 @@ function parseConfiguration(value: unknown): Configuration {
 					},
 		enabledEcosystems: strings(source['enabledEcosystems']),
 		execute: booleanValue(source['execute']),
+		explorerUrl: stringValue(source['explorerUrl']),
 		hasSigner: booleanValue(source['hasSigner']),
 		initializeGenesisUniverse: booleanValue(source['initializeGenesisUniverse']),
 		maximumDelaySeconds: scalarValue(source['maximumDelaySeconds']),
@@ -766,11 +779,15 @@ async function requestJson(path: string, timeoutMilliseconds: number, init?: Req
 	}
 }
 
-function identifierLine(prefix: string, value: string | undefined, type: string) {
+function transactionIdentifier(hash: string, type: string) {
+	return compactIdentifier(hash, type, { explorerUrl: transactionExplorerUrl(configuration?.explorerUrl, hash) })
+}
+
+function transactionLine(prefix: string, hash: string | undefined, type: string) {
 	const line = node('small', 'identifier-line')
 	line.append(node('span', undefined, prefix))
-	if (value === undefined) line.append(node('span', 'mono muted', 'Unavailable'))
-	else line.append(compactIdentifier(value, type))
+	if (hash === undefined) line.append(node('span', 'mono muted', 'Unavailable'))
+	else line.append(transactionIdentifier(hash, type))
 	return line
 }
 
@@ -952,7 +969,7 @@ function renderOverview(value: Snapshot) {
 	}
 	renderRpcHealth(value)
 	renderSubmissionHealth(value.submissionHealth)
-	renderWorkflow(value.currentWorkflow)
+	renderWorkflow(value.currentWorkflow, value.pendingTransactions)
 	renderCoverage(value.operationEvaluations)
 	retirementDashboard.render(value)
 }
@@ -1045,7 +1062,15 @@ function renderRepBalances(values: RepBalance[]) {
 	repBalances.replaceChildren(...rows)
 }
 
-function renderWorkflow(value: Workflow | undefined) {
+function transactionWaitNote(transaction: PendingTransaction) {
+	const summary = pendingTransactionSummary(transaction)
+	const note = node('div', `transaction-wait ${summary.tone}`)
+	note.append(node('strong', undefined, summary.headline))
+	if (summary.detail !== '') note.append(node('small', undefined, summary.detail))
+	return note
+}
+
+function renderWorkflow(value: Workflow | undefined, pendingTransactions: readonly PendingTransaction[]) {
 	if (value === undefined) {
 		currentWorkflow.className = 'empty-state'
 		currentWorkflow.textContent = 'No operation is in progress.'
@@ -1059,6 +1084,8 @@ function renderWorkflow(value: Workflow | undefined) {
 	const status = node('span')
 	setBadge(status, value.status === undefined ? 'In progress' : statusLabel(value.status), statusTone(value.status))
 	heading.append(copy, status)
+	const stepHashes = new Set(value.steps.flatMap(step => (step.txHash === undefined ? [] : [step.txHash.toLowerCase()])))
+	const waitingTransaction = value.status === 'waiting-transaction' ? pendingTransactions.find(transaction => transaction.hash !== undefined && stepHashes.has(transaction.hash.toLowerCase())) : undefined
 	const steps = node('ol', 'step-list')
 	for (const step of value.steps) {
 		const row = node('li')
@@ -1070,7 +1097,7 @@ function renderWorkflow(value: Workflow | undefined) {
 		status.dataset['stepStatus'] = step.status?.trim().toLowerCase() || 'waiting'
 		detail.append(status)
 		if (step.txHash !== undefined) {
-			const hash = compactIdentifier(step.txHash, 'workflow transaction hash')
+			const hash = transactionIdentifier(step.txHash, 'workflow transaction hash')
 			hash.classList.add('step-hash')
 			hash.dataset['stepHash'] = ''
 			detail.append(hash)
@@ -1079,7 +1106,7 @@ function renderWorkflow(value: Workflow | undefined) {
 		steps.append(row)
 	}
 	if (value.steps.length === 0) steps.append(node('li', undefined, 'Workflow state is being prepared.'))
-	currentWorkflow.replaceChildren(heading, steps)
+	currentWorkflow.replaceChildren(heading, ...(waitingTransaction === undefined ? [] : [transactionWaitNote(waitingTransaction)]), steps)
 }
 
 function renderCoverage(values: OperationEvaluation[]) {
@@ -1374,19 +1401,16 @@ function renderRecovery(value: Snapshot) {
 				const row = node('div', 'stack-row')
 				const copy = node('div')
 				copy.append(node('strong', undefined, transaction.label ?? transaction.operationId ?? 'Pending transaction'))
-				copy.append(identifierLine(`Nonce ${String(transaction.nonce ?? '—')}`, transaction.hash, 'pending transaction hash'))
+				copy.append(transactionLine(`Nonce ${String(transaction.nonce ?? '—')}`, transaction.hash, 'pending transaction hash'))
 				if (transaction.replacementHash !== undefined) {
-					copy.append(identifierLine('Replacement queued', transaction.replacementHash, 'replacement transaction hash'))
+					copy.append(transactionLine('Replacement queued', transaction.replacementHash, 'replacement transaction hash'))
 				}
 				if (transaction.cancellationHash !== undefined) {
-					copy.append(identifierLine('Cancellation queued', transaction.cancellationHash, 'cancellation transaction hash'))
-				}
-				if (transaction.recoveryBlocker !== undefined) {
-					copy.append(node('small', 'warning-text', transaction.recoveryBlocker))
+					copy.append(transactionLine('Cancellation queued', transaction.cancellationHash, 'cancellation transaction hash'))
 				}
 				const status = node('span')
 				setBadge(status, statusLabel(transaction.status ?? 'pending'), statusTone(transaction.status ?? 'pending'))
-				row.append(copy, status)
+				row.append(copy, status, transactionWaitNote(transaction))
 				return row
 			}),
 		)
@@ -1419,7 +1443,7 @@ function renderSnapshot(value: Snapshot) {
 	renderEcosystems(value.operationEvaluations)
 	renderTopology(value.topology)
 	renderRecovery(value)
-	renderActivities(value.activities)
+	renderActivities(value.activities, configuration?.explorerUrl)
 	renderOperatorAlerts(operatorAlerts, value.alerts)
 	renderCountdown()
 	applyMutationControlLatches()
@@ -1587,6 +1611,9 @@ function refresh() {
 	let configurationAvailable = false
 	refreshPromise = (async () => {
 		const [stateResult, configurationResult] = await Promise.allSettled([requestJson('/api/state', stateRequestTimeoutMilliseconds), requestJson('/api/configuration', configurationRequestTimeoutMilliseconds)])
+		// Transaction explorer links come from the configuration, so it must be current before the state renders.
+		const parsedConfiguration = configurationResult.status === 'fulfilled' ? parseConfiguration(configurationResult.value) : undefined
+		if (parsedConfiguration !== undefined) configuration = parsedConfiguration
 		if (stateResult.status === 'fulfilled') {
 			snapshot = parseSnapshot(stateResult.value)
 			renderSnapshot(snapshot)
@@ -1600,14 +1627,13 @@ function refresh() {
 			globalError.classList.remove('hidden')
 			settleRecoveryContextRefreshes(undefined)
 		}
-		if (configurationResult.status === 'fulfilled') {
-			configuration = parseConfiguration(configurationResult.value)
-			renderConfiguration(configuration)
+		if (parsedConfiguration !== undefined) {
+			renderConfiguration(parsedConfiguration)
 			configurationAvailable = true
 			if (!configurationCommitIndeterminate) configurationStatus.classList.add('hidden')
 		} else {
 			settingsFields.disabled = true
-			configurationStatus.textContent = configurationResult.reason instanceof Error ? configurationResult.reason.message : 'Configuration is unavailable.'
+			configurationStatus.textContent = configurationResult.status === 'rejected' && configurationResult.reason instanceof Error ? configurationResult.reason.message : 'Configuration is unavailable.'
 			configurationStatus.className = 'notice error'
 		}
 		selectionControlsAvailable = stateAvailable && configurationAvailable

@@ -12,20 +12,31 @@ import { createSignerOperationGate } from '@zoltar/bot-shared/execution/signer-o
 import { canonicalBlockHashWithQuorum, executionFailureDecision, executionTokenAllowed, isExecutionPausedError, selectBestExecution } from '#execution/execution-orchestration'
 import { appendExecutionHistoryIfMissing, clearPollFailureMetadata, decimalSignedEth, ensureExecutionHistoryWritable, gameCapitalSnapshot, loadExecutionHistory, recordOperation, type OperatorState, type OpportunitySnapshot } from '#state/operator-state'
 import { applyCoordinatorReports, applyLogs, compareLogs, logBlockNumber, reportId, type ActiveReport } from '#monitoring/oracle-log-state'
-import { appendPriceHistory, createTokenCatalogTracker, discoverAugurRepTokens, loadPriceHistory, loadTokenMarkets, missingPricePoints, pricePoints } from '#monitoring/market-monitor'
-import { centralizedMarketConfigurationAllowsExecution, centralizedMarketConsensusObservations, centralizedPriceAllowsExecution, centralizedPriceDeviationBps, marketConsensusSettings, observeCentralizedMarkets } from '@zoltar/bot-shared/monitoring/centralized-markets'
-import { clearOrphanedDexEvidenceForHeadReplacement, discardDexMarketObservations, estimateMarketConsensus, marketConsensusAllowsExecution, marketConsensusDeviationBps, requireCanonicalBlock, requireCanonicalDexEvidence, type MarketConsensusObservation } from '@zoltar/bot-shared/monitoring/market-consensus'
+import { appendPriceHistory, createTokenCatalogTracker, createTokenMetadataCache, discoverAugurRepTokens, discoverTokenPools, loadPriceHistory, loadTokenMarkets, missingPricePoints, pricePoints } from '#monitoring/market-monitor'
+import { centralizedMarketConfigurationAllowsExecution, centralizedMarketConsensusObservations, centralizedPriceAllowsExecution, centralizedPriceDeviationBps, marketConsensusSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
+import {
+	clearOrphanedDexEvidenceForHeadReplacement,
+	discardDexMarketObservations,
+	estimateMarketConsensus,
+	marketConsensusAllowsExecution,
+	marketConsensusDeviationBps,
+	mergeMarketObservations,
+	requireCanonicalBlock,
+	requireCanonicalDexEvidence,
+	type MarketConsensusObservation,
+} from '@zoltar/bot-shared/monitoring/market-consensus'
 import { observeConstantProductMarkets, readConstantProductPairWithQuorum, requireCurrentConstantProductMarketEvidence } from '@zoltar/bot-shared/monitoring/constant-product-markets'
 import { archivedUtcDayGasSpentWeth, loadPositionJournalState, savePositionJournalState, type ExclusiveProcessLock, type PositionRecord } from '#state/position-store'
-import { availableSettledValues, quorumValue, settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
-import { ConnectivityDegradedError, operationalFailureDisposition, pollUntilStopped, retryDelayMilliseconds } from '@zoltar/bot-shared/monitoring/resilience'
+import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
+import { operationalFailureDisposition, pollUntilStopped, retryDelayMilliseconds } from '@zoltar/bot-shared/monitoring/resilience'
+import { requireDeployedContractsOnce } from '@zoltar/bot-shared/monitoring/deployed-contracts'
 import { rpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 import { positionConsumesRisk } from '#core/safety-controls'
 import type { NetworkConfiguration } from '#config/network'
 import { transactionLogLevel, type TrackTransaction } from '#execution/transaction-tracker'
 import type { ExecutionCandidate } from '#core/operator-types'
 import { errorMessage } from '#core/rpc-validation'
-import { candidateRiskMismatch, poolsForToken } from '#monitoring/opportunity-evaluation'
+import { candidateRiskMismatch, poolsForTokens } from '#monitoring/opportunity-evaluation'
 import { dateFromBlockTimestamp, pendingCoordinatorReports, pendingCoordinatorReportsWithQuorum } from '#execution/recovery-support'
 import { reconcileExpiredAttemptsWithQuorum, processPositionLifecycle } from '#execution/position-lifecycle'
 import type { ExecutionLockManager } from '#execution/execution-locks'
@@ -36,10 +47,14 @@ import { acquireScanSignerOperation, deploymentUpdateMustWait, startOperatorCont
 import { executorDeploymentIntentPath, loadExecutorDeploymentIntentForChain } from '#execution/executor-deployment-store'
 import { assertStoredExecutorDeploymentIntent } from '#execution/create2-executor'
 import { applyQueuedExecutionSettings, applyQueuedSigner, resetReportScanState } from './operator-execution-state.ts'
+import { selectQuorumHead } from './quorum-head.ts'
+import { createOperatorHeadWatcher, createScanWakeGate, startCentralizedMarketSampler } from './background-observers.ts'
 import type { ArbitragerShutdownController } from './shutdown.ts'
 
 const REORG_OVERLAP_BLOCKS = 12n
 const MAX_LOG_SCAN_RANGE = 256n
+/** A failing scan retries within this bound (or the poll interval when that is longer) so a transient fault never leaves the operator blind for minutes. */
+const MAXIMUM_SCAN_RETRY_DELAY_MILLISECONDS = 30_000
 
 type SuccessfulPollState = Pick<OperatorState, 'marketAvailability' | 'consecutivePollFailures' | 'lastError' | 'lastPollFailureAt' | 'lastRetryAt' | 'nextRetryAt' | 'paused' | 'retryInProgress' | 'status'>
 
@@ -70,6 +85,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 	let readPool = createRpcEndpointPool([config.connectivity.readRpcUrl, ...config.quorumRpcUrls])
 	let clientRpcUrl: string | undefined
 	let wakeProfileSwitchWait: (() => void) | undefined
+	let wakeCentralizedMarketSampler: (() => void) | undefined
 	const createClient = (rpcUrl?: string) => createContextualPublicClient(config.network.chain, readPool, config.execute ? rpcUrl : undefined)
 	const contextualRpcRead = async <Value>(_method: string, request: (requestClient: PublicClient<Transport, Chain>) => Promise<Value>, explicitRpcUrl: string | undefined = clientRpcUrl) => await request(createClient(explicitRpcUrl))
 	const contextualLogRead = async <Value>(request: (requestClient: PublicClient<Transport, Chain>) => Promise<Value>) => await request(createContextualPublicClient(config.network.chain, readPool))
@@ -230,15 +246,28 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 		getCursor: () => cursor,
 		...(shutdown === undefined ? {} : { isStopping: shutdown.isRequested }),
 		lockManager,
-		onNetworkProfileSwitch: () => wakeProfileSwitchWait?.(),
+		onNetworkProfileSwitch: () => {
+			wakeProfileSwitchWait?.()
+			wakeCentralizedMarketSampler?.()
+		},
 		signerOperationGate,
 		state,
 	})
 	const { dashboard, pending } = controlPlane
-	const waitForProfileSwitchOrDelay = async (milliseconds: number) => {
-		if (pending.profileSwitch || shutdown?.isRequested()) return
+	let operatorStopped = false
+	const stopping = () => operatorStopped || pending.profileSwitch || shutdown?.isRequested() === true
+	const headWatcher = createOperatorHeadWatcher({ config, isStopping: stopping, readClient: () => createClient() })
+	const scanWakeGate = createScanWakeGate(headWatcher)
+	/**
+	 * Waits for the next scan trigger: a new head from the watcher wakes the scan immediately, while the
+	 * configured poll interval still bounds how long queued settings or lifecycle work can wait on an idle chain.
+	 */
+	const waitForProfileSwitchOrDelay = async (milliseconds: number, afterFailure: boolean) => {
+		if (stopping()) return
+		const headWake = scanWakeGate.wait(milliseconds, afterFailure)
 		await Promise.race([
 			shutdown?.wait(milliseconds) ?? Bun.sleep(milliseconds),
+			...(headWake === undefined ? [] : [headWake]),
 			new Promise<void>(resolve => {
 				wakeProfileSwitchWait = resolve
 				if (pending.profileSwitch) resolve()
@@ -264,7 +293,8 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 		}
 	}
 	let cachedLogs: TransactionLog[] = []
-	let catalogForScan = createTokenCatalogTracker((configured, observed) => discoverAugurRepTokens(client, config.network.chain.id, configured, observed))
+	let tokenMetadataCache = createTokenMetadataCache()
+	let catalogForScan = createTokenCatalogTracker((configured, observed) => discoverAugurRepTokens(client, config.network.multicall3, config.network.chain.id, configured, observed))
 	recordOperation(state, {
 		category: 'scan',
 		details: config.coordinatorAddresses.length === 0 ? undefined : `Approved coordinators: ${config.coordinatorAddresses.join(', ')}`,
@@ -278,11 +308,15 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 			? `network=${config.network.name} chain=${config.network.chain.id.toString()} mode=${config.execute ? 'execute' : 'dry-run'} submission=${config.submission.mode} oracle=${config.openOracle} coordinators=${config.coordinatorAddresses.join(',') || 'none'} rpc=${endpointLabel(config.connectivity.readRpcUrl)}`
 			: 'network=unconfigured mode=paused configure the chain and RPC endpoints in the dashboard',
 	)
+	headWatcher.start()
+	const centralizedMarketSampler = startCentralizedMarketSampler({ config, isStopping: stopping, state, wait: shutdown?.wait })
+	wakeCentralizedMarketSampler = centralizedMarketSampler.wake
 	try {
 		await pollUntilStopped(
 			async consecutiveFailures => {
 				if (pending.profileSwitch || shutdown?.isRequested()) return true
 				state.consecutivePollFailures = consecutiveFailures
+				scanWakeGate.beginPoll()
 				const scanIntentLock = await acquireScanSignerOperation(signerOperationGate, deploymentRecovery, executorIntentPath)
 				if (scanIntentLock === undefined) return 'deferred'
 				state.nextRetryAt = undefined
@@ -366,7 +400,8 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						state.tokenMarkets = []
 						state.marketObservations = []
 						state.marketConsensus = undefined
-						catalogForScan = createTokenCatalogTracker((configured, observed) => discoverAugurRepTokens(client, config.network.chain.id, configured, observed))
+						tokenMetadataCache = createTokenMetadataCache()
+						catalogForScan = createTokenCatalogTracker((configured, observed) => discoverAugurRepTokens(client, config.network.multicall3, config.network.chain.id, configured, observed))
 					}
 					if (!deploymentSettingsDeferred && networkInitializationPending) {
 						const appliedSettings = applyQueuedExecutionSettings(config, state, pending)
@@ -384,6 +419,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						fixedState.explorerUrl = network.explorerUrl
 						fixedState.networkConfigured = true
 						pending.network = undefined
+						centralizedMarketSampler.wake()
 					}
 					if (!deploymentSettingsDeferred && pending.connectivity !== undefined) {
 						config.connectivity = pending.connectivity
@@ -439,6 +475,11 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 							client = availableClient
 							clientRpcUrl = availableChainRead === undefined ? undefined : ([config.connectivity.readRpcUrl, ...config.quorumRpcUrls][availableChainRead.value.index] ?? undefined)
 						}
+						await contextualRpcRead('eth_chainId', async requestClient => {
+							const value = await requestClient.getChainId()
+							if (value !== config.network.chain.id) throw new Error(`Read RPC chain mismatch: expected ${config.network.chain.id.toString()}, received ${value.toString()}`)
+						})
+						await requireDeployedContractsOnce(client, [{ name: 'Multicall3', address: config.network.multicall3 }])
 						coordinatorPolicies = config.execute ? await loadCoordinatorPoliciesWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls].map(endpointLabel), config) : await loadCoordinatorPolicies(client, config)
 						await authenticateConfiguredDeployments(readClients, config)
 						if (config.execute && config.executor !== undefined) {
@@ -464,88 +505,26 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 							console.error(`historyPersistenceFailed=${message}`)
 						}
 					}
-					let fixedHeadNumber: bigint | undefined
+					const scanStartedAt = Date.now()
+					let quorumHead: Awaited<ReturnType<typeof selectQuorumHead>>['block'] | undefined
 					if (config.execute) {
-						const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
-						const settledHeads = await Promise.allSettled(
-							readClients.map(async (_, index) => {
-								const endpoint = endpointLabel(endpoints[index] ?? '')
-								return {
-									endpoint,
-									head: await contextualRpcRead('eth_blockNumber', requestClient => requestClient.getBlockNumber(), endpoints[index]),
-									index,
-								}
-							}),
-						)
-						const availableHeads = availableSettledValues(settledHeads)
-						const quorumRequirement = rpcQuorumRequirement()
-						if (availableHeads.length < quorumRequirement) {
-							const failures = settledHeads.flatMap(result => (result.status === 'rejected' ? [errorMessage(result.reason)] : []))
-							throw new ConnectivityDegradedError(`Canonical head does not satisfy the configured RPC quorum requirement: ${failures.join('; ')}`)
-						}
-						const sharedHead = availableHeads.reduce((minimum, observation) => (observation.head < minimum ? observation.head : minimum), availableHeads[0]?.head ?? 0n)
-						const settledBlocks = await Promise.allSettled(
-							availableHeads.map(async observation => {
-								const readClient = readClients[observation.index]
-								if (readClient === undefined) throw new Error('Canonical head reader is unavailable')
-								const fixedBlock = await contextualRpcRead(
-									'eth_getBlockByNumber',
-									async requestClient => {
-										const value = await requestClient.getBlock({
-											blockNumber: sharedHead,
-										})
-										if (value.hash === undefined) throw new Error('Canonical head block is missing its hash')
-										return { ...value, hash: value.hash }
-									},
-									endpoints[observation.index],
-								)
-								return {
-									block: fixedBlock,
-									endpoint: observation.endpoint,
-									index: observation.index,
-								}
-							}),
-						)
-						const availableBlocks = availableSettledValues(settledBlocks)
-						if (availableBlocks.length < quorumRequirement) {
-							const failures = settledBlocks.flatMap(result => (result.status === 'rejected' ? [errorMessage(result.reason)] : []))
-							throw new ConnectivityDegradedError(`Canonical head does not satisfy the configured RPC quorum requirement: ${failures.join('; ')}`)
-						}
-						quorumValue(
-							`canonical head ${sharedHead.toString()}`,
-							availableBlocks.map(observation => ({
-								endpoint: observation.endpoint,
-								value: observation.block.hash,
-							})),
-							quorumRequirement,
-						)
-						const selected = availableBlocks[0]
-						if (selected === undefined) throw new Error('Canonical head does not satisfy the configured RPC quorum requirement')
-						const selectedClient = readClients[selected.index]
-						if (selectedClient === undefined) throw new Error('Canonical head does not satisfy the configured RPC quorum requirement')
-						client = selectedClient
-						clientRpcUrl = endpoints[selected.index]
-						fixedHeadNumber = sharedHead
+						const selected = await selectQuorumHead(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], contextualRpcRead)
+						client = selected.client
+						clientRpcUrl = selected.rpcUrl
+						quorumHead = selected.block
 					}
-					await contextualRpcRead('eth_chainId', async requestClient => {
-						const value = await requestClient.getChainId()
-						if (value !== config.network.chain.id) throw new Error(`Read RPC chain mismatch: expected ${config.network.chain.id.toString()}, received ${value.toString()}`)
-					})
-					const block = await contextualRpcRead('eth_getBlockByNumber', async requestClient => {
-						const value =
-							fixedHeadNumber === undefined
-								? await requestClient.getBlock()
-								: await requestClient.getBlock({
-										blockNumber: fixedHeadNumber,
-									})
-						if (value.number === undefined) throw new Error('Latest block is missing its number')
-						if (value.hash === undefined) throw new Error('Latest block is missing its hash')
-						return { ...value, hash: value.hash, number: value.number }
-					})
+					const block =
+						quorumHead ??
+						(await contextualRpcRead('eth_getBlockByNumber', async requestClient => {
+							const value = await requestClient.getBlock()
+							if (value.number == null) throw new Error('Latest block is missing its number')
+							if (value.hash == null) throw new Error('Latest block is missing its hash')
+							return { ...value, hash: value.hash, number: value.number }
+						}))
 					const blockNumber = block.number
 					recordObservedHead(state, block)
-					console.log(`observedBlock=${blockNumber.toString()} blockAgeSeconds=${(BigInt(Math.floor(Date.now() / 1_000)) - block.timestamp).toString()}`)
 					const blockHash = block.hash
+					scanWakeGate.headScanned({ hash: blockHash, number: blockNumber })
 					const finalityAnchorForHead = async () => {
 						const number = blockNumber > REORG_OVERLAP_BLOCKS ? blockNumber - REORG_OVERLAP_BLOCKS : 0n
 						const anchor = await contextualRpcRead('eth_getBlockByNumber', async requestClient => {
@@ -577,7 +556,8 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 							state.tokenMarkets = []
 							state.marketObservations = []
 							state.marketConsensus = undefined
-							catalogForScan = createTokenCatalogTracker((configured, observed) => discoverAugurRepTokens(client, config.network.chain.id, configured, observed))
+							tokenMetadataCache = createTokenMetadataCache()
+							catalogForScan = createTokenCatalogTracker((configured, observed) => discoverAugurRepTokens(client, config.network.multicall3, config.network.chain.id, configured, observed))
 							cursor = config.coordinatorAddresses.length !== 0 || config.lookbackBlocks === 0n ? initialCursor(blockNumber, 0n) : { ...initialCursor(blockNumber, 0n), nextBlock: latestLogRange(blockNumber, config.lookbackBlocks).fromBlock }
 							state.status = 'syncing'
 							recordOperation(state, {
@@ -742,93 +722,119 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						shutdownDuringHead = true
 						return true
 					}
+					await centralizedMarketSampler.ready // background sampling, but the first scan still waits for the first sample
+					if (shutdown?.isRequested()) return true
 					const completedCursor = await advanceCursorAfterSuccessfulHead(blockNumber, blockHash, async () => {
-						state.centralizedMarket = await observeCentralizedMarkets(config.centralizedMarkets, config.network.rep, config.network.chain.id)
+						// DEX evidence read at a head that turns out to be non-canonical is discarded before the failure propagates.
+						const discardDexEvidence = (error: unknown) => {
+							state.marketObservations = discardDexMarketObservations(state.marketObservations ?? [])
+							state.marketConsensus = undefined
+							throw error
+						}
+						// Every stage below is pinned to the head block; the canonical hash is revalidated once after the reads.
+						const [configuredDexMarkets, { universes, approvedTokens }] = await Promise.all([
+							observeConstantProductMarkets(config.centralizedMarkets, config.network.rep, config.network.weth, async pair => readConfiguredDexPair(pair, { hash: blockHash, number: blockNumber })).catch(discardDexEvidence),
+							loadApprovedUniverses(readClients, config, blockNumber),
+						])
 						if (stopHead()) return
-						let configuredDexMarkets: Awaited<ReturnType<typeof observeConstantProductMarkets>>
-						try {
-							configuredDexMarkets = await observeConstantProductMarkets(config.centralizedMarkets, config.network.rep, config.network.weth, async pair => readConfiguredDexPair(pair, { hash: blockHash, number: blockNumber }))
-							if (stopHead()) return
-						} catch (error) {
-							state.marketObservations = discardDexMarketObservations(state.marketObservations ?? [])
-							state.marketConsensus = undefined
-							throw error
-						}
-						try {
-							await requireCanonicalBlock(blockNumber, blockHash, async canonicalBlockNumber => canonicalBlockHashWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], 'market snapshot final revalidation', canonicalBlockNumber))
-							if (stopHead()) return
-						} catch (error) {
-							state.marketObservations = discardDexMarketObservations(state.marketObservations ?? [])
-							state.marketConsensus = undefined
-							throw error
-						}
-						const marketObservedAt = Date.now()
-						state.marketObservations = [...(state.marketObservations ?? []), ...centralizedMarketConsensusObservations(state.centralizedMarket), ...configuredDexMarkets.observations]
-							.filter(observation => observation.observedAt <= marketObservedAt && marketObservedAt - observation.observedAt <= config.centralizedMarkets.maximumObservationAgeMilliseconds)
-							.slice(-2_000)
-						const observedTokens = [...reports.values()].flatMap(report => [report.latest.game.token1, report.latest.game.token2]).filter(address => address !== zeroAddress && address.toLowerCase() !== config.network.weth.toLowerCase())
-						const { universes, approvedTokens } = await loadApprovedUniverses(readClients, config, blockNumber)
 						state.universes = universes
+						const observedTokens = [...reports.values()].flatMap(report => [report.latest.game.token1, report.latest.game.token2]).filter(address => address !== zeroAddress && address.toLowerCase() !== config.network.weth.toLowerCase())
 						const { executionTokens, monitoringTokens: discoveredTokens } = await catalogForScan(config.tokenAddresses, [...universes.map(universe => universe.repToken), ...observedTokens], approvedTokens)
 						if (stopHead()) return
 						state.tokenAddresses = [...executionTokens]
-						state.tokenMarkets = await loadTokenMarkets(client, {
+						const discoveredPools = await discoverTokenPools(client, {
 							blockNumber,
 							chainId: config.network.chain.id,
-							explorerUrl: config.network.explorerUrl,
 							factory: config.network.factory,
+							multicall3: config.network.multicall3,
 							tokens: discoveredTokens,
 							weth: config.network.weth,
-							wallet: wallet?.account.address,
 						})
+						if (stopHead()) return
+						const [tokenMarkets, pools, balances] = await Promise.all([
+							loadTokenMarkets(client, {
+								blockNumber,
+								explorerUrl: config.network.explorerUrl,
+								metadataCache: tokenMetadataCache,
+								multicall3: config.network.multicall3,
+								pools: discoveredPools,
+								wallet: wallet?.account.address,
+								weth: config.network.weth,
+							}),
+							poolsForTokens(client, config, discoveredPools, blockNumber),
+							loadBalances(client, wallet, config, discoveredTokens, blockNumber),
+						])
+						if (stopHead()) return
+						state.tokenMarkets = tokenMarkets
+						state.marketAvailability = pools.length === 0 ? { kind: 'no-v3-liquidity', chainId: config.network.chain.id } : undefined
+						const gasPrice = (block.baseFeePerGas ?? 0n) * 2n + 2n * 10n ** 9n
+						const opportunities: OpportunitySnapshot[] = []
+						const candidates: ExecutionCandidate[] = []
+						const cycleDexObservations: MarketConsensusObservation[] = []
+						const evaluatedReports = await Promise.all(
+							[...reports.values()]
+								.filter(report => !report.settled)
+								.map(async report => {
+									const reportId = report.latest.helper.reportId.toString()
+									try {
+										const metadata = tokenMarkets.find(market => market.address.toLowerCase() === report.latest.game.token2.toLowerCase())
+										if (metadata === undefined) throw new Error('Token metadata is unavailable')
+										const evaluated = await inspectReport(
+											client,
+											wallet,
+											config,
+											report.latest,
+											pools,
+											blockNumber,
+											blockHash,
+											block.timestamp,
+											gasPrice,
+											balances?.raw,
+											metadata,
+											executionTokenAllowed(executionTokens, report.latest.game.token2) && authenticatedExecutionToken(config, report.latest.game.token2),
+											executionReady,
+											state.paused,
+											coordinatorPolicies,
+											(message, reason) =>
+												recordOperation(state, {
+													category: 'decision',
+													details: undefined,
+													level: 'info',
+													message,
+													reason,
+													reportId,
+												}),
+										)
+										return { evaluated, report }
+									} catch (error) {
+										logMarketDiscoveryFailure(`report=${reportId} skipped=`, error)
+										recordOperation(state, {
+											category: 'decision',
+											details: undefined,
+											level: 'warning',
+											message: 'Report evaluation failed',
+											reason: errorMessage(error),
+											reportId,
+										})
+										throw error
+									}
+								}),
+						)
+						if (stopHead()) return
+						// One canonical-hash check after all pinned reads confirms none of them straddled a head replacement.
+						const [, headFinalityAnchor] = await Promise.all([
+							requireCanonicalBlock(blockNumber, blockHash, async canonicalBlockNumber => canonicalBlockHashWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], 'market snapshot final revalidation', canonicalBlockNumber)).catch(discardDexEvidence),
+							finalityAnchorForHead(),
+						])
 						if (stopHead()) return
 						const sampledAt = new Date(bigintToSafeNumber(block.timestamp * 1_000n, 'Price sample block timestamp')).toISOString()
 						const samples = missingPricePoints(state.priceHistory, pricePoints(state.tokenMarkets, blockNumber, sampledAt))
 						await appendPriceHistory(config.priceHistoryFile, samples, config.network.chain.id)
 						state.priceHistory = [...state.priceHistory, ...samples]
-						const pools = (await Promise.all(discoveredTokens.map(token => poolsForToken(client, config, token, blockNumber)))).flat()
-						if (stopHead()) return
-						state.marketAvailability = pools.length === 0 ? { kind: 'no-v3-liquidity', chainId: config.network.chain.id } : undefined
-						const balances = await contextualRpcRead('eth_call', requestClient => loadBalances(requestClient, wallet, config, pools, discoveredTokens))
-						if (stopHead()) return
-						const gasPrice = (block.baseFeePerGas ?? 0n) * 2n + 2n * 10n ** 9n
-						const opportunities: OpportunitySnapshot[] = []
-						const candidates: ExecutionCandidate[] = []
-						const cycleDexObservations: MarketConsensusObservation[] = []
-						for (const report of reports.values()) {
+						state.marketObservations = mergeMarketObservations(state.marketObservations ?? [], [...centralizedMarketConsensusObservations(state.centralizedMarket), ...configuredDexMarkets.observations], config.centralizedMarkets.maximumObservationAgeMilliseconds)
+						for (const { evaluated, report } of evaluatedReports) {
 							if (stopHead()) return
-							if (report.settled) continue
 							try {
-								const reportId = report.latest.helper.reportId.toString()
-								const metadata = state.tokenMarkets.find(market => market.address.toLowerCase() === report.latest.game.token2.toLowerCase())
-								if (metadata === undefined) throw new Error('Token metadata is unavailable')
-								const evaluated = await inspectReport(
-									client,
-									wallet,
-									config,
-									report.latest,
-									pools,
-									blockNumber,
-									blockHash,
-									block.timestamp,
-									gasPrice,
-									balances?.raw,
-									metadata,
-									executionTokenAllowed(executionTokens, report.latest.game.token2) && authenticatedExecutionToken(config, report.latest.game.token2),
-									executionReady,
-									state.paused,
-									coordinatorPolicies,
-									(message, reason) =>
-										recordOperation(state, {
-											category: 'decision',
-											details: undefined,
-											level: 'info',
-											message,
-											reason,
-											reportId,
-										}),
-								)
-								if (stopHead()) return
 								if (evaluated !== undefined) {
 									cycleDexObservations.push(...evaluated.dexObservations)
 									opportunities.push(evaluated.opportunity)
@@ -908,26 +914,20 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 								}
 							} catch (error) {
 								const reportId = report.latest.helper.reportId.toString()
-								const message = errorMessage(error)
-								if (message === 'Canonical block changed during market observation') {
-									state.marketObservations = discardDexMarketObservations(state.marketObservations ?? [])
-									state.marketConsensus = undefined
-									throw error
-								}
 								logMarketDiscoveryFailure(`report=${reportId} skipped=`, error)
 								recordOperation(state, {
 									category: 'decision',
 									details: undefined,
 									level: 'warning',
 									message: 'Report evaluation failed',
-									reason: message,
+									reason: errorMessage(error),
 									reportId,
 								})
 								throw error
 							}
 						}
-						state.activeReportCount = [...reports.values()].filter(report => !report.settled).length
-						state.marketObservations = [...(state.marketObservations ?? []), ...cycleDexObservations].filter(observation => observation.observedAt <= Date.now() && Date.now() - observation.observedAt <= config.centralizedMarkets.maximumObservationAgeMilliseconds).slice(-2_000)
+						state.activeReportCount = evaluatedReports.length
+						state.marketObservations = mergeMarketObservations(state.marketObservations ?? [], cycleDexObservations, config.centralizedMarkets.maximumObservationAgeMilliseconds)
 						state.marketConsensus =
 							config.centralizedMarkets.venueConsensus === undefined
 								? undefined
@@ -1017,7 +1017,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						}
 						state.priceHistory = state.priceHistory.slice(-2_000)
 						completedOpportunityCount = opportunities.length
-						completedFinalityAnchor = await finalityAnchorForHead()
+						completedFinalityAnchor = headFinalityAnchor
 					})
 					if (shutdownDuringHead || shutdown?.isRequested()) return true
 					if (completedFinalityAnchor === undefined) throw new Error('Successful scan did not produce a finality anchor')
@@ -1034,6 +1034,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						for (const id of settledReportIds) reports.delete(id)
 						cachedLogs = cachedLogs.filter(log => !settledReportIds.has(reportId(log)))
 					}
+					console.log(`scanBlock=${blockNumber.toString()} durationMs=${(Date.now() - scanStartedAt).toString()} activeReports=${state.activeReportCount.toString()} opportunities=${completedOpportunityCount.toString()}`)
 					recordOperation(state, {
 						category: 'scan',
 						details: `${state.activeReportCount.toString()} active reports; ${completedOpportunityCount.toString()} opportunities`,
@@ -1054,9 +1055,10 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 			consecutiveFailures => {
 				state.consecutivePollFailures = consecutiveFailures
 				state.retryInProgress = false
-				const delayMilliseconds = retryDelayMilliseconds(config.pollMilliseconds, consecutiveFailures)
-				if (consecutiveFailures > 0) state.nextRetryAt = new Date(Date.now() + delayMilliseconds).toISOString()
-				return waitForProfileSwitchOrDelay(delayMilliseconds)
+				if (consecutiveFailures === 0) return waitForProfileSwitchOrDelay(config.pollMilliseconds, false)
+				const delayMilliseconds = retryDelayMilliseconds(config.pollMilliseconds, consecutiveFailures, Math.random, MAXIMUM_SCAN_RETRY_DELAY_MILLISECONDS)
+				state.nextRetryAt = new Date(Date.now() + delayMilliseconds).toISOString()
+				return waitForProfileSwitchOrDelay(delayMilliseconds, true)
 			},
 			config.once,
 			error => {
@@ -1066,6 +1068,8 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 			},
 		)
 	} finally {
+		operatorStopped = true
+		await Promise.all([headWatcher.stop(), centralizedMarketSampler.stop()])
 		state.status = 'stopped'
 		await dashboard?.stop(pending.profileSwitch)
 	}

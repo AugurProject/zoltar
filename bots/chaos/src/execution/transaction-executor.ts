@@ -11,7 +11,9 @@ import { erc1155Abi, erc20Abi, openOracleAbi, securityPoolAbi } from '../contrac
 import { assertCanonicalAnchorFreshness } from '../core/canonical-freshness.ts'
 import { EXECUTOR_FINALITY_BLOCKS } from '../operations/timing.ts'
 import type { OperationEvidence, OperationPlan, OperationPreflightCall, OperationStep } from '../operations/types.ts'
-import { recordActivity, saveDurableState, type PendingTransactionIntent, type RuntimeState } from '../state/operator-state.ts'
+import { recordActivity, type PendingTransactionIntent, type RuntimeState } from '../state/operator-state.ts'
+import { observePendingTransaction } from '../state/pending-transaction-observation.ts'
+import { persist, retainUnreadableReceiptEvidence } from './recovery-journal.ts'
 import {
 	captureWorkflowIntentSubmissionJournal,
 	recoverableWorkflowForIntent,
@@ -847,6 +849,11 @@ export async function finalizedReceiptWithQuorum(environment: ExecutionEnvironme
 	if (observations.length < connectivity.rpcQuorum) {
 		throw new ConnectivityDegradedError(`receipt ${hash} requires ${connectivity.rpcQuorum.toString()} available RPC endpoints with head evidence`)
 	}
+	// Heads sampled alongside the receipt lookups cannot precede an observed inclusion block, unlike the earlier anchor.
+	const head = sharedQuorumBlockNumber(
+		observations.map(observation => observation.head),
+		connectivity.rpcQuorum,
+	)
 	const receiptObservations = observations.flatMap(({ reader, receipt }) => {
 		if (receipt === undefined) return []
 		const value: ReceiptEvidence = {
@@ -863,7 +870,7 @@ export async function finalizedReceiptWithQuorum(environment: ExecutionEnvironme
 		return [{ endpoint: reader.endpoint, receipt, value }]
 	})
 	if (receiptObservations.length === 0) {
-		return { observed: false as const, receipt: undefined }
+		return { head, includedBlock: undefined, observed: false as const, receipt: undefined }
 	}
 	if (receiptObservations.length < connectivity.rpcQuorum) {
 		throw new ConnectivityDegradedError(`receipt ${hash} requires ${connectivity.rpcQuorum.toString()} available RPC endpoints with matching receipt evidence`)
@@ -910,15 +917,7 @@ export async function finalizedReceiptWithQuorum(environment: ExecutionEnvironme
 		undefined,
 		connectivity.rpcQuorum,
 	)
-	return finalized ? { observed: true as const, receipt } : { observed: true as const, receipt: undefined }
-}
-
-async function persist(environment: ExecutionEnvironment) {
-	if (environment.persistState !== undefined) {
-		await environment.persistState(environment.state)
-		return
-	}
-	await saveDurableState(environment.settings.runtime.stateFile, environment.state)
+	return { head, includedBlock: receipt.blockNumber, observed: true as const, receipt: finalized ? receipt : undefined }
 }
 
 function receiptDispositionJournal(environment: ExecutionEnvironment, workflow: ReturnType<typeof recoverableWorkflowForIntent>) {
@@ -1169,6 +1168,8 @@ async function executeStep(environment: ExecutionEnvironment, plan: OperationPla
 	const finalized = await finalizedReceiptWithQuorum(environment, intent.hash)
 	if (finalized.receipt === undefined) {
 		intent.status = 'confirmation-unknown'
+		// Mempool visibility is only checked by recovery, so an absent receipt is left for that pass to explain.
+		if (finalized.observed) observePendingTransaction(intent, { head: finalized.head, includedBlock: finalized.includedBlock, kind: 'awaiting-finality' })
 		await persist(environment)
 		throw new TransactionAwaitingRecovery(step.label, intent.hash, ...receiptVisibilityDisposition(finalized.observed, intent.submittedAt))
 	}
@@ -1196,9 +1197,7 @@ async function executeStep(environment: ExecutionEnvironment, plan: OperationPla
 		afterBalances = await captureBalanceEvidence(environment, step.evidence, receipt.blockNumber)
 		afterStorage = await captureStorageEvidence(environment, step.evidence, receipt.blockNumber)
 	} catch (error) {
-		intent.status = 'confirmation-unknown'
-		await persist(environment)
-		throw new TransactionAwaitingRecovery(step.label, intent.hash, `confirmed receipt evidence is temporarily unavailable: ${error instanceof Error ? error.message : String(error)}`)
+		throw await retainUnreadableReceiptEvidence(environment, intent, finalized.head, receipt.blockNumber, error)
 	}
 	let evidenceDisposition: ReceiptEvidenceDisposition
 	try {

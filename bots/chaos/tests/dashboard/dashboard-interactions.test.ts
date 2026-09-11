@@ -22,6 +22,8 @@ const candidateHash = `0x${'34'.repeat(32)}`
 const cancellationHash = `0x${'56'.repeat(32)}`
 const activityHash = `0x${'78'.repeat(32)}`
 const walletAddress = `0x${'ab'.repeat(20)}`
+const explorerUrl = 'https://sepolia.etherscan.io'
+const explorerTransaction = (hash: string) => `${explorerUrl}/tx/${hash}`
 const longCatalogLabel = 'Blocked report sibling with an intentionally extended operation label that must remain associated with every mobile status field'
 const longCatalogBlocker = `Canonical blocker ${'without-a-natural-break-'.repeat(12)}must-stay-inside-the-operation-card`
 const topologyValues = {
@@ -64,7 +66,7 @@ const stalePrivateSubmissionHealth = privateSubmissionHealth.map(check => ({ ...
 const workflowSteps = [
 	{ label: 'Confirmed step', status: 'confirmed', transactionHash: `0x${'11'.repeat(32)}` },
 	{ label: 'Complete step', status: 'complete', transactionHash: `0x${'22'.repeat(32)}` },
-	{ label: 'Submitted step', status: 'submitted', transactionHash: `0x${'33'.repeat(32)}` },
+	{ label: 'Submitted step', status: 'submitted', transactionHash },
 	{ label: 'Pending step', status: 'pending', transactionHash: `0x${'44'.repeat(32)}` },
 	{ label: 'Failed step', status: 'failed', transactionHash: `0x${'55'.repeat(32)}` },
 	{ label: 'Waiting step' },
@@ -180,7 +182,9 @@ const workflowRenderingState = state({
 			cancellationHash,
 			hash: transactionHash,
 			label: 'Rendered pending transaction',
+			maxBlockNumber: '12345700',
 			nonce: 9,
+			observation: { checkedAt: new Date(Date.now() - 20_000).toISOString(), head: '12345678', includedBlock: '12345670', kind: 'awaiting-finality' },
 			replacementHash: candidateHash,
 			status: 'waiting-transaction',
 		},
@@ -267,7 +271,7 @@ browserTest(
 						readRpcUrl: `https://operator:${rpcSecret}@read-one.example/private`,
 						rpcQuorum: 2,
 					},
-					network: { chainId: 11_155_111, name: 'sepolia' },
+					network: { chainId: 11_155_111, explorerUrl, name: 'sepolia' },
 					paused: Reflect.get(initialDashboardState, 'paused') === true,
 					runtime: { execute: false },
 					submission: submissionConfigured
@@ -371,7 +375,7 @@ browserTest(
 				}
 				throw new Error(message)
 			}
-			const expectVisibleIdentifiers = async (expected: { type: string; value: string }[], minimumButtonHeight: number, selector = '.compact-identifier') => {
+			const expectVisibleIdentifiers = async (expected: { explorerUrl?: string; type: string; value: string }[], minimumButtonHeight: number, selector = '.compact-identifier') => {
 				const identifiers = await cdp.evaluate(`[...document.querySelectorAll(${JSON.stringify(selector)})].flatMap(wrapper => {
 					const bounds = wrapper.getBoundingClientRect()
 					if (bounds.width === 0 || bounds.height === 0) return []
@@ -380,6 +384,8 @@ browserTest(
 					const disclosure = wrapper.querySelector('.identifier-disclosure')
 					const disclosureBounds = disclosure?.getBoundingClientRect()
 					const full = wrapper.querySelector('.identifier-full')
+					const explorer = wrapper.querySelector('.identifier-explorer')
+					const explorerBounds = explorer?.getBoundingClientRect()
 					return [{
 						accessibleName: button?.getAttribute('aria-label'),
 						buttonHeight: buttonBounds?.height,
@@ -390,6 +396,14 @@ browserTest(
 						disclosureTabIndex: disclosure?.tabIndex,
 						disclosureVisible: (disclosureBounds?.width ?? 0) > 0 && (disclosureBounds?.height ?? 0) > 0,
 						display: wrapper.querySelector('.identifier-value')?.textContent,
+						explorerHeight: explorerBounds?.height,
+						explorerHref: explorer?.getAttribute('href') ?? null,
+						explorerName: explorer?.getAttribute('aria-label') ?? null,
+						explorerRel: explorer?.getAttribute('rel') ?? null,
+						explorerTarget: explorer?.getAttribute('target') ?? null,
+						explorerText: explorer?.textContent ?? null,
+						explorerTitle: explorer?.getAttribute('title') ?? null,
+						explorerVisible: (explorerBounds?.width ?? 0) > 0 && (explorerBounds?.height ?? 0) > 0,
 						feedback: wrapper.querySelector('.identifier-feedback')?.textContent,
 						fullHidden: full?.hidden,
 						fullValue: full?.value,
@@ -416,6 +430,18 @@ browserTest(
 					expect(Reflect.get(rendered, 'disclosureExpanded')).toBe('false')
 					expect(Reflect.get(rendered, 'fullHidden')).toBe(true)
 					expect(Reflect.get(rendered, 'fullValue')).toBe(identifier.value)
+					if (identifier.explorerUrl === undefined) {
+						expect(Reflect.get(rendered, 'explorerHref')).toBeNull()
+					} else {
+						expect(Reflect.get(rendered, 'explorerHref')).toBe(identifier.explorerUrl)
+						expect(Reflect.get(rendered, 'explorerName')).toBe(`Open ${identifier.type} on ${new URL(identifier.explorerUrl).hostname}: ${identifier.value}`)
+						expect(Reflect.get(rendered, 'explorerRel')).toBe('noreferrer')
+						expect(Reflect.get(rendered, 'explorerTarget')).toBe('_blank')
+						expect(Reflect.get(rendered, 'explorerText')).toBe('Explorer')
+						expect(Reflect.get(rendered, 'explorerTitle')).toBe(`Open on ${new URL(identifier.explorerUrl).hostname}`)
+						expect(Reflect.get(rendered, 'explorerVisible')).toBe(true)
+						expect(Reflect.get(rendered, 'explorerHeight')).toBeGreaterThanOrEqual(minimumButtonHeight)
+					}
 					const right = Reflect.get(rendered, 'right')
 					if (typeof right !== 'number') throw new Error(`Missing ${identifier.type} bounds`)
 					expect(right).toBeLessThanOrEqual(viewportRight)
@@ -716,8 +742,19 @@ browserTest(
 					}
 				}
 				expect(await cdp.evaluate(`({ scheduler: document.querySelector('#scheduler-state')?.textContent, workflow: document.querySelector('#current-workflow .workflow-heading .badge')?.textContent })`)).toEqual({ scheduler: 'Transaction recovery pending', workflow: 'Waiting transaction' })
+				const waitNote = await cdp.evaluate(`(() => {
+					const note = document.querySelector('#current-workflow .transaction-wait')
+					const bounds = note?.getBoundingClientRect()
+					return { className: note?.className, detail: note?.querySelector('small')?.textContent, headline: note?.querySelector('strong')?.textContent, visible: (bounds?.width ?? 0) > 0 && (bounds?.height ?? 0) > 0 }
+				})()`)
+				// The fixture queues a replacement, which recovery verifies before anything else, so that takes precedence over the observation.
+				expect(waitNote).toEqual({ className: 'transaction-wait info', detail: 'Waiting for its finalized receipt before the original intent is closed.', headline: 'Verifying the queued replacement', visible: true })
 				await expectVisibleIdentifiers(
-					[{ type: 'wallet address', value: walletAddress }, { type: 'activity transaction hash', value: activityHash }, ...workflowSteps.flatMap(step => (step.transactionHash === undefined ? [] : [{ type: 'workflow transaction hash', value: step.transactionHash }]))],
+					[
+						{ type: 'wallet address', value: walletAddress },
+						{ explorerUrl: explorerTransaction(activityHash), type: 'activity transaction hash', value: activityHash },
+						...workflowSteps.flatMap(step => (step.transactionHash === undefined ? [] : [{ explorerUrl: explorerTransaction(step.transactionHash), type: 'workflow transaction hash', value: step.transactionHash }])),
+					],
 					viewport.width === 390 ? 44 : 32,
 				)
 				if (viewport.width === 390) {
@@ -1009,11 +1046,29 @@ browserTest(
 
 				await cdp.command('Page.navigate', { url: new URL('/recovery', dashboard.url).href })
 				await waitFor("document.querySelector('#pending-transactions .identifier-copy') !== null", `${viewport.label} recovery identifiers did not render`)
+				expect(await cdp.evaluate("document.querySelector('#pending-transactions .transaction-wait strong')?.textContent")).toBe('Verifying the queued replacement')
+				expect(
+					await cdp.evaluate(`(() => {
+						const row = document.querySelector('#pending-transactions .stack-row')
+						const note = row?.querySelector('.transaction-wait')
+						const headline = note?.querySelector('strong')
+						const detail = note?.querySelector('small')
+						if (!(row instanceof HTMLElement) || !(note instanceof HTMLElement) || !(headline instanceof HTMLElement) || !(detail instanceof HTMLElement)) return undefined
+						const rowStyle = getComputedStyle(row)
+						const noteStyle = getComputedStyle(note)
+						const contentHeight = headline.offsetHeight + detail.offsetHeight + parseFloat(noteStyle.rowGap) + parseFloat(noteStyle.paddingTop) + parseFloat(noteStyle.paddingBottom) + parseFloat(noteStyle.borderTopWidth) + parseFloat(noteStyle.borderBottomWidth)
+						return {
+							contained: note.getBoundingClientRect().bottom <= row.getBoundingClientRect().bottom && note.getBoundingClientRect().top >= row.getBoundingClientRect().top,
+							contentSized: Math.abs(note.offsetHeight - contentHeight) <= 2,
+							fullWidth: Math.round(note.getBoundingClientRect().width) === Math.round(row.clientWidth - parseFloat(rowStyle.paddingLeft) - parseFloat(rowStyle.paddingRight)),
+						}
+					})()`),
+				).toEqual({ contained: true, contentSized: true, fullWidth: true })
 				await expectVisibleIdentifiers(
 					[
-						{ type: 'pending transaction hash', value: transactionHash },
-						{ type: 'replacement transaction hash', value: candidateHash },
-						{ type: 'cancellation transaction hash', value: cancellationHash },
+						{ explorerUrl: explorerTransaction(transactionHash), type: 'pending transaction hash', value: transactionHash },
+						{ explorerUrl: explorerTransaction(candidateHash), type: 'replacement transaction hash', value: candidateHash },
+						{ explorerUrl: explorerTransaction(cancellationHash), type: 'cancellation transaction hash', value: cancellationHash },
 					],
 					viewport.width === 390 ? 44 : 32,
 				)

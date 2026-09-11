@@ -612,6 +612,27 @@ describe('shared bot primitives', () => {
 		}
 	})
 
+	test('routes batched multicall reads through the contextual pool with failover and error context', async () => {
+		const healthy = Bun.serve({ port: 0, fetch: () => Response.json({ id: 1, jsonrpc: '2.0', result: '0x' }) })
+		try {
+			if (healthy.port === undefined) throw new Error('RPC pool test server did not expose a port')
+			const healthyUrl = `http://127.0.0.1:${healthy.port.toString()}`
+			const pool = createRpcEndpointPool(['http://127.0.0.1:1', healthyUrl], { timeoutMilliseconds: 100 })
+			const client = createContextualPublicClient(mainnet, pool)
+			const erc20Abi = [{ type: 'function', name: 'decimals', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint8' }] }] as const
+			const failure: unknown = await client.multicall({ allowFailure: true, contracts: [{ abi: erc20Abi, address: `0x${'11'.repeat(20)}`, functionName: 'decimals' }], multicallAddress: `0x${'22'.repeat(20)}` }).then(
+				() => undefined,
+				(error: unknown) => error,
+			)
+			// The refused endpoint was skipped and the empty response is attributed to the endpoint and the eth_call it answered.
+			expect(String(failure)).toContain(`RPC ${healthyUrl} failed while calling eth_call`)
+			expect(pool.snapshot()[0]).toMatchObject({ consecutiveFailures: 1, status: 'degraded' })
+			expect(pool.snapshot()[1]).toMatchObject({ status: 'healthy' })
+		} finally {
+			healthy.stop(true)
+		}
+	})
+
 	test('omits one refused endpoint from endpoint-bound quorum reads', async () => {
 		const first = Bun.serve({ port: 0, fetch: () => Response.json({ id: 1, jsonrpc: '2.0', result: '0x1' }) })
 		const second = Bun.serve({ port: 0, fetch: () => Response.json({ id: 1, jsonrpc: '2.0', result: '0x1' }) })
