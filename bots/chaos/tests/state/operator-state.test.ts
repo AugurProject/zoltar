@@ -772,6 +772,28 @@ describe('chaos-bot durable state', () => {
 		expect(restored?.recoveryBlocker).toContain('window closed')
 	})
 
+	test('round-trips the latest pending transaction observation and rejects inconsistent ones', async () => {
+		const path = await statePath()
+		const state = await populatedState()
+		const intent = state.pendingTransactions[0]
+		if (intent === undefined) throw new Error('Expected a pending workflow fixture')
+		intent.observation = { checkedAt: createdAt, head: 130n, includedBlock: 125n, kind: 'awaiting-finality' }
+		await saveDurableState(path, state)
+		expect((await loadDurableState(path, 1)).pendingTransactions[0]?.observation).toEqual({ checkedAt: createdAt, head: 130n, includedBlock: 125n, kind: 'awaiting-finality' })
+		intent.observation = { checkedAt: createdAt, head: 130n, kind: 'in-mempool' }
+		await saveDurableState(path, state)
+		expect((await loadDurableState(path, 1)).pendingTransactions[0]?.observation).toEqual({ checkedAt: createdAt, head: 130n, kind: 'in-mempool' })
+		const stored = JSON.parse(await readFile(path, 'utf8')) as { pendingTransactions: Array<Record<string, unknown>> }
+		const storedTransaction = stored.pendingTransactions[0]
+		if (storedTransaction === undefined) throw new Error('Expected a stored pending transaction')
+		storedTransaction['observation'] = { checkedAt: createdAt, head: '130', includedBlock: '125', kind: 'in-mempool' }
+		await writeFile(path, `${JSON.stringify(stored)}\n`)
+		await expect(loadDurableState(path, 1)).rejects.toThrow('includedBlock must accompany exactly the included kinds')
+		storedTransaction['observation'] = { checkedAt: createdAt, head: '130', kind: 'included' }
+		await writeFile(path, `${JSON.stringify(stored)}\n`)
+		await expect(loadDurableState(path, 1)).rejects.toThrow('observation.kind is invalid')
+	})
+
 	test('round-trips the canonical report, auction bid, and escalation deposit index', async () => {
 		const path = await statePath()
 		const state = initialDurableState(1)
