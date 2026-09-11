@@ -1,6 +1,6 @@
 type LocalSettlementBidStatus = 'claimed' | 'refunded'
 
-export type TruthAuctionSettlementAction = 'claimAuctionProceeds' | 'refundLosingBids'
+type TruthAuctionSettlementAction = 'claimAuctionProceeds' | 'refundLosingBids'
 
 export function getTruthAuctionSettlementAction({ selectionHasClaims, selectionHasRefunds, truthAuctionFinalized }: { selectionHasClaims: boolean; selectionHasRefunds: boolean; truthAuctionFinalized: boolean }): TruthAuctionSettlementAction | undefined {
 	if (selectionHasClaims) return 'claimAuctionProceeds'
@@ -15,14 +15,14 @@ type TruthAuctionSettlementPendingAction = {
 	refundKeys: string[]
 }
 
-export type TruthAuctionSettlementActionState = {
+type TruthAuctionSettlementActionState = {
 	pendingAction: TruthAuctionSettlementPendingAction | undefined
 	refreshToken: number
 	resultByKey: Record<string, LocalSettlementBidStatus>
 	selectedBidKeys: string[]
 }
 
-export type TruthAuctionSettlementActionStateEvent =
+type TruthAuctionSettlementActionStateEvent =
 	| { type: 'reset' }
 	| { type: 'selectBidKeys'; selectedBidKeys: string[] }
 	| { type: 'submit'; action: TruthAuctionSettlementAction; claimKeys: string[]; ignoredResultHash: string | undefined; refundKeys: string[] }

@@ -38,8 +38,9 @@
 			"ignoreUnresolved": ["./bun-test-setup-solidity.ts"]
 		},
 		"ui/zoltarShared": {
-			"entry": ["ts/**/*.ts", "ts/**/*.tsx"],
-			"project": ["ts/**/*.ts", "ts/**/*.tsx"],
+			"entry": [],
+			"includeEntryExports": true,
+			"project": ["ts/**/*.{ts,tsx}!"],
 			"paths": {
 				"@zoltar/ui-core-shared/*": ["../coreShared/ts/*"],
 				"@zoltar/ui-zoltar-shared/*": ["./ts/*"],
@@ -52,8 +53,9 @@
 			"ignoreDependencies": ["bun-types"]
 		},
 		"ui/statoblastShared": {
-			"entry": ["ts/**/*.ts", "ts/**/*.tsx"],
-			"project": ["ts/**/*.ts", "ts/**/*.tsx"],
+			"entry": [],
+			"includeEntryExports": true,
+			"project": ["ts/**/*.{ts,tsx}!"],
 			"paths": {
 				"@zoltar/ui-core-shared/*": ["../coreShared/ts/*"],
 				"@zoltar/ui-zoltar-shared/*": ["../zoltarShared/ts/*"],

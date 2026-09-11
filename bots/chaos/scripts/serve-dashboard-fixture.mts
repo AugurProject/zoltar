@@ -75,7 +75,7 @@ function state() {
 					{
 						at: new Date(now - 380_000).toISOString(),
 						details:
-							'Operation open-oracle.report in open-oracle; selectable; random priority; medium risk; planned at block 8842001. Inputs: reportId → 8124. Planned transactions: 1. Approve report settlement token (to 0xbbbbbb…bbbb, selector 0x095ea7b3, gas 120000) 2. Submit the anchored report (to 0xaaaaaa…aaaa, selector 0x8f6b4d91, gas 420000, value 15000000000000000 wei) Expected outcome: The anchored report is recorded for settlement.',
+							'Operation open-oracle.report in open-oracle; selectable; random priority; medium risk; planned at block 8842001. Inputs: reportId → 8124. Planned transactions: 1. Approve report settlement token (to 0xbbbbbb…bbbb, selector 0x095ea7b3, gas 120000) 2. Submit the anchored report (to 0xaaaaaa…aaaa, selector 0x8f6b4d91, gas 420000, value 15000000000000000 attoETH) Expected outcome: The anchored report is recorded for settlement.',
 						ecosystem: 'open-oracle',
 						message: 'Report workflow planned',
 						operationId: 'open-oracle.report',

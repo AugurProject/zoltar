@@ -7,7 +7,9 @@ const baseUrl = process.env.TRADING_QA_URL ?? 'http://127.0.0.1:4163'
 const selectedNames = new Set((process.env.TRADING_QA_SCENARIOS ?? '').split(',').filter(name => name !== ''))
 const injectedFailure = process.env.TRADING_QA_INJECT_FAILURE
 const debuggingPort = 9227
-const simulationPath = '/?simulate=1&simScenario=trading'
+const simulationPath = '/?simulate=1&simScenario=trading-funded'
+// The Deployed scenario seeds a SecurityPool without a trading market, which the SecurityPools browse and market creation need.
+const deployedSimulationPath = '/?simulate=1&simScenario=deployed'
 await fs.mkdir(outputDirectory, { recursive: true })
 const userDataDirectory = await fs.mkdtemp('/tmp/zoltar-trading-qa-browser-')
 const browser = Bun.spawn({
@@ -127,6 +129,14 @@ const openSeededPool = `(async () => {
 	}
 	return false
 })()`
+const waitForWalletBalances = `(async () => {
+	for (let attempt = 0; attempt < 600; attempt++) {
+		const term = [...document.querySelectorAll('dt')].find(node => node.textContent === 'Wallet YES')
+		if (term?.nextElementSibling?.textContent?.endsWith(' YES') === true) return true
+		await new Promise(resolve => setTimeout(resolve, 100))
+	}
+	throw new Error('Wallet balances did not load for the seeded market')
+})()`
 const commonAssertion = `document.querySelector('.demo-banner') === null && !document.body.textContent?.includes('SIMULATED DATA') && !document.body.textContent?.includes('Demo mode') && !document.body.textContent?.includes('Loading...') && document.querySelector('.simulation-banner-details') !== null && document.querySelector('.top-shell .overview-panel') !== null && document.documentElement.scrollWidth <= document.documentElement.clientWidth`
 const waitForRouteHeading = (heading: string) => `(async () => {
 	for (let attempt = 0; attempt < 600; attempt++) {
@@ -151,6 +161,44 @@ const scenarios = [
 	})),
 	...(
 		[
+			['simulation-markets-desktop', 1440, 900],
+			['simulation-markets-mobile', 390, 844],
+		] as const
+	).map(([name, width, height]) => ({
+		name,
+		width,
+		height,
+		path: `${simulationPath}#/markets`,
+		assertExpression: `(async () => { await (${waitForSeededPool}); return ${commonAssertion} && document.title === 'Browse markets · Statoblast trading' && document.querySelector('a[aria-current="page"]')?.textContent === 'Market' && document.querySelectorAll('.market-row').length > 0 })()`,
+	})),
+	...(
+		[
+			['simulation-market-detail-desktop', 1440, 900],
+			['simulation-market-detail-mobile', 390, 844],
+		] as const
+	).map(([name, width, height]) => ({
+		name,
+		width,
+		height,
+		path: `${simulationPath}#/markets`,
+		evaluate: `(async () => { if (!(await (${openSeededPool}))) return false; return await (${waitForWalletBalances}) })()`,
+		assertExpression: `(${commonAssertion}) && location.hash.startsWith('#/market/') && document.title === 'Market · Statoblast trading' && document.querySelector('.market-stack .section .fact-list') !== null && document.querySelector('.market-list') === null && !document.body.textContent?.includes('Loading balances')`,
+	})),
+	...(
+		[
+			['simulation-liquidity-desktop', 1440, 900],
+			['simulation-liquidity-mobile', 390, 844],
+		] as const
+	).map(([name, width, height]) => ({
+		name,
+		width,
+		height,
+		path: `${simulationPath}#/markets`,
+		evaluate: `(async () => { if (!(await (${openSeededPool}))) return false; const link = [...document.querySelectorAll('.tab-nav a')].find(anchor => anchor.textContent?.trim() === 'Liquidity'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); for (let attempt = 0; attempt < 100; attempt++) { if (location.hash.startsWith('#/liquidity/') && [...document.querySelectorAll('.operation-block h3')].some(heading => heading.textContent === 'Live liquidity')) return true; await new Promise(resolve => setTimeout(resolve, 100)); } return false })()`,
+		assertExpression: `(${commonAssertion}) && location.hash.startsWith('#/liquidity/') && document.title === 'Liquidity · Statoblast trading' && document.querySelector('a[aria-current="page"]')?.textContent === 'Liquidity' && [...document.querySelectorAll('.operation-block h3')].some(heading => heading.textContent === 'Live liquidity')`,
+	})),
+	...(
+		[
 			['simulation-security-pools-desktop', 1440, 900],
 			['simulation-security-pools-mobile', 390, 844],
 		] as const
@@ -158,7 +206,7 @@ const scenarios = [
 		name,
 		width,
 		height,
-		path: `${simulationPath}#/security-pools`,
+		path: `${deployedSimulationPath}#/security-pools`,
 		assertExpression: `(async () => { await (${waitForSeededPool}); return ${commonAssertion} && document.title === 'Browse SecurityPools · Statoblast trading' && document.querySelectorAll('.market-row').length > 0 })()`,
 	})),
 	...(
@@ -170,7 +218,7 @@ const scenarios = [
 		name,
 		width,
 		height,
-		path: `${simulationPath}#/security-pools`,
+		path: `${deployedSimulationPath}#/security-pools`,
 		evaluate: openSeededPool,
 		assertExpression: `(${commonAssertion}) && location.hash.startsWith('#/create-market/') && document.title === 'Create new market · Statoblast trading' && document.querySelector('a[aria-current="page"]')?.textContent === 'Create new market' && document.querySelector('.market-stack .section .fact-list') !== null && document.querySelector('.market-list') === null && [...document.querySelectorAll('.operation-block h3')].some(heading => heading.textContent === 'Live liquidity')`,
 	})),
@@ -226,7 +274,7 @@ const scenarios = [
 		name: 'simulation-scenario-navigation-desktop',
 		width: 1440,
 		height: 900,
-		path: `${simulationPath}#/security-pools`,
+		path: `${simulationPath}#/markets`,
 		evaluate: `(async () => {
 			await (${waitForSeededPool})
 			const details = document.querySelector('.simulation-banner-details')
@@ -247,10 +295,10 @@ const scenarios = [
 			history.back()
 			for (let attempt = 0; attempt < 600; attempt++) {
 				const currentSelect = document.querySelector('.simulation-control-select')
-				if (location.href.includes('simScenario=trading') && currentSelect instanceof HTMLSelectElement && currentSelect.value === 'scenario:trading' && document.querySelector('.market-row') !== null) break
+				if (location.href.includes('simScenario=trading-funded') && currentSelect instanceof HTMLSelectElement && currentSelect.value === 'scenario:trading-funded' && document.querySelector('.market-row') !== null) break
 				await new Promise(resolve => setTimeout(resolve, 100))
 			}
-			if (!location.href.includes('simScenario=trading') || document.querySelector('.simulation-control-select')?.value !== 'scenario:trading' || document.querySelector('.market-row') === null) throw new Error('Browser Back did not restore the seeded Trading environment: ' + location.href + ' / ' + document.querySelector('.simulation-control-select')?.value + ' / ' + document.querySelector('.error-notice')?.textContent)
+			if (!location.href.includes('simScenario=trading-funded') || document.querySelector('.simulation-control-select')?.value !== 'scenario:trading-funded' || document.querySelector('.market-row') === null) throw new Error('Browser Back did not restore the seeded Trading environment: ' + location.href + ' / ' + document.querySelector('.simulation-control-select')?.value + ' / ' + document.querySelector('.error-notice')?.textContent)
 			history.forward()
 			for (let attempt = 0; attempt < 600; attempt++) {
 				const currentSelect = document.querySelector('.simulation-control-select')
@@ -268,27 +316,27 @@ const scenarios = [
 			if (!location.hash.startsWith('#/liquidity?') || document.body.textContent?.includes('Page not found')) throw new Error('Liquidity navigation lost the Baseline scenario')
 			history.back()
 			for (let attempt = 0; attempt < 100; attempt++) {
-				if (location.hash.startsWith('#/security-pools?') && location.hash.includes('simScenario=baseline') && document.querySelector('a[aria-current="page"]')?.textContent === 'Create new market') break
+				if (location.hash.startsWith('#/markets?') && location.hash.includes('simScenario=baseline') && document.querySelector('a[aria-current="page"]')?.textContent === 'Market') break
 				await new Promise(resolve => setTimeout(resolve, 100))
 			}
 			const restoredSelect = document.querySelector('.simulation-control-select')
-			if (!(restoredSelect instanceof HTMLSelectElement) || restoredSelect.value !== 'scenario:baseline') throw new Error('Browser Back did not restore the Baseline SecurityPools route')
-			restoredSelect.value = 'scenario:trading'
+			if (!(restoredSelect instanceof HTMLSelectElement) || restoredSelect.value !== 'scenario:baseline') throw new Error('Browser Back did not restore the Baseline markets route')
+			restoredSelect.value = 'scenario:trading-funded'
 			restoredSelect.dispatchEvent(new Event('change', { bubbles: true }))
 			for (let attempt = 0; attempt < 600; attempt++) {
-				if (location.hash.includes('simScenario=trading') && document.querySelector('.market-row') !== null) return true
+				if (location.hash.includes('simScenario=trading-funded') && document.querySelector('.market-row') !== null) return true
 				await new Promise(resolve => setTimeout(resolve, 100))
 			}
 			throw new Error('Trading did not restore its seeded environment after scenario navigation: ' + location.hash + ' / ' + document.querySelector('.simulation-control-select')?.value + ' / ' + document.querySelector('.error-notice')?.textContent)
 		})()`,
-		assertExpression: `(${commonAssertion}) && location.hash.includes('simScenario=trading') && document.querySelector('.market-row') !== null`,
+		assertExpression: `(${commonAssertion}) && location.hash.includes('simScenario=trading-funded') && document.querySelector('.market-row') !== null`,
 	},
 	{
 		name: 'simulation-scenario-direct-reload-desktop',
 		width: 1440,
 		height: 900,
-		path: '/#/security-pools?simulate=1&simScenario=trading',
-		assertExpression: `(async () => { await (${waitForSeededPool}); return ${commonAssertion} && location.hash === '#/security-pools?simulate=1&simScenario=trading' && document.querySelector('a[aria-current="page"]')?.textContent === 'Create new market' && !document.body.textContent?.includes('Page not found') })()`,
+		path: '/#/markets?simulate=1&simScenario=trading-funded',
+		assertExpression: `(async () => { await (${waitForSeededPool}); return ${commonAssertion} && location.hash === '#/markets?simulate=1&simScenario=trading-funded' && document.querySelector('a[aria-current="page"]')?.textContent === 'Market' && !document.body.textContent?.includes('Page not found') })()`,
 	},
 ] as const
 

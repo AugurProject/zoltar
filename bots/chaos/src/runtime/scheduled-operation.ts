@@ -32,7 +32,7 @@ function functionSelector(data: string) {
 
 function describeStep(step: OperationPlan['steps'][number], index: number) {
 	const parts = [`to ${shortAddress(step.to)}`, `selector ${functionSelector(step.data)}`, `gas ${step.gasLimit}`]
-	if (step.value !== undefined && step.value !== '0') parts.push(`value ${step.value} wei`)
+	if (step.value !== undefined && step.value !== '0') parts.push(`value ${step.value} attoETH`)
 	return `${(index + 1).toString()}. ${step.label} (${parts.join(', ')})`
 }
 

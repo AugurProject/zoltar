@@ -154,7 +154,7 @@ Choose the smallest relevant scenario:
 - `simScenario=deployed`
 - `simScenario=security-pool`
 - `simScenario=securitypoolx2`
-- `simScenario=trading`
+- `simScenario=trading-funded`
 
 Check the changed flow at desktop and narrow/mobile widths, including relevant empty, loading, disabled, pending, success, and failure states. Uniswap-backed REP pricing is intentionally unavailable in simulation; quote-dependent UI must degrade gracefully.
 

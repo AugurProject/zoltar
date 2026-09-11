@@ -56,7 +56,7 @@ test('a dry-run activity records the exact planned work and publishes it to the 
 	expect(details).toContain('Operation zoltar.question.create-categorical in zoltar; selectable; random priority; low risk; planned at block 4210.')
 	expect(details).toContain('Inputs: outcomeCount → 4.')
 	expect(details).toContain('1. Approve REP spending (to 0x111111…1111, selector 0x095ea7b3, gas 120000)')
-	expect(details).toContain('2. Create the question (to 0x222222…2222, selector 0xabcdef01, gas 450000, value 1500 wei)')
+	expect(details).toContain('2. Create the question (to 0x222222…2222, selector 0xabcdef01, gas 450000, value 1500 attoETH)')
 	expect(details).toContain('Expected outcome: A categorical question exists in the genesis universe.')
 	expect(details).toContain('Deadline: 2026-09-10T00:26:40.000Z.')
 	const published = publicChaosState({ activities: state.activities })
