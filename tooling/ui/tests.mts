@@ -38,8 +38,8 @@ async function getAllFiles(dirPath: string, fileList: string[] = []) {
 	return fileList
 }
 
-export async function buildTests(target: TestBuildTarget) {
-	const { testSourceRoot, testOutputRoot } = getTestBuildRoots(target)
+export async function buildTests(target: TestBuildTarget, testOutputRoot = getTestBuildRoots(target).testOutputRoot) {
+	const { testSourceRoot } = getTestBuildRoots(target)
 	const testFiles = (await getAllFiles(testSourceRoot)).filter(filePath => filePath.endsWith('.ts') || filePath.endsWith('.tsx'))
 	await fs.rm(testOutputRoot, { recursive: true, force: true })
 	await fs.mkdir(testOutputRoot, { recursive: true })

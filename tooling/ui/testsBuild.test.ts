@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import * as path from 'node:path'
 import { existsSync, promises as fs } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { buildTests, getTestBuildRoots, isTestBuildTarget, parseTestBuildTarget } from './tests.mts'
 import { UI_APP_IDS, getUiAppPaths, getUiCoreSharedPaths } from './appPaths.mts'
 
@@ -36,21 +37,25 @@ describe('UI test build output paths', () => {
 		}
 	})
 
+	// Build into a temporary root: rewriting the real ui/*/js/tests trees mid-process changes how later tests in the same
+	// process resolve @zoltar/ui-* test utilities (Bun prefers the compiled export target once it exists).
 	test('building a target emits compiled output into only that target tree', async () => {
-		for (const appId of UI_APP_IDS) {
-			const { testSourceRoot, testOutputRoot } = getTestBuildRoots(appId)
-			if (!existsSync(testSourceRoot)) continue
-			const builtCount = await buildTests(appId)
-			expect(builtCount).toBeGreaterThan(0)
-			expect(existsSync(testOutputRoot)).toBe(true)
-			const compiledFiles = (await fs.readdir(testOutputRoot, { recursive: true })).filter(entry => String(entry).endsWith('.js'))
-			expect(compiledFiles.length).toBe(builtCount)
-		}
-		const { coreSharedTestSourceRoot, coreSharedTestOutputRoot } = getUiCoreSharedPaths()
-		if (existsSync(coreSharedTestSourceRoot)) {
-			const builtCount = await buildTests('coreShared')
-			expect(builtCount).toBeGreaterThan(0)
-			expect(existsSync(coreSharedTestOutputRoot)).toBe(true)
+		const outputRoot = await fs.mkdtemp(path.join(tmpdir(), 'zoltar-ui-test-build-'))
+		try {
+			const builtTargets: string[] = []
+			for (const target of ['coreShared', ...UI_APP_IDS] as const) {
+				if (!existsSync(getTestBuildRoots(target).testSourceRoot)) continue
+				const testOutputRoot = path.join(outputRoot, target)
+				const builtCount = await buildTests(target, testOutputRoot)
+				builtTargets.push(target)
+				expect(builtCount).toBeGreaterThan(0)
+				const compiledFiles = (await fs.readdir(testOutputRoot, { recursive: true })).filter(entry => String(entry).endsWith('.js'))
+				expect(compiledFiles.length).toBe(builtCount)
+				expect((await fs.readdir(outputRoot)).sort()).toEqual([...builtTargets].sort())
+			}
+			expect(builtTargets).toContain('coreShared')
+		} finally {
+			await fs.rm(outputRoot, { force: true, recursive: true })
 		}
 	}, 60000)
 })
