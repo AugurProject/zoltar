@@ -78,7 +78,7 @@ describe('live workflow safety boundary', () => {
 			await cleanupRendered?.()
 			cleanupRendered = undefined
 		},
-		url: 'http://localhost/?demo=0#/market',
+		url: `http://localhost/?demo=0#/market/${pool}`,
 	})
 
 	test('keeps the hash visible and every competing write locked after receipt polling and wallet context fail', async () => {
@@ -145,7 +145,7 @@ describe('live workflow safety boundary', () => {
 			universeForkTime: 0n,
 			vaultCount: 1n,
 			shareTokenSupplyAttoShares: 100n * 10n ** 18n,
-			settlementCollateralAttoEth: 10n * 10n ** 18n,
+			settlementCollateralAttoEth: 100n * 10n ** 18n,
 			currentRetentionRate: 10n ** 18n,
 			totalCapacityOwnershipAttoRep: 1n,
 			feeEligibleCapacityOwnershipAttoRep: 1n,
@@ -189,7 +189,11 @@ describe('live workflow safety boundary', () => {
 			validateLiveDeployment: async () => undefined,
 			discoverLiveUniverseMarketPage: discoverSelectedUniverse,
 			discoverTradingMarketPage: discoverSelectedUniverse,
-			discoverAddressedMarket: async () => ({ ...(await discoverSelectedUniverse(undefined, undefined, 1n)), markets: [{ ...market, endTime: discoveredEndTime, loadError: discoveredLoadError }] }),
+			discoverUniverses: async (_client: unknown, _configuration: unknown, requestedUniverseId: bigint | undefined) => ({ ...(await discoverSelectedUniverse(undefined, undefined, requestedUniverseId)), markets: [] }),
+			discoverAddressedMarket: async (_client: unknown, _configuration: unknown, address: Address) => {
+				const discovered = await discoverSelectedUniverse(undefined, undefined, 1n)
+				return { ...discovered, markets: discovered.markets.filter(candidate => candidate.pool.toLowerCase() === address.toLowerCase()) }
+			},
 			discoverAllLiveMarketsInUniverse: discoverSelectedUniverse,
 			walletChainId: async () => {
 				if (deferredWalletChainRead !== undefined) {
@@ -243,24 +247,35 @@ describe('live workflow safety boundary', () => {
 		const liquidityServices = liveLiquidityServices
 		const LiveTrading = (props: Parameters<typeof ProductionLiveTrading>[0]) => <ProductionLiveTrading {...props} controllerServices={controllerServices} liquidityServices={liquidityServices} settlementServices={liveSettlementServices} />
 		const workflowLocks: boolean[] = []
-		let rendered = await renderIntoDocument(<LiveTrading route='market' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />)
+		const marketRoute = `market/${pool}` as const
+		const liquidityRoute = `liquidity/${pool}` as const
+		// Manual refresh controls are gone; leaving and re-entering the addressed route runs an explicit refresh.
+		const rerouteForRefresh = async (route: 'market' | 'portfolio' | typeof marketRoute | typeof liquidityRoute, selectedUniverse = '1') => {
+			await act(() => render(<LiveTrading route='security-pools' configuration={configuration} configurationError={undefined} selectedUniverseId={selectedUniverse} onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
+			await flush()
+			await act(() => render(<LiveTrading route={route} configuration={configuration} configurationError={undefined} selectedUniverseId={selectedUniverse} onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
+			await flush()
+		}
+		let rendered = await renderIntoDocument(<LiveTrading route={marketRoute} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />)
 		cleanupRendered = rendered.cleanup
 		await flush()
 		for (const phrase of forbiddenLiveCopy) expect(document.body.textContent?.toLowerCase()).not.toContain(phrase.toLowerCase())
 		expect(document.body.textContent).not.toContain('2 nETH / gas')
 		expect(document.body.textContent).toContain('Unsupported on-chain timestamp')
 		expect(document.body.textContent).not.toContain('Unsupported on-chain timestamp UTC')
+		expect(document.body.textContent).not.toContain('Refresh')
+		expect(document.body.textContent).not.toContain('Ready to simulate')
+		expect(document.body.textContent).not.toContain('Pool and reserve details')
+		expect(document.body.textContent).not.toContain('Current spot price')
 		discoveredLoadError = 'market RPC unavailable'
-		await act(async () => button('Refresh').click())
-		await flush()
+		await rerouteForRefresh(marketRoute)
 		expect(document.body.textContent).toContain('Market data unavailable')
 		expect(document.body.textContent).toContain(pool)
 		expect(document.body.textContent).not.toContain(shareToken)
 		expect(document.body.textContent).not.toContain('Question ID2')
 		expect(document.body.textContent).not.toContain('INVALID 256 · YES 257 · NO 258')
 		discoveredLoadError = undefined
-		await act(async () => button('Refresh').click())
-		await flush()
+		await rerouteForRefresh(marketRoute)
 		discoveredEndTime = now + 2n
 
 		deferredWalletChainRead = deferred<number>()
@@ -287,6 +302,9 @@ describe('live workflow safety boundary', () => {
 		await act(() => render(<LiveTrading route={poolRoute} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} walletConnectRequestNonce={1} />, rendered.container))
 		await walletChainReadStarted.promise
 		await act(() => render(<LiveTrading route='markets' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} walletConnectRequestNonce={1} />, rendered.container))
+		await waitForDom(() => document.querySelectorAll('.market-row').length === 2, 'browse rows')
+		expect(document.querySelector(`.market-row a[href="#/market/${pool}"]`)).not.toBeNull()
+		expect(document.querySelector(`.market-row a[href="#/liquidity/${pool}"]`)).not.toBeNull()
 		deferredWalletChainRead.reject(new Error('Wallet request rejected after navigation'))
 		await settleAsyncWorkflow()
 		expect(document.body.textContent).not.toContain('Wallet request rejected after navigation')
@@ -298,6 +316,8 @@ describe('live workflow safety boundary', () => {
 		await act(() => render(<LiveTrading route='market' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
 		await settleAsyncWorkflow()
 		await flush()
+		expect(document.querySelector('.market-lookup')).not.toBeNull()
+		expect(document.querySelector('.market-lookup a[href="#/markets"]')).not.toBeNull()
 		deferredWalletChainRead = deferred<number>()
 		walletChainReadStarted = deferred<undefined>()
 		const discoveriesBeforeMidConnectUniverseChange = discoveredUniverseIds.length
@@ -373,15 +393,13 @@ describe('live workflow safety boundary', () => {
 		await act(() => render(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
 		await flush()
 		rejectDiscovery = true
-		await act(async () => button('Refresh').click())
-		await flush()
+		await rerouteForRefresh('portfolio')
 		expect(Array.from(document.querySelectorAll('[role="alert"]')).filter(candidate => candidate.textContent?.includes('SecurityPool discovery failed') === true)).toHaveLength(1)
-		expect(Array.from(document.querySelectorAll('button')).filter(candidate => candidate.textContent?.trim() === 'Refresh')).toHaveLength(1)
+		expect(hasButton('Refresh')).toBeFalse()
 		expect(document.body.textContent).not.toContain('Retry balances')
 		rejectDiscovery = false
-		await act(async () => button('Refresh').click())
-		await flush()
-		await act(() => render(<LiveTrading route='market' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
+		await rerouteForRefresh('portfolio')
+		await act(() => render(<LiveTrading route={marketRoute} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
 		await flush()
 		connectedAccount = `0x${'9a'.repeat(20)}` as Address
 		await act(async () => walletListeners.get('accountsChanged')?.([connectedAccount]))
@@ -396,8 +414,9 @@ describe('live workflow safety boundary', () => {
 		expect(walletSummaries.length).toBeGreaterThan(summariesBeforeChainRefresh)
 		expect(walletSummaries.at(-1)).toMatchObject({ account: connectedAccount, ethAttoEth: 5n * 10n ** 18n, repAttoRep: 6n * 10n ** 18n, status: 'ready' })
 		expect(document.body.textContent).not.toContain('Refreshing wallet context')
-		await act(() => render(<LiveTrading route='market' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
+		await act(() => render(<LiveTrading route={marketRoute} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
 		await settleAsyncWorkflow()
+		await waitForDom(() => document.body.textContent?.includes('1 YES') === true, 'wallet balances for the addressed market')
 
 		await act(async () => button('Enter').click())
 		await act(async () => button('Preview trade').click())
@@ -426,6 +445,9 @@ describe('live workflow safety boundary', () => {
 		positionReceipt.resolve({ status: 'success' })
 		await settleAsyncWorkflow()
 		expect(document.body.textContent).toContain('Enter YES confirmed on-chain')
+		// The post-receipt refresh revalidates balances without hiding the ones already on screen.
+		expect(document.body.textContent).not.toContain('Loading balances')
+		expect(document.body.textContent).toContain('1 YES')
 		expect(document.querySelector('.transaction-hash')?.textContent).toContain(replacementTransactionHash)
 		deferPositionBroadcast = false
 		waitForPositionReceipt = false
@@ -444,25 +466,20 @@ describe('live workflow safety boundary', () => {
 		expect(document.querySelector('.transaction-hash')).toBeNull()
 
 		await act(async () => button('Exit').click())
-		const positionAction = document.querySelector('.operation-block .tx-action-button')
-		const poolMechanics = document.querySelector('.operation-block .pool-mechanics')
-		if (positionAction === null || poolMechanics === null) throw new Error('Missing position action or pool mechanics disclosure')
-		expect(positionAction.compareDocumentPosition(poolMechanics) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
-		const secondMarketButton = Array.from(document.querySelectorAll<HTMLButtonElement>('.live-market-button')).find(candidate => candidate.textContent?.includes('Second rendered workflow market') === true)
-		if (secondMarketButton === undefined) throw new Error('Missing second market selector')
+		expect(document.querySelector('.operation-block .tx-action-button')).not.toBeNull()
+		expect(document.querySelector('.operation-block .pool-mechanics')).toBeNull()
 		expect(document.body.textContent).not.toContain('Factory discovery')
-		expect(document.querySelector('.market-list.section')).toBeNull()
+		expect(document.querySelector('.market-list')).toBeNull()
 		expect(document.querySelector('.market-stack')).not.toBeNull()
-		await act(async () => secondMarketButton.click())
+		await act(() => render(<LiveTrading route={`market/${secondPool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
 		await settleAsyncWorkflow()
 		expect(document.querySelector('.transaction-hash')).toBeNull()
-		const firstMarketButton = Array.from(document.querySelectorAll<HTMLButtonElement>('.live-market-button')).find(candidate => candidate.textContent?.includes('Rendered workflow market') === true && candidate.textContent?.includes('Second') !== true)
-		if (firstMarketButton === undefined) throw new Error('Missing first market selector')
-		await act(async () => firstMarketButton.click())
+		expect(document.body.textContent).toContain('Second rendered workflow market')
+		await act(() => render(<LiveTrading route={marketRoute} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
 		await settleAsyncWorkflow()
-		await act(() => render(<LiveTrading route='liquidity' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} />, rendered.container))
-		await act(async () => button('Refresh').click())
+		await act(() => render(<LiveTrading route={liquidityRoute} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} />, rendered.container))
 		await flush()
+		await waitForDom(() => hasButton('Remove'), 'liquidity controls')
 		await act(async () => button('Remove').click())
 		expect(hasButton('Approve exact LP amount')).toBeFalse()
 		expect(hasButton('Simulate liquidity transaction')).toBeTrue()

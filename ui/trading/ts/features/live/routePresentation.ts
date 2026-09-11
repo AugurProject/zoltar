@@ -1,5 +1,4 @@
 import * as appCopy from '../../copy/app.js'
-import * as liquidityCopy from '../../copy/liquidity.js'
 import type { TradingRoute } from '../../lib/routing.js'
 
 function marketRouteSubtitle(chainName: string, simulationActive: boolean) {
@@ -8,8 +7,8 @@ function marketRouteSubtitle(chainName: string, simulationActive: boolean) {
 
 export function liveWorkflowRoutePresentation(route: TradingRoute, chainName: string, simulationActive: boolean) {
 	if (route === 'create-market') return { description: undefined, title: appCopy.createMarket }
-	if (route === 'liquidity') return { description: liquidityCopy.routeDescription, title: appCopy.liquidity }
-	return { description: marketRouteSubtitle(chainName, simulationActive), title: route === 'market' ? appCopy.market : appCopy.markets }
+	if (route === 'liquidity') return { description: undefined, title: appCopy.liquidity }
+	return { description: marketRouteSubtitle(chainName, simulationActive), title: appCopy.market }
 }
 
 export function portfolioRouteSubtitle(chainName: string, simulationActive: boolean) {
