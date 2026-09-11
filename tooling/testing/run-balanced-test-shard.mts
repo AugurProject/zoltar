@@ -204,6 +204,18 @@ if (import.meta.main) {
 			cwd: repositoryRoot,
 		})
 		console.error(`[preact-diagnostic ${label}] fresh child resolve: ${freshChild.stdout.toString().trim()}${freshChild.stderr.toString().trim()}`)
+		const probePaths = ['ui/coreShared/ts/tests/testUtils/renderIntoDocument.ts', 'ui/coreShared/js/tests/testUtils/renderIntoDocument.js', 'ui/coreShared/ts', 'ui/coreShared/js/tests/testUtils']
+		console.error(`[preact-diagnostic ${label}] path existence: ${probePaths.map(probe => `${probe}=${existsSync(path.join(repositoryRoot, probe))}`).join(' ')}`)
+		try {
+			console.error(`[preact-diagnostic ${label}] testUtils specifier resolves to: ${Bun.resolveSync('@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js', path.join(repositoryRoot, 'ui', 'statoblast', 'ts', 'tests', 'app'))}`)
+		} catch (error) {
+			console.error(`[preact-diagnostic ${label}] testUtils specifier failed: ${error instanceof Error ? error.message : String(error)}`)
+		}
+		const processList = Bun.spawnSync({ cmd: ['ps', '-eo', 'pid,ppid,etimes,command'] })
+			.stdout.toString()
+			.split('\n')
+			.filter(line => /bun|node|tsc/.test(line) && !/ps -eo/.test(line))
+		console.error(`[preact-diagnostic ${label}] bun/node processes:\n${processList.join('\n')}`)
 	}
 	await reportPreactState('before')
 	const exitCode = await runBunTestProcess({
