@@ -1,16 +1,15 @@
-import { OpenPoolForm } from './OpenPoolForm.js'
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { formatBpsMultiplier, formatCapacityOwnership, formatEthPerShare, formatMintingCapacity, formatUnits, shortAddress } from '../lib/format.js'
+import { formatBpsMultiplier, formatCapacityOwnership, formatMintingCapacity, formatUnits, shortAddress } from '../lib/format.js'
 import { Status } from '../components/Status.js'
 import { SecurityPoolAddressLink, TradingAddressValue } from '../components/TradingAddress.js'
 import type { DeploymentConfiguration } from '../protocol/config.js'
 import { marketAcceptsNewRisk, marketNewRiskBlocker, type LiveMarket } from '../protocol/live.js'
 import { getActiveSimulationController } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import * as appCopy from '../copy/app.js'
-import { getTradingRouteHref, tradingWorkflowRoute, type TradingRoute } from '../lib/routing.js'
+import { getTradingRouteHref, isTradingBrowseRoute, isTradingLookupRoute, tradingWorkflowRoute, type TradingRoute } from '../lib/routing.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { useLiveTradingController } from './liveTradingController.js'
-import { livePairInitialized, liveTradingControllerServices } from './liveTradingControllerHelpers.js'
+import { liveTradingControllerServices } from './liveTradingControllerHelpers.js'
 import type { LiveTradingControllerServices } from './live/liveTradingTypes.js'
 import { LivePortfolio } from './LivePortfolio.js'
 import { LivePositionControls } from './LivePositionControls.js'
@@ -20,19 +19,13 @@ import { DEFAULT_SLIPPAGE_PERCENT, DEFAULT_TRANSACTION_VALIDITY_MINUTES, formatT
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
 import { liveWorkflowRoutePresentation, portfolioRouteSubtitle } from './live/routePresentation.js'
 import { SecurityPoolIdentityRows } from './LiveMarketIdentity.js'
+import { LiveMarketBrowser, marketStatusLabel } from './LiveMarketBrowser.js'
+import { LiveMarketLookup } from './LiveMarketLookup.js'
 import { liveCopy } from '../copy/live.js'
 
 export { liveWorkflowRoutePresentation, portfolioRouteSubtitle } from './live/routePresentation.js'
 
 const ignoreWalletSummaryChange = () => undefined
-
-function statusLabel(market: LiveMarket, nowSeconds: bigint) {
-	if (market.loadError !== undefined) return liveCopy.marketDataUnavailable
-	const blocker = marketNewRiskBlocker(market, nowSeconds)
-	if (blocker !== undefined) return blocker
-	if (market.pair === undefined) return liveCopy.pairNotCreated
-	return livePairInitialized(market) ? liveCopy.tradingOpen : liveCopy.pairUninitialized
-}
 
 function systemStateLabel(state: number) {
 	if (state === 0) return liveCopy.operational
@@ -50,7 +43,7 @@ function questionOutcomeLabel(outcome: number) {
 	return liveCopy.unknownQuestionOutcome(outcome)
 }
 
-export function PairInitializationAction({ market, nowSeconds, onSelect = () => undefined }: { market: LiveMarket; nowSeconds: bigint; onSelect?(market: LiveMarket): void }) {
+export function PairInitializationAction({ market, nowSeconds }: { market: LiveMarket; nowSeconds: bigint }) {
 	const blocker = marketNewRiskBlocker(market, nowSeconds)
 	if (blocker !== undefined)
 		return (
@@ -64,7 +57,7 @@ export function PairInitializationAction({ market, nowSeconds, onSelect = () => 
 	return (
 		<div class='operation-block'>
 			<p>{market.pair === undefined ? liveCopy.undeployedPairDescription(formatUnits(market.feeBps, 2, 2)) : liveCopy.uninitializedPairDescription(formatUnits(market.feeBps, 2, 2))}</p>
-			<a class='primary-action' href={getTradingRouteHref(`#/${market.pair === undefined ? 'create-market' : 'liquidity'}/${market.pool}`)} onClick={() => onSelect(market)}>
+			<a class='primary-action' href={getTradingRouteHref(`#/${market.pair === undefined ? 'create-market' : 'liquidity'}/${market.pool}`)}>
 				{market.pair === undefined ? liveCopy.deployTradingPool : liveCopy.initializeTradingPool}
 			</a>
 		</div>
@@ -79,7 +72,6 @@ export function LiveSecurityPoolDetails({
 	workflowLocked,
 	nowSeconds,
 	connectionMessage,
-	onSelect = () => undefined,
 }: {
 	market: LiveMarket
 	refreshError?: string | undefined
@@ -88,7 +80,6 @@ export function LiveSecurityPoolDetails({
 	workflowLocked: boolean
 	nowSeconds: bigint
 	connectionMessage?: string | undefined
-	onSelect?(market: LiveMarket): void
 }) {
 	const hasLoadedDetails = market.loadError === undefined
 	let refreshMessage: string | undefined
@@ -96,9 +87,11 @@ export function LiveSecurityPoolDetails({
 	let errorMessage: string | undefined
 	if (market.loadError !== undefined) errorMessage = liveCopy.securityPoolDetailsUnavailable(market.loadError, refreshError)
 	else if (refreshError !== undefined) errorMessage = liveCopy.securityPoolRefreshFailed(refreshError)
+	// Return to the browse list that includes this pool: markets once a pair exists, otherwise SecurityPools awaiting one.
+	const browseBack = market.pair === undefined ? { href: '#/security-pools', label: liveCopy.backToBrowseSecurityPools } : { href: '#/markets', label: liveCopy.backToBrowseMarkets }
 	return (
 		<main class='route' id='main-content'>
-			<RouteHeader eyebrow={<a href={getTradingRouteHref('#/markets')}>{appCopy.backToMarkets}</a>} title={appCopy.securityPool} description={market.title} badge={market.loadError === undefined ? undefined : <Status tone='warn'>{appCopy.poolDataUnavailable}</Status>} />
+			<RouteHeader eyebrow={<a href={getTradingRouteHref(browseBack.href)}>{browseBack.label}</a>} title={appCopy.securityPool} description={market.title} badge={market.loadError === undefined ? undefined : <Status tone='warn'>{appCopy.poolDataUnavailable}</Status>} />
 			{connectionMessage === undefined ? null : (
 				<p class='error' role='alert'>
 					{connectionMessage}
@@ -164,13 +157,9 @@ export function LiveSecurityPoolDetails({
 								<dt>{liveCopy.mintingCapacity}</dt>
 								<dd>{formatMintingCapacity(market.settlementCollateralAttoEth, market.mintingCapacityCeilingAttoEth)}</dd>
 							</div>
-							<div>
-								<dt>{liveCopy.checkpointedCollateralShareRatio}</dt>
-								<dd>{market.shareTokenSupplyAttoShares === 0n ? liveCopy.noCompleteSetsYet : formatEthPerShare(market.settlementCollateralAttoEth, market.shareTokenSupplyAttoShares)}</dd>
-							</div>
 						</dl>
 						{market.pair === undefined ? (
-							<PairInitializationAction market={market} nowSeconds={nowSeconds} onSelect={onSelect} />
+							<PairInitializationAction market={market} nowSeconds={nowSeconds} />
 						) : (
 							<a class='primary-action' href={getTradingRouteHref(`#/market/${market.pool}`)}>
 								{liveCopy.tradePool}
@@ -217,6 +206,7 @@ export function LiveTrading({
 	onWalletSummaryChange = ignoreWalletSummaryChange,
 	walletSummaryRetryNonce = 0,
 	walletConnectRequestNonce,
+	refreshIntervalMilliseconds,
 	controllerServices = liveTradingControllerServices,
 	liquidityServices = liveLiquidityServices,
 	settlementServices = liveSettlementServices,
@@ -230,6 +220,7 @@ export function LiveTrading({
 	onWalletSummaryChange?(summary: WalletSummaryState): void
 	walletSummaryRetryNonce?: number
 	walletConnectRequestNonce?: number
+	refreshIntervalMilliseconds?: number | undefined
 	controllerServices?: LiveTradingControllerServices
 	liquidityServices?: LiveLiquidityServices
 	settlementServices?: LiveSettlementServices
@@ -245,11 +236,12 @@ export function LiveTrading({
 		walletSummaryRetryNonce,
 		defaultSlippage: DEFAULT_SLIPPAGE_PERCENT,
 		defaultValidityMinutes: DEFAULT_TRANSACTION_VALIDITY_MINUTES,
+		refreshIntervalMilliseconds,
 		services: controllerServices,
 	})
 	const { account, walletClient, connect, connectionMessage, refreshWalletSummaryAfterReceipt, executeWithCurrentWalletContext, createGuardedWalletWrite } = wallet
 	const { balanceError, portfolioBalanceState, portfolioBalanceError, visiblePortfolioEntries, selectedBalances, selectedBalanceState, retryBalances, retryPortfolioBalances } = balances
-	const { visibleMarkets, listedMarkets, selected, selectedPairInitialized, routePool, discoveryState, discoveryError, marketPage, marketListRef, marketDetailRef, nowSeconds, refresh, refreshFromControl, loadMarketPage, focusSection, selectMarket } = discovery
+	const { visibleMarkets, listedMarkets, selected, selectedPairInitialized, routePool, discoveryState, discoveryError, marketPage, nowSeconds, refresh, refreshFromControl, loadMarketPage } = discovery
 	const { parsedAmount, mode, setMode, side, setSide, amount, setAmount, slippage, setSlippage, transactionValidityMinutes, setTransactionValidityMinutes, quote, state, positionHash, message, positionReceiptWarning, simulate, submit } = position
 	const { workflowLocked, updateLiquidityWorkflowLock } = workflow
 	const workflowRoute = tradingWorkflowRoute(route)
@@ -271,59 +263,36 @@ export function LiveTrading({
 				<RouteHeader eyebrow={appCopy.standaloneLiveClient} title={<span role='status'>{appCopy.loadingContracts}</span>} />
 			</main>
 		)
-	let discoveryContent
-	if (discoveryState === 'loading' && visibleMarkets.length === 0) discoveryContent = <p role='status'>{liveCopy.discoveringSecurityPoolsFromFactory}</p>
-	else if (discoveryState === 'error' && visibleMarkets.length === 0)
-		discoveryContent = (
-			<div>
-				<p class='error' role='alert'>
-					{liveCopy.securityPoolFactoryDiscoveryFailed(discoveryError)}
-				</p>
-				<button class='secondary-action' disabled={workflowLocked} onClick={refreshFromControl}>
-					{liveCopy.retryDiscovery}
-				</button>
-			</div>
-		)
-	else if (listedMarkets.length === 0) discoveryContent = <p>{creatingMarket ? liveCopy.noEligiblePools : liveCopy.noMarketsOnPage}</p>
-	else {
-		const marketButtons = listedMarkets.map(market => (
-			<button key={market.pool} class='live-market-button' aria-pressed={selected?.pool === market.pool} disabled={workflowLocked} onClick={() => selectMarket(market)}>
-				<strong>{market.title}</strong>
-				{creatingMarket ? null : <span>{statusLabel(market, nowSeconds)}</span>}
+	const walletAction =
+		walletConnectRequestNonce === undefined ? (
+			<button class='wallet-button' disabled={workflowLocked} onClick={connect}>
+				{account === undefined ? appCopy.connectWallet : shortAddress(account)}
 			</button>
-		))
-		discoveryContent =
-			discoveryState === 'error' ? (
-				<div>
-					<p class='error' role='alert'>
-						{discoveryError === undefined ? undefined : liveCopy.securityPoolRefreshFailed(discoveryError)}
-					</p>
-					<button class='secondary-action' disabled={workflowLocked} onClick={refreshFromControl}>
-						{liveCopy.retryDiscovery}
-					</button>
-					{marketButtons}
-				</div>
-			) : (
-				marketButtons
-			)
-	}
+		) : undefined
+	if (isTradingBrowseRoute(route))
+		return (
+			<LiveMarketBrowser
+				route={route}
+				markets={listedMarkets}
+				pageMarketCount={visibleMarkets.length}
+				discoveryState={discoveryState}
+				discoveryError={discoveryError}
+				marketPage={marketPage}
+				workflowLocked={workflowLocked}
+				nowSeconds={nowSeconds}
+				connectionMessage={connectionMessage}
+				retry={refreshFromControl}
+				loadMarketPage={loadMarketPage}
+			/>
+		)
 	if (routePool !== undefined && route.startsWith('security-pool/')) {
 		if (selected !== undefined)
 			return (
-				<LiveSecurityPoolDetails
-					market={selected}
-					refreshError={discoveryState === 'error' ? (discoveryError ?? liveCopy.unknownDiscovery) : undefined}
-					refreshing={discoveryState === 'loading'}
-					retry={refreshFromControl}
-					workflowLocked={workflowLocked}
-					nowSeconds={nowSeconds}
-					connectionMessage={connectionMessage}
-					onSelect={selectMarket}
-				/>
+				<LiveSecurityPoolDetails market={selected} refreshError={discoveryState === 'error' ? (discoveryError ?? liveCopy.unknownDiscovery) : undefined} refreshing={discoveryState === 'loading'} retry={refreshFromControl} workflowLocked={workflowLocked} nowSeconds={nowSeconds} connectionMessage={connectionMessage} />
 			)
 		return (
 			<main class='route' id='main-content'>
-				<RouteHeader eyebrow={<a href={getTradingRouteHref('#/markets')}>{appCopy.backToMarkets}</a>} title={appCopy.securityPool} />
+				<RouteHeader eyebrow={<a href={getTradingRouteHref('#/market')}>{liveCopy.backToMarket}</a>} title={appCopy.securityPool} />
 				{connectionMessage === undefined ? null : (
 					<p class='error' role='alert'>
 						{connectionMessage}
@@ -339,18 +308,7 @@ export function LiveTrading({
 		const subtitle = portfolioRouteSubtitle(configuration.chainName, getActiveSimulationController() !== undefined)
 		return (
 			<main class='route' id='main-content'>
-				<RouteHeader
-					eyebrow={appCopy.positionsByPool}
-					title={appCopy.portfolio}
-					description={subtitle}
-					actions={
-						walletConnectRequestNonce === undefined ? (
-							<button class='wallet-button' disabled={workflowLocked} onClick={connect}>
-								{account === undefined ? appCopy.connectWallet : shortAddress(account)}
-							</button>
-						) : undefined
-					}
-				/>
+				<RouteHeader eyebrow={appCopy.positionsByPool} title={appCopy.portfolio} description={subtitle} actions={walletAction} />
 				{message === undefined ? null : (
 					<p class='error' role='alert'>
 						{message}
@@ -359,9 +317,6 @@ export function LiveTrading({
 				<section class='portfolio-section' aria-busy={discoveryState === 'loading'}>
 					<div class='section-heading'>
 						<h2>{liveCopy.positions}</h2>
-						<button class='secondary-action' disabled={discoveryState === 'loading' || workflowLocked} onClick={refreshFromControl}>
-							{liveCopy.refresh}
-						</button>
 					</div>
 					{discoveryState === 'loading' && visibleMarkets.length === 0 ? <p role='status'>{liveCopy.discoveringSecurityPools}</p> : null}
 					{discoveryState === 'error' ? (
@@ -375,29 +330,28 @@ export function LiveTrading({
 			</main>
 		)
 	}
-	const returnToMarkets =
-		routePool === undefined ? (
-			<button class='secondary-action mobile-return' onClick={() => focusSection(marketListRef)}>
-				{creatingMarket ? liveCopy.backToSecurityPools : appCopy.backToMarkets}
-			</button>
-		) : null
 	const routePresentation = liveWorkflowRoutePresentation(workflowRoute, configuration.chainName, getActiveSimulationController() !== undefined)
+	// The position controls surface workflow messages beside their action; other addressed views keep them at the top.
+	const positionControlsVisible = workflowRoute === 'market' && selected !== undefined && selected.loadError === undefined && selectedPairInitialized
+	const routeMessage = connectionMessage ?? (positionControlsVisible ? undefined : message) ?? parsedAmount.error
+	if (isTradingLookupRoute(route))
+		return (
+			<main class='route' id='main-content'>
+				<RouteHeader title={routePresentation.title} description={routePresentation.description} actions={walletAction} />
+				{connectionMessage === undefined ? null : (
+					<p class='error' role='alert'>
+						{connectionMessage}
+					</p>
+				)}
+				<LiveMarketLookup route={route} disabled={workflowLocked} />
+			</main>
+		)
 	return (
 		<main class='route' id='main-content'>
-			<RouteHeader
-				title={routePresentation.title}
-				description={routePresentation.description}
-				actions={
-					walletConnectRequestNonce === undefined ? (
-						<button class='wallet-button' disabled={workflowLocked} onClick={connect}>
-							{account === undefined ? appCopy.connectWallet : shortAddress(account)}
-						</button>
-					) : undefined
-				}
-			/>
-			{connectionMessage === undefined && message === undefined && parsedAmount.error === undefined ? null : (
+			<RouteHeader title={routePresentation.title} description={routePresentation.description} actions={walletAction} />
+			{routeMessage === undefined ? null : (
 				<p class='error' role='alert'>
-					{connectionMessage ?? message ?? parsedAmount.error}
+					{routeMessage}
 				</p>
 			)}
 			{createdMarketTitle === undefined ? null : (
@@ -405,34 +359,15 @@ export function LiveTrading({
 					{liveCopy.marketCreated(createdMarketTitle)} <a href={getTradingRouteHref(routePool === undefined ? '#/liquidity' : `#/liquidity/${routePool}`)}>{appCopy.liquidity}</a>
 				</p>
 			)}
-			{routePool !== undefined && selected !== undefined && discoveryState === 'error' ? (
+			{selected !== undefined && discoveryState === 'error' ? (
 				<p class='error' role='alert'>
 					{liveCopy.securityPoolRefreshFailed(discoveryError ?? liveCopy.unknownDiscovery)}
 				</p>
 			) : null}
-			<OpenPoolForm disabled={workflowLocked} liquidity={workflowRoute === 'liquidity'} />
 			<div class='market-stack'>
-				{routePool !== undefined && selected === undefined ? <SecurityPoolRouteEmptyState discoveryState={discoveryState} discoveryError={discoveryError} workflowLocked={workflowLocked} retry={refreshFromControl} /> : null}
-				{routePool === undefined ? (
-					<section class='market-list live-focus-target' id='security-pool-list' ref={marketListRef} tabIndex={-1} aria-busy={discoveryState === 'loading'}>
-						<div class='section-heading'>
-							{creatingMarket ? <h2>{liveCopy.eligibleSecurityPools}</h2> : null}
-							<button class='secondary-action' disabled={discoveryState === 'loading' || workflowLocked} onClick={refreshFromControl}>
-								{liveCopy.refresh}
-							</button>
-						</div>
-						{discoveryContent}
-						{marketPage.previousStart === undefined && marketPage.nextStart === undefined ? null : (
-							<nav class='market-pagination' aria-label={liveCopy.securityPoolPages}>
-								<button class='secondary-action' disabled={marketPage.previousStart === undefined || discoveryState === 'loading' || workflowLocked} onClick={() => loadMarketPage(marketPage.previousStart)}>
-									{liveCopy.previousPools}
-								</button>
-								<span>{liveCopy.poolPageRange(marketPage.start + 1n, marketPage.start + BigInt(visibleMarkets.length), marketPage.total)}</span>
-								<button class='secondary-action' disabled={marketPage.nextStart === undefined || discoveryState === 'loading' || workflowLocked} onClick={() => loadMarketPage(marketPage.nextStart)}>
-									{liveCopy.nextPools}
-								</button>
-							</nav>
-						)}
+				{selected === undefined ? (
+					<section class='section' aria-busy={discoveryState === 'loading'}>
+						<SecurityPoolRouteEmptyState discoveryState={discoveryState} discoveryError={discoveryError} workflowLocked={workflowLocked} retry={refreshFromControl} />
 					</section>
 				) : null}
 				{(() => {
@@ -445,8 +380,7 @@ export function LiveTrading({
 						)
 					if (selected.loadError !== undefined)
 						return (
-							<section class='section live-focus-target' key={selected.pool} ref={marketDetailRef} tabIndex={-1}>
-								{returnToMarkets}
+							<section class='section' key={selected.pool}>
 								<div class='section-heading'>
 									<div>
 										<span class='section-kicker'>{creatingMarket ? liveCopy.securityPool : appCopy.market}</span>
@@ -468,23 +402,15 @@ export function LiveTrading({
 							</section>
 						)
 					return (
-						<section class='section live-focus-target' key={selected.pool} ref={marketDetailRef} tabIndex={-1}>
-							{returnToMarkets}
+						<section class='section' key={selected.pool}>
 							<div class='section-heading'>
 								<div>
 									<span class='section-kicker'>{creatingMarket ? liveCopy.securityPool : appCopy.market}</span>
 									<h2>{selected.title}</h2>
 								</div>
-								<div>
-									{creatingMarket ? null : <Status tone={marketAcceptsNewRisk(selected, nowSeconds) ? 'good' : 'warn'}>{statusLabel(selected, nowSeconds)}</Status>}
-									{routePool === undefined ? null : (
-										<button class='secondary-action' disabled={discoveryState === 'loading' || workflowLocked} onClick={refreshFromControl}>
-											{liveCopy.refresh}
-										</button>
-									)}
-								</div>
+								{creatingMarket ? null : <Status tone={marketAcceptsNewRisk(selected, nowSeconds) ? 'good' : 'warn'}>{marketStatusLabel(selected, nowSeconds)}</Status>}
 							</div>
-							{workflowRoute !== 'liquidity' && !creatingMarket && !selectedPairInitialized ? <PairInitializationAction market={selected} nowSeconds={nowSeconds} onSelect={selectMarket} /> : null}
+							{workflowRoute !== 'liquidity' && !creatingMarket && !selectedPairInitialized ? <PairInitializationAction market={selected} nowSeconds={nowSeconds} /> : null}
 							<dl class='fact-list'>
 								<div>
 									<dt>{liveCopy.securityPoolLabel}</dt>
@@ -559,6 +485,7 @@ export function LiveTrading({
 									transactionValidityMinutes={transactionValidityMinutes}
 									quote={quote}
 									state={state}
+									message={message}
 									receiptWarning={positionReceiptWarning}
 									transactionHash={positionHash}
 									externallyLocked={workflowLocked}
