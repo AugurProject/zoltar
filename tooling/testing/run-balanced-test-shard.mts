@@ -167,7 +167,8 @@ if (import.meta.main) {
 		const describe = (target: string) => {
 			try {
 				const stat = lstatSync(target)
-				return stat.isSymbolicLink() ? `symlink -> ${readlinkSync(target)}` : stat.isDirectory() ? 'directory' : 'file'
+				if (stat.isSymbolicLink()) return `symlink -> ${readlinkSync(target)}`
+				return stat.isDirectory() ? 'directory' : 'file'
 			} catch (error) {
 				return `missing (${error instanceof Error ? error.message : String(error)})`
 			}
