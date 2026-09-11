@@ -179,6 +179,30 @@ if (import.meta.main) {
 		} catch (error) {
 			console.error(`[preact-diagnostic ${label}] resolve from js testUtils failed: ${error instanceof Error ? error.message : String(error)}`)
 		}
+		let ancestor = path.join(repositoryRoot, 'ui', 'coreShared', 'js', 'tests', 'testUtils')
+		const manifestReport: string[] = []
+		while (ancestor.length >= repositoryRoot.length - 1) {
+			for (const marker of ['package.json', 'bun.lock', 'node_modules']) {
+				if (existsSync(path.join(ancestor, marker))) manifestReport.push(`${path.relative(repositoryRoot, ancestor) || '.'}/${marker}`)
+			}
+			const parent = path.dirname(ancestor)
+			if (parent === ancestor) break
+			ancestor = parent
+		}
+		console.error(`[preact-diagnostic ${label}] ancestor markers: ${manifestReport.join(', ')}`)
+		const cacheRoot = path.join(process.env['HOME'] ?? '', '.bun', 'install', 'cache')
+		try {
+			const { readdirSync } = await import('node:fs')
+			const cacheEntries = readdirSync(cacheRoot).filter(entry => entry.startsWith('preact'))
+			console.error(`[preact-diagnostic ${label}] bun cache preact entries: ${cacheEntries.join(', ') || 'none'}`)
+		} catch (error) {
+			console.error(`[preact-diagnostic ${label}] bun cache unreadable: ${error instanceof Error ? error.message : String(error)}`)
+		}
+		const freshChild = Bun.spawnSync({
+			cmd: [process.execPath, '-e', `try { console.log(Bun.resolveSync('preact', ${JSON.stringify(path.join(repositoryRoot, 'ui', 'coreShared', 'js', 'tests', 'testUtils'))})) } catch (error) { console.log('failed: ' + (error instanceof Error ? error.message : String(error))) }`],
+			cwd: repositoryRoot,
+		})
+		console.error(`[preact-diagnostic ${label}] fresh child resolve: ${freshChild.stdout.toString().trim()}${freshChild.stderr.toString().trim()}`)
 	}
 	await reportPreactState('before')
 	const exitCode = await runBunTestProcess({
