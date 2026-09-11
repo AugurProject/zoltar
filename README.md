@@ -204,14 +204,14 @@ After completing [Setup](#setup):
 1. Run `bun run app:serve:zoltar` (Zoltar on port 4153), `bun run app:serve:statoblast` (Statoblast on port 12347), or `bun run app:serve:trading` (Trading on port 4163)
 1. Open `http://localhost:4153/?simulate=1`, `http://localhost:12347/?simulate=1`, or `http://localhost:4163/?simulate=1`
 
-This mode does not require a wallet extension or `anvil`. Instead, it boots a Tevm-backed in-browser chain and seeds the QA accounts with ETH, WETH, and REP. Zoltar and Statoblast scenarios control whether application contracts are already deployed. Trading defaults to `simScenario=trading`, which deploys a seeded SecurityPool plus the Trading factory and router so its market routes are immediately usable.
+This mode does not require a wallet extension or `anvil`. Instead, it boots a Tevm-backed in-browser chain and seeds the QA accounts with ETH, WETH, and REP. Zoltar and Statoblast scenarios control whether application contracts are already deployed. In Trading, `simScenario=deployed` deploys a seeded SecurityPool plus the Trading factory and router so its market routes are immediately usable, and the default `simScenario=trading-funded` additionally initializes pair liquidity and funds the simulation wallet with YES, NO, INVALID, and LP shares.
 
 Simulation mode details:
 
 - The activation flag is `?simulate=1`
 - The flag is intentionally not restricted to localhost or development builds; production deployments may expose it as a browser-local demo and manual-QA path
 - Production users should treat any `?simulate=1` URL as a local sandbox. Simulated balances, deployments, blocks, quotes, and transactions are local to the browser and are not evidence of mainnet state.
-- Supported seeded scenarios are `simScenario=baseline`, `simScenario=deployed`, `simScenario=security-pool`, `simScenario=securitypoolx2`, `simScenario=securitypoolx2-auction`, and `simScenario=trading`
+- Supported seeded scenarios are `simScenario=baseline`, `simScenario=deployed`, `simScenario=security-pool`, `simScenario=securitypoolx2`, `simScenario=securitypoolx2-auction`, and `simScenario=trading-funded`
 - The live simulation chain is ephemeral and exists only in the current browser tab session; only states explicitly saved from the simulation banner persist in browser storage
 
 ## Common Commands

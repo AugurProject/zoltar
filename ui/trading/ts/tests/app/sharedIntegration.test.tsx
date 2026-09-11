@@ -1,7 +1,7 @@
 import { beforeEach, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
-import { registerTradingSimulationScenario, TRADING_SIMULATION_SCENARIO } from '../../simulation/index.js'
-import { getRegisteredSimulationScenarios } from '@zoltar/ui-core-shared/simulation/scenarios.js'
+import { DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIMULATION_SCENARIO, registerTradingSimulationScenario, withDefaultTradingSimulationScenario } from '../../simulation/index.js'
+import { getRegisteredSimulationScenarios, getSimulationScenarioDescription, getSimulationScenarioLabel } from '@zoltar/ui-core-shared/simulation/scenarios.js'
 import { tradingActiveEnvironmentDependencies } from '../../app/activeEnvironment.js'
 import * as appCopy from '../../copy/app.js'
 import { Status } from '../../components/Status.js'
@@ -23,20 +23,36 @@ import { createTradingPublicClient } from '../../protocol/live.js'
 
 beforeEach(() => installTradingRouting())
 
-test('Trading registers its shared TEVM scenario and selects its own worker', () => {
+test('Trading registers its shared TEVM scenarios and selects its own worker', () => {
 	registerTradingSimulationScenario()
 	expect(tradingActiveEnvironmentDependencies.appId).toBe('trading')
-	expect(getRegisteredSimulationScenarios()).toContain(TRADING_SIMULATION_SCENARIO)
+	const scenarios = getRegisteredSimulationScenarios()
+	expect(scenarios.filter(scenario => scenario === DEPLOYED_TRADING_SIMULATION_SCENARIO)).toHaveLength(1)
+	expect(scenarios.indexOf(DEPLOYED_TRADING_SIMULATION_SCENARIO)).toBe(1)
+	expect(scenarios.indexOf(FUNDED_TRADING_SIMULATION_SCENARIO)).toBeGreaterThan(1)
+	expect(getSimulationScenarioLabel(DEPLOYED_TRADING_SIMULATION_SCENARIO)).toBe('Deployed')
+	expect(getSimulationScenarioDescription(DEPLOYED_TRADING_SIMULATION_SCENARIO)).toContain('trading factory and router')
+})
+
+test('Trading defaults bare simulation launches to the funded scenario', () => {
+	expect(withDefaultTradingSimulationScenario('http://localhost/?simulate=1')?.href).toBe(`http://localhost/?simulate=1&simScenario=${FUNDED_TRADING_SIMULATION_SCENARIO}`)
+	expect(withDefaultTradingSimulationScenario('http://localhost/?simulate=1#/markets')?.href).toBe(`http://localhost/?simulate=1&simScenario=${FUNDED_TRADING_SIMULATION_SCENARIO}#/markets`)
+	expect(withDefaultTradingSimulationScenario('http://localhost/#/markets?simulate=1')?.href).toBe(`http://localhost/#/markets?simulate=1&simScenario=${FUNDED_TRADING_SIMULATION_SCENARIO}`)
+	expect(withDefaultTradingSimulationScenario('http://localhost/')).toBeUndefined()
+	expect(withDefaultTradingSimulationScenario('http://localhost/#/markets')).toBeUndefined()
+	expect(withDefaultTradingSimulationScenario('http://localhost/?simulate=1&simScenario=baseline')).toBeUndefined()
+	expect(withDefaultTradingSimulationScenario('http://localhost/?simulate=1#/markets?simScenario=deployed')).toBeUndefined()
+	expect(withDefaultTradingSimulationScenario('http://localhost/?simulate=1#/markets?simState=abc')).toBeUndefined()
 })
 
 test('Trading installs shared routing for simulation scenario navigation', () => {
-	const dom = installDomEnvironment('http://localhost/#/liquidity?simulate=1&simScenario=trading')
+	const dom = installDomEnvironment('http://localhost/#/liquidity?simulate=1&simScenario=deployed')
 	try {
 		installTradingRouting()
 		expect(getCurrentRouteHash()).toBe('#/liquidity')
-		expect(getRouteHashSearch()).toBe('?simulate=1&simScenario=trading')
+		expect(getRouteHashSearch()).toBe('?simulate=1&simScenario=deployed')
 		expect(currentRoute()).toBe('liquidity')
-		expect(getTradingRouteHref('#/markets')).toBe('#/markets?simulate=1&simScenario=trading')
+		expect(getTradingRouteHref('#/markets')).toBe('#/markets?simulate=1&simScenario=deployed')
 	} finally {
 		resetRoutingForTesting()
 		dom.cleanup()
@@ -52,7 +68,7 @@ test('Trading production links preserve the active simulation route query', asyn
 })
 
 test('Trading refreshes the active environment when history changes the simulation scenario', async () => {
-	const dom = installDomEnvironment('http://localhost/#/markets?simulate=1&simScenario=trading')
+	const dom = installDomEnvironment('http://localhost/#/markets?simulate=1&simScenario=deployed')
 	installTradingRouting()
 	let environmentInitializations = 0
 	const configuration: DeploymentConfiguration = {
@@ -264,7 +280,7 @@ test('the removed demo query cannot select a parallel simulated-data application
 	expect(rendered.container.querySelector('.demo-banner')).toBeNull()
 	expect(rendered.container.textContent).not.toContain('SIMULATED DATA')
 	expect(rendered.container.textContent).not.toContain('Demo mode')
-	expect(rendered.container.textContent).toContain('Markets')
+	expect(rendered.container.textContent).toContain('Browse markets')
 	await rendered.cleanup()
 	dom.cleanup()
 })

@@ -9,7 +9,7 @@ const OPEN_ORACLE_UINT48_MAX = (1n << 48n) - 1n
 const OPEN_ORACLE_UINT96_MAX = (1n << 96n) - 1n
 const OPEN_ORACLE_UINT128_MAX = (1n << 128n) - 1n
 
-export type OpenOracleCreateValidationParameters = {
+type OpenOracleCreateValidationParameters = {
 	disputeDelay: bigint
 	escalationHalt: bigint
 	exactToken1Report: bigint
@@ -24,7 +24,7 @@ export type OpenOracleCreateValidationParameters = {
 	token2Address: Address
 }
 
-export type OpenOracleCreateParameterValidation = {
+type OpenOracleCreateParameterValidation = {
 	field: keyof OpenOracleCreateValidationParameters
 	message: string
 }

@@ -81,8 +81,6 @@ export const withdrawBalance = (tokenSymbol: string) => `Withdraw ${tokenSymbol}
 export const withdrawingBalance = (tokenSymbol: string) => `Withdrawing ${tokenSymbol}…`
 export const checkingWithdrawalBalance = (tokenSymbol: string) => `Checking ${tokenSymbol} balance…`
 export const confirmWithdrawal = 'Confirm withdrawal'
-export const withdrawalRecipient = 'Recipient'
-export const formatWithdrawalRisk = (tokenSymbol: CopyTemplateValue) => `Withdraws the full credited ${tokenSymbol} balance to the connected account. Wallet gas is separate.`
 export const formatWithdrawalBalanceChanged = (tokenSymbol: CopyTemplateValue) => `Your withdrawable ${tokenSymbol} balance changed. Review the updated amount and confirm again`
 export const withdrawalBalanceRefreshFailed = 'Unable to refresh the withdrawable balance'
 export const numberOfReports = 'Number of Reports'
@@ -99,18 +97,11 @@ export const searchReports = 'Search this page'
 export const settlingReport = 'Settling report…'
 export const settlingReportTitle = 'Settling Report'
 export const reportSettled = 'Report Settled'
-export const reportLifecycle = 'Report lifecycle'
-export const settled = 'Settled'
-export const settlementFinalityRisk = 'Settlement finalizes the report state and closes its dispute lifecycle.'
-export const settlementWithdrawalRisk = 'Rewards and returned liquidity remain credited in the Oracle until the recipient withdraws them.'
 export const settlerRewardHelpText = 'ETH paid to the settler.'
 export const settlementSummary = 'Settlement Summary'
 export const settlementTimestamp = 'Settlement Timestamp'
 export const settlementBlock = 'Settlement Block'
 export const settlementTimestampOnConfirmation = 'Recorded on confirmation'
-export const reporterToken1Credit = 'Current reporter receives'
-export const reporterToken2Credit = 'Current reporter receives'
-export const settlerCredit = 'Settler receives'
 export const notSettled = 'Not settled'
 export const stateHash = 'State Hash'
 export const allStatuses = 'All statuses'
@@ -128,12 +119,9 @@ export const standaloneOracleWarningDetail = 'Standalone only. Start pool-manage
 export const standaloneOracleIntroduction = 'Define the token pair and initial report economics first. Default dispute and timing settings are available below for users who need to tune the report lifecycle.'
 export const advancedDisputeAndTimingSettings = 'Advanced Dispute & Timing Settings'
 export const advancedDisputeAndTimingSettingsDetail = 'These values control how challenges escalate and when settlement becomes available. Keep the defaults unless your report requires different economics.'
-export const standaloneFundingRisk = 'The ETH value and settler reward are committed to this standalone report; wallet gas is separate.'
-export const standaloneDisputeSettingsRisk = 'Dispute fees, escalation, and timing settings determine when the report can be challenged and settled.'
 export const secondsAbbreviation = 's'
 export const blocks = 'blocks'
 export const formatTimingValue = (timingAmount: CopyTemplateValue, unit: CopyTemplateValue) => `${timingAmount}\u00a0${unit}`
-export const formatExactSeconds = (seconds: CopyTemplateValue) => `${seconds} seconds`
 export const timing = 'Timing'
 export const token1Address = 'Base Token Address'
 export const formatTokenApprovalTitle = (tokenSymbol: string) => `${tokenSymbol} Approval`

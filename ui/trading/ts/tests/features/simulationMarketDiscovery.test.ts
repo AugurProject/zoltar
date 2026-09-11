@@ -16,8 +16,9 @@ import { getInfraContractAddresses, PROXY_DEPLOYER_ADDRESS } from '@zoltar/ui-st
 import { activateSimulationBackendProfile, createBootstrappedSimulationBackendWithRetry, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulationTestUtils.js'
 import { deploymentConfigurationForPlan, getTradingDeploymentPlan } from '../../protocol/deployment.js'
 import { discoverLiveUniverseMarketPage, loadLiveBalances } from '../../protocol/live.js'
+import { DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIMULATION_SCENARIO } from '../../simulation/index.js'
 
-for (const scenario of ['trading', 'trading-funded'])
+for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIMULATION_SCENARIO])
 	describe(`${scenario} simulation market discovery`, () => {
 		let backend: SimulationBackend
 
@@ -129,7 +130,7 @@ for (const scenario of ['trading', 'trading-funded'])
 				expect([...attemptedPools]).toEqual(pairIndex.deployments.slice(25, 50).map(deployment => deployment.securityPool))
 				expect(page.previousStart).toBe(0n)
 				expect(page.nextStart).toBe(50n)
-				for (const route of ['markets', 'liquidity', 'create-market', 'portfolio'] as const) {
+				for (const route of ['markets', 'security-pools', 'market', 'liquidity', 'create-market', 'portfolio'] as const) {
 					let summary: WalletSummaryState | undefined
 					const rendered = await renderIntoDocument(
 						h(LiveTrading, {
@@ -147,11 +148,15 @@ for (const scenario of ['trading', 'trading-funded'])
 						await waitFor(() => expect(rendered.container.querySelector('[aria-busy="true"]')?.getAttribute('class'), `${scenario}/${route}: ${rendered.container.textContent}`).toBeUndefined(), { timeout: 10_000 })
 						await waitFor(() => expect(summary?.status).toBe('ready'), { timeout: 10_000 })
 						expect(rendered.container.textContent).not.toContain('Connect a wallet to load')
-						if (route !== 'portfolio') {
-							const expectedMarkets = (route === 'create-market') === (scenario === 'trading') ? 1 : 0
-							expect(rendered.container.querySelectorAll('.live-market-button')).toHaveLength(expectedMarkets)
+						if (route === 'markets' || route === 'security-pools') {
+							const expectedMarkets = (route === 'security-pools') === (scenario === DEPLOYED_TRADING_SIMULATION_SCENARIO) ? 1 : 0
+							expect(rendered.container.querySelectorAll('.market-row')).toHaveLength(expectedMarkets)
 							expect(rendered.container.textContent).not.toContain('Pair not created')
 							expect(rendered.container.textContent).not.toContain('Conditional prices only')
+						} else if (route !== 'portfolio') {
+							// Lookup routes wait for an address instead of discovering every pool.
+							expect(rendered.container.querySelector('.market-lookup')).not.toBeNull()
+							expect(rendered.container.querySelectorAll('.market-row')).toHaveLength(0)
 						}
 					} finally {
 						await rendered.cleanup()
@@ -168,7 +173,7 @@ for (const scenario of ['trading', 'trading-funded'])
 			expect(discovery.markets[0]?.originUniverseId).toBe(0n)
 			const market = discovery.markets[0]
 			if (market === undefined) throw new Error('Seeded market is missing')
-			if (scenario === 'trading') {
+			if (scenario === DEPLOYED_TRADING_SIMULATION_SCENARIO) {
 				expect(market.pair).toBeUndefined()
 				return
 			}

@@ -17,7 +17,7 @@ function parseTokenDecimals(value: unknown) {
 	return decimals !== undefined && Number.isInteger(decimals) && decimals >= 0 && decimals <= 255 ? decimals : undefined
 }
 
-export type CreateTokenDecimalsReadResult = { decimals: number; status: 'success' } | { message: string; status: 'failure' }
+type CreateTokenDecimalsReadResult = { decimals: number; status: 'success' } | { message: string; status: 'failure' }
 
 export async function readCreateTokenDecimals(readClient: OpenOracleReadClient, address: Address, label: 'Base' | 'Quote'): Promise<CreateTokenDecimalsReadResult> {
 	try {

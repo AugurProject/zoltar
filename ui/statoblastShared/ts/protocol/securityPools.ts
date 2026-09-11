@@ -29,7 +29,7 @@ const MAXIMUM_DEPLOYMENT_LOG_RANGE = 10_000n
 const securityPoolFactoryAbi = statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi
 const deploySecurityPoolEvent = securityPoolFactoryAbi.find((entry: (typeof securityPoolFactoryAbi)[number]) => entry.type === 'event' && entry.name === 'DeploySecurityPool')
 if (deploySecurityPoolEvent === undefined) throw new Error('DeploySecurityPool event missing from ABI')
-export type LoadAllSecurityPoolsOptions = {
+type LoadAllSecurityPoolsOptions = {
 	accountAddress?: Address
 	selectedSecurityPoolAddress?: Address | string
 	vaultDetailMode?: 'all' | 'selected'

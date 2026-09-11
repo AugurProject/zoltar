@@ -1,12 +1,16 @@
 import { buildRouteHref, createRouting, getRouteHashSearch, installRouting, type RoutingConfig } from '@zoltar/ui-core-shared/navigation/routing.js'
 
-export type TradingRoute = 'markets' | 'create-market' | 'market' | 'liquidity' | 'portfolio' | 'deploy' | 'help' | `security-pool/${string}` | `market/${string}` | `liquidity/${string}` | `create-market/${string}`
+export type TradingRoute = 'markets' | 'security-pools' | 'create-market' | 'market' | 'liquidity' | 'portfolio' | 'deploy' | 'help' | `security-pool/${string}` | `market/${string}` | `liquidity/${string}` | `create-market/${string}`
+
+export type TradingBrowseRoute = Extract<TradingRoute, 'markets' | 'security-pools'>
+export type TradingLookupRoute = Extract<TradingRoute, 'market' | 'liquidity' | 'create-market'>
 
 const TRADING_ROUTING_CONFIG: RoutingConfig<TradingRoute> = {
-	defaultRoute: 'markets',
+	defaultRoute: 'market',
 	routes: [
 		{ hash: '#/deploy', name: 'deploy' },
 		{ aliases: ['#/developer'], hash: '#/markets', name: 'markets' },
+		{ hash: '#/security-pools', name: 'security-pools' },
 		{ hash: '#/market', name: 'market' },
 		{ hash: '#/create-market', name: 'create-market' },
 		{ hash: '#/liquidity', name: 'liquidity' },
@@ -45,4 +49,17 @@ export function tradingWorkflowRoute<T extends TradingRoute | 'not-found'>(route
 	if (route.startsWith('liquidity/')) return 'liquidity'
 	if (route.startsWith('create-market/')) return 'create-market'
 	return route
+}
+
+export function isTradingBrowseRoute(route: string): route is TradingBrowseRoute {
+	return route === 'markets' || route === 'security-pools'
+}
+
+export function isTradingLookupRoute(route: string): route is TradingLookupRoute {
+	return route === 'market' || route === 'liquidity' || route === 'create-market'
+}
+
+/** The browse route that lists candidates for a lookup workflow: trading markets for trade and liquidity, SecurityPools for market creation. */
+export function tradingBrowseRouteFor(lookupRoute: TradingLookupRoute): TradingBrowseRoute {
+	return lookupRoute === 'create-market' ? 'security-pools' : 'markets'
 }

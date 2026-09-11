@@ -34,7 +34,7 @@ const defaultScenarioProtocol = {
 	submitTruthAuctionBid,
 }
 
-export type StatoblastScenarioProtocol = typeof defaultScenarioProtocol
+type StatoblastScenarioProtocol = typeof defaultScenarioProtocol
 
 let scenarioProtocolOverride: StatoblastScenarioProtocol | undefined
 

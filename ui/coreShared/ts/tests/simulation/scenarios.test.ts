@@ -24,4 +24,26 @@ void describe('simulation scenarios', () => {
 		expect(getSimulationScenarioLabel('securitypoolx2')).toBe('Security pool x2')
 		expect(getSimulationScenarioDescription('securitypoolx2')).toBe('x2 description')
 	})
+
+	void test('an app can override a core scenario presentation without listing it twice', () => {
+		const coreLabel = getSimulationScenarioLabel('deployed')
+		const coreDescription = getSimulationScenarioDescription('deployed')
+		registerSimulationScenario('deployed', { description: 'app deployed description', label: 'App deployed' })
+		try {
+			const scenarios = getRegisteredSimulationScenarios()
+			expect(scenarios.filter(scenario => scenario === 'deployed')).toHaveLength(1)
+			expect(scenarios.indexOf('deployed')).toBe(1)
+			expect(getSimulationScenarioLabel('deployed')).toBe('App deployed')
+			expect(getSimulationScenarioDescription('deployed')).toBe('app deployed description')
+		} finally {
+			registerSimulationScenario('deployed', { description: coreDescription, label: coreLabel })
+		}
+		expect(getSimulationScenarioLabel('deployed')).toBe(coreLabel)
+		expect(getSimulationScenarioDescription('deployed')).toBe(coreDescription)
+	})
+
+	void test('unregistered scenario ids render without throwing', () => {
+		expect(getSimulationScenarioLabel('legacy-id')).toBe('legacy-id')
+		expect(getSimulationScenarioDescription('legacy-id')).toBe("Unregistered simulation scenario 'legacy-id'.")
+	})
 })
