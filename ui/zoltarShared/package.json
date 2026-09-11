@@ -188,6 +188,14 @@
 		"./lib/formDefaults.js": {
 			"bun": "./ts/lib/formDefaults.ts",
 			"default": "./js/lib/formDefaults.js"
+		},
+		"./features/questions/components/ScalarCreatePreview.js": {
+			"bun": "./ts/features/questions/components/ScalarCreatePreview.tsx",
+			"default": "./js/features/questions/components/ScalarCreatePreview.js"
+		},
+		"./features/zoltarTransactionPresentations.js": {
+			"bun": "./ts/features/zoltarTransactionPresentations.tsx",
+			"default": "./js/features/zoltarTransactionPresentations.js"
 		}
 	}
 }

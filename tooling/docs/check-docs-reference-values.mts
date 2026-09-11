@@ -5,6 +5,7 @@ import ts from 'typescript'
 import { diagramGraphSpecs } from '../../docs/charts/diagramModels'
 import type { DiagramGraphNode } from '../../docs/charts/diagramTypes'
 import { getMainnetProtocolConfig } from '../contracts/protocol-config.ts'
+import { repositorySourceUrl } from './repository-source-links.mts'
 import { htmlToDocumentationText } from './docs-html-text.mts'
 
 const normalizeHtmlSource = (source: string): string => source.replaceAll(/<\/([a-z][\w:-]*)\s+>/gi, '</$1>')
@@ -17,7 +18,7 @@ const diagramModelsSource = await readFile('docs/charts/diagramModels.ts', 'utf8
 const coordinatorData = await readFile('docs/data/open-oracle-coordinator.json', 'utf8')
 const compiledContractArtifacts: unknown = JSON.parse(await readFile('solidity/artifacts/Contracts.json', 'utf8'))
 const operatorReference = htmlToDocumentationText(await readFile('docs/reference/operator-guardrails.html', 'utf8'))
-const contractInteractionReference = htmlToDocumentationText(await readFile('docs/reference/contracts.html', 'utf8'))
+const contractInteractionReference = (await Promise.all(['docs/reference/contracts.html', ...[...new Bun.Glob('docs/reference/contracts/*.html').scanSync('.')].toSorted()].map(async pagePath => htmlToDocumentationText(await readFile(pagePath, 'utf8'))))).join('\n')
 const contractReferenceGenerator = `${await readFile('tooling/docs/generate-contract-interaction-reference.mts', 'utf8')}\n${await readFile('tooling/docs/contract-reference-metadata.mts', 'utf8')}`
 const escalationGame = await readFile('solidity/contracts/statoblast/EscalationGame.sol', 'utf8')
 const escalationGameClaimDelegate = await readFile('solidity/contracts/statoblast/EscalationGameClaimDelegate.sol', 'utf8')
@@ -354,7 +355,7 @@ function assertInvariantCatalogLifecycleBoundaries(): void {
 	assert.ok(activeAuctionEntry, 'Invariant catalog must retain AUC-11 lifecycle-qualified clearing-tree accounting')
 	assert.ok(auctionLiabilityEntry, 'Invariant catalog must retain AUC-12 ETH liability accounting')
 	assert.match(capacityOwnershipEntry, /href="\.\.\/explanation\/truth-auctions\.html#clearing"/)
-	assert.match(vaultEntry, /href="\.\.\/\.\.\/solidity\/contracts\/statoblast\/SecurityPool\.sol"><code>_registerVault<\/code><\/a>/)
+	assert.ok(vaultEntry.includes(`href="${repositorySourceUrl('solidity/contracts/statoblast/SecurityPool.sol')}"><code>_registerVault</code></a>`), 'VAULT-03 must link _registerVault to its repository source')
 	assert.match(activeAuctionEntry, /href="#auc-12"><code>AUC-12<\/code><\/a>/)
 }
 
@@ -720,7 +721,7 @@ async function assertProductionSolidityInventory(): Promise<void> {
 	const inventoryDocuments = `${contractInteractionReference}\n${operatorReference}`
 	for (const sourcePath of await listSoliditySources('solidity/contracts')) {
 		if (sourcePath.includes('/test/')) continue
-		assert.ok(inventoryDocuments.includes(`../${sourcePath}`), `Contract and operator references must inventory production source ${sourcePath}`)
+		assert.ok(inventoryDocuments.includes(repositorySourceUrl(sourcePath)), `Contract and operator references must inventory production source ${sourcePath}`)
 	}
 }
 

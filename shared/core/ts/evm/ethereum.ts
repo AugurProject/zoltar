@@ -472,9 +472,13 @@ type LogTopicFilter = Hex | readonly Hex[] | null
 const DEFAULT_RATE_LIMIT_RETRY_COUNT = 3
 const RATE_LIMIT_RETRY_DELAY_MILLISECONDS = 10_000
 
-type PublicClientShape<TTransport extends Transport, TChain extends Chain | undefined> = {
+// `this` is the already-extended client, so chained extensions accumulate and each callback sees the ones before it.
+interface ExtendableClient {
+	extend: <TExtension extends object>(extension: (client: this) => TExtension) => this & TExtension
+}
+
+type PublicClientShape<TTransport extends Transport, TChain extends Chain | undefined> = ExtendableClient & {
 	chain: TChain
-	extend: <TExtension extends object>(extension: (client: PublicClientShape<TTransport, TChain>) => TExtension) => PublicClientShape<TTransport, TChain> & TExtension
 	estimateContractGas: <TAbi extends Abi, TFunctionName extends string>(parameters: EstimateContractGasParameters<TAbi, TFunctionName>) => Promise<bigint>
 	estimateGas: (parameters: EstimateGasParameters) => Promise<bigint>
 	getBalance: (parameters: { address: Address; blockNumber?: bigint | undefined; blockTag?: BlockTag | undefined }) => Promise<bigint>
@@ -504,10 +508,9 @@ type PublicClientShape<TTransport extends Transport, TChain extends Chain | unde
 
 type PublicClientActions = Omit<PublicClientShape<Transport, Chain | undefined>, 'chain' | 'extend' | 'transport'>
 
-type WalletClientShape<TTransport extends Transport, TChain extends Chain | undefined, TAccount extends Account | undefined> = Omit<PublicClientShape<TTransport, TChain>, 'extend'> & {
+type WalletClientShape<TTransport extends Transport, TChain extends Chain | undefined, TAccount extends Account | undefined> = PublicClientShape<TTransport, TChain> & {
 	account: TAccount
 	call: (parameters: { account?: Account | Address | undefined; data?: Hex | undefined; gas?: bigint | undefined; gasPrice?: bigint | undefined; maxFeePerGas?: bigint | undefined; maxPriorityFeePerGas?: bigint | undefined; to?: Address | undefined; value?: bigint | undefined }) => Promise<{ data: Hex | undefined }>
-	extend: <TExtension extends object>(extension: (client: WalletClientShape<TTransport, TChain, TAccount>) => TExtension) => WalletClientShape<TTransport, TChain, TAccount> & TExtension
 	sendRawTransaction: (parameters: { serializedTransaction: Hex }) => Promise<Hash>
 	sendTransaction: (parameters: {
 		account?: Account | Address | undefined
@@ -1797,27 +1800,21 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 			const decoded = decodeFunctionOutput(rawResult.abiItem, rawResult.data)
 			if (!Array.isArray(decoded)) throw new Error('Unexpected multicall response')
 			if (decoded.length !== parameters.contracts.length) throw new Error(`Multicall returned ${decoded.length.toString()} results for ${parameters.contracts.length.toString()} calls`)
+			const decodeEntry = (index: number, returnData: Hex) => {
+				const contract = parameters.contracts[index]
+				if (contract === undefined) throw new Error('Missing multicall contract response')
+				return decodeFunctionOutput(getNamedFunctionAbi(contract.abi, contract.functionName, contract.args), returnData)
+			}
 
 			if (parameters.allowFailure) {
 				return decoded.map((entry, index) => {
-					if (typeof entry !== 'object' || entry === null || !('success' in entry) || !('returnData' in entry)) {
-						return {
-							error: new Error('Unexpected multicall response'),
-							status: 'failure',
-						}
-					}
-					if (entry.success !== true) {
-						return {
-							error: new Error('Multicall contract call failed'),
-							status: 'failure',
-						}
-					}
-					const contract = parameters.contracts[index]
-					if (contract === undefined) throw new Error('Missing multicall contract response')
-					const abiItem = getNamedFunctionAbi(contract.abi, contract.functionName, contract.args)
-					return {
-						result: decodeFunctionOutput(abiItem, entry.returnData as Hex),
-						status: 'success',
+					if (typeof entry !== 'object' || entry === null || !('success' in entry) || !('returnData' in entry)) return { error: new Error('Unexpected multicall response'), status: 'failure' }
+					if (entry.success !== true) return { error: new Error('Multicall contract call failed'), status: 'failure' }
+					// A result that cannot be decoded only fails its own entry; the other results stay usable.
+					try {
+						return { result: decodeEntry(index, entry.returnData as Hex), status: 'success' }
+					} catch (error) {
+						return { error: error instanceof Error ? error : new Error('Multicall result decoding failed', { cause: error }), status: 'failure' }
 					}
 				}) as MulticallReturnType<typeof parameters.contracts, typeof parameters.allowFailure>
 			}
@@ -1826,10 +1823,7 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 				if (typeof entry !== 'object' || entry === null || !('success' in entry) || !('returnData' in entry) || entry.success !== true) {
 					throw new Error('Multicall contract call failed')
 				}
-				const contract = parameters.contracts[index]
-				if (contract === undefined) throw new Error('Missing multicall contract response')
-				const abiItem = getNamedFunctionAbi(contract.abi, contract.functionName, contract.args)
-				return decodeFunctionOutput(abiItem, entry.returnData as Hex)
+				return decodeEntry(index, entry.returnData as Hex)
 			}) as MulticallReturnType<typeof parameters.contracts, typeof parameters.allowFailure>
 		},
 		readContract: async <TAbi extends Abi, TFunctionName extends string>(parameters: ContractReadParameters<TAbi, TFunctionName>) => {
@@ -2023,20 +2017,20 @@ export function publicActions<TTransport extends Transport, TChain extends Chain
 	}
 }
 
+// Each extended client gets its own `extend` closing over the extended client, so chained extensions accumulate.
+function attachExtend<TClient extends object>(client: TClient): TClient & ExtendableClient {
+	const extended: TClient & ExtendableClient = { ...client, extend: extension => attachExtend({ ...extended, ...extension(extended) }) }
+	return extended
+}
+
 export function createPublicClient<TTransport extends Transport = Transport, TChain extends Chain | undefined = Chain | undefined>({ chain, transport }: { cacheTime?: number | undefined; chain?: TChain; transport: TTransport }): PublicClient<TTransport, TChain> {
 	const resolvedChain = chain as TChain
 	const actions = buildPublicClientActions({
 		chain: resolvedChain,
 		transport,
 	})
-	let client: PublicClient<TTransport, TChain>
-	client = {
-		...actions,
-		chain: resolvedChain,
-		extend: extension => Object.assign({}, client, extension(client)) as PublicClient<TTransport, TChain> & ReturnType<typeof extension>,
-		transport,
-	}
-	return client
+	const client: Omit<PublicClient<TTransport, TChain>, 'extend'> = { ...actions, chain: resolvedChain, transport }
+	return attachExtend(client)
 }
 
 function normalizeWalletAccount(account: Account | Address | undefined) {
@@ -2064,8 +2058,7 @@ export function createWalletClient<TTransport extends Transport = Transport, TCh
 					transport,
 				})
 	const baseClient = publicClient as PublicClient<TTransport, TChain>
-	let walletClient: WalletClient<TTransport, TChain, Account | undefined>
-	walletClient = {
+	const walletActions: Omit<WalletClient<TTransport, TChain, Account | undefined>, 'extend'> = {
 		...baseClient,
 		account: normalizedAccount,
 		call: async parameters => {
@@ -2151,7 +2144,7 @@ export function createWalletClient<TTransport extends Transport = Transport, TCh
 					to: parameters.to ?? undefined,
 					value,
 				})
-				return await walletClient.sendRawTransaction({
+				return await walletActions.sendRawTransaction({
 					serializedTransaction,
 				})
 			}
@@ -2181,9 +2174,8 @@ export function createWalletClient<TTransport extends Transport = Transport, TCh
 				}),
 			)
 		},
-		extend: extension => Object.assign({}, walletClient, extension(walletClient)) as WalletClient<TTransport, TChain, Account | undefined> & ReturnType<typeof extension>,
 		writeContract: async parameters =>
-			await walletClient.sendTransaction({
+			await walletActions.sendTransaction({
 				account: parameters.account,
 				data: encodeFunctionData({
 					abi: parameters.abi,
@@ -2198,7 +2190,7 @@ export function createWalletClient<TTransport extends Transport = Transport, TCh
 				value: parameters.value,
 			}),
 	}
-	return walletClient
+	return attachExtend(walletActions)
 }
 
 function normalizeTransportRetryOptions(options: TransportRetryOptions = {}) {

@@ -135,6 +135,42 @@ async function collectSourceFiles(directory: string, files: string[] = []): Prom
 	return files
 }
 
+export type UiExportsManifestFinding = {
+	detail: string
+	packageId: string
+}
+
+// Bun serves the default (built js) export target whenever it exists and only
+// falls back to the bun-condition source when it is missing, so every entry
+// must name an existing source file and every .tsx module needs an explicit
+// entry: the './*' wildcard's bun condition can only map to './ts/*.ts'.
+export function findUiExportsManifestViolations(packageId: string, manifestExports: Readonly<Record<string, unknown>>, sourceFiles: readonly string[]): UiExportsManifestFinding[] {
+	const findings: UiExportsManifestFinding[] = []
+	const sourceFileSet = new Set(sourceFiles)
+	const sourceTargetOf = (value: unknown): string | undefined => {
+		if (typeof value === 'string') return value
+		if (typeof value === 'object' && value !== null && 'bun' in value && typeof (value as { bun: unknown }).bun === 'string') return (value as { bun: string }).bun
+		return undefined
+	}
+	for (const [key, value] of Object.entries(manifestExports)) {
+		if (key.includes('*')) continue
+		const sourceTarget = sourceTargetOf(value)
+		if (sourceTarget === undefined) {
+			findings.push({ detail: `exports entry ${key} has no bun-condition source target`, packageId })
+			continue
+		}
+		if (!sourceFileSet.has(sourceTarget.replace(/^\.\//, ''))) findings.push({ detail: `exports entry ${key} points its bun condition at missing ${sourceTarget}`, packageId })
+	}
+	if ('./*' in manifestExports) {
+		for (const sourceFile of sourceFiles) {
+			if (!sourceFile.endsWith('.tsx')) continue
+			const entryKey = `./${sourceFile.slice('ts/'.length, -'.tsx'.length)}.js`
+			if (!(entryKey in manifestExports)) findings.push({ detail: `.tsx module ${sourceFile} needs an explicit exports entry so bun resolves it to sources when built output is absent`, packageId })
+		}
+	}
+	return findings
+}
+
 async function main() {
 	const findings: UiLayerBoundaryFinding[] = []
 	for (const uiSourceRoot of uiSourceRoots) {
@@ -144,10 +180,19 @@ async function main() {
 		}
 	}
 
-	if (findings.length === 0) return
+	const manifestFindings: UiExportsManifestFinding[] = []
+	for (const packageId of ['coreShared', 'zoltarShared', 'statoblastShared']) {
+		const packageRoot = path.join(projectRoot, 'ui', packageId)
+		const manifest = JSON.parse(await fs.readFile(path.join(packageRoot, 'package.json'), 'utf8')) as { exports?: Record<string, unknown> }
+		const sourceFiles = (await collectSourceFiles(path.join(packageRoot, 'ts'))).map(filePath => path.relative(packageRoot, filePath).replaceAll('\\', '/'))
+		manifestFindings.push(...findUiExportsManifestViolations(packageId, manifest.exports ?? {}, sourceFiles))
+	}
 
-	console.error('UI dependencies must point inward: app may compose features, while shared layers must never depend on app or feature ownership.')
+	if (findings.length === 0 && manifestFindings.length === 0) return
+
+	if (findings.length > 0) console.error('UI dependencies must point inward: app may compose features, while shared layers must never depend on app or feature ownership.')
 	for (const finding of findings) console.error(`${finding.file}:${finding.line}:${finding.column} - ${finding.rule}: ${finding.specifier}`)
+	for (const finding of manifestFindings) console.error(`ui/${finding.packageId}/package.json - ${finding.detail}`)
 	process.exitCode = 1
 }
 

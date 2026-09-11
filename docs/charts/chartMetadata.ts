@@ -26,7 +26,7 @@ export const quantitativeChartMetadata = {
 		height: 420,
 		width: 900,
 	},
-	'plot-statoblast-whitepaper-19': {
+	'fig-statoblast-collateral-repair': {
 		ariaDescription: 'Child collateral repair progress',
 		ariaLabel: 'Child collateral repair progress',
 		height: 170,

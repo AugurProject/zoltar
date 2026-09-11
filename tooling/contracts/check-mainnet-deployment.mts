@@ -14,6 +14,10 @@ type ManifestDeploymentStep = {
 	id: string
 	label: string
 	address: string
+	// ABI-encoded constructor arguments without a 0x prefix; empty for an
+	// argument-less constructor and absent for steps that are not deployed
+	// from compiled init code (the raw proxy deployer, derived contracts).
+	constructorArguments?: string
 }
 
 type ManifestNetwork = {
@@ -118,13 +122,32 @@ function readProtocolConfig(source: unknown): ManifestProtocolConfig {
 	}
 }
 
-function readDeploymentSteps(source: unknown): ManifestDeploymentStep[] {
+function readConstructorArgumentsById(source: unknown): Map<string, string> {
+	if (!isRecord(source)) throw new Error('Deployment step constructor arguments did not load as an object')
+	return new Map(
+		Object.entries(source).map(([id, constructorArguments]) => {
+			if (typeof constructorArguments !== 'string' || !/^[0-9a-fA-F]*$/.test(constructorArguments)) throw new Error(`Constructor arguments for deployment step ${id} must be a hex string without a 0x prefix`)
+			return [id, constructorArguments]
+		}),
+	)
+}
+
+// The raw proxy deployer is installed from a presigned transaction rather than
+// compiled init code, so it is the only step without constructor arguments.
+const RAW_TRANSACTION_STEP_IDS = new Set(['proxyDeployer'])
+
+export function readDeploymentSteps(source: unknown, constructorArgumentsById?: Map<string, string>): ManifestDeploymentStep[] {
 	if (!Array.isArray(source)) throw new Error('Deployment steps did not load as an array')
 	return source.map((step, index) => {
 		const id = readStringField(step, 'id', `deploymentSteps[${index}].id`)
 		const label = readStringField(step, 'label', `deploymentSteps[${index}].label`)
 		const address = readStringField(step, 'address', `deploymentSteps[${index}].address`)
-		return { id, label, address }
+		const recordedArguments = isRecord(step) && typeof step['constructorArguments'] === 'string' ? step['constructorArguments'] : undefined
+		const constructorArguments = constructorArgumentsById === undefined ? recordedArguments : constructorArgumentsById.get(id)
+		if (constructorArgumentsById !== undefined && constructorArguments === undefined && !RAW_TRANSACTION_STEP_IDS.has(id)) {
+			throw new Error(`Deployment step ${id} has no computed constructor arguments. Extend getDeploymentStepConstructorArguments in ui/statoblastShared/ts/protocol/deployment.ts alongside the new deployment step.`)
+		}
+		return constructorArguments === undefined ? { id, label, address } : { id, label, address, constructorArguments }
 	})
 }
 
@@ -163,6 +186,7 @@ async function loadComputedManifest(manifestId: ManifestId): Promise<DeploymentM
 		const networkProfileModule = await import(url.pathToFileURL(networkProfileModulePath).href)
 		const protocolConfigModule = await import(url.pathToFileURL(protocolConfigModulePath).href)
 		const getDeploymentSteps = readFunction(deploymentModule, 'getDeploymentSteps')
+		const getDeploymentStepConstructorArguments = readFunction(deploymentModule, 'getDeploymentStepConstructorArguments')
 		const getInfraContractAddresses = readFunction(deploymentHelpersModule, 'getInfraContractAddresses')
 		const getMainnetProtocolConfig = readFunction(protocolConfigModule, 'getMainnetProtocolConfig')
 		const setRuntimeNetworkProfile = readFunction(networkProfileModule, 'setRuntimeNetworkProfile')
@@ -174,7 +198,7 @@ async function loadComputedManifest(manifestId: ManifestId): Promise<DeploymentM
 		return {
 			network: readNetworkProfile(profile, manifestId),
 			protocolConfig: readProtocolConfig(getMainnetProtocolConfig()),
-			deploymentSteps: readDeploymentSteps(getDeploymentSteps(profile)),
+			deploymentSteps: readDeploymentSteps(getDeploymentSteps(profile), readConstructorArgumentsById(getDeploymentStepConstructorArguments(profile))),
 			derivedContracts: [
 				{
 					id: 'securityPoolForker',

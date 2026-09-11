@@ -1,7 +1,7 @@
 import { encodeDeployData, getAddress, keccak256, type Address, type Hash, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
-import { createDeploymentStatusOracleAddressHelper } from '@zoltar/core-shared/deployment/deploymentAddresses'
-import { DeploymentStatusOracle_DeploymentStatusOracle, ScalarOutcomes_ScalarOutcomes, ZoltarQuestionData_ZoltarQuestionData, statoblast_Multicall3_Multicall3, statoblast_WETH9_WETH9 } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { constructorArgumentsFromInitCode, createDeploymentStatusOracleAddressHelper } from '@zoltar/core-shared/deployment/deploymentAddresses'
+import { DeploymentStatusOracle_DeploymentStatusOracle, GenesisReputationToken_GenesisReputationToken, ScalarOutcomes_ScalarOutcomes, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData, statoblast_Multicall3_Multicall3, statoblast_WETH9_WETH9 } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { MULTICALL3_BYTECODE, PROXY_DEPLOYER_ADDRESS, ZERO_SALT, getZoltarContractAddresses, getZoltarInitCode, getZoltarQuestionDataByteCode } from './zoltarDeploymentHelpers.js'
 import { readWithRpcStateRetries, waitForSubmittedTransactionReceipt, type RpcStateRetryWait } from './core.js'
 import type { DeploymentStatusSnapshot, DeploymentStep, DeploymentStepId, ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -445,6 +445,25 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 		},
 	]
 	return withExpectedDeploymentRuntimeCodeHashes(steps, profile)
+}
+
+// Constructor arguments for the proxy-deployed steps, keyed by step id, as
+// appended to each step's init code. Deployment manifests record these so
+// explorer source verification never re-derives deployment parameters.
+export function getZoltarDeploymentStepConstructorArguments(profile: NetworkProfile = getRuntimeNetworkProfile()): Partial<Record<DeploymentStepId, string>> {
+	const addresses = getZoltarContractAddresses(profile)
+	const constructorArguments: Partial<Record<DeploymentStepId, string>> = {
+		deploymentStatusOracle: constructorArgumentsFromInitCode(getDeploymentStatusOracleByteCode(profile), DeploymentStatusOracle_DeploymentStatusOracle.evm.bytecode.object),
+		multicall3: constructorArgumentsFromInitCode(MULTICALL3_BYTECODE, statoblast_Multicall3_Multicall3.evm.bytecode.object),
+		scalarOutcomes: '',
+		zoltarQuestionData: constructorArgumentsFromInitCode(getZoltarQuestionDataByteCode(), ZoltarQuestionData_ZoltarQuestionData.evm.bytecode.object),
+		zoltar: constructorArgumentsFromInitCode(getZoltarInitCode(addresses.zoltarQuestionData, profile.genesisRepTokenAddress), Zoltar_Zoltar.evm.bytecode.object),
+	}
+	if (profile.id === 'sepolia') {
+		constructorArguments.weth = constructorArgumentsFromInitCode(SEPOLIA_WETH_INIT_CODE, statoblast_WETH9_WETH9.evm.bytecode.object)
+		constructorArguments.reputationToken = constructorArgumentsFromInitCode(SEPOLIA_GENESIS_REP_INIT_CODE, GenesisReputationToken_GenesisReputationToken.evm.bytecode.object)
+	}
+	return constructorArguments
 }
 
 export function withExpectedDeploymentRuntimeCodeHashes(steps: readonly DeploymentStep[], profile: NetworkProfile): DeploymentStep[] {

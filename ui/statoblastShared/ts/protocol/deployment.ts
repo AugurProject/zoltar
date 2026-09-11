@@ -8,12 +8,14 @@ import {
 	deployViaProxy,
 	getDeploymentSteps as getZoltarDeploymentSteps,
 	getZoltarDeploymentStatusOracleStepAddresses,
+	getZoltarDeploymentStepConstructorArguments,
 	loadDeploymentStatusOracleMaskAtAddress,
 	withExpectedDeploymentRuntimeCodeHashes,
 } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
 import {
 	getInfraContractAddresses,
 	getEscalationGameFactoryByteCode,
+	getInfraStepConstructorArguments,
 	getPriceOracleManagerAndOperatorQueuerFactoryByteCode,
 	getSecurityPoolFactoryByteCode,
 	getSecurityPoolForkerByteCode,
@@ -23,7 +25,7 @@ import {
 } from './deploymentHelpers.js'
 import { DeploymentStatusOracle_DeploymentStatusOracle } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate, statoblast_SecurityPoolUtils_SecurityPoolUtils, statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory, statoblast_openOracle_OpenOracle_OpenOracle } from '../contractArtifact.js'
-import { createDeploymentStatusOracleAddressHelper } from '@zoltar/core-shared/deployment/deploymentAddresses'
+import { constructorArgumentsFromInitCode, createDeploymentStatusOracleAddressHelper } from '@zoltar/core-shared/deployment/deploymentAddresses'
 import { PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from './deploymentHelpers.js'
 
 export { loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
@@ -187,6 +189,22 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 		...(profile.id === 'sepolia' && EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES[step.id] !== undefined ? { expectedRuntimeCodeHash: EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES[step.id] } : {}),
 		...(profile.id === 'mainnet' && EXPECTED_MAINNET_RUNTIME_CODE_HASHES[step.id] !== undefined ? { expectedRuntimeCodeHash: EXPECTED_MAINNET_RUNTIME_CODE_HASHES[step.id] } : {}),
 	}))
+}
+
+/**
+ * Constructor arguments for every proxy-deployed step in the statoblast
+ * deployment plan, keyed by step id. The statoblast deployment status oracle
+ * monitors additional contracts, so its arguments replace the zoltar entry.
+ * Consumed through a dynamic import by the deployment manifest generator
+ * (tooling/contracts/check-mainnet-deployment.mts), which Knip cannot trace.
+ * @public
+ */
+export function getDeploymentStepConstructorArguments(profile: NetworkProfile = getRuntimeNetworkProfile()): Partial<Record<DeploymentStepId, string>> {
+	return {
+		...getZoltarDeploymentStepConstructorArguments(profile),
+		...getInfraStepConstructorArguments(profile),
+		deploymentStatusOracle: constructorArgumentsFromInitCode(getDeploymentStatusOracleByteCode(profile), DeploymentStatusOracle_DeploymentStatusOracle.evm.bytecode.object),
+	}
 }
 
 function getStatoblastDeploymentStatusOracleStepAddresses(profile = getRuntimeNetworkProfile()): Address[] {
