@@ -594,6 +594,20 @@ async function handleCycleFailure(error: unknown, configuration: ConfigurationSt
 		await persistState(configuration, state)
 		return
 	}
+	if (error instanceof TransactionAwaitingRecovery && error.severity === 'pending') {
+		state.error = undefined
+		const message = errorMessage(error)
+		if (state.activities[0]?.message !== message) {
+			recordActivity(state, {
+				hash: error.hash,
+				message,
+				status: 'pending',
+				type: 'transaction',
+			})
+		}
+		await persistState(configuration, state)
+		return
+	}
 	const message = errorMessage(error)
 	const changed = state.error !== message
 	state.error = message
@@ -1082,6 +1096,12 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 			await shutdown.wait(milliseconds)
 		},
 		loaded.settings.runtime.once,
-		error => console.error(`chaosBot=${errorMessage(error)}`),
+		error => {
+			if (error instanceof TransactionAwaitingRecovery && error.severity === 'pending') {
+				console.log(`chaosBot=${errorMessage(error)}`)
+				return
+			}
+			console.error(`chaosBot=${errorMessage(error)}`)
+		},
 	)
 }
