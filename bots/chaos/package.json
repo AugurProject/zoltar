@@ -22,7 +22,7 @@
 		"ensure-contract-artifacts": "bun ../../tooling/contracts/ensure-contract-artifacts.mts",
 		"format": "bun x @biomejs/biome format --write biome.json package.json tsconfig.json bunfig.toml README.md OPERATOR_REFERENCE.md src tests scripts config",
 		"format:check": "bun x @biomejs/biome format biome.json package.json tsconfig.json bunfig.toml README.md OPERATOR_REFERENCE.md src tests scripts config",
-		"lint": "bun x @biomejs/biome lint package.json tsconfig.json bunfig.toml src tests scripts config",
+		"lint": "bun x @biomejs/biome lint package.json tsconfig.json bunfig.toml src tests scripts config && bun ../../tooling/repo/lint-no-restricted-import-types.mts .",
 		"run": "bun ./src/cli/run.ts",
 		"test": "bun run ensure-contract-artifacts && bun test ./tests --timeout 300000",
 		"typecheck": "bun run ensure-contract-artifacts && bun x tsc --project tsconfig.json --noEmit"

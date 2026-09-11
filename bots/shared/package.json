@@ -31,7 +31,7 @@
 		"check": "bun run typecheck && bun run lint && bun run test && bun run format:check",
 		"format": "bun x @biomejs/biome format --write biome.json package.json tsconfig.json src tests",
 		"format:check": "bun x @biomejs/biome format biome.json package.json tsconfig.json src tests",
-		"lint": "bun x @biomejs/biome lint package.json tsconfig.json src tests",
+		"lint": "bun x @biomejs/biome lint package.json tsconfig.json src tests && bun ../../tooling/repo/lint-no-restricted-import-types.mts .",
 		"test": "bun test ./tests",
 		"typecheck": "bun x tsc --project tsconfig.json --noEmit"
 	},
