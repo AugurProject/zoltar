@@ -189,7 +189,6 @@ function setActiveEnvironmentForTesting(backend: ChainBackend, simulationControl
 	setRuntimeNetworkProfile(backend.profile)
 }
 
-/** @internal */
 export function installActiveEnvironmentForTesting(backend: ChainBackend, simulationController?: SimulationController) {
 	setActiveEnvironmentForTesting(backend, simulationController)
 	return () => {
@@ -197,7 +196,6 @@ export function installActiveEnvironmentForTesting(backend: ChainBackend, simula
 	}
 }
 
-/** @internal */
 export function resetActiveEnvironmentForTesting() {
 	initializeActiveEnvironmentGeneration += 1
 	activeEnvironmentGeneration += 1

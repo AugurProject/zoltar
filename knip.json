@@ -35,7 +35,8 @@
 				"@zoltar/statoblast-shared/*": ["../../shared/statoblast/ts/*"],
 				"@zoltar/trading-shared/*": ["../../shared/trading/ts/*"]
 			},
-			"ignoreDependencies": ["@noble/curves", "@noble/hashes", "micro-eth-signer", "micro-packed"]
+			"ignoreDependencies": ["@noble/curves", "@noble/hashes", "micro-eth-signer", "micro-packed"],
+			"ignore": ["ts/tests/testUtils/**", "ts/tests/simulation/testUtils.ts"]
 		},
 		"ui/zoltarShared": {
 			"entry": [],

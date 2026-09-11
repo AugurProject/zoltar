@@ -89,7 +89,6 @@ export function installRouting(config: RoutingConfig) {
 	globalThis.__zoltarActiveRoutingState__ = buildRoutingState(config)
 }
 
-/** @internal */
 export function resetRoutingForTesting() {
 	globalThis.__zoltarActiveRoutingState__ = undefined
 }
