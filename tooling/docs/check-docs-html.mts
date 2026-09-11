@@ -2,8 +2,10 @@ import { access, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { Document, Element, Window } from 'happy-dom'
+import { repositorySourcePath } from './repository-source-links.mts'
 
 type ParsedHtmlDocument = {
+	docsDirectory: string
 	document: Document
 	filePath: string
 	ids: Set<string>
@@ -17,7 +19,7 @@ type ValidationFailure = {
 	relativePath: string
 }
 
-const repositoryRootPath = path.resolve(fileURLToPath(new URL('..', import.meta.url)))
+const repositoryRootPath = path.resolve(fileURLToPath(new URL('../..', import.meta.url)))
 const docsDirectoryPath = path.join(repositoryRootPath, 'docs')
 const conflictMarkerPattern = /^(<<<<<<<|=======|>>>>>>>)($| )/m
 
@@ -31,10 +33,11 @@ export async function assertDocsHtmlValid(): Promise<void> {
 	throw new Error(`Docs HTML validation failed:\n${formattedFailures}`)
 }
 
-export async function validateDocsHtml(): Promise<ValidationFailure[]> {
+export async function validateDocsHtml(docsDirectory = docsDirectoryPath): Promise<ValidationFailure[]> {
 	const failures: ValidationFailure[] = []
-	const htmlFilePaths = await findDocsFiles('.html')
-	const parsedDocuments = await Promise.all(htmlFilePaths.map(parseHtmlDocument))
+	const htmlFilePaths = await findDocsFiles(docsDirectory, '.html')
+	if (htmlFilePaths.length === 0) throw new Error(`No HTML documentation found under ${docsDirectory}`)
+	const parsedDocuments = await Promise.all(htmlFilePaths.map(filePath => parseHtmlDocument(filePath, docsDirectory)))
 	const parsedDocumentsByPath = new Map(parsedDocuments.map(document => [document.filePath, document]))
 
 	for (const parsedDocument of parsedDocuments) {
@@ -70,16 +73,16 @@ function validateResponsiveRuntime(parsedDocument: ParsedHtmlDocument, failures:
 	}
 }
 
-async function findDocsFiles(extension: string): Promise<string[]> {
+async function findDocsFiles(docsDirectory: string, extension: string): Promise<string[]> {
 	const paths: string[] = []
 	const glob = new Bun.Glob(`**/*${extension}`)
-	for await (const relativePath of glob.scan({ cwd: docsDirectoryPath, onlyFiles: true })) {
-		paths.push(path.join(docsDirectoryPath, relativePath))
+	for await (const relativePath of glob.scan({ cwd: docsDirectory, onlyFiles: true })) {
+		paths.push(path.join(docsDirectory, relativePath))
 	}
 	return paths.sort()
 }
 
-async function parseHtmlDocument(filePath: string): Promise<ParsedHtmlDocument> {
+async function parseHtmlDocument(filePath: string, docsDirectory: string): Promise<ParsedHtmlDocument> {
 	const text = await readFile(filePath, 'utf8')
 	const window = new Window({
 		url: pathToFileURL(filePath).href,
@@ -88,6 +91,7 @@ async function parseHtmlDocument(filePath: string): Promise<ParsedHtmlDocument> 
 	window.document.close()
 
 	return {
+		docsDirectory,
 		document: window.document,
 		filePath,
 		ids: collectIds(window.document),
@@ -195,7 +199,8 @@ function validateDiagrams(parsedDocument: ParsedHtmlDocument, failures: Validati
 
 		const chartMount = figure.querySelector('[data-plot-chart]')
 		if (chartMount === null) {
-			addFailure(parsedDocument, `${describeElement(figure)} is missing an Observable Plot mount`, failures)
+			// Ordered HTML flows are the only non-Plot diagram allowed; every other visual must render through a Plot mount.
+			if (figure.querySelector(':scope > .protocol-flow') === null) addFailure(parsedDocument, `${describeElement(figure)} is missing an Observable Plot mount or a .protocol-flow`, failures)
 			continue
 		}
 
@@ -393,12 +398,14 @@ async function validateHtmlLinks(parsedDocument: ParsedHtmlDocument, parsedDocum
 		if (rawHref !== href) {
 			addFailure(parsedDocument, `${describeElement(link)} href has leading or trailing whitespace`, failures)
 		}
-		await validateLocalLink(parsedDocument.filePath, href, parsedDocumentsByPath, parsedDocument.relativePath, failures)
+		await validateLocalLink(parsedDocument, href, parsedDocumentsByPath, failures)
 	}
 }
 
-async function validateLocalLink(sourceFilePath: string, href: string, parsedDocumentsByPath: Map<string, ParsedHtmlDocument>, sourceRelativePath: string, failures: ValidationFailure[]): Promise<void> {
+async function validateLocalLink(parsedDocument: ParsedHtmlDocument, href: string, parsedDocumentsByPath: Map<string, ParsedHtmlDocument>, failures: ValidationFailure[]): Promise<void> {
+	const { docsDirectory, filePath: sourceFilePath, relativePath: sourceRelativePath } = parsedDocument
 	if (isExternalLink(href)) {
+		await validateRepositorySourceLink(href, sourceRelativePath, failures)
 		return
 	}
 
@@ -412,6 +419,14 @@ async function validateLocalLink(sourceFilePath: string, href: string, parsedDoc
 
 	const [targetPathPart, rawFragment] = splitHref(href)
 	const targetFilePath = targetPathPart.length === 0 ? sourceFilePath : path.resolve(path.dirname(sourceFilePath), decodeURIComponent(targetPathPart))
+	// The published site serves only docs/; a relative link into the rest of the checkout works locally but downloads or 404s once published.
+	if (!targetFilePath.startsWith(`${docsDirectory}${path.sep}`)) {
+		failures.push({
+			message: `links outside the documentation directory "${href}"; link repository files through their GitHub source URL`,
+			relativePath: sourceRelativePath,
+		})
+		return
+	}
 	try {
 		await access(targetFilePath)
 	} catch (error) {
@@ -436,6 +451,20 @@ async function validateLocalLink(sourceFilePath: string, href: string, parsedDoc
 			})
 		}
 		return
+	}
+}
+
+async function validateRepositorySourceLink(href: string, sourceRelativePath: string, failures: ValidationFailure[]): Promise<void> {
+	const repositoryPath = repositorySourcePath(href)
+	if (repositoryPath === undefined) return
+	if (repositoryPath.startsWith('docs/')) {
+		failures.push({ message: `links to documentation through the repository instead of a relative route "${href}"`, relativePath: sourceRelativePath })
+		return
+	}
+	try {
+		await access(path.join(repositoryRootPath, repositoryPath))
+	} catch (error) {
+		failures.push({ message: `links to missing repository file "${href}": ${formatUnknownError(error)}`, relativePath: sourceRelativePath })
 	}
 }
 
@@ -520,7 +549,7 @@ export function resolveDocumentReference(filePath: string, reference: string): s
 }
 
 function elementsReferencingAsset(parsedDocument: ParsedHtmlDocument, selector: string, attribute: string, docsRelativeAssetPath: string): Element[] {
-	const expectedPath = path.join(docsDirectoryPath, docsRelativeAssetPath)
+	const expectedPath = path.join(parsedDocument.docsDirectory, docsRelativeAssetPath)
 	return Array.from(parsedDocument.document.querySelectorAll(selector)).filter(element => {
 		const reference = element.getAttribute(attribute)
 		return reference !== null && resolveDocumentReference(parsedDocument.filePath, reference) === expectedPath

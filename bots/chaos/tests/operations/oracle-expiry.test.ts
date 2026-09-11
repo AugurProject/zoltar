@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { eligibleOperationPlans } from '../../src/operations/catalog.ts'
+import { eligibleOperationPlans } from '../support/operation-plans.ts'
 import { snapshotFixture } from './fixture.ts'
 
 const planningOptions = {

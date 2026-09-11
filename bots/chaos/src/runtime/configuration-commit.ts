@@ -1,6 +1,6 @@
 import type { Address } from '@zoltar/bot-shared/ethereum'
 import type { SignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
-import { CONFIGURATION_REVISION_CONFLICT, type OperatorSettings } from '../config/settings.ts'
+import { type OperatorSettings } from '../config/settings.ts'
 import { setRuntimeExecutionAddress, bindRuntimeStateToSigner, recordActivity, type RuntimeState } from '../state/operator-state.ts'
 
 export const CONFIGURATION_COMMIT_INDETERMINATE = 'ConfigurationCommitIndeterminate'
@@ -86,8 +86,4 @@ export function applyRuntimeSettings(state: RuntimeState, settings: OperatorSett
 
 export function commitRuntimeState(target: RuntimeState, candidate: RuntimeState) {
 	Object.assign(target, candidate)
-}
-
-export function isConfigurationRevisionConflict(error: unknown) {
-	return error instanceof Error && error.name === CONFIGURATION_REVISION_CONFLICT
 }

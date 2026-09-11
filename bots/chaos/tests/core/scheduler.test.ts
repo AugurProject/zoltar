@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { createChaosScheduler } from '../../src/core/scheduler.ts'
-import { initialDurableState, loadDurableState, saveDurableState } from '../../src/state/operator-state.ts'
+import { loadDurableState, saveDurableState } from '../../src/state/operator-state.ts'
+import { initialDurableState } from '../../src/state/initial-state.ts'
 
 const directories: string[] = []
 

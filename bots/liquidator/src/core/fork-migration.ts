@@ -4,7 +4,7 @@ import { zeroAddress } from '@zoltar/bot-shared/ethereum'
 import type { OperatorSettings } from '#config/settings'
 import type { PoolObservation, UniverseObservation } from '#state/operator-state'
 
-export const FORK_MIGRATION_WINDOW_SECONDS = 8n * 7n * 24n * 60n * 60n
+const FORK_MIGRATION_WINDOW_SECONDS = 8n * 7n * 24n * 60n * 60n
 
 export type VaultMigration = {
 	childPool: PoolObservation | undefined

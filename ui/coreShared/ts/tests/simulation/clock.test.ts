@@ -3,7 +3,11 @@
 import { createMemoryClient } from '@tevm/memory-client'
 import { describe, expect, test } from 'bun:test'
 import { bytesToHex, type Hex } from '@zoltar/core-shared/evm/ethereum'
-import { SIMULATION_BLOCK_INTERVAL_SECONDS, SIMULATION_INITIAL_TIMESTAMP, advanceSimulationTime, getNextSimulationTimestamp, getSimulationChainTimestamp, initializeSimulationClock, mineNextSimulationBlock, minePendingSimulationTransactionAtTimestamp } from '../../simulation/clock.js'
+import { advanceSimulationTime, getNextSimulationTimestamp, getSimulationChainTimestamp, initializeSimulationClock, mineNextSimulationBlock, minePendingSimulationTransactionAtTimestamp } from '../../simulation/clock.js'
+
+// The simulation clock starts at 2025-01-01T00:00:00Z and advances one second per block.
+const SIMULATION_INITIAL_TIMESTAMP = 1_735_689_600n
+const SIMULATION_BLOCK_INTERVAL_SECONDS = 1n
 
 function createSimulationNode(overrides: { blockStateRootHex: Hex; includeStateRoot: boolean; txForHash?: { isFound: boolean; txValue?: unknown } }) {
 	const stateRoot = hexToBytes(overrides.blockStateRootHex)

@@ -8,11 +8,11 @@ import type { AuctionBidSnapshot, AuctionRefundSnapshot, ChildRepSplitProgressSn
 
 const PROTOCOL_INDEX_REFERENCE_VERSION = 1
 const PROTOCOL_INDEX_MANIFEST_VERSION = 1
-export const MAXIMUM_PROTOCOL_INDEX_CHUNK_RECORDS = 256
-export const MAXIMUM_PROTOCOL_INDEX_CHUNK_BYTES = 1024 * 1024
-export const MAXIMUM_PROTOCOL_INDEX_RECORDS = 100_000
-export const MAXIMUM_PROTOCOL_INDEX_CHUNKS = 512
-export const MAXIMUM_PROTOCOL_INDEX_BYTES = 64 * 1024 * 1024
+const MAXIMUM_PROTOCOL_INDEX_CHUNK_RECORDS = 256
+const MAXIMUM_PROTOCOL_INDEX_CHUNK_BYTES = 1024 * 1024
+const MAXIMUM_PROTOCOL_INDEX_RECORDS = 100_000
+const MAXIMUM_PROTOCOL_INDEX_CHUNKS = 512
+const MAXIMUM_PROTOCOL_INDEX_BYTES = 64 * 1024 * 1024
 const MAXIMUM_PROTOCOL_INDEX_MANIFEST_BYTES = 64 * 1024
 
 const COLLECTION_KINDS = ['reports', 'auction-bids', 'auction-refunds', 'escalation-deposits', 'migration-routes', 'child-routes'] as const
@@ -45,7 +45,7 @@ export type ProtocolIndexFileHandle = {
 	writeFile: (data: string, options: { encoding: 'utf8' }) => Promise<unknown>
 }
 
-export type ProtocolIndexDirectoryEntry = {
+type ProtocolIndexDirectoryEntry = {
 	isDirectory: () => boolean
 	isFile: () => boolean
 	isSymbolicLink: () => boolean
@@ -440,7 +440,7 @@ function assertProtocolIndexRecordEnvelope(index: Record<string, unknown>) {
 	if (recordCount > MAXIMUM_PROTOCOL_INDEX_RECORDS) throw new Error(`Protocol index exceeds the ${MAXIMUM_PROTOCOL_INDEX_RECORDS.toString()}-record aggregate safety limit`)
 }
 
-export function parseProtocolIndex(value: unknown, expectedChainId: number): ChaosProtocolIndex | undefined {
+function parseProtocolIndex(value: unknown, expectedChainId: number): ChaosProtocolIndex | undefined {
 	if (value === null || value === undefined) return undefined
 	const index = requiredRecord(value, 'protocolIndex')
 	assertExactKeys(index, ['auctionBids', 'auctionRefunds', 'chainId', 'childRepSplits', 'cursor', 'escalationDeposits', 'migrationRepSplits', 'openOracle', 'reports', 'schemaVersion', 'securityPoolForker', 'startBlock', 'wallet', 'zoltar'], ['availableStartBlock'], 'protocolIndex')
@@ -598,7 +598,7 @@ async function syncDirectory(path: string, filesystem: ProtocolIndexFilesystem) 
 	}
 }
 
-export function protocolIndexSidecarDirectory(statePath: string) {
+function protocolIndexSidecarDirectory(statePath: string) {
 	return `${resolve(statePath)}.protocol-index-v1`
 }
 

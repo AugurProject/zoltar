@@ -66,14 +66,6 @@
 			"bun": "./ts/features/markets/components/MarketCreateQuestionSection.tsx",
 			"default": "./js/features/markets/components/MarketCreateQuestionSection.js"
 		},
-		"./features/markets/components/MarketOverviewSection.js": {
-			"bun": "./ts/features/markets/components/MarketOverviewSection.tsx",
-			"default": "./js/features/markets/components/MarketOverviewSection.js"
-		},
-		"./features/markets/components/ScalarDeploymentSection.js": {
-			"bun": "./ts/features/markets/components/ScalarDeploymentSection.tsx",
-			"default": "./js/features/markets/components/ScalarDeploymentSection.js"
-		},
 		"./features/markets/components/TradingSection.js": {
 			"bun": "./ts/features/markets/components/TradingSection.tsx",
 			"default": "./js/features/markets/components/TradingSection.js"
@@ -97,14 +89,6 @@
 		"./features/markets/lib/trading.js": {
 			"bun": "./ts/features/markets/lib/trading.ts",
 			"default": "./js/features/markets/lib/trading.js"
-		},
-		"./features/security-pools/components/CollateralizationCircle.js": {
-			"bun": "./ts/features/security-pools/components/CollateralizationCircle.tsx",
-			"default": "./js/features/security-pools/components/CollateralizationCircle.js"
-		},
-		"./features/security-pools/components/CollateralizationMetricField.js": {
-			"bun": "./ts/features/security-pools/components/CollateralizationMetricField.tsx",
-			"default": "./js/features/security-pools/components/CollateralizationMetricField.js"
 		},
 		"./features/security-pools/components/LiquidationModal.js": {
 			"bun": "./ts/features/security-pools/components/LiquidationModal.tsx",
@@ -406,10 +390,6 @@
 			"bun": "./ts/features/reportingTransactionPresentations.tsx",
 			"default": "./js/features/reportingTransactionPresentations.js"
 		},
-		"./features/universes/components/TransactionUniverseValue.js": {
-			"bun": "./ts/features/universes/components/TransactionUniverseValue.tsx",
-			"default": "./js/features/universes/components/TransactionUniverseValue.js"
-		},
 		"./protocol/deploymentHelpers.js": {
 			"bun": "./ts/protocol/deploymentHelpers.ts",
 			"default": "./js/protocol/deploymentHelpers.js"
@@ -425,6 +405,10 @@
 		"./protocol/liquidationApprovals.js": {
 			"bun": "./ts/protocol/liquidationApprovals.ts",
 			"default": "./js/protocol/liquidationApprovals.js"
+		},
+		"./protocol/openOracleMath.js": {
+			"bun": "./ts/protocol/openOracleMath.ts",
+			"default": "./js/protocol/openOracleMath.js"
 		},
 		"./protocol/openOracle.js": {
 			"bun": "./ts/protocol/openOracle.ts",
@@ -461,6 +445,70 @@
 		"./contractArtifact.js": {
 			"bun": "./ts/contractArtifact.ts",
 			"default": "./js/contractArtifact.js"
+		},
+		"./features/open-oracle/components/OpenOraclePriceValue.js": {
+			"bun": "./ts/features/open-oracle/components/OpenOraclePriceValue.tsx",
+			"default": "./js/features/open-oracle/components/OpenOraclePriceValue.js"
+		},
+		"./features/open-oracle/components/OpenOracleReportDetailsCard.js": {
+			"bun": "./ts/features/open-oracle/components/OpenOracleReportDetailsCard.tsx",
+			"default": "./js/features/open-oracle/components/OpenOracleReportDetailsCard.js"
+		},
+		"./features/reporting/components/EscalationSide.js": {
+			"bun": "./ts/features/reporting/components/EscalationSide.tsx",
+			"default": "./js/features/reporting/components/EscalationSide.js"
+		},
+		"./features/security-pools/components/SecurityPoolOracleSections.js": {
+			"bun": "./ts/features/security-pools/components/SecurityPoolOracleSections.tsx",
+			"default": "./js/features/security-pools/components/SecurityPoolOracleSections.js"
+		},
+		"./features/security-pools/components/SecurityPoolSummaryMetrics.js": {
+			"bun": "./ts/features/security-pools/components/SecurityPoolSummaryMetrics.tsx",
+			"default": "./js/features/security-pools/components/SecurityPoolSummaryMetrics.js"
+		},
+		"./features/security-pools/components/SecurityPoolVaultDirectory.js": {
+			"bun": "./ts/features/security-pools/components/SecurityPoolVaultDirectory.tsx",
+			"default": "./js/features/security-pools/components/SecurityPoolVaultDirectory.js"
+		},
+		"./features/security-pools/components/SecurityPoolVaultWorkspace.js": {
+			"bun": "./ts/features/security-pools/components/SecurityPoolVaultWorkspace.tsx",
+			"default": "./js/features/security-pools/components/SecurityPoolVaultWorkspace.js"
+		},
+		"./features/security-pools/components/VaultMetricGrid.js": {
+			"bun": "./ts/features/security-pools/components/VaultMetricGrid.tsx",
+			"default": "./js/features/security-pools/components/VaultMetricGrid.js"
+		},
+		"./features/security-pools/components/VaultQueuedOperationStatusCard.js": {
+			"bun": "./ts/features/security-pools/components/VaultQueuedOperationStatusCard.tsx",
+			"default": "./js/features/security-pools/components/VaultQueuedOperationStatusCard.js"
+		},
+		"./features/truth-auctions/components/ForkAuctionActionSections.js": {
+			"bun": "./ts/features/truth-auctions/components/ForkAuctionActionSections.tsx",
+			"default": "./js/features/truth-auctions/components/ForkAuctionActionSections.js"
+		},
+		"./features/truth-auctions/components/ForkAuctionMigrationStage.js": {
+			"bun": "./ts/features/truth-auctions/components/ForkAuctionMigrationStage.tsx",
+			"default": "./js/features/truth-auctions/components/ForkAuctionMigrationStage.js"
+		},
+		"./features/truth-auctions/components/ForkAuctionPresentation.js": {
+			"bun": "./ts/features/truth-auctions/components/ForkAuctionPresentation.tsx",
+			"default": "./js/features/truth-auctions/components/ForkAuctionPresentation.js"
+		},
+		"./features/truth-auctions/components/ForkAuctionWorkflowShell.js": {
+			"bun": "./ts/features/truth-auctions/components/ForkAuctionWorkflowShell.tsx",
+			"default": "./js/features/truth-auctions/components/ForkAuctionWorkflowShell.js"
+		},
+		"./features/truth-auctions/components/TruthAuctionDepthChart.js": {
+			"bun": "./ts/features/truth-auctions/components/TruthAuctionDepthChart.tsx",
+			"default": "./js/features/truth-auctions/components/TruthAuctionDepthChart.js"
+		},
+		"./features/truth-auctions/components/TruthAuctionSummaryCard.js": {
+			"bun": "./ts/features/truth-auctions/components/TruthAuctionSummaryCard.tsx",
+			"default": "./js/features/truth-auctions/components/TruthAuctionSummaryCard.js"
+		},
+		"./features/universes/components/ShareMigrationTargetsSection.js": {
+			"bun": "./ts/features/universes/components/ShareMigrationTargetsSection.tsx",
+			"default": "./js/features/universes/components/ShareMigrationTargetsSection.js"
 		}
 	}
 }

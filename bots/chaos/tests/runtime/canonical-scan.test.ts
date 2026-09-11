@@ -6,13 +6,18 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getAddress, zeroHash } from '@zoltar/bot-shared/ethereum'
 import { parseSettings, serializedSettings } from '../../src/config/settings.ts'
-import { CANONICAL_MUTATING_CONTRACT_MANIFEST, MUTATING_CONTRACT_SURFACE } from '../../src/contracts/surface.ts'
+import { MUTATING_CONTRACT_SURFACE } from '../../src/contracts/surface.ts'
+import { CANONICAL_MUTATING_CONTRACT_MANIFEST } from '../support/canonical-contracts.ts'
 import { canonicalLifecyclePresence } from '../../src/operations/catalog.ts'
-import { applyExecutionPolicy, blockExecutableEvaluations, chaosReadClients, completeOperationCoverage, createChaosReadPool, discoveryCoverageIsComplete, loadTopologyCacheForScan, planningOptions, sharedCanonicalBlockNumber, unavailableOperationCatalog, walletInventory } from '../../src/runtime/canonical-scan.ts'
+import { discoveryCoverageIsComplete } from '../../src/monitoring/discovery.ts'
+import { applyExecutionPolicy, blockExecutableEvaluations, chaosReadClients, createChaosReadPool, planningOptions, unavailableOperationCatalog } from '../../src/runtime/canonical-scan.ts'
+import { completeOperationCoverage } from '../../src/runtime/surface-coverage.ts'
+import { walletInventory } from '../../src/state/runtime-state.ts'
 import type { ChaosEcosystem, EcosystemSnapshot, EvaluatedOperation } from '../../src/operations/types.ts'
 import type { ChaosProtocolIndex } from '../../src/monitoring/protocol-index.ts'
-import { deriveChildUniverseId } from '../../src/monitoring/protocol-index.ts'
-import { IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, immutableTopologySidecarDirectory, saveImmutableTopologyCache, type CanonicalImmutableTopologyCache, type ImmutableTopologyIdentity } from '../../src/monitoring/topology-cache.ts'
+import { deriveChildUniverseId } from '../support/universe.ts'
+import { IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, loadImmutableTopologyCacheWithinLimits, saveImmutableTopologyCache, type CanonicalImmutableTopologyCache, type ImmutableTopologyIdentity } from '../../src/monitoring/topology-cache.ts'
+import { immutableTopologySidecarDirectory } from '../support/state-sidecars.ts'
 import { hash, snapshotFixture } from '../operations/fixture.ts'
 import { applyLiveNoveltyInventoryReadiness, liveInventoryReadinessBlockers } from '../../src/runtime/live-readiness.ts'
 
@@ -164,8 +169,8 @@ describe('canonical scan policy', () => {
 			}
 			await saveImmutableTopologyCache(statePath, identity, cache)
 			const lowered = { maxPools: 1, maxQuestions: 1, maxUniverses: 1, maxVaultsPerPool: 1 }
-			expect(await loadTopologyCacheForScan({ identity, limits: lowered, statePath })).toBeUndefined()
-			expect(await loadTopologyCacheForScan({ identity, limits: lowered, previous: cache, statePath })).toBeUndefined()
+			expect(await loadImmutableTopologyCacheWithinLimits({ identity, limits: lowered, statePath })).toBeUndefined()
+			expect(await loadImmutableTopologyCacheWithinLimits({ identity, limits: lowered, previous: cache, statePath })).toBeUndefined()
 
 			const storePath = immutableTopologySidecarDirectory(statePath)
 			const generation = (await readdir(storePath, { withFileTypes: true })).find(entry => entry.isDirectory() && /^[0-9a-f]{64}$/.test(entry.name))
@@ -174,16 +179,10 @@ describe('canonical scan policy', () => {
 			const questionChunk = (await readdir(generationPath)).find(name => name.startsWith('questions-'))
 			if (questionChunk === undefined) throw new Error('Immutable topology generation has no question chunk')
 			await writeFile(join(generationPath, questionChunk), '{not valid json', { mode: 0o600 })
-			await expect(loadTopologyCacheForScan({ identity, limits: { ...lowered, maxQuestions: 2 }, statePath })).rejects.toThrow('digest')
+			await expect(loadImmutableTopologyCacheWithinLimits({ identity, limits: { ...lowered, maxQuestions: 2 }, statePath })).rejects.toThrow('digest')
 		} finally {
 			await rm(directory, { force: true, recursive: true })
 		}
-	})
-
-	test('anchors at the newest block supported by the configured quorum', () => {
-		expect(sharedCanonicalBlockNumber([112n, 112n, 80n], 2)).toBe(112n)
-		expect(sharedCanonicalBlockNumber([112n, 111n, 80n], 2)).toBe(111n)
-		expect(() => sharedCanonicalBlockNumber([112n], 2)).toThrow('enough independent RPC heads')
 	})
 
 	test('projects indexed identities and wallet funding inventory', () => {

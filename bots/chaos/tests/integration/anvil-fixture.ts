@@ -1,6 +1,5 @@
 import { eip191Signer } from 'micro-eth-signer'
 import { encodeDeployData, getAddress, keccak256, privateKeyToAccount, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
-import { TRANSACTION_SUBMISSION_CAPABILITY_PROBE } from '@zoltar/bot-shared/monitoring/connectivity'
 import { createAnvilNodeForConnectionMode, type AnvilNode } from '../../../../solidity/ts/testSupport/simulator/anvilNode.ts'
 import { addressString } from '../../../../solidity/ts/testSupport/simulator/utils/bigint.ts'
 import { createWriteClient, writeContractAndWait } from '../../../../solidity/ts/testSupport/simulator/utils/clients.ts'
@@ -10,6 +9,9 @@ import { createQuestion, getQuestionId } from '../../../../solidity/ts/testSuppo
 import { manipulatePriceOracle } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/statoblastTestUtils.ts'
 import { setupTestAccounts } from '../../../../solidity/ts/testSupport/simulator/utils/utilities.ts'
 import { ReputationToken_ReputationToken, ZoltarQuestionData_ZoltarQuestionData, trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory, trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter } from '../../../../solidity/ts/types/contractArtifact.ts'
+
+// Mirrors the signed probe transaction that bot-shared connectivity checks send to private relays.
+const TRANSACTION_SUBMISSION_CAPABILITY_PROBE = '0xdf800182520894000000000000000000000000000000000000000080801b0180'
 
 export const CHAOS_TEST_PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80' as const
 export const CHAOS_TEST_FINALITY_BLOCKS = 2n

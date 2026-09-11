@@ -1,4 +1,3 @@
-import { maximumFeePerGas } from '@zoltar/bot-shared/execution/transaction-submission'
 import type { CanonicalUintString } from '../core/units.ts'
 import type { OracleRequestFundingSnapshot } from './types.ts'
 
@@ -29,20 +28,6 @@ type CoordinatorFundingValues = {
 	reportDenominator: bigint
 	reportNumeratorMultiplier: bigint
 	settlementCallbackGasLimit: bigint
-}
-
-export interface OracleRequestFundingBoundParameters {
-	anchorBaseFeePerGas: CanonicalUintString
-	coordinator: OracleRequestFundingSnapshot
-	proposedRepPerEthPrice: CanonicalUintString
-	settlementCollateralAttoEth: CanonicalUintString
-}
-
-export interface OracleRequestFundingForMaximumBaseFeeParameters {
-	coordinator: OracleRequestFundingSnapshot
-	maximumBaseFeePerGas: CanonicalUintString
-	proposedRepPerEthPrice: CanonicalUintString
-	settlementCollateralAttoEth: CanonicalUintString
 }
 
 export interface OracleRequestFundingEnvelopeParameters {
@@ -177,12 +162,12 @@ function fundingBoundsForMaximumBaseFee(parameters: { funding: CoordinatorFundin
 	}
 }
 
-export function anchoredMinimumToken1ReportAttoEth(parameters: { baseFeePerGas: CanonicalUintString; coordinator: OracleRequestFundingSnapshot; settlementCollateralAttoEth: CanonicalUintString }): CanonicalUintString {
+function anchoredMinimumToken1ReportAttoEth(parameters: { baseFeePerGas: CanonicalUintString; coordinator: OracleRequestFundingSnapshot; settlementCollateralAttoEth: CanonicalUintString }): CanonicalUintString {
 	const funding = coordinatorFundingValues(parameters.coordinator)
 	return minimumToken1ReportAttoEth(uint256(parameters.baseFeePerGas, 'baseFeePerGas'), uint256(parameters.settlementCollateralAttoEth, 'settlementCollateralAttoEth'), funding).toString()
 }
 
-export function anchoredRequestPriceCostAttoEth(parameters: { baseFeePerGas: CanonicalUintString; coordinator: OracleRequestFundingSnapshot }): CanonicalUintString {
+function anchoredRequestPriceCostAttoEth(parameters: { baseFeePerGas: CanonicalUintString; coordinator: OracleRequestFundingSnapshot }): CanonicalUintString {
 	const funding = coordinatorFundingValues(parameters.coordinator)
 	return requestPriceCostAttoEth(uint256(parameters.baseFeePerGas, 'baseFeePerGas'), funding).toString()
 }
@@ -197,29 +182,6 @@ export function assertAnchoredOracleRequestFunding(parameters: { baseFeePerGas: 
 	if (locallyDerivedRequestCost !== parameters.requestPriceCostAttoEth) {
 		throw oracleRequestFundingError(`${subject} request-price cost does not match its anchored funding inputs`)
 	}
-}
-
-export function oracleRequestFundingBounds(parameters: OracleRequestFundingBoundParameters): OracleRequestFundingBounds {
-	const anchorBaseFeePerGas = uint256(parameters.anchorBaseFeePerGas, 'anchorBaseFeePerGas')
-	return oracleRequestFundingForMaximumBaseFee({
-		coordinator: parameters.coordinator,
-		maximumBaseFeePerGas: maximumFeePerGas(anchorBaseFeePerGas).toString(),
-		proposedRepPerEthPrice: parameters.proposedRepPerEthPrice,
-		settlementCollateralAttoEth: parameters.settlementCollateralAttoEth,
-	})
-}
-
-export function oracleRequestFundingForMaximumBaseFee(parameters: OracleRequestFundingForMaximumBaseFeeParameters): OracleRequestFundingBounds {
-	const funding = coordinatorFundingValues(parameters.coordinator)
-	const maximumBaseFeePerGas = uint256(parameters.maximumBaseFeePerGas, 'maximumBaseFeePerGas')
-	const proposedRepPerEthPrice = uint256(parameters.proposedRepPerEthPrice, 'proposedRepPerEthPrice')
-	if (proposedRepPerEthPrice === 0n) throw oracleRequestFundingError('proposedRepPerEthPrice must be positive')
-	return fundingBoundsForMaximumBaseFee({
-		funding,
-		maximumBaseFeePerGas,
-		proposedRepPerEthPrice,
-		settlementCollateralAttoEth: uint256(parameters.settlementCollateralAttoEth, 'settlementCollateralAttoEth'),
-	})
 }
 
 /**

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { erc20Abi, escalationGameAbi, openOracleAbi, securityPoolAbi, zoltarAbi } from '../../src/contracts/abi.ts'
-import { eligibleOperationPlans, reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
+import { reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
+import { eligibleOperationPlans } from '../support/operation-plans.ts'
 import type { EcosystemSnapshot, OperationPlan } from '../../src/operations/types.ts'
 import { decodeFunctionData } from '@zoltar/bot-shared/ethereum'
 import { address, hash, snapshotFixture } from './fixture.ts'

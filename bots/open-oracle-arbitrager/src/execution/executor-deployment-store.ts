@@ -30,7 +30,7 @@ function parseHex(value: unknown, bytes: number, label: string) {
 	return value as Hex
 }
 
-export async function parseExecutorDeploymentIntent(value: unknown): Promise<ExecutorDeploymentIntent> {
+async function parseExecutorDeploymentIntent(value: unknown): Promise<ExecutorDeploymentIntent> {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Executor deployment intent must be an object')
 	const record = value as Record<string, unknown>
 	const keys = ['account', 'address', 'chainId', 'salt', 'serializedTransaction', 'transactionHash', 'version']

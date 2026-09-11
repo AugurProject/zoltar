@@ -6,8 +6,6 @@ import { TRADING_OPERATIONS } from './trading.ts'
 import type { CanonicalLifecyclePresence, EcosystemSnapshot, EvaluatedOperation, OperationContinuationContext, OperationDefinition, OperationPlan, PlanningOptions } from './types.ts'
 import { ZOLTAR_OPERATIONS } from './zoltar.ts'
 
-export { MUTATING_CONTRACT_SURFACE, classifiedMethod, type ContractMethodClassification } from '../contracts/surface.ts'
-
 export const CHAOS_OPERATION_CATALOG: readonly OperationDefinition[] = [...ZOLTAR_OPERATIONS, ...STATOBLAST_OPERATIONS, ...OPEN_ORACLE_OPERATIONS, ...TRADING_OPERATIONS]
 
 export function operationHasCanonicalContinuationBuilder(definitionId: string) {
@@ -229,38 +227,4 @@ export function reevaluateOperationContinuation(snapshot: EcosystemSnapshot, pre
 	}
 }
 
-export function eligibleOperationPlans(snapshot: EcosystemSnapshot, options: PlanningOptions): OperationPlan[] {
-	return evaluateOperationCatalog(snapshot, options)
-		.map(operation => operation.plan)
-		.filter((plan): plan is OperationPlan => plan !== undefined)
-}
-
-export function urgentOperationPlans(snapshot: EcosystemSnapshot, options: PlanningOptions): OperationPlan[] {
-	return eligibleOperationPlans(snapshot, options)
-		.filter(plan => plan.obligation)
-		.sort((left, right) => {
-			if (left.deadlineTimestamp === undefined) return right.deadlineTimestamp === undefined ? 0 : 1
-			if (right.deadlineTimestamp === undefined) return -1
-			const leftDeadline = BigInt(left.deadlineTimestamp)
-			const rightDeadline = BigInt(right.deadlineTimestamp)
-			if (leftDeadline < rightDeadline) return -1
-			if (leftDeadline > rightDeadline) return 1
-			return 0
-		})
-}
-
-export type {
-	ChaosEcosystem,
-	CanonicalLifecyclePresence,
-	EcosystemSnapshot,
-	EligibilityResult,
-	EvaluatedOperation,
-	OperationClassification,
-	OperationDefinition,
-	OperationEvidence,
-	OperationPlan,
-	OperationRisk,
-	OperationStep,
-	OperationWalletAssetDebit,
-	PlanningOptions,
-} from './types.ts'
+export type { CanonicalLifecyclePresence, EcosystemSnapshot, EvaluatedOperation, OperationDefinition, OperationPlan, PlanningOptions } from './types.ts'

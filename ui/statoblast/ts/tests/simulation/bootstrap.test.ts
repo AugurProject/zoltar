@@ -2,7 +2,6 @@
 
 import { afterEach, describe, expect, mock, test } from 'bun:test'
 import { MAINNET_NETWORK_PROFILE, MAINNET_WETH_ADDRESS, type NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
-import { SIMULATION_INITIAL_TIMESTAMP } from '@zoltar/ui-core-shared/simulation/clock.js'
 import { bootstrapSimulationChain, mintSimulationGenesisRep, predictSimulationTokenAddresses, type BootstrapScenarioApplyParameters } from '@zoltar/ui-core-shared/simulation/bootstrap.js'
 import { installStatoblastScenarioProtocolForTesting } from '@zoltar/ui-statoblast-shared/simulation/statoblastScenarioProtocol.js'
 import { applyStatoblastScenario } from '@zoltar/ui-statoblast-shared/simulation/statoblastScenarios.js'
@@ -700,6 +699,9 @@ const ZOLTAR_SIMULATION_STEP: DeploymentStep = {
 	deploy: async () => ({ action: 'none', address: getAddress('0x00000000000000000000000000000000000000a1'), hash: '0x01' }) as never,
 }
 const getDeploymentSteps = () => [ZOLTAR_SIMULATION_STEP] as const satisfies ReadonlyArray<DeploymentStep>
+
+// The simulation clock starts at 2025-01-01T00:00:00Z.
+const SIMULATION_INITIAL_TIMESTAMP = 1_735_689_600n
 
 describe('simulation bootstrap', () => {
 	afterEach(() => {

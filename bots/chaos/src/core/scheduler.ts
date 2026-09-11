@@ -1,9 +1,10 @@
 import type { SchedulerSettings } from '#config/settings'
 import { randomDelaySeconds, type RandomIntegerSource } from '#core/random'
 import type { SchedulerState } from '#state/operator-state'
+import type { RuntimeState } from '#state/operator-state'
 
 export type SchedulerClock = () => number
-export type SchedulerPersistence = (state: SchedulerState) => Promise<void>
+type SchedulerPersistence = (state: SchedulerState) => Promise<void>
 
 export type ChaosSchedulerOptions = {
 	clock?: SchedulerClock | undefined
@@ -44,7 +45,7 @@ export function schedulerIsDue(state: Pick<SchedulerState, 'nextRunAt' | 'status
 	return nextRunAt !== undefined && nextRunAt <= nowMilliseconds
 }
 
-export function schedulerWaitMilliseconds(state: Pick<SchedulerState, 'nextRunAt'>, nowMilliseconds = Date.now()) {
+function schedulerWaitMilliseconds(state: Pick<SchedulerState, 'nextRunAt'>, nowMilliseconds = Date.now()) {
 	const nextRunAt = timestampMilliseconds(state.nextRunAt, 'Scheduler next run')
 	if (nextRunAt === undefined) return undefined
 	return Math.max(0, nextRunAt - nowMilliseconds)
@@ -115,4 +116,22 @@ export function createChaosScheduler(options: ChaosSchedulerOptions) {
 	}
 }
 
-export type ChaosScheduler = ReturnType<typeof createChaosScheduler>
+export function backfillWaitMilliseconds(lifecyclePollMilliseconds: number, consecutiveBackfillCycles: number) {
+	if (!Number.isSafeInteger(lifecyclePollMilliseconds) || lifecyclePollMilliseconds < 1_000 || lifecyclePollMilliseconds > 60_000) {
+		throw new Error('Backfill poll interval must be an integer from 1000 through 60000 milliseconds')
+	}
+	if (!Number.isSafeInteger(consecutiveBackfillCycles) || consecutiveBackfillCycles < 0) {
+		throw new Error('Consecutive backfill cycle count must be a non-negative integer')
+	}
+	const initialCadence = Math.min(lifecyclePollMilliseconds, 5_000)
+	const completedWindows = Math.min(Math.floor(consecutiveBackfillCycles / 16), 4)
+	return Math.min(lifecyclePollMilliseconds, initialCadence * 2 ** completedWindows)
+}
+
+export function operatorWaitMilliseconds(baseMilliseconds: number, state: Pick<RuntimeState, 'paused' | 'scheduler'>, nowMilliseconds = Date.now()) {
+	if (!Number.isSafeInteger(baseMilliseconds) || baseMilliseconds < 1) throw new Error('Operator wait must be a positive integer')
+	if (state.paused || (state.scheduler.status !== 'scheduled' && state.scheduler.status !== 'due')) return baseMilliseconds
+	const schedulerWait = schedulerWaitMilliseconds(state.scheduler, nowMilliseconds)
+	if (schedulerWait === undefined) return baseMilliseconds
+	return Math.min(baseMilliseconds, Math.max(1, schedulerWait))
+}

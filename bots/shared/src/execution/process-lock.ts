@@ -151,7 +151,7 @@ export function acquireFileProcessLock(path: string, label: string, filesystem?:
 	return acquireExclusiveProcessLock(`${resolvedPath}.lock`, `${label} ${resolvedPath}`, { file: resolvedPath }, filesystem)
 }
 
-export function executionSignerLockPath(chainId: number, account: Address, lockRoot = join(tmpdir(), 'zoltar-bot-locks')) {
+function executionSignerLockPath(chainId: number, account: Address, lockRoot = join(tmpdir(), 'zoltar-bot-locks')) {
 	if (!Number.isSafeInteger(chainId) || chainId <= 0) throw new Error('Execution signer lock chain id is invalid')
 	const signer = getAddress(account)
 	if (lockRoot.trim() === '') throw new Error('Execution signer lock root cannot be empty')

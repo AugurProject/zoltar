@@ -55,6 +55,15 @@
 		return node
 	}
 
+	// Contract names such as UniformPriceDualCapBatchAuction have no spaces; break them between words instead of at an arbitrary character.
+	function appendBreakableTitle(link: HTMLAnchorElement, title: string): void {
+		const parts = title.split(/(?<=[a-z0-9])(?=[A-Z])/)
+		parts.forEach((part, index) => {
+			if (index > 0) link.append(document.createElement('wbr'))
+			link.append(document.createTextNode(part))
+		})
+	}
+
 	function sectionPages(sectionId: string): StatoblastDocumentationPage[] {
 		return data.pages.filter(page => page.section === sectionId)
 	}
@@ -102,7 +111,8 @@
 			const list = element('ul', 'docs-navigation-list')
 			for (const page of pages) {
 				const item = element('li', '')
-				const link = element('a', '', page.title)
+				const link = element('a', '')
+				appendBreakableTitle(link, page.title)
 				link.href = docsUrl(page.path)
 				if (page.path === currentPage?.path) link.setAttribute('aria-current', 'page')
 				item.append(link)

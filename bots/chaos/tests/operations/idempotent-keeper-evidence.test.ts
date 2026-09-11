@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { validateStepReceiptEvidence } from '../../src/execution/receipt-validation.ts'
+import { stepReceiptEvidenceDisposition } from '../../src/execution/receipt-validation.ts'
 import { STATOBLAST_OPERATIONS } from '../../src/operations/statoblast.ts'
 import type { EcosystemSnapshot, OperationEvidence, OperationPlanDraft, OperationStep, PlanningOptions } from '../../src/operations/types.ts'
 import { hash, snapshotFixture } from './fixture.ts'
@@ -56,7 +56,7 @@ function validateAlreadyAchieved(plan: OperationPlanDraft) {
 		return { after: evidence.expected, before: evidence.expected, evidence }
 	})
 	expect(storage).not.toHaveLength(0)
-	expect(() => validateStepReceiptEvidence(step, receipt, { storage })).not.toThrow()
+	expect(stepReceiptEvidenceDisposition(step, receipt, { storage })).toBe('confirmed')
 }
 
 describe('idempotent Statoblast keeper evidence', () => {
@@ -122,7 +122,7 @@ describe('idempotent Statoblast keeper evidence', () => {
 		const evidence = step === undefined ? undefined : storageEvidence(step)[0]
 		if (step === undefined || evidence === undefined) throw new Error('Checkpoint evidence is missing')
 		expect(() =>
-			validateStepReceiptEvidence(step, receipt, {
+			stepReceiptEvidenceDisposition(step, receipt, {
 				storage: [
 					{
 						after: (BigInt(snapshot.anchor.timestamp) - 1n).toString(),

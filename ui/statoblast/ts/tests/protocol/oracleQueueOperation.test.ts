@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import { decodeOracleQueueOperation, encodeOracleQueueOperation, LIQUIDATION_OPERATION_TYPE, WITHDRAW_REP_OPERATION_TYPE } from '@zoltar/ui-statoblast-shared/protocol/oracleQueueOperation.js'
+import { decodeOracleQueueOperation, encodeOracleQueueOperation } from '@zoltar/ui-statoblast-shared/protocol/oracleQueueOperation.js'
+
+// OpenOraclePriceCoordinator operation type ids.
+const LIQUIDATION_OPERATION_TYPE = 0
+const WITHDRAW_REP_OPERATION_TYPE = 1
 
 describe('oracleQueueOperation', () => {
 	test('round-trips supported operations', () => {

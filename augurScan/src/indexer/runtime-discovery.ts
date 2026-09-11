@@ -6,7 +6,7 @@ export const isProtocolActivitySource = (contract: ContractMetadata | undefined)
 
 export const indexerLogSources = (contracts: readonly ContractMetadata[]): readonly ContractMetadata[] => contracts.filter(contract => isProtocolActivitySource(contract) || contract.kind === 'reputationToken')
 
-export const discoveryLogAddresses = (discoveredAddresses: readonly Address[], contracts: ReadonlyMap<string, ContractMetadata>): readonly Address[] => {
+const discoveryLogAddresses = (discoveredAddresses: readonly Address[], contracts: ReadonlyMap<string, ContractMetadata>): readonly Address[] => {
 	const sources = discoveredAddresses.filter(address => {
 		const contract = contracts.get(address.toLowerCase())
 		return isProtocolActivitySource(contract) || contract?.kind === 'reputationToken'

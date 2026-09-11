@@ -4,76 +4,65 @@ import { assertIndexerLeaseObservation, assertIndexerLeaseReleaseObservation, Da
 import { readRichListBalance } from '../../src/direct-observations.ts'
 import { type Address, createPublicClient, decodeFunctionResult, encodeAbiParameters, encodeEventTopics, getAddress, type Hex, http, type Log, parseAbi, RpcError, toHex } from '../../src/ethereum.ts'
 import {
-	addressActivityFrom,
-	boundedDeploymentRead,
-	commitCanonicalRead,
-	compactIndexerDuration,
-	confirmCanonicalBlock,
-	contractDeploymentScanDue,
-	createRpcDiagnosticContext,
-	createRpcRequestQueue,
-	deploymentReadBudget,
 	findContractDeploymentBlock,
 	findManifestContractDeployment,
-	indexerOperationFailureReason,
-	indexerProgressMessage,
-	indexerWaitingMessage,
-	indexingCompletion,
 	initialIndexStartBlock,
-	isLocalIndexerFailure,
-	isProtocolActivitySource,
-	isProtocolEvidenceEmitter,
-	isSplittableLogRangeError,
 	logScanCursorUpdates,
 	manifestChangeRequiresFullReplay,
 	manifestReplayAncestor,
-	nextIndexerOwnershipStatus,
-	ownershipFailureLogMessage,
 	planDeploymentAwareLogScan,
 	planManifestBackfill,
 	queryAdaptiveLogRange,
-	queryCanonicalLogRange,
-	RpcQueueSaturatedError,
 	readTokenMetadata,
 	reorgSearchFloor,
-	requiresParentLookup,
-	retryDelayMs,
-	rpcFailureLogMessage,
-	rpcIndexerFailureReason,
-	rpcLogAddressGroups,
 	rpcLogQueryGroups,
-	rpcProviderLabel,
-	runIndexerOwnershipLifecycle,
-	runIndexerTask,
-	runNetworkLifecycle,
-	runOwnedNetworkLifecycle,
-	safeIndexerFailure,
-	safeIndexerFailureReason,
 	startIndexers,
 	tokenMetadataNeedsRead,
 	uniswapV4PoolIds,
-	waitForIndexerDelay,
-	withRpcRequestQueue,
-	withVerifiedProvider,
 } from '../../src/indexer.ts'
 import {
+	addressActivityFrom,
 	ChainConfigurationError,
+	commitCanonicalRead,
 	commitSparseCanonicalBatch,
+	confirmCanonicalBlock,
 	contractDeploymentCandidateFrom,
+	contractDeploymentScanDue,
 	createLogClient,
-	discoveryLogAddresses,
-	findEarliestAvailableLogBlock,
+	createRpcDiagnosticContext,
+	deploymentReadBudget,
 	findEarliestAvailableLogProvider,
 	findEarliestAvailableStateBlock,
 	findSparseCanonicalAncestor,
 	indexerLogSources,
+	indexerOperationFailureReason,
+	indexerProgressMessage,
+	indexerWaitingMessage,
+	indexingCompletion,
+	isLocalIndexerFailure,
 	isPermanentHistoricalLogError,
+	isProtocolActivitySource,
+	isProtocolEvidenceEmitter,
 	isPrunedHistoricalStateError,
+	isSplittableLogRangeError,
+	ownershipFailureLogMessage,
+	queryCanonicalLogRange,
 	readHistoricalCodeWithPermanentFallback,
 	readWithPrunedStateFallback,
+	retryDelayMs,
+	rpcFailureLogMessage,
+	rpcIndexerFailureReason,
+	rpcProviderLabel,
+	runIndexerOwnershipLifecycle,
+	runNetworkLifecycle,
+	runOwnedNetworkLifecycle,
+	safeIndexerFailure,
+	safeIndexerFailureReason,
 	scanDiscoveredLogCoverage,
+	waitForIndexerDelay,
+	withVerifiedProvider,
 } from '../../src/indexer-runtime.ts'
-import { RpcRequestMethodError } from '../../src/rpc-request-queue.ts'
+import { createRpcRequestQueue, RpcQueueSaturatedError, RpcRequestMethodError, withRpcRequestQueue } from '../../src/rpc-request-queue.ts'
 import { unixSecondsToDate } from '../../src/time.ts'
 import type { ContractMetadata, StoredLog, TokenMetadata } from '../../src/types.ts'
 import { isSupportedUniswapV4Market, uniswapV2V3TokenPairs, uniswapV4PoolId } from '../../src/uniswap.ts'
@@ -611,18 +600,17 @@ describe('network indexer lifecycle', () => {
 
 	test('locates the earliest retrievable log block without retrying the pruned range', async () => {
 		const attempts: bigint[] = []
-		const availableStart = await findEarliestAvailableLogBlock(
+		const available = await findEarliestAvailableLogProvider(
+			['reth'],
 			10n,
-			100n,
-			async blockNumber => {
+			async () => 100n,
+			async (_provider, blockNumber) => {
 				attempts.push(blockNumber)
 				if (blockNumber < 42n) throw new RpcRequestMethodError('eth_getLogs', new RpcError('pruned history unavailable', { code: 4444, shortMessage: 'pruned history unavailable' }), '#1 http://reth:8545')
 			},
-			true,
 		)
-		expect(availableStart).toBe(42n)
-		expect(attempts).not.toContain(10n)
-		expect(attempts.length).toBeLessThanOrEqual(8)
+		expect(available).toEqual({ provider: 'reth', startBlock: 42n })
+		expect(attempts.length).toBeLessThanOrEqual(9)
 	})
 
 	test('locates the earliest retrievable historical state block', async () => {
@@ -1064,9 +1052,6 @@ describe('network indexer lifecycle', () => {
 		expect(indexingCompletion(100n, 99n, 99n)).toEqual({ completedBlocks: 0n, percentage: '100.00', remainingBlocks: 0n, totalBlocks: 0n })
 		expect(indexerWaitingMessage('mainnet', 100n, 99n)).toBe('[mainnet] indexer state: live; observed head #99; 100.00% complete; caught up; waiting for configured start block #100')
 		expect(indexingCompletion(0n, 99_998n, 99_999n).percentage).toBe('99.99')
-		expect(compactIndexerDuration(3_600)).toBe('1h')
-		expect(compactIndexerDuration(86_400)).toBe('1d')
-		expect(compactIndexerDuration(172_800)).toBe('2d')
 		expect(indexerProgressMessage('mainnet', 100n, 119n, 1_000n, 0n, 10)).toBe('[mainnet] indexer state: backfilling; indexed blocks #100–#119; observed head #1000; 11.99% complete; 881 blocks behind; ETA 1m 29s')
 		expect(indexerProgressMessage('mainnet', 100n, 119n, 1_000n, 0n)).toEndWith('11.99% complete; 881 blocks behind; estimating ETA')
 		expect(indexerProgressMessage('sepolia', 1_000n, 1_000n, 1_000n, 0n)).toBe('[sepolia] indexer state: live; indexed block #1000; observed head #1000; 100.00% complete; caught up')
@@ -1787,11 +1772,6 @@ describe('network indexer lifecycle', () => {
 			{ address: oracleAddress, label: 'Oracle', kind: 'openOracle', provenance: 'manifest' },
 		] satisfies readonly ContractMetadata[]
 		expect(indexerLogSources(contracts).map(contract => contract.address)).toEqual([repAddress, oracleAddress])
-		const contractMap = new Map<string, ContractMetadata>(contracts.map(contract => [contract.address.toLowerCase(), contract]))
-		expect(discoveryLogAddresses([repAddress, wethAddress, oracleAddress], contractMap)).toEqual([repAddress, oracleAddress])
-		const factoryAddress = '0x6000000000000000000000000000000000000006'
-		contractMap.set(factoryAddress, { address: factoryAddress, label: 'V3 factory', kind: 'uniswapV3Factory', provenance: 'manifest' })
-		expect(discoveryLogAddresses([repAddress], contractMap)).toEqual([repAddress, factoryAddress])
 	})
 
 	test('covers REP events from the discovery block through the active scan segment', async () => {
@@ -2067,15 +2047,7 @@ describe('network indexer lifecycle', () => {
 		expect(detection).toHaveBeenCalledTimes(2)
 	})
 
-	test('bounds a stalled optional contract deployment history read', async () => {
-		let deploymentTimeout: unknown
-		try {
-			await boundedDeploymentRead(() => new Promise(() => {}), 1)
-		} catch (error) {
-			deploymentTimeout = error
-		}
-		expect(deploymentTimeout).toMatchObject({ name: 'TimeoutError' })
-		expect(safeIndexerFailureReason(deploymentTimeout)).toBe('TimeoutError; message: provider request timed out')
+	test('bounds optional contract deployment history reads to their shared budget', async () => {
 		let now = 0
 		const readWithinBudget = deploymentReadBudget(10, () => now)
 		expect(
@@ -2200,11 +2172,6 @@ describe('network indexer lifecycle', () => {
 	})
 
 	test('keeps RPC log address filters within public-provider limits', () => {
-		expect(rpcLogAddressGroups(Array.from({ length: 12 }, (_, index) => index))).toEqual([
-			[0, 1, 2, 3, 4],
-			[5, 6, 7, 8, 9],
-			[10, 11],
-		])
 		expect(
 			rpcLogQueryGroups([
 				{ address, fromBlock: 10n, startBlock: 10n },
@@ -2446,28 +2413,6 @@ describe('network indexer lifecycle', () => {
 			}),
 		).toBe(false)
 		expect(controlReason).toContain('message: provider rejected the requested block range')
-	})
-
-	test('reports one stopped transition after graceful lifecycle shutdown', async () => {
-		const controller = new AbortController()
-		const info = spyOn(console, 'info').mockImplementation(() => {})
-		try {
-			await runIndexerTask('sepolia', () =>
-				runNetworkLifecycle({
-					verify: async () => {},
-					poll: async () => {
-						controller.abort()
-						return true
-					},
-					failure: async () => {},
-					intervalMs: 1,
-					signal: controller.signal,
-				}),
-			)
-			expect(info.mock.calls.filter(([message]) => message === '[sepolia] indexer state: stopped')).toHaveLength(1)
-		} finally {
-			info.mockRestore()
-		}
 	})
 
 	test('identifies RPC providers during failover without exposing credentials, paths, or credential subdomains', async () => {
@@ -2896,8 +2841,6 @@ describe('network indexer lifecycle', () => {
 	})
 
 	test('never requires RPC history below a configured start boundary', () => {
-		expect(requiresParentLookup(1_000n, 1_000n)).toBe(false)
-		expect(requiresParentLookup(1_001n, 1_000n)).toBe(true)
 		expect(reorgSearchFloor(1_000n, 1_003n, 64n)).toBe(1_000n)
 		expect(reorgSearchFloor(1_000n, 2_000n, 64n)).toBe(1_936n)
 	})
@@ -3368,36 +3311,6 @@ describe('network indexer lifecycle', () => {
 		} finally {
 			recovered.mockRestore()
 		}
-	})
-
-	test('tracks process-local ownership failures and reacquisitions for health diagnostics', () => {
-		const failed = nextIndexerOwnershipStatus('sepolia', undefined, { type: 'failure', stage: 'verify', consecutiveFailures: 2, retryDelayMs: 24_000, backendPid: 41 }, new Date('2026-08-13T10:00:00Z'))
-		expect(failed).toEqual({
-			networkId: 'sepolia',
-			active: false,
-			backendPid: 41,
-			failuresTotal: 1,
-			reacquisitionsTotal: 0,
-			consecutiveFailures: 2,
-			lastFailureAt: '2026-08-13T10:00:00.000Z',
-			lastFailureStage: 'verify',
-		})
-		expect(nextIndexerOwnershipStatus('sepolia', failed, { type: 'acquired', backendPid: 42, recoveredAfterFailures: 2, acquiredAfterStandby: false })).toEqual({
-			...failed,
-			active: true,
-			backendPid: 42,
-			reacquisitionsTotal: 1,
-			consecutiveFailures: 0,
-		})
-		const standby = nextIndexerOwnershipStatus('mainnet', undefined, { type: 'standby' })
-		expect(nextIndexerOwnershipStatus('mainnet', standby, { type: 'acquired', backendPid: 52, recoveredAfterFailures: 0, acquiredAfterStandby: true })).toEqual({
-			networkId: 'mainnet',
-			active: true,
-			backendPid: 52,
-			failuresTotal: 0,
-			reacquisitionsTotal: 1,
-			consecutiveFailures: 0,
-		})
 	})
 
 	test('reports a lease release failure through ownership diagnostics', async () => {

@@ -59,7 +59,7 @@ export function getWalletScopedAccountAddress(accountAddress: Address | undefine
 	return isSupportedAppChain(chainId) ? accountAddress : undefined
 }
 
-export function getWrongNetworkMessage() {
+function getWrongNetworkMessage() {
 	const profile = getActiveNetworkProfile()
 	if (profile.id === 'simulation') return undefined
 	if (profile.id === 'mainnet') return commonCopy.mainnetRequiredReason

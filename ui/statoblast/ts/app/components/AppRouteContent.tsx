@@ -8,7 +8,7 @@ import { shouldRenderAppRouteContent } from '@zoltar/ui-core-shared/app/lib/appR
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as statoblastAppCopy from '@zoltar/ui-statoblast-shared/copy/app.js'
 
-export const STATOBLAST_NOT_FOUND_LINKS = [
+const STATOBLAST_NOT_FOUND_LINKS = [
 	{ href: '#/deploy', label: commonCopy.deploy },
 	{ href: '#/security-pools', label: commonCopy.securityPools },
 	{ href: '#/security-pools?securityPoolsView=universes', label: commonCopy.universe },

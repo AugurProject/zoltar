@@ -4,7 +4,8 @@ import { expect, test } from 'bun:test'
 import example from '../../config/operator.example.json'
 import { parseSettings } from '../../src/config/settings.ts'
 import { checkDeploymentAvailability, recordUnavailableDeploymentScan, tradingDeploymentNotice } from '../../src/runtime/deployment-availability.ts'
-import { initialRuntimeState, resetRuntimeStateForProfile } from '../../src/state/operator-state.ts'
+import { resetRuntimeStateForProfile } from '../../src/state/operator-state.ts'
+import { initialRuntimeState } from '../../src/state/initial-state.ts'
 
 const settings = parseSettings(example)
 
