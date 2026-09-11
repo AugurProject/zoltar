@@ -1,14 +1,16 @@
-import { requireDeployedContracts } from '../../../shared/src/monitoring/deployed-contracts.js'
+import { requireDeployedContractsOnce } from '@zoltar/bot-shared/monitoring/deployed-contracts'
 import { randomUUID } from 'node:crypto'
 import { appendFile, mkdir, open, rename, rm } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import { bigintToSafeNumber, formatUnits, getAddress, isAddress, keccak256, type Address, type Chain, type Hex, type PublicClient, type Transport, zeroAddress } from '@zoltar/bot-shared/ethereum'
+import { bigintToSafeNumber, formatUnits, getAddress, isAddress, keccak256, type Address, type Hex, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { augurMarketAbi, augurUniverseAbi, constantProductFactoryAbi, constantProductPairAbi, erc20Abi, factoryAbi, poolAbi } from '#contracts/abi'
+import { batchRead, batchValue, type BatchCall, type BatchReader, type BatchResult } from '#core/batch-read'
+import { requiredBigint, requiredRpcAddress, requiredTuple } from '#core/rpc-validation'
 
 const MAINNET_AUGUR_GENESIS_UNIVERSE = getAddress('0x49244BD018Ca9fd1f06ecC07B9E9De773246e5AA')
 export const UNISWAP_V3_FEES = [100, 500, 3000, 10000] as const
 
-type ReadClient = PublicClient<Transport, Chain>
+type DeploymentReader = Parameters<typeof requireDeployedContractsOnce>[0]
 
 export type TokenConfiguration = {
 	addresses: readonly Address[]
@@ -25,10 +27,12 @@ export type MarketPoolSnapshot = {
 	venue: string
 }
 
-const MAINNET_CONSTANT_PRODUCT_VENUES = [
-	{ factory: getAddress('0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f'), fee: 3_000, name: 'Uniswap V2' },
-	{ factory: getAddress('0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac'), fee: 3_000, name: 'SushiSwap V2' },
-] as const
+type ConstantProductVenueKind = 'sushiswap-v2' | 'uniswap-v2'
+
+const MAINNET_CONSTANT_PRODUCT_VENUES: readonly { factory: Address; fee: number; kind: ConstantProductVenueKind; name: string }[] = [
+	{ factory: getAddress('0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f'), fee: 3_000, kind: 'uniswap-v2', name: 'Uniswap V2' },
+	{ factory: getAddress('0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac'), fee: 3_000, kind: 'sushiswap-v2', name: 'SushiSwap V2' },
+]
 
 export type TokenMarketSnapshot = {
 	address: Address
@@ -57,20 +61,6 @@ type PriceHistoryLimits = {
 const DEFAULT_PRICE_HISTORY_MAXIMUM_BYTES = 8 * 1024 * 1024
 const DEFAULT_PRICE_HISTORY_MAXIMUM_RECORDS = 2_000
 
-export async function availableTokenBalances(tokens: readonly Address[], readBalance: (token: Address) => Promise<bigint>) {
-	const entries = await Promise.all(
-		tokens.map(async token => {
-			try {
-				return [[token.toLowerCase(), await readBalance(token)] as const]
-			} catch (error) {
-				console.error(`token=${token} balanceUnavailable=${error instanceof Error ? error.message : String(error)}`)
-				return []
-			}
-		}),
-	)
-	return new Map(entries.flat())
-}
-
 function uniqueAddresses(addresses: readonly Address[]) {
 	const unique = new Map<string, Address>()
 	for (const address of addresses) unique.set(address.toLowerCase(), getAddress(address))
@@ -90,10 +80,21 @@ export function tokenCatalogForScan(discoveredAugurTokens: readonly Address[], c
 	}
 }
 
-export function createTokenCatalogTracker(discoverAugurTokens: (configured: readonly Address[], observed: readonly Address[]) => Promise<readonly Address[]>) {
+const DEFAULT_AUGUR_DISCOVERY_REFRESH_MILLISECONDS = 60_000
+
+/**
+ * Augur REP discovery only changes when the genesis universe forks, so the discovered set is reused
+ * across scans and refreshed on a short timer instead of being re-read from the chain every block.
+ */
+export function createTokenCatalogTracker(discoverAugurTokens: (configured: readonly Address[], observed: readonly Address[]) => Promise<readonly Address[]>, options: { now?: (() => number) | undefined; refreshMilliseconds?: number | undefined } = {}) {
+	const now = options.now ?? Date.now
+	const refreshMilliseconds = options.refreshMilliseconds ?? DEFAULT_AUGUR_DISCOVERY_REFRESH_MILLISECONDS
+	if (!Number.isSafeInteger(refreshMilliseconds) || refreshMilliseconds < 0) throw new Error('Augur discovery refresh must be a non-negative integer')
+	let discovered: { at: number; tokens: readonly Address[] } | undefined
 	return async (configuredTokens: readonly Address[], observedTokens: readonly Address[], approvedTokens: readonly Address[] = []) => {
-		const discoveredAugurTokens = await discoverAugurTokens([], [])
-		return tokenCatalogForScan(discoveredAugurTokens, configuredTokens, observedTokens, approvedTokens)
+		const current = now()
+		if (discovered === undefined || current - discovered.at >= refreshMilliseconds) discovered = { at: current, tokens: await discoverAugurTokens([], []) }
+		return tokenCatalogForScan(discovered.tokens, configuredTokens, observedTokens, approvedTokens)
 	}
 }
 
@@ -108,46 +109,57 @@ export function payoutDistributionHash(payout: readonly bigint[]) {
 	return keccak256(`0x${packed}` as Hex)
 }
 
-export async function discoverAugurRepTokens(client: ReadClient, chainId: number, configured: readonly Address[], observed: readonly Address[]) {
+export async function discoverAugurRepTokens(client: BatchReader, multicall3: Address, chainId: number, configured: readonly Address[], observed: readonly Address[]) {
 	const addresses = [...configured, ...observed]
 	if (chainId !== 1) return uniqueAddresses(addresses)
-	const genesisRep = await client.readContract({
-		address: MAINNET_AUGUR_GENESIS_UNIVERSE,
-		abi: augurUniverseAbi,
-		functionName: 'getReputationToken',
-	})
-	addresses.push(genesisRep)
-	const market = await client.readContract({
-		address: MAINNET_AUGUR_GENESIS_UNIVERSE,
-		abi: augurUniverseAbi,
-		functionName: 'getForkingMarket',
-	})
-	if (market !== zeroAddress) {
-		const [numTicks, numberOfOutcomes] = await Promise.all([client.readContract({ address: market, abi: augurMarketAbi, functionName: 'getNumTicks' }), client.readContract({ address: market, abi: augurMarketAbi, functionName: 'getNumberOfOutcomes' })])
-		for (const payout of childPayouts(numTicks, numberOfOutcomes)) {
-			const payoutHash = payoutDistributionHash(payout)
-			const universe = await client.readContract({
-				address: MAINNET_AUGUR_GENESIS_UNIVERSE,
-				abi: augurUniverseAbi,
-				functionName: 'getChildUniverse',
-				args: [payoutHash],
-			})
-			if (universe === zeroAddress) continue
-			addresses.push(
-				await client.readContract({
-					address: universe,
-					abi: augurUniverseAbi,
-					functionName: 'getReputationToken',
-				}),
-			)
-		}
-	}
+	const [genesisRep, forkingMarket] = await batchRead(client, multicall3, [
+		{ address: MAINNET_AUGUR_GENESIS_UNIVERSE, abi: augurUniverseAbi, functionName: 'getReputationToken' },
+		{ address: MAINNET_AUGUR_GENESIS_UNIVERSE, abi: augurUniverseAbi, functionName: 'getForkingMarket' },
+	])
+	addresses.push(requiredRpcAddress(batchValue(genesisRep, 'Augur genesis REP token'), 'Augur genesis REP token'))
+	const market = requiredRpcAddress(batchValue(forkingMarket, 'Augur forking market'), 'Augur forking market')
+	if (market === zeroAddress) return uniqueAddresses(addresses)
+	const [rawNumTicks, rawNumberOfOutcomes] = await batchRead(client, multicall3, [
+		{ address: market, abi: augurMarketAbi, functionName: 'getNumTicks' },
+		{ address: market, abi: augurMarketAbi, functionName: 'getNumberOfOutcomes' },
+	])
+	const payouts = childPayouts(requiredBigint(batchValue(rawNumTicks, 'Augur forking market numTicks'), 'Augur forking market numTicks'), requiredBigint(batchValue(rawNumberOfOutcomes, 'Augur forking market outcomes'), 'Augur forking market outcomes'))
+	const childUniverses = await batchRead(
+		client,
+		multicall3,
+		payouts.map(payout => ({ address: MAINNET_AUGUR_GENESIS_UNIVERSE, abi: augurUniverseAbi, functionName: 'getChildUniverse', args: [payoutDistributionHash(payout)] })),
+	)
+	const universes = childUniverses.map((result, index) => requiredRpcAddress(batchValue(result, `Augur child universe ${index.toString()}`), `Augur child universe ${index.toString()}`)).filter(universe => universe !== zeroAddress)
+	const childTokens = await batchRead(
+		client,
+		multicall3,
+		universes.map(universe => ({ address: universe, abi: augurUniverseAbi, functionName: 'getReputationToken' })),
+	)
+	for (const [index, result] of childTokens.entries()) addresses.push(requiredRpcAddress(batchValue(result, `Augur child universe ${universes[index] ?? index.toString()} REP token`), 'Augur child REP token'))
 	return uniqueAddresses(addresses)
 }
 
-async function tokenMetadata(client: ReadClient, address: Address) {
-	const [name, symbol, decimals] = await Promise.all([client.readContract({ address, abi: erc20Abi, functionName: 'name' }), client.readContract({ address, abi: erc20Abi, functionName: 'symbol' }), client.readContract({ address, abi: erc20Abi, functionName: 'decimals' })])
-	return { decimals: bigintToSafeNumber(decimals, 'Token decimals'), name, symbol }
+export type TokenMetadata = { decimals: number; name: string; symbol: string }
+
+/** ERC-20 name, symbol, and decimals are immutable, so one read per token serves every later scan. */
+export function createTokenMetadataCache() {
+	return new Map<string, TokenMetadata>()
+}
+
+function metadataCalls(address: Address) {
+	return [
+		{ address, abi: erc20Abi, functionName: 'name' },
+		{ address, abi: erc20Abi, functionName: 'symbol' },
+		{ address, abi: erc20Abi, functionName: 'decimals' },
+	] satisfies BatchCall[]
+}
+
+function decodeMetadata(results: readonly BatchResult[], token: Address): TokenMetadata {
+	const name = batchValue(results[0], `Token ${token} name`)
+	const symbol = batchValue(results[1], `Token ${token} symbol`)
+	const decimals = batchValue(results[2], `Token ${token} decimals`)
+	if (typeof name !== 'string' || typeof symbol !== 'string') throw new Error(`Token ${token} metadata is not valid`)
+	return { decimals: bigintToSafeNumber(requiredBigint(decimals, `Token ${token} decimals`), 'Token decimals'), name, symbol }
 }
 
 export function poolSpotPriceWeth(sqrtPriceX96: bigint, token: Address, weth: Address, decimals: number) {
@@ -168,83 +180,140 @@ export function formatTokenAmount(value: bigint, decimals: number) {
 	return formatUnits(value, decimals)
 }
 
-async function loadConstantProductPools(client: ReadClient, chainId: number, token: Address, weth: Address, tokenDecimals: number, explorerUrl: string) {
-	if (chainId !== 1) return []
-	const pools: MarketPoolSnapshot[] = []
-	for (const venue of MAINNET_CONSTANT_PRODUCT_VENUES) {
-		const address = await client.readContract({
-			address: venue.factory,
-			abi: constantProductFactoryAbi,
-			functionName: 'getPair',
-			args: [token, weth],
+export type DiscoveredTokenPools = {
+	constantProduct: readonly { address: Address; fee: number; kind: ConstantProductVenueKind; venue: string }[]
+	token: Address
+	v3: readonly { address: Address; fee: (typeof UNISWAP_V3_FEES)[number] }[]
+}
+
+/**
+ * Resolves every candidate Uniswap V3 pool and mainnet constant-product pair for the monitored tokens
+ * in one batched read so the market overview and the execution pool set share a single discovery.
+ */
+export async function discoverTokenPools(
+	client: DeploymentReader & BatchReader,
+	parameters: {
+		blockNumber?: bigint | undefined
+		chainId: number
+		factory: Address
+		multicall3: Address
+		tokens: readonly Address[]
+		weth: Address
+	},
+): Promise<readonly DiscoveredTokenPools[]> {
+	await requireDeployedContractsOnce(client, [{ name: 'Uniswap V3 factory', address: parameters.factory }], parameters.blockNumber)
+	const venues = parameters.chainId === 1 ? MAINNET_CONSTANT_PRODUCT_VENUES : []
+	const calls = parameters.tokens.flatMap(token => [
+		...UNISWAP_V3_FEES.map(fee => ({ address: parameters.factory, abi: factoryAbi, functionName: 'getPool', args: [parameters.weth, token, fee] }) satisfies BatchCall),
+		...venues.map(venue => ({ address: venue.factory, abi: constantProductFactoryAbi, functionName: 'getPair', args: [token, parameters.weth] }) satisfies BatchCall),
+	])
+	const results = await batchRead(client, parameters.multicall3, calls, parameters.blockNumber)
+	const stride = UNISWAP_V3_FEES.length + venues.length
+	return parameters.tokens.map((token, tokenIndex) => {
+		const base = tokenIndex * stride
+		const v3 = UNISWAP_V3_FEES.flatMap((fee, feeIndex) => {
+			const address = requiredRpcAddress(batchValue(results[base + feeIndex], 'Uniswap V3 factory getPool'), 'Uniswap V3 factory getPool')
+			return address === zeroAddress ? [] : [{ address, fee }]
 		})
-		if (address === zeroAddress) continue
-		const [token0, reserves] = await Promise.all([client.readContract({ address, abi: constantProductPairAbi, functionName: 'token0' }), client.readContract({ address, abi: constantProductPairAbi, functionName: 'getReserves' })])
-		const tokenIsZero = token0.toLowerCase() === token.toLowerCase()
-		const reserveToken = tokenIsZero ? reserves[0] : reserves[1]
-		const reserveAttoWeth = tokenIsZero ? reserves[1] : reserves[0]
-		pools.push({
-			address,
-			fee: venue.fee,
-			liquidity: `${formatUnits(reserveToken, tokenDecimals)} token / ${formatUnits(reserveAttoWeth, 18)} WETH`,
-			priceWeth: constantProductSpotPriceWeth(reserveToken, reserveAttoWeth, tokenDecimals),
-			url: `${explorerUrl}/address/${address}`,
-			venue: venue.name,
+		const constantProduct = venues.flatMap((venue, venueIndex) => {
+			const result = results[base + UNISWAP_V3_FEES.length + venueIndex]
+			if (result === undefined || result.status === 'failure') {
+				console.error(`venue=${venue.name} token=${token} skipped=${result === undefined ? 'missing pair read' : result.error.message}`)
+				return []
+			}
+			const address = requiredRpcAddress(result.result, `${venue.name} pair`)
+			return address === zeroAddress ? [] : [{ address, fee: venue.fee, kind: venue.kind, venue: venue.name }]
 		})
-	}
-	return pools
+		return { constantProduct, token, v3 }
+	})
 }
 
 export async function loadTokenMarkets(
-	client: ReadClient,
+	client: BatchReader,
 	parameters: {
 		blockNumber?: bigint | undefined
 		explorerUrl: string
-		factory: Address
-		chainId: number
-		tokens: readonly Address[]
-		weth: Address
+		metadataCache: Map<string, TokenMetadata>
+		multicall3: Address
+		pools: readonly DiscoveredTokenPools[]
 		wallet: Address | undefined
+		weth: Address
 	},
 ) {
+	const calls: BatchCall[] = []
+	const enqueue = (...batch: BatchCall[]) => {
+		const index = calls.length
+		calls.push(...batch)
+		return index
+	}
+	const layout = parameters.pools.map(discovered => {
+		const token = discovered.token
+		const metadataIndex = parameters.metadataCache.has(token.toLowerCase()) ? undefined : enqueue(...metadataCalls(token))
+		const v3Indexes = discovered.v3.map(pool => enqueue({ address: pool.address, abi: poolAbi, functionName: 'liquidity' }, { address: pool.address, abi: poolAbi, functionName: 'slot0' }))
+		const constantProductIndexes = discovered.constantProduct.map(pool => enqueue({ address: pool.address, abi: constantProductPairAbi, functionName: 'token0' }, { address: pool.address, abi: constantProductPairAbi, functionName: 'getReserves' }))
+		const balanceIndex = parameters.wallet === undefined ? undefined : enqueue({ address: token, abi: erc20Abi, functionName: 'balanceOf', args: [parameters.wallet] })
+		return { balanceIndex, constantProductIndexes, metadataIndex, v3Indexes }
+	})
+	const results = await batchRead(client, parameters.multicall3, calls, parameters.blockNumber)
 	const snapshots: TokenMarketSnapshot[] = []
-	await requireDeployedContracts(client, [{ name: 'Uniswap V3 factory', address: parameters.factory }], parameters.blockNumber)
-	for (const token of parameters.tokens) {
-		const poolAddresses = []
-		for (const fee of UNISWAP_V3_FEES) {
-			const address = await client.readContract({ address: parameters.factory, abi: factoryAbi, functionName: 'getPool', args: [parameters.weth, token, fee] })
-			poolAddresses.push({ fee, address })
-		}
+	for (const [index, discovered] of parameters.pools.entries()) {
+		const token = discovered.token
+		const entry = layout[index]
+		if (entry === undefined) throw new Error('Token market layout lost an entry')
 		try {
-			const metadata = await tokenMetadata(client, token)
-			const pools: MarketPoolSnapshot[] = []
-			for (const { fee, address } of poolAddresses) {
-				if (address === zeroAddress) continue
-				const [liquidity, slot0] = await Promise.all([client.readContract({ address, abi: poolAbi, functionName: 'liquidity' }), client.readContract({ address, abi: poolAbi, functionName: 'slot0' })])
-				pools.push({
-					address,
-					fee,
-					liquidity: liquidity.toString(),
-					priceWeth: poolSpotPriceWeth(slot0[0], token, parameters.weth, metadata.decimals),
-					url: `${parameters.explorerUrl}/address/${address}`,
-					venue: 'Uniswap V3',
-				})
+			let metadata = parameters.metadataCache.get(token.toLowerCase())
+			if (metadata === undefined) {
+				if (entry.metadataIndex === undefined) throw new Error('Token metadata read is missing')
+				metadata = decodeMetadata(results.slice(entry.metadataIndex, entry.metadataIndex + 3), token)
+				parameters.metadataCache.set(token.toLowerCase(), metadata)
 			}
-			pools.push(...(await loadConstantProductPools(client, parameters.chainId, token, parameters.weth, metadata.decimals, parameters.explorerUrl)))
-			const wallet = parameters.wallet
-			const tokenBalances =
-				wallet === undefined
-					? undefined
-					: await availableTokenBalances([token], address =>
-							client.readContract({
-								address,
-								abi: erc20Abi,
-								functionName: 'balanceOf',
-								args: [wallet],
-							}),
-						)
-			const rawBalance = tokenBalances?.get(token.toLowerCase())
-			const balance = rawBalance === undefined ? undefined : formatUnits(rawBalance, metadata.decimals)
+			const decimals = metadata.decimals
+			const pools: MarketPoolSnapshot[] = []
+			for (const [poolIndex, pool] of discovered.v3.entries()) {
+				const resultIndex = entry.v3Indexes[poolIndex]
+				if (resultIndex === undefined) throw new Error('Uniswap V3 pool read is missing')
+				try {
+					const liquidity = requiredBigint(batchValue(results[resultIndex], 'Uniswap liquidity'), 'Uniswap liquidity')
+					const slot0 = requiredTuple(batchValue(results[resultIndex + 1], 'Uniswap slot0'), 1, 'Uniswap slot0')
+					pools.push({
+						address: pool.address,
+						fee: pool.fee,
+						liquidity: liquidity.toString(),
+						priceWeth: poolSpotPriceWeth(requiredBigint(slot0[0], 'Uniswap sqrtPriceX96'), token, parameters.weth, decimals),
+						url: `${parameters.explorerUrl}/address/${pool.address}`,
+						venue: 'Uniswap V3',
+					})
+				} catch (error) {
+					console.error(`pool=${pool.address} marketSnapshotSkipped=${error instanceof Error ? error.message : String(error)}`)
+				}
+			}
+			for (const [poolIndex, pool] of discovered.constantProduct.entries()) {
+				const resultIndex = entry.constantProductIndexes[poolIndex]
+				if (resultIndex === undefined) throw new Error('Constant-product pair read is missing')
+				try {
+					const token0 = requiredRpcAddress(batchValue(results[resultIndex], `${pool.venue} token0`), `${pool.venue} token0`)
+					const reserves = requiredTuple(batchValue(results[resultIndex + 1], `${pool.venue} reserves`), 2, `${pool.venue} reserves`)
+					const tokenIsZero = token0.toLowerCase() === token.toLowerCase()
+					const reserveToken = requiredBigint(tokenIsZero ? reserves[0] : reserves[1], `${pool.venue} token reserve`)
+					const reserveAttoWeth = requiredBigint(tokenIsZero ? reserves[1] : reserves[0], `${pool.venue} WETH reserve`)
+					pools.push({
+						address: pool.address,
+						fee: pool.fee,
+						liquidity: `${formatUnits(reserveToken, decimals)} token / ${formatUnits(reserveAttoWeth, 18)} WETH`,
+						priceWeth: constantProductSpotPriceWeth(reserveToken, reserveAttoWeth, decimals),
+						url: `${parameters.explorerUrl}/address/${pool.address}`,
+						venue: pool.venue,
+					})
+				} catch (error) {
+					console.error(`pool=${pool.address} marketSnapshotSkipped=${error instanceof Error ? error.message : String(error)}`)
+				}
+			}
+			let balance: string | undefined
+			if (entry.balanceIndex !== undefined) {
+				const rawBalance = results[entry.balanceIndex]
+				if (rawBalance === undefined || rawBalance.status === 'failure') console.error(`token=${token} balanceUnavailable=${rawBalance === undefined ? 'missing balance read' : rawBalance.error.message}`)
+				else balance = formatUnits(requiredBigint(rawBalance.result, `Token ${token} balance`), decimals)
+			}
 			snapshots.push({ address: token, balance, ...metadata, pools })
 		} catch (error) {
 			console.error(`token=${token} marketDiscoverySkipped=${error instanceof Error ? error.message : String(error)}`)

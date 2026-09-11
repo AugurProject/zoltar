@@ -44,10 +44,98 @@
 		{
 			"path": "reference/contracts.html",
 			"title": "Contract interactions",
-			"summary": "State-changing entrypoints, callers, prerequisites, effects, and events.",
+			"summary": "Index of the per-contract interaction reference.",
 			"section": "reference",
 			"topic": "Contracts",
 			"keywords": ["ABI", "transactions", "callers", "events"]
+		},
+		{
+			"path": "reference/contracts/zoltarquestiondata.html",
+			"title": "ZoltarQuestionData",
+			"summary": "Read surface and the createQuestion entrypoint.",
+			"section": "reference",
+			"topic": "Contracts",
+			"keywords": ["questions", "categorical", "scalar", "encoding"]
+		},
+		{
+			"path": "reference/contracts/zoltar.html",
+			"title": "Zoltar",
+			"summary": "Read surface and the forkUniverse, burnRep, deployChild, and migration-balance entrypoints.",
+			"section": "reference",
+			"topic": "Contracts",
+			"keywords": ["fork", "universe", "migration", "child REP"]
+		},
+		{
+			"path": "reference/contracts/reputationtoken.html",
+			"title": "ReputationToken",
+			"summary": "Read surface and the ERC-20, ERC-2612 permit, and ERC-3009 authorization entrypoints.",
+			"section": "reference",
+			"topic": "Contracts",
+			"keywords": ["REP", "ERC-20", "permit", "supply"]
+		},
+		{
+			"path": "reference/contracts/securitypoolfactory.html",
+			"title": "SecurityPoolFactory",
+			"summary": "Read surface and the origin and child pool deployment entrypoints.",
+			"section": "reference",
+			"topic": "Contracts",
+			"keywords": ["factory", "deployment", "registration", "CREATE2"]
+		},
+		{
+			"path": "reference/contracts/securitypool.html",
+			"title": "SecurityPool",
+			"summary": "Read surface and the vault, complete-set, escalation, liquidation, fork-mode, and delegate-only entrypoints.",
+			"section": "reference",
+			"topic": "Contracts",
+			"keywords": ["collateral", "vault", "complete set", "fees", "liquidation"]
+		},
+		{
+			"path": "reference/contracts/securitypoolforker.html",
+			"title": "SecurityPoolForker",
+			"summary": "Read surface, the child-game trust boundary, and the fork initiation, child creation, vault migration, and truth-auction entrypoints.",
+			"section": "reference",
+			"topic": "Contracts",
+			"keywords": ["fork", "migration", "child pool", "auction"]
+		},
+		{
+			"path": "reference/contracts/escalationgame.html",
+			"title": "EscalationGame",
+			"summary": "Read surface and the start, deposit, withdrawal, claim, fork-carry, and escrow export entrypoints.",
+			"section": "reference",
+			"topic": "Contracts",
+			"keywords": ["escalation", "dispute", "deposit", "non-decision"]
+		},
+		{
+			"path": "reference/contracts/liquidationapprovalregistry.html",
+			"title": "LiquidationApprovalRegistry",
+			"summary": "Read surface and the approval, permit, revoke, reserve, release, and consume entrypoints.",
+			"section": "reference",
+			"topic": "Contracts",
+			"keywords": ["liquidation", "approval", "receiver", "operator"]
+		},
+		{
+			"path": "reference/contracts/openoraclepricecoordinator.html",
+			"title": "OpenOraclePriceCoordinator",
+			"summary": "Read surface and the price request, staged operation, recovery, and openOracleCallback entrypoints.",
+			"section": "reference",
+			"topic": "Contracts",
+			"keywords": ["OpenOracle", "price", "coordinator", "staged operation"]
+		},
+		{
+			"path": "reference/contracts/sharetoken.html",
+			"title": "ShareToken",
+			"summary": "Read surface and the ERC-1155 transfer, migrate, authorize, and complete-set entrypoints.",
+			"section": "reference",
+			"topic": "Contracts",
+			"keywords": ["shares", "ERC-1155", "migrate", "outcome"]
+		},
+		{
+			"path": "reference/contracts/uniformpricedualcapbatchauction.html",
+			"title": "UniformPriceDualCapBatchAuction",
+			"summary": "Read surface and the startAuction, submitBid, refund, finalize, and withdrawal entrypoints.",
+			"section": "reference",
+			"topic": "Contracts",
+			"keywords": ["truth auction", "bids", "clearing", "settlement"]
 		},
 		{
 			"path": "reference/invariants.html",

@@ -10,6 +10,7 @@ const manifestPath = path.join(docsDirectory, 'manifest.json')
 const dataOutputPath = path.join(docsDirectory, 'assets/js/docsData.js')
 const searchDataOutputPath = path.join(docsDirectory, 'assets/js/docsSearchData.js')
 const categoryDirectories = ['reference', 'explanation'] as const
+const searchChunkHeadingSelector = 'h2, h3, details[id] > summary'
 
 type DocsSection = {
 	id: string
@@ -62,8 +63,8 @@ function assertManifest(value: unknown): asserts value is DocsManifest {
 }
 
 async function filesIn(directory: string): Promise<string[]> {
-	const entries = await readdir(path.join(docsDirectory, directory), { withFileTypes: true })
-	return entries.filter(entry => entry.isFile() && entry.name.endsWith('.html')).map(entry => `${directory}/${entry.name}`)
+	const entries = await readdir(path.join(docsDirectory, directory), { recursive: true, withFileTypes: true })
+	return entries.filter(entry => entry.isFile() && entry.name.endsWith('.html')).map(entry => path.posix.join(directory, path.relative(path.join(docsDirectory, directory), path.join(entry.parentPath, entry.name)).split(path.sep).join('/')))
 }
 
 const checkOnly = process.argv.includes('--check')
@@ -100,10 +101,11 @@ for (const page of manifest.pages) {
 	const pageWindow = new Window()
 	pageWindow.document.write(source)
 	pageWindow.document.close()
+	const assetPrefix = '../'.repeat(page.path.split('/').length - 1)
 	for (const [selector, attribute, expectedValue] of [
-		['link[rel~="stylesheet"]', 'href', '../assets/css/docsShell.css'],
-		['script[src]', 'src', '../assets/js/docsData.js'],
-		['script[src]', 'src', '../assets/js/docsShell.js'],
+		['link[rel~="stylesheet"]', 'href', `${assetPrefix}assets/css/docsShell.css`],
+		['script[src]', 'src', `${assetPrefix}assets/js/docsData.js`],
+		['script[src]', 'src', `${assetPrefix}assets/js/docsShell.js`],
 	] as const) {
 		const matches = Array.from(pageWindow.document.querySelectorAll(selector)).filter(element => element.getAttribute(attribute) === expectedValue)
 		assert.equal(matches.length, 1, `${page.path} must load ${expectedValue} exactly once`)
@@ -119,14 +121,20 @@ for (const page of manifest.pages) {
 	const walker = pageWindow.document.createTreeWalker(main, pageWindow.NodeFilter.SHOW_ELEMENT | pageWindow.NodeFilter.SHOW_TEXT)
 	let node = walker.nextNode()
 	while (node !== null) {
-		if (node instanceof pageWindow.HTMLElement && node.matches('h2, h3')) {
-			const heading = normalizedText(node.textContent)
+		if (node instanceof pageWindow.HTMLElement && node.matches(searchChunkHeadingSelector)) {
+			// A deep-linkable disclosure (invariant entry, interactive tool) is its own result so identifiers resolve to the entry, not its section.
+			const heading = node.matches('summary')
+				? Array.from(node.childNodes)
+						.map(child => normalizedText(child.textContent))
+						.filter(part => part.length > 0)
+						.join(' ')
+				: normalizedText(node.textContent)
 			const fragment = node.id || node.closest('[id]')?.getAttribute('id') || ''
 			assert(heading.length > 0, `${page.path} contains an empty search heading`)
 			assert(fragment.length > 0, `${page.path} heading ${heading} needs an id or an ancestor id`)
 			currentChunk = { fragment, heading, text: [] }
 			searchChunks.push(currentChunk)
-		} else if (node.nodeType === pageWindow.Node.TEXT_NODE && node.parentElement?.closest('h1, h2, h3') === null) {
+		} else if (node.nodeType === pageWindow.Node.TEXT_NODE && node.parentElement?.closest(`h1, ${searchChunkHeadingSelector}`) === null) {
 			const text = normalizedText(node.textContent)
 			if (text.length > 0) currentChunk.text.push(text)
 		}

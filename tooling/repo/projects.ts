@@ -351,7 +351,7 @@ export const projects: readonly Project[] = [
 		type: 'documentation',
 		dependencies: ['contracts'],
 		tasks: { check: rootTask(['bun', 'run', 'docs:check'], ['docs/**', 'solidity/contracts/**']) },
-		generatedDirectories: ['docs/assets/js'],
+		generatedDirectories: ['docs/assets/js', 'docs/reference/contracts'],
 		generatedFiles: ['docs/reference/contracts.html'],
 		ci: { scope: 'docs' },
 	},

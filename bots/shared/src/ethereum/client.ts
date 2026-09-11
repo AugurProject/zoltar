@@ -34,6 +34,7 @@ const contextualActionMethods = new Map<PropertyKey, string>([
 	['getTransaction', 'eth_getTransactionByHash'],
 	['getTransactionCount', 'eth_getTransactionCount'],
 	['getTransactionReceipt', 'eth_getTransactionReceipt'],
+	['multicall', 'eth_call'],
 	['readContract', 'eth_call'],
 ])
 

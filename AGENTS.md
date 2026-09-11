@@ -138,7 +138,7 @@ pins the deployment input and prevents its large upstream packages from entering
 | `docs/assets/js/mmrProofPlanner.js` | `bun run docs:build-runtime` |
 | `docs/assets/js/docsData.js` | `bun run docs:build-index` |
 | `docs/assets/js/docsSearchData.js` | `bun run docs:build-index` |
-| `docs/reference/contracts.html` | `bun run docs:generate-contract-reference` |
+| `docs/reference/contracts.html` and `docs/reference/contracts/*.html` | `bun run docs:generate-contract-reference` |
 | `bots/open-oracle-arbitrager/docs/chart-runtime.js` | `cd bots/open-oracle-arbitrager && bun run build:docs`; validate with `bun run check:generated` |
 | `scripts/artifacts/uniswap-deployment.json` | Pinned bytecode from the upstream package versions recorded in the artifact; validate with `bun run check:uniswap-deployment-artifact` |
 
