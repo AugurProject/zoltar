@@ -2,10 +2,10 @@ import { useId, useState } from 'preact/hooks'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { tryParseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
-import { getTradingRouteHref } from '../lib/routing.js'
+import { getTradingRouteHref, type TradingLookupRoute } from '../lib/routing.js'
 import { liveCopy } from '../copy/live.js'
 
-export function OpenPoolForm({ disabled, liquidity = false }: { disabled: boolean; liquidity?: boolean }) {
+export function OpenPoolForm({ disabled, target = 'market' }: { disabled: boolean; target?: TradingLookupRoute }) {
 	const [address, setAddress] = useState('')
 	const id = useId()
 	const parsed = tryParseAddressInput(address.trim())
@@ -17,7 +17,7 @@ export function OpenPoolForm({ disabled, liquidity = false }: { disabled: boolea
 			onSubmit={event => {
 				event.preventDefault()
 				if (disabled || !valid) return
-				window.location.hash = getTradingRouteHref(`#/${liquidity ? 'liquidity' : 'market'}/${parsed}`)
+				window.location.hash = getTradingRouteHref(`#/${target}/${parsed}`)
 			}}
 		>
 			<label class='field' for={id}>
@@ -29,7 +29,7 @@ export function OpenPoolForm({ disabled, liquidity = false }: { disabled: boolea
 					{liveCopy.invalidPoolAddress}
 				</p>
 			) : null}
-			<button class='secondary-action' type='submit' disabled={disabled || !valid}>
+			<button class='primary-action' type='submit' disabled={disabled || !valid}>
 				{liveCopy.openPool}
 			</button>
 		</form>
