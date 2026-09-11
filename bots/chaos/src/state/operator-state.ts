@@ -9,7 +9,9 @@ import { getAddress, keccak256, parseTransaction, recoverTransactionAddress, typ
 import type { ChaosProtocolIndex } from '#monitoring/protocol-index'
 import type { ChaosEcosystem, OperationContinuationDisposition, OperationEvidence, OperationPreflightCall, OperationRisk, OperationTerminalSubmission, OperationWalletAssetDebit } from '#operations/types'
 import { assertSafeRetirementRecipient, initialRetirementState, parseRetirementState, type DurableRetirementState } from './retirement.ts'
+import { parsePendingTransactionObservation, serializedPendingTransactionObservation, type PendingTransactionObservation } from './pending-transaction-observation.ts'
 import { serializedScheduler } from './state-serialization.ts'
+import { timestamp, unsignedIntegerString } from './state-parsing.ts'
 import {
 	loadPersistedProtocolIndex,
 	parseProtocolIndex as parseStoredProtocolIndex,
@@ -175,6 +177,7 @@ export type PendingTransactionIntent = {
 	maxBlockNumber: bigint
 	mode: 'private' | 'public'
 	nonce: bigint
+	observation?: PendingTransactionObservation | undefined
 	operationId: string
 	recoveryBlocker?: string | undefined
 	replacementHash?: Hex | undefined
@@ -362,11 +365,6 @@ function identifier(value: unknown, label: string) {
 	return parsed
 }
 
-function unsignedIntegerString(value: unknown, label: string) {
-	if (typeof value !== 'string' || !/^(?:0|[1-9]\d*)$/.test(value)) throw new Error(`${label} must be a non-negative integer string`)
-	return value
-}
-
 const MAXIMUM_UINT256 = (1n << 256n) - 1n
 
 function uint256String(value: unknown, label: string) {
@@ -389,11 +387,6 @@ function positiveIntegerString(value: unknown, label: string) {
 	const parsed = unsignedIntegerString(value, label)
 	if (parsed === '0') throw new Error(`${label} must be greater than zero`)
 	return parsed
-}
-
-function timestamp(value: unknown, label: string) {
-	if (typeof value !== 'string' || !Number.isFinite(Date.parse(value)) || new Date(value).toISOString() !== value) throw new Error(`${label} must be a canonical UTC ISO timestamp`)
-	return value
 }
 
 function optionalTimestamp(value: unknown, label: string) {
@@ -919,7 +912,7 @@ async function parsePendingTransaction(value: unknown, index: number, expectedCh
 	assertExactKeys(
 		intent,
 		['data', 'hash', 'id', 'label', 'maxBlockNumber', 'mode', 'nonce', 'operationId', 'semanticExpectation', 'sender', 'serializedTransaction', 'signedAt', 'status', 'stepId', 'to', 'value', 'workflowId'],
-		['cancellationHash', 'recoveryBlocker', 'replacementHash', 'submissionBlock', 'submittedAt'],
+		['cancellationHash', 'observation', 'recoveryBlocker', 'replacementHash', 'submissionBlock', 'submittedAt'],
 		label,
 	)
 	const rawTransaction = serializedTransaction(intent['serializedTransaction'], `${label}.serializedTransaction`)
@@ -958,6 +951,7 @@ async function parsePendingTransaction(value: unknown, index: number, expectedCh
 		throw new Error(`${label} cannot queue both replacement and cancellation verification`)
 	}
 	const recoveryBlocker = optionalString(intent['recoveryBlocker'], `${label}.recoveryBlocker`, 2_048)
+	const observation = intent['observation'] === undefined ? undefined : parsePendingTransactionObservation(intent['observation'], `${label}.observation`)
 	if (status === 'signed' && (submissionBlock !== undefined || submittedAt !== undefined)) throw new Error(`${label} has submission metadata before broadcast`)
 	if (status !== 'signed' && (submissionBlock === undefined || submittedAt === undefined)) throw new Error(`${label} is missing submission metadata`)
 	const expectation = requiredRecord(intent['semanticExpectation'], `${label}.semanticExpectation`)
@@ -1012,6 +1006,7 @@ async function parsePendingTransaction(value: unknown, index: number, expectedCh
 		maxBlockNumber,
 		mode,
 		nonce,
+		...(observation === undefined ? {} : { observation }),
 		operationId: identifier(intent['operationId'], `${label}.operationId`),
 		...(recoveryBlocker === undefined ? {} : { recoveryBlocker }),
 		...(replacementHash === undefined ? {} : { replacementHash }),
@@ -1198,6 +1193,7 @@ export function serializedDurableState(
 			...intent,
 			maxBlockNumber: intent.maxBlockNumber.toString(),
 			nonce: intent.nonce.toString(),
+			observation: intent.observation === undefined ? undefined : serializedPendingTransactionObservation(intent.observation),
 			submissionBlock: intent.submissionBlock?.toString(),
 			value: intent.value.toString(),
 		})),

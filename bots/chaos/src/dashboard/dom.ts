@@ -37,12 +37,38 @@ export function statusLabel(status: string | undefined) {
 	return `${normalized.slice(0, 1).toUpperCase()}${normalized.slice(1).toLowerCase()}`
 }
 
+const TRANSACTION_HASH_PATTERN = /^0x[0-9a-f]{64}$/i
+
+/** Builds the configured block explorer page for a transaction hash; undefined when no explorer is known. */
+export function transactionExplorerUrl(explorerUrl: string | undefined, hash: string) {
+	if (explorerUrl === undefined || !TRANSACTION_HASH_PATTERN.test(hash)) return undefined
+	return `${explorerUrl.replace(/\/+$/, '')}/tx/${hash}`
+}
+
+/** Keeps the visible label short; the explorer hostname stays in the accessible name and tooltip. */
+function explorerLink(url: string, type: string, value: string) {
+	let hostname: string
+	try {
+		hostname = new URL(url).hostname
+	} catch {
+		return undefined
+	}
+	const link = node('a', 'identifier-explorer', 'Explorer')
+	link.href = url
+	link.rel = 'noreferrer'
+	link.target = '_blank'
+	link.title = `Open on ${hostname}`
+	link.setAttribute('aria-label', `Open ${type} on ${hostname}: ${value}`)
+	return link
+}
+
 let identifierSequence = 0
 
-export function compactIdentifier(value: string, type: string) {
+export function compactIdentifier(value: string, type: string, options: { explorerUrl?: string | undefined } = {}) {
 	const wrapper = node('span', 'compact-identifier')
 	wrapper.dataset['identifierType'] = type
 	const display = node('span', 'identifier-value mono', shortHex(value))
+	const explorer = options.explorerUrl === undefined ? undefined : explorerLink(options.explorerUrl, type, value)
 	const copy = document.createElement('button')
 	copy.className = 'identifier-copy'
 	copy.textContent = 'Copy'
@@ -96,7 +122,7 @@ export function compactIdentifier(value: string, type: string) {
 			},
 		)
 	})
-	wrapper.append(display, copy, disclosure, feedback, full)
+	wrapper.append(display, ...(explorer === undefined ? [] : [explorer]), copy, disclosure, feedback, full)
 	return wrapper
 }
 
