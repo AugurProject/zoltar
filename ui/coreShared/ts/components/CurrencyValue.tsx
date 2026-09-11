@@ -20,6 +20,30 @@ type CurrencyValueProps = {
 	value: bigint | undefined
 }
 
+function parsePixels(value: string) {
+	const pixels = Number.parseFloat(value)
+	return Number.isFinite(pixels) ? pixels : 0
+}
+
+function isInlineLevel(element: Element) {
+	const display = getComputedStyle(element).display
+	return display === '' || display === 'inline' || display === 'contents' || display.startsWith('inline-')
+}
+
+/** The value and its wrap shrink to fit their text, so the room for the full value is the nearest block container's content box. */
+function getLayoutContainer(element: HTMLElement) {
+	let container = element
+	while (container.parentElement !== null && isInlineLevel(container)) container = container.parentElement
+	return container
+}
+
+/** Width available to the text: excludes the container padding and the element's own padding, which the measurement span lacks. */
+function getAvailableWidth(element: HTMLElement, container: HTMLElement) {
+	const containerStyle = getComputedStyle(container)
+	const elementStyle = getComputedStyle(element)
+	return container.clientWidth - parsePixels(containerStyle.paddingLeft) - parsePixels(containerStyle.paddingRight) - parsePixels(elementStyle.paddingLeft) - parsePixels(elementStyle.paddingRight)
+}
+
 export function CurrencyValue({ className = '', compactWhenOverflow = false, copyable = true, decimals = 2, exactWhenRoundedToZero = false, loading = false, precision = 'rounded', suffix = '', units = 18, value }: CurrencyValueProps) {
 	const buttonRef = useRef<HTMLButtonElement>(null)
 	const spanRef = useRef<HTMLSpanElement>(null)
@@ -60,10 +84,14 @@ export function CurrencyValue({ className = '', compactWhenOverflow = false, cop
 			return
 		}
 
+		const container = getLayoutContainer(element)
 		const updateCompaction = () => {
 			if (copied.value) return
+			const availableWidth = getAvailableWidth(element, container)
+			// A hidden value has no width to judge; keep the current choice until the container is shown.
+			if (availableWidth <= 0) return
 			measureElement.textContent = displayValue
-			const shouldUseCompactValue = measureElement.getBoundingClientRect().width > element.clientWidth + 1
+			const shouldUseCompactValue = measureElement.getBoundingClientRect().width > availableWidth + 1
 			measureElement.textContent = ''
 			setShouldCompact(shouldUseCompactValue)
 		}
@@ -75,12 +103,12 @@ export function CurrencyValue({ className = '', compactWhenOverflow = false, cop
 		const observer = new ResizeObserver(() => {
 			updateCompaction()
 		})
-		observer.observe(element)
+		observer.observe(container)
 
 		return () => {
 			observer.disconnect()
 		}
-	}, [compactWhenOverflow, copiedValue, displayValue, value])
+	}, [compactWhenOverflow, copiedValue, displayValue, loading, value])
 
 	if (loading) return <LoadingText className={`currency-value loading ${className}`}>{commonCopy.loadingWithEllipsis}</LoadingText>
 

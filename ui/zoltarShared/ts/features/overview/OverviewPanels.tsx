@@ -5,7 +5,7 @@ import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
-import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
+import { HeaderMetricStrip } from '@zoltar/ui-core-shared/components/HeaderMetricStrip.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
@@ -179,7 +179,7 @@ export function OverviewPanels({
 				/>
 				{accountActions}
 
-				<DataGrid className={`overview-inline-metrics ${showEnvironmentDetails ? 'mobile-expanded' : ''}`.trim()} columns='auto'>
+				<HeaderMetricStrip expanded={showEnvironmentDetails}>
 					<MetricField className='overview-address-metric' label={appCopy.address}>
 						{(() => {
 							if (isWalletAddressLoading)
@@ -194,19 +194,15 @@ export function OverviewPanels({
 							return <AddressValue address={accountState.address} responsiveAbbreviation />
 						})()}
 					</MetricField>
-					{showAccountBalances ? (
-						<>
-							<MetricField className='overview-simulation-secondary' label={commonCopy.eth}>
-								<CurrencyValue value={accountState.ethBalanceAttoEth} loading={isRefreshing && accountState.ethBalanceAttoEth === undefined} suffix={commonCopy.eth} compactWhenOverflow />
-							</MetricField>
-							<MetricField className='overview-metric-secondary' label={commonCopy.weth}>
-								<CurrencyValue value={accountState.wethBalanceAttoEth} loading={isRefreshing && accountState.wethBalanceAttoEth === undefined} suffix={commonCopy.weth} compactWhenOverflow />
-							</MetricField>
-							<MetricField className='overview-simulation-secondary' label={commonCopy.rep}>
-								<CurrencyValue value={universeRepBalanceAttoRep} loading={isLoadingUniverseRepBalance} suffix={commonCopy.rep} compactWhenOverflow />
-							</MetricField>
-						</>
-					) : undefined}
+					<MetricField className='overview-simulation-secondary' label={commonCopy.eth}>
+						<CurrencyValue value={showAccountBalances ? accountState.ethBalanceAttoEth : undefined} loading={isWalletAddressLoading || (showAccountBalances && isRefreshing && accountState.ethBalanceAttoEth === undefined)} suffix={commonCopy.eth} compactWhenOverflow />
+					</MetricField>
+					<MetricField className='overview-metric-secondary' label={commonCopy.weth}>
+						<CurrencyValue value={showAccountBalances ? accountState.wethBalanceAttoEth : undefined} loading={isWalletAddressLoading || (showAccountBalances && isRefreshing && accountState.wethBalanceAttoEth === undefined)} suffix={commonCopy.weth} compactWhenOverflow />
+					</MetricField>
+					<MetricField className='overview-simulation-secondary' label={commonCopy.rep}>
+						<CurrencyValue value={showAccountBalances ? universeRepBalanceAttoRep : undefined} loading={isWalletAddressLoading || (showAccountBalances && isLoadingUniverseRepBalance)} suffix={commonCopy.rep} compactWhenOverflow />
+					</MetricField>
 					{showRepPrices ? (
 						<MetricField
 							className='overview-metric-secondary'
@@ -248,7 +244,7 @@ export function OverviewPanels({
 					<MetricField className='overview-universe-metric' label={commonCopy.universe}>
 						{universeLabel}
 					</MetricField>
-				</DataGrid>
+				</HeaderMetricStrip>
 				<button className='overview-details-toggle secondary' type='button' aria-expanded={showEnvironmentDetails} onClick={() => setShowEnvironmentDetails(current => !current)}>
 					{showEnvironmentDetails ? appCopy.hideEnvironmentDetails : appCopy.showEnvironmentDetails}
 				</button>

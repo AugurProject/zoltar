@@ -188,6 +188,36 @@ describe('universe selector', () => {
 		expect(() => compactUniqueUniverseIds(['7', '7'])).toThrow('Universe IDs must be unique')
 	})
 
+	test('keeps the balance and universe slots in place while the wallet is disconnected or loading', async () => {
+		const disconnected = await renderIntoDocument(
+			<WalletSummary summary={{ account: undefined, ethAttoEth: undefined, repAttoRep: undefined, status: 'disconnected', error: undefined, errorLabel: undefined, universeId: '1' }}>
+				<div class='overview-universe-metric'>Universe</div>
+			</WalletSummary>,
+		)
+		cleanupRendered = disconnected.cleanup
+		const disconnectedCells = [...(disconnected.container.querySelector('.overview-inline-metrics')?.children ?? [])].map(cell => cell.className)
+		expect(disconnectedCells).toEqual(['overview-address-metric', 'overview-simulation-secondary', 'overview-simulation-secondary', 'overview-universe-metric'])
+		const strip = disconnected.container.querySelector('.overview-inline-metrics')
+		if (!(strip instanceof HTMLElement)) throw new Error('Expected the header metric strip')
+		expect(strip.style.getPropertyValue('--overview-metric-columns')).toBe('3')
+		expect(strip.classList.contains('is-dense')).toBe(false)
+		expect(disconnected.container.querySelector('.overview-address-metric')?.textContent).toContain('Not connected')
+		expect(disconnected.container.querySelector('[data-wallet-asset="ETH"]')?.textContent).toContain('—')
+		expect(disconnected.container.querySelector('[data-wallet-asset="REP"]')?.textContent).toContain('—')
+		await disconnected.cleanup()
+
+		const loading = await renderIntoDocument(
+			<WalletSummary summary={{ account: '0x8ba1f109551bD432803012645Ac136ddd64DBA72', ethAttoEth: undefined, repAttoRep: undefined, status: 'loading', error: undefined, errorLabel: undefined, universeId: '1' }}>
+				<div class='overview-universe-metric'>Universe</div>
+			</WalletSummary>,
+		)
+		cleanupRendered = loading.cleanup
+		const loadingCells = [...(loading.container.querySelector('.overview-inline-metrics')?.children ?? [])].map(cell => cell.className)
+		expect(loadingCells).toEqual(disconnectedCells)
+		expect(loading.container.querySelector('[data-wallet-asset="ETH"]')?.textContent).toContain('Loading')
+		expect(loading.container.querySelector('[data-wallet-asset="REP"]')?.textContent).toContain('Loading')
+	})
+
 	test('keeps wallet balance failures visible without abbreviating the account', async () => {
 		const account = '0x8ba1f109551bD432803012645Ac136ddd64DBA72'
 		let retries = 0

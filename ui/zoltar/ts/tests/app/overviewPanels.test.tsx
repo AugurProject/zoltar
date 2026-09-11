@@ -21,6 +21,7 @@ describe('OverviewPanels', () => {
 		firstElementChild: MetricElement | null
 		getAttribute: (name: string) => string | null
 		parentElement: MetricElement | null
+		querySelector: (selector: string) => MetricElement | null
 	}
 
 	let restoreDomEnvironment: (() => void) | undefined
@@ -426,11 +427,48 @@ describe('OverviewPanels', () => {
 		expect(documentQueries.queryByText('Parent Universe')).toBeNull()
 	})
 
+	test('keeps every header metric slot rendered while the wallet bootstraps or stays disconnected', async () => {
+		const expectedSlots = ['overview-address-metric', 'overview-simulation-secondary', 'overview-metric-secondary', 'overview-simulation-secondary', 'overview-metric-secondary', 'overview-metric-secondary', 'overview-universe-metric']
+		const readSlots = () => [...(document.body.querySelector('.overview-inline-metrics')?.children ?? [])].map(cell => cell.className)
+		const readMetricValues = () => [...document.body.querySelectorAll('.overview-inline-metrics .metric-field-value')].map(value => value.textContent?.trim())
+
+		await renderOverviewPanels({ walletBootstrapComplete: false })
+		expect(readSlots()).toEqual(expectedSlots)
+		expect(readMetricValues().slice(0, 4)).toEqual(['Connecting…', 'Loading…', 'Loading…', 'Loading…'])
+		const strip = document.body.querySelector('.overview-inline-metrics')
+		if (!(strip instanceof HTMLElement)) throw new Error('Expected the header metric strip')
+		expect(strip.style.getPropertyValue('--overview-metric-columns')).toBe('6')
+		expect(strip.classList.contains('is-dense')).toBe(true)
+		await cleanupRenderedComponent?.()
+
+		await renderOverviewPanels({ walletBootstrapComplete: false, showRepPrices: false })
+		expect(readSlots()).toEqual(['overview-address-metric', 'overview-simulation-secondary', 'overview-metric-secondary', 'overview-simulation-secondary', 'overview-universe-metric'])
+		const compactStrip = document.body.querySelector('.overview-inline-metrics')
+		if (!(compactStrip instanceof HTMLElement)) throw new Error('Expected the header metric strip')
+		expect(compactStrip.style.getPropertyValue('--overview-metric-columns')).toBe('4')
+		expect(compactStrip.classList.contains('is-dense')).toBe(false)
+		await cleanupRenderedComponent?.()
+
+		await renderOverviewPanels({ walletBootstrapComplete: true })
+		expect(readSlots()).toEqual(expectedSlots)
+		expect(readMetricValues().slice(0, 4)).toEqual(['Not connected', '—', '—', '—'])
+		await cleanupRenderedComponent?.()
+
+		await renderOverviewPanels({
+			accountState: { address: '0x1234567890123456789012345678901234567890', chainId: '0x1', ethBalanceAttoEth: 2n * 10n ** 18n, wethBalanceAttoEth: 10n ** 18n },
+			universeRepBalanceAttoRep: 5n * 10n ** 18n,
+		})
+		expect(readSlots()).toEqual(expectedSlots)
+		expect(readMetricValues().slice(1, 4)).toEqual(['≈ 2.00 ETH', '≈ 1.00 WETH', '≈ 5.00 REP'])
+	})
+
 	test('compacts a large ETH balance without affecting the adjacent WETH metric', async () => {
+		// Widths belong to the metric cell around each shrink-to-fit value.
 		setClientWidthResolver(element => {
-			if (!element.classList.contains('currency-value')) return 0
-			if (element.getAttribute('title') === '999 999 990 000 ETH') return 80
-			if (element.getAttribute('title') === '10 000 WETH') return 160
+			if (element.classList.contains('currency-value') || element.classList.contains('currency-value-wrap')) return 0
+			const title = element.querySelector('.currency-value')?.getAttribute('title')
+			if (title === '999 999 990 000 ETH') return 80
+			if (title === '10 000 WETH') return 160
 			return 160
 		})
 

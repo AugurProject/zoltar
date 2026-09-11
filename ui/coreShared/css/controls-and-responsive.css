@@ -239,9 +239,11 @@
 	box-shadow: none;
 }
 
+/* Header metric strip: one explicit track per metric so cells keep their slot while values load.
+   --overview-metric-columns is set inline by HeaderMetricStrip from the metric cells beside the address. */
 .overview-inline-metrics.data-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+	grid-template-columns: repeat(var(--overview-metric-columns, 4), minmax(0, 1fr));
 	gap: var(--space-3) var(--space-4);
 }
 
@@ -250,16 +252,39 @@
 }
 
 .overview-inline-metrics.data-grid > .overview-address-metric {
-	grid-column: span 2;
+	grid-column: 1 / -1;
+}
+
+.overview-inline-metrics.data-grid > .overview-universe-metric {
+	grid-column: -2 / -1;
+}
+
+/* Dense strips (six metrics) never fit one legible row inside the page shell, so they wrap:
+   three columns on tablets, then four columns with a double-width address from 1280px. */
+@media (min-width: 801px) and (max-width: 1279px) {
+	.overview-inline-metrics.data-grid.is-dense {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
 }
 
 @media (min-width: 1280px) {
-	.overview-inline-metrics.data-grid {
-		grid-template-columns: minmax(16rem, 1fr) repeat(6, fit-content(10rem));
+	.overview-inline-metrics.data-grid.is-dense {
+		grid-template-columns: repeat(4, minmax(0, 1fr));
 	}
 
-	.overview-inline-metrics.data-grid > .overview-address-metric {
-		grid-column: auto;
+	.overview-inline-metrics.data-grid.is-dense > .overview-address-metric {
+		grid-column: 1 / 3;
+	}
+}
+
+/* Wide layout: the address joins the metric row. */
+@media (min-width: 1280px) {
+	.overview-inline-metrics.data-grid:not(.is-dense) {
+		grid-template-columns: minmax(25rem, 2fr) repeat(var(--overview-metric-columns, 4), minmax(0, 1fr));
+	}
+
+	.overview-inline-metrics.data-grid:not(.is-dense) > .overview-address-metric {
+		grid-column: 1;
 	}
 }
 
@@ -1115,21 +1140,17 @@
 		font-size: var(--font-label);
 	}
 
-	.overview-inline-metrics {
-		display: grid;
+	.overview-inline-metrics.data-grid {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: 0.65rem 1rem;
-	}
-
-	.overview-inline-metrics > div {
-		min-width: 0;
 	}
 
 	.overview-inline-metrics:not(.mobile-expanded) .overview-metric-secondary {
 		display: none;
 	}
 
-	.overview-address-metric {
+	.overview-inline-metrics.data-grid > .overview-address-metric,
+	.overview-inline-metrics.data-grid > .overview-universe-metric {
 		grid-column: 1 / -1;
 	}
 
@@ -1375,14 +1396,6 @@
 		margin-left: 0;
 	}
 
-	.overview-inline-metrics.data-grid {
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-	}
-
-	.overview-inline-metrics.data-grid > .overview-address-metric {
-		grid-column: 1 / -1;
-	}
-
 	.overview-wallet-panel.is-simulation .route-header {
 		gap: var(--space-2);
 		padding-bottom: var(--space-2);
@@ -1397,7 +1410,6 @@
 	}
 
 	.overview-wallet-panel.is-simulation .overview-inline-metrics.data-grid {
-		grid-template-columns: minmax(0, 1fr) minmax(7rem, auto);
 		gap: var(--space-2);
 	}
 
@@ -1406,7 +1418,13 @@
 	}
 
 	.overview-wallet-panel.is-simulation .overview-inline-metrics.data-grid > .overview-address-metric {
-		grid-column: auto;
+		grid-column: 1;
+		grid-row: 1;
+	}
+
+	.overview-wallet-panel.is-simulation .overview-inline-metrics.data-grid > .overview-universe-metric {
+		grid-column: 2;
+		grid-row: 1;
 	}
 
 	.overview-wallet-panel.is-simulation {

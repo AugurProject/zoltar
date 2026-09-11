@@ -1712,32 +1712,24 @@ summary {
 	width: 100%;
 }
 
-@media (min-width: 1280px) {
-	.trading-overview .overview-inline-metrics.data-grid {
-		grid-template-columns: minmax(27rem, 1.5fr) minmax(10rem, 1fr) minmax(8rem, 1fr) minmax(12rem, 1fr);
-	}
-}
-@media (max-width: 42rem) {
-	.trading-overview .overview-universe-metric {
+@media (max-width: 640px) {
+	/* The universe selector is a full-width control, so it keeps its own row instead of sharing row one with the address. */
+	.trading-overview.is-simulation .overview-inline-metrics.data-grid > .overview-address-metric,
+	.trading-overview.is-simulation .overview-inline-metrics.data-grid > .overview-universe-metric {
 		grid-column: 1 / -1;
+		grid-row: auto;
 	}
 	.trading-overview.is-simulation .overview-universe-metric {
 		text-align: left;
-	}
-	.trading-overview.is-simulation .overview-inline-metrics.data-grid > .overview-address-metric {
-		grid-column: 1 / -1;
 	}
 }
 
 .trading-wallet-summary .overview-details-toggle {
 	margin-top: var(--space-2);
 }
-
-@media (min-width: 42.001rem) and (max-width: 1279px) {
-	.trading-overview .overview-inline-metrics.data-grid {
-		grid-template-columns: repeat(3, minmax(0, 1fr));
-	}
-	.trading-overview .overview-inline-metrics.data-grid > .overview-address-metric {
-		grid-column: 1 / -1;
+/* Trading only collapses its simulation balances at 640px and below, so the toggle has nothing to reveal above that. */
+@media (min-width: 641px) {
+	.trading-wallet-summary .overview-details-toggle {
+		display: none;
 	}
 }

@@ -204,6 +204,10 @@
 			"bun": "./ts/components/GlobalTransactionPresentationContext.tsx",
 			"default": "./js/components/GlobalTransactionPresentationContext.js"
 		},
+		"./components/HeaderMetricStrip.js": {
+			"bun": "./ts/components/HeaderMetricStrip.tsx",
+			"default": "./js/components/HeaderMetricStrip.js"
+		},
 		"./components/IdentifierValue.js": {
 			"bun": "./ts/components/IdentifierValue.tsx",
 			"default": "./js/components/IdentifierValue.js"
