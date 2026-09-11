@@ -4,7 +4,7 @@ import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUti
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import { pickFixtureProperties } from '@zoltar/core-shared/testing/pickFixtureProperties'
+import { pickFixtureProperties } from '../../../../../../../solidity/ts/testSupport/pickFixtureProperties.js'
 import { SecurityPoolWorkflowSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolWorkflowSection.js'
 import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import { getReportingLockedUntilMessage } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reporting.js'

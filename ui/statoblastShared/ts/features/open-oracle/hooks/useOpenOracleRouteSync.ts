@@ -9,7 +9,7 @@ type OpenOracleRouteSyncOptions = {
 	setOpenOracleFormReportId: (reportId: string) => void
 }
 
-export function shouldLoadOpenOracleReportFromUrl({ environmentReady, isOpenOracleRoute, reportId }: Pick<OpenOracleRouteSyncOptions, 'environmentReady' | 'isOpenOracleRoute' | 'reportId'>) {
+function shouldLoadOpenOracleReportFromUrl({ environmentReady, isOpenOracleRoute, reportId }: Pick<OpenOracleRouteSyncOptions, 'environmentReady' | 'isOpenOracleRoute' | 'reportId'>) {
 	return environmentReady && isOpenOracleRoute && reportId !== ''
 }
 

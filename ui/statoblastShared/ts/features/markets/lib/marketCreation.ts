@@ -4,8 +4,6 @@ import { tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.j
 import { createQuestionParameters } from '@zoltar/ui-zoltar-shared/features/questions/lib/questionCreation.js'
 import { parseStatoblastSecurityMultiplierBpsInput } from './marketForm.js'
 
-export { validateMarketForm } from '@zoltar/ui-zoltar-shared/features/questions/lib/questionCreation.js'
-
 export function createMarketParameters(form: MarketFormState) {
 	return createQuestionParameters(form)
 }

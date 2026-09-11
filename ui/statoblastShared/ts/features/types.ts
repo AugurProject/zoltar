@@ -34,17 +34,6 @@ import type { ReportingRouteContentProps } from './oracleTypes.js'
 
 export type * from '@zoltar/ui-core-shared/types/components.js'
 
-export type CollateralizationCircleProps = {
-	collateralizationPercent: bigint | undefined
-	className?: string
-	label?: string
-	size?: 'small' | 'medium' | 'large'
-	successThreshold?: number
-	targetCollateralizationPercent: bigint | undefined
-	tone?: 'default' | 'danger' | 'muted' | 'success' | 'warning'
-	warningThreshold?: number
-}
-
 export type VaultMetricGridProps = {
 	associatedRepPerCapacityBps?: bigint | undefined
 	badDebtAttoEth?: bigint | undefined

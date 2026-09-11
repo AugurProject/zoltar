@@ -3,7 +3,7 @@ import { retirementUniswapV3PositionAbi } from '../contracts/retirement-abi.ts'
 import { encodeStep, planBase } from '../operations/planning.ts'
 import type { EcosystemSnapshot, OperationPlan } from '../operations/types.ts'
 import { uniswapV3PositionKey, type DurableRetirementState, type DurableV3Position } from '../state/retirement.ts'
-import type { DurableState } from '../state/operator-state.ts'
+import type { DurableState, RuntimeState } from '../state/operator-state.ts'
 import type { V3PositionAnchor, V3PositionObservation, V3PositionReader } from './retirement-types.ts'
 
 async function assertV3EndpointAnchor(client: Pick<PublicClient, 'getBlock'>, position: DurableV3Position, anchor: V3PositionAnchor) {
@@ -136,4 +136,22 @@ export function reconcileV3PositionJournal(retirement: DurableRetirementState, w
 		retirement.positions.push({ ...position, id: key, positionKey })
 		retirement.updatedAt = now
 	}
+}
+
+function updateV3PositionStatus(observation: V3PositionObservation, blockNumber: bigint) {
+	observation.position.lastCheckedAtBlock = blockNumber.toString()
+	if (observation.liquidity > 0n) observation.position.status = 'active'
+	else if (observation.tokensOwed0 > 0n || observation.tokensOwed1 > 0n) observation.position.status = 'collect-only'
+	else if (observation.position.status !== 'pending-confirmation' || (observation.position.registeredBy === 'workflow' && observation.position.creationTransactionHash !== undefined)) observation.position.status = 'closed'
+}
+
+export function recordV3ScanFailure(state: Pick<RuntimeState, 'retirement'>, position: RuntimeState['retirement']['positions'][number], error: unknown) {
+	if (position.status !== 'pending-confirmation') position.status = 'blocked'
+	const details = error instanceof Error ? error.message : String(error)
+	state.retirement.blockers = [...state.retirement.blockers.filter(blocker => blocker.id !== position.id), { category: 'ambiguous-position', details, id: position.id }]
+}
+
+export function recordV3ScanSuccess(state: Pick<RuntimeState, 'retirement'>, observation: V3PositionObservation, blockNumber: bigint) {
+	state.retirement.blockers = state.retirement.blockers.filter(blocker => blocker.id !== observation.position.id)
+	updateV3PositionStatus(observation, blockNumber)
 }

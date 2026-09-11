@@ -9,7 +9,7 @@ import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { ReportingSection } from '@zoltar/ui-statoblast-shared/features/reporting/components/ReportingSection.js'
 import { formatDuration, formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getReportingLockedUntilMessage } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reporting.js'
-import { computeEscalationTimeSinceStartFromAttritionCostAttoRep, ESCALATION_GAME_ACTIVATION_DELAY, getEscalationBalanceTuple, getEscalationBindingCapitalAttoRep } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingDomain.js'
+import { ESCALATION_GAME_ACTIVATION_DELAY } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingDomain.js'
 import type { AccountState, ReportingFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import type { ActiveReportingDetails, EscalationDeposit, MarketDetails, ReportingDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ReportingSectionProps } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
@@ -123,8 +123,9 @@ function createDynamicReportingDetails(overrides: Partial<ActiveReportingDetails
 	const forkThresholdAttoRep = overrides.forkThresholdAttoRep ?? nonDecisionThresholdAttoRep * 2n
 	const activationTime = overrides.activationTime ?? 120n
 	const currentTime = overrides.currentTime ?? 150n
-	const bindingCapital = getEscalationBindingCapitalAttoRep(getEscalationBalanceTuple(sides))
-	const escalationEndTime = activationTime + computeEscalationTimeSinceStartFromAttritionCostAttoRep(startBondAttoRep, nonDecisionThresholdAttoRep, bindingCapital)
+	// Binding capital is the median side balance; the fixture end time only needs to sit past the current time.
+	const bindingCapital = [...sides.map(side => side.balance)].sort((left, right) => Number(left - right))[1] ?? 0n
+	const escalationEndTime = activationTime + 1_000n
 
 	const baseDetails: ActiveReportingDetails = {
 		bindingCapital,

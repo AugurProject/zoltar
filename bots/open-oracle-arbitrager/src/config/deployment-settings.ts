@@ -69,7 +69,7 @@ export function validateDeploymentSettings(value: unknown, network: NetworkName 
 	}
 }
 
-export function replacePrimaryRepToken(tokenAddresses: readonly Address[], previousRep: Address, nextRep: Address) {
+function replacePrimaryRepToken(tokenAddresses: readonly Address[], previousRep: Address, nextRep: Address) {
 	return [nextRep, ...tokenAddresses.filter(address => address.toLowerCase() !== previousRep.toLowerCase() && address.toLowerCase() !== nextRep.toLowerCase())]
 }
 

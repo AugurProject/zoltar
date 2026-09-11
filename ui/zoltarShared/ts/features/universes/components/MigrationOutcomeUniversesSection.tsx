@@ -25,7 +25,7 @@ type MigrationOutcomeUniversesSectionProps = {
 	deploymentDisabledReason: (child: ZoltarChildUniverseSummary) => string | undefined
 }
 
-export function getMigrationOutcomeHeldBalance(child: ZoltarChildUniverseSummary, childUniverseRepBalances: Record<string, bigint | undefined>) {
+function getMigrationOutcomeHeldBalance(child: ZoltarChildUniverseSummary, childUniverseRepBalances: Record<string, bigint | undefined>) {
 	if (!child.exists) return 0n
 	return childUniverseRepBalances[child.universeId.toString()]
 }

@@ -15,10 +15,10 @@ import { configuredQuorumRpcUrlMinimum, type RpcQuorumRequirement } from '@zolta
 import { persistentPathIdentitiesMatch, persistentPathIdentity } from '@zoltar/bot-shared/config/persistent-path'
 import { executorDeploymentIntentPath } from '#execution/executor-deployment-store'
 
-export const PRESERVE_PRIVATE_KEY = '__PRESERVE_SAVED_PRIVATE_KEY__'
+const PRESERVE_PRIVATE_KEY = '__PRESERVE_SAVED_PRIVATE_KEY__'
 export const CONFIGURATION_REVISION_CONFLICT = 'ConfigurationRevisionConflict'
 
-export type RuntimeSettings = {
+type RuntimeSettings = {
 	execute: boolean
 	historyFile: string
 	lookbackBlocks: bigint

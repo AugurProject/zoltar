@@ -14,15 +14,13 @@ async function exists(filePath: string) {
 	}
 }
 
-test('ensure-contract-artifacts requires shared package testing helper outputs', async () => {
+test('ensure-contract-artifacts requires shared package export outputs', async () => {
 	const requiredSharedOutputs = await getRequiredSharedOutputRelativePaths()
 
 	expect(requiredSharedOutputs).toContain('shared/core/js/deployment/protocolConfig.js')
 	expect(requiredSharedOutputs).toContain('shared/core/js/deployment/protocolConfig.d.ts')
-	expect(requiredSharedOutputs).toContain('shared/core/js/testing/pickFixtureProperties.js')
-	expect(requiredSharedOutputs).toContain('shared/core/js/testing/pickFixtureProperties.d.ts')
-	expect(requiredSharedOutputs).toContain('shared/zoltar/js/testing/scalarOutcomeParityFixtures.js')
-	expect(requiredSharedOutputs).toContain('shared/zoltar/js/testing/scalarOutcomeParityFixtures.d.ts')
+	expect(requiredSharedOutputs).toContain('shared/zoltar/js/questions/scalarOutcome.js')
+	expect(requiredSharedOutputs).toContain('shared/zoltar/js/questions/scalarOutcome.d.ts')
 })
 
 test('core contract artifact preparation does not require Trading UI output', () => {

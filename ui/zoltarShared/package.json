@@ -89,22 +89,6 @@
 			"bun": "./ts/features/types.ts",
 			"default": "./js/features/types.js"
 		},
-		"./features/universes/components/ChildUniverseDeploymentModal.js": {
-			"bun": "./ts/features/universes/components/ChildUniverseDeploymentModal.tsx",
-			"default": "./js/features/universes/components/ChildUniverseDeploymentModal.js"
-		},
-		"./features/universes/components/ChildUniverseDeploymentSection.js": {
-			"bun": "./ts/features/universes/components/ChildUniverseDeploymentSection.tsx",
-			"default": "./js/features/universes/components/ChildUniverseDeploymentSection.js"
-		},
-		"./features/universes/components/ChildUniverseDetails.js": {
-			"bun": "./ts/features/universes/components/ChildUniverseDetails.tsx",
-			"default": "./js/features/universes/components/ChildUniverseDetails.js"
-		},
-		"./features/universes/components/ChildUniversesSection.js": {
-			"bun": "./ts/features/universes/components/ChildUniversesSection.tsx",
-			"default": "./js/features/universes/components/ChildUniversesSection.js"
-		},
 		"./features/universes/components/ForkZoltarSection.js": {
 			"bun": "./ts/features/universes/components/ForkZoltarSection.tsx",
 			"default": "./js/features/universes/components/ForkZoltarSection.js"
@@ -148,6 +132,10 @@
 		"./features/universes/lib/zoltarMigrationGuards.js": {
 			"bun": "./ts/features/universes/lib/zoltarMigrationGuards.ts",
 			"default": "./js/features/universes/lib/zoltarMigrationGuards.js"
+		},
+		"./features/zoltarSurface/components/QuestionsView.js": {
+			"bun": "./ts/features/zoltarSurface/components/QuestionsView.tsx",
+			"default": "./js/features/zoltarSurface/components/QuestionsView.js"
 		},
 		"./features/zoltarSurface/components/ZoltarSection.js": {
 			"bun": "./ts/features/zoltarSurface/components/ZoltarSection.tsx",
@@ -200,6 +188,14 @@
 		"./lib/formDefaults.js": {
 			"bun": "./ts/lib/formDefaults.ts",
 			"default": "./js/lib/formDefaults.js"
+		},
+		"./features/questions/components/ScalarCreatePreview.js": {
+			"bun": "./ts/features/questions/components/ScalarCreatePreview.tsx",
+			"default": "./js/features/questions/components/ScalarCreatePreview.js"
+		},
+		"./features/zoltarTransactionPresentations.js": {
+			"bun": "./ts/features/zoltarTransactionPresentations.tsx",
+			"default": "./js/features/zoltarTransactionPresentations.js"
 		}
 	}
 }

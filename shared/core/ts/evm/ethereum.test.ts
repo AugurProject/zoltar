@@ -23,14 +23,12 @@ import {
 	isHex,
 	keccak256,
 	mainnet,
-	numberToBytes,
 	parseAbiItem,
 	parseAbiParameters,
 	parseTransaction,
 	parseUnits,
 	privateKeyToAccount,
 	publicActions,
-	RATE_LIMIT_RETRY_DELAY_MILLISECONDS,
 	recoverTransactionAddress,
 	requestRpc,
 	toHex,
@@ -1236,7 +1234,6 @@ describe('shared ethereum compatibility layer', () => {
 		expect(() => toHex(-1)).toThrow('safe integer range')
 		expect(() => toHex(-1n)).toThrow('safe integer range')
 		expect(() => toHex(Number.MAX_SAFE_INTEGER + 1)).toThrow('safe integer range')
-		expect(() => numberToBytes(Number.MAX_SAFE_INTEGER + 1)).toThrow('safe integer range')
 		await expect(
 			account.signTransaction?.({
 				chainId: Number.MAX_SAFE_INTEGER + 1,
@@ -3079,6 +3076,88 @@ describe('shared ethereum compatibility layer', () => {
 		expect(calls).toHaveLength(1)
 	})
 
+	test('chained public client extensions keep earlier extensions and receive the extended client', () => {
+		const client = createPublicClient({ transport: custom(createProvider(() => undefined, [])) })
+		const seenByFirst: object[] = []
+		const seenBySecond: object[] = []
+		const extended = client
+			.extend(base => {
+				seenByFirst.push(base)
+				return { first: () => 'first' as const }
+			})
+			.extend(withFirst => {
+				seenBySecond.push(withFirst)
+				return { second: () => withFirst.first() }
+			})
+			.extend(withBoth => ({ third: () => `${withBoth.first()}+${withBoth.second()}` as const }))
+
+		expect(seenByFirst).toHaveLength(1)
+		expect(seenBySecond).toHaveLength(1)
+		expect(seenBySecond[0]).toHaveProperty('first')
+		expect(seenBySecond[0]).toHaveProperty('extend')
+		expect(extended.first()).toBe('first')
+		expect(extended.second()).toBe('first')
+		expect(extended.third()).toBe('first+first')
+		expect(typeof extended.getBlockNumber).toBe('function')
+		expect(typeof extended.extend).toBe('function')
+	})
+
+	test('chained wallet client extensions keep earlier extensions and receive the extended client', () => {
+		const client = createWalletClient({ account: OWNER_ADDRESS, transport: custom(createProvider(() => undefined, [])) })
+		const extended = client
+			.extend(base => ({ first: () => base.account.address }))
+			.extend(withFirst => ({ second: () => withFirst.first() }))
+			.extend(publicActions)
+			.extend(withActions => ({ third: () => `${withActions.second()}!` }))
+
+		expect(extended.first()).toBe(getAddress(OWNER_ADDRESS))
+		expect(extended.second()).toBe(getAddress(OWNER_ADDRESS))
+		expect(extended.third()).toBe(`${getAddress(OWNER_ADDRESS)}!`)
+		expect(typeof extended.simulateContract).toBe('function')
+		expect(typeof extended.writeContract).toBe('function')
+		expect(extended.account.address).toBe(getAddress(OWNER_ADDRESS))
+	})
+
+	test('public client multicall isolates undecodable return data per entry when failures are allowed', async () => {
+		const provider = createProvider(({ method }) => {
+			if (method !== 'eth_call') throw new Error(`Unexpected rpc method: ${method}`)
+			return encodeAbiParameters(
+				[
+					{
+						components: [
+							{ name: 'success', type: 'bool' },
+							{ name: 'returnData', type: 'bytes' },
+						],
+						name: 'returnData',
+						type: 'tuple[]',
+					},
+				],
+				[
+					[
+						[true, encodeAbiParameters([{ type: 'uint256' }], [7n])],
+						[true, '0x01'],
+						[true, encodeAbiParameters([{ type: 'uint256' }], [9n])],
+					],
+				],
+			)
+		}, [])
+		const client = createPublicClient({ transport: custom(provider) })
+		const contracts = [
+			{ abi: BALANCE_OF_ABI, address: TOKEN_ADDRESS, args: [OWNER_ADDRESS], functionName: 'balanceOf' },
+			{ abi: BALANCE_OF_ABI, address: TOKEN_ADDRESS, args: [RECIPIENT_ADDRESS], functionName: 'balanceOf' },
+			{ abi: BALANCE_OF_ABI, address: TOKEN_ADDRESS, args: [MULTICALL_ADDRESS], functionName: 'balanceOf' },
+		] as const
+
+		const result = await client.multicall({ allowFailure: true, contracts, multicallAddress: MULTICALL_ADDRESS })
+		expect(result).toHaveLength(3)
+		expect(result[0]).toEqual({ result: 7n, status: 'success' })
+		expect(getObjectEntry(result[1], 'status', 'undecodable multicall entry')).toBe('failure')
+		expect(getObjectEntry(result[1], 'error', 'undecodable multicall entry')).toBeInstanceOf(Error)
+		expect(result[2]).toEqual({ result: 9n, status: 'success' })
+
+		await expect(client.multicall({ allowFailure: false, contracts, multicallAddress: MULTICALL_ADDRESS })).rejects.toThrow()
+	})
+
 	for (const allowFailure of [true, false] as const) {
 		test(`public client rejects truncated multicall responses when allowFailure is ${allowFailure.toString()}`, async () => {
 			const provider = createProvider(({ method }) => {
@@ -3273,8 +3352,7 @@ describe('shared ethereum compatibility layer', () => {
 	})
 
 	test('HTTP transport retries rate limits for reads, receipt requests, and raw transaction broadcasts', async () => {
-		expect(RATE_LIMIT_RETRY_DELAY_MILLISECONDS).toBe(10_000)
-		expect(http('https://rpc.example.test').retryDelay).toBe(RATE_LIMIT_RETRY_DELAY_MILLISECONDS)
+		expect(http('https://rpc.example.test').retryDelay).toBe(10_000)
 		expect(http('https://rpc.example.test').requestTimeout).toBe(30_000)
 		expect(() => http('https://rpc.example.test', { requestTimeout: 0 })).toThrow('request timeout')
 		const responses = [
@@ -3601,5 +3679,40 @@ describe('shared ethereum compatibility layer', () => {
 			}),
 		).toBe(21_000n)
 		expect(calls.map(call => call.method)).toEqual(['eth_call', 'eth_estimateGas'])
+	})
+
+	test('multicall failures carry the decoded revert reason of the failed entry', async () => {
+		const aggregateOutputs = [
+			{
+				components: [
+					{ name: 'success', type: 'bool' },
+					{ name: 'returnData', type: 'bytes' },
+				],
+				name: 'returnData',
+				type: 'tuple[]',
+			},
+		] as const
+		const reasonData = `0x08c379a0${encodeAbiParameters([{ type: 'string' }], ['pool not initialized']).slice(2)}`
+		const client = createPublicClient({
+			transport: custom(
+				createProvider(
+					() =>
+						encodeAbiParameters(aggregateOutputs, [
+							[
+								[false, reasonData],
+								[false, '0x'],
+								[false, '0x4e487b71' + '11'.padStart(64, '0')],
+								[true, encodeAbiParameters([{ type: 'uint256' }], [7n])],
+							],
+						]),
+					[],
+				),
+			),
+		})
+		const contract = { abi: SINGLE_OUTPUT_ABI, address: TOKEN_ADDRESS, functionName: 'singleOutput' } as const
+		const contracts = [contract, contract, contract, contract]
+		const results = await client.multicall({ allowFailure: true, contracts, multicallAddress: MULTICALL_ADDRESS })
+		expect(results.map(result => (result.status === 'failure' ? result.error.message : result.result))).toEqual(['Multicall contract call failed: execution reverted: pool not initialized', 'Multicall contract call failed: empty return data', `Multicall contract call failed: panic 0x${'11'.padStart(64, '0')}`, 7n])
+		await expect(client.multicall({ allowFailure: false, contracts, multicallAddress: MULTICALL_ADDRESS })).rejects.toThrow('Multicall contract call failed: execution reverted: pool not initialized')
 	})
 })

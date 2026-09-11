@@ -1,21 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import {
-	assertWorkflowPrerequisiteLimit,
-	CONSENSUS_FINALITY_HORIZON_BLOCKS,
-	MAXIMUM_WORKFLOW_PREREQUISITE_COUNT,
-	MINIMUM_WORKFLOW_VALIDITY_BLOCKS,
-	requiredTimestampSafetySeconds,
-	requiredTimestampSubmissionSafetySeconds,
-	requiredWorkflowSafetyBlocks,
-	timestampDeadlineHasRequiredSafety,
-} from '../../src/operations/timing.ts'
+import { assertWorkflowPrerequisiteLimit, EXECUTOR_FINALITY_BLOCKS, MINIMUM_WORKFLOW_VALIDITY_BLOCKS, requiredTimestampSafetySeconds, requiredTimestampSubmissionSafetySeconds, requiredWorkflowSafetyBlocks, timestampDeadlineHasRequiredSafety } from '../../src/operations/timing.ts'
 
 const options = { maximumBlockIntervalSeconds: 15, seed: 1 }
 
 describe('deadline timing safety', () => {
 	test('separates block-clock transport windows from timestamp next-block safety', () => {
-		expect(CONSENSUS_FINALITY_HORIZON_BLOCKS).toBe(96n)
-		expect(MAXIMUM_WORKFLOW_PREREQUISITE_COUNT).toBe(2)
+		expect(EXECUTOR_FINALITY_BLOCKS).toBe(96n)
 		expect(MINIMUM_WORKFLOW_VALIDITY_BLOCKS).toBe(243)
 		expect(requiredWorkflowSafetyBlocks()).toBe(25n)
 		expect(requiredWorkflowSafetyBlocks(1)).toBe(146n)

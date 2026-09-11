@@ -2,9 +2,11 @@
 
 import { describe, expect, test } from 'bun:test'
 import { maxUint256 } from '@zoltar/core-shared/evm/ethereum'
-import { deriveTokenApprovalRequirement, formatTokenApprovalNeededMessage, formatTokenApprovalPartialMessage, formatTokenApprovalUnavailableMessage, maxUint200, parseTokenApprovalAmountInput, resolveTokenApprovalStatusMessage, shouldDisplayMaxTokenApprovalAmount } from '../transactions/tokenApproval.js'
+import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, parseTokenApprovalAmountInput, resolveTokenApprovalStatusMessage, shouldDisplayMaxTokenApprovalAmount } from '../transactions/tokenApproval.js'
 
 const ONE = 10n ** 18n
+// Approved amounts above uint200 are displayed as unlimited.
+const maxUint200 = 2n ** 200n - 1n
 
 describe('token approval helpers', () => {
 	test('derives the approval requirement and exact default target from required and approved amounts', () => {
@@ -70,8 +72,13 @@ describe('token approval helpers', () => {
 		const requirement = deriveTokenApprovalRequirement(25n * ONE, 24n * ONE)
 
 		expect(
-			formatTokenApprovalNeededMessage({
+			resolveTokenApprovalStatusMessage({
 				actionLabel: 'submitting the initial report',
+				amountValidationMessage: undefined,
+				draftAmount: '',
+				guardMessage: undefined,
+				nextApprovalAmount: undefined,
+				requiredAmount: 25n * ONE,
 				requirement,
 				tokenLabel: 'ETH',
 				tokenUnits: 18,
@@ -79,10 +86,14 @@ describe('token approval helpers', () => {
 		).toBe('Need 1\u00a0more\u00a0ETH approved before submitting the initial report.')
 
 		expect(
-			formatTokenApprovalPartialMessage({
+			resolveTokenApprovalStatusMessage({
 				actionLabel: 'submitting the initial report',
-				nextApprovedAmount: 24_500_000_000_000_000_000n,
+				amountValidationMessage: undefined,
+				draftAmount: '24.5',
+				guardMessage: undefined,
+				nextApprovalAmount: 24_500_000_000_000_000_000n,
 				requiredAmount: 25n * ONE,
+				requirement,
 				tokenLabel: 'ETH',
 				tokenUnits: 18,
 			}),

@@ -11,7 +11,7 @@ export interface UniswapPriceObservation {
 	contract_address: string
 }
 
-export interface UniswapChartRow extends UniswapPriceObservation {
+interface UniswapChartRow extends UniswapPriceObservation {
 	[key: `uniswap_price_${number}`]: string
 }
 

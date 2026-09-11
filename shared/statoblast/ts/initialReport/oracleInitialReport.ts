@@ -1,4 +1,4 @@
-export const ORACLE_PERCENTAGE_PRECISION = 10_000_000n
+const ORACLE_PERCENTAGE_PRECISION = 10_000_000n
 export const ORACLE_PROTOCOL_FEE = 100000
 export const ORACLE_FEE_PERCENTAGE = 10000
 export const ORACLE_MULTIPLIER = 115
@@ -6,8 +6,8 @@ export const ORACLE_GAS_UNITS_FOR_ONE_DISPUTE = 300000n
 export const OPEN_ORACLE_SECURITY_MULTIPLIER_BPS = 100000n
 export const ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE = 500000n
 export const DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS = 10n * 10n ** 9n
-export const ORACLE_OPEN_INTEREST_DIVIDER = 100n
-export const ORACLE_ESCALATION_HALT_MULTIPLIER_BPS = 100000n
+const ORACLE_OPEN_INTEREST_DIVIDER = 100n
+const ORACLE_ESCALATION_HALT_MULTIPLIER_BPS = 100000n
 
 const BPS_DENOMINATOR = 10000n
 const UINT128_MAX = (1n << 128n) - 1n
@@ -34,7 +34,7 @@ export const DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS = {
 	targetPriceErrorForDispute: ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE,
 } satisfies OracleMinimumWethReportParameters
 
-export function calculateMaximumOracleInitialReportPriorityFeeAttoEthPerGas(parameters: OracleMinimumWethReportParameters = DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS, escalationHaltMultiplierBps = ORACLE_ESCALATION_HALT_MULTIPLIER_BPS) {
+function calculateMaximumOracleInitialReportPriorityFeeAttoEthPerGas(parameters: OracleMinimumWethReportParameters = DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS, escalationHaltMultiplierBps = ORACLE_ESCALATION_HALT_MULTIPLIER_BPS) {
 	if (parameters.gasUnitsForOneDispute <= 0n) throw new Error('Dispute gas units must be positive')
 	if (escalationHaltMultiplierBps <= 0n) throw new Error('Escalation halt multiplier must be positive')
 	const feeSum = BigInt(parameters.openOracleProtocolFee + parameters.openOracleReporterFee)

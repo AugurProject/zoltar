@@ -688,7 +688,7 @@ function auctionDemandChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement 
 }
 
 function collateralRepairChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement {
-	const axes = quantitativeChartAxisLabels['plot-statoblast-whitepaper-19']
+	const axes = quantitativeChartAxisLabels['fig-statoblast-collateral-repair']
 	const example = mount.closest('#collateral-repair-example')
 	const parentSettlementCollateral = Math.max(readInput(example, 'parentSettlementCollateral', 50), 0)
 	const forkSettlementCollateralReceived = readInput(example, 'forkSettlementCollateralReceived', 47.5)
@@ -750,7 +750,7 @@ function createChart(chartId: string, spec: ChartSpec, mount: HTMLElement): SVGS
 	if (chartId === 'fig-auction-clearing-ladder') {
 		return auctionDemandChart(spec, mount)
 	}
-	if (chartId === 'plot-statoblast-whitepaper-19') {
+	if (chartId === 'fig-statoblast-collateral-repair') {
 		return collateralRepairChart(spec, mount)
 	}
 	return markDrivenDiagramChart(spec)
@@ -1095,7 +1095,7 @@ function updateEscalationSimulator(): void {
 
 updateEscalationSimulator()
 
-for (const chartId of ['fig-auction-clearing-ladder', 'plot-statoblast-whitepaper-19', 'fig-statoblast-escalation-cost-curve']) {
+for (const chartId of ['fig-auction-clearing-ladder', 'fig-statoblast-collateral-repair', 'fig-statoblast-escalation-cost-curve']) {
 	const mount = document.querySelector<HTMLElement>(`[data-plot-chart="${chartId}"]`)
 	const inputRoot = mount === null ? null : quantitativeInputRoot(chartId, mount)
 	for (const input of Array.from(inputRoot?.querySelectorAll<HTMLElement>('[data-example-input]') ?? [])) {

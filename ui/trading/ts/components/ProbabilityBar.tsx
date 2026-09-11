@@ -1,6 +1,6 @@
 import { probabilityCopy } from '../copy/probability.js'
 
-export function roundedProbabilityLabels(yesPercent: number) {
+function roundedProbabilityLabels(yesPercent: number) {
 	const roundedYes = Math.round((yesPercent + Number.EPSILON * Math.abs(yesPercent)) * 10) / 10
 	return { yes: roundedYes.toFixed(1), no: (100 - roundedYes).toFixed(1) }
 }

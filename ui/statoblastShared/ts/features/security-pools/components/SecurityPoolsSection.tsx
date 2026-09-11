@@ -8,7 +8,7 @@ import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { UniverseDirectorySection } from './UniverseDirectorySection.js'
 
-export function shouldRefreshSelectedPoolDataOnViewOpen({ currentSecurityPoolAddress, nextSecurityPoolAddress, nextView, selectedPoolHasLoadedDetails }: { currentSecurityPoolAddress: string; nextSecurityPoolAddress?: string | undefined; nextView: SecurityPoolsView; selectedPoolHasLoadedDetails: boolean }) {
+function shouldRefreshSelectedPoolDataOnViewOpen({ currentSecurityPoolAddress, nextSecurityPoolAddress, nextView, selectedPoolHasLoadedDetails }: { currentSecurityPoolAddress: string; nextSecurityPoolAddress?: string | undefined; nextView: SecurityPoolsView; selectedPoolHasLoadedDetails: boolean }) {
 	if (nextView !== 'operate') return false
 	const resolvedSecurityPoolAddress = nextSecurityPoolAddress ?? currentSecurityPoolAddress
 	return resolvedSecurityPoolAddress.trim() !== '' && !selectedPoolHasLoadedDetails

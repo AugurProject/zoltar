@@ -2,6 +2,7 @@ import { keccak_256 } from '@noble/hashes/sha3.js'
 import { bytesToHex as nobleBytesToHex, concatBytes, hexToBytes as nobleHexToBytes, utf8ToBytes } from '@noble/hashes/utils.js'
 import { addr, amounts, eip191Signer, Transaction as MicroTransaction } from 'micro-eth-signer'
 import { Decoder, createContract, deployContract, events } from 'micro-eth-signer/advanced/abi.js'
+import { multicallFailureMessage } from './multicallFailure.js'
 
 export type Hex = `0x${string}`
 export type Address = Hex
@@ -223,7 +224,7 @@ type EstimateContractGasParameters<TAbi extends Abi, TFunctionName extends strin
 	value?: bigint | undefined
 }
 
-export type EstimateGasParameters = {
+type EstimateGasParameters = {
 	account?: Account | Address | undefined
 	data?: Hex | undefined
 	gasPrice?: bigint | undefined
@@ -305,7 +306,7 @@ export type TransactionReplacement = {
 	transactionReceipt: TransactionReceipt
 }
 
-export type WaitForTransactionReceiptParameters = {
+type WaitForTransactionReceiptParameters = {
 	hash: Hash
 	onReplaced?: ((replacement: TransactionReplacement) => void) | undefined
 	pollingInterval?: number | undefined
@@ -378,9 +379,9 @@ export type ParsedTransaction = {
 	value?: bigint | undefined
 }
 
-export type RpcRequestScheduler = <TValue>(method: string, operation: () => Promise<TValue>) => Promise<TValue>
+type RpcRequestScheduler = <TValue>(method: string, operation: () => Promise<TValue>) => Promise<TValue>
 export type RpcFetchFn = (input: string | URL | Request, init?: RequestInit | undefined) => Promise<Response>
-export type RpcResponseParser = (response: Response, method: string) => Promise<JsonValue>
+type RpcResponseParser = (response: Response, method: string) => Promise<JsonValue>
 
 type TransportRetryOptions = {
 	batch?: { readonly wait?: number } | undefined
@@ -470,11 +471,15 @@ type BlockTag = 'earliest' | 'latest' | 'pending'
 type LogTopicFilter = Hex | readonly Hex[] | null
 
 const DEFAULT_RATE_LIMIT_RETRY_COUNT = 3
-export const RATE_LIMIT_RETRY_DELAY_MILLISECONDS = 10_000
+const RATE_LIMIT_RETRY_DELAY_MILLISECONDS = 10_000
 
-type PublicClientShape<TTransport extends Transport, TChain extends Chain | undefined> = {
+// `this` is the already-extended client, so chained extensions accumulate and each callback sees the ones before it.
+interface ExtendableClient {
+	extend: <TExtension extends object>(extension: (client: this) => TExtension) => this & TExtension
+}
+
+type PublicClientShape<TTransport extends Transport, TChain extends Chain | undefined> = ExtendableClient & {
 	chain: TChain
-	extend: <TExtension extends object>(extension: (client: PublicClientShape<TTransport, TChain>) => TExtension) => PublicClientShape<TTransport, TChain> & TExtension
 	estimateContractGas: <TAbi extends Abi, TFunctionName extends string>(parameters: EstimateContractGasParameters<TAbi, TFunctionName>) => Promise<bigint>
 	estimateGas: (parameters: EstimateGasParameters) => Promise<bigint>
 	getBalance: (parameters: { address: Address; blockNumber?: bigint | undefined; blockTag?: BlockTag | undefined }) => Promise<bigint>
@@ -504,10 +509,9 @@ type PublicClientShape<TTransport extends Transport, TChain extends Chain | unde
 
 type PublicClientActions = Omit<PublicClientShape<Transport, Chain | undefined>, 'chain' | 'extend' | 'transport'>
 
-type WalletClientShape<TTransport extends Transport, TChain extends Chain | undefined, TAccount extends Account | undefined> = Omit<PublicClientShape<TTransport, TChain>, 'extend'> & {
+type WalletClientShape<TTransport extends Transport, TChain extends Chain | undefined, TAccount extends Account | undefined> = PublicClientShape<TTransport, TChain> & {
 	account: TAccount
 	call: (parameters: { account?: Account | Address | undefined; data?: Hex | undefined; gas?: bigint | undefined; gasPrice?: bigint | undefined; maxFeePerGas?: bigint | undefined; maxPriorityFeePerGas?: bigint | undefined; to?: Address | undefined; value?: bigint | undefined }) => Promise<{ data: Hex | undefined }>
-	extend: <TExtension extends object>(extension: (client: WalletClientShape<TTransport, TChain, TAccount>) => TExtension) => WalletClientShape<TTransport, TChain, TAccount> & TExtension
 	sendRawTransaction: (parameters: { serializedTransaction: Hex }) => Promise<Hash>
 	sendTransaction: (parameters: {
 		account?: Account | Address | undefined
@@ -1797,39 +1801,29 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 			const decoded = decodeFunctionOutput(rawResult.abiItem, rawResult.data)
 			if (!Array.isArray(decoded)) throw new Error('Unexpected multicall response')
 			if (decoded.length !== parameters.contracts.length) throw new Error(`Multicall returned ${decoded.length.toString()} results for ${parameters.contracts.length.toString()} calls`)
+			const decodeEntry = (index: number, returnData: Hex) => {
+				const contract = parameters.contracts[index]
+				if (contract === undefined) throw new Error('Missing multicall contract response')
+				return decodeFunctionOutput(getNamedFunctionAbi(contract.abi, contract.functionName, contract.args), returnData)
+			}
 
 			if (parameters.allowFailure) {
 				return decoded.map((entry, index) => {
-					if (typeof entry !== 'object' || entry === null || !('success' in entry) || !('returnData' in entry)) {
-						return {
-							error: new Error('Unexpected multicall response'),
-							status: 'failure',
-						}
-					}
-					if (entry.success !== true) {
-						return {
-							error: new Error('Multicall contract call failed'),
-							status: 'failure',
-						}
-					}
-					const contract = parameters.contracts[index]
-					if (contract === undefined) throw new Error('Missing multicall contract response')
-					const abiItem = getNamedFunctionAbi(contract.abi, contract.functionName, contract.args)
-					return {
-						result: decodeFunctionOutput(abiItem, entry.returnData as Hex),
-						status: 'success',
+					if (typeof entry !== 'object' || entry === null || !('success' in entry) || !('returnData' in entry)) return { error: new Error('Unexpected multicall response'), status: 'failure' }
+					if (entry.success !== true) return { error: new Error(multicallFailureMessage(entry.returnData)), status: 'failure' }
+					// A result that cannot be decoded only fails its own entry; the other results stay usable.
+					try {
+						return { result: decodeEntry(index, entry.returnData as Hex), status: 'success' }
+					} catch (error) {
+						return { error: error instanceof Error ? error : new Error('Multicall result decoding failed', { cause: error }), status: 'failure' }
 					}
 				}) as MulticallReturnType<typeof parameters.contracts, typeof parameters.allowFailure>
 			}
 
 			return decoded.map((entry, index) => {
-				if (typeof entry !== 'object' || entry === null || !('success' in entry) || !('returnData' in entry) || entry.success !== true) {
-					throw new Error('Multicall contract call failed')
-				}
-				const contract = parameters.contracts[index]
-				if (contract === undefined) throw new Error('Missing multicall contract response')
-				const abiItem = getNamedFunctionAbi(contract.abi, contract.functionName, contract.args)
-				return decodeFunctionOutput(abiItem, entry.returnData as Hex)
+				if (typeof entry !== 'object' || entry === null || !('success' in entry) || !('returnData' in entry)) throw new Error('Unexpected multicall response')
+				if (entry.success !== true) throw new Error(multicallFailureMessage(entry.returnData))
+				return decodeEntry(index, entry.returnData as Hex)
 			}) as MulticallReturnType<typeof parameters.contracts, typeof parameters.allowFailure>
 		},
 		readContract: async <TAbi extends Abi, TFunctionName extends string>(parameters: ContractReadParameters<TAbi, TFunctionName>) => {
@@ -2023,20 +2017,20 @@ export function publicActions<TTransport extends Transport, TChain extends Chain
 	}
 }
 
+// Each extended client gets its own `extend` closing over the extended client, so chained extensions accumulate.
+function attachExtend<TClient extends object>(client: TClient): TClient & ExtendableClient {
+	const extended: TClient & ExtendableClient = { ...client, extend: extension => attachExtend({ ...extended, ...extension(extended) }) }
+	return extended
+}
+
 export function createPublicClient<TTransport extends Transport = Transport, TChain extends Chain | undefined = Chain | undefined>({ chain, transport }: { cacheTime?: number | undefined; chain?: TChain; transport: TTransport }): PublicClient<TTransport, TChain> {
 	const resolvedChain = chain as TChain
 	const actions = buildPublicClientActions({
 		chain: resolvedChain,
 		transport,
 	})
-	let client: PublicClient<TTransport, TChain>
-	client = {
-		...actions,
-		chain: resolvedChain,
-		extend: extension => Object.assign({}, client, extension(client)) as PublicClient<TTransport, TChain> & ReturnType<typeof extension>,
-		transport,
-	}
-	return client
+	const client: Omit<PublicClient<TTransport, TChain>, 'extend'> = { ...actions, chain: resolvedChain, transport }
+	return attachExtend(client)
 }
 
 function normalizeWalletAccount(account: Account | Address | undefined) {
@@ -2064,8 +2058,7 @@ export function createWalletClient<TTransport extends Transport = Transport, TCh
 					transport,
 				})
 	const baseClient = publicClient as PublicClient<TTransport, TChain>
-	let walletClient: WalletClient<TTransport, TChain, Account | undefined>
-	walletClient = {
+	const walletActions: Omit<WalletClient<TTransport, TChain, Account | undefined>, 'extend'> = {
 		...baseClient,
 		account: normalizedAccount,
 		call: async parameters => {
@@ -2151,7 +2144,7 @@ export function createWalletClient<TTransport extends Transport = Transport, TCh
 					to: parameters.to ?? undefined,
 					value,
 				})
-				return await walletClient.sendRawTransaction({
+				return await walletActions.sendRawTransaction({
 					serializedTransaction,
 				})
 			}
@@ -2181,9 +2174,8 @@ export function createWalletClient<TTransport extends Transport = Transport, TCh
 				}),
 			)
 		},
-		extend: extension => Object.assign({}, walletClient, extension(walletClient)) as WalletClient<TTransport, TChain, Account | undefined> & ReturnType<typeof extension>,
 		writeContract: async parameters =>
-			await walletClient.sendTransaction({
+			await walletActions.sendTransaction({
 				account: parameters.account,
 				data: encodeFunctionData({
 					abi: parameters.abi,
@@ -2198,7 +2190,7 @@ export function createWalletClient<TTransport extends Transport = Transport, TCh
 				value: parameters.value,
 			}),
 	}
-	return walletClient
+	return attachExtend(walletActions)
 }
 
 function normalizeTransportRetryOptions(options: TransportRetryOptions = {}) {
@@ -2289,13 +2281,6 @@ export function stringToHex(value: string): Hex {
 	return toHex(value)
 }
 
-export function numberToBytes(value: bigint | number, options: { size?: number | undefined } = {}) {
-	const bytes = bigintToBytes(normalizeQuantityValue(value))
-	if (options.size === undefined) return bytes
-	if (bytes.length > options.size) throw new Error(`Value exceeds requested size of ${options.size.toString()} bytes`)
-	return Uint8Array.from([...new Uint8Array(options.size - bytes.length), ...bytes])
-}
-
 export function keccak256(value: Hex | Uint8Array | string) {
 	if (typeof value === 'string' && value.startsWith('0x')) {
 		return ensure0x(nobleBytesToHex(keccak_256(hexToBytes(value))))
@@ -2325,6 +2310,7 @@ export function encodeFunctionData(parameters: { abi: readonly unknown[]; args?:
 }
 
 export function decodeFunctionData<TAbi extends Abi>(parameters: { abi: TAbi; data: Hex }): DecodedFunctionData<TAbi>
+
 export function decodeFunctionData(parameters: { abi: Abi; data: Hex }): {
 	args: readonly AbiValue[]
 	functionName: string
@@ -2347,6 +2333,7 @@ export function decodeFunctionData(parameters: { abi: Abi; data: Hex }) {
 	}
 }
 
+/** @internal Test fixtures decode call results with this; production reads through readContract. */
 export function decodeFunctionResult<TAbi extends Abi, TFunctionName extends string>(parameters: { abi: TAbi; data: Hex; functionName: TFunctionName }): ContractFunctionResult<TAbi, TFunctionName> {
 	return decodeFunctionOutput(getNamedFunctionAbi(parameters.abi, parameters.functionName), parameters.data) as ContractFunctionResult<TAbi, TFunctionName>
 }
@@ -2402,6 +2389,7 @@ export function decodeEventLog(parameters: { abi: Abi; data: Hex; topics: readon
 
 type EncodedEventTopic<TArgs> = TArgs extends readonly unknown[] ? (Extract<TArgs[number], readonly unknown[]> extends never ? Hex : Hex | readonly Hex[]) : TArgs extends Readonly<Record<string, unknown>> ? (Extract<TArgs[keyof TArgs], readonly unknown[]> extends never ? Hex : Hex | readonly Hex[]) : Hex
 
+/** @internal Production filters logs through getLogs; tests build topic fixtures with this encoder. */
 export function encodeEventTopics<const TArgs extends readonly unknown[] | Record<string, unknown> | undefined = undefined>(parameters: { abi: Abi; args?: TArgs; eventName: string }): readonly (EncodedEventTopic<TArgs> | null)[]
 export function encodeEventTopics(parameters: { abi: Abi; args?: readonly unknown[] | Record<string, unknown> | undefined; eventName: string }): readonly (Hex | readonly Hex[] | null)[] {
 	const eventAbi = getNamedEventAbi(parameters.abi, parameters.eventName)

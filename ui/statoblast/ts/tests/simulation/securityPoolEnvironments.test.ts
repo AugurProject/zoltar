@@ -4,7 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:tes
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { loadAllSecurityPools, loadSecurityVaultDetails } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
 import type { SimulationScenario } from '@zoltar/ui-core-shared/simulation/scenarios.js'
-import { activateSimulationBackendProfile, createBootstrappedSimulationBackendWithRetry, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulationTestUtils.js'
+import { activateSimulationBackendProfile, createBootstrappedSimulationBackendWithRetry, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
 
 const SEEDED_REP_DEPOSIT = 10_000n * 10n ** 18n
 const SEEDED_CAPACITY_OWNERSHIP_ATTO_REP = 80n * 10n ** 18n

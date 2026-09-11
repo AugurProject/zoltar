@@ -7,6 +7,7 @@ import { MAINNET_WETH_ADDRESS, setRuntimeNetworkProfile, type NetworkProfile } f
 import { initializeSimulationClock } from './clock.js'
 import type { SimulationScenario } from './scenarios.js'
 import { withTimeout } from '../lib/promise.js'
+import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/zoltar-shared/constants'
 
 export type TevmLikeClient = ReturnType<typeof createMemoryClient>
 
@@ -22,7 +23,6 @@ const WETH_DECIMALS_SLOT = 2n
 const ZOLTAR_GENESIS_REPUTATION_TOKEN_OFFSET = 3n
 const ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT = 2n
 const ZOLTAR_UNIVERSES_SLOT = 0n
-const REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT = 5n
 
 async function yieldToBrowser() {
 	await new Promise<void>(resolve => {

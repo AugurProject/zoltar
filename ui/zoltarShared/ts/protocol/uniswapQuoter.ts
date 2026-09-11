@@ -2,18 +2,9 @@ import { encodeAbiParameters, getAddress, keccak256, type Address, type Hex, zer
 import type { ReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { getActiveNetworkProfile, getActiveSimulationController } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { isRecoverableContractReadError, isRecoverableQuoteError } from '@zoltar/ui-core-shared/lib/errors.js'
-import { MAINNET_NETWORK_PROFILE, MAINNET_WETH_ADDRESS } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { getGenesisReputationTokenAddress, getWethAddress } from './activeProtocolAddresses.js'
 
 export { getWethAddress }
-
-export const UNISWAP_V4_QUOTER_ADDRESS = MAINNET_NETWORK_PROFILE.uniswapV4QuoterAddress
-
-// Known token addresses (mainnet)
-export const REP_ADDRESS: Address = '0x221657776846890989a759BA2973e427DfF5C9bB'
-export const USDC_ADDRESS = MAINNET_NETWORK_PROFILE.usdcAddress
-// WETH — used for V3 quotes (V3 doesn't support native ETH, only WETH)
-export const WETH_ADDRESS: Address = MAINNET_WETH_ADDRESS
 // ETH in Uniswap V4 is represented as address(0)
 export const ETH_ADDRESS: Address = zeroAddress
 
@@ -44,7 +35,7 @@ type MockQuoteSource = {
 }
 
 // Default pool config (0.3% fee, standard tick spacing, no hooks)
-export const DEFAULT_POOL_CONFIG: PoolConfig = {
+const DEFAULT_POOL_CONFIG: PoolConfig = {
 	fee: 3000,
 	tickSpacing: 60,
 }
@@ -224,16 +215,16 @@ async function assertMockPairSupported(client: ReadClient, tokenIn: Address, tok
 	throw new Error('Simulation mock pricing only supports REP / ETH, REP / WETH, and REP / USDC pairs.')
 }
 
-export function buildUniswapV4PoolId(tokenA: Address, tokenB: Address, poolConfig: PoolConfig): Hex {
+function buildUniswapV4PoolId(tokenA: Address, tokenB: Address, poolConfig: PoolConfig): Hex {
 	const [currency0, currency1] = sortTokenPair(tokenA, tokenB)
 	return keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'address' }, { type: 'uint24' }, { type: 'int24' }, { type: 'address' }], [currency0, currency1, poolConfig.fee, poolConfig.tickSpacing, poolConfig.hooks ?? zeroAddress]))
 }
 
-export function buildUniswapV4PoolUrl(tokenA: Address, tokenB: Address, poolConfig: PoolConfig) {
+function buildUniswapV4PoolUrl(tokenA: Address, tokenB: Address, poolConfig: PoolConfig) {
 	return buildUniswapPoolExplorerUrl(buildUniswapV4PoolId(tokenA, tokenB, poolConfig))
 }
 
-export function buildUniswapV3PoolUrl(poolAddress: Address) {
+function buildUniswapV3PoolUrl(poolAddress: Address) {
 	return buildUniswapPoolExplorerUrl(poolAddress)
 }
 
@@ -307,31 +298,6 @@ export async function quoteBestExactInputWithSource(client: ReadClient, tokenIn:
 			protocol: 'v4',
 		},
 	}
-}
-
-export async function quoteBestExactInput(client: ReadClient, tokenIn: Address, tokenOut: Address, amountIn: bigint, poolConfigs: readonly PoolConfig[] = COMMON_V4_POOL_CONFIGS): Promise<bigint> {
-	const result = await quoteBestExactInputWithSource(client, tokenIn, tokenOut, amountIn, poolConfigs)
-	return result.amountOut
-}
-
-// Returns how much ETH (in attoETH) you receive for swapping `amountIn` of `token`
-export async function quoteTokenForEth(client: ReadClient, token: Address, amountIn: bigint, poolConfig: PoolConfig = DEFAULT_POOL_CONFIG): Promise<bigint> {
-	return quoteExactInput(client, token, ETH_ADDRESS, amountIn, poolConfig)
-}
-
-// Returns how much `token` (in token's native units) you receive for swapping `amountIn` ETH (in attoETH)
-export async function quoteEthForToken(client: ReadClient, token: Address, amountIn: bigint, poolConfig: PoolConfig = DEFAULT_POOL_CONFIG): Promise<bigint> {
-	return quoteExactInput(client, ETH_ADDRESS, token, amountIn, poolConfig)
-}
-
-// Convenience: REP → ETH using the default pool config
-export async function quoteRepForEth(client: ReadClient, attoRepAmount: bigint): Promise<bigint> {
-	return quoteBestExactInput(client, getRepAddress(), ETH_ADDRESS, attoRepAmount)
-}
-
-// Convenience: ETH → REP using the default pool config
-export async function quoteEthForRep(client: ReadClient, ethAmountAttoEth: bigint): Promise<bigint> {
-	return quoteBestExactInput(client, ETH_ADDRESS, getRepAddress(), ethAmountAttoEth)
 }
 
 // ─── Uniswap V3 ───────────────────────────────────────────────────────────────
@@ -436,16 +402,6 @@ export async function quoteBestV3ExactInputWithSource(client: ReadClient, tokenI
 			protocol: 'v3',
 		},
 	}
-}
-
-export async function quoteBestV3ExactInput(client: ReadClient, tokenIn: Address, tokenOut: Address, amountIn: bigint, fees: readonly number[] = COMMON_V3_FEES): Promise<bigint> {
-	const result = await quoteBestV3ExactInputWithSource(client, tokenIn, tokenOut, amountIn, fees)
-	return result.amountOut
-}
-
-// Returns how much WETH (= ETH) you receive for `attoRepAmount` REP via Uniswap V3 (1% pool).
-export async function quoteRepForEthV3(client: ReadClient, attoRepAmount: bigint): Promise<bigint> {
-	return quoteBestV3ExactInput(client, getRepAddress(), ETH_ADDRESS, attoRepAmount)
 }
 
 // ─── Known V4 REP pools ───────────────────────────────────────────────────────

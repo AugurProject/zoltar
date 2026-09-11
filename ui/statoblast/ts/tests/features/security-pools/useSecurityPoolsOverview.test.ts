@@ -5,14 +5,14 @@ import { h, type ComponentChildren } from 'preact'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { getAddress, zeroAddress, zeroHash, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { createSecurityPoolPageFromLoadedPools, useSecurityPoolsOverview, type UseSecurityPoolsOverviewDependencies } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolsOverview.js'
+import { useSecurityPoolsOverview, type UseSecurityPoolsOverviewDependencies } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolsOverview.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import type { ListedSecurityPool, MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import { createSecurityPoolsOverviewDependencies, type TestSecurityPoolsOverviewWriteClient } from './testSupport/securityPoolsOverviewDependencies.js'
+import { createSecurityPoolPageFromLoadedPools, createSecurityPoolsOverviewDependencies, type TestSecurityPoolsOverviewWriteClient } from './testSupport/securityPoolsOverviewDependencies.js'
 
 type UseSecurityPoolsOverviewState = ReturnType<typeof useSecurityPoolsOverview>
 
@@ -116,16 +116,6 @@ void describe('useSecurityPoolsOverview helpers', () => {
 		restoreDomEnvironment = undefined
 		resetActiveEnvironmentForTesting()
 		mock.restore()
-	})
-
-	void test('builds a paginated fallback page from loaded pools', () => {
-		const pools = [createListedSecurityPool('0x01'), createListedSecurityPool('0x02'), createListedSecurityPool('0x03')]
-		const page = createSecurityPoolPageFromLoadedPools(pools, 1, 2)
-
-		expect(page.pageIndex).toBe(1)
-		expect(page.pageSize).toBe(2)
-		expect(page.poolCount).toBe(3n)
-		expect(page.pools.map(pool => pool.questionId)).toEqual(['0x03'])
 	})
 
 	void test('loads only the checked pool lineage for workflow details', async () => {

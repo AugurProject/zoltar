@@ -19,18 +19,18 @@
 		"preact": "10.26.4",
 		"prettier": "3.8.4",
 		"prettier-plugin-solidity": "2.3.1",
-		"typescript": "5.8.2"
+		"solc": "0.8.17",
+		"typescript": "5.8.2",
+		"@zoltar/zoltar-shared": "file:shared/zoltar"
 	},
 	"dependencies": {
 		"@preact/signals": "2.0.1",
-		"solc": "0.8.17",
 		"@tevm/memory-client": "1.0.0-rc.151",
 		"@tevm/common": "1.0.0-rc.151",
 		"@zoltar/core-shared": "file:shared/core",
 		"@zoltar/open-oracle-shared": "file:shared/openOracle",
 		"@zoltar/statoblast-shared": "file:shared/statoblast",
-		"@zoltar/trading-shared": "file:shared/trading",
-		"@zoltar/zoltar-shared": "file:shared/zoltar"
+		"@zoltar/trading-shared": "file:shared/trading"
 	},
 	"overrides": {
 		"@tevm/actions": "1.0.0-rc.151",
@@ -86,6 +86,7 @@
 		"ui:build:prod:current": "bun run check:mainnet-deployment:current && bun ./tooling/ui/production.mts zoltar && bun ./tooling/ui/production.mts statoblast && bun ./tooling/ui/production.mts trading",
 		"ui:vendor": "bun ./tooling/repo/run-project-tasks.mts vendor",
 		"deploy:testnet": "bun ./tooling/contracts/ensure-contract-artifacts.mts --headless && bun ./tooling/contracts/run-deploy-testnet.mts",
+		"verify:contracts": "bun ./tooling/contracts/ensure-contract-artifacts.mts --headless && bun ./tooling/contracts/verify-contracts.mts",
 		"gas-costs": "cd solidity && bun run gas-costs",
 		"test": "bun run ensure-contract-artifacts && bun run check:shared-dependencies && bun run tsc && bun run test:run",
 		"check:complete": "bun run format:check && bun run check && bun run knip && bun run check:generated-clean",
@@ -98,7 +99,7 @@
 		"test:statoblast": "bun run ensure-contract-artifacts && bun run check:shared-dependencies && bun run tsc:solidity && bun test --preload ./bun-test-setup-solidity.ts --timeout 300000 solidity/ts/tests/statoblast",
 		"test:security-pool-workflow": "bun run ensure-shared-build && bun run check:shared-dependencies && bun run tsc:app && bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/statoblast/ts/tests/features/security-pools/workflow",
 		"test:security-regressions": "bun run ensure-contract-artifacts && bun run check:shared-dependencies && bun test --preload ./bun-test-setup-solidity.ts --timeout 300000 solidity/ts/tests/audit*.test.ts solidity/ts/tests/securityRegression*.test.ts solidity/ts/tests/statoblast/*.audit.test.ts",
-		"test:browser:smoke": "bun run ensure-contract-artifacts && bun run check:shared-dependencies && bun test --preload ./bun-test-setup-ui.ts --timeout 300000 tooling/ui/browserSmoke.test.ts && bun test --preload ./bun-test-setup-ui.ts --timeout 300000 tooling/ui/productionBuild.test.ts && bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/statoblast/ts/tests/features/security-pools/collateralizationCircle.browser.test.ts",
+		"test:browser:smoke": "bun run ensure-contract-artifacts && bun run check:shared-dependencies && bun test --preload ./bun-test-setup-ui.ts --timeout 300000 tooling/ui/browserSmoke.test.ts && bun test --preload ./bun-test-setup-ui.ts --timeout 300000 tooling/ui/productionBuild.test.ts",
 		"test:browser:workflow": "bun run ensure-contract-artifacts && bun run check:shared-dependencies && RUN_PRODUCTION_BROWSER_WORKFLOWS=1 bun test --preload ./bun-test-setup-ui.ts --timeout 600000 --test-name-pattern 'production bundle (boots the statoblast fork and auction scenario|executes deployment, reporting, fork migration, failure recovery, and truth auction finalization)' tooling/ui/productionBuild.test.ts",
 		"test:integration:mainnet": "bun run ensure-contract-artifacts && bun run check:shared-dependencies && RUN_MAINNET_INTEGRATION_TESTS=1 bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/zoltar/ts/tests/protocol/uniswapQuoter.integration.test.ts",
 		"test:integration:mainnet-fork": "bun run ensure-contract-artifacts && bun run check:shared-dependencies && RUN_MAINNET_FORK_INTEGRATION_TESTS=1 bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ./ui/zoltar/ts/tests/protocol/uniswapQuoter.fork.test.ts",
@@ -153,8 +154,8 @@
 		"trading:ui:build": "cd ui/trading && bun run build",
 		"format:html": "bun tooling/docs/format-html-prose.mts",
 		"knip": "bun run --sequential --no-exit-on-error knip:normal knip:production",
-		"knip:normal": "bun x knip --preprocessor ./tooling/repo/knip-baseline.mts",
-		"knip:production": "bun x knip --production --include files,exports,dependencies --preprocessor ./tooling/repo/knip-baseline.mts",
+		"knip:normal": "bun x knip --no-config-hints",
+		"knip:production": "bun x knip --production --include files,exports,dependencies",
 		"knip:fix": "bun x knip --fix",
 		"ui:publish:ipfs": "docker build --target publisher -f ui/Dockerfile . -t zoltar-ui-publisher && docker run --rm --add-host=host.docker.internal:host-gateway zoltar-ui-publisher",
 		"projects:setup": "bun ./tooling/repo/run-project-tasks.mts setup",

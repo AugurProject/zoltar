@@ -48,12 +48,6 @@ export function walletSummaryRefreshState(account: Address | undefined, universe
 	return { account, ethAttoEth: undefined, repAttoRep: undefined, status: account === undefined ? 'disconnected' : 'loading', error: undefined, errorLabel: undefined, universeId }
 }
 
-export async function observeKnownReceipt<T>(receipt: Promise<T>, onKnownReceipt: () => void): Promise<T> {
-	const knownReceipt = await receipt
-	onKnownReceipt()
-	return knownReceipt
-}
-
 export function walletSummaryDiscoveryRetryStart(discoveryState: 'loading' | 'ready' | 'error', selectedPoolAvailable: boolean, selectedPoolLoadError: string | undefined, currentPageStart: bigint) {
 	return discoveryState === 'error' || !selectedPoolAvailable || selectedPoolLoadError !== undefined ? currentPageStart : undefined
 }

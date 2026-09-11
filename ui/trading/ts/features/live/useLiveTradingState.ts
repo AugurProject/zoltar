@@ -13,11 +13,11 @@ export function parsedUniverseId(selectedUniverseId: string | undefined) {
 	}
 }
 
-export function initialQuestionClockTimestamp(simulationTimestamp: bigint | undefined, currentWallMilliseconds = Date.now()) {
+function initialQuestionClockTimestamp(simulationTimestamp: bigint | undefined, currentWallMilliseconds = Date.now()) {
 	return simulationTimestamp ?? BigInt(Math.floor(currentWallMilliseconds / 1_000))
 }
 
-export function questionClockShouldPollAgain(endTime: bigint | undefined, currentTimestamp: bigint) {
+function questionClockShouldPollAgain(endTime: bigint | undefined, currentTimestamp: bigint) {
 	return endTime === undefined || currentTimestamp < endTime
 }
 

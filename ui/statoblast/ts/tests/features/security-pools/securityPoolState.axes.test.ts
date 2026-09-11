@@ -1,8 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { getSecurityPoolLifecycleLabel } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolLabels.js'
-import { deriveSecurityPoolForkStage, deriveSecurityPoolLifecycleState, deriveSecurityPoolReportingStage, isSecurityPoolEnded } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolState.js'
+import { deriveSecurityPoolForkStage, deriveSecurityPoolLifecycleState, deriveSecurityPoolReportingStage } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolState.js'
 import type { ActiveReportingDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 
 function createActiveReportingDetails(overrides: Partial<ActiveReportingDetails> = {}): ActiveReportingDetails {
@@ -108,31 +107,29 @@ describe('security pool state axes', () => {
 			}),
 		).toBeUndefined()
 		expect(
-			isSecurityPoolEnded({
+			deriveSecurityPoolLifecycleState({
 				questionOutcome: 'yes',
 				systemState: 'operational',
 			}),
-		).toBe(true)
+		).toBe('ended')
 		expect(
-			isSecurityPoolEnded({
+			deriveSecurityPoolLifecycleState({
 				hasForkActivity: true,
 				isChildPool: true,
 				questionOutcome: 'yes',
 				systemState: 'operational',
 				universeHasForked: true,
 			}),
-		).toBe(false)
+		).toBe('operational')
 		expect(
-			isSecurityPoolEnded({
+			deriveSecurityPoolLifecycleState({
 				hasForkActivity: false,
 				isChildPool: false,
 				questionOutcome: 'yes',
 				systemState: 'operational',
 				universeHasForked: true,
 			}),
-		).toBe(false)
-		expect(getSecurityPoolLifecycleLabel('ended')).toBe('Ended')
-		expect(getSecurityPoolLifecycleLabel(undefined)).toBe('Unknown')
+		).toBe('poolForked')
 	})
 
 	test('derives reporting stages from reporting details and readiness', () => {

@@ -40,12 +40,24 @@ async function sourceFilesUnder(directory: string): Promise<readonly string[]> {
 	return files
 }
 
+// Parallel test files write short-lived probe sources into the tree; a file that vanishes between the directory
+// listing and the read is not a forwarding module.
+async function readSourceIfPresent(sourcePath: string) {
+	try {
+		return await readFile(sourcePath, 'utf8')
+	} catch (error: unknown) {
+		if (typeof error === 'object' && error !== null && Reflect.get(error, 'code') === 'ENOENT') return undefined
+		throw error
+	}
+}
+
 export async function forwardingModules(repositoryRoot: string) {
 	const sourcePaths = await sourceFilesUnder(repositoryRoot)
 	const results: string[] = []
 	for (const sourcePath of sourcePaths) {
 		const relativePath = path.relative(repositoryRoot, sourcePath).split(path.sep).join('/')
-		if (isForwardingModule(relativePath, await readFile(sourcePath, 'utf8'))) results.push(relativePath)
+		const source = await readSourceIfPresent(sourcePath)
+		if (source !== undefined && isForwardingModule(relativePath, source)) results.push(relativePath)
 	}
 	return results.sort()
 }
