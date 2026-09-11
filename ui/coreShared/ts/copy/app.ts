@@ -1,7 +1,7 @@
 export const connecting = 'Connecting…'
 export const changeWallet = 'Change wallet'
 export const disconnectWallet = 'Disconnect'
-export const accountMenu = 'Account Menu'
+const accountMenu = 'Account Menu'
 export const formatAccountMenuLabel = (account: string) => `${accountMenu} ${account}`
 export const currentNetwork = 'Current Network'
 export const formatSwitchToNetwork = (networkName: string) => `Switch to ${networkName}`
