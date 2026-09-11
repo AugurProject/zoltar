@@ -3,8 +3,8 @@ import type { JsonValue } from './ethereum.ts'
 
 const POSTGRES_BIGINT_MAX = 9_223_372_036_854_775_807n
 
-export type ExportDataset = 'logs' | 'timeline' | 'reorgs'
-export type ExportCanonicalScope = 'canonical' | 'orphaned' | 'all'
+type ExportDataset = 'logs' | 'timeline' | 'reorgs'
+type ExportCanonicalScope = 'canonical' | 'orphaned' | 'all'
 
 export type ExportRequestScope = {
 	readonly dataset: ExportDataset

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { createPublicClient, custom, encodeAbiParameters, getAddress, keccak256, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { getChildUniverseId, loadForkMigrationContext } from '../../protocol/forks.js'
+import { loadForkMigrationContext } from '../../protocol/forks.js'
 
 const pool = getAddress(`0x${'11'.repeat(20)}`)
 const shareToken = getAddress(`0x${'22'.repeat(20)}`)
@@ -89,17 +89,10 @@ function commonResponse(callSelector: string, question: string) {
 	return undefined
 }
 
+// Mirrors Zoltar's child universe derivation for fixture IDs: keccak(uint248 parent, uint256 outcome) masked to uint248.
+const getChildUniverseId = (parentUniverseId: bigint, outcomeIndex: bigint) => BigInt(keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [parentUniverseId, outcomeIndex]))) & ((1n << 248n) - 1n)
+
 describe('fork protocol helpers', () => {
-	test('derives the Solidity child universe ID from the parent and scalar outcome', () => {
-		expect(getChildUniverseId(7n, 42n)).toBe(314759649437236790502340698995905624569868907448583953074618328891806893637n)
-	})
-
-	test('rejects values outside the contract integer bounds', () => {
-		expect(() => getChildUniverseId(-1n, 42n)).toThrow('uint248')
-		expect(() => getChildUniverseId(7n, -1n)).toThrow('uint256')
-		expect(() => getChildUniverseId(7n, 1n << 256n)).toThrow('uint256')
-	})
-
 	test('loads paginated categorical branches with Invalid and canonical-pool readiness', async () => {
 		let labelsPage = 0
 		let canonicalPoolRead = 0

@@ -11,10 +11,10 @@
         "@zoltar/core-shared": "file:../../shared/core",
         "@zoltar/ui-core-shared": "file:../coreShared",
         "@zoltar/ui-zoltar-shared": "file:../zoltarShared",
-        "@zoltar/zoltar-shared": "file:../../shared/zoltar",
         "preact": "10.26.4",
       },
       "devDependencies": {
+        "@zoltar/zoltar-shared": "file:../../shared/zoltar",
         "better-typescript-lib": "2.11.0",
         "bun-types": "1.4.2",
         "typescript": "5.8.2",

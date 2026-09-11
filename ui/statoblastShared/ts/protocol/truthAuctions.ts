@@ -43,41 +43,6 @@ function requireTruthAuctionBidViewArray(value: unknown, context: string): Truth
 	return requireArrayValue(value, context).map(bid => requireTruthAuctionBidView(bid, context))
 }
 
-export async function loadTruthAuctionTickSummary(client: Pick<ReadClient, 'readContract'>, truthAuctionAddress: Address, tick: bigint): Promise<TruthAuctionTickSummary> {
-	const summary = await client.readContract({
-		abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-		functionName: 'getTickSummary',
-		address: truthAuctionAddress,
-		args: [tick],
-	})
-	return requireTruthAuctionTickSummary(summary, 'truth auction tick summary')
-}
-
-export async function loadTruthAuctionTickPage(client: Pick<ReadClient, 'readContract'>, truthAuctionAddress: Address, pageIndex: number, pageSize: number): Promise<TruthAuctionTickPage> {
-	const offset = getProtocolPageOffset(pageIndex, pageSize)
-	const tickCount = await client.readContract({
-		abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-		functionName: 'getTickCount',
-		address: truthAuctionAddress,
-		args: [],
-	})
-	const tickPage = requireTruthAuctionTickSummaryArray(
-		await client.readContract({
-			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-			functionName: 'getTickPage',
-			address: truthAuctionAddress,
-			args: [offset, BigInt(pageSize)],
-		}),
-		'truth auction tick page',
-	)
-	return {
-		pageIndex,
-		pageSize,
-		tickCount,
-		ticks: tickPage,
-	}
-}
-
 export async function loadTruthAuctionActiveTickPage(client: Pick<ReadClient, 'readContract'>, truthAuctionAddress: Address, pageIndex: number, pageSize: number): Promise<TruthAuctionTickPage> {
 	const offset = getProtocolPageOffset(pageIndex, pageSize)
 	const tickCount = await client.readContract({

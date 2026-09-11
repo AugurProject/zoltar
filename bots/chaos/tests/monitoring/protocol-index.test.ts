@@ -2,10 +2,12 @@ import { indexWithCurrentRefunds, snapshotWithProtocolIndex } from '../../src/ru
 import { snapshotProtocolIndex } from '../../src/state/protocol-index-store.ts'
 import { ChaosProtocolIndexReorgError } from '../../src/monitoring/protocol-index-context.ts'
 import { describe, expect, test } from 'bun:test'
-import { bytesToHex, encodeAbiParameters, keccak256, toHex, type Address } from '@zoltar/bot-shared/ethereum'
-import { decodePackedOracleReport, deriveChildUniverseId, OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT, updateProtocolIndex, type ChaosProtocolIndex } from '../../src/monitoring/protocol-index.ts'
+import { bytesToHex } from '@zoltar/core-shared/evm/ethereum'
+import { encodeAbiParameters, keccak256, toHex, type Address } from '@zoltar/bot-shared/ethereum'
+import { deriveChildUniverseId } from '../support/universe.ts'
+import { OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT, updateProtocolIndex, type ChaosProtocolIndex } from '../../src/monitoring/protocol-index.ts'
 import { updateProtocolIndexWithQuorum } from '../../src/monitoring/protocol-index-quorum.ts'
-import type { ChaosReadClient } from '../../src/monitoring/discovery.ts'
+import type { ChaosReadClient } from '../../src/monitoring/discovery-client.ts'
 import { address, hash, snapshotFixture } from '../operations/fixture.ts'
 
 const indexDeployments = { openOracle: address(6), securityPoolForker: address(5), zoltar: address(2) } as const
@@ -434,8 +436,27 @@ describe('durable protocol index', () => {
 		expect(refundGeneration(replacementLog)).not.toBe(refundGeneration(originalLog))
 	})
 
-	test('decodes the complete packed OpenOracle preimage and timestamp deadlines', () => {
-		const report = decodePackedOracleReport(42n, address(6), packedReport())
+	test('decodes the complete packed OpenOracle preimage and timestamp deadlines', async () => {
+		const signerReport = canonicalLog({
+			address: indexDeployments.openOracle,
+			blockNumber: 10n,
+			data: packedReport({ callbackContract: address(0), callbackGasLimit: 0n, creator: address(1) }),
+			logIndex: 0,
+			topics: [reportSubmittedTopic, toHex(42n, { size: 32 })],
+		})
+		const update = await updateProtocolIndex({
+			anchorBlockNumber: 10n,
+			auctionAddresses: [],
+			chainId: 31337,
+			client: eventIndexClient([signerReport]),
+			escalationGames: [],
+			...indexDeployments,
+			...indexTrust,
+			startBlock: 10n,
+			wallet: address(1),
+		})
+		const report = update.index.reports[0]
+		if (report === undefined) throw new Error('Expected the signer report to be indexed')
 		expect(report).toMatchObject({
 			currentAmount1: '11',
 			currentAmount2: '22',
@@ -445,13 +466,14 @@ describe('durable protocol index', () => {
 			escalationHalt: '1100',
 			flags: 7,
 			multiplier: 140,
+			openOracle: indexDeployments.openOracle,
 			reportId: '42',
 			settleAfterTimestamp: '1900',
 			token1: address(7),
 			token2: address(10),
 		})
-		expect(report.game).toMatchObject({ callbackContract: address(31), callbackGasLimit: 500000, protocolFeeRecipient: address(30), settlerReward: '44' })
-		expect(report.helper).toEqual({ blockNumber: '88', blockTimestamp: '999', creator: address(32) })
+		expect(report.game).toMatchObject({ callbackContract: address(0), callbackGasLimit: 0, protocolFeeRecipient: address(30), settlerReward: '44' })
+		expect(report.helper).toEqual({ blockNumber: '88', blockTimestamp: '999', creator: address(1) })
 	})
 
 	test('advances a bounded canonical cursor and rejects a changed persisted cursor hash', async () => {

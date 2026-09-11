@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import path from 'node:path'
-import { runIndexerProcess } from '../../src/indexer-process-runner.ts'
+import { runIndexerProcess } from '../../src/indexer-process-lifecycle.ts'
 
 const projectRoot = path.resolve(import.meta.dir, '..', '..')
 
@@ -9,7 +9,7 @@ test('keeps a disabled indexer process alive until termination without starting 
 		[
 			process.execPath,
 			'-e',
-			`import { runIndexerProcess, terminationSignal } from './src/indexer-process-runner.ts'
+			`import { runIndexerProcess, terminationSignal } from './src/indexer-process-lifecycle.ts'
 const events = []
 const database = { close: async () => events.push('close') }
 runIndexerProcess({

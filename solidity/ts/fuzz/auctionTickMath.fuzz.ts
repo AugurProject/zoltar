@@ -9,7 +9,8 @@ import { ensureInfraDeployed } from '../testSupport/simulator/utils/contracts/de
 import { getUniformPriceDualCapBatchAuctionAddress } from '../testSupport/simulator/utils/contracts/deployments'
 import { deployUniformPriceDualCapBatchAuction } from '../testSupport/simulator/utils/contracts/auction'
 import { ensureZoltarDeployed } from '../testSupport/simulator/utils/contracts/zoltar'
-import { priceToClosestTick, tickToPrice } from '@zoltar/statoblast-shared/statoblast/truthAuctionTickMath'
+import { tickToPrice } from '@zoltar/statoblast-shared/statoblast/truthAuctionTickMath'
+import { priceToClosestTick } from '../testSupport/truthAuctionTicks'
 import { createWriteClient, WriteClient } from '../testSupport/simulator/utils/clients'
 import { contractExists, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 

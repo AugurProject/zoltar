@@ -26,7 +26,7 @@ type UseSecurityPoolCreationParameters = TransactionLifecycleParameters &
 		zoltarUniverseHasForked: boolean
 	}
 
-export function resolveSecurityPoolQuestionLookupInput(marketIdInput: string) {
+function resolveSecurityPoolQuestionLookupInput(marketIdInput: string) {
 	const marketId = marketIdInput.trim()
 	if (marketId === '') return undefined
 	return tryParseBigIntInput(marketId) === undefined ? undefined : marketId

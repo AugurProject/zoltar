@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { evaluateOperationCatalog } from '../../src/operations/catalog.ts'
 import type { EcosystemSnapshot, PlanningOptions } from '../../src/operations/types.ts'
 import { ZOLTAR_OPERATIONS } from '../../src/operations/zoltar.ts'
-import { deriveChildUniverseId } from '../../src/monitoring/protocol-index.ts'
+import { deriveChildUniverseId } from '../support/universe.ts'
 import { address, snapshotFixture } from './fixture.ts'
 
 const QUESTION_DISCOVERY_RESIDENT_UTF8_BYTES = 32 * 1024 * 1024

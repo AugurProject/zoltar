@@ -1,6 +1,6 @@
 import { initializeActiveEnvironment } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 
-export const tradingActiveEnvironmentDependencies = {
+const tradingActiveEnvironmentDependencies = {
 	appId: 'trading',
 } satisfies NonNullable<Parameters<typeof initializeActiveEnvironment>[1]>
 

@@ -21,7 +21,6 @@ describe('test impact recommendations', () => {
 		expect(commandsFor(['tooling/ui/productionBuild.test.ts'])).toEqual(['bun test --preload ./bun-test-setup-ui.ts --timeout 300000 tooling/ui/productionBuild.test.ts'])
 		expect(commandsFor(['tooling/ui/browserSmoke.mts'])).toEqual(['bun run test:browser:smoke'])
 		expect(commandsFor(['ui/coreShared/css/application-surfaces.css'])).toEqual(['bun run test:browser:smoke'])
-		expect(commandsFor(['ui/statoblastShared/ts/features/security-pools/components/CollateralizationCircle.tsx'])).toContain('bun run test:browser:smoke')
 		expect(commandsFor(['tooling/ui/production.mts'])).toEqual(['bun run test:browser:smoke', 'bun run test:browser:workflow'])
 	})
 

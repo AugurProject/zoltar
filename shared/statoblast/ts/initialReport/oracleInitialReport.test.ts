@@ -1,12 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import {
-	DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
-	MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS,
-	ORACLE_ESCALATION_HALT_MULTIPLIER_BPS,
-	ORACLE_PERCENTAGE_PRECISION,
-	calculateMaximumOracleInitialReportPriorityFeeAttoEthPerGas,
-	calculateOracleMinimumWethReportAttoEth,
-} from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
+
+// Mirrors the contract constants: percentages carry seven decimals and escalation halt is ten times the report.
+const ORACLE_PERCENTAGE_PRECISION = 10_000_000n
+const ORACLE_ESCALATION_HALT_MULTIPLIER_BPS = 100000n
+import { DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS, MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, calculateOracleMinimumWethReportAttoEth } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 
 describe('oracle initial report sizing', () => {
 	test('uses the configured priority-fee report when the current base fee and open interest are zero', () => {
@@ -84,7 +81,6 @@ describe('oracle initial report sizing', () => {
 			initialReportPriorityFeeAttoEthPerGas: MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS + 1n,
 		})
 
-		expect(calculateMaximumOracleInitialReportPriorityFeeAttoEthPerGas()).toBe(MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS)
 		expect(maximumReport).toBeLessThanOrEqual(uint128Max)
 		expect((maximumReport * ORACLE_ESCALATION_HALT_MULTIPLIER_BPS) / 10000n).toBeLessThanOrEqual(uint128Max / 2n)
 		expect(firstInvalidReport).toBeGreaterThan(maximumReport)

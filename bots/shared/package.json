@@ -21,6 +21,8 @@
 		"./monitoring/connectivity": "./src/monitoring/connectivity.ts",
 		"./monitoring/centralized-markets": "./src/monitoring/centralized-markets.ts",
 		"./monitoring/constant-product-markets": "./src/monitoring/constant-product-markets.ts",
+		"./monitoring/deployed-contracts": "./src/monitoring/deployed-contracts.ts",
+		"./monitoring/head-watcher": "./src/monitoring/head-watcher.ts",
 		"./monitoring/log-availability": "./src/monitoring/log-availability.ts",
 		"./monitoring/market-consensus": "./src/monitoring/market-consensus.ts",
 		"./monitoring/read-quorum": "./src/monitoring/read-quorum.ts",

@@ -1,4 +1,5 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import * as marketCopy from '../../../copy/market.js'
 import * as zoltarCopy from '../../../copy/zoltar.js'
 import type { ComponentChildren } from 'preact'
 import { useMemo } from 'preact/hooks'
@@ -24,8 +25,15 @@ import { getUniversePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
 import { getMigrationGuardMessage } from '../lib/zoltarMigrationGuards.js'
 import type { ZoltarMigrationFormState } from '../../../types/app.js'
 import type { ZoltarChildUniverseSummary, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
-import { getChildDeploymentAvailabilityReason } from './ChildUniverseDeploymentSection.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
+
+function getChildDeploymentAvailabilityReason({ accountAddress, exists, hasForked, isOnActiveAppChain }: { accountAddress: Address | undefined; exists?: boolean | undefined; hasForked: boolean; isOnActiveAppChain: boolean }) {
+	if (accountAddress === undefined) return marketCopy.childDeploymentWalletRequiredReason
+	if (!isOnActiveAppChain) return getWrongNetworkReason()
+	if (!hasForked) return marketCopy.childUniversesNotForkedReason
+	if (exists === true) return marketCopy.childUniverseDeployedReason
+	return undefined
+}
 
 type ZoltarMigrationSectionProps = {
 	onDeployChildUniverse: (outcomeIndex: bigint) => void

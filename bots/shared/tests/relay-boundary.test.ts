@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { simulateBundle, simulateSignedBundleEveryRelay, submitSignedBundle, submitSignedTransaction } from '../src/execution/transaction-submission.ts'
+import { simulateSignedBundleEveryRelay, submitSignedBundle, submitSignedTransaction } from '../src/execution/transaction-submission.ts'
+import { flashbotsPrivateTransactionCompatibilityProfileAllowed } from '../src/monitoring/relay-compatibility.ts'
 
 describe('relay endpoint policy at the delivery boundary', () => {
 	test.each([
@@ -22,7 +23,6 @@ describe('relay endpoint policy at the delivery boundary', () => {
 			transactions: ['0x'],
 		} as const
 
-		await expect(simulateBundle(parameters)).rejects.toThrow(message)
 		await expect(simulateSignedBundleEveryRelay(parameters)).rejects.toThrow(message)
 		await expect(submitSignedBundle(parameters)).rejects.toThrow(message)
 		await expect(
@@ -39,5 +39,15 @@ describe('relay endpoint policy at the delivery boundary', () => {
 			}),
 		).rejects.toThrow(message)
 		expect(signatureRequests).toBe(0)
+	})
+
+	test('restricts the Flashbots compatibility profile to the official relay for each chain or loopback tests', () => {
+		expect(flashbotsPrivateTransactionCompatibilityProfileAllowed('https://relay.flashbots.net', 1)).toBeTrue()
+		expect(flashbotsPrivateTransactionCompatibilityProfileAllowed('https://relay-sepolia.flashbots.net', 11_155_111)).toBeTrue()
+		expect(flashbotsPrivateTransactionCompatibilityProfileAllowed('https://relay-sepolia.flashbots.net/path', 11_155_111)).toBeTrue()
+		expect(flashbotsPrivateTransactionCompatibilityProfileAllowed('https://relay-sepolia.flashbots.net', 1)).toBeFalse()
+		expect(flashbotsPrivateTransactionCompatibilityProfileAllowed('https://relay.flashbots.net', 11_155_111)).toBeFalse()
+		expect(flashbotsPrivateTransactionCompatibilityProfileAllowed('https://untrusted-private-relay.example', 11_155_111)).toBeFalse()
+		expect(flashbotsPrivateTransactionCompatibilityProfileAllowed('http://127.0.0.1:8545', 1)).toBeTrue()
 	})
 })

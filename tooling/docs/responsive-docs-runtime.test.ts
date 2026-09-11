@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { diagramBackgroundElements, enforceDiagramBackground, expandDiagramAttributes, isolateDiagramBackground, restoreDiagramAttributes, restoreDiagramBackground } from '../../docs/charts/diagramControl.ts'
+import { enforceDiagramBackground, expandDiagramAttributes, isolateDiagramBackground, restoreDiagramAttributes, restoreDiagramBackground } from '../../docs/charts/diagramControl.ts'
 import { installDomEnvironment } from '../../ui/coreShared/ts/tests/testUtils/domEnvironment.ts'
 
 function setWidth(element: Element, property: 'clientWidth' | 'scrollWidth', value: number) {
@@ -19,8 +19,8 @@ test('full-screen diagrams isolate background siblings without inerting their an
 		const footer = document.querySelector('footer')
 		if (header === null || footer === null) throw new Error('Diagram background state fixture is missing')
 		header.inert = true
-		expect(diagramBackgroundElements(diagram).map(element => element.tagName)).toEqual(['P', 'P', 'HEADER', 'FOOTER'])
 		const background = isolateDiagramBackground(diagram)
+		expect(background.map(state => state.element.tagName)).toEqual(['P', 'P', 'HEADER', 'FOOTER'])
 		expect(background.map(state => state.inert)).toEqual([false, false, true, false])
 		footer.inert = false
 		enforceDiagramBackground(background)

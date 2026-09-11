@@ -9,26 +9,20 @@ import { parseSettings, serializedSettings, type OperatorSettings } from '../../
 import { createChaosShutdownController, type ChaosProcessLocks } from '../../src/core/process-locks.ts'
 import { OperationRediscoveryRequired } from '../../src/execution/transaction-executor.ts'
 import { IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, type CanonicalImmutableTopologyCache } from '../../src/monitoring/topology-cache.ts'
-import { eligibleOperationPlans, reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
-import {
-	abandonRetryableSelectableFailure,
-	backfillWaitMilliseconds,
-	blockNovelEvaluations,
-	evaluatePolicySafeContinuation,
-	executionProfileId,
-	actionableUrgentLifecyclePlan,
-	lifecycleObstructions,
-	operatorWaitMilliseconds,
-	recordEndpointPreflightChecks,
-	rediscoverableExecutionFailure,
-	repairDurableSelectableFailures,
-	runChaosOperator,
-	runtimeTopologySummary,
-	scheduleAfterRecoveredTransaction,
-} from '../../src/runtime/operator.ts'
+import { reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
+import { eligibleOperationPlans } from '../support/operation-plans.ts'
+import { executionProfileId, runChaosOperator } from '../../src/runtime/operator.ts'
+import { backfillWaitMilliseconds, operatorWaitMilliseconds } from '../../src/core/scheduler.ts'
+import { actionableUrgentLifecyclePlan, lifecycleObstructions } from '../../src/runtime/lifecycle-readiness.ts'
+import { blockNovelEvaluations } from '../../src/runtime/obligations.ts'
+import { scheduleAfterRecoveredTransaction } from '../../src/runtime/scheduled-operation.ts'
+import { runtimeTopologySummary } from '../../src/runtime/topology-summary.ts'
+import { evaluatePolicySafeContinuation } from '../../src/runtime/workflow-continuation.ts'
+import { abandonRetryableSelectableFailure, rediscoverableExecutionFailure, repairDurableSelectableFailures } from '../../src/runtime/workflow-repair.ts'
 import { planningOptions } from '../../src/runtime/canonical-scan.ts'
-import { assertSubmissionPreflightFresh, submissionPreflightConfigurationIdentity, submissionPreflightIsDue } from '../../src/runtime/submission-preflight.ts'
-import { initialDurableState, initialRuntimeState, loadDurableState, recordActivity, saveDurableState } from '../../src/state/operator-state.ts'
+import { assertSubmissionPreflightFresh, recordEndpointPreflightChecks, submissionPreflightConfigurationIdentity, submissionPreflightIsDue } from '../../src/runtime/submission-preflight.ts'
+import { loadDurableState, recordActivity, saveDurableState } from '../../src/state/operator-state.ts'
+import { initialDurableState, initialRuntimeState } from '../../src/state/initial-state.ts'
 import { randomOperationPlans, urgentOperationPlans } from '../../src/runtime/selection.ts'
 import { createDurableWorkflow, markWorkflowFailed, markWorkflowStepConfirmed, retirementCleanupBlocker } from '../../src/runtime/workflows.ts'
 import { beginLifecycleObligation, failLifecycleObligation, synchronizeLifecycleObligations } from '../../src/runtime/obligations.ts'

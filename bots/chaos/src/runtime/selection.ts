@@ -1,18 +1,6 @@
-import { randomInt } from 'node:crypto'
 import type { EvaluatedOperation, OperationPlan } from '../operations/types.ts'
 
-export type RandomIndex = (upperExclusive: number) => number
-
-const cryptoRandomIndex: RandomIndex = upperExclusive => randomInt(upperExclusive)
-
-function requireRandomIndex(index: number, length: number) {
-	if (!Number.isSafeInteger(index) || index < 0 || index >= length) {
-		throw new Error(`Random operation index must be from 0 through ${(length - 1).toString()}`)
-	}
-	return index
-}
-
-export function eligibleOperationPlans(evaluations: readonly EvaluatedOperation[]) {
+function eligibleOperationPlans(evaluations: readonly EvaluatedOperation[]) {
 	return evaluations.flatMap(evaluation => {
 		if (!evaluation.eligibility.eligible || evaluation.plan === undefined) return []
 		return [evaluation.plan]
@@ -98,12 +86,4 @@ export function genesisInitializationPlan(evaluations: readonly EvaluatedOperati
 	if (definitionId === undefined) return undefined
 	const plans = eligibleOperationPlans(evaluations)
 	return plans.find(candidate => candidate.definitionId === definitionId)
-}
-
-export function selectOperationPlan(evaluations: readonly EvaluatedOperation[], randomIndex: RandomIndex = cryptoRandomIndex, selectableOperationAllowlist?: readonly string[]): OperationPlan | undefined {
-	const urgent = urgentOperationPlans(evaluations)
-	if (urgent.length > 0) return urgent[0]
-	const candidates = randomOperationPlans(evaluations, selectableOperationAllowlist)
-	if (candidates.length === 0) return undefined
-	return candidates[requireRandomIndex(randomIndex(candidates.length), candidates.length)]
 }

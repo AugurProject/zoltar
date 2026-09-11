@@ -1,6 +1,6 @@
 import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import type { DeploymentSettings, OperatorSettings } from '../config/settings.ts'
-import type { ChaosReadClient } from '../monitoring/discovery.ts'
+import type { ChaosReadClient } from '../monitoring/discovery-client.ts'
 import type { EcosystemSnapshot } from '../operations/types.ts'
 import type { RuntimeState } from '../state/operator-state.ts'
 import { canonicalAnchor, chaosReadClients, createChaosReadPool, unavailableOperationCatalog } from './canonical-scan.ts'

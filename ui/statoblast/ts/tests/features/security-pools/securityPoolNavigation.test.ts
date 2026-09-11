@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
-import { getSecurityPoolLinkHref, getUseQuestionForPoolHref } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolNavigation.js'
+import { getSecurityPoolLinkHref } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolNavigation.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 
@@ -47,22 +47,5 @@ describe('securityPoolNavigation', () => {
 		expect(hrefSearchParams.get('securityPoolsView')).toBe('operate')
 		expect(hrefSearchParams.get('selectedPoolView')).toBe('vaults')
 		expect(hrefSearchParams.get('universe')).toBe('11')
-	})
-
-	test('builds a durable create-pool handoff for a selected question', () => {
-		window.location.hash = '#/zoltar?zoltarView=questions&universe=12&simulate=1&simScenario=securitypoolx2'
-		const questionId = '0x0000000000000000000000000000000000000000000000000000000000000042'
-		const href = getUseQuestionForPoolHref(questionId, 12n)
-		const hrefUrl = new URL(href, 'http://localhost')
-		const hrefSearch = hrefUrl.hash.includes('?') ? hrefUrl.hash.slice(hrefUrl.hash.indexOf('?')) : ''
-		const hrefSearchParams = new URLSearchParams(hrefSearch)
-
-		expect(hrefUrl.hash.startsWith('#/security-pools')).toBe(true)
-		expect(hrefSearchParams.get('securityPoolsView')).toBe('create')
-		expect(hrefSearchParams.get('questionId')).toBe(questionId)
-		expect(hrefSearchParams.get('securityPool')).toBeNull()
-		expect(hrefSearchParams.get('selectedPoolView')).toBeNull()
-		expect(hrefSearchParams.get('zoltarView')).toBeNull()
-		expect(hrefSearchParams.get('universe')).toBe('12')
 	})
 })

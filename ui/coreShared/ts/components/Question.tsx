@@ -57,7 +57,7 @@ function getDisplayRange(question: MarketDetails) {
 	return question.answerUnit === '' ? displayRange : `${displayRange}\u00a0${question.answerUnit}`
 }
 
-export function getQuestionSummaryFields(question: MarketDetails): QuestionSummaryField[] {
+function getQuestionSummaryFields(question: MarketDetails): QuestionSummaryField[] {
 	const fields: QuestionSummaryField[] = [
 		{ kind: 'text', label: commonCopy.questionType, value: getMarketTypeLabel(question.marketType) },
 		{ kind: 'identifier', label: commonCopy.questionId, value: question.questionId },

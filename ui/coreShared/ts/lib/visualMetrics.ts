@@ -1,5 +1,4 @@
 import { bigintToSafeNumber } from '@zoltar/core-shared/evm/ethereum'
-import { formatRoundedCurrencyBalance } from './formatters.js'
 
 const VISUAL_RATIO_SCALE = 1_000_000n
 
@@ -19,26 +18,11 @@ export function getVisualRatio({ value, maxValue }: { value: bigint | undefined;
 	return bigintToSafeNumber(scaledRatio, 'Visual ratio') / 1_000_000
 }
 
-function formatCollateralizationPercentLabel(value: bigint | undefined, decimals: number = 0) {
-	if (value === undefined) return 'Unavailable'
-	return `${formatRoundedCurrencyBalance(value, 18, decimals)}%`
-}
-
-export function formatCollateralizationCompactPercentLabel(value: bigint | undefined, decimals: number = 0, unavailable = '—') {
-	if (value === undefined) return unavailable
-	return formatCollateralizationPercentLabel(value, decimals)
-}
-
 export function getToneRatioThreshold({ ratio, warningThreshold = 0.4, successThreshold = 0.75 }: { ratio: number | undefined; warningThreshold?: number; successThreshold?: number }) {
 	if (ratio === undefined) return 'muted'
 	if (ratio >= successThreshold) return 'success'
 	if (ratio >= warningThreshold) return 'warning'
 	return 'danger'
-}
-
-export function getCollateralizationVisualPercent({ collateralizationPercent, targetCollateralizationPercent }: { collateralizationPercent: bigint | undefined; targetCollateralizationPercent: bigint | undefined }) {
-	const ratio = getVisualRatio({ value: collateralizationPercent, maxValue: targetCollateralizationPercent })
-	return ratio === undefined ? undefined : clampVisualRatio(ratio) * 100
 }
 
 export function takeTopRankedItems<TItem extends { value?: bigint }>({ items, limit }: { items: readonly TItem[]; limit: number }) {

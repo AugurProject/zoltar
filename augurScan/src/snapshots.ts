@@ -1,4 +1,4 @@
-import { type Abi, type AbiValue, type Address, getAddress, type PublicClient, parseAbi } from './ethereum.ts'
+import { type Abi, type AbiValue, type Address, getAddress, parseAbi } from './ethereum.ts'
 
 export type StateSnapshotTarget = {
 	readonly entityType: 'auction' | 'escalation' | 'pool' | 'vault'
@@ -268,11 +268,6 @@ export const sampleEntityStateWithRead = async (target: StateSnapshotTarget, rea
 			readFailureReason: failureReason(error),
 		}
 	}
-}
-
-export const sampleEntityState = async (client: Pick<PublicClient, 'readContract'>, target: StateSnapshotTarget, blockNumber: bigint, onFailure: (error: unknown) => void = () => {}): Promise<EntityStateSnapshot> => {
-	const read: StateRead = async (address, abi, functionName, args) => await client.readContract({ address, abi, functionName, ...(args === undefined ? {} : { args }), blockNumber })
-	return await sampleEntityStateWithRead(target, read, onFailure)
 }
 
 export const normalizeSnapshotTarget = (row: Record<string, unknown>): StateSnapshotTarget => {

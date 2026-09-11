@@ -19,7 +19,6 @@ import {
 	hasTimestampAndNumber,
 	isBigintTriple,
 	isStringArray,
-	requireEscalationGameTuple,
 	requireUniverseTupleArray,
 	requireSecurityVaultTupleArray,
 } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
@@ -67,10 +66,6 @@ describe('contracts helpers', () => {
 	})
 
 	test('tuple validators require exact tuple structure and throw with unexpected responses', () => {
-		const validEscalationTuple: [bigint, bigint, bigint, bigint, bigint, [bigint, bigint, bigint], bigint, bigint, bigint, boolean] = [1n, 2n, 3n, 4n, 5n, [6n, 7n, 8n], 9n, 10n, 11n, true]
-		expect(requireEscalationGameTuple(validEscalationTuple, 'escalation response')).toEqual(validEscalationTuple)
-		expect(() => requireEscalationGameTuple([1n, 2n], 'escalation response')).toThrow('Unexpected escalation response')
-
 		const validUniverseSummary: Array<[bigint, bigint, bigint, `0x${string}`, bigint]> = [[1n, 2n, 3n, getAddress('0x00000000000000000000000000000000000000a1'), 4n]]
 		expect(requireUniverseTupleArray(validUniverseSummary, 'universe summary')).toEqual(validUniverseSummary)
 		expect(() => requireUniverseTupleArray([[1n, 2n, 3n, getAddress('0x00000000000000000000000000000000000000b2'), 4n, 5n] as never], 'universe summary')).toThrow('Unexpected universe summary response')

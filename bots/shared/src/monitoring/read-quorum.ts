@@ -42,9 +42,18 @@ export async function settledQuorumValue<T>(label: string, observations: readonl
 	return quorumValue(label, available, requirement)
 }
 
-export async function readWithQuorum<T>(label: string, endpoints: readonly string[], read: (endpoint: string) => Promise<T>) {
-	return settledQuorumValue(
-		label,
-		endpoints.map(async endpoint => ({ endpoint, value: await read(endpoint) })),
-	)
+export function sharedQuorumBlockNumber(heads: readonly bigint[], requiredQuorum: number) {
+	if (!Number.isSafeInteger(requiredQuorum) || requiredQuorum < 1) {
+		throw new Error('Quorum head selection requires a positive integer quorum')
+	}
+	if (heads.length < requiredQuorum) {
+		throw new ConnectivityDegradedError('Not enough independent RPC heads for the configured quorum')
+	}
+	const ordered = [...heads].sort((left, right) => {
+		if (left === right) return 0
+		return left > right ? -1 : 1
+	})
+	const shared = ordered[requiredQuorum - 1]
+	if (shared === undefined) throw new Error('Quorum head selection did not select a block')
+	return shared
 }

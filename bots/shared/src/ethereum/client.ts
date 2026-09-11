@@ -1,27 +1,17 @@
-import { createPublicClient, type Abi, type AbiValue, type Address, type Chain, type PublicClient, type Transport } from '@zoltar/core-shared/evm/ethereum'
-import { custom, http, RpcError, type TransportOptions } from './rpc-transport.ts'
+import { createPublicClient, type Abi, type AbiValue, type Address, type Chain, type PublicClient } from '@zoltar/core-shared/evm/ethereum'
+import { http, RpcError } from './rpc-transport.ts'
 import type { createRpcEndpointPool } from './rpc-resilience.ts'
 
 export {
 	createPublicClient,
 	createWalletClient,
 	defineChain,
-	mainnet,
-	publicActions,
 } from '@zoltar/core-shared/evm/ethereum'
 export type { PublicActions, PublicClient, WalletClient } from '@zoltar/core-shared/evm/ethereum'
-export { custom, http, RpcError, type TransportOptions }
+export { http, RpcError }
 
 export async function readContractAtBlock(client: Pick<PublicClient, 'readContract'>, parameters: { abi: Abi; address: Address; args?: readonly AbiValue[] | undefined; functionName: string }, blockNumber: bigint): Promise<AbiValue | undefined> {
 	return await client.readContract({ ...parameters, blockNumber })
-}
-
-export async function getBalanceAtBlock(transport: Transport, parameters: { address: Address; blockNumber: bigint }) {
-	return await createPublicClient({ transport }).getBalance(parameters)
-}
-
-export async function getTransactionCountAtBlock(transport: Transport, parameters: { address: Address; blockNumber: bigint }) {
-	return await createPublicClient({ transport }).getTransactionCount(parameters)
 }
 
 const contextualActionMethods = new Map<PropertyKey, string>([
@@ -34,6 +24,7 @@ const contextualActionMethods = new Map<PropertyKey, string>([
 	['getTransaction', 'eth_getTransactionByHash'],
 	['getTransactionCount', 'eth_getTransactionCount'],
 	['getTransactionReceipt', 'eth_getTransactionReceipt'],
+	['multicall', 'eth_call'],
 	['readContract', 'eth_call'],
 ])
 

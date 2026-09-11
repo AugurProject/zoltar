@@ -24,7 +24,6 @@ test('dynamic value and unit copy uses nonbreaking separators', () => {
 test('transaction actions and pending labels use sentence case independently of titles', () => {
 	expect(marketCopy.createQuestionPendingLabel).toBe('Creating question…')
 	expect(appCopy.changeWallet).toBe('Change wallet')
-	expect(appCopy.switchToEthereumMainnet).toBe('Switch to Ethereum mainnet')
 	expect(marketCopy.alreadyForked).toBe('Already forked')
 	expect(reportingCopy.reportOnSelectedSide).toBe('Report on selected side')
 	expect(reportingCopy.triggerZoltarFork).toBe('Trigger universe fork')

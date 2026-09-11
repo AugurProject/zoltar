@@ -4,7 +4,7 @@ import { render } from 'preact'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { OpenPoolForm } from '../../features/OpenPoolForm.js'
-import { currentRoute, tradingDocumentTitle } from '../../app/App.js'
+import { tradingRouting } from '../../lib/routing.js'
 
 test('opens an addressed workflow and preserves simulation settings; rejects invalid addresses and locked navigation', async () => {
 	const dom = installDomEnvironment('http://localhost/#/markets?simulate=1&simScenario=trading-funded')
@@ -30,20 +30,17 @@ test('opens an addressed workflow and preserves simulation settings; rejects inv
 		})
 		expect(button.disabled).toBe(false)
 		await act(() => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
-		expect(currentRoute()).toBe(`market/${pool}`)
+		expect(tradingRouting.resolve(window.location.hash)).toBe(`market/${pool}`)
 		expect(window.location.hash).toContain('simScenario=trading-funded')
 		await act(() => render(<OpenPoolForm disabled={true} target='liquidity' />, rendered.container))
 		await act(() => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
-		expect(currentRoute()).toBe(`market/${pool}`)
+		expect(tradingRouting.resolve(window.location.hash)).toBe(`market/${pool}`)
 		await act(() => render(<OpenPoolForm disabled={false} target='liquidity' />, rendered.container))
 		await act(() => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
-		expect(currentRoute()).toBe(`liquidity/${pool}`)
-		expect(tradingDocumentTitle(`liquidity/${pool}`)).toBe('Liquidity · Statoblast trading')
+		expect(tradingRouting.resolve(window.location.hash)).toBe(`liquidity/${pool}`)
 		await act(() => render(<OpenPoolForm disabled={false} target='create-market' />, rendered.container))
 		await act(() => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
-		expect(currentRoute()).toBe(`create-market/${pool}`)
-		expect(tradingDocumentTitle('markets')).toBe('Browse markets · Statoblast trading')
-		expect(tradingDocumentTitle('security-pools')).toBe('Browse SecurityPools · Statoblast trading')
+		expect(tradingRouting.resolve(window.location.hash)).toBe(`create-market/${pool}`)
 	} finally {
 		await rendered.cleanup()
 		dom.cleanup()

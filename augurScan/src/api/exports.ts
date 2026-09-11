@@ -11,7 +11,7 @@ const EXPORT_KEY_COLUMNS: Record<HistoricalExportDataset, readonly string[]> = {
 	timeline: ['block_number', 'block_hash', 'tx_hash', 'log_index', 'entity_type', 'entity_identity'],
 	reorgs: ['id'],
 }
-export type HistoricalExportCursor = readonly [
+type HistoricalExportCursor = readonly [
 	version: 1,
 	dataset: HistoricalExportDataset,
 	chainId: number,
@@ -35,7 +35,7 @@ const historicalExportKeyValid = (dataset: HistoricalExportDataset, key: readonl
 	return key.length === 1 && isPostgresBigint(key[0])
 }
 
-export const parseHistoricalExportCursor = (value: string | null): HistoricalExportCursor | undefined => {
+const parseHistoricalExportCursor = (value: string | null): HistoricalExportCursor | undefined => {
 	if (value === null) return undefined
 	try {
 		const parsed = decodeOpaqueCursor(value)

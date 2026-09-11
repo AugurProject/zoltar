@@ -7,7 +7,8 @@ import { type DashboardControllerOptions, createChaosDashboardController } from 
 import { assertSignerCompatibleWithPending, assertSignerCompatibleWithDurableScope, assertSettingsUpdatePaused, connectivityCandidate, pausedCandidate, restartSafeSettings, settingsPatchCandidate, signerCandidateSettings } from '../../src/runtime/configuration-candidates.ts'
 import { ConfigurationCommitIndeterminate, ConfigurationCommittedSafelyPaused } from '../../src/runtime/configuration-commit.ts'
 import { parseSettings, serializedSettings, type OperatorSettings } from '../../src/config/settings.ts'
-import { bindRuntimeStateToSigner, initialDurableState, initialRuntimeState, type RuntimeState } from '../../src/state/operator-state.ts'
+import { bindRuntimeStateToSigner, type RuntimeState } from '../../src/state/operator-state.ts'
+import { initialDurableState, initialRuntimeState } from '../../src/state/initial-state.ts'
 import { createDurableWorkflow, markWorkflowFailed, markWorkflowStepConfirmed } from '../../src/runtime/workflows.ts'
 import type { OperationPlan } from '../../src/operations/types.ts'
 

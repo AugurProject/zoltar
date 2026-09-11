@@ -2,9 +2,7 @@ import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { OracleManagerDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { SecurityVaultDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
-import { getOracleManagerPriceValidUntilTimestamp, ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS } from '../../../protocol/oracleTiming.js'
-
-export { getOracleManagerPriceValidUntilTimestamp, ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS }
+import { getOracleManagerPriceValidUntilTimestamp } from '../../../protocol/oracleTiming.js'
 
 export const MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP = 10n * 10n ** 18n
 export const DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES = 5n
@@ -74,19 +72,6 @@ function getStrictCapacityOwnershipBackedRepMinimum(capacityOwnershipAttoRep: bi
 	return (capacityOwnershipAttoRep * repPerEthPrice * multiplierBps) / (PRICE_PRECISION * BPS_DENOMINATOR) + 1n
 }
 
-function getBackedCapacityOwnershipCeiling(attoRepAmount: bigint | undefined, repPerEthPrice: bigint | undefined, statoblastSecurityMultiplierBps: bigint | undefined) {
-	if (attoRepAmount === undefined || attoRepAmount <= 0n) return 0n
-	if (repPerEthPrice === undefined || repPerEthPrice <= 0n) return 0n
-	if (statoblastSecurityMultiplierBps === undefined || statoblastSecurityMultiplierBps <= 0n) return 0n
-	return (attoRepAmount * PRICE_PRECISION * BPS_DENOMINATOR) / (repPerEthPrice * statoblastSecurityMultiplierBps)
-}
-
-function getStrictlyBackedCapacityOwnershipCeiling(attoRepAmount: bigint | undefined, repPerEthPrice: bigint | undefined, multiplierBps: bigint | undefined) {
-	if (attoRepAmount === undefined || attoRepAmount <= 0n || repPerEthPrice === undefined || repPerEthPrice <= 0n || multiplierBps === undefined || multiplierBps <= 0n) return 0n
-	const numerator = attoRepAmount * PRICE_PRECISION * BPS_DENOMINATOR
-	return numerator === 0n ? 0n : (numerator - 1n) / (repPerEthPrice * multiplierBps)
-}
-
 export function getSecurityVaultWithdrawableRepAmount({
 	disputeStakedAttoRep = 0n,
 	vaultAttoRepBacking,
@@ -123,37 +108,6 @@ export function getSecurityVaultWithdrawableRepAmount({
 		maxWithdrawableAttoRep = maxWithdrawableAttoRep < maxGlobalWithdrawal ? maxWithdrawableAttoRep : maxGlobalWithdrawal
 	}
 	return maxWithdrawableAttoRep
-}
-
-export function getSecurityVaultMaxCapacityOwnershipAttoRepAmount({
-	currentCapacityOwnershipAttoRep,
-	disputeStakedAttoRep = 0n,
-	vaultAttoRepBacking,
-	repPerEthPrice,
-	statoblastSecurityMultiplierBps,
-	totalPoolHeldAttoRep,
-	totalCapacityOwnershipAttoRep,
-}: {
-	currentCapacityOwnershipAttoRep?: bigint | undefined
-	disputeStakedAttoRep?: bigint | undefined
-	vaultAttoRepBacking: bigint | undefined
-	repPerEthPrice: bigint | undefined
-	statoblastSecurityMultiplierBps: bigint | undefined
-	totalPoolHeldAttoRep?: bigint | undefined
-	totalCapacityOwnershipAttoRep?: bigint | undefined
-}) {
-	const localCapacityOwnershipCeilingAttoRep = getBackedCapacityOwnershipCeiling((vaultAttoRepBacking ?? 0n) + disputeStakedAttoRep, repPerEthPrice, statoblastSecurityMultiplierBps)
-	const migrationCapacityOwnershipCeilingAttoRep = getStrictlyBackedCapacityOwnershipCeiling(vaultAttoRepBacking, repPerEthPrice, statoblastSecurityMultiplierBps === undefined ? undefined : getMigrationSecurityMultiplierBps(statoblastSecurityMultiplierBps))
-	let maxCapacityOwnershipAttoRepAmount = localCapacityOwnershipCeilingAttoRep
-	if (migrationCapacityOwnershipCeilingAttoRep < maxCapacityOwnershipAttoRepAmount) maxCapacityOwnershipAttoRepAmount = migrationCapacityOwnershipCeilingAttoRep
-	if (totalPoolHeldAttoRep !== undefined && totalCapacityOwnershipAttoRep !== undefined) {
-		const normalizedCurrentCapacityOwnershipAttoRep = currentCapacityOwnershipAttoRep ?? 0n
-		const otherVaultCapacityOwnershipAttoRep = totalCapacityOwnershipAttoRep > normalizedCurrentCapacityOwnershipAttoRep ? totalCapacityOwnershipAttoRep - normalizedCurrentCapacityOwnershipAttoRep : 0n
-		const globalCapacityOwnershipCeilingAttoRep = getBackedCapacityOwnershipCeiling(totalPoolHeldAttoRep, repPerEthPrice, statoblastSecurityMultiplierBps)
-		const remainingPoolCapacityOwnershipAttoRep = globalCapacityOwnershipCeilingAttoRep > otherVaultCapacityOwnershipAttoRep ? globalCapacityOwnershipCeilingAttoRep - otherVaultCapacityOwnershipAttoRep : 0n
-		maxCapacityOwnershipAttoRepAmount = maxCapacityOwnershipAttoRepAmount < remainingPoolCapacityOwnershipAttoRep ? maxCapacityOwnershipAttoRepAmount : remainingPoolCapacityOwnershipAttoRep
-	}
-	return maxCapacityOwnershipAttoRepAmount
 }
 
 export function getStagedOperationTimeoutSeconds(timeoutMinutes: bigint | undefined) {

@@ -6,32 +6,18 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { encodeAbiParameters, getAddress, privateKeyToAccount, type Abi, type AbiValue, type Address } from '@zoltar/bot-shared/ethereum'
-import {
-	advanceVaultRegistryCursor,
-	assertCanonicalPairGraph,
-	assertCanonicalPoolGraph,
-	authenticatePoolProtocolBindings,
-	canonicalDiscoveryWarnings,
-	collectCountedPages,
-	DISCOVERY_RPC_CONCURRENCY,
-	DISCOVERY_RPC_QUEUE_LIMIT,
-	discoverDirectEscalationDepositQuotes,
-	discoverEcosystemSnapshot,
-	discoverShareInventory,
-	discoverStagedOperations,
-	drainConcurrent,
-	forkMigrationWindowIsOpen,
-	forkRepMigrationTarget,
-	limitDiscoveryConcurrency,
-	mapWithConcurrency,
-	minimumSafeVaultDeposit,
-	relevantTokenSpenders,
-	trustedIndexedReportsForDiscovery,
-	type ChaosReadClient,
-} from '../../src/monitoring/discovery.ts'
-import { canonicalLifecyclePresence, urgentOperationPlans } from '../../src/operations/catalog.ts'
+import { discoverEcosystemSnapshot } from '../../src/monitoring/discovery.ts'
+import { DISCOVERY_RPC_CONCURRENCY, DISCOVERY_RPC_QUEUE_LIMIT, drainConcurrent, limitDiscoveryConcurrency, mapWithConcurrency, type ChaosReadClient } from '../../src/monitoring/discovery-client.ts'
+import { discoverDirectEscalationDepositQuotes, minimumSafeVaultDeposit, relevantTokenSpenders } from '../../src/monitoring/discovery-escalation.ts'
+import { forkMigrationWindowIsOpen, forkRepMigrationTarget } from '../../src/monitoring/discovery-fork-migration.ts'
+import { assertCanonicalPairGraph, assertCanonicalPoolGraph, authenticatePoolProtocolBindings } from '../../src/monitoring/discovery-graph.ts'
+import { advanceVaultRegistryCursor, collectCountedPages } from '../../src/monitoring/discovery-registry.ts'
+import { discoverShareInventory, trustedIndexedReportsForDiscovery } from '../../src/monitoring/discovery-share-inventory.ts'
+import { discoverStagedOperations } from '../../src/monitoring/discovery-staged-operations.ts'
+import { canonicalLifecyclePresence } from '../../src/operations/catalog.ts'
+import { urgentOperationPlans } from '../support/operation-plans.ts'
 import type { OracleGameSnapshot, PlanningOptions } from '../../src/operations/types.ts'
-import { IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, IMMUTABLE_TOPOLOGY_MAXIMUM_QUESTION_LABEL_UTF8_BYTES, loadImmutableTopologyCache, saveImmutableTopologyCache, type CanonicalImmutableTopologyCache, type ImmutableTopologyIdentity } from '../../src/monitoring/topology-cache.ts'
+import { IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, IMMUTABLE_TOPOLOGY_MAXIMUM_QUESTION_LABEL_UTF8_BYTES, loadImmutableTopologyCacheWithinLimits, saveImmutableTopologyCache, type CanonicalImmutableTopologyCache, type ImmutableTopologyIdentity } from '../../src/monitoring/topology-cache.ts'
 import { address, hash, snapshotFixture } from '../operations/fixture.ts'
 
 const temporaryDirectories: string[] = []
@@ -904,7 +890,7 @@ describe('anchored ecosystem discovery', () => {
 			const anchor = 10n + BigInt(cycle)
 			const historicalBlockHashes = previousAnchor === undefined ? {} : { [previousAnchor.toString()]: hash(Number(previousAnchor)) }
 			const fake = fakeClient(anchor, hash(Number(anchor)), { historicalBlockHashes, poolDeployments, questionIds })
-			const restored = await loadImmutableTopologyCache(statePath, topologyIdentity(), limits)
+			const restored = await loadImmutableTopologyCacheWithinLimits({ identity: topologyIdentity(), limits, statePath })
 			let checkpoint: CanonicalImmutableTopologyCache | undefined
 			const snapshot = await discoverEcosystemSnapshot({
 				anchorBlockNumber: anchor,
@@ -933,7 +919,7 @@ describe('anchored ecosystem discovery', () => {
 			await saveImmutableTopologyCache(statePath, topologyIdentity(), checkpoint, limits)
 			previousAnchor = anchor
 		}
-		const exact = await loadImmutableTopologyCache(statePath, topologyIdentity(), limits)
+		const exact = await loadImmutableTopologyCacheWithinLimits({ identity: topologyIdentity(), limits, statePath })
 		expect(exact?.discoveryCursors.questions).toMatchObject({ canonicalCount: '11', nextIndex: '11', retentionMode: 'overflow' })
 		expect(exact?.discoveryCursors.poolDeployments).toMatchObject({ canonicalCount: '11', nextIndex: '11', retentionMode: 'overflow' })
 		expect(exact?.questions).toEqual([])
@@ -956,7 +942,7 @@ describe('anchored ecosystem discovery', () => {
 			const canonicalCount = canonicalCounts[cycle]
 			if (canonicalCount === undefined) throw new Error(`Missing canonical vault count for cycle ${cycle.toString()}`)
 			const newestFirst = [...oldestFirst.slice(0, canonicalCount)].reverse()
-			const restored = await loadImmutableTopologyCache(statePath, topologyIdentity(), limits)
+			const restored = await loadImmutableTopologyCacheWithinLimits({ identity: topologyIdentity(), limits, statePath })
 			const calls: Array<[bigint, bigint]> = []
 			const advanced = await advanceVaultRegistryCursor({
 				cachedVaults: restored?.vaultsByPool[pool] ?? [],
@@ -995,7 +981,7 @@ describe('anchored ecosystem discovery', () => {
 				limits,
 			)
 		}
-		const exact = await loadImmutableTopologyCache(statePath, topologyIdentity(), limits)
+		const exact = await loadImmutableTopologyCacheWithinLimits({ identity: topologyIdentity(), limits, statePath })
 		const exactCursor = exact?.discoveryCursors.vaultsByPool[pool]
 		if (exactCursor === undefined) throw new Error('Exact oversized vault cursor was not persisted')
 		expect(exactCursor).toMatchObject({ canonicalCount: '11', nextIndex: '11', retentionMode: 'overflow' })
@@ -1106,7 +1092,7 @@ describe('anchored ecosystem discovery', () => {
 		if (checkpoint === undefined) throw new Error('Boundary-label discovery did not produce a topology checkpoint')
 		expect(snapshot.questions[0]?.outcomeLabels[0]?.length).toBe(IMMUTABLE_TOPOLOGY_MAXIMUM_QUESTION_LABEL_UTF8_BYTES)
 		await saveImmutableTopologyCache(statePath, topologyIdentity(), checkpoint)
-		const restored = await loadImmutableTopologyCache(statePath, topologyIdentity())
+		const restored = await loadImmutableTopologyCacheWithinLimits({ identity: topologyIdentity(), limits: { maxPools: 1_000_000, maxQuestions: 1_000_000, maxUniverses: 1_000_000, maxVaultsPerPool: 1_000_000 }, statePath })
 		expect(restored?.questions[0]?.outcomeLabels[0]).toBe(boundaryLabel)
 		await expect(
 			discoverEcosystemSnapshot({
@@ -1663,10 +1649,6 @@ describe('anchored ecosystem discovery', () => {
 		simulationFailure = undefined
 		receiver = address(99)
 		expect((await discoverStagedOperations(client, pool, 555n, 2, []))[0]?.executionExpectedSuccess).toBe(false)
-	})
-
-	test('canonicalizes concurrent warnings before quorum comparison', () => {
-		expect(canonicalDiscoveryWarnings(['z warning', 'a warning', 'z warning'])).toEqual(['a warning', 'z warning'])
 	})
 
 	test('pins the block fetch, every contract read, and wallet balance to the supplied anchor', async () => {
