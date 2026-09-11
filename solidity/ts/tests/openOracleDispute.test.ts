@@ -1,17 +1,7 @@
 import { beforeAll, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { bytesToHex, encodeAbiParameters, encodeDeployData, encodeFunctionData, getAddress, hexToBytes, keccak256, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
-import {
-	getOpenOracleGameTuple,
-	getOpenOracleHelperTuple,
-	hashOpenOracleStatePreimage,
-	OPEN_ORACLE_FLAG_FEES_ONLY_AT_HALT,
-	OPEN_ORACLE_FLAG_FLEXIBLE_ESCALATION,
-	OPEN_ORACLE_FLAG_STORE_ALL,
-	OPEN_ORACLE_FLAG_STORE_PRICE,
-	OPEN_ORACLE_FLAG_STORE_SETTLEMENT_ELIGIBILITY,
-	OPEN_ORACLE_FLAG_TIME_TYPE,
-	OPEN_ORACLE_FLAG_TRACK_DISPUTES,
-} from '@zoltar/open-oracle-shared/openOracle/openOracle'
+import { OPEN_ORACLE_FLAG_FEES_ONLY_AT_HALT, OPEN_ORACLE_FLAG_FLEXIBLE_ESCALATION, OPEN_ORACLE_FLAG_STORE_SETTLEMENT_ELIGIBILITY } from '../testSupport/openOracle/statePreimage'
+import { getOpenOracleGameTuple, getOpenOracleHelperTuple, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_STORE_PRICE, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_FLAG_TRACK_DISPUTES } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import assert from '../testSupport/simulator/utils/assert'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'

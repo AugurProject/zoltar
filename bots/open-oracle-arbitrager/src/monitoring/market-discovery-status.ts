@@ -15,7 +15,10 @@ export function logMarketDiscoveryFailure(context: string, error: unknown) {
 
 export function recordMarketDiscoveryFailure(state: OperatorState, error: unknown) {
 	const message = errorMessage(error)
+	const previousAvailability = state.marketAvailability
 	state.marketAvailability = marketAvailabilityFromError(error)
+	// Absent deployments are dashboard notices, not per-poll errors, but the first detection still reaches the process log.
+	if (state.marketAvailability?.kind === 'missing-deployment' && JSON.stringify(previousAvailability) !== JSON.stringify(state.marketAvailability)) console.log(`deploymentUnavailable=${message}`)
 	state.lastError = message
 	state.lastPollFailureAt = new Date().toISOString()
 	state.retryInProgress = false

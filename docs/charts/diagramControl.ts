@@ -32,7 +32,7 @@ export function centeredDiagramScrollLeft(clientWidth: number, scrollWidth: numb
 	return Math.max(0, (scrollWidth - clientWidth) / 2)
 }
 
-export function diagramBackgroundElements(dialog: Element): HTMLElement[] {
+function diagramBackgroundElements(dialog: Element): HTMLElement[] {
 	const background: HTMLElement[] = []
 	const document = dialog.ownerDocument
 	const ElementConstructor = document.defaultView?.HTMLElement

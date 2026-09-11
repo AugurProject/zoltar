@@ -1,18 +1,8 @@
 import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
 import assert from '../testSupport/simulator/utils/assert'
 import { decodeEventLog, encodeAbiParameters, encodeDeployData, encodeFunctionData, keccak256, type Address, type Hex, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import {
-	getOpenOracleGameTuple,
-	getOpenOracleHelperTuple,
-	hashOpenOracleStatePreimage,
-	OPEN_ORACLE_FLAG_FEES_ONLY_AT_HALT,
-	OPEN_ORACLE_FLAG_FLEXIBLE_ESCALATION,
-	OPEN_ORACLE_FLAG_STORE_ALL,
-	OPEN_ORACLE_FLAG_STORE_SETTLEMENT_ELIGIBILITY,
-	OPEN_ORACLE_FLAG_TIME_TYPE,
-	OPEN_ORACLE_FLAG_TRACK_DISPUTES,
-	type OpenOracleStatePreimage,
-} from '@zoltar/open-oracle-shared/openOracle/openOracle'
+import { OPEN_ORACLE_FLAG_FEES_ONLY_AT_HALT, OPEN_ORACLE_FLAG_FLEXIBLE_ESCALATION, OPEN_ORACLE_FLAG_STORE_SETTLEMENT_ELIGIBILITY } from '../testSupport/openOracle/statePreimage'
+import { getOpenOracleGameTuple, getOpenOracleHelperTuple, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_FLAG_TRACK_DISPUTES, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS, MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, calculateOracleMinimumWethReportAttoEth } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'

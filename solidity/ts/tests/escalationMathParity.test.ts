@@ -10,7 +10,7 @@ import { deployEscalationGame, depositOnOutcome, getActivationTime, getBalances,
 import { ensureZoltarDeployed, getRepTokenAddress, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import { ReputationToken_ReputationToken, statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier, statoblast_EscalationGame_EscalationGame, test_statoblast_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as escalationGameProofTestPoolArtifact } from '../types/contractArtifact'
-import { computeEscalationTimeSinceStartFromAttritionCostAttoRep, ESCALATION_TIME_LENGTH, getEscalationBindingCapitalAttoRep, getWinningEscalationDepositClaimAmount, getWinningImportedEscalationDepositClaimAmount, projectEscalationDeposit } from '@zoltar/statoblast-shared/escalationGame/escalationMath'
+import { computeEscalationTimeSinceStartFromAttritionCostAttoRep, ESCALATION_TIME_LENGTH, getWinningEscalationDepositClaimAmount, getWinningImportedEscalationDepositClaimAmount, projectEscalationDeposit } from '@zoltar/statoblast-shared/escalationGame/escalationMath'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 
 const initializeForkCarrySnapshotTestPoolAbi: Abi = [
@@ -341,17 +341,15 @@ describe('Escalation math parity', () => {
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 	})
 
-	test('shared binding capital and attrition-time inversion match the deployed contract', async () => {
+	test('shared attrition-time inversion matches the deployed contract', async () => {
 		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThresholdAttoRep)
 		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.No, 15n * reportBond)
 		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Yes, 7n * reportBond)
 		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Invalid, 11n * reportBond)
 
-		const balances = await getBalances(client, escalationGame)
-		const sharedBindingCapital = getEscalationBindingCapitalAttoRep([balances.invalid, balances.yes, balances.no])
-		assert.strictEqual(await readBindingCapital(escalationGame), sharedBindingCapital, 'shared binding capital should match the contract median balance')
+		const bindingCapital = await readBindingCapital(escalationGame)
 
-		for (const attritionCost of [reportBond, sharedBindingCapital, nonDecisionThresholdAttoRep]) {
+		for (const attritionCost of [reportBond, bindingCapital, nonDecisionThresholdAttoRep]) {
 			const solidityTimeSinceStart = await readTimeSinceStartFromAttritionCost(escalationGame, attritionCost)
 			const sharedTimeSinceStart = computeEscalationTimeSinceStartFromAttritionCostAttoRep(reportBond, nonDecisionThresholdAttoRep, attritionCost)
 			assert.strictEqual(solidityTimeSinceStart, sharedTimeSinceStart, `attrition inversion mismatch at ${attritionCost.toString()}`)
@@ -380,9 +378,8 @@ describe('Escalation math parity', () => {
 		assert.strictEqual(resultingCumulativeAmount, projection.projectedBalancesAttoRep[0], 'projected invalid balance should match preview cumulative amount')
 
 		const activationTime = await getActivationTime(client, escalationGame)
-		const projectedBindingCapital = getEscalationBindingCapitalAttoRep(projection.projectedBalancesAttoRep)
-		const expectedEndTime = activationTime + computeEscalationTimeSinceStartFromAttritionCostAttoRep(reportBond, nonDecisionThresholdAttoRep, projectedBindingCapital)
 		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Invalid, acceptedAmount)
+		const expectedEndTime = activationTime + computeEscalationTimeSinceStartFromAttritionCostAttoRep(reportBond, nonDecisionThresholdAttoRep, await readBindingCapital(escalationGame))
 		assert.strictEqual(await readEscalationEndDate(escalationGame), expectedEndTime, 'shared projected end time should match the contract after the same deposit')
 	})
 

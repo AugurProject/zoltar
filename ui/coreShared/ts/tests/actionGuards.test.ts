@@ -1,24 +1,24 @@
 import { describe, expect, test } from 'bun:test'
-import { getWalletActiveAppChainActionAvailability, getWalletActiveAppChainGuardMessage, getWalletActiveAppChainGuardState } from '../transactions/actionGuards.js'
+import { getWalletActiveAppChainActionAvailability, getWalletActiveAppChainGuardState } from '../transactions/actionGuards.js'
 
 describe('actionGuards', () => {
 	test('returns the provided disconnected-wallet reason before feature-specific checks', () => {
 		expect(
-			getWalletActiveAppChainGuardMessage({
+			getWalletActiveAppChainGuardState({
 				accountAddress: undefined,
 				isOnActiveAppChain: true,
 				walletRequiredReason: 'Connect a wallet before settling escalation deposits.',
-			}),
+			}).reason,
 		).toBe('Connect a wallet before settling escalation deposits.')
 	})
 
 	test('explains wrong-network recovery while disabling actions', () => {
 		expect(
-			getWalletActiveAppChainGuardMessage({
+			getWalletActiveAppChainGuardState({
 				accountAddress: '0x0000000000000000000000000000000000000001',
 				isOnActiveAppChain: false,
 				walletRequiredReason: 'Connect a wallet before settling escalation deposits.',
-			}),
+			}).reason,
 		).toBe('Switch to Ethereum mainnet.')
 
 		expect(
@@ -40,10 +40,10 @@ describe('actionGuards', () => {
 
 	test('falls back to the shared continue copy when no custom wallet reason is provided', () => {
 		expect(
-			getWalletActiveAppChainGuardMessage({
+			getWalletActiveAppChainGuardState({
 				accountAddress: undefined,
 				isOnActiveAppChain: true,
-			}),
+			}).reason,
 		).toBe('Connect wallet to continue.')
 	})
 })

@@ -48,7 +48,7 @@ function readLocationParams(location: LocationLike) {
 	return params
 }
 
-export function shouldUseSimulationLocation(location: LocationLike) {
+function shouldUseSimulationLocation(location: LocationLike) {
 	const params = readLocationParams(location)
 	// Simulation mode is intentionally available as a public URL opt-in on any hostname,
 	// including production deployments. It boots a browser-local chain instead of

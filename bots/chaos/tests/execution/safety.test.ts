@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
-import { assertOperationEthFunding, assertOperationPlanFresh, assertOperationPrincipalCaps, assertStepSafety, maximumFeePerGas, operationSubmissionLastValidBlock, unsignedQuantity } from '../../src/execution/safety.ts'
-import type { OperationStep } from '../../src/operations/types.ts'
+import { maximumFeePerGas } from '@zoltar/bot-shared/execution/transaction-submission'
+import { assertOperationEthFunding, assertOperationPlanFresh, assertOperationPrincipalCaps, assertStepSafety, operationStepSubmissionLastValidBlock, unsignedQuantity } from '../../src/execution/safety.ts'
+import type { OperationPlan, OperationStep } from '../../src/operations/types.ts'
 
 const step: OperationStep = {
 	data: '0x',
@@ -12,6 +13,29 @@ const step: OperationStep = {
 	to: '0x0000000000000000000000000000000000000001',
 	value: '10',
 	walletAssetDebits: [{ amount: '10', asset: 'ETH', kind: 'native' }],
+}
+
+function deadlinePlan(deadline: Pick<OperationPlan, 'id'> & Partial<Pick<OperationPlan, 'deadlineTimestamp' | 'lastValidBlockNumber'>>): OperationPlan {
+	return {
+		classification: 'selectable',
+		createdAtBlock: '1',
+		definitionId: deadline.id,
+		ecosystem: 'statoblast',
+		label: deadline.id,
+		metadata: {},
+		obligation: false,
+		planningSeed: 1,
+		postconditions: ['done'],
+		priority: 'random',
+		risk: 'low',
+		steps: [step],
+		...deadline,
+	}
+}
+
+// Resolves the submission horizon of the single-step deadline plan at block 100 / timestamp 1000.
+function submissionLastValidBlock(deadline: Parameters<typeof deadlinePlan>[0], mode: 'private' | 'public', maximumBlockIntervalSeconds: number) {
+	return operationStepSubmissionLastValidBlock({ baseFeePerGas: 1n, currentBlock: 100n, currentTimestamp: 1_000n, maximumBlockIntervalSeconds, mode, plan: deadlinePlan(deadline), step })
 }
 
 const strategy = {
@@ -43,12 +67,12 @@ describe('chaos execution safety gates', () => {
 	})
 
 	test('enforces block and timestamp deadlines through private next-block submission', () => {
-		expect(operationSubmissionLastValidBlock({ id: 'block-clock', lastValidBlockNumber: '102' }, 100n, 1_000n, 'private', 15)).toBe(102n)
-		expect(() => operationSubmissionLastValidBlock({ id: 'expired', lastValidBlockNumber: '100' }, 100n, 1_000n, 'private', 15)).toThrow('block deadline expired')
-		expect(operationSubmissionLastValidBlock({ deadlineTimestamp: '1200', id: 'timestamp-clock' }, 100n, 1_000n, 'private', 15)).toBe(101n)
-		expect(() => operationSubmissionLastValidBlock({ deadlineTimestamp: '1060', id: 'near-expiry' }, 100n, 1_000n, 'private', 15)).toThrow('timestamp deadline is too close')
-		expect(() => operationSubmissionLastValidBlock({ deadlineTimestamp: '1080', id: 'slow-chain-near-expiry' }, 100n, 1_000n, 'private', 90)).toThrow('timestamp deadline is too close')
-		expect(() => operationSubmissionLastValidBlock({ deadlineTimestamp: '2000', id: 'public-deadline' }, 100n, 1_000n, 'public', 15)).toThrow('requires private submission')
+		expect(submissionLastValidBlock({ id: 'block-clock', lastValidBlockNumber: '102' }, 'private', 15)).toBe(102n)
+		expect(() => submissionLastValidBlock({ id: 'expired', lastValidBlockNumber: '100' }, 'private', 15)).toThrow('block deadline expired')
+		expect(submissionLastValidBlock({ deadlineTimestamp: '1200', id: 'timestamp-clock' }, 'private', 15)).toBe(101n)
+		expect(() => submissionLastValidBlock({ deadlineTimestamp: '1060', id: 'near-expiry' }, 'private', 15)).toThrow('timestamp deadline is too close')
+		expect(() => submissionLastValidBlock({ deadlineTimestamp: '1080', id: 'slow-chain-near-expiry' }, 'private', 90)).toThrow('timestamp deadline is too close')
+		expect(() => submissionLastValidBlock({ deadlineTimestamp: '2000', id: 'public-deadline' }, 'public', 15)).toThrow('requires private submission')
 	})
 
 	test('accounts for padded EIP-1559 gas and the post-operation ETH reserve', () => {

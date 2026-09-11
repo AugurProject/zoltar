@@ -384,10 +384,7 @@ export function formatOpenOracleFeePercentage(feePercentage: bigint | undefined)
 	if (feePercentage === undefined) return '—'
 	return `${formatScaledBigInt(feePercentage, 100_000n, 0, true)}%`
 }
-export function formatOpenOracleFeePercentageInput(feePercentage: bigint) {
-	return formatScaledBigInt(feePercentage, 100_000n)
-}
-export function parseOpenOracleFeePercentageInput(value: string, label: string) {
+function parseOpenOracleFeePercentageInput(value: string, label: string) {
 	const trimmed = value.trim()
 	if (trimmed === '') throw new Error(`${label} is required`)
 	const parsed = tryParseDecimalInput(trimmed, 5)

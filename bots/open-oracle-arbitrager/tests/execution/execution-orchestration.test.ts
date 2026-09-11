@@ -2,7 +2,9 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
-import { createPublicClient, custom, decodeFunctionData, encodeFunctionData, mainnet, type Address, type EIP1193Provider, type Hex, type TransactionReceipt, type TransactionReplacement } from '@zoltar/bot-shared/ethereum'
+import { mainnet } from '@zoltar/core-shared/evm/ethereum'
+import { createPublicClient, decodeFunctionData, encodeFunctionData, type Address, type EIP1193Provider, type Hex, type TransactionReceipt, type TransactionReplacement } from '@zoltar/bot-shared/ethereum'
+import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { openOracleArbitrageExecutorAbi } from '#contracts/abi'
 import {
 	assertCanonicalExecutionSnapshot,
@@ -11,7 +13,6 @@ import {
 	buildHedgeExecutionPayload,
 	canonicalBlockHashWithQuorum,
 	executionFailureDecision,
-	executionSnapshotWithQuorum,
 	settledExecutionSnapshotWithQuorum,
 	executionTokenAllowed,
 	finalizeSubmittedLifecycleAttempt,
@@ -24,15 +25,12 @@ import {
 	lifecycleWithdrawalMismatch,
 	openOracleDisputeTiming,
 	opportunityDecision,
-	privateBundleReceiptStatus,
 	attemptHasFinality,
 	privateEntryRecoveryIsConfirmed,
 	recoveredTransactionIntentMismatch,
 	receiptGasExpendituresWithQuorum,
 	retryPrivateSubmissionWithinWindow,
-	runFundedExecution,
 	selectBestExecution,
-	signAndSubmitOpenOracleDispute,
 	simulateTrackedPrivateBundle,
 	trackPrivateBundleReceiptStatuses,
 	transactionHashBySenderNonceWithQuorum,
@@ -40,8 +38,8 @@ import {
 	transactionReceiptsWithQuorum,
 	waitForResolvedTransaction,
 } from '#execution/execution-orchestration'
-import { loadPositionJournal, savePositionJournal, type PositionJournalFilesystem, type PositionRecord } from '#state/position-store'
-import { assertSubmissionWindowOpen } from '#execution/transaction-submission'
+import { loadPositionJournal, type PositionJournalFilesystem, type PositionRecord } from '#state/position-store'
+import { savePositionJournal } from '../support/position-journal.ts'
 import { v4QuotePlan } from '#core/uniswap-v4'
 import { ConnectivityDegradedError, operationalFailureDisposition } from '@zoltar/bot-shared/monitoring/resilience'
 
@@ -190,24 +188,14 @@ describe('funded execution orchestration', () => {
 		}
 	})
 
-	test('rejects a per-reader V4 selected-fee quote disagreement', () => {
+	test('rejects a per-reader V4 selected-fee quote disagreement', async () => {
 		const shared = {
 			blockHash: `0x${'12'.repeat(32)}` as Hex,
 			buyHedgeQuote: 13n,
 			sellHedgeQuote: 11n,
 		}
-		expect(
-			executionSnapshotWithQuorum(100n, [
-				{ endpoint: 'rpc-a', value: shared },
-				{ endpoint: 'rpc-b', value: shared },
-			]),
-		).toEqual(shared)
-		expect(() =>
-			executionSnapshotWithQuorum(100n, [
-				{ endpoint: 'rpc-a', value: shared },
-				{ endpoint: 'rpc-b', value: { ...shared, buyHedgeQuote: 14n } },
-			]),
-		).toThrow('RPC disagreement')
+		await expect(settledExecutionSnapshotWithQuorum(100n, [Promise.resolve({ endpoint: 'rpc-a', value: shared }), Promise.resolve({ endpoint: 'rpc-b', value: shared })])).resolves.toEqual(shared)
+		await expect(settledExecutionSnapshotWithQuorum(100n, [Promise.resolve({ endpoint: 'rpc-a', value: shared }), Promise.resolve({ endpoint: 'rpc-b', value: { ...shared, buyHedgeQuote: 14n } })])).rejects.toThrow('RPC disagreement')
 	})
 
 	test('uses two agreeing execution snapshots when a third reader is offline', async () => {
@@ -276,10 +264,17 @@ describe('funded execution orchestration', () => {
 	})
 
 	test('classifies every private bundle receipt before aborting anomalous inclusion', () => {
-		expect(privateBundleReceiptStatus(undefined, 101n)).toBe('confirmation-unknown')
-		expect(privateBundleReceiptStatus(transactionReceipt('reverted'), 101n)).toBe('reverted')
-		expect(privateBundleReceiptStatus({ ...transactionReceipt(), blockNumber: 102n }, 101n)).toBe('confirmation-unknown')
-		expect(privateBundleReceiptStatus(transactionReceipt(), 101n)).toBe('confirmed')
+		const statusOf = (receipt: TransactionReceipt | undefined) => {
+			let observed: string | undefined
+			const complete = trackPrivateBundleReceiptStatuses(['entry'], [receipt], 101n, (_transaction, status) => {
+				observed = status
+			})
+			return complete ? 'confirmed' : observed
+		}
+		expect(statusOf(undefined)).toBe('confirmation-unknown')
+		expect(statusOf(transactionReceipt('reverted'))).toBe('reverted')
+		expect(statusOf({ ...transactionReceipt(), blockNumber: 102n })).toBe('confirmation-unknown')
+		expect(statusOf(transactionReceipt())).toBe('confirmed')
 	})
 
 	test('releases a private attempt only after its target block has twelve canonical descendants', () => {
@@ -336,50 +331,6 @@ describe('funded execution orchestration', () => {
 		expect(transitions).toEqual(['approval:confirmation-unknown', 'dispute:reverted', 'cleanup:confirmation-unknown'])
 	})
 
-	test('guards every production transaction boundary against pause', async () => {
-		const expectedCalls = [[], ['approve-1'], ['approve-1', 'approve-2', 'prepare'], ['approve-1', 'approve-2', 'prepare', 'simulate']]
-		for (let pauseBoundary = 1; pauseBoundary <= expectedCalls.length; pauseBoundary += 1) {
-			let check = 0
-			const calls: string[] = []
-			await expect(
-				runFundedExecution(
-					() => {
-						check += 1
-						return check === pauseBoundary
-					},
-					{
-						approveToken1: async () => {
-							calls.push('approve-1')
-							return 1n
-						},
-						approveToken2: async () => {
-							calls.push('approve-2')
-							return 2n
-						},
-						prepare: async () => {
-							calls.push('prepare')
-							return 'prepared'
-						},
-						simulate: async () => {
-							calls.push('simulate')
-						},
-						submit: async () => {
-							calls.push('submit')
-							return 'hash'
-						},
-						confirm: async () => {
-							calls.push('confirm')
-							return 'record'
-						},
-					},
-				),
-			).rejects.toThrow('paused')
-			const expected = expectedCalls[pauseBoundary - 1]
-			if (expected === undefined) throw new Error('Missing expected pause-boundary call sequence')
-			expect(calls).toEqual(expected)
-		}
-	})
-
 	test('rechecks pause after asynchronous pre-submission work and does not call the sender', async () => {
 		let paused = false
 		let releasePreparation: (() => void) | undefined
@@ -405,6 +356,7 @@ describe('funded execution orchestration', () => {
 			failure = error
 		}
 		expect(executionFailureDecision(failure)).toBe('paused')
+		expect(executionFailureDecision(new Error('relay rejected the bundle'))).toBe('execution-failed')
 		expect(submitted).toBe(false)
 	})
 
@@ -667,50 +619,6 @@ describe('funded execution orchestration', () => {
 		expect(submitted).toBe(false)
 	})
 
-	test('preserves an in-flight transaction failure even if pause arrives while it runs', async () => {
-		let paused = false
-		const execution = runFundedExecution(() => paused, {
-			approveToken1: () => Promise.resolve(1n),
-			approveToken2: () => Promise.resolve(2n),
-			prepare: () => Promise.resolve('prepared'),
-			simulate: () => Promise.resolve(),
-			submit: async () => {
-				paused = true
-				throw new Error('replacement transaction failed')
-			},
-			confirm: () => Promise.resolve('record'),
-		})
-		await expect(execution).rejects.toThrow('replacement transaction failed')
-		try {
-			await execution
-		} catch (error) {
-			expect(executionFailureDecision(error)).toBe('execution-failed')
-		}
-	})
-
-	test('classifies a reverted already-broadcast transaction as failed while paused', async () => {
-		let paused = false
-		const execution = runFundedExecution(() => paused, {
-			approveToken1: () => Promise.resolve(1n),
-			approveToken2: () => Promise.resolve(2n),
-			prepare: () => Promise.resolve('prepared'),
-			simulate: () => Promise.resolve(),
-			submit: async () => {
-				paused = true
-				return 'broadcast-hash'
-			},
-			confirm: async () => {
-				throw new Error('dispute transaction reverted')
-			},
-		})
-		await expect(execution).rejects.toThrow('dispute transaction reverted')
-		try {
-			await execution
-		} catch (error) {
-			expect(executionFailureDecision(error)).toBe('execution-failed')
-		}
-	})
-
 	test('blocks on transient confirmation failures and records a repriced replacement', async () => {
 		let attempts = 0
 		const retries: unknown[] = []
@@ -933,29 +841,6 @@ describe('funded execution orchestration', () => {
 		)
 		expect(attempts).toBe(1)
 		expect(receipt.status).toBe('reverted')
-	})
-
-	test('wires the OpenOracle quote block through signing and refuses submission after expiry', async () => {
-		const signed = await signAndSubmitOpenOracleDispute(
-			100n,
-			lastValidBlockNumber => Promise.resolve({ lastValidBlockNumber }),
-			transaction => {
-				assertSubmissionWindowOpen(transaction.lastValidBlockNumber, 100n)
-				return Promise.resolve(transaction)
-			},
-		)
-		expect(signed.lastValidBlockNumber).toBe(101n)
-
-		await expect(
-			signAndSubmitOpenOracleDispute(
-				100n,
-				lastValidBlockNumber => Promise.resolve({ lastValidBlockNumber }),
-				transaction => {
-					assertSubmissionWindowOpen(transaction.lastValidBlockNumber, 101n)
-					return Promise.resolve(transaction)
-				},
-			),
-		).rejects.toThrow('validity window expired')
 	})
 
 	test('caps private retries at the dispute window and performs no retry at expiry', async () => {

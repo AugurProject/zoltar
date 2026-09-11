@@ -3,25 +3,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { encodeAbiParameters, getAddress, keccak256, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
-import {
-	DURABLE_STATE_VERSION,
-	MAXIMUM_LIFECYCLE_PRESENCE_BLOCKER_COUNT,
-	MAXIMUM_TERMINAL_WORKFLOW_COUNT,
-	bindRuntimeStateToSigner,
-	compactDurableState,
-	initialDurableState,
-	initialRuntimeState,
-	setRuntimeExecutionAddress,
-	loadDurableState,
-	loadRuntimeState,
-	parseProtocolIndex,
-	recordActivity,
-	saveDurableState,
-	type DurableState,
-	type DurableWorkflow,
-	type PendingTransactionIntent,
-	type StateFilesystem,
-} from '../../src/state/operator-state.ts'
+import { MAXIMUM_LIFECYCLE_PRESENCE_BLOCKER_COUNT, bindRuntimeStateToSigner, setRuntimeExecutionAddress, loadDurableState, loadRuntimeState, recordActivity, saveDurableState, type DurableState, type DurableWorkflow, type PendingTransactionIntent, type StateFilesystem } from '../../src/state/operator-state.ts'
+import { snapshotProtocolIndex } from '../../src/state/protocol-index-store.ts'
+import { DURABLE_STATE_VERSION, initialDurableState, initialRuntimeState } from '../../src/state/initial-state.ts'
 import { acceptResidualProfileReplacement } from '../../src/state/retirement.ts'
 
 const directories: string[] = []
@@ -168,6 +152,15 @@ function workflow(): DurableWorkflow {
 		],
 		updatedAt: createdAt,
 	}
+}
+
+function terminalWorkflow(status: 'abandoned' | 'completed', id: string, at: string): DurableWorkflow {
+	const base = workflow()
+	const step = base.steps[0]
+	if (step === undefined) throw new Error('Expected a populated workflow step')
+	const confirmedStep = { ...step, confirmedAt: at, status: 'confirmed' as const, transactionHash: topic0 }
+	delete confirmedStep.transactionIntentId
+	return { ...base, completedAt: at, id, status, steps: [confirmedStep], updatedAt: at }
 }
 
 async function pendingIntent(): Promise<PendingTransactionIntent> {
@@ -772,6 +765,28 @@ describe('chaos-bot durable state', () => {
 		expect(restored?.recoveryBlocker).toContain('window closed')
 	})
 
+	test('round-trips the latest pending transaction observation and rejects inconsistent ones', async () => {
+		const path = await statePath()
+		const state = await populatedState()
+		const intent = state.pendingTransactions[0]
+		if (intent === undefined) throw new Error('Expected a pending workflow fixture')
+		intent.observation = { checkedAt: createdAt, head: 130n, includedBlock: 125n, kind: 'awaiting-finality' }
+		await saveDurableState(path, state)
+		expect((await loadDurableState(path, 1)).pendingTransactions[0]?.observation).toEqual({ checkedAt: createdAt, head: 130n, includedBlock: 125n, kind: 'awaiting-finality' })
+		intent.observation = { checkedAt: createdAt, head: 130n, kind: 'in-mempool' }
+		await saveDurableState(path, state)
+		expect((await loadDurableState(path, 1)).pendingTransactions[0]?.observation).toEqual({ checkedAt: createdAt, head: 130n, kind: 'in-mempool' })
+		const stored = JSON.parse(await readFile(path, 'utf8')) as { pendingTransactions: Array<Record<string, unknown>> }
+		const storedTransaction = stored.pendingTransactions[0]
+		if (storedTransaction === undefined) throw new Error('Expected a stored pending transaction')
+		storedTransaction['observation'] = { checkedAt: createdAt, head: '130', includedBlock: '125', kind: 'in-mempool' }
+		await writeFile(path, `${JSON.stringify(stored)}\n`)
+		await expect(loadDurableState(path, 1)).rejects.toThrow('includedBlock must accompany exactly the included kinds')
+		storedTransaction['observation'] = { checkedAt: createdAt, head: '130', kind: 'included' }
+		await writeFile(path, `${JSON.stringify(stored)}\n`)
+		await expect(loadDurableState(path, 1)).rejects.toThrow('observation.kind is invalid')
+	})
+
 	test('round-trips the canonical report, auction bid, and escalation deposit index', async () => {
 		const path = await statePath()
 		const state = initialDurableState(1)
@@ -791,7 +806,7 @@ describe('chaos-bot durable state', () => {
 		const forgedRoute = forged.migrationRepSplits[0]
 		if (forgedRoute === undefined) throw new Error('Expected migration progress fixture')
 		forgedRoute.childUniverseId = '0'
-		expect(() => parseProtocolIndex(forged, 1)).toThrow('does not match its parent/outcome derivation')
+		expect(() => snapshotProtocolIndex(forged, 1)).toThrow('does not match its parent/outcome derivation')
 
 		const unordered = protocolIndex()
 		unordered.migrationRepSplits.push({
@@ -800,7 +815,7 @@ describe('chaos-bot durable state', () => {
 			outcomeIndex: '0',
 			universeId: '0',
 		})
-		expect(() => parseProtocolIndex(unordered, 1)).toThrow('canonical unique route order')
+		expect(() => snapshotProtocolIndex(unordered, 1)).toThrow('canonical unique route order')
 	})
 
 	test('rejects a protocol index whose canonical cursor precedes its immutable start', async () => {
@@ -890,41 +905,29 @@ describe('chaos-bot durable state', () => {
 		expect(runtime.activities.at(-1)?.message).toBe('old 498')
 	})
 
-	test('bounds terminal workflow history for indefinite operation', () => {
+	const MAXIMUM_TERMINAL_WORKFLOW_COUNT = 500
+
+	test('bounds terminal workflow history for indefinite operation', async () => {
 		const state = initialDurableState(1)
-		state.workflows = Array.from({ length: MAXIMUM_TERMINAL_WORKFLOW_COUNT + 2 }, (_, index) => ({
-			...workflow(),
-			completedAt: new Date(index * 1_000).toISOString(),
-			id: `workflow:history-${index.toString()}`,
-			status: 'completed',
-			updatedAt: new Date(index * 1_000).toISOString(),
-		}))
-		compactDurableState(state)
+		state.workflows = Array.from({ length: MAXIMUM_TERMINAL_WORKFLOW_COUNT + 2 }, (_, index) => terminalWorkflow('completed', `workflow:history-${index.toString()}`, new Date(index * 1_000).toISOString()))
+		await saveDurableState(await statePath(), state)
 		expect(state.workflows).toHaveLength(MAXIMUM_TERMINAL_WORKFLOW_COUNT)
 		expect(state.workflows.some(candidate => candidate.id === 'workflow:history-0')).toBe(false)
 		expect(state.workflows.some(candidate => candidate.id === `workflow:history-${(MAXIMUM_TERMINAL_WORKFLOW_COUNT + 1).toString()}`)).toBe(true)
 	})
 
-	test('bounds abandoned unsigned workflow history for indefinite operation', () => {
+	test('bounds abandoned unsigned workflow history for indefinite operation', async () => {
 		const state = initialDurableState(1)
-		state.workflows = Array.from({ length: MAXIMUM_TERMINAL_WORKFLOW_COUNT + 2 }, (_, index) => ({
-			...workflow(),
-			completedAt: new Date(index * 1_000).toISOString(),
-			id: `workflow:abandoned-${index.toString()}`,
-			status: 'abandoned' as const,
-			updatedAt: new Date(index * 1_000).toISOString(),
-		}))
-		compactDurableState(state)
+		state.workflows = Array.from({ length: MAXIMUM_TERMINAL_WORKFLOW_COUNT + 2 }, (_, index) => terminalWorkflow('abandoned', `workflow:abandoned-${index.toString()}`, new Date(index * 1_000).toISOString()))
+		await saveDurableState(await statePath(), state)
 		expect(state.workflows).toHaveLength(MAXIMUM_TERMINAL_WORKFLOW_COUNT)
 		expect(state.workflows.some(candidate => candidate.id === 'workflow:abandoned-0')).toBe(false)
 	})
 
-	test('retains compact lifecycle tombstones when rich terminal history is pruned', () => {
+	test('retains compact lifecycle tombstones when rich terminal history is pruned', async () => {
 		const state = initialDurableState(1)
-		const terminalWorkflow = workflow()
-		terminalWorkflow.status = 'completed'
-		terminalWorkflow.completedAt = createdAt
-		state.workflows = [terminalWorkflow]
+		const completedWorkflow = terminalWorkflow('completed', 'workflow:one', createdAt)
+		state.workflows = [completedWorkflow]
 		state.obligations = [
 			{
 				automaticRetryCount: 0,
@@ -936,13 +939,13 @@ describe('chaos-bot durable state', () => {
 				id: 'obligation:test',
 				label: 'Settle report',
 				metadata: { reportId: '1' },
-				operationId: 'open-oracle.settle',
+				operationId: completedWorkflow.operationId,
 				status: 'completed',
 				updatedAt: createdAt,
-				workflowId: terminalWorkflow.id,
+				workflowId: completedWorkflow.id,
 			},
 		]
-		compactDurableState(state)
+		await saveDurableState(await statePath(), state)
 		expect(state.obligationTombstones).toEqual([
 			{
 				id: 'obligation:test',

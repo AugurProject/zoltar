@@ -43,23 +43,6 @@ export function operationalFailureDisposition(error: unknown): OperationalFailur
 	return 'safety-paused'
 }
 
-export async function bestSuccessful<T>(attempts: readonly (() => Promise<T>)[], score: (value: T) => bigint, onError: (error: unknown) => void) {
-	let best: T | undefined
-	for (const attempt of attempts) {
-		try {
-			const value = await attempt()
-			if (best === undefined || score(value) > score(best)) best = value
-		} catch (error) {
-			onError(error)
-		}
-	}
-	return best
-}
-
-export function replaceOverlap<T>(cached: readonly T[], fetched: readonly T[], fromBlock: bigint, blockNumber: (value: T) => bigint, compare: (left: T, right: T) => number) {
-	return [...cached.filter(value => blockNumber(value) < fromBlock), ...fetched].sort(compare)
-}
-
 export function compactFinalityWindow<T, K>(values: readonly T[], head: bigint, overlapBlocks: bigint, key: (value: T) => K, blockNumber: (value: T) => bigint, isTerminal: (value: T) => boolean) {
 	const nextBlock = head + 1n
 	const overlapStart = nextBlock > overlapBlocks ? nextBlock - overlapBlocks : 0n
@@ -85,12 +68,17 @@ export function compactFinalityWindow<T, K>(values: readonly T[], head: bigint, 
 	return values.filter(value => retained.has(value))
 }
 
-export function retryDelayMilliseconds(baseMilliseconds: number, consecutiveFailures: number, random: () => number = Math.random) {
+const DEFAULT_MAXIMUM_RETRY_DELAY_MILLISECONDS = 300_000
+
+export function retryDelayMilliseconds(baseMilliseconds: number, consecutiveFailures: number, random: () => number = Math.random, maximumMilliseconds = DEFAULT_MAXIMUM_RETRY_DELAY_MILLISECONDS) {
 	if (!Number.isSafeInteger(baseMilliseconds) || baseMilliseconds < 1) throw new Error('Retry base delay must be a positive integer')
 	if (!Number.isSafeInteger(consecutiveFailures) || consecutiveFailures < 0) throw new Error('Consecutive failures must be a non-negative integer')
+	if (!Number.isSafeInteger(maximumMilliseconds) || maximumMilliseconds < 1) throw new Error('Retry maximum delay must be a positive integer')
 	if (consecutiveFailures === 0) return baseMilliseconds
-	const exponential = Math.min(300_000, baseMilliseconds * 2 ** Math.min(consecutiveFailures - 1, 20))
-	return Math.min(300_000, Math.round(exponential * (1 + Math.max(0, Math.min(1, random())) * 0.2)))
+	// The cap never cuts below the configured base delay, so a long poll interval keeps its own pace.
+	const cap = Math.max(maximumMilliseconds, baseMilliseconds)
+	const exponential = Math.min(cap, baseMilliseconds * 2 ** Math.min(consecutiveFailures - 1, 20))
+	return Math.min(cap, Math.round(exponential * (1 + Math.max(0, Math.min(1, random())) * 0.2)))
 }
 
 export type PollResult = boolean | 'deferred'

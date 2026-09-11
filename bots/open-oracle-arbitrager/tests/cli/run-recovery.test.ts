@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test'
-import { createPublicClient, custom, encodeAbiParameters, encodeEventTopics, getAddress, mainnet, type EIP1193Provider, type Hex } from '@zoltar/bot-shared/ethereum'
+import { encodeEventTopics, mainnet } from '@zoltar/core-shared/evm/ethereum'
+import { createPublicClient, encodeAbiParameters, getAddress, type EIP1193Provider, type Hex } from '@zoltar/bot-shared/ethereum'
+import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { openOracleArbitrageExecutorAbi } from '#contracts/abi'
 import {
 	createExecutionLockManager,

@@ -1,6 +1,6 @@
 import { describe, expect, spyOn, test } from 'bun:test'
+import { aggregateCentralizedMarketObservations } from '../src/monitoring/centralized-market-aggregation.ts'
 import {
-	aggregateCentralizedMarketObservations,
 	centralizedMarketConfigurationAllowsExecution,
 	centralizedMarketConsensusObservations,
 	centralizedPriceAllowsExecution,

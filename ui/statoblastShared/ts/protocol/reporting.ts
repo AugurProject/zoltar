@@ -81,7 +81,7 @@ function requireEscalationDepositArray(value: unknown, context: string): Escalat
 	return requireArrayValue(value, context).map(deposit => requireEscalationDepositView(deposit, context))
 }
 
-export async function loadEscalationDeposits(client: Pick<ReadClient, 'readContract'>, escalationGameAddress: Address, outcome: ReportingOutcomeKey): Promise<EscalationDeposit[]> {
+async function loadEscalationDeposits(client: Pick<ReadClient, 'readContract'>, escalationGameAddress: Address, outcome: ReportingOutcomeKey): Promise<EscalationDeposit[]> {
 	let currentIndex = 0n
 	const deposits: EscalationDeposit[] = []
 	while (true) {

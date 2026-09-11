@@ -1,4 +1,4 @@
-import { isContractProjectSource, parseContractProject } from './contractProjects.js'
+import { isContractProjectSource, parseContractProject, type ContractProject } from './contractProjects.js'
 import { createHash } from 'crypto'
 import { promises as fs } from 'fs'
 import * as path from 'path'
@@ -9,7 +9,9 @@ import * as url from 'url'
 
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const CONTRACT_PATH_APP = path.join(directoryOfThisFile, '..', 'ts', 'types', 'contractArtifact.ts')
-const selectedProject = process.argv[2] === undefined ? undefined : parseContractProject(process.argv[2])
+// Importers (such as the explorer verification tooling) carry their own CLI
+// arguments; only an actual compile invocation selects a contract project.
+const selectedProject = import.meta.main && process.argv[2] !== undefined ? parseContractProject(process.argv[2]) : undefined
 const HASH_CACHE_PATH = path.join(process.cwd(), ...(selectedProject === undefined ? [] : ['artifacts', selectedProject]), '.contract-hash.json')
 const ARTIFACTS_DIR = path.join(process.cwd(), 'artifacts', ...(selectedProject === undefined ? [] : [selectedProject]))
 const ARTIFACTS_JSON = path.join(ARTIFACTS_DIR, 'Contracts.json')
@@ -108,7 +110,7 @@ const HashCache = funtypes.ReadonlyPartial({
 	hash: funtypes.String,
 })
 
-const mainCompilerSettings = {
+export const mainCompilerSettings = {
 	viaIR: true,
 	evmVersion: 'osaka',
 	optimizer: {
@@ -214,6 +216,10 @@ function getCompilerVersion(compiler: SolcCompiler): string {
 	return compiler.version()
 }
 
+export function getMainCompilerVersion(): string {
+	return getCompilerVersion(solc)
+}
+
 export async function loadOpenOracleCompiler(): Promise<SolcCompiler> {
 	if (openOracleCompilerPromise) return openOracleCompilerPromise
 
@@ -306,6 +312,17 @@ const getAllFiles = async (dirPath: string, baseDir?: string, fileList: string[]
 	return fileList
 }
 
+export async function loadContractSources(project: ContractProject | undefined = undefined): Promise<Map<string, string>> {
+	const solidityRoot = path.join(directoryOfThisFile, '..')
+	const files = (await getAllFiles(path.join(solidityRoot, 'contracts'))).filter(file => path.extname(file) === '.sol')
+	const sources = new Map<string, string>()
+	for (const file of files) {
+		const relativePath = path.relative(solidityRoot, file).replace(/\\/g, '/')
+		if (project === undefined || isContractProjectSource(relativePath, project)) sources.set(relativePath, normalizeSoliditySourceLineEndings(await fs.readFile(file, 'utf8')))
+	}
+	return sources
+}
+
 const copySolidityContractArtifact = async (contractLocation: string) => {
 	const solidityContract = CompileResult.parse(JSON.parse(await fs.readFile(contractLocation, 'utf8')))
 	if (!solidityContract.contracts) throw new Error('No contracts compiled')
@@ -345,7 +362,7 @@ function addOpenOracleImportAliases(targetSources: Map<string, string>, sourceFi
 	}
 }
 
-function createMainCompilerSources(sourceFiles: Map<string, string>) {
+export function createMainCompilerSources(sourceFiles: Map<string, string>) {
 	const mainSources = new Map(sourceFiles)
 	const openOracleSource = sourceFiles.get(OPEN_ORACLE_LOCAL_PATH)
 	if (openOracleSource === undefined) return mainSources
@@ -516,12 +533,7 @@ function mergeCompileResults(mainResult: funtypes.Static<typeof CompileResult>, 
 const compileContracts = async () => {
 	console.log('Computing contract hash...')
 
-	const files = (await getAllFiles('contracts')).filter(file => path.extname(file) === '.sol')
-	const sources = new Map<string, string>()
-	for (const file of files) {
-		const relativePath = path.relative(process.cwd(), file).replace(/\\/g, '/')
-		if (selectedProject === undefined || isContractProjectSource(relativePath, selectedProject)) sources.set(relativePath, normalizeSoliditySourceLineEndings(await fs.readFile(file, 'utf8')))
-	}
+	const sources = await loadContractSources(selectedProject)
 
 	const openOracleCompiler = await loadOpenOracleCompiler()
 	const currentContractHash = await computeContractHash(sources, openOracleCompiler)

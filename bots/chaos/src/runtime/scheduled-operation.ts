@@ -86,3 +86,11 @@ export async function executeScheduledOperation(configuration: ConfigurationStat
 		if (!recovered) throw error
 	}
 }
+
+export async function scheduleAfterRecoveredTransaction(configuration: ConfigurationState, state: RuntimeState, operationId: string) {
+	if (state.scheduler.selectedOperationId !== operationId) return false
+	const scheduler = schedulerFor(configuration, state)
+	await scheduler.complete(operationId)
+	if (configuration.settings.paused || state.paused) await scheduler.pause()
+	return true
+}

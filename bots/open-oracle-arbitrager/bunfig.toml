@@ -1,3 +1,9 @@
 [test]
 timeout = 300000
 preload = ["../../bun-test-setup-solidity.ts"]
+
+[install]
+# Runtime auto-install silently resolves bare imports from temp-directory
+# fixtures against the live npm registry (latest versions) and can poison
+# in-process module resolution for the rest of a test run. Fail loudly instead.
+auto = "disable"

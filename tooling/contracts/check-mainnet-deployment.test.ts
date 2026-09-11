@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { assertDeploymentManifestCurrent, deploymentRuntimeTypeScriptProjects, ensureDeploymentRuntimeDependencies } from './check-mainnet-deployment.mts'
+import { assertDeploymentManifestCurrent, deploymentRuntimeTypeScriptProjects, ensureDeploymentRuntimeDependencies, readDeploymentSteps } from './check-mainnet-deployment.mts'
 
 describe('deployment manifest freshness', () => {
 	test('builds shared libraries in dependency order without compiling an application leaf', () => {
@@ -30,6 +30,22 @@ describe('deployment manifest freshness', () => {
 			},
 		)
 		expect(builds).toBe(0)
+	})
+
+	test('records constructor arguments per step and skips only the raw proxy deployer', () => {
+		const steps = [
+			{ address: '0x1', id: 'proxyDeployer', label: 'Proxy Deployer' },
+			{ address: '0x2', id: 'zoltar', label: 'Zoltar' },
+		]
+		expect(readDeploymentSteps(steps, new Map([['zoltar', 'abcd']]))).toEqual([
+			{ address: '0x1', id: 'proxyDeployer', label: 'Proxy Deployer' },
+			{ address: '0x2', constructorArguments: 'abcd', id: 'zoltar', label: 'Zoltar' },
+		])
+	})
+
+	test('fails manifest generation when a new step has no computed constructor arguments', () => {
+		const steps = [{ address: '0x3', id: 'newProtocolModule', label: 'New Protocol Module' }]
+		expect(() => readDeploymentSteps(steps, new Map())).toThrow('Extend getDeploymentStepConstructorArguments')
 	})
 
 	test('accepts a manifest that matches current deterministic deployment output', () => {

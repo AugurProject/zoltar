@@ -55,6 +55,37 @@ test('documentation landing keeps global navigation compact and omits a redundan
 	}
 })
 
+test('contract reference index preserves the fragment ids of the former single page', async () => {
+	const shell = await loadShell('http://localhost/docs/reference/contracts.html')
+	try {
+		const contractPages = [...new Bun.Glob('docs/reference/contracts/*.html').scanSync('.')]
+		expect(contractPages.length).toBeGreaterThan(0)
+		for (const pagePath of contractPages) {
+			const slug = pagePath.replace(/^docs\/reference\/contracts\/|\.html$/g, '')
+			const row = document.getElementById(slug)
+			expect(row?.tagName).toBe('TR')
+			expect(row?.querySelector('a')?.getAttribute('href')).toBe(`./contracts/${slug}.html`)
+		}
+		expect(document.getElementById('child-game-trust-boundary')?.getAttribute('href')).toBe('./contracts/securitypoolforker.html#child-game-trust-boundary')
+	} finally {
+		shell.cleanup()
+	}
+})
+
+test('documentation navigation adds word-break opportunities inside camel-case contract titles', async () => {
+	const shell = await loadShell('http://localhost/docs/reference/contracts/uniformpricedualcapbatchauction.html')
+	try {
+		const link = Array.from(document.querySelectorAll<HTMLAnchorElement>('.docs-navigation-list a')).find(candidate => candidate.getAttribute('aria-current') === 'page')
+		if (link === undefined) throw new Error('Current contract page is missing from the navigation')
+		expect(link.textContent).toBe('UniformPriceDualCapBatchAuction')
+		expect(Array.from(link.childNodes).map(node => node.nodeName)).toEqual(['#text', 'WBR', '#text', 'WBR', '#text', 'WBR', '#text', 'WBR', '#text', 'WBR', '#text'])
+		const plainLink = Array.from(document.querySelectorAll<HTMLAnchorElement>('.docs-navigation-list a')).find(candidate => candidate.textContent === 'Security model')
+		expect(plainLink?.querySelector('wbr')).toBeNull()
+	} finally {
+		shell.cleanup()
+	}
+})
+
 test('documentation search loads on demand, normalizes Unicode, and links to the best matching section', async () => {
 	const shell = await loadShell('http://localhost/docs/explanation/open-oracle.html')
 	try {
@@ -84,6 +115,23 @@ test('documentation search loads on demand, normalizes Unicode, and links to the
 		input.value = 'diataxis'
 		input.dispatchEvent(new Event('input'))
 		expect(document.querySelector('.docs-search-results strong')?.textContent).toBe('Why Statoblast uses OpenOracle')
+	} finally {
+		shell.cleanup()
+	}
+})
+
+test('documentation search resolves an invariant identifier to its own entry', async () => {
+	const shell = await loadShell('http://localhost/docs/explanation/open-oracle.html')
+	try {
+		document.querySelector<HTMLButtonElement>('.docs-search-button')?.click()
+		await finishSearchLoad()
+		const input = document.querySelector<HTMLInputElement>('.docs-search-input')
+		if (input === null) throw new Error('Search input is missing')
+		input.value = 'UNI-01'
+		input.dispatchEvent(new Event('input'))
+		const result = document.querySelector<HTMLAnchorElement>('.docs-search-results a')
+		expect(result?.href).toBe('http://localhost/docs/reference/invariants.html#uni-01')
+		expect(result?.querySelector('.docs-search-result-snippet')?.textContent).toStartWith('UNI-01 One fork per universe — ')
 	} finally {
 		shell.cleanup()
 	}
