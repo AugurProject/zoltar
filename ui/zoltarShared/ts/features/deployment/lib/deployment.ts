@@ -13,7 +13,7 @@ type DeploymentSectionDefinition = {
 const ZOLTAR_DEPLOYMENT_SECTIONS: DeploymentSectionDefinition[] = [
 	{
 		title: 'Utilities',
-		stepIds: ['proxyDeployer', 'deploymentStatusOracle', 'multicall3', 'weth'],
+		stepIds: ['proxyDeployer', 'multicall3', 'weth'],
 	},
 	{
 		title: 'Zoltar',

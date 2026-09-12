@@ -103,7 +103,7 @@ export type UseOnchainStateOptions = {
 export type UseOnchainStateDependencies = {
 	getDeploymentSteps: () => ReadonlyArray<DeploymentStep>
 	getWethAddress: () => Address
-	loadDeploymentStatusOracleSnapshot: (readClient: ReadClient) => Promise<{ applicationDeploymentComplete: boolean; deploymentStatuses: DeploymentStatus[] }>
+	loadDeploymentStatusSnapshot: (readClient: ReadClient) => Promise<{ applicationDeploymentComplete: boolean; deploymentStatuses: DeploymentStatus[] }>
 	loadErc20Balance: (readClient: ReadClient, tokenAddress: Address, accountAddress: Address) => Promise<bigint>
 }
 
@@ -369,7 +369,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 		if (shouldLoadDeploymentState && backend.isBootstrapped !== false && isReadBackendReady())
 			deploymentStatePromise = deploymentStatusLoad.track(async () => {
 				try {
-					const snapshot = await dependencies.loadDeploymentStatusOracleSnapshot(backend.createReadClient())
+					const snapshot = await dependencies.loadDeploymentStatusSnapshot(backend.createReadClient())
 					if (!isCurrent()) return
 					applicationDeploymentComplete.value = snapshot.applicationDeploymentComplete
 					deploymentStatuses.value = snapshot.deploymentStatuses

@@ -3,7 +3,7 @@ import type { ReputationTokenMetadata } from './reputation.js'
 import type { WriteClient as ClientsWriteClient } from '../wallet/clients.js'
 export type { ReadClient, WriteClient } from '../wallet/clients.js'
 
-type ZoltarDeploymentStepId = 'proxyDeployer' | 'deploymentStatusOracle' | 'weth' | 'reputationToken' | 'multicall3' | 'uniformPriceDualCapBatchAuctionFactory' | 'scalarOutcomes' | 'securityPoolUtils' | 'openOracle' | 'zoltarQuestionData' | 'zoltar' | 'shareTokenFactory' | 'priceOracleManagerAndOperatorQueuerFactory'
+type ZoltarDeploymentStepId = 'proxyDeployer' | 'weth' | 'reputationToken' | 'multicall3' | 'uniformPriceDualCapBatchAuctionFactory' | 'scalarOutcomes' | 'securityPoolUtils' | 'openOracle' | 'zoltarQuestionData' | 'zoltar' | 'shareTokenFactory' | 'priceOracleManagerAndOperatorQueuerFactory'
 
 export type DeploymentStepId = ZoltarDeploymentStepId | 'securityPoolForker' | 'securityPoolOperationsDelegate' | 'escalationGameClaimDelegate' | 'escalationGameFactory' | 'securityPoolFactory'
 export type MarketType = 'binary' | 'categorical' | 'scalar'

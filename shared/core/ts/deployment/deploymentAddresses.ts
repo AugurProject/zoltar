@@ -5,12 +5,6 @@ type LibraryReplacement = {
 	hash: string
 }
 
-type DeploymentStatusOracleAddressConfig = {
-	deploymentStatusOracleBytecode: () => Hex
-	proxyDeployerAddress: Address
-	zeroSalt: Hex
-}
-
 export function getProxyDeployerCreate2Address(proxyDeployerAddress: Address, zeroSalt: Hex, bytecode: Hex) {
 	return getCreate2Address({
 		bytecode,
@@ -40,12 +34,4 @@ export function createApplyLinkedLibrariesHelper(libraryReplacements: () => read
 export function constructorArgumentsFromInitCode(initCode: Hex, creationBytecode: string): string {
 	if (initCode.length < 2 + creationBytecode.length) throw new Error('Init code is shorter than the compiled creation bytecode it should extend')
 	return initCode.slice(2 + creationBytecode.length)
-}
-
-export function createDeploymentStatusOracleAddressHelper(config: DeploymentStatusOracleAddressConfig) {
-	const getDeploymentStatusOracleAddress = () => getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.deploymentStatusOracleBytecode())
-
-	return {
-		getDeploymentStatusOracleAddress,
-	}
 }

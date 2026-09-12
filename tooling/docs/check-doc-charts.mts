@@ -209,7 +209,7 @@ const quantitativeMetadata: Record<string, { ariaDescription: string; ariaLabel:
 const graphIds = new Set(Object.keys(graphSpecs))
 const quantitativeIds = new Set(Object.keys(quantitativeMetadata))
 const allSpecIds = new Set([...graphIds, ...quantitativeIds])
-if (graphIds.size !== 17 || quantitativeIds.size !== 5 || allSpecIds.size !== 22) throw new Error(`Expected 17 ELK diagrams and 5 quantitative plots, found ${graphIds.size} and ${quantitativeIds.size}`)
+if (graphIds.size !== 16 || quantitativeIds.size !== 5 || allSpecIds.size !== 21) throw new Error(`Expected 16 ELK diagrams and 5 quantitative plots, found ${graphIds.size} and ${quantitativeIds.size}`)
 if ([...graphIds].some(chartId => quantitativeIds.has(chartId))) throw new Error('A documentation chart cannot be both an ELK diagram and quantitative plot')
 
 const mountIds: string[] = []

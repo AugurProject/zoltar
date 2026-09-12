@@ -88,20 +88,6 @@ const presetDefinitions: Record<string, ToolPreset[]> = {
 			values: { first: '60', second: '60' },
 		},
 	],
-	'deployment-mask-decoder': [
-		{
-			label: 'First and third set',
-			values: { deploymentMask: '0x5' },
-		},
-		{
-			label: 'First eight set',
-			values: { deploymentMask: '0xff' },
-		},
-		{
-			label: 'Includes unknown high bit',
-			values: { deploymentMask: '0x10005' },
-		},
-	],
 	'mmr-proof-planner': [
 		{
 			label: '13 leaves, height 2',

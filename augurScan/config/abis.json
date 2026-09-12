@@ -1,48 +1,6 @@
 {
-  "sourceHash": "4f70ae08387a5035e3d93310c1f405483d2c5b2204d3104551bd6506fcdee81f",
+  "sourceHash": "7bac36507f1b9628bdd7fc9fbbafbe5cafff68d59a4aceb1c55742cce710dcee",
   "contracts": {
-    "DeploymentStatusOracle": {
-      "source": "contracts/DeploymentStatusOracle.sol",
-      "abi": [
-        {
-          "inputs": [
-            {
-              "internalType": "address[]",
-              "name": "_deploymentAddresses",
-              "type": "address[]"
-            }
-          ],
-          "stateMutability": "nonpayable",
-          "type": "constructor"
-        },
-        {
-          "anonymous": false,
-          "inputs": [
-            {
-              "indexed": false,
-              "internalType": "address[]",
-              "name": "deploymentAddresses",
-              "type": "address[]"
-            }
-          ],
-          "name": "DeploymentAddressesSet",
-          "type": "event"
-        },
-        {
-          "inputs": [],
-          "name": "getDeploymentMask",
-          "outputs": [
-            {
-              "internalType": "uint256",
-              "name": "deployedMask",
-              "type": "uint256"
-            }
-          ],
-          "stateMutability": "view",
-          "type": "function"
-        }
-      ]
-    },
     "ERC20": {
       "source": "contracts/ERC20.sol",
       "abi": [

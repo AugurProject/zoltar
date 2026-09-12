@@ -24,7 +24,7 @@ function createStep(id: DeploymentStatus['id'], label: string, deployed: boolean
 }
 
 function createProps(): DeploymentRouteContentProps {
-	const deploymentStatuses: DeploymentStatus[] = [createStep('proxyDeployer', 'Proxy Deployer', true), createStep('deploymentStatusOracle', 'Deployment Status Oracle', true, ['proxyDeployer']), createStep('multicall3', 'Multicall3', true, ['proxyDeployer']), createStep('scalarOutcomes', 'Scalar Outcomes', false)]
+	const deploymentStatuses: DeploymentStatus[] = [createStep('proxyDeployer', 'Proxy Deployer', true), createStep('multicall3', 'Multicall3', true, ['proxyDeployer']), createStep('scalarOutcomes', 'Scalar Outcomes', false)]
 
 	return {
 		accountAddress: zeroAddress,
@@ -76,8 +76,8 @@ describe('DeploymentRouteContent', () => {
 		if (!(allContractsDisclosure instanceof HTMLElement) || allContractsDisclosure.tagName !== 'DETAILS') throw new Error('Expected all-contracts disclosure')
 		expect(allContractsDisclosure.hasAttribute('open')).toBe(false)
 		expect(allContractsDisclosure.querySelector('summary')?.textContent).toContain('All contracts')
-		expect(allContractsDisclosure.querySelector('summary')?.textContent).not.toContain('3 of 4 deployed')
-		expect(documentQueries.getByText('3 / 4')).not.toBeNull()
+		expect(allContractsDisclosure.querySelector('summary')?.textContent).not.toContain('2 of 3 deployed')
+		expect(documentQueries.getByText('2 / 3')).not.toBeNull()
 		expect(within(allContractsDisclosure).getByText('Proxy Deployer')).not.toBeNull()
 		expect(document.body.querySelector('.section-block.default .section-block.default')).toBeNull()
 		expect(document.body.querySelector('.deployment-contract-details .contract-panel.plain')).not.toBeNull()
@@ -88,8 +88,8 @@ describe('DeploymentRouteContent', () => {
 			h(DeploymentRouteContent, {
 				...createProps(),
 				accountAddress: undefined,
-				deploymentStatuses: [createStep('proxyDeployer', 'Proxy Deployer', true), createStep('scalarOutcomes', 'Scalar Outcomes', false, ['deploymentStatusOracle'])],
-				deploymentSections: [{ title: 'Zoltar', steps: [createStep('scalarOutcomes', 'Scalar Outcomes', false, ['deploymentStatusOracle'])] }],
+				deploymentStatuses: [createStep('proxyDeployer', 'Proxy Deployer', true), createStep('scalarOutcomes', 'Scalar Outcomes', false, ['multicall3'])],
+				deploymentSections: [{ title: 'Zoltar', steps: [createStep('scalarOutcomes', 'Scalar Outcomes', false, ['multicall3'])] }],
 			}),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup

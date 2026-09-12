@@ -16,7 +16,6 @@ const definitions = (domain: DomainEventProjection['domain'], entityType: string
 // emitted by the contracts represented in the operations views.
 const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 	...definitions('system', 'question', ['QuestionCreated'], ['questionId']),
-	...definitions('system', 'deployment', ['DeploymentAddressesSet']),
 	...definitions('system', 'reputation-token', ['TheoreticalSupplySet', 'Mint', 'Burn']),
 	...definitions('system', 'share-token', ['AuthorizationUpdated', 'TransferSingle', 'TransferBatch', 'Migrate']),
 	...definitions('report', 'open-oracle-report', ['ReportSubmitted', 'ReportDisputed', 'ReportSettled'], ['reportId']),

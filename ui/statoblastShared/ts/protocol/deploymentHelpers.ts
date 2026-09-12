@@ -21,7 +21,7 @@ import { getWethAddress } from '@zoltar/ui-zoltar-shared/protocol/activeProtocol
 import { getRuntimeNetworkProfile, type NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { getZoltarContractAddresses, MULTICALL3_BYTECODE, PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from '@zoltar/ui-zoltar-shared/protocol/zoltarDeploymentHelpers.js'
 
-export { getZoltarAddress, PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from '@zoltar/ui-zoltar-shared/protocol/zoltarDeploymentHelpers.js'
+export { getZoltarAddress, PROXY_DEPLOYER_ADDRESS } from '@zoltar/ui-zoltar-shared/protocol/zoltarDeploymentHelpers.js'
 const ORACLE_FEE_SINK_ADDRESS = '0x000000000000000000000000000000000000dEaD' satisfies Address
 const ORACLE_REPORT_GAS = 100000n
 const ORACLE_SETTLEMENT_GAS = 1000000

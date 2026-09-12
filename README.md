@@ -152,6 +152,10 @@ saved in shell history:
 bun run deploy:testnet -- --private-key=0x... --rpc-url=https://rpc.example --chain-id=11155111 --max-fee-per-gas-gwei=100 --max-total-cost-eth=20
 ```
 
+The default `minimal` profile deploys protocol infrastructure and Permit2. Add
+`--profile=with-quote-venues` to also deploy the Uniswap V3 and V4 quote venues.
+Quote-dependent features remain unavailable until their venues are deployed.
+
 Run `bun run deploy:testnet -- --help` for all options. Options other than
 `--private-key` also accept uppercase arguments after `--` or environment
 variables.
@@ -159,6 +163,7 @@ variables.
 | Input | Default | Purpose |
 | --- | --- | --- |
 | `RPC_URL` / `--rpc-url` | Required | RPC endpoint for the target network |
+| `DEPLOYMENT_PROFILE` / `--profile` | `minimal` | `minimal` or `with-quote-venues` |
 | `CHAIN_ID` / `--chain-id` | `11155111` | Expected decimal chain ID |
 | `MAX_FEE_PER_GAS_GWEI` / `--max-fee-per-gas-gwei` | `100` | Rejects higher RPC fee suggestions |
 | `MAX_TOTAL_COST_ETH` / `--max-total-cost-eth` | `20` | Caps the conservative preflight estimate and transaction budget |
@@ -186,10 +191,11 @@ Every deployment includes:
 
 - deterministic WETH and genesis REP
 - the canonical CREATE2 deployer and Permit2
-- a deterministic Uniswap V3 factory, SwapRouter, and QuoterV2
-- a Uniswap V4 PoolManager and Quoter
 - the Zoltar and Augur Statoblast protocol factories and their bootstrap support
   contracts
+
+The `with-quote-venues` profile additionally deploys a Uniswap V3 factory,
+SwapRouter, and QuoterV2, plus a Uniswap V4 PoolManager and Quoter.
 
 The command does not create Uniswap pools or add liquidity. Protocol factories
 create market-specific security pools, share tokens, oracle coordinators,

@@ -696,11 +696,6 @@
 							<td>Stateless or library math and proof routines have no lifecycle authority. Public verifier calls can be used for previews, but do not mutate a game or pool.</td>
 							<td>A result becomes protocol state only through a recognized game, pool, or forker transaction and its events.</td>
 						</tr>
-						<tr>
-							<td><code>DeploymentStatusOracle</code></td>
-							<td>Anyone can call <code>getDeploymentMask</code>; the constructor alone fixes the ordered address list and emits <code>DeploymentAddressesSet</code>.</td>
-							<td>It reports code presence only, not canonical wiring or readiness. Decode it using its constructor event or the matching deployment manifest order.</td>
-						</tr>
 					</tbody>
 				</table>
 				<h3 id="securitypoolutils-read-surface">SecurityPoolUtils read surface</h3>
@@ -761,13 +756,6 @@
 						</tr>
 					</thead>
 					<tbody>
-						<tr>
-							<td>Deployment tracking</td>
-							<td>
-								<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/DeploymentStatusOracle.sol"><code>DeploymentStatusOracle.sol</code></a>
-							</td>
-							<td>Reports one code-presence bit per configured deployment-step address. See <a href="../reference/deployment-status.html">Deployment Status Oracle</a>.</td>
-						</tr>
 						<tr>
 							<td>Carry proof hashing</td>
 							<td>

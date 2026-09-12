@@ -2,7 +2,7 @@
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
-import { loadDeploymentStatusOracleSnapshot, loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
+import { loadDeploymentStatusSnapshot, loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
 import { getChainDisplayLabel, getChainIdDecimalLabel, getWalletScopedAccountAddress, getWrongNetworkReason, isActiveAppChain, isSupportedAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import { getActiveBackend, initializeActiveEnvironment, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { getSavedSimulationStateEnvelope, persistSavedSimulationState, serializeSavedSimulationStateEnvelope } from '@zoltar/ui-core-shared/simulation/savedStates.js'
@@ -553,7 +553,7 @@ void describe('simulation backend', () => {
 		})
 		const repBalanceAttoRep = await loadErc20Balance(readClient, backend.profile.genesisRepTokenAddress, primaryAccount)
 		const wethBalanceAttoEth = await loadErc20Balance(readClient, backend.profile.wethAddress, primaryAccount)
-		const deploymentSnapshot = await loadDeploymentStatusOracleSnapshot(readClient)
+		const deploymentSnapshot = await loadDeploymentStatusSnapshot(readClient)
 
 		expect(repCode).not.toBe('0x')
 		expect(wethCode).not.toBe('0x')
