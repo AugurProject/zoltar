@@ -427,8 +427,7 @@ export async function refreshSecurityPoolDeploymentEventIndex<Deployment>(
 		let candidateStartBlock = index.startBlock
 		if (currentAnchor === undefined && candidateStartBlock === undefined) candidateStartBlock = await loadStartBlock(anchor.blockNumber)
 		const fromBlock = currentAnchor === undefined ? candidateStartBlock : currentAnchor.blockNumber + 1n
-		if (currentDeployments.length > maximumItems) throw new Error(`SecurityPool deployment history exceeds the configured ${maximumItems.toString()}-item limit`)
-		let appended = fromBlock !== undefined && fromBlock <= anchor.blockNumber ? await fetchLogsWithAdaptiveRanges(fromBlock, anchor.blockNumber, MAXIMUM_DEPLOYMENT_LOG_RANGE, async range => await loadEvents(range.fromBlock, range.toBlock), maximumItems - currentDeployments.length) : []
+		let appended = fromBlock !== undefined && fromBlock <= anchor.blockNumber ? await fetchLogsWithAdaptiveRanges(fromBlock, anchor.blockNumber, MAXIMUM_DEPLOYMENT_LOG_RANGE, async range => await loadEvents(range.fromBlock, range.toBlock), maximumItems) : []
 		if (currentAnchor !== undefined && !(await isAnchorCanonical(currentAnchor))) {
 			clearSecurityPoolDeploymentIndex(index, key)
 			currentDeployments = []

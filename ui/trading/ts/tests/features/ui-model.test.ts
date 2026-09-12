@@ -409,7 +409,25 @@ describe('standalone trading UI model', () => {
 		expect(ranges.at(-1)?.fromBlock).toBe(899n)
 	})
 
-	test('fails closed without retaining an oversized initial event history and recovers after the limit increases', async () => {
+	test('replays and refreshes deployment histories larger than the RPC page budget', async () => {
+		const index = createSecurityPoolDeploymentIndex<string, { blockHash: `0x${string}`; blockNumber: bigint }>()
+		let head = 2n
+		const refresh = () =>
+			refreshSecurityPoolDeploymentEventIndex(
+				index,
+				'chain:factory:universe-7',
+				async () => ({ blockHash: '0x11', blockNumber: head }),
+				async () => true,
+				async (fromBlock, toBlock) => Array.from({ length: Number(toBlock - fromBlock + 1n) }, (_, offset) => (fromBlock + BigInt(offset)).toString()),
+				2,
+			)
+		expect(await refresh()).toEqual(['0', '1', '2'])
+		expect(await refresh()).toEqual(['0', '1', '2'])
+		head = 4n
+		expect(await refresh()).toEqual(['0', '1', '2', '3', '4'])
+	})
+
+	test('fails closed without retaining an oversized single-block event page and recovers after the limit increases', async () => {
 		const index = createSecurityPoolDeploymentIndex<string, { blockHash: `0x${string}`; blockNumber: bigint }>()
 		const latest = { blockHash: `0x${'11'.repeat(32)}` as const, blockNumber: 0n }
 		const loadEvents = async () => ['first', 'second']
@@ -438,10 +456,10 @@ describe('standalone trading UI model', () => {
 		).toEqual(['first', 'second'])
 	})
 
-	test('preserves the prior event index when an append exceeds the resident limit', async () => {
+	test('preserves the prior event index when a single-block append exceeds the page limit', async () => {
 		const index = createSecurityPoolDeploymentIndex<string, { blockHash: `0x${string}`; blockNumber: bigint }>()
 		let latest = { blockHash: `0x${'11'.repeat(32)}` as const, blockNumber: 0n }
-		const loadEvents = async (fromBlock: bigint) => (fromBlock === 0n ? ['retained'] : ['overflow-a', 'overflow-b'])
+		const loadEvents = async (fromBlock: bigint) => (fromBlock === 0n ? ['retained'] : ['overflow-a', 'overflow-b', 'overflow-c'])
 		await refreshSecurityPoolDeploymentEventIndex(
 			index,
 			'chain:factory:universe-7',
@@ -461,12 +479,12 @@ describe('standalone trading UI model', () => {
 				loadEvents,
 				2,
 			),
-		).rejects.toThrow('exceeds the configured 1-item limit')
+		).rejects.toThrow('exceeds the configured 2-item limit')
 		expect(index.deployments).toEqual(['retained'])
 		expect(index.anchor?.blockNumber).toBe(0n)
 	})
 
-	test('leaves no orphan event state when a canonical rebuild exceeds the resident limit', async () => {
+	test('leaves no orphan event state when a canonical rebuild encounters an oversized single-block page', async () => {
 		const index = createSecurityPoolDeploymentIndex<string, { blockHash: `0x${string}`; blockNumber: bigint }>()
 		const orphan = { blockHash: `0x${'11'.repeat(32)}` as const, blockNumber: 0n }
 		const replacement = { blockHash: `0x${'22'.repeat(32)}` as const, blockNumber: 1n }
