@@ -899,7 +899,6 @@ export function resolveCoverageBaseRef(args: readonly string[], environmentBaseR
 async function main() {
 	const repositoryRoot = process.cwd()
 	const check = process.argv.includes('--check')
-	const allowMissingSolidity = process.argv.includes('--allow-missing-solidity')
 	const typescriptOnly = process.argv.includes('--typescript-only')
 	const lcovPath = resolve(repositoryRoot, 'coverage/typescript/lcov.info')
 	const parsedLcov = parseLcov(await readFile(lcovPath, 'utf8'), repositoryRoot)
@@ -913,12 +912,8 @@ async function main() {
 
 	let solidity: SolidityCoverage | undefined
 	if (!typescriptOnly) {
-		try {
-			const soliditySummary = parseSoliditySummary(JSON.parse(await readFile(resolve(repositoryRoot, 'solidity/coverage/coverage-summary.json'), 'utf8')))
-			solidity = summarizeSolidityCoverage(soliditySummary, repositoryRoot)
-		} catch (error) {
-			if (!allowMissingSolidity || !(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') throw error
-		}
+		const soliditySummary = parseSoliditySummary(JSON.parse(await readFile(resolve(repositoryRoot, 'solidity/coverage/coverage-summary.json'), 'utf8')))
+		solidity = summarizeSolidityCoverage(soliditySummary, repositoryRoot)
 	}
 
 	const baseRef = resolveCoverageBaseRef(process.argv, process.env['COVERAGE_BASE_REF'])

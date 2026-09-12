@@ -97,7 +97,7 @@ export function App({
 	deploymentSetupServices?: TradingDeploymentSetupServices
 	initializeEnvironment?: () => Promise<unknown>
 	loadLiveDeployment?: () => Promise<DeploymentConfiguration>
-} = {}) {
+}) {
 	const [route, setRoute] = useState(currentRoute)
 	const [liveDeploymentStatus, setLiveDeploymentStatus] = useState<LiveDeploymentStatus>('loading')
 	const [liveConfiguration, setLiveConfiguration] = useState<DeploymentConfiguration>()

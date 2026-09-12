@@ -21,7 +21,6 @@ export function installRepPriceQuoterForTesting(quoter: RepPriceQuoter | undefin
 }
 
 declare global {
-	// eslint-disable-next-line no-var
 	var __zoltarRepPriceQuoterOverride__: RepPriceQuoter | undefined
 }
 
