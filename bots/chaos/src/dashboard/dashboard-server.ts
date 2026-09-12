@@ -1,4 +1,4 @@
-import { buildDashboardScript } from '../../../shared/src/dashboard/assets.js'
+import { buildDashboardScript } from '@zoltar/bot-shared/dashboard/assets'
 import { operatorHeader } from './header.ts'
 import { record, safeString, stringField, booleanField, scalar, safeIntegerField, isoTimestampField, compact } from './public-fields.ts'
 import { join } from 'node:path'

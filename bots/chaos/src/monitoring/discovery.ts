@@ -1,4 +1,4 @@
-import { requireDeployedContracts } from '../../../shared/src/monitoring/deployed-contracts.js'
+import { requireDeployedContracts } from '@zoltar/bot-shared/monitoring/deployed-contracts'
 import { bigintToSafeNumber, getAddress, zeroAddress, type Address, type Hash } from '@zoltar/bot-shared/ethereum'
 import * as abis from '@zoltar/bot-shared/contracts/abi'
 import { CANONICAL_PROXY_DEPLOYER, CANONICAL_PROXY_DEPLOYER_RUNTIME, CANONICAL_UNISWAP_V3_FACTORY, GENESIS_UNISWAP_FEE, genesisUniswapSeederDeployment } from '../core/genesis-uniswap.ts'

@@ -1,5 +1,5 @@
 import { operatorHeader } from './header.ts'
-import { buildDashboardScript } from '../../../shared/src/dashboard/assets.js'
+import { buildDashboardScript } from '@zoltar/bot-shared/dashboard/assets'
 import { join } from 'node:path'
 import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
 import { boundedDashboardJson, dashboardAuthenticationChallenge, dashboardAuthorities, dashboardRequestAuthorityIsAccepted, dashboardRequestIsAuthenticated, dashboardRequestIsSameOrigin, validateDashboardAuthentication } from '@zoltar/bot-shared/dashboard/security'

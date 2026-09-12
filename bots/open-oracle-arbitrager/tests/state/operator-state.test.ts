@@ -1,5 +1,5 @@
 import { recordMarketDiscoveryFailure, recordObservedHead } from '#monitoring/market-discovery-status'
-import { requireDeployedContracts } from '../../../shared/src/monitoring/deployed-contracts.ts'
+import { requireDeployedContracts } from '@zoltar/bot-shared/monitoring/deployed-contracts'
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 import { appendFile, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

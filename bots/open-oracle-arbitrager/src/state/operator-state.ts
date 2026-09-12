@@ -1,5 +1,5 @@
 import type { UniverseIdentity } from '@zoltar/bot-shared/monitoring/universe-policy'
-import type { MissingContractDeployment } from '../../../shared/src/monitoring/deployed-contracts.ts'
+import type { MissingContractDeployment } from '@zoltar/bot-shared/monitoring/deployed-contracts'
 import { mkdir, open, readFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { bigintToSafeNumber, type Address, type Hex } from '@zoltar/bot-shared/ethereum'

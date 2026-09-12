@@ -1,5 +1,5 @@
 import { operationalFailureDisposition } from '@zoltar/bot-shared/monitoring/resilience'
-import { missingContractDeployment } from '../../../shared/src/monitoring/deployed-contracts.ts'
+import { missingContractDeployment } from '@zoltar/bot-shared/monitoring/deployed-contracts'
 import { errorMessage } from '#core/rpc-validation'
 import { recordOperation, type OperatorState, type MarketAvailabilityNotice } from '#state/operator-state'
 
