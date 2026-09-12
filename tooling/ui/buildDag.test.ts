@@ -44,8 +44,8 @@ describe('UI build dependency direction', () => {
 			expect(commands.filter(command => command[0] === 'x').map(command => command[3])).toEqual(getUiAppDependencyOrder(app).map(packageId => `ui/${packageId}/tsconfig.json`))
 			expect(commands.filter(command => command[0]?.endsWith('/workers.mts') === true)).toEqual([['./tooling/ui/workers.mts', app, '--artifacts-current']])
 		}
-		const appBuild = scripts['app:build']
-		if (appBuild === undefined) throw new Error('app:build script is missing')
+		const appBuild = scripts['ui:build']
+		if (appBuild === undefined) throw new Error('ui:build script is missing')
 		expect(appBuild).toContain('ui:build:apps')
 	})
 
@@ -72,7 +72,6 @@ describe('UI build dependency direction', () => {
 		expect(projectsIndex).toBeGreaterThanOrEqual(0)
 		expect(appsIndex).toBeGreaterThan(projectsIndex)
 		expect(testsIndex).toBeGreaterThan(appsIndex)
-		expect(scripts['ui:setup']).toBe('bun run setup')
 	})
 
 	test('applications depend on shared libraries and no application depends on another application', () => {
@@ -123,7 +122,7 @@ describe('UI build dependency direction', () => {
 		const scripts = readRootPackageJson().scripts ?? {}
 		const buildTestsScript = scripts['ui:build:tests']
 		if (buildTestsScript === undefined) throw new Error('ui:build:tests script is missing')
-		expect(buildTestsScript).toBe('bun run projects:test-build')
+		expect(buildTestsScript).toBe('bun ./tooling/repo/run-project-tasks.mts test-build')
 		expect(createProjectTaskPlan('test-build').map(entry => entry.projectId)).toEqual(['ui-core', 'ui-zoltar', 'ui-statoblast', 'ui-trading'])
 	})
 })

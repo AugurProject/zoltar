@@ -11,7 +11,7 @@ export type CleanupFoundryAnvilStateResult = {
 	readonly stateDirectory: string
 }
 
-export const getDefaultAnvilStateDirectory = (): string => process.env['ZOLTAR_ANVIL_STATE_DIRECTORY']?.trim() || join(homedir(), '.foundry', 'anvil', 'tmp')
+const getDefaultAnvilStateDirectory = (): string => process.env['ZOLTAR_ANVIL_STATE_DIRECTORY']?.trim() || join(homedir(), '.foundry', 'anvil', 'tmp')
 
 const isMissingPathError = (error: unknown): boolean => typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT'
 
@@ -55,15 +55,4 @@ export const cleanupFoundryAnvilState = async ({ maxAgeMs = DEFAULT_ANVIL_STATE_
 	}
 
 	return { deletedCount, skippedCount, stateDirectory }
-}
-
-if (import.meta.main) {
-	try {
-		const result = await cleanupFoundryAnvilState()
-		if (result.deletedCount > 0) console.log(`Deleted ${result.deletedCount} stale Anvil state director${result.deletedCount === 1 ? 'y' : 'ies'} from ${result.stateDirectory}`)
-	} catch (error) {
-		const message = error instanceof Error ? error.message : String(error)
-		console.error(`Failed to clean stale Anvil state directories: ${message}`)
-		process.exit(1)
-	}
 }

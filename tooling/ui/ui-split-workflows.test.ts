@@ -135,7 +135,7 @@ describe('split UI workflow paths', () => {
 		const triggers = requireRecord(workflow['on'], 'coverage triggers')
 		expect(Object.keys(triggers)).toEqual(['workflow_dispatch'])
 		const steps = Object.values(workflowJobs(workflow)).flatMap(workflowSteps)
-		expect(steps.some(step => step['run'] === 'bun run coverage:fast')).toBe(false)
+		expect(steps.some(step => step['run'] === 'bun run coverage')).toBe(false)
 		expect(steps.some(step => step['run'] === 'bun run coverage:full')).toBe(true)
 		const publisher = steps.find(step => typeof step['run'] === 'string' && step['run'].includes('coverage/coverage-summary.md'))
 		expect(publisher).toBeDefined()
