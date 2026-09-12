@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { zeroAddress, zeroHash } from '@zoltar/bot-shared/ethereum'
 import example from '../../config/operator.example.json'
 import { parseSettings } from '../../src/config/settings.ts'
-import { createChaosShutdownController } from '../../src/core/process-locks.ts'
+import { createBotShutdownController } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { executionProfileId } from '../../src/config/execution-profile.ts'
 import { runChaosOperator } from '../../src/runtime/operator.ts'
 import { loadDurableState, saveDurableState } from '../../src/state/operator-state.ts'
@@ -29,7 +29,7 @@ test('restarts an empty bootstrap that recorded the previous zero-address deploy
 		old.activities.push({ at: new Date().toISOString(), message: `Operator cycle stopped safely: No contract code on RPC chain 11155111 at block 100: zoltar (${zeroAddress}). Verify the selected network, RPC synchronization, and deployment addresses before retrying.`, status: 'failed', type: 'error' })
 		await saveDurableState(stateFile, old)
 		const settings = parseSettings({ ...example, runtime: { ...example.runtime, once: true, ui: false, stateFile } })
-		using shutdown = createChaosShutdownController()
+		using shutdown = createBotShutdownController()
 		await runChaosOperator({ path: join(directory, 'settings.json'), revision: 'fixture', settings }, { acquireSigner: async () => undefined, commitSigner: async () => undefined, discardSigner: async () => undefined, release: async () => undefined }, shutdown)
 		const migrated = await loadDurableState(stateFile, 11155111)
 		expect(migrated.profileId).toBe(executionProfileId(settings))

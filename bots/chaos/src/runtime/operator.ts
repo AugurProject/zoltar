@@ -9,8 +9,7 @@ import { checkRpcEndpoint, EndpointCheckFailure, type EndpointCheck } from '@zol
 import { createSignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
 import { operationalFailureDisposition, pollUntilStopped, retryDelayMilliseconds } from '@zoltar/bot-shared/monitoring/resilience'
 import { saveSettings, type OperatorSettings } from '../config/settings.ts'
-import { chaosDashboardLifecycle } from '../core/process-locks.ts'
-import type { ChaosProcessLocks, ChaosShutdownController } from '../core/process-locks.ts'
+import { botDashboardLifecycle, type BotProcessLocks, type BotShutdownController } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { randomInteger } from '../core/random.ts'
 import { backfillWaitMilliseconds, operatorWaitMilliseconds } from '../core/scheduler.ts'
 import { startDashboardServer } from '../dashboard/dashboard-server.ts'
@@ -456,7 +455,7 @@ async function handleCycleFailure(error: unknown, configuration: ConfigurationSt
 	await persistState(configuration, state)
 }
 
-export async function runChaosOperator(loaded: LoadedConfiguration, locks: ChaosProcessLocks, shutdown: ChaosShutdownController) {
+export async function runChaosOperator(loaded: LoadedConfiguration, locks: BotProcessLocks, shutdown: BotShutdownController) {
 	const initialWallet = configuredWallet(loaded.settings)
 	const state = migrateEmptyBootstrapState(await loadRuntimeState(loaded.settings.runtime.stateFile, loaded.settings.paused, initialWallet, loaded.settings.network.chainId), loaded.settings)
 	const initialProfileId = executionProfileId(loaded.settings)
@@ -596,7 +595,7 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 	})
 	dashboardController.setOperation = manualOperations.handle
 	const dashboard = loaded.settings.runtime.ui ? startDashboardServer(loaded.settings.runtime.uiPort, dashboardController) : undefined
-	await using _dashboardLifecycle = dashboard === undefined ? undefined : chaosDashboardLifecycle(dashboard)
+	await using _dashboardLifecycle = dashboard === undefined ? undefined : botDashboardLifecycle(dashboard)
 	let backfillIncomplete = false
 	let consecutiveBackfillCycles = 0
 	await persistState(configuration, state)

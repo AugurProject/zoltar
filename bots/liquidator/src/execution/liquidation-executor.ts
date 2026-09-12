@@ -3,7 +3,7 @@ import { prepareSignedTransaction, submitSignedTransaction } from '@zoltar/bot-s
 import { sendRawTransactionToRpc } from '@zoltar/bot-shared/monitoring/connectivity'
 import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import type { DesiredPoolSettings, OperatorSettings } from '#config/settings'
-import { coordinatorAbi, erc20Abi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi, wethAbi } from '#contracts/abi'
+import { openOraclePriceCoordinatorAbi, erc20Abi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi, weth9Abi } from '@zoltar/bot-shared/contracts/abi'
 import { isPoolExecutionEligible, type VaultMigration } from '#core/fork-migration'
 import { BPS_DENOMINATOR, LIQUIDATION_REP_BONUS_BPS, PRICE_PRECISION, conservativeLiquidationRep, liquidationSubmissionLabel, type LiquidationCandidate } from '#core/strategy'
 import { recordActivity, saveDurableState, type PendingTransactionIntent, type PoolObservation, type RuntimeState } from '#state/operator-state'
@@ -342,7 +342,7 @@ async function fundStaleOracle(wallet: WriteClient, settings: OperatorSettings, 
 			state,
 			rpcPool,
 			{
-				data: encodeFunctionData({ abi: wethAbi, args: [], functionName: 'deposit' }),
+				data: encodeFunctionData({ abi: weth9Abi, args: [], functionName: 'deposit' }),
 				gas: 80_000n,
 				label: 'Wrap ETH for oracle initial report',
 				preSubmit: () => assertMarketPriceStillAllowed(priceStillAllowed),
@@ -420,7 +420,7 @@ export async function executeLiquidation(wallet: WriteClient, settings: Operator
 		rpcPool,
 		{
 			data: encodeFunctionData({
-				abi: coordinatorAbi,
+				abi: openOraclePriceCoordinatorAbi,
 				args: [candidate.target.address, wallet.account.address, candidate.requestedDebtAttoEth, `0x${'00'.repeat(32)}`, settings.strategy.stagedOperationValidForSeconds, oracleFunding.proposedPrice, oracleFunding.initialAttoWeth],
 				functionName: 'requestPriceIfNeededAndStageLiquidation',
 			}),
@@ -450,7 +450,7 @@ export async function maintainVault(wallet: WriteClient, settings: OperatorSetti
 			rpcPool,
 			{
 				data: encodeFunctionData({
-					abi: coordinatorAbi,
+					abi: openOraclePriceCoordinatorAbi,
 					args: [1, wallet.account.address, plan.amountAttoRep, settings.strategy.stagedOperationValidForSeconds, 0n, 0n],
 					functionName: 'requestPriceIfNeededAndStageOperation',
 				}),

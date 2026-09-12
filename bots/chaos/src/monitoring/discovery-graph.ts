@@ -1,4 +1,4 @@
-import { coordinatorAbi, securityPoolAbi } from '../contracts/abi.ts'
+import { openOraclePriceCoordinatorAbi, securityPoolAbi } from '@zoltar/bot-shared/contracts/abi'
 import { type ChaosReadClient, drainConcurrent, sameAddress } from './discovery-client.ts'
 import { type Address, getAddress } from '@zoltar/bot-shared/ethereum'
 
@@ -23,9 +23,9 @@ export async function authenticatePoolProtocolBindings(authentication: PoolProto
 	const { blockNumber, canonicalRepToken, client, configuredOpenOracle, configuredWeth, coordinator, pool } = authentication
 	const [poolOpenOracle, coordinatorOpenOracle, coordinatorWeth, coordinatorRepToken] = await drainConcurrent([
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'openOracle' }),
-		client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'openOracle' }),
-		client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'weth' }),
-		client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'reputationToken' }),
+		client.readContract({ abi: openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'openOracle' }),
+		client.readContract({ abi: openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'weth' }),
+		client.readContract({ abi: openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'reputationToken' }),
 	])
 	requireGraphEdge(getAddress(poolOpenOracle), configuredOpenOracle, `Pool ${pool} OpenOracle edge`)
 	requireGraphEdge(getAddress(coordinatorOpenOracle), configuredOpenOracle, `Coordinator ${coordinator} OpenOracle edge`)

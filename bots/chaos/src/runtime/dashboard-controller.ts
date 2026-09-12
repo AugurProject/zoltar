@@ -17,7 +17,7 @@ import {
 	signerCandidateSettings,
 } from './configuration-candidates.ts'
 import { acquireConfigurationGate, applyRuntimeSettings, commitRuntimeState, ConfigurationCommitIndeterminate, ConfigurationCommittedSafelyPaused, latchSafetyPause, runtimeStateCandidate, safelyPausedSettings, safetyFailureCheckpoint, SignerOperationBusy } from './configuration-commit.ts'
-import type { ChaosProcessLocks } from '../core/process-locks.ts'
+import type { BotProcessLocks } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { scheduledStateAfterRun, schedulerIsDue } from '../core/scheduler.ts'
 import { abandonLifecycleObligation, retryLifecycleObligation } from './obligations.ts'
 import { workflowNeedsOperatorReconciliation } from './workflows.ts'
@@ -39,7 +39,7 @@ export type DashboardControllerOptions = {
 	onScheduleRequested?: (() => void) | undefined
 	gate: SignerOperationGate
 	hostname: ChaosDashboardController['hostname']
-	locks: ChaosProcessLocks
+	locks: BotProcessLocks
 	loopbackPublished?: boolean | undefined
 	onConnectivityUpdated?: ((settings: OperatorSettings, checks: readonly EndpointCheck[]) => void) | undefined
 	saveConfiguration?: typeof saveSettings | undefined

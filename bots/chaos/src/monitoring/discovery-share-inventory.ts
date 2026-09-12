@@ -1,5 +1,5 @@
 import { DISCOVERY_AGGREGATE_ITEM_LIMIT, type EcosystemDiscoveryContext } from './discovery-context.ts'
-import { erc1155Abi, shareTokenAbi, zoltarAbi } from '../contracts/abi.ts'
+import { erc1155Abi, shareTokenAbi, zoltarAbi } from '@zoltar/bot-shared/contracts/abi'
 import { validForkOutcomeRoutes } from '../operations/fork-outcomes.ts'
 import { type EcosystemDeployments, type OracleGameSnapshot, type PairSnapshot, type PoolSnapshot, type QuestionSnapshot, type ShareInventory, type UniverseSnapshot } from '../operations/types.ts'
 import { DISCOVERY_RPC_CONCURRENCY, drainConcurrent, mapWithConcurrency } from './discovery-client.ts'

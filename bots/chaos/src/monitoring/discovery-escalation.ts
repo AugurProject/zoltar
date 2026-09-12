@@ -1,5 +1,5 @@
 import { contractSimulationReverted } from './discovery-client.ts'
-import { escalationGameAbi } from '../contracts/abi.ts'
+import { escalationGameAbi } from '@zoltar/bot-shared/contracts/abi'
 import { genesisUniswapSeederDeployment } from '../core/genesis-uniswap.ts'
 import { canonicalUintString } from '../core/units.ts'
 import { type EcosystemDeployments, type PoolSnapshot } from '../operations/types.ts'

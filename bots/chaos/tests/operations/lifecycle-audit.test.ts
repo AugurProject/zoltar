@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData } from '@zoltar/bot-shared/ethereum'
-import { securityPoolForkerAbi } from '../../src/contracts/abi.ts'
+import { securityPoolForkerAbi } from '@zoltar/bot-shared/contracts/abi'
 import { canonicalLifecyclePresence, reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
 import { classifiedMethod } from '../support/canonical-contracts.ts'
 import { eligibleOperationPlans, urgentOperationPlans } from '../support/operation-plans.ts'

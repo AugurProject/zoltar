@@ -2,7 +2,7 @@ import { loadUniverseTree } from '@zoltar/bot-shared/monitoring/universe-policy'
 import { getAddress, zeroAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import { fetchLogsWithAdaptiveRanges } from '@zoltar/bot-shared/monitoring/block-sync'
 import type { OperatorSettings } from '#config/settings'
-import { coordinatorAbi, deploySecurityPoolEvent, erc20Abi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi } from '#contracts/abi'
+import { openOraclePriceCoordinatorAbi, deploySecurityPoolEvent, erc20Abi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi } from '@zoltar/bot-shared/contracts/abi'
 import { isPoolExecutionEligible } from '#core/fork-migration'
 import { evaluateCandidate, sortCandidates, type VaultPosition } from '#core/strategy'
 import { hasStagedLiquidation } from '#core/staged-operations'
@@ -58,18 +58,18 @@ async function loadPool(client: ReadClient, settings: OperatorSettings, deployme
 		client.readContract({ abi: securityPoolAbi, address, args: [], blockNumber, functionName: 'currentRetentionRate' }),
 		client.readContract({ abi: securityPoolAbi, address, args: [], blockNumber, functionName: 'totalRepBackingUnits' }),
 		client.readContract({ abi: securityPoolAbi, address, args: [], blockNumber, functionName: 'escalationGame' }),
-		client.readContract({ abi: coordinatorAbi, address: manager, args: [], blockNumber, functionName: 'isPriceValid' }),
-		client.readContract({ abi: coordinatorAbi, address: manager, args: [], blockNumber, functionName: 'lastPrice' }),
-		client.readContract({ abi: coordinatorAbi, address: manager, args: [], blockNumber, functionName: 'lastSettlementTimestamp' }),
-		client.readContract({ abi: coordinatorAbi, address: manager, args: [], blockNumber, functionName: 'minLiquidationPriceDistanceBps' }),
+		client.readContract({ abi: openOraclePriceCoordinatorAbi, address: manager, args: [], blockNumber, functionName: 'isPriceValid' }),
+		client.readContract({ abi: openOraclePriceCoordinatorAbi, address: manager, args: [], blockNumber, functionName: 'lastPrice' }),
+		client.readContract({ abi: openOraclePriceCoordinatorAbi, address: manager, args: [], blockNumber, functionName: 'lastSettlementTimestamp' }),
+		client.readContract({ abi: openOraclePriceCoordinatorAbi, address: manager, args: [], blockNumber, functionName: 'minLiquidationPriceDistanceBps' }),
 		client.readContract({ abi: securityPoolAbi, address, args: [], blockNumber, functionName: 'minimumSecurityBondDebtAttoEth' }),
-		client.readContract({ abi: coordinatorAbi, address: manager, args: [], blockNumber, functionName: 'minimumToken1ReportAttoEth' }),
+		client.readContract({ abi: openOraclePriceCoordinatorAbi, address: manager, args: [], blockNumber, functionName: 'minimumToken1ReportAttoEth' }),
 		client.readContract({ abi: securityPoolAbi, address, args: [], blockNumber, functionName: 'minimumVaultRepDepositAttoRep' }),
 		client.readContract({ abi: securityPoolAbi, address, args: [], blockNumber, functionName: 'getPoolAccountingSnapshot' }),
-		client.readContract({ abi: coordinatorAbi, address: manager, args: [], blockNumber, functionName: 'pendingReportId' }),
-		client.readContract({ abi: coordinatorAbi, address: manager, args: [], blockNumber, functionName: 'pendingReportSponsor' }),
+		client.readContract({ abi: openOraclePriceCoordinatorAbi, address: manager, args: [], blockNumber, functionName: 'pendingReportId' }),
+		client.readContract({ abi: openOraclePriceCoordinatorAbi, address: manager, args: [], blockNumber, functionName: 'pendingReportSponsor' }),
 		client.readContract({ abi: securityPoolAbi, address, args: [], blockNumber, functionName: 'repToken' }),
-		client.readContract({ abi: coordinatorAbi, address: manager, args: [], blockNumber, functionName: 'getRequestPriceCostAttoEth' }),
+		client.readContract({ abi: openOraclePriceCoordinatorAbi, address: manager, args: [], blockNumber, functionName: 'getRequestPriceCostAttoEth' }),
 		client.readContract({ abi: securityPoolAbi, address, args: [], blockNumber, functionName: 'securityPoolForker' }),
 		client.readContract({ abi: securityPoolAbi, address, args: [], blockNumber, functionName: 'systemState' }),
 		client.readContract({ abi: securityPoolAbi, address, args: [], blockNumber, functionName: 'getTotalPoolHeldAttoRep' }),
@@ -88,14 +88,14 @@ async function loadPool(client: ReadClient, settings: OperatorSettings, deployme
 	const vaultRefresh = await loadCurrentVaults(client, vaultIndex, address, normalizedEscalationGame, knownVaultCount, totalAttoRep, denominator, poolAccountingSnapshot.settlementCollateralAttoEth, totalCapacityOwnershipAttoRep, { hash: block.hash, number: blockNumber })
 	const vaults = vaultRefresh.vaults
 	const [stagedOperationCount, pendingSettlementOperationIds] = await Promise.all([
-		client.readContract({ abi: coordinatorAbi, address: manager, args: [], blockNumber, functionName: 'getActiveStagedOperationCount' }),
-		client.readContract({ abi: coordinatorAbi, address: manager, args: [], blockNumber, functionName: 'getPendingSettlementOperationIds' }),
+		client.readContract({ abi: openOraclePriceCoordinatorAbi, address: manager, args: [], blockNumber, functionName: 'getActiveStagedOperationCount' }),
+		client.readContract({ abi: openOraclePriceCoordinatorAbi, address: manager, args: [], blockNumber, functionName: 'getPendingSettlementOperationIds' }),
 	])
 	const stagedOperations: StagedOperationObservation[] = []
 	const stagedTargetVaults = new Map(vaults.map(vault => [vault.address.toLowerCase(), vault]))
 	for (let start = 0n; start < stagedOperationCount; start += 100n) {
 		const pageCount = stagedOperationCount - start < 100n ? stagedOperationCount - start : 100n
-		const [ids, operations] = await client.readContract({ abi: coordinatorAbi, address: manager, args: [start, pageCount], blockNumber, functionName: 'getActiveStagedOperations' })
+		const [ids, operations] = await client.readContract({ abi: openOraclePriceCoordinatorAbi, address: manager, args: [start, pageCount], blockNumber, functionName: 'getActiveStagedOperations' })
 		for (const [index, operation] of operations.entries()) {
 			const id = ids[index]
 			if (id === undefined) throw new Error('Coordinator returned mismatched staged operation arrays')

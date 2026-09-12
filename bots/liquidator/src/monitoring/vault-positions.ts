@@ -1,6 +1,6 @@
 import { type Chain, type PublicClient, type Transport } from '@zoltar/bot-shared/ethereum'
 
-import { escalationGameAbi, securityPoolAbi, truthAuctionHaircutAppliedEvent, vaultAccountingCheckpointEvent, vaultEscrowUpdatedEvent } from '#contracts/abi'
+import { escalationGameAbi, securityPoolAbi, truthAuctionHaircutAppliedEvent, vaultAccountingCheckpointEvent, vaultEscrowUpdatedEvent } from '@zoltar/bot-shared/contracts/abi'
 import { type VaultPosition, repForBackingUnits } from '#core/strategy'
 import { type VaultStateIndex, refreshVaultStateIndex } from './vault-state-index.ts'
 import { type Address, getAddress, zeroAddress } from '@zoltar/bot-shared/ethereum'

@@ -8,7 +8,8 @@ import { dirname } from 'node:path'
 import { privateKeyToAccount, zeroAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import { fetchLogsWithAdaptiveRanges } from '@zoltar/bot-shared/monitoring/block-sync'
 import { assertSettingsProfileIsolation, CHAOS_ECOSYSTEMS, loadSettings, type OperatorSettings } from '../config/settings.ts'
-import { acquireChaosProcessLocks, ChaosProcessLockAcquisitionError, type ChaosProcessLocks } from '../core/process-locks.ts'
+import { acquireBotProcessLocks, BotProcessLockAcquisitionError, type BotProcessLocks } from '@zoltar/bot-shared/execution/bot-process-locks'
+import { CHAOS_PROCESS_LOCK_OPTIONS } from '../core/process-lock-options.ts'
 import type { CanonicalUintString } from '../core/units.ts'
 import { executionProfileId } from '../config/execution-profile.ts'
 import { validateImmutableTopologySidecarIfPresent } from '../monitoring/topology-cache.ts'
@@ -51,7 +52,7 @@ export type ChaosDoctorProbeResult = {
 
 export type ChaosDoctorDependencies = {
 	deploymentAvailability: (settings: OperatorSettings) => Promise<string | undefined>
-	acquireLocks: (settings: OperatorSettings) => Promise<Pick<ChaosProcessLocks, 'release'>>
+	acquireLocks: (settings: OperatorSettings) => Promise<Pick<BotProcessLocks, 'release'>>
 	assertProfileIsolation: typeof assertSettingsProfileIsolation
 	load: typeof loadSettings
 	loadState: typeof loadDurableState
@@ -304,15 +305,18 @@ export async function probeChaosDoctor(settings: OperatorSettings, wallet: `0x${
 
 async function acquireDoctorLocks(settings: OperatorSettings) {
 	try {
-		return await acquireChaosProcessLocks({
-			chainId: settings.network.chainId,
-			execute: settings.runtime.execute,
-			privateKey: settings.privateKey,
-			signerLockRoot: process.env['ZOLTAR_BOT_SIGNER_LOCK_ROOT'],
-			stateFile: settings.runtime.stateFile,
-		})
+		return await acquireBotProcessLocks(
+			{
+				chainId: settings.network.chainId,
+				execute: settings.runtime.execute,
+				privateKey: settings.privateKey,
+				signerLockRoot: process.env['ZOLTAR_BOT_SIGNER_LOCK_ROOT'],
+				stateFile: settings.runtime.stateFile,
+			},
+			CHAOS_PROCESS_LOCK_OPTIONS,
+		)
 	} catch (error) {
-		if (error instanceof ChaosProcessLockAcquisitionError) {
+		if (error instanceof BotProcessLockAcquisitionError) {
 			await error.releaseProcessLocks()
 			throw error.acquisitionCause
 		}

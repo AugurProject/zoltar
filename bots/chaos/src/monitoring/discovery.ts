@@ -1,6 +1,6 @@
 import { requireDeployedContracts } from '../../../shared/src/monitoring/deployed-contracts.js'
 import { bigintToSafeNumber, getAddress, zeroAddress, type Address, type Hash } from '@zoltar/bot-shared/ethereum'
-import { auctionAbi, coordinatorAbi, erc20Abi, escalationGameAbi, openOracleAbi, questionDataAbi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi, tradingFactoryAbi, tradingPairAbi, tradingRouterAbi, uniswapV3FactoryAbi, uniswapV3PoolAbi, zoltarAbi } from '../contracts/abi.ts'
+import * as abis from '@zoltar/bot-shared/contracts/abi'
 import { CANONICAL_PROXY_DEPLOYER, CANONICAL_PROXY_DEPLOYER_RUNTIME, CANONICAL_UNISWAP_V3_FACTORY, GENESIS_UNISWAP_FEE, genesisUniswapSeederDeployment } from '../core/genesis-uniswap.ts'
 import { canonicalUintString, type CanonicalUintString } from '../core/units.ts'
 import type { AuctionSnapshot, ChildRepSplitProgressSnapshot, EcosystemSnapshot, MigrationRepSplitProgressSnapshot, OracleGameSnapshot, PairSnapshot, PoolSnapshot, QuestionSnapshot, StagedOperationSnapshot, TokenInventory, UniverseSnapshot } from '../operations/types.ts'
@@ -31,7 +31,7 @@ async function discoverOutcomeLabels(client: ChaosReadClient, questionData: Addr
 	for (;;) {
 		const remaining = limits.maxOutcomeLabelsPerQuestion - outcomeLabels.length
 		const requested = remaining === 0 ? 1n : BigInt(Math.min(remaining, Number(OUTCOME_LABEL_PAGE_SIZE)))
-		const page = await client.readContract({ abi: questionDataAbi, address: questionData, args: [questionId, BigInt(outcomeLabels.length), requested], blockNumber, functionName: 'getOutcomeLabels' })
+		const page = await client.readContract({ abi: abis.zoltarQuestionDataAbi, address: questionData, args: [questionId, BigInt(outcomeLabels.length), requested], blockNumber, functionName: 'getOutcomeLabels' })
 		if (BigInt(page.length) > requested) throw new Error(`Question ${questionId.toString()} outcome-label page exceeded its requested size`)
 		if (remaining === 0) {
 			if (page.length === 0) return outcomeLabels
@@ -90,7 +90,7 @@ async function authenticateConfiguredGraph(context: EcosystemDiscoveryContext, b
 		blockNumber,
 	)
 	const [forkerZoltar, tradingFactoryCode, tradingRouterCode] = await drainConcurrent([
-		client.readContract({ abi: securityPoolForkerAbi, address: deployments.securityPoolForker, blockNumber, functionName: 'zoltar' }),
+		client.readContract({ abi: abis.securityPoolForkerAbi, address: deployments.securityPoolForker, blockNumber, functionName: 'zoltar' }),
 		client.getCode({ address: deployments.tradingFactory, blockNumber }),
 		client.getCode({ address: deployments.tradingRouter, blockNumber }),
 	])
@@ -99,10 +99,10 @@ async function authenticateConfiguredGraph(context: EcosystemDiscoveryContext, b
 	const router = tradingRouterCode !== undefined && tradingRouterCode !== '0x'
 	if (router && !factory) throw new Error('Configured trading router exists without its factory')
 	if (!factory) return { factory, router }
-	const tradingSecurityPoolFactory = await client.readContract({ abi: tradingFactoryAbi, address: deployments.tradingFactory, blockNumber, functionName: 'securityPoolFactory' })
+	const tradingSecurityPoolFactory = await client.readContract({ abi: abis.twoWayConstantProductFactoryAbi, address: deployments.tradingFactory, blockNumber, functionName: 'securityPoolFactory' })
 	requireGraphEdge(getAddress(tradingSecurityPoolFactory), deployments.securityPoolFactory, 'Trading factory security-pool-factory edge')
 	if (router) {
-		const routerFactory = await client.readContract({ abi: tradingRouterAbi, address: deployments.tradingRouter, blockNumber, functionName: 'factory' })
+		const routerFactory = await client.readContract({ abi: abis.twoWayConstantProductRouterAbi, address: deployments.tradingRouter, blockNumber, functionName: 'factory' })
 		requireGraphEdge(getAddress(routerFactory), deployments.tradingFactory, 'Trading router factory edge')
 	}
 	return { factory, router }
@@ -119,15 +119,15 @@ async function discoverUniverseUniswap(context: EcosystemDiscoveryContext, unive
 	const factory = factoryCode !== undefined && factoryCode !== '0x'
 	const pools = await mapWithConcurrency(universes, UNISWAP_POOL_DISCOVERY_CONCURRENCY, async universe => {
 		if (!factory) return { initialized: false, liquidity: '0', repToken: universe.repToken, universeId: universe.id }
-		const pool = getAddress(await context.client.readContract({ abi: uniswapV3FactoryAbi, address: uniswapFactory, args: [universe.repToken, context.deployments.weth, GENESIS_UNISWAP_FEE], blockNumber, functionName: 'getPool' }))
+		const pool = getAddress(await context.client.readContract({ abi: abis.genesisUniswapV3FactoryAbi, address: uniswapFactory, args: [universe.repToken, context.deployments.weth, GENESIS_UNISWAP_FEE], blockNumber, functionName: 'getPool' }))
 		if (pool === zeroAddress) return { initialized: false, liquidity: '0', repToken: universe.repToken, universeId: universe.id }
 		const [poolFactory, token0, token1, fee, slot0, liquidity] = await drainConcurrent([
-			context.client.readContract({ abi: uniswapV3PoolAbi, address: pool, blockNumber, functionName: 'factory' }),
-			context.client.readContract({ abi: uniswapV3PoolAbi, address: pool, blockNumber, functionName: 'token0' }),
-			context.client.readContract({ abi: uniswapV3PoolAbi, address: pool, blockNumber, functionName: 'token1' }),
-			context.client.readContract({ abi: uniswapV3PoolAbi, address: pool, blockNumber, functionName: 'fee' }),
-			context.client.readContract({ abi: uniswapV3PoolAbi, address: pool, blockNumber, functionName: 'slot0' }),
-			context.client.readContract({ abi: uniswapV3PoolAbi, address: pool, blockNumber, functionName: 'liquidity' }),
+			context.client.readContract({ abi: abis.genesisUniswapV3PoolStateAbi, address: pool, blockNumber, functionName: 'factory' }),
+			context.client.readContract({ abi: abis.genesisUniswapV3PoolStateAbi, address: pool, blockNumber, functionName: 'token0' }),
+			context.client.readContract({ abi: abis.genesisUniswapV3PoolStateAbi, address: pool, blockNumber, functionName: 'token1' }),
+			context.client.readContract({ abi: abis.genesisUniswapV3PoolStateAbi, address: pool, blockNumber, functionName: 'fee' }),
+			context.client.readContract({ abi: abis.genesisUniswapV3PoolStateAbi, address: pool, blockNumber, functionName: 'slot0' }),
+			context.client.readContract({ abi: abis.genesisUniswapV3PoolStateAbi, address: pool, blockNumber, functionName: 'liquidity' }),
 		])
 		requireGraphEdge(getAddress(poolFactory), uniswapFactory, `Universe ${universe.id} Uniswap pool ${pool} factory edge`)
 		const expected = [universe.repToken.toLowerCase(), context.deployments.weth.toLowerCase()].sort()
@@ -155,7 +155,7 @@ async function discoverUniverses(context: EcosystemDiscoveryContext, blockNumber
 		topology.universeChildren = {}
 		mutation.changed = true
 	}
-	const forkBurnDivisor = await client.readContract({ abi: zoltarAbi, address: deployments.zoltar, blockNumber, functionName: 'forkBurnDivisor' })
+	const forkBurnDivisor = await client.readContract({ abi: abis.zoltarAbi, address: deployments.zoltar, blockNumber, functionName: 'forkBurnDivisor' })
 	const migrationProgressByUniverse = new Map<string, MigrationRepSplitProgressSnapshot[]>()
 	for (const progress of context.indexedMigrationRepSplits ?? []) {
 		const routes = migrationProgressByUniverse.get(progress.universeId) ?? []
@@ -170,14 +170,14 @@ async function discoverUniverses(context: EcosystemDiscoveryContext, blockNumber
 		if (seen.has(universeId.toString())) continue
 		seen.add(universeId.toString())
 		const [raw, threshold, nonDecisionThreshold, migration] = await drainConcurrent([
-			client.readContract({ abi: zoltarAbi, address: deployments.zoltar, args: [universeId], blockNumber, functionName: 'universes' }),
-			client.readContract({ abi: zoltarAbi, address: deployments.zoltar, args: [universeId], blockNumber, functionName: 'getForkThresholdAttoRep' }),
-			client.readContract({ abi: zoltarAbi, address: deployments.zoltar, args: [universeId], blockNumber, functionName: 'getNonDecisionThresholdAttoRep' }),
-			wallet === undefined ? Promise.resolve(0n) : client.readContract({ abi: zoltarAbi, address: deployments.zoltar, args: [wallet, universeId], blockNumber, functionName: 'getMigrationRepBalanceAttoRep' }),
+			client.readContract({ abi: abis.zoltarAbi, address: deployments.zoltar, args: [universeId], blockNumber, functionName: 'universes' }),
+			client.readContract({ abi: abis.zoltarAbi, address: deployments.zoltar, args: [universeId], blockNumber, functionName: 'getForkThresholdAttoRep' }),
+			client.readContract({ abi: abis.zoltarAbi, address: deployments.zoltar, args: [universeId], blockNumber, functionName: 'getNonDecisionThresholdAttoRep' }),
+			wallet === undefined ? Promise.resolve(0n) : client.readContract({ abi: abis.zoltarAbi, address: deployments.zoltar, args: [wallet, universeId], blockNumber, functionName: 'getMigrationRepBalanceAttoRep' }),
 		])
 		const [forkTime, forkQuestionId, forkingOutcomeIndex, reputationToken, parentUniverseId] = raw
 		if (reputationToken === zeroAddress) throw new Error(`Universe ${universeId.toString()} has no REP token`)
-		const theoreticalSupply = await client.readContract({ abi: erc20Abi, address: reputationToken, blockNumber, functionName: 'getTotalTheoreticalSupply' })
+		const theoreticalSupply = await client.readContract({ abi: abis.genesisReputationTokenAbi, address: reputationToken, blockNumber, functionName: 'getTotalTheoreticalSupply' })
 		const supplyBasedDeposit = theoreticalSupply / 10_000_000n
 		const initialEscalationDeposit = supplyBasedDeposit < 10n ** 18n ? 10n ** 18n : supplyBasedDeposit
 		const cachedChildren = topology.universeChildren[universeId.toString()]
@@ -195,7 +195,7 @@ async function discoverUniverses(context: EcosystemDiscoveryContext, blockNumber
 			for (let start = BigInt(outcomes.length); ; ) {
 				const remainingSlots = limits.maxUniverses - retainedUniverseIds.size
 				const requestedPageSize = BigInt(Math.max(1, Math.min(limits.maxUniverses, remainingSlots + 1)))
-				const [pageOutcomes, pageChildIds, pageChildren] = await client.readContract({ abi: zoltarAbi, address: deployments.zoltar, args: [universeId, start, requestedPageSize], blockNumber, functionName: 'getDeployedChildUniverses' })
+				const [pageOutcomes, pageChildIds, pageChildren] = await client.readContract({ abi: abis.zoltarAbi, address: deployments.zoltar, args: [universeId, start, requestedPageSize], blockNumber, functionName: 'getDeployedChildUniverses' })
 				if (pageOutcomes.length !== pageChildIds.length || pageOutcomes.length !== pageChildren.length) throw new Error(`Universe ${universeId.toString()} returned mismatched child arrays`)
 				if (BigInt(pageOutcomes.length) > requestedPageSize) throw new Error(`Universe ${universeId.toString()} exceeded the requested child page size`)
 				const accepted = Math.min(pageOutcomes.length, remainingSlots)
@@ -255,7 +255,7 @@ async function discoverUniverses(context: EcosystemDiscoveryContext, blockNumber
 
 async function discoverQuestions(context: EcosystemDiscoveryContext, blockNumber: bigint, limits: DiscoveryLimits, topology: ImmutableTopologyData, mutation: TopologyMutationState, warnings: string[]) {
 	const { client, deployments } = context
-	const count = await client.readContract({ abi: questionDataAbi, address: deployments.questionData, blockNumber, functionName: 'getQuestionCount' })
+	const count = await client.readContract({ abi: abis.zoltarQuestionDataAbi, address: deployments.questionData, blockNumber, functionName: 'getQuestionCount' })
 	let cursor = topology.discoveryCursors.questions
 	assertRegistryCountNotRegressed(cursor, count, 'Question registry')
 	let retentionMode: CountedRegistryCursor['retentionMode'] = count <= BigInt(limits.maxQuestions) ? 'resident' : 'overflow'
@@ -278,7 +278,7 @@ async function discoverQuestions(context: EcosystemDiscoveryContext, blockNumber
 		label: 'Question discovery',
 		maximumItems: limits.maxQuestions,
 		pageSize: limits.maxQuestions,
-		readPage: async (start, pageCount) => await client.readContract({ abi: questionDataAbi, address: deployments.questionData, args: [start, pageCount], blockNumber, functionName: 'getQuestions' }),
+		readPage: async (start, pageCount) => await client.readContract({ abi: abis.zoltarQuestionDataAbi, address: deployments.questionData, args: [start, pageCount], blockNumber, functionName: 'getQuestions' }),
 		start: BigInt(cursor.nextIndex),
 	})
 	if (collected.values.length > 0) {
@@ -300,8 +300,8 @@ async function discoverQuestions(context: EcosystemDiscoveryContext, blockNumber
 		const discovered = await mapWithConcurrency(collected.values, DISCOVERY_RPC_CONCURRENCY, async questionId => {
 			if (overflowed) return undefined
 			const [question, createdAt, labels] = await drainConcurrent([
-				client.readContract({ abi: questionDataAbi, address: deployments.questionData, args: [questionId], blockNumber, functionName: 'questions' }),
-				client.readContract({ abi: questionDataAbi, address: deployments.questionData, args: [questionId], blockNumber, functionName: 'questionCreatedTimestamp' }),
+				client.readContract({ abi: abis.zoltarQuestionDataAbi, address: deployments.questionData, args: [questionId], blockNumber, functionName: 'questions' }),
+				client.readContract({ abi: abis.zoltarQuestionDataAbi, address: deployments.questionData, args: [questionId], blockNumber, functionName: 'questionCreatedTimestamp' }),
 				discoverOutcomeLabels(client, deployments.questionData, questionId, blockNumber, limits),
 			])
 			const [, , startTime, endTime, numTicks] = question
@@ -379,7 +379,7 @@ async function discoverPools(
 		childProgressByPool.set(key, routes)
 	}
 	for (const routes of childProgressByPool.values()) routes.sort((left, right) => compareUnsignedStrings(left.outcomeIndex, right.outcomeIndex))
-	const count = await client.readContract({ abi: securityPoolFactoryAbi, address: deployments.securityPoolFactory, blockNumber, functionName: 'securityPoolDeploymentCount' })
+	const count = await client.readContract({ abi: abis.securityPoolFactoryAbi, address: deployments.securityPoolFactory, blockNumber, functionName: 'securityPoolDeploymentCount' })
 	const questionCursor = topology.discoveryCursors.questions
 	const dependenciesComplete = questionCursor.retentionMode === 'resident' && questionCursor.nextIndex === questionCursor.canonicalCount && !warnings.some(warning => /Universe discovery.*truncated/i.test(warning))
 	let cursor = topology.discoveryCursors.poolDeployments
@@ -406,7 +406,7 @@ async function discoverPools(
 		label: 'Pool discovery',
 		maximumItems: limits.maxPools,
 		pageSize: limits.maxPools,
-		readPage: async (start, pageCount) => await client.readContract({ abi: securityPoolFactoryAbi, address: deployments.securityPoolFactory, args: [start, pageCount], blockNumber, functionName: 'securityPoolDeploymentsRange' }),
+		readPage: async (start, pageCount) => await client.readContract({ abi: abis.securityPoolFactoryAbi, address: deployments.securityPoolFactory, args: [start, pageCount], blockNumber, functionName: 'securityPoolDeploymentsRange' }),
 		start: BigInt(cursor.nextIndex),
 	})
 	const newDeployments = collectedDeployments.values
@@ -490,53 +490,53 @@ async function discoverPools(
 			poolCoordinator,
 			coordinatorPool,
 		] = await drainConcurrent([
-			cachedDeployment ? Promise.resolve(authenticatedUniverse.repToken) : client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'repToken' }),
-			cachedDeployment ? Promise.resolve(deployment.shareToken) : client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'shareToken' }),
-			cachedDeployment ? Promise.resolve(BigInt(deployment.universeId)) : client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'universeId' }),
-			cachedDeployment ? Promise.resolve(BigInt(deployment.questionId)) : client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'questionId' }),
-			client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'escalationGame' }),
-			cachedDeployment ? Promise.resolve(deployment.truthAuction) : client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'truthAuction' }),
-			client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'systemState' }),
-			client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'awaitingForkContinuation' }),
-			client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'getPoolAccountingSnapshot' }),
-			client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'shareTokenSupplyAttoShares' }),
-			client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'totalRepBackingUnits' }),
-			client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'totalBadDebtAttoEth' }),
-			client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'minimumVaultRepDepositAttoRep' }),
-			client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'initialEscalationGameDepositAttoRep' }),
-			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'isPriceValid' }),
-			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'getRequestPriceCostAttoEth' }),
-			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'settlementTime' }),
-			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'lastPrice' }),
-			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'lastSettlementTimestamp' }),
-			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'stagedOperationCounter' }),
-			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'minimumToken1ReportAttoEth' }),
-			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'gasConsumedOpenOracleReportPrice' }),
-			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'getSettlementCallbackGasLimit' }),
-			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'gasUnitsForOneDispute' }),
-			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'initialReportPriorityFeeAttoEthPerGas' }),
-			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'targetPriceErrorForDispute' }),
-			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'openOracleSecurityMultiplierBps' }),
-			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'protocolFee' }),
-			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'feePercentage' }),
-			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'escalationHaltMultiplierBps' }),
-			client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'pendingReportId' }),
-			client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'getTotalPoolHeldAttoRep' }),
-			client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'getVaultCount' }),
-			client.readContract({ abi: securityPoolForkerAbi, address: deployments.securityPoolForker, args: [address], blockNumber, functionName: 'getQuestionOutcome' }),
-			client.readContract({ abi: securityPoolForkerAbi, address: deployments.securityPoolForker, args: [address], blockNumber, functionName: 'forkData' }),
-			deployment.parent === zeroAddress ? Promise.resolve(undefined) : client.readContract({ abi: securityPoolForkerAbi, address: deployments.securityPoolForker, args: [deployment.parent], blockNumber, functionName: 'forkData' }),
-			client.readContract({ abi: securityPoolForkerAbi, address: deployments.securityPoolForker, args: [address], blockNumber, functionName: 'getOwnForkMigrationStatus' }),
-			wallet === undefined ? Promise.resolve([false, 0n, [false, false, false]] as const) : client.readContract({ abi: securityPoolForkerAbi, address: deployments.securityPoolForker, args: [address, wallet], blockNumber, functionName: 'getEscalationMigrationEntitlementStatus' }),
-			client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'getCurrentMintingCapacityAttoEth' }),
-			client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'statoblastSecurityMultiplierBps' }),
-			client.readContract({ abi: securityPoolForkerAbi, address: deployments.securityPoolForker, args: [address], blockNumber, functionName: 'getUnassignedPosition' }),
-			cachedDeployment ? Promise.resolve(deployments.securityPoolFactory) : client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'securityPoolFactory' }),
-			cachedDeployment ? Promise.resolve(deployments.securityPoolForker) : client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'securityPoolForker' }),
-			cachedDeployment ? Promise.resolve(deployments.zoltar) : client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'zoltar' }),
-			cachedDeployment ? Promise.resolve(deployments.questionData) : client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'questionData' }),
-			cachedDeployment ? Promise.resolve(coordinator) : client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'priceOracleManagerAndOperatorQueuer' }),
-			cachedDeployment ? Promise.resolve(address) : client.readContract({ abi: coordinatorAbi, address: coordinator, blockNumber, functionName: 'securityPool' }),
+			cachedDeployment ? Promise.resolve(authenticatedUniverse.repToken) : client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'repToken' }),
+			cachedDeployment ? Promise.resolve(deployment.shareToken) : client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'shareToken' }),
+			cachedDeployment ? Promise.resolve(BigInt(deployment.universeId)) : client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'universeId' }),
+			cachedDeployment ? Promise.resolve(BigInt(deployment.questionId)) : client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'questionId' }),
+			client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'escalationGame' }),
+			cachedDeployment ? Promise.resolve(deployment.truthAuction) : client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'truthAuction' }),
+			client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'systemState' }),
+			client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'awaitingForkContinuation' }),
+			client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'getPoolAccountingSnapshot' }),
+			client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'shareTokenSupplyAttoShares' }),
+			client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'totalRepBackingUnits' }),
+			client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'totalBadDebtAttoEth' }),
+			client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'minimumVaultRepDepositAttoRep' }),
+			client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'initialEscalationGameDepositAttoRep' }),
+			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'isPriceValid' }),
+			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'getRequestPriceCostAttoEth' }),
+			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'settlementTime' }),
+			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'lastPrice' }),
+			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'lastSettlementTimestamp' }),
+			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'stagedOperationCounter' }),
+			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'minimumToken1ReportAttoEth' }),
+			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'gasConsumedOpenOracleReportPrice' }),
+			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'getSettlementCallbackGasLimit' }),
+			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'gasUnitsForOneDispute' }),
+			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'initialReportPriorityFeeAttoEthPerGas' }),
+			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'targetPriceErrorForDispute' }),
+			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'openOracleSecurityMultiplierBps' }),
+			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'protocolFee' }),
+			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'feePercentage' }),
+			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'escalationHaltMultiplierBps' }),
+			client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'pendingReportId' }),
+			client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'getTotalPoolHeldAttoRep' }),
+			client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'getVaultCount' }),
+			client.readContract({ abi: abis.securityPoolForkerAbi, address: deployments.securityPoolForker, args: [address], blockNumber, functionName: 'getQuestionOutcome' }),
+			client.readContract({ abi: abis.securityPoolForkerAbi, address: deployments.securityPoolForker, args: [address], blockNumber, functionName: 'forkData' }),
+			deployment.parent === zeroAddress ? Promise.resolve(undefined) : client.readContract({ abi: abis.securityPoolForkerAbi, address: deployments.securityPoolForker, args: [deployment.parent], blockNumber, functionName: 'forkData' }),
+			client.readContract({ abi: abis.securityPoolForkerAbi, address: deployments.securityPoolForker, args: [address], blockNumber, functionName: 'getOwnForkMigrationStatus' }),
+			wallet === undefined ? Promise.resolve([false, 0n, [false, false, false]] as const) : client.readContract({ abi: abis.securityPoolForkerAbi, address: deployments.securityPoolForker, args: [address, wallet], blockNumber, functionName: 'getEscalationMigrationEntitlementStatus' }),
+			client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'getCurrentMintingCapacityAttoEth' }),
+			client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'statoblastSecurityMultiplierBps' }),
+			client.readContract({ abi: abis.securityPoolForkerAbi, address: deployments.securityPoolForker, args: [address], blockNumber, functionName: 'getUnassignedPosition' }),
+			cachedDeployment ? Promise.resolve(deployments.securityPoolFactory) : client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'securityPoolFactory' }),
+			cachedDeployment ? Promise.resolve(deployments.securityPoolForker) : client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'securityPoolForker' }),
+			cachedDeployment ? Promise.resolve(deployments.zoltar) : client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'zoltar' }),
+			cachedDeployment ? Promise.resolve(deployments.questionData) : client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'questionData' }),
+			cachedDeployment ? Promise.resolve(coordinator) : client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'priceOracleManagerAndOperatorQueuer' }),
+			cachedDeployment ? Promise.resolve(address) : client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'securityPool' }),
 			authenticatePoolProtocolBindings({
 				blockNumber,
 				canonicalRepToken: authenticatedUniverse.repToken,
@@ -618,29 +618,29 @@ async function discoverPools(
 			escalationAddress === zeroAddress
 				? [false, false, false, 0n, 0n, false, 0n, 0n, 0n, [0n, 0n, 0n] as const, false, false, 3n]
 				: await drainConcurrent([
-						client.readContract({ abi: escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'canTriggerOwnFork' }),
-						client.readContract({ abi: escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'forkContinuation' }),
-						client.readContract({ abi: escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'isForkCarryFundingComplete' }),
-						client.readContract({ abi: escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'forkResumedAt' }),
-						client.readContract({ abi: escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'getEscalationGameEndDate' }),
-						client.readContract({ abi: escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'hasReachedNonDecision' }),
-						client.readContract({ abi: escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'nonDecisionState' }),
-						client.readContract({ abi: escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'startBondAttoRep' }),
-						client.readContract({ abi: escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'nonDecisionThresholdAttoRep' }),
-						client.readContract({ abi: escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'getOutcomeBalancesAttoRep' }),
-						client.readContract({ abi: securityPoolAbi, address, blockNumber, functionName: 'isEscalationResolved' }),
-						client.readContract({ abi: escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'forkCarrySnapshotInitialized' }),
-						client.readContract({ abi: escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'getFinalQuestionResolution' }),
+						client.readContract({ abi: abis.escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'canTriggerOwnFork' }),
+						client.readContract({ abi: abis.escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'forkContinuation' }),
+						client.readContract({ abi: abis.escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'isForkCarryFundingComplete' }),
+						client.readContract({ abi: abis.escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'forkResumedAt' }),
+						client.readContract({ abi: abis.escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'getEscalationGameEndDate' }),
+						client.readContract({ abi: abis.escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'hasReachedNonDecision' }),
+						client.readContract({ abi: abis.escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'nonDecisionState' }),
+						client.readContract({ abi: abis.escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'startBondAttoRep' }),
+						client.readContract({ abi: abis.escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'nonDecisionThresholdAttoRep' }),
+						client.readContract({ abi: abis.escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'getOutcomeBalancesAttoRep' }),
+						client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'isEscalationResolved' }),
+						client.readContract({ abi: abis.escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'forkCarrySnapshotInitialized' }),
+						client.readContract({ abi: abis.escalationGameAbi, address: escalationAddress, blockNumber, functionName: 'getFinalQuestionResolution' }),
 					])
 		const [poolRepBalanceAttoRep, escalationRepBalanceAttoRep, unassignedRepBackingAttoRep] = await drainConcurrent([
-			client.readContract({ abi: erc20Abi, address: getAddress(repToken), args: [address], blockNumber, functionName: 'balanceOf' }),
-			escalationAddress === zeroAddress ? Promise.resolve(0n) : client.readContract({ abi: erc20Abi, address: getAddress(repToken), args: [escalationAddress], blockNumber, functionName: 'balanceOf' }),
-			client.readContract({ abi: securityPoolAbi, address, args: [unassignedPosition[0]], blockNumber, functionName: 'backingUnitsToAttoRep' }),
+			client.readContract({ abi: abis.genesisReputationTokenAbi, address: getAddress(repToken), args: [address], blockNumber, functionName: 'balanceOf' }),
+			escalationAddress === zeroAddress ? Promise.resolve(0n) : client.readContract({ abi: abis.genesisReputationTokenAbi, address: getAddress(repToken), args: [escalationAddress], blockNumber, functionName: 'balanceOf' }),
+			client.readContract({ abi: abis.securityPoolAbi, address, args: [unassignedPosition[0]], blockNumber, functionName: 'backingUnitsToAttoRep' }),
 		])
 		let escalationResidualSweepExpectedSuccess = false
 		if (wallet !== undefined && escalationAddress !== zeroAddress) {
 			try {
-				await client.simulateContract({ abi: escalationGameAbi, account: wallet, address: escalationAddress, blockNumber, functionName: 'sweepResidualRepToSecurityPool' })
+				await client.simulateContract({ abi: abis.escalationGameAbi, account: wallet, address: escalationAddress, blockNumber, functionName: 'sweepResidualRepToSecurityPool' })
 				escalationResidualSweepExpectedSuccess = true
 			} catch (error) {
 				if (!contractSimulationReverted(error)) throw error
@@ -653,7 +653,7 @@ async function discoverPools(
 			await drainConcurrent(
 				[0, 1, 2].map(async outcome => {
 					try {
-						await client.simulateContract({ abi: securityPoolAbi, account: wallet, address, args: [outcome, escalationMaximum], blockNumber, functionName: 'depositToEscalationGame' })
+						await client.simulateContract({ abi: abis.securityPoolAbi, account: wallet, address, args: [outcome, escalationMaximum], blockNumber, functionName: 'depositToEscalationGame' })
 						safeEscalationDepositMaximumsAttoRep[outcome] = escalationMaximum.toString()
 					} catch (error) {
 						if (!contractSimulationReverted(error)) throw error
@@ -666,7 +666,7 @@ async function discoverPools(
 			wallet !== undefined && escalationAddress !== zeroAddress && systemState === 0n && !awaitingForkContinuation && !escalationForkContinuation && universe.forkTime === '0'
 				? await discoverDirectEscalationDepositQuotes(client, wallet, escalationAddress, escalationMaximum, escalationOutcomeBalancesAttoRep, escalationNonDecisionThresholdAttoRep, blockNumber)
 				: ([emptyDirectEscalationDepositQuote(), emptyDirectEscalationDepositQuote(), emptyDirectEscalationDepositQuote()] satisfies PoolSnapshot['directEscalationDepositQuotes'])
-		const pendingReportSettled = pendingReportId === 0n ? false : (await client.readContract({ abi: openOracleAbi, address: deployments.openOracle, args: [pendingReportId], blockNumber, functionName: 'storedGame' })).settlementTimestamp !== 0n
+		const pendingReportSettled = pendingReportId === 0n ? false : (await client.readContract({ abi: abis.openOracleAbi, address: deployments.openOracle, args: [pendingReportId], blockNumber, functionName: 'storedGame' })).settlementTimestamp !== 0n
 		const vaultCacheKey = address.toLowerCase()
 		const vaultRegistry = await advanceVaultRegistryCursor({
 			cachedVaults: topology.vaultsByPool[vaultCacheKey] ?? [],
@@ -674,7 +674,7 @@ async function discoverPools(
 			cursor: topology.discoveryCursors.vaultsByPool[vaultCacheKey],
 			label: `Vault registry ${address}`,
 			limit: limits.maxVaultsPerPool,
-			readNewestFirstPage: async (start, pageCount) => await client.readContract({ abi: securityPoolAbi, address, args: [start, pageCount], blockNumber, functionName: 'getVaults' }),
+			readNewestFirstPage: async (start, pageCount) => await client.readContract({ abi: abis.securityPoolAbi, address, args: [start, pageCount], blockNumber, functionName: 'getVaults' }),
 		})
 		if (vaultRegistry.changed) mutation.changed = true
 		topology.discoveryCursors.vaultsByPool[vaultCacheKey] = vaultRegistry.cursor
@@ -701,7 +701,7 @@ async function discoverPools(
 		if (wallet !== undefined && inspectEveryVault && forkData.unresolvedEscalationAtFork) {
 			for (const outcome of validForkOutcomeRoutes(forkQuestion, universe.knownChildOutcomes)) {
 				try {
-					await client.simulateContract({ abi: securityPoolForkerAbi, account: wallet, address: deployments.securityPoolForker, args: [address, wallet, BigInt(outcome)], blockNumber, functionName: 'migrateVaultWithUnresolvedEscalation' })
+					await client.simulateContract({ abi: abis.securityPoolForkerAbi, account: wallet, address: deployments.securityPoolForker, args: [address, wallet, BigInt(outcome)], blockNumber, functionName: 'migrateVaultWithUnresolvedEscalation' })
 					unresolvedEscalationMigrationReadyOutcomes.push(outcome)
 				} catch (error) {
 					if (!contractSimulationReverted(error)) throw error
@@ -793,22 +793,22 @@ async function discoverPairs(context: EcosystemDiscoveryContext, pools: readonly
 	for (const pool of pools) {
 		const pairCacheKey = pool.address.toLowerCase()
 		const cachedPair = topology.pairsByPool[pairCacheKey]
-		const rawPair = cachedPair ?? (await client.readContract({ abi: tradingFactoryAbi, address: deployments.tradingFactory, args: [pool.address], blockNumber, functionName: 'getPair' }))
+		const rawPair = cachedPair ?? (await client.readContract({ abi: abis.twoWayConstantProductFactoryAbi, address: deployments.tradingFactory, args: [pool.address], blockNumber, functionName: 'getPair' }))
 		if (rawPair === zeroAddress) continue
 		if (cachedPair === undefined) mutation.changed = true
 		const address = getAddress(rawPair)
 		const [status, feeBps, reserves, effectiveReserves, totalSupply, walletLiquidity, pairFactory, pairPool, pairShareToken, pairUniverseId, pairQuestionId] = await drainConcurrent([
-			client.readContract({ abi: tradingPairAbi, address, blockNumber, functionName: 'tradingStatus' }),
-			client.readContract({ abi: tradingPairAbi, address, blockNumber, functionName: 'feeBps' }),
-			client.readContract({ abi: tradingPairAbi, address, blockNumber, functionName: 'getReserves' }),
-			client.readContract({ abi: tradingPairAbi, address, blockNumber, functionName: 'getEffectiveReserves' }),
-			client.readContract({ abi: tradingPairAbi, address, blockNumber, functionName: 'totalSupply' }),
-			wallet === undefined ? Promise.resolve(0n) : client.readContract({ abi: tradingPairAbi, address, args: [wallet], blockNumber, functionName: 'balanceOf' }),
-			cachedPair === undefined ? client.readContract({ abi: tradingPairAbi, address, blockNumber, functionName: 'factory' }) : Promise.resolve(deployments.tradingFactory),
-			cachedPair === undefined ? client.readContract({ abi: tradingPairAbi, address, blockNumber, functionName: 'securityPool' }) : Promise.resolve(pool.address),
-			cachedPair === undefined ? client.readContract({ abi: tradingPairAbi, address, blockNumber, functionName: 'shareToken' }) : Promise.resolve(pool.shareToken),
-			cachedPair === undefined ? client.readContract({ abi: tradingPairAbi, address, blockNumber, functionName: 'universeId' }) : Promise.resolve(BigInt(pool.universeId)),
-			cachedPair === undefined ? client.readContract({ abi: tradingPairAbi, address, blockNumber, functionName: 'questionId' }) : Promise.resolve(BigInt(pool.questionId)),
+			client.readContract({ abi: abis.twoWayConstantProductPairAbi, address, blockNumber, functionName: 'tradingStatus' }),
+			client.readContract({ abi: abis.twoWayConstantProductPairAbi, address, blockNumber, functionName: 'feeBps' }),
+			client.readContract({ abi: abis.twoWayConstantProductPairAbi, address, blockNumber, functionName: 'getReserves' }),
+			client.readContract({ abi: abis.twoWayConstantProductPairAbi, address, blockNumber, functionName: 'getEffectiveReserves' }),
+			client.readContract({ abi: abis.twoWayConstantProductPairAbi, address, blockNumber, functionName: 'totalSupply' }),
+			wallet === undefined ? Promise.resolve(0n) : client.readContract({ abi: abis.twoWayConstantProductPairAbi, address, args: [wallet], blockNumber, functionName: 'balanceOf' }),
+			cachedPair === undefined ? client.readContract({ abi: abis.twoWayConstantProductPairAbi, address, blockNumber, functionName: 'factory' }) : Promise.resolve(deployments.tradingFactory),
+			cachedPair === undefined ? client.readContract({ abi: abis.twoWayConstantProductPairAbi, address, blockNumber, functionName: 'securityPool' }) : Promise.resolve(pool.address),
+			cachedPair === undefined ? client.readContract({ abi: abis.twoWayConstantProductPairAbi, address, blockNumber, functionName: 'shareToken' }) : Promise.resolve(pool.shareToken),
+			cachedPair === undefined ? client.readContract({ abi: abis.twoWayConstantProductPairAbi, address, blockNumber, functionName: 'universeId' }) : Promise.resolve(BigInt(pool.universeId)),
+			cachedPair === undefined ? client.readContract({ abi: abis.twoWayConstantProductPairAbi, address, blockNumber, functionName: 'questionId' }) : Promise.resolve(BigInt(pool.questionId)),
 		])
 		assertCanonicalPairGraph({
 			configuredFactory: deployments.tradingFactory,
@@ -851,13 +851,13 @@ async function discoverTokenInventory(context: EcosystemDiscoveryContext, univer
 	const tokens: TokenInventory[] = []
 	for (const address of addresses.values()) {
 		const [balance, openOracleCredit, openOracleInternalAllowanceToSelf] = await drainConcurrent([
-			client.readContract({ abi: erc20Abi, address, args: [wallet], blockNumber, functionName: 'balanceOf' }),
-			client.readContract({ abi: openOracleAbi, address: deployments.openOracle, args: [wallet, address], blockNumber, functionName: 'tokenHolder' }),
-			client.readContract({ abi: openOracleAbi, address: deployments.openOracle, args: [wallet, wallet, address], blockNumber, functionName: 'internalAllowance' }),
+			client.readContract({ abi: abis.erc20Abi, address, args: [wallet], blockNumber, functionName: 'balanceOf' }),
+			client.readContract({ abi: abis.openOracleAbi, address: deployments.openOracle, args: [wallet, address], blockNumber, functionName: 'tokenHolder' }),
+			client.readContract({ abi: abis.openOracleAbi, address: deployments.openOracle, args: [wallet, wallet, address], blockNumber, functionName: 'internalAllowance' }),
 		])
 		const allowances: Record<string, string> = {}
 		for (const spender of relevantTokenSpenders(deployments, pools, address)) {
-			allowances[spender] = (await client.readContract({ abi: erc20Abi, address, args: [wallet, spender], blockNumber, functionName: 'allowance' })).toString()
+			allowances[spender] = (await client.readContract({ abi: abis.erc20Abi, address, args: [wallet, spender], blockNumber, functionName: 'allowance' })).toString()
 		}
 		tokens.push({
 			address,
@@ -875,7 +875,7 @@ async function discoverLpInventory(context: EcosystemDiscoveryContext, pairs: re
 	const wallet = context.wallet
 	if (wallet === undefined) return []
 	return await mapWithConcurrency(pairs, DISCOVERY_RPC_CONCURRENCY, async pair => ({
-		allowanceToRouter: (await context.client.readContract({ abi: tradingPairAbi, address: pair.address, args: [wallet, context.deployments.tradingRouter], blockNumber, functionName: 'allowance' })).toString(),
+		allowanceToRouter: (await context.client.readContract({ abi: abis.twoWayConstantProductPairAbi, address: pair.address, args: [wallet, context.deployments.tradingRouter], blockNumber, functionName: 'allowance' })).toString(),
 		balance: pair.walletLiquidity,
 		pair: pair.address,
 	}))
@@ -890,18 +890,18 @@ async function discoverAuctions(context: EcosystemDiscoveryContext, pools: reado
 	const auctions: AuctionSnapshot[] = []
 	for (const pool of pools) {
 		if (pool.truthAuction === zeroAddress) continue
-		const started = await context.client.readContract({ abi: auctionAbi, address: pool.truthAuction, blockNumber, functionName: 'auctionStarted' })
+		const started = await context.client.readContract({ abi: abis.uniformPriceDualCapBatchAuctionAbi, address: pool.truthAuction, blockNumber, functionName: 'auctionStarted' })
 		const [minimumBid, finalized, pendingRefund, clearing, storedClearingTick, underfunded, underfundedWinningAttoEth] =
 			started === 0n
 				? [0n, false, 0n, [false, 0n, 0n, 0n] as const, 0n, false, 0n]
 				: await drainConcurrent([
-						context.client.readContract({ abi: auctionAbi, address: pool.truthAuction, blockNumber, functionName: 'minBidSizeAttoEth' }),
-						context.client.readContract({ abi: auctionAbi, address: pool.truthAuction, blockNumber, functionName: 'finalized' }),
-						context.wallet === undefined ? Promise.resolve(0n) : context.client.readContract({ abi: auctionAbi, address: pool.truthAuction, args: [context.wallet], blockNumber, functionName: 'pendingEthRefundsAttoEth' }),
-						context.client.readContract({ abi: auctionAbi, address: pool.truthAuction, blockNumber, functionName: 'computeClearing' }),
-						context.client.readContract({ abi: auctionAbi, address: pool.truthAuction, blockNumber, functionName: 'clearingTick' }),
-						context.client.readContract({ abi: auctionAbi, address: pool.truthAuction, blockNumber, functionName: 'underfunded' }),
-						context.client.readContract({ abi: auctionAbi, address: pool.truthAuction, blockNumber, functionName: 'underfundedWinningAttoEth' }),
+						context.client.readContract({ abi: abis.uniformPriceDualCapBatchAuctionAbi, address: pool.truthAuction, blockNumber, functionName: 'minBidSizeAttoEth' }),
+						context.client.readContract({ abi: abis.uniformPriceDualCapBatchAuctionAbi, address: pool.truthAuction, blockNumber, functionName: 'finalized' }),
+						context.wallet === undefined ? Promise.resolve(0n) : context.client.readContract({ abi: abis.uniformPriceDualCapBatchAuctionAbi, address: pool.truthAuction, args: [context.wallet], blockNumber, functionName: 'pendingEthRefundsAttoEth' }),
+						context.client.readContract({ abi: abis.uniformPriceDualCapBatchAuctionAbi, address: pool.truthAuction, blockNumber, functionName: 'computeClearing' }),
+						context.client.readContract({ abi: abis.uniformPriceDualCapBatchAuctionAbi, address: pool.truthAuction, blockNumber, functionName: 'clearingTick' }),
+						context.client.readContract({ abi: abis.uniformPriceDualCapBatchAuctionAbi, address: pool.truthAuction, blockNumber, functionName: 'underfunded' }),
+						context.client.readContract({ abi: abis.uniformPriceDualCapBatchAuctionAbi, address: pool.truthAuction, blockNumber, functionName: 'underfundedWinningAttoEth' }),
 					])
 		const pendingEthRefundGeneration = authenticatedAuctionRefundGeneration(context, pool.truthAuction, pendingRefund)
 		auctions.push({
@@ -927,7 +927,7 @@ async function verifyIndexedReports(context: EcosystemDiscoveryContext, blockNum
 	const verified: OracleGameSnapshot[] = []
 	for (const report of context.indexedReports ?? []) {
 		if (!sameAddress(report.openOracle, context.deployments.openOracle)) continue
-		const stateHash = await context.client.readContract({ abi: openOracleAbi, address: report.openOracle, args: [BigInt(report.reportId)], blockNumber, functionName: 'oracleGame' })
+		const stateHash = await context.client.readContract({ abi: abis.openOracleAbi, address: report.openOracle, args: [BigInt(report.reportId)], blockNumber, functionName: 'oracleGame' })
 		if (stateHash.toLowerCase() !== report.stateHash.toLowerCase()) continue
 		const timestampClock = (report.flags & 1) !== 0
 		const settleAt = BigInt(report.reportTimestamp) + BigInt(report.settlementTime)
@@ -970,7 +970,7 @@ export async function discoverEcosystemSnapshot(context: EcosystemDiscoveryConte
 		context.wallet === undefined ? Promise.resolve(0n) : context.client.getBalance({ address: context.wallet, blockNumber }),
 		discoverUniverses(context, blockNumber, limits, topology, topologyMutation, warnings),
 		discoverQuestions(context, blockNumber, limits, topology, topologyMutation, warnings),
-		context.wallet === undefined ? Promise.resolve(0n) : context.client.readContract({ abi: openOracleAbi, address: context.deployments.openOracle, args: [context.wallet, zeroAddress], blockNumber, functionName: 'tokenHolder' }),
+		context.wallet === undefined ? Promise.resolve(0n) : context.client.readContract({ abi: abis.openOracleAbi, address: context.deployments.openOracle, args: [context.wallet, zeroAddress], blockNumber, functionName: 'tokenHolder' }),
 	])
 	const { pools, staged } = await discoverPools(context, blockNumber, block.timestamp, block.baseFeePerGas, limits, warnings, universes, questions, topology, topologyMutation)
 	const pairs = tradingDeployment.factory ? await discoverPairs(context, pools, blockNumber, topology, topologyMutation) : []

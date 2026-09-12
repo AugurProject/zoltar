@@ -7,7 +7,7 @@ import { availableSettledValues, quorumValue, settledQuorumValue, sharedQuorumBl
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
 import type { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import type { OperatorSettings } from '../config/settings.ts'
-import { erc1155Abi, erc20Abi, openOracleAbi, securityPoolAbi } from '../contracts/abi.ts'
+import { erc1155Abi, erc20Abi, openOracleAbi, securityPoolAbi } from '@zoltar/bot-shared/contracts/abi'
 import { assertCanonicalAnchorFreshness } from '../core/canonical-freshness.ts'
 import { EXECUTOR_FINALITY_BLOCKS } from '../operations/timing.ts'
 import type { OperationEvidence, OperationPlan, OperationPreflightCall, OperationStep } from '../operations/types.ts'

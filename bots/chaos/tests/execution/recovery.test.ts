@@ -5,7 +5,7 @@ import { createRpcEndpointPool, createWalletClient, encodeAbiParameters, encodeF
 import { mainnet } from '@zoltar/core-shared/evm/ethereum'
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
 import type { OperatorSettings } from '../../src/config/settings.ts'
-import { securityPoolAbi } from '../../src/contracts/abi.ts'
+import { securityPoolAbi } from '@zoltar/bot-shared/contracts/abi'
 import { recoverPendingTransactions } from '../../src/execution/recovery.ts'
 import { assertRecoverySubmissionMode, pendingIntentRecoveryAction, transactionIsStrictNonceCancellation } from '../../src/execution/recovery-policy.ts'
 import { TransactionAwaitingRecovery, type ExecutionEnvironment } from '../../src/execution/transaction-executor.ts'

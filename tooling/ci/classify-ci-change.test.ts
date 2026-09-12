@@ -25,7 +25,7 @@ const routingCases: readonly (readonly [readonly string[], readonly CiScope[]])[
 		['.agents/skills/babysit/SKILL.md', 'ui/trading/ts/index.ts'],
 		['core', 'docs'],
 	],
-	[['shared/trading/ts/trading/math.ts'], ['core', 'infrastructure', 'chaos', 'arbitrager', 'liquidator', 'docs']],
+	[['shared/trading/ts/trading/math.ts'], ['core', 'infrastructure', 'bot-shared', 'chaos', 'arbitrager', 'liquidator', 'docs']],
 	[['ui/trading/ts/index.ts'], ['core']],
 	[['bots/open-oracle-arbitrager/src/run.ts'], ['arbitrager']],
 	[['bots/liquidator/src/run.ts'], ['liquidator']],
@@ -34,11 +34,11 @@ const routingCases: readonly (readonly [readonly string[], readonly CiScope[]])[
 	[['augurScan/src/server.ts'], ['augur-scan']],
 	[['shared/core/ts/evm/ethereum.ts'], ['core', 'infrastructure', 'bot-shared', 'chaos', 'arbitrager', 'liquidator', 'augur-scan', 'docs']],
 	[['ui/zoltar/ts/index.ts'], ['core']],
-	[['solidity/contracts/Zoltar.sol'], ['core', 'infrastructure', 'chaos', 'arbitrager', 'liquidator', 'docs']],
+	[['solidity/contracts/Zoltar.sol'], ['core', 'infrastructure', 'bot-shared', 'chaos', 'arbitrager', 'liquidator', 'docs']],
 	[['reth/compose.yaml'], ['infrastructure']],
 	[
 		['solidity/contracts/trading/TwoWayConstantProductPair.sol', 'bots/liquidator/src/run.ts'],
-		['core', 'infrastructure', 'chaos', 'arbitrager', 'liquidator', 'docs'],
+		['core', 'infrastructure', 'bot-shared', 'chaos', 'arbitrager', 'liquidator', 'docs'],
 	],
 ]
 for (const [paths, expected] of routingCases) test(`routes ${paths.join(', ')}`, () => expect(scopes(paths)).toEqual(expected))

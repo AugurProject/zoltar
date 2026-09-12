@@ -1,3 +1,15 @@
+/* Base resets shared by every bot dashboard; the per-bot stylesheets layer their themes on top. */
+* {
+	box-sizing: border-box;
+}
+
+fieldset {
+	min-width: 0;
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
 .operator-shell {
 	position: sticky;
 	top: 0;
