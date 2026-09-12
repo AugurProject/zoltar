@@ -51,6 +51,24 @@ test('registry paths, local dependencies, cache inputs, and generated outputs ar
 	expect(() => validateProjectRegistryFiles(repositoryRoot)).not.toThrow()
 })
 
+async function pinnedBiomeVersion(packageDirectory: string) {
+	const manifest: unknown = JSON.parse(await fs.readFile(path.join(repositoryRoot, packageDirectory, 'package.json'), 'utf8'))
+	if (typeof manifest !== 'object' || manifest === null) throw new Error(`${packageDirectory}/package.json must contain an object`)
+	const pinnedVersion = Reflect.get(Reflect.get(manifest, 'devDependencies') ?? {}, '@biomejs/biome')
+	if (typeof pinnedVersion !== 'string') throw new Error(`${packageDirectory}/package.json must pin @biomejs/biome`)
+	return pinnedVersion
+}
+
+test('every Biome configuration declares the schema of the Biome version its package pins, and every package pins the root version', async () => {
+	const rootVersion = await pinnedBiomeVersion('.')
+	for (const packageDirectory of ['.', 'augurScan', 'bots/chaos', 'bots/liquidator', 'bots/open-oracle-arbitrager', 'bots/shared']) {
+		const packageVersion = await pinnedBiomeVersion(packageDirectory)
+		expect(packageVersion, `${packageDirectory} @biomejs/biome`).toBe(rootVersion)
+		const config = JSON.parse(await fs.readFile(path.join(repositoryRoot, packageDirectory, 'biome.json'), 'utf8')) as Record<string, unknown>
+		expect(Reflect.get(config, '$schema'), `${packageDirectory}/biome.json`).toBe(`https://biomejs.dev/schemas/${packageVersion}/schema.json`)
+	}
+})
+
 test('independent service Biome configurations extend the root rules without local overrides', async () => {
 	for (const projectPath of ['augurScan', 'bots/chaos', 'bots/liquidator', 'bots/open-oracle-arbitrager', 'bots/shared']) {
 		const config = JSON.parse(await fs.readFile(path.join(repositoryRoot, projectPath, 'biome.json'), 'utf8')) as Record<string, unknown>
