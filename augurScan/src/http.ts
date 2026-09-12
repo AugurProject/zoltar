@@ -76,18 +76,12 @@ export const requestAccessGuard = (
 			? undefined
 			: {
 					reason: 'rate-limit' as const,
-					response: Response.json(
-						{ error: 'Rate limit exceeded; retry shortly' },
-						{ status: 429, headers: { ...headers, 'retry-after': String(admission.retryAfterSeconds ?? 1) } },
-					),
+					response: Response.json({ error: 'Rate limit exceeded; retry shortly' }, { status: 429, headers: { ...headers, 'retry-after': String(admission.retryAfterSeconds ?? 1) } }),
 				}
 	const lockout = credentials === undefined ? undefined : admissionFailure(admitRequest.check(client))
 	if (lockout !== undefined) return lockout
 	const authenticated = hasBasicAccess(request, credentials)
-	const admission =
-		pathname.startsWith('/api/') || (credentials !== undefined && !authenticated)
-			? admissionFailure(admitRequest(client))
-			: undefined
+	const admission = pathname.startsWith('/api/') || (credentials !== undefined && !authenticated) ? admissionFailure(admitRequest(client)) : undefined
 	if (admission !== undefined) return admission
 	if (!authenticated) return { reason: 'authentication', response: basicAccessRequiredResponse(headers) }
 	return undefined
@@ -128,8 +122,7 @@ export const createRequestMetrics = () => {
 			}
 			lines.push('# HELP augurscan_http_request_duration_seconds_sum Cumulative request time by bounded route.')
 			lines.push('# TYPE augurscan_http_request_duration_seconds_sum counter')
-			for (const [route, seconds] of [...durationSums].toSorted(([left], [right]) => left.localeCompare(right)))
-				lines.push(`augurscan_http_request_duration_seconds_sum{route="${prometheusLabel(route)}"} ${seconds}`)
+			for (const [route, seconds] of [...durationSums].toSorted(([left], [right]) => left.localeCompare(right))) lines.push(`augurscan_http_request_duration_seconds_sum{route="${prometheusLabel(route)}"} ${seconds}`)
 			lines.push('# HELP augurscan_rate_limit_rejections_total Requests rejected by the process-local request limiter.')
 			lines.push('# TYPE augurscan_rate_limit_rejections_total counter')
 			lines.push(`augurscan_rate_limit_rejections_total ${rateLimitRejections}`)
