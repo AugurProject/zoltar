@@ -1,6 +1,8 @@
+import { assertCompatibleProfileProcessMode, chainSpecificPath } from '@zoltar/bot-shared/config/profiles'
+import { renameAndSyncDirectory } from '@zoltar/bot-shared/config/durable-replacement'
 import { createHash, randomBytes } from 'node:crypto'
 import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
-import { dirname, extname, resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import { persistentPathIdentitiesMatch, persistentPathIdentity } from '@zoltar/bot-shared/config/persistent-path'
 import type { NetworkName } from '@zoltar/bot-shared/monitoring/connectivity'
 import { canonicalDeployment, canonicalRootMarketIdentity } from './canonical-deployment.ts'
@@ -56,25 +58,13 @@ export async function saveSettings(path: string, settings: OperatorSettings, exp
 		await handle.writeFile(contents, { encoding: 'utf8' })
 		await handle.sync()
 		await handle.close()
-		await filesystem.rename(temporaryPath, path)
-		const directoryHandle = await filesystem.open(dirname(path), 'r')
-		try {
-			await directoryHandle.sync()
-		} finally {
-			await directoryHandle.close()
-		}
+		await renameAndSyncDirectory(temporaryPath, path, filesystem)
 	} catch (error) {
 		await handle.close().catch(() => undefined)
 		await filesystem.rm(temporaryPath, { force: true })
 		throw error
 	}
 	return revision(contents)
-}
-
-function chainSpecificPath(path: string, network: NetworkName) {
-	const extension = extname(path)
-	const stem = (extension === '' ? path : path.slice(0, -extension.length)).replace(/\.(?:mainnet|sepolia)$/, '')
-	return `${stem}.${network}${extension}`
 }
 
 function settingsProfilePath(path: string, network: NetworkName) {
@@ -107,12 +97,6 @@ async function assertSettingsProfileCandidates(path: string, candidates: readonl
 		for (const target of candidatePaths.slice(index + 1)) {
 			if (target.candidate.expectedNetwork !== current.candidate.expectedNetwork && persistentPathIdentitiesMatch(current.statePath, target.statePath)) throw new Error('Mainnet and Sepolia profiles must use distinct durable recovery state paths')
 		}
-	}
-}
-
-function assertCompatibleProfileProcessMode(current: OperatorSettings, target: OperatorSettings) {
-	if (current.runtime.once !== target.runtime.once || current.runtime.ui !== target.runtime.ui || current.runtime.uiHost !== target.runtime.uiHost || current.runtime.uiPort !== target.runtime.uiPort) {
-		throw new Error('Chain profiles must use the same once mode and dashboard binding to switch in place')
 	}
 }
 
