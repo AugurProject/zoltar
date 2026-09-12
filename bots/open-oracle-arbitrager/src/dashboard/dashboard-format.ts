@@ -30,45 +30,6 @@ export function networkTargetStatus(activeNetwork: 'mainnet' | 'sepolia' | undef
 	return activeNetwork === undefined || savedNetwork === undefined || activeNetwork === savedNetwork ? undefined : `Applying ${savedNetwork}; the last snapshot was ${activeNetwork}.`
 }
 
-export function singleFlight<T>(operation: () => Promise<T>) {
-	let inFlight: Promise<T> | undefined
-	let rerunRequested = false
-	return () => {
-		if (inFlight !== undefined) {
-			rerunRequested = true
-			return inFlight
-		}
-		inFlight = (async () => {
-			rerunRequested = false
-			let result = await operation()
-			while (rerunRequested) {
-				rerunRequested = false
-				result = await operation()
-			}
-			return result
-		})().finally(() => {
-			inFlight = undefined
-		})
-		return inFlight
-	}
-}
-
-export async function requestWithTimeout<T>(request: (signal: AbortSignal) => Promise<T>, timeoutMilliseconds: number, timeoutMessage = 'Dashboard state request timed out') {
-	const controller = new AbortController()
-	let timeout: ReturnType<typeof setTimeout> | undefined
-	const deadline = new Promise<never>((_resolve, reject) => {
-		timeout = setTimeout(() => {
-			reject(new Error(timeoutMessage))
-			controller.abort()
-		}, timeoutMilliseconds)
-	})
-	try {
-		return await Promise.race([request(controller.signal), deadline])
-	} finally {
-		if (timeout !== undefined) clearTimeout(timeout)
-	}
-}
-
 function parseSignedDecimal(value: string) {
 	if (!/^-?(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(value)) throw new Error(`Invalid decimal amount: ${value}`)
 	const negative = value.startsWith('-')

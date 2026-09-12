@@ -1,4 +1,5 @@
 import { getAddress, parseTransaction, type Hex } from '@zoltar/bot-shared/ethereum'
+import { isHash32 } from '@zoltar/bot-shared/infrastructure/json-validation'
 import type { PendingTransactionIntent } from '#state/operator-state'
 
 export type FinalizedReplacementEvidence = {
@@ -17,8 +18,8 @@ type ReconciliationEvidenceReaders = {
 }
 
 function transactionHash(value: unknown, label: string) {
-	if (typeof value !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(value)) throw new Error(`${label} must be a transaction hash`)
-	return value as Hex
+	if (!isHash32(value)) throw new Error(`${label} must be a transaction hash`)
+	return value
 }
 
 export function parseTransactionReconciliation(value: unknown) {

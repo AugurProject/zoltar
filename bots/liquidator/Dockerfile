@@ -37,7 +37,7 @@ COPY bots/liquidator/config/ ./bots/liquidator/config/
 COPY docs/mainnet-deployment-addresses.json docs/sepolia-deployment-addresses.json ./docs/
 COPY bots/liquidator/scripts/check-market-sources.mts ./bots/liquidator/scripts/check-market-sources.mts
 COPY bots/liquidator/scripts/check-process-lock-runtime.mts ./bots/liquidator/scripts/check-process-lock-runtime.mts
-COPY bots/liquidator/scripts/docker-entrypoint.sh ./bots/liquidator/scripts/docker-entrypoint.sh
+COPY bots/shared/scripts/docker-entrypoint.sh ./bots/liquidator/scripts/docker-entrypoint.sh
 COPY bots/liquidator/src/ ./bots/liquidator/src/
 RUN chmod 0755 bots/liquidator/scripts/docker-entrypoint.sh \
 	&& install -d -m 0700 -o bun -g bun bots/liquidator/.state

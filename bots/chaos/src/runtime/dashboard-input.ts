@@ -1,4 +1,4 @@
-import type { Hex } from '@zoltar/bot-shared/ethereum'
+import { isHash32 } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { configurationRevisionConflict } from '../config/settings.ts'
 
 export function expectedRevision(value: unknown, current: string) {
@@ -7,10 +7,8 @@ export function expectedRevision(value: unknown, current: string) {
 }
 
 export function transactionHash(value: unknown, label: string) {
-	if (typeof value !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(value)) {
-		throw new Error(`${label} must be a 32-byte transaction hash`)
-	}
-	return value as Hex
+	if (!isHash32(value)) throw new Error(`${label} must be a 32-byte transaction hash`)
+	return value
 }
 
 export function dashboardRecord(value: unknown, label: string) {

@@ -1,7 +1,11 @@
-import { createUniverseExplorer } from '../../../shared/src/dashboard/universe-explorer.js'
+import { createUniverseExplorer } from '@zoltar/bot-shared/dashboard/universe-explorer'
 import { readinessGuidance } from './readiness-status.js'
 import { blockStatusText, scanStatusText } from './block-status.js'
-import { createMetric, setAttentionBadge } from '../../../shared/src/dashboard/components.js'
+import { createMetric, endpointHealthDetail, endpointRow, renderDisconnectedHeader, setAttentionBadge } from '@zoltar/bot-shared/dashboard/components'
+import { CONFIGURATION_REQUEST_TIMEOUT_MS, PROFILE_SWITCH_REQUEST_TIMEOUT_MESSAGE, PROFILE_SWITCH_REQUEST_TIMEOUT_MS, requestWithTimeout, singleFlight, STATE_REQUEST_TIMEOUT_MS } from '@zoltar/bot-shared/dashboard/polling'
+import { closeResumePreflight, openResumePreflight } from '@zoltar/bot-shared/dashboard/resume-preflight'
+import { createSectionNavigation } from '@zoltar/bot-shared/dashboard/section-navigation'
+import { urlLines } from '@zoltar/bot-shared/dashboard/forms'
 type Activity = {
 	at: string
 	details?: string
@@ -199,7 +203,6 @@ const clearSignerButton = element('clear-signer', HTMLButtonElement)
 const walletAddress = element('wallet-address', HTMLElement)
 const healthPolicyPreview = element('health-policy-preview', HTMLParagraphElement)
 const resumeDialog = element('resume-dialog', HTMLElement)
-const resumePreflight = element('resume-preflight', HTMLUListElement)
 const cancelResume = element('cancel-resume', HTMLButtonElement)
 const confirmResume = element('confirm-resume', HTMLButtonElement)
 
@@ -220,11 +223,6 @@ let initialFragmentApplied = false
 let stateConnected = false
 let configurationConnected = false
 let pauseRequestPending: boolean | undefined
-
-const STATE_REQUEST_TIMEOUT_MS = 1_000
-const CONFIGURATION_REQUEST_TIMEOUT_MS = 2_000
-const PROFILE_SWITCH_REQUEST_TIMEOUT_MS = 2_000
-const PROFILE_SWITCH_REQUEST_TIMEOUT_MESSAGE = 'Profile switch request timed out.'
 
 function renderBlockStatus(snapshot = currentSnapshot) {
 	blockStatus.textContent = blockStatusText(snapshot)
@@ -256,22 +254,6 @@ function setMutationControlsEnabled(enabled: boolean) {
 		for (const control of document.querySelectorAll<HTMLInputElement | HTMLButtonElement>('#pool-rows input, #recovery-list input, #recovery-list button')) control.disabled = true
 	}
 	if (currentSnapshot !== undefined) renderUniverses(currentSnapshot, !chainSettingsAvailable)
-}
-
-async function requestWithTimeout<T>(request: (signal: AbortSignal) => Promise<T>, timeoutMilliseconds: number, timeoutMessage = 'Dashboard state request timed out') {
-	const controller = new window.AbortController()
-	let timeout: number | undefined
-	const deadline = new Promise<never>((_resolve, reject) => {
-		timeout = window.setTimeout(() => {
-			reject(new Error(timeoutMessage))
-			controller.abort()
-		}, timeoutMilliseconds)
-	})
-	try {
-		return await Promise.race([request(controller.signal), deadline])
-	} finally {
-		if (timeout !== undefined) window.clearTimeout(timeout)
-	}
 }
 
 async function api<T>(path: string, options?: RequestInit, timeoutMilliseconds?: number): Promise<T> {
@@ -785,26 +767,7 @@ function renderActivities(activities: Activity[]) {
 
 function renderRpcEndpointHealth(health: Snapshot['rpcEndpointHealth']) {
 	const container = element('rpc-endpoint-health', HTMLDivElement)
-	container.replaceChildren(
-		...(health ?? []).map(endpoint => {
-			const item = document.createElement('div')
-			item.className = 'rpc-health-item'
-			item.dataset['status'] = endpoint.status
-			const status = document.createElement('strong')
-			status.textContent = endpoint.status
-			const target = document.createElement('span')
-			target.className = 'mono'
-			target.textContent = endpoint.target
-			const detail = document.createElement('small')
-			const metadata = [endpoint.consecutiveFailures > 0 ? `${endpoint.consecutiveFailures.toString()} consecutive failure${endpoint.consecutiveFailures === 1 ? '' : 's'}` : undefined, endpoint.nextRetryAt === undefined ? undefined : `retry ${new Date(endpoint.nextRetryAt).toLocaleTimeString()}`].filter(
-				value => value !== undefined,
-			)
-			const primaryDetail = endpoint.error ?? (endpoint.latencyMilliseconds === undefined ? 'Awaiting first request' : `${endpoint.latencyMilliseconds.toString()} ms`)
-			detail.textContent = [primaryDetail, ...metadata].join(' · ')
-			item.append(status, target, detail)
-			return item
-		}),
-	)
+	container.replaceChildren(...(health ?? []).map(endpoint => endpointRow('rpc-health-item', endpoint, endpointHealthDetail(endpoint))))
 }
 
 function renderCurrentRpcEndpointHealth(snapshot = currentSnapshot) {
@@ -988,13 +951,8 @@ networkForm.addEventListener('submit', async event => {
 	networkFields.disabled = true
 	actionStatus(networkStatus, 'Checking every RPC against the selected chain…')
 	try {
-		const lines = (value: string) =>
-			value
-				.split('\n')
-				.map(entry => entry.trim())
-				.filter(Boolean)
 		const configuration = await put<Configuration>('/api/network-connectivity', {
-			connectivity: { publicRpcUrls: lines(publicRpcUrls.value), quorumRpcUrls: lines(quorumRpcUrls.value), readRpcUrl: readRpcUrl.value.trim(), rpcQuorum: Number(rpcQuorum.value) },
+			connectivity: { publicRpcUrls: urlLines(publicRpcUrls.value), quorumRpcUrls: urlLines(quorumRpcUrls.value), readRpcUrl: readRpcUrl.value.trim(), rpcQuorum: Number(rpcQuorum.value) },
 			network: networkName.value,
 		})
 		populateConfiguration(configuration)
@@ -1138,19 +1096,24 @@ function renderConnectionFailure(error: unknown) {
 	void error
 	const snapshot = currentSnapshot
 	stateConnected = false
-	modeBadge.textContent = snapshot === undefined ? 'Mode unavailable' : `${snapshot.execute ? 'Live' : 'Dry run'} · last known`
-	modeBadge.className = 'badge warning'
 	renderNetworkBadge()
-	capabilityBadge.hidden = false
-	capabilityBadge.textContent = 'Capability unavailable'
-	capabilityBadge.className = 'badge warning'
-	runStatusBadge.textContent = 'Disconnected'
-	runStatusBadge.className = 'badge warning'
-	const attentionCount = 1 + (snapshot === undefined ? 0 : Math.max(snapshot.pendingTransactions.length + snapshot.pendingStagedOperations.length, snapshot.alerts.length))
-	setAttentionBadge(attentionBadge, attentionCount, '/overview#global-error')
+	let lastKnownModeLabel: string | undefined
+	if (snapshot !== undefined) lastKnownModeLabel = snapshot.execute ? 'Live' : 'Dry run'
+	renderDisconnectedHeader({
+		attentionBadge,
+		attentionTarget: '/overview#global-error',
+		capabilityBadge,
+		capabilityBadgeClassName: 'badge warning',
+		lastKnownModeLabel,
+		modeBadge,
+		modeBadgeClassName: 'badge warning',
+		retainedAttentionCount: snapshot === undefined ? 0 : Math.max(snapshot.pendingTransactions.length + snapshot.pendingStagedOperations.length, snapshot.alerts.length),
+		runStatusBadge,
+		runStatusBadgeClassName: 'badge warning',
+		showNotice: title => setGlobalError('State polling failed. Automatic retry is active; use the next successful poll before making an execution decision.', title),
+	})
 	recoveryGuidance.hidden = true
 	setMutationControlsEnabled(false)
-	setGlobalError('State polling failed. Automatic retry is active; use the next successful poll before making an execution decision.', 'Dashboard disconnected')
 }
 
 function strategyInput(name: string) {
@@ -1171,38 +1134,19 @@ function updateHealthPolicyPreview() {
 	healthPolicyPreview.textContent = `Top up below ${topUp} · restore to ${target} · withdraw excess above ${withdraw}`
 }
 
-function preflightItem(label: string, value: string) {
-	const item = document.createElement('li')
-	const name = document.createElement('span')
-	name.textContent = label
-	const status = document.createElement('strong')
-	status.textContent = value
-	item.append(name, status)
-	return item
-}
-
-function openResumePreflight(snapshot: Snapshot) {
+function openResumeConfirmation(snapshot: Snapshot) {
 	const automaticActions = ['allowAutomaticDeposits', 'allowAutomaticPoolCreation', 'allowAutomaticVaultMigrations', 'allowAutomaticWithdrawals'].filter(name => {
 		const field = strategyForm.elements.namedItem(name)
 		return field instanceof HTMLInputElement && field.checked
 	}).length
-	resumePreflight.replaceChildren(
-		preflightItem('Mode', 'Live execution'),
-		preflightItem('Recovery work', snapshot.pendingTransactions.length + snapshot.pendingStagedOperations.length === 0 ? 'Clear' : `${(snapshot.pendingTransactions.length + snapshot.pendingStagedOperations.length).toString()} unresolved`),
-		preflightItem('Market evidence', snapshot.marketConsensus?.reliable === true ? 'Reliable' : 'Guarded / unavailable'),
-		preflightItem('Eligible pools', snapshot.metrics.eligiblePoolCount.toString()),
-		preflightItem('Execution signer', snapshot.wallet === undefined ? 'Missing' : shortAddress(snapshot.wallet)),
-		preflightItem('Automatic actions enabled', automaticActions.toString()),
-	)
-	if ('showModal' in resumeDialog && typeof resumeDialog.showModal === 'function') resumeDialog.showModal()
-	if (!resumeDialog.hasAttribute('open')) resumeDialog.setAttribute('open', '')
-	element('resume-title', HTMLElement).focus({ preventScroll: true })
-	resumeDialog.scrollTop = 0
-}
-
-function closeResumePreflight() {
-	if (resumeDialog.hasAttribute('open') && 'close' in resumeDialog && typeof resumeDialog.close === 'function') resumeDialog.close()
-	else resumeDialog.removeAttribute('open')
+	openResumePreflight([
+		['Mode', 'Live execution'],
+		['Recovery work', snapshot.pendingTransactions.length + snapshot.pendingStagedOperations.length === 0 ? 'Clear' : `${(snapshot.pendingTransactions.length + snapshot.pendingStagedOperations.length).toString()} unresolved`],
+		['Market evidence', snapshot.marketConsensus?.reliable === true ? 'Reliable' : 'Guarded / unavailable'],
+		['Eligible pools', snapshot.metrics.eligiblePoolCount.toString()],
+		['Execution signer', snapshot.wallet === undefined ? 'Missing' : shortAddress(snapshot.wallet)],
+		['Automatic actions enabled', automaticActions.toString()],
+	])
 }
 
 async function changePaused(paused: boolean) {
@@ -1226,7 +1170,7 @@ async function changePaused(paused: boolean) {
 pauseButton.addEventListener('click', () => {
 	if (currentSnapshot === undefined) return
 	if (pauseButton.dataset['action'] === 'confirm-resume') {
-		openResumePreflight(currentSnapshot)
+		openResumeConfirmation(currentSnapshot)
 		return
 	}
 	void changePaused(!currentSnapshot.paused)
@@ -1242,100 +1186,7 @@ poolFilter.addEventListener('input', () => {
 
 strategyForm.addEventListener('input', updateHealthPolicyPreview)
 
-const sectionLinks = [...document.querySelectorAll<HTMLAnchorElement>('.section-nav a[href^="/"]')]
-
-function showDashboardPage(pathname: string, push = false) {
-	const page = pathname === '/' ? 'overview' : pathname.replace(/^\//, '').replace(/\/$/, '')
-	document.body.dataset['page'] = page
-	for (const link of sectionLinks) link.toggleAttribute('aria-current', new URL(link.href).pathname.replace(/\/$/, '') === `/${page}`)
-	const activeLink = sectionLinks.find(link => link.hasAttribute('aria-current'))
-	const navigation = activeLink?.closest<HTMLElement>('.section-nav')
-	if (activeLink !== undefined && navigation !== null && navigation !== undefined) {
-		window.requestAnimationFrame(() => {
-			navigation.scrollLeft = activeLink.offsetLeft - (navigation.clientWidth - activeLink.offsetWidth) / 2
-		})
-	}
-	if (push) window.history.pushState({}, '', `/${page}`)
-	window.scrollTo({ top: 0 })
-}
-
-for (const link of sectionLinks) {
-	link.addEventListener('click', event => {
-		if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-		event.preventDefault()
-		showDashboardPage(new URL(link.href).pathname, true)
-	})
-}
-window.addEventListener('popstate', () => showDashboardPage(window.location.pathname))
-
-function secureExternalLinks(root: ParentNode) {
-	const links = root instanceof HTMLAnchorElement ? [root] : [...root.querySelectorAll<HTMLAnchorElement>('a[href]')]
-	for (const link of links) {
-		if (link.origin === window.location.origin) continue
-		link.target = '_blank'
-		link.rel = 'noopener noreferrer'
-	}
-}
-
-secureExternalLinks(document)
-new MutationObserver(records => {
-	for (const record of records) {
-		for (const node of record.addedNodes) if (node instanceof HTMLElement) secureExternalLinks(node)
-	}
-}).observe(document.body, { childList: true, subtree: true })
-
-let sectionNavigationAlignmentInitialized = false
-
-function revealSectionLink(_link: HTMLAnchorElement) {
-	const navigation = sectionLinks[0]?.closest<HTMLElement>('.section-nav')
-	if (navigation === undefined || navigation === null) return
-	const align = () => {
-		const link = sectionLinks.find(candidate => candidate.hasAttribute('aria-current'))
-		if (link === undefined) return
-		navigation.scrollLeft = link.offsetLeft - (navigation.clientWidth - link.offsetWidth) / 2
-	}
-	align()
-	if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(align)
-	if (!sectionNavigationAlignmentInitialized) {
-		sectionNavigationAlignmentInitialized = true
-		window.addEventListener('load', align, { once: true })
-		window.addEventListener('resize', align)
-		new ResizeObserver(align).observe(navigation)
-	}
-	void document.fonts?.ready.then(align)
-}
-
-function scrollToSection(id: string) {
-	const target = document.getElementById(id)
-	const shell = document.querySelector<HTMLElement>('.operator-shell')
-	if (target === null || shell === null) return
-	if (target instanceof HTMLDetailsElement) target.open = true
-	else target.closest('details')?.setAttribute('open', '')
-	const align = () => {
-		const top = target.getBoundingClientRect().top + window.scrollY - shell.getBoundingClientRect().height - 16
-		window.scrollTo({ top: Math.max(0, top) })
-	}
-	align()
-	if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(() => window.requestAnimationFrame(align))
-	void document.fonts?.ready.then(align)
-}
-
-function syncSectionNavigation(scrollToTarget = false) {
-	const activePath = window.location.pathname === '/' ? '/overview' : window.location.pathname
-	let activeLink: HTMLAnchorElement | undefined
-	for (const link of sectionLinks) {
-		if (link.pathname === activePath) {
-			link.setAttribute('aria-current', 'page')
-			activeLink = link
-		} else link.removeAttribute('aria-current')
-	}
-	if (activeLink !== undefined) revealSectionLink(activeLink)
-	const targetId = window.location.hash.slice(1)
-	if (scrollToTarget && targetId !== '') scrollToSection(targetId)
-}
-
-window.addEventListener('hashchange', () => syncSectionNavigation(true))
-syncSectionNavigation()
+const { scrollToSection, syncSectionNavigation } = createSectionNavigation()
 
 strategyForm.addEventListener('submit', async event => {
 	event.preventDefault()
@@ -1411,27 +1262,7 @@ clearSignerButton.addEventListener('click', async () => {
 	}
 })
 
-let refreshInFlight: Promise<void> | undefined
-let refreshQueued = false
-
-function refresh() {
-	if (refreshInFlight !== undefined) {
-		refreshQueued = true
-		return refreshInFlight
-	}
-	const operation = (async () => {
-		refreshQueued = false
-		await performRefresh()
-		while (refreshQueued) {
-			refreshQueued = false
-			await performRefresh()
-		}
-	})()
-	refreshInFlight = operation.finally(() => {
-		refreshInFlight = undefined
-	})
-	return refreshInFlight
-}
+const refresh = singleFlight(performRefresh)
 
 async function performRefresh() {
 	const requestEpoch = profileRequestEpoch

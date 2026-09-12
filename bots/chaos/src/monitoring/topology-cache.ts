@@ -4,6 +4,7 @@ import { mkdir, open, opendir, rename, rm } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { getAddress, zeroAddress, type Address, type Hash, type Hex } from '@zoltar/bot-shared/ethereum'
 import type { QuestionSnapshot } from '../operations/types.ts'
+import { assertExactKeys as assertExactRequiredAndOptionalKeys, normalizedHash32 as hash, requiredRecord, uint256String as unsignedIntegerString } from '../state/validators.ts'
 
 export const IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION = 3
 const IMMUTABLE_TOPOLOGY_SEGMENT_BYTES = 32 * 1024 * 1024
@@ -25,7 +26,6 @@ const GENERATION_NAME = /^[0-9a-f]{64}$/
 const TEMPORARY_GENERATION_NAME = /^\.tmp-[0-9]+-[0-9a-f-]+$/
 const TEMPORARY_POINTER_NAME = /^\.current-[0-9]+-[0-9a-f-]+\.json$/
 const CHUNK_FILE = /^(pairs|pool-deployments|questions|universe-children|vault-cursors|vaults)-(0|[1-9]\d*)-([0-9a-f]{64})\.json$/
-const UNSIGNED_INTEGER = /^(?:0|[1-9]\d*)$/
 const configuredResidentLimitErrors = new WeakSet<Error>()
 
 function configuredResidentLimitError(message: string) {
@@ -163,23 +163,8 @@ type TopologyPointer = {
 	schemaVersion: 1
 }
 
-function requiredRecord(value: unknown, label: string): Record<string, unknown> {
-	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`${label} must be an object`)
-	return value as Record<string, unknown>
-}
-
 function assertExactKeys(record: Record<string, unknown>, required: readonly string[], label: string) {
-	const expected = new Set(required)
-	const unknown = Object.keys(record).filter(key => !expected.has(key))
-	const missing = required.filter(key => !(key in record))
-	if (unknown.length > 0) throw new Error(`${label} contains unsupported field ${unknown[0] ?? 'unknown'}`)
-	if (missing.length > 0) throw new Error(`${label} is missing ${missing[0] ?? 'a required field'}`)
-}
-
-function unsignedIntegerString(value: unknown, label: string) {
-	if (typeof value !== 'string' || !UNSIGNED_INTEGER.test(value)) throw new Error(`${label} must be a canonical unsigned integer string`)
-	if (BigInt(value) >= 1n << 256n) throw new Error(`${label} exceeds uint256`)
-	return value
+	assertExactRequiredAndOptionalKeys(record, required, [], label)
 }
 
 function boundedString(value: unknown, label: string, maximumLength: number) {
@@ -199,11 +184,6 @@ function address(value: unknown, label: string) {
 	} catch (error) {
 		throw new Error(`${label} must be an address`, { cause: error })
 	}
-}
-
-function hash(value: unknown, label: string) {
-	if (typeof value !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(value)) throw new Error(`${label} must be a 32-byte hash`)
-	return value.toLowerCase() as Hash
 }
 
 function parseCountedRegistryCursor(value: unknown, label: string): CountedRegistryCursor {

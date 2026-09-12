@@ -1,5 +1,7 @@
 import type { Hex } from '@zoltar/bot-shared/ethereum'
 
+export { hash32 as hash, normalizedHash32 } from '@zoltar/bot-shared/infrastructure/json-validation'
+
 export function requiredRecord(value: unknown, label: string): Record<string, unknown> {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`${label} must be an object`)
 	return value as Record<string, unknown>
@@ -54,11 +56,6 @@ export function timestamp(value: unknown, label: string) {
 
 export function optionalTimestamp(value: unknown, label: string) {
 	return value === undefined ? undefined : timestamp(value, label)
-}
-
-export function hash(value: unknown, label: string) {
-	if (typeof value !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(value)) throw new Error(`${label} must be a 32-byte hash`)
-	return value as Hex
 }
 
 export function dataHex(value: unknown, label: string) {

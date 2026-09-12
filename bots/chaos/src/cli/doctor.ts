@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 import { migrateEmptyBootstrapState } from '../state/bootstrap-migration.ts'
-import { requireDeployedContracts } from '../../../shared/src/monitoring/deployed-contracts.js'
+import { requireDeployedContracts } from '@zoltar/bot-shared/monitoring/deployed-contracts'
 import { access, lstat } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { dirname } from 'node:path'

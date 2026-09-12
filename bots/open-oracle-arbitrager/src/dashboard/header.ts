@@ -1,4 +1,4 @@
-import { renderOperatorHeader } from '../../../shared/src/dashboard/header.ts'
+import { renderOperatorHeader } from '@zoltar/bot-shared/dashboard/header'
 
 export const operatorHeader = renderOperatorHeader({
 	title: 'OpenOracle Arbitrager',

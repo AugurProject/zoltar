@@ -1,8 +1,19 @@
 import { operatorHeader } from './header.ts'
-import { buildDashboardScript } from '../../../shared/src/dashboard/assets.js'
+import { buildDashboardScript, dashboardHealthResponse, sharedDashboardAssetResponse } from '@zoltar/bot-shared/dashboard/assets'
 import { join } from 'node:path'
 import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
-import { boundedDashboardJson, dashboardAuthenticationChallenge, dashboardAuthorities, dashboardRequestAuthorityIsAccepted, dashboardRequestIsAuthenticated, dashboardRequestIsSameOrigin, validateDashboardAuthentication } from '@zoltar/bot-shared/dashboard/security'
+import {
+	boundedDashboardJson,
+	closingDashboardJson as closingJson,
+	dashboardAuthenticationChallenge,
+	dashboardAuthorities,
+	dashboardJson as json,
+	dashboardRequestAuthorityIsAccepted,
+	dashboardRequestIsAuthenticated,
+	dashboardRequestIsSameOrigin,
+	dashboardSecurityHeaders as headers,
+	validateDashboardAuthentication,
+} from '@zoltar/bot-shared/dashboard/security'
 
 export type DashboardController = {
 	getConfiguration: () => unknown | Promise<unknown>
@@ -25,27 +36,6 @@ export type DashboardController = {
 }
 
 const CHAIN_CONFIGURATION_REQUIRED = 'Select and save the chain and RPC endpoints before changing chain-specific settings'
-
-function headers(contentType: string) {
-	return {
-		'cache-control': 'no-store',
-		'content-security-policy': "default-src 'self'; connect-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
-		'content-type': contentType,
-		'referrer-policy': 'no-referrer',
-		'x-content-type-options': 'nosniff',
-	}
-}
-
-function json(value: unknown, status = 200) {
-	return Response.json(value, {
-		headers: headers('application/json; charset=utf-8'),
-		status,
-	})
-}
-
-function closingJson(value: unknown) {
-	return Response.json(value, { headers: { ...headers('application/json; charset=utf-8'), connection: 'close' } })
-}
 
 function errorMessage(error: unknown) {
 	return error instanceof Error ? error.message : String(error)
@@ -238,7 +228,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 			if (!dashboardRequestAuthorityIsAccepted(request, acceptedAuthorities)) {
 				return json({ error: 'Request authority is not accepted' }, 403)
 			}
-			if (request.method === 'GET' && new URL(request.url).pathname === '/healthz') return new Response('ok', { headers: headers('text/plain; charset=utf-8') })
+			if (request.method === 'GET' && new URL(request.url).pathname === '/healthz') return dashboardHealthResponse()
 			if (!dashboardRequestIsAuthenticated(request, controller.password)) {
 				return Response.json({ error: 'Dashboard authentication is required' }, { headers: { ...headers('application/json; charset=utf-8'), ...dashboardAuthenticationChallenge() }, status: 401 })
 			}
@@ -252,13 +242,9 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					headers: headers('text/css; charset=utf-8'),
 				})
 			}
-			if (request.method === 'GET' && url.pathname === '/operator-console.css') {
-				return new Response(Bun.file(join(directory, '..', '..', '..', 'shared', 'src', 'dashboard', 'operator-console.css')), {
-					headers: headers('text/css; charset=utf-8'),
-				})
-			}
-			if (request.method === 'GET' && url.pathname === '/header-notices.js') {
-				return new Response(await buildDashboardScript(join(directory, '..', '..', '..', 'shared', 'src', 'dashboard', 'header-notices.ts')), { headers: headers('text/javascript; charset=utf-8') })
+			if (request.method === 'GET') {
+				const asset = await sharedDashboardAssetResponse(url.pathname, join(directory, 'favicon.svg'))
+				if (asset !== undefined) return asset
 			}
 			if (request.method === 'GET' && url.pathname === '/dashboard.js') {
 				return new Response(await buildDashboardScript(browserEntrypoint), {
@@ -306,12 +292,6 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					const fallback = url.pathname === '/api/network-connectivity' ? publicConnectivityUpdateError(error) : 'The dashboard change could not be saved. Review the submitted values and protected bot logs.'
 					return publicError(error, 400, `mutation:${url.pathname}`, fallback)
 				}
-			}
-			if (request.method === 'GET' && url.pathname === '/favicon.svg') {
-				return new Response(Bun.file(join(import.meta.dir, 'favicon.svg')), { headers: headers('image/svg+xml') })
-			}
-			if (request.method === 'GET' && url.pathname === '/favicon.ico') {
-				return new Response(undefined, { headers: headers('image/x-icon'), status: 204 })
 			}
 			return json({ error: 'Not found' }, 404)
 		},

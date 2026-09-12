@@ -1,9 +1,9 @@
-import { buildDashboardScript } from '../../../shared/src/dashboard/assets.js'
+import { dashboardHealthResponse, sharedDashboardAssetResponse } from '@zoltar/bot-shared/dashboard/assets'
 import { operatorHeader } from './header.ts'
 import { record, safeString, stringField, booleanField, scalar, safeIntegerField, isoTimestampField, compact } from './public-fields.ts'
 import { join } from 'node:path'
 import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
-import { boundedDashboardJson } from '@zoltar/bot-shared/dashboard/security'
+import { boundedDashboardJson, dashboardJson as json, dashboardSecurityHeaders as securityHeaders } from '@zoltar/bot-shared/dashboard/security'
 import { CONFIGURATION_REVISION_CONFLICT } from '../config/settings.ts'
 import { browserScript } from './browser-assets.ts'
 import { publicAlert, publicRetirement } from './public-retirement.ts'
@@ -32,23 +32,6 @@ export type ChaosDashboardController = {
 }
 
 const dashboardPages = new Set(['overview', 'catalog', 'ecosystem', 'recovery', 'settings'])
-
-function securityHeaders(contentType: string) {
-	return {
-		'cache-control': 'no-store',
-		'content-security-policy': "default-src 'self'; connect-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'",
-		'content-type': contentType,
-		'cross-origin-resource-policy': 'same-origin',
-		'permissions-policy': 'camera=(), geolocation=(), microphone=(), payment=(), usb=()',
-		'referrer-policy': 'no-referrer',
-		'x-content-type-options': 'nosniff',
-		'x-frame-options': 'DENY',
-	}
-}
-
-function json(value: unknown, status = 200) {
-	return Response.json(value, { headers: securityHeaders('application/json; charset=utf-8'), status })
-}
 
 function publicStrings(value: unknown) {
 	return Array.isArray(value)
@@ -949,7 +932,7 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 		async fetch(request) {
 			if (request.headers.get('host') !== authority) return json({ error: 'Request authority is not accepted' }, 403)
 			const url = new URL(request.url)
-			if (request.method === 'GET' && url.pathname === '/healthz') return new Response('ok', { headers: securityHeaders('text/plain; charset=utf-8') })
+			if (request.method === 'GET' && url.pathname === '/healthz') return dashboardHealthResponse()
 			if (request.method === 'GET') {
 				if (url.pathname === '/readyz' || url.pathname === '/metrics') {
 					try {
@@ -971,12 +954,8 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 					return new Response(html.replace('<!-- operator-header -->', operatorHeader).replace('<body>', `<body data-page="${page}">`), { headers: securityHeaders('text/html; charset=utf-8') })
 				}
 				if (url.pathname === '/dashboard.css') return new Response(Bun.file(join(directory, 'styles.css')), { headers: securityHeaders('text/css; charset=utf-8') })
-				if (url.pathname === '/operator-console.css') {
-					return new Response(Bun.file(join(directory, '..', '..', '..', 'shared', 'src', 'dashboard', 'operator-console.css')), { headers: securityHeaders('text/css; charset=utf-8') })
-				}
-				if (request.method === 'GET' && url.pathname === '/header-notices.js') {
-					return new Response(await buildDashboardScript(join(directory, '..', '..', '..', 'shared', 'src', 'dashboard', 'header-notices.ts')), { headers: securityHeaders('text/javascript; charset=utf-8') })
-				}
+				const asset = await sharedDashboardAssetResponse(url.pathname, join(directory, 'favicon.svg'))
+				if (asset !== undefined) return asset
 				const script = await browserScript(url.pathname, directory, transpiler)
 				if (script !== undefined) return new Response(script, { headers: securityHeaders('text/javascript; charset=utf-8') })
 				if (url.pathname === '/api/state') {
@@ -1000,8 +979,6 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 						return json({ error: 'Dashboard configuration is temporarily unavailable.' }, 503)
 					}
 				}
-				if (url.pathname === '/favicon.svg') return new Response(Bun.file(join(directory, 'favicon.svg')), { headers: securityHeaders('image/svg+xml') })
-				if (url.pathname === '/favicon.ico') return new Response(undefined, { headers: securityHeaders('image/x-icon'), status: 204 })
 			}
 			if (request.method === 'PUT') {
 				if (request.headers.get('origin') !== `http://${authority}`) return json({ error: 'Cross-origin requests are not accepted' }, 403)

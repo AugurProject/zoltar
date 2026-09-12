@@ -11,6 +11,8 @@ import { validateConnectivitySettings, validateIndependentReadRpcUrls, type Conn
 import { configuredQuorumRpcUrlMinimum, rpcQuorumRequirement, type RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 import { CHAOS_OPERATION_CATALOG } from '../operations/catalog.ts'
 import { MINIMUM_WORKFLOW_VALIDITY_BLOCKS } from '../operations/timing.ts'
+import { assertExactKeys as assertExactRequiredAndOptionalKeys, requiredRecord, uint256String } from '../state/validators.ts'
+import { formatDecimalAmount, parseDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
 
 const PRESERVE_PRIVATE_KEY = '__PRESERVE_SAVED_PRIVATE_KEY__'
 export const CONFIGURATION_REVISION_CONFLICT = 'ConfigurationRevisionConflict'
@@ -140,20 +142,10 @@ const settingsFilesystem: SettingsFilesystem = {
 
 const settingsWriteQueues = new Map<string, Promise<void>>()
 
-const unit = 10n ** 18n
 const defaultSettingsPath = resolve(import.meta.dir, '..', '..', '.state', 'operator.json')
 
-function requiredRecord(value: unknown, label: string): JsonRecord {
-	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`${label} must be an object`)
-	return value as JsonRecord
-}
-
 function assertExactKeys(value: JsonRecord, keys: readonly string[], label: string) {
-	const allowed = new Set(keys)
-	const unknown = Object.keys(value).filter(key => !allowed.has(key))
-	const missing = keys.filter(key => !(key in value))
-	if (unknown.length !== 0) throw new Error(`${label} contains unsupported field ${unknown[0] ?? 'unknown'}`)
-	if (missing.length !== 0) throw new Error(`${label} is missing ${missing[0] ?? 'a required field'}`)
+	assertExactRequiredAndOptionalKeys(value, keys, [], label)
 }
 
 function boolean(value: unknown, label: string) {
@@ -194,28 +186,6 @@ function maximumBlockIntervalSeconds(value: unknown, label = 'network.maximumBlo
 
 function filePath(value: unknown, label: string) {
 	return resolve(nonemptyString(value, label))
-}
-
-function unsignedIntegerString(value: unknown, label: string) {
-	if (typeof value !== 'string' || !/^(?:0|[1-9]\d*)$/.test(value)) throw new Error(`${label} must be a non-negative integer string`)
-	const parsed = BigInt(value)
-	if (parsed >= 1n << 256n) throw new Error(`${label} must fit in a uint256`)
-	return parsed
-}
-
-function parseDecimalAmount(value: unknown, label: string) {
-	if (typeof value !== 'string' || !/^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(value)) {
-		throw new Error(`${label} must be a non-negative decimal with at most 18 places`)
-	}
-	const [whole = '0', fraction = ''] = value.split('.')
-	return BigInt(whole) * unit + BigInt(fraction.padEnd(18, '0'))
-}
-
-function formatDecimalAmount(value: bigint) {
-	if (value < 0n) throw new Error('Decimal amount cannot be negative')
-	const whole = value / unit
-	const fraction = (value % unit).toString().padStart(18, '0').replace(/0+$/, '')
-	return fraction === '' ? whole.toString() : `${whole.toString()}.${fraction}`
 }
 
 function parseNetwork(value: unknown): OperatorSettings['network'] {
@@ -298,7 +268,7 @@ function parseRuntime(value: unknown): RuntimeSettings {
 		lifecyclePollMilliseconds: integer(runtime['lifecyclePollMilliseconds'], 'runtime.lifecyclePollMilliseconds', 1_000, 60_000),
 		once,
 		protocolLogBlockSpan: integer(runtime['protocolLogBlockSpan'], 'runtime.protocolLogBlockSpan', 1, 50_000),
-		protocolStartBlock: unsignedIntegerString(runtime['protocolStartBlock'], 'runtime.protocolStartBlock'),
+		protocolStartBlock: BigInt(uint256String(runtime['protocolStartBlock'], 'runtime.protocolStartBlock')),
 		stateFile: filePath(runtime['stateFile'], 'runtime.stateFile'),
 		ui,
 		uiHost: runtime['uiHost'],

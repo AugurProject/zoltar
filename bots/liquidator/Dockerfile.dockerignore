@@ -19,7 +19,7 @@
 !bots/liquidator/config/**
 !bots/liquidator/scripts/check-market-sources.mts
 !bots/liquidator/scripts/check-process-lock-runtime.mts
-!bots/liquidator/scripts/docker-entrypoint.sh
+!bots/shared/scripts/docker-entrypoint.sh
 !bots/liquidator/src/**
 !docs/
 !docs/mainnet-deployment-addresses.json
