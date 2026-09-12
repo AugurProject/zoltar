@@ -1,10 +1,13 @@
+import { zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { chmod, mkdir, mkdtemp, open, readFile, readdir, rename, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, test } from 'bun:test'
-import { CONFIGURATION_REVISION_CONFLICT, PRESERVE_PRIVATE_KEY, assertSettingsProfileIsolation, loadSettings, parseSettings, saveSettings, serializedSettings, settingsProfilePath, settingsProfilePathForNetwork, switchSettingsNetworkProfile, type SettingsFilesystem } from '../../src/config/settings.ts'
+import { CONFIGURATION_REVISION_CONFLICT, assertSettingsProfileIsolation, loadSettings, parseSettings, saveSettings, serializedSettings, type SettingsFilesystem } from '../../src/config/settings.ts'
+
+const PRESERVE_PRIVATE_KEY = '__PRESERVE_SAVED_PRIVATE_KEY__'
 import { publicChaosConfiguration } from '../../src/dashboard/dashboard-server.ts'
-import { carryProofDeploymentProfileId } from '../../src/monitoring/carry-proof-scan.ts'
+import { executionProfileId } from '../../src/config/execution-profile.ts'
 import { chaosChain } from '../../src/runtime/canonical-scan.ts'
 
 const directories: string[] = []
@@ -76,7 +79,7 @@ describe('chaos-bot settings', () => {
 		expect(configured.connectivity?.quorumRpcUrls).toHaveLength(2)
 		const configuredRpcUrls = configured.connectivity === undefined ? [] : [configured.connectivity.readRpcUrl, ...configured.connectivity.quorumRpcUrls, ...configured.connectivity.publicRpcUrls]
 		expect(configuredRpcUrls.every(url => new URL(url).hostname.endsWith('.invalid'))).toBeTrue()
-		expect(Object.values(configured.deployment).every(address => typeof address === 'string' && address.startsWith('0x11111111111111111111111111111111111111'))).toBeTrue()
+		expect(Object.values(configured.deployment).every(address => typeof address === 'string' && address !== zeroAddress)).toBeTrue()
 		const privateSettings = parseSettings({
 			...serializedSettings(configured),
 			submission: {
@@ -119,16 +122,12 @@ describe('chaos-bot settings', () => {
 		expect(JSON.stringify(dashboardConfiguration)).toContain('read-primary.custom-chain')
 		expect(JSON.stringify(dashboardConfiguration)).not.toContain(settings.deployment.zoltar)
 
-		const profilePath = settingsProfilePathForNetwork('/tmp/operator.json', settings.network)
-		expect(profilePath).toBe('/tmp/operator.json.custom-chain-4242424242.profile')
-		expect(profilePath).not.toContain(settings.network.name)
-		expect(carryProofDeploymentProfileId(roundTripped)).toBe(carryProofDeploymentProfileId(settings))
+		expect(executionProfileId(roundTripped)).toBe(executionProfileId(settings))
 		const differentChain = parseSettings({
 			...serialized,
 			network: { ...serialized.network, chainId: 4_242_424_243 },
 		})
-		expect(carryProofDeploymentProfileId(differentChain)).not.toBe(carryProofDeploymentProfileId(settings))
-		expect(settingsProfilePathForNetwork('/tmp/operator.json', differentChain.network)).toBe('/tmp/operator.json.custom-chain-4242424243.profile')
+		expect(executionProfileId(differentChain)).not.toBe(executionProfileId(settings))
 
 		const directory = await temporaryDirectory()
 		const path = join(directory, 'custom-operator.json')
@@ -160,26 +159,6 @@ describe('chaos-bot settings', () => {
 		expect(() => parseSettings({ ...source, network: { ...network, kind: 'private' } })).toThrow('network.kind must be custom')
 		const implicitCustomNetwork = Object.fromEntries(Object.entries(network).filter(([key]) => key !== 'kind'))
 		expect(() => parseSettings({ ...source, network: implicitCustomNetwork })).toThrow('network.kind must explicitly be custom')
-
-		const pathLikeLabel = parseSettings({ ...source, network: { ...network, name: '../Zoltar QA / Chain' } })
-		expect(settingsProfilePathForNetwork('/tmp/operator.json', pathLikeLabel.network)).toBe('/tmp/operator.json.custom-chain-4242424242.profile')
-	})
-
-	test('stores a custom profile under its chain ID rather than its display label', async () => {
-		const directory = await temporaryDirectory()
-		const path = join(directory, 'operator.json')
-		const source = record(JSON.parse(await readFile(customChainPlaceholderPath, 'utf8')))
-		const custom = parseSettings({
-			...source,
-			network: { ...record(source['network']), name: '../Zoltar QA / Chain' },
-			runtime: { ...record(source['runtime']), stateFile: join(directory, 'custom-state.json') },
-		})
-		await saveSettings(path, custom)
-		await switchSettingsNetworkProfile(path, 'sepolia', examplePath)
-		const customProfilePath = join(directory, 'operator.json.custom-chain-4242424242.profile')
-		const storedCustom = await loadSettings(customProfilePath)
-		expect(storedCustom.settings.network).toEqual(custom.network)
-		expect(await readdir(directory)).toContain('operator.json.custom-chain-4242424242.profile')
 	})
 
 	test('parses the documented chain forms with distinct durable state paths', async () => {
@@ -222,7 +201,7 @@ describe('chaos-bot settings', () => {
 			network: { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' },
 			runtime: { ...serializedSettings(custom).runtime, stateFile: sharedStateFile },
 		})
-		await saveSettings(settingsProfilePath(path, 'mainnet'), mainnet)
+		await saveSettings(`${path}.mainnet.profile`, mainnet)
 		await expect(assertSettingsProfileIsolation(path, custom)).rejects.toThrow('different chain IDs must use distinct durable state paths')
 	})
 
@@ -230,7 +209,7 @@ describe('chaos-bot settings', () => {
 		const settings = parseSettings(await storedExample())
 		expect(settings.paused).toBe(true)
 		expect(settings.runtime.execute).toBe(false)
-		expect(settings.runtime.protocolLogBlockSpan).toBe(2_000)
+		expect(settings.runtime.protocolLogBlockSpan).toBe(50_000)
 		expect(settings.runtime.protocolStartBlock).toBe(0n)
 		expect(settings.discovery).toEqual({
 			maxPools: 100,
@@ -319,11 +298,11 @@ describe('chaos-bot settings', () => {
 		expect(() => parseSettings(redacted)).toThrow('only preserve an existing saved signer')
 	})
 
-	test('requires configured, funded deployment inputs before live execution', async () => {
+	test('requires a signer before live execution and accepts a single quorum-1 reader', async () => {
 		const configured = await configuredExample()
 		expect(() => parseSettings({ ...configured, runtime: { ...record(configured['runtime']), execute: true } })).toThrow('Live execution requires privateKey')
 		const privateKey = `0x${'22'.repeat(32)}` as const
-		expect(() => parseSettings({ ...configured, privateKey, runtime: { ...record(configured['runtime']), execute: true } })).toThrow('every ecosystem deployment address')
+		expect(() => parseSettings({ ...configured, privateKey, runtime: { ...record(configured['runtime']), execute: true } })).not.toThrow()
 	})
 
 	test('rejects a zero ETH reserve in live execution mode', async () => {
@@ -390,18 +369,16 @@ describe('chaos-bot settings', () => {
 		expect(settings.strategy.minimumRepReserveAttoRep).toBe(1n)
 	})
 
-	test('requires quorum 2 across three independent read origins for live execution', async () => {
+	test('requires three independent read origins for live execution with quorum 2 and accepts a single reader with quorum 1', async () => {
 		const configured = await configuredExample()
 		const privateKey = `0x${'22'.repeat(32)}` as const
-		const deploymentAddress = '0x0000000000000000000000000000000000000001'
 		const live = {
 			...configured,
-			deployment: Object.fromEntries(Object.keys(record(configured['deployment'])).map(key => [key, deploymentAddress])),
 			privateKey,
 			runtime: { ...record(configured['runtime']), execute: true },
 		}
 
-		expect(() => parseSettings(live)).toThrow('Live execution requires RPC quorum 2 with three independent read origins')
+		expect(() => parseSettings(live)).not.toThrow()
 		expect(() =>
 			parseSettings({
 				...live,
@@ -411,7 +388,7 @@ describe('chaos-bot settings', () => {
 					rpcQuorum: 2,
 				},
 			}),
-		).toThrow('Live execution requires RPC quorum 2 with three independent read origins')
+		).toThrow('Live execution with RPC quorum 2 requires three independent read origins')
 		expect(() =>
 			parseSettings({
 				...live,
@@ -498,7 +475,7 @@ describe('chaos-bot settings', () => {
 			network: { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' },
 			runtime: { ...serializedSettings(base).runtime, stateFile: statePath },
 		})
-		await saveSettings(settingsProfilePath(path, 'mainnet'), mainnet)
+		await saveSettings(`${path}.mainnet.profile`, mainnet)
 		await expect(assertSettingsProfileIsolation(path, base)).rejects.toThrow('distinct durable state paths')
 	})
 
@@ -524,3 +501,44 @@ describe('chaos-bot settings', () => {
 		await expect(loadSettings(alias)).rejects.toThrow('must not be a symbolic link')
 	})
 })
+
+for (const failure of ['rename', 'directory sync']) {
+	test(`propagates ${failure} failure and cleans the temporary configuration`, async () => {
+		const events: string[] = []
+		const problem = new Error(failure)
+		const filesystem: SettingsFilesystem = {
+			mkdir: async () => undefined,
+			open: async (_path, flags) => ({
+				chmod: async () => undefined,
+				readFile: async () => {
+					throw new Error('Unexpected handle read')
+				},
+				stat: async () => {
+					throw new Error('Unexpected handle stat')
+				},
+				close: async () => {
+					events.push(`${flags}:close`)
+				},
+				sync: async () => {
+					if (flags === 'r' && failure === 'directory sync') throw problem
+				},
+				writeFile: async () => undefined,
+			}),
+			readFile: async () => {
+				throw new Error('Unexpected revision read')
+			},
+			rename: async () => {
+				events.push('rename')
+				if (failure === 'rename') throw problem
+			},
+			rm: async (path, options) => {
+				expect(path.endsWith('.tmp')).toBe(true)
+				expect(options).toEqual({ force: true })
+				events.push('rm')
+			},
+		}
+		await expect(saveSettings('/state/operator.json', parseSettings(await storedExample()), undefined, filesystem)).rejects.toBe(problem)
+		expect(events.includes('r:close')).toBe(failure === 'directory sync')
+		expect(events.at(-1)).toBe('rm')
+	})
+}

@@ -11,4 +11,6 @@ Environment variables used by local deployment:
 
 `deploy:local` writes a nested deployment manifest for scripts and integration environments. Secrets do not belong in manifests or `.env.example`.
 
-The build writes `core-deployments.json` from the root mainnet and Sepolia deployment manifests and adds each network's default public RPC URL. The live client defaults to the first supported network, computes the trading factory and router with the fixed 0.30% trading fee through the core deployment's canonical CREATE2 proxy, and checks both addresses directly. **Settings** beside the wallet selects another supported network or accepts an optional HTTPS or loopback HTTP RPC override. The client does not require or persist a separate trading deployment configuration.
+The manifest records the canonical factory and router. The router handles entry and liquidity operations as well as approval-free receive-based share exits and complete-set redemptions. The canonical pair supports ERC-2612 permits and deadline-bound direct liquidity removal.
+
+The build writes `core-deployments.json` from the root mainnet and Sepolia deployment manifests and adds each network's default public RPC URL. The live client defaults to the first supported network, computes the trading contracts with the fixed 0.30% trading fee through the core deployment's canonical CREATE2 proxy, and checks each address directly. **Settings** beside the wallet selects another supported network or accepts an optional HTTPS or loopback HTTP RPC override.

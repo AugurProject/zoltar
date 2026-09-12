@@ -1,4 +1,14 @@
-import { setAttentionBadge } from '../../../shared/src/dashboard/components.js'
+import { createUniverseExplorer } from '@zoltar/bot-shared/dashboard/universe-explorer'
+let approvedUniverseIds = new Set<string>()
+let universeSavePending = false
+let universeExplorer: ReturnType<typeof createUniverseExplorer> | undefined
+
+import { operatorNoticePresentation } from './dashboard-notice.ts'
+import { endpointHealthDetail, endpointRow, renderDisconnectedHeader, setAttentionBadge } from '@zoltar/bot-shared/dashboard/components'
+import { CONFIGURATION_REQUEST_TIMEOUT_MS, PROFILE_SWITCH_REQUEST_TIMEOUT_MESSAGE, PROFILE_SWITCH_REQUEST_TIMEOUT_MS, requestWithTimeout, singleFlight, STATE_REQUEST_TIMEOUT_MS } from '@zoltar/bot-shared/dashboard/polling'
+import { closeResumePreflight, openResumePreflight } from '@zoltar/bot-shared/dashboard/resume-preflight'
+import { createSectionNavigation } from '@zoltar/bot-shared/dashboard/section-navigation'
+import { urlLines } from '@zoltar/bot-shared/dashboard/forms'
 import type { ConnectivitySettings } from '#monitoring/connectivity'
 import type { OpportunitySnapshot, PublicExecutionRecord, PublicOperationEntry, PublicOperatorSnapshot, PublicPositionRecord, PublicTransactionActivity, StrategySettings } from '#state/operator-state'
 import {
@@ -17,10 +27,8 @@ import {
 	persistedConnectivity,
 	pollRetryStatus,
 	requiredSignerPrivateKey,
-	requestWithTimeout,
 	selectedTokenPriceHistory,
 	signerControlState,
-	singleFlight,
 	statePollingFailureMessage,
 	sumSignedDecimals,
 	transactionKindLabel,
@@ -51,12 +59,6 @@ let connected = false
 let signerFeedback: { error: boolean; message: string } | undefined
 let signerRequestPending = false
 let pauseRequestPending: 'pause' | 'resume' | undefined
-let manualRefreshPending = false
-
-const STATE_REQUEST_TIMEOUT_MS = 1_000
-const CONFIGURATION_REQUEST_TIMEOUT_MS = 2_000
-const PROFILE_SWITCH_REQUEST_TIMEOUT_MS = 2_000
-const PROFILE_SWITCH_REQUEST_TIMEOUT_MESSAGE = 'Profile switch request timed out.'
 
 function element<T extends HTMLElement>(id: string) {
 	const found = document.getElementById(id)
@@ -88,7 +90,7 @@ function setControlsEnabled(enabled: boolean) {
 	})
 	const pauseButton = element<HTMLButtonElement>('pause-button')
 	pauseButton.disabled = pauseRequestPending !== undefined || pauseControls.pauseDisabled
-	pauseButton.textContent = pauseRequestPending === 'pause' ? 'Pausing…' : latestSnapshot?.paused === true ? 'Resume bot' : 'Pause bot'
+	pauseButton.textContent = pauseButtonLabel(pauseRequestPending === 'pause', latestSnapshot?.paused === true)
 	if (pauseRequestPending === 'pause') pauseButton.setAttribute('aria-busy', 'true')
 	else pauseButton.removeAttribute('aria-busy')
 	const confirmResume = element<HTMLButtonElement>('confirm-resume')
@@ -108,7 +110,7 @@ function setControlsEnabled(enabled: boolean) {
 		if (!(fieldset instanceof HTMLFieldSetElement)) throw new Error(`Missing ${id}`)
 		if (id === 'connectivity-fieldset') fieldset.disabled = connectivityControlsDisabled(configurationEnabled, connectivityRequestPending) || !connectivityLoaded
 		else if (id === 'deployment-fieldset' || id === 'create2-fieldset') fieldset.disabled = !focusedSettingsEnabled || !deploymentLoaded
-		else if (id === 'tokens-fieldset') fieldset.disabled = !focusedSettingsEnabled || !tokensLoaded
+		else if (id === 'tokens-fieldset') fieldset.disabled = !focusedSettingsEnabled || !tokensLoaded || universeSavePending
 		else fieldset.disabled = !focusedSettingsEnabled
 	}
 	element<HTMLSelectElement>('network-name').disabled = !enabled || pendingNetworkProfile !== undefined || persistedNetwork === undefined
@@ -146,14 +148,6 @@ function updateSettingsLoadState() {
 	setText('settings-load-status', configurationLoadError === undefined ? 'Operator configuration is unavailable.' : `${configurationLoadError} Editable settings remain locked.`)
 	retry.hidden = false
 	retry.disabled = false
-}
-
-function updateManualRefreshState() {
-	const button = element<HTMLButtonElement>('refresh-button')
-	button.disabled = manualRefreshPending
-	button.textContent = manualRefreshPending ? 'Refreshing…' : 'Refresh'
-	if (manualRefreshPending) button.setAttribute('aria-busy', 'true')
-	else button.removeAttribute('aria-busy')
 }
 
 function updateNetworkTargetStatus() {
@@ -207,16 +201,10 @@ function optionalInput(id: string) {
 }
 
 function lines(id: string) {
-	return element<HTMLTextAreaElement>(id)
-		.value.split('\n')
-		.map(value => value.trim())
-		.filter(Boolean)
+	return urlLines(element<HTMLTextAreaElement>(id).value)
 }
 
-function loadDeployment(deployment: DeploymentSettings) {
-	element<HTMLInputElement>('deployment-rep').value = deployment.rep
-	element<HTMLInputElement>('deployment-weth').value = deployment.weth
-	element<HTMLInputElement>('deployment-open-oracle').value = deployment.openOracle
+function loadDeployment(deployment: Omit<DeploymentSettings, 'openOracle' | 'rep' | 'weth'>) {
 	element<HTMLInputElement>('deployment-executor').value = deployment.executor ?? ''
 	element<HTMLInputElement>('deployment-v3-factory').value = deployment.uniswapFactory
 	element<HTMLInputElement>('deployment-v3-quoter').value = deployment.uniswapQuoter
@@ -599,9 +587,9 @@ function isSubmissionSettings(value: unknown): value is SubmissionSettings {
 	return (mode === 'private' || mode === 'public') && typeof Reflect.get(value, 'minimumBundleRelaySuccesses') === 'number' && isStringArray(Reflect.get(value, 'relayUrls'))
 }
 
-function isDeploymentSettings(value: unknown): value is DeploymentSettings {
+function isDeploymentSettings(value: unknown): value is Omit<DeploymentSettings, 'openOracle' | 'rep' | 'weth'> {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
-	for (const key of ['openOracle', 'rep', 'uniswapFactory', 'uniswapQuoter', 'weth']) {
+	for (const key of ['uniswapFactory', 'uniswapQuoter']) {
 		if (typeof Reflect.get(value, key) !== 'string') return false
 	}
 	for (const key of ['executor', 'uniswapRouter', 'uniswapV2Router', 'uniswapV4PoolManager', 'uniswapV4Quoter']) {
@@ -616,8 +604,8 @@ function synchronizeFocusedConfiguration(configuration: unknown) {
 	const strategy = Reflect.get(configuration, 'strategy')
 	const submission = Reflect.get(configuration, 'submission')
 	const deployment = Reflect.get(configuration, 'deployment')
-	const tokenAddresses = Reflect.get(configuration, 'tokenAddresses')
-	if (!isStrategySettings(strategy) || !isSubmissionSettings(submission) || !isDeploymentSettings(deployment) || !isStringArray(tokenAddresses)) throw new Error('Bot returned an invalid configuration document')
+	const approvedUniverses = Reflect.get(configuration, 'approvedUniverses')
+	if (!isStrategySettings(strategy) || !isSubmissionSettings(submission) || !isDeploymentSettings(deployment) || !isStringArray(approvedUniverses)) throw new Error('Bot returned an invalid configuration document')
 	loadSettings(strategy)
 	settingsLoaded = true
 	loadSubmission(submission)
@@ -625,7 +613,7 @@ function synchronizeFocusedConfiguration(configuration: unknown) {
 	synchronizePersistedConnectivity(configuration)
 	loadDeployment(deployment)
 	deploymentLoaded = true
-	element<HTMLTextAreaElement>('token-addresses').value = tokenAddresses.join('\n')
+	approvedUniverseIds = new Set(approvedUniverses)
 	tokensLoaded = true
 }
 
@@ -641,18 +629,7 @@ function renderEndpointChecks(snapshot: PublicOperatorSnapshot) {
 		container.append(heading)
 	}
 	for (const check of endpointChecks) {
-		const item = document.createElement('div')
-		item.className = 'endpoint-check'
-		item.dataset['status'] = check.status
-		const status = document.createElement('strong')
-		status.textContent = check.status
-		const target = document.createElement('span')
-		target.className = 'mono'
-		target.textContent = check.target
-		const detail = document.createElement('small')
-		detail.textContent = check.error ?? `Chain ${check.chainId?.toString() ?? 'unconfirmed'} · ${check.kind}`
-		item.append(status, target, detail)
-		container.append(item)
+		container.append(endpointRow('endpoint-check', check, check.error ?? `Chain ${check.chainId?.toString() ?? 'unconfirmed'} · ${check.kind}`))
 	}
 	const runtimeHealth = endpointChecksMatchActiveChain ? (snapshot.rpcEndpointHealth ?? []) : []
 	if (runtimeHealth.length > 0) {
@@ -662,22 +639,7 @@ function renderEndpointChecks(snapshot: PublicOperatorSnapshot) {
 		container.append(heading)
 	}
 	for (const endpoint of runtimeHealth) {
-		const item = document.createElement('div')
-		item.className = 'endpoint-check'
-		item.dataset['status'] = endpoint.status
-		const status = document.createElement('strong')
-		status.textContent = endpoint.status
-		const target = document.createElement('span')
-		target.className = 'mono'
-		target.textContent = endpoint.target
-		const detail = document.createElement('small')
-		const metadata = [endpoint.consecutiveFailures > 0 ? `${endpoint.consecutiveFailures.toString()} consecutive failure${endpoint.consecutiveFailures === 1 ? '' : 's'}` : undefined, endpoint.nextRetryAt === undefined ? undefined : `retry ${new Date(endpoint.nextRetryAt).toLocaleTimeString()}`].filter(
-			value => value !== undefined,
-		)
-		const primaryDetail = endpoint.error ?? (endpoint.latencyMilliseconds === undefined ? 'Awaiting first request' : `${endpoint.latencyMilliseconds.toString()} ms`)
-		detail.textContent = [primaryDetail, ...metadata].join(' · ')
-		item.append(status, target, detail)
-		container.append(item)
+		container.append(endpointRow('endpoint-check', endpoint, endpointHealthDetail(endpoint)))
 	}
 }
 
@@ -697,7 +659,15 @@ function renderOperations(operations: readonly PublicOperationEntry[]) {
 }
 
 function renderTokenMarkets(snapshot: PublicOperatorSnapshot) {
-	setText('tracked-token-addresses', snapshot.tokenAddresses.length === 0 ? 'None observed' : snapshot.tokenAddresses.join(' · '))
+	universeExplorer ??= createUniverseExplorer(element('approved-universes'), {
+		onChange: next => {
+			approvedUniverseIds = next
+			setText('tokens-status', 'Selection updated. Save universe approvals to apply.')
+		},
+		savedMessage: '',
+	})
+	universeExplorer.update({ universes: snapshot.universes ?? [], approved: approvedUniverseIds, network: snapshot.network, disabled: element<HTMLFieldSetElement>('tokens-fieldset').disabled })
+
 	const body = element<HTMLTableSectionElement>('token-markets-body')
 	body.replaceChildren()
 	const executableTokens = new Set(snapshot.tokenAddresses.map(address => address.toLowerCase()))
@@ -742,7 +712,7 @@ function renderCentralizedMarket(snapshot: PublicOperatorSnapshot) {
 	setText('dex-market-bid-depth', consensus === undefined ? '—' : `${consensus.dex.bidDepthEth} ETH`)
 	setText('dex-market-ask-depth', consensus === undefined ? '—' : `${consensus.dex.askDepthEth} ETH`)
 	if (market === undefined) {
-		setText('centralized-market-status', consensus === undefined ? 'No market sources configured' : consensus.reliable ? 'Reliable DEX consensus' : consensus.reasons.join(' · '))
+		setText('centralized-market-status', consensusStatusText(consensus, 'Reliable DEX consensus') ?? 'No market sources configured')
 		setText('centralized-market-price', '—')
 		setText('centralized-market-bid-depth', '—')
 		setText('centralized-market-ask-depth', '—')
@@ -750,7 +720,7 @@ function renderCentralizedMarket(snapshot: PublicOperatorSnapshot) {
 		element('centralized-market-empty').hidden = false
 		return
 	}
-	setText('centralized-market-status', consensus === undefined ? (market.reliable ? 'Reliable CEX estimate' : market.reasons.join(' · ')) : consensus.reliable ? 'Reliable independent CEX + DEX consensus' : consensus.reasons.join(' · '))
+	setText('centralized-market-status', consensusStatusText(consensus, 'Reliable independent CEX + DEX consensus') ?? (market.reliable ? 'Reliable CEX estimate' : market.reasons.join(' · ')))
 	setText('centralized-market-price', market.priceRepPerEth)
 	setText('centralized-market-bid-depth', `${market.bidDepthEth} ETH`)
 	setText('centralized-market-ask-depth', `${market.askDepthEth} ETH`)
@@ -974,7 +944,6 @@ function renderSignerStatus(snapshot: PublicOperatorSnapshot) {
 
 function renderBlockStatus(snapshot = latestSnapshot) {
 	const value = snapshot?.blockNumber === undefined ? 'Block — · waiting for first observation' : `Block ${snapshot.blockNumber} · ${blockAgeLabel(snapshot.blockTimestamp)}`
-	setText('block-value', value)
 	setText('header-block-status', value)
 }
 
@@ -1007,6 +976,32 @@ function renderTransactions(transactions: readonly PublicTransactionActivity[]) 
 	setText('transaction-count', `${transactions.length.toString()} tracked`)
 }
 
+function pauseButtonLabel(pausing: boolean, paused: boolean) {
+	if (pausing) return 'Pausing…'
+	return paused ? 'Resume bot' : 'Pause bot'
+}
+
+function consensusStatusText(consensus: { reasons: readonly string[]; reliable: boolean } | undefined, reliableLabel: string) {
+	if (consensus === undefined) return undefined
+	return consensus.reliable ? reliableLabel : consensus.reasons.join(' · ')
+}
+
+function runStatusKey(snapshot: PublicOperatorSnapshot) {
+	if (snapshot.paused) return 'paused'
+	return snapshot.status === 'error' && snapshot.marketAvailability?.kind === 'missing-deployment' ? 'syncing' : snapshot.status
+}
+
+function runStatusBadgeClass(runStatus: string) {
+	if (runStatus === 'running') return ' badge-ok'
+	return runStatus === 'error' ? ' badge-danger' : ' badge-warning'
+}
+
+function attentionTarget(networkSetupCount: number, recoveryCount: number, uncertainTransactionCount: number) {
+	if (networkSetupCount > 0) return '/settings#network-connectivity'
+	if (recoveryCount > 0) return '/operations#position-lifecycle'
+	return uncertainTransactionCount > 0 ? '/operations#transaction-tracking' : '/overview#notice'
+}
+
 function render(snapshot: PublicOperatorSnapshot) {
 	const activeElement = document.activeElement
 	const focusKey = activeElement instanceof HTMLElement ? activeElement.dataset['focusKey'] : undefined
@@ -1019,12 +1014,13 @@ function render(snapshot: PublicOperatorSnapshot) {
 	modeBadge.dataset['mode'] = snapshot.mode
 	modeBadge.textContent = statusLabels.mode
 	const runStatusBadge = element('run-status-badge')
-	const runStatus = snapshot.paused ? 'paused' : snapshot.status
+	const runStatus = runStatusKey(snapshot)
 	runStatusBadge.dataset['status'] = runStatus
 	runStatusBadge.textContent = statusLabels.status
-	runStatusBadge.className = `badge${runStatus === 'running' ? ' badge-ok' : runStatus === 'error' ? ' badge-danger' : ' badge-warning'}`
+	runStatusBadge.className = `badge${runStatusBadgeClass(runStatus)}`
 	const capabilityBadge = element('capability-badge')
-	capabilityBadge.textContent = snapshot.operatorCapable ? 'Operator capable' : 'Operator blocked'
+	capabilityBadge.hidden = snapshot.operatorCapable
+	capabilityBadge.textContent = snapshot.operatorCapable ? '' : 'Operator blocked'
 	capabilityBadge.className = `badge${snapshot.operatorCapable ? ' badge-ok' : ' badge-warning'}`
 	renderPollRetry(snapshot)
 	const headerNetworkBadge = element('header-network-badge')
@@ -1036,7 +1032,7 @@ function render(snapshot: PublicOperatorSnapshot) {
 	const detailedAttentionCount = networkSetupCount + recoveryCount + uncertainTransactionCount + (snapshot.lastError === undefined ? 0 : 1)
 	const attentionCount = Math.max(snapshot.operatorCapable ? 0 : 1, detailedAttentionCount)
 	const attentionBadge = element<HTMLAnchorElement>('attention-badge')
-	setAttentionBadge(attentionBadge, attentionCount, networkSetupCount > 0 ? '/settings#network-connectivity' : recoveryCount > 0 ? '/operations#position-lifecycle' : uncertainTransactionCount > 0 ? '/operations#transaction-tracking' : '/overview#notice')
+	setAttentionBadge(attentionBadge, attentionCount, attentionTarget(networkSetupCount, recoveryCount, uncertainTransactionCount))
 	setText('status-value', statusLabels.status)
 	setText('last-poll-value', snapshot.lastPollAt === undefined ? 'No poll completed' : `Updated ${new Date(snapshot.lastPollAt).toLocaleTimeString()}`)
 	setText('active-report-value', snapshot.activeReportCount.toString())
@@ -1052,17 +1048,14 @@ function render(snapshot: PublicOperatorSnapshot) {
 	setText('risk-daily-gas', `${exactAmount(snapshot.risk.usage.dailyGasSpentWeth, 'ETH')} / ${exactAmount(snapshot.risk.limits.maxDailyGasSpendWeth, 'ETH')}`)
 	setText('risk-position-limit', exactAmount(snapshot.risk.limits.maxPositionNotionalWeth, 'WETH'))
 	setText('risk-lifecycle-reserve', exactAmount(snapshot.risk.limits.lifecycleGasReserveWeth, 'ETH'))
-	setText('oracle-address', `Oracle ${snapshot.openOracle}`)
-	setText('executor-address', snapshot.executor === undefined ? 'Executor not configured' : `Executor ${snapshot.executor}`)
 	setText('network-value', snapshot.networkConfigured ? `Active: ${snapshot.network} · chain ${snapshot.expectedChainId.toString()}` : 'Network not configured')
 	updateNetworkTargetStatus()
-	setText('chain-safety', snapshot.networkConfigured ? '' : 'Set the chain and RPC endpoints in RPC connectivity before scanning.')
 	renderSignerStatus(snapshot)
 	const launchNotice = element('launch-notice')
 	if (!snapshot.networkConfigured) {
 		launchNotice.hidden = false
 		setText('launch-notice-title', 'Network setup required')
-		setText('launch-notice-copy', 'Choose the chain and verified RPC endpoints below. They apply to the next scan; the bot remains paused until you resume it.')
+		setText('launch-notice-copy', 'Choose the chain and verified RPC endpoints in Settings. They apply to the next scan; the bot remains paused until you resume it.')
 		launchNotice.dataset['tone'] = 'warning'
 	} else if (snapshot.network === 'mainnet') {
 		launchNotice.hidden = true
@@ -1076,37 +1069,7 @@ function render(snapshot: PublicOperatorSnapshot) {
 		launchNotice.dataset['tone'] = 'warning'
 	}
 	const notice = element('notice')
-	let noticeTitle = 'Dry-run mode'
-	let noticeCopy = 'Opportunities are monitored, but this process cannot submit transactions. Enable runtime.execute in the configuration to change modes.'
-	let noticeTone = 'info'
-	if (snapshot.execute) {
-		noticeTitle = 'Execution mode is locally armed'
-		noticeCopy = 'The local wallet can submit disputes when every strategy, timing, inventory, state, and delivery guard passes.'
-		noticeTone = 'warning'
-	}
-	if (!snapshot.operatorCapable) {
-		noticeTitle = 'Operator not ready'
-		noticeCopy = 'Check the latest poll and execution settings before starting new work.'
-		if (snapshot.lastPollAt === undefined) noticeCopy = 'Waiting for the first successful poll. Check RPC connectivity in Settings if polling does not complete.'
-		else if (snapshot.execute && snapshot.wallet === undefined) noticeCopy = 'Configure a local signer in Settings before starting execution.'
-		noticeTone = 'warning'
-	}
-	if (snapshot.paused) {
-		noticeTitle = 'Bot paused'
-		noticeCopy = 'New entries are paused. Settlement and withdrawal continue for already-funded positions so capital is not stranded.'
-		noticeTone = 'warning'
-	}
-	if (snapshot.lastError !== undefined) {
-		const retry = pollRetryStatus(snapshot)
-		noticeTitle = snapshot.retryInProgress ? 'Automatic retry in progress' : retry?.state === 'due' ? 'Automatic retry due' : snapshot.lastPollFailureAt === undefined ? 'Operator attention required' : 'Latest poll failed'
-		const failure = retry === undefined ? snapshot.lastError : snapshot.lastError.replace(/ Automatic retry remains active\.$/, '')
-		const failureTime = snapshot.lastPollFailureAt === undefined ? '' : ` Poll failed at ${new Date(snapshot.lastPollFailureAt).toLocaleTimeString()}.`
-		const nextRetry = retry?.state === 'scheduled' && snapshot.nextRetryAt !== undefined ? ` Next automatic retry is scheduled for ${new Date(snapshot.nextRetryAt).toLocaleTimeString()}.` : ''
-		const retryDue = retry?.state === 'due' && snapshot.nextRetryAt !== undefined ? ` Automatic retry became due at ${new Date(snapshot.nextRetryAt).toLocaleTimeString()}.` : ''
-		const lastRetry = snapshot.lastRetryAt === undefined ? '' : ` ${snapshot.retryInProgress ? 'Automatic retry' : 'Last automatic retry'} started at ${new Date(snapshot.lastRetryAt).toLocaleTimeString()}.`
-		noticeCopy = `${failure}${failureTime}${nextRetry}${retryDue}${lastRetry}`
-		noticeTone = 'danger'
-	}
+	const { noticeTitle, noticeCopy, noticeTone } = operatorNoticePresentation(snapshot)
 	setText('notice-title', noticeTitle)
 	setText('notice-copy', noticeCopy)
 	notice.dataset['tone'] = noticeTone
@@ -1173,19 +1136,25 @@ const refresh = singleFlight(async () => {
 		const modeBadge = element('mode-badge')
 		const statusLabels = botStatusLabels(undefined)
 		delete modeBadge.dataset['mode']
-		modeBadge.textContent = 'Mode unavailable'
-		modeBadge.className = 'badge badge-danger'
-		const capabilityBadge = element('capability-badge')
-		capabilityBadge.textContent = 'Capability unavailable'
-		capabilityBadge.className = 'badge badge-warning'
 		const runStatusBadge = element('run-status-badge')
 		runStatusBadge.dataset['status'] = 'disconnected'
-		runStatusBadge.textContent = 'Disconnected'
-		runStatusBadge.className = 'badge badge-danger'
-		const attentionBadge = element<HTMLAnchorElement>('attention-badge')
-		const retainedAttentionCount = latestSnapshot === undefined ? 0 : latestSnapshot.positions.filter(position => position.status === 'recovery-required').length + latestSnapshot.transactionActivity.filter(transaction => transaction.status === 'confirmation-unknown').length + (latestSnapshot.networkConfigured ? 0 : 1)
-		const attentionCount = retainedAttentionCount + 1
-		setAttentionBadge(attentionBadge, attentionCount, '/overview#notice')
+		renderDisconnectedHeader({
+			attentionBadge: element<HTMLAnchorElement>('attention-badge'),
+			attentionTarget: '/overview#notice',
+			capabilityBadge: element('capability-badge'),
+			capabilityBadgeClassName: 'badge badge-warning',
+			lastKnownModeLabel: undefined,
+			modeBadge,
+			modeBadgeClassName: 'badge badge-danger',
+			retainedAttentionCount: latestSnapshot === undefined ? 0 : latestSnapshot.positions.filter(position => position.status === 'recovery-required').length + latestSnapshot.transactionActivity.filter(transaction => transaction.status === 'confirmation-unknown').length + (latestSnapshot.networkConfigured ? 0 : 1),
+			runStatusBadge,
+			runStatusBadgeClassName: 'badge badge-danger',
+			showNotice: title => {
+				setText('notice-title', title)
+				setText('notice-copy', statePollingFailureMessage(error))
+				element('notice').dataset['tone'] = 'danger'
+			},
+		})
 		const headerNetworkBadge = element('header-network-badge')
 		if (latestSnapshot?.networkConfigured === true) headerNetworkBadge.textContent = `${latestSnapshot.network} · ${latestSnapshot.expectedChainId.toString()} · last known`
 		else if (latestSnapshot !== undefined) headerNetworkBadge.textContent = 'Network setup · last known'
@@ -1193,25 +1162,9 @@ const refresh = singleFlight(async () => {
 		headerNetworkBadge.className = 'badge badge-warning'
 		setText('status-value', statusLabels.status)
 		element('launch-notice').hidden = true
-		setText('notice-title', 'Dashboard disconnected')
-		setText('notice-copy', statePollingFailureMessage(error))
-		element('notice').dataset['tone'] = 'danger'
 	}
 })
 
-async function manualRefresh() {
-	if (manualRefreshPending) return
-	manualRefreshPending = true
-	updateManualRefreshState()
-	try {
-		await refresh()
-	} finally {
-		manualRefreshPending = false
-		updateManualRefreshState()
-	}
-}
-
-element('refresh-button').addEventListener('click', () => void manualRefresh())
 element('reload-configuration-button').addEventListener('click', () => void loadCompleteConfiguration())
 element<HTMLButtonElement>('profile-switch-retry-button').addEventListener('click', async event => {
 	const button = event.currentTarget
@@ -1294,57 +1247,44 @@ element<HTMLSelectElement>('price-token').addEventListener('change', () => {
 })
 element('tokens-form').addEventListener('submit', async event => {
 	event.preventDefault()
-	const addresses = element<HTMLTextAreaElement>('token-addresses')
-		.value.split('\n')
-		.map(value => value.trim())
-		.filter(Boolean)
+	const requestEpoch = profileRequestEpoch
+	universeSavePending = true
+	setControlsEnabled(connected)
+	const button = element<HTMLFormElement>('tokens-form').querySelector<HTMLButtonElement>('button[type="submit"]')
+	if (button === null) throw new Error('Universe approval submit button is missing')
+	button.disabled = true
+	setText('tokens-status', 'Saving universe approvals…')
 	try {
-		await api('/api/tokens', {
-			body: JSON.stringify(addresses),
+		await api('/api/approved-universes', {
+			body: JSON.stringify([...approvedUniverseIds]),
 			headers: { 'content-type': 'application/json' },
 			method: 'PUT',
 		})
-		setText('tokens-status', 'Token list checked and saved. Discovery refreshes on the next block.')
+		if (requestEpoch !== profileRequestEpoch) return
+		setText('tokens-status', 'Universe approvals saved. They apply before the next execution scan.')
 	} catch (error) {
-		setText('tokens-status', error instanceof Error ? error.message : String(error))
+		if (requestEpoch === profileRequestEpoch) setText('tokens-status', error instanceof Error ? error.message : String(error))
+	} finally {
+		universeSavePending = false
+		button.disabled = !connected
+		setControlsEnabled(connected)
 	}
 })
 
-function preflightItem(label: string, value: string) {
-	const item = document.createElement('li')
-	const name = document.createElement('span')
-	name.textContent = label
-	const status = document.createElement('strong')
-	status.textContent = value
-	item.append(name, status)
-	return item
-}
-
-function openResumePreflight(snapshot: PublicOperatorSnapshot) {
+function openResumeConfirmation(snapshot: PublicOperatorSnapshot) {
 	const recoveryCount = snapshot.positions.filter(position => position.status === 'recovery-required').length
 	const uncertainTransactions = snapshot.transactionActivity.filter(transaction => transaction.status === 'confirmation-unknown').length
 	const selectedOpportunities = snapshot.opportunities.filter(opportunity => opportunity.decision === 'selected' || opportunity.decision === 'eligible').length
-	element('resume-preflight').replaceChildren(
-		preflightItem('Mode', 'Live execution'),
-		preflightItem('Network', snapshot.networkConfigured ? `${snapshot.network} · chain ${snapshot.expectedChainId.toString()}` : 'Not configured'),
-		preflightItem('Execution signer', snapshot.wallet === undefined ? 'Missing' : shorten(snapshot.wallet)),
-		preflightItem('Recovery-required positions', recoveryCount.toString()),
-		preflightItem('Unknown confirmations', uncertainTransactions.toString()),
-		preflightItem('Market evidence', snapshot.marketConsensus?.reliable === true ? 'Reliable' : 'Guarded / unavailable'),
-		preflightItem('Eligible opportunities now', selectedOpportunities.toString()),
-		preflightItem('Submission', snapshot.submission.mode === 'private' ? `${snapshot.submission.minimumBundleRelaySuccesses.toString()} private relay confirmations` : 'Public mempool'),
-	)
-	const dialog = element<HTMLDialogElement>('resume-dialog')
-	if (typeof dialog.showModal === 'function') dialog.showModal()
-	if (!dialog.hasAttribute('open')) dialog.setAttribute('open', '')
-	element<HTMLElement>('resume-title').focus({ preventScroll: true })
-	dialog.scrollTop = 0
-}
-
-function closeResumePreflight() {
-	const dialog = element<HTMLDialogElement>('resume-dialog')
-	if (dialog.open && typeof dialog.close === 'function') dialog.close()
-	else dialog.removeAttribute('open')
+	openResumePreflight([
+		['Mode', 'Live execution'],
+		['Network', snapshot.networkConfigured ? `${snapshot.network} · chain ${snapshot.expectedChainId.toString()}` : 'Not configured'],
+		['Execution signer', snapshot.wallet === undefined ? 'Missing' : shorten(snapshot.wallet)],
+		['Recovery-required positions', recoveryCount.toString()],
+		['Unknown confirmations', uncertainTransactions.toString()],
+		['Market evidence', snapshot.marketConsensus?.reliable === true ? 'Reliable' : 'Guarded / unavailable'],
+		['Eligible opportunities now', selectedOpportunities.toString()],
+		['Submission', snapshot.submission.mode === 'private' ? `${snapshot.submission.minimumBundleRelaySuccesses.toString()} private relay confirmations` : 'Public mempool'],
+	])
 }
 
 async function changePaused(paused: boolean) {
@@ -1378,7 +1318,7 @@ element('pause-button').addEventListener('click', () => {
 	if (latestSnapshot === undefined) return
 	if (latestSnapshot.paused && (!connected || !latestSnapshot.networkConfigured)) return
 	if (latestSnapshot.paused && latestSnapshot.execute) {
-		openResumePreflight(latestSnapshot)
+		openResumeConfirmation(latestSnapshot)
 		return
 	}
 	void changePaused(!latestSnapshot.paused)
@@ -1391,100 +1331,7 @@ element('confirm-resume').addEventListener('click', () => {
 })
 
 const dashboardPaths = new Set(['/overview', '/operations', '/games', '/markets', '/settings'])
-const sectionLinks = [...document.querySelectorAll<HTMLAnchorElement>('.section-nav a[href^="/"]')].filter(link => dashboardPaths.has(new URL(link.href).pathname))
-
-function showDashboardPage(pathname: string, push = false) {
-	const page = pathname === '/' ? 'overview' : pathname.replace(/^\//, '').replace(/\/$/, '')
-	document.body.dataset['page'] = page
-	for (const link of sectionLinks) link.toggleAttribute('aria-current', new URL(link.href).pathname.replace(/\/$/, '') === `/${page}`)
-	const activeLink = sectionLinks.find(link => link.hasAttribute('aria-current'))
-	const navigation = activeLink?.closest<HTMLElement>('.section-nav')
-	if (activeLink !== undefined && navigation !== null && navigation !== undefined) {
-		window.requestAnimationFrame(() => {
-			navigation.scrollLeft = activeLink.offsetLeft - (navigation.clientWidth - activeLink.offsetWidth) / 2
-		})
-	}
-	if (push) window.history.pushState({}, '', `/${page}`)
-	window.scrollTo({ top: 0 })
-}
-
-for (const link of sectionLinks) {
-	link.addEventListener('click', event => {
-		if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-		event.preventDefault()
-		showDashboardPage(new URL(link.href).pathname, true)
-	})
-}
-window.addEventListener('popstate', () => showDashboardPage(window.location.pathname))
-
-function secureExternalLinks(root: ParentNode) {
-	const links = root instanceof HTMLAnchorElement ? [root] : [...root.querySelectorAll<HTMLAnchorElement>('a[href]')]
-	for (const link of links) {
-		if (link.origin === window.location.origin) continue
-		link.target = '_blank'
-		link.rel = 'noopener noreferrer'
-	}
-}
-
-secureExternalLinks(document)
-new MutationObserver(records => {
-	for (const record of records) {
-		for (const node of record.addedNodes) if (node instanceof HTMLElement) secureExternalLinks(node)
-	}
-}).observe(document.body, { childList: true, subtree: true })
-
-let sectionNavigationAlignmentInitialized = false
-
-function revealSectionLink(_link: HTMLAnchorElement) {
-	const navigation = sectionLinks[0]?.closest<HTMLElement>('.section-nav')
-	if (navigation === undefined || navigation === null) return
-	const align = () => {
-		const link = sectionLinks.find(candidate => candidate.hasAttribute('aria-current'))
-		if (link === undefined) return
-		navigation.scrollLeft = link.offsetLeft - (navigation.clientWidth - link.offsetWidth) / 2
-	}
-	align()
-	if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(align)
-	if (!sectionNavigationAlignmentInitialized) {
-		sectionNavigationAlignmentInitialized = true
-		window.addEventListener('load', align, { once: true })
-		window.addEventListener('resize', align)
-		new ResizeObserver(align).observe(navigation)
-	}
-	void document.fonts?.ready.then(align)
-}
-
-function scrollToSection(id: string) {
-	const target = document.getElementById(id)
-	const shell = document.querySelector<HTMLElement>('.operator-shell')
-	if (target === null || shell === null) return
-	if (target instanceof HTMLDetailsElement) target.open = true
-	else target.closest('details')?.setAttribute('open', '')
-	const align = () => {
-		const top = target.getBoundingClientRect().top + window.scrollY - shell.getBoundingClientRect().height - 16
-		window.scrollTo({ top: Math.max(0, top) })
-	}
-	align()
-	if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(() => window.requestAnimationFrame(align))
-	void document.fonts?.ready.then(align)
-}
-
-function syncSectionNavigation(scrollToTarget = false) {
-	const activePath = window.location.pathname === '/' ? '/overview' : window.location.pathname
-	let activeLink: HTMLAnchorElement | undefined
-	for (const link of sectionLinks) {
-		if (link.pathname === activePath) {
-			link.setAttribute('aria-current', 'page')
-			activeLink = link
-		} else link.removeAttribute('aria-current')
-	}
-	if (activeLink !== undefined) revealSectionLink(activeLink)
-	const targetId = window.location.hash.slice(1)
-	if (scrollToTarget && targetId !== '') scrollToSection(targetId)
-}
-
-window.addEventListener('hashchange', () => syncSectionNavigation(true))
-syncSectionNavigation()
+const { scrollToSection, syncSectionNavigation } = createSectionNavigation(link => dashboardPaths.has(new URL(link.href).pathname))
 
 element<HTMLFormElement>('strategy-form').addEventListener('submit', async event => {
 	event.preventDefault()
@@ -1528,10 +1375,7 @@ element<HTMLFormElement>('submission-form').addEventListener('submit', async eve
 		const submission = {
 			minimumBundleRelaySuccesses: Number(element<HTMLInputElement>('minimum-bundle-relay-successes').value),
 			mode: element<HTMLSelectElement>('submission-mode').value,
-			relayUrls: element<HTMLTextAreaElement>('relay-urls')
-				.value.split('\n')
-				.map(value => value.trim())
-				.filter(value => value !== ''),
+			relayUrls: urlLines(element<HTMLTextAreaElement>('relay-urls').value),
 		}
 		const response = await api<{ submission: SubmissionSettings }>('/api/submission', {
 			body: JSON.stringify(submission),
@@ -1561,10 +1405,7 @@ element<HTMLFormElement>('connectivity-form').addEventListener('submit', async e
 	setText('connectivity-status', `Checking every endpoint for ${selectedNetworkLabel}…`)
 	try {
 		const connectivity = {
-			publicRpcUrls: element<HTMLTextAreaElement>('public-rpc-urls')
-				.value.split('\n')
-				.map(value => value.trim())
-				.filter(value => value !== ''),
+			publicRpcUrls: urlLines(element<HTMLTextAreaElement>('public-rpc-urls').value),
 			readRpcUrl: element<HTMLInputElement>('read-rpc-url').value.trim(),
 		}
 		const rpcQuorum = Number(element<HTMLSelectElement>('rpc-quorum').value)
@@ -1604,16 +1445,13 @@ element<HTMLFormElement>('deployment-form').addEventListener('submit', async eve
 			coordinatorAddresses: lines('deployment-coordinators'),
 			deploymentManifest: manifestText === '' ? undefined : JSON.parse(manifestText),
 			executor: optionalInput('deployment-executor'),
-			openOracle: element<HTMLInputElement>('deployment-open-oracle').value.trim(),
 			quorumRpcUrls: lines('deployment-quorum-rpcs'),
-			rep: element<HTMLInputElement>('deployment-rep').value.trim(),
 			uniswapFactory: element<HTMLInputElement>('deployment-v3-factory').value.trim(),
 			uniswapQuoter: element<HTMLInputElement>('deployment-v3-quoter').value.trim(),
 			uniswapRouter: optionalInput('deployment-v3-router'),
 			uniswapV2Router: optionalInput('deployment-v2-router'),
 			uniswapV4PoolManager: optionalInput('deployment-v4-pool-manager'),
 			uniswapV4Quoter: optionalInput('deployment-v4-quoter'),
-			weth: element<HTMLInputElement>('deployment-weth').value.trim(),
 		}
 		const response = await api<{ deployment: DeploymentSettings }>('/api/deployment', {
 			body: JSON.stringify(deployment),

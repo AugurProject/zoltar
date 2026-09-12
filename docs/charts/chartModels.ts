@@ -1,4 +1,4 @@
-import { computeEscalationBindingCapitalAttoRep, computeEscalationTimeSinceStartFromAttritionCostAttoRep, ESCALATION_TIME_LENGTH, hasReachedNonDecision, type EscalationBalanceTuple, type EscalationOutcomeKey, projectEscalationDeposit } from '../../shared/ts/escalationMath'
+import { computeEscalationBindingCapitalAttoRep, computeEscalationTimeSinceStartFromAttritionCostAttoRep, ESCALATION_TIME_LENGTH, hasReachedNonDecision, type EscalationBalanceTuple, type EscalationOutcomeKey, projectEscalationDeposit } from '../../shared/statoblast/ts/escalationGame/escalationMath'
 
 export type AuctionBidInput = {
 	eth: number
@@ -7,7 +7,7 @@ export type AuctionBidInput = {
 	price: number
 }
 
-export const quantitativeChartIds = ['fig-auction-clearing-ladder', 'fig-statoblast-escalation-cost-curve', 'fig-statoblast-retention-utilization', 'fig-zoltar-fork-threshold-decay', 'plot-statoblast-whitepaper-19'] as const
+export const quantitativeChartIds = ['fig-auction-clearing-ladder', 'fig-statoblast-escalation-cost-curve', 'fig-statoblast-retention-utilization', 'fig-zoltar-fork-threshold-decay', 'fig-statoblast-collateral-repair'] as const
 
 type QuantitativeChartId = (typeof quantitativeChartIds)[number]
 
@@ -16,7 +16,7 @@ export const quantitativeChartAxisLabels: Record<QuantitativeChartId, { x: strin
 	'fig-statoblast-escalation-cost-curve': { x: 'Days since game start (days)', y: 'Required support threshold / attrition cost (REP)' },
 	'fig-statoblast-retention-utilization': { x: 'Live ETH minting-capacity utilization (%)', y: 'Annualized open-interest fee (%)' },
 	'fig-zoltar-fork-threshold-decay': { x: 'Fork generation (count)', y: 'Theoretical genesis supply (%)' },
-	'plot-statoblast-whitepaper-19': { x: 'Child-universe collateral (ETH)', y: 'Collateral destination (category)' },
+	'fig-statoblast-collateral-repair': { x: 'Child-universe collateral (ETH)', y: 'Collateral destination (category)' },
 }
 
 type AuctionBidResult = AuctionBidInput & {

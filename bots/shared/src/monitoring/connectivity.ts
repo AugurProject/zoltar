@@ -1,8 +1,9 @@
-import type { Address, Hex } from '../ethereum.ts'
+import type { Address, Hex, JsonValue } from '../ethereum.ts'
 import { bigintToSafeNumber, getAddress, keccak256 } from '../ethereum.ts'
 import type { SubmissionSettings } from '../execution/transaction-submission.ts'
 import { authenticatedRelayHeaders, type RelayAuthentication } from '../execution/relay-authentication.ts'
 import { boundedJsonResponse, DEFAULT_RPC_RESPONSE_BYTES } from '../infrastructure/bounded-json.ts'
+import { flashbotsPrivateTransactionCompatibilityProfileAllowed } from './relay-compatibility.ts'
 
 export type { RelayAuthentication } from '../execution/relay-authentication.ts'
 
@@ -53,8 +54,11 @@ type JsonRpcResponse = {
 	error?: {
 		code?: number
 		message?: string
+		data?: JsonValue
 	}
-	result?: unknown
+	id?: number | string | null
+	jsonrpc?: '2.0'
+	result?: JsonValue
 }
 
 export class EndpointCheckFailure extends Error {
@@ -229,7 +233,7 @@ export async function checkRpcEndpoint(url: string, expectedChainId: number, kin
 
 // A validly encoded legacy envelope with v=27, r=1, and s=0. secp256k1
 // signatures require s >= 1, so no client can recover a sender or admit it.
-export const TRANSACTION_SUBMISSION_CAPABILITY_PROBE = '0xdf800182520894000000000000000000000000000000000000000080801b0180' as const
+const TRANSACTION_SUBMISSION_CAPABILITY_PROBE = '0xdf800182520894000000000000000000000000000000000000000080801b0180' as const
 
 type TransactionSubmissionMethod = 'eth_sendPrivateTransaction' | 'eth_sendRawTransaction'
 
@@ -269,22 +273,22 @@ async function rawCapabilityErrorResponse(url: string, body: string, headers: Re
 		if (response.status === 408 || response.status === 425 || response.status === 429 || response.status >= 500) throw new EndpointTransportError(message)
 		throw new EndpointSafetyError(message)
 	}
-	let value: unknown
+	let value: JsonValue
 	try {
 		value = await boundedJsonResponse(response, DEFAULT_RPC_RESPONSE_BYTES, parameters.label)
 	} catch (error) {
 		if (error instanceof SyntaxError) throw new EndpointSafetyError(`${parameters.label} returned a non-JSON response`)
 		throw error
 	}
-	const responseIdMatches = typeof value === 'object' && value !== null && !Array.isArray(value) && 'id' in value && (value.id === parameters.expectedId || (parameters.alternateExpectedId !== undefined && value.id === parameters.alternateExpectedId))
-	if (typeof value !== 'object' || value === null || Array.isArray(value) || !('jsonrpc' in value) || value.jsonrpc !== '2.0' || !responseIdMatches || !('error' in value) || 'result' in value) {
+	const responseIdMatches = typeof value === 'object' && value !== null && !Array.isArray(value) && 'id' in value && (value['id'] === parameters.expectedId || (parameters.alternateExpectedId !== undefined && value['id'] === parameters.alternateExpectedId))
+	if (typeof value !== 'object' || value === null || Array.isArray(value) || !('jsonrpc' in value) || value['jsonrpc'] !== '2.0' || !responseIdMatches || !('error' in value) || 'result' in value) {
 		throw new EndpointSafetyError(`${parameters.label} did not return the expected matching JSON-RPC 2.0 error`)
 	}
-	const error = value.error
-	if (typeof error !== 'object' || error === null || Array.isArray(error) || !('code' in error) || typeof error.code !== 'number' || !Number.isSafeInteger(error.code) || !('message' in error) || typeof error.message !== 'string' || error.message.trim() === '') {
+	const error = value['error']
+	if (typeof error !== 'object' || error === null || Array.isArray(error) || !('code' in error) || typeof error['code'] !== 'number' || !Number.isSafeInteger(error['code']) || !('message' in error) || typeof error['message'] !== 'string' || error['message'].trim() === '') {
 		throw new EndpointSafetyError(`${parameters.label} returned a malformed JSON-RPC error`)
 	}
-	return { code: error.code, message: error.message.trim(), status: response.status }
+	return { code: error['code'], message: error['message'].trim(), status: response.status }
 }
 
 async function rawTransactionSubmissionCapabilityError(
@@ -325,17 +329,6 @@ async function assertPublicTransactionSubmissionCapability(url: string, timeoutM
 }
 
 const PRIVATE_TRANSACTION_METHOD_CONTROL = 'zoltar_unsupportedRelayCapabilityProbe_f8b1e7c34d929a650c42bf176f80e2196a7d44ce53239018bd631cc9a4e5702f'
-const FLASHBOTS_MAINNET_RELAY_ORIGIN = 'https://relay.flashbots.net'
-const FLASHBOTS_SEPOLIA_RELAY_ORIGIN = 'https://relay-sepolia.flashbots.net'
-export function flashbotsPrivateTransactionCompatibilityProfileAllowed(url: string, expectedChainId: number) {
-	const parsed = new URL(url)
-	const loopback = parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost' || parsed.hostname === '[::1]'
-	let officialOrigin: string | undefined
-	if (expectedChainId === 1) officialOrigin = FLASHBOTS_MAINNET_RELAY_ORIGIN
-	else if (expectedChainId === 11_155_111) officialOrigin = FLASHBOTS_SEPOLIA_RELAY_ORIGIN
-	return loopback || parsed.origin === officialOrigin
-}
-
 function privateCapabilityControlBody(method: string, params: readonly unknown[]) {
 	return JSON.stringify({ id: 1, jsonrpc: '2.0', method, params })
 }
@@ -437,21 +430,21 @@ async function rawRelayCapabilityError(url: string, requestedMethod: string, cap
 		if (response.status === 408 || response.status === 425 || response.status === 429 || response.status >= 500) throw new EndpointTransportError(message)
 		throw new Error(message)
 	}
-	let value: unknown
+	let value: JsonValue
 	try {
 		value = await boundedJsonResponse(response, DEFAULT_RPC_RESPONSE_BYTES, 'Bundle relay capability check')
 	} catch (error) {
 		if (error instanceof SyntaxError) throw new Error(`Bundle relay capability check returned non-JSON HTTP ${response.status.toString()}`)
 		throw error
 	}
-	if (typeof value !== 'object' || value === null || Array.isArray(value) || !('jsonrpc' in value) || value.jsonrpc !== '2.0' || !('id' in value) || (value.id !== 1 && value.id !== null) || !('error' in value) || 'result' in value) {
+	if (typeof value !== 'object' || value === null || Array.isArray(value) || !('jsonrpc' in value) || value['jsonrpc'] !== '2.0' || !('id' in value) || (value['id'] !== 1 && value['id'] !== null) || !('error' in value) || 'result' in value) {
 		throw new Error(`Endpoint did not prove ${capabilityMethod} support: expected one matching JSON-RPC 2.0 error from the intentionally invalid request`)
 	}
-	const error = value.error
-	if (typeof error !== 'object' || error === null || Array.isArray(error) || !('code' in error) || typeof error.code !== 'number' || !Number.isSafeInteger(error.code) || !('message' in error) || typeof error.message !== 'string' || error.message.trim() === '') {
+	const error = value['error']
+	if (typeof error !== 'object' || error === null || Array.isArray(error) || !('code' in error) || typeof error['code'] !== 'number' || !Number.isSafeInteger(error['code']) || !('message' in error) || typeof error['message'] !== 'string' || error['message'].trim() === '') {
 		throw new Error(`Endpoint did not prove ${capabilityMethod} support: malformed JSON-RPC error`)
 	}
-	return { code: error.code, id: value.id, message: error.message.trim() }
+	return { code: error['code'], id: value['id'], message: error['message'].trim() }
 }
 
 async function rawAssertRelayMethodCapability(url: string, method: RelayMethod, timeoutMilliseconds: number) {
@@ -556,11 +549,11 @@ export async function checkPrivateTransactionSubmissionEndpoints(settings: Submi
 	return checkedSubmissionThreshold(await Promise.all(settings.relayUrls.map(url => checkPrivateTransactionRelayEndpoint(url, expectedChainId, authentication))), settings.minimumBundleRelaySuccesses, 'private transaction relay check failed')
 }
 
-export function withConnectivityChecks(existing: readonly EndpointCheck[], connectivityChecks: readonly EndpointCheck[]) {
+function withConnectivityChecks(existing: readonly EndpointCheck[], connectivityChecks: readonly EndpointCheck[]) {
 	return [...connectivityChecks, ...existing.filter(check => check.kind === 'private-relay')]
 }
 
-export function withSubmissionChecks(existing: readonly EndpointCheck[], submissionChecks: readonly EndpointCheck[]) {
+function withSubmissionChecks(existing: readonly EndpointCheck[], submissionChecks: readonly EndpointCheck[]) {
 	return [...existing.filter(check => check.kind !== 'private-relay'), ...submissionChecks]
 }
 

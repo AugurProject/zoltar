@@ -1,40 +1,109 @@
+import example from '../../config/operator.example.json'
+import { parseSettings } from '../../src/config/settings.ts'
+import { chaosReadClients, createChaosReadPool, performCanonicalScan } from '../../src/runtime/canonical-scan.ts'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { encodeAbiParameters, getAddress, type Abi, type Address } from '../support/bot-shared.ts'
-import {
-	advanceVaultRegistryCursor,
-	assertCanonicalPairGraph,
-	assertCanonicalPoolGraph,
-	authenticatePoolProtocolBindings,
-	canonicalDiscoveryWarnings,
-	collectCountedPages,
-	DISCOVERY_RPC_CONCURRENCY,
-	DISCOVERY_RPC_QUEUE_LIMIT,
-	discoverDirectEscalationDepositQuotes,
-	discoverEcosystemSnapshot,
-	discoverShareInventory,
-	discoverStagedOperations,
-	drainConcurrent,
-	forkMigrationWindowIsOpen,
-	forkRepMigrationTarget,
-	limitDiscoveryConcurrency,
-	mapWithConcurrency,
-	minimumSafeVaultDeposit,
-	relevantTokenSpenders,
-	trustedIndexedReportsForDiscovery,
-	type ChaosReadClient,
-} from '../../src/monitoring/discovery.ts'
-import { canonicalLifecyclePresence, urgentOperationPlans } from '../../src/operations/catalog.ts'
+import { encodeAbiParameters, getAddress, privateKeyToAccount, type Abi, type AbiValue, type Address } from '@zoltar/bot-shared/ethereum'
+import { discoverEcosystemSnapshot } from '../../src/monitoring/discovery.ts'
+import { DISCOVERY_RPC_CONCURRENCY, DISCOVERY_RPC_QUEUE_LIMIT, drainConcurrent, limitDiscoveryConcurrency, mapWithConcurrency, type ChaosReadClient } from '../../src/monitoring/discovery-client.ts'
+import { discoverDirectEscalationDepositQuotes, minimumSafeVaultDeposit, relevantTokenSpenders } from '../../src/monitoring/discovery-escalation.ts'
+import { forkMigrationWindowIsOpen, forkRepMigrationTarget } from '../../src/monitoring/discovery-fork-migration.ts'
+import { assertCanonicalPairGraph, assertCanonicalPoolGraph, authenticatePoolProtocolBindings } from '../../src/monitoring/discovery-graph.ts'
+import { advanceVaultRegistryCursor, collectCountedPages } from '../../src/monitoring/discovery-registry.ts'
+import { discoverShareInventory, trustedIndexedReportsForDiscovery } from '../../src/monitoring/discovery-share-inventory.ts'
+import { discoverStagedOperations } from '../../src/monitoring/discovery-staged-operations.ts'
+import { canonicalLifecyclePresence } from '../../src/operations/catalog.ts'
+import { urgentOperationPlans } from '../support/operation-plans.ts'
 import type { OracleGameSnapshot, PlanningOptions } from '../../src/operations/types.ts'
-import { IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, IMMUTABLE_TOPOLOGY_MAXIMUM_QUESTION_LABEL_UTF8_BYTES, loadImmutableTopologyCache, saveImmutableTopologyCache, type CanonicalImmutableTopologyCache, type ImmutableTopologyIdentity } from '../../src/monitoring/topology-cache.ts'
+import { IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, IMMUTABLE_TOPOLOGY_MAXIMUM_QUESTION_LABEL_UTF8_BYTES, loadImmutableTopologyCacheWithinLimits, saveImmutableTopologyCache, type CanonicalImmutableTopologyCache, type ImmutableTopologyIdentity } from '../../src/monitoring/topology-cache.ts'
 import { address, hash, snapshotFixture } from '../operations/fixture.ts'
 
 const temporaryDirectories: string[] = []
 
 afterEach(async () => {
 	await Promise.all(temporaryDirectories.splice(0).map(path => rm(path, { force: true, recursive: true })))
+})
+
+test('keyless discovery scans protocol topology without querying account inventory', async () => {
+	const fake = fakeClient(10n)
+	const snapshot = await discoverEcosystemSnapshot({
+		anchorBlockNumber: 10n,
+		client: fake.client,
+		deployments: snapshotFixture().deployments,
+		wallet: undefined,
+	})
+	expect(snapshot.universes.length).toBeGreaterThan(0)
+	expect(fake.balanceAddresses).toEqual([])
+	expect(fake.contractReads.some(read => ['balanceOf', 'allowance', 'tokenHolder', 'internalAllowance', 'getMigrationRepBalanceAttoRep'].includes(read.functionName))).toBe(false)
+	expect(snapshot.wallet.tokens).toEqual([])
+})
+
+test('monitors inventory for a known execution address without requiring a signer', async () => {
+	const fake = fakeClient(10n)
+	const wallet = address(1)
+	const snapshot = await discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: fake.client, deployments: snapshotFixture().deployments, wallet })
+	expect(fake.balanceAddresses).toEqual([wallet])
+	expect(snapshot.wallet.address).toBe(wallet)
+	expect(snapshot.wallet.ethBalanceAttoEth).toBe('10')
+	expect(snapshot.wallet.tokens.length).toBeGreaterThan(0)
+	expect(fake.contractReads.filter(read => read.functionName === 'balanceOf').every(read => read.args?.[0] === wallet)).toBe(true)
+})
+
+test('keyless pool discovery keeps auctions and vault topology without execution-account reads', async () => {
+	const fake = refundBackfillClient(25n)
+	const snapshot = await discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: fake.client, deployments: snapshotFixture().deployments, wallet: undefined })
+	expect(snapshot.pools).toHaveLength(1)
+	expect(snapshot.auctions).toHaveLength(1)
+	expect(snapshot.wallet.tokens).toEqual([])
+	expect(snapshot.wallet.shares).toEqual([])
+	expect(snapshot.wallet.lpTokens).toEqual([])
+	for (const name of ['getEscalationMigrationEntitlementStatus', 'pendingEthRefundsAttoEth', 'isApprovedForAll', 'allowance', 'tokenHolder', 'internalAllowance']) expect(fake.contractReads).not.toContain(name)
+})
+
+test('canonical scans publish inventory only for a successfully scanned execution address', async () => {
+	const privateKey = `0x${'11'.repeat(32)}` as const
+	for (const account of [
+		{ wallet: undefined, privateKey: undefined },
+		{ wallet: address(1), privateKey: undefined },
+		{ wallet: privateKeyToAccount(privateKey).address, privateKey },
+	]) {
+		const wallet = account.wallet
+		const fake = fakeClient(10n, hash(10))
+		const settings = parseSettings({
+			...example,
+			privateKey: account.privateKey ?? null,
+			connectivity: { publicRpcUrls: ['http://127.0.0.1:1'], quorumRpcUrls: [], readRpcUrl: 'http://127.0.0.1:1', rpcQuorum: 1 },
+			deployment: snapshotFixture().deployments,
+			network: { chainId: 31337, name: 'local', explorerUrl: 'http://127.0.0.1', kind: 'custom', maximumBlockIntervalSeconds: 12 },
+			networkConfigured: true,
+			runtime: { ...example.runtime, protocolStartBlock: '0', stateFile: await temporaryStatePath() },
+		})
+		settings.deployment = snapshotFixture().deployments
+		const pool = createChaosReadPool(settings)
+		const read = chaosReadClients(settings, pool)[0]
+		if (read === undefined) throw new Error('Canonical scan fixture needs one client')
+		Object.assign(read.client, {
+			getBalance: fake.client.getBalance,
+			getBlock: fake.client.getBlock,
+			getBlockNumber: async () => 10n,
+			getChainId: fake.client.getChainId,
+			getCode: fake.client.getCode,
+			getLogs: async () => [],
+			readContract: fake.client.readContract,
+		})
+		const scan = await performCanonicalScan(settings, pool, wallet, 0, undefined, undefined, { clock: () => 1_000_000 })
+		expect(scan.snapshot.universes.length).toBeGreaterThan(0)
+		expect(scan.indexComplete).toBe(true)
+		expect(scan.index?.cursor.blockNumber).toBe('10')
+		expect(scan.inventoryAddress).toBe(wallet)
+		expect(fake.balanceAddresses).toEqual(wallet === undefined ? [] : [wallet])
+		if (wallet === undefined) {
+			expect(scan.executionReady).toBe(false)
+			expect(scan.evaluations.every(evaluation => !evaluation.eligibility.eligible)).toBe(true)
+		}
+	}
 })
 
 test('discovers and authenticates fixed-fee REP/WETH pools for every canonical universe', async () => {
@@ -104,6 +173,7 @@ function topologyIdentity(): ImmutableTopologyIdentity {
 
 interface GraphOverrides {
 	missingContract?: Address
+	missingContracts?: readonly Address[]
 	baseFeePerGas?: bigint | null
 	childOutcomesByUniverse?: Readonly<Record<string, readonly bigint[]>>
 	delayUniswapPoolReads?: boolean
@@ -129,11 +199,13 @@ interface GraphOverrides {
 }
 
 function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: GraphOverrides = {}, poisonToken?: Address) {
+	const balanceAddresses: Address[] = []
 	const pinnedReads: Array<bigint | undefined> = []
-	const contractReads: Array<{ args?: readonly unknown[]; functionName: string }> = []
+	const contractReads: Array<{ args?: readonly AbiValue[]; functionName: string }> = []
 	let requestedBlock: bigint | undefined
 	const implementation = {
 		async getBalance(parameters: { address: Address; blockNumber?: bigint }) {
+			balanceAddresses.push(parameters.address)
 			pinnedReads.push(parameters.blockNumber)
 			return 10n
 		},
@@ -148,11 +220,11 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 		},
 		async getCode(parameters: { address: Address; blockNumber?: bigint }) {
 			pinnedReads.push(parameters.blockNumber)
-			if (parameters.address === graph.missingContract) return '0x'
+			if (parameters.address === graph.missingContract || graph.missingContracts?.includes(parameters.address) === true) return '0x'
 			if ([address(2), address(3), address(4), address(5), address(6), address(7), address(8), address(9)].includes(parameters.address)) return '0x01'
 			return graph.uniswapFactory !== undefined && parameters.address.toLowerCase() === graph.uniswapFactory.toLowerCase() ? '0x01' : '0x'
 		},
-		async readContract(parameters: { abi: Abi; address: Address; args?: readonly unknown[]; blockNumber?: bigint; functionName: string }) {
+		async readContract(parameters: { abi: Abi; address: Address; args?: readonly AbiValue[]; blockNumber?: bigint; functionName: string }) {
 			pinnedReads.push(parameters.blockNumber)
 			contractReads.push({ ...(parameters.args === undefined ? {} : { args: parameters.args }), functionName: parameters.functionName })
 			if (graph.delayUniswapPoolReads === true && ['factory', 'fee', 'liquidity', 'slot0', 'token0', 'token1'].includes(parameters.functionName) && Object.values(graph.uniswapPoolsByRep ?? {}).some(candidate => candidate.pool.toLowerCase() === parameters.address.toLowerCase())) {
@@ -198,7 +270,7 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 					return 100n
 				case 'getNonDecisionThresholdAttoRep':
 					return 200n
-				case 'getTotalTheoreticalSupplyAttoRep':
+				case 'getTotalTheoreticalSupply':
 					return 1_000_000n
 				case 'forkBurnDivisor':
 					return 5n
@@ -260,7 +332,7 @@ function fakeClient(anchorBlockNumber: bigint, blockHash = hash(99), graph: Grap
 			return value
 		},
 	})
-	return { client, contractReads, pinnedReads, requested: () => requestedBlock }
+	return { balanceAddresses, client, contractReads, pinnedReads, requested: () => requestedBlock }
 }
 
 interface RefundBackfillOverrides {
@@ -296,7 +368,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, walletVaultRegistere
 		questionIds: [101n],
 	})
 	const implementation = {
-		async readContract(parameters: { abi: Abi; address: Address; args?: readonly unknown[]; blockNumber?: bigint; functionName: string }) {
+		async readContract(parameters: { abi: Abi; address: Address; args?: readonly AbiValue[]; blockNumber?: bigint; functionName: string }) {
 			contractReads.push(parameters.functionName)
 			switch (parameters.functionName) {
 				case 'getVaultCount':
@@ -818,7 +890,7 @@ describe('anchored ecosystem discovery', () => {
 			const anchor = 10n + BigInt(cycle)
 			const historicalBlockHashes = previousAnchor === undefined ? {} : { [previousAnchor.toString()]: hash(Number(previousAnchor)) }
 			const fake = fakeClient(anchor, hash(Number(anchor)), { historicalBlockHashes, poolDeployments, questionIds })
-			const restored = await loadImmutableTopologyCache(statePath, topologyIdentity(), limits)
+			const restored = await loadImmutableTopologyCacheWithinLimits({ identity: topologyIdentity(), limits, statePath })
 			let checkpoint: CanonicalImmutableTopologyCache | undefined
 			const snapshot = await discoverEcosystemSnapshot({
 				anchorBlockNumber: anchor,
@@ -847,7 +919,7 @@ describe('anchored ecosystem discovery', () => {
 			await saveImmutableTopologyCache(statePath, topologyIdentity(), checkpoint, limits)
 			previousAnchor = anchor
 		}
-		const exact = await loadImmutableTopologyCache(statePath, topologyIdentity(), limits)
+		const exact = await loadImmutableTopologyCacheWithinLimits({ identity: topologyIdentity(), limits, statePath })
 		expect(exact?.discoveryCursors.questions).toMatchObject({ canonicalCount: '11', nextIndex: '11', retentionMode: 'overflow' })
 		expect(exact?.discoveryCursors.poolDeployments).toMatchObject({ canonicalCount: '11', nextIndex: '11', retentionMode: 'overflow' })
 		expect(exact?.questions).toEqual([])
@@ -870,7 +942,7 @@ describe('anchored ecosystem discovery', () => {
 			const canonicalCount = canonicalCounts[cycle]
 			if (canonicalCount === undefined) throw new Error(`Missing canonical vault count for cycle ${cycle.toString()}`)
 			const newestFirst = [...oldestFirst.slice(0, canonicalCount)].reverse()
-			const restored = await loadImmutableTopologyCache(statePath, topologyIdentity(), limits)
+			const restored = await loadImmutableTopologyCacheWithinLimits({ identity: topologyIdentity(), limits, statePath })
 			const calls: Array<[bigint, bigint]> = []
 			const advanced = await advanceVaultRegistryCursor({
 				cachedVaults: restored?.vaultsByPool[pool] ?? [],
@@ -909,7 +981,7 @@ describe('anchored ecosystem discovery', () => {
 				limits,
 			)
 		}
-		const exact = await loadImmutableTopologyCache(statePath, topologyIdentity(), limits)
+		const exact = await loadImmutableTopologyCacheWithinLimits({ identity: topologyIdentity(), limits, statePath })
 		const exactCursor = exact?.discoveryCursors.vaultsByPool[pool]
 		if (exactCursor === undefined) throw new Error('Exact oversized vault cursor was not persisted')
 		expect(exactCursor).toMatchObject({ canonicalCount: '11', nextIndex: '11', retentionMode: 'overflow' })
@@ -1020,7 +1092,7 @@ describe('anchored ecosystem discovery', () => {
 		if (checkpoint === undefined) throw new Error('Boundary-label discovery did not produce a topology checkpoint')
 		expect(snapshot.questions[0]?.outcomeLabels[0]?.length).toBe(IMMUTABLE_TOPOLOGY_MAXIMUM_QUESTION_LABEL_UTF8_BYTES)
 		await saveImmutableTopologyCache(statePath, topologyIdentity(), checkpoint)
-		const restored = await loadImmutableTopologyCache(statePath, topologyIdentity())
+		const restored = await loadImmutableTopologyCacheWithinLimits({ identity: topologyIdentity(), limits: { maxPools: 1_000_000, maxQuestions: 1_000_000, maxUniverses: 1_000_000, maxVaultsPerPool: 1_000_000 }, statePath })
 		expect(restored?.questions[0]?.outcomeLabels[0]).toBe(boundaryLabel)
 		await expect(
 			discoverEcosystemSnapshot({
@@ -1248,12 +1320,12 @@ describe('anchored ecosystem discovery', () => {
 	test('selects only exact threshold-filling direct escalation quotes', async () => {
 		const wallet = address(1)
 		const game = address(15)
-		const previews: Array<readonly unknown[]> = []
-		const simulations: Array<readonly unknown[]> = []
+		const previews: Array<readonly AbiValue[]> = []
+		const simulations: Array<readonly AbiValue[]> = []
 		const client = new Proxy({} as ChaosReadClient, {
 			get(_target, property) {
 				if (property === 'readContract') {
-					return async (parameters: { args?: readonly unknown[]; functionName: string }) => {
+					return async (parameters: { args?: readonly AbiValue[]; functionName: string }) => {
 						if (parameters.functionName !== 'previewDepositOnOutcome') throw new Error(`Unexpected read ${parameters.functionName}`)
 						previews.push(parameters.args ?? [])
 						const outcome = parameters.args?.[0]
@@ -1263,7 +1335,7 @@ describe('anchored ecosystem discovery', () => {
 					}
 				}
 				if (property === 'simulateContract') {
-					return async (parameters: { args?: readonly unknown[]; functionName: string }) => {
+					return async (parameters: { args?: readonly AbiValue[]; functionName: string }) => {
 						if (parameters.functionName !== 'depositRepOnOutcome') throw new Error(`Unexpected simulation ${parameters.functionName}`)
 						simulations.push(parameters.args ?? [])
 						return { result: undefined }
@@ -1287,7 +1359,7 @@ describe('anchored ecosystem discovery', () => {
 		const client = new Proxy({} as ChaosReadClient, {
 			get(_target, property) {
 				if (property === 'readContract') {
-					return async (parameters: { args?: readonly unknown[] }) => {
+					return async (parameters: { args?: readonly AbiValue[] }) => {
 						const requested = parameters.args?.[1]
 						if (typeof requested !== 'bigint') throw new Error('Direct quote amount missing')
 						return [requested - 1n, requested - 1n] as const
@@ -1376,7 +1448,7 @@ describe('anchored ecosystem discovery', () => {
 		let reservationAmount = 80n
 		let approvalReceiver = address(87)
 		let approvalRevoked = false
-		const simulations: Array<{ account?: Address; blockNumber?: bigint; functionName: string; args?: readonly unknown[] }> = []
+		const simulations: Array<{ account?: Address; blockNumber?: bigint; functionName: string; args?: readonly AbiValue[] }> = []
 		const implementation = {
 			async readContract(parameters: { functionName: string }) {
 				switch (parameters.functionName) {
@@ -1444,7 +1516,7 @@ describe('anchored ecosystem discovery', () => {
 						throw new Error(`Unexpected read ${parameters.functionName}`)
 				}
 			},
-			async simulateContract(parameters: { account?: Address; blockNumber?: bigint; functionName: string; args?: readonly unknown[] }) {
+			async simulateContract(parameters: { account?: Address; blockNumber?: bigint; functionName: string; args?: readonly AbiValue[] }) {
 				simulations.push(parameters)
 				if (simulationFailure !== undefined) throw simulationFailure
 				return { result: [80n, 20n, 0n] }
@@ -1512,8 +1584,8 @@ describe('anchored ecosystem discovery', () => {
 		if (pool === undefined) throw new Error('Pool fixture missing')
 		let receiver = fixture.wallet.address
 		let simulationFailure: Error | undefined
-		const simulations: Array<{ account?: Address; functionName: string; args?: readonly unknown[] }> = []
-		const pageRequests: Array<readonly unknown[]> = []
+		const simulations: Array<{ account?: Address; functionName: string; args?: readonly AbiValue[] }> = []
+		const pageRequests: Array<readonly AbiValue[]> = []
 		const operation = () => ({
 			liquidationApprovalId: hash(0),
 			operation: 1n,
@@ -1534,7 +1606,7 @@ describe('anchored ecosystem discovery', () => {
 		const client = new Proxy({} as ChaosReadClient, {
 			get(_target, property) {
 				if (property === 'readContract') {
-					return async (parameters: { args?: readonly unknown[]; functionName: string }) => {
+					return async (parameters: { args?: readonly AbiValue[]; functionName: string }) => {
 						if (parameters.functionName === 'getActiveStagedOperationCount') return 2n
 						if (parameters.functionName === 'getPendingSettlementOperationIds') return []
 						if (parameters.functionName === 'getActiveStagedOperations') {
@@ -1551,7 +1623,7 @@ describe('anchored ecosystem discovery', () => {
 					}
 				}
 				if (property === 'simulateContract') {
-					return async (parameters: { account?: Address; functionName: string; args?: readonly unknown[] }) => {
+					return async (parameters: { account?: Address; functionName: string; args?: readonly AbiValue[] }) => {
 						simulations.push(parameters)
 						if (simulationFailure !== undefined) throw simulationFailure
 						return { result: undefined }
@@ -1577,10 +1649,6 @@ describe('anchored ecosystem discovery', () => {
 		simulationFailure = undefined
 		receiver = address(99)
 		expect((await discoverStagedOperations(client, pool, 555n, 2, []))[0]?.executionExpectedSuccess).toBe(false)
-	})
-
-	test('canonicalizes concurrent warnings before quorum comparison', () => {
-		expect(canonicalDiscoveryWarnings(['z warning', 'a warning', 'z warning'])).toEqual(['a warning', 'z warning'])
 	})
 
 	test('pins the block fetch, every contract read, and wallet balance to the supplied anchor', async () => {
@@ -1781,13 +1849,22 @@ test('reports missing configured contract code before calling protocol getters',
 	expect(fake.contractReads).toHaveLength(0)
 })
 
-for (const [name, missingContract] of [
-	['tradingFactory', address(8)],
-	['tradingRouter', address(9)],
+for (const [name, missingContracts, expected] of [
+	['factory and router', [address(8), address(9)], { factory: false, router: false }],
+	['router', [address(9)], { factory: true, router: false }],
 ] as const) {
-	test(`reports missing required ${name} before protocol getters`, async () => {
-		const fake = fakeClient(10n, hash(10), { missingContract })
-		await expect(discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: fake.client, deployments: topologyIdentity(), wallet: address(1) })).rejects.toThrow(`No contract code on RPC chain 31337 at block 10: ${name} (${missingContract})`)
-		expect(fake.contractReads).toHaveLength(0)
+	test(`continues non-trading discovery without the trading ${name}`, async () => {
+		const fake = fakeClient(10n, hash(10), { missingContracts })
+		const snapshot = await discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: fake.client, deployments: topologyIdentity(), wallet: address(1) })
+		expect(snapshot.tradingDeployment).toEqual(expected)
+		expect(snapshot.universes.length).toBeGreaterThan(0)
+		expect(snapshot.wallet.ethBalanceAttoEth).toBe('10')
+		expect(fake.contractReads.length).toBeGreaterThan(0)
+		if (!expected.factory) expect(snapshot.pairs).toEqual([])
 	})
 }
+
+test('rejects a deployed trading router without its factory', async () => {
+	const fake = fakeClient(10n, hash(10), { missingContract: address(8) })
+	await expect(discoverEcosystemSnapshot({ anchorBlockNumber: 10n, client: fake.client, deployments: topologyIdentity(), wallet: address(1) })).rejects.toThrow('Configured trading router exists without its factory')
+})

@@ -1,35 +1,25 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { zeroAddress } from '@zoltar/shared/ethereum'
+import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import {
-	MARKET_NOT_FINALIZED_MESSAGE,
-	NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE,
-	NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE,
-	SHARE_MIGRATION_AFTER_FORK_MESSAGE,
 	calculateMintingCapacityAttoEth,
 	estimateMintCheckpoint,
 	convertMintSettlementCollateralAttoEthToAttoShares,
 	convertSettlementCollateralAttoEthToAttoShares,
 	convertAttoSharesToSettlementCollateralAttoEth,
 	formatStatoblastSecurityMultiplier,
-	getCollateralizationDisplayState,
-	getCollateralizationTone,
 	getDefaultShareMigrationTargetOutcomeIndexes,
-	getMaxRedeemableCompleteSets,
 	getMaximumMintAmount,
-	getPoolCollateralizationPercent,
 	getRemainingMintCapacity,
 	getSelectedOutcomeShareBalance,
-	getTradingGuardDisplayMessage,
 	getTradingMigrateSharesGuardMessage,
 	getTradingMintGuardMessage,
 	getTradingRedeemCompleteSetGuardMessage,
 	getTradingRedeemSharesGuardMessage,
-	getVaultCollateralizationPercent,
 	hasRepBackedPoolWithNoActiveCapacityOwnership,
 	isTradingSystemDeployed,
-} from '../../../features/markets/lib/trading.js'
+} from '@zoltar/ui-statoblast-shared/features/markets/lib/trading.js'
 import { getScalarOutcomeIndex } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 import type { DeploymentStatus, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 
@@ -175,39 +165,10 @@ void describe('trading helpers', () => {
 		expect(isTradingSystemDeployed([createDeploymentStep('proxyDeployer', true), createDeploymentStep('zoltar', true), createDeploymentStep('securityPoolFactory', false)])).toBe(false)
 	})
 
-	void test('computes pool collateralization as a percentage using the canonical REP/ETH price', () => {
-		expect(getPoolCollateralizationPercent(3n * TOKEN_PRECISION, 2n * TOKEN_PRECISION, TOKEN_PRECISION)).toBe(150n * TOKEN_PRECISION)
-		expect(getPoolCollateralizationPercent(undefined, 2n * TOKEN_PRECISION, TOKEN_PRECISION)).toBeUndefined()
-		expect(getPoolCollateralizationPercent(3n * TOKEN_PRECISION, 2n * TOKEN_PRECISION, undefined)).toBeUndefined()
-		expect(getPoolCollateralizationPercent(3n * TOKEN_PRECISION, 2n * TOKEN_PRECISION, 0n)).toBeUndefined()
-	})
-
-	void test('computes vault REP-backing collateralization as a percentage using the canonical REP/ETH price', () => {
-		expect(getVaultCollateralizationPercent(4n * TOKEN_PRECISION, 2n * TOKEN_PRECISION, TOKEN_PRECISION)).toBe(200n * TOKEN_PRECISION)
-		expect(getVaultCollateralizationPercent(4n * TOKEN_PRECISION, undefined, TOKEN_PRECISION)).toBeUndefined()
-	})
-
-	void test('marks collateralization green when it is at or above the security multiplier threshold', () => {
-		expect(getCollateralizationTone(201n * TOKEN_PRECISION, 20_000n)).toBe('success')
-		expect(getCollateralizationTone(200n * TOKEN_PRECISION, 20_000n)).toBe('success')
-		expect(getCollateralizationTone(199n * TOKEN_PRECISION, 20_000n)).toBe('danger')
-		expect(getCollateralizationTone(undefined, 20_000n)).toBeUndefined()
-	})
-
 	void test('formats Statoblast security multiplier basis points as fractional x values', () => {
 		expect(formatStatoblastSecurityMultiplier(20_000n)).toBe('2')
 		expect(formatStatoblastSecurityMultiplier(25_000n)).toBe('2.5')
 		expect(formatStatoblastSecurityMultiplier(20_001n)).toBe('2.0001')
-	})
-
-	void test('surfaces no active capacity ownership separately from unavailable quotes', () => {
-		expect(getCollateralizationDisplayState(0n, undefined)).toBe('noActiveCapacityOwnership')
-		expect(getCollateralizationDisplayState(TOKEN_PRECISION, undefined)).toBe('unavailable')
-		expect(getCollateralizationDisplayState(TOKEN_PRECISION, 150n * TOKEN_PRECISION)).toBe('value')
-	})
-
-	void test('returns zero percent when REP backing is zero but capacity ownership is active', () => {
-		expect(getPoolCollateralizationPercent(0n, TOKEN_PRECISION, TOKEN_PRECISION)).toBe(0n)
 	})
 
 	void test('detects pools that have REP backing but no active capacity ownership', () => {
@@ -216,23 +177,12 @@ void describe('trading helpers', () => {
 		expect(hasRepBackedPoolWithNoActiveCapacityOwnership(0n, 0n)).toBe(false)
 	})
 
-	void test('derives the max redeemable complete sets from wallet share balances', () => {
-		expect(getMaxRedeemableCompleteSets(shareBalances)).toBe(2n * 10n ** 18n)
-		expect(getMaxRedeemableCompleteSets(undefined)).toBeUndefined()
+	void test('reads outcome share balances and default migration targets', () => {
 		expect(getSelectedOutcomeShareBalance(shareBalances, 'yes')).toBe(3n * 10n ** 18n)
 		expect(getSelectedOutcomeShareBalance(shareBalances, 'no')).toBe(4n * 10n ** 18n)
 		expect(getSelectedOutcomeShareBalance(shareBalances, 'invalid')).toBe(2n * 10n ** 18n)
 		expect(getDefaultShareMigrationTargetOutcomeIndexes(binaryForkUniverse)).toBe('0, 1, 2')
 		expect(getDefaultShareMigrationTargetOutcomeIndexes(scalarForkUniverse)).toBe('')
-	})
-
-	void test('suppresses only the targeted trading guard copy in the UI', () => {
-		expect(getTradingGuardDisplayMessage(NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE)).toBeUndefined()
-		expect(getTradingGuardDisplayMessage(NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE)).toBeUndefined()
-		expect(getTradingGuardDisplayMessage(SHARE_MIGRATION_AFTER_FORK_MESSAGE)).toBe(SHARE_MIGRATION_AFTER_FORK_MESSAGE)
-		expect(getTradingGuardDisplayMessage(MARKET_NOT_FINALIZED_MESSAGE)).toBe(MARKET_NOT_FINALIZED_MESSAGE)
-		expect(getTradingGuardDisplayMessage('Loading wallet share balances.')).toBe('Loading wallet share balances.')
-		expect(getTradingGuardDisplayMessage(undefined)).toBeUndefined()
 	})
 
 	void test('blocks minting until a pool is loaded and the wallet is connected on mainnet', () => {

@@ -109,7 +109,7 @@ main {
 
 .app-settings-menu label > span {
 	font-family: var(--font-family-mono);
-	font-size: 0.75rem;
+	font-size: var(--font-label);
 	color: var(--text-muted);
 }
 
@@ -496,12 +496,6 @@ button.quiet:disabled {
 	color: var(--muted);
 }
 
-.metric-label-with-action {
-	display: inline-flex;
-	align-items: center;
-	gap: 0.35rem;
-}
-
 .metric-label-refresh {
 	display: inline-flex;
 	align-items: center;
@@ -509,7 +503,7 @@ button.quiet:disabled {
 	min-width: var(--touch-target-min);
 	min-height: var(--touch-target-min);
 	padding: 0.35rem;
-	font-size: 0.8rem;
+	font-size: var(--font-label);
 	line-height: 1;
 }
 
@@ -531,21 +525,130 @@ button.quiet:disabled {
 .account-menu > summary {
 	display: inline-flex;
 	align-items: center;
-	min-height: var(--touch-target-min);
-	padding: 0.78rem 1rem;
-	border: 1px solid var(--control-border);
-	border-radius: var(--radius-control);
+	padding: 0;
+	border: 0;
 	background: transparent;
 	color: var(--text);
 	font: inherit;
-	font-size: var(--font-button);
 	cursor: pointer;
 	list-style: none;
 }
 
-.account-menu > summary:hover {
+.account-menu > summary:hover .wallet-chip,
+.account-menu[open] > summary .wallet-chip {
 	border-color: var(--interactive-border-hover);
 	background: var(--interactive-bg-active);
+}
+
+.account-menu > summary:focus-visible {
+	outline: 2px solid var(--focus);
+	outline-offset: 2px;
+	border-radius: 999px;
+}
+
+/* The popover is the only place the full account is shown, so it grows to fit one line of address. */
+.account-menu-popover {
+	width: max-content;
+	max-width: min(28rem, calc(100vw - 3rem));
+}
+
+.account-menu-popover .address-value,
+.account-menu-popover .address-value.copyable {
+	font-family: var(--font-family-mono);
+	font-size: var(--font-address);
+	white-space: nowrap;
+}
+
+/* Narrow screens cannot fit one line of address, so it wraps at a deterministic point instead of overflowing. */
+@media (max-width: 26rem) {
+	.account-menu-popover {
+		width: calc(100vw - 3rem);
+	}
+
+	.account-menu-popover .address-value {
+		white-space: normal;
+		word-break: break-all;
+	}
+}
+
+/* Toolbar wallet identity: abbreviated account with a copy affordance and a live-connection dot. */
+.wallet-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.45rem;
+	min-height: var(--touch-target-min);
+	max-width: 100%;
+	padding: 0 0.7rem 0 0.65rem;
+	border: 1px solid var(--control-border);
+	border-radius: 999px;
+	background: var(--surface-row);
+	font-family: var(--font-family-mono);
+	font-size: var(--font-address);
+	color: var(--text);
+}
+
+.wallet-chip.is-placeholder {
+	min-width: 10.75rem;
+	justify-content: center;
+	color: var(--muted);
+}
+
+.wallet-chip-dot {
+	flex-shrink: 0;
+	width: 0.5rem;
+	height: 0.5rem;
+	border-radius: 50%;
+	background: var(--success);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 22%, transparent);
+}
+
+.wallet-chip.is-danger .wallet-chip-dot {
+	background: var(--danger);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 22%, transparent);
+}
+
+.wallet-chip .address-value {
+	white-space: nowrap;
+}
+
+.wallet-chip .address-value.copyable {
+	min-height: 2rem;
+	margin: 0;
+}
+
+.wallet-chip .address-value-full {
+	display: none;
+}
+
+.wallet-chip .address-value-abbreviated {
+	display: inline;
+}
+
+/* Toolbar caption-plus-value pair, such as the selected universe. */
+.toolbar-field {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2);
+	min-width: 0;
+	min-height: var(--touch-target-min);
+}
+
+.toolbar-field-label {
+	font-family: var(--font-family-mono);
+	font-size: var(--font-xs);
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	white-space: nowrap;
+	color: var(--muted);
+}
+
+.toolbar-field-value {
+	min-width: 0;
+	font-family: var(--font-family-mono);
+	font-size: var(--font-value);
+	font-weight: 600;
+	color: var(--value);
+	overflow-wrap: anywhere;
 }
 
 .account-menu > summary::-webkit-details-marker {
@@ -579,7 +682,7 @@ button.quiet:disabled {
 
 .account-menu-network span {
 	color: var(--muted);
-	font-size: 0.75rem;
+	font-size: var(--font-label);
 }
 
 .detail {
@@ -1026,7 +1129,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 .address-value.copyable {
 	display: inline-flex;
 	align-items: center;
-	min-height: 2rem;
+	min-height: var(--touch-target-min);
 	max-width: 100%;
 	box-sizing: border-box;
 	border: 0;
@@ -1240,56 +1343,124 @@ button.wallet-asset-action-pending:disabled {
 	padding-top: 0.2rem;
 }
 
+/* Toolbar stat strip: captioned groups of inline metrics sharing one row (see HeaderMetricStrip). */
 .overview-inline-metrics {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 0.75rem 1.15rem;
-	overflow-x: visible;
+	align-items: center;
+	gap: var(--space-2) var(--space-4);
 	min-width: 0;
-	padding-bottom: 0;
+	margin-top: var(--space-2);
 }
 
-.overview-inline-metrics > div {
-	flex: 0 1 auto;
-	max-width: 100%;
+/* The primary group takes the row and keeps an equal track per metric; a secondary group hugs its content so its values are never squeezed. */
+.overview-metric-group {
+	display: flex;
+	align-items: center;
+	flex: 1 1 0;
+	gap: var(--space-3);
 	min-width: 0;
-	padding-top: 0.4rem;
-	border-top: 1px solid var(--border-default);
+}
+
+.overview-metric-group.is-secondary {
+	flex: 0 0 auto;
+}
+
+.overview-metric-group.is-secondary .overview-metric-group-items {
+	grid-auto-flow: column;
+	grid-auto-columns: max-content;
+	grid-template-columns: none;
+	gap: var(--space-4);
+}
+
+.overview-metric-group-caption {
+	display: inline-flex;
+	align-items: center;
+	flex-shrink: 0;
+	gap: 0.25rem;
+}
+
+.overview-metric-group + .overview-metric-group {
+	padding-left: var(--space-4);
+	border-left: 1px solid var(--divider-subtle);
+}
+
+/* Captions are bolder and brighter than the metric labels they introduce. */
+.overview-metric-group-label {
+	flex-shrink: 0;
+	font-family: var(--font-family-mono);
+	font-size: var(--font-xs);
+	font-weight: 700;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	white-space: nowrap;
+	color: var(--text-muted);
+}
+
+.overview-metric-group-items {
+	display: grid;
+	grid-template-columns: repeat(var(--overview-metric-columns, 1), minmax(0, 18rem));
+	gap: var(--space-2);
+	flex: 1 1 0;
+	min-width: 0;
+}
+
+.overview-metric-group-items > div {
+	display: flex;
+	align-items: center;
+	gap: 0 0.4rem;
+	min-width: 0;
+	min-height: 1.75rem;
+}
+
+.overview-inline-metrics .metric-label {
+	flex-shrink: 0;
+	font-size: var(--font-xs);
+	letter-spacing: 0.06em;
+	white-space: nowrap;
+}
+
+.overview-inline-metrics .metric-label-refresh {
+	min-width: 1.6rem;
+	min-height: 1.6rem;
+	margin: -0.3rem 0;
+	padding: 0.15rem;
 }
 
 .overview-inline-metrics strong {
 	display: block;
-	margin-top: 0.15rem;
 	font-family: var(--font-family-mono);
 	font-size: var(--font-value);
 	font-weight: 600;
 	font-variant-numeric: tabular-nums;
-	line-height: 1.15;
+	line-height: 1.2;
 	color: var(--value);
 	overflow-wrap: anywhere;
 }
 
+/* The value fills the rest of its track so overflow compaction measures the track, in both directions, as it resizes. */
+.overview-inline-metrics .metric-field-value {
+	display: flex;
+	align-items: center;
+	flex: 1 1 0;
+	min-width: 0;
+	min-height: 1.75rem;
+}
+
+/* Any wrapper between the slot and the value fills the track too, so the value's measured room is the track. */
+.overview-inline-metrics .metric-field-value > * {
+	flex: 1 1 0;
+	min-width: 0;
+	max-width: 100%;
+}
+
+.overview-inline-metrics .currency-value.copyable {
+	min-height: 1.75rem;
+	margin: 0;
+}
+
 .overview-details-toggle {
 	display: none;
-}
-
-.overview-address-metric strong {
-	font-family: var(--font-family-mono);
-	font-size: var(--font-address);
-	letter-spacing: -0.01em;
-}
-
-.overview-universe-error {
-	color: var(--danger);
-}
-
-.overview-universe-actions {
-	margin-top: 0.5rem;
-}
-
-.overview-address-metric {
-	flex: 1 1 min(24rem, 100%);
-	min-width: 0;
 }
 
 .address-value {
@@ -1307,9 +1478,11 @@ button.wallet-asset-action-pending:disabled {
 	white-space: normal;
 	text-overflow: clip;
 	overflow: visible;
-	display: inline-block;
+	display: inline-flex;
+	align-items: center;
 	max-width: 100%;
 	min-width: 0;
+	min-height: var(--touch-target-min);
 	border: 0;
 	border-radius: 0.35rem;
 	margin: 0;
@@ -1779,21 +1952,30 @@ button.wallet-asset-action-pending:disabled {
 	border-top: 0;
 }
 
+.migration-amount-hint {
+	min-block-size: 2.9em;
+}
+
 .migration-outcome-list {
 	display: grid;
-	gap: 0.6rem;
+	gap: 0.6rem 0;
+	grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .migration-outcome-row {
-	display: flex;
-	flex-direction: column;
-	align-items: flex-start;
-	gap: 0.35rem;
+	display: grid;
+	grid-column: 1 / -1;
+	grid-template-columns: subgrid;
+	align-items: start;
 	width: 100%;
-	padding: 0.8rem 0.95rem;
 	border: 1px solid var(--control-border);
 	background: var(--control-bg);
-	text-align: left;
+}
+
+.migration-outcome-row:hover,
+.migration-outcome-row:focus-within {
+	background: var(--interactive-bg-hover);
+	border-color: var(--interactive-border-hover);
 }
 
 .migration-outcome-row.active {
@@ -1801,9 +1983,58 @@ button.wallet-asset-action-pending:disabled {
 	background: var(--interactive-bg);
 }
 
-.migration-outcome-row:disabled {
+.migration-outcome-select:disabled {
 	opacity: 0.55;
 	cursor: not-allowed;
+}
+
+.migration-outcome-select {
+	display: flex;
+	align-items: flex-start;
+	width: 100%;
+	padding: 0.9rem 1rem;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	color: inherit;
+	text-align: left;
+}
+
+.migration-outcome-select:hover:not(:disabled) {
+	background: transparent;
+}
+
+.migration-outcome-actions {
+	display: flex;
+	align-items: flex-start;
+	justify-content: flex-end;
+	padding: 0.75rem;
+	width: 12rem;
+	min-width: 0;
+}
+
+.migration-outcome-actions > * {
+	width: 100%;
+}
+
+.migration-outcome-actions .tx-action-button,
+.migration-outcome-actions .button-link {
+	min-height: 4rem;
+}
+
+@media (max-width: 600px) {
+	.migration-amount-hint {
+		min-block-size: 2.9em;
+	}
+
+	.migration-outcome-list {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.migration-outcome-actions {
+		justify-self: end;
+		padding-top: 0;
+	}
 }
 
 .migration-outcome-label {
@@ -1820,15 +2051,49 @@ button.wallet-asset-action-pending:disabled {
 
 .migration-outcome-metrics {
 	display: grid;
-	gap: 0.25rem;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 0.5rem 1rem;
+	margin-top: 0.25rem;
 	color: var(--text-secondary);
 	font-size: var(--font-caption);
 	line-height: 1.35;
 }
 
+.migration-outcome-metric {
+	display: grid;
+	gap: 0.16rem;
+	min-width: 0;
+	overflow: hidden;
+}
+
+.migration-outcome-metric-label {
+	color: var(--muted);
+	font-size: var(--font-xs);
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+@media (max-width: 900px) {
+	.migration-outcome-metrics {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 520px) {
+	.migration-outcome-metrics {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
 .migration-outcome-metrics strong {
+	display: block;
+	min-width: 0;
+	max-width: 100%;
 	color: var(--text);
 	font-weight: 600;
+	overflow-wrap: anywhere;
+	word-break: break-word;
 }
 
 .status-list span,
@@ -2305,14 +2570,6 @@ button.wallet-asset-action-pending:disabled {
 	font-family: var(--font-family-sans);
 	font-size: var(--font-label);
 	font-weight: 500;
-}
-
-.comparison-record-collateralization {
-	--collateralization-size: 4.2rem;
-}
-
-.comparison-record-collateralization .collateralization-gauge-label {
-	display: none;
 }
 
 .comparison-record-details {

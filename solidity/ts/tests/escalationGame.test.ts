@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
-import { decodeEventLog, encodeDeployData, encodeFunctionData, type Abi, type Address, type Hex, zeroAddress } from '@zoltar/shared/ethereum'
+import { decodeEventLog, encodeDeployData, encodeFunctionData, type Abi, type Address, type Hex, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
@@ -163,6 +163,22 @@ describe('Escalation Game Test Suite', () => {
 		await client.readContract({
 			abi: statoblast_EscalationGame_EscalationGame.abi,
 			functionName: 'canTriggerOwnFork',
+			address: escalationGame,
+			args: [],
+		})
+
+	const readEscalationGameEndDate = async (escalationGame: Address) =>
+		await client.readContract({
+			abi: statoblast_EscalationGame_EscalationGame.abi,
+			functionName: 'getEscalationGameEndDate',
+			address: escalationGame,
+			args: [],
+		})
+
+	const readFinalQuestionResolution = async (escalationGame: Address) =>
+		await client.readContract({
+			abi: statoblast_EscalationGame_EscalationGame.abi,
+			functionName: 'getFinalQuestionResolution',
 			address: escalationGame,
 			args: [],
 		})
@@ -1262,11 +1278,19 @@ describe('Escalation Game Test Suite', () => {
 		)
 	})
 
-	test('empty started game resolves to invalid after timeout', async () => {
+	test('empty started game becomes final only after its exact end timestamp', async () => {
 		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThresholdAttoRep)
-		const activationTime = await getActivationTime(client, escalationGame)
-		await mockWindow.setTime(activationTime + ESCALATION_TIME_LENGTH + 1n)
-		assert.strictEqual(await getQuestionResolution(client, escalationGame), QuestionOutcome.Invalid, 'empty game should resolve as invalid')
+		const escalationEndDate = await readEscalationGameEndDate(escalationGame)
+
+		await mockWindow.setTime(escalationEndDate - 1n)
+		assert.strictEqual(await readFinalQuestionResolution(escalationGame), BigInt(QuestionOutcome.None), 'the result must remain non-final one second before the escalation deadline')
+
+		await mockWindow.setTime(escalationEndDate)
+		assert.strictEqual(await readFinalQuestionResolution(escalationGame), BigInt(QuestionOutcome.None), 'the result must remain non-final at the exact escalation deadline')
+
+		await mockWindow.setTime(escalationEndDate + 1n)
+		assert.strictEqual(await readFinalQuestionResolution(escalationGame), BigInt(QuestionOutcome.Invalid), 'the empty game should become finally invalid one second after the escalation deadline')
+		assert.strictEqual(await getQuestionResolution(client, escalationGame), QuestionOutcome.Invalid, 'the ordinary resolution view should agree with the final result')
 	})
 
 	test('non-decision keeps question resolution at None even after the nominal timeout window', async () => {

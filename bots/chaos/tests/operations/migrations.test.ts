@@ -1,10 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import { decodeFunctionData, encodeAbiParameters, toHex } from '../support/bot-shared.ts'
-import { securityPoolForkerAbi, zoltarAbi } from '../../src/contracts/abi.ts'
-import { stepReceiptEvidenceDisposition, validateStepReceiptEvidence } from '../../src/execution/receipt-validation.ts'
-import { canonicalLifecyclePresence, eligibleOperationPlans, evaluateOperationCatalog, reevaluateOperationContinuation, urgentOperationPlans } from '../../src/operations/catalog.ts'
+import { decodeFunctionData, encodeAbiParameters, toHex } from '@zoltar/bot-shared/ethereum'
+import { securityPoolForkerAbi, zoltarAbi } from '@zoltar/bot-shared/contracts/abi'
+import { stepReceiptEvidenceDisposition } from '../../src/execution/receipt-validation.ts'
+import { canonicalLifecyclePresence, evaluateOperationCatalog, reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
+import { eligibleOperationPlans, urgentOperationPlans } from '../support/operation-plans.ts'
 import type { OperationEvidence } from '../../src/operations/types.ts'
-import { deriveChildUniverseId } from '../../src/monitoring/protocol-index.ts'
+import { deriveChildUniverseId } from '../support/universe.ts'
 import { beginLifecycleObligation, completeLifecycleObligation, obligationForPlan, synchronizeLifecycleObligations, waitForCanonicalLifecycleConfirmation } from '../../src/runtime/obligations.ts'
 import { createDurableWorkflow, markWorkflowStepConfirmed, markWorkflowStepWaitingCanonical } from '../../src/runtime/workflows.ts'
 import type { DurableObligation, DurableObligationTombstone, DurableWorkflow } from '../../src/state/operator-state.ts'
@@ -126,16 +127,6 @@ describe('indexed REP migration operations', () => {
 				signature: 'ChildRepSplit(address,uint256,uint256,uint256)',
 			}),
 		])
-		expect(() =>
-			validateStepReceiptEvidence(step, {
-				blockHash: hash(101),
-				blockNumber: 101n,
-				logs: [],
-				status: 'success',
-				transactionHash: hash(102),
-			}),
-		).toThrow('requires canonical lifecycle confirmation')
-
 		const receipt = {
 			blockHash: hash(101),
 			blockNumber: 101n,

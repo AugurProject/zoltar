@@ -3,17 +3,13 @@ import { createHash } from 'node:crypto'
 import { mkdtemp, mkdir, readFile, readdir, rename, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import {
-	IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION,
-	IMMUTABLE_TOPOLOGY_SEGMENT_BYTES,
-	immutableTopologySidecarDirectory,
-	loadImmutableTopologyCache,
-	saveImmutableTopologyCache,
-	validateImmutableTopologySidecarIfPresent,
-	type CanonicalImmutableTopologyCache,
-	type ImmutableTopologyIdentity,
-} from '../../src/monitoring/topology-cache.ts'
+import { IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, loadImmutableTopologyCacheWithinLimits, saveImmutableTopologyCache, validateImmutableTopologySidecarIfPresent, type CanonicalImmutableTopologyCache, type ImmutableTopologyIdentity } from '../../src/monitoring/topology-cache.ts'
 import { address, hash } from '../operations/fixture.ts'
+import { immutableTopologySidecarDirectory } from '../support/state-sidecars.ts'
+
+const IMMUTABLE_TOPOLOGY_SEGMENT_BYTES = 32 * 1024 * 1024
+// Resident limits far above every fixture so loads exercise only the sidecar format checks.
+const generousLimits = { maxPools: 1_000_000, maxQuestions: 1_000_000, maxUniverses: 1_000_000, maxVaultsPerPool: 1_000_000 }
 
 const temporaryDirectories: string[] = []
 
@@ -66,6 +62,7 @@ function identity(): ImmutableTopologyIdentity {
 		securityPoolForker: address(5),
 		tradingFactory: address(8),
 		tradingRouter: address(9),
+		uniswapV3Factory: address(10),
 		weth: address(7),
 		zoltar: address(2),
 	}
@@ -138,14 +135,14 @@ describe('immutable topology sidecar', () => {
 		await writeFile(join(generationPath, 'manifest.json'), `${JSON.stringify({ ...manifestPayload, manifestDigest })}\n`, { mode: 0o600 })
 		await writeFile(join(storePath, 'current.json'), `${JSON.stringify({ manifestDigest, schemaVersion: 1 })}\n`, { mode: 0o600 })
 
-		await expect(loadImmutableTopologyCache(statePath, identity())).resolves.toBeUndefined()
+		await expect(loadImmutableTopologyCacheWithinLimits({ identity: identity(), limits: generousLimits, statePath })).resolves.toBeUndefined()
 	})
 
 	test('round-trips more than ten thousand immutable records through checksummed bounded chunks', async () => {
 		const statePath = await temporaryStatePath()
 		const expected = cache(10_500)
 		await saveImmutableTopologyCache(statePath, identity(), expected)
-		const restored = await loadImmutableTopologyCache(statePath, identity())
+		const restored = await loadImmutableTopologyCacheWithinLimits({ identity: identity(), limits: generousLimits, statePath })
 		expect(restored).toEqual(expected)
 
 		const storePath = immutableTopologySidecarDirectory(statePath)
@@ -169,7 +166,7 @@ describe('immutable topology sidecar', () => {
 			throw new Error('Whole-payload concatenation is forbidden')
 		}
 		try {
-			expect(await loadImmutableTopologyCache(statePath, identity())).toEqual(expected)
+			expect(await loadImmutableTopologyCacheWithinLimits({ identity: identity(), limits: generousLimits, statePath })).toEqual(expected)
 		} finally {
 			Buffer.concat = concatenate
 		}
@@ -183,7 +180,7 @@ describe('immutable topology sidecar', () => {
 		question.kind = 'categorical'
 		question.outcomeLabels = ['x'.repeat(20_000)]
 		await saveImmutableTopologyCache(statePath, identity(), expected)
-		expect(await loadImmutableTopologyCache(statePath, identity())).toEqual(expected)
+		expect(await loadImmutableTopologyCacheWithinLimits({ identity: identity(), limits: generousLimits, statePath })).toEqual(expected)
 	})
 
 	test('rejects an oversized manifest before reading or decoding committed chunks', async () => {
@@ -198,13 +195,14 @@ describe('immutable topology sidecar', () => {
 		await writeFile(join(generationPath, questionChunk), '{not valid json', { mode: 0o600 })
 
 		await expect(
-			loadImmutableTopologyCache(statePath, identity(), {
-				maxPools: 100,
-				maxQuestions: 10,
-				maxUniverses: 100,
-				maxVaultsPerPool: 100,
+			loadImmutableTopologyCacheWithinLimits({
+				identity: identity(),
+				limits: { maxPools: 100, maxQuestions: 10, maxUniverses: 100, maxVaultsPerPool: 100 },
+				statePath,
 			}),
-		).rejects.toThrow('configured question resident limit')
+		).resolves.toBeUndefined()
+		// The same corrupted generation is rejected once the limits admit it, so the reset above came from the manifest check.
+		await expect(loadImmutableTopologyCacheWithinLimits({ identity: identity(), limits: generousLimits, statePath })).rejects.toThrow()
 	})
 
 	test('rejects aggregate vault payloads against live limits before decoding their chunks', async () => {
@@ -222,7 +220,8 @@ describe('immutable topology sidecar', () => {
 		if (vaultChunk === undefined) throw new Error('Immutable topology generation has no vault chunk')
 		await writeFile(join(generationPath, vaultChunk), '{not valid json', { mode: 0o600 })
 
-		await expect(loadImmutableTopologyCache(statePath, identity(), { maxPools: 1, maxQuestions: 2, maxUniverses: 3, maxVaultsPerPool: 1 })).rejects.toThrow('aggregate vault resident limit')
+		await expect(loadImmutableTopologyCacheWithinLimits({ identity: identity(), limits: { maxPools: 1, maxQuestions: 2, maxUniverses: 3, maxVaultsPerPool: 1 }, statePath })).resolves.toBeUndefined()
+		await expect(loadImmutableTopologyCacheWithinLimits({ identity: identity(), limits: generousLimits, statePath })).rejects.toThrow()
 	})
 
 	test('rejects an underreported collection before appending records beyond its manifest commitment', async () => {
@@ -237,7 +236,7 @@ describe('immutable topology sidecar', () => {
 		if (poisonedChunk === undefined) throw new Error('Immutable topology fixture must span at least two question chunks')
 		await writeFile(join(rewrittenPath, poisonedChunk), '{not valid json', { mode: 0o600 })
 
-		await expect(loadImmutableTopologyCache(statePath, identity())).rejects.toThrow('questions collection record count exceeds its manifest commitment')
+		await expect(loadImmutableTopologyCacheWithinLimits({ identity: identity(), limits: generousLimits, statePath })).rejects.toThrow('questions collection record count exceeds its manifest commitment')
 	})
 
 	test('rejects underreported committed bytes before decoding a collection chunk', async () => {
@@ -247,7 +246,7 @@ describe('immutable topology sidecar', () => {
 			const questions = object(object(manifest['collections'], 'Immutable topology collections fixture')['questions'], 'Immutable topology question commitment fixture')
 			questions['committedBytes'] = '1'
 		})
-		await expect(loadImmutableTopologyCache(statePath, identity())).rejects.toThrow('questions collection committed bytes exceed its manifest commitment')
+		await expect(loadImmutableTopologyCacheWithinLimits({ identity: identity(), limits: generousLimits, statePath })).rejects.toThrow('questions collection committed bytes exceed its manifest commitment')
 	})
 
 	test('rejects underreported nested resident items before retaining a collection record', async () => {
@@ -257,7 +256,7 @@ describe('immutable topology sidecar', () => {
 			const questions = object(object(manifest['collections'], 'Immutable topology collections fixture')['questions'], 'Immutable topology question commitment fixture')
 			questions['itemCount'] = '1'
 		})
-		await expect(loadImmutableTopologyCache(statePath, identity())).rejects.toThrow('questions collection resident-item count exceeds its manifest commitment')
+		await expect(loadImmutableTopologyCacheWithinLimits({ identity: identity(), limits: generousLimits, statePath })).rejects.toThrow('questions collection resident-item count exceeds its manifest commitment')
 	})
 
 	test('persists exact overflow totals across restarts without retaining historical vault records', async () => {
@@ -278,7 +277,7 @@ describe('immutable topology sidecar', () => {
 				},
 			}
 			await saveImmutableTopologyCache(statePath, identity(), expected, limits)
-			const restored = await loadImmutableTopologyCache(statePath, identity(), limits)
+			const restored = await loadImmutableTopologyCacheWithinLimits({ identity: identity(), limits, statePath })
 			expect(restored?.discoveryCursors.vaultsByPool[pool]).toMatchObject({ canonicalCount: '11', nextIndex: nextIndex.toString(), retentionMode: 'overflow' })
 			expect(restored?.vaultsByPool).toEqual({})
 			if (restored === undefined) throw new Error('Immutable topology overflow cursor was not restored')
@@ -305,14 +304,14 @@ describe('immutable topology sidecar', () => {
 		if (first === undefined) throw new Error('Immutable topology segment is empty')
 		contents[0] = first ^ 1
 		await writeFile(chunkPath, contents)
-		await expect(loadImmutableTopologyCache(statePath, identity())).rejects.toThrow('digest')
+		await expect(loadImmutableTopologyCacheWithinLimits({ identity: identity(), limits: generousLimits, statePath })).rejects.toThrow('digest')
 
 		await saveImmutableTopologyCache(statePath, identity(), cache())
 		const pointerPath = join(storePath, 'current.json')
 		const realPointerPath = join(storePath, 'real-current.json')
 		await rename(pointerPath, realPointerPath)
 		await symlink(realPointerPath, pointerPath)
-		await expect(loadImmutableTopologyCache(statePath, identity())).rejects.toThrow('symbolic link')
+		await expect(loadImmutableTopologyCacheWithinLimits({ identity: identity(), limits: generousLimits, statePath })).rejects.toThrow('symbolic link')
 	})
 
 	test('stops streaming a generation after its manifest-declared entry bound', async () => {
@@ -325,7 +324,7 @@ describe('immutable topology sidecar', () => {
 		for (let index = 0; index < 20; index += 1) {
 			await writeFile(join(generationPath, `questions-${(10_000 + index).toString()}-${hash(10_000 + index).slice(2)}.json`), '{}\n', { mode: 0o600 })
 		}
-		await expect(loadImmutableTopologyCache(statePath, identity())).rejects.toThrow('manifest-declared')
+		await expect(loadImmutableTopologyCacheWithinLimits({ identity: identity(), limits: generousLimits, statePath })).rejects.toThrow('manifest-declared')
 	})
 
 	test('ignores an orphan generation and does not reuse a cache for another deployment identity', async () => {
@@ -336,8 +335,9 @@ describe('immutable topology sidecar', () => {
 		await saveImmutableTopologyCache(statePath, identity(), expected)
 		const storePath = immutableTopologySidecarDirectory(statePath)
 		await mkdir(join(storePath, '.tmp-999-deadbeef-dead-beef-dead-beefdeadbeef'), { mode: 0o700 })
-		expect(await loadImmutableTopologyCache(statePath, identity())).toEqual(expected)
-		expect(await loadImmutableTopologyCache(statePath, { ...identity(), tradingFactory: address(99) })).toBeUndefined()
+		expect(await loadImmutableTopologyCacheWithinLimits({ identity: identity(), limits: generousLimits, statePath })).toEqual(expected)
+		expect(await loadImmutableTopologyCacheWithinLimits({ identity: { ...identity(), tradingFactory: address(99) }, limits: generousLimits, statePath })).toBeUndefined()
+		expect(await loadImmutableTopologyCacheWithinLimits({ identity: { ...identity(), uniswapV3Factory: address(99) }, limits: generousLimits, statePath })).toBeUndefined()
 		expect(await validateImmutableTopologySidecarIfPresent(statePath, identity())).toBe('valid')
 		await expect(validateImmutableTopologySidecarIfPresent(statePath, { ...identity(), tradingFactory: address(99) })).rejects.toThrow('different deployment identity')
 	})
@@ -356,7 +356,7 @@ describe('immutable topology sidecar', () => {
 		const entries = await readdir(storePath)
 		expect(entries).not.toContain('.tmp-999-deadbeef-dead-beef-dead-beefdeadbeef')
 		expect(entries).not.toContain('.current-999-deadbeef-dead-beef-dead-beefdeadbeef.json')
-		expect(await loadImmutableTopologyCache(statePath, identity())).toEqual(next)
+		expect(await loadImmutableTopologyCacheWithinLimits({ identity: identity(), limits: generousLimits, statePath })).toEqual(next)
 	})
 
 	test('reclaims repeated recognized orphan generations in bounded pre-write passes while retaining the current target', async () => {
@@ -368,9 +368,9 @@ describe('immutable topology sidecar', () => {
 		const next = { ...cache(), anchor: { blockHash: hash(52), blockNumber: '52' } }
 
 		await expect(saveImmutableTopologyCache(statePath, identity(), next)).rejects.toThrow('per-cycle safety limit')
-		expect(await loadImmutableTopologyCache(statePath, identity())).toEqual(current)
+		expect(await loadImmutableTopologyCacheWithinLimits({ identity: identity(), limits: generousLimits, statePath })).toEqual(current)
 		await saveImmutableTopologyCache(statePath, identity(), next)
-		expect(await loadImmutableTopologyCache(statePath, identity())).toEqual(next)
+		expect(await loadImmutableTopologyCacheWithinLimits({ identity: identity(), limits: generousLimits, statePath })).toEqual(next)
 		expect((await readdir(storePath)).filter(name => name.startsWith('.tmp-'))).toEqual([])
 	})
 })

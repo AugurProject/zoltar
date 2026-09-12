@@ -30,45 +30,6 @@ export function networkTargetStatus(activeNetwork: 'mainnet' | 'sepolia' | undef
 	return activeNetwork === undefined || savedNetwork === undefined || activeNetwork === savedNetwork ? undefined : `Applying ${savedNetwork}; the last snapshot was ${activeNetwork}.`
 }
 
-export function singleFlight<T>(operation: () => Promise<T>) {
-	let inFlight: Promise<T> | undefined
-	let rerunRequested = false
-	return () => {
-		if (inFlight !== undefined) {
-			rerunRequested = true
-			return inFlight
-		}
-		inFlight = (async () => {
-			rerunRequested = false
-			let result = await operation()
-			while (rerunRequested) {
-				rerunRequested = false
-				result = await operation()
-			}
-			return result
-		})().finally(() => {
-			inFlight = undefined
-		})
-		return inFlight
-	}
-}
-
-export async function requestWithTimeout<T>(request: (signal: AbortSignal) => Promise<T>, timeoutMilliseconds: number, timeoutMessage = 'Dashboard state request timed out') {
-	const controller = new AbortController()
-	let timeout: ReturnType<typeof setTimeout> | undefined
-	const deadline = new Promise<never>((_resolve, reject) => {
-		timeout = setTimeout(() => {
-			reject(new Error(timeoutMessage))
-			controller.abort()
-		}, timeoutMilliseconds)
-	})
-	try {
-		return await Promise.race([request(controller.signal), deadline])
-	} finally {
-		if (timeout !== undefined) clearTimeout(timeout)
-	}
-}
-
 function parseSignedDecimal(value: string) {
 	if (!/^-?(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(value)) throw new Error(`Invalid decimal amount: ${value}`)
 	const negative = value.startsWith('-')
@@ -181,7 +142,7 @@ export function blockAgeLabel(blockTimestamp: string | undefined, nowMillisecond
 	return nowMilliseconds >= timestampMilliseconds ? `seen ${label} ago` : `${label} ahead of local clock`
 }
 
-export function botStatusLabels(state: Pick<PublicOperatorSnapshot, 'mode' | 'paused' | 'status'> | undefined) {
+export function botStatusLabels(state: Pick<PublicOperatorSnapshot, 'mode' | 'paused' | 'status' | 'marketAvailability'> | undefined) {
 	if (state === undefined) return { mode: 'Mode —', status: '—' }
 	if (state.paused) return { mode: state.mode, status: 'Paused' }
 	const statuses: Record<PublicOperatorSnapshot['status'], string> = {
@@ -192,6 +153,8 @@ export function botStatusLabels(state: Pick<PublicOperatorSnapshot, 'mode' | 'pa
 		stopped: 'Stopped',
 		syncing: 'Syncing',
 	}
+	if (state.status === 'error' && state.marketAvailability?.kind === 'missing-deployment') return { mode: state.mode, status: 'Not deployed' }
+	if (state.status === 'running' && state.marketAvailability?.kind === 'no-v3-liquidity') return { mode: state.mode, status: 'No V3 liquidity' }
 	return { mode: state.mode, status: statuses[state.status] }
 }
 
@@ -244,4 +207,11 @@ export function signerControlState(parameters: { hasQueuedSigner: boolean; hasWa
 
 export function sumSignedDecimals(values: readonly string[]) {
 	return decimalFromScaled(values.reduce((total, value) => total + parseSignedDecimal(value), 0n))
+}
+
+export function marketAvailabilityPresentation(notice: PublicOperatorSnapshot['marketAvailability']) {
+	if (notice === undefined) return undefined
+	if (notice.kind === 'no-v3-liquidity') return { title: 'No V3 liquidity', detail: 'No liquid REP/WETH V3 pools were found. Market checks continue automatically.' }
+	const names = [...new Set(notice.contracts.map(contract => contract.name))].join(', ')
+	return { title: 'Deployment unavailable', detail: `${names}: no contract at the configured ${notice.contracts.length === 1 ? 'address' : 'addresses'} on chain ${notice.chainId.toString()}. Availability is checked automatically.` }
 }

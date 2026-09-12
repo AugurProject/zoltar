@@ -1,6 +1,6 @@
 import type { ComponentChildren } from 'preact'
 import { LoadingText } from './LoadingText.js'
-import { useChainTimestamp } from '../lib/chainTimestamp.js'
+import { useChainTimestamp } from '../wallet/chainTimestamp.js'
 import { formatRelativeTimestamp, formatTimestamp, formatTimestampDateTime, getWallClockTimestamp } from '../lib/formatters.js'
 import { getMetricPlaceholderPresentation } from '../lib/userCopy.js'
 

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { validateStepReceiptEvidence } from '../../src/execution/receipt-validation.ts'
+import { stepReceiptEvidenceDisposition } from '../../src/execution/receipt-validation.ts'
 import { TRADING_OPERATIONS } from '../../src/operations/trading.ts'
 import type { OperationEvidence } from '../../src/operations/types.ts'
 import { address, hash, snapshotFixture } from './fixture.ts'
@@ -38,6 +38,6 @@ describe('idempotent trading keeper evidence', () => {
 		if (step === undefined || evidence === undefined) throw new Error('Pair creation evidence is missing')
 		expect(evidence).toMatchObject({ functionName: 'getPair', relation: 'greater-than', expected: '0' })
 		const canonicalPair = address(90)
-		expect(() => validateStepReceiptEvidence(step, { blockHash: hash(101), blockNumber: 101n, logs: [], status: 'success', transactionHash: hash(102) }, { storage: [{ after: canonicalPair, before: canonicalPair, evidence }] })).not.toThrow()
+		expect(stepReceiptEvidenceDisposition(step, { blockHash: hash(101), blockNumber: 101n, logs: [], status: 'success', transactionHash: hash(102) }, { storage: [{ after: canonicalPair, before: canonicalPair, evidence }] })).toBe('confirmed')
 	})
 })

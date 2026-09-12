@@ -3,7 +3,6 @@ name: Production Browser Workflow
 on:
   workflow_dispatch:
   pull_request:
-    branches: [main]
   push:
     branches: [main]
 
@@ -21,6 +20,8 @@ env:
 jobs:
   browser-smoke:
     name: Production browser smoke
+    # Automatic smoke coverage is owned by CI Gate.
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -35,6 +36,24 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - name: Select CI scope
+        id: scope
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
+            bun tooling/ci/classify-ci-change.mts --github-output --base-ref "${BASE_SHA}"
+          else
+            bun tooling/ci/classify-ci-change.mts --github-output --full
+          fi
       - uses: ./.github/actions/setup-ci
+        if: steps.scope.outputs.core == 'true'
       - name: Run production browser workflow tier
+        if: steps.scope.outputs.core == 'true'
         run: bun run test:browser:workflow

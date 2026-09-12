@@ -1,5 +1,5 @@
-import { encodeDeployData, getAddress, getCreate2Address, toHex, type Address, type Hash, type Hex, type PublicClient } from '@zoltar/shared/ethereum'
-import { waitForSubmittedTransactionReceipt, type SubmittedTransactionClient } from '@zoltar/ui-core-shared/lib/transactionReceipt.js'
+import { encodeDeployData, getAddress, getCreate2Address, toHex, type Address, type Hash, type Hex, type PublicClient } from '@zoltar/core-shared/evm/ethereum'
+import { waitForSubmittedTransactionReceipt, type SubmittedTransactionClient } from '@zoltar/ui-core-shared/transactions/transactionReceipt.js'
 import { tradingContracts } from '../generated/contractArtifact.js'
 import type { DeploymentConfiguration } from './config.js'
 
@@ -40,6 +40,7 @@ const factoryContract = tradingContracts['contracts/trading/TwoWayConstantProduc
 const routerContract = tradingContracts['contracts/trading/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter
 const zeroSalt = toHex(0, { size: 32 })
 const rpcStateRetryDelaysMilliseconds = [250, 500, 1_000, 2_000, 4_000] as const
+/** @internal exported for tests that simulate the canonical proxy deployer */
 export const CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE = '0x60003681823780368234f58015156014578182fd5b80825250506014600cf3' satisfies Hex
 
 function requireFeeBps(feeBps: number) {
@@ -113,6 +114,22 @@ export async function loadTradingDeploymentStatus(client: Pick<PublicClient, 'ge
 	return { factory: factoryDeployed, router: routerDeployed }
 }
 
+export function isTradingDeploymentComplete(_plan: TradingDeploymentPlan, status: Readonly<{ factory: boolean; router: boolean }>) {
+	return status.factory && status.router
+}
+
+function hasInstalledTradingStep(status: Readonly<{ factory: boolean; router: boolean }>) {
+	return status.factory || status.router
+}
+
+export async function resolveInstalledTradingDeployment(client: Pick<PublicClient, 'getCode' | 'readContract'>, core: CoreDeployment, feeBps: number, rpcUrl: string): Promise<DeploymentConfiguration> {
+	const plan = getTradingDeploymentPlan(core, feeBps)
+	const status = await loadTradingDeploymentStatus(client, plan)
+	if (isTradingDeploymentComplete(plan, status)) return deploymentConfigurationForPlan(plan, rpcUrl)
+	if (hasInstalledTradingStep(status)) throw new Error('The trading deployment is incomplete')
+	throw new Error('Trading contracts have not been deployed')
+}
+
 export function nextTradingDeploymentStep(plan: TradingDeploymentPlan, status: Readonly<{ factory: boolean; router: boolean }>) {
 	if (!status.factory) return plan.factory
 	if (!status.router) return plan.router
@@ -141,7 +158,9 @@ export async function deployTradingStep(
 	const status = await loadTradingDeploymentStatus(publicClient, plan)
 	if (status[step.id]) throw new Error(`${step.label} is already deployed`)
 	for (const dependency of step.dependencies) {
-		if (!status[dependency]) throw new Error(`Deploy ${plan[dependency].label} first`)
+		const dependencyStep = plan[dependency]
+		if (dependencyStep === undefined) throw new Error(`Deployment plan is missing ${dependency}`)
+		if (!status[dependency]) throw new Error(`Deploy ${dependencyStep.label} first`)
 	}
 	await beforeSend()
 	const hash = await walletClient.sendTransaction({ to: plan.core.proxyDeployer, data: step.data })

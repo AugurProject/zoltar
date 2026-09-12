@@ -2,12 +2,13 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { keccak256, privateKeyToAccount, type Hex } from '#ethereum'
+import { keccak256, privateKeyToAccount, type Hex } from '@zoltar/bot-shared/ethereum'
 import { loadOperatorSettings, operatorProfilePath, saveOperatorSettings, type PersistedOperatorSettings } from '#config/settings-store'
 import { assertDistinctPersistentPaths } from '#config/configuration'
-import { deterministicDeploymentProxy, executorDeploymentPlan } from '#execution/create2-executor'
+import { deterministicDeploymentProxy, executorDeploymentPlan } from '#execution/executor-deployment-primitives'
 import { clearExecutorDeploymentIntent, executorDeploymentIntentPath, saveExecutorDeploymentIntent } from '#execution/executor-deployment-store'
-import { acquirePositionJournalLock, savePositionJournal } from '#state/position-store'
+import { acquirePositionJournalLock } from '#state/position-store'
+import { savePositionJournal } from '../support/position-journal.ts'
 
 const executable = process.execPath
 const runSource = join(import.meta.dir, '..', '..', 'src', 'cli', 'run.ts')
@@ -34,6 +35,7 @@ async function temporaryDirectory() {
 function settings(rpcUrl: string, uiPort: number, privateKey?: Hex): PersistedOperatorSettings {
 	const address = '0x0000000000000000000000000000000000000001'
 	return {
+		approvedUniverses: [],
 		centralizedMarkets: {
 			assetAddress: address,
 			assetChainId: 1,
@@ -701,7 +703,7 @@ describe('file-only startup configuration', () => {
 			port: 0,
 			async fetch(request) {
 				const requestValue = (await request.json()) as { id: unknown; method: string }
-				const result = requestValue.method === 'eth_chainId' ? '0x1' : requestValue.method === 'eth_blockNumber' ? '0x1' : '0x'
+				const result = requestValue.method === 'eth_chainId' || requestValue.method === 'eth_blockNumber' ? '0x1' : '0x'
 				return Response.json({ id: requestValue.id, jsonrpc: '2.0', result })
 			},
 		})
@@ -754,7 +756,11 @@ describe('file-only startup configuration', () => {
 			port: 0,
 			async fetch(request) {
 				const requestValue = (await request.json()) as { id: unknown; method: string }
-				const result = requestValue.method === 'eth_chainId' ? rpcChainId : requestValue.method === 'eth_blockNumber' ? '0x1' : '0x'
+				const result =
+					new Map([
+						['eth_chainId', rpcChainId],
+						['eth_blockNumber', '0x1'],
+					]).get(requestValue.method) ?? '0x'
 				return Response.json({ id: requestValue.id, jsonrpc: '2.0', result })
 			},
 		})

@@ -1,7 +1,7 @@
-import { createPublicClient, createWalletClient, custom, EIP1193Provider, http, publicActions } from '@zoltar/shared/ethereum'
-import type { Hash } from '@zoltar/shared/ethereum'
+import { createPublicClient, createWalletClient, custom, EIP1193Provider, http, publicActions } from '@zoltar/core-shared/evm/ethereum'
+import type { Hash } from '@zoltar/core-shared/evm/ethereum'
 import { addressString } from './bigint'
-import { mainnet } from '@zoltar/shared/ethereum'
+import { mainnet } from '@zoltar/core-shared/evm/ethereum'
 import type { AnvilWindowEthereum } from '../AnvilWindowEthereum'
 
 const DEFAULT_HTTP = 'https://ethereum.dark.florist'

@@ -36,11 +36,12 @@ describe('CurrencyValue', () => {
 		const resizeObservers: MockResizeObserver[] = []
 		const originalGetBoundingClientRect = domEnvironment.window.HTMLElement.prototype.getBoundingClientRect
 
+		// The value and its wrap shrink to fit, so the mocked width belongs to the block container around them.
 		Object.defineProperty(domEnvironment.window.HTMLElement.prototype, 'clientWidth', {
 			configurable: true,
 			get() {
-				if (this.classList.contains('currency-value')) return currentClientWidth
-				return 0
+				if (this.classList.contains('currency-value') || this.classList.contains('currency-value-wrap')) return 0
+				return currentClientWidth
 			},
 		})
 
@@ -111,6 +112,75 @@ describe('CurrencyValue', () => {
 		const documentQueries = await renderCurrencyValue()
 		const copyButton = documentQueries.getByRole('button', { name: 'Copy exact value 999 999 990 000' })
 		expect(copyButton.textContent).toBe('≈ 999 999 990 000.00 ETH')
+	})
+
+	test('treats horizontal padding as unavailable width when deciding to compact', async () => {
+		setClientWidth(186)
+		setMeasureWidth(180)
+
+		const documentQueries = await renderCurrencyValue()
+		const copyButton = documentQueries.getByRole('button', { name: 'Copy exact value 999 999 990 000' })
+		expect(copyButton.textContent).toBe('≈ 999 999 990 000.00 ETH')
+
+		copyButton.style.paddingLeft = '4px'
+		copyButton.style.paddingRight = '4px'
+		await act(() => {
+			triggerResizeObservers()
+		})
+
+		expect(copyButton.textContent).toBe('≈ 1T ETH')
+	})
+
+	test('keeps a value hidden inside a zero-width container from being compacted', async () => {
+		setClientWidth(0)
+		setMeasureWidth(180)
+
+		const documentQueries = await renderCurrencyValue()
+		const copyButton = documentQueries.getByRole('button', { name: 'Copy exact value 999 999 990 000' })
+		expect(copyButton.textContent).toBe('≈ 999 999 990 000.00 ETH')
+
+		setClientWidth(240)
+		await act(() => {
+			triggerResizeObservers()
+		})
+
+		expect(copyButton.textContent).toBe('≈ 999 999 990 000.00 ETH')
+	})
+
+	test('measures a value that mounts after its loading placeholder', async () => {
+		setClientWidth(80)
+		setMeasureWidth(180)
+		const value = 999999990000n * 10n ** 18n
+
+		const renderedComponent = await renderIntoDocument(<CurrencyValue compactWhenOverflow loading suffix='ETH' value={value} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByRole('button', { name: 'Copy exact value 999 999 990 000' })).toBeNull()
+
+		await act(() => {
+			render(<CurrencyValue compactWhenOverflow loading={false} suffix='ETH' value={value} />, renderedComponent.container)
+		})
+
+		expect(documentQueries.getByRole('button', { name: 'Copy exact value 999 999 990 000' }).textContent).toBe('≈ 1T ETH')
+	})
+
+	test('measures the container above its own wrap even when the wrap is a blockified flex item', async () => {
+		setClientWidth(240)
+		setMeasureWidth(180)
+
+		const renderedComponent = await renderIntoDocument(<CurrencyValue compactWhenOverflow suffix='ETH' value={999999990000n * 10n ** 18n} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+		const wrap = documentQueries.getByRole('button', { name: 'Copy exact value 999 999 990 000' }).parentElement
+		if (!(wrap instanceof HTMLElement) || !wrap.classList.contains('currency-value-wrap')) throw new Error('Expected the value wrap')
+		wrap.style.display = 'block'
+		Object.defineProperty(wrap, 'clientWidth', { configurable: true, get: () => 60 })
+
+		await act(() => {
+			render(<CurrencyValue compactWhenOverflow suffix='ETH' value={999999990001n * 10n ** 18n} />, renderedComponent.container)
+		})
+
+		expect(documentQueries.getByRole('button', { name: 'Copy exact value 999 999 990 001' }).textContent).toBe('≈ 999 999 990 001.00 ETH')
 	})
 
 	test('re-expands from compact to full after a resize observer update', async () => {

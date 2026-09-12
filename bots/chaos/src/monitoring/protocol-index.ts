@@ -1,24 +1,13 @@
 import { bigintToSafeNumber, encodeAbiParameters, getAddress, hexToBytes, keccak256, zeroAddress, zeroHash, type Address, type Chain, type Hash, type PublicClient, type Transport } from '@zoltar/bot-shared/ethereum'
-import { fetchLogsWithAdaptiveRanges } from '@zoltar/bot-shared/monitoring/block-sync'
-import { openOracleAbi } from '../contracts/abi.ts'
+import { ChaosProtocolIndexReorgError, fetchProtocolLogs, protocolLogPrefixAvailable, recoverPrunedProtocolLogs, requireCanonicalBlock, validatePreviousProtocolIndex } from './protocol-index-context.ts'
+import { openOracleAbi } from '@zoltar/bot-shared/contracts/abi'
 import type { CanonicalUintString } from '../core/units.ts'
 import { eventTopic } from '../operations/planning.ts'
 import type { AuctionBidSnapshot, AuctionRefundSnapshot, ChildRepSplitProgressSnapshot, EscalationDepositSnapshot, MigrationRepSplitProgressSnapshot, OracleGameSnapshot } from '../operations/types.ts'
 
 type IndexClient = PublicClient<Transport, Chain>
 
-type ProtocolLogQuery = {
-	address: Address | Address[]
-	fromBlock: bigint
-	toBlock: bigint
-}
-
-async function fetchProtocolLogs(client: IndexClient, query: ProtocolLogQuery) {
-	const maximumRange = query.toBlock - query.fromBlock + 1n
-	return await fetchLogsWithAdaptiveRanges({ nextBlock: query.fromBlock }, query.toBlock, maximumRange, async range => await client.getLogs({ address: query.address, fromBlock: range.fromBlock, toBlock: range.toBlock }))
-}
-
-export interface ProtocolIndexCursor {
+interface ProtocolIndexCursor {
 	blockNumber: string
 	blockHash: Hash
 }
@@ -31,6 +20,8 @@ export interface ChaosProtocolIndex {
 	securityPoolForker: Address
 	wallet: Address
 	startBlock: string
+	/** Earliest retained log coverage when the requested prefix is pruned. */
+	availableStartBlock?: string
 	cursor: ProtocolIndexCursor
 	reports: OracleGameSnapshot[]
 	auctionBids: Record<string, AuctionBidSnapshot[]>
@@ -54,13 +45,14 @@ export interface UpdateProtocolIndexContext {
 	auctionAddresses: readonly Address[]
 	escalationGames: readonly { pool: Address; escalationGame: Address }[]
 	startBlock: bigint
+	availableStartBlock?: bigint
 	anchorBlockNumber: bigint
 	expectedAnchorHash?: Hash
 	maxBlockSpan?: bigint
 	previous?: ChaosProtocolIndex
 }
 
-export interface CanonicalCoordinatorReportRoute {
+interface CanonicalCoordinatorReportRoute {
 	coordinator: Address
 	pendingReportId: string
 	repToken: Address
@@ -80,16 +72,6 @@ export interface ProtocolIndexUpdate {
 	complete: boolean
 	fromBlock: string
 	toBlock: string
-}
-
-export class ChaosProtocolIndexReorgError extends Error {
-	readonly rescanFromBlock: bigint
-
-	constructor(message: string, rescanFromBlock: bigint) {
-		super(message)
-		this.name = 'ChaosProtocolIndexReorgError'
-		this.rescanFromBlock = rescanFromBlock
-	}
 }
 
 const REPORT_SUBMITTED = eventTopic('ReportSubmitted(uint256,bytes)')
@@ -174,10 +156,6 @@ export function trustedOpenOracleReportPredicate(context: TrustedOpenOracleRepor
 	}
 }
 
-export function isTrustedOpenOracleReport(context: TrustedOpenOracleReportContext, report: OracleGameSnapshot) {
-	return trustedOpenOracleReportPredicate(context)(report)
-}
-
 function requireTrustedReportBounds(context: TrustedOpenOracleReportContext, reports: ReadonlyMap<string, OracleGameSnapshot>, trustedReport: (report: OracleGameSnapshot) => boolean) {
 	let signerReports = 0
 	for (const report of reports.values()) {
@@ -237,7 +215,7 @@ function abiWordAddress(bytes: Uint8Array, offset: number, label: string) {
 	return readAddress(bytes, offset + 12)
 }
 
-export function deriveChildUniverseId(universeId: bigint, outcomeIndex: bigint) {
+function deriveChildUniverseId(universeId: bigint, outcomeIndex: bigint) {
 	if (universeId < 0n || universeId >= UINT248_LIMIT) throw new Error('Parent universe ID exceeds uint248')
 	if (outcomeIndex < 0n || outcomeIndex >= 1n << 256n) throw new Error('Fork outcome exceeds uint256')
 	return BigInt(keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [universeId, outcomeIndex]))) & (UINT248_LIMIT - 1n)
@@ -298,7 +276,7 @@ function signed256(value: bigint) {
 	return value >= 1n << 255n ? value - (1n << 256n) : value
 }
 
-export function decodePackedOracleReport(reportId: bigint, openOracle: Address, packed: `0x${string}`): OracleGameSnapshot {
+function decodePackedOracleReport(reportId: bigint, openOracle: Address, packed: `0x${string}`): OracleGameSnapshot {
 	const bytes = hexToBytes(packed)
 	if (bytes.length !== 235) throw new Error(`OpenOracle report ${reportId.toString()} packed payload has ${bytes.length} bytes instead of 235`)
 	const flags = bigintToSafeNumber(readUnsigned(bytes, 202, 1), 'OpenOracle flags')
@@ -343,25 +321,6 @@ export function decodePackedOracleReport(reportId: bigint, openOracle: Address, 
 		snapshot.settleAfterTimestamp = (reportTimestamp + settlementTime).toString()
 	}
 	return snapshot
-}
-
-function validatePrevious(context: UpdateProtocolIndexContext, previous: ChaosProtocolIndex) {
-	if (previous.schemaVersion !== 3) throw new Error(`Unsupported protocol index schema ${previous.schemaVersion}`)
-	if (previous.chainId !== context.chainId) throw new Error('Protocol index chain does not match discovery chain')
-	if (previous.openOracle.toLowerCase() !== context.openOracle.toLowerCase()) throw new Error('Protocol index OpenOracle deployment changed')
-	if (previous.zoltar.toLowerCase() !== context.zoltar.toLowerCase()) throw new Error('Protocol index Zoltar deployment changed')
-	if (previous.securityPoolForker.toLowerCase() !== context.securityPoolForker.toLowerCase()) throw new Error('Protocol index SecurityPoolForker deployment changed')
-	if (previous.wallet.toLowerCase() !== context.wallet.toLowerCase()) throw new Error('Protocol index wallet changed')
-	if (previous.startBlock !== context.startBlock.toString()) throw new Error('Protocol index start block changed')
-}
-
-async function requireCanonicalBlock(client: IndexClient, blockNumber: bigint, expectedHash?: Hash) {
-	const block = await client.getBlock({ blockNumber })
-	if (block.number !== blockNumber || block.hash === null || block.hash === undefined) throw new Error(`RPC did not return canonical block ${blockNumber.toString()}`)
-	if (expectedHash !== undefined && block.hash.toLowerCase() !== expectedHash.toLowerCase()) {
-		throw new ChaosProtocolIndexReorgError(`Block ${blockNumber.toString()} changed from ${expectedHash} to ${block.hash}`, blockNumber)
-	}
-	return block.hash
 }
 
 function activeAuctionBids(source: Readonly<Record<string, readonly AuctionBidSnapshot[]>>) {
@@ -457,12 +416,19 @@ function indexedChildProgress(source: readonly ChildRepSplitProgressSnapshot[]) 
 }
 
 export async function updateProtocolIndex(context: UpdateProtocolIndexContext): Promise<ProtocolIndexUpdate> {
+	return await recoverPrunedProtocolLogs(context, scanProtocolIndex)
+}
+
+async function scanProtocolIndex(context: UpdateProtocolIndexContext): Promise<ProtocolIndexUpdate> {
 	if (context.anchorBlockNumber < context.startBlock) throw new Error('Protocol index anchor precedes its start block')
 	const trustedReport = trustedOpenOracleReportPredicate(context)
 	const span = context.maxBlockSpan ?? 2_000n
 	if (span <= 0n) throw new Error('Protocol index maxBlockSpan must be positive')
 	const anchorHash = await requireCanonicalBlock(context.client, context.anchorBlockNumber, context.expectedAnchorHash)
-	let fromBlock = context.startBlock
+	const availableStartBlock = context.availableStartBlock ?? (context.previous?.availableStartBlock === undefined ? context.startBlock : BigInt(context.previous.availableStartBlock))
+	if (availableStartBlock < context.startBlock || availableStartBlock > context.anchorBlockNumber) throw new Error('Protocol index log coverage boundary is outside its requested range')
+	const partialHistory = availableStartBlock > context.startBlock
+	let fromBlock = availableStartBlock
 	const reports = new Map<string, OracleGameSnapshot>()
 	let auctionBids: Record<string, AuctionBidSnapshot[]> = {}
 	let auctionRefunds: Record<string, AuctionRefundSnapshot> = {}
@@ -470,10 +436,15 @@ export async function updateProtocolIndex(context: UpdateProtocolIndexContext): 
 	let migrationRepSplits = new Map<string, MigrationRepSplitProgressSnapshot>()
 	let childRepSplits = new Map<string, ChildRepSplitProgressSnapshot>()
 	if (context.previous !== undefined) {
-		validatePrevious(context, context.previous)
+		validatePreviousProtocolIndex(context, context.previous)
+		if ((context.previous.availableStartBlock ?? context.previous.startBlock) !== availableStartBlock.toString()) throw new Error('Protocol index log coverage changed without resetting the index')
 		const cursorNumber = BigInt(context.previous.cursor.blockNumber)
 		if (cursorNumber > context.anchorBlockNumber) throw new ChaosProtocolIndexReorgError('Persisted protocol index cursor is ahead of the requested anchor', context.startBlock)
 		await requireCanonicalBlock(context.client, cursorNumber, context.previous.cursor.blockHash)
+		if (await protocolLogPrefixAvailable(context)) {
+			const { previous: _previous, ...fresh } = context
+			return await scanProtocolIndex(fresh)
+		}
 		fromBlock = cursorNumber + 1n
 		for (const report of context.previous.reports) {
 			if (!trustedReport(report)) continue
@@ -486,11 +457,12 @@ export async function updateProtocolIndex(context: UpdateProtocolIndexContext): 
 		migrationRepSplits = indexedMigrationProgress(context.previous.migrationRepSplits)
 		childRepSplits = indexedChildProgress(context.previous.childRepSplits)
 	}
+
 	if (fromBlock > context.anchorBlockNumber) {
 		if (context.previous === undefined) throw new Error('Protocol index has no previous state at the requested anchor')
 		requireTrustedReportBounds(context, reports, trustedReport)
 		return {
-			complete: true,
+			complete: !partialHistory,
 			fromBlock: fromBlock.toString(),
 			index: {
 				...context.previous,
@@ -504,193 +476,206 @@ export async function updateProtocolIndex(context: UpdateProtocolIndexContext): 
 			toBlock: context.previous.cursor.blockNumber,
 		}
 	}
-	const maximumToBlock = fromBlock + span - 1n
-	const toBlock = maximumToBlock < context.anchorBlockNumber ? maximumToBlock : context.anchorBlockNumber
-	const oracleLogs = orderedCanonicalLogs(await fetchProtocolLogs(context.client, { address: context.openOracle, fromBlock, toBlock }), fromBlock, toBlock, 'OpenOracle report index')
-	for (const log of oracleLogs) {
-		const topic0 = log.topics[0]
-		if (topic0 !== REPORT_SUBMITTED && topic0 !== REPORT_DISPUTED && topic0 !== REPORT_SETTLED) continue
-		const reportId = topicUnsigned(log.topics[1], 'OpenOracle report id')
-		if (topic0 === REPORT_SUBMITTED || topic0 === REPORT_DISPUTED) {
-			const decoded = decodePackedOracleReport(reportId, context.openOracle, log.data)
-			if (trustedReport(decoded)) reports.set(reportId.toString(), decoded)
-			else reports.delete(reportId.toString())
-		} else if (topic0 === REPORT_SETTLED) reports.delete(reportId.toString())
-	}
-	requireTrustedReportBounds(context, reports, trustedReport)
-	const migrationLogs = orderedCanonicalLogs(await fetchProtocolLogs(context.client, { address: [context.zoltar, context.securityPoolForker], fromBlock, toBlock }), fromBlock, toBlock, 'Migration progress index')
-	for (const log of migrationLogs) {
-		if (log.address.toLowerCase() !== context.zoltar.toLowerCase() && log.address.toLowerCase() !== context.securityPoolForker.toLowerCase()) {
-			throw new Error(`Migration progress index returned unexpected emitter ${log.address}`)
-		}
-		const topic0 = log.topics[0]
-		if (topic0 === MIGRATION_REP_SPLIT) {
-			if (log.address.toLowerCase() !== context.zoltar.toLowerCase()) throw new Error('MigrationRepSplit was emitted outside canonical Zoltar')
-			if (log.topics.length !== 4) throw new Error('MigrationRepSplit has an invalid indexed-field count')
-			const migrator = strictTopicAddress(log.topics[1], 'MigrationRepSplit migrator')
-			if (migrator.toLowerCase() !== context.wallet.toLowerCase()) continue
-			const universeId = strictTopicUnsigned(log.topics[2], 248, 'MigrationRepSplit universe id')
-			const childUniverseId = strictTopicUnsigned(log.topics[3], 248, 'MigrationRepSplit child universe id')
-			const data = hexToBytes(log.data)
-			if (data.length !== 128) throw new Error('MigrationRepSplit has an invalid data length')
-			const recipient = abiWordAddress(data, 0, 'MigrationRepSplit recipient')
-			if (recipient.toLowerCase() !== context.wallet.toLowerCase()) throw new Error('Wallet MigrationRepSplit recipient does not match the indexed wallet')
-			const outcomeIndex = readUnsigned(data, 32, 32)
-			const amountAttoRep = readUnsigned(data, 64, 32)
-			const cumulativeAttoRep = readUnsigned(data, 96, 32)
-			const expectedChildUniverseId = deriveChildUniverseId(universeId, outcomeIndex)
-			if (childUniverseId !== expectedChildUniverseId) throw new Error('MigrationRepSplit child universe ID does not match its parent/outcome derivation')
-			const routeKey = migrationProgressKey(universeId.toString(), outcomeIndex.toString())
-			const existing = migrationRepSplits.get(routeKey)
-			const previousCumulative = existing === undefined ? 0n : BigInt(existing.childMigrationRepAmountAttoRep)
-			if (cumulativeAttoRep !== previousCumulative + amountAttoRep) {
-				throw new Error(`MigrationRepSplit cumulative progress is discontinuous for universe ${universeId.toString()} outcome ${outcomeIndex.toString()}`)
-			}
-			const progress: MigrationRepSplitProgressSnapshot = {
-				childMigrationRepAmountAttoRep: cumulativeAttoRep.toString(),
-				childUniverseId: childUniverseId.toString(),
-				outcomeIndex: outcomeIndex.toString(),
-				universeId: universeId.toString(),
-			}
-			if (existing !== undefined && existing.childUniverseId !== progress.childUniverseId) throw new Error('MigrationRepSplit route changed its derived child universe ID')
-			migrationRepSplits.set(routeKey, progress)
-		} else if (topic0 === CHILD_REP_SPLIT) {
-			if (log.address.toLowerCase() !== context.securityPoolForker.toLowerCase()) throw new Error('ChildRepSplit was emitted outside canonical SecurityPoolForker')
-			if (log.topics.length !== 3) throw new Error('ChildRepSplit has an invalid indexed-field count')
-			const pool = strictTopicAddress(log.topics[1], 'ChildRepSplit parent')
-			const outcomeIndex = topicUnsigned(log.topics[2], 'ChildRepSplit outcome index')
-			const data = hexToBytes(log.data)
-			if (data.length !== 64) throw new Error('ChildRepSplit has an invalid data length')
-			const cumulativeAttoRep = readUnsigned(data, 0, 32)
-			readUnsigned(data, 32, 32)
-			const routeKey = childProgressKey(pool, outcomeIndex.toString())
-			const existing = childRepSplits.get(routeKey)
-			const previousCumulative = existing === undefined ? 0n : BigInt(existing.childPoolRepSplitAttoRep)
-			if (cumulativeAttoRep <= previousCumulative) {
-				throw new Error(`ChildRepSplit cumulative progress did not increase for pool ${pool} outcome ${outcomeIndex.toString()}`)
-			}
-			const progress: ChildRepSplitProgressSnapshot = {
-				childPoolRepSplitAttoRep: cumulativeAttoRep.toString(),
-				outcomeIndex: outcomeIndex.toString(),
-				pool,
-			}
-			childRepSplits.set(routeKey, progress)
-		}
-	}
-	if (context.auctionAddresses.length > 0) {
-		const auctionAddressKeys = new Set(context.auctionAddresses.map(address => address.toLowerCase()))
-		const auctionLogs = orderedCanonicalLogs(await fetchProtocolLogs(context.client, { address: [...context.auctionAddresses], fromBlock, toBlock }), fromBlock, toBlock, 'Auction event index')
-		for (const log of auctionLogs) {
-			const key = log.address.toLowerCase()
-			if (!auctionAddressKeys.has(key)) throw new Error(`Auction event index returned unexpected emitter ${log.address}`)
+	const scanFromBlock = fromBlock
+	let toBlock = fromBlock
+	while (fromBlock <= context.anchorBlockNumber) {
+		const maximumToBlock = fromBlock + span - 1n
+		toBlock = maximumToBlock < context.anchorBlockNumber ? maximumToBlock : context.anchorBlockNumber
+		const [rawOracleLogs, rawMigrationLogs, rawAuctionLogs, rawEscalationLogs] = await Promise.all([
+			fetchProtocolLogs(context.client, { address: context.openOracle, fromBlock, toBlock, topics: [REPORT_SUBMITTED, REPORT_DISPUTED, REPORT_SETTLED] }),
+			fetchProtocolLogs(context.client, { address: [context.zoltar, context.securityPoolForker], fromBlock, toBlock, topics: [MIGRATION_REP_SPLIT, CHILD_REP_SPLIT] }),
+			context.auctionAddresses.length === 0 ? [] : fetchProtocolLogs(context.client, { address: [...context.auctionAddresses], fromBlock, toBlock, topics: [BID_SUBMITTED, BID_SETTLED, ETH_REFUND_CREDITED, PENDING_ETH_REFUND_WITHDRAWN] }),
+			context.escalationGames.length === 0 ? [] : fetchProtocolLogs(context.client, { address: context.escalationGames.map(route => route.escalationGame), fromBlock, toBlock, topics: [LOCAL_DEPOSIT_APPENDED, DEPOSIT_ON_OUTCOME, CLAIM_DEPOSIT, CARRY_DEPOSIT_CONSUMED] }),
+		])
+		const oracleLogs = orderedCanonicalLogs(rawOracleLogs, fromBlock, toBlock, 'OpenOracle report index')
+		for (const log of oracleLogs) {
 			const topic0 = log.topics[0]
-			if (topic0 === ETH_REFUND_CREDITED || topic0 === PENDING_ETH_REFUND_WITHDRAWN) {
-				if (log.topics.length !== 2) throw new Error('Auction refund event has an invalid indexed-field count')
-				const bidder = strictTopicAddress(log.topics[1], 'Auction refund bidder')
-				if (bidder.toLowerCase() !== context.wallet.toLowerCase()) continue
+			if (topic0 !== REPORT_SUBMITTED && topic0 !== REPORT_DISPUTED && topic0 !== REPORT_SETTLED) continue
+			const reportId = topicUnsigned(log.topics[1], 'OpenOracle report id')
+			if (topic0 === REPORT_SUBMITTED || topic0 === REPORT_DISPUTED) {
+				const decoded = decodePackedOracleReport(reportId, context.openOracle, log.data)
+				if (trustedReport(decoded)) reports.set(reportId.toString(), decoded)
+				else reports.delete(reportId.toString())
+			} else if (topic0 === REPORT_SETTLED) reports.delete(reportId.toString())
+		}
+		requireTrustedReportBounds(context, reports, trustedReport)
+		const migrationLogs = orderedCanonicalLogs(rawMigrationLogs, fromBlock, toBlock, 'Migration progress index')
+		for (const log of migrationLogs) {
+			if (log.address.toLowerCase() !== context.zoltar.toLowerCase() && log.address.toLowerCase() !== context.securityPoolForker.toLowerCase()) {
+				throw new Error(`Migration progress index returned unexpected emitter ${log.address}`)
+			}
+			const topic0 = log.topics[0]
+			if (topic0 === MIGRATION_REP_SPLIT) {
+				if (log.address.toLowerCase() !== context.zoltar.toLowerCase()) throw new Error('MigrationRepSplit was emitted outside canonical Zoltar')
+				if (log.topics.length !== 4) throw new Error('MigrationRepSplit has an invalid indexed-field count')
+				const migrator = strictTopicAddress(log.topics[1], 'MigrationRepSplit migrator')
+				if (migrator.toLowerCase() !== context.wallet.toLowerCase()) continue
+				const universeId = strictTopicUnsigned(log.topics[2], 248, 'MigrationRepSplit universe id')
+				const childUniverseId = strictTopicUnsigned(log.topics[3], 248, 'MigrationRepSplit child universe id')
 				const data = hexToBytes(log.data)
-				if (topic0 === ETH_REFUND_CREDITED) {
-					if (data.length !== 64) throw new Error('EthRefundCredited has an invalid data length')
-					const amountAttoEth = readUnsigned(data, 0, 32)
-					const pendingAttoEth = readUnsigned(data, 32, 32)
-					if (amountAttoEth === 0n || pendingAttoEth === 0n) throw new Error('EthRefundCredited has a zero refund amount')
-					const existing = auctionRefunds[key]
-					if (existing === undefined) {
-						if (pendingAttoEth !== amountAttoEth) {
-							throw new Error(`EthRefundCredited for auction ${log.address} did not start from zero; protocolStartBlock is after the episode start or the event history is incomplete`)
-						}
-						auctionRefunds[key] = { generation: refundEpisodeGeneration(log), pendingAttoEth: pendingAttoEth.toString() }
-					} else {
-						const expectedPendingAttoEth = BigInt(existing.pendingAttoEth) + amountAttoEth
-						if (pendingAttoEth !== expectedPendingAttoEth) throw new Error(`EthRefundCredited continuity failed for auction ${log.address}`)
-						auctionRefunds[key] = { ...existing, pendingAttoEth: pendingAttoEth.toString() }
-					}
-				} else {
-					if (data.length !== 32) throw new Error('PendingEthRefundWithdrawn has an invalid data length')
-					const amountAttoEth = readUnsigned(data, 0, 32)
-					const existing = auctionRefunds[key]
-					if (existing === undefined) throw new Error(`PendingEthRefundWithdrawn for auction ${log.address} has no authenticated active refund episode`)
-					if (amountAttoEth === 0n || amountAttoEth !== BigInt(existing.pendingAttoEth)) throw new Error(`PendingEthRefundWithdrawn amount does not match the active refund episode for auction ${log.address}`)
-					delete auctionRefunds[key]
+				if (data.length !== 128) throw new Error('MigrationRepSplit has an invalid data length')
+				const recipient = abiWordAddress(data, 0, 'MigrationRepSplit recipient')
+				if (recipient.toLowerCase() !== context.wallet.toLowerCase()) throw new Error('Wallet MigrationRepSplit recipient does not match the indexed wallet')
+				const outcomeIndex = readUnsigned(data, 32, 32)
+				const amountAttoRep = readUnsigned(data, 64, 32)
+				const cumulativeAttoRep = readUnsigned(data, 96, 32)
+				const expectedChildUniverseId = deriveChildUniverseId(universeId, outcomeIndex)
+				if (childUniverseId !== expectedChildUniverseId) throw new Error('MigrationRepSplit child universe ID does not match its parent/outcome derivation')
+				const routeKey = migrationProgressKey(universeId.toString(), outcomeIndex.toString())
+				const existing = migrationRepSplits.get(routeKey)
+				const previousCumulative = existing === undefined ? 0n : BigInt(existing.childMigrationRepAmountAttoRep)
+				if (existing !== undefined || !partialHistory ? cumulativeAttoRep !== previousCumulative + amountAttoRep : cumulativeAttoRep < amountAttoRep) {
+					throw new Error(`MigrationRepSplit cumulative progress is discontinuous for universe ${universeId.toString()} outcome ${outcomeIndex.toString()}`)
 				}
-				continue
-			}
-			if (topic0 !== BID_SUBMITTED && topic0 !== BID_SETTLED) continue
-			const bidder = topicAddress(log.topics[1], 'Auction bidder')
-			if (bidder.toLowerCase() !== context.wallet.toLowerCase()) continue
-			const tick = signed256(topicUnsigned(log.topics[2], 'Auction tick')).toString()
-			const index = topicUnsigned(log.topics[3], 'Auction bid index').toString()
-			const bids = auctionBids[key] ?? []
-			const existing = bids.find(bid => bid.tick === tick && bid.index === index)
-			if (topic0 === BID_SUBMITTED) {
-				const bid: AuctionBidSnapshot = { amountAttoEth: readUnsigned(hexToBytes(log.data), 0, 32).toString(), index, refunded: false, tick }
-				if (existing === undefined) bids.push(bid)
-				else Object.assign(existing, bid)
-			} else if (existing !== undefined) existing.refunded = true
-			auctionBids[key] = bids
-		}
-	}
-	if (context.escalationGames.length > 0) {
-		const routeByGame = new Map(context.escalationGames.map(route => [route.escalationGame.toLowerCase(), route]))
-		const escalationLogs = orderedCanonicalLogs(await fetchProtocolLogs(context.client, { address: context.escalationGames.map(route => route.escalationGame), fromBlock, toBlock }), fromBlock, toBlock, 'Escalation deposit index')
-		const pendingLocal: Array<{ game: Address; pool: Address; vault: Address; outcome: number; amountAttoRep: CanonicalUintString; parentDepositIndex: string; cumulative: string }> = []
-		for (const log of escalationLogs) {
-			const topic0 = log.topics[0]
-			const route = routeByGame.get(log.address.toLowerCase())
-			if (route === undefined) throw new Error(`Indexed escalation game ${log.address} has no pool route`)
-			if (topic0 === LOCAL_DEPOSIT_APPENDED) {
+				const progress: MigrationRepSplitProgressSnapshot = {
+					childMigrationRepAmountAttoRep: cumulativeAttoRep.toString(),
+					childUniverseId: childUniverseId.toString(),
+					outcomeIndex: outcomeIndex.toString(),
+					universeId: universeId.toString(),
+				}
+				if (existing !== undefined && existing.childUniverseId !== progress.childUniverseId) throw new Error('MigrationRepSplit route changed its derived child universe ID')
+				migrationRepSplits.set(routeKey, progress)
+			} else if (topic0 === CHILD_REP_SPLIT) {
+				if (log.address.toLowerCase() !== context.securityPoolForker.toLowerCase()) throw new Error('ChildRepSplit was emitted outside canonical SecurityPoolForker')
+				if (log.topics.length !== 3) throw new Error('ChildRepSplit has an invalid indexed-field count')
+				const pool = strictTopicAddress(log.topics[1], 'ChildRepSplit parent')
+				const outcomeIndex = topicUnsigned(log.topics[2], 'ChildRepSplit outcome index')
 				const data = hexToBytes(log.data)
-				pendingLocal.push({
-					amountAttoRep: readUnsigned(data, 0, 32).toString(),
-					cumulative: readUnsigned(data, 64, 32).toString(),
-					game: route.escalationGame,
-					outcome: bigintToSafeNumber(topicUnsigned(log.topics[2], 'Escalation outcome'), 'Escalation outcome'),
-					parentDepositIndex: readUnsigned(data, 32, 32).toString(),
-					pool: route.pool,
-					vault: topicAddress(log.topics[3], 'Escalation depositor'),
-				})
-			} else if (topic0 === DEPOSIT_ON_OUTCOME) {
-				const data = hexToBytes(log.data)
-				const vault = topicAddress(log.topics[1], 'Escalation depositor')
-				const outcome = bigintToSafeNumber(topicUnsigned(log.topics[2], 'Escalation outcome'), 'Escalation outcome')
-				const amountAttoRep = readUnsigned(data, 0, 32).toString()
-				const cumulative = readUnsigned(data, 64, 32).toString()
-				const pendingIndex = pendingLocal.findIndex(candidate => candidate.game.toLowerCase() === route.escalationGame.toLowerCase() && candidate.vault.toLowerCase() === vault.toLowerCase() && candidate.outcome === outcome && candidate.amountAttoRep === amountAttoRep && candidate.cumulative === cumulative)
-				const local = pendingIndex < 0 ? undefined : pendingLocal.splice(pendingIndex, 1)[0]
-				if (local === undefined) throw new Error(`DepositOnOutcome for ${vault} has no matching LocalDepositAppended event`)
-				const depositIndex = readUnsigned(data, 32, 32).toString()
-				const existing = escalationDeposits.find(deposit => deposit.escalationGame.toLowerCase() === route.escalationGame.toLowerCase() && deposit.outcome === outcome && deposit.depositIndex === depositIndex)
-				const deposit: EscalationDepositSnapshot = { amountAttoRep, claimed: false, depositIndex, escalationGame: route.escalationGame, outcome, parentDepositIndex: local.parentDepositIndex, pool: route.pool, vault }
-				if (existing === undefined) escalationDeposits.push(deposit)
-				else Object.assign(existing, deposit)
-			} else if (topic0 === CLAIM_DEPOSIT) {
-				const vault = topicAddress(log.topics[1], 'Escalation claimant')
-				const outcome = bigintToSafeNumber(topicUnsigned(log.topics[2], 'Escalation outcome'), 'Escalation outcome')
-				const parentDepositIndex = topicUnsigned(log.topics[3], 'Parent deposit index').toString()
-				const deposit = escalationDeposits.find(candidate => candidate.escalationGame.toLowerCase() === route.escalationGame.toLowerCase() && candidate.vault.toLowerCase() === vault.toLowerCase() && candidate.outcome === outcome && candidate.parentDepositIndex === parentDepositIndex)
-				if (deposit !== undefined) deposit.claimed = true
-			} else if (topic0 === CARRY_DEPOSIT_CONSUMED) {
-				const parentDepositIndex = topicUnsigned(log.topics[1], 'Consumed parent deposit index').toString()
-				const vault = topicAddress(log.topics[3], 'Consumed escalation depositor')
-				const outcome = bigintToSafeNumber(readUnsigned(hexToBytes(log.data), 0, 32), 'Consumed escalation outcome')
-				const deposit = escalationDeposits.find(candidate => candidate.escalationGame.toLowerCase() === route.escalationGame.toLowerCase() && candidate.vault.toLowerCase() === vault.toLowerCase() && candidate.outcome === outcome && candidate.parentDepositIndex === parentDepositIndex)
-				if (deposit !== undefined) deposit.claimed = true
+				if (data.length !== 64) throw new Error('ChildRepSplit has an invalid data length')
+				const cumulativeAttoRep = readUnsigned(data, 0, 32)
+				readUnsigned(data, 32, 32)
+				const routeKey = childProgressKey(pool, outcomeIndex.toString())
+				const existing = childRepSplits.get(routeKey)
+				const previousCumulative = existing === undefined ? 0n : BigInt(existing.childPoolRepSplitAttoRep)
+				if (cumulativeAttoRep <= previousCumulative) {
+					throw new Error(`ChildRepSplit cumulative progress did not increase for pool ${pool} outcome ${outcomeIndex.toString()}`)
+				}
+				const progress: ChildRepSplitProgressSnapshot = {
+					childPoolRepSplitAttoRep: cumulativeAttoRep.toString(),
+					outcomeIndex: outcomeIndex.toString(),
+					pool,
+				}
+				childRepSplits.set(routeKey, progress)
 			}
 		}
-		if (pendingLocal.length > 0) throw new Error('Escalation log range ended with unmatched local deposit events')
+		if (context.auctionAddresses.length > 0) {
+			const auctionAddressKeys = new Set(context.auctionAddresses.map(address => address.toLowerCase()))
+			const auctionLogs = orderedCanonicalLogs(rawAuctionLogs, fromBlock, toBlock, 'Auction event index')
+			for (const log of auctionLogs) {
+				const key = log.address.toLowerCase()
+				if (!auctionAddressKeys.has(key)) throw new Error(`Auction event index returned unexpected emitter ${log.address}`)
+				const topic0 = log.topics[0]
+				if (topic0 === ETH_REFUND_CREDITED || topic0 === PENDING_ETH_REFUND_WITHDRAWN) {
+					if (log.topics.length !== 2) throw new Error('Auction refund event has an invalid indexed-field count')
+					const bidder = strictTopicAddress(log.topics[1], 'Auction refund bidder')
+					if (bidder.toLowerCase() !== context.wallet.toLowerCase()) continue
+					const data = hexToBytes(log.data)
+					if (topic0 === ETH_REFUND_CREDITED) {
+						if (data.length !== 64) throw new Error('EthRefundCredited has an invalid data length')
+						const amountAttoEth = readUnsigned(data, 0, 32)
+						const pendingAttoEth = readUnsigned(data, 32, 32)
+						if (amountAttoEth === 0n || pendingAttoEth === 0n) throw new Error('EthRefundCredited has a zero refund amount')
+						const existing = auctionRefunds[key]
+						if (existing === undefined) {
+							if (pendingAttoEth !== amountAttoEth) {
+								if (partialHistory && pendingAttoEth > amountAttoEth) continue
+								throw new Error(`EthRefundCredited for auction ${log.address} did not start from zero; protocolStartBlock is after the episode start or the event history is incomplete`)
+							}
+							auctionRefunds[key] = { generation: refundEpisodeGeneration(log), pendingAttoEth: pendingAttoEth.toString() }
+						} else {
+							const expectedPendingAttoEth = BigInt(existing.pendingAttoEth) + amountAttoEth
+							if (pendingAttoEth !== expectedPendingAttoEth) throw new Error(`EthRefundCredited continuity failed for auction ${log.address}`)
+							auctionRefunds[key] = { ...existing, pendingAttoEth: pendingAttoEth.toString() }
+						}
+					} else {
+						if (data.length !== 32) throw new Error('PendingEthRefundWithdrawn has an invalid data length')
+						const amountAttoEth = readUnsigned(data, 0, 32)
+						const existing = auctionRefunds[key]
+						if (existing === undefined && partialHistory && amountAttoEth > 0n) continue
+						if (existing === undefined) throw new Error(`PendingEthRefundWithdrawn for auction ${log.address} has no authenticated active refund episode`)
+						if (amountAttoEth === 0n || amountAttoEth !== BigInt(existing.pendingAttoEth)) throw new Error(`PendingEthRefundWithdrawn amount does not match the active refund episode for auction ${log.address}`)
+						delete auctionRefunds[key]
+					}
+					continue
+				}
+				if (topic0 !== BID_SUBMITTED && topic0 !== BID_SETTLED) continue
+				const bidder = topicAddress(log.topics[1], 'Auction bidder')
+				if (bidder.toLowerCase() !== context.wallet.toLowerCase()) continue
+				const tick = signed256(topicUnsigned(log.topics[2], 'Auction tick')).toString()
+				const index = topicUnsigned(log.topics[3], 'Auction bid index').toString()
+				const bids = auctionBids[key] ?? []
+				const existing = bids.find(bid => bid.tick === tick && bid.index === index)
+				if (topic0 === BID_SUBMITTED) {
+					const bid: AuctionBidSnapshot = { amountAttoEth: readUnsigned(hexToBytes(log.data), 0, 32).toString(), index, refunded: false, tick }
+					if (existing === undefined) bids.push(bid)
+					else Object.assign(existing, bid)
+				} else if (existing !== undefined) existing.refunded = true
+				auctionBids[key] = bids
+			}
+		}
+		if (context.escalationGames.length > 0) {
+			const routeByGame = new Map(context.escalationGames.map(route => [route.escalationGame.toLowerCase(), route]))
+			const escalationLogs = orderedCanonicalLogs(rawEscalationLogs, fromBlock, toBlock, 'Escalation deposit index')
+			const pendingLocal: Array<{ game: Address; pool: Address; vault: Address; outcome: number; amountAttoRep: CanonicalUintString; parentDepositIndex: string; cumulative: string }> = []
+			for (const log of escalationLogs) {
+				const topic0 = log.topics[0]
+				const route = routeByGame.get(log.address.toLowerCase())
+				if (route === undefined) throw new Error(`Indexed escalation game ${log.address} has no pool route`)
+				if (topic0 === LOCAL_DEPOSIT_APPENDED) {
+					const data = hexToBytes(log.data)
+					pendingLocal.push({
+						amountAttoRep: readUnsigned(data, 0, 32).toString(),
+						cumulative: readUnsigned(data, 64, 32).toString(),
+						game: route.escalationGame,
+						outcome: bigintToSafeNumber(topicUnsigned(log.topics[2], 'Escalation outcome'), 'Escalation outcome'),
+						parentDepositIndex: readUnsigned(data, 32, 32).toString(),
+						pool: route.pool,
+						vault: topicAddress(log.topics[3], 'Escalation depositor'),
+					})
+				} else if (topic0 === DEPOSIT_ON_OUTCOME) {
+					const data = hexToBytes(log.data)
+					const vault = topicAddress(log.topics[1], 'Escalation depositor')
+					const outcome = bigintToSafeNumber(topicUnsigned(log.topics[2], 'Escalation outcome'), 'Escalation outcome')
+					const amountAttoRep = readUnsigned(data, 0, 32).toString()
+					const cumulative = readUnsigned(data, 64, 32).toString()
+					const pendingIndex = pendingLocal.findIndex(candidate => candidate.game.toLowerCase() === route.escalationGame.toLowerCase() && candidate.vault.toLowerCase() === vault.toLowerCase() && candidate.outcome === outcome && candidate.amountAttoRep === amountAttoRep && candidate.cumulative === cumulative)
+					const local = pendingIndex < 0 ? undefined : pendingLocal.splice(pendingIndex, 1)[0]
+					if (local === undefined) throw new Error(`DepositOnOutcome for ${vault} has no matching LocalDepositAppended event`)
+					const depositIndex = readUnsigned(data, 32, 32).toString()
+					const existing = escalationDeposits.find(deposit => deposit.escalationGame.toLowerCase() === route.escalationGame.toLowerCase() && deposit.outcome === outcome && deposit.depositIndex === depositIndex)
+					const deposit: EscalationDepositSnapshot = { amountAttoRep, claimed: false, depositIndex, escalationGame: route.escalationGame, outcome, parentDepositIndex: local.parentDepositIndex, pool: route.pool, vault }
+					if (existing === undefined) escalationDeposits.push(deposit)
+					else Object.assign(existing, deposit)
+				} else if (topic0 === CLAIM_DEPOSIT) {
+					const vault = topicAddress(log.topics[1], 'Escalation claimant')
+					const outcome = bigintToSafeNumber(topicUnsigned(log.topics[2], 'Escalation outcome'), 'Escalation outcome')
+					const parentDepositIndex = topicUnsigned(log.topics[3], 'Parent deposit index').toString()
+					const deposit = escalationDeposits.find(candidate => candidate.escalationGame.toLowerCase() === route.escalationGame.toLowerCase() && candidate.vault.toLowerCase() === vault.toLowerCase() && candidate.outcome === outcome && candidate.parentDepositIndex === parentDepositIndex)
+					if (deposit !== undefined) deposit.claimed = true
+				} else if (topic0 === CARRY_DEPOSIT_CONSUMED) {
+					const parentDepositIndex = topicUnsigned(log.topics[1], 'Consumed parent deposit index').toString()
+					const vault = topicAddress(log.topics[3], 'Consumed escalation depositor')
+					const outcome = bigintToSafeNumber(readUnsigned(hexToBytes(log.data), 0, 32), 'Consumed escalation outcome')
+					const deposit = escalationDeposits.find(candidate => candidate.escalationGame.toLowerCase() === route.escalationGame.toLowerCase() && candidate.vault.toLowerCase() === vault.toLowerCase() && candidate.outcome === outcome && candidate.parentDepositIndex === parentDepositIndex)
+					if (deposit !== undefined) deposit.claimed = true
+				}
+			}
+			if (pendingLocal.length > 0) throw new Error('Escalation log range ended with unmatched local deposit events')
+		}
+		fromBlock = toBlock + 1n
 	}
 	for (const [reportId, report] of reports) {
 		const stateHash = await context.client.readContract({ abi: openOracleAbi, address: context.openOracle, args: [BigInt(reportId)], blockNumber: toBlock, functionName: 'oracleGame' })
 		reports.set(reportId, { ...report, stateHash })
 	}
 	requireTrustedReportBounds(context, reports, trustedReport)
-	const cursorHash = toBlock === context.anchorBlockNumber ? anchorHash : await requireCanonicalBlock(context.client, toBlock)
+	if (toBlock !== context.anchorBlockNumber) throw new Error('Protocol index scan ended before its anchor block')
 	const index: ChaosProtocolIndex = {
 		auctionBids: activeAuctionBids(auctionBids),
 		auctionRefunds: activeAuctionRefunds(auctionRefunds),
 		chainId: context.chainId,
 		childRepSplits: sortedChildRepSplits([...childRepSplits.values()]),
-		cursor: { blockHash: cursorHash, blockNumber: toBlock.toString() },
+		cursor: { blockHash: anchorHash, blockNumber: toBlock.toString() },
 		escalationDeposits: activeEscalationDeposits(escalationDeposits),
 		migrationRepSplits: sortedMigrationRepSplits([...migrationRepSplits.values()]),
 		openOracle: context.openOracle,
@@ -698,10 +683,11 @@ export async function updateProtocolIndex(context: UpdateProtocolIndexContext): 
 		schemaVersion: 3,
 		securityPoolForker: context.securityPoolForker,
 		startBlock: context.startBlock.toString(),
+		...(partialHistory ? { availableStartBlock: availableStartBlock.toString() } : {}),
 		wallet: context.wallet,
 		zoltar: context.zoltar,
 	}
-	return { complete: toBlock === context.anchorBlockNumber, fromBlock: fromBlock.toString(), index, toBlock: toBlock.toString() }
+	return { complete: !partialHistory && toBlock === context.anchorBlockNumber, fromBlock: scanFromBlock.toString(), index, toBlock: toBlock.toString() }
 }
 
 export function protocolIndexDiscoveryInputs(index: ChaosProtocolIndex) {

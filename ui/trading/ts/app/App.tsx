@@ -1,37 +1,51 @@
+import { securityPoolAddressFromRoute } from '../features/liveTradingControllerHelpers.js'
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
-import type { PublicClient } from '@zoltar/shared/ethereum'
+import type { PublicClient } from '@zoltar/core-shared/evm/ethereum'
 import { Help } from '../features/Help.js'
 import { LiveTrading } from '../features/LiveTrading.js'
 import { UniverseSelector } from '../components/UniverseSelector.js'
 import { WalletSummary } from '../components/WalletSummary.js'
-import { TradingAddressValue } from '../components/TradingAddress.js'
 import { buildLiveUniverseOptions, type UniverseOption } from '../lib/universeOptions.js'
 import { routeOwnsLiveWallet, walletSummaryAfterRouteChange, walletSummaryForUniverse, type WalletSummaryState } from '../lib/walletSummaryState.js'
 import { TradingDeploymentSetup, type DeploymentWalletState, type TradingDeploymentSetupServices } from '../features/TradingDeploymentSetup.js'
 import type { DeploymentConfiguration } from '../protocol/config.js'
 import { loadCoreDeployments } from '../protocol/coreDeployments.js'
-import { deploymentConfigurationForPlan, getTradingDeploymentPlan, loadTradingDeploymentStatus, type CoreDeployment } from '../protocol/deployment.js'
-import { createTradingPublicClient, publicErrorMessage, validateRpcChainId } from '../protocol/live.js'
-import { shortAddress } from '../lib/format.js'
+import { resolveInstalledTradingDeployment, type CoreDeployment } from '../protocol/deployment.js'
+import { createTradingPublicClient, publicErrorMessage, validateRpcChainId, waitForActiveEnvironmentReady } from '../protocol/live.js'
 import { getActiveNetworkProfile, getActiveSimulationController } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { withTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import * as appCopy from '../copy/app.js'
+import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { AppHeaderShell } from '@zoltar/ui-core-shared/app/components/AppHeaderShell.js'
 import { AppPageHeading } from '@zoltar/ui-core-shared/app/components/AppPageHeading.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
+import { HeaderToolbar } from '@zoltar/ui-core-shared/components/HeaderToolbar.js'
+import { ToolbarField } from '@zoltar/ui-core-shared/components/ToolbarField.js'
+import { hasTradingWalletControls, TradingWalletControls } from '../components/TradingWalletControls.js'
 import { initializeTradingActiveEnvironment } from './activeEnvironment.js'
-import { getTradingEnvironmentLocationKey, getTradingRouteHref, tradingRouting, type TradingRoute } from '../lib/routing.js'
+import { getTradingEnvironmentLocationKey, getTradingRouteHref, tradingRouting, tradingWorkflowRoute, type TradingRoute } from '../lib/routing.js'
 
 type ResolvedTradingRoute = TradingRoute | 'not-found'
 
-export function currentRoute(): ResolvedTradingRoute {
+/** Browse routes highlight the workflow tab they feed: markets serve trading, SecurityPools serve market creation. */
+function tradingNavigationRoute(workflowRoute: ReturnType<typeof tradingWorkflowRoute<ResolvedTradingRoute>>) {
+	if (workflowRoute === 'markets') return 'market'
+	if (workflowRoute === 'security-pools') return 'create-market'
+	return workflowRoute
+}
+
+function currentRoute(): ResolvedTradingRoute {
 	return tradingRouting.resolve(window.location.hash)
 }
 
-export function tradingDocumentTitle(route: ResolvedTradingRoute) {
+function tradingDocumentTitle(route: ResolvedTradingRoute) {
 	let label = `${route.charAt(0).toUpperCase()}${route.slice(1)}`
 	if (route === 'not-found') label = appCopy.notFound
-	if (route === 'market') label = appCopy.market
+	if (route === 'create-market' || route.startsWith('create-market/')) label = appCopy.createMarket
+	if (route === 'market' || route.startsWith('market/')) label = appCopy.market
+	if (route === 'markets') label = appCopy.browseMarkets
+	if (route === 'security-pools') label = appCopy.browseSecurityPools
+	if (route.startsWith('liquidity/')) label = appCopy.liquidity
 	if (route.startsWith('security-pool/')) label = appCopy.securityPool
 	return appCopy.documentTitle(label)
 }
@@ -44,8 +58,8 @@ function renderNotFoundRoute() {
 	return (
 		<main class='route' id='main-content'>
 			<RouteHeader title={appCopy.pageNotFound} />
-			<a class='primary-link' href={getTradingRouteHref('#/markets')}>
-				{appCopy.returnToMarkets}
+			<a class='primary-link' href={getTradingRouteHref('#/market')}>
+				{appCopy.returnToMarket}
 			</a>
 		</main>
 	)
@@ -53,40 +67,26 @@ function renderNotFoundRoute() {
 
 type LiveDeploymentStatus = 'loading' | 'verified' | 'unavailable'
 
-export async function resolveCanonicalLiveDeployment(coreDeployments: readonly CoreDeployment[], createPublicClient: (configuration: DeploymentConfiguration) => PublicClient = createTradingPublicClient) {
+async function resolveCanonicalLiveDeployment(coreDeployments: readonly CoreDeployment[], createPublicClient: (configuration: DeploymentConfiguration) => PublicClient = createTradingPublicClient) {
 	const activeChainId = getActiveNetworkProfile().chain.id
 	const core = coreDeployments.find(deployment => deployment.chainId === activeChainId)
 	if (core === undefined) throw new Error('No canonical deployment is available for the active network')
-	const plan = getTradingDeploymentPlan(core, 30)
-	const configuration = deploymentConfigurationForPlan(plan, core.defaultRpcUrl)
-	const client = createPublicClient(configuration)
+	const bootstrapConfiguration: DeploymentConfiguration = { chainId: core.chainId, chainName: core.chainName, factory: core.securityPoolFactory, feeBps: 30, router: core.securityPoolFactory, rpcUrl: core.defaultRpcUrl, securityPoolFactory: core.securityPoolFactory, zoltar: core.zoltar }
+	const client = createPublicClient(bootstrapConfiguration)
 	validateRpcChainId(await withTimeout(client.getChainId(), 15_000, 'Trading RPC chain verification timed out'), core.chainId)
-	const status = await withTimeout(loadTradingDeploymentStatus(client, plan), 15_000, 'Trading deployment verification timed out')
-	if (!status.factory || !status.router) throw new Error('Trading contracts have not been deployed')
-	return configuration
+	return await withTimeout(resolveInstalledTradingDeployment(client, core, 30, core.defaultRpcUrl), 15_000, 'Trading deployment verification timed out')
 }
 
 async function resolveLiveDeployment() {
+	await waitForActiveEnvironmentReady()
 	return await resolveCanonicalLiveDeployment(await loadCoreDeployments())
 }
 
-export function tradingNetworkLabel(liveDeploymentStatus: LiveDeploymentStatus, liveConfiguration: DeploymentConfiguration | undefined, deploymentWalletState: DeploymentWalletState) {
+function tradingNetworkLabel(liveDeploymentStatus: LiveDeploymentStatus, liveConfiguration: DeploymentConfiguration | undefined, deploymentWalletState: DeploymentWalletState) {
 	const networkName = deploymentWalletState.networkName ?? liveConfiguration?.chainName
 	if (networkName !== undefined) return networkName
 	if (liveDeploymentStatus === 'unavailable') return appCopy.networkUnavailable
 	return appCopy.checkingDeployment
-}
-
-function networkToneClass(liveDeploymentStatus: LiveDeploymentStatus) {
-	if (liveDeploymentStatus === 'unavailable') return ' network-pill--warn'
-	if (liveDeploymentStatus !== 'verified') return ' network-pill--neutral'
-	return ''
-}
-
-function deploymentWalletLabel(state: DeploymentWalletState) {
-	if (state.connecting) return appCopy.connectingWallet
-	if (state.account === undefined) return appCopy.connectWallet
-	return <TradingAddressValue value={state.account} />
 }
 
 export function App({
@@ -97,7 +97,7 @@ export function App({
 	deploymentSetupServices?: TradingDeploymentSetupServices
 	initializeEnvironment?: () => Promise<unknown>
 	loadLiveDeployment?: () => Promise<DeploymentConfiguration>
-} = {}) {
+}) {
 	const [route, setRoute] = useState(currentRoute)
 	const [liveDeploymentStatus, setLiveDeploymentStatus] = useState<LiveDeploymentStatus>('loading')
 	const [liveConfiguration, setLiveConfiguration] = useState<DeploymentConfiguration>()
@@ -141,7 +141,10 @@ export function App({
 	}, [])
 	const updateDeploymentWalletState = useCallback((state: DeploymentWalletState) => setDeploymentWalletState(state), [])
 	const deploymentSetupActive = route !== 'not-found' && route !== 'help' && (route === 'deploy' || liveDeploymentStatus === 'unavailable')
-	const displayedRoute = deploymentSetupActive ? 'deploy' : route
+	const addressedPool = securityPoolAddressFromRoute(route)
+	const workflowRoute = tradingWorkflowRoute(route)
+	const navigationRoute = tradingNavigationRoute(workflowRoute)
+	const displayedRoute = deploymentSetupActive ? 'deploy' : navigationRoute
 	const refreshActiveEnvironment = useCallback(async () => {
 		const previousLocationKey = activeEnvironmentLocationRef.current
 		const nextLocationKey = getTradingEnvironmentLocationKey()
@@ -239,72 +242,71 @@ export function App({
 			/>
 		)
 	const simulationController = getActiveSimulationController()
+	const walletSlot = { deploymentSetupActive, liveDeploymentStatus, routeOwnsLiveWallet: routeOwnsLiveWallet(route) }
+	const showWalletControls = hasTradingWalletControls(walletSlot)
 	return (
 		<div class='app-shell'>
-			<AppPageHeading mainElementId='main-content' formatDocumentTitle={appCopy.documentTitle} pageTitle={tradingPageTitle(displayedRoute)} />
+			<AppPageHeading mainElementId='main-content' formatDocumentTitle={appCopy.documentTitle} pageTitle={tradingPageTitle(deploymentSetupActive ? 'deploy' : route)} />
 			<AppHeaderShell
 				mainElementId='main-content'
 				simulationController={simulationController}
 				onEnvironmentChanged={refreshActiveEnvironment}
 				onRefresh={async () => window.location.reload()}
-				renderHeader={(simulationBanner, settingsMenu) => (
-					<div class='site-chrome'>
-						{simulationBanner}
-						<header class={`site-header${deploymentSetupActive ? ' site-header--deployment' : ''}`}>
-							<a class='brand' href={getTradingRouteHref('#/markets')} aria-label={appCopy.appHomeLabel} aria-disabled={workflowLocked} onClick={workflowLocked ? event => event.preventDefault() : undefined}>
-								<img class='brand__mark' src='./favicon.svg' alt='' />
-								<span>
-									<strong>{appCopy.appName}</strong>
-								</span>
-							</a>
-							<nav aria-label={appCopy.primaryNavigationLabel}>
-								{liveDeploymentStatus !== 'verified' ? (
-									<a aria-current={displayedRoute === 'deploy' ? 'page' : undefined} aria-disabled={workflowLocked} href={getTradingRouteHref('#/deploy')} onClick={workflowLocked ? event => event.preventDefault() : undefined}>
-										{appCopy.deploy}
-									</a>
-								) : null}
-								<a aria-current={displayedRoute === 'markets' ? 'page' : undefined} aria-disabled={workflowLocked} href={getTradingRouteHref('#/markets')} onClick={workflowLocked ? event => event.preventDefault() : undefined}>
-									{appCopy.markets}
-								</a>
-								<a aria-current={displayedRoute === 'liquidity' ? 'page' : undefined} aria-disabled={workflowLocked} href={getTradingRouteHref('#/liquidity')} onClick={workflowLocked ? event => event.preventDefault() : undefined}>
-									{appCopy.liquidity}
-								</a>
-								<a aria-current={displayedRoute === 'portfolio' ? 'page' : undefined} aria-disabled={workflowLocked} href={getTradingRouteHref('#/portfolio')} onClick={workflowLocked ? event => event.preventDefault() : undefined}>
-									{appCopy.portfolio}
-								</a>
-								<a aria-current={displayedRoute === 'help' ? 'page' : undefined} aria-disabled={workflowLocked} href={getTradingRouteHref('#/help')} onClick={workflowLocked ? event => event.preventDefault() : undefined}>
-									{appCopy.help}
-								</a>
-							</nav>
-							<div class={`header-actions${deploymentSetupActive ? ' header-actions--deployment' : ''}`}>
-								{settingsMenu}
-								<span class={`network-pill${networkToneClass(liveDeploymentStatus)}`}>
-									<span />
-									{tradingNetworkLabel(liveDeploymentStatus, liveConfiguration, deploymentWalletState)}
-								</span>
-								{showUniverseSelector ? <WalletSummary summary={walletSummary} onRetry={retryWalletSummary} /> : null}
-								{showUniverseSelector ? <UniverseSelector options={liveUniverseOptions} selectedId={selectedUniverseId} disabled={workflowLocked} onChange={setSelectedUniverseId} /> : null}
-								{deploymentSetupActive ? (
-									<button
-										class='wallet-button'
-										type='button'
-										disabled={workflowLocked || deploymentWalletState.connecting || !deploymentWalletState.ready}
-										aria-busy={deploymentWalletState.connecting}
-										aria-label={deploymentWalletState.account === undefined ? undefined : appCopy.disconnectWalletLabel(deploymentWalletState.account)}
-										title={deploymentWalletState.account === undefined ? undefined : appCopy.disconnectWallet}
-										onClick={() => setDeploymentWalletRequestNonce(current => current + 1)}
-									>
-										{deploymentWalletLabel(deploymentWalletState)}
-									</button>
-								) : null}
-								{liveDeploymentStatus === 'verified' && routeOwnsLiveWallet(route) ? (
-									<button class='wallet-button' type='button' disabled={workflowLocked} onClick={() => setWalletConnectRequestNonce(current => current + 1)}>
-										{walletSummary.account === undefined ? appCopy.connectWallet : shortAddress(walletSummary.account)}
-									</button>
-								) : null}
-							</div>
-						</header>
-					</div>
+				tabNavigation={{
+					route: displayedRoute,
+					showProtocolGuide: false,
+					tabs: [
+						...(liveDeploymentStatus !== 'verified' ? [{ route: 'deploy', hash: '#/deploy', label: appCopy.deploy }] : []),
+						{ route: 'market', hash: addressedPool === undefined ? '#/market' : `#/market/${addressedPool}`, label: appCopy.market },
+						{ route: 'liquidity', hash: addressedPool === undefined ? '#/liquidity' : `#/liquidity/${addressedPool}`, label: appCopy.liquidity },
+						{ route: 'portfolio', hash: '#/portfolio', label: appCopy.portfolio },
+						{ route: 'create-market', hash: '#/create-market', label: appCopy.createMarket },
+						{ route: 'help', hash: '#/help', label: appCopy.help },
+					].map(tab => ({ ...tab, disabled: workflowLocked })),
+					onRouteChange: nextRoute => {
+						if (workflowLocked) return
+						const hash = (nextRoute === 'liquidity' || nextRoute === 'market') && addressedPool !== undefined ? `#/${nextRoute}/${addressedPool}` : `#/${nextRoute}`
+						window.location.hash = getTradingRouteHref(hash)
+					},
+				}}
+				renderOverview={settingsMenu => (
+					<section class='overview-shell'>
+						<article class={`overview-panel overview-wallet-panel trading-overview${simulationController === undefined ? '' : ' is-simulation'}`}>
+							<HeaderToolbar
+								brand={
+									<>
+										<img src='./favicon.svg' alt='' width='28' height='28' />
+										{appCopy.appName}
+									</>
+								}
+								badges={<Badge tone={liveDeploymentStatus === 'unavailable' ? 'warning' : 'muted'}>{tradingNetworkLabel(liveDeploymentStatus, liveConfiguration, deploymentWalletState)}</Badge>}
+								controls={
+									!showWalletControls && !showUniverseSelector ? undefined : (
+										<>
+											{showWalletControls ? (
+												<TradingWalletControls
+													{...walletSlot}
+													account={walletSummary.account}
+													deploymentWalletState={deploymentWalletState}
+													onDeploymentWalletRequest={() => setDeploymentWalletRequestNonce(current => current + 1)}
+													onWalletConnectRequest={() => setWalletConnectRequestNonce(current => current + 1)}
+													simulation={simulationController !== undefined}
+													workflowLocked={workflowLocked}
+												/>
+											) : null}
+											{showUniverseSelector ? (
+												<ToolbarField label={appCopy.universe}>
+													<UniverseSelector options={liveUniverseOptions} selectedId={selectedUniverseId} disabled={workflowLocked} loading={liveDeploymentStatus === 'loading'} onChange={setSelectedUniverseId} />
+												</ToolbarField>
+											) : null}
+										</>
+									)
+								}
+								settings={settingsMenu}
+							/>
+							{showUniverseSelector ? <WalletSummary simulation={simulationController !== undefined} summary={walletSummary} onRetry={retryWalletSummary} /> : null}
+						</article>
+					</section>
 				)}
 			/>
 			{content}

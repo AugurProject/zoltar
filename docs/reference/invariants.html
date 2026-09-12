@@ -3,17 +3,17 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>Statoblast And Zoltar Invariants</title>
+		<title>Statoblast and Zoltar invariants</title>
 		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 		<link rel="stylesheet" href="../assets/css/docsShell.css" />
 	</head>
 	<body class="doc-openoracle invariants-catalog">
 		<main>
 			<header>
-				<h1>Statoblast And Zoltar Invariants</h1>
+				<h1>Statoblast and Zoltar invariants</h1>
 				<p>An invariant is a statement that must remain true at every successful external-call boundary, across every legal lifecycle transition, or under the economic assumptions named beside it. Reverts may interrupt a transition, but they must roll back all of its state and asset effects.</p>
-				<p>The catalog separates local contract guards from cross-contract properties and economic assumptions. It also records launch-critical properties that the current contracts do not preserve. A documented implementation choice is not automatically a safe invariant.</p>
-				<p>See the <a href="./security-model.html">Protocol Security Model</a> for assumptions A01–A28. Funded and underfunded clearing are explained in the <a href="../explanation/truth-auctions.html#clearing">Truth Auction clearing guide</a>; oracle notional and residual-loss analysis are explained in <a href="../explanation/open-oracle.html#intentional-economic-tradeoffs">OpenOracle Integration</a>.</p>
+				<p>The catalog separates local contract guards, automated release-tooling guards, cross-contract properties, and economic assumptions. Each entry names the strongest enforcement and evidence currently present; a documented implementation choice is not automatically a safe invariant.</p>
+				<p>See the <a href="./security-model.html">Protocol Security Model</a> for assumptions A01–A28. Funded and underfunded clearing are explained in the <a href="../explanation/truth-auctions.html#clearing">Truth Auction clearing guide</a>; oracle notional and residual-loss analysis are explained in <a href="./open-oracle.html#intentional-economic-tradeoffs">OpenOracle Integration</a>.</p>
 				<figure class="diagram diagram-wide" id="fig-invariant-layers" role="region" tabindex="0">
 					<div class="plot-chart" data-plot-chart="fig-invariant-layers" data-plot-width="920" data-plot-height="786" role="img" aria-label="Protocol invariant layers"><span class="plot-chart-fallback">Four connected layers run from local authority guards through cross-contract conservation and lifecycle liveness to economic security. A failure in an earlier layer invalidates the safety claims built above it.</span></div>
 					<p class="diagram-caption"><span class="figure-label">Invariant Dependency</span>Correct callers are necessary but insufficient. Their actions must conserve assets, every mandatory state transition must remain reachable, and the named participation and inclusion assumptions must hold where the protocol deliberately relies on economic incentives.</p>
@@ -25,7 +25,7 @@
 					<div data-primary-output><span>Matches</span><output class="invariant-result-count" data-invariant-count aria-live="polite">Loading invariants…</output></div>
 				</div>
 				<div class="invariant-explorer-controls">
-					<label>Search <input type="search" data-invariant-search placeholder="Search invariants" /></label>
+					<label>Filter invariants <input type="search" data-invariant-filter placeholder="Keyword or identifier" /></label>
 					<label
 						>Type
 						<select data-invariant-type>
@@ -54,7 +54,7 @@
 			</section>
 
 			<section id="standing">
-				<h2>Classification and Scope</h2>
+				<h2>Classification and scope</h2>
 				<p>Each entry separates the kind of property from its current enforcement status. A status describes the strongest claim supported by the local implementation and tests; it is not a formal proof. Changes to any contract named in the evidence column must preserve the full statement, not only the check performed in one function.</p>
 				<div class="table-scroll" role="region" aria-label="Invariant property types" tabindex="0">
 					<table>
@@ -105,19 +105,14 @@
 								<td>Protect it with cross-contract invariant and lifecycle tests.</td>
 							</tr>
 							<tr>
-								<td><strong>Open violation</strong></td>
-								<td>A concrete sequence reaches a state that contradicts the required property.</td>
-								<td>Fix before deployment and retain a regression test.</td>
-							</tr>
-							<tr>
 								<td><strong>Economic or external assumption</strong></td>
 								<td>Solidity cannot guarantee the property without honest participation, liquidity, or transaction inclusion.</td>
 								<td>State and monitor the assumption, and document both its failure mode and the guarantees deliberately excluded from the protocol model.</td>
 							</tr>
 							<tr>
-								<td><strong>Proposed guard</strong></td>
-								<td>The property closes a missing safety or verification boundary not currently represented as one assertion.</td>
-								<td>Add a contract check, model assertion, or invariant harness where practical.</td>
+								<td><strong>Automated tooling guard</strong></td>
+								<td>Release, deployment, or CI tooling rejects a mismatched artifact, address, or runtime-code identity before it is accepted.</td>
+								<td>Keep the check deterministic, run it in the documented release path, and test both matching and mismatched inputs.</td>
 							</tr>
 						</tbody>
 					</table>
@@ -147,12 +142,12 @@
 			</section>
 
 			<section class="callout" id="zoltar-invariants">
-				<h2>Zoltar Invariants</h2>
+				<h2>Zoltar invariants</h2>
 				<p>These properties govern core universe creation, REP supply, universe forks, deterministic child identities, and branch-specific REP migration.</p>
 			</section>
 
 			<section id="universes">
-				<h2>Universes, REP Supply, and Migration</h2>
+				<h2>Universes, REP supply, and migration</h2>
 				<div class="invariant-list">
 					<details class="invariant-entry" id="uni-01">
 						<summary><code>UNI-01</code><span class="invariant-title">One fork per universe</span></summary>
@@ -172,7 +167,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/Zoltar.sol"><code>Zoltar.forkUniverse</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/Zoltar.sol"><code>Zoltar.forkUniverse</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -196,9 +191,9 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/Zoltar.sol"><code>forkUniverse</code></a
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/Zoltar.sol"><code>forkUniverse</code></a
 										>,
-										<a href="../explanation/zoltar.html#global-question-scope">question model</a>
+										<a href="../explanation/zoltar.html#questions">question model</a>
 									</dd>
 								</div>
 								<div>
@@ -231,7 +226,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/Zoltar.sol"><code>getForkThresholdAttoRep</code> and <code>forkUniverse</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/Zoltar.sol"><code>getForkThresholdAttoRep</code> and <code>forkUniverse</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -255,7 +250,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/Zoltar.sol"><code>getChildUniverseId</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/Zoltar.sol"><code>getChildUniverseId</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -279,7 +274,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/Zoltar.sol"><code>deployChild</code> and <code>splitRepInternal</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/Zoltar.sol"><code>deployChild</code> and <code>splitRepInternal</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -303,7 +298,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/Zoltar.sol"><code>childMigrationRepAmounts</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/Zoltar.sol"><code>childMigrationRepAmounts</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -327,9 +322,9 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/Zoltar.sol"><code>splitRepInternal</code></a
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/Zoltar.sol"><code>splitRepInternal</code></a
 										>,
-										<a href="../../solidity/contracts/ReputationToken.sol"><code>ReputationToken</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/ReputationToken.sol"><code>ReputationToken</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -353,7 +348,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/Zoltar.sol"><code>childUniverseTheoreticalSupplySnapshotsAttoRep</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/Zoltar.sol"><code>childUniverseTheoreticalSupplySnapshotsAttoRep</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -377,8 +372,8 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/Zoltar.sol"><code>splitMigrationRep</code> and child universe accounting</a>, <a href="../../solidity/contracts/ReputationToken.sol"><code>ReputationToken</code> supply</a>,
-										<a href="../../solidity/ts/tests/zoltar.test.ts">aggregate child-supply invariant test</a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/Zoltar.sol"><code>splitMigrationRep</code> and child universe accounting</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/ReputationToken.sol"><code>ReputationToken</code> supply</a>,
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/zoltar.test.ts">aggregate child-supply invariant test</a>
 									</dd>
 								</div>
 							</dl>
@@ -388,7 +383,7 @@
 			</section>
 
 			<section id="questions">
-				<h2>Questions and Answer Classification</h2>
+				<h2>Questions and answer classification</h2>
 				<div class="invariant-list">
 					<details class="invariant-entry" id="qst-01">
 						<summary><code>QST-01</code><span class="invariant-title">Question registry and classifier coherence</span></summary>
@@ -411,8 +406,8 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/ZoltarQuestionData.sol"><code>createQuestion</code>, <code>getQuestions</code>, and answer classification</a>,
-										<a href="../../solidity/ts/tests/questionData.test.ts">registry and classifier invariant test</a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/ZoltarQuestionData.sol"><code>createQuestion</code>, <code>getQuestions</code>, and answer classification</a>,
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/questionData.test.ts">registry and classifier invariant test</a>
 									</dd>
 								</div>
 							</dl>
@@ -422,12 +417,12 @@
 			</section>
 
 			<section class="callout" id="statoblast-invariants">
-				<h2>Augur Statoblast Invariants</h2>
+				<h2>Augur Statoblast invariants</h2>
 				<p>These properties govern Statoblast deployment, SecurityPool accounting, fork migration, escalation, oracle operations, truth auctions, and the cross-contract lifecycle built on Zoltar universes.</p>
 			</section>
 
 			<section id="authority">
-				<h2>Authority and Deployment Identity</h2>
+				<h2>Authority and deployment identity</h2>
 				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="./security-model.html#assumption-a23">A23 verified deployments</a> and <a href="./security-model.html#assumption-a27">A27 cryptographic identity</a>.</p>
 				<div class="invariant-list">
 					<details class="invariant-entry" id="auth-01">
@@ -448,7 +443,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>SecurityPool.onlyValidOracle</code> and <code>onlyForker</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>SecurityPool.onlyValidOracle</code> and <code>onlyForker</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -472,9 +467,9 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/factories/SecurityPoolFactory.sol"><code>SecurityPoolFactory</code></a
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/SecurityPoolFactory.sol"><code>SecurityPoolFactory</code></a
 										>,
-										<a href="../../solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol"><code>setSecurityPool</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol"><code>setSecurityPool</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -522,9 +517,9 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/factories/SecurityPoolFactory.sol"><code>SecurityPoolFactory</code></a
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/SecurityPoolFactory.sol"><code>SecurityPoolFactory</code></a
 										>,
-										<a href="../../shared/ts/addressDerivation.ts"><code>addressDerivation.ts</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/testSupport/evm/securityPoolAddressDerivation.ts"><code>securityPoolAddressDerivation.ts</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -548,7 +543,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/SecurityPoolForker.sol"><code>SecurityPoolForker</code></a
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForker.sol"><code>SecurityPoolForker</code></a
 										>, interface and storage-layout regression tests
 									</dd>
 								</div>
@@ -583,8 +578,8 @@
 						<summary><code>AUTH-07</code><span class="invariant-title">Published deployment verification</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">For every published deployment address, the runtime-bytecode hash and constructor-installed dependencies must match the reviewed release manifest.</div>
-							<p class="invariant-example"><strong>Example:</strong> A manifest check fails when the published coordinator address contains code built with a different OpenOracle dependency.</p>
+							<div class="invariant-property">The release manifest must match the deterministic address calculation, and deployment tooling must reject installed planned contracts or bootstrap descendants whose runtime-code hash differs from the pinned release artifact.</div>
+							<p class="invariant-example"><strong>Example:</strong> Testnet deployment stops instead of treating a coordinator address as installed when its runtime bytecode differs from the expected hash.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -592,13 +587,13 @@
 								</div>
 								<div>
 									<dt>Enforcement status</dt>
-									<dd>Proposed guard</dd>
+									<dd>Automated tooling guard</dd>
 								</div>
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../reference/deployment-status.html">Deployment Status Oracle limits</a>, <a href="../mainnet-deployment-addresses.json">mainnet manifest</a>,
-										<a href="../sepolia-deployment-addresses.json">Sepolia manifest</a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/tooling/contracts/deploy-testnet.mts">runtime-code verification in the deployment plan</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/tooling/contracts/deployment-runtime-hashes.test.ts">runtime-hash regression tests</a>,
+										<a href="https://github.com/AugurProject/zoltar/blob/main/tooling/contracts/check-mainnet-deployment.mts">deterministic manifest freshness check</a>, <a href="../mainnet-deployment-addresses.json">mainnet manifest</a>, and <a href="../sepolia-deployment-addresses.json">Sepolia manifest</a>
 									</dd>
 								</div>
 							</dl>
@@ -609,7 +604,7 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">Every factory deployment record names one unique pool whose runtime parent, share token, universe, and question match the record. Its pool-to-origin reverse lookup and origin/universe forward lookup are mutual inverses, and its recorded share token authorizes that pool.</div>
-							<p class="invariant-example"><strong>Example:</strong> Looking up a child pool's origin and then resolving that origin with the child's universe returns the same child, not a pool from an <a href="../explanation/statoblast.html#pools">independent origin lineage</a> in that universe.</p>
+							<p class="invariant-example"><strong>Example:</strong> Looking up a child pool's origin and then resolving that origin with the child's universe returns the same child, not a pool from an independent origin lineage in that universe.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -622,8 +617,8 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/factories/SecurityPoolFactory.sol">factory registry and canonical lookups</a>, <a href="../../solidity/contracts/statoblast/tokens/ShareToken.sol">share-token authorization</a>,
-										<a href="../../solidity/ts/tests/statoblast/deploymentAndOwnForkEscalation.test.ts">stateful registry-bijection test</a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/SecurityPoolFactory.sol">factory registry and canonical lookups</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/tokens/ShareToken.sol">share-token authorization</a>,
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/deploymentAndOwnForkEscalation.test.ts">stateful registry-bijection test</a>
 									</dd>
 								</div>
 							</dl>
@@ -633,7 +628,7 @@
 			</section>
 
 			<section id="pool-accounting">
-				<h2>Pool Assets, Shares, and Vaults</h2>
+				<h2>Pool assets, shares, and vaults</h2>
 				<p>The raw ETH balance needs an explicit surplus term. Without it, forced ETH is indistinguishable from collateral and can change an exchange rate or lifecycle precondition.</p>
 				<div class="equation" id="eq-pool-eth-conservation" role="region" aria-label="ETH conservation equation" tabindex="0">
 					<math display="block" aria-label="All values in attoETH: raw ETH balance equals settlement collateral plus unallocated accrued fees plus total claimable vault fees plus explicit surplus" data-source="rawEthBalanceAttoEth = settlementCollateralAttoEth + unallocatedAccruedFeesAttoEth + totalClaimableVaultFeesAttoEth + explicitSurplusAttoEth">
@@ -673,8 +668,8 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/SecurityPool.sol">Pool ETH accounting</a>,
-										<a href="../../solidity/ts/tests/statoblastInvariant.test.ts">stateful exact-accounting invariant tests</a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol">Pool ETH accounting</a>,
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblastInvariant.test.ts">stateful exact-accounting invariant tests</a>
 									</dd>
 								</div>
 							</dl>
@@ -698,8 +693,8 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>receive</code>, tracked collateral, and fee redemption</a>,
-										<a href="../../solidity/contracts/statoblast/SecurityPoolForker.sol">auction finalization</a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>receive</code>, tracked collateral, and fee redemption</a>,
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForker.sol">auction finalization</a>
 									</dd>
 								</div>
 							</dl>
@@ -723,12 +718,12 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>createCompleteSet</code>, <code>setPoolFinancials</code>, <code>redeemCompleteSet</code>, and <code>redeemShares</code></a
-										>, <a href="../../solidity/contracts/statoblast/SecurityPoolOperationsDelegate.sol"><code>redeemCompleteSet</code> and <code>redeemShares</code> claim-exhaustion generation transitions</a>, <a href="../../solidity/contracts/statoblast/SecurityPoolSettlementDelegate.sol"><code>createCompleteSet</code> and <code>setValidatedSettlementCollateral</code></a
-										>, <a href="../../solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationDelegate.sol"><code>finalizeTruthAuctionRepair</code></a
-										>, <a href="../../solidity/contracts/statoblast/SecurityPoolForkerAuctionSettlementBase.sol"><code>_creditAuctionProceeds</code></a
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>createCompleteSet</code>, <code>setPoolFinancials</code>, <code>redeemCompleteSet</code>, and <code>redeemShares</code></a
+										>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolOperationsDelegate.sol"><code>redeemCompleteSet</code> and <code>redeemShares</code> claim-exhaustion generation transitions</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolSettlementDelegate.sol"><code>createCompleteSet</code> and <code>setValidatedSettlementCollateral</code></a
+										>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationDelegate.sol"><code>finalizeTruthAuctionRepair</code></a
+										>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForkerAuctionSettlementBase.sol"><code>_creditAuctionProceeds</code></a
 										>,
-										<a href="../../solidity/contracts/statoblast/SecurityPoolUtils.sol"><code>creditForkAuctionVault</code> and unassigned-position health checks</a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolUtils.sol"><code>creditForkAuctionVault</code> and unassigned-position health checks</a>
 									</dd>
 								</div>
 							</dl>
@@ -752,7 +747,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/SecurityPool.sol">Capacity ownership and withdrawal checks</a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol">Capacity ownership and withdrawal checks</a>
 									</dd>
 								</div>
 							</dl>
@@ -776,7 +771,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>attoRepToBackingUnits</code> and <code>backingUnitsToAttoRep</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>attoRepToBackingUnits</code> and <code>backingUnitsToAttoRep</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -800,7 +795,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/SecurityPool.sol">Fee accumulator and <code>redeemFees</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol">Fee accumulator and <code>redeemFees</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -824,7 +819,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>transferEth</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>transferEth</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -853,8 +848,8 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>getPoolAccountingSnapshot</code> and vault checkpointing</a>, <a href="../../solidity/contracts/statoblast/SecurityPoolForker.sol">truth-auction claim accounting</a>,
-										<a href="../../solidity/ts/tests/statoblastInvariant.test.ts">stateful ledger and claim-order invariant tests</a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>getPoolAccountingSnapshot</code> and vault checkpointing</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForker.sol">truth-auction claim accounting</a>,
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblastInvariant.test.ts">stateful ledger and claim-order invariant tests</a>
 									</dd>
 								</div>
 							</dl>
@@ -878,7 +873,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/tokens/ShareToken.sol"><code>mintCompleteSets</code> and <code>burnCompleteSets</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/tokens/ShareToken.sol"><code>mintCompleteSets</code> and <code>burnCompleteSets</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -902,7 +897,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>redeemCompleteSet</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>redeemCompleteSet</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -926,8 +921,8 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>attoEthToAttoShares</code> and the <code>createCompleteSet</code> wrapper</a>,
-										<a href="../../solidity/contracts/statoblast/SecurityPoolSettlementDelegate.sol"><code>createCompleteSet</code> settlement accounting</a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>attoEthToAttoShares</code> and the <code>createCompleteSet</code> wrapper</a>,
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolSettlementDelegate.sol"><code>createCompleteSet</code> settlement accounting</a>
 									</dd>
 								</div>
 							</dl>
@@ -951,9 +946,9 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>attoEthToAttoShares</code> and <code>redeemShares</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>attoEthToAttoShares</code> and <code>redeemShares</code></a>
 										and
-										<a href="../../solidity/contracts/statoblast/tokens/ShareToken.sol"><code>ShareToken.migrate</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/tokens/ShareToken.sol"><code>ShareToken.migrate</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -977,7 +972,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>redeemShares</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>redeemShares</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -1005,8 +1000,8 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/tokens/ShareToken.sol">ERC-1155 supply accounting</a>,
-										<a href="../../solidity/ts/tests/erc1155.test.ts">modeled holder-supply invariant test</a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/tokens/ShareToken.sol">ERC-1155 supply accounting</a>,
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/erc1155.test.ts">modeled holder-supply invariant test</a>
 									</dd>
 								</div>
 							</dl>
@@ -1030,8 +1025,8 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/SecurityPool.sol">Escrow checks</a>,
-										<a href="../../solidity/contracts/statoblast/EscalationGame.sol"><code>EscalationGame</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol">Escrow checks</a>,
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGame.sol"><code>EscalationGame</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -1055,9 +1050,9 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../explanation/liquidations.html">Liquidation design</a>, <a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>performLiquidation</code></a
+										<a href="../explanation/liquidations.html">Liquidation design</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>performLiquidation</code></a
 										>,
-										<a href="../../solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol"><code>executeStagedOperation</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol"><code>executeStagedOperation</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -1081,7 +1076,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/EscalationGameSettlement.sol"><code>withdrawDeposit</code></a
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameSettlement.sol"><code>withdrawDeposit</code></a
 										>, <a href="../explanation/liquidations.html">liquidation design</a>
 									</dd>
 								</div>
@@ -1106,9 +1101,9 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>_registerVault</code></a
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>_registerVault</code></a
 										>,
-										<a href="../../solidity/ts/tests/statoblastInvariant.test.ts">registry pagination and direct-claim boundary tests</a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblastInvariant.test.ts">registry pagination and direct-claim boundary tests</a>
 									</dd>
 								</div>
 							</dl>
@@ -1118,7 +1113,7 @@
 			</section>
 
 			<section id="forks">
-				<h2>Forks and Child Isolation</h2>
+				<h2>Forks and child isolation</h2>
 				<div class="invariant-list">
 					<details class="invariant-entry" id="fork-01">
 						<summary><code>FORK-01</code><span class="invariant-title">Parent pool finality</span></summary>
@@ -1141,7 +1136,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>isOperational</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>isOperational</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -1165,7 +1160,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/SecurityPoolForker.sol">Fork snapshot preparation</a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForker.sol">Fork snapshot preparation</a>
 									</dd>
 								</div>
 							</dl>
@@ -1189,7 +1184,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/SecurityPoolForker.sol"><code>getMigrationProxyAddress</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForker.sol"><code>getMigrationProxyAddress</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -1213,7 +1208,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/SecurityPoolForker.sol"><code>initiateSecurityPoolFork</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForker.sol"><code>initiateSecurityPoolFork</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -1237,8 +1232,8 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/SecurityPoolForker.sol"><code>forkActivationTime</code> recording and child guards</a>, <a href="../../solidity/contracts/statoblast/SecurityPoolUtils.sol"><code>MIGRATION_TIME</code></a
-										>, <a href="../../solidity/contracts/Zoltar.sol"><code>deployChild</code>, <code>addRepToMigrationBalance</code>, and <code>splitMigrationRep</code></a
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForker.sol"><code>forkActivationTime</code> recording and child guards</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolUtils.sol"><code>MIGRATION_TIME</code></a
+										>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/Zoltar.sol"><code>deployChild</code>, <code>addRepToMigrationBalance</code>, and <code>splitMigrationRep</code></a
 										>, migration deadline tests
 									</dd>
 								</div>
@@ -1263,10 +1258,10 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/SecurityPoolForker.sol"><code>_prepareForkState</code> external-fork authorization guard</a>,
-										<a href="../../solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationBase.sol"><code>_validateChildPoolDeployment</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForker.sol"><code>_prepareForkState</code> external-fork authorization guard</a>,
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationBase.sol"><code>_validateChildPoolDeployment</code></a>
 										and
-										<a href="../../solidity/contracts/statoblast/factories/SecurityPoolFactory.sol"><code>deployChildSecurityPool</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/SecurityPoolFactory.sol"><code>deployChildSecurityPool</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -1290,7 +1285,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationBase.sol"><code>_migrateNonEscrowedVaultAccounting</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationBase.sol"><code>_migrateNonEscrowedVaultAccounting</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -1303,8 +1298,7 @@
 							<div class="invariant-property">
 								Each selected child initializes the canonical carry snapshot and receives the complete aggregate continuation backing at most once. Optional vault cleanup only clears unresolved parent escalation-deposit accounting; it creates no child escrow and cannot change carried-proof eligibility. The continuation cannot resume until its game balance covers all effective unrelated-fork principal. For an own fork, initial backing must cover
 								<code>sourcePrincipalAtForkAttoRep - ⌊sourcePrincipalAtForkAttoRep / 5⌋</code>, the rounded-up 80% minimum, and the live balance must cover the unexported remainder after valid direct pre-resume claims.
-								<a href="../explanation/statoblast.html#migration"><code>sourcePrincipalAtForkAttoRep</code></a>
-								is the raw aggregate stored by the fork snapshot before effective direct-claim deductions.
+								<code>sourcePrincipalAtForkAttoRep</code> is the raw aggregate stored by the fork snapshot before effective direct-claim deductions.
 							</div>
 							<p class="invariant-example"><strong>Example:</strong> Creating the Yes child installs its snapshot and aggregate backing before Alice acts. Alice may later clear her unresolved parent escalation-deposit accounting, but that cleanup neither funds the child nor enables or disables her winning proof.</p>
 							<dl class="invariant-metadata">
@@ -1319,13 +1313,13 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationBase.sol"><code>_ensureChildEscalationBacking</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationBase.sol"><code>_ensureChildEscalationBacking</code></a>
 										,
-										<a href="../../solidity/contracts/statoblast/EscalationGame.sol"><code>resumeFromFork</code></a
-										>, <a href="../../solidity/contracts/statoblast/EscalationGameCarry.sol"><code>isForkCarryFundingComplete</code></a
-										>, <a href="../../solidity/contracts/statoblast/EscalationGameEscrow.sol"><code>_exportForkedEscrowByOutcome</code></a
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGame.sol"><code>resumeFromFork</code></a
+										>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameCarry.sol"><code>isForkCarryFundingComplete</code></a
+										>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameEscrow.sol"><code>_exportForkedEscrowByOutcome</code></a
 										>, and
-										<a href="../../solidity/ts/tests/auditEscalationForkBurnDivisor.test.ts">fork-backing regression tests</a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditEscalationForkBurnDivisor.test.ts">fork-backing regression tests</a>
 									</dd>
 								</div>
 							</dl>
@@ -1349,7 +1343,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationBase.sol"><code>_transferForkMigratedCollateralToChild</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationBase.sol"><code>_transferForkMigratedCollateralToChild</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -1373,7 +1367,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/tokens/ShareToken.sol"><code>ShareToken.migrate</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/tokens/ShareToken.sol"><code>ShareToken.migrate</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -1401,9 +1395,9 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/SecurityPoolForker.sol"><code>setTotalSharesAttoShares</code> during auction preparation</a>, <a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>attoSharesToAttoEth</code>, <code>redeemCompleteSet</code>, and <code>redeemShares</code></a
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForker.sol"><code>setTotalSharesAttoShares</code> during auction preparation</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>attoSharesToAttoEth</code>, <code>redeemCompleteSet</code>, and <code>redeemShares</code></a
 										>,
-										<a href="../../solidity/contracts/statoblast/tokens/ShareToken.sol"><code>mintCompleteSets</code> and persistent migration accounting</a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/tokens/ShareToken.sol"><code>mintCompleteSets</code> and persistent migration accounting</a>
 									</dd>
 								</div>
 							</dl>
@@ -1427,7 +1421,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/SecurityPoolForker.sol">Truth-auction start and finalization</a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForker.sol">Truth-auction start and finalization</a>
 									</dd>
 								</div>
 							</dl>
@@ -1437,7 +1431,7 @@
 			</section>
 
 			<section id="escalation">
-				<h2>Escalation Games and Carried Claims</h2>
+				<h2>Escalation Games and carried claims</h2>
 				<div class="invariant-list">
 					<details class="invariant-entry" id="esc-01">
 						<summary><code>ESC-01</code><span class="invariant-title">Total escrow reconciliation</span></summary>
@@ -1457,8 +1451,8 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/EscalationGameCarry.sol">Continuation initialization</a>,
-										<a href="../../solidity/contracts/statoblast/EscalationGameDepositDelegate.sol">truth-auction retention accounting</a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameCarry.sol">Continuation initialization</a>,
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameDepositDelegate.sol">truth-auction retention accounting</a>
 									</dd>
 								</div>
 							</dl>
@@ -1482,7 +1476,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/EscalationGameState.sol">Unresolved counters</a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameState.sol">Unresolved counters</a>
 									</dd>
 								</div>
 							</dl>
@@ -1553,7 +1547,7 @@
 								</div>
 								<div>
 									<dt>Primary evidence</dt>
-									<dd><a href="../../solidity/contracts/statoblast/EscalationGameCarry.sol">Carry nullifiers</a>, <a href="../reference/merkle-mountain-range.html">MMR proofs</a></dd>
+									<dd><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameCarry.sol">Carry nullifiers</a>, <a href="../reference/merkle-mountain-range.html">MMR proofs</a></dd>
 								</div>
 							</dl>
 						</div>
@@ -1576,7 +1570,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/EscalationGameEscrow.sol"><code>exportVaultUnresolvedTotalsWithoutTransfer</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameEscrow.sol"><code>exportVaultUnresolvedTotalsWithoutTransfer</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -1600,7 +1594,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/EscalationGameSettlement.sol"><code>withdrawDeposit</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameSettlement.sol"><code>withdrawDeposit</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -1624,7 +1618,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/EscalationGameSettlement.sol">Settlement</a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameSettlement.sol">Settlement</a>
 									</dd>
 								</div>
 							</dl>
@@ -1648,7 +1642,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/EscalationGame.sol"><code>EscalationGame</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGame.sol"><code>EscalationGame</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -1672,7 +1666,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/EscalationGameForker.sol">Forked claims</a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameForker.sol">Forked claims</a>
 									</dd>
 								</div>
 							</dl>
@@ -1696,7 +1690,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/EscalationGameSettlement.sol"><code>sweepResidualRepToSecurityPool</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameSettlement.sol"><code>sweepResidualRepToSecurityPool</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -1720,10 +1714,10 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>activateForkMode</code></a
-										>, <a href="../../solidity/contracts/statoblast/EscalationGameCalculations.sol"><code>getQuestionResolution</code></a
-										>, <a href="../../solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationBase.sol">fixed-outcome propagation</a>, and
-										<a href="../../solidity/contracts/statoblast/EscalationGameSettlement.sol">pool/game payout check</a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>activateForkMode</code></a
+										>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameCalculations.sol"><code>getQuestionResolution</code></a
+										>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationBase.sol">fixed-outcome propagation</a>, and
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameSettlement.sol">pool/game payout check</a>
 									</dd>
 								</div>
 							</dl>
@@ -1747,11 +1741,11 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/Zoltar.sol"><code>getNonDecisionThresholdAttoRep</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/Zoltar.sol"><code>getNonDecisionThresholdAttoRep</code></a>
 										,
-										<a href="../../solidity/contracts/statoblast/factories/SecurityPoolFactory.sol">origin threshold admission</a>, <a href="../../solidity/contracts/statoblast/factories/EscalationGameFactory.sol"><code>deployEscalationGame</code></a
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/SecurityPoolFactory.sol">origin threshold admission</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/EscalationGameFactory.sol"><code>deployEscalationGame</code></a
 										>, and
-										<a href="../../solidity/ts/tests/auditEscalationStartConfigLiveness.test.ts">start-liveness regression tests</a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auditEscalationStartConfigLiveness.test.ts">start-liveness regression tests</a>
 									</dd>
 								</div>
 							</dl>
@@ -1778,10 +1772,10 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/EscalationGameCarry.sol"><code>getForkCarrySnapshot</code> and <code>getForkCarryRoots</code></a
-										>, <a href="../../solidity/contracts/statoblast/EscalationGameProofVerifier.sol"><code>bagCarryPeaks</code></a
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameCarry.sol"><code>getForkCarrySnapshot</code> and <code>getForkCarryRoots</code></a
+										>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/EscalationGameProofVerifier.sol"><code>bagCarryPeaks</code></a
 										>,
-										<a href="../../solidity/ts/tests/escalationGame.test.ts">independent carry-structure invariant tests</a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/escalationGame.test.ts">independent carry-structure invariant tests</a>
 									</dd>
 								</div>
 							</dl>
@@ -1791,7 +1785,7 @@
 			</section>
 
 			<section id="oracle">
-				<h2>REP/ETH Oracle Operations</h2>
+				<h2>REP/ETH oracle operations</h2>
 				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="./security-model.html#assumption-a18">A18 independent correction incentive</a>, <a href="./security-model.html#assumption-a19">A19 observable correctable price</a>, and <a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>.</p>
 				<div class="callout" id="oracle-accepted-non-invariants">
 					<p><strong>Accepted oracle design properties—not security findings.</strong> Statoblast uses profitable correction, not operation-value collateralization. Report liquidity is intentionally not required to equal or bound the value of withdrawals, liquidations, capacity ownership changes, pool assets, or cumulative operations that use an accepted price.</p>
@@ -1817,7 +1811,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol"><code>openOracleCallback</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol"><code>openOracleCallback</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -1844,9 +1838,9 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol"><code>openOracleCallback</code></a
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol"><code>openOracleCallback</code></a
 										>,
-										<a href="../explanation/open-oracle.html">ratio direction</a>
+										<a href="./open-oracle.html">ratio direction</a>
 									</dd>
 								</div>
 							</dl>
@@ -1870,7 +1864,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol"><code>isPriceValid</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol"><code>isPriceValid</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -1894,7 +1888,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol"><code>executeStagedOperation</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol"><code>executeStagedOperation</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -1918,7 +1912,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol">Staging and snapshot checks</a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol">Staging and snapshot checks</a>
 									</dd>
 								</div>
 							</dl>
@@ -1942,7 +1936,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol"><code>executeStagedOperation</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol"><code>executeStagedOperation</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -1969,8 +1963,8 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol">active and pending staged-operation indexes</a>,
-										<a href="../../solidity/ts/tests/statoblastInvariant.test.ts">queue/index invariant test</a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol">active and pending staged-operation indexes</a>,
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblastInvariant.test.ts">queue/index invariant test</a>
 									</dd>
 								</div>
 							</dl>
@@ -1994,7 +1988,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/openOracle/OpenOracle.sol"><code>settle</code> and dispute validation</a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/OpenOracle.sol"><code>settle</code> and dispute validation</a>
 									</dd>
 								</div>
 							</dl>
@@ -2018,10 +2012,10 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol"><code>pendingReportSponsor</code> and <code>_withdrawOpenOracleReporterBalances</code></a
-										>, <a href="../../solidity/contracts/statoblast/openOracle/OpenOracle.sol"><code>deposit</code> and <code>withdrawTo</code></a
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol"><code>pendingReportSponsor</code> and <code>_withdrawOpenOracleReporterBalances</code></a
+										>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/OpenOracle.sol"><code>deposit</code> and <code>withdrawTo</code></a
 										>,
-										<a href="../../solidity/ts/tests/priceOracleSecurity.test.ts">coordinator/OpenOracle balance-domain test</a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/priceOracleSecurity.test.ts">coordinator/OpenOracle balance-domain test</a>
 									</dd>
 								</div>
 							</dl>
@@ -2051,7 +2045,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/UniformPriceDualCapBatchAuction.sol"><code>submitBid</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/UniformPriceDualCapBatchAuction.sol"><code>submitBid</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -2075,7 +2069,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/UniformPriceDualCapBatchAuction.sol"><code>computeClearing</code> and <code>finalize</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/UniformPriceDualCapBatchAuction.sol"><code>computeClearing</code> and <code>finalize</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -2099,7 +2093,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/UniformPriceDualCapBatchAuction.sol"><code>withdrawBids</code> and refund functions</a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/UniformPriceDualCapBatchAuction.sol"><code>withdrawBids</code> and refund functions</a>
 									</dd>
 								</div>
 							</dl>
@@ -2123,7 +2117,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/UniformPriceDualCapBatchAuctionStorage.sol"><code>allocateFromCumulativePosition</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/UniformPriceDualCapBatchAuctionStorage.sol"><code>allocateFromCumulativePosition</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -2171,9 +2165,9 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/SecurityPoolForker.sol">Auction-claim settlement</a>, <a href="../../solidity/contracts/statoblast/SecurityPoolForkerAuctionSettlementBase.sol"><code>_creditAuctionProceeds</code></a
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForker.sol">Auction-claim settlement</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForkerAuctionSettlementBase.sol"><code>_creditAuctionProceeds</code></a
 										>,
-										<a href="../../solidity/contracts/statoblast/SecurityPoolUtils.sol"><code>creditForkAuctionVault</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolUtils.sol"><code>creditForkAuctionVault</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -2224,7 +2218,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationDelegate.sol"><code>finalizeTruthAuctionRepair</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationDelegate.sol"><code>finalizeTruthAuctionRepair</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -2234,7 +2228,7 @@
 						<summary><code>AUC-09</code><span class="invariant-title">Bounded bid settlement</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">After the auction deadline, value-free finalization succeeds using migration-routed collateral plus retained auction ETH. Qualifying bids settle for REP, non-qualifying bids refund, and nonzero finalizer ETH reverts.</div>
+							<div class="invariant-property">At and after the auction deadline, value-free finalization succeeds using migration-routed collateral plus retained auction ETH. Qualifying bids settle for REP, non-qualifying bids refund, and nonzero finalizer ETH reverts.</div>
 							<p class="invariant-example"><strong>Example:</strong> For a 10 ETH target with 6 ETH migrated and 3 ETH retained from bids, the child activates with 9 ETH of accounted collateral and every bid can then settle.</p>
 							<dl class="invariant-metadata">
 								<div>
@@ -2249,7 +2243,7 @@
 									<dt>Primary evidence</dt>
 									<dd>
 										<a href="../explanation/truth-auctions.html">Weak-demand behavior</a>,
-										<a href="../../solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationDelegate.sol"><code>finalizeTruthAuctionRepair</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationDelegate.sol"><code>finalizeTruthAuctionRepair</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -2273,11 +2267,11 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/UniformPriceDualCapBatchAuction.sol"><code>_appendBid</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/UniformPriceDualCapBatchAuction.sol"><code>_appendBid</code></a>
 										and
-										<a href="../../solidity/contracts/statoblast/UniformPriceDualCapBatchAuctionStorage.sol">refund-prefix accounting</a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/UniformPriceDualCapBatchAuctionStorage.sol">refund-prefix accounting</a>
 										and
-										<a href="../../solidity/ts/tests/auction.test.ts">repeated tick deletion/recreation tests</a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auction.test.ts">repeated tick deletion/recreation tests</a>
 									</dd>
 								</div>
 							</dl>
@@ -2305,8 +2299,8 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/UniformPriceDualCapBatchAuctionStorage.sol">AVL tree and clearing</a>, <a href="../../solidity/contracts/statoblast/UniformPriceDualCapBatchAuction.sol">enumeration and auction integration</a>,
-										<a href="../../solidity/ts/tests/auction.test.ts">seeded independent-model and frozen-snapshot tests</a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/UniformPriceDualCapBatchAuctionStorage.sol">AVL tree and clearing</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/UniformPriceDualCapBatchAuction.sol">enumeration and auction integration</a>,
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auction.test.ts">seeded independent-model and frozen-snapshot tests</a>
 									</dd>
 								</div>
 							</dl>
@@ -2333,8 +2327,8 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/UniformPriceDualCapBatchAuction.sol"><code>finalize</code>, <code>withdrawBids</code>, and credited refunds</a>,
-										<a href="../../solidity/ts/tests/auction.test.ts">seeded and pull-refund ETH-liability tests</a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/UniformPriceDualCapBatchAuction.sol"><code>finalize</code>, <code>withdrawBids</code>, and credited refunds</a>,
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/auction.test.ts">seeded and pull-refund ETH-liability tests</a>
 									</dd>
 								</div>
 							</dl>
@@ -2344,7 +2338,7 @@
 			</section>
 
 			<section id="lifecycle">
-				<h2>Lifecycle, Liveness, Observability, and External Calls</h2>
+				<h2>Lifecycle, liveness, observability, and external calls</h2>
 				<p class="security-assumption-ref"><strong>Security assumptions:</strong> <a href="./security-model.html#assumption-a02">A02 viable operating costs</a>, <a href="./security-model.html#assumption-a16">A16 timely inclusion</a>, <a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>, and <a href="./security-model.html#assumption-a26">A26 Ethereum execution</a>.</p>
 				<div class="invariant-list">
 					<details class="invariant-entry" id="life-01">
@@ -2370,8 +2364,8 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/interfaces/ISecurityPool.sol"><code>SystemState</code></a
-										>, <a href="../../solidity/contracts/statoblast/SecurityPoolForker.sol">fork transitions</a>; see <code>FORK-12</code> for child accounting consistency.
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/ISecurityPool.sol"><code>SystemState</code></a
+										>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForker.sol">fork transitions</a>; see <code>FORK-12</code> for child accounting consistency.
 									</dd>
 								</div>
 							</dl>
@@ -2383,6 +2377,7 @@
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">Once a resolution, migration, auction-completion, or withdrawal function's documented semantic preconditions hold, dust, unsolicited balances, empty collections, or earlier permissionless calls cannot permanently prevent some caller from completing it.</div>
 							<p class="invariant-example"><strong>Example:</strong> Forced ETH and an empty losing-bid list do not prevent a caller from finalizing an otherwise complete truth auction.</p>
+							<p>The named <code>LIFE-02 fixed-point</code> stateful regressions combine empty zero-demand auctions, unsolicited ETH, repeated migration calls, shuffled partial migration, and bounded continuation progress, then require a reachable terminal child state with tracked accounting unchanged by the forced balance. The wider lifecycle audit also covers empty games and collections, repeated claims, delayed oracle operations, and recovery after failed callbacks. No permanent blocker was identified in those cases.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -2390,13 +2385,13 @@
 								</div>
 								<div>
 									<dt>Enforcement status</dt>
-									<dd>Proposed guard</dd>
+									<dd>Reviewed preservation</dd>
 								</div>
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<code>FORK-04</code>, <code>BAL-02</code>, and
-										<code>AUC-08</code>
+										<code>FORK-04</code>, <code>BAL-02</code>, and <code>AUC-08</code>; <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblastInvariant.test.ts">named <code>LIFE-02</code> fixed-point and stateful lifecycle regressions</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/truthAuction.test.ts">forced-balance and zero-demand auction regressions</a>, and
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/priceOracleSecurity.test.ts">oracle recovery and empty-vault regressions</a>
 									</dd>
 								</div>
 							</dl>
@@ -2428,8 +2423,8 @@
 						<summary><code>LIFE-04</code><span class="invariant-title">Deadline equality rules</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">Every deadline assigns equality to one documented side of the boundary: migration remains open at equality; auction bidding and public pool finalization are both closed at equality, and finalization opens immediately afterward; oracle disputes are closed and settlement is open at equality; staged operations expire only after equality; and an escalation result is final only after its end timestamp.</div>
-							<p class="invariant-example"><strong>Example:</strong> Exactly at an auction deadline, both a bid and public pool finalization revert; one second later, finalization succeeds.</p>
+							<div class="invariant-property">Every deadline assigns equality to one documented side of the boundary. A universe fork is allowed at question-end equality, while initial reporting opens one second later. Pool migration remains open at equality and auction start opens afterward. Auction bidding closes and finalization opens at equality. OpenOracle disputes close and settlement opens at equality. Cached oracle prices become stale at equality. Staged operations remain executable through equality and expire afterward. An escalation result becomes final only after its end timestamp. ERC-2612 permits include equality, while ERC-3009 authorizations use a strict validity window.</div>
+							<p class="invariant-example"><strong>Example:</strong> Exactly at an auction deadline, a bid reverts and public pool finalization succeeds; transaction ordering cannot reopen bidding.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -2437,11 +2432,14 @@
 								</div>
 								<div>
 									<dt>Enforcement status</dt>
-									<dd>Proposed guard</dd>
+									<dd>Contract guards and boundary tests</dd>
 								</div>
 								<div>
 									<dt>Primary evidence</dt>
-									<dd>Boundary tests across fork migration, auctions, escalation, and OpenOracle</dd>
+									<dd>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/zoltar.test.ts">question-end fork boundary</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/vaultAccounting.test.ts">initial-reporting boundary</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/truthAuction.test.ts">migration and auction boundaries</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/escalationGame.test.ts">escalation finality boundary</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/priceOracleSecurity.test.ts">cached-price and staged-operation boundaries</a>, and
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/openOracleDispute.test.ts">OpenOracle dispute and settlement boundary</a>
+									</dd>
 								</div>
 							</dl>
 						</div>
@@ -2486,8 +2484,8 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="./contracts.html">contract interaction reference</a>, <a href="../../solidity/ts/tests/eventReplay/eventReplayModel.ts">event replay model</a>,
-										<a href="../../solidity/ts/tests/eventReplay/eventReplay.test.ts">actual-log storage-equivalence tests</a>
+										<a href="./contracts.html">contract interaction reference</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/eventReplay/eventReplayModel.ts">event replay model</a>,
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/eventReplay/eventReplay.test.ts">actual-log storage-equivalence tests</a>
 									</dd>
 								</div>
 							</dl>
@@ -2514,9 +2512,9 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/SafeERC20Ops.sol"><code>SafeERC20Ops</code></a
-										>, <a href="../../solidity/contracts/GenesisReputationToken.sol"><code>GenesisReputationToken</code></a
-										>, <a href="../../solidity/contracts/statoblast/WETH9.sol"><code>WETH9</code></a
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/SafeERC20Ops.sol"><code>SafeERC20Ops</code></a
+										>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/GenesisReputationToken.sol"><code>GenesisReputationToken</code></a
+										>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/WETH9.sol"><code>WETH9</code></a
 										>, the network deployment manifests, and security assumption
 										<a href="./security-model.html#assumption-a21"><code>A21</code></a>
 									</dd>
@@ -2525,7 +2523,7 @@
 									<dt>Related enforced property</dt>
 									<dd>
 										Canonical child REP behavior is enforced by
-										<a href="../../solidity/contracts/ReputationToken.sol"><code>ReputationToken</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/ReputationToken.sol"><code>ReputationToken</code></a>
 										and its Zoltar-only mint and burn authority.
 									</dd>
 								</div>
@@ -2578,7 +2576,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="../../solidity/contracts/statoblast/SecurityPool.sol"><code>createCompleteSet</code> wrapper</a>, <a href="../../solidity/contracts/statoblast/SecurityPoolSettlementDelegate.sol"><code>createCompleteSet</code> accounting</a>, ERC-1155 receiver checks, and receiver callback tests
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>createCompleteSet</code> wrapper</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolSettlementDelegate.sol"><code>createCompleteSet</code> accounting</a>, ERC-1155 receiver checks, and receiver callback tests
 									</dd>
 								</div>
 								<div>
@@ -2603,11 +2601,14 @@
 								</div>
 								<div>
 									<dt>Enforcement status</dt>
-									<dd>Proposed guard</dd>
+									<dd>Contract guards and same-block tests</dd>
 								</div>
 								<div>
 									<dt>Primary evidence</dt>
-									<dd><code>ORA-08</code> and same-block auction ordering analysis</dd>
+									<dd>
+										<code>ORA-08</code>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/openOracleDispute.test.ts">same-block dispute and settlement ordering</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/priceOracleSecurity.test.ts">same-block staged execution and expiry ordering</a>, and
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/tests/statoblast/truthAuction.test.ts">same-block migration, bidding, and finalization ordering</a>
+									</dd>
 								</div>
 							</dl>
 						</div>

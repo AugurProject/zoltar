@@ -1,15 +1,14 @@
-export type ReportClock = 'block' | 'timestamp'
+import { compareBigint } from './compare.ts'
+type ReportClock = 'block' | 'timestamp'
 
 // BinaryOutcome in EscalationGame.sol: Invalid = 0, Yes = 1, No = 2.
 export const ESCALATION_OUTCOME = { invalid: '0', yes: '1', no: '2' } as const
 export const ETH_QUOTE_DECIMALS = 18
 export const USDC_QUOTE_DECIMALS = 6
-export const VAULT_WARNING_HEALTH_FACTOR_BPS = 12_000n
+const VAULT_WARNING_HEALTH_FACTOR_BPS = 12_000n
 const BPS_DENOMINATOR = 10_000n
 const PRICE_PRECISION = 10n ** 18n
 const LIQUIDATION_REP_BONUS_BPS = 500n
-
-export const quoteDecimalsFallback = (contractKind: string | undefined): number => (contractKind === 'usdc' ? USDC_QUOTE_DECIMALS : ETH_QUOTE_DECIMALS)
 
 export type ReportLifecycleInput = {
 	readonly eventName: 'ReportSubmitted' | 'ReportDisputed' | 'ReportSettled'
@@ -38,8 +37,7 @@ type ReportFieldChange = {
 
 type ReportRoundEvidence = Record<string, unknown>
 
-const reportRecord = (value: unknown): Record<string, unknown> =>
-	typeof value === 'object' && value !== null && !Array.isArray(value) ? Object.fromEntries(Object.entries(value)) : {}
+const reportRecord = (value: unknown): Record<string, unknown> => (typeof value === 'object' && value !== null && !Array.isArray(value) ? Object.fromEntries(Object.entries(value)) : {})
 
 const flattenReportFields = (value: unknown, path: string, fields: Map<string, unknown>): void => {
 	const record = reportRecord(value)
@@ -105,6 +103,12 @@ const nonNegative = (value: string | undefined): bigint | undefined => {
 	return BigInt(value)
 }
 
+/** Narrows a stored report event name to the lifecycle input union, treating unknown names as the initial submission. */
+export const reportLifecycleEventName = (eventName: unknown): ReportLifecycleInput['eventName'] => {
+	if (eventName === 'ReportSettled' || eventName === 'ReportDisputed') return eventName
+	return 'ReportSubmitted'
+}
+
 export const reportLifecycle = (input: ReportLifecycleInput): LifecycleState => {
 	const flags = nonNegative(input.flags) ?? 0n
 	const clock: ReportClock = (flags & 1n) === 1n ? 'timestamp' : 'block'
@@ -163,14 +167,6 @@ export const auctionLifecycle = (input: AuctionLifecycleInput): string => {
 	return 'Awaiting finalization'
 }
 
-export const priceFreshness = (indexedTimestamp: string, observedTimestamp: string | undefined, validitySeconds = 86_400n) => {
-	const indexed = nonNegative(indexedTimestamp)
-	const observed = nonNegative(observedTimestamp)
-	if (indexed === undefined || observed === undefined) return { state: 'Unavailable' as const }
-	const age = indexed > observed ? indexed - observed : 0n
-	return { state: age <= validitySeconds ? ('Fresh' as const) : ('Stale' as const), ageSeconds: age.toString() }
-}
-
 const positiveInteger = (value: unknown, name: string): bigint => {
 	if (typeof value !== 'string') throw new Error(`${name} must be a non-negative decimal integer`)
 	if (!/^\d+$/.test(value)) throw new Error(`${name} must be a non-negative integer`)
@@ -190,6 +186,13 @@ export type VaultRiskInput = {
 	readonly securityMultiplierBps: string
 	readonly targetHealthFactorBps: string
 	readonly badDebtAttoEth: unknown
+}
+
+const vaultHealthAssessment = (badDebt: bigint, healthFactor: bigint) => {
+	if (badDebt > 0n) return { protocolState: 'bad-debt' as const, scannerSeverity: 'critical' as const, scannerReason: 'Vault has recorded bad debt' }
+	if (healthFactor < BPS_DENOMINATOR) return { protocolState: 'liquidatable' as const, scannerSeverity: 'critical' as const, scannerReason: 'Exact contract health constraints fail at the liquidation boundary' }
+	if (healthFactor < VAULT_WARNING_HEALTH_FACTOR_BPS) return { protocolState: 'healthy' as const, scannerSeverity: 'warning' as const, scannerReason: `Health factor is below the scanner warning threshold of ${VAULT_WARNING_HEALTH_FACTOR_BPS} bps` }
+	return { protocolState: 'healthy' as const, scannerSeverity: 'healthy' as const, scannerReason: 'Health factor is above the scanner warning threshold' }
 }
 
 export const vaultRisk = (input: VaultRiskInput) => {
@@ -220,28 +223,14 @@ export const vaultRisk = (input: VaultRiskInput) => {
 		}
 	const baseRequired = ceilDiv(openInterest * price, PRICE_PRECISION)
 	const associatedBeforeFactor = ceilDiv(baseRequired * securityMultiplier, BPS_DENOMINATOR)
-	const migrationMultiplier = [BPS_DENOMINATOR + (securityMultiplier - BPS_DENOMINATOR) / 2n, BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS].reduce(
-		(maximum, candidate) => (candidate > maximum ? candidate : maximum),
-		0n,
-	)
+	const migrationMultiplier = [BPS_DENOMINATOR + (securityMultiplier - BPS_DENOMINATOR) / 2n, BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS].reduce((maximum, candidate) => (candidate > maximum ? candidate : maximum), 0n)
 	const freeBeforeFactor = ceilDiv(baseRequired * migrationMultiplier, BPS_DENOMINATOR)
 	const associatedFactor = associatedBeforeFactor === 0n ? 0n : ((backing + dispute) * BPS_DENOMINATOR) / associatedBeforeFactor
 	const freeFactor = freeBeforeFactor === 0n ? 0n : (backing * BPS_DENOMINATOR) / freeBeforeFactor
 	const healthFactor = associatedFactor < freeFactor ? associatedFactor : freeFactor
-	const protocolState = badDebt > 0n ? ('bad-debt' as const) : healthFactor < BPS_DENOMINATOR ? ('liquidatable' as const) : ('healthy' as const)
-	const scannerSeverity =
-		protocolState !== 'healthy' ? ('critical' as const) : healthFactor < VAULT_WARNING_HEALTH_FACTOR_BPS ? ('warning' as const) : ('healthy' as const)
+	const assessment = vaultHealthAssessment(badDebt, healthFactor)
 	return {
-		protocolState,
-		scannerSeverity,
-		scannerReason:
-			badDebt > 0n
-				? 'Vault has recorded bad debt'
-				: healthFactor < BPS_DENOMINATOR
-					? 'Exact contract health constraints fail at the liquidation boundary'
-					: healthFactor < VAULT_WARNING_HEALTH_FACTOR_BPS
-						? `Health factor is below the scanner warning threshold of ${VAULT_WARNING_HEALTH_FACTOR_BPS} bps`
-						: 'Health factor is above the scanner warning threshold',
+		...assessment,
 		healthFactorBps: healthFactor.toString(),
 		targetHealthFactorBps: target.toString(),
 		liquidationBoundaryBps: BPS_DENOMINATOR.toString(),
@@ -336,13 +325,13 @@ export const fixedWindowTwap = (observations: readonly ExactPriceObservation[], 
 	const end = positiveInteger(windowEnd, 'windowEnd')
 	if (end <= start) throw new Error('TWAP window end must be after its start')
 	const ordered = observations
-		.map((observation) => ({
+		.map(observation => ({
 			timestamp: positiveInteger(observation.timestamp, 'observation timestamp'),
 			numerator: positiveInteger(observation.numerator, 'price numerator'),
 			denominator: positiveInteger(observation.denominator, 'price denominator'),
 		}))
 		.filter(({ denominator }) => denominator > 0n)
-		.sort((left, right) => (left.timestamp < right.timestamp ? -1 : left.timestamp > right.timestamp ? 1 : 0))
+		.sort((left, right) => compareBigint(left.timestamp, right.timestamp))
 	let active = [...ordered].reverse().find(({ timestamp }) => timestamp <= start)
 	let cursor = start
 	let weightedNumerator = 0n
@@ -391,7 +380,7 @@ export const auctionDemandCurve = (bids: readonly { readonly tick: string; reado
 	}
 	let cumulative = 0n
 	return [...totals]
-		.sort(([left], [right]) => (left > right ? -1 : left < right ? 1 : 0))
+		.sort(([left], [right]) => compareBigint(right, left))
 		.map(([tick, amountAttoEth]) => {
 			cumulative += amountAttoEth
 			return { tick: tick.toString(), amountAttoEth: amountAttoEth.toString(), cumulativeDemandAttoEth: cumulative.toString() }
@@ -414,7 +403,7 @@ export const candlestickBuckets = (observations: readonly ExactPriceObservation[
 	const compare = (left: { numerator: bigint; denominator: bigint }, right: { numerator: bigint; denominator: bigint }): number => {
 		const leftScaled = left.numerator * right.denominator
 		const rightScaled = right.numerator * left.denominator
-		return leftScaled < rightScaled ? -1 : leftScaled > rightScaled ? 1 : 0
+		return compareBigint(leftScaled, rightScaled)
 	}
 	const serialized = (value: { numerator: bigint; denominator: bigint }) => ({
 		numerator: value.numerator.toString(),
@@ -423,7 +412,7 @@ export const candlestickBuckets = (observations: readonly ExactPriceObservation[
 	return [...buckets]
 		.sort(([left], [right]) => (BigInt(left) < BigInt(right) ? -1 : 1))
 		.map(([bucketStart, entries]) => {
-			entries.sort((left, right) => (left.timestamp < right.timestamp ? -1 : left.timestamp > right.timestamp ? 1 : 0))
+			entries.sort((left, right) => compareBigint(left.timestamp, right.timestamp))
 			const open = entries[0]
 			const close = entries.at(-1)
 			if (open === undefined || close === undefined) throw new Error('Candlestick bucket is unexpectedly empty')

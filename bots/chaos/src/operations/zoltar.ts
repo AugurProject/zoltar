@@ -1,5 +1,7 @@
+import { repSpend } from './input-funding.ts'
+import { inputInteger, inputMatches, inputText, inputList } from './input-values.ts'
 import { encodeAbiParameters, getAddress, keccak256 } from '@zoltar/bot-shared/ethereum'
-import { erc20Abi, questionDataAbi, zoltarAbi } from '../contracts/abi.ts'
+import { erc20Abi, zoltarQuestionDataAbi, zoltarAbi } from '@zoltar/bot-shared/contracts/abi'
 import { allowance, amount, cappedSpend, choose, disabled, eligible, encodeStep, erc20AllowanceEvidence, erc20WalletDebit, eventEvidence, eventTopic, mixSeed, ONE_TOKEN, optionAmount, planBase, tokenInventory } from './planning.ts'
 import type { EcosystemSnapshot, OperationContinuationContext, OperationDefinition, OperationEvidence, OperationPlan, PlanningOptions, QuestionSnapshot, UniverseSnapshot } from './types.ts'
 import { validForkOutcomeRoutes } from './fork-outcomes.ts'
@@ -29,12 +31,6 @@ function childDeploymentCapacityBlocker(snapshot: EcosystemSnapshot, options: Pl
 
 function irreversibleEnabled(options: PlanningOptions) {
 	return options.allowIrreversibleOperations === true ? undefined : 'Irreversible operations are disabled'
-}
-
-function repSpend(snapshot: EcosystemSnapshot, universe: UniverseSnapshot, options: PlanningOptions, salt: string) {
-	const inventory = tokenInventory(snapshot, universe.repToken)
-	const balance = inventory === undefined ? 0n : amount(inventory.balance)
-	return cappedSpend(balance, optionAmount(options, 'minimumRepReserveAttoRep', ONE_TOKEN), optionAmount(options, 'maxRepSpendAttoRep', ONE_TOKEN), mixSeed(options.seed, salt))
 }
 
 function approveRepStep(snapshot: EcosystemSnapshot, universe: UniverseSnapshot, required: bigint) {
@@ -195,16 +191,19 @@ function questionCreationDraft(kind: 'binary' | 'categorical' | 'scalar', snapsh
 			return 1
 		})
 	}
+	if (kind !== 'scalar') labels = inputList(options, 'labels', labels)
 	const question = {
-		answerUnit: kind === 'scalar' ? 'points' : '',
-		description: `Chaos bot protocol exercise ${nonce}`,
-		displayValueMax: kind === 'scalar' ? 100n : 0n,
-		displayValueMin: 0n,
-		endTime: createdAt + 86_400n,
-		numTicks: kind === 'scalar' ? 100n : 0n,
-		startTime: createdAt,
-		title: `Chaos ${kind} ${nonce}`,
+		answerUnit: kind === 'scalar' ? inputText(options, 'answerUnit', 'points') : '',
+		description: inputText(options, 'description', `Chaos bot protocol exercise ${nonce}`),
+		displayValueMax: kind === 'scalar' ? inputInteger(options, 'displayValueMax', 100n, -(1n << 255n), (1n << 255n) - 1n) : 0n,
+		displayValueMin: kind === 'scalar' ? inputInteger(options, 'displayValueMin', 0n, -(1n << 255n), (1n << 255n) - 1n) : 0n,
+		endTime: inputInteger(options, 'endTime', createdAt + 86_400n, 0n, (1n << 48n) - 1n),
+		numTicks: kind === 'scalar' ? inputInteger(options, 'numTicks', 100n, 1n, (1n << 120n) - 1n) : 0n,
+		startTime: inputInteger(options, 'startTime', createdAt, 0n, (1n << 48n) - 1n),
+		title: inputText(options, 'title', `Chaos ${kind} ${nonce}`),
 	}
+	if (question.endTime < question.startTime) throw new Error('Question end time must be on or after its start time')
+	if (kind === 'scalar' && question.displayValueMax <= question.displayValueMin) throw new Error('Display maximum must exceed the minimum')
 	const id = BigInt(
 		keccak256(
 			encodeAbiParameters(
@@ -258,7 +257,7 @@ function questionDefinition(kind: 'binary' | 'categorical' | 'scalar'): Operatio
 				snapshot,
 				steps: [
 					encodeStep({
-						abi: questionDataAbi,
+						abi: zoltarQuestionDataAbi,
 						args: [question, labels],
 						evidence: [eventEvidence(snapshot.deployments.questionData, 'QuestionCreated(uint256,uint256,(string,string,uint48,uint48,uint120,int256,int256,string),string[])')],
 						functionName: 'createQuestion',
@@ -503,7 +502,7 @@ function migrationDefinition(mode: 'add' | 'split' | 'burn'): OperationDefinitio
 	return {
 		buildPlan(snapshot, options) {
 			const universe = choose(
-				snapshot.universes.filter(candidate => (mode === 'burn' || candidate.forkTime !== '0') && repSpend(snapshot, candidate, options, id) > 0n),
+				snapshot.universes.filter(candidate => inputMatches(options, 'universeId', candidate.id)).filter(candidate => (mode === 'burn' || candidate.forkTime !== '0') && repSpend(snapshot, candidate, options, id) > 0n),
 				mixSeed(options.seed, id),
 			)
 			if (universe === undefined) return undefined

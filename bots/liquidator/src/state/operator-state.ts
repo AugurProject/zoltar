@@ -1,14 +1,15 @@
+import type { RuntimeState } from './runtime-state.ts'
+export type { RuntimeState } from './runtime-state.ts'
 import { randomBytes } from 'node:crypto'
 import { dirname } from 'node:path'
 import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
 import { getAddress, isHex, keccak256, parseTransaction, recoverTransactionAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
-import { formatDecimalAmount } from '#config/settings'
+import { compareBigint } from '@zoltar/bot-shared/infrastructure/compare'
+import { formatDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { isVaultMigrationSourceEligible } from '#core/fork-migration'
 import { vaultHealthBps, type LiquidationCandidate, type VaultPosition } from '#core/strategy'
 import { centralizedMarketConfigurationAllowsExecution, centralizedPriceAllowsExecution, centralizedPriceDeviationBps, serializeCentralizedMarketEstimate, type CentralizedMarketEstimate, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import { marketConsensusAllowsExecution, marketConsensusDeviationBps, serializeMarketConsensusEstimate, type MarketConsensusEstimate } from '@zoltar/bot-shared/monitoring/market-consensus'
-import type { MarketConsensusObservation } from '@zoltar/bot-shared/monitoring/market-consensus'
-import type { RpcEndpointHealth } from '@zoltar/bot-shared/ethereum'
 
 export type PoolObservation = {
 	knownVaultCount: bigint
@@ -130,31 +131,58 @@ export type PendingTransactionIntent = {
 	submissionBlock: bigint
 }
 
-export type RuntimeState = {
-	activities: Activity[]
-	chainId: number
-	centralizedMarket: CentralizedMarketEstimate | undefined
-	centralizedMarketsByAsset: Map<string, CentralizedMarketEstimate>
-	marketConsensus: MarketConsensusEstimate | undefined
-	marketConsensusByAsset: Map<string, MarketConsensusEstimate>
-	marketObservations: MarketConsensusObservation[]
-	error: string | undefined
-	lastScanAt: string | undefined
-	lastScannedBlock: bigint | undefined
-	lastScannedBlockHash: Hex | undefined
-	lastScannedTimestamp: bigint | undefined
-	paused: boolean
-	rpcEndpointHealth: readonly RpcEndpointHealth[]
-	pendingStagedOperations: PendingStagedOperation[]
-	pendingTransactions: PendingTransactionIntent[]
-	pools: PoolObservation[]
-	scanning: boolean
-	startedAt: string
-	status: 'connectivity-degraded' | 'dry-run' | 'error' | 'paused' | 'running' | 'starting'
-	universes: UniverseObservation[]
-	wallet: Address | undefined
-	walletAttoEth: bigint
-	walletRepByToken: Map<string, bigint>
+type ReceiptExpectation = PendingTransactionIntent['receiptExpectation']
+
+function marketConfigurationList(marketConfigurations: CentralizedMarketSettings | readonly CentralizedMarketSettings[] | undefined): readonly CentralizedMarketSettings[] {
+	if (marketConfigurations === undefined) return []
+	return 'assetAddress' in marketConfigurations ? [marketConfigurations] : marketConfigurations
+}
+
+function poolCentralizedPriceAllowed(pool: { lastPrice: bigint; repToken: Address }, noConfigurations: boolean, settings: CentralizedMarketSettings | undefined, centralizedMarket: CentralizedMarketEstimate | undefined, marketConsensus: MarketConsensusEstimate | undefined) {
+	if (settings === undefined) return noConfigurations
+	if (!centralizedMarketConfigurationAllowsExecution(settings)) return false
+	if (settings.venueConsensus === undefined) return settings.requiredForExecution ? false : centralizedPriceAllowsExecution(pool.lastPrice, centralizedMarket, settings, pool.repToken)
+	return marketConsensusAllowsExecution(
+		pool.lastPrice,
+		marketConsensus,
+		{
+			maximumDeviationBps: settings.maximumDexDeviationBps,
+			maximumObservationAgeMilliseconds: settings.maximumObservationAgeMilliseconds,
+			requiredForExecution: settings.requiredForExecution,
+		},
+		pool.repToken,
+		settings.assetChainId,
+	)
+}
+
+function poolCentralizedPriceDeviationBps(pool: { lastPrice: bigint; repToken: Address }, settings: CentralizedMarketSettings | undefined, centralizedMarket: CentralizedMarketEstimate | undefined, marketConsensus: MarketConsensusEstimate | undefined) {
+	if (settings?.venueConsensus !== undefined) return marketConsensusDeviationBps(pool.lastPrice, marketConsensus, pool.repToken)
+	if (centralizedMarket === undefined || settings === undefined) return undefined
+	return centralizedPriceDeviationBps(pool.lastPrice, centralizedMarket, pool.repToken)
+}
+
+function parseStagedOperation(value: unknown): 0 | 1 {
+	if (value === 0 || value === 1) return value
+	throw new Error('Pending transaction intent has invalid staged operation')
+}
+
+function parseReceiptExpectation(rawExpectation: object): ReceiptExpectation {
+	const expectationType = Reflect.get(rawExpectation, 'type')
+	if (expectationType === 'transaction') return { type: 'transaction' }
+	if (expectationType === 'staged-success') {
+		return { coordinator: getAddress(String(Reflect.get(rawExpectation, 'coordinator'))), operation: parseStagedOperation(Reflect.get(rawExpectation, 'operation')), type: 'staged-success' }
+	}
+	if (expectationType === 'pending-liquidation') {
+		return {
+			amount: BigInt(String(Reflect.get(rawExpectation, 'amount'))),
+			coordinator: getAddress(String(Reflect.get(rawExpectation, 'coordinator'))),
+			operator: getAddress(String(Reflect.get(rawExpectation, 'operator'))),
+			receiver: getAddress(String(Reflect.get(rawExpectation, 'receiver'))),
+			target: getAddress(String(Reflect.get(rawExpectation, 'target'))),
+			type: 'pending-liquidation',
+		}
+	}
+	throw new Error('Pending transaction intent has invalid receipt expectation')
 }
 
 function isHash(value: unknown): value is Hex {
@@ -172,6 +200,9 @@ export function initialRuntimeState(paused: boolean, wallet: Address | undefined
 		marketConsensusByAsset: new Map(),
 		marketObservations: [],
 		error: undefined,
+		deploymentMissingName: undefined,
+		deploymentCheckedBlock: undefined,
+		deploymentCheckedTimestamp: undefined,
 		lastScanAt: undefined,
 		lastScannedBlock: undefined,
 		lastScannedBlockHash: undefined,
@@ -265,7 +296,7 @@ function candidateView(candidate: LiquidationCandidate) {
 }
 
 export function operatorSnapshot(state: RuntimeState, execute: boolean, marketConfigurations?: CentralizedMarketSettings | readonly CentralizedMarketSettings[]) {
-	const configurations: readonly CentralizedMarketSettings[] = marketConfigurations === undefined ? [] : 'assetAddress' in marketConfigurations ? [marketConfigurations] : marketConfigurations
+	const configurations = marketConfigurationList(marketConfigurations)
 	const marketConfigurationFor = (asset: Address) => configurations.find(configuration => configuration.assetAddress.toLowerCase() === asset.toLowerCase())
 	const deployedRep = state.pools.reduce((total, pool) => total + pool.botVault.vaultAttoRepBacking, 0n)
 	const assumedOpenInterestAttoEth = state.pools.reduce((total, pool) => total + pool.botVault.openInterestAttoEth, 0n)
@@ -363,6 +394,9 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 			state.pendingStagedOperations.length === 0 &&
 			state.status === (execute ? 'running' : 'dry-run') &&
 			(!execute || state.wallet !== undefined),
+		deploymentMissingName: state.deploymentMissingName,
+		deploymentCheckedBlock: state.deploymentCheckedBlock?.toString(),
+		deploymentCheckedTimestamp: state.deploymentCheckedTimestamp?.toString(),
 		lastScanAt: state.lastScanAt,
 		lastScannedBlock: state.lastScannedBlock?.toString(),
 		lastScannedTimestamp: state.lastScannedTimestamp?.toString(),
@@ -410,38 +444,14 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 				botVault: vaultView(pool.botVault, pool.multiplierBps, pool.lastPrice),
 				candidates: pool.candidates.map(candidateView),
 				settlementCollateralEth: formatDecimalAmount(pool.settlementCollateralAttoEth),
-				centralizedPriceAllowed:
-					centralizedMarkets === undefined
-						? configurations.length === 0
-						: !centralizedMarketConfigurationAllowsExecution(centralizedMarkets)
-							? false
-							: centralizedMarkets.venueConsensus === undefined
-								? centralizedMarkets.requiredForExecution
-									? false
-									: centralizedPriceAllowsExecution(pool.lastPrice, centralizedMarket, centralizedMarkets, pool.repToken)
-								: marketConsensusAllowsExecution(
-										pool.lastPrice,
-										marketConsensus,
-										{
-											maximumDeviationBps: centralizedMarkets.maximumDexDeviationBps,
-											maximumObservationAgeMilliseconds: centralizedMarkets.maximumObservationAgeMilliseconds,
-											requiredForExecution: centralizedMarkets.requiredForExecution,
-										},
-										pool.repToken,
-										centralizedMarkets.assetChainId,
-									),
+				centralizedPriceAllowed: poolCentralizedPriceAllowed(pool, configurations.length === 0, centralizedMarkets, centralizedMarket, marketConsensus),
 				currentRetentionRate: pool.currentRetentionRate.toString(),
 				forkActivationTime: pool.forkActivationTime.toString(),
 				forkOutcomeIndex: pool.forkOutcomeIndex?.toString(),
 				initialReportPriorityFeeAttoEthPerGas: pool.initialReportPriorityFeeAttoEthPerGas.toString(),
 				isPriceValid: pool.isPriceValid,
 				lastPrice: formatDecimalAmount(pool.lastPrice),
-				centralizedPriceDeviationBps:
-					centralizedMarkets?.venueConsensus === undefined
-						? centralizedMarket === undefined || centralizedMarkets === undefined
-							? undefined
-							: centralizedPriceDeviationBps(pool.lastPrice, centralizedMarket, pool.repToken)?.toString()
-						: marketConsensusDeviationBps(pool.lastPrice, marketConsensus, pool.repToken)?.toString(),
+				centralizedPriceDeviationBps: poolCentralizedPriceDeviationBps(pool, centralizedMarkets, centralizedMarket, marketConsensus)?.toString(),
 				lastSettlementTimestamp: pool.lastSettlementTimestamp.toString(),
 				manager: pool.manager,
 				minLiquidationPriceDistanceBps: pool.minLiquidationPriceDistanceBps.toString(),
@@ -501,7 +511,7 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 		startedAt: state.startedAt,
 		status: state.status,
 		universes: [...universeMap.values()]
-			.sort((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0))
+			.sort((left, right) => compareBigint(left.id, right.id))
 			.map(universe => ({
 				approved: universe.approved,
 				forkedPoolCount: universe.forkedPoolCount,
@@ -639,35 +649,7 @@ export async function loadDurableState(path: string, expectedChainId: number): P
 				const recoveredSender = await recoverTransactionAddress({ serializedTransaction: serializedTransaction as Hex })
 				if (recoveredSender.toLowerCase() !== normalizedSender.toLowerCase()) throw new Error('Pending transaction intent sender does not match its serialized transaction')
 				if (typeof rawExpectation !== 'object' || rawExpectation === null || Array.isArray(rawExpectation)) throw new Error('Pending transaction intent is missing receipt expectation')
-				const expectationType = Reflect.get(rawExpectation, 'type')
-				const receiptExpectation =
-					expectationType === 'transaction'
-						? ({ type: 'transaction' } as const)
-						: expectationType === 'staged-success'
-							? {
-									coordinator: getAddress(String(Reflect.get(rawExpectation, 'coordinator'))),
-									operation:
-										Reflect.get(rawExpectation, 'operation') === 0
-											? (0 as const)
-											: Reflect.get(rawExpectation, 'operation') === 1
-												? (1 as const)
-												: (() => {
-														throw new Error('Pending transaction intent has invalid staged operation')
-													})(),
-									type: 'staged-success' as const,
-								}
-							: expectationType === 'pending-liquidation'
-								? {
-										amount: BigInt(String(Reflect.get(rawExpectation, 'amount'))),
-										coordinator: getAddress(String(Reflect.get(rawExpectation, 'coordinator'))),
-										operator: getAddress(String(Reflect.get(rawExpectation, 'operator'))),
-										receiver: getAddress(String(Reflect.get(rawExpectation, 'receiver'))),
-										target: getAddress(String(Reflect.get(rawExpectation, 'target'))),
-										type: 'pending-liquidation' as const,
-									}
-								: (() => {
-										throw new Error('Pending transaction intent has invalid receipt expectation')
-									})()
+				const receiptExpectation = parseReceiptExpectation(rawExpectation)
 				const requiresMarketEvidence = typeof rawRequiresMarketEvidence === 'boolean' ? rawRequiresMarketEvidence : kind === 'deposit' || kind === 'liquidation' || kind === 'withdrawal'
 				return { hash: hash as Hex, kind, label, maxBlockNumber: BigInt(maxBlockNumber), mode, nonce: parsedNonce, receiptExpectation, requiresMarketEvidence, sender: normalizedSender, serializedTransaction: serializedTransaction as Hex, submissionBlock: BigInt(submissionBlock) }
 			}),

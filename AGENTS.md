@@ -21,7 +21,7 @@ On a fresh checkout, use `bun install --frozen-lockfile && bun run setup` for a 
 ## Working boundaries
 
 - Treat TypeScript as source. Never inspect or edit a generated `js/` file when a corresponding TypeScript source exists.
-- Never edit `ui/*/js/**` or `shared/js/**` directly.
+- Never edit `ui/*/js/**` or `shared/*/js/**` directly.
 - Do not modify imported compatibility contracts:
   - `solidity/contracts/statoblast/openOracle/OpenOracle.sol`
   - `solidity/contracts/statoblast/WETH9.sol`
@@ -38,7 +38,7 @@ Use the whole task change set when choosing validation and preparing review:
 - unstaged changes
 - task-related untracked files
 
-`scripts/changed-files.mts` is the canonical implementation for this calculation. Keep a separate note of pre-existing or unrelated worktree changes so validation and reviewers do not attribute them to the task.
+`tooling/repo/changed-files.mts` is the canonical implementation for this calculation. Keep a separate note of pre-existing or unrelated worktree changes so validation and reviewers do not attribute them to the task.
 
 ## Validation
 
@@ -54,13 +54,13 @@ Run `bun run tsc` when any of these change:
 - Solidity contracts or generated contract outputs
 - anything that can change generated TypeScript imports
 
-UI app-only exception: when changes are limited to one app's `ui/<app>/ts/**/*.ts(x)` sources outside its tests and do not touch contracts, `ui/coreShared/build`, `ui/coreShared/dev-server.ts`, generated artifacts, or consumers of refreshed contract output, run:
+UI app-only exception: when changes are limited to one app's `ui/<app>/ts/**/*.ts(x)` sources outside its tests and do not touch contracts, `tooling/ui`, generated artifacts, or consumers of refreshed contract output, run:
 
 ```bash
 cd ui/zoltar && bun x tsc --project tsconfig.json
 ```
 
-(or the matching `ui/statoblast`, `ui/trading`, or `ui/coreShared` project). Use full `bun run tsc` for UI tests, UI build scripts, `ui/coreShared/dev-server.ts`, any UI tsconfig, package scripts, mixed UI/non-UI TypeScript, contracts, or generated contract output.
+(or the matching `ui/statoblast`, `ui/trading`, or `ui/coreShared` project). Use full `bun run tsc` for UI tests, UI build scripts under `tooling/ui`, any UI tsconfig, package scripts, mixed UI/non-UI TypeScript, contracts, or generated contract output.
 
 Skip TypeScript for prose-only, instruction-only, `.codex/agents`-only, formatting-only, or comment-only changes that cannot affect generated imports or executable behavior.
 
@@ -113,21 +113,26 @@ Run `bun run knip` when imports, exports, tests, package scripts or dependencies
 
 Run `bun run check:generated-clean` only for CI/release freshness work or when contracts, generation scripts, shared build output, UI contract artifacts, or artifact policy change.
 
-Generated outputs are intentionally untracked, except for the documentation outputs and
-vendored deployment input listed below. The documentation outputs are tracked because the
-static documentation site loads them directly;
+Generated outputs are intentionally untracked, except for the documentation outputs, the
+shared bot ABI module, the arbitrager generated TypeScript, and the vendored deployment input
+listed below. The documentation outputs are tracked because the static documentation site loads them directly;
 `bun run docs:check-charts`, `bun run docs:check-runtime`, `bun run docs:check-contract-reference`, and
 `bun run docs:check-index` enforce their freshness. `bun run check:uniswap-deployment-artifact`
 pins the deployment input and prevents its large upstream packages from entering the lockfile.
+The shared bot ABI module is tracked so the liquidator and arbitrager container images resolve it
+without Solidity artifacts (local `typecheck` and `test` scripts still ensure the artifacts first);
+`cd bots/shared && bun run check:generated` enforces its freshness.
 
 | Output | Source or command |
 | --- | --- |
-| `shared/js/**` | `bun run shared:build` |
+| `shared/*/js/**` | `bun run shared:build` |
+| `solidity/artifacts/<app>/Contracts.json` | `bun tooling/contracts/build-app-contracts.mts <app>` |
 | `solidity/artifacts/Contracts.json` | `bun run compile-contracts` |
 | `solidity/ts/types/contractArtifact.ts` | `bun run compile-contracts` |
-| `ui/coreShared/ts/contractArtifact.ts` and `ui/coreShared/ts/abis.ts` | `bun run generate` or `bun run ui:build` |
+| `ui/coreShared/ts/contractArtifact.ts`, `ui/coreShared/ts/abis.ts`, and `ui/statoblastShared/ts/contractArtifact.ts` | `bun run generate` or `bun run ui:build` |
 | `ui/*/js/**` | UI TypeScript builds per package |
-| `ui/trading/ts/generated/contractArtifact.ts` | `bun ./ui/coreShared/build/vendor.mts trading`, `bun run ui:vendor`, or `bun run trading:compile` |
+| `bots/shared/src/contracts/abi.generated.ts` | `bun tooling/contracts/generate-bot-abis.mts` (or `cd bots/shared && bun run generate:abi`); validate with `cd bots/shared && bun run check:generated` |
+| `ui/trading/ts/generated/contractArtifact.ts` | `bun ./tooling/ui/vendor.mts trading`, `bun run ui:vendor`, or `bun run trading:compile` |
 | `ui/*/vendor/**` | `bun run ui:vendor` |
 | `docs/assets/js/chartRuntime.js` | `bun run docs:build-charts` |
 | `docs/assets/js/docsShell.js` | `bun run docs:build-runtime` |
@@ -137,8 +142,10 @@ pins the deployment input and prevents its large upstream packages from entering
 | `docs/assets/js/mmrProofPlanner.js` | `bun run docs:build-runtime` |
 | `docs/assets/js/docsData.js` | `bun run docs:build-index` |
 | `docs/assets/js/docsSearchData.js` | `bun run docs:build-index` |
-| `docs/reference/contracts.html` | `bun run docs:generate-contract-reference` |
+| `docs/reference/contracts.html` and `docs/reference/contracts/*.html` | `bun run docs:generate-contract-reference` |
 | `bots/open-oracle-arbitrager/docs/chart-runtime.js` | `cd bots/open-oracle-arbitrager && bun run build:docs`; validate with `bun run check:generated` |
+| `bots/open-oracle-arbitrager/src/contracts/artifacts.generated.ts` and `bots/open-oracle-arbitrager/tests/contracts/harness-artifacts.generated.ts` | `cd bots/open-oracle-arbitrager && bun run compile-contracts`; validate with `bun run check:generated` |
+| `bots/open-oracle-arbitrager/src/contracts/executor-abi.generated.ts` | `cd bots/open-oracle-arbitrager && bun run generate:abi`; validate with `bun run check:generated` |
 | `scripts/artifacts/uniswap-deployment.json` | Pinned bytecode from the upstream package versions recorded in the artifact; validate with `bun run check:uniswap-deployment-artifact` |
 
 Do not regenerate or commit these outputs unless the task requires them or a required check reports a missing expected artifact. A deployment workflow that adds another tracked generated artifact must update this policy and add a dirty-diff freshness check in the same change.
@@ -153,7 +160,7 @@ Choose the smallest relevant scenario:
 - `simScenario=deployed`
 - `simScenario=security-pool`
 - `simScenario=securitypoolx2`
-- `simScenario=trading`
+- `simScenario=trading-funded`
 
 Check the changed flow at desktop and narrow/mobile widths, including relevant empty, loading, disabled, pending, success, and failure states. Uniswap-backed REP pricing is intentionally unavailable in simulation; quote-dependent UI must degrade gracefully.
 

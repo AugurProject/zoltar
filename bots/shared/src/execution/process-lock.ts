@@ -6,17 +6,17 @@ import { dlopen } from 'bun:ffi'
 import { getAddress, type Address } from '../ethereum.ts'
 
 type ProcessLockFileHandle = {
-	chmod: (mode: number) => Promise<unknown>
-	close: () => Promise<unknown>
+	chmod: (mode: number) => Promise<void>
+	close: () => Promise<void>
 	fd: number
-	sync: () => Promise<unknown>
-	truncate: (length?: number) => Promise<unknown>
-	writeFile: (data: string, options: { encoding: 'utf8' }) => Promise<unknown>
+	sync: () => Promise<void>
+	truncate: (length?: number) => Promise<void>
+	writeFile: (data: string, options: { encoding: 'utf8' }) => Promise<void>
 }
 
 export type ProcessLockFilesystem = {
 	lstat?: (path: string) => Promise<{ isDirectory: () => boolean; isSymbolicLink: () => boolean; mode: number; uid: number }>
-	mkdir: (path: string, options: { mode: number; recursive: true }) => Promise<unknown>
+	mkdir: (path: string, options: { mode: number; recursive: true }) => Promise<string | undefined>
 	open: (path: string, flags: number, mode: number) => Promise<ProcessLockFileHandle>
 	readFile: (path: string, encoding: 'utf8') => Promise<string>
 	tryLock: (fileDescriptor: number) => boolean
@@ -151,7 +151,7 @@ export function acquireFileProcessLock(path: string, label: string, filesystem?:
 	return acquireExclusiveProcessLock(`${resolvedPath}.lock`, `${label} ${resolvedPath}`, { file: resolvedPath }, filesystem)
 }
 
-export function executionSignerLockPath(chainId: number, account: Address, lockRoot = join(tmpdir(), 'zoltar-bot-locks')) {
+function executionSignerLockPath(chainId: number, account: Address, lockRoot = join(tmpdir(), 'zoltar-bot-locks')) {
 	if (!Number.isSafeInteger(chainId) || chainId <= 0) throw new Error('Execution signer lock chain id is invalid')
 	const signer = getAddress(account)
 	if (lockRoot.trim() === '') throw new Error('Execution signer lock root cannot be empty')

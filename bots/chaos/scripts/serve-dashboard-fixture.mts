@@ -72,8 +72,26 @@ function state() {
 			? [{ at: new Date(now - 12_000).toISOString(), ecosystem: 'statoblast', message: 'Safety pause latched after a semantic evidence mismatch', operationId: 'statoblast.oracle.request-price', status: 'failed', summary: 'Review the partial workflow before explicitly resuming.', type: 'recovery' }]
 			: [
 					{ at: new Date(now - 45_000).toISOString(), ecosystem: 'trading', hash: `0x${'12'.repeat(32)}`, message: 'Entered YES position', operationId: 'trading.position.enter', status: 'confirmed', summary: 'Receipt and share-balance postcondition confirmed.', type: 'operation' },
-					{ at: new Date(now - 380_000).toISOString(), ecosystem: 'open-oracle', message: 'Report workflow planned', operationId: 'open-oracle.report', status: 'dry-run', summary: 'Anchored plan generated; no transaction was signed.', type: 'operation' },
+					{
+						at: new Date(now - 380_000).toISOString(),
+						details:
+							'Operation open-oracle.report in open-oracle; selectable; random priority; medium risk; planned at block 8842001. Inputs: reportId → 8124. Planned transactions: 1. Approve report settlement token (to 0xbbbbbb…bbbb, selector 0x095ea7b3, gas 120000) 2. Submit the anchored report (to 0xaaaaaa…aaaa, selector 0x8f6b4d91, gas 420000, value 15000000000000000 attoETH) Expected outcome: The anchored report is recorded for settlement.',
+						ecosystem: 'open-oracle',
+						message: 'Report workflow planned',
+						operationId: 'open-oracle.report',
+						status: 'dry-run',
+						summary: '2 steps across 2 contracts; medium risk; random priority; no transaction signed',
+						type: 'operation',
+					},
 					{ at: new Date(now - 740_000).toISOString(), message: 'Random delay scheduled', status: 'info', summary: 'Next delay differs from the previous delay.', type: 'scheduler' },
+					...Array.from({ length: 9 }, (_unused, index) => ({
+						at: new Date(now - 800_000 - index * 60_000).toISOString(),
+						ecosystem: 'zoltar',
+						message: 'Canonical scan completed',
+						status: 'info',
+						summary: `Discovery pass ${(index + 1).toString()} reconciled the anchored topology.`,
+						type: 'discovery',
+					})),
 				],
 		alerts: safetyRecovery ? [{ message: 'Safety pause is latched; review the failure activity and current recovery state before explicitly resuming execution', severity: 'error' }] : [],
 		chainId: 11_155_111,

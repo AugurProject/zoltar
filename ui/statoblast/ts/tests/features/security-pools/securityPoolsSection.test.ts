@@ -5,12 +5,13 @@ import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/querie
 import { h } from 'preact'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
-import { getAddress, zeroAddress, zeroHash, type Address } from '@zoltar/shared/ethereum'
-import { SecurityPoolsSection, shouldRefreshSelectedPoolDataOnViewOpen } from '../../../features/security-pools/components/SecurityPoolsSection.js'
-import { deriveHasForkActivity } from '../../../features/truth-auctions/lib/forkAuction.js'
-import type { AccountState } from '@zoltar/ui-zoltar/types/app.js'
+import { getAddress, zeroAddress, zeroHash, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { SecurityPoolsSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolsSection.js'
+import { deriveHasForkActivity } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/forkAuction.js'
+import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import type { ListedSecurityPool, MarketDetails, SecurityPoolBrowsePage, SecurityPoolPage } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { ForkAuctionRouteContentProps, ReportingRouteContentProps, SecurityPoolRouteContentProps, SecurityPoolsOverviewRouteContentProps, SecurityPoolsSectionProps, SecurityPoolWorkflowRouteContentProps, SecurityVaultRouteContentProps, TradingRouteContentProps } from '@zoltar/ui-zoltar/features/types.js'
+import type { ForkAuctionRouteContentProps, SecurityPoolRouteContentProps, SecurityPoolsOverviewRouteContentProps, SecurityPoolsSectionProps, SecurityPoolWorkflowRouteContentProps, SecurityVaultRouteContentProps, TradingRouteContentProps } from '@zoltar/ui-zoltar-shared/features/types.js'
+import type { ReportingRouteContentProps } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
@@ -363,113 +364,6 @@ function createSecurityPoolsSectionProps(overrides: Partial<SecurityPoolsSection
 		...overrides,
 	}
 }
-
-void describe('security pools selected tab refresh', () => {
-	const currentSecurityPoolAddress = '0x1234567890123456789012345678901234567890'
-	const nextSecurityPoolAddress = '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd'
-
-	void test('refreshes selected pool data only when opening the selected pool view for a pool that is not already loaded', () => {
-		expect(
-			shouldRefreshSelectedPoolDataOnViewOpen({
-				currentSecurityPoolAddress,
-				nextView: 'browse',
-				nextSecurityPoolAddress: currentSecurityPoolAddress,
-				selectedPoolHasLoadedDetails: false,
-			}),
-		).toBe(false)
-
-		expect(
-			shouldRefreshSelectedPoolDataOnViewOpen({
-				currentSecurityPoolAddress,
-				nextView: 'create',
-				nextSecurityPoolAddress: currentSecurityPoolAddress,
-				selectedPoolHasLoadedDetails: false,
-			}),
-		).toBe(false)
-
-		expect(
-			shouldRefreshSelectedPoolDataOnViewOpen({
-				currentSecurityPoolAddress,
-				nextView: 'operate',
-				nextSecurityPoolAddress: '',
-				selectedPoolHasLoadedDetails: false,
-			}),
-		).toBe(false)
-
-		expect(
-			shouldRefreshSelectedPoolDataOnViewOpen({
-				currentSecurityPoolAddress,
-				nextView: 'operate',
-				nextSecurityPoolAddress: currentSecurityPoolAddress,
-				selectedPoolHasLoadedDetails: true,
-			}),
-		).toBe(false)
-
-		expect(
-			shouldRefreshSelectedPoolDataOnViewOpen({
-				currentSecurityPoolAddress,
-				nextView: 'operate',
-				nextSecurityPoolAddress: currentSecurityPoolAddress,
-				selectedPoolHasLoadedDetails: false,
-			}),
-		).toBe(true)
-
-		expect(
-			shouldRefreshSelectedPoolDataOnViewOpen({
-				currentSecurityPoolAddress,
-				nextView: 'operate',
-				nextSecurityPoolAddress,
-				selectedPoolHasLoadedDetails: true,
-			}),
-		).toBe(false)
-
-		expect(
-			shouldRefreshSelectedPoolDataOnViewOpen({
-				currentSecurityPoolAddress,
-				nextView: 'operate',
-				nextSecurityPoolAddress,
-				selectedPoolHasLoadedDetails: false,
-			}),
-		).toBe(true)
-
-		expect(
-			shouldRefreshSelectedPoolDataOnViewOpen({
-				currentSecurityPoolAddress: '   ',
-				nextView: 'operate',
-				nextSecurityPoolAddress: currentSecurityPoolAddress,
-				selectedPoolHasLoadedDetails: true,
-			}),
-		).toBe(false)
-
-		expect(
-			shouldRefreshSelectedPoolDataOnViewOpen({
-				currentSecurityPoolAddress: '   ',
-				nextView: 'operate',
-				selectedPoolHasLoadedDetails: false,
-			}),
-		).toBe(false)
-
-		expect(
-			shouldRefreshSelectedPoolDataOnViewOpen({
-				currentSecurityPoolAddress,
-				nextView: 'operate',
-				nextSecurityPoolAddress: '   ',
-				selectedPoolHasLoadedDetails: false,
-			}),
-		).toBe(false)
-	})
-
-	void test('refreshes selected pool data when the summary exists but vault details were deferred', () => {
-		expect(
-			shouldRefreshSelectedPoolDataOnViewOpen({
-				currentSecurityPoolAddress,
-				nextView: 'operate',
-				nextSecurityPoolAddress: currentSecurityPoolAddress,
-				selectedPoolHasLoadedDetails: false,
-			}),
-		).toBe(true)
-	})
-})
 
 void describe('SecurityPoolsSection', () => {
 	let restoreDomEnvironment: (() => void) | undefined

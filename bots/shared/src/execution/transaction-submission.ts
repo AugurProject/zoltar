@@ -1,9 +1,9 @@
-import { keccak256, type Address, type BlockTransaction, type Hex } from '../ethereum.ts'
+import { keccak256, type Address, type BlockTransaction, type Hex, type JsonValue } from '../ethereum.ts'
 import { endpointLabel } from '../monitoring/connectivity.ts'
 import { boundedJsonResponse, RELAY_RESPONSE_BYTES } from '../infrastructure/bounded-json.ts'
 import { authenticatedRelayHeaders, type RelayAuthentication } from './relay-authentication.ts'
 
-export type SubmissionMode = 'private' | 'public'
+type SubmissionMode = 'private' | 'public'
 
 export type SubmissionSettings = {
 	minimumBundleRelaySuccesses: number
@@ -54,10 +54,11 @@ type JsonRpcResponse = {
 	error?: {
 		code?: number
 		message?: string
+		data?: JsonValue
 	}
-	id?: unknown
-	jsonrpc?: unknown
-	result?: unknown
+	id?: number | string | null
+	jsonrpc?: '2.0'
+	result?: JsonValue
 }
 
 function relayUrl(value: string) {
@@ -122,7 +123,7 @@ const MAX_UINT256 = (1n << 256n) - 1n
 const MAX_PRIORITY_FEE_PER_GAS = 2n * 10n ** 9n
 export const DEFAULT_TRANSACTION_VALIDITY_BLOCKS = 25n
 
-export function maximumBaseFeePerGas(baseFeePerGas: bigint, validityBlocks = DEFAULT_TRANSACTION_VALIDITY_BLOCKS) {
+function maximumBaseFeePerGas(baseFeePerGas: bigint, validityBlocks = DEFAULT_TRANSACTION_VALIDITY_BLOCKS) {
 	if (baseFeePerGas < 0n || baseFeePerGas > MAX_UINT256) throw new Error('baseFeePerGas must be an unsigned uint256')
 	if (validityBlocks < 0n) throw new Error('validity blocks must be an unsigned integer')
 	if (validityBlocks > DEFAULT_TRANSACTION_VALIDITY_BLOCKS) throw new Error('validity blocks cannot exceed the signed transaction horizon')
@@ -227,14 +228,15 @@ function bundleIdentity(transactions: readonly Hex[]) {
 }
 
 async function authenticatedRelayRequest(parameters: RelayAuthentication & { body: string; relayUrl: string; timeoutMilliseconds: number }) {
-	const response = await fetch(parameters.relayUrl, {
+	const endpoint = relayUrl(parameters.relayUrl)
+	const response = await fetch(endpoint, {
 		body: parameters.body,
 		headers: await authenticatedRelayHeaders(parameters.body, parameters),
 		method: 'POST',
 		redirect: 'error',
 		signal: AbortSignal.timeout(parameters.timeoutMilliseconds),
 	})
-	let decoded: unknown
+	let decoded: JsonValue
 	try {
 		decoded = await boundedJsonResponse(response, RELAY_RESPONSE_BYTES, 'Relay')
 	} catch (error) {
@@ -254,7 +256,7 @@ async function authenticatedRelayRequest(parameters: RelayAuthentication & { bod
 	return value.result
 }
 
-export async function simulateBundle(parameters: { address: Address; relayUrl: string; signMessage: (message: string | Uint8Array) => Promise<Hex>; stateBlockNumber: bigint; targetBlockNumber: bigint; timeoutMilliseconds?: number | undefined; transactions: readonly Hex[] }): Promise<BundleSimulation> {
+async function simulateBundle(parameters: { address: Address; relayUrl: string; signMessage: (message: string | Uint8Array) => Promise<Hex>; stateBlockNumber: bigint; targetBlockNumber: bigint; timeoutMilliseconds?: number | undefined; transactions: readonly Hex[] }): Promise<BundleSimulation> {
 	if (parameters.transactions.length === 0) throw new Error('Bundle must contain at least one transaction')
 	const body = JSON.stringify({
 		id: 1,

@@ -1,3 +1,6 @@
+import type { OperationInputValues } from './input-values.ts'
+import type { OperationDefinition } from './operation-definition.ts'
+export type { OperationDefinition } from './operation-definition.ts'
 import type { Address, Hash, Hex } from '@zoltar/bot-shared/ethereum'
 import type { CanonicalUintString } from '../core/units.ts'
 
@@ -6,7 +9,7 @@ export type OperationRisk = 'low' | 'medium' | 'high' | 'irreversible'
 export type OperationClassification = 'selectable' | 'prerequisite' | 'lifecycle-obligation' | 'role-restricted' | 'excluded-dangerous'
 export type OperationAbiEntryKind = 'fallback' | 'function' | 'receive'
 
-export interface SnapshotAnchor {
+interface SnapshotAnchor {
 	baseFeePerGas: CanonicalUintString
 	blockNumber: string
 	blockHash: Hash
@@ -39,13 +42,13 @@ export interface ShareInventory {
 	migrationProgressByRoute: Record<string, string>
 }
 
-export interface LpInventory {
+interface LpInventory {
 	pair: Address
 	balance: string
 	allowanceToRouter: string
 }
 
-export interface WalletInventory {
+interface WalletInventory {
 	address: Address
 	ethBalanceAttoEth: CanonicalUintString
 	openOracleEthCredit: string
@@ -106,7 +109,7 @@ export interface OracleRequestFundingSnapshot {
 	targetPriceErrorForDispute: CanonicalUintString
 }
 
-export interface DirectEscalationDepositQuoteSnapshot {
+interface DirectEscalationDepositQuoteSnapshot {
 	/** Exact REP amount the game preview accepts from the wallet. */
 	acceptedAmountAttoRep: CanonicalUintString
 	/** Fixed calldata ceiling used by both the anchored preview and mutation. */
@@ -243,7 +246,7 @@ export interface EscalationDepositSnapshot {
 }
 
 /** A serialization-safe carried-deposit proof verified against one canonical anchor. */
-export interface ForkedCarryDepositProofSnapshot {
+interface ForkedCarryDepositProofSnapshot {
 	depositor: Address
 	amountAttoRep: CanonicalUintString
 	parentDepositIndex: string
@@ -262,7 +265,6 @@ export interface ForkedCarryWithdrawalSnapshot {
 	sourcePool: Address
 	sourceGame: Address
 	claimSourceGame: Address
-	snapshotId: Hash
 	outcome: 0 | 1 | 2
 	depositor: Address
 	amountAttoRep: CanonicalUintString
@@ -271,14 +273,13 @@ export interface ForkedCarryWithdrawalSnapshot {
 	proof: ForkedCarryDepositProofSnapshot
 	resultingCarryRoot: Hash
 	resultingNullifierRoot: Hash
-	resultingUnresolvedTotalAttoRep: CanonicalUintString
 	amountToWithdrawAttoRep: CanonicalUintString
 	burnAmountAttoRep: CanonicalUintString
 	preflightExpectedResult: Hex
 }
 
 /** Lightweight canonical identity retained independently of bounded proof work. */
-export interface ForkedCarryWithdrawalPresenceSnapshot {
+interface ForkedCarryWithdrawalPresenceSnapshot {
 	pool: Address
 	game: Address
 	sourceGame: Address
@@ -381,7 +382,7 @@ export interface PairSnapshot {
 	walletLiquidity: string
 }
 
-export interface UniverseUniswapPoolSnapshot {
+interface UniverseUniswapPoolSnapshot {
 	universeId: string
 	repToken: Address
 	initialized: boolean
@@ -389,7 +390,7 @@ export interface UniverseUniswapPoolSnapshot {
 	pool?: Address | undefined
 }
 
-export interface UniverseUniswapSnapshot {
+interface UniverseUniswapSnapshot {
 	factory: boolean
 	proxy: boolean
 	seeder: boolean
@@ -520,6 +521,8 @@ export interface OperationPlan {
 	lastValidBlockNumber?: string
 	/** Seed that must be reused when rebuilding a durable workflow after restart. */
 	planningSeed: number
+	operationInputs?: OperationInputValues
+	inputSources?: Record<string, 'custom' | 'chaosbot'>
 	steps: OperationStep[]
 	/** Explicitly identifies a continuation plan that only unwinds confirmed preparation. */
 	continuationDisposition?: OperationContinuationDisposition
@@ -544,6 +547,8 @@ export interface ImmutableTopologyPlanningCapacity {
 }
 
 export interface PlanningOptions {
+	operationInputs?: OperationInputValues
+
 	seed: number
 	/** Exact linked topology selected by the genesis initializer. Ordinary random planning leaves this absent. */
 	genesisInitializationTarget?: {
@@ -570,44 +575,6 @@ export interface OperationContinuationContext {
 	confirmedStepIds: readonly string[]
 	continuationDisposition?: OperationContinuationDisposition
 	previousPlan: OperationPlan
-}
-
-export interface OperationDefinition {
-	id: string
-	label: string
-	ecosystem: ChaosEcosystem
-	contract: string
-	method: string
-	/** Defaults to `function`; coverage-only rows retain receive and fallback identity explicitly. */
-	abiEntryKind?: OperationAbiEntryKind
-	risk: OperationRisk
-	classification: OperationClassification
-	/** False only for a coverage row that cannot be planned as its own operation. */
-	independentlyExecutable?: boolean
-	description: string
-	discoveryInputs: string[]
-	evaluate(snapshot: EcosystemSnapshot, options: PlanningOptions): EligibilityResult
-	buildPlan(snapshot: EcosystemSnapshot, options: PlanningOptions): OperationPlanDraft | undefined
-	/** Rebuilds or safely cleans up a partially confirmed selectable workflow. */
-	buildContinuationPlan?(snapshot: EcosystemSnapshot, options: PlanningOptions, context: OperationContinuationContext): OperationPlanDraft | undefined
-	/**
-	 * Builds every currently eligible durable instance in one deterministic pass.
-	 * Required for lifecycle definitions; random selection happens only after the
-	 * complete set has been synchronized with durable state.
-	 */
-	buildLifecyclePlans?(snapshot: EcosystemSnapshot, options: PlanningOptions): OperationPlanDraft[]
-	/**
-	 * Enumerates raw protocol identities independently of execution policy and
-	 * eligibility. Required for lifecycle definitions by the catalog invariant.
-	 */
-	enumerateLifecyclePresence?(snapshot: EcosystemSnapshot, options: PlanningOptions): Array<Record<string, string | number | boolean>>
-	/**
-	 * Enumerates every raw identity whose protocol phase is currently due and
-	 * must obstruct unrelated novelty. This is independent of local execution
-	 * policy and, unlike executable plan construction, must not be paginated.
-	 * Required for lifecycle definitions by the catalog invariant.
-	 */
-	enumerateLifecycleObstructingPresence?(snapshot: EcosystemSnapshot, options: PlanningOptions): Array<Record<string, string | number | boolean>>
 }
 
 export interface EvaluatedOperation {

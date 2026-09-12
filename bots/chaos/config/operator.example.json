@@ -1,17 +1,6 @@
 {
 	"version": 1,
 	"connectivity": null,
-	"deployment": {
-		"openOracle": "0x0000000000000000000000000000000000000000",
-		"questionData": "0x0000000000000000000000000000000000000000",
-		"securityPoolFactory": "0x0000000000000000000000000000000000000000",
-		"securityPoolForker": "0x0000000000000000000000000000000000000000",
-		"tradingFactory": "0x0000000000000000000000000000000000000000",
-		"tradingRouter": "0x0000000000000000000000000000000000000000",
-		"uniswapV3Factory": "0x1F98431c8aD98523631AE4a59f267346ea31F984",
-		"weth": "0x0000000000000000000000000000000000000000",
-		"zoltar": "0x0000000000000000000000000000000000000000"
-	},
 	"discovery": {
 		"maxPools": 100,
 		"maxQuestions": 100,
@@ -32,7 +21,7 @@
 		"execute": false,
 		"lifecyclePollMilliseconds": 12000,
 		"once": false,
-		"protocolLogBlockSpan": 2000,
+		"protocolLogBlockSpan": 50000,
 		"protocolStartBlock": "0",
 		"stateFile": ".state/chaos.sepolia.json",
 		"ui": true,

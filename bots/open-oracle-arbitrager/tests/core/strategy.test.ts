@@ -1,9 +1,8 @@
 import { describe, expect, test } from 'bun:test'
-import type { Address } from '#ethereum'
-import type { OpenOracleGame } from '@zoltar/shared/openOracle'
+import type { Address } from '@zoltar/bot-shared/ethereum'
+import type { OpenOracleGame } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { decimalSignedEth } from '#state/operator-state'
 import {
-	calculateContribution,
 	calculateNextAmount1,
 	calculateTrackedNetProfitEth,
 	deriveTokenToSwap,
@@ -41,20 +40,22 @@ describe('OpenOracle arbitrage strategy', () => {
 		const newAmount1 = calculateNextAmount1(game)
 		expect(newAmount1).toBe(1_150_000n)
 		const cheapRepReplacement = { amount1: newAmount1, amount2: 1_800_000n }
-		expect(calculateContribution(game, weth, weth, cheapRepReplacement.amount1, cheapRepReplacement.amount2)).toEqual({
+		expect(executorFunding(game, cheapRepReplacement.amount1, cheapRepReplacement.amount2, 0n)).toEqual({
 			token1: 2_161_000n,
-			token2: 0n,
+			token2: game.currentAmount2,
 		})
 		expect(game.currentAmount2 - cheapRepReplacement.amount2).toBe(200_000n)
 		expect(cheapRepReplacement).toEqual({ amount1: 1_150_000n, amount2: 1_800_000n })
 
-		const expensiveRepReplacement = { amount1: newAmount1, amount2: 2_300_000n }
-		expect(calculateContribution(game, rep, weth, expensiveRepReplacement.amount1, expensiveRepReplacement.amount2)).toEqual({
+		const expensiveRepReplacement = { amount1: newAmount1, amount2: 2_400_000n }
+		// The hedge repays the locked token2 plus both fees (2_000_000 + 20_000 + 2_000 REP); the executor funds only the replacement itself.
+		expect(evaluateBuyRep(game, 0n, 0n).hedgeAmountAttoRep).toBe(2_022_000n)
+		expect(executorFunding(game, expensiveRepReplacement.amount1, expensiveRepReplacement.amount2, 0n)).toEqual({
 			token1: 150_000n,
-			token2: 4_322_000n,
+			token2: 2_400_000n,
 		})
 		expect(expensiveRepReplacement.amount1 - game.currentAmount1).toBe(150_000n)
-		expect(expensiveRepReplacement).toEqual({ amount1: 1_150_000n, amount2: 2_300_000n })
+		expect(expensiveRepReplacement).toEqual({ amount1: 1_150_000n, amount2: 2_400_000n })
 	})
 
 	test('uses executable hedge quotes, all fees, and gas for profitability', () => {

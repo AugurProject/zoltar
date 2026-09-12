@@ -1,5 +1,5 @@
 import { bigintToSafeNumber } from '../lib/format.js'
-import { readInjectedChainId, requireInjectedAccount, switchInjectedChain } from '@zoltar/ui-core-shared/injectedEthereum.js'
+import { readInjectedChainId, requireInjectedAccount, switchInjectedChain } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'
 import type { InjectedEthereum } from './injected.js'
 
 export async function connectWallet(provider: InjectedEthereum) {

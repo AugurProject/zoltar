@@ -3,25 +3,25 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>Deployment Status Oracle</title>
+		<title>Deployment status oracle</title>
 		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 		<link rel="stylesheet" href="../assets/css/docsShell.css" />
 	</head>
 	<body class="doc-openoracle">
 		<main>
 			<header>
-				<h1>Deployment Status Oracle</h1>
+				<h1>Deployment status oracle</h1>
 				<p><code>DeploymentStatusOracle</code> is a deployment-progress helper. It does not measure protocol readiness or initialization success. It only reports which configured deployment-step addresses currently contain runtime bytecode.</p>
-				<p>The canonical mainnet and Sepolia manifests list this contract directly, so operators and frontends need a precise explanation of the returned bitmask and the built-in 256-step ceiling.</p>
+				<p>The canonical mainnet and Sepolia manifests list this contract directly, so operators and user-interface developers need a precise explanation of the returned bitmask and the built-in 256-step ceiling.</p>
 			</header>
 
 			<section id="mask">
-				<h2>What <code>getDeploymentMask()</code> Returns</h2>
+				<h2>What <code>getDeploymentMask()</code> returns</h2>
 				<p>The constructor stores one ordered <code>address[] deploymentAddresses</code>. <code>getDeploymentMask()</code> loops over that array and checks <code>deploymentAddresses[index].code.length</code>. When code exists, the oracle sets bit <code>index</code> in the returned <code>uint256</code>.</p>
-				<p>This is a code-presence bitmap. A set bit means code exists at the configured address. A clear bit means the address currently has no code. The oracle does not verify constructor args, ownership wiring, or post-deployment setup.</p>
+				<p>This is a code-presence bitmap. A set bit means code exists at the configured address. A clear bit means the address currently has no code. The oracle does not verify constructor arguments, ownership wiring, or post-deployment setup.</p>
 				<figure class="diagram diagram-wide" id="fig-deployment-mask">
 					<div class="plot-chart" data-plot-chart="fig-deployment-mask" data-plot-width="920" data-plot-height="360" role="img" aria-label="Deployment mask maps ordered deployment steps to bits"><span class="plot-chart-fallback">A row of deployment steps maps by index into bit positions in a uint256 mask. Each step sets its bit only when code exists at that configured address.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Deployment Status Mask</span>Each configured deployment step uses one bit position in the returned word. The oracle sets that bit only if the step's address currently contains code.</p>
+					<p class="diagram-caption"><span class="figure-label">Deployment status mask</span>Each configured deployment step uses one bit position in the returned word. The oracle sets that bit only if the step's address currently contains code.</p>
 				</figure>
 				<div class="equation" id="eq-deployment-mask">
 					<math display="block" aria-label="deployed mask equals the sum over each configured address of code present at i times two to the i" data-source="deployedMask = sum(codePresent(i) * 2^i)">
@@ -51,11 +51,11 @@
 			</section>
 
 			<section id="ordering">
-				<h2>How Bits Map To Deployment Steps</h2>
-				<p>Bit positions are array positions. Bit <code>0</code> maps to the first constructor address, bit <code>1</code> to the second, and so on. Offchain decoding must use the same ordered list that seeded the oracle.</p>
-				<p>The constructor emits <code>DeploymentAddressesSet(address[] deploymentAddresses)</code> with that exact ordered list. It is the onchain source for recovering a particular oracle instance's bit mapping; the manifest below describes the current planned deployment and must match the constructor event for that instance.</p>
-				<p>The current UI and deployment helpers derive the constructor list from <code>deploymentSteps</code> with one exception: the oracle does not include its own address in its constructor array. The manifest still lists <code>deploymentStatusOracle</code> as a deployment step, but the UI tracks that step out-of-band and starts consuming mask bits from the remaining addresses.</p>
-				<p>The tables below render the complete bit mappings directly from the canonical <a href="../mainnet-deployment-addresses.json">mainnet</a> and <a href="../sepolia-deployment-addresses.json">Sepolia</a> deployment manifests, excluding <code>deploymentStatusOracle</code>. Each manifest's ordered <code>deploymentSteps</code> array is the canonical mapping for that network.</p>
+				<h2>How bits map to deployment steps</h2>
+				<p>Bit positions are array positions. Bit <code>0</code> maps to the first constructor address, bit <code>1</code> to the second, and so on. Off-chain decoding must use the same ordered list that seeded the oracle.</p>
+				<p>The constructor emits <code>DeploymentAddressesSet(address[] deploymentAddresses)</code> with that exact ordered list. It is the on-chain source for recovering a particular oracle instance's bit mapping. The manifest below describes the current planned deployment and must match the constructor event for that instance.</p>
+				<p>The current user interface (UI) and deployment helpers derive the constructor list from <code>deploymentSteps</code> with one exception: the oracle does not include its own address in its constructor array. The manifest still lists <code>deploymentStatusOracle</code> as a deployment step, but the UI tracks that step out of band and starts consuming mask bits from the remaining addresses.</p>
+				<p>The tables below render the complete bit mappings directly from the canonical <a href="../mainnet-deployment-addresses.json">mainnet deployment manifest</a> and <a href="../sepolia-deployment-addresses.json">Sepolia deployment manifest</a>, excluding <code>deploymentStatusOracle</code>. Each manifest's ordered <code>deploymentSteps</code> array is the canonical mapping for that network.</p>
 				<table aria-label="Current mainnet deployment-status bit mapping">
 					<thead>
 						<tr>
@@ -95,19 +95,19 @@
 					<label for="deployment-mask-input">Mask value</label>
 					<input id="deployment-mask-input" data-tool-input="deploymentMask" inputmode="numeric" value="0x0" aria-describedby="deployment-mask-guidance" />
 					<div class="deployment-bit-grid" data-deployment-bit-grid aria-label="Tracked deployment bits"></div>
-					<p id="deployment-mask-guidance" data-deployment-mask-guidance>Decoder controls will be available when the mapping loads.</p>
+					<p id="deployment-mask-guidance" data-deployment-mask-guidance>The decoder maps each set bit to the constructor address at the same index.</p>
 					<button type="button" data-deployment-mask-retry hidden>Retry loading the canonical mapping</button>
 				</details>
 			</section>
 
 			<section id="limit">
-				<h2>Why The Cap Is 256 Steps</h2>
+				<h2>Why the cap is 256 steps</h2>
 				<p>The constructor requires <code>deploymentAddresses.length &lt;= uint256(type(uint8).max) + 1</code>, which is <code>256</code>. The limit exists because the result is a single <code>uint256</code>, and each tracked step consumes one bit.</p>
-				<p>Indices <code>0...255</code> are supported. A deployment process with more than <code>256</code> tracked addresses must split status across multiple masks or use a different representation.</p>
+				<p>Indices <code>0</code> through <code>255</code> are supported. A deployment process with more than <code>256</code> tracked addresses must split status across multiple masks or use a different representation.</p>
 			</section>
 
 			<section id="interpretation">
-				<h2>Interpretation and Verification Boundaries</h2>
+				<h2>Interpretation and verification boundaries</h2>
 				<table>
 					<thead>
 						<tr>
@@ -130,7 +130,7 @@
 						<tr>
 							<td>Manifest match</td>
 							<td>The decoder used the intended ordered address list for the network.</td>
-							<td>That deployed code matches the release or that RPC responses are honest.</td>
+							<td>That deployed code matches the release or that remote procedure call (RPC) responses are honest.</td>
 						</tr>
 						<tr>
 							<td>Full deployment verification</td>
@@ -168,7 +168,7 @@
 					</tbody>
 				</table>
 				<noscript
-					><p>The interactive tables require JavaScript. The ordered source lists are available in the <a href="../mainnet-deployment-addresses.json">Mainnet</a> and <a href="../sepolia-deployment-addresses.json">Sepolia</a> manifests; bit <code>i</code> always corresponds to the <code>i</code>th constructor address after excluding <code>deploymentStatusOracle</code>.</p></noscript
+					><p>The interactive tables require JavaScript. The ordered source lists are available in the <a href="../mainnet-deployment-addresses.json">mainnet deployment manifest</a> and <a href="../sepolia-deployment-addresses.json">Sepolia deployment manifest</a>; bit <code>i</code> always corresponds to the <code>i</code>th constructor address after excluding <code>deploymentStatusOracle</code>.</p></noscript
 				>
 			</section>
 		</main>

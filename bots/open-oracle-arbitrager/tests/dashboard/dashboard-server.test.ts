@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from 'bun:test'
-import type { Address, Hex } from '#ethereum'
+import type { Address, Hex } from '@zoltar/bot-shared/ethereum'
 import { startDashboardServer } from '#dashboard/dashboard-server'
 import { operatorSnapshot, updateStrategyFromRequest, type MutableStrategy, type OperatorState } from '#state/operator-state'
 import { validateSubmissionSettings } from '#execution/transaction-submission'
@@ -102,6 +102,10 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 			return submission
 		},
 		updateStrategy: value => updateStrategyFromRequest(strategy, value),
+		setApprovedUniverses: value => {
+			if (!Array.isArray(value)) throw new Error('Invalid universe list')
+			return value.map(String)
+		},
 		updateTokens: value => {
 			if (!Array.isArray(value)) throw new Error('Invalid token list')
 			return value.map(String)
@@ -114,6 +118,10 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(await health.text()).toBe('ok')
 	const page = await fetch(origin)
 	expect(page.status).toBe(200)
+	expect(page.headers.get('content-security-policy')).toContain("object-src 'none'")
+	expect(page.headers.get('cross-origin-resource-policy')).toBe('same-origin')
+	expect(page.headers.get('permissions-policy')).toContain('camera=()')
+	expect(page.headers.get('x-frame-options')).toBe('DENY')
 	expect(page.headers.get('content-security-policy')).toContain("default-src 'self'")
 	const pageSource = await page.text()
 	expect(pageSource).toContain('OpenOracle Arbitrager')
@@ -128,8 +136,8 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	}
 	expect(pageSource).toContain('<a href="/documentation">Operator guide</a>')
 	expect(pageSource).not.toContain('>Starting<')
-	expect(pageSource).toContain('id="mode-badge" class="badge">Mode —</span>')
-	expect(pageSource).toContain('id="run-status-badge" class="badge">Run —</span>')
+	expect(pageSource).toContain('id="mode-badge" class="badge loading">Mode —</span>')
+	expect(pageSource).toContain('id="run-status-badge" class="badge loading">Run —</span>')
 	expect(pageSource).toContain('id="retry-status-badge" class="badge badge-warning" hidden>Retry —</span>')
 	expect(pageSource).toContain('id="status-value">—</strong>')
 	expect(pageSource).toContain('id="pause-button" class="button" type="button" disabled')
@@ -213,11 +221,15 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	const favicon = await fetch(`${origin}/favicon.ico`)
 	expect(favicon.status).toBe(204)
 	expect(favicon.headers.get('content-type')).toBe('image/x-icon')
+	const headerScript = await fetch(`${origin}/header-notices.js`)
+	expect(headerScript.status).toBe(200)
+	expect(headerScript.headers.get('content-type')).toContain('text/javascript')
+	expect(await headerScript.text()).toContain('MutationObserver')
 	const browserScript = await fetch(`${origin}/dashboard.js`)
 	expect(browserScript.headers.get('content-type')).toContain('text/javascript')
 	const browserSource = await browserScript.text()
 	expect(browserSource).toContain('setInterval')
-	expect(browserSource).toContain('Refreshing…')
+	expect(browserSource).not.toContain('refresh-button')
 	expect(browserSource).toContain('Configuration request timed out.')
 	expect(browserSource).toContain('aria-labelledby')
 	expect(browserSource).toContain('Recent exact price samples')
@@ -364,6 +376,11 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(readQuorumLimitUpdate.status).toBe(400)
 	expect(await readQuorumLimitUpdate.json()).toEqual({ error: 'At most 8 read quorum RPC URLs are supported' })
 	connectivityFailure = undefined
+	const universeUpdate = await fetch(`${origin}/api/approved-universes`, { body: JSON.stringify(['0']), headers: { 'content-type': 'application/json', origin }, method: 'PUT' })
+	expect(universeUpdate.status).toBe(200)
+	expect(await universeUpdate.json()).toEqual({ approvedUniverses: ['0'] })
+	const rejectedUniverseUpdate = await fetch(`${origin}/api/approved-universes`, { body: '[]', headers: { 'content-type': 'application/json', origin: 'https://other.example' }, method: 'PUT' })
+	expect(rejectedUniverseUpdate.status).toBe(403)
 	const tokenUpdate = await fetch(`${origin}/api/tokens`, {
 		body: JSON.stringify([address]),
 		headers: { 'content-type': 'application/json', origin },
@@ -696,6 +713,7 @@ test('rejects every chain-specific mutation until network connectivity is config
 		['/api/deployment', 'PUT', {}],
 		['/api/executor-deployment', 'POST', {}],
 		['/api/executor-prediction', 'POST', {}],
+		['/api/approved-universes', 'PUT', []],
 		['/api/tokens', 'PUT', []],
 		['/api/signer', 'PUT', {}],
 		['/api/paused', 'PUT', { paused: false }],

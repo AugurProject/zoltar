@@ -1,26 +1,21 @@
 import { describe, expect, test } from 'bun:test'
-import { getAddress, zeroAddress } from '#ethereum'
-import { STANDARD_UNISWAP_FEES, STANDARD_UNISWAP_V4_POOLS, standardV4QuotePlans, v4QuoteParameters, v4TickSpacing } from '#core/uniswap-v4'
+import { getAddress, zeroAddress } from '@zoltar/bot-shared/ethereum'
+import { standardV4QuotePlans, v4QuotePlan } from '#core/uniswap-v4'
 
 describe('Uniswap V4 execution configuration', () => {
 	test('maps every supported fee to the canonical hookless tick spacing', () => {
-		expect(STANDARD_UNISWAP_V4_POOLS).toEqual([
+		const token = getAddress('0x221657776846890989a759BA2973e427DfF5C9bB')
+		expect(standardV4QuotePlans(token, 1n, 1n).map(plan => ({ fee: plan.fee, tickSpacing: plan.sell.poolKey.tickSpacing }))).toEqual([
 			{ fee: 100, tickSpacing: 1 },
 			{ fee: 500, tickSpacing: 10 },
 			{ fee: 3_000, tickSpacing: 60 },
 			{ fee: 10_000, tickSpacing: 200 },
 		])
-		expect(STANDARD_UNISWAP_FEES.map(fee => [fee, v4TickSpacing(fee)])).toEqual([
-			[100, 1],
-			[500, 10],
-			[3_000, 60],
-			[10_000, 200],
-		])
 	})
 
 	test('builds a native-ETH/token hookless pool quote', () => {
 		const token = getAddress('0x221657776846890989a759BA2973e427DfF5C9bB')
-		expect(v4QuoteParameters(token, 3_000, 12n, true)).toEqual({
+		expect(v4QuotePlan(token, 3_000, 7n, 12n).buy).toEqual({
 			exactAmount: 12n,
 			hookData: '0x',
 			poolKey: {
@@ -35,7 +30,7 @@ describe('Uniswap V4 execution configuration', () => {
 	})
 
 	test('rejects amounts that cannot be represented by a signed V4 pool delta', () => {
-		expect(() => v4QuoteParameters(getAddress('0x221657776846890989a759BA2973e427DfF5C9bB'), 3_000, 2n ** 127n, false)).toThrow('signed pool-delta range')
+		expect(() => v4QuotePlan(getAddress('0x221657776846890989a759BA2973e427DfF5C9bB'), 3_000, 2n ** 127n, 1n)).toThrow('signed pool-delta range')
 	})
 
 	test('builds independent buy and sell quotes for every supported standard pool', () => {

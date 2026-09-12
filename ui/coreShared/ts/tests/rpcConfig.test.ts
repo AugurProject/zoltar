@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { DEFAULT_RPC_URL, readNetworkRpcUrls, resolveConfiguredRpcConfig, resolveConfiguredRpcUrl, saveNetworkRpcUrl } from '../lib/rpcConfig.js'
+import { readNetworkRpcUrls, resolveConfiguredRpcConfig, resolveConfiguredRpcUrl, saveNetworkRpcUrl } from '../wallet/rpcConfig.js'
 
 describe('rpc config', () => {
 	test('prefers explicit overrides over every other source', () => {
@@ -232,7 +232,6 @@ describe('rpc config', () => {
 	test('falls back to the default shared RPC when no config source is set', () => {
 		expect(
 			resolveConfiguredRpcUrl({
-				fallbackRpcUrl: DEFAULT_RPC_URL,
 				location: {
 					search: '',
 				},
@@ -240,6 +239,6 @@ describe('rpc config', () => {
 					getItem: () => null,
 				},
 			}),
-		).toBe(DEFAULT_RPC_URL)
+		).toBe('https://ethereum.dark.florist')
 	})
 })

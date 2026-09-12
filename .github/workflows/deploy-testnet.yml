@@ -62,14 +62,15 @@ jobs:
           (cd solidity && bun install --frozen-lockfile)
 
       - name: Prepare contract artifacts
-        run: bun ./scripts/ensure-contract-artifacts.mts --headless
+        run: bun ./tooling/contracts/ensure-contract-artifacts.mts --headless
 
       - name: Validate deployment entrypoint
-        run: bun ./scripts/run-deploy-testnet.mts --help > /dev/null
+        run: bun ./tooling/contracts/run-deploy-testnet.mts --help > /dev/null
 
       - name: Deploy deterministic infrastructure
         env:
           CHAIN_ID: ${{ inputs.chain_id }}
+          ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
           MAX_FEE_PER_GAS_GWEI: ${{ inputs.max_fee_per_gas_gwei }}
           MAX_TOTAL_COST_ETH: ${{ inputs.max_total_cost_eth }}
           PRIVATE_KEY: ${{ secrets.TESTNET_DEPLOYER_PRIVATE_KEY }}

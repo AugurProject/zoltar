@@ -1,21 +1,9 @@
-import type { Address, Hash, Hex } from '@zoltar/shared/ethereum'
-import type { WriteClient as ClientsWriteClient } from '../lib/clients.js'
-export type { ReadClient, WriteClient } from '../lib/clients.js'
+import type { Address, Hash, Hex } from '@zoltar/core-shared/evm/ethereum'
+import type { ReputationTokenMetadata } from './reputation.js'
+import type { WriteClient as ClientsWriteClient } from '../wallet/clients.js'
+export type { ReadClient, WriteClient } from '../wallet/clients.js'
 
-export type ZoltarDeploymentStepId =
-	| 'proxyDeployer'
-	| 'deploymentStatusOracle'
-	| 'weth'
-	| 'reputationToken'
-	| 'multicall3'
-	| 'uniformPriceDualCapBatchAuctionFactory'
-	| 'scalarOutcomes'
-	| 'securityPoolUtils'
-	| 'openOracle'
-	| 'zoltarQuestionData'
-	| 'zoltar'
-	| 'shareTokenFactory'
-	| 'priceOracleManagerAndOperatorQueuerFactory'
+type ZoltarDeploymentStepId = 'proxyDeployer' | 'deploymentStatusOracle' | 'weth' | 'reputationToken' | 'multicall3' | 'uniformPriceDualCapBatchAuctionFactory' | 'scalarOutcomes' | 'securityPoolUtils' | 'openOracle' | 'zoltarQuestionData' | 'zoltar' | 'shareTokenFactory' | 'priceOracleManagerAndOperatorQueuerFactory'
 
 export type DeploymentStepId = ZoltarDeploymentStepId | 'securityPoolForker' | 'securityPoolOperationsDelegate' | 'escalationGameClaimDelegate' | 'escalationGameFactory' | 'securityPoolFactory'
 export type MarketType = 'binary' | 'categorical' | 'scalar'
@@ -101,7 +89,7 @@ export type ZoltarChildUniverseSummary = {
 	parentUniverseId: bigint
 	reputationToken: Address
 	universeId: bigint
-}
+} & ReputationTokenMetadata
 
 export type ZoltarUniverseSummary = {
 	childUniverses: ZoltarChildUniverseSummary[]
@@ -116,7 +104,7 @@ export type ZoltarUniverseSummary = {
 	totalTheoreticalSupplyAttoRep: bigint
 	universeId: bigint
 	zoltarAddress?: Address
-}
+} & ReputationTokenMetadata
 
 export type DeploymentStep = {
 	id: DeploymentStepId
@@ -197,7 +185,6 @@ export type SecurityPoolCreationResult = {
 	statoblastSecurityMultiplierBps: bigint
 	universeId: bigint
 }
-
 export type SecurityVaultDetails = {
 	associatedRepPerCapacityBps?: bigint
 	badDebtAttoEth: bigint
@@ -211,6 +198,7 @@ export type SecurityVaultDetails = {
 	totalRepBackingUnits: bigint
 	vaultAttoRepBacking: bigint
 	repToken: Address
+	repTokenSymbol?: string
 	capacityOwnershipAttoRep: bigint
 	securityPoolAddress: Address
 	totalCapacityOwnershipAttoRep: bigint

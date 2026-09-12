@@ -1,9 +1,10 @@
 import { describe, expect, test } from 'bun:test'
-import { decodeFunctionData } from '../support/bot-shared.ts'
-import { coordinatorAbi, erc20Abi } from '../../src/contracts/abi.ts'
+import { decodeFunctionData } from '@zoltar/bot-shared/ethereum'
+import { openOraclePriceCoordinatorAbi, genesisReputationTokenAbi } from '@zoltar/bot-shared/contracts/abi'
 import { assertOperationEthFunding } from '../../src/execution/safety.ts'
-import { anchoredMinimumToken1ReportAttoEth, anchoredRequestPriceCostAttoEth, assertAnchoredOracleRequestFunding, assertOracleRequestFundingEnvelope, oracleRequestFundingBounds, oracleRequestFundingEnvelope, oracleRequestFundingForMaximumBaseFee } from '../../src/operations/oracle-request-funding.ts'
-import { eligibleOperationPlans, reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
+import { assertAnchoredOracleRequestFunding, assertOracleRequestFundingEnvelope, oracleRequestFundingEnvelope } from '../../src/operations/oracle-request-funding.ts'
+import { reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
+import { eligibleOperationPlans } from '../support/operation-plans.ts'
 import { snapshotFixture } from './fixture.ts'
 
 const options = {
@@ -30,11 +31,6 @@ const simpleCoordinatorFunding = {
 } as const
 
 describe('oracle request funding bounds', () => {
-	test('reproduces the coordinator getters at the anchor base fee', () => {
-		expect(anchoredMinimumToken1ReportAttoEth({ baseFeePerGas: '1', coordinator: simpleCoordinatorFunding, settlementCollateralAttoEth: 100n.toString() })).toBe('4')
-		expect(anchoredRequestPriceCostAttoEth({ baseFeePerGas: '1', coordinator: simpleCoordinatorFunding })).toBe('121')
-	})
-
 	test('fails closed when an anchored coordinator getter disagrees with its immutable inputs', () => {
 		const observation = {
 			baseFeePerGas: '1',
@@ -46,23 +42,6 @@ describe('oracle request funding bounds', () => {
 		expect(() => assertAnchoredOracleRequestFunding(observation)).not.toThrow()
 		expect(() => assertAnchoredOracleRequestFunding({ ...observation, minimumToken1ReportAttoEth: 5n.toString() })).toThrow('minimum oracle report does not match')
 		expect(() => assertAnchoredOracleRequestFunding({ ...observation, requestPriceCostAttoEth: 122n.toString() })).toThrow('request-price cost does not match')
-	})
-
-	test('derives the exact inclusion bound from the signed transaction maximum fee', () => {
-		expect(
-			oracleRequestFundingBounds({
-				anchorBaseFeePerGas: '1',
-				coordinator: simpleCoordinatorFunding,
-				proposedRepPerEthPrice: (10n ** 18n).toString(),
-				settlementCollateralAttoEth: 100n.toString(),
-			}),
-		).toEqual({
-			maximumBaseFeePerGas: '2000000046',
-			maximumEscalationHaltAttoEth: 4_000_000_094n.toString(),
-			maximumInitialAttoRep: 4_000_000_094n.toString(),
-			maximumInitialAttoWeth: '4000000094',
-			maximumRequestPriceCostAttoEth: 40_000_001_021n.toString(),
-		})
 	})
 
 	test('derives a base-fee-independent envelope from cumulative operation caps', () => {
@@ -82,13 +61,6 @@ describe('oracle request funding bounds', () => {
 			maximumInitialAttoWeth: '90909090909082',
 			maximumRequestPriceCostAttoEth: 909_090_909_090_901n.toString(),
 		})
-		const nextBaseFee = oracleRequestFundingForMaximumBaseFee({
-			coordinator: simpleCoordinatorFunding,
-			maximumBaseFeePerGas: (BigInt(envelope.maximumBaseFeePerGas) + 1n).toString(),
-			proposedRepPerEthPrice: (10n ** 18n).toString(),
-			settlementCollateralAttoEth: 0n.toString(),
-		})
-		expect(BigInt(nextBaseFee.maximumInitialAttoWeth) + BigInt(nextBaseFee.maximumRequestPriceCostAttoEth)).toBeGreaterThan(10n ** 15n)
 	})
 
 	test('includes the collateral ceiling and validates a persisted envelope against current state', () => {
@@ -140,26 +112,6 @@ describe('oracle request funding bounds', () => {
 		).toThrow('cannot support a positive maximum base fee')
 	})
 
-	test('rejects bounds that cannot fit the coordinator report fields', () => {
-		const uint128Maximum = (1n << 128n) - 1n
-		expect(() =>
-			oracleRequestFundingBounds({
-				anchorBaseFeePerGas: '1',
-				coordinator: simpleCoordinatorFunding,
-				proposedRepPerEthPrice: (10n ** 18n).toString(),
-				settlementCollateralAttoEth: ((uint128Maximum + 1n) * 100n).toString(),
-			}),
-		).toThrow('WETH report exceeds uint128')
-		expect(() =>
-			oracleRequestFundingBounds({
-				anchorBaseFeePerGas: (1n << 94n).toString(),
-				coordinator: simpleCoordinatorFunding,
-				proposedRepPerEthPrice: (10n ** 18n).toString(),
-				settlementCollateralAttoEth: 0n.toString(),
-			}),
-		).toThrow('settler reward exceeds uint96')
-	})
-
 	test('rejects immutable funding inputs that the coordinator constructor forbids', () => {
 		const uint128Maximum = (1n << 128n) - 1n
 		expect(() =>
@@ -196,14 +148,14 @@ describe('oracle request funding bounds', () => {
 		expect(plan.steps).toHaveLength(3)
 
 		for (const approval of plan.steps.slice(0, 2)) {
-			const decoded = decodeFunctionData({ abi: erc20Abi, data: approval.data })
+			const decoded = decodeFunctionData({ abi: genesisReputationTokenAbi, data: approval.data })
 			expect(decoded.functionName).toBe('approve')
 			expect(decoded.args).toEqual([pool.coordinator, 90_909_090_909_082n])
 		}
 
 		const request = plan.steps[2]
 		if (request === undefined) throw new Error('Request-price step missing')
-		const decoded = decodeFunctionData({ abi: coordinatorAbi, data: request.data })
+		const decoded = decodeFunctionData({ abi: openOraclePriceCoordinatorAbi, data: request.data })
 		expect(decoded.functionName).toBe('requestPrice')
 		expect(decoded.args[1]).toBe(90_909_090_909_082n)
 		expect(request.value).toBe('909090909090901')
@@ -304,7 +256,7 @@ describe('oracle request funding bounds', () => {
 		expect(oneConfirmedContinuation.plan?.maximumCleanupTransactionCount).toBe(2)
 		const remainingApproval = oneConfirmedContinuation.plan?.steps[0]
 		if (remainingApproval === undefined) throw new Error('Remaining REP approval missing')
-		expect(decodeFunctionData({ abi: erc20Abi, data: remainingApproval.data }).args).toEqual([pool.coordinator, BigInt(initialRepAttoRep)])
+		expect(decodeFunctionData({ abi: genesisReputationTokenAbi, data: remainingApproval.data }).args).toEqual([pool.coordinator, BigInt(initialRepAttoRep)])
 		const oneConfirmedCleanup = reevaluateOperationContinuation(snapshot, initial, options, {
 			confirmedStepIds: ['approve-oracle-weth'],
 			continuationDisposition: 'cleanup-only',
@@ -348,7 +300,7 @@ describe('oracle request funding bounds', () => {
 		expect(cleanup.plan?.terminalSubmission).toBeUndefined()
 		expect(cleanup.plan?.metadata).toEqual(initial.metadata)
 		for (const step of cleanup.plan?.steps ?? []) {
-			const decoded = decodeFunctionData({ abi: erc20Abi, data: step.data })
+			const decoded = decodeFunctionData({ abi: genesisReputationTokenAbi, data: step.data })
 			expect(decoded.functionName).toBe('approve')
 			expect(decoded.args).toEqual([pool.coordinator, 0n])
 			expect(step.walletAssetDebits).toEqual([])

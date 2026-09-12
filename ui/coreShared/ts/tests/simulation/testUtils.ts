@@ -1,5 +1,5 @@
 import { createSimulationBackend } from '../../simulation/tevmBackend.js'
-import { setRuntimeNetworkProfile } from '../../lib/networkProfile.js'
+import { setRuntimeNetworkProfile } from '../../wallet/networkProfile.js'
 import type { SimulationScenario } from '../../simulation/scenarios.js'
 
 export type SimulationBackend = Awaited<ReturnType<typeof createSimulationBackend>>

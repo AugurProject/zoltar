@@ -1,9 +1,9 @@
-import type { Hash } from '@zoltar/shared/ethereum'
-import { bigintToSafeNumber, formatEthPerShare, formatOutcomeAmount, formatShareAmount, formatUnits, parseUnitsOrUndefined } from '../lib/format.js'
-import { SecurityPoolAddressLink } from '../components/TradingAddress.js'
+import type { Hash } from '@zoltar/core-shared/evm/ethereum'
+import { bigintToSafeNumber, formatRoundedUnits, formatUnits, parseUnitsOrUndefined } from '../lib/format.js'
+import { attoSharesToCollateralAttoEth, averagePriceBps, collateralAttoEthToAttoShares, formatCollateralEth, formatCompleteSetValue, formatOutcomeValue } from '../lib/shareValue.js'
 import { ProbabilityBar } from '../components/ProbabilityBar.js'
 import { marketAcceptsNewRisk, type LiveBalances, type LiveMarket, type ShareOutcome } from '../protocol/live.js'
-import { maximumInsuredExit } from '@zoltar/shared/trading/positions'
+import { maximumInsuredExit } from '@zoltar/trading-shared/trading/positions'
 import * as workflowCopy from '../copy/workflows.js'
 import * as appCopy from '../copy/app.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
@@ -25,6 +25,7 @@ export function LivePositionControls({
 	transactionValidityMinutes,
 	quote,
 	state,
+	message,
 	receiptWarning,
 	transactionHash,
 	externallyLocked,
@@ -35,7 +36,6 @@ export function LivePositionControls({
 	setSlippage,
 	setTransactionValidityMinutes,
 	simulate,
-	approve,
 	submit,
 	retryBalances,
 }: {
@@ -50,6 +50,7 @@ export function LivePositionControls({
 	transactionValidityMinutes: string
 	quote: Quote | undefined
 	state: TransactionState
+	message: string | undefined
 	receiptWarning: string | undefined
 	transactionHash: Hash | undefined
 	externallyLocked: boolean
@@ -60,7 +61,6 @@ export function LivePositionControls({
 	setSlippage(value: string): void
 	setTransactionValidityMinutes(value: string): void
 	simulate(): Promise<void>
-	approve(): Promise<void>
 	submit(): Promise<void>
 	retryBalances(): Promise<void>
 }) {
@@ -70,20 +70,28 @@ export function LivePositionControls({
 	const longBalance = side === 'YES' ? balances?.yes : balances?.no
 	const maximumExit = balances === undefined || longBalance === undefined ? undefined : maximumInsuredExit({ longOutcome: side, longBalance, invalidBalance: balances.invalid, yesReserve: market.yesReserve, noReserve: market.noReserve, feeBps: market.feeBps })
 	const parsedInput = parseUnitsOrUndefined(amount)
+	// Exit amounts are entered as complete-set collateral value, so convert them to the share amount the router redeems.
+	const exitAttoShares = mode === 'exit' && parsedInput !== undefined ? collateralAttoEthToAttoShares(parsedInput, market) : undefined
 	const slippageBps = parseSlippageBps(slippage)
 	const validityMinutes = parseTransactionValidityMinutes(transactionValidityMinutes)
-	const exceedsInsurance = mode === 'exit' && parsedInput !== undefined && maximumExit !== undefined && parsedInput > maximumExit
+	const exceedsInsurance = exitAttoShares !== undefined && maximumExit !== undefined && exitAttoShares > maximumExit
+	const exitTooSmall = mode === 'exit' && parsedInput !== undefined && parsedInput > 0n && (exitAttoShares === undefined || attoSharesToCollateralAttoEth(exitAttoShares, market) === 0n)
 	const entryPriceImpactBps = quote?.kind === 'entry' ? quote.value.result.conditionalYesBpsAfter - quote.value.result.conditionalYesBpsBefore : undefined
+	const averagePrice = quote?.kind === 'entry' ? averagePriceBps(quote.value.amount, quote.value.result.totalLongShares, market) : undefined
 	const workflowLocked = externallyLocked || positionControlsWorkflowLocked(state, receiptWarning)
+	// After a receipt the workflow stays locked until the market and balances have been re-read; say so instead of showing a silent disabled form.
+	const revalidatingAfterReceipt = state === 'confirmed' && externallyLocked
 	const submitLabel = mode === 'entry' ? workflowCopy.enterOutcome(side) : workflowCopy.exitInsuredOutcome(side)
+	const stateText = stateLabel(state, mode === 'entry' ? workflowCopy.enterOutcome(side) : workflowCopy.insuredOutcomeExit(side))
+	const statusText = revalidatingAfterReceipt && stateText !== undefined ? workflowCopy.revalidatingAfterReceipt(stateText) : stateText
 	const walletBalanceLabel = (value: bigint | undefined, outcome: ShareOutcome) => {
-		if (value !== undefined) return formatOutcomeAmount(value, outcome)
+		if (value !== undefined) return formatOutcomeValue(value, outcome, market)
 		if (balanceState === 'loading') return appCopy.loadingBalances
 		if (balanceState === 'error') return appCopy.unavailable
 		return appCopy.connectWallet
 	}
 	return (
-		<div class='operation-block' aria-busy={balanceState === 'loading'}>
+		<div class='operation-block' aria-busy={balanceState === 'loading' || revalidatingAfterReceipt}>
 			<ProbabilityBar yesPercent={yesPercent} />
 			<dl class='metrics'>
 				<div>
@@ -118,59 +126,41 @@ export function LivePositionControls({
 				</button>
 			</div>
 			<label class='field'>
-				<span>{mode === 'entry' ? workflowCopy.ethAmount : workflowCopy.completeSetSharesToRedeem}</span>
+				<span>{mode === 'entry' ? workflowCopy.ethAmount : workflowCopy.completeSetValueToRedeem}</span>
 				<div class='amount-input'>
 					<input value={amount} disabled={closed || workflowLocked} inputMode='decimal' onInput={event => setAmount(event.currentTarget.value)} />
-					<span>{mode === 'entry' ? workflowCopy.eth : workflowCopy.shares}</span>
+					<span>{workflowCopy.eth}</span>
 				</div>
 			</label>
 			<ExecutionProtectionFields slippage={slippage} validityMinutes={transactionValidityMinutes} disabled={closed || workflowLocked} onSlippageInput={setSlippage} onValidityInput={setTransactionValidityMinutes} />
-			{mode !== 'exit' || maximumExit === undefined ? null : <p>{workflowCopy.maximumInsuredExit(side, formatOutcomeAmount(maximumExit, side))}</p>}
+			{mode !== 'exit' || maximumExit === undefined ? null : <p>{workflowCopy.maximumInsuredExit(side, formatCollateralEth(maximumExit, market, 'down'))}</p>}
 			{exceedsInsurance ? (
 				<p class='error' role='alert'>
-					{insuredExitLimitMessage(parsedInput ?? 0n, maximumExit ?? 0n, balances?.invalid ?? 0n)}
+					{insuredExitLimitMessage(exitAttoShares ?? 0n, maximumExit ?? 0n, balances?.invalid ?? 0n, market)}
+				</p>
+			) : null}
+			{exitTooSmall && !exceedsInsurance ? (
+				<p class='error' role='alert'>
+					{workflowCopy.amountTooSmall}
 				</p>
 			) : null}
 			{quote === undefined ? null : renderLiveTradeSummary(quote, side)}
-			{mode === 'exit' && balances?.approved === false ? (
-				<>
-					<p>{workflowCopy.erc1155ApprovalScopeWarning}</p>
-					<TransactionActionButton disabled={closed || balanceState !== 'ready' || workflowLocked} idleLabel={workflowCopy.approveOutcomeTokens} pending={state === 'preparing' || state === 'approval' || state === 'approval-pending'} pendingLabel={workflowCopy.approvingRouter} onClick={approve} />
-				</>
-			) : null}
-			{!(mode === 'exit' && balances?.approved === false) && quote === undefined ? (
+			{quote === undefined ? (
 				<TransactionActionButton
-					disabled={closed || balanceState !== 'ready' || balances === undefined || parsedInput === undefined || parsedInput === 0n || slippageBps === undefined || validityMinutes === undefined || exceedsInsurance || workflowLocked}
+					disabled={closed || balanceState !== 'ready' || balances === undefined || parsedInput === undefined || parsedInput === 0n || slippageBps === undefined || validityMinutes === undefined || exceedsInsurance || exitTooSmall || workflowLocked}
 					idleLabel={workflowCopy.previewTrade}
 					pending={state === 'simulating'}
 					pendingLabel={workflowCopy.simulatingTrade(mode, side)}
 					onClick={simulate}
 				/>
 			) : null}
-			{!(mode === 'exit' && balances?.approved === false) && quote !== undefined ? <TransactionActionButton disabled={workflowLocked || closed || state !== 'ready'} idleLabel={submitLabel} pending={state === 'submitting' || state === 'pending'} pendingLabel={workflowCopy.submittingTrade} onClick={submit} /> : null}
+			{quote !== undefined ? <TransactionActionButton disabled={workflowLocked || closed || state !== 'ready'} idleLabel={submitLabel} pending={state === 'submitting' || state === 'pending'} pendingLabel={workflowCopy.submittingTrade} onClick={submit} /> : null}
 			<p role='status' aria-live='polite'>
-				{stateLabel(state, mode === 'entry' ? workflowCopy.enterOutcome(side) : workflowCopy.insuredOutcomeExit(side))}
+				{statusText}
 			</p>
 			{transactionHash === undefined ? null : <TradingTransactionHash hash={transactionHash} />}
 			<ErrorNotice message={receiptWarning} />
-			<details class='trade-breakdown pool-mechanics'>
-				<summary>{workflowCopy.poolAndReserveDetails}</summary>
-				{mode === 'entry' ? (
-					<p class='pool-mint-note'>
-						{workflowCopy.submittedEthPoolPrefix} <SecurityPoolAddressLink value={market.pool} disabled={workflowLocked} />. {workflowCopy.submittedEthPoolSuffix}
-					</p>
-				) : null}
-				<dl class='metrics quote'>
-					<div>
-						<dt>{workflowCopy.yesReserve}</dt>
-						<dd>{formatOutcomeAmount(market.yesReserve, workflowCopy.yes)}</dd>
-					</div>
-					<div>
-						<dt>{workflowCopy.noReserve}</dt>
-						<dd>{formatOutcomeAmount(market.noReserve, workflowCopy.no)}</dd>
-					</div>
-				</dl>
-			</details>
+			<ErrorNotice message={message} />
 			{quote === undefined ? null : (
 				<details class='trade-breakdown'>
 					<summary>{workflowCopy.fullTradeBreakdown}</summary>
@@ -180,41 +170,46 @@ export function LivePositionControls({
 							<dd>{quote.value.blockNumber.toString()}</dd>
 						</div>
 						<div>
-							<dt>{workflowCopy.completeSetShares}</dt>
-							<dd>{formatShareAmount(quote.value.result.completeSetShares)}</dd>
+							<dt>{workflowCopy.completeSets}</dt>
+							<dd>{formatCompleteSetValue(quote.value.result.completeSetShares, market)}</dd>
 						</div>
 						<div>
 							<dt>{quote.kind === 'entry' ? workflowCopy.oppositeOutcomeSwapped : workflowCopy.outcomeSwapped(side)}</dt>
-							<dd>{formatOutcomeAmount(quote.kind === 'entry' ? quote.value.result.oppositeSharesSwapped : quote.value.result.longSharesSwapped, quote.kind === 'entry' ? oppositeOutcome : side)}</dd>
+							<dd>{formatOutcomeValue(quote.kind === 'entry' ? quote.value.result.oppositeSharesSwapped : quote.value.result.longSharesSwapped, quote.kind === 'entry' ? oppositeOutcome : side, market)}</dd>
 						</div>
 						<div>
 							<dt>{quote.kind === 'entry' ? workflowCopy.additionalOutcomeReceived(side) : workflowCopy.totalOutcomeRequired(side)}</dt>
-							<dd>{formatOutcomeAmount(quote.kind === 'entry' ? quote.value.result.additionalLongShares : quote.value.result.totalLongShares, side)}</dd>
+							<dd>{formatOutcomeValue(quote.kind === 'entry' ? quote.value.result.additionalLongShares : quote.value.result.totalLongShares, side, market)}</dd>
 						</div>
 						<div>
 							<dt>{quote.kind === 'entry' ? workflowCopy.totalOutcomeDelivered(side) : workflowCopy.invalidRequiredUppercase}</dt>
-							<dd>{formatOutcomeAmount(quote.kind === 'entry' ? quote.value.result.totalLongShares : quote.value.result.invalidInsurance, quote.kind === 'entry' ? side : 'INVALID')}</dd>
+							<dd>{formatOutcomeValue(quote.kind === 'entry' ? quote.value.result.totalLongShares : quote.value.result.invalidInsurance, quote.kind === 'entry' ? side : 'INVALID', market)}</dd>
 						</div>
 						<div>
 							<dt>{quote.kind === 'entry' ? workflowCopy.invalidReceived : workflowCopy.estimatedEthOut}</dt>
-							<dd>{quote.kind === 'entry' ? formatOutcomeAmount(quote.value.result.invalidInsurance, workflowCopy.invalid) : `${formatUnits(quote.value.result.ethOut)} ${workflowCopy.eth}`}</dd>
+							<dd>{quote.kind === 'entry' ? formatOutcomeValue(quote.value.result.invalidInsurance, workflowCopy.invalid, market) : `${formatRoundedUnits(quote.value.result.ethOut)} ${workflowCopy.eth}`}</dd>
 						</div>
 						<div>
 							<dt>{workflowCopy.ammFee}</dt>
-							<dd>{formatOutcomeAmount(quote.value.result.feeAmount, quote.kind === 'entry' ? oppositeOutcome : side)}</dd>
+							<dd>{formatOutcomeValue(quote.value.result.feeAmount, quote.kind === 'entry' ? oppositeOutcome : side, market, 8)}</dd>
 						</div>
 						<div>
 							<dt>{quote.kind === 'entry' ? workflowCopy.minimumOutcomeReceived(side) : workflowCopy.maximumOutcomeRequired(side)}</dt>
-							<dd>{formatOutcomeAmount(quote.kind === 'entry' ? quote.value.minimumLongShares : quote.value.maximumLongShares, side)}</dd>
+							<dd>{formatOutcomeValue(quote.kind === 'entry' ? quote.value.minimumLongShares : quote.value.maximumLongShares, side, market)}</dd>
 						</div>
-						<div>
-							<dt>{quote.kind === 'entry' ? workflowCopy.averageEthPerLongShare : workflowCopy.minimumEthReceived}</dt>
-							<dd>{quote.kind === 'entry' ? formatEthPerShare(quote.value.amount, quote.value.result.totalLongShares) : `${formatUnits(quote.value.minimumEth)} ${workflowCopy.eth}`}</dd>
-						</div>
-						<div>
-							<dt>{workflowCopy.simulatedCompleteSetRate}</dt>
-							<dd>{formatEthPerShare(quote.kind === 'entry' ? quote.value.amount : quote.value.result.ethOut, quote.value.result.completeSetShares)}</dd>
-						</div>
+						{quote.kind === 'entry' ? (
+							<div>
+								<dt>{workflowCopy.averageOutcomePrice(side)}</dt>
+								<dd>{averagePrice === undefined ? workflowCopy.unavailableMetric : `${formatUnits(averagePrice, 2, 2)}%`}</dd>
+							</div>
+						) : (
+							<div>
+								<dt>{workflowCopy.minimumEthReceived}</dt>
+								<dd>
+									{formatUnits(quote.value.minimumEth)} {workflowCopy.eth}
+								</dd>
+							</div>
+						)}
 						<div>
 							<dt>{workflowCopy.deadline}</dt>
 							<dd>{formatTimestamp(quote.value.deadline)}</dd>

@@ -1,14 +1,12 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { getAddress, zeroAddress } from '@zoltar/shared/ethereum'
+import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { parseOptionalRepAmountInput, parseRepAmountInput } from '@zoltar/ui-core-shared/lib/formInputs.js'
+import { parseOptionalRepAmountInput, parseRepAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import {
 	doesLoadedSecurityVaultMatchSelection,
 	doesSecurityVaultExistOnchain,
-	getOracleManagerPriceValidUntilTimestamp,
-	getSecurityVaultMaxCapacityOwnershipAttoRepAmount,
 	getSecurityVaultWithdrawableRepAmount,
 	getSelectedVaultOwner,
 	hasValidSecurityVaultOraclePrice,
@@ -16,10 +14,10 @@ import {
 	isSecurityVaultDepositBelowMinimum,
 	isSelectedVaultOwnedByAccount,
 	MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP,
-	ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS,
-} from '../../../features/security-pools/lib/securityVault.js'
-import { createConnectedReadClient } from '@zoltar/ui-core-shared/lib/clients.js'
-import { loadSecurityVaultDetails } from '../../../protocol/securityPools.js'
+} from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityVault.js'
+import { getOracleManagerPriceValidUntilTimestamp } from '@zoltar/ui-statoblast-shared/protocol/oracleTiming.js'
+import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
+import { loadSecurityVaultDetails } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
 
 void describe('security vault helpers', () => {
 	void test('defaults to the connected wallet vault when no explicit vault is selected', () => {
@@ -171,7 +169,7 @@ void describe('security vault helpers', () => {
 	void test('derives the oracle price expiry timestamp from the last settlement time', () => {
 		expect(getOracleManagerPriceValidUntilTimestamp(undefined)).toBe(undefined)
 		expect(getOracleManagerPriceValidUntilTimestamp(0n)).toBe(undefined)
-		expect(getOracleManagerPriceValidUntilTimestamp(15n)).toBe(15n + ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS)
+		expect(getOracleManagerPriceValidUntilTimestamp(15n)).toBe(15n + 5n * 60n)
 	})
 
 	void test('treats a loaded oracle validity flag as expired at the shared time boundary', () => {
@@ -184,27 +182,6 @@ void describe('security vault helpers', () => {
 		expect(isOracleManagerPriceUsable(details, 399n)).toBe(true)
 		expect(isOracleManagerPriceUsable(details, 400n)).toBe(false)
 		expect(isOracleManagerPriceUsable({ ...details, isPriceValid: false }, 399n)).toBe(false)
-	})
-
-	void test('caps max capacity ownership by both vault backing and remaining pool backing', () => {
-		expect(
-			getSecurityVaultMaxCapacityOwnershipAttoRepAmount({
-				currentCapacityOwnershipAttoRep: 1n * 10n ** 18n,
-				vaultAttoRepBacking: 12n * 10n ** 18n,
-				repPerEthPrice: 3n * 10n ** 18n,
-				statoblastSecurityMultiplierBps: 20_000n,
-				totalPoolHeldAttoRep: 9n * 10n ** 18n,
-				totalCapacityOwnershipAttoRep: 2n * 10n ** 18n,
-			}),
-		).toBe(500_000_000_000_000_000n)
-		expect(
-			getSecurityVaultMaxCapacityOwnershipAttoRepAmount({
-				currentCapacityOwnershipAttoRep: 0n,
-				vaultAttoRepBacking: 6n * 10n ** 18n,
-				repPerEthPrice: 3n * 10n ** 18n,
-				statoblastSecurityMultiplierBps: 20_000n,
-			}),
-		).toBe(1n * 10n ** 18n)
 	})
 
 	void test('returns undefined for a missing security pool without reading contract state', async () => {
@@ -254,57 +231,6 @@ void describe('security vault helpers', () => {
 				totalCapacityOwnershipAttoRep: undefined,
 			}),
 		).toBe(10n * 10n ** 18n)
-	})
-
-	void test('caps max capacity ownership by local backing and empty global context', () => {
-		expect(
-			getSecurityVaultMaxCapacityOwnershipAttoRepAmount({
-				vaultAttoRepBacking: 20n * 10n ** 18n,
-				repPerEthPrice: 2n * 10n ** 18n,
-				currentCapacityOwnershipAttoRep: 10n * 10n ** 18n,
-				statoblastSecurityMultiplierBps: 20_000n,
-			}),
-		).toBe(5n * 10n ** 18n)
-	})
-
-	void test('floors maximum capacity ownership to the greatest fully backed atomic amount', () => {
-		const vaultAttoRepBacking = 10n * 10n ** 18n
-		const repPerEthPrice = 3n * 10n ** 18n
-		const statoblastSecurityMultiplierBps = 20_000n
-		const maxCapacityOwnershipAttoRep = getSecurityVaultMaxCapacityOwnershipAttoRepAmount({
-			currentCapacityOwnershipAttoRep: 0n,
-			vaultAttoRepBacking,
-			repPerEthPrice,
-			statoblastSecurityMultiplierBps,
-		})
-
-		expect(maxCapacityOwnershipAttoRep).toBe(1_666_666_666_666_666_666n)
-		if (maxCapacityOwnershipAttoRep === undefined) throw new Error('capacity ownership')
-		expect(maxCapacityOwnershipAttoRep * repPerEthPrice * statoblastSecurityMultiplierBps <= vaultAttoRepBacking * 10n ** 18n * 10_000n).toBe(true)
-		expect((maxCapacityOwnershipAttoRep + 1n) * repPerEthPrice * statoblastSecurityMultiplierBps > vaultAttoRepBacking * 10n ** 18n * 10_000n).toBe(true)
-	})
-
-	void test('caps maximum capacity ownership against both local and pool-wide backing', () => {
-		expect(
-			getSecurityVaultMaxCapacityOwnershipAttoRepAmount({
-				currentCapacityOwnershipAttoRep: 15n * 10n ** 18n,
-				vaultAttoRepBacking: 20n * 10n ** 18n,
-				repPerEthPrice: 10n ** 18n,
-				statoblastSecurityMultiplierBps: 20_000n,
-				totalPoolHeldAttoRep: 50n * 10n ** 18n,
-				totalCapacityOwnershipAttoRep: 30n * 10n ** 18n,
-			}),
-		).toBe(10n * 10n ** 18n)
-		expect(
-			getSecurityVaultMaxCapacityOwnershipAttoRepAmount({
-				currentCapacityOwnershipAttoRep: 40n * 10n ** 18n,
-				vaultAttoRepBacking: 50n * 10n ** 18n,
-				repPerEthPrice: 10n ** 18n,
-				statoblastSecurityMultiplierBps: 20_000n,
-				totalPoolHeldAttoRep: 10n * 10n ** 18n,
-				totalCapacityOwnershipAttoRep: 40n * 10n ** 18n,
-			}),
-		).toBe(5n * 10n ** 18n)
 	})
 
 	void test('withdrawable REP is bounded by pool-held vault REP backing and pool caps', () => {

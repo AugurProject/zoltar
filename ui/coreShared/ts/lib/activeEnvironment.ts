@@ -1,7 +1,7 @@
-import type { ChainBackend } from './chainBackend.js'
-import { createInjectedBackend } from './chainBackend.js'
+import type { ChainBackend } from '../wallet/chainBackend.js'
+import { createInjectedBackend } from '../wallet/chainBackend.js'
 import { getErrorMessage } from './errors.js'
-import { getPublicNetworkProfile, getPublicNetworkProfileForChainId, MAINNET_NETWORK_PROFILE, resetRuntimeNetworkProfile, setRuntimeNetworkProfile, type NetworkProfile } from './networkProfile.js'
+import { getPublicNetworkProfile, getPublicNetworkProfileForChainId, MAINNET_NETWORK_PROFILE, resetRuntimeNetworkProfile, setRuntimeNetworkProfile, type NetworkProfile } from '../wallet/networkProfile.js'
 import type { SimulationController } from '../simulation/controller.js'
 import { getSavedSimulationStateEnvelope } from '../simulation/savedStates.js'
 import { createSimulationBackend } from '../simulation/tevmBackend.js'
@@ -48,7 +48,7 @@ function readLocationParams(location: LocationLike) {
 	return params
 }
 
-export function shouldUseSimulationLocation(location: LocationLike) {
+function shouldUseSimulationLocation(location: LocationLike) {
 	const params = readLocationParams(location)
 	// Simulation mode is intentionally available as a public URL opt-in on any hostname,
 	// including production deployments. It boots a browser-local chain instead of

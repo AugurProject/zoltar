@@ -1,11 +1,9 @@
 {
 	"version": 1,
-	"approvedUniverses": ["0"],
+	"approvedUniverses": [],
 	"childMarketConfigurations": [],
 	"desiredPools": [],
 	"centralizedMarkets": {
-		"assetAddress": "0x0000000000000000000000000000000000000000",
-		"assetChainId": 11155111,
 		"assetSymbol": "REP",
 		"depthBps": 500,
 		"maximumDexDeviationBps": 1000,
@@ -30,11 +28,6 @@
 			"minimumSourceObservationSpanMilliseconds": 10000,
 			"minimumTotalSourceCount": 3
 		}
-	},
-	"deployment": {
-		"securityPoolFactory": "0x0000000000000000000000000000000000000000",
-		"weth": "0x0000000000000000000000000000000000000000",
-		"zoltar": "0x0000000000000000000000000000000000000000"
 	},
 	"submission": {
 		"mode": "public",

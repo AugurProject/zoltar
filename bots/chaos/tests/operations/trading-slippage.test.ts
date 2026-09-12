@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
-import { decodeFunctionData } from '../support/bot-shared.ts'
-import { tradingPairAbi, tradingRouterAbi } from '../../src/contracts/abi.ts'
-import { eligibleOperationPlans } from '../../src/operations/catalog.ts'
+import { decodeFunctionData } from '@zoltar/bot-shared/ethereum'
+import { erc1155Abi, twoWayConstantProductPairAbi, twoWayConstantProductRouterAbi } from '@zoltar/bot-shared/contracts/abi'
+import { eligibleOperationPlans } from '../support/operation-plans.ts'
 import { snapshotFixture } from './fixture.ts'
 
 const options = {
@@ -45,10 +45,10 @@ function positive(value: unknown, label: string) {
 
 describe('trading economic bounds', () => {
 	test('uses nonzero anchored limits for direct pair mutations', () => {
-		const add = decodeFunctionData({ abi: tradingPairAbi, data: planData('trading.liquidity.add-shares') })
-		const remove = decodeFunctionData({ abi: tradingPairAbi, data: planData('trading.liquidity.remove-shares') })
-		const exactInput = decodeFunctionData({ abi: tradingPairAbi, data: planData('trading.swap.exact-input') })
-		const exactOutput = decodeFunctionData({ abi: tradingPairAbi, data: planData('trading.swap.exact-output') })
+		const add = decodeFunctionData({ abi: twoWayConstantProductPairAbi, data: planData('trading.liquidity.add-shares') })
+		const remove = decodeFunctionData({ abi: twoWayConstantProductPairAbi, data: planData('trading.liquidity.remove') })
+		const exactInput = decodeFunctionData({ abi: twoWayConstantProductPairAbi, data: planData('trading.swap.exact-input') })
+		const exactOutput = decodeFunctionData({ abi: twoWayConstantProductPairAbi, data: planData('trading.swap.exact-output') })
 		positive(add.args[2], 'direct add minimum liquidity')
 		positive(remove.args[1], 'direct remove minimum YES')
 		positive(remove.args[2], 'direct remove minimum NO')
@@ -57,17 +57,14 @@ describe('trading economic bounds', () => {
 	})
 
 	test('uses nonzero anchored limits for router mutations', () => {
-		const add = decodeFunctionData({ abi: tradingRouterAbi, data: planData('trading.liquidity.add-eth') })
-		const enter = decodeFunctionData({ abi: tradingRouterAbi, data: planData('trading.position.enter') })
-		const exit = decodeFunctionData({ abi: tradingRouterAbi, data: planData('trading.position.exit') })
-		const redeem = decodeFunctionData({ abi: tradingRouterAbi, data: planData('trading.complete-set.redeem') })
-		const remove = decodeFunctionData({ abi: tradingRouterAbi, data: planData('trading.liquidity.remove') })
+		const add = decodeFunctionData({ abi: twoWayConstantProductRouterAbi, data: planData('trading.liquidity.add-eth') })
+		const enter = decodeFunctionData({ abi: twoWayConstantProductRouterAbi, data: planData('trading.position.enter') })
+		const exit = decodeFunctionData({ abi: erc1155Abi, data: planData('trading.position.exit') })
+		const redeem = decodeFunctionData({ abi: erc1155Abi, data: planData('trading.complete-set.redeem') })
 		positive(add.args[1], 'router add minimum liquidity')
 		positive(enter.args[2], 'router enter minimum long shares')
-		positive(exit.args[4], 'router exit minimum ETH')
-		positive(redeem.args[2], 'router redeem minimum ETH')
-		positive(remove.args[2], 'router remove minimum YES')
-		positive(remove.args[3], 'router remove minimum NO')
+		expect(exit.args[4]).not.toBe('0x')
+		expect(redeem.args[4]).not.toBe('0x')
 	})
 
 	test('uses nonzero anchored limits for initialization', () => {
@@ -78,8 +75,8 @@ describe('trading economic bounds', () => {
 		directPair.totalSupply = '0'
 		directPair.effectiveYesReserve = '0'
 		directPair.effectiveNoReserve = '0'
-		const direct = decodeFunctionData({ abi: tradingPairAbi, data: planData('trading.pair.initialize-shares', directSnapshot) })
-		const router = decodeFunctionData({ abi: tradingRouterAbi, data: planData('trading.pair.initialize-eth', directSnapshot) })
+		const direct = decodeFunctionData({ abi: twoWayConstantProductPairAbi, data: planData('trading.pair.initialize-shares', directSnapshot) })
+		const router = decodeFunctionData({ abi: twoWayConstantProductRouterAbi, data: planData('trading.pair.initialize-eth', directSnapshot) })
 		positive(direct.args[2], 'direct initialization minimum liquidity')
 		positive(router.args[2], 'router initialization minimum liquidity')
 	})

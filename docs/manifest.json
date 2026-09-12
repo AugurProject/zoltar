@@ -1,24 +1,141 @@
 {
 	"sections": [
 		{
-			"id": "reference",
-			"title": "Reference",
-			"description": "Look up authoritative contracts, events, invariants, and formats."
+			"id": "start-here",
+			"title": "Start here",
+			"description": "Build a practical mental model before reading detailed mechanisms."
 		},
 		{
 			"id": "explanation",
-			"title": "Explanation",
+			"title": "Explanations",
 			"description": "Understand why the protocol is designed and behaves as it does."
+		},
+		{
+			"id": "reference",
+			"title": "Reference",
+			"description": "Look up authoritative contracts, events, invariants, and formats."
 		}
 	],
 	"pages": [
 		{
+			"path": "explanation/system-overview.html",
+			"title": "System overview",
+			"summary": "A five-minute introduction to Zoltar, Statoblast, Trading, and OpenOracle.",
+			"section": "start-here",
+			"topic": "Introduction",
+			"keywords": ["overview", "lifecycle", "market", "components"]
+		},
+		{
+			"path": "explanation/contract-architecture.html",
+			"title": "Contract architecture",
+			"summary": "How the product layers and deployed contracts call, deploy, and move assets.",
+			"section": "start-here",
+			"topic": "Architecture",
+			"keywords": ["contracts", "architecture", "calls", "assets"]
+		},
+		{
+			"path": "reference/glossary.html",
+			"title": "Glossary",
+			"summary": "Canonical definitions for protocol assets, states, and mechanisms.",
+			"section": "start-here",
+			"topic": "Introduction",
+			"keywords": ["glossary", "terms", "REP", "universe"]
+		},
+		{
 			"path": "reference/contracts.html",
 			"title": "Contract interactions",
-			"summary": "State-changing entrypoints, callers, prerequisites, effects, and events.",
+			"summary": "Index of the per-contract interaction reference.",
 			"section": "reference",
 			"topic": "Contracts",
 			"keywords": ["ABI", "transactions", "callers", "events"]
+		},
+		{
+			"path": "reference/contracts/zoltarquestiondata.html",
+			"title": "ZoltarQuestionData",
+			"summary": "Read surface and the createQuestion entrypoint.",
+			"section": "reference",
+			"topic": "Contracts",
+			"keywords": ["questions", "categorical", "scalar", "encoding"]
+		},
+		{
+			"path": "reference/contracts/zoltar.html",
+			"title": "Zoltar",
+			"summary": "Read surface and the forkUniverse, burnRep, deployChild, and migration-balance entrypoints.",
+			"section": "reference",
+			"topic": "Contracts",
+			"keywords": ["fork", "universe", "migration", "child REP"]
+		},
+		{
+			"path": "reference/contracts/reputationtoken.html",
+			"title": "ReputationToken",
+			"summary": "Read surface and the ERC-20, ERC-2612 permit, and ERC-3009 authorization entrypoints.",
+			"section": "reference",
+			"topic": "Contracts",
+			"keywords": ["REP", "ERC-20", "permit", "supply"]
+		},
+		{
+			"path": "reference/contracts/securitypoolfactory.html",
+			"title": "SecurityPoolFactory",
+			"summary": "Read surface and the origin and child pool deployment entrypoints.",
+			"section": "reference",
+			"topic": "Contracts",
+			"keywords": ["factory", "deployment", "registration", "CREATE2"]
+		},
+		{
+			"path": "reference/contracts/securitypool.html",
+			"title": "SecurityPool",
+			"summary": "Read surface and the vault, complete-set, escalation, liquidation, fork-mode, and delegate-only entrypoints.",
+			"section": "reference",
+			"topic": "Contracts",
+			"keywords": ["collateral", "vault", "complete set", "fees", "liquidation"]
+		},
+		{
+			"path": "reference/contracts/securitypoolforker.html",
+			"title": "SecurityPoolForker",
+			"summary": "Read surface, the child-game trust boundary, and the fork initiation, child creation, vault migration, and truth-auction entrypoints.",
+			"section": "reference",
+			"topic": "Contracts",
+			"keywords": ["fork", "migration", "child pool", "auction"]
+		},
+		{
+			"path": "reference/contracts/escalationgame.html",
+			"title": "EscalationGame",
+			"summary": "Read surface and the start, deposit, withdrawal, claim, fork-carry, and escrow export entrypoints.",
+			"section": "reference",
+			"topic": "Contracts",
+			"keywords": ["escalation", "dispute", "deposit", "non-decision"]
+		},
+		{
+			"path": "reference/contracts/liquidationapprovalregistry.html",
+			"title": "LiquidationApprovalRegistry",
+			"summary": "Read surface and the approval, permit, revoke, reserve, release, and consume entrypoints.",
+			"section": "reference",
+			"topic": "Contracts",
+			"keywords": ["liquidation", "approval", "receiver", "operator"]
+		},
+		{
+			"path": "reference/contracts/openoraclepricecoordinator.html",
+			"title": "OpenOraclePriceCoordinator",
+			"summary": "Read surface and the price request, staged operation, recovery, and openOracleCallback entrypoints.",
+			"section": "reference",
+			"topic": "Contracts",
+			"keywords": ["OpenOracle", "price", "coordinator", "staged operation"]
+		},
+		{
+			"path": "reference/contracts/sharetoken.html",
+			"title": "ShareToken",
+			"summary": "Read surface and the ERC-1155 transfer, migrate, authorize, and complete-set entrypoints.",
+			"section": "reference",
+			"topic": "Contracts",
+			"keywords": ["shares", "ERC-1155", "migrate", "outcome"]
+		},
+		{
+			"path": "reference/contracts/uniformpricedualcapbatchauction.html",
+			"title": "UniformPriceDualCapBatchAuction",
+			"summary": "Read surface and the startAuction, submitBid, refund, finalize, and withdrawal entrypoints.",
+			"section": "reference",
+			"topic": "Contracts",
+			"keywords": ["truth auction", "bids", "clearing", "settlement"]
 		},
 		{
 			"path": "reference/invariants.html",
@@ -62,39 +179,39 @@
 		},
 		{
 			"path": "explanation/statoblast.html",
-			"title": "Statoblast protocol",
-			"summary": "A binary prediction market protocol",
+			"title": "How Statoblast works",
+			"summary": "A market lifecycle from creation through local resolution or fork migration to redemption.",
 			"section": "explanation",
 			"topic": "Protocol",
 			"keywords": ["Statoblast", "markets", "security pools", "overview"]
 		},
 		{
 			"path": "explanation/zoltar.html",
-			"title": "Zoltar and branching truth",
+			"title": "Zoltar and branching universes",
 			"summary": "Universes, question encoding, global forks, and REP splitting.",
 			"section": "explanation",
 			"topic": "Protocol",
 			"keywords": ["Zoltar", "universes", "questions", "REP"]
 		},
 		{
-			"path": "explanation/contract-architecture.html",
-			"title": "Contract architecture",
-			"summary": "How deployed contracts call, deploy, and move assets between one another.",
+			"path": "explanation/trading.html",
+			"title": "How Statoblast Trading works",
+			"summary": "Complete sets, directional liquidity, conditional prices, and market isolation.",
 			"section": "explanation",
-			"topic": "Architecture",
-			"keywords": ["contracts", "architecture", "calls", "assets"]
+			"topic": "Trading",
+			"keywords": ["Trading", "AMM", "liquidity", "prices"]
 		},
 		{
 			"path": "explanation/escalation-game.html",
-			"title": "Escalation game architecture",
-			"summary": "Module boundaries, authority, proof flow, and accounting responsibilities.",
+			"title": "Escalation Game",
+			"summary": "Local dispute escalation, deadlines, fork conditions, proofs, and claims.",
 			"section": "explanation",
 			"topic": "Architecture",
-			"keywords": ["EscalationGame", "modules", "authority", "accounting"]
+			"keywords": ["Escalation Game", "disputes", "deadlines", "accounting"]
 		},
 		{
 			"path": "explanation/liquidations.html",
-			"title": "Capacity and delegated liquidation",
+			"title": "Vault liquidation",
 			"summary": "Dynamic capacity, liquidation roles, bounded receiver approvals, and reservation lifecycle.",
 			"section": "explanation",
 			"topic": "Economics",
@@ -110,7 +227,7 @@
 		},
 		{
 			"path": "explanation/truth-auctions.html",
-			"title": "Truth auction economics",
+			"title": "Truth auctions",
 			"summary": "Auction clearing, settlement, and weak-demand loss allocation.",
 			"section": "explanation",
 			"topic": "Economics",
@@ -118,11 +235,19 @@
 		},
 		{
 			"path": "explanation/open-oracle.html",
-			"title": "OpenOracle integration",
+			"title": "Why Statoblast uses OpenOracle",
 			"summary": "REP/ETH price oracle for Statoblast.",
 			"section": "explanation",
 			"topic": "Architecture",
 			"keywords": ["OpenOracle", "price", "coordinator", "callback"]
+		},
+		{
+			"path": "reference/open-oracle.html",
+			"title": "OpenOracle integration reference",
+			"summary": "Funding, sizing, callbacks, queues, recovery, parameters, and interactive estimators.",
+			"section": "reference",
+			"topic": "Oracle",
+			"keywords": ["OpenOracle", "parameters", "funding", "callbacks", "estimators"]
 		}
 	]
 }

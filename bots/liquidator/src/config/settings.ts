@@ -1,13 +1,13 @@
-import { createHash, randomBytes } from 'node:crypto'
-import { dirname, extname, resolve } from 'node:path'
-import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
+import { resolve } from 'node:path'
+import { parseApprovedUniverses } from '@zoltar/bot-shared/monitoring/universe-policy'
+import { canonicalDeployment, parseRootMarketSettings } from './canonical-deployment.ts'
 import { bigintToSafeNumber, getAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
 import { validateConnectivitySettings, validateIndependentReadRpcUrls, type ConnectivitySettings, type NetworkName } from '@zoltar/bot-shared/monitoring/connectivity'
 import { validateSubmissionSettings, type SubmissionSettings } from '@zoltar/bot-shared/execution/transaction-submission'
 import { parseCentralizedMarketSettings, serializeCentralizedMarketSettings, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import { configuredQuorumRpcUrlMinimum, rpcQuorumRequirement, type RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
-import { persistentPathIdentitiesMatch, persistentPathIdentity } from '@zoltar/bot-shared/config/persistent-path'
+import { formatDecimalAmount, parseDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
 
 export type CandidatePriority = 'largest-bonus' | 'largest-debt' | 'lowest-top-up'
 
@@ -40,33 +40,6 @@ export type StrategySettings = {
 	vaultTopUpHealthBps: bigint
 	vaultWithdrawHealthBps: bigint
 	walletAttoRepReserve: bigint
-}
-
-type AtomicStrategyAmountKey =
-	| 'maximumGasCostAttoEth'
-	| 'maximumLiquidationDebtAttoEth'
-	| 'maximumOracleRequestCostAttoEth'
-	| 'maximumAttoRepPerPool'
-	| 'maximumTotalDeployedRep'
-	| 'minimumLiquidationDebtAttoEth'
-	| 'minimumRepWithdrawalAttoRep'
-	| 'minimumRewardValueAttoEth'
-	| 'redeemFeesAboveAttoEth'
-	| 'walletAttoRepReserve'
-
-export type StoredStrategySettings = {
-	[K in Exclude<keyof StrategySettings, AtomicStrategyAmountKey>]: StrategySettings[K] extends bigint ? string | number : StrategySettings[K]
-} & {
-	maximumGasCostEth: string | number
-	maximumLiquidationDebtEth: string | number
-	maximumOracleRequestCostEth: string | number
-	maximumPerPoolRep: string | number
-	maximumTotalDeployedRep: string | number
-	minimumLiquidationDebtEth: string | number
-	minimumRepWithdrawalRep: string | number
-	minimumRewardValueEth: string | number
-	redeemFeesAboveEth: string | number
-	walletReserveRep: string | number
 }
 
 export type OperatorSettings = {
@@ -110,30 +83,10 @@ export type OperatorSettings = {
 
 type JsonRecord = Record<string, unknown>
 
-type SettingsFileHandle = {
-	close: () => Promise<unknown>
-	sync: () => Promise<unknown>
-	writeFile: (data: string, options: { encoding: 'utf8' }) => Promise<unknown>
+function uiHost(value: unknown): '0.0.0.0' | '127.0.0.1' {
+	if (value === '0.0.0.0' || value === '127.0.0.1') return value
+	throw new Error('runtime.uiHost must be 127.0.0.1 or 0.0.0.0')
 }
-
-export type SettingsFilesystem = {
-	mkdir: (path: string, options: { mode: number; recursive: true }) => Promise<unknown>
-	open: (path: string, flags: 'r' | 'wx', mode?: number) => Promise<SettingsFileHandle>
-	readFile: (path: string, encoding: 'utf8') => Promise<string>
-	rename: (oldPath: string, newPath: string) => Promise<unknown>
-	rm: (path: string, options: { force: true }) => Promise<unknown>
-}
-
-const settingsFilesystem: SettingsFilesystem = {
-	mkdir,
-	open,
-	readFile,
-	rename,
-	rm,
-}
-
-const defaultSettingsPath = resolve(import.meta.dir, '..', '..', '.state', 'operator.json')
-const UNIT = 10n ** 18n
 
 function record(value: unknown, label: string): JsonRecord {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`${label} must be an object`)
@@ -153,18 +106,6 @@ function integer(value: unknown, label: string, minimum: number, maximum: number
 function string(value: unknown, label: string) {
 	if (typeof value !== 'string' || value.trim() === '') throw new Error(`${label} must be a non-empty string`)
 	return value
-}
-
-export function parseDecimalAmount(value: unknown, label: string) {
-	if (typeof value !== 'string' || !/^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(value)) throw new Error(`${label} must be a non-negative decimal with at most 18 places`)
-	const [whole = '0', fraction = ''] = value.split('.')
-	return BigInt(whole) * UNIT + BigInt(fraction.padEnd(18, '0'))
-}
-
-export function formatDecimalAmount(value: bigint) {
-	const whole = value / UNIT
-	const fraction = (value % UNIT).toString().padStart(18, '0').replace(/0+$/, '')
-	return fraction === '' ? whole.toString() : `${whole.toString()}.${fraction}`
 }
 
 function parseNetworkName(value: unknown): NetworkName {
@@ -265,18 +206,16 @@ function parseConnectivity(value: unknown): OperatorSettings['connectivity'] {
 export function parseSettings(value: unknown): OperatorSettings {
 	const root = record(value, 'operator settings')
 	if (root['version'] !== 1) throw new Error('operator settings version must be 1')
-	const deployment = record(root['deployment'], 'deployment')
 	const networkConfigured = root['networkConfigured'] === undefined ? root['connectivity'] !== undefined : boolean(root['networkConfigured'], 'networkConfigured')
 	if (networkConfigured && (root['network'] === undefined || root['connectivity'] === undefined)) throw new Error('A configured operator requires network and connectivity')
 	if (!networkConfigured && root['connectivity'] !== undefined) throw new Error('An unconfigured operator cannot retain RPC connectivity')
 	const network = root['network'] === undefined ? { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' } : record(root['network'], 'network')
+	const chainId = integer(network['chainId'], 'network.chainId', 1, 2 ** 31 - 1)
 	const runtime = record(root['runtime'], 'runtime')
 	const connectivity = networkConfigured ? parseConnectivity(root['connectivity']) : { publicRpcUrls: [], quorumRpcUrls: [], readRpcUrl: 'http://127.0.0.1:1', rpcQuorum: rpcQuorumRequirement() }
 	const selectedPools = root['selectedPools']
 	if (!Array.isArray(selectedPools)) throw new Error('selectedPools must be an array')
-	const approvedUniverses = root['approvedUniverses']
-	if (!Array.isArray(approvedUniverses)) throw new Error('approvedUniverses must be an array')
-	const parsedApprovedUniverses = [...new Set(approvedUniverses.map(value => universeId(value, 'approved universe')))]
+	const parsedApprovedUniverses = parseApprovedUniverses(root['approvedUniverses'])
 	const parsedSelectedPools = [
 		...new Map(
 			selectedPools.map(value => {
@@ -294,16 +233,12 @@ export function parseSettings(value: unknown): OperatorSettings {
 			if (!Array.isArray(values)) throw new Error('childMarketConfigurations must be an array')
 			return values.map(parseCentralizedMarketSettings)
 		})(),
-		centralizedMarkets: parseCentralizedMarketSettings(root['centralizedMarkets']),
+		centralizedMarkets: parseRootMarketSettings(root['centralizedMarkets'], chainId),
 		connectivity,
-		deployment: {
-			securityPoolFactory: getAddress(string(deployment['securityPoolFactory'], 'deployment.securityPoolFactory')),
-			weth: getAddress(string(deployment['weth'], 'deployment.weth')),
-			zoltar: getAddress(string(deployment['zoltar'], 'deployment.zoltar')),
-		},
+		deployment: canonicalDeployment(chainId),
 		desiredPools: parsedDesiredPools,
 		network: {
-			chainId: integer(network['chainId'], 'network.chainId', 1, 2 ** 31 - 1),
+			chainId,
 			explorerUrl: string(network['explorerUrl'], 'network.explorerUrl'),
 			name: parseNetworkName(network['name']),
 		},
@@ -318,14 +253,7 @@ export function parseSettings(value: unknown): OperatorSettings {
 			pollMilliseconds: integer(runtime['pollMilliseconds'], 'runtime.pollMilliseconds', 1_000, 3_600_000),
 			stateFile: resolve(string(runtime['stateFile'], 'runtime.stateFile')),
 			ui: boolean(runtime['ui'], 'runtime.ui'),
-			uiHost:
-				runtime['uiHost'] === '0.0.0.0'
-					? '0.0.0.0'
-					: runtime['uiHost'] === '127.0.0.1'
-						? '127.0.0.1'
-						: (() => {
-								throw new Error('runtime.uiHost must be 127.0.0.1 or 0.0.0.0')
-							})(),
+			uiHost: uiHost(runtime['uiHost']),
 			uiPort: integer(runtime['uiPort'], 'runtime.uiPort', 1, 65_535),
 		},
 		selectedPools: parsedSelectedPools,
@@ -335,26 +263,22 @@ export function parseSettings(value: unknown): OperatorSettings {
 	}
 	const canonicalChainId = settings.network.name === 'mainnet' ? 1 : 11_155_111
 	if (settings.network.chainId !== canonicalChainId) throw new Error('network name and chainId must identify the same supported chain')
-	if (settings.networkConfigured && settings.centralizedMarkets.assetChainId !== settings.network.chainId) throw new Error('Centralized market configuration must target the configured chain')
 	if (settings.networkConfigured && settings.childMarketConfigurations.some(configuration => configuration.assetChainId !== settings.network.chainId)) throw new Error('Child market configurations must target the configured chain')
 	const marketAssetIds = [settings.centralizedMarkets, ...settings.childMarketConfigurations].map(configuration => configuration.assetAddress.toLowerCase())
 	if (new Set(marketAssetIds).size !== marketAssetIds.length) throw new Error('Market configurations must target distinct REP assets')
 	if (settings.runtime.execute && settings.privateKey === undefined) throw new Error('Live execution requires privateKey')
 	if (settings.runtime.execute && settings.connectivity.quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(settings.connectivity.rpcQuorum)) throw new Error('Live execution with RPC quorum 2 requires at least two independent quorum RPCs (three read endpoints total)')
-	if (settings.runtime.execute && settings.deployment.securityPoolFactory === getAddress('0x0000000000000000000000000000000000000000')) throw new Error('Live execution requires a deployed security-pool factory')
-	if (settings.runtime.execute && settings.deployment.weth === getAddress('0x0000000000000000000000000000000000000000')) throw new Error('Live execution requires a deployed WETH contract')
-	if (settings.runtime.execute && settings.deployment.zoltar === getAddress('0x0000000000000000000000000000000000000000')) throw new Error('Live execution requires a deployed Zoltar contract')
 	if (!settings.networkConfigured && (!settings.paused || settings.runtime.execute)) throw new Error('An unconfigured network requires paused dry-run mode')
 	return settings
 }
 
 export function serializedSettings(settings: OperatorSettings, redactPrivateKey = false) {
+	const { assetAddress: _assetAddress, assetChainId: _assetChainId, ...centralizedMarkets } = serializeCentralizedMarketSettings(settings.centralizedMarkets)
 	return {
 		approvedUniverses: settings.approvedUniverses.map(value => value.toString()),
 		childMarketConfigurations: settings.childMarketConfigurations.map(serializeCentralizedMarketSettings),
-		centralizedMarkets: serializeCentralizedMarketSettings(settings.centralizedMarkets),
+		centralizedMarkets,
 		connectivity: settings.networkConfigured ? { ...settings.connectivity } : undefined,
-		deployment: settings.deployment,
 		desiredPools: settings.desiredPools.map(pool => ({
 			initialReportPriorityFeeAttoEthPerGas: pool.initialReportPriorityFeeAttoEthPerGas.toString(),
 			questionId: pool.questionId.toString(),
@@ -393,143 +317,4 @@ export function serializedSettings(settings: OperatorSettings, redactPrivateKey 
 		submission: settings.submission,
 		version: 1,
 	}
-}
-
-function revision(contents: string) {
-	return createHash('sha256').update(contents).digest('hex')
-}
-
-export async function loadSettings(path = resolve(process.env['ZOLTAR_LIQUIDATOR_CONFIG'] ?? defaultSettingsPath)) {
-	const contents = await readFile(path, 'utf8').catch(error => {
-		if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return undefined
-		throw error
-	})
-	if (contents === undefined) throw new Error(`Missing liquidator configuration at ${path}. Copy config/operator.example.json there and edit it.`)
-	return { path, revision: revision(contents), settings: parseSettings(JSON.parse(contents)) }
-}
-
-export async function saveSettings(path: string, settings: OperatorSettings, expectedRevision?: string, filesystem: SettingsFilesystem = settingsFilesystem) {
-	const contents = `${JSON.stringify(serializedSettings(settings), undefined, 2)}\n`
-	await filesystem.mkdir(dirname(path), { mode: 0o700, recursive: true })
-	if (expectedRevision !== undefined) {
-		const current = await filesystem.readFile(path, 'utf8')
-		if (revision(current) !== expectedRevision) throw new Error('Configuration changed on disk; reload before saving')
-	}
-	const temporaryPath = `${path}.${randomBytes(8).toString('hex')}.tmp`
-	const handle = await filesystem.open(temporaryPath, 'wx', 0o600)
-	try {
-		await handle.writeFile(contents, { encoding: 'utf8' })
-		await handle.sync()
-		await handle.close()
-		await filesystem.rename(temporaryPath, path)
-		const directoryHandle = await filesystem.open(dirname(path), 'r')
-		try {
-			await directoryHandle.sync()
-		} finally {
-			await directoryHandle.close()
-		}
-	} catch (error) {
-		await handle.close().catch(() => undefined)
-		await filesystem.rm(temporaryPath, { force: true })
-		throw error
-	}
-	return revision(contents)
-}
-
-function chainSpecificPath(path: string, network: NetworkName) {
-	const extension = extname(path)
-	const stem = (extension === '' ? path : path.slice(0, -extension.length)).replace(/\.(?:mainnet|sepolia)$/, '')
-	return `${stem}.${network}${extension}`
-}
-
-export function settingsProfilePath(path: string, network: NetworkName) {
-	return `${path}.${network}.profile`
-}
-
-type SettingsProfileCandidate = { expectedNetwork: NetworkName; settings: OperatorSettings }
-
-async function loadSettingsProfile(path: string, network: NetworkName) {
-	return await loadSettings(settingsProfilePath(path, network))
-		.then(value => value.settings)
-		.catch(error => {
-			if (error instanceof Error && error.message.startsWith('Missing liquidator configuration')) return undefined
-			throw error
-		})
-}
-
-async function assertSettingsProfileCandidates(path: string, candidates: readonly SettingsProfileCandidate[]) {
-	const reservedPaths = await Promise.all([path, settingsProfilePath(path, 'mainnet'), settingsProfilePath(path, 'sepolia')].map(persistentPathIdentity))
-	const candidatePaths: { candidate: SettingsProfileCandidate; statePath: Awaited<ReturnType<typeof persistentPathIdentity>> }[] = []
-	for (const candidate of candidates) {
-		if (candidate.settings.network.name !== candidate.expectedNetwork) throw new Error(`The ${candidate.expectedNetwork} profile contains ${candidate.settings.network.name} settings`)
-		const statePath = await persistentPathIdentity(candidate.settings.runtime.stateFile)
-		if (reservedPaths.some(reservedPath => persistentPathIdentitiesMatch(reservedPath, statePath))) throw new Error('The durable recovery state path must not reuse the active configuration or chain profile files')
-		candidatePaths.push({ candidate, statePath })
-	}
-	for (let index = 0; index < candidatePaths.length; index += 1) {
-		const current = candidatePaths[index]
-		if (current === undefined) continue
-		for (const target of candidatePaths.slice(index + 1)) {
-			if (target.candidate.expectedNetwork !== current.candidate.expectedNetwork && persistentPathIdentitiesMatch(current.statePath, target.statePath)) throw new Error('Mainnet and Sepolia profiles must use distinct durable recovery state paths')
-		}
-	}
-}
-
-function assertCompatibleProfileProcessMode(current: OperatorSettings, target: OperatorSettings) {
-	if (current.runtime.once !== target.runtime.once || current.runtime.ui !== target.runtime.ui || current.runtime.uiHost !== target.runtime.uiHost || current.runtime.uiPort !== target.runtime.uiPort) {
-		throw new Error('Chain profiles must use the same once mode and dashboard binding to switch in place')
-	}
-}
-
-export async function assertSettingsProfileIsolation(path: string, active: OperatorSettings) {
-	const mainnet = await loadSettingsProfile(path, 'mainnet')
-	const sepolia = await loadSettingsProfile(path, 'sepolia')
-	const candidates: SettingsProfileCandidate[] = [{ expectedNetwork: active.network.name, settings: active }]
-	if (mainnet !== undefined) candidates.push({ expectedNetwork: 'mainnet', settings: mainnet })
-	if (sepolia !== undefined) candidates.push({ expectedNetwork: 'sepolia', settings: sepolia })
-	await assertSettingsProfileCandidates(path, candidates)
-}
-
-export async function switchSettingsNetworkProfile(path: string, network: NetworkName, examplePath: string, preflight?: (target: OperatorSettings) => Promise<void>) {
-	const current = await loadSettings(path)
-	const mainnet = await loadSettingsProfile(path, 'mainnet')
-	const sepolia = await loadSettingsProfile(path, 'sepolia')
-	const storedCandidates: SettingsProfileCandidate[] = [{ expectedNetwork: current.settings.network.name, settings: current.settings }]
-	if (mainnet !== undefined) storedCandidates.push({ expectedNetwork: 'mainnet', settings: mainnet })
-	if (sepolia !== undefined) storedCandidates.push({ expectedNetwork: 'sepolia', settings: sepolia })
-	await assertSettingsProfileCandidates(path, storedCandidates)
-	if (current.settings.network.name === network) return current
-	let target = network === 'mainnet' ? mainnet : sepolia
-	if (target === undefined) {
-		const template = parseSettings(JSON.parse(await readFile(examplePath, 'utf8')))
-		const chainId = network === 'mainnet' ? 1 : 11_155_111
-		target = {
-			...template,
-			centralizedMarkets: { ...template.centralizedMarkets, assetChainId: chainId },
-			network: { chainId, explorerUrl: network === 'mainnet' ? 'https://etherscan.io' : 'https://sepolia.etherscan.io', name: network },
-			networkConfigured: false,
-			paused: true,
-			privateKey: undefined,
-			runtime: {
-				...template.runtime,
-				execute: false,
-				once: false,
-				stateFile: chainSpecificPath(current.settings.runtime.stateFile, network),
-				ui: current.settings.runtime.ui,
-				uiHost: current.settings.runtime.uiHost,
-				uiPort: current.settings.runtime.uiPort,
-			},
-		}
-	}
-	target = { ...target, paused: true }
-	await assertSettingsProfileCandidates(path, [
-		{ expectedNetwork: current.settings.network.name, settings: current.settings },
-		{ expectedNetwork: network, settings: target },
-	])
-	assertCompatibleProfileProcessMode(current.settings, target)
-	await preflight?.(target)
-	await saveSettings(settingsProfilePath(path, current.settings.network.name), { ...current.settings, paused: true })
-	await saveSettings(settingsProfilePath(path, network), target)
-	const savedRevision = await saveSettings(path, target, current.revision)
-	return { path, revision: savedRevision, settings: target }
 }

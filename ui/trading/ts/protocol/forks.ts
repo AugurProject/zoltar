@@ -1,6 +1,7 @@
-import { encodeAbiParameters, getAddress, keccak256, zeroAddress, type Address, type PublicClient } from '@zoltar/shared/ethereum'
-import { formatScalarOutcomeIndexLabel, type ScalarQuestionDetails } from '@zoltar/shared/scalarOutcome'
-import { statoblast_SecurityPool_SecurityPool, statoblast_tokens_ShareToken_ShareToken, ZoltarQuestionData_ZoltarQuestionData, Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { encodeAbiParameters, getAddress, keccak256, zeroAddress, type Address, type PublicClient } from '@zoltar/core-shared/evm/ethereum'
+import { formatScalarOutcomeIndexLabel, type ScalarQuestionDetails } from '@zoltar/zoltar-shared/questions/scalarOutcome'
+import { statoblast_SecurityPool_SecurityPool, statoblast_tokens_ShareToken_ShareToken } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
+import { ZoltarQuestionData_ZoltarQuestionData, Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
 import type { LiveMarket } from './live.js'
 
 const poolForkAbi = statoblast_SecurityPool_SecurityPool.abi
@@ -27,7 +28,7 @@ export type ForkMigrationContext = (ForkQuestionBase & Readonly<{ kind: 'categor
 const FORK_PAGE_SIZE = 30n
 const UINT248_MASK = (1n << 248n) - 1n
 
-export function getChildUniverseId(parentUniverseId: bigint, outcomeIndex: bigint) {
+function getChildUniverseId(parentUniverseId: bigint, outcomeIndex: bigint) {
 	if (parentUniverseId < 0n || parentUniverseId > UINT248_MASK) throw new Error('Parent universe ID is outside uint248')
 	if (outcomeIndex < 0n || outcomeIndex >= 1n << 256n) throw new Error('Fork outcome is outside uint256')
 	return BigInt(keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [parentUniverseId, outcomeIndex]))) & UINT248_MASK

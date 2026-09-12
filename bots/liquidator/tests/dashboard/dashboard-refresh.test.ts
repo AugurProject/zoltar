@@ -216,7 +216,7 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 	let releaseApprovedUniverseRequest: (() => void) | undefined
 	let releaseSelectedPoolRequest: (() => void) | undefined
 	window.fetch = async (input, init) => {
-		const inputUrl = typeof input === 'string' ? input : input instanceof window.URL ? input.href : Reflect.get(input, 'url')
+		const inputUrl = typeof input === 'string' || input instanceof window.URL ? input.toString() : Reflect.get(input, 'url')
 		if (typeof inputUrl !== 'string') throw new Error('Unexpected request URL')
 		const url = new URL(inputUrl, server.url)
 		if (url.pathname === '/api/configuration') {
@@ -417,47 +417,58 @@ describe('liquidator dashboard refresh behavior', () => {
 		}
 	})
 
+	test('shows the missing deployment and checked block instead of generic readiness guidance', async () => {
+		const waiting = { ...state(), operatorCapable: false, deploymentMissingName: 'Zoltar', deploymentCheckedBlock: '11662177', deploymentCheckedTimestamp: '123' }
+		const page = await dashboard(mainnetConfiguration(), waiting)
+		expect(page.window.document.getElementById('global-error')?.textContent).toContain('Zoltar is not deployed at block 11662177')
+		expect(page.window.document.getElementById('global-error')?.textContent).not.toContain('logs')
+		expect(page.window.document.getElementById('global-error')?.getAttribute('role')).toBe('status')
+		expect(page.window.document.getElementById('attention-badge')?.textContent).toBe('Not deployed')
+		expect(page.window.document.getElementById('attention-badge')?.getAttribute('href')).toBe('/overview#global-error')
+		expect(page.window.document.getElementById('run-status-badge')?.textContent).toBe('Waiting')
+		page.setSnapshot({ ...waiting, error: 'RPC timed out', status: 'connectivity-degraded' })
+		await page.refresh()
+		expect(page.window.document.getElementById('global-error')?.getAttribute('role')).toBe('alert')
+		expect(page.window.document.getElementById('global-error')?.textContent).toContain('RPC connectivity is degraded')
+		page.setSnapshot({ ...state(), operatorCapable: true })
+		await page.refresh()
+		expect(page.window.document.getElementById('global-error')?.classList.contains('hidden')).toBe(true)
+	})
+
 	for (const [label, snapshot, guidance] of [
-		['startup', { ...state(), operatorCapable: false }, 'first successful scan'],
-		['scanning', { ...state(), scanning: true, operatorCapable: false }, 'scan is in progress'],
+		['startup', { ...state(), operatorCapable: false }, 'first scan has not completed'],
+		['scanning', { ...state(), scanning: true, operatorCapable: false }, 'Scan in progress'],
 		['paused', { ...state(undefined, [], { paused: true }), operatorCapable: false }, 'Use Resume'],
 		['missing signer', { ...state(undefined, [], { execute: true }), operatorCapable: false }, 'Execution signer'],
 	] as const) {
 		test(`explains capability-only ${label} blockers`, async () => {
 			const pending = label === 'startup' || label === 'scanning'
 			const page = await dashboard(mainnetConfiguration(), snapshot)
-			expect(page.window.document.getElementById('attention-badge')?.textContent).toBe(pending ? 'Checking readiness' : '1 action')
+			const pendingBadge = label === 'scanning' ? 'Scanning pools' : 'Awaiting first scan'
+			expect(page.window.document.getElementById('attention-badge')?.textContent).toBe(pending ? pendingBadge : '1 action')
 			expect(page.window.document.getElementById('attention-badge')?.getAttribute('href')).toBe(pending ? null : '/overview#global-error')
-			expect(page.window.document.getElementById('global-error')?.classList.contains('warning')).toBe(true)
+			expect(page.window.document.getElementById('global-error')?.classList.contains('warning')).toBe(!pending)
 			if (pending) expect(page.window.document.getElementById('global-error')?.textContent).toContain('automatically')
 			expect(page.window.document.getElementById('global-error')?.textContent).toContain(guidance)
 			page.setSnapshot({ ...state(), operatorCapable: true })
 			await page.refresh()
 			expect(page.window.document.getElementById('global-error')?.classList.contains('hidden')).toBe(true)
-			expect(page.window.document.getElementById('attention-badge')?.textContent).toBe('No blockers')
+			expect(page.window.document.getElementById('attention-badge')?.hasAttribute('hidden')).toBe(true)
 		})
 	}
-	test('provides a durable manual refresh action across success and failure', async () => {
+	test('keeps polling automatically across success and failure', async () => {
 		const page = await dashboard()
-		const refreshButton = page.window.document.getElementById('refresh-button')
-		if (!(refreshButton instanceof page.window.HTMLButtonElement)) throw new Error('Expected refresh control')
+		expect(page.window.document.getElementById('refresh-button')).toBeNull()
 		const before = page.stateRequestCount()
 
-		refreshButton.click()
-		await page.waitUntilComplete()
+		await page.refresh()
 		await Bun.sleep(1)
 		expect(page.stateRequestCount()).toBe(before + 1)
-		expect(refreshButton.disabled).toBe(false)
-		expect(refreshButton.textContent).toBe('Refresh')
-		expect(refreshButton.hasAttribute('aria-busy')).toBe(false)
 
 		page.setStateRequestFailure(true)
-		refreshButton.click()
-		await page.waitUntilComplete()
+		await page.refresh()
 		await Bun.sleep(1)
 		expect(page.stateRequestCount()).toBe(before + 2)
-		expect(refreshButton.disabled).toBe(false)
-		expect(refreshButton.textContent).toBe('Refresh')
 		expect(page.window.document.getElementById('run-status-badge')?.textContent).toBe('Disconnected')
 	})
 
@@ -524,8 +535,8 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(recovered.window.document.getElementById('mode-badge')?.textContent).toBe('Dry run')
 		expect(recovered.window.document.getElementById('network-badge')?.textContent).toBe('Mainnet · chain 1')
 		expect(recovered.window.document.getElementById('run-status-badge')?.textContent).toBe('Running')
-		expect(recovered.window.document.getElementById('attention-badge')?.textContent).toBe('No blockers')
-		expect(recovered.window.document.getElementById('capability-badge')?.textContent).toBe('Operator capable')
+		expect(recovered.window.document.getElementById('attention-badge')?.hasAttribute('hidden')).toBe(true)
+		expect(recovered.window.document.getElementById('capability-badge')?.hasAttribute('hidden')).toBe(true)
 		expect(recovered.window.document.getElementById('attention-badge')?.getAttribute('data-tone')).toBe('ok')
 		expect(recovered.window.document.getElementById('pause-button')?.hasAttribute('disabled')).toBe(false)
 		expect(recovered.window.document.getElementById('global-error')?.classList.contains('hidden')).toBe(true)
@@ -601,10 +612,10 @@ describe('liquidator dashboard refresh behavior', () => {
 		await unconfigured.refresh()
 		await Bun.sleep(1)
 		expect({
-			attention: unconfigured.window.document.getElementById('attention-badge')?.textContent,
+			attention: unconfigured.window.document.getElementById('attention-badge')?.hasAttribute('hidden'),
 			badge: unconfigured.window.document.getElementById('network-badge')?.textContent,
 			status: unconfigured.window.document.getElementById('network-status')?.textContent,
-		}).toEqual({ attention: 'No blockers', badge: 'Sepolia · chain 11155111', status: 'Chain and RPCs passed validation, were saved, and apply to the next scan.' })
+		}).toEqual({ attention: true, badge: 'Sepolia · chain 11155111', status: 'Chain and RPCs passed validation, were saved, and apply to the next scan.' })
 		expect(unconfigured.window.document.getElementById('settings-chain-scope')?.textContent).toContain('Editing the Sepolia profile')
 		expect(unconfigured.window.document.getElementById('network-scope-summary')?.textContent).toBe('Sepolia profile · switchable')
 		expect(networkName.disabled).toBe(false)
@@ -715,9 +726,7 @@ describe('liquidator dashboard refresh behavior', () => {
 	test('prunes approved descendants when changing or clearing a truth path', async () => {
 		const universes = [universe('1'), universe('2', '1', '1'), universe('3', '1', '2'), universe('4', '2', '1')]
 		const siblingPage = await dashboard(mainnetConfiguration(['1', '2', '4']), state(undefined, [], { universes }))
-		const legend = siblingPage.window.document.querySelector('.truth-options legend')
-		expect(legend?.firstChild?.textContent).toBe('Truth outcome')
-		expect(legend?.textContent).toBe('Truth outcome for universe #1')
+		expect(siblingPage.window.document.querySelector('.ue-detail-title')?.textContent).toBe('Root universe')
 		const sibling = siblingPage.window.document.querySelector('input[value="3"]')
 		if (!(sibling instanceof siblingPage.window.HTMLInputElement)) throw new Error('Expected sibling truth control')
 		sibling.click()
@@ -726,7 +735,7 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(siblingPage.approvedUniverseRequests.at(-1)?.sort()).toEqual(['1', '3'])
 
 		const nonePage = await dashboard(mainnetConfiguration(['1', '2', '4']), state(undefined, [], { universes }))
-		const none = nonePage.window.document.querySelector('input[data-record-key="universe:none:1"]')
+		const none = nonePage.window.document.querySelector('input[value="2"]')
 		if (!(none instanceof nonePage.window.HTMLInputElement)) throw new Error('Expected no-child truth control')
 		none.click()
 		await nonePage.waitUntilComplete()
@@ -737,6 +746,9 @@ describe('liquidator dashboard refresh behavior', () => {
 	test('switches a nested truth selection across the complete ancestor path', async () => {
 		const universes = [universe('1'), universe('2', '1', '1'), universe('3', '1', '2'), universe('4', '2', '1'), universe('5', '3', '1')]
 		const page = await dashboard(mainnetConfiguration(['1', '2', '4']), state(undefined, [], { universes }))
+		const expand = page.window.document.querySelector('button[data-universe-focus="expand:3"]')
+		if (!(expand instanceof page.window.HTMLButtonElement)) throw new Error('Expected branch expansion')
+		expand.click()
 		const destination = page.window.document.querySelector('input[value="5"]')
 		if (!(destination instanceof page.window.HTMLInputElement)) throw new Error('Expected nested truth control')
 
@@ -756,7 +768,9 @@ describe('liquidator dashboard refresh behavior', () => {
 		if (!(firstUniverse instanceof universePage.window.HTMLInputElement) || !(secondUniverse instanceof universePage.window.HTMLInputElement)) throw new Error('Expected universe controls')
 		firstUniverse.click()
 		await Bun.sleep(1)
-		expect(secondUniverse.disabled).toBe(true)
+		const pendingSecondUniverse = universePage.window.document.querySelector('input[value="3"]')
+		if (!(pendingSecondUniverse instanceof universePage.window.HTMLInputElement)) throw new Error('Expected pending universe control')
+		expect(pendingSecondUniverse.disabled).toBe(true)
 		secondUniverse.click()
 		expect(universePage.approvedUniverseRequests).toHaveLength(1)
 		universePage.releaseApprovedUniverseRequest()
@@ -973,4 +987,39 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(page.pauseRequests.length).toBeGreaterThan(0)
 		expect(page.pauseRequests).toEqual(page.pauseRequests.map(() => ({ paused: false })))
 	})
+})
+
+test('keeps a large universe registry compact and finds collapsed descendants with their lineage', async () => {
+	const universes = [universe('0'), ...Array.from({ length: 5000 }, (_, index) => universe(String(index + 1), '0', String(index + 1))), universe('6000', '1', '2'), universe('6001', '5000', '1')]
+	const page = await dashboard(mainnetConfiguration(['0']), state(undefined, [], { universes }))
+	expect(page.window.document.querySelectorAll('.ue-row')).toHaveLength(60)
+	const more = page.window.document.querySelector('.ue-more')
+	if (!(more instanceof page.window.HTMLButtonElement)) throw new Error('Expected universe pagination')
+	more.click()
+	expect(page.window.document.querySelectorAll('.ue-row')).toHaveLength(120)
+	const search = page.window.document.querySelector('.ue-search')
+	if (!(search instanceof page.window.HTMLInputElement)) throw new Error('Expected universe search')
+	search.value = '5000'
+	search.dispatchEvent(new page.window.Event('input'))
+	const distant = page.window.document.querySelector('.ue-node')
+	if (!(distant instanceof page.window.HTMLButtonElement)) throw new Error('Expected distant parent')
+	distant.click()
+	const children = Array.from(page.window.document.querySelectorAll('.ue-parent-link')).find(button => button.textContent?.startsWith('View 1 child'))
+	if (!(children instanceof page.window.HTMLButtonElement)) throw new Error('Expected child navigation')
+	children.click()
+	expect(page.window.document.querySelector('input[value="6001"]')).not.toBeNull()
+	expect(page.window.document.querySelectorAll('.ue-row').length).toBeLessThanOrEqual(60)
+	search.value = '6000'
+	search.dispatchEvent(new page.window.Event('input'))
+	expect(page.window.document.querySelectorAll('.ue-row')).toHaveLength(1)
+	const inspect = page.window.document.querySelector('.ue-node')
+	if (!(inspect instanceof page.window.HTMLButtonElement)) throw new Error('Expected matching universe')
+	inspect.click()
+	expect(page.window.document.querySelector('.ue-lineage')?.textContent).toBe('Root universe › Outcome 1 › Outcome 2')
+	const approval = page.window.document.querySelector('.ue-approve')
+	if (!(approval instanceof page.window.HTMLInputElement)) throw new Error('Expected approval control')
+	approval.click()
+	await page.waitUntilComplete()
+	await Bun.sleep(1)
+	expect(page.approvedUniverseRequests.at(-1)).toEqual(['0', '1', '6000'])
 })

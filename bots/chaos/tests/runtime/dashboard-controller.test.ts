@@ -1,22 +1,15 @@
+import { recordUnavailableDeploymentScan } from '../../src/runtime/deployment-availability.ts'
 import { describe, expect, test } from 'bun:test'
-import { createSignerOperationGate, privateKeyToAccount, zeroAddress, zeroHash, type Hex } from '../support/bot-shared.ts'
+import { privateKeyToAccount, zeroAddress, zeroHash, type Hex } from '@zoltar/bot-shared/ethereum'
+import { createSignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
 import example from '../../config/operator.example.json'
-import {
-	assertSignerCompatibleWithPending,
-	assertSignerCompatibleWithDurableScope,
-	assertSettingsUpdatePaused,
-	ConfigurationCommitIndeterminate,
-	ConfigurationCommittedSafelyPaused,
-	connectivityCandidate,
-	createChaosDashboardController,
-	pausedCandidate,
-	restartSafeSettings,
-	settingsPatchCandidate,
-	signerCandidateSettings,
-} from '../../src/runtime/dashboard-controller.ts'
+import { type DashboardControllerOptions, createChaosDashboardController } from '../../src/runtime/dashboard-controller.ts'
+import { assertSignerCompatibleWithPending, assertSignerCompatibleWithDurableScope, assertSettingsUpdatePaused, connectivityCandidate, pausedCandidate, restartSafeSettings, settingsPatchCandidate, signerCandidateSettings } from '../../src/runtime/configuration-candidates.ts'
+import { ConfigurationCommitIndeterminate, ConfigurationCommittedSafelyPaused } from '../../src/runtime/configuration-commit.ts'
 import { parseSettings, serializedSettings, type OperatorSettings } from '../../src/config/settings.ts'
-import { bindRuntimeStateToSigner, initialDurableState, initialRuntimeState, type RuntimeState } from '../../src/state/operator-state.ts'
-import { createDurableWorkflow, markWorkflowStepConfirmed } from '../../src/runtime/workflows.ts'
+import { bindRuntimeStateToSigner, type RuntimeState } from '../../src/state/operator-state.ts'
+import { initialDurableState, initialRuntimeState } from '../../src/state/initial-state.ts'
+import { createDurableWorkflow, markWorkflowFailed, markWorkflowStepConfirmed } from '../../src/runtime/workflows.ts'
 import type { OperationPlan } from '../../src/operations/types.ts'
 
 function settings() {
@@ -103,7 +96,7 @@ function completeSignerScan(state: RuntimeState, current: OperatorSettings, bala
 	}
 }
 
-function noopController(current: OperatorSettings, state: RuntimeState) {
+function noopController(current: OperatorSettings, state: RuntimeState, overrides: Pick<DashboardControllerOptions, 'saveState' | 'onScheduleRequested'> = {}) {
 	const configuration = { path: '/tmp/unused-chaos-config.json', rememberSigner: true, revision: 'revision', settings: current }
 	let revision = 0
 	return {
@@ -123,6 +116,7 @@ function noopController(current: OperatorSettings, state: RuntimeState) {
 				return `revision:${revision.toString()}`
 			},
 			saveState: async () => undefined,
+			...overrides,
 			state,
 		}),
 	}
@@ -138,6 +132,163 @@ async function captureFailure(operation: () => unknown | Promise<unknown>): Prom
 }
 
 describe('chaos dashboard configuration boundary', () => {
+	test('brings only the current running schedule forward', async () => {
+		const current = configuredSettings(false, false)
+		const state = runtimeState(current)
+		state.scheduler = { ...state.scheduler, status: 'scheduled', nextRunAt: '2099-01-01T00:00:00.000Z' }
+		const { controller } = noopController(current, state)
+		if (controller.setSchedule === undefined) throw new Error('Schedule control is unavailable')
+		const request = { revision: 'revision', nextRunAt: state.scheduler.nextRunAt }
+		await expect(controller.setSchedule({ ...request, nextRunAt: 'stale' })).rejects.toThrow('changed')
+		await controller.setSchedule(request)
+		expect(state.scheduler.status).toBe('due')
+		expect(Date.parse(state.scheduler.nextRunAt ?? '')).toBeLessThanOrEqual(Date.now())
+		await expect(controller.setSchedule(request)).rejects.toThrow('changed')
+		state.paused = true
+		await expect(controller.setSchedule({ revision: 'revision', nextRunAt: state.scheduler.nextRunAt })).rejects.toThrow('Resume')
+	})
+
+	test('does not advance or wake a schedule whose persistence failed', async () => {
+		const current = configuredSettings(false, false)
+		const state = runtimeState(current)
+		state.scheduler = { ...state.scheduler, status: 'scheduled', nextRunAt: '2099-01-01T00:00:00.000Z' }
+		let woken = false
+		const { controller } = noopController(current, state, {
+			saveState: async () => {
+				throw new Error('disk unavailable')
+			},
+			onScheduleRequested: () => {
+				woken = true
+			},
+		})
+		if (controller.setSchedule === undefined) throw new Error('Schedule control is unavailable')
+		await expect(controller.setSchedule({ revision: 'revision', nextRunAt: state.scheduler.nextRunAt })).rejects.toThrow('disk unavailable')
+		expect(state.scheduler).toMatchObject({ status: 'scheduled', nextRunAt: '2099-01-01T00:00:00.000Z' })
+		expect(woken).toBe(false)
+	})
+
+	test('disabling one unrestricted catalog entry preserves all other selections', async () => {
+		const current = configuredSettings(true, false)
+		current.strategy.selectableOperationAllowlist = undefined
+		const state = runtimeState(current)
+		const { controller, configuration } = noopController(current, state)
+		if (controller.setSelection === undefined) throw new Error('Selection control is unavailable')
+		await controller.setSelection({ revision: 'revision', operationId: 'open-oracle.weth.wrap', enabled: false })
+		const allowed = configuration.settings.strategy.selectableOperationAllowlist
+		expect(allowed).not.toContain('open-oracle.weth.wrap')
+		expect(allowed).toContain('zoltar.question.create-binary')
+		expect(allowed).not.toContain('open-oracle.settle')
+	})
+
+	test('updates catalog selection without replacing other execution policy', async () => {
+		const current = configuredSettings(true, false)
+		const state = runtimeState(current)
+		const { controller, configuration } = noopController(current, state)
+		if (controller.setSelection === undefined) throw new Error('Selection control is unavailable')
+		await controller.setSelection({ revision: 'revision', operationId: 'open-oracle.weth.wrap', enabled: true })
+		expect(configuration.settings.strategy.selectableOperationAllowlist).toEqual(['open-oracle.weth.wrap'])
+		expect(configuration.settings.strategy).toEqual({ ...current.strategy, selectableOperationAllowlist: ['open-oracle.weth.wrap'] })
+		await expect(controller.setSelection({ revision: 'revision', operationId: 'open-oracle.weth.wrap', enabled: false })).rejects.toThrow('changed')
+		await expect(controller.setSelection({ revision: configuration.revision, operationId: 'open-oracle.settle', enabled: true })).rejects.toThrow('selectable')
+		await controller.setSelection({ revision: configuration.revision, operationId: 'open-oracle.weth.wrap', enabled: false })
+		expect(configuration.settings.strategy.selectableOperationAllowlist).toEqual([])
+		state.paused = false
+		await expect(controller.setSelection({ revision: configuration.revision, operationId: 'open-oracle.weth.wrap', enabled: true })).rejects.toThrow('Pause')
+	})
+
+	test('persists profile- and recipient-bound Drain & Retire controls', async () => {
+		const current = configuredSettings(false, true)
+		const state = runtimeState(current)
+		state.profileId = 'profile:test'
+		completeSignerScan(state, current)
+		const { controller } = noopController(current, state)
+		if (controller.setRetirement === undefined) throw new Error('Retirement controller is unavailable')
+		const recipient = '0x0000000000000000000000000000000000000099'
+		await controller.setRetirement({
+			action: 'request',
+			confirmation: `DRAIN profile:test TO ${recipient}`,
+			policies: { exitAfterCompletion: false, exitUnmatchedShares: false, maximumExitLossBps: 0, migrateExistingClaims: false, sweepAssets: true, unwrapWeth: true },
+			profileId: 'profile:test',
+			recipient,
+		})
+		expect(state.retirement).toMatchObject({ recipient, status: 'requested' })
+		await controller.setRetirement({ action: 'cancel', confirmation: 'CANCEL DRAIN' })
+		expect(state.retirement.status).toBe('inactive')
+	})
+
+	test('rejects zero and durable-signer recipients at the dashboard API boundary', async () => {
+		const current = configuredSettings(false, true)
+		const state = runtimeState(current)
+		state.profileId = 'profile:test'
+		completeSignerScan(state, current)
+		const { controller } = noopController(current, state)
+		if (controller.setRetirement === undefined || state.signerAddress === undefined) throw new Error('Retirement controller is unavailable')
+		for (const [recipient, expectedError] of [
+			['0x0000000000000000000000000000000000000000', 'zero address'],
+			[state.signerAddress, 'durable signer'],
+		] as const) {
+			const error = await captureFailure(
+				async () =>
+					await controller.setRetirement?.({
+						action: 'request',
+						confirmation: `DRAIN profile:test TO ${recipient}`,
+						policies: { exitAfterCompletion: false, exitUnmatchedShares: false, maximumExitLossBps: 0, migrateExistingClaims: false, sweepAssets: true, unwrapWeth: true },
+						profileId: 'profile:test',
+						recipient,
+					}),
+			)
+			expect(String(error)).toContain(expectedError)
+			expect(state.retirement.status).toBe('inactive')
+		}
+	})
+
+	test('registers only durable-signer V3 positions with explicit profile confirmation', async () => {
+		const current = configuredSettings(true, false)
+		const state = runtimeState(current)
+		state.profileId = 'profile:test'
+		completeSignerScan(state, current)
+		const { controller } = noopController(current, state)
+		if (controller.setRetirement === undefined || state.signerAddress === undefined) throw new Error('Retirement controller is unavailable')
+		await controller.setRetirement({
+			action: 'register-v3-position',
+			confirmation: 'REGISTER V3 profile:test',
+			fee: 3000,
+			owner: state.signerAddress,
+			pool: '0x0000000000000000000000000000000000000020',
+			profileId: 'profile:test',
+			tickLower: -120,
+			tickUpper: 120,
+			token0: '0x0000000000000000000000000000000000000021',
+			token1: '0x0000000000000000000000000000000000000022',
+			workflowId: 'legacy:receipt',
+		})
+		expect(state.retirement.positions[0]).toMatchObject({ registeredBy: 'operator', status: 'pending-confirmation' })
+	})
+
+	test('binds dashboard residual acceptance to the current profile and completion proof', async () => {
+		const current = configuredSettings(true, false)
+		const state = runtimeState(current)
+		if (current.privateKey === undefined) throw new Error('Expected a configured signer')
+		const signer = privateKeyToAccount(current.privateKey).address
+		bindRuntimeStateToSigner(state, signer)
+		state.profileId = 'profile:test'
+		state.retirement.status = 'drained-with-residuals'
+		state.retirement.recipient = '0x0000000000000000000000000000000000000099'
+		state.retirement.completionEvidence = {
+			blockHash: zeroHash,
+			blockNumber: '42',
+			completedAt: '2026-09-07T00:00:00.000Z',
+			profileId: state.profileId,
+			proof: { actionableObligations: 0, claimableAssets: 0, collectableV3Positions: 0, knownApprovals: 0, ownedLiquidityPositions: 0, partialWorkflows: 0, pendingTransactions: 0 },
+			residuals: [{ amount: '1', asset: 'TEST', category: 'operator-accepted', reason: 'Retained test asset' }],
+			signerAddress: signer,
+		}
+		const { controller } = noopController(current, state)
+		if (controller.setRetirement === undefined) throw new Error('Retirement controller is unavailable')
+		await controller.setRetirement({ action: 'accept-residuals', confirmation: 'ACCEPT RESIDUALS FOR profile:next', reason: 'Reviewed residual assets and accepted replacement.', targetProfileId: 'profile:next' })
+		expect(state.retirement.profileReplacementOverride).toMatchObject({ completionBlockHash: zeroHash, completionBlockNumber: '42', recipient: state.retirement.recipient, sourceProfileId: 'profile:test', targetProfileId: 'profile:next' })
+	})
+
 	test('builds a focused server-side RPC connectivity update', () => {
 		const candidate = connectivityCandidate(settings(), {
 			connectivity: {
@@ -387,7 +538,16 @@ describe('chaos dashboard configuration boundary', () => {
 		})
 
 		state.lastScanAt = '2026-08-29T00:00:00.000Z'
-		expect(await controller.getState()).toMatchObject({ inventoryAvailable: true })
+		expect(await controller.getState()).toMatchObject({ inventoryAvailable: false })
+		const address = privateKeyToAccount(firstPrivateKey).address
+		state.wallet = address
+		expect(await controller.getState()).toMatchObject({ inventoryAvailable: false, signerReady: false, wallet: address })
+		state.inventoryAddress = address
+		expect(await controller.getState()).toMatchObject({ inventoryAvailable: true, signerReady: false, wallet: address })
+		state.wallet = privateKeyToAccount(secondPrivateKey).address
+		expect(await controller.getState()).toMatchObject({ inventoryAvailable: false })
+		state.wallet = undefined
+		expect(await controller.getState()).toMatchObject({ inventoryAvailable: false })
 	})
 
 	test('keeps a deferred lifecycle obligation in the dashboard state', async () => {
@@ -506,7 +666,7 @@ describe('chaos dashboard configuration boundary', () => {
 		expect(candidate.settings.strategy.initializeGenesisUniverse).toBe(true)
 	})
 
-	test('rejects a dashboard transition from single-reader dry run to live execution', () => {
+	test('accepts a dashboard transition from single-reader dry run to live execution', () => {
 		const configured = configuredSettings(true, false)
 		const singleReader = parseSettings({
 			...serializedSettings(configured),
@@ -518,7 +678,12 @@ describe('chaos dashboard configuration boundary', () => {
 			},
 		})
 
-		expect(() => settingsPatchCandidate(singleReader, settingsUpdate(singleReader, 'revision', true))).toThrow('Live execution requires RPC quorum 2 with three independent read origins')
+		const live = settingsPatchCandidate(singleReader, settingsUpdate(singleReader, 'revision', true))
+		expect(live.settings.runtime.execute).toBe(true)
+		expect(live.settings.connectivity).toMatchObject({
+			quorumRpcUrls: [],
+			rpcQuorum: 1,
+		})
 		expect(settingsPatchCandidate(singleReader, settingsUpdate(singleReader, 'revision', false)).settings.connectivity).toMatchObject({
 			quorumRpcUrls: [],
 			rpcQuorum: 1,
@@ -1022,6 +1187,39 @@ describe('chaos dashboard configuration boundary', () => {
 		expect(state.scheduler.nextRunAt).toBeDefined()
 	})
 
+	test('durably reconciles a selectable semantic failure before retirement can complete', async () => {
+		const current = settings()
+		const state = initialRuntimeState(true, undefined, current.network.chainId, initialDurableState(current.network.chainId, true))
+		const workflow = createDurableWorkflow({
+			classification: 'selectable',
+			createdAtBlock: '10',
+			definitionId: 'trading.test',
+			ecosystem: 'trading',
+			id: 'plan:semantic-failure',
+			label: 'Semantically uncertain trade',
+			metadata: {},
+			obligation: false,
+			planningSeed: 7,
+			postconditions: [],
+			priority: 'random',
+			risk: 'low',
+			steps: [{ data: '0x11', evidence: [{ kind: 'receipt-success' }], gasLimit: '100000', id: 'trade', label: 'Trade', preflightCalls: [], to: zeroAddress, walletAssetDebits: [] }],
+		})
+		markWorkflowFailed(workflow, 'trade', new Error('Receipt succeeded but the state proof disagreed'), 'semantic-failure')
+		state.workflows = [workflow]
+		const controller = createChaosDashboardController({
+			configuration: { path: '/tmp/unused-chaos-config.json', rememberSigner: false, revision: 'revision', settings: current },
+			gate: createSignerOperationGate(),
+			hostname: '127.0.0.1',
+			locks: { acquireSigner: async () => undefined, commitSigner: async () => undefined, discardSigner: async () => undefined, release: async () => undefined },
+			saveState: async () => {},
+			state,
+		})
+		expect(await controller.getState()).toMatchObject({ currentWorkflow: { id: workflow.id, status: 'failed' } })
+		await controller.setWorkflow({ action: 'abandon', confirmation: 'ABANDON PARTIAL WORKFLOW', reason: 'Operator verified the final canonical state manually', updatedAt: workflow.updatedAt, workflowId: workflow.id })
+		expect(state.workflows[0]).toMatchObject({ status: 'abandoned' })
+	})
+
 	test('does not begin a resume when the pre-configuration safety checkpoint cannot persist', async () => {
 		const current = configuredSettings(true, true)
 		const state = runtimeState(current)
@@ -1429,4 +1627,13 @@ describe('chaos dashboard configuration boundary', () => {
 		expect(stateSaveCount).toBe(2)
 		expect(configuration.settings.scheduler.minimumDelaySeconds).toBe(90)
 	})
+})
+
+test('projects absent deployments as informational availability with no executable plans', async () => {
+	const current = parseSettings(example)
+	const state = initialRuntimeState(false, undefined, current.network.chainId)
+	recordUnavailableDeploymentScan(state, 'Waiting for deployments', { blockNumber: 100n, checkedAt: '2026-09-08T00:00:00.000Z' })
+	const { controller } = noopController(current, state)
+	expect(await controller.getState()).toMatchObject({ alerts: [{ message: 'Waiting for deployments', severity: 'info' }], error: undefined })
+	expect(state.evaluations.every(evaluation => !evaluation.eligibility.eligible && evaluation.plan === undefined)).toBeTrue()
 })

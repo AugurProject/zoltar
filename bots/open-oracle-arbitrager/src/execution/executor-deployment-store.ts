@@ -2,8 +2,9 @@ import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
-import { getAddress, keccak256, parseTransaction, recoverTransactionAddress, type Address, type Hex } from '#ethereum'
+import { getAddress, keccak256, parseTransaction, recoverTransactionAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { acquireExclusiveProcessLock } from '@zoltar/bot-shared/execution/process-lock'
+import { isHash32 } from '@zoltar/bot-shared/infrastructure/json-validation'
 
 export type ExecutorDeploymentIntent = {
 	account: Address
@@ -25,12 +26,12 @@ export function acquireExecutorDeploymentIntentLock(path: string) {
 	return acquireExclusiveProcessLock(join(tmpdir(), 'zoltar-bot-locks', `executor-intent-${lockName}.lock`), `Executor deployment intent ${intentPath}`, { intentPath })
 }
 
-function parseHex(value: unknown, bytes: number, label: string) {
-	if (typeof value !== 'string' || !new RegExp(`^0x[0-9a-fA-F]{${(bytes * 2).toString()}}$`).test(value)) throw new Error(`Executor deployment intent ${label} is invalid`)
-	return value as Hex
+function parseHash32(value: unknown, label: string) {
+	if (!isHash32(value)) throw new Error(`Executor deployment intent ${label} is invalid`)
+	return value
 }
 
-export async function parseExecutorDeploymentIntent(value: unknown): Promise<ExecutorDeploymentIntent> {
+async function parseExecutorDeploymentIntent(value: unknown): Promise<ExecutorDeploymentIntent> {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Executor deployment intent must be an object')
 	const record = value as Record<string, unknown>
 	const keys = ['account', 'address', 'chainId', 'salt', 'serializedTransaction', 'transactionHash', 'version']
@@ -38,7 +39,7 @@ export async function parseExecutorDeploymentIntent(value: unknown): Promise<Exe
 	if (!Number.isSafeInteger(record['chainId']) || Number(record['chainId']) <= 0) throw new Error('Executor deployment intent chainId is invalid')
 	if (typeof record['serializedTransaction'] !== 'string' || !/^0x(?:[0-9a-fA-F]{2})+$/.test(record['serializedTransaction'])) throw new Error('Executor deployment intent serializedTransaction is invalid')
 	const serializedTransaction = record['serializedTransaction'] as Hex
-	const transactionHash = parseHex(record['transactionHash'], 32, 'transactionHash')
+	const transactionHash = parseHash32(record['transactionHash'], 'transactionHash')
 	if (keccak256(serializedTransaction).toLowerCase() !== transactionHash.toLowerCase()) throw new Error('Executor deployment intent transaction hash does not match its signed bytes')
 	const chainId = Number(record['chainId'])
 	if (parseTransaction(serializedTransaction).chainId !== BigInt(chainId)) throw new Error('Executor deployment intent signed transaction uses a different chain')
@@ -48,7 +49,7 @@ export async function parseExecutorDeploymentIntent(value: unknown): Promise<Exe
 		account,
 		address: getAddress(String(record['address'])),
 		chainId,
-		salt: parseHex(record['salt'], 32, 'salt'),
+		salt: parseHash32(record['salt'], 'salt'),
 		serializedTransaction,
 		transactionHash,
 		version: 1,

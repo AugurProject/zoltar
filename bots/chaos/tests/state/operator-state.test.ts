@@ -2,24 +2,11 @@ import { chmod, link, mkdir, mkdtemp, open, readFile, readdir, rename, rm, stat,
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test } from 'bun:test'
-import { encodeAbiParameters, getAddress, keccak256, privateKeyToAccount } from '../support/bot-shared.ts'
-import {
-	DURABLE_STATE_VERSION,
-	MAXIMUM_LIFECYCLE_PRESENCE_BLOCKER_COUNT,
-	MAXIMUM_TERMINAL_WORKFLOW_COUNT,
-	compactDurableState,
-	initialDurableState,
-	initialRuntimeState,
-	loadDurableState,
-	loadRuntimeState,
-	parseProtocolIndex,
-	recordActivity,
-	saveDurableState,
-	type DurableState,
-	type DurableWorkflow,
-	type PendingTransactionIntent,
-	type StateFilesystem,
-} from '../../src/state/operator-state.ts'
+import { encodeAbiParameters, getAddress, keccak256, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
+import { MAXIMUM_LIFECYCLE_PRESENCE_BLOCKER_COUNT, bindRuntimeStateToSigner, setRuntimeExecutionAddress, loadDurableState, loadRuntimeState, recordActivity, saveDurableState, type DurableState, type DurableWorkflow, type PendingTransactionIntent, type StateFilesystem } from '../../src/state/operator-state.ts'
+import { snapshotProtocolIndex } from '../../src/state/protocol-index-store.ts'
+import { DURABLE_STATE_VERSION, initialDurableState, initialRuntimeState } from '../../src/state/initial-state.ts'
+import { acceptResidualProfileReplacement } from '../../src/state/retirement.ts'
 
 const directories: string[] = []
 
@@ -167,6 +154,15 @@ function workflow(): DurableWorkflow {
 	}
 }
 
+function terminalWorkflow(status: 'abandoned' | 'completed', id: string, at: string): DurableWorkflow {
+	const base = workflow()
+	const step = base.steps[0]
+	if (step === undefined) throw new Error('Expected a populated workflow step')
+	const confirmedStep = { ...step, confirmedAt: at, status: 'confirmed' as const, transactionHash: topic0 }
+	delete confirmedStep.transactionIntentId
+	return { ...base, completedAt: at, id, status, steps: [confirmedStep], updatedAt: at }
+}
+
 async function pendingIntent(): Promise<PendingTransactionIntent> {
 	const account = privateKeyToAccount(`0x${'11'.repeat(32)}`)
 	const serializedTransaction = await account.signTransaction({
@@ -247,6 +243,38 @@ describe('chaos-bot durable state', () => {
 		expect(runtime.wallet).toBe(signer)
 	})
 
+	test('rejects an active keyless retirement targeting the configured signer before recovery or binding', async () => {
+		const path = await statePath()
+		const configuredSigner = privateKeyToAccount(`0x${'22'.repeat(32)}`).address
+		const durable = initialDurableState(1, false, 'profile:test')
+		durable.retirement.status = 'draining'
+		durable.retirement.recipient = configuredSigner
+		durable.retirement.requestedAt = createdAt
+		const pendingRetirementWorkflow = workflow()
+		pendingRetirementWorkflow.id = 'workflow:retirement-sweep'
+		pendingRetirementWorkflow.operationId = 'retirement.sweep.native-last'
+		pendingRetirementWorkflow.planId = 'retirement.sweep.native-last:1'
+		pendingRetirementWorkflow.status = 'planned'
+		const pendingStep = pendingRetirementWorkflow.steps[0]
+		if (pendingStep === undefined) throw new Error('Expected retirement workflow step')
+		pendingStep.status = 'planned'
+		pendingStep.transactionIntentId = undefined
+		durable.workflows = [pendingRetirementWorkflow]
+		await saveDurableState(path, durable)
+
+		let recoveryStateReturned = false
+		await expect(
+			loadRuntimeState(path, false, configuredSigner, 1).then(() => {
+				recoveryStateReturned = true
+			}),
+		).rejects.toThrow('durable signer')
+		expect(recoveryStateReturned).toBeFalse()
+		const keylessRuntime = initialRuntimeState(false, undefined, 1, durable)
+		expect(() => bindRuntimeStateToSigner(keylessRuntime, configuredSigner)).toThrow('durable signer')
+		expect(keylessRuntime.signerAddress).toBeUndefined()
+		expect(keylessRuntime.workflows[0]?.status).toBe('planned')
+	})
+
 	test('honors a durable safety pause across process restart', () => {
 		const durable = initialDurableState(1, false)
 		durable.safetyPaused = true
@@ -289,15 +317,136 @@ describe('chaos-bot durable state', () => {
 		expect(restored.lifecyclePresenceBlocker).toEqual(state.lifecyclePresenceBlocker)
 		expect(restored.obligationTombstones).toEqual(state.obligationTombstones)
 
+		state.lifecyclePresenceBlocker = { ...state.lifecyclePresenceBlocker, historyStartBlock: '42', requiresCarryHistory: true, presenceComplete: false }
+		await saveDurableState(path, state)
+		expect((await loadDurableState(path, 1)).lifecyclePresenceBlocker).toEqual(state.lifecyclePresenceBlocker)
 		const validBlocker = state.lifecyclePresenceBlocker
+		state.lifecyclePresenceBlocker = { ...validBlocker, historyStartBlock: '89' }
+		await expect(saveDurableState(path, state)).rejects.toThrow('after its observation')
 		state.lifecyclePresenceBlocker = { ...validBlocker, count: MAXIMUM_LIFECYCLE_PRESENCE_BLOCKER_COUNT + 1 }
 		await expect(saveDurableState(path, state)).rejects.toThrow('identity safety limit')
 		expect((await loadDurableState(path, 1)).lifecyclePresenceBlocker).toEqual(validBlocker)
 
 		const stored = JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>
-		stored['version'] = DURABLE_STATE_VERSION - 1
+		stored['version'] = DURABLE_STATE_VERSION - 2
 		await writeFile(path, `${JSON.stringify(stored)}\n`)
 		await expect(loadDurableState(path, 1)).rejects.toThrow('version is unsupported')
+	})
+
+	test('migrates version 3 state to an inactive retirement journal', async () => {
+		const path = await statePath()
+		await saveDurableState(path, initialDurableState(1))
+		const stored = JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>
+		stored['version'] = 3
+		delete stored['retirement']
+		await writeFile(path, `${JSON.stringify(stored)}\n`)
+		const restored = await loadDurableState(path, 1)
+		expect(restored.version).toBe(4)
+		expect(restored.retirement).toMatchObject({ blockers: [], lastObservedBalances: {}, positions: [], status: 'inactive' })
+	})
+
+	test('migrates balance evidence and restarts durably from every retirement phase', async () => {
+		const path = await statePath()
+		const state = initialDurableState(1)
+		for (const status of ['requested', 'draining', 'waiting', 'blocked', 'drained', 'drained-with-residuals'] as const) {
+			state.retirement.status = status
+			state.retirement.completionEvidence =
+				status === 'drained' || status === 'drained-with-residuals'
+					? {
+							blockHash: topic0,
+							blockNumber: '50',
+							completedAt: createdAt,
+							proof: { actionableObligations: 0, claimableAssets: 0, collectableV3Positions: 0, knownApprovals: 0, ownedLiquidityPositions: 0, partialWorkflows: 0, pendingTransactions: 0 },
+							residuals: status === 'drained' ? [] : [{ amount: '1', asset: 'dust', category: 'accepted-dust', reason: 'Accepted test dust' }],
+						}
+					: undefined
+			state.retirement.lastObservedBalances = { ETH: '9' }
+			state.retirement.recoveredBalances = { ETH: '4' }
+			await saveDurableState(path, state)
+			const restored = await loadDurableState(path, 1)
+			expect(restored.retirement).toMatchObject({ lastObservedBalances: { ETH: '9' }, recoveredBalances: { ETH: '4' }, status })
+		}
+		const stored = JSON.parse(await readFile(path, 'utf8')) as { retirement: Record<string, unknown> }
+		delete stored.retirement['lastObservedBalances']
+		await writeFile(path, `${JSON.stringify(stored)}\n`)
+		expect((await loadDurableState(path, 1)).retirement.lastObservedBalances).toEqual({})
+	})
+
+	test('fails closed when persisted retirement state targets zero or the durable signer', async () => {
+		const path = await statePath()
+		const signer = getAddress('0x0000000000000000000000000000000000000099')
+		const state = initialDurableState(1, true, 'profile:test', signer)
+		await saveDurableState(path, state)
+		const stored = JSON.parse(await readFile(path, 'utf8')) as { retirement: Record<string, unknown> }
+		stored.retirement['status'] = 'requested'
+		stored.retirement['requestedAt'] = createdAt
+		for (const recipient of [getAddress('0x0000000000000000000000000000000000000000'), signer]) {
+			stored.retirement['recipient'] = recipient
+			await writeFile(path, `${JSON.stringify(stored)}\n`)
+			await expect(loadDurableState(path, 1)).rejects.toThrow(recipient === signer ? 'durable signer' : 'zero address')
+		}
+	})
+
+	test('persists proof-bound residual replacement acceptance and discards the legacy unbound shape', async () => {
+		const path = await statePath()
+		const signer = getAddress('0x0000000000000000000000000000000000000021')
+		const state = initialDurableState(1, true, 'profile:test', signer)
+		state.profileId = 'profile:test'
+		state.retirement.status = 'drained-with-residuals'
+		state.retirement.recipient = emitter
+		state.retirement.completionEvidence = {
+			blockHash: topic0,
+			blockNumber: '50',
+			completedAt: createdAt,
+			profileId: state.profileId,
+			proof: { actionableObligations: 0, claimableAssets: 0, collectableV3Positions: 0, knownApprovals: 0, ownedLiquidityPositions: 0, partialWorkflows: 0, pendingTransactions: 0 },
+			residuals: [{ amount: '1', asset: 'dust', category: 'accepted-dust', reason: 'Accepted test dust' }],
+			signerAddress: signer,
+		}
+		acceptResidualProfileReplacement(state.retirement, state.profileId, 'profile:next', 'Reviewed current residual assets.', 'ACCEPT RESIDUALS FOR profile:next', createdAt)
+		await saveDurableState(path, state)
+		const restored = await loadDurableState(path, 1)
+		expect(restored.retirement.profileReplacementOverride).toEqual(state.retirement.profileReplacementOverride)
+
+		const stored = JSON.parse(await readFile(path, 'utf8')) as { retirement: Record<string, unknown> }
+		const boundOverride = stored.retirement['profileReplacementOverride'] as Record<string, unknown>
+		boundOverride['completionBlockNumber'] = '51'
+		await writeFile(path, `${JSON.stringify(stored)}\n`)
+		await expect(loadDurableState(path, 1)).rejects.toThrow('does not match current completion evidence')
+
+		stored.retirement['profileReplacementOverride'] = { acceptedAt: createdAt, reason: 'Legacy unbound acceptance.', targetProfileId: 'profile:next' }
+		await writeFile(path, `${JSON.stringify(stored)}\n`)
+		expect((await loadDurableState(path, 1)).retirement.profileReplacementOverride).toBeUndefined()
+	})
+
+	test('rejects retirement completion states whose canonical evidence is missing or inconsistent', async () => {
+		const path = await statePath()
+		const state = initialDurableState(1)
+		await saveDurableState(path, state)
+		const original = JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>
+		const completionEvidence = {
+			blockHash: topic0,
+			blockNumber: '50',
+			completedAt: createdAt,
+			proof: { actionableObligations: 0, claimableAssets: 0, collectableV3Positions: 0, knownApprovals: 0, ownedLiquidityPositions: 0, partialWorkflows: 0, pendingTransactions: 0 },
+			residuals: [],
+		}
+		const writeRetirement = async (status: string, evidence?: unknown) => {
+			const candidate = structuredClone(original)
+			const retirement = candidate['retirement'] as Record<string, unknown>
+			retirement['status'] = status
+			if (evidence === undefined) delete retirement['completionEvidence']
+			else retirement['completionEvidence'] = evidence
+			await writeFile(path, `${JSON.stringify(candidate)}\n`)
+		}
+		await writeRetirement('drained')
+		await expect(loadDurableState(path, 1)).rejects.toThrow('requires completion evidence')
+		await writeRetirement('draining', completionEvidence)
+		await expect(loadDurableState(path, 1)).rejects.toThrow('cannot retain completion evidence')
+		await writeRetirement('drained', { ...completionEvidence, residuals: [{ amount: '1', asset: 'dust', category: 'accepted-dust', reason: 'Accepted test dust' }] })
+		await expect(loadDurableState(path, 1)).rejects.toThrow('requires zero residuals')
+		await writeRetirement('drained-with-residuals', completionEvidence)
+		await expect(loadDurableState(path, 1)).rejects.toThrow('requires at least one residual')
 	})
 
 	test('preserves an interrupted scheduler marker until startup schedules a fresh wait', () => {
@@ -616,6 +765,28 @@ describe('chaos-bot durable state', () => {
 		expect(restored?.recoveryBlocker).toContain('window closed')
 	})
 
+	test('round-trips the latest pending transaction observation and rejects inconsistent ones', async () => {
+		const path = await statePath()
+		const state = await populatedState()
+		const intent = state.pendingTransactions[0]
+		if (intent === undefined) throw new Error('Expected a pending workflow fixture')
+		intent.observation = { checkedAt: createdAt, head: 130n, includedBlock: 125n, kind: 'awaiting-finality' }
+		await saveDurableState(path, state)
+		expect((await loadDurableState(path, 1)).pendingTransactions[0]?.observation).toEqual({ checkedAt: createdAt, head: 130n, includedBlock: 125n, kind: 'awaiting-finality' })
+		intent.observation = { checkedAt: createdAt, head: 130n, kind: 'in-mempool' }
+		await saveDurableState(path, state)
+		expect((await loadDurableState(path, 1)).pendingTransactions[0]?.observation).toEqual({ checkedAt: createdAt, head: 130n, kind: 'in-mempool' })
+		const stored = JSON.parse(await readFile(path, 'utf8')) as { pendingTransactions: Array<Record<string, unknown>> }
+		const storedTransaction = stored.pendingTransactions[0]
+		if (storedTransaction === undefined) throw new Error('Expected a stored pending transaction')
+		storedTransaction['observation'] = { checkedAt: createdAt, head: '130', includedBlock: '125', kind: 'in-mempool' }
+		await writeFile(path, `${JSON.stringify(stored)}\n`)
+		await expect(loadDurableState(path, 1)).rejects.toThrow('includedBlock must accompany exactly the included kinds')
+		storedTransaction['observation'] = { checkedAt: createdAt, head: '130', kind: 'included' }
+		await writeFile(path, `${JSON.stringify(stored)}\n`)
+		await expect(loadDurableState(path, 1)).rejects.toThrow('observation.kind is invalid')
+	})
+
 	test('round-trips the canonical report, auction bid, and escalation deposit index', async () => {
 		const path = await statePath()
 		const state = initialDurableState(1)
@@ -635,7 +806,7 @@ describe('chaos-bot durable state', () => {
 		const forgedRoute = forged.migrationRepSplits[0]
 		if (forgedRoute === undefined) throw new Error('Expected migration progress fixture')
 		forgedRoute.childUniverseId = '0'
-		expect(() => parseProtocolIndex(forged, 1)).toThrow('does not match its parent/outcome derivation')
+		expect(() => snapshotProtocolIndex(forged, 1)).toThrow('does not match its parent/outcome derivation')
 
 		const unordered = protocolIndex()
 		unordered.migrationRepSplits.push({
@@ -644,7 +815,7 @@ describe('chaos-bot durable state', () => {
 			outcomeIndex: '0',
 			universeId: '0',
 		})
-		expect(() => parseProtocolIndex(unordered, 1)).toThrow('canonical unique route order')
+		expect(() => snapshotProtocolIndex(unordered, 1)).toThrow('canonical unique route order')
 	})
 
 	test('rejects a protocol index whose canonical cursor precedes its immutable start', async () => {
@@ -734,41 +905,29 @@ describe('chaos-bot durable state', () => {
 		expect(runtime.activities.at(-1)?.message).toBe('old 498')
 	})
 
-	test('bounds terminal workflow history for indefinite operation', () => {
+	const MAXIMUM_TERMINAL_WORKFLOW_COUNT = 500
+
+	test('bounds terminal workflow history for indefinite operation', async () => {
 		const state = initialDurableState(1)
-		state.workflows = Array.from({ length: MAXIMUM_TERMINAL_WORKFLOW_COUNT + 2 }, (_, index) => ({
-			...workflow(),
-			completedAt: new Date(index * 1_000).toISOString(),
-			id: `workflow:history-${index.toString()}`,
-			status: 'completed',
-			updatedAt: new Date(index * 1_000).toISOString(),
-		}))
-		compactDurableState(state)
+		state.workflows = Array.from({ length: MAXIMUM_TERMINAL_WORKFLOW_COUNT + 2 }, (_, index) => terminalWorkflow('completed', `workflow:history-${index.toString()}`, new Date(index * 1_000).toISOString()))
+		await saveDurableState(await statePath(), state)
 		expect(state.workflows).toHaveLength(MAXIMUM_TERMINAL_WORKFLOW_COUNT)
 		expect(state.workflows.some(candidate => candidate.id === 'workflow:history-0')).toBe(false)
 		expect(state.workflows.some(candidate => candidate.id === `workflow:history-${(MAXIMUM_TERMINAL_WORKFLOW_COUNT + 1).toString()}`)).toBe(true)
 	})
 
-	test('bounds abandoned unsigned workflow history for indefinite operation', () => {
+	test('bounds abandoned unsigned workflow history for indefinite operation', async () => {
 		const state = initialDurableState(1)
-		state.workflows = Array.from({ length: MAXIMUM_TERMINAL_WORKFLOW_COUNT + 2 }, (_, index) => ({
-			...workflow(),
-			completedAt: new Date(index * 1_000).toISOString(),
-			id: `workflow:abandoned-${index.toString()}`,
-			status: 'abandoned' as const,
-			updatedAt: new Date(index * 1_000).toISOString(),
-		}))
-		compactDurableState(state)
+		state.workflows = Array.from({ length: MAXIMUM_TERMINAL_WORKFLOW_COUNT + 2 }, (_, index) => terminalWorkflow('abandoned', `workflow:abandoned-${index.toString()}`, new Date(index * 1_000).toISOString()))
+		await saveDurableState(await statePath(), state)
 		expect(state.workflows).toHaveLength(MAXIMUM_TERMINAL_WORKFLOW_COUNT)
 		expect(state.workflows.some(candidate => candidate.id === 'workflow:abandoned-0')).toBe(false)
 	})
 
-	test('retains compact lifecycle tombstones when rich terminal history is pruned', () => {
+	test('retains compact lifecycle tombstones when rich terminal history is pruned', async () => {
 		const state = initialDurableState(1)
-		const terminalWorkflow = workflow()
-		terminalWorkflow.status = 'completed'
-		terminalWorkflow.completedAt = createdAt
-		state.workflows = [terminalWorkflow]
+		const completedWorkflow = terminalWorkflow('completed', 'workflow:one', createdAt)
+		state.workflows = [completedWorkflow]
 		state.obligations = [
 			{
 				automaticRetryCount: 0,
@@ -780,13 +939,13 @@ describe('chaos-bot durable state', () => {
 				id: 'obligation:test',
 				label: 'Settle report',
 				metadata: { reportId: '1' },
-				operationId: 'open-oracle.settle',
+				operationId: completedWorkflow.operationId,
 				status: 'completed',
 				updatedAt: createdAt,
-				workflowId: terminalWorkflow.id,
+				workflowId: completedWorkflow.id,
 			},
 		]
-		compactDurableState(state)
+		await saveDurableState(await statePath(), state)
 		expect(state.obligationTombstones).toEqual([
 			{
 				id: 'obligation:test',
@@ -841,4 +1000,38 @@ describe('chaos-bot durable state', () => {
 		await Promise.all([firstSave, secondSave])
 		expect((await loadDurableState(path, 1)).activities[0]?.message).toBe('second invocation')
 	})
+})
+
+test('invalidates inventory on execution address changes and removal, and never restores inventory', async () => {
+	const first = getAddress('0x0000000000000000000000000000000000000001')
+	const second = getAddress('0x0000000000000000000000000000000000000002')
+	const state = initialRuntimeState(false, undefined, 1)
+	expect(state.inventoryAddress).toBeUndefined()
+	expect(state.wallet).toBeUndefined()
+	setRuntimeExecutionAddress(state, first)
+	state.inventory = { eth: '123', rep: [], weth: '456' }
+	state.inventoryAddress = first
+	state.lastScanAt = '2026-09-10T00:00:00.000Z'
+	setRuntimeExecutionAddress(state, first)
+	expect(state.inventory.eth).toBe('123')
+	expect(state.inventoryAddress).toBe(first)
+	setRuntimeExecutionAddress(state, second)
+	expect(state.inventoryAddress).toBeUndefined()
+	expect(state.inventory.eth).toBe('0')
+	expect(state.lastScanAt).toBe('2026-09-10T00:00:00.000Z')
+	state.inventoryAddress = second
+	state.inventory.eth = '789'
+	setRuntimeExecutionAddress(state, undefined)
+	expect(state.inventoryAddress).toBeUndefined()
+	expect(state.inventory.eth).toBe('0')
+	bindRuntimeStateToSigner(state, first)
+	state.inventoryAddress = first
+	state.inventory.eth = '123'
+	const path = await statePath()
+	await saveDurableState(path, state)
+	const restored = await loadRuntimeState(path, false, undefined, 1)
+	expect(restored.wallet).toBe(first)
+	expect(restored.inventoryAddress).toBeUndefined()
+	expect(restored.inventory.eth).toBe('0')
+	expect(await readFile(path, 'utf8')).not.toContain('inventory')
 })

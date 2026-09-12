@@ -68,7 +68,7 @@ export function repForBackingUnits(backingUnits: bigint, totalAttoRep: bigint, d
 	return (backingUnits * totalAttoRep) / denominator
 }
 
-export function backingUnitsForRep(vaultAttoRepBacking: bigint, totalAttoRep: bigint, denominator: bigint, roundUp = false) {
+function backingUnitsForRep(vaultAttoRepBacking: bigint, totalAttoRep: bigint, denominator: bigint, roundUp = false) {
 	if (denominator === 0n || totalAttoRep === 0n) return vaultAttoRepBacking * PRICE_PRECISION
 	return roundUp ? mulDivUp(vaultAttoRepBacking, denominator, totalAttoRep) : (vaultAttoRepBacking * denominator) / totalAttoRep
 }
@@ -92,7 +92,7 @@ export function vaultHealthBps(vaultAttoRepBacking: bigint, openInterestAttoEth:
 	return associatedHealth < freeHealth ? associatedHealth : freeHealth
 }
 
-export function liquidationPriceDistanceBps(targetVaultRepBackingAttoRep: bigint, openInterestAttoEth: bigint, multiplierBps: bigint, price: bigint, disputeStakedAttoRep = 0n) {
+function liquidationPriceDistanceBps(targetVaultRepBackingAttoRep: bigint, openInterestAttoEth: bigint, multiplierBps: bigint, price: bigint, disputeStakedAttoRep = 0n) {
 	if (openInterestAttoEth === 0n || price === 0n) return 0n
 	const valueScale = PRICE_PRECISION * BPS_DENOMINATOR
 	const associatedThreshold = ((targetVaultRepBackingAttoRep + disputeStakedAttoRep) * valueScale) / (openInterestAttoEth * multiplierBps)
@@ -102,12 +102,12 @@ export function liquidationPriceDistanceBps(targetVaultRepBackingAttoRep: bigint
 	return ((price - thresholdPrice) * BPS_DENOMINATOR) / price
 }
 
-export function isUnsafeVault(vaultAttoRepBacking: bigint, openInterestAttoEth: bigint, multiplierBps: bigint, price: bigint, disputeStakedAttoRep = 0n) {
+function isUnsafeVault(vaultAttoRepBacking: bigint, openInterestAttoEth: bigint, multiplierBps: bigint, price: bigint, disputeStakedAttoRep = 0n) {
 	const health = vaultHealthBps(vaultAttoRepBacking, openInterestAttoEth, multiplierBps, price, disputeStakedAttoRep)
 	return health !== undefined && health < BPS_DENOMINATOR
 }
 
-export function calculateLiquidationTransfer(parameters: {
+function calculateLiquidationTransfer(parameters: {
 	currentPoolHeldAttoRepBalance: bigint
 	currentTargetBackingUnits: bigint
 	currentTotalRepBackingUnits: bigint
@@ -191,10 +191,20 @@ export function evaluateCandidate(pool: PoolRiskContext, target: VaultPosition, 
 	}
 }
 
+/** Operator-facing label for the coordinator call that executes or queues a liquidation. */
+export function liquidationSubmissionLabel(priceValid: boolean, usesExistingPendingReport: boolean) {
+	if (priceValid) return 'Execute security-pool liquidation'
+	return usesExistingPendingReport ? 'Queue liquidation behind the existing price report' : 'Queue liquidation and request a fresh REP price'
+}
+
 export function sortCandidates(candidates: readonly LiquidationCandidate[], priority: CandidatePriority) {
+	const priorityValue = (candidate: LiquidationCandidate) => {
+		if (priority === 'largest-debt') return candidate.debtToMoveAttoEth
+		return priority === 'lowest-top-up' ? -candidate.topUpAttoRep : candidate.bonusValueAttoEth
+	}
 	return [...candidates].sort((left, right) => {
-		const leftValue = priority === 'largest-debt' ? left.debtToMoveAttoEth : priority === 'lowest-top-up' ? -left.topUpAttoRep : left.bonusValueAttoEth
-		const rightValue = priority === 'largest-debt' ? right.debtToMoveAttoEth : priority === 'lowest-top-up' ? -right.topUpAttoRep : right.bonusValueAttoEth
+		const leftValue = priorityValue(left)
+		const rightValue = priorityValue(right)
 		if (leftValue === rightValue) return left.target.address.localeCompare(right.target.address)
 		return leftValue > rightValue ? -1 : 1
 	})

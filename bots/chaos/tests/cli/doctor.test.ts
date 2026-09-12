@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
+import { getAddress, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
 import {
 	assertCommonFinalizedBlockResults,
 	assertDoctorDurableStateScope,
@@ -10,6 +10,7 @@ import {
 	assertStableFinalizedCheckpointResults,
 	boundedAdaptiveLogRange,
 	commonFreshFinalizedBlockNumber,
+	launchGateSummary,
 	probeChaosDoctor,
 	runChaosDoctor,
 	runChaosLaunchGate,
@@ -17,12 +18,14 @@ import {
 	type ChaosDoctorDependencies,
 	type ChaosDoctorProbeResult,
 } from '../../src/cli/doctor.ts'
-import { MINIMUM_WORKFLOW_VALIDITY_BLOCKS, parseSettings } from '../../src/config/settings.ts'
-import { carryProofJournalSidecarPath } from '../../src/monitoring/carry-proof-journal.ts'
-import { carryProofDeploymentProfileId } from '../../src/monitoring/carry-proof-scan.ts'
-import { immutableTopologySidecarDirectory } from '../../src/monitoring/topology-cache.ts'
+import { parseSettings } from '../../src/config/settings.ts'
+import { executionProfileId } from '../../src/config/execution-profile.ts'
+import { MINIMUM_WORKFLOW_VALIDITY_BLOCKS } from '../../src/operations/timing.ts'
+import { immutableTopologySidecarDirectory } from '../support/state-sidecars.ts'
 import { preflightTransactionSubmissionNetwork } from '../../src/runtime/submission-preflight.ts'
-import { initialDurableState, loadDurableState, serializedDurableState } from '../../src/state/operator-state.ts'
+import { loadDurableState, saveDurableState } from '../../src/state/operator-state.ts'
+import { initialDurableState } from '../../src/state/initial-state.ts'
+import { DEFAULT_RETIREMENT_POLICIES, registerV3Position, requestRetirement } from '../../src/state/retirement.ts'
 
 const temporaryDirectories: string[] = []
 
@@ -56,13 +59,14 @@ const probeResult: ChaosDoctorProbeResult = {
 
 function passiveDoctorDependencies(settings: Awaited<ReturnType<typeof settingsFixture>>, overrides: Partial<ChaosDoctorDependencies> = {}): ChaosDoctorDependencies {
 	return {
+		deploymentAvailability: async () => undefined,
 		acquireLocks: async () => ({ release: async () => undefined }),
 		assertProfileIsolation: async () => undefined,
 		load: async () => ({ path: '/private/operator.json', revision: 'sha256:test', settings }),
-		loadState: async (_path, chainId) => initialDurableState(chainId, true, carryProofDeploymentProfileId(settings)),
+		loadState: async (_path, chainId) => initialDurableState(chainId, true, executionProfileId(settings)),
 		preflightSubmission: async () => [],
 		probe: async () => probeResult,
-		validateCompanionState: async () => ({ carryProofJournal: 'absent', immutableTopology: 'absent' }),
+		validateCompanionState: async () => ({ immutableTopology: 'absent' }),
 		verifyStateParent: async () => undefined,
 		...overrides,
 	}
@@ -235,6 +239,7 @@ describe('chaos launch doctor', () => {
 			submissionCapabilityChecks: 2,
 			topology: { universes: 1 },
 		})
+		if (report.operationFamilies === undefined) throw new Error('Expected deployed doctor report')
 		expect(Object.keys(report.operationFamilies).sort()).toEqual(['open-oracle', 'statoblast', 'trading', 'zoltar'])
 	})
 
@@ -350,10 +355,10 @@ describe('chaos launch doctor', () => {
 		wrongProfile.activities.push({ at: new Date(0).toISOString(), message: 'existing history', status: 'info', type: 'configuration' })
 		expect(() => assertDoctorDurableStateScope(settings, wrongProfile, wallet, '/state.json')).toThrow('belongs to deployment profile')
 
-		const wrongSigner = initialDurableState(settings.network.chainId, true, carryProofDeploymentProfileId(settings), privateKeyToAccount(`0x${'55'.repeat(32)}`).address)
+		const wrongSigner = initialDurableState(settings.network.chainId, true, executionProfileId(settings), privateKeyToAccount(`0x${'55'.repeat(32)}`).address)
 		expect(() => assertDoctorDurableStateScope(settings, wrongSigner, wallet, '/state.json')).toThrow('scoped to signer')
 
-		const wrongIndex = initialDurableState(settings.network.chainId, true, carryProofDeploymentProfileId(settings), wallet)
+		const wrongIndex = initialDurableState(settings.network.chainId, true, executionProfileId(settings), wallet)
 		wrongIndex.protocolIndex = {
 			auctionBids: {},
 			auctionRefunds: {},
@@ -376,6 +381,41 @@ describe('chaos launch doctor', () => {
 		expect(assertDoctorDurableStateScope(settings, pristine, wallet, '/state.json').profile).toBe('pristine-bootstrap')
 	})
 
+	test('rejects mismatched-profile retirement state before network probing', async () => {
+		const settings = await settingsFixture('operator.configured-placeholder.json')
+		const recipient = getAddress('0x0000000000000000000000000000000000000099')
+		const requested = initialDurableState(settings.network.chainId, true, 'profile:wrong')
+		requestRetirement(requested.retirement, requested.profileId, recipient, DEFAULT_RETIREMENT_POLICIES, `DRAIN ${requested.profileId} TO ${recipient}`, undefined)
+		const registered = initialDurableState(settings.network.chainId, true, 'profile:wrong')
+		registerV3Position(registered.retirement, {
+			creationWorkflowId: 'legacy:position',
+			fee: 3_000,
+			owner: getAddress('0x0000000000000000000000000000000000000001'),
+			pool: getAddress('0x0000000000000000000000000000000000000020'),
+			profileId: registered.profileId,
+			tickLower: -120,
+			tickUpper: 120,
+			token0: getAddress('0x0000000000000000000000000000000000000021'),
+			token1: getAddress('0x0000000000000000000000000000000000000022'),
+		})
+		for (const state of [requested, registered]) {
+			let networkProbed = false
+			const dependencies = passiveDoctorDependencies(settings, {
+				loadState: async () => state,
+				preflightSubmission: async () => {
+					networkProbed = true
+					return []
+				},
+				probe: async () => {
+					networkProbed = true
+					return probeResult
+				},
+			})
+			await expect(runChaosDoctor(dependencies)).rejects.toThrow('belongs to deployment profile')
+			expect(networkProbed).toBeFalse()
+		}
+	})
+
 	test('loads the complete durable journal and fails when its committed index generation is missing', async () => {
 		const baseline = await settingsFixture('operator.configured-placeholder.json')
 		const directory = await mkdtemp(join(tmpdir(), 'zoltar-chaos-doctor-state-'))
@@ -383,9 +423,12 @@ describe('chaos launch doctor', () => {
 		await chmod(directory, 0o700)
 		const stateFile = join(directory, 'state.json')
 		const settings = { ...baseline, runtime: { ...baseline.runtime, stateFile } }
-		const state = initialDurableState(settings.network.chainId, true, carryProofDeploymentProfileId(settings))
+		const state = initialDurableState(settings.network.chainId, true, executionProfileId(settings))
 		const missingReference = { kind: 'protocol-index-sidecar' as const, manifestDigest: `0x${'aa'.repeat(32)}` as const, schemaVersion: 1 as const }
-		await writeFile(stateFile, `${JSON.stringify(serializedDurableState(state, missingReference))}\n`, { mode: 0o600 })
+		await saveDurableState(stateFile, state)
+		const persisted: unknown = JSON.parse(await readFile(stateFile, 'utf8'))
+		if (typeof persisted !== 'object' || persisted === null) throw new Error('Expected a persisted durable state object')
+		await writeFile(stateFile, `${JSON.stringify({ ...persisted, protocolIndex: missingReference })}\n`, { mode: 0o600 })
 		let locksReleased = false
 		let probed = false
 		const dependencies = passiveDoctorDependencies(settings, {
@@ -427,7 +470,7 @@ describe('chaos launch doctor', () => {
 		expect(probed).toBe(false)
 	})
 
-	test('authenticates existing carry-journal and topology companions before probing the network', async () => {
+	test('ignores obsolete carry journals and authenticates topology before probing the network', async () => {
 		const baseline = await settingsFixture('operator.configured-placeholder.json')
 		for (const companion of ['carry', 'topology'] as const) {
 			const directory = await mkdtemp(join(tmpdir(), `zoltar-chaos-doctor-${companion}-`))
@@ -436,7 +479,7 @@ describe('chaos launch doctor', () => {
 			const stateFile = join(directory, 'state.json')
 			const settings = { ...baseline, runtime: { ...baseline.runtime, stateFile } }
 			if (companion === 'carry') {
-				await writeFile(carryProofJournalSidecarPath(stateFile), '{', { mode: 0o600 })
+				await writeFile(`${stateFile}.carry-proof-journal.json`, '{', { mode: 0o600 })
 			} else {
 				const store = immutableTopologySidecarDirectory(stateFile)
 				await mkdir(store, { mode: 0o700 })
@@ -451,8 +494,13 @@ describe('chaos launch doctor', () => {
 				validateCompanionState: validateDoctorCompanionState,
 			})
 
-			await expect(runChaosDoctor(dependencies)).rejects.toThrow('not valid JSON')
-			expect(probed).toBe(false)
+			if (companion === 'carry') {
+				await runChaosDoctor(dependencies)
+				expect(probed).toBe(true)
+			} else {
+				await expect(runChaosDoctor(dependencies)).rejects.toThrow('not valid JSON')
+				expect(probed).toBe(false)
+			}
 		}
 	})
 
@@ -507,12 +555,38 @@ describe('chaos launch doctor', () => {
 		expect(liveLocks).toBe(1)
 		expect(liveProbes).toBe(1)
 	})
+
+	test('summarizes every launch gate outcome as readable sentences', async () => {
+		const pausedSettings = await settingsFixture('operator.example.json')
+		const skipped = await runChaosLaunchGate(passiveDoctorDependencies(pausedSettings))
+		expect(launchGateSummary(skipped)).toBe('Launch preflight skipped: persisted configuration has transaction execution disabled. The operator starts without submitting transactions.')
+
+		const configuredSettings = await settingsFixture('operator.configured-placeholder.json')
+		const privateKey = `0x${'66'.repeat(32)}` as const
+		const liveSettings = { ...configuredSettings, paused: false, privateKey, runtime: { ...configuredSettings.runtime, execute: true } }
+		const notice = 'Waiting for deployments on chain 1 at block 100: zoltar. Chaos operations are unavailable until these contracts are deployed. Availability is checked automatically.'
+		const waiting = await runChaosLaunchGate(passiveDoctorDependencies(liveSettings, { deploymentAvailability: async () => notice }))
+		expect(launchGateSummary(waiting)).toBe(`Launch preflight passed with the deployment still pending. ${notice}`)
+
+		const fundedProbeResult: ChaosDoctorProbeResult = {
+			...probeResult,
+			snapshot: {
+				...probeResult.snapshot,
+				wallet: {
+					ethBalanceAttoEth: (10n ** 30n).toString(),
+					tokens: [{ address: probeResult.snapshot.universes[0]?.repToken ?? '0x0000000000000000000000000000000000000001', balance: (10n ** 30n).toString(), symbol: 'REP' }],
+				},
+			},
+		}
+		const passed = await runChaosLaunchGate(passiveDoctorDependencies(liveSettings, { probe: async () => fundedProbeResult }))
+		expect(launchGateSummary(passed)).toBe('Launch preflight passed all 10 readiness checks at canonical block 100. Run `bun run doctor` for the detailed readiness report.')
+	})
 })
 
-test('doctor reports the actual chain, pinned block, and missing root address before discovery', async () => {
+test.each(['zoltar', 'tradingFactory', 'tradingRouter'] as const)('doctor requires core roots but reaches discovery without optional %s', async missingRoot => {
 	const baseline = await settingsFixture('operator.configured-placeholder.json')
 	const methods: string[] = []
-	const missing = baseline.deployment.tradingRouter
+	const missing = baseline.deployment[missingRoot]
 	const server = Bun.serve({
 		port: 0,
 		fetch: async request => {
@@ -534,9 +608,34 @@ test('doctor reports the actual chain, pinned block, and missing root address be
 	})
 	try {
 		const settings = { ...baseline, connectivity: { publicRpcUrls: [server.url.href], readRpcUrl: server.url.href, quorumRpcUrls: [], rpcQuorum: 1 as const } }
-		await expect(probeChaosDoctor(settings, '0x0000000000000000000000000000000000000001')).rejects.toThrow(`No contract code on RPC chain ${baseline.network.chainId} at block 100: tradingRouter (${missing})`)
-		expect(methods).not.toContain('eth_call')
+		if (missingRoot === 'zoltar') {
+			await expect(probeChaosDoctor(settings, '0x0000000000000000000000000000000000000001')).rejects.toThrow(`No contract code on RPC chain ${baseline.network.chainId} at block 100: zoltar (${missing})`)
+			expect(methods).not.toContain('eth_call')
+		} else {
+			await expect(probeChaosDoctor(settings, '0x0000000000000000000000000000000000000001')).rejects.toThrow('Unexpected discovery request')
+			expect(methods).toContain('eth_call')
+		}
 	} finally {
 		server.stop(true)
 	}
+})
+
+test('allows the dashboard to launch while canonical deployments are absent', async () => {
+	const settings = await settingsFixture('operator.configured-placeholder.json')
+	settings.runtime.execute = true
+	let released = false
+	const dependencies = passiveDoctorDependencies(settings, {
+		deploymentAvailability: async () => 'Waiting for deployments on chain 11155111: Zoltar.',
+		acquireLocks: async () => ({
+			release: async () => {
+				released = true
+			},
+		}),
+		probe: async () => {
+			throw new Error('Must not discover unavailable contracts')
+		},
+	})
+	const result = await runChaosLaunchGate(dependencies)
+	expect(result).toMatchObject({ checks: { deploymentCodeAndGraph: 'waiting' }, operationsAvailable: false })
+	expect(released).toBeTrue()
 })

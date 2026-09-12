@@ -1,6 +1,6 @@
 export const createConcurrencyGate = <T>(limit: number, busy: () => T): ((operation: () => Promise<T>) => Promise<T>) => {
 	let active = 0
-	return async (operation) => {
+	return async operation => {
 		if (active >= limit) return busy()
 		active++
 		try {

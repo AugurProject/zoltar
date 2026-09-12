@@ -1,15 +1,13 @@
-import { rpcFailureWithContext, type Address, type TransactionLog } from '#ethereum'
-import { OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_FLAG_TRACK_DISPUTES, OPEN_ORACLE_REPORT_SETTLED_TOPIC } from '@zoltar/shared/openOracle'
+import { rpcFailureWithContext, type Address, type TransactionLog } from '@zoltar/bot-shared/ethereum'
+import { OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_FLAG_TRACK_DISPUTES, OPEN_ORACLE_REPORT_SETTLED_TOPIC } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { openOraclePriceCoordinatorAbi } from '#contracts/abi'
 import { type Configuration } from '#config/configuration'
 import { authenticateDeploymentManifest, validateDeploymentManifestRequirements, type DeploymentRole } from '#config/deployment-auth'
 import { coordinatorPolicySafetyMismatch, retainedReportIds, type CoordinatorGamePolicy } from '#core/game-policy'
 import { applyLogs, logBlockNumber, reportId, type ActiveReport } from '#monitoring/oracle-log-state'
-import { compactFinalityWindow, ConnectivityDegradedError, operationalFailureDisposition } from '#monitoring/resilience'
+import { compactFinalityWindow } from '@zoltar/bot-shared/monitoring/resilience'
 import type { ReadClient } from '#core/operator-types'
-import { errorMessage } from '#core/rpc-validation'
-import { settledQuorumValue } from '#monitoring/read-quorum'
-import { rpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
+import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { endpointLabel } from '#monitoring/connectivity'
 
 const MAX_UNTRUSTED_DRY_RUN_REPORTS = 256
@@ -64,14 +62,13 @@ export async function loadCoordinatorPoliciesWithQuorum(clients: readonly ReadCl
 	)
 }
 
-export function requiredDeploymentIdentities(config: Configuration) {
+function requiredDeploymentIdentities(config: Configuration) {
 	const identities: { address: Address; role: DeploymentRole }[] = [
 		{ address: config.openOracle, role: 'open-oracle' },
 		{ address: config.network.weth, role: 'weth' },
 		{ address: config.network.factory, role: 'uniswap-factory' },
 		{ address: config.network.quoter, role: 'uniswap-quoter' },
 		...config.coordinatorAddresses.map(address => ({ address, role: 'coordinator' as const })),
-		...config.tokenAddresses.map(address => ({ address, role: 'token' as const })),
 	]
 	if (config.executor !== undefined) identities.push({ address: config.executor, role: 'executor' })
 	if (config.router !== undefined) identities.push({ address: config.router, role: 'uniswap-router' })
@@ -86,15 +83,6 @@ export function authenticatedExecutionToken(config: Configuration, token: Addres
 	return config.deploymentManifest?.contracts.some(entry => entry.role === 'token' && entry.address.toLowerCase() === token.toLowerCase()) === true
 }
 
-export async function requireManifestAuthenticationQuorum(attempts: readonly Promise<void>[]) {
-	const settled = await Promise.allSettled(attempts)
-	const failures = settled.flatMap(result => (result.status === 'rejected' ? [result.reason] : []))
-	const safetyFailure = failures.find(error => operationalFailureDisposition(error) === 'safety-paused')
-	if (safetyFailure !== undefined) throw safetyFailure
-	const requirement = rpcQuorumRequirement()
-	if (settled.filter(result => result.status === 'fulfilled').length < requirement) throw new ConnectivityDegradedError(`Deployment authentication requires at least ${requirement === 1 ? 'one available RPC endpoint' : 'two available independent RPC endpoints'}: ${failures.map(errorMessage).join('; ')}`)
-}
-
 export async function authenticateConfiguredDeployments(clients: readonly ReadClient[], config: Configuration) {
 	if (!config.execute) return
 	const manifest = config.deploymentManifest
@@ -102,7 +90,8 @@ export async function authenticateConfiguredDeployments(clients: readonly ReadCl
 	const required = [...requiredDeploymentIdentities(config), ...manifest.contracts.map(contract => ({ address: contract.address, role: contract.role }))]
 	validateDeploymentManifestRequirements(manifest, { chainId: config.network.chain.id, network: config.network.name, required })
 	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
-	await requireManifestAuthenticationQuorum(
+	await settledQuorumValue(
+		'Deployment authentication',
 		clients.map(async (client, index) => {
 			const endpoint = endpointLabel(endpoints[index] ?? '')
 			try {
@@ -115,6 +104,7 @@ export async function authenticateConfiguredDeployments(clients: readonly ReadCl
 			} catch (error) {
 				throw rpcFailureWithContext(error, endpoint, 'eth_getCode')
 			}
+			return { endpoint, value: true }
 		}),
 	)
 }

@@ -1,6 +1,7 @@
 export type {
 	Abi,
 	AbiParameter,
+	AbiValue,
 	Account,
 	Address,
 	Block,
@@ -10,6 +11,7 @@ export type {
 	EIP1193Provider,
 	Hash,
 	Hex,
+	JsonValue,
 	MulticallFailureResult,
 	MulticallReturnType,
 	MulticallSuccessResult,
@@ -21,30 +23,24 @@ export type {
 	TransactionReceipt,
 	TransactionReplacement,
 	Transport,
-} from '@zoltar/shared/ethereum'
+} from '@zoltar/core-shared/evm/ethereum'
 export {
 	bigintToSafeNumber,
-	bytesToHex,
 	concatHex,
 	decodeEventLog,
 	decodeFunctionData,
 	encodeAbiParameters,
 	encodeDeployData,
-	encodeEventTopics,
 	encodeFunctionData,
 	formatEther,
 	formatUnits,
 	getAddress,
 	getCreate2Address,
-	getCreateAddress,
 	hexToBytes,
 	isAddress,
 	isHex,
 	keccak256,
-	maxUint256,
-	numberToBytes,
 	parseAbiItem,
-	parseAbiParameters,
 	parseTransaction,
 	parseUnits,
 	privateKeyToAccount,
@@ -52,21 +48,16 @@ export {
 	toHex,
 	zeroAddress,
 	zeroHash,
-} from '@zoltar/shared/ethereum'
+} from '@zoltar/core-shared/evm/ethereum'
 export type { PublicActions, PublicClient, WalletClient } from './ethereum/client'
 export type { RpcEndpointHealth, RpcEndpointPoolOptions, RpcEndpointStatus } from './ethereum/rpc-resilience'
 export {
 	createPublicClient,
 	createContextualPublicClient,
 	createWalletClient,
-	custom,
 	defineChain,
-	getBalanceAtBlock,
-	getTransactionCountAtBlock,
 	http,
-	mainnet,
-	publicActions,
 	readContractAtBlock,
 	RpcError,
 } from './ethereum/client'
-export { createRpcEndpointPool, rpcFailureWithContext, RpcEndpointPoolFailure } from './ethereum/rpc-resilience'
+export { createRpcEndpointPool, rpcFailureWithContext } from './ethereum/rpc-resilience'

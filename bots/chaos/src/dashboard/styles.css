@@ -16,10 +16,6 @@
 	font-synthesis: none;
 }
 
-* {
-	box-sizing: border-box;
-}
-
 html {
 	min-width: 20rem;
 	background: var(--operator-background);
@@ -32,14 +28,14 @@ body {
 	color: var(--operator-text);
 }
 
-.warning-text {
-	color: var(--operator-warning);
+#retirement-summary {
+	overflow-wrap: anywhere;
 }
 
 body[data-page="overview"] [data-page-content]:not([data-page-content="overview"]):not([data-page-content="all"]),
 body[data-page="catalog"] [data-page-content]:not([data-page-content="catalog"]):not([data-page-content="all"]),
 body[data-page="ecosystem"] [data-page-content]:not([data-page-content="ecosystem"]):not([data-page-content="all"]),
-body[data-page="activity"] [data-page-content]:not([data-page-content="activity"]):not([data-page-content="all"]),
+body[data-page="recovery"] [data-page-content]:not([data-page-content="recovery"]):not([data-page-content="all"]),
 body[data-page="settings"] [data-page-content]:not([data-page-content="settings"]):not([data-page-content="all"]) {
 	display: none;
 }
@@ -260,6 +256,25 @@ button.identifier-disclosure {
 	background: var(--operator-surface-raised);
 	color: var(--operator-accent);
 	font-size: 0.7rem;
+}
+
+a.identifier-explorer {
+	display: inline-flex;
+	align-items: center;
+	min-height: 2rem;
+	padding: 0.25rem 0.5rem;
+	border: 1px solid var(--operator-border);
+	border-radius: 0.55rem;
+	background: var(--operator-surface-raised);
+	color: var(--operator-accent);
+	font-size: 0.7rem;
+	font-weight: 760;
+	text-decoration: none;
+}
+
+a.identifier-explorer:hover {
+	border-color: var(--operator-accent-strong);
+	text-decoration: underline;
 }
 
 .identifier-full {
@@ -636,6 +651,48 @@ dd {
 	font-size: 0.8rem;
 }
 
+.transaction-wait {
+	display: grid;
+	gap: 0.2rem;
+	margin-top: 0.75rem;
+	padding: 0.6rem 0.75rem;
+	border: 1px solid var(--operator-border);
+	border-left: 3px solid var(--operator-info);
+	border-radius: 0.5rem;
+	background: rgb(8 11 13 / 55%);
+	font-size: 0.82rem;
+}
+
+.transaction-wait.warning {
+	border-left-color: var(--operator-warning);
+}
+
+.transaction-wait strong {
+	display: block;
+	overflow-wrap: anywhere;
+}
+
+.transaction-wait small {
+	display: block;
+	margin: 0;
+	overflow-wrap: anywhere;
+	color: var(--operator-muted);
+}
+
+.stack-row {
+	flex-wrap: wrap;
+}
+
+/* A zero basis keeps the status badge on the first line; the note alone wraps beneath. */
+.stack-row > div:first-child {
+	flex: 1 1 0;
+}
+
+.stack-row > .transaction-wait {
+	flex: 1 0 100%;
+	margin-top: 0;
+}
+
 .step-list {
 	display: grid;
 	gap: 0;
@@ -852,33 +909,27 @@ tbody tr:last-child td {
 	line-height: 1.4;
 }
 
-.operation-id-control {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: 0.35rem;
-	margin-top: 0.35rem;
+#catalog-rows {
+	display: grid;
+	gap: 1rem;
 }
 
-.operation-id-control small {
-	margin-top: 0;
+.catalog-group > summary {
+	display: list-item;
+	padding: 1rem;
+	cursor: pointer;
+	border: 1px solid var(--operator-border);
+	border-radius: 0.65rem;
+	background: var(--operator-surface);
 }
 
-button.operation-id-copy {
-	min-height: 2rem;
-	padding: 0.25rem 0.5rem;
-	border-color: var(--operator-border);
-	background: var(--operator-surface-raised);
-	color: var(--operator-accent);
-	font-size: 0.7rem;
+.catalog-group > summary span {
+	margin-left: 0.75rem;
+	font-size: 0.8rem;
 }
 
-.operation-id-feedback.success {
-	color: var(--operator-accent);
-}
-
-.operation-id-feedback.error {
-	color: var(--operator-error);
+.catalog-group[open] > summary {
+	margin-bottom: 0.75rem;
 }
 
 .resume-random-scope {
@@ -1081,6 +1132,11 @@ button.operation-id-copy {
 	border-top: 0;
 }
 
+/* Keep the status badge pinned to the first line instead of stretching beside long detail copy. */
+.timeline-item > span {
+	align-self: start;
+}
+
 .timeline-time,
 .timeline-detail {
 	color: var(--operator-muted);
@@ -1095,8 +1151,26 @@ button.operation-id-copy {
 	margin-top: 0.25rem;
 }
 
-.notice,
-.operator-alerts {
+.activity-details {
+	margin-top: 0.45rem;
+}
+
+.activity-details > summary {
+	cursor: pointer;
+	color: var(--operator-muted);
+}
+
+.activity-details p {
+	margin: 0.35rem 0 0;
+	line-height: 1.5;
+	overflow-wrap: anywhere;
+}
+
+#activity-expand {
+	margin-top: 0.9rem;
+}
+
+.notice {
 	margin: 0 0 1rem;
 	padding: 0.85rem 1rem;
 	border: 1px solid var(--operator-border);
@@ -1111,14 +1185,15 @@ button.operation-id-copy {
 	color: var(--operator-warning);
 }
 
-.notice.error,
-.operator-alerts {
+.notice.error {
 	border-color: rgb(255 117 111 / 38%);
 	color: var(--operator-error);
 }
 
 .operator-alerts {
-	padding-left: 2rem;
+	margin: 0;
+	padding: 0;
+	list-style: none;
 }
 
 .operator-alerts li + li {
@@ -1148,13 +1223,6 @@ button.operation-id-copy {
 
 .settings-group summary strong {
 	font-size: 1rem;
-}
-
-fieldset {
-	min-width: 0;
-	margin: 0;
-	padding: 0;
-	border: 0;
 }
 
 .switch-row {
@@ -1390,13 +1458,13 @@ fieldset {
 		border: 0;
 	}
 
-	[data-page-content="catalog"] #catalog-rows {
+	[data-page-content="catalog"] .catalog-operation-rows {
 		display: grid;
 		width: 100%;
 		gap: 0.75rem;
 	}
 
-	[data-page-content="catalog"] #catalog-rows > tr {
+	[data-page-content="catalog"] .catalog-operation-rows > tr {
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 		width: 100%;
@@ -1407,7 +1475,7 @@ fieldset {
 		overflow: hidden;
 	}
 
-	[data-page-content="catalog"] #catalog-rows > tr > td {
+	[data-page-content="catalog"] .catalog-operation-rows > tr > td {
 		display: block;
 		width: auto;
 		min-width: 0;
@@ -1416,7 +1484,7 @@ fieldset {
 		overflow-wrap: anywhere;
 	}
 
-	[data-page-content="catalog"] #catalog-rows > tr > td[data-label]::before {
+	[data-page-content="catalog"] .catalog-operation-rows > tr > td[data-label]::before {
 		display: block;
 		margin-bottom: 0.4rem;
 		color: var(--operator-muted);
@@ -1428,14 +1496,14 @@ fieldset {
 		text-transform: uppercase;
 	}
 
-	[data-page-content="catalog"] #catalog-rows > tr > td:nth-child(1),
-	[data-page-content="catalog"] #catalog-rows > tr > td:nth-child(6),
-	[data-page-content="catalog"] #catalog-rows > tr > td.empty-state {
+	[data-page-content="catalog"] .catalog-operation-rows > tr > td:nth-child(1),
+	[data-page-content="catalog"] .catalog-operation-rows > tr > td:nth-child(5),
+	[data-page-content="catalog"] .catalog-operation-rows > tr > td.empty-state {
 		grid-column: 1 / -1;
 	}
 
-	[data-page-content="catalog"] #catalog-rows > tr > td:nth-child(6),
-	[data-page-content="catalog"] #catalog-rows > tr > td.empty-state {
+	[data-page-content="catalog"] .catalog-operation-rows > tr > td:nth-child(5),
+	[data-page-content="catalog"] .catalog-operation-rows > tr > td.empty-state {
 		border-bottom: 0;
 	}
 
@@ -1458,15 +1526,6 @@ fieldset {
 @media (max-width: 42rem) {
 	.topbar {
 		padding-inline: 0.85rem;
-	}
-
-	.operator-primary > .operator-safety {
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-	}
-
-	.operator-primary > .operator-safety > .badge,
-	.operator-primary > .operator-safety > button {
-		min-height: 2.75rem;
 	}
 
 	main {
@@ -1510,11 +1569,8 @@ fieldset {
 	}
 
 	button.identifier-copy,
-	button.identifier-disclosure {
-		min-height: 2.75rem;
-	}
-
-	button.operation-id-copy {
+	button.identifier-disclosure,
+	a.identifier-explorer {
 		min-height: 2.75rem;
 	}
 
@@ -1561,6 +1617,16 @@ fieldset {
 		flex-direction: column;
 	}
 
+	/* In the column direction a percentage basis would resolve against the row height, so size both by content. */
+	.stack-row {
+		flex-wrap: nowrap;
+	}
+
+	.stack-row > div:first-child,
+	.stack-row > .transaction-wait {
+		flex: 0 0 auto;
+	}
+
 	.step-list li {
 		grid-template-columns: 0.65rem minmax(0, 1fr);
 		padding-block: 0.55rem;
@@ -1581,4 +1647,105 @@ fieldset {
 	.countdown-track span {
 		transition: none;
 	}
+}
+
+.operation-open {
+	margin-top: 0.75rem;
+}
+
+.operation-dialog {
+	width: min(48rem, calc(100vw - 2rem));
+	max-height: calc(100dvh - 2rem);
+	padding: 1.5rem;
+	overflow: auto;
+	border: 1px solid var(--operator-border);
+	border-radius: 0.8rem;
+	background: var(--operator-surface);
+	color: var(--operator-text);
+}
+
+.operation-dialog::backdrop {
+	background: rgb(0 0 0 / 65%);
+}
+
+.operation-dialog h2 {
+	overflow-wrap: anywhere;
+}
+
+.operation-inputs {
+	display: grid;
+	gap: 1rem;
+	padding: 0;
+	border: 0;
+	min-width: 0;
+}
+
+.operation-input {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	gap: 0.5rem;
+}
+
+.operation-input label {
+	grid-column: 1 / -1;
+}
+
+.operation-input input,
+.operation-input textarea,
+.operation-input select {
+	width: 100%;
+	min-width: 0;
+}
+
+.operation-transactions details {
+	margin-top: 0.75rem;
+}
+
+.operation-coverage p,
+.operation-transactions p,
+.operation-transactions pre {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	font-size: 0.8rem;
+}
+
+.operation-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.75rem;
+}
+
+@media (max-width: 42rem) {
+	.operation-dialog {
+		padding: 1rem;
+	}
+
+	.operation-input {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+.operation-dialog .section-heading {
+	flex-direction: row;
+	align-items: flex-start;
+}
+
+.operation-limits > .operation-input {
+	margin-top: 1rem;
+}
+
+.operation-dialog [hidden] {
+	display: none;
+}
+
+.operation-selection {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	margin-top: 0.75rem;
+}
+
+.operation-selection input {
+	width: 1.25rem;
+	height: 1.25rem;
 }

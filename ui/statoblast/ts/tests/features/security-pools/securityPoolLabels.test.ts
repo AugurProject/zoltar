@@ -1,18 +1,9 @@
 /// <reference types='bun-types' />
 
 import { describe, expect, test } from 'bun:test'
-import { formatSecurityPoolPageSummary, getSecurityPoolLifecycleLabel, getSecurityPoolStatusBadgeLabel, getVaultLauncherVaultOwnerReason, getVaultLauncherWalletReason } from '../../../features/security-pools/lib/securityPoolLabels.js'
+import { formatSecurityPoolPageSummary, getSecurityPoolStatusBadgeLabel, getVaultLauncherVaultOwnerReason, getVaultLauncherWalletReason } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolLabels.js'
 
 void describe('security pool lifecycle label', () => {
-	void test('maps each known lifecycle state and undefined', () => {
-		expect(getSecurityPoolLifecycleLabel(undefined)).toBe('Unknown')
-		expect(getSecurityPoolLifecycleLabel('operational')).toBe('Operational')
-		expect(getSecurityPoolLifecycleLabel('ended')).toBe('Ended')
-		expect(getSecurityPoolLifecycleLabel('poolForked')).toBe('Pool Forked')
-		expect(getSecurityPoolLifecycleLabel('forkMigration')).toBe('Fork Migration')
-		expect(getSecurityPoolLifecycleLabel('forkTruthAuction')).toBe('Truth Auction')
-	})
-
 	void test('derives fork-aware status badge labels', () => {
 		expect(getSecurityPoolStatusBadgeLabel({ hasForkActivity: false, lifecycleState: undefined })).toBe('Unknown')
 		expect(getSecurityPoolStatusBadgeLabel({ hasForkActivity: false, lifecycleState: 'operational' })).toBe('Operational')

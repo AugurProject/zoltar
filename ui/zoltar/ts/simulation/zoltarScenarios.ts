@@ -1,31 +1,19 @@
-import { sortStringArrayByKeccak } from '@zoltar/shared/sortStringArrayByKeccak'
+import { sortStringArrayByKeccak } from '@zoltar/core-shared/serialization/sortStringArrayByKeccak'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { getSimulationChainTimestamp } from '@zoltar/ui-core-shared/simulation/clock.js'
 import { deploySimulationAppContracts, reportBootstrapProgress, requireQaAccount, type BootstrapScenarioApplyParameters } from '@zoltar/ui-core-shared/simulation/bootstrap.js'
 import type { QuestionData } from '@zoltar/ui-core-shared/types/contracts.js'
-import { getDeploymentSteps } from '../protocol/deployment.js'
-import { approveErc20 } from '../protocol/tokenActions.js'
-import { createMarket, loadZoltarUniverseSummary } from '../protocol/zoltar.js'
-import { createZoltarChildUniverse, forkZoltarUniverse } from '../protocol/zoltarForks.js'
-import { getZoltarAddress } from '../protocol/zoltarDeploymentHelpers.js'
+import { getDeploymentSteps } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
+import { approveErc20 } from '@zoltar/ui-zoltar-shared/protocol/tokenActions.js'
+import { createMarket, loadZoltarUniverseSummary } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
+import { createZoltarChildUniverse, forkZoltarUniverse } from '@zoltar/ui-zoltar-shared/protocol/zoltarForks.js'
+import { getZoltarAddress } from '@zoltar/ui-zoltar-shared/protocol/zoltarDeploymentHelpers.js'
 
-const defaultScenarioProtocol = { approveErc20, createMarket, createZoltarChildUniverse, forkZoltarUniverse, getDeploymentSteps, getZoltarAddress, loadZoltarUniverseSummary }
-
-type ZoltarScenarioProtocol = Pick<typeof defaultScenarioProtocol, 'approveErc20' | 'createMarket' | 'createZoltarChildUniverse' | 'forkZoltarUniverse' | 'getDeploymentSteps' | 'getZoltarAddress' | 'loadZoltarUniverseSummary'>
-
-let scenarioProtocolOverride: ZoltarScenarioProtocol | undefined
+const scenarioProtocol = { approveErc20, createMarket, createZoltarChildUniverse, forkZoltarUniverse, getDeploymentSteps, getZoltarAddress, loadZoltarUniverseSummary }
 
 const DAY_IN_SECONDS = 24n * 60n * 60n
 
 export type ZoltarScenario = 'two-questions' | 'forked-categorical'
-
-export function installZoltarScenarioProtocolForTesting(override: ZoltarScenarioProtocol | undefined) {
-	scenarioProtocolOverride = override
-}
-
-function getScenarioProtocol(): ZoltarScenarioProtocol {
-	return scenarioProtocolOverride ?? defaultScenarioProtocol
-}
 
 export function getZoltarScenarioLabel(scenario: ZoltarScenario) {
 	switch (scenario) {
@@ -75,24 +63,24 @@ async function seedForkedCategoricalScenario({ accounts, createReadClient, creat
 	const currentTimestamp = await getSimulationChainTimestamp(memoryClient)
 	const seededQuestion = createForkedCategoricalQuestion(currentTimestamp)
 
-	const marketResult = await getScenarioProtocol().createMarket(writeClient, seededQuestion)
+	const marketResult = await scenarioProtocol.createMarket(writeClient, seededQuestion)
 	await reportBootstrapProgress(onProgress, 'Creating seeded categorical fork question', 0.88)
 
 	const universeId = 0n
 	const questionId = BigInt(marketResult.questionId)
-	const rootUniverse = await getScenarioProtocol().loadZoltarUniverseSummary(readClient, universeId)
+	const rootUniverse = await scenarioProtocol.loadZoltarUniverseSummary(readClient, universeId)
 	if (rootUniverse === undefined) throw new Error('Expected the seeded genesis universe before forking')
-	await getScenarioProtocol().approveErc20(writeClient, rootUniverse.reputationToken, getScenarioProtocol().getZoltarAddress(), rootUniverse.forkThresholdAttoRep, 'approveForkRep')
+	await scenarioProtocol.approveErc20(writeClient, rootUniverse.reputationToken, scenarioProtocol.getZoltarAddress(), rootUniverse.forkThresholdAttoRep, 'approveForkRep')
 	await reportBootstrapProgress(onProgress, 'Approving seeded REP for the fork threshold', 0.9)
-	await getScenarioProtocol().forkZoltarUniverse(writeClient, universeId, questionId)
+	await scenarioProtocol.forkZoltarUniverse(writeClient, universeId, questionId)
 	await reportBootstrapProgress(onProgress, 'Forking the seeded genesis universe', 0.92)
 
 	for (const outcomeIndex of [0n, 1n] as const) {
-		await getScenarioProtocol().createZoltarChildUniverse(writeClient, universeId, outcomeIndex)
+		await scenarioProtocol.createZoltarChildUniverse(writeClient, universeId, outcomeIndex)
 	}
 	await reportBootstrapProgress(onProgress, 'Deploying two seeded child universes', 0.96)
 
-	const universeSummary = await getScenarioProtocol().loadZoltarUniverseSummary(readClient, universeId)
+	const universeSummary = await scenarioProtocol.loadZoltarUniverseSummary(readClient, universeId)
 	if (universeSummary === undefined) throw new Error('Expected the seeded genesis universe after forking')
 	if (!universeSummary.hasForked) throw new Error('Expected the seeded genesis universe to be forked')
 	if (universeSummary.forkQuestionDetails?.marketType !== 'categorical') throw new Error('Expected the seeded fork question to be categorical')
@@ -111,7 +99,7 @@ async function seedTwoQuestionsScenario({ accounts, createWriteClient, memoryCli
 		{ answerUnit: '', description: 'A second seeded binary question for list and selection QA.', displayValueMax: 0n, displayValueMin: 0n, endTime: currentTimestamp + 2n * DAY_IN_SECONDS, numTicks: 0n, startTime: currentTimestamp, title: 'Will the second proposal pass?' },
 	]
 	for (const [index, questionData] of questions.entries()) {
-		await getScenarioProtocol().createMarket(writeClient, { marketType: 'binary', outcomeLabels: ['Yes', 'No'], questionData })
+		await scenarioProtocol.createMarket(writeClient, { marketType: 'binary', outcomeLabels: ['Yes', 'No'], questionData })
 		await reportBootstrapProgress(onProgress, `Creating seeded question ${(index + 1).toString()} of 2`, 0.86 + index * 0.05)
 	}
 }
@@ -121,11 +109,11 @@ export async function applyZoltarScenario({ accounts, createReadClient, createWr
 
 	switch (scenario) {
 		case 'two-questions':
-			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, profile, { start: 0.32, end: 0.78 }, getScenarioProtocol().getDeploymentSteps)
+			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, profile, { start: 0.32, end: 0.78 }, scenarioProtocol.getDeploymentSteps)
 			await seedTwoQuestionsScenario({ accounts, createReadClient, createWriteClient, memoryClient, onProgress, profile, scenario })
 			return true
 		case 'forked-categorical':
-			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, profile, { start: 0.32, end: 0.82 }, getScenarioProtocol().getDeploymentSteps)
+			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, profile, { start: 0.32, end: 0.82 }, scenarioProtocol.getDeploymentSteps)
 			await seedForkedCategoricalScenario({ accounts, createReadClient, createWriteClient, memoryClient, onProgress, profile, scenario })
 			return true
 		default:

@@ -1,4 +1,11 @@
-import { createMetric, setAttentionBadge } from '../../../shared/src/dashboard/components.js'
+import { createUniverseExplorer } from '@zoltar/bot-shared/dashboard/universe-explorer'
+import { readinessGuidance } from './readiness-status.js'
+import { blockStatusText, scanStatusText } from './block-status.js'
+import { createMetric, endpointHealthDetail, endpointRow, renderDisconnectedHeader, setAttentionBadge } from '@zoltar/bot-shared/dashboard/components'
+import { CONFIGURATION_REQUEST_TIMEOUT_MS, PROFILE_SWITCH_REQUEST_TIMEOUT_MESSAGE, PROFILE_SWITCH_REQUEST_TIMEOUT_MS, requestWithTimeout, singleFlight, STATE_REQUEST_TIMEOUT_MS } from '@zoltar/bot-shared/dashboard/polling'
+import { closeResumePreflight, openResumePreflight } from '@zoltar/bot-shared/dashboard/resume-preflight'
+import { createSectionNavigation } from '@zoltar/bot-shared/dashboard/section-navigation'
+import { urlLines } from '@zoltar/bot-shared/dashboard/forms'
 type Activity = {
 	at: string
 	details?: string
@@ -34,6 +41,8 @@ type Pool = {
 }
 
 type Universe = {
+	repToken?: string
+
 	forkedPoolCount: number
 	forkQuestionId: string
 	id: string
@@ -85,6 +94,9 @@ type Snapshot = {
 	marketConsensus?: MarketConsensus
 	error?: string
 	execute: boolean
+	deploymentMissingName?: string
+	deploymentCheckedBlock?: string
+	deploymentCheckedTimestamp?: string
 	lastScanAt?: string
 	lastScannedBlock?: string
 	lastScannedTimestamp?: string
@@ -173,7 +185,6 @@ const networkBadge = element('network-badge', HTMLSpanElement)
 const runStatusBadge = element('run-status-badge', HTMLSpanElement)
 const capabilityBadge = element('capability-badge', HTMLSpanElement)
 const attentionBadge = element('attention-badge', HTMLAnchorElement)
-const refreshButton = element('refresh-button', HTMLButtonElement)
 const pauseButton = element('pause-button', HTMLButtonElement)
 const pauseStatus = element('pause-status', HTMLSpanElement)
 const lastScan = element('last-scan', HTMLParagraphElement)
@@ -192,7 +203,6 @@ const clearSignerButton = element('clear-signer', HTMLButtonElement)
 const walletAddress = element('wallet-address', HTMLElement)
 const healthPolicyPreview = element('health-policy-preview', HTMLParagraphElement)
 const resumeDialog = element('resume-dialog', HTMLElement)
-const resumePreflight = element('resume-preflight', HTMLUListElement)
 const cancelResume = element('cancel-resume', HTMLButtonElement)
 const confirmResume = element('confirm-resume', HTMLButtonElement)
 
@@ -204,9 +214,8 @@ let profileRequestEpoch = 0
 let approvedUniverses = new Set<string>()
 let selectedPools = new Set<string>()
 let pendingPoolMutations = 0
-let pendingUniverseMutations = 0
 const poolActionStates = new Map<string, { failed: boolean; message: string }>()
-const universeActionStates = new Map<string, { failed: boolean; message: string }>()
+let universeExplorer: ReturnType<typeof createUniverseExplorer> | undefined
 const recoveryActionStates = new Map<string, { failed: boolean; message: string }>()
 let renderedAlertKey: string | undefined
 let marketSourceProbeRows: MarketSourceRow[] | undefined
@@ -215,42 +224,9 @@ let stateConnected = false
 let configurationConnected = false
 let pauseRequestPending: boolean | undefined
 
-const STATE_REQUEST_TIMEOUT_MS = 1_000
-const CONFIGURATION_REQUEST_TIMEOUT_MS = 2_000
-const PROFILE_SWITCH_REQUEST_TIMEOUT_MS = 2_000
-const PROFILE_SWITCH_REQUEST_TIMEOUT_MESSAGE = 'Profile switch request timed out.'
-
-function compactDuration(seconds: number) {
-	if (seconds < 60) return `${seconds.toString()}s`
-	const minutes = Math.floor(seconds / 60)
-	if (minutes < 60) return `${minutes.toString()}m`
-	const hours = Math.floor(minutes / 60)
-	return hours < 24 ? `${hours.toString()}h` : `${Math.floor(hours / 24).toString()}d`
-}
-
 function renderBlockStatus(snapshot = currentSnapshot) {
-	const headerBlockStatus = element('header-block-status', HTMLParagraphElement)
-	if (snapshot?.lastScannedBlock === undefined) {
-		blockStatus.textContent = 'Block — · waiting for first observation'
-		headerBlockStatus.textContent = blockStatus.textContent
-		return
-	}
-	const timestamp = snapshot.lastScannedTimestamp
-	if (timestamp === undefined || !/^(?:0|[1-9]\d*)$/.test(timestamp)) {
-		blockStatus.textContent = `Block ${snapshot.lastScannedBlock} · timestamp unavailable`
-		headerBlockStatus.textContent = blockStatus.textContent
-		return
-	}
-	const timestampMilliseconds = Number(timestamp) * 1_000
-	if (!Number.isSafeInteger(timestampMilliseconds)) {
-		blockStatus.textContent = `Block ${snapshot.lastScannedBlock} · timestamp unavailable`
-		headerBlockStatus.textContent = blockStatus.textContent
-		return
-	}
-	const differenceSeconds = Math.floor(Math.abs(Date.now() - timestampMilliseconds) / 1_000)
-	const age = compactDuration(differenceSeconds)
-	blockStatus.textContent = Date.now() >= timestampMilliseconds ? `Block ${snapshot.lastScannedBlock} · seen ${age} ago` : `Block ${snapshot.lastScannedBlock} · ${age} ahead of local clock`
-	headerBlockStatus.textContent = blockStatus.textContent
+	blockStatus.textContent = blockStatusText(snapshot)
+	element('header-block-status', HTMLParagraphElement).textContent = blockStatus.textContent
 }
 
 function setMutationControlsEnabled(enabled: boolean) {
@@ -258,8 +234,7 @@ function setMutationControlsEnabled(enabled: boolean) {
 	const chainSettingsAvailable = configurationAvailable && pendingNetworkProfile === undefined && currentConfiguration?.networkConfigured === true
 	const resumeAvailable = configurationAvailable && pendingNetworkProfile === undefined && configurationConnected && currentConfiguration?.networkConfigured === true
 	const paused = currentSnapshot?.paused
-	const pendingLabel = pauseRequestPending === true ? 'Pausing…' : 'Resuming…'
-	pauseButton.textContent = pauseRequestPending === undefined ? (paused === true ? 'Resume' : 'Pause') : pendingLabel
+	pauseButton.textContent = pauseButtonLabel(pauseRequestPending, paused)
 	pauseButton.disabled = pauseRequestPending !== undefined || currentSnapshot === undefined || (paused === true && !resumeAvailable)
 	pauseButton.toggleAttribute('aria-busy', pauseRequestPending !== undefined)
 	if (pauseRequestPending !== undefined) pauseButton.setAttribute('aria-busy', 'true')
@@ -276,24 +251,9 @@ function setMutationControlsEnabled(enabled: boolean) {
 	testMarketSourcesButton.disabled = !chainSettingsAvailable
 	recheckRecovery.disabled = !chainSettingsAvailable
 	if (!chainSettingsAvailable) {
-		for (const control of document.querySelectorAll<HTMLInputElement | HTMLButtonElement>('#pool-rows input, #universe-rows input, #recovery-list input, #recovery-list button')) control.disabled = true
+		for (const control of document.querySelectorAll<HTMLInputElement | HTMLButtonElement>('#pool-rows input, #recovery-list input, #recovery-list button')) control.disabled = true
 	}
-}
-
-async function requestWithTimeout<T>(request: (signal: AbortSignal) => Promise<T>, timeoutMilliseconds: number, timeoutMessage = 'Dashboard state request timed out') {
-	const controller = new window.AbortController()
-	let timeout: number | undefined
-	const deadline = new Promise<never>((_resolve, reject) => {
-		timeout = window.setTimeout(() => {
-			reject(new Error(timeoutMessage))
-			controller.abort()
-		}, timeoutMilliseconds)
-	})
-	try {
-		return await Promise.race([request(controller.signal), deadline])
-	} finally {
-		if (timeout !== undefined) window.clearTimeout(timeout)
-	}
+	if (currentSnapshot !== undefined) renderUniverses(currentSnapshot, !chainSettingsAvailable)
 }
 
 async function api<T>(path: string, options?: RequestInit, timeoutMilliseconds?: number): Promise<T> {
@@ -313,6 +273,62 @@ function put<T = unknown>(path: string, value: unknown, timeoutMilliseconds?: nu
 	const options = { body, headers: { 'content-type': 'application/json' }, method: 'PUT' }
 	if (timeoutMilliseconds === undefined) return api<T>(path, options)
 	return requestWithTimeout(signal => api<T>(path, { ...options, signal }), timeoutMilliseconds, timeoutMessage)
+}
+
+const MARKET_SOURCE_STATUS_PRESENTATION: Record<MarketSourceRow['status'], { badgeClass: string; defaultReason: string; label: string }> = {
+	admitted: { badgeClass: 'ok', defaultReason: 'Meets the active admission policy', label: 'Admitted' },
+	excluded: { badgeClass: 'warning', defaultReason: 'Excluded by the active admission policy', label: 'Excluded' },
+	failed: { badgeClass: 'warning', defaultReason: 'Probe did not return usable evidence', label: 'Failed' },
+	observed: { badgeClass: '', defaultReason: 'Probe succeeded; admission still requires the persistence and consensus policy', label: 'Observed' },
+}
+
+const NETWORK_LABELS = new Map<string | undefined, string>([
+	['mainnet', 'Mainnet'],
+	['sepolia', 'Sepolia'],
+])
+
+function pauseButtonLabel(pauseRequestPending: boolean | undefined, paused: boolean | undefined) {
+	if (pauseRequestPending !== undefined) return pauseRequestPending ? 'Pausing…' : 'Resuming…'
+	return paused === true ? 'Resume' : 'Pause'
+}
+
+function pauseButtonAction(snapshot: Snapshot) {
+	if (!snapshot.paused) return 'pause'
+	return snapshot.execute ? 'confirm-resume' : 'resume'
+}
+
+function consensusStatusText(consensus: { reasons: readonly string[]; reliable: boolean } | undefined, reliableLabel: string) {
+	if (consensus === undefined) return undefined
+	return consensus.reliable ? reliableLabel : consensus.reasons.join(' · ')
+}
+
+function poolStatusText(pool: { approvedUniverse: boolean; centralizedPriceAllowed: boolean; selected: boolean; systemState: string }) {
+	if (!pool.approvedUniverse) return 'Universe not approved'
+	if (pool.systemState !== '0') return 'Pool inactive'
+	if (!pool.centralizedPriceAllowed) return 'Market consensus guard'
+	return pool.selected ? 'Eligible' : ''
+}
+
+function activityBadgeClass(status: string) {
+	if (status === 'failed') return 'warning'
+	return status === 'confirmed' ? 'ok' : ''
+}
+
+function runStatusLabel(snapshot: Snapshot) {
+	if (snapshot.status === 'connectivity-degraded') return 'Connectivity degraded'
+	if (snapshot.error !== undefined) return 'Error'
+	if (snapshot.paused) return 'Paused'
+	if (snapshot.scanning) return 'Scanning'
+	return snapshot.deploymentMissingName !== undefined ? 'Waiting' : 'Running'
+}
+
+function globalErrorPresentation(snapshot: Snapshot): { message: string | undefined; title: string; tone: 'error' | 'info' | 'warning' } {
+	if (snapshot.error === undefined) {
+		const guidance = capabilityBlockerGuidance(snapshot)
+		return { message: guidance?.message, title: guidance?.title ?? 'Operator blocked', tone: guidance?.pending === true ? 'info' : 'warning' }
+	}
+	const message = snapshot.status === 'connectivity-degraded' ? 'RPC connectivity is degraded. Execution is blocked and the bot will retry automatically.' : `${scanFailureDetail(snapshot.error)} Automatic retry is active. Check the bot logs if the next cycle also fails.`
+	return { message, title: 'Scan failed', tone: 'error' }
 }
 
 function shortAddress(address: string) {
@@ -388,11 +404,10 @@ function renderMarketSources(sources: MarketSourceRow[]) {
 		...sources.map(source => {
 			const row = document.createElement('tr')
 			const badge = document.createElement('span')
-			badge.className = `badge ${source.status === 'admitted' ? 'ok' : source.status === 'excluded' || source.status === 'failed' ? 'warning' : ''}`
-			badge.textContent = source.status === 'admitted' ? 'Admitted' : source.status === 'excluded' ? 'Excluded' : source.status === 'observed' ? 'Observed' : 'Failed'
-			const defaultReason =
-				source.status === 'admitted' ? 'Meets the active admission policy' : source.status === 'observed' ? 'Probe succeeded; admission still requires the persistence and consensus policy' : source.status === 'failed' ? 'Probe did not return usable evidence' : 'Excluded by the active admission policy'
-			const cells = [cell(source.kind.toUpperCase()), cell(source.id), cell(shortAddress(source.assetId)), cell(source.market), cell(badge), cell(source.reason ?? defaultReason)]
+			const presentation = MARKET_SOURCE_STATUS_PRESENTATION[source.status]
+			badge.className = `badge ${presentation.badgeClass}`
+			badge.textContent = presentation.label
+			const cells = [cell(source.kind.toUpperCase()), cell(source.id), cell(shortAddress(source.assetId)), cell(source.market), cell(badge), cell(source.reason ?? presentation.defaultReason)]
 			const labels = ['Venue', 'Source', 'REP asset', 'Market', 'Status', 'Reason']
 			const headings = ['source-kind-heading', 'source-id-heading', 'source-asset-heading', 'source-market-heading', 'source-status-heading', 'source-reason-heading']
 			for (const [index, value] of cells.entries()) {
@@ -489,7 +504,7 @@ function renderCentralizedMarket(snapshot: Snapshot) {
 	updateText(dexMarketBidDepth, consensus === undefined ? '—' : `${consensus.dex.bidDepthEth} ETH`)
 	updateText(dexMarketAskDepth, consensus === undefined ? '—' : `${consensus.dex.askDepthEth} ETH`)
 	if (market === undefined) {
-		updateText(centralizedMarketStatus, consensus === undefined ? 'No market sources configured' : consensus.reliable ? 'Reliable DEX consensus' : consensus.reasons.join(' · '))
+		updateText(centralizedMarketStatus, consensusStatusText(consensus, 'Reliable DEX consensus') ?? 'No market sources configured')
 		updateText(centralizedMarketPrice, '—')
 		updateText(centralizedMarketBidDepth, '—')
 		updateText(centralizedMarketAskDepth, '—')
@@ -502,7 +517,7 @@ function renderCentralizedMarket(snapshot: Snapshot) {
 		centralizedMarketRows.replaceChildren(row)
 		return
 	}
-	updateText(centralizedMarketStatus, consensus === undefined ? (market.reliable ? 'Reliable CEX estimate' : market.reasons.join(' · ')) : consensus.reliable ? 'Reliable independent CEX + DEX consensus' : consensus.reasons.join(' · '))
+	updateText(centralizedMarketStatus, consensusStatusText(consensus, 'Reliable independent CEX + DEX consensus') ?? (market.reliable ? 'Reliable CEX estimate' : market.reasons.join(' · ')))
 	updateText(centralizedMarketPrice, market.priceRepPerEth)
 	updateText(centralizedMarketBidDepth, `${market.bidDepthEth} ETH`)
 	updateText(centralizedMarketAskDepth, `${market.askDepthEth} ETH`)
@@ -521,14 +536,6 @@ function renderCentralizedMarket(snapshot: Snapshot) {
 			return row
 		}),
 	)
-}
-
-function forkOutcome(outcomeIndex?: string) {
-	if (outcomeIndex === undefined) return 'Origin'
-	if (outcomeIndex === '0') return 'Invalid'
-	if (outcomeIndex === '1') return 'Yes'
-	if (outcomeIndex === '2') return 'No'
-	return `Outcome ${outcomeIndex}`
 }
 
 function universeState(universe: Universe) {
@@ -553,229 +560,25 @@ function restoreRecordFocus(container: HTMLElement, recordKey?: string) {
 	}
 }
 
-function universeMetadata(universe: Universe, includeOutcome: boolean) {
-	const metadata = document.createElement('p')
-	metadata.className = 'truth-metadata'
-	const values = [
-		`${universe.poolCount.toString()} pool${universe.poolCount === 1 ? '' : 's'} · question #${universe.forkQuestionId}`,
-		universeState(universe),
-		`${universe.selectedPoolCount.toString()} selected`,
-		universe.migratableVaultCount > 0 ? `${universe.migratableVaultCount.toString()} migratable vault${universe.migratableVaultCount === 1 ? '' : 's'}` : 'No vault migration',
-	]
-	if (includeOutcome) values.unshift(forkOutcome(universe.outcomeIndex))
-	for (const value of values) {
-		const item = document.createElement('span')
-		item.textContent = value
-		metadata.append(item)
-	}
-	return metadata
-}
-
-async function saveUniversePolicy(actionKey: string, next: Set<string>, status: HTMLElement) {
-	if (pendingUniverseMutations > 0) return
-	pendingUniverseMutations += 1
-	for (const control of universeRows.querySelectorAll<HTMLInputElement>('input')) control.disabled = true
-	universeActionStates.set(actionKey, { failed: false, message: 'Saving…' })
-	actionStatus(status, 'Saving…')
-	try {
-		await put('/api/approved-universes', [...next])
-		approvedUniverses = next
-		universeActionStates.set(actionKey, { failed: false, message: 'Saved' })
-	} catch (error) {
-		universeActionStates.set(actionKey, { failed: true, message: publicFailure(error, 'Could not save universe approval. Retry this selection.') })
-	} finally {
-		pendingUniverseMutations -= 1
-		if (currentSnapshot !== undefined) renderUniverses(currentSnapshot)
-	}
-}
-
-function selectUniversePath(universe: Universe) {
-	const next = new Set(approvedUniverses)
-	if (currentSnapshot === undefined) {
-		next.add(universe.id)
-		return next
-	}
-	const universesById = new Map(currentSnapshot.universes.map(candidate => [candidate.id, candidate]))
-	let selected: Universe | undefined = universe
-	const visited = new Set<string>()
-	while (selected !== undefined && !visited.has(selected.id)) {
-		visited.add(selected.id)
-		next.add(selected.id)
-		if (selected.parentId === undefined) break
-		const selectedId = selected.id
-		const parentId = selected.parentId
-		removeUniverseSubtrees(
-			next,
-			currentSnapshot.universes.filter(candidate => candidate.parentId === parentId && candidate.id !== selectedId).map(candidate => candidate.id),
-		)
-		selected = universesById.get(parentId)
-	}
-	return next
-}
-
-function removeUniverseSubtrees(next: Set<string>, rootIds: readonly string[]) {
-	if (currentSnapshot === undefined) {
-		for (const rootId of rootIds) next.delete(rootId)
-		return
-	}
-	const childrenByParent = new Map<string, string[]>()
-	for (const universe of currentSnapshot.universes) {
-		if (universe.parentId === undefined) continue
-		const children = childrenByParent.get(universe.parentId) ?? []
-		children.push(universe.id)
-		childrenByParent.set(universe.parentId, children)
-	}
-	const pending = [...rootIds]
-	for (let index = 0; index < pending.length; index += 1) {
-		const universeId = pending[index]
-		if (universeId === undefined) continue
-		next.delete(universeId)
-		pending.push(...(childrenByParent.get(universeId) ?? []))
-	}
-}
-
-function universeChoice(universe: Universe) {
-	const choice = document.createElement('label')
-	choice.className = 'truth-choice'
-	const input = document.createElement('input')
-	input.type = 'radio'
-	input.name = `truth-path-${universe.parentId ?? 'root'}`
-	input.value = universe.id
-	input.dataset['recordKey'] = `universe:${universe.id}`
-	input.checked = approvedUniverses.has(universe.id)
-	input.disabled = pendingNetworkProfile !== undefined || currentConfiguration?.networkConfigured !== true || !stateConnected
-	const copy = document.createElement('span')
-	copy.className = 'truth-choice-copy'
-	const title = document.createElement('strong')
-	title.textContent = `${forkOutcome(universe.outcomeIndex)} · universe #${universe.id}`
-	copy.append(title, universeMetadata(universe, false))
-	const status = document.createElement('span')
-	status.className = 'action-status'
-	const saved = universeActionStates.get(universe.id)
-	if (saved !== undefined) actionStatus(status, saved.message, saved.failed)
-	input.addEventListener('change', () => {
-		if (!input.checked) return
-		void saveUniversePolicy(universe.id, selectUniversePath(universe), status)
+function renderUniverses(snapshot: Snapshot, disabled?: boolean) {
+	universeExplorer ??= createUniverseExplorer(universeRows, {
+		savedMessage: 'Universe approvals saved.',
+		onChange: async next => {
+			const epoch = profileRequestEpoch
+			try {
+				await put('/api/approved-universes', [...next])
+				if (epoch === profileRequestEpoch) approvedUniverses = next
+			} catch (error) {
+				throw new Error(publicFailure(error, 'Could not save universe approval. Retry this selection.'))
+			}
+		},
 	})
-	choice.append(copy, input, status)
-	return choice
-}
-
-function universeFamily(parent: Universe, children: readonly Universe[]) {
-	const family = document.createElement('div')
-	family.className = 'truth-family'
-	const heading = document.createElement('div')
-	heading.className = 'truth-parent'
-	const copy = document.createElement('div')
-	const title = document.createElement('h3')
-	title.textContent = `${parent.parentId === undefined ? 'Root' : 'Parent'} universe #${parent.id}`
-	copy.append(title, universeMetadata(parent, parent.parentId !== undefined))
-	heading.append(copy)
-	if (parent.parentId === undefined) {
-		const toggleTarget = document.createElement('label')
-		toggleTarget.className = 'pool-toggle truth-root-toggle'
-		const toggle = document.createElement('input')
-		toggle.type = 'checkbox'
-		toggle.dataset['recordKey'] = `universe:${parent.id}`
-		toggle.checked = approvedUniverses.has(parent.id)
-		toggle.disabled = pendingNetworkProfile !== undefined || currentConfiguration?.networkConfigured !== true || !stateConnected
-		toggle.setAttribute('aria-label', `Approve root universe ${parent.id}`)
-		toggle.addEventListener('change', () => {
-			const next = new Set(approvedUniverses)
-			if (toggle.checked) next.add(parent.id)
-			else removeUniverseSubtrees(next, [parent.id])
-			void saveUniversePolicy(parent.id, next, status)
-		})
-		const status = document.createElement('span')
-		status.className = 'action-status truth-parent-status'
-		const saved = universeActionStates.get(parent.id)
-		if (saved !== undefined) actionStatus(status, saved.message, saved.failed)
-		toggleTarget.append(toggle)
-		heading.append(toggleTarget, status)
-	} else {
-		const approval = document.createElement('span')
-		approval.className = `badge ${approvedUniverses.has(parent.id) ? 'ok' : ''}`
-		approval.textContent = approvedUniverses.has(parent.id) ? 'Approved path' : 'Not approved'
-		heading.append(approval)
-	}
-	family.append(heading)
-	if (children.length === 0) return family
-	const options = document.createElement('fieldset')
-	options.className = 'truth-options'
-	const legend = document.createElement('legend')
-	legend.append(document.createTextNode('Truth outcome'))
-	const legendContext = document.createElement('span')
-	legendContext.className = 'visually-hidden'
-	legendContext.textContent = ` for universe #${parent.id}`
-	legend.append(legendContext)
-	options.append(legend)
-	const childIds = children.map(child => child.id)
-	const none = document.createElement('label')
-	none.className = 'truth-choice'
-	const noneInput = document.createElement('input')
-	noneInput.type = 'radio'
-	noneInput.name = `truth-path-${parent.id}`
-	noneInput.value = ''
-	noneInput.dataset['recordKey'] = `universe:none:${parent.id}`
-	noneInput.checked = childIds.every(childId => !approvedUniverses.has(childId))
-	noneInput.disabled = pendingNetworkProfile !== undefined || currentConfiguration?.networkConfigured !== true || !stateConnected
-	const noneCopy = document.createElement('span')
-	noneCopy.className = 'truth-choice-copy'
-	const noneTitle = document.createElement('strong')
-	noneTitle.textContent = 'No child approved'
-	const noneDescription = document.createElement('small')
-	noneDescription.textContent = 'Keep every child universe inert'
-	noneCopy.append(noneTitle, noneDescription)
-	const noneStatus = document.createElement('span')
-	noneStatus.className = 'action-status'
-	const saved = universeActionStates.get(`none:${parent.id}`)
-	if (saved !== undefined) actionStatus(noneStatus, saved.message, saved.failed)
-	noneInput.addEventListener('change', () => {
-		if (!noneInput.checked) return
-		const next = new Set(approvedUniverses)
-		removeUniverseSubtrees(next, childIds)
-		void saveUniversePolicy(`none:${parent.id}`, next, noneStatus)
+	universeExplorer.update({
+		universes: snapshot.universes.map(universe => ({ ...universe, summary: `${universe.poolCount} pools · ${universeState(universe)} · ${universe.selectedPoolCount} selected · ${universe.migratableVaultCount} migratable vaults` })),
+		approved: approvedUniverses,
+		network: snapshot.network,
+		disabled: disabled ?? (pendingNetworkProfile !== undefined || currentConfiguration?.networkConfigured !== true || !stateConnected),
 	})
-	none.append(noneCopy, noneInput, noneStatus)
-	options.append(none, ...children.map(child => universeChoice(child)))
-	family.append(options)
-	return family
-}
-
-function renderUniverses(snapshot: Snapshot) {
-	if (pendingUniverseMutations > 0) return
-	const focusedRecord = activeRecordKey(universeRows)
-	if (snapshot.universes.length === 0) {
-		const empty = document.createElement('p')
-		empty.className = 'empty'
-		empty.textContent = 'No universes are registered.'
-		universeRows.replaceChildren(empty)
-		return
-	}
-	const childrenByParent = new Map<string, Universe[]>()
-	for (const universe of snapshot.universes) {
-		if (universe.parentId === undefined) continue
-		const children = childrenByParent.get(universe.parentId) ?? []
-		children.push(universe)
-		childrenByParent.set(universe.parentId, children)
-	}
-	const families: HTMLElement[] = []
-	const visited = new Set<string>()
-	const appendFamily = (parent: Universe) => {
-		if (visited.has(parent.id)) return
-		visited.add(parent.id)
-		const children = childrenByParent.get(parent.id) ?? []
-		families.push(universeFamily(parent, children))
-		for (const child of children) {
-			if (childrenByParent.has(child.id)) appendFamily(child)
-		}
-	}
-	for (const root of snapshot.universes.filter(universe => universe.parentId === undefined)) appendFamily(root)
-	for (const universe of snapshot.universes) {
-		if (!visited.has(universe.id) && childrenByParent.has(universe.id)) appendFamily(universe)
-	}
-	universeRows.replaceChildren(...families)
-	restoreRecordFocus(universeRows, focusedRecord)
 }
 
 function cell(...children: (Node | string)[]) {
@@ -856,7 +659,7 @@ function renderPools(snapshot: Snapshot) {
 			poolStatus.className = 'action-status'
 			const savedActionState = poolActionStates.get(pool.address.toLowerCase())
 			if (savedActionState === undefined) {
-				poolStatus.textContent = !pool.approvedUniverse ? 'Universe not approved' : pool.systemState !== '0' ? 'Pool inactive' : !pool.centralizedPriceAllowed ? 'Market consensus guard' : pool.selected ? 'Eligible' : ''
+				poolStatus.textContent = poolStatusText(pool)
 			} else {
 				actionStatus(poolStatus, savedActionState.message, savedActionState.failed)
 				if (!savedActionState.failed && savedActionState.message === 'Saved') poolActionStates.delete(pool.address.toLowerCase())
@@ -941,7 +744,7 @@ function renderActivities(activities: Activity[]) {
 			const item = document.createElement('li')
 			item.className = 'activity'
 			const badge = document.createElement('span')
-			badge.className = `badge ${activity.status === 'failed' ? 'warning' : activity.status === 'confirmed' ? 'ok' : ''}`
+			badge.className = `badge ${activityBadgeClass(activity.status)}`
 			badge.textContent = activity.status
 			const body = document.createElement('div')
 			const message = document.createElement('p')
@@ -964,26 +767,7 @@ function renderActivities(activities: Activity[]) {
 
 function renderRpcEndpointHealth(health: Snapshot['rpcEndpointHealth']) {
 	const container = element('rpc-endpoint-health', HTMLDivElement)
-	container.replaceChildren(
-		...(health ?? []).map(endpoint => {
-			const item = document.createElement('div')
-			item.className = 'rpc-health-item'
-			item.dataset['status'] = endpoint.status
-			const status = document.createElement('strong')
-			status.textContent = endpoint.status
-			const target = document.createElement('span')
-			target.className = 'mono'
-			target.textContent = endpoint.target
-			const detail = document.createElement('small')
-			const metadata = [endpoint.consecutiveFailures > 0 ? `${endpoint.consecutiveFailures.toString()} consecutive failure${endpoint.consecutiveFailures === 1 ? '' : 's'}` : undefined, endpoint.nextRetryAt === undefined ? undefined : `retry ${new Date(endpoint.nextRetryAt).toLocaleTimeString()}`].filter(
-				value => value !== undefined,
-			)
-			const primaryDetail = endpoint.error ?? (endpoint.latencyMilliseconds === undefined ? 'Awaiting first request' : `${endpoint.latencyMilliseconds.toString()} ms`)
-			detail.textContent = [primaryDetail, ...metadata].join(' · ')
-			item.append(status, target, detail)
-			return item
-		}),
-	)
+	container.replaceChildren(...(health ?? []).map(endpoint => endpointRow('rpc-health-item', endpoint, endpointHealthDetail(endpoint))))
 }
 
 function renderCurrentRpcEndpointHealth(snapshot = currentSnapshot) {
@@ -996,28 +780,22 @@ function render(snapshot: Snapshot) {
 	currentSnapshot = snapshot
 	renderBlockStatus(snapshot)
 	stateConnected = true
-	pauseButton.dataset['action'] = snapshot.paused ? (snapshot.execute ? 'confirm-resume' : 'resume') : 'pause'
+	pauseButton.dataset['action'] = pauseButtonAction(snapshot)
 	setMutationControlsEnabled(true)
 	renderNetworkBadge()
 	modeBadge.textContent = snapshot.execute ? 'Live' : 'Dry run'
 	modeBadge.className = `badge ${snapshot.execute ? 'warning' : 'ok'}`
-	runStatusBadge.textContent = snapshot.status === 'connectivity-degraded' ? 'Connectivity degraded' : snapshot.error !== undefined ? 'Error' : snapshot.paused ? 'Paused' : snapshot.scanning ? 'Scanning' : 'Running'
+	runStatusBadge.textContent = runStatusLabel(snapshot)
 	runStatusBadge.className = `badge ${snapshot.paused || snapshot.error !== undefined ? 'warning' : 'ok'}`
-	capabilityBadge.textContent = snapshot.operatorCapable ? 'Operator capable' : 'Operator blocked'
+	capabilityBadge.hidden = snapshot.operatorCapable
+	capabilityBadge.textContent = snapshot.operatorCapable ? '' : 'Operator blocked'
 	capabilityBadge.className = `badge ${snapshot.operatorCapable ? 'ok' : 'warning'}`
 	renderAttention(snapshot)
 	recoveryGuidance.hidden = snapshot.paused
-	lastScan.textContent = snapshot.lastScanAt === undefined ? (snapshot.scanning ? 'Scanning configured pools…' : 'Waiting for first scan') : `Last scan ${new Date(snapshot.lastScanAt).toLocaleString()}`
+	lastScan.textContent = scanStatusText(snapshot)
 	walletAddress.textContent = snapshot.wallet ?? 'No active signer'
-	setGlobalError(
-		snapshot.error === undefined
-			? capabilityBlockerGuidance(snapshot)?.message
-			: snapshot.status === 'connectivity-degraded'
-				? 'RPC connectivity is degraded. Execution is blocked and the bot will retry automatically.'
-				: `${scanFailureDetail(snapshot.error)} Automatic retry is active. Check the bot logs if the next cycle also fails.`,
-		snapshot.error === undefined ? 'Operator blocked' : 'Scan failed',
-		snapshot.error === undefined ? 'warning' : 'error',
-	)
+	const globalError = globalErrorPresentation(snapshot)
+	setGlobalError(globalError.message, globalError.title, globalError.tone)
 	renderMetrics(snapshot)
 	renderAlerts(snapshot)
 	renderCentralizedMarket(snapshot)
@@ -1046,12 +824,7 @@ function snapshotAttentionCount(snapshot: Snapshot) {
 }
 
 function capabilityBlockerGuidance(snapshot: Snapshot) {
-	if (snapshot.operatorCapable !== false || snapshotDetailedAttentionCount(snapshot) > 0) return undefined
-	if (snapshot.paused) return { pending: false, message: 'The bot is paused. Use Resume to continue scanning.' }
-	if (snapshot.scanning) return { pending: true, message: 'A scan is in progress. Readiness updates automatically when it completes.' }
-	if (snapshot.execute && snapshot.wallet === undefined) return { pending: false, message: 'Live execution needs an active signer. Open Settings and configure Execution signer.' }
-	if (snapshot.lastScanAt === undefined || snapshot.lastScannedBlock === undefined) return { pending: true, message: 'Waiting for the first successful scan. Readiness updates automatically; inspect the bot logs if scanning does not start.' }
-	return { pending: false, message: 'The operator is not ready. Status updates automatically; inspect the bot logs if it remains blocked.' }
+	return readinessGuidance(snapshot, snapshotDetailedAttentionCount(snapshot) > 0)
 }
 
 function renderAttention(snapshot: Snapshot) {
@@ -1064,8 +837,8 @@ function renderAttention(snapshot: Snapshot) {
 	else if (snapshot.alerts.length > 0) attentionTarget = '/operations'
 	setAttentionBadge(attentionBadge, attentionCount, attentionTarget)
 	if (capabilityBlockerGuidance(snapshot)?.pending === true) {
-		attentionBadge.textContent = 'Checking readiness'
-		attentionBadge.removeAttribute('href')
+		attentionBadge.textContent = capabilityBlockerGuidance(snapshot)?.label ?? 'Awaiting first scan'
+		if (snapshot.deploymentMissingName === undefined) attentionBadge.removeAttribute('href')
 	}
 }
 
@@ -1170,7 +943,7 @@ async function waitForNetworkProfile(network: string) {
 		await refresh()
 		if (pendingNetworkProfile === undefined && currentConfiguration?.network?.name === network) return
 	}
-	actionStatus(networkStatus, 'The profile was saved, but the dashboard did not reconnect in time. Use Refresh to retry.', true)
+	actionStatus(networkStatus, 'The profile was saved, but the dashboard did not reconnect in time. It keeps retrying automatically.', true)
 }
 
 networkForm.addEventListener('submit', async event => {
@@ -1178,13 +951,8 @@ networkForm.addEventListener('submit', async event => {
 	networkFields.disabled = true
 	actionStatus(networkStatus, 'Checking every RPC against the selected chain…')
 	try {
-		const lines = (value: string) =>
-			value
-				.split('\n')
-				.map(entry => entry.trim())
-				.filter(Boolean)
 		const configuration = await put<Configuration>('/api/network-connectivity', {
-			connectivity: { publicRpcUrls: lines(publicRpcUrls.value), quorumRpcUrls: lines(quorumRpcUrls.value), readRpcUrl: readRpcUrl.value.trim(), rpcQuorum: Number(rpcQuorum.value) },
+			connectivity: { publicRpcUrls: urlLines(publicRpcUrls.value), quorumRpcUrls: urlLines(quorumRpcUrls.value), readRpcUrl: readRpcUrl.value.trim(), rpcQuorum: Number(rpcQuorum.value) },
 			network: networkName.value,
 		})
 		populateConfiguration(configuration)
@@ -1275,7 +1043,7 @@ function scanFailureDetail(error: string) {
 	return 'The latest scan cycle returned an unexpected error.'
 }
 
-function setGlobalError(message?: string, title = 'Dashboard unavailable', tone: 'error' | 'warning' = 'error') {
+function setGlobalError(message?: string, title = 'Dashboard unavailable', tone: 'error' | 'warning' | 'info' = 'error') {
 	if (message === undefined) {
 		if (!globalError.classList.contains('hidden')) globalError.classList.add('hidden')
 		if (globalError.childNodes.length > 0) globalError.replaceChildren()
@@ -1284,6 +1052,7 @@ function setGlobalError(message?: string, title = 'Dashboard unavailable', tone:
 	}
 	const noticeKey = `${tone}\n${title}\n${message}`
 	if (globalError.dataset['noticeKey'] === noticeKey && !globalError.classList.contains('hidden')) return
+	globalError.setAttribute('role', tone === 'info' ? 'status' : 'alert')
 	globalError.classList.toggle('error', tone === 'error')
 	globalError.classList.toggle('warning', tone === 'warning')
 	globalError.dataset['noticeKey'] = noticeKey
@@ -1313,7 +1082,7 @@ function renderNetworkBadge() {
 		return
 	}
 	if (currentConfiguration?.network === undefined || currentConfiguration.networkConfigured !== true) {
-		const networkLabel = currentConfiguration?.network?.name === 'mainnet' ? 'Mainnet' : currentConfiguration?.network?.name === 'sepolia' ? 'Sepolia' : undefined
+		const networkLabel = NETWORK_LABELS.get(currentConfiguration?.network?.name)
 		networkBadge.textContent = networkLabel === undefined ? 'Choose chain' : `${networkLabel} · RPC setup required`
 		networkBadge.className = 'badge warning'
 		return
@@ -1327,18 +1096,24 @@ function renderConnectionFailure(error: unknown) {
 	void error
 	const snapshot = currentSnapshot
 	stateConnected = false
-	modeBadge.textContent = snapshot === undefined ? 'Mode unavailable' : `${snapshot.execute ? 'Live' : 'Dry run'} · last known`
-	modeBadge.className = 'badge warning'
 	renderNetworkBadge()
-	capabilityBadge.textContent = 'Capability unavailable'
-	capabilityBadge.className = 'badge warning'
-	runStatusBadge.textContent = 'Disconnected'
-	runStatusBadge.className = 'badge warning'
-	const attentionCount = 1 + (snapshot === undefined ? 0 : Math.max(snapshot.pendingTransactions.length + snapshot.pendingStagedOperations.length, snapshot.alerts.length))
-	setAttentionBadge(attentionBadge, attentionCount, '/overview#global-error')
+	let lastKnownModeLabel: string | undefined
+	if (snapshot !== undefined) lastKnownModeLabel = snapshot.execute ? 'Live' : 'Dry run'
+	renderDisconnectedHeader({
+		attentionBadge,
+		attentionTarget: '/overview#global-error',
+		capabilityBadge,
+		capabilityBadgeClassName: 'badge warning',
+		lastKnownModeLabel,
+		modeBadge,
+		modeBadgeClassName: 'badge warning',
+		retainedAttentionCount: snapshot === undefined ? 0 : Math.max(snapshot.pendingTransactions.length + snapshot.pendingStagedOperations.length, snapshot.alerts.length),
+		runStatusBadge,
+		runStatusBadgeClassName: 'badge warning',
+		showNotice: title => setGlobalError('State polling failed. Automatic retry is active; use the next successful poll before making an execution decision.', title),
+	})
 	recoveryGuidance.hidden = true
 	setMutationControlsEnabled(false)
-	setGlobalError('State polling failed. Automatic retry is active; use the next successful poll before making an execution decision.', 'Dashboard disconnected')
 }
 
 function strategyInput(name: string) {
@@ -1359,38 +1134,19 @@ function updateHealthPolicyPreview() {
 	healthPolicyPreview.textContent = `Top up below ${topUp} · restore to ${target} · withdraw excess above ${withdraw}`
 }
 
-function preflightItem(label: string, value: string) {
-	const item = document.createElement('li')
-	const name = document.createElement('span')
-	name.textContent = label
-	const status = document.createElement('strong')
-	status.textContent = value
-	item.append(name, status)
-	return item
-}
-
-function openResumePreflight(snapshot: Snapshot) {
+function openResumeConfirmation(snapshot: Snapshot) {
 	const automaticActions = ['allowAutomaticDeposits', 'allowAutomaticPoolCreation', 'allowAutomaticVaultMigrations', 'allowAutomaticWithdrawals'].filter(name => {
 		const field = strategyForm.elements.namedItem(name)
 		return field instanceof HTMLInputElement && field.checked
 	}).length
-	resumePreflight.replaceChildren(
-		preflightItem('Mode', 'Live execution'),
-		preflightItem('Recovery work', snapshot.pendingTransactions.length + snapshot.pendingStagedOperations.length === 0 ? 'Clear' : `${(snapshot.pendingTransactions.length + snapshot.pendingStagedOperations.length).toString()} unresolved`),
-		preflightItem('Market evidence', snapshot.marketConsensus?.reliable === true ? 'Reliable' : 'Guarded / unavailable'),
-		preflightItem('Eligible pools', snapshot.metrics.eligiblePoolCount.toString()),
-		preflightItem('Execution signer', snapshot.wallet === undefined ? 'Missing' : shortAddress(snapshot.wallet)),
-		preflightItem('Automatic actions enabled', automaticActions.toString()),
-	)
-	if ('showModal' in resumeDialog && typeof resumeDialog.showModal === 'function') resumeDialog.showModal()
-	if (!resumeDialog.hasAttribute('open')) resumeDialog.setAttribute('open', '')
-	element('resume-title', HTMLElement).focus({ preventScroll: true })
-	resumeDialog.scrollTop = 0
-}
-
-function closeResumePreflight() {
-	if (resumeDialog.hasAttribute('open') && 'close' in resumeDialog && typeof resumeDialog.close === 'function') resumeDialog.close()
-	else resumeDialog.removeAttribute('open')
+	openResumePreflight([
+		['Mode', 'Live execution'],
+		['Recovery work', snapshot.pendingTransactions.length + snapshot.pendingStagedOperations.length === 0 ? 'Clear' : `${(snapshot.pendingTransactions.length + snapshot.pendingStagedOperations.length).toString()} unresolved`],
+		['Market evidence', snapshot.marketConsensus?.reliable === true ? 'Reliable' : 'Guarded / unavailable'],
+		['Eligible pools', snapshot.metrics.eligiblePoolCount.toString()],
+		['Execution signer', snapshot.wallet === undefined ? 'Missing' : shortAddress(snapshot.wallet)],
+		['Automatic actions enabled', automaticActions.toString()],
+	])
 }
 
 async function changePaused(paused: boolean) {
@@ -1414,7 +1170,7 @@ async function changePaused(paused: boolean) {
 pauseButton.addEventListener('click', () => {
 	if (currentSnapshot === undefined) return
 	if (pauseButton.dataset['action'] === 'confirm-resume') {
-		openResumePreflight(currentSnapshot)
+		openResumeConfirmation(currentSnapshot)
 		return
 	}
 	void changePaused(!currentSnapshot.paused)
@@ -1430,100 +1186,7 @@ poolFilter.addEventListener('input', () => {
 
 strategyForm.addEventListener('input', updateHealthPolicyPreview)
 
-const sectionLinks = [...document.querySelectorAll<HTMLAnchorElement>('.section-nav a[href^="/"]')]
-
-function showDashboardPage(pathname: string, push = false) {
-	const page = pathname === '/' ? 'overview' : pathname.replace(/^\//, '').replace(/\/$/, '')
-	document.body.dataset['page'] = page
-	for (const link of sectionLinks) link.toggleAttribute('aria-current', new URL(link.href).pathname.replace(/\/$/, '') === `/${page}`)
-	const activeLink = sectionLinks.find(link => link.hasAttribute('aria-current'))
-	const navigation = activeLink?.closest<HTMLElement>('.section-nav')
-	if (activeLink !== undefined && navigation !== null && navigation !== undefined) {
-		window.requestAnimationFrame(() => {
-			navigation.scrollLeft = activeLink.offsetLeft - (navigation.clientWidth - activeLink.offsetWidth) / 2
-		})
-	}
-	if (push) window.history.pushState({}, '', `/${page}`)
-	window.scrollTo({ top: 0 })
-}
-
-for (const link of sectionLinks) {
-	link.addEventListener('click', event => {
-		if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-		event.preventDefault()
-		showDashboardPage(new URL(link.href).pathname, true)
-	})
-}
-window.addEventListener('popstate', () => showDashboardPage(window.location.pathname))
-
-function secureExternalLinks(root: ParentNode) {
-	const links = root instanceof HTMLAnchorElement ? [root] : [...root.querySelectorAll<HTMLAnchorElement>('a[href]')]
-	for (const link of links) {
-		if (link.origin === window.location.origin) continue
-		link.target = '_blank'
-		link.rel = 'noopener noreferrer'
-	}
-}
-
-secureExternalLinks(document)
-new MutationObserver(records => {
-	for (const record of records) {
-		for (const node of record.addedNodes) if (node instanceof HTMLElement) secureExternalLinks(node)
-	}
-}).observe(document.body, { childList: true, subtree: true })
-
-let sectionNavigationAlignmentInitialized = false
-
-function revealSectionLink(_link: HTMLAnchorElement) {
-	const navigation = sectionLinks[0]?.closest<HTMLElement>('.section-nav')
-	if (navigation === undefined || navigation === null) return
-	const align = () => {
-		const link = sectionLinks.find(candidate => candidate.hasAttribute('aria-current'))
-		if (link === undefined) return
-		navigation.scrollLeft = link.offsetLeft - (navigation.clientWidth - link.offsetWidth) / 2
-	}
-	align()
-	if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(align)
-	if (!sectionNavigationAlignmentInitialized) {
-		sectionNavigationAlignmentInitialized = true
-		window.addEventListener('load', align, { once: true })
-		window.addEventListener('resize', align)
-		new ResizeObserver(align).observe(navigation)
-	}
-	void document.fonts?.ready.then(align)
-}
-
-function scrollToSection(id: string) {
-	const target = document.getElementById(id)
-	const shell = document.querySelector<HTMLElement>('.operator-shell')
-	if (target === null || shell === null) return
-	if (target instanceof HTMLDetailsElement) target.open = true
-	else target.closest('details')?.setAttribute('open', '')
-	const align = () => {
-		const top = target.getBoundingClientRect().top + window.scrollY - shell.getBoundingClientRect().height - 16
-		window.scrollTo({ top: Math.max(0, top) })
-	}
-	align()
-	if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(() => window.requestAnimationFrame(align))
-	void document.fonts?.ready.then(align)
-}
-
-function syncSectionNavigation(scrollToTarget = false) {
-	const activePath = window.location.pathname === '/' ? '/overview' : window.location.pathname
-	let activeLink: HTMLAnchorElement | undefined
-	for (const link of sectionLinks) {
-		if (link.pathname === activePath) {
-			link.setAttribute('aria-current', 'page')
-			activeLink = link
-		} else link.removeAttribute('aria-current')
-	}
-	if (activeLink !== undefined) revealSectionLink(activeLink)
-	const targetId = window.location.hash.slice(1)
-	if (scrollToTarget && targetId !== '') scrollToSection(targetId)
-}
-
-window.addEventListener('hashchange', () => syncSectionNavigation(true))
-syncSectionNavigation()
+const { scrollToSection, syncSectionNavigation } = createSectionNavigation()
 
 strategyForm.addEventListener('submit', async event => {
 	event.preventDefault()
@@ -1599,36 +1262,7 @@ clearSignerButton.addEventListener('click', async () => {
 	}
 })
 
-let refreshInFlight: Promise<void> | undefined
-let refreshQueued = false
-
-function setRefreshControlPending(pending: boolean) {
-	refreshButton.disabled = pending
-	refreshButton.textContent = pending ? 'Refreshing…' : 'Refresh'
-	refreshButton.toggleAttribute('aria-busy', pending)
-	if (pending) refreshButton.setAttribute('aria-busy', 'true')
-}
-
-function refresh() {
-	if (refreshInFlight !== undefined) {
-		refreshQueued = true
-		return refreshInFlight
-	}
-	const operation = (async () => {
-		refreshQueued = false
-		await performRefresh()
-		while (refreshQueued) {
-			refreshQueued = false
-			await performRefresh()
-		}
-	})()
-	refreshInFlight = operation.finally(() => {
-		refreshInFlight = undefined
-		setRefreshControlPending(false)
-	})
-	setRefreshControlPending(true)
-	return refreshInFlight
-}
+const refresh = singleFlight(performRefresh)
 
 async function performRefresh() {
 	const requestEpoch = profileRequestEpoch
@@ -1699,7 +1333,6 @@ async function loadConfiguration() {
 }
 
 void loadConfiguration()
-refreshButton.addEventListener('click', () => void refresh())
 void refresh()
 setInterval(refresh, 3_000)
 setInterval(renderBlockStatus, 1_000)

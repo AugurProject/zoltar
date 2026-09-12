@@ -28,6 +28,9 @@ describe('liquidator dashboard server', () => {
 				],
 				alerts: [{ internalPath: protectedPath, message: 'Execution is paused', severity: 'warning' }],
 				execute: true,
+				deploymentMissingName: 'Zoltar',
+				deploymentCheckedBlock: '12345679',
+				deploymentCheckedTimestamp: '1786924812',
 				lastScannedBlock: '12345678',
 				lastScannedTimestamp: '1786924800',
 				metrics: {
@@ -137,6 +140,9 @@ describe('liquidator dashboard server', () => {
 		expect(body).not.toContain(protectedPath)
 		expect(body).not.toContain(rpcSecret)
 		expect(Reflect.get(snapshot, 'status')).toBe('connectivity-degraded')
+		expect(Reflect.get(snapshot, 'deploymentMissingName')).toBe('Zoltar')
+		expect(Reflect.get(snapshot, 'deploymentCheckedBlock')).toBe('12345679')
+		expect(Reflect.get(snapshot, 'deploymentCheckedTimestamp')).toBe('1786924812')
 		expect(Reflect.get(snapshot, 'lastScannedBlock')).toBe('12345678')
 		expect(Reflect.get(snapshot, 'lastScannedTimestamp')).toBe('1786924800')
 		expect(Reflect.get(snapshot, 'rpcEndpointHealth')).toEqual([{ consecutiveFailures: 2, error: 'RPC connectivity or canonical chain reads failed. Automatic retry remains active.', lastFailureAt: '2026-08-13T00:00:00.000Z', nextRetryAt: '2026-08-13T00:01:00.000Z', status: 'offline', target: 'https://rpc.example' }])
@@ -263,6 +269,10 @@ describe('liquidator dashboard server', () => {
 		expect(await health.text()).toBe('ok')
 		const page = await fetch(server.url)
 		expect(page.status).toBe(200)
+		expect(page.headers.get('content-security-policy')).toContain("object-src 'none'")
+		expect(page.headers.get('cross-origin-resource-policy')).toBe('same-origin')
+		expect(page.headers.get('permissions-policy')).toContain('camera=()')
+		expect(page.headers.get('x-frame-options')).toBe('DENY')
 		const pageSource = await page.text()
 		expect(pageSource).toContain('Statoblast liquidator')
 		const favicon = await fetch(new URL('/favicon.svg', server.url))
@@ -286,18 +296,22 @@ describe('liquidator dashboard server', () => {
 		expect(pageSource).toContain('id="network-scope-summary"')
 		expect(pageSource).toContain('Select a chain profile first')
 		expect(pageSource).toContain('id="network-badge"')
-		expect(pageSource).toContain('id="refresh-button"')
+		expect(pageSource).not.toContain('id="refresh-button"')
 		expect(pageSource).toContain('id="test-market-sources"')
 		expect(pageSource).toContain('id="recovery-list"')
 		expect(pageSource).toContain('id="resume-dialog"')
 		expect(pageSource).toContain('class="section-nav"')
-		expect(pageSource).toContain('Universe truth policy')
+		expect(pageSource).toContain('Approved universes')
 		expect(pageSource).not.toContain('public CCXT sources')
 		expect(pageSource).toContain('id="metrics" class="metric-grid operator-metrics"')
 		expect(pageSource).not.toContain('id="metrics" class="metric-grid" aria-live')
 		const sharedStyles = await fetch(new URL('/operator-console.css', server.url))
 		expect(sharedStyles.status).toBe(200)
 		expect(await sharedStyles.text()).toContain('.operator-shell')
+		const headerScript = await fetch(new URL('/header-notices.js', server.url))
+		expect(headerScript.status).toBe(200)
+		expect(headerScript.headers.get('content-type')).toContain('text/javascript')
+		expect(await headerScript.text()).toContain('MutationObserver')
 		const rejected = await fetch(new URL('/api/paused', server.url), {
 			body: JSON.stringify({ paused: true }),
 			headers: {

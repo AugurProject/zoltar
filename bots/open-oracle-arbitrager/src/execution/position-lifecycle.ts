@@ -1,5 +1,5 @@
-import { encodeFunctionData, parseUnits, type Address, type Hex, zeroAddress } from '#ethereum'
-import { getOpenOracleGameTuple, getOpenOracleHelperTuple, OPEN_ORACLE_FLAG_TIME_TYPE } from '@zoltar/shared/openOracle'
+import { encodeFunctionData, parseUnits, type Address, type Hex, zeroAddress } from '@zoltar/bot-shared/ethereum'
+import { getOpenOracleGameTuple, getOpenOracleHelperTuple, OPEN_ORACLE_FLAG_TIME_TYPE } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { openOracleArbitrageExecutorAbi } from '#contracts/abi'
 import type { Configuration } from '#config/configuration'
 import {
@@ -23,7 +23,7 @@ import type { ReadClient, WriteClient } from '#core/operator-types'
 import { errorMessage } from '#core/rpc-validation'
 import { currentBlockNumberWithQuorum, dateFromBlockTimestamp, durableTransactionIntent, lifecycleBalancesWithQuorum, pendingNonceWithQuorum, replacementDisputeAmountsWithQuorum, storedReportWithQuorum } from '#execution/recovery-support'
 import { discoverPublicReplacementWithQuorum, expireEntryWithQuorum, finalizeLifecycleAfterFinalityWithQuorum, recoverPendingEntryWithQuorum, recoverPendingLifecycleWithQuorum, tokenDecimalsFromSnapshot } from '#execution/position-recovery'
-import { operationalFailureDisposition } from '#monitoring/resilience'
+import { operationalFailureDisposition } from '@zoltar/bot-shared/monitoring/resilience'
 
 export {
 	discoverPublicReplacementWithQuorum,
@@ -144,12 +144,11 @@ export async function processPositionLifecycle(
 		if (activePosition.reportDisputeIndex === undefined) {
 			await persistPosition({ ...activePosition, status: 'recovery-required' })
 			throw new Error(`Position ${activePosition.reportId} lacks a durable dispute cursor; automatic historical log replay is disabled and manual reconciliation is required`)
-		} else {
-			const successorIndex = BigInt(activePosition.reportDisputeIndex) + 1n
-			const replacement = await replacementDisputeAmountsWithQuorum(readClients, config, id, successorIndex, blockNumber)
-			if (replacement.blockHash.toLowerCase() !== storedSnapshot.blockHash.toLowerCase()) throw new Error('Replacement dispute and report state use different canonical blocks')
-			if (replacement.record.reportTimestamp !== 0n) replacementAmounts = replacement.record
 		}
+		const successorIndex = BigInt(activePosition.reportDisputeIndex) + 1n
+		const replacement = await replacementDisputeAmountsWithQuorum(readClients, config, id, successorIndex, blockNumber)
+		if (replacement.blockHash.toLowerCase() !== storedSnapshot.blockHash.toLowerCase()) throw new Error('Replacement dispute and report state use different canonical blocks')
+		if (replacement.record.reportTimestamp !== 0n) replacementAmounts = replacement.record
 		if (replacementAmounts === undefined) throw new Error(`Position ${activePosition.reportId} replacement transition is not yet available in stored OpenOracle dispute history`)
 		const credit = replacementCredit({
 			feePercentage: BigInt(activePosition.reportFeePercentage),

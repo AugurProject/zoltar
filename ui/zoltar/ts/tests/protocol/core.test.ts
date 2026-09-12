@@ -1,11 +1,11 @@
 /// <reference types='bun-types' />
 
 import { describe, expect, mock, test } from 'bun:test'
-import { encodeFunctionData, getAddress, type Hash, type TransactionReceipt } from '@zoltar/shared/ethereum'
+import { encodeFunctionData, getAddress, type Hash, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
-import { getMulticall3Address } from '../../protocol/deploymentHelpers.js'
-import { readOptionalMulticall, readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from '../../protocol/core.js'
-import { buildIntent, createPreparedWalletPresentation } from '@zoltar/ui-core-shared/lib/transactionPresentations.js'
+import { getMulticall3Address } from '@zoltar/ui-zoltar-shared/protocol/zoltarDeploymentHelpers.js'
+import { readOptionalMulticall, readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from '@zoltar/ui-zoltar-shared/protocol/core.js'
+import { buildIntent, createPreparedWalletPresentation } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
 import type { GlobalTransactionPresentation } from '@zoltar/ui-core-shared/types/components.js'
 import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 

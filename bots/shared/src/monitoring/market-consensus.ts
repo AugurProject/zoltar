@@ -1,3 +1,4 @@
+import { compareBigint } from '../infrastructure/compare.ts'
 const BPS = 10_000n
 
 export async function requireCanonicalBlock(blockNumber: bigint, expectedHash: `0x${string}`, readCanonicalHash: (blockNumber: bigint) => Promise<`0x${string}` | undefined>) {
@@ -7,6 +8,16 @@ export async function requireCanonicalBlock(blockNumber: bigint, expectedHash: `
 
 export function discardDexMarketObservations(observations: readonly MarketConsensusObservation[]) {
 	return observations.filter(observation => observation.kind === 'cex')
+}
+
+const MAXIMUM_RETAINED_OBSERVATIONS = 2_000
+
+/** Appends observations that are not already recorded, then keeps only the fresh tail of the bounded history. */
+export function mergeMarketObservations(existing: readonly MarketConsensusObservation[], additions: readonly MarketConsensusObservation[], maximumAgeMilliseconds: number, now = Date.now()) {
+	const identity = (observation: MarketConsensusObservation) => `${observation.sourceId}:${observation.marketId ?? ''}:${observation.observationId}`
+	const recorded = new Set(existing.map(identity))
+	const merged = [...existing, ...additions.filter(observation => !recorded.has(identity(observation)))]
+	return merged.filter(observation => observation.observedAt <= now && now - observation.observedAt <= maximumAgeMilliseconds).slice(-MAXIMUM_RETAINED_OBSERVATIONS)
 }
 
 export function marketObservationsForAsset(observations: readonly MarketConsensusObservation[], assetId: string, chainId: number) {
@@ -41,7 +52,7 @@ export async function clearOrphanedDexEvidenceForHeadReplacement(
 	return true
 }
 
-export type MarketVenueKind = 'cex' | 'dex'
+type MarketVenueKind = 'cex' | 'dex'
 
 export type MarketConsensusObservation = {
 	assetId: string
@@ -112,7 +123,7 @@ export type MarketConsensusEstimate = {
 
 function median(values: readonly bigint[]) {
 	if (values.length === 0) return undefined
-	const sorted = [...values].sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))
+	const sorted = [...values].sort(compareBigint)
 	const middle = Math.floor(sorted.length / 2)
 	const upper = sorted[middle]
 	if (upper === undefined) return undefined
@@ -294,7 +305,7 @@ export function estimateMarketConsensus(observations: readonly MarketConsensusOb
 	}
 }
 
-export function consensusAllowsCandidate(candidatePriceRepPerEth: bigint, estimate: MarketConsensusEstimate, maximumDeviationBps: bigint) {
+function consensusAllowsCandidate(candidatePriceRepPerEth: bigint, estimate: MarketConsensusEstimate, maximumDeviationBps: bigint) {
 	if (!estimate.reliable || estimate.priceRepPerEth === undefined || candidatePriceRepPerEth <= 0n) return false
 	return deviationBps(candidatePriceRepPerEth, estimate.priceRepPerEth) <= maximumDeviationBps
 }

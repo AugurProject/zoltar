@@ -24,7 +24,6 @@ export const eth = 'ETH'
 export const failed = 'Failed'
 export const forked = 'Forked'
 export const forkThresholdAttoRep = 'Fork Threshold'
-export const forkTime = 'Fork Time'
 export const forkTriggered = 'Fork Triggered'
 export const gwei = 'gwei'
 export const hexValuePlaceholder = '0x...'
@@ -72,6 +71,8 @@ export const targetVault = 'Target Vault'
 export const truthAuction = 'Truth Auction'
 export const unavailable = 'Unavailable'
 export const universe = 'Universe'
+export const balances = 'Balances'
+export const prices = 'Prices'
 export const weth = 'WETH'
 export const yes = 'Yes'
 export const zeroDecimalPlaceholder = '0.0'
@@ -114,6 +115,7 @@ export const formatDecimalNumberRequiredError = (fieldLabel: CopyTemplateValue) 
 export const approvalAmountInvalidError = 'Approval amount must be a decimal number.'
 export const approvalAmount = 'Approval amount'
 export const formatApproveValue = (tokenLabel: CopyTemplateValue) => `Approve ${tokenLabel}`
+export const formatApprovingToken = (tokenLabel: CopyTemplateValue) => `Approving ${tokenLabel}…`
 export const approvalSatisfied = 'Approval Satisfied'
 export const formatApproveMaxValue = (tokenLabel: CopyTemplateValue) => `Approve Max ${tokenLabel}`
 export const formatApproveTokenAmount = (amountLabel: CopyTemplateValue, tokenSymbol: CopyTemplateValue) => `Approve ${amountLabel}\u00a0${tokenSymbol}`
@@ -127,9 +129,7 @@ export const minutes = 'minutes'
 export const moreInfo = 'More info'
 export const formatActionDetailLabel = (actionLabel: CopyTemplateValue) => `${actionLabel} details`
 export const noneSelected = 'None selected'
-export const exists = 'Exists'
 export const notDeployed = 'Not deployed'
-export const working = 'Working…'
 export const formatSelectedTickLabel = (selectedTick: string, totalTicks: string) => `${selectedTick} / ${totalTicks}`
 export const mainnetRequiredReason = 'Switch to Ethereum mainnet.'
 export const formatNetworkRequiredReason = (networkName: CopyTemplateValue) => `Switch to ${networkName}.`

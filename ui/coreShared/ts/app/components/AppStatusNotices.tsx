@@ -2,7 +2,7 @@ import * as appCopy from '../../copy/app.js'
 import * as commonCopy from '../../copy/common.js'
 import { NoticeStack } from '../../components/NoticeStack.js'
 import type { NoticeItem } from '../../types/components.js'
-import type { ReadBackendStatus } from '../../lib/chainBackend.js'
+import type { ReadBackendStatus } from '../../wallet/chainBackend.js'
 
 type AppStatusNoticesProps = {
 	errorMessage?: string | undefined

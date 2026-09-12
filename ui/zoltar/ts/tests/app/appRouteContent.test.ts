@@ -1,11 +1,11 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { shouldRenderRouteContent, ZOLTAR_NOT_FOUND_LINKS } from '../../app/components/AppRouteContent.js'
-import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/lib/networkProfile.js'
+import { shouldRenderAppRouteContent } from '@zoltar/ui-core-shared/app/lib/appRouteGate.js'
+import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { onchainStateDependencies } from '../../app/onchainStateDependencies.js'
-import { getDeploymentSteps } from '../../protocol/deployment.js'
-import { isUniverseIndependentZoltarView } from '../../lib/routing.js'
+import { getDeploymentSteps } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
+import { isUniverseIndependentZoltarView } from '@zoltar/ui-zoltar-shared/lib/routing.js'
 
 describe('AppRouteContent', () => {
 	test('keeps only global question views available without a universe', () => {
@@ -15,32 +15,24 @@ describe('AppRouteContent', () => {
 		expect(isUniverseIndependentZoltarView('migrate')).toBe(false)
 	})
 
-	test('offers only Zoltar-local recovery links', () => {
-		expect(ZOLTAR_NOT_FOUND_LINKS).toEqual([
-			{ href: '#/deploy', label: 'Deploy' },
-			{ href: '#/zoltar', label: 'Zoltar' },
-			{ href: '#/zoltar?zoltarView=universes', label: 'Universe' },
-		])
-	})
-
 	test('injects the Zoltar-specific deployment plan into shared onchain state', () => {
 		expect(onchainStateDependencies.getDeploymentSteps).toBe(getDeploymentSteps)
 		expect(onchainStateDependencies.getDeploymentSteps(MAINNET_NETWORK_PROFILE).some(step => step.id === 'securityPoolFactory')).toBe(false)
 	})
 
 	test('keeps route content visible when the read backend is ready', () => {
-		expect(shouldRenderRouteContent({ readBackendMessage: undefined, route: 'zoltar' })).toBe(true)
+		expect(shouldRenderAppRouteContent('zoltar', undefined)).toBe(true)
 	})
 
 	test('does not render route content when the configured read RPC is on the wrong chain', () => {
-		expect(shouldRenderRouteContent({ readBackendMessage: 'Configured read RPC reports chain 11155111, but this app requires Ethereum Mainnet (1).', route: 'zoltar' })).toBe(false)
+		expect(shouldRenderAppRouteContent('zoltar', 'Configured read RPC reports chain 11155111, but this app requires Ethereum Mainnet (1).')).toBe(false)
 	})
 
 	test('renders route content when both wallet and read backend are ready', () => {
-		expect(shouldRenderRouteContent({ readBackendMessage: undefined, route: 'zoltar' })).toBe(true)
+		expect(shouldRenderAppRouteContent('zoltar', undefined)).toBe(true)
 	})
 
 	test('keeps deploy route content available when the configured read RPC is on the wrong chain', () => {
-		expect(shouldRenderRouteContent({ readBackendMessage: 'Configured read RPC reports chain 11155111, but this app requires Ethereum Mainnet (1).', route: 'deploy' })).toBe(true)
+		expect(shouldRenderAppRouteContent('deploy', 'Configured read RPC reports chain 11155111, but this app requires Ethereum Mainnet (1).')).toBe(true)
 	})
 })

@@ -1,10 +1,11 @@
-import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { recordMarketDiscoveryFailure, recordObservedHead } from '#monitoring/market-discovery-status'
+import { requireDeployedContracts } from '@zoltar/bot-shared/monitoring/deployed-contracts'
+import { afterEach, describe, expect, spyOn, test } from 'bun:test'
+import { appendFile, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { Address, Hex } from '#ethereum'
+import type { Address, Hex } from '@zoltar/bot-shared/ethereum'
 import {
-	appendExecutionHistory,
 	appendExecutionHistoryIfMissing,
 	clearPollFailureMetadata,
 	clearWalletDerivedState,
@@ -14,13 +15,14 @@ import {
 	loadExecutionHistory,
 	operatorSnapshot,
 	parseSignedDecimalEth,
-	publicPollFailure,
+	publicOperatorSnapshot,
 	updateStrategyFromRequest,
 	type ExecutionHistoryFilesystem,
 	type ExecutionRecord,
 	type MutableStrategy,
 	type OperatorState,
 } from '#state/operator-state'
+import { publicPollFailure } from '#state/public-failures'
 import type { PositionRecord } from '#state/position-store'
 
 const temporaryDirectories: string[] = []
@@ -550,8 +552,10 @@ describe('operator execution history', () => {
 			trackedNetProfitEth: '0.05',
 			transactionHash: `0x${'12'.repeat(32)}` as Hex,
 		}
-		await appendExecutionHistory(path, record, 1)
-		await appendExecutionHistory(path, record, 1)
+		expect(await appendExecutionHistoryIfMissing(path, record, 1)).toBeTrue()
+		expect(await appendExecutionHistoryIfMissing(path, record, 1)).toBeFalse()
+		// A crash between the read and the append can still leave a duplicated line behind.
+		await appendFile(path, `${JSON.stringify({ chainId: 1, record })}\n`, { encoding: 'utf8' })
 		const history = await loadExecutionHistory(path, 1)
 		expect(history).toEqual([record])
 		const state: OperatorState = {
@@ -610,7 +614,7 @@ describe('operator execution history', () => {
 			trackedNetProfitEth: '0.05',
 			transactionHash: `0x${'12'.repeat(32)}` as Hex,
 		}
-		await appendExecutionHistory(path, record, 1)
+		await appendExecutionHistoryIfMissing(path, record, 1)
 		await expect(loadExecutionHistory(path, 11_155_111)).rejects.toThrow('belongs to another chain')
 	})
 
@@ -654,10 +658,11 @@ describe('operator execution history', () => {
 				return opened === 1 ? fileHandle : directoryHandle
 			},
 			readFile: async () => {
-				throw new Error('read is unexpected')
+				events.push('readFile')
+				throw Object.assign(new Error('missing history'), { code: 'ENOENT' })
 			},
 		}
-		await appendExecutionHistory(
+		await appendExecutionHistoryIfMissing(
 			'/history.jsonl',
 			{
 				actualGasCostEth: '0.002',
@@ -679,7 +684,7 @@ describe('operator execution history', () => {
 			1,
 			filesystem,
 		)
-		expect(events).toEqual(['mkdir', 'file:chmod', 'file:append', 'file:sync', 'file:close', 'directory:sync', 'directory:close'])
+		expect(events).toEqual(['readFile', 'mkdir', 'file:chmod', 'file:append', 'file:sync', 'file:close', 'directory:sync', 'directory:close'])
 	})
 
 	test('drains a replayed durable history outbox idempotently after restart', async () => {
@@ -771,4 +776,39 @@ describe('operator execution history', () => {
 		expect(snapshot.totalActualGasCostEth).toBe('0.501')
 		expect(snapshot.totalTrackedNetProfitEth).toBe('1.002')
 	})
+})
+
+test('publishes absent deployments without console errors, keeps execution blocked and restores real failures', async () => {
+	const state = capabilityState()
+	state.lastPollAt = undefined
+	recordObservedHead(state, { number: 100n, timestamp: 123n })
+	const failure: unknown = await requireDeployedContracts({ getCode: async () => '0x', getChainId: async () => 11155111 }, [{ name: 'OpenOracle', address }]).then(
+		() => undefined,
+		error => error,
+	)
+	const logged = spyOn(console, 'error').mockImplementation(() => {})
+	const noticed = spyOn(console, 'log').mockImplementation(() => {})
+	try {
+		recordMarketDiscoveryFailure(state, failure)
+		recordMarketDiscoveryFailure(state, failure)
+		expect(noticed).toHaveBeenCalledTimes(1)
+		expect(String(noticed.mock.calls[0]?.[0])).toContain('deploymentUnavailable=No contract code')
+		const snapshot = publicOperatorSnapshot(operatorSnapshot(state, strategy(), submission, connectivity, fixed))
+		expect(snapshot.blockNumber).toBe('100')
+		expect(snapshot.blockTimestamp).toBe('123')
+		expect(snapshot.lastPollAt).toBeUndefined()
+		expect(snapshot.marketAvailability).toEqual({ kind: 'missing-deployment', chainId: 11155111, contracts: [{ name: 'OpenOracle', address }] })
+		expect(snapshot.lastError).toBeUndefined()
+		expect(snapshot.operatorCapable).toBe(false)
+		expect(state.operationLog[0]?.level).toBe('info')
+		expect(logged).not.toHaveBeenCalled()
+		recordMarketDiscoveryFailure(state, new Error('RPC unavailable'))
+		expect(state.marketAvailability).toBeUndefined()
+		expect(publicOperatorSnapshot(operatorSnapshot(state, strategy(), submission, connectivity, fixed)).lastError).toBeDefined()
+		expect(state.operationLog[0]?.level).toBe('error')
+		expect(logged).toHaveBeenCalledTimes(1)
+	} finally {
+		logged.mockRestore()
+		noticed.mockRestore()
+	}
 })

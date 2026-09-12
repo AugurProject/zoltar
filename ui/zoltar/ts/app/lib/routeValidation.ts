@@ -1,6 +1,6 @@
-import { hasPresentEmptyQueryParam } from '@zoltar/ui-core-shared/lib/routing.js'
-import type { Route } from '../../types/app.js'
-import type { ZoltarView } from '../../features/types.js'
+import { hasPresentEmptyQueryParam } from '@zoltar/ui-core-shared/navigation/routing.js'
+import type { Route } from '@zoltar/ui-zoltar-shared/types/app.js'
+import type { ZoltarView } from '@zoltar/ui-zoltar-shared/features/types.js'
 
 const ZOLTAR_VIEWS: readonly ZoltarView[] = ['questions', 'create', 'fork', 'migrate', 'universes']
 

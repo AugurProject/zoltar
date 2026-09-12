@@ -1,9 +1,10 @@
 import { describe, expect, test } from 'bun:test'
-import { decodeFunctionData, encodeAbiParameters } from '../support/bot-shared.ts'
-import { coordinatorAbi, erc20Abi, escalationGameAbi, tradingRouterAbi } from '../../src/contracts/abi.ts'
-import { validateStepReceiptEvidence } from '../../src/execution/receipt-validation.ts'
-import { CARRY_PROOF_SCAN_MAXIMUM_WITHDRAWAL_CANDIDATES } from '../../src/monitoring/carry-proof-scan.ts'
-import { canonicalLifecyclePresence, CHAOS_OPERATION_CATALOG, eligibleOperationPlans, evaluateOperationCatalog, reevaluateOperationContinuation, urgentOperationPlans } from '../../src/operations/catalog.ts'
+import { decodeFunctionData, encodeAbiParameters } from '@zoltar/bot-shared/ethereum'
+import { openOraclePriceCoordinatorAbi, erc1155Abi, genesisReputationTokenAbi, escalationGameAbi } from '@zoltar/bot-shared/contracts/abi'
+import { stepReceiptEvidenceDisposition } from '../../src/execution/receipt-validation.ts'
+import { CARRY_STORAGE_MAXIMUM_WITHDRAWALS } from '../../src/monitoring/carry-proof-storage.ts'
+import { canonicalLifecyclePresence, CHAOS_OPERATION_CATALOG, evaluateOperationCatalog, reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
+import { eligibleOperationPlans, urgentOperationPlans } from '../support/operation-plans.ts'
 import { validForkOutcomeRoutes } from '../../src/operations/fork-outcomes.ts'
 import type { OperationEvidence, OperationPlan } from '../../src/operations/types.ts'
 import { address, hash, snapshotFixture } from './fixture.ts'
@@ -408,7 +409,7 @@ describe('chaos operation catalog', () => {
 		expect(reevaluateOperationContinuation(snapshot, original, options).plan).toBeUndefined()
 	})
 
-	test('continues the exact position-exit route after approval and opposite inventory appears', () => {
+	test('continues the exact approval-free position-exit route after opposite inventory appears', () => {
 		const snapshot = snapshotFixture()
 		const pair = snapshot.pairs[0]
 		const pool = snapshot.pools[0]
@@ -422,18 +423,15 @@ describe('chaos operation catalog', () => {
 		const original = eligibleOperationPlans(snapshot, options).find(plan => plan.definitionId === 'trading.position.exit')
 		if (original === undefined) throw new Error('Expected a position-exit plan')
 		const originalAction = original.steps.at(-1)
-		const confirmedApproval = original.steps[0]
-		if (originalAction === undefined || confirmedApproval === undefined || !confirmedApproval.id.startsWith('approve-shares-')) throw new Error('Expected a position-exit approval and action')
-		expect(decodeFunctionData({ abi: tradingRouterAbi, data: originalAction.data }).args[1]).toBe(1n)
-		shares.isApprovedForAll[snapshot.deployments.tradingRouter] = true
+		if (originalAction === undefined || original.steps.length !== 1) throw new Error('Expected one approval-free position-exit action')
+		expect(decodeFunctionData({ abi: erc1155Abi, data: originalAction.data }).args[2]).toEqual([0n, 1n])
 		shares.no = shares.yes
 
 		const rebuilt = reevaluateOperationContinuation(snapshot, original, options)
 		const rebuiltAction = rebuilt.plan?.steps.at(-1)
 		if (rebuiltAction === undefined) throw new Error('Expected an exact position-exit continuation')
-		expect(decodeFunctionData({ abi: tradingRouterAbi, data: rebuiltAction.data }).args[1]).toBe(1n)
+		expect(decodeFunctionData({ abi: erc1155Abi, data: rebuiltAction.data }).args[2]).toEqual([0n, 1n])
 		expect(rebuilt.plan?.metadata).toMatchObject({ longOutcome: 1, pair: pair.address })
-		expect(rebuilt.plan?.steps.some(step => step.id === confirmedApproval.id)).toBe(false)
 
 		shares.yes = '0'
 		expect(reevaluateOperationContinuation(snapshot, original, options).plan).toBeUndefined()
@@ -538,7 +536,7 @@ describe('chaos operation catalog', () => {
 		])
 		const step = plan?.steps[0]
 		if (step === undefined) throw new Error('Withdrawal step missing')
-		expect(() => validateStepReceiptEvidence(step, { blockHash: hash(101), blockNumber: 101n, logs: [], status: 'success', transactionHash: hash(102) }, { storage: [{ after: '1', before: '1', evidence }] })).toThrow('Transfer(address,address,uint256)')
+		expect(() => stepReceiptEvidenceDisposition(step, { blockHash: hash(101), blockNumber: 101n, logs: [], status: 'success', transactionHash: hash(102) }, { storage: [{ after: '1', before: '1', evidence }] })).toThrow('Transfer(address,address,uint256)')
 	})
 
 	test('excludes native deposits, withdrawals, and pushes while retaining WETH and REP deposits', () => {
@@ -635,7 +633,7 @@ describe('chaos operation catalog', () => {
 		const outcome = plan.metadata['outcome']
 		if (approval === undefined || action === undefined || typeof outcome !== 'number') throw new Error('Direct escalation workflow is incomplete')
 
-		expect(decodeFunctionData({ abi: erc20Abi, data: approval.data })).toMatchObject({ args: [pool.escalationGame, 1000n], functionName: 'approve' })
+		expect(decodeFunctionData({ abi: genesisReputationTokenAbi, data: approval.data })).toMatchObject({ args: [pool.escalationGame, 1000n], functionName: 'approve' })
 		expect(decodeFunctionData({ abi: escalationGameAbi, data: action.data })).toMatchObject({ args: [BigInt(outcome), 1000n], functionName: 'depositRepOnOutcome' })
 		expect(action.walletAssetDebits).toEqual([{ amount: '1000', asset: pool.repToken, category: 'rep', kind: 'erc20' }])
 		expect(action.preflightCalls).toEqual([expect.objectContaining({ caller: snapshot.wallet.address, expectedResult: '0x', to: pool.escalationGame })])
@@ -674,8 +672,6 @@ describe('chaos operation catalog', () => {
 			},
 			resultingCarryRoot: hash(80),
 			resultingNullifierRoot: hash(81),
-			resultingUnresolvedTotalAttoRep: 90n.toString(),
-			snapshotId: hash(82),
 			sourceGame: address(83),
 			sourceNodeId: '9',
 			sourcePool: address(84),
@@ -690,10 +686,11 @@ describe('chaos operation catalog', () => {
 		expect(invalid?.steps[0]?.data.startsWith('0xcd8e4401')).toBeTrue()
 		expect(invalid?.steps[0]?.preflightCalls).toHaveLength(1)
 		expect(invalid?.steps[0]?.evidence).toContainEqual(expect.objectContaining({ equals: 0, field: 'reason', indexed: { depositor: snapshot.wallet.address, parentDepositIndex: '7', sourceNodeId: '9' } }))
-		expect(invalid?.steps[0]?.evidence).toContainEqual(expect.objectContaining({ equals: '90', field: 'resultingUnresolvedTotalAttoRep' }))
 		expect(invalid?.steps[0]?.evidence).toContainEqual(expect.objectContaining({ equals: true, field: 'transferredRep', indexed: { depositor: snapshot.wallet.address, outcome: '0', parentDepositIndex: '7' } }))
 		expect(invalid?.steps[0]?.evidence).toContainEqual(expect.objectContaining({ equals: '12', field: 'amountToWithdrawAttoRep' }))
 		expect(invalid?.steps[0]?.evidence).toContainEqual(expect.objectContaining({ equals: '3', field: 'burnAmountAttoRep' }))
+		expect(invalid?.steps[0]?.evidence).toContainEqual(expect.objectContaining({ equals: hash(80), field: 'resultingCarryRoot' }))
+		expect(invalid?.steps[0]?.evidence).toContainEqual(expect.objectContaining({ equals: hash(81), field: 'resultingNullifierRoot' }))
 		const presence = canonicalLifecyclePresence(snapshot, { ...permissiveOptions, maxEthSpendAttoEth: 0n.toString(), maxRepSpendAttoRep: 0n.toString() }).filter(entry => entry.definitionId === 'statoblast.escalation.withdraw-forked')
 		expect(presence.map(entry => entry.metadata['parentDepositIndex'])).toEqual(['7', '8'])
 	})
@@ -730,14 +727,12 @@ describe('chaos operation catalog', () => {
 			},
 			resultingCarryRoot: hash(80),
 			resultingNullifierRoot: hash(81),
-			resultingUnresolvedTotalAttoRep: 0n.toString(),
-			snapshotId: hash(82),
 			sourceGame: address(83),
 			sourceNodeId: '0',
 			sourcePool: address(84),
 		}
-		const identityCount = CARRY_PROOF_SCAN_MAXIMUM_WITHDRAWAL_CANDIDATES + 8
-		snapshot.forkedCarryWithdrawals = Array.from({ length: CARRY_PROOF_SCAN_MAXIMUM_WITHDRAWAL_CANDIDATES }, (_, index) => ({
+		const identityCount = CARRY_STORAGE_MAXIMUM_WITHDRAWALS + 8
+		snapshot.forkedCarryWithdrawals = Array.from({ length: CARRY_STORAGE_MAXIMUM_WITHDRAWALS }, (_, index) => ({
 			...candidate,
 			parentDepositIndex: index.toString(),
 			proof: { ...candidate.proof, parentDepositIndex: index.toString(), sourceNodeId: index.toString() },
@@ -756,7 +751,7 @@ describe('chaos operation catalog', () => {
 		const plans = urgentOperationPlans(snapshot, permissiveOptions).filter(plan => plan.definitionId === 'statoblast.escalation.withdraw-forked')
 		const presence = canonicalLifecyclePresence(snapshot, permissiveOptions).filter(entry => entry.definitionId === 'statoblast.escalation.withdraw-forked')
 
-		expect(plans).toHaveLength(CARRY_PROOF_SCAN_MAXIMUM_WITHDRAWAL_CANDIDATES)
+		expect(plans).toHaveLength(CARRY_STORAGE_MAXIMUM_WITHDRAWALS)
 		expect(presence).toHaveLength(identityCount)
 		expect(presence.at(-1)).toMatchObject({ blocksNovelty: true, metadata: { parentDepositIndex: (identityCount - 1).toString(), sourceNodeId: (identityCount - 1).toString() } })
 		expect(plans.some(plan => plan.metadata['parentDepositIndex'] === (identityCount - 1).toString())).toBeFalse()
@@ -1064,7 +1059,25 @@ describe('chaos operation catalog', () => {
 		expect(blockClockPlan?.deadlineTimestamp).toBeUndefined()
 		expect(blockClockPlan?.lastValidBlockNumber).toBe('394')
 		expect(blockClockPlan?.metadata).toMatchObject({ deadlineBlock: '394', reportId: '42' })
+		for (const optionalFlag of [16, 32, 64]) {
+			indexed.flags = 6 | optionalFlag
+			const optionalBlockClockPlan = eligibleOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'open-oracle.dispute')
+			expect(optionalBlockClockPlan?.deadlineTimestamp).toBeUndefined()
+			expect(optionalBlockClockPlan?.lastValidBlockNumber).toBe('394')
+		}
 
+		indexed.flags = 7
+		indexed.reportTimestamp = '1999999500'
+		indexed.settlementTime = '4000'
+		for (const optionalFlag of [0, 16, 32, 64]) {
+			indexed.flags = 7 | optionalFlag
+			const optionalTimestampClockPlan = eligibleOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'open-oracle.dispute')
+			expect(optionalTimestampClockPlan?.deadlineTimestamp).toBe('2000003500')
+			expect(optionalTimestampClockPlan?.lastValidBlockNumber).toBeUndefined()
+		}
+
+		indexed.flags = 6
+		indexed.reportTimestamp = '95'
 		indexed.settlementTime = '31'
 		expect(eligibleOperationPlans(snapshot, permissiveOptions).find(candidate => candidate.definitionId === 'open-oracle.dispute')).toBeUndefined()
 		for (const token of snapshot.wallet.tokens) token.allowances[snapshot.deployments.openOracle] = '1000000000000000000000000'
@@ -1081,7 +1094,7 @@ describe('chaos operation catalog', () => {
 		if (plan === undefined) throw new Error('Prepared request-price plan missing')
 		const request = plan.steps.at(-1)
 		if (request === undefined) throw new Error('Request-price step missing')
-		const decoded = decodeFunctionData({ abi: coordinatorAbi, data: request.data })
+		const decoded = decodeFunctionData({ abi: openOraclePriceCoordinatorAbi, data: request.data })
 		const maximumWeth = plan.metadata['maximumInitialAttoWeth']
 		const maximumRep = plan.metadata['maximumInitialAttoRep']
 		const maximumBounty = plan.metadata['maximumRequestPriceCostAttoEth']
@@ -1164,7 +1177,7 @@ describe('chaos operation catalog', () => {
 		question.endTime = (BigInt(snapshot.anchor.timestamp) + 200n).toString()
 		plans = eligibleOperationPlans(snapshot, permissiveOptions)
 		expect(plans.find(candidate => candidate.definitionId === 'trading.swap.exact-input')).toBeUndefined()
-		expect(plans.find(candidate => candidate.definitionId === 'trading.position.exit')).toBeUndefined()
+		expect(plans.find(candidate => candidate.definitionId === 'trading.position.exit')).toBeDefined()
 
 		shares.isApprovedForAll[snapshot.pairs[0]?.address ?? address(14)] = true
 		shares.isApprovedForAll[snapshot.deployments.tradingRouter] = true
@@ -1236,3 +1249,26 @@ describe('chaos operation catalog', () => {
 		expect(plan?.deadlineTimestamp).toBe('2004837400')
 	})
 })
+
+for (const factory of [false, true]) {
+	test(`missing trading deployments preserve unrelated plans (factory=${factory})`, () => {
+		const base = snapshotFixture()
+		const snapshot = { ...base, pairs: factory ? base.pairs : [], tradingDeployment: { factory, router: false } }
+		const before = evaluateOperationCatalog({ ...snapshot, tradingDeployment: { factory: true, router: true } }, permissiveOptions)
+		const after = evaluateOperationCatalog(snapshot, permissiveOptions)
+		expect(after.filter(value => value.definition.ecosystem !== 'trading')).toEqual(before.filter(value => value.definition.ecosystem !== 'trading'))
+		expect(after.some(value => value.definition.ecosystem !== 'trading' && value.eligibility.eligible)).toBe(true)
+		for (const id of ['trading.pair.create-and-initialize', 'trading.position.enter', 'trading.position.exit', 'trading.complete-set.redeem', ...(factory ? [] : ['trading.pair.create'])]) {
+			const value = after.find(value => value.definition.id === id)
+			expect(value?.plan).toBeUndefined()
+			expect(value?.eligibility.blockers.join(' ')).toContain('not deployed')
+		}
+		if (factory) expect(after.find(value => value.definition.id === 'trading.liquidity.remove')).toEqual(before.find(value => value.definition.id === 'trading.liquidity.remove'))
+		const priorRouterPlan = before.find(value => value.definition.id === 'trading.complete-set.redeem')?.plan
+		if (factory) {
+			if (priorRouterPlan === undefined) throw new Error('Expected an executable router redemption before its deployment disappeared')
+			expect(before.find(value => value.definition.id === 'trading.liquidity.remove')?.plan).toBeDefined()
+			expect(reevaluateOperationContinuation(snapshot, priorRouterPlan, permissiveOptions).eligibility.blockers.join(' ')).toContain('not deployed')
+		}
+	})
+}

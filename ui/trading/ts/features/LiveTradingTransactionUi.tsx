@@ -1,6 +1,7 @@
 import { useId } from 'preact/hooks'
-import type { Hash } from '@zoltar/shared/ethereum'
-import { bigintToSafeNumber, formatOutcomeAmount, formatUnits } from '../lib/format.js'
+import type { Hash } from '@zoltar/core-shared/evm/ethereum'
+import { bigintToSafeNumber, formatRoundedUnits, formatUnits } from '../lib/format.js'
+import { formatOutcomeValue, type ShareValueRate } from '../lib/shareValue.js'
 import * as workflowCopy from '../copy/workflows.js'
 import { TransactionHashLink } from '@zoltar/ui-core-shared/components/TransactionHashLink.js'
 import { TransactionReview } from '@zoltar/ui-core-shared/components/TransactionReview.js'
@@ -26,23 +27,21 @@ export function stateLabel(state: TransactionState, action = workflowCopy.defaul
 	if (state === 'simulating') return workflowCopy.simulatingRouterCall
 	if (state === 'ready') return workflowCopy.authoritativeSimulationReady
 	if (state === 'preparing') return workflowCopy.preparingAction(action)
-	if (state === 'approval') return workflowCopy.actionApprovalPendingInWallet(action)
-	if (state === 'approval-pending') return workflowCopy.actionApprovalPendingOnchain(action)
-	if (state === 'approval-confirmed') return workflowCopy.actionApprovalConfirmedOnchain(action)
 	if (state === 'submitting') return workflowCopy.actionPendingInWallet(action)
 	if (state === 'pending') return workflowCopy.actionPendingOnchain(action)
 	if (state === 'confirmed') return workflowCopy.actionConfirmedOnchain(action)
 	if (state === 'error') return workflowCopy.transactionWorkflowNeedsAttention
-	return workflowCopy.readyToSimulate
+	return undefined
 }
 
+type SummaryMarket = Pick<Quote['value']['market'], 'feeBps'> & ShareValueRate
 type EntrySummaryValue = Readonly<{
 	amount: Extract<Quote, { kind: 'entry' }>['value']['amount']
-	market: Pick<Extract<Quote, { kind: 'entry' }>['value']['market'], 'feeBps'>
+	market: SummaryMarket
 	result: Pick<Extract<Quote, { kind: 'entry' }>['value']['result'], 'totalLongShares' | 'invalidInsurance'>
 }>
 type ExitSummaryValue = Readonly<{
-	market: Pick<Extract<Quote, { kind: 'exit' }>['value']['market'], 'feeBps'>
+	market: SummaryMarket
 	result: Pick<Extract<Quote, { kind: 'exit' }>['value']['result'], 'totalLongShares' | 'invalidInsurance' | 'ethOut'>
 }>
 type LiveTradeSummaryQuote = Readonly<{ kind: 'entry'; value: EntrySummaryValue }> | Readonly<{ kind: 'exit'; value: ExitSummaryValue }>
@@ -51,12 +50,12 @@ export function renderLiveTradeSummary(quote: LiveTradeSummaryQuote, side: 'YES'
 	const primary =
 		quote.kind === 'entry'
 			? [
-					{ label: workflowCopy.youPay, value: `${formatUnits(quote.value.amount)} ETH` },
-					{ label: workflowCopy.youReceive, value: formatOutcomeAmount(quote.value.result.totalLongShares, side) },
+					{ label: workflowCopy.youPay, value: `${formatRoundedUnits(quote.value.amount)} ETH` },
+					{ label: workflowCopy.youReceive, value: formatOutcomeValue(quote.value.result.totalLongShares, side, quote.value.market) },
 				]
 			: [
-					{ label: workflowCopy.youUse, value: formatOutcomeAmount(quote.value.result.totalLongShares, side) },
-					{ label: workflowCopy.youReceive, value: `${formatUnits(quote.value.result.ethOut)} ETH` },
+					{ label: workflowCopy.youUse, value: formatOutcomeValue(quote.value.result.totalLongShares, side, quote.value.market) },
+					{ label: workflowCopy.youReceive, value: `${formatRoundedUnits(quote.value.result.ethOut)} ETH` },
 				]
 	return (
 		<div class='trade-summary trade-summary--review' aria-label={workflowCopy.tradeSummary}>
@@ -64,7 +63,7 @@ export function renderLiveTradeSummary(quote: LiveTradeSummaryQuote, side: 'YES'
 				variant='inline'
 				primary={primary}
 				details={[
-					{ label: quote.kind === 'entry' ? workflowCopy.invalidReceived : workflowCopy.invalidRequired, value: formatOutcomeAmount(quote.value.result.invalidInsurance, 'INVALID') },
+					{ label: quote.kind === 'entry' ? workflowCopy.invalidReceived : workflowCopy.invalidRequired, value: formatOutcomeValue(quote.value.result.invalidInsurance, 'INVALID', quote.value.market) },
 					{ label: workflowCopy.tradingFee, value: `${formatUnits(quote.value.market.feeBps, 2, 2)}%` },
 				]}
 			/>

@@ -1,11 +1,11 @@
 import type { ComponentProps } from 'preact'
-import { DeploymentRouteContent } from '../../features/deployment/components/DeploymentRouteContent.js'
+import { DeploymentRouteContent } from '@zoltar/ui-zoltar-shared/features/deployment/components/DeploymentRouteContent.js'
 import { NotFoundSection } from '@zoltar/ui-core-shared/app/components/NotFoundSection.js'
-import { ZoltarSection } from '../../features/zoltarSurface/components/ZoltarSection.js'
+import { ZoltarSection } from '@zoltar/ui-zoltar-shared/features/zoltarSurface/components/ZoltarSection.js'
 import { shouldRenderAppRouteContent } from '@zoltar/ui-core-shared/app/lib/appRouteGate.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
-export const ZOLTAR_NOT_FOUND_LINKS = [
+const ZOLTAR_NOT_FOUND_LINKS = [
 	{ href: '#/deploy', label: commonCopy.deploy },
 	{ href: '#/zoltar', label: commonCopy.zoltar },
 	{ href: '#/zoltar?zoltarView=universes', label: commonCopy.universe },
@@ -20,7 +20,7 @@ type Props = {
 	route: AppRoute
 }
 
-export function shouldRenderRouteContent({ readBackendMessage, route }: Pick<Props, 'readBackendMessage' | 'route'>) {
+function shouldRenderRouteContent({ readBackendMessage, route }: Pick<Props, 'readBackendMessage' | 'route'>) {
 	return shouldRenderAppRouteContent(route, readBackendMessage)
 }
 

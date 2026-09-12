@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe as baseDescribe, expect, test } from 'bun:test'
-import { createPublicClient, http, mainnet } from '@zoltar/shared/ethereum'
+import { createPublicClient, http, mainnet } from '@zoltar/core-shared/evm/ethereum'
 import { resolveAnvilBinary } from '../../../../../solidity/ts/testSupport/simulator/anvilNode'
-import { ETH_ADDRESS, REP_ADDRESS, USDC_ADDRESS, quoteExactInput, quoteRepForEthV3 } from '../../protocol/uniswapQuoter.js'
+import { ETH_ADDRESS, getRepAddress, quoteBestV3ExactInputWithSource, quoteExactInput } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
+import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 
 const PINNED_MAINNET_BLOCK = 22_000_000n
 const ANVIL_START_TIMEOUT_MS = 30_000
@@ -183,8 +184,8 @@ void describe('Uniswap quote paths — pinned mainnet fork', () => {
 	test('fork height and production token metadata are deterministic', async () => {
 		expect(await getClient().getBlockNumber()).toBe(PINNED_MAINNET_BLOCK)
 		for (const [address, expectedDecimals] of [
-			[REP_ADDRESS, 18n],
-			[USDC_ADDRESS, 6n],
+			[MAINNET_NETWORK_PROFILE.genesisRepTokenAddress, 18n],
+			[MAINNET_NETWORK_PROFILE.usdcAddress, 6n],
 		] as const) {
 			const decimals: unknown = await getClient().readContract({
 				address,
@@ -197,13 +198,13 @@ void describe('Uniswap quote paths — pinned mainnet fork', () => {
 	})
 
 	test('production V4 ETH/USDC route quotes at the pinned block', async () => {
-		const amountOut = await quoteExactInput(getClient(), ETH_ADDRESS, USDC_ADDRESS, 10n ** 18n, { fee: 500, tickSpacing: 10 })
+		const amountOut = await quoteExactInput(getClient(), ETH_ADDRESS, MAINNET_NETWORK_PROFILE.usdcAddress, 10n ** 18n, { fee: 500, tickSpacing: 10 })
 		expect(amountOut).toBeGreaterThan(100n * 10n ** 6n)
 		expect(amountOut).toBeLessThan(100_000n * 10n ** 6n)
 	})
 
 	test('production REP/WETH V3 fallback quotes at the pinned block', async () => {
-		const amountOut = await quoteRepForEthV3(getClient(), 10n ** 18n)
+		const { amountOut } = await quoteBestV3ExactInputWithSource(getClient(), getRepAddress(), ETH_ADDRESS, 10n ** 18n)
 		expect(amountOut).toBeGreaterThan(10n ** 12n)
 		expect(amountOut).toBeLessThan(10n ** 18n)
 	})

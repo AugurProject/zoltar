@@ -1,7 +1,7 @@
 import { normalizeNumericInput } from '@zoltar/ui-core-shared/lib/numericInput.js'
-import { bigintToSafeNumber } from '@zoltar/shared/ethereum'
+import { bigintToSafeNumber } from '@zoltar/core-shared/evm/ethereum'
 import { abbreviateAddress } from '@zoltar/ui-core-shared/lib/address.js'
-import { tryParseDecimalInput } from '@zoltar/ui-core-shared/lib/decimal.js'
+import { tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
 
 function requireNonNegativeSafeInteger(value: number, label: string) {
@@ -14,26 +14,15 @@ export function formatUnits(value: bigint, decimals = 18, maximumFractionDigits 
 	return formatTrimmedUnits(value, decimals, maximumFractionDigits)
 }
 
-export function formatShareAmount(value: bigint, maximumFractionDigits = 4) {
-	return `${formatUnits(value, 18, maximumFractionDigits)} shares`
-}
-
-export function formatOutcomeAmount(value: bigint, outcome: 'YES' | 'NO' | 'INVALID', maximumFractionDigits = 4) {
-	return `${formatUnits(value, 18, maximumFractionDigits)} ${outcome}`
-}
-
-export function formatEthPerShare(collateralWei: bigint, atomicShareSupply: bigint, maximumSignificantDigits = 4) {
-	if (!Number.isSafeInteger(maximumSignificantDigits) || maximumSignificantDigits < 1) throw new Error('Maximum significant digits must be a positive safe integer')
-	if (collateralWei < 0n || atomicShareSupply <= 0n) throw new Error('Collateral rate requires nonnegative collateral and positive share supply')
-	const precision = 36
-	const scaled = (collateralWei * 10n ** BigInt(precision)) / atomicShareSupply
-	const digits = scaled.toString().padStart(precision + 1, '0')
-	const whole = digits.slice(0, -precision)
-	const fraction = digits.slice(-precision)
-	const firstNonzero = fraction.search(/[1-9]/)
-	if (firstNonzero === -1) return `${whole} ETH / share`
-	const visibleEnd = Math.min(fraction.length, firstNonzero + maximumSignificantDigits)
-	return `${whole}.${fraction.slice(0, visibleEnd).replace(/0+$/, '')} ETH / share`
+/** Rounds half-up to the displayed precision instead of truncating, so exact amounts do not render one digit short. */
+export function formatRoundedUnits(value: bigint, decimals = 18, maximumFractionDigits = 4) {
+	requireNonNegativeSafeInteger(decimals, 'Decimals')
+	requireNonNegativeSafeInteger(maximumFractionDigits, 'Maximum fraction digits')
+	if (maximumFractionDigits >= decimals) return formatTrimmedUnits(value, decimals, maximumFractionDigits)
+	const step = 10n ** BigInt(decimals - maximumFractionDigits)
+	const magnitude = value < 0n ? -value : value
+	const rounded = ((magnitude + step / 2n) / step) * step
+	return formatTrimmedUnits(value < 0n ? -rounded : rounded, decimals, maximumFractionDigits)
 }
 
 export function formatBpsMultiplier(value: bigint) {

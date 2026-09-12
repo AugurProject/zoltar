@@ -1,29 +1,26 @@
+import { storedInputSources, storedInputValues } from '../operations/input-values.ts'
+import type { RuntimeState } from './runtime-state.ts'
+export type { RuntimeState, RuntimeTopologySummary, WalletBalanceState } from './runtime-state.ts'
 import { randomUUID } from 'node:crypto'
 import { constants } from 'node:fs'
 import { link, mkdir, open, readFile, readdir, rename, rm } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { getAddress, keccak256, parseTransaction, recoverTransactionAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import type { ChaosProtocolIndex } from '#monitoring/protocol-index'
-import type { ChaosEcosystem, EvaluatedOperation, OperationContinuationDisposition, OperationEvidence, OperationPreflightCall, OperationRisk, OperationTerminalSubmission, OperationWalletAssetDebit } from '#operations/types'
-import {
-	loadPersistedProtocolIndex,
-	parseProtocolIndex as parseStoredProtocolIndex,
-	parseProtocolIndexReference,
-	persistProtocolIndexGeneration,
-	pruneProtocolIndexGenerations,
-	snapshotProtocolIndex,
-	type ProtocolIndexFileHandle,
-	type ProtocolIndexFilesystem,
-	type ProtocolIndexReference,
-} from './protocol-index-store.ts'
+import type { ChaosEcosystem, OperationContinuationDisposition, OperationEvidence, OperationPreflightCall, OperationRisk, OperationTerminalSubmission, OperationWalletAssetDebit } from '#operations/types'
+import { DURABLE_STATE_VERSION, initialDurableState, initialRuntimeState } from './initial-state.ts'
+import { assertSafeRetirementRecipient, initialRetirementState, parseRetirementState, type DurableRetirementState } from './retirement.ts'
+import { parsePendingTransactionObservation, serializedPendingTransactionObservation, type PendingTransactionObservation } from './pending-transaction-observation.ts'
+import { serializedScheduler } from './state-serialization.ts'
+import { assertExactKeys, dataHex, hash, identifier, nonemptyString, optionalString, optionalTimestamp, positiveIntegerString, requiredRecord, timestamp, uint256String, unsignedIntegerString } from './validators.ts'
+import { loadPersistedProtocolIndex, parseProtocolIndexReference, persistProtocolIndexGeneration, pruneProtocolIndexGenerations, snapshotProtocolIndex, type ProtocolIndexFileHandle, type ProtocolIndexFilesystem, type ProtocolIndexReference } from './protocol-index-store.ts'
 
-export const DURABLE_STATE_VERSION = 3
-export const MAXIMUM_ACTIVITY_COUNT = 500
+const MAXIMUM_ACTIVITY_COUNT = 500
 export const MAXIMUM_LIFECYCLE_PRESENCE_BLOCKER_COUNT = 1_000_000
-export const MAXIMUM_TERMINAL_OBLIGATION_COUNT = 500
+const MAXIMUM_TERMINAL_OBLIGATION_COUNT = 500
 export const MAXIMUM_OBLIGATION_TOMBSTONE_COUNT = 10_000
-export const MAXIMUM_TERMINAL_WORKFLOW_COUNT = 500
-export const MAXIMUM_STATE_BYTES = 5 * 1024 * 1024
+const MAXIMUM_TERMINAL_WORKFLOW_COUNT = 500
+const MAXIMUM_STATE_BYTES = 5 * 1024 * 1024
 
 export type Activity = {
 	at: string
@@ -48,6 +45,9 @@ export type SchedulerState = {
 export type DurableMetadata = Record<string, boolean | number | string>
 
 export type DurableLifecyclePresenceBlocker = {
+	/** Retained log boundary for an ordinary-identity blocker observed in partial-history mode. */
+	historyStartBlock?: string
+	requiresCarryHistory?: true
 	count: number
 	digest: Hex
 	firstDefinitionId: string
@@ -96,6 +96,8 @@ export type DurableWorkflow = {
 	obligation: boolean
 	planId: string
 	planningSeed: number
+	operationInputs?: Record<string, string>
+	inputSources?: Record<string, 'custom' | 'chaosbot'>
 	postconditions: string[]
 	priority: 'random' | 'urgent'
 	risk: OperationRisk
@@ -140,7 +142,7 @@ export type DurableObligationTombstone = {
 	resolutionReason?: string | undefined
 }
 
-export type TransactionSemanticExpectation = {
+type TransactionSemanticExpectation = {
 	balanceBaselines: readonly {
 		account: Address
 		asset: 'ETH' | Address
@@ -165,6 +167,7 @@ export type PendingTransactionIntent = {
 	maxBlockNumber: bigint
 	mode: 'private' | 'public'
 	nonce: bigint
+	observation?: PendingTransactionObservation | undefined
 	operationId: string
 	recoveryBlocker?: string | undefined
 	replacementHash?: Hex | undefined
@@ -190,52 +193,12 @@ export type DurableState = {
 	pendingTransactions: PendingTransactionIntent[]
 	profileId: string
 	protocolIndex: ChaosProtocolIndex | undefined
+	retirement: DurableRetirementState
 	safetyPaused: boolean
 	scheduler: SchedulerState
 	signerAddress: Address | undefined
-	version: 3
+	version: 4
 	workflows: DurableWorkflow[]
-}
-
-export type WalletBalanceState = {
-	eth: string
-	rep: readonly { balance: string; symbol: string; token: Address; universeId: string }[]
-	weth: string
-}
-
-export type RuntimeTopologySummary = {
-	anchor: { blockNumber: bigint; timestamp: bigint }
-	auctions: { address: string; bidCount: number; endTime: string; finalized: boolean; pool: string; startTime: string }[]
-	complete: boolean
-	pairs: { address: string; feeBps: number; pool: string; status: number; universeId: string }[]
-	pools: {
-		address: string
-		awaitingForkContinuation: boolean
-		coordinator: string
-		questionId: string
-		systemState: number
-		universeId: string
-		/** Total canonical registry entries, independent of how many vault states this scan inspected. */
-		vaultCount: number
-	}[]
-	reports: { currentReporter: string; flags: number; reportId: string; settlementTime: string; token1: string; token2: string }[]
-	universes: { forkQuestionId: string; forkTime: string; id: string; knownChildOutcomeCount: number; parentUniverseId?: string | undefined; repToken: string }[]
-}
-
-export type RuntimeState = DurableState & {
-	error: string | undefined
-	evaluations: EvaluatedOperation[]
-	inventory: WalletBalanceState
-	lastScanAt: string | undefined
-	lastScannedBlock: bigint | undefined
-	paused: boolean
-	rpcEndpointHealth: readonly unknown[]
-	scanning: boolean
-	startedAt: string
-	status: 'connectivity-degraded' | 'dry-run' | 'error' | 'paused' | 'running' | 'starting'
-	topology: RuntimeTopologySummary | undefined
-	wallet: Address | undefined
-	warnings: string[]
 }
 
 export type StateFilesystem = ProtocolIndexFilesystem
@@ -252,70 +215,17 @@ const stateFilesystem: StateFilesystem = {
 
 const stateWriteQueues = new Map<string, Promise<void>>()
 
-function emptySchedulerState(paused = true): SchedulerState {
-	return {
-		lastDelaySeconds: undefined,
-		lastRunAt: undefined,
-		nextRunAt: undefined,
-		selectedOperationId: undefined,
-		status: paused ? 'paused' : 'idle',
+export function setRuntimeExecutionAddress(state: RuntimeState, address: Address | undefined) {
+	if (state.wallet?.toLowerCase() !== address?.toLowerCase() || (state.inventoryAddress !== undefined && state.inventoryAddress.toLowerCase() !== address?.toLowerCase())) {
+		state.inventory = { eth: '0', rep: [], weth: '0' }
+		state.inventoryAddress = undefined
+		state.evaluations = []
 	}
-}
-
-export function initialDurableState(chainId: number, paused = true, profileId = 'profile:unconfigured', signerAddress?: Address | undefined): DurableState {
-	if (!Number.isSafeInteger(chainId) || chainId < 1) throw new Error('State chain ID must be a positive integer')
-	return {
-		activities: [],
-		chainId,
-		lifecyclePresenceBlocker: undefined,
-		obligationTombstones: [],
-		obligations: [],
-		pendingTransactions: [],
-		profileId: identifier(profileId, 'profileId'),
-		protocolIndex: undefined,
-		safetyPaused: false,
-		scheduler: emptySchedulerState(paused),
-		signerAddress,
-		version: DURABLE_STATE_VERSION,
-		workflows: [],
-	}
-}
-
-export function initialRuntimeState(paused: boolean, wallet: Address | undefined, chainId: number, durableState: DurableState = initialDurableState(chainId, paused)): RuntimeState {
-	if (durableState.chainId !== chainId) throw new Error(`Durable state belongs to chain ${durableState.chainId.toString()}, expected chain ${chainId.toString()}`)
-	const restoredSchedulerStatus = durableState.scheduler.status
-	const effectivePaused = paused || durableState.safetyPaused
-	let activeSchedulerStatus = restoredSchedulerStatus
-	if (restoredSchedulerStatus === 'running') activeSchedulerStatus = 'running'
-	else if (effectivePaused) activeSchedulerStatus = 'paused'
-	else if (restoredSchedulerStatus === 'paused') activeSchedulerStatus = 'idle'
-	const durableSafetyError = durableState.safetyPaused ? durableState.activities.find(activity => activity.type === 'error' && activity.status === 'failed')?.message : undefined
-	return {
-		...durableState,
-		activities: [...durableState.activities],
-		error: durableSafetyError,
-		evaluations: [],
-		inventory: { eth: '0', rep: [], weth: '0' },
-		lastScanAt: undefined,
-		lastScannedBlock: undefined,
-		lifecyclePresenceBlocker: durableState.lifecyclePresenceBlocker === undefined ? undefined : { ...durableState.lifecyclePresenceBlocker },
-		obligationTombstones: [...durableState.obligationTombstones],
-		obligations: [...durableState.obligations],
-		paused: effectivePaused,
-		pendingTransactions: [...durableState.pendingTransactions],
-		rpcEndpointHealth: [],
-		scanning: false,
-		scheduler: { ...durableState.scheduler, status: activeSchedulerStatus },
-		startedAt: new Date().toISOString(),
-		status: effectivePaused ? 'paused' : 'starting',
-		topology: undefined,
-		wallet: wallet ?? durableState.signerAddress,
-		warnings: [],
-		workflows: [...durableState.workflows],
-	}
+	state.wallet = address
 }
 
 export function bindRuntimeStateToSigner(state: RuntimeState, address: Address) {
+	if (state.retirement.recipient !== undefined) assertSafeRetirementRecipient(state.retirement.recipient, address)
 	if (state.signerAddress !== undefined && state.signerAddress.toLowerCase() !== address.toLowerCase()) {
 		throw new Error(`Durable runtime is scoped to signer ${state.signerAddress}, not ${address}`)
 	}
@@ -323,13 +233,14 @@ export function bindRuntimeStateToSigner(state: RuntimeState, address: Address) 
 	if (firstBinding) {
 		state.evaluations = []
 		state.inventory = { eth: '0', rep: [], weth: '0' }
+		state.inventoryAddress = undefined
 		state.lastScanAt = undefined
 		state.lastScannedBlock = undefined
 		state.topology = undefined
 		state.warnings = []
 	}
 	state.signerAddress = address
-	state.wallet = address
+	setRuntimeExecutionAddress(state, address)
 	const indexInvalidated = state.protocolIndex !== undefined && state.protocolIndex.wallet.toLowerCase() !== address.toLowerCase()
 	if (indexInvalidated) state.protocolIndex = undefined
 	return { firstBinding, indexInvalidated }
@@ -347,47 +258,6 @@ export function resetRuntimeStateForProfile(state: RuntimeState, profileId: stri
 	return state
 }
 
-function requiredRecord(value: unknown, label: string): Record<string, unknown> {
-	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`${label} must be an object`)
-	return value as Record<string, unknown>
-}
-
-function assertExactKeys(record: Record<string, unknown>, required: readonly string[], optional: readonly string[], label: string) {
-	const allowed = new Set([...required, ...optional])
-	const unknown = Object.keys(record).filter(key => !allowed.has(key))
-	const missing = required.filter(key => !(key in record))
-	if (unknown.length !== 0) throw new Error(`${label} contains unsupported field ${unknown[0] ?? 'unknown'}`)
-	if (missing.length !== 0) throw new Error(`${label} is missing ${missing[0] ?? 'a required field'}`)
-}
-
-function nonemptyString(value: unknown, label: string, maximumLength = 2_048) {
-	if (typeof value !== 'string' || value.trim() === '' || value.length > maximumLength) throw new Error(`${label} must be a non-empty string of at most ${maximumLength.toString()} characters`)
-	return value
-}
-
-function optionalString(value: unknown, label: string, maximumLength = 2_048) {
-	return value === undefined ? undefined : nonemptyString(value, label, maximumLength)
-}
-
-function identifier(value: unknown, label: string) {
-	const parsed = nonemptyString(value, label, 128)
-	if (!/^[a-zA-Z0-9](?:[a-zA-Z0-9._:-]*[a-zA-Z0-9])?$/.test(parsed)) throw new Error(`${label} contains unsupported characters`)
-	return parsed
-}
-
-function unsignedIntegerString(value: unknown, label: string) {
-	if (typeof value !== 'string' || !/^(?:0|[1-9]\d*)$/.test(value)) throw new Error(`${label} must be a non-negative integer string`)
-	return value
-}
-
-const MAXIMUM_UINT256 = (1n << 256n) - 1n
-
-function uint256String(value: unknown, label: string) {
-	const parsed = unsignedIntegerString(value, label)
-	if (BigInt(parsed) > MAXIMUM_UINT256) throw new Error(`${label} exceeds uint256`)
-	return parsed
-}
-
 function parseTerminalSubmission(value: unknown, label: string): OperationTerminalSubmission {
 	const submission = requiredRecord(value, label)
 	assertExactKeys(submission, ['kind', 'maximumFeePerGas'], [], label)
@@ -396,31 +266,6 @@ function parseTerminalSubmission(value: unknown, label: string): OperationTermin
 		kind: submission['kind'],
 		maximumFeePerGas: uint256String(submission['maximumFeePerGas'], `${label}.maximumFeePerGas`),
 	}
-}
-
-function positiveIntegerString(value: unknown, label: string) {
-	const parsed = unsignedIntegerString(value, label)
-	if (parsed === '0') throw new Error(`${label} must be greater than zero`)
-	return parsed
-}
-
-function timestamp(value: unknown, label: string) {
-	if (typeof value !== 'string' || !Number.isFinite(Date.parse(value)) || new Date(value).toISOString() !== value) throw new Error(`${label} must be a canonical UTC ISO timestamp`)
-	return value
-}
-
-function optionalTimestamp(value: unknown, label: string) {
-	return value === undefined ? undefined : timestamp(value, label)
-}
-
-function hash(value: unknown, label: string) {
-	if (typeof value !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(value)) throw new Error(`${label} must be a 32-byte hash`)
-	return value as Hex
-}
-
-function dataHex(value: unknown, label: string) {
-	if (typeof value !== 'string' || !/^0x(?:[0-9a-fA-F]{2})*$/.test(value)) throw new Error(`${label} must be even-length 0x-prefixed hex`)
-	return value as Hex
 }
 
 function serializedTransaction(value: unknown, label: string) {
@@ -456,12 +301,17 @@ function parseMetadata(value: unknown, label: string): DurableMetadata {
 function parseLifecyclePresenceBlocker(value: unknown): DurableLifecyclePresenceBlocker {
 	const label = 'chaos-bot state.lifecyclePresenceBlocker'
 	const blocker = requiredRecord(value, label)
-	assertExactKeys(blocker, ['count', 'digest', 'firstDefinitionId', 'firstEcosystem', 'observedAtBlock', 'presenceComplete', 'reason'], [], label)
+	assertExactKeys(blocker, ['count', 'digest', 'firstDefinitionId', 'firstEcosystem', 'observedAtBlock', 'presenceComplete', 'reason'], ['historyStartBlock', 'requiresCarryHistory'], label)
 	const count = blocker['count']
 	if (typeof count !== 'number' || !Number.isSafeInteger(count) || count < 1 || count > MAXIMUM_LIFECYCLE_PRESENCE_BLOCKER_COUNT) {
 		throw new Error(`${label}.count must be a positive integer within the ${MAXIMUM_LIFECYCLE_PRESENCE_BLOCKER_COUNT.toString()}-identity safety limit`)
 	}
 	if (typeof blocker['presenceComplete'] !== 'boolean') throw new Error(`${label}.presenceComplete must be a boolean`)
+	const historyStartBlock = blocker['historyStartBlock'] === undefined ? undefined : unsignedIntegerString(blocker['historyStartBlock'], `${label}.historyStartBlock`)
+	const requiresCarryHistory = blocker['requiresCarryHistory']
+	if (requiresCarryHistory !== undefined && (requiresCarryHistory !== true || historyStartBlock === undefined)) throw new Error(`${label}.requiresCarryHistory requires a scoped history boundary`)
+	const observedAtBlock = unsignedIntegerString(blocker['observedAtBlock'], `${label}.observedAtBlock`)
+	if (historyStartBlock !== undefined && BigInt(historyStartBlock) > BigInt(observedAtBlock)) throw new Error(`${label}.historyStartBlock is after its observation`)
 	const reason = blocker['reason']
 	if (reason !== 'completed-identity-returned' && reason !== 'unplanned-due-identity') throw new Error(`${label}.reason is invalid`)
 	return {
@@ -469,7 +319,9 @@ function parseLifecyclePresenceBlocker(value: unknown): DurableLifecyclePresence
 		digest: hash(blocker['digest'], `${label}.digest`),
 		firstDefinitionId: identifier(blocker['firstDefinitionId'], `${label}.firstDefinitionId`),
 		firstEcosystem: ecosystem(blocker['firstEcosystem'], `${label}.firstEcosystem`),
-		observedAtBlock: unsignedIntegerString(blocker['observedAtBlock'], `${label}.observedAtBlock`),
+		observedAtBlock,
+		...(historyStartBlock === undefined ? {} : { historyStartBlock }),
+		...(requiresCarryHistory === true ? { requiresCarryHistory: true } : {}),
 		presenceComplete: blocker['presenceComplete'],
 		reason,
 	}
@@ -737,7 +589,7 @@ function parseWorkflow(value: unknown, index: number): DurableWorkflow {
 	assertExactKeys(
 		workflow,
 		['classification', 'createdAt', 'createdAtBlock', 'ecosystem', 'id', 'label', 'metadata', 'obligation', 'operationId', 'planId', 'planningSeed', 'postconditions', 'priority', 'risk', 'status', 'steps', 'updatedAt'],
-		['completedAt', 'continuationDisposition', 'deadlineTimestamp', 'lastValidBlockNumber', 'maximumCleanupTransactionCount', 'semanticDeadlineBlockNumber', 'startedAt', 'terminalSubmission'],
+		['operationInputs', 'inputSources', 'completedAt', 'continuationDisposition', 'deadlineTimestamp', 'lastValidBlockNumber', 'maximumCleanupTransactionCount', 'semanticDeadlineBlockNumber', 'startedAt', 'terminalSubmission'],
 		label,
 	)
 	const status = workflow['status']
@@ -823,6 +675,8 @@ function parseWorkflow(value: unknown, index: number): DurableWorkflow {
 		operationId: identifier(workflow['operationId'], `${label}.operationId`),
 		planId: identifier(workflow['planId'], `${label}.planId`),
 		planningSeed,
+		...(workflow['operationInputs'] === undefined ? {} : { operationInputs: storedInputValues(workflow['operationInputs']) }),
+		...(workflow['inputSources'] === undefined ? {} : { inputSources: storedInputSources(workflow['inputSources']) }),
 		postconditions: stringArray(workflow['postconditions'], `${label}.postconditions`),
 		priority,
 		risk,
@@ -923,7 +777,7 @@ async function parsePendingTransaction(value: unknown, index: number, expectedCh
 	assertExactKeys(
 		intent,
 		['data', 'hash', 'id', 'label', 'maxBlockNumber', 'mode', 'nonce', 'operationId', 'semanticExpectation', 'sender', 'serializedTransaction', 'signedAt', 'status', 'stepId', 'to', 'value', 'workflowId'],
-		['cancellationHash', 'recoveryBlocker', 'replacementHash', 'submissionBlock', 'submittedAt'],
+		['cancellationHash', 'observation', 'recoveryBlocker', 'replacementHash', 'submissionBlock', 'submittedAt'],
 		label,
 	)
 	const rawTransaction = serializedTransaction(intent['serializedTransaction'], `${label}.serializedTransaction`)
@@ -962,6 +816,7 @@ async function parsePendingTransaction(value: unknown, index: number, expectedCh
 		throw new Error(`${label} cannot queue both replacement and cancellation verification`)
 	}
 	const recoveryBlocker = optionalString(intent['recoveryBlocker'], `${label}.recoveryBlocker`, 2_048)
+	const observation = intent['observation'] === undefined ? undefined : parsePendingTransactionObservation(intent['observation'], `${label}.observation`)
 	if (status === 'signed' && (submissionBlock !== undefined || submittedAt !== undefined)) throw new Error(`${label} has submission metadata before broadcast`)
 	if (status !== 'signed' && (submissionBlock === undefined || submittedAt === undefined)) throw new Error(`${label} is missing submission metadata`)
 	const expectation = requiredRecord(intent['semanticExpectation'], `${label}.semanticExpectation`)
@@ -1016,6 +871,7 @@ async function parsePendingTransaction(value: unknown, index: number, expectedCh
 		maxBlockNumber,
 		mode,
 		nonce,
+		...(observation === undefined ? {} : { observation }),
 		operationId: identifier(intent['operationId'], `${label}.operationId`),
 		...(recoveryBlocker === undefined ? {} : { recoveryBlocker }),
 		...(replacementHash === undefined ? {} : { replacementHash }),
@@ -1036,10 +892,6 @@ async function parsePendingTransaction(value: unknown, index: number, expectedCh
 		value: transactionValue,
 		workflowId: identifier(intent['workflowId'], `${label}.workflowId`),
 	}
-}
-
-export function parseProtocolIndex(value: unknown, expectedChainId: number) {
-	return parseStoredProtocolIndex(value, expectedChainId)
 }
 
 type PrevalidatedProtocolIndex = {
@@ -1098,8 +950,9 @@ async function loadDurableStateFile(path: string, expectedChainId: number, files
 		throw error
 	}
 	const state = requiredRecord(value, 'chaos-bot state')
-	assertExactKeys(state, ['activities', 'chainId', 'lifecyclePresenceBlocker', 'obligationTombstones', 'obligations', 'pendingTransactions', 'profileId', 'protocolIndex', 'safetyPaused', 'scheduler', 'signerAddress', 'version', 'workflows'], [], 'chaos-bot state')
-	if (state['version'] !== DURABLE_STATE_VERSION) throw new Error('Chaos-bot state version is unsupported')
+	const storedVersion = state['version']
+	if (storedVersion !== 3 && storedVersion !== DURABLE_STATE_VERSION) throw new Error('Chaos-bot state version is unsupported')
+	assertExactKeys(state, ['activities', 'chainId', 'lifecyclePresenceBlocker', 'obligationTombstones', 'obligations', 'pendingTransactions', 'profileId', 'protocolIndex', ...(storedVersion === 3 ? [] : ['retirement']), 'safetyPaused', 'scheduler', 'signerAddress', 'version', 'workflows'], [], 'chaos-bot state')
 	if (state['chainId'] !== expectedChainId) throw new Error(`Chaos-bot state belongs to chain ${String(state['chainId'])}, expected chain ${expectedChainId.toString()}`)
 	if (typeof state['safetyPaused'] !== 'boolean') {
 		throw new Error('chaos-bot state.safetyPaused must be a boolean')
@@ -1174,6 +1027,7 @@ async function loadDurableStateFile(path: string, expectedChainId: number, files
 		pendingTransactions,
 		profileId: identifier(state['profileId'], 'profileId'),
 		protocolIndex,
+		retirement: storedVersion === 3 || state['retirement'] === undefined ? initialRetirementState() : parseRetirementState(state['retirement'], signerAddress),
 		safetyPaused: state['safetyPaused'],
 		scheduler: parseScheduler(state['scheduler']),
 		signerAddress,
@@ -1186,18 +1040,8 @@ export async function loadDurableState(path: string, expectedChainId: number, fi
 	return loadDurableStateFile(path, expectedChainId, filesystem, path, undefined)
 }
 
-function serializedScheduler(scheduler: SchedulerState) {
-	return {
-		lastDelaySeconds: scheduler.lastDelaySeconds ?? null,
-		lastRunAt: scheduler.lastRunAt ?? null,
-		nextRunAt: scheduler.nextRunAt ?? null,
-		selectedOperationId: scheduler.selectedOperationId ?? null,
-		status: scheduler.status,
-	}
-}
-
-export function serializedDurableState(
-	state: Pick<DurableState, 'activities' | 'chainId' | 'lifecyclePresenceBlocker' | 'obligationTombstones' | 'obligations' | 'pendingTransactions' | 'profileId' | 'protocolIndex' | 'safetyPaused' | 'scheduler' | 'signerAddress' | 'workflows'>,
+function serializedDurableState(
+	state: Pick<DurableState, 'activities' | 'chainId' | 'lifecyclePresenceBlocker' | 'obligationTombstones' | 'obligations' | 'pendingTransactions' | 'profileId' | 'protocolIndex' | 'retirement' | 'safetyPaused' | 'scheduler' | 'signerAddress' | 'workflows'>,
 	persistedProtocolIndex: ChaosProtocolIndex | ProtocolIndexReference | null = state.protocolIndex ?? null,
 ) {
 	return {
@@ -1210,11 +1054,13 @@ export function serializedDurableState(
 			...intent,
 			maxBlockNumber: intent.maxBlockNumber.toString(),
 			nonce: intent.nonce.toString(),
+			observation: intent.observation === undefined ? undefined : serializedPendingTransactionObservation(intent.observation),
 			submissionBlock: intent.submissionBlock?.toString(),
 			value: intent.value.toString(),
 		})),
 		profileId: state.profileId,
 		protocolIndex: persistedProtocolIndex,
+		retirement: state.retirement,
 		safetyPaused: state.safetyPaused,
 		scheduler: serializedScheduler(state.scheduler),
 		signerAddress: state.signerAddress ?? null,
@@ -1236,7 +1082,7 @@ function replaceArrayContents<T>(target: T[], retained: readonly T[]) {
 	target.splice(0, target.length, ...retained)
 }
 
-export function compactDurableState(state: Pick<DurableState, 'activities' | 'obligationTombstones' | 'obligations' | 'pendingTransactions' | 'workflows'>) {
+function compactDurableState(state: Pick<DurableState, 'activities' | 'obligationTombstones' | 'obligations' | 'pendingTransactions' | 'workflows'>) {
 	if (state.activities.length > MAXIMUM_ACTIVITY_COUNT) state.activities.splice(MAXIMUM_ACTIVITY_COUNT)
 	const tombstones = new Map(state.obligationTombstones.map(tombstone => [tombstone.id, tombstone]))
 	for (const obligation of state.obligations) {
@@ -1274,7 +1120,7 @@ export function compactDurableState(state: Pick<DurableState, 'activities' | 'ob
 	return state
 }
 
-type PersistableDurableState = Pick<DurableState, 'activities' | 'chainId' | 'lifecyclePresenceBlocker' | 'obligationTombstones' | 'obligations' | 'pendingTransactions' | 'profileId' | 'protocolIndex' | 'safetyPaused' | 'scheduler' | 'signerAddress' | 'workflows'>
+type PersistableDurableState = Pick<DurableState, 'activities' | 'chainId' | 'lifecyclePresenceBlocker' | 'obligationTombstones' | 'obligations' | 'pendingTransactions' | 'profileId' | 'protocolIndex' | 'retirement' | 'safetyPaused' | 'scheduler' | 'signerAddress' | 'workflows'>
 
 function snapshotDurableState(state: PersistableDurableState) {
 	compactDurableState(state)
@@ -1289,6 +1135,7 @@ function snapshotDurableState(state: PersistableDurableState) {
 		pendingTransactions: [...state.pendingTransactions],
 		profileId: state.profileId,
 		protocolIndex: undefined,
+		retirement: structuredClone(state.retirement),
 		safetyPaused: state.safetyPaused,
 		scheduler: { ...state.scheduler },
 		signerAddress: state.signerAddress,

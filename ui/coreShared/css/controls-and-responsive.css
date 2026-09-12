@@ -108,9 +108,22 @@
 	color: var(--text);
 }
 
+.tx-action-group {
+	display: grid;
+	gap: var(--space-2);
+}
+
+.tx-action-group > .actions {
+	align-items: flex-start;
+}
+
 .tx-action {
 	display: grid;
 	gap: var(--space-2);
+}
+
+.actions > .tx-action {
+	width: min(100%, 24rem);
 }
 
 .tx-action-row {
@@ -123,81 +136,33 @@
 	flex: 1 1 auto;
 }
 
-.inline-hint {
-	position: relative;
-	flex: 0 0 auto;
-}
-
-.inline-hint > summary {
-	list-style: none;
-}
-
-.inline-hint > summary::-webkit-details-marker {
-	display: none;
-}
-
-.inline-hint-toggle {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: var(--touch-target-min);
-	height: var(--touch-target-min);
-	border: 1px solid color-mix(in srgb, var(--warning-border-strong) 92%, transparent 8%);
-	border-radius: 999px;
-	background: color-mix(in srgb, var(--notice-warning-gradient) 32%, transparent 68%);
-	color: color-mix(in srgb, var(--text) 82%, var(--warning-border-strong) 18%);
-	cursor: pointer;
-	font-size: 0.82rem;
-	font-weight: 700;
-	line-height: 1;
-	user-select: none;
-}
-
-.inline-hint-toggle:hover,
-.inline-hint.is-open > .inline-hint-toggle,
-.inline-hint-toggle:focus-visible {
-	border-color: color-mix(in srgb, var(--warning-border-strong) 78%, var(--color-white) 22%);
-	background: color-mix(in srgb, var(--notice-warning-gradient) 44%, transparent 56%);
-}
-
-.inline-hint-popover {
-	position: absolute;
-	z-index: 30;
-	top: calc(100% + 0.45rem);
-	display: none;
-	width: min(22rem, calc(100vw - 2rem));
-	max-width: calc(100vw - 2rem);
-	padding: 0.7rem 0.8rem;
-	border: 1px solid color-mix(in srgb, var(--warning-border-strong) 84%, transparent 16%);
-	border-radius: 0.8rem;
-	background: color-mix(in srgb, var(--notice-warning-gradient) 24%, var(--surface-raised) 76%);
-	box-shadow: 0 14px 28px rgba(0, 0, 0, 0.28);
-	color: var(--text);
+.tx-action-notice {
+	padding: 0;
+	color: var(--text-secondary);
 	font-size: var(--font-caption);
-	line-height: 1.5;
+	line-height: 1.45;
 }
 
-.inline-hint[data-align="left"] .inline-hint-popover {
-	left: 0;
+.tx-action-feedback {
+	min-block-size: 2.9em;
+	font-size: var(--font-caption);
 }
 
-.inline-hint[data-align="right"] .inline-hint-popover {
-	right: 0;
+.tx-action-button-labels {
+	display: grid;
+	align-items: center;
 }
 
-.inline-hint:hover .inline-hint-popover,
-.inline-hint:focus-within .inline-hint-popover,
-.inline-hint.is-open .inline-hint-popover {
-	display: block;
+.tx-action-button-labels > span {
+	grid-area: 1 / 1;
 }
 
-@media (max-width: 480px) {
-	.inline-hint-popover {
-		position: fixed;
-		top: auto;
-		right: auto;
-		max-width: min(22rem, calc(100vw - 2rem));
-	}
+.tx-action-label-placeholder {
+	visibility: hidden;
+}
+
+.tx-action-label-placeholder::after {
+	content: attr(data-label);
 }
 
 .transaction-action-status {
@@ -245,6 +210,7 @@
 
 .tx-action-button {
 	width: 100%;
+	min-block-size: 3rem;
 }
 
 .tx-action-button .loading-value {
@@ -260,7 +226,7 @@
 }
 
 .overview-wallet-panel {
-	padding: var(--space-4) var(--space-5) var(--space-3);
+	padding: var(--space-3) var(--space-4);
 	border: 0;
 	background: transparent;
 	box-shadow: none;
@@ -271,30 +237,6 @@
 	border: 0;
 	background: transparent;
 	box-shadow: none;
-}
-
-.overview-inline-metrics.data-grid {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
-	gap: var(--space-3) var(--space-4);
-}
-
-.overview-inline-metrics.data-grid > div {
-	min-width: 0;
-}
-
-.overview-inline-metrics.data-grid > .overview-address-metric {
-	grid-column: span 2;
-}
-
-@media (min-width: 1280px) {
-	.overview-inline-metrics.data-grid {
-		grid-template-columns: minmax(16rem, 1fr) repeat(6, fit-content(10rem));
-	}
-
-	.overview-inline-metrics.data-grid > .overview-address-metric {
-		grid-column: auto;
-	}
 }
 
 .workflow-stack,
@@ -782,7 +724,7 @@
 	padding: 0.12rem 0.46rem;
 	border: 1px solid currentColor;
 	border-radius: 999px;
-	font-size: 0.72rem;
+	font-size: var(--font-label);
 	font-weight: 700;
 	letter-spacing: 0.08em;
 	line-height: 1.2;
@@ -1149,22 +1091,60 @@
 		font-size: var(--font-label);
 	}
 
-	.overview-inline-metrics {
-		display: grid;
+	/* Groups stack, each with its caption above two metric columns. */
+	.overview-metric-group,
+	.overview-metric-group.is-secondary {
+		flex: 1 1 100%;
+		flex-direction: column;
+		align-items: stretch;
+		gap: var(--space-1);
+	}
+
+	.overview-metric-group + .overview-metric-group {
+		padding-top: var(--space-2);
+		padding-left: 0;
+		border-top: 1px solid var(--divider-subtle);
+		border-left: 0;
+	}
+
+	.overview-metric-group-items,
+	.overview-metric-group.is-secondary .overview-metric-group-items {
+		grid-auto-flow: row;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 0.65rem 1rem;
+		gap: var(--space-1) var(--space-3);
 	}
 
-	.overview-inline-metrics > div {
-		min-width: 0;
+	/* Narrow tracks stack every label above its value so rows stay even; the tap-target slack sits below the value text. */
+	.overview-metric-group-items > div {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 0.1rem;
 	}
 
-	.overview-inline-metrics:not(.mobile-expanded) .overview-metric-secondary {
+	.overview-inline-metrics .metric-field-value {
+		flex: 0 0 auto;
+		align-items: flex-start;
+	}
+
+	/* Copyable and plain values start at the same line so a mobile row reads level. */
+	.overview-inline-metrics .currency-value.copyable {
+		align-items: flex-start;
+		padding-top: 0;
+	}
+
+	.overview-metric-group-caption {
+		margin-bottom: var(--space-1);
+	}
+
+	.overview-inline-metrics .metric-field-value,
+	.overview-inline-metrics .currency-value.copyable,
+	.wallet-chip .address-value.copyable {
+		min-height: var(--touch-target-min);
+	}
+
+	.overview-inline-metrics:not(.mobile-expanded) .overview-metric-secondary,
+	.overview-inline-metrics:not(.mobile-expanded) .overview-metric-group.is-secondary {
 		display: none;
-	}
-
-	.overview-address-metric {
-		grid-column: 1 / -1;
 	}
 
 	.overview-details-toggle {
@@ -1173,6 +1153,14 @@
 		justify-content: center;
 		min-height: var(--touch-target-min);
 		width: fit-content;
+		margin-top: var(--space-2);
+	}
+
+	/* Keep the touch target while the visible chip label row stays compact. */
+	.overview-inline-metrics .metric-label-refresh {
+		min-width: var(--touch-target-min);
+		min-height: var(--touch-target-min);
+		margin: -0.85rem -0.6rem -0.85rem 0;
 	}
 
 	.address-value.copyable,
@@ -1409,58 +1397,18 @@
 		margin-left: 0;
 	}
 
-	.overview-inline-metrics.data-grid {
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-	}
-
-	.overview-inline-metrics.data-grid > .overview-address-metric {
-		grid-column: 1 / -1;
-	}
-
-	.overview-wallet-panel.is-simulation .route-header {
-		gap: var(--space-2);
-		padding-bottom: var(--space-2);
-	}
-
-	.overview-wallet-panel.is-simulation .route-header-copy {
-		gap: var(--space-1);
-	}
-
-	.overview-wallet-panel.is-simulation .route-description {
+	/* A simulation strip collapses entirely until the details toggle reveals it. */
+	.overview-wallet-panel.is-simulation .overview-inline-metrics:not(.mobile-expanded) .overview-simulation-secondary,
+	.overview-wallet-panel.is-simulation .overview-inline-metrics:not(.mobile-expanded) .overview-metric-group {
 		display: none;
 	}
 
-	.overview-wallet-panel.is-simulation .overview-inline-metrics.data-grid {
-		grid-template-columns: minmax(0, 1fr) minmax(7rem, auto);
-		gap: var(--space-2);
-	}
-
-	.overview-wallet-panel.is-simulation .overview-inline-metrics:not(.mobile-expanded) .overview-simulation-secondary {
-		display: none;
-	}
-
-	.overview-wallet-panel.is-simulation .overview-inline-metrics.data-grid > .overview-address-metric {
-		grid-column: auto;
+	.overview-wallet-panel.is-simulation .overview-inline-metrics:not(.mobile-expanded) {
+		margin-top: 0;
 	}
 
 	.overview-wallet-panel.is-simulation {
 		padding: var(--space-2) var(--space-3);
-	}
-
-	.overview-address-metric .address-value {
-		white-space: nowrap;
-	}
-
-	.overview-address-metric .address-value-full {
-		display: none;
-	}
-
-	.overview-address-metric .address-value-abbreviated {
-		display: inline;
-	}
-
-	.overview-wallet-panel.is-simulation .overview-universe-metric {
-		text-align: right;
 	}
 
 	.route-header,
@@ -1551,28 +1499,48 @@
 	}
 }
 
-.overview-route-header .route-header-main {
+/* Application toolbar: brand and badges lead, wallet and universe controls sit right, settings closes the row. */
+.header-toolbar {
 	display: grid;
 	grid-template-columns: auto minmax(0, 1fr) auto;
 	align-items: center;
-	gap: var(--space-2);
+	gap: var(--space-2) var(--space-3);
 }
 
-.overview-route-header .route-header-badge {
-	justify-self: start;
-	align-self: center;
-}
-
-.overview-route-header .route-header-actions {
-	align-self: center;
-}
-
-.overview-route-header .route-title-row h2 {
-	white-space: nowrap;
-}
-
-.overview-route-header .environment-badge-row {
+.header-toolbar-brand {
+	display: flex;
+	align-items: center;
 	flex-wrap: wrap;
+	gap: var(--space-2) var(--space-3);
+	min-width: 0;
+}
+
+.header-toolbar .application-brand {
+	margin: 0;
+	font-size: 1.25rem;
+	font-weight: 650;
+	line-height: 1.2;
+	letter-spacing: -0.01em;
+	white-space: nowrap;
+	overflow-wrap: normal;
+}
+
+.header-toolbar .environment-badge-row {
+	justify-content: flex-start;
+}
+
+.header-toolbar-controls {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: var(--space-2) var(--space-3);
+	min-width: 0;
+}
+
+.header-toolbar-settings {
+	display: flex;
+	align-items: center;
 }
 
 .overview-shell > .universe-fork-notice {
@@ -1581,9 +1549,127 @@
 	background: var(--notice-warning-gradient);
 }
 
+/* Until both groups fit on one row, the balance and price groups take one row each, sized to their content with a shared caption column. */
+@media (min-width: 801px) and (max-width: 75rem) {
+	.overview-metric-group,
+	.overview-metric-group.is-secondary {
+		flex: 0 1 100%;
+	}
+
+	.overview-metric-group-caption {
+		min-width: 6.5rem;
+	}
+
+	.overview-metric-group + .overview-metric-group {
+		padding-left: 0;
+		border-left: 0;
+	}
+}
+
+/* Once the controls no longer fit beside the brand, brand and settings share row one and the wallet and universe controls take row two. */
+@media (max-width: 56rem) {
+	.header-toolbar {
+		grid-template-columns: minmax(0, 1fr) auto;
+	}
+
+	.header-toolbar-controls {
+		grid-column: 1 / -1;
+		grid-row: 2;
+		justify-content: flex-start;
+	}
+
+	/* The wallet chip now sits at the left edge, so its popover opens rightwards instead of off-screen. */
+	.header-toolbar-controls .account-menu-popover {
+		right: auto;
+		left: 0;
+	}
+}
+
 @media (max-width: 42rem) {
-	.overview-route-header .environment-badge-row .badge {
+	.header-toolbar .application-brand {
+		white-space: normal;
+	}
+
+	/* Wallet chip and universe share one toolbar row when they fit, with the universe caption stacked over its value; otherwise the field takes its own row. */
+	.header-toolbar-controls {
+		justify-content: space-between;
+	}
+
+	/* The field is left-aligned internally so it reads the same whether it ends the chip row or takes its own. */
+	.header-toolbar-controls .toolbar-field {
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0.1rem;
+	}
+
+	.header-toolbar-controls .toolbar-field-value {
+		white-space: nowrap;
+	}
+
+	.header-toolbar .environment-badge-row .badge {
 		padding-inline: 0.3rem;
 		letter-spacing: 0.02em;
 	}
+}
+
+@media (max-width: 359px) {
+	.overview-metric-group-items,
+	.overview-metric-group.is-secondary .overview-metric-group-items {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+/* Horizontal navigation shares one tab treatment across route levels. */
+.view-tabs[data-orientation="horizontal"]:is(.route, .subroute) {
+	gap: var(--space-3);
+	border-bottom: 1px solid var(--divider-subtle);
+}
+
+.view-tabs[data-orientation="horizontal"]:is(.route, .subroute) .view-tab {
+	position: relative;
+	flex: 0 0 auto;
+	border: 0;
+	border-bottom: 2px solid transparent;
+	border-radius: 0;
+	padding: 0.75rem 0.5rem;
+	background: transparent;
+	box-shadow: none;
+	color: var(--text-muted);
+	font-size: var(--font-subtab);
+	font-weight: 600;
+	letter-spacing: 0;
+	text-transform: none;
+	text-decoration: none;
+}
+
+.view-tabs[data-orientation="horizontal"]:is(.route, .subroute) .view-tab::after {
+	content: none;
+}
+
+.view-tabs[data-orientation="horizontal"]:is(.route, .subroute) .view-tab:hover:not(:disabled):not([aria-disabled="true"]) {
+	background: transparent;
+	border-bottom-color: var(--border-active);
+	color: var(--text);
+}
+
+.view-tabs[data-orientation="horizontal"]:is(.route, .subroute) .view-tab.active {
+	background: transparent;
+	border-bottom-color: var(--accent);
+	color: var(--text);
+	box-shadow: none;
+}
+
+.universe-fork-notice {
+	padding: var(--space-3);
+	margin: var(--space-3) var(--space-4);
+}
+
+.application-brand {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.application-brand img {
+	flex-shrink: 0;
 }

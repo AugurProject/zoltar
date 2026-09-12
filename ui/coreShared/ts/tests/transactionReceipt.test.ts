@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from 'bun:test'
-import type { Hash, ReplacementReason } from '@zoltar/shared/ethereum'
-import { waitForSubmittedTransactionReceipt, type SubmittedTransactionClient } from '../lib/transactionReceipt.js'
+import type { Hash, ReplacementReason } from '@zoltar/core-shared/evm/ethereum'
+import { waitForSubmittedTransactionReceipt, type SubmittedTransactionClient } from '../transactions/transactionReceipt.js'
 
 const originalHash = `0x${'1'.repeat(64)}` as Hash
 const replacementHash = `0x${'2'.repeat(64)}` as Hash

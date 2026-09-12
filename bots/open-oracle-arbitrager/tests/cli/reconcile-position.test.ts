@@ -2,7 +2,7 @@ import { afterEach, expect, test } from 'bun:test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { getAddress, privateKeyToAccount, type Hex } from '#ethereum'
+import { getAddress, privateKeyToAccount, type Hex } from '@zoltar/bot-shared/ethereum'
 import { loadPositionJournalState, savePositionJournalState, type PositionRecord } from '#state/position-store'
 
 const requiredArguments = ['--position-file=/tmp/unused-position-journal.json', '--chain-id=1', '--report-id=7', '--confirm-report-id=7', '--evidence=archived receipts', '--note=manual unwind complete', '--external-cost-eth=0.003', '--final-wallet-weth=4', '--final-wallet-token=5'] as const

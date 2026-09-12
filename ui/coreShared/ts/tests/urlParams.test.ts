@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { readOpenOracleReportIdQueryParam, readOpenOracleViewQueryParam, writeOpenOracleReportIdQueryParam, writeOpenOracleViewQueryParam } from '../lib/openOracleUrlParams.js'
+import { readOpenOracleReportIdQueryParam, readOpenOracleViewQueryParam, writeOpenOracleReportIdQueryParam, writeOpenOracleViewQueryParam } from '../navigation/openOracleUrlParams.js'
 import {
 	readSecurityPoolsViewQueryParam,
 	readSecurityPoolQuestionIdQueryParam,
@@ -15,7 +15,7 @@ import {
 	writeSelectedPoolViewQueryParam,
 	writeUniverseQueryParam,
 	writeZoltarViewQueryParam,
-} from '../lib/urlParams.js'
+} from '../navigation/urlParams.js'
 
 void describe('url params', () => {
 	void test('reads a universe query param', () => {

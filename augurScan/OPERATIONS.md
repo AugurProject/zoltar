@@ -21,7 +21,10 @@ The most important runtime settings are:
 - `POSTGRES_URL` connects directly to PostgreSQL or through a session-mode pooler;
 - `AUGURSCAN_ACCESS_USERNAME` and `AUGURSCAN_ACCESS_PASSWORD` enable HTTP Basic access control when both are set;
 - `API_RATE_LIMIT_PER_MINUTE` changes the default per-client API limit of 600 and also limits failed Basic-authentication attempts on protected non-API routes, while `0` disables both limits when a trusted upstream enforces them;
+- `LIVE_BACKPRESSURE_TIMEOUT_MS` changes the default 60-second limit for a live-stream client that makes no write progress before its slot is closed and released;
 - `DISABLE_INDEXER=1` disables the dedicated indexer process. The web app already runs without indexing, but it still initializes or migrates the schema, records an indexer-disabled process run, prunes expired live-stream events, and records the run's stop time.
+
+API requests and failed Basic-authentication attempts share one per-client quota. When Basic authentication is enabled, exhausting that quota temporarily blocks all protected routes for the client, including requests with valid credentials, until the window resets. Successful non-API requests do not consume quota.
 
 The writer lease is a PostgreSQL session advisory lock and is incompatible with transaction-mode pooling. Terminate TLS before enabling Basic authentication because Basic credentials are encoded, not encrypted. Do not expose PostgreSQL publicly, and do not rely on the process-local rate limiter as a distributed edge control. `GET /metrics` exposes bounded Prometheus request, limiter, indexer-lag, success, and failure metrics.
 

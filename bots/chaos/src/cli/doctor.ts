@@ -1,24 +1,27 @@
 #!/usr/bin/env bun
 
-import { requireDeployedContracts } from '../../../shared/src/monitoring/deployed-contracts.js'
+import { migrateEmptyBootstrapState } from '../state/bootstrap-migration.ts'
+import { requireDeployedContracts } from '@zoltar/bot-shared/monitoring/deployed-contracts'
 import { access, lstat } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { dirname } from 'node:path'
 import { privateKeyToAccount, zeroAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import { fetchLogsWithAdaptiveRanges } from '@zoltar/bot-shared/monitoring/block-sync'
 import { assertSettingsProfileIsolation, CHAOS_ECOSYSTEMS, loadSettings, type OperatorSettings } from '../config/settings.ts'
-import { acquireChaosProcessLocks, ChaosProcessLockAcquisitionError, type ChaosProcessLocks } from '../core/process-locks.ts'
+import { acquireBotProcessLocks, BotProcessLockAcquisitionError, type BotProcessLocks } from '@zoltar/bot-shared/execution/bot-process-locks'
+import { CHAOS_PROCESS_LOCK_OPTIONS } from '../core/process-lock-options.ts'
 import type { CanonicalUintString } from '../core/units.ts'
-import { validateCarryProofJournalSidecarIfPresent } from '../monitoring/carry-proof-journal.ts'
-import { carryProofDeploymentProfileId } from '../monitoring/carry-proof-scan.ts'
+import { executionProfileId } from '../config/execution-profile.ts'
 import { validateImmutableTopologySidecarIfPresent } from '../monitoring/topology-cache.ts'
 import { CHAOS_OPERATION_CATALOG } from '../operations/catalog.ts'
-import { CONSENSUS_FINALITY_HORIZON_BLOCKS } from '../operations/timing.ts'
-import type { ChaosReadClient } from '../monitoring/discovery.ts'
+import { EXECUTOR_FINALITY_BLOCKS } from '../operations/timing.ts'
+import type { ChaosReadClient } from '../monitoring/discovery-client.ts'
 import { canonicalAnchor, chaosReadClients, chaosReadEndpoints, createChaosReadPool, discoverWithQuorum } from '../runtime/canonical-scan.ts'
+import { checkDeploymentAvailability } from '../runtime/deployment-availability.ts'
 import { requiredLiveInventory } from '../runtime/live-readiness.ts'
 import { preflightTransactionSubmissionNetwork } from '../runtime/submission-preflight.ts'
 import { loadDurableState, type DurableState } from '../state/operator-state.ts'
+import { isPristineBootstrapState } from '../state/pristine.ts'
 
 type DoctorReaderResult = {
 	codeRoots: number
@@ -48,13 +51,14 @@ export type ChaosDoctorProbeResult = {
 }
 
 export type ChaosDoctorDependencies = {
-	acquireLocks: (settings: OperatorSettings) => Promise<Pick<ChaosProcessLocks, 'release'>>
+	deploymentAvailability: (settings: OperatorSettings) => Promise<string | undefined>
+	acquireLocks: (settings: OperatorSettings) => Promise<Pick<BotProcessLocks, 'release'>>
 	assertProfileIsolation: typeof assertSettingsProfileIsolation
 	load: typeof loadSettings
 	loadState: typeof loadDurableState
 	preflightSubmission: typeof preflightTransactionSubmissionNetwork
 	probe: (settings: OperatorSettings, wallet: `0x${string}`) => Promise<ChaosDoctorProbeResult>
-	validateCompanionState: (settings: OperatorSettings) => Promise<{ carryProofJournal: 'absent' | 'valid'; immutableTopology: 'absent' | 'valid' }>
+	validateCompanionState: (settings: OperatorSettings) => Promise<{ immutableTopology: 'absent' | 'valid' }>
 	verifyStateParent: (stateFile: string) => Promise<void>
 }
 
@@ -134,8 +138,8 @@ export function commonFreshFinalizedBlockNumber(anchorBlockNumber: bigint, ident
 	for (const identity of identities) {
 		if (identity.number > anchorBlockNumber) throw new Error('RPC returned a finalized block ahead of the quorum anchor')
 		const lag = anchorBlockNumber - identity.number
-		if (lag > CONSENSUS_FINALITY_HORIZON_BLOCKS) {
-			throw new Error(`RPC finalized checkpoint is ${lag.toString()} blocks behind the quorum anchor, exceeding the ${CONSENSUS_FINALITY_HORIZON_BLOCKS.toString()}-block launch limit`)
+		if (lag > EXECUTOR_FINALITY_BLOCKS) {
+			throw new Error(`RPC finalized checkpoint is ${lag.toString()} blocks behind the quorum anchor, exceeding the ${EXECUTOR_FINALITY_BLOCKS.toString()}-block launch limit`)
 		}
 		if (identity.number < commonBlockNumber) commonBlockNumber = identity.number
 	}
@@ -226,12 +230,10 @@ export async function probeChaosDoctor(settings: OperatorSettings, wallet: `0x${
 		{ address: settings.deployment.questionData, name: 'questionData' },
 		{ address: settings.deployment.securityPoolFactory, name: 'securityPoolFactory' },
 		{ address: settings.deployment.securityPoolForker, name: 'securityPoolForker' },
-		{ address: settings.deployment.tradingFactory, name: 'tradingFactory' },
-		{ address: settings.deployment.tradingRouter, name: 'tradingRouter' },
 		{ address: settings.deployment.weth, name: 'weth' },
 		{ address: settings.deployment.zoltar, name: 'zoltar' },
 	]
-	const deploymentAddresses = deploymentRoots.map(root => root.address)
+	const deploymentAddresses = [...deploymentRoots.map(root => root.address), settings.deployment.tradingFactory, settings.deployment.tradingRouter]
 	const logToBlock = anchor.blockNumber < settings.runtime.protocolStartBlock + BigInt(settings.runtime.protocolLogBlockSpan) - 1n ? anchor.blockNumber : settings.runtime.protocolStartBlock + BigInt(settings.runtime.protocolLogBlockSpan) - 1n
 	const readerUrls = chaosReadEndpoints(settings)
 	const readers = chaosReadClients(settings, pool)
@@ -303,15 +305,18 @@ export async function probeChaosDoctor(settings: OperatorSettings, wallet: `0x${
 
 async function acquireDoctorLocks(settings: OperatorSettings) {
 	try {
-		return await acquireChaosProcessLocks({
-			chainId: settings.network.chainId,
-			execute: settings.runtime.execute,
-			privateKey: settings.privateKey,
-			signerLockRoot: process.env['ZOLTAR_BOT_SIGNER_LOCK_ROOT'],
-			stateFile: settings.runtime.stateFile,
-		})
+		return await acquireBotProcessLocks(
+			{
+				chainId: settings.network.chainId,
+				execute: settings.runtime.execute,
+				privateKey: settings.privateKey,
+				signerLockRoot: process.env['ZOLTAR_BOT_SIGNER_LOCK_ROOT'],
+				stateFile: settings.runtime.stateFile,
+			},
+			CHAOS_PROCESS_LOCK_OPTIONS,
+		)
 	} catch (error) {
-		if (error instanceof ChaosProcessLockAcquisitionError) {
+		if (error instanceof BotProcessLockAcquisitionError) {
 			await error.releaseProcessLocks()
 			throw error.acquisitionCause
 		}
@@ -320,26 +325,15 @@ async function acquireDoctorLocks(settings: OperatorSettings) {
 }
 
 export async function validateDoctorCompanionState(settings: OperatorSettings) {
-	const [carryProofJournal, immutableTopology] = await Promise.all([
-		validateCarryProofJournalSidecarIfPresent(settings.runtime.stateFile, {
-			chainId: settings.network.chainId,
-			profileId: carryProofDeploymentProfileId(settings),
-			securityPoolForker: settings.deployment.securityPoolForker,
-			startBlock: settings.runtime.protocolStartBlock.toString(),
-		}),
-		validateImmutableTopologySidecarIfPresent(
-			settings.runtime.stateFile,
-			{
-				chainId: settings.network.chainId,
-				...settings.deployment,
-			},
-			settings.discovery,
-		),
-	])
-	return { carryProofJournal, immutableTopology }
+	const immutableTopology = await validateImmutableTopologySidecarIfPresent(settings.runtime.stateFile, { chainId: settings.network.chainId, ...settings.deployment }, settings.discovery)
+	return { immutableTopology }
 }
 
 const defaultDependencies: ChaosDoctorDependencies = {
+	deploymentAvailability: async settings => {
+		const check = await checkDeploymentAvailability(settings, createChaosReadPool(settings))
+		return check.blocking ? check.notice : undefined
+	},
 	acquireLocks: acquireDoctorLocks,
 	assertProfileIsolation: assertSettingsProfileIsolation,
 	load: loadSettings,
@@ -398,24 +392,8 @@ function familyReachability(settings: OperatorSettings, result: ChaosDoctorProbe
 	)
 }
 
-function isPristineBootstrapState(state: DurableState) {
-	const schedulerIsPristine = (state.scheduler.status === 'idle' || state.scheduler.status === 'paused') && state.scheduler.lastDelaySeconds === undefined && state.scheduler.lastRunAt === undefined && state.scheduler.nextRunAt === undefined && state.scheduler.selectedOperationId === undefined
-	return (
-		state.signerAddress === undefined &&
-		state.activities.length === 0 &&
-		state.lifecyclePresenceBlocker === undefined &&
-		state.obligationTombstones.length === 0 &&
-		state.obligations.length === 0 &&
-		state.pendingTransactions.length === 0 &&
-		state.protocolIndex === undefined &&
-		!state.safetyPaused &&
-		schedulerIsPristine &&
-		state.workflows.length === 0
-	)
-}
-
 export function assertDoctorDurableStateScope(settings: OperatorSettings, state: DurableState, wallet: Address | undefined, stateFile = settings.runtime.stateFile) {
-	const expectedProfileId = carryProofDeploymentProfileId(settings)
+	const expectedProfileId = executionProfileId(settings)
 	if (state.profileId !== expectedProfileId && !isPristineBootstrapState(state)) {
 		throw new Error(`Durable state ${stateFile} belongs to deployment profile ${state.profileId}, expected ${expectedProfileId}`)
 	}
@@ -452,10 +430,17 @@ async function runChaosDoctorWithLoaded(loaded: LoadedDoctorSettings, dependenci
 	const locks = await dependencies.acquireLocks(loaded.settings)
 	try {
 		const configuredSigner = loaded.settings.privateKey === undefined ? undefined : privateKeyToAccount(loaded.settings.privateKey).address
-		const durableState = await dependencies.loadState(loaded.settings.runtime.stateFile, loaded.settings.network.chainId)
+		const durableState = migrateEmptyBootstrapState(await dependencies.loadState(loaded.settings.runtime.stateFile, loaded.settings.network.chainId), loaded.settings)
 		const durableScope = assertDoctorDurableStateScope(loaded.settings, durableState, configuredSigner)
 		const companionState = await dependencies.validateCompanionState(loaded.settings)
 		const submissionChecks = await dependencies.preflightSubmission(loaded.settings)
+		const deploymentNotice = await dependencies.deploymentAvailability(loaded.settings)
+		if (deploymentNotice !== undefined)
+			return {
+				checks: { configuration: 'passed', durableState: 'passed', companionState: 'passed', submission: 'passed', deploymentCodeAndGraph: 'waiting' },
+				deploymentNotice,
+				operationsAvailable: false,
+			}
 		const probeWallet = configuredSigner ?? zeroAddress
 		const result = await dependencies.probe(loaded.settings, probeWallet)
 		const fundingBlockers = liveFundingBlockers(loaded.settings, result.snapshot)
@@ -514,18 +499,24 @@ export async function runChaosLaunchGate(dependencies: ChaosDoctorDependencies =
 	return runChaosDoctorWithLoaded(loaded, dependencies)
 }
 
+export function launchGateSummary(report: Awaited<ReturnType<typeof runChaosLaunchGate>>) {
+	if ('reason' in report) return `Launch preflight skipped: ${report.reason}. The operator starts without submitting transactions.`
+	if ('deploymentNotice' in report) return `Launch preflight passed with the deployment still pending. ${report.deploymentNotice}`
+	return `Launch preflight passed all ${Object.keys(report.checks).length.toString()} readiness checks at canonical block ${report.anchor.blockNumber}. Run \`bun run doctor\` for the detailed readiness report.`
+}
+
 async function doctorCli() {
 	const argumentsAfterScript = process.argv.slice(2)
 	if (argumentsAfterScript.length > 1 || (argumentsAfterScript.length === 1 && argumentsAfterScript[0] !== '--if-live-capable')) {
 		throw new Error('Usage: bun src/cli/doctor.ts [--if-live-capable]')
 	}
-	const run = argumentsAfterScript[0] === '--if-live-capable' ? runChaosLaunchGate : runChaosDoctor
-	return run()
+	if (argumentsAfterScript[0] === '--if-live-capable') return launchGateSummary(await runChaosLaunchGate())
+	return JSON.stringify(await runChaosDoctor(), undefined, 2)
 }
 
 if (import.meta.main) {
 	doctorCli()
-		.then(report => console.log(JSON.stringify(report, undefined, 2)))
+		.then(output => console.log(output))
 		.catch(error => {
 			console.error(error instanceof Error ? error.message : String(error))
 			process.exitCode = 1

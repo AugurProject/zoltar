@@ -1,4 +1,5 @@
 import { getAddress, parseTransaction, type Hex } from '@zoltar/bot-shared/ethereum'
+import { isHash32 } from '@zoltar/bot-shared/infrastructure/json-validation'
 import type { PendingTransactionIntent } from '#state/operator-state'
 
 export type FinalizedReplacementEvidence = {
@@ -17,8 +18,8 @@ type ReconciliationEvidenceReaders = {
 }
 
 function transactionHash(value: unknown, label: string) {
-	if (typeof value !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(value)) throw new Error(`${label} must be a transaction hash`)
-	return value as Hex
+	if (!isHash32(value)) throw new Error(`${label} must be a transaction hash`)
+	return value
 }
 
 export function parseTransactionReconciliation(value: unknown) {
@@ -33,7 +34,7 @@ export function validateReconciliationIntentChain(serializedTransaction: Hex, ch
 	if (parseTransaction(serializedTransaction).chainId !== BigInt(chainId)) throw new Error('Pending transaction intent was signed for a different chain')
 }
 
-export function validateFinalizedReplacement(intent: Pick<PendingTransactionIntent, 'hash' | 'nonce' | 'sender'>, requestedHash: Hex, replacement: FinalizedReplacementEvidence) {
+function validateFinalizedReplacement(intent: Pick<PendingTransactionIntent, 'hash' | 'nonce' | 'sender'>, requestedHash: Hex, replacement: FinalizedReplacementEvidence) {
 	if (replacement.hash.toLowerCase() === intent.hash.toLowerCase()) throw new Error('Use automatic receipt recovery for the original transaction hash')
 	if (replacement.hash.toLowerCase() !== requestedHash.toLowerCase()) throw new Error('Replacement RPC returned another transaction')
 	if (getAddress(replacement.from).toLowerCase() !== intent.sender.toLowerCase()) throw new Error('Replacement transaction was sent by another account')

@@ -1,7 +1,7 @@
 import { test } from 'bun:test'
 import assert from '../testSupport/simulator/utils/assert'
 import { readFileSync, writeFileSync } from 'node:fs'
-import { keccak256, type Hex } from '@zoltar/shared/ethereum'
+import { keccak256, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { getArray, getContractOutput, getRecord, getString, loadContractsJson, normalizeStorageLayout } from './contractArtifactHelpers'
 
 const escalationGameSourcePath = 'contracts/statoblast/EscalationGame.sol'
@@ -193,5 +193,5 @@ test('EscalationGame bytecode stays within size budgets and preserves runtime sn
 
 	assert.ok(actualSnapshot.deployedBytes <= eip170DeployedBytecodeLimitBytes, `EscalationGame deployed bytecode exceeds EIP-170: ${actualSnapshot.deployedBytes}`)
 	assert.ok(actualSnapshot.deployedBytes <= escalationGameDeployedBytecodeBudgetBytes, `EscalationGame deployed bytecode exceeds project budget: ${actualSnapshot.deployedBytes}`)
-	assert.deepStrictEqual(actualSnapshot, getExpectedEscalationGameBytecodeSnapshot(actualSnapshot))
+	assert.deepStrictEqual(actualSnapshot, getExpectedEscalationGameBytecodeSnapshot(actualSnapshot), 'EscalationGame bytecode changed; review the change and refresh the snapshot with bun run update:escalation-game-bytecode-snapshot')
 })

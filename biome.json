@@ -1,5 +1,5 @@
 {
-	"$schema": "https://biomejs.dev/schemas/2.4.10/schema.json",
+	"$schema": "https://biomejs.dev/schemas/2.3.11/schema.json",
 	"vcs": {
 		"enabled": true,
 		"clientKind": "git",
@@ -7,7 +7,7 @@
 	},
 	"files": {
 		"ignoreUnknown": false,
-		"experimentalScannerIgnores": ["solidity/ts/testSupport/simulator/types/wire-types.js"]
+		"includes": ["**", "!**/node_modules", "!**/vendor", "!**/dist", "!coverage", "!reth", "!testnetwork", "!docs/assets/js", "!shared/*/js", "!ui/*/js", "!solidity/artifacts", "!solidity/contracts", "!solidity/js", "!solidity/ts/testSupport/simulator/types/wire-types.js"]
 	},
 	"formatter": {
 		"enabled": true,
@@ -37,41 +37,26 @@
 				"noUselessElse": "error",
 				"noNonNullAssertion": "error",
 				"useDefaultSwitchClause": "error",
-				"useNodeAssertStrict": "error"
+				"useNodeAssertStrict": "error",
+				"noRestrictedImports": {
+					"level": "error",
+					"options": {
+						"paths": {
+							"viem": "Import EVM primitives through the shared boundary ('@zoltar/core-shared/evm/ethereum', or 'src/ethereum.ts' inside AugurScan) instead of viem or abitype.",
+							"abitype": "Import EVM primitives through the shared boundary ('@zoltar/core-shared/evm/ethereum', or 'src/ethereum.ts' inside AugurScan) instead of viem or abitype."
+						},
+						"patterns": [
+							{
+								"group": ["viem/**", "abitype/**"],
+								"message": "Import EVM primitives through the shared boundary ('@zoltar/core-shared/evm/ethereum', or 'src/ethereum.ts' inside AugurScan) instead of viem or abitype."
+							}
+						]
+					}
+				}
 			}
 		}
 	},
 	"overrides": [
-		{
-			"includes": [
-				"docs/assets/js/chartRuntime.js",
-				"docs/assets/js/docsData.js",
-				"docs/assets/js/docsSearchData.js",
-				"docs/assets/js/docsShell.js",
-				"docs/assets/js/responsiveDocs.js",
-				"docs/assets/js/interactiveTools.js",
-				"docs/assets/js/invariantExplorer.js",
-				"docs/assets/js/mmrProofPlanner.js",
-				"docs/assets/js/auctionClearing.js",
-				"docs/assets/js/deploymentMaskDecoder.js",
-				"docs/assets/js/openOracleTools.js"
-			],
-			"formatter": {
-				"enabled": false
-			},
-			"linter": {
-				"enabled": false
-			}
-		},
-		{
-			"includes": ["solidity/ts/testSupport/simulator/types/wire-types.js"],
-			"formatter": {
-				"enabled": false
-			},
-			"linter": {
-				"enabled": false
-			}
-		},
 		{
 			"includes": ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"],
 			"linter": {

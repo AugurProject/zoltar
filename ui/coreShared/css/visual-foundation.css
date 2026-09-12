@@ -1,0 +1,112 @@
+/* Shared visual behavior. Applications retain their own shells and composition. */
+html {
+	font-size: 16px;
+}
+
+body,
+button,
+input,
+select,
+textarea {
+	font-family: var(--font-family-sans);
+}
+
+body {
+	font-size: var(--font-body);
+}
+
+main {
+	width: min(var(--content-max), 100%);
+	padding-inline: var(--gutter-desktop);
+}
+
+h1,
+h2,
+h3,
+h4,
+label,
+button,
+nav {
+	font-family: var(--font-family-sans);
+}
+
+.brand,
+.brand-name,
+.application-title {
+	font-family: var(--font-family-serif);
+}
+
+button,
+[role="button"],
+input,
+select,
+textarea,
+summary,
+a.primary-action,
+a.secondary-action,
+.view-tab {
+	min-height: var(--touch-target-min);
+}
+
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+	box-shadow: var(--focus-ring);
+}
+
+:where(address, code, pre, .address, .hash, .transaction-hash, .identifier-value) {
+	font-family: var(--font-family-mono);
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}
+
+:where(table, .fact-list, .metric-grid, .data-grid) {
+	font-variant-numeric: tabular-nums;
+}
+
+:where(.detail, .meta, .metadata, .status, .badge, td, th, dt, dd) {
+	font-size: max(0.8125rem, 1em);
+}
+
+.section,
+.section-block,
+.overview-panel,
+.route-workflow-panel {
+	border-radius: var(--radius-section);
+	box-shadow: none;
+}
+
+.section :where(.section, .section-block, .overview-panel, .route-workflow-panel),
+.section-block :where(.section, .section-block, .overview-panel, .route-workflow-panel) {
+	border-inline: 0;
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
+}
+
+[aria-busy="true"] {
+	cursor: progress;
+}
+
+@media (max-width: 64rem) {
+	main {
+		padding-inline: var(--gutter-tablet);
+	}
+}
+
+@media (max-width: 48rem) {
+	main {
+		padding-inline: var(--gutter-mobile);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		scroll-behavior: auto !important;
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+	}
+}

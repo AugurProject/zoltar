@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { parseDecimalInput } from '../lib/decimal.js'
+import { parseDecimalInput } from '../forms/decimal.js'
 
 void describe('decimal helpers', () => {
 	void test('parseDecimalInput accepts trimmed decimals and normalizes leading or trailing dots', () => {

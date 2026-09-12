@@ -4,12 +4,13 @@ import { mkdir, open, opendir, rename, rm } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { getAddress, zeroAddress, type Address, type Hash, type Hex } from '@zoltar/bot-shared/ethereum'
 import type { QuestionSnapshot } from '../operations/types.ts'
+import { assertExactKeys as assertExactRequiredAndOptionalKeys, normalizedHash32 as hash, requiredRecord, uint256String as unsignedIntegerString } from '../state/validators.ts'
 
 export const IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION = 3
-export const IMMUTABLE_TOPOLOGY_SEGMENT_BYTES = 32 * 1024 * 1024
-export const IMMUTABLE_TOPOLOGY_MANIFEST_BYTES = 64 * 1024
-export const IMMUTABLE_TOPOLOGY_MAXIMUM_COMMITTED_BYTES = 64 * 1024 * 1024
-export const IMMUTABLE_TOPOLOGY_MAXIMUM_RESIDENT_ITEMS = 100_000
+const IMMUTABLE_TOPOLOGY_SEGMENT_BYTES = 32 * 1024 * 1024
+const IMMUTABLE_TOPOLOGY_MANIFEST_BYTES = 64 * 1024
+const IMMUTABLE_TOPOLOGY_MAXIMUM_COMMITTED_BYTES = 64 * 1024 * 1024
+const IMMUTABLE_TOPOLOGY_MAXIMUM_RESIDENT_ITEMS = 100_000
 export const IMMUTABLE_TOPOLOGY_MAXIMUM_QUESTION_LABEL_UTF8_BYTES = 4 * 1024 * 1024
 export const IMMUTABLE_TOPOLOGY_MAXIMUM_RECORD_BYTES = IMMUTABLE_TOPOLOGY_SEGMENT_BYTES - 1024
 
@@ -25,17 +26,12 @@ const GENERATION_NAME = /^[0-9a-f]{64}$/
 const TEMPORARY_GENERATION_NAME = /^\.tmp-[0-9]+-[0-9a-f-]+$/
 const TEMPORARY_POINTER_NAME = /^\.current-[0-9]+-[0-9a-f-]+\.json$/
 const CHUNK_FILE = /^(pairs|pool-deployments|questions|universe-children|vault-cursors|vaults)-(0|[1-9]\d*)-([0-9a-f]{64})\.json$/
-const UNSIGNED_INTEGER = /^(?:0|[1-9]\d*)$/
 const configuredResidentLimitErrors = new WeakSet<Error>()
 
 function configuredResidentLimitError(message: string) {
 	const error = new Error(message)
 	configuredResidentLimitErrors.add(error)
 	return error
-}
-
-export function immutableTopologyCacheExceedsConfiguredResidentLimits(error: unknown) {
-	return error instanceof Error && configuredResidentLimitErrors.has(error)
 }
 
 export interface ImmutableTopologyIdentity {
@@ -46,6 +42,7 @@ export interface ImmutableTopologyIdentity {
 	securityPoolForker: Address
 	tradingFactory: Address
 	tradingRouter: Address
+	uniswapV3Factory?: Address | undefined
 	weth: Address
 	zoltar: Address
 }
@@ -60,7 +57,7 @@ export interface CachedPoolDeployment {
 	universeId: string
 }
 
-export interface CachedUniverseChildren {
+interface CachedUniverseChildren {
 	childUniverseIds: string[]
 	outcomeIndexes: string[]
 }
@@ -73,7 +70,7 @@ export interface CountedRegistryCursor {
 	retentionMode: 'overflow' | 'resident'
 }
 
-export interface ImmutableTopologyDiscoveryCursors {
+interface ImmutableTopologyDiscoveryCursors {
 	poolDeployments: CountedRegistryCursor
 	questions: CountedRegistryCursor
 	vaultsByPool: Record<string, CountedRegistryCursor>
@@ -166,23 +163,8 @@ type TopologyPointer = {
 	schemaVersion: 1
 }
 
-function requiredRecord(value: unknown, label: string): Record<string, unknown> {
-	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`${label} must be an object`)
-	return value as Record<string, unknown>
-}
-
 function assertExactKeys(record: Record<string, unknown>, required: readonly string[], label: string) {
-	const expected = new Set(required)
-	const unknown = Object.keys(record).filter(key => !expected.has(key))
-	const missing = required.filter(key => !(key in record))
-	if (unknown.length > 0) throw new Error(`${label} contains unsupported field ${unknown[0] ?? 'unknown'}`)
-	if (missing.length > 0) throw new Error(`${label} is missing ${missing[0] ?? 'a required field'}`)
-}
-
-function unsignedIntegerString(value: unknown, label: string) {
-	if (typeof value !== 'string' || !UNSIGNED_INTEGER.test(value)) throw new Error(`${label} must be a canonical unsigned integer string`)
-	if (BigInt(value) >= 1n << 256n) throw new Error(`${label} exceeds uint256`)
-	return value
+	assertExactRequiredAndOptionalKeys(record, required, [], label)
 }
 
 function boundedString(value: unknown, label: string, maximumLength: number) {
@@ -202,11 +184,6 @@ function address(value: unknown, label: string) {
 	} catch (error) {
 		throw new Error(`${label} must be an address`, { cause: error })
 	}
-}
-
-function hash(value: unknown, label: string) {
-	if (typeof value !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(value)) throw new Error(`${label} must be a 32-byte hash`)
-	return value.toLowerCase() as Hash
 }
 
 function parseCountedRegistryCursor(value: unknown, label: string): CountedRegistryCursor {
@@ -254,7 +231,7 @@ function parseManifestDiscoveryCursors(value: unknown, label: string): ManifestD
 function parseIdentity(value: unknown, label: string): ImmutableTopologyIdentity {
 	const identity = requiredRecord(value, label)
 	const addressFields = ['openOracle', 'questionData', 'securityPoolFactory', 'securityPoolForker', 'tradingFactory', 'tradingRouter', 'weth', 'zoltar'] as const
-	assertExactKeys(identity, ['chainId', ...addressFields], label)
+	assertExactKeys(identity, ['chainId', ...addressFields, ...('uniswapV3Factory' in identity ? ['uniswapV3Factory'] : [])], label)
 	if (typeof identity['chainId'] !== 'number' || !Number.isSafeInteger(identity['chainId']) || identity['chainId'] <= 0) throw new Error(`${label}.chainId must be a positive safe integer`)
 	return {
 		chainId: identity['chainId'],
@@ -264,6 +241,7 @@ function parseIdentity(value: unknown, label: string): ImmutableTopologyIdentity
 		securityPoolForker: address(identity['securityPoolForker'], `${label}.securityPoolForker`),
 		tradingFactory: address(identity['tradingFactory'], `${label}.tradingFactory`),
 		tradingRouter: address(identity['tradingRouter'], `${label}.tradingRouter`),
+		...('uniswapV3Factory' in identity ? { uniswapV3Factory: address(identity['uniswapV3Factory'], `${label}.uniswapV3Factory`) } : {}),
 		weth: address(identity['weth'], `${label}.weth`),
 		zoltar: address(identity['zoltar'], `${label}.zoltar`),
 	}
@@ -430,24 +408,15 @@ function assertTopologyResidentBounds(cache: CanonicalImmutableTopologyCache, li
 	}
 }
 
-export function validateImmutableTopologyCache(value: CanonicalImmutableTopologyCache, limits?: ImmutableTopologyResidentLimits) {
+function validateImmutableTopologyCache(value: CanonicalImmutableTopologyCache, limits?: ImmutableTopologyResidentLimits) {
 	const cache = parseTopologyCache(value)
 	assertTopologyResidentBounds(cache, limits)
 	return cache
 }
 
 function sameIdentity(left: ImmutableTopologyIdentity, right: ImmutableTopologyIdentity) {
-	return (
-		left.chainId === right.chainId &&
-		left.openOracle.toLowerCase() === right.openOracle.toLowerCase() &&
-		left.questionData.toLowerCase() === right.questionData.toLowerCase() &&
-		left.securityPoolFactory.toLowerCase() === right.securityPoolFactory.toLowerCase() &&
-		left.securityPoolForker.toLowerCase() === right.securityPoolForker.toLowerCase() &&
-		left.tradingFactory.toLowerCase() === right.tradingFactory.toLowerCase() &&
-		left.tradingRouter.toLowerCase() === right.tradingRouter.toLowerCase() &&
-		left.weth.toLowerCase() === right.weth.toLowerCase() &&
-		left.zoltar.toLowerCase() === right.zoltar.toLowerCase()
-	)
+	const addressFields = ['openOracle', 'questionData', 'securityPoolFactory', 'securityPoolForker', 'tradingFactory', 'tradingRouter', 'uniswapV3Factory', 'weth', 'zoltar'] as const
+	return left.chainId === right.chainId && addressFields.every(field => left[field]?.toLowerCase() === right[field]?.toLowerCase())
 }
 
 function sha256(value: string | Uint8Array) {
@@ -531,7 +500,7 @@ async function syncDirectory(path: string) {
 	}
 }
 
-export function immutableTopologySidecarDirectory(statePath: string) {
+function immutableTopologySidecarDirectory(statePath: string) {
 	return `${resolve(statePath)}.immutable-topology-v1`
 }
 
@@ -878,7 +847,7 @@ async function loadGeneration(statePath: string, digest: Hex, expectedIdentity: 
 	return cache
 }
 
-export async function loadImmutableTopologyCache(statePath: string, expectedIdentity: ImmutableTopologyIdentity, limits?: ImmutableTopologyResidentLimits) {
+async function loadImmutableTopologyCache(statePath: string, expectedIdentity: ImmutableTopologyIdentity, limits?: ImmutableTopologyResidentLimits) {
 	const storePath = immutableTopologySidecarDirectory(statePath)
 	try {
 		await ownerDirectory(storePath, 'Immutable topology store')
@@ -1061,5 +1030,14 @@ export async function saveImmutableTopologyCache(statePath: string, identity: Im
 	} catch (error) {
 		if (!renamedGeneration) await rm(temporaryPath, { force: true, recursive: true })
 		throw error
+	}
+}
+
+export async function loadImmutableTopologyCacheWithinLimits(parameters: { identity: ImmutableTopologyIdentity; limits: ImmutableTopologyResidentLimits; previous?: CanonicalImmutableTopologyCache; statePath: string }) {
+	try {
+		return parameters.previous === undefined ? await loadImmutableTopologyCache(parameters.statePath, parameters.identity, parameters.limits) : validateImmutableTopologyCache(parameters.previous, parameters.limits)
+	} catch (error) {
+		if (!(error instanceof Error && configuredResidentLimitErrors.has(error))) throw error
+		return undefined
 	}
 }

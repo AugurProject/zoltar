@@ -1,7 +1,29 @@
 import { timingSafeEqual } from 'node:crypto'
 import { isIP } from 'node:net'
+import type { JsonValue } from '../ethereum.ts'
 
 const MAXIMUM_DASHBOARD_JSON_BYTES = 1024 * 1024
+
+export function dashboardSecurityHeaders(contentType: string) {
+	return {
+		'cache-control': 'no-store',
+		'content-security-policy': "default-src 'self'; connect-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'",
+		'content-type': contentType,
+		'cross-origin-resource-policy': 'same-origin',
+		'permissions-policy': 'camera=(), geolocation=(), microphone=(), payment=(), usb=()',
+		'referrer-policy': 'no-referrer',
+		'x-content-type-options': 'nosniff',
+		'x-frame-options': 'DENY',
+	}
+}
+
+export function dashboardJson(value: unknown, status = 200) {
+	return Response.json(value, { headers: dashboardSecurityHeaders('application/json; charset=utf-8'), status })
+}
+
+export function closingDashboardJson(value: unknown) {
+	return Response.json(value, { headers: { ...dashboardSecurityHeaders('application/json; charset=utf-8'), connection: 'close' } })
+}
 
 function normalizeDashboardAuthority(authority: string) {
 	if (authority !== authority.trim() || authority === '') throw new Error('Dashboard public authority must be a non-empty host with no surrounding whitespace')
@@ -80,7 +102,7 @@ export function dashboardAuthenticationChallenge() {
 	return { 'www-authenticate': 'Basic realm="Zoltar bot", charset="UTF-8"' }
 }
 
-export async function boundedDashboardJson(request: Request) {
+export async function boundedDashboardJson(request: Request): Promise<JsonValue> {
 	if (request.headers.get('content-type')?.split(';')[0] !== 'application/json') throw new Error('Content-Type must be application/json')
 	const declaredLength = request.headers.get('content-length')
 	if (declaredLength !== null && Number(declaredLength) > MAXIMUM_DASHBOARD_JSON_BYTES) throw new Error('JSON request body exceeds 1 MiB')
@@ -106,5 +128,5 @@ export async function boundedDashboardJson(request: Request) {
 		body.set(chunk, offset)
 		offset += chunk.byteLength
 	}
-	return JSON.parse(new TextDecoder().decode(body)) as unknown
+	return JSON.parse(new TextDecoder().decode(body)) as JsonValue
 }

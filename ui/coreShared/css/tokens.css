@@ -7,12 +7,17 @@
 	--text: rgba(231, 243, 255, 1);
 	--text-secondary: rgba(207, 221, 238, 0.9);
 	--muted: rgba(160, 181, 207, 0.76);
+	--text-muted: rgba(174, 193, 215, 0.82);
 	--value: rgba(208, 231, 245, 1);
 	--color-white: rgba(255, 255, 255, 1);
 	--color-white-08: rgba(255, 255, 255, 0.08);
 
 	/* accents */
-	--accent: rgba(56, 213, 255, 1);
+	--accent-zoltar: rgba(56, 213, 255, 1);
+	--accent-statoblast: rgba(160, 124, 255, 1);
+	--accent-trading: rgba(183, 238, 81, 1);
+	--accent-augurscan: rgba(45, 212, 191, 1);
+	--accent: var(--accent-zoltar);
 	--accent-strong: rgba(124, 108, 255, 1);
 	--accent-faint: rgba(56, 213, 255, 0.08);
 	--accent-soft: rgba(56, 213, 255, 0.12);
@@ -36,6 +41,7 @@
 	--surface-raised: rgba(11, 22, 37, 0.9);
 	--surface-sunken: rgba(10, 20, 36, 0.22);
 	--surface-overlay: rgba(5, 11, 21, 0.86);
+	--surface-interactive: rgba(15, 31, 49, 0.92);
 	--surface-card: rgba(12, 23, 38, 0.9);
 	--surface-card-end: rgba(8, 16, 27, 0.94);
 	--surface-inset: rgba(9, 18, 31, 0.58);
@@ -59,12 +65,18 @@
 	--danger-soft: rgba(255, 112, 143, 0.12);
 	--danger-border: rgba(255, 112, 143, 0.28);
 	--danger-border-strong: rgba(255, 112, 143, 0.56);
+	--status-pending: rgba(104, 190, 255, 1);
+	--status-loading: rgba(145, 170, 199, 1);
+	--outcome-yes: rgba(91, 214, 168, 1);
+	--outcome-no: rgba(241, 130, 151, 1);
+	--outcome-invalid: rgba(191, 159, 255, 1);
 
 	/* controls */
 	--control-bg: rgba(10, 20, 36, 0.18);
 	--control-border: rgba(154, 179, 211, 0.28);
 	--input-border: rgba(154, 179, 211, 0.3);
 	--focus: rgba(56, 213, 255, 0.48);
+	--focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 38%, transparent);
 	--primary-button-bg: rgba(19, 127, 159, 1);
 	--primary-button-bg-hover: rgba(22, 148, 184, 1);
 	--primary-button-border: rgba(42, 181, 216, 1);
@@ -77,6 +89,8 @@
 	--disabled-primary-button-border: rgba(75, 127, 145, 1);
 	--disabled-primary-button-text: rgba(185, 207, 222, 1);
 	--touch-target-min: 2.75rem;
+	--control-height-compact: 2.75rem;
+	--control-height: 3rem;
 
 	/* spacing */
 	--space-1: 0.25rem;
@@ -85,8 +99,8 @@
 	--space-4: 1rem;
 	--space-5: 1.5rem;
 	--space-6: 2rem;
-	--space-7: 2.75rem;
-	--space-8: 3.5rem;
+	--space-7: 3rem;
+	--space-8: 3rem;
 
 	/* font families */
 	--font-family-sans: "Aptos", "Segoe UI", "Helvetica Neue", sans-serif;
@@ -95,10 +109,10 @@
 
 	/* type scale — fixed */
 	--font-xs: 0.75rem;
-	--font-label: 0.75rem;
-	--font-chip: 0.76rem;
-	--font-tab: 0.8rem;
-	--font-subtab: 0.84rem;
+	--font-label: 0.8125rem;
+	--font-chip: 0.8125rem;
+	--font-tab: 0.875rem;
+	--font-subtab: 0.875rem;
 	--font-caption: 0.86rem;
 	--font-address: 0.86rem;
 	--font-value: 0.96rem;
@@ -106,13 +120,13 @@
 	--font-body: 1rem;
 	--font-base: 1.03rem;
 	--font-card-title: 1.12rem;
-	--font-small: 0.82rem;
+	--font-small: 0.8125rem;
 	--font-detail: 0.88rem;
 	--font-h4: 0.96rem;
 	--font-section-title: 1.08rem;
 
 	/* type scale — responsive */
-	--font-h1: clamp(2.6rem, 6vw, 4.85rem);
+	--font-h1: clamp(1.625rem, 3vw, 2.5rem);
 	--font-h2: clamp(1.35rem, 1.9vw, 2rem);
 	--font-h2-panel: clamp(1.18rem, 1.45vw, 1.7rem);
 	--font-h2-wallet: clamp(0.88rem, 1.05vw, 1.15rem);
@@ -156,13 +170,39 @@
 	--truth-auction-rep-highlight: rgba(137, 208, 168, 1);
 
 	/* component hierarchy */
-	--radius-shell: 1rem;
-	--radius-section: 0.8rem;
-	--radius-panel: 0.8rem;
-	--radius-record: 0.85rem;
-	--radius-control: 0.6rem;
+	--radius-compact: 0.25rem;
+	--radius-normal: 0.5rem;
+	--radius-overlay: 0.75rem;
+	--radius-shell: var(--radius-overlay);
+	--radius-section: var(--radius-normal);
+	--radius-panel: var(--radius-normal);
+	--radius-record: var(--radius-normal);
+	--radius-control: var(--radius-compact);
 	--divider-subtle: rgba(159, 180, 207, 0.1);
 	--divider-strong: rgba(159, 180, 207, 0.18);
 	--border-active: rgba(56, 213, 255, 0.52);
 	--text-primary: var(--text);
+
+	/* Shared layout contracts; each application retains its own shell. */
+	--content-max: 90rem;
+	--gutter-desktop: 2rem;
+	--gutter-tablet: 1.5rem;
+	--gutter-mobile: 1rem;
+	--breakpoint-wide: 90rem;
+	--breakpoint-desktop: 64rem;
+	--breakpoint-tablet: 48rem;
+	--breakpoint-mobile: 24.375rem;
+}
+
+:root[data-product="zoltar"] {
+	--accent: var(--accent-zoltar);
+}
+
+:root[data-product="statoblast"] {
+	--accent: var(--accent-statoblast);
+}
+
+:root[data-product="trading"] {
+	--accent: var(--accent-trading);
+	--focus: color-mix(in srgb, var(--accent-trading) 52%, transparent);
 }

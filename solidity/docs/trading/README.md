@@ -7,7 +7,7 @@ The pair trades only YES and NO. Every ETH entry creates a complete set, swaps t
 ## Project map
 
 - `../../contracts/trading/` — immutable-fee factory, ERC-20 LP pair, stateless router, full-precision math, interfaces, and harnesses compiled by the main Solidity pipeline.
-- `../../../shared/ts/trading/` — exact bigint quote math, maximum insured-exit search, transaction builders, simulations, and result extraction.
+- `../../../shared/trading/ts/trading/` — exact bigint quote math, maximum insured-exit search, transaction builders, simulations, and result extraction.
 - `../../ts/trading/deploy/` — deployment from an existing Zoltar core manifest.
 - `../../../ui/trading/` — standalone Preact application, deterministic visual fixtures, and walletless TEVM simulation.
 - This directory contains tutorials, task guides, reference, and design explanation.
@@ -22,7 +22,7 @@ docker network inspect zoltar >/dev/null 2>&1 || docker network create zoltar
 docker compose up --build --force-recreate
 ```
 
-Open `http://localhost:4163/#/markets`. The client derives the trading factory and router addresses from the canonical Zoltar deployment and checks their code through the default public RPC. If either deterministic contract is missing, the deployment screen is shown automatically. Connect a wallet, then deploy the trading factory and router in order. The **Settings** control beside the wallet lets you override the network or RPC URL without making configuration part of the setup steps. SecurityPools remain browseable without a trading pool; deploy and initialize one from the selected pool when needed. Browser-led deployment uses a fixed 0.30% trading fee. Trading and trading-pool deployment surfaces show the deployed immutable fee as a percentage.
+Open `http://localhost:4163/#/market`. The client derives the trading factory and router addresses from the canonical Zoltar deployment and checks their code through the default public RPC. If either deterministic contract is missing, the deployment screen is shown automatically. Connect a wallet, then deploy the trading factory and router in order. The **Settings** control beside the wallet lets you override the network or RPC URL without making configuration part of the setup steps. Each workflow starts from a SecurityPool address; `#/markets` browses the trading markets of the selected universe and `#/security-pools` browses SecurityPools that do not have a trading market yet, so deploy and initialize one from there when needed. Browser-led deployment uses a fixed 0.30% trading fee. Trading and trading-pool deployment surfaces show the deployed immutable fee as a percentage. Share, complete-set, and LP amounts are shown as their settlement-collateral value in ETH at the pool's current rate.
 
 On Windows, run `ui/trading/start.bat` to start the same Compose command. The final image runs as an unprivileged user and exposes a health check at `/`.
 
@@ -38,7 +38,7 @@ bun run trading:ui:build
 bun run app:serve:trading
 ```
 
-Open `http://localhost:4163/?simulate=1#/markets` for the shared browser-local TEVM simulator. Use `?demo=1` for the deterministic visual fixtures used by browser QA.
+Open `http://localhost:4163/?simulate=1#/market` for the shared browser-local TEVM simulator. Use `?demo=1` for the deterministic visual fixtures used by browser QA.
 
 See [Local development](tutorials/local-development.md) for the compile and external-node workflow.
 
@@ -46,7 +46,7 @@ The Docker image copies the canonical mainnet and Sepolia core deployment addres
 
 ### Live deployment
 
-Without Docker, `bun run trading:ui:build` includes the same deterministic wallet deployment setup. The live client derives and verifies the canonical trading contracts, discovers SecurityPools in bounded pages, displays their exact pairs, settings, and status, and obtains authoritative simulations before entry, exit, liquidity, settlement, and explicit fork-migration transactions. Fork migration loads the fork question and supports labeled categorical branches or arbitrary scalar ticks, including multi-branch migration for each INVALID, YES, or NO source balance. Each simulation is pinned to a canonical block hash; the client rejects a quote when either its block number or hash changes, including a same-height block replacement, and re-simulates immediately before wallet submission.
+Without Docker, `bun run trading:ui:build` includes the same deterministic wallet deployment setup. The live client derives and verifies the canonical trading contracts, opens SecurityPools by address, discovers them in bounded pages on the browse routes, refreshes market data and wallet balances in the background, displays their exact pairs, settings, and status, and obtains authoritative simulations before entry, exit, liquidity, settlement, and explicit fork-migration transactions. Fork migration loads the fork question and supports labeled categorical branches or arbitrary scalar ticks, including multi-branch migration for each INVALID, YES, or NO source balance. Each simulation is pinned to a canonical block hash; the client rejects a quote when either its block number or hash changes, including a same-height block replacement, and re-simulates immediately before wallet submission.
 
 ## Commands
 

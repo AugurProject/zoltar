@@ -1,7 +1,7 @@
-import { encodeFunctionData, keccak256, toHex, type Abi, type Address, type Hash, type Hex } from '@zoltar/bot-shared/ethereum'
+import { encodeFunctionData, keccak256, toHex, type Abi, type AbiValue, type Address, type Hash, type Hex } from '@zoltar/bot-shared/ethereum'
 import type { EcosystemSnapshot, EligibilityResult, OperationEvidence, OperationPlan, OperationPlanDraft, OperationPreflightCall, OperationStep, OperationWalletAssetDebit, PlanningOptions, TokenInventory } from './types.ts'
 
-export const ONE_ATTO_TOKEN = 1n
+const ONE_ATTO_TOKEN = 1n
 export const ONE_TOKEN = 10n ** 18n
 
 export function eventTopic(signature: string): Hash {
@@ -71,7 +71,7 @@ export function encodeStep(parameters: {
 	label: string
 	abi: Abi
 	functionName: string
-	args?: readonly unknown[] | undefined
+	args?: readonly AbiValue[] | undefined
 	to: Address
 	value?: bigint | undefined
 	gasLimit?: bigint | undefined
@@ -101,7 +101,7 @@ export function encodeStep(parameters: {
 	return step
 }
 
-export function encodePreflightCall(parameters: { abi: Abi; args?: readonly unknown[] | undefined; caller: Address; expectedResult: Hex; functionName: string; label: string; to: Address; value?: bigint | undefined }): OperationPreflightCall {
+export function encodePreflightCall(parameters: { abi: Abi; args?: readonly AbiValue[] | undefined; caller: Address; expectedResult: Hex; functionName: string; label: string; to: Address; value?: bigint | undefined }): OperationPreflightCall {
 	const data = parameters.args === undefined ? encodeFunctionData({ abi: parameters.abi, functionName: parameters.functionName }) : encodeFunctionData({ abi: parameters.abi, args: parameters.args, functionName: parameters.functionName })
 	return {
 		caller: parameters.caller,

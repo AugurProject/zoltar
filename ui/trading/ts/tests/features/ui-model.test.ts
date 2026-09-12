@@ -1,78 +1,55 @@
 import { describe, expect, test } from 'bun:test'
-import { bigintToSafeNumber, formatBpsMultiplier, formatCapacityOwnership, formatEthPerShare, formatOutcomeAmount, formatShareAmount, formatUnits, parseUnits, parseUnitsOrUndefined } from '../../lib/format.js'
-import { liveWorkflowRoutePresentation, marketRouteSubtitle, portfolioRouteSubtitle } from '../../features/LiveTrading.js'
-import { liquidityApprovalRequired, liquidityOperationAvailable } from '../../features/LiveLiquidityControls.js'
+import { getAddress } from '@zoltar/core-shared/evm/ethereum'
+import { bigintToSafeNumber, formatBpsMultiplier, formatCapacityOwnership, formatRoundedUnits, formatUnits, parseUnits, parseUnitsOrUndefined } from '../../lib/format.js'
+import { attoSharesToCollateralAttoEth, averagePriceBps, collateralAttoEthToAttoShares, formatCollateralEth, formatCompleteSetValue, formatLpValue, formatOutcomeValue } from '../../lib/shareValue.js'
 import { forkMigrationBatchBlocker, forkMigrationBatchWarning, insuredExitLimitMessage, migrationSimulationSummary, settlementBalanceLabel, settlementInputBlocker } from '../../features/LiveSettlementModel.js'
-import { roundedProbabilityLabels } from '../../components/ProbabilityBar.js'
-import {
-	collateMarketDiscoveryResults,
-	createSecurityPoolDeploymentIndex,
-	liveBalancesForMarket,
-	liveQuestionFields,
-	marketAcceptsNewRisk,
-	marketDiscoveryPage,
-	marketDiscoveryRanges,
-	publicErrorMessage,
-	marketNewRiskBlocker,
-	mapWithConcurrency,
-	maximumAfterSlippage,
-	minimumAfterSlippage,
-	retainApprovedMaximum,
-	retainApprovedMinimum,
-	refreshSecurityPoolDeploymentIndex,
-	refreshSecurityPoolDeploymentEventIndex,
-	registryBlockAnchorIsCanonical,
-	registrySnapshotBlockParameters,
-	requireTransactionSlippageBps,
-	requireTransactionValidityMinutes,
-	selectUniverseDeployments,
-	settlementAvailability,
-	shareBalanceScope,
-	type LiveMarket,
-} from '../../protocol/live.js'
-import {
-	approvalFailureTransition,
-	broadcastUncertainMessage,
-	discoveryCommitAllowed,
-	failedSubmissionTransition,
-	livePairInitialized,
-	marketSelectionAfterDiscovery,
-	parseSlippageBps,
-	parseTransactionValidityMinutes,
-	positionControlsWorkflowLocked,
-	securityPoolAddressFromRoute,
-} from '../../features/liveTradingControllerHelpers.js'
-import { initialQuestionClockTimestamp, questionClockShouldPollAgain } from '../../features/live/useLiveTradingState.js'
+import { createSecurityPoolDeploymentIndex, liveBalancesForMarket, marketAcceptsNewRisk, publicErrorMessage, marketNewRiskBlocker, mapWithConcurrency, refreshSecurityPoolDeploymentEventIndex, registryBlockAnchorIsCanonical, settlementAvailability, shareBalanceScope, type LiveMarket } from '../../protocol/live.js'
+import { maximumAfterSlippage, minimumAfterSlippage, requireTransactionSlippageBps, requireTransactionValidityMinutes, retainApprovedMaximum, retainApprovedMinimum } from '../../protocol/tradeQuote.js'
+import { broadcastUncertainMessage, discoveryCommitAllowed, failedSubmissionTransition, livePairInitialized, parseSlippageBps, parseTransactionValidityMinutes, positionControlsWorkflowLocked, securityPoolAddressFromRoute } from '../../features/liveTradingControllerHelpers.js'
+import { isTradingBrowseRoute, isTradingLookupRoute, tradingBrowseRouteFor, tradingRouting } from '../../lib/routing.js'
+import { liveWorkflowRoutePresentation, portfolioRouteSubtitle } from '../../features/live/routePresentation.js'
+import { liquidityOperationAvailable } from '../../features/live/useLiquidityWorkflowController.js'
 
 describe('standalone trading UI model', () => {
-	test('uses the deterministic chain timestamp instead of the host wall clock in simulation', () => {
-		expect(initialQuestionClockTimestamp(1_735_689_600n, 1_800_000_000_000)).toBe(1_735_689_600n)
-		expect(initialQuestionClockTimestamp(undefined, 1_800_000_000_000)).toBe(1_800_000_000n)
-	})
-
-	test('stops polling the live chain clock at the exact question end boundary', () => {
-		expect(questionClockShouldPollAgain(undefined, 100n)).toBeTrue()
-		expect(questionClockShouldPollAgain(101n, 100n)).toBeTrue()
-		expect(questionClockShouldPollAgain(100n, 100n)).toBeFalse()
-		expect(questionClockShouldPollAgain(100n, 101n)).toBeFalse()
-	})
-
 	test('keeps the shared simulation banner as the only Browser Simulation disclosure', () => {
-		expect(marketRouteSubtitle('Browser Simulation', true)).toBe('Conditional prices only')
-		expect(marketRouteSubtitle('Ethereum Mainnet', false)).toBe('Ethereum Mainnet · conditional prices only')
+		expect(liveWorkflowRoutePresentation('markets', 'Browser Simulation', true).description).toBeUndefined()
+		expect(liveWorkflowRoutePresentation('markets', 'Ethereum Mainnet', false).description).toBe('Ethereum Mainnet')
 		expect(portfolioRouteSubtitle('Browser Simulation', true)).toBeUndefined()
 		expect(portfolioRouteSubtitle('Ethereum Mainnet', false)).toBe('Ethereum Mainnet')
 	})
 
-	test('presents liquidity as its own workflow instead of repeating the markets header', () => {
+	test('presents liquidity as its own workflow instead of repeating the market header', () => {
 		expect(liveWorkflowRoutePresentation('liquidity', 'Browser Simulation', true)).toEqual({
-			description: 'Manage YES and NO liquidity for the selected SecurityPool.',
+			description: undefined,
 			title: 'Liquidity',
 		})
-		expect(liveWorkflowRoutePresentation('markets', 'Ethereum Mainnet', false)).toEqual({
-			description: 'Ethereum Mainnet · conditional prices only',
-			title: 'Markets',
+		expect(liveWorkflowRoutePresentation('market', 'Ethereum Mainnet', false)).toEqual({
+			description: 'Ethereum Mainnet',
+			title: 'Market',
 		})
+		expect(liveWorkflowRoutePresentation('create-market', 'Ethereum Mainnet', false).title).toBe('Create new market')
+	})
+
+	test('invalidates new-risk liquidity operations at the exact end boundary while preserving removal', () => {
+		const market = { endTime: 2_000n, systemState: 0, awaitingForkContinuation: false, universeForkTime: 0n, questionOutcome: 3, tradingStatus: 0 }
+		expect(liquidityOperationAvailable('initialize', market, 1_999n)).toBe(true)
+		expect(liquidityOperationAvailable('add', market, 2_000n)).toBe(false)
+		expect(liquidityOperationAvailable('initialize', market, 2_001n)).toBe(false)
+		expect(liquidityOperationAvailable('remove', market, 2_001n)).toBe(true)
+	})
+
+	test('defaults to the address lookup and pairs each lookup workflow with its own browse route', () => {
+		expect(tradingRouting.resolve('#/')).toBe('market')
+		expect(tradingRouting.resolve('')).toBe('market')
+		expect(tradingRouting.resolve('#/markets')).toBe('markets')
+		expect(tradingRouting.resolve('#/security-pools')).toBe('security-pools')
+		expect(isTradingLookupRoute('market')).toBeTrue()
+		expect(isTradingLookupRoute('markets')).toBeFalse()
+		expect(isTradingBrowseRoute('security-pools')).toBeTrue()
+		expect(isTradingBrowseRoute('security-pool/0x1111111111111111111111111111111111111111')).toBeFalse()
+		expect(tradingBrowseRouteFor('market')).toBe('markets')
+		expect(tradingBrowseRouteFor('liquidity')).toBe('markets')
+		expect(tradingBrowseRouteFor('create-market')).toBe('security-pools')
 	})
 
 	test('validates a registry anchor at the current tip without requesting historical blocks', async () => {
@@ -96,17 +73,6 @@ describe('standalone trading UI model', () => {
 		expect(await registryBlockAnchorIsCanonical(anchor, async () => ({ blockNumber: 13n, blockHash: `0x${'13'.repeat(32)}` }))).toBe(true)
 	})
 
-	test('uses latest registry reads only for the deterministic simulator', () => {
-		const anchor = { blockNumber: 12n, blockHash: `0x${'12'.repeat(32)}` }
-		expect(registrySnapshotBlockParameters(anchor, true)).toEqual({})
-		expect(registrySnapshotBlockParameters(anchor, false)).toEqual({ blockHash: anchor.blockHash })
-	})
-
-	test('reads question metadata from the ABI tuple preserved by the worker boundary', () => {
-		const question = ['Will this resolve?', 'Seeded market', 10n, 20n] as const
-		expect(liveQuestionFields(question)).toEqual({ description: 'Seeded market', endTime: 20n, title: 'Will this resolve?' })
-	})
-
 	test('keeps provider identifiers out of public error copy', () => {
 		const pool = `0x${'12'.repeat(20)}`
 		const shareToken = `0x${'34'.repeat(20)}`
@@ -121,28 +87,8 @@ describe('standalone trading UI model', () => {
 	})
 	test('parses only exact security pool detail routes', () => {
 		const address = `0x${'AB'.repeat(20)}`
-		expect(securityPoolAddressFromRoute(`security-pool/${address}`)).toBe(address.toLowerCase())
+		expect(securityPoolAddressFromRoute(`security-pool/${address}`)).toBe(getAddress(address))
 		expect(securityPoolAddressFromRoute('security-pool/not-an-address')).toBeUndefined()
-	})
-
-	test('invalidates new-risk liquidity operations at the exact end boundary while preserving removal', () => {
-		const market = { endTime: 2_000n, systemState: 0, awaitingForkContinuation: false, universeForkTime: 0n, questionOutcome: 3, tradingStatus: 0 }
-		expect(liquidityOperationAvailable('initialize', market, 1_999n)).toBe(true)
-		expect(liquidityOperationAvailable('add', market, 2_000n)).toBe(false)
-		expect(liquidityOperationAvailable('initialize', market, 2_001n)).toBe(false)
-		expect(liquidityOperationAvailable('remove', market, 2_001n)).toBe(true)
-	})
-
-	test('keeps displayed conditional prices complementary after rounding', () => {
-		expect(roundedProbabilityLabels(70.25)).toEqual({ yes: '70.3', no: '29.7' })
-		expect(roundedProbabilityLabels(50.05)).toEqual({ yes: '50.1', no: '49.9' })
-	})
-
-	test('requires LP approval only after authoritative balances are ready', () => {
-		for (const state of ['disconnected', 'loading', 'error'] as const) expect(liquidityApprovalRequired(state, 'remove', 1n, 0n)).toBeFalse()
-		expect(liquidityApprovalRequired('ready', 'remove', 1n, 0n)).toBeTrue()
-		expect(liquidityApprovalRequired('ready', 'remove', 1n, 1n)).toBeFalse()
-		expect(liquidityApprovalRequired('ready', 'add', 1n, 0n)).toBeFalse()
 	})
 
 	test('parses and formats chain quantities without numbers', () => {
@@ -156,7 +102,6 @@ describe('standalone trading UI model', () => {
 		expect(parseUnitsOrUndefined('../70', 2)).toBeUndefined()
 		expect(() => formatUnits(1n, -1)).toThrow('Decimals must be a nonnegative safe integer')
 		expect(() => formatUnits(1n, 18, -1)).toThrow('Maximum fraction digits must be a nonnegative safe integer')
-		expect(() => formatEthPerShare(1n, 2n, 0)).toThrow('Maximum significant digits must be a positive safe integer')
 	})
 
 	test('converts to a number only after proving the bigint is safe', () => {
@@ -164,14 +109,43 @@ describe('standalone trading UI model', () => {
 		expect(() => bigintToSafeNumber(9_007_199_254_740_992n)).toThrow('safe integer range')
 	})
 
-	test('formats 18-decimal shares and Statoblast settings for display', () => {
-		expect(formatShareAmount(1_234_500_000_000_000_000n)).toBe('1.2345 shares')
-		expect(formatOutcomeAmount(10n * 10n ** 18n, 'YES')).toBe('10 YES')
+	test('formats Statoblast settings for display', () => {
 		expect(formatBpsMultiplier(25_000n)).toBe('2.5×')
 		expect(formatCapacityOwnership(10_000n * 10n ** 18n, 9_500n * 10n ** 18n)).toBe('10,000 / 9,500 REP')
-		expect(formatEthPerShare(12_342_500_000_000_000_000n, 12_500_000_000_000_000_000n)).toBe('0.9874 ETH / share')
 		expect(formatUnits(999_999_996_848_000_000n, 18, 12)).toBe('0.999999996848')
 		expect(formatUnits(999_999_977_880_000_000n, 18, 12)).toBe('0.99999997788')
+		expect(formatRoundedUnits(999_999_996_848_000_000n)).toBe('1')
+		expect(formatRoundedUnits(4_999_500_000_000_000n)).toBe('0.005')
+		expect(formatRoundedUnits(4_949_999_999_999_999n)).toBe('0.0049')
+		expect(formatRoundedUnits(-4_999_500_000_000_000n)).toBe('-0.005')
+		expect(formatRoundedUnits(123n, 18, 18)).toBe('0.000000000000000123')
+	})
+
+	test('presents share amounts as their settlement-collateral value at the pool rate', () => {
+		// The pool mints 10^18 attoShares per attoETH at genesis, so raw share counts are unreadable without the rate.
+		const genesis = { settlementCollateralAttoEth: 0n, shareTokenSupplyAttoShares: 0n }
+		expect(attoSharesToCollateralAttoEth(5n * 10n ** 33n, genesis)).toBe(5n * 10n ** 15n)
+		expect(collateralAttoEthToAttoShares(5n * 10n ** 15n, genesis)).toBe(5n * 10n ** 33n)
+		const rate = { settlementCollateralAttoEth: 9n * 10n ** 18n, shareTokenSupplyAttoShares: 10n * 10n ** 36n }
+		expect(attoSharesToCollateralAttoEth(10n ** 36n, rate)).toBe(9n * 10n ** 17n)
+		expect(collateralAttoEthToAttoShares(9n * 10n ** 17n, rate)).toBe(10n ** 36n)
+		expect(collateralAttoEthToAttoShares(1n, rate)).toBe(1_111_111_111_111_111_111n)
+		expect(collateralAttoEthToAttoShares(1n, { settlementCollateralAttoEth: 0n, shareTokenSupplyAttoShares: 1n })).toBeUndefined()
+		expect(() => attoSharesToCollateralAttoEth(-1n, rate)).toThrow('cannot be negative')
+		expect(formatOutcomeValue(10n ** 36n, 'YES', rate)).toBe('0.9 YES')
+		expect(formatCompleteSetValue(10n ** 36n, rate)).toBe('0.9 complete sets')
+		// Exactly 0.005 ETH of shares under a rate that no longer divides evenly still reads as 0.005, while limits round down.
+		const drifted = { settlementCollateralAttoEth: 9_999_999_999_999_999n, shareTokenSupplyAttoShares: 10n * 10n ** 36n }
+		const shares = collateralAttoEthToAttoShares(5n * 10n ** 15n, drifted)
+		if (shares === undefined) throw new Error('Drifted rate must convert')
+		expect(formatOutcomeValue(shares, 'YES', drifted)).toBe('0.005 YES')
+		expect(formatOutcomeValue(shares, 'YES', drifted, 4, 'down')).toBe('0.0049 YES')
+		expect(formatCollateralEth(shares, drifted, 'down')).toBe('0.0049 ETH')
+		expect(formatCollateralEth(shares, drifted)).toBe('0.005 ETH')
+		expect(formatCompleteSetValue(10n ** 36n, { settlementCollateralAttoEth: 10n ** 18n, shareTokenSupplyAttoShares: 10n ** 36n })).toBe('1 complete set')
+		expect(formatLpValue(10n ** 36n, rate)).toBe('0.9 LP')
+		expect(averagePriceBps(6n * 10n ** 17n, 10n ** 36n, rate)).toBe(6_666n)
+		expect(averagePriceBps(1n, 0n, rate)).toBeUndefined()
 	})
 
 	test('derives displayed transaction bounds with LP-favoring rounding', () => {
@@ -225,63 +199,6 @@ describe('standalone trading UI model', () => {
 		expect(marketNewRiskBlocker({ ...open, tradingStatus: undefined, questionOutcome: 0 }, 1_000n)).toBe('Resolved INVALID')
 		expect(marketNewRiskBlocker({ ...open, tradingStatus: undefined }, 2_000n)).toBe('Question ended')
 		expect(marketNewRiskBlocker({ ...open, tradingStatus: 0 }, 2_000n)).toBe('Question ended')
-	})
-
-	test('bounds market discovery into deterministic RPC pages', () => {
-		expect(marketDiscoveryRanges(0n)).toEqual([])
-		expect(marketDiscoveryRanges(51n)).toEqual([
-			{ start: 0n, count: 25n },
-			{ start: 25n, count: 25n },
-			{ start: 50n, count: 1n },
-		])
-		expect(() => marketDiscoveryRanges(1n, 0n)).toThrow('Invalid market discovery range')
-		expect(marketDiscoveryPage(51n, 25n)).toEqual({ start: 25n, count: 25n, previousStart: 0n, nextStart: 50n })
-		expect(marketDiscoveryPage(51n, 99n)).toEqual({ start: 50n, count: 1n, previousStart: 25n, nextStart: undefined })
-		expect(marketDiscoveryPage(0n)).toEqual({ start: 0n, count: 0n, previousStart: undefined, nextStart: undefined })
-		expect(() => marketDiscoveryPage(1n, -1n)).toThrow('Invalid market discovery page')
-	})
-
-	test('enumerates universes while selecting pools from only one universe', () => {
-		const deployments = [
-			{ universeId: 1n, pool: 'first' },
-			{ universeId: 2n, pool: 'child' },
-			{ universeId: 1n, pool: 'second' },
-		]
-		const firstUniverseDeployments = [
-			{ universeId: 1n, pool: 'first' },
-			{ universeId: 1n, pool: 'second' },
-		]
-		expect(selectUniverseDeployments(deployments, 1n)).toEqual({ universeIds: [1n, 2n], selectedUniverseId: 1n, selectedDeployments: firstUniverseDeployments })
-		expect(selectUniverseDeployments(deployments, 99n)).toEqual({ universeIds: [1n, 2n], selectedUniverseId: 1n, selectedDeployments: firstUniverseDeployments })
-		expect(selectUniverseDeployments([], undefined)).toEqual({ universeIds: [], selectedUniverseId: undefined, selectedDeployments: [] })
-	})
-
-	test('increments the deployment index without rereading known registry ranges', async () => {
-		const index = createSecurityPoolDeploymentIndex<{ universeId: bigint; pool: string }, string>()
-		let total = 5n
-		let anchor = 'block-1'
-		const deployments = Array.from({ length: 7 }, (_value, position) => ({ universeId: position < 3 ? 1n : 2n, pool: `pool-${position}` }))
-		const rangeReads: Array<{ start: bigint; count: bigint }> = []
-		const loadRange = async (start: bigint, count: bigint, _anchor: string) => {
-			rangeReads.push({ start, count })
-			return deployments.slice(bigintToSafeNumber(start, 'test range start'), bigintToSafeNumber(start + count, 'test range end'))
-		}
-		const loadSnapshot = async () => ({ anchor, total })
-		const isAnchorCanonical = async () => true
-		expect(await refreshSecurityPoolDeploymentIndex(index, 'chain:factory', loadSnapshot, isAnchorCanonical, loadRange, 2n)).toEqual(deployments.slice(0, 5))
-		expect(rangeReads).toEqual([
-			{ start: 0n, count: 2n },
-			{ start: 2n, count: 2n },
-			{ start: 4n, count: 1n },
-		])
-		rangeReads.length = 0
-		expect(await refreshSecurityPoolDeploymentIndex(index, 'chain:factory', loadSnapshot, isAnchorCanonical, loadRange, 2n)).toEqual(deployments.slice(0, 5))
-		expect(rangeReads).toEqual([])
-		rangeReads.length = 0
-		total = 7n
-		anchor = 'block-2'
-		expect(await refreshSecurityPoolDeploymentIndex(index, 'chain:factory', loadSnapshot, isAnchorCanonical, loadRange, 2n)).toEqual(deployments)
-		expect(rangeReads).toEqual([{ start: 5n, count: 2n }])
 	})
 
 	test('increments a selected-universe event index without rescanning historical blocks', async () => {
@@ -396,127 +313,6 @@ describe('standalone trading UI model', () => {
 		])
 	})
 
-	test('clears populated orphan indexes when their canonical rebuild fails', async () => {
-		const eventIndex = createSecurityPoolDeploymentIndex<string, { blockHash: `0x${string}`; blockNumber: bigint }>()
-		const orphanEventAnchor = { blockHash: `0x${'11'.repeat(32)}` as const, blockNumber: 100n }
-		await refreshSecurityPoolDeploymentEventIndex(
-			eventIndex,
-			'chain:factory:universe-7',
-			async () => orphanEventAnchor,
-			async () => true,
-			async () => ['orphan-event'],
-		)
-		await expect(
-			refreshSecurityPoolDeploymentEventIndex(
-				eventIndex,
-				'chain:factory:universe-7',
-				async () => {
-					throw new Error('replacement event head unavailable')
-				},
-				async () => false,
-				async () => [],
-			),
-		).rejects.toThrow('replacement event head unavailable')
-		expect(eventIndex.deployments).toEqual([])
-		expect(eventIndex.anchor).toBeUndefined()
-
-		const rangeIndex = createSecurityPoolDeploymentIndex<string, string>()
-		await refreshSecurityPoolDeploymentIndex(
-			rangeIndex,
-			'chain:factory',
-			async () => ({ anchor: 'orphan-block', total: 1n }),
-			async () => true,
-			async () => ['orphan-range'],
-		)
-		await expect(
-			refreshSecurityPoolDeploymentIndex(
-				rangeIndex,
-				'chain:factory',
-				async () => {
-					throw new Error('replacement registry unavailable')
-				},
-				async () => false,
-				async () => [],
-			),
-		).rejects.toThrow('replacement registry unavailable')
-		expect(rangeIndex.deployments).toEqual([])
-		expect(rangeIndex.anchor).toBeUndefined()
-	})
-
-	test('serializes deployment-index waiters without duplicate appends', async () => {
-		const index = createSecurityPoolDeploymentIndex<{ universeId: bigint; pool: string }, string>()
-		const deployments = Array.from({ length: 5 }, (_value, position) => ({ universeId: 1n, pool: `pool-${position}` }))
-		let releaseFirstRange: () => void = () => undefined
-		let announceFirstRange: () => void = () => undefined
-		const firstRangeStarted = new Promise<void>(resolve => {
-			announceFirstRange = resolve
-		})
-		const firstRangeGate = new Promise<void>(resolve => {
-			releaseFirstRange = resolve
-		})
-		let activeRangeReads = 0
-		let maximumActiveRangeReads = 0
-		const loadRange = async (start: bigint, count: bigint, _anchor: string) => {
-			activeRangeReads += 1
-			maximumActiveRangeReads = Math.max(maximumActiveRangeReads, activeRangeReads)
-			if (start === 0n) {
-				announceFirstRange()
-				await firstRangeGate
-			}
-			await Promise.resolve()
-			activeRangeReads -= 1
-			return deployments.slice(bigintToSafeNumber(start, 'test range start'), bigintToSafeNumber(start + count, 'test range end'))
-		}
-		const isAnchorCanonical = async () => true
-		const first = refreshSecurityPoolDeploymentIndex(index, 'chain:factory', async () => ({ anchor: 'block-1', total: 2n }), isAnchorCanonical, loadRange, 5n)
-		await firstRangeStarted
-		const second = refreshSecurityPoolDeploymentIndex(index, 'chain:factory', async () => ({ anchor: 'block-2', total: 4n }), isAnchorCanonical, loadRange, 5n)
-		const third = refreshSecurityPoolDeploymentIndex(index, 'chain:factory', async () => ({ anchor: 'block-3', total: 5n }), isAnchorCanonical, loadRange, 5n)
-		releaseFirstRange()
-		await Promise.all([first, second, third])
-		expect(maximumActiveRangeReads).toBe(1)
-		expect(index.deployments).toEqual(deployments)
-	})
-
-	test('reloads the deployment index after an equal-count registry replacement', async () => {
-		const index = createSecurityPoolDeploymentIndex<{ universeId: bigint; pool: string }, string>()
-		let deployments = [
-			{ universeId: 1n, pool: 'parent' },
-			{ universeId: 2n, pool: 'orphaned-child' },
-		]
-		let canonicalAnchor = 'block-1'
-		const loadRange = async (start: bigint, count: bigint, _anchor: string) => deployments.slice(bigintToSafeNumber(start, 'test range start'), bigintToSafeNumber(start + count, 'test range end'))
-		const isAnchorCanonical = async (candidate: string) => candidate === canonicalAnchor
-		expect(await refreshSecurityPoolDeploymentIndex(index, 'chain:factory', async () => ({ anchor: canonicalAnchor, total: 2n }), isAnchorCanonical, loadRange, 25n)).toEqual(deployments)
-		deployments = [
-			{ universeId: 3n, pool: 'canonical-parent' },
-			{ universeId: 2n, pool: 'orphaned-child' },
-		]
-		canonicalAnchor = 'block-2'
-		expect(await refreshSecurityPoolDeploymentIndex(index, 'chain:factory', async () => ({ anchor: canonicalAnchor, total: 2n }), isAnchorCanonical, loadRange, 25n)).toEqual(deployments)
-	})
-
-	test('accepts a canonical registry snapshot when the chain tip advances during loading', async () => {
-		const index = createSecurityPoolDeploymentIndex<{ universeId: bigint; pool: string }, string>()
-		const deployments = [{ universeId: 1n, pool: 'parent' }]
-		let tip = 'block-1'
-		const canonicalAnchors = new Set(['block-1', 'block-2'])
-		const loadRange = async (start: bigint, count: bigint, _anchor: string) => {
-			tip = 'block-2'
-			return deployments.slice(bigintToSafeNumber(start, 'test range start'), bigintToSafeNumber(start + count, 'test range end'))
-		}
-		const result = await refreshSecurityPoolDeploymentIndex(
-			index,
-			'chain:factory',
-			async () => ({ anchor: tip, total: 1n }),
-			async anchor => canonicalAnchors.has(anchor),
-			loadRange,
-		)
-		expect(tip).toBe('block-2')
-		expect(result).toEqual(deployments)
-		expect(index.anchor).toBe('block-1')
-	})
-
 	test('bounds asynchronous portfolio work while preserving registry order', async () => {
 		let active = 0
 		let maximumActive = 0
@@ -529,21 +325,6 @@ describe('standalone trading UI model', () => {
 		})
 		expect(maximumActive).toBe(2)
 		expect(results).toEqual([0, 10, 20, 30, 40])
-	})
-
-	test('isolates one failed market read into an explicit unavailable row', () => {
-		const pool = `0x${'12'.repeat(20)}` as const
-		const shareToken = `0x${'34'.repeat(20)}` as const
-		const deployments = [{ securityPool: pool, shareToken, universeId: 7n, questionId: 9n, statoblastSecurityMultiplierBps: 20_000n, initialReportPriorityFeeAttoEthPerGas: 1n }]
-		const results = [{ status: 'rejected', reason: new Error(`Contract read failed at ${pool}: share token ${shareToken}, token ID 1793, call arguments unavailable`) }] satisfies PromiseRejectedResult[]
-		const [market] = collateMarketDiscoveryResults(deployments, results, 30)
-		if (market === undefined) throw new Error('Expected unavailable market row')
-		expect(market.pool).toBe(pool)
-		expect(market.loadError).toBe('Market reads failed')
-		expect(market.loadError).not.toContain(pool)
-		expect(market.loadError).not.toContain(shareToken)
-		expect(market.loadError).not.toContain('1793')
-		expect(marketNewRiskBlocker(market, 0n)).toBe('Market data unavailable')
 	})
 
 	test('scopes portfolio share balances to one exact SecurityPool token namespace', () => {
@@ -571,7 +352,7 @@ describe('standalone trading UI model', () => {
 	test('never exposes balances under another SecurityPool identity', () => {
 		const firstMarket = { pool: `0x${'11'.repeat(20)}`, shareToken: `0x${'22'.repeat(20)}`, universeId: 7n } as const
 		const secondMarket = { pool: `0x${'33'.repeat(20)}`, shareToken: `0x${'44'.repeat(20)}`, universeId: 8n } as const
-		const firstBalances = { scope: shareBalanceScope(firstMarket), invalid: 1n, yes: 2n, no: 3n, lp: 4n, approved: true, lpAllowance: 5n }
+		const firstBalances = { scope: shareBalanceScope(firstMarket), invalid: 1n, yes: 2n, no: 3n, lp: 4n }
 		expect(liveBalancesForMarket(firstBalances, firstMarket)).toBe(firstBalances)
 		expect(liveBalancesForMarket(firstBalances, secondMarket)).toBeUndefined()
 	})
@@ -599,31 +380,25 @@ describe('standalone trading UI model', () => {
 		expect(forkMigrationBatchWarning([ready, { ...ready, outcomeIndex: 3n }])).toBeUndefined()
 	})
 
-	test('preserves same-page market context but selects the first pool after navigation', () => {
-		const first = `0x${'11'.repeat(20)}` as const
-		const selected = `0x${'22'.repeat(20)}` as const
-		const markets = [{ pool: first }, { pool: selected }]
-		expect(marketSelectionAfterDiscovery(markets, selected, true)).toBe(selected)
-		expect(marketSelectionAfterDiscovery(markets, selected, false)).toBe(first)
-		expect(marketSelectionAfterDiscovery([{ pool: first }], selected, true)).toBe(first)
-	})
-
 	test('explains every settlement input that keeps simulation disabled', () => {
-		expect(settlementInputBlocker('redeem-complete-set', true, 5n, undefined, [], 'YES', 1n)).toBe('Enter a valid positive complete-set share amount')
-		expect(settlementInputBlocker('redeem-complete-set', true, 5n * 10n ** 18n, 6n * 10n ** 18n, [], 'YES', 1n)).toContain('complete-set balance of 5 shares')
-		expect(settlementInputBlocker('migrate-shares', true, 0n, undefined, [], 'YES', 1n)).toContain('at least one child branch')
-		expect(settlementInputBlocker('migrate-shares', true, 0n, undefined, [0n], 'YES', 0n)).toBe('The selected YES balance is zero')
-		expect(settlementInputBlocker('redeem-winning-shares', false, 0n, undefined, [], 'NO', 0n)).toContain('unavailable')
+		const unit = { settlementCollateralAttoEth: 10n ** 18n, shareTokenSupplyAttoShares: 10n ** 18n }
+		expect(settlementInputBlocker('redeem-complete-set', true, 5n, undefined, [], 'YES', 1n, unit)).toBe('Enter a valid positive complete-set value')
+		expect(settlementInputBlocker('redeem-complete-set', true, 5n * 10n ** 18n, 6n * 10n ** 18n, [], 'YES', 1n, unit)).toContain('complete-set balance of 5 ETH')
+		expect(settlementInputBlocker('redeem-complete-set', true, 5n * 10n ** 36n, 10n ** 17n, [], 'YES', 1n, { settlementCollateralAttoEth: 10n ** 18n, shareTokenSupplyAttoShares: 10n ** 36n })).toBe('Amount too small to redeem any ETH')
+		expect(settlementInputBlocker('migrate-shares', true, 0n, undefined, [], 'YES', 1n, unit)).toContain('at least one child branch')
+		expect(settlementInputBlocker('migrate-shares', true, 0n, undefined, [0n], 'YES', 0n, unit)).toBe('The selected YES balance is zero')
+		expect(settlementInputBlocker('redeem-winning-shares', false, 0n, undefined, [], 'NO', 0n, unit)).toContain('unavailable')
 	})
 
 	test('never presents unavailable settlement balances as zero', () => {
-		expect(settlementBalanceLabel('disconnected', undefined)).toBe('Not loaded')
-		expect(settlementBalanceLabel('loading', 0n)).toBe('Loading…')
-		expect(settlementBalanceLabel('error', 0n)).toBe('Unavailable')
-		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n)).toBe('5 shares')
-		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, 'YES')).toBe('5 YES')
-		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, 'NO')).toBe('5 NO')
-		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, 'INVALID')).toBe('5 INVALID')
+		const unit = { settlementCollateralAttoEth: 10n ** 18n, shareTokenSupplyAttoShares: 10n ** 18n }
+		expect(settlementBalanceLabel('disconnected', undefined, unit)).toBe('Not loaded')
+		expect(settlementBalanceLabel('loading', 0n, unit)).toBe('Loading…')
+		expect(settlementBalanceLabel('error', 0n, unit)).toBe('Unavailable')
+		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit)).toBe('5 ETH')
+		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit, 'YES')).toBe('5 YES')
+		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit, 'NO')).toBe('5 NO')
+		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit, 'INVALID')).toBe('5 INVALID')
 	})
 
 	test('discards failed submission quotes so every workflow can simulate again', () => {
@@ -636,24 +411,9 @@ describe('standalone trading UI model', () => {
 		const warning = broadcastUncertainMessage('Settlement transaction', hash)
 		expect(warning).toBe(`Settlement transaction ${hash} was broadcast, but its receipt could not be confirmed. Do not resubmit. Check this hash in your wallet or configured block explorer, then reload only after its final status is known.`)
 		expect(positionControlsWorkflowLocked('error', warning)).toBeTrue()
-		expect(positionControlsWorkflowLocked('approval-pending', undefined)).toBeTrue()
-		expect(positionControlsWorkflowLocked('approval-confirmed', undefined)).toBeFalse()
 		expect(positionControlsWorkflowLocked('preparing', undefined)).toBeTrue()
 		expect(positionControlsWorkflowLocked('submitting', undefined)).toBeTrue()
 		expect(positionControlsWorkflowLocked('idle', undefined)).toBeFalse()
-	})
-
-	test('keeps both approval workflows locked after an unconfirmed broadcast', () => {
-		const hash = `0x${'77'.repeat(32)}` as const
-		for (const label of ['Share-token approval', 'LP-token approval']) {
-			const transition = approvalFailureTransition(label, hash, false, new Error('receipt unavailable'), 'Approval failed')
-			expect(transition.keepLocked).toBeTrue()
-			expect(transition.state).toBe('pending')
-			expect(transition.message).toBeUndefined()
-			expect(transition.warning).toContain(hash)
-			expect(transition.warning).toContain('Do not resubmit')
-		}
-		expect(approvalFailureTransition('LP-token approval', hash, true, new Error('reverted'), 'Approval failed')).toEqual({ keepLocked: false, state: 'error', message: 'reverted', warning: undefined })
 	})
 
 	test('does not let an older discovery response replace an active workflow', () => {
@@ -672,7 +432,8 @@ describe('standalone trading UI model', () => {
 	})
 
 	test('attributes insured-exit limits to INVALID only when INVALID is insufficient', () => {
-		expect(insuredExitLimitMessage(11n * 10n ** 18n, 5n * 10n ** 18n, 10n * 10n ** 18n)).toContain('long-share balance and pair liquidity')
-		expect(insuredExitLimitMessage(11n * 10n ** 18n, 4n * 10n ** 18n, 4n * 10n ** 18n)).toContain('INVALID balance covers only 4 complete sets')
+		const unit = { settlementCollateralAttoEth: 10n ** 18n, shareTokenSupplyAttoShares: 10n ** 18n }
+		expect(insuredExitLimitMessage(11n * 10n ** 18n, 5n * 10n ** 18n, 10n * 10n ** 18n, unit)).toContain('insured exit of at most 5 ETH')
+		expect(insuredExitLimitMessage(11n * 10n ** 18n, 4n * 10n ** 18n, 4n * 10n ** 18n, unit)).toContain('INVALID balance covers only 4 ETH of complete sets')
 	})
 })

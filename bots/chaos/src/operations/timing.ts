@@ -2,18 +2,16 @@ import { DEFAULT_TRANSACTION_VALIDITY_BLOCKS } from '@zoltar/bot-shared/executio
 import type { PlanningOptions } from './types.ts'
 
 /** Ethereum finalizes checkpoints by epoch; three epochs leave one full epoch beyond the normal two-epoch path. */
-export const ETHEREUM_SLOTS_PER_EPOCH = 32n
-export const CONSERVATIVE_FINALITY_EPOCHS = 3n
+const ETHEREUM_SLOTS_PER_EPOCH = 32n
+const CONSERVATIVE_FINALITY_EPOCHS = 3n
 /** Planning horizon only. Receipt disposition uses the RPC consensus `finalized` checkpoint directly. */
-export const CONSENSUS_FINALITY_HORIZON_BLOCKS = ETHEREUM_SLOTS_PER_EPOCH * CONSERVATIVE_FINALITY_EPOCHS
-/** Retained as the execution timing name consumed by workflow planners and local confirmation-depth fixtures. */
-export const EXECUTOR_FINALITY_BLOCKS = CONSENSUS_FINALITY_HORIZON_BLOCKS
-export const MINIMUM_TIMESTAMP_SAFETY_SECONDS = 60n
-export const MAXIMUM_WORKFLOW_PREREQUISITE_COUNT = 2
+export const EXECUTOR_FINALITY_BLOCKS = ETHEREUM_SLOTS_PER_EPOCH * CONSERVATIVE_FINALITY_EPOCHS
+const MINIMUM_TIMESTAMP_SAFETY_SECONDS = 60n
+const MAXIMUM_WORKFLOW_PREREQUISITE_COUNT = 2
 /** Leaves one block after every supported prerequisite consumes its full transport and finality horizon. */
 export const MINIMUM_WORKFLOW_VALIDITY_BLOCKS = Number(BigInt(MAXIMUM_WORKFLOW_PREREQUISITE_COUNT) * (DEFAULT_TRANSACTION_VALIDITY_BLOCKS + EXECUTOR_FINALITY_BLOCKS) + 1n)
 
-export function assertWorkflowPrerequisiteLimit(plan: { id: string; steps: readonly unknown[] }) {
+export function assertWorkflowPrerequisiteLimit(plan: { id: string; steps: readonly object[] }) {
 	const prerequisiteCount = Math.max(0, plan.steps.length - 1)
 	if (prerequisiteCount > MAXIMUM_WORKFLOW_PREREQUISITE_COUNT) {
 		throw new Error(`${plan.id} has ${prerequisiteCount.toString()} pre-terminal steps; the configured workflow validity floor supports at most ${MAXIMUM_WORKFLOW_PREREQUISITE_COUNT.toString()} pre-terminal steps`)

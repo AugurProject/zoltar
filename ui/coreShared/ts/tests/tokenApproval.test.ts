@@ -1,10 +1,12 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { maxUint256 } from '@zoltar/shared/ethereum'
-import { deriveTokenApprovalRequirement, formatTokenApprovalNeededMessage, formatTokenApprovalPartialMessage, formatTokenApprovalUnavailableMessage, maxUint200, parseTokenApprovalAmountInput, resolveTokenApprovalStatusMessage, shouldDisplayMaxTokenApprovalAmount } from '../lib/tokenApproval.js'
+import { maxUint256 } from '@zoltar/core-shared/evm/ethereum'
+import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, parseTokenApprovalAmountInput, resolveTokenApprovalStatusMessage, shouldDisplayMaxTokenApprovalAmount } from '../transactions/tokenApproval.js'
 
 const ONE = 10n ** 18n
+// Approved amounts above uint200 are displayed as unlimited.
+const maxUint200 = 2n ** 200n - 1n
 
 describe('token approval helpers', () => {
 	test('derives the approval requirement and exact default target from required and approved amounts', () => {
@@ -44,10 +46,15 @@ describe('token approval helpers', () => {
 		})
 	})
 
-	test('flags approvals above uint200 max for compact max display', () => {
-		expect(shouldDisplayMaxTokenApprovalAmount(maxUint200)).toBe(false)
-		expect(shouldDisplayMaxTokenApprovalAmount(maxUint200 + 1n)).toBe(true)
-		expect(shouldDisplayMaxTokenApprovalAmount(undefined)).toBe(false)
+	test.each([
+		{ amount: undefined, expected: false, label: 'unavailable' },
+		{ amount: 0n, expected: false, label: 'zero' },
+		{ amount: maxUint200 - 1n, expected: false, label: 'below maxUint200' },
+		{ amount: maxUint200, expected: false, label: 'maxUint200 boundary' },
+		{ amount: maxUint200 + 1n, expected: true, label: 'above maxUint200' },
+		{ amount: maxUint256, expected: true, label: 'maxUint256' },
+	])('reports $label as max display: $expected', ({ amount, expected }) => {
+		expect(shouldDisplayMaxTokenApprovalAmount(amount)).toBe(expected)
 	})
 
 	test('parses custom approval input using token decimals', () => {
@@ -65,8 +72,13 @@ describe('token approval helpers', () => {
 		const requirement = deriveTokenApprovalRequirement(25n * ONE, 24n * ONE)
 
 		expect(
-			formatTokenApprovalNeededMessage({
+			resolveTokenApprovalStatusMessage({
 				actionLabel: 'submitting the initial report',
+				amountValidationMessage: undefined,
+				draftAmount: '',
+				guardMessage: undefined,
+				nextApprovalAmount: undefined,
+				requiredAmount: 25n * ONE,
 				requirement,
 				tokenLabel: 'ETH',
 				tokenUnits: 18,
@@ -74,10 +86,14 @@ describe('token approval helpers', () => {
 		).toBe('Need 1\u00a0more\u00a0ETH approved before submitting the initial report.')
 
 		expect(
-			formatTokenApprovalPartialMessage({
+			resolveTokenApprovalStatusMessage({
 				actionLabel: 'submitting the initial report',
-				nextApprovedAmount: 24_500_000_000_000_000_000n,
+				amountValidationMessage: undefined,
+				draftAmount: '24.5',
+				guardMessage: undefined,
+				nextApprovalAmount: 24_500_000_000_000_000_000n,
 				requiredAmount: 25n * ONE,
+				requirement,
 				tokenLabel: 'ETH',
 				tokenUnits: 18,
 			}),

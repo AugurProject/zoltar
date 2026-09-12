@@ -1,0 +1,33 @@
+{
+	"name": "@zoltar/trading-shared",
+	"version": "1.0.0",
+	"type": "module",
+	"exports": {
+		"./trading/math": {
+			"types": "./ts/trading/math.ts",
+			"bun": "./ts/trading/math.ts",
+			"default": "./js/trading/math.js"
+		},
+		"./trading/positions": {
+			"types": "./ts/trading/positions.ts",
+			"bun": "./ts/trading/positions.ts",
+			"default": "./js/trading/positions.js"
+		}
+	},
+	"files": [
+		"js",
+		"ts"
+	],
+	"scripts": {
+		"build": "bun x tsc --project tsconfig.json"
+	},
+	"devDependencies": {
+		"typescript": "5.8.2"
+	},
+	"dependencies": {
+		"@zoltar/core-shared": "file:../core"
+	},
+	"overrides": {
+		"@zoltar/core-shared": "file:../core"
+	}
+}

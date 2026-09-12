@@ -5,11 +5,41 @@ import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { ISecurityPool, SystemState, LiquidationExecutionRequest } from './interfaces/ISecurityPool.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { SecurityPoolSettlementDelegate } from './SecurityPoolSettlementDelegate.sol';
+import { IERC20 } from '../IERC20.sol';
+import { SafeERC20Ops } from '../SafeERC20Ops.sol';
+import { IERC20PermitAuthorization, IERC3009Authorization } from '../vendor/authorization/IERC20Authorization.sol';
+import { SecurityPoolEventEmitter } from './SecurityPoolEventEmitter.sol';
+import { AccountingReason } from './interfaces/ISecurityPool.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
 import { IShareToken } from './interfaces/IShareToken.sol';
 
+interface ISecurityPoolRepDepositContext {
+	function attoRepToBackingUnits(uint256 attoRepAmount) external view returns (uint256);
+	function backingUnitsToAttoRep(uint256 backingUnits) external view returns (uint256);
+	function eventEmitter() external view returns (SecurityPoolEventEmitter);
+	function isEscalationResolved() external view returns (bool);
+	function questionId() external view returns (uint256);
+	function questionData() external view returns (address);
+	function repToken() external view returns (address);
+	function universeId() external view returns (uint248);
+	function updateRetentionRate() external;
+	function updateVaultFees(address vault) external;
+	function zoltar() external view returns (address);
+}
+
+interface IZoltarForkState {
+	function getForkTime(uint248 universeId) external view returns (uint256);
+}
+
+interface IQuestionEndTime {
+	function getQuestionEndDate(uint256 questionId) external view returns (uint256);
+}
+
 contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
+	using SafeERC20Ops for IERC20;
+
+	event RepDepositedToVault(address indexed vault, uint256 attoRepAmount, uint256 repBackingUnits, uint256 totalRepBackingUnits);
 	event AwaitingForkContinuationSet(bool awaitingForkContinuation);
 	event VaultBadDebtRecorded(address indexed targetVault, uint256 badDebtAttoEth, uint256 resultingVaultBadDebtAttoEth, uint256 resultingTotalBadDebtAttoEth);
 	event VaultDepositTargetHealthFactorRecorded(address indexed vault, uint256 depositTargetHealthFactorBps, uint256 capacityOwnershipAttoRep, uint256 resultingTotalCapacityOwnershipAttoRep);
@@ -21,6 +51,10 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 	}
 
 	function setVaultCapacity(address vault, uint256 nextCapacityOwnershipAttoRep, uint256 depositTargetHealthFactorBps) external {
+		_setVaultCapacity(vault, nextCapacityOwnershipAttoRep, depositTargetHealthFactorBps);
+	}
+
+	function _setVaultCapacity(address vault, uint256 nextCapacityOwnershipAttoRep, uint256 depositTargetHealthFactorBps) private {
 		uint256 previousCapacityOwnershipAttoRep = securityVaults[vault].capacityOwnershipAttoRep;
 		// Reducing the denominator would reallocate live settlement collateral to every remaining vault.
 		if (nextCapacityOwnershipAttoRep < previousCapacityOwnershipAttoRep)
@@ -37,6 +71,71 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		securityVaults[vault].capacityOwnershipAttoRep = nextCapacityOwnershipAttoRep;
 		if (depositTargetHealthFactorBps != 0) {
 			emit VaultDepositTargetHealthFactorRecorded(vault, depositTargetHealthFactorBps, nextCapacityOwnershipAttoRep, totalCapacityOwnershipAttoRep);
+		}
+	}
+
+	function depositRepToVault(uint256 attoRepAmount, uint256 targetHealthFactorBps) external {
+		_depositRepToVault(msg.sender, attoRepAmount, targetHealthFactorBps, true);
+	}
+
+	function depositRepToVaultWithPermit(uint256 attoRepAmount, uint256 targetHealthFactorBps, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external {
+		ISecurityPoolRepDepositContext pool = ISecurityPoolRepDepositContext(address(this));
+		require(pool.universeId() != 0, 'Genesis REP does not support permit');
+		address token = pool.repToken();
+		try
+			IERC20PermitAuthorization(token).permit(msg.sender, address(this), attoRepAmount, deadline, v, r, s)
+		{} catch {
+			require(IERC20(token).allowance(msg.sender, address(this)) >= attoRepAmount, 'Vault permit and allowance insufficient');
+		}
+		_depositRepToVault(msg.sender, attoRepAmount, targetHealthFactorBps, true);
+	}
+
+	function depositRepToVaultWithAuthorization(address owner, uint256 attoRepAmount, uint256 targetHealthFactorBps, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external {
+		ISecurityPoolRepDepositContext pool = ISecurityPoolRepDepositContext(address(this));
+		require(pool.universeId() != 0, 'Genesis REP does not support authorization');
+		bytes32 operationHash = keccak256(abi.encode(this.depositRepToVaultWithAuthorization.selector, owner, pool.universeId(), pool.questionId(), attoRepAmount, targetHealthFactorBps));
+		IERC3009Authorization(pool.repToken()).receiveWithAuthorization(owner, address(this), attoRepAmount, validAfter, validBefore, keccak256(abi.encode(nonce, operationHash, owner)), v, r, s);
+		_depositRepToVault(owner, attoRepAmount, targetHealthFactorBps, false);
+	}
+
+	function _depositRepToVault(address vault, uint256 attoRepAmount, uint256 targetHealthFactorBps, bool transferRep) private {
+		ISecurityPoolRepDepositContext pool = ISecurityPoolRepDepositContext(address(this));
+		if (
+			systemState != SystemState.Operational ||
+			IZoltarForkState(pool.zoltar()).getForkTime(pool.universeId()) != 0
+		) revert();
+		if (pool.isEscalationResolved()) revert();
+		if (
+			block.timestamp >= IQuestionEndTime(pool.questionData()).getQuestionEndDate(pool.questionId()) &&
+			!postEndVaultAdmissionAllowed
+		) revert();
+		require(attoRepAmount > 0, 'Zero REP');
+		require(targetHealthFactorBps >= SecurityPoolUtils.BPS_DENOMINATOR, 'HF low');
+		pool.updateVaultFees(vault);
+		uint256 repBackingUnits = pool.attoRepToBackingUnits(attoRepAmount);
+		if (transferRep) IERC20(pool.repToken()).safeTransferFrom(vault, address(this), attoRepAmount);
+		securityVaults[vault].repBackingUnits += repBackingUnits;
+		totalRepBackingUnits += repBackingUnits;
+		require(pool.backingUnitsToAttoRep(securityVaults[vault].repBackingUnits) >= minimumVaultRepDepositAttoRep, 'Vault REP below minimum');
+		uint256 capacityOwnershipAddedAttoRep = Math.mulDiv(attoRepAmount, SecurityPoolUtils.BPS_DENOMINATOR, targetHealthFactorBps);
+		_setVaultCapacity(vault, securityVaults[vault].capacityOwnershipAttoRep + capacityOwnershipAddedAttoRep, targetHealthFactorBps);
+		pool.updateRetentionRate();
+		if (!isKnownVault[vault]) {
+			isKnownVault[vault] = true;
+			vaultAddresses.push(vault);
+		}
+		emit RepDepositedToVault(vault, attoRepAmount, securityVaults[vault].repBackingUnits, totalRepBackingUnits);
+		SecurityPoolEventEmitter emitter = pool.eventEmitter();
+		_delegateEvent(address(emitter), abi.encodeCall(SecurityPoolEventEmitter.emitVaultAccountingCheckpoint, (vault)));
+		_delegateEvent(address(emitter), abi.encodeCall(SecurityPoolEventEmitter.emitPoolAccountingCheckpoint, (AccountingReason.CapacityOwnershipChange, vault)));
+	}
+
+	function _delegateEvent(address emitter, bytes memory callData) private {
+		(bool success, bytes memory result) = emitter.delegatecall(callData);
+		if (!success) {
+			assembly ('memory-safe') {
+				revert(add(result, 0x20), mload(result))
+			}
 		}
 	}
 

@@ -1,6 +1,6 @@
 import type { ComponentChildren } from 'preact'
-import { ChainBlockNumberContext, ChainTimestampContext } from '../../lib/chainTimestamp.js'
-import { getTransactionActionLockReason, type TransactionTrayState } from '../../lib/transactionTray.js'
+import { ChainBlockNumberContext, ChainTimestampContext } from '../../wallet/chainTimestamp.js'
+import { getTransactionActionLockReason, type TransactionTrayState } from '../../transactions/transactionTray.js'
 import { GlobalTransactionPresentationProvider } from '../../components/GlobalTransactionPresentationContext.js'
 import { TransactionActionButtonLockProvider } from '../../components/TransactionActionButton.js'
 import { GlobalTransactionTray } from './GlobalTransactionTray.js'

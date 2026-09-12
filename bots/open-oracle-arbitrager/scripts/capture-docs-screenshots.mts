@@ -1,10 +1,25 @@
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { getAddress, keccak256, toHex } from '#ethereum'
+import { getAddress, keccak256, toHex } from '@zoltar/bot-shared/ethereum'
 import { startDashboardServer } from '#dashboard/dashboard-server'
-import { operatorSnapshot, publicOperatorFailure, publicPollFailure, type OperatorSnapshot, type OperatorState } from '#state/operator-state'
+import { operatorSnapshot, type OperatorSnapshot, type OperatorState } from '#state/operator-state'
+import { publicOperatorFailure, publicPollFailure } from '#state/public-failures'
 import type { PositionRecord } from '#state/position-store'
+
+const SECTION_PAGES = new Map<string | undefined, string>([
+	['operations', 'operations'],
+	['token-market-title', 'markets'],
+	['network-connectivity', 'settings'],
+	['deployment-configuration', 'settings'],
+	['create2-form', 'settings'],
+	['complete-configuration', 'settings'],
+])
+
+function fixtureLastError(attention: string, pollFailureMetadata: boolean, rawRpcFailure: string, rawNonPollFailure: string) {
+	if (attention !== 'error') return undefined
+	return pollFailureMetadata ? rawRpcFailure : rawNonPollFailure
+}
 
 const address = (value: number) => getAddress(`0x${value.toString(16).padStart(40, '0')}`)
 const transactionHash = (label: string) => keccak256(toHex(label))
@@ -187,7 +202,7 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 			const result = await command(
 				'Runtime.evaluate',
 				{
-					expression: `(() => Object.fromEntries(['refresh-button', 'pause-button'].map(id => {
+					expression: `(() => Object.fromEntries(['pause-button'].map(id => {
 						const element = document.getElementById(id)
 						if (!(element instanceof HTMLElement)) return [id, undefined]
 						const rect = element.getBoundingClientRect()
@@ -235,8 +250,7 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 				: []),
 		] as const) {
 			const mobile = name === 'dashboard-network-mobile.png' || name === 'dashboard-markets-mobile.png' || name === 'dashboard-opportunities-mobile.png' || name === 'deployment-mobile.png' || name === 'configuration-mobile.png' || name === 'settings-mobile.png'
-			const fragment =
-				section === undefined ? 'overview' : section === 'operations' ? 'operations' : section === 'token-market-title' ? 'markets' : section === 'network-connectivity' || section === 'deployment-configuration' || section === 'create2-form' || section === 'complete-configuration' ? 'settings' : 'overview'
+			const fragment = SECTION_PAGES.get(section) ?? 'overview'
 			await replacePage(`${origin}/${fragment}`, mobile ? 390 : 1440, mobile ? 844 : 900)
 			await Bun.sleep(750)
 			if (section !== undefined) {
@@ -267,7 +281,7 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 						const navigation = document.querySelector('.section-nav')
 						const activeRect = active?.getBoundingClientRect()
 						const navigationRect = navigation?.getBoundingClientRect()
-						const safetyTargets = ['mode-badge', 'run-status-badge', 'header-network-badge', 'attention-badge', 'refresh-button', 'pause-button'].map(id => document.getElementById(id))
+						const safetyTargets = ['mode-badge', 'run-status-badge', 'header-network-badge', 'attention-badge', 'pause-button'].map(id => document.getElementById(id))
 						return {
 							activeHref: active?.getAttribute('href'),
 							activeVisible: activeRect !== undefined && navigationRect !== undefined && activeRect.left >= navigationRect.left - 1 && activeRect.right <= navigationRect.right + 1,
@@ -1112,8 +1126,7 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 					await replacePage(`${origin}/?status=${retrying ? 'retrying' : 'scheduled'}-disconnect-${mobile ? 'mobile' : 'desktop'}`, width, mobile ? 844 : 900)
 					await Bun.sleep(350)
 					fixtureStateUnavailable = true
-					await command('Runtime.evaluate', { expression: `document.querySelector('#refresh-button')?.click()` }, sessionId)
-					await Bun.sleep(250)
+					await Bun.sleep(2_300)
 					const disconnectedState = await command(
 						'Runtime.evaluate',
 						{
@@ -1155,14 +1168,7 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 						'Runtime.evaluate',
 						{
 							expression: `(() => {
-								const refresh = document.querySelector('#refresh-button')
-								const pause = document.querySelector('#pause-button')
-								const refreshBounds = refresh?.getBoundingClientRect()
-								const pauseBounds = pause?.getBoundingClientRect()
-								const refreshTextRange = document.createRange()
-								if (refresh !== null) refreshTextRange.selectNodeContents(refresh)
-								const refreshTextBounds = refreshTextRange.getBoundingClientRect()
-								const safetyVisible = ['mode-badge', 'run-status-badge', 'header-network-badge', 'attention-badge', 'refresh-button', 'pause-button'].every(id => {
+								const safetyVisible = ['mode-badge', 'run-status-badge', 'header-network-badge', 'attention-badge', 'pause-button'].every(id => {
 									const target = document.getElementById(id)
 									if (!(target instanceof HTMLElement)) return false
 									const rect = target.getBoundingClientRect()
@@ -1178,11 +1184,6 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 									noticeTitle: document.querySelector('#notice-title')?.textContent,
 									confirmDisabled: document.querySelector('#confirm-resume')?.disabled,
 									pauseDisabled: document.querySelector('#pause-button')?.disabled,
-									refreshBusy: document.querySelector('#refresh-button')?.getAttribute('aria-busy'),
-									refreshDisabled: document.querySelector('#refresh-button')?.disabled,
-									refreshTextFits: refreshBounds !== undefined && refreshTextBounds.left >= refreshBounds.left && refreshTextBounds.right <= refreshBounds.right,
-									refreshDoesNotOverlapPause: refreshBounds !== undefined && pauseBounds !== undefined && refreshBounds.right <= pauseBounds.left,
-									refreshText: document.querySelector('#refresh-button')?.textContent,
 									resumeOpen: document.querySelector('#resume-dialog')?.hasAttribute('open'),
 									runStatus: document.querySelector('#run-status-badge')?.textContent,
 									safetyVisible,
@@ -1231,8 +1232,7 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 				await replacePage(`${origin}/?connection=post-success-${mobile ? 'mobile' : 'desktop'}`, width, height)
 				await Bun.sleep(750)
 				fixtureStateUnavailable = true
-				await command('Runtime.evaluate', { expression: `document.querySelector('#refresh-button')?.click()` }, sessionId)
-				await Bun.sleep(250)
+				await Bun.sleep(2_300)
 				const postSuccessFailure = await readConnectionState()
 				if (mobile) assertStableSafetyActions(mobileSafetyActionPositions, await readSafetyActionPositions(), 'Post-success connection failure')
 				if (
@@ -1267,14 +1267,13 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 				if (fixturePauseRequests.length !== pauseRequestCount + 1 || fixturePauseRequests.at(-1) !== true) throw new Error('Emergency Pause did not reach the bot while state polling was unavailable')
 				paused = false
 				fixtureStateUnavailable = false
-				await command('Runtime.evaluate', { expression: `document.querySelector('#refresh-button')?.click()` }, sessionId)
-				await Bun.sleep(250)
+				await Bun.sleep(2_300)
 				const recovery = await readConnectionState()
 				if (
 					typeof recovery !== 'object' ||
 					recovery === null ||
 					!('attentionText' in recovery) ||
-					recovery.attentionText !== 'No blockers' ||
+					recovery.attentionText !== '' ||
 					!('network' in recovery) ||
 					recovery.network !== 'mainnet · 1' ||
 					!('pauseDisabled' in recovery) ||
@@ -1287,27 +1286,8 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 				await replacePage(`${origin}/?connection=hung-${mobile ? 'mobile' : 'desktop'}`, width, height)
 				await Bun.sleep(750)
 				fixtureStateHanging = true
-				await command('Runtime.evaluate', { expression: `document.querySelector('#refresh-button')?.click()` }, sessionId)
-				await Bun.sleep(100)
-				const pendingRefresh = await readConnectionState()
-				if (mobile) assertStableSafetyActions(mobileSafetyActionPositions, await readSafetyActionPositions(), 'Pending manual refresh')
-				if (
-					typeof pendingRefresh !== 'object' ||
-					pendingRefresh === null ||
-					!('refreshBusy' in pendingRefresh) ||
-					pendingRefresh.refreshBusy !== 'true' ||
-					!('refreshDisabled' in pendingRefresh) ||
-					pendingRefresh.refreshDisabled !== true ||
-					!('refreshText' in pendingRefresh) ||
-					pendingRefresh.refreshText !== 'Refreshing…' ||
-					!('refreshTextFits' in pendingRefresh) ||
-					pendingRefresh.refreshTextFits !== true ||
-					!('refreshDoesNotOverlapPause' in pendingRefresh) ||
-					pendingRefresh.refreshDoesNotOverlapPause !== true
-				) {
-					throw new Error(`Manual Refresh did not expose a busy control: ${JSON.stringify(pendingRefresh)}`)
-				}
-				await capturePng(`refresh-pending-${mobile ? 'mobile' : 'desktop'}.png`)
+				await Bun.sleep(2_300)
+				if (mobile) assertStableSafetyActions(mobileSafetyActionPositions, await readSafetyActionPositions(), 'Pending automatic refresh')
 				await Bun.sleep(1_150)
 				const hungRequest = await readConnectionState()
 				if (
@@ -1322,13 +1302,7 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 					!('resumeOpen' in hungRequest) ||
 					hungRequest.resumeOpen !== false ||
 					!('runStatus' in hungRequest) ||
-					hungRequest.runStatus !== 'Disconnected' ||
-					!('refreshBusy' in hungRequest) ||
-					hungRequest.refreshBusy !== null ||
-					!('refreshDisabled' in hungRequest) ||
-					hungRequest.refreshDisabled !== false ||
-					!('refreshText' in hungRequest) ||
-					hungRequest.refreshText !== 'Refresh'
+					hungRequest.runStatus !== 'Disconnected'
 				) {
 					throw new Error(`Hung state request did not fail closed after its deadline: ${JSON.stringify(hungRequest)}`)
 				}
@@ -1345,15 +1319,13 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 					throw new Error(`Resume preflight did not open from current state: ${JSON.stringify(openPreflight)}`)
 				}
 				fixtureStateUnavailable = true
-				await command('Runtime.evaluate', { expression: `document.querySelector('#refresh-button')?.click()` }, sessionId)
-				await Bun.sleep(250)
+				await Bun.sleep(2_300)
 				const stalePreflight = await readConnectionState()
 				if (typeof stalePreflight !== 'object' || stalePreflight === null || !('resumeOpen' in stalePreflight) || stalePreflight.resumeOpen !== false || !('confirmDisabled' in stalePreflight) || stalePreflight.confirmDisabled !== true) {
 					throw new Error(`Disconnected resume preflight remained actionable: ${JSON.stringify(stalePreflight)}`)
 				}
 				fixtureStateUnavailable = false
-				await command('Runtime.evaluate', { expression: `document.querySelector('#refresh-button')?.click()` }, sessionId)
-				await Bun.sleep(250)
+				await Bun.sleep(2_300)
 				const preflightRecovery = await readConnectionState()
 				if (typeof preflightRecovery !== 'object' || preflightRecovery === null || !('confirmDisabled' in preflightRecovery) || preflightRecovery.confirmDisabled !== false) {
 					throw new Error(`Resume confirmation did not recover after current state returned: ${JSON.stringify(preflightRecovery)}`)
@@ -1873,7 +1845,7 @@ function currentFixtureSnapshot(): OperatorSnapshot {
 		networkConfigured: fixtureNetworkConfigured,
 		endpointChecks: fixtureAttention === 'error' ? endpointChecks.map((check, index) => (index === 0 ? { ...check, chainId: undefined, error: rawRpcFailure, status: 'failed' as const } : check)) : endpointChecks,
 		rpcEndpointHealth: snapshot.rpcEndpointHealth?.map(endpoint => ({ ...endpoint, target: fixtureNetwork === 'mainnet' ? endpoint.target : endpoint.target.replace('rpc.example', 'sepolia-rpc.example').replace('quorum.example', 'sepolia-quorum.example') })),
-		lastError: fixtureAttention === 'error' ? (fixturePollFailureMetadata ? rawRpcFailure : rawNonPollFailure) : undefined,
+		lastError: fixtureLastError(fixtureAttention, fixturePollFailureMetadata, rawRpcFailure, rawNonPollFailure),
 		lastPollFailureAt: fixtureAttention === 'error' && fixturePollFailureMetadata ? new Date(Date.now() - 2_000).toISOString() : undefined,
 		lastRetryAt: fixtureAttention === 'error' && fixturePollFailureMetadata && fixtureRetryInProgress ? new Date(Date.now() - 1_000).toISOString() : undefined,
 		nextRetryAt: fixtureAttention === 'error' && fixturePollFailureMetadata && !fixtureRetryInProgress ? (fixtureNextRetryAt ?? new Date(Date.now() + 10_000).toISOString()) : undefined,

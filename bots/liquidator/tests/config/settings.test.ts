@@ -1,10 +1,19 @@
+import mainnetManifest from '../../../../docs/mainnet-deployment-addresses.json'
+import example from '../../config/operator.example.json'
+import sepoliaManifest from '../../../../docs/sepolia-deployment-addresses.json'
 import { createHash } from 'node:crypto'
 import { mkdir, mkdtemp, readFile, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
-import { getAddress } from '../helpers/ethereum.ts'
-import { assertSettingsProfileIsolation, loadSettings, parseSettings, parseStrategy, saveSettings, serializedSettings, settingsProfilePath, switchSettingsNetworkProfile, type SettingsFilesystem } from '../../src/config/settings.ts'
+import { getAddress } from '@zoltar/bot-shared/ethereum'
+import { parseSettings, parseStrategy, serializedSettings } from '../../src/config/settings.ts'
+import { assertSettingsProfileIsolation, loadSettings, saveSettings, switchSettingsNetworkProfile, type SettingsFilesystem } from '../../src/config/settings-store.ts'
+
+// Preset profiles live beside the active configuration under this suffix.
+function settingsProfilePath(path: string, network: 'mainnet' | 'sepolia') {
+	return `${path}.${network}.profile`
+}
 
 const settings = {
 	approvedUniverses: ['0'],
@@ -86,6 +95,18 @@ const settings = {
 }
 
 describe('liquidator settings', () => {
+	test('derives Sepolia roots instead of loading zero or obsolete address overrides', () => {
+		const zoltar = sepoliaManifest.deploymentSteps.find(step => step.id === 'zoltar')
+		if (zoltar === undefined) throw new Error('Canonical Sepolia Zoltar is missing')
+		for (const deployment of [undefined, settings.deployment, { zoltar: '0x0000000000000000000000000000000000000001' }]) {
+			const parsed = parseSettings({ ...settings, deployment })
+			expect(parsed.deployment.zoltar).toBe(getAddress(zoltar.address))
+			expect(parsed.deployment.weth).toBe(getAddress(sepoliaManifest.network.wethAddress))
+			expect(Object.values(parsed.deployment)).not.toContain('0x0000000000000000000000000000000000000000')
+			expect(serializedSettings(parsed)).not.toHaveProperty('deployment')
+		}
+	})
+
 	test('keeps settings and durable recovery state isolated while switching chain profiles', async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-profiles-'))
 		try {
@@ -102,6 +123,10 @@ describe('liquidator settings', () => {
 			const sepolia = await switchSettingsNetworkProfile(path, 'sepolia', join(import.meta.dir, '..', '..', 'config', 'operator.example.json'))
 			expect(sepolia.settings).toMatchObject({ network: { name: 'sepolia' }, networkConfigured: false, paused: true, privateKey: undefined })
 			expect(sepolia.settings.runtime.stateFile).toContain('.sepolia.')
+			expect(sepolia.settings.deployment.weth).toBe(getAddress(sepoliaManifest.network.wethAddress))
+			expect(sepolia.settings.centralizedMarkets.assetAddress).toBe(getAddress(sepoliaManifest.network.genesisRepTokenAddress))
+			expect(sepolia.settings.centralizedMarkets.assetChainId).toBe(sepoliaManifest.network.chainId)
+			expect(sepolia.settings.deployment).not.toEqual(mainnet.deployment)
 			await saveSettings(
 				path,
 				{
@@ -348,8 +373,8 @@ describe('liquidator settings', () => {
 		}
 	})
 
-	test('requires a deployed WETH contract for live execution', () => {
-		expect(() =>
+	test('uses canonical WETH for live execution despite saved placeholders', () => {
+		expect(
 			parseSettings({
 				...settings,
 				connectivity: {
@@ -363,8 +388,8 @@ describe('liquidator settings', () => {
 				},
 				privateKey: `0x${'11'.repeat(32)}`,
 				runtime: { ...settings.runtime, execute: true },
-			}),
-		).toThrow('deployed WETH contract')
+			}).deployment.weth,
+		).toBe(getAddress(sepoliaManifest.network.wethAddress))
 	})
 
 	test('parses desired origin pools and exact child REP market configurations', () => {
@@ -398,3 +423,48 @@ describe('liquidator settings', () => {
 		expect(events).toEqual(['mkdir', 'wx:write', 'wx:sync', 'wx:close', 'rename', 'r:sync', 'r:close'])
 	})
 })
+
+for (const manifest of [mainnetManifest, sepoliaManifest]) {
+	test(`derives the ${manifest.network.id} root market identity and omits it from saved settings`, () => {
+		const parsed = parseSettings({ ...example, centralizedMarkets: { ...example.centralizedMarkets, assetAddress: '0x0000000000000000000000000000000000000001', assetChainId: 999 }, network: { name: manifest.network.id, chainId: manifest.network.chainId, explorerUrl: 'https://example.com' } })
+		expect(parsed.centralizedMarkets.assetAddress).toBe(getAddress(manifest.network.genesisRepTokenAddress))
+		expect(parsed.centralizedMarkets.assetChainId).toBe(manifest.network.chainId)
+		expect(serializedSettings(parsed).centralizedMarkets).not.toHaveProperty('assetAddress')
+		expect(serializedSettings(parsed).centralizedMarkets).not.toHaveProperty('assetChainId')
+		expect(parseSettings(serializedSettings(parsed)).centralizedMarkets).toEqual(parsed.centralizedMarkets)
+	})
+}
+
+for (const failure of ['rename', 'directory sync']) {
+	test(`propagates ${failure} failure and cleans the temporary configuration`, async () => {
+		const events: string[] = []
+		const problem = new Error(failure)
+		const filesystem: SettingsFilesystem = {
+			mkdir: async () => undefined,
+			open: async (_path, flags) => ({
+				close: async () => {
+					events.push(`${flags}:close`)
+				},
+				sync: async () => {
+					if (flags === 'r' && failure === 'directory sync') throw problem
+				},
+				writeFile: async () => undefined,
+			}),
+			readFile: async () => {
+				throw new Error('Unexpected revision read')
+			},
+			rename: async () => {
+				events.push('rename')
+				if (failure === 'rename') throw problem
+			},
+			rm: async (path, options) => {
+				expect(path.endsWith('.tmp')).toBe(true)
+				expect(options).toEqual({ force: true })
+				events.push('rm')
+			},
+		}
+		await expect(saveSettings('/state/operator.json', parseSettings(settings), undefined, filesystem)).rejects.toBe(problem)
+		expect(events.includes('r:close')).toBe(failure === 'directory sync')
+		expect(events.at(-1)).toBe('rm')
+	})
+}

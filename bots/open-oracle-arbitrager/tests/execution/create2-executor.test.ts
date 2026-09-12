@@ -1,21 +1,16 @@
 import { expect, test } from 'bun:test'
-import {
-	assertExecutorDeploymentActive,
-	assertExecutorDeploymentEnvironment,
-	assertExecutorDeploymentIntent,
-	assertExecutorDeploymentReceipt,
-	deployExecutorCreate2,
-	deterministicDeploymentProxy,
-	deterministicDeploymentProxyCode,
-	executorCodeStatus,
-	executorDeploymentPlan,
-	submitExecutorDeploymentTransaction,
-} from '#execution/create2-executor'
+import { deployExecutorCreate2 } from '#execution/create2-executor'
+import { assertExecutorDeploymentActive, assertExecutorDeploymentEnvironment, assertExecutorDeploymentIntent, assertExecutorDeploymentReceipt, deterministicDeploymentProxy, executorCodeStatus, executorDeploymentPlan, submitExecutorDeploymentTransaction } from '#execution/executor-deployment-primitives'
+
+// Runtime bytecode of the canonical deterministic deployment proxy (Arachnid's CREATE2 factory).
+const deterministicDeploymentProxyCode = '0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe03601600081602082378035828234f58015156039578182fd5b8082525050506014600cf3' as const
 import { executorArtifact } from '#contracts/artifacts.generated'
-import { keccak256, mainnet, privateKeyToAccount } from '#ethereum'
-import type { Hex } from '#ethereum'
-import { acquireScanSignerOperation, deployExecutorFromConnectivity, persistExecutorDeploymentIntentForRecovery, requireActivePersistedNetwork, requireActivePersistedRpcQuorum, requireNoPendingExecutorDeployment, requirePausedExecutorDeployment } from '../../src/runtime/operator-control-plane.ts'
-import { createSignerOperationGate } from '#execution/signer-operation-gate'
+import { mainnet } from '@zoltar/core-shared/evm/ethereum'
+import { keccak256, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
+import type { Hex } from '@zoltar/bot-shared/ethereum'
+import { deployExecutorFromConnectivity, requireActivePersistedNetwork, requireActivePersistedRpcQuorum, requireNoPendingExecutorDeployment, requirePausedExecutorDeployment } from '../../src/runtime/executor-deployment-control.ts'
+import { acquireScanSignerOperation, persistExecutorDeploymentIntentForRecovery } from '../../src/runtime/signer-operations.ts'
+import { createSignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
 import { acquireExecutorDeploymentIntentLock, clearExecutorDeploymentIntent, executorDeploymentIntentPath, loadExecutorDeploymentIntent, saveExecutorDeploymentIntent, type ExecutorDeploymentIntent } from '#execution/executor-deployment-store'
 import { acquireExecutionSignerLock } from '#state/position-store'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'

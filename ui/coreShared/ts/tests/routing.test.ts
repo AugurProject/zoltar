@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { buildRouteHref, createRouting, ensureRouteHash, getCurrentRoute, getCurrentRouteHash, getRouteHash, getRouteHashSearch, getTopLevelRouteSearch, installRouting, normalizeRouteHash, parseRouteHash } from '../lib/routing.js'
+import { buildRouteHref, createRouting, ensureRouteHash, getCurrentRoute, getCurrentRouteHash, getRouteHash, getRouteHashSearch, getTopLevelRouteSearch, installRouting, parseRouteHash } from '../navigation/routing.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { installTestRouting } from './testUtils/testRouting.js'
 
@@ -69,7 +69,7 @@ describe('routing', () => {
 			] as const,
 		})
 		expect(parseRouteHash('#/markets?simulate=1')).toEqual({ routeHash: '#/markets', search: '?simulate=1' })
-		expect(normalizeRouteHash('markets?simulate=1')).toBe('#/markets?simulate=1')
+		expect(routing.resolve('markets?simulate=1')).toBe('markets')
 		expect(routing.resolve('#/developer?simulate=1')).toBe('markets')
 		expect(routing.getHash('portfolio')).toBe('#/portfolio')
 	})

@@ -1,8 +1,11 @@
-import { describe, expect, test } from 'bun:test'
+import { installTradingRouting, tradingRouting } from '../../lib/routing.js'
+import { beforeEach, describe, expect, test } from 'bun:test'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import { App, currentRoute } from '../../app/App.js'
+import { App } from '../../app/App.js'
 import { ExecutionProtectionFields, renderLiveTradeSummary } from '../../features/LiveTradingTransactionUi.js'
+
+beforeEach(() => installTradingRouting())
 
 const forbiddenCopy = ['illustrative', 'Demo preview only', 'Demo discovery snapshot', 'Simulated account', 'Demo configuration', 'Demo data is simulated', 'Simulate enter', 'Simulate insured']
 
@@ -27,11 +30,12 @@ describe('essential trading copy', () => {
 	})
 
 	test('shows the deployed fee in live entry and exit summaries', async () => {
-		const market = { feeBps: 125n }
+		const market = { feeBps: 125n, settlementCollateralAttoEth: 10n ** 18n, shareTokenSupplyAttoShares: 10n ** 18n }
 		const entry = await renderIntoDocument(renderLiveTradeSummary({ kind: 'entry', value: { amount: 10n ** 18n, market, result: { totalLongShares: 2n * 10n ** 18n, invalidInsurance: 3n * 10n ** 17n } } }, 'YES'))
 		expect(entry.container.textContent).toContain('Trading fee')
 		expect(entry.container.textContent).toContain('1.25%')
 		expect(entry.container.textContent).toContain('INVALID received')
+		expect(entry.container.textContent).toContain('2 YES')
 		await entry.cleanup()
 		const exit = await renderIntoDocument(renderLiveTradeSummary({ kind: 'exit', value: { market, result: { totalLongShares: 2n * 10n ** 18n, invalidInsurance: 3n * 10n ** 17n, ethOut: 8n * 10n ** 17n } } }, 'YES'))
 		cleanupRendered = exit.cleanup
@@ -50,8 +54,12 @@ describe('essential trading copy', () => {
 		expect(inputs[1]?.getAttribute('aria-describedby')).toBe(alerts[1]?.id)
 	})
 
-	test('maps the removed developer route to the canonical markets route', () => {
+	test('maps the removed developer route to the markets browse route and defaults to the market lookup', () => {
 		window.history.replaceState(undefined, '', '/?demo=1#/developer?simulate=1')
-		expect(currentRoute()).toBe('markets')
+		expect(tradingRouting.resolve(window.location.hash)).toBe('markets')
+		window.history.replaceState(undefined, '', '/?demo=1#/')
+		expect(tradingRouting.resolve(window.location.hash)).toBe('market')
+		window.history.replaceState(undefined, '', '/?demo=1#/security-pools')
+		expect(tradingRouting.resolve(window.location.hash)).toBe('security-pools')
 	})
 })

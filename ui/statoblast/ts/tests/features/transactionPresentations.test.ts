@@ -6,6 +6,13 @@ import {
 	createForkAuctionTransactionIntent,
 	createLiquidationSuccessPresentation,
 	createLiquidationTransactionIntent,
+	createSecurityPoolCreationTransactionIntent,
+	createSecurityVaultSuccessPresentation,
+	createSecurityVaultTransactionIntent,
+	createTradingSuccessPresentation,
+	createTradingTransactionIntent,
+} from '@zoltar/ui-statoblast-shared/features/transactionPresentations.js'
+import {
 	createMarketCreationSuccessPresentation,
 	createOpenOracleSuccessPresentation,
 	createOpenOracleTransactionIntent,
@@ -13,14 +20,9 @@ import {
 	createPoolOracleTransactionIntent,
 	createReportingSuccessPresentation,
 	createReportingTransactionIntent,
-	createSecurityPoolCreationTransactionIntent,
-	createSecurityVaultSuccessPresentation,
-	createSecurityVaultTransactionIntent,
-	createTradingSuccessPresentation,
-	createTradingTransactionIntent,
-} from '../../features/transactionPresentations.js'
+} from '@zoltar/ui-statoblast-shared/features/reportingTransactionPresentations.js'
 import type { ForkAuctionActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
-import { createInitialTransactionTrayState, markTransactionFailed, markTransactionPrepared, markTransactionRequested, markTransactionSubmitted } from '@zoltar/ui-core-shared/lib/transactionTray.js'
+import { createInitialTransactionTrayState, markTransactionFailed, markTransactionPrepared, markTransactionRequested, markTransactionSubmitted } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
 
 const transactionHash = '0x1234000000000000000000000000000000000000000000000000000000000000'
 
@@ -47,6 +49,13 @@ describe('transaction presentations', () => {
 			const questionTypeRow = createMarketCreationSuccessPresentation({ createQuestionHash: '0x1234', marketType, questionId: '0x01' }).rows?.find(row => row.label === 'Question Type')
 			expect(questionTypeRow?.value).toBe(expectedLabel)
 		}
+	})
+
+	test('renders child REP symbols in vault transaction actions', () => {
+		const context = { repTokenSymbol: 'REP2' }
+		expect(createSecurityVaultTransactionIntent('depositRepToVault', context).submittedTitle).toBe('Deposit REP2')
+		expect(createSecurityVaultTransactionIntent('queueWithdrawRep', context).submittedTitle).toBe('Withdraw REP2')
+		expect(createSecurityVaultSuccessPresentation({ action: 'redeemRepFromVault', hash: '0x1234' }, context).title).toBe('Redeem REP2')
 	})
 
 	test('keeps vault identity in transaction intent rows', () => {

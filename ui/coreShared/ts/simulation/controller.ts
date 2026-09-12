@@ -1,4 +1,4 @@
-import type { Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { SimulationScenario } from './scenarios.js'
 import type { SimulationSource } from './savedStates.js'
 

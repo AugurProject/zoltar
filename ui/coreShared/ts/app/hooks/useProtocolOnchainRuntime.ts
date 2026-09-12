@@ -1,4 +1,4 @@
-import { getWalletScopedAccountAddress, isSupportedAppChain } from '../../lib/network.js'
+import { getWalletScopedAccountAddress, isSupportedAppChain } from '../../wallet/network.js'
 import { useOnchainState, type UseOnchainStateDependencies } from './useOnchainState.js'
 import { buildProtocolHookConfigs, useProtocolAppRuntime } from './useProtocolAppRuntime.js'
 

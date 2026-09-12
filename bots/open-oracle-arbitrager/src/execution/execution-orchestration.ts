@@ -1,13 +1,13 @@
-import { bigintToSafeNumber, rpcFailureWithContext, type Address, type BlockTransaction, type Hex, type TransactionReceipt, type TransactionReplacement } from '#ethereum'
+import { bigintToSafeNumber, rpcFailureWithContext, type Address, type BlockTransaction, type Hex, type TransactionReceipt, type TransactionReplacement } from '@zoltar/bot-shared/ethereum'
 import { endpointLabel } from '#monitoring/connectivity'
 import type { OpportunitySnapshot } from '#state/operator-state'
 import type { DurableTransactionIntent, ExecutionIntent, PositionRecord } from '#state/position-store'
-import { quorumValue, settledQuorumValue } from '#monitoring/read-quorum'
+import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { isSelfReport } from '#core/strategy'
 import type { StandardUniswapFee } from '#core/uniswap-v4'
 import type { Venue } from '#core/venue-strategy'
 
-export function hedgeExecutionRoute(venue: Venue, selectedFee: StandardUniswapFee) {
+function hedgeExecutionRoute(venue: Venue, selectedFee: StandardUniswapFee) {
 	let encodedVenue: 0 | 1 | 2 = 0
 	if (venue === 'uniswap-v2') encodedVenue = 1
 	if (venue === 'uniswap-v4') encodedVenue = 2
@@ -51,10 +51,6 @@ export function buildHedgeExecutionPayload(parameters: {
 	}
 }
 
-export function executionSnapshotWithQuorum<T>(blockNumber: bigint, observations: readonly { endpoint: string; value: T }[]) {
-	return quorumValue(`execution snapshot at block ${blockNumber.toString()}`, observations)
-}
-
 export function settledExecutionSnapshotWithQuorum<T>(blockNumber: bigint, observations: readonly Promise<{ endpoint: string; value: T }>[]) {
 	return settledQuorumValue(`execution snapshot at block ${blockNumber.toString()}`, observations)
 }
@@ -88,7 +84,7 @@ export function openOracleDisputeTiming(quoteBlockNumber: bigint, quoteBlockTime
 	return [quoteBlockNumber, 1n, quoteBlockTimestamp, 300n] as const
 }
 
-export function privateBundleReceiptStatus(receipt: Pick<TransactionReceipt, 'blockNumber' | 'status'> | undefined, targetBlockNumber: bigint) {
+function privateBundleReceiptStatus(receipt: Pick<TransactionReceipt, 'blockNumber' | 'status'> | undefined, targetBlockNumber: bigint) {
 	if (receipt === undefined || receipt.blockNumber !== targetBlockNumber) return 'confirmation-unknown' as const
 	return receipt.status === 'success' ? ('confirmed' as const) : ('reverted' as const)
 }
@@ -141,7 +137,7 @@ export function trackPrivateBundleReceiptStatuses<TTransaction, TReceipt extends
 	return false
 }
 
-export function executionPausedError() {
+function executionPausedError() {
 	const error = new Error('Bot paused before the next transaction was broadcast')
 	error.name = 'ExecutionPausedError'
 	return error
@@ -423,11 +419,6 @@ export async function transactionReceiptsOrMissingWithQuorum(readers: readonly T
 	)
 }
 
-export async function signAndSubmitOpenOracleDispute<TSigned, TSubmitted>(quoteBlockNumber: bigint, sign: (lastValidBlockNumber: bigint) => Promise<TSigned>, submit: (signed: TSigned) => Promise<TSubmitted>) {
-	const signed = await sign(quoteBlockNumber + 1n)
-	return submit(signed)
-}
-
 export async function retryPrivateSubmissionWithinWindow<T>(parameters: { currentBlockNumber: bigint; lastValidBlockNumber: bigint | undefined; submit: (maxBlockNumber: bigint) => Promise<T> }) {
 	if (parameters.lastValidBlockNumber !== undefined && parameters.currentBlockNumber >= parameters.lastValidBlockNumber) return { attempted: false as const }
 	const defaultMaxBlockNumber = parameters.currentBlockNumber + 25n
@@ -446,24 +437,6 @@ export async function attemptConfirmationRecovery<T>(recover: () => Promise<T>, 
 		await onFailure(error)
 		return undefined
 	}
-}
-
-export async function runFundedExecution<TPrepared, TSubmitted, TResult>(
-	isPaused: () => boolean,
-	stages: {
-		approveToken1: () => Promise<bigint>
-		approveToken2: () => Promise<bigint>
-		confirm: (submitted: TSubmitted, prepared: TPrepared, approvalGasCost: bigint) => Promise<TResult>
-		prepare: () => Promise<TPrepared>
-		simulate: (prepared: TPrepared) => Promise<unknown>
-		submit: (prepared: TPrepared) => Promise<TSubmitted>
-	},
-) {
-	const approvalGasCost = (await guardedExecutionStep(isPaused, stages.approveToken1)) + (await guardedExecutionStep(isPaused, stages.approveToken2))
-	const prepared = await stages.prepare()
-	await guardedExecutionStep(isPaused, () => stages.simulate(prepared))
-	const submitted = await guardedExecutionStep(isPaused, () => stages.submit(prepared))
-	return stages.confirm(submitted, prepared, approvalGasCost)
 }
 
 export function selectBestExecution<T>(candidates: readonly T[], score: (candidate: T) => bigint) {

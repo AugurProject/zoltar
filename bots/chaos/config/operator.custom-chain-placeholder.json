@@ -6,17 +6,6 @@
 		"readRpcUrl": "https://read-primary.custom-chain.example.invalid",
 		"rpcQuorum": 2
 	},
-	"deployment": {
-		"openOracle": "0x2222222222222222222222222222222222222205",
-		"questionData": "0x2222222222222222222222222222222222222202",
-		"securityPoolFactory": "0x2222222222222222222222222222222222222203",
-		"securityPoolForker": "0x2222222222222222222222222222222222222204",
-		"tradingFactory": "0x2222222222222222222222222222222222222207",
-		"tradingRouter": "0x2222222222222222222222222222222222222208",
-		"uniswapV3Factory": "0x2222222222222222222222222222222222222209",
-		"weth": "0x2222222222222222222222222222222222222206",
-		"zoltar": "0x2222222222222222222222222222222222222201"
-	},
 	"discovery": {
 		"maxPools": 100,
 		"maxQuestions": 100,
@@ -38,7 +27,7 @@
 		"execute": false,
 		"lifecyclePollMilliseconds": 12000,
 		"once": false,
-		"protocolLogBlockSpan": 2000,
+		"protocolLogBlockSpan": 50000,
 		"protocolStartBlock": "0",
 		"stateFile": ".state/chaos.custom-chain-placeholder.json",
 		"ui": true,

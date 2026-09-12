@@ -1,7 +1,6 @@
 export const sectionTitle = 'Live liquidity'
-export const routeDescription = 'Manage YES and NO liquidity for the selected SecurityPool.'
 export const disconnectedGuidance = 'Connect a wallet to load balances and simulate liquidity transactions.'
-export const loadingBalancesStatus = 'Refreshing wallet balances and LP allowance…'
+export const loadingBalancesStatus = 'Refreshing wallet balances…'
 export const balanceRefreshFallback = 'balance refresh failed'
 export const operationLabel = 'Liquidity operation'
 export const initializeAction = 'Initialize'
@@ -20,8 +19,7 @@ export const slippageTolerance = 'Slippage tolerance'
 export const deadline = 'Deadline'
 export const rawYesReturned = 'Raw YES returned'
 export const rawNoReturned = 'Raw NO returned'
-export const completeSetSharesCreated = 'Complete-set shares created'
-export const simulatedCompleteSetRate = 'Simulated effective complete-set rate'
+export const completeSetSharesCreated = 'Complete sets created'
 export const sharesDeposited = 'YES / NO deposited'
 export const unusedSharesReturned = 'Unused YES / NO returned'
 export const invalidRetained = 'INVALID retained'
@@ -31,7 +29,7 @@ export const no = 'NO'
 export const invalid = 'INVALID'
 
 export function balancesUnavailable(reason: string) {
-	return `Wallet balances and LP allowance are unavailable: ${reason}.`
+	return `Wallet balances are unavailable: ${reason}.`
 }
 
 export function simulationBlock(blockNumber: bigint) {

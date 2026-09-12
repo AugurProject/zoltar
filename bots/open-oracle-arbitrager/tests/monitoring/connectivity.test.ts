@@ -1,27 +1,26 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { eip191Signer } from 'micro-eth-signer'
-import { keccak256, privateKeyToAccount, recoverTransactionAddress, type Hex } from '#ethereum'
+import { keccak256, privateKeyToAccount, recoverTransactionAddress, type Hex } from '@zoltar/bot-shared/ethereum'
 import {
 	checkConnectivity,
 	checkPrivateTransactionSubmissionEndpoints,
 	checkPublicTransactionSubmissionEndpoints,
 	checkSubmissionEndpoints,
 	endpointLabel,
-	flashbotsPrivateTransactionCompatibilityProfileAllowed,
 	readRpcChainId,
 	sendRawTransactionToRpc,
-	TRANSACTION_SUBMISSION_CAPABILITY_PROBE,
 	updateConnectivityEndpointChecks,
 	updateSubmissionEndpointChecks,
 	validateConnectivitySettings,
 	validateConnectivitySettingsForQuorum,
 	validateIndependentReadRpcUrls,
 	validateReadRpcUrls,
-	withConnectivityChecks,
-	withSubmissionChecks,
 	type EndpointCheck,
 } from '#monitoring/connectivity'
 import { validateSubmissionSettings } from '#execution/transaction-submission'
+
+// The fixed, non-broadcastable signed envelope that capability probes send to public RPCs.
+const TRANSACTION_SUBMISSION_CAPABILITY_PROBE = '0xdf800182520894000000000000000000000000000000000000000080801b0180'
 
 const servers: Bun.Server<unknown>[] = []
 const RELAY_AUTHENTICATION_PRIVATE_KEY: Hex = `0x${'44'.repeat(32)}`
@@ -297,8 +296,12 @@ describe('operator connectivity', () => {
 		const healthy = await checkSubmissionEndpoints(validateSubmissionSettings({ mode: 'private', relayUrls: [mainnetRelay] }), 1)
 		expect(healthy).toMatchObject([{ chainId: 1, kind: 'private-relay', status: 'healthy' }])
 		const connectivity = await checkConnectivity(validateConnectivitySettings({ publicRpcUrls: [mainnetRelay], readRpcUrl: mainnetRelay }), 1)
-		expect(withConnectivityChecks(healthy, connectivity).map(check => check.kind)).toEqual(['read-rpc', 'public-rpc', 'private-relay'])
-		expect(withSubmissionChecks(connectivity, healthy).map(check => check.kind)).toEqual(['read-rpc', 'public-rpc', 'private-relay'])
+		const afterConnectivity = { endpointChecks: [...healthy] }
+		await updateConnectivityEndpointChecks(afterConnectivity, async () => connectivity)
+		expect(afterConnectivity.endpointChecks.map(check => check.kind)).toEqual(['read-rpc', 'public-rpc', 'private-relay'])
+		const afterSubmission = { endpointChecks: [...connectivity] }
+		await updateSubmissionEndpointChecks(afterSubmission, async () => healthy)
+		expect(afterSubmission.endpointChecks.map(check => check.kind)).toEqual(['read-rpc', 'public-rpc', 'private-relay'])
 		let wrongRelayFailure: unknown
 		try {
 			await checkSubmissionEndpoints(validateSubmissionSettings({ mode: 'private', relayUrls: [sepoliaRelay] }), 1)
@@ -311,7 +314,9 @@ describe('operator connectivity', () => {
 		expect(wrongRelayMessage.match(new RegExp(new URL(sepoliaRelay).origin.replaceAll('.', '\\.'), 'g'))).toHaveLength(1)
 		const publicChecks = await checkSubmissionEndpoints(validateSubmissionSettings({ mode: 'public', relayUrls: [mainnetRelay] }), 1)
 		expect(publicChecks).toEqual([])
-		expect(withSubmissionChecks([...connectivity, ...healthy], publicChecks).map(check => check.kind)).toEqual(['read-rpc', 'public-rpc'])
+		const afterPublicSubmission = { endpointChecks: [...connectivity, ...healthy] }
+		await updateSubmissionEndpointChecks(afterPublicSubmission, async () => publicChecks)
+		expect(afterPublicSubmission.endpointChecks.map(check => check.kind)).toEqual(['read-rpc', 'public-rpc'])
 	})
 
 	test('rejects a relay that applies configured-account authorization only after transaction parsing', async () => {
@@ -342,16 +347,6 @@ describe('operator connectivity', () => {
 		})
 		expect(validResponse.status).toBe(403)
 		expect(parsedConfiguredRequests).toBe(1)
-	})
-
-	test('restricts the Flashbots compatibility profile to the official relay for each chain or loopback tests', () => {
-		expect(flashbotsPrivateTransactionCompatibilityProfileAllowed('https://relay.flashbots.net', 1)).toBeTrue()
-		expect(flashbotsPrivateTransactionCompatibilityProfileAllowed('https://relay-sepolia.flashbots.net', 11_155_111)).toBeTrue()
-		expect(flashbotsPrivateTransactionCompatibilityProfileAllowed('https://relay-sepolia.flashbots.net/path', 11_155_111)).toBeTrue()
-		expect(flashbotsPrivateTransactionCompatibilityProfileAllowed('https://relay-sepolia.flashbots.net', 1)).toBeFalse()
-		expect(flashbotsPrivateTransactionCompatibilityProfileAllowed('https://relay.flashbots.net', 11_155_111)).toBeFalse()
-		expect(flashbotsPrivateTransactionCompatibilityProfileAllowed('https://untrusted-private-relay.example', 11_155_111)).toBeFalse()
-		expect(flashbotsPrivateTransactionCompatibilityProfileAllowed('http://127.0.0.1:8545', 1)).toBeTrue()
 	})
 
 	test('accepts the strict authenticated control sequence used by the official Sepolia Flashbots relay', async () => {

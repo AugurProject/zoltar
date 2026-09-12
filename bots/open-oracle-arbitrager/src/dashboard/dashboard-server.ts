@@ -1,8 +1,21 @@
-import { buildDashboardScript } from '../../../shared/src/dashboard/assets.js'
+import { operatorHeader } from './header.ts'
+import { buildDashboardScript, dashboardHealthResponse, sharedDashboardAssetResponse } from '@zoltar/bot-shared/dashboard/assets'
 import { join } from 'node:path'
 import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
-import { boundedDashboardJson, dashboardAuthenticationChallenge, dashboardAuthorities, dashboardRequestAuthorityIsAccepted, dashboardRequestIsAuthenticated, dashboardRequestIsSameOrigin, validateDashboardAuthentication } from '@zoltar/bot-shared/dashboard/security'
-import { publicOperatorFailure, publicOperatorSnapshot, publicPollFailure, type OperatorSnapshot, type StrategySettings } from '#state/operator-state'
+import {
+	boundedDashboardJson,
+	closingDashboardJson as closingJson,
+	dashboardAuthenticationChallenge,
+	dashboardAuthorities,
+	dashboardJson as json,
+	dashboardRequestAuthorityIsAccepted,
+	dashboardRequestIsAuthenticated,
+	dashboardRequestIsSameOrigin,
+	dashboardSecurityHeaders as securityHeaders,
+	validateDashboardAuthentication,
+} from '@zoltar/bot-shared/dashboard/security'
+import { publicOperatorSnapshot, type OperatorSnapshot, type StrategySettings } from '#state/operator-state'
+import { publicOperatorFailure, publicPollFailure } from '#state/public-failures'
 import type { SubmissionSettings } from '#execution/transaction-submission'
 import type { DeploymentSettings } from '#config/deployment-settings'
 import { CONFIGURATION_REVISION_CONFLICT } from '#config/settings-store'
@@ -25,6 +38,7 @@ type DashboardController = {
 	switchNetworkProfile?: (value: unknown) => unknown | Promise<unknown>
 	updateStrategy: (value: unknown) => StrategySettings | Promise<StrategySettings>
 	updateSubmission: (value: unknown) => SubmissionSettings | Promise<SubmissionSettings>
+	setApprovedUniverses?: (value: unknown) => readonly string[] | Promise<readonly string[]>
 	updateTokens?: (value: unknown) => readonly string[] | Promise<readonly string[]>
 }
 
@@ -32,27 +46,6 @@ const CHAIN_CONFIGURATION_REQUIRED = 'Select and save the chain and RPC endpoint
 
 async function requireConfiguredChain(controller: DashboardController) {
 	if (!(await controller.isNetworkConfigured())) throw new Error(CHAIN_CONFIGURATION_REQUIRED)
-}
-
-function json(value: unknown, status = 200) {
-	return Response.json(value, {
-		headers: securityHeaders('application/json; charset=utf-8'),
-		status,
-	})
-}
-
-function closingJson(value: unknown) {
-	return Response.json(value, { headers: { ...securityHeaders('application/json; charset=utf-8'), connection: 'close' } })
-}
-
-function securityHeaders(contentType: string) {
-	return {
-		'cache-control': 'no-store',
-		'content-security-policy': "default-src 'self'; connect-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
-		'content-type': contentType,
-		'referrer-policy': 'no-referrer',
-		'x-content-type-options': 'nosniff',
-	}
 }
 
 function errorMessage(error: unknown) {
@@ -149,7 +142,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 		const page = pathname === '/' ? 'overview' : pathname.slice(1)
 		if (!dashboardPages.has(page)) return undefined
 		const source = await Bun.file(join(directory, 'index.html')).text()
-		return source.replace('<body>', `<body data-page="${page}">`)
+		return source.replace('<!-- operator-header -->', operatorHeader).replace('<body>', `<body data-page="${page}">`)
 	}
 	const transpiler = new Bun.Transpiler({ loader: 'ts', target: 'browser' })
 	const hostname = controller.hostname ?? '127.0.0.1'
@@ -160,7 +153,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 		port,
 		async fetch(request) {
 			if (!dashboardRequestAuthorityIsAccepted(request, acceptedAuthorities)) return json({ error: 'Request authority is not accepted' }, 403)
-			if (request.method === 'GET' && new URL(request.url).pathname === '/healthz') return new Response('ok', { headers: securityHeaders('text/plain; charset=utf-8') })
+			if (request.method === 'GET' && new URL(request.url).pathname === '/healthz') return dashboardHealthResponse()
 			if (!dashboardRequestIsAuthenticated(request, controller.password)) {
 				return Response.json({ error: 'Dashboard authentication is required' }, { headers: { ...securityHeaders('application/json; charset=utf-8'), ...dashboardAuthenticationChallenge() }, status: 401 })
 			}
@@ -187,12 +180,11 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				return new Response(Bun.file(join(projectDirectory, 'src', 'core', 'strategy.ts')), { headers: securityHeaders('text/plain; charset=utf-8') })
 			}
 			if (request.method === 'GET' && url.pathname === '/README.md') return new Response(Bun.file(join(projectDirectory, 'README.md')), { headers: securityHeaders('text/markdown; charset=utf-8') })
-			if (request.method === 'GET' && url.pathname === '/favicon.svg') return new Response(Bun.file(join(directory, 'favicon.svg')), { headers: securityHeaders('image/svg+xml') })
-			if (request.method === 'GET' && url.pathname === '/favicon.ico') return new Response(undefined, { headers: securityHeaders('image/x-icon'), status: 204 })
-			if (request.method === 'GET' && url.pathname === '/dashboard.css') return new Response(Bun.file(join(directory, 'styles.css')), { headers: securityHeaders('text/css; charset=utf-8') })
-			if (request.method === 'GET' && url.pathname === '/operator-console.css') {
-				return new Response(Bun.file(join(directory, '..', '..', '..', 'shared', 'src', 'dashboard', 'operator-console.css')), { headers: securityHeaders('text/css; charset=utf-8') })
+			if (request.method === 'GET') {
+				const asset = await sharedDashboardAssetResponse(url.pathname, join(directory, 'favicon.svg'))
+				if (asset !== undefined) return asset
 			}
+			if (request.method === 'GET' && url.pathname === '/dashboard.css') return new Response(Bun.file(join(directory, 'styles.css')), { headers: securityHeaders('text/css; charset=utf-8') })
 			if (request.method === 'GET' && url.pathname === '/operator-guide.css') return new Response(Bun.file(join(documentationDirectory, 'operator-guide.css')), { headers: securityHeaders('text/css; charset=utf-8') })
 			if (request.method === 'GET' && url.pathname === '/shared.css') {
 				return new Response(Bun.file(join(documentationDirectory, 'shared.css')), { headers: securityHeaders('text/css; charset=utf-8') })
@@ -308,6 +300,16 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					return json(await controller.predictExecutor(await boundedDashboardJson(request)))
 				} catch (error) {
 					return publicError(error, 400, 'executor-prediction', 'Executor prediction could not be completed. Review the submitted salt and protected bot logs.')
+				}
+			}
+			if (request.method === 'PUT' && url.pathname === '/api/approved-universes') {
+				if (!dashboardRequestIsSameOrigin(request, acceptedAuthorities)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
+				try {
+					await requireConfiguredChain(controller)
+					if (controller.setApprovedUniverses === undefined) throw new Error('Universe approval is unavailable')
+					return json({ approvedUniverses: await controller.setApprovedUniverses(await boundedDashboardJson(request)) })
+				} catch (error) {
+					return publicError(error, 400, 'universe-approval', 'Universe approval could not be saved. Select only one outcome per fork and review protected bot logs.')
 				}
 			}
 			if (request.method === 'PUT' && url.pathname === '/api/tokens') {

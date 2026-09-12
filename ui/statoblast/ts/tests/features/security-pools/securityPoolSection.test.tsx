@@ -4,12 +4,12 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
-import { getAddress, zeroAddress, zeroHash } from '@zoltar/shared/ethereum'
-import { SecurityPoolSection } from '../../../features/security-pools/components/SecurityPoolSection.js'
-import { formatOpenInterestFeePerYearPercent, ORIGIN_POOL_INITIAL_RETENTION_RATE } from '../../../features/security-pools/lib/retentionRate.js'
-import type { AccountState } from '@zoltar/ui-zoltar/types/app.js'
+import { getAddress, zeroAddress, zeroHash } from '@zoltar/core-shared/evm/ethereum'
+import { SecurityPoolSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolSection.js'
+import { formatOpenInterestFeePerYearPercent, ORIGIN_POOL_INITIAL_RETENTION_RATE } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/retentionRate.js'
+import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import type { MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { SecurityPoolSectionProps } from '@zoltar/ui-zoltar/features/types.js'
+import type { SecurityPoolSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
@@ -650,11 +650,9 @@ describe('SecurityPoolSection', () => {
 			render(h(SecurityPoolSection, { ...initialProps, activeUniverseId: 2n }), renderedComponent.container)
 		})
 
-		const warning = within(document.body).getByRole('alert')
-		expect(warning.classList.contains('flat')).toBe(true)
-		expect(warning.classList.contains('compact')).toBe(true)
-		expect(warning.textContent).toContain('Universe Mismatch')
-		expect(warning.textContent).toContain('This pool belongs to 0x1, while the header shows 0x2.')
+		const warning = within(document.body).getByText('This pool belongs to universe 0x1')
+		expect(warning.closest('.entity-card') !== null).toBe(true)
+		expect(within(document.body).queryByText('Universe Mismatch') === null).toBe(true)
 	})
 
 	test('uses carried market details when created market does not match loaded market details', async () => {

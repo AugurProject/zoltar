@@ -7,9 +7,10 @@
  */
 
 import { describe as baseDescribe, expect, test } from 'bun:test'
-import { createPublicClient, http, zeroAddress } from '@zoltar/shared/ethereum'
-import { mainnet } from '@zoltar/shared/ethereum'
-import { ETH_ADDRESS, REP_ADDRESS, USDC_ADDRESS, quoteExactInput } from '../../protocol/uniswapQuoter.js'
+import { createPublicClient, http, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { mainnet } from '@zoltar/core-shared/evm/ethereum'
+import { ETH_ADDRESS, quoteExactInput } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
+import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 
 const RPC_URL = 'https://ethereum.dark.florist'
 
@@ -25,14 +26,14 @@ void describe('Uniswap mainnet smoke checks', () => {
 	// Sanity check: ETH/USDC 0.05% pool is established and should always return a price
 	void describe('ETH/USDC (0.05% pool — known to exist on V4)', () => {
 		void test('quotes 1 ETH → USDC and returns a plausible price', async () => {
-			const usdcOut = await quoteExactInput(client, ETH_ADDRESS, USDC_ADDRESS, ATTO_ETH_PER_ETH, { fee: 500, tickSpacing: 10 })
+			const usdcOut = await quoteExactInput(client, ETH_ADDRESS, MAINNET_NETWORK_PROFILE.usdcAddress, ATTO_ETH_PER_ETH, { fee: 500, tickSpacing: 10 })
 			// At time of writing ETH is roughly $2 191 — assert a wide range to keep test non-brittle
 			expect(usdcOut).toBeGreaterThan(100n * 10n ** 6n) // > $100 USDC
 			expect(usdcOut).toBeLessThan(100_000n * 10n ** 6n) // < $100 000 USDC
 		})
 
 		void test('quotes 1 USDC → ETH and returns a plausible price', async () => {
-			const ethOut = await quoteExactInput(client, USDC_ADDRESS, ETH_ADDRESS, 1n * 10n ** 6n, { fee: 500, tickSpacing: 10 })
+			const ethOut = await quoteExactInput(client, MAINNET_NETWORK_PROFILE.usdcAddress, ETH_ADDRESS, 1n * 10n ** 6n, { fee: 500, tickSpacing: 10 })
 			// 1 USDC should buy a small fraction of ETH (more than 0 attoETH, less than 1 ETH)
 			expect(ethOut).toBeGreaterThan(0n)
 			expect(ethOut).toBeLessThan(ATTO_ETH_PER_ETH)
@@ -44,11 +45,11 @@ void describe('Uniswap mainnet smoke checks', () => {
 			expect(ETH_ADDRESS).toBe(zeroAddress)
 		})
 
-		void test('REP_ADDRESS is a valid checksummed address accepted by the shared address validator', async () => {
-			// If REP_ADDRESS had a bad checksum, getBlockNumber would still work but this
+		void test('the mainnet REP address is a valid checksummed address accepted by the shared address validator', async () => {
+			// If MAINNET_NETWORK_PROFILE.genesisRepTokenAddress had a bad checksum, getBlockNumber would still work but this
 			// call would throw an address validation error before any RPC call is made.
 			const repDecimals = await client.readContract({
-				address: REP_ADDRESS,
+				address: MAINNET_NETWORK_PROFILE.genesisRepTokenAddress,
 				abi: [{ name: 'decimals', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint8' }] }],
 				functionName: 'decimals',
 			})
@@ -58,9 +59,9 @@ void describe('Uniswap mainnet smoke checks', () => {
 			if (repDecimals !== 18n) throw new Error('Expected REP decimals to be 18')
 		})
 
-		void test('USDC_ADDRESS is a valid checksummed address with 6 decimals', async () => {
+		void test('the mainnet USDC address is a valid checksummed address with 6 decimals', async () => {
 			const usdcDecimals = await client.readContract({
-				address: USDC_ADDRESS,
+				address: MAINNET_NETWORK_PROFILE.usdcAddress,
 				abi: [{ name: 'decimals', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint8' }] }],
 				functionName: 'decimals',
 			})

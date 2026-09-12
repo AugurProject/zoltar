@@ -1,34 +1,30 @@
+import { getAddress } from '@zoltar/bot-shared/ethereum'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import example from '../../config/operator.example.json'
-import { EndpointCheckFailure, privateKeyToAccount, zeroAddress, zeroHash, type Address, type EndpointCheck } from '../support/bot-shared.ts'
+import { privateKeyToAccount, zeroAddress, zeroHash, type Address } from '@zoltar/bot-shared/ethereum'
+import { EndpointCheckFailure, type EndpointCheck } from '@zoltar/bot-shared/monitoring/connectivity'
 import { parseSettings, serializedSettings, type OperatorSettings } from '../../src/config/settings.ts'
-import { createChaosShutdownController, type ChaosProcessLocks } from '../../src/core/process-locks.ts'
+import { createBotShutdownController, type BotProcessLocks } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { OperationRediscoveryRequired } from '../../src/execution/transaction-executor.ts'
 import { IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, type CanonicalImmutableTopologyCache } from '../../src/monitoring/topology-cache.ts'
-import { eligibleOperationPlans, reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
-import {
-	abandonRetryableSelectableFailure,
-	backfillWaitMilliseconds,
-	blockNovelEvaluations,
-	evaluatePolicySafeContinuation,
-	executionProfileId,
-	actionableUrgentLifecyclePlan,
-	lifecycleObstructions,
-	operatorWaitMilliseconds,
-	recordEndpointPreflightChecks,
-	rediscoverableExecutionFailure,
-	repairDurableSelectableFailures,
-	runChaosOperator,
-	runtimeTopologySummary,
-	scheduleAfterRecoveredTransaction,
-} from '../../src/runtime/operator.ts'
+import { reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
+import { eligibleOperationPlans } from '../support/operation-plans.ts'
+import { executionProfileId, runChaosOperator } from '../../src/runtime/operator.ts'
+import { backfillWaitMilliseconds, operatorWaitMilliseconds } from '../../src/core/scheduler.ts'
+import { actionableUrgentLifecyclePlan, lifecycleObstructions } from '../../src/runtime/lifecycle-readiness.ts'
+import { blockNovelEvaluations } from '../../src/runtime/obligations.ts'
+import { scheduleAfterRecoveredTransaction } from '../../src/runtime/scheduled-operation.ts'
+import { runtimeTopologySummary } from '../../src/runtime/topology-summary.ts'
+import { evaluatePolicySafeContinuation } from '../../src/runtime/workflow-continuation.ts'
+import { abandonRetryableSelectableFailure, rediscoverableExecutionFailure, repairDurableSelectableFailures } from '../../src/runtime/workflow-repair.ts'
 import { planningOptions } from '../../src/runtime/canonical-scan.ts'
-import { assertSubmissionPreflightFresh, submissionPreflightConfigurationIdentity, submissionPreflightIsDue } from '../../src/runtime/submission-preflight.ts'
-import { initialDurableState, initialRuntimeState, loadDurableState, recordActivity, saveDurableState } from '../../src/state/operator-state.ts'
+import { assertSubmissionPreflightFresh, recordEndpointPreflightChecks, submissionPreflightConfigurationIdentity, submissionPreflightIsDue } from '../../src/runtime/submission-preflight.ts'
+import { loadDurableState, recordActivity, saveDurableState } from '../../src/state/operator-state.ts'
+import { initialDurableState, initialRuntimeState } from '../../src/state/initial-state.ts'
 import { randomOperationPlans, urgentOperationPlans } from '../../src/runtime/selection.ts'
-import { createDurableWorkflow, markWorkflowFailed, markWorkflowStepConfirmed } from '../../src/runtime/workflows.ts'
+import { createDurableWorkflow, markWorkflowFailed, markWorkflowStepConfirmed, retirementCleanupBlocker } from '../../src/runtime/workflows.ts'
 import { beginLifecycleObligation, failLifecycleObligation, synchronizeLifecycleObligations } from '../../src/runtime/obligations.ts'
 import type { EvaluatedOperation, OperationPlan } from '../../src/operations/types.ts'
 import { address, snapshotFixture } from '../operations/fixture.ts'
@@ -43,7 +39,7 @@ afterEach(async () => {
 	)
 })
 
-function processLocks(): ChaosProcessLocks {
+function processLocks(): BotProcessLocks {
 	return {
 		acquireSigner: async () => undefined,
 		commitSigner: async () => undefined,
@@ -73,12 +69,8 @@ const FIRST_PRIVATE_KEY = `0x${'11'.repeat(32)}` as const
 const SECOND_PRIVATE_KEY = `0x${'22'.repeat(32)}` as const
 
 function restartSettings(stateFile: string, deploymentIdentity: number, privateKey: `0x${string}` | null) {
-	return parseSettings({
+	const settings = parseSettings({
 		...example,
-		deployment: {
-			...example.deployment,
-			zoltar: `0x${deploymentIdentity.toString(16).padStart(40, '0')}`,
-		},
 		privateKey,
 		runtime: {
 			...example.runtime,
@@ -87,6 +79,9 @@ function restartSettings(stateFile: string, deploymentIdentity: number, privateK
 			ui: false,
 		},
 	})
+	// Inject a distinct historical deployment identity only for persistence tests.
+	settings.deployment.zoltar = getAddress(`0x${deploymentIdentity.toString(16).padStart(40, '0')}`)
+	return settings
 }
 
 function lifecyclePlan(): OperationPlan {
@@ -315,9 +310,7 @@ describe('chaos operator runtime', () => {
 		if (firstVault === undefined) throw new Error('Topology fixture requires one vault')
 		const summary = runtimeTopologySummary({
 			anchor: { baseFeePerGas: 1n, blockHash: zeroHash, blockNumber: 77n, timestamp: 1n },
-			canonicalLifecyclePresenceComplete: true,
-			carryProofJournalComplete: true,
-			indexComplete: false,
+			executionReady: false,
 			snapshot,
 			topologyCache: topologyCacheWithVaults(firstPool.address, [firstVault.address]),
 		})
@@ -350,9 +343,7 @@ describe('chaos operator runtime', () => {
 
 		const summary = runtimeTopologySummary({
 			anchor: { baseFeePerGas: 1n, blockHash: zeroHash, blockNumber: 77n, timestamp: 1n },
-			canonicalLifecyclePresenceComplete: true,
-			carryProofJournalComplete: true,
-			indexComplete: true,
+			executionReady: true,
 			snapshot,
 			topologyCache: topologyCacheWithVaults(firstPool.address, registeredVaults),
 		})
@@ -502,13 +493,7 @@ describe('chaos operator runtime', () => {
 			...serialized,
 			privateKey: `0x${'11'.repeat(32)}`,
 		})
-		const withDeployment = parseSettings({
-			...serialized,
-			deployment: {
-				...serialized.deployment,
-				zoltar: '0x0000000000000000000000000000000000000001',
-			},
-		})
+		const withDeployment = { ...base, deployment: { ...base.deployment, zoltar: getAddress('0x0000000000000000000000000000000000000001') } }
 		const withProtocolOrigin = parseSettings({
 			...serialized,
 			runtime: { ...serialized.runtime, protocolStartBlock: '1' },
@@ -532,7 +517,7 @@ describe('chaos operator runtime', () => {
 				ui: false,
 			},
 		})
-		using shutdown = createChaosShutdownController()
+		using shutdown = createBotShutdownController()
 		await runChaosOperator({ path: join(directory, 'operator.json'), revision: 'test-revision', settings }, processLocks(), shutdown)
 		const durable = await loadDurableState(stateFile, settings.network.chainId)
 		expect(durable.scheduler.status).toBe('paused')
@@ -565,7 +550,7 @@ describe('chaos operator runtime', () => {
 		}
 		await saveDurableState(stateFile, durable)
 
-		using shutdown = createChaosShutdownController()
+		using shutdown = createBotShutdownController()
 		await runChaosOperator({ path: join(directory, 'operator.json'), revision: 'test-revision', settings }, processLocks(), shutdown)
 
 		const rebound = await loadDurableState(stateFile, settings.network.chainId)
@@ -674,7 +659,7 @@ describe('chaos operator runtime', () => {
 		await saveDurableState(stateFile, durable)
 
 		const before = Date.now()
-		using shutdown = createChaosShutdownController()
+		using shutdown = createBotShutdownController()
 		shutdown.requestShutdown()
 		await runChaosOperator({ path: join(directory, 'operator.json'), revision: 'test-revision', settings }, processLocks(), shutdown)
 
@@ -703,7 +688,7 @@ describe('chaos operator runtime', () => {
 		const expectedScheduler = { ...durable.scheduler }
 		await saveDurableState(stateFile, durable)
 
-		using shutdown = createChaosShutdownController()
+		using shutdown = createBotShutdownController()
 		await runChaosOperator({ path: join(directory, 'operator.json'), revision: 'test-revision', settings }, processLocks(), shutdown)
 
 		const restarted = await loadDurableState(stateFile, settings.network.chainId)
@@ -718,16 +703,16 @@ describe('chaos operator runtime', () => {
 		const configuredStateFile = join(directory, 'configured-state.json')
 		const bootstrapSettings = restartSettings(bootstrapStateFile, 0, null)
 
-		using bootstrapShutdown = createChaosShutdownController()
+		using bootstrapShutdown = createBotShutdownController()
 		await runChaosOperator({ path: join(directory, 'operator.json'), revision: 'bootstrap-revision', settings: bootstrapSettings }, processLocks(), bootstrapShutdown)
 		const bootstrapBefore = await readFile(bootstrapStateFile)
 		const changedAtOldPath = restartSettings(bootstrapStateFile, 1, null)
-		using rejectedShutdown = createChaosShutdownController()
+		using rejectedShutdown = createBotShutdownController()
 		await expect(runChaosOperator({ path: join(directory, 'operator.json'), revision: 'changed-revision', settings: changedAtOldPath }, processLocks(), rejectedShutdown)).rejects.toThrow('configure a distinct state file for the new deployment profile')
 		expect((await readFile(bootstrapStateFile)).equals(bootstrapBefore)).toBeTrue()
 
 		const changedAtFreshPath = restartSettings(configuredStateFile, 1, null)
-		using configuredShutdown = createChaosShutdownController()
+		using configuredShutdown = createBotShutdownController()
 		await runChaosOperator({ path: join(directory, 'operator.json'), revision: 'configured-revision', settings: changedAtFreshPath }, processLocks(), configuredShutdown)
 		const configured = await loadDurableState(configuredStateFile, changedAtFreshPath.network.chainId)
 		expect(configured.profileId).toBe(executionProfileId(changedAtFreshPath))
@@ -746,7 +731,7 @@ describe('chaos operator runtime', () => {
 		const before = await readFile(stateFile)
 		const changedSettings = restartSettings(stateFile, 2, SECOND_PRIVATE_KEY)
 
-		using shutdown = createChaosShutdownController()
+		using shutdown = createBotShutdownController()
 		await expect(runChaosOperator({ path: join(directory, 'operator.json'), revision: 'test-revision', settings: changedSettings }, processLocks(), shutdown)).rejects.toThrow(`Durable state ${stateFile} is scoped to signer ${previousSigner}`)
 
 		const after = await readFile(stateFile)
@@ -769,7 +754,7 @@ describe('chaos operator runtime', () => {
 		const before = await readFile(stateFile)
 		const changedSettings = restartSettings(stateFile, 2, FIRST_PRIVATE_KEY)
 
-		using shutdown = createChaosShutdownController()
+		using shutdown = createBotShutdownController()
 		await expect(runChaosOperator({ path: join(directory, 'operator.json'), revision: 'test-revision', settings: changedSettings }, processLocks(), shutdown)).rejects.toThrow('configure a distinct state file for the new deployment profile')
 
 		expect((await readFile(stateFile)).equals(before)).toBeTrue()
@@ -783,7 +768,7 @@ describe('chaos operator runtime', () => {
 		await saveDurableState(stateFile, initialDurableState(previousSettings.network.chainId, true, executionProfileId(previousSettings)))
 		const changedSettings = restartSettings(stateFile, 2, null)
 
-		using shutdown = createChaosShutdownController()
+		using shutdown = createBotShutdownController()
 		await runChaosOperator({ path: join(directory, 'operator.json'), revision: 'test-revision', settings: changedSettings }, processLocks(), shutdown)
 
 		const durable = await loadDurableState(stateFile, changedSettings.network.chainId)
@@ -927,6 +912,25 @@ describe('chaos operator runtime', () => {
 		workflow.continuationDisposition = selection.continuationDisposition
 		await saveDurableState(stateFile, state)
 		expect((await loadDurableState(stateFile, settings.network.chainId)).workflows[0]?.continuationDisposition).toBe('cleanup-only')
+	})
+
+	test('forces a partially prepared selectable workflow to cleanup-only during retirement', () => {
+		const settings = parseSettings(example)
+		const snapshot = snapshotFixture()
+		const original = eligibleOperationPlans(snapshot, planningOptions(settings, 17)).find(plan => plan.definitionId === 'open-oracle.deposit')
+		if (original === undefined) throw new Error('Retirement cleanup fixture requires an OpenOracle deposit')
+		const approval = original.steps.find(step => step.id.startsWith('approve-'))
+		if (approval === undefined) throw new Error('Retirement cleanup fixture requires an approval')
+		const workflow = createDurableWorkflow(original)
+		markWorkflowStepConfirmed(workflow, approval.id, zeroHash)
+		expect(retirementCleanupBlocker(workflow, true)).toBeUndefined()
+		const selection = evaluatePolicySafeContinuation(snapshot, workflow, { ...settings, strategy: { ...settings.strategy, enabledEcosystems: [] } }, snapshot.anchor.blockNumber, true)
+		expect(workflow.continuationDisposition).toBe('cleanup-only')
+		expect(selection.evaluation.plan?.steps.every(step => step.id.startsWith('revoke-'))).toBeTrue()
+		workflow.classification = 'lifecycle-obligation'
+		workflow.continuationDisposition = undefined
+		expect(retirementCleanupBlocker(workflow, true)).toBeUndefined()
+		expect(workflow).toMatchObject({ continuationDisposition: 'cleanup-only' })
 	})
 
 	test('latches cleanup-only after unsigned rediscovery of a partially confirmed selectable workflow', () => {

@@ -246,9 +246,43 @@ contract TradingReentrantRecipient is IERC1155Receiver {
 		return IERC1155Receiver.onERC1155BatchReceived.selector;
 	}
 
+	receive() external payable {
+		_attemptReentry();
+	}
+
 	function _attemptReentry() private {
 		(bool success, ) = target.call(payload);
 		require(!success, 'Reentry unexpectedly succeeded');
 		reentryBlocked = true;
 	}
+}
+
+contract TradingMockSafe is IERC1155Receiver {
+	function execute(address target, bytes calldata data) external payable returns (bytes memory result) {
+		(bool success, bytes memory returned) = target.call{value: msg.value}(data);
+		require(success, 'Safe execution failed');
+		return returned;
+	}
+
+	function createCompleteSet(ISecurityPool pool) external payable {
+		pool.createCompleteSet{value: msg.value}();
+	}
+
+	function transferBatch(address token, address from, address to, uint256[] calldata ids, uint256[] calldata values, bytes calldata data) external {
+		TradingMockShareToken(token).safeBatchTransferFrom(from, to, ids, values, data);
+	}
+
+	function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
+		return interfaceId == type(IERC1155Receiver).interfaceId;
+	}
+
+	function onERC1155Received(address, address, uint256, uint256, bytes calldata) external pure returns (bytes4) {
+		return IERC1155Receiver.onERC1155Received.selector;
+	}
+
+	function onERC1155BatchReceived(address, address, uint256[] calldata, uint256[] calldata, bytes calldata) external pure returns (bytes4) {
+		return IERC1155Receiver.onERC1155BatchReceived.selector;
+	}
+
+	receive() external payable {}
 }

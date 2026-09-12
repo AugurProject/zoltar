@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test'
-import { createPublicClient, custom, encodeAbiParameters, encodeEventTopics, getAddress, mainnet, type EIP1193Provider, type Hex } from '#ethereum'
+import { encodeEventTopics, mainnet } from '@zoltar/core-shared/evm/ethereum'
+import { createPublicClient, encodeAbiParameters, getAddress, type EIP1193Provider, type Hex } from '@zoltar/bot-shared/ethereum'
+import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { openOracleArbitrageExecutorAbi } from '#contracts/abi'
 import {
 	createExecutionLockManager,
@@ -17,7 +19,7 @@ import {
 	processPositionLifecycle,
 } from '#cli/run'
 import { manuallyReconcilePosition, type PositionRecord } from '#state/position-store'
-import { ConnectivityDegradedError } from '#monitoring/resilience'
+import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
 
 const transactionHash = `0x${'11'.repeat(32)}` as Hex
 const lifecycleTransactionHash = `0x${'22'.repeat(32)}` as Hex

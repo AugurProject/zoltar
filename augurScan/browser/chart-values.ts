@@ -11,7 +11,7 @@ export interface UniswapPriceObservation {
 	contract_address: string
 }
 
-export interface UniswapChartRow extends UniswapPriceObservation {
+interface UniswapChartRow extends UniswapPriceObservation {
 	[key: `uniswap_price_${number}`]: string
 }
 
@@ -42,29 +42,26 @@ export const chartValueBounds = (values: readonly number[], sharedRange: readonl
 const feeLabel = (fee: string): string => `${Number(fee) / 10_000}%`
 const shortMarketId = (marketId: string): string => (marketId.length > 15 ? `${marketId.slice(0, 8)}…${marketId.slice(-6)}` : marketId)
 
-export const uniswapPriceProvenance = (observation: UniswapPriceObservation): string =>
-	`${observation.venue.toUpperCase()} · ${feeLabel(observation.fee_hundredths_bip)} · ${observation.quote_symbol} · ${shortMarketId(observation.market_id)}`
+export const uniswapPriceProvenance = (observation: UniswapPriceObservation): string => `${observation.venue.toUpperCase()} · ${feeLabel(observation.fee_hundredths_bip)} · ${observation.quote_symbol} · ${shortMarketId(observation.market_id)}`
 
 export const uniswapPriceChartModel = (observations: readonly UniswapPriceObservation[]) => {
 	const quoteSymbols = new Set(observations.map(({ quote_symbol }) => quote_symbol))
 	const bounds = chartValueBounds(
-		observations.map((observation) => Number(observation.rep_per_eth_1e18) / 1e18),
+		observations.map(observation => Number(observation.rep_per_eth_1e18) / 1e18),
 		undefined,
 	)
 	const identities = [
 		...new Map(
-			observations.map((observation) => {
+			observations.map(observation => {
 				const identity = `${observation.venue}:${observation.market_id}`
 				return [identity, observation]
 			}),
 		).entries(),
 	].sort(([, left], [, right]) => left.venue.localeCompare(right.venue) || Number(left.fee_hundredths_bip) - Number(right.fee_hundredths_bip))
-	const keys = new Map<string, `uniswap_price_${number}`>(
-		identities.map(([identity], index): [string, `uniswap_price_${number}`] => [identity, `uniswap_price_${index}`]),
-	)
+	const keys = new Map<string, `uniswap_price_${number}`>(identities.map(([identity], index): [string, `uniswap_price_${number}`] => [identity, `uniswap_price_${index}`]))
 	const rows: UniswapChartRow[] = [...observations]
 		.sort((left, right) => new Date(left.timestamp).getTime() - new Date(right.timestamp).getTime())
-		.map((observation) => {
+		.map(observation => {
 			const key = keys.get(`${observation.venue}:${observation.market_id}`)
 			if (key === undefined) throw new Error(`Missing chart series for ${observation.venue}:${observation.market_id}`)
 			return { ...observation, [key]: observation.rep_per_eth_1e18 }
@@ -81,7 +78,7 @@ export const uniswapPriceChartModel = (observations: readonly UniswapPriceObserv
 				label: `Uniswap ${uniswapPriceProvenance(observation)}`,
 				unit: `REP/${observation.quote_symbol}`,
 				className: `series-${index % 8}`,
-				pointLabel: (row) => `${row.event_name} · ${row.market_id}`,
+				pointLabel: row => `${row.event_name} · ${row.market_id}`,
 			}),
 		),
 		sharedRange: quoteSymbols.size <= 1 ? ([bounds.minimum, bounds.maximum] as const) : undefined,
@@ -90,24 +87,19 @@ export const uniswapPriceChartModel = (observations: readonly UniswapPriceObserv
 }
 
 export const uniswapLiquidityChartModel = (observations: readonly UniswapPriceObservation[]) => {
-	const available = observations.filter(
-		(observation): observation is UniswapPriceObservation & { liquidity_value: string } =>
-			observation.liquidity_value !== undefined && observation.liquidity_value !== null,
-	)
+	const available = observations.filter((observation): observation is UniswapPriceObservation & { liquidity_value: string } => observation.liquidity_value !== undefined && observation.liquidity_value !== null)
 	const identities = [
 		...new Map(
-			available.map((observation) => {
+			available.map(observation => {
 				const identity = `${observation.venue}:${observation.market_id}`
 				return [identity, observation]
 			}),
 		).entries(),
 	].sort(([, left], [, right]) => left.venue.localeCompare(right.venue) || Number(left.fee_hundredths_bip) - Number(right.fee_hundredths_bip))
-	const keys = new Map<string, `uniswap_liquidity_${number}`>(
-		identities.map(([identity], index): [string, `uniswap_liquidity_${number}`] => [identity, `uniswap_liquidity_${index}`]),
-	)
+	const keys = new Map<string, `uniswap_liquidity_${number}`>(identities.map(([identity], index): [string, `uniswap_liquidity_${number}`] => [identity, `uniswap_liquidity_${index}`]))
 	const rows: UniswapLiquidityChartRow[] = [...available]
 		.sort((left, right) => new Date(left.timestamp).getTime() - new Date(right.timestamp).getTime())
-		.map((observation) => {
+		.map(observation => {
 			const key = keys.get(`${observation.venue}:${observation.market_id}`)
 			if (key === undefined) throw new Error(`Missing liquidity series for ${observation.venue}:${observation.market_id}`)
 			return { ...observation, [key]: observation.liquidity_value }
@@ -124,8 +116,7 @@ export const uniswapLiquidityChartModel = (observations: readonly UniswapPriceOb
 			decimals: 0,
 			unit: observation.venue === 'v2' ? 'reserve product' : 'active liquidity',
 			className: `series-${index % 8}`,
-			pointLabel: (row: UniswapLiquidityChartRow) =>
-				`${row.venue.toUpperCase()} ${row.event_name} · ${row.market_id} · ${row.venue === 'v2' ? 'reserve product' : 'active liquidity'}`,
+			pointLabel: (row: UniswapLiquidityChartRow) => `${row.venue.toUpperCase()} ${row.event_name} · ${row.market_id} · ${row.venue === 'v2' ? 'reserve product' : 'active liquidity'}`,
 		})),
 	}
 }

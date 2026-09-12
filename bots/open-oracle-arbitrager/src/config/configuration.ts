@@ -1,5 +1,5 @@
 import { resolve } from 'node:path'
-import type { Address, Hex } from '#ethereum'
+import type { Address, Hex } from '@zoltar/bot-shared/ethereum'
 import type { DeploymentManifest } from '#config/deployment-auth'
 import { validateIndependentReadRpcUrls, type ConnectivitySettings } from '#monitoring/connectivity'
 import { type MutableStrategy } from '#state/operator-state'
@@ -57,8 +57,6 @@ export function runnableOperatorSettings(settingsFile: string, saved: PersistedO
 	const network = networkConfiguration(saved.network, {
 		factory: deployment.uniswapFactory,
 		quoter: deployment.uniswapQuoter,
-		rep: deployment.rep,
-		weth: deployment.weth,
 	})
 	const quorumRpcUrls = [...validateIndependentReadRpcUrls(saved.connectivity.readRpcUrl, deployment.quorumRpcUrls)]
 	if (saved.runtime.execute && quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(saved.rpcQuorum)) throw new Error('Execution is enabled, but live operation requires at least two independent quorum RPCs (three read endpoints total)')
@@ -70,10 +68,9 @@ export function runnableOperatorSettings(settingsFile: string, saved: PersistedO
 	return { deployment, network, quorumRpcUrls }
 }
 
-export async function loadConfiguration(): Promise<Configuration> {
+export async function loadConfiguration(settingsFile = resolve(process.env['OPEN_ORACLE_ARBITRAGER_CONFIG'] ?? defaultConfigurationFile)): Promise<Configuration> {
 	const arguments_ = process.argv.slice(2)
-	if (arguments_.length > 0) throw new Error(`The arbitrager accepts no command-line arguments. Edit ${process.env['OPEN_ORACLE_ARBITRAGER_CONFIG'] ?? defaultConfigurationFile} or use the operator UI.`)
-	const settingsFile = resolve(process.env['OPEN_ORACLE_ARBITRAGER_CONFIG'] ?? defaultConfigurationFile)
+	if (arguments_.length > 0) throw new Error(`The arbitrager accepts no command-line arguments. Edit ${settingsFile} or use the operator UI.`)
 	const saved = await loadOperatorSettings(settingsFile)
 	if (saved === undefined) throw new Error(`Missing operator configuration at ${settingsFile}. Copy config/operator.example.json there, edit it, and start the bot again.`)
 	await assertOperatorProfileIsolation(settingsFile, saved)

@@ -1,21 +1,21 @@
 import { applyStrategy, type Configuration } from '#config/configuration'
-import type { Address } from '#ethereum'
+import type { Address } from '@zoltar/bot-shared/ethereum'
 import type { ExecutionLockManager } from '#execution/execution-locks'
 import { clearWalletDerivedState, type OperatorSnapshotFixedState, type OperatorState } from '#state/operator-state'
 import type { ExclusiveProcessLock } from '#state/position-store'
 import type { PendingOperatorUpdates } from './operator-control-plane.ts'
 
-export function clearMarketEvidenceForSourceChange(state: { marketConsensus?: unknown; marketObservations?: unknown[] | undefined }) {
+function clearMarketEvidenceForSourceChange(state: { marketConsensus?: unknown; marketObservations?: unknown[] | undefined }) {
 	state.marketObservations = []
 	state.marketConsensus = undefined
 }
 
-export function applyCentralizedMarketSettings<TSettings>(config: { centralizedMarkets: TSettings }, state: { marketConsensus?: unknown; marketObservations?: unknown[] | undefined }, nextSettings: TSettings) {
+function applyCentralizedMarketSettings<TSettings>(config: { centralizedMarkets: TSettings }, state: { marketConsensus?: unknown; marketObservations?: unknown[] | undefined }, nextSettings: TSettings) {
 	config.centralizedMarkets = nextSettings
 	clearMarketEvidenceForSourceChange(state)
 }
 
-export function applyLookbackBlockSetting(config: { lookbackBlocks: bigint }, nextLookbackBlocks: bigint) {
+function applyLookbackBlockSetting(config: { lookbackBlocks: bigint }, nextLookbackBlocks: bigint) {
 	const changed = config.lookbackBlocks !== nextLookbackBlocks
 	config.lookbackBlocks = nextLookbackBlocks
 	return changed
@@ -91,7 +91,7 @@ export function applyQueuedExecutionSettings(config: Configuration, state: Opera
 	}
 	if (pending.tokenAddresses !== undefined) {
 		config.tokenAddresses = pending.tokenAddresses
-		state.tokenAddresses = pending.tokenAddresses
+		state.tokenAddresses = []
 		pending.tokenAddresses = undefined
 		pending.persistedTokenAddresses = undefined
 	}

@@ -1,7 +1,9 @@
-import { encodeAbiParameters, getAddress, zeroAddress } from '@zoltar/bot-shared/ethereum'
-import { erc20Abi, openOracleAbi, wethAbi } from '../contracts/abi.ts'
+import { ethSpend, tokenSpend } from './input-funding.ts'
+import { inputInteger, inputMatches, inputText } from './input-values.ts'
+import { encodeAbiParameters, getAddress, zeroAddress, type AbiValue } from '@zoltar/bot-shared/ethereum'
+import { erc20Abi, openOracleAbi, weth9Abi } from '@zoltar/bot-shared/contracts/abi'
 import { OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT, trustedOpenOracleReportPredicate } from '../monitoring/protocol-index.ts'
-import { allowance, amount, cappedSpend, choose, disabled, eligible, encodePreflightCall, encodeStep, erc20AllowanceEvidence, erc20WalletDebit, eventEvidence, eventTopic, mixSeed, ONE_TOKEN, openOracleCreditDebit, optionAmount, planBase, tokenInventory } from './planning.ts'
+import { allowance, amount, choose, disabled, eligible, encodePreflightCall, encodeStep, erc20AllowanceEvidence, erc20WalletDebit, eventEvidence, eventTopic, mixSeed, ONE_TOKEN, openOracleCreditDebit, optionAmount, planBase, tokenInventory } from './planning.ts'
 import { requiredTimestampSafetySeconds, requiredWorkflowSafetyBlocks } from './timing.ts'
 import type { EcosystemSnapshot, OperationContinuationContext, OperationDefinition, OperationEvidence, OperationPlan, OperationStep, OperationWalletAssetDebit, OracleGameSnapshot, PlanningOptions } from './types.ts'
 
@@ -49,13 +51,13 @@ function tokenHolderEvidence(snapshot: EcosystemSnapshot, token: `0x${string}`, 
 	}
 }
 
-function exactTokenTransferEvidence(snapshot: EcosystemSnapshot, token: `0x${string}`, expected: bigint): OperationEvidence {
+function exactTokenTransferEvidence(snapshot: EcosystemSnapshot, token: `0x${string}`, expected: bigint, recipient = snapshot.wallet.address): OperationEvidence {
 	return {
 		abi: 'event Transfer(address indexed from, address indexed to, uint256 value)',
 		emitter: token,
 		equals: expected.toString(),
 		field: 'value',
-		indexed: { from: snapshot.deployments.openOracle, to: snapshot.wallet.address },
+		indexed: { from: snapshot.deployments.openOracle, to: recipient },
 		kind: 'decoded-event-field',
 		signature: 'Transfer(address,address,uint256)',
 		topic0: eventTopic('Transfer(address,address,uint256)'),
@@ -76,18 +78,6 @@ function trustedReportPredicate(snapshot: EcosystemSnapshot) {
 function hasActiveSignerReport(snapshot: EcosystemSnapshot) {
 	const trustedReport = trustedReportPredicate(snapshot)
 	return snapshot.reports.some(report => report.settlementTimestamp === '0' && trustedReport(report) && report.helper.creator.toLowerCase() === snapshot.wallet.address.toLowerCase())
-}
-
-function ethSpend(snapshot: EcosystemSnapshot, options: PlanningOptions, salt: string) {
-	return cappedSpend(amount(snapshot.wallet.ethBalanceAttoEth), optionAmount(options, 'minimumEthReserveAttoEth', 10n ** 16n), optionAmount(options, 'maxEthSpendAttoEth', 10n ** 16n), mixSeed(options.seed, salt))
-}
-
-function tokenSpend(snapshot: EcosystemSnapshot, tokenAddress: `0x${string}`, options: PlanningOptions, salt: string) {
-	const token = tokenInventory(snapshot, tokenAddress)
-	const isRep = snapshot.universes.some(universe => universe.repToken.toLowerCase() === tokenAddress.toLowerCase())
-	const reserve = isRep ? optionAmount(options, 'minimumRepReserveAttoRep', ONE_TOKEN) : 1n
-	const maximum = isRep ? optionAmount(options, 'maxRepSpendAttoRep', ONE_TOKEN) : optionAmount(options, 'maxEthSpendAttoEth', 10n ** 16n)
-	return cappedSpend(token === undefined ? 0n : amount(token.balance), reserve, maximum, mixSeed(options.seed, salt))
 }
 
 function approveToken(snapshot: EcosystemSnapshot, tokenAddress: `0x${string}`, required: bigint) {
@@ -313,7 +303,7 @@ function wethDefinition(mode: 'wrap' | 'unwrap'): OperationDefinition {
 				snapshot,
 				steps: [
 					encodeStep({
-						abi: wethAbi,
+						abi: weth9Abi,
 						args: mode === 'unwrap' ? [value] : undefined,
 						evidence: [eventEvidence(snapshot.deployments.weth, mode === 'wrap' ? 'Deposit(address,uint256)' : 'Withdrawal(address,uint256)')],
 						functionName: mode === 'wrap' ? 'deposit' : 'withdraw',
@@ -346,6 +336,7 @@ const deposit: OperationDefinition = {
 	buildPlan(snapshot, options) {
 		const knownRep = new Set(snapshot.universes.map(universe => universe.repToken.toLowerCase()))
 		const candidates = snapshot.wallet.tokens
+			.filter(token => inputMatches(options, 'token', token.address))
 			.filter(token => token.address.toLowerCase() === snapshot.deployments.weth.toLowerCase() || knownRep.has(token.address.toLowerCase()))
 			.filter(token => tokenSpend(snapshot, token.address, options, `${deposit.id}:${token.address}`) > 0n)
 			.map(token => ({ address: token.address, credit: token.openOracleCredit, spend: minAmount(tokenSpend(snapshot, token.address, options, `${deposit.id}:${token.address}`), MAX_UINT128) }))
@@ -440,27 +431,32 @@ function creditDefinition(mode: 'withdraw' | 'withdraw-to' | 'push-or-credit'): 
 		withdraw: 'withdraw',
 		'withdraw-to': 'withdrawTo',
 	}[mode]
-	const candidates = (snapshot: EcosystemSnapshot) => {
+	const candidates = (snapshot: EcosystemSnapshot, options: PlanningOptions) => {
 		const knownRep = new Set(snapshot.universes.map(universe => universe.repToken.toLowerCase()))
-		const tokens = snapshot.wallet.tokens.filter(token => amount(token.openOracleCredit) > 1n && (token.address.toLowerCase() === snapshot.deployments.weth.toLowerCase() || knownRep.has(token.address.toLowerCase()))).map(token => ({ address: token.address, credit: token.openOracleCredit }))
+		const tokens = snapshot.wallet.tokens
+			.filter(token => inputMatches(options, 'token', token.address))
+			.filter(token => amount(token.openOracleCredit) > 1n && (token.address.toLowerCase() === snapshot.deployments.weth.toLowerCase() || knownRep.has(token.address.toLowerCase())))
+			.map(token => ({ address: token.address, credit: token.openOracleCredit }))
 		return tokens
 	}
 	const build = (snapshot: EcosystemSnapshot, options: PlanningOptions, token: ReturnType<typeof candidates>[number]) => {
 		const tokenAddress = token.address
+		const recipient = mode === 'withdraw-to' ? getAddress(inputText(options, 'recipient', snapshot.wallet.address)) : snapshot.wallet.address
+		if (recipient === zeroAddress || recipient.toLowerCase() === snapshot.deployments.openOracle.toLowerCase()) throw new Error('Choose a non-zero external recipient')
 		const creditBefore = amount(token.credit)
 		const available = creditBefore - 1n
-		const spend = available > ONE_TOKEN ? ONE_TOKEN : available
+		const spend = inputInteger(options, 'amount', available > ONE_TOKEN ? ONE_TOKEN : available, 1n, available < ONE_TOKEN ? available : ONE_TOKEN)
 		const pushVariantSeed = mixSeed(options.seed, `${id}:overload`)
 		const useCustomPushGasLimit = mode === 'push-or-credit' && pushVariantSeed % 2 === 1
 		const customPushGasLimit = MINIMUM_CUSTOM_PUSH_OR_CREDIT_GAS_LIMIT + (BigInt(mixSeed(options.seed, `${id}:gas-limit`)) % (MAXIMUM_CUSTOM_PUSH_OR_CREDIT_GAS_LIMIT - MINIMUM_CUSTOM_PUSH_OR_CREDIT_GAS_LIMIT + 1n))
 		const pushGasLimit = useCustomPushGasLimit ? customPushGasLimit : DEFAULT_PUSH_OR_CREDIT_GAS_LIMIT
 		const args = (() => {
 			if (mode === 'withdraw') return [tokenAddress, spend] as const
-			if (mode === 'withdraw-to') return [tokenAddress, spend, snapshot.wallet.address] as const
+			if (mode === 'withdraw-to') return [tokenAddress, spend, recipient] as const
 			if (useCustomPushGasLimit) return [tokenAddress, snapshot.wallet.address, spend, pushGasLimit] as const
 			return [tokenAddress, snapshot.wallet.address, spend] as const
 		})()
-		const evidence: OperationEvidence[] = [tokenHolderEvidence(snapshot, tokenAddress, creditBefore - spend), exactTokenTransferEvidence(snapshot, tokenAddress, spend)]
+		const evidence: OperationEvidence[] = [tokenHolderEvidence(snapshot, tokenAddress, creditBefore - spend), exactTokenTransferEvidence(snapshot, tokenAddress, spend, recipient)]
 		const preflightCalls =
 			mode === 'withdraw' || mode === 'withdraw-to'
 				? [
@@ -470,7 +466,7 @@ function creditDefinition(mode: 'withdraw' | 'withdraw-to' | 'push-or-credit'): 
 							caller: snapshot.wallet.address,
 							expectedResult: encodeAbiParameters([{ type: 'uint256' }], [spend]),
 							functionName: method,
-							label: `Prove the fixed OpenOracle ${mode === 'withdraw-to' ? 'self-recipient withdrawal' : 'withdrawal'} still debits its full amount`,
+							label: `Prove the fixed OpenOracle ${mode === 'withdraw-to' ? 'recipient withdrawal' : 'withdrawal'} still debits its full amount`,
 							to: snapshot.deployments.openOracle,
 						}),
 					]
@@ -483,15 +479,15 @@ function creditDefinition(mode: 'withdraw' | 'withdraw-to' | 'push-or-credit'): 
 		const label = {
 			'push-or-credit': 'Push or credit OpenOracle balance',
 			withdraw: 'Withdraw OpenOracle credit',
-			'withdraw-to': 'Withdraw OpenOracle credit to self',
+			'withdraw-to': 'Withdraw OpenOracle credit to recipient',
 		}[mode]
 		return planBase({
 			definitionId: id,
 			ecosystem: 'open-oracle',
 			label,
 			lastValidBlockNumber: (BigInt(snapshot.anchor.blockNumber) + 1n).toString(),
-			metadata: { amount: spend.toString(), creditBefore: creditBefore.toString(), methodSignature, recipient: snapshot.wallet.address, token: tokenAddress, ...(mode === 'push-or-credit' ? { forwardedGasLimit: pushGasLimit.toString() } : {}) },
-			postconditions: ['Internal credit decreases and the configured wallet receives the asset externally or as fallback credit'],
+			metadata: { amount: spend.toString(), creditBefore: creditBefore.toString(), methodSignature, recipient, token: tokenAddress, ...(mode === 'push-or-credit' ? { forwardedGasLimit: pushGasLimit.toString() } : {}) },
+			postconditions: ['Internal credit decreases and the selected recipient receives the asset externally or as fallback credit'],
 			priority: 'random',
 			risk: 'low',
 			snapshot,
@@ -512,7 +508,7 @@ function creditDefinition(mode: 'withdraw' | 'withdraw-to' | 'push-or-credit'): 
 	}
 	return {
 		buildPlan(snapshot, options) {
-			const token = choose(candidates(snapshot), mixSeed(options.seed, id))
+			const token = choose(candidates(snapshot, options), mixSeed(options.seed, id))
 			return token === undefined ? undefined : build(snapshot, options, token)
 		},
 		classification: 'selectable',
@@ -585,8 +581,8 @@ const report: OperationDefinition = {
 		if (hasActiveSignerReport(snapshot)) return undefined
 		const rep = snapshot.universes[0]?.repToken
 		if (rep === undefined) return undefined
-		const amount1 = minAmount(tokenSpend(snapshot, snapshot.deployments.weth, options, 'report-weth'), MAX_UINT128 / 100n)
-		const amount2 = minAmount(tokenSpend(snapshot, rep, options, 'report-rep'), MAX_UINT128)
+		const amount1 = minAmount(tokenSpend(snapshot, snapshot.deployments.weth, options, 'report-weth', 'amount1'), MAX_UINT128 / 100n)
+		const amount2 = minAmount(tokenSpend(snapshot, rep, options, 'report-rep', 'amount2'), MAX_UINT128)
 		if (amount1 === 0n || amount2 === 0n) return undefined
 		const params = {
 			callbackContract: zeroAddress,
@@ -727,8 +723,8 @@ const report: OperationDefinition = {
 			options.allowHighRisk === true ? undefined : 'High-risk operations are disabled',
 			hasActiveSignerReport(snapshot) ? 'A signer-created OpenOracle report is still unresolved' : undefined,
 			rep === undefined ? 'Root REP is unavailable' : undefined,
-			minAmount(tokenSpend(snapshot, snapshot.deployments.weth, options, 'report-weth'), MAX_UINT128 / 100n) === 0n ? 'No WETH is spendable within policy and uint128 report bounds' : undefined,
-			rep === undefined || minAmount(tokenSpend(snapshot, rep, options, 'report-rep'), MAX_UINT128) === 0n ? 'No REP is spendable within policy and uint128 report bounds' : undefined,
+			minAmount(tokenSpend(snapshot, snapshot.deployments.weth, options, 'report-weth', 'amount1'), MAX_UINT128 / 100n) === 0n ? 'No WETH is spendable within policy and uint128 report bounds' : undefined,
+			rep === undefined || minAmount(tokenSpend(snapshot, rep, options, 'report-rep', 'amount2'), MAX_UINT128) === 0n ? 'No REP is spendable within policy and uint128 report bounds' : undefined,
 		)
 	},
 	id: 'open-oracle.report',
@@ -750,7 +746,7 @@ function reportOperation(mode: 'dispute' | 'settle'): OperationDefinition {
 		})
 	}
 	const build = (snapshot: EcosystemSnapshot, options: PlanningOptions, selected: OracleGameSnapshot) => {
-		let args: readonly unknown[]
+		let args: readonly AbiValue[]
 		let steps: OperationStep[] = []
 		if (mode === 'settle') args = [BigInt(selected.reportId), oracleGame(selected), oracleHelper(selected)]
 		else {

@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test'
-import { createPublicClient, custom, encodeAbiParameters, getAddress } from '@zoltar/shared/ethereum'
+import { createPublicClient, custom, encodeAbiParameters, getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { parseDeploymentSetupInput } from '../../protocol/config.js'
-import { parseCoreDeployments } from '../../protocol/coreDeployments.js'
 import { loadWalletHeaderBalances, validateRpcChainId } from '../../protocol/live.js'
+import { loadCoreDeploymentsFrom } from '../support/coreDeployments.js'
 
 const core = `0x${'34'.repeat(20)}`
 const zoltar = `0x${'56'.repeat(20)}`
@@ -13,8 +13,8 @@ describe('trading UI deployment configuration', () => {
 		expect(validateRpcChainId(1, 1)).toBeUndefined()
 	})
 
-	test('loads canonical core deployment choices copied from the root manifests', () => {
-		const deployments = parseCoreDeployments([{ chainId: 11_155_111, chainName: 'Sepolia', id: 'sepolia', proxyDeployer: `0x${'45'.repeat(20)}`, securityPoolFactory: core, zoltar }])
+	test('loads canonical core deployment choices copied from the root manifests', async () => {
+		const deployments = await loadCoreDeploymentsFrom([{ chainId: 11_155_111, chainName: 'Sepolia', id: 'sepolia', proxyDeployer: `0x${'45'.repeat(20)}`, securityPoolFactory: core, zoltar }])
 		expect(deployments[0]?.chainId).toBe(11_155_111)
 		expect(deployments[0]?.securityPoolFactory.toLowerCase()).toBe(core)
 		expect(deployments[0]?.zoltar.toLowerCase()).toBe(zoltar)

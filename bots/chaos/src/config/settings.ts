@@ -1,24 +1,27 @@
+import { renameAndSyncDirectory } from '@zoltar/bot-shared/config/durable-replacement'
+import { canonicalDeployment } from './canonical-deployment.ts'
 import { createHash, randomUUID } from 'node:crypto'
 import { constants } from 'node:fs'
 import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
-import { dirname, extname, resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import { persistentPathIdentitiesMatch, persistentPathIdentity } from '@zoltar/bot-shared/config/persistent-path'
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
-import { getAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import { type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { validateSubmissionSettings, type SubmissionSettings } from '@zoltar/bot-shared/execution/transaction-submission'
 import { validateConnectivitySettings, validateIndependentReadRpcUrls, type ConnectivitySettings, type NetworkName } from '@zoltar/bot-shared/monitoring/connectivity'
 import { configuredQuorumRpcUrlMinimum, rpcQuorumRequirement, type RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 import { CHAOS_OPERATION_CATALOG } from '../operations/catalog.ts'
 import { MINIMUM_WORKFLOW_VALIDITY_BLOCKS } from '../operations/timing.ts'
+import { assertExactKeys as assertExactRequiredAndOptionalKeys, requiredRecord, uint256String } from '../state/validators.ts'
+import { formatDecimalAmount, parseDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
 
-export const PRESERVE_PRIVATE_KEY = '__PRESERVE_SAVED_PRIVATE_KEY__'
+const PRESERVE_PRIVATE_KEY = '__PRESERVE_SAVED_PRIVATE_KEY__'
 export const CONFIGURATION_REVISION_CONFLICT = 'ConfigurationRevisionConflict'
-export { MINIMUM_WORKFLOW_VALIDITY_BLOCKS }
-export const PRESET_MAXIMUM_BLOCK_INTERVAL_SECONDS = 60
-export const MAXIMUM_BLOCK_INTERVAL_SECONDS = 86_400
+const PRESET_MAXIMUM_BLOCK_INTERVAL_SECONDS = 60
+const MAXIMUM_BLOCK_INTERVAL_SECONDS = 86_400
 
 export const CHAOS_ECOSYSTEMS = ['zoltar', 'statoblast', 'open-oracle', 'trading'] as const
-export type ChaosEcosystem = (typeof CHAOS_ECOSYSTEMS)[number]
+type ChaosEcosystem = (typeof CHAOS_ECOSYSTEMS)[number]
 
 export type DeploymentSettings = {
 	openOracle: Address
@@ -32,7 +35,7 @@ export type DeploymentSettings = {
 	zoltar: Address
 }
 
-export type DiscoverySettings = {
+type DiscoverySettings = {
 	maxPools: number
 	maxQuestions: number
 	maxStagedOperationsPerPool: number
@@ -62,7 +65,7 @@ export type StrategySettings = {
 	workflowValidForBlocks: bigint
 }
 
-export type RuntimeSettings = {
+type RuntimeSettings = {
 	execute: boolean
 	lifecyclePollMilliseconds: number
 	once: boolean
@@ -74,7 +77,7 @@ export type RuntimeSettings = {
 	uiPort: number
 }
 
-export type PresetNetworkSettings = {
+type PresetNetworkSettings = {
 	chainId: number
 	explorerUrl: string
 	kind?: undefined
@@ -82,7 +85,7 @@ export type PresetNetworkSettings = {
 	name: NetworkName
 }
 
-export type CustomNetworkSettings = {
+type CustomNetworkSettings = {
 	chainId: number
 	explorerUrl: string
 	kind: 'custom'
@@ -90,7 +93,7 @@ export type CustomNetworkSettings = {
 	name: string
 }
 
-export type OperatorNetworkSettings = PresetNetworkSettings | CustomNetworkSettings
+type OperatorNetworkSettings = PresetNetworkSettings | CustomNetworkSettings
 
 export type OperatorSettings = {
 	connectivity: (ConnectivitySettings & { quorumRpcUrls: string[]; rpcQuorum: RpcQuorumRequirement }) | undefined
@@ -140,22 +143,10 @@ const settingsFilesystem: SettingsFilesystem = {
 
 const settingsWriteQueues = new Map<string, Promise<void>>()
 
-const zeroAddress = getAddress('0x0000000000000000000000000000000000000000')
-const canonicalUniswapV3Factory = getAddress('0x1F98431c8aD98523631AE4a59f267346ea31F984')
-const unit = 10n ** 18n
 const defaultSettingsPath = resolve(import.meta.dir, '..', '..', '.state', 'operator.json')
 
-function requiredRecord(value: unknown, label: string): JsonRecord {
-	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`${label} must be an object`)
-	return value as JsonRecord
-}
-
 function assertExactKeys(value: JsonRecord, keys: readonly string[], label: string) {
-	const allowed = new Set(keys)
-	const unknown = Object.keys(value).filter(key => !allowed.has(key))
-	const missing = keys.filter(key => !(key in value))
-	if (unknown.length !== 0) throw new Error(`${label} contains unsupported field ${unknown[0] ?? 'unknown'}`)
-	if (missing.length !== 0) throw new Error(`${label} is missing ${missing[0] ?? 'a required field'}`)
+	assertExactRequiredAndOptionalKeys(value, keys, [], label)
 }
 
 function boolean(value: unknown, label: string) {
@@ -196,28 +187,6 @@ function maximumBlockIntervalSeconds(value: unknown, label = 'network.maximumBlo
 
 function filePath(value: unknown, label: string) {
 	return resolve(nonemptyString(value, label))
-}
-
-function unsignedIntegerString(value: unknown, label: string) {
-	if (typeof value !== 'string' || !/^(?:0|[1-9]\d*)$/.test(value)) throw new Error(`${label} must be a non-negative integer string`)
-	const parsed = BigInt(value)
-	if (parsed >= 1n << 256n) throw new Error(`${label} must fit in a uint256`)
-	return parsed
-}
-
-export function parseDecimalAmount(value: unknown, label: string) {
-	if (typeof value !== 'string' || !/^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(value)) {
-		throw new Error(`${label} must be a non-negative decimal with at most 18 places`)
-	}
-	const [whole = '0', fraction = ''] = value.split('.')
-	return BigInt(whole) * unit + BigInt(fraction.padEnd(18, '0'))
-}
-
-export function formatDecimalAmount(value: bigint) {
-	if (value < 0n) throw new Error('Decimal amount cannot be negative')
-	const whole = value / unit
-	const fraction = (value % unit).toString().padStart(18, '0').replace(/0+$/, '')
-	return fraction === '' ? whole.toString() : `${whole.toString()}.${fraction}`
 }
 
 function parseNetwork(value: unknown): OperatorSettings['network'] {
@@ -271,23 +240,6 @@ function parseConnectivity(value: unknown): NonNullable<OperatorSettings['connec
 	return { ...parsed, quorumRpcUrls, rpcQuorum }
 }
 
-function parseDeployment(value: unknown): DeploymentSettings {
-	const deployment = requiredRecord(value, 'deployment')
-	const keys = ['openOracle', 'questionData', 'securityPoolFactory', 'securityPoolForker', 'tradingFactory', 'tradingRouter', ...('uniswapV3Factory' in deployment ? ['uniswapV3Factory'] : []), 'weth', 'zoltar'] as const
-	assertExactKeys(deployment, keys, 'deployment')
-	return {
-		openOracle: getAddress(nonemptyString(deployment['openOracle'], 'deployment.openOracle')),
-		questionData: getAddress(nonemptyString(deployment['questionData'], 'deployment.questionData')),
-		securityPoolFactory: getAddress(nonemptyString(deployment['securityPoolFactory'], 'deployment.securityPoolFactory')),
-		securityPoolForker: getAddress(nonemptyString(deployment['securityPoolForker'], 'deployment.securityPoolForker')),
-		tradingFactory: getAddress(nonemptyString(deployment['tradingFactory'], 'deployment.tradingFactory')),
-		tradingRouter: getAddress(nonemptyString(deployment['tradingRouter'], 'deployment.tradingRouter')),
-		uniswapV3Factory: deployment['uniswapV3Factory'] === undefined ? canonicalUniswapV3Factory : getAddress(nonemptyString(deployment['uniswapV3Factory'], 'deployment.uniswapV3Factory')),
-		weth: getAddress(nonemptyString(deployment['weth'], 'deployment.weth')),
-		zoltar: getAddress(nonemptyString(deployment['zoltar'], 'deployment.zoltar')),
-	}
-}
-
 function parseDiscovery(value: unknown): DiscoverySettings {
 	const discovery = requiredRecord(value, 'discovery')
 	const keys = ['maxPools', 'maxQuestions', 'maxStagedOperationsPerPool', 'maxUniverses', 'maxVaultsPerPool'] as const
@@ -317,7 +269,7 @@ function parseRuntime(value: unknown): RuntimeSettings {
 		lifecyclePollMilliseconds: integer(runtime['lifecyclePollMilliseconds'], 'runtime.lifecyclePollMilliseconds', 1_000, 60_000),
 		once,
 		protocolLogBlockSpan: integer(runtime['protocolLogBlockSpan'], 'runtime.protocolLogBlockSpan', 1, 50_000),
-		protocolStartBlock: unsignedIntegerString(runtime['protocolStartBlock'], 'runtime.protocolStartBlock'),
+		protocolStartBlock: BigInt(uint256String(runtime['protocolStartBlock'], 'runtime.protocolStartBlock')),
 		stateFile: filePath(runtime['stateFile'], 'runtime.stateFile'),
 		ui,
 		uiHost: runtime['uiHost'],
@@ -387,13 +339,10 @@ function parseStrategy(value: unknown): StrategySettings {
 	}
 }
 
-function hasZeroDeploymentAddress(deployment: DeploymentSettings) {
-	return Object.values(deployment).some(address => address === zeroAddress)
-}
-
 export function parseSettings(value: unknown, preservedPrivateKey?: Hex): OperatorSettings {
 	const root = requiredRecord(value, 'operator settings')
-	assertExactKeys(root, ['connectivity', 'deployment', 'discovery', 'network', 'networkConfigured', 'paused', 'privateKey', 'runtime', 'scheduler', 'strategy', 'submission', 'version'], 'operator settings')
+	// Accept the obsolete field so existing saved configurations can migrate; never use its addresses.
+	assertExactKeys(root, ['connectivity', ...('deployment' in root ? ['deployment'] : []), 'discovery', 'network', 'networkConfigured', 'paused', 'privateKey', 'runtime', 'scheduler', 'strategy', 'submission', 'version'], 'operator settings')
 	if (root['version'] !== 1) throw new Error('operator settings version must be 1')
 	const networkConfigured = boolean(root['networkConfigured'], 'networkConfigured')
 	const connectivity = root['connectivity'] === null ? undefined : parseConnectivity(root['connectivity'])
@@ -401,11 +350,12 @@ export function parseSettings(value: unknown, preservedPrivateKey?: Hex): Operat
 	if (root['privateKey'] === PRESERVE_PRIVATE_KEY && preservedPrivateKey === undefined) throw new Error('A redacted private key can only preserve an existing saved signer')
 	const privateKeyValue = root['privateKey'] === PRESERVE_PRIVATE_KEY ? preservedPrivateKey : root['privateKey']
 	const privateKey = signerCandidate(privateKeyValue ?? null).privateKey
+	const network = parseNetwork(root['network'])
 	const settings: OperatorSettings = {
 		connectivity,
-		deployment: parseDeployment(root['deployment']),
+		deployment: canonicalDeployment(network.chainId),
 		discovery: parseDiscovery(root['discovery']),
-		network: parseNetwork(root['network']),
+		network,
 		networkConfigured,
 		paused: boolean(root['paused'], 'paused'),
 		privateKey,
@@ -422,9 +372,8 @@ export function parseSettings(value: unknown, preservedPrivateKey?: Hex): Operat
 	if (settings.runtime.execute && settings.strategy.minimumEthReserveAttoEth < settings.strategy.maximumGasCostAttoEth) {
 		throw new Error('Live execution requires strategy.minimumEthReserve to retain at least one strategy.maximumGasCostEth-sized safety floor')
 	}
-	if (settings.runtime.execute && hasZeroDeploymentAddress(settings.deployment)) throw new Error('Live execution requires every ecosystem deployment address')
-	if (settings.runtime.execute && (settings.connectivity === undefined || settings.connectivity.rpcQuorum !== 2 || settings.connectivity.quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(2))) {
-		throw new Error('Live execution requires RPC quorum 2 with three independent read origins')
+	if (settings.runtime.execute && settings.connectivity !== undefined && settings.connectivity.quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(settings.connectivity.rpcQuorum)) {
+		throw new Error('Live execution with RPC quorum 2 requires three independent read origins')
 	}
 	return settings
 }
@@ -432,7 +381,6 @@ export function parseSettings(value: unknown, preservedPrivateKey?: Hex): Operat
 export function serializedSettings(settings: OperatorSettings, redactPrivateKey = false) {
 	return {
 		connectivity: settings.connectivity === undefined ? null : { ...settings.connectivity },
-		deployment: settings.deployment,
 		discovery: settings.discovery,
 		network: settings.network,
 		networkConfigured: settings.networkConfigured,
@@ -535,13 +483,7 @@ export async function saveSettings(path: string, settings: OperatorSettings, exp
 				}
 				if (revision(current) !== expectedRevision) throw configurationRevisionConflict()
 			}
-			await filesystem.rename(temporaryPath, resolvedPath)
-			const directoryHandle = await filesystem.open(dirname(resolvedPath), 'r')
-			try {
-				await directoryHandle.sync()
-			} finally {
-				await directoryHandle.close()
-			}
+			await renameAndSyncDirectory(temporaryPath, resolvedPath, filesystem)
 		} catch (error) {
 			await filesystem.rm(temporaryPath, { force: true })
 			throw error
@@ -555,17 +497,11 @@ export async function saveSettings(path: string, settings: OperatorSettings, exp
 	return savedRevision
 }
 
-export function chainSpecificPath(path: string, network: NetworkName) {
-	const extension = extname(path)
-	const stem = (extension === '' ? path : path.slice(0, -extension.length)).replace(/\.(?:mainnet|sepolia)$/, '')
-	return `${stem}.${network}${extension}`
-}
-
-export function settingsProfilePath(path: string, network: NetworkName) {
+function settingsProfilePath(path: string, network: NetworkName) {
 	return `${path}.${network}.profile`
 }
 
-export function settingsProfilePathForNetwork(path: string, network: OperatorNetworkSettings) {
+function settingsProfilePathForNetwork(path: string, network: OperatorNetworkSettings) {
 	if (network.kind !== 'custom') return settingsProfilePath(path, network.name)
 	const chainId = customNetworkChainId(network.chainId, 'Custom profile chain ID')
 	return `${path}.custom-chain-${chainId.toString()}.profile`
@@ -622,12 +558,6 @@ async function assertProfileCandidates(path: string, candidates: readonly Profil
 	}
 }
 
-function assertCompatibleProfileProcessMode(current: OperatorSettings, target: OperatorSettings) {
-	if (current.runtime.once !== target.runtime.once || current.runtime.ui !== target.runtime.ui || current.runtime.uiHost !== target.runtime.uiHost || current.runtime.uiPort !== target.runtime.uiPort) {
-		throw new Error('Chain profiles must use the same once mode and dashboard binding to switch in place')
-	}
-}
-
 export async function assertSettingsProfileIsolation(path: string, active: OperatorSettings) {
 	const mainnet = await loadProfile(path, 'mainnet')
 	const sepolia = await loadProfile(path, 'sepolia')
@@ -635,51 +565,4 @@ export async function assertSettingsProfileIsolation(path: string, active: Opera
 	if (mainnet !== undefined) candidates.push(presetProfileCandidate('mainnet', mainnet))
 	if (sepolia !== undefined) candidates.push(presetProfileCandidate('sepolia', sepolia))
 	await assertProfileCandidates(path, candidates)
-}
-
-export async function switchSettingsNetworkProfile(path: string, network: NetworkName, examplePath: string, preflight?: (target: OperatorSettings) => Promise<void>) {
-	const current = await loadSettings(path)
-	const mainnet = await loadProfile(path, 'mainnet')
-	const sepolia = await loadProfile(path, 'sepolia')
-	const stored: ProfileCandidate[] = [activeProfileCandidate(current.settings)]
-	if (mainnet !== undefined) stored.push(presetProfileCandidate('mainnet', mainnet))
-	if (sepolia !== undefined) stored.push(presetProfileCandidate('sepolia', sepolia))
-	await assertProfileCandidates(path, stored)
-	if (current.settings.network.kind !== 'custom' && current.settings.network.name === network) return current
-	let target = network === 'mainnet' ? mainnet : sepolia
-	if (target === undefined) {
-		const template = parseSettings(JSON.parse(await readFile(examplePath, 'utf8')))
-		const chainId = network === 'mainnet' ? 1 : 11_155_111
-		target = {
-			...template,
-			connectivity: undefined,
-			deployment: Object.fromEntries(Object.keys(template.deployment).map(key => [key, zeroAddress])) as DeploymentSettings,
-			network: {
-				chainId,
-				explorerUrl: network === 'mainnet' ? 'https://etherscan.io' : 'https://sepolia.etherscan.io',
-				maximumBlockIntervalSeconds: PRESET_MAXIMUM_BLOCK_INTERVAL_SECONDS,
-				name: network,
-			},
-			networkConfigured: false,
-			paused: true,
-			privateKey: undefined,
-			runtime: {
-				...template.runtime,
-				execute: false,
-				once: false,
-				stateFile: chainSpecificPath(current.settings.runtime.stateFile, network),
-				ui: current.settings.runtime.ui,
-				uiHost: current.settings.runtime.uiHost,
-				uiPort: current.settings.runtime.uiPort,
-			},
-		}
-	}
-	target = { ...target, paused: true }
-	await assertProfileCandidates(path, [activeProfileCandidate(current.settings), presetProfileCandidate(network, target)])
-	assertCompatibleProfileProcessMode(current.settings, target)
-	await preflight?.(target)
-	await saveSettings(settingsProfilePathForNetwork(path, current.settings.network), { ...current.settings, paused: true })
-	await saveSettings(settingsProfilePath(path, network), target)
-	const savedRevision = await saveSettings(path, target, current.revision)
-	return { path, revision: savedRevision, settings: target }
 }

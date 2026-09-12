@@ -1,19 +1,23 @@
 import { readFile } from 'node:fs/promises'
 import { beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
 import assert from '../testSupport/simulator/utils/assert'
-import { encodeDeployData, encodeFunctionData, type Address, type Hash, type Hex, zeroAddress } from '@zoltar/shared/ethereum'
-import { privateKeyToAccount } from '@zoltar/shared/ethereum'
-import { knownSourceMapCoverageGaps } from '../coverage/sourceMapCoverageGaps'
+import { encodeDeployData, encodeFunctionData, type Address, type Hash, type Hex, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { privateKeyToAccount } from '@zoltar/core-shared/evm/ethereum'
+import { knownSourceMapCoverageGaps } from '../testSupport/coverage/sourceMapCoverageGaps'
 import {
+	buildCoveragePcToSourceMapForTest,
 	collectBytecodeCoverageForCall,
 	collectBytecodeCoverageForTransaction,
 	flushSolidityBytecodeCoverageForTest,
 	getKnownSourceMapCoverageGapRuleMatchCountsForTest,
 	getSolidityBytecodeCoverageProfileHitCountForTest,
 	getSolidityCoverableLineNumbersForTest,
+	isCoverageBytecodeCompatibleForTest,
 	resetSolidityBytecodeCoverageAddressCache,
+	resolveCoverageBytecodeCandidateForTest,
+	resolveCoverageCreationCandidateForTest,
 	resolveTraceStepAddressesForTest,
-} from '../coverage/traceToSource'
+} from '../testSupport/coverage/traceToSource'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
@@ -57,6 +61,17 @@ const bytes32 = (value: bigint): Hex => `0x${value.toString(16).padStart(64, '0'
 const isCoverageEnabled = () => process.env['SOLIDITY_BYTECODE_COVERAGE'] === '1'
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
 
+const parseBytecodeRanges = (value: unknown): { readonly start: number; readonly length: number }[] => {
+	if (Array.isArray(value)) {
+		return value.map(range => {
+			if (!isRecord(range) || typeof range['start'] !== 'number' || typeof range['length'] !== 'number') throw new Error('Bytecode reference range is invalid')
+			return { start: range['start'], length: range['length'] }
+		})
+	}
+	if (!isRecord(value)) return []
+	return Object.values(value).flatMap(parseBytecodeRanges)
+}
+
 const parseRpcQuantity = (value: unknown): bigint => {
 	if (typeof value !== 'string') throw new Error('Expected RPC quantity string')
 	return BigInt(value)
@@ -88,6 +103,47 @@ const readCoverageFileSummary = async (sourceSuffix: string): Promise<CoverageFi
 	}
 	throw new Error(`Coverage summary is missing ${sourceSuffix}`)
 }
+
+test('coverage runtime matching preserves linked PCs and masks generated mutable ranges exactly', async () => {
+	const artifactDocument: unknown = JSON.parse(await readFile('solidity/artifacts/Contracts.json', 'utf8'))
+	if (!isRecord(artifactDocument) || !isRecord(artifactDocument['contracts'])) throw new Error('Contract artifact must contain contracts')
+	const sourceContracts = artifactDocument['contracts']['contracts/statoblast/SecurityPool.sol']
+	if (!isRecord(sourceContracts) || !isRecord(sourceContracts['SecurityPool'])) throw new Error('Contract artifact must contain SecurityPool')
+	const evm = sourceContracts['SecurityPool']['evm']
+	if (!isRecord(evm) || !isRecord(evm['deployedBytecode'])) throw new Error('SecurityPool must contain deployed bytecode')
+	const bytecode = evm['deployedBytecode']['object']
+	const sourceMap = evm['deployedBytecode']['sourceMap']
+	const immutableRanges = parseBytecodeRanges(evm['deployedBytecode']['immutableReferences'])
+	const linkRanges = parseBytecodeRanges(evm['deployedBytecode']['linkReferences'])
+	if (typeof bytecode !== 'string' || typeof sourceMap !== 'string') throw new Error('SecurityPool coverage metadata must contain bytecode and a source map')
+	assert.ok(immutableRanges.length > 0, 'SecurityPool must expose immutable ranges')
+	assert.ok(linkRanges.length > 0, 'SecurityPool must expose linked-library ranges')
+	const ranges = [...immutableRanges, ...linkRanges]
+	const runtimeCharacters = bytecode.split('')
+	for (const range of ranges) {
+		for (let index = range.start * 2; index < (range.start + range.length) * 2; index++) runtimeCharacters[index] = runtimeCharacters[index] === 'f' ? '0' : 'f'
+	}
+	assert.ok(isCoverageBytecodeCompatibleForTest(bytecode, runtimeCharacters.join(''), ranges), 'runtime matching must ignore constructor-populated immutable bytes')
+	const firstLinkRange = linkRanges.reduce((first, range) => (range.start < first.start ? range : first))
+	const pcToSource = buildCoveragePcToSourceMapForTest(bytecode, sourceMap, linkRanges)
+	assert.ok(
+		[...pcToSource.keys()].some(pc => pc > firstLinkRange.start + firstLinkRange.length),
+		'PC parsing must retain source-mapped instructions after the first library placeholder',
+	)
+	assert.ok(!isCoverageBytecodeCompatibleForTest('6000', '6100', []), 'runtime matching must reject changes outside declared ranges')
+	assert.strictEqual(
+		resolveCoverageBytecodeCandidateForTest(
+			[
+				{ artifactBytecode: '60aa00', mutableRanges: [{ start: 1, length: 1 }], profileId: 'first' },
+				{ artifactBytecode: '60bb00', mutableRanges: [{ start: 1, length: 1 }], profileId: 'second' },
+			],
+			'60cc00',
+		),
+		undefined,
+		'distinct profiles that match only after masking must remain ambiguous',
+	)
+	assert.strictEqual(resolveCoverageCreationCandidateForTest([{ artifactBytecode: '60aa00', mutableRanges: [{ start: 1, length: 1 }], profileId: 'creation' }], '60bb00deadbeef'), 'creation', 'creation matching must mask linked bytes without treating constructor arguments as code')
+})
 
 const normalizeRpcBytecode = (value: string): string => (value.startsWith('0x') ? value.slice(2) : value).toLowerCase()
 
@@ -493,7 +549,8 @@ describe('Solidity bytecode coverage helpers', () => {
 		if (isCoverageEnabled()) {
 			await flushSolidityBytecodeCoverageForTest()
 			const deploymentStatusCoverage = await readCoverageFileSummary('/solidity/contracts/DeploymentStatusOracle.sol')
-			assert.ok((deploymentStatusCoverage.lineHits['14'] ?? 0) > 0, 'raw deployment coverage should attribute the constructor assignment using input fetched by transaction hash')
+			const constructorAssignmentLine = await findLineNumberByExactSource('solidity/contracts/DeploymentStatusOracle.sol', 'deploymentAddresses = _deploymentAddresses;')
+			assert.ok((deploymentStatusCoverage.lineHits[constructorAssignmentLine.toString()] ?? 0) > 0, 'raw deployment coverage should attribute the constructor assignment using input fetched by transaction hash')
 		}
 	})
 
@@ -560,8 +617,8 @@ describe('Solidity bytecode coverage helpers', () => {
 			reputationTokenAddress,
 			encodeFunctionData({
 				abi: ReputationToken_ReputationToken.abi,
-				functionName: 'setMaxTheoreticalSupplyAttoRep',
-				args: [100n],
+				functionName: 'initialize',
+				args: [1n, 100n, 1n],
 			}),
 		)
 		await transact(
@@ -658,8 +715,8 @@ describe('Solidity bytecode coverage helpers', () => {
 			reputationTokenAddress,
 			encodeFunctionData({
 				abi: ReputationToken_ReputationToken.abi,
-				functionName: 'setMaxTheoreticalSupplyAttoRep',
-				args: [10n],
+				functionName: 'initialize',
+				args: [1n, 10n, 1n],
 			}),
 		)
 		await transact(
@@ -707,8 +764,8 @@ describe('Solidity bytecode coverage helpers', () => {
 			reputationTokenAddress,
 			encodeFunctionData({
 				abi: ReputationToken_ReputationToken.abi,
-				functionName: 'setMaxTheoreticalSupplyAttoRep',
-				args: [100n],
+				functionName: 'initialize',
+				args: [1n, 100n, 1n],
 			}),
 		)
 		await transact(
@@ -1654,7 +1711,7 @@ describe('Solidity bytecode coverage helpers', () => {
 					gas: 10_000_000n,
 				}),
 			),
-			/SafeERC20Ops token address must contain contract code/,
+			/Security pool deployment failed/,
 		)
 		const securityPoolDeployerAddress = await deployContract(
 			encodeDeployData({
@@ -1684,7 +1741,7 @@ describe('Solidity bytecode coverage helpers', () => {
 					gas: 10_000_000n,
 				}),
 			),
-			/SafeERC20Ops token address must contain contract code/,
+			/Security pool deployment failed/,
 		)
 	})
 })

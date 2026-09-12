@@ -21,9 +21,10 @@
 		"types": ["bun-types", "node"],
 		"paths": {
 			"@zoltar/ui-core-shared/*": ["./ui/coreShared/ts/*"],
-			"@zoltar/ui-zoltar/*": ["./ui/zoltar/ts/*"],
-			"@zoltar/ui-statoblast/*": ["./ui/statoblast/ts/*"]
+			"@zoltar/ui-zoltar-shared/*": ["./ui/zoltarShared/ts/*"],
+			"@zoltar/ui-statoblast-shared/*": ["./ui/statoblastShared/ts/*"]
 		}
 	},
-	"include": ["bun-test-setup*.ts", "scripts/**/*.mts", "scripts/**/*.ts", "ui/coreShared/build/**/*.mts", "ui/coreShared/dev-server.ts"]
+	"include": ["bun-test-setup*.ts", "scripts/**/*.mts", "scripts/**/*.ts", "solidity/ts/types/index.d.ts", "tooling/**/*.mts", "tooling/**/*.ts"],
+	"exclude": ["tooling/ui/browserSmoke.test.ts", "tooling/ui/productionBuild.test.ts"]
 }

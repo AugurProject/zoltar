@@ -1,4 +1,4 @@
-import type { Account, Address, Chain, Hex, PublicClient, TransactionReplacement, Transport, WalletClient } from '#ethereum'
+import type { Account, Address, Chain, Hex, PublicClient, TransactionReplacement, Transport, WalletClient } from '@zoltar/bot-shared/ethereum'
 import type { Configuration } from '#config/configuration'
 import { sendRawTransactionToRpc } from '#monitoring/connectivity'
 import { attemptConfirmationRecovery, guardedExecutionStep, guardedTransactionSubmission, isExecutionPausedError, journaledSubmission, retryPrivateSubmissionWithinWindow, waitForResolvedTransaction } from '#execution/execution-orchestration'
@@ -11,7 +11,7 @@ type WriteClient = WalletClient<Transport, Chain, Account>
 
 export type TrackTransaction = (activity: TransactionActivity) => void
 
-export const receiptWaitAttemptMilliseconds = (pollMilliseconds: number) => Math.min(pollMilliseconds, 5_000)
+const receiptWaitAttemptMilliseconds = (pollMilliseconds: number) => Math.min(pollMilliseconds, 5_000)
 
 export type TrackedSubmission = SignedTransaction &
 	SubmittedTransaction & {
@@ -135,7 +135,7 @@ export async function submitContractTransaction(
 
 export async function waitForTrackedTransaction(
 	client: ReadClient,
-	wallet: WriteClient,
+	wallet: Pick<WriteClient, 'account' | 'waitForTransactionReceipt'>,
 	config: Pick<Configuration, 'connectivity' | 'pollMilliseconds' | 'submission'>,
 	submission: TrackedSubmission,
 	track: TrackTransaction,

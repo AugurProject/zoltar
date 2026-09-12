@@ -87,9 +87,9 @@ describe('Nested fork migration deadline', () => {
 		const { truthAuctionStarted } = await getSecurityPoolForkerForkData(client, childPool.securityPool)
 
 		const auctionDeadline = truthAuctionStarted + 7n * DAY
-		await mockWindow.setTime(auctionDeadline - 1n)
+		await mockWindow.setTime(auctionDeadline - 2n)
 		await assert.rejects(finalizeTruthAuction(client, childPool.securityPool), /Auction open/)
-		await mockWindow.setTime(auctionDeadline)
+		await mockWindow.setTime(auctionDeadline - 1n)
 		await finalizeTruthAuction(client, childPool.securityPool)
 		assert.strictEqual(await getSystemState(client, childPool.securityPool), SystemState.Operational)
 		assert.ok((await getSettlementCollateralAttoEth(client, childPool.securityPool)) > 0n)

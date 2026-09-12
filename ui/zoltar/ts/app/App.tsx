@@ -1,7 +1,7 @@
 import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import * as marketCopy from '../copy/market.js'
-import * as zoltarCopy from '../copy/zoltar.js'
+import * as marketCopy from '@zoltar/ui-zoltar-shared/copy/market.js'
+import * as zoltarCopy from '@zoltar/ui-zoltar-shared/copy/zoltar.js'
 import type { ComponentChildren } from 'preact'
 import { useEffect } from 'preact/hooks'
 import { AppHeaderShell } from '@zoltar/ui-core-shared/app/components/AppHeaderShell.js'
@@ -10,27 +10,26 @@ import { AppStatusNotices } from '@zoltar/ui-core-shared/app/components/AppStatu
 import { ProtocolAppFrame } from '@zoltar/ui-core-shared/app/components/ProtocolAppFrame.js'
 import { RouteSubNavigation } from '@zoltar/ui-core-shared/app/components/RouteSubNavigation.js'
 import { AppRouteContent } from './components/AppRouteContent.js'
-import { OverviewPanels } from './components/OverviewPanels.js'
+import { OverviewPanels } from '@zoltar/ui-zoltar-shared/features/overview/OverviewPanels.js'
 import { useAppRouteEffects } from './hooks/useAppRouteEffects.js'
-import { useDeploymentFlow } from '../features/deployment/hooks/useDeploymentFlow.js'
-import { buildDeploymentRouteContentProps } from '../features/deployment/lib/deploymentRoute.js'
+import { useDeploymentFlow } from '@zoltar/ui-zoltar-shared/features/deployment/hooks/useDeploymentFlow.js'
+import { buildDeploymentRouteContentProps } from '@zoltar/ui-zoltar-shared/features/deployment/lib/deploymentRoute.js'
 import { useHashRoute } from '@zoltar/ui-core-shared/app/hooks/useHashRoute.js'
 import { useProtocolOnchainRuntime } from '@zoltar/ui-core-shared/app/hooks/useProtocolOnchainRuntime.js'
-import { useQuestionCreation } from '../features/questions/hooks/useQuestionCreation.js'
+import { useQuestionCreation } from '@zoltar/ui-zoltar-shared/features/questions/hooks/useQuestionCreation.js'
 import { useZoltarUrlState } from './hooks/useZoltarUrlState.js'
 import { getActiveSimulationController, initializeActiveEnvironment } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { formatAppDocumentTitle, getAppPageTitle } from './lib/appPageTitle.js'
 import { onchainStateDependencies } from './onchainStateDependencies.js'
 import { resolveLoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
-import { buildRouteHref, getRouteHashSearch, parseRouteHash } from '@zoltar/ui-core-shared/lib/routing.js'
-import { writeZoltarViewQueryParam } from '@zoltar/ui-core-shared/lib/urlParams.js'
+import { buildRouteHref, getRouteHashSearch, parseRouteHash } from '@zoltar/ui-core-shared/navigation/routing.js'
+import { writeZoltarViewQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
 import { getUniversePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
-import { formatUniverseCollectionLabel } from '../features/universes/lib/universe.js'
-import { resolveEnumValue } from '@zoltar/ui-core-shared/lib/viewState.js'
+import { resolveEnumValue } from '@zoltar/ui-core-shared/forms/viewState.js'
 import type { RouteTabDefinition } from '@zoltar/ui-core-shared/types/components.js'
-import type { MarketRouteContentProps, ZoltarView } from '../features/types.js'
-import type { Route } from '../types/app.js'
-import { isUniverseIndependentZoltarView, zoltarRouting } from '../lib/routing.js'
+import type { MarketRouteContentProps, ZoltarView } from '@zoltar/ui-zoltar-shared/features/types.js'
+import type { Route } from '@zoltar/ui-zoltar-shared/types/app.js'
+import { isUniverseIndependentZoltarView, zoltarRouting } from '@zoltar/ui-zoltar-shared/lib/routing.js'
 import { hasInvalidZoltarView } from './lib/routeValidation.js'
 
 export function App() {
@@ -99,6 +98,7 @@ export function App() {
 		forkZoltar,
 		hasLoadedZoltarQuestions,
 		loadingZoltarForkAccess,
+		loadZoltarForkAccess,
 		loadingZoltarQuestionCount,
 		loadingZoltarQuestion,
 		loadingZoltarQuestions,
@@ -108,7 +108,6 @@ export function App() {
 		loadZoltarQuestions,
 		loadZoltarUniverse,
 		migrateInternalRep,
-		prepareRepForMigration,
 		createQuestion,
 		questionCreating,
 		questionError,
@@ -126,6 +125,7 @@ export function App() {
 		zoltarForkPending,
 		zoltarForkQuestionId,
 		zoltarForkRepBalanceAttoRep,
+		zoltarMigrationChildSplitAmountsAttoRep,
 		zoltarMigrationChildRepBalancesAttoRep,
 		zoltarMigrationActiveAction,
 		zoltarMigrationError,
@@ -163,7 +163,6 @@ export function App() {
 	const showZoltarUniverseWarning = canReadOnchainData && zoltarUniverseState === 'missing'
 	const activeViewRequiresUniverse = !isUniverseIndependentZoltarView(activeZoltarView)
 	const isRouteContentDisabled = route !== 'deploy' && (!readBackendReady || applicationDeploymentMissing || (activeViewRequiresUniverse && showZoltarUniverseWarning))
-	const universeLabel = formatUniverseCollectionLabel([activeUniverseId])
 	const universePresentation = showZoltarUniverseWarning ? getUniversePresentation(zoltarUniverseState) : undefined
 	const pageTitle = getAppPageTitle({ activeZoltarView, route: activeRoute })
 	useAppRouteEffects({
@@ -207,8 +206,8 @@ export function App() {
 		onLoadZoltarQuestion: async questionId => await loadZoltarQuestion(questionId),
 		onLoadZoltarQuestionPage: async (pageIndex, pageSize) => await loadZoltarQuestionPage(pageIndex, pageSize),
 		onLoadZoltarQuestions: async () => await loadZoltarQuestions(),
-		onMigrateInternalRep: () => void migrateInternalRep(),
-		onPrepareRepForMigration: () => void prepareRepForMigration(),
+		onRetryMigrationBalances: () => void loadZoltarForkAccess(),
+		onMigrateInternalRep: maxPreparationAttoRep => void migrateInternalRep(maxPreparationAttoRep),
 		onQuestionFormChange: update => setQuestionForm(current => ({ ...current, ...update })),
 		onResetQuestion: resetQuestion,
 		onZoltarForkQuestionIdChange: questionId => setZoltarForkQuestionId(questionId),
@@ -222,6 +221,7 @@ export function App() {
 		zoltarForkQuestionId,
 		zoltarForkRepBalanceAttoRep,
 		zoltarMigrationActiveAction,
+		zoltarMigrationChildSplitAmountsAttoRep,
 		zoltarMigrationChildRepBalancesAttoRep,
 		zoltarMigrationError,
 		zoltarMigrationForm,
@@ -314,7 +314,6 @@ export function App() {
 							universeForkTime={zoltarUniverse?.forkTime}
 							universeHasForked={zoltarUniverse?.hasForked}
 							universePresentation={universePresentation}
-							universeLabel={universeLabel}
 							universeRepBalanceAttoRep={zoltarForkRepBalanceAttoRep}
 							isRefreshing={isRefreshing}
 							walletBootstrapComplete={walletBootstrapComplete}

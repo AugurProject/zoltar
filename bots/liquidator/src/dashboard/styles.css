@@ -20,10 +20,6 @@
 	background: var(--bg);
 }
 
-* {
-	box-sizing: border-box;
-}
-
 body {
 	margin: 0;
 	min-width: 20rem;
@@ -191,99 +187,6 @@ section,
 	border-left: 2px solid var(--accent);
 	color: var(--muted);
 	font-size: 0.82rem;
-}
-
-.truth-path-list {
-	display: grid;
-	gap: 1rem;
-}
-
-.truth-family,
-.truth-parent > *,
-.truth-options,
-.truth-choice-copy {
-	min-width: 0;
-}
-
-.truth-parent h3,
-.truth-choice-copy strong {
-	overflow-wrap: anywhere;
-}
-
-.truth-family + .truth-family {
-	padding-top: 1rem;
-	border-top: 1px solid var(--line);
-}
-
-.truth-parent,
-.truth-choice {
-	display: grid;
-	grid-template-columns: minmax(0, 1fr) auto;
-	align-items: start;
-	gap: 1rem;
-}
-
-.truth-parent h3 {
-	margin: 0;
-	font-size: 1rem;
-}
-
-.truth-metadata {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 0.45rem 1rem;
-	margin: 0.35rem 0 0;
-	color: var(--muted);
-	font-size: 0.78rem;
-}
-
-.truth-options {
-	display: grid;
-	gap: 0;
-	margin: 0.85rem 0 0;
-	padding: 0;
-	border: 0;
-}
-
-.truth-options legend {
-	display: block;
-	max-width: 100%;
-	margin-bottom: 0.35rem;
-	color: var(--muted);
-	font-size: 0.75rem;
-	font-weight: 750;
-	overflow-wrap: anywhere;
-	white-space: normal;
-}
-
-.truth-choice {
-	min-height: 3rem;
-	padding: 0.7rem 0;
-	border-top: 1px solid var(--line);
-	cursor: pointer;
-}
-
-.truth-choice input {
-	grid-column: 2;
-	grid-row: 1;
-	margin: 0.1rem;
-}
-
-.truth-choice-copy {
-	display: grid;
-	gap: 0.25rem;
-}
-
-.truth-choice-copy small {
-	color: var(--muted);
-}
-
-.truth-choice .action-status {
-	grid-column: 1 / -1;
-}
-
-.truth-parent-status {
-	grid-column: 1 / -1;
 }
 
 .section-heading {
@@ -485,17 +388,6 @@ input[type="checkbox"] {
 
 .pool-toggle input {
 	margin: 0;
-}
-
-.truth-root-toggle {
-	flex: none;
-}
-
-fieldset {
-	min-width: 0;
-	margin: 0;
-	padding: 0;
-	border: 0;
 }
 
 .table-shell {
@@ -819,11 +711,6 @@ td small {
 	.settings-group,
 	#settings {
 		scroll-margin-top: 11.5rem;
-	}
-
-	.truth-parent,
-	.truth-choice {
-		grid-template-columns: minmax(0, 1fr) auto;
 	}
 
 	.search {

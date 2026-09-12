@@ -1,30 +1,17 @@
 import * as commonCopy from '../copy/common.js'
 /// <reference types='bun-types' />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import { within } from './testUtils/queries'
-import { installDomEnvironment } from './testUtils/domEnvironment.js'
+import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
-import { ApprovedAmountValue, APPROVAL_MAX_DISPLAY_THRESHOLD } from '../components/ApprovedAmountValue.js'
+import { ApprovedAmountValue } from '../components/ApprovedAmountValue.js'
 
 describe('ApprovedAmountValue', () => {
-	let restoreDomEnvironment: (() => void) | undefined
-	let cleanupRenderedComponent: (() => Promise<void>) | undefined
-
-	beforeEach(() => {
-		restoreDomEnvironment = installDomEnvironment().cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
-	})
+	const { trackRendered } = installDomTestLifecycle()
 
 	test('renders the max label when approval exceeds max-display threshold', async () => {
-		const renderedComponent = await renderIntoDocument(<ApprovedAmountValue value={APPROVAL_MAX_DISPLAY_THRESHOLD + 1n} requiredAmount={0n} suffix='REP' units={18} />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackRendered(await renderIntoDocument(<ApprovedAmountValue value={2n ** 200n} requiredAmount={0n} suffix='REP' units={18} />))
 
 		const documentQueries = within(document.body)
 		const valueBadge = documentQueries.getByText(commonCopy.max)
@@ -35,8 +22,7 @@ describe('ApprovedAmountValue', () => {
 	})
 
 	test('renders currency output with tone class for sufficient amounts', async () => {
-		const renderedComponent = await renderIntoDocument(<ApprovedAmountValue value={2n * 10n ** 18n} requiredAmount={1n} suffix='REP' units={18} />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackRendered(await renderIntoDocument(<ApprovedAmountValue value={2n * 10n ** 18n} requiredAmount={1n} suffix='REP' units={18} />))
 
 		const documentQueries = within(document.body)
 		const currencyOutput = document.body.querySelector('button[type="button"]')
@@ -47,8 +33,7 @@ describe('ApprovedAmountValue', () => {
 	})
 
 	test('renders placeholder while value is unavailable', async () => {
-		const renderedComponent = await renderIntoDocument(<ApprovedAmountValue value={undefined} requiredAmount={1n} suffix='REP' units={18} />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackRendered(await renderIntoDocument(<ApprovedAmountValue value={undefined} requiredAmount={1n} suffix='REP' units={18} />))
 
 		expect(within(document.body).getByText('—')).not.toBeNull()
 	})

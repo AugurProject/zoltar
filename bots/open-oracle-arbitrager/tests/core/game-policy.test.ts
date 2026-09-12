@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
-import type { Address } from '#ethereum'
-import { OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_FLAG_TRACK_DISPUTES, type OpenOracleStatePreimage } from '@zoltar/shared/openOracle'
+import type { Address } from '@zoltar/bot-shared/ethereum'
+import { OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_FLAG_TRACK_DISPUTES, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
+import { OPEN_ORACLE_FLAG_FEES_ONLY_AT_HALT, OPEN_ORACLE_FLAG_FLEXIBLE_ESCALATION, OPEN_ORACLE_FLAG_STORE_SETTLEMENT_ELIGIBILITY } from '../../../../solidity/ts/testSupport/openOracle/statePreimage.ts'
 import { gamePolicyMismatch, retainedReportIds, type CoordinatorGamePolicy } from '#core/game-policy'
 
 const coordinator = '0x0000000000000000000000000000000000000001' as Address
@@ -63,6 +64,25 @@ describe('trusted coordinator game policy', () => {
 		expect(gamePolicyMismatch({ ...report, game: { ...report.game, callbackContract: other } }, [policy], openOracle)).toBe('Settlement callback is not the report coordinator')
 		expect(gamePolicyMismatch({ ...report, game: { ...report.game, callbackGasLimit: 4_000_001n } }, [policy], openOracle)).toBe('Callback gas limit differs from the approved coordinator template')
 		expect(gamePolicyMismatch({ ...report, game: { ...report.game, multiplier: 141n } }, [policy], openOracle)).toBe('Multiplier differs from the approved coordinator template')
+	})
+
+	test('accepts coordinator flag templates 6 and 7 while rejecting every unexpected optional bit', () => {
+		const blockPolicy = {
+			...policy,
+			flags: OPEN_ORACLE_FLAG_TRACK_DISPUTES | OPEN_ORACLE_FLAG_STORE_ALL,
+			settlementTime: 480n,
+		}
+		const blockReport = {
+			...report,
+			game: { ...report.game, flags: blockPolicy.flags, settlementTime: blockPolicy.settlementTime },
+		}
+		expect(gamePolicyMismatch(report, [policy], openOracle)).toBeUndefined()
+		expect(gamePolicyMismatch(blockReport, [blockPolicy], openOracle)).toBeUndefined()
+
+		for (const optionalFlag of [OPEN_ORACLE_FLAG_STORE_SETTLEMENT_ELIGIBILITY, OPEN_ORACLE_FLAG_FEES_ONLY_AT_HALT, OPEN_ORACLE_FLAG_FLEXIBLE_ESCALATION]) {
+			expect(gamePolicyMismatch({ ...report, game: { ...report.game, flags: report.game.flags | optionalFlag } }, [policy], openOracle)).toBe('Flags differs from the approved coordinator template')
+			expect(gamePolicyMismatch({ ...blockReport, game: { ...blockReport.game, flags: blockReport.game.flags | optionalFlag } }, [blockPolicy], openOracle)).toBe('Flags differs from the approved coordinator template')
+		}
 	})
 
 	test('rejects unsafe parameters even when a configured coordinator exposes them', () => {

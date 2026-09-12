@@ -1,7 +1,18 @@
 import { mock } from 'bun:test'
-import { zeroAddress, zeroHash } from '@zoltar/shared/ethereum'
-import { createSecurityPoolPageFromLoadedPools, type UseSecurityPoolsOverviewDependencies } from '../../../../features/security-pools/hooks/useSecurityPoolsOverview.js'
-import type { OracleManagerDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import { zeroAddress, zeroHash } from '@zoltar/core-shared/evm/ethereum'
+import type { UseSecurityPoolsOverviewDependencies } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolsOverview.js'
+import type { ListedSecurityPool, OracleManagerDetails, SecurityPoolPage } from '@zoltar/ui-core-shared/types/contracts.js'
+
+// Builds the page shape loadSecurityPoolPage returns from an in-memory pool list.
+export function createSecurityPoolPageFromLoadedPools(pools: ListedSecurityPool[], pageIndex: number, pageSize: number): SecurityPoolPage {
+	const startIndex = pageIndex * pageSize
+	return {
+		pageIndex,
+		pageSize,
+		poolCount: BigInt(pools.length),
+		pools: pools.slice(startIndex, startIndex + pageSize),
+	}
+}
 
 export type TestSecurityPoolsOverviewWriteClient = { kind: 'write-client' }
 

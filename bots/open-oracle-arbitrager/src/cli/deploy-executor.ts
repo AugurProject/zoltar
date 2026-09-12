@@ -1,10 +1,11 @@
 #!/usr/bin/env bun
 
-import { privateKeyToAccount, zeroAddress, type Hex } from '#ethereum'
+import { privateKeyToAccount, type Hex } from '@zoltar/bot-shared/ethereum'
 import { defaultConfigurationFile } from '#config/configuration'
 import { loadOperatorSettings, operatorProfilePath } from '#config/settings-store'
 import { defaultRpcUrl, networkConfiguration, parseNetworkName } from '#config/network'
-import { deployExecutorCreate2, executorDeploymentPlan } from '#execution/create2-executor'
+import { deployExecutorCreate2 } from '#execution/create2-executor'
+import { executorDeploymentPlan } from '#execution/executor-deployment-primitives'
 import { acquireExecutorDeploymentIntentLock, clearExecutorDeploymentIntent, executorDeploymentIntentPath, loadExecutorDeploymentIntentForChain, saveExecutorDeploymentIntent } from '#execution/executor-deployment-store'
 import { acquireExecutionSignerLock } from '#state/position-store'
 import { resolve } from 'node:path'
@@ -42,7 +43,7 @@ CREATE2 proxy, verifies its runtime bytecode, and prints the stable address.`)
 const privateKeyValue = process.env['PRIVATE_KEY']
 if (privateKeyValue === undefined || !/^0x[0-9a-fA-F]{64}$/.test(privateKeyValue)) throw new Error('PRIVATE_KEY must be a 32-byte 0x-prefixed deployment key')
 const networkName = parseNetworkName(option('network'))
-const network = networkConfiguration(networkName, { rep: networkName === 'sepolia' ? zeroAddress : undefined })
+const network = networkConfiguration(networkName, {})
 const rpcUrl = option('rpc-url') ?? process.env['ETH_RPC_URL'] ?? defaultRpcUrl(networkName)
 const quorumRpcUrls = options('quorum-rpc-url')
 const settingsFile = resolve(process.env['OPEN_ORACLE_ARBITRAGER_CONFIG'] ?? defaultConfigurationFile)

@@ -1,12 +1,10 @@
 /// <reference types="bun-types" />
 
 import { afterEach, describe, expect, mock, test } from 'bun:test'
-import { getAddress, isHex, keccak256, zeroAddress } from '@zoltar/shared/ethereum'
-import { createInjectedBackend, normalizeAccount } from '../lib/chainBackend.js'
-import type { InjectedEthereum } from '../injectedEthereum.js'
-
-type FetchArguments = Parameters<typeof fetch>
-type FetchHandler = (input: FetchArguments[0], init: FetchArguments[1] | undefined) => Promise<Response>
+import { getAddress, isHex, keccak256, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { createInjectedBackend, normalizeAccount } from '../wallet/chainBackend.js'
+import type { InjectedEthereum } from '../wallet/injectedEthereum.js'
+import { installFetchStub } from './testUtils/fetchStub.js'
 
 type RpcBody = Record<string, unknown>
 
@@ -15,12 +13,6 @@ const isRpcBody = (value: unknown): value is RpcBody => typeof value === 'object
 const extractRpcId = (value: unknown): number | string => {
 	if (isRpcBody(value) && (typeof value['id'] === 'number' || typeof value['id'] === 'string')) return value['id']
 	return 0
-}
-
-const createMockFetch = (originalFetch: typeof fetch, handler: FetchHandler): typeof fetch => {
-	const mocked = (async (input: FetchArguments[0], init?: FetchArguments[1]) => handler(input, init)) as typeof fetch
-	mocked.preconnect = originalFetch.preconnect
-	return mocked
 }
 
 function ensureWindowObject() {
@@ -110,10 +102,11 @@ afterEach(() => {
 })
 
 describe('injected backend read transport', () => {
-	const originalFetch = globalThis.fetch
+	let restoreFetch = () => {}
 	const originalEthereum = ensureWindowObject().ethereum
 	afterEach(() => {
-		globalThis.fetch = originalFetch
+		restoreFetch()
+		restoreFetch = () => {}
 		const windowObject = ensureWindowObject()
 		if (originalEthereum === undefined) {
 			delete windowObject.ethereum
@@ -129,7 +122,7 @@ describe('injected backend read transport', () => {
 			return '0x'
 		})
 		let fetchCalled = false
-		globalThis.fetch = createMockFetch(originalFetch, async () => {
+		restoreFetch = installFetchStub(async () => {
 			fetchCalled = true
 			throw new Error('fetch should not be called while provider reads are enabled')
 		})
@@ -147,7 +140,7 @@ describe('injected backend read transport', () => {
 			return '0x'
 		})
 		const fetchCalls: string[] = []
-		globalThis.fetch = createMockFetch(originalFetch, async (input, init) => {
+		restoreFetch = installFetchStub(async (input, init) => {
 			const url = input instanceof Request ? input.url : String(input)
 			fetchCalls.push(url)
 

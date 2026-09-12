@@ -6,8 +6,8 @@ export const uniswapV2V3TokenPairs = (contracts: Iterable<ContractIdentity>): re
 	const values = [...contracts]
 	const reputationTokens = values.filter(({ kind }) => kind === 'reputationToken').map(({ address }) => address)
 	const quoteTokens = values.filter(({ kind }) => kind === 'weth' || kind === 'usdc').map(({ address }) => address)
-	return reputationTokens.flatMap((rep) =>
-		quoteTokens.flatMap((quote) => [
+	return reputationTokens.flatMap(rep =>
+		quoteTokens.flatMap(quote => [
 			{ token0: rep, token1: quote },
 			{ token0: quote, token1: rep },
 		]),
@@ -23,12 +23,7 @@ export const uniswapV4PoolConfigurations = [
 
 export const uniswapV4PoolId = (reputationToken: Address, fee: number, tickSpacing: number, quoteToken: Address = zeroAddress): Hex => {
 	const [currency0, currency1] = BigInt(reputationToken) < BigInt(quoteToken) ? [reputationToken, quoteToken] : [quoteToken, reputationToken]
-	return keccak256(
-		encodeAbiParameters(
-			[{ type: 'address' }, { type: 'address' }, { type: 'uint24' }, { type: 'int24' }, { type: 'address' }],
-			[currency0, currency1, fee, tickSpacing, zeroAddress],
-		),
-	)
+	return keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'address' }, { type: 'uint24' }, { type: 'int24' }, { type: 'address' }], [currency0, currency1, fee, tickSpacing, zeroAddress]))
 }
 
 type UniswapV4MarketIdentity = {
@@ -42,12 +37,7 @@ type UniswapV4MarketIdentity = {
 
 export const isSupportedUniswapV4Market = (market: UniswapV4MarketIdentity): boolean => {
 	if (!isAddress(market.token0Address) || !isAddress(market.token1Address) || market.hooksAddress?.toLowerCase() !== zeroAddress) return false
-	const configuration = uniswapV4PoolConfigurations.find(
-		({ fee, tickSpacing }) => market.feeHundredthsBip === fee.toString() && market.tickSpacing === tickSpacing.toString(),
-	)
+	const configuration = uniswapV4PoolConfigurations.find(({ fee, tickSpacing }) => market.feeHundredthsBip === fee.toString() && market.tickSpacing === tickSpacing.toString())
 	if (configuration === undefined) return false
-	return (
-		market.marketId.toLowerCase() ===
-		uniswapV4PoolId(getAddress(market.token0Address), configuration.fee, configuration.tickSpacing, getAddress(market.token1Address))
-	)
+	return market.marketId.toLowerCase() === uniswapV4PoolId(getAddress(market.token0Address), configuration.fee, configuration.tickSpacing, getAddress(market.token1Address))
 }

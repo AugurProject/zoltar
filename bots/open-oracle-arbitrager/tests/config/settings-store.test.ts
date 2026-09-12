@@ -1,8 +1,12 @@
+import mainnet from '../../../../docs/mainnet-deployment-addresses.json'
+import sepolia from '../../../../docs/sepolia-deployment-addresses.json'
+import { canonicalCoreDeployment, canonicalNetworkDeployment } from '@zoltar/bot-shared/config/canonical-deployment'
+import example from '../../config/operator.example.json'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdir, mkdtemp, open, readFile, rename, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { Hex } from '#ethereum'
+import type { Hex } from '@zoltar/bot-shared/ethereum'
 import { assertOperatorProfileIsolation, CONFIGURATION_REVISION_CONFLICT, loadOperatorSettings, loadOperatorSettingsWithRevision, operatorProfilePath, parseOperatorSettings, saveOperatorSettings, serializeOperatorSettings, switchOperatorNetworkProfile, type OperatorSettingsFilesystem } from '#config/settings-store'
 import { executorDeploymentIntentPath } from '#execution/executor-deployment-store'
 
@@ -15,8 +19,9 @@ afterEach(async () => {
 
 function settings(privateKeyValue: Hex | undefined) {
 	return {
+		approvedUniverses: [],
 		centralizedMarkets: {
-			assetAddress: '0x0000000000000000000000000000000000000005' as const,
+			assetAddress: canonicalNetworkDeployment(mainnet).rep,
 			assetChainId: 1,
 			assetSymbol: 'REP',
 			depthBps: 500n,
@@ -39,16 +44,16 @@ function settings(privateKeyValue: Hex | undefined) {
 			coordinatorAddresses: ['0x0000000000000000000000000000000000000002' as const],
 			deploymentManifest: undefined,
 			executor: '0x0000000000000000000000000000000000000003' as const,
-			openOracle: '0x0000000000000000000000000000000000000004' as const,
+			openOracle: canonicalCoreDeployment(mainnet).openOracle,
 			quorumRpcUrls: ['https://quorum.example/'],
-			rep: '0x0000000000000000000000000000000000000005' as const,
+			rep: canonicalNetworkDeployment(mainnet).rep,
 			uniswapFactory: '0x0000000000000000000000000000000000000006' as const,
 			uniswapQuoter: '0x0000000000000000000000000000000000000007' as const,
 			uniswapRouter: '0x0000000000000000000000000000000000000008' as const,
 			uniswapV2Router: undefined,
 			uniswapV4PoolManager: undefined,
 			uniswapV4Quoter: undefined,
-			weth: '0x0000000000000000000000000000000000000009' as const,
+			weth: canonicalNetworkDeployment(mainnet).weth,
 		},
 		network: 'mainnet' as const,
 		networkConfigured: true,
@@ -90,6 +95,11 @@ function settings(privateKeyValue: Hex | undefined) {
 		},
 		tokenAddresses: ['0x0000000000000000000000000000000000000001' as const],
 	}
+}
+
+function reservedProfilePath(path: string, reservedName: 'active' | 'executor' | 'mainnet' | 'sepolia') {
+	if (reservedName === 'active') return path
+	return reservedName === 'executor' ? executorDeploymentIntentPath(path, 'mainnet') : operatorProfilePath(path, reservedName)
 }
 
 describe('operator settings persistence', () => {
@@ -134,7 +144,7 @@ describe('operator settings persistence', () => {
 			const directory = await mkdtemp(join(tmpdir(), `zoltar-arbitrager-reserved-${reservedName}-`))
 			temporaryDirectories.push(directory)
 			const path = join(directory, 'operator.json')
-			const reservedPath = reservedName === 'active' ? path : reservedName === 'executor' ? executorDeploymentIntentPath(path, 'mainnet') : operatorProfilePath(path, reservedName)
+			const reservedPath = reservedProfilePath(path, reservedName)
 			const mainnet = settings(undefined)
 			mainnet.runtime.historyFile = join(directory, 'mainnet-history.jsonl')
 			mainnet.runtime.positionFile = join(directory, 'mainnet-positions.json')
@@ -422,3 +432,64 @@ describe('operator settings persistence', () => {
 		).toThrow('must use distinct paths')
 	})
 })
+
+for (const [network, manifest] of [
+	['mainnet', mainnet],
+	['sepolia', sepolia],
+] as const) {
+	test(`loads the ${network} canonical oracle from an existing zero-address configuration`, () => {
+		const parsed = parseOperatorSettings({ ...example, network, deployment: { ...example.deployment, openOracle: '0x0000000000000000000000000000000000000000' }, centralizedMarkets: { ...example.centralizedMarkets, assetChainId: 999 } })
+		expect(parsed.deployment.openOracle).toBe(canonicalCoreDeployment(manifest).openOracle)
+		expect(parsed.centralizedMarkets.assetAddress).toBe(canonicalNetworkDeployment(manifest).rep)
+		expect(parsed.centralizedMarkets.assetChainId).toBe(manifest.network.chainId)
+		expect(serializeOperatorSettings(parsed).centralizedMarkets).not.toHaveProperty('assetAddress')
+		expect(serializeOperatorSettings(parsed).centralizedMarkets).not.toHaveProperty('assetChainId')
+		expect(serializeOperatorSettings(parsed).deployment).not.toHaveProperty('rep')
+		expect(serializeOperatorSettings(parsed).deployment).not.toHaveProperty('weth')
+		expect(serializeOperatorSettings(parsed).deployment).not.toHaveProperty('openOracle')
+		expect(parseOperatorSettings(serializeOperatorSettings(parsed)).deployment.openOracle).toBe(parsed.deployment.openOracle)
+	})
+}
+
+test('universe approvals round-trip independently of monitoring tokens and missing approval defaults to none', () => {
+	const stored = serializeOperatorSettings({ ...settings(undefined), approvedUniverses: [0n, 123n] })
+	expect(parseOperatorSettings(stored).approvedUniverses).toEqual([0n, 123n])
+	const { approvedUniverses, ...withoutApprovals } = stored
+	expect(approvedUniverses).toEqual(['0', '123'])
+	expect(parseOperatorSettings(withoutApprovals).approvedUniverses).toEqual([])
+})
+
+for (const failure of ['rename', 'directory sync']) {
+	test(`propagates ${failure} failure and cleans the temporary configuration`, async () => {
+		const events: string[] = []
+		const problem = new Error(failure)
+		const filesystem: OperatorSettingsFilesystem = {
+			mkdir: async () => undefined,
+			open: async (_path, flags) => ({
+				chmod: async () => undefined,
+				close: async () => {
+					events.push(`${flags}:close`)
+				},
+				sync: async () => {
+					if (flags === 'r' && failure === 'directory sync') throw problem
+				},
+				writeFile: async () => undefined,
+			}),
+			readFile: async () => {
+				throw new Error('Unexpected revision read')
+			},
+			rename: async () => {
+				events.push('rename')
+				if (failure === 'rename') throw problem
+			},
+			rm: async (path, options) => {
+				expect(path.endsWith('.tmp')).toBe(true)
+				expect(options).toEqual({ force: true })
+				events.push('rm')
+			},
+		}
+		await expect(saveOperatorSettings('/state/operator.json', settings(undefined), filesystem)).rejects.toBe(problem)
+		expect(events.includes('r:close')).toBe(failure === 'directory sync')
+		expect(events.at(-1)).toBe('rm')
+	})
+}

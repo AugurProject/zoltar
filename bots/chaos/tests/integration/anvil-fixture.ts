@@ -1,5 +1,5 @@
 import { eip191Signer } from 'micro-eth-signer'
-import { encodeDeployData, getAddress, keccak256, privateKeyToAccount, TRANSACTION_SUBMISSION_CAPABILITY_PROBE, type Address, type Hex } from '../support/bot-shared.ts'
+import { encodeDeployData, getAddress, keccak256, privateKeyToAccount, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { createAnvilNodeForConnectionMode, type AnvilNode } from '../../../../solidity/ts/testSupport/simulator/anvilNode.ts'
 import { addressString } from '../../../../solidity/ts/testSupport/simulator/utils/bigint.ts'
 import { createWriteClient, writeContractAndWait } from '../../../../solidity/ts/testSupport/simulator/utils/clients.ts'
@@ -9,6 +9,9 @@ import { createQuestion, getQuestionId } from '../../../../solidity/ts/testSuppo
 import { manipulatePriceOracle } from '../../../../solidity/ts/testSupport/simulator/utils/contracts/statoblastTestUtils.ts'
 import { setupTestAccounts } from '../../../../solidity/ts/testSupport/simulator/utils/utilities.ts'
 import { ReputationToken_ReputationToken, ZoltarQuestionData_ZoltarQuestionData, trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory, trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter } from '../../../../solidity/ts/types/contractArtifact.ts'
+
+// Mirrors the signed probe transaction that bot-shared connectivity checks send to private relays.
+const TRANSACTION_SUBMISSION_CAPABILITY_PROBE = '0xdf800182520894000000000000000000000000000000000000000080801b0180'
 
 export const CHAOS_TEST_PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80' as const
 export const CHAOS_TEST_FINALITY_BLOCKS = 2n
@@ -46,7 +49,7 @@ export type ChaosPrivateRelay = {
 export type ChaosAnvilFixture = {
 	baselineQuestionCount: bigint
 	createPrivateRelay: () => ChaosPrivateRelay
-	createRpcProxy: (options?: { lostAcknowledgementOrdinal?: number | undefined }) => ChaosRpcProxy
+	createRpcProxy: (options?: { lostAcknowledgementOrdinal?: number | undefined; prunedLogStartBlock?: bigint }) => ChaosRpcProxy
 	dispose: () => Promise<void>
 	infra: ReturnType<typeof getInfraContractAddresses>
 	node: AnvilNode
@@ -163,7 +166,7 @@ async function mineFinalityBlocks(node: AnvilNode) {
 	}
 }
 
-function createRpcProxy(node: AnvilNode, options: { lostAcknowledgementOrdinal?: number | undefined } = {}): ChaosRpcProxy {
+function createRpcProxy(node: AnvilNode, options: { lostAcknowledgementOrdinal?: number | undefined; prunedLogStartBlock?: bigint } = {}): ChaosRpcProxy {
 	const rawTransactions: Hex[] = []
 	const successfulSendRawTransactionParams: unknown[][] = []
 	const server = Bun.serve({
@@ -171,6 +174,11 @@ function createRpcProxy(node: AnvilNode, options: { lostAcknowledgementOrdinal?:
 		async fetch(request) {
 			const requestText = await request.text()
 			const body = jsonRpcRequest(JSON.parse(requestText))
+			if (body.method === 'eth_getLogs' && options.prunedLogStartBlock !== undefined) {
+				const filter = body.params[0]
+				if (typeof filter !== 'object' || filter === null || !('fromBlock' in filter) || typeof filter.fromBlock !== 'string') throw new Error('Pruned log fixture requires a bounded range')
+				if (BigInt(filter.fromBlock) < options.prunedLogStartBlock) return Response.json({ error: { code: 4444, message: 'pruned history unavailable' }, id: body.id, jsonrpc: '2.0' })
+			}
 			const upstream = await fetch(node.rpcUrl, {
 				body: requestText,
 				headers: { 'content-type': 'application/json' },

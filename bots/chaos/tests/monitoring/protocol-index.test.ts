@@ -1,8 +1,14 @@
+import { indexWithCurrentRefunds, snapshotWithProtocolIndex } from '../../src/runtime/protocol-index-snapshot.ts'
+import { snapshotProtocolIndex } from '../../src/state/protocol-index-store.ts'
+import { ChaosProtocolIndexReorgError } from '../../src/monitoring/protocol-index-context.ts'
 import { describe, expect, test } from 'bun:test'
-import { bytesToHex, encodeAbiParameters, keccak256, toHex, type Address } from '../support/bot-shared.ts'
-import { ChaosProtocolIndexReorgError, decodePackedOracleReport, deriveChildUniverseId, OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT, updateProtocolIndex, type ChaosProtocolIndex } from '../../src/monitoring/protocol-index.ts'
-import type { ChaosReadClient } from '../../src/monitoring/discovery.ts'
-import { address, hash } from '../operations/fixture.ts'
+import { bytesToHex } from '@zoltar/core-shared/evm/ethereum'
+import { encodeAbiParameters, keccak256, toHex, type Address } from '@zoltar/bot-shared/ethereum'
+import { deriveChildUniverseId } from '../support/universe.ts'
+import { OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT, updateProtocolIndex, type ChaosProtocolIndex } from '../../src/monitoring/protocol-index.ts'
+import { updateProtocolIndexWithQuorum } from '../../src/monitoring/protocol-index-quorum.ts'
+import type { ChaosReadClient } from '../../src/monitoring/discovery-client.ts'
+import { address, hash, snapshotFixture } from '../operations/fixture.ts'
 
 const indexDeployments = { openOracle: address(6), securityPoolForker: address(5), zoltar: address(2) } as const
 const indexTrust = {
@@ -126,7 +132,7 @@ function refundGeneration(log: ReturnType<typeof refundLog>) {
 	return keccak256(encodeAbiParameters([{ type: 'bytes32' }, { type: 'bytes32' }, { type: 'uint256' }], [log.blockHash, log.transactionHash, BigInt(log.logIndex)]))
 }
 
-function eventIndexClient(logs: ReturnType<typeof canonicalLog>[], oracleReads: bigint[] = [], canonicalBlockHash = (blockNumber: bigint) => hash(Number(blockNumber)), maximumLogRange?: bigint, logFailure?: Error) {
+function eventIndexClient(logs: ReturnType<typeof canonicalLog>[], oracleReads: bigint[] = [], canonicalBlockHash = (blockNumber: bigint) => hash(Number(blockNumber)), maximumLogRange?: bigint, logFailure?: Error | ((fromBlock: bigint, toBlock: bigint) => Error | undefined)) {
 	const implementation = {
 		async getBlock(parameters: { blockNumber?: bigint }) {
 			const number = parameters.blockNumber
@@ -134,9 +140,10 @@ function eventIndexClient(logs: ReturnType<typeof canonicalLog>[], oracleReads: 
 			return { hash: canonicalBlockHash(number), number, timestamp: 1_000n }
 		},
 		async getLogs(parameters: { address?: Address | Address[]; fromBlock?: bigint; toBlock?: bigint }) {
-			if (logFailure !== undefined) throw logFailure
 			const { fromBlock, toBlock } = parameters
 			if (fromBlock === undefined || toBlock === undefined) throw new Error('Bounded log range required')
+			const failure = typeof logFailure === 'function' ? logFailure(fromBlock, toBlock) : logFailure
+			if (failure !== undefined) throw failure
 			if (maximumLogRange !== undefined && toBlock - fromBlock + 1n > maximumLogRange) throw new Error(`eth_getLogs range is too large; maximum ${maximumLogRange.toString()} blocks`)
 			let requested: Address[] = []
 			if (Array.isArray(parameters.address)) requested = parameters.address
@@ -161,6 +168,104 @@ function eventIndexClient(logs: ReturnType<typeof canonicalLog>[], oracleReads: 
 }
 
 describe('durable protocol index', () => {
+	test('tracks storage-observed refunds across restart, later credits, withdrawal, and a same-amount new claim', async () => {
+		const logs = [refundLog({ amount: 3n, pending: 11n, blockNumber: 51n, logIndex: 0 }), refundLog({ amount: 11n, withdrawn: true, blockNumber: 52n, logIndex: 0 }), refundLog({ amount: 8n, blockNumber: 53n, logIndex: 0 })]
+		const client = eventIndexClient(logs, [], undefined, undefined, from => (from < 42n ? new Error('pruned history unavailable') : undefined))
+		const context = { ...indexDeployments, ...indexTrust, anchorBlockNumber: 50n, auctionAddresses: [address(20)], chainId: 31337, client, escalationGames: [], startBlock: 0n, wallet: address(1) }
+		const initial = await updateProtocolIndex(context)
+		const snapshot = snapshotFixture()
+		snapshot.chainId = context.chainId
+		snapshot.wallet.address = context.wallet
+		snapshot.anchor.blockNumber = '50'
+		snapshot.anchor.blockHash = hash(50)
+		snapshot.auctions = [{ address: address(20), bids: [], clearingTick: '0', endTime: '10000', finalized: false, hasClearingPrice: false, minimumBidAttoEth: 1n.toString(), pendingEthRefund: '8', pool: address(22), startTime: '1', underfunded: false, underfundedWinningAttoEth: 0n.toString() }]
+		const observed = snapshotProtocolIndex(indexWithCurrentRefunds(snapshot, initial.index), context.chainId)
+		const generation = observed.auctionRefunds[address(20).toLowerCase()]?.generation
+		if (generation === undefined) throw new Error('Expected a storage-observed refund identity')
+		expect(snapshotWithProtocolIndex(snapshot, observed).auctions[0]?.pendingEthRefundGeneration).toBe(generation)
+		const credited = await updateProtocolIndex({ ...context, anchorBlockNumber: 51n, previous: observed })
+		expect(credited.index.auctionRefunds[address(20).toLowerCase()]).toEqual({ generation, pendingAttoEth: 11n.toString() })
+		const withdrawn = await updateProtocolIndex({ ...context, anchorBlockNumber: 52n, previous: credited.index })
+		expect(withdrawn.index.auctionRefunds).toEqual({})
+		const renewed = await updateProtocolIndex({ ...context, anchorBlockNumber: 53n, previous: withdrawn.index })
+		expect(renewed.index.auctionRefunds[address(20).toLowerCase()]?.pendingAttoEth).toBe('8')
+		expect(renewed.index.auctionRefunds[address(20).toLowerCase()]?.generation).not.toBe(generation)
+	})
+
+	test('selects the oldest history supported by the configured quorum across retention windows', async () => {
+		const context = { ...indexDeployments, ...indexTrust, anchorBlockNumber: 100n, auctionAddresses: [], chainId: 31337, escalationGames: [], maxBlockSpan: 101n, startBlock: 0n, wallet: address(1) }
+		const readers = [42n, 60n, 80n].map((floor, position) => ({ endpoint: `reader-${position}`, client: eventIndexClient([], [], undefined, undefined, from => (from < floor ? new Error('pruned history unavailable') : undefined)) }))
+		expect((await updateProtocolIndexWithQuorum(context, readers, 1)).index.availableStartBlock).toBe('42')
+		const quorum = await updateProtocolIndexWithQuorum(context, readers, 2)
+		expect(quorum.index.availableStartBlock).toBe('60')
+		expect(quorum.complete).toBe(false)
+		const archive = { endpoint: 'archive', client: eventIndexClient([]) }
+		const full = await updateProtocolIndexWithQuorum(context, [...readers, archive], 1)
+		expect(full.index.availableStartBlock).toBeUndefined()
+		expect(full.complete).toBe(true)
+		const partial = await updateProtocolIndexWithQuorum({ ...context, maxBlockSpan: 10n }, readers, 2)
+		const prunedReader = readers[1]
+		if (prunedReader === undefined) throw new Error('Missing pruned reader fixture')
+		const resumed = await updateProtocolIndexWithQuorum({ ...context, maxBlockSpan: 10n, previous: partial.index }, [archive, prunedReader], 2)
+		expect(resumed.index.availableStartBlock).toBe('60')
+		expect(resumed.toBlock).toBe('100')
+	})
+
+	test('continues to reject disagreements between providers serving the same suffix', async () => {
+		const context = { ...indexDeployments, ...indexTrust, anchorBlockNumber: 100n, auctionAddresses: [], chainId: 31337, escalationGames: [], maxBlockSpan: 101n, startBlock: 0n, wallet: address(1) }
+		const readers = [7n, 8n].map((cumulative, position) => ({ endpoint: `reader-${position}`, client: eventIndexClient([migrationRepSplitLog({ amount: 2n, blockNumber: 42n, cumulative, logIndex: 0 })], [], undefined, undefined, from => (from < 42n ? new Error('pruned history unavailable') : undefined)) }))
+		await expect(updateProtocolIndexWithQuorum(context, readers, 2)).rejects.toThrow('RPC disagreement')
+	})
+
+	test('locates pruned history, indexes the available suffix, and resumes without forgetting the gap', async () => {
+		const requested: bigint[] = []
+		const logs = [migrationRepSplitLog({ amount: 5n, blockNumber: 1n, cumulative: 5n, logIndex: 0 }), migrationRepSplitLog({ amount: 2n, blockNumber: 42n, cumulative: 7n, logIndex: 0 }), migrationRepSplitLog({ amount: 3n, blockNumber: 51n, cumulative: 10n, logIndex: 0 })]
+		const client = eventIndexClient(logs, [], undefined, undefined, fromBlock => {
+			requested.push(fromBlock)
+			return fromBlock < 42n ? new Error('pruned history unavailable') : undefined
+		})
+		const context = { ...indexDeployments, ...indexTrust, anchorBlockNumber: 100n, auctionAddresses: [], chainId: 31337, client, escalationGames: [], maxBlockSpan: 10n, startBlock: 0n, wallet: address(1) }
+		const first = await updateProtocolIndex(context)
+		expect(first).toMatchObject({ complete: false, fromBlock: '42', toBlock: '100', index: { availableStartBlock: '42', startBlock: '0', migrationRepSplits: [{ childMigrationRepAmountAttoRep: 10n.toString() }] } })
+		expect(requested.length).toBeLessThan(40)
+		requested.length = 0
+		const resumed = await updateProtocolIndex({ ...context, anchorBlockNumber: 150n, maxBlockSpan: 100n, previous: first.index })
+		expect(resumed).toMatchObject({ complete: false, fromBlock: '101', toBlock: '150', index: { availableStartBlock: '42' } })
+		expect(requested[0]).toBe(0n)
+		expect(requested.slice(1).every(block => block >= 101n)).toBe(true)
+		const caughtUp = await updateProtocolIndex({ ...context, anchorBlockNumber: 150n, previous: resumed.index })
+		expect(caughtUp.complete).toBe(false)
+		const restored = await updateProtocolIndex({ ...context, anchorBlockNumber: 150n, client: eventIndexClient(logs), maxBlockSpan: 101n, previous: resumed.index })
+		expect(restored.complete).toBe(true)
+		expect(restored.index.availableStartBlock).toBeUndefined()
+		expect(restored.index.migrationRepSplits).toEqual(resumed.index.migrationRepSplits)
+	})
+
+	test('does not fetch older logs for carry proofs behind a caught-up protocol cursor', async () => {
+		const context = { ...indexDeployments, ...indexTrust, anchorBlockNumber: 100n, auctionAddresses: [], chainId: 31337, escalationGames: [], startBlock: 0n, wallet: address(1) }
+		const previous = (await updateProtocolIndex({ ...context, client: eventIndexClient([]) })).index
+		const client = eventIndexClient([], [], undefined, undefined, from => (from < 42n ? new Error('pruned history unavailable') : undefined))
+		const update = await updateProtocolIndex({ ...context, client, previous })
+		expect(update.index.availableStartBlock).toBeUndefined()
+		expect(update.complete).toBe(true)
+		expect(update.toBlock).toBe('100')
+	})
+
+	test('does not invent refund episodes when the available history begins mid-episode', async () => {
+		const knownEpisode = refundLog({ amount: 4n, blockNumber: 45n, logIndex: 0 })
+		const client = eventIndexClient([refundLog({ amount: 2n, pending: 7n, blockNumber: 42n, logIndex: 0 }), refundLog({ amount: 7n, withdrawn: true, blockNumber: 43n, logIndex: 0 }), knownEpisode], [], undefined, undefined, from => (from < 42n ? new Error('pruned history unavailable') : undefined))
+		const update = await updateProtocolIndex({ ...indexDeployments, ...indexTrust, anchorBlockNumber: 50n, auctionAddresses: [address(20)], chainId: 31337, client, escalationGames: [], startBlock: 0n, wallet: address(1) })
+		expect(update.complete).toBe(false)
+		expect(update.index.auctionRefunds[address(20).toLowerCase()]).toEqual({ generation: refundGeneration(knownEpisode), pendingAttoEth: 4n.toString() })
+	})
+
+	test('preserves failures when even the anchor logs are pruned or a boundary probe times out', async () => {
+		for (const failure of [(from: bigint) => (from < 100n ? new Error('pruned history unavailable') : new Error('request timed out')), () => new Error('pruned history unavailable')]) {
+			const client = eventIndexClient([], [], undefined, undefined, failure)
+			await expect(updateProtocolIndex({ ...indexDeployments, ...indexTrust, anchorBlockNumber: 100n, auctionAddresses: [], chainId: 31337, client, escalationGames: [], startBlock: 0n, wallet: address(1) })).rejects.toThrow()
+		}
+	})
+
 	test('subdivides provider-limited log ranges without losing or duplicating canonical history', async () => {
 		const update = await updateProtocolIndex({
 			anchorBlockNumber: 120n,
@@ -331,8 +436,27 @@ describe('durable protocol index', () => {
 		expect(refundGeneration(replacementLog)).not.toBe(refundGeneration(originalLog))
 	})
 
-	test('decodes the complete packed OpenOracle preimage and timestamp deadlines', () => {
-		const report = decodePackedOracleReport(42n, address(6), packedReport())
+	test('decodes the complete packed OpenOracle preimage and timestamp deadlines', async () => {
+		const signerReport = canonicalLog({
+			address: indexDeployments.openOracle,
+			blockNumber: 10n,
+			data: packedReport({ callbackContract: address(0), callbackGasLimit: 0n, creator: address(1) }),
+			logIndex: 0,
+			topics: [reportSubmittedTopic, toHex(42n, { size: 32 })],
+		})
+		const update = await updateProtocolIndex({
+			anchorBlockNumber: 10n,
+			auctionAddresses: [],
+			chainId: 31337,
+			client: eventIndexClient([signerReport]),
+			escalationGames: [],
+			...indexDeployments,
+			...indexTrust,
+			startBlock: 10n,
+			wallet: address(1),
+		})
+		const report = update.index.reports[0]
+		if (report === undefined) throw new Error('Expected the signer report to be indexed')
 		expect(report).toMatchObject({
 			currentAmount1: '11',
 			currentAmount2: '22',
@@ -342,13 +466,14 @@ describe('durable protocol index', () => {
 			escalationHalt: '1100',
 			flags: 7,
 			multiplier: 140,
+			openOracle: indexDeployments.openOracle,
 			reportId: '42',
 			settleAfterTimestamp: '1900',
 			token1: address(7),
 			token2: address(10),
 		})
-		expect(report.game).toMatchObject({ callbackContract: address(31), callbackGasLimit: 500000, protocolFeeRecipient: address(30), settlerReward: '44' })
-		expect(report.helper).toEqual({ blockNumber: '88', blockTimestamp: '999', creator: address(32) })
+		expect(report.game).toMatchObject({ callbackContract: address(0), callbackGasLimit: 0, protocolFeeRecipient: address(30), settlerReward: '44' })
+		expect(report.helper).toEqual({ blockNumber: '88', blockTimestamp: '999', creator: address(1) })
 	})
 
 	test('advances a bounded canonical cursor and rejects a changed persisted cursor hash', async () => {

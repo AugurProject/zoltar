@@ -3,7 +3,7 @@ import type { OperationAbiEntryKind, OperationClassification } from '../operatio
 export type ContractAbiEntryKind = OperationAbiEntryKind
 
 /** A selector intentionally routed through one catalog operation that subsumes its effects. */
-export interface ContractMethodSemanticAlias {
+interface ContractMethodSemanticAlias {
 	contract: string
 	method: string
 	relation: 'target-subsumes-source'
@@ -20,55 +20,6 @@ export interface ContractMethodClassification {
 	semanticAliasOf?: ContractMethodSemanticAlias
 	signatures?: readonly string[]
 }
-
-export type CanonicalMutatingContractExposure = 'static-endpoint' | 'dynamic-endpoint' | 'deployment-helper' | 'delegate-module' | 'fallback-module' | 'migration-proxy'
-
-export interface CanonicalMutatingContract {
-	artifactSource: `contracts/${string}.sol`
-	contract: string
-	exposure: CanonicalMutatingContractExposure
-}
-
-// This is the canonical runtime code-family boundary for mutating-surface coverage.
-// It contains user-facing protocol endpoints plus deployed factories, workers,
-// migration proxies, and storage-coupled delegate modules. Pure/view-only runtime
-// helpers, generic Multicall transport, libraries, interfaces, and test contracts
-// are deliberately outside this economic-operation manifest.
-export const CANONICAL_MUTATING_CONTRACT_MANIFEST: readonly CanonicalMutatingContract[] = [
-	{ artifactSource: 'contracts/ZoltarQuestionData.sol', contract: 'ZoltarQuestionData', exposure: 'static-endpoint' },
-	{ artifactSource: 'contracts/Zoltar.sol', contract: 'Zoltar', exposure: 'static-endpoint' },
-	{ artifactSource: 'contracts/GenesisReputationToken.sol', contract: 'GenesisReputationToken', exposure: 'static-endpoint' },
-	{ artifactSource: 'contracts/ReputationToken.sol', contract: 'ReputationToken', exposure: 'dynamic-endpoint' },
-	{ artifactSource: 'contracts/statoblast/factories/SecurityPoolFactory.sol', contract: 'SecurityPoolFactory', exposure: 'static-endpoint' },
-	{ artifactSource: 'contracts/statoblast/factories/SecurityPoolDeployer.sol', contract: 'SecurityPoolDeployer', exposure: 'deployment-helper' },
-	{ artifactSource: 'contracts/statoblast/factories/SecurityPoolDeployer.sol', contract: 'SecurityPoolDeploymentWorker', exposure: 'deployment-helper' },
-	{ artifactSource: 'contracts/statoblast/SecurityPool.sol', contract: 'SecurityPool', exposure: 'dynamic-endpoint' },
-	{ artifactSource: 'contracts/statoblast/SecurityPoolOperationsDelegate.sol', contract: 'SecurityPoolOperationsDelegate', exposure: 'delegate-module' },
-	{ artifactSource: 'contracts/statoblast/SecurityPoolEventEmitter.sol', contract: 'SecurityPoolEventEmitter', exposure: 'delegate-module' },
-	{ artifactSource: 'contracts/statoblast/SecurityPoolEventEmitter.sol', contract: 'SecurityPoolForkEventEmitter', exposure: 'delegate-module' },
-	{ artifactSource: 'contracts/statoblast/OpenOraclePriceCoordinator.sol', contract: 'OpenOraclePriceCoordinator', exposure: 'dynamic-endpoint' },
-	{ artifactSource: 'contracts/statoblast/LiquidationApprovalRegistry.sol', contract: 'LiquidationApprovalRegistry', exposure: 'dynamic-endpoint' },
-	{ artifactSource: 'contracts/statoblast/factories/PriceOracleManagerAndOperatorQueuerFactory.sol', contract: 'PriceOracleManagerAndOperatorQueuerFactory', exposure: 'static-endpoint' },
-	{ artifactSource: 'contracts/statoblast/factories/PriceOracleManagerAndOperatorQueuerFactory.sol', contract: 'LiquidationApprovalRegistryDeployer', exposure: 'deployment-helper' },
-	{ artifactSource: 'contracts/statoblast/factories/PriceOracleManagerAndOperatorQueuerFactory.sol', contract: 'PriceCoordinatorDeploymentWorker', exposure: 'deployment-helper' },
-	{ artifactSource: 'contracts/statoblast/SecurityPoolForker.sol', contract: 'SecurityPoolForker', exposure: 'static-endpoint' },
-	{ artifactSource: 'contracts/statoblast/SecurityPoolForkerVaultMigrationDelegate.sol', contract: 'SecurityPoolForkerVaultMigrationDelegate', exposure: 'delegate-module' },
-	{ artifactSource: 'contracts/statoblast/EscalationGameForker.sol', contract: 'EscalationGameForker', exposure: 'delegate-module' },
-	{ artifactSource: 'contracts/statoblast/SecurityPoolMigrationProxy.sol', contract: 'SecurityPoolMigrationProxy', exposure: 'migration-proxy' },
-	{ artifactSource: 'contracts/statoblast/factories/EscalationGameFactory.sol', contract: 'EscalationGameFactory', exposure: 'static-endpoint' },
-	{ artifactSource: 'contracts/statoblast/EscalationGame.sol', contract: 'EscalationGame', exposure: 'dynamic-endpoint' },
-	{ artifactSource: 'contracts/statoblast/EscalationGameClaimDelegate.sol', contract: 'EscalationGameClaimDelegate', exposure: 'fallback-module' },
-	{ artifactSource: 'contracts/statoblast/EscalationGameDepositDelegate.sol', contract: 'EscalationGameDepositDelegate', exposure: 'delegate-module' },
-	{ artifactSource: 'contracts/statoblast/factories/ShareTokenFactory.sol', contract: 'ShareTokenFactory', exposure: 'static-endpoint' },
-	{ artifactSource: 'contracts/statoblast/tokens/ShareToken.sol', contract: 'ShareToken', exposure: 'dynamic-endpoint' },
-	{ artifactSource: 'contracts/statoblast/factories/UniformPriceDualCapBatchAuctionFactory.sol', contract: 'UniformPriceDualCapBatchAuctionFactory', exposure: 'static-endpoint' },
-	{ artifactSource: 'contracts/statoblast/UniformPriceDualCapBatchAuction.sol', contract: 'UniformPriceDualCapBatchAuction', exposure: 'dynamic-endpoint' },
-	{ artifactSource: 'contracts/statoblast/openOracle/OpenOracle.sol', contract: 'OpenOracle', exposure: 'static-endpoint' },
-	{ artifactSource: 'contracts/statoblast/WETH9.sol', contract: 'WETH9', exposure: 'static-endpoint' },
-	{ artifactSource: 'contracts/trading/TwoWayConstantProductFactory.sol', contract: 'TwoWayConstantProductFactory', exposure: 'static-endpoint' },
-	{ artifactSource: 'contracts/trading/TwoWayConstantProductPair.sol', contract: 'TwoWayConstantProductPair', exposure: 'dynamic-endpoint' },
-	{ artifactSource: 'contracts/trading/TwoWayConstantProductRouter.sol', contract: 'TwoWayConstantProductRouter', exposure: 'static-endpoint' },
-] as const
 
 const entry = (contract: string, method: string, classification: OperationClassification, operationId?: string, reason?: string, signatures?: readonly string[], abiEntryKind: ContractAbiEntryKind = 'function'): ContractMethodClassification => {
 	const base = { abiEntryKind, classification, contract, method }
@@ -89,15 +40,20 @@ export const MUTATING_CONTRACT_SURFACE: readonly ContractMethodClassification[] 
 	entry('Zoltar', 'deployChild', 'selectable', 'zoltar.child.deploy'),
 	entry('Zoltar', 'addRepToMigrationBalance', 'selectable', 'zoltar.migration.add'),
 	entry('Zoltar', 'splitMigrationRep', 'selectable', 'zoltar.migration.split'),
+	entry('Zoltar', 'prepareAndSplitMigrationRep', 'excluded-dangerous', undefined, 'Atomic preparation can burn wallet REP; chaos budgets preparation and indexed child-route splitting through separate guarded operations.'),
 	entry('GenesisReputationToken', 'approve', 'prerequisite', 'token.rep.approve'),
 	entry('GenesisReputationToken', 'transfer', 'excluded-dangerous', undefined, 'Raw transfers have no ecosystem postcondition and can strand funded genesis REP.'),
 	entry('GenesisReputationToken', 'transferFrom', 'excluded-dangerous', undefined, 'Delegated raw transfers are not chaos workflows.'),
 	entry('ReputationToken', 'approve', 'prerequisite', 'token.rep.approve'),
+	entry('ReputationToken', 'permit', 'excluded-dangerous', undefined, 'Permit signing requires an explicit wallet-intent workflow; chaos retains exact approval steps.'),
+	entry('ReputationToken', 'transferWithAuthorization', 'excluded-dangerous', undefined, 'Raw signed transfers have no ecosystem postcondition and can strand child REP.'),
+	entry('ReputationToken', 'receiveWithAuthorization', 'excluded-dangerous', undefined, 'Relayed raw transfers have no ecosystem postcondition and can strand child REP.'),
+	entry('ReputationToken', 'cancelAuthorization', 'excluded-dangerous', undefined, 'Chaos does not originate durable signed token authorizations whose nonce it can safely cancel.'),
 	entry('ReputationToken', 'transfer', 'excluded-dangerous', undefined, 'Raw transfers have no ecosystem postcondition and can strand funded REP.'),
 	entry('ReputationToken', 'transferFrom', 'excluded-dangerous', undefined, 'Delegated raw transfers are not chaos workflows.'),
 	entry('ReputationToken', 'mint', 'role-restricted', undefined, 'Only Zoltar may mint child-universe REP.'),
 	entry('ReputationToken', 'burn', 'role-restricted', undefined, 'Only Zoltar may burn child-universe REP.'),
-	entry('ReputationToken', 'setMaxTheoreticalSupplyAttoRep', 'role-restricted', undefined, 'Only Zoltar initializes the supply bound.'),
+	entry('ReputationToken', 'initialize', 'role-restricted', undefined, 'Only Zoltar initializes child REP identity and theoretical supply.'),
 
 	entry('SecurityPoolFactory', 'deployOriginSecurityPool', 'selectable', 'statoblast.pool.deploy'),
 	entry('SecurityPoolFactory', 'deployChildSecurityPool', 'role-restricted', undefined, 'Only SecurityPoolForker deploys canonical children.'),
@@ -134,7 +90,11 @@ export const MUTATING_CONTRACT_SURFACE: readonly ContractMethodClassification[] 
 	entry('SecurityPool', 'transferEth', 'role-restricted', undefined, 'Only SecurityPoolForker routes migration collateral.'),
 	entry('SecurityPool', 'authorizeChildPool', 'role-restricted', undefined, 'Only SecurityPoolForker authorizes child pools.'),
 	entry('SecurityPool', 'receive', 'role-restricted', undefined, 'Only the canonical forker, truth auction, or parent pool may send ETH directly.', undefined, 'receive'),
+	entry('SecurityPool', 'fallback', 'excluded-dangerous', undefined, 'The fallback exposes signed REP-deposit selectors that require explicit wallet-intent provenance outside randomized execution.', undefined, 'fallback'),
 	entry('SecurityPoolOperationsDelegate', 'decodeError', 'excluded-dangerous', undefined, 'This helper decodes revert data for canonical SecurityPool delegate calls and has no direct protocol effect.'),
+	entry('SecurityPoolOperationsDelegate', 'depositRepToVault', 'excluded-dangerous', undefined, 'This storage-coupled module is valid only through SecurityPool delegatecall during a checked vault deposit.'),
+	entry('SecurityPoolOperationsDelegate', 'depositRepToVaultWithPermit', 'excluded-dangerous', undefined, 'This signed entrypoint is meaningful only through SecurityPool fallback and requires explicit wallet intent.'),
+	entry('SecurityPoolOperationsDelegate', 'depositRepToVaultWithAuthorization', 'excluded-dangerous', undefined, 'This relayed signed entrypoint is meaningful only through SecurityPool fallback and requires durable authorization provenance.'),
 	entry('SecurityPoolOperationsDelegate', 'performBundledLiquidation', 'excluded-dangerous', undefined, 'This storage-coupled module is valid only through SecurityPool delegatecall; a direct call uses isolated delegate storage.'),
 	entry('SecurityPoolOperationsDelegate', 'resumeForkedEscalationGame', 'excluded-dangerous', undefined, 'This storage-coupled module is valid only through the typed SecurityPool resumption entrypoint.'),
 	entry('SecurityPoolOperationsDelegate', 'setVaultCapacity', 'excluded-dangerous', undefined, 'This storage-coupled module is valid only through SecurityPool delegatecall during a checked vault deposit.'),
@@ -231,6 +191,8 @@ export const MUTATING_CONTRACT_SURFACE: readonly ContractMethodClassification[] 
 	entry('EscalationGameDepositDelegate', 'creditClaimOwners', 'excluded-dangerous', undefined, 'This per-game storage-coupled module is valid only through internal EscalationGame delegatecall composition.'),
 	entry('EscalationGameDepositDelegate', 'creditExternalClaimOwners', 'excluded-dangerous', undefined, 'This per-game storage-coupled module is valid only through internal EscalationGame delegatecall composition.'),
 	entry('EscalationGameDepositDelegate', 'depositRepOnOutcome', 'excluded-dangerous', undefined, 'This per-game storage-coupled module is valid only through the typed EscalationGame deposit entrypoint; a direct call uses isolated delegate storage.'),
+	entry('EscalationGameDepositDelegate', 'depositRepOnOutcomeWithPermit', 'excluded-dangerous', undefined, 'This signed storage-coupled entrypoint is meaningful only through EscalationGame fallback and requires explicit wallet intent.'),
+	entry('EscalationGameDepositDelegate', 'depositRepOnOutcomeWithAuthorization', 'excluded-dangerous', undefined, 'This relayed signed entrypoint is meaningful only through EscalationGame fallback and requires durable authorization provenance.'),
 	entry('EscalationGameDepositDelegate', 'recordDeposit', 'excluded-dangerous', undefined, 'This per-game storage-coupled module is valid only through the typed EscalationGame deposit entrypoint.'),
 	entry('EscalationGameDepositDelegate', 'recordForkedEscrowForOutcome', 'excluded-dangerous', undefined, 'This per-game storage-coupled module is valid only through the typed EscalationGame escrow entrypoint.'),
 	entry('EscalationGameDepositDelegate', 'resumeFromFork', 'excluded-dangerous', undefined, 'This per-game storage-coupled module is valid only through the typed EscalationGame resumption entrypoint.'),
@@ -274,24 +236,20 @@ export const MUTATING_CONTRACT_SURFACE: readonly ContractMethodClassification[] 
 
 	entry('TwoWayConstantProductFactory', 'createPair', 'selectable', 'trading.pair.create'),
 	entry('TwoWayConstantProductPair', 'approve', 'prerequisite', 'trading.lp.approve'),
+	entry('TwoWayConstantProductPair', 'permit', 'excluded-dangerous', undefined, 'Chaos does not originate durable LP permit signatures.'),
 	entry('TwoWayConstantProductPair', 'transfer', 'excluded-dangerous', undefined, 'Raw LP transfers have no ecosystem postcondition.'),
 	entry('TwoWayConstantProductPair', 'transferFrom', 'excluded-dangerous', undefined, 'Delegated raw LP transfers are not chaos workflows.'),
 	entry('TwoWayConstantProductPair', 'initialize', 'selectable', 'trading.pair.initialize-shares'),
 	entry('TwoWayConstantProductPair', 'addLiquidity', 'selectable', 'trading.liquidity.add-shares'),
-	entry('TwoWayConstantProductPair', 'removeLiquidity', 'selectable', 'trading.liquidity.remove-shares'),
+	entry('TwoWayConstantProductPair', 'removeLiquidity', 'selectable', 'trading.liquidity.remove'),
 	entry('TwoWayConstantProductPair', 'swapExactInput', 'selectable', 'trading.swap.exact-input'),
 	entry('TwoWayConstantProductPair', 'swapExactOutput', 'selectable', 'trading.swap.exact-output'),
 	entry('TwoWayConstantProductPair', 'sync', 'selectable', 'trading.pair.sync'),
 	entry('TwoWayConstantProductRouter', 'enterPosition', 'selectable', 'trading.position.enter'),
-	entry('TwoWayConstantProductRouter', 'exitPosition', 'selectable', 'trading.position.exit'),
-	entry('TwoWayConstantProductRouter', 'redeemCompleteSet', 'selectable', 'trading.complete-set.redeem'),
 	entry('TwoWayConstantProductRouter', 'createPairAndInitializeWithEth', 'selectable', 'trading.pair.create-and-initialize'),
 	entry('TwoWayConstantProductRouter', 'initializeWithEth', 'selectable', 'trading.pair.initialize-eth'),
 	entry('TwoWayConstantProductRouter', 'addLiquidityWithEth', 'selectable', 'trading.liquidity.add-eth'),
-	entry('TwoWayConstantProductRouter', 'removeLiquidity', 'selectable', 'trading.liquidity.remove'),
+	entry('TwoWayConstantProductRouter', 'onERC1155BatchReceived', 'role-restricted', undefined, 'Only the canonical ShareToken invokes the router callback after an owner-initiated batch transfer.'),
+	entry('TwoWayConstantProductRouter', 'removeLiquidityWithPermit', 'excluded-dangerous', undefined, 'Chaos removes liquidity directly and does not originate durable LP permit signatures.'),
 	entry('TwoWayConstantProductRouter', 'receive', 'role-restricted', undefined, 'Only the active callback pool may return ETH during a router workflow.', undefined, 'receive'),
 ] as const
-
-export function classifiedMethod(contract: string, method: string, abiEntryKind: ContractAbiEntryKind = 'function') {
-	return MUTATING_CONTRACT_SURFACE.find(candidate => candidate.contract === contract && candidate.method === method && candidate.abiEntryKind === abiEntryKind)
-}

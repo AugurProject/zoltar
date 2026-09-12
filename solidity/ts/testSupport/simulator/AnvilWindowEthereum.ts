@@ -1,7 +1,7 @@
 import type { EthereumBytes32, EthereumData, EthereumQuantity, EthereumQuantitySmall } from './types/wire-types'
 import { ensureDefined } from './utils/testUtils'
 import { ensureArray } from './utils/array-utils'
-import { collectBytecodeCoverageForCall, collectBytecodeCoverageForTransaction, invalidateSolidityBytecodeCoverageAddressCache, resetSolidityBytecodeCoverageAddressCache } from '../../coverage/traceToSource'
+import { collectBytecodeCoverageForCall, collectBytecodeCoverageForTransaction, invalidateSolidityBytecodeCoverageAddressCache, resetSolidityBytecodeCoverageAddressCache } from '../coverage/traceToSource'
 
 type BlockTimeManipulation = { readonly type: 'AddToTimestamp'; readonly deltaToAdd: EthereumQuantity } | { readonly type: 'SetTimestamp'; readonly timeToSet: EthereumQuantity }
 
@@ -349,7 +349,7 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 					method: 'evm_mine',
 					params: [],
 				})
-			} catch (error: unknown) {
+			} catch (error) {
 				if (!isEvmMineUnsupported(error)) throw error
 			}
 		}

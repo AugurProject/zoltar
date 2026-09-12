@@ -53,7 +53,7 @@ if (requestedCaptureSource === undefined) {
 		{ height: 900, name: 'chaos-catalog-desktop', route: 'catalog', width: 1_440 },
 		{ height: 900, name: 'chaos-ecosystem-desktop', route: 'ecosystem', width: 1_440 },
 		{ height: 900, name: 'chaos-ecosystem-desktop-topology', route: 'ecosystem', verticalScroll: 'topology', width: 1_440 },
-		{ height: 900, name: 'chaos-activity-desktop', route: 'activity', width: 1_440 },
+		{ height: 900, name: 'chaos-recovery-desktop', route: 'recovery', width: 1_440 },
 		{ height: 900, name: 'chaos-settings-desktop', route: 'settings', width: 1_440 },
 		{ height: 844, name: 'chaos-overview-mobile', route: 'overview', width: 390 },
 		{ height: 844, name: 'chaos-resume-mobile', resumeDialog: true, route: 'overview', width: 390 },
@@ -79,8 +79,8 @@ if (requestedCaptureSource === undefined) {
 			width: 390,
 		},
 		{ height: 844, name: 'chaos-ecosystem-mobile-topology', route: 'ecosystem', verticalScroll: 'topology', width: 390 },
-		{ height: 844, name: 'chaos-activity-mobile', route: 'activity', width: 390 },
-		{ height: 844, name: 'chaos-activity-mobile-retry', recoveryRefreshFailure: 'candidate', route: 'activity', width: 390 },
+		{ height: 844, name: 'chaos-recovery-mobile', route: 'recovery', width: 390 },
+		{ height: 844, name: 'chaos-recovery-mobile-retry', recoveryRefreshFailure: 'candidate', route: 'recovery', width: 390 },
 		{ fullDocument: true, height: 844, name: 'chaos-settings-mobile', route: 'settings', width: 390 },
 	]
 	for (const capture of captures) {
@@ -547,7 +547,7 @@ try {
 				throw new Error(`Desktop catalog did not expose all six columns without hidden horizontal content: ${JSON.stringify(catalogLayout)}`)
 			}
 		}
-		if (route === 'activity' && width === 390) {
+		if (route === 'recovery' && width === 390) {
 			const danglingRecoveryPrefixes = await evaluate(`[
 				...document.querySelectorAll('#pending-transactions .identifier-line > span:first-child'),
 			].map(prefix => prefix.textContent?.trim()).filter(prefix => prefix?.endsWith('·'))`)
@@ -688,7 +688,7 @@ try {
 				panel.scrollIntoView({ block: 'start' })
 				requestAnimationFrame(() => requestAnimationFrame(() => {
 					const bounds = panel.getBoundingClientRect()
-					const topbarColor = getComputedStyle(document.querySelector('.topbar')).backgroundColor
+					const topbarColor = getComputedStyle(document.querySelector('.operator-shell')).backgroundColor
 					const topbarAlpha = topbarColor.startsWith('rgba(') ? Number(topbarColor.match(/,\\s*([0-9.]+)\\)$/)?.[1]) : 1
 					const identifiers = [...panel.querySelectorAll('.compact-identifier')].map(identifier => {
 						const full = identifier.querySelector('.identifier-full')
@@ -834,7 +834,7 @@ try {
 				if (fullDocument === true) paintTargets.push({ label: 'last catalog row', minimumDistinctColors: 12, selector: '#catalog-rows tr:last-child' })
 			}
 			if (route === 'ecosystem') paintTargets.push({ label: 'first ecosystem card', minimumDistinctColors: 12, selector: '#ecosystem-grid .ecosystem-card:first-child' })
-			if (route === 'activity') paintTargets.push({ label: 'pending recovery heading', minimumDistinctColors: 8, selector: '.recovery-columns .panel:first-child .panel-heading' })
+			if (route === 'recovery') paintTargets.push({ label: 'pending recovery heading', minimumDistinctColors: 8, selector: '.recovery-columns .panel:first-child .panel-heading' })
 			if (route === 'settings') {
 				paintTargets.push(
 					{ label: 'execution policy', minimumDistinctColors: 12, selector: '#settings-form' },

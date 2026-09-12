@@ -1,7 +1,7 @@
-import type { Address } from '#ethereum'
-import type { OpenOracleGame } from '@zoltar/shared/openOracle'
+import type { Address } from '@zoltar/bot-shared/ethereum'
+import type { OpenOracleGame } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 
-export const OPEN_ORACLE_PERCENTAGE_PRECISION = 10_000_000n
+const OPEN_ORACLE_PERCENTAGE_PRECISION = 10_000_000n
 
 export type ArbitrageDirection = 'sell-rep' | 'buy-rep'
 
@@ -35,7 +35,7 @@ export function isSelfReport(account: Address | undefined, currentReporter: Addr
 	return account !== undefined && account.toLowerCase() === currentReporter.toLowerCase()
 }
 
-export function calculateContribution(game: Pick<OpenOracleGame, 'currentAmount1' | 'currentAmount2' | 'feePercentage' | 'protocolFee'>, tokenToSwap: Address, token1: Address, newAmount1: bigint, newAmount2: bigint) {
+function calculateContribution(game: Pick<OpenOracleGame, 'currentAmount1' | 'currentAmount2' | 'feePercentage' | 'protocolFee'>, tokenToSwap: Address, token1: Address, newAmount1: bigint, newAmount2: bigint) {
 	if (tokenToSwap.toLowerCase() === token1.toLowerCase()) {
 		return {
 			token1: newAmount1 + game.currentAmount1 + calculateFee(game.currentAmount1, game.feePercentage) + calculateFee(game.currentAmount1, game.protocolFee),

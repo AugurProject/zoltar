@@ -1,8 +1,8 @@
-import { fetchLogsWithAdaptiveRanges as fetchLogsWithAdaptiveRangesFromBlocks, logRangeLimitError, LogScanError, type LogRange } from '@zoltar/shared/logScan'
+import { fetchLogsWithAdaptiveRanges as fetchLogsWithAdaptiveRangesFromBlocks, LogScanError, type LogRange } from '@zoltar/core-shared/evm/logScan'
 
-export { logRangeLimitError, LogScanError, type LogRange }
+export { LogScanError, type LogRange }
 
-export const DEFAULT_LATEST_LOG_BLOCKS = 256n
+const DEFAULT_LATEST_LOG_BLOCKS = 256n
 
 function walkErrorCauses(error: unknown, visit: (current: object) => boolean) {
 	const seen = new Set<unknown>()
@@ -85,21 +85,7 @@ export function cursorForHeadScan(cursor: SyncCursor, head: bigint, headHash: st
 	}
 }
 
-export function scanRanges(cursor: Pick<SyncCursor, 'nextBlock'>, head: bigint, maximumRange = 10_000n) {
-	if (maximumRange < 1n) throw new Error('maximumRange must be positive')
-	if (cursor.nextBlock > head) return []
-	const ranges: { fromBlock: bigint; toBlock: bigint }[] = []
-	let fromBlock = cursor.nextBlock
-	while (fromBlock <= head) {
-		const candidate = fromBlock + maximumRange - 1n
-		const toBlock = candidate < head ? candidate : head
-		ranges.push({ fromBlock, toBlock })
-		fromBlock = toBlock + 1n
-	}
-	return ranges
-}
-
-export function advanceCursor(head: bigint, headHash: string): SyncCursor {
+function advanceCursor(head: bigint, headHash: string): SyncCursor {
 	return { finalityAnchorHash: undefined, finalityAnchorNumber: undefined, initial: false, lastHeadHash: headHash, lastHeadNumber: head, nextBlock: head + 1n }
 }
 
@@ -112,7 +98,7 @@ export function withFinalityAnchor(cursor: SyncCursor, blockNumber: bigint, bloc
 	return { ...cursor, finalityAnchorHash: blockHash, finalityAnchorNumber: blockNumber }
 }
 
-export function finalityAnchorMatches(cursor: SyncCursor, blockNumber: bigint, blockHash: string) {
+function finalityAnchorMatches(cursor: SyncCursor, blockNumber: bigint, blockHash: string) {
 	return cursor.finalityAnchorNumber === blockNumber && cursor.finalityAnchorHash?.toLowerCase() === blockHash.toLowerCase()
 }
 
@@ -120,10 +106,4 @@ export function finalityAnchorRequiresReset(cursor: SyncCursor, currentHead: big
 	const anchorNumber = cursor.finalityAnchorNumber
 	if (anchorNumber === undefined || cursor.finalityAnchorHash === undefined) return false
 	return anchorNumber > currentHead || observedAnchorHash === undefined || !finalityAnchorMatches(cursor, anchorNumber, observedAnchorHash)
-}
-
-export function assertFinalityAnchor(cursor: SyncCursor, blockNumber: bigint, blockHash: string) {
-	if (!finalityAnchorMatches(cursor, blockNumber, blockHash)) {
-		throw new Error(`Canonical chain reorganized deeper than the configured overlap at block ${blockNumber.toString()}; execution remains blocked while the retained lookback is rebuilt`)
-	}
 }

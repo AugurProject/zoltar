@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from 'bun:test'
 import { Browser, type BrowserWindow, type Element } from 'happy-dom'
 import { join } from 'node:path'
-import type { Address } from '#ethereum'
+import type { Address } from '@zoltar/bot-shared/ethereum'
 import { startDashboardServer } from '#dashboard/dashboard-server'
 import { operatorSnapshot, type MutableStrategy, type OperatorState } from '#state/operator-state'
 import { validateSubmissionSettings } from '#execution/transaction-submission'
@@ -53,6 +53,8 @@ function strategy(minimumProfitBps: bigint): MutableStrategy {
 
 test('keeps all mutations locked and ignores deferred old-chain responses until matching state and configuration arrive', async () => {
 	let network: 'mainnet' | 'sepolia' = 'mainnet'
+	let networkConfigured = true
+	let deploymentUnavailable = false
 	let currentStrategy = strategy(111n)
 	let stateGate: Promise<void> | undefined
 	let configurationGate: Promise<void> | undefined
@@ -83,7 +85,7 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 		connectivity,
 		deployment,
 		network,
-		networkConfigured: true,
+		networkConfigured,
 		rpcQuorum: 1,
 		strategy: {
 			maxSpotTwapTicks: currentStrategy.maxSpotTwapTicks.toString(),
@@ -95,10 +97,12 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 			twapSeconds: currentStrategy.twapSeconds,
 		},
 		submission,
+		approvedUniverses: [],
 		tokenAddresses: [],
 	})
 	const snapshot = () => {
 		const state = operatorState()
+		if (deploymentUnavailable) state.marketAvailability = { kind: 'missing-deployment', chainId: 11_155_111, contracts: [{ name: 'Uniswap V3 factory', address }] }
 		if (capable) {
 			state.paused = false
 			state.status = 'running'
@@ -113,6 +117,7 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 			expectedChainId: network === 'mainnet' ? 1 : 11_155_111,
 			explorerUrl: network === 'mainnet' ? 'https://etherscan.io' : 'https://sepolia.etherscan.io',
 			network,
+			networkConfigured,
 			openOracle: address,
 			queuedWallet: undefined,
 			savedWallet: undefined,
@@ -158,18 +163,25 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	browsers.push(browser)
 	const page = browser.newPage()
 	page.url = server.url.href
-	page.content = (await (await fetch(server.url)).text()).replace('<script type="module" src="/dashboard.js"></script>', '')
+	page.content = (await (await fetch(server.url)).text()).replace('<script type="module" src="/dashboard.js"></script>', '').replace('<script type="module" src="/header-notices.js"></script>', '')
 	const window = page.mainFrame.window
 	for (const [name, value] of Object.entries({ AbortController, Array, Boolean, Date, Error, Intl, JSON, Map, Math, Number, Object, Promise, Reflect, Set, String, SyntaxError, decodeURIComponent })) Reflect.set(window, name, value)
-	window.setInterval = () => {
+	const intervalCallbacks: (() => unknown)[] = []
+	window.setInterval = handler => {
+		if (typeof handler === 'function') intervalCallbacks.push(handler as () => unknown)
 		const timeout = window.setTimeout(() => undefined, 1)
 		window.clearTimeout(timeout)
 		return timeout
 	}
+	const triggerRefresh = () => {
+		const refresh = intervalCallbacks[0]
+		if (refresh === undefined) throw new Error('Dashboard did not register its refresh interval')
+		refresh()
+	}
 	const nativeSetTimeout = window.setTimeout.bind(window)
 	window.setTimeout = (handler, timeout, ...arguments_) => nativeSetTimeout(handler, timeout === 500 ? 0 : timeout, ...arguments_)
 	window.fetch = async (input, init) => {
-		const inputUrl = typeof input === 'string' ? input : input instanceof window.URL ? input.href : Reflect.get(input, 'url')
+		const inputUrl = typeof input === 'string' || input instanceof window.URL ? input.toString() : Reflect.get(input, 'url')
 		if (typeof inputUrl !== 'string') throw new Error('Unexpected request URL')
 		const url = new URL(inputUrl, server.url)
 		const response = init?.method === undefined || init.method === 'GET' ? await fetch(url) : await fetch(url, { body: String(init.body), headers: { 'content-type': 'application/json', origin: server.url.origin }, method: init.method })
@@ -189,35 +201,35 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	expect(element(window, 'capability-badge', window.HTMLElement).textContent).toBe('Capability unavailable')
 	expect(element(window, 'attention-badge', window.HTMLElement).dataset['tone']).toBe('warning')
 	stateFailure = false
-	element(window, 'refresh-button', window.HTMLButtonElement).click()
+	triggerRefresh()
 	await page.waitUntilComplete()
 	expect(element(window, 'capability-badge', window.HTMLElement).textContent).toBe('Operator blocked')
 	expect(element(window, 'attention-badge', window.HTMLElement).textContent).toBe('1 action')
 
 	capable = true
-	element(window, 'refresh-button', window.HTMLButtonElement).click()
+	triggerRefresh()
 	await page.waitUntilComplete()
-	expect(element(window, 'capability-badge', window.HTMLElement).textContent).toBe('Operator capable')
+	expect(element(window, 'capability-badge', window.HTMLElement).hidden).toBe(true)
 	expect(element(window, 'attention-badge', window.HTMLElement).dataset['tone']).toBe('ok')
 	stateFailure = true
-	element(window, 'refresh-button', window.HTMLButtonElement).click()
+	triggerRefresh()
 	await page.waitUntilComplete()
 	expect(element(window, 'launch-notice', window.HTMLElement).hidden).toBe(true)
 	expect(element(window, 'capability-badge', window.HTMLElement).textContent).toBe('Capability unavailable')
 	expect(element(window, 'attention-badge', window.HTMLElement).dataset['tone']).toBe('warning')
 	stateFailure = false
-	element(window, 'refresh-button', window.HTMLButtonElement).click()
+	triggerRefresh()
 	await page.waitUntilComplete()
-	expect(element(window, 'capability-badge', window.HTMLElement).textContent).toBe('Operator capable')
+	expect(element(window, 'capability-badge', window.HTMLElement).hidden).toBe(true)
 	expect(element(window, 'attention-badge', window.HTMLElement).dataset['tone']).toBe('ok')
 
 	capable = false
-	element(window, 'refresh-button', window.HTMLButtonElement).click()
+	triggerRefresh()
 	await page.waitUntilComplete()
 
 	stateGate = new Promise(resolve => (releaseState = resolve))
 	configurationGate = new Promise(resolve => (releaseConfiguration = resolve))
-	element(window, 'refresh-button', window.HTMLButtonElement).click()
+	triggerRefresh()
 	element(window, 'reload-configuration-button', window.HTMLButtonElement).click()
 	await Bun.sleep(10)
 	const networkSelect = element(window, 'network-name', window.HTMLSelectElement)
@@ -278,6 +290,33 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 	const profitInput = window.document.querySelector('[name="minimumProfitBps"]')
 	if (!(profitInput instanceof window.HTMLInputElement)) throw new Error('Missing minimum profit input')
 	expect(profitInput.value).toBe('333')
+
+	page.evaluate(await (await fetch(new URL('/header-notices.js', server.url))).text())
+	networkConfigured = false
+	window.history.replaceState({}, '', '/settings')
+	window.dispatchEvent(new window.PopStateEvent('popstate'))
+	triggerRefresh()
+	await page.waitUntilComplete()
+	const launchNotice = element(window, 'launch-notice', window.HTMLElement)
+	expect(launchNotice.hidden).toBe(false)
+	expect(launchNotice.closest('header')).not.toBeNull()
+	expect(launchNotice.textContent).toContain('Network setup required')
+	expect(launchNotice.textContent).toContain('in Settings')
+	networkConfigured = true
+	triggerRefresh()
+	await page.waitUntilComplete()
+	expect(launchNotice.hidden).toBe(true)
+	capable = true
+	deploymentUnavailable = true
+	triggerRefresh()
+	await page.waitUntilComplete()
+	expect(element(window, 'header-notices-count', window.HTMLElement).textContent).toBe('1')
+	expect(element(window, 'header-notices', window.HTMLDetailsElement).open).toBe(false)
+	expect(element(window, 'notice-title', window.HTMLElement).textContent).toBe('Deployment unavailable')
+	deploymentUnavailable = false
+	triggerRefresh()
+	await page.waitUntilComplete()
+	expect(element(window, 'header-notices-count', window.HTMLElement).textContent).toBe('0')
 })
 
 function element<T extends Element>(window: BrowserWindow, id: string, constructor: { new (): T }): T {

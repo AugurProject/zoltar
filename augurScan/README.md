@@ -2,6 +2,8 @@
 
 augurScan is a read-only explorer for the Zoltar/Augur protocol. It indexes configured Ethereum networks into PostgreSQL, retains raw and historical evidence, and presents the result through a live web interface and bounded APIs.
 
+Backend capability ownership and dependency rules are documented in [`src/ARCHITECTURE.md`](src/ARCHITECTURE.md).
+
 The **Operations** area brings together the histories that operators usually need to investigate a protocol state: OpenOracle reports, escalation games, truth auctions, security-pool and vault risk, Zoltar forks, Statoblast migrations, AMM trading, price provenance, semantic changes, and chain replacements. The global timeline lets you filter those records across Zoltar, Trading, Statoblast, and Open Oracle by entity, event, address, block range, text, and canonical status.
 
 ## Start with Docker

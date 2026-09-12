@@ -1,16 +1,9 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { getRegisteredSimulationScenarios, getSimulationScenarioDescription, getSimulationScenarioLabel, normalizeSimulationScenario, registerSimulationScenario } from '../../simulation/scenarios.js'
+import { getRegisteredSimulationScenarios, getSimulationScenarioDescription, getSimulationScenarioLabel, registerSimulationScenario } from '../../simulation/scenarios.js'
 
 void describe('simulation scenarios', () => {
-	void test('normalizes core scenarios and rejects unknown values', () => {
-		expect(normalizeSimulationScenario('baseline')).toBe('baseline')
-		expect(normalizeSimulationScenario('deployed')).toBe('deployed')
-		expect(normalizeSimulationScenario('securitypoolx2')).toBe('baseline')
-		expect(normalizeSimulationScenario(undefined)).toBe('baseline')
-	})
-
 	void test('returns labels and descriptions for core scenarios', () => {
 		expect(getSimulationScenarioLabel('baseline')).toBe('Baseline')
 		expect(getSimulationScenarioLabel('deployed')).toBe('Deployed')
@@ -23,5 +16,27 @@ void describe('simulation scenarios', () => {
 		expect(getRegisteredSimulationScenarios()).toContain('securitypoolx2')
 		expect(getSimulationScenarioLabel('securitypoolx2')).toBe('Security pool x2')
 		expect(getSimulationScenarioDescription('securitypoolx2')).toBe('x2 description')
+	})
+
+	void test('an app can override a core scenario presentation without listing it twice', () => {
+		const coreLabel = getSimulationScenarioLabel('deployed')
+		const coreDescription = getSimulationScenarioDescription('deployed')
+		registerSimulationScenario('deployed', { description: 'app deployed description', label: 'App deployed' })
+		try {
+			const scenarios = getRegisteredSimulationScenarios()
+			expect(scenarios.filter(scenario => scenario === 'deployed')).toHaveLength(1)
+			expect(scenarios.indexOf('deployed')).toBe(1)
+			expect(getSimulationScenarioLabel('deployed')).toBe('App deployed')
+			expect(getSimulationScenarioDescription('deployed')).toBe('app deployed description')
+		} finally {
+			registerSimulationScenario('deployed', { description: coreDescription, label: coreLabel })
+		}
+		expect(getSimulationScenarioLabel('deployed')).toBe(coreLabel)
+		expect(getSimulationScenarioDescription('deployed')).toBe(coreDescription)
+	})
+
+	void test('unregistered scenario ids render without throwing', () => {
+		expect(getSimulationScenarioLabel('legacy-id')).toBe('legacy-id')
+		expect(getSimulationScenarioDescription('legacy-id')).toBe("Unregistered simulation scenario 'legacy-id'.")
 	})
 })

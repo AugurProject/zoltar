@@ -1,7 +1,8 @@
-import { encodeFunctionData, type Address, type Hex, zeroAddress } from '#ethereum'
+import { encodeFunctionData, type Address, type Hex, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { STANDARD_UNISWAP_FEES } from '#core/uniswap-v4'
-import { getOpenOracleGameTuple, getOpenOracleHelperTuple, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_TIME_TYPE, type OpenOracleStatePreimage } from '@zoltar/shared/openOracle'
-import { erc20Abi, openOracleArbitrageExecutorAbi } from '#contracts/abi'
+import { getOpenOracleGameTuple, getOpenOracleHelperTuple, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_TIME_TYPE, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
+import { erc20Abi, multicall3Abi, openOracleArbitrageExecutorAbi, quoterAbi } from '#contracts/abi'
+import { batchRead, batchValue, type BatchReader } from '#core/batch-read'
 import { type Configuration } from '#config/configuration'
 import {
 	assertCanonicalExecutionSnapshot,
@@ -22,14 +23,13 @@ import {
 	transactionReceiptsWithQuorum,
 } from '#execution/execution-orchestration'
 import { decimalSignedEth, decimalWeth, type BalanceSnapshot, type ExecutionRecord } from '#state/operator-state'
-import { availableTokenBalances, formatTokenAmount } from '#monitoring/market-monitor'
+import { formatTokenAmount } from '#monitoring/market-monitor'
 import { centralizedMarketConfigurationAllowsExecution, centralizedPriceAllowsExecution, type CentralizedMarketEstimate } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import { marketConsensusAllowsExecution, type MarketConsensusEstimate } from '@zoltar/bot-shared/monitoring/market-consensus'
 
 const FEES = STANDARD_UNISWAP_FEES
 import { expectedWithdrawalToken2, hedgedProfitBeforeGasWeth } from '#core/position-accounting'
 import { type PositionRecord } from '#state/position-store'
-import { bestSuccessful } from '#monitoring/resilience'
 import { positionRiskLimitMismatch, projectedLifecycleGasReserveAttoWeth } from '#core/safety-controls'
 import {
 	calculateFee,
@@ -51,48 +51,55 @@ import { prepareSignedTransaction, simulateSignedBundleEveryRelay, submitConfigu
 import { receiptGasCost, submitContractTransaction, trackedActivity, waitForTrackedTransaction, type TrackTransaction } from '#execution/transaction-tracker'
 import type { Venue } from '#core/venue-strategy'
 import type { Pool, ReadClient, WriteClient } from '#core/operator-types'
-import { errorMessage } from '#core/rpc-validation'
-import { executionReadQuorum, quoteInput, safetyAdjustedQuote } from '#monitoring/opportunity-evaluation'
-import { operationalFailureDisposition } from '#monitoring/resilience'
+import { errorMessage, requiredBigint, requiredTuple } from '#core/rpc-validation'
+import { executionReadQuorum, safetyAdjustedQuote } from '#monitoring/opportunity-evaluation'
+import { operationalFailureDisposition } from '@zoltar/bot-shared/monitoring/resilience'
 import { confirmedGasExpenditures, currentBlockNumberWithQuorum, dateFromBlockTimestamp, durableTransactionIntent, hedgeExecutionFromLogs, pendingNonceWithQuorum, recoveredTransactionIntentMismatchWithQuorum } from '#execution/recovery-support'
 import { executionRecordForConfirmedPosition, recoverPendingEntryWithQuorum } from '#execution/position-lifecycle'
 
-export async function loadBalances(client: ReadClient, wallet: WriteClient | undefined, config: Configuration, pools: readonly Pool[], tokens: readonly Address[]) {
+/** Reads wallet inventory in one batched call at the scanned block, then values the REP balance across its pools in a second. */
+export async function loadBalances(client: BatchReader, wallet: Pick<WriteClient, 'account'> | undefined, config: Pick<Configuration, 'network'>, tokens: readonly Address[], blockNumber?: bigint | undefined) {
 	if (wallet === undefined) return undefined
 	const address = wallet.account.address
-	const [ethAttoEth, attoWeth, repAttoRep] = await Promise.all([
-		client.getBalance({ address }),
-		client.readContract({
-			address: config.network.weth,
-			abi: erc20Abi,
-			functionName: 'balanceOf',
-			args: [address],
-		}),
-		client.readContract({
-			address: config.network.rep,
-			abi: erc20Abi,
-			functionName: 'balanceOf',
-			args: [address],
-		}),
-	])
-	const tokenBalances = await availableTokenBalances(tokens, token =>
-		client.readContract({
-			address: token,
-			abi: erc20Abi,
-			functionName: 'balanceOf',
-			args: [address],
-		}),
+	const results = await batchRead(
+		client,
+		config.network.multicall3,
+		[
+			{ address: config.network.multicall3, abi: multicall3Abi, functionName: 'getEthBalance', args: [address] },
+			{ address: config.network.weth, abi: erc20Abi, functionName: 'balanceOf', args: [address] },
+			{ address: config.network.rep, abi: erc20Abi, functionName: 'balanceOf', args: [address] },
+			...tokens.map(token => ({ address: token, abi: erc20Abi, functionName: 'balanceOf', args: [address] })),
+		],
+		blockNumber,
 	)
+	const ethAttoEth = requiredBigint(batchValue(results[0], 'Wallet ETH balance'), 'Wallet ETH balance')
+	const attoWeth = requiredBigint(batchValue(results[1], 'Wallet WETH balance'), 'Wallet WETH balance')
+	const repAttoRep = requiredBigint(batchValue(results[2], 'Wallet REP balance'), 'Wallet REP balance')
+	const tokenBalances = new Map<string, bigint>()
+	for (const [index, token] of tokens.entries()) {
+		const result = results[3 + index]
+		if (result === undefined || result.status === 'failure') {
+			console.error(`token=${token} balanceUnavailable=${result === undefined ? 'missing balance read' : result.error.message}`)
+			continue
+		}
+		tokenBalances.set(token.toLowerCase(), requiredBigint(result.result, `Token ${token} balance`))
+	}
 	const raw = { ethAttoEth, repAttoRep, tokens: tokenBalances, attoWeth }
 	let repValueAttoWeth: bigint | undefined
 	if (repAttoRep === 0n) repValueAttoWeth = 0n
 	else {
-		const best = await bestSuccessful(
-			pools.filter(pool => pool.token.toLowerCase() === config.network.rep.toLowerCase()).map(pool => () => quoteInput(client, config.network.quoter, config.network.rep, config.network.weth, repAttoRep, pool.fee)),
-			value => value,
-			() => undefined,
+		// Every standard fee tier is quoted; tiers without a REP pool simply fail their own entry.
+		const quotes = await batchRead(
+			client,
+			config.network.multicall3,
+			STANDARD_UNISWAP_FEES.map(fee => ({ address: config.network.quoter, abi: quoterAbi, functionName: 'quoteExactInputSingle', args: [{ tokenIn: config.network.rep, tokenOut: config.network.weth, amountIn: repAttoRep, fee, sqrtPriceLimitX96: 0n }] })),
+			blockNumber,
 		)
-		repValueAttoWeth = best
+		for (const quote of quotes) {
+			if (quote.status === 'failure') continue
+			const amount = requiredBigint(requiredTuple(quote.result, 1, 'Uniswap exact-input quote')[0], 'Uniswap exact-input amount')
+			if (repValueAttoWeth === undefined || amount > repValueAttoWeth) repValueAttoWeth = amount
+		}
 	}
 	const snapshot: BalanceSnapshot = {
 		availableEth: decimalWeth(ethAttoEth),

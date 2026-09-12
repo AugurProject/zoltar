@@ -1,8 +1,14 @@
+import { dashboardHealthResponse, sharedDashboardAssetResponse } from '@zoltar/bot-shared/dashboard/assets'
+import { operatorHeader } from './header.ts'
+import { record, safeString, stringField, booleanField, scalar, safeIntegerField, isoTimestampField, compact } from './public-fields.ts'
 import { join } from 'node:path'
 import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
-import { boundedDashboardJson } from '@zoltar/bot-shared/dashboard/security'
+import { boundedDashboardJson, dashboardJson as json, dashboardSecurityHeaders as securityHeaders } from '@zoltar/bot-shared/dashboard/security'
 import { CONFIGURATION_REVISION_CONFLICT } from '../config/settings.ts'
-import { CONFIGURATION_COMMIT_INDETERMINATE, CONFIGURATION_COMMITTED_SAFELY_PAUSED } from '../runtime/dashboard-controller.ts'
+import { browserScript } from './browser-assets.ts'
+import { publicAlert, publicRetirement } from './public-retirement.ts'
+import { CONFIGURATION_COMMIT_INDETERMINATE, CONFIGURATION_COMMITTED_SAFELY_PAUSED } from '../runtime/configuration-commit.ts'
+import { pendingTransactionObservationKind } from '../state/pending-transaction-observation.ts'
 import { requiredLiveInventory } from '../runtime/live-readiness.ts'
 
 export type ChaosDashboardController = {
@@ -13,79 +19,19 @@ export type ChaosDashboardController = {
 	setCancellation: (value: unknown) => unknown | Promise<unknown>
 	setCandidate: (value: unknown) => unknown | Promise<unknown>
 	setConnectivity?: ((value: unknown) => unknown | Promise<unknown>) | undefined
+	setOperation?: ((value: unknown) => unknown | Promise<unknown>) | undefined
 	setObligation: (value: unknown) => unknown | Promise<unknown>
 	setReplacement: (value: unknown) => unknown | Promise<unknown>
 	setPaused: (value: unknown) => unknown | Promise<unknown>
+	setRetirement?: ((value: unknown) => unknown | Promise<unknown>) | undefined
+	setSchedule?: ((value: unknown) => unknown | Promise<unknown>) | undefined
+	setSelection?: ((value: unknown) => unknown | Promise<unknown>) | undefined
 	setSettings: (value: unknown) => unknown | Promise<unknown>
 	setSigner: (value: unknown) => unknown | Promise<unknown>
 	setWorkflow: (value: unknown) => unknown | Promise<unknown>
 }
 
-const dashboardPages = new Set(['overview', 'catalog', 'ecosystem', 'activity', 'settings'])
-
-function securityHeaders(contentType: string) {
-	return {
-		'cache-control': 'no-store',
-		'content-security-policy': "default-src 'self'; connect-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'",
-		'content-type': contentType,
-		'cross-origin-resource-policy': 'same-origin',
-		'permissions-policy': 'camera=(), geolocation=(), microphone=(), payment=(), usb=()',
-		'referrer-policy': 'no-referrer',
-		'x-content-type-options': 'nosniff',
-		'x-frame-options': 'DENY',
-	}
-}
-
-function json(value: unknown, status = 200) {
-	return Response.json(value, { headers: securityHeaders('application/json; charset=utf-8'), status })
-}
-
-function record(value: unknown): Record<string, unknown> | undefined {
-	return typeof value === 'object' && value !== null && !Array.isArray(value) ? Object.fromEntries(Object.entries(value)) : undefined
-}
-
-function safeString(value: unknown) {
-	if (typeof value !== 'string') return undefined
-	const sensitive =
-		/(?:authorization|bearer|password|private[_-]?key|secret|token|api[_-]?key|rpc[_-]?(?:url|endpoint)|calldata|raw[_-]?(?:transaction|tx)|signed[_-]?(?:transaction|tx))\s*[=:]/i.test(value) ||
-		/https?:\/\//i.test(value) ||
-		/(?:[a-z]:\\|\/(?:etc|home|root|tmp|var|workspace)\/)/i.test(value) ||
-		/0x[0-9a-f]{130,}/i.test(value)
-	return sensitive ? undefined : value.slice(0, 1_000)
-}
-
-function stringField(source: Record<string, unknown>, key: string) {
-	return safeString(source[key])
-}
-
-function booleanField(source: Record<string, unknown>, key: string) {
-	return typeof source[key] === 'boolean' ? source[key] : undefined
-}
-
-function numberField(source: Record<string, unknown>, key: string) {
-	return typeof source[key] === 'number' && Number.isFinite(source[key]) ? source[key] : undefined
-}
-
-function scalar(source: Record<string, unknown>, key: string) {
-	const value = source[key]
-	return stringField(source, key) ?? numberField(source, key) ?? booleanField(source, key) ?? (typeof value === 'bigint' ? value.toString() : undefined)
-}
-
-function safeIntegerField(source: Record<string, unknown>, key: string) {
-	const value = source[key]
-	return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined
-}
-
-function isoTimestampField(source: Record<string, unknown>, key: string) {
-	const value = source[key]
-	if (typeof value !== 'string') return undefined
-	const milliseconds = Date.parse(value)
-	return Number.isFinite(milliseconds) ? new Date(milliseconds).toISOString() : undefined
-}
-
-function compact<T extends Record<string, unknown>>(value: T) {
-	return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined))
-}
+const dashboardPages = new Set(['overview', 'catalog', 'ecosystem', 'recovery', 'settings'])
 
 function publicStrings(value: unknown) {
 	return Array.isArray(value)
@@ -98,6 +44,15 @@ function publicStrings(value: unknown) {
 
 function configuredRpcUrls(value: unknown) {
 	return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string' && entry.length <= 2_048).slice(0, 8) : []
+}
+
+/** Publishes the operator-configured block explorer only as a plain http(s) base that `/tx/<hash>` can be appended to. */
+function publicExplorerUrl(value: unknown) {
+	// A bare `?` or `#` parses as an empty query or fragment, so reject the delimiters themselves.
+	if (typeof value !== 'string' || value.length > 2_048 || value.includes('?') || value.includes('#') || !URL.canParse(value)) return undefined
+	const url = new URL(value)
+	if ((url.protocol !== 'https:' && url.protocol !== 'http:') || url.username !== '' || url.password !== '') return undefined
+	return value
 }
 
 function nullablePublicStrings(value: unknown) {
@@ -197,7 +152,7 @@ function topologyItemCount(value: unknown) {
 }
 
 /** Sanitized, bounded view of the protocol graph observed at one canonical anchor. */
-export function publicChaosTopology(value: unknown) {
+function publicChaosTopology(value: unknown) {
 	const source = record(value)
 	const anchor = record(source?.['anchor'])
 	const totalCounts = {
@@ -534,6 +489,16 @@ function publicWorkflow(value: unknown) {
 	})
 }
 
+function publicPendingTransactionObservation(value: unknown) {
+	const source = record(value)
+	if (source === undefined) return undefined
+	const kind = pendingTransactionObservationKind(source['kind'])
+	const checkedAt = isoTimestampField(source, 'checkedAt')
+	const head = scalar(source, 'head')
+	if (kind === undefined || checkedAt === undefined || head === undefined) return undefined
+	return compact({ checkedAt, head, includedBlock: scalar(source, 'includedBlock'), kind })
+}
+
 function publicPendingTransaction(value: unknown) {
 	const source = record(value)
 	if (source === undefined) return undefined
@@ -541,7 +506,9 @@ function publicPendingTransaction(value: unknown) {
 		cancellationHash: stringField(source, 'cancellationHash'),
 		hash: stringField(source, 'hash'),
 		label: stringField(source, 'label'),
+		maxBlockNumber: scalar(source, 'maxBlockNumber'),
 		nonce: scalar(source, 'nonce'),
+		observation: publicPendingTransactionObservation(source['observation']),
 		operationId: stringField(source, 'operationId'),
 		recoveryBlocker: stringField(source, 'recoveryBlocker'),
 		replacementHash: stringField(source, 'replacementHash'),
@@ -575,6 +542,7 @@ function publicActivity(value: unknown) {
 	if (source === undefined) return undefined
 	return compact({
 		at: stringField(source, 'at'),
+		details: stringField(source, 'details'),
 		ecosystem: stringField(source, 'ecosystem'),
 		label: stringField(source, 'label') ?? stringField(source, 'message'),
 		operationId: stringField(source, 'operationId'),
@@ -582,12 +550,6 @@ function publicActivity(value: unknown) {
 		summary: stringField(source, 'summary'),
 		txHash: stringField(source, 'txHash') ?? stringField(source, 'hash'),
 	})
-}
-
-function publicAlert(value: unknown) {
-	const source = record(value)
-	if (source === undefined) return undefined
-	return compact({ message: stringField(source, 'message'), severity: stringField(source, 'severity') })
 }
 
 export function publicChaosState(value: unknown, configurationValue?: unknown, nowMilliseconds = Date.now()) {
@@ -618,8 +580,10 @@ export function publicChaosState(value: unknown, configurationValue?: unknown, n
 		currentWorkflow,
 		execute: booleanField(source, 'execute'),
 		inventory: publicInventory(source['inventory']),
-		inventoryAvailable: booleanField(source, 'inventoryAvailable') ?? source['inventory'] !== undefined,
+		inventoryAvailable: booleanField(source, 'inventoryAvailable') === true && stringField(source, 'wallet') !== undefined,
 		lastScanAt: stringField(source, 'lastScanAt'),
+		lastDeploymentCheckedBlock: scalar(source, 'lastDeploymentCheckedBlock'),
+		lastDeploymentCheckAt: stringField(source, 'lastDeploymentCheckAt'),
 		lastScannedBlock: scalar(source, 'lastScannedBlock') ?? scalar(source, 'block'),
 		network: stringField(source, 'network'),
 		obligations: Array.isArray(source['obligations'])
@@ -639,6 +603,8 @@ export function publicChaosState(value: unknown, configurationValue?: unknown, n
 					return transaction === undefined ? [] : [transaction]
 				})
 			: [],
+		profileId: stringField(source, 'profileId'),
+		retirement: publicRetirement(source['retirement']),
 		rpcHealth: publicRpcHealth(source['rpcEndpointHealth'], configurationValue),
 		submissionHealth: publicSubmissionHealth(source['rpcEndpointHealth'], configurationValue, nowMilliseconds, publicSubmissionHealthMaximumAgeSeconds(configurationValue)),
 		safetyPaused: booleanField(source, 'safetyPaused'),
@@ -676,6 +642,7 @@ export function publicChaosConfiguration(value: unknown) {
 		chainId: scalar(record(settings['network']) ?? {}, 'chainId'),
 		enabledEcosystems: publicStrings(strategy['enabledEcosystems']),
 		execute: booleanField(runtime, 'execute'),
+		explorerUrl: publicExplorerUrl((record(settings['network']) ?? {})['explorerUrl']),
 		hasSigner: booleanField(source, 'hasSigner') ?? booleanField(source, 'signerReady') ?? (privateKey === null || privateKey === undefined ? false : true),
 		maximumDelaySeconds: scalar(scheduler, 'maximumDelaySeconds'),
 		maximumEthPerOperation: scalar(strategy, 'maximumEthPerOperation'),
@@ -911,6 +878,7 @@ function publicFailure(operation: string, error: unknown) {
 		)
 	}
 	if (operation === 'mutation:/api/connectivity') return json({ error: publicConnectivityFailure(error) }, 400)
+	if (error instanceof Error && error.message.length > 0) return json({ error: error.message }, 400)
 	return json({ error: 'The dashboard request could not be completed. Review the submitted values and protected bot logs.' }, 400)
 }
 
@@ -939,7 +907,6 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 		throw new Error('Non-loopback chaos dashboard exposure is disabled; bind to 127.0.0.1 or publish a 0.0.0.0 container listener through a host-loopback-only port')
 	}
 	const directory = import.meta.dir
-	const browserSource = Bun.file(join(directory, 'dashboard.ts'))
 	const transpiler = new Bun.Transpiler({ loader: 'ts', target: 'browser' })
 	let authority = ''
 	let configurationCommitIndeterminate = false
@@ -965,7 +932,7 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 		async fetch(request) {
 			if (request.headers.get('host') !== authority) return json({ error: 'Request authority is not accepted' }, 403)
 			const url = new URL(request.url)
-			if (request.method === 'GET' && url.pathname === '/healthz') return new Response('ok', { headers: securityHeaders('text/plain; charset=utf-8') })
+			if (request.method === 'GET' && url.pathname === '/healthz') return dashboardHealthResponse()
 			if (request.method === 'GET') {
 				if (url.pathname === '/readyz' || url.pathname === '/metrics') {
 					try {
@@ -984,13 +951,13 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 				const page = url.pathname === '/' ? 'overview' : url.pathname.slice(1)
 				if (dashboardPages.has(page)) {
 					const html = await Bun.file(join(directory, 'index.html')).text()
-					return new Response(html.replace('<body>', `<body data-page="${page}">`), { headers: securityHeaders('text/html; charset=utf-8') })
+					return new Response(html.replace('<!-- operator-header -->', operatorHeader).replace('<body>', `<body data-page="${page}">`), { headers: securityHeaders('text/html; charset=utf-8') })
 				}
 				if (url.pathname === '/dashboard.css') return new Response(Bun.file(join(directory, 'styles.css')), { headers: securityHeaders('text/css; charset=utf-8') })
-				if (url.pathname === '/operator-console.css') {
-					return new Response(Bun.file(join(directory, '..', '..', '..', 'shared', 'src', 'dashboard', 'operator-console.css')), { headers: securityHeaders('text/css; charset=utf-8') })
-				}
-				if (url.pathname === '/dashboard.js') return new Response(transpiler.transformSync(await browserSource.text()), { headers: securityHeaders('text/javascript; charset=utf-8') })
+				const asset = await sharedDashboardAssetResponse(url.pathname, join(directory, 'favicon.svg'))
+				if (asset !== undefined) return asset
+				const script = await browserScript(url.pathname, directory, transpiler)
+				if (script !== undefined) return new Response(script, { headers: securityHeaders('text/javascript; charset=utf-8') })
 				if (url.pathname === '/api/state') {
 					try {
 						await mutationBarrier
@@ -1012,8 +979,6 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 						return json({ error: 'Dashboard configuration is temporarily unavailable.' }, 503)
 					}
 				}
-				if (url.pathname === '/favicon.svg') return new Response(Bun.file(join(directory, 'favicon.svg')), { headers: securityHeaders('image/svg+xml') })
-				if (url.pathname === '/favicon.ico') return new Response(undefined, { headers: securityHeaders('image/x-icon'), status: 204 })
 			}
 			if (request.method === 'PUT') {
 				if (request.headers.get('origin') !== `http://${authority}`) return json({ error: 'Cross-origin requests are not accepted' }, 403)
@@ -1027,6 +992,10 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 					['/api/settings', controller.setSettings],
 					['/api/signer', controller.setSigner],
 				])
+				if (controller.setSchedule !== undefined) handlers.set('/api/schedule', controller.setSchedule)
+				if (controller.setSelection !== undefined) handlers.set('/api/selection', controller.setSelection)
+				if (controller.setOperation !== undefined) handlers.set('/api/operation', controller.setOperation)
+				if (controller.setRetirement !== undefined) handlers.set('/api/retirement', controller.setRetirement)
 				if (controller.setConnectivity !== undefined) handlers.set('/api/connectivity', controller.setConnectivity)
 				const handler = handlers.get(url.pathname)
 				if (handler !== undefined) {
@@ -1034,8 +1003,8 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 						if (configurationCommitIndeterminate) return indeterminateConfigurationFailure()
 						try {
 							const value = await boundedDashboardJson(request)
-							await handler(value)
-							return json({ saved: true })
+							const result = await handler(value)
+							return json(url.pathname === '/api/operation' ? result : { saved: true })
 						} catch (error) {
 							if (error instanceof Error && error.name === CONFIGURATION_COMMIT_INDETERMINATE) configurationCommitIndeterminate = true
 							return publicFailure(`mutation:${url.pathname}`, error)

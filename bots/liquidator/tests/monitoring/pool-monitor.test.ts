@@ -1,10 +1,19 @@
 import { expect, test } from 'bun:test'
-import { createPublicClient, custom, mainnet } from '@zoltar/bot-shared/ethereum'
+import { mainnet } from '@zoltar/core-shared/evm/ethereum'
+import { createPublicClient } from '@zoltar/bot-shared/ethereum'
+import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { parseSettings } from '#config/settings'
-import { isUnsafeVault, PRICE_PRECISION, type VaultPosition } from '#core/strategy'
-import { createPoolMonitorIndex, currentVaultPositionForPoolAccounting, loadChangedVaultAddresses, resolveOperatorVault, scanPools } from '#monitoring/pool-monitor'
+import { BPS_DENOMINATOR, PRICE_PRECISION, vaultHealthBps, type VaultPosition } from '#core/strategy'
+import { scanPools } from '#monitoring/pool-monitor'
+import { loadChangedVaultAddresses } from '#monitoring/vault-change-logs'
+import { createPoolMonitorIndex, currentVaultPositionForPoolAccounting, loadCurrentVaults, resolveOperatorVault } from '#monitoring/vault-positions'
 import { createVaultStateIndex, refreshVaultStateIndex } from '#monitoring/vault-state-index'
-import { getAddress } from '../helpers/ethereum.ts'
+import { getAddress } from '@zoltar/bot-shared/ethereum'
+
+function isUnsafeVault(candidate: VaultPosition) {
+	const health = vaultHealthBps(candidate.vaultAttoRepBacking, candidate.openInterestAttoEth, 20_000n, PRICE_PRECISION, candidate.disputeStakedAttoRep)
+	return health !== undefined && health < BPS_DENOMINATOR
+}
 
 const vault = getAddress('0x0000000000000000000000000000000000000001')
 const escrowVault = getAddress('0x0000000000000000000000000000000000000002')
@@ -214,7 +223,7 @@ test('a truth-auction haircut globally dirties every retained dispute-staked vau
 		loadRegistryRange: async () => [vault, escrowVault],
 		readCanonicalBlockHash: async () => `0x${'11'.repeat(32)}`,
 	})
-	expect(first.activeVaults.every(candidate => !isUnsafeVault(candidate.vaultAttoRepBacking, candidate.openInterestAttoEth, 20_000n, PRICE_PRECISION, candidate.disputeStakedAttoRep))).toBeTrue()
+	expect(first.activeVaults.every(candidate => !isUnsafeVault(candidate))).toBeTrue()
 	positions.set(vault.toLowerCase(), position(vault, haircuttedStake))
 	positions.set(escrowVault.toLowerCase(), position(escrowVault, haircuttedStake))
 
@@ -237,7 +246,7 @@ test('a truth-auction haircut globally dirties every retained dispute-staked vau
 
 	expect(second.refreshedVaults.map(candidate => candidate.address)).toEqual([vault, escrowVault])
 	expect(second.activeVaults.every(candidate => candidate.disputeStakedAttoRep === haircuttedStake)).toBeTrue()
-	expect(second.activeVaults.every(candidate => isUnsafeVault(candidate.vaultAttoRepBacking, candidate.openInterestAttoEth, 20_000n, PRICE_PRECISION, candidate.disputeStakedAttoRep))).toBeTrue()
+	expect(second.activeVaults.every(candidate => isUnsafeVault(candidate))).toBeTrue()
 })
 
 test('cached raw vault state recomputes backing and open interest from current pool accounting', () => {
@@ -282,4 +291,43 @@ test('unchanged empty operator vaults are read once and then served from the eve
 	await resolveOperatorVault(monitorIndex, pool, operator, refresh, accounting, loadPosition)
 
 	expect(positionReads).toBe(1)
+})
+
+test('retains only vaults backed by pool-held REP or dispute-staked REP in the active-vault index', async () => {
+	const pool = getAddress('0x0000000000000000000000000000000000000010')
+	const escalationGame = getAddress('0x0000000000000000000000000000000000000011')
+	const blockHash: `0x${string}` = `0x${'22'.repeat(32)}`
+	const backed = getAddress('0x0000000000000000000000000000000000000001')
+	const disputeStakedOnly = getAddress('0x0000000000000000000000000000000000000002')
+	const feesOnly = getAddress('0x0000000000000000000000000000000000000003')
+	const badDebtOnly = getAddress('0x0000000000000000000000000000000000000004')
+	const vaults = [backed, disputeStakedOnly, feesOnly, badDebtOnly]
+	const client = new Proxy(createPublicClient({ chain: mainnet, transport: custom({ request: () => Promise.reject(new Error('Unexpected RPC request')) }) }), {
+		get(target, property) {
+			if (property === 'getBlock') return () => Promise.resolve({ hash: blockHash })
+			if (property === 'readContract') {
+				return (parameters: { functionName: string }) => {
+					if (parameters.functionName === 'getVaults') return Promise.resolve(vaults)
+					throw new Error(`Unexpected contract read: ${parameters.functionName}`)
+				}
+			}
+			if (property === 'multicall') {
+				return (parameters: { contracts: Array<{ args: readonly [string]; functionName: string }> }) =>
+					Promise.resolve(
+						parameters.contracts.map(contract => {
+							const vault = getAddress(contract.args[0])
+							if (contract.functionName === 'securityVaults') return [vault === backed ? 7n : 0n, 0n, vault === feesOnly ? 5n : 0n, 0n]
+							if (contract.functionName === 'vaultBadDebtAttoEth') return vault === badDebtOnly ? 3n : 0n
+							if (contract.functionName === 'disputeStakedRepByVaultAttoRep') return vault === disputeStakedOnly ? 9n : 0n
+							throw new Error(`Unexpected multicall read: ${contract.functionName}`)
+						}),
+					)
+			}
+			return Reflect.get(target, property, target)
+		},
+	})
+	const index = createVaultStateIndex<VaultPosition>()
+	const refresh = await loadCurrentVaults(client, index, pool, escalationGame, BigInt(vaults.length), 100n, 10n, 0n, 0n, { hash: blockHash, number: 2n })
+	expect(refresh.refreshedVaults.map(vault => vault.address)).toEqual(vaults)
+	expect([...index.activeVaults.values()].map(vault => vault.address)).toEqual([backed, disputeStakedOnly])
 })

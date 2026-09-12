@@ -1,5 +1,3 @@
-import type { IndexerOwnershipStatus } from './indexer.ts'
-
 export type BasicAccessCredentials = {
 	readonly username: string
 	readonly password: string
@@ -7,8 +5,7 @@ export type BasicAccessCredentials = {
 
 export const parseBasicAccessCredentials = (username: string | undefined, password: string | undefined): BasicAccessCredentials | undefined => {
 	if ((username === undefined || username === '') && (password === undefined || password === '')) return undefined
-	if (username === undefined || username === '' || password === undefined || password === '')
-		throw new Error('AUGURSCAN_ACCESS_USERNAME and AUGURSCAN_ACCESS_PASSWORD must be configured together')
+	if (username === undefined || username === '' || password === undefined || password === '') throw new Error('AUGURSCAN_ACCESS_USERNAME and AUGURSCAN_ACCESS_PASSWORD must be configured together')
 	if (username.includes(':')) throw new Error('AUGURSCAN_ACCESS_USERNAME must not contain a colon')
 	return { username, password }
 }
@@ -20,13 +17,13 @@ const exactString = (left: string, right: string): boolean => {
 	return difference === 0
 }
 
-export const hasBasicAccess = (request: Request, credentials: BasicAccessCredentials | undefined): boolean => {
+const hasBasicAccess = (request: Request, credentials: BasicAccessCredentials | undefined): boolean => {
 	if (credentials === undefined) return true
 	const authorization = request.headers.get('authorization')
 	if (authorization === null || !authorization.startsWith('Basic ')) return false
 	try {
 		const encodedBytes = atob(authorization.slice('Basic '.length))
-		const decoded = new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from(encodedBytes, (value) => value.charCodeAt(0)))
+		const decoded = new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from(encodedBytes, value => value.charCodeAt(0)))
 		const separator = decoded.indexOf(':')
 		if (separator < 0) return false
 		return exactString(decoded.slice(0, separator), credentials.username) && exactString(decoded.slice(separator + 1), credentials.password)
@@ -36,8 +33,7 @@ export const hasBasicAccess = (request: Request, credentials: BasicAccessCredent
 	}
 }
 
-export const basicAccessRequiredResponse = (headers: Readonly<Record<string, string>> = {}): Response =>
-	Response.json({ error: 'Authentication required' }, { status: 401, headers: { ...headers, 'www-authenticate': 'Basic realm="augurScan", charset="UTF-8"' } })
+const basicAccessRequiredResponse = (headers: Readonly<Record<string, string>> = {}): Response => Response.json({ error: 'Authentication required' }, { status: 401, headers: { ...headers, 'www-authenticate': 'Basic realm="augurScan", charset="UTF-8"' } })
 
 export const createFixedWindowRateLimiter = (limit: number, windowMs: number, maximumClients = 10_000) => {
 	if (!Number.isSafeInteger(limit) || limit < 0) throw new Error('Rate limit must be a non-negative safe integer')
@@ -63,9 +59,8 @@ export const createFixedWindowRateLimiter = (limit: number, windowMs: number, ma
 		if (consume) current.count++
 		return { allowed: true }
 	}
-	return Object.assign(admit, {
-		check: (client: string, now = Date.now()) => admit(client, now, false),
-	})
+	admit.check = (client: string, now = Date.now()) => admit(client, now, false)
+	return admit
 }
 
 export const requestAccessGuard = (
@@ -147,20 +142,13 @@ type RequestTimeoutServer = {
 	readonly timeout: (request: Request, seconds: number) => void
 }
 
-export const STATIC_ASSET_CACHE_CONTROL = 'no-cache'
+const STATIC_ASSET_CACHE_CONTROL = 'no-cache'
 
-export const staticAssetResponse = (body: BodyInit, securityHeaders: Readonly<Record<string, string>>, contentType: string) =>
-	new Response(body, { headers: { ...securityHeaders, 'cache-control': STATIC_ASSET_CACHE_CONTROL, 'content-type': contentType } })
+export const staticAssetResponse = (body: BodyInit, securityHeaders: Readonly<Record<string, string>>, contentType: string) => new Response(body, { headers: { ...securityHeaders, 'cache-control': STATIC_ASSET_CACHE_CONTROL, 'content-type': contentType } })
 
-export const indexerHealthUnavailableResponse = (ownership: readonly IndexerOwnershipStatus[]): Response =>
-	Response.json({ status: 'unknown', ownership }, { status: 503 })
+export const indexerHealthUnavailableResponse = (ownership: readonly { readonly networkId: string }[]): Response => Response.json({ status: 'unknown', ownership }, { status: 503 })
 
-export const liveStreamResponse = (
-	stream: ReadableStream<Uint8Array>,
-	request: Request,
-	server: RequestTimeoutServer,
-	baseHeaders: Readonly<Record<string, string>> = {},
-): Response => {
+export const liveStreamResponse = (stream: ReadableStream<Uint8Array>, request: Request, server: RequestTimeoutServer, baseHeaders: Readonly<Record<string, string>> = {}): Response => {
 	server.timeout(request, 0)
 	return new Response(stream, {
 		headers: {

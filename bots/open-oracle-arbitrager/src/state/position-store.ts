@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { lstat, mkdir, open, readFile, rename, rm } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { acquireExecutionSignerLock as acquireSharedExecutionSignerLock, acquireFileProcessLock, type ExclusiveProcessLock } from '@zoltar/bot-shared/execution/process-lock'
-import { getAddress, type Address, type Hex } from '#ethereum'
+import { getAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { parseExecutionRecord, type ExecutionRecord } from '#state/operator-state'
 
 type PositionJournalFileHandle = {
@@ -51,7 +51,7 @@ export type DurableTransactionIntent = {
 	value: string
 }
 
-export type ExpiredTransactionAttempt = {
+type ExpiredTransactionAttempt = {
 	kind: 'entry' | 'lifecycle'
 	nonce: string
 	targetBlockNumber: string
@@ -533,7 +533,7 @@ function archivePosition(archive: PositionJournalArchive, position: PositionReco
 	}
 }
 
-export function compactPositionJournal(state: PositionJournalState): PositionJournalState {
+function compactPositionJournal(state: PositionJournalState): PositionJournalState {
 	let terminalPositions = 0
 	let archived = parsePositionJournalArchive(state.archived)
 	const positions: PositionRecord[] = []
@@ -628,8 +628,4 @@ export async function savePositionJournalState(path: string, state: PositionJour
 		throw error
 	}
 	return compacted
-}
-
-export async function savePositionJournal(path: string, positions: readonly PositionRecord[], chainId: number, filesystem: PositionJournalFilesystem = positionJournalFilesystem) {
-	await savePositionJournalState(path, { archived: emptyPositionJournalArchive(), positions: [...positions] }, chainId, filesystem)
 }

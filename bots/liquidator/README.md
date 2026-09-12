@@ -4,8 +4,8 @@ The liquidator monitors configured security pools, their direct child pools, and
 resolved desired pools from a configured `SecurityPoolFactory`. It shows pool and
 vault statistics in a local dashboard and evaluates unsafe vaults in
 operator-selected pools. Dry-run is the default. Live execution requires an
-explicit signer, the configured read RPC quorum, the execution flag, and non-zero
-deployment addresses.
+explicit signer, the configured read RPC quorum, the execution flag, and deployed
+canonical contracts.
 
 The bot owns an ordinary vault under its signer address in each selected pool. A
 liquidation moves ETH-denominated open-interest debt, the proportional attoREP
@@ -98,11 +98,17 @@ endpoint selection. It chain-checks the read, public-submission, and independent
 quorum RPCs before saving them. An initially unconfigured process remains paused
 with its dashboard available and begins scanning only after a verified selection is
 saved. Same-chain RPC changes apply at the next scan. A chain profile includes its
-signer, deployments, markets, selections, strategy, RPCs, and runtime state path.
+signer, markets, selections, strategy, RPCs, and runtime state path.
 Profiles are private sibling files beside the active operator file, and a newly
 created profile receives a separate chain-named recovery state path. This prevents
 transactions, staged operations, and scan state from crossing chains. Docker and
 direct Bun use the same in-process switching behavior.
+
+Zoltar, the security pool factory, and WETH addresses come from the selected
+network's canonical deployment manifest. Saved deployment address fields are
+ignored and removed when settings are saved. The bot checks contract code at
+these addresses and reports the checked block while waiting for deployments.
+An absence of pools is a separate empty state; it does not mean Zoltar is missing.
 
 The primary read RPC is sufficient when the active chain profile uses agreement `1`.
 Independent quorum RPCs become mandatory when that profile uses agreement `2`.
@@ -164,8 +170,11 @@ operational. The universe table shows parent and fork-outcome lineage, operation
 and forked pool counts, pool selection, and whether a bot vault can migrate into
 that universe.
 
-`deployment.zoltar` identifies the universe registry, and
-`approvedUniverses` is the operator's explicit truth policy. A root universe or
+The canonical Zoltar contract identifies the universe registry, and
+`approvedUniverses` is the operator's explicit truth policy, shared with the
+arbitrager. Both example configurations start with no approvals. Select the
+root or truthful child in the universe UI; approvals are saved per network
+profile and REP addresses come from the canonical universe registry. A root universe or
 fork-created child remains inert until it is approved. For a given forked parent
 universe, the bot rejects configuration that approves more than one direct child
 outcome. This prevents an ambiguous vault route. Universe approval does not
@@ -303,11 +312,16 @@ Example source entries (only use venues where these exact markets exist):
 ]
 ```
 
-Set `assetAddress`, `assetChainId`, and `assetSymbol: "REP"` to the exact REP
-deployment before adding sources. Put root REP in `centralizedMarkets` and child
-REP configurations in `childMarketConfigurations`. The bot rejects another token
-base, chain, or address, and CEX exchange IDs cannot be reused as DEX
-failure-domain IDs.
+Put root REP sources in `centralizedMarkets` with `assetSymbol: "REP"`. The root
+asset address and chain come from `docs/mainnet-deployment-addresses.json` or
+`docs/sepolia-deployment-addresses.json`; saved settings omit those two fields
+and cannot override them. WETH and protocol deployment addresses also come from
+the selected manifest.
+
+Put child REP configurations in `childMarketConfigurations`, including each
+child's exact `assetAddress`, `assetChainId`, and `assetSymbol: "REP"`. Child assets
+remain separately configurable and must match the selected chain and discovered
+universe REP. CEX exchange IDs cannot be reused as DEX failure-domain IDs.
 
 Example DEX source entries (addresses are intentionally placeholders):
 

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { Address } from '#ethereum'
+import type { Address } from '@zoltar/bot-shared/ethereum'
 import {
 	blockAgeLabel,
 	botStatusLabels,
@@ -9,6 +9,7 @@ import {
 	countLabel,
 	exactAmount,
 	marketPoolStrategyUse,
+	marketAvailabilityPresentation,
 	marketPriceChartDescription,
 	networkTargetStatus,
 	opportunityDecisionReason,
@@ -16,10 +17,8 @@ import {
 	persistedConnectivity,
 	pollRetryStatus,
 	requiredSignerPrivateKey,
-	requestWithTimeout,
 	selectedTokenPriceHistory,
 	signerControlState,
-	singleFlight,
 	statePollingFailureMessage,
 	sumSignedDecimals,
 	transactionKindLabel,
@@ -115,45 +114,6 @@ describe('dashboard exact ETH formatting', () => {
 		expect(networkTargetStatus('sepolia', 'sepolia')).toBeUndefined()
 	})
 
-	test('serializes overlapping dashboard refreshes and preserves one trailing request', async () => {
-		let calls = 0
-		let release: (() => void) | undefined
-		const refresh = singleFlight(async () => {
-			calls++
-			if (calls === 1) {
-				await new Promise<void>(resolve => {
-					release = resolve
-				})
-			}
-		})
-		const first = refresh()
-		const second = refresh()
-		expect(calls).toBe(1)
-		release?.()
-		await Promise.all([first, second])
-		expect(calls).toBe(2)
-	})
-
-	test('aborts and rejects a state request that never resolves', async () => {
-		let aborted = false
-		const request = requestWithTimeout(
-			signal =>
-				new Promise<never>(() => {
-					signal.addEventListener('abort', () => {
-						aborted = true
-					})
-				}),
-			10,
-		)
-
-		await expect(request).rejects.toThrow('timed out')
-		expect(aborted).toBe(true)
-	})
-
-	test('uses a surface-specific timeout message for bounded configuration reads', async () => {
-		await expect(requestWithTimeout(() => new Promise<never>(() => {}), 10, 'Configuration request timed out.')).rejects.toThrow('Configuration request timed out.')
-	})
-
 	test('shows block delay against the operator computer without hiding clock skew', () => {
 		expect(blockAgeLabel('1000', 1_012_400)).toBe('seen 12s ago')
 		expect(blockAgeLabel('1000', 995_000)).toBe('5s ahead of local clock')
@@ -217,4 +177,21 @@ describe('dashboard exact ETH formatting', () => {
 
 test('hides JSON parser internals when the state response is unreadable', () => {
 	expect(statePollingFailureMessage(new SyntaxError('Unexpected token U in JSON'))).toBe('The state server returned an unreadable response. Automatic retry remains active; check the dashboard server if the next attempt also fails.')
+})
+
+test('presents unavailable deployments and liquidity as informative status', () => {
+	const notice = {
+		kind: 'missing-deployment' as const,
+		chainId: 11155111,
+		contracts: [
+			{ name: 'Uniswap V3 factory', address: '0x0000000000000000000000000000000000000000' as const },
+			{ name: 'OpenOracle', address: '0x0000000000000000000000000000000000000000' as const },
+		],
+	}
+	expect(marketAvailabilityPresentation(notice)).toEqual({ title: 'Deployment unavailable', detail: 'Uniswap V3 factory, OpenOracle: no contract at the configured addresses on chain 11155111. Availability is checked automatically.' })
+	expect(botStatusLabels({ paused: false, status: 'error', mode: 'dry-run', marketAvailability: notice }).status).toBe('Not deployed')
+	expect(marketAvailabilityPresentation({ kind: 'no-v3-liquidity', chainId: 1 })?.title).toBe('No V3 liquidity')
+	expect(marketAvailabilityPresentation(undefined)).toBeUndefined()
+	expect(botStatusLabels({ paused: false, status: 'stopped', mode: 'dry-run', marketAvailability: notice }).status).toBe('Stopped')
+	expect(botStatusLabels({ paused: false, status: 'error', mode: 'dry-run', marketAvailability: { kind: 'no-v3-liquidity', chainId: 1 } }).status).toBe('Error')
 })

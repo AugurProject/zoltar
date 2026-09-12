@@ -3,18 +3,18 @@
 import { describe, expect, mock, test } from 'bun:test'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
-import { type Address, type Hash, type Hex, type TransactionReceipt, encodeDeployData, getAddress, getCreate2Address, keccak256 } from '@zoltar/shared/ethereum'
-import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Allowance, loadErc20Balance } from '../../protocol/index.js'
-import { getGenesisReputationTokenAddress } from '../../protocol/activeProtocolAddresses.js'
-import { PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from '../../protocol/deploymentHelpers.js'
+import { type Address, type Hash, type Hex, type TransactionReceipt, encodeDeployData, getAddress, getCreate2Address, keccak256 } from '@zoltar/core-shared/evm/ethereum'
+import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Allowance, loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
+import { getGenesisReputationTokenAddress } from '@zoltar/ui-zoltar-shared/protocol/activeProtocolAddresses.js'
+import { PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from '@zoltar/ui-zoltar-shared/protocol/zoltarDeploymentHelpers.js'
 import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { createInitialTransactionTrayState, markTransactionPrepared, markTransactionRequested } from '@zoltar/ui-core-shared/lib/transactionTray.js'
+import { createInitialTransactionTrayState, markTransactionPrepared, markTransactionRequested } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
 import { createFakeBackend, createFakeSimulationProfile } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
-import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/lib/networkProfile.js'
+import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { SEPOLIA_GENESIS_REP_INIT_CODE, SEPOLIA_WETH_INIT_CODE } from '@zoltar/ui-core-shared/lib/sepoliaDeploymentConfig.js'
 import { DeploymentStatusOracle_DeploymentStatusOracle, ScalarOutcomes_ScalarOutcomes } from '@zoltar/ui-core-shared/contractArtifact.js'
-import { ATOMIC_FUNDING_BYTECODE, ATOMIC_FUNDING_SOURCE, PROXY_DEPLOYER_RUNTIME_CODE, STATIC_DEPLOYMENT_ARTIFACT_RUNTIME_CODE_BY_STEP_ID, assertStaticDeploymentArtifactRuntimeCodeHashes } from '../../protocol/deployment.js'
+import { PROXY_DEPLOYER_RUNTIME_CODE, assertStaticDeploymentArtifactRuntimeCodeHashes, fundCanonicalDeployerSigner } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
 
 const require = createRequire(import.meta.url)
 const rootSolcPath = fileURLToPath(new URL('../../../../../node_modules/solc/index.js', import.meta.url))
@@ -67,10 +67,24 @@ function createMockReadClient({ getCode, readContract }: { getCode: MockReadClie
 	} as MockReadClient
 }
 
+// Source of the pinned ATOMIC_FUNDING_BYTECODE: solc 0.8.17, optimizer runs=200, metadata bytecodeHash=none.
+const ATOMIC_FUNDING_SOURCE = `pragma solidity 0.8.17;
+contract AtomicFunding {
+    constructor(address payable signer, address expectedDeployer, uint256 requiredBalance) payable {
+        if (expectedDeployer.code.length == 0) {
+            uint256 balance = signer.balance;
+            if (balance < requiredBalance) {
+                (bool success,) = signer.call{value: requiredBalance - balance}("");
+                require(success, "Funding failed");
+            }
+        }
+        selfdestruct(payable(msg.sender));
+    }
+}`
+
 describe('contract deployment internals', () => {
 	test('rejects generated deployment artifacts that do not match the pinned runtime hashes', () => {
-		expect(Object.keys(STATIC_DEPLOYMENT_ARTIFACT_RUNTIME_CODE_BY_STEP_ID).sort()).toEqual(['deploymentStatusOracle', 'multicall3', 'scalarOutcomes', 'weth', 'zoltarQuestionData'])
-		expect(() => assertStaticDeploymentArtifactRuntimeCodeHashes()).not.toThrow()
+		expect(assertStaticDeploymentArtifactRuntimeCodeHashes()).toEqual(['deploymentStatusOracle', 'multicall3', 'scalarOutcomes', 'weth', 'zoltarQuestionData'])
 		expect(() =>
 			assertStaticDeploymentArtifactRuntimeCodeHashes({
 				expectedRuntimeCodeHashes: { scalarOutcomes: keccak256('0x01') },
@@ -79,7 +93,22 @@ describe('contract deployment internals', () => {
 		).toThrow('Local runtime code for scalarOutcomes does not match its pinned expected hash')
 	})
 
-	test('atomic canonical-signer funding bytecode matches its pinned source and compiler settings', () => {
+	test('atomic canonical-signer funding bytecode matches its pinned source and compiler settings', async () => {
+		let sentInitCode: Hex | undefined
+		await fundCanonicalDeployerSigner(
+			asWriteClient({
+				getCode: async () => undefined,
+				sendTransaction: async request => {
+					sentInitCode = request.data
+					return ZERO_HASH
+				},
+				waitForTransactionReceipt: async () => hashReceipt('success'),
+			}),
+			{ expectedDeployer: getAddress('0x00000000000000000000000000000000000000a1'), label: 'test', requiredBalance: 1n, signer: getAddress('0x00000000000000000000000000000000000000b2') },
+		)
+		if (sentInitCode === undefined) throw new Error('Funding did not send init code')
+		// The init code is the compiled bytecode followed by the three ABI-encoded constructor words.
+		const sentBytecode = sentInitCode.slice(2, sentInitCode.length - 3 * 64)
 		const output = requireRecord(
 			JSON.parse(
 				solc.compile(
@@ -103,7 +132,7 @@ describe('contract deployment internals', () => {
 		const bytecode = requireRecord(evm['bytecode'], 'AtomicFunding bytecode')
 		expect(solc.version()).toStartWith('0.8.17')
 		expect(Array.isArray(output['errors']) ? output['errors'].filter(error => requireRecord(error, 'compiler diagnostic')['severity'] === 'error') : []).toEqual([])
-		expect(bytecode['object']).toBe(ATOMIC_FUNDING_BYTECODE.slice(2))
+		expect(bytecode['object']).toBe(sentBytecode)
 	})
 
 	test('adds WETH and allocated genesis REP ahead of Sepolia protocol dependencies', () => {

@@ -1,26 +1,31 @@
+import { parseApprovedUniverses, validateApprovedUniverseSelection } from '@zoltar/bot-shared/monitoring/universe-policy'
 import { resolve } from 'node:path'
-import { getAddress, privateKeyToAccount, type Address, type Hex } from '#ethereum'
+import { privateKeyToAccount, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { assertDistinctPersistentPaths, mutableStrategy, runnableOperatorSettings, type Configuration } from '#config/configuration'
-import { assertFocusedDeploymentCompatible, prepareDeploymentTokenTransition, validateDeploymentSettings, type DeploymentSettings } from '#config/deployment-settings'
+import { monitoringTokensForDeployment, assertFocusedDeploymentCompatible, prepareDeploymentTokenTransition, validateDeploymentSettings, type DeploymentSettings } from '#config/deployment-settings'
 import { configurationRevisionConflict, loadOperatorSettingsWithRevision, parseOperatorSettings, saveOperatorSettings, serializeOperatorSettings, switchOperatorNetworkProfile, type PersistedOperatorSettings } from '#config/settings-store'
-import { signerCandidate } from '#config/signer'
+import { signerCandidate } from '@zoltar/bot-shared/config/signer'
 import { startDashboardServer } from '#dashboard/dashboard-server'
-import { assertStoredExecutorDeploymentIntent, deployExecutorCreate2, executorDeploymentPlan } from '#execution/create2-executor'
-import { acquireExecutorDeploymentIntentLock, clearExecutorDeploymentIntent, executorDeploymentIntentPath, loadExecutorDeploymentIntent, loadExecutorDeploymentIntentForChain, saveExecutorDeploymentIntent } from '#execution/executor-deployment-store'
+import { assertStoredExecutorDeploymentIntent } from '#execution/create2-executor'
+import { executorDeploymentPlan } from '#execution/executor-deployment-primitives'
+import { acquireExecutorDeploymentIntentLock, clearExecutorDeploymentIntent, executorDeploymentIntentPath, loadExecutorDeploymentIntent, loadExecutorDeploymentIntentForChain } from '#execution/executor-deployment-store'
 import type { ExecutionLockManager } from '#execution/execution-locks'
 import { persistSignerSettingsWithProvisionalLock } from '#execution/execution-locks'
-import type { SignerOperationGate } from '#execution/signer-operation-gate'
+import type { SignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
 import { validateSubmissionSettings, type SubmissionSettings } from '#execution/transaction-submission'
 import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, updateSubmissionEndpointChecks, validateIndependentReadRpcUrls, type ConnectivitySettings } from '#monitoring/connectivity'
-import { operatorStatusAfterPause, type SyncCursor } from '#monitoring/block-sync'
+import { operatorStatusAfterPause, type SyncCursor } from '@zoltar/bot-shared/monitoring/block-sync'
 import { loadExecutionHistory, operatorSnapshot, recordOperation, strategySettings, updateStrategyFromRequest, type MutableStrategy, type OperatorSnapshotFixedState, type OperatorState } from '#state/operator-state'
-import { acquireExecutionSignerLock, acquirePositionJournalLock, loadPositionJournal, type ExclusiveProcessLock, type PositionRecord } from '#state/position-store'
+import { acquireExecutionSignerLock, acquirePositionJournalLock, loadPositionJournal, type ExclusiveProcessLock } from '#state/position-store'
 import { checkIndependentRpcChains, updateOperatorConnectivity } from './connectivity-update.ts'
-import { configuredQuorumRpcUrlMinimum, configuredReadRpcEndpointMinimum, type RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
+import { configuredQuorumRpcUrlMinimum, type RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 import { networkConfiguration } from '#config/network'
-import { positionConsumesRisk, type RiskLimits } from '#core/safety-controls'
+import { type RiskLimits } from '#core/safety-controls'
 import type { CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import { loadPriceHistory } from '#monitoring/market-monitor'
+import { requireSafeDeploymentTransition } from './deployment-transition.ts'
+import { deployExecutorFromConnectivity, requireActivePersistedNetwork, requireActivePersistedRpcQuorum, requireNoPendingExecutorDeployment, requirePausedExecutorDeployment } from './executor-deployment-control.ts'
+import { acquireConfigurationSignerOperation, persistExecutorDeploymentIntentForRecovery, runConfigurationSignerOperation, type DeploymentRecoveryState } from './signer-operations.ts'
 
 export type PendingOperatorUpdates = {
 	centralizedMarkets: CentralizedMarketSettings | undefined
@@ -43,77 +48,6 @@ export type PendingOperatorUpdates = {
 	strategy: MutableStrategy | undefined
 	submission: SubmissionSettings | undefined
 	tokenAddresses: Address[] | undefined
-}
-
-export function deploymentIdentityChanged(current: DeploymentSettings, next: DeploymentSettings) {
-	return current.openOracle.toLowerCase() !== next.openOracle.toLowerCase() || current.executor?.toLowerCase() !== next.executor?.toLowerCase() || current.rep.toLowerCase() !== next.rep.toLowerCase() || current.weth.toLowerCase() !== next.weth.toLowerCase()
-}
-
-export function deploymentUpdateMustWait(current: DeploymentSettings, next: DeploymentSettings, positions: readonly Pick<PositionRecord, 'status'>[]) {
-	return deploymentIdentityChanged(current, next) && positions.some(position => positionConsumesRisk(position.status))
-}
-
-export function tokenUpdateForDeployment(value: readonly string[], previousRep: Address, deployment: DeploymentSettings, execute: boolean) {
-	const parsedAddresses: Address[] = [deployment.rep]
-	for (const address of value) {
-		const token = getAddress(address)
-		if (token.toLowerCase() === previousRep.toLowerCase() && token.toLowerCase() !== deployment.rep.toLowerCase()) continue
-		const authenticated = !execute || deployment.deploymentManifest?.contracts.some(entry => entry.role === 'token' && entry.address.toLowerCase() === token.toLowerCase()) === true
-		if (!authenticated) throw new Error(`Execution token ${token} is not authenticated by the deployment manifest`)
-		parsedAddresses.push(token)
-	}
-	return [...new Map(parsedAddresses.map(address => [address.toLowerCase(), address])).values()]
-}
-
-export function requireSafeDeploymentTransition(state: { positions: readonly Pick<PositionRecord, 'status'>[] }, current: DeploymentSettings, next: DeploymentSettings) {
-	if (deploymentUpdateMustWait(current, next, state.positions)) {
-		throw new Error('OpenOracle, executor, REP, and WETH deployment identities cannot change while a position still consumes risk')
-	}
-}
-
-export async function deployExecutorFromConnectivity(
-	parameters: {
-		chain: Configuration['network']['chain']
-		connectivity: ConnectivitySettings
-		existingIntent?: Awaited<ReturnType<typeof loadExecutorDeploymentIntent>> | undefined
-		isStopping?: (() => boolean) | undefined
-		persistIntent?: Parameters<typeof deployExecutorCreate2>[0]['persistIntent']
-		privateKey: Hex
-		quorumRpcUrls: readonly string[]
-		rpcQuorum: Configuration['rpcQuorum']
-		salt: unknown
-	},
-	deploy: typeof deployExecutorCreate2 = deployExecutorCreate2,
-) {
-	if (parameters.connectivity.publicRpcUrls.length === 0) throw new Error('Configure a public submission RPC before deploying the executor')
-	const readRpcUrls = [parameters.connectivity.readRpcUrl, ...parameters.quorumRpcUrls]
-	if (readRpcUrls.length < configuredReadRpcEndpointMinimum(parameters.rpcQuorum)) throw new Error('Executor deployment requires three independently configured read RPC endpoints')
-	return await deploy({
-		chain: parameters.chain,
-		existingIntent: parameters.existingIntent,
-		...(parameters.isStopping === undefined ? {} : { isStopping: parameters.isStopping }),
-		persistIntent: parameters.persistIntent,
-		privateKey: parameters.privateKey,
-		readRpcUrls,
-		rpcUrls: parameters.connectivity.publicRpcUrls,
-		salt: parameters.salt,
-	})
-}
-
-export function requireActivePersistedNetwork(activeNetwork: Configuration['network']['name'], persistedNetwork: PersistedOperatorSettings['network']) {
-	if (persistedNetwork !== activeNetwork) throw new Error('Wait for the saved network to apply at the next scan boundary before deploying the executor')
-}
-
-export function requireActivePersistedRpcQuorum(activeRpcQuorum: Configuration['rpcQuorum'], persistedRpcQuorum: PersistedOperatorSettings['rpcQuorum']) {
-	if (persistedRpcQuorum !== activeRpcQuorum) throw new Error('Wait for the saved RPC agreement requirement to apply at the next scan boundary before deploying the executor')
-}
-
-export function requirePausedExecutorDeployment(execute: boolean, paused: boolean) {
-	if (execute && !paused) throw new Error('Pause execution before deploying with the active signer')
-}
-
-export async function requireNoPendingExecutorDeployment(settingsFile: string, network: PersistedOperatorSettings['network']) {
-	if ((await loadExecutorDeploymentIntent(executorDeploymentIntentPath(settingsFile, network))) !== undefined) throw new Error('Recover the pending executor deployment before resuming execution')
 }
 
 async function preflightOperatorProfile(settingsFile: string, target: PersistedOperatorSettings) {
@@ -140,46 +74,6 @@ async function preflightOperatorProfile(settingsFile: string, target: PersistedO
 		const errors = results.filter(result => result.status === 'rejected').map(result => result.reason)
 		if (errors.length !== 0) throw new AggregateError(errors, 'Failed to release target chain profile preflight locks')
 	}
-}
-
-export type DeploymentRecoveryState = { pending: boolean }
-
-export async function acquireScanSignerOperation(signerOperationGate: SignerOperationGate, deploymentRecovery: DeploymentRecoveryState, intentPath: string) {
-	if (deploymentRecovery.pending) return undefined
-	const intentLock = await acquireExecutorDeploymentIntentLock(intentPath)
-	try {
-		if ((await loadExecutorDeploymentIntent(intentPath)) !== undefined) {
-			deploymentRecovery.pending = true
-			await intentLock.release()
-			return undefined
-		}
-		if (!signerOperationGate.acquire('scan')) {
-			await intentLock.release()
-			return undefined
-		}
-		return intentLock
-	} catch (error) {
-		await intentLock.release()
-		throw error
-	}
-}
-
-export async function acquireConfigurationSignerOperation(signerOperationGate: SignerOperationGate) {
-	while (!signerOperationGate.acquire('configuration')) await Bun.sleep(10)
-}
-
-export async function runConfigurationSignerOperation<T>(signerOperationGate: SignerOperationGate, operation: () => Promise<T>) {
-	await acquireConfigurationSignerOperation(signerOperationGate)
-	try {
-		return await operation()
-	} finally {
-		signerOperationGate.release('configuration')
-	}
-}
-
-export async function persistExecutorDeploymentIntentForRecovery(path: string, intent: Parameters<typeof saveExecutorDeploymentIntent>[1], deploymentRecovery: DeploymentRecoveryState) {
-	deploymentRecovery.pending = true
-	await saveExecutorDeploymentIntent(path, intent)
 }
 
 export function startOperatorControlPlane(parameters: {
@@ -309,6 +203,7 @@ export function startOperatorControlPlane(parameters: {
 				let nextPendingSignerLock: ExclusiveProcessLock | undefined
 				let savedRevision = ''
 				try {
+					if (next.approvedUniverses.length > 0) validateApprovedUniverseSelection(state.universes ?? [], next.approvedUniverses)
 					requireSafeDeploymentTransition(state, pending.deployment ?? fixedState.deployment, next.deployment)
 					if (next.runtime.execute && signer.address !== undefined && !keepsActiveSigner && !keepsPendingSigner) {
 						if (lockManager === undefined) throw new Error('Execution signer lock management is unavailable')
@@ -334,8 +229,6 @@ export function startOperatorControlPlane(parameters: {
 						pending.network = networkConfiguration(next.network, {
 							factory: next.deployment.uniswapFactory,
 							quoter: next.deployment.uniswapQuoter,
-							rep: next.deployment.rep,
-							weth: next.deployment.weth,
 						})
 					}
 					pending.operatorSettings = normalizedNext
@@ -415,8 +308,6 @@ export function startOperatorControlPlane(parameters: {
 					pending.network = networkConfiguration(next.network, {
 						factory: latest.settings.deployment.uniswapFactory,
 						quoter: latest.settings.deployment.uniswapQuoter,
-						rep: latest.settings.deployment.rep,
-						weth: latest.settings.deployment.weth,
 					})
 				}
 				pending.centralizedMarkets = next.centralizedMarkets
@@ -438,10 +329,10 @@ export function startOperatorControlPlane(parameters: {
 			})
 		},
 		updateDeployment: value => {
-			const next = validateDeploymentSettings(value)
 			return queueSettingsUpdate(async () => {
 				const latest = await loadOperatorSettingsWithRevision(config.settingsFile)
 				if (latest === undefined) throw configurationRevisionConflict()
+				const next = validateDeploymentSettings(value, latest.settings.network)
 				if ((config.execute || latest.settings.runtime.execute) && next.quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(latest.settings.rpcQuorum)) throw new Error('Live execution requires at least two independent quorum RPCs (three read endpoints total)')
 				assertFocusedDeploymentCompatible(next.rep, latest.settings.centralizedMarkets)
 				validateIndependentReadRpcUrls(latest.settings.connectivity.readRpcUrl, next.quorumRpcUrls)
@@ -648,6 +539,18 @@ export function startOperatorControlPlane(parameters: {
 				return next
 			})
 		},
+		setApprovedUniverses: value =>
+			queueSettingsUpdate(() =>
+				runConfigurationSignerOperation(signerOperationGate, async () => {
+					const approvedUniverses = parseApprovedUniverses(value)
+					validateApprovedUniverseSelection(state.universes ?? [], approvedUniverses)
+					const next = await persistFocusedSettings(settings => ({ ...settings, approvedUniverses }))
+					pending.operatorSettings = next
+					state.tokenAddresses = []
+					recordOperation(state, { category: 'configuration', details: approvedUniverses.map(id => id.toString()).join(', '), level: 'info', message: 'Approved universe selection saved', reason: 'Applies before the next execution scan; existing positions continue recovery', reportId: undefined })
+					return approvedUniverses.map(id => id.toString())
+				}),
+			),
 		updateTokens: value => {
 			if (!Array.isArray(value)) throw new Error('Token configuration must be an array of addresses')
 			const tokenAddresses = value.map(address => {
@@ -656,8 +559,7 @@ export function startOperatorControlPlane(parameters: {
 			})
 			return queueSettingsUpdate(async () => {
 				const effectiveDeployment = pending.deployment ?? fixedState.deployment
-				const executionEnabled = pending.execute ?? config.execute
-				const next = tokenUpdateForDeployment(tokenAddresses, fixedState.deployment.rep, effectiveDeployment, executionEnabled)
+				const next = monitoringTokensForDeployment(tokenAddresses, fixedState.deployment.rep, effectiveDeployment)
 				await persistFocusedSettings(settings => ({
 					...settings,
 					tokenAddresses: next,
@@ -668,8 +570,8 @@ export function startOperatorControlPlane(parameters: {
 					category: 'configuration',
 					details: next.join(', '),
 					level: 'info',
-					message: 'Execution token allowlist saved and queued',
-					reason: 'Explicitly configured tokens become executable at the next block scan',
+					message: 'Monitoring token list saved and queued',
+					reason: 'Monitoring tokens do not grant universe approval',
 					reportId: undefined,
 				})
 				return next

@@ -1,7 +1,9 @@
+import type { UniverseIdentity } from '@zoltar/bot-shared/monitoring/universe-policy'
+import type { MissingContractDeployment } from '@zoltar/bot-shared/monitoring/deployed-contracts'
 import { mkdir, open, readFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import { bigintToSafeNumber, type Address, type Hex } from '#ethereum'
-import type { OpenOracleGame } from '@zoltar/shared/openOracle'
+import { bigintToSafeNumber, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import type { OpenOracleGame } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import type { DeploymentSettings } from '#config/deployment-settings'
 import type { ConnectivitySettings, EndpointCheck, NetworkName } from '#monitoring/connectivity'
 import type { SubmissionSettings, SubmissionTargetResult } from '#execution/transaction-submission'
@@ -13,6 +15,7 @@ import { serializeCentralizedMarketEstimate, type CentralizedMarketEstimate } fr
 import { serializeMarketConsensusEstimate, type MarketConsensusEstimate } from '@zoltar/bot-shared/monitoring/market-consensus'
 import type { MarketConsensusObservation } from '@zoltar/bot-shared/monitoring/market-consensus'
 import type { RpcEndpointHealth } from '@zoltar/bot-shared/ethereum'
+import { publicOperatorFailure, publicPollFailure } from '#state/public-failures'
 
 type ExecutionHistoryFileHandle = {
 	appendFile: (data: string, options: { encoding: 'utf8' }) => Promise<unknown>
@@ -76,7 +79,7 @@ export type DisputeStepSnapshot = {
 	transactionHash: Hex | undefined
 }
 
-export type ReportPathSnapshot = {
+type ReportPathSnapshot = {
 	reportId: string
 	settled: boolean
 	steps: readonly DisputeStepSnapshot[]
@@ -153,7 +156,19 @@ export type PublicOperationEntry = Omit<OperationEntry, 'details' | 'reason'> & 
 	reason?: string | undefined
 }
 
-export type OperatorSnapshot = {
+export type MarketAvailabilityNotice = ({ kind: 'missing-deployment' } & MissingContractDeployment) | { kind: 'no-v3-liquidity'; chainId: number }
+
+type PollStatus = {
+	marketAvailability?: MarketAvailabilityNotice | undefined
+	lastError: string | undefined
+	lastPollAt: string | undefined
+	lastPollFailureAt?: string | undefined
+	lastRetryAt?: string | undefined
+	nextRetryAt?: string | undefined
+	retryInProgress?: boolean | undefined
+}
+
+export type OperatorSnapshot = PollStatus & {
 	activeReportCount: number
 	consecutivePollFailures?: number | undefined
 	balances: BalanceSnapshot | undefined
@@ -171,12 +186,6 @@ export type OperatorSnapshot = {
 	endpointChecks: readonly EndpointCheck[]
 	rpcEndpointHealth?: readonly RpcEndpointHealth[] | undefined
 	gameCapital: GameCapitalSnapshot
-	lastError: string | undefined
-	lastPollAt: string | undefined
-	lastPollFailureAt?: string | undefined
-	lastRetryAt?: string | undefined
-	nextRetryAt?: string | undefined
-	retryInProgress?: boolean | undefined
 	mode: 'dry-run' | 'execute'
 	network: NetworkName
 	networkConfigured: boolean
@@ -191,6 +200,7 @@ export type OperatorSnapshot = {
 	settings: StrategySettings
 	status: 'connectivity-degraded' | 'error' | 'paused' | 'running' | 'stopped' | 'syncing'
 	submission: SubmissionSettings
+	universes?: readonly { id: string; parentId: string | undefined; outcomeIndex: string | undefined; repToken: Address }[] | undefined
 	tokenAddresses: readonly Address[]
 	tokenMarkets: readonly TokenMarketSnapshot[]
 	priceHistory: readonly MarketPricePoint[]
@@ -240,60 +250,52 @@ export type PublicTransactionActivity = Pick<TransactionActivity, 'acceptedTarge
 	failedTargets: readonly SubmissionTargetResult[]
 }
 
-export type PublicOperatorSnapshot = {
-	activeReportCount: number
-	consecutivePollFailures?: number | undefined
-	balances: BalanceSnapshot | undefined
-	blockNumber: string | undefined
-	blockTimestamp: string | undefined
-	centralizedMarket?: ReturnType<typeof serializeCentralizedMarketEstimate>
-	marketConsensus?: ReturnType<typeof serializeMarketConsensusEstimate>
-	execute: boolean
-	executor: Address | undefined
-	executionHistory: readonly PublicExecutionRecord[]
-	executionHistoryRecordCount: number
-	positionRecordCount: number
-	expectedChainId: number
-	explorerUrl: string
-	endpointChecks: readonly EndpointCheck[]
-	rpcEndpointHealth?: readonly RpcEndpointHealth[] | undefined
-	gameCapital: GameCapitalSnapshot
-	lastError: string | undefined
-	lastPollAt: string | undefined
-	lastPollFailureAt?: string | undefined
-	lastRetryAt?: string | undefined
-	nextRetryAt?: string | undefined
-	retryInProgress?: boolean | undefined
-	mode: 'dry-run' | 'execute'
-	network: NetworkName
-	networkConfigured: boolean
-	openOracle: Address
-	operatorCapable: boolean
-	operationLog: readonly PublicOperationEntry[]
-	opportunities: readonly OpportunitySnapshot[]
-	positions: readonly PublicPositionRecord[]
-	paused: boolean
-	queuedWallet: Address | null | undefined
-	savedWallet: Address | undefined
-	status: OperatorSnapshot['status']
-	submission: Pick<SubmissionSettings, 'minimumBundleRelaySuccesses' | 'mode'>
-	tokenAddresses: readonly Address[]
-	tokenMarkets: readonly TokenMarketSnapshot[]
-	priceHistory: readonly MarketPricePoint[]
-	reportPaths: readonly ReportPathSnapshot[]
-	risk: {
-		limits: OperatorSnapshot['risk']['limits']
-		usage: Pick<OperatorSnapshot['risk']['usage'], 'dailyGasSpentWeth' | 'lockedWeth' | 'openPositions'>
+export type PublicOperatorSnapshot = PollStatus &
+	Pick<OperatorSnapshot, 'universes' | 'tokenAddresses' | 'tokenMarkets' | 'priceHistory'> & {
+		activeReportCount: number
+		consecutivePollFailures?: number | undefined
+		balances: BalanceSnapshot | undefined
+		blockNumber: string | undefined
+		blockTimestamp: string | undefined
+		centralizedMarket?: ReturnType<typeof serializeCentralizedMarketEstimate>
+		marketConsensus?: ReturnType<typeof serializeMarketConsensusEstimate>
+		execute: boolean
+		executor: Address | undefined
+		executionHistory: readonly PublicExecutionRecord[]
+		executionHistoryRecordCount: number
+		positionRecordCount: number
+		expectedChainId: number
+		explorerUrl: string
+		endpointChecks: readonly EndpointCheck[]
+		rpcEndpointHealth?: readonly RpcEndpointHealth[] | undefined
+		gameCapital: GameCapitalSnapshot
+		mode: 'dry-run' | 'execute'
+		network: NetworkName
+		networkConfigured: boolean
+		openOracle: Address
+		operatorCapable: boolean
+		operationLog: readonly PublicOperationEntry[]
+		opportunities: readonly OpportunitySnapshot[]
+		positions: readonly PublicPositionRecord[]
+		paused: boolean
+		queuedWallet: Address | null | undefined
+		savedWallet: Address | undefined
+		status: OperatorSnapshot['status']
+		submission: Pick<SubmissionSettings, 'minimumBundleRelaySuccesses' | 'mode'>
+		reportPaths: readonly ReportPathSnapshot[]
+		risk: {
+			limits: OperatorSnapshot['risk']['limits']
+			usage: Pick<OperatorSnapshot['risk']['usage'], 'dailyGasSpentWeth' | 'lockedWeth' | 'openPositions'>
+		}
+		totalActualGasCostEth: string
+		totalHedgedProfitBeforeGasEth: string
+		totalOpenHedgedNetProfitEth: string
+		totalRealizedNetProfitEth: string
+		transactionActivity: readonly PublicTransactionActivity[]
+		wallet: Address | undefined
 	}
-	totalActualGasCostEth: string
-	totalHedgedProfitBeforeGasEth: string
-	totalOpenHedgedNetProfitEth: string
-	totalRealizedNetProfitEth: string
-	transactionActivity: readonly PublicTransactionActivity[]
-	wallet: Address | undefined
-}
 
-export type OperatorState = {
+export type OperatorState = PollStatus & {
 	activeReportCount: number
 	consecutivePollFailures?: number | undefined
 	balances: BalanceSnapshot | undefined
@@ -306,18 +308,13 @@ export type OperatorState = {
 	endpointChecks: EndpointCheck[]
 	rpcEndpointHealth?: readonly RpcEndpointHealth[] | undefined
 	gameCapital: GameCapitalSnapshot
-	lastError: string | undefined
-	lastPollAt: string | undefined
-	lastPollFailureAt?: string | undefined
-	lastRetryAt?: string | undefined
-	nextRetryAt?: string | undefined
-	retryInProgress?: boolean | undefined
 	opportunities: OpportunitySnapshot[]
 	positions: PositionRecord[]
 	positionArchive?: PositionJournalArchive | undefined
 	operationLog: OperationEntry[]
 	paused: boolean
 	status: OperatorSnapshot['status']
+	universes?: UniverseIdentity[] | undefined
 	tokenAddresses: Address[]
 	tokenMarkets: TokenMarketSnapshot[]
 	priceHistory: MarketPricePoint[]
@@ -325,71 +322,9 @@ export type OperatorState = {
 	transactionActivity: TransactionActivity[]
 }
 
-const GENERIC_PUBLIC_FAILURE = 'The operation returned an unexpected error. Automatic retry remains active; check protected bot logs for details.'
-
-function publicFailureDetail(error: string, translateChainTerm = true) {
-	const trimmed = error.trim()
-	if (trimmed === '') return undefined
-	const urlMatches = [...trimmed.matchAll(/(?![A-Za-z]:[\\/])\b[A-Za-z][A-Za-z0-9+.-]*:\S+/g)]
-	let sanitized = trimmed
-	for (const match of urlMatches.reverse()) {
-		if (match.index === undefined) return undefined
-		let replacement = '[redacted URL]'
-		try {
-			const url = new URL(match[0])
-			if (url.protocol === 'http:' || url.protocol === 'https:') replacement = url.origin
-		} catch (urlError) {
-			void urlError
-		}
-		sanitized = `${sanitized.slice(0, match.index)}${replacement}${sanitized.slice(match.index + match[0].length)}`
-	}
-	sanitized = sanitized
-		.replace(/(["']?(?:api(?:[_ -]?key)|auth(?:orization)?|bearer|credentials?|password|secret|token)["']?\s*[=:]\s*)"(?:\\.|[^"\\\r\n])*"/gi, '$1"[redacted]"')
-		.replace(/(["']?(?:api(?:[_ -]?key)|auth(?:orization)?|bearer|credentials?|password|secret|token)["']?\s*[=:]\s*)'(?:\\.|[^'\\\r\n])*'/gi, "$1'[redacted]'")
-		.replace(/(auth(?:orization)?\s*[=:]\s*)(?:(?:basic|bearer)\s+)?\S+/gi, '$1[redacted]')
-		.replace(/(bearer\s+)\S+/gi, '$1[redacted]')
-		.replace(/((?:api(?:[_ -]?key)|auth(?:orization)?|credentials?|password|secret|token)\s*[=:]\s*)\S+/gi, '$1[redacted]')
-		.replace(/(["'])(?:[A-Za-z]:[\\/]|~?\/|\.\.?\/|\\\\)[^"'\r\n]*\1/g, '$1[protected path]$1')
-		.replace(/(["'])(?![A-Za-z]+:\/\/)(?=[^"'\r\n]*[\\/])[^"'\r\n]*\1/gi, '$1[protected path]$1')
-		.replace(/file:\/\/\S+/gi, '[protected path]')
-		.replace(/(\b(?:file|path)\s*[=:]\s*)(?![A-Za-z]+:\/\/)(?=\S*[\\/])\S+/gi, '$1[protected path]')
-		.replace(/(^|[\s'"(\[=])(?![A-Za-z]+:\/\/)(?=[^\s'"\)\]]*[\\/])[^\s'"\)\]]+/gi, '$1[protected path]')
-		.replace(/(^|[\s'"(\[=])(?:[A-Za-z]:[\\/]|~?\/|\.\.?\/|\\\\)[^\s'"\)\]]+/g, '$1[protected path]')
-		.replace(/(^|\s)(?!\S*[A-Za-z][A-Za-z0-9+.-]*:\/\/)(?=\S*[\\/])\S+/g, '$1[protected path]')
-	if (translateChainTerm) sanitized = sanitized.replace(/canonical chain/gi, match => (match.startsWith('C') ? 'Blockchain history' : 'blockchain history'))
-	const detail = sanitized.replace(/[.!?]+$/, '')
-	const maximumLength = 320
-	if (detail.length <= maximumLength) return detail
-	const prefix = detail.slice(0, maximumLength - 1)
-	const wordBoundary = prefix.lastIndexOf(' ')
-	return `${(wordBoundary >= maximumLength * 0.75 ? prefix.slice(0, wordBoundary) : prefix).trimEnd()}…`
-}
-
-function attemptedOperationFailure(attempt: string, error: string, recovery: string) {
-	const detail = publicFailureDetail(error)
-	return `The bot tried to ${attempt}, but it failed${detail === undefined ? '' : `: ${detail}`}${detail?.endsWith('…') === true ? '' : '.'} ${recovery}`
-}
-
-function publicFailureCategory(error: string) {
-	const normalized = (publicFailureDetail(error.replace(/https?:\/\/\S+/gi, '[url]'), false) ?? '').toLowerCase()
-	if (/\b(?:risk|limits?|policy)\b/.test(normalized)) return { attempt: 'apply the active risk and execution limits', operatorRecovery: 'Review the active risk settings and protected bot logs.', pollRecovery: 'Automatic retry remains active. Review the active risk settings and protected bot logs.' }
-	if (/\b(?:transactions?|receipts?|relays?)\b/.test(normalized)) return { attempt: 'submit or confirm a transaction', operatorRecovery: 'Review transaction activity while automatic retry remains active.', pollRecovery: 'Automatic retry remains active. Review transaction activity.' }
-	if (/\b(?:markets?|prices?|quotes?)\b/.test(normalized)) return { attempt: 'collect and validate market prices', operatorRecovery: 'Automatic retry remains active.', pollRecovery: 'Automatic retry remains active.' }
-	if (/\b(?:durable|history|persist(?:ed|ence|ent|ing)?)\b/.test(normalized)) return { attempt: 'save or reload durable operator state', operatorRecovery: 'Review recovery state before resuming execution.', pollRecovery: 'Automatic retry remains active. Review recovery state before resuming execution.' }
-	if (/\b(?:rpc|chain|block(?:chain)?)\b/.test(normalized)) return { attempt: 'read blockchain data through an RPC endpoint', operatorRecovery: 'Automatic retry remains active.', pollRecovery: 'Automatic retry remains active.' }
-	if (/\bstates?\b/.test(normalized)) return { attempt: 'save or reload durable operator state', operatorRecovery: 'Review recovery state before resuming execution.', pollRecovery: 'Automatic retry remains active. Review recovery state before resuming execution.' }
-	return undefined
-}
-
-export function publicOperatorFailure(error: string, fallback = GENERIC_PUBLIC_FAILURE) {
-	const category = publicFailureCategory(error)
-	return category === undefined ? fallback : attemptedOperationFailure(category.attempt, error, category.operatorRecovery)
-}
-
-export function publicPollFailure(error: string, attempt?: string) {
-	if (attempt !== undefined) return attemptedOperationFailure(attempt, error, 'Automatic retry remains active.')
-	const category = publicFailureCategory(error)
-	return category === undefined ? attemptedOperationFailure('complete the latest polling cycle', error, 'Automatic retry remains active.') : attemptedOperationFailure(category.attempt, error, category.pollRecovery)
+function publicLastError(snapshot: Pick<OperatorSnapshot, 'lastError' | 'lastPollFailureAt' | 'marketAvailability'>) {
+	if (snapshot.marketAvailability?.kind === 'missing-deployment' || snapshot.lastError === undefined) return undefined
+	return snapshot.lastPollFailureAt === undefined ? publicOperatorFailure(snapshot.lastError) : publicPollFailure(snapshot.lastError)
 }
 
 function publicInformationalOperationValue(value: string | undefined) {
@@ -487,7 +422,8 @@ export function publicOperatorSnapshot(snapshot: OperatorSnapshot): PublicOperat
 			totalEthWeth: snapshot.gameCapital.totalEthWeth,
 			weth: snapshot.gameCapital.weth,
 		},
-		lastError: snapshot.lastError === undefined ? undefined : snapshot.lastPollFailureAt === undefined ? publicOperatorFailure(snapshot.lastError) : publicPollFailure(snapshot.lastError),
+		marketAvailability: snapshot.marketAvailability,
+		lastError: publicLastError(snapshot),
 		lastPollAt: snapshot.lastPollAt,
 		lastPollFailureAt: snapshot.lastPollFailureAt,
 		lastRetryAt: snapshot.lastRetryAt,
@@ -549,6 +485,7 @@ export function publicOperatorSnapshot(snapshot: OperatorSnapshot): PublicOperat
 			minimumBundleRelaySuccesses: snapshot.submission.minimumBundleRelaySuccesses,
 			mode: snapshot.submission.mode,
 		},
+		universes: snapshot.universes,
 		tokenAddresses: [...snapshot.tokenAddresses],
 		tokenMarkets: snapshot.tokenMarkets.map(token => ({
 			address: token.address,
@@ -849,7 +786,7 @@ async function syncExecutionHistoryDirectory(path: string, filesystem: Execution
 	}
 }
 
-export async function appendExecutionHistory(path: string, record: ExecutionRecord, chainId: number, filesystem: ExecutionHistoryFilesystem = executionHistoryFilesystem) {
+async function appendExecutionHistory(path: string, record: ExecutionRecord, chainId: number, filesystem: ExecutionHistoryFilesystem = executionHistoryFilesystem) {
 	if (!Number.isSafeInteger(chainId) || chainId < 1) throw new Error('Execution history chain ID must be a positive integer')
 	await filesystem.mkdir(dirname(path), { mode: 0o700, recursive: true })
 	const handle = await filesystem.open(path, 'a', 0o600)
@@ -965,6 +902,7 @@ export function operatorSnapshot(
 		endpointChecks: state.endpointChecks,
 		rpcEndpointHealth: state.rpcEndpointHealth ?? [],
 		gameCapital: state.gameCapital,
+		marketAvailability: state.marketAvailability,
 		lastError: state.lastError,
 		lastPollAt: state.lastPollAt,
 		lastPollFailureAt: state.lastPollFailureAt,
@@ -985,6 +923,7 @@ export function operatorSnapshot(
 		settings: strategySettings(strategy),
 		status: state.status,
 		submission,
+		universes: state.universes?.map(universe => ({ id: universe.id.toString(), parentId: universe.parentId?.toString(), outcomeIndex: universe.outcomeIndex?.toString(), repToken: universe.repToken })),
 		tokenAddresses: state.tokenAddresses,
 		tokenMarkets: state.tokenMarkets,
 		priceHistory: state.priceHistory,

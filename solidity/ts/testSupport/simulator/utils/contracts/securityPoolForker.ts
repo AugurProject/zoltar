@@ -3,7 +3,7 @@ import { QuestionOutcome } from '../../types/types'
 import { getInfraContractAddresses } from './deployStatoblast'
 import { contractExists, requireAddress, requireArray, requireBigInt, requireBoolean } from '../utilities'
 import { ReadClient, WriteClient, writeContractAndWait } from '../clients'
-import type { Abi, Address } from '@zoltar/shared/ethereum'
+import type { Abi, Address } from '@zoltar/core-shared/evm/ethereum'
 
 const getQuestionOutcomeAbi = [
 	{

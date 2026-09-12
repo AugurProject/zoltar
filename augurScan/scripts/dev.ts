@@ -32,7 +32,7 @@ const drainBuilds = async (): Promise<void> => {
 			buildQueued = false
 			try {
 				await build()
-			} catch (error: unknown) {
+			} catch (error) {
 				console.error(error instanceof Error ? error.message : String(error))
 			}
 		} while (buildQueued)

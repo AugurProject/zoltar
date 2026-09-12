@@ -1,5 +1,10 @@
 import path from 'node:path'
 
+const CONTENT_TYPES = new Map([
+	['.css', 'text/css'],
+	['.js', 'text/javascript'],
+])
+
 const root = path.resolve(import.meta.dir, '../public')
 const server = Bun.serve({
 	port: Number(process.env['PORT'] ?? '3001'),
@@ -17,11 +22,7 @@ const server = Bun.serve({
 					const send = () => {
 						sequence++
 						controller.enqueue(
-							new TextEncoder().encode(
-								emitReorg && sequence === 1
-									? `id: ${sequence}\nevent: reorg\ndata: ${JSON.stringify({ chainId: 1, depth: 1, reason: 'chain-reorg', sequence })}\n\n`
-									: `id: ${sequence}\nevent: block\ndata: ${JSON.stringify({ chainId: 1, blockNumber: 23_184_712 + sequence, sequence })}\n\n`,
-							),
+							new TextEncoder().encode(emitReorg && sequence === 1 ? `id: ${sequence}\nevent: reorg\ndata: ${JSON.stringify({ chainId: 1, depth: 1, reason: 'chain-reorg', sequence })}\n\n` : `id: ${sequence}\nevent: block\ndata: ${JSON.stringify({ chainId: 1, blockNumber: 23_184_712 + sequence, sequence })}\n\n`),
 						)
 						timer = setTimeout(send, emitBurst && sequence < 10 ? 150 : 2_500)
 					}
@@ -43,11 +44,10 @@ const server = Bun.serve({
 		const name = requested.includes('.') ? requested : 'index.html'
 		const file = Bun.file(path.join(root, name))
 		if (!(await file.exists())) return new Response('Not found', { status: 404 })
-		const type = name.endsWith('.css') ? 'text/css' : name.endsWith('.js') ? 'text/javascript' : 'text/html'
+		const type = CONTENT_TYPES.get(path.extname(name)) ?? 'text/html'
 		return new Response(file, {
 			headers: {
-				'content-security-policy':
-					"default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; base-uri 'none'; frame-ancestors 'none'",
+				'content-security-policy': "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; base-uri 'none'; frame-ancestors 'none'",
 				'content-type': `${type}; charset=utf-8`,
 			},
 		})

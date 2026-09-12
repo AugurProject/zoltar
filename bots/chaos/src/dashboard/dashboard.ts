@@ -1,3 +1,10 @@
+import { activeSchedulerWorkLabel, createSelectionControls } from './selection-controls.js'
+import { createCatalogGroups } from './catalog-groups.js'
+import { createActivityTimeline } from './activity-timeline.js'
+import { compactIdentifier, formatDate, node, setBadge, shortHex, statusLabel, statusTone, transactionExplorerUrl } from './dom.js'
+import { createOperationDialog } from './operation-dialog.js'
+import { pendingTransactionSummary, type PendingTransactionObservationView } from './pending-transaction-summary.js'
+import { renderOperatorAlerts } from './operator-alerts.js'
 type RepBalance = {
 	balance?: string | number | undefined
 	symbol?: string | undefined
@@ -57,7 +64,9 @@ type PendingTransaction = {
 	cancellationHash?: string | undefined
 	hash?: string | undefined
 	label?: string | undefined
+	maxBlockNumber?: string | number | undefined
 	nonce?: string | number | undefined
+	observation?: PendingTransactionObservationView | undefined
 	operationId?: string | undefined
 	recoveryBlocker?: string | undefined
 	replacementHash?: string | undefined
@@ -83,6 +92,7 @@ type Obligation = {
 
 type Activity = {
 	at?: string | undefined
+	details?: string | undefined
 	ecosystem?: string | undefined
 	label?: string | undefined
 	operationId?: string | undefined
@@ -122,12 +132,16 @@ type Snapshot = {
 	inventory: { eth?: string | number | undefined; rep: RepBalance[]; weth?: string | number | undefined }
 	inventoryAvailable?: boolean | undefined
 	lastScanAt?: string | undefined
+	lastDeploymentCheckedBlock?: string | number | undefined
+	lastDeploymentCheckAt?: string | undefined
 	lastScannedBlock?: string | number | undefined
 	network?: string | undefined
 	obligations: Obligation[]
 	operationEvaluations: OperationEvaluation[]
 	paused?: boolean | undefined
 	pendingTransactions: PendingTransaction[]
+	profileId?: string | undefined
+	retirement?: { blockers: unknown[]; finalSweepStartedAt?: string | undefined; positions: unknown[]; recipient?: string | undefined; requestedAt?: string | undefined; status?: string | undefined; updatedAt?: string | undefined } | undefined
 	rpcHealth: RpcHealth
 	submissionHealth: SubmissionHealth
 	safetyPaused?: boolean | undefined
@@ -154,6 +168,7 @@ type Configuration = {
 	connectivity?: { publicRpcUrls: string[]; quorumRpcUrls: string[]; readRpcUrl?: string | undefined; rpcQuorum?: string | number | undefined } | undefined
 	enabledEcosystems: string[]
 	execute?: boolean | undefined
+	explorerUrl?: string | undefined
 	hasSigner?: boolean | undefined
 	maximumDelaySeconds?: string | number | undefined
 	maximumEthPerOperation?: string | number | undefined
@@ -195,7 +210,6 @@ const modeBadge = element('mode-badge', HTMLSpanElement)
 const networkBadge = element('network-badge', HTMLSpanElement)
 const signerBadge = element('signer-badge', HTMLSpanElement)
 const recoveryBadge = element('recovery-badge', HTMLAnchorElement)
-const refreshButton = element('refresh-button', HTMLButtonElement)
 const pauseButton = element('pause-button', HTMLButtonElement)
 const pauseStatus = element('pause-status', HTMLSpanElement)
 const globalError = element('global-error', HTMLDivElement)
@@ -233,8 +247,8 @@ const coverageSummary = element('coverage-summary', HTMLDivElement)
 const catalogFilter = element('catalog-filter', HTMLSelectElement)
 const catalogClassificationFilter = element('catalog-classification-filter', HTMLSelectElement)
 const catalogEligibilityFilter = element('catalog-eligibility-filter', HTMLSelectElement)
-const catalogCaption = element('catalog-caption', HTMLTableCaptionElement)
-const catalogRows = element('catalog-rows', HTMLTableSectionElement)
+const catalogCaption = element('catalog-caption', HTMLParagraphElement)
+const catalogRows = element('catalog-rows', HTMLDivElement)
 const ecosystemGrid = element('ecosystem-grid', HTMLDivElement)
 const topologyAnchor = element('topology-anchor', HTMLSpanElement)
 const topologyStatus = element('topology-status', HTMLParagraphElement)
@@ -280,7 +294,7 @@ const obligationConfirmationInput = element('obligation-confirmation', HTMLInput
 const obligationConfirmationHelp = element('obligation-confirmation-help', HTMLParagraphElement)
 const obligationStatus = element('obligation-status', HTMLSpanElement)
 const obligationRetryButton = element('obligation-retry', HTMLButtonElement)
-const activityList = element('activity-list', HTMLOListElement)
+const renderActivities = createActivityTimeline()
 const settingsScope = element('settings-scope', HTMLSpanElement)
 const configurationStatus = element('configuration-status', HTMLDivElement)
 const settingsPauseNote = element('settings-pause-note', HTMLDivElement)
@@ -340,7 +354,27 @@ let pauseMutationUnreconciled = false
 let settingsMutationUnreconciled = false
 let connectivityMutationUnreconciled = false
 let signerMutationUnreconciled = false
+const retirementDashboard = createRetirementDashboard({ current: () => snapshot, put: async value => await put('/api/retirement', value), refresh: async () => await refresh() })
 let configurationCommitIndeterminate = false
+let selectionControlsAvailable = false
+const selectionControls = createSelectionControls({
+	put,
+	refresh,
+	reconcile: (error, status) => reconcileUnknownMutation(error, status, 'configuration and state', 'settings'),
+})
+function updateSelectionControls() {
+	selectionControls.update({
+		available: selectionControlsAvailable,
+		frozen: configurationCommitIndeterminate || settingsMutationUnreconciled || pauseMutationUnreconciled,
+		paused: configuration?.paused === true && snapshot?.paused === true,
+		revision: configuration?.revision,
+		selection: configuration?.selectableOperationAllowlist,
+		scheduledAt:
+			configuration?.paused === false && snapshot?.paused !== true && snapshot?.safetyPaused !== true && snapshot?.scheduler.status === 'scheduled' && (snapshot.retirement?.status === undefined || snapshot.retirement.status === 'inactive') && activeSchedulerWorkLabel(snapshot) === undefined
+				? snapshot.scheduler.nextRunAt
+				: undefined,
+	})
+}
 
 const configurationCommitIndeterminateRecoveryMessage = 'Dashboard mutation controls are permanently frozen in this server process and page. Stop the bot, inspect and reload the owner configuration and runtime-state files offline, then restart it before making another mutation.'
 const configurationCommitIndeterminateMessage = 'The configuration may have committed. Treat it as committed and stop the bot before inspecting and reloading the owner configuration and runtime-state files.'
@@ -435,6 +469,12 @@ function scalarValue(value: unknown) {
 
 function nonnegativeIntegerValue(value: unknown) {
 	return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined
+}
+
+function parsePendingTransactionObservation(value: unknown): PendingTransactionObservationView | undefined {
+	const source = record(value)
+	if (source === undefined) return undefined
+	return { checkedAt: stringValue(source['checkedAt']), head: scalarValue(source['head']), includedBlock: scalarValue(source['includedBlock']), kind: stringValue(source['kind']) }
 }
 
 function rpcHealthStatusValue(value: unknown): RpcHealth['status'] {
@@ -556,6 +596,7 @@ function parseSnapshot(value: unknown): Snapshot {
 	return {
 		activities: list(source['activities'], entry => ({
 			at: stringValue(entry['at']),
+			details: stringValue(entry['details']),
 			ecosystem: stringValue(entry['ecosystem']),
 			label: stringValue(entry['label']),
 			operationId: stringValue(entry['operationId']),
@@ -579,6 +620,8 @@ function parseSnapshot(value: unknown): Snapshot {
 		},
 		inventoryAvailable: booleanValue(source['inventoryAvailable']),
 		lastScanAt: stringValue(source['lastScanAt']),
+		lastDeploymentCheckedBlock: scalarValue(source['lastDeploymentCheckedBlock']),
+		lastDeploymentCheckAt: stringValue(source['lastDeploymentCheckAt']),
 		lastScannedBlock: scalarValue(source['lastScannedBlock']),
 		network: stringValue(source['network']),
 		obligations: list(source['obligations'], entry => ({
@@ -614,7 +657,9 @@ function parseSnapshot(value: unknown): Snapshot {
 			cancellationHash: stringValue(entry['cancellationHash']),
 			hash: stringValue(entry['hash']),
 			label: stringValue(entry['label']),
+			maxBlockNumber: scalarValue(entry['maxBlockNumber']),
 			nonce: scalarValue(entry['nonce']),
+			observation: parsePendingTransactionObservation(entry['observation']),
 			operationId: stringValue(entry['operationId']),
 			recoveryBlocker: stringValue(entry['recoveryBlocker']),
 			replacementHash: stringValue(entry['replacementHash']),
@@ -622,6 +667,8 @@ function parseSnapshot(value: unknown): Snapshot {
 			submittedAt: stringValue(entry['submittedAt']),
 			submissionBlock: scalarValue(entry['submissionBlock']),
 		})),
+		profileId: stringValue(source['profileId']),
+		retirement: parsePublicRetirement(source['retirement']),
 		rpcHealth: {
 			chainReady: booleanValue(rpcHealth['chainReady']),
 			configuredReadEndpointCount: nonnegativeIntegerValue(rpcHealth['configuredReadEndpointCount']),
@@ -678,6 +725,7 @@ function parseConfiguration(value: unknown): Configuration {
 					},
 		enabledEcosystems: strings(source['enabledEcosystems']),
 		execute: booleanValue(source['execute']),
+		explorerUrl: stringValue(source['explorerUrl']),
 		hasSigner: booleanValue(source['hasSigner']),
 		initializeGenesisUniverse: booleanValue(source['initializeGenesisUniverse']),
 		maximumDelaySeconds: scalarValue(source['maximumDelaySeconds']),
@@ -731,118 +779,16 @@ async function requestJson(path: string, timeoutMilliseconds: number, init?: Req
 	}
 }
 
-function node<Tag extends keyof HTMLElementTagNameMap>(tag: Tag, className?: string, text?: string): HTMLElementTagNameMap[Tag] {
-	const value = document.createElement(tag)
-	if (className !== undefined) value.className = className
-	if (text !== undefined) value.textContent = text
-	return value
+function transactionIdentifier(hash: string, type: string) {
+	return compactIdentifier(hash, type, { explorerUrl: transactionExplorerUrl(configuration?.explorerUrl, hash) })
 }
 
-let identifierSequence = 0
-
-function compactIdentifier(value: string, type: string) {
-	const wrapper = node('span', 'compact-identifier')
-	wrapper.dataset['identifierType'] = type
-	const display = node('span', 'identifier-value mono', shortHex(value))
-	const copy = document.createElement('button')
-	copy.className = 'identifier-copy'
-	copy.textContent = 'Copy'
-	copy.type = 'button'
-	copy.setAttribute('aria-label', `Copy ${type}: ${value}`)
-	identifierSequence += 1
-	const full = document.createElement('textarea')
-	full.className = 'identifier-full mono'
-	full.hidden = true
-	full.id = `identifier-full-${identifierSequence.toString()}`
-	full.readOnly = true
-	full.rows = 2
-	full.spellcheck = false
-	full.value = value
-	full.wrap = 'soft'
-	full.setAttribute('aria-label', `Full ${type}`)
-	const disclosure = document.createElement('button')
-	disclosure.className = 'identifier-disclosure'
-	disclosure.textContent = 'Show full'
-	disclosure.type = 'button'
-	disclosure.setAttribute('aria-controls', full.id)
-	disclosure.setAttribute('aria-expanded', 'false')
-	disclosure.setAttribute('aria-label', `Show full ${type}: ${value}`)
-	const feedback = node('span', 'identifier-feedback')
-	feedback.setAttribute('aria-live', 'polite')
-	feedback.setAttribute('role', 'status')
-	const setExpanded = (expanded: boolean) => {
-		full.hidden = !expanded
-		disclosure.textContent = expanded ? 'Hide full' : 'Show full'
-		disclosure.setAttribute('aria-expanded', expanded ? 'true' : 'false')
-		disclosure.setAttribute('aria-label', `${expanded ? 'Hide' : 'Show'} full ${type}: ${value}`)
-	}
-	disclosure.addEventListener('click', () => setExpanded(full.hidden))
-	copy.addEventListener('click', () => {
-		copy.disabled = true
-		feedback.className = 'identifier-feedback'
-		feedback.textContent = 'Copying…'
-		const clipboard = navigator.clipboard
-		const write = clipboard === undefined ? Promise.reject(new Error('Clipboard API unavailable')) : Promise.resolve().then(() => clipboard.writeText(value))
-		void write.then(
-			() => {
-				copy.disabled = false
-				feedback.className = 'identifier-feedback success'
-				feedback.textContent = 'Copied'
-			},
-			() => {
-				copy.disabled = false
-				feedback.className = 'identifier-feedback error'
-				feedback.textContent = 'Copy failed; full value shown'
-				setExpanded(true)
-			},
-		)
-	})
-	wrapper.append(display, copy, disclosure, feedback, full)
-	return wrapper
-}
-
-function copyableOperationId(value: string) {
-	const wrapper = node('span', 'operation-id-control')
-	const identifier = node('small', 'mono', value)
-	const copy = node('button', 'operation-id-copy', 'Copy ID')
-	copy.setAttribute('aria-label', `Copy selectable operation definition ID: ${value}`)
-	copy.setAttribute('type', 'button')
-	const feedback = node('small', 'operation-id-feedback')
-	feedback.setAttribute('aria-live', 'polite')
-	feedback.setAttribute('role', 'status')
-	copy.addEventListener('click', () => {
-		copy.disabled = true
-		feedback.textContent = 'Copying…'
-		const clipboard = navigator.clipboard
-		const write = clipboard === undefined ? Promise.reject(new Error('Clipboard API unavailable')) : Promise.resolve().then(() => clipboard.writeText(value))
-		void write.then(
-			() => {
-				copy.disabled = false
-				feedback.className = 'operation-id-feedback success'
-				feedback.textContent = 'Copied'
-			},
-			() => {
-				copy.disabled = false
-				feedback.className = 'operation-id-feedback error'
-				feedback.textContent = 'Copy failed; select the ID shown'
-			},
-		)
-	})
-	wrapper.append(identifier, copy, feedback)
-	return wrapper
-}
-
-function identifierLine(prefix: string, value: string | undefined, type: string) {
+function transactionLine(prefix: string, hash: string | undefined, type: string) {
 	const line = node('small', 'identifier-line')
 	line.append(node('span', undefined, prefix))
-	if (value === undefined) line.append(node('span', 'mono muted', 'Unavailable'))
-	else line.append(compactIdentifier(value, type))
+	if (hash === undefined) line.append(node('span', 'mono muted', 'Unavailable'))
+	else line.append(transactionIdentifier(hash, type))
 	return line
-}
-
-function setBadge(target: HTMLElement, label: string, tone: 'error' | 'info' | 'neutral' | 'success' | 'warning') {
-	target.textContent = label
-	target.className = `badge ${tone}`
 }
 
 function normalizeEcosystem(value: string | undefined): string {
@@ -875,11 +821,6 @@ function classificationLabel(value: string | undefined) {
 	return 'Classification unavailable'
 }
 
-function shortHex(value: string | undefined) {
-	if (value === undefined || value.length < 14) return value ?? '—'
-	return `${value.slice(0, 8)}…${value.slice(-6)}`
-}
-
 function parsePositiveNumber(value: string | number | undefined) {
 	let parsed = Number.NaN
 	if (typeof value === 'number') parsed = value
@@ -894,29 +835,12 @@ function publicCandidateCount(value: string | number | undefined) {
 	return count <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(count) : count.toString()
 }
 
-function formatAtomic18(value: string | number | undefined) {
-	if (value === undefined) return '—'
-	let atomic = ''
-	if (typeof value === 'string') atomic = value
-	else if (Number.isSafeInteger(value) && value >= 0) atomic = value.toString()
-	if (!/^(?:0|[1-9]\d*)$/.test(atomic)) return 'Invalid atomic balance'
-	const padded = atomic.padStart(19, '0')
-	const integer = padded.slice(0, -18).replace(/^0+(?=\d)/, '')
-	return `${integer}.${padded.slice(-18)}`
-}
-
 function formatDuration(totalSeconds: number) {
 	const seconds = Math.max(0, Math.floor(totalSeconds))
 	const hours = Math.floor(seconds / 3_600)
 	const minutes = Math.floor((seconds % 3_600) / 60)
 	const remainingSeconds = seconds % 60
 	return hours > 0 ? `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}` : `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`
-}
-
-function formatDate(value: string | undefined) {
-	if (value === undefined) return 'Not scheduled'
-	const date = new Date(value)
-	return Number.isNaN(date.getTime()) ? 'Timestamp unavailable' : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'medium' }).format(date)
 }
 
 function formatRelative(value: string | undefined) {
@@ -929,22 +853,6 @@ function formatRelative(value: string | undefined) {
 	return `Scanned ${Math.floor(seconds / 3_600).toString()}h ago`
 }
 
-function statusTone(status: string | undefined): 'error' | 'info' | 'neutral' | 'success' | 'warning' {
-	const normalized = status?.toLowerCase()
-	if (normalized === 'confirmed' || normalized === 'complete' || normalized === 'eligible' || normalized === 'healthy' || normalized === 'success') return 'success'
-	if (normalized === 'failed' || normalized === 'error' || normalized === 'blocked') return 'error'
-	if (normalized === 'pending' || normalized === 'submitted' || normalized === 'recovering' || normalized === 'due') return 'warning'
-	if (normalized === 'dry-run' || normalized === 'simulated') return 'info'
-	if (normalized === 'deferred') return 'neutral'
-	return 'neutral'
-}
-
-function statusLabel(status: string | undefined) {
-	const normalized = status?.trim().replaceAll('_', ' ').replaceAll('-', ' ')
-	if (normalized === undefined || normalized.length === 0) return 'Waiting'
-	return `${normalized.slice(0, 1).toUpperCase()}${normalized.slice(1).toLowerCase()}`
-}
-
 function obligationDetail(obligation: Obligation) {
 	if (obligation.status === 'deferred' && obligation.notBefore !== undefined && obligation.automaticRetryCount !== undefined && obligation.automaticRetryLimit !== undefined) {
 		return `${ecosystemLabel(obligation.ecosystem)} · ${obligation.automaticRetryCount.toString()} of ${obligation.automaticRetryLimit.toString()} finalized attempts failed · next attempt ${formatDate(obligation.notBefore)}`
@@ -954,6 +862,7 @@ function obligationDetail(obligation: Obligation) {
 }
 
 function applyMutationControlLatches() {
+	updateSelectionControls()
 	if (pauseMutationUnreconciled || configurationCommitIndeterminate) pauseButton.disabled = true
 	if (settingsMutationUnreconciled || configurationCommitIndeterminate) settingsFields.disabled = true
 	if (connectivityMutationUnreconciled || configurationCommitIndeterminate) connectivityFields.disabled = true
@@ -1011,17 +920,10 @@ function recoveryItemCount(value: Snapshot) {
 	return value.pendingTransactions.length + value.obligations.length + selectableContinuation
 }
 
-function activeSchedulerWorkLabel(value: Snapshot) {
-	if (value.pendingTransactions.length !== 0 || value.currentWorkflow?.status === 'waiting-transaction') return 'Transaction recovery pending'
-	if (value.currentWorkflow?.status === 'waiting-continuation') return 'Workflow continuation pending'
-	if (value.currentWorkflow?.status === 'waiting-obligation') return 'Lifecycle confirmation pending'
-	if (value.currentWorkflow?.status === 'running') return 'Operation in progress'
-	return undefined
-}
-
 function renderHeader(value: Snapshot) {
-	lastBlock.textContent = value.lastScannedBlock === undefined ? 'Block —' : `Block ${String(value.lastScannedBlock)}`
-	lastScan.textContent = formatRelative(value.lastScanAt)
+	const checkedBlock = value.lastDeploymentCheckedBlock ?? value.lastScannedBlock
+	lastBlock.textContent = checkedBlock === undefined ? 'Block —' : `Block ${String(checkedBlock)}`
+	lastScan.textContent = value.lastDeploymentCheckedBlock === undefined ? formatRelative(value.lastScanAt) : formatRelative(value.lastDeploymentCheckAt).replace('Scanned', 'Deployments checked')
 	if (value.safetyPaused === true) setBadge(modeBadge, 'Safety paused', 'error')
 	else if (value.paused === true) setBadge(modeBadge, 'Paused', 'warning')
 	else if (value.execute === true) setBadge(modeBadge, 'Live execution', 'error')
@@ -1029,9 +931,13 @@ function renderHeader(value: Snapshot) {
 	const networkName = value.network ?? configuration?.network ?? 'Network unknown'
 	const chainId = value.chainId ?? configuration?.chainId
 	setBadge(networkBadge, chainId === undefined ? networkName : `${networkName} · ${String(chainId)}`, value.network === undefined && configuration?.network === undefined ? 'warning' : 'neutral')
-	setBadge(signerBadge, value.signerReady === true ? 'Signer ready' : 'Signer missing', value.signerReady === true ? 'success' : 'warning')
+	let signerLabel = 'Signer missing'
+	if (value.signerReady === true) signerLabel = 'Signer ready'
+	else if (value.wallet !== undefined) signerLabel = 'Read-only — signer not loaded'
+	setBadge(signerBadge, signerLabel, value.signerReady === true ? 'success' : 'warning')
 	const recoveryItems = recoveryItemCount(value)
-	setBadge(recoveryBadge, recoveryItems === 0 ? 'Recovery clear' : `${recoveryItems.toString()} recovery item${recoveryItems === 1 ? '' : 's'}`, recoveryItems === 0 ? 'success' : 'warning')
+	setBadge(recoveryBadge, `${recoveryItems.toString()} recovery item${recoveryItems === 1 ? '' : 's'}`, 'warning')
+	recoveryBadge.classList.toggle('hidden', recoveryItems === 0)
 	let pauseLabel = value.paused === true ? 'Resume' : 'Pause'
 	if (pauseMutationPending) pauseLabel = value.paused === true ? 'Resuming…' : 'Pausing…'
 	pauseButton.textContent = pauseLabel
@@ -1047,9 +953,9 @@ function renderOverview(value: Snapshot) {
 	eligibleCount.textContent = `${eligible.length.toString()} of ${executable.length.toString()}`
 	const selected = value.operationEvaluations.find(operation => operation.id === value.scheduler.selectedOperationId)
 	selectedOperation.textContent = selected?.label ?? value.scheduler.selectedOperationId ?? 'None'
-	walletShort.replaceChildren(value.wallet === undefined ? document.createTextNode('No signer') : compactIdentifier(value.wallet, 'wallet address'))
+	walletShort.replaceChildren(value.wallet === undefined ? document.createTextNode('No execution account configured') : compactIdentifier(value.wallet, 'wallet address'))
 	walletShort.removeAttribute('title')
-	if (value.inventoryAvailable === true) {
+	if (value.wallet !== undefined && value.inventoryAvailable === true) {
 		balanceEth.textContent = formatAtomic18(value.inventory.eth)
 		balanceWeth.textContent = formatAtomic18(value.inventory.weth)
 		balanceRepTotal.textContent = value.inventory.rep.length === 0 ? '—' : `${value.inventory.rep.length.toString()} token${value.inventory.rep.length === 1 ? '' : 's'}`
@@ -1059,12 +965,13 @@ function renderOverview(value: Snapshot) {
 		balanceWeth.textContent = '—'
 		balanceRepTotal.textContent = '—'
 		repBalances.className = 'token-list empty-state'
-		repBalances.textContent = 'Inventory unavailable until the first canonical scan.'
+		repBalances.textContent = value.wallet === undefined ? '—' : 'Inventory unavailable until this account is scanned.'
 	}
 	renderRpcHealth(value)
 	renderSubmissionHealth(value.submissionHealth)
-	renderWorkflow(value.currentWorkflow)
+	renderWorkflow(value.currentWorkflow, value.pendingTransactions)
 	renderCoverage(value.operationEvaluations)
+	retirementDashboard.render(value)
 }
 
 function renderRpcHealth(value: Snapshot) {
@@ -1155,7 +1062,15 @@ function renderRepBalances(values: RepBalance[]) {
 	repBalances.replaceChildren(...rows)
 }
 
-function renderWorkflow(value: Workflow | undefined) {
+function transactionWaitNote(transaction: PendingTransaction) {
+	const summary = pendingTransactionSummary(transaction)
+	const note = node('div', `transaction-wait ${summary.tone}`)
+	note.append(node('strong', undefined, summary.headline))
+	if (summary.detail !== '') note.append(node('small', undefined, summary.detail))
+	return note
+}
+
+function renderWorkflow(value: Workflow | undefined, pendingTransactions: readonly PendingTransaction[]) {
 	if (value === undefined) {
 		currentWorkflow.className = 'empty-state'
 		currentWorkflow.textContent = 'No operation is in progress.'
@@ -1169,6 +1084,8 @@ function renderWorkflow(value: Workflow | undefined) {
 	const status = node('span')
 	setBadge(status, value.status === undefined ? 'In progress' : statusLabel(value.status), statusTone(value.status))
 	heading.append(copy, status)
+	const stepHashes = new Set(value.steps.flatMap(step => (step.txHash === undefined ? [] : [step.txHash.toLowerCase()])))
+	const waitingTransaction = value.status === 'waiting-transaction' ? pendingTransactions.find(transaction => transaction.hash !== undefined && stepHashes.has(transaction.hash.toLowerCase())) : undefined
 	const steps = node('ol', 'step-list')
 	for (const step of value.steps) {
 		const row = node('li')
@@ -1180,7 +1097,7 @@ function renderWorkflow(value: Workflow | undefined) {
 		status.dataset['stepStatus'] = step.status?.trim().toLowerCase() || 'waiting'
 		detail.append(status)
 		if (step.txHash !== undefined) {
-			const hash = compactIdentifier(step.txHash, 'workflow transaction hash')
+			const hash = transactionIdentifier(step.txHash, 'workflow transaction hash')
 			hash.classList.add('step-hash')
 			hash.dataset['stepHash'] = ''
 			detail.append(hash)
@@ -1189,7 +1106,7 @@ function renderWorkflow(value: Workflow | undefined) {
 		steps.append(row)
 	}
 	if (value.steps.length === 0) steps.append(node('li', undefined, 'Workflow state is being prepared.'))
-	currentWorkflow.replaceChildren(heading, steps)
+	currentWorkflow.replaceChildren(heading, ...(waitingTransaction === undefined ? [] : [transactionWaitNote(waitingTransaction)]), steps)
 }
 
 function renderCoverage(values: OperationEvaluation[]) {
@@ -1211,10 +1128,20 @@ function normalizedCatalogCopy(value: string) {
 		.toLowerCase()
 }
 
+const operationDialog = createOperationDialog({ request: value => put('/api/operation', value, 120_000) })
+
+const renderCatalogGroups = createCatalogGroups(catalogRows, ecosystemOrder, ecosystemLabel)
+const catalogRowCache = new Map<string, { row: HTMLTableRowElement; signature: string }>()
+let catalogSignature = ''
+
 function renderCatalog(values: OperationEvaluation[]) {
+	if (document.querySelector('#operation-dialog[open]') !== null) return
 	const selectedEcosystem = catalogFilter.value
 	const selectedClassification = catalogClassificationFilter.value
 	const selectedEligibility = catalogEligibilityFilter.value
+	const signature = JSON.stringify({ values, selectedEcosystem, selectedClassification, selectedEligibility })
+	if (signature === catalogSignature) return
+	catalogSignature = signature
 	const filtered = values.filter(value => {
 		if (selectedEcosystem !== 'all' && normalizeEcosystem(value.ecosystem) !== selectedEcosystem) return false
 		if (selectedClassification !== 'all' && displayedClassification(value) !== selectedClassification) return false
@@ -1229,6 +1156,11 @@ function renderCatalog(values: OperationEvaluation[]) {
 	const candidateTotal = filtered.reduce((total, value) => total + BigInt(publicCandidateCount(value.candidateCount) ?? 0), 0n)
 	catalogCaption.textContent = `${filtered.length.toString()} of ${values.length.toString()} classified catalog entr${values.length === 1 ? 'y' : 'ies'} shown · ${candidateTotal.toString()} live candidate${candidateTotal === 1n ? '' : 's'}.`
 	const rows = filtered.map(value => {
+		const key = value.id ?? ''
+		const rowSignature = JSON.stringify(value)
+		const reused = catalogRowCache.get(key)
+		// Reusing an unchanged row keeps its checkbox, focus, and layout untouched across polls.
+		if (reused !== undefined && reused.signature === rowSignature) return reused.row
 		const row = document.createElement('tr')
 		const enabled = value.enabled !== false
 		const independentlyExecutable = operationIsIndependentlyExecutable(value)
@@ -1245,12 +1177,10 @@ function renderCatalog(values: OperationEvaluation[]) {
 		}
 		const nameCell = node('td', 'operation-name')
 		nameCell.append(node('strong', undefined, value.label ?? value.id ?? 'Unnamed operation'))
-		if (value.id !== undefined) nameCell.append(displayClassification === 'selectable' ? copyableOperationId(value.id) : node('small', 'mono', value.id))
 		const description = value.description?.trim()
 		if (description !== undefined && description !== '' && !displayedBlockers.some(blocker => normalizedCatalogCopy(blocker) === normalizedCatalogCopy(description))) {
 			nameCell.append(node('small', 'operation-description', description))
 		}
-		const ecosystemCell = node('td', undefined, ecosystemLabel(value.ecosystem))
 		const classificationCell = node('td')
 		const classificationBadge = node('span')
 		let classificationTone: Parameters<typeof setBadge>[2] = 'success'
@@ -1266,7 +1196,6 @@ function renderCatalog(values: OperationEvaluation[]) {
 		const candidatesCell = node('td', 'mono', String(publicCandidateCount(value.candidateCount) ?? 0))
 		const eligibilityCell = node('td')
 		nameCell.dataset['label'] = 'Operation'
-		ecosystemCell.dataset['label'] = 'Ecosystem'
 		classificationCell.dataset['label'] = 'Classification'
 		riskCell.dataset['label'] = 'Risk'
 		candidatesCell.dataset['label'] = 'Candidates'
@@ -1282,16 +1211,24 @@ function renderCatalog(values: OperationEvaluation[]) {
 			for (const reason of displayedBlockers) listValue.append(node('li', undefined, reason))
 			eligibilityCell.append(listValue)
 		}
-		row.append(nameCell, ecosystemCell, classificationCell, riskCell, candidatesCell, eligibilityCell)
+		const open = node('button', 'operation-open secondary', 'Open operation')
+		open.type = 'button'
+		open.setAttribute('aria-label', `Open ${value.label ?? 'operation'}`)
+		open.addEventListener('click', () => operationDialog.open(value))
+		nameCell.append(open)
+		if (value.classification === 'selectable' && independentlyExecutable && value.id !== undefined) selectionControls.appendToggle(nameCell, value.id, value.label ?? value.id)
+		row.dataset['ecosystem'] = normalizeEcosystem(value.ecosystem)
+		row.dataset['operationId'] = key
+		row.append(nameCell, classificationCell, riskCell, candidatesCell, eligibilityCell)
+		catalogRowCache.set(key, { row, signature: rowSignature })
 		return row
 	})
 	if (rows.length === 0) {
-		const row = document.createElement('tr')
-		const cell = node('td', 'empty-state', 'No operations match this filter.')
-		cell.setAttribute('colspan', '6')
-		row.append(cell)
-		catalogRows.replaceChildren(row)
-	} else catalogRows.replaceChildren(...rows)
+		catalogRows.replaceChildren(node('p', 'empty-state', 'No operations match this filter.'))
+		return
+	}
+	renderCatalogGroups(rows)
+	updateSelectionControls()
 }
 
 function renderEcosystems(values: OperationEvaluation[]) {
@@ -1358,7 +1295,12 @@ function topologyIdentifierFact(label: string, value: string | undefined, type: 
 	return fact
 }
 
+const topologyGroupSignatures = new WeakMap<HTMLDivElement, string>()
+
 function renderTopologyGroup(target: HTMLDivElement, values: readonly unknown[], render: (value: Record<string, unknown>) => HTMLElement) {
+	const signature = JSON.stringify(values)
+	if (topologyGroupSignatures.get(target) === signature) return
+	topologyGroupSignatures.set(target, signature)
 	if (values.length === 0) {
 		target.className = 'topology-list empty-state'
 		target.textContent = 'None discovered at this anchor.'
@@ -1459,19 +1401,16 @@ function renderRecovery(value: Snapshot) {
 				const row = node('div', 'stack-row')
 				const copy = node('div')
 				copy.append(node('strong', undefined, transaction.label ?? transaction.operationId ?? 'Pending transaction'))
-				copy.append(identifierLine(`Nonce ${String(transaction.nonce ?? '—')}`, transaction.hash, 'pending transaction hash'))
+				copy.append(transactionLine(`Nonce ${String(transaction.nonce ?? '—')}`, transaction.hash, 'pending transaction hash'))
 				if (transaction.replacementHash !== undefined) {
-					copy.append(identifierLine('Replacement queued', transaction.replacementHash, 'replacement transaction hash'))
+					copy.append(transactionLine('Replacement queued', transaction.replacementHash, 'replacement transaction hash'))
 				}
 				if (transaction.cancellationHash !== undefined) {
-					copy.append(identifierLine('Cancellation queued', transaction.cancellationHash, 'cancellation transaction hash'))
-				}
-				if (transaction.recoveryBlocker !== undefined) {
-					copy.append(node('small', 'warning-text', transaction.recoveryBlocker))
+					copy.append(transactionLine('Cancellation queued', transaction.cancellationHash, 'cancellation transaction hash'))
 				}
 				const status = node('span')
 				setBadge(status, statusLabel(transaction.status ?? 'pending'), statusTone(transaction.status ?? 'pending'))
-				row.append(copy, status)
+				row.append(copy, status, transactionWaitNote(transaction))
 				return row
 			}),
 		)
@@ -1495,39 +1434,6 @@ function renderRecovery(value: Snapshot) {
 			}),
 		)
 	}
-	if (value.activities.length === 0) {
-		activityList.replaceChildren(node('li', 'empty-state', 'No activity recorded.'))
-	} else {
-		activityList.replaceChildren(
-			...value.activities.map(activity => {
-				const row = node('li', 'timeline-item')
-				row.append(node('time', 'timeline-time', formatDate(activity.at)))
-				const main = node('div', 'timeline-main')
-				main.append(node('strong', undefined, activity.label ?? activity.operationId ?? 'Bot activity'))
-				if (activity.summary !== undefined) main.append(node('span', 'timeline-detail', activity.summary))
-				if (activity.txHash !== undefined) {
-					const identifier = node('div', 'activity-identifier')
-					identifier.append(compactIdentifier(activity.txHash, 'activity transaction hash'))
-					main.append(identifier)
-				}
-				const status = node('span')
-				setBadge(status, statusLabel(activity.status ?? 'info'), statusTone(activity.status))
-				row.append(main, status)
-				return row
-			}),
-		)
-	}
-}
-
-function renderAlerts(value: Snapshot) {
-	const messages = value.alerts.flatMap(alert => (alert.message === undefined ? [] : [alert.message]))
-	if (messages.length === 0) {
-		operatorAlerts.classList.add('hidden')
-		operatorAlerts.replaceChildren()
-		return
-	}
-	operatorAlerts.classList.remove('hidden')
-	operatorAlerts.replaceChildren(...messages.map(message => node('li', undefined, message)))
 }
 
 function renderSnapshot(value: Snapshot) {
@@ -1537,7 +1443,8 @@ function renderSnapshot(value: Snapshot) {
 	renderEcosystems(value.operationEvaluations)
 	renderTopology(value.topology)
 	renderRecovery(value)
-	renderAlerts(value)
+	renderActivities(value.activities, configuration?.explorerUrl)
+	renderOperatorAlerts(operatorAlerts, value.alerts)
 	renderCountdown()
 	applyMutationControlLatches()
 }
@@ -1698,14 +1605,15 @@ async function requestRecoveryContextRefresh(context: RecoveryContextRefresh) {
 function refresh() {
 	if (refreshPromise !== undefined) return refreshPromise
 	markRecoveryContextRefreshesLoading()
-	refreshButton.disabled = true
-	refreshButton.textContent = 'Refreshing…'
 	rpcHealthRetryButton.disabled = true
 	rpcHealthRetryButton.textContent = 'Refreshing…'
 	let stateAvailable = false
 	let configurationAvailable = false
 	refreshPromise = (async () => {
 		const [stateResult, configurationResult] = await Promise.allSettled([requestJson('/api/state', stateRequestTimeoutMilliseconds), requestJson('/api/configuration', configurationRequestTimeoutMilliseconds)])
+		// Transaction explorer links come from the configuration, so it must be current before the state renders.
+		const parsedConfiguration = configurationResult.status === 'fulfilled' ? parseConfiguration(configurationResult.value) : undefined
+		if (parsedConfiguration !== undefined) configuration = parsedConfiguration
 		if (stateResult.status === 'fulfilled') {
 			snapshot = parseSnapshot(stateResult.value)
 			renderSnapshot(snapshot)
@@ -1719,16 +1627,16 @@ function refresh() {
 			globalError.classList.remove('hidden')
 			settleRecoveryContextRefreshes(undefined)
 		}
-		if (configurationResult.status === 'fulfilled') {
-			configuration = parseConfiguration(configurationResult.value)
-			renderConfiguration(configuration)
+		if (parsedConfiguration !== undefined) {
+			renderConfiguration(parsedConfiguration)
 			configurationAvailable = true
 			if (!configurationCommitIndeterminate) configurationStatus.classList.add('hidden')
 		} else {
 			settingsFields.disabled = true
-			configurationStatus.textContent = configurationResult.reason instanceof Error ? configurationResult.reason.message : 'Configuration is unavailable.'
+			configurationStatus.textContent = configurationResult.status === 'rejected' && configurationResult.reason instanceof Error ? configurationResult.reason.message : 'Configuration is unavailable.'
 			configurationStatus.className = 'notice error'
 		}
+		selectionControlsAvailable = stateAvailable && configurationAvailable
 		if (stateAvailable && configurationAvailable) {
 			resolveMutationReconciliations()
 		}
@@ -1736,8 +1644,6 @@ function refresh() {
 		return { configurationAvailable, stateAvailable }
 	})().finally(() => {
 		refreshPromise = undefined
-		refreshButton.disabled = false
-		refreshButton.textContent = stateAvailable ? 'Refresh' : 'Retry'
 		rpcHealthRetryButton.disabled = false
 		rpcHealthRetryButton.textContent = 'Retry'
 	})
@@ -1757,7 +1663,7 @@ async function reconcileUnknownMutation(error: unknown, status: HTMLElement, sco
 	const result = await refresh()
 	const reconciled = scope === 'state' ? result.stateAvailable : result.configurationAvailable && result.stateAvailable
 	const verb = scope === 'configuration and state' ? 'were' : 'was'
-	status.textContent = reconciled ? `The request outcome was unknown. Current ${scope} ${verb} reloaded; review it before another mutation.` : `The request outcome is still unknown because current ${scope} could not be reloaded. Controls remain frozen; retry the dashboard refresh.`
+	status.textContent = reconciled ? `The request outcome was unknown. Current ${scope} ${verb} reloaded; review it before another mutation.` : `The request outcome is still unknown because current ${scope} could not be reloaded. Controls remain frozen while automatic refresh retries.`
 	return { handled: true, reconciled }
 }
 
@@ -1899,7 +1805,6 @@ if (currentSectionLink !== undefined) {
 	})
 }
 
-refreshButton.addEventListener('click', () => void refresh())
 rpcHealthRetryButton.addEventListener('click', () => void refresh())
 for (const context of recoveryContexts) context.retryButton.addEventListener('click', () => void requestRecoveryContextRefresh(context))
 catalogFilter.addEventListener('change', () => {
@@ -2375,6 +2280,10 @@ clearSignerButton.addEventListener('click', () => {
 	})()
 })
 
+window.addEventListener('focus', () => void refresh())
+document.addEventListener('visibilitychange', () => {
+	if (document.visibilityState === 'visible') void refresh()
+})
 window.setInterval(renderCountdown, 1_000)
 window.setInterval(() => void refresh(), stateRefreshMilliseconds)
 void refresh()

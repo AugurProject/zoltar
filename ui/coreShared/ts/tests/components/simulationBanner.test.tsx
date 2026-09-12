@@ -4,7 +4,7 @@ import { fireEvent, waitFor, within } from '../testUtils/queries'
 import { describe, expect, mock, test } from 'bun:test'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
-import type { Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { SimulationBanner } from '../../components/SimulationBanner.js'
 import type { SimulationController } from '../../simulation/controller.js'
 import { serializeSavedSimulationStateEnvelope } from '../../simulation/savedStates.js'
@@ -856,6 +856,47 @@ describe('SimulationBanner', () => {
 				expect(domEnvironment.window.location.search).toBe('?simulate=1')
 				expect(domEnvironment.window.location.hash).toContain('simScenario=deployed')
 				expect(domEnvironment.window.location.hash.match(/simulate=1/g)?.length ?? 0).toBe(0)
+			})
+		} finally {
+			await renderedComponent.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
+
+	test('removes a stale page-level scenario when switching scenarios through the hash route', async () => {
+		const domEnvironment = installDomEnvironment('http://localhost/?simulate=1&simScenario=baseline#/zoltar')
+		const onRefresh = mock(async () => undefined)
+		const subscribers = new Set<() => void>()
+		const controller = createSimulationController({
+			subscribe: handler => {
+				subscribers.add(handler)
+				return () => {
+					subscribers.delete(handler)
+				}
+			},
+		})
+		const onEnvironmentChanged = mock(async () => {
+			controller.currentScenario = 'deployed'
+			controller.simulationSource = {
+				kind: 'scenario',
+				scenario: 'deployed',
+			}
+			for (const subscriber of subscribers) subscriber()
+		})
+		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onEnvironmentChanged={onEnvironmentChanged} onRefresh={onRefresh} />)
+
+		try {
+			const picker = within(renderedComponent.container).getAllByRole('combobox')[0]
+			if (picker === undefined || picker.tagName !== 'SELECT') throw new Error('Expected the scenario picker')
+			fireEvent.change(picker, {
+				currentTarget: { value: 'scenario:deployed' },
+				target: { value: 'scenario:deployed' },
+			})
+
+			await waitFor(() => {
+				expect(domEnvironment.window.location.search).toBe('?simulate=1')
+				expect(domEnvironment.window.location.hash).toContain('simScenario=deployed')
+				expect(domEnvironment.window.location.href.match(/simScenario=/g)?.length ?? 0).toBe(1)
 			})
 		} finally {
 			await renderedComponent.cleanup()

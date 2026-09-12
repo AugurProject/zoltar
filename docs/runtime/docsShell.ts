@@ -34,7 +34,7 @@
 	const requiredMain: HTMLElement = main
 	const favicon = document.createElement('link')
 	favicon.rel = 'icon'
-	favicon.href = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#176653"/><text x="16" y="22" fill="white" font-family="Georgia,serif" font-size="20" text-anchor="middle">S</text></svg>')}`
+	favicon.href = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#176653"/><text x="16" y="22" fill="white" font-family="Georgia,serif" font-size="20" text-anchor="middle">A</text></svg>')}`
 	document.head.append(favicon)
 
 	document.body.classList.add('docs-shell-page')
@@ -55,6 +55,15 @@
 		return node
 	}
 
+	// Contract names such as UniformPriceDualCapBatchAuction have no spaces; break them between words instead of at an arbitrary character.
+	function appendBreakableTitle(link: HTMLAnchorElement, title: string): void {
+		const parts = title.split(/(?<=[a-z0-9])(?=[A-Z])/)
+		parts.forEach((part, index) => {
+			if (index > 0) link.append(document.createElement('wbr'))
+			link.append(document.createTextNode(part))
+		})
+	}
+
 	function sectionPages(sectionId: string): StatoblastDocumentationPage[] {
 		return data.pages.filter(page => page.section === sectionId)
 	}
@@ -65,7 +74,9 @@
 	const topbar = element('header', 'docs-topbar')
 	const brand = element('a', 'docs-brand')
 	brand.href = docsUrl('documentation.html')
-	brand.append(element('span', 'docs-brand-mark', 'S'), element('span', '', 'Statoblast documentation'))
+	const brandMark = element('span', 'docs-brand-mark', 'A')
+	brandMark.setAttribute('aria-hidden', 'true')
+	brand.append(brandMark, element('span', '', 'Augur documentation'))
 
 	const actions = element('div', 'docs-top-actions')
 	const menuButton = element('button', 'docs-icon-button', '☰')
@@ -100,7 +111,8 @@
 			const list = element('ul', 'docs-navigation-list')
 			for (const page of pages) {
 				const item = element('li', '')
-				const link = element('a', '', page.title)
+				const link = element('a', '')
+				appendBreakableTitle(link, page.title)
 				link.href = docsUrl(page.path)
 				if (page.path === currentPage?.path) link.setAttribute('aria-current', 'page')
 				item.append(link)

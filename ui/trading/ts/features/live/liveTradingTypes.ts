@@ -1,9 +1,9 @@
-import type { Address, WalletClient } from '@zoltar/shared/ethereum'
+import { discoverAddressedMarket, discoverTradingMarketPage, discoverUniverses } from '../../protocol/marketDiscovery.js'
+import type { Address, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import type {
 	LiveBalances,
 	LiveMarket,
-	approveRouter,
 	connectWallet,
 	createTradingPublicClient,
 	createTradingWalletClient,
@@ -19,17 +19,20 @@ import type {
 	validateLiveDeployment,
 	walletChainId,
 } from '../../protocol/live.js'
+import type { TransactionPhase } from './transactionWorkflow.js'
 
 type EntryQuote = Awaited<ReturnType<typeof simulateEntry>>
 type ExitQuote = Awaited<ReturnType<typeof simulateExit>>
 
 export type QuoteContext = Readonly<{ account: Address; configuration: DeploymentConfiguration; walletClient: WalletClient }>
 export type Quote = (Readonly<{ kind: 'entry'; value: EntryQuote }> | Readonly<{ kind: 'exit'; value: ExitQuote }>) & QuoteContext
-export type TransactionState = 'idle' | 'simulating' | 'ready' | 'preparing' | 'approval' | 'approval-pending' | 'approval-confirmed' | 'submitting' | 'pending' | 'confirmed' | 'error'
+export type TransactionState = TransactionPhase
 export type BalanceState = 'disconnected' | 'loading' | 'ready' | 'error'
 export type PortfolioBalanceEntry = Readonly<{ market: LiveMarket; balances: LiveBalances | undefined; error: string | undefined }>
 export type LiveTradingControllerServices = Readonly<{
-	approveRouter: typeof approveRouter
+	discoverAddressedMarket: typeof discoverAddressedMarket
+	discoverTradingMarketPage: typeof discoverTradingMarketPage
+	discoverUniverses: typeof discoverUniverses
 	connectWallet: typeof connectWallet
 	createTradingPublicClient: typeof createTradingPublicClient
 	createTradingWalletClient: typeof createTradingWalletClient

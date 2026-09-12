@@ -1,68 +1,52 @@
-import { formatUnits, shortAddress } from '../lib/format.js'
+import { useState } from 'preact/hooks'
+import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
+import { HeaderMetricGroup, HeaderMetricStrip } from '@zoltar/ui-core-shared/components/HeaderMetricStrip.js'
+import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
 import * as copy from '../copy/app.js'
 
-export function WalletSummary({ summary, onRetry }: { summary: WalletSummaryState; onRetry?(): void }) {
-	if (summary.account === undefined) return null
-	let ethDisplay = '…'
-	let repBalance = '…'
-	if (summary.status === 'error') {
-		ethDisplay = '—'
-		repBalance = '—'
-	} else if (summary.status === 'ready') {
-		if (summary.ethAttoEth !== undefined) ethDisplay = formatUnits(summary.ethAttoEth, 18, 18)
-		if (summary.repAttoRep !== undefined) repBalance = formatUnits(summary.repAttoRep, 18, 18)
-	}
+export function WalletSummary({ summary, onRetry, simulation = false }: { summary: WalletSummaryState; onRetry?(): void; simulation?: boolean }) {
+	const [expanded, setExpanded] = useState(false)
+	const loading = summary.status === 'loading'
+	const ready = summary.status === 'ready'
 	return (
-		<details class={`wallet-summary wallet-summary--${summary.status}`} aria-label={copy.connectedWalletBalances} aria-busy={summary.status === 'loading'} open={summary.status === 'error'}>
-			<summary class='wallet-summary__trigger'>
-				<code class='wallet-summary__address wallet-summary__address--full'>{summary.account}</code>
-				<code class='wallet-summary__address wallet-summary__address--compact'>{shortAddress(summary.account)}</code>
-				<span class='wallet-summary__compact-loading'>{copy.loadingBalances}</span>
-				<div class='wallet-summary__balances'>
-					<span data-wallet-asset='ETH'>
-						<small>{copy.eth}</small>
-						<strong>{ethDisplay}</strong>
-					</span>
-					<span data-wallet-asset='REP'>
-						<small>{copy.rep}</small>
-						<strong>{repBalance}</strong>
-					</span>
-				</div>
-			</summary>
-			<div class='wallet-summary__details'>
-				<div class='wallet-summary__identity'>
-					<span>{copy.connectedAccount}</span>
-					<code>{summary.account}</code>
-				</div>
-				<div class='wallet-summary__detail-balances' aria-label={copy.walletBalances}>
-					<span>
-						<small>{copy.eth}</small>
-						<strong>{ethDisplay}</strong>
-					</span>
-					<span>
-						<small>{copy.rep}</small>
-						<strong>{repBalance}</strong>
-					</span>
-				</div>
-				{summary.status === 'error' ? (
-					<span class='wallet-summary__failure'>
-						<span class='wallet-summary__error' role='alert' title={summary.error} aria-label={copy.walletBalanceError(summary.errorLabel, summary.error)}>
-							{summary.errorLabel ?? copy.balancesUnavailable}
+		<section class='trading-wallet-summary' aria-label={copy.connectedWalletBalances} aria-busy={loading}>
+			<HeaderMetricStrip expanded={expanded}>
+				<HeaderMetricGroup label={copy.balances}>
+					<MetricField className='overview-simulation-secondary' label={copy.eth}>
+						<span data-wallet-asset='ETH'>
+							<CurrencyValue value={ready ? summary.ethAttoEth : undefined} loading={loading} compactWhenOverflow exactWhenRoundedToZero />
 						</span>
-						{onRetry === undefined ? null : (
-							<button class='wallet-summary__retry' type='button' onClick={onRetry}>
-								{copy.retry}
-							</button>
-						)}
+					</MetricField>
+					<MetricField className='overview-simulation-secondary' label={copy.rep}>
+						<span data-wallet-asset='REP'>
+							<CurrencyValue value={ready ? summary.repAttoRep : undefined} loading={loading} compactWhenOverflow exactWhenRoundedToZero />
+						</span>
+					</MetricField>
+				</HeaderMetricGroup>
+			</HeaderMetricStrip>
+			{simulation && summary.account !== undefined ? (
+				<button class='overview-details-toggle secondary' type='button' aria-expanded={expanded} onClick={() => setExpanded(current => !current)}>
+					{expanded ? copy.hideEnvironmentDetails : copy.showEnvironmentDetails}
+				</button>
+			) : null}
+			{summary.status === 'error' ? (
+				<div class='trading-wallet-error'>
+					<span class='error' role='alert' title={summary.error} aria-label={copy.walletBalanceError(summary.errorLabel, summary.error)}>
+						{summary.errorLabel ?? copy.balancesUnavailable}
 					</span>
-				) : null}
-			</div>
-			{summary.status === 'loading' ? (
+					{onRetry === undefined ? null : (
+						<button class='secondary' type='button' onClick={onRetry}>
+							{copy.retry}
+						</button>
+					)}
+				</div>
+			) : null}
+			{loading ? (
 				<span class='visually-hidden' role='status'>
 					{copy.loadingWalletBalances}
 				</span>
 			) : null}
-		</details>
+		</section>
 	)
 }

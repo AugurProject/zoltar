@@ -10,35 +10,8 @@
 		<link rel="stylesheet" href="/operator-console.css" />
 	</head>
 	<body>
-		<header class="topbar operator-shell">
-			<div class="operator-primary">
-				<div>
-					<p class="eyebrow">Statoblast operator</p>
-					<h1>Statoblast liquidator</h1>
-					<p id="header-block-status" class="header-block-status">Block — · waiting for first observation</p>
-				</div>
-				<div class="topbar-actions operator-safety" aria-label="Bot safety status">
-					<span id="mode-badge" class="badge">Starting</span>
-					<span id="network-badge" class="badge">Network loading</span>
-					<span id="run-status-badge" class="badge">Loading</span>
-					<span id="capability-badge" class="badge">Capability loading</span>
-					<a id="attention-badge" class="badge attention-badge">No blockers</a>
-					<button id="refresh-button" class="secondary" type="button">Refresh</button>
-					<button id="pause-button" class="secondary" type="button">Pause</button>
-					<span id="pause-status" class="action-status" role="alert"></span>
-				</div>
-			</div>
-			<nav class="section-nav" aria-label="Dashboard sections">
-				<a href="/overview">Overview</a>
-				<a href="/pools">Pool work</a>
-				<a href="/markets">Market evidence</a>
-				<a href="/operations">Activity &amp; recovery</a>
-				<a href="/settings">Settings</a>
-			</nav>
-		</header>
+		<!-- operator-header -->
 		<main>
-			<div id="global-error" class="notice error hidden" data-page-content="all" role="alert"></div>
-			<ul id="operator-alerts" class="operator-alerts hidden" data-page-content="all" aria-atomic="true" aria-label="Operator alerts" aria-live="assertive" role="alert"></ul>
 
 			<section id="overview" data-page-content="overview" aria-labelledby="overview-title">
 				<div class="section-heading">
@@ -259,10 +232,10 @@
 
 				<details class="settings-group" open>
 					<summary>
-						<span class="settings-summary-copy"><strong id="universes-title">Universe truth policy</strong><small>Choose no more than one truthful child per fork</small></span>
+						<span class="settings-summary-copy"><strong id="universes-title">Approved universes</strong><small>Choose one truthful path through the universe tree</small></span>
 					</summary>
 					<div class="settings-body">
-						<div id="universe-rows" class="truth-path-list"><p class="empty">Scanning universe registry…</p></div>
+						<div id="universe-rows" class="universe-explorer"><p class="empty">Scanning universe registry…</p></div>
 					</div>
 				</details>
 

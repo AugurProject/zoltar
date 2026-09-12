@@ -1,9 +1,11 @@
 import { describe, expect, test } from 'bun:test'
 import { parseSettings } from '../../src/config/settings.ts'
-import { FORK_MIGRATION_WINDOW_SECONDS, inheritedChildPoolSelections, isPoolExecutionEligible, isVaultMigrationSourceEligible, selectVaultMigration, validateApprovedUniverseSelection } from '../../src/core/fork-migration.ts'
-import { validatePoolUniverseRep } from '../../src/monitoring/pool-monitor.ts'
+import { inheritedChildPoolSelections, isPoolExecutionEligible, isVaultMigrationSourceEligible, selectVaultMigration, validateApprovedUniverseSelection } from '../../src/core/fork-migration.ts'
+import { validatePoolUniverseRep } from '../../src/monitoring/pool-identity.ts'
+
+const FORK_MIGRATION_WINDOW_SECONDS = 8n * 7n * 24n * 60n * 60n
 import { initialRuntimeState, operatorSnapshot, type PoolObservation, type UniverseObservation } from '../../src/state/operator-state.ts'
-import { getAddress, zeroAddress } from '../helpers/ethereum.ts'
+import { getAddress, zeroAddress } from '@zoltar/bot-shared/ethereum'
 
 const wallet = getAddress('0x0000000000000000000000000000000000000009')
 const forker = getAddress('0x0000000000000000000000000000000000000008')

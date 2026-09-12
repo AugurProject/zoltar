@@ -85,7 +85,7 @@ body.docs-shell-page:has(.docs-search[open]) {
 
 .docs-icon-button,
 .docs-search-button {
-	min-height: 2.55rem;
+	min-height: 2.75rem;
 	border: 1px solid transparent;
 	border-radius: 0.55rem;
 	background: transparent;
@@ -94,6 +94,10 @@ body.docs-shell-page:has(.docs-search[open]) {
 	font-size: 0.9rem;
 	font-weight: 680;
 	text-decoration: none;
+}
+
+.docs-icon-button {
+	min-width: 2.75rem;
 }
 
 .docs-icon-button:hover,
@@ -182,7 +186,7 @@ body.docs-shell-page:has(.docs-search[open]) {
 .docs-outline-title {
 	margin: 0 0 0.7rem;
 	color: var(--docs-shell-muted);
-	font-size: 0.72rem;
+	font-size: 0.8125rem;
 	font-weight: 820;
 	letter-spacing: 0.09em;
 	text-transform: uppercase;
@@ -229,6 +233,9 @@ body.docs-shell-page:has(.docs-search[open]) {
 }
 
 .docs-navigation-section > summary {
+	display: flex;
+	align-items: center;
+	min-height: 2.75rem;
 	padding: 0.65rem 0.55rem;
 	border-radius: 0.45rem;
 	font-weight: 780;
@@ -246,9 +253,12 @@ body.docs-shell-page:has(.docs-search[open]) {
 }
 
 .docs-navigation-topic > summary {
+	display: flex;
+	align-items: center;
+	min-height: 2.75rem;
 	padding: 0.35rem 0;
 	color: var(--docs-shell-muted);
-	font-size: 0.75rem;
+	font-size: 0.8125rem;
 	font-weight: 760;
 	letter-spacing: 0.04em;
 	text-transform: uppercase;
@@ -263,12 +273,15 @@ body.docs-shell-page:has(.docs-search[open]) {
 
 .docs-navigation-list a,
 .docs-outline-list a {
-	display: block;
+	display: flex;
+	align-items: center;
+	min-height: 2.75rem;
 	padding: 0.38rem 0.5rem;
 	border-radius: 0.38rem;
 	color: var(--docs-shell-muted);
 	font-size: 0.86rem;
 	line-height: 1.35;
+	overflow-wrap: anywhere;
 	text-decoration: none;
 }
 
@@ -318,7 +331,7 @@ body.docs-shell-page:has(.docs-search[open]) {
 	border-radius: 999px;
 	background: var(--docs-shell-accent-soft);
 	color: var(--docs-shell-accent);
-	font-size: 0.7rem;
+	font-size: 0.8125rem;
 	font-weight: 820;
 	letter-spacing: 0.06em;
 	text-transform: uppercase;
@@ -357,7 +370,7 @@ body.docs-shell-page:has(.docs-search[open]) {
 
 .docs-page-pager span {
 	color: var(--docs-shell-muted);
-	font-size: 0.72rem;
+	font-size: 0.8125rem;
 	text-transform: uppercase;
 }
 
@@ -415,6 +428,7 @@ body.docs-shell-page:has(.docs-search[open]) {
 }
 
 .docs-search-retry {
+	min-height: 2.75rem;
 	margin: 0.7rem 1rem 0;
 	padding: 0.5rem 0.75rem;
 	border: 1px solid var(--docs-shell-line);
@@ -454,7 +468,7 @@ body.docs-shell-page:has(.docs-search[open]) {
 
 .docs-search-result-meta {
 	color: var(--docs-shell-accent);
-	font-size: 0.7rem;
+	font-size: 0.8125rem;
 	font-weight: 780;
 	letter-spacing: 0.04em;
 	text-transform: uppercase;

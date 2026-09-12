@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
-import type { Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
-import { LiveSecurityPoolDetails, PairInitializationAction, SecurityPoolRouteEmptyState } from '../../features/LiveTrading.js'
+import { LiveSecurityPoolDetails, PairInitializationAction, SecurityPoolRouteEmptyState } from '../../features/LiveSecurityPoolDetails.js'
 import { LivePortfolio } from '../../features/LivePortfolio.js'
 import type { LiveMarket } from '../../protocol/live.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -26,8 +26,8 @@ const market: LiveMarket = {
 	awaitingForkContinuation: false,
 	universeForkTime: 0n,
 	vaultCount: 1n,
-	shareTokenSupplyAttoShares: 0n,
-	settlementCollateralAttoEth: 0n,
+	shareTokenSupplyAttoShares: 100n * 10n ** 18n,
+	settlementCollateralAttoEth: 100n * 10n ** 18n,
 	currentRetentionRate: 10n ** 18n,
 	totalCapacityOwnershipAttoRep: 1n,
 	feeEligibleCapacityOwnershipAttoRep: 1n,
@@ -68,8 +68,8 @@ describe('live portfolio scope', () => {
 
 	test('renders separate balance groups for each exact SecurityPool', async () => {
 		const secondMarket = { ...market, pool: secondPool, shareToken: secondShareToken, universeId: 8n, questionId: 10n, title: 'Second scoped portfolio' }
-		const firstBalances = { scope: { pool, shareToken, invalidTokenId: 1_792n, yesTokenId: 1_793n, noTokenId: 1_794n }, invalid: 3n * 10n ** 18n, yes: 1n * 10n ** 18n, no: 2n * 10n ** 18n, lp: 0n, approved: false, lpAllowance: 0n }
-		const secondBalances = { scope: { pool: secondPool, shareToken: secondShareToken, invalidTokenId: 2_048n, yesTokenId: 2_049n, noTokenId: 2_050n }, invalid: 6n * 10n ** 18n, yes: 4n * 10n ** 18n, no: 5n * 10n ** 18n, lp: 0n, approved: false, lpAllowance: 0n }
+		const firstBalances = { scope: { pool, shareToken, invalidTokenId: 1_792n, yesTokenId: 1_793n, noTokenId: 1_794n }, invalid: 3n * 10n ** 18n, yes: 1n * 10n ** 18n, no: 2n * 10n ** 18n, lp: 0n }
+		const secondBalances = { scope: { pool: secondPool, shareToken: secondShareToken, invalidTokenId: 2_048n, yesTokenId: 2_049n, noTokenId: 2_050n }, invalid: 6n * 10n ** 18n, yes: 4n * 10n ** 18n, no: 5n * 10n ** 18n, lp: 0n }
 		const rendered = await renderIntoDocument(
 			<LivePortfolio
 				entries={[
@@ -89,6 +89,9 @@ describe('live portfolio scope', () => {
 		expect(rendered.container.textContent).not.toContain('Question ID')
 		expect(rendered.container.textContent).toContain('1 YES')
 		expect(rendered.container.textContent).toContain('4 YES')
+		expect(rendered.container.textContent).toContain('0 complete sets')
+		expect(rendered.container.textContent).toContain('Maximum insured YES exit0 ETH')
+		expect(rendered.container.textContent).not.toContain('Transferring LP tokens')
 		expect(rendered.container.querySelectorAll('[data-portfolio-pool]')).toHaveLength(2)
 		expect(rendered.container.textContent).not.toContain('These balances and LP claims belong only')
 		expect(rendered.container.textContent).not.toContain('live RPC')
@@ -96,17 +99,7 @@ describe('live portfolio scope', () => {
 	})
 
 	test('keeps live pool identifiers and operational details in the security pool view', async () => {
-		let selectedPool: Address | undefined
-		const rendered = await renderIntoDocument(
-			<LiveSecurityPoolDetails
-				market={{ ...market, feeBps: 47n }}
-				retry={() => undefined}
-				workflowLocked={false}
-				onSelect={selected => {
-					selectedPool = selected.pool
-				}}
-			/>,
-		)
+		const rendered = await renderIntoDocument(<LiveSecurityPoolDetails market={{ ...market, feeBps: 47n }} retry={() => undefined} workflowLocked={false} nowSeconds={market.endTime - 1n} />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.textContent).toContain(pool)
 		expect(rendered.container.textContent).toContain(shareToken)
@@ -114,11 +107,18 @@ describe('live portfolio scope', () => {
 		expect(rendered.container.textContent).toContain('System stateOperational')
 		expect(rendered.container.textContent).toContain('Security multiplier2×')
 		expect(rendered.container.textContent).not.toContain('OutcomeNone (unresolved)')
-		expect(rendered.container.querySelector('a[href="#/liquidity"]')?.textContent).toContain('Deploy trading pool')
+		expect(rendered.container.querySelector(`a[href="#/create-market/${pool}"]`)?.textContent).toContain('Deploy trading pool')
 		expect(rendered.container.textContent).toContain('available to browse')
 		expect(rendered.container.textContent).toContain('Trading fee: 0.47%')
-		rendered.container.querySelector<HTMLAnchorElement>('a[href="#/liquidity"]')?.click()
-		expect(selectedPool).toBe(pool)
+		expect(rendered.container.textContent).not.toContain('Checkpointed collateral')
+		expect(rendered.container.querySelector('.route-header a[href="#/security-pools"]')).not.toBeNull()
+	})
+
+	test('returns from a pool with a trading pair to the markets browse route', async () => {
+		const rendered = await renderIntoDocument(<LiveSecurityPoolDetails market={{ ...market, pair: `0x${'90'.repeat(20)}` }} retry={() => undefined} workflowLocked={false} nowSeconds={market.endTime - 1n} />)
+		cleanupRendered = rendered.cleanup
+		expect(rendered.container.querySelector('.route-header a[href="#/markets"]')).not.toBeNull()
+		expect(rendered.container.querySelector(`a[href="#/market/${pool}"]`)?.textContent).toContain('Trade this pool')
 	})
 
 	test('shows the deployed fee when an existing trading pool needs initialization', async () => {
@@ -126,7 +126,7 @@ describe('live portfolio scope', () => {
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.textContent).toContain('needs initial liquidity')
 		expect(rendered.container.textContent).toContain('Trading fee: 1.25%')
-		expect(rendered.container.querySelector('a[href="#/liquidity"]')?.textContent).toContain('Initialize trading pool')
+		expect(rendered.container.querySelector(`a[href="#/liquidity/${pool}"]`)?.textContent).toContain('Initialize trading pool')
 	})
 
 	test('does not present placeholder operational facts when live pool reads fail', async () => {

@@ -1,4 +1,9 @@
 #!/usr/bin/env bun
+import { parseApprovedUniverses } from '@zoltar/bot-shared/monitoring/universe-policy'
+
+import { parseRootMarketSettings } from '#config/canonical-deployment'
+
+import { recordSystemDeploymentCheck } from '../core/deployment-observation.ts'
 
 import { createPublicClient, createWalletClient, getAddress, privateKeyToAccount, type Address, type Hash } from '@zoltar/bot-shared/ethereum'
 import { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
@@ -7,10 +12,13 @@ import { availableSettledValues, settledQuorumValue } from '@zoltar/bot-shared/m
 import { ConnectivityDegradedError, operationalFailureDisposition, pollUntilStopped, retryDelayMilliseconds } from '@zoltar/bot-shared/monitoring/resilience'
 import { availableExecutionObservations, liquidationExecutionSnapshotObservation } from '#monitoring/execution-quorum'
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
-import { assertSettingsProfileIsolation, loadSettings, parseDesiredPools, parseStrategy, saveSettings, serializedSettings, switchSettingsNetworkProfile, type OperatorSettings } from '#config/settings'
+import { parseDesiredPools, parseStrategy, serializedSettings, type OperatorSettings } from '#config/settings'
+import { assertSettingsProfileIsolation, loadSettings, saveSettings, switchSettingsNetworkProfile } from '#config/settings-store'
 import { startDashboardServer } from '#dashboard/dashboard-server'
-import { dryRunCandidate, executeLiquidation, executeOriginPoolDeployment, executeVaultMigration, maintainVault, OperatorStopping, setExecutionShutdownCheck, TransactionAwaitingCanonicalFinality } from '#execution/liquidation-executor'
-import { createPoolMonitorIndex, scanPools } from '#monitoring/pool-monitor'
+import { OperatorStopping, setExecutionShutdownCheck, TransactionAwaitingCanonicalFinality } from '#execution/execution-safety'
+import { dryRunCandidate, executeLiquidation, executeOriginPoolDeployment, executeVaultMigration, maintainVault } from '#execution/liquidation-executor'
+import { scanPools } from '#monitoring/pool-monitor'
+import { createPoolMonitorIndex } from '#monitoring/vault-positions'
 import { assertIntentSender, clearMarketEvidenceForConfigurationChange, commitReconciledIntent, initialRuntimeState, loadDurableState, operatorSnapshot, recordActivity, saveDurableState } from '#state/operator-state'
 import { evaluateCandidate, liquidationExecutionAllowed } from '#core/strategy'
 import { PRIVATE_INTENT_FINALITY_BLOCKS, recoveryWorkBlocksExecution, shouldStopAfterSuccessfulCycle } from '#core/cycle-control'
@@ -18,7 +26,7 @@ import { inheritedChildPoolSelections, selectVaultMigration, validateApprovedUni
 import { createConfigurationMutationGate } from '#core/configuration-gate'
 import { commitSignerMutation } from '#core/signer-mutation'
 import { parseTransactionReconciliation, validateReconciliationIntentChain, verifyFinalizedReplacement } from '#core/transaction-reconciliation'
-import { acquireLiquidatorProcessLocks, acquireLiquidatorProcessLocksForShutdown, createLiquidatorShutdownController, liquidatorDashboardLifecycle, LiquidatorProcessLockAcquisitionError, type LiquidatorProcessLocks, type LiquidatorShutdownController } from '#core/process-locks'
+import { acquireBotProcessLocks, acquireBotProcessLocksForShutdown, BotProcessLockAcquisitionError, botDashboardLifecycle, createBotShutdownController, type BotProcessLockOptions, type BotProcessLocks, type BotShutdownController } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { createSettingsUpdateQueue } from '#core/settings-update-queue'
 import { updateNetworkConnectivity } from '#core/network-connectivity'
 import { centralizedMarketConsensusObservations, marketConsensusSettings, observeCentralizedMarkets, parseCentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
@@ -29,11 +37,24 @@ import { canonicalMarketPriceAllowsExecution, marketConfigurations, marketPriceA
 import { reconcilePendingStagedOperations, recoverPendingTransactions } from '#execution/recovery'
 import { createSystemDeploymentGate } from '#core/deployment-gate'
 
+/** The liquidator only reserves a signer while live execution is enabled; dry-run processes never hold signer locks. */
+const LIQUIDATOR_PROCESS_LOCK_OPTIONS: BotProcessLockOptions = { label: 'liquidator', signerLocksInDryRun: false }
+
 const constantProductPairAbi = [
 	{ inputs: [], name: 'token0', outputs: [{ type: 'address' }], stateMutability: 'view', type: 'function' },
 	{ inputs: [], name: 'token1', outputs: [{ type: 'address' }], stateMutability: 'view', type: 'function' },
 	{ inputs: [], name: 'getReserves', outputs: [{ type: 'uint112' }, { type: 'uint112' }, { type: 'uint32' }], stateMutability: 'view', type: 'function' },
 ] as const
+
+function runningStatus(paused: boolean, execute: boolean): 'dry-run' | 'paused' | 'running' {
+	if (paused) return 'paused'
+	return execute ? 'running' : 'dry-run'
+}
+
+function cycleFailureMessage(disposition: ReturnType<typeof operationalFailureDisposition>, execute: boolean) {
+	if (disposition === 'connectivity-degraded') return 'RPC connectivity degraded; execution remains blocked until recovery'
+	return execute ? 'Live execution paused after a safety fault' : 'Scan cycle failed'
+}
 
 function errorMessage(error: unknown) {
 	return error instanceof Error ? error.message : String(error)
@@ -48,12 +69,7 @@ async function preflightNetworkProfile(target: OperatorSettings) {
 		}
 		await checkSubmissionEndpoints(target.submission, target.network.chainId)
 	}
-	const locks = await acquireLiquidatorProcessLocks({
-		chainId: target.network.chainId,
-		execute: target.runtime.execute,
-		privateKey: target.privateKey,
-		stateFile: target.runtime.stateFile,
-	})
+	const locks = await acquireBotProcessLocks({ chainId: target.network.chainId, execute: target.runtime.execute, privateKey: target.privateKey, stateFile: target.runtime.stateFile }, LIQUIDATOR_PROCESS_LOCK_OPTIONS)
 	try {
 		const durable = await loadDurableState(target.runtime.stateFile, target.network.chainId)
 		const configuredSigner = target.privateKey === undefined ? undefined : privateKeyToAccount(target.privateKey).address
@@ -66,7 +82,7 @@ async function preflightNetworkProfile(target: OperatorSettings) {
 	}
 }
 
-async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, processLocks: LiquidatorProcessLocks, shutdown: LiquidatorShutdownController) {
+async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, processLocks: BotProcessLocks, shutdown: BotShutdownController) {
 	let settings = loaded.settings
 	let settingsRevision = loaded.revision
 	let activePrivateKey = settings.privateKey
@@ -294,11 +310,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				},
 				setApprovedUniverses: value =>
 					configurationMutationGate.run(async () => {
-						if (!Array.isArray(value) || value.some(universe => typeof universe !== 'string' || !/^(?:0|[1-9]\d*)$/.test(universe))) {
-							throw new Error('Approved universes must be an array of non-negative integer strings')
-						}
-						const approvedUniverses = [...new Set(value.map(universe => BigInt(String(universe))))]
-						if (approvedUniverses.some(universe => universe >= 2n ** 248n)) throw new Error('Approved universe must fit in uint248')
+						const approvedUniverses = parseApprovedUniverses(value)
 						validateApprovedUniverseSelection(state.universes, approvedUniverses)
 						await persistSettings(current => ({ ...current, approvedUniverses }))
 						for (const universe of state.universes) universe.approved = approvedUniverses.includes(universe.id)
@@ -325,7 +337,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 									universeId: pool.universeId.toString(),
 								})),
 						)
-						const centralizedMarkets = parseCentralizedMarketSettings(rootValue ?? value)
+						const centralizedMarkets = parseRootMarketSettings(rootValue ?? value, settings.network.chainId)
 						if (childrenValue !== undefined && !Array.isArray(childrenValue)) throw new Error('Market configuration children must be an array')
 						const childMarketConfigurations = (childrenValue ?? []).map(parseCentralizedMarketSettings)
 						if (centralizedMarkets.assetChainId !== settings.network.chainId) throw new Error('Market consensus configuration targets another chain')
@@ -453,7 +465,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 					}),
 			})
 		: undefined
-	await using _dashboardLifecycle = dashboard === undefined ? undefined : liquidatorDashboardLifecycle(dashboard)
+	await using _dashboardLifecycle = dashboard === undefined ? undefined : botDashboardLifecycle(dashboard)
 	if (dashboard !== undefined) {
 		console.log(`dashboard=${dashboard.url}`)
 	}
@@ -505,20 +517,8 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				chain = currentChain
 				client = createPrimaryClient()
 				const deploymentStatus = await checkSystemDeployment(client, settings.network.chainId, settings.deployment)
-				if (!deploymentStatus.deployed) {
-					state.status = state.paused ? 'paused' : 'starting'
-					if (missingDeploymentAddress !== deploymentStatus.address) {
-						recordActivity(state, {
-							details: `chain=${settings.network.chainId.toString()} contract=${deploymentStatus.address}`,
-							kind: 'deployment',
-							message: `${deploymentStatus.name} is not deployed; waiting before checking again`,
-							status: 'info',
-						})
-						missingDeploymentAddress = deploymentStatus.address
-					}
-					return 'deferred'
-				}
-				missingDeploymentAddress = undefined
+				missingDeploymentAddress = recordSystemDeploymentCheck(state, deploymentStatus, missingDeploymentAddress)
+				if (!deploymentStatus.deployed) return 'deferred'
 				let primary
 				if (settings.runtime.execute) {
 					const endpoints = [settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls]
@@ -628,7 +628,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				if (state.wallet !== undefined) {
 					state.walletAttoEth = await client.getBalance({ address: state.wallet })
 				}
-				state.status = state.paused ? 'paused' : settings.runtime.execute ? 'running' : 'dry-run'
+				state.status = runningStatus(state.paused, settings.runtime.execute)
 				if (shutdown.isRequested()) {
 					await saveDurableState(settings.runtime.stateFile, state)
 					return true
@@ -719,7 +719,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				recordActivity(state, {
 					details: state.error,
 					kind: 'error',
-					message: disposition === 'connectivity-degraded' ? 'RPC connectivity degraded; execution remains blocked until recovery' : settings.runtime.execute ? 'Live execution paused after a safety fault' : 'Scan cycle failed',
+					message: cycleFailureMessage(disposition, settings.runtime.execute),
 					status: 'failed',
 				})
 				await saveDurableState(settings.runtime.stateFile, state).catch(() => undefined)
@@ -737,25 +737,26 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 
 async function main() {
 	if (process.argv.length > 2) throw new Error('The liquidator accepts no command-line arguments; use its operator file or dashboard')
-	using shutdown = createLiquidatorShutdownController()
+	using shutdown = createBotShutdownController()
 	for (;;) {
 		const loaded = await loadSettings()
 		await assertSettingsProfileIsolation(loaded.path, loaded.settings)
-		let locks: LiquidatorProcessLocks
+		let locks: BotProcessLocks
 		try {
-			const acquired = await acquireLiquidatorProcessLocksForShutdown(
+			const acquired = await acquireBotProcessLocksForShutdown(
 				{
 					chainId: loaded.settings.network.chainId,
 					execute: loaded.settings.runtime.execute,
 					privateKey: loaded.settings.privateKey,
 					stateFile: loaded.settings.runtime.stateFile,
 				},
+				LIQUIDATOR_PROCESS_LOCK_OPTIONS,
 				shutdown,
 			)
 			if (acquired === undefined) return
 			locks = acquired
 		} catch (error) {
-			if (error instanceof LiquidatorProcessLockAcquisitionError) {
+			if (error instanceof BotProcessLockAcquisitionError) {
 				await error.releaseProcessLocks()
 				throw error.acquisitionCause
 			}

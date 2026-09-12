@@ -1,11 +1,9 @@
+import { startChromiumSession } from './chromium-session.ts'
 import { existsSync } from 'node:fs'
-import { mkdtemp, rm } from 'node:fs/promises'
-import { createServer } from 'node:net'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test } from 'bun:test'
 import { startDashboardServer } from '../../src/dashboard/dashboard-server.ts'
-import { CONFIGURATION_COMMIT_INDETERMINATE } from '../../src/runtime/dashboard-controller.ts'
+import { CONFIGURATION_COMMIT_INDETERMINATE } from '../../src/runtime/configuration-commit.ts'
 
 type RecoveryScenario = {
 	fieldsId: string
@@ -17,15 +15,16 @@ type RecoveryScenario = {
 	statusId: string
 }
 
-const chromium = process.env['CHROMIUM_PATH'] ?? '/usr/bin/chromium'
+const chromium = process.env['CHROMIUM_PATH'] ?? Bun.which('google-chrome') ?? Bun.which('chromium') ?? '/usr/bin/chromium'
 const browserTest = existsSync(chromium) ? test : test.skip
 const transactionHash = `0x${'12'.repeat(32)}`
 const candidateHash = `0x${'34'.repeat(32)}`
 const cancellationHash = `0x${'56'.repeat(32)}`
 const activityHash = `0x${'78'.repeat(32)}`
 const walletAddress = `0x${'ab'.repeat(20)}`
+const explorerUrl = 'https://sepolia.etherscan.io'
+const explorerTransaction = (hash: string) => `${explorerUrl}/tx/${hash}`
 const longCatalogLabel = 'Blocked report sibling with an intentionally extended operation label that must remain associated with every mobile status field'
-const longCatalogIdentifier = `open-oracle.${'long-operation-identifier-segment-'.repeat(8)}blocked-sibling`
 const longCatalogBlocker = `Canonical blocker ${'without-a-natural-break-'.repeat(12)}must-stay-inside-the-operation-card`
 const topologyValues = {
 	auctionAddress: `0x${'a1'.repeat(20)}`,
@@ -67,7 +66,7 @@ const stalePrivateSubmissionHealth = privateSubmissionHealth.map(check => ({ ...
 const workflowSteps = [
 	{ label: 'Confirmed step', status: 'confirmed', transactionHash: `0x${'11'.repeat(32)}` },
 	{ label: 'Complete step', status: 'complete', transactionHash: `0x${'22'.repeat(32)}` },
-	{ label: 'Submitted step', status: 'submitted', transactionHash: `0x${'33'.repeat(32)}` },
+	{ label: 'Submitted step', status: 'submitted', transactionHash },
 	{ label: 'Pending step', status: 'pending', transactionHash: `0x${'44'.repeat(32)}` },
 	{ label: 'Failed step', status: 'failed', transactionHash: `0x${'55'.repeat(32)}` },
 	{ label: 'Waiting step' },
@@ -167,6 +166,7 @@ const workflowRenderingState = state({
 		{ definition: { classification: 'lifecycle-obligation', ecosystem: 'statoblast', id: 'surface.security-pool-forker.claim-auction-proceeds', independentlyExecutable: false, label: 'SecurityPoolForker.claimAuctionProceeds', risk: 'low' }, eligibility: { blockers: ['Covered by settleAuctionBids'], eligible: false } },
 		{ definition: { classification: 'selectable', ecosystem: 'trading', id: 'trading.position.enter', label: 'Router enter', risk: 'low' }, eligibility: { blockers: ['No safe route exists'], eligible: false } },
 	],
+	inventoryAvailable: true,
 	inventory: {
 		eth: '1000000000000000001',
 		rep: [{ balance: '123456789012345678901', symbol: 'REP', token: '0x9999999999999999999999999999999999999998', universeId: '0' }],
@@ -182,7 +182,9 @@ const workflowRenderingState = state({
 			cancellationHash,
 			hash: transactionHash,
 			label: 'Rendered pending transaction',
+			maxBlockNumber: '12345700',
 			nonce: 9,
+			observation: { checkedAt: new Date(Date.now() - 20_000).toISOString(), head: '12345678', includedBlock: '12345670', kind: 'awaiting-finality' },
 			replacementHash: candidateHash,
 			status: 'waiting-transaction',
 		},
@@ -225,71 +227,21 @@ const pausedWorkflowRenderingState = { ...workflowRenderingState, paused: true }
 const degradedWorkflowRenderingState = { ...workflowRenderingState, rpcEndpointHealth: [...degradedReadRpcHealth, ...degradedPrivateSubmissionHealth] }
 const staleSubmissionWorkflowRenderingState = { ...workflowRenderingState, rpcEndpointHealth: [...readRpcHealth, ...stalePrivateSubmissionHealth] }
 
-async function availablePort() {
-	const listener = createServer()
-	await new Promise<void>((resolve, reject) => {
-		listener.once('error', reject)
-		listener.listen(0, '127.0.0.1', resolve)
-	})
-	const address = listener.address()
-	if (address === null || typeof address === 'string') throw new Error('Could not allocate a Chromium debugging port')
-	await new Promise<void>((resolve, reject) => listener.close(error => (error === undefined ? resolve() : reject(error))))
-	return address.port
-}
-
-async function connectToChromium(port: number) {
-	let tabs: unknown
-	for (let attempt = 0; attempt < 400; attempt += 1) {
-		try {
-			const response: unknown = await fetch(`http://127.0.0.1:${port.toString()}/json/list`).then(value => value.json())
-			if (Array.isArray(response) && response.length > 0) {
-				tabs = response
-				break
-			}
-		} catch (error) {
-			if (!(error instanceof Error) || Reflect.get(error, 'code') !== 'ConnectionRefused') throw error
+async function connectToChromium() {
+	const session = await startChromiumSession(chromium)
+	try {
+		await session.send('Runtime.enable')
+		await session.send('Page.enable')
+		const evaluate = async (expression: string) => {
+			const response = await session.send('Runtime.evaluate', { awaitPromise: true, expression, returnByValue: true })
+			const result = typeof response === 'object' && response !== null ? Reflect.get(response, 'result') : undefined
+			return typeof result === 'object' && result !== null ? Reflect.get(result, 'value') : undefined
 		}
-		await Bun.sleep(50)
+		return { command: session.send, evaluate, close: session.close, issues: session.issues }
+	} catch (error) {
+		await session.close()
+		throw error
 	}
-	if (!Array.isArray(tabs) || tabs.length === 0) throw new Error('Chromium debugging tab did not become available')
-	const debuggerUrl = Reflect.get(tabs[0], 'webSocketDebuggerUrl')
-	if (typeof debuggerUrl !== 'string') throw new Error('Chromium tab is missing a debugger URL')
-	const socket = new WebSocket(debuggerUrl)
-	const pending = new Map<number, { reject: (error: Error) => void; resolve: (value: unknown) => void }>()
-	let requestId = 0
-	socket.addEventListener('message', event => {
-		const response: unknown = JSON.parse(String(event.data))
-		if (typeof response !== 'object' || response === null || Array.isArray(response)) return
-		const responseId = Reflect.get(response, 'id')
-		if (typeof responseId !== 'number') return
-		const callback = pending.get(responseId)
-		if (callback === undefined) return
-		pending.delete(responseId)
-		const responseError = Reflect.get(response, 'error')
-		if (responseError === undefined) callback.resolve(Reflect.get(response, 'result'))
-		else {
-			const message = typeof responseError === 'object' && responseError !== null ? Reflect.get(responseError, 'message') : undefined
-			callback.reject(new Error(typeof message === 'string' ? message : 'CDP command failed'))
-		}
-	})
-	await new Promise<void>((resolve, reject) => {
-		socket.addEventListener('open', () => resolve(), { once: true })
-		socket.addEventListener('error', () => reject(new Error('Chromium debugger connection failed')), { once: true })
-	})
-	const command = (method: string, params: Record<string, unknown> = {}) =>
-		new Promise<unknown>((resolve, reject) => {
-			requestId += 1
-			pending.set(requestId, { reject, resolve })
-			socket.send(JSON.stringify({ id: requestId, method, params }))
-		})
-	await command('Runtime.enable')
-	await command('Page.enable')
-	const evaluate = async (expression: string) => {
-		const response = await command('Runtime.evaluate', { awaitPromise: true, expression, returnByValue: true })
-		const result = typeof response === 'object' && response !== null ? Reflect.get(response, 'result') : undefined
-		return typeof result === 'object' && result !== null ? Reflect.get(result, 'value') : undefined
-	}
-	return { command, evaluate, socket }
 }
 
 browserTest(
@@ -319,7 +271,7 @@ browserTest(
 						readRpcUrl: `https://operator:${rpcSecret}@read-one.example/private`,
 						rpcQuorum: 2,
 					},
-					network: { chainId: 11_155_111, name: 'sepolia' },
+					network: { chainId: 11_155_111, explorerUrl, name: 'sepolia' },
 					paused: Reflect.get(initialDashboardState, 'paused') === true,
 					runtime: { execute: false },
 					submission: submissionConfigured
@@ -378,13 +330,10 @@ browserTest(
 		})
 		const dashboardPort = dashboard.port
 		if (dashboardPort === undefined) throw new Error('Dashboard interaction fixture did not expose a port')
-		const debuggingPort = await availablePort()
-		const userDataDirectory = await mkdtemp(join(tmpdir(), 'chaos-dashboard-chromium-'))
-		const browser = Bun.spawn([chromium, '--headless', '--no-sandbox', '--disable-gpu', `--remote-debugging-port=${debuggingPort.toString()}`, `--user-data-dir=${userDataDirectory}`, 'about:blank'], { stderr: 'ignore', stdout: 'ignore' })
-		let socket: WebSocket | undefined
+		let browserSession: Awaited<ReturnType<typeof connectToChromium>> | undefined
 		try {
-			const cdp = await connectToChromium(debuggingPort)
-			socket = cdp.socket
+			const cdp = await connectToChromium()
+			browserSession = cdp
 			await cdp.command('Network.enable')
 			const waitFor = async (expression: string, message: string) => {
 				for (let attempt = 0; attempt < 400; attempt += 1) {
@@ -426,7 +375,7 @@ browserTest(
 				}
 				throw new Error(message)
 			}
-			const expectVisibleIdentifiers = async (expected: { type: string; value: string }[], minimumButtonHeight: number, selector = '.compact-identifier') => {
+			const expectVisibleIdentifiers = async (expected: { explorerUrl?: string; type: string; value: string }[], minimumButtonHeight: number, selector = '.compact-identifier') => {
 				const identifiers = await cdp.evaluate(`[...document.querySelectorAll(${JSON.stringify(selector)})].flatMap(wrapper => {
 					const bounds = wrapper.getBoundingClientRect()
 					if (bounds.width === 0 || bounds.height === 0) return []
@@ -435,6 +384,8 @@ browserTest(
 					const disclosure = wrapper.querySelector('.identifier-disclosure')
 					const disclosureBounds = disclosure?.getBoundingClientRect()
 					const full = wrapper.querySelector('.identifier-full')
+					const explorer = wrapper.querySelector('.identifier-explorer')
+					const explorerBounds = explorer?.getBoundingClientRect()
 					return [{
 						accessibleName: button?.getAttribute('aria-label'),
 						buttonHeight: buttonBounds?.height,
@@ -445,6 +396,14 @@ browserTest(
 						disclosureTabIndex: disclosure?.tabIndex,
 						disclosureVisible: (disclosureBounds?.width ?? 0) > 0 && (disclosureBounds?.height ?? 0) > 0,
 						display: wrapper.querySelector('.identifier-value')?.textContent,
+						explorerHeight: explorerBounds?.height,
+						explorerHref: explorer?.getAttribute('href') ?? null,
+						explorerName: explorer?.getAttribute('aria-label') ?? null,
+						explorerRel: explorer?.getAttribute('rel') ?? null,
+						explorerTarget: explorer?.getAttribute('target') ?? null,
+						explorerText: explorer?.textContent ?? null,
+						explorerTitle: explorer?.getAttribute('title') ?? null,
+						explorerVisible: (explorerBounds?.width ?? 0) > 0 && (explorerBounds?.height ?? 0) > 0,
 						feedback: wrapper.querySelector('.identifier-feedback')?.textContent,
 						fullHidden: full?.hidden,
 						fullValue: full?.value,
@@ -471,6 +430,18 @@ browserTest(
 					expect(Reflect.get(rendered, 'disclosureExpanded')).toBe('false')
 					expect(Reflect.get(rendered, 'fullHidden')).toBe(true)
 					expect(Reflect.get(rendered, 'fullValue')).toBe(identifier.value)
+					if (identifier.explorerUrl === undefined) {
+						expect(Reflect.get(rendered, 'explorerHref')).toBeNull()
+					} else {
+						expect(Reflect.get(rendered, 'explorerHref')).toBe(identifier.explorerUrl)
+						expect(Reflect.get(rendered, 'explorerName')).toBe(`Open ${identifier.type} on ${new URL(identifier.explorerUrl).hostname}: ${identifier.value}`)
+						expect(Reflect.get(rendered, 'explorerRel')).toBe('noreferrer')
+						expect(Reflect.get(rendered, 'explorerTarget')).toBe('_blank')
+						expect(Reflect.get(rendered, 'explorerText')).toBe('Explorer')
+						expect(Reflect.get(rendered, 'explorerTitle')).toBe(`Open on ${new URL(identifier.explorerUrl).hostname}`)
+						expect(Reflect.get(rendered, 'explorerVisible')).toBe(true)
+						expect(Reflect.get(rendered, 'explorerHeight')).toBeGreaterThanOrEqual(minimumButtonHeight)
+					}
 					const right = Reflect.get(rendered, 'right')
 					if (typeof right !== 'number') throw new Error(`Missing ${identifier.type} bounds`)
 					expect(right).toBeLessThanOrEqual(viewportRight)
@@ -504,7 +475,7 @@ browserTest(
 				recoveredDashboardState = scenario.recoveredState
 				failSecondStateRead = true
 				stateRequests = 0
-				await cdp.command('Page.navigate', { url: new URL('/activity', dashboard.url).href })
+				await cdp.command('Page.navigate', { url: new URL('/recovery', dashboard.url).href })
 				await waitFor("document.querySelector('#mode-badge')?.textContent === 'Paused'", `${scenario.label} fixture did not load`)
 				const loading = await cdp.evaluate(`(() => {
 					const form = document.querySelector('#${scenario.formId}')
@@ -521,7 +492,7 @@ browserTest(
 				})()`)
 				expect(loading).toEqual({ disabled: true, retryDisabled: true, retryHidden: false, retryText: 'Refreshing…', status: expect.stringContaining('Loading the current') })
 				await waitFor(
-					`document.querySelector('#${scenario.statusId}')?.textContent?.includes('unavailable') === true && document.querySelector('#refresh-button')?.textContent === 'Retry' && document.querySelector('#${scenario.retryId}')?.textContent === 'Retry' && document.querySelector('#${scenario.retryId}')?.disabled === false`,
+					`document.querySelector('#${scenario.statusId}')?.textContent?.includes('unavailable') === true && document.querySelector('#rpc-health-retry-button')?.disabled === false && document.querySelector('#${scenario.retryId}')?.textContent === 'Retry' && document.querySelector('#${scenario.retryId}')?.disabled === false`,
 					`${scenario.label} did not expose its local Retry action after failure`,
 				)
 				expect(stateRequests).toBe(2)
@@ -565,13 +536,22 @@ browserTest(
 					})`),
 				).toEqual({ disabled: true, hidden: false, status: expect.stringContaining('Loading the current'), text: 'Refreshing…' })
 				await waitFor(
-					`document.querySelector('#${scenario.statusId}')?.textContent?.includes('loaded') === true && document.querySelector('#refresh-button')?.textContent === 'Refresh' && document.querySelector('#${scenario.retryId}')?.classList.contains('hidden') === true`,
+					`document.querySelector('#${scenario.statusId}')?.textContent?.includes('loaded') === true && document.querySelector('#rpc-health-retry-button')?.disabled === false && document.querySelector('#${scenario.retryId}')?.classList.contains('hidden') === true`,
 					`${scenario.label} did not recover through its local Retry`,
 				)
 				expect(stateRequests).toBe(3)
 				expect(await cdp.evaluate(`document.querySelector('#${scenario.fieldsId}')?.disabled`)).toBe(false)
 			}
 
+			initialDashboardState = { ...partialRecoveryDashboardState, lastScannedBlock: undefined, lastScanAt: undefined, lastDeploymentCheckedBlock: '100', lastDeploymentCheckAt: new Date().toISOString(), pendingTransactions: [], obligations: [], workflows: [], currentWorkflow: undefined }
+			recoveredDashboardState = initialDashboardState
+			failSecondStateRead = false
+			stateRequests = 0
+			await cdp.command('Page.navigate', { url: new URL('/overview', dashboard.url).href })
+			await waitFor("document.querySelector('#last-block')?.textContent === 'Block 100'", 'Deployment check block was not displayed before a complete scan')
+			expect(await cdp.evaluate("document.querySelector('#last-scan')?.textContent")).toContain('Deployments checked')
+			expect(await cdp.evaluate("document.querySelector('#recovery-badge')?.getClientRects().length")).toBe(0)
+			expect(await cdp.evaluate("document.querySelector('#rep-balances')?.textContent")).toBe('—')
 			initialDashboardState = partialRecoveryDashboardState
 			recoveredDashboardState = partialRecoveryDashboardState
 			failSecondStateRead = false
@@ -579,13 +559,27 @@ browserTest(
 			await cdp.command('Page.navigate', { url: new URL('/overview', dashboard.url).href })
 			await waitFor("document.querySelector('#mode-badge')?.textContent === 'Safety paused'", 'Safety-pause fixture did not render its durable latch')
 			expect(
+				await cdp.evaluate(`(async () => {
+ const { renderOperatorAlerts } = await import('/operator-alerts.js')
+ const container = document.createElement('ul')
+ renderOperatorAlerts(container, [{ message: 'Waiting for deployments', severity: 'info' }])
+ const waiting = { role: container.getAttribute('role'), live: container.getAttribute('aria-live'), style: container.firstElementChild.className, text: container.textContent }
+ renderOperatorAlerts(container, [{ message: 'RPC failed', severity: 'error' }, { message: 'Waiting for deployments', severity: 'info' }])
+ const mixed = { role: container.getAttribute('role'), live: container.getAttribute('aria-live'), styles: [...container.children].map(item => item.className) }
+ renderOperatorAlerts(container, [])
+ return { waiting, mixed, cleared: container.children.length === 0 && container.classList.contains('hidden') }
+ })()`),
+			).toEqual({ waiting: { role: 'status', live: 'polite', style: 'notice info', text: 'Waiting for deployments' }, mixed: { role: 'alert', live: 'assertive', styles: ['notice error', 'notice info'] }, cleared: true })
+
+			expect(
 				await cdp.evaluate(`({
 					eth: document.querySelector('#balance-eth')?.textContent,
 					recovery: document.querySelector('#recovery-badge')?.textContent,
 					rep: document.querySelector('#rep-balances')?.textContent,
 					weth: document.querySelector('#balance-weth')?.textContent,
 				})`),
-			).toEqual({ eth: '—', recovery: '1 recovery item', rep: 'Inventory unavailable until the first canonical scan.', weth: '—' })
+			).toEqual({ eth: '—', recovery: '1 recovery item', rep: '—', weth: '—' })
+			expect(await cdp.evaluate("document.querySelector('#recovery-badge')?.getClientRects().length")).toBe(1)
 			await cdp.evaluate("document.querySelector('#pause-button')?.click()")
 			await waitFor("document.querySelector('#resume-dialog')?.open === true", 'Safety-pause resume dialog did not open')
 			expect(await cdp.evaluate(`Object.fromEntries([...document.querySelectorAll('#resume-preflight li')].map(row => [row.querySelector('span')?.textContent, row.querySelector('strong')?.textContent]))`)).toMatchObject({ 'Recovery items': '1', 'Safety latch': 'Active' })
@@ -646,9 +640,9 @@ browserTest(
 					})`),
 				).toEqual({ eth: '1.000000000000000001', rep: '123.456789012345678901', weth: '0.000000000000000042' })
 				failSecondStateRead = true
-				await cdp.evaluate("document.querySelector('#refresh-button')?.click()")
+				await cdp.evaluate("window.dispatchEvent(new Event('focus'))")
 				await waitFor(
-					"document.querySelector('#rpc-health-status')?.textContent === 'Health unavailable' && document.querySelector('#refresh-button')?.textContent === 'Retry' && document.querySelector('#rpc-health-retry-button')?.textContent === 'Retry' && document.querySelector('#rpc-health-retry-button')?.classList.contains('hidden') === false",
+					"document.querySelector('#rpc-health-status')?.textContent === 'Health unavailable' && document.querySelector('#rpc-health-retry-button')?.disabled === false && document.querySelector('#rpc-health-retry-button')?.textContent === 'Retry' && document.querySelector('#rpc-health-retry-button')?.classList.contains('hidden') === false",
 					`${viewport.label} failed refresh did not expose local RPC recovery`,
 				)
 				expect(
@@ -708,7 +702,7 @@ browserTest(
 				failSecondStateRead = false
 				await cdp.evaluate("document.querySelector('#rpc-health-retry-button')?.click()")
 				await waitFor(
-					"document.querySelector('#rpc-health-status')?.textContent === 'Quorum ready' && document.querySelector('#refresh-button')?.textContent === 'Refresh' && document.querySelector('#rpc-health-retry-button')?.classList.contains('hidden') === true",
+					"document.querySelector('#rpc-health-status')?.textContent === 'Quorum ready' && document.querySelector('#rpc-health-retry-button')?.disabled === false && document.querySelector('#rpc-health-retry-button')?.classList.contains('hidden') === true",
 					`${viewport.label} RPC health did not recover through its local Retry`,
 				)
 				const renderedSteps = await cdp.evaluate(`[...document.querySelectorAll('#current-workflow .step-list li')].map(row => {
@@ -748,7 +742,21 @@ browserTest(
 					}
 				}
 				expect(await cdp.evaluate(`({ scheduler: document.querySelector('#scheduler-state')?.textContent, workflow: document.querySelector('#current-workflow .workflow-heading .badge')?.textContent })`)).toEqual({ scheduler: 'Transaction recovery pending', workflow: 'Waiting transaction' })
-				await expectVisibleIdentifiers([{ type: 'wallet address', value: walletAddress }, ...workflowSteps.flatMap(step => (step.transactionHash === undefined ? [] : [{ type: 'workflow transaction hash', value: step.transactionHash }]))], viewport.width === 390 ? 44 : 32)
+				const waitNote = await cdp.evaluate(`(() => {
+					const note = document.querySelector('#current-workflow .transaction-wait')
+					const bounds = note?.getBoundingClientRect()
+					return { className: note?.className, detail: note?.querySelector('small')?.textContent, headline: note?.querySelector('strong')?.textContent, visible: (bounds?.width ?? 0) > 0 && (bounds?.height ?? 0) > 0 }
+				})()`)
+				// The fixture queues a replacement, which recovery verifies before anything else, so that takes precedence over the observation.
+				expect(waitNote).toEqual({ className: 'transaction-wait info', detail: 'Waiting for its finalized receipt before the original intent is closed.', headline: 'Verifying the queued replacement', visible: true })
+				await expectVisibleIdentifiers(
+					[
+						{ type: 'wallet address', value: walletAddress },
+						{ explorerUrl: explorerTransaction(activityHash), type: 'activity transaction hash', value: activityHash },
+						...workflowSteps.flatMap(step => (step.transactionHash === undefined ? [] : [{ explorerUrl: explorerTransaction(step.transactionHash), type: 'workflow transaction hash', value: step.transactionHash }])),
+					],
+					viewport.width === 390 ? 44 : 32,
+				)
 				if (viewport.width === 390) {
 					const contextualActionHeights = await cdp.evaluate(`[...document.querySelectorAll('.text-link')].flatMap(link => {
 						const bounds = link.getBoundingClientRect()
@@ -819,23 +827,19 @@ browserTest(
 				await cdp.command('Page.navigate', { url: new URL('/catalog', dashboard.url).href })
 				await waitFor("document.querySelector('header #last-block')?.textContent === 'Block 12345678'", 'Shared block header did not render on the catalog route')
 				await waitFor("document.querySelector('#catalog-caption')?.textContent?.includes('2 live candidates') === true", 'Grouped operation catalog did not render')
-				await cdp.evaluate(`Object.defineProperty(navigator, 'clipboard', {
-					configurable: true,
-					value: { writeText: value => { window.__identifierCopies = [...(window.__identifierCopies ?? []), value]; return Promise.resolve() } },
-				}); document.querySelector('#catalog-rows .operation-id-copy')?.click()`)
-				await waitFor("document.querySelector('#catalog-rows .operation-id-feedback')?.textContent === 'Copied'", `${viewport.label} selectable operation ID copy did not succeed`)
-				expect(await cdp.evaluate('window.__identifierCopies?.at(-1)')).toBe('open-oracle.blocked-sibling')
+				expect(await cdp.evaluate("document.querySelectorAll('#catalog-rows .operation-id-copy, #catalog-rows .operation-name small.mono').length")).toBe(0)
+				await cdp.evaluate("document.querySelectorAll('#catalog-rows details').forEach(group => { group.open = true })")
 				expect(
 					await cdp.evaluate(`(() => {
-						const alias = [...document.querySelectorAll('#catalog-rows tr')].find(row => row.textContent?.includes('claimAuctionProceeds'))
-						const selectableAlias = [...document.querySelectorAll('#catalog-rows tr')].find(row => row.querySelector('.operation-name small.mono')?.textContent === 'surface.weth9.receive')
+						const alias = [...document.querySelectorAll('#catalog-rows tbody tr')].find(row => row.textContent?.includes('claimAuctionProceeds'))
+						const selectableAlias = [...document.querySelectorAll('#catalog-rows tbody tr')].find(row => row.querySelector('.operation-name strong')?.textContent === 'WETH9.receive')
 						const statoblast = [...document.querySelectorAll('#coverage-summary .coverage-card')].find(card => card.textContent?.includes('Statoblast'))
 						return {
-							aliasClassification: selectableAlias?.querySelector('td:nth-child(3) .badge')?.textContent,
+							aliasClassification: selectableAlias?.querySelector('td:nth-child(2) .badge')?.textContent,
 							aliasCopyable: selectableAlias?.querySelector('.operation-id-copy') instanceof HTMLButtonElement,
-							aliasEligibility: selectableAlias?.querySelector('td:nth-child(6) .badge')?.textContent,
+							aliasEligibility: selectableAlias?.querySelector('td:nth-child(5) .badge')?.textContent,
 							coverage: statoblast?.querySelector('strong')?.textContent,
-							eligibility: alias?.querySelector('td:nth-child(6) .badge')?.textContent,
+							eligibility: alias?.querySelector('td:nth-child(5) .badge')?.textContent,
 						}
 					})()`),
 				).toEqual({
@@ -847,7 +851,7 @@ browserTest(
 				})
 				const redundantCatalogCopy = await cdp.evaluate(`(() => {
 					const normalize = value => value?.trim().replaceAll(/\\s+/g, ' ').replace(/[.?!]+$/, '').toLowerCase()
-					return [...document.querySelectorAll('#catalog-rows tr')].flatMap(row => {
+					return [...document.querySelectorAll('#catalog-rows tbody tr')].flatMap(row => {
 						const description = row.querySelector('.operation-name > small:not(.mono)')?.textContent
 						const normalizedDescription = normalize(description)
 						if (normalizedDescription === undefined || normalizedDescription === '') return []
@@ -858,7 +862,7 @@ browserTest(
 				expect(redundantCatalogCopy).toEqual([])
 				expect(
 					await cdp.evaluate(`(() => {
-						const row = [...document.querySelectorAll('#catalog-rows tr')].find(candidate => candidate.textContent?.includes('Pool.initialize'))
+						const row = [...document.querySelectorAll('#catalog-rows tbody tr')].find(candidate => candidate.textContent?.includes('Pool.initialize'))
 						return {
 							blockers: [...(row?.querySelectorAll('.blocker-list li') ?? [])].map(blocker => blocker.textContent),
 							descriptions: row?.querySelectorAll('.operation-name > small:not(.mono)').length,
@@ -867,7 +871,7 @@ browserTest(
 				).toEqual({ blockers: ['factory only'], descriptions: 0 })
 				expect(
 					await cdp.evaluate(`(() => {
-						const row = [...document.querySelectorAll('#catalog-rows tr')].find(candidate => candidate.querySelector('.operation-name small.mono')?.textContent === 'open-oracle.settle')
+						const row = [...document.querySelectorAll('#catalog-rows tbody tr')].find(candidate => candidate.querySelector('.operation-name strong')?.textContent === 'Settle report')
 						return {
 							blockers: row?.querySelectorAll('.blocker-list li').length,
 							description: row?.querySelector('.operation-description')?.textContent,
@@ -877,14 +881,14 @@ browserTest(
 				if (viewport.label === 'desktop') {
 					expect(
 						await cdp.evaluate(`({
-								candidate: [...document.querySelectorAll('#catalog-rows tr')].find(row => row.textContent?.includes('open-oracle.settle'))?.querySelector('td:nth-child(5)')?.textContent,
-								rows: document.querySelectorAll('#catalog-rows tr').length,
+								candidate: [...document.querySelectorAll('#catalog-rows tbody tr')].find(row => row.querySelector('.operation-name strong')?.textContent === 'Settle report')?.querySelector('td:nth-child(4)')?.textContent,
+								rows: document.querySelectorAll('#catalog-rows tbody tr').length,
 							})`),
 					).toEqual({ candidate: '2', rows: 6 })
 					expect(
 						await cdp.evaluate(`(() => {
-							const shell = document.querySelector('.table-shell')
-							const headers = [...document.querySelectorAll('.table-shell thead th')]
+							const shell = document.querySelector('#catalog-rows .table-shell')
+							const headers = [...shell.querySelectorAll('thead th')]
 							if (!(shell instanceof HTMLElement)) return undefined
 							const eligibilityBounds = headers.at(-1)?.getBoundingClientRect()
 							return {
@@ -893,31 +897,29 @@ browserTest(
 								horizontalOverflow: shell.scrollWidth > shell.clientWidth,
 							}
 						})()`),
-					).toEqual({ allColumnsVisible: true, headerLabels: ['Operation', 'Ecosystem', 'Classification', 'Risk', 'Candidates', 'Eligibility'], horizontalOverflow: false })
+					).toEqual({ allColumnsVisible: true, headerLabels: ['Operation', 'Classification', 'Risk', 'Candidates', 'Eligibility'], horizontalOverflow: false })
 					await cdp.evaluate(`(() => {
 						const filter = document.querySelector('#catalog-classification-filter')
 						if (!(filter instanceof HTMLSelectElement)) return
 						filter.value = 'coverage-alias'
 						filter.dispatchEvent(new Event('change', { bubbles: true }))
 					})()`)
-					expect(await cdp.evaluate(`document.querySelector('#catalog-rows')?.textContent?.includes('WETH9.receive') === true && document.querySelectorAll('#catalog-rows tr').length === 1`)).toBe(true)
+					expect(await cdp.evaluate(`document.querySelector('#catalog-rows')?.textContent?.includes('WETH9.receive') === true && document.querySelectorAll('#catalog-rows tbody tr').length === 1`)).toBe(true)
 					await cdp.evaluate(`(() => {
 							const filter = document.querySelector('#catalog-classification-filter')
 							if (!(filter instanceof HTMLSelectElement)) return
 							filter.value = 'role-restricted'
 							filter.dispatchEvent(new Event('change', { bubbles: true }))
 						})()`)
-					expect(await cdp.evaluate(`document.querySelector('#catalog-rows')?.textContent?.includes('Pool.initialize') === true && document.querySelectorAll('#catalog-rows tr').length === 1`)).toBe(true)
+					expect(await cdp.evaluate(`document.querySelector('#catalog-rows')?.textContent?.includes('Pool.initialize') === true && document.querySelectorAll('#catalog-rows tbody tr').length === 1`)).toBe(true)
 				} else {
 					const mobileCatalog = await cdp.evaluate(`(() => {
-						const shell = document.querySelector('[data-page-content="catalog"] .table-shell')
-						const row = [...document.querySelectorAll('#catalog-rows tr')].find(candidate => candidate.textContent?.includes('open-oracle.blocked-sibling'))
+						const shell = document.querySelector('#catalog-rows [data-ecosystem="open-oracle"] .table-shell')
+						const row = [...document.querySelectorAll('#catalog-rows tbody tr')].find(candidate => candidate.querySelector('.operation-name strong')?.textContent === 'Blocked report sibling')
 						if (!(shell instanceof HTMLElement) || !(row instanceof HTMLTableRowElement)) return undefined
 						const operationLabel = row.querySelector('.operation-name strong')
-						const operationId = row.querySelector('.operation-name small.mono')
 						const blocker = row.querySelector('.blocker-list li')
 						if (operationLabel !== null) operationLabel.textContent = ${JSON.stringify(longCatalogLabel)}
-						if (operationId !== null) operationId.textContent = ${JSON.stringify(longCatalogIdentifier)}
 						if (blocker !== null) blocker.textContent = ${JSON.stringify(longCatalogBlocker)}
 						shell.scrollLeft = shell.scrollWidth
 						const cells = [...row.querySelectorAll(':scope > td')]
@@ -925,37 +927,35 @@ browserTest(
 						const shellBounds = shell.getBoundingClientRect()
 						return {
 							blocker: blocker?.textContent,
-							candidateCount: cells[4]?.textContent?.trim(),
+							candidateCount: cells[3]?.textContent?.trim(),
 							cellLabels: cells.map(cell => getComputedStyle(cell, '::before').content.replaceAll('"', '')),
 							cellsContained: cells.every(cell => {
 								const bounds = cell.getBoundingClientRect()
 								return bounds.left >= rowBounds.left - 1 && bounds.right <= rowBounds.right + 1 && cell.scrollWidth <= cell.clientWidth
 							}),
 							documentOverflow: document.body.scrollWidth > document.documentElement.clientWidth,
-							eligibility: cells[5]?.querySelector('.badge')?.textContent,
+							eligibility: cells[4]?.querySelector('.badge')?.textContent,
 							identity: operationLabel?.textContent,
-							identifier: operationId?.textContent,
 							maximumHorizontalScroll: shell.scrollWidth - shell.clientWidth,
-							risk: cells[3]?.querySelector('.badge')?.textContent,
+							risk: cells[2]?.querySelector('.badge')?.textContent,
 							rowContained: rowBounds.left >= shellBounds.left - 1 && rowBounds.right <= shellBounds.right + 1 && row.scrollWidth <= row.clientWidth,
 							rowDisplay: getComputedStyle(row).display,
 							shellOverflow: shell.scrollWidth > shell.clientWidth,
 						}
 					})()`)
-					const copyTargetHeights = await cdp.evaluate(`[...document.querySelectorAll('#catalog-rows .operation-id-copy')].map(button => button.getBoundingClientRect().height)`)
+					const copyTargetHeights = await cdp.evaluate(`[...document.querySelectorAll('#catalog-rows .operation-open')].map(button => button.getBoundingClientRect().height)`)
 					expect(Array.isArray(copyTargetHeights)).toBe(true)
-					if (!Array.isArray(copyTargetHeights)) throw new Error('Mobile catalog Copy ID controls did not render')
+					if (!Array.isArray(copyTargetHeights)) throw new Error('Mobile catalog Open operation controls did not render')
 					expect(copyTargetHeights.length).toBeGreaterThan(0)
 					for (const height of copyTargetHeights) expect(height).toBeGreaterThanOrEqual(44)
 					expect(mobileCatalog).toEqual({
 						blocker: longCatalogBlocker,
 						candidateCount: '0',
-						cellLabels: ['Operation', 'Ecosystem', 'Classification', 'Risk', 'Candidates', 'Eligibility'],
+						cellLabels: ['Operation', 'Classification', 'Risk', 'Candidates', 'Eligibility'],
 						cellsContained: true,
 						documentOverflow: false,
 						eligibility: 'Blocked',
 						identity: longCatalogLabel,
-						identifier: longCatalogIdentifier,
 						maximumHorizontalScroll: 0,
 						risk: 'Low',
 						rowContained: true,
@@ -979,9 +979,9 @@ browserTest(
 				).toEqual({ auctions: 1, pairs: 1, pools: 1, reports: 1, universes: 1 })
 				const topologyPresentation = await cdp.evaluate(`({
 					summaryHeights: [...document.querySelectorAll('.topology-grid summary')].map(summary => summary.getBoundingClientRect().height),
-					topbarBackground: getComputedStyle(document.querySelector('.topbar')).backgroundColor,
+					topbarBackground: getComputedStyle(document.querySelector('.operator-shell')).backgroundColor,
 				})`)
-				expect(Reflect.get(topologyPresentation, 'topbarBackground')).toBe('rgb(8, 11, 16)')
+				expect(Reflect.get(topologyPresentation, 'topbarBackground')).toBe('color(srgb 0.0627451 0.0823529 0.113725 / 0.82)')
 				const summaryHeights = Reflect.get(topologyPresentation, 'summaryHeights')
 				expect(summaryHeights).toHaveLength(5)
 				if (!Array.isArray(summaryHeights)) throw new Error('Missing topology summary bounds')
@@ -1022,6 +1022,9 @@ browserTest(
 						})`),
 					).toEqual({ expanded: 'true', hidden: false, value: topologyValues.repToken })
 					expect(await cdp.evaluate(`(() => { const copy = document.querySelector('[data-identifier-type="security pool address"] .identifier-copy'); copy?.focus(); return { focused: document.activeElement === copy, tag: copy?.tagName } })()`)).toEqual({ focused: true, tag: 'BUTTON' })
+					await cdp.evaluate("window.dispatchEvent(new Event('focus'))")
+					await waitFor("document.querySelector('#rpc-health-retry-button')?.disabled === false", 'Automatic refresh did not settle before keyboard copy')
+					expect(await cdp.evaluate("document.activeElement?.getAttribute('aria-label')")).toBe(`Copy security pool address: ${topologyValues.poolAddress}`)
 					await cdp.command('Input.dispatchKeyEvent', { code: 'Space', key: ' ', nativeVirtualKeyCode: 32, type: 'rawKeyDown', windowsVirtualKeyCode: 32 })
 					await cdp.command('Input.dispatchKeyEvent', { code: 'Space', key: ' ', nativeVirtualKeyCode: 32, type: 'keyUp', windowsVirtualKeyCode: 32 })
 					await waitFor(`document.querySelector('[data-identifier-type="security pool address"] .identifier-feedback')?.textContent === 'Copied'`, 'Keyboard topology copy did not report success')
@@ -1041,25 +1044,41 @@ browserTest(
 				}
 				expect(await cdp.evaluate('document.body.scrollWidth === document.documentElement.clientWidth')).toBe(true)
 
-				await cdp.command('Page.navigate', { url: new URL('/activity', dashboard.url).href })
-				await waitFor("document.querySelector('#pending-transactions .identifier-copy') !== null && document.querySelector('#activity-list .identifier-copy') !== null", `${viewport.label} recovery identifiers did not render`)
+				await cdp.command('Page.navigate', { url: new URL('/recovery', dashboard.url).href })
+				await waitFor("document.querySelector('#pending-transactions .identifier-copy') !== null", `${viewport.label} recovery identifiers did not render`)
+				expect(await cdp.evaluate("document.querySelector('#pending-transactions .transaction-wait strong')?.textContent")).toBe('Verifying the queued replacement')
+				expect(
+					await cdp.evaluate(`(() => {
+						const row = document.querySelector('#pending-transactions .stack-row')
+						const note = row?.querySelector('.transaction-wait')
+						const headline = note?.querySelector('strong')
+						const detail = note?.querySelector('small')
+						if (!(row instanceof HTMLElement) || !(note instanceof HTMLElement) || !(headline instanceof HTMLElement) || !(detail instanceof HTMLElement)) return undefined
+						const rowStyle = getComputedStyle(row)
+						const noteStyle = getComputedStyle(note)
+						const contentHeight = headline.offsetHeight + detail.offsetHeight + parseFloat(noteStyle.rowGap) + parseFloat(noteStyle.paddingTop) + parseFloat(noteStyle.paddingBottom) + parseFloat(noteStyle.borderTopWidth) + parseFloat(noteStyle.borderBottomWidth)
+						return {
+							contained: note.getBoundingClientRect().bottom <= row.getBoundingClientRect().bottom && note.getBoundingClientRect().top >= row.getBoundingClientRect().top,
+							contentSized: Math.abs(note.offsetHeight - contentHeight) <= 2,
+							fullWidth: Math.round(note.getBoundingClientRect().width) === Math.round(row.clientWidth - parseFloat(rowStyle.paddingLeft) - parseFloat(rowStyle.paddingRight)),
+						}
+					})()`),
+				).toEqual({ contained: true, contentSized: true, fullWidth: true })
 				await expectVisibleIdentifiers(
 					[
-						{ type: 'pending transaction hash', value: transactionHash },
-						{ type: 'replacement transaction hash', value: candidateHash },
-						{ type: 'cancellation transaction hash', value: cancellationHash },
-						{ type: 'activity transaction hash', value: activityHash },
+						{ explorerUrl: explorerTransaction(transactionHash), type: 'pending transaction hash', value: transactionHash },
+						{ explorerUrl: explorerTransaction(candidateHash), type: 'replacement transaction hash', value: candidateHash },
+						{ explorerUrl: explorerTransaction(cancellationHash), type: 'cancellation transaction hash', value: cancellationHash },
 					],
 					viewport.width === 390 ? 44 : 32,
 				)
 				expect(
 					await cdp.evaluate(`({
-						activity: document.querySelector('#activity-list .badge')?.textContent,
 						obligation: document.querySelector('#obligations .badge')?.textContent,
 						option: document.querySelector('#obligation-id option')?.textContent,
 						pending: document.querySelector('#pending-transactions .badge')?.textContent,
 					})`),
-				).toEqual({ activity: 'Dry run', obligation: 'Executing', option: 'Rendered obligation · Executing', pending: 'Waiting transaction' })
+				).toEqual({ obligation: 'Executing', option: 'Rendered obligation · Executing', pending: 'Waiting transaction' })
 				expect(
 					await cdp.evaluate(`(() => {
 						const row = [...document.querySelectorAll('#obligations .stack-row')].find(candidate => candidate.textContent?.includes('Deferred obligation'))
@@ -1099,6 +1118,13 @@ browserTest(
 					styledLikeInput: true,
 					value: 'Operator confirmed the canonical recovery state.',
 				})
+				const previousInitialState = initialDashboardState
+				const previousRecoveredState = recoveredDashboardState
+				initialDashboardState = state({ pendingTransactions: [{ hash: transactionHash, replacementHash: candidateHash, status: 'submitted' }] })
+				recoveredDashboardState = initialDashboardState
+				await cdp.evaluate("window.dispatchEvent(new Event('focus'))")
+				await waitFor("document.querySelector('#rpc-health-retry-button')?.disabled === false && document.querySelector('#candidate-reason')?.matches(':disabled') === false", 'Recovery textarea did not become available from current state')
+				await cdp.evaluate("document.querySelector('#candidate-reason')?.focus()")
 				await cdp.command('Input.dispatchKeyEvent', { code: 'Tab', key: 'Tab', type: 'keyDown', windowsVirtualKeyCode: 9 })
 				await cdp.command('Input.dispatchKeyEvent', { code: 'Tab', key: 'Tab', type: 'keyUp', windowsVirtualKeyCode: 9 })
 				await cdp.command('Input.dispatchKeyEvent', { code: 'Tab', key: 'Tab', modifiers: 8, type: 'keyDown', windowsVirtualKeyCode: 9 })
@@ -1111,6 +1137,17 @@ browserTest(
 						return { focused: document.activeElement === textarea, outlineStyle: style.outlineStyle, outlineWidth: style.outlineWidth }
 					})()`),
 				).toEqual({ focused: true, outlineStyle: 'solid', outlineWidth: '2px' })
+				initialDashboardState = previousInitialState
+				recoveredDashboardState = previousRecoveredState
+
+				await cdp.command('Page.navigate', { url: new URL('/overview', dashboard.url).href })
+				await waitFor("document.querySelector('#activity-list .identifier-copy') !== null", `${viewport.label} overview activity did not render`)
+				expect(
+					await cdp.evaluate(`({
+						activity: document.querySelector('#activity-list .badge')?.textContent,
+						expandHidden: document.querySelector('#activity-expand')?.classList.contains('hidden'),
+					})`),
+				).toEqual({ activity: 'Dry run', expandHidden: true })
 
 				await cdp.command('Page.navigate', { url: new URL('/settings', dashboard.url).href })
 				await waitFor("document.querySelector('#signer-summary .identifier-copy') !== null", `${viewport.label} signer identifier did not render`)
@@ -1145,7 +1182,7 @@ browserTest(
 					initializeGenesisUniverse: true,
 					readRpcUrl: `https://operator:${rpcSecret}@read-one.example/private`,
 					selectableScopeHelp:
-						'Turn this off for a staged rollout, then enter exact selectable definition IDs from the Operation catalog. An empty allowlist runs lifecycle obligations only unless genesis initialization is enabled; only its ordered initializer operations are exempt. Lifecycle discovery, recovery, and execution are never disabled by this control.',
+						'Turn this off for a staged rollout, then enable operations in the Operation catalog. An empty allowlist runs lifecycle obligations only unless genesis initialization is enabled; only its ordered initializer operations are exempt. Lifecycle discovery, recovery, and execution are never disabled by this control.',
 					executeDescription: 'execute-help',
 					executeHelp: 'Off is dry-run mode. Live mode can spend gas and protocol assets. It requires positive reserves and retains an ETH safety floor at least as large as one maximum gas-cost budget.',
 					lede: 'Changes apply before the next selection cycle.',
@@ -1160,8 +1197,8 @@ browserTest(
 					quorum.dispatchEvent(new InputEvent('input', { bubbles: true }))
 					return true
 				})()`)
-				await cdp.evaluate("document.querySelector('#refresh-button')?.click()")
-				await waitFor("document.querySelector('#refresh-button')?.matches(':disabled') === false && document.querySelector('#rpc-quorum')?.value === '1'", `${viewport.label} RPC quorum draft was not preserved across a same-revision refresh`)
+				await cdp.evaluate("window.dispatchEvent(new Event('focus'))")
+				await waitFor("document.querySelector('#rpc-health-retry-button')?.disabled === false && document.querySelector('#rpc-quorum')?.value === '1'", `${viewport.label} RPC quorum draft was not preserved across a same-revision refresh`)
 				await cdp.evaluate("document.querySelector('#discard-connectivity')?.click()")
 				await waitFor("document.querySelector('#rpc-quorum')?.value === '2'", `${viewport.label} discarded RPC quorum draft did not restore the current configuration`)
 				await cdp.evaluate(`(() => {
@@ -1173,7 +1210,7 @@ browserTest(
 					return true
 				})()`)
 				configurationRevision = nextConfigurationRevision
-				await cdp.evaluate("document.querySelector('#refresh-button')?.click()")
+				await cdp.evaluate("window.dispatchEvent(new Event('focus'))")
 				await waitFor(
 					"document.querySelector('#connectivity-status')?.textContent === 'Configuration changed elsewhere. Discard this RPC draft and re-enter the complete replacement set before saving.' && document.querySelector('#save-connectivity')?.matches(':disabled') === true",
 					`${viewport.label} stale RPC draft was not blocked after a newer configuration loaded`,
@@ -1249,7 +1286,7 @@ browserTest(
 				await waitFor("document.querySelector('#signer-status')?.textContent?.includes('configuration and state could not be reloaded') === true", `${viewport.label} partial signer reconciliation did not remain unresolved`)
 				expect(await cdp.evaluate(`document.querySelector('#signer-fields')?.disabled`)).toBe(true)
 				await cdp.command('Network.setBlockedURLs', { urls: [] })
-				await cdp.evaluate("document.querySelector('#refresh-button')?.click()")
+				await cdp.evaluate("window.dispatchEvent(new Event('focus'))")
 				await waitFor("document.querySelector('#signer-status')?.textContent?.includes('Current configuration and state were reloaded') === true && document.querySelector('#signer-fields')?.disabled === false", `${viewport.label} unresolved signer mutation did not recover after a complete refresh`)
 
 				initialDashboardState = pausedWorkflowRenderingState
@@ -1271,7 +1308,7 @@ browserTest(
 				await waitFor("document.querySelector('#settings-save-status')?.textContent?.includes('configuration and state could not be reloaded') === true", `${viewport.label} partial settings reconciliation did not remain unresolved`)
 				expect(await cdp.evaluate(`document.querySelector('#settings-fields')?.disabled`)).toBe(true)
 				await cdp.command('Network.setBlockedURLs', { urls: [] })
-				await cdp.evaluate("document.querySelector('#refresh-button')?.click()")
+				await cdp.evaluate("window.dispatchEvent(new Event('focus'))")
 				await waitFor("document.querySelector('#settings-save-status')?.textContent?.includes('Current configuration and state were reloaded') === true && document.querySelector('#settings-fields')?.disabled === false", `${viewport.label} unresolved settings mutation did not recover after a complete refresh`)
 				expect(
 					await cdp.evaluate(`({
@@ -1629,7 +1666,7 @@ browserTest(
 			expect(formRight).toBeLessThanOrEqual(viewportWidth)
 			expect(buttonHeight).toBeGreaterThanOrEqual(44)
 
-			for (const route of ['activity', 'settings']) {
+			for (const route of ['ecosystem', 'settings']) {
 				await cdp.command('Page.navigate', { url: 'about:blank' })
 				await waitFor("document.readyState === 'complete'", `Chromium did not reset before the /${route} navigation check`)
 				stateRequests = 0
@@ -1645,7 +1682,7 @@ browserTest(
 				})()`,
 					`/${route} did not reveal its current navigation chip`,
 				)
-				await waitFor("document.querySelector('#refresh-button')?.disabled === false && document.querySelector('#refresh-button')?.textContent === 'Refresh'", `/${route} initial refresh did not settle`)
+				await waitFor("document.querySelector('#rpc-health-retry-button')?.disabled === false", `/${route} initial refresh did not settle`)
 				const navigationBeforeRefresh = await cdp.evaluate(`(() => {
 					const navigation = document.querySelector('.section-nav')
 					const current = navigation?.querySelector('[aria-current="page"]')
@@ -1669,7 +1706,7 @@ browserTest(
 				const navigationScrollLeft = Reflect.get(navigationBeforeRefresh, 'scrollLeft')
 				const maximumScrollLeft = Reflect.get(navigationBeforeRefresh, 'maximumScrollLeft')
 				if (typeof navigationScrollLeft !== 'number' || typeof maximumScrollLeft !== 'number') throw new Error(`/${route} navigation scroll metrics are unavailable`)
-				if (route === 'activity') {
+				if (route === 'ecosystem') {
 					expect(navigationScrollLeft).toBeGreaterThan(0)
 					expect(navigationScrollLeft).toBeLessThan(maximumScrollLeft)
 					expect(Reflect.get(navigationBeforeRefresh, 'centerDelta')).toBeLessThanOrEqual(1)
@@ -1678,7 +1715,7 @@ browserTest(
 				expect(linkHeights).toHaveLength(5)
 				for (const height of Array.isArray(linkHeights) ? linkHeights : []) expect(height).toBeGreaterThanOrEqual(44)
 				const requestsBeforeRefresh = stateRequests
-				await cdp.evaluate("document.querySelector('#refresh-button')?.click()")
+				await cdp.evaluate("window.dispatchEvent(new Event('focus'))")
 				for (let attempt = 0; attempt < 100 && stateRequests === requestsBeforeRefresh; attempt += 1) await Bun.sleep(10)
 				expect(stateRequests).toBeGreaterThan(requestsBeforeRefresh)
 				const navigationAfterRefresh = await cdp.evaluate(`({
@@ -1688,11 +1725,11 @@ browserTest(
 				expect(navigationAfterRefresh).toEqual({ scrollLeft: Reflect.get(navigationBeforeRefresh, 'scrollLeft'), scrollY: Reflect.get(navigationBeforeRefresh, 'scrollY') })
 			}
 		} finally {
-			socket?.close()
-			browser.kill()
-			await browser.exited
-			dashboard.stop(true)
-			await rm(userDataDirectory, { force: true, recursive: true })
+			try {
+				await browserSession?.close()
+			} finally {
+				dashboard.stop(true)
+			}
 		}
 	},
 	60_000,
@@ -1730,13 +1767,10 @@ browserTest(
 			},
 			setWorkflow: () => {},
 		})
-		const debuggingPort = await availablePort()
-		const userDataDirectory = await mkdtemp(join(tmpdir(), 'chaos-dashboard-indeterminate-chromium-'))
-		const browser = Bun.spawn([chromium, '--headless', '--no-sandbox', '--disable-gpu', `--remote-debugging-port=${debuggingPort.toString()}`, `--user-data-dir=${userDataDirectory}`, 'about:blank'], { stderr: 'ignore', stdout: 'ignore' })
-		let socket: WebSocket | undefined
+		let browserSession: Awaited<ReturnType<typeof connectToChromium>> | undefined
 		try {
-			const cdp = await connectToChromium(debuggingPort)
-			socket = cdp.socket
+			const cdp = await connectToChromium()
+			browserSession = cdp
 			await cdp.command('Network.enable')
 			const waitFor = async (expression: string, message: string) => {
 				for (let attempt = 0; attempt < 200; attempt += 1) {
@@ -1773,8 +1807,8 @@ browserTest(
 				sensitiveVisible: false,
 			})
 
-			await cdp.evaluate("document.querySelector('#refresh-button')?.click()")
-			await waitFor("document.querySelector('#refresh-button')?.textContent === 'Refresh'", 'Refresh did not finish after the indeterminate mutation')
+			await cdp.evaluate("window.dispatchEvent(new Event('focus'))")
+			await waitFor("document.querySelector('#rpc-health-retry-button')?.disabled === false", 'Refresh did not finish after the indeterminate mutation')
 			expect(await cdp.evaluate("document.querySelector('#signer-fields')?.disabled === true && document.querySelector('#signer-status')?.textContent?.includes('permanently frozen') === true")).toBe(true)
 
 			await cdp.command('Page.navigate', { url: 'about:blank' })
@@ -1783,11 +1817,11 @@ browserTest(
 			await waitFor("document.querySelector('#configuration-status')?.textContent?.includes('permanently frozen in this server process and page') === true", 'A new page did not inherit the server-process mutation latch')
 			expect(await cdp.evaluate("document.querySelector('#pause-button')?.disabled === true && document.querySelector('#settings-fields')?.disabled === true && document.querySelector('#signer-fields')?.disabled === true")).toBe(true)
 		} finally {
-			socket?.close()
-			browser.kill()
-			await browser.exited
-			dashboard.stop(true)
-			await rm(userDataDirectory, { force: true, recursive: true })
+			try {
+				await browserSession?.close()
+			} finally {
+				dashboard.stop(true)
+			}
 		}
 	},
 	30_000,
@@ -1800,3 +1834,309 @@ test('recovery dashboard source has no generic manual-load fallback', async () =
 		expect(source).toContain(`await requestRecoveryContextRefresh(${context})`)
 	}
 })
+
+browserTest(
+	'schedule shortcut and catalog selection save through the dashboard',
+	async () => {
+		let paused = false
+		let revision = 'controls-1'
+		let selection: string[] = []
+		const initialSchedule = new Date(Date.now() + 60_000).toISOString()
+		let scheduledAt = initialSchedule
+		let scheduleStatus = 'scheduled'
+		let rejectSelection = false
+		let selectionGate: Promise<void> | undefined
+		let scans = 0
+		const mutations: unknown[] = []
+		const dashboard = startDashboardServer(0, {
+			hostname: '127.0.0.1',
+			getConfiguration: () => ({ revision, settings: { paused, runtime: { execute: false }, scheduler: { minimumDelaySeconds: 60, maximumDelaySeconds: 3600 }, strategy: { selectableOperationAllowlist: selection } } }),
+			getState: () =>
+				state({
+					paused,
+					scheduler: { status: scheduleStatus, nextRunAt: scheduledAt, lastDelaySeconds: 60 },
+					evaluations: [
+						{ definition: { classification: 'selectable', ecosystem: 'open-oracle', id: 'open-oracle.weth.wrap', label: 'Wrap ETH', risk: 'low' }, eligibility: { eligible: false, blockers: ['No ETH available'] } },
+						{ definition: { classification: 'selectable', ecosystem: 'open-oracle', id: 'open-oracle.weth.unwrap', label: 'Unwrap WETH', risk: 'low' }, eligibility: { eligible: false, blockers: ['No WETH available'] } },
+						{ definition: { classification: 'lifecycle-obligation', ecosystem: 'open-oracle', id: 'open-oracle.settle', label: 'Settle report', risk: 'low' }, eligibility: { eligible: false, blockers: [`No report due after scan ${((scans += 1)).toString()}`] } },
+					],
+				}),
+			setSchedule: value => {
+				mutations.push(value)
+				scheduledAt = new Date().toISOString()
+				scheduleStatus = 'due'
+			},
+			setSelection: async value => {
+				await selectionGate
+				if (rejectSelection) throw new Error('Selection save failed')
+				mutations.push(value)
+				selection = [...selection, String(Reflect.get(Object(value), 'operationId'))]
+				revision = 'controls-2'
+			},
+			setCancellation: () => {},
+			setCandidate: () => {},
+			setObligation: () => {},
+			setPaused: () => {},
+			setReplacement: () => {},
+			setSettings: () => {},
+			setSigner: () => {},
+			setWorkflow: () => {},
+		})
+		const port = dashboard.port
+		if (port === undefined) throw new Error('Dashboard port is unavailable')
+		const cdp = await connectToChromium()
+		try {
+			const waitFor = async (expression: string) => {
+				for (let attempt = 0; attempt < 400; attempt += 1) {
+					if ((await cdp.evaluate(expression)) === true) return
+					await Bun.sleep(25)
+				}
+				throw new Error(`Timed out: ${expression}`)
+			}
+			const capture = async (name: string) => {
+				const result = await cdp.command('Page.captureScreenshot', { format: 'png' })
+				const data = typeof result === 'object' && result !== null ? Reflect.get(result, 'data') : undefined
+				if (typeof data !== 'string') throw new Error('Screenshot unavailable')
+				await Bun.write(`/tmp/chaos-controls-qa/${name}.png`, Buffer.from(data, 'base64'))
+			}
+			await cdp.command('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false })
+			await cdp.command('Page.navigate', { url: `http://127.0.0.1:${port.toString()}/overview` })
+			await waitFor("document.querySelector('#run-next-now')?.disabled === false")
+			await capture('overview-desktop-1440x900')
+			await cdp.command('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false })
+			await cdp.evaluate("document.querySelector('#run-next-now').scrollIntoView({ block: 'center' })")
+			await capture('overview-scheduled-mobile-390x844')
+			await cdp.evaluate("document.querySelector('#run-next-now').click()")
+			await waitFor("document.querySelector('#schedule-action-status')?.textContent.startsWith('Next choice requested.')")
+			expect(mutations[0]).toEqual({ revision: 'controls-1', nextRunAt: initialSchedule })
+			expect(await cdp.evaluate("document.querySelector('#run-next-now').disabled")).toBe(true)
+			await waitFor("document.querySelector('#schedule-action-status')?.textContent === ''")
+			await capture('overview-due-mobile-390x844')
+			await cdp.command('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false })
+			paused = true
+			await waitFor("document.querySelector('#countdown')?.textContent === 'Paused'")
+			expect(await cdp.evaluate("document.querySelector('#schedule-action-status').textContent")).toBe('')
+			await cdp.command('Page.navigate', { url: `http://127.0.0.1:${port.toString()}/catalog` })
+			await waitFor("document.querySelector('[data-selection-toggle]')?.disabled === false")
+			expect(await cdp.evaluate("document.querySelectorAll('[data-selection-toggle]').length")).toBe(2)
+			await cdp.evaluate("document.querySelector('#catalog-rows summary').click()")
+			await capture('catalog-desktop-1440x900')
+			rejectSelection = true
+			// The refresh that follows a failed save renders a snapshot that throws once. A save that
+			// rejects inside its own recovery path must not strand every later save.
+			await cdp.evaluate(`(() => {
+				const countdown = document.querySelector('#countdown')
+				const descriptor = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent')
+				Object.defineProperty(countdown, 'textContent', {
+					configurable: true,
+					get: () => descriptor.get.call(countdown),
+					set: value => {
+						delete countdown.textContent
+						throw new Error('Injected render failure')
+					},
+				})
+			})()`)
+			await cdp.evaluate("document.querySelector('[data-selection-toggle]').click()")
+			await waitFor("document.querySelector('#catalog-selection-status')?.textContent.includes('Selection save failed')")
+			await waitFor("document.querySelector('[data-selection-toggle]')?.disabled === false")
+			expect(await cdp.evaluate("document.querySelector('[data-selection-toggle]').checked")).toBe(false)
+			rejectSelection = false
+			await cdp.evaluate("document.querySelector('[data-selection-toggle]').click()")
+			await waitFor("document.querySelector('#selectable-operation-allowlist')?.value === 'open-oracle.weth.wrap'")
+			expect(mutations[1]).toEqual({ revision: 'controls-1', operationId: 'open-oracle.weth.wrap', enabled: true })
+			// A save must not blink the rest of the catalog: only the saving toggle changes state.
+			let releaseSelection = () => {}
+			selectionGate = new Promise(resolve => {
+				releaseSelection = resolve
+			})
+			await cdp.evaluate(`(() => {
+				const rows = [...document.querySelectorAll('#catalog-rows tbody tr')]
+				rows.forEach((row, index) => { row.dataset.stableRow = String(index) })
+				document.querySelector('[data-selection-toggle="open-oracle.weth.unwrap"]').click()
+			})()`)
+			await waitFor('document.querySelector(\'[data-selection-toggle="open-oracle.weth.unwrap"]\')?.disabled === true')
+			expect(
+				await cdp.evaluate(`({
+					otherChecked: document.querySelector('[data-selection-toggle="open-oracle.weth.wrap"]').checked,
+					otherDisabled: document.querySelector('[data-selection-toggle="open-oracle.weth.wrap"]').disabled,
+					savingChecked: document.querySelector('[data-selection-toggle="open-oracle.weth.unwrap"]').checked,
+				})`),
+			).toEqual({ otherChecked: true, otherDisabled: false, savingChecked: true })
+			releaseSelection()
+			await waitFor("document.querySelector('#selectable-operation-allowlist')?.value === 'open-oracle.weth.wrap\\nopen-oracle.weth.unwrap'")
+			selectionGate = undefined
+			// Only the row whose data changed is rebuilt; the rest keep their DOM nodes so the catalog never reflows.
+			const scansBeforeRefresh = scans
+			await cdp.evaluate("window.dispatchEvent(new Event('focus'))")
+			await waitFor(`document.querySelector('#catalog-rows')?.textContent?.includes('No report due after scan ${(scansBeforeRefresh + 1).toString()}') === true`)
+			expect(await cdp.evaluate("[...document.querySelectorAll('#catalog-rows tbody tr')].map(row => row.dataset.stableRow ?? 'rebuilt')")).toEqual(['0', '1', 'rebuilt'])
+			await cdp.command('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false })
+			await cdp.evaluate("document.querySelector('[data-selection-toggle]').scrollIntoView({ block: 'center' })")
+			await capture('catalog-mobile-390x844')
+			expect(await cdp.evaluate('document.body.scrollWidth === document.documentElement.clientWidth')).toBe(true)
+			await cdp.command('Page.navigate', { url: `http://127.0.0.1:${port.toString()}/overview` })
+			await waitFor("document.querySelector('#countdown')?.textContent === 'Paused'")
+			await cdp.evaluate("document.querySelector('#run-next-now').scrollIntoView({ block: 'center' })")
+			await capture('overview-paused-mobile-390x844')
+			expect(cdp.issues.filter(issue => issue.kind === 'pageerror')).toEqual([])
+		} finally {
+			await cdp.close()
+			await dashboard.stop(true)
+		}
+	},
+	60_000,
+)
+
+browserTest(
+	'shows unavailable, read-only, and signer-backed execution account inventory',
+	async () => {
+		let current = state({ inventoryAvailable: false, signerReady: false })
+		const dashboard = startDashboardServer(0, {
+			getConfiguration: () => ({}),
+			setCancellation: () => {},
+			setCandidate: () => {},
+			setObligation: () => {},
+			setReplacement: () => {},
+			setWorkflow: () => {},
+			getState: () => current,
+			hostname: '127.0.0.1',
+			setPaused: () => {},
+			setSettings: () => {},
+			setSigner: () => {},
+		})
+		const cdp = await connectToChromium()
+		try {
+			for (const viewport of [
+				{ width: 1440, height: 900 },
+				{ width: 390, height: 844 },
+			]) {
+				await cdp.command('Emulation.setDeviceMetricsOverride', { ...viewport, deviceScaleFactor: 1, mobile: false })
+				for (const mode of ['keyless', 'read-only', 'signer'] as const) {
+					current = state({
+						inventory: { eth: '1000000000000000000', rep: [], weth: '2000000000000000000' },
+						inventoryAvailable: mode !== 'keyless',
+						signerReady: mode === 'signer',
+						...(mode === 'keyless' ? {} : { wallet: walletAddress }),
+					})
+					await cdp.command('Page.navigate', { url: `http://127.0.0.1:${dashboard.port}/overview` })
+					const expectedEthText = mode === 'keyless' ? '—' : '1.000000000000000000'
+					const expectedBadge = { keyless: 'Signer missing', 'read-only': 'Read-only — signer not loaded', signer: 'Signer ready' }[mode]
+					const ready = `document.getElementById('balance-eth')?.textContent === ${JSON.stringify(expectedEthText)} && document.getElementById('signer-badge')?.textContent === ${JSON.stringify(expectedBadge)}`
+					for (let attempt = 0; attempt < 200; attempt += 1) {
+						if (await cdp.evaluate(ready)) break
+						await Bun.sleep(25)
+					}
+					expect(await cdp.evaluate(ready)).toBe(true)
+					if (mode === 'keyless') expect(await cdp.evaluate("document.getElementById('wallet-short')?.textContent")).toBe('No execution account configured')
+					else expect(await cdp.evaluate(`document.getElementById('wallet-short')?.innerHTML.includes(${JSON.stringify(walletAddress)})`)).toBe(true)
+					expect(await cdp.evaluate('document.documentElement.scrollWidth <= window.innerWidth')).toBe(true)
+					expect(cdp.issues).toEqual([])
+					const outputDirectory = process.env['CHAOS_INVENTORY_QA_DIRECTORY']
+					if (outputDirectory !== undefined) {
+						const capture = await cdp.command('Page.captureScreenshot', { format: 'png' })
+						const data = typeof capture === 'object' && capture !== null ? Reflect.get(capture, 'data') : undefined
+						if (typeof data !== 'string') throw new Error('Inventory QA screenshot is missing')
+						await Bun.write(join(outputDirectory, `${mode}-${viewport.width.toString()}.png`), Buffer.from(data, 'base64'))
+						if (viewport.width === 390) {
+							await cdp.evaluate("document.getElementById('wallet-short')?.scrollIntoView({ block: 'center' })")
+							const inventoryCapture = await cdp.command('Page.captureScreenshot', { format: 'png' })
+							const inventoryData = typeof inventoryCapture === 'object' && inventoryCapture !== null ? Reflect.get(inventoryCapture, 'data') : undefined
+							if (typeof inventoryData !== 'string') throw new Error('Inventory panel QA screenshot is missing')
+							await Bun.write(join(outputDirectory, `${mode}-390-inventory.png`), Buffer.from(inventoryData, 'base64'))
+						}
+					}
+				}
+			}
+		} finally {
+			await cdp.close()
+			await dashboard.stop(true)
+		}
+	},
+	60_000,
+)
+
+browserTest(
+	'collapses overview activity to the ten newest actions and discloses planned dry-run work',
+	async () => {
+		const activities: Record<string, unknown>[] = Array.from({ length: 14 }, (_, index) => ({
+			at: `2026-08-24T00:${index.toString().padStart(2, '0')}:00.000Z`,
+			details: index === 0 ? 'Execution is disabled, so the bot planned this operation and stopped before signing any transaction.' : undefined,
+			label: `Action ${index.toString()}`,
+			status: 'dry-run',
+			summary: '2 steps across 2 contracts; low risk; random priority; no transaction signed',
+		}))
+		const dashboard = startDashboardServer(0, {
+			getConfiguration: () => ({}),
+			getState: () => state({ activities }),
+			hostname: '127.0.0.1',
+			setCancellation: () => {},
+			setCandidate: () => {},
+			setObligation: () => {},
+			setPaused: () => {},
+			setReplacement: () => {},
+			setSettings: () => {},
+			setSigner: () => {},
+			setWorkflow: () => {},
+		})
+		const cdp = await connectToChromium()
+		try {
+			const waitFor = async (expression: string) => {
+				for (let attempt = 0; attempt < 400; attempt += 1) {
+					if ((await cdp.evaluate(expression)) === true) return
+					await Bun.sleep(25)
+				}
+				throw new Error(`Timed out: ${expression}`)
+			}
+			await cdp.command('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false })
+			await cdp.command('Page.navigate', { url: `http://127.0.0.1:${dashboard.port}/overview` })
+			await waitFor("document.querySelectorAll('#activity-list .timeline-item').length === 10")
+			expect(
+				await cdp.evaluate(`({
+					disclosure: document.querySelector('#activity-list .activity-details summary')?.textContent,
+					expandExpanded: document.querySelector('#activity-expand')?.getAttribute('aria-expanded'),
+					expandHidden: document.querySelector('#activity-expand')?.classList.contains('hidden'),
+					expandText: document.querySelector('#activity-expand')?.textContent,
+					newest: document.querySelector('#activity-list .timeline-item strong')?.textContent,
+				})`),
+			).toEqual({ disclosure: 'What was planned', expandExpanded: 'false', expandHidden: false, expandText: 'Show all 14 actions', newest: 'Action 0' })
+			await cdp.evaluate("document.querySelector('#activity-expand').click()")
+			await waitFor("document.querySelectorAll('#activity-list .timeline-item').length === 14")
+			expect(
+				await cdp.evaluate(`({
+					expandExpanded: document.querySelector('#activity-expand')?.getAttribute('aria-expanded'),
+					expandText: document.querySelector('#activity-expand')?.textContent,
+				})`),
+			).toEqual({ expandExpanded: 'true', expandText: 'Show fewer' })
+			await cdp.evaluate("document.querySelector('#activity-expand').click()")
+			await waitFor("document.querySelectorAll('#activity-list .timeline-item').length === 10")
+			expect(await cdp.evaluate('document.querySelector(\'[data-page-content="recovery"] #activity-list\')')).toBeNull()
+			// A poll must not close an opened disclosure or rebuild unchanged items.
+			await cdp.evaluate(`(() => {
+				document.querySelector('#activity-list .activity-details').open = true
+				;[...document.querySelectorAll('#activity-list .timeline-item')].forEach((item, index) => { item.dataset.stableItem = String(index) })
+			})()`)
+			activities[3] = { ...activities[3], summary: 'Rewritten summary' }
+			await waitFor("document.querySelector('#activity-list')?.textContent?.includes('Rewritten summary') === true")
+			expect(
+				await cdp.evaluate(`({
+					disclosureOpen: document.querySelector('#activity-list .activity-details').open,
+					items: [...document.querySelectorAll('#activity-list .timeline-item')].map(item => item.dataset.stableItem ?? 'rebuilt'),
+				})`),
+			).toEqual({ disclosureOpen: true, items: ['0', '1', '2', 'rebuilt', '4', '5', '6', '7', '8', '9'] })
+			activities.length = 0
+			await cdp.evaluate("window.dispatchEvent(new Event('focus'))")
+			await waitFor("document.querySelector('#activity-list .empty-state') !== null")
+			expect(
+				await cdp.evaluate(`({
+					expandHidden: document.querySelector('#activity-expand')?.classList.contains('hidden'),
+					occurrences: [...document.querySelectorAll('.activity-panel *')].filter(element => element.children.length === 0 && element.textContent?.trim() === 'No activity recorded.').length,
+				})`),
+			).toEqual({ expandHidden: true, occurrences: 1 })
+			expect(cdp.issues.filter(issue => issue.kind === 'pageerror')).toEqual([])
+		} finally {
+			await cdp.close()
+			await dashboard.stop(true)
+		}
+	},
+	60_000,
+)

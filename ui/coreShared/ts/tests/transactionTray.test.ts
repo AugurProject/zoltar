@@ -2,7 +2,18 @@
 
 import { afterEach, describe, expect, test } from 'bun:test'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
-import { createInitialTransactionTrayState, getTransactionActionLockReason, markTransactionCanceled, markTransactionFailed, markTransactionFinished, markTransactionPrepared, markTransactionPresented, markTransactionRequested, markTransactionSubmitted, TRANSACTION_ACTION_LOCK_REASON } from '../lib/transactionTray.js'
+import {
+	createInitialTransactionTrayState,
+	getTransactionActionLockReason,
+	markTransactionCanceled,
+	markTransactionFailed,
+	markTransactionFinished,
+	markTransactionPrepared,
+	markTransactionPresented,
+	markTransactionRequested,
+	markTransactionSubmitted,
+	TRANSACTION_ACTION_LOCK_REASON,
+} from '../transactions/transactionTray.js'
 import { createFakeBackend, createFakeSimulationProfile } from './testUtils/fakeBackend.js'
 
 const transactionHash = '0x1234000000000000000000000000000000000000000000000000000000000000'

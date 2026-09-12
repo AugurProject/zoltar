@@ -1,3 +1,6 @@
+import type { JsonRecord, JsonValue } from './api-validation.ts'
+import { isJsonArray } from './api-validation.ts'
+
 export type LiveRecord = { key: string; signature: string }
 export type ClassifiedLiveRecord = LiveRecord & { state: 'added' | 'changed' | 'unchanged' }
 export type Page<T, Cursor = string> = { items: T[]; nextCursor?: Cursor }
@@ -52,47 +55,25 @@ export const knownNetworkName = (chainId: string): string => {
 }
 
 interface NetworkStatusPresentation {
-	readonly chain_id?: unknown
-	readonly name?: unknown
-	readonly explorer_base_url?: unknown
-	readonly start_block?: unknown
-	readonly indexed_block?: unknown
-	readonly indexed_hash?: unknown
-	readonly indexed_timestamp?: unknown
-	readonly observed_block?: unknown
-	readonly phase?: unknown
-	readonly consecutive_failures?: unknown
-	readonly next_retry_at?: unknown
-	readonly last_error?: unknown
+	readonly chain_id?: string
+	readonly name?: string
+	readonly explorer_base_url?: string
+	readonly start_block?: string
+	readonly indexed_block?: string | null
+	readonly indexed_hash?: string | null
+	readonly indexed_timestamp?: string | null
+	readonly observed_block?: string | null
+	readonly phase?: string
+	readonly consecutive_failures?: number
+	readonly next_retry_at?: string | null
+	readonly last_error?: string | null
 }
 
-export const networkStatusPresentationKey = (network: NetworkStatusPresentation): string =>
-	JSON.stringify([
-		network.chain_id,
-		network.name,
-		network.explorer_base_url,
-		network.start_block,
-		network.indexed_block,
-		network.indexed_hash,
-		network.indexed_timestamp,
-		network.observed_block,
-		network.phase,
-		network.consecutive_failures,
-		network.next_retry_at,
-		network.last_error,
-	])
+const networkStatusPresentationKey = (network: NetworkStatusPresentation): string =>
+	JSON.stringify([network.chain_id, network.name, network.explorer_base_url, network.start_block, network.indexed_block, network.indexed_hash, network.indexed_timestamp, network.observed_block, network.phase, network.consecutive_failures, network.next_retry_at, network.last_error])
 
-export const canReuseNetworkStatusPresentation = (
-	previous: NetworkStatusPresentation,
-	current: NetworkStatusPresentation,
-	renderedChainId: string | undefined,
-	renderedFreshness: string | undefined,
-	expectedChainId: string,
-	expectedFreshness: 'current' | 'stale',
-): boolean =>
-	renderedChainId === expectedChainId &&
-	renderedFreshness === expectedFreshness &&
-	networkStatusPresentationKey(previous) === networkStatusPresentationKey(current)
+export const canReuseNetworkStatusPresentation = (previous: NetworkStatusPresentation, current: NetworkStatusPresentation, renderedChainId: string | undefined, renderedFreshness: string | undefined, expectedChainId: string, expectedFreshness: 'current' | 'stale'): boolean =>
+	renderedChainId === expectedChainId && renderedFreshness === expectedFreshness && networkStatusPresentationKey(previous) === networkStatusPresentationKey(current)
 
 export const refreshRouteAlongsideNetworkStatus = <T>(refreshNetworkStatus: RefreshOperation<unknown>, refreshRoute: RefreshOperation<T>): Promise<T> => {
 	void Promise.resolve()
@@ -101,11 +82,19 @@ export const refreshRouteAlongsideNetworkStatus = <T>(refreshNetworkStatus: Refr
 	return Promise.resolve(refreshRoute())
 }
 
+const restoredNetworkSnapshotMaxAgeMs = 30_000
+
+export const restoredNetworkSnapshotIsCurrent = (writtenAt: number | undefined, now = Date.now()): boolean => {
+	if (writtenAt === undefined || !Number.isFinite(writtenAt)) return false
+	const ageMs = now - writtenAt
+	return ageMs >= 0 && ageMs <= restoredNetworkSnapshotMaxAgeMs
+}
+
 export const loadInitialNetworkStatus = async (restoredSnapshot: boolean, load: RefreshOperation<unknown>): Promise<void> => {
 	if (!restoredSnapshot) await load()
 }
 
-export const operationsForkChildCount = (formattedCount: string, value: unknown): string => `${formattedCount} ${Number(value) === 1 ? 'child' : 'children'}`
+export const operationsForkChildCount = (formattedCount: string, value: JsonValue | undefined): string => `${formattedCount} ${Number(value) === 1 ? 'child' : 'children'}`
 
 export interface RefreshGate {
 	runBackground<T>(operation: RefreshOperation<T>): Promise<T>
@@ -145,8 +134,7 @@ export interface TransactionDialogSnapshot {
 
 export type HistoryInvalidationReason = 'chain-reorg' | 'manifest-reset' | 'start-boundary-advanced' | 'abi-redecode' | 'projection-rebuild'
 
-export const isHistoryInvalidationReason = (value: unknown): value is HistoryInvalidationReason =>
-	value === 'chain-reorg' || value === 'manifest-reset' || value === 'start-boundary-advanced' || value === 'abi-redecode' || value === 'projection-rebuild'
+export const isHistoryInvalidationReason = (value: unknown): value is HistoryInvalidationReason => value === 'chain-reorg' || value === 'manifest-reset' || value === 'start-boundary-advanced' || value === 'abi-redecode' || value === 'projection-rebuild'
 
 export const historyInvalidationNotice = (reason: HistoryInvalidationReason, depth: string) => {
 	const blocks = `${depth} indexed block${depth === '1' ? '' : 's'}`
@@ -161,18 +149,25 @@ export const historyInvalidationNotice = (reason: HistoryInvalidationReason, dep
 			return { title: 'Historical ABI re-decode', detail: `${blocks} invalidated so historical evidence can be decoded again; views are refreshing.` }
 		case 'projection-rebuild':
 			return { title: 'Historical projection rebuild', detail: `${blocks} invalidated so historical views can be rebuilt; views are refreshing.` }
+		default:
+			throw new Error(`Unknown history invalidation reason ${String(reason)}`)
 	}
 }
 
+const liveRecordState = (previousSignature: string | undefined, signature: string): ClassifiedLiveRecord['state'] => {
+	if (previousSignature === undefined) return 'added'
+	return previousSignature === signature ? 'unchanged' : 'changed'
+}
+
 export const classifyLiveRecords = (previous: ReadonlyMap<string, string>, current: readonly LiveRecord[]): ClassifiedLiveRecord[] =>
-	current.map((record) => ({
+	current.map(record => ({
 		...record,
-		state: previous.has(record.key) ? (previous.get(record.key) === record.signature ? 'unchanged' : 'changed') : 'added',
+		state: liveRecordState(previous.get(record.key), record.signature),
 	}))
 
 export const mergeUniqueRecords = <T>(primary: readonly T[], retained: readonly T[], keyFor: (record: T) => string): T[] => {
 	const seen = new Set<string>()
-	return [...primary, ...retained].filter((record) => {
+	return [...primary, ...retained].filter(record => {
 		const key = keyFor(record)
 		if (seen.has(key)) return false
 		seen.add(key)
@@ -180,7 +175,7 @@ export const mergeUniqueRecords = <T>(primary: readonly T[], retained: readonly 
 	})
 }
 
-export const activityDetailAnchorIndex = (rowKeys: readonly string[], triggerKey: string | undefined): number | undefined => {
+const activityDetailAnchorIndex = (rowKeys: readonly string[], triggerKey: string | undefined): number | undefined => {
 	if (triggerKey === undefined) return undefined
 	const index = rowKeys.indexOf(triggerKey)
 	return index >= 0 ? index : undefined
@@ -201,11 +196,83 @@ interface ActivityDetailDrawerLike {
 
 export const placeActivityDetailDrawer = (feed: ActivityDetailFeedLike, drawer: ActivityDetailDrawerLike): boolean => {
 	const rows = Array.from(feed.querySelectorAll('.log-row[data-live-key]'))
-	const rowKeys = rows.flatMap((row) => (row.dataset.liveKey === undefined ? [] : [row.dataset.liveKey]))
+	const rowKeys = rows.flatMap(row => (row.dataset.liveKey === undefined ? [] : [row.dataset.liveKey]))
 	const anchorIndex = activityDetailAnchorIndex(rowKeys, drawer.dataset.triggerKey)
 	const anchor = anchorIndex === undefined ? undefined : rows[anchorIndex]
 	if (anchor === undefined) return false
 	anchor.after(drawer)
+	return true
+}
+
+export interface ActivityDetailFocusSnapshot {
+	drawerFocused: boolean
+	focusIndex: number
+	focusKey?: string
+	focusKeyOccurrence?: number
+	focusTop?: number
+}
+
+interface ActivityDetailFocusableLike {
+	readonly tagName: string
+	readonly textContent: string | null
+	getAttribute(name: string): string | null
+	getBoundingClientRect(): { readonly top: number }
+	focus(options?: FocusOptions): void
+}
+
+interface ActivityDetailFocusDrawerLike extends ActivityDetailFocusableLike {
+	querySelectorAll(selectors: string): ArrayLike<ActivityDetailFocusableLike>
+}
+
+const activityDetailFocusable = (drawer: ActivityDetailFocusDrawerLike): ActivityDetailFocusableLike[] => Array.from(drawer.querySelectorAll('a, button, summary'))
+
+const activityDetailFocusKey = (node: ActivityDetailFocusableLike): string => `${node.tagName}:${node.tagName === 'A' ? (node.getAttribute('href') ?? '') : ''}:${node.getAttribute('aria-label') ?? node.textContent ?? ''}`
+
+export const captureActivityDetailFocus = (drawer: ActivityDetailFocusDrawerLike, activeElement: unknown): ActivityDetailFocusSnapshot => {
+	const focusable = activityDetailFocusable(drawer)
+	let focusIndex = -1
+	for (const [index, candidate] of focusable.entries()) {
+		if (candidate !== activeElement) continue
+		focusIndex = index
+		break
+	}
+	const focused = focusIndex < 0 ? undefined : focusable[focusIndex]
+	const focusKey = focused === undefined ? undefined : activityDetailFocusKey(focused)
+	return {
+		drawerFocused: activeElement === drawer,
+		focusIndex,
+		focusKey,
+		focusKeyOccurrence: focusKey === undefined ? undefined : focusable.slice(0, focusIndex + 1).filter(candidate => activityDetailFocusKey(candidate) === focusKey).length - 1,
+		focusTop: focused?.getBoundingClientRect().top,
+	}
+}
+
+export const restoreActivityDetailFocus = (drawer: ActivityDetailFocusDrawerLike, snapshot: ActivityDetailFocusSnapshot, align?: (nextFocus: ActivityDetailFocusableLike, previousTop: number) => void): boolean => {
+	if (snapshot.drawerFocused) {
+		drawer.focus({ preventScroll: true })
+		return true
+	}
+	if (snapshot.focusIndex < 0) return false
+	const focusable = activityDetailFocusable(drawer)
+	const keyedCandidates = snapshot.focusKey ? focusable.filter(candidate => activityDetailFocusKey(candidate) === snapshot.focusKey) : []
+	const nextFocus = keyedCandidates[snapshot.focusKeyOccurrence ?? 0] ?? focusable[snapshot.focusIndex]
+	if (nextFocus === undefined) return false
+	if (snapshot.focusTop !== undefined) align?.(nextFocus, snapshot.focusTop)
+	nextFocus.focus({ preventScroll: true })
+	return true
+}
+
+interface ActivityDetailEscapeEvent {
+	readonly key: string
+	preventDefault(): void
+	stopPropagation(): void
+}
+
+export const handleActivityDetailDrawerEscape = (event: ActivityDetailEscapeEvent, close: () => void): boolean => {
+	if (event.key !== 'Escape') return false
+	event.preventDefault()
+	event.stopPropagation()
+	close()
 	return true
 }
 
@@ -225,11 +292,7 @@ interface DisclosureContainerLike {
 }
 
 export const captureDisclosureState = (container: DisclosureContainerLike): Readonly<Record<string, boolean>> =>
-	Object.fromEntries(
-		Array.from(container.querySelectorAll('.detail-disclosure[data-disclosure-key]')).flatMap((item) =>
-			item.dataset.disclosureKey === undefined ? [] : [[item.dataset.disclosureKey, item.open === true] as const],
-		),
-	)
+	Object.fromEntries(Array.from(container.querySelectorAll('.detail-disclosure[data-disclosure-key]')).flatMap(item => (item.dataset.disclosureKey === undefined ? [] : [[item.dataset.disclosureKey, item.open === true] as const])))
 
 export const restoreDisclosureState = (container: DisclosureContainerLike, state: Readonly<Record<string, boolean>>): void => {
 	for (const item of Array.from(container.querySelectorAll('.detail-disclosure[data-disclosure-key]'))) {
@@ -239,21 +302,16 @@ export const restoreDisclosureState = (container: DisclosureContainerLike, state
 	}
 }
 
-export const operationsCatalogRecordKey = (
-	section: 'auctions' | 'escalations' | 'forks' | 'integrity' | 'reports' | 'timeline' | 'trading',
-	record: Readonly<Record<string, unknown>>,
-): string => {
+export const operationsCatalogRecordKey = (section: 'auctions' | 'escalations' | 'forks' | 'integrity' | 'reports' | 'timeline' | 'trading', record: Readonly<Record<string, unknown>>): string => {
 	if (section === 'reports') return `${String(record['open_oracle_address'] ?? '')}:${String(record['report_id'] ?? '')}`
 	if (section === 'trading') return String(record['pair_address'] ?? '')
 	if (section === 'integrity') return String(record['id'] ?? '')
-	if (section === 'timeline')
-		return `${String(record['block_hash'] ?? '')}:${String(record['tx_hash'] ?? '')}:${String(record['log_index'] ?? '')}:${String(record['entity_type'] ?? '')}:${String(record['entity_identity'] ?? '')}`
+	if (section === 'timeline') return `${String(record['block_hash'] ?? '')}:${String(record['tx_hash'] ?? '')}:${String(record['log_index'] ?? '')}:${String(record['entity_type'] ?? '')}:${String(record['entity_identity'] ?? '')}`
 	if (section === 'forks') return String(record['universe_identity'] ?? '')
 	return String(record[section === 'auctions' ? 'auction_address' : 'game_address'] ?? '')
 }
 
-export const operationsDetailRecordKey = (record: Readonly<Record<string, unknown>>): string =>
-	`${String(record['block_hash'] ?? '')}:${String(record['tx_hash'] ?? '')}:${String(record['log_index'] ?? '')}:${String(record['event_name'] ?? record['semantic_event_kind'] ?? '')}`
+export const operationsDetailRecordKey = (record: Readonly<Record<string, unknown>>): string => `${String(record['block_hash'] ?? '')}:${String(record['tx_hash'] ?? '')}:${String(record['log_index'] ?? '')}:${String(record['event_name'] ?? record['semantic_event_kind'] ?? '')}`
 
 export const timelineOccurrenceFields = (record: Readonly<Record<string, unknown>>): ReadonlyArray<readonly [label: string, value: unknown]> => [
 	['Block', record['block_number']],
@@ -282,7 +340,7 @@ export const demoTimelineEvidenceStatus = (canonical: boolean, invalidationReaso
 	}
 }
 
-const enumValueLabel = (value: unknown, fallback: string): string => {
+const enumValueLabel = (value: JsonValue | undefined, fallback: string): string => {
 	if (typeof value !== 'string' || value.trim() === '') return fallback
 	const words = value.trim().split('-').filter(Boolean)
 	const [first, ...rest] = words
@@ -290,7 +348,7 @@ const enumValueLabel = (value: unknown, fallback: string): string => {
 	return [`${first.slice(0, 1).toUpperCase()}${first.slice(1)}`, ...rest].join(' ')
 }
 
-export const timelineEntityTypeLabel = (value: unknown): string => {
+export const timelineEntityTypeLabel = (value: JsonValue | undefined): string => {
 	switch (value) {
 		case 'question':
 			return 'Question'
@@ -325,7 +383,7 @@ export const timelineEntityTypeLabel = (value: unknown): string => {
 	}
 }
 
-export const evidenceStatusLabel = (value: unknown): string => {
+export const evidenceStatusLabel = (value: JsonValue | undefined): string => {
 	switch (value) {
 		case 'canonical':
 			return 'Canonical evidence'
@@ -346,7 +404,7 @@ export const evidenceStatusLabel = (value: unknown): string => {
 	}
 }
 
-export const historyInvalidationReasonLabel = (value: unknown): string => {
+export const historyInvalidationReasonLabel = (value: JsonValue | undefined): string => {
 	switch (value) {
 		case 'chain-reorg':
 			return 'Chain reorganization'
@@ -372,8 +430,8 @@ const invalidationOccurrenceLabels: Readonly<Record<string, string>> = {
 	'token-metadata': 'Affected token metadata observations',
 }
 
-export const historyInvalidationEvidencePresentation = (causes: unknown, occurrenceCounts: unknown) => {
-	const causeCodes = Array.isArray(causes) ? causes.filter((cause): cause is string => typeof cause === 'string') : []
+export const historyInvalidationEvidencePresentation = (causes: JsonValue | undefined, occurrenceCounts: JsonValue | undefined) => {
+	const causeCodes = isJsonArray(causes) ? causes.filter((cause): cause is string => typeof cause === 'string') : []
 	const countsRecord = typeof occurrenceCounts === 'object' && occurrenceCounts !== null && !Array.isArray(occurrenceCounts) ? occurrenceCounts : {}
 	const occurrenceFields: Array<readonly [label: string, value: string]> = []
 	let occurrenceTotal = 0n
@@ -391,33 +449,30 @@ export const historyInvalidationEvidencePresentation = (causes: unknown, occurre
 	}
 }
 
-const operationsInteger = (value: unknown): string => {
-	const serialized = typeof value === 'string' || typeof value === 'number' || typeof value === 'bigint' ? String(value) : ''
+const operationsInteger = (value: JsonValue | undefined): string => {
+	const serialized = typeof value === 'string' || typeof value === 'number' ? String(value) : ''
 	return /^-?\d+$/.test(serialized) ? BigInt(serialized).toLocaleString('en-US') : 'Unavailable'
 }
 
-export const operationsRouteFreshness = (asOf: Readonly<Record<string, unknown>>, liveConnected: boolean): string => {
-	if (asOf['historical'] === true || asOf['phase'] === 'historical')
-		return `Historical snapshot at block #${operationsInteger(asOf['blockNumber'])} · current indexed head #${operationsInteger(
-			asOf['indexedHead'],
-		)} · ${operationsInteger(asOf['historyDepthBlocks'])} blocks earlier · fixed point-in-time evidence`
-	return `As of indexed block #${operationsInteger(asOf['blockNumber'])} · ${operationsInteger(asOf['lagBlocks'])} blocks behind · ${
-		liveConnected ? 'live updates connected' : 'live updates reconnecting'
-	}`
+export const operationsRouteFreshness = (asOf: JsonRecord, liveConnected: boolean): string => {
+	if (asOf['historical'] === true || asOf['phase'] === 'historical') return `Historical snapshot at block #${operationsInteger(asOf['blockNumber'])} · current head #${operationsInteger(asOf['indexedHead'])} · ${operationsInteger(asOf['historyDepthBlocks'])} blocks earlier · fixed point-in-time evidence`
+	return `As of block #${operationsInteger(asOf['blockNumber'])} · ${operationsInteger(asOf['lagBlocks'])} blocks behind · ${liveConnected ? 'live updates connected' : 'live updates reconnecting'}`
 }
 
-export const decodedActionLabel = (
-	actionSummary: string | null,
-	toAddress: string | null,
-	contractLabel: string | null,
-	emitterAddress?: string | null,
-	deployedContractAddress?: string | null,
-): string => {
-	if (toAddress !== null) return actionSummary ?? 'No decoded calldata'
-	const verifiedLabel =
-		contractLabel && emitterAddress && deployedContractAddress && emitterAddress.toLowerCase() === deployedContractAddress.toLowerCase()
-			? contractLabel
-			: undefined
+export const riskPaginationForCollectedCursors = (pagination: JsonRecord, poolNextCursor: string | undefined, vaultNextCursor: string | undefined): JsonRecord => {
+	const paginationWithoutCursors = Object.fromEntries(Object.entries(pagination).filter(([key]) => key !== 'poolNextCursor' && key !== 'vaultNextCursor'))
+	return {
+		...paginationWithoutCursors,
+		poolHasMore: poolNextCursor !== undefined,
+		...(poolNextCursor === undefined ? {} : { poolNextCursor }),
+		vaultHasMore: vaultNextCursor !== undefined,
+		...(vaultNextCursor === undefined ? {} : { vaultNextCursor }),
+	}
+}
+
+export const decodedActionLabel = (actionSummary: string | null, toAddress: string | null, contractLabel: string | null, emitterAddress?: string | null, deployedContractAddress?: string | null): string => {
+	if (toAddress !== null) return actionSummary?.startsWith('Unknown call ') ? `${actionSummary.replace('Unknown call', 'Unrecognized function')} · no matching ABI` : (actionSummary ?? 'No decoded calldata')
+	const verifiedLabel = contractLabel && emitterAddress && deployedContractAddress && emitterAddress.toLowerCase() === deployedContractAddress.toLowerCase() ? contractLabel : undefined
 	return `Deploy ${verifiedLabel ?? 'contract'}`
 }
 
@@ -439,7 +494,7 @@ const operationsDetailCatalogPaths: Readonly<Record<OperationsDetailKind, string
 	vault: '/operations/risk',
 }
 
-export const operationsDetailHeaderPresentation = (kind: OperationsDetailKind, asOf: Readonly<Record<string, unknown>>, liveConnected: boolean) => {
+export const operationsDetailHeaderPresentation = (kind: OperationsDetailKind, asOf: JsonRecord, liveConnected: boolean) => {
 	const catalogPath = operationsDetailCatalogPaths[kind]
 	return {
 		backLabel: '← Back to catalog',
@@ -449,7 +504,7 @@ export const operationsDetailHeaderPresentation = (kind: OperationsDetailKind, a
 	}
 }
 
-const poolProtocolStateLabel = (value: unknown): string => {
+const poolProtocolStateLabel = (value: JsonValue | undefined): string => {
 	switch (String(value).toLowerCase()) {
 		case '0':
 			return 'Operational'
@@ -468,7 +523,7 @@ const poolProtocolStateLabel = (value: unknown): string => {
 	}
 }
 
-const vaultProtocolStateLabel = (value: unknown): string => {
+const vaultProtocolStateLabel = (value: JsonValue | undefined): string => {
 	switch (String(value).toLowerCase()) {
 		case 'healthy':
 			return 'Healthy'
@@ -483,7 +538,7 @@ const vaultProtocolStateLabel = (value: unknown): string => {
 	}
 }
 
-export const operationsRiskPresentation = (kind: 'pool' | 'vault', protocolState: unknown, scannerSeverity: unknown) => {
+export const operationsRiskPresentation = (kind: 'pool' | 'vault', protocolState: JsonValue | undefined, scannerSeverity: JsonValue | undefined) => {
 	const severity = String(scannerSeverity).toLowerCase()
 	switch (severity) {
 		case 'healthy':
@@ -519,14 +574,20 @@ export const operationsRiskPresentation = (kind: 'pool' | 'vault', protocolState
 	}
 }
 
+const snapshotReadStatusLabel = (readStatus: unknown) => {
+	if (readStatus === 'success') return 'Current tagged read available'
+	if (readStatus === undefined || readStatus === null || readStatus === '') return 'Event-derived'
+	return `Tagged read ${String(readStatus)}`
+}
+
 export const operationsDetailSummaryPresentation = (
 	kind: OperationsDetailKind,
 	state: {
-		readonly currentEvent?: unknown
-		readonly lifecycleState?: unknown
-		readonly protocolState?: unknown
-		readonly scannerSeverity?: unknown
-		readonly snapshotReadStatus?: unknown
+		readonly currentEvent?: JsonValue
+		readonly lifecycleState?: JsonValue
+		readonly protocolState?: JsonValue
+		readonly scannerSeverity?: JsonValue
+		readonly snapshotReadStatus?: JsonValue
 	},
 ): { readonly label: string; readonly value: string } => {
 	if (kind === 'pool' || kind === 'vault')
@@ -541,17 +602,11 @@ export const operationsDetailSummaryPresentation = (
 	const readStatus = state.snapshotReadStatus
 	return {
 		label: 'Evidence state',
-		value:
-			readStatus === 'success'
-				? 'Current tagged read available'
-				: readStatus === undefined || readStatus === null || readStatus === ''
-					? 'Event-derived'
-					: `Tagged read ${String(readStatus)}`,
+		value: snapshotReadStatusLabel(readStatus),
 	}
 }
 
-export const operationsDetailEvidencePanelVisible = (kind: OperationsDetailKind, itemCount: number, hasMore: boolean, focusedContinuation: boolean): boolean =>
-	kind === 'pool' || kind === 'vault' ? itemCount > 0 || hasMore || focusedContinuation : true
+export const operationsDetailEvidencePanelVisible = (kind: OperationsDetailKind, itemCount: number, hasMore: boolean, focusedContinuation: boolean): boolean => (kind === 'pool' || kind === 'vault' ? itemCount > 0 || hasMore || focusedContinuation : true)
 
 const approvalFieldDefinitions = [
 	['maxCumulativeDebtAttoEth', 'maximum cumulative debt', 'attoETH'],
@@ -566,32 +621,16 @@ const approvalFieldDefinitions = [
 	['newNonce', 'new nonce', ''],
 ] as const
 
-export const approvalTransitionFields = (
-	data: Readonly<Record<string, unknown>>,
-): Array<{ readonly label: string; readonly value: string; readonly unit: string }> =>
-	approvalFieldDefinitions.flatMap(([key, label, unit]) => (typeof data[key] === 'string' ? [{ label, value: data[key], unit }] : []))
+export const approvalTransitionFields = (data: Readonly<Record<string, unknown>>): Array<{ readonly label: string; readonly value: string; readonly unit: string }> => approvalFieldDefinitions.flatMap(([key, label, unit]) => (typeof data[key] === 'string' ? [{ label, value: data[key], unit }] : []))
 
-export const operationsLoadDisposition = (
-	activeContext: string,
-	requestedContext: string,
-	live: boolean,
-	hasPaginationTarget: boolean,
-): 'join' | 'queue' | 'supersede' => {
+const operationsLoadDisposition = (activeContext: string, requestedContext: string, live: boolean, hasPaginationTarget: boolean): 'join' | 'queue' | 'supersede' => {
 	if (activeContext !== requestedContext) return 'supersede'
 	return live || hasPaginationTarget ? 'queue' : 'join'
 }
 
 export type OperationsLoadState = { promise?: Promise<boolean>; context?: string }
 
-export const runSerializedOperationsLoad = async (
-	state: OperationsLoadState,
-	requestedContext: string,
-	live: boolean,
-	hasPaginationTarget: boolean,
-	currentContext: () => string,
-	supersede: () => void,
-	run: () => Promise<boolean>,
-): Promise<boolean> => {
+export const runSerializedOperationsLoad = async (state: OperationsLoadState, requestedContext: string, live: boolean, hasPaginationTarget: boolean, currentContext: () => string, supersede: () => void, run: () => Promise<boolean>): Promise<boolean> => {
 	while (state.promise !== undefined) {
 		const active = state.promise
 		const disposition = operationsLoadDisposition(state.context ?? '', requestedContext, live, hasPaginationTarget)
@@ -628,17 +667,13 @@ export const compareCanonicalEventPosition = (left: Readonly<Record<string, unkn
 	if (leftTransaction !== rightTransaction) return leftTransaction < rightTransaction ? -1 : 1
 	const leftLog = canonicalEventPosition(left, 'log_index')
 	const rightLog = canonicalEventPosition(right, 'log_index')
-	return leftLog === rightLog ? 0 : leftLog < rightLog ? -1 : 1
+	if (leftLog === rightLog) return 0
+	return leftLog < rightLog ? -1 : 1
 }
 
-export const canonicalPageLimit = (targetCount: number, loadedCount: number, pageSize: number): number =>
-	targetCount > loadedCount ? Math.min(pageSize, targetCount - loadedCount) : pageSize
+export const canonicalPageLimit = (targetCount: number, loadedCount: number, pageSize: number): number => (targetCount > loadedCount ? Math.min(pageSize, targetCount - loadedCount) : pageSize)
 
-export const collectCanonicalPages = async <T, Cursor = string>(
-	fetchPage: (cursor?: Cursor, limit?: number) => Promise<Page<T, Cursor>>,
-	targetCount: number,
-	keyFor: (record: T) => string,
-): Promise<Page<T, Cursor>> => {
+export const collectCanonicalPages = async <T, Cursor = string>(fetchPage: (cursor?: Cursor, limit?: number) => Promise<Page<T, Cursor>>, targetCount: number, keyFor: (record: T) => string): Promise<Page<T, Cursor>> => {
 	let cursor: Cursor | undefined
 	let items: T[] = []
 	do {
@@ -665,15 +700,13 @@ export const collectCursorCollections = async <T>(
 	let priorOffset: number | undefined
 	while (true) {
 		const page = await fetchPage(cursor)
-		if (!Number.isSafeInteger(page.offset) || page.offset < 0 || (priorOffset === undefined ? page.offset !== 0 : page.offset <= priorOffset))
-			throw new Error('History continuation page offset did not advance')
+		if (!Number.isSafeInteger(page.offset) || page.offset < 0 || (priorOffset === undefined ? page.offset !== 0 : page.offset <= priorOffset)) throw new Error('History continuation page offset did not advance')
 		for (const key of collectionKeys) {
 			const retained = collections[key]
 			if (retained === undefined) throw new Error(`History collection ${key} was not initialized`)
 			retained.push(...(page.collections[key] ?? []))
 		}
-		if (page.nextCursor === undefined || page.offset >= throughOffset)
-			return { collections, loadedOffset: page.offset, ...(page.nextCursor === undefined ? {} : { nextCursor: page.nextCursor }) }
+		if (page.nextCursor === undefined || page.offset >= throughOffset) return { collections, loadedOffset: page.offset, ...(page.nextCursor === undefined ? {} : { nextCursor: page.nextCursor }) }
 		priorOffset = page.offset
 		cursor = page.nextCursor
 	}
@@ -727,10 +760,7 @@ const historyBlockNumber = (value: unknown): bigint | undefined => {
 	return undefined
 }
 
-export const summarizeHistoryCollections = (
-	collections: Readonly<Record<string, readonly Readonly<Record<string, unknown>>[]>>,
-	collectionKeys: readonly string[],
-): { readonly counts: Readonly<Record<string, number>>; readonly oldestBlock?: bigint; readonly newestBlock?: bigint } => {
+export const summarizeHistoryCollections = (collections: Readonly<Record<string, readonly Readonly<Record<string, unknown>>[]>>, collectionKeys: readonly string[]): { readonly counts: Readonly<Record<string, number>>; readonly oldestBlock?: bigint; readonly newestBlock?: bigint } => {
 	const counts: Record<string, number> = {}
 	let oldestBlock: bigint | undefined
 	let newestBlock: bigint | undefined
@@ -747,8 +777,7 @@ export const summarizeHistoryCollections = (
 	return { counts, ...(oldestBlock === undefined ? {} : { oldestBlock }), ...(newestBlock === undefined ? {} : { newestBlock }) }
 }
 
-export const reconcilePaginatedTotal = (currentTotal: number, responseTotal: number, append: boolean): number =>
-	append ? Math.max(currentTotal, responseTotal) : responseTotal
+export const reconcilePaginatedTotal = (currentTotal: number, responseTotal: number, append: boolean): number => (append ? Math.max(currentTotal, responseTotal) : responseTotal)
 
 export const paginatedSnapshotWasReplaced = (loadedCount: number, responseTotal: number): boolean => responseTotal < loadedCount
 
@@ -767,8 +796,7 @@ export const activityRefreshRetention = (canonicalRefreshRequired: boolean, cano
 	retainVisibleDepth: true,
 })
 
-export const retainedPaginationAvailable = (hasContinuation: boolean, canonicalRefreshRequired: boolean): boolean =>
-	hasContinuation && !canonicalRefreshRequired
+export const retainedPaginationAvailable = (hasContinuation: boolean, canonicalRefreshRequired: boolean): boolean => hasContinuation && !canonicalRefreshRequired
 
 export const paginationRequestAllowed = (append: boolean, canonicalRefreshRequired: boolean): boolean => !append || !canonicalRefreshRequired
 
@@ -797,8 +825,7 @@ export const transactionRetryMode = (appendFailure: boolean, hasLoadedTransactio
 	liveRefresh: !appendFailure && hasLoadedTransactions,
 })
 
-export const accountStateDuringStagedRefresh = <T>(committedState: T, stagedState: T, stagedRefresh: boolean): T =>
-	stagedRefresh ? committedState : stagedState
+export const accountStateDuringStagedRefresh = <T>(committedState: T, stagedState: T, stagedRefresh: boolean): T => (stagedRefresh ? committedState : stagedState)
 
 export const createForegroundRefreshGate = (): RefreshGate => {
 	let active: Promise<unknown> | undefined
@@ -830,12 +857,12 @@ export const createForegroundRefreshGate = (): RefreshGate => {
 		let releaseOperation: () => void = () => {
 			throw new Error('Foreground reservation released before initialization')
 		}
-		const ready = new Promise<void>((resolve) => {
+		const ready = new Promise<void>(resolve => {
 			markReady = resolve
 		})
 		const completed = run(
 			() =>
-				new Promise<void>((resolve) => {
+				new Promise<void>(resolve => {
 					releaseOperation = resolve
 					markReady()
 				}),
@@ -856,11 +883,9 @@ export const runWithForegroundReservation = async <T>(gate: RefreshGate, operati
 	}
 }
 
-export const isCurrentLiveRequest = (requestVersion: number, currentVersion: number, responseChainId: string | number, selectedChainId: string | number) =>
-	requestVersion === currentVersion && String(responseChainId) === String(selectedChainId)
+export const isCurrentLiveRequest = (requestVersion: number, currentVersion: number, responseChainId: string | number, selectedChainId: string | number) => requestVersion === currentVersion && String(responseChainId) === String(selectedChainId)
 
-export const isCurrentContextRequest = (requestContext: number, currentContext: number, requestVersion: number, currentVersion: number) =>
-	requestContext === currentContext && requestVersion === currentVersion
+export const isCurrentContextRequest = (requestContext: number, currentContext: number, requestVersion: number, currentVersion: number) => requestContext === currentContext && requestVersion === currentVersion
 
 export const isCurrentCanonicalGeneration = (requestGeneration: number, currentGeneration: number): boolean => requestGeneration === currentGeneration
 
@@ -868,15 +893,9 @@ export const isNoncanonicalDetailFailure = (canonicalRecovery: boolean, status?:
 
 export const shouldClearPendingDetailState = (preservePendingOnClose: boolean): boolean => !preservePendingOnClose
 
-export const shouldContinueTransactionRestore = (loaded: boolean, loadedCount: number, targetLoadedCount: number, nextPageCursor?: string) =>
-	loaded && loadedCount < targetLoadedCount && nextPageCursor !== undefined
+export const shouldContinueTransactionRestore = (loaded: boolean, loadedCount: number, targetLoadedCount: number, nextPageCursor?: string) => loaded && loadedCount < targetLoadedCount && nextPageCursor !== undefined
 
-export const indexerConnectionStatus = (
-	network: NetworkFreshnessRecord | undefined,
-	streamState: 'open' | 'closed' | 'connecting',
-	networkRequestFailed: boolean,
-	streamHasOpened = false,
-) => {
+export const indexerConnectionStatus = (network: NetworkFreshnessRecord | undefined, streamState: 'open' | 'closed' | 'connecting', networkRequestFailed: boolean, streamHasOpened = false) => {
 	if (networkRequestFailed) return { label: 'Status unavailable', tone: 'error' }
 	const waitingForStart = indexerWaitingForStart(network)
 	if (streamHasOpened && streamState !== 'open') {
@@ -900,7 +919,7 @@ const decimalBlock = (value: string | number | bigint | null | undefined): bigin
 	return /^\d+$/.test(text) ? BigInt(text) : undefined
 }
 
-export const indexerWaitingForStart = (network: NetworkFreshnessRecord | undefined): boolean => {
+const indexerWaitingForStart = (network: NetworkFreshnessRecord | undefined): boolean => {
 	if (network === undefined || (network.indexed_block !== null && network.indexed_block !== undefined)) return false
 	const startBlock = decimalBlock(network.start_block)
 	const observedBlock = decimalBlock(network.observed_block)
@@ -948,7 +967,7 @@ export const showIndexerSyncDetails = (network: NetworkFreshnessRecord, sampledA
 	return observedBlock === undefined || indexedBlock === undefined || indexedBlock < observedBlock
 }
 
-export const compactIndexerDuration = (seconds: number): string => {
+const compactIndexerDuration = (seconds: number): string => {
 	const rounded = Math.max(1, Math.ceil(seconds))
 	if (rounded < 60) return `${rounded}s`
 	if (rounded < 3_600) return `${Math.floor(rounded / 60)}m ${rounded % 60}s`
@@ -962,35 +981,33 @@ export const compactIndexerDuration = (seconds: number): string => {
 	return `${Math.floor(totalHours / 24)}d${hours === 0 ? '' : ` ${hours}h`}`
 }
 
-export const indexerProgressEstimate = (
-	network: NetworkFreshnessRecord,
-	previousSample: IndexerProgressSample | undefined = undefined,
-	sampledAt = Date.now(),
-) => {
-	if (network.start_block === null || network.start_block === undefined || network.observed_block === null || network.observed_block === undefined)
-		return { percentage: undefined, eta: 'Estimating ETA' }
+const exactIndexedBlockFor = (indexedBlock: string | number | bigint | null | undefined, exactStartBlock: bigint | undefined) => {
+	if (indexedBlock !== null && indexedBlock !== undefined) return decimalBlock(indexedBlock)
+	return exactStartBlock === undefined ? undefined : exactStartBlock - 1n
+}
+
+const clampBigint = (value: bigint, minimum: bigint, maximum: bigint) => {
+	if (value > maximum) return maximum
+	return value < minimum ? minimum : value
+}
+
+export const indexerProgressEstimate = (network: NetworkFreshnessRecord, previousSample: IndexerProgressSample | undefined = undefined, sampledAt = Date.now()) => {
+	if (network.start_block === null || network.start_block === undefined || network.observed_block === null || network.observed_block === undefined) return { percentage: undefined, eta: 'Estimating ETA' }
 	const startBlock = Number(network.start_block)
 	const observedBlock = Number(network.observed_block)
 	const indexedBlock = network.indexed_block === null || network.indexed_block === undefined ? startBlock - 1 : Number(network.indexed_block)
 	if (![startBlock, indexedBlock, observedBlock].every(Number.isSafeInteger)) return { percentage: undefined, eta: 'Estimating ETA' }
 	const exactStartBlock = decimalBlock(network.start_block)
 	const exactObservedBlock = decimalBlock(network.observed_block)
-	const exactIndexedBlock =
-		network.indexed_block === null || network.indexed_block === undefined
-			? exactStartBlock === undefined
-				? undefined
-				: exactStartBlock - 1n
-			: decimalBlock(network.indexed_block)
-	if (exactStartBlock === undefined || exactObservedBlock === undefined || exactIndexedBlock === undefined)
-		return { percentage: undefined, eta: 'Estimating ETA' }
+	const exactIndexedBlock = exactIndexedBlockFor(network.indexed_block, exactStartBlock)
+	if (exactStartBlock === undefined || exactObservedBlock === undefined || exactIndexedBlock === undefined) return { percentage: undefined, eta: 'Estimating ETA' }
 	if (exactObservedBlock < exactStartBlock) return { percentage: '100.00', eta: 'Caught up' }
 	const boundedHead = observedBlock
 	const boundedIndexed = Math.min(boundedHead, Math.max(startBlock - 1, indexedBlock))
 	const completedBlocks = boundedIndexed - startBlock + 1
 	const totalBlocks = boundedHead - startBlock + 1
 	const remainingBlocks = totalBlocks - completedBlocks
-	const exactBoundedIndexed =
-		exactIndexedBlock > exactObservedBlock ? exactObservedBlock : exactIndexedBlock < exactStartBlock ? exactStartBlock - 1n : exactIndexedBlock
+	const exactBoundedIndexed = clampBigint(exactIndexedBlock, exactStartBlock - 1n, exactObservedBlock)
 	const exactCompletedBlocks = exactBoundedIndexed - exactStartBlock + 1n
 	const exactTotalBlocks = exactObservedBlock - exactStartBlock + 1n
 	const roundedHundredths = (exactCompletedBlocks * 10_000n + exactTotalBlocks / 2n) / exactTotalBlocks
@@ -1018,49 +1035,29 @@ export const indexerProgressEstimate = (
 }
 
 export const contractDeploymentStatus = (contract: ContractDeploymentRecord) => {
-	if (contract.deployment_block !== null && contract.deployment_block !== undefined)
-		return contract.deployment_block_exact === false
-			? { label: `Deployed at or before #${contract.deployment_block}`, tone: 'live' }
-			: { label: 'Deployed', tone: 'live' }
-	if (contract.deployment_checked_block !== null && contract.deployment_checked_block !== undefined)
-		return { label: `No code at #${contract.deployment_checked_block}`, tone: 'error' }
+	if (contract.deployment_block !== null && contract.deployment_block !== undefined) return contract.deployment_block_exact === false ? { label: `Deployed at or before #${contract.deployment_block}`, tone: 'live' } : { label: 'Deployed', tone: 'live' }
+	if (contract.deployment_checked_block !== null && contract.deployment_checked_block !== undefined) return { label: `No code at #${contract.deployment_checked_block}`, tone: 'error' }
 	return { label: 'Checking deployment', tone: 'pending' }
 }
 
 export type ContractRegistrySection = 'Protocol contracts' | 'System dependencies' | 'Discovered contracts'
 
-const dependencyContractKinds = new Set([
-	'multicall3',
-	'proxyDeployer',
-	'reputationToken',
-	'scalarOutcomes',
-	'uniswapV2Factory',
-	'uniswapV3Factory',
-	'uniswapV4PoolManager',
-	'usdc',
-	'weth',
-])
+const dependencyContractKinds = new Set(['multicall3', 'proxyDeployer', 'reputationToken', 'scalarOutcomes', 'uniswapV2Factory', 'uniswapV3Factory', 'uniswapV4PoolManager', 'usdc', 'weth'])
 
 export const contractRegistrySection = (contract: { readonly kind: string; readonly provenance: string }): ContractRegistrySection => {
 	if (contract.provenance !== 'manifest') return 'Discovered contracts'
 	return dependencyContractKinds.has(contract.kind) ? 'System dependencies' : 'Protocol contracts'
 }
 
-export const contractDeploymentTimestampLabel = (contract: ContractDeploymentRecord): string =>
-	contract.deployment_block_exact === false ? 'Deployed at or before' : 'Deployed at'
-
-export const contractDeploymentBlockActionLabel = (contract: ContractDeploymentRecord): string =>
-	contract.deployment_block_exact === false ? 'Open search boundary block ↗' : 'Open deployment block ↗'
-
 export const reconcileTransactionDialogSnapshot = (snapshot: TransactionDialogSnapshot, availableKeys: ReadonlySet<string>): TransactionDialogSnapshot => ({
 	...snapshot,
-	expandedKeys: snapshot.expandedKeys.filter((key) => key !== undefined && availableKeys.has(key)),
+	expandedKeys: snapshot.expandedKeys.filter(key => key !== undefined && availableKeys.has(key)),
 	anchorKey: snapshot.anchorKey !== undefined && availableKeys.has(snapshot.anchorKey) ? snapshot.anchorKey : undefined,
 	focusKey: snapshot.focusKey !== undefined && availableKeys.has(snapshot.focusKey) ? snapshot.focusKey : undefined,
 	focusIndex: snapshot.focusKey !== undefined && availableKeys.has(snapshot.focusKey) ? snapshot.focusIndex : -1,
 })
 
-export const createLatestRefreshCoordinator = <T>(refresh: (count: number, force: boolean) => Promise<T>) => {
+const createLatestRefreshCoordinator = <T>(refresh: (count: number, force: boolean) => Promise<T>) => {
 	let inFlight: Promise<T> | undefined
 	let pendingCount = 0
 	let pendingForce = false
@@ -1096,5 +1093,4 @@ export const createLatestRefreshCoordinator = <T>(refresh: (count: number, force
 	}
 }
 
-export const createLiveRouteRefreshCoordinator = <T, R>(refresh: (count: number, force: boolean, recovery: R) => Promise<T>, currentRecovery: () => R) =>
-	createLatestRefreshCoordinator((count, force) => refresh(count, force, currentRecovery()))
+export const createLiveRouteRefreshCoordinator = <T, R>(refresh: (count: number, force: boolean, recovery: R) => Promise<T>, currentRecovery: () => R) => createLatestRefreshCoordinator((count, force) => refresh(count, force, currentRecovery()))

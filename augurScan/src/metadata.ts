@@ -1,101 +1,16 @@
-import path from 'node:path'
-import { effectiveAbiSourceHash } from './abi-provenance.ts'
-import {
-	type Abi,
-	type AbiEvent,
-	type AbiFunction,
-	type AbiParameter,
-	type Address,
-	decodeEventLog,
-	decodeFunctionData,
-	formatAbiItem,
-	formatAbiParameter,
-	formatUnits,
-	getAddress,
-	type Hex,
-	isAddress,
-	keccak256,
-	parseAbi,
-	stringToHex,
-	toEventSelector,
-	toFunctionSelector,
-	zeroAddress,
-} from './ethereum.ts'
-import type { AbiCatalogEntry, ContractMetadata, DecodedRecord, SerializedArguments, TokenMetadata } from './types.ts'
-
-type CatalogFile = {
-	readonly sourceHash: string
-	readonly contracts: Record<string, AbiCatalogEntry>
-}
-
-const catalogFile = (await Bun.file(path.resolve(import.meta.dir, '../config/abis.json')).json()) as CatalogFile
-
-const kindToContractName: Readonly<Record<string, string>> = {
-	ammFactory: 'TwoWayConstantProductFactory',
-	ammPair: 'TwoWayConstantProductPair',
-	deploymentStatusOracle: 'DeploymentStatusOracle',
-	escalationGame: 'EscalationGame',
-	escalationGameClaimDelegate: 'EscalationGameClaimDelegate',
-	escalationGameFactory: 'EscalationGameFactory',
-	escalationProofVerifier: 'EscalationGameProofVerifier',
-	multicall3: 'Multicall3',
-	liquidationApprovalRegistry: 'LiquidationApprovalRegistry',
-	openOracle: 'OpenOracle',
-	priceCoordinator: 'OpenOraclePriceCoordinator',
-	priceCoordinatorFactory: 'PriceOracleManagerAndOperatorQueuerFactory',
-	reputationToken: 'ReputationToken',
-	scalarOutcomes: 'ScalarOutcomes',
-	securityPool: 'SecurityPool',
-	securityPoolFactory: 'SecurityPoolFactory',
-	securityPoolForker: 'SecurityPoolForker',
-	securityPoolOperationsDelegate: 'SecurityPoolOperationsDelegate',
-	securityPoolUtils: 'SecurityPoolUtils',
-	shareToken: 'ShareToken',
-	shareTokenFactory: 'ShareTokenFactory',
-	truthAuction: 'UniformPriceDualCapBatchAuction',
-	truthAuctionFactory: 'UniformPriceDualCapBatchAuctionFactory',
-	weth: 'WETH9',
-	zoltar: 'Zoltar',
-	zoltarQuestionData: 'ZoltarQuestionData',
-}
-
-const externalAbis: Readonly<Record<string, Abi>> = {
-	uniswapV2Factory: parseAbi(['event PairCreated(address indexed token0,address indexed token1,address pair,uint256 pairIndex)']),
-	uniswapV2Pair: parseAbi(['event Sync(uint112 reserve0,uint112 reserve1)']),
-	uniswapV3Factory: parseAbi(['event PoolCreated(address indexed token0,address indexed token1,uint24 indexed fee,int24 tickSpacing,address pool)']),
-	uniswapV3Pool: parseAbi([
-		'event Initialize(uint160 sqrtPriceX96,int24 tick)',
-		'event Swap(address indexed sender,address indexed recipient,int256 amount0,int256 amount1,uint160 sqrtPriceX96,uint128 liquidity,int24 tick)',
-	]),
-	uniswapV4PoolManager: parseAbi([
-		'event Initialize(bytes32 indexed id,address indexed currency0,address indexed currency1,uint24 fee,int24 tickSpacing,address hooks,uint160 sqrtPriceX96,int24 tick)',
-		'event Swap(bytes32 indexed id,address indexed sender,int128 amount0,int128 amount1,uint160 sqrtPriceX96,uint128 liquidity,int24 tick,uint24 fee)',
-	]),
-}
-
-export const abiSourceHash = effectiveAbiSourceHash(catalogFile.contracts, kindToContractName, externalAbis)
-
-export const abiForKind = (kind: string): Abi | undefined => {
-	const externalAbi = externalAbis[kind]
-	if (externalAbi !== undefined) return externalAbi
-	const name = kindToContractName[kind]
-	const catalogAbi = name === undefined ? undefined : catalogFile.contracts[name]?.abi
-	if (catalogAbi !== undefined) return catalogAbi
-	// These deployed helper libraries expose no project ABI, but remain known contracts.
-	if (kind === 'proxyDeployer' || kind === 'scalarOutcomes') return []
-	return undefined
-}
+import { abiForKind, catalogAbis } from './abi-catalog.ts'
+import { type AbiEvent, type AbiFunction, type AbiParameter, type Address, decodeEventLog, decodeFunctionData, formatAbiItem, formatAbiParameter, formatUnits, getAddress, getCreate2Address, type Hex, isAddress, keccak256, stringToHex, toEventSelector, toFunctionSelector, zeroAddress, zeroHash } from './ethereum.ts'
+import type { ContractMetadata, DecodedRecord, SerializedArguments, TokenMetadata } from './types.ts'
 
 const eventByTopic = new Map<Hex, AbiEvent[]>()
 const isAbiEvent = (item: AbiParameter): item is AbiEvent => item.type === 'event' && item.name !== undefined && item.inputs !== undefined
-const isAbiFunction = (item: AbiParameter): item is AbiFunction =>
-	item.type === 'function' && item.name !== undefined && item.inputs !== undefined && item.outputs !== undefined
-for (const { abi } of Object.values(catalogFile.contracts)) {
+const isAbiFunction = (item: AbiParameter): item is AbiFunction => item.type === 'function' && item.name !== undefined && item.inputs !== undefined && item.outputs !== undefined
+for (const abi of catalogAbis()) {
 	for (const item of abi) {
 		if (!isAbiEvent(item)) continue
 		const topic = toEventSelector(item)
 		const existing = eventByTopic.get(topic)
-		if (existing?.some((candidate) => formatAbiItem(candidate) === formatAbiItem(item))) continue
+		if (existing?.some(candidate => formatAbiItem(candidate) === formatAbiItem(item))) continue
 		eventByTopic.set(topic, [...(existing ?? []), item])
 	}
 }
@@ -204,9 +119,8 @@ const displayValue = (name: string, value: unknown, labels: ReadonlyMap<string, 
 		}
 		return value
 	}
-	if (Array.isArray(value)) return value.map((item) => displayValue(name, item, labels, context))
-	if (typeof value === 'object' && value !== null)
-		return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, displayValue(key, item, labels, context)]))
+	if (Array.isArray(value)) return value.map(item => displayValue(name, item, labels, context))
+	if (typeof value === 'object' && value !== null) return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, displayValue(key, item, labels, context)]))
 	return value
 }
 
@@ -216,12 +130,22 @@ const addressValues = (value: unknown): Address[] => {
 	return []
 }
 
+const tupleValues = (parameterType: string, value: unknown): unknown[] => {
+	if (parameterType === 'tuple') return [value]
+	return Array.isArray(value) ? value : []
+}
+
+const UNISWAP_QUOTE_SYMBOLS = new Map<string | undefined, 'WETH' | 'USDC'>([
+	['weth', 'WETH'],
+	['usdc', 'USDC'],
+])
+
 const addressesFromParameter = (parameter: AbiParameter, value: unknown): Address[] => {
 	if (parameter.type === 'address' || parameter.type.startsWith('address[')) return addressValues(value)
 	const components = parameter.components
 	if (components === undefined) return []
-	const tuples = parameter.type === 'tuple' ? [value] : Array.isArray(value) ? value : []
-	return tuples.flatMap((tuple) => {
+	const tuples = tupleValues(parameter.type, value)
+	return tuples.flatMap(tuple => {
 		if (typeof tuple !== 'object' || tuple === null) return []
 		return components.flatMap((component, index) => {
 			const componentValue = Array.isArray(tuple) ? tuple[index] : Object.entries(tuple).find(([key]) => key === (component.name || String(index)))?.[1]
@@ -230,13 +154,7 @@ const addressesFromParameter = (parameter: AbiParameter, value: unknown): Addres
 	})
 }
 
-export const referencedAddressesFrom = (parameters: readonly AbiParameter[], values: SerializedArguments): readonly Address[] => [
-	...new Map(
-		parameters
-			.flatMap((parameter, index) => addressesFromParameter(parameter, values[parameter.name || String(index)]))
-			.map((address) => [address.toLowerCase(), address]),
-	).values(),
-]
+const referencedAddressesFrom = (parameters: readonly AbiParameter[], values: SerializedArguments): readonly Address[] => [...new Map(parameters.flatMap((parameter, index) => addressesFromParameter(parameter, values[parameter.name || String(index)])).map(address => [address.toLowerCase(), address])).values()]
 
 const valueAtPath = (value: unknown, path: string): unknown => {
 	let current = value
@@ -264,23 +182,13 @@ const tokenAddress = (rule: TokenAmountRule, argumentsValue: SerializedArguments
 	return typeof candidate === 'string' && isAddress(candidate) ? getAddress(candidate) : undefined
 }
 
-const formattedTokenAmount = (
-	value: unknown,
-	address: string | undefined,
-	kind: string | undefined,
-	emitterAddress: string | undefined,
-	tokenMetadata: ReadonlyMap<string, TokenMetadata>,
-	contractKinds: ReadonlyMap<string, string>,
-	context: DecodeDisplayContext,
-): unknown => {
-	if (Array.isArray(value)) return value.map((item) => formattedTokenAmount(item, address, kind, emitterAddress, tokenMetadata, contractKinds, context))
+const formattedTokenAmount = (value: unknown, address: string | undefined, kind: string | undefined, emitterAddress: string | undefined, tokenMetadata: ReadonlyMap<string, TokenMetadata>, contractKinds: ReadonlyMap<string, string>, context: DecodeDisplayContext): unknown => {
+	if (Array.isArray(value)) return value.map(item => formattedTokenAmount(item, address, kind, emitterAddress, tokenMetadata, contractKinds, context))
 	if (typeof value !== 'string' || !/^-?\d+$/.test(value)) return value
 	if (address?.toLowerCase() === zeroAddress) return `${exactUnits(value, 18)} ${context.nativeSymbol}`
 	const metadata = address === undefined ? undefined : tokenMetadata.get(address.toLowerCase())
 	const referencedKind = address === undefined ? undefined : contractKinds.get(address.toLowerCase())
-	const protocolUnit =
-		(referencedKind === undefined ? undefined : protocolTokenUnit[referencedKind]) ??
-		(address?.toLowerCase() === emitterAddress?.toLowerCase() && kind !== undefined ? protocolTokenUnit[kind] : undefined)
+	const protocolUnit = (referencedKind === undefined ? undefined : protocolTokenUnit[referencedKind]) ?? (address?.toLowerCase() === emitterAddress?.toLowerCase() && kind !== undefined ? protocolTokenUnit[kind] : undefined)
 	const decimals = protocolUnit?.decimals ?? metadata?.decimals
 	const symbol = protocolUnit?.symbol ?? metadata?.symbol ?? 'tokens'
 	return decimals === undefined ? `${value} base units` : `${exactUnits(value, decimals)} ${symbol}`
@@ -300,20 +208,18 @@ const applyTokenFormats = (
 		const address = tokenAddress(rule, argumentsValue, emitterAddress)
 		for (const path of rule.amountPaths) {
 			const value = valueAtPath(argumentsValue, path)
-			if (value !== undefined)
-				setAtPath(displayArguments, path, formattedTokenAmount(value, address, kind, emitterAddress, tokenMetadata, contractKinds, context))
+			if (value !== undefined) setAtPath(displayArguments, path, formattedTokenAmount(value, address, kind, emitterAddress, tokenMetadata, contractKinds, context))
 		}
 	}
 	for (const rule of fixedNativeAmountRules[`${kind}.${name}`] ?? []) {
 		const value = valueAtPath(argumentsValue, rule.path)
-		if (typeof value === 'string' && /^-?\d+$/.test(value))
-			setAtPath(displayArguments, rule.path, `${exactUnits(value, rule.decimals)} ${context.nativeSymbol}`)
+		if (typeof value === 'string' && /^-?\d+$/.test(value)) setAtPath(displayArguments, rule.path, `${exactUnits(value, rule.decimals)} ${context.nativeSymbol}`)
 	}
 }
 
 export const tokenAddressesFrom = (kind: string | undefined, decoded: DecodedRecord, emitterAddress?: string): readonly Address[] => {
 	if (decoded.name === undefined || decoded.arguments === undefined) return []
-	const addresses = (tokenAmountRules[`${kind}.${decoded.name}`] ?? []).flatMap((rule) => {
+	const addresses = (tokenAmountRules[`${kind}.${decoded.name}`] ?? []).flatMap(rule => {
 		const address = tokenAddress(rule, decoded.arguments ?? {}, emitterAddress)
 		return address === undefined || address.toLowerCase() === zeroAddress ? [] : [address]
 	})
@@ -345,8 +251,7 @@ const decodeWithEvents = (
 			const result = decodeEventLog({ abi: [event], topics, data })
 			const argumentsValue = serializeArguments(result.args)
 			const displayArguments = argumentsValue === undefined ? undefined : (displayValue('', argumentsValue, labels, context) as SerializedArguments)
-			if (argumentsValue !== undefined && displayArguments !== undefined)
-				applyTokenFormats(kind, result.eventName, argumentsValue, displayArguments, tokenMetadata, contractKinds, emitterAddress, context)
+			if (argumentsValue !== undefined && displayArguments !== undefined) applyTokenFormats(kind, result.eventName, argumentsValue, displayArguments, tokenMetadata, contractKinds, emitterAddress, context)
 			return {
 				name: result.eventName,
 				signature: formatAbiItem(event),
@@ -400,15 +305,7 @@ const packedFields = [
 	['blockNumber', 6, 'uint'],
 ] as const
 
-const decodePackedReport = (
-	name: 'ReportSubmitted' | 'ReportDisputed',
-	topics: readonly Hex[],
-	data: Hex,
-	labels: ReadonlyMap<string, string>,
-	tokenMetadata: ReadonlyMap<string, TokenMetadata>,
-	contractKinds: ReadonlyMap<string, string>,
-	context: DecodeDisplayContext = defaultDisplayContext,
-): DecodedRecord => {
+const decodePackedReport = (name: 'ReportSubmitted' | 'ReportDisputed', topics: readonly Hex[], data: Hex, labels: ReadonlyMap<string, string>, tokenMetadata: ReadonlyMap<string, TokenMetadata>, contractKinds: ReadonlyMap<string, string>, context: DecodeDisplayContext = defaultDisplayContext): DecodedRecord => {
 	if (topics.length !== 2) return { name, status: 'failed', error: `${name} requires exactly two topics`, summary: `Malformed ${name}` }
 	const bytes = data.slice(2)
 	if (bytes.length !== 235 * 2) return { name, status: 'failed', error: `${name} packed payload must be exactly 235 bytes`, summary: `Malformed ${name}` }
@@ -428,25 +325,14 @@ const decodePackedReport = (
 	] as const) {
 		const tokenAddress = argumentsValue[tokenField]
 		const amount = String(argumentsValue[amountField])
-		displayArguments[amountField] = formattedTokenAmount(
-			amount,
-			typeof tokenAddress === 'string' ? tokenAddress : undefined,
-			undefined,
-			undefined,
-			tokenMetadata,
-			contractKinds,
-			context,
-		)
+		displayArguments[amountField] = formattedTokenAmount(amount, typeof tokenAddress === 'string' ? tokenAddress : undefined, undefined, undefined, tokenMetadata, contractKinds, context)
 	}
 	return {
 		name,
 		signature: `event ${name}(uint256 indexed reportId, bytes packed)`,
 		arguments: argumentsValue,
 		displayArguments,
-		argumentSchema: [
-			{ index: 0, name: 'reportId', type: 'uint256', indexed: true },
-			...packedFields.map(([field, width, type], index) => ({ index: index + 1, name: field, type: type === 'address' ? 'address' : `uint${width * 8}` })),
-		],
+		argumentSchema: [{ index: 0, name: 'reportId', type: 'uint256', indexed: true }, ...packedFields.map(([field, width, type], index) => ({ index: index + 1, name: field, type: type === 'address' ? 'address' : `uint${width * 8}` }))],
 		referencedAddresses: packedFields.flatMap(([field, , type]) => (type === 'address' ? addressValues(argumentsValue[field]) : [])),
 		status: 'decoded',
 		summary: summaryFrom(name, displayArguments),
@@ -474,29 +360,38 @@ export const decodeLogRecord = (
 	return decodeWithEvents(candidates, kind, topics, data, labels, tokenMetadata, contractKinds, emitterAddress, context)
 }
 
-export const decodeAction = (
-	contract: ContractMetadata | undefined,
-	input: Hex,
-	labels: ReadonlyMap<string, string>,
-	tokenMetadata: ReadonlyMap<string, TokenMetadata> = new Map(),
-	contractKinds: ReadonlyMap<string, string> = new Map(),
-	context: DecodeDisplayContext = defaultDisplayContext,
-): DecodedRecord => {
-	if (input === '0x') return { status: 'decoded', name: 'receive', summary: `Native transfer to ${contract?.label ?? 'contract'}` }
-	const abi = contract === undefined ? undefined : abiForKind(contract.kind)
-	if (abi === undefined) return { status: 'unknown', summary: `Call ${input.slice(0, 10)}` }
+export const decodeAction = (contract: ContractMetadata | undefined, input: Hex, labels: ReadonlyMap<string, string>, tokenMetadata: ReadonlyMap<string, TokenMetadata> = new Map(), contractKinds: ReadonlyMap<string, string> = new Map(), context: DecodeDisplayContext = defaultDisplayContext): DecodedRecord => {
 	try {
+		// deployViaProxy sends the entire init code to the zero-salt CREATE2 deployer;
+		// there is no Solidity function selector or ABI envelope to decode.
+		if (contract?.kind === 'proxyDeployer') {
+			const deployedContract = getCreate2Address({ from: contract.address, salt: zeroHash, bytecode: input })
+			const initCodeHash = keccak256(input)
+			const deployedLabel = labels.get(deployedContract.toLowerCase()) ?? deployedContract
+			return {
+				name: 'deploy',
+				arguments: { deployedContract, initCodeHash },
+				displayArguments: { deployedContract: deployedLabel, initCodeHash },
+				argumentSchema: [
+					{ index: 0, name: 'deployedContract', type: 'address' },
+					{ index: 1, name: 'initCodeHash', type: 'bytes32' },
+				],
+				referencedAddresses: [deployedContract],
+				status: 'decoded',
+				summary: `Deploy ${deployedLabel} via ${contract.label}`,
+			}
+		}
+		if (input === '0x') return { status: 'decoded', name: 'receive', summary: `Native transfer to ${contract?.label ?? 'contract'}` }
+		const abi = contract === undefined ? undefined : abiForKind(contract.kind)
+		if (abi === undefined) return { status: 'unknown', summary: `Call ${input.slice(0, 10)}` }
 		const result = decodeFunctionData({ abi, data: input })
 		const selector = input.slice(0, 10)
 		const functionItem = abi.find((item): item is AbiFunction => isAbiFunction(item) && toFunctionSelector(item) === selector)
 		if (functionItem === undefined) throw new Error(`ABI function not found for ${selector}`)
 		const decodedArguments = Array.isArray(result.args) ? result.args : []
-		const argumentsValue = Object.fromEntries(
-			functionItem.inputs.map((parameter, index) => [parameter.name || String(index), serializeValue(decodedArguments[index])]),
-		)
+		const argumentsValue = Object.fromEntries(functionItem.inputs.map((parameter, index) => [parameter.name || String(index), serializeValue(decodedArguments[index])]))
 		const displayArguments = Object.keys(argumentsValue).length === 0 ? undefined : (displayValue('', argumentsValue, labels, context) as SerializedArguments)
-		if (displayArguments !== undefined)
-			applyTokenFormats(contract?.kind, result.functionName, argumentsValue, displayArguments, tokenMetadata, contractKinds, contract?.address, context)
+		if (displayArguments !== undefined) applyTokenFormats(contract?.kind, result.functionName, argumentsValue, displayArguments, tokenMetadata, contractKinds, contract?.address, context)
 		return {
 			name: result.functionName,
 			signature: formatAbiItem(functionItem),
@@ -538,32 +433,23 @@ const knownRepQuotePair = (decoded: DecodedRecord, contracts: ReadonlyMap<string
 	const kinds = [contracts.get(token0.toLowerCase())?.kind, contracts.get(token1.toLowerCase())?.kind]
 	if (!kinds.includes('reputationToken')) return undefined
 	const quoteKind = kinds.find(knownUniswapQuoteKind)
-	return quoteKind === 'weth' ? 'WETH' : quoteKind === 'usdc' ? 'USDC' : undefined
+	return UNISWAP_QUOTE_SYMBOLS.get(quoteKind)
 }
 
-export const discoveriesFrom = (
-	decoded: DecodedRecord,
-	contracts: ReadonlyMap<string, ContractMetadata> = new Map(),
-): readonly Omit<ContractMetadata, 'provenance'>[] => {
+export const discoveriesFrom = (decoded: DecodedRecord, contracts: ReadonlyMap<string, ContractMetadata> = new Map()): readonly Omit<ContractMetadata, 'provenance'>[] => {
 	if (decoded.name === undefined || decoded.arguments === undefined) return []
 	if (decoded.name === 'PairCreated' && decoded.arguments['token0'] !== undefined) {
 		const pair = decoded.arguments['pair']
 		const quote = knownRepQuotePair(decoded, contracts)
-		return quote !== undefined && typeof pair === 'string' && isAddress(pair)
-			? [{ address: getAddress(pair), kind: 'uniswapV2Pair', label: `Uniswap V2 REP / ${quote} Pair` }]
-			: []
+		return quote !== undefined && typeof pair === 'string' && isAddress(pair) ? [{ address: getAddress(pair), kind: 'uniswapV2Pair', label: `Uniswap V2 REP / ${quote} Pair` }] : []
 	}
 	if (decoded.name === 'PoolCreated') {
 		const pool = decoded.arguments['pool']
 		const quote = knownRepQuotePair(decoded, contracts)
-		return quote !== undefined && typeof pool === 'string' && isAddress(pool)
-			? [{ address: getAddress(pool), kind: 'uniswapV3Pool', label: `Uniswap V3 REP / ${quote} Pool` }]
-			: []
+		return quote !== undefined && typeof pool === 'string' && isAddress(pool) ? [{ address: getAddress(pool), kind: 'uniswapV3Pool', label: `Uniswap V3 REP / ${quote} Pool` }] : []
 	}
-	return (discoveries[decoded.name] ?? []).flatMap((rule) => {
+	return (discoveries[decoded.name] ?? []).flatMap(rule => {
 		const value = decoded.arguments?.[rule.argument]
-		return typeof value === 'string' && isAddress(value) && value.toLowerCase() !== zeroAddress
-			? [{ address: getAddress(value), kind: rule.kind, label: rule.label }]
-			: []
+		return typeof value === 'string' && isAddress(value) && value.toLowerCase() !== zeroAddress ? [{ address: getAddress(value), kind: rule.kind, label: rule.label }] : []
 	})
 }

@@ -1,17 +1,19 @@
-import { createHash, randomUUID } from 'node:crypto'
+import { collectionDigest, sha256 } from './protocol-index-digest.ts'
+import { randomUUID } from 'node:crypto'
 import { constants } from 'node:fs'
 import { resolve } from 'node:path'
 import { encodeAbiParameters, getAddress, keccak256, type Address, type Hash, type Hex } from '@zoltar/bot-shared/ethereum'
 import type { ChaosProtocolIndex } from '#monitoring/protocol-index'
 import type { AuctionBidSnapshot, AuctionRefundSnapshot, ChildRepSplitProgressSnapshot, EscalationDepositSnapshot, MigrationRepSplitProgressSnapshot, OracleGameSnapshot } from '#operations/types'
+import { assertExactKeys, nonemptyString, normalizedHash32 as hash, requiredRecord, unsignedIntegerString } from './validators.ts'
 
 const PROTOCOL_INDEX_REFERENCE_VERSION = 1
 const PROTOCOL_INDEX_MANIFEST_VERSION = 1
-export const MAXIMUM_PROTOCOL_INDEX_CHUNK_RECORDS = 256
-export const MAXIMUM_PROTOCOL_INDEX_CHUNK_BYTES = 1024 * 1024
-export const MAXIMUM_PROTOCOL_INDEX_RECORDS = 100_000
-export const MAXIMUM_PROTOCOL_INDEX_CHUNKS = 512
-export const MAXIMUM_PROTOCOL_INDEX_BYTES = 64 * 1024 * 1024
+const MAXIMUM_PROTOCOL_INDEX_CHUNK_RECORDS = 256
+const MAXIMUM_PROTOCOL_INDEX_CHUNK_BYTES = 1024 * 1024
+const MAXIMUM_PROTOCOL_INDEX_RECORDS = 100_000
+const MAXIMUM_PROTOCOL_INDEX_CHUNKS = 512
+const MAXIMUM_PROTOCOL_INDEX_BYTES = 64 * 1024 * 1024
 const MAXIMUM_PROTOCOL_INDEX_MANIFEST_BYTES = 64 * 1024
 
 const COLLECTION_KINDS = ['reports', 'auction-bids', 'auction-refunds', 'escalation-deposits', 'migration-routes', 'child-routes'] as const
@@ -44,7 +46,7 @@ export type ProtocolIndexFileHandle = {
 	writeFile: (data: string, options: { encoding: 'utf8' }) => Promise<unknown>
 }
 
-export type ProtocolIndexDirectoryEntry = {
+type ProtocolIndexDirectoryEntry = {
 	isDirectory: () => boolean
 	isFile: () => boolean
 	isSymbolicLink: () => boolean
@@ -68,6 +70,7 @@ type ProtocolIndexIdentity = {
 	schemaVersion: 3
 	securityPoolForker: Address
 	startBlock: string
+	availableStartBlock?: string
 	wallet: Address
 	zoltar: Address
 }
@@ -101,29 +104,6 @@ type AuctionRefundRecord = {
 	refund: AuctionRefundSnapshot
 }
 
-function requiredRecord(value: unknown, label: string): Record<string, unknown> {
-	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`${label} must be an object`)
-	return value as Record<string, unknown>
-}
-
-function assertExactKeys(record: Record<string, unknown>, required: readonly string[], optional: readonly string[], label: string) {
-	const allowed = new Set([...required, ...optional])
-	const unknown = Object.keys(record).filter(key => !allowed.has(key))
-	const missing = required.filter(key => !(key in record))
-	if (unknown.length !== 0) throw new Error(`${label} contains unsupported field ${unknown[0] ?? 'unknown'}`)
-	if (missing.length !== 0) throw new Error(`${label} is missing ${missing[0] ?? 'a required field'}`)
-}
-
-function nonemptyString(value: unknown, label: string, maximumLength = 2_048) {
-	if (typeof value !== 'string' || value.trim() === '' || value.length > maximumLength) throw new Error(`${label} must be a non-empty string of at most ${maximumLength.toString()} characters`)
-	return value
-}
-
-function unsignedIntegerString(value: unknown, label: string) {
-	if (typeof value !== 'string' || !/^(?:0|[1-9]\d*)$/.test(value)) throw new Error(`${label} must be a non-negative integer string`)
-	return value
-}
-
 function signedIntegerString(value: unknown, label: string) {
 	if (typeof value !== 'string' || !/^(?:0|-?[1-9]\d*)$/.test(value)) throw new Error(`${label} must be an integer string`)
 	return value
@@ -132,11 +112,6 @@ function signedIntegerString(value: unknown, label: string) {
 function boundedInteger(value: unknown, label: string, maximum = Number.MAX_SAFE_INTEGER) {
 	if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0 || value > maximum) throw new Error(`${label} must be an integer between 0 and ${maximum.toString()}`)
 	return value
-}
-
-function hash(value: unknown, label: string) {
-	if (typeof value !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(value)) throw new Error(`${label} must be a 32-byte hash`)
-	return value.toLowerCase() as Hex
 }
 
 function boundedUnsignedString(value: unknown, label: string, bits: number) {
@@ -165,7 +140,7 @@ function compareSignedStrings(left: string, right: string) {
 
 function parseIdentity(value: unknown, expectedChainId: number, label = 'protocolIndex'): ProtocolIndexIdentity {
 	const index = requiredRecord(value, label)
-	assertExactKeys(index, ['chainId', 'cursor', 'openOracle', 'schemaVersion', 'securityPoolForker', 'startBlock', 'wallet', 'zoltar'], [], label)
+	assertExactKeys(index, ['chainId', 'cursor', 'openOracle', 'schemaVersion', 'securityPoolForker', 'startBlock', 'wallet', 'zoltar'], ['availableStartBlock'], label)
 	if (index['schemaVersion'] !== 3) throw new Error(`${label}.schemaVersion is unsupported`)
 	if (index['chainId'] !== expectedChainId) throw new Error(`Protocol index belongs to chain ${String(index['chainId'])}, expected chain ${expectedChainId.toString()}`)
 	const startBlock = boundedUnsignedString(index['startBlock'], `${label}.startBlock`, 256)
@@ -173,6 +148,8 @@ function parseIdentity(value: unknown, expectedChainId: number, label = 'protoco
 	assertExactKeys(cursor, ['blockHash', 'blockNumber'], [], `${label}.cursor`)
 	const cursorBlockNumber = boundedUnsignedString(cursor['blockNumber'], `${label}.cursor.blockNumber`, 256)
 	if (BigInt(cursorBlockNumber) < BigInt(startBlock)) throw new Error(`${label}.cursor.blockNumber precedes ${label}.startBlock`)
+	const availableStartBlock = index['availableStartBlock'] === undefined ? undefined : boundedUnsignedString(index['availableStartBlock'], `${label}.availableStartBlock`, 256)
+	if (availableStartBlock !== undefined && (BigInt(availableStartBlock) <= BigInt(startBlock) || BigInt(availableStartBlock) > BigInt(cursorBlockNumber))) throw new Error(`${label}.availableStartBlock must follow startBlock and not exceed the cursor`)
 	return {
 		chainId: expectedChainId,
 		cursor: { blockHash: hash(cursor['blockHash'], `${label}.cursor.blockHash`), blockNumber: cursorBlockNumber },
@@ -180,6 +157,7 @@ function parseIdentity(value: unknown, expectedChainId: number, label = 'protoco
 		schemaVersion: 3,
 		securityPoolForker: getAddress(nonemptyString(index['securityPoolForker'], `${label}.securityPoolForker`)),
 		startBlock,
+		...(availableStartBlock === undefined ? {} : { availableStartBlock }),
 		wallet: getAddress(nonemptyString(index['wallet'], `${label}.wallet`)),
 		zoltar: getAddress(nonemptyString(index['zoltar'], `${label}.zoltar`)),
 	}
@@ -435,10 +413,10 @@ function assertProtocolIndexRecordEnvelope(index: Record<string, unknown>) {
 	if (recordCount > MAXIMUM_PROTOCOL_INDEX_RECORDS) throw new Error(`Protocol index exceeds the ${MAXIMUM_PROTOCOL_INDEX_RECORDS.toString()}-record aggregate safety limit`)
 }
 
-export function parseProtocolIndex(value: unknown, expectedChainId: number): ChaosProtocolIndex | undefined {
+function parseProtocolIndex(value: unknown, expectedChainId: number): ChaosProtocolIndex | undefined {
 	if (value === null || value === undefined) return undefined
 	const index = requiredRecord(value, 'protocolIndex')
-	assertExactKeys(index, ['auctionBids', 'auctionRefunds', 'chainId', 'childRepSplits', 'cursor', 'escalationDeposits', 'migrationRepSplits', 'openOracle', 'reports', 'schemaVersion', 'securityPoolForker', 'startBlock', 'wallet', 'zoltar'], [], 'protocolIndex')
+	assertExactKeys(index, ['auctionBids', 'auctionRefunds', 'chainId', 'childRepSplits', 'cursor', 'escalationDeposits', 'migrationRepSplits', 'openOracle', 'reports', 'schemaVersion', 'securityPoolForker', 'startBlock', 'wallet', 'zoltar'], ['availableStartBlock'], 'protocolIndex')
 	assertProtocolIndexRecordEnvelope(index)
 	const identity = parseIdentity(
 		{
@@ -448,6 +426,7 @@ export function parseProtocolIndex(value: unknown, expectedChainId: number): Cha
 			schemaVersion: index['schemaVersion'],
 			securityPoolForker: index['securityPoolForker'],
 			startBlock: index['startBlock'],
+			...(index['availableStartBlock'] === undefined ? {} : { availableStartBlock: index['availableStartBlock'] }),
 			wallet: index['wallet'],
 			zoltar: index['zoltar'],
 		},
@@ -512,10 +491,6 @@ export function snapshotProtocolIndex(index: ChaosProtocolIndex, expectedChainId
 	return immutable
 }
 
-function sha256(value: string) {
-	return `0x${createHash('sha256').update(value, 'utf8').digest('hex')}` as Hex
-}
-
 function manifestPayload(identity: ProtocolIndexIdentity, collections: Record<CollectionKind, CollectionCommitment>): ProtocolIndexManifestPayload {
 	return {
 		collections: {
@@ -534,12 +509,6 @@ function manifestPayload(identity: ProtocolIndexIdentity, collections: Record<Co
 
 function manifestWithDigest(payload: ProtocolIndexManifestPayload): ProtocolIndexManifest {
 	return { ...payload, manifestDigest: sha256(JSON.stringify(payload)) }
-}
-
-function collectionDigest(digests: readonly Hex[]) {
-	const hasher = createHash('sha256')
-	for (let ordinal = 0; ordinal < digests.length; ordinal += 1) hasher.update(`${ordinal.toString()}:${digests[ordinal] ?? ''}\n`, 'utf8')
-	return `0x${hasher.digest('hex')}` as Hex
 }
 
 function errorCode(error: unknown) {
@@ -602,7 +571,7 @@ async function syncDirectory(path: string, filesystem: ProtocolIndexFilesystem) 
 	}
 }
 
-export function protocolIndexSidecarDirectory(statePath: string) {
+function protocolIndexSidecarDirectory(statePath: string) {
 	return `${resolve(statePath)}.protocol-index-v1`
 }
 
@@ -957,6 +926,7 @@ export async function persistProtocolIndexGeneration(statePath: string, index: C
 		schemaVersion: 3,
 		securityPoolForker: parsed.securityPoolForker,
 		startBlock: parsed.startBlock,
+		...(parsed.availableStartBlock === undefined ? {} : { availableStartBlock: parsed.availableStartBlock }),
 		wallet: parsed.wallet,
 		zoltar: parsed.zoltar,
 	}

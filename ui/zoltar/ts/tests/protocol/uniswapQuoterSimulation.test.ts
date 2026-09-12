@@ -1,12 +1,12 @@
 /// <reference types="bun-types" />
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { createPublicClient, getAddress, http } from '@zoltar/shared/ethereum'
-import { USDC_ADDRESS, quoteEthForToken, quoteExactInput, quoteRepForEth, quoteTokenForEth } from '../../protocol/uniswapQuoter.js'
+import { createPublicClient, getAddress, http } from '@zoltar/core-shared/evm/ethereum'
+import { ETH_ADDRESS, getRepAddress, quoteBestExactInputWithSource, quoteExactInput } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { serializeSavedSimulationStateEnvelope } from '@zoltar/ui-core-shared/simulation/savedStates.js'
-import type { ReadClient } from '@zoltar/ui-core-shared/lib/clients.js'
-import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/lib/networkProfile.js'
+import type { ReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
+import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { createFakeBackend, createFakeSimulationProfile } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 
 afterEach(() => {
@@ -33,7 +33,7 @@ function createStubReadClient(): ReadClient {
 describe('simulation Uniswap quotes', () => {
 	test('rejects unsupported pairs when only the simulation REP price is available', async () => {
 		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: createFakeSimulationProfile() }))
-		await expect(quoteRepForEth(createStubReadClient(), 1n)).rejects.toThrow('Simulation mock pricing only supports REP / ETH, REP / WETH, and REP / USDC pairs.')
+		await expect(quoteBestExactInputWithSource(createStubReadClient(), getRepAddress(), ETH_ADDRESS, 1n)).rejects.toThrow('Simulation mock pricing only supports REP / ETH, REP / WETH, and REP / USDC pairs.')
 		resetEnvironment()
 	})
 
@@ -90,10 +90,10 @@ describe('simulation Uniswap quotes', () => {
 		})
 		const client = createStubReadClient()
 		client.readContract = async () => 'REP' as never
-		await expect(quoteEthForToken(client, profile.genesisRepTokenAddress, 3n * 10n ** 18n)).resolves.toBe(6n * 10n ** 18n)
-		await expect(quoteTokenForEth(client, profile.genesisRepTokenAddress, 6n * 10n ** 18n)).resolves.toBe(3n * 10n ** 18n)
-		await expect(quoteExactInput(client, profile.genesisRepTokenAddress, USDC_ADDRESS, 2n * 10n ** 18n)).resolves.toBe(10n * 10n ** 6n)
-		await expect(quoteExactInput(client, USDC_ADDRESS, profile.genesisRepTokenAddress, 10n * 10n ** 6n)).resolves.toBe(2n * 10n ** 18n)
+		await expect(quoteExactInput(client, ETH_ADDRESS, profile.genesisRepTokenAddress, 3n * 10n ** 18n)).resolves.toBe(6n * 10n ** 18n)
+		await expect(quoteExactInput(client, profile.genesisRepTokenAddress, ETH_ADDRESS, 6n * 10n ** 18n)).resolves.toBe(3n * 10n ** 18n)
+		await expect(quoteExactInput(client, profile.genesisRepTokenAddress, MAINNET_NETWORK_PROFILE.usdcAddress, 2n * 10n ** 18n)).resolves.toBe(10n * 10n ** 6n)
+		await expect(quoteExactInput(client, MAINNET_NETWORK_PROFILE.usdcAddress, profile.genesisRepTokenAddress, 10n * 10n ** 6n)).resolves.toBe(2n * 10n ** 18n)
 		resetEnvironment()
 	})
 })

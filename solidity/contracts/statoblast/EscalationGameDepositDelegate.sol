@@ -9,6 +9,7 @@ import { SystemState } from './interfaces/ISecurityPool.sol';
 import { IEscalationGameEvents } from './interfaces/IEscalationGame.sol';
 import { MerkleMountainRange } from './MerkleMountainRange.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
+import { IERC20PermitAuthorization, IERC3009Authorization } from '../vendor/authorization/IERC20Authorization.sol';
 import {
 	Deposit,
 	ForkedEscrowState,
@@ -31,6 +32,7 @@ interface IEscalationGameDepositContext {
 
 interface IEscalationGameSecurityPoolContext {
 	function escalationGame() external view returns (address);
+	function questionId() external view returns (uint256);
 	function securityPoolForker() external view returns (address);
 	function systemState() external view returns (SystemState);
 	function universeId() external view returns (uint248);
@@ -54,16 +56,51 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 	}
 
 	function depositRepOnOutcome(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep) external {
-		require(!forkContinuation, 'Fork game');
+		_depositRepOnOutcome(outcome, maximumDepositAttoRep);
+	}
+
+	function depositRepOnOutcomeWithPermit(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external {
 		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
+		_validateGameForDeposit(game);
+		IEscalationGameSecurityPoolContext pool = IEscalationGameSecurityPoolContext(game.securityPool());
+		require(pool.universeId() != 0, 'Genesis REP does not support permit');
+		(uint256 depositedAttoRep, uint256 resultingCumulativeAttoRep) = game.previewDepositOnOutcome(outcome, maximumDepositAttoRep);
+		address token = game.repToken();
+		try
+			IERC20PermitAuthorization(token).permit(msg.sender, address(this), depositedAttoRep, deadline, v, r, s)
+		{} catch {
+			require(IERC20(token).allowance(msg.sender, address(this)) >= depositedAttoRep, 'Game permit and allowance insufficient');
+		}
+		IERC20(token).safeTransferFrom(msg.sender, address(this), depositedAttoRep);
+		_recordDeposit(msg.sender, outcome, depositedAttoRep, resultingCumulativeAttoRep);
+	}
+
+	function depositRepOnOutcomeWithAuthorization(address owner, BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external {
+		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
+		_validateGameForDeposit(game);
+		(uint256 depositedAttoRep, uint256 resultingCumulativeAttoRep) = game.previewDepositOnOutcome(outcome, maximumDepositAttoRep);
+		IEscalationGameSecurityPoolContext pool = IEscalationGameSecurityPoolContext(game.securityPool());
+		require(pool.universeId() != 0, 'Genesis REP does not support authorization');
+		bytes32 operationHash = keccak256(abi.encode(this.depositRepOnOutcomeWithAuthorization.selector, owner, game.securityPool(), pool.universeId(), pool.questionId(), outcome, maximumDepositAttoRep, depositedAttoRep));
+		IERC3009Authorization(game.repToken()).receiveWithAuthorization(owner, address(this), depositedAttoRep, validAfter, validBefore, keccak256(abi.encode(nonce, operationHash, owner)), v, r, s);
+		_recordDeposit(owner, outcome, depositedAttoRep, resultingCumulativeAttoRep);
+	}
+
+	function _depositRepOnOutcome(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep) private {
+		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
+		_validateGameForDeposit(game);
+		(uint256 depositedAttoRep, uint256 resultingCumulativeAttoRep) = game.previewDepositOnOutcome(outcome, maximumDepositAttoRep);
+		IERC20(game.repToken()).safeTransferFrom(msg.sender, address(this), depositedAttoRep);
+		_recordDeposit(msg.sender, outcome, depositedAttoRep, resultingCumulativeAttoRep);
+	}
+
+	function _validateGameForDeposit(IEscalationGameDepositContext game) private view {
+		require(!forkContinuation, 'Fork game');
 		address poolAddress = game.securityPool();
 		IEscalationGameSecurityPoolContext pool = IEscalationGameSecurityPoolContext(poolAddress);
 		require(pool.escalationGame() == address(this), 'Game inactive');
 		require(pool.systemState() == SystemState.Operational, 'Pool inactive');
 		require(IEscalationGameZoltarContext(pool.zoltar()).getForkTime(pool.universeId()) == 0, 'Forked');
-		(uint256 depositedAttoRep, uint256 resultingCumulativeAttoRep) = game.previewDepositOnOutcome(outcome, maximumDepositAttoRep);
-		IERC20(game.repToken()).safeTransferFrom(msg.sender, address(this), depositedAttoRep);
-		_recordDeposit(msg.sender, outcome, depositedAttoRep, resultingCumulativeAttoRep);
 	}
 
 	function _recordDeposit(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 attoRepAmount, uint256 expectedCumulativeRepAmountAttoRep) private returns (uint256 parentDepositIndex) {
