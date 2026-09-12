@@ -31,14 +31,3 @@ export function navigateToUniverse(universeId: bigint) {
 	window.history.pushState({}, '', getUniverseLinkHref(universeId))
 	window.dispatchEvent(new PopStateEvent('popstate'))
 }
-
-export function formatUniverseCollectionLabel(universeIds: bigint[]) {
-	const uniqueUniverseIds = [...new Set(universeIds)]
-	if (uniqueUniverseIds.length === 0) return formatUniverseLabel(0n)
-	if (uniqueUniverseIds.length === 1) {
-		const universeId = uniqueUniverseIds[0]
-		if (universeId === undefined) return formatUniverseLabel(0n)
-		return formatUniverseLabel(universeId)
-	}
-	return `Multiple (${uniqueUniverseIds.map(formatUniverseIdHex).join(', ')})`
-}
