@@ -5,7 +5,7 @@ import { operationInputCoverage } from '../../src/operations/input-coverage.ts'
 import { inputFieldValue, operationInputSchema, resolveOperationInputs } from '../../src/operations/input-schema.ts'
 import { restoreOperationPlanningInputs, type ManualInput, type ManualInputs } from '../../src/operations/manual-inputs.ts'
 import { decodedTransaction, readableTransaction } from '../../src/operations/transaction-description.ts'
-import { erc20Abi, openOracleAbi } from '../../src/contracts/abi.ts'
+import { genesisReputationTokenAbi, openOracleAbi } from '@zoltar/bot-shared/contracts/abi'
 import { createDurableWorkflow, durableWorkflowPlan } from '../../src/runtime/workflows.ts'
 import { loadDurableState, saveDurableState } from '../../src/state/operator-state.ts'
 import { initialDurableState } from '../../src/state/initial-state.ts'
@@ -118,7 +118,7 @@ test('exact principal changes ETH value, approvals, debits, and decoded token ar
 	const deposit = build('open-oracle.deposit', { token: address(7), amount: '12345' })
 	const approval = deposit.steps.find(step => step.label.includes('Approve'))
 	if (approval === undefined) throw new Error('Missing approval')
-	expect(decodeFunctionData({ abi: erc20Abi, data: approval.data }).args[1]).toBe(12345n)
+	expect(decodeFunctionData({ abi: genesisReputationTokenAbi, data: approval.data }).args[1]).toBe(12345n)
 	expect(transaction(deposit).args[1]).toBe(12345n)
 	expect(deposit.steps.at(-1)?.walletAssetDebits).toContainEqual(expect.objectContaining({ amount: '12345' }))
 	const report = build('open-oracle.report', { amount1: '23456', amount2: '34567' })

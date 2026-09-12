@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { erc20Abi, escalationGameAbi, openOracleAbi, securityPoolAbi, zoltarAbi } from '../../src/contracts/abi.ts'
+import { genesisReputationTokenAbi, escalationGameAbi, openOracleAbi, securityPoolAbi, zoltarAbi } from '@zoltar/bot-shared/contracts/abi'
 import { reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
 import { eligibleOperationPlans } from '../support/operation-plans.ts'
 import type { EcosystemSnapshot, OperationPlan } from '../../src/operations/types.ts'
@@ -35,7 +35,7 @@ function approvalSteps(plan: OperationPlan) {
 }
 
 function confirmApproval(snapshot: EcosystemSnapshot, step: OperationPlan['steps'][number]) {
-	const call = decodeFunctionData({ abi: erc20Abi, data: step.data })
+	const call = decodeFunctionData({ abi: genesisReputationTokenAbi, data: step.data })
 	if (call.functionName !== 'approve') throw new Error(`Expected ${step.id} to be an ERC-20 approval`)
 	const [spender, required] = call.args
 	const inventory = snapshot.wallet.tokens.find(token => token.address.toLowerCase() === step.to.toLowerCase())
@@ -67,7 +67,7 @@ function expectOnlyExactRevokes(plan: OperationPlan | undefined, expected: Array
 	for (const [index, step] of plan.steps.entries()) {
 		const expectedRevoke = expected[index]
 		if (expectedRevoke === undefined) throw new Error('Missing expected revoke')
-		const call = decodeFunctionData({ abi: erc20Abi, data: step.data })
+		const call = decodeFunctionData({ abi: genesisReputationTokenAbi, data: step.data })
 		expect(call.functionName).toBe('approve')
 		expect(call.args).toEqual([expectedRevoke.spender, 0n])
 		expect(step.to).toBe(expectedRevoke.token)
@@ -155,7 +155,7 @@ describe('non-Trading exact approval continuations', () => {
 				candidate.definitionId,
 			).toBeTrue()
 			const expectedRevokes = originalApprovals.map(step => {
-				const call = decodeFunctionData({ abi: erc20Abi, data: step.data })
+				const call = decodeFunctionData({ abi: genesisReputationTokenAbi, data: step.data })
 				if (call.functionName !== 'approve') throw new Error(`Expected ${step.id} approval`)
 				return { spender: call.args[0], token: step.to }
 			})

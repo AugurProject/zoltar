@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { erc1155Abi, tradingPairAbi } from '../../src/contracts/abi.ts'
+import { erc1155Abi, twoWayConstantProductPairAbi } from '@zoltar/bot-shared/contracts/abi'
 import { reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
 import { eligibleOperationPlans } from '../support/operation-plans.ts'
 import type { OperationPlan } from '../../src/operations/types.ts'
@@ -77,14 +77,14 @@ describe('trading exact continuations', () => {
 				pair.effectiveNoReserve = '0'
 			}
 			const original = requiredPlan(snapshot, definitionId)
-			const originalArgs = decodeFunctionData({ abi: tradingPairAbi, data: requiredAction(original).data }).args
+			const originalArgs = decodeFunctionData({ abi: twoWayConstantProductPairAbi, data: requiredAction(original).data }).args
 			const confirmedStepId = confirmShareApproval(snapshot, original, pair.address)
 			shares.yes = (10n ** 18n).toString()
 			shares.no = (10n ** 18n).toString()
 
 			const continuation = exactContinuation(snapshot, original, confirmedStepId)
 			if (continuation === undefined) throw new Error(`Missing ${definitionId} continuation`)
-			const continuationArgs = decodeFunctionData({ abi: tradingPairAbi, data: requiredAction(continuation).data }).args
+			const continuationArgs = decodeFunctionData({ abi: twoWayConstantProductPairAbi, data: requiredAction(continuation).data }).args
 			expect(continuationArgs[0], definitionId).toBe(originalArgs[0])
 			expect(continuationArgs[1], definitionId).toBe(originalArgs[1])
 			expect(continuation.maximumCleanupTransactionCount, definitionId).toBe(1)
@@ -99,13 +99,13 @@ describe('trading exact continuations', () => {
 		shares.yes = '5000'
 		shares.no = '0'
 		const original = requiredPlan(snapshot, 'trading.swap.exact-input')
-		const originalArgs = decodeFunctionData({ abi: tradingPairAbi, data: requiredAction(original).data }).args
+		const originalArgs = decodeFunctionData({ abi: twoWayConstantProductPairAbi, data: requiredAction(original).data }).args
 		const confirmedStepId = confirmShareApproval(snapshot, original, pair.address)
 		shares.yes = (10n ** 18n).toString()
 
 		const continuation = exactContinuation(snapshot, original, confirmedStepId)
 		if (continuation === undefined) throw new Error('Missing exact-input continuation')
-		const continuationArgs = decodeFunctionData({ abi: tradingPairAbi, data: requiredAction(continuation).data }).args
+		const continuationArgs = decodeFunctionData({ abi: twoWayConstantProductPairAbi, data: requiredAction(continuation).data }).args
 		expect(continuationArgs[1]).toBe(originalArgs[1])
 		expect(continuationArgs[2]).toBe(originalArgs[2])
 
@@ -127,12 +127,12 @@ describe('trading exact continuations', () => {
 		shares.yes = '5000'
 		shares.no = '0'
 		const original = requiredPlan(snapshot, 'trading.swap.exact-output')
-		const originalArgs = decodeFunctionData({ abi: tradingPairAbi, data: requiredAction(original).data }).args
+		const originalArgs = decodeFunctionData({ abi: twoWayConstantProductPairAbi, data: requiredAction(original).data }).args
 		const confirmedStepId = confirmShareApproval(snapshot, original, pair.address)
 		shares.yes = (10n ** 18n).toString()
 		const continuation = exactContinuation(snapshot, original, confirmedStepId)
 		if (continuation === undefined) throw new Error('Missing exact-output continuation')
-		const continuationArgs = decodeFunctionData({ abi: tradingPairAbi, data: requiredAction(continuation).data }).args
+		const continuationArgs = decodeFunctionData({ abi: twoWayConstantProductPairAbi, data: requiredAction(continuation).data }).args
 		expect(continuationArgs[1]).toBe(originalArgs[1])
 		expect(continuationArgs[2]).toBe(originalArgs[2])
 
@@ -219,12 +219,12 @@ describe('trading exact continuations', () => {
 		lp.balance = '5000'
 		lp.allowanceToRouter = '0'
 		const remove = requiredPlan(removeSnapshot, 'trading.liquidity.remove')
-		const removeArgs = decodeFunctionData({ abi: tradingPairAbi, data: requiredAction(remove).data }).args
+		const removeArgs = decodeFunctionData({ abi: twoWayConstantProductPairAbi, data: requiredAction(remove).data }).args
 		pair.walletLiquidity = (10n ** 18n).toString()
 		lp.balance = (10n ** 18n).toString()
 		const removeContinuation = exactContinuation(removeSnapshot, remove, '')
 		if (removeContinuation === undefined) throw new Error('Missing router remove continuation')
-		expect(decodeFunctionData({ abi: tradingPairAbi, data: requiredAction(removeContinuation).data }).args[0]).toBe(removeArgs[0])
+		expect(decodeFunctionData({ abi: twoWayConstantProductPairAbi, data: requiredAction(removeContinuation).data }).args[0]).toBe(removeArgs[0])
 	})
 
 	test('cleans up every exact liquidity or redemption principal when live inventory falls below it', () => {
@@ -240,7 +240,7 @@ describe('trading exact continuations', () => {
 				pair.effectiveNoReserve = '0'
 			}
 			const original = requiredPlan(snapshot, definitionId)
-			const shareAmount = requiredBigint(decodeFunctionData({ abi: tradingPairAbi, data: requiredAction(original).data }).args[0], `${definitionId} share amount`)
+			const shareAmount = requiredBigint(decodeFunctionData({ abi: twoWayConstantProductPairAbi, data: requiredAction(original).data }).args[0], `${definitionId} share amount`)
 			const confirmedApproval = confirmShareApproval(snapshot, original, pair.address)
 			shares.yes = (shareAmount - 1n).toString()
 			const cleanup = exactContinuation(snapshot, original, confirmedApproval)
@@ -264,7 +264,7 @@ describe('trading exact continuations', () => {
 		if (pair === undefined || lp === undefined) throw new Error('LP inventory cleanup fixture is incomplete')
 		lp.allowanceToRouter = '0'
 		const remove = requiredPlan(removeSnapshot, 'trading.liquidity.remove')
-		const liquidity = requiredBigint(decodeFunctionData({ abi: tradingPairAbi, data: requiredAction(remove).data }).args[0], 'remove liquidity')
+		const liquidity = requiredBigint(decodeFunctionData({ abi: twoWayConstantProductPairAbi, data: requiredAction(remove).data }).args[0], 'remove liquidity')
 		lp.balance = (liquidity - 1n).toString()
 		pair.walletLiquidity = (liquidity - 1n).toString()
 		expect(exactContinuation(removeSnapshot, remove, '')).toBeUndefined()

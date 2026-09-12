@@ -1,7 +1,7 @@
 import { createPublicClient, defineChain, getAddress, http, type Hex } from '@zoltar/bot-shared/ethereum'
 import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import type { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
-import { securityPoolFactoryAbi } from '#contracts/abi'
+import { securityPoolFactoryAbi } from '@zoltar/bot-shared/contracts/abi'
 import type { DesiredPoolSettings, OperatorSettings } from '#config/settings'
 
 export function chainFor(settings: OperatorSettings) {

@@ -1,7 +1,7 @@
 import { ethSpend, tokenSpend } from './input-funding.ts'
 import { inputInteger, inputMatches, inputText } from './input-values.ts'
 import { encodeAbiParameters, getAddress, zeroAddress, type AbiValue } from '@zoltar/bot-shared/ethereum'
-import { erc20Abi, openOracleAbi, wethAbi } from '../contracts/abi.ts'
+import { erc20Abi, openOracleAbi, weth9Abi } from '@zoltar/bot-shared/contracts/abi'
 import { OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT, trustedOpenOracleReportPredicate } from '../monitoring/protocol-index.ts'
 import { allowance, amount, choose, disabled, eligible, encodePreflightCall, encodeStep, erc20AllowanceEvidence, erc20WalletDebit, eventEvidence, eventTopic, mixSeed, ONE_TOKEN, openOracleCreditDebit, optionAmount, planBase, tokenInventory } from './planning.ts'
 import { requiredTimestampSafetySeconds, requiredWorkflowSafetyBlocks } from './timing.ts'
@@ -303,7 +303,7 @@ function wethDefinition(mode: 'wrap' | 'unwrap'): OperationDefinition {
 				snapshot,
 				steps: [
 					encodeStep({
-						abi: wethAbi,
+						abi: weth9Abi,
 						args: mode === 'unwrap' ? [value] : undefined,
 						evidence: [eventEvidence(snapshot.deployments.weth, mode === 'wrap' ? 'Deposit(address,uint256)' : 'Withdrawal(address,uint256)')],
 						functionName: mode === 'wrap' ? 'deposit' : 'withdraw',

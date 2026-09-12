@@ -1,7 +1,7 @@
-import { escalationGameAbi } from '../contracts/abi.ts'
+import { escalationGameAbi } from '@zoltar/bot-shared/contracts/abi'
 import { type VaultSnapshot } from '../operations/types.ts'
 
-import { coordinatorAbi, liquidationApprovalRegistryAbi, securityPoolAbi } from '../contracts/abi.ts'
+import { openOraclePriceCoordinatorAbi, liquidationApprovalRegistryAbi, securityPoolAbi } from '@zoltar/bot-shared/contracts/abi'
 import { type PoolSnapshot, type StagedOperationSnapshot } from '../operations/types.ts'
 import { type ChaosReadClient, DISCOVERY_RPC_CONCURRENCY, contractSimulationReverted, drainConcurrent, mapWithConcurrency, sameAddress } from './discovery-client.ts'
 import { collectCountedPages } from './discovery-registry.ts'
@@ -44,19 +44,19 @@ export async function discoverVault(client: ChaosReadClient, pool: Address, esca
 }
 
 export async function discoverStagedOperations(client: ChaosReadClient, pool: PoolSnapshot, blockNumber: bigint, limit: number, warnings: string[]) {
-	const count = await client.readContract({ abi: coordinatorAbi, address: pool.coordinator, blockNumber, functionName: 'getActiveStagedOperationCount' })
+	const count = await client.readContract({ abi: openOraclePriceCoordinatorAbi, address: pool.coordinator, blockNumber, functionName: 'getActiveStagedOperationCount' })
 	if (count > BigInt(limit)) {
 		warnings.push(`Staged-operation discovery truncated for ${pool.coordinator}: exact canonical total ${count.toString()} exceeds the configured ${limit.toString()}-entry resident limit`)
 		return []
 	}
-	const pendingIds = await client.readContract({ abi: coordinatorAbi, address: pool.coordinator, blockNumber, functionName: 'getPendingSettlementOperationIds' })
+	const pendingIds = await client.readContract({ abi: openOraclePriceCoordinatorAbi, address: pool.coordinator, blockNumber, functionName: 'getPendingSettlementOperationIds' })
 	const collected = await collectCountedPages({
 		count,
 		label: `Staged-operation discovery for ${pool.coordinator}`,
 		maximumItems: limit,
 		pageSize: limit,
 		readPage: async (start, pageCount) => {
-			const [ids, operations] = await client.readContract({ abi: coordinatorAbi, address: pool.coordinator, args: [start, pageCount], blockNumber, functionName: 'getActiveStagedOperations' })
+			const [ids, operations] = await client.readContract({ abi: openOraclePriceCoordinatorAbi, address: pool.coordinator, args: [start, pageCount], blockNumber, functionName: 'getActiveStagedOperations' })
 			if (ids.length !== operations.length) throw new Error(`Coordinator ${pool.coordinator} returned mismatched staged-operation arrays`)
 			return ids.map((id, index) => {
 				const operation = operations[index]
@@ -72,8 +72,8 @@ export async function discoverStagedOperations(client: ChaosReadClient, pool: Po
 	let liquidationConfiguration: Promise<readonly [bigint, Address]> | undefined
 	const getLiquidationConfiguration = () => {
 		liquidationConfiguration ??= drainConcurrent([
-			client.readContract({ abi: coordinatorAbi, address: pool.coordinator, blockNumber, functionName: 'minLiquidationPriceDistanceBps' }),
-			client.readContract({ abi: coordinatorAbi, address: pool.coordinator, blockNumber, functionName: 'liquidationApprovalRegistry' }).then(getAddress),
+			client.readContract({ abi: openOraclePriceCoordinatorAbi, address: pool.coordinator, blockNumber, functionName: 'minLiquidationPriceDistanceBps' }),
+			client.readContract({ abi: openOraclePriceCoordinatorAbi, address: pool.coordinator, blockNumber, functionName: 'liquidationApprovalRegistry' }).then(getAddress),
 		])
 		return liquidationConfiguration
 	}

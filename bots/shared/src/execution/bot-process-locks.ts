@@ -1,7 +1,7 @@
-import { getAddress, privateKeyToAccount, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
-import { acquireExecutionSignerLock, acquireFileProcessLock, type ExclusiveProcessLock } from '@zoltar/bot-shared/execution/process-lock'
+import { getAddress, privateKeyToAccount, type Address, type Hex } from '../ethereum.ts'
+import { acquireExecutionSignerLock, acquireFileProcessLock, type ExclusiveProcessLock } from './process-lock.ts'
 
-export type ChaosLockSettings = {
+export type BotLockSettings = {
 	chainId: number
 	execute: boolean
 	privateKey: Hex | undefined
@@ -9,30 +9,42 @@ export type ChaosLockSettings = {
 	stateFile: string
 }
 
-export type ChaosProcessLockAcquirers = {
+export type BotProcessLockAcquirers = {
 	acquireSigner: (chainId: number, address: Address, lockRoot?: string | undefined) => Promise<ExclusiveProcessLock>
 	acquireState: (stateFile: string) => Promise<ExclusiveProcessLock>
 }
 
-const defaultLockAcquirers: ChaosProcessLockAcquirers = {
-	acquireSigner: acquireExecutionSignerLock,
-	acquireState: stateFile => acquireFileProcessLock(stateFile, 'Chaos-bot state'),
+/**
+ * How a bot names itself in lock messages and whether dry-run processes should hold signer locks at all. The chaos bot signs
+ * nothing in dry-run mode but still reserves the configured signer so a second process cannot take it over; the liquidator
+ * only reserves signers while live execution is enabled.
+ */
+export type BotProcessLockOptions = {
+	readonly acquirers?: BotProcessLockAcquirers
+	readonly label: string
+	readonly signerLocksInDryRun: boolean
 }
 
-export class ChaosProcessLockAcquisitionError extends Error {
+const defaultLockAcquirers = (label: string): BotProcessLockAcquirers => ({
+	acquireSigner: acquireExecutionSignerLock,
+	acquireState: stateFile => acquireFileProcessLock(stateFile, `${label} state`),
+})
+
+export class BotProcessLockAcquisitionError extends Error {
 	readonly acquisitionCause: unknown
 	readonly releaseProcessLocks: () => Promise<void>
 
 	constructor(acquisitionCause: unknown, releaseProcessLocks: () => Promise<void>) {
 		super(acquisitionCause instanceof Error ? acquisitionCause.message : String(acquisitionCause), { cause: acquisitionCause })
-		this.name = 'ChaosProcessLockAcquisitionError'
+		this.name = 'BotProcessLockAcquisitionError'
 		this.acquisitionCause = acquisitionCause
 		this.releaseProcessLocks = releaseProcessLocks
 	}
 }
 
-export async function acquireChaosProcessLocks(settings: ChaosLockSettings, acquirers: ChaosProcessLockAcquirers = defaultLockAcquirers) {
-	if (!Number.isSafeInteger(settings.chainId) || settings.chainId < 1) throw new Error('Chaos-bot lock chain ID must be a positive integer')
+export async function acquireBotProcessLocks(settings: BotLockSettings, { acquirers: configuredAcquirers, label, signerLocksInDryRun }: BotProcessLockOptions) {
+	const acquirers = configuredAcquirers ?? defaultLockAcquirers(label)
+	if (!Number.isSafeInteger(settings.chainId) || settings.chainId < 1) throw new Error(`${label} lock chain ID must be a positive integer`)
 	const stateLock = await acquirers.acquireState(settings.stateFile)
 	let signerLock: ExclusiveProcessLock | undefined
 	let signerAddress: Address | undefined
@@ -46,11 +58,11 @@ export async function acquireChaosProcessLocks(settings: ChaosLockSettings, acqu
 		try {
 			await stateLock.release()
 		} catch (cleanupError) {
-			throw new ChaosProcessLockAcquisitionError(error, async () => {
+			throw new BotProcessLockAcquisitionError(error, async () => {
 				try {
 					await stateLock.release()
 				} catch (retryError) {
-					throw new AggregateError([cleanupError, retryError], `Failed to release the partially acquired chaos-bot state lock ${stateLock.path}`)
+					throw new AggregateError([cleanupError, retryError], `Failed to release the partially acquired ${label} state lock ${stateLock.path}`)
 				}
 			})
 		}
@@ -69,7 +81,7 @@ export async function acquireChaosProcessLocks(settings: ChaosLockSettings, acqu
 	}
 	return {
 		acquireSigner: async (address: Address | undefined) => {
-			if (address === undefined || (signerAddress !== undefined && address.toLowerCase() === signerAddress.toLowerCase())) return undefined
+			if ((!signerLocksInDryRun && !settings.execute) || address === undefined || (signerAddress !== undefined && address.toLowerCase() === signerAddress.toLowerCase())) return undefined
 			const key = signerKey(address)
 			const retained = retiredSignerLocks.get(key)
 			if (retained !== undefined) {
@@ -79,13 +91,14 @@ export async function acquireChaosProcessLocks(settings: ChaosLockSettings, acqu
 			return acquirers.acquireSigner(settings.chainId, getAddress(address), settings.signerLockRoot)
 		},
 		commitSigner: async (address: Address | undefined, nextLock: ExclusiveProcessLock | undefined) => {
+			if (!signerLocksInDryRun && !settings.execute) return
 			const unchanged = address !== undefined && signerAddress !== undefined && address.toLowerCase() === signerAddress.toLowerCase()
 			if (unchanged) {
-				if (nextLock !== undefined) throw new Error('Unchanged chaos-bot signer unexpectedly acquired another lock')
+				if (nextLock !== undefined) throw new Error(`Unchanged ${label} signer unexpectedly acquired another lock`)
 				await releaseRetiredSignerLocks()
 				return
 			}
-			if (address !== undefined && nextLock === undefined) throw new Error('Changed chaos-bot signer is missing its exclusive lock')
+			if (address !== undefined && nextLock === undefined) throw new Error(`Changed ${label} signer is missing its exclusive lock`)
 			const previousLock = signerLock
 			const previousAddress = signerAddress
 			signerAddress = address
@@ -95,7 +108,7 @@ export async function acquireChaosProcessLocks(settings: ChaosLockSettings, acqu
 		},
 		discardSigner: async (address: Address | undefined, lock: ExclusiveProcessLock | undefined) => {
 			if (lock === undefined) return
-			if (address === undefined) throw new Error('Cannot discard a chaos-bot signer lock without its address')
+			if (address === undefined) throw new Error(`Cannot discard a ${label} signer lock without its address`)
 			retiredSignerLocks.set(signerKey(address), lock)
 			await releaseRetiredSignerLocks()
 		},
@@ -122,7 +135,7 @@ export async function acquireChaosProcessLocks(settings: ChaosLockSettings, acqu
 				} catch (error) {
 					errors.push(error)
 				}
-				if (errors.length !== 0) throw new AggregateError(errors, 'Failed to release all chaos-bot process locks')
+				if (errors.length !== 0) throw new AggregateError(errors, `Failed to release all ${label} process locks`)
 				released = true
 			})().finally(() => {
 				if (!released) releaseAttempt = undefined
@@ -132,22 +145,22 @@ export async function acquireChaosProcessLocks(settings: ChaosLockSettings, acqu
 	}
 }
 
-export type ChaosProcessLocks = Awaited<ReturnType<typeof acquireChaosProcessLocks>>
+export type BotProcessLocks = Awaited<ReturnType<typeof acquireBotProcessLocks>>
 
-export type ChaosShutdownController = ReturnType<typeof createChaosShutdownController>
+export type BotShutdownController = ReturnType<typeof createBotShutdownController>
 
-export async function acquireChaosProcessLocksForShutdown(settings: ChaosLockSettings, shutdown: Pick<ChaosShutdownController, 'isRequested'>, acquire: typeof acquireChaosProcessLocks = acquireChaosProcessLocks) {
-	const locks = await acquire(settings)
+export async function acquireBotProcessLocksForShutdown(settings: BotLockSettings, options: BotProcessLockOptions, shutdown: Pick<BotShutdownController, 'isRequested'>, acquire: typeof acquireBotProcessLocks = acquireBotProcessLocks) {
+	const locks = await acquire(settings, options)
 	if (!shutdown.isRequested()) return locks
 	await locks.release()
 	return undefined
 }
 
-export function chaosDashboardLifecycle(dashboard: { stop: (closeActiveConnections?: boolean) => Promise<void> }) {
+export function botDashboardLifecycle(dashboard: { stop: (closeActiveConnections?: boolean) => Promise<void> }) {
 	return { [Symbol.asyncDispose]: () => dashboard.stop() }
 }
 
-export function createChaosShutdownController() {
+export function createBotShutdownController() {
 	let requested = false
 	let disposed = false
 	const waiters = new Set<() => void>()

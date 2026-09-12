@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData, encodeAbiParameters, keccak256, toHex } from '@zoltar/bot-shared/ethereum'
-import { openOracleAbi } from '../../src/contracts/abi.ts'
+import { openOracleAbi } from '@zoltar/bot-shared/contracts/abi'
 import { evaluateOperationCatalog } from '../../src/operations/catalog.ts'
 import { eligibleOperationPlans } from '../support/operation-plans.ts'
 import type { OperationPlan } from '../../src/operations/types.ts'

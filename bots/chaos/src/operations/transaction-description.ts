@@ -1,5 +1,5 @@
 import { decodeFunctionData, type Abi, type JsonValue } from '@zoltar/bot-shared/ethereum'
-import * as contractAbis from '../contracts/abi.ts'
+import * as contractAbis from '@zoltar/bot-shared/contracts/abi'
 import type { OperationPlan } from './types.ts'
 
 function jsonValue(value: unknown): JsonValue {
@@ -11,26 +11,26 @@ function jsonValue(value: unknown): JsonValue {
 }
 
 const previewAbis: readonly Abi[] = [
-	contractAbis.erc20Abi,
-	contractAbis.uniswapV3FactoryAbi,
-	contractAbis.uniswapV3PoolAbi,
-	contractAbis.genesisUniswapSeederAbi,
+	contractAbis.genesisReputationTokenAbi,
+	contractAbis.genesisUniswapV3FactoryAbi,
+	contractAbis.genesisUniswapV3PoolStateAbi,
+	contractAbis.genesisUniswapV3SeederAbi,
 	contractAbis.erc1155Abi,
 	contractAbis.shareTokenAbi,
 	contractAbis.zoltarAbi,
-	contractAbis.questionDataAbi,
+	contractAbis.zoltarQuestionDataAbi,
 	contractAbis.securityPoolFactoryAbi,
 	contractAbis.securityPoolAbi,
 	contractAbis.liquidationApprovalRegistryAbi,
-	contractAbis.coordinatorAbi,
+	contractAbis.openOraclePriceCoordinatorAbi,
 	contractAbis.securityPoolForkerAbi,
 	contractAbis.escalationGameAbi,
-	contractAbis.auctionAbi,
+	contractAbis.uniformPriceDualCapBatchAuctionAbi,
 	contractAbis.openOracleAbi,
-	contractAbis.wethAbi,
-	contractAbis.tradingFactoryAbi,
-	contractAbis.tradingPairAbi,
-	contractAbis.tradingRouterAbi,
+	contractAbis.weth9Abi,
+	contractAbis.twoWayConstantProductFactoryAbi,
+	contractAbis.twoWayConstantProductPairAbi,
+	contractAbis.twoWayConstantProductRouterAbi,
 ]
 
 export function readableTransaction(step: OperationPlan['steps'][number]) {

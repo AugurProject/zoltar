@@ -2,7 +2,7 @@ import { ethSpend, repSpend } from './input-funding.ts'
 import { inputInteger, inputMatches } from './input-values.ts'
 import { getAddress, zeroAddress, type AbiValue } from '@zoltar/bot-shared/ethereum'
 import { maximumFeePerGas } from '@zoltar/bot-shared/execution/transaction-submission'
-import { auctionAbi, coordinatorAbi, erc20Abi, escalationGameAbi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi } from '../contracts/abi.ts'
+import { uniformPriceDualCapBatchAuctionAbi, openOraclePriceCoordinatorAbi, erc20Abi, escalationGameAbi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi } from '@zoltar/bot-shared/contracts/abi'
 import { allowance, amount, choose, disabled, eligible, encodePreflightCall, encodeStep, erc1155WalletDebit, erc20AllowanceEvidence, erc20WalletDebit, eventEvidence, eventTopic, mixSeed, ONE_TOKEN, optionAmount, planBase, securityPoolVaultRepDebit, tokenInventory } from './planning.ts'
 import type { EcosystemSnapshot, OperationContinuationContext, OperationDefinition, OperationEvidence, OperationPlan, OperationWalletAssetDebit, PlanningOptions, PoolSnapshot } from './types.ts'
 import { validForkOutcomeRoutes } from './fork-outcomes.ts'
@@ -1012,7 +1012,7 @@ const queueWithdrawal: OperationDefinition = {
 		const evidence = [eventEvidence(pool.coordinator, 'StagedOperationQueued(uint256,uint8,address,address,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,bool)'), decodedStagedSuccess(pool.coordinator)]
 		steps.push(
 			encodeStep({
-				abi: coordinatorAbi,
+				abi: openOraclePriceCoordinatorAbi,
 				args: [1, snapshot.wallet.address, requested, STAGED_WITHDRAWAL_VALIDITY_SECONDS, funding.price, funding.initialWethAttoEth],
 				evidence,
 				functionName: 'requestPriceIfNeededAndStageOperation',
@@ -1107,7 +1107,7 @@ function oracleRequestSteps(snapshot: EcosystemSnapshot, coordinator: `0x${strin
 	}
 	steps.push(
 		encodeStep({
-			abi: coordinatorAbi,
+			abi: openOraclePriceCoordinatorAbi,
 			args: [prepared.price, initialWethAttoEth],
 			evidence: [
 				eventEvidence(coordinator, 'PriceRequested(uint256,uint256)'),
@@ -1320,7 +1320,7 @@ const recoverSettledReport: OperationDefinition = {
 			priority: 'urgent',
 			risk: 'low',
 			snapshot,
-			steps: [encodeStep({ abi: coordinatorAbi, evidence: [eventEvidence(pool.coordinator, 'PendingReportRecovered(uint256,uint256,uint256,uint256,uint256,uint256)')], functionName: 'recoverSettledPendingReport', id: 'recover-report', label: 'Recover settled pending report', to: pool.coordinator })],
+			steps: [encodeStep({ abi: openOraclePriceCoordinatorAbi, evidence: [eventEvidence(pool.coordinator, 'PendingReportRecovered(uint256,uint256,uint256,uint256,uint256,uint256)')], functionName: 'recoverSettledPendingReport', id: 'recover-report', label: 'Recover settled pending report', to: pool.coordinator })],
 		})
 	},
 	buildLifecyclePlans(snapshot) {
@@ -1336,7 +1336,7 @@ const recoverSettledReport: OperationDefinition = {
 					priority: 'urgent',
 					risk: 'low',
 					snapshot,
-					steps: [encodeStep({ abi: coordinatorAbi, evidence: [eventEvidence(pool.coordinator, 'PendingReportRecovered(uint256,uint256,uint256,uint256,uint256,uint256)')], functionName: 'recoverSettledPendingReport', id: 'recover-report', label: 'Recover settled pending report', to: pool.coordinator })],
+					steps: [encodeStep({ abi: openOraclePriceCoordinatorAbi, evidence: [eventEvidence(pool.coordinator, 'PendingReportRecovered(uint256,uint256,uint256,uint256,uint256,uint256)')], functionName: 'recoverSettledPendingReport', id: 'recover-report', label: 'Recover settled pending report', to: pool.coordinator })],
 				}),
 			)
 	},
@@ -1653,7 +1653,7 @@ function stagedObligation(mode: 'execute' | 'expire'): OperationDefinition {
 			snapshot,
 			steps: [
 				encodeStep({
-					abi: coordinatorAbi,
+					abi: openOraclePriceCoordinatorAbi,
 					args: [BigInt(staged.id)],
 					evidence,
 					functionName: mode === 'execute' ? 'executeStagedOperation' : 'expireStagedOperation',
@@ -1972,7 +1972,7 @@ function auctionDefinition(kind: 'bid' | 'withdraw-refund'): OperationDefinition
 			priority: kind === 'bid' ? 'random' : 'urgent',
 			risk: kind === 'bid' ? 'high' : 'low',
 			snapshot,
-			steps: [encodeStep({ abi: auctionAbi, args: kind === 'bid' ? [tick] : undefined, evidence: [eventEvidence(auction.address, signature)], functionName: method, id: method, label: kind, to: auction.address, value: kind === 'bid' ? bid : undefined })],
+			steps: [encodeStep({ abi: uniformPriceDualCapBatchAuctionAbi, args: kind === 'bid' ? [tick] : undefined, evidence: [eventEvidence(auction.address, signature)], functionName: method, id: method, label: kind, to: auction.address, value: kind === 'bid' ? bid : undefined })],
 		})
 	}
 	return {
@@ -2336,7 +2336,7 @@ function buildAuctionRefundPlan(snapshot: EcosystemSnapshot, candidate: ReturnTy
 		snapshot,
 		steps: [
 			encodeStep({
-				abi: auctionAbi,
+				abi: uniformPriceDualCapBatchAuctionAbi,
 				args: [refundable],
 				evidence: [eventEvidence(candidate.auction.address, 'BidSettled(address,int256,uint256,uint256,uint256,uint256,uint256,uint8)')],
 				functionName: 'refundLosingBids',

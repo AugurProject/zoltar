@@ -20,10 +20,6 @@
 	background: var(--bg);
 }
 
-* {
-	box-sizing: border-box;
-}
-
 body {
 	margin: 0;
 	min-width: 20rem;
@@ -392,13 +388,6 @@ input[type="checkbox"] {
 
 .pool-toggle input {
 	margin: 0;
-}
-
-fieldset {
-	min-width: 0;
-	margin: 0;
-	padding: 0;
-	border: 0;
 }
 
 .table-shell {

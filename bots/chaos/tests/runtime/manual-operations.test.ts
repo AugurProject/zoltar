@@ -1,4 +1,5 @@
-import { acquireChaosProcessLocks, createChaosShutdownController } from '../../src/core/process-locks.ts'
+import { acquireBotProcessLocks, createBotShutdownController } from '@zoltar/bot-shared/execution/bot-process-locks'
+import { CHAOS_PROCESS_LOCK_OPTIONS } from '../../src/core/process-lock-options.ts'
 import { saveDurableState } from '../../src/state/operator-state.ts'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -160,8 +161,8 @@ test('shutdown retains process locks until manual execution and recovery persist
 	const { configuration, state, scan, gate } = fixture()
 	const directory = await mkdtemp(join(tmpdir(), 'chaos-manual-shutdown-'))
 	const lockSettings = { chainId: configuration.settings.network.chainId, execute: true, privateKey: configuration.settings.privateKey, signerLockRoot: join(directory, 'locks'), stateFile: join(directory, 'state.json') }
-	const locks = await acquireChaosProcessLocks(lockSettings)
-	using shutdown = createChaosShutdownController()
+	const locks = await acquireBotProcessLocks(lockSettings, CHAOS_PROCESS_LOCK_OPTIONS)
+	using shutdown = createBotShutdownController()
 	const entered = Promise.withResolvers<void>()
 	const rpc = Promise.withResolvers<void>()
 	const persisting = Promise.withResolvers<void>()
@@ -200,16 +201,16 @@ test('shutdown retains process locks until manual execution and recovery persist
 		await Bun.sleep(10)
 		expect(returned).toBe(false)
 		await expect(controller.handle({ ...wrap, action: 'inspect' })).rejects.toThrow('shutting down')
-		await expect(acquireChaosProcessLocks(lockSettings)).rejects.toThrow('already locked')
-		await expect(acquireChaosProcessLocks({ ...lockSettings, stateFile: join(directory, 'competitor.json') })).rejects.toThrow('already locked')
+		await expect(acquireBotProcessLocks(lockSettings, CHAOS_PROCESS_LOCK_OPTIONS)).rejects.toThrow('already locked')
+		await expect(acquireBotProcessLocks({ ...lockSettings, stateFile: join(directory, 'competitor.json') }, CHAOS_PROCESS_LOCK_OPTIONS)).rejects.toThrow('already locked')
 		rpc.resolve()
 		await persisting.promise
 		expect(returned).toBe(false)
-		await expect(acquireChaosProcessLocks(lockSettings)).rejects.toThrow('already locked')
+		await expect(acquireBotProcessLocks(lockSettings, CHAOS_PROCESS_LOCK_OPTIONS)).rejects.toThrow('already locked')
 		persistence.resolve()
 		await stopping
 		expect(returned).toBe(true)
-		const successor = await acquireChaosProcessLocks(lockSettings)
+		const successor = await acquireBotProcessLocks(lockSettings, CHAOS_PROCESS_LOCK_OPTIONS)
 		await successor.release()
 	} finally {
 		rpc.resolve()

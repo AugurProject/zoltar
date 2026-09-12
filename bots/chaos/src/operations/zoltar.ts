@@ -1,7 +1,7 @@
 import { repSpend } from './input-funding.ts'
 import { inputInteger, inputMatches, inputText, inputList } from './input-values.ts'
 import { encodeAbiParameters, getAddress, keccak256 } from '@zoltar/bot-shared/ethereum'
-import { erc20Abi, questionDataAbi, zoltarAbi } from '../contracts/abi.ts'
+import { erc20Abi, zoltarQuestionDataAbi, zoltarAbi } from '@zoltar/bot-shared/contracts/abi'
 import { allowance, amount, cappedSpend, choose, disabled, eligible, encodeStep, erc20AllowanceEvidence, erc20WalletDebit, eventEvidence, eventTopic, mixSeed, ONE_TOKEN, optionAmount, planBase, tokenInventory } from './planning.ts'
 import type { EcosystemSnapshot, OperationContinuationContext, OperationDefinition, OperationEvidence, OperationPlan, PlanningOptions, QuestionSnapshot, UniverseSnapshot } from './types.ts'
 import { validForkOutcomeRoutes } from './fork-outcomes.ts'
@@ -257,7 +257,7 @@ function questionDefinition(kind: 'binary' | 'categorical' | 'scalar'): Operatio
 				snapshot,
 				steps: [
 					encodeStep({
-						abi: questionDataAbi,
+						abi: zoltarQuestionDataAbi,
 						args: [question, labels],
 						evidence: [eventEvidence(snapshot.deployments.questionData, 'QuestionCreated(uint256,uint256,(string,string,uint48,uint48,uint120,int256,int256,string),string[])')],
 						functionName: 'createQuestion',
