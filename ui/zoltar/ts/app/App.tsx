@@ -25,7 +25,6 @@ import { resolveLoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.
 import { buildRouteHref, getRouteHashSearch, parseRouteHash } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { writeZoltarViewQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
 import { getUniversePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
-import { formatUniverseCollectionLabel } from '@zoltar/ui-zoltar-shared/features/universes/lib/universe.js'
 import { resolveEnumValue } from '@zoltar/ui-core-shared/forms/viewState.js'
 import type { RouteTabDefinition } from '@zoltar/ui-core-shared/types/components.js'
 import type { MarketRouteContentProps, ZoltarView } from '@zoltar/ui-zoltar-shared/features/types.js'
@@ -164,7 +163,6 @@ export function App() {
 	const showZoltarUniverseWarning = canReadOnchainData && zoltarUniverseState === 'missing'
 	const activeViewRequiresUniverse = !isUniverseIndependentZoltarView(activeZoltarView)
 	const isRouteContentDisabled = route !== 'deploy' && (!readBackendReady || applicationDeploymentMissing || (activeViewRequiresUniverse && showZoltarUniverseWarning))
-	const universeLabel = formatUniverseCollectionLabel([activeUniverseId])
 	const universePresentation = showZoltarUniverseWarning ? getUniversePresentation(zoltarUniverseState) : undefined
 	const pageTitle = getAppPageTitle({ activeZoltarView, route: activeRoute })
 	useAppRouteEffects({
@@ -316,7 +314,6 @@ export function App() {
 							universeForkTime={zoltarUniverse?.forkTime}
 							universeHasForked={zoltarUniverse?.hasForked}
 							universePresentation={universePresentation}
-							universeLabel={universeLabel}
 							universeRepBalanceAttoRep={zoltarForkRepBalanceAttoRep}
 							isRefreshing={isRefreshing}
 							walletBootstrapComplete={walletBootstrapComplete}

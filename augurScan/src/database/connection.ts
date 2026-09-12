@@ -2,6 +2,8 @@ import { type ReservedSQL, SQL } from 'bun'
 import { destroyReservedConnection, type IndexerLease, type PersistedIndexerOwnershipState, releaseReservedConnection, runSerializedIndexerLeaseOperation, scannerDatabaseOptions } from './history.ts'
 import { assertIndexerLeaseObservation, assertIndexerLeaseReleaseObservation, IndexerLeaseReleaseError, type IntegrityIssue, type LiveEvent, lockLiveEventWriter } from './records.ts'
 
+const LEASE_HOLDER_TERMINATION_TIMEOUT_MILLISECONDS = 5_000
+
 export class ScannerDatabaseConnection {
 	readonly sql: SQL
 
@@ -172,14 +174,18 @@ export class ScannerDatabaseConnection {
 			return rows[0]?.['held'] === true
 		}
 		if (!(await held())) return true
+		// The backend exits asynchronously after the signal; the timeout form waits for the exit (or reports false)
+		// so the lock check below observes the released lock instead of racing the shutdown.
 		const terminated = await this.sql`
-			SELECT pg_terminate_backend(${backendPid}) AS terminated
+			SELECT pg_terminate_backend(${backendPid}, ${LEASE_HOLDER_TERMINATION_TIMEOUT_MILLISECONDS}) AS terminated
 			WHERE EXISTS (
 				SELECT 1 FROM pg_locks WHERE locktype = 'advisory' AND classid::bigint = 92138472
 					AND objid::bigint = ${chainId} AND objsubid = 2 AND pid = ${backendPid} AND granted
 			)
 		`
-		if (terminated[0]?.['terminated'] !== true) return false
+		// The lock observation is the only confirmation: a holder that exited on its own leaves the terminate
+		// statement without a row, while a timed-out terminate still shows the lock as held.
+		if (terminated[0]?.['terminated'] === false) return false
 		return !(await held())
 	}
 
