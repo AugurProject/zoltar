@@ -29,12 +29,12 @@ const items = (abi: readonly unknown[]): readonly unknown[] => abi
 const event = (abi: readonly { type: string; name?: string }[], name: string): unknown => abi.find(item => item.type === 'event' && item.name === name)
 const generated = (value: unknown): unknown => value
 const delegatedEscalationGameViews = new Set(['applyInheritedClaimRetention', 'applyInheritedSourceStorageBasis'])
+const erc20Functions = new Set(['allowance', 'approve', 'balanceOf', 'decimals', 'name', 'symbol', 'totalSupply', 'transfer', 'transferFrom'])
 
 describe('generated bot contract ABIs', () => {
 	test('every contract ABI is the compiled artifact ABI', () => {
 		const expected: readonly [readonly unknown[], readonly unknown[]][] = [
 			[abis.genesisReputationTokenAbi, GenesisReputationToken_GenesisReputationToken.abi],
-			[abis.reputationTokenAbi, ReputationToken_ReputationToken.abi],
 			[abis.zoltarAbi, Zoltar_Zoltar.abi],
 			[abis.zoltarQuestionDataAbi, ZoltarQuestionData_ZoltarQuestionData.abi],
 			[abis.securityPoolFactoryAbi, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi],
@@ -63,6 +63,12 @@ describe('generated bot contract ABIs', () => {
 		expect(items(abis.escalationGameAbi)).toEqual([...statoblast_EscalationGame_EscalationGame.abi, ...delegatedViews])
 	})
 
+	test('the generic ERC-20 ABI is the standard token surface of the compiled ReputationToken artifact', () => {
+		const standard = ReputationToken_ReputationToken.abi.filter(item => item.type === 'function' && erc20Functions.has(item.name))
+		expect(standard).toHaveLength(erc20Functions.size)
+		expect(items(abis.erc20Abi)).toEqual(standard)
+	})
+
 	test('the named events are the compiled artifact events', () => {
 		expect(generated(abis.deploySecurityPoolEvent)).toEqual(event(statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, 'DeploySecurityPool'))
 		expect(generated(abis.vaultAccountingCheckpointEvent)).toEqual(event(statoblast_SecurityPool_SecurityPool.abi, 'VaultAccountingCheckpoint'))
@@ -73,7 +79,7 @@ describe('generated bot contract ABIs', () => {
 	test('every generated export is covered by an artifact assertion', () => {
 		const asserted = new Set([
 			'genesisReputationTokenAbi',
-			'reputationTokenAbi',
+			'erc20Abi',
 			'zoltarAbi',
 			'zoltarQuestionDataAbi',
 			'securityPoolFactoryAbi',

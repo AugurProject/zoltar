@@ -15,14 +15,14 @@ type AbiExport = { readonly name: string; readonly sources: readonly ContractSel
 
 const statoblast = (contract: string, functions?: readonly string[]): ContractSelection => ({ artifactSource: `contracts/statoblast/${contract}.sol`, contract: contract.split('/').at(-1) ?? contract, ...(functions === undefined ? {} : { functions }) })
 const trading = (contract: string): ContractSelection => ({ artifactSource: `contracts/trading/${contract}.sol`, contract })
-const root = (contract: string): ContractSelection => ({ artifactSource: `contracts/${contract}.sol`, contract })
+const root = (contract: string, functions?: readonly string[]): ContractSelection => ({ artifactSource: `contracts/${contract}.sol`, contract, ...(functions === undefined ? {} : { functions }) })
 const uniswapSeeder = (contract: string): ContractSelection => ({ artifactSource: 'contracts/chaos/GenesisUniswapV3Seeder.sol', contract })
 const escalationGame = [statoblast('EscalationGame'), statoblast('EscalationGameClaimDelegate', ['applyInheritedClaimRetention', 'applyInheritedSourceStorageBasis'])]
 
 /** One generated module in bots/shared serves every bot; names follow the contract names so bots alias locally if they prefer shorter ones. */
 const SHARED_ABI_EXPORTS: readonly AbiExport[] = [
 	{ name: 'genesisReputationTokenAbi', sources: [root('GenesisReputationToken')] },
-	{ name: 'reputationTokenAbi', sources: [root('ReputationToken')] },
+	{ name: 'erc20Abi', sources: [root('ReputationToken', ['allowance', 'approve', 'balanceOf', 'decimals', 'name', 'symbol', 'totalSupply', 'transfer', 'transferFrom'])] },
 	{ name: 'zoltarAbi', sources: [root('Zoltar')] },
 	{ name: 'zoltarQuestionDataAbi', sources: [root('ZoltarQuestionData')] },
 	{ name: 'securityPoolFactoryAbi', sources: [statoblast('factories/SecurityPoolFactory')] },

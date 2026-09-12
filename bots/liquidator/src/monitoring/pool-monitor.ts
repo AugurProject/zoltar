@@ -2,7 +2,7 @@ import { loadUniverseTree } from '@zoltar/bot-shared/monitoring/universe-policy'
 import { getAddress, zeroAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import { fetchLogsWithAdaptiveRanges } from '@zoltar/bot-shared/monitoring/block-sync'
 import type { OperatorSettings } from '#config/settings'
-import { openOraclePriceCoordinatorAbi, deploySecurityPoolEvent, reputationTokenAbi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi } from '@zoltar/bot-shared/contracts/abi'
+import { openOraclePriceCoordinatorAbi, deploySecurityPoolEvent, erc20Abi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi } from '@zoltar/bot-shared/contracts/abi'
 import { isPoolExecutionEligible } from '#core/fork-migration'
 import { evaluateCandidate, sortCandidates, type VaultPosition } from '#core/strategy'
 import { hasStagedLiquidation } from '#core/staged-operations'
@@ -305,7 +305,7 @@ export async function scanPools(client: ReadClient, settings: OperatorSettings, 
 			walletRepByToken.set(
 				token.toLowerCase(),
 				await client.readContract({
-					abi: reputationTokenAbi,
+					abi: erc20Abi,
 					address: token,
 					args: [wallet],
 					blockNumber: snapshotBlock.number,

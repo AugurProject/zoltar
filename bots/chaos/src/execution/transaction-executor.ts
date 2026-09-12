@@ -7,7 +7,7 @@ import { availableSettledValues, quorumValue, settledQuorumValue, sharedQuorumBl
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
 import type { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import type { OperatorSettings } from '../config/settings.ts'
-import { erc1155Abi, genesisReputationTokenAbi, openOracleAbi, securityPoolAbi } from '@zoltar/bot-shared/contracts/abi'
+import { erc1155Abi, erc20Abi, openOracleAbi, securityPoolAbi } from '@zoltar/bot-shared/contracts/abi'
 import { assertCanonicalAnchorFreshness } from '../core/canonical-freshness.ts'
 import { EXECUTOR_FINALITY_BLOCKS } from '../operations/timing.ts'
 import type { OperationEvidence, OperationPlan, OperationPreflightCall, OperationStep } from '../operations/types.ts'
@@ -39,8 +39,6 @@ type WriteClient = WalletClient<Transport, Chain, Account>
 type RpcPool = ReturnType<typeof createRpcEndpointPool>
 
 export const CHAOS_FINALITY_BLOCKS = EXECUTOR_FINALITY_BLOCKS
-// Token balance reads cover any ERC-20 the wallet holds; the REP artifact carries the standard ERC-20 surface.
-const erc20Abi = genesisReputationTokenAbi
 
 export class OperationRediscoveryRequired extends Error {
 	constructor(message: string, cause?: unknown) {

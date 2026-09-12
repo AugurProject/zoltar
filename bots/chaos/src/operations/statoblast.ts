@@ -2,7 +2,7 @@ import { ethSpend, repSpend } from './input-funding.ts'
 import { inputInteger, inputMatches } from './input-values.ts'
 import { getAddress, zeroAddress, type AbiValue } from '@zoltar/bot-shared/ethereum'
 import { maximumFeePerGas } from '@zoltar/bot-shared/execution/transaction-submission'
-import { uniformPriceDualCapBatchAuctionAbi, openOraclePriceCoordinatorAbi, genesisReputationTokenAbi, escalationGameAbi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi } from '@zoltar/bot-shared/contracts/abi'
+import { uniformPriceDualCapBatchAuctionAbi, openOraclePriceCoordinatorAbi, erc20Abi, escalationGameAbi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi } from '@zoltar/bot-shared/contracts/abi'
 import { allowance, amount, choose, disabled, eligible, encodePreflightCall, encodeStep, erc1155WalletDebit, erc20AllowanceEvidence, erc20WalletDebit, eventEvidence, eventTopic, mixSeed, ONE_TOKEN, optionAmount, planBase, securityPoolVaultRepDebit, tokenInventory } from './planning.ts'
 import type { EcosystemSnapshot, OperationContinuationContext, OperationDefinition, OperationEvidence, OperationPlan, OperationWalletAssetDebit, PlanningOptions, PoolSnapshot } from './types.ts'
 import { validForkOutcomeRoutes } from './fork-outcomes.ts'
@@ -178,7 +178,7 @@ function approvePool(snapshot: EcosystemSnapshot, pool: PoolSnapshot, required: 
 }
 
 function poolApprovalStep(snapshot: EcosystemSnapshot, token: `0x${string}`, pool: `0x${string}`, required: bigint, id = 'approve-rep', label = 'Approve REP for security pool') {
-	return encodeStep({ abi: genesisReputationTokenAbi, args: [pool, required], evidence: [erc20AllowanceEvidence(token, snapshot.wallet.address, pool, required)], functionName: 'approve', id, label, to: token })
+	return encodeStep({ abi: erc20Abi, args: [pool, required], evidence: [erc20AllowanceEvidence(token, snapshot.wallet.address, pool, required)], functionName: 'approve', id, label, to: token })
 }
 
 function requiredVaultMetadataString(metadata: OperationPlan['metadata'], key: string) {
@@ -225,7 +225,7 @@ function poolCleanupPlan(snapshot: EcosystemSnapshot, context: OperationContinua
 }
 
 function approveCoordinatorToken(snapshot: EcosystemSnapshot, coordinator: `0x${string}`, tokenAddress: `0x${string}`, required: bigint, id: string, label: string) {
-	return encodeStep({ abi: genesisReputationTokenAbi, args: [coordinator, required], evidence: [erc20AllowanceEvidence(tokenAddress, snapshot.wallet.address, coordinator, required)], functionName: 'approve', id, label, to: tokenAddress })
+	return encodeStep({ abi: erc20Abi, args: [coordinator, required], evidence: [erc20AllowanceEvidence(tokenAddress, snapshot.wallet.address, coordinator, required)], functionName: 'approve', id, label, to: tokenAddress })
 }
 
 function oracleRequestStagingParameters(pool: PoolSnapshot) {
@@ -704,7 +704,7 @@ function completeSetDefinition(kind: 'create' | 'redeem' | 'winning'): Operation
 }
 
 function directEscalationApprovalStep(snapshot: EcosystemSnapshot, token: `0x${string}`, game: `0x${string}`, required: bigint, id = 'approve-direct-rep', label = 'Approve REP for direct escalation deposit') {
-	return encodeStep({ abi: genesisReputationTokenAbi, args: [game, required], evidence: [erc20AllowanceEvidence(token, snapshot.wallet.address, game, required)], functionName: 'approve', id, label, to: token })
+	return encodeStep({ abi: erc20Abi, args: [game, required], evidence: [erc20AllowanceEvidence(token, snapshot.wallet.address, game, required)], functionName: 'approve', id, label, to: token })
 }
 
 function exactPreviousDirectEscalationApproval(snapshot: EcosystemSnapshot, context: OperationContinuationContext, token: `0x${string}`, game: `0x${string}`, required: bigint) {

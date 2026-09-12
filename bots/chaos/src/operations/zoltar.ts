@@ -1,7 +1,7 @@
 import { repSpend } from './input-funding.ts'
 import { inputInteger, inputMatches, inputText, inputList } from './input-values.ts'
 import { encodeAbiParameters, getAddress, keccak256 } from '@zoltar/bot-shared/ethereum'
-import { genesisReputationTokenAbi, zoltarQuestionDataAbi, zoltarAbi } from '@zoltar/bot-shared/contracts/abi'
+import { erc20Abi, zoltarQuestionDataAbi, zoltarAbi } from '@zoltar/bot-shared/contracts/abi'
 import { allowance, amount, cappedSpend, choose, disabled, eligible, encodeStep, erc20AllowanceEvidence, erc20WalletDebit, eventEvidence, eventTopic, mixSeed, ONE_TOKEN, optionAmount, planBase, tokenInventory } from './planning.ts'
 import type { EcosystemSnapshot, OperationContinuationContext, OperationDefinition, OperationEvidence, OperationPlan, PlanningOptions, QuestionSnapshot, UniverseSnapshot } from './types.ts'
 import { validForkOutcomeRoutes } from './fork-outcomes.ts'
@@ -40,7 +40,7 @@ function approveRepStep(snapshot: EcosystemSnapshot, universe: UniverseSnapshot,
 }
 
 function zoltarApprovalStep(snapshot: EcosystemSnapshot, token: `0x${string}`, spender: `0x${string}`, required: bigint, id = 'approve-rep', label = 'Approve REP for Zoltar') {
-	return encodeStep({ abi: genesisReputationTokenAbi, args: [spender, required], evidence: [erc20AllowanceEvidence(token, snapshot.wallet.address, spender, required)], functionName: 'approve', id, label, to: token })
+	return encodeStep({ abi: erc20Abi, args: [spender, required], evidence: [erc20AllowanceEvidence(token, snapshot.wallet.address, spender, required)], functionName: 'approve', id, label, to: token })
 }
 
 function requiredZoltarMetadataString(metadata: OperationPlan['metadata'], key: string) {

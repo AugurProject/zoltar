@@ -22,6 +22,17 @@ test('generated OpenOracle and coordinator ABIs are the compiled artifact ABIs',
 	expect(openOraclePriceCoordinatorAbi).toEqual(statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi)
 })
 
+test('executor ABI pins the public executor surface of the compiled artifact', () => {
+	const functionNames = openOracleArbitrageExecutorAbi.filter(entry => entry.type === 'function').map(entry => entry.name)
+	expect(functionNames).toEqual(['assertParentBlock', 'contributions', 'dispute', 'hedgeAndDispute', 'settleAndWithdraw', 'unlockCallback', 'withdrawReplacementCredit'])
+	expect(
+		executorArtifact.abi
+			.filter(entry => entry.type === 'function')
+			.map(entry => entry.name)
+			.sort(),
+	).toEqual([...functionNames].sort())
+})
+
 test('executor exposes atomic entry and lifecycle functions', () => {
 	for (const functionName of ['hedgeAndDispute', 'settleAndWithdraw']) {
 		const custom = openOracleArbitrageExecutorAbi.find(entry => entry.type === 'function' && entry.name === functionName)

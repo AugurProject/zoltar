@@ -1,7 +1,7 @@
 import { ethSpend, tokenSpend } from './input-funding.ts'
 import { inputInteger, inputMatches, inputText } from './input-values.ts'
 import { encodeAbiParameters, getAddress, zeroAddress, type AbiValue } from '@zoltar/bot-shared/ethereum'
-import { genesisReputationTokenAbi, openOracleAbi, weth9Abi } from '@zoltar/bot-shared/contracts/abi'
+import { erc20Abi, openOracleAbi, weth9Abi } from '@zoltar/bot-shared/contracts/abi'
 import { OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT, trustedOpenOracleReportPredicate } from '../monitoring/protocol-index.ts'
 import { allowance, amount, choose, disabled, eligible, encodePreflightCall, encodeStep, erc20AllowanceEvidence, erc20WalletDebit, eventEvidence, eventTopic, mixSeed, ONE_TOKEN, openOracleCreditDebit, optionAmount, planBase, tokenInventory } from './planning.ts'
 import { requiredTimestampSafetySeconds, requiredWorkflowSafetyBlocks } from './timing.ts'
@@ -95,7 +95,7 @@ type OpenOracleApprovalRequirement = {
 }
 
 function openOracleApprovalStep(snapshot: EcosystemSnapshot, token: `0x${string}`, spender: `0x${string}`, required: bigint, id = `approve-${token}`, label = 'Approve token for OpenOracle') {
-	return encodeStep({ abi: genesisReputationTokenAbi, args: [spender, required], evidence: [erc20AllowanceEvidence(token, snapshot.wallet.address, spender, required)], functionName: 'approve', id, label, to: token })
+	return encodeStep({ abi: erc20Abi, args: [spender, required], evidence: [erc20AllowanceEvidence(token, snapshot.wallet.address, spender, required)], functionName: 'approve', id, label, to: token })
 }
 
 function requiredMetadataString(metadata: OperationPlan['metadata'], key: string) {

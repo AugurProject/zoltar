@@ -3,7 +3,7 @@ import { prepareSignedTransaction, submitSignedTransaction } from '@zoltar/bot-s
 import { sendRawTransactionToRpc } from '@zoltar/bot-shared/monitoring/connectivity'
 import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import type { DesiredPoolSettings, OperatorSettings } from '#config/settings'
-import { openOraclePriceCoordinatorAbi, reputationTokenAbi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi, weth9Abi } from '@zoltar/bot-shared/contracts/abi'
+import { openOraclePriceCoordinatorAbi, erc20Abi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi, weth9Abi } from '@zoltar/bot-shared/contracts/abi'
 import { isPoolExecutionEligible, type VaultMigration } from '#core/fork-migration'
 import { BPS_DENOMINATOR, LIQUIDATION_REP_BONUS_BPS, PRICE_PRECISION, conservativeLiquidationRep, liquidationSubmissionLabel, type LiquidationCandidate } from '#core/strategy'
 import { recordActivity, saveDurableState, type PendingTransactionIntent, type PoolObservation, type RuntimeState } from '#state/operator-state'
@@ -32,7 +32,7 @@ function executionReadClients(wallet: WriteClient, settings: OperatorSettings, p
 async function agreedErc20Balance(wallet: WriteClient, settings: OperatorSettings, pool: RpcPool, token: Address) {
 	return settledQuorumValue(
 		'wallet token balance',
-		executionReadClients(wallet, settings, pool).map(async ({ client, endpoint }) => ({ endpoint, value: await client.readContract({ abi: reputationTokenAbi, address: token, args: [wallet.account.address], functionName: 'balanceOf' }) })),
+		executionReadClients(wallet, settings, pool).map(async ({ client, endpoint }) => ({ endpoint, value: await client.readContract({ abi: erc20Abi, address: token, args: [wallet.account.address], functionName: 'balanceOf' }) })),
 		settings.connectivity.rpcQuorum,
 	)
 }
@@ -40,7 +40,7 @@ async function agreedErc20Balance(wallet: WriteClient, settings: OperatorSetting
 async function agreedErc20Allowance(wallet: WriteClient, settings: OperatorSettings, pool: RpcPool, token: Address, spender: Address) {
 	return settledQuorumValue(
 		'wallet token allowance',
-		executionReadClients(wallet, settings, pool).map(async ({ client, endpoint }) => ({ endpoint, value: await client.readContract({ abi: reputationTokenAbi, address: token, args: [wallet.account.address, spender], functionName: 'allowance' }) })),
+		executionReadClients(wallet, settings, pool).map(async ({ client, endpoint }) => ({ endpoint, value: await client.readContract({ abi: erc20Abi, address: token, args: [wallet.account.address, spender], functionName: 'allowance' }) })),
 		settings.connectivity.rpcQuorum,
 	)
 }
@@ -251,7 +251,7 @@ async function ensureAllowance(wallet: WriteClient, settings: OperatorSettings, 
 		pool,
 		{
 			data: encodeFunctionData({
-				abi: reputationTokenAbi,
+				abi: erc20Abi,
 				args: [spender, amount],
 				functionName: 'approve',
 			}),
@@ -362,7 +362,7 @@ async function fundStaleOracle(wallet: WriteClient, settings: OperatorSettings, 
 			rpcPool,
 			{
 				data: encodeFunctionData({
-					abi: reputationTokenAbi,
+					abi: erc20Abi,
 					args: [pool.manager, initialAttoWeth],
 					functionName: 'approve',
 				}),

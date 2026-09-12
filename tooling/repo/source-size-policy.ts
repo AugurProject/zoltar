@@ -15,7 +15,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	...allowances('Existing Chaos modules remain temporary responsibility debt; their reviewed ceilings prohibit further growth.', [
 		['bots/chaos/src/operations/statoblast.ts', 2616],
 		['bots/chaos/src/dashboard/dashboard.ts', 2380],
-		['bots/chaos/src/monitoring/discovery.ts', 1037],
+		['bots/chaos/src/monitoring/discovery.ts', 1021],
 		['bots/chaos/src/operations/trading.ts', 1769],
 		['bots/chaos/src/state/operator-state.ts', 1199],
 		['bots/chaos/src/execution/transaction-executor.ts', 1288],

@@ -119,7 +119,8 @@ listed below. The documentation outputs are tracked because the static documenta
 `bun run docs:check-charts`, `bun run docs:check-runtime`, `bun run docs:check-contract-reference`, and
 `bun run docs:check-index` enforce their freshness. `bun run check:uniswap-deployment-artifact`
 pins the deployment input and prevents its large upstream packages from entering the lockfile.
-The shared bot ABI module is tracked so the bots type-check and ship without compiling contracts;
+The shared bot ABI module is tracked so the liquidator and arbitrager container images resolve it
+without Solidity artifacts (local `typecheck` and `test` scripts still ensure the artifacts first);
 `cd bots/shared && bun run check:generated` enforces its freshness.
 
 | Output | Source or command |

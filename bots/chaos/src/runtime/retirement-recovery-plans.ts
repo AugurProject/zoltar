@@ -1,12 +1,9 @@
 import { getAddress, zeroAddress } from '@zoltar/bot-shared/ethereum'
-import { erc1155Abi, genesisReputationTokenAbi, openOracleAbi, twoWayConstantProductPairAbi, weth9Abi } from '@zoltar/bot-shared/contracts/abi'
+import { erc1155Abi, erc20Abi, openOracleAbi, twoWayConstantProductPairAbi, weth9Abi } from '@zoltar/bot-shared/contracts/abi'
 import { retirementErc20TransferAbi } from '../contracts/retirement-abi.ts'
 import { encodeStep, planBase } from '../operations/planning.ts'
 import type { EcosystemSnapshot, OperationPlan } from '../operations/types.ts'
 import { assertSafeRetirementRecipient, type DurableRetirementState } from '../state/retirement.ts'
-
-// Allowance revocation targets whichever ERC-20 the wallet approved; the REP artifact carries the standard ERC-20 surface.
-const erc20Abi = genesisReputationTokenAbi
 
 export function buildAllowanceRevocationPlan(snapshot: EcosystemSnapshot, seed: number): OperationPlan | undefined {
 	const internalApproval = [...snapshot.wallet.tokens].sort((left, right) => left.address.localeCompare(right.address)).find(token => BigInt(token.openOracleInternalAllowanceToSelf ?? '0') > 0n)

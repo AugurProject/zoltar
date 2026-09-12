@@ -77,79 +77,7 @@ export const genesisReputationTokenAbi = [
 	},
 ] as const
 
-export const reputationTokenAbi = [
-	{ type: 'constructor', stateMutability: 'nonpayable', inputs: [{ name: '_zoltar', type: 'address', internalType: 'address' }] },
-	{
-		type: 'event',
-		name: 'Approval',
-		anonymous: false,
-		inputs: [
-			{ name: 'owner', type: 'address', internalType: 'address', indexed: true },
-			{ name: 'spender', type: 'address', internalType: 'address', indexed: true },
-			{ name: 'value', type: 'uint256', internalType: 'uint256', indexed: false },
-		],
-	},
-	{
-		type: 'event',
-		name: 'AuthorizationCanceled',
-		anonymous: false,
-		inputs: [
-			{ name: 'authorizer', type: 'address', internalType: 'address', indexed: true },
-			{ name: 'nonce', type: 'bytes32', internalType: 'bytes32', indexed: true },
-		],
-	},
-	{
-		type: 'event',
-		name: 'AuthorizationUsed',
-		anonymous: false,
-		inputs: [
-			{ name: 'authorizer', type: 'address', internalType: 'address', indexed: true },
-			{ name: 'nonce', type: 'bytes32', internalType: 'bytes32', indexed: true },
-		],
-	},
-	{
-		type: 'event',
-		name: 'Burn',
-		anonymous: false,
-		inputs: [
-			{ name: 'account', type: 'address', internalType: 'address', indexed: true },
-			{ name: 'valueAttoRep', type: 'uint256', internalType: 'uint256', indexed: false },
-			{ name: 'totalTheoreticalSupplyAttoRep', type: 'uint256', internalType: 'uint256', indexed: false },
-		],
-	},
-	{
-		type: 'event',
-		name: 'Mint',
-		anonymous: false,
-		inputs: [
-			{ name: 'account', type: 'address', internalType: 'address', indexed: true },
-			{ name: 'valueAttoRep', type: 'uint256', internalType: 'uint256', indexed: false },
-		],
-	},
-	{
-		type: 'event',
-		name: 'ReputationTokenInitialized',
-		anonymous: false,
-		inputs: [
-			{ name: 'universeId', type: 'uint248', internalType: 'uint248', indexed: true },
-			{ name: 'repNumber', type: 'uint256', internalType: 'uint256', indexed: true },
-			{ name: 'name', type: 'string', internalType: 'string', indexed: false },
-			{ name: 'symbol', type: 'string', internalType: 'string', indexed: false },
-			{ name: 'totalTheoreticalSupplyAttoRep', type: 'uint256', internalType: 'uint256', indexed: false },
-		],
-	},
-	{ type: 'event', name: 'TheoreticalSupplySet', anonymous: false, inputs: [{ name: 'totalTheoreticalSupplyAttoRep', type: 'uint256', internalType: 'uint256', indexed: false }] },
-	{
-		type: 'event',
-		name: 'Transfer',
-		anonymous: false,
-		inputs: [
-			{ name: 'from', type: 'address', internalType: 'address', indexed: true },
-			{ name: 'to', type: 'address', internalType: 'address', indexed: true },
-			{ name: 'value', type: 'uint256', internalType: 'uint256', indexed: false },
-		],
-	},
-	{ type: 'function', name: 'DOMAIN_SEPARATOR', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'bytes32', internalType: 'bytes32' }] },
+export const erc20Abi = [
 	{
 		type: 'function',
 		name: 'allowance',
@@ -170,98 +98,9 @@ export const reputationTokenAbi = [
 		],
 		outputs: [{ name: '', type: 'bool', internalType: 'bool' }],
 	},
-	{
-		type: 'function',
-		name: 'authorizationState',
-		stateMutability: 'view',
-		inputs: [
-			{ name: 'authorizer', type: 'address', internalType: 'address' },
-			{ name: 'nonce', type: 'bytes32', internalType: 'bytes32' },
-		],
-		outputs: [{ name: '', type: 'bool', internalType: 'bool' }],
-	},
 	{ type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ name: 'account', type: 'address', internalType: 'address' }], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
-	{
-		type: 'function',
-		name: 'burn',
-		stateMutability: 'nonpayable',
-		inputs: [
-			{ name: 'account', type: 'address', internalType: 'address' },
-			{ name: 'valueAttoRep', type: 'uint256', internalType: 'uint256' },
-		],
-		outputs: [],
-	},
-	{
-		type: 'function',
-		name: 'cancelAuthorization',
-		stateMutability: 'nonpayable',
-		inputs: [
-			{ name: 'authorizer', type: 'address', internalType: 'address' },
-			{ name: 'nonce', type: 'bytes32', internalType: 'bytes32' },
-			{ name: 'v', type: 'uint8', internalType: 'uint8' },
-			{ name: 'r', type: 'bytes32', internalType: 'bytes32' },
-			{ name: 's', type: 'bytes32', internalType: 'bytes32' },
-		],
-		outputs: [],
-	},
 	{ type: 'function', name: 'decimals', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint8', internalType: 'uint8' }] },
-	{ type: 'function', name: 'getTotalTheoreticalSupply', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
-	{
-		type: 'function',
-		name: 'initialize',
-		stateMutability: 'nonpayable',
-		inputs: [
-			{ name: 'universeId_', type: 'uint248', internalType: 'uint248' },
-			{ name: 'totalTheoreticalSupplyAttoRep_', type: 'uint256', internalType: 'uint256' },
-			{ name: 'repNumber_', type: 'uint256', internalType: 'uint256' },
-		],
-		outputs: [],
-	},
-	{
-		type: 'function',
-		name: 'mint',
-		stateMutability: 'nonpayable',
-		inputs: [
-			{ name: 'account', type: 'address', internalType: 'address' },
-			{ name: 'valueAttoRep', type: 'uint256', internalType: 'uint256' },
-		],
-		outputs: [],
-	},
 	{ type: 'function', name: 'name', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'string', internalType: 'string' }] },
-	{ type: 'function', name: 'nonces', stateMutability: 'view', inputs: [{ name: 'owner', type: 'address', internalType: 'address' }], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
-	{
-		type: 'function',
-		name: 'permit',
-		stateMutability: 'nonpayable',
-		inputs: [
-			{ name: 'owner', type: 'address', internalType: 'address' },
-			{ name: 'spender', type: 'address', internalType: 'address' },
-			{ name: 'value', type: 'uint256', internalType: 'uint256' },
-			{ name: 'deadline', type: 'uint256', internalType: 'uint256' },
-			{ name: 'v', type: 'uint8', internalType: 'uint8' },
-			{ name: 'r', type: 'bytes32', internalType: 'bytes32' },
-			{ name: 's', type: 'bytes32', internalType: 'bytes32' },
-		],
-		outputs: [],
-	},
-	{
-		type: 'function',
-		name: 'receiveWithAuthorization',
-		stateMutability: 'nonpayable',
-		inputs: [
-			{ name: 'from', type: 'address', internalType: 'address' },
-			{ name: 'to', type: 'address', internalType: 'address' },
-			{ name: 'value', type: 'uint256', internalType: 'uint256' },
-			{ name: 'validAfter', type: 'uint256', internalType: 'uint256' },
-			{ name: 'validBefore', type: 'uint256', internalType: 'uint256' },
-			{ name: 'nonce', type: 'bytes32', internalType: 'bytes32' },
-			{ name: 'v', type: 'uint8', internalType: 'uint8' },
-			{ name: 'r', type: 'bytes32', internalType: 'bytes32' },
-			{ name: 's', type: 'bytes32', internalType: 'bytes32' },
-		],
-		outputs: [],
-	},
-	{ type: 'function', name: 'repNumber', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'symbol', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'string', internalType: 'string' }] },
 	{ type: 'function', name: 'totalSupply', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{
@@ -285,25 +124,6 @@ export const reputationTokenAbi = [
 		],
 		outputs: [{ name: '', type: 'bool', internalType: 'bool' }],
 	},
-	{
-		type: 'function',
-		name: 'transferWithAuthorization',
-		stateMutability: 'nonpayable',
-		inputs: [
-			{ name: 'from', type: 'address', internalType: 'address' },
-			{ name: 'to', type: 'address', internalType: 'address' },
-			{ name: 'value', type: 'uint256', internalType: 'uint256' },
-			{ name: 'validAfter', type: 'uint256', internalType: 'uint256' },
-			{ name: 'validBefore', type: 'uint256', internalType: 'uint256' },
-			{ name: 'nonce', type: 'bytes32', internalType: 'bytes32' },
-			{ name: 'v', type: 'uint8', internalType: 'uint8' },
-			{ name: 'r', type: 'bytes32', internalType: 'bytes32' },
-			{ name: 's', type: 'bytes32', internalType: 'bytes32' },
-		],
-		outputs: [],
-	},
-	{ type: 'function', name: 'universeId', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint248', internalType: 'uint248' }] },
-	{ type: 'function', name: 'zoltar', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'address' }] },
 ] as const
 
 export const zoltarAbi = [
