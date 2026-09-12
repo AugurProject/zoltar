@@ -56,6 +56,33 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['ui/statoblastShared/ts/features/security-pools/hooks/useSecurityPoolsOverview.ts', 659],
 		['ui/coreShared/ts/types/contracts.ts', 601],
 	]),
+	...allowances('The AugurScan browser bundle and its live-update module still need feature-level decomposition.', [
+		['augurScan/browser/app.ts', 8056],
+		['augurScan/browser/live-update.ts', 1096],
+	]),
+	...allowances('Bot QA and documentation capture scripts grew with every dashboard surface they exercise.', [
+		['bots/open-oracle-arbitrager/scripts/capture-docs-screenshots.mts', 1913],
+		['bots/liquidator/scripts/capture-dashboard-qa.mts', 1101],
+		['bots/chaos/scripts/capture-dashboard-qa.mts', 973],
+	]),
+	...allowances('Repository tooling modules accumulated responsibilities that belong in separate modules.', [
+		['tooling/docs/contract-reference-metadata.mts', 1910],
+		['tooling/ui/dev-server.ts', 1116],
+		['tooling/docs/check-docs-examples.mts', 1076],
+		['tooling/testing/coverage-report.mts', 945],
+		['tooling/ui/watch.mts', 845],
+		['tooling/docs/check-docs-reference-values.mts', 844],
+		['tooling/contracts/deploy-testnet.mts', 747],
+		['tooling/docs/generate-contract-interaction-reference.mts', 678],
+	]),
+	...allowances('Documentation runtime bundles and Solidity-side TypeScript utilities still need responsibility extraction.', [
+		['docs/charts/chartRuntime.ts', 1111],
+		['docs/runtime/interactiveTools.ts', 616],
+		['solidity/ts/testSupport/coverage/traceToSource.ts', 965],
+		['solidity/ts/gas-costs.ts', 724],
+		['solidity/ts/testSupport/simulator/AnvilWindowEthereum.ts', 623],
+	]),
+	...allowances('The arbitrage executor contract bundles routing, settlement, and recovery paths that belong in libraries.', [['bots/open-oracle-arbitrager/contracts/OpenOracleArbitrageExecutor.sol', 771]]),
 	...allowances('SecurityPool delegate extraction is ongoing and bytecode-sensitive.', [
 		['solidity/contracts/statoblast/SecurityPool.sol', 802],
 		['solidity/contracts/statoblast/SecurityPoolForker.sol', 685],
