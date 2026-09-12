@@ -5,6 +5,7 @@ import { resolve } from 'node:path'
 import { encodeAbiParameters, getAddress, keccak256, type Address, type Hash, type Hex } from '@zoltar/bot-shared/ethereum'
 import type { ChaosProtocolIndex } from '#monitoring/protocol-index'
 import type { AuctionBidSnapshot, AuctionRefundSnapshot, ChildRepSplitProgressSnapshot, EscalationDepositSnapshot, MigrationRepSplitProgressSnapshot, OracleGameSnapshot } from '#operations/types'
+import { assertExactKeys, nonemptyString, normalizedHash32 as hash, requiredRecord, unsignedIntegerString } from './validators.ts'
 
 const PROTOCOL_INDEX_REFERENCE_VERSION = 1
 const PROTOCOL_INDEX_MANIFEST_VERSION = 1
@@ -103,29 +104,6 @@ type AuctionRefundRecord = {
 	refund: AuctionRefundSnapshot
 }
 
-function requiredRecord(value: unknown, label: string): Record<string, unknown> {
-	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`${label} must be an object`)
-	return value as Record<string, unknown>
-}
-
-function assertExactKeys(record: Record<string, unknown>, required: readonly string[], optional: readonly string[], label: string) {
-	const allowed = new Set([...required, ...optional])
-	const unknown = Object.keys(record).filter(key => !allowed.has(key))
-	const missing = required.filter(key => !(key in record))
-	if (unknown.length !== 0) throw new Error(`${label} contains unsupported field ${unknown[0] ?? 'unknown'}`)
-	if (missing.length !== 0) throw new Error(`${label} is missing ${missing[0] ?? 'a required field'}`)
-}
-
-function nonemptyString(value: unknown, label: string, maximumLength = 2_048) {
-	if (typeof value !== 'string' || value.trim() === '' || value.length > maximumLength) throw new Error(`${label} must be a non-empty string of at most ${maximumLength.toString()} characters`)
-	return value
-}
-
-function unsignedIntegerString(value: unknown, label: string) {
-	if (typeof value !== 'string' || !/^(?:0|[1-9]\d*)$/.test(value)) throw new Error(`${label} must be a non-negative integer string`)
-	return value
-}
-
 function signedIntegerString(value: unknown, label: string) {
 	if (typeof value !== 'string' || !/^(?:0|-?[1-9]\d*)$/.test(value)) throw new Error(`${label} must be an integer string`)
 	return value
@@ -134,11 +112,6 @@ function signedIntegerString(value: unknown, label: string) {
 function boundedInteger(value: unknown, label: string, maximum = Number.MAX_SAFE_INTEGER) {
 	if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0 || value > maximum) throw new Error(`${label} must be an integer between 0 and ${maximum.toString()}`)
 	return value
-}
-
-function hash(value: unknown, label: string) {
-	if (typeof value !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(value)) throw new Error(`${label} must be a 32-byte hash`)
-	return value.toLowerCase() as Hex
 }
 
 function boundedUnsignedString(value: unknown, label: string, bits: number) {

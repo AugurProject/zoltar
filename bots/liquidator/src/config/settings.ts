@@ -7,6 +7,7 @@ import { validateConnectivitySettings, validateIndependentReadRpcUrls, type Conn
 import { validateSubmissionSettings, type SubmissionSettings } from '@zoltar/bot-shared/execution/transaction-submission'
 import { parseCentralizedMarketSettings, serializeCentralizedMarketSettings, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import { configuredQuorumRpcUrlMinimum, rpcQuorumRequirement, type RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
+import { formatDecimalAmount, parseDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
 
 export type CandidatePriority = 'largest-bonus' | 'largest-debt' | 'lowest-top-up'
 
@@ -82,8 +83,6 @@ export type OperatorSettings = {
 
 type JsonRecord = Record<string, unknown>
 
-const UNIT = 10n ** 18n
-
 function uiHost(value: unknown): '0.0.0.0' | '127.0.0.1' {
 	if (value === '0.0.0.0' || value === '127.0.0.1') return value
 	throw new Error('runtime.uiHost must be 127.0.0.1 or 0.0.0.0')
@@ -107,18 +106,6 @@ function integer(value: unknown, label: string, minimum: number, maximum: number
 function string(value: unknown, label: string) {
 	if (typeof value !== 'string' || value.trim() === '') throw new Error(`${label} must be a non-empty string`)
 	return value
-}
-
-function parseDecimalAmount(value: unknown, label: string) {
-	if (typeof value !== 'string' || !/^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(value)) throw new Error(`${label} must be a non-negative decimal with at most 18 places`)
-	const [whole = '0', fraction = ''] = value.split('.')
-	return BigInt(whole) * UNIT + BigInt(fraction.padEnd(18, '0'))
-}
-
-export function formatDecimalAmount(value: bigint) {
-	const whole = value / UNIT
-	const fraction = (value % UNIT).toString().padStart(18, '0').replace(/0+$/, '')
-	return fraction === '' ? whole.toString() : `${whole.toString()}.${fraction}`
 }
 
 function parseNetworkName(value: unknown): NetworkName {

@@ -7,7 +7,7 @@ import { batchCommands, dockerInstructions, parseDockerfile, requireDockerStage,
 const dockerfile = join(import.meta.dir, '..', 'Dockerfile')
 const dockerignore = join(import.meta.dir, '..', 'Dockerfile.dockerignore')
 const composeFile = join(import.meta.dir, '..', 'compose.yaml')
-const entrypoint = join(import.meta.dir, '..', 'scripts', 'docker-entrypoint.sh')
+const entrypoint = join(import.meta.dir, '..', '..', 'shared', 'scripts', 'docker-entrypoint.sh')
 const example = join(import.meta.dir, '..', 'config', 'operator.example.json')
 const windowsLauncher = join(import.meta.dir, '..', 'start.bat')
 const temporaryDirectories: string[] = []

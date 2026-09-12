@@ -1,4 +1,5 @@
 import { getAddress, type Hex } from '@zoltar/bot-shared/ethereum'
+import { isHash32 } from '@zoltar/bot-shared/infrastructure/json-validation'
 
 export function requiredBigint(value: unknown, description: string) {
 	if (typeof value !== 'bigint') throw new Error(`${description} is not an RPC bigint`)
@@ -26,8 +27,8 @@ export function requiredRpcAddress(value: unknown, description: string) {
 }
 
 export function requiredHash(value: unknown, description: string): Hex {
-	if (typeof value !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(value)) throw new Error(`${description} is not a 32-byte RPC hash`)
-	return value as Hex
+	if (!isHash32(value)) throw new Error(`${description} is not a 32-byte RPC hash`)
+	return value
 }
 
 export function errorMessage(error: unknown) {

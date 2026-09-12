@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { batchCommands, dockerInstructions, parseDockerfile, requireDockerStage, shellCommandSegments } from '../../../tooling/testing/packaging-parsers.ts'
 
-const entrypoint = join(import.meta.dir, '..', 'scripts', 'docker-entrypoint.sh')
+const entrypoint = join(import.meta.dir, '..', '..', 'shared', 'scripts', 'docker-entrypoint.sh')
 const dockerfile = join(import.meta.dir, '..', 'Dockerfile')
 const dockerignore = join(import.meta.dir, '..', 'Dockerfile.dockerignore')
 const composeFile = join(import.meta.dir, '..', 'compose.yaml')

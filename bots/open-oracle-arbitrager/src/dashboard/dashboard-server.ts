@@ -1,8 +1,19 @@
 import { operatorHeader } from './header.ts'
-import { buildDashboardScript } from '@zoltar/bot-shared/dashboard/assets'
+import { buildDashboardScript, dashboardHealthResponse, sharedDashboardAssetResponse } from '@zoltar/bot-shared/dashboard/assets'
 import { join } from 'node:path'
 import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
-import { boundedDashboardJson, dashboardAuthenticationChallenge, dashboardAuthorities, dashboardRequestAuthorityIsAccepted, dashboardRequestIsAuthenticated, dashboardRequestIsSameOrigin, validateDashboardAuthentication } from '@zoltar/bot-shared/dashboard/security'
+import {
+	boundedDashboardJson,
+	closingDashboardJson as closingJson,
+	dashboardAuthenticationChallenge,
+	dashboardAuthorities,
+	dashboardJson as json,
+	dashboardRequestAuthorityIsAccepted,
+	dashboardRequestIsAuthenticated,
+	dashboardRequestIsSameOrigin,
+	dashboardSecurityHeaders as securityHeaders,
+	validateDashboardAuthentication,
+} from '@zoltar/bot-shared/dashboard/security'
 import { publicOperatorSnapshot, type OperatorSnapshot, type StrategySettings } from '#state/operator-state'
 import { publicOperatorFailure, publicPollFailure } from '#state/public-failures'
 import type { SubmissionSettings } from '#execution/transaction-submission'
@@ -35,27 +46,6 @@ const CHAIN_CONFIGURATION_REQUIRED = 'Select and save the chain and RPC endpoint
 
 async function requireConfiguredChain(controller: DashboardController) {
 	if (!(await controller.isNetworkConfigured())) throw new Error(CHAIN_CONFIGURATION_REQUIRED)
-}
-
-function json(value: unknown, status = 200) {
-	return Response.json(value, {
-		headers: securityHeaders('application/json; charset=utf-8'),
-		status,
-	})
-}
-
-function closingJson(value: unknown) {
-	return Response.json(value, { headers: { ...securityHeaders('application/json; charset=utf-8'), connection: 'close' } })
-}
-
-function securityHeaders(contentType: string) {
-	return {
-		'cache-control': 'no-store',
-		'content-security-policy': "default-src 'self'; connect-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
-		'content-type': contentType,
-		'referrer-policy': 'no-referrer',
-		'x-content-type-options': 'nosniff',
-	}
 }
 
 function errorMessage(error: unknown) {
@@ -163,7 +153,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 		port,
 		async fetch(request) {
 			if (!dashboardRequestAuthorityIsAccepted(request, acceptedAuthorities)) return json({ error: 'Request authority is not accepted' }, 403)
-			if (request.method === 'GET' && new URL(request.url).pathname === '/healthz') return new Response('ok', { headers: securityHeaders('text/plain; charset=utf-8') })
+			if (request.method === 'GET' && new URL(request.url).pathname === '/healthz') return dashboardHealthResponse()
 			if (!dashboardRequestIsAuthenticated(request, controller.password)) {
 				return Response.json({ error: 'Dashboard authentication is required' }, { headers: { ...securityHeaders('application/json; charset=utf-8'), ...dashboardAuthenticationChallenge() }, status: 401 })
 			}
@@ -190,12 +180,11 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				return new Response(Bun.file(join(projectDirectory, 'src', 'core', 'strategy.ts')), { headers: securityHeaders('text/plain; charset=utf-8') })
 			}
 			if (request.method === 'GET' && url.pathname === '/README.md') return new Response(Bun.file(join(projectDirectory, 'README.md')), { headers: securityHeaders('text/markdown; charset=utf-8') })
-			if (request.method === 'GET' && url.pathname === '/favicon.svg') return new Response(Bun.file(join(directory, 'favicon.svg')), { headers: securityHeaders('image/svg+xml') })
-			if (request.method === 'GET' && url.pathname === '/favicon.ico') return new Response(undefined, { headers: securityHeaders('image/x-icon'), status: 204 })
-			if (request.method === 'GET' && url.pathname === '/dashboard.css') return new Response(Bun.file(join(directory, 'styles.css')), { headers: securityHeaders('text/css; charset=utf-8') })
-			if (request.method === 'GET' && url.pathname === '/operator-console.css') {
-				return new Response(Bun.file(join(directory, '..', '..', '..', 'shared', 'src', 'dashboard', 'operator-console.css')), { headers: securityHeaders('text/css; charset=utf-8') })
+			if (request.method === 'GET') {
+				const asset = await sharedDashboardAssetResponse(url.pathname, join(directory, 'favicon.svg'))
+				if (asset !== undefined) return asset
 			}
+			if (request.method === 'GET' && url.pathname === '/dashboard.css') return new Response(Bun.file(join(directory, 'styles.css')), { headers: securityHeaders('text/css; charset=utf-8') })
 			if (request.method === 'GET' && url.pathname === '/operator-guide.css') return new Response(Bun.file(join(documentationDirectory, 'operator-guide.css')), { headers: securityHeaders('text/css; charset=utf-8') })
 			if (request.method === 'GET' && url.pathname === '/shared.css') {
 				return new Response(Bun.file(join(documentationDirectory, 'shared.css')), { headers: securityHeaders('text/css; charset=utf-8') })
@@ -208,9 +197,6 @@ export function startDashboardServer(port: number, controller: DashboardControll
 			}
 			if (request.method === 'GET' && url.pathname === '/assets/dashboard-markets.png') {
 				return new Response(Bun.file(join(documentationDirectory, 'assets', 'dashboard-markets.png')), { headers: securityHeaders('image/png') })
-			}
-			if (request.method === 'GET' && url.pathname === '/header-notices.js') {
-				return new Response(await buildDashboardScript(join(directory, '..', '..', '..', 'shared', 'src', 'dashboard', 'header-notices.ts')), { headers: securityHeaders('text/javascript; charset=utf-8') })
 			}
 			if (request.method === 'GET' && url.pathname === '/dashboard.js') {
 				return new Response(await buildDashboardScript(browserEntrypoint), {

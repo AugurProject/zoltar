@@ -26,7 +26,6 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['bots/chaos/src/operations/open-oracle.ts', 1028],
 		['bots/chaos/src/execution/recovery.ts', 733],
 		['bots/chaos/src/monitoring/protocol-index.ts', 702],
-		['bots/chaos/src/config/settings.ts', 603],
 		['bots/chaos/src/operations/zoltar.ts', 619],
 	]),
 	...allowances('Existing bot dashboard/runtime debt is outside this lane.', [
