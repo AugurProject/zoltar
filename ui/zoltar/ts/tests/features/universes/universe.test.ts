@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { getActiveNetworkProfile, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { getGenesisReputationTokenAddress, formatUniverseCollectionLabel, formatUniverseLabel, getUniverseLinkHref, navigateToUniverse } from '@zoltar/ui-zoltar-shared/features/universes/lib/universe.js'
+import { getGenesisReputationTokenAddress, formatUniverseLabel, getUniverseLinkHref, navigateToUniverse } from '@zoltar/ui-zoltar-shared/features/universes/lib/universe.js'
 import { createFakeBackend, createFakeSimulationProfile } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
@@ -25,12 +25,6 @@ void describe('universe helpers', () => {
 	test('renders genesis and non-genesis labels', () => {
 		expect(formatUniverseLabel(0n)).toBe('Genesis (0x0)')
 		expect(formatUniverseLabel(7n)).toBe('Universe 0x7')
-	})
-
-	test('builds collection labels for empty, single, and multiple ids', () => {
-		expect(formatUniverseCollectionLabel([])).toBe('Genesis (0x0)')
-		expect(formatUniverseCollectionLabel([3n])).toBe('Universe 0x3')
-		expect(formatUniverseCollectionLabel([3n, 3n, 4n])).toBe('Multiple (0x3, 0x4)')
 	})
 
 	test('resolves the current universe link from route hash and query', () => {

@@ -1,7 +1,8 @@
 export const connecting = 'Connecting…'
 export const changeWallet = 'Change wallet'
 export const disconnectWallet = 'Disconnect'
-export const accountMenu = 'Account Menu'
+const accountMenu = 'Account Menu'
+export const formatAccountMenuLabel = (account: string) => `${accountMenu} ${account}`
 export const currentNetwork = 'Current Network'
 export const formatSwitchToNetwork = (networkName: string) => `Switch to ${networkName}`
 export const ethereumMainnet = 'Ethereum Mainnet'
@@ -46,11 +47,8 @@ export const setupIncomplete = 'Setup incomplete'
 export const simulationBootstrapFailed = 'Simulation bootstrap failed'
 export const staleReadBackendDetail = 'Displayed onchain state may be behind the latest chain state. Refresh or switch RPC before acting on balances, settlement, or liquidation.'
 export const urlProvidedReadRpc = 'URL-provided read RPC'
-export const address = 'Address'
 export const formatShowEarlierNavigationItems = (navigationLabel: string) => `Show earlier ${navigationLabel}`
 export const formatShowLaterNavigationItems = (navigationLabel: string) => `Show later ${navigationLabel}`
-export const connected = 'Connected'
-export const notConnected = 'Not connected'
 export const repUsdc = 'REP/USDC'
 export const refreshingRepPrices = 'Refreshing REP prices…'
 export const simulation = 'Simulation'
