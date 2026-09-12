@@ -45,7 +45,6 @@ export type OverviewPanelsProps = {
 	universeForkTime?: bigint | undefined
 	universeHasForked?: boolean | undefined
 	universePresentation: UserMessagePresentation | undefined
-	universeLabel: string
 	isRefreshing: boolean
 	repUsdcPrice: bigint | undefined
 	repUsdcFailure: RepPriceFailure | undefined

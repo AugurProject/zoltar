@@ -8,7 +8,6 @@ import { OverviewPanels } from '@zoltar/ui-zoltar-shared/features/overview/Overv
 import { useAppRouteEffects } from './useAppRouteEffects.js'
 import { useDeploymentFlow } from '@zoltar/ui-zoltar-shared/features/deployment/hooks/useDeploymentFlow.js'
 import { buildDeploymentRouteContentProps } from '@zoltar/ui-zoltar-shared/features/deployment/lib/deploymentRoute.js'
-import { formatUniverseCollectionLabel } from '@zoltar/ui-zoltar-shared/features/universes/lib/universe.js'
 import { useHashRoute } from '@zoltar/ui-core-shared/app/hooks/useHashRoute.js'
 import { useMarketCreation } from '@zoltar/ui-statoblast-shared/features/markets/hooks/useMarketCreation.js'
 import { useProtocolOnchainRuntime } from '@zoltar/ui-core-shared/app/hooks/useProtocolOnchainRuntime.js'
@@ -216,7 +215,6 @@ export function App() {
 		universeForkTime: zoltarUniverse?.forkTime,
 		universeHasForked: zoltarUniverse?.hasForked,
 		universePresentation: undefined,
-		universeLabel: formatUniverseCollectionLabel([activeUniverseId]),
 		universeRepBalanceAttoRep: zoltarUniverse?.totalTheoreticalSupplyAttoRep,
 		isRefreshing,
 		walletBootstrapComplete,
