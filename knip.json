@@ -128,7 +128,7 @@
 			}
 		},
 		"augurScan": {
-			"entry": ["src/indexer-process.ts!", "browser/app.ts!", "tests/**/*.ts", "scripts/{build-browser,check-ethereum-imports,check-import-boundaries,check-project-metadata,dev,serve-demo,snapshot-project-metadata,verify-compose-source,verify-export-page}.ts!"],
+			"entry": ["src/indexer-process.ts!", "browser/app.ts!", "tests/**/*.ts", "scripts/{build-browser,check-import-boundaries,check-project-metadata,dev,serve-demo,snapshot-project-metadata,verify-compose-source,verify-export-page}.ts!"],
 			"project": ["{src,browser,scripts}/**/*.ts!", "tests/**/*.ts"],
 			"ignoreDependencies": ["@noble/hashes", "micro-eth-signer"],
 			"paths": {

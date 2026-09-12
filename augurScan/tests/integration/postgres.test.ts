@@ -832,7 +832,7 @@ postgresTest('destroys a lease session after backend loss and never reuses it as
 		if (lease === undefined) throw new Error('lease-loss writer did not acquire its lock')
 		const terminatedPid = lease.backendPid
 		expect((await terminator.sql`SELECT pg_terminate_backend(${terminatedPid}) AS terminated`)[0]?.['terminated']).toBe(true)
-		await expect(lease.release()).rejects.toThrow('Indexer lease unlock failed')
+		await expect(lease.release()).rejects.toThrow('release of its expected PostgreSQL session was confirmed')
 		lease = undefined
 		const replacement = await database.tryAcquireIndexerLock(releaseChainId)
 		if (replacement === undefined) throw new Error('replacement writer did not acquire the released lock')

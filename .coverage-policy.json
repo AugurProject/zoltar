@@ -71,7 +71,7 @@
 				"tooling/repo/install-frozen.mts",
 				"tooling/repo/link-shared-node-modules.mts",
 				"tooling/repo/lint-no-bare-catch.mts",
-				"tooling/repo/lint-no-direct-viem-imports.mts",
+				"tooling/repo/lint-no-restricted-import-types.mts",
 				"tooling/repo/lint-no-signal-wrapper-comparisons.mts",
 				"tooling/ui/browserSmoke.mts",
 				"tooling/ui/chromiumDevTools.mts",

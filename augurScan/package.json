@@ -19,9 +19,9 @@
 		"test:replay": "bun test tests/replay",
 		"test:integration": "bun test tests/integration",
 		"typecheck": "cd .. && bun install --frozen-lockfile && cd augurScan && bun x tsc --noEmit",
-		"check:ethereum-imports": "bun scripts/check-ethereum-imports.ts",
 		"check:boundaries": "bun scripts/check-import-boundaries.ts",
-		"check": "bun run check:ethereum-imports && bun run check:boundaries && bun run metadata:check && bun x biome check .",
+		"check:restricted-import-types": "bun ../tooling/repo/lint-no-restricted-import-types.mts .",
+		"check": "bun run check:boundaries && bun run check:restricted-import-types && bun run metadata:check && bun x biome check .",
 		"format": "bun x biome format --write .",
 		"format:check": "bun x biome format ."
 	},

@@ -37,7 +37,22 @@
 				"noUselessElse": "error",
 				"noNonNullAssertion": "error",
 				"useDefaultSwitchClause": "error",
-				"useNodeAssertStrict": "error"
+				"useNodeAssertStrict": "error",
+				"noRestrictedImports": {
+					"level": "error",
+					"options": {
+						"paths": {
+							"viem": "Import EVM primitives through the shared boundary ('@zoltar/core-shared/evm/ethereum', or 'src/ethereum.ts' inside AugurScan) instead of viem or abitype.",
+							"abitype": "Import EVM primitives through the shared boundary ('@zoltar/core-shared/evm/ethereum', or 'src/ethereum.ts' inside AugurScan) instead of viem or abitype."
+						},
+						"patterns": [
+							{
+								"group": ["viem/**", "abitype/**"],
+								"message": "Import EVM primitives through the shared boundary ('@zoltar/core-shared/evm/ethereum', or 'src/ethereum.ts' inside AugurScan) instead of viem or abitype."
+							}
+						]
+					}
+				}
 			}
 		}
 	},
