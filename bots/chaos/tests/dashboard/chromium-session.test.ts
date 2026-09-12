@@ -38,3 +38,13 @@ test('fails after the second startup timeout and never retries other errors', as
 		logged.mockRestore()
 	}
 })
+
+test('allows a cold Chromium startup that needs more than ten seconds', async () => {
+	const session = { close: async () => {}, getLastNetworkActivity: () => 0, hasWorkerStarted: () => false, issues: [], send: async () => undefined, pageUrl: 'about:blank' }
+	const launched = await startChromiumSession('chromium', async (_path, _url, _viewport, options = {}) => {
+		const initializationBudget = options.initializationTimeoutMilliseconds ?? 60_000
+		if (initializationBudget < 15_000) throw new Error('Chromium initialization timed out while waiting for the DevTools port')
+		return session
+	})
+	expect(launched).toBe(session)
+})
