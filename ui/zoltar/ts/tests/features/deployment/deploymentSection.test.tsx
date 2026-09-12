@@ -97,20 +97,20 @@ describe('DeploymentSection', () => {
 
 	test('shows waiting state while prerequisite step is missing', async () => {
 		const prerequisite = createDeploymentStep({ id: 'proxyDeployer', deployed: false, label: 'Proxy Deployer' })
-		const dependent = createDeploymentStep({ id: 'deploymentStatusOracle', deployed: false, dependencies: ['proxyDeployer'], label: 'Deployment Status Oracle' })
+		const dependent = createDeploymentStep({ id: 'multicall3', deployed: false, dependencies: ['proxyDeployer'], label: 'Multicall3' })
 		const rendered = await renderIntoDocument(<DeploymentSection title='Deployment' steps={[dependent]} allSteps={[prerequisite, dependent]} accountAddress={zeroAddress} busyStepId={undefined} deploymentStateReady={true} isOnActiveAppChain={true} onDeploy={async () => undefined} />)
 		cleanupRendered = rendered.cleanup
 
 		expect(rendered.container.textContent).toContain('Requires Proxy Deployer')
 		expect(rendered.container.textContent?.match(/Requires Proxy Deployer/g) ?? []).toHaveLength(1)
-		expectTransactionButtonDisabled(document.body, 'Deploy Deployment Status Oracle', 'Requires Proxy Deployer')
+		expectTransactionButtonDisabled(document.body, 'Deploy Multicall3', 'Requires Proxy Deployer')
 		const button = rendered.container.querySelector('button')
 		const detailId = button?.getAttribute('aria-describedby')
-		expect(detailId).toBe('deployment-deploymentStatusOracle-status-detail')
+		expect(detailId).toBe('deployment-multicall3-status-detail')
 		expect(rendered.container.querySelector(`#${detailId}`)?.textContent).toBe('Requires Proxy Deployer')
 		expect(rendered.container.textContent).toContain('Waiting')
 		expect(rendered.container.textContent).not.toContain('Blocked')
-		expect(rendered.container.textContent).toContain('Deployment Status Oracle')
+		expect(rendered.container.textContent).toContain('Multicall3')
 	})
 
 	test('enables deploy when wallet and chain are ready and prerequisites are satisfied', async () => {

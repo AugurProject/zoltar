@@ -44,7 +44,7 @@ export const contractPagesDirectory = 'docs/reference/contracts'
 export function contractPageOutputPath(contractName: string): string {
 	return `${contractPagesDirectory}/${contractName.toLowerCase()}.html`
 }
-export const expectedProductionSoliditySourceFingerprint = 'e9c2fad94b0bb693e16a50f3bec0679bb226d793a5730173639333c9a5f1a20c'
+export const expectedProductionSoliditySourceFingerprint = '6f8c3d5b76efbc28322abd77f0ef6e637713d77b661ca9431baed2cc7848f576'
 
 export const eventSourceByName: Record<string, string> = {
 	VaultBadDebtMigrated: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
@@ -297,11 +297,6 @@ export const documentedEventSchemas: Array<{ name: string; parameters: string; s
 		name: 'InternalApproval',
 		parameters: 'address indexed owner,address indexed spender,address indexed token,uint256 amount',
 		sourcePath: 'solidity/contracts/statoblast/openOracle/OpenOracle.sol',
-	},
-	{
-		name: 'DeploymentAddressesSet',
-		parameters: 'address[] deploymentAddresses',
-		sourcePath: 'solidity/contracts/DeploymentStatusOracle.sol',
 	},
 ]
 

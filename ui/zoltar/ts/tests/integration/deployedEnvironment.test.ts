@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
-import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
+import { getDeploymentSteps, loadDeploymentStatusSnapshot } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
 import { loadZoltarUniverseSummary } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
 import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createBootstrappedSimulationBackendWithRetry, resetSelectedAccountAndTransactionDelay, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
@@ -50,7 +50,7 @@ void describe('deployed simulation backend', () => {
 	}, 60_000)
 
 	void test('bootstraps the deployed scenario with app contracts already deployed', async () => {
-		const deploymentSnapshot = await loadDeploymentStatusOracleSnapshot(deployedBackend.createReadClient())
+		const deploymentSnapshot = await loadDeploymentStatusSnapshot(deployedBackend.createReadClient())
 
 		expect(deployedBackend.currentScenario).toBe('deployed')
 		expect(deploymentSnapshot.applicationDeploymentComplete).toBe(true)

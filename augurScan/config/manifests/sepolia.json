@@ -1,7 +1,6 @@
 {
 	"contracts": [
 		["0x7A0D94F55792C434d74a40883C6ed8545E406D12", "Proxy Deployer", "proxyDeployer"],
-		["0x2C94d25dA406dE8AFB0183A29256b7bba19098F6", "Deployment Status Oracle", "deploymentStatusOracle"],
 		["0xB657B12CD9d80421DBC2bc70c43d6b2ff9409108", "Multicall3", "multicall3"],
 		["0x9AdECC476DdF3a0E89B7540302758123308B03A0", "ScalarOutcomes", "scalarOutcomes"],
 		["0x98927dA4cD6C97d95c8CC97E77948389a84559fC", "ZoltarQuestionData", "zoltarQuestionData"],

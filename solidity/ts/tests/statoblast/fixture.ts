@@ -14,7 +14,7 @@ import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../../testSupport
 import { approveToken, contractExists, getChildUniverseId, getERC20Balance, getETHBalance, ensureProxyDeployerDeployed, setupTestAccounts, sortStringArrayByKeccak } from '../../testSupport/simulator/utils/utilities'
 import { addressString, rpow } from '../../testSupport/simulator/utils/bigint'
 import { approveAndDepositRepToVault, canLiquidate, handleOracleReporting, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
-import { deployOriginSecurityPool, ensureDeploymentStatusOracleDeployed, ensureInfraDeployed, getDeploymentStatusOracleAddress, getDeploymentStepAddresses, getInfraContractAddresses, getSecurityPoolAddresses, loadDeploymentStatusOracleMask } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
+import { deployOriginSecurityPool, ensureInfraDeployed, getDeploymentStepAddresses, getInfraContractAddresses, getSecurityPoolAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { createQuestion, getQuestionId } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
 
 import { balanceOfShares, balanceOfSharesInAttoEth, getEthRaiseCapAttoEth, getLastPrice, getQuestionEndDate, migrateShares, OperationType, participateAuction, requestPriceIfNeededAndStageOperation } from '../../testSupport/simulator/utils/contracts/statoblast'
@@ -307,13 +307,10 @@ function useStatoblastTestFixture() {
 		manipulatePriceOracleAndPerformOperation,
 		triggerOwnGameFork,
 		deployOriginSecurityPool,
-		ensureDeploymentStatusOracleDeployed,
 		ensureInfraDeployed,
-		getDeploymentStatusOracleAddress,
 		getDeploymentStepAddresses,
 		getInfraContractAddresses,
 		getSecurityPoolAddresses,
-		loadDeploymentStatusOracleMask,
 		createQuestion,
 		getQuestionId,
 		balanceOfShares,
@@ -867,15 +864,12 @@ export function useStatoblastVaultAccountingFixture() {
 		'manipulatePriceOracle',
 		'manipulatePriceOracleAndPerformOperation',
 		'deployOriginSecurityPool',
-		'ensureDeploymentStatusOracleDeployed',
 		'getAnvilWindowEthereum',
 		'setBaselineSnapshot',
 		'initializeStatoblastBaseline',
-		'getDeploymentStatusOracleAddress',
 		'getDeploymentStepAddresses',
 		'getInfraContractAddresses',
 		'getSecurityPoolAddresses',
-		'loadDeploymentStatusOracleMask',
 		'createQuestion',
 		'getQuestionId',
 		'getLastPrice',

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-import { DeploymentStatusOracle } from '../../DeploymentStatusOracle.sol';
 import { IERC20 } from '../../IERC20.sol';
 import { ReputationToken } from '../../ReputationToken.sol';
 import { SafeERC20Ops } from '../../SafeERC20Ops.sol';
@@ -99,10 +98,6 @@ contract CoverageHelpersHarness {
 
 	constructor() {
 		proofVerifier = new EscalationGameProofVerifier();
-	}
-
-	function deployDeploymentStatusOracle(address[] memory deploymentAddresses) external returns (DeploymentStatusOracle) {
-		return new DeploymentStatusOracle(deploymentAddresses);
 	}
 
 	function safeApproveToken(IERC20 token, address spender, uint256 amount) external {

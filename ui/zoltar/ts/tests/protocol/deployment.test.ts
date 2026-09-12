@@ -3,18 +3,18 @@
 import { describe, expect, mock, test } from 'bun:test'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
-import { type Address, type Hash, type Hex, type TransactionReceipt, encodeDeployData, getAddress, getCreate2Address, keccak256 } from '@zoltar/core-shared/evm/ethereum'
-import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot, loadErc20Allowance, loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
+import { type Address, type Hash, type Hex, type TransactionReceipt, getAddress, keccak256 } from '@zoltar/core-shared/evm/ethereum'
+import { getDeploymentSteps, loadDeploymentStatusSnapshot, loadErc20Allowance, loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
 import { getGenesisReputationTokenAddress } from '@zoltar/ui-zoltar-shared/protocol/activeProtocolAddresses.js'
-import { PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from '@zoltar/ui-zoltar-shared/protocol/zoltarDeploymentHelpers.js'
+import { PROXY_DEPLOYER_ADDRESS } from '@zoltar/ui-zoltar-shared/protocol/zoltarDeploymentHelpers.js'
 import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createInitialTransactionTrayState, markTransactionPrepared, markTransactionRequested } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
 import { createFakeBackend, createFakeSimulationProfile } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { SEPOLIA_GENESIS_REP_INIT_CODE, SEPOLIA_WETH_INIT_CODE } from '@zoltar/ui-core-shared/lib/sepoliaDeploymentConfig.js'
-import { DeploymentStatusOracle_DeploymentStatusOracle, ScalarOutcomes_ScalarOutcomes } from '@zoltar/ui-core-shared/contractArtifact.js'
-import { PROXY_DEPLOYER_RUNTIME_CODE, assertStaticDeploymentArtifactRuntimeCodeHashes, fundCanonicalDeployerSigner } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
+import { ScalarOutcomes_ScalarOutcomes } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES, PROXY_DEPLOYER_RUNTIME_CODE, assertStaticDeploymentArtifactRuntimeCodeHashes, fundCanonicalDeployerSigner } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
 
 const require = createRequire(import.meta.url)
 const rootSolcPath = fileURLToPath(new URL('../../../../../node_modules/solc/index.js', import.meta.url))
@@ -83,8 +83,76 @@ contract AtomicFunding {
 }`
 
 describe('contract deployment internals', () => {
+	test('loads deployment status with off-chain code checks and deploys a non-proxy step', async () => {
+		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: createFakeSimulationProfile() }))
+		try {
+			const steps = getDeploymentSteps()
+			const scalarStep = steps.find(step => step.id === 'scalarOutcomes')
+			if (scalarStep === undefined) throw new Error('Expected scalar deployment step')
+			const scalarRuntimeCode = `0x${ScalarOutcomes_ScalarOutcomes.evm.deployedBytecode.object}` as const
+			const snapshot = await loadDeploymentStatusSnapshot(
+				createMockReadClient({
+					getCode: async () => '0x1234',
+				}),
+			)
+			expect(snapshot.applicationDeploymentComplete).toBe(true)
+
+			let transactionTarget: Address | null | undefined
+			const transactionHash = `0x${'8'.repeat(64)}` as Hash
+			expect(
+				await scalarStep.deploy(
+					asWriteClient({
+						getCode: async () => PROXY_DEPLOYER_RUNTIME_CODE,
+						sendTransaction: async request => {
+							transactionTarget = request.to
+							return transactionHash
+						},
+						waitForTransactionReceipt: async () => hashReceipt('success'),
+					}),
+				),
+			).toBe(transactionHash)
+			expect(transactionTarget).toBe(PROXY_DEPLOYER_ADDRESS)
+			expect(keccak256(scalarRuntimeCode)).toBe(EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES.scalarOutcomes)
+		} finally {
+			resetEnvironment()
+		}
+	})
+
+	test('loadDeploymentStatusSnapshot checks every deployment address without a contract call', async () => {
+		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: createFakeSimulationProfile() }))
+		try {
+			const readClient = createMockReadClient({
+				getCode: async ({ address }) => (address === PROXY_DEPLOYER_ADDRESS ? '0x1234' : undefined),
+			})
+
+			const snapshot = await loadDeploymentStatusSnapshot(readClient)
+
+			expect(snapshot.applicationDeploymentComplete).toBe(false)
+			expect(snapshot.deploymentStatuses.find(step => step.id === 'proxyDeployer')?.deployed).toBe(true)
+			expect(snapshot.deploymentStatuses.find(step => step.id === 'multicall3')?.deployed).toBe(false)
+			expect(snapshot.deploymentStatuses.find(step => step.id === 'scalarOutcomes')?.deployed).toBe(false)
+		} finally {
+			resetEnvironment()
+		}
+	})
+
+	test('loadDeploymentStatusSnapshot rejects unexpected protocol runtime code', async () => {
+		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: SEPOLIA_NETWORK_PROFILE }))
+		try {
+			const scalarStep = createDeploymentSteps().find(step => step.id === 'scalarOutcomes')
+			if (scalarStep === undefined) throw new Error('Expected scalarOutcomes step')
+			const readClient = createMockReadClient({
+				getCode: async ({ address }) => (address === scalarStep.address ? '0x1234' : undefined),
+			})
+
+			await expect(loadDeploymentStatusSnapshot(readClient)).rejects.toThrow('Unexpected runtime code for scalarOutcomes')
+		} finally {
+			resetEnvironment()
+		}
+	})
+
 	test('rejects generated deployment artifacts that do not match the pinned runtime hashes', () => {
-		expect(assertStaticDeploymentArtifactRuntimeCodeHashes()).toEqual(['deploymentStatusOracle', 'multicall3', 'scalarOutcomes', 'weth', 'zoltarQuestionData'])
+		expect(assertStaticDeploymentArtifactRuntimeCodeHashes()).toEqual(['multicall3', 'scalarOutcomes', 'weth', 'zoltarQuestionData'])
 		expect(() =>
 			assertStaticDeploymentArtifactRuntimeCodeHashes({
 				expectedRuntimeCodeHashes: { scalarOutcomes: keccak256('0x01') },
@@ -153,81 +221,9 @@ describe('contract deployment internals', () => {
 		}
 	})
 
-	test('status oracle constructor order matches the deployment-step order on every public network', () => {
-		for (const profile of [MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE]) {
-			const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile }))
-			try {
-				const steps = getDeploymentSteps()
-				const oracleStep = steps.find(step => step.id === 'deploymentStatusOracle')
-				if (oracleStep === undefined) throw new Error(`Expected ${profile.displayName} deploymentStatusOracle step`)
-				const trackedAddresses = steps.filter(step => step.id !== 'deploymentStatusOracle').map(step => step.address)
-				const expectedBytecode = encodeDeployData({
-					abi: DeploymentStatusOracle_DeploymentStatusOracle.abi,
-					bytecode: `0x${DeploymentStatusOracle_DeploymentStatusOracle.evm.bytecode.object}`,
-					args: [trackedAddresses],
-				})
-				const expectedAddress = getCreate2Address({
-					bytecode: expectedBytecode,
-					from: PROXY_DEPLOYER_ADDRESS,
-					salt: ZERO_SALT,
-				})
-
-				expect(oracleStep.address).toBe(expectedAddress)
-			} finally {
-				resetEnvironment()
-			}
-		}
-	})
-
 	test('provides exact runtime verification for every mainnet deployment step', () => {
 		const steps = getDeploymentSteps(MAINNET_NETWORK_PROFILE)
 		expect(steps.filter(step => step.expectedRuntimeCodeHash === undefined).map(step => step.id)).toEqual([])
-	})
-
-	test('loads mainnet status with exact code verification and deploys a non-proxy step', async () => {
-		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: MAINNET_NETWORK_PROFILE }))
-		try {
-			const steps = getDeploymentSteps(MAINNET_NETWORK_PROFILE)
-			const oracleStep = steps.find(step => step.id === 'deploymentStatusOracle')
-			const scalarStep = steps.find(step => step.id === 'scalarOutcomes')
-			if (oracleStep === undefined || scalarStep === undefined) throw new Error('Expected mainnet oracle and scalar deployment steps')
-			const oracleRuntimeCode = `0x${DeploymentStatusOracle_DeploymentStatusOracle.evm.deployedBytecode.object}` as Hex
-			const scalarRuntimeCode = `0x${ScalarOutcomes_ScalarOutcomes.evm.deployedBytecode.object}` as Hex
-			const snapshot = await loadDeploymentStatusOracleSnapshot(
-				createMockReadClient({
-					getCode: async ({ address }) => {
-						if (address === oracleStep.address) return oracleRuntimeCode
-						if (address === PROXY_DEPLOYER_ADDRESS) return PROXY_DEPLOYER_RUNTIME_CODE
-						throw new Error(`Unexpected mainnet status code address: ${address}`)
-					},
-					readContract: async ({ functionName }) => {
-						if (functionName === 'getDeploymentMask') return 1n as never
-						throw new Error(`Unexpected mainnet status read: ${functionName}`)
-					},
-				}) as ReadClient,
-			)
-			expect(snapshot.deploymentStatuses.find(step => step.id === 'proxyDeployer')?.deployed).toBe(true)
-			expect(snapshot.deploymentStatuses.find(step => step.id === 'deploymentStatusOracle')?.deployed).toBe(true)
-
-			let transactionTarget: Address | null | undefined
-			const transactionHash = `0x${'8'.repeat(64)}` as Hash
-			expect(
-				await scalarStep.deploy(
-					asWriteClient({
-						getCode: async () => PROXY_DEPLOYER_RUNTIME_CODE,
-						sendTransaction: async request => {
-							transactionTarget = request.to
-							return transactionHash
-						},
-						waitForTransactionReceipt: async () => hashReceipt('success'),
-					}),
-				),
-			).toBe(transactionHash)
-			expect(transactionTarget).toBe(PROXY_DEPLOYER_ADDRESS)
-			expect(scalarStep.expectedRuntimeCodeHash).toBe(keccak256(scalarRuntimeCode))
-		} finally {
-			resetEnvironment()
-		}
 	})
 
 	test('explicit public profiles produce isolated addresses and init code when runtime uses the opposite network', async () => {
@@ -263,76 +259,14 @@ describe('contract deployment internals', () => {
 
 			expect(oppositeRuntimeSteps.map(step => [step.id, step.address])).toEqual(alignedRuntimeSteps.map(step => [step.id, step.address]))
 
-			const oracleStep = oppositeRuntimeSteps.find(step => step.id === 'deploymentStatusOracle')
-			if (oracleStep === undefined) throw new Error(`Expected ${requestedProfile.displayName} deploymentStatusOracle step`)
-			const trackedAddresses = oppositeRuntimeSteps.filter(step => step.id !== 'deploymentStatusOracle').map(step => step.address)
-			const expectedOracleBytecode = encodeDeployData({
-				abi: DeploymentStatusOracle_DeploymentStatusOracle.abi,
-				bytecode: `0x${DeploymentStatusOracle_DeploymentStatusOracle.evm.bytecode.object}`,
-				args: [trackedAddresses],
-			})
-			expect(oracleStep.address).toBe(
-				getCreate2Address({
-					bytecode: expectedOracleBytecode,
-					from: PROXY_DEPLOYER_ADDRESS,
-					salt: ZERO_SALT,
-				}),
-			)
-
 			expect(await captureDeployData(oppositeRuntimeSteps, 'zoltar')).toBe(await captureDeployData(alignedRuntimeSteps, 'zoltar'))
-		}
-	})
-
-	test('loadDeploymentStatusOracleSnapshot reads deployment mask when the status oracle is deployed', async () => {
-		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: createFakeSimulationProfile() }))
-		try {
-			const oracleStep = createDeploymentSteps().find(step => step.id === 'deploymentStatusOracle')
-			if (oracleStep === undefined) throw new Error('Expected deploymentStatusOracle step')
-			const readContractCalls: string[] = []
-			const readClient = createMockReadClient({
-				getCode: async ({ address }) => {
-					if (address === oracleStep.address) return '0x1234'
-					throw new Error(`Unexpected getCode address: ${address}`)
-				},
-				readContract: async ({ functionName }) => {
-					readContractCalls.push(functionName)
-					if (functionName === 'getDeploymentMask') return 5n as never
-					throw new Error(`Unexpected readContract call: ${functionName}`)
-				},
-			})
-
-			const snapshot = await loadDeploymentStatusOracleSnapshot(readClient as ReadClient)
-
-			expect(readContractCalls).toEqual(['getDeploymentMask'])
-			expect(snapshot.applicationDeploymentComplete).toBe(false)
-			expect(snapshot.deploymentStatuses.find(step => step.id === 'proxyDeployer')?.deployed).toBe(true)
-			expect(snapshot.deploymentStatuses.find(step => step.id === 'deploymentStatusOracle')?.deployed).toBe(true)
-			expect(snapshot.deploymentStatuses.find(step => step.id === 'multicall3')?.deployed).toBe(false)
-			expect(snapshot.deploymentStatuses.find(step => step.id === 'scalarOutcomes')?.deployed).toBe(true)
-		} finally {
-			resetEnvironment()
-		}
-	})
-
-	test('loadDeploymentStatusOracleSnapshot rejects unexpected status-oracle code', async () => {
-		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: SEPOLIA_NETWORK_PROFILE }))
-		try {
-			const oracleStep = createDeploymentSteps().find(step => step.id === 'deploymentStatusOracle')
-			if (oracleStep === undefined) throw new Error('Expected deploymentStatusOracle step')
-			const readClient = createMockReadClient({
-				getCode: async ({ address }) => (address === oracleStep.address ? '0x1234' : undefined),
-			})
-
-			await expect(loadDeploymentStatusOracleSnapshot(readClient as ReadClient)).rejects.toThrow('Unexpected runtime code for deploymentStatusOracle')
-		} finally {
-			resetEnvironment()
 		}
 	})
 
 	test('deployViaProxy-backed steps execute with a transaction through the proxy deployer', async () => {
 		const steps = createDeploymentSteps()
-		const oracleStep = steps.find(step => step.id === 'deploymentStatusOracle')
-		if (oracleStep === undefined) throw new Error('Expected deploymentStatusOracle step')
+		const deploymentStep = steps.find(step => step.id === 'scalarOutcomes')
+		if (deploymentStep === undefined) throw new Error('Expected scalarOutcomes step')
 		const questionDataStep = steps.find(step => step.id === 'zoltarQuestionData')
 		if (questionDataStep === undefined) throw new Error('Expected zoltarQuestionData step')
 
@@ -359,20 +293,20 @@ describe('contract deployment internals', () => {
 			waitForTransactionReceipt: async () => hashReceipt('success'),
 		})
 
-		const oracleHash = await oracleStep.deploy(client)
+		const firstHash = await deploymentStep.deploy(client)
 		const questionDataHash = await questionDataStep.deploy(client)
 
 		expect(capturedProxyDeployData).toBeDefined()
 		expect(capturedFactoryData).toBeDefined()
-		expect(oracleHash).toBe(txHash)
+		expect(firstHash).toBe(txHash)
 		expect(questionDataHash).toBe(txHash)
 		expect(preparedFunctions).toEqual(['Deploy contract through deterministic proxy', 'Deploy contract through deterministic proxy'])
 	})
 
 	test('deployViaProxy-backed steps inherit simulation prepared-transaction copy from the write client', async () => {
 		const steps = createDeploymentSteps()
-		const oracleStep = steps.find(step => step.id === 'deploymentStatusOracle')
-		if (oracleStep === undefined) throw new Error('Expected deploymentStatusOracle step')
+		const deploymentStep = steps.find(step => step.id === 'scalarOutcomes')
+		if (deploymentStep === undefined) throw new Error('Expected scalarOutcomes step')
 		let preparedPreview: Parameters<NonNullable<WriteClient['onTransactionPrepared']>>[0] | undefined
 		const txHash = `0x${'8'.repeat(64)}` as Hash
 		const client = asWriteClient({
@@ -385,7 +319,7 @@ describe('contract deployment internals', () => {
 			waitForTransactionReceipt: async () => hashReceipt('success'),
 		})
 
-		await oracleStep.deploy(client)
+		await deploymentStep.deploy(client)
 
 		expect(preparedPreview?.functionName).toBe('Deploy contract through deterministic proxy')
 		expect(preparedPreview?.requiresWalletConfirmation).toBe(false)
@@ -393,8 +327,8 @@ describe('contract deployment internals', () => {
 
 	test('deployViaProxy-backed steps return the replacement hash when repriced in the wallet', async () => {
 		const steps = createDeploymentSteps()
-		const oracleStep = steps.find(step => step.id === 'deploymentStatusOracle')
-		if (oracleStep === undefined) throw new Error('Expected deploymentStatusOracle step')
+		const deploymentStep = steps.find(step => step.id === 'scalarOutcomes')
+		if (deploymentStep === undefined) throw new Error('Expected scalarOutcomes step')
 		const originalHash = `0x${'1'.repeat(64)}` as Hash
 		const replacementHash = `0x${'2'.repeat(64)}` as Hash
 		const onTransactionSubmitted = mock(() => undefined)
@@ -413,7 +347,7 @@ describe('contract deployment internals', () => {
 			},
 		})
 
-		const hash = await oracleStep.deploy(client)
+		const hash = await deploymentStep.deploy(client)
 
 		expect(hash).toBe(replacementHash)
 		expect(onTransactionSubmitted).toHaveBeenCalledWith(replacementHash)
@@ -421,8 +355,8 @@ describe('contract deployment internals', () => {
 
 	test('deployViaProxy-backed steps reject cancelled replacement transactions', async () => {
 		const steps = createDeploymentSteps()
-		const oracleStep = steps.find(step => step.id === 'deploymentStatusOracle')
-		if (oracleStep === undefined) throw new Error('Expected deploymentStatusOracle step')
+		const deploymentStep = steps.find(step => step.id === 'scalarOutcomes')
+		if (deploymentStep === undefined) throw new Error('Expected scalarOutcomes step')
 		const originalHash = `0x${'3'.repeat(64)}` as Hash
 		const replacementHash = `0x${'4'.repeat(64)}` as Hash
 		const onTransactionSubmitted = mock(() => undefined)
@@ -441,7 +375,7 @@ describe('contract deployment internals', () => {
 			},
 		})
 
-		await expect(oracleStep.deploy(client)).rejects.toThrow('Transaction was cancelled in the wallet before confirmation.')
+		await expect(deploymentStep.deploy(client)).rejects.toThrow('Transaction was cancelled in the wallet before confirmation.')
 		expect(onTransactionSubmitted).toHaveBeenCalledWith(replacementHash)
 	})
 
@@ -449,13 +383,13 @@ describe('contract deployment internals', () => {
 		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: createFakeSimulationProfile() }))
 		try {
 			const steps = createDeploymentSteps()
-			const oracleStep = steps.find(step => step.id === 'deploymentStatusOracle')
-			if (oracleStep === undefined) throw new Error('Expected deploymentStatusOracle step')
+			const deploymentStep = steps.find(step => step.id === 'scalarOutcomes')
+			if (deploymentStep === undefined) throw new Error('Expected scalarOutcomes step')
 			let transactionState = markTransactionRequested(createInitialTransactionTrayState(), {
 				action: 'deploy',
 				source: 'deployment',
 				submittedDetail: 'Transaction submitted.',
-				submittedTitle: `Deploying ${oracleStep.label}`,
+				submittedTitle: `Deploying ${deploymentStep.label}`,
 			})
 			const txHash = `0x${'6'.repeat(64)}` as Hash
 			const client = asWriteClient({
@@ -468,7 +402,7 @@ describe('contract deployment internals', () => {
 				waitForTransactionReceipt: async () => hashReceipt('success'),
 			})
 
-			await oracleStep.deploy(client)
+			await deploymentStep.deploy(client)
 
 			expect(transactionState.active?.tone).toBe('preparing')
 			expect(transactionState.active?.detail).toBe('Review the prepared transaction before it is submitted.')
@@ -1211,8 +1145,8 @@ describe('contract deployment internals', () => {
 			},
 		}
 
-		expect(await loadErc20Balance(readClient as ReadClient, tokenAddress, ownerAddress)).toBe(2_000n)
-		expect(await loadErc20Allowance(readClient as ReadClient, tokenAddress, ownerAddress, spenderAddress)).toBe(500n)
+		expect(await loadErc20Balance(readClient, tokenAddress, ownerAddress)).toBe(2_000n)
+		expect(await loadErc20Allowance(readClient, tokenAddress, ownerAddress, spenderAddress)).toBe(500n)
 		expect(seen).toEqual([
 			{
 				functionName: 'balanceOf',

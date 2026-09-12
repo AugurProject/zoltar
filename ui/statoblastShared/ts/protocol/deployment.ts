@@ -1,15 +1,14 @@
 import type { NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { getRuntimeNetworkProfile, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
-import { bytesToHex, encodeDeployData, hexToBytes, keccak256, toHex, type Address, type Hash, type Hex } from '@zoltar/core-shared/evm/ethereum'
-import type { DeploymentStatusSnapshot, DeploymentStep, DeploymentStepId, ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
+import { bytesToHex, hexToBytes, toHex, type Hash, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import type { DeploymentStatusSnapshot, DeploymentStep, DeploymentStepId, ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import {
 	assertStaticDeploymentArtifactRuntimeCodeHashes,
+	assertDeploymentStepRuntimeCode,
 	buildDeploymentStatusSnapshot,
 	deployViaProxy,
 	getDeploymentSteps as getZoltarDeploymentSteps,
-	getZoltarDeploymentStatusOracleStepAddresses,
 	getZoltarDeploymentStepConstructorArguments,
-	loadDeploymentStatusOracleMaskAtAddress,
 	withExpectedDeploymentRuntimeCodeHashes,
 } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
 import {
@@ -23,10 +22,7 @@ import {
 	getSecurityPoolOperationsDelegateRuntimeCode,
 	getShareTokenFactoryByteCode,
 } from './deploymentHelpers.js'
-import { DeploymentStatusOracle_DeploymentStatusOracle } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate, statoblast_SecurityPoolUtils_SecurityPoolUtils, statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory, statoblast_openOracle_OpenOracle_OpenOracle } from '../contractArtifact.js'
-import { constructorArgumentsFromInitCode, createDeploymentStatusOracleAddressHelper } from '@zoltar/core-shared/deployment/deploymentAddresses'
-import { PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from './deploymentHelpers.js'
 
 export { loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
 
@@ -87,18 +83,7 @@ const EXPECTED_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentSt
 export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkProfile(), wait?: Parameters<typeof getZoltarDeploymentSteps>[1]): DeploymentStep[] {
 	const addresses = getInfraContractAddresses(profile)
 	const steps: DeploymentStep[] = [
-		// Statoblast replaces the deployment status oracle step: the statoblast oracle
-		// must monitor additional Statoblast contracts, so it is deployed with
-		// a different constructor argument list (and therefore a different address).
-		...getZoltarDeploymentSteps(profile, wait).map(step =>
-			step.id === 'deploymentStatusOracle'
-				? {
-						...step,
-						address: getDeploymentStatusOracleAddress(profile),
-						deploy: async (client: WriteClient) => await deployViaProxy(client, getDeploymentStatusOracleByteCode(profile)),
-					}
-				: step,
-		),
+		...getZoltarDeploymentSteps(profile, wait),
 		{
 			id: 'uniformPriceDualCapBatchAuctionFactory',
 			label: 'UniformPriceDualCapBatchAuctionFactory',
@@ -203,77 +188,11 @@ export function getDeploymentStepConstructorArguments(profile: NetworkProfile = 
 	return {
 		...getZoltarDeploymentStepConstructorArguments(profile),
 		...getInfraStepConstructorArguments(profile),
-		deploymentStatusOracle: constructorArgumentsFromInitCode(getDeploymentStatusOracleByteCode(profile), DeploymentStatusOracle_DeploymentStatusOracle.evm.bytecode.object),
 	}
 }
 
-function getStatoblastDeploymentStatusOracleStepAddresses(profile = getRuntimeNetworkProfile()): Address[] {
-	const addresses = getInfraContractAddresses(profile)
-	return [
-		...getZoltarDeploymentStatusOracleStepAddresses(profile),
-		addresses.uniformPriceDualCapBatchAuctionFactory,
-		addresses.securityPoolUtils,
-		addresses.securityPoolOperationsDelegate,
-		addresses.openOracle,
-		addresses.shareTokenFactory,
-		addresses.priceOracleManagerAndOperatorQueuerFactory,
-		addresses.securityPoolForker,
-		addresses.escalationGameClaimDelegate,
-		addresses.escalationGameFactory,
-		addresses.securityPoolFactory,
-	] satisfies Address[]
-}
-
-function getDeploymentStatusOracleByteCode(profile = getRuntimeNetworkProfile()): Hex {
-	return encodeDeployData({
-		abi: DeploymentStatusOracle_DeploymentStatusOracle.abi,
-		bytecode: `0x${DeploymentStatusOracle_DeploymentStatusOracle.evm.bytecode.object}`,
-		args: [getStatoblastDeploymentStatusOracleStepAddresses(profile)],
-	})
-}
-
-function getDeploymentStatusOracleAddress(profile = getRuntimeNetworkProfile()): Address {
-	return createDeploymentStatusOracleAddressHelper({
-		deploymentStatusOracleBytecode: () => getDeploymentStatusOracleByteCode(profile),
-		proxyDeployerAddress: PROXY_DEPLOYER_ADDRESS,
-		zeroSalt: ZERO_SALT,
-	}).getDeploymentStatusOracleAddress()
-}
-
-function assertStepRuntimeCode(step: DeploymentStep, code: Hex | undefined): boolean {
-	if (step.trustedSimulationCodePresence) return true
-	if (code === undefined || code === '0x') return false
-	if (step.expectedRuntimeCodeHash === undefined) throw new Error(`Exact runtime-code verification is unavailable for deployment step ${step.id} on the active network`)
-	if (keccak256(code) !== step.expectedRuntimeCodeHash) throw new Error(`Unexpected runtime code for ${step.id} at ${step.address}`)
-	return true
-}
-
-export async function loadDeploymentStatusOracleSnapshot(client: Pick<ReadClient, 'readContract' | 'getCode'>): Promise<DeploymentStatusSnapshot> {
-	const profile = getRuntimeNetworkProfile()
-	const steps = getDeploymentSteps(profile)
-	const oracleAddress = getDeploymentStatusOracleAddress(profile)
-	const oracleCode = await client.getCode({ address: oracleAddress })
-	if (profile.id === 'simulation') {
-		if (oracleCode === undefined || oracleCode === '0x') {
-			const proxyDeployerCode = await client.getCode({ address: PROXY_DEPLOYER_ADDRESS })
-			return buildDeploymentStatusSnapshot(steps, proxyDeployerCode === undefined || proxyDeployerCode === '0x' ? 0n : 1n, false)
-		}
-		return buildDeploymentStatusSnapshot(steps, await loadDeploymentStatusOracleMaskAtAddress(client, oracleAddress), true)
-	}
-	const oracleStep = steps.find(step => step.id === 'deploymentStatusOracle')
-	const proxyStep = steps.find(step => step.id === 'proxyDeployer')
-	if (oracleStep === undefined || proxyStep === undefined) throw new Error('Deployment plan is missing required verification steps')
-	if (!assertStepRuntimeCode(oracleStep, oracleCode)) {
-		const proxyDeployerCode = await client.getCode({ address: PROXY_DEPLOYER_ADDRESS })
-		const proxyDeployerDeployed = assertStepRuntimeCode(proxyStep, proxyDeployerCode)
-		return buildDeploymentStatusSnapshot(steps, proxyDeployerDeployed ? 1n : 0n, false)
-	}
-	const snapshot = buildDeploymentStatusSnapshot(steps, await loadDeploymentStatusOracleMaskAtAddress(client, oracleAddress), true)
-	await Promise.all(
-		snapshot.deploymentStatuses.map(async step => {
-			if (!step.deployed) return
-			assertStepRuntimeCode(step, await client.getCode({ address: step.address }))
-		}),
-	)
-	return snapshot
+export async function loadDeploymentStatusSnapshot(client: Pick<ReadClient, 'getCode'>): Promise<DeploymentStatusSnapshot> {
+	const steps = getDeploymentSteps(getRuntimeNetworkProfile())
+	const deployedSteps = await Promise.all(steps.map(async step => assertDeploymentStepRuntimeCode(step, await client.getCode({ address: step.address }))))
+	return buildDeploymentStatusSnapshot(steps, deployedSteps)
 }

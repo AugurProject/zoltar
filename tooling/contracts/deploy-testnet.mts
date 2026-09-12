@@ -1,3 +1,4 @@
+import { parseDeploymentProfile, type DeploymentProfile } from './deployment-profile.mts'
 import { appendFile } from 'node:fs/promises'
 import * as process from 'node:process'
 import { createWalletClient, defineChain, formatEther, http, keccak256, parseUnits, privateKeyToAccount, type Account, type Address, type Chain, type Hash, type Hex } from '@zoltar/core-shared/evm/ethereum'
@@ -42,7 +43,6 @@ export const CONSERVATIVE_DEPLOYMENT_GAS: Readonly<Record<string, bigint>> = {
 	uniswapV3SwapRouter: 4_250_000n,
 	uniswapV4PoolManager: 8_000_000n,
 	uniswapV4Quoter: 2_250_000n,
-	deploymentStatusOracle: 1_000_000n,
 	weth: 1_000_000n,
 	reputationToken: 1_250_000n,
 	multicall3: 1_250_000n,
@@ -223,6 +223,7 @@ export function parseMaxTotalCost(value: string | undefined) {
 export function parseDeploymentCommandLine(argv = process.argv.slice(2), environment: Readonly<Record<string, string | undefined>> = process.env) {
 	return {
 		chainId: parseChainId(commandLineValue('chain-id', 'CHAIN_ID', argv) ?? environment['CHAIN_ID']),
+		deploymentProfile: parseDeploymentProfile(commandLineValue('profile', 'DEPLOYMENT_PROFILE', argv) ?? environment['DEPLOYMENT_PROFILE']),
 		maxFeePerGas: parseMaxFeePerGas(commandLineValue('max-fee-per-gas-gwei', 'MAX_FEE_PER_GAS_GWEI', argv) ?? environment['MAX_FEE_PER_GAS_GWEI']),
 		maxTotalCost: parseMaxTotalCost(commandLineValue('max-total-cost-eth', 'MAX_TOTAL_COST_ETH', argv) ?? environment['MAX_TOTAL_COST_ETH']),
 		privateKey: parsePrivateKey(option('private-key', [...argv]) ?? environment['PRIVATE_KEY']),
@@ -599,14 +600,15 @@ async function assertCanonicalCreate2DeployerCode(client: CodeReader) {
 	if (code.toLowerCase() !== ARACHNID_CREATE2_DEPLOYER_RUNTIME_CODE.toLowerCase()) throw new Error(`Unexpected code at canonical CREATE2 deployer ${ARACHNID_CREATE2_DEPLOYER_ADDRESS}`)
 }
 
-export function createCompleteDeploymentPlan(profile: NetworkProfile, uniswap: UniswapDeployment) {
+export function createCompleteDeploymentPlan(profile: NetworkProfile, uniswap: UniswapDeployment, deploymentProfile: DeploymentProfile = 'minimal') {
 	const [create2DeployerStep, permit2Step, ...uniswapQuoteSteps] = uniswap.steps
 	if (create2DeployerStep === undefined || create2DeployerStep.id !== 'arachnidCreate2Deployer') throw new Error('Uniswap deployment plan must begin with the canonical CREATE2 deployer')
 	if (permit2Step === undefined || permit2Step.id !== 'permit2') throw new Error('Uniswap deployment plan must deploy Permit2 after the canonical CREATE2 deployer')
 	const [proxyDeployerStep, ...protocolSteps] = getDeploymentSteps(profile)
 	if (proxyDeployerStep === undefined || proxyDeployerStep.id !== 'proxyDeployer') throw new Error('Protocol deployment plan must begin with the canonical proxy deployer')
 	const protocolStepsWithExternalDependencies = protocolSteps.map(step => (step.id === 'openOracle' ? { ...step, dependencies: [...step.dependencies, 'permit2'] } : step))
-	return [create2DeployerStep, permit2Step, proxyDeployerStep, ...uniswapQuoteSteps, ...protocolStepsWithExternalDependencies].map(step => (!('verifyRuntimeCode' in step) || step.verifyRuntimeCode === undefined ? { ...step, expectedRuntimeCodeHash: getExpectedRuntimeCodeHash(step.id) } : step))
+	const optionalSteps = deploymentProfile === 'with-quote-venues' ? uniswapQuoteSteps : []
+	return [create2DeployerStep, permit2Step, proxyDeployerStep, ...optionalSteps, ...protocolStepsWithExternalDependencies].map(step => (!('verifyRuntimeCode' in step) || step.verifyRuntimeCode === undefined ? { ...step, expectedRuntimeCodeHash: getExpectedRuntimeCodeHash(step.id) } : step))
 }
 
 export async function assertBootstrapDescendantCode(client: CodeReader, profile: NetworkProfile, wait?: RpcStateRetryWait, expectedRuntimeCodeHashes?: Readonly<Record<string, Hash>>) {
@@ -643,7 +645,7 @@ async function writeGitHubSummary(chainId: number, account: Address, results: re
 	await appendFile(summaryPath, `## Testnet deployment\n\nChain ID: \`${chainId.toString()}\`  \nDeployer: \`${account}\`\n\n| Contract | Result | Address | Transaction |\n| --- | --- | --- | --- |\n${rows}\n`)
 }
 
-export async function deployTestnet(parameters: { chainId: number; maxFeePerGas?: bigint; maxTotalCost?: bigint; privateKey: Hex; rpcUrl: string; log?: (message: string) => void; writeGitHubSummary?: boolean }) {
+export async function deployTestnet(parameters: { chainId: number; deploymentProfile?: DeploymentProfile; maxFeePerGas?: bigint; maxTotalCost?: bigint; privateKey: Hex; rpcUrl: string; log?: (message: string) => void; writeGitHubSummary?: boolean }) {
 	assertStaticDeploymentArtifactRuntimeCodeHashes()
 	assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes()
 	const chainId = parseChainId(parameters.chainId.toString())
@@ -673,7 +675,7 @@ export async function deployTestnet(parameters: { chainId: number; maxFeePerGas?
 	if (authorizedMaxFeePerGas < CANONICAL_DEPLOYER_RAW_GAS_PRICE && (!canonicalCreate2Installed || !proxyInstalled)) {
 		throw new Error(`MAX_FEE_PER_GAS_GWEI authorizes ${authorizedMaxFeePerGas.toString()} attoETH per gas, but missing canonical deployers require fixed ${CANONICAL_DEPLOYER_RAW_GAS_PRICE.toString()} attoETH per gas raw transactions`)
 	}
-	const plan = createCompleteDeploymentPlan(profile, uniswap)
+	const plan = createCompleteDeploymentPlan(profile, uniswap, parameters.deploymentProfile)
 	const knownInstalledAddresses = new Set<Address>()
 	if (canonicalCreate2Installed) knownInstalledAddresses.add(ARACHNID_CREATE2_DEPLOYER_ADDRESS)
 	if (proxyInstalled) knownInstalledAddresses.add(PROXY_DEPLOYER_ADDRESS)
@@ -714,7 +716,7 @@ export async function deployTestnet(parameters: { chainId: number; maxFeePerGas?
 }
 
 export function getDeploymentHelp() {
-	return `Deploy the complete deterministic Zoltar infrastructure to an EVM testnet
+	return `Deploy deterministic Zoltar protocol infrastructure to an EVM testnet
 
 Load PRIVATE_KEY into the environment from a secret manager or hidden prompt,
 or pass --private-key=0x... if shell history exposure is acceptable.
@@ -724,6 +726,7 @@ Pass RPC and cost limits as uppercase assignments after --, for example:
   --private-key=0x...    Required unless PRIVATE_KEY is set
   --rpc-url=https://...   Required unless RPC_URL is set
   --chain-id=11155111     Defaults to Sepolia chain ID 11155111
+  --profile=minimal      Protocol requirements; with-quote-venues adds V3/V4 quote infrastructure
   --max-fee-per-gas-gwei=100  Rejects higher RPC fee suggestions
   --max-total-cost-eth=20     Caps the preflight estimate and transaction costs
 
@@ -733,15 +736,11 @@ unprotected legacy deployer transactions. Ethereum mainnet chain ID 1 is
 intentionally rejected.`
 }
 
-function printHelp() {
-	console.log(getDeploymentHelp())
-}
-
 export async function main() {
 	if (process.argv.includes('--help') || process.argv.includes('-h')) {
-		printHelp()
+		console.log(getDeploymentHelp())
 		return
 	}
-	const { chainId, maxFeePerGas, maxTotalCost, privateKey, rpcUrl } = parseDeploymentCommandLine()
-	await deployTestnet({ chainId, maxFeePerGas, maxTotalCost, privateKey, rpcUrl })
+	const { chainId, deploymentProfile, maxFeePerGas, maxTotalCost, privateKey, rpcUrl } = parseDeploymentCommandLine()
+	await deployTestnet({ chainId, deploymentProfile, maxFeePerGas, maxTotalCost, privateKey, rpcUrl })
 }

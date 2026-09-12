@@ -162,14 +162,6 @@
 			"keywords": ["operators", "guardrails", "launch", "recovery"]
 		},
 		{
-			"path": "reference/deployment-status.html",
-			"title": "Deployment status oracle",
-			"summary": "Deployment progress bitmask semantics and the 256-step limit.",
-			"section": "reference",
-			"topic": "Deployment",
-			"keywords": ["deployment", "bitmask", "runtime bytecode", "status"]
-		},
-		{
 			"path": "reference/merkle-mountain-range.html",
 			"title": "Merkle Mountain Range proofs",
 			"summary": "Carry-proof hashing, snapshot peaks, bounds, and replay protection.",

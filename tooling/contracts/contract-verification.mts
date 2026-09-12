@@ -114,11 +114,6 @@ const UNVERIFIABLE_STEPS: Readonly<Record<string, string>> = {
 }
 
 const STEP_DEFINITIONS: Readonly<Record<string, StepDefinition>> = {
-	deploymentStatusOracle: {
-		artifactPath: 'contracts/DeploymentStatusOracle.sol',
-		compilerProfile: 'main',
-		contractName: 'DeploymentStatusOracle',
-	},
 	weth: {
 		artifactPath: 'contracts/statoblast/WETH9.sol',
 		compilerProfile: 'main',

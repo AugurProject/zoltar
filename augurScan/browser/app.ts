@@ -852,7 +852,6 @@ const demoSupplyEventName = (index: number) => {
 const demoContracts = demoNetworks.flatMap(network => {
 	const manifestDefinitions: readonly (readonly [address: string, label: string, kind: string, deploymentBlock: string | undefined, exact: boolean])[] = [
 		['0x7A0D94F55792C434d74a40883C6ed8545E406D12', 'Proxy Deployer', 'proxyDeployer', '22181455', true],
-		['0x052c04adFF6C1BF51f52158e36441C1e99cdfDB4', 'Deployment Status Oracle', 'deploymentStatusOracle', '22181462', true],
 		['0x529dcaC57677451CBfe766d88CcC133D082500df', 'OpenOracle', 'openOracle', '22181501', true],
 		['0xaa280cf94Fc3531aDe40b479C17eBef53923291C', 'Zoltar', 'zoltar', undefined, true],
 		['0xBea56ec12C943213408DA17f754A523A8aB38947', 'Security Pool Factory', 'securityPoolFactory', undefined, true],

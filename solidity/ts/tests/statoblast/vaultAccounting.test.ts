@@ -48,15 +48,12 @@ describe('Statoblast: vault accounting', () => {
 		manipulatePriceOracle,
 		manipulatePriceOracleAndPerformOperation,
 		deployOriginSecurityPool,
-		ensureDeploymentStatusOracleDeployed,
 		getAnvilWindowEthereum,
 		setBaselineSnapshot,
 		initializeStatoblastBaseline,
-		getDeploymentStatusOracleAddress,
 		getDeploymentStepAddresses,
 		getInfraContractAddresses,
 		getSecurityPoolAddresses,
-		loadDeploymentStatusOracleMask,
 		createQuestion,
 		getQuestionId,
 		getLastPrice,
@@ -424,25 +421,23 @@ describe('Statoblast: vault accounting', () => {
 		strictEqualTypeSafe(await getLastPrice(client, managerAddress), 0n, 'origin manager should start with a zero price')
 	})
 
-	test('deployment status oracle returns the deployment bitmask in one read', async () => {
-		const deploymentStatusOracleAddress = getDeploymentStatusOracleAddress()
-		const deploymentMask = await loadDeploymentStatusOracleMask(client)
-
-		assert.notStrictEqual(await client.getCode({ address: deploymentStatusOracleAddress }), '0x', 'deployment status oracle should be deployed')
-		strictEqualTypeSafe(deploymentMask, (1n << BigInt(getDeploymentStepAddresses().length)) - 1n, 'all deployment steps should be deployed after ensureInfraDeployed')
+	test('every infrastructure deployment has bytecode after setup', async () => {
+		for (const address of getDeploymentStepAddresses()) {
+			const code = await client.getCode({ address })
+			assert.ok(code !== undefined && code !== '0x', `Missing infrastructure bytecode at ${address}`)
+		}
 	})
 
-	test('deployment status oracle reports missing contracts from a partial deployment', async () => {
+	test('partial infrastructure deployment contains only the proxy deployer', async () => {
 		const partialWindow = getAnvilWindowEthereum()
 		const partialClient = createWriteClient(partialWindow, TEST_ADDRESSES[0], 0)
 		await partialWindow.resetToCleanState()
 		await setupTestAccounts(partialWindow)
 		await ensureProxyDeployerDeployed(partialClient)
-		await ensureDeploymentStatusOracleDeployed(partialClient)
 
-		const deploymentMask = await loadDeploymentStatusOracleMask(partialClient)
+		const codes = await Promise.all(getDeploymentStepAddresses().map(address => partialClient.getCode({ address })))
 
-		strictEqualTypeSafe(deploymentMask, 1n, 'only the proxy deployer should be marked deployed before the rest of infra')
+		assert.equal(codes.filter(code => code !== undefined && code !== '0x').length, 1, 'only the proxy deployer should have code')
 		await initializeStatoblastBaseline()
 		await setBaselineSnapshot()
 	})

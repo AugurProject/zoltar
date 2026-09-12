@@ -2,7 +2,7 @@
 
 The production contracts keep stable source paths because paths participate in artifact identities, deployment tooling, and documentation links.
 
-- Root contracts own Zoltar universe identity, REP, common token interfaces, and deployment-status primitives.
+- Root contracts own Zoltar universe identity, REP, and common token interfaces.
 - `statoblast/` owns SecurityPool settlement, reporting, escalation, migration, auctions, shares, and its public interfaces.
 - `trading/` is an optional subsystem. It consumes Statoblast through `statoblast/interfaces`, the shared outcome type, and the already-vendored math library; Statoblast core never depends on Trading.
 - `vendor/` and `statoblast/openOracle/` contain pinned upstream or upstream-derived sources with provenance records beside the code.

@@ -1,3 +1,4 @@
+import { parseDeploymentProfile } from './deployment-profile.mts'
 import { describe, expect, test } from 'bun:test'
 import { getAddress, getCreateAddress, keccak256, privateKeyToAccount, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { getBootstrapDescendantAddresses, getInfraContractAddresses } from '../../ui/statoblastShared/ts/protocol/deploymentHelpers.ts'
@@ -37,6 +38,24 @@ const SECOND_HASH: Hex = '0x0202020202020202020202020202020202020202020202020202
 const ZERO_HASH: Hex = '0x0000000000000000000000000000000000000000000000000000000000000000'
 
 describe('testnet deployment inputs', () => {
+	test('defaults to minimal infrastructure and validates explicit profiles', () => {
+		expect(parseDeploymentProfile(undefined)).toBe('minimal')
+		expect(parseDeploymentProfile('with-quote-venues')).toBe('with-quote-venues')
+		expect(() => parseDeploymentProfile('unknown')).toThrow()
+	})
+
+	test('minimal deployment retains Permit2 and excludes optional quote venues', async () => {
+		const uniswap = await getUniswapDeployment(SEPOLIA_NETWORK_PROFILE.wethAddress)
+		const plan = createCompleteDeploymentPlan(SEPOLIA_NETWORK_PROFILE, uniswap)
+		expect(plan.some(step => step.id === 'permit2')).toBe(true)
+		expect(plan.some(step => step.id === 'openOracle')).toBe(true)
+		expect(plan.some(step => step.id.startsWith('uniswap'))).toBe(false)
+		const indexById = new Map(plan.map((step, index) => [step.id, index]))
+		for (const [index, step] of plan.entries()) {
+			for (const dependency of step.dependencies) expect(indexById.get(dependency)).toBeLessThan(index)
+		}
+	})
+
 	test('retries canonical proxy code after its signer nonce is confirmed', async () => {
 		let codeReadCount = 0
 		const retryDelays: number[] = []
@@ -129,6 +148,7 @@ describe('testnet deployment inputs', () => {
 			}),
 		).toEqual({
 			chainId: 11_155_111,
+			deploymentProfile: 'minimal',
 			maxFeePerGas: 42_000_000_000n,
 			maxTotalCost: 7_500_000_000_000_000_000n,
 			privateKey,
@@ -539,7 +559,7 @@ describe('testnet deployment plan', () => {
 
 	test('covers every bootstrap infrastructure address and orders every dependency first', async () => {
 		const uniswap = await getUniswapDeployment(SEPOLIA_NETWORK_PROFILE.wethAddress)
-		const plan = createCompleteDeploymentPlan(SEPOLIA_NETWORK_PROFILE, uniswap)
+		const plan = createCompleteDeploymentPlan(SEPOLIA_NETWORK_PROFILE, uniswap, 'with-quote-venues')
 		const addressSet = new Set(plan.map(step => step.address))
 		const infrastructure = getInfraContractAddresses(SEPOLIA_NETWORK_PROFILE)
 		const bootstrapDescendants = getBootstrapDescendantAddresses(SEPOLIA_NETWORK_PROFILE)
@@ -586,7 +606,7 @@ describe('testnet deployment plan', () => {
 		expect(bootstrapDescendants.securityPoolCreationCodeFirstChunk).toBe(getCreateAddress({ from: bootstrapDescendants.securityPoolDeploymentWorker, nonce: 1n }))
 		expect(bootstrapDescendants.securityPoolCreationCodeSecondChunk).toBe(getCreateAddress({ from: bootstrapDescendants.securityPoolDeploymentWorker, nonce: 2n }))
 		expect(plan.some(step => step.id === 'escalationGameFactory')).toBe(true)
-		expect(plan).toHaveLength(25)
+		expect(plan).toHaveLength(24)
 		expect(new Set(plan.map(step => step.id)).size).toBe(plan.length)
 		expect(new Set(plan.map(step => step.address)).size).toBe(plan.length)
 		expect(Object.keys(CONSERVATIVE_DEPLOYMENT_GAS).sort()).toEqual(plan.map(step => step.id).sort())

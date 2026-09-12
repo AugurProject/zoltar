@@ -5,7 +5,7 @@ import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { findNextDeployableStep, getDeploymentSections, getDeploymentStepAvailability, getDeployNextMissingAvailability, getPrerequisiteLabel } from '@zoltar/ui-zoltar-shared/features/deployment/lib/deployment.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import type { InjectedEthereum } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'
-import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
+import { getDeploymentSteps, loadDeploymentStatusSnapshot } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
 import { getMulticall3Address } from '@zoltar/ui-zoltar-shared/protocol/zoltarDeploymentHelpers.js'
 import { loadZoltarUniverseSummary } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
 import type { DeploymentStatus, ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -118,16 +118,13 @@ void describe('deployment helpers', () => {
 		).toEqual({ disabled: false, reason: undefined })
 	})
 
-	void test('getDeploymentSteps includes the deployment status oracle as a proxy deployer step', () => {
+	void test('getDeploymentSteps contains only the required deployment steps', () => {
 		const deploymentSteps = getDeploymentSteps()
-		const deploymentStatusOracleStep = deploymentSteps.find(step => step.id === 'deploymentStatusOracle')
 
-		expect(deploymentSteps.map(step => step.id)).toEqual(['proxyDeployer', 'deploymentStatusOracle', 'multicall3', 'scalarOutcomes', 'zoltarQuestionData', 'zoltar'])
-		expect(deploymentStatusOracleStep?.dependencies).toEqual(['proxyDeployer'])
-		expect(deploymentStatusOracleStep?.label).toBe('Deployment Status Oracle')
+		expect(deploymentSteps.map(step => step.id)).toEqual(['proxyDeployer', 'multicall3', 'scalarOutcomes', 'zoltarQuestionData', 'zoltar'])
 	})
 
-	void test('getDeploymentSections groups the deployment status oracle with proxy deployer', () => {
+	void test('getDeploymentSections groups utilities with the proxy deployer', () => {
 		const deploymentStatuses = getDeploymentSteps().map(step => ({
 			...step,
 			deployed: false,
@@ -135,7 +132,7 @@ void describe('deployment helpers', () => {
 		const sections = getDeploymentSections(deploymentStatuses)
 		const proxyDeployerSection = sections.find(section => section.title === 'Utilities')
 
-		expect(proxyDeployerSection?.steps.map(step => step.id)).toEqual(['proxyDeployer', 'deploymentStatusOracle', 'multicall3'])
+		expect(proxyDeployerSection?.steps.map(step => step.id)).toEqual(['proxyDeployer', 'multicall3'])
 	})
 
 	void test('deploys Sepolia WETH and allocated REP before wiring REP into Zoltar', async () => {
@@ -191,12 +188,11 @@ void describe('deployment helpers', () => {
 		expect(multicall3Step?.address).toBe(getMulticall3Address())
 	})
 
-	void test('loadDeploymentStatusOracleSnapshot returns the proxy deployer when the oracle is missing', async () => {
-		const snapshot = await loadDeploymentStatusOracleSnapshot(readClient)
+	void test('loadDeploymentStatusSnapshot returns the proxy deployer when the oracle is missing', async () => {
+		const snapshot = await loadDeploymentStatusSnapshot(readClient)
 
 		expect(snapshot.applicationDeploymentComplete).toBe(false)
 		expect(snapshot.deploymentStatuses.find(step => step.id === 'proxyDeployer')?.deployed).toBe(true)
-		expect(snapshot.deploymentStatuses.find(step => step.id === 'deploymentStatusOracle')?.deployed).toBe(false)
 	})
 
 	void test('loadZoltarUniverseSummary returns undefined for an unknown universe id', async () => {
