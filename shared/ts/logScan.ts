@@ -66,6 +66,8 @@ export function logRangeLimitError(error: unknown) {
 	})
 }
 
+// Item and byte budgets apply to each RPC page, not the lifetime of the index.
+// Split oversized ranges while preserving complete history across pages and refreshes.
 export async function fetchLogsWithAdaptiveRanges<Log>(
 	fromBlock: bigint,
 	toBlock: bigint,
@@ -80,7 +82,6 @@ export async function fetchLogsWithAdaptiveRanges<Log>(
 	if (!Number.isSafeInteger(maximumItems) || maximumItems < 0) throw new Error('maximumItems must be a non-negative safe integer')
 	if (!Number.isSafeInteger(maximumBytes) || maximumBytes < 0) throw new Error('maximumBytes must be a non-negative safe integer')
 	const logs: Log[] = []
-	let retainedBytes = 0
 	let nextBlock = fromBlock
 	let requestedBlocks = maximumRange
 	while (nextBlock <= toBlock) {
@@ -94,17 +95,16 @@ export async function fetchLogsWithAdaptiveRanges<Log>(
 				if (!Number.isSafeInteger(itemBytes) || itemBytes < 0) throw new Error('Canonical log item size must be a non-negative safe integer')
 				return total + itemBytes
 			}, 0)
-			if (page.length > maximumItems - logs.length || pageBytes > maximumBytes - retainedBytes) {
+			if (page.length > maximumItems || pageBytes > maximumBytes) {
 				if (attemptedBlocks > 1n) {
 					requestedBlocks = (attemptedBlocks + 1n) / 2n
 					continue
 				}
-				if (page.length > maximumItems - logs.length) throw new Error(`Canonical log history exceeds the configured ${maximumItems.toString()}-item limit`)
-				throw new Error(`Canonical log history exceeds the configured ${maximumBytes.toString()}-byte limit`)
+				if (page.length > maximumItems) throw new Error(`Canonical log page exceeds the configured ${maximumItems.toString()}-item limit`)
+				throw new Error(`Canonical log page exceeds the configured ${maximumBytes.toString()}-byte limit`)
 			}
 			for (const item of page) validateItem?.(item)
 			logs.push(...page)
-			retainedBytes += pageBytes
 			nextBlock = range.toBlock + 1n
 			requestedBlocks = maximumRange
 		} catch (error) {
@@ -172,12 +172,7 @@ export async function refreshCanonicalLogIndex<Log>(
 				}
 			}
 			const fromBlock = index.anchor === undefined ? effectiveStartBlock : index.anchor.blockNumber + 1n
-			const measureItem = parameters.measureItem
-			const retainedBytes = measureItem === undefined ? 0 : index.items.reduce((total, item) => total + measureItem(item), 0)
-			const appended =
-				fromBlock > latest.blockNumber
-					? []
-					: await fetchLogsWithAdaptiveRanges(fromBlock, latest.blockNumber, parameters.maximumRange, parameters.fetchRange, parameters.maximumItems - index.items.length, (parameters.maximumBytes ?? Number.MAX_SAFE_INTEGER) - retainedBytes, parameters.measureItem, parameters.validateItem)
+			const appended = fromBlock > latest.blockNumber ? [] : await fetchLogsWithAdaptiveRanges(fromBlock, latest.blockNumber, parameters.maximumRange, parameters.fetchRange, parameters.maximumItems, parameters.maximumBytes, parameters.measureItem, parameters.validateItem)
 			const latestAfterFetch = await parameters.loadBlockAnchor(latest.blockNumber)
 			const currentAfterFetch = currentAnchor === undefined ? undefined : await parameters.loadBlockAnchor(currentAnchor.blockNumber)
 			if (latestAfterFetch.blockHash !== latest.blockHash || (currentAnchor !== undefined && currentAfterFetch?.blockHash !== currentAnchor.blockHash)) {

@@ -153,18 +153,41 @@ describe('canonical log indexes', () => {
 		expect(reads.every(block => block >= 0n && block <= 1_000_000n)).toBeTrue()
 	})
 
-	test('fails closed before retaining a log history beyond its item limit', async () => {
+	test.each([
+		{ maximumItems: 2, maximumBytes: 100 },
+		{ maximumItems: 100, maximumBytes: 2 },
+	])('continues initial replay, incremental refresh, and reorg replay beyond a page budget: %j', async limits => {
+		const index = createCanonicalLogIndex<bigint>()
+		let head = 5n
+		let chain = 'a'
+		const parameters = {
+			fetchRange: async ({ fromBlock, toBlock }: Readonly<{ fromBlock: bigint; toBlock: bigint }>) => Array.from({ length: Number(toBlock - fromBlock + 1n) }, (_, offset) => fromBlock + BigInt(offset)),
+			key: 'questions',
+			loadBlockAnchor: async (blockNumber = head) => ({ blockHash: `${chain}:${blockNumber.toString()}`, blockNumber }),
+			...limits,
+			maximumRange: 10_000n,
+			measureItem: () => 1,
+			startBlock: 1n,
+		}
+		expect(await refreshCanonicalLogIndex(index, parameters)).toEqual([1n, 2n, 3n, 4n, 5n])
+		head = 7n
+		expect(await refreshCanonicalLogIndex(index, parameters)).toEqual([1n, 2n, 3n, 4n, 5n, 6n, 7n])
+		chain = 'b'
+		expect(await refreshCanonicalLogIndex(index, parameters)).toEqual([1n, 2n, 3n, 4n, 5n, 6n, 7n])
+	})
+
+	test('rejects a single block exceeding the page item limit without committing it', async () => {
 		const index = createCanonicalLogIndex<bigint>()
 		await expect(
 			refreshCanonicalLogIndex(index, {
-				fetchRange: async ({ fromBlock, toBlock }) => Array.from({ length: Number(toBlock - fromBlock + 1n) }, (_, offset) => fromBlock + BigInt(offset)),
+				fetchRange: async () => [1n, 2n, 3n],
 				key: 'questions',
-				loadBlockAnchor: async (blockNumber = 20n) => ({ blockHash: `chain:${blockNumber.toString()}`, blockNumber }),
-				maximumItems: 5,
+				loadBlockAnchor: async (blockNumber = 1n) => ({ blockHash: `chain:${blockNumber.toString()}`, blockNumber }),
+				maximumItems: 2,
 				maximumRange: 10_000n,
-				startBlock: 10n,
+				startBlock: 1n,
 			}),
-		).rejects.toThrow('exceeds the configured 5-item limit')
+		).rejects.toThrow('exceeds the configured 2-item limit')
 		expect(index.items).toEqual([])
 		expect(index.anchor).toBeUndefined()
 	})

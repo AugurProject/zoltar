@@ -23,7 +23,7 @@ const questionComponents = [
 
 type MockReadClient = Parameters<typeof loadMarketDetails>[0]
 type MockReadContractRequest = Parameters<MockReadClient['readContract']>[0]
-type MockLog = Readonly<{ address: Address; data: Hex; topics: readonly Hex[] }>
+type MockLog = Readonly<{ address: Address; data: Hex; topics: readonly Hex[]; blockNumber?: bigint }>
 
 function questionObject(question: readonly [string, string, bigint, bigint, bigint, bigint, bigint, string]) {
 	return { title: question[0], description: question[1], startTime: question[2], endTime: question[3], numTicks: question[4], displayValueMin: question[5], displayValueMax: question[6], answerUnit: question[7] }
@@ -79,7 +79,12 @@ function createReadClient({
 			let eventTopic: Hex | undefined
 			if (eventName === 'QuestionCreated') eventTopic = keccak256('QuestionCreated(uint256,uint256,(string,string,uint48,uint48,uint120,int256,int256,string),string[])')
 			else if (eventName === 'DeployChild') eventTopic = keccak256('DeployChild(address,uint248,uint256,uint248,address,uint256)')
-			return logs.filter(log => (request.address === undefined || log.address === request.address) && (eventTopic === undefined || log.topics[0] === eventTopic))
+			return logs.filter(
+				log =>
+					(log.blockNumber === undefined || ((request.fromBlock === undefined || log.blockNumber >= request.fromBlock) && (request.toBlock === undefined || log.blockNumber <= request.toBlock))) &&
+					(request.address === undefined || log.address === request.address) &&
+					(eventTopic === undefined || log.topics[0] === eventTopic),
+			)
 		},
 		multicall: async () => {
 			const response = multicallResponses[callIndex]
@@ -97,6 +102,18 @@ function createReadClient({
 }
 
 describe('zoltar contract helpers', () => {
+	test('keeps individual questions and later pages readable beyond the RPC page item budget', async () => {
+		const tuples = Array.from({ length: 10_001 }, (_, index) => [`Question ${index}`, '', 1n, 2n, 0n, 0n, 0n, ''] as const)
+		const logs = tuples.map((question, index) => ({ ...questionCreatedLog(question, ['Yes', 'No']), blockNumber: BigInt(index + 1) }))
+		const client = createReadClient({ logs, head: 10_001n, deploymentBlock: 1n, multicallResponses: [], readContractHandlers: {} })
+		const first = tuples[0]
+		if (first === undefined) throw new Error('Missing first question fixture')
+		expect((await loadMarketDetails(client, getQuestionId(questionObject(first), ['Yes', 'No']))).title).toBe('Question 0')
+		const page = await loadZoltarQuestionPage(client, 1_000, 10)
+		expect(page.questionCount).toBe(10_001n)
+		expect(page.questions.map(question => question.title)).toEqual(['Question 10000'])
+	})
+
 	test('loadMarketDetails marks a question without a creation event as non-existent', async () => {
 		const client = createReadClient({ multicallResponses: [], readContractHandlers: {} })
 		const market = await loadMarketDetails(client, 123n)
