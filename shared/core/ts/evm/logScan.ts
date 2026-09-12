@@ -47,7 +47,7 @@ export async function fetchLogsWithAdaptiveRanges<Log>(fromBlock: bigint, toBloc
 		const attemptedBlocks = requestedBlocks < remaining ? requestedBlocks : remaining
 		const range = { fromBlock: nextBlock, toBlock: nextBlock + attemptedBlocks - 1n }
 		try {
-			logs.push(...(await fetchRange(range)))
+			for (const log of await fetchRange(range)) logs.push(log)
 			nextBlock = range.toBlock + 1n
 			requestedBlocks = maximumRange
 		} catch (error) {
