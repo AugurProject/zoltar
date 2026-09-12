@@ -1,5 +1,6 @@
 import { executorArtifact } from '#contracts/artifacts.generated'
 import { concatHex, getCreate2Address } from '@zoltar/bot-shared/ethereum'
+import { isHash32 } from '@zoltar/bot-shared/infrastructure/json-validation'
 
 import { type ExecutorDeploymentIntent } from '#execution/executor-deployment-store'
 import { submitSignedTransaction, validateSubmissionSettings } from '#execution/transaction-submission'
@@ -17,8 +18,8 @@ export type ExecutorDeploymentPlan = {
 }
 
 export function executorDeploymentPlan(saltValue: unknown): ExecutorDeploymentPlan {
-	if (typeof saltValue !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(saltValue)) throw new Error('CREATE2 salt must be a 32-byte 0x-prefixed value')
-	const salt = saltValue as Hex
+	if (!isHash32(saltValue)) throw new Error('CREATE2 salt must be a 32-byte 0x-prefixed value')
+	const salt = saltValue
 	const bytecode = `0x${executorArtifact.evm.bytecode.object}` as Hex
 	return {
 		address: getCreate2Address({ bytecode, from: deterministicDeploymentProxy, salt }),

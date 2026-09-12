@@ -1,5 +1,6 @@
 import { createPublicClient, parseAbiItem, type Account, type Address, type Chain, type Hex, type TransactionReceipt, type Transport, type WalletClient, toHex, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { requestTransport } from '@zoltar/bot-shared/ethereum/rpc-transport'
+import { isHash32 } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { confirmCanonicalReceiptFinality, type CanonicalReceiptFinalityPolicy } from '@zoltar/bot-shared/execution/canonical-finality'
 import { assertSubmissionWindowOpen, prepareSignedTransaction, submitSignedTransaction } from '@zoltar/bot-shared/execution/transaction-submission'
 import { endpointLabel, sendRawTransactionToRpc } from '@zoltar/bot-shared/monitoring/connectivity'
@@ -119,15 +120,11 @@ export function executionReadClients(environment: ExecutionEnvironment) {
 	})
 }
 
-function rpcBlockHash(value: unknown): value is Hex {
-	return typeof value === 'string' && /^0x[0-9a-fA-F]{64}$/.test(value)
-}
-
 function finalizedBlockResponse(value: unknown, endpoint: string) {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`RPC ${endpoint} returned a malformed finalized block`)
 	const hash = 'hash' in value ? value.hash : undefined
 	const number = 'number' in value ? value.number : undefined
-	if (!rpcBlockHash(hash)) throw new Error(`RPC ${endpoint} finalized block is missing its canonical hash`)
+	if (!isHash32(hash)) throw new Error(`RPC ${endpoint} finalized block is missing its canonical hash`)
 	if (typeof number !== 'string' || !/^0x(?:0|[1-9a-fA-F][0-9a-fA-F]*)$/.test(number)) throw new Error(`RPC ${endpoint} finalized block has a malformed number`)
 	return { hash, number: BigInt(number) }
 }
