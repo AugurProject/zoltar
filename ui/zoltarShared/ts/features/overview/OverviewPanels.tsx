@@ -1,14 +1,16 @@
 import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { useState } from 'preact/hooks'
-import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
+import { HeaderToolbar } from '@zoltar/ui-core-shared/components/HeaderToolbar.js'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
-import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
+import { HeaderMetricGroup, HeaderMetricStrip } from '@zoltar/ui-core-shared/components/HeaderMetricStrip.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
+import { ToolbarField } from '@zoltar/ui-core-shared/components/ToolbarField.js'
+import { WalletChip, WalletChipLabel } from '@zoltar/ui-core-shared/components/WalletChip.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import { getChainDisplayLabel, getChainIdDecimalLabel, getKnownChainName, isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
@@ -16,6 +18,8 @@ import { renderRepPriceSourceLabel } from '@zoltar/ui-core-shared/lib/repPriceSo
 import type { OverviewPanelsProps, RepPriceFailure } from '../types.js'
 import { getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { getNetworkSwitchTarget } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
+import { abbreviateAddress } from '@zoltar/ui-core-shared/lib/address.js'
+import { formatUniverseDisplayLabel, formatUniverseLabel } from '../universes/lib/universe.js'
 import type { UserMessagePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
 
 function omitPresentationActionHint(presentation: UserMessagePresentation) {
@@ -47,6 +51,7 @@ function renderRepPriceFailure(failure: RepPriceFailure | undefined) {
 export function OverviewPanels({
 	settingsMenu,
 	applicationTitle,
+	activeUniverseId,
 	accountState,
 	isConnectingWallet,
 	isManagingWallet,
@@ -73,7 +78,6 @@ export function OverviewPanels({
 	universeForkTime,
 	universeHasForked,
 	universePresentation,
-	universeLabel,
 	universeRepBalanceAttoRep,
 	isRefreshing,
 	walletBootstrapComplete,
@@ -98,11 +102,6 @@ export function OverviewPanels({
 	const environmentBadge = (() => {
 		if (isBrowserSimulationReadBackend) return <Badge tone='warning'>{appCopy.simulation}</Badge>
 		if (hasWrongWalletNetwork) return <Badge tone='danger'>{appCopy.formatWrongNetworkBadgeLabel(getChainDisplayLabel(accountState.chainId) ?? appCopy.unknownNetwork)}</Badge>
-		if (accountState.address === undefined) return undefined
-		return <Badge tone='ok'>{appCopy.connected}</Badge>
-	})()
-	const environmentDescription = (() => {
-		void isBrowserSimulationReadBackend
 		return undefined
 	})()
 	const activeNetworkBadge = activeNetworkProfile.id === 'simulation' ? undefined : <Badge>{activeNetworkProfile.displayName}</Badge>
@@ -111,18 +110,21 @@ export function OverviewPanels({
 		if (activeNetworkProfile.id === 'sepolia') return appCopy.sepoliaNetwork
 		return appCopy.ethereumMainnet
 	})()
-	const accountActions = (() => {
+	const walletControl = (() => {
 		if (accountState.address === undefined)
 			return (
-				<button className='secondary' type='button' onClick={onConnect} disabled={isConnectingWallet}>
+				<button className='secondary wallet-button' type='button' onClick={onConnect} disabled={isConnectingWallet}>
 					{isConnectingWallet ? <LoadingText>{appCopy.connecting}</LoadingText> : commonCopy.connectWallet}
 				</button>
 			)
-		if (isBrowserSimulationReadBackend) return undefined
+		if (isBrowserSimulationReadBackend) return <WalletChip address={accountState.address} />
 		return (
 			<details className='account-menu'>
-				<summary className='secondary'>{appCopy.accountMenu}</summary>
+				<summary aria-label={appCopy.formatAccountMenuLabel(abbreviateAddress(accountState.address))}>
+					<WalletChipLabel address={accountState.address} tone={hasWrongWalletNetwork ? 'danger' : 'ok'} />
+				</summary>
 				<div className='account-menu-popover'>
+					<AddressValue address={accountState.address} />
 					<p className='account-menu-network'>
 						<span>{appCopy.currentNetwork}</span>
 						<strong>{walletNetworkLabel}</strong>
@@ -142,7 +144,6 @@ export function OverviewPanels({
 			</details>
 		)
 	})()
-	const headerDescription = environmentDescription
 	return (
 		<section className='overview-shell'>
 			{universeHasForked ? (
@@ -160,95 +161,78 @@ export function OverviewPanels({
 				</WarningSurface>
 			) : undefined}
 			<article className={`overview-panel overview-wallet-panel${isBrowserSimulationReadBackend ? ' is-simulation' : ''}`}>
-				<RouteHeader
-					className='overview-route-header'
-					actions={settingsMenu}
-					badge={
-						<span className='environment-badge-row'>
-							{activeNetworkBadge}
-							{environmentBadge}
-						</span>
-					}
-					description={headerDescription}
-					title={
-						<span className='application-brand'>
-							<img src='./favicon.svg' alt='' width='32' height='32' />
-							{applicationTitle}
-						</span>
-					}
-				/>
-				{accountActions}
-
-				<DataGrid className={`overview-inline-metrics ${showEnvironmentDetails ? 'mobile-expanded' : ''}`.trim()} columns='auto'>
-					<MetricField className='overview-address-metric' label={appCopy.address}>
-						{(() => {
-							if (isWalletAddressLoading)
-								return (
-									<span className='loading-value'>
-										<span className='spinner' aria-hidden='true' />
-										{appCopy.connecting}
-									</span>
-								)
-							if (accountState.address === undefined) return appCopy.notConnected
-
-							return <AddressValue address={accountState.address} responsiveAbbreviation />
-						})()}
-					</MetricField>
-					{showAccountBalances ? (
+				<HeaderToolbar
+					brand={
 						<>
-							<MetricField className='overview-simulation-secondary' label={commonCopy.eth}>
-								<CurrencyValue value={accountState.ethBalanceAttoEth} loading={isRefreshing && accountState.ethBalanceAttoEth === undefined} suffix={commonCopy.eth} compactWhenOverflow />
-							</MetricField>
-							<MetricField className='overview-metric-secondary' label={commonCopy.weth}>
-								<CurrencyValue value={accountState.wethBalanceAttoEth} loading={isRefreshing && accountState.wethBalanceAttoEth === undefined} suffix={commonCopy.weth} compactWhenOverflow />
-							</MetricField>
-							<MetricField className='overview-simulation-secondary' label={commonCopy.rep}>
-								<CurrencyValue value={universeRepBalanceAttoRep} loading={isLoadingUniverseRepBalance} suffix={commonCopy.rep} compactWhenOverflow />
-							</MetricField>
+							<img src='./favicon.svg' alt='' width='28' height='28' />
+							{applicationTitle}
 						</>
-					) : undefined}
+					}
+					badges={
+						activeNetworkBadge === undefined && environmentBadge === undefined ? undefined : (
+							<>
+								{activeNetworkBadge}
+								{environmentBadge}
+							</>
+						)
+					}
+					controls={
+						<>
+							{walletControl}
+							<ToolbarField label={commonCopy.universe}>
+								<span title={formatUniverseLabel(activeUniverseId)}>{formatUniverseDisplayLabel(activeUniverseId)}</span>
+							</ToolbarField>
+						</>
+					}
+					settings={settingsMenu}
+				/>
+				<HeaderMetricStrip expanded={showEnvironmentDetails}>
+					<HeaderMetricGroup label={commonCopy.balances}>
+						<MetricField className='overview-simulation-secondary' label={commonCopy.eth}>
+							<CurrencyValue value={showAccountBalances ? accountState.ethBalanceAttoEth : undefined} loading={isWalletAddressLoading || (showAccountBalances && isRefreshing && accountState.ethBalanceAttoEth === undefined)} compactWhenOverflow />
+						</MetricField>
+						<MetricField className='overview-metric-secondary' label={commonCopy.weth}>
+							<CurrencyValue value={showAccountBalances ? accountState.wethBalanceAttoEth : undefined} loading={isWalletAddressLoading || (showAccountBalances && isRefreshing && accountState.wethBalanceAttoEth === undefined)} compactWhenOverflow />
+						</MetricField>
+						<MetricField className='overview-simulation-secondary' label={commonCopy.rep}>
+							<CurrencyValue value={showAccountBalances ? universeRepBalanceAttoRep : undefined} loading={isWalletAddressLoading || (showAccountBalances && isLoadingUniverseRepBalance)} compactWhenOverflow />
+						</MetricField>
+					</HeaderMetricGroup>
 					{showRepPrices ? (
-						<MetricField
-							className='overview-metric-secondary'
-							label={
-								<span className='metric-label-with-action'>
-									<span>
+						<HeaderMetricGroup
+							label={commonCopy.prices}
+							secondary
+							action={
+								isRepPricingUnavailable ? undefined : (
+									<button type='button' className='quiet metric-label-refresh' onClick={onRefreshRepPrices} disabled={isRefreshingRepPrices} aria-label={appCopy.refreshRepPrices} title={isRefreshingRepPrices ? appCopy.refreshingRepPrices : appCopy.refreshRepPrices}>
+										↻
+									</button>
+								)
+							}
+						>
+							<MetricField
+								className='overview-metric-secondary'
+								label={
+									<>
 										{appCopy.repPerEthCompact} {repPerEthSourceLabel ?? renderRepPriceSourceLabel(repPerEthSource, repPerEthSourceUrl)}
-									</span>
-									{isRepPricingUnavailable ? undefined : (
-										<button type='button' className='quiet metric-label-refresh' onClick={onRefreshRepPrices} disabled={isRefreshingRepPrices} aria-label={appCopy.refreshRepPrices} title={isRefreshingRepPrices ? appCopy.refreshingRepPrices : appCopy.refreshRepPrices}>
-											↻
-										</button>
-									)}
-								</span>
-							}
-						>
-							{isRepPricingUnavailable ? repPricingUnavailableLabel : (renderRepPriceFailure(repPerEthPrice === undefined && !isLoadingRepPrices ? repPerEthFailure : undefined) ?? <CurrencyValue value={repPerEthPrice} loading={isLoadingRepPrices} copyable={false} />)}
-						</MetricField>
-					) : undefined}
-					{showRepPrices ? (
-						<MetricField
-							className='overview-metric-secondary'
-							label={
-								<span className='metric-label-with-action'>
-									<span>
+									</>
+								}
+							>
+								{isRepPricingUnavailable ? repPricingUnavailableLabel : (renderRepPriceFailure(repPerEthPrice === undefined && !isLoadingRepPrices ? repPerEthFailure : undefined) ?? <CurrencyValue value={repPerEthPrice} loading={isLoadingRepPrices} copyable={false} compactWhenOverflow />)}
+							</MetricField>
+							<MetricField
+								className='overview-metric-secondary'
+								label={
+									<>
 										{appCopy.repUsdc} {renderRepPriceSourceLabel(repUsdcSource, repUsdcSourceUrl)}
-									</span>
-									{isRepPricingUnavailable ? undefined : (
-										<button type='button' className='quiet metric-label-refresh' onClick={onRefreshRepPrices} disabled={isRefreshingRepPrices} aria-label={appCopy.refreshRepPrices} title={isRefreshingRepPrices ? appCopy.refreshingRepPrices : appCopy.refreshRepPrices}>
-											↻
-										</button>
-									)}
-								</span>
-							}
-						>
-							{isRepPricingUnavailable ? repPricingUnavailableLabel : (renderRepPriceFailure(repUsdcPrice === undefined && !isLoadingRepPrices ? repUsdcFailure : undefined) ?? <CurrencyValue value={repUsdcPrice} loading={isLoadingRepPrices} suffix={appCopy.usdc} units={6} />)}
-						</MetricField>
+									</>
+								}
+							>
+								{isRepPricingUnavailable ? repPricingUnavailableLabel : (renderRepPriceFailure(repUsdcPrice === undefined && !isLoadingRepPrices ? repUsdcFailure : undefined) ?? <CurrencyValue value={repUsdcPrice} loading={isLoadingRepPrices} suffix={appCopy.usdc} units={6} compactWhenOverflow />)}
+							</MetricField>
+						</HeaderMetricGroup>
 					) : undefined}
-					<MetricField className='overview-universe-metric' label={commonCopy.universe}>
-						{universeLabel}
-					</MetricField>
-				</DataGrid>
+				</HeaderMetricStrip>
 				<button className='overview-details-toggle secondary' type='button' aria-expanded={showEnvironmentDetails} onClick={() => setShowEnvironmentDetails(current => !current)}>
 					{showEnvironmentDetails ? appCopy.hideEnvironmentDetails : appCopy.showEnvironmentDetails}
 				</button>
