@@ -159,7 +159,7 @@ if (import.meta.main) {
 		selectedShards = [selectedShard]
 	}
 
-	let mergedSummary = process.argv.includes('--no-clean') ? await readCoverageSummary() : undefined
+	let mergedSummary: SolidityCoverageSummary | undefined = undefined
 
 	for (const testShard of selectedShards) {
 		const shardIndex = testShards.indexOf(testShard) + 1

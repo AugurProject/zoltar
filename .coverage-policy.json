@@ -25,7 +25,6 @@
 				"ui/zoltar/ts/index.ts",
 				"ui/zoltar/ts/simulation/tevmWorker.ts",
 				"ui/zoltarShared/ts/features/deployment/lib/deploymentRoute.ts",
-				"ui/statoblastShared/ts/features/open-oracle/lib/openOracleNavigation.ts",
 				"ui/zoltarShared/ts/features/universes/hooks/useZoltarOperations.ts"
 			]
 		},

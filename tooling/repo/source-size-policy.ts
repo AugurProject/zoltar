@@ -61,7 +61,6 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	]),
 	...allowances('Bot QA and documentation capture scripts grew with every dashboard surface they exercise.', [
 		['bots/open-oracle-arbitrager/scripts/capture-docs-screenshots.mts', 1913],
-		['bots/liquidator/scripts/capture-dashboard-qa.mts', 1101],
 		['bots/chaos/scripts/capture-dashboard-qa.mts', 973],
 	]),
 	...allowances('Repository tooling modules accumulated responsibilities that belong in separate modules.', [

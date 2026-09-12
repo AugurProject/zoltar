@@ -40,6 +40,7 @@ const factoryContract = tradingContracts['contracts/trading/TwoWayConstantProduc
 const routerContract = tradingContracts['contracts/trading/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter
 const zeroSalt = toHex(0, { size: 32 })
 const rpcStateRetryDelaysMilliseconds = [250, 500, 1_000, 2_000, 4_000] as const
+/** @internal exported for tests that simulate the canonical proxy deployer */
 export const CANONICAL_PROXY_DEPLOYER_RUNTIME_CODE = '0x60003681823780368234f58015156014578182fd5b80825250506014600cf3' satisfies Hex
 
 function requireFeeBps(feeBps: number) {

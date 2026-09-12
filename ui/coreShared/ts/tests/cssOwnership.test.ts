@@ -80,7 +80,7 @@ test('persistent operational text and AugurScan disclosures keep accessible mini
 	expect(base).toMatch(/\.overview-inline-metrics strong \{[^}]*font-size: var\(--font-value\);/s)
 	expect(readStylesheet('visual-foundation.css')).toMatch(/button,\s*\[role="button"\][^{]*\{[^}]*min-height: var\(--touch-target-min\);/s)
 	expect(trading).toMatch(/\.primary-link \{[^}]*min-height: 44px;/s)
-	expect(trading).toMatch(/\.eyebrow,\s*\.section-kicker \{[^}]*12px \/ 1\.2 ui-monospace/s)
+	expect(trading).toMatch(/\.section-kicker \{[^}]*12px \/ 1\.2 ui-monospace/s)
 	expect(trading).toMatch(/\.status \{[^}]*13px \/ 1\.2 ui-monospace/s)
 	expect(controls).toMatch(/\.view-tab \{[^}]*min-height: var\(--touch-target-min\);/s)
 	expect(controls).toMatch(/\.mobile-route-select select \{[^}]*min-height: var\(--touch-target-min\);/s)
