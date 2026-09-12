@@ -1,3 +1,4 @@
+import { renameAndSyncDirectory } from '@zoltar/bot-shared/config/durable-replacement'
 import { canonicalDeployment } from './canonical-deployment.ts'
 import { createHash, randomUUID } from 'node:crypto'
 import { constants } from 'node:fs'
@@ -482,13 +483,7 @@ export async function saveSettings(path: string, settings: OperatorSettings, exp
 				}
 				if (revision(current) !== expectedRevision) throw configurationRevisionConflict()
 			}
-			await filesystem.rename(temporaryPath, resolvedPath)
-			const directoryHandle = await filesystem.open(dirname(resolvedPath), 'r')
-			try {
-				await directoryHandle.sync()
-			} finally {
-				await directoryHandle.close()
-			}
+			await renameAndSyncDirectory(temporaryPath, resolvedPath, filesystem)
 		} catch (error) {
 			await filesystem.rm(temporaryPath, { force: true })
 			throw error

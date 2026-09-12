@@ -5,6 +5,8 @@
 	"type": "module",
 	"exports": {
 		"./config/canonical-deployment": "./src/config/canonical-deployment.ts",
+		"./config/durable-replacement": "./src/config/durable-replacement.ts",
+		"./config/profiles": "./src/config/profiles.ts",
 		"./config/persistent-path": "./src/config/persistent-path.ts",
 		"./contracts/abi": "./src/contracts/abi.generated.ts",
 		"./config/signer": "./src/config/signer.ts",

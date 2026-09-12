@@ -458,3 +458,38 @@ test('universe approvals round-trip independently of monitoring tokens and missi
 	expect(approvedUniverses).toEqual(['0', '123'])
 	expect(parseOperatorSettings(withoutApprovals).approvedUniverses).toEqual([])
 })
+
+for (const failure of ['rename', 'directory sync']) {
+	test(`propagates ${failure} failure and cleans the temporary configuration`, async () => {
+		const events: string[] = []
+		const problem = new Error(failure)
+		const filesystem: OperatorSettingsFilesystem = {
+			mkdir: async () => undefined,
+			open: async (_path, flags) => ({
+				chmod: async () => undefined,
+				close: async () => {
+					events.push(`${flags}:close`)
+				},
+				sync: async () => {
+					if (flags === 'r' && failure === 'directory sync') throw problem
+				},
+				writeFile: async () => undefined,
+			}),
+			readFile: async () => {
+				throw new Error('Unexpected revision read')
+			},
+			rename: async () => {
+				events.push('rename')
+				if (failure === 'rename') throw problem
+			},
+			rm: async (path, options) => {
+				expect(path.endsWith('.tmp')).toBe(true)
+				expect(options).toEqual({ force: true })
+				events.push('rm')
+			},
+		}
+		await expect(saveOperatorSettings('/state/operator.json', settings(undefined), filesystem)).rejects.toBe(problem)
+		expect(events.includes('r:close')).toBe(failure === 'directory sync')
+		expect(events.at(-1)).toBe('rm')
+	})
+}
