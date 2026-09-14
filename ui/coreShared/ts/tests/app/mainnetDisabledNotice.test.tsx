@@ -38,7 +38,7 @@ test('shared header only shows the notice for a connected mainnet wallet and fol
 		restore()
 		dom.cleanup()
 	}
-	const notice = () => within(rendered.container).queryByText('Ethereum mainnet is temporarily disabled.')
+	const notice = () => within(rendered.container).queryByText('Ethereum mainnet is disabled.')
 	expect(notice()).toBeNull()
 	connected = true
 	refreshAccounts()
@@ -65,7 +65,7 @@ test('simulation has no mainnet notice and settings offer only Sepolia and simul
 		restore()
 		dom.cleanup()
 	}
-	expect(rendered.container.textContent).not.toContain('mainnet is temporarily disabled')
+	expect(rendered.container.textContent).not.toContain('mainnet is disabled')
 	fireEvent.click(within(rendered.container).getByRole('button', { name: 'Settings' }))
 	expect(
 		within(rendered.container)

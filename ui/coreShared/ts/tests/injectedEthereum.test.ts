@@ -9,7 +9,7 @@ test('rejects a mainnet switch before requesting the wallet and permits Sepolia'
 			return undefined
 		},
 	}
-	await expect(switchInjectedChain(provider, '0x01')).rejects.toThrow('Ethereum mainnet is temporarily disabled.')
+	await expect(switchInjectedChain(provider, '0x01')).rejects.toThrow('Ethereum mainnet is disabled.')
 	expect(calls).toEqual([])
 	await switchInjectedChain(provider, '0xaa36a7')
 	expect(calls).toEqual([{ method: 'wallet_switchEthereumChain', params: [{ chainId: '0xaa36a7' }] }])

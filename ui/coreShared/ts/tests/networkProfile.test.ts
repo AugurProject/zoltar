@@ -2,11 +2,12 @@
 
 import { describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
-import { MAINNET_NETWORK_PROFILE, MAINNET_WETH_ADDRESS, SEPOLIA_NETWORK_PROFILE, buildTransactionExplorerUrl, createSimulationProfile, formatTransactionNetworkLabel, getPublicNetworkProfile, getPublicNetworkProfileForChainId, getRuntimeNetworkProfile } from '../wallet/networkProfile.js'
+import { MAINNET_NETWORK_PROFILE, MAINNET_WETH_ADDRESS, SEPOLIA_NETWORK_PROFILE, buildTransactionExplorerUrl, createSimulationProfile, formatTransactionNetworkLabel, getDefaultNetworkProfile, getPublicNetworkProfile, getPublicNetworkProfileForChainId, getRuntimeNetworkProfile } from '../wallet/networkProfile.js'
 import { SEPOLIA_GENESIS_REP_ADDRESS, SEPOLIA_WETH_ADDRESS } from '../lib/sepoliaDeploymentConfig.js'
 
 describe('network profile helpers', () => {
 	test('defaults to Sepolia and excludes mainnet from wallet network discovery', () => {
+		expect(getDefaultNetworkProfile()).toBe(SEPOLIA_NETWORK_PROFILE)
 		expect(getPublicNetworkProfile(undefined)).toBe(SEPOLIA_NETWORK_PROFILE)
 		expect(getPublicNetworkProfile('')).toBe(SEPOLIA_NETWORK_PROFILE)
 		expect(getPublicNetworkProfile(' MAINNET ')).toBe(SEPOLIA_NETWORK_PROFILE)

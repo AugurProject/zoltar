@@ -332,7 +332,7 @@ describe('injected backend read transport', () => {
 					throw new Error(`Unexpected wallet request: ${method}`)
 				})
 				const backend = createInjectedBackend(profile === undefined ? {} : { profile })
-				await expect(operation.execute(backend.createWriteClient(zeroAddress))).rejects.toThrow('Ethereum mainnet is temporarily disabled.')
+				await expect(operation.execute(backend.createWriteClient(zeroAddress))).rejects.toThrow('Ethereum mainnet is disabled.')
 				expect(calls).toEqual(profile === undefined ? ['eth_accounts', 'eth_chainId'] : [])
 			})
 		}

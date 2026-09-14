@@ -18,7 +18,7 @@ test('Trading checks its supplied provider before a mainnet transaction can reac
 		},
 	}
 	try {
-		await expect(createTradingWalletClient(provider, zeroAddress).sendTransaction({ to: zeroAddress })).rejects.toThrow('Ethereum mainnet is temporarily disabled.')
+		await expect(createTradingWalletClient(provider, zeroAddress).sendTransaction({ to: zeroAddress })).rejects.toThrow('Ethereum mainnet is disabled.')
 		expect(requests).toEqual(['eth_accounts', 'eth_chainId'])
 	} finally {
 		restore()

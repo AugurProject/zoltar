@@ -3,7 +3,7 @@ import { createPublicClient, createWalletClient, custom, http, publicActions, ty
 import { getInjectedEthereum, normalizeInjectedAccount, parseInjectedChainId, readInjectedAccounts, switchInjectedChain, type InjectedEthereum } from './injectedEthereum.js'
 import { hasErrorCode, hasErrorMessage } from '../lib/errors.js'
 import { sameChainId } from './chainId.js'
-import { getNetworkSwitchTarget, SEPOLIA_NETWORK_PROFILE, type NetworkProfile } from './networkProfile.js'
+import { getNetworkSwitchTarget, getDefaultNetworkProfile, type NetworkProfile } from './networkProfile.js'
 import { resolveConfiguredRpcConfig, type ConfiguredRpcSource, type RejectedRpcOverride } from './rpcConfig.js'
 
 export type ReadClient = ReturnType<typeof createPublicClient>
@@ -147,7 +147,7 @@ async function readProviderChainId(ethereum: InjectedEthereum | undefined) {
 	return parseInjectedChainId(result)
 }
 
-export function createInjectedBackend({ profile = SEPOLIA_NETWORK_PROFILE, rpcUrl, provider }: { profile?: NetworkProfile; rpcUrl?: string; provider?: InjectedEthereum } = {}): ChainBackend {
+export function createInjectedBackend({ profile = getDefaultNetworkProfile(), rpcUrl, provider }: { profile?: NetworkProfile; rpcUrl?: string; provider?: InjectedEthereum } = {}): ChainBackend {
 	const getProvider = () => provider ?? getInjectedEthereum()
 	let readTransportMode: ReadTransportMode = 'provider'
 	let readBackendBlockNumber: bigint | undefined
