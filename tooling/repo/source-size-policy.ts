@@ -69,7 +69,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['tooling/testing/coverage-report.mts', 940],
 		['tooling/ui/watch.mts', 845],
 		['tooling/docs/check-docs-reference-values.mts', 844],
-		['tooling/contracts/deploy-testnet.mts', 747],
+		['tooling/contracts/deploy-testnet.mts', 713],
 		['tooling/docs/generate-contract-interaction-reference.mts', 678],
 	]),
 	...allowances('Documentation runtime bundles and Solidity-side TypeScript utilities still need responsibility extraction.', [
