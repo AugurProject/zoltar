@@ -1,3 +1,18 @@
+import { getTotalRepPurchasedAttoRep } from '../testSupport/simulator/utils/contracts/auction'
+import { getInfraContractAddresses, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
+import { forkUniverse, getMigrationRepBalanceAttoRep, getRepTokenAddress, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
+import { createWriteClient } from '../testSupport/simulator/utils/clients'
+import { createQuestion, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { createCompleteSet, getRepToken, getTotalRepBackingUnits, getSecurityVault, getSystemState, backingUnitsToAttoRep, depositToEscalationGame } from '../testSupport/simulator/utils/contracts/securityPool'
+import { claimAuctionProceeds, finalizeTruthAuction, initiateSecurityPoolFork, migrateRepToZoltar, migrateVault, startTruthAuction, getSecurityPoolForkerForkData } from '../testSupport/simulator/utils/contracts/securityPoolForker'
+import { approveToken, getChildUniverseId, getERC20Balance } from '../testSupport/simulator/utils/utilities'
+import { approveAndDepositRepToVault, manipulatePriceOracleAndPerformOperation, manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { SystemState } from '../testSupport/simulator/types/statoblastTypes'
+import { QuestionOutcome } from '../testSupport/simulator/types/types'
+import { OperationType, getQuestionEndDate, participateAuction } from '../testSupport/simulator/utils/contracts/statoblast'
+import { DAY, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
+import { strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
+import assert from '../testSupport/simulator/utils/assert'
 import { beforeEach, describe, test } from 'bun:test'
 import { getMaxRepBeingSoldAttoRep, getMinBidSizeAttoEth } from '../testSupport/simulator/utils/contracts/auction'
 import { getTotalPoolHeldAttoRep, redeemRepFromVault, withdrawFromEscalationGame } from '../testSupport/simulator/utils/contracts/securityPool'
@@ -6,55 +21,8 @@ import { useStatoblastTruthAuctionFixture, type StatoblastTruthAuctionFixture } 
 
 describe('Recursive truth-auction ownership regression', () => {
 	const fixture = useStatoblastTruthAuctionFixture()
-	const assert: StatoblastTruthAuctionFixture['assert'] = fixture.assert
-	const strictEqualTypeSafe: StatoblastTruthAuctionFixture['strictEqualTypeSafe'] = fixture.strictEqualTypeSafe
 
-	const {
-		DAY,
-		OperationType,
-		PRICE_PRECISION,
-		QuestionOutcome,
-		SystemState,
-		TEST_ADDRESSES,
-		approveAndDepositRepToVault,
-		approveToken,
-		claimAuctionProceeds,
-		createCompleteSet,
-		createQuestion,
-		createWriteClient,
-		finalizeTruthAuction,
-		formatStorageSlot,
-		forkUniverse,
-		genesisUniverse,
-		getChildUniverseId,
-		getERC20Balance,
-		getInfraContractAddresses,
-		getMappingStorageSlot,
-		getMigrationRepBalanceAttoRep,
-		getQuestionEndDate,
-		getRepToken,
-		getTotalRepBackingUnits,
-		getQuestionId,
-		getRepTokenAddress,
-		getSecurityPoolAddresses,
-		getSecurityVault,
-		getSystemState,
-		getTotalRepPurchasedAttoRep,
-		getZoltarAddress,
-		initiateSecurityPoolFork,
-		manipulatePriceOracleAndPerformOperation,
-		manipulatePriceOracle,
-		migrateRepToZoltar,
-		migrateVault,
-		outcomes,
-		participateAuction,
-		backingUnitsToAttoRep,
-		depositToEscalationGame,
-		reportBond,
-		repDeposit,
-		startTruthAuction,
-		statoblastSecurityMultiplierBps,
-	} = fixture
+	const { PRICE_PRECISION, formatStorageSlot, genesisUniverse, getMappingStorageSlot, outcomes, reportBond, repDeposit, statoblastSecurityMultiplierBps } = fixture
 
 	let client: StatoblastTruthAuctionFixture['client']
 	let mockWindow: StatoblastTruthAuctionFixture['mockWindow']
@@ -130,7 +98,7 @@ describe('Recursive truth-auction ownership regression', () => {
 			const childPool = getSecurityPoolAddresses(currentPool.securityPool, childUniverse, questionId, statoblastSecurityMultiplierBps)
 			const childAttackerVault = await getSecurityVault(client, childPool.securityPool, attacker.account.address)
 
-			const childMigratedRep = (await fixture.getSecurityPoolForkerForkData(client, childPool.securityPool)).migratedAttoRep
+			const childMigratedRep = (await getSecurityPoolForkerForkData(client, childPool.securityPool)).migratedAttoRep
 			strictEqualTypeSafe(childMigratedRep, expectedMigratedRep, `round ${roundIndex + 1}: migrated REP should follow the production flooring path`)
 			strictEqualTypeSafe(childAttackerVault.repBackingUnits, childMigratedRep, `round ${roundIndex + 1}: migration should normalize ownership into child-local REP units`)
 			const migratedRepHaircut = (childMigratedRep + maxAuctionVaultHaircutDivisor - 1n) / maxAuctionVaultHaircutDivisor

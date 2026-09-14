@@ -1,3 +1,67 @@
+import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPoolForker_SecurityPoolForker, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory } from '../../types/contractArtifact'
+import {
+	createCompleteSet,
+	depositRepToVault,
+	depositToEscalationGame,
+	getSettlementCollateralAttoEth,
+	getCurrentRetentionRate,
+	getAwaitingForkContinuation,
+	getTotalRepBackingUnits,
+	getRepToken,
+	getShareTokenSupplyAttoShares,
+	getTotalPoolHeldAttoRep,
+	getSecurityPoolsEscalationGame,
+	getSecurityVault,
+	getSystemState,
+	getTotalAccruedFees,
+	getTotalClaimableVaultFeesAttoEth,
+	getTotalCapacityOwnershipAttoRep,
+	backingUnitsToAttoRep,
+	redeemCompleteSet,
+	redeemFees,
+	redeemRepFromVault,
+	redeemShares,
+	attoSharesToAttoEth,
+	updateSettlementCollateral,
+	updateVaultFees,
+	withdrawFromEscalationGame,
+} from '../../testSupport/simulator/utils/contracts/securityPool'
+import { getTotalRepPurchasedAttoRep } from '../../testSupport/simulator/utils/contracts/auction'
+import { forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress, getZoltarForkThreshold } from '../../testSupport/simulator/utils/contracts/zoltar'
+import {
+	claimAuctionProceeds,
+	createChildUniverse,
+	finalizeTruthAuction,
+	getMigratedAttoRep,
+	getOwnForkRepBuckets,
+	getQuestionOutcome,
+	getSecurityPoolForkerForkData,
+	forkZoltarWithOwnEscalationGame,
+	initiateSecurityPoolFork,
+	claimForkedEscalationDeposits,
+	migrateRepToZoltar,
+	migrateVault,
+	migrateVaultWithUnresolvedEscalation,
+	getForkedEscrowChildRepByOutcomeAndVault,
+	startTruthAuction,
+} from '../../testSupport/simulator/utils/contracts/securityPoolForker'
+import { SystemState } from '../../testSupport/simulator/types/statoblastTypes'
+import { QuestionOutcome } from '../../testSupport/simulator/types/types'
+import { tickToPrice } from '@zoltar/statoblast-shared/statoblast/truthAuctionTickMath'
+import { getScalarOutcomeIndex } from '../../testSupport/simulator/utils/contracts/scalarOutcome'
+import { balanceOfShares, balanceOfSharesInAttoEth, getEthRaiseCapAttoEth, getLastPrice, getQuestionEndDate, migrateShares, OperationType, participateAuction, requestPriceIfNeededAndStageOperation } from '../../testSupport/simulator/utils/contracts/statoblast'
+import { createQuestion, getQuestionId } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { getInfraContractAddresses, getSecurityPoolAddresses, deployOriginSecurityPool } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
+import { approveAndDepositRepToVault, canLiquidate, handleOracleReporting, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { addressString, rpow } from '../../testSupport/simulator/utils/bigint'
+import { approveToken, contractExists, getChildUniverseId, getERC20Balance, getETHBalance } from '../../testSupport/simulator/utils/utilities'
+import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
+import { createWriteClient } from '../../testSupport/simulator/utils/clients'
+import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/zoltar-shared/constants'
+import { sortBigIntsAscending } from '@zoltar/core-shared/serialization/bigInt'
+import { decodeEventLog } from '@zoltar/core-shared/evm/ethereum'
+import { approximatelyEqual, strictEqual18Decimal, strictEqualTypeSafe, ensureDefined } from '../../testSupport/simulator/utils/testUtils'
+import assert from '../../testSupport/simulator/utils/assert'
 import { beforeEach, describe, test } from 'bun:test'
 import { encodeAbiParameters, encodeDeployData, keccak256, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { getLiquidationVaultRepBackingToTransfer } from '@zoltar/statoblast-shared/statoblast/liquidation'
@@ -37,118 +101,7 @@ function getLiquidationApprovalId(params: { securityPool: Address; receiverVault
 describe('Statoblast: fork migration', () => {
 	const fixture = useStatoblastForkMigrationFixture()
 
-	const assert: StatoblastForkMigrationFixture['assert'] = fixture.assert
-
-	const approximatelyEqual: StatoblastForkMigrationFixture['approximatelyEqual'] = fixture.approximatelyEqual
-
-	const strictEqual18Decimal: StatoblastForkMigrationFixture['strictEqual18Decimal'] = fixture.strictEqual18Decimal
-
-	const strictEqualTypeSafe: StatoblastForkMigrationFixture['strictEqualTypeSafe'] = fixture.strictEqualTypeSafe
-
-	const {
-		decodeEventLog,
-		sortBigIntsAscending,
-		REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT,
-		createWriteClient,
-		DAY,
-		GENESIS_REPUTATION_TOKEN,
-		TEST_ADDRESSES,
-		approveToken,
-		contractExists,
-		getChildUniverseId,
-		getERC20Balance,
-		getETHBalance,
-		addressString,
-		rpow,
-		approveAndDepositRepToVault,
-		canLiquidate,
-		handleOracleReporting,
-		manipulatePriceOracle,
-		manipulatePriceOracleAndPerformOperation,
-		triggerOwnGameFork,
-		getInfraContractAddresses,
-		getSecurityPoolAddresses,
-		deployOriginSecurityPool,
-		createQuestion,
-		getQuestionId,
-		balanceOfShares,
-		balanceOfSharesInAttoEth,
-		getEthRaiseCapAttoEth,
-		getLastPrice,
-		getQuestionEndDate,
-		migrateShares,
-		OperationType,
-		participateAuction,
-		requestPriceIfNeededAndStageOperation,
-		getScalarOutcomeIndex,
-		tickToPrice,
-		QuestionOutcome,
-		SystemState,
-		ensureDefined,
-		claimAuctionProceeds,
-		createChildUniverse,
-		finalizeTruthAuction,
-		getMigratedAttoRep,
-		getOwnForkRepBuckets,
-		getQuestionOutcome,
-		getSecurityPoolForkerForkData,
-		forkZoltarWithOwnEscalationGame,
-		initiateSecurityPoolFork,
-		claimForkedEscalationDeposits,
-		migrateRepToZoltar,
-		migrateVault,
-		migrateVaultWithUnresolvedEscalation,
-		getForkedEscrowChildRepByOutcomeAndVault,
-		startTruthAuction,
-		forkUniverse,
-		getRepTokenAddress,
-		getTotalTheoreticalSupply,
-		getZoltarAddress,
-		getZoltarForkThreshold,
-		getTotalRepPurchasedAttoRep,
-		createCompleteSet,
-		depositRepToVault,
-		depositToEscalationGame,
-		getSettlementCollateralAttoEth,
-		getCurrentRetentionRate,
-		getAwaitingForkContinuation,
-		getTotalRepBackingUnits,
-		getRepToken,
-		getShareTokenSupplyAttoShares,
-		getTotalPoolHeldAttoRep,
-		getSecurityPoolsEscalationGame,
-		getSecurityVault,
-		getSystemState,
-		getTotalAccruedFees,
-		getTotalClaimableVaultFeesAttoEth,
-		getTotalCapacityOwnershipAttoRep,
-		backingUnitsToAttoRep,
-		redeemCompleteSet,
-		redeemFees,
-		redeemRepFromVault,
-		redeemShares,
-		attoSharesToAttoEth,
-		updateSettlementCollateral,
-		updateVaultFees,
-		withdrawFromEscalationGame,
-		statoblast_EscalationGame_EscalationGame,
-		statoblast_SecurityPoolForker_SecurityPoolForker,
-		statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
-		formatStorageSlot,
-		getMappingStorageSlot,
-		reportBond,
-		PRICE_PRECISION,
-		repDeposit,
-		genesisUniverse,
-		statoblastSecurityMultiplierBps,
-		MAX_RETENTION_RATE,
-		outcomes,
-		transferRepToAddress,
-		getVaultRepClaim,
-		finalizeQuestionAsYesWithoutFork,
-		triggerExternalForkForSecurityPool,
-		setupOwnForkWithEscrow,
-	} = fixture
+	const { formatStorageSlot, getMappingStorageSlot, reportBond, PRICE_PRECISION, repDeposit, genesisUniverse, statoblastSecurityMultiplierBps, MAX_RETENTION_RATE, outcomes, transferRepToAddress, getVaultRepClaim, finalizeQuestionAsYesWithoutFork, triggerExternalForkForSecurityPool, setupOwnForkWithEscrow } = fixture
 
 	let mockWindow: StatoblastForkMigrationFixture['mockWindow']
 

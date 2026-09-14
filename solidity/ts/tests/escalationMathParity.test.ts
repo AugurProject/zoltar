@@ -1,7 +1,7 @@
-import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
+import { beforeAll, beforeEach, describe, test } from 'bun:test'
 import { concatHex, encodeAbiParameters, encodeDeployData, keccak256, zeroAddress, type Abi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import assert from '../testSupport/simulator/utils/assert'
-import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
+import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
@@ -27,8 +27,6 @@ const initializeForkCarrySnapshotTestPoolAbi: Abi = [
 		type: 'function',
 	},
 ]
-
-setDefaultTimeout(TEST_TIMEOUT_MS)
 
 describe('Escalation math parity', () => {
 	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()

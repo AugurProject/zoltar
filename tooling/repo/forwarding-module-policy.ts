@@ -3,7 +3,6 @@ import path from 'node:path'
 import ts from 'typescript'
 
 export const intentionalForwardingModules: Readonly<Record<string, string>> = {
-	'bun-test-setup-solidity.ts': 'Solidity test preload bootstrap that installs the shared root test setup for the dedicated runner.',
 	'augurScan/src/api.ts': 'Stable application entry point for the capability-based API implementation.',
 	'augurScan/src/database.ts': 'Stable database facade preserving the ScannerDatabase and record API after decomposition.',
 	'augurScan/src/ethereum.ts': 'Deployment boundary copied with AugurScan so its independently installed runtime shares the canonical EVM adapter.',

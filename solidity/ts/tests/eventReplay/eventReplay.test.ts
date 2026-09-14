@@ -1,3 +1,13 @@
+import { getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
+import { getChildUniverseId } from '../../testSupport/simulator/utils/utilities'
+import { migrateRepToZoltar, createChildUniverse, claimAuctionProceeds } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
+import { QuestionOutcome } from '../../testSupport/simulator/types/types'
+import { depositToEscalationGame, updateSettlementCollateral, updateVaultFees, redeemFees, getSecurityVault, getTotalPoolHeldAttoRep, getSettlementCollateralAttoEth } from '../../testSupport/simulator/utils/contracts/securityPool'
+import { manipulatePriceOracleAndPerformOperation } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { requestPriceIfNeededAndStageOperation, OperationType } from '../../testSupport/simulator/utils/contracts/statoblast'
+import { getInfraContractAddresses, getSecurityPoolAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
+import { getQuestionId, createQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { strictEqualTypeSafe } from '../../testSupport/simulator/utils/testUtils'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { decodeEventLog, zeroAddress, type Abi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import {
@@ -1341,7 +1351,7 @@ describe('event-only replay', () => {
 	})
 
 	const fixture = useStatoblastForkMigrationFixture()
-	const strictEqualTypeSafe: StatoblastForkMigrationFixture['strictEqualTypeSafe'] = fixture.strictEqualTypeSafe
+
 	let client: StatoblastForkMigrationFixture['client']
 	let mockWindow: StatoblastForkMigrationFixture['mockWindow']
 	let securityPoolAddresses: StatoblastForkMigrationFixture['securityPoolAddresses']
@@ -1398,9 +1408,9 @@ describe('event-only replay', () => {
 
 	test('actual origin deployment pre-discovers relationships before constructor checkpoints', async () => {
 		const questionData = { ...fixture.questionData, title: 'Event replay deployment discovery' }
-		const questionId = fixture.getQuestionId(questionData, fixture.outcomes)
-		await fixture.createQuestion(client, questionData, fixture.outcomes)
-		const factory = fixture.getInfraContractAddresses().securityPoolFactory
+		const questionId = getQuestionId(questionData, fixture.outcomes)
+		await createQuestion(client, questionData, fixture.outcomes)
+		const factory = getInfraContractAddresses().securityPoolFactory
 		const deploymentHash = await client.writeContract({
 			address: factory,
 			abi: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
@@ -1409,7 +1419,7 @@ describe('event-only replay', () => {
 		})
 		const receipt = await client.waitForTransactionReceipt({ hash: deploymentHash })
 		if (receipt.status === 'reverted') throw new Error('origin pool deployment reverted')
-		const addresses = fixture.getSecurityPoolAddresses(zeroAddress, fixture.genesisUniverse, questionId, fixture.statoblastSecurityMultiplierBps)
+		const addresses = getSecurityPoolAddresses(zeroAddress, fixture.genesisUniverse, questionId, fixture.statoblastSecurityMultiplierBps)
 		const blockNumber = receipt.blockNumber
 		const replayLogs = (
 			await Promise.all([
@@ -1451,7 +1461,7 @@ describe('event-only replay', () => {
 	test('actual queued coordinator operation replays every governing field and pending membership', async () => {
 		const coordinator = securityPoolAddresses.priceOracleManagerAndOperatorQueuer
 		const validForSeconds = 300n
-		const transactionHash = await fixture.requestPriceIfNeededAndStageOperation(client, coordinator, fixture.OperationType.WithdrawRep, client.account.address, fixture.reportBond, validForSeconds)
+		const transactionHash = await requestPriceIfNeededAndStageOperation(client, coordinator, OperationType.WithdrawRep, client.account.address, fixture.reportBond, validForSeconds)
 		const receipt = await client.getTransactionReceipt({ hash: transactionHash })
 		const replayLogs = (await getContractReplayLogs(coordinator, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, receipt.blockNumber, receipt.blockNumber)).filter(log => log.transactionHash === transactionHash)
 		const queuedLog = replayLogs.find(log => log.eventName === 'StagedOperationQueued')
@@ -1487,10 +1497,10 @@ describe('event-only replay', () => {
 
 	test('actual first escalation deposit pre-discovers the game before its lifecycle event', async () => {
 		await mockWindow.setTime(fixture.questionData.endTime + 1n)
-		await fixture.manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, fixture.OperationType.PriceRefresh, client.account.address, 0n)
-		const depositHash = await fixture.depositToEscalationGame(client, securityPoolAddresses.securityPool, fixture.QuestionOutcome.Yes, fixture.reportBond)
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
+		const depositHash = await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, fixture.reportBond)
 		const receipt = await client.getTransactionReceipt({ hash: depositHash })
-		const factory = fixture.getInfraContractAddresses().securityPoolFactory
+		const factory = getInfraContractAddresses().securityPoolFactory
 		const factoryLogs = await getContractReplayLogs(factory, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, 0n, receipt.blockNumber)
 		const deploymentLogs = factoryLogs.filter(log => {
 			const deployedPool = log.args['securityPool']
@@ -1518,16 +1528,16 @@ describe('event-only replay', () => {
 	test('actual child continuation replays its inherited carry checkpoint and storage', async () => {
 		const fromBlock = (await client.getBlockNumber()) + 1n
 		await mockWindow.setTime(fixture.questionData.endTime + 1n)
-		await fixture.manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, fixture.OperationType.PriceRefresh, client.account.address, 0n)
-		await fixture.depositToEscalationGame(client, securityPoolAddresses.securityPool, fixture.QuestionOutcome.Yes, fixture.reportBond)
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, fixture.reportBond)
 		await fixture.triggerExternalForkForSecurityPool(undefined, 'event replay child continuation')
-		await fixture.migrateRepToZoltar(client, securityPoolAddresses.securityPool, [fixture.QuestionOutcome.Yes])
-		const childDeploymentHash = await fixture.createChildUniverse(client, securityPoolAddresses.securityPool, fixture.QuestionOutcome.Yes)
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		const childDeploymentHash = await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 		const receipt = await client.getTransactionReceipt({ hash: childDeploymentHash })
-		const childUniverseId = fixture.getChildUniverseId(fixture.genesisUniverse, fixture.QuestionOutcome.Yes)
-		const child = fixture.getSecurityPoolAddresses(securityPoolAddresses.securityPool, childUniverseId, fixture.questionId, fixture.statoblastSecurityMultiplierBps)
-		const factory = fixture.getInfraContractAddresses().securityPoolFactory
-		const forker = fixture.getInfraContractAddresses().securityPoolForker
+		const childUniverseId = getChildUniverseId(fixture.genesisUniverse, QuestionOutcome.Yes)
+		const child = getSecurityPoolAddresses(securityPoolAddresses.securityPool, childUniverseId, fixture.questionId, fixture.statoblastSecurityMultiplierBps)
+		const factory = getInfraContractAddresses().securityPoolFactory
+		const forker = getInfraContractAddresses().securityPoolForker
 		const factoryLogs = await getContractReplayLogs(factory, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, 0n, receipt.blockNumber)
 		const canonicalPools = new Set([securityPoolAddresses.securityPool.toLowerCase(), child.securityPool.toLowerCase()])
 		const deploymentLogs = factoryLogs.filter(log => {
@@ -1622,15 +1632,15 @@ describe('event-only replay', () => {
 
 	test('actual universe logs reconstruct migration balances and child storage', async () => {
 		await fixture.triggerExternalForkForSecurityPool(undefined, 'event replay universe state source')
-		await fixture.createChildUniverse(client, securityPoolAddresses.securityPool, fixture.QuestionOutcome.Yes)
+		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 		const toBlock = await client.getBlockNumber()
-		const replayLogs = await getContractReplayLogs(fixture.getZoltarAddress(), Zoltar_Zoltar.abi, 0n, toBlock)
+		const replayLogs = await getContractReplayLogs(getZoltarAddress(), Zoltar_Zoltar.abi, 0n, toBlock)
 		const replayed = replayZoltarEvents(replayLogs)
 		const universeId = fixture.genesisUniverse.toString()
 		const replayedParent = replayed.universes.get(universeId)
 		const replayedFork = replayed.universeForks.get(universeId)
 		if (replayedParent === undefined || replayedFork === undefined) throw new Error('parent universe replay state missing')
-		const childUniverseId = fixture.getChildUniverseId(fixture.genesisUniverse, fixture.QuestionOutcome.Yes)
+		const childUniverseId = getChildUniverseId(fixture.genesisUniverse, QuestionOutcome.Yes)
 		const replayedChild = replayed.universes.get(childUniverseId.toString())
 		if (replayedChild === undefined) throw new Error('child universe replay state missing')
 
@@ -1663,22 +1673,22 @@ describe('event-only replay', () => {
 		}
 		for (let updateIndex = 0; updateIndex < 6; updateIndex += 1) {
 			await mockWindow.advanceTime((nextRandom() % 7n) + 1n)
-			await fixture.updateSettlementCollateral(client, scenario.yesSecurityPool.securityPool)
+			await updateSettlementCollateral(client, scenario.yesSecurityPool.securityPool)
 		}
-		await fixture.updateVaultFees(client, scenario.yesSecurityPool.securityPool, client.account.address)
+		await updateVaultFees(client, scenario.yesSecurityPool.securityPool, client.account.address)
 		await mockWindow.advanceTime((nextRandom() % 17n) + 3n)
-		await fixture.claimAuctionProceeds(client, scenario.yesSecurityPool.securityPool, scenario.winningBidder.account.address, [{ tick: scenario.winningTick, bidIndex: 0n }])
+		await claimAuctionProceeds(client, scenario.yesSecurityPool.securityPool, scenario.winningBidder.account.address, [{ tick: scenario.winningTick, bidIndex: 0n }])
 
 		const checkpointVaults = [client.account.address, scenario.winningBidder.account.address]
 		if ((nextRandom() & 1n) === 1n) checkpointVaults.reverse()
 		await mockWindow.advanceTime((nextRandom() % 11n) + 1n)
-		for (const vault of checkpointVaults) await fixture.updateVaultFees(client, scenario.yesSecurityPool.securityPool, vault)
+		for (const vault of checkpointVaults) await updateVaultFees(client, scenario.yesSecurityPool.securityPool, vault)
 		for (let updateIndex = 0; updateIndex < 4; updateIndex += 1) {
 			await mockWindow.advanceTime((nextRandom() % 5n) + 1n)
-			await fixture.updateSettlementCollateral(client, scenario.yesSecurityPool.securityPool)
+			await updateSettlementCollateral(client, scenario.yesSecurityPool.securityPool)
 		}
-		for (const vault of checkpointVaults.toReversed()) await fixture.updateVaultFees(client, scenario.yesSecurityPool.securityPool, vault)
-		for (const vault of checkpointVaults) await fixture.redeemFees(client, scenario.yesSecurityPool.securityPool, vault)
+		for (const vault of checkpointVaults.toReversed()) await updateVaultFees(client, scenario.yesSecurityPool.securityPool, vault)
+		for (const vault of checkpointVaults) await redeemFees(client, scenario.yesSecurityPool.securityPool, vault)
 
 		const toBlock = await client.getBlockNumber()
 		const replayLogs = await getContractReplayLogs(scenario.yesSecurityPool.securityPool, statoblast_SecurityPool_SecurityPool.abi, fromBlock, toBlock)
@@ -1701,7 +1711,7 @@ describe('event-only replay', () => {
 		for (const vault of checkpointVaults) {
 			const replayedVault = replayedState.vaults.get(scenario.yesSecurityPool.securityPool)?.get(vault)
 			if (replayedVault === undefined) throw new Error(`seeded vault replay state missing for ${vault}`)
-			const storedVault = await fixture.getSecurityVault(client, scenario.yesSecurityPool.securityPool, vault)
+			const storedVault = await getSecurityVault(client, scenario.yesSecurityPool.securityPool, vault)
 			const storedVaultFeeRemainder = await client.readContract({
 				address: scenario.yesSecurityPool.securityPool,
 				abi: statoblast_SecurityPool_SecurityPool.abi,
@@ -1731,7 +1741,7 @@ describe('event-only replay', () => {
 	test('actual vault checkpoints carry a fractional fee entitlement into a later whole attoETH', async () => {
 		const pool = securityPoolAddresses.securityPool
 		const vault = client.account.address
-		const storedVaultBefore = await fixture.getSecurityVault(client, pool, vault)
+		const storedVaultBefore = await getSecurityVault(client, pool, vault)
 		const vaultSlot = fixture.getMappingStorageSlot(vault, 16n)
 		const vaultFeeRemainderSlot = fixture.getMappingStorageSlot(vault, 17n)
 		const firstFeeIndex = storedVaultBefore.feeIndex + 1n
@@ -1750,7 +1760,7 @@ describe('event-only replay', () => {
 			},
 		})
 
-		const firstCheckpointHash = await fixture.updateVaultFees(client, pool, vault)
+		const firstCheckpointHash = await updateVaultFees(client, pool, vault)
 		const firstCheckpointReceipt = await client.getTransactionReceipt({ hash: firstCheckpointHash })
 		const remainderAfterFirstCheckpoint = await client.readContract({
 			address: pool,
@@ -1758,7 +1768,7 @@ describe('event-only replay', () => {
 			functionName: 'getVaultFeeRemainder',
 			args: [vault],
 		})
-		const vaultAfterFirstCheckpoint = await fixture.getSecurityVault(client, pool, vault)
+		const vaultAfterFirstCheckpoint = await getSecurityVault(client, pool, vault)
 		strictEqualTypeSafe(remainderAfterFirstCheckpoint, fixture.PRICE_PRECISION - 1n, 'first checkpoint should preserve the sub-attoETH vault entitlement')
 		strictEqualTypeSafe(vaultAfterFirstCheckpoint.claimableFeesAttoEth, storedVaultBefore.claimableFeesAttoEth, 'fractional entitlement alone should not credit a whole attoETH')
 
@@ -1771,12 +1781,12 @@ describe('event-only replay', () => {
 				},
 			},
 		})
-		const secondCheckpointHash = await fixture.updateVaultFees(client, pool, vault)
+		const secondCheckpointHash = await updateVaultFees(client, pool, vault)
 		const secondCheckpointReceipt = await client.getTransactionReceipt({ hash: secondCheckpointHash })
 		const replayLogs = await getContractReplayLogs(pool, statoblast_SecurityPool_SecurityPool.abi, firstCheckpointReceipt.blockNumber, secondCheckpointReceipt.blockNumber)
 		const replayedVault = replayZoltarEvents(replayLogs).vaults.get(pool)?.get(vault)
 		if (replayedVault === undefined) throw new Error('fractional vault checkpoint replay state missing')
-		const storedVaultAfter = await fixture.getSecurityVault(client, pool, vault)
+		const storedVaultAfter = await getSecurityVault(client, pool, vault)
 		const storedRemainderAfter = await client.readContract({
 			address: pool,
 			abi: statoblast_SecurityPool_SecurityPool.abi,
@@ -1791,7 +1801,7 @@ describe('event-only replay', () => {
 
 	test('zero fee eligibility emits an authoritative accounting checkpoint matching storage', async () => {
 		await mockWindow.advanceTime(10n)
-		const transactionHash = await fixture.updateSettlementCollateral(client, securityPoolAddresses.securityPool)
+		const transactionHash = await updateSettlementCollateral(client, securityPoolAddresses.securityPool)
 		const receipt = await client.getTransactionReceipt({ hash: transactionHash })
 		const logs = await client.getLogs({
 			address: securityPoolAddresses.securityPool,
@@ -1864,11 +1874,11 @@ describe('event-only replay', () => {
 	})
 
 	test('external forks emit one canonical pool snapshot after REP is locked', async () => {
-		const totalPoolHeldRepAtForkAttoRep = await fixture.getTotalPoolHeldAttoRep(client, securityPoolAddresses.securityPool)
-		const settlementCollateralAtForkAttoEth = await fixture.getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool)
+		const totalPoolHeldRepAtForkAttoRep = await getTotalPoolHeldAttoRep(client, securityPoolAddresses.securityPool)
+		const settlementCollateralAtForkAttoEth = await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool)
 		const transactionHash = await fixture.triggerExternalForkForSecurityPool(undefined, 'event replay fork source')
 		const receipt = await client.getTransactionReceipt({ hash: transactionHash })
-		const forker = fixture.getInfraContractAddresses().securityPoolForker
+		const forker = getInfraContractAddresses().securityPoolForker
 		const logs = await client.getLogs({
 			address: forker,
 			event: securityPoolForkSnapshotEvent,

@@ -1,3 +1,10 @@
+import { statoblast_EscalationGame_EscalationGame } from '../types/contractArtifact'
+import { QuestionOutcome } from '../testSupport/simulator/types/types'
+import { manipulatePriceOracle, manipulatePriceOracleAndPerformOperation } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
+import { getSecurityPoolsEscalationGame, getSecurityVault, backingUnitsToAttoRep, redeemRepFromVault, withdrawFromEscalationGame, depositToEscalationGame } from '../testSupport/simulator/utils/contracts/securityPool'
+import { deployOriginSecurityPool } from '../testSupport/simulator/utils/contracts/deployStatoblast'
+import assert from '../testSupport/simulator/utils/assert'
 import { describe, test } from 'bun:test'
 import { encodeAbiParameters, keccak256, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/core-shared/deployment/protocolConfig'
@@ -10,7 +17,7 @@ const ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT = 2n
 
 describe('Audit regression: escalation start configuration liveness', () => {
 	const fixture = useStatoblastVaultAccountingFixture()
-	const { assert, deployOriginSecurityPool, getSecurityPoolsEscalationGame, getSecurityVault, getZoltarAddress, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation, backingUnitsToAttoRep, redeemRepFromVault, reportBond, reportedRepEthPrice, withdrawFromEscalationGame } = fixture
+	const { reportBond, reportedRepEthPrice } = fixture
 
 	test('an existing funded pool remains resolvable when the tracked threshold falls to the configured start bond', async () => {
 		const { client, genesisUniverse, mockWindow, questionData, statoblastSecurityMultiplierBps, securityPoolAddresses } = fixture
@@ -82,7 +89,7 @@ describe('Audit regression: escalation start configuration liveness', () => {
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, reportedRepEthPrice)
 		assert.strictEqual(await getSecurityPoolsEscalationGame(client, securityPoolAddresses.securityPool), zeroAddress, 'the first-deposit path must begin without a game')
 
-		await fixture.depositToEscalationGame(client, securityPoolAddresses.securityPool, fixture.QuestionOutcome.Yes, reportBond)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 		const escalationGame = await getSecurityPoolsEscalationGame(client, securityPoolAddresses.securityPool)
 		assert.notStrictEqual(escalationGame, zeroAddress, 'the pool must deploy a live escalation game')
 		assert.strictEqual(
@@ -97,7 +104,7 @@ describe('Audit regression: escalation start configuration liveness', () => {
 		)
 		assert.strictEqual(
 			await client.readContract({
-				abi: fixture.statoblast_EscalationGame_EscalationGame.abi,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
 				address: escalationGame,
 				functionName: 'startBondAttoRep',
 				args: [],
@@ -107,7 +114,7 @@ describe('Audit regression: escalation start configuration liveness', () => {
 		)
 		assert.strictEqual(
 			await client.readContract({
-				abi: fixture.statoblast_EscalationGame_EscalationGame.abi,
+				abi: statoblast_EscalationGame_EscalationGame.abi,
 				address: escalationGame,
 				functionName: 'nonDecisionThresholdAttoRep',
 				args: [],
@@ -116,13 +123,13 @@ describe('Audit regression: escalation start configuration liveness', () => {
 			'the game must preserve the live non-decision threshold',
 		)
 		const escalationEndTime = await client.readContract({
-			abi: fixture.statoblast_EscalationGame_EscalationGame.abi,
+			abi: statoblast_EscalationGame_EscalationGame.abi,
 			address: escalationGame,
 			functionName: 'getEscalationGameEndDate',
 			args: [],
 		})
 		await mockWindow.setTime(escalationEndTime + 1n)
-		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, fixture.QuestionOutcome.Yes, [0n])
+		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n])
 		await redeemShares(client, securityPoolAddresses.securityPool)
 		await redeemRepFromVault(client, securityPoolAddresses.securityPool, client.account.address)
 

@@ -39,9 +39,14 @@ function pumpChannel(channel: OutputChannel) {
 	}
 }
 
+// Bun 1.4.2 ignores test.timeout in bunfig.toml. The runner owns the
+// default; explicit CLI flags and individual-test limits remain authoritative.
+const defaultTestTimeoutMilliseconds = 300_000
+
 export async function runBunTestProcess({ cmd, cwd = process.cwd(), env = process.env, redirectStdio = process.platform === 'linux', stderrTargetFd = 2, stdoutTargetFd = 1 }: BunTestProcessOptions) {
+	const testCommand = cmd[1] === 'test' && !cmd.some(argument => argument === '--timeout' || argument.startsWith('--timeout=')) ? [...cmd.slice(0, 2), '--timeout', defaultTestTimeoutMilliseconds.toString(), ...cmd.slice(2)] : [...cmd]
 	if (!redirectStdio) {
-		const child = Bun.spawn({ cmd: [...cmd], cwd, env, stderr: 'inherit', stdin: 'inherit', stdout: 'inherit' })
+		const child = Bun.spawn({ cmd: testCommand, cwd, env, stderr: 'inherit', stdin: 'inherit', stdout: 'inherit' })
 		return await child.exited
 	}
 
@@ -62,7 +67,7 @@ export async function runBunTestProcess({ cmd, cwd = process.cwd(), env = proces
 			pumpChannel(stderrChannel)
 		}
 
-		const child = Bun.spawn({ cmd: [...cmd], cwd, env, stderr: stderrFd, stdin: 'inherit', stdout: stdoutFd })
+		const child = Bun.spawn({ cmd: testCommand, cwd, env, stderr: stderrFd, stdin: 'inherit', stdout: stdoutFd })
 		let pumpError: unknown
 		pumpTimer = setInterval(() => {
 			try {

@@ -1,6 +1,6 @@
-import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
+import { test, beforeEach, describe } from 'bun:test'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
-import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
+import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/zoltar-shared/constants'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/core-shared/deployment/protocolConfig'
 import { createWriteClient, WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
@@ -76,8 +76,6 @@ async function signPermit(ethereum: AnvilWindowEthereum, owner: Address, token: 
 		message: { owner, spender, value: value.toString(), nonce: nonce.toString(), deadline: deadline.toString() },
 	})
 }
-
-setDefaultTimeout(TEST_TIMEOUT_MS)
 
 describe('Contract Test Suite', () => {
 	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()

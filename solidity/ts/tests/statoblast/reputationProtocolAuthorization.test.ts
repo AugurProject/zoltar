@@ -1,10 +1,15 @@
+import { manipulatePriceOracle } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { getQuestionEndDate } from '../../testSupport/simulator/utils/contracts/statoblast'
+import { depositToEscalationGame } from '../../testSupport/simulator/utils/contracts/securityPool'
+import { QuestionOutcome } from '../../testSupport/simulator/types/types'
+import assert from '../../testSupport/simulator/utils/assert'
 import { beforeEach, describe, test } from 'bun:test'
 import { statoblast_interfaces_IEscalationGame_IEscalationGameAuthorization } from '../../types/contractArtifact'
 import { useStatoblastVaultAccountingFixture, type StatoblastVaultAccountingFixture } from './fixture'
 
 describe('Statoblast REP authorization entry points', () => {
 	const fixture = useStatoblastVaultAccountingFixture()
-	const { QuestionOutcome, depositToEscalationGame, getAnvilWindowEthereum, getQuestionEndDate, manipulatePriceOracle, reportBond } = fixture
+	const { getAnvilWindowEthereum, reportBond } = fixture
 
 	let mockWindow: StatoblastVaultAccountingFixture['mockWindow']
 	let client: StatoblastVaultAccountingFixture['client']
@@ -28,7 +33,7 @@ describe('Statoblast REP authorization entry points', () => {
 
 	test('genesis REP escalation deposits reject ERC-2612 permit routing', async () => {
 		const escalationGame = await initializeEscalationGame()
-		await fixture.assert.rejects(
+		await assert.rejects(
 			client.writeContract({
 				abi: statoblast_interfaces_IEscalationGame_IEscalationGameAuthorization.abi,
 				address: escalationGame,
@@ -41,7 +46,7 @@ describe('Statoblast REP authorization entry points', () => {
 
 	test('genesis REP escalation deposits reject ERC-3009 authorization routing', async () => {
 		const escalationGame = await initializeEscalationGame()
-		await fixture.assert.rejects(
+		await assert.rejects(
 			client.writeContract({
 				abi: statoblast_interfaces_IEscalationGame_IEscalationGameAuthorization.abi,
 				address: escalationGame,

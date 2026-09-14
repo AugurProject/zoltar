@@ -1,3 +1,12 @@
+import { getEscalationGameDeposits } from '../../testSupport/simulator/utils/contracts/escalationGame'
+import { depositToEscalationGame, getRepToken } from '../../testSupport/simulator/utils/contracts/securityPool'
+import { QuestionOutcome } from '../../testSupport/simulator/types/types'
+import { OperationType } from '../../testSupport/simulator/utils/contracts/statoblast'
+import { manipulatePriceOracle, manipulatePriceOracleAndPerformOperation } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { addressString } from '../../testSupport/simulator/utils/bigint'
+import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
+import { createWriteClient } from '../../testSupport/simulator/utils/clients'
+import assert from '../../testSupport/simulator/utils/assert'
 import { beforeEach, describe, test } from 'bun:test'
 import { encodeDeployData, encodeFunctionData, getAddress, type Address, type Hex, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
@@ -8,8 +17,8 @@ import { useStatoblastVaultAccountingFixture, type StatoblastVaultAccountingFixt
 
 describe('Statoblast: privileged authorization matrix', () => {
 	const fixture = useStatoblastVaultAccountingFixture()
-	const assert: StatoblastVaultAccountingFixture['assert'] = fixture.assert
-	const { createWriteClient, TEST_ADDRESSES, addressString, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation, OperationType, QuestionOutcome, depositToEscalationGame, getEscalationGameDeposits, repDeposit } = fixture
+
+	const { repDeposit } = fixture
 	let client: StatoblastVaultAccountingFixture['client']
 	let mockWindow: StatoblastVaultAccountingFixture['mockWindow']
 	let securityPool: Address
@@ -255,7 +264,7 @@ describe('Statoblast: privileged authorization matrix', () => {
 		assert.strictEqual(deposits.length, 1, 'authorized pool path should record one escalation deposit')
 		const existingDeposit = deposits[0]
 		if (existingDeposit === undefined) throw new Error('expected initial escalation deposit')
-		const repToken = await fixture.getRepToken(client, securityPool)
+		const repToken = await getRepToken(client, securityPool)
 
 		const readSnapshot = async () => ({
 			attackerEscrow: await client.readContract({

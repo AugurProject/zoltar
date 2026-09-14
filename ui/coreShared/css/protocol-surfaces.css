@@ -1188,7 +1188,7 @@ strong.metric-value-danger {
 	margin-top: 0.3rem;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 40rem) {
 	.transaction-review-primary {
 		grid-template-columns: minmax(0, 1fr);
 	}
@@ -2059,7 +2059,7 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	gap: 0.75rem;
 }
 
-@media (max-width: 800px) {
+@media (max-width: 50rem) {
 	.comparison-record {
 		grid-template-columns: 1fr;
 	}

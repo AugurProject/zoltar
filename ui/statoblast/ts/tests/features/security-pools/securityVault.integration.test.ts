@@ -1,6 +1,6 @@
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { approveErc20 } from '@zoltar/ui-zoltar-shared/protocol/tokenActions.js'
 import { depositRepToVaultToSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/securityVault.js'
@@ -15,14 +15,12 @@ import { DAY, TEST_ADDRESSES } from '../../../../../../solidity/ts/testSupport/s
 import { addressString } from '../../../../../../solidity/ts/testSupport/simulator/utils/bigint'
 import { ensureProxyDeployerDeployed, setupTestAccounts } from '../../../../../../solidity/ts/testSupport/simulator/utils/utilities'
 import { AnvilWindowEthereum } from '../../../../../../solidity/ts/testSupport/simulator/AnvilWindowEthereum'
-import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../../../../../solidity/ts/testSupport/simulator/useIsolatedAnvilNode'
+import { useIsolatedAnvilNode } from '../../../../../../solidity/ts/testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, type WriteClient } from '../../../../../../solidity/ts/testSupport/simulator/utils/clients'
 import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast'
 import { ensureZoltarDeployed } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { getSecurityVault, getVaultCount, getVaults, backingUnitsToAttoRep } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/securityPool'
-
-setDefaultTimeout(TEST_TIMEOUT_MS)
 
 function installInjectedEthereum(mockWindow: AnvilWindowEthereum, accountAddress: Address = addressString(TEST_ADDRESSES[0])) {
 	if (!Reflect.has(globalThis, 'window')) Reflect.set(globalThis, 'window', globalThis)

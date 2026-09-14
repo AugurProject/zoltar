@@ -1,8 +1,8 @@
-import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
+import { beforeAll, beforeEach, describe, test } from 'bun:test'
 import assert from '../testSupport/simulator/utils/assert'
 import { decodeEventLog, encodeDeployData, encodeFunctionData, type Address, type Hex, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
-import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
+import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { ensureInfraDeployed } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { ensureZoltarDeployed, forkUniverse, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
@@ -11,8 +11,6 @@ import { approveToken, getChildUniverseId, setupTestAccounts, sortStringArrayByK
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { addressString } from '../testSupport/simulator/utils/bigint'
 import { statoblast_tokens_ShareToken_ShareToken, test_statoblast_ERC1155ReceiverMock_ERC1155NonReceiver, test_statoblast_ERC1155ReceiverMock_ERC1155ReceiverMock, test_statoblast_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock } from '../types/contractArtifact'
-
-setDefaultTimeout(TEST_TIMEOUT_MS)
 
 describe('ERC1155 Compliance Test Suite', () => {
 	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()

@@ -1,0 +1,17 @@
+{
+	"extends": "./tsconfig.strict.json",
+	"compilerOptions": {
+		"target": "ESNext",
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+		"sourceMap": false,
+		"inlineSources": false,
+		"declaration": true,
+		"declarationMap": false,
+		"noEmit": false,
+		"esModuleInterop": true,
+		"lib": ["ESNext", "DOM"],
+		"skipLibCheck": true,
+		"types": ["bun-types"]
+	}
+}

@@ -1,15 +1,13 @@
-import { beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
+import { beforeEach, describe, test } from 'bun:test'
 import { SEPOLIA_REP_ALLOCATIONS } from '@zoltar/zoltar-shared/deployment/sepoliaRepAllocations'
 import { encodeDeployData, type Address } from '@zoltar/core-shared/evm/ethereum'
 import assert from '../testSupport/simulator/utils/assert'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
-import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
+import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { createWriteClient, type WriteClient } from '../testSupport/simulator/utils/clients'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { GenesisReputationToken_GenesisReputationToken, ReputationToken_ReputationToken } from '../types/contractArtifact'
-
-setDefaultTimeout(TEST_TIMEOUT_MS)
 
 describe('GenesisReputationToken', () => {
 	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()

@@ -166,7 +166,7 @@ if (import.meta.main) {
 		console.log(`Running Solidity bytecode coverage shard ${shardIndex}/${testShards.length}`)
 		await rm(coverageDirectory, { recursive: true, force: true })
 		const exitCode = await runBunTestProcess({
-			cmd: [process.execPath, 'test', '--timeout', '300000', ...testShard.map(toBunTestPath)],
+			cmd: [process.execPath, 'test', ...testShard.map(toBunTestPath)],
 			env: {
 				...Bun.env,
 				SOLIDITY_BYTECODE_COVERAGE: '1',

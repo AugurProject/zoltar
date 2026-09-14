@@ -1,6 +1,6 @@
 import { encodeAbiParameters, encodeDeployData, getAddress, type Address } from '@zoltar/bot-shared/ethereum'
-import { beforeAll, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../../../solidity/ts/testSupport/simulator/useIsolatedAnvilNode'
+import { beforeAll, beforeEach, describe, expect, test } from 'bun:test'
+import { useIsolatedAnvilNode } from '../../../../solidity/ts/testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../../../../solidity/ts/testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../../../../solidity/ts/testSupport/simulator/utils/constants'
 import { ensureDefined } from '../../../../solidity/ts/testSupport/simulator/utils/testUtils'
@@ -8,8 +8,6 @@ import { setupTestAccounts } from '../../../../solidity/ts/testSupport/simulator
 import { executorArtifact } from '#contracts/artifacts.generated'
 import { feeTokenArtifact, routerArtifact, targetArtifact, tokenArtifact, v4PoolManagerArtifact, wethArtifact } from './harness-artifacts.generated.ts'
 import { statoblast_openOracle_OpenOracle_OpenOracle as openOracleArtifact } from '../../../../solidity/ts/types/contractArtifact'
-
-setDefaultTimeout(TEST_TIMEOUT_MS)
 
 describe('OpenOracle arbitrage executor', () => {
 	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
