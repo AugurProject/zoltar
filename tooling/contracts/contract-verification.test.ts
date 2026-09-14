@@ -270,7 +270,7 @@ for (const limitedAction of ['getsourcecode', 'verifysourcecode', 'checkverifyst
 		})
 		expect(outcomes[0]?.status).toBe('verified')
 		expect(attempts.get(limitedAction)).toBe(2)
-		expect(delays.some(delay => delay >= 2_000)).toBe(true)
+		expect(delays.includes(1_652)).toBe(true)
 		expect(calls.filter(call => call.type === 'POST')).toHaveLength(1)
 		expect(calls.at(-1)?.parameters.get('guid')).toBe('preserved-guid')
 	})
@@ -302,7 +302,7 @@ test('explorer paces every request including already-verified lookups and status
 	for (let index = 1; index < requestTimes.length; index += 1) expect((requestTimes[index] ?? 0) - (requestTimes[index - 1] ?? 0)).toBeGreaterThanOrEqual(1_000)
 })
 
-test('explorer rate-limit retries are bounded and later contracts still run', async () => {
+test('explorer retries each request ten times over five minutes and later contracts still run', async () => {
 	let attempts = 0
 	const delays: number[] = []
 	const fetchFn: ExplorerFetch = async () => {
@@ -319,18 +319,68 @@ test('explorer rate-limit retries are bounded and later contracts still run', as
 		},
 		target: testTarget,
 	})
-	expect(attempts).toBe(10)
+	expect(attempts).toBe(22)
 	expect(outcomes.map(outcome => outcome.status)).toEqual(['failed', 'failed'])
 	expect(outcomes.every(outcome => outcome.detail?.includes('HTTP 429') === true)).toBe(true)
-	expect(delays.filter(delay => delay >= 2_000)).toEqual([2_000, 4_000, 8_000, 16_000, 32_000, 2_000, 4_000, 8_000, 16_000])
+	expect(delays).toHaveLength(21)
+	for (const waits of [delays.slice(0, 10), delays.slice(11)]) {
+		expect(waits.reduce((sum, delay) => sum + delay, 0)).toBe(300_000)
+		for (let index = 1; index < waits.length; index += 1) expect((waits[index] ?? 0) / (waits[index - 1] ?? 1)).toBeCloseTo(1.6, 2)
+	}
 })
+
+test('explorer can recover on the tenth retry', async () => {
+	let attempts = 0
+	let waited = 0
+	const outcomes = await verifyContractsWithExplorer({
+		fetchFn: async () => {
+			attempts += 1
+			return attempts <= 10 ? { ok: false, status: 429, json: async () => ({}) } : { ok: true, status: 200, json: async () => ({ result: [{ SourceCode: 'verified source' }], status: '1' }) }
+		},
+		inputs: testInputs,
+		jobs: [testJob],
+		log: () => {},
+		sleep: async delay => {
+			waited += delay
+		},
+		target: testTarget,
+	})
+	expect(outcomes[0]?.status).toBe('already-verified')
+	expect(attempts).toBe(11)
+	expect(waited).toBe(300_000)
+})
+
+for (const cooldownSeconds of [100, 120, 300]) {
+	test(`explorer shares the five-minute wait budget with ${cooldownSeconds}s server cooldowns`, async () => {
+		let attempts = 0
+		const delays: number[] = []
+		const outcomes = await verifyContractsWithExplorer({
+			fetchFn: async () => {
+				attempts += 1
+				return { ok: false, status: 429, headers: new Headers({ 'Retry-After': cooldownSeconds.toString() }), json: async () => ({}) }
+			},
+			inputs: testInputs,
+			jobs: [testJob],
+			log: () => {},
+			sleep: async delay => {
+				delays.push(delay)
+			},
+			target: testTarget,
+		})
+		const expectedRetries = Math.floor(300 / cooldownSeconds)
+		expect(attempts).toBe(expectedRetries + 1)
+		expect(delays).toEqual(Array.from({ length: expectedRetries }, () => cooldownSeconds * 1_000))
+		expect(outcomes[0]?.status).toBe('failed')
+		expect(outcomes[0]?.detail).toContain('300s retry wait budget')
+	})
+}
 
 for (const [label, header, minimumDelay, maximumDelay] of [
 	['seconds', '10', 10_000, 10_000],
 	['five-minute boundary', '300', 300_000, 300_000],
 	['HTTP date', 'future-date', 28_000, 30_000],
-	['invalid header', 'invalid', 2_000, 2_000],
-	['past date', 'Wed, 01 Jan 2020 00:00:00 GMT', 2_000, 2_000],
+	['invalid header', 'invalid', 1_652, 1_652],
+	['past date', 'Wed, 01 Jan 2020 00:00:00 GMT', 1_652, 1_652],
 ] as const) {
 	test(`explorer handles Retry-After ${label}`, async () => {
 		let attempts = 0
@@ -405,7 +455,7 @@ test('explorer preserves the final retry cooldown before contacting the provider
 	const fetchFn: ExplorerFetch = async () => {
 		attempts += 1
 		requestTimes.push(elapsed)
-		if (attempts <= 5) return { ok: false, status: 429, headers: new Headers({ 'Retry-After': attempts === 5 ? '45' : '1' }), json: async () => ({}) }
+		if (attempts <= 11) return { ok: false, status: 429, headers: new Headers({ 'Retry-After': attempts === 11 ? '250' : '1' }), json: async () => ({}) }
 		return { ok: true, status: 200, json: async () => ({ result: [{ SourceCode: 'verified source' }], status: '1' }) }
 	}
 	const outcomes = await verifyContractsWithExplorer({
@@ -419,8 +469,8 @@ test('explorer preserves the final retry cooldown before contacting the provider
 		target: testTarget,
 	})
 	expect(outcomes.map(outcome => outcome.status)).toEqual(['failed', 'already-verified'])
-	expect(attempts).toBe(6)
-	expect((requestTimes[5] ?? 0) - (requestTimes[4] ?? 0)).toBeGreaterThanOrEqual(45_000)
+	expect(attempts).toBe(12)
+	expect((requestTimes[11] ?? 0) - (requestTimes[10] ?? 0)).toBeGreaterThanOrEqual(250_000)
 })
 
 test('sourcify targets exist for mainnet and sepolia only', () => {
