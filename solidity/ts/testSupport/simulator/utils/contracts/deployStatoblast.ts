@@ -26,7 +26,6 @@ import {
 	statoblast_SecurityPoolForker_SecurityPoolForker,
 	statoblast_SecurityPoolUtils_SecurityPoolUtils,
 	statoblast_tokens_ShareToken_ShareToken,
-	ScalarOutcomes_ScalarOutcomes,
 	Zoltar_Zoltar,
 	ZoltarQuestionData_ZoltarQuestionData,
 	statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction,
@@ -52,8 +51,6 @@ const ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS = 30000n
 const ORACLE_MIN_LIQUIDATION_PRICE_DISTANCE_BPS = 1000n
 
 const getSecurityPoolUtilsAddress = () => getCreate2Address({ bytecode: `0x${statoblast_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`, from: addressString(PROXY_DEPLOYER_ADDRESS), salt: ZERO_SALT })
-
-const getScalarOutcomesAddress = () => getCreate2Address({ bytecode: `0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`, from: addressString(PROXY_DEPLOYER_ADDRESS), salt: ZERO_SALT })
 
 export function getDeploymentStepAddresses() {
 	return getDeploymentStatusOracleSteps().map(step => step.address)
@@ -187,13 +184,10 @@ const getZoltarInitCode = (zoltarQuestionDataAddress: Address): Hex =>
 const getZoltarQuestionDataByteCode = (): Hex =>
 	encodeDeployData({
 		abi: ZoltarQuestionData_ZoltarQuestionData.abi,
-		bytecode: applyLibraries(ZoltarQuestionData_ZoltarQuestionData.evm.bytecode.object),
+		bytecode: `0x${ZoltarQuestionData_ZoltarQuestionData.evm.bytecode.object}`,
 	})
 
-export const { applyLibraries } = createApplyLinkedLibrariesHelper(() => [
-	{ hash: keccak256(toHex('contracts/ScalarOutcomes.sol:ScalarOutcomes')).slice(2, 36), address: getScalarOutcomesAddress() },
-	{ hash: keccak256(toHex('contracts/statoblast/SecurityPoolUtils.sol:SecurityPoolUtils')).slice(2, 36), address: getSecurityPoolUtilsAddress() },
-])
+export const { applyLibraries } = createApplyLinkedLibrariesHelper(() => [{ hash: keccak256(toHex('contracts/statoblast/SecurityPoolUtils.sol:SecurityPoolUtils')).slice(2, 36), address: getSecurityPoolUtilsAddress() }])
 
 const { getZoltarAddress, getZoltarQuestionDataAddress } = createZoltarAddressHelpers({
 	getZoltarInitCode,
@@ -214,7 +208,6 @@ export const { getInfraContractAddresses } = createInfraContractAddressHelper({
 	openOracleBytecode: `0x${statoblast_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`,
 	priceOracleManagerAndOperatorQueuerFactoryBytecode: getPriceOracleManagerAndOperatorQueuerFactoryByteCode,
 	proxyDeployerAddress: addressString(PROXY_DEPLOYER_ADDRESS),
-	scalarOutcomesBytecode: `0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`,
 	securityPoolUtilsBytecode: `0x${statoblast_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`,
 	securityPoolOperationsDelegateBytecode: applyLibraries(statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate.evm.bytecode.object),
 	uniformPriceDualCapBatchAuctionFactoryBytecode: `0x${statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object}`,
@@ -332,7 +325,6 @@ function getDeploymentStatusOracleSteps() {
 		{ id: 'proxyDeployer', address: addressString(PROXY_DEPLOYER_ADDRESS) },
 		{ id: 'multicall3', address: infraContracts.multicall3 },
 		{ id: 'uniformPriceDualCapBatchAuctionFactory', address: infraContracts.uniformPriceDualCapBatchAuctionFactory },
-		{ id: 'scalarOutcomes', address: infraContracts.scalarOutcomes },
 		{ id: 'securityPoolUtils', address: infraContracts.securityPoolUtils },
 		{ id: 'securityPoolOperationsDelegate', address: infraContracts.securityPoolOperationsDelegate },
 		{ id: 'openOracle', address: infraContracts.openOracle },
@@ -370,7 +362,6 @@ async function getInfraDeployedInformation(client: WriteClient): Promise<{ [key 
 		escalationGameFactory: isDeploymentStatusOracleStepDeployed(deploymentMask, 'escalationGameFactory'),
 		escalationGameProofVerifier: isDeploymentStatusOracleStepDeployed(deploymentMask, 'escalationGameFactory'),
 		zoltarQuestionData: isDeploymentStatusOracleStepDeployed(deploymentMask, 'zoltarQuestionData'),
-		scalarOutcomes: isDeploymentStatusOracleStepDeployed(deploymentMask, 'scalarOutcomes'),
 		uniformPriceDualCapBatchAuctionFactory: isDeploymentStatusOracleStepDeployed(deploymentMask, 'uniformPriceDualCapBatchAuctionFactory'),
 		securityPoolFactory: isDeploymentStatusOracleStepDeployed(deploymentMask, 'securityPoolFactory'),
 	}
@@ -389,7 +380,6 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 
 	if (!existence['multicall3']) await deployBytecode('multicall3', MULTICALL3_BYTECODE)
 	if (!existence['uniformPriceDualCapBatchAuctionFactory']) await deployBytecode('uniformPriceDualCapBatchAuctionFactory', `0x${statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object}`)
-	if (!existence['scalarOutcomes']) await deployBytecode('scalarOutcomes', `0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`)
 	if (!existence['securityPoolUtils']) await deployBytecode('securityPoolUtils', `0x${statoblast_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`)
 	if (!existence['securityPoolOperationsDelegate']) await deployBytecode('securityPoolOperationsDelegate', applyLibraries(statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate.evm.bytecode.object))
 	if (!existence['openOracle']) await deployBytecode('openOracle', `0x${statoblast_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`)

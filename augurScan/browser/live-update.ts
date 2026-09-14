@@ -1042,7 +1042,7 @@ export const contractDeploymentStatus = (contract: ContractDeploymentRecord) => 
 
 export type ContractRegistrySection = 'Protocol contracts' | 'System dependencies' | 'Discovered contracts'
 
-const dependencyContractKinds = new Set(['multicall3', 'proxyDeployer', 'reputationToken', 'scalarOutcomes', 'uniswapV2Factory', 'uniswapV3Factory', 'uniswapV4PoolManager', 'usdc', 'weth'])
+const dependencyContractKinds = new Set(['multicall3', 'proxyDeployer', 'reputationToken', 'uniswapV2Factory', 'uniswapV3Factory', 'uniswapV4PoolManager', 'usdc', 'weth'])
 
 export const contractRegistrySection = (contract: { readonly kind: string; readonly provenance: string }): ContractRegistrySection => {
 	if (contract.provenance !== 'manifest') return 'Discovered contracts'

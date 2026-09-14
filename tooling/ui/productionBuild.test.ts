@@ -906,7 +906,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			expect(await driver.evaluate('document.activeElement?.textContent?.trim()')).toBe('Skip to main content')
 			await driver.waitForButtonEnabled('Deploy next missing')
 			await driver.clickButton('Deploy next missing')
-			const deployedBody = await driver.waitForBodyText('1 / 16')
+			const deployedBody = await driver.waitForBodyText('1 / 15')
 			expect(deployedBody).toContain('Proxy Deployer')
 			expect(deployedBody).not.toContain('Failed to initialize the app environment')
 

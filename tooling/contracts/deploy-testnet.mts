@@ -41,7 +41,6 @@ export const CONSERVATIVE_DEPLOYMENT_GAS: Readonly<Record<string, bigint>> = {
 	reputationToken: 1_250_000n,
 	multicall3: 1_250_000n,
 	uniformPriceDualCapBatchAuctionFactory: 4_750_000n,
-	scalarOutcomes: 250_000n,
 	securityPoolUtils: 2_000_000n,
 	securityPoolOperationsDelegate: 3_000_000n,
 	openOracle: 4_250_000n,

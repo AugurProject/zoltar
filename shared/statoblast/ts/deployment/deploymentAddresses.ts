@@ -23,7 +23,6 @@ type InfraContractAddressConfig = {
 	openOracleBytecode: Hex
 	priceOracleManagerAndOperatorQueuerFactoryBytecode: () => Hex
 	proxyDeployerAddress: Address
-	scalarOutcomesBytecode: Hex
 	securityPoolUtilsBytecode: Hex
 	securityPoolOperationsDelegateBytecode: Hex
 	uniformPriceDualCapBatchAuctionFactoryBytecode: Hex
@@ -39,7 +38,6 @@ type InfraContractAddresses = {
 	multicall3: Address
 	openOracle: Address
 	priceOracleManagerAndOperatorQueuerFactory: Address
-	scalarOutcomes: Address
 	securityPoolFactory: Address
 	securityPoolForker: Address
 	securityPoolOperationsDelegate: Address
@@ -62,7 +60,6 @@ export function createInfraContractAddressHelper(config: InfraContractAddressCon
 			priceOracleManagerAndOperatorQueuerFactory: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.priceOracleManagerAndOperatorQueuerFactoryBytecode()),
 			securityPoolForker: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.getSecurityPoolForkerByteCode(config.getZoltarAddress())),
 			escalationGameClaimDelegate: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.escalationGameClaimDelegateBytecode),
-			scalarOutcomes: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.scalarOutcomesBytecode),
 			uniformPriceDualCapBatchAuctionFactory: getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.uniformPriceDualCapBatchAuctionFactoryBytecode),
 		}
 		const escalationGameFactory = getProxyDeployerCreate2Address(config.proxyDeployerAddress, config.zeroSalt, config.getEscalationGameFactoryByteCode(addresses.escalationGameClaimDelegate))
