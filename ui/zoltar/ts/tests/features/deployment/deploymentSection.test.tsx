@@ -1,12 +1,12 @@
 /// <reference types='bun-types' />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import { DeploymentSection } from '@zoltar/ui-zoltar-shared/features/deployment/components/DeploymentSection.js'
-import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
-import type { DeploymentStatus } from '@zoltar/ui-core-shared/types/contracts.js'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
+import type { DeploymentStatus } from '@zoltar/ui-core-shared/types/contracts.js'
+import { DeploymentSection } from '@zoltar/ui-zoltar-shared/features/deployment/components/DeploymentSection.js'
+import { describe, expect, test } from 'bun:test'
 
 const ZERO_HASH = '0x0000000000000000000000000000000000000000000000000000000000000000'
 
@@ -24,18 +24,13 @@ function createDeploymentStep(props: { id: DeploymentStatus['id']; deployed: boo
 }
 
 describe('DeploymentSection', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRendered: (() => Promise<void>) | undefined
 
-	beforeEach(() => {
-		restoreDomEnvironment = installDomEnvironment().cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRendered?.()
-		cleanupRendered = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRendered?.()
+			cleanupRendered = undefined
+		},
 	})
 
 	test('marks already deployed steps once without redundant detail or action', async () => {

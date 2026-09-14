@@ -1,24 +1,19 @@
 /// <reference types='bun-types' />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
+import { describe, expect, test } from 'bun:test'
 import { ActionLauncherButton } from '../components/ActionLauncherButton.js'
-import { installDomEnvironment } from './testUtils/domEnvironment.js'
-import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 import { within } from './testUtils/queries.js'
+import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
 describe('ActionLauncherButton', () => {
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
-	let restoreDomEnvironment: (() => void) | undefined
 
-	beforeEach(() => {
-		restoreDomEnvironment = installDomEnvironment().cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+		},
 	})
 
 	test('associates its visible disabled reason with the action', async () => {

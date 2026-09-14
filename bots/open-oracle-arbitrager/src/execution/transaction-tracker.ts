@@ -1,10 +1,11 @@
-import type { Account, Address, Chain, Hex, PublicClient, TransactionReplacement, Transport, WalletClient } from '@zoltar/bot-shared/ethereum'
 import type { Configuration } from '#config/configuration'
-import { sendRawTransactionToRpc } from '#monitoring/connectivity'
 import { attemptConfirmationRecovery, guardedExecutionStep, guardedTransactionSubmission, isExecutionPausedError, journaledSubmission, retryPrivateSubmissionWithinWindow, waitForResolvedTransaction } from '#execution/execution-orchestration'
+import { assertSubmissionWindowOpen, mergeSubmissionFailures, SubmissionFailure, submitSignedTransaction, type SignedTransaction, type SubmissionTargetResult, type SubmittedTransaction } from '#execution/transaction-submission'
+import { sendRawTransactionToRpc } from '#monitoring/connectivity'
 import type { TransactionActivity } from '#state/operator-state'
 import { decimalWeth } from '#state/operator-state'
-import { mergeSubmissionFailures, assertSubmissionWindowOpen, SubmissionFailure, submitSignedTransaction, type SignedTransaction, type SubmittedTransaction, type SubmissionTargetResult } from '#execution/transaction-submission'
+import type { Account, Address, Chain, Hex, PublicClient, TransactionReplacement, Transport, WalletClient } from '@zoltar/bot-shared/ethereum'
+import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
 
 type ReadClient = PublicClient<Transport, Chain>
 type WriteClient = WalletClient<Transport, Chain, Account>
@@ -22,10 +23,6 @@ export type TrackedSubmission = SignedTransaction &
 		token: Address | undefined
 		tokenSymbol: string | undefined
 	}
-
-function errorMessage(error: unknown) {
-	return error instanceof Error ? error.message : String(error)
-}
 
 export function receiptGasCost(receipt: { effectiveGasPrice?: bigint | undefined; gasUsed: bigint; transactionHash: Hex }) {
 	if (typeof receipt.effectiveGasPrice !== 'bigint') throw new Error(`Receipt ${receipt.transactionHash} is missing its effective gas price`)

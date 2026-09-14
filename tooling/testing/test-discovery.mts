@@ -1,6 +1,7 @@
-import { sharedPackages } from '../repo/sharedPackages.ts'
-import { existsSync, promises as fs } from 'node:fs'
+import { existsSync } from 'node:fs'
 import * as path from 'node:path'
+import { sharedPackages } from '../repo/sharedPackages.ts'
+import { walkFiles } from '../repo/walk.mts'
 
 const APPLICATION_TEST_ROOTS = ['scripts', 'tooling', ...sharedPackages.map(entry => `${entry.path}/ts`), 'ui/coreShared/ts', 'ui/zoltar/ts', 'ui/statoblast/ts', 'ui/trading/ts'] as const
 const SOLIDITY_TEST_ROOTS = ['solidity/ts'] as const
@@ -57,22 +58,7 @@ export function hasExplicitTestPath(arguments_: readonly string[], repositoryRoo
 }
 
 async function collectTestFiles(repositoryRoot: string, directoryPath: string): Promise<string[]> {
-	const entries = await fs.readdir(directoryPath, { withFileTypes: true })
-	const files: string[] = []
-
-	for (const entry of entries) {
-		if (IGNORED_TEST_DIRECTORY_NAMES.has(entry.name)) continue
-
-		const entryPath = path.join(directoryPath, entry.name)
-		if (entry.isDirectory()) {
-			files.push(...(await collectTestFiles(repositoryRoot, entryPath)))
-			continue
-		}
-
-		if (entry.isFile() && isTestSourceFile(entry.name)) files.push(path.relative(repositoryRoot, entryPath).replaceAll('\\', '/'))
-	}
-
-	return files
+	return (await walkFiles(directoryPath, { descend: (_directory, entry) => !IGNORED_TEST_DIRECTORY_NAMES.has(entry.name), include: (_file, entry) => !IGNORED_TEST_DIRECTORY_NAMES.has(entry.name) && isTestSourceFile(entry.name) })).map(file => path.relative(repositoryRoot, file).replaceAll('\\', '/'))
 }
 
 export async function discoverTestFiles(repositoryRoot = process.cwd(), testRoots: readonly string[] = TEST_ROOTS) {

@@ -1,10 +1,12 @@
-import { activeSchedulerWorkLabel, createSelectionControls } from './selection-controls.js'
-import { createCatalogGroups } from './catalog-groups.js'
+import { optionalRecord as record } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { createActivityTimeline } from './activity-timeline.js'
+import { createCatalogGroups } from './catalog-groups.js'
 import { compactIdentifier, formatDate, node, setBadge, shortHex, statusLabel, statusTone, transactionExplorerUrl } from './dom.js'
+import { createRetirementDashboard, parsePublicRetirement } from './retirement-dashboard.js'
 import { createOperationDialog } from './operation-dialog.js'
-import { pendingTransactionSummary, type PendingTransactionObservationView } from './pending-transaction-summary.js'
 import { renderOperatorAlerts } from './operator-alerts.js'
+import { pendingTransactionSummary, type PendingTransactionObservationView } from './pending-transaction-summary.js'
+import { activeSchedulerWorkLabel, createSelectionControls } from './selection-controls.js'
 type RepBalance = {
 	balance?: string | number | undefined
 	symbol?: string | undefined
@@ -450,10 +452,6 @@ const obligationRecoveryContext: RecoveryContextRefresh = {
 }
 
 const recoveryContexts = [replacementRecoveryContext, cancellationRecoveryContext, candidateRecoveryContext, workflowRecoveryContext, obligationRecoveryContext] as const
-
-function record(value: unknown): Record<string, unknown> | undefined {
-	return typeof value === 'object' && value !== null && !Array.isArray(value) ? Object.fromEntries(Object.entries(value)) : undefined
-}
 
 function stringValue(value: unknown) {
 	return typeof value === 'string' ? value : undefined

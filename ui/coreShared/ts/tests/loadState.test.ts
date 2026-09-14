@@ -1,17 +1,8 @@
+import { createDeferred } from './testUtils/deferred.js'
 /// <reference types="bun-types" />
 
 import { describe, expect, spyOn, test } from 'bun:test'
 import { createLoadController, resolveLoadableValueState, resolveRequestedLoadableValueState, type LoadPhase } from '../lib/loadState.js'
-
-function createDeferred<T>() {
-	let resolve: (value: T) => void = () => undefined
-	let reject: (reason?: unknown) => void = () => undefined
-	const promise = new Promise<T>((promiseResolve, promiseReject) => {
-		resolve = promiseResolve
-		reject = promiseReject
-	})
-	return { promise, reject, resolve }
-}
 
 void describe('load state helpers', () => {
 	void test('bounds backend readiness and allows retry without running a premature read', async () => {

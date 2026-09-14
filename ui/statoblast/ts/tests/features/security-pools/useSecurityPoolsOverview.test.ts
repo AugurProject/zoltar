@@ -1,47 +1,28 @@
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
+import { createMarketDetails as marketDetailsFixture } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 /// <reference types='bun-types' />
 
-import { afterEach, describe, expect, mock, test } from 'bun:test'
-import { h, type ComponentChildren } from 'preact'
-import { render } from 'preact'
-import { act } from 'preact/test-utils'
 import { getAddress, zeroAddress, zeroHash, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { useSecurityPoolsOverview, type UseSecurityPoolsOverviewDependencies } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolsOverview.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import type { ListedSecurityPool, MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
-import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import type { ListedSecurityPool, MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import { useSecurityPoolsOverview, type UseSecurityPoolsOverviewDependencies } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolsOverview.js'
+import { afterEach, describe, expect, mock, test } from 'bun:test'
+import { h, render, type ComponentChildren } from 'preact'
+import { act } from 'preact/test-utils'
 import { createSecurityPoolPageFromLoadedPools, createSecurityPoolsOverviewDependencies, type TestSecurityPoolsOverviewWriteClient } from './testSupport/securityPoolsOverviewDependencies.js'
 
 type UseSecurityPoolsOverviewState = ReturnType<typeof useSecurityPoolsOverview>
 
-function createDeferred<T>() {
-	let resolve: (value: T) => void = () => undefined
-	let reject: (reason?: unknown) => void = () => undefined
-	const promise = new Promise<T>((promiseResolve, promiseReject) => {
-		resolve = promiseResolve
-		reject = promiseReject
-	})
-	return { promise, reject, resolve }
-}
-
 function createMarketDetails(questionId: string): MarketDetails {
-	return {
-		answerUnit: '',
-		createdAt: 1n,
+	return marketDetailsFixture({
 		description: `Description for ${questionId}`,
-		displayValueMax: 100n,
-		displayValueMin: 0n,
-		endTime: 2n,
-		exists: true,
-		marketType: 'binary',
-		numTicks: 2n,
-		outcomeLabels: ['Yes', 'No'],
 		questionId,
-		startTime: 1n,
 		title: `Question ${questionId}`,
-	}
+	})
 }
 
 function createListedSecurityPool(questionId: string, securityPoolAddress: Address = zeroAddress): ListedSecurityPool {

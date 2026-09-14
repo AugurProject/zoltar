@@ -1,5 +1,5 @@
 import type { SQL } from 'bun'
-import { decodeOpaqueCursor, encodeOpaqueCursor, isJsonArray } from '../cursor-codec.ts'
+import { encodeOpaqueCursor, parseCursor } from '../cursor-codec.ts'
 import type { JsonValue } from '../ethereum.ts'
 import { logDetailData, logListRows, provenanceHistoryData, reorganizationHistoryData } from '../repositories/logs.ts'
 import { snapshotBoundary } from './entity-details.ts'
@@ -72,14 +72,14 @@ const isReorganizationCursor = (parts: readonly JsonValue[]): parts is Reorganiz
 
 const parseReorganizationCursor = (value: string | null, chainId: number): ReorganizationCursor | undefined => {
 	if (value === null) return undefined
-	let parts: readonly JsonValue[]
-	try {
-		const parsed = decodeOpaqueCursor(value)
-		parts = isJsonArray(parsed) ? parsed : []
-		if (!isReorganizationCursor(parts)) throw new Error('shape')
-	} catch (error) {
-		throw new ApiRequestError('cursor is invalid', { cause: error })
-	}
+	const parts = parseCursor(
+		value,
+		parts => {
+			if (!isReorganizationCursor(parts)) throw new Error('shape')
+			return parts
+		},
+		error => new ApiRequestError('cursor is invalid', { cause: error }),
+	)
 	if (parts[1] !== chainId) throw new ApiRequestError('cursor does not match the requested reorganization collection')
 	return parts
 }
@@ -114,14 +114,14 @@ type ProvenanceCursor = readonly [version: 1, startedAt: string, runId: string]
 
 const parseProvenanceCursor = (value: string | null): ProvenanceCursor | undefined => {
 	if (value === null) return undefined
-	try {
-		const parsed = decodeOpaqueCursor(value)
-		const parts = isJsonArray(parsed) ? parsed : []
-		if (parts.length !== 3 || parts[0] !== 1 || typeof parts[1] !== 'string' || !isCursorTimestamp(parts[1]) || !isPostgresBigint(parts[2])) throw new Error('shape')
-		return [1, parts[1], parts[2]]
-	} catch (error) {
-		throw new ApiRequestError('cursor is invalid', { cause: error })
-	}
+	return parseCursor(
+		value,
+		parts => {
+			if (parts.length !== 3 || parts[0] !== 1 || typeof parts[1] !== 'string' || !isCursorTimestamp(parts[1]) || !isPostgresBigint(parts[2])) throw new Error('shape')
+			return [1, parts[1], parts[2]]
+		},
+		error => new ApiRequestError('cursor is invalid', { cause: error }),
+	)
 }
 
 export const provenanceHistory = async (sql: SQL, url: URL): Promise<Response> => {

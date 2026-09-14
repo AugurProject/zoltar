@@ -1,26 +1,26 @@
-import { requireDeployedContracts } from '@zoltar/bot-shared/monitoring/deployed-contracts'
-import { bigintToSafeNumber, getAddress, zeroAddress, type Address, type Hash } from '@zoltar/bot-shared/ethereum'
 import * as abis from '@zoltar/bot-shared/contracts/abi'
+import { bigintToSafeNumber, getAddress, zeroAddress, type Address, type Hash } from '@zoltar/bot-shared/ethereum'
+import { requireDeployedContracts } from '@zoltar/bot-shared/monitoring/deployed-contracts'
+import { sameAddress } from '@zoltar/core-shared/evm/address'
 import { CANONICAL_PROXY_DEPLOYER, CANONICAL_PROXY_DEPLOYER_RUNTIME, CANONICAL_UNISWAP_V3_FACTORY, GENESIS_UNISWAP_FEE, genesisUniswapSeederDeployment } from '../core/genesis-uniswap.ts'
 import { canonicalUintString, type CanonicalUintString } from '../core/units.ts'
-import type { AuctionSnapshot, ChildRepSplitProgressSnapshot, EcosystemSnapshot, MigrationRepSplitProgressSnapshot, OracleGameSnapshot, PairSnapshot, PoolSnapshot, QuestionSnapshot, StagedOperationSnapshot, TokenInventory, UniverseSnapshot } from '../operations/types.ts'
 import { validForkOutcomeRoutes } from '../operations/fork-outcomes.ts'
 import { assertAnchoredOracleRequestFunding } from '../operations/oracle-request-funding.ts'
-import { cloneImmutableTopologyData, emptyCountedRegistryCursor, emptyImmutableTopologyData, IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, IMMUTABLE_TOPOLOGY_MAXIMUM_RECORD_BYTES, type CachedPoolDeployment, type CountedRegistryCursor, type ImmutableTopologyData } from './topology-cache.ts'
-import { contractSimulationReverted, DISCOVERY_RPC_CONCURRENCY, DISCOVERY_RPC_QUEUE_LIMIT, drainConcurrent, limitDiscoveryConcurrency, mapWithConcurrency, requirePositiveLimit, sameAddress, type ChaosReadClient } from './discovery-client.ts'
-import { authenticatePoolProtocolBindings, assertCanonicalPairGraph, assertCanonicalPoolGraph, requireGraphEdge } from './discovery-graph.ts'
-import { discoverDirectEscalationDepositQuotes, emptyDirectEscalationDepositQuote, minimumSafeVaultDeposit, projectSettlementCollateral, relevantTokenSpenders } from './discovery-escalation.ts'
-import { discoverStagedOperations, discoverVault } from './discovery-staged-operations.ts'
-import { forkMigrationWindowIsOpen, forkRepMigrationTarget } from './discovery-fork-migration.ts'
-import { discoverShareInventory, trustedIndexedReportsForDiscovery } from './discovery-share-inventory.ts'
+import type { AuctionSnapshot, ChildRepSplitProgressSnapshot, EcosystemSnapshot, MigrationRepSplitProgressSnapshot, OracleGameSnapshot, PairSnapshot, PoolSnapshot, QuestionSnapshot, StagedOperationSnapshot, TokenInventory, UniverseSnapshot } from '../operations/types.ts'
+import { contractSimulationReverted, DISCOVERY_RPC_CONCURRENCY, DISCOVERY_RPC_QUEUE_LIMIT, drainConcurrent, limitDiscoveryConcurrency, mapWithConcurrency, requirePositiveLimit, type ChaosReadClient } from './discovery-client.ts'
 import { DISCOVERY_AGGREGATE_ITEM_LIMIT, limitsWithDefaults, requireAggregateDiscoveryEnvelope, type DiscoveryLimits, type EcosystemDiscoveryContext } from './discovery-context.ts'
-import { advanceVaultRegistryCursor, collectCountedPages, cursorWithCanonicalCount, registryCatchUpWarning, sameRegistryCursor, updateRegistryCommitment, assertRegistryCountNotRegressed } from './discovery-registry.ts'
+import { discoverDirectEscalationDepositQuotes, emptyDirectEscalationDepositQuote, minimumSafeVaultDeposit, projectSettlementCollateral, relevantTokenSpenders } from './discovery-escalation.ts'
+import { forkMigrationWindowIsOpen, forkRepMigrationTarget } from './discovery-fork-migration.ts'
+import { assertCanonicalPairGraph, assertCanonicalPoolGraph, authenticatePoolProtocolBindings, requireGraphEdge } from './discovery-graph.ts'
+import { advanceVaultRegistryCursor, assertRegistryCountNotRegressed, collectCountedPages, cursorWithCanonicalCount, registryCatchUpWarning, sameRegistryCursor, updateRegistryCommitment } from './discovery-registry.ts'
+import { discoverShareInventory, trustedIndexedReportsForDiscovery } from './discovery-share-inventory.ts'
+import { discoverStagedOperations, discoverVault } from './discovery-staged-operations.ts'
+import { cloneImmutableTopologyData, emptyCountedRegistryCursor, emptyImmutableTopologyData, IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, IMMUTABLE_TOPOLOGY_MAXIMUM_RECORD_BYTES, type CachedPoolDeployment, type CountedRegistryCursor, type ImmutableTopologyData } from './topology-cache.ts'
 
 const UNISWAP_POOL_DISCOVERY_CONCURRENCY = Math.floor(DISCOVERY_RPC_QUEUE_LIMIT / 6)
 const DISCOVERY_QUESTION_RESIDENT_UTF8_BYTES = 32 * 1024 * 1024
 const OUTCOME_LABEL_PAGE_SIZE = 256n
 const utf8Encoder = new TextEncoder()
-
 type TopologyMutationState = {
 	changed: boolean
 }

@@ -1,11 +1,12 @@
-import { beforeEach, describe, test } from 'bun:test'
-import assert from '../testSupport/simulator/utils/assert'
 import { encodeDeployData, encodeFunctionData, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { beforeEach, describe, test } from 'bun:test'
+import { deployContract } from '../testSupport/deployContract'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
+import assert from '../testSupport/simulator/utils/assert'
+import { createWriteClient, writeContractAndWait, type WriteClient } from '../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
-import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { statoblast_Multicall3_Multicall3 } from '../types/contractArtifact'
 
 describe('Multicall3', () => {
@@ -13,16 +14,9 @@ describe('Multicall3', () => {
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
 
-	const deployContract = async (deploymentData: Hex): Promise<Address> => {
-		const hash = await client.sendTransaction({ data: deploymentData })
-		const receipt = await client.waitForTransactionReceipt({ hash })
-		const contractAddress = receipt.contractAddress
-		if (contractAddress === undefined || contractAddress === null) throw new Error('deployment address missing')
-		return contractAddress
-	}
-
 	const deployMulticall = async () =>
 		await deployContract(
+			client,
 			encodeDeployData({
 				abi: statoblast_Multicall3_Multicall3.abi,
 				bytecode: `0x${statoblast_Multicall3_Multicall3.evm.bytecode.object}`,

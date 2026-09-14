@@ -1,11 +1,7 @@
 import type { Hex } from '@zoltar/bot-shared/ethereum'
+import { nonemptyString as validateNonemptyString } from '@zoltar/bot-shared/infrastructure/json-validation'
 
-export { hash32 as hash, normalizedHash32 } from '@zoltar/bot-shared/infrastructure/json-validation'
-
-export function requiredRecord(value: unknown, label: string): Record<string, unknown> {
-	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`${label} must be an object`)
-	return value as Record<string, unknown>
-}
+export { hash32 as hash, normalizedHash32, record as requiredRecord } from '@zoltar/bot-shared/infrastructure/json-validation'
 
 export function assertExactKeys(record: Record<string, unknown>, required: readonly string[], optional: readonly string[], label: string) {
 	const allowed = new Set([...required, ...optional])
@@ -16,8 +12,7 @@ export function assertExactKeys(record: Record<string, unknown>, required: reado
 }
 
 export function nonemptyString(value: unknown, label: string, maximumLength = 2_048) {
-	if (typeof value !== 'string' || value.trim() === '' || value.length > maximumLength) throw new Error(`${label} must be a non-empty string of at most ${maximumLength.toString()} characters`)
-	return value
+	return validateNonemptyString(value, label, maximumLength)
 }
 
 export function optionalString(value: unknown, label: string, maximumLength = 2_048) {

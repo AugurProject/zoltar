@@ -1,17 +1,17 @@
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { fireEvent, within } from './testUtils/queries'
-import { act } from 'preact/test-utils'
+import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
+import { describe, expect, test } from 'bun:test'
 import { render } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { OperationModal } from '../components/OperationModal.js'
+import { act } from 'preact/test-utils'
 import { AddressValue } from '../components/AddressValue.js'
 import { GlobalTransactionPresentationProvider } from '../components/GlobalTransactionPresentationContext.js'
-import { installDomEnvironment } from './testUtils/domEnvironment.js'
+import { OperationModal } from '../components/OperationModal.js'
 import { createInitialTransactionTrayState, markTransactionFailed, markTransactionFinished, markTransactionPresented, markTransactionRequested, markTransactionSubmitted } from '../transactions/transactionTray.js'
-import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 import type { GlobalTransactionPresentation, TransactionIntent } from '../types/components.js'
+import { fireEvent, within } from './testUtils/queries'
+import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
 function OperationModalHarness() {
 	const [value, setValue] = useState('')
@@ -394,19 +394,13 @@ function FocusRestoreModalHarness({ onOpenSetter }: { onOpenSetter: (setOpen: (o
 }
 
 describe('OperationModal', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
-	beforeEach(() => {
-		const domEnvironment = installDomEnvironment()
-		restoreDomEnvironment = domEnvironment.cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+		},
 	})
 
 	test('exposes the dialog title and close control accessibly', async () => {

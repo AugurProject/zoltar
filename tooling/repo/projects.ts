@@ -1,7 +1,8 @@
-import { contractProjectOwner, isContractProjectSource } from '../../solidity/ts/contractProjects.ts'
-import { sharedPackages } from './sharedPackages.ts'
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
+import { contractProjectOwner, isContractProjectSource } from '../../solidity/ts/contractProjects.ts'
+import { repositoryRoot as defaultRepositoryRoot } from './root.mts'
+import { sharedPackages } from './sharedPackages.ts'
 
 const projectTypes = ['repository', 'library', 'contracts', 'ui-library', 'ui-app', 'service', 'bot', 'documentation'] as const
 type ProjectType = (typeof projectTypes)[number]
@@ -411,7 +412,7 @@ export function validateProjectRegistry(registry: readonly Project[] = projects)
 const wildcardPrefix = (entry: string) => entry.split(/[*?[\]{}]/u, 1)[0] ?? ''
 const resolveRegistryPath = (repositoryRoot: string, entry: string) => path.resolve(repositoryRoot, wildcardPrefix(entry))
 
-export function validateProjectRegistryFiles(repositoryRoot = path.resolve(import.meta.dir, '../..'), registry: readonly Project[] = projects): void {
+export function validateProjectRegistryFiles(repositoryRoot = defaultRepositoryRoot, registry: readonly Project[] = projects): void {
 	validateProjectRegistry(registry)
 	const packagesByPath = new Map(registry.map(project => [path.resolve(repositoryRoot, project.path), project]))
 	for (const project of registry) {

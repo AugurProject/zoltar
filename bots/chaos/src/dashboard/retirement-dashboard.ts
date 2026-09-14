@@ -1,17 +1,15 @@
+import { optionalRecord as retirementRecord } from '@zoltar/bot-shared/infrastructure/json-validation'
+
 type RetirementSnapshot = {
 	profileId?: string | undefined
 	retirement?: { blockers: unknown[]; finalSweepStartedAt?: string | undefined; positions: unknown[]; recipient?: string | undefined; status?: string | undefined } | undefined
-}
-
-function retirementRecord(value: unknown): Record<string, unknown> | undefined {
-	return typeof value === 'object' && value !== null && !Array.isArray(value) ? Object.fromEntries(Object.entries(value)) : undefined
 }
 
 function retirementStringValue(value: unknown) {
 	return typeof value === 'string' ? value : undefined
 }
 
-function parsePublicRetirement(value: unknown): RetirementSnapshot['retirement'] {
+export function parsePublicRetirement(value: unknown): RetirementSnapshot['retirement'] {
 	const retirement = retirementRecord(value)
 	return retirement === undefined
 		? undefined
@@ -36,7 +34,7 @@ function retirementElement<T extends Element>(id: string, constructor: { new ():
 	return value
 }
 
-function createRetirementDashboard(options: RetirementDashboardOptions) {
+export function createRetirementDashboard(options: RetirementDashboardOptions) {
 	const statusElement = retirementElement('retirement-status', HTMLSpanElement)
 	const summary = retirementElement('retirement-summary', HTMLParagraphElement)
 	const form = retirementElement('retirement-form', HTMLFormElement)
@@ -156,5 +154,3 @@ function createRetirementDashboard(options: RetirementDashboardOptions) {
 		},
 	}
 }
-
-Object.assign(globalThis, { createRetirementDashboard, parsePublicRetirement })

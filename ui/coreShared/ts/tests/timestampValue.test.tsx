@@ -1,26 +1,20 @@
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
+import { describe, expect, test } from 'bun:test'
 import { TimestampValue } from '../components/TimestampValue.js'
-import { ChainTimestampContext } from '../wallet/chainTimestamp.js'
 import { formatTimestamp } from '../lib/formatters.js'
-import { installDomEnvironment } from './testUtils/domEnvironment.js'
+import { ChainTimestampContext } from '../wallet/chainTimestamp.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
 describe('TimestampValue', () => {
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
-	let restoreDomEnvironment: (() => void) | undefined
 
-	beforeEach(() => {
-		const domEnvironment = installDomEnvironment()
-		restoreDomEnvironment = domEnvironment.cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+		},
 	})
 
 	test('prefers an explicit current timestamp over the shared chain timestamp context', async () => {

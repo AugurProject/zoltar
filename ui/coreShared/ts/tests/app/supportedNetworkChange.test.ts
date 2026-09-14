@@ -1,15 +1,8 @@
+import { createDeferred } from '../testUtils/deferred.js'
 /// <reference types="bun-types" />
 
 import { describe, expect, mock, test } from 'bun:test'
 import { createSupportedNetworkChangeCoordinator } from '../../app/lib/supportedNetworkChange.js'
-
-function createDeferred() {
-	let resolve: () => void = () => undefined
-	const promise = new Promise<void>(promiseResolve => {
-		resolve = promiseResolve
-	})
-	return { promise, resolve }
-}
 
 describe('supported network change coordination', () => {
 	test('defers environment replacement until the active write action finishes', async () => {
@@ -46,7 +39,7 @@ describe('supported network change coordination', () => {
 
 	test('retries when a write starts during asynchronous network discovery', async () => {
 		let inFlightCount = 0
-		const discovery = createDeferred()
+		const discovery = createDeferred<void>()
 		const replaceEnvironment = mock(async (canCommit: () => boolean) => {
 			await discovery.promise
 			return canCommit()
@@ -69,8 +62,8 @@ describe('supported network change coordination', () => {
 
 	test('retries when the write finishes before a rejected replacement resolves', async () => {
 		let inFlightCount = 0
-		const discovery = createDeferred()
-		const rejectedReplacement = createDeferred()
+		const discovery = createDeferred<void>()
+		const rejectedReplacement = createDeferred<void>()
 		let replacementAttempt = 0
 		const replaceEnvironment = mock(async (canCommit: () => boolean) => {
 			replacementAttempt += 1

@@ -1,42 +1,38 @@
 /// <reference types='bun-types' />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
-import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
-import { act } from 'preact/test-utils'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 import { UniverseLink } from '@zoltar/ui-zoltar-shared/features/universes/components/UniverseLink.js'
 import { getUniverseLinkHref } from '@zoltar/ui-zoltar-shared/features/universes/lib/universe.js'
+import { describe, expect, test } from 'bun:test'
+import { act } from 'preact/test-utils'
 
 installTestRouting()
 describe('UniverseLink', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 	let previousPopStateEventDescriptor: PropertyDescriptor | undefined
 
-	beforeEach(() => {
-		const domEnvironment = installDomEnvironment()
-		restoreDomEnvironment = domEnvironment.cleanup
-		previousPopStateEventDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'PopStateEvent')
-		Object.defineProperty(globalThis, 'PopStateEvent', {
-			configurable: true,
-			value: domEnvironment.window.PopStateEvent,
-			writable: true,
-		})
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		if (previousPopStateEventDescriptor === undefined) {
-			delete (globalThis as typeof globalThis & { PopStateEvent?: typeof window.PopStateEvent }).PopStateEvent
-		} else {
-			Object.defineProperty(globalThis, 'PopStateEvent', previousPopStateEventDescriptor)
-		}
-		previousPopStateEventDescriptor = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
+	installDomTestLifecycle({
+		beforeTest: domEnvironment => {
+			previousPopStateEventDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'PopStateEvent')
+			Object.defineProperty(globalThis, 'PopStateEvent', {
+				configurable: true,
+				value: domEnvironment.window.PopStateEvent,
+				writable: true,
+			})
+		},
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+			if (previousPopStateEventDescriptor === undefined) {
+				delete (globalThis as typeof globalThis & { PopStateEvent?: typeof window.PopStateEvent }).PopStateEvent
+			} else {
+				Object.defineProperty(globalThis, 'PopStateEvent', previousPopStateEventDescriptor)
+			}
+			previousPopStateEventDescriptor = undefined
+		},
 	})
 
 	test('renders the default universe label and follows normal left-click navigation', async () => {

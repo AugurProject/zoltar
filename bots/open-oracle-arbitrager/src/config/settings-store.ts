@@ -1,21 +1,22 @@
-import { assertCompatibleProfileProcessMode, chainSpecificPath } from '@zoltar/bot-shared/config/profiles'
-import { renameAndSyncDirectory } from '@zoltar/bot-shared/config/durable-replacement'
-import { parseApprovedUniverses } from '@zoltar/bot-shared/monitoring/universe-policy'
+import { validateDeploymentSettings, type DeploymentSettings } from '#config/deployment-settings'
 import { networkDeployment } from '#config/network'
+import type { RiskLimits } from '#core/safety-controls'
+import { executorDeploymentIntentPath } from '#execution/executor-deployment-store'
+import { validateSubmissionSettings, type SubmissionSettings } from '#execution/transaction-submission'
+import { validateConnectivitySettings, validateIndependentReadRpcUrls, type ConnectivitySettings, type NetworkName } from '#monitoring/connectivity'
+import { decimalWeth, parseDecimalWeth, updateStrategyFromRequest, type MutableStrategy, type StrategySettings } from '#state/operator-state'
+import { renameAndSyncDirectory } from '@zoltar/bot-shared/config/durable-replacement'
+import { persistentPathIdentitiesMatch, persistentPathIdentity } from '@zoltar/bot-shared/config/persistent-path'
+import { assertCompatibleProfileProcessMode, chainSpecificPath } from '@zoltar/bot-shared/config/profiles'
+import { signerCandidate } from '@zoltar/bot-shared/config/signer'
+import { getAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import { integer as validateInteger, record } from '@zoltar/bot-shared/infrastructure/json-validation'
+import { parseCentralizedMarketSettings, serializeCentralizedMarketSettings, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
+import { configuredQuorumRpcUrlMinimum, type RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
+import { parseApprovedUniverses } from '@zoltar/bot-shared/monitoring/universe-policy'
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
-import { getAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
-import { validateConnectivitySettings, validateIndependentReadRpcUrls, type ConnectivitySettings, type NetworkName } from '#monitoring/connectivity'
-import { decimalWeth, parseDecimalWeth, updateStrategyFromRequest, type MutableStrategy, type StrategySettings } from '#state/operator-state'
-import { signerCandidate } from '@zoltar/bot-shared/config/signer'
-import { validateSubmissionSettings, type SubmissionSettings } from '#execution/transaction-submission'
-import { validateDeploymentSettings, type DeploymentSettings } from '#config/deployment-settings'
-import type { RiskLimits } from '#core/safety-controls'
-import { parseCentralizedMarketSettings, serializeCentralizedMarketSettings, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
-import { configuredQuorumRpcUrlMinimum, type RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
-import { persistentPathIdentitiesMatch, persistentPathIdentity } from '@zoltar/bot-shared/config/persistent-path'
-import { executorDeploymentIntentPath } from '#execution/executor-deployment-store'
 
 const PRESERVE_PRIVATE_KEY = '__PRESERVE_SAVED_PRIVATE_KEY__'
 export const CONFIGURATION_REVISION_CONFLICT = 'ConfigurationRevisionConflict'
@@ -122,8 +123,7 @@ export type StoredOperatorSettings = {
 }
 
 function requiredRecord(value: unknown, name = 'Operator configuration') {
-	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`${name} must be a JSON object`)
-	return value as Record<string, unknown>
+	return record(value, name, `${name} must be a JSON object`)
 }
 
 function validatedKeys(record: Record<string, unknown>) {
@@ -137,8 +137,7 @@ function validatedKeys(record: Record<string, unknown>) {
 }
 
 function integer(value: unknown, name: string, minimum: number, maximum: number) {
-	if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < minimum || value > maximum) throw new Error(`${name} must be an integer from ${minimum.toString()} to ${maximum.toString()}`)
-	return value
+	return validateInteger(value, name, minimum, maximum, `${name} must be an integer from ${minimum.toString()} to ${maximum.toString()}`)
 }
 
 function nonnegativeBigInt(value: unknown, name: string) {

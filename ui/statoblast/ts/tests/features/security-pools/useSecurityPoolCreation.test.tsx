@@ -1,15 +1,17 @@
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
+import { createMarketDetails as marketDetailsFixture } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 /// <reference types='bun-types' />
 
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import { act } from 'preact/test-utils'
-import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { zeroAddress, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
+import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import type { DeploymentStatus, MarketDetails, SecurityPoolCreationResult } from '@zoltar/ui-core-shared/types/contracts.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
+import type { DeploymentStatus, MarketDetails, SecurityPoolCreationResult } from '@zoltar/ui-core-shared/types/contracts.js'
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
+import { act } from 'preact/test-utils'
 
 type UseSecurityPoolCreation = typeof import('@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolCreation.js')['useSecurityPoolCreation']
 type UseSecurityPoolCreationState = ReturnType<UseSecurityPoolCreation>
@@ -22,33 +24,11 @@ type MockContractDeps = {
 	createSecurityPool: ReturnType<typeof mock>
 }
 
-function createDeferred<T>() {
-	let resolve: (value: T) => void = () => undefined
-	let reject: (reason?: unknown) => void = () => undefined
-	const promise = new Promise<T>((promiseResolve, promiseReject) => {
-		resolve = promiseResolve
-		reject = promiseReject
-	})
-	return { promise, reject, resolve }
-}
-
 function createMarketDetails(overrides: Partial<MarketDetails> = {}): MarketIdLoadResult {
-	return {
-		answerUnit: '',
-		createdAt: 1n,
-		description: 'Question description',
-		displayValueMax: 100n,
-		displayValueMin: 0n,
-		endTime: 2n,
-		exists: true,
-		marketType: 'binary',
-		numTicks: 2n,
-		outcomeLabels: ['Yes', 'No'],
+	return marketDetailsFixture({
 		questionId: '0x0b',
-		startTime: 1n,
-		title: 'Will this resolve?',
 		...overrides,
-	}
+	})
 }
 
 function createStatus(id: DeploymentStatus['id'], deployed: boolean, dependencies: DeploymentStatus['id'][] = []): DeploymentStatus {

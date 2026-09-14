@@ -1,26 +1,20 @@
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { readCoreSharedCssSource } from './testUtils/coreSharedCss.js'
+import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
+import { describe, expect, test } from 'bun:test'
 import { EntityCard } from '../components/EntityCard.js'
 import { WarningSurface } from '../components/WarningSurface.js'
-import { installDomEnvironment } from './testUtils/domEnvironment.js'
+import { readCoreSharedCssSource } from './testUtils/coreSharedCss.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
 describe('flat nested surfaces', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
-	beforeEach(() => {
-		const domEnvironment = installDomEnvironment()
-		restoreDomEnvironment = domEnvironment.cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+		},
 	})
 
 	test('marks entity cards as flat when they are composed inside another surface', async () => {

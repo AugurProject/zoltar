@@ -1,9 +1,10 @@
-import { bigintToSafeNumber, encodeAbiParameters, getAddress, hexToBytes, keccak256, zeroAddress, zeroHash, type Address, type Chain, type Hash, type PublicClient, type Transport } from '@zoltar/bot-shared/ethereum'
-import { ChaosProtocolIndexReorgError, fetchProtocolLogs, protocolLogPrefixAvailable, recoverPrunedProtocolLogs, requireCanonicalBlock, validatePreviousProtocolIndex } from './protocol-index-context.ts'
 import { openOracleAbi } from '@zoltar/bot-shared/contracts/abi'
+import { bigintToSafeNumber, encodeAbiParameters, getAddress, hexToBytes, keccak256, zeroAddress, zeroHash, type Address, type Chain, type Hash, type PublicClient, type Transport } from '@zoltar/bot-shared/ethereum'
+import { sameAddress } from '@zoltar/core-shared/evm/address'
 import type { CanonicalUintString } from '../core/units.ts'
 import { eventTopic } from '../operations/planning.ts'
 import type { AuctionBidSnapshot, AuctionRefundSnapshot, ChildRepSplitProgressSnapshot, EscalationDepositSnapshot, MigrationRepSplitProgressSnapshot, OracleGameSnapshot } from '../operations/types.ts'
+import { ChaosProtocolIndexReorgError, fetchProtocolLogs, protocolLogPrefixAvailable, recoverPrunedProtocolLogs, requireCanonicalBlock, validatePreviousProtocolIndex } from './protocol-index-context.ts'
 
 type IndexClient = PublicClient<Transport, Chain>
 
@@ -92,10 +93,6 @@ const MAXIMUM_ACTIVE_SIGNER_REPORTS = 64
 
 /** Every OpenOracle settlement plan uses this explicit transaction gas limit. */
 export const OPEN_ORACLE_SETTLEMENT_STEP_GAS_LIMIT = 12_000_000n
-
-function sameAddress(left: Address, right: Address) {
-	return left.toLowerCase() === right.toLowerCase()
-}
 
 function maximumTrustedCallbackGasLimit(maximumSettlementStepGasLimit: bigint) {
 	if (maximumSettlementStepGasLimit <= 0n) throw new Error('OpenOracle settlement step gas limit must be positive')

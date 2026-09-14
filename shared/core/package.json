@@ -32,6 +32,21 @@
 			"types": "./ts/serialization/sortStringArrayByKeccak.ts",
 			"bun": "./ts/serialization/sortStringArrayByKeccak.ts",
 			"default": "./js/serialization/sortStringArrayByKeccak.js"
+		},
+		"./errors/errorChain": {
+			"types": "./ts/errors/errorChain.ts",
+			"bun": "./ts/errors/errorChain.ts",
+			"default": "./js/errors/errorChain.js"
+		},
+		"./math/bigint": {
+			"types": "./ts/math/bigint.ts",
+			"bun": "./ts/math/bigint.ts",
+			"default": "./js/math/bigint.js"
+		},
+		"./evm/address": {
+			"types": "./ts/evm/address.ts",
+			"bun": "./ts/evm/address.ts",
+			"default": "./js/evm/address.js"
 		}
 	},
 	"files": [

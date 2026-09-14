@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
+import { repositoryRoot } from './root.mts'
 import { productionSourceLineLimit, sourceSizeAllowances, type SourceSizeAllowance } from './source-size-policy.ts'
 
 const productionRoots = /^(?:augurScan\/(?:src|public|browser|scripts)|bots\/[^/]+\/(?:src|scripts|contracts)|shared\/[^/]+\/ts|solidity\/(?:contracts|ts)|ui\/[^/]+\/(?:ts|build|scripts)|tooling|docs\/(?:charts|runtime))\//
@@ -62,7 +63,6 @@ function trackedSources(repositoryRoot: string): Map<string, string> {
 }
 
 if (import.meta.main) {
-	const repositoryRoot = path.resolve(import.meta.dir, '../..')
 	const findings = inspectSourceSizes(trackedSources(repositoryRoot))
 	if (findings.length === 0) {
 		console.log(`Production source-size guard passed (${productionSourceLineLimit.toString()} line limit).`)

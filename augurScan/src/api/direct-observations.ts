@@ -1,5 +1,5 @@
 import type { SQL } from 'bun'
-import { decodeOpaqueCursor, encodeOpaqueCursor, isJsonArray } from '../cursor-codec.ts'
+import { encodeOpaqueCursor, parseCursor } from '../cursor-codec.ts'
 import type { JsonValue } from '../ethereum.ts'
 import { directObservationMaxima, directObservationRows } from '../repositories/direct-observations.ts'
 import { snapshotBoundary } from './entity-details.ts'
@@ -37,31 +37,31 @@ type DirectObservationCursor = readonly [
 
 const parseDirectObservationCursor = (value: string | null, chainId: number): DirectObservationCursor | undefined => {
 	if (value === null) return undefined
-	try {
-		const decoded = decodeOpaqueCursor(value)
-		const parts = isJsonArray(decoded) ? decoded : []
-		if (
-			parts.length !== 14 ||
-			parts[0] !== 1 ||
-			parts[1] !== chainId ||
-			parts[2] !== 'direct-observations' ||
-			typeof parts[3] !== 'string' ||
-			!isPostgresBigint(parts[4]) ||
-			typeof parts[5] !== 'string' ||
-			!/^0x[0-9a-f]{64}$/.test(parts[5]) ||
-			!isPostgresBigint(parts[6]) ||
-			!parts.slice(7, 10).every(part => typeof part === 'string') ||
-			!isNonNegativeSafeInteger(parts[10]) ||
-			typeof parts[11] !== 'string' ||
-			!isCursorTimestamp(parts[11]) ||
-			(parts[12] !== 'address-balance' && parts[12] !== 'token-metadata') ||
-			!isPostgresBigint(parts[13])
-		)
-			throw new Error('shape')
-		return [1, chainId, 'direct-observations', String(parts[3]), String(parts[4]), String(parts[5]), String(parts[6]), String(parts[7]), String(parts[8]), String(parts[9]), Number(parts[10]), String(parts[11]), parts[12], String(parts[13])]
-	} catch (error) {
-		throw new ApiRequestError('cursor is invalid', { cause: error })
-	}
+	return parseCursor(
+		value,
+		parts => {
+			if (
+				parts.length !== 14 ||
+				parts[0] !== 1 ||
+				parts[1] !== chainId ||
+				parts[2] !== 'direct-observations' ||
+				typeof parts[3] !== 'string' ||
+				!isPostgresBigint(parts[4]) ||
+				typeof parts[5] !== 'string' ||
+				!/^0x[0-9a-f]{64}$/.test(parts[5]) ||
+				!isPostgresBigint(parts[6]) ||
+				!parts.slice(7, 10).every(part => typeof part === 'string') ||
+				!isNonNegativeSafeInteger(parts[10]) ||
+				typeof parts[11] !== 'string' ||
+				!isCursorTimestamp(parts[11]) ||
+				(parts[12] !== 'address-balance' && parts[12] !== 'token-metadata') ||
+				!isPostgresBigint(parts[13])
+			)
+				throw new Error('shape')
+			return [1, chainId, 'direct-observations', String(parts[3]), String(parts[4]), String(parts[5]), String(parts[6]), String(parts[7]), String(parts[8]), String(parts[9]), Number(parts[10]), String(parts[11]), parts[12], String(parts[13])]
+		},
+		error => new ApiRequestError('cursor is invalid', { cause: error }),
+	)
 }
 
 const directObservationCursorFor = (chainId: number, snapshot: DirectObservationSnapshot, asOf: Record<string, unknown>, offset: number, row: Record<string, unknown>): string => {

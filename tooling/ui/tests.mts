@@ -1,6 +1,7 @@
-import * as path from 'path'
 import { promises as fs } from 'fs'
 import * as process from 'node:process'
+import * as path from 'path'
+import { walkFiles } from '../repo/walk.mts'
 import { getUiAppPaths, getUiCoreSharedPaths, isUiAppId, parseUiAppId, type UiAppId } from './appPaths.mts'
 
 export type TestBuildTarget = UiAppId | 'coreShared'
@@ -25,17 +26,8 @@ export function getTestBuildRoots(target: TestBuildTarget) {
 	return { testSourceRoot: path.join(appSourceRoot, 'tests'), testOutputRoot: path.join(appGeneratedJsRoot, 'tests') }
 }
 
-async function getAllFiles(dirPath: string, fileList: string[] = []) {
-	const entries = await fs.readdir(dirPath, { withFileTypes: true })
-	for (const entry of entries) {
-		const entryPath = path.join(dirPath, entry.name)
-		if (entry.isDirectory()) {
-			await getAllFiles(entryPath, fileList)
-		} else {
-			fileList.push(entryPath)
-		}
-	}
-	return fileList
+async function getAllFiles(dirPath: string) {
+	return await walkFiles(dirPath, { includeNonFiles: true })
 }
 
 export async function buildTests(target: TestBuildTarget, outputRootOverride?: string) {
