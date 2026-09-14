@@ -2022,7 +2022,7 @@ button.wallet-asset-action-pending:disabled {
 	min-height: 4rem;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 37.5rem) {
 	.migration-amount-hint {
 		min-block-size: 2.9em;
 	}
@@ -2074,13 +2074,13 @@ button.wallet-asset-action-pending:disabled {
 	text-transform: uppercase;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 56.25rem) {
 	.migration-outcome-metrics {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 }
 
-@media (max-width: 520px) {
+@media (max-width: 32.5rem) {
 	.migration-outcome-metrics {
 		grid-template-columns: minmax(0, 1fr);
 	}

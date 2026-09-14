@@ -1,6 +1,4 @@
-import { afterEach, beforeEach, mock, setDefaultTimeout } from 'bun:test'
-
-setDefaultTimeout(300000)
+import { afterEach, beforeEach, mock } from 'bun:test'
 
 beforeEach(() => {
 	mock.restore()

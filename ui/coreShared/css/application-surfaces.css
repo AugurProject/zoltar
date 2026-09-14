@@ -1161,7 +1161,7 @@
 	padding-top: 0.35rem;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 56.25rem) {
 	.metric-tile-grid[data-columns="4"] {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
@@ -1186,7 +1186,7 @@
 	}
 }
 
-@media (max-width: 640px) {
+@media (max-width: 40rem) {
 	.vault-action-launcher-grid {
 		grid-template-columns: minmax(0, 1fr);
 	}

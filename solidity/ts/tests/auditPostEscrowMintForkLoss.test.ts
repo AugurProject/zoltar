@@ -1,3 +1,15 @@
+import { manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
+import { getEthRaiseCapAttoEth, participateAuction } from '../testSupport/simulator/utils/contracts/statoblast'
+import { getChildUniverseId } from '../testSupport/simulator/utils/utilities'
+import { finalizeTruthAuction, migrateVault, startTruthAuction } from '../testSupport/simulator/utils/contracts/securityPoolForker'
+import { createWriteClient } from '../testSupport/simulator/utils/clients'
+import { createCompleteSet, depositToEscalationGame, getSystemState } from '../testSupport/simulator/utils/contracts/securityPool'
+import { SystemState } from '../testSupport/simulator/types/statoblastTypes'
+import { QuestionOutcome } from '../testSupport/simulator/types/types'
+import { DAY, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
+import { strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
+import assert from '../testSupport/simulator/utils/assert'
 import { beforeEach, describe, test } from 'bun:test'
 import { getSettlementCollateralAttoEth, getTotalPoolHeldAttoRep, getTotalRepBackingUnits } from '../testSupport/simulator/utils/contracts/securityPool'
 import { getSecurityPoolForkerForkData } from '../testSupport/simulator/utils/contracts/securityPoolForker'
@@ -6,34 +18,8 @@ import { useStatoblastForkMigrationFixture, type StatoblastForkMigrationFixture 
 
 describe('Audit regression: post-escrow complete-set mint fork loss', () => {
 	const fixture = useStatoblastForkMigrationFixture()
-	const assert: StatoblastForkMigrationFixture['assert'] = fixture.assert
-	const strictEqualTypeSafe: StatoblastForkMigrationFixture['strictEqualTypeSafe'] = fixture.strictEqualTypeSafe
 
-	const {
-		DAY,
-		PRICE_PRECISION,
-		QuestionOutcome,
-		SystemState,
-		TEST_ADDRESSES,
-		createCompleteSet,
-		createWriteClient,
-		depositToEscalationGame,
-		formatStorageSlot,
-		finalizeTruthAuction,
-		genesisUniverse,
-		getChildUniverseId,
-		getEthRaiseCapAttoEth,
-		getMappingStorageSlot,
-		getSecurityPoolAddresses,
-		getSystemState,
-		manipulatePriceOracle,
-		migrateVault,
-		participateAuction,
-		repDeposit,
-		startTruthAuction,
-		statoblastSecurityMultiplierBps,
-		triggerExternalForkForSecurityPool,
-	} = fixture
+	const { PRICE_PRECISION, formatStorageSlot, genesisUniverse, getMappingStorageSlot, repDeposit, statoblastSecurityMultiplierBps, triggerExternalForkForSecurityPool } = fixture
 
 	let client: StatoblastForkMigrationFixture['client']
 	let mockWindow: StatoblastForkMigrationFixture['mockWindow']

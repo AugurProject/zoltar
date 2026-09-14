@@ -1,3 +1,15 @@
+import { SystemState } from '../../testSupport/simulator/types/statoblastTypes'
+import { QuestionOutcome } from '../../testSupport/simulator/types/types'
+import { participateAuction } from '../../testSupport/simulator/utils/contracts/statoblast'
+import { getSystemState } from '../../testSupport/simulator/utils/contracts/securityPool'
+import { getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
+import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
+import { getChildUniverseId, getETHBalance } from '../../testSupport/simulator/utils/utilities'
+import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
+import { createWriteClient } from '../../testSupport/simulator/utils/clients'
+import { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, getSecurityPoolForkerForkData, initiateSecurityPoolFork, startTruthAuction } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
+import { addressString } from '../../testSupport/simulator/utils/bigint'
+import assert from '../../testSupport/simulator/utils/assert'
 import { beforeEach, describe, test } from 'bun:test'
 import { encodeDeployData } from '@zoltar/core-shared/evm/ethereum'
 import { useStatoblastTruthAuctionFixture, type StatoblastTruthAuctionFixture } from './fixture'
@@ -12,32 +24,7 @@ import {
 describe('Audit PoC: truth-auction aliasing across unauthenticated lineages', () => {
 	const fixture = useStatoblastTruthAuctionFixture()
 
-	const assert: StatoblastTruthAuctionFixture['assert'] = fixture.assert
-
-	const {
-		addressString,
-		claimAuctionProceeds,
-		createChildUniverse,
-		createWriteClient,
-		DAY,
-		finalizeTruthAuction,
-		GENESIS_REPUTATION_TOKEN,
-		getChildUniverseId,
-		getETHBalance,
-		getInfraContractAddresses,
-		getRepTokenAddress,
-		getSecurityPoolForkerForkData,
-		getSystemState,
-		initiateSecurityPoolFork,
-		participateAuction,
-		QuestionOutcome,
-		statoblastSecurityMultiplierBps,
-		setupStartedTruthAuction,
-		startTruthAuction,
-		SystemState,
-		TEST_ADDRESSES,
-		genesisUniverse,
-	} = fixture
+	const { statoblastSecurityMultiplierBps, setupStartedTruthAuction, genesisUniverse } = fixture
 
 	let client: StatoblastTruthAuctionFixture['client']
 	let mockWindow: StatoblastTruthAuctionFixture['mockWindow']

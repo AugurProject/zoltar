@@ -34,7 +34,6 @@ const hasArg = (name: string) => passthroughArgs.some(arg => arg === name || arg
 const args = ['test', '--preload', './bun-test-setup-ui.ts']
 
 if (!hasArg('--parallel')) args.push(`--parallel=${defaultParallelism}`)
-if (!hasArg('--timeout')) args.push('--timeout', '300000')
 
 args.push(...passthroughArgs)
 if (!hasExplicitTestPath(passthroughArgs)) args.push(...(await discoverTestFiles()).map(toBunTestPath))

@@ -1,6 +1,6 @@
 /// <reference types="bun-types" />
 
-import { beforeAll, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { getAddress, maxUint256, zeroAddress, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { createOpenOracleReportInstance, loadOpenOracleWithdrawableBalances, loadOpenOracleReportDetails, loadOpenOracleReportSummaries, settleOracleReport, withdrawOpenOracleBalance, wrapWeth as wrapUiWeth } from '@zoltar/ui-statoblast-shared/protocol/openOracle.js'
 import { executeOracleManagerStagedOperation, loadCoordinatorInitialReportFundingRequirement, loadOracleManagerDetails, queueOracleManagerOperation, queueSecurityPoolLiquidation, requestOraclePrice } from '@zoltar/ui-statoblast-shared/protocol/oracleCoordinator.js'
@@ -37,14 +37,12 @@ import { DAY, GENESIS_REPUTATION_TOKEN, WETH_ADDRESS, TEST_ADDRESSES } from '../
 import { addressString } from '../../../../../../solidity/ts/testSupport/simulator/utils/bigint.js'
 import { setupTestAccounts, ensureProxyDeployerDeployed } from '../../../../../../solidity/ts/testSupport/simulator/utils/utilities.js'
 import { AnvilWindowEthereum } from '../../../../../../solidity/ts/testSupport/simulator/AnvilWindowEthereum.js'
-import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../../../../../solidity/ts/testSupport/simulator/useIsolatedAnvilNode.js'
+import { useIsolatedAnvilNode } from '../../../../../../solidity/ts/testSupport/simulator/useIsolatedAnvilNode.js'
 import { createWriteClient, type WriteClient } from '../../../../../../solidity/ts/testSupport/simulator/utils/clients.js'
 import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast.js'
 import { ensureZoltarDeployed } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar.js'
 import { createQuestion, getQuestionId } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltarQuestionData.js'
 import { getOpenOracleExtraData, getRequestPriceCostAttoEth, requestPriceWithValue } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/statoblast.js'
-
-setDefaultTimeout(TEST_TIMEOUT_MS)
 
 function installInjectedEthereum(mockWindow: AnvilWindowEthereum, accountAddress: Address = addressString(TEST_ADDRESSES[0])) {
 	const globalWindow = globalThis as typeof globalThis & { window?: Window }

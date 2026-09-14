@@ -40,7 +40,8 @@
 		"./monitoring/market-consensus": "./src/monitoring/market-consensus.ts",
 		"./monitoring/read-quorum": "./src/monitoring/read-quorum.ts",
 		"./monitoring/rpc-quorum-policy": "./src/monitoring/rpc-quorum-policy.ts",
-		"./monitoring/resilience": "./src/monitoring/resilience.ts"
+		"./monitoring/resilience": "./src/monitoring/resilience.ts",
+		"./monitoring/centralized-exchange-factory": "./src/monitoring/centralized-exchange-factory.ts"
 	},
 	"scripts": {
 		"check": "bun run typecheck && bun run lint && bun run check:generated && bun run test && bun run format:check",
@@ -50,11 +51,10 @@
 		"format": "bun x @biomejs/biome format --write biome.json package.json tsconfig.json src tests",
 		"format:check": "bun x @biomejs/biome format biome.json package.json tsconfig.json src tests",
 		"lint": "bun x @biomejs/biome lint package.json tsconfig.json src tests && bun ../../tooling/repo/lint-no-restricted-import-types.mts .",
-		"test": "bun run ensure-contract-artifacts && bun test ./tests",
+		"test": "bun run ensure-contract-artifacts && bun ../../tooling/testing/bun-test.mts ./tests",
 		"typecheck": "bun run ensure-contract-artifacts && bun x tsc --project tsconfig.json --noEmit"
 	},
 	"dependencies": {
-		"ccxt": "4.5.70",
 		"@zoltar/core-shared": "file:../../shared/core"
 	},
 	"overrides": {

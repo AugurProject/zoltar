@@ -1,3 +1,19 @@
+import { statoblast_EscalationGame_EscalationGame } from '../types/contractArtifact'
+import { depositRepToVault, depositToEscalationGame, getSecurityPoolsEscalationGame, getSecurityVault, getSystemState, backingUnitsToAttoRep } from '../testSupport/simulator/utils/contracts/securityPool'
+import { forkUniverse, getRepTokenAddress, getZoltarAddress, getZoltarForkThreshold, getTotalTheoreticalSupply } from '../testSupport/simulator/utils/contracts/zoltar'
+import { createChildUniverse, initiateSecurityPoolFork, startTruthAuction } from '../testSupport/simulator/utils/contracts/securityPoolForker'
+import { SystemState } from '../testSupport/simulator/types/statoblastTypes'
+import { QuestionOutcome } from '../testSupport/simulator/types/types'
+import { getQuestionEndDate } from '../testSupport/simulator/utils/contracts/statoblast'
+import { createQuestion, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
+import { approveAndDepositRepToVault, manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { addressString } from '../testSupport/simulator/utils/bigint'
+import { approveToken, getChildUniverseId, getERC20Balance } from '../testSupport/simulator/utils/utilities'
+import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
+import { createWriteClient } from '../testSupport/simulator/utils/clients'
+import { strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
+import assert from '../testSupport/simulator/utils/assert'
 import { beforeEach, describe, test } from 'bun:test'
 import { decodeEventLog } from '@zoltar/core-shared/evm/ethereum'
 import { createCarryProof, SparseNullifierTree } from './carryProofHelpers'
@@ -8,44 +24,7 @@ import { statoblast_SecurityPool_SecurityPool } from '../types/contractArtifact'
 
 describe('Fork-continuation residual settlement regression', () => {
 	const fixture = useStatoblastEscalationMigrationFixture()
-	const {
-		assert,
-		strictEqualTypeSafe,
-		createWriteClient,
-		DAY,
-		GENESIS_REPUTATION_TOKEN,
-		TEST_ADDRESSES,
-		approveToken,
-		getChildUniverseId,
-		getERC20Balance,
-		addressString,
-		approveAndDepositRepToVault,
-		getSecurityPoolAddresses,
-		createQuestion,
-		getQuestionId,
-		getQuestionEndDate,
-		QuestionOutcome,
-		SystemState,
-		createChildUniverse,
-		initiateSecurityPoolFork,
-		startTruthAuction,
-		forkUniverse,
-		getRepTokenAddress,
-		getZoltarAddress,
-		getZoltarForkThreshold,
-		depositRepToVault,
-		depositToEscalationGame,
-		getSecurityPoolsEscalationGame,
-		getSecurityVault,
-		getSystemState,
-		getTotalTheoreticalSupply,
-		manipulatePriceOracle,
-		backingUnitsToAttoRep,
-		statoblast_EscalationGame_EscalationGame,
-		genesisUniverse,
-		statoblastSecurityMultiplierBps,
-		outcomes,
-	} = fixture
+	const { genesisUniverse, statoblastSecurityMultiplierBps, outcomes } = fixture
 
 	let mockWindow: StatoblastEscalationMigrationFixture['mockWindow']
 	let client: StatoblastEscalationMigrationFixture['client']

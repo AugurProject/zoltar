@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { getChangedFiles } from './changed-files.mts'
+import { getChangedFileEntries } from './changed-files.mts'
+import { runStaticChecks } from './static-checks.mts'
 
 function runCommand(command: string, args: string[]) {
 	return execFileSync(command, args, { encoding: 'utf8', stdio: 'inherit' })
@@ -20,7 +21,7 @@ export function getBiomeChangedFiles(changedFiles: string[]) {
 if (import.meta.main) {
 	let changedFiles: string[]
 	try {
-		changedFiles = getChangedFiles()
+		changedFiles = getChangedFileEntries().flatMap(entry => (entry.previousPath === undefined ? [entry.path] : [entry.path, entry.previousPath]))
 	} catch (error) {
 		console.error('check-changed: unable to compute changed files against origin/main. Fetch origin/main and retry.')
 		throw error
@@ -35,8 +36,6 @@ if (import.meta.main) {
 
 	if (biomeChangedFiles.length === 0) {
 		console.log('check-changed: no Biome file types among the changed files')
-		process.exit(0)
-	}
-
-	runCommand('bunx', ['@biomejs/biome', 'check', '--no-errors-on-unmatched', ...biomeChangedFiles])
+	} else runCommand('bunx', ['@biomejs/biome', 'check', '--no-errors-on-unmatched', ...biomeChangedFiles])
+	runStaticChecks(changedFiles)
 }

@@ -58,8 +58,8 @@ describe('canonical test discovery', () => {
 		const smokeCommand = packageManifest['scripts']['test:browser:smoke']
 		if (typeof smokeCommand !== 'string') throw new Error('package.json must define test:browser:smoke')
 
-		const smokeTestCommands = smokeCommand.split(' && ').filter(command => command.startsWith('bun test '))
-		expect(smokeTestCommands).toEqual(['bun test --preload ./bun-test-setup-ui.ts --timeout 300000 tooling/ui/browserSmoke.test.ts', 'bun test --preload ./bun-test-setup-ui.ts --timeout 300000 tooling/ui/productionBuild.test.ts'])
+		const smokeTestCommands = smokeCommand.split(' && ').filter(command => command.startsWith('bun ./tooling/testing/bun-test.mts '))
+		expect(smokeTestCommands).toEqual(['bun ./tooling/testing/bun-test.mts --preload ./bun-test-setup-ui.ts tooling/ui/browserSmoke.test.ts', 'bun ./tooling/testing/bun-test.mts --preload ./bun-test-setup-ui.ts tooling/ui/productionBuild.test.ts'])
 		expect(smokeTestCommands.map(command => command.split(' ').at(-1)).sort()).toEqual([...EXPLICIT_TEST_TIER_FILES].sort())
 	})
 
@@ -109,7 +109,7 @@ describe('canonical test discovery', () => {
 				'ui/zoltar/bun.lock',
 			]),
 		)
-		expect(getTimingContextPaths('solidity')).toEqual(expect.arrayContaining(['bun-test-setup.ts', 'bun-test-setup-solidity.ts', 'bunfig.toml', 'shared/core/bun.lock', 'shared/zoltar/bun.lock', 'shared/openOracle/bun.lock', 'shared/statoblast/bun.lock', 'shared/trading/bun.lock', 'solidity/bun.lock']))
+		expect(getTimingContextPaths('solidity')).toEqual(expect.arrayContaining(['bun-test-setup.ts', 'tooling/testing/run-bun-test-process.mts', 'bunfig.toml', 'shared/core/bun.lock', 'shared/zoltar/bun.lock', 'shared/openOracle/bun.lock', 'shared/statoblast/bun.lock', 'shared/trading/bun.lock', 'solidity/bun.lock']))
 	})
 
 	test('bytecode coverage dynamically shards the complete Solidity source set', async () => {
@@ -159,7 +159,7 @@ describe('canonical test discovery', () => {
 		expect(hasExplicitTestPath(['--parallel=2', 'scripts/test-discovery.test.ts'])).toBe(true)
 		expect(hasExplicitTestPath(['--changed', 'scripts/test-discovery.test.ts'])).toBe(true)
 		expect(hasExplicitTestPath(['--changed=main'])).toBe(false)
-		expect(hasExplicitTestPath(['--timeout', '300000', 'scripts/test-discovery.test.ts'])).toBe(true)
+		expect(hasExplicitTestPath(['scripts/test-discovery.test.ts'])).toBe(true)
 	})
 
 	test('balanced shards reject arguments that can alter their manifest evidence', () => {

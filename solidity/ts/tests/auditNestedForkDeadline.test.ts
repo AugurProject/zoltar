@@ -1,3 +1,15 @@
+import { SystemState } from '../testSupport/simulator/types/statoblastTypes'
+import { QuestionOutcome } from '../testSupport/simulator/types/types'
+import { getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
+import { forkUniverse, getRepTokenAddress, getZoltarAddress, getZoltarForkThreshold } from '../testSupport/simulator/utils/contracts/zoltar'
+import { createWriteClient } from '../testSupport/simulator/utils/clients'
+import { createCompleteSet, getSettlementCollateralAttoEth, getSystemState } from '../testSupport/simulator/utils/contracts/securityPool'
+import { createChildUniverse, finalizeTruthAuction, getSecurityPoolForkerForkData, initiateSecurityPoolFork, migrateVault, startTruthAuction } from '../testSupport/simulator/utils/contracts/securityPoolForker'
+import { balanceOfShares, migrateShares, OperationType } from '../testSupport/simulator/utils/contracts/statoblast'
+import { approveAndDepositRepToVault, manipulatePriceOracleAndPerformOperation } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { approveToken, getChildUniverseId, getETHBalance } from '../testSupport/simulator/utils/utilities'
+import { DAY, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
+import assert from '../testSupport/simulator/utils/assert'
 import { beforeEach, describe, test } from 'bun:test'
 import { addRepToMigrationBalance, deployChild, getUniverseData, splitMigrationRep } from '../testSupport/simulator/utils/contracts/zoltar'
 import { useStatoblastForkMigrationFixture, type StatoblastForkMigrationFixture } from './statoblast/fixture'
@@ -5,40 +17,8 @@ import { getForkActivationTime } from '../testSupport/simulator/utils/contracts/
 
 describe('Nested fork migration deadline', () => {
 	const fixture = useStatoblastForkMigrationFixture()
-	const assert: StatoblastForkMigrationFixture['assert'] = fixture.assert
-	const {
-		DAY,
-		approveToken,
-		approveAndDepositRepToVault,
-		balanceOfShares,
-		createChildUniverse,
-		createCompleteSet,
-		createWriteClient,
-		finalizeTruthAuction,
-		forkUniverse,
-		genesisUniverse,
-		getChildUniverseId,
-		getSettlementCollateralAttoEth,
-		getETHBalance,
-		getRepTokenAddress,
-		getSecurityPoolAddresses,
-		getSecurityPoolForkerForkData,
-		getSystemState,
-		getZoltarAddress,
-		getZoltarForkThreshold,
-		initiateSecurityPoolFork,
-		manipulatePriceOracleAndPerformOperation,
-		migrateShares,
-		migrateVault,
-		OperationType,
-		QuestionOutcome,
-		repDeposit,
-		statoblastSecurityMultiplierBps,
-		startTruthAuction,
-		SystemState,
-		TEST_ADDRESSES,
-		triggerExternalForkForSecurityPool,
-	} = fixture
+
+	const { genesisUniverse, repDeposit, statoblastSecurityMultiplierBps, triggerExternalForkForSecurityPool } = fixture
 
 	let mockWindow: StatoblastForkMigrationFixture['mockWindow']
 	let client: StatoblastForkMigrationFixture['client']

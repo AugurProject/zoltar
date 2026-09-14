@@ -1,8 +1,7 @@
 [test]
-root = "js/tests"
+root = "ts/tests"
 threads = 2
-timeout = 300000
-preload = ['../bun-test-setup-solidity.ts']
+preload = ['../bun-test-setup.ts']
 
 [install]
 # Runtime auto-install silently resolves bare imports from temp-directory

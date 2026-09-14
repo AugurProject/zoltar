@@ -1036,7 +1036,7 @@ summary {
 	}
 }
 
-@media (max-width: 900px) {
+@media (max-width: 56.25rem) {
 	details summary,
 	.market-row h2 a,
 	.security-pool-link {
@@ -1097,7 +1097,7 @@ summary {
 	}
 }
 
-@media (max-width: 520px) {
+@media (max-width: 32.5rem) {
 	.execution-settings__fields {
 		grid-template-columns: 1fr;
 	}
@@ -1331,7 +1331,7 @@ summary {
 	font-variant-numeric: tabular-nums;
 }
 
-@media (max-width: 520px) {
+@media (max-width: 32.5rem) {
 	:root[data-product="trading"] .market-row {
 		width: 100%;
 		min-width: 0;
@@ -1397,7 +1397,7 @@ summary {
 	max-width: 100%;
 }
 /* Trading's brand, deployment badge, wallet chip, and universe select only share one row from the desktop breakpoint. */
-@media (max-width: 1279px) {
+@media (max-width: 79.9375rem) {
 	.trading-overview .header-toolbar {
 		grid-template-columns: minmax(0, 1fr) auto;
 	}
@@ -1429,7 +1429,7 @@ summary {
 	}
 }
 /* Trading only collapses its simulation balances at 640px and below, so the toggle has nothing to reveal above that. */
-@media (min-width: 641px) {
+@media (min-width: 40.0625rem) {
 	.trading-wallet-summary .overview-details-toggle {
 		display: none;
 	}

@@ -8,7 +8,7 @@ import { createTestFingerprints, filterTestTimingHistory, getHistoricalTestWeigh
 
 const repositoryRoot = process.cwd()
 
-const SHARED_TIMING_CONTEXT_PATHS = ['bun-test-setup.ts', 'bunfig.toml'] as const
+const SHARED_TIMING_CONTEXT_PATHS = ['bun-test-setup.ts', 'bunfig.toml', 'tooling/testing/run-bun-test-process.mts'] as const
 const APPLICATION_TIMING_CONTEXT_PATHS = [
 	...SHARED_TIMING_CONTEXT_PATHS,
 	'bun-test-setup-ui.ts',
@@ -21,7 +21,7 @@ const APPLICATION_TIMING_CONTEXT_PATHS = [
 	'ui/trading/bun.lock',
 	'ui/zoltar/bun.lock',
 ] as const
-const SOLIDITY_TIMING_CONTEXT_PATHS = [...SHARED_TIMING_CONTEXT_PATHS, 'bun-test-setup-solidity.ts', 'bun.lock', ...sharedPackages.map(entry => `${entry.path}/bun.lock`), 'solidity/bun.lock'] as const
+const SOLIDITY_TIMING_CONTEXT_PATHS = [...SHARED_TIMING_CONTEXT_PATHS, 'bun.lock', ...sharedPackages.map(entry => `${entry.path}/bun.lock`), 'solidity/bun.lock'] as const
 
 export function getTimingContextPaths(domain: TestDomain) {
 	if (domain === 'application') return [...APPLICATION_TIMING_CONTEXT_PATHS]
@@ -158,9 +158,9 @@ if (import.meta.main) {
 	const reporterArguments = junitPath === undefined ? ['--reporter=dots'] : ['--reporter=junit', `--reporter-outfile=${junitPath}`]
 	if (junitPath !== undefined) await fs.mkdir(path.dirname(junitPath), { recursive: true })
 	const startedAt = performance.now()
-	const preloadPath = domain === 'solidity' ? './bun-test-setup-solidity.ts' : './bun-test-setup-ui.ts'
+	const preloadPath = domain === 'solidity' ? './bun-test-setup.ts' : './bun-test-setup-ui.ts'
 	const exitCode = await runBunTestProcess({
-		cmd: [process.execPath, 'test', '--preload', preloadPath, ...reporterArguments, '--timeout', '300000', ...passthroughArgs, ...selectedShard.files.map(toBunTestPath)],
+		cmd: [process.execPath, 'test', '--preload', preloadPath, ...reporterArguments, ...passthroughArgs, ...selectedShard.files.map(toBunTestPath)],
 	})
 	const elapsedSeconds = (performance.now() - startedAt) / 1000
 	if (exitCode === 0 && timingOutputPath !== undefined && junitPath !== undefined) {

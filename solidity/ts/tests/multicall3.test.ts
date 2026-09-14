@@ -1,14 +1,12 @@
-import { beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
+import { beforeEach, describe, test } from 'bun:test'
 import assert from '../testSupport/simulator/utils/assert'
 import { encodeDeployData, encodeFunctionData, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
-import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
+import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { statoblast_Multicall3_Multicall3 } from '../types/contractArtifact'
-
-setDefaultTimeout(TEST_TIMEOUT_MS)
 
 describe('Multicall3', () => {
 	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()

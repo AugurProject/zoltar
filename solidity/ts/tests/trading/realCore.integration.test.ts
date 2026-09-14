@@ -1,3 +1,11 @@
+import { getZoltarAddress, forkUniverse } from '../../testSupport/simulator/utils/contracts/zoltar'
+import { approveToken } from '../../testSupport/simulator/utils/utilities'
+import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
+import { OperationType } from '../../testSupport/simulator/utils/contracts/statoblast'
+import { manipulatePriceOracleAndPerformOperation } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { TEST_ADDRESSES, GENESIS_REPUTATION_TOKEN } from '../../testSupport/simulator/utils/constants'
+import { addressString } from '../../testSupport/simulator/utils/bigint'
+import { statoblast_tokens_ShareToken_ShareToken } from '../../types/contractArtifact'
 import { beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { encodeAbiParameters, encodeDeployData, type Abi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { useStatoblastVaultAccountingFixture } from '../statoblast/fixture'
@@ -49,7 +57,7 @@ describe('trading against authoritative Zoltar contracts', () => {
 	}
 
 	async function shareBalance(owner: Address, outcome: 0n | 1n | 2n) {
-		return await fixture.client.readContract({ abi: fixture.statoblast_tokens_ShareToken_ShareToken.abi, address: fixture.securityPoolAddresses.shareToken, functionName: 'balanceOf', args: [owner, outcome] })
+		return await fixture.client.readContract({ abi: statoblast_tokens_ShareToken_ShareToken.abi, address: fixture.securityPoolAddresses.shareToken, functionName: 'balanceOf', args: [owner, outcome] })
 	}
 
 	async function loadPoolAccounting() {
@@ -70,13 +78,13 @@ describe('trading against authoritative Zoltar contracts', () => {
 	})
 
 	beforeEach(async () => {
-		account = fixture.addressString(fixture.TEST_ADDRESSES[0])
-		await fixture.manipulatePriceOracleAndPerformOperation(fixture.client, fixture.mockWindow, fixture.securityPoolAddresses.priceOracleManagerAndOperatorQueuer, fixture.OperationType.PriceRefresh, fixture.client.account.address, fixture.repDeposit / 4n)
-		factory = await deploy(factoryArtifact, [fixture.getInfraContractAddresses().securityPoolFactory, 30n])
+		account = addressString(TEST_ADDRESSES[0])
+		await manipulatePriceOracleAndPerformOperation(fixture.client, fixture.mockWindow, fixture.securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, fixture.client.account.address, fixture.repDeposit / 4n)
+		factory = await deploy(factoryArtifact, [getInfraContractAddresses().securityPoolFactory, 30n])
 		router = await deploy(routerArtifact, [factory])
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: factoryArtifact.abi, address: factory, functionName: 'createPair', args: [fixture.securityPoolAddresses.securityPool] }))
 		pair = await fixture.client.readContract({ abi: factoryArtifact.abi, address: factory, functionName: 'getPair', args: [fixture.securityPoolAddresses.securityPool] })
-		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: fixture.statoblast_tokens_ShareToken_ShareToken.abi, address: fixture.securityPoolAddresses.shareToken, functionName: 'setApprovalForAll', args: [router, true] }))
+		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: statoblast_tokens_ShareToken_ShareToken.abi, address: fixture.securityPoolAddresses.shareToken, functionName: 'setApprovalForAll', args: [router, true] }))
 	})
 
 	test('uses the real dynamic complete-set scale and leaves no INVALID or router residue', async () => {
@@ -124,8 +132,8 @@ describe('trading against authoritative Zoltar contracts', () => {
 		const deadline = fixture.questionData.endTime - 1n
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, 5_000n, 1n, account, deadline], value: 1n }))
 		await fixture.mockWindow.setTime(fixture.questionData.endTime + 1n)
-		await fixture.approveToken(fixture.client, fixture.addressString(fixture.GENESIS_REPUTATION_TOKEN), fixture.getZoltarAddress())
-		await fixture.forkUniverse(fixture.client, fixture.genesisUniverse, fixture.questionId)
+		await approveToken(fixture.client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		await forkUniverse(fixture.client, fixture.genesisUniverse, fixture.questionId)
 		expect(await fixture.client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'tradingStatus' })).toBe(4n)
 		const liquidity = await fixture.client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'balanceOf', args: [account] })
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: pairArtifact.abi, address: pair, functionName: 'removeLiquidity', args: [liquidity, 1n, 1n, account, 10n ** 12n] }))
@@ -136,7 +144,7 @@ describe('trading against authoritative Zoltar contracts', () => {
 		expect(await fixture.client.readContract({ abi: pairArtifact.abi, address: pair, functionName: 'factory' })).toBe(factory)
 		const deadline = fixture.questionData.endTime - 1n
 		const shareTokenAddress = fixture.securityPoolAddresses.shareToken
-		const shareTokenAbi = fixture.statoblast_tokens_ShareToken_ShareToken.abi
+		const shareTokenAbi = statoblast_tokens_ShareToken_ShareToken.abi
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, 5_000n, 1n, account, deadline], value: 10n }))
 
 		const entry = await fixture.client.simulateContract({ abi: routerArtifact.abi, address: router, functionName: 'enterPosition', args: [pair, 1, 1n, account, deadline], value: 2n })

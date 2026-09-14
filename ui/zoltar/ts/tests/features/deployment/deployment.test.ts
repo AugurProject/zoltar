@@ -1,6 +1,6 @@
 /// <reference types="bun-types" />
 
-import { beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { beforeEach, describe, expect, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { findNextDeployableStep, getDeploymentSections, getDeploymentStepAvailability, getDeployNextMissingAvailability, getPrerequisiteLabel } from '@zoltar/ui-zoltar-shared/features/deployment/lib/deployment.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
@@ -10,7 +10,7 @@ import { getMulticall3Address } from '@zoltar/ui-zoltar-shared/protocol/zoltarDe
 import { loadZoltarUniverseSummary } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
 import type { DeploymentStatus, ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { AnvilWindowEthereum } from '../../../../../../solidity/ts/testSupport/simulator/AnvilWindowEthereum'
-import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../../../../../solidity/ts/testSupport/simulator/useIsolatedAnvilNode'
+import { useIsolatedAnvilNode } from '../../../../../../solidity/ts/testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, type WriteClient as SolidityWriteClient } from '../../../../../../solidity/ts/testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../../../../../../solidity/ts/testSupport/simulator/utils/constants'
 import { ensureProxyDeployerDeployed, setupTestAccounts } from '../../../../../../solidity/ts/testSupport/simulator/utils/utilities'
@@ -28,8 +28,6 @@ function installInjectedEthereum(mockWindow: AnvilWindowEthereum) {
 	if (globalWindow.window === undefined) globalWindow.window = globalThis as Window & typeof globalThis
 	globalWindow.window.ethereum = mockWindow as InjectedEthereum
 }
-
-setDefaultTimeout(TEST_TIMEOUT_MS)
 
 function createStep(id: DeploymentStatus['id'], deployed: boolean, dependencies: DeploymentStatus['id'][] = []) {
 	return {

@@ -923,7 +923,7 @@
 	overflow-wrap: anywhere;
 }
 
-@media (max-width: 800px) {
+@media (max-width: 50rem) {
 	main {
 		padding: 1rem 0.85rem 3rem;
 	}
@@ -1255,7 +1255,7 @@
 	}
 }
 
-@media (max-width: 640px) {
+@media (max-width: 40rem) {
 	main {
 		padding: 0.75rem 0.65rem 2.5rem;
 	}
@@ -1357,7 +1357,7 @@
 		flex: 1 1 12rem;
 		gap: var(--space-1);
 		min-width: 0;
-		color: var(--text-subtle);
+		color: var(--text-muted);
 		font-size: var(--font-caption);
 	}
 
@@ -1550,7 +1550,7 @@
 }
 
 /* Until both groups fit on one row, the balance and price groups take one row each, sized to their content with a shared caption column. */
-@media (min-width: 801px) and (max-width: 75rem) {
+@media (min-width: 50.0625rem) and (max-width: 75rem) {
 	.overview-metric-group,
 	.overview-metric-group.is-secondary {
 		flex: 0 1 100%;
@@ -1612,7 +1612,7 @@
 	}
 }
 
-@media (max-width: 359px) {
+@media (max-width: 22.4375rem) {
 	.overview-metric-group-items,
 	.overview-metric-group.is-secondary .overview-metric-group-items {
 		grid-template-columns: minmax(0, 1fr);

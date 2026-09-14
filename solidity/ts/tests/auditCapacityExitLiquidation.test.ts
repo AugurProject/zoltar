@@ -1,3 +1,11 @@
+import { OperationType, requestPriceIfNeededAndStageOperation } from '../testSupport/simulator/utils/contracts/statoblast'
+import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
+import { depositRepToVault } from '../testSupport/simulator/utils/contracts/securityPool'
+import { decodeEventLog } from '@zoltar/core-shared/evm/ethereum'
+import { createWriteClient } from '../testSupport/simulator/utils/clients'
+import { approveToken, getERC20Balance } from '../testSupport/simulator/utils/utilities'
+import { addressString } from '../testSupport/simulator/utils/bigint'
+import assert from '../testSupport/simulator/utils/assert'
 import { describe, test } from 'bun:test'
 import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_SecurityPool_SecurityPool } from '../types/contractArtifact'
 import { createCompleteSet, getSecurityVault, getSettlementCollateralAttoEth, getShareTokenSupplyAttoShares, redeemCompleteSet } from '../testSupport/simulator/utils/contracts/securityPool'
@@ -8,7 +16,7 @@ const MAX_UINT256 = 2n ** 256n - 1n
 
 describe('Audit PoC: capacity-exit liquidation', () => {
 	const fixture = useStatoblastVaultAccountingFixture()
-	const { addressString, approveToken, assert, createWriteClient, decodeEventLog, depositRepToVault, GENESIS_REPUTATION_TOKEN, getERC20Balance, getVaultRepClaim, OperationType, repDeposit, requestPriceIfNeededAndStageOperation, statoblastSecurityMultiplierBps, TEST_ADDRESSES, transferRepToAddress } = fixture
+	const { getVaultRepClaim, repDeposit, statoblastSecurityMultiplierBps, transferRepToAddress } = fixture
 
 	test('a capacity provider cannot exit while doing so would reassign live open interest to another vault', async () => {
 		const { client, mockWindow, securityPoolAddresses } = fixture

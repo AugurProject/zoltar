@@ -1,3 +1,37 @@
+import { statoblast_EscalationGame_EscalationGame, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_tokens_ShareToken_ShareToken } from '../../types/contractArtifact'
+import {
+	depositRepToVault,
+	depositToEscalationGame,
+	getTotalRepBackingUnits,
+	getRepToken,
+	getTotalPoolHeldAttoRep,
+	getVaultCount,
+	getVaults,
+	getSecurityPoolsEscalationGame,
+	getSecurityVault,
+	backingUnitsToAttoRep,
+	redeemFees,
+	redeemRepFromVault,
+	updateVaultFees,
+	withdrawFromEscalationGame,
+} from '../../testSupport/simulator/utils/contracts/securityPool'
+import { isIgnorableLogDecodeError } from '../logDecodeErrors'
+import { forkUniverse, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
+import { getEscalationGameDeposits, getNonDecisionThresholdAttoRep, getQuestionResolution, getStartBond } from '../../testSupport/simulator/utils/contracts/escalationGame'
+import { getQuestionOutcome } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
+import { QuestionOutcome } from '../../testSupport/simulator/types/types'
+import { getLastPrice, getQuestionEndDate, OperationType, requestPriceIfNeededAndStageOperation } from '../../testSupport/simulator/utils/contracts/statoblast'
+import { createQuestion, getQuestionId } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { deployOriginSecurityPool, ensureDeploymentStatusOracleDeployed, getDeploymentStatusOracleAddress, getDeploymentStepAddresses, getInfraContractAddresses, getSecurityPoolAddresses, loadDeploymentStatusOracleMask } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
+import { approveAndDepositRepToVault, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { addressString } from '../../testSupport/simulator/utils/bigint'
+import { approveToken, getERC20Balance, ensureProxyDeployerDeployed, setupTestAccounts } from '../../testSupport/simulator/utils/utilities'
+import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
+import { createWriteClient } from '../../testSupport/simulator/utils/clients'
+import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/zoltar-shared/constants'
+import { decodeEventLog } from '@zoltar/core-shared/evm/ethereum'
+import { approximatelyEqual, strictEqualTypeSafe, ensureDefined } from '../../testSupport/simulator/utils/testUtils'
+import assert from '../../testSupport/simulator/utils/assert'
 import { beforeEach, describe, test } from 'bun:test'
 import { statoblast_interfaces_ISecurityPool_ISecurityPool, statoblast_SecurityPool_SecurityPool, statoblast_SecurityPoolForker_SecurityPoolForker, statoblast_SecurityPoolUtils_SecurityPoolUtils, ReputationToken_ReputationToken } from '../../types/contractArtifact'
 import { createCompleteSet } from '../../testSupport/simulator/utils/contracts/securityPool'
@@ -29,79 +63,8 @@ const MAX_UINT256 = 2n ** 256n - 1n
 
 describe('Statoblast: vault accounting', () => {
 	const fixture = useStatoblastVaultAccountingFixture()
-	const assert: StatoblastVaultAccountingFixture['assert'] = fixture.assert
-	const approximatelyEqual: StatoblastVaultAccountingFixture['approximatelyEqual'] = fixture.approximatelyEqual
-	const strictEqualTypeSafe: StatoblastVaultAccountingFixture['strictEqualTypeSafe'] = fixture.strictEqualTypeSafe
-	const {
-		decodeEventLog,
-		REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT,
-		createWriteClient,
-		DAY,
-		GENESIS_REPUTATION_TOKEN,
-		TEST_ADDRESSES,
-		approveToken,
-		getERC20Balance,
-		ensureProxyDeployerDeployed,
-		setupTestAccounts,
-		addressString,
-		approveAndDepositRepToVault,
-		manipulatePriceOracle,
-		manipulatePriceOracleAndPerformOperation,
-		deployOriginSecurityPool,
-		ensureDeploymentStatusOracleDeployed,
-		getAnvilWindowEthereum,
-		setBaselineSnapshot,
-		initializeStatoblastBaseline,
-		getDeploymentStatusOracleAddress,
-		getDeploymentStepAddresses,
-		getInfraContractAddresses,
-		getSecurityPoolAddresses,
-		loadDeploymentStatusOracleMask,
-		createQuestion,
-		getQuestionId,
-		getLastPrice,
-		getQuestionEndDate,
-		OperationType,
-		requestPriceIfNeededAndStageOperation,
-		QuestionOutcome,
-		ensureDefined,
-		getQuestionOutcome,
-		getEscalationGameDeposits,
-		getNonDecisionThresholdAttoRep,
-		getQuestionResolution,
-		getStartBond,
-		forkUniverse,
-		getZoltarAddress,
-		isIgnorableLogDecodeError,
-		depositRepToVault,
-		depositToEscalationGame,
-		getTotalRepBackingUnits,
-		getRepToken,
-		getTotalPoolHeldAttoRep,
-		getVaultCount,
-		getVaults,
-		getSecurityPoolsEscalationGame,
-		getSecurityVault,
-		backingUnitsToAttoRep,
-		redeemFees,
-		redeemRepFromVault,
-		updateVaultFees,
-		withdrawFromEscalationGame,
-		statoblast_EscalationGame_EscalationGame,
-		statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
-		statoblast_tokens_ShareToken_ShareToken,
-		formatStorageSlot,
-		reportBond,
-		repDeposit,
-		genesisUniverse,
-		statoblastSecurityMultiplierBps,
-		reportedRepEthPrice,
-		MAX_RETENTION_RATE,
-		outcomes,
-		transferRepToAddress,
-		getVaultRepClaim,
-		finalizeQuestionAsYesWithoutFork,
-	} = fixture
+
+	const { getAnvilWindowEthereum, setBaselineSnapshot, initializeStatoblastBaseline, formatStorageSlot, reportBond, repDeposit, genesisUniverse, statoblastSecurityMultiplierBps, reportedRepEthPrice, MAX_RETENTION_RATE, outcomes, transferRepToAddress, getVaultRepClaim, finalizeQuestionAsYesWithoutFork } = fixture
 
 	let mockWindow: StatoblastVaultAccountingFixture['mockWindow']
 	let client: StatoblastVaultAccountingFixture['client']

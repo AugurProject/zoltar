@@ -1,8 +1,8 @@
-import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
+import { test, beforeEach, describe } from 'bun:test'
 import { encodeAbiParameters, encodeDeployData, keccak256, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/core-shared/deployment/protocolConfig'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
-import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
+import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { approveToken, getERC20Balance, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
@@ -30,8 +30,6 @@ import { GENESIS_REPUTATION_TOKEN } from '../testSupport/simulator/utils/constan
 
 const DAY = 86400n
 const ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT = 2n
-
-setDefaultTimeout(TEST_TIMEOUT_MS)
 
 const getUserRepClaim = async (client: WriteClient, securityPoolAddress: Address) => {
 	const vault = await getSecurityVault(client, securityPoolAddress, client.account.address)
