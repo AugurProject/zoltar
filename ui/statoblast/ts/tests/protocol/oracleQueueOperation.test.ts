@@ -12,6 +12,8 @@ describe('oracleQueueOperation', () => {
 
 		expect(decodeOracleQueueOperation(LIQUIDATION_OPERATION_TYPE)).toBe('liquidation')
 		expect(decodeOracleQueueOperation(1n)).toBe('withdrawRep')
+		expect(encodeOracleQueueOperation('adjustVaultBackingFactor')).toBe(2)
+		expect(decodeOracleQueueOperation(2n)).toBe('adjustVaultBackingFactor')
 	})
 
 	test('rejects unknown operation values', () => {

@@ -1,3 +1,6 @@
+import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
+import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
+import type { OperationModalProps } from '@zoltar/ui-core-shared/types/components.js'
 import { useId, useState } from 'preact/hooks'
 import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
@@ -5,26 +8,43 @@ import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
-import type { SecurityVaultDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { SecurityVaultDetails, SecurityVaultActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getVaultBackingFactorAdjustmentGuard, parseTargetHealthFactorBps } from '../lib/securityVault.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
-export function VaultBackingFactorForm({ details, blocker, busy, pending, onAdjust }: { details: SecurityVaultDetails | undefined; blocker: string | undefined; busy: boolean; pending: boolean; onAdjust: (factor: string) => void }) {
+export function VaultBackingFactorForm({
+	details,
+	blocker,
+	busy,
+	pending,
+	repPerEthPrice,
+	poolSecurityMultiplierBps,
+	onAdjust,
+}: {
+	details: SecurityVaultDetails | undefined
+	repPerEthPrice?: bigint | undefined
+	poolSecurityMultiplierBps?: bigint | undefined
+	blocker: string | undefined
+	busy: boolean
+	pending: boolean
+	onAdjust: (factor: string) => void
+}) {
 	const [factorInput, setFactor] = useState<string | undefined>(undefined)
-	const currentFactorBps = details?.poolHeldRepPerCapacityBps
+	const currentFactorBps = details?.targetBackingFactorBps || details?.poolHeldRepPerCapacityBps
 	const factor = factorInput ?? (currentFactorBps !== undefined && currentFactorBps >= 10_000n ? formatCurrencyInputBalance(currentFactorBps, 4) : '2')
 	const descriptionId = useId()
 	let nextCapacity: bigint | undefined
+	let factorBps: bigint | undefined
 	let error: string | undefined
 	try {
-		const factorBps = parseTargetHealthFactorBps(factor, securityPoolCopy.vaultBackingFactor)
+		factorBps = parseTargetHealthFactorBps(factor, securityPoolCopy.vaultBackingFactor)
 		if (details !== undefined) nextCapacity = (details.vaultAttoRepBacking * 10_000n) / factorBps
 		if (nextCapacity === 0n) error = securityPoolCopy.positiveCapacityRequired
 	} catch (cause) {
 		error = cause instanceof Error ? cause.message : commonCopy.metricUnavailablePlaceholder
 	}
-	const prerequisite = blocker ?? getVaultBackingFactorAdjustmentGuard(details)
+	const prerequisite = blocker ?? getVaultBackingFactorAdjustmentGuard(details, factorBps, repPerEthPrice, poolSecurityMultiplierBps)
 	const reason = prerequisite ?? error
 	return (
 		<>
@@ -54,8 +74,9 @@ export function VaultBackingFactorForm({ details, blocker, busy, pending, onAdju
 	)
 }
 
-export function DepositBackingFactorField({ value, error, disabled, onChange }: { value: string; error: string | undefined; disabled: boolean; onChange: (value: string) => void }) {
+export function DepositBackingFactorField({ value, error, disabled, saved = false, onChange }: { value: string; saved?: boolean; error: string | undefined; disabled: boolean; onChange: (value: string) => void }) {
 	const descriptionId = useId()
+	if (saved) return <MetricField label={securityPoolCopy.vaultBackingFactor}>{value}×</MetricField>
 	return (
 		<label className='field'>
 			<span>{securityPoolCopy.targetHealthFactor}</span>
@@ -64,5 +85,14 @@ export function DepositBackingFactorField({ value, error, disabled, onChange }: 
 				{error ?? securityPoolCopy.targetHealthFactorHelp}
 			</small>
 		</label>
+	)
+}
+
+export function VaultBackingFactorModal({ result, error, children, ...props }: Omit<OperationModalProps, 'title' | 'closeOnSuccessKey'> & { result: SecurityVaultActionResult | undefined; error: string | undefined }) {
+	return (
+		<OperationModal {...props} title={securityPoolCopy.adjustVaultBackingFactor} closeOnSuccessKey={result?.action === 'adjustVaultBackingFactor' && result.stagedExecution?.success !== false ? result.hash : undefined}>
+			{children}
+			<ErrorNotice message={error} />
+		</OperationModal>
 	)
 }

@@ -1,3 +1,4 @@
+import { isVaultHealthyAtFactor } from './liquidation.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { OracleManagerDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { SecurityVaultDetails } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -11,7 +12,7 @@ export const MAX_STAGED_OPERATION_TIMEOUT_MINUTES = 5n
 const PRICE_PRECISION = 10n ** 18n
 const BPS_DENOMINATOR = 10_000n
 
-export function parseTargetHealthFactorBps(value: string, label = 'Deposit backing factor') {
+export function parseTargetHealthFactorBps(value: string, label = 'Target backing factor') {
 	const trimmed = value.trim()
 	if (!/^\d+(?:\.\d{1,4})?$/.test(trimmed)) throw new Error(`${label} must be a number with at most four decimal places`)
 	const [whole = '', fraction = ''] = trimmed.split('.')
@@ -128,10 +129,17 @@ export function isOracleManagerPriceUsable(oracleManagerDetails: Pick<OracleMana
 	return validUntilTimestamp !== undefined && currentTimestamp < validUntilTimestamp
 }
 
-export function getVaultBackingFactorAdjustmentGuard(details: SecurityVaultDetails | undefined) {
+export function getVaultBackingFactorAdjustmentGuard(details: SecurityVaultDetails | undefined, factorBps?: bigint, repPerEthPrice?: bigint, poolSecurityMultiplierBps?: bigint) {
 	if (details === undefined || details.settlementCollateralAttoEth === undefined) return 'Refresh vault details before adjusting the backing factor.'
 	if (details.vaultAttoRepBacking <= 0n) return 'Deposit REP to create a vault first.'
-	if (details.settlementCollateralAttoEth > 0n) return 'Backing factor changes are unavailable while the pool has committed settlement collateral.'
+	if (details.settlementCollateralAttoEth > 0n && factorBps !== undefined && factorBps > 0n && (details.vaultAttoRepBacking * 10_000n) / factorBps < details.capacityOwnershipAttoRep) return 'Capacity cannot be reduced while the pool has committed settlement collateral.'
 	if (details.disputeStakedAttoRep > 0n) return 'Backing factor changes are unavailable while vault REP is in a dispute.'
+	if (factorBps !== undefined && factorBps > 0n && repPerEthPrice !== undefined && poolSecurityMultiplierBps !== undefined) {
+		const capacity = (details.vaultAttoRepBacking * 10_000n) / factorBps
+		const totalCapacity = details.totalCapacityOwnershipAttoRep - details.capacityOwnershipAttoRep + capacity
+		const grossInterest = totalCapacity > 0n ? (details.settlementCollateralAttoEth * capacity + totalCapacity - 1n) / totalCapacity : 0n
+		const openInterestAttoEth = grossInterest > details.badDebtAttoEth ? grossInterest - details.badDebtAttoEth : 0n
+		if (!isVaultHealthyAtFactor({ healthFactorBps: 10_000n, openInterestAttoEth, poolHeldVaultRepBackingAttoRep: details.vaultAttoRepBacking, repPerEthPrice, poolSecurityMultiplierBps })) return 'This target would leave the vault undercollateralized.'
+	}
 	return undefined
 }

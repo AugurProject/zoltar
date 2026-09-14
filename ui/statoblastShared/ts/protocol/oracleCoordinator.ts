@@ -176,7 +176,7 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 				const stagedOperation = activeOperations[index]
 				if (stagedOperation === undefined) throw new Error('Missing staged operation details')
 				return {
-					amount: stagedOperation.operationAmountAttoRepOrAttoEth,
+					amount: stagedOperation.operationValue,
 					operator: stagedOperation.operator,
 					operation: decodeOracleQueueOperation(stagedOperation.operation),
 					operationId,
@@ -194,7 +194,7 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 			})
 			if (stagedOperation.operator !== zeroAddress) {
 				pendingOperation = {
-					amount: stagedOperation.operationAmountAttoRepOrAttoEth,
+					amount: stagedOperation.operationValue,
 					operator: stagedOperation.operator,
 					operation: decodeOracleQueueOperation(stagedOperation.operation),
 					operationId: pendingOperationSlotId,
@@ -451,7 +451,7 @@ export async function executeOracleManagerStagedOperation(client: WriteContractC
 		args: [operationId],
 		gas: 5_000_000n,
 	}))
-	const stagedExecution = getStagedOracleExecutionResult(receipt, managerAddress, 'liquidation') ?? getStagedOracleExecutionResult(receipt, managerAddress, 'withdrawRep')
+	const stagedExecution = getStagedOracleExecutionResult(receipt, managerAddress, 'liquidation') ?? getStagedOracleExecutionResult(receipt, managerAddress, 'withdrawRep') ?? getStagedOracleExecutionResult(receipt, managerAddress, 'adjustVaultBackingFactor')
 	return {
 		action: 'executeStagedOperation',
 		hash,

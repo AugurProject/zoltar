@@ -1067,6 +1067,11 @@ describe('Statoblast: fork migration', () => {
 			const childVault = await getSecurityVault(client, yesPool.securityPool, client.account.address)
 			strictEqualTypeSafe(childVault.capacityOwnershipAttoRep, parentVaultBeforeMigration.capacityOwnershipAttoRep, 'migration should preserve capacity ownership')
 			const parentVaultAfterMigration = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+			strictEqualTypeSafe(
+				await client.readContract({ address: yesPool.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'vaultTargetBackingFactorBps', args: [client.account.address] }),
+				await client.readContract({ address: securityPoolAddresses.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'vaultTargetBackingFactorBps', args: [client.account.address] }),
+				'child vault inherits its parent target',
+			)
 			strictEqualTypeSafe(childVault.claimableFeesAttoEth + parentVaultAfterMigration.claimableFeesAttoEth, parentVaultBeforeMigration.claimableFeesAttoEth, 'migration should preserve accrued vault fees without changing their existing pool entitlement')
 			strictEqualTypeSafe(childVault.feeIndex, await client.readContract({ address: yesPool.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'feeIndex' }), 'the migrated capacity should start from the child fee index')
 			strictEqualTypeSafe(await client.readContract({ address: yesPool.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'backingUnitsToAttoRep', args: [childVault.repBackingUnits] }), parentBackingAttoRep, 'migration should preserve pool-held REP backing')

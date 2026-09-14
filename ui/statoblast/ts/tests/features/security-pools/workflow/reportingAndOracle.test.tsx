@@ -367,6 +367,30 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		expect(documentQueries.queryByRole('button', { name: 'Request new price' })).toBeNull()
 	})
 
+	test('shows queued target changes in the existing staged operations table with factor units', async () => {
+		const rendered = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					checkedSecurityPoolAddress: zeroAddress,
+					securityPoolAddress: zeroAddress,
+					securityPools: [createSelectedPool()],
+					selectedPoolView: 'staged-operations',
+					poolOracleManagerDetails: createOracleManagerDetails({
+						managerAddress: zeroAddress,
+						pendingOperation: { amount: 20_000n, operator: zeroAddress, operation: 'adjustVaultBackingFactor', operationId: 7n, targetVault: zeroAddress },
+						pendingOperationSlotId: 7n,
+						pendingSettlementOperationIds: [7n],
+					}),
+				})}
+			/>,
+		)
+		setCleanup(rendered.cleanup)
+		const page = within(document.body)
+		expect(page.getByText('Vault target backing factor')).not.toBeNull()
+		expect(page.getByText('Adjust backing factor')).not.toBeNull()
+		expect(page.getByText('Vault target backing factor').parentElement?.textContent).toMatch(/2(?:\.0+)?\s*×/)
+	})
+
 	test('lists staged operations in the staged operations tab', async () => {
 		const executions: Array<{ operationId: bigint; securityPoolAddress: string; universeId: bigint }> = []
 		const pool = createSelectedPool({ universeId: 4n })

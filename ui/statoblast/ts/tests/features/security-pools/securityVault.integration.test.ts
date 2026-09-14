@@ -1,9 +1,11 @@
+import { manipulatePriceOracle } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { queueOracleManagerOperation } from '@zoltar/ui-statoblast-shared/protocol/oracleCoordinator.js'
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { approveErc20 } from '@zoltar/ui-zoltar-shared/protocol/tokenActions.js'
-import { adjustVaultBackingFactor, depositRepToVaultToSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/securityVault.js'
+import { depositRepToVaultToSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/securityVault.js'
 import { loadSecurityVaultDetails } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
 import { loadErc20Allowance, loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
@@ -119,12 +121,14 @@ describe('Security vault integration', () => {
 		expect(updatedVaultDetails.securityPoolAddress).toBe(securityPoolAddress)
 		expect(updatedVaultDetails.vaultAttoRepBacking).toBe(depositAmount)
 		expect(updatedVaultDetails.settlementCollateralAttoEth).toBe(0n)
-		const adjustment = await adjustVaultBackingFactor(uiWriteClient, securityPoolAddress, 20_000n)
-		expect(adjustment.action).toBe('adjustVaultBackingFactor')
+		await manipulatePriceOracle(client, mockWindow, updatedVaultDetails.managerAddress, 10n ** 18n)
+		const adjustment = await queueOracleManagerOperation(uiWriteClient, updatedVaultDetails.managerAddress, 'adjustVaultBackingFactor', walletAddress, 20_000n, 300n)
+		expect(adjustment.stagedExecution?.success).toBe(true)
 		const adjustedVault = await loadSecurityVaultDetails(uiReadClient, securityPoolAddress, walletAddress)
 		expect(adjustedVault?.capacityOwnershipAttoRep).toBe(depositAmount / 2n)
 		expect(adjustedVault?.vaultAttoRepBacking).toBe(depositAmount)
 		expect(adjustedVault?.poolHeldRepPerCapacityBps).toBe(20_000n)
+		expect(adjustedVault?.targetBackingFactorBps).toBe(20_000n)
 	})
 
 	test('surfaces the real revert reason when the first deposit is below the minimum', async () => {

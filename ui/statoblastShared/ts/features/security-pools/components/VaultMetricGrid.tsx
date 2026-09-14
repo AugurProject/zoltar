@@ -39,6 +39,7 @@ function getAssociatedRepStatusLabel({ associatedRepPerCapacityBps, isCurrentlyH
 }
 
 export function VaultMetricGrid({
+	targetBackingFactorBps,
 	associatedRepPerCapacityBps,
 	badDebtAttoEth,
 	className = '',
@@ -100,6 +101,7 @@ export function VaultMetricGrid({
 				</div>
 			</div>
 			<div className='vault-detail-meta'>
+				{targetBackingFactorBps === undefined || targetBackingFactorBps === 0n ? undefined : <MetricField label={securityPoolCopy.vaultBackingFactor}>{formatRepPerCapacityBps(targetBackingFactorBps)}</MetricField>}
 				{associatedRepPerCapacityBps === undefined ? undefined : (
 					<MetricField label={securityPoolCopy.associatedRepPerCapacity} valueClassName={associatedRepToneClass}>
 						<span className='metric-inline-value'>

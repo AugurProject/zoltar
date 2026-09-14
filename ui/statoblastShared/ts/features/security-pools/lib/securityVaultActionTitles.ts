@@ -24,7 +24,7 @@ export const getPendingTitle = (actionName: SecurityVaultActionResult['action'])
 export const getSuccessTitle = (actionName: SecurityVaultActionResult['action']) => {
 	switch (actionName) {
 		case 'adjustVaultBackingFactor':
-			return 'Backing factor adjusted'
+			return 'Vault target change submitted'
 		case 'approveRep':
 			return 'REP approved'
 		case 'depositRepToVault':

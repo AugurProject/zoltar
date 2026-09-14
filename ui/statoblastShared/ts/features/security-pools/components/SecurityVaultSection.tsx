@@ -1,3 +1,5 @@
+import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
+import { VaultOperationTimeoutField } from './VaultOperationTimeoutField.js'
 import type { ComponentChildren } from 'preact'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
@@ -5,7 +7,6 @@ import { useEffect, useId, useRef, useState } from 'preact/hooks'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { ActionLauncherCard } from '@zoltar/ui-core-shared/components/ActionLauncherCard.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
-import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { LookupFieldRow } from '@zoltar/ui-core-shared/components/LookupFieldRow.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
@@ -19,12 +20,12 @@ import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue
 import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
 import { TransactionActionButton, TransactionActionGroup } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { normalizeAddress, sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
-import { formatCurrencyBalance, formatCurrencyInputBalance, formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyBalance, formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { balanceShortage } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
 import { tryParseRepAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
-import { resolveOracleOperationEthFunding } from '../../open-oracle/lib/oracleRequestEth.js'
+import { getOracleRequestEthGuardMessage, resolveOracleOperationEthFunding } from '../../open-oracle/lib/oracleRequestEth.js'
 import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { getSecurityPoolVaultReadinessActions } from '../lib/securityPoolReadiness.js'
 import { getVaultLauncherVaultOwnerReason, getVaultLauncherWalletReason } from '../lib/securityPoolLabels.js'
@@ -36,7 +37,6 @@ import {
 	DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES,
 	doesSecurityVaultExistOnchain,
 	doesLoadedSecurityVaultMatchSelection,
-	getStagedOperationTimeoutSeconds,
 	getSecurityVaultWithdrawableRepAmount,
 	getSelectedVaultOwner,
 	hasValidSecurityVaultOraclePrice,
@@ -45,7 +45,7 @@ import {
 	MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP,
 } from '../lib/securityVault.js'
 import type { ReadinessAction, SecurityVaultSectionProps } from '../../types.js'
-import { DepositBackingFactorField, VaultBackingFactorForm } from './VaultBackingFactorForm.js'
+import { DepositBackingFactorField, VaultBackingFactorForm, VaultBackingFactorModal } from './VaultBackingFactorForm.js'
 import { SelectedVaultSummarySection } from './SelectedVaultSummarySection.js'
 import { getQueuedVaultOperation, getQueuedVaultOperationStatus, VaultQueuedOperationStatusCard } from './VaultQueuedOperationStatusCard.js'
 
@@ -113,6 +113,7 @@ export function SecurityVaultSection({
 	})
 		? securityVaultDetails
 		: undefined
+	const depositTargetHealthFactor = currentSelectedVaultDetails?.targetBackingFactorBps ? formatCurrencyInputBalance(currentSelectedVaultDetails.targetBackingFactorBps, 4) : normalizedSecurityVaultForm.targetHealthFactor
 	const selectedVaultIsOwnedByAccount = isSelectedVaultOwnedByAccountHelper(selectedVaultOwner, accountState.address)
 	const repTokenSymbol = currentSelectedVaultDetails?.repTokenSymbol ?? commonCopy.rep
 	const depositRepActionLabel = securityPoolCopy.formatDepositRepToVault(repTokenSymbol)
@@ -124,7 +125,6 @@ export function SecurityVaultSection({
 	const depositAmount = tryParseRepAmountInput(normalizedSecurityVaultForm.depositAmount)
 	const withdrawAmount = tryParseRepAmountInput(normalizedSecurityVaultForm.repWithdrawAmount)
 	const stagedOperationTimeoutMinutes = tryParseBigIntInput(normalizedSecurityVaultForm.stagedOperationTimeoutMinutes)
-	const stagedOperationTimeoutSeconds = getStagedOperationTimeoutSeconds(stagedOperationTimeoutMinutes)
 	const capacityOwnershipAttoRep = currentSelectedVaultDetails?.capacityOwnershipAttoRep ?? 0n
 	const vaultExistsOnchain = doesSecurityVaultExistOnchain(currentSelectedVaultDetails)
 	const hasValidOraclePrice = hasValidSecurityVaultOraclePrice(currentSelectedVaultDetails?.managerAddress, oracleManagerDetails, currentTimestamp)
@@ -190,10 +190,10 @@ export function SecurityVaultSection({
 		depositAmount,
 		isDepositBelowMinimum,
 		minimumVaultRepDepositAttoRep,
-		targetHealthFactor: normalizedSecurityVaultForm.targetHealthFactor,
+		targetHealthFactor: depositTargetHealthFactor,
 		walletRepShortfallAttoRep: hasInsufficientRepBalance ? walletRepShortfallAttoRep : undefined,
 	})
-	const targetHealthFactorGuardMessage = hasPositiveDepositAmount ? getTargetHealthFactorGuardMessage(normalizedSecurityVaultForm.targetHealthFactor) : undefined
+	const targetHealthFactorGuardMessage = hasPositiveDepositAmount ? getTargetHealthFactorGuardMessage(depositTargetHealthFactor) : undefined
 	const depositActionGuardMessage = targetHealthFactorGuardMessage === undefined ? (depositGuardMessage ?? (!hasPositiveDepositAmount ? commonCopy.positiveAmountRequired : undefined)) : undefined
 
 	const depositAmountNotice = (() => {
@@ -256,19 +256,7 @@ export function SecurityVaultSection({
 		queuedVaultOperation,
 		securityVaultResult,
 	})
-	const stagedOperationTimeoutHelpText = stagedOperationTimeoutSeconds === undefined ? securityPoolCopy.selfServiceExecutionTimeoutHelpText : securityPoolCopy.formatManualExecutionTimeoutResolvedDetail(formatDuration(stagedOperationTimeoutSeconds))
-	const renderStagedOperationTimeoutField = () => (
-		<>
-			<label className='field'>
-				<span>{commonCopy.manualExecutionTimeout}</span>
-				<div className='field-inline'>
-					<FormInput className='field-inline-input' inputMode='numeric' min='1' pattern='[0-9]*' step='1' value={normalizedSecurityVaultForm.stagedOperationTimeoutMinutes} onInput={event => onSecurityVaultFormChange({ stagedOperationTimeoutMinutes: event.currentTarget.value })} disabled={!queueWithdrawRepEnabled} />
-					<span className='field-inline-action'>{commonCopy.minutes}</span>
-				</div>
-			</label>
-			<p className='detail'>{stagedOperationTimeoutHelpText}</p>
-		</>
-	)
+	const stagedOperationTimeoutField = <VaultOperationTimeoutField value={normalizedSecurityVaultForm.stagedOperationTimeoutMinutes} disabled={!queueWithdrawRepEnabled} onChange={stagedOperationTimeoutMinutes => onSecurityVaultFormChange({ stagedOperationTimeoutMinutes })} />
 	const vaultLoadNotice = (() => {
 		if (loadingSecurityVault)
 			return (
@@ -327,7 +315,18 @@ export function SecurityVaultSection({
 		void onLoadSecurityVault()
 	}, [autoLoadKey, autoLoadVault, hasLoadedCurrentVault, loadingSecurityVault, normalizedSecurityVaultForm.securityPoolAddress, onLoadSecurityVault, selectedVaultOwner])
 	const adjustmentBlocker = repExitLauncherBlocker ?? vaultLifecycleBlocker ?? (!depositRepToVaultEnabled ? securityPoolCopy.vaultDepositAdmissionClosedDetail : undefined)
-	const adjustmentForm = <VaultBackingFactorForm key={autoLoadKey} details={currentSelectedVaultDetails} blocker={adjustmentBlocker} busy={securityVaultActiveAction !== undefined} pending={securityVaultActiveAction === 'adjustVaultBackingFactor'} onAdjust={onAdjustVaultBackingFactor} />
+	const adjustmentForm = (
+		<VaultBackingFactorForm
+			repPerEthPrice={repPerEthPrice}
+			poolSecurityMultiplierBps={selectedPoolStatoblastSecurityMultiplierBps}
+			key={autoLoadKey}
+			details={currentSelectedVaultDetails}
+			blocker={adjustmentBlocker ?? getOracleRequestEthGuardMessage({ actionLabel: securityPoolCopy.queueTargetChangeFundingAction, includeBuffer: withdrawRepFunding?.includeBuffer === true, requiredCostAttoEth: withdrawRepFunding?.costAttoEth, walletBalanceAttoEth: accountState.ethBalanceAttoEth })}
+			busy={securityVaultActiveAction !== undefined}
+			pending={securityVaultActiveAction === 'adjustVaultBackingFactor'}
+			onAdjust={onAdjustVaultBackingFactor}
+		/>
+	)
 	const vaultReadinessActions = getSecurityPoolVaultReadinessActions([
 		{
 			actionLabel: depositRepActionLabel,
@@ -428,7 +427,7 @@ export function SecurityVaultSection({
 								</button>
 							</div>
 						</label>
-						<DepositBackingFactorField value={normalizedSecurityVaultForm.targetHealthFactor} error={targetHealthFactorGuardMessage} disabled={!depositRepToVaultEnabled} onChange={targetHealthFactor => onSecurityVaultFormChange({ targetHealthFactor })} />
+						<DepositBackingFactorField saved={!!currentSelectedVaultDetails?.targetBackingFactorBps} value={depositTargetHealthFactor} error={targetHealthFactorGuardMessage} disabled={!depositRepToVaultEnabled} onChange={targetHealthFactor => onSecurityVaultFormChange({ targetHealthFactor })} />
 						<MetricGrid>
 							<MetricField label={securityPoolCopy.walletRep}>{walletRepBalanceLoading ? <LoadingText>{commonCopy.loading}</LoadingText> : <CurrencyValue value={walletRepBalanceAttoRep} suffix={repTokenSymbol} />}</MetricField>
 						</MetricGrid>
@@ -526,7 +525,7 @@ export function SecurityVaultSection({
 								</div>
 							</label>
 						)}
-						{effectiveRepExitMode === 'redeem' ? null : renderStagedOperationTimeoutField()}
+						{effectiveRepExitMode === 'redeem' ? null : stagedOperationTimeoutField}
 						<div className='actions'>
 							<button className='secondary' type='button' onClick={() => setVaultActionModal(undefined)}>
 								{commonCopy.cancel}
@@ -546,11 +545,9 @@ export function SecurityVaultSection({
 					</>
 				)}
 			</OperationModal>
-
-			<OperationModal closeOnSuccessKey={securityVaultResult?.action === 'adjustVaultBackingFactor' ? securityVaultResult.hash : undefined} context={vaultTransactionContext} isOpen={vaultActionModal === 'adjust-backing'} onClose={() => setVaultActionModal(undefined)} title={securityPoolCopy.adjustVaultBackingFactor}>
+			<VaultBackingFactorModal context={vaultTransactionContext} isOpen={vaultActionModal === 'adjust-backing'} onClose={() => setVaultActionModal(undefined)} result={securityVaultResult} error={securityVaultError}>
 				{adjustmentForm}
-				<ErrorNotice message={securityVaultError} />
-			</OperationModal>
+			</VaultBackingFactorModal>
 			<OperationModal context={vaultTransactionContext} isOpen={vaultActionModal === 'claim-fees'} onClose={() => setVaultActionModal(undefined)} title={securityPoolCopy.claimFeesTitle}>
 				<MetricGrid>
 					<MetricField label={securityPoolCopy.claimableFees}>{currentSelectedVaultDetails === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue exactWhenRoundedToZero value={currentSelectedVaultDetails.claimableFeesAttoEth} suffix={commonCopy.eth} />}</MetricField>
@@ -608,7 +605,7 @@ export function SecurityVaultSection({
 						</button>
 					</div>
 				</label>
-				<DepositBackingFactorField value={normalizedSecurityVaultForm.targetHealthFactor} error={targetHealthFactorGuardMessage} disabled={!depositRepToVaultEnabled} onChange={targetHealthFactor => onSecurityVaultFormChange({ targetHealthFactor })} />
+				<DepositBackingFactorField saved={!!currentSelectedVaultDetails?.targetBackingFactorBps} value={depositTargetHealthFactor} error={targetHealthFactorGuardMessage} disabled={!depositRepToVaultEnabled} onChange={targetHealthFactor => onSecurityVaultFormChange({ targetHealthFactor })} />
 				<TokenApprovalControl
 					renderActions={({ button, notice, noticeId }) => renderDepositActions(button, notice, noticeId)}
 					actionLabel={depositRepActionLabel}
@@ -671,7 +668,7 @@ export function SecurityVaultSection({
 						</div>
 					</label>
 				)}
-				{effectiveRepExitMode === 'redeem' ? null : renderStagedOperationTimeoutField()}
+				{effectiveRepExitMode === 'redeem' ? null : stagedOperationTimeoutField}
 				<div className='actions'>
 					<TransactionActionButton
 						idleLabel={repExitActionLabel}

@@ -1,7 +1,7 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
-import type { ForkAuctionDetails, ListedSecurityPool } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ForkAuctionDetails, ListedSecurityPool, OracleQueueOperation } from '@zoltar/ui-core-shared/types/contracts.js'
 
 export function buildSelectedPoolSummaryPool({ forkAuctionDetails, selectedPool }: { forkAuctionDetails: ForkAuctionDetails | undefined; selectedPool: ListedSecurityPool | undefined }) {
 	if (selectedPool === undefined) return undefined
@@ -23,10 +23,12 @@ export function buildSelectedPoolSummaryPool({ forkAuctionDetails, selectedPool 
 	}
 }
 
-export function getPendingOperationLabel(operation: 'liquidation' | 'withdrawRep') {
+export function getPendingOperationLabel(operation: OracleQueueOperation) {
 	switch (operation) {
 		case 'liquidation':
 			return securityPoolCopy.liquidation
+		case 'adjustVaultBackingFactor':
+			return securityPoolCopy.adjustVaultBackingFactor
 		case 'withdrawRep':
 			return securityPoolCopy.withdrawRep
 		default:
@@ -34,12 +36,14 @@ export function getPendingOperationLabel(operation: 'liquidation' | 'withdrawRep
 	}
 }
 
-export function getPendingOperationAmountPresentation(operation: 'liquidation' | 'withdrawRep') {
+export function getPendingOperationAmountPresentation(operation: OracleQueueOperation) {
 	switch (operation) {
 		case 'liquidation':
-			return { label: securityPoolCopy.requestedLiquidationDebt, suffix: commonCopy.eth }
+			return { label: securityPoolCopy.requestedLiquidationDebt, suffix: commonCopy.eth, decimals: 18 }
 		case 'withdrawRep':
-			return { label: securityPoolCopy.repWithdrawal, suffix: commonCopy.rep }
+			return { label: securityPoolCopy.repWithdrawal, suffix: commonCopy.rep, decimals: 18 }
+		case 'adjustVaultBackingFactor':
+			return { label: securityPoolCopy.vaultBackingFactor, suffix: '×', decimals: 4 }
 		default:
 			return assertNever(operation)
 	}

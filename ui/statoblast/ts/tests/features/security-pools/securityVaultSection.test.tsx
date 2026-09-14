@@ -178,11 +178,11 @@ describe('SecurityVaultSection', () => {
 		const page = within(document.body)
 		fireEvent.click(page.getByRole('button', { name: 'Adjust backing factor' }))
 		const dialog = within(page.getByRole('dialog', { name: 'Adjust backing factor' }))
-		const input = dialog.getByLabelText('Vault backing factor')
+		const input = dialog.getByLabelText('Vault target backing factor')
 		if (!(input instanceof HTMLInputElement)) throw new Error('Expected backing factor input')
 		expect(input.value).toBe('6')
 		fireEvent.input(input, { target: { value: '0.9' } })
-		expect(dialog.getAllByText('Vault backing factor must be at least 1.00×')).toHaveLength(1)
+		expect(dialog.getAllByText('Vault target backing factor must be at least 1.00×')).toHaveLength(1)
 		expect(dialog.getByRole('button', { name: 'Adjust backing factor' }).getAttribute('aria-describedby')).toBe(input.getAttribute('aria-describedby'))
 		fireEvent.input(input, { target: { value: '2' } })
 		expect(dialog.getByText('Capacity after adjustment')).toBeDefined()
@@ -191,12 +191,49 @@ describe('SecurityVaultSection', () => {
 		expect(submitted).toBe('2')
 	})
 
-	test('blocks adjustment when settlement collateral or dispute REP is committed', async () => {
-		for (const details of [createSecurityVaultDetails({ settlementCollateralAttoEth: 1n, disputeStakedAttoRep: 0n }), createSecurityVaultDetails({ settlementCollateralAttoEth: 0n, disputeStakedAttoRep: 1n })]) {
-			const rendered = await renderIntoDocument(<SecurityVaultSection {...createSecurityVaultSectionProps({ securityVaultDetails: details })} />)
-			expectTransactionButtonDisabled(document.body, 'Adjust backing factor')
-			await rendered.cleanup()
-		}
+	test('blocks a capacity reduction while settlement collateral is committed', async () => {
+		const rendered = await renderIntoDocument(<SecurityVaultSection {...createSecurityVaultSectionProps({ modalFirst: true, securityVaultDetails: createSecurityVaultDetails({ settlementCollateralAttoEth: 1n, disputeStakedAttoRep: 0n }) })} />)
+		cleanupRenderedComponent = rendered.cleanup
+		const page = within(document.body)
+		fireEvent.click(page.getByRole('button', { name: 'Adjust backing factor' }))
+		const dialog = within(page.getByRole('dialog', { name: 'Adjust backing factor' }))
+		fireEvent.input(dialog.getByLabelText('Vault target backing factor'), { target: { value: '100' } })
+		expectTransactionButtonDisabled(page.getByRole('dialog'), 'Adjust backing factor')
+	})
+
+	test('blocks adjustment while dispute REP is committed', async () => {
+		const rendered = await renderIntoDocument(<SecurityVaultSection {...createSecurityVaultSectionProps({ securityVaultDetails: createSecurityVaultDetails({ settlementCollateralAttoEth: 0n, disputeStakedAttoRep: 1n }) })} />)
+		cleanupRenderedComponent = rendered.cleanup
+		expectTransactionButtonDisabled(document.body, 'Adjust backing factor')
+	})
+
+	test('rejects an input whose resulting capacity leaves the vault undercollateralized', async () => {
+		const rendered = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					modalFirst: true,
+					selectedPoolStatoblastSecurityMultiplierBps: 20_000n,
+					repPerEthPrice: 3n * 10n ** 18n,
+					securityVaultDetails: createSecurityVaultDetails({ targetBackingFactorBps: 20_000n, vaultAttoRepBacking: 12n * 10n ** 18n, capacityOwnershipAttoRep: 6n * 10n ** 18n, totalCapacityOwnershipAttoRep: 6n * 10n ** 18n, settlementCollateralAttoEth: 3n * 10n ** 18n, disputeStakedAttoRep: 0n, badDebtAttoEth: 0n }),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		const page = within(document.body)
+		fireEvent.click(page.getByRole('button', { name: 'Adjust backing factor' }))
+		const dialog = page.getByRole('dialog', { name: 'Adjust backing factor' })
+		fireEvent.input(within(dialog).getByLabelText('Vault target backing factor'), { target: { value: '1' } })
+		expectTransactionButtonDisabled(dialog, 'Adjust backing factor')
+		expect(within(dialog).getByText('This target would leave the vault undercollateralized.')).not.toBeNull()
+	})
+
+	test('uses a saved target as read-only context for later deposits', async () => {
+		const rendered = await renderIntoDocument(<SecurityVaultSection {...createSecurityVaultSectionProps({ securityVaultDetails: createSecurityVaultDetails({ targetBackingFactorBps: 20_000n }) })} />)
+		cleanupRenderedComponent = rendered.cleanup
+		const page = within(document.body)
+		expect(page.queryByText('Target backing factor')).toBeNull()
+		expect(page.getAllByText('Vault target backing factor').length).toBeGreaterThan(0)
+		expect(document.body.textContent).toContain('2×')
 	})
 
 	test('shows the selected child REP symbol on vault action controls', async () => {
@@ -835,9 +872,9 @@ describe('SecurityVaultSection', () => {
 			const documentQueries = within(document.body)
 			if (modalFirst) fireEvent.click(documentQueries.getByRole('button', { name: 'Deposit REP' }))
 			const scope = modalFirst ? within(documentQueries.getByRole('dialog', { name: 'Deposit REP' })) : documentQueries
-			const factorInput = scope.getByText('Deposit backing factor').parentElement?.querySelector('input')
+			const factorInput = scope.getByText('Target backing factor').parentElement?.querySelector('input')
 			expect(factorInput).not.toBeNull()
-			const factorError = scope.getByText('Deposit backing factor must be a number with at most four decimal places')
+			const factorError = scope.getByText('Target backing factor must be a number with at most four decimal places')
 			expect(factorInput?.getAttribute('aria-invalid')).toBe('true')
 			expect(factorInput?.getAttribute('aria-describedby')).toBe(factorError.id)
 			renderedComponent.cleanup()

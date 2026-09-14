@@ -1463,7 +1463,7 @@ describe('anchored ecosystem discovery', () => {
 								{
 									liquidationApprovalId: hash(5),
 									operation: 0n,
-									operationAmountAttoRepOrAttoEth: 100n,
+									operationValue: 100n,
 									operator: fixture.wallet.address,
 									queuedAt: 500n,
 									receiverVault: address(87),
@@ -1589,7 +1589,7 @@ describe('anchored ecosystem discovery', () => {
 		const operation = () => ({
 			liquidationApprovalId: hash(0),
 			operation: 1n,
-			operationAmountAttoRepOrAttoEth: 100n,
+			operationValue: 100n,
 			operator: fixture.wallet.address,
 			queuedAt: 500n,
 			receiverVault: receiver,

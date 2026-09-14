@@ -267,29 +267,7 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	function updateVaultFees(address vault) public {
-		updateSettlementCollateral();
-		bool hadUncheckpointedFeeEligibleCapacity = uncheckpointedFeeEligibleCapacityOwnershipAttoRep != 0;
-		uint256 previousVaultFeeIndex = securityVaults[vault].feeIndex;
-		uint256 previousVaultFeeRemainder = vaultFeeRemainders[vault];
-		(uint256 fees, uint256 nextRemainder) = SecurityPoolUtils.calculateVaultFee(securityVaults[vault].capacityOwnershipAttoRep, feeIndex - securityVaults[vault].feeIndex, previousVaultFeeRemainder);
-		bool vaultAccountingChanged =
-			previousVaultFeeIndex != feeIndex || previousVaultFeeRemainder != nextRemainder || fees != 0;
-		bool poolAccountingChanged = fees != 0;
-		vaultFeeRemainders[vault] = nextRemainder;
-		securityVaults[vault].feeIndex = feeIndex;
-		if (previousVaultFeeIndex != feeIndex) {
-			uint256 capacityOwnershipAttoRep = securityVaults[vault].capacityOwnershipAttoRep;
-			uncheckpointedFeeEligibleCapacityOwnershipAttoRep -= capacityOwnershipAttoRep;
-			if (capacityOwnershipAttoRep != 0) poolAccountingChanged = true;
-		}
-		unallocatedAccruedFeesAttoEth -= fees;
-		totalClaimableVaultFeesAttoEth += fees;
-		securityVaults[vault].claimableFeesAttoEth += fees;
-		if (!hadUncheckpointedFeeEligibleCapacity && _releaseUnassignableFeeReserveIfComplete())
-			poolAccountingChanged = true;
-		_registerVault(vault);
-		if (vaultAccountingChanged) _emitVaultAccountingCheckpoint(vault);
-		if (poolAccountingChanged) _emitPoolAccountingCheckpoint(AccountingReason.VaultCheckpoint, vault);
+		DelegateCallForwarder.invoke(operationsDelegate, abi.encodeCall(SecurityPoolOperationsDelegate.updateVaultFees, (vault)));
 	}
 
 	function redeemFees(address vault) external {
@@ -686,6 +664,8 @@ contract SecurityPool is SecurityPoolStorage {
 
 	function _configureVault(address vault, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 vaultFeeIndex, uint256 newVaultBadDebtAttoEth, uint256 newTotalBadDebtAttoEth, bool clearFeeIndexRemainderOnCapacityChange) private {
 		require(vault != address(0x0), 'Zero vault');
+		if (vaultTargetBackingFactorBps[vault] == 0 && address(parent) != address(0x0))
+			vaultTargetBackingFactorBps[vault] = parent.vaultTargetBackingFactorBps(vault);
 		securityVaults[vault].repBackingUnits = repBackingUnits;
 		if (
 			clearFeeIndexRemainderOnCapacityChange &&
@@ -715,21 +695,6 @@ contract SecurityPool is SecurityPoolStorage {
 		}
 		_emitVaultAccountingCheckpoint(vault);
 		_emitPoolAccountingCheckpoint(AccountingReason.AuctionClaim, vault);
-	}
-
-	function _releaseUnassignableFeeReserveIfComplete() private returns (bool released) {
-		// Each independently rounded vault or unassigned-auction entitlement ledger, and each global
-		// fee-index denominator epoch whose remainder is cleared, can leave less than one attoETH of
-		// aggregate division residue. Their count has no safe protocol-wide bound, so release the
-		// terminal reserve only after every capacity unit behind the final fee index is reconciled.
-		if (
-			uncheckpointedFeeEligibleCapacityOwnershipAttoRep != 0 ||
-			systemState != SystemState.PoolForked ||
-			unallocatedAccruedFeesAttoEth == 0
-		) return false;
-		settlementCollateralAttoEth += unallocatedAccruedFeesAttoEth;
-		unallocatedAccruedFeesAttoEth = 0;
-		return true;
 	}
 
 	function _registerVault(address vault) private {

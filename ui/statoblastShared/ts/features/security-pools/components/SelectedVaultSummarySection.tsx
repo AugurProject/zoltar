@@ -61,6 +61,7 @@ export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, r
 	)
 	const gridContent = (
 		<VaultMetricGrid
+			targetBackingFactorBps={securityVaultDetails.targetBackingFactorBps}
 			associatedRepPerCapacityBps={securityVaultDetails.associatedRepPerCapacityBps}
 			badDebtAttoEth={securityVaultDetails.badDebtAttoEth}
 			layout='grid'

@@ -35,6 +35,7 @@ import type { ReportingRouteContentProps } from './oracleTypes.js'
 export type * from '@zoltar/ui-core-shared/types/components.js'
 
 export type VaultMetricGridProps = {
+	targetBackingFactorBps?: bigint | undefined
 	associatedRepPerCapacityBps?: bigint | undefined
 	badDebtAttoEth?: bigint | undefined
 	className?: string

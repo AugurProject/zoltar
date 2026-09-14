@@ -9,7 +9,7 @@ import { loadErc20Allowance, loadErc20Balance } from '@zoltar/ui-zoltar-shared/p
 import { loadCoordinatorInitialReportFundingRequirement, loadOracleManagerDetails, queueOracleManagerOperation } from '../../../protocol/oracleCoordinator.js'
 import { approveErc20 } from '@zoltar/ui-zoltar-shared/protocol/tokenActions.js'
 import { isSecurityPoolVaultAdmissionClosed, loadSecurityVaultDetails } from '../../../protocol/securityPools.js'
-import { adjustVaultBackingFactor, depositRepToVaultToSecurityPool, redeemRepFromVaultFromSecurityPool, redeemSecurityVaultFees, updateSecurityVaultFees } from '../../../protocol/securityVault.js'
+import { depositRepToVaultToSecurityPool, redeemRepFromVaultFromSecurityPool, redeemSecurityVaultFees, updateSecurityVaultFees } from '../../../protocol/securityVault.js'
 import { getPendingTitle, getSuccessTitle, getFailureTitle } from '../lib/securityVaultActionTitles.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
@@ -23,7 +23,7 @@ import { parseRepAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { getDefaultSecurityVaultFormState } from '../../markets/lib/marketForm.js'
 import { getOracleRequestEthGuardMessage, resolveOracleOperationEthFunding } from '../../open-oracle/lib/oracleRequestEth.js'
 import { requireDefined } from '@zoltar/ui-core-shared/forms/required.js'
-import { doesLoadedSecurityVaultMatchSelection, getSelectedVaultOwner, getStagedOperationTimeoutSeconds, getVaultBackingFactorAdjustmentGuard, MIN_STAGED_OPERATION_TIMEOUT_MINUTES, parseTargetHealthFactorBps } from '../lib/securityVault.js'
+import { DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES, doesLoadedSecurityVaultMatchSelection, getSelectedVaultOwner, getStagedOperationTimeoutSeconds, getVaultBackingFactorAdjustmentGuard, MIN_STAGED_OPERATION_TIMEOUT_MINUTES, parseTargetHealthFactorBps } from '../lib/securityVault.js'
 import { createSecurityVaultSuccessPresentation, createSecurityVaultTransactionIntent, createSecurityVaultWarningPresentation } from '../../transactionPresentations.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { buildWriteActionConfig, runWriteAction } from '@zoltar/ui-core-shared/transactions/writeAction.js'
@@ -46,7 +46,6 @@ type SecurityVaultProductionWriteClient = ReturnType<typeof createWalletWriteCli
 type SecurityVaultQueueResult = Pick<SecurityVaultActionResult, 'hash' | 'queuedOperation' | 'stagedExecution'>
 
 export type UseSecurityVaultOperationsDependencies<TWriteClient = SecurityVaultProductionWriteClient> = {
-	adjustVaultBackingFactor: (client: TWriteClient, securityPoolAddress: Address, backingFactorBps: bigint) => Promise<SecurityVaultActionResult>
 	approveErc20: (client: TWriteClient, tokenAddress: Address, spenderAddress: Address, amount: bigint, action: 'approveRep') => Promise<SecurityVaultActionResult>
 	createConnectedReadClient: () => SecurityVaultReadClient
 	createWalletWriteClient: (walletAddress: Address, callbacks?: Parameters<typeof createWalletWriteClient>[1]) => TWriteClient
@@ -56,14 +55,13 @@ export type UseSecurityVaultOperationsDependencies<TWriteClient = SecurityVaultP
 	loadErc20Balance: (tokenAddress: Address, accountAddress: Address) => Promise<bigint>
 	loadOracleManagerDetails: (managerAddress: Address) => Promise<Awaited<ReturnType<typeof loadOracleManagerDetails>>>
 	loadSecurityVaultDetails: (securityPoolAddress: Address, vaultAddress: Address) => Promise<SecurityVaultDetails | undefined>
-	queueOracleManagerOperation: (client: TWriteClient, managerAddress: Address, operation: 'withdrawRep', targetVault: Address, amount: bigint, validForSeconds: bigint) => Promise<SecurityVaultQueueResult>
+	queueOracleManagerOperation: (client: TWriteClient, managerAddress: Address, operation: 'withdrawRep' | 'adjustVaultBackingFactor', targetVault: Address, amount: bigint, validForSeconds: bigint) => Promise<SecurityVaultQueueResult>
 	redeemRepFromVaultFromSecurityPool: (client: TWriteClient, securityPoolAddress: Address, vaultAddress: Address) => Promise<SecurityVaultActionResult>
 	redeemSecurityVaultFees: (client: TWriteClient, securityPoolAddress: Address, vaultAddress: Address) => Promise<SecurityVaultActionResult>
 	updateSecurityVaultFees: (client: TWriteClient, securityPoolAddress: Address, vaultAddress: Address) => Promise<SecurityVaultActionResult>
 }
 
 const defaultUseSecurityVaultOperationsDependencies: UseSecurityVaultOperationsDependencies = {
-	adjustVaultBackingFactor,
 	approveErc20: async (client, tokenAddress, spenderAddress, amount, action) => await approveErc20(client, tokenAddress, spenderAddress, amount, action),
 	createConnectedReadClient: () => createConnectedReadClient(),
 	createWalletWriteClient,
@@ -315,6 +313,13 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 					if (!isVaultActionSnapshotCurrent(snapshot)) return
 					const resolvedSecurityPoolAddress = requireDefined(securityPoolAddress, 'Security pool address is required')
 					securityVaultResult.value = result
+					if (result.stagedExecution?.success === false) {
+						const message = result.stagedExecution.errorMessage ?? 'Vault operation failed'
+						securityVaultError.value = message
+						securityVaultFeedback.value = createErrorActionFeedback(actionName, getFailureTitle(actionName), message)
+						onTransactionPresented(createSecurityVaultWarningPresentation(result, message, transactionContext))
+						return
+					}
 					securityVaultFeedback.value = createSuccessActionFeedback(actionName, getSuccessTitle(actionName), result.hash)
 					onTransactionPresented(createSecurityVaultSuccessPresentation(result, transactionContext))
 					if (!isCurrentSelection()) return
@@ -357,7 +362,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 			snapshot,
 			async (vaultAddress, securityPoolAddress, isCurrentSelection) => {
 				const depositAmount = parseRepAmountInput(snapshot.form.depositAmount, 'REP backing amount')
-				const targetHealthFactorBps = parseTargetHealthFactorBps(snapshot.form.targetHealthFactor)
+				const requestedTargetHealthFactorBps = parseTargetHealthFactorBps(snapshot.form.targetHealthFactor)
 				if (depositAmount <= 0n) throw new Error('REP deposit amount must be greater than zero')
 				const details = await loadExistingSecurityVaultDetails(securityPoolAddress, vaultAddress, 'Security pool does not exist', isCurrentSelection)
 				if (details === undefined) return undefined
@@ -367,7 +372,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				if (currentRepBalanceAttoRep < depositAmount) throw new Error(`Insufficient REP balance. Wallet balance is ${formatCurrencyBalanceWithUnit(currentRepBalanceAttoRep, 'REP')} but the deposit amount is ${formatCurrencyBalanceWithUnit(depositAmount, 'REP')}.`)
 				if (await dependencies.isSecurityPoolVaultAdmissionClosed(securityPoolAddress)) throw new Error(securityPoolCopy.vaultDepositAdmissionClosedDetail)
 				if (!isCurrentSelection()) return undefined
-				return await dependencies.depositRepToVaultToSecurityPool(dependencies.createWalletWriteClient(vaultAddress, { onTransactionPrepared, onTransactionSubmitted }), securityPoolAddress, depositAmount, targetHealthFactorBps)
+				return await dependencies.depositRepToVaultToSecurityPool(dependencies.createWalletWriteClient(vaultAddress, { onTransactionPrepared, onTransactionSubmitted }), securityPoolAddress, depositAmount, details.targetBackingFactorBps || requestedTargetHealthFactorBps)
 			},
 			'Failed to deposit REP',
 			async (_result, securityPoolAddress, vaultAddress, isCurrentSelection) => {
@@ -381,6 +386,17 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 		)
 	}
 
+	const prepareVaultOracleOperation = async (details: SecurityVaultDetails, vaultAddress: Address) => {
+		const managerDetails = await dependencies.loadOracleManagerDetails(details.managerAddress)
+		const funding = resolveOracleOperationEthFunding({ managerDetails })
+		const writeClient = dependencies.createWalletWriteClient(vaultAddress, { onTransactionPrepared, onTransactionSubmitted })
+		const walletBalanceAttoEth = funding?.costAttoEth !== undefined && funding.costAttoEth > 0n ? await dependencies.createConnectedReadClient().getBalance({ address: vaultAddress }) : undefined
+		if (funding?.costAttoEth !== undefined && funding.costAttoEth > 0n) {
+			await assertFreshRequestFunding(writeClient, details.managerAddress, vaultAddress, funding.costAttoEth, 'queue this vault operation', walletBalanceAttoEth)
+		}
+		return { managerDetails, funding, walletBalanceAttoEth, writeClient }
+	}
+
 	const adjustBackingFactor = async (value: string) => {
 		if (securityVaultActiveAction.value !== undefined) return
 		const snapshot = createVaultActionSnapshot()
@@ -388,15 +404,20 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 			'adjustVaultBackingFactor',
 			snapshot,
 			async (vaultAddress, securityPoolAddress, isCurrentSelection) => {
-				const factor = parseTargetHealthFactorBps(value, 'Vault backing factor')
+				const factor = parseTargetHealthFactorBps(value, securityPoolCopy.vaultBackingFactor)
 				const details = await dependencies.loadSecurityVaultDetails(securityPoolAddress, vaultAddress)
 				if (!isCurrentSelection()) return undefined
-				const guard = getVaultBackingFactorAdjustmentGuard(details)
+				const guard = getVaultBackingFactorAdjustmentGuard(details, factor)
 				if (guard !== undefined) throw new Error(guard)
 				if (await dependencies.isSecurityPoolVaultAdmissionClosed(securityPoolAddress)) throw new Error(securityPoolCopy.vaultDepositAdmissionClosedDetail)
 				if (!isCurrentSelection()) return undefined
 				if (details === undefined || (details.vaultAttoRepBacking * 10_000n) / factor === 0n) throw new Error('Backing factor must leave positive capacity.')
-				return await dependencies.adjustVaultBackingFactor(dependencies.createWalletWriteClient(vaultAddress, { onTransactionPrepared, onTransactionSubmitted }), securityPoolAddress, factor)
+				const { managerDetails, writeClient } = await prepareVaultOracleOperation(details, vaultAddress)
+				if (!isCurrentSelection()) return undefined
+				const coverageGuard = getVaultBackingFactorAdjustmentGuard(details, factor, managerDetails?.isPriceValid ? managerDetails.lastPrice : undefined, details.statoblastSecurityMultiplierBps)
+				if (coverageGuard !== undefined) throw new Error(coverageGuard)
+				const result = await dependencies.queueOracleManagerOperation(writeClient, details.managerAddress, 'adjustVaultBackingFactor', vaultAddress, factor, DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES * 60n)
+				return { ...result, action: 'adjustVaultBackingFactor' } satisfies SecurityVaultActionResult
 			},
 			'Failed to adjust backing factor',
 			async (_result, securityPoolAddress, vaultAddress, isCurrentSelection) => {
@@ -455,15 +476,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 
 				const details = await loadExistingSecurityVaultDetails(securityPoolAddress, vaultAddress, 'Security pool does not exist', isCurrentSelection)
 				if (details === undefined) return undefined
-				const managerDetails = await dependencies.loadOracleManagerDetails(details.managerAddress)
-				const funding = resolveOracleOperationEthFunding({
-					managerDetails,
-				})
-				const writeClient = dependencies.createWalletWriteClient(vaultAddress, { onTransactionPrepared, onTransactionSubmitted })
-				const walletBalanceAttoEth = funding?.costAttoEth === undefined || funding.costAttoEth === 0n ? undefined : await dependencies.createConnectedReadClient().getBalance({ address: vaultAddress })
-				if (funding?.costAttoEth !== undefined && funding.costAttoEth > 0n) {
-					await assertFreshRequestFunding(writeClient, details.managerAddress, vaultAddress, funding.costAttoEth, 'queue this REP withdrawal', walletBalanceAttoEth)
-				}
+				const { funding, walletBalanceAttoEth, writeClient } = await prepareVaultOracleOperation(details, vaultAddress)
 				const withdrawRepGuardMessage = getOracleRequestEthGuardMessage({
 					actionLabel: 'queue this REP withdrawal',
 					includeBuffer: funding?.includeBuffer === true,

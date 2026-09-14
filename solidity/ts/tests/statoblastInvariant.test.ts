@@ -1479,8 +1479,8 @@ describe('Statoblast invariant harness', () => {
 		strictEqualTypeSafe(await getActiveStagedOperationCount(client, priceOracle), 5n, 'active operation count should include pending and manual operations')
 		const [activeOperationIds, activeOperations] = await getActiveStagedOperations(client, priceOracle, 0n, 5n)
 		assert.deepStrictEqual(Array.from(activeOperationIds), [5n, 4n, 3n, 2n, 1n], 'active staged operations should page newest first')
-		assert.strictEqual(activeOperations[0]?.operationAmountAttoRepOrAttoEth, withdrawalAmountsAttoRep[4], 'newest overflow operation should retain its amount')
-		assert.strictEqual(activeOperations[4]?.operationAmountAttoRepOrAttoEth, withdrawalAmountsAttoRep[0], 'oldest pending operation should retain its amount')
+		assert.strictEqual(activeOperations[0]?.operationValue, withdrawalAmountsAttoRep[4], 'newest overflow operation should retain its amount')
+		assert.strictEqual(activeOperations[4]?.operationValue, withdrawalAmountsAttoRep[0], 'oldest pending operation should retain its amount')
 
 		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
 

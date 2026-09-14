@@ -127,7 +127,7 @@ export async function discoverStagedOperations(client: ChaosReadClient, pool: Po
 							operationId: id,
 							operator: operation.operator,
 							receiverVault: operation.receiverVault,
-							requestedDebtAttoEth: hasApproval ? operation.reservedLiquidationDebtAttoEth : operation.operationAmountAttoRepOrAttoEth,
+							requestedDebtAttoEth: hasApproval ? operation.reservedLiquidationDebtAttoEth : operation.operationValue,
 							snapshot: {
 								targetBackingUnits: operation.snapshotTargetBackingUnits,
 								targetCapacityOwnershipAttoRep: operation.snapshotTargetCapacityOwnershipAttoRep,
@@ -153,7 +153,7 @@ export async function discoverStagedOperations(client: ChaosReadClient, pool: Po
 					account: pool.coordinator,
 					abi: securityPoolAbi,
 					address: pool.address,
-					args: [operation.operator, operation.operationAmountAttoRepOrAttoEth],
+					args: [operation.operator, operation.operationValue],
 					blockNumber,
 					functionName: 'withdrawRepFromVault',
 				})
@@ -165,7 +165,7 @@ export async function discoverStagedOperations(client: ChaosReadClient, pool: Po
 			}
 		}
 		return {
-			amount: operation.operationAmountAttoRepOrAttoEth.toString(),
+			amount: operation.operationValue.toString(),
 			coordinator: pool.coordinator,
 			executionExpectedResult,
 			executionExpectedSuccess,

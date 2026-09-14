@@ -63,7 +63,7 @@
 	"events": ["SecurityPoolSet", "RepEthPriceSet", "PriceRequested", "PriceReported", "PriceReportRejected", "PendingReportRecovered", "LiquidationRouteStaged", "StagedOperationQueued", "ExecutedStagedOperation", "CoordinatorStateCheckpoint"],
 	"checkpointReasons": { "0": "SecurityPoolSetup", "1": "PriceSeeded", "2": "PriceRequested", "3": "PriceReported", "4": "PriceRejected", "5": "PendingReportRecovered", "6": "OperationQueued", "7": "OperationExecuted" },
 	"enumValues": {
-		"OperationType": { "0": "Liquidation", "1": "WithdrawRep" },
+		"OperationType": { "0": "Liquidation", "1": "WithdrawRep", "2": "AdjustVaultBackingFactor" },
 		"CoordinatorCheckpointReason": { "0": "SecurityPoolSetup", "1": "PriceSeeded", "2": "PriceRequested", "3": "PriceReported", "4": "PriceRejected", "5": "PendingReportRecovered", "6": "OperationQueued", "7": "OperationExecuted" }
 	},
 	"eventDeclarations": {
@@ -74,7 +74,7 @@
 		"PriceReported": "PriceReported(uint256 indexed reportId, uint256 price, uint256 lastSettlementTimestamp)",
 		"PendingReportRecovered": "PendingReportRecovered(uint256 indexed reportId, uint256 settlementTimestamp, uint256 pendingReportId, uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas, uint256 lastPrice, uint256 lastSettlementTimestamp)",
 		"LiquidationRouteStaged": "LiquidationRouteStaged(uint256 indexed operationId, address indexed operator, address indexed receiverVault, address targetVault, bytes32 approvalId, uint256 requestedDebtAttoEth, uint256 reservedDebtAttoEth)",
-		"StagedOperationQueued": "StagedOperationQueued(uint256 indexed operationId, uint8 operation, address indexed operator, address indexed targetVault, uint256 operationAmountAttoRepOrAttoEth, uint256 queuedAt, uint256 validForSeconds, uint256 snapshotTargetBackingUnits, uint256 snapshotTargetCapacityOwnershipAttoRep, uint256 snapshotTargetOpenInterestAttoEth, uint256 snapshotTargetDisputeStakedAttoRep, uint256 snapshotTotalPoolHeldAttoRep, uint256 snapshotTotalRepBackingUnits, bool isPendingSlot)",
+		"StagedOperationQueued": "StagedOperationQueued(uint256 indexed operationId, uint8 operation, address indexed operator, address indexed targetVault, uint256 operationValue, uint256 queuedAt, uint256 validForSeconds, uint256 snapshotTargetBackingUnits, uint256 snapshotTargetCapacityOwnershipAttoRep, uint256 snapshotTargetOpenInterestAttoEth, uint256 snapshotTargetDisputeStakedAttoRep, uint256 snapshotTotalPoolHeldAttoRep, uint256 snapshotTotalRepBackingUnits, bool isPendingSlot)",
 		"ExecutedStagedOperation": "ExecutedStagedOperation(uint256 indexed operationId, uint8 operation, bool success, string errorMessage)",
 		"CoordinatorStateCheckpoint": "CoordinatorStateCheckpoint(uint8 reason, uint256 indexed reportId, uint256 indexed operationId, uint256 pendingReportId, address pendingReportSponsor, uint256 pendingOperationSlotId, uint256 pendingReportMaxSettlementBaseFeeAttoEthPerGas, uint256 lastPrice, uint256 lastSettlementTimestamp, uint256 stagedOperationCounter, uint256 activeStagedOperationCount, uint256 pendingSettlementOperationCount)"
 	},
@@ -155,5 +155,5 @@
 		"stagedOperations": "stagedOperations(uint256)"
 	},
 	"functionSignatureNote": "The functions map is the complete ABI name-to-mutability inventory. Signatures are listed for parameterized and tuple-returning entry points; zero-input and scalar getters use their Solidity names directly.",
-	"operationType": { "0": "Liquidation", "1": "WithdrawRep" }
+	"operationType": { "0": "Liquidation", "1": "WithdrawRep", "2": "AdjustVaultBackingFactor" }
 }

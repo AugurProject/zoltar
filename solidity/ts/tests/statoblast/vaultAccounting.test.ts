@@ -214,18 +214,18 @@ describe('Statoblast: vault accounting', () => {
 		strictEqualTypeSafe(factors[1], 0n, 'zero capacity should report zero pool-held REP per capacity')
 	})
 
-	test('economically identical mixed-target vaults are independent of deposit order', async () => {
+	test('same-target vaults are independent of deposit order', async () => {
 		const vaultA = createWriteClient(mockWindow, TEST_ADDRESSES[2])
 		const vaultB = createWriteClient(mockWindow, TEST_ADDRESSES[3])
 		const depositAmount = repDeposit / 10n
 		for (const vault of [vaultA, vaultB]) {
-			await transferRepToAddress(client, vault.account.address, depositAmount * 2n)
+			await transferRepToAddress(client, vault.account.address, depositAmount * 3n)
 			await approveToken(vault, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
 		}
-		await depositRepToVault(vaultA, securityPoolAddresses.securityPool, depositAmount, 10_000n)
 		await depositRepToVault(vaultA, securityPoolAddresses.securityPool, depositAmount, 20_000n)
+		await depositRepToVault(vaultA, securityPoolAddresses.securityPool, depositAmount * 2n, 20_000n)
+		await depositRepToVault(vaultB, securityPoolAddresses.securityPool, depositAmount * 2n, 20_000n)
 		await depositRepToVault(vaultB, securityPoolAddresses.securityPool, depositAmount, 20_000n)
-		await depositRepToVault(vaultB, securityPoolAddresses.securityPool, depositAmount, 10_000n)
 		await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
 
 		const vaultAState = await getSecurityVault(client, securityPoolAddresses.securityPool, vaultA.account.address)
@@ -244,10 +244,10 @@ describe('Statoblast: vault accounting', () => {
 		const vaultBFactors = await getVaultCapacityBackingFactorsBps(vaultB.account.address)
 		strictEqualTypeSafe(vaultAFactors[0], vaultBFactors[0], 'reversed deposits should produce the same associated backing factor')
 		strictEqualTypeSafe(vaultAFactors[1], vaultBFactors[1], 'reversed deposits should produce the same pool-held backing factor')
-		strictEqualTypeSafe(vaultAFactors[0], 13_333n, 'associated REP per capacity should derive from aggregate backing and capacity')
-		strictEqualTypeSafe(vaultAFactors[1], 13_333n, 'pool-held REP per capacity should derive from aggregate backing and capacity')
+		strictEqualTypeSafe(vaultAFactors[0], 20_000n, 'associated REP per capacity should derive from aggregate backing and capacity')
+		strictEqualTypeSafe(vaultAFactors[1], 20_000n, 'pool-held REP per capacity should derive from aggregate backing and capacity')
 		strictEqualTypeSafe(vaultATargets.at(-1)?.args?.depositTargetHealthFactorBps, 20_000n, 'vault A history should expose its latest deposit instruction')
-		strictEqualTypeSafe(vaultBTargets.at(-1)?.args?.depositTargetHealthFactorBps, 10_000n, 'vault B history should expose its latest deposit instruction')
+		strictEqualTypeSafe(vaultBTargets.at(-1)?.args?.depositTargetHealthFactorBps, 20_000n, 'vault B history should expose its latest deposit instruction')
 		const vaultAOpenInterestAttoEth = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddresses.securityPool, functionName: 'getVaultOpenInterestAttoEth', args: [vaultA.account.address] })
 		const vaultBOpenInterestAttoEth = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddresses.securityPool, functionName: 'getVaultOpenInterestAttoEth', args: [vaultB.account.address] })
 		strictEqualTypeSafe(vaultAOpenInterestAttoEth, vaultBOpenInterestAttoEth, 'reversed deposits should receive identical open interest')
@@ -284,12 +284,12 @@ describe('Statoblast: vault accounting', () => {
 		strictEqualTypeSafe(preferenceLogs.length, 0, 'zero deposit must not record a deposit target event')
 	})
 
-	test('mixed non-round deposit targets derive aggregate backing factors from final economic state', async () => {
+	test('non-round deposits preserve the saved vault target', async () => {
 		const vault = createWriteClient(mockWindow, TEST_ADDRESSES[2])
 		const deposits = [
 			{ amount: repDeposit / 9n + 7n, target: 12_345n },
-			{ amount: repDeposit / 7n + 11n, target: 23_456n },
-			{ amount: repDeposit / 5n + 13n, target: 17_777n },
+			{ amount: repDeposit / 7n + 11n, target: 12_345n },
+			{ amount: repDeposit / 5n + 13n, target: 12_345n },
 		]
 		const totalDepositAttoRep = deposits.reduce((total, deposit) => total + deposit.amount, 0n)
 		await transferRepToAddress(client, vault.account.address, totalDepositAttoRep)
@@ -300,7 +300,7 @@ describe('Statoblast: vault accounting', () => {
 
 		const vaultState = await getSecurityVault(client, securityPoolAddresses.securityPool, vault.account.address)
 		const poolHeldRepAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vaultState.repBackingUnits)
-		const expectedCapacityOwnershipAttoRep = deposits.reduce((total, deposit) => total + (deposit.amount * 10_000n) / deposit.target, 0n)
+		const expectedCapacityOwnershipAttoRep = (totalDepositAttoRep * 10_000n) / 12_345n
 		const expectedFactorBps = (poolHeldRepAttoRep * 10_000n) / expectedCapacityOwnershipAttoRep
 		const factors = await getVaultCapacityBackingFactorsBps(vault.account.address)
 		strictEqualTypeSafe(vaultState.capacityOwnershipAttoRep, expectedCapacityOwnershipAttoRep, 'each deposit should retain the existing downward-rounded capacity formula')

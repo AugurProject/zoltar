@@ -201,8 +201,8 @@ function assertMigrationSecurityCoverageCommitmentDocs(): void {
 	for (const functionName of externalPureFunctions) {
 		assert.ok(operatorReference.includes(`${functionName}(`), `operator reference must document SecurityPoolUtils.${functionName}`)
 	}
-	assert.match(priceCoordinator, /enum OperationType \{\s*Liquidation,\s*WithdrawRep\s*\}/)
-	assert.match(coordinatorData, /"OperationType": \{ "0": "Liquidation", "1": "WithdrawRep" \}/)
+	assert.match(priceCoordinator, /enum OperationType \{\s*Liquidation,\s*WithdrawRep,\s*AdjustVaultBackingFactor\s*\}/)
+	assert.match(coordinatorData, /"OperationType": \{ "0": "Liquidation", "1": "WithdrawRep", "2": "AdjustVaultBackingFactor" \}/)
 	assert.doesNotMatch(coordinatorData, /StagedOperationDisputeStakedRepSnapshotted|initiatorVault/)
 	assert.doesNotMatch(priceCoordinator, /event PendingOperationRecoveryConsumed/)
 	assert.match(coordinatorData, /LiquidationRouteStaged\(uint256 indexed operationId, address indexed operator, address indexed receiverVault, address targetVault, bytes32 approvalId, uint256 requestedDebtAttoEth, uint256 reservedDebtAttoEth\)/)
