@@ -1,3 +1,4 @@
+import { ceilDiv as divideUp } from '@zoltar/core-shared/math/bigint'
 import type { PoolSnapshot } from './types.ts'
 
 const PRECISION = 10n ** 18n
@@ -5,7 +6,7 @@ const PRECISION = 10n ** 18n
 const value = (input: string) => BigInt(input)
 
 function ceilDivide(numerator: bigint, denominator: bigint) {
-	return denominator === 0n ? undefined : (numerator + denominator - 1n) / denominator
+	return denominator === 0n ? undefined : divideUp(numerator, denominator)
 }
 
 export function sharesToProjectedEth(pool: PoolSnapshot, attoShares: bigint) {

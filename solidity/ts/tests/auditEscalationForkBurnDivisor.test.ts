@@ -1,20 +1,21 @@
+import { encodeAbiParameters, encodeDeployData, keccak256, zeroAddress, type Abi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { beforeEach, describe, test } from 'bun:test'
-import { encodeAbiParameters, encodeDeployData, keccak256, type Abi, type Address, type Hex, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { deployContract } from '../testSupport/deployContract'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
-import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
-import { createWriteClient, WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
-import { addressString } from '../testSupport/simulator/utils/bigint'
-import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
+import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import assert from '../testSupport/simulator/utils/assert'
-import { getERC20Balance, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
+import { addressString } from '../testSupport/simulator/utils/bigint'
+import { createWriteClient, WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
+import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { ensureZoltarDeployed, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
+import { getERC20Balance, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import {
+	test_statoblast_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as proofTestPoolArtifact,
+	ReputationToken_ReputationToken,
 	statoblast_EscalationGame_EscalationGame,
 	statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
 	statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier,
-	ReputationToken_ReputationToken,
-	test_statoblast_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as proofTestPoolArtifact,
 	Zoltar_Zoltar,
 } from '../types/contractArtifact'
 import { hashCarryLeaf, SparseNullifierTree } from './carryProofHelpers'
@@ -51,13 +52,6 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 	const zeroHash = `0x${'0'.repeat(64)}` as Hex
 	const universeSupplySlot = keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [0n, ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT]))
 
-	const deployContract = async (deploymentData: Hex): Promise<Address> => {
-		const transactionHash = await client.sendTransaction({ data: deploymentData })
-		const receipt = await client.waitForTransactionReceipt({ hash: transactionHash })
-		if (receipt.contractAddress === undefined || receipt.contractAddress === null) throw new Error('deployment address missing')
-		return receipt.contractAddress
-	}
-
 	const zeroPeaks = () => Array.from({ length: 64 }, () => zeroHash)
 
 	beforeEach(async () => {
@@ -66,6 +60,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 		await setupTestAccounts(mockWindow)
 		await ensureZoltarDeployed(client)
 		claimDelegate = await deployContract(
+			client,
 			encodeDeployData({
 				abi: statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate.abi,
 				bytecode: `0x${statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate.evm.bytecode.object}`,
@@ -75,6 +70,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 
 	test('rounds the own-fork minimum backing up for non-divisible source principal', async () => {
 		const proofVerifier = await deployContract(
+			client,
 			encodeDeployData({
 				abi: statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.abi,
 				bytecode: `0x${statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.evm.bytecode.object}`,
@@ -85,6 +81,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 
 		const deployContinuation = async (initialBacking: bigint) => {
 			const securityPool = await deployContract(
+				client,
 				encodeDeployData({
 					abi: proofTestPoolArtifact.abi,
 					bytecode: `0x${proofTestPoolArtifact.evm.bytecode.object}`,
@@ -92,6 +89,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 				}),
 			)
 			const escalationGame = await deployContract(
+				client,
 				encodeDeployData({
 					abi: statoblast_EscalationGame_EscalationGame.abi,
 					bytecode: `0x${statoblast_EscalationGame_EscalationGame.evm.bytecode.object}`,
@@ -203,6 +201,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 			args: [],
 		})
 		const proofVerifier = await deployContract(
+			client,
 			encodeDeployData({
 				abi: statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.abi,
 				bytecode: `0x${statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.evm.bytecode.object}`,
@@ -213,6 +212,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 		for (const unsafeForkBurnDivisor of [2n, 3n, 4n]) {
 			await assert.rejects(
 				deployContract(
+					client,
 					encodeDeployData({
 						abi: Zoltar_Zoltar.abi,
 						bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
@@ -225,6 +225,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 
 		const forkBurnDivisor = 5n
 		const zoltar = await deployContract(
+			client,
 			encodeDeployData({
 				abi: Zoltar_Zoltar.abi,
 				bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
@@ -251,6 +252,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 
 		const childBacking = FORK_THRESHOLD - FORK_THRESHOLD / forkBurnDivisor
 		const securityPool = await deployContract(
+			client,
 			encodeDeployData({
 				abi: proofTestPoolArtifact.abi,
 				bytecode: `0x${proofTestPoolArtifact.evm.bytecode.object}`,
@@ -258,6 +260,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 			}),
 		)
 		const escalationGame = await deployContract(
+			client,
 			encodeDeployData({
 				abi: statoblast_EscalationGame_EscalationGame.abi,
 				bytecode: `0x${statoblast_EscalationGame_EscalationGame.evm.bytecode.object}`,

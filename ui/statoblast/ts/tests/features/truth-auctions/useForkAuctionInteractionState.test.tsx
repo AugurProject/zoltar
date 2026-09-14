@@ -1,12 +1,12 @@
 /// <reference types='bun-types' />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { useForkAuctionInteractionState } from '@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useForkAuctionInteractionState.js'
+import { describe, expect, test } from 'bun:test'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
-import type { Address } from '@zoltar/core-shared/evm/ethereum'
-import { useForkAuctionInteractionState } from '@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useForkAuctionInteractionState.js'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
-import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
 type InteractionProps = Parameters<typeof useForkAuctionInteractionState>[0]
 type InteractionState = ReturnType<typeof useForkAuctionInteractionState>
@@ -16,17 +16,12 @@ const caseVariantPoolAddress: Address = '0x0000000000000000000000000000000000000
 
 describe('useForkAuctionInteractionState', () => {
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
-	let restoreDomEnvironment: (() => void) | undefined
 
-	beforeEach(() => {
-		restoreDomEnvironment = installDomEnvironment().cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+		},
 	})
 
 	test('reconciles a migration result with equivalent pool address casing', async () => {

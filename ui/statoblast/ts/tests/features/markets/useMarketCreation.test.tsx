@@ -1,33 +1,24 @@
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 /// <reference types='bun-types' />
 
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import { h, render } from 'preact'
-import { act } from 'preact/test-utils'
 import { getAddress, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
-import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import type { DeploymentStatus, MarketCreationResult } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { MarketFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import type { UseMarketCreationDependencies } from '@zoltar/ui-statoblast-shared/features/markets/hooks/useMarketCreation.js'
+import type { MarketFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
+import { describe, expect, mock, test } from 'bun:test'
+import { h, render } from 'preact'
+import { act } from 'preact/test-utils'
 
 type UseMarketCreation = typeof import('@zoltar/ui-statoblast-shared/features/markets/hooks/useMarketCreation.js')['useMarketCreation']
 type UseMarketCreationState = ReturnType<UseMarketCreation>
 
 const WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000a1')
 const SECOND_WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000a2')
-
-function createDeferred<T>() {
-	let resolve: (value: T) => void = () => undefined
-	let reject: (reason?: unknown) => void = () => undefined
-	const promise = new Promise<T>((promiseResolve, promiseReject) => {
-		resolve = promiseResolve
-		reject = promiseReject
-	})
-	return { promise, reject, resolve }
-}
 
 function createStatus(id: DeploymentStatus['id'], deployed: boolean, dependencies: DeploymentStatus['id'][] = []): DeploymentStatus {
 	return {
@@ -47,25 +38,21 @@ function requireHookState(state: UseMarketCreationState | undefined) {
 }
 
 describe('useMarketCreation', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 	let resetEnvironment: (() => void) | undefined
 
-	beforeEach(() => {
-		const domEnvironment = installDomEnvironment()
-		restoreDomEnvironment = domEnvironment.cleanup
-		resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		resetEnvironment?.()
-		resetEnvironment = undefined
-		resetActiveEnvironmentForTesting()
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
-		mock.restore()
+	installDomTestLifecycle({
+		beforeTest: () => {
+			resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
+		},
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+			resetEnvironment?.()
+			resetEnvironment = undefined
+			resetActiveEnvironmentForTesting()
+			mock.restore()
+		},
 	})
 
 	test('blocks repeated market creation submissions while the first request is still preparing', async () => {

@@ -1,5 +1,6 @@
 import path from 'node:path'
 import { projectDependencyClosure, projects, projectsInTaskGroup, projectTaskNames, taskProjects, topologicallySortedProjects, validateProjectRegistry, type Project, type ProjectTaskName } from './projects.ts'
+import { repositoryRoot as defaultRepositoryRoot } from './root.mts'
 
 export type ProjectTaskPlanEntry = {
 	readonly command: readonly string[]
@@ -22,7 +23,7 @@ export function createProjectTaskPlan(taskName: ProjectTaskName, requestedProjec
 	})
 }
 
-export async function runProjectTaskPlan(plan: readonly ProjectTaskPlanEntry[], repositoryRoot = path.resolve(import.meta.dir, '../..')): Promise<number> {
+export async function runProjectTaskPlan(plan: readonly ProjectTaskPlanEntry[], repositoryRoot = defaultRepositoryRoot): Promise<number> {
 	for (const entry of plan) {
 		console.log(`project:${entry.projectId}: ${entry.command.join(' ')}`)
 		const child = Bun.spawn({ cmd: [...entry.command], cwd: path.join(repositoryRoot, entry.cwd), stdin: 'inherit', stdout: 'inherit', stderr: 'inherit' })

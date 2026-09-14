@@ -1,8 +1,9 @@
+import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
-import { expect, test } from 'bun:test'
-import { createProjectTaskPlan } from './run-project-tasks.mts'
 import { projects, type Project } from './projects.ts'
+import { repositoryRoot } from './root.mts'
+import { createProjectTaskPlan } from './run-project-tasks.mts'
 
 const registry: readonly Project[] = [
 	{ id: 'app', path: 'app', type: 'ui-app', dependencies: ['domain'], tasks: { build: { command: ['bun', 'run', 'build'], cwd: 'app', inputs: ['app/**'] } }, generatedDirectories: [] },
@@ -41,7 +42,6 @@ test('full setup bootstraps the repository before dependency-ordered package set
 })
 
 test('the real full setup plan installs the root runtime before every Preact-consuming UI package', () => {
-	const repositoryRoot = path.resolve(import.meta.dir, '../..')
 	const preactConsumers = projects.filter(project => {
 		if (!project.path.startsWith('ui/') || project.tasks.setup === undefined) return false
 		const manifest: unknown = JSON.parse(readFileSync(path.join(repositoryRoot, project.path, 'package.json'), 'utf8'))

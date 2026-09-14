@@ -1,23 +1,17 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { readCoreSharedCssSource } from './testUtils/coreSharedCss.js'
+import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
+import { describe, expect, test } from 'bun:test'
 import { SectionBlock } from '../components/SectionBlock.js'
-import { installDomEnvironment } from './testUtils/domEnvironment.js'
+import { readCoreSharedCssSource } from './testUtils/coreSharedCss.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
 describe('SectionBlock', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
-	beforeEach(() => {
-		const domEnvironment = installDomEnvironment()
-		restoreDomEnvironment = domEnvironment.cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+		},
 	})
 
 	test('renders explicit visual hierarchy variants as classes', async () => {

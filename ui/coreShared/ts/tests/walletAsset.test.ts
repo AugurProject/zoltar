@@ -1,14 +1,15 @@
+import { createDeferred } from './testUtils/deferred.js'
 /// <reference types='bun-types' />
 
-import { describe, expect, mock, test } from 'bun:test'
 import { getAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { watchActiveWalletAsset, type WalletAssetMetadata } from '../wallet/walletAsset.js'
+import { describe, expect, mock, test } from 'bun:test'
+import { installActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import type { ChainBackend } from '../wallet/chainBackend.js'
 import type { InjectedEthereum } from '../wallet/injectedEthereum.js'
-import { installActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
+import { MAINNET_NETWORK_PROFILE } from '../wallet/networkProfile.js'
+import { watchActiveWalletAsset, type WalletAssetMetadata } from '../wallet/walletAsset.js'
 import { createFakeBackend } from './testUtils/fakeBackend.js'
 import { createMockLoaderClient } from './testUtils/protocolTestSupport.js'
-import { MAINNET_NETWORK_PROFILE } from '../wallet/networkProfile.js'
 
 const GENESIS_REP_ADDRESS = '0x221657776846890989a759ba2973e427dff5c9bb'
 const CHILD_REP_ADDRESS = '0x00000000000000000000000000000000000000a1'
@@ -56,14 +57,6 @@ async function requestWalletWatchAsset(address: Address, dependencies: WalletAss
 	} finally {
 		restoreEnvironment()
 	}
-}
-
-function createDeferred<T>() {
-	let resolve: (value: T) => void = () => undefined
-	const promise = new Promise<T>(promiseResolve => {
-		resolve = promiseResolve
-	})
-	return { promise, resolve }
 }
 
 function createRequestDependencies({

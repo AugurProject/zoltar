@@ -1,12 +1,12 @@
 /// <reference types='bun-types' />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import type { ComponentChildren } from 'preact'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
-import { TruthAuctionBidsSection, ViewerTruthAuctionBidsSection } from '@zoltar/ui-statoblast-shared/features/truth-auctions/components/TruthAuctionBidsSection.js'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { TruthAuctionBidsSection, ViewerTruthAuctionBidsSection } from '@zoltar/ui-statoblast-shared/features/truth-auctions/components/TruthAuctionBidsSection.js'
+import { describe, expect, test } from 'bun:test'
+import type { ComponentChildren } from 'preact'
 
 const walletAddress: Address = '0x0000000000000000000000000000000000000001'
 
@@ -16,18 +16,13 @@ function renderPriceValue(value: bigint | undefined): ComponentChildren {
 }
 
 describe('TruthAuctionBidsSection', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRendered: (() => Promise<void>) | undefined
 
-	beforeEach(() => {
-		restoreDomEnvironment = installDomEnvironment().cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRendered?.()
-		cleanupRendered = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRendered?.()
+			cleanupRendered = undefined
+		},
 	})
 
 	test('shows auction bid loading and empty states', async () => {
@@ -150,18 +145,13 @@ describe('TruthAuctionBidsSection', () => {
 })
 
 describe('ViewerTruthAuctionBidsSection', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRendered: (() => Promise<void>) | undefined
 
-	beforeEach(() => {
-		restoreDomEnvironment = installDomEnvironment().cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRendered?.()
-		cleanupRendered = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRendered?.()
+			cleanupRendered = undefined
+		},
 	})
 
 	test('prompts for a wallet before showing viewer bids', async () => {

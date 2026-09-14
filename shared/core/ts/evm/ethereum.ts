@@ -1,7 +1,8 @@
 import { keccak_256 } from '@noble/hashes/sha3.js'
-import { bytesToHex as nobleBytesToHex, concatBytes, hexToBytes as nobleHexToBytes, utf8ToBytes } from '@noble/hashes/utils.js'
+import { concatBytes, bytesToHex as nobleBytesToHex, hexToBytes as nobleHexToBytes, utf8ToBytes } from '@noble/hashes/utils.js'
 import { addr, amounts, eip191Signer, Transaction as MicroTransaction } from 'micro-eth-signer'
-import { Decoder, createContract, deployContract, events } from 'micro-eth-signer/advanced/abi.js'
+import { createContract, Decoder, deployContract, events } from 'micro-eth-signer/advanced/abi.js'
+import { errorChain } from '../errors/errorChain.js'
 import { multicallFailureMessage } from './multicallFailure.js'
 
 export type Hex = `0x${string}`
@@ -1490,12 +1491,8 @@ function isTransactionNotFoundError(error: unknown): error is Error {
 }
 
 function isRateLimitError(error: unknown) {
-	const seen = new Set<unknown>()
-	let current: unknown = error
-	while (typeof current === 'object' && current !== null && !seen.has(current)) {
-		seen.add(current)
+	for (const current of errorChain(error)) {
 		if (current instanceof RpcError && (current.code === 429 || current.code === '429' || current.code === -32_005 || current.code === '-32005' || current.message.includes('HTTP 429'))) return true
-		current = 'cause' in current ? current.cause : undefined
 	}
 	return false
 }
@@ -1584,14 +1581,10 @@ async function readContractRaw<TAbi extends Abi, TFunctionName extends string>(t
 			],
 		})
 	} catch (cause) {
-		const seen = new Set<unknown>()
-		let current: unknown = cause
-		while (typeof current === 'object' && current !== null && !seen.has(current)) {
-			seen.add(current)
+		for (const current of errorChain(cause)) {
 			if (current instanceof RpcError && current.message.toLowerCase().includes('revert')) {
 				throw new ContractFunctionError('ContractFunctionRevertedError', current.message, cause)
 			}
-			current = 'cause' in current ? current.cause : undefined
 		}
 		throw cause
 	}

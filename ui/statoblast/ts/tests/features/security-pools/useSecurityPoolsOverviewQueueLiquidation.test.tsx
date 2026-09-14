@@ -1,18 +1,19 @@
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 /// <reference types='bun-types' />
 
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import { h, render, type ComponentChildren } from 'preact'
-import { act } from 'preact/test-utils'
 import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import { createSecurityPoolsOverviewDependencies, type TestSecurityPoolsOverviewWriteClient } from './testSupport/securityPoolsOverviewDependencies.js'
+import type { LiquidationApprovalDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { useSecurityPoolsOverview, type UseSecurityPoolsOverviewDependencies } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolsOverview.js'
 import type { GlobalTransactionPresentation } from '@zoltar/ui-zoltar-shared/features/types.js'
-import type { LiquidationApprovalDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import { describe, expect, mock, test } from 'bun:test'
+import { h, render, type ComponentChildren } from 'preact'
+import { act } from 'preact/test-utils'
+import { createSecurityPoolsOverviewDependencies, type TestSecurityPoolsOverviewWriteClient } from './testSupport/securityPoolsOverviewDependencies.js'
 
 type UseSecurityPoolsOverviewState = ReturnType<typeof useSecurityPoolsOverview>
 type HarnessOptions = {
@@ -21,14 +22,6 @@ type HarnessOptions = {
 
 const WALLET_ADDRESS = getAddress('0x0000000000000000000000000000000000000001')
 const SECOND_WALLET_ADDRESS = getAddress('0x0000000000000000000000000000000000000002')
-
-function createDeferred<T>() {
-	let resolve: (value: T) => void = () => undefined
-	const promise = new Promise<T>(promiseResolve => {
-		resolve = promiseResolve
-	})
-	return { promise, resolve }
-}
 
 function createHarness(dependencies: UseSecurityPoolsOverviewDependencies<TestSecurityPoolsOverviewWriteClient>, onRender: (state: UseSecurityPoolsOverviewState) => void, options: HarnessOptions = {}) {
 	return function SecurityPoolsOverviewHarness({ accountAddress = WALLET_ADDRESS, environmentRefreshKey = 0 }: { accountAddress?: Address; children?: ComponentChildren; environmentRefreshKey?: number }) {
@@ -57,23 +50,20 @@ function requireHookState(state: UseSecurityPoolsOverviewState | undefined) {
 }
 
 describe('useSecurityPoolsOverview queueLiquidation', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let restoreActiveEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
-	beforeEach(() => {
-		restoreDomEnvironment = installDomEnvironment().cleanup
-		restoreActiveEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		restoreActiveEnvironment?.()
-		restoreActiveEnvironment = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
-		mock.restore()
+	installDomTestLifecycle({
+		beforeTest: () => {
+			restoreActiveEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
+		},
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+			restoreActiveEnvironment?.()
+			restoreActiveEnvironment = undefined
+			mock.restore()
+		},
 	})
 
 	test('snapshots submitted modal inputs before async preflight completes', async () => {

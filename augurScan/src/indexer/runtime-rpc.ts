@@ -1,3 +1,4 @@
+import { errorChain } from '../../../shared/core/ts/errors/errorChain.ts'
 import type { AddressActivity, StoredTransaction } from '../database.ts'
 import { type Address, createPublicClient, type Hash, http, type Log, type PublicClient, type RpcFetchFn, zeroAddress } from '../ethereum.ts'
 import { safePrunedStateProviderMessage } from '../logging.ts'
@@ -93,11 +94,8 @@ export const preferredRpcDescriptions = (value: object): readonly string[] => {
 }
 
 export const rpcErrorCategory = (error: unknown): RpcDescriptionCategory | undefined => {
-	const seen = new Set<unknown>()
 	let firstCategory: RpcDescriptionCategory | undefined
-	let current: unknown = error
-	while (typeof current === 'object' && current !== null && !seen.has(current)) {
-		seen.add(current)
+	for (const current of errorChain(error)) {
 		if ('status' in current && current.status === 429) return 'rate-limit'
 		for (const description of preferredRpcDescriptions(current)) {
 			const category = rpcDescriptionCategory(description)
@@ -107,17 +105,13 @@ export const rpcErrorCategory = (error: unknown): RpcDescriptionCategory | undef
 		if ('name' in current && current.name === 'ResponseBodyTooLargeError') firstCategory ??= 'response-size'
 		if ('name' in current && current.name === 'TimeoutError') firstCategory ??= 'timeout'
 		if ('code' in current && current.code === -32005) firstCategory ??= 'result-limit'
-		current = 'cause' in current ? current.cause : undefined
 	}
 	return firstCategory
 }
 
 export const isPermanentHistoricalCodeError = (error: unknown): boolean => {
 	if (isPrunedHistoricalStateError(error)) return true
-	const seen = new Set<unknown>()
-	let current: unknown = error
-	while (typeof current === 'object' && current !== null && !seen.has(current)) {
-		seen.add(current)
+	for (const current of errorChain(error)) {
 		if ('code' in current && current.code === -32601) return true
 		for (const description of preferredRpcDescriptions(current)) {
 			const normalized = classifiedRpcDescription(description)
@@ -145,36 +139,27 @@ export const isPermanentHistoricalCodeError = (error: unknown): boolean => {
 			)
 				return true
 		}
-		current = 'cause' in current ? current.cause : undefined
 	}
 	return false
 }
 
 export const isPermanentHistoricalLogError = (error: unknown): boolean => {
-	const seen = new Set<unknown>()
 	let getLogsRequest = false
 	let prunedHistory = false
-	let current: unknown = error
-	while (typeof current === 'object' && current !== null && !seen.has(current)) {
-		seen.add(current)
+	for (const current of errorChain(error)) {
 		if (current instanceof RpcRequestMethodError && current.method === 'eth_getLogs') getLogsRequest = true
 		if ('code' in current && current.code === 4444) prunedHistory = true
 		for (const description of preferredRpcDescriptions(current)) {
 			const normalized = classifiedRpcDescription(description)
 			if (normalized.includes('pruned history unavailable') || normalized.includes('historical logs unavailable')) prunedHistory = true
 		}
-		current = 'cause' in current ? current.cause : undefined
 	}
 	return getLogsRequest && prunedHistory
 }
 
 export const isPrunedHistoricalStateError = (error: unknown): boolean => {
-	const seen = new Set<unknown>()
-	let current: unknown = error
-	while (typeof current === 'object' && current !== null && !seen.has(current)) {
-		seen.add(current)
+	for (const current of errorChain(error)) {
 		for (const description of preferredRpcDescriptions(current)) if (safePrunedStateProviderMessage(description) !== undefined) return true
-		current = 'cause' in current ? current.cause : undefined
 	}
 	return false
 }

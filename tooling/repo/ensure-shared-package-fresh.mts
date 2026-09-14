@@ -1,11 +1,10 @@
-import { sharedPackages } from './sharedPackages.ts'
 import { createHash } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
-import * as url from 'node:url'
+import { repositoryRoot as repositoryRootPath } from './root.mts'
+import { sharedPackages } from './sharedPackages.ts'
+import { walkFiles } from './walk.mts'
 
-const scriptDirectoryPath = path.dirname(url.fileURLToPath(import.meta.url))
-const repositoryRootPath = path.join(scriptDirectoryPath, '..', '..')
 const mode = process.argv.includes('--refresh') ? 'refresh' : 'check'
 
 interface PackageManifest {
@@ -23,17 +22,7 @@ const readPackageJson = async (packagePath: string): Promise<PackageManifest> =>
 }
 
 const listFilesRecursively = async (directoryPath: string): Promise<string[]> => {
-	const entries = await fs.readdir(directoryPath, { withFileTypes: true })
-	const filePaths: string[][] = await Promise.all(
-		entries.map(async entry => {
-			const entryPath = path.join(directoryPath, entry.name)
-			if (entry.isSymbolicLink()) return []
-			if (entry.isDirectory()) return await listFilesRecursively(entryPath)
-			if (!entry.isFile()) return []
-			return [entryPath]
-		}),
-	)
-	return filePaths.flat().sort()
+	return (await walkFiles(directoryPath)).sort()
 }
 
 const listPackageFilesRecursively = async (packageRootPath: string): Promise<string[]> => {

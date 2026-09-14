@@ -87,11 +87,11 @@ export const MUTATION_SMOKE_CASES: readonly SourceMutation[] = [
 		testCommand: ['bun', 'test', 'shared/core/ts/serialization/bigInt.test.ts'],
 	},
 	{
-		name: 'trading exact-output ceiling',
-		filePath: 'shared/trading/ts/trading/math.ts',
+		name: 'unsigned bigint ceiling division',
+		filePath: 'shared/core/ts/math/bigint.ts',
 		from: 'return numerator === 0n ? 0n : (numerator - 1n) / denominator + 1n',
 		to: 'return numerator === 0n ? 0n : numerator / denominator',
-		testCommand: ['bun', 'test', 'shared/trading/ts/trading/math.test.ts'],
+		testCommand: ['bun', 'test', 'shared/core/ts/math/bigint.test.ts'],
 	},
 	{
 		name: 'escalation non-decision threshold count',

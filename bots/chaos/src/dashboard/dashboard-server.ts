@@ -1,15 +1,15 @@
 import { dashboardHealthResponse, sharedDashboardAssetResponse } from '@zoltar/bot-shared/dashboard/assets'
-import { operatorHeader } from './header.ts'
-import { record, safeString, stringField, booleanField, scalar, safeIntegerField, isoTimestampField, compact } from './public-fields.ts'
-import { join } from 'node:path'
 import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
 import { boundedDashboardJson, dashboardJson as json, dashboardSecurityHeaders as securityHeaders } from '@zoltar/bot-shared/dashboard/security'
+import { join } from 'node:path'
 import { CONFIGURATION_REVISION_CONFLICT } from '../config/settings.ts'
-import { browserScript } from './browser-assets.ts'
-import { publicAlert, publicRetirement } from './public-retirement.ts'
 import { CONFIGURATION_COMMIT_INDETERMINATE, CONFIGURATION_COMMITTED_SAFELY_PAUSED } from '../runtime/configuration-commit.ts'
-import { pendingTransactionObservationKind } from '../state/pending-transaction-observation.ts'
 import { requiredLiveInventory } from '../runtime/live-readiness.ts'
+import { pendingTransactionObservationKind } from '../state/pending-transaction-observation.ts'
+import { browserScript } from './browser-assets.ts'
+import { operatorHeader } from './header.ts'
+import { booleanField, compact, isoTimestampField, record, safeIntegerField, safeString, scalar, stringField } from './public-fields.ts'
+import { publicAlert, publicRetirement } from './public-retirement.ts'
 
 export type ChaosDashboardController = {
 	getConfiguration: () => unknown | Promise<unknown>
@@ -907,7 +907,6 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 		throw new Error('Non-loopback chaos dashboard exposure is disabled; bind to 127.0.0.1 or publish a 0.0.0.0 container listener through a host-loopback-only port')
 	}
 	const directory = import.meta.dir
-	const transpiler = new Bun.Transpiler({ loader: 'ts', target: 'browser' })
 	let authority = ''
 	let configurationCommitIndeterminate = false
 	let mutationBarrier = Promise.resolve()
@@ -956,7 +955,7 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 				if (url.pathname === '/dashboard.css') return new Response(Bun.file(join(directory, 'styles.css')), { headers: securityHeaders('text/css; charset=utf-8') })
 				const asset = await sharedDashboardAssetResponse(url.pathname, join(directory, 'favicon.svg'))
 				if (asset !== undefined) return asset
-				const script = await browserScript(url.pathname, directory, transpiler)
+				const script = await browserScript(url.pathname, directory)
 				if (script !== undefined) return new Response(script, { headers: securityHeaders('text/javascript; charset=utf-8') })
 				if (url.pathname === '/api/state') {
 					try {

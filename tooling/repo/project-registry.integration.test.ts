@@ -3,8 +3,8 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { reviewableGitHubPath } from '../testing/reviewable-github-path.ts'
 import { componentProjects, projects, taskProjects, validateProjectRegistryFiles } from './projects.ts'
+import { repositoryRoot } from './root.mts'
 
-const repositoryRoot = path.resolve(import.meta.dir, '../..')
 const ignoredDirectories = new Set(['.git', '.t3', 'artifacts', 'coverage', 'dist', 'js', 'node_modules', 'vendor'])
 
 async function findPackageManifests(directory = repositoryRoot): Promise<string[]> {

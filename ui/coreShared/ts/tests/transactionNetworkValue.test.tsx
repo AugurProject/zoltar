@@ -1,28 +1,22 @@
 /// <reference types='bun-types' />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
+import { describe, expect, test } from 'bun:test'
 import { TransactionNetworkValue } from '../components/TransactionNetworkValue.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
-import { within } from './testUtils/queries.js'
-import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { createFakeBackend, createFakeSimulationProfile } from './testUtils/fakeBackend.js'
+import { within } from './testUtils/queries.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
 describe('TransactionNetworkValue', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
-	beforeEach(() => {
-		const domEnvironment = installDomEnvironment()
-		restoreDomEnvironment = domEnvironment.cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		resetActiveEnvironmentForTesting()
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+			resetActiveEnvironmentForTesting()
+		},
 	})
 
 	test('renders the active public network', async () => {

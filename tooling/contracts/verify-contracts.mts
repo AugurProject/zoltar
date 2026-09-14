@@ -1,12 +1,11 @@
 #!/usr/bin/env bun
+import { repositoryRoot } from '../repo/root.mts'
 
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
 import process from 'node:process'
-import * as url from 'node:url'
 import { buildVerificationPlan, getExplorerTargets, getSourcifyTarget, parseDeploymentManifest, verifyContractsWithExplorer, verifyContractsWithSourcify, type ArtifactLookup, type DeploymentManifest, type StandardJsonInputs, type VerificationOutcome, type VerificationPlan } from './contract-verification.mts'
 
-const repositoryRoot = path.join(path.dirname(url.fileURLToPath(import.meta.url)), '..', '..')
 const CONTRACT_ARTIFACT_PATH = path.join(repositoryRoot, 'solidity', 'artifacts', 'Contracts.json')
 const NETWORK_IDS_BY_CHAIN_ID: Readonly<Record<number, 'mainnet' | 'sepolia'>> = {
 	1: 'mainnet',

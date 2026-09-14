@@ -1,24 +1,19 @@
 /// <reference types='bun-types' />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { within } from './testUtils/queries'
+import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
+import { describe, expect, test } from 'bun:test'
 import { CopyErrorMessage } from '../components/CopyErrorMessage.js'
-import { installDomEnvironment } from './testUtils/domEnvironment.js'
+import { within } from './testUtils/queries'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
 describe('CopyErrorMessage', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
-	beforeEach(() => {
-		restoreDomEnvironment = installDomEnvironment().cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+		},
 	})
 
 	test('keeps manual recovery behind a compact disclosure while announcing the failure', async () => {

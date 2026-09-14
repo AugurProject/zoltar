@@ -1,5 +1,5 @@
-import { sameAddress } from '#monitoring/vault-positions'
 import { type PoolObservation, type UniverseObservation } from '#state/operator-state'
+import { sameAddress } from '@zoltar/core-shared/evm/address'
 
 export function validatePoolUniverseRep(pool: Pick<PoolObservation, 'address' | 'repToken' | 'universeId'>, universes: readonly UniverseObservation[]) {
 	const universe = universes.find(candidate => candidate.id === pool.universeId)

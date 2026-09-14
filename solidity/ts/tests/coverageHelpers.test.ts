@@ -1,8 +1,6 @@
-import { readFile } from 'node:fs/promises'
+import { type Address, encodeDeployData, encodeFunctionData, type Hash, type Hex, privateKeyToAccount, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { beforeEach, describe, test } from 'bun:test'
-import assert from '../testSupport/simulator/utils/assert'
-import { encodeDeployData, encodeFunctionData, type Address, type Hash, type Hex, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import { privateKeyToAccount } from '@zoltar/core-shared/evm/ethereum'
+import { readFile } from 'node:fs/promises'
 import { knownSourceMapCoverageGaps } from '../testSupport/coverage/sourceMapCoverageGaps'
 import {
 	buildCoveragePcToSourceMapForTest,
@@ -18,14 +16,17 @@ import {
 	resolveCoverageCreationCandidateForTest,
 	resolveTraceStepAddressesForTest,
 } from '../testSupport/coverage/traceToSource'
+import { deployContract } from '../testSupport/deployContract'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
-import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
-import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
+import assert from '../testSupport/simulator/utils/assert'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
-import { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, applyLibraries } from '../testSupport/simulator/utils/contracts/deployStatoblast'
+import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
+import { applyLibraries, OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE } from '../testSupport/simulator/utils/contracts/deployStatoblast'
+import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import {
 	DeploymentStatusOracle_DeploymentStatusOracle,
+	ReputationToken_ReputationToken,
 	statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
 	statoblast_factories_EscalationGameFactory_EscalationGameFactory,
 	statoblast_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory,
@@ -33,7 +34,6 @@ import {
 	statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
 	statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate,
-	ReputationToken_ReputationToken,
 	test_statoblast_CoverageHelpersHarness_CoverageAttributionDecoy,
 	test_statoblast_CoverageHelpersHarness_CoverageAttributionExecuted,
 	test_statoblast_CoverageHelpersHarness_CoverageHelpersHarness,
@@ -290,20 +290,13 @@ describe('Solidity bytecode coverage helpers', () => {
 	let client: WriteClient
 	let participantClient: WriteClient
 
-	const deployContract = async (deploymentData: Hex): Promise<Address> => {
-		const hash = await client.sendTransaction({ data: deploymentData })
-		const receipt = await client.waitForTransactionReceipt({ hash })
-		const contractAddress = receipt.contractAddress
-		if (contractAddress === undefined || contractAddress === null) throw new Error('deployment address missing')
-		return contractAddress
-	}
-
 	const transact = async (to: Address, data: Hex) => {
 		await writeContractAndWait(client, () => client.sendTransaction({ to, data }))
 	}
 
 	const deployCoverageHelper = async () =>
 		await deployContract(
+			client,
 			encodeDeployData({
 				abi: test_statoblast_CoverageHelpersHarness_CoverageHelpersHarness.abi,
 				bytecode: `0x${test_statoblast_CoverageHelpersHarness_CoverageHelpersHarness.evm.bytecode.object}`,
@@ -312,6 +305,7 @@ describe('Solidity bytecode coverage helpers', () => {
 
 	const deployErc1155CoverageHelper = async () =>
 		await deployContract(
+			client,
 			encodeDeployData({
 				abi: test_statoblast_CoverageHelpersHarness_ERC1155CoverageHarness.abi,
 				bytecode: `0x${test_statoblast_CoverageHelpersHarness_ERC1155CoverageHarness.evm.bytecode.object}`,
@@ -320,6 +314,7 @@ describe('Solidity bytecode coverage helpers', () => {
 
 	const deployReputationToken = async () =>
 		await deployContract(
+			client,
 			encodeDeployData({
 				abi: ReputationToken_ReputationToken.abi,
 				bytecode: `0x${ReputationToken_ReputationToken.evm.bytecode.object}`,
@@ -329,6 +324,7 @@ describe('Solidity bytecode coverage helpers', () => {
 
 	const deployDeploymentStatusOracle = async (deploymentAddresses: readonly Address[]) =>
 		await deployContract(
+			client,
 			encodeDeployData({
 				abi: DeploymentStatusOracle_DeploymentStatusOracle.abi,
 				bytecode: `0x${DeploymentStatusOracle_DeploymentStatusOracle.evm.bytecode.object}`,
@@ -338,6 +334,7 @@ describe('Solidity bytecode coverage helpers', () => {
 
 	const deployEscalationGameFactorySecurityPool = async (reputationTokenAddress: Address) =>
 		await deployContract(
+			client,
 			encodeDeployData({
 				abi: test_statoblast_CoverageHelpersHarness_EscalationGameFactoryCoverageSecurityPool.abi,
 				bytecode: `0x${test_statoblast_CoverageHelpersHarness_EscalationGameFactoryCoverageSecurityPool.evm.bytecode.object}`,
@@ -375,6 +372,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			/Operations delegate has no code/,
 		)
 		const operationsDelegate = await deployContract(
+			client,
 			encodeDeployData({
 				abi: statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate.abi,
 				bytecode: applyLibraries(statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate.evm.bytecode.object),
@@ -382,6 +380,7 @@ describe('Solidity bytecode coverage helpers', () => {
 		)
 
 		const factoryAddress = await deployContract(
+			client,
 			encodeDeployData({
 				abi: factoryArtifact.abi,
 				bytecode: applyLibraries(factoryArtifact.evm.bytecode.object),
@@ -421,12 +420,14 @@ describe('Solidity bytecode coverage helpers', () => {
 		if (!isCoverageEnabled()) return
 
 		const executedAddress = await deployContract(
+			client,
 			encodeDeployData({
 				abi: test_statoblast_CoverageHelpersHarness_CoverageAttributionExecuted.abi,
 				bytecode: `0x${test_statoblast_CoverageHelpersHarness_CoverageAttributionExecuted.evm.bytecode.object}`,
 			}),
 		)
 		const decoyAddress = await deployContract(
+			client,
 			encodeDeployData({
 				abi: test_statoblast_CoverageHelpersHarness_CoverageAttributionDecoy.abi,
 				bytecode: `0x${test_statoblast_CoverageHelpersHarness_CoverageAttributionDecoy.evm.bytecode.object}`,
@@ -1603,12 +1604,14 @@ describe('Solidity bytecode coverage helpers', () => {
 	test('traces factory deployment paths through transaction-backed calls', async () => {
 		const reputationTokenAddress = await deployReputationToken()
 		const claimDelegateAddress = await deployContract(
+			client,
 			encodeDeployData({
 				abi: statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate.abi,
 				bytecode: `0x${statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate.evm.bytecode.object}`,
 			}),
 		)
 		const escalationGameFactoryAddress = await deployContract(
+			client,
 			encodeDeployData({
 				abi: statoblast_factories_EscalationGameFactory_EscalationGameFactory.abi,
 				bytecode: `0x${statoblast_factories_EscalationGameFactory_EscalationGameFactory.evm.bytecode.object}`,
@@ -1660,6 +1663,7 @@ describe('Solidity bytecode coverage helpers', () => {
 		)
 
 		const priceOracleFactoryAddress = await deployContract(
+			client,
 			encodeDeployData({
 				abi: statoblast_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.abi,
 				bytecode: applyLibraries(statoblast_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object),
@@ -1676,12 +1680,14 @@ describe('Solidity bytecode coverage helpers', () => {
 		)
 
 		const fakeZoltar = await deployContract(
+			client,
 			encodeDeployData({
 				abi: test_statoblast_SecurityPoolConstructorFailureZoltar_SecurityPoolConstructorFailureZoltar.abi,
 				bytecode: `0x${test_statoblast_SecurityPoolConstructorFailureZoltar_SecurityPoolConstructorFailureZoltar.evm.bytecode.object}`,
 			}),
 		)
 		const deploymentWorkerAddress = await deployContract(
+			client,
 			encodeDeployData({
 				abi: statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.abi,
 				bytecode: applyLibraries(statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.evm.bytecode.object),
@@ -1712,6 +1718,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			/Security pool deployment failed/,
 		)
 		const securityPoolDeployerAddress = await deployContract(
+			client,
 			encodeDeployData({
 				abi: statoblast_factories_SecurityPoolDeployer_SecurityPoolDeployer.abi,
 				bytecode: applyLibraries(statoblast_factories_SecurityPoolDeployer_SecurityPoolDeployer.evm.bytecode.object),

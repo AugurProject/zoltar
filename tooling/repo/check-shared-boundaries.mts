@@ -1,10 +1,10 @@
-import { readFileSync, readdirSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
+import { repositoryRoot } from './root.mts'
 import { appSharedPackages, sharedPackageClosure, sharedPackages } from './sharedPackages.ts'
+import { walkFiles } from './walk.mts'
 
-const repositoryRoot = fileURLToPath(new URL('../..', import.meta.url))
 const uiConsumers = ['coreShared', 'zoltarShared', 'statoblastShared', 'zoltar', 'statoblast', 'trading'] as const
 
 export function sharedImportBoundaryViolation(source: string, specifier: string): string | undefined {
@@ -45,17 +45,13 @@ export function findSharedBoundaryViolations(source: string, text: string) {
 	return violations
 }
 
-function checkDirectory(directory: string): string[] {
-	return readdirSync(path.join(repositoryRoot, directory), { withFileTypes: true }).flatMap(entry => {
-		const source = `${directory}/${entry.name}`
-		if (entry.isDirectory()) return checkDirectory(source)
-		if (!/\.[cm]?tsx?$/.test(entry.name)) return []
-		return findSharedBoundaryViolations(source, readFileSync(path.join(repositoryRoot, source), 'utf8'))
-	})
+async function checkDirectory(directory: string): Promise<string[]> {
+	const files = await walkFiles(path.join(repositoryRoot, directory), { includeNonFiles: true, include: file => /\.[cm]?tsx?$/.test(file) })
+	return files.flatMap(file => findSharedBoundaryViolations(path.relative(repositoryRoot, file).replaceAll('\\', '/'), readFileSync(file, 'utf8')))
 }
 
 if (import.meta.main) {
-	const violations = [...sharedPackages.map(entry => `${entry.path}/ts`), ...uiConsumers.map(entry => `ui/${entry}/ts`)].flatMap(checkDirectory)
+	const violations = (await Promise.all([...sharedPackages.map(entry => `${entry.path}/ts`), ...uiConsumers.map(entry => `ui/${entry}/ts`)].map(checkDirectory))).flat()
 	if (violations.length > 0) throw new Error(violations.join('\n'))
 	console.log('Shared package dependency boundaries passed.')
 }

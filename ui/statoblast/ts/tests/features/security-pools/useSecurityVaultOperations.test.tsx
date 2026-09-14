@@ -1,16 +1,17 @@
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 /// <reference types='bun-types' />
 
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import { h } from 'preact'
-import { act } from 'preact/test-utils'
 import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import type { OracleManagerDetails, SecurityVaultDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { useSecurityVaultOperations, type UseSecurityVaultOperationsDependencies } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityVaultOperations.js'
+import { describe, expect, mock, test } from 'bun:test'
+import { h } from 'preact'
+import { act } from 'preact/test-utils'
 
 type UseSecurityVaultOperationsState = ReturnType<typeof useSecurityVaultOperations>
 type TestSecurityVaultWriteClient = { kind: 'injected-write-client' }
@@ -19,16 +20,6 @@ const WALLET_ADDRESS = getAddress('0x0000000000000000000000000000000000000001')
 const SECURITY_POOL_ADDRESS = getAddress('0x0000000000000000000000000000000000000002')
 const MANAGER_ADDRESS = getAddress('0x0000000000000000000000000000000000000003')
 const REP_TOKEN_ADDRESS = getAddress('0x0000000000000000000000000000000000000004')
-
-function createDeferred<T>() {
-	let resolve: (value: T) => void = () => undefined
-	let reject: (reason?: unknown) => void = () => undefined
-	const promise = new Promise<T>((promiseResolve, promiseReject) => {
-		resolve = promiseResolve
-		reject = promiseReject
-	})
-	return { promise, reject, resolve }
-}
 
 function createSecurityVaultDetails(overrides: Partial<SecurityVaultDetails> = {}): SecurityVaultDetails {
 	return {
@@ -142,23 +133,20 @@ function requireHookState(state: UseSecurityVaultOperationsState | undefined) {
 }
 
 describe('useSecurityVaultOperations', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let restoreActiveEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
-	beforeEach(() => {
-		restoreDomEnvironment = installDomEnvironment().cleanup
-		restoreActiveEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		restoreActiveEnvironment?.()
-		restoreActiveEnvironment = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
-		mock.restore()
+	installDomTestLifecycle({
+		beforeTest: () => {
+			restoreActiveEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
+		},
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+			restoreActiveEnvironment?.()
+			restoreActiveEnvironment = undefined
+			mock.restore()
+		},
 	})
 
 	test('approveRep snapshots the submitted deposit amount before async preflight completes', async () => {

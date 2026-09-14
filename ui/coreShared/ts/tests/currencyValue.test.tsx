@@ -1,15 +1,14 @@
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import { fireEvent, waitFor, within } from './testUtils/queries'
+import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
+import { describe, expect, mock, test } from 'bun:test'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { CurrencyValue } from '../components/CurrencyValue.js'
-import { installDomEnvironment } from './testUtils/domEnvironment.js'
+import { fireEvent, waitFor, within } from './testUtils/queries'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
 describe('CurrencyValue', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 	let setClientWidth = (_nextWidth: number) => undefined
 	let setMeasureWidth = (_nextWidth: number) => undefined
@@ -27,73 +26,69 @@ describe('CurrencyValue', () => {
 		return within(document.body)
 	}
 
-	beforeEach(() => {
-		const domEnvironment = installDomEnvironment()
-		restoreDomEnvironment = domEnvironment.cleanup
+	installDomTestLifecycle({
+		beforeTest: domEnvironment => {
+			let currentClientWidth = 200
+			let currentMeasureWidth = 120
+			const resizeObservers: MockResizeObserver[] = []
+			const originalGetBoundingClientRect = domEnvironment.window.HTMLElement.prototype.getBoundingClientRect
 
-		let currentClientWidth = 200
-		let currentMeasureWidth = 120
-		const resizeObservers: MockResizeObserver[] = []
-		const originalGetBoundingClientRect = domEnvironment.window.HTMLElement.prototype.getBoundingClientRect
+			// The value and its wrap shrink to fit, so the mocked width belongs to the block container around them.
+			Object.defineProperty(domEnvironment.window.HTMLElement.prototype, 'clientWidth', {
+				configurable: true,
+				get() {
+					if (this.classList.contains('currency-value') || this.classList.contains('currency-value-wrap')) return 0
+					return currentClientWidth
+				},
+			})
 
-		// The value and its wrap shrink to fit, so the mocked width belongs to the block container around them.
-		Object.defineProperty(domEnvironment.window.HTMLElement.prototype, 'clientWidth', {
-			configurable: true,
-			get() {
-				if (this.classList.contains('currency-value') || this.classList.contains('currency-value-wrap')) return 0
-				return currentClientWidth
-			},
-		})
-
-		domEnvironment.window.HTMLElement.prototype.getBoundingClientRect = function () {
-			if (this.classList.contains('currency-value-measure')) return new domEnvironment.window.DOMRect(0, 0, currentMeasureWidth, 0)
-			return originalGetBoundingClientRect.call(this)
-		}
-
-		class MockResizeObserver implements ResizeObserver {
-			callback: ResizeObserverCallback
-
-			constructor(callback: ResizeObserverCallback) {
-				this.callback = callback
-				resizeObservers.push(this)
+			domEnvironment.window.HTMLElement.prototype.getBoundingClientRect = function () {
+				if (this.classList.contains('currency-value-measure')) return new domEnvironment.window.DOMRect(0, 0, currentMeasureWidth, 0)
+				return originalGetBoundingClientRect.call(this)
 			}
 
-			disconnect() {}
+			class MockResizeObserver implements ResizeObserver {
+				callback: ResizeObserverCallback
 
-			observe(_target: Element, _options?: ResizeObserverOptions) {}
+				constructor(callback: ResizeObserverCallback) {
+					this.callback = callback
+					resizeObservers.push(this)
+				}
 
-			unobserve(_target: Element) {}
-		}
+				disconnect() {}
 
-		Reflect.set(globalThis, 'ResizeObserver', MockResizeObserver)
-		Reflect.set(navigator, 'clipboard', {
-			writeText: mock(async () => undefined),
-		})
+				observe(_target: Element, _options?: ResizeObserverOptions) {}
 
-		setClientWidth = nextWidth => {
-			currentClientWidth = nextWidth
-		}
-
-		setMeasureWidth = nextWidth => {
-			currentMeasureWidth = nextWidth
-		}
-
-		triggerResizeObservers = () => {
-			for (const observer of resizeObservers) {
-				observer.callback([], observer)
+				unobserve(_target: Element) {}
 			}
-		}
-	})
 
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		Reflect.deleteProperty(globalThis, 'ResizeObserver')
-		triggerResizeObservers = () => undefined
-		setClientWidth = (_nextWidth: number) => undefined
-		setMeasureWidth = (_nextWidth: number) => undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
+			Reflect.set(globalThis, 'ResizeObserver', MockResizeObserver)
+			Reflect.set(navigator, 'clipboard', {
+				writeText: mock(async () => undefined),
+			})
+
+			setClientWidth = nextWidth => {
+				currentClientWidth = nextWidth
+			}
+
+			setMeasureWidth = nextWidth => {
+				currentMeasureWidth = nextWidth
+			}
+
+			triggerResizeObservers = () => {
+				for (const observer of resizeObservers) {
+					observer.callback([], observer)
+				}
+			}
+		},
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+			Reflect.deleteProperty(globalThis, 'ResizeObserver')
+			triggerResizeObservers = () => undefined
+			setClientWidth = (_nextWidth: number) => undefined
+			setMeasureWidth = (_nextWidth: number) => undefined
+		},
 	})
 
 	test('compacts a large balance when the normal display value does not fit', async () => {

@@ -1,8 +1,9 @@
-import { sharedPackages } from '../repo/sharedPackages.ts'
 import { execFileSync } from 'node:child_process'
-import { getChangedFileEntries, type ChangedFileEntry } from '../repo/changed-files.mts'
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
+import { getChangedFileEntries, type ChangedFileEntry } from '../repo/changed-files.mts'
+import { sharedPackages } from '../repo/sharedPackages.ts'
+import { walkFiles } from '../repo/walk.mts'
 import { isTestSourceFile } from './test-discovery.mts'
 
 export type TestImpactRecommendation = {
@@ -157,15 +158,7 @@ function parsePackageImports(source: string) {
 }
 
 async function collectImportGraphSources(repositoryRoot: string, directoryPath = repositoryRoot): Promise<string[]> {
-	const entries = await fs.readdir(directoryPath, { withFileTypes: true })
-	const files: string[] = []
-	for (const entry of entries) {
-		if (entry.isDirectory() && IMPORT_GRAPH_IGNORED_DIRECTORIES.has(entry.name)) continue
-		const entryPath = path.join(directoryPath, entry.name)
-		if (entry.isDirectory()) files.push(...(await collectImportGraphSources(repositoryRoot, entryPath)))
-		else if (entry.isFile() && IMPORT_GRAPH_SOURCE_PATTERN.test(entry.name)) files.push(path.relative(repositoryRoot, entryPath).replaceAll('\\', '/'))
-	}
-	return files
+	return (await walkFiles(directoryPath, { descend: (_directory, entry) => !IMPORT_GRAPH_IGNORED_DIRECTORIES.has(entry.name), include: (_file, entry) => IMPORT_GRAPH_SOURCE_PATTERN.test(entry.name) })).map(file => path.relative(repositoryRoot, file).replaceAll('\\', '/'))
 }
 
 async function readCurrentSources(repositoryRoot: string) {

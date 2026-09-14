@@ -1,17 +1,19 @@
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
+import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 /// <reference types='bun-types' />
 
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
+import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
-import { h, render } from 'preact'
-import { act } from 'preact/test-utils'
-import { getAddress, type Address, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
+import { expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
+import type { ForkAuctionDetails, ListedSecurityPool } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ForkAuctionSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
 import type { AccountState, ForkAuctionFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
-import type { ForkAuctionDetails, ListedSecurityPool, MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
-import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import { expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
-import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
+import { h, render } from 'preact'
+import { act } from 'preact/test-utils'
 
 const actualSecurityPools = await import('@zoltar/ui-statoblast-shared/protocol/securityPools.js')
 const actualForks = await import('@zoltar/ui-statoblast-shared/protocol/forks.js')
@@ -59,14 +61,6 @@ mock.module('@zoltar/ui-core-shared/wallet/clients.js', () => ({
 
 const { ForkAuctionSection } = await import('@zoltar/ui-statoblast-shared/features/truth-auctions/components/ForkAuctionSection.js')
 
-function createDeferred<T>() {
-	let resolve: (value: T) => void = () => undefined
-	const promise = new Promise<T>(promiseResolve => {
-		resolve = promiseResolve
-	})
-	return { promise, resolve }
-}
-
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {
 		address: zeroAddress,
@@ -74,24 +68,6 @@ function createAccountState(overrides: Partial<AccountState> = {}): AccountState
 		ethBalanceAttoEth: 0n,
 		wethBalanceAttoEth: 0n,
 		...overrides,
-	}
-}
-
-function createMarketDetails(): MarketDetails {
-	return {
-		answerUnit: '',
-		createdAt: 1n,
-		description: 'Question description',
-		displayValueMax: 100n,
-		displayValueMin: 0n,
-		endTime: 2n,
-		exists: true,
-		marketType: 'binary',
-		numTicks: 2n,
-		outcomeLabels: ['Yes', 'No'],
-		questionId: '0x01',
-		startTime: 1n,
-		title: 'Will this resolve?',
 	}
 }
 

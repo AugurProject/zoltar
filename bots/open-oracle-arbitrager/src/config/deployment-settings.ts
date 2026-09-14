@@ -1,9 +1,10 @@
-import mainnet from '../../../../docs/mainnet-deployment-addresses.json'
-import sepolia from '../../../../docs/sepolia-deployment-addresses.json'
-import { canonicalCoreDeployment, canonicalNetworkDeployment } from '@zoltar/bot-shared/config/canonical-deployment'
-import { getAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import { parseDeploymentManifest, type DeploymentManifest } from '#config/deployment-auth'
 import { validateReadRpcUrls, type NetworkName } from '#monitoring/connectivity'
+import { canonicalCoreDeployment, canonicalNetworkDeployment } from '@zoltar/bot-shared/config/canonical-deployment'
+import { getAddress, type Address } from '@zoltar/bot-shared/ethereum'
+import { record as validateRecord } from '@zoltar/bot-shared/infrastructure/json-validation'
+import mainnet from '../../../../docs/mainnet-deployment-addresses.json'
+import sepolia from '../../../../docs/sepolia-deployment-addresses.json'
 
 export type DeploymentSettings = {
 	coordinatorAddresses: readonly Address[]
@@ -22,8 +23,7 @@ export type DeploymentSettings = {
 }
 
 function record(value: unknown) {
-	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Deployment settings must be a JSON object')
-	return value as Record<string, unknown>
+	return validateRecord(value, 'Deployment settings', 'Deployment settings must be a JSON object')
 }
 
 function optionalAddress(value: unknown, name: string) {

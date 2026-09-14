@@ -1,16 +1,16 @@
 /// <reference types='bun-types' />
 
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import { h } from 'preact'
-import { act } from 'preact/test-utils'
 import { createWalletClient, custom, getAddress, keccak256, publicActions, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { useDeploymentFlow } from '@zoltar/ui-zoltar-shared/features/deployment/hooks/useDeploymentFlow.js'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import type { DeploymentStatus } from '@zoltar/ui-core-shared/types/contracts.js'
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
+import { useDeploymentFlow } from '@zoltar/ui-zoltar-shared/features/deployment/hooks/useDeploymentFlow.js'
+import { describe, expect, mock, test } from 'bun:test'
+import { h } from 'preact'
+import { act } from 'preact/test-utils'
 
 type UseDeploymentFlowState = ReturnType<typeof useDeploymentFlow>
 
@@ -24,25 +24,21 @@ function requireHookState(state: UseDeploymentFlowState | undefined) {
 }
 
 describe('useDeploymentFlow', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 	let resetEnvironment: (() => void) | undefined
 
-	beforeEach(() => {
-		const domEnvironment = installDomEnvironment()
-		restoreDomEnvironment = domEnvironment.cleanup
-		resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: NEXT_WALLET_ADDRESS }))
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		resetEnvironment?.()
-		resetEnvironment = undefined
-		resetActiveEnvironmentForTesting()
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
-		mock.restore()
+	installDomTestLifecycle({
+		beforeTest: () => {
+			resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: NEXT_WALLET_ADDRESS }))
+		},
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+			resetEnvironment?.()
+			resetEnvironment = undefined
+			resetActiveEnvironmentForTesting()
+			mock.restore()
+		},
 	})
 
 	test('does not request a deployment transaction when the active wallet account changed', async () => {

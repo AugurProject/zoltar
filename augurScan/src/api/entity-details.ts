@@ -1,6 +1,5 @@
 import type { SQL } from 'bun'
-import { decodeOpaqueCursor, encodeOpaqueCursor, isJsonArray } from '../cursor-codec.ts'
-import type { JsonValue } from '../ethereum.ts'
+import { encodeOpaqueCursor, parseCursor } from '../cursor-codec.ts'
 import { auctionDemandCurve, reportLifecycle, reportLifecycleEventName, reportRoundChanges } from '../operations.ts'
 import { auctionDetailData, eventEntityRows, forkDetailData, latestEntitySnapshot, reportDetailData } from '../repositories/entity-details.ts'
 import { ApiConflictError, ApiRequestError, integer, isNonNegativeSafeInteger, isPostgresBigint, isPostgresInteger, json, jsonRecord, routeInteger } from './shared.ts'
@@ -20,26 +19,26 @@ export type ProtocolCursor = readonly [number, string, string, string, string, s
 export type RiskCursor = readonly [number, 'pool' | 'vault', string, string, string, string, string, string, string]
 export const parseRiskCursor = (value: string | null, chainId: number, kind: 'pool' | 'vault'): RiskCursor | undefined => {
 	if (value === null) return undefined
-	let parts: readonly JsonValue[]
-	try {
-		const parsed = decodeOpaqueCursor(value)
-		parts = isJsonArray(parsed) ? parsed : []
-		if (
-			parts.length !== 9 ||
-			!isNonNegativeSafeInteger(parts[0]) ||
-			(parts[1] !== 'pool' && parts[1] !== 'vault') ||
-			!isPostgresBigint(parts[2]) ||
-			typeof parts[3] !== 'string' ||
-			!/^0x[0-9a-f]{64}$/.test(parts[3]) ||
-			!isPostgresBigint(parts[4]) ||
-			!parts.slice(5, 8).every(part => typeof part === 'string') ||
-			typeof parts[8] !== 'string' ||
-			(kind === 'pool' ? !/^0x[0-9a-f]{40}$/.test(parts[8]) : !/^0x[0-9a-f]{40}:0x[0-9a-f]{40}$/.test(parts[8]))
-		)
-			throw new Error('shape')
-	} catch (error) {
-		throw new ApiRequestError(`${kind}Cursor is invalid`, { cause: error })
-	}
+	const parts = parseCursor(
+		value,
+		parts => {
+			if (
+				parts.length !== 9 ||
+				!isNonNegativeSafeInteger(parts[0]) ||
+				(parts[1] !== 'pool' && parts[1] !== 'vault') ||
+				!isPostgresBigint(parts[2]) ||
+				typeof parts[3] !== 'string' ||
+				!/^0x[0-9a-f]{64}$/.test(parts[3]) ||
+				!isPostgresBigint(parts[4]) ||
+				!parts.slice(5, 8).every(part => typeof part === 'string') ||
+				typeof parts[8] !== 'string' ||
+				(kind === 'pool' ? !/^0x[0-9a-f]{40}$/.test(parts[8]) : !/^0x[0-9a-f]{40}:0x[0-9a-f]{40}$/.test(parts[8]))
+			)
+				throw new Error('shape')
+			return parts
+		},
+		error => new ApiRequestError(`${kind}Cursor is invalid`, { cause: error }),
+	)
 	if (parts[0] !== chainId || parts[1] !== kind) throw new ApiRequestError(`${kind}Cursor does not match the requested collection`)
 	return parts as [number, 'pool' | 'vault', string, string, string, string, string, string, string]
 }
@@ -48,30 +47,30 @@ export const riskCursorFor = (chainId: number, kind: 'pool' | 'vault', asOf: Rec
 
 const parseProtocolCursor = (value: string | null): ProtocolCursor | undefined => {
 	if (value === null) return undefined
-	try {
-		const parsed = decodeOpaqueCursor(value)
-		const parts = isJsonArray(parsed) ? parsed : []
-		if (
-			parts.length !== 12 ||
-			!isNonNegativeSafeInteger(parts[0]) ||
-			typeof parts[1] !== 'string' ||
-			typeof parts[2] !== 'string' ||
-			!isPostgresBigint(parts[3]) ||
-			typeof parts[4] !== 'string' ||
-			!/^0x[0-9a-f]{64}$/.test(parts[4]) ||
-			!isPostgresBigint(parts[5]) ||
-			!parts.slice(6, 9).every(part => typeof part === 'string') ||
-			!isPostgresBigint(parts[9]) ||
-			typeof parts[10] !== 'string' ||
-			!/^0x[0-9a-f]{64}$/.test(parts[10]) ||
-			!isPostgresInteger(parts[11]) ||
-			BigInt(parts[9]) > BigInt(parts[3])
-		)
-			throw new Error('shape')
-		return parts as [number, string, string, string, string, string, string, string, string, string, string, number]
-	} catch (error) {
-		throw new ApiRequestError('cursor is invalid', { cause: error })
-	}
+	return parseCursor(
+		value,
+		parts => {
+			if (
+				parts.length !== 12 ||
+				!isNonNegativeSafeInteger(parts[0]) ||
+				typeof parts[1] !== 'string' ||
+				typeof parts[2] !== 'string' ||
+				!isPostgresBigint(parts[3]) ||
+				typeof parts[4] !== 'string' ||
+				!/^0x[0-9a-f]{64}$/.test(parts[4]) ||
+				!isPostgresBigint(parts[5]) ||
+				!parts.slice(6, 9).every(part => typeof part === 'string') ||
+				!isPostgresBigint(parts[9]) ||
+				typeof parts[10] !== 'string' ||
+				!/^0x[0-9a-f]{64}$/.test(parts[10]) ||
+				!isPostgresInteger(parts[11]) ||
+				BigInt(parts[9]) > BigInt(parts[3])
+			)
+				throw new Error('shape')
+			return parts as [number, string, string, string, string, string, string, string, string, string, string, number]
+		},
+		error => new ApiRequestError('cursor is invalid', { cause: error }),
+	)
 }
 
 export const protocolCursorForRequest = (url: URL, chainId: number, domain: string, identity: string): ProtocolCursor | undefined => {
@@ -94,33 +93,33 @@ export type TimelineCatalogCursor = readonly [number, string, string, string, st
 
 export const parseTimelineCatalogCursor = (value: string | null, chainId: number, filterIdentity: string): TimelineCatalogCursor | undefined => {
 	if (value === null) return undefined
-	let parts: readonly JsonValue[]
-	try {
-		const parsed = decodeOpaqueCursor(value)
-		parts = isJsonArray(parsed) ? parsed : []
-		if (
-			parts.length !== 15 ||
-			!isNonNegativeSafeInteger(parts[0]) ||
-			typeof parts[1] !== 'string' ||
-			!isPostgresBigint(parts[2]) ||
-			typeof parts[3] !== 'string' ||
-			!/^0x[0-9a-f]{64}$/.test(parts[3]) ||
-			!isPostgresBigint(parts[4]) ||
-			!parts.slice(5, 8).every(part => typeof part === 'string') ||
-			!isPostgresBigint(parts[8]) ||
-			!isPostgresInteger(parts[9]) ||
-			typeof parts[10] !== 'string' ||
-			!/^0x[0-9a-f]{64}$/.test(parts[10]) ||
-			typeof parts[11] !== 'string' ||
-			!/^0x[0-9a-f]{64}$/.test(parts[11]) ||
-			typeof parts[12] !== 'string' ||
-			typeof parts[13] !== 'string' ||
-			parts[14] !== 'v2'
-		)
-			throw new Error('shape')
-	} catch (error) {
-		throw new ApiRequestError('cursor is invalid', { cause: error })
-	}
+	const parts = parseCursor(
+		value,
+		parts => {
+			if (
+				parts.length !== 15 ||
+				!isNonNegativeSafeInteger(parts[0]) ||
+				typeof parts[1] !== 'string' ||
+				!isPostgresBigint(parts[2]) ||
+				typeof parts[3] !== 'string' ||
+				!/^0x[0-9a-f]{64}$/.test(parts[3]) ||
+				!isPostgresBigint(parts[4]) ||
+				!parts.slice(5, 8).every(part => typeof part === 'string') ||
+				!isPostgresBigint(parts[8]) ||
+				!isPostgresInteger(parts[9]) ||
+				typeof parts[10] !== 'string' ||
+				!/^0x[0-9a-f]{64}$/.test(parts[10]) ||
+				typeof parts[11] !== 'string' ||
+				!/^0x[0-9a-f]{64}$/.test(parts[11]) ||
+				typeof parts[12] !== 'string' ||
+				typeof parts[13] !== 'string' ||
+				parts[14] !== 'v2'
+			)
+				throw new Error('shape')
+			return parts
+		},
+		error => new ApiRequestError('cursor is invalid', { cause: error }),
+	)
 	if (parts[0] !== chainId || parts[1] !== filterIdentity) throw new ApiRequestError('cursor does not match the requested timeline filters')
 	return [Number(parts[0]), String(parts[1]), String(parts[2]), String(parts[3]), String(parts[4]), String(parts[5]), String(parts[6]), String(parts[7]), String(parts[8]), Number(parts[9]), String(parts[10]), String(parts[11]), String(parts[12]), String(parts[13]), 'v2']
 }

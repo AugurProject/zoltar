@@ -1,19 +1,19 @@
 import { renameAndSyncDirectory } from '@zoltar/bot-shared/config/durable-replacement'
-import { canonicalDeployment } from './canonical-deployment.ts'
-import { createHash, randomUUID } from 'node:crypto'
-import { constants } from 'node:fs'
-import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
-import { dirname, resolve } from 'node:path'
 import { persistentPathIdentitiesMatch, persistentPathIdentity } from '@zoltar/bot-shared/config/persistent-path'
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
 import { type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { validateSubmissionSettings, type SubmissionSettings } from '@zoltar/bot-shared/execution/transaction-submission'
+import { boolean, formatDecimalAmount, integer, nonemptyString, parseDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { validateConnectivitySettings, validateIndependentReadRpcUrls, type ConnectivitySettings, type NetworkName } from '@zoltar/bot-shared/monitoring/connectivity'
 import { configuredQuorumRpcUrlMinimum, rpcQuorumRequirement, type RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
+import { createHash, randomUUID } from 'node:crypto'
+import { constants } from 'node:fs'
+import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
+import { dirname, resolve } from 'node:path'
 import { CHAOS_OPERATION_CATALOG } from '../operations/catalog.ts'
 import { MINIMUM_WORKFLOW_VALIDITY_BLOCKS } from '../operations/timing.ts'
 import { assertExactKeys as assertExactRequiredAndOptionalKeys, requiredRecord, uint256String } from '../state/validators.ts'
-import { formatDecimalAmount, parseDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
+import { canonicalDeployment } from './canonical-deployment.ts'
 
 const PRESERVE_PRIVATE_KEY = '__PRESERVE_SAVED_PRIVATE_KEY__'
 export const CONFIGURATION_REVISION_CONFLICT = 'ConfigurationRevisionConflict'
@@ -147,23 +147,6 @@ const defaultSettingsPath = resolve(import.meta.dir, '..', '..', '.state', 'oper
 
 function assertExactKeys(value: JsonRecord, keys: readonly string[], label: string) {
 	assertExactRequiredAndOptionalKeys(value, keys, [], label)
-}
-
-function boolean(value: unknown, label: string) {
-	if (typeof value !== 'boolean') throw new Error(`${label} must be a boolean`)
-	return value
-}
-
-function integer(value: unknown, label: string, minimum: number, maximum: number) {
-	if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < minimum || value > maximum) {
-		throw new Error(`${label} must be an integer from ${minimum.toString()} through ${maximum.toString()}`)
-	}
-	return value
-}
-
-function nonemptyString(value: unknown, label: string) {
-	if (typeof value !== 'string' || value.trim() === '') throw new Error(`${label} must be a non-empty string`)
-	return value
 }
 
 function customNetworkName(value: unknown) {

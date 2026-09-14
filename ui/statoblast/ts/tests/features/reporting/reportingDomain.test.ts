@@ -1,18 +1,19 @@
+import { createMarketDetails as marketDetailsFixture } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 /// <reference types="bun-types" />
 
-import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import type { ActiveReportingDetails, MarketDetails, ReportingDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import {
-	getEscalationTimeRemaining,
-	getEscalationPhase,
 	getEscalationDepositClaimAmount,
+	getEscalationPhase,
+	getEscalationTimeRemaining,
 	getImportedEscalationDepositClaimAmount,
 	getRemainingSelectedOutcomeContributionCapacity,
 	getReportingMaxProfitContribution,
 	getReportingMinimumOutcomeChangeContribution,
 	previewReportingContribution,
 } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingDomain.js'
-import type { ActiveReportingDetails, MarketDetails, ReportingDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import { describe, expect, test } from 'bun:test'
 
 const ATTO_REP = 10n ** 18n
 
@@ -21,21 +22,9 @@ function rep(value: bigint) {
 }
 
 function createMarketDetails(): MarketDetails {
-	return {
-		answerUnit: '',
-		createdAt: 1n,
-		description: 'Question description',
-		displayValueMax: 100n,
-		displayValueMin: 0n,
+	return marketDetailsFixture({
 		endTime: 100n,
-		exists: true,
-		marketType: 'binary',
-		numTicks: 2n,
-		outcomeLabels: ['Yes', 'No'],
-		questionId: '0x01',
-		startTime: 1n,
-		title: 'Will this resolve?',
-	}
+	})
 }
 
 function createReportingDetails(overrides: Partial<ActiveReportingDetails> = {}): ActiveReportingDetails {

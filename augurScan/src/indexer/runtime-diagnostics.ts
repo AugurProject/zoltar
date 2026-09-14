@@ -1,6 +1,7 @@
+import { errorChain } from '../../../shared/core/ts/errors/errorChain.ts'
 import { errorChainIncludes } from '../error-chain.ts'
 import { jsonRpcErrorName, safeRpcProviderMessage } from '../logging.ts'
-import { RpcRequestMethodError, rpcQueueSaturationFrom } from '../rpc-request-queue.ts'
+import { rpcQueueSaturationFrom, RpcRequestMethodError } from '../rpc-request-queue.ts'
 import { bigintToSafeNumber } from '../time.ts'
 import type { ContractMetadata } from '../types.ts'
 import type { RpcProvider } from './runtime-chain.ts'
@@ -131,13 +132,9 @@ const safeStandardRpcProviderMessage = (value: unknown): string | undefined => {
 const safeRpcRequestMethod = (value: unknown): string | undefined => (typeof value === 'string' && /^(?:eth|net|web3)_[A-Za-z0-9_]+$/u.test(value) ? value : undefined)
 
 const rpcRequestMethodFrom = (error: unknown): string | undefined => {
-	const seen = new Set<unknown>()
-	let current: unknown = error
-	while (typeof current === 'object' && current !== null && !seen.has(current)) {
-		seen.add(current)
+	for (const current of errorChain(error)) {
 		const method = current instanceof RpcRequestMethodError ? safeRpcRequestMethod(current.method) : undefined
 		if (method !== undefined) return method
-		current = 'cause' in current ? current.cause : undefined
 	}
 	return undefined
 }
