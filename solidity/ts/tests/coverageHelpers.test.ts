@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises'
-import { beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
+import { beforeEach, describe, test } from 'bun:test'
 import assert from '../testSupport/simulator/utils/assert'
 import { encodeDeployData, encodeFunctionData, type Address, type Hash, type Hex, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { privateKeyToAccount } from '@zoltar/core-shared/evm/ethereum'
@@ -19,7 +19,7 @@ import {
 	resolveTraceStepAddressesForTest,
 } from '../testSupport/coverage/traceToSource'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
-import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
+import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
@@ -41,8 +41,6 @@ import {
 	test_statoblast_CoverageHelpersHarness_EscalationGameFactoryCoverageSecurityPool,
 	test_statoblast_SecurityPoolConstructorFailureZoltar_SecurityPoolConstructorFailureZoltar,
 } from '../types/contractArtifact'
-
-setDefaultTimeout(TEST_TIMEOUT_MS)
 
 const ZERO_BYTES32 = '0x0000000000000000000000000000000000000000000000000000000000000000'
 const SCALAR_DECIMALS = 18n

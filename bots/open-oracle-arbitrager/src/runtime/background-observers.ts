@@ -1,8 +1,12 @@
+import { exchanges } from 'ccxt'
+import { createCentralizedExchangeFactory } from '@zoltar/bot-shared/monitoring/centralized-exchange-factory'
 import type { Configuration } from '#config/configuration'
 import { errorMessage } from '#core/rpc-validation'
 import { recordOperation, type OperatorState } from '#state/operator-state'
 import { observeCentralizedMarkets } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import { createHeadWatcher, type HeadWatcher, type ObservedHead } from '@zoltar/bot-shared/monitoring/head-watcher'
+
+const centralizedExchangeFactory = createCentralizedExchangeFactory(exchanges)
 
 /** How often the head watcher polls `eth_blockNumber`; well under one slot so every block is observed promptly. */
 const HEAD_WATCH_INTERVAL_MILLISECONDS = 1_000
@@ -108,7 +112,7 @@ export function startCentralizedMarketSampler(parameters: {
 		while (!parameters.isStopping()) {
 			if (config.networkConfigured) {
 				try {
-					state.centralizedMarket = await observeCentralizedMarkets(config.centralizedMarkets, config.network.rep, config.network.chain.id)
+					state.centralizedMarket = await observeCentralizedMarkets(config.centralizedMarkets, config.network.rep, config.network.chain.id, centralizedExchangeFactory)
 					lastFailure = undefined
 				} catch (error) {
 					const message = errorMessage(error)

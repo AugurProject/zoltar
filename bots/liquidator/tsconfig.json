@@ -1,4 +1,5 @@
 {
+	"extends": "../../shared/tsconfig.strict.json",
 	"compilerOptions": {
 		"target": "ESNext",
 		"module": "ESNext",
@@ -9,16 +10,8 @@
 			"@zoltar/core-shared/*": ["../../shared/core/ts/*"]
 		},
 		"allowImportingTsExtensions": true,
-		"strict": true,
 		"skipLibCheck": true,
 		"noEmit": true,
-		"exactOptionalPropertyTypes": true,
-		"noFallthroughCasesInSwitch": true,
-		"noImplicitReturns": true,
-		"noPropertyAccessFromIndexSignature": true,
-		"noUncheckedIndexedAccess": true,
-		"noUnusedLocals": true,
-		"noUnusedParameters": true,
 		"lib": ["ESNext", "DOM", "DOM.Iterable"],
 		"types": ["bun-types", "node"]
 	},

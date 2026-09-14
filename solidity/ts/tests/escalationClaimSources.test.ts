@@ -1,14 +1,12 @@
-import { beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
+import { beforeEach, describe, test } from 'bun:test'
 import { encodeDeployData, type Hex, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
-import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
+import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { createWriteClient, type WriteClient } from '../testSupport/simulator/utils/clients'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import assert from '../testSupport/simulator/utils/assert'
 import { test_statoblast_EscalationClaimSourcesHarness_EscalationClaimSourceNode as sourceNodeArtifact, test_statoblast_EscalationClaimSourcesHarness_EscalationClaimSourcesHarness as sourcesHarnessArtifact } from '../types/contractArtifact'
-
-setDefaultTimeout(TEST_TIMEOUT_MS)
 
 describe('Escalation claim source traversal', () => {
 	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()

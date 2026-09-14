@@ -1,12 +1,18 @@
 /// <reference types="bun-types" />
 import { createReadContractStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
-import { describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { createPublicClient, getAddress, http, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { ETH_ADDRESS, getRepAddress, quoteBestExactInputWithSource, quoteBestV3ExactInputWithSource, quoteExactInput, quoteRepForUsdcV4WithSource } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
 import type { ReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
-import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
+
+// These read-only quote fixtures exercise mainnet addresses explicitly.
+beforeEach(() => {
+	installActiveEnvironmentForTesting(createFakeBackend({ profile: MAINNET_NETWORK_PROFILE }))
+})
+afterEach(() => resetActiveEnvironmentForTesting())
 
 const REP_ADDRESS = getAddress(MAINNET_NETWORK_PROFILE.genesisRepTokenAddress)
 const WETH_ADDRESS = MAINNET_NETWORK_PROFILE.wethAddress

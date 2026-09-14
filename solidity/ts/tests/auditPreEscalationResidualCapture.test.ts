@@ -1,33 +1,21 @@
+import { statoblast_EscalationGame_EscalationGame } from '../types/contractArtifact'
+import { QuestionOutcome } from '../testSupport/simulator/types/types'
+import { getQuestionOutcome } from '../testSupport/simulator/utils/contracts/securityPoolForker'
+import { getQuestionEndDate } from '../testSupport/simulator/utils/contracts/statoblast'
+import { depositRepToVault, depositToEscalationGame, getSecurityPoolsEscalationGame, getSecurityVault, getTotalPoolHeldAttoRep, redeemRepFromVault, withdrawFromEscalationGame } from '../testSupport/simulator/utils/contracts/securityPool'
+import { approveAndDepositRepToVault, manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { approveToken, getERC20Balance } from '../testSupport/simulator/utils/utilities'
+import { addressString } from '../testSupport/simulator/utils/bigint'
+import { DAY, TEST_ADDRESSES, GENESIS_REPUTATION_TOKEN } from '../testSupport/simulator/utils/constants'
+import { createWriteClient } from '../testSupport/simulator/utils/clients'
+import { strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
+import assert from '../testSupport/simulator/utils/assert'
 import { beforeEach, describe, test } from 'bun:test'
 import { useStatoblastVaultAccountingFixture, type StatoblastVaultAccountingFixture } from './statoblast/fixture'
 
 describe('Audit: pre-escalation residual capture', () => {
 	const fixture = useStatoblastVaultAccountingFixture()
-	const {
-		assert,
-		strictEqualTypeSafe,
-		createWriteClient,
-		DAY,
-		TEST_ADDRESSES,
-		GENESIS_REPUTATION_TOKEN,
-		addressString,
-		approveToken,
-		approveAndDepositRepToVault,
-		depositRepToVault,
-		depositToEscalationGame,
-		getERC20Balance,
-		getQuestionEndDate,
-		getQuestionOutcome,
-		getSecurityPoolsEscalationGame,
-		getSecurityVault,
-		getTotalPoolHeldAttoRep,
-		manipulatePriceOracle,
-		redeemRepFromVault,
-		withdrawFromEscalationGame,
-		QuestionOutcome,
-		statoblast_EscalationGame_EscalationGame,
-		repDeposit,
-	} = fixture
+	const { repDeposit } = fixture
 
 	let mockWindow: StatoblastVaultAccountingFixture['mockWindow']
 	let client: StatoblastVaultAccountingFixture['client']

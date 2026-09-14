@@ -62,7 +62,7 @@ describe('UniverseDirectorySection', () => {
 	for (const hasForked of [false, true]) {
 		test(`renders ${hasForked ? 'migration' : 'fork'} actions in the Universe view`, async () => {
 			const props: MarketRouteContentProps = {
-				accountState: { address: zeroAddress, chainId: '0x1', ethBalanceAttoEth: 0n, wethBalanceAttoEth: 0n },
+				accountState: { address: zeroAddress, chainId: '0xaa36a7', ethBalanceAttoEth: 0n, wethBalanceAttoEth: 0n },
 				activeUniverseId: 1n,
 				activeView: 'universes',
 				environmentRefreshKey: 0,

@@ -1,3 +1,16 @@
+import { statoblast_EscalationGame_EscalationGame } from '../types/contractArtifact'
+import { getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
+import { getRepTokenAddress, getTotalTheoreticalSupply, getZoltarForkThreshold } from '../testSupport/simulator/utils/contracts/zoltar'
+import { getQuestionEndDate } from '../testSupport/simulator/utils/contracts/statoblast'
+import { getChildUniverseId, getERC20Balance } from '../testSupport/simulator/utils/utilities'
+import { depositRepToVault, depositToEscalationGame, getRepToken, getSecurityPoolsEscalationGame, getSecurityVault, getSystemState, backingUnitsToAttoRep } from '../testSupport/simulator/utils/contracts/securityPool'
+import { claimForkedEscalationDeposits, forkZoltarWithOwnEscalationGame, startTruthAuction } from '../testSupport/simulator/utils/contracts/securityPoolForker'
+import { approveAndDepositRepToVault, manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { SystemState } from '../testSupport/simulator/types/statoblastTypes'
+import { QuestionOutcome } from '../testSupport/simulator/types/types'
+import { DAY } from '../testSupport/simulator/utils/constants'
+import { strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
+import assert from '../testSupport/simulator/utils/assert'
 import { beforeEach, describe, test } from 'bun:test'
 import { decodeEventLog } from '@zoltar/core-shared/evm/ethereum'
 import { getVaultCount, getTotalRepBackingUnits, redeemRepFromVault } from '../testSupport/simulator/utils/contracts/securityPool'
@@ -6,35 +19,8 @@ import { useStatoblastEscalationMigrationFixture, type StatoblastEscalationMigra
 
 describe('Own-fork continuation residual settlement regression', () => {
 	const fixture = useStatoblastEscalationMigrationFixture()
-	const assert: StatoblastEscalationMigrationFixture['assert'] = fixture.assert
-	const strictEqualTypeSafe: StatoblastEscalationMigrationFixture['strictEqualTypeSafe'] = fixture.strictEqualTypeSafe
-	const {
-		DAY,
-		QuestionOutcome,
-		SystemState,
-		approveAndDepositRepToVault,
-		claimForkedEscalationDeposits,
-		depositRepToVault,
-		depositToEscalationGame,
-		forkZoltarWithOwnEscalationGame,
-		getChildUniverseId,
-		getERC20Balance,
-		getQuestionEndDate,
-		getRepToken,
-		getRepTokenAddress,
-		getSecurityPoolAddresses,
-		getSecurityPoolsEscalationGame,
-		getSecurityVault,
-		getSystemState,
-		getTotalTheoreticalSupply,
-		getZoltarForkThreshold,
-		manipulatePriceOracle,
-		statoblast_EscalationGame_EscalationGame,
-		backingUnitsToAttoRep,
-		startTruthAuction,
-		genesisUniverse,
-		statoblastSecurityMultiplierBps,
-	} = fixture
+
+	const { genesisUniverse, statoblastSecurityMultiplierBps } = fixture
 
 	let mockWindow: StatoblastEscalationMigrationFixture['mockWindow']
 	let client: StatoblastEscalationMigrationFixture['client']

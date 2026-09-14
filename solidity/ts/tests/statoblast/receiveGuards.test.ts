@@ -1,3 +1,15 @@
+import { createCompleteSet, depositRepToVault, getRepToken } from '../../testSupport/simulator/utils/contracts/securityPool'
+import { getTotalTheoreticalSupply } from '../../testSupport/simulator/utils/contracts/zoltar'
+import { migrateRepToZoltar, migrateVault } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
+import { QuestionOutcome } from '../../testSupport/simulator/types/types'
+import { getQuestionEndDate, OperationType } from '../../testSupport/simulator/utils/contracts/statoblast'
+import { getInfraContractAddresses, getSecurityPoolAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
+import { manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { getChildUniverseId, getETHBalance } from '../../testSupport/simulator/utils/utilities'
+import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
+import { createWriteClient } from '../../testSupport/simulator/utils/clients'
+import { strictEqualTypeSafe } from '../../testSupport/simulator/utils/testUtils'
+import assert from '../../testSupport/simulator/utils/assert'
 import { beforeEach, describe, test } from 'bun:test'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
@@ -5,32 +17,8 @@ import { useStatoblastReceiveGuardsFixture, type StatoblastReceiveGuardsFixture 
 
 describe('Statoblast: receive guards', () => {
 	const fixture = useStatoblastReceiveGuardsFixture()
-	const assert: StatoblastReceiveGuardsFixture['assert'] = fixture.assert
-	const strictEqualTypeSafe: StatoblastReceiveGuardsFixture['strictEqualTypeSafe'] = fixture.strictEqualTypeSafe
-	const {
-		createWriteClient,
-		TEST_ADDRESSES,
-		getChildUniverseId,
-		getETHBalance,
-		manipulatePriceOracleAndPerformOperation,
-		triggerOwnGameFork,
-		getInfraContractAddresses,
-		getSecurityPoolAddresses,
-		getQuestionEndDate,
-		OperationType,
-		QuestionOutcome,
-		migrateRepToZoltar,
-		migrateVault,
-		getTotalTheoreticalSupply,
-		createCompleteSet,
-		depositRepToVault,
-		getRepToken,
-		repDeposit,
-		genesisUniverse,
-		statoblastSecurityMultiplierBps,
-		testInternalSenderBalance,
-		sendEthAndWait,
-	} = fixture
+
+	const { repDeposit, genesisUniverse, statoblastSecurityMultiplierBps, testInternalSenderBalance, sendEthAndWait } = fixture
 
 	let mockWindow: StatoblastReceiveGuardsFixture['mockWindow']
 	let client: StatoblastReceiveGuardsFixture['client']

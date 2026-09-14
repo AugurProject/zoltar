@@ -1,6 +1,7 @@
+import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 /// <reference types="bun-types" />
 
-import { afterEach, beforeAll, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
@@ -21,7 +22,7 @@ import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from '../../..
 import { addressString } from '../../../../../../solidity/ts/testSupport/simulator/utils/bigint.js'
 import { setupTestAccounts, ensureProxyDeployerDeployed } from '../../../../../../solidity/ts/testSupport/simulator/utils/utilities.js'
 import { AnvilWindowEthereum } from '../../../../../../solidity/ts/testSupport/simulator/AnvilWindowEthereum.js'
-import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../../../../../solidity/ts/testSupport/simulator/useIsolatedAnvilNode.js'
+import { useIsolatedAnvilNode } from '../../../../../../solidity/ts/testSupport/simulator/useIsolatedAnvilNode.js'
 import { createWriteClient, type WriteClient } from '../../../../../../solidity/ts/testSupport/simulator/utils/clients.js'
 import { ensureInfraDeployed } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast.js'
 import { ensureZoltarDeployed } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar.js'
@@ -29,8 +30,6 @@ import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } 
 import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-
-setDefaultTimeout(TEST_TIMEOUT_MS)
 
 const walletAddress = addressString(TEST_ADDRESSES[0])
 const reportId = 1n
@@ -77,7 +76,7 @@ function OpenOracleSectionHarness({ accountAddress, initialActiveView = 'create'
 	})
 	const accountState: AccountState = {
 		address: accountAddress,
-		chainId: '0x1',
+		chainId: SEPOLIA_NETWORK_PROFILE.chainIdHex,
 		ethBalanceAttoEth: 10n ** 30n,
 		wethBalanceAttoEth: undefined,
 	}
@@ -229,15 +228,17 @@ describe.serial('OpenOracleSection integration', () => {
 		await setBaselineSnapshot()
 	})
 
-	beforeEach(() => {
+	beforeEach(async () => {
 		resetActiveEnvironment?.()
 		resetActiveEnvironmentForTesting()
 		mockWindow = getAnvilWindowEthereum()
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		await mockWindow.request({ method: 'anvil_setChainId', params: [SEPOLIA_NETWORK_PROFILE.chain.id] })
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0, SEPOLIA_NETWORK_PROFILE.chain)
 		const domEnvironment = installDomEnvironment()
 		restoreDomEnvironment = domEnvironment.cleanup
 		Reflect.set(domEnvironment.window, 'ethereum', createInjectedWalletShim(mockWindow, walletAddress))
-		resetActiveEnvironment = installActiveEnvironmentForTesting(createInjectedBackend())
+		// The Anvil fixture seeds mainnet token addresses, but UI writes use Sepolia's chain ID.
+		resetActiveEnvironment = installActiveEnvironmentForTesting(createInjectedBackend({ profile: { ...MAINNET_NETWORK_PROFILE, chain: SEPOLIA_NETWORK_PROFILE.chain, chainIdHex: SEPOLIA_NETWORK_PROFILE.chainIdHex, id: 'sepolia', displayName: 'Sepolia' } }))
 		uiReadClient = createConnectedReadClient()
 	})
 

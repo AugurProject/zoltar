@@ -1,3 +1,4 @@
+import { SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { beforeEach, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIMULATION_SCENARIO, registerTradingSimulationScenario, withDefaultTradingSimulationScenario } from '../../simulation/index.js'
@@ -114,11 +115,11 @@ test('Trading force-refreshes the active environment after saving the active net
 			initializeEnvironment={async () => {
 				environmentInitializations += 1
 				restoreConfiguredEnvironment?.()
-				restoreConfiguredEnvironment = installActiveEnvironmentForTesting({ ...createFakeBackend(), createReadClient: () => configuredClient })
+				restoreConfiguredEnvironment = installActiveEnvironmentForTesting({ ...createFakeBackend({ profile: SEPOLIA_NETWORK_PROFILE }), createReadClient: () => configuredClient })
 			}}
 			loadLiveDeployment={async () => ({
-				chainId: 1,
-				chainName: 'Ethereum Mainnet',
+				chainId: 11155111,
+				chainName: 'Sepolia',
 				factory: `0x${'22'.repeat(20)}`,
 				feeBps: 30,
 				router: `0x${'33'.repeat(20)}`,
@@ -128,12 +129,12 @@ test('Trading force-refreshes the active environment after saving the active net
 		/>,
 	)
 	try {
-		await waitFor(() => expect(rendered.container.textContent).toContain('Ethereum Mainnet'))
+		await waitFor(() => expect(rendered.container.textContent).toContain('Sepolia'))
 		const queries = within(rendered.container)
 		await act(async () => fireEvent.click(queries.getByRole('button', { name: 'Settings' })))
 		const networkSelect = queries.getByRole('combobox', { name: 'RPC network' }) as HTMLSelectElement
-		expect(networkSelect.value).toBe('mainnet')
-		expect(getActiveNetworkProfile().id).toBe('mainnet')
+		expect(networkSelect.value).toBe('sepolia')
+		expect(getActiveNetworkProfile().id).toBe('sepolia')
 		const rpcInput = queries.getByRole('textbox', { name: 'Fallback RPC URL' }) as HTMLInputElement
 		rpcInput.value = 'https://new-rpc.example'
 		await act(async () => fireEvent.input(rpcInput))
@@ -142,7 +143,7 @@ test('Trading force-refreshes the active environment after saving the active net
 		await act(async () => saveButton.click())
 		expect(globalThis.localStorage.getItem('zoltar.rpcUrls')).toContain('new-rpc.example')
 		await waitFor(() => expect(environmentInitializations).toBe(1))
-		expect(createTradingPublicClient({ chainId: 1, chainName: 'Ethereum Mainnet', factory: `0x${'22'.repeat(20)}`, feeBps: 30, router: `0x${'33'.repeat(20)}`, rpcUrl: 'https://old-rpc.example', securityPoolFactory: `0x${'11'.repeat(20)}` })).toBe(configuredClient)
+		expect(createTradingPublicClient({ chainId: 11155111, chainName: 'Sepolia', factory: `0x${'22'.repeat(20)}`, feeBps: 30, router: `0x${'33'.repeat(20)}`, rpcUrl: 'https://old-rpc.example', securityPoolFactory: `0x${'11'.repeat(20)}` })).toBe(configuredClient)
 	} finally {
 		await rendered.cleanup()
 		restoreConfiguredEnvironment?.()

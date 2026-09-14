@@ -19,7 +19,7 @@ describe('actionGuards', () => {
 				isOnActiveAppChain: false,
 				walletRequiredReason: 'Connect a wallet before settling escalation deposits.',
 			}).reason,
-		).toBe('Switch to Ethereum mainnet.')
+		).toBe('Switch to Sepolia.')
 
 		expect(
 			getWalletActiveAppChainGuardState({
@@ -27,7 +27,7 @@ describe('actionGuards', () => {
 				isOnActiveAppChain: false,
 				walletRequiredReason: 'Connect a wallet before settling escalation deposits.',
 			}),
-		).toEqual({ blocked: true, reason: 'Switch to Ethereum mainnet.' })
+		).toEqual({ blocked: true, reason: 'Switch to Sepolia.' })
 
 		expect(
 			getWalletActiveAppChainActionAvailability({
@@ -35,7 +35,7 @@ describe('actionGuards', () => {
 				isOnActiveAppChain: false,
 				walletRequiredReason: 'Connect a wallet before settling escalation deposits.',
 			}),
-		).toEqual({ disabled: true, reason: 'Switch to Ethereum mainnet.' })
+		).toEqual({ disabled: true, reason: 'Switch to Sepolia.' })
 	})
 
 	test('falls back to the shared continue copy when no custom wallet reason is provided', () => {

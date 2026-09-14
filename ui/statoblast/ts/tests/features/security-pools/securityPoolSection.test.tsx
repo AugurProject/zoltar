@@ -18,7 +18,7 @@ import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testR
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {
 		address: zeroAddress,
-		chainId: '0x1',
+		chainId: '0xaa36a7',
 		ethBalanceAttoEth: 0n,
 		wethBalanceAttoEth: 0n,
 		...overrides,
@@ -113,19 +113,19 @@ describe('SecurityPoolSection', () => {
 		expectTransactionButtonDisabled(document.body, 'Create pool', 'Connect a wallet before creating a security pool.')
 	})
 
-	test('keeps pool creation disabled off mainnet and shows switch-network recovery', async () => {
+	test('keeps pool creation disabled off Sepolia and shows switch-network recovery', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				SecurityPoolSection,
 				createProps({
-					accountState: createAccountState({ chainId: '0xaa36a7' }),
+					accountState: createAccountState({ chainId: '0x1' }),
 				}),
 			),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expectTransactionButtonDisabled(document.body, 'Create pool')
-		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(true)
+		expect(document.body.textContent?.includes('Switch to Sepolia')).toBe(true)
 	})
 
 	test('disables pool creation for non-binary markets and enables it for valid binary questions', async () => {

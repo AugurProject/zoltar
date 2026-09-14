@@ -125,12 +125,12 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(pageText).not.toContain('≈ 10.00 ETH')
 	})
 
-	test('keeps oracle actions disabled off mainnet and explains recovery', async () => {
+	test('keeps oracle actions disabled off Sepolia and explains recovery', async () => {
 		const renderOffMainnetOracleView = async (selectedPoolView: 'price-oracle' | 'staged-operations') =>
 			renderIntoDocument(
 				<SecurityPoolWorkflowSection
 					{...createSecurityPoolWorkflowProps({
-						accountState: createAccountState({ address: zeroAddress, chainId: '0xaa36a7' }),
+						accountState: createAccountState({ address: zeroAddress, chainId: '0x1' }),
 						checkedSecurityPoolAddress: zeroAddress,
 						poolOracleManagerDetails: createOracleManagerDetails({
 							isPriceValid: true,
@@ -146,14 +146,14 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		const priceOracleRender = await renderOffMainnetOracleView('price-oracle')
 		setCleanup(priceOracleRender.cleanup)
 
-		expect(getTransactionButtonState(document.body, 'Request new price')).toEqual({ disabled: true, reason: 'Switch to Ethereum mainnet.' })
+		expect(getTransactionButtonState(document.body, 'Request new price')).toEqual({ disabled: true, reason: 'Switch to Sepolia.' })
 
 		await priceOracleRender.cleanup()
 
 		const stagedOperationsRender = await renderOffMainnetOracleView('staged-operations')
 		setCleanup(stagedOperationsRender.cleanup)
 
-		expect(getTransactionButtonState(document.body, 'Execute staged operation')).toEqual({ disabled: true, reason: 'Switch to Ethereum mainnet.' })
+		expect(getTransactionButtonState(document.body, 'Execute staged operation')).toEqual({ disabled: true, reason: 'Switch to Sepolia.' })
 	})
 
 	test('keeps the workflow rail visible with disabled items before a pool loads', async () => {

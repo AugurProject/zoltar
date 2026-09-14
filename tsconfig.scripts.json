@@ -1,22 +1,12 @@
 {
+	"extends": "./shared/tsconfig.strict.json",
 	"compilerOptions": {
 		"target": "ESNext",
 		"module": "ESNext",
 		"moduleResolution": "bundler",
 		"allowImportingTsExtensions": true,
-		"strict": true,
 		"skipLibCheck": true,
 		"noEmit": true,
-		"allowUnusedLabels": false,
-		"allowUnreachableCode": false,
-		"exactOptionalPropertyTypes": true,
-		"noFallthroughCasesInSwitch": true,
-		"noImplicitOverride": true,
-		"noImplicitReturns": true,
-		"noPropertyAccessFromIndexSignature": true,
-		"noUncheckedIndexedAccess": true,
-		"noUnusedLocals": true,
-		"noUnusedParameters": true,
 		"lib": ["ESNext", "DOM"],
 		"types": ["bun-types", "node"],
 		"paths": {

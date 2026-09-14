@@ -1,7 +1,7 @@
-import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
+import { beforeAll, beforeEach, describe, test } from 'bun:test'
 import { createWriteClient, WriteClient } from '../testSupport/simulator/utils/clients'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
-import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
+import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { contractExists, getETHBalance, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { decodeEventLog, encodeAbiParameters, encodeDeployData, encodeFunctionData, isHex, keccak256, type Address, type Hash, type Hex } from '@zoltar/core-shared/evm/ethereum'
@@ -109,8 +109,6 @@ const requireTransactionHash = (value: unknown): Hash => {
 	if (typeof value !== 'string' || !isHex(value, { strict: true }) || value.length !== 66) throw new Error('Anvil returned an invalid transaction hash')
 	return `0x${value.slice(2)}`
 }
-
-setDefaultTimeout(TEST_TIMEOUT_MS)
 
 describe('Auction', () => {
 	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()

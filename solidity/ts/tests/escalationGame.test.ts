@@ -1,7 +1,7 @@
-import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
+import { beforeAll, beforeEach, describe, test } from 'bun:test'
 import { decodeEventLog, encodeDeployData, encodeFunctionData, type Abi, type Address, type Hex, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
-import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
+import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { BURN_ADDRESS, DAY, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { addressString } from '../testSupport/simulator/utils/bigint'
@@ -95,8 +95,6 @@ const initializeGameForkCarrySnapshotAbi: Abi = [
 		type: 'function',
 	},
 ]
-
-setDefaultTimeout(TEST_TIMEOUT_MS)
 
 describe('Escalation Game Test Suite', () => {
 	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()

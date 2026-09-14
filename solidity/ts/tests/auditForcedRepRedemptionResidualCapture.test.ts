@@ -1,30 +1,21 @@
+import { statoblast_EscalationGame_EscalationGame } from '../types/contractArtifact'
+import { depositToEscalationGame, getSecurityPoolsEscalationGame, getTotalPoolHeldAttoRep, redeemRepFromVault, withdrawFromEscalationGame } from '../testSupport/simulator/utils/contracts/securityPool'
+import { QuestionOutcome } from '../testSupport/simulator/types/types'
+import { getQuestionOutcome } from '../testSupport/simulator/utils/contracts/securityPoolForker'
+import { getQuestionEndDate } from '../testSupport/simulator/utils/contracts/statoblast'
+import { getERC20Balance } from '../testSupport/simulator/utils/utilities'
+import { approveAndDepositRepToVault, manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { addressString } from '../testSupport/simulator/utils/bigint'
+import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
+import { createWriteClient } from '../testSupport/simulator/utils/clients'
+import { strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
+import assert from '../testSupport/simulator/utils/assert'
 import { beforeEach, describe, test } from 'bun:test'
 import { useStatoblastVaultAccountingFixture, type StatoblastVaultAccountingFixture } from './statoblast/fixture'
 
 describe('Audit: forced REP redemption before escalation residual sweep', () => {
 	const fixture = useStatoblastVaultAccountingFixture()
-	const {
-		assert,
-		strictEqualTypeSafe,
-		createWriteClient,
-		DAY,
-		GENESIS_REPUTATION_TOKEN,
-		TEST_ADDRESSES,
-		addressString,
-		approveAndDepositRepToVault,
-		getERC20Balance,
-		getQuestionEndDate,
-		getQuestionOutcome,
-		QuestionOutcome,
-		depositToEscalationGame,
-		getSecurityPoolsEscalationGame,
-		getTotalPoolHeldAttoRep,
-		manipulatePriceOracle,
-		redeemRepFromVault,
-		withdrawFromEscalationGame,
-		statoblast_EscalationGame_EscalationGame,
-		repDeposit,
-	} = fixture
+	const { repDeposit } = fixture
 
 	let mockWindow: StatoblastVaultAccountingFixture['mockWindow']
 	let client: StatoblastVaultAccountingFixture['client']

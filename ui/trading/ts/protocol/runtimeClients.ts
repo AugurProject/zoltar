@@ -1,4 +1,5 @@
-import { createWalletClient, custom, getAddress, type Address, type PublicClient } from '@zoltar/core-shared/evm/ethereum'
+import { createInjectedBackend } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
+import { getAddress, type Address, type PublicClient } from '@zoltar/core-shared/evm/ethereum'
 import { ReputationToken_ReputationToken, Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { statoblast_SecurityPool_SecurityPool } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
@@ -30,7 +31,7 @@ export function createTradingPublicClient(configuration: DeploymentConfiguration
 export function createTradingWalletClient(provider: InjectedEthereum, account: Address) {
 	const backend = getActiveBackend()
 	if (backend.id === 'simulation') return backend.createWriteClient(account)
-	return createWalletClient({ account, transport: custom(provider) })
+	return createInjectedBackend({ profile: backend.profile, provider }).createWriteClient(account)
 }
 
 export async function loadWalletHeaderBalances(client: PublicClient, market: Pick<LiveMarket, 'pool'> | { zoltar: Address; universeId: bigint }, account: Address) {

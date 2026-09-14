@@ -573,7 +573,7 @@ describe('useOnchainState (integration)', () => {
 		resetEnvironment()
 	})
 
-	test('reports a supported wallet chain change so the app can follow it', async () => {
+	test('follows Sepolia wallet changes without following disabled mainnet', async () => {
 		let walletChainId = MAINNET_NETWORK_PROFILE.chainIdHex
 		const onSupportedNetworkChange = mock((_chainId: string) => undefined)
 		const { backend, subscriptionState } = createBackend({
@@ -605,7 +605,7 @@ describe('useOnchainState (integration)', () => {
 			subscriptionState.chainHandler?.()
 			await Promise.resolve()
 		})
-		expect(onSupportedNetworkChange).toHaveBeenCalledWith(MAINNET_NETWORK_PROFILE.chainIdHex)
+		expect(onSupportedNetworkChange).not.toHaveBeenCalledWith(MAINNET_NETWORK_PROFILE.chainIdHex)
 		resetEnvironment()
 	})
 

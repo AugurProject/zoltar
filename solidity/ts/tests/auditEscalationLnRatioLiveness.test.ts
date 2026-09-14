@@ -1,3 +1,9 @@
+import { QuestionOutcome } from '../testSupport/simulator/types/types'
+import { manipulatePriceOracle, manipulatePriceOracleAndPerformOperation } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
+import { getSecurityPoolsEscalationGame, redeemRepFromVault, withdrawFromEscalationGame, depositToEscalationGame } from '../testSupport/simulator/utils/contracts/securityPool'
+import { getQuestionOutcome } from '../testSupport/simulator/utils/contracts/securityPoolForker'
+import assert from '../testSupport/simulator/utils/assert'
 import { describe, test } from 'bun:test'
 import { encodeAbiParameters, keccak256 } from '@zoltar/core-shared/evm/ethereum'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/core-shared/deployment/protocolConfig'
@@ -12,7 +18,7 @@ const ESCALATION_TIME_LENGTH = 4_233_600n
 describe('Audit PoC: escalation logarithm precision liveness', () => {
 	const fixture = useStatoblastVaultAccountingFixture()
 
-	const { assert, getQuestionOutcome, getSecurityPoolsEscalationGame, getZoltarAddress, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation, QuestionOutcome, redeemRepFromVault, reportBond, reportedRepEthPrice, withdrawFromEscalationGame } = fixture
+	const { reportBond, reportedRepEthPrice } = fixture
 
 	test('a funded game with a power-of-two threshold ratio resolves and releases its assets', async () => {
 		const { client, genesisUniverse, mockWindow, questionData, securityPoolAddresses } = fixture
@@ -34,8 +40,8 @@ describe('Audit PoC: escalation logarithm precision liveness', () => {
 
 		await mockWindow.setTime(questionData.endTime + 1n)
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, reportedRepEthPrice)
-		await fixture.depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond + 2n)
-		await fixture.depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, reportBond + 1n)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond + 2n)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, reportBond + 1n)
 
 		const escalationGame = await getSecurityPoolsEscalationGame(client, securityPoolAddresses.securityPool)
 		const activationTime = await client.readContract({
@@ -61,7 +67,7 @@ describe('Audit PoC: escalation logarithm precision liveness', () => {
 		})
 		assert.ok(escalationEndDate < activationTime + ESCALATION_TIME_LENGTH, 'strict winner should end the game before the maximum escalation duration')
 		assert.strictEqual(await getQuestionOutcome(client, securityPoolAddresses.securityPool), QuestionOutcome.Yes, 'pool should expose the strict winner after the computed deadline')
-		await assert.rejects(fixture.depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, reportBond), /Invalid deposit preview/)
+		await assert.rejects(depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, reportBond), /Invalid deposit preview/)
 		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n])
 		await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, [0n])
 		await redeemShares(client, securityPoolAddresses.securityPool)
