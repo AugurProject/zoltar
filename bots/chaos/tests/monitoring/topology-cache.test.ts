@@ -1,3 +1,5 @@
+import { validateDoctorCompanionState } from '../../src/cli/doctor.ts'
+import { parseSettings } from '../../src/config/settings.ts'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { mkdtemp, mkdir, readFile, readdir, rename, rm, stat, symlink, writeFile } from 'node:fs/promises'
@@ -136,6 +138,19 @@ describe('immutable topology sidecar', () => {
 		await writeFile(join(storePath, 'current.json'), `${JSON.stringify({ manifestDigest, schemaVersion: 1 })}\n`, { mode: 0o600 })
 
 		await expect(loadImmutableTopologyCacheWithinLimits({ identity: identity(), limits: generousLimits, statePath })).resolves.toBeUndefined()
+	})
+
+	test('doctor accepts a persisted topology with the full deployment configuration', async () => {
+		const statePath = await temporaryStatePath()
+		const settings = parseSettings(await Bun.file(join(import.meta.dir, '../../config/operator.configured-placeholder.json')).json())
+		settings.runtime.stateFile = statePath
+		const deployment = Object.fromEntries(Object.entries(settings.deployment).filter(([key]) => key !== 'multicall3'))
+		const expectedIdentity = { ...identity(), ...deployment, chainId: settings.network.chainId }
+		await saveImmutableTopologyCache(statePath, expectedIdentity, cache())
+		expect(await validateDoctorCompanionState(settings)).toEqual({ immutableTopology: 'valid' })
+		const scanIdentity = { chainId: settings.network.chainId, ...settings.deployment }
+		expect(await loadImmutableTopologyCacheWithinLimits({ identity: scanIdentity, limits: generousLimits, statePath })).toEqual(cache())
+		await saveImmutableTopologyCache(statePath, scanIdentity, cache())
 	})
 
 	test('round-trips more than ten thousand immutable records through checksummed bounded chunks', async () => {
