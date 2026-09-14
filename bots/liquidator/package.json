@@ -21,12 +21,13 @@
 		"lint": "bun x @biomejs/biome lint package.json tsconfig.json src tests scripts config && bun ../../tooling/repo/lint-no-restricted-import-types.mts .",
 		"run": "bun ./src/cli/run.ts",
 		"smoke:markets": "bun ./scripts/check-market-sources.mts",
-		"test": "bun run ensure-contract-artifacts && bun test ./tests --timeout 300000",
+		"test": "bun run ensure-contract-artifacts && bun ../../tooling/testing/bun-test.mts ./tests",
 		"typecheck": "bun run ensure-contract-artifacts && bun x tsc --project tsconfig.json --noEmit",
 		"ui:fixture": "bun ./scripts/serve-dashboard-fixture.mts"
 	},
 	"dependencies": {
-		"@zoltar/bot-shared": "file:../shared"
+		"@zoltar/bot-shared": "file:../shared",
+		"ccxt": "4.5.70"
 	},
 	"overrides": {
 		"undici": "7.29.0",

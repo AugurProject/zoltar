@@ -22,7 +22,7 @@
 		"check:docs": "bun ./scripts/check-docs.mts && bun ./scripts/check-market-fixture.mts",
 		"typecheck": "bun x tsc --project tsconfig.json --noEmit",
 		"lint": "bun x @biomejs/biome lint package.json tsconfig.json bunfig.toml src tests scripts docs/*.ts config && bun ../../tooling/repo/lint-no-restricted-import-types.mts .",
-		"test": "bun ./scripts/compile-contracts.mts --check && bun test ./tests --timeout 300000",
+		"test": "bun ./scripts/compile-contracts.mts --check && bun ../../tooling/testing/bun-test.mts ./tests",
 		"format": "bun x @biomejs/biome format --write biome.json package.json tsconfig.json bunfig.toml README.md src tests scripts docs/*.ts docs/*.html docs/*.css docs/*.json config && bun x prettier --write 'contracts/**/*.sol'",
 		"format:check": "bun x @biomejs/biome format biome.json package.json tsconfig.json bunfig.toml README.md src tests scripts docs/*.ts docs/*.html docs/*.css docs/*.json config && bun x prettier --check 'contracts/**/*.sol'",
 		"check": "bun run typecheck && bun run lint && bun run check:generated && bun run test && bun run check:docs && bun run format:check",
@@ -34,7 +34,8 @@
 	"dependencies": {
 		"@zoltar/bot-shared": "file:../shared",
 		"@zoltar/open-oracle-shared": "file:../../shared/openOracle",
-		"@zoltar/statoblast-shared": "file:../../shared/statoblast"
+		"@zoltar/statoblast-shared": "file:../../shared/statoblast",
+		"ccxt": "4.5.70"
 	},
 	"overrides": {
 		"tmp": "0.2.7",

@@ -1,3 +1,20 @@
+import { statoblast_EscalationGame_EscalationGame } from '../types/contractArtifact'
+import { SystemState } from '../testSupport/simulator/types/statoblastTypes'
+import { QuestionOutcome } from '../testSupport/simulator/types/types'
+import { forkUniverse, getRepTokenAddress, getZoltarAddress, getZoltarForkThreshold } from '../testSupport/simulator/utils/contracts/zoltar'
+import { createChildUniverse, initiateSecurityPoolFork, migrateRepToZoltar, migrateVault, startTruthAuction } from '../testSupport/simulator/utils/contracts/securityPoolForker'
+import { getQuestionResolution } from '../testSupport/simulator/utils/contracts/escalationGame'
+import { getQuestionEndDate } from '../testSupport/simulator/utils/contracts/statoblast'
+import { depositRepToVault, depositToEscalationGame, getRepToken, getSecurityPoolsEscalationGame, getSecurityVault, getSystemState, backingUnitsToAttoRep, withdrawFromEscalationGame } from '../testSupport/simulator/utils/contracts/securityPool'
+import { createQuestion, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { getInfraContractAddresses, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
+import { approveAndDepositRepToVault, manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { addressString } from '../testSupport/simulator/utils/bigint'
+import { getChildUniverseId, approveToken, getERC20Balance } from '../testSupport/simulator/utils/utilities'
+import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
+import { createWriteClient } from '../testSupport/simulator/utils/clients'
+import { strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
+import assert from '../testSupport/simulator/utils/assert'
 import { beforeEach, describe, test } from 'bun:test'
 import { encodeDeployData, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { getTotalPoolHeldAttoRep, getTotalRepBackingUnits, redeemRepFromVault } from '../testSupport/simulator/utils/contracts/securityPool'
@@ -7,51 +24,7 @@ import { statoblast_SecurityPool_SecurityPool } from '../types/contractArtifact'
 
 describe('Ordinary escalation vault-deposit freeze', () => {
 	const fixture = useStatoblastEscalationMigrationFixture()
-	const {
-		assert,
-		strictEqualTypeSafe,
-		createWriteClient,
-		DAY,
-		GENESIS_REPUTATION_TOKEN,
-		TEST_ADDRESSES,
-		getChildUniverseId,
-		addressString,
-		approveToken,
-		approveAndDepositRepToVault,
-		getInfraContractAddresses,
-		getSecurityPoolAddresses,
-		createQuestion,
-		getQuestionId,
-		depositRepToVault,
-		depositToEscalationGame,
-		getERC20Balance,
-		getQuestionEndDate,
-		getQuestionResolution,
-		createChildUniverse,
-		initiateSecurityPoolFork,
-		migrateRepToZoltar,
-		migrateVault,
-		startTruthAuction,
-		forkUniverse,
-		getRepTokenAddress,
-		getZoltarAddress,
-		getZoltarForkThreshold,
-		getRepToken,
-		getSecurityPoolsEscalationGame,
-		getSecurityVault,
-		getSystemState,
-		backingUnitsToAttoRep,
-		manipulatePriceOracle,
-		QuestionOutcome,
-		SystemState,
-		reportBond,
-		repDeposit,
-		genesisUniverse,
-		statoblastSecurityMultiplierBps,
-		outcomes,
-		statoblast_EscalationGame_EscalationGame,
-		withdrawFromEscalationGame,
-	} = fixture
+	const { reportBond, repDeposit, genesisUniverse, statoblastSecurityMultiplierBps, outcomes } = fixture
 
 	type TestClient = StatoblastEscalationMigrationFixture['client']
 

@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, setDefaultTimeout } from 'bun:test'
+import { afterAll, beforeAll, beforeEach } from 'bun:test'
 import type { AnvilWindowEthereum } from './AnvilWindowEthereum'
 import type { AnvilNode } from './anvilNode'
 import { createAnvilNodeForConnectionMode, getAnvilConnectionMode } from './anvilNode'
@@ -7,10 +7,6 @@ import { ensureDefined } from './utils/testUtils'
 const isSolidityBytecodeCoverageEnabled = (): boolean => process.env['SOLIDITY_BYTECODE_COVERAGE'] === '1'
 
 const TEST_CHAIN_START_TIMESTAMP = 1n
-export const TEST_TIMEOUT_MS = 300_000
-
-setDefaultTimeout(TEST_TIMEOUT_MS)
-
 export const useIsolatedAnvilNode = () => {
 	let anvilNode: AnvilNode | undefined
 	let anvilWindowEthereum: AnvilWindowEthereum | undefined

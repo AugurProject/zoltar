@@ -38,7 +38,7 @@ const isProductionTradingContract = (file: string) => {
 }
 
 await rm(coverageDirectory, { recursive: true, force: true })
-const testProcess = Bun.spawn(['bun', 'test', '--timeout', '300000', './solidity/ts/tests/trading/pairRouter.integration.test.ts', './solidity/ts/tests/trading/solidityMath.test.ts'], {
+const testProcess = Bun.spawn([process.execPath, './tooling/testing/bun-test.mts', './solidity/ts/tests/trading/pairRouter.integration.test.ts', './solidity/ts/tests/trading/solidityMath.test.ts'], {
 	cwd: repositoryRoot,
 	env: {
 		...Bun.env,

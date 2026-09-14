@@ -1,32 +1,19 @@
+import { strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
+import { manipulatePriceOracle, manipulatePriceOracleAndPerformOperation } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { createWriteClient } from '../testSupport/simulator/utils/clients'
+import { createCompleteSet, depositRepToVault, getSecurityVault, getShareTokenSupplyAttoShares, getSettlementCollateralAttoEth, getTotalPoolHeldAttoRep, redeemCompleteSet } from '../testSupport/simulator/utils/contracts/securityPool'
+import { approveToken } from '../testSupport/simulator/utils/utilities'
+import { addressString } from '../testSupport/simulator/utils/bigint'
+import { OperationType, getQuestionEndDate } from '../testSupport/simulator/utils/contracts/statoblast'
+import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
+import assert from '../testSupport/simulator/utils/assert'
 import { beforeEach, describe, test } from 'bun:test'
 import { statoblast_SecurityPool_SecurityPool } from '../types/contractArtifact'
 import { useStatoblastForkMigrationFixture, type StatoblastForkMigrationFixture } from './statoblast/fixture'
 
 describe('Audit PoC: stale bad debt survives a collateral reset', () => {
 	const fixture = useStatoblastForkMigrationFixture()
-	const {
-		GENESIS_REPUTATION_TOKEN,
-		OperationType,
-		PRICE_PRECISION,
-		TEST_ADDRESSES,
-		addressString,
-		approveToken,
-		assert,
-		createCompleteSet,
-		createWriteClient,
-		depositRepToVault,
-		getQuestionEndDate,
-		getSecurityVault,
-		getShareTokenSupplyAttoShares,
-		getSettlementCollateralAttoEth,
-		getTotalPoolHeldAttoRep,
-		getVaultRepClaim,
-		manipulatePriceOracle,
-		manipulatePriceOracleAndPerformOperation,
-		redeemCompleteSet,
-		repDeposit,
-		strictEqualTypeSafe,
-	} = fixture
+	const { PRICE_PRECISION, getVaultRepClaim, repDeposit } = fixture
 
 	let client: StatoblastForkMigrationFixture['client']
 	let mockWindow: StatoblastForkMigrationFixture['mockWindow']

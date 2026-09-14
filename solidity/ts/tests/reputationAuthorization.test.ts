@@ -1,15 +1,13 @@
-import { beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
+import { beforeEach, describe, test } from 'bun:test'
 import { encodeDeployData, getAddress, isHex, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import assert from '../testSupport/simulator/utils/assert'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
-import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
+import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { addressString } from '../testSupport/simulator/utils/bigint'
 import { ReputationToken_ReputationToken } from '../types/contractArtifact'
-
-setDefaultTimeout(TEST_TIMEOUT_MS)
 
 function splitSignature(signature: string) {
 	if (signature.length !== 132) throw new Error('Expected a 65-byte signature')

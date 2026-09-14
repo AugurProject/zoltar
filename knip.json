@@ -11,7 +11,9 @@
 				"tooling/contracts/build-app-contracts.mts!",
 				"tooling/contracts/{deploy-testnet,run-deploy-testnet,uniswap-deployment}.mts!",
 				"tooling/docs/{build-doc-charts,documentationChartBuild,check-doc-charts,check-docs-examples}.mts!",
-				"tooling/ui/projectArtifacts.mts!"
+				"tooling/ui/projectArtifacts.mts!",
+				"tooling/contracts/lint-no-nested-solidity-ternaries.mts!",
+				"tooling/repo/lint-no-{bare-catch,signal-wrapper-comparisons}.mts!"
 			],
 			"project": ["docs/runtime/**/*.ts!", "docs/charts/**/*.ts!", "tooling/**/*.{ts,mts}", "bun-test-setup*.ts"],
 			"ignoreDependencies": ["@preact/signals", "@tevm/memory-client", "@tevm/common", "@zoltar/core-shared", "@zoltar/open-oracle-shared", "@zoltar/statoblast-shared", "@zoltar/trading-shared"],

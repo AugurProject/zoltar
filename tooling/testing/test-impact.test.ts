@@ -10,37 +10,37 @@ const commandsFor = (changedFiles: string[]) => getTestImpactRecommendations(cha
 
 describe('test impact recommendations', () => {
 	test('maps the subprocess formatter engine to its owning tests', () => {
-		expect(commandsFor(['tooling/contracts/prettier-solidity-batch.mjs'])).toEqual(['bun test tooling/contracts/format-solidity-one-line.test.ts'])
+		expect(commandsFor(['tooling/contracts/prettier-solidity-batch.mjs'])).toEqual(['bun ./tooling/testing/bun-test.mts tooling/contracts/format-solidity-one-line.test.ts'])
 	})
 	test('maps test infrastructure to its focused runner tests', () => {
-		expect(commandsFor(['tooling/testing/test-timings.mts'])).toEqual(['bun test tooling/testing/mutation-support.test.ts tooling/testing/test-discovery.test.ts tooling/testing/run-tests.test.ts tooling/testing/test-impact.test.ts'])
-		expect(commandsFor(['bun-test-setup.ts'])).toEqual(['bun test tooling/testing/mutation-support.test.ts tooling/testing/test-discovery.test.ts tooling/testing/run-tests.test.ts tooling/testing/test-impact.test.ts'])
+		expect(commandsFor(['tooling/testing/test-timings.mts'])).toEqual(['bun ./tooling/testing/bun-test.mts tooling/testing/mutation-support.test.ts tooling/testing/test-discovery.test.ts tooling/testing/run-tests.test.ts tooling/testing/test-impact.test.ts'])
+		expect(commandsFor(['bun-test-setup.ts'])).toEqual(['bun ./tooling/testing/bun-test.mts tooling/testing/mutation-support.test.ts tooling/testing/test-discovery.test.ts tooling/testing/run-tests.test.ts tooling/testing/test-impact.test.ts'])
 	})
 
 	test('runs the changed production-build test without escalating solely because the test changed', () => {
-		expect(commandsFor(['tooling/ui/productionBuild.test.ts'])).toEqual(['bun test --preload ./bun-test-setup-ui.ts --timeout 300000 tooling/ui/productionBuild.test.ts'])
+		expect(commandsFor(['tooling/ui/productionBuild.test.ts'])).toEqual(['bun ./tooling/testing/bun-test.mts --preload ./bun-test-setup-ui.ts tooling/ui/productionBuild.test.ts'])
 		expect(commandsFor(['tooling/ui/browserSmoke.mts'])).toEqual(['bun run test:browser:smoke'])
 		expect(commandsFor(['ui/coreShared/css/application-surfaces.css'])).toEqual(['bun run test:browser:smoke'])
 		expect(commandsFor(['tooling/ui/production.mts'])).toEqual(['bun run test:browser:smoke', 'bun run test:browser:workflow'])
 	})
 
 	test('maps quote behavior to unit and deterministic fork coverage', () => {
-		expect(commandsFor(['ui/zoltarShared/ts/protocol/uniswapQuoter.ts'])).toEqual(['bun run test:integration:mainnet-fork', 'bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/zoltar/ts/tests/protocol/uniswapQuoter.test.ts'])
+		expect(commandsFor(['ui/zoltarShared/ts/protocol/uniswapQuoter.ts'])).toEqual(['bun ./tooling/testing/bun-test.mts --preload ./bun-test-setup-ui.ts ui/zoltar/ts/tests/protocol/uniswapQuoter.test.ts', 'bun run test:integration:mainnet-fork'])
 	})
 
 	test('uses each package test runner for changed package-owned tests', () => {
-		expect(commandsFor(['augurScan/src/index.test.ts', 'bots/open-oracle-arbitrager/src/quote.test.ts'])).toEqual(['cd augurScan && bun test src/index.test.ts', 'cd bots/open-oracle-arbitrager && bun test src/quote.test.ts'])
+		expect(commandsFor(['augurScan/src/index.test.ts', 'bots/open-oracle-arbitrager/src/quote.test.ts'])).toEqual(['cd augurScan && bun test src/index.test.ts', 'cd bots/open-oracle-arbitrager && bun ../../tooling/testing/bun-test.mts src/quote.test.ts'])
 	})
 
 	test('deduplicates recommendations shared by multiple changed files', () => {
 		expect(commandsFor(['tooling/testing/test-discovery.mts', 'tooling/testing/test-discovery.test.ts', 'tooling/testing/test-impact.mts', 'tooling/testing/test-impact.test.ts', 'tooling/testing/test-timings.mts'])).toEqual([
-			'bun test tooling/testing/mutation-support.test.ts tooling/testing/test-discovery.test.ts tooling/testing/run-tests.test.ts tooling/testing/test-impact.test.ts',
+			'bun ./tooling/testing/bun-test.mts tooling/testing/mutation-support.test.ts tooling/testing/test-discovery.test.ts tooling/testing/run-tests.test.ts tooling/testing/test-impact.test.ts',
 		])
 	})
 
 	test('maps CI workflow changes to workflow contract tests', () => {
 		expect(commandsFor(['.github/workflows/browser-workflow.yml', '.github/workflows/coverage.yml', '.github/workflows/test-domains.yml', '.github/workflows/test-stability.yml', 'workflow/coverage.yml', 'workflow/ci.yml', 'workflow/actions/setup-ci/action.yml'])).toEqual([
-			'bun test tooling/ui/ui-split-workflows.test.ts',
+			'bun ./tooling/testing/bun-test.mts tooling/ui/ui-split-workflows.test.ts',
 		])
 	})
 
@@ -54,31 +54,31 @@ describe('test impact recommendations', () => {
 			{ path: 'ui/zoltar/ts/tests/deleted.test.ts', status: 'deleted' },
 			{ path: 'ui/zoltar/ts/tests/new-name.test.ts', previousPath: 'ui/zoltar/ts/tests/old-name.test.ts', status: 'renamed' },
 		]
-		expect(getTestImpactRecommendations(changes).map(recommendation => recommendation.command)).toEqual(['bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/zoltar/ts/tests/new-name.test.ts'])
+		expect(getTestImpactRecommendations(changes).map(recommendation => recommendation.command)).toEqual(['bun ./tooling/testing/bun-test.mts --preload ./bun-test-setup-ui.ts ui/zoltar/ts/tests/new-name.test.ts'])
 	})
 
 	test('rewrites or removes static infrastructure commands when their tests move or are deleted', () => {
 		expect(getTestImpactRecommendations([{ path: 'tooling/testing/test-impact.test.ts', status: 'deleted' }])).toEqual([])
-		expect(getTestImpactRecommendations([{ path: 'tooling/testing/renamed-impact.test.ts', previousPath: 'tooling/testing/test-impact.test.ts', status: 'renamed' }]).map(recommendation => recommendation.command)).toEqual(['bun test tooling/testing/renamed-impact.test.ts'])
+		expect(getTestImpactRecommendations([{ path: 'tooling/testing/renamed-impact.test.ts', previousPath: 'tooling/testing/test-impact.test.ts', status: 'renamed' }]).map(recommendation => recommendation.command)).toEqual(['bun ./tooling/testing/bun-test.mts tooling/testing/renamed-impact.test.ts'])
 		expect(
 			getTestImpactRecommendations([
 				{ path: 'bun-test-setup.ts', status: 'modified' },
 				{ path: 'tooling/testing/test-impact.test.ts', status: 'deleted' },
 			]).map(recommendation => recommendation.command),
-		).toEqual(['bun test tooling/testing/mutation-support.test.ts tooling/testing/test-discovery.test.ts tooling/testing/run-tests.test.ts'])
+		).toEqual(['bun ./tooling/testing/bun-test.mts tooling/testing/mutation-support.test.ts tooling/testing/test-discovery.test.ts tooling/testing/run-tests.test.ts'])
 		expect(
 			getTestImpactRecommendations([
 				{ path: 'bun-test-setup.ts', status: 'modified' },
 				{ path: 'bots/liquidator/tests/renamed-impact.test.ts', previousPath: 'tooling/testing/test-impact.test.ts', status: 'renamed' },
 			]).map(recommendation => recommendation.command),
-		).toEqual(['bun test tooling/testing/mutation-support.test.ts tooling/testing/test-discovery.test.ts tooling/testing/run-tests.test.ts', 'cd bots/liquidator && bun test tests/renamed-impact.test.ts'])
+		).toEqual(['bun ./tooling/testing/bun-test.mts tooling/testing/mutation-support.test.ts tooling/testing/test-discovery.test.ts tooling/testing/run-tests.test.ts', 'cd bots/liquidator && bun ../../tooling/testing/bun-test.mts tests/renamed-impact.test.ts'])
 	})
 
 	test('does not retain opaque specialized tiers for deleted or renamed integration tests', () => {
 		const integrationTest = 'ui/zoltar/ts/tests/protocol/uniswapQuoter.integration.test.ts'
 		expect(getTestImpactRecommendations([{ path: integrationTest, status: 'deleted' }])).toEqual([])
 		expect(getTestImpactRecommendations([{ path: 'ui/zoltar/ts/tests/protocol/uniswapQuoter.renamed.test.ts', previousPath: integrationTest, status: 'renamed' }]).map(recommendation => recommendation.command)).toEqual([
-			'bun run ensure-contract-artifacts && RUN_MAINNET_INTEGRATION_TESTS=1 bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/zoltar/ts/tests/protocol/uniswapQuoter.renamed.test.ts',
+			'bun run ensure-contract-artifacts && RUN_MAINNET_INTEGRATION_TESTS=1 bun ./tooling/testing/bun-test.mts --preload ./bun-test-setup-ui.ts ui/zoltar/ts/tests/protocol/uniswapQuoter.renamed.test.ts',
 		])
 		const forkTest = 'ui/zoltar/ts/tests/protocol/uniswapQuoter.fork.test.ts'
 		const renamedForkTest = 'bots/liquidator/tests/uniswapQuoter.fork.test.ts'
@@ -87,21 +87,21 @@ describe('test impact recommendations', () => {
 				{ path: 'ui/zoltarShared/ts/protocol/uniswapQuoter.ts', status: 'modified' },
 				{ path: renamedForkTest, previousPath: forkTest, status: 'renamed' },
 			]).map(recommendation => recommendation.command),
-		).toEqual(['bun run ensure-contract-artifacts && cd bots/liquidator && RUN_MAINNET_FORK_INTEGRATION_TESTS=1 bun test --timeout 300000 tests/uniswapQuoter.fork.test.ts', 'bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/zoltar/ts/tests/protocol/uniswapQuoter.test.ts'])
+		).toEqual(['bun ./tooling/testing/bun-test.mts --preload ./bun-test-setup-ui.ts ui/zoltar/ts/tests/protocol/uniswapQuoter.test.ts', 'bun run ensure-contract-artifacts && cd bots/liquidator && RUN_MAINNET_FORK_INTEGRATION_TESTS=1 bun ../../tooling/testing/bun-test.mts tests/uniswapQuoter.fork.test.ts'])
 	})
 
 	test('removes or rewrites browser tiers when their owned production-build test moves', () => {
 		const productionSource: ChangedFileEntry = { path: 'tooling/ui/production.mts', status: 'modified' }
 		const productionTest = 'tooling/ui/productionBuild.test.ts'
 		expect(getTestImpactRecommendations([productionSource, { path: productionTest, status: 'deleted' }])).toEqual([])
-		expect(getTestImpactRecommendations([{ path: 'bots/liquidator/tests/productionBuild.test.ts', previousPath: productionTest, status: 'renamed' }]).map(recommendation => recommendation.command)).toEqual(['cd bots/liquidator && bun test tests/productionBuild.test.ts'])
+		expect(getTestImpactRecommendations([{ path: 'bots/liquidator/tests/productionBuild.test.ts', previousPath: productionTest, status: 'renamed' }]).map(recommendation => recommendation.command)).toEqual(['cd bots/liquidator && bun ../../tooling/testing/bun-test.mts tests/productionBuild.test.ts'])
 		const combinedCommands = getTestImpactRecommendations([productionSource, { path: 'bots/liquidator/tests/productionBuild.test.ts', previousPath: productionTest, status: 'renamed' }]).map(recommendation => recommendation.command)
 		expect(combinedCommands).toHaveLength(3)
 		expect(combinedCommands).toEqual(
 			expect.arrayContaining([
-				'bun run ensure-contract-artifacts && cd bots/liquidator && bun test --timeout 300000 tests/productionBuild.test.ts',
-				"bun run ensure-contract-artifacts && cd bots/liquidator && RUN_PRODUCTION_BROWSER_WORKFLOWS=1 bun test --timeout 600000 --test-name-pattern 'production bundle (boots the statoblast fork and auction scenario|executes deployment, reporting, fork migration, failure recovery, and truth auction finalization)' tests/productionBuild.test.ts",
-				'cd bots/liquidator && bun test tests/productionBuild.test.ts',
+				'bun run ensure-contract-artifacts && cd bots/liquidator && bun ../../tooling/testing/bun-test.mts tests/productionBuild.test.ts',
+				"bun run ensure-contract-artifacts && cd bots/liquidator && RUN_PRODUCTION_BROWSER_WORKFLOWS=1 bun ../../tooling/testing/bun-test.mts --timeout 600000 --test-name-pattern 'production bundle (boots the statoblast fork and auction scenario|executes deployment, reporting, fork migration, failure recovery, and truth auction finalization)' tests/productionBuild.test.ts",
+				'cd bots/liquidator && bun ../../tooling/testing/bun-test.mts tests/productionBuild.test.ts',
 			]),
 		)
 	})
@@ -109,12 +109,12 @@ describe('test impact recommendations', () => {
 	test('merges overlapping commands for the same runner so every selected test runs once', () => {
 		expect(
 			deduplicateTestRecommendations([
-				{ command: 'bun test tooling/testing/run-tests.test.ts tooling/testing/test-impact.test.ts', reason: 'import graph' },
-				{ command: 'bun test tooling/testing/test-discovery.test.ts tooling/testing/test-impact.test.ts', reason: 'test infrastructure' },
+				{ command: 'bun ./tooling/testing/bun-test.mts tooling/testing/run-tests.test.ts tooling/testing/test-impact.test.ts', reason: 'import graph' },
+				{ command: 'bun ./tooling/testing/bun-test.mts tooling/testing/test-discovery.test.ts tooling/testing/test-impact.test.ts', reason: 'test infrastructure' },
 			]),
 		).toEqual([
 			{
-				command: 'bun test tooling/testing/run-tests.test.ts tooling/testing/test-discovery.test.ts tooling/testing/test-impact.test.ts',
+				command: 'bun ./tooling/testing/bun-test.mts tooling/testing/run-tests.test.ts tooling/testing/test-discovery.test.ts tooling/testing/test-impact.test.ts',
 				reason: 'import graph; test infrastructure',
 			},
 		])
@@ -131,7 +131,7 @@ describe('test impact recommendations', () => {
 
 			expect(await getImportGraphTestRecommendations(['ui/zoltar/ts/feature/source.ts'], repositoryRoot)).toEqual([
 				{
-					command: 'bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/zoltar/ts/tests/consumer.test.ts',
+					command: 'bun ./tooling/testing/bun-test.mts --preload ./bun-test-setup-ui.ts ui/zoltar/ts/tests/consumer.test.ts',
 					reason: 'imports changed production source directly or transitively',
 				},
 			])
@@ -152,7 +152,7 @@ describe('test impact recommendations', () => {
 
 			expect(await getImportGraphTestRecommendations(['bots/shared/src/value.ts'], repositoryRoot)).toEqual([
 				{
-					command: 'cd bots/open-oracle-arbitrager && bun test tests/consumer.test.ts',
+					command: 'cd bots/open-oracle-arbitrager && bun ../../tooling/testing/bun-test.mts tests/consumer.test.ts',
 					reason: 'imports changed production source directly or transitively',
 				},
 			])
@@ -174,7 +174,7 @@ describe('test impact recommendations', () => {
 			await writeFile(join(packageRoot, 'tests', 'core', 'strategy.test.ts'), "import { strategy } from '#core/strategy'\nimport { ethereum } from '#ethereum'\nvoid strategy\nvoid ethereum\n")
 			const expected = [
 				{
-					command: 'cd bots/open-oracle-arbitrager && bun test tests/core/strategy.test.ts',
+					command: 'cd bots/open-oracle-arbitrager && bun ../../tooling/testing/bun-test.mts tests/core/strategy.test.ts',
 					reason: 'imports changed production source directly or transitively',
 				},
 			]
@@ -212,7 +212,7 @@ describe('test impact recommendations', () => {
 
 			expect(await getImportGraphTestRecommendations([{ path: 'bots/open-oracle-arbitrager/src/core/strategy.ts', status: 'deleted' }], repositoryRoot, { baselinePackageImports, baselineSources })).toEqual([
 				{
-					command: 'cd bots/open-oracle-arbitrager && bun test tests/core/strategy.test.ts',
+					command: 'cd bots/open-oracle-arbitrager && bun ../../tooling/testing/bun-test.mts tests/core/strategy.test.ts',
 					reason: 'imports changed production source directly or transitively',
 				},
 			])
@@ -236,7 +236,7 @@ describe('test impact recommendations', () => {
 
 			expect(await getImportGraphTestRecommendations([{ path: 'shared/core/ts/deleted.ts', status: 'deleted' }], repositoryRoot, { baselineSources })).toEqual([
 				{
-					command: 'bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/zoltar/ts/tests/consumer.test.ts',
+					command: 'bun ./tooling/testing/bun-test.mts --preload ./bun-test-setup-ui.ts ui/zoltar/ts/tests/consumer.test.ts',
 					reason: 'imports changed production source directly or transitively',
 				},
 			])
@@ -267,7 +267,7 @@ describe('test impact recommendations', () => {
 			git(['rm', 'pkg/source.ts'])
 			git(['commit', '-m', 'feature deletes source'])
 
-			expect(await getImportGraphTestRecommendations([{ path: 'pkg/source.ts', status: 'deleted' }], repositoryRoot)).toEqual([{ command: 'bun test pkg/source.test.ts', reason: 'imports changed production source directly or transitively' }])
+			expect(await getImportGraphTestRecommendations([{ path: 'pkg/source.ts', status: 'deleted' }], repositoryRoot)).toEqual([{ command: 'bun ./tooling/testing/bun-test.mts pkg/source.test.ts', reason: 'imports changed production source directly or transitively' }])
 		} finally {
 			await rm(repositoryRoot, { force: true, recursive: true })
 		}
