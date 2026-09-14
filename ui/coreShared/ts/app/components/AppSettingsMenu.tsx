@@ -82,7 +82,7 @@ export function AppSettingsMenu({ onEnvironmentChanged, settingsContent }: { onE
 							id='fallback-rpc-url'
 							disabled={selectedNetwork === 'simulation'}
 							aria-invalid={error === undefined ? undefined : true}
-							aria-describedby={error === undefined ? 'fallback-rpc-help' : 'fallback-rpc-help fallback-rpc-error'}
+							aria-describedby={[selectedNetwork === 'simulation' ? 'fallback-rpc-help' : undefined, error === undefined ? undefined : 'fallback-rpc-error'].filter(Boolean).join(' ') || undefined}
 							value={rpcUrls[selectedNetwork] ?? ''}
 							placeholder={defaults[selectedNetwork]}
 							onInput={event => {
@@ -92,9 +92,11 @@ export function AppSettingsMenu({ onEnvironmentChanged, settingsContent }: { onE
 							}}
 						/>
 					</label>
-					<p id='fallback-rpc-help' className='field-help'>
-						{selectedNetwork === 'simulation' ? appCopy.simulationRpcDetail : appCopy.formatFallbackRpcDetail(defaults[selectedNetwork])}
-					</p>
+					{selectedNetwork === 'simulation' ? (
+						<p id='fallback-rpc-help' className='field-help'>
+							{appCopy.simulationRpcDetail}
+						</p>
+					) : undefined}
 					{error === undefined ? undefined : (
 						<p id='fallback-rpc-error' className='field-error' role='alert'>
 							{error}

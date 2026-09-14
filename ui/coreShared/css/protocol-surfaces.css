@@ -1454,7 +1454,7 @@ strong.metric-value-danger {
 	border: 1px solid var(--border-strong);
 	border-radius: 1rem;
 	border-color: var(--border-strong);
-	background: linear-gradient(180deg, rgba(13, 26, 43, 0.94) 0%, rgba(9, 18, 31, 0.97) 100%);
+	background: linear-gradient(180deg, rgba(13, 26, 43, 0.94) 0%, rgba(9, 18, 31, 0.97) 100%) var(--surface-modal-opaque);
 	box-shadow: var(--glow-inset-subtle);
 	pointer-events: auto;
 }
@@ -1538,14 +1538,13 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 }
 
 .global-transaction-dismiss {
-	min-width: 7rem;
+	min-width: var(--touch-target-min);
 }
 
 .global-transaction-actions {
 	display: flex;
 	justify-content: flex-end;
 	padding-top: 0.2rem;
-	border-top: 1px solid var(--divider-strong);
 }
 
 .global-transaction-close {
