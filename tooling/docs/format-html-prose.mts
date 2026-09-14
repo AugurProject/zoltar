@@ -1,9 +1,9 @@
 import { existsSync } from 'node:fs'
 import { readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { repositoryRoot } from '../repo/root.mts'
 
-const repositoryRootPath = path.resolve(fileURLToPath(new URL('..', import.meta.url)))
+const toolingRootPath = path.join(repositoryRoot, 'tooling')
 
 type SourceSpan = { end: number; start: number }
 
@@ -121,13 +121,13 @@ export function formatParagraphsOnSingleLines(html: string): string {
 }
 
 export function repositoryHtmlFilePaths(): string[] {
-	const result = Bun.spawnSync(['git', 'ls-files', '--cached', '--others', '--exclude-standard', '-z', ':(glob)**/*.html'], { cwd: repositoryRootPath })
+	const result = Bun.spawnSync(['git', 'ls-files', '--cached', '--others', '--exclude-standard', '-z', ':(glob)**/*.html'], { cwd: toolingRootPath })
 	if (result.exitCode !== 0) throw new Error(`Unable to list tracked HTML files: ${result.stderr.toString().trim()}`)
 	return result.stdout
 		.toString()
 		.split('\0')
 		.filter(Boolean)
-		.map(filePath => path.join(repositoryRootPath, filePath))
+		.map(filePath => path.join(toolingRootPath, filePath))
 		.filter(filePath => existsSync(filePath))
 }
 
@@ -144,7 +144,7 @@ export async function formatHtmlFiles(filePaths: string[], runPrettier: () => Pr
 if (import.meta.main) {
 	await formatHtmlFiles(repositoryHtmlFilePaths(), async () => {
 		const prettier = Bun.spawn(['bun', 'x', 'prettier', '--write', '**/*.html'], {
-			cwd: repositoryRootPath,
+			cwd: toolingRootPath,
 			stderr: 'inherit',
 			stdout: 'inherit',
 		})

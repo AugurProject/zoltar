@@ -1,10 +1,11 @@
-import { normalizeNumericInput } from '@zoltar/ui-core-shared/lib/numericInput.js'
+import { ceilDiv as divideUp } from '@zoltar/core-shared/math/bigint'
 import { TRUTH_AUCTION_MAX_TICK, TRUTH_AUCTION_PRICE_PRECISION } from '@zoltar/statoblast-shared/statoblast/truthAuctionTickMath'
-import type { TruthAuctionBidView, TruthAuctionMetrics, TruthAuctionTickSummary } from '@zoltar/ui-core-shared/types/contracts.js'
-import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
-import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice } from '../../../protocol/truthAuctionMath.js'
 import { tryParseTruthAuctionAmountInput, tryParseTruthAuctionPriceInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
+import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { normalizeNumericInput } from '@zoltar/ui-core-shared/lib/numericInput.js'
+import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
+import type { TruthAuctionBidView, TruthAuctionMetrics, TruthAuctionTickSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice } from '../../../protocol/truthAuctionMath.js'
 export { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice }
 
 type TruthAuctionDisposition = {
@@ -47,7 +48,7 @@ export function estimateRepPurchased(bidAmountAttoEth: bigint, price: bigint) {
 
 function ceilDiv(dividend: bigint, divisor: bigint) {
 	if (divisor <= 0n) return 0n
-	return (dividend + divisor - 1n) / divisor
+	return divideUp(dividend, divisor)
 }
 
 function findUnderfundedWinningAttoEth(tickSummaries: TruthAuctionTickSummary[], maxAttoRepBeingSold: bigint) {

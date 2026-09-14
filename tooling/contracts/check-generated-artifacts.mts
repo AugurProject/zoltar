@@ -1,12 +1,10 @@
-import { sharedPackages } from '../repo/sharedPackages.ts'
 import { spawnSync } from 'node:child_process'
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
 import * as process from 'node:process'
 import * as url from 'node:url'
-
-const scriptDirectory = path.dirname(url.fileURLToPath(import.meta.url))
-const defaultRepositoryRoot = path.join(scriptDirectory, '..', '..')
+import { repositoryRoot as defaultRepositoryRoot } from '../repo/root.mts'
+import { sharedPackages } from '../repo/sharedPackages.ts'
 
 type GitResult = {
 	status: number | null

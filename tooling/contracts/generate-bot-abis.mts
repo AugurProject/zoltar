@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
+import { repositoryRoot } from '../repo/root.mts'
 
 /**
  * Emits the repository-contract ABIs the bots consume from the compiled artifact into bots/shared instead of hand-maintained
@@ -7,7 +8,6 @@ import path from 'node:path'
  * exposes through a delegate) or one named event, so the bots always match the deployed interface and the conformance tests
  * only need to check identity.
  */
-const repositoryRoot = path.resolve(import.meta.dir, '..', '..')
 const artifactPath = path.join(repositoryRoot, 'solidity', 'artifacts', 'Contracts.json')
 
 type ContractSelection = { readonly artifactSource: string; readonly contract: string; readonly functions?: readonly string[] }

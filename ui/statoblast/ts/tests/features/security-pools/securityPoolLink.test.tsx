@@ -1,43 +1,39 @@
 /// <reference types='bun-types' />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
-import { act } from 'preact/test-utils'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
-import { SecurityPoolLink } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolLink.js'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
+import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import { getSecurityPoolLinkHref } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolNavigation.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
+import { SecurityPoolLink } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolLink.js'
+import { getSecurityPoolLinkHref } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolNavigation.js'
+import { describe, expect, test } from 'bun:test'
+import { act } from 'preact/test-utils'
 
 installTestRouting()
 describe('SecurityPoolLink', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 	let previousPopStateEventDescriptor: PropertyDescriptor | undefined
 
-	beforeEach(() => {
-		const domEnvironment = installDomEnvironment()
-		restoreDomEnvironment = domEnvironment.cleanup
-		previousPopStateEventDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'PopStateEvent')
-		Object.defineProperty(globalThis, 'PopStateEvent', {
-			configurable: true,
-			value: domEnvironment.window.PopStateEvent,
-			writable: true,
-		})
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		if (previousPopStateEventDescriptor === undefined) {
-			delete (globalThis as typeof globalThis & { PopStateEvent?: typeof window.PopStateEvent }).PopStateEvent
-		} else {
-			Object.defineProperty(globalThis, 'PopStateEvent', previousPopStateEventDescriptor)
-		}
-		previousPopStateEventDescriptor = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
+	installDomTestLifecycle({
+		beforeTest: domEnvironment => {
+			previousPopStateEventDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'PopStateEvent')
+			Object.defineProperty(globalThis, 'PopStateEvent', {
+				configurable: true,
+				value: domEnvironment.window.PopStateEvent,
+				writable: true,
+			})
+		},
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+			if (previousPopStateEventDescriptor === undefined) {
+				delete (globalThis as typeof globalThis & { PopStateEvent?: typeof window.PopStateEvent }).PopStateEvent
+			} else {
+				Object.defineProperty(globalThis, 'PopStateEvent', previousPopStateEventDescriptor)
+			}
+			previousPopStateEventDescriptor = undefined
+		},
 	})
 
 	test('renders the full pool address and follows normal left-click navigation', async () => {

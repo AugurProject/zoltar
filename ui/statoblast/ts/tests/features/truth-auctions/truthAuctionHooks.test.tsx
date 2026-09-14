@@ -1,19 +1,20 @@
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { useState } from 'preact/hooks'
-import { act } from 'preact/test-utils'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
-import { useTruthAuctionPaginationState } from '@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useTruthAuctionPaginationState.js'
+import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import type { ForkAuctionActionResult, ReadClient, TruthAuctionBidView } from '@zoltar/ui-core-shared/types/contracts.js'
 import { useTruthAuctionBookData } from '@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useTruthAuctionBookData.js'
+import { useTruthAuctionPaginationState } from '@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useTruthAuctionPaginationState.js'
 import { useTruthAuctionSettlementActionState } from '@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useTruthAuctionSettlementActionState.js'
 import type { TruthAuctionBidDisposition } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/truthAuctionBook.js'
 import { getTruthAuctionSettlementBidKey, type TruthAuctionSettlementBidRow } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/truthAuctionSettlement.js'
-import type { ForkAuctionActionResult, ReadClient, TruthAuctionBidView } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { SettlementSelectedBid } from '@zoltar/ui-zoltar-shared/features/types.js'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
-import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { useState } from 'preact/hooks'
+import { act } from 'preact/test-utils'
 
 const walletAddress: Address = '0x0000000000000000000000000000000000000001'
 const otherWalletAddress: Address = '0x0000000000000000000000000000000000000002'
@@ -84,14 +85,6 @@ function createForkAuctionResult(action: ForkAuctionActionResult['action'], hash
 		securityPoolAddress: poolAddress,
 		universeId: 1n,
 	}
-}
-
-function createDeferred<T>() {
-	let resolve: (value: T) => void = () => undefined
-	const promise = new Promise<T>(promiseResolve => {
-		resolve = promiseResolve
-	})
-	return { promise, resolve }
 }
 
 describe('truth auction hooks', () => {

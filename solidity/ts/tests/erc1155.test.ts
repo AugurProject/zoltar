@@ -1,15 +1,16 @@
+import { type Address, decodeEventLog, encodeDeployData, encodeFunctionData, type Hex, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { beforeAll, beforeEach, describe, test } from 'bun:test'
-import assert from '../testSupport/simulator/utils/assert'
-import { decodeEventLog, encodeDeployData, encodeFunctionData, type Address, type Hex, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { deployContract } from '../testSupport/deployContract'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
+import assert from '../testSupport/simulator/utils/assert'
+import { addressString } from '../testSupport/simulator/utils/bigint'
+import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { ensureInfraDeployed } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { ensureZoltarDeployed, forkUniverse, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { approveToken, getChildUniverseId, setupTestAccounts, sortStringArrayByKeccak } from '../testSupport/simulator/utils/utilities'
-import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
-import { addressString } from '../testSupport/simulator/utils/bigint'
 import { statoblast_tokens_ShareToken_ShareToken, test_statoblast_ERC1155ReceiverMock_ERC1155NonReceiver, test_statoblast_ERC1155ReceiverMock_ERC1155ReceiverMock, test_statoblast_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock } from '../types/contractArtifact'
 
 describe('ERC1155 Compliance Test Suite', () => {
@@ -18,16 +19,9 @@ describe('ERC1155 Compliance Test Suite', () => {
 	let client: WriteClient
 	let operatorClient: WriteClient
 
-	const deployContract = async (deploymentData: Hex) => {
-		const hash = await client.sendTransaction({ data: deploymentData })
-		const receipt = await client.waitForTransactionReceipt({ hash })
-		const contractAddress = receipt.contractAddress
-		if (contractAddress === undefined || contractAddress === null) throw new Error('deployment address missing')
-		return contractAddress
-	}
-
 	const deployShareToken = async (questionId = 1n) =>
 		await deployContract(
+			client,
 			encodeDeployData({
 				abi: statoblast_tokens_ShareToken_ShareToken.abi,
 				bytecode: `0x${statoblast_tokens_ShareToken_ShareToken.evm.bytecode.object}`,
@@ -37,6 +31,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 
 	const deployReceiver = async () =>
 		await deployContract(
+			client,
 			encodeDeployData({
 				abi: test_statoblast_ERC1155ReceiverMock_ERC1155ReceiverMock.abi,
 				bytecode: `0x${test_statoblast_ERC1155ReceiverMock_ERC1155ReceiverMock.evm.bytecode.object}`,
@@ -45,6 +40,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 
 	const deployNonReceiver = async () =>
 		await deployContract(
+			client,
 			encodeDeployData({
 				abi: test_statoblast_ERC1155ReceiverMock_ERC1155NonReceiver.abi,
 				bytecode: `0x${test_statoblast_ERC1155ReceiverMock_ERC1155NonReceiver.evm.bytecode.object}`,
@@ -265,6 +261,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 		assert.strictEqual(constructorLog.args.authorized, true)
 
 		const firstPool = await deployContract(
+			client,
 			encodeDeployData({
 				abi: test_statoblast_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock.abi,
 				bytecode: `0x${test_statoblast_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock.evm.bytecode.object}`,
@@ -272,6 +269,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 			}),
 		)
 		const chainedPool = await deployContract(
+			client,
 			encodeDeployData({
 				abi: test_statoblast_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock.abi,
 				bytecode: `0x${test_statoblast_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock.evm.bytecode.object}`,
@@ -279,6 +277,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 			}),
 		)
 		const collidingPool = await deployContract(
+			client,
 			encodeDeployData({
 				abi: test_statoblast_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock.abi,
 				bytecode: `0x${test_statoblast_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock.evm.bytecode.object}`,
@@ -370,6 +369,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 		const shareTokenAddress = await deployShareToken()
 		const otherShareTokenAddress = await deployShareToken(2n)
 		const wrongShareTokenPool = await deployContract(
+			client,
 			encodeDeployData({
 				abi: test_statoblast_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock.abi,
 				bytecode: `0x${test_statoblast_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock.evm.bytecode.object}`,
@@ -539,6 +539,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 		)
 
 		const nonMigratableSourcePool = await deployContract(
+			client,
 			encodeDeployData({
 				abi: test_statoblast_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock.abi,
 				bytecode: `0x${test_statoblast_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock.evm.bytecode.object}`,

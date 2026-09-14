@@ -1,10 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import * as url from 'node:url'
+import { repositoryRoot } from '../repo/root.mts'
 import { UI_APP_IDS, getUiAppDependencyOrder, getUiAppPaths, getUiCoreSharedPaths, isUiAppId, parseUiAppId, type UiAppId } from './appPaths.mts'
-
-const repositoryRoot = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..', '..')
 
 test('UI_APP_IDS lists exactly the supported applications', () => {
 	expect(UI_APP_IDS).toEqual(['zoltar', 'statoblast', 'trading'])

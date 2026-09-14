@@ -1,19 +1,21 @@
-import { operatorHeader } from './header.ts'
 import { buildDashboardScript, dashboardHealthResponse, sharedDashboardAssetResponse } from '@zoltar/bot-shared/dashboard/assets'
-import { join } from 'node:path'
 import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
 import {
 	boundedDashboardJson,
 	closingDashboardJson as closingJson,
 	dashboardAuthenticationChallenge,
 	dashboardAuthorities,
-	dashboardJson as json,
 	dashboardRequestAuthorityIsAccepted,
 	dashboardRequestIsAuthenticated,
 	dashboardRequestIsSameOrigin,
 	dashboardSecurityHeaders as headers,
+	dashboardJson as json,
 	validateDashboardAuthentication,
 } from '@zoltar/bot-shared/dashboard/security'
+import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
+import { optionalRecord as record } from '@zoltar/bot-shared/infrastructure/json-validation'
+import { join } from 'node:path'
+import { operatorHeader } from './header.ts'
 
 export type DashboardController = {
 	getConfiguration: () => unknown | Promise<unknown>
@@ -36,10 +38,6 @@ export type DashboardController = {
 }
 
 const CHAIN_CONFIGURATION_REQUIRED = 'Select and save the chain and RPC endpoints before changing chain-specific settings'
-
-function errorMessage(error: unknown) {
-	return error instanceof Error ? error.message : String(error)
-}
 
 function publicConnectivityUpdateError(error: unknown) {
 	return publicConnectivityError(error, {
@@ -69,10 +67,6 @@ function publicOperatorFailure(error: string, fallback = 'The operation returned
 
 function containsSensitiveOperatorDetail(value: string) {
 	return /https?:\/\/[^\s/:]+:[^@\s]+@/i.test(value) || /(?:api[_-]?key|authorization|bearer|password|secret|token)\s*[=:]\s*\S+/i.test(value) || /(?:calldata|data|serializedTransaction|transactionData)\s*[=:]\s*0x[0-9a-f]{16,}/i.test(value) || /(?:[a-z]:\\|\/(?:etc|home|root|tmp|var|workspace)\/)/i.test(value)
-}
-
-function record(value: unknown): Record<string, unknown> | undefined {
-	return typeof value === 'object' && value !== null && !Array.isArray(value) ? Object.fromEntries(Object.entries(value)) : undefined
 }
 
 function publicFields(value: unknown, fields: readonly string[]) {

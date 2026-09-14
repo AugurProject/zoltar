@@ -248,6 +248,29 @@ describe('operator strategy settings', () => {
 		expect(() => updateStrategyFromRequest(current, { ...settings(), execute: true })).toThrow('Unknown strategy setting')
 	})
 
+	test('preserves object validation and inclusive integer boundaries', () => {
+		const current = strategy()
+		const before = { ...current }
+		for (const value of [undefined, null, [], 'settings', 1]) {
+			expect(() => updateStrategyFromRequest(current, value)).toThrow('Settings must be a JSON object')
+			expect(current).toEqual(before)
+		}
+		for (const pollMilliseconds of [999, 3_600_001, 1_000.5, Number.NaN, Number.POSITIVE_INFINITY, '1000']) {
+			expect(() => updateStrategyFromRequest(current, { ...settings(), pollMilliseconds })).toThrow('must be an integer from 1000 to 3600000')
+			expect(current).toEqual(before)
+		}
+		for (const twapSeconds of [59, 86_401, 60.5]) {
+			expect(() => updateStrategyFromRequest(current, { ...settings(), twapSeconds })).toThrow('must be an integer from 60 to 86400')
+			expect(current).toEqual(before)
+		}
+		for (const [pollMilliseconds, twapSeconds] of [
+			[1_000, 60],
+			[3_600_000, 86_400],
+		]) {
+			expect(updateStrategyFromRequest(current, { ...settings(), pollMilliseconds, twapSeconds })).toMatchObject({ pollMilliseconds, twapSeconds })
+		}
+	})
+
 	test('preserves negative ETH profitability', () => {
 		expect(parseSignedDecimalEth('-0.0015')).toBe(-15n * 10n ** 14n)
 		expect(decimalSignedEth(-15n * 10n ** 14n)).toBe('-0.0015')

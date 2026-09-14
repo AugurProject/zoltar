@@ -1,5 +1,6 @@
-import type { Address } from '@zoltar/bot-shared/ethereum'
 import type { CandidatePriority, StrategySettings } from '#config/settings'
+import type { Address } from '@zoltar/bot-shared/ethereum'
+import { ceilDiv as divideUp } from '@zoltar/core-shared/math/bigint'
 
 export const PRICE_PRECISION = 10n ** 18n
 export const BPS_DENOMINATOR = 10_000n
@@ -51,7 +52,7 @@ export type LiquidationCandidate = {
 function ceilDiv(numerator: bigint, denominator: bigint) {
 	if (denominator <= 0n) throw new Error('Division denominator must be positive')
 	if (numerator === 0n) return 0n
-	return (numerator - 1n) / denominator + 1n
+	return divideUp(numerator, denominator)
 }
 
 function mulDivUp(left: bigint, right: bigint, denominator: bigint) {

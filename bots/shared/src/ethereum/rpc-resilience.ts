@@ -1,7 +1,8 @@
-import { custom } from './rpc-transport.ts'
-import { http, requestTransport, RpcError } from './rpc-transport.ts'
+import { integer } from '../infrastructure/json-validation.ts'
+import { errorMessage } from '../infrastructure/error-message.ts'
 import { historyUnavailableError } from '../monitoring/block-sync.ts'
 import { permanentHistoricalLogError } from '../monitoring/log-availability.ts'
+import { custom, http, requestTransport, RpcError } from './rpc-transport.ts'
 
 export type RpcEndpointStatus = 'degraded' | 'healthy' | 'offline' | 'unknown'
 
@@ -63,10 +64,6 @@ function endpointTarget(url: string) {
 	return new URL(url).origin
 }
 
-function errorMessage(error: unknown) {
-	return error instanceof Error ? error.message : String(error)
-}
-
 function safeErrorMessage(error: unknown, url: string, target: string) {
 	return errorMessage(error).split(url).join(target)
 }
@@ -103,8 +100,7 @@ function endpointFailoverEligible(method: string, error: unknown) {
 }
 
 function validatedInteger(value: number, label: string, minimum: number, maximum: number) {
-	if (!Number.isSafeInteger(value) || value < minimum || value > maximum) throw new Error(`${label} must be an integer from ${minimum.toString()} to ${maximum.toString()}`)
-	return value
+	return integer(value, label, minimum, maximum, `${label} must be an integer from ${minimum.toString()} to ${maximum.toString()}`)
 }
 
 export function createRpcEndpointPool(urls: readonly string[], options: RpcEndpointPoolOptions = {}) {

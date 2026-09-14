@@ -1,4 +1,4 @@
-import { type Address, type Chain, type PublicClient, type Transport } from '@zoltar/bot-shared/ethereum'
+import { type Chain, type PublicClient, type Transport } from '@zoltar/bot-shared/ethereum'
 
 export function requirePositiveLimit(value: unknown, label: string) {
 	if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) throw new Error(`${label} must be a positive safe integer`)
@@ -75,10 +75,6 @@ export async function mapWithConcurrency<T, R>(values: readonly T[], maximum: nu
 		if (value === undefined) throw new Error(`Bounded mapping lost result ${index.toString()}`)
 		return value.value
 	})
-}
-
-export function sameAddress(left: Address, right: Address) {
-	return left.toLowerCase() === right.toLowerCase()
 }
 
 const CONTRACT_REVERT_MESSAGE = /(?:execution reverted|\brevert(?:ed|ing)?\b|always failing transaction)/i

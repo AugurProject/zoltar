@@ -1,6 +1,5 @@
 import type { SQL } from 'bun'
-import { decodeOpaqueCursor, encodeOpaqueCursor, isJsonArray } from '../cursor-codec.ts'
-import type { JsonValue } from '../ethereum.ts'
+import { encodeOpaqueCursor, parseCursor } from '../cursor-codec.ts'
 import { tradingCatalogRows } from '../repositories/trading-catalog.ts'
 import { snapshotBoundary } from './entity-details.ts'
 import { ApiRequestError, integer, isNonNegativeSafeInteger, isPostgresBigint, json } from './shared.ts'
@@ -15,13 +14,11 @@ export const rejectRawSnapshotOffset = (url: URL): void => {
 export const offsetPage = (url: URL, chainId: number, domain: string, identity: string) => {
 	const cursorValue = url.searchParams.get('cursor')
 	if (cursorValue === null) return { identity, offset: 0, cursor: undefined }
-	let parsed: JsonValue
-	try {
-		parsed = decodeOpaqueCursor(cursorValue)
-	} catch (error) {
-		throw new ApiRequestError('cursor is invalid', { cause: error })
-	}
-	const parts = isJsonArray(parsed) ? parsed : []
+	const parts = parseCursor(
+		cursorValue,
+		parts => parts,
+		error => new ApiRequestError('cursor is invalid', { cause: error }),
+	)
 	if (
 		parts.length !== 10 ||
 		!isNonNegativeSafeInteger(parts[0]) ||

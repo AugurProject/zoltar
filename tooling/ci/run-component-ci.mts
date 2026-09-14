@@ -1,7 +1,6 @@
 import path from 'node:path'
 import { componentProjects, type Project } from '../repo/projects.ts'
-
-const repositoryRoot = path.resolve(import.meta.dir, '../..')
+import { repositoryRoot } from '../repo/root.mts'
 
 export type ComponentCiPlanEntry = {
 	readonly command: readonly string[]

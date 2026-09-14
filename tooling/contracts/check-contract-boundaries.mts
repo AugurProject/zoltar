@@ -1,17 +1,13 @@
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
+import { repositoryRoot } from '../repo/root.mts'
+import { walkFiles } from '../repo/walk.mts'
 import { findContractBoundaryViolations } from './contract-boundaries.js'
 
-const repositoryRoot = path.resolve(import.meta.dir, '..', '..')
 const contractRoot = path.join(repositoryRoot, 'solidity', 'contracts')
 
-async function collectSolidityFiles(directory: string, files: string[] = []): Promise<string[]> {
-	for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
-		const entryPath = path.join(directory, entry.name)
-		if (entry.isDirectory()) await collectSolidityFiles(entryPath, files)
-		else if (entry.isFile() && entry.name.endsWith('.sol')) files.push(entryPath)
-	}
-	return files
+async function collectSolidityFiles(directory: string): Promise<string[]> {
+	return await walkFiles(directory, { include: file => file.endsWith('.sol') })
 }
 
 const findings = []

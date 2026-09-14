@@ -1,3 +1,4 @@
+import { ceilDiv as divideUp } from '../../shared/core/ts/math/bigint.ts'
 import { compareBigint } from './compare.ts'
 type ReportClock = 'block' | 'timestamp'
 
@@ -175,7 +176,7 @@ const positiveInteger = (value: unknown, name: string): bigint => {
 
 const ceilDiv = (numerator: bigint, denominator: bigint): bigint => {
 	if (denominator <= 0n) throw new Error('Exact division requires a positive denominator')
-	return numerator === 0n ? 0n : (numerator - 1n) / denominator + 1n
+	return divideUp(numerator, denominator)
 }
 
 export type VaultRiskInput = {
