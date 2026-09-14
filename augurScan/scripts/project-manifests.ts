@@ -49,7 +49,6 @@ const deploymentKind: Readonly<Record<string, string>> = {
 	openOracle: 'openOracle',
 	priceOracleManagerAndOperatorQueuerFactory: 'priceCoordinatorFactory',
 	proxyDeployer: 'proxyDeployer',
-	scalarOutcomes: 'scalarOutcomes',
 	securityPoolFactory: 'securityPoolFactory',
 	securityPoolForker: 'securityPoolForker',
 	securityPoolOperationsDelegate: 'securityPoolOperationsDelegate',

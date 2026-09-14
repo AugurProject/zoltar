@@ -549,7 +549,6 @@ describe('testnet deployment plan', () => {
 			infrastructure.multicall3,
 			infrastructure.openOracle,
 			infrastructure.priceOracleManagerAndOperatorQueuerFactory,
-			infrastructure.scalarOutcomes,
 			infrastructure.securityPoolFactory,
 			infrastructure.securityPoolForker,
 			infrastructure.securityPoolOperationsDelegate,
@@ -587,7 +586,7 @@ describe('testnet deployment plan', () => {
 		expect(bootstrapDescendants.securityPoolCreationCodeFirstChunk).toBe(getCreateAddress({ from: bootstrapDescendants.securityPoolDeploymentWorker, nonce: 1n }))
 		expect(bootstrapDescendants.securityPoolCreationCodeSecondChunk).toBe(getCreateAddress({ from: bootstrapDescendants.securityPoolDeploymentWorker, nonce: 2n }))
 		expect(plan.some(step => step.id === 'escalationGameFactory')).toBe(true)
-		expect(plan).toHaveLength(26)
+		expect(plan).toHaveLength(25)
 		expect(new Set(plan.map(step => step.id)).size).toBe(plan.length)
 		expect(new Set(plan.map(step => step.address)).size).toBe(plan.length)
 		expect(Object.keys(CONSERVATIVE_DEPLOYMENT_GAS).sort()).toEqual(plan.map(step => step.id).sort())

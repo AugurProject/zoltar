@@ -145,7 +145,7 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 			id: 'securityPoolForker',
 			label: 'Security Pool Forker',
 			address: addresses.securityPoolForker,
-			dependencies: ['proxyDeployer', 'scalarOutcomes', 'securityPoolUtils', 'zoltar'],
+			dependencies: ['proxyDeployer', 'securityPoolUtils', 'zoltar'],
 			deploy: async client => await deployViaProxy(client, getSecurityPoolForkerByteCode(addresses.zoltar)),
 		},
 		{

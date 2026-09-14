@@ -17,7 +17,7 @@ const ZOLTAR_DEPLOYMENT_SECTIONS: DeploymentSectionDefinition[] = [
 	},
 	{
 		title: 'Zoltar',
-		stepIds: ['reputationToken', 'scalarOutcomes', 'zoltarQuestionData', 'zoltar'],
+		stepIds: ['reputationToken', 'zoltarQuestionData', 'zoltar'],
 	},
 ]
 
