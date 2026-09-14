@@ -12,7 +12,7 @@ import type { DeploymentStatus, TradingDetails, ZoltarUniverseSummary } from '@z
 import { useTradingOperations, type UseTradingOperationsDependencies } from '@zoltar/ui-statoblast-shared/features/markets/hooks/useTradingOperations.js'
 import type { TransactionIntent } from '@zoltar/ui-zoltar-shared/features/types.js'
 import { describe, expect, mock, test } from 'bun:test'
-import { h } from 'preact'
+import { h, render } from 'preact'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 
@@ -84,12 +84,12 @@ function createHarness(
 		onTransactionRequested?: Parameters<UseTradingOperations>[0]['onTransactionRequested']
 	} = {},
 ) {
-	return function TradingOperationsHarness() {
+	return function TradingOperationsHarness({ enabled = true }: { enabled?: boolean }) {
 		const state = useTradingOperations(
 			{
 				accountAddress: WALLET_ADDRESS,
 				deploymentStatuses: [createDeploymentStep('proxyDeployer')],
-				enabled: true,
+				enabled,
 				onTransactionCanceled,
 				onTransactionFailed,
 				onTransactionFinished,
@@ -152,6 +152,32 @@ describe('useTradingOperations', () => {
 			resetActiveEnvironmentForTesting()
 			mock.restore()
 		},
+	})
+
+	test('disabling pool reads clears stale errors and discards an outstanding decode failure', async () => {
+		let hookState: UseTradingOperationsState | undefined
+		const pendingDetails = createDeferred<TradingDetails>()
+		const loadTradingDetails = mock(async () => await pendingDetails.promise)
+		const Harness = createHarness(
+			useTradingOperations,
+			state => {
+				hookState = state
+			},
+			() => undefined,
+			createTradingOperationsDependencies({ loadTradingDetails }),
+		)
+		const rendered = await renderIntoDocument(<Harness enabled={false} />)
+		cleanupRenderedComponent = rendered.cleanup
+		expect(loadTradingDetails).not.toHaveBeenCalled()
+		await act(() => render(<Harness enabled />, rendered.container))
+		await waitFor(() => expect(loadTradingDetails).toHaveBeenCalledTimes(1))
+		await act(() => render(<Harness enabled={false} />, rendered.container))
+		await act(async () => {
+			pendingDetails.reject(new Error('Unable to decode universeId result'))
+			await Promise.resolve()
+		})
+		expect(requireHookState(hookState).tradingError).toBeUndefined()
+		expect(requireHookState(hookState).tradingDetails).toBeUndefined()
 	})
 
 	test('blocks complete-set mint writes when latest pool capacity has no collateral exchange rate', async () => {

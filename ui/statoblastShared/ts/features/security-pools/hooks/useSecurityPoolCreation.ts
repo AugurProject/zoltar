@@ -73,7 +73,7 @@ export function useSecurityPoolCreation({
 		const isCurrent = nextDuplicateCheck()
 		const marketId = securityPoolForm.value.marketId.trim()
 		const statoblastSecurityMultiplierBpsInput = securityPoolForm.value.statoblastSecurityMultiplierBps.trim()
-		const initialReportPriorityFeeInput = securityPoolForm.value.initialReportPriorityFeeGwei.trim()
+		const initialReportPriorityFeeInput = securityPoolForm.value.initialReportPriorityFeeEth.trim()
 		if (marketId === '' || statoblastSecurityMultiplierBpsInput === '' || initialReportPriorityFeeInput === '') {
 			duplicateOriginPoolExists.value = false
 			return
@@ -81,7 +81,7 @@ export function useSecurityPoolCreation({
 
 		const questionId = tryParseBigIntInput(marketId)
 		const statoblastSecurityMultiplierBps = tryParseStatoblastSecurityMultiplierBpsInput(statoblastSecurityMultiplierBpsInput)
-		const initialReportPriorityFeeAttoEthPerGas = tryParseDecimalInput(initialReportPriorityFeeInput, 9)
+		const initialReportPriorityFeeAttoEthPerGas = tryParseDecimalInput(initialReportPriorityFeeInput, 18)
 		if (questionId === undefined || statoblastSecurityMultiplierBps === undefined || initialReportPriorityFeeAttoEthPerGas === undefined || initialReportPriorityFeeAttoEthPerGas <= 0n) {
 			duplicateOriginPoolExists.value = false
 			return
@@ -141,7 +141,7 @@ export function useSecurityPoolCreation({
 		const baseSecurityPoolForm = securityPoolFormOverride ?? securityPoolForm.value
 		const submittedSecurityPoolForm = questionIdOverride === undefined ? baseSecurityPoolForm : { ...baseSecurityPoolForm, marketId: questionIdOverride }
 		const transactionContext = {
-			initialReportPriorityFeeGwei: submittedSecurityPoolForm.initialReportPriorityFeeGwei,
+			initialReportPriorityFeeEth: submittedSecurityPoolForm.initialReportPriorityFeeEth,
 			questionId: submittedSecurityPoolForm.marketId,
 			statoblastSecurityMultiplierBps: tryParseStatoblastSecurityMultiplierBpsInput(submittedSecurityPoolForm.statoblastSecurityMultiplierBps),
 			universeId: activeUniverseId,
@@ -241,7 +241,7 @@ export function useSecurityPoolCreation({
 	useEffect(() => {
 		if (!enabled) return
 		void loadDuplicateOriginPoolState()
-	}, [enabled, securityPoolForm.value.initialReportPriorityFeeGwei, securityPoolForm.value.marketId, securityPoolForm.value.statoblastSecurityMultiplierBps])
+	}, [enabled, securityPoolForm.value.initialReportPriorityFeeEth, securityPoolForm.value.marketId, securityPoolForm.value.statoblastSecurityMultiplierBps])
 
 	useEffect(() => {
 		if (!enabled) return

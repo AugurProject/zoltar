@@ -6,7 +6,6 @@ import { h } from 'preact'
 import { act } from 'preact/test-utils'
 import { GlobalTransactionPresentationProvider } from '../components/GlobalTransactionPresentationContext.js'
 import { TransactionActionButton, TransactionActionButtonLockProvider, TransactionActionGroup } from '../components/TransactionActionButton.js'
-import { TRANSACTION_ACTION_LOCK_REASON } from '../transactions/transactionTray.js'
 import { fireEvent, within } from './testUtils/queries'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
@@ -30,7 +29,7 @@ describe('TransactionActionButton', () => {
 
 	test('shares a global transaction blocker while keeping both grouped actions disabled', async () => {
 		const rendered = await renderIntoDocument(
-			<TransactionActionButtonLockProvider disabledReason={TRANSACTION_ACTION_LOCK_REASON}>
+			<TransactionActionButtonLockProvider locked>
 				<TransactionActionGroup message={undefined}>
 					<TransactionActionButton idleLabel='Approve' pendingLabel='Approving' onClick={() => undefined} />
 					<TransactionActionButton idleLabel='Submit' pendingLabel='Submitting' onClick={() => undefined} />
@@ -38,11 +37,10 @@ describe('TransactionActionButton', () => {
 			</TransactionActionButtonLockProvider>,
 		)
 		cleanupRenderedComponent = rendered.cleanup
-		const notice = within(document.body).getByRole('note')
-		expect(notice.textContent).toBe(TRANSACTION_ACTION_LOCK_REASON)
+		expect(within(document.body).queryByRole('note')).toBeNull()
 		for (const button of document.querySelectorAll('button')) {
 			expect(button.disabled).toBe(true)
-			expect(button.getAttribute('aria-describedby')).toBe(notice.id)
+			expect(button.getAttribute('aria-describedby')).toBeNull()
 		}
 	})
 
@@ -131,7 +129,7 @@ describe('TransactionActionButton', () => {
 	test('blocks new actions while another transaction is still in flight', async () => {
 		let callCount = 0
 		const renderedComponent = await renderIntoDocument(
-			<TransactionActionButtonLockProvider disabledReason={TRANSACTION_ACTION_LOCK_REASON}>
+			<TransactionActionButtonLockProvider locked>
 				<TransactionActionButton idleLabel='Create Pool' onClick={() => callCount++} pendingLabel='Submitting...' />
 			</TransactionActionButtonLockProvider>,
 		)
@@ -140,7 +138,7 @@ describe('TransactionActionButton', () => {
 		const documentQueries = within(document.body)
 		const button = documentQueries.getByRole('button', { name: 'Create Pool' })
 		expect((button as HTMLButtonElement).disabled).toBe(true)
-		expect(documentQueries.getByText(TRANSACTION_ACTION_LOCK_REASON)).not.toBeNull()
+		expect(documentQueries.queryByText('Finish the current transaction before starting another transaction.')).toBeNull()
 
 		await act(() => {
 			fireEvent.click(button)

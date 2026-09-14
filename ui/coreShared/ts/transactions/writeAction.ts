@@ -4,7 +4,6 @@ import { assertActiveWallet, type ActiveWalletContext } from '../wallet/assertAc
 import type { WriteOperationsParameters } from '../types/app.js'
 import type { TransactionIntent } from '../types/components.js'
 import { createActiveEnvironmentGuard } from '../lib/activeEnvironment.js'
-import { TRANSACTION_ACTION_LOCK_REASON } from './transactionTray.js'
 
 type RunWriteActionParameters = {
 	accountAddress: Address | undefined
@@ -68,11 +67,7 @@ export async function runWriteAction<TResult extends { hash: Hash }>(parameters:
 			const activeWallet = await assertActiveWallet(parameters.accountAddress)
 			if (!environmentGuard.isCurrent()) return
 			if (parameters.onTransactionRequested() === false) {
-				if (parameters.onWriteError === undefined) {
-					parameters.setErrorMessage(TRANSACTION_ACTION_LOCK_REASON)
-				} else {
-					parameters.onWriteError(TRANSACTION_ACTION_LOCK_REASON)
-				}
+				parameters.onWriteCanceled?.()
 				return
 			}
 			ownsTransaction = true

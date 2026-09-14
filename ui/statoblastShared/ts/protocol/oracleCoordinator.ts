@@ -73,8 +73,20 @@ function getStagedOracleQueuedResult(receipt: TransactionReceipt, managerAddress
 	return undefined
 }
 
+async function readOracleRequestCost(client: Pick<ReadClient, 'getBlock' | 'readContract'>, managerAddress: Address) {
+	const block = await client.getBlock()
+	if (block.baseFeePerGas === undefined) throw new Error('The current block base fee is unavailable. Retry the oracle quote.')
+	const [callbackGasLimit, reportGas] = await Promise.all([
+		client.readContract({ address: managerAddress, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'getSettlementCallbackGasLimit', args: [], blockNumber: block.number }),
+		client.readContract({ address: managerAddress, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'gasConsumedOpenOracleReportPrice', args: [], blockNumber: block.number }),
+	])
+	// Match OpenOraclePriceCoordinator.getRequestPriceCostAttoEth using the
+	// block header: fee-free eth_call can zero BASEFEE on Geth nodes.
+	return block.baseFeePerGas * 4n * (BigInt(callbackGasLimit) + reportGas) + 101n
+}
+
 export async function loadOracleManagerDetails(client: ReadClient, managerAddress: Address, openOracleAddress?: Address): Promise<OracleManagerDetails> {
-	const [lastPrice, pendingOperationSlotId, pendingSettlementOperationIds, pendingSettlementQueueCapacity, pendingReportId, queuedOperationCostAttoEth, requestPriceCostAttoEth, rawIsPriceValid, lastSettlementTimestamp, activeStagedOperationCount, settlementTime] = await readRequiredMulticall(client, [
+	const [lastPrice, pendingOperationSlotId, pendingSettlementOperationIds, pendingSettlementQueueCapacity, pendingReportId, queuedOperationCostAttoEth, rawIsPriceValid, lastSettlementTimestamp, activeStagedOperationCount, settlementTime] = await readRequiredMulticall(client, [
 		{
 			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'lastPrice',
@@ -113,12 +125,6 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 		},
 		{
 			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-			functionName: 'getRequestPriceCostAttoEth',
-			address: managerAddress,
-			args: [],
-		},
-		{
-			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'isPriceValid',
 			address: managerAddress,
 			args: [],
@@ -145,7 +151,7 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 	const normalizedPendingSettlementOperationIds = requireBigintArray(pendingSettlementOperationIds, 'pending settlement operation ids')
 	const normalizedPendingSettlementQueueCapacity = requireBigintValue(pendingSettlementQueueCapacity, 'pending settlement queue capacity')
 	const normalizedQueuedOperationEthCost = requireBigintValue(queuedOperationCostAttoEth, 'queued operation ETH cost')
-	const normalizedRequestPriceEthCost = requireBigintValue(requestPriceCostAttoEth, 'request price ETH cost')
+	const normalizedRequestPriceEthCost = requireBigintValue(await readOracleRequestCost(client, managerAddress), 'request price ETH cost')
 	const resolvedOracleAddress = openOracleAddress ?? getInfraContractAddresses().openOracle
 	let callbackStateHash: Hex | undefined
 	let exactToken1Report: bigint | undefined
@@ -242,16 +248,10 @@ function compareStagedOperationIdsDescending(left: { operationId: bigint }, righ
 }
 
 async function loadBufferedOracleRequestEthCost(client: WriteClient, managerAddress: Address) {
-	const requestPriceCostAttoEth = await client.readContract({
-		address: managerAddress,
-		abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-		functionName: 'getRequestPriceCostAttoEth',
-		args: [],
-	})
-	return addOpenOracleBountyBuffer(requestPriceCostAttoEth)
+	return addOpenOracleBountyBuffer(await readOracleRequestCost(client, managerAddress))
 }
 
-export async function loadOracleManagerQueueOperationEthValue(client: Pick<WriteClient, 'readContract'>, managerAddress: Address) {
+export async function loadOracleManagerQueueOperationEthValue(client: Pick<WriteClient, 'getBlock' | 'readContract'>, managerAddress: Address) {
 	const [lastPrice, pendingSettlementOperationIds, pendingSettlementQueueCapacity, pendingReportId, queuedOperationCostAttoEth, requestPriceCostAttoEth, rawIsPriceValid] = await Promise.all([
 		client.readContract({
 			address: managerAddress,
@@ -283,12 +283,7 @@ export async function loadOracleManagerQueueOperationEthValue(client: Pick<Write
 			functionName: 'getQueuedOperationCostAttoEth',
 			args: [],
 		}),
-		client.readContract({
-			address: managerAddress,
-			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-			functionName: 'getRequestPriceCostAttoEth',
-			args: [],
-		}),
+		readOracleRequestCost(client, managerAddress),
 		client.readContract({
 			address: managerAddress,
 			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,

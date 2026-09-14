@@ -912,6 +912,24 @@ describe('Open Oracle helpers', () => {
 		expect(details.priceValidUntilTimestamp).toBe(undefined)
 	})
 
+	test('oracle quotes match the contract at a nonzero base fee without a funded read caller', async () => {
+		await mockWindow.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: ['0x3b9aca00'] })
+		await mockWindow.request({ method: 'evm_mine', params: [] })
+		const block = await uiReadClient.getBlock()
+		const expectedCost = await client.readContract({
+			address: managerAddress,
+			abi: [{ type: 'function', name: 'getRequestPriceCostAttoEth', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' }],
+			functionName: 'getRequestPriceCostAttoEth',
+			args: [],
+			account: client.account.address,
+			blockNumber: block.number,
+			gasPrice: block.baseFeePerGas,
+		})
+		const details = await loadOracleManagerDetails(uiReadClient, managerAddress)
+		expect(details.requestPriceCostAttoEth).toBe(expectedCost)
+		expect(details.requestPriceCostAttoEth).toBeGreaterThan(101n)
+	})
+
 	test('requestOraclePrice creates a pending report visible via loadOpenOracleReportDetails', async () => {
 		const minimumToken1ReportAttoEth = await client.readContract({
 			address: managerAddress,
@@ -1007,7 +1025,7 @@ describe('Open Oracle helpers', () => {
 		const seededReportId = (await loadOracleManagerDetails(uiReadClient, managerAddress)).pendingReportId
 		await mockWindow.advanceTime(DAY)
 		await settleOracleReport(uiWriteClient, getOpenOracleAddress(), seededReportId)
-		await mockWindow.advanceTime(5n * 60n + 1n)
+		await mockWindow.advanceTime(60n * 60n + 1n)
 
 		await expect(requestOraclePrice(uiWriteClient, managerAddress)).rejects.toThrow('Failed to fetch price from Uniswap')
 		expect((await loadOracleManagerDetails(uiReadClient, managerAddress)).pendingReportId).toBe(0n)
@@ -1226,7 +1244,8 @@ describe('Open Oracle helpers', () => {
 				if (parameters.functionName === 'MAX_PENDING_SETTLEMENT_OPERATIONS') return 8n as never
 				if (parameters.functionName === 'pendingReportId') return 0n as never
 				if (parameters.functionName === 'getQueuedOperationCostAttoEth') return 0n as never
-				if (parameters.functionName === 'getRequestPriceCostAttoEth') return 10n as never
+				if (parameters.functionName === 'getSettlementCallbackGasLimit') return 10 as never
+				if (parameters.functionName === 'gasConsumedOpenOracleReportPrice') return 20n as never
 				if (parameters.functionName === 'isPriceValid') return false as never
 				if (parameters.functionName === 'minimumToken1ReportAttoEth') return minimumToken1ReportAttoEth as never
 				if (parameters.functionName === 'reputationToken') return reputationTokenAddress as never
@@ -1361,7 +1380,7 @@ describe('Open Oracle helpers', () => {
 		expect(managerDetails.pendingReportId).toBe(0n)
 		expect(managerDetails.lastSettlementTimestamp).toBeGreaterThan(0n)
 		expect(managerDetails.isPriceValid).toBe(true)
-		expect(managerDetails.priceValidUntilTimestamp).toBe(managerDetails.lastSettlementTimestamp + 5n * 60n)
+		expect(managerDetails.priceValidUntilTimestamp).toBe(managerDetails.lastSettlementTimestamp + 60n * 60n)
 	})
 
 	test('ui wrapWeth helper deposits ETH into WETH and reports the wrap action', async () => {

@@ -326,8 +326,13 @@ export function useTradingOperations(
 		)
 
 	useEffect(() => {
-		if (!enabled) return
 		nextTradingDetailsLoad()
+		if (!enabled) {
+			tradingDetails.value = undefined
+			tradingForkUniverse.value = undefined
+			tradingError.value = undefined
+			return
+		}
 		targetOutcomeDefaultsKey.current = undefined
 		if (tradingForm.value.targetOutcomeIndexes !== '')
 			tradingForm.value = {

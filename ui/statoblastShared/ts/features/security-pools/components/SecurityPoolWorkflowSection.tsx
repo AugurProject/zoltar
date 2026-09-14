@@ -790,7 +790,9 @@ export function SecurityPoolWorkflowSection({
 									/>
 								) : undefined}
 
-								{view === 'trading' ? <TradingSection {...trading} calculationPriceConfigured={uiPriceOracle !== undefined} selectedPool={effectiveSelectedPool} poolState={selectedPoolStateModel} embedInCard showHeader={false} showSecurityPoolAddressInput={false} /> : undefined}
+								{view === 'trading' ? (
+									<TradingSection {...trading} oraclePriceUsable={currentPoolOraclePriceUsable} calculationPriceConfigured={uiPriceOracle !== undefined} selectedPool={effectiveSelectedPool} poolState={selectedPoolStateModel} embedInCard showHeader={false} showSecurityPoolAddressInput={false} />
+								) : undefined}
 
 								{view === 'reporting' ? (
 									<ReportingSection

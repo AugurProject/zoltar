@@ -2186,6 +2186,21 @@ describe('Price Oracle Refund Security Tests', () => {
 		await assert.rejects(async () => await executeStagedOperation(client, priceOracle, manualOperationId), /Staged operation unavailable/)
 	})
 
+	test('Sepolia oracle prices stay valid for one hour', async () => {
+		const originalChainId = await mockWindow.request({ method: 'eth_chainId' })
+		try {
+			await mockWindow.request({ method: 'anvil_setChainId', params: [11155111] })
+			await manipulatePriceOracle(client, mockWindow, priceOracle)
+			const settledAt = await client.readContract({ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, address: priceOracle, functionName: 'lastSettlementTimestamp', args: [] })
+			await mockWindow.setTime(settledAt + 3599n)
+			assert.strictEqual(await getIsPriceValid(client, priceOracle), true)
+			await mockWindow.setTime(settledAt + 3600n)
+			assert.strictEqual(await getIsPriceValid(client, priceOracle), false)
+		} finally {
+			await mockWindow.request({ method: 'anvil_setChainId', params: [Number(originalChainId)] })
+		}
+	})
+
 	test('cached oracle prices expire exactly at the five-minute validity boundary', async () => {
 		await manipulatePriceOracle(client, mockWindow, priceOracle)
 		const lastSettlementTimestamp = await client.readContract({

@@ -191,7 +191,7 @@ describe('useQuestionCreation', () => {
 		expect(harness.onTransactionSubmitted).not.toHaveBeenCalled()
 		expect(harness.onTransactionFinished).not.toHaveBeenCalled()
 		expect(harness.hookState().questionCreating).toBe(false)
-		expect(harness.hookState().questionError).toBe('Finish the current transaction before starting another transaction.')
+		expect(harness.hookState().questionError).toBeUndefined()
 	})
 
 	test('keeps the successful result and presents a warning when refresh fails', async () => {
@@ -358,7 +358,7 @@ describe('useQuestionCreation', () => {
 			harness.hookState().setQuestionForm(current => ({ ...current, endTime: '2000', startTime: '1000', title: 'Will the replacement account submit?' }))
 		})
 		await act(async () => await harness.hookState().createQuestion())
-		expect(harness.hookState().questionError).toBe('Finish the current transaction before starting another transaction.')
+		expect(harness.hookState().questionError).toBeUndefined()
 		expect(requestCount).toBe(1)
 
 		await act(async () => {

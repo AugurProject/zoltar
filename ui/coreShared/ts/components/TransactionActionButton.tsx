@@ -9,7 +9,7 @@ import { isPendingGlobalTransactionPresentation, useGlobalTransactionPresentatio
 
 const TransactionActionGroupContext = createContext<{ noticeId: string; hasNotice: boolean } | undefined>(undefined)
 
-const TransactionActionButtonLockContext = createContext<string | undefined>(undefined)
+const TransactionActionButtonLockContext = createContext(false)
 
 function getInlineHintAriaLabel(ariaLabel: string | undefined, inlineHintAriaLabel: string | undefined, idleLabel: ComponentChildren) {
 	if (inlineHintAriaLabel !== undefined) return inlineHintAriaLabel
@@ -18,15 +18,14 @@ function getInlineHintAriaLabel(ariaLabel: string | undefined, inlineHintAriaLab
 	return undefined
 }
 
-export function TransactionActionButtonLockProvider({ children, disabledReason }: { children: ComponentChildren; disabledReason: string | undefined }) {
-	return <TransactionActionButtonLockContext.Provider value={disabledReason}>{children}</TransactionActionButtonLockContext.Provider>
+export function TransactionActionButtonLockProvider({ children, locked }: { children: ComponentChildren; locked: boolean }) {
+	return <TransactionActionButtonLockContext.Provider value={locked}>{children}</TransactionActionButtonLockContext.Provider>
 }
 
 export function TransactionActionGroup({ children, id, message }: { children: ComponentChildren; id?: string | undefined; message: string | undefined }) {
 	const generatedId = useId()
 	const noticeId = id ?? generatedId
-	const globalDisabledReason = useContext(TransactionActionButtonLockContext)
-	const notice = message ?? globalDisabledReason
+	const notice = message
 	return (
 		<TransactionActionGroupContext.Provider value={{ noticeId, hasNotice: notice !== undefined }}>
 			<div className='tx-action-group'>
@@ -43,10 +42,10 @@ export function TransactionActionButton({ ariaLabel, availability, className = '
 	const group = useContext(TransactionActionGroupContext)
 	const disabledReasonId = useId()
 	const globalTransaction = useGlobalTransactionPresentation()
-	const globalDisabledReason = useContext(TransactionActionButtonLockContext)
-	const blockedByPendingRequest = globalDisabledReason !== undefined && !pending
+	const globallyLocked = useContext(TransactionActionButtonLockContext)
+	const blockedByPendingRequest = globallyLocked && !pending
 	const isDisabled = disabled || pending || availability?.disabled === true || blockedByPendingRequest
-	const disabledReason = isDisabled ? (availability?.reason ?? (blockedByPendingRequest ? globalDisabledReason : undefined)) : undefined
+	const disabledReason = isDisabled ? availability?.reason : undefined
 	const shouldShowDisabledReason = showDisabledReason && isDisabled && disabledReason !== undefined
 	const resolvedInlineHint = shouldShowDisabledReason ? disabledReason : inlineHint
 	const resolvedInlineHintAriaLabel = getInlineHintAriaLabel(ariaLabel, inlineHintAriaLabel, idleLabel)

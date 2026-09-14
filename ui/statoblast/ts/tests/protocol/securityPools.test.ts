@@ -135,11 +135,12 @@ describe('securityPools protocol client', () => {
 		expect(deploymentRangeCalls).toEqual([[expectedStartIndex, 1n]])
 	})
 
-	test('loadAllSecurityPools keeps the default root-pool fork outcome unset and inactive', async () => {
+	test.each(['all', 'new-pool-lineage'])('loads %s with the default root-pool fork outcome unset and inactive', async mode => {
+		let registryReads = 0
 		const questionId = 1n
 		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
 		const client = createMockLoaderClient({
-			getBlock: async () => createBlockWithTimestamp(0n),
+			getBlock: async () => ({ timestamp: 0n, number: 100n, hash: `0x${'11'.repeat(32)}` }),
 			multicall: async request => {
 				const contracts = request.contracts
 				const firstContract = contracts[0]
@@ -151,7 +152,10 @@ describe('securityPools protocol client', () => {
 			},
 			readContract: async request => {
 				if (request.functionName === 'forkContinuation') return false
-				if (request.functionName === 'securityPoolDeploymentCount') return 1n
+				if (request.functionName === 'securityPoolDeploymentCount') {
+					registryReads += 1
+					return mode === 'new-pool-lineage' && registryReads === 1 ? 0n : 1n
+				}
 				if (request.functionName === 'securityPoolDeploymentsRange') {
 					return [
 						{
@@ -175,7 +179,7 @@ describe('securityPools protocol client', () => {
 			},
 		})
 
-		const pools = await loadAllSecurityPools(client)
+		const pools = mode === 'all' ? await loadAllSecurityPools(client) : await loadSecurityPoolLineage(client, securityPoolAddress)
 		const [pool] = pools
 		if (pool === undefined) throw new Error('Expected one security pool')
 

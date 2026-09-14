@@ -514,7 +514,7 @@ describe('useSecurityPoolCreation', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			requireState(state).setSecurityPoolForm(current => ({ ...current, initialReportPriorityFeeGwei: '20', marketId: '11', statoblastSecurityMultiplierBps: '3' }))
+			requireState(state).setSecurityPoolForm(current => ({ ...current, initialReportPriorityFeeEth: '0.00000002', marketId: '11', statoblastSecurityMultiplierBps: '3' }))
 			requireState(state).loadMarketById('11')
 		})
 		await waitFor(() => {
@@ -522,7 +522,7 @@ describe('useSecurityPoolCreation', () => {
 		})
 
 		await act(async () => {
-			await requireState(state).createPool('11', { initialReportPriorityFeeGwei: '10', marketId: '', statoblastSecurityMultiplierBps: '2' })
+			await requireState(state).createPool('11', { initialReportPriorityFeeEth: '0.00000001', marketId: '', statoblastSecurityMultiplierBps: '2' })
 		})
 
 		expect(requireState(state).securityPoolResult?.questionId).toBe('0x0b')

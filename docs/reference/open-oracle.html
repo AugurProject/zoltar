@@ -40,7 +40,7 @@
 				</figure>
 				<p>This raw-amount ratio is valid because the configured WETH and REP contracts both use 18 decimals. The coordinator does not normalize token decimals in the settlement callback.</p>
 
-				<p id="integration-terms">An accepted report becomes the coordinator's cached REP/ETH price. It is reusable only while it remains inside <code>PRICE_VALID_FOR_SECONDS</code>, currently five minutes. The coordinator does not meter how much operation volume uses that price during the freshness window.</p>
+				<p id="integration-terms">An accepted report becomes the coordinator's cached REP/ETH price. Its freshness window is one hour on Sepolia and five minutes on other chains. The coordinator does not meter how much operation volume uses that price during the freshness window.</p>
 			</section>
 
 			<section id="optional-upstream-capabilities">

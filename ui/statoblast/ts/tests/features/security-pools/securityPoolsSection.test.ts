@@ -325,7 +325,7 @@ function createCreatePoolProps(overrides: Partial<SecurityPoolRouteContentProps>
 		securityPoolCreating: false,
 		securityPoolError: undefined,
 		securityPoolForm: {
-			initialReportPriorityFeeGwei: '10',
+			initialReportPriorityFeeEth: '0.00000001',
 			marketId: '',
 			statoblastSecurityMultiplierBps: '',
 		},

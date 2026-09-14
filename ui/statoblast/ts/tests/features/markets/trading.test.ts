@@ -244,7 +244,7 @@ void describe('trading helpers', () => {
 				totalPoolHeldAttoRep: 10n,
 				mintingCapacityAttoEth: 10n,
 			}),
-		).toBe('Refresh the REP price before minting.')
+		).toBe('Request a new price in Price Oracle before minting.')
 	})
 
 	void test('surfaces the local mint block reasons before the transaction is sent', () => {
