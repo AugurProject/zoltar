@@ -392,7 +392,7 @@ describe('ABI metadata', () => {
 	})
 
 	test('maps all supported manifest contract kinds to ABIs', () => {
-		for (const kind of ['ammFactory', 'ammPair', 'proxyDeployer', 'multicall3', 'priceCoordinatorFactory', 'scalarOutcomes', 'securityPoolUtils', 'securityPoolOperationsDelegate', 'shareTokenFactory', 'truthAuctionFactory']) {
+		for (const kind of ['ammFactory', 'ammPair', 'proxyDeployer', 'multicall3', 'priceCoordinatorFactory', 'securityPoolUtils', 'securityPoolOperationsDelegate', 'shareTokenFactory', 'truthAuctionFactory']) {
 			expect(abiForKind(kind)).toBeDefined()
 		}
 	})

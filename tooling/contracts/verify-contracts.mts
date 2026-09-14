@@ -67,7 +67,6 @@ async function buildStandardJsonInputs(plan: VerificationPlan): Promise<Standard
 	const compileModule = await import('../../solidity/ts/compile.ts')
 	const sources = await compileModule.loadContractSources()
 	const libraries = {
-		'contracts/ScalarOutcomes.sol': { ScalarOutcomes: plan.libraryAddresses.scalarOutcomes },
 		'contracts/statoblast/SecurityPoolUtils.sol': { SecurityPoolUtils: plan.libraryAddresses.securityPoolUtils },
 	}
 	return {

@@ -13,7 +13,7 @@ import { createInitialTransactionTrayState, markTransactionPrepared, markTransac
 import { createFakeBackend, createFakeSimulationProfile } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { SEPOLIA_GENESIS_REP_INIT_CODE, SEPOLIA_WETH_INIT_CODE } from '@zoltar/ui-core-shared/lib/sepoliaDeploymentConfig.js'
-import { DeploymentStatusOracle_DeploymentStatusOracle, ScalarOutcomes_ScalarOutcomes } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { DeploymentStatusOracle_DeploymentStatusOracle, ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { PROXY_DEPLOYER_RUNTIME_CODE, assertStaticDeploymentArtifactRuntimeCodeHashes, fundCanonicalDeployerSigner } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
 
 const require = createRequire(import.meta.url)
@@ -84,13 +84,13 @@ contract AtomicFunding {
 
 describe('contract deployment internals', () => {
 	test('rejects generated deployment artifacts that do not match the pinned runtime hashes', () => {
-		expect(assertStaticDeploymentArtifactRuntimeCodeHashes()).toEqual(['deploymentStatusOracle', 'multicall3', 'scalarOutcomes', 'weth', 'zoltarQuestionData'])
+		expect(assertStaticDeploymentArtifactRuntimeCodeHashes()).toEqual(['deploymentStatusOracle', 'multicall3', 'weth', 'zoltarQuestionData'])
 		expect(() =>
 			assertStaticDeploymentArtifactRuntimeCodeHashes({
-				expectedRuntimeCodeHashes: { scalarOutcomes: keccak256('0x01') },
-				runtimeCodeByStepId: { scalarOutcomes: '0x02' },
+				expectedRuntimeCodeHashes: { zoltarQuestionData: keccak256('0x01') },
+				runtimeCodeByStepId: { zoltarQuestionData: '0x02' },
 			}),
-		).toThrow('Local runtime code for scalarOutcomes does not match its pinned expected hash')
+		).toThrow('Local runtime code for zoltarQuestionData does not match its pinned expected hash')
 	})
 
 	test('atomic canonical-signer funding bytecode matches its pinned source and compiler settings', async () => {
@@ -189,10 +189,10 @@ describe('contract deployment internals', () => {
 		try {
 			const steps = getDeploymentSteps(MAINNET_NETWORK_PROFILE)
 			const oracleStep = steps.find(step => step.id === 'deploymentStatusOracle')
-			const scalarStep = steps.find(step => step.id === 'scalarOutcomes')
-			if (oracleStep === undefined || scalarStep === undefined) throw new Error('Expected mainnet oracle and scalar deployment steps')
+			const questionDataStep = steps.find(step => step.id === 'zoltarQuestionData')
+			if (oracleStep === undefined || questionDataStep === undefined) throw new Error('Expected mainnet oracle and question data deployment steps')
 			const oracleRuntimeCode = `0x${DeploymentStatusOracle_DeploymentStatusOracle.evm.deployedBytecode.object}` as Hex
-			const scalarRuntimeCode = `0x${ScalarOutcomes_ScalarOutcomes.evm.deployedBytecode.object}` as Hex
+			const questionDataRuntimeCode = `0x${ZoltarQuestionData_ZoltarQuestionData.evm.deployedBytecode.object}` as Hex
 			const snapshot = await loadDeploymentStatusOracleSnapshot(
 				createMockReadClient({
 					getCode: async ({ address }) => {
@@ -212,7 +212,7 @@ describe('contract deployment internals', () => {
 			let transactionTarget: Address | null | undefined
 			const transactionHash = `0x${'8'.repeat(64)}` as Hash
 			expect(
-				await scalarStep.deploy(
+				await questionDataStep.deploy(
 					asWriteClient({
 						getCode: async () => PROXY_DEPLOYER_RUNTIME_CODE,
 						sendTransaction: async request => {
@@ -224,7 +224,7 @@ describe('contract deployment internals', () => {
 				),
 			).toBe(transactionHash)
 			expect(transactionTarget).toBe(PROXY_DEPLOYER_ADDRESS)
-			expect(scalarStep.expectedRuntimeCodeHash).toBe(keccak256(scalarRuntimeCode))
+			expect(questionDataStep.expectedRuntimeCodeHash).toBe(keccak256(questionDataRuntimeCode))
 		} finally {
 			resetEnvironment()
 		}
@@ -308,7 +308,7 @@ describe('contract deployment internals', () => {
 			expect(snapshot.deploymentStatuses.find(step => step.id === 'proxyDeployer')?.deployed).toBe(true)
 			expect(snapshot.deploymentStatuses.find(step => step.id === 'deploymentStatusOracle')?.deployed).toBe(true)
 			expect(snapshot.deploymentStatuses.find(step => step.id === 'multicall3')?.deployed).toBe(false)
-			expect(snapshot.deploymentStatuses.find(step => step.id === 'scalarOutcomes')?.deployed).toBe(true)
+			expect(snapshot.deploymentStatuses.find(step => step.id === 'zoltarQuestionData')?.deployed).toBe(true)
 		} finally {
 			resetEnvironment()
 		}

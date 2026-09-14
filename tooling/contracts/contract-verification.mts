@@ -1,7 +1,6 @@
 import { createApplyLinkedLibrariesHelper } from '@zoltar/core-shared/deployment/deploymentAddresses'
 import { getAddress, getCreate2Address, keccak256, toHex, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 
-const SCALAR_OUTCOMES_SOURCE_PATH = 'contracts/ScalarOutcomes.sol'
 const SECURITY_POOL_UTILS_SOURCE_PATH = 'contracts/statoblast/SecurityPoolUtils.sol'
 const ZERO_SALT = toHex(0, { size: 32 })
 
@@ -37,7 +36,7 @@ export type VerificationJob = {
 
 export type VerificationPlan = {
 	jobs: VerificationJob[]
-	libraryAddresses: { scalarOutcomes: Address; securityPoolUtils: Address }
+	libraryAddresses: { securityPoolUtils: Address }
 	skipped: { id: string; reason: string }[]
 }
 
@@ -134,16 +133,10 @@ const STEP_DEFINITIONS: Readonly<Record<string, StepDefinition>> = {
 		compilerProfile: 'main',
 		contractName: 'Multicall3',
 	},
-	scalarOutcomes: {
-		artifactPath: SCALAR_OUTCOMES_SOURCE_PATH,
-		compilerProfile: 'main',
-		contractName: 'ScalarOutcomes',
-	},
 	zoltarQuestionData: {
 		artifactPath: 'contracts/ZoltarQuestionData.sol',
 		compilerProfile: 'main',
 		contractName: 'ZoltarQuestionData',
-		linksLibraries: true,
 	},
 	zoltar: {
 		artifactPath: 'contracts/Zoltar.sol',
@@ -215,11 +208,8 @@ export function buildVerificationPlan(manifest: DeploymentManifest, getArtifact:
 		return step.address
 	}
 	const proxyDeployerAddress = stepAddress('proxyDeployer')
-	const libraryAddresses = { scalarOutcomes: stepAddress('scalarOutcomes'), securityPoolUtils: stepAddress('securityPoolUtils') }
-	const { applyLibraries } = createApplyLinkedLibrariesHelper(() => [
-		{ address: libraryAddresses.scalarOutcomes, hash: keccak256(toHex(`${SCALAR_OUTCOMES_SOURCE_PATH}:ScalarOutcomes`)).slice(2, 36) },
-		{ address: libraryAddresses.securityPoolUtils, hash: keccak256(toHex(`${SECURITY_POOL_UTILS_SOURCE_PATH}:SecurityPoolUtils`)).slice(2, 36) },
-	])
+	const libraryAddresses = { securityPoolUtils: stepAddress('securityPoolUtils') }
+	const { applyLibraries } = createApplyLinkedLibrariesHelper(() => [{ address: libraryAddresses.securityPoolUtils, hash: keccak256(toHex(`${SECURITY_POOL_UTILS_SOURCE_PATH}:SecurityPoolUtils`)).slice(2, 36) }])
 	const jobs: VerificationJob[] = []
 	const skipped: { id: string; reason: string }[] = []
 	for (const step of manifest.deploymentSteps) {
@@ -285,11 +275,12 @@ const POLL_INTERVAL_MILLISECONDS = 5_000
 const POLL_TIMEOUT_MILLISECONDS = 5 * 60 * 1_000
 
 const REQUEST_DELAY_MILLISECONDS = 1_000
-const MAX_RATE_LIMIT_RETRIES = 4
+const MAX_RATE_LIMIT_RETRIES = 10
 const MAX_RATE_LIMIT_DELAY_MILLISECONDS = 5 * 60_000
+const RATE_LIMIT_BACKOFF_FACTOR = 1.6
+const INITIAL_RATE_LIMIT_DELAY_MILLISECONDS = (MAX_RATE_LIMIT_DELAY_MILLISECONDS * (RATE_LIMIT_BACKOFF_FACTOR - 1)) / (RATE_LIMIT_BACKOFF_FACTOR ** MAX_RATE_LIMIT_RETRIES - 1)
 
-function rateLimitDelay(retryAfter: string | null | undefined, retry: number): number {
-	const backoff = 2_000 * 2 ** retry
+function rateLimitDelay(retryAfter: string | null | undefined, backoff: number): number {
 	if (retryAfter === undefined || retryAfter === null) return backoff
 	const value = retryAfter.trim()
 	const requestedDelay = /^\d+$/.test(value) ? Number(value) * 1_000 : Date.parse(value) - Date.now()
@@ -307,23 +298,30 @@ function createPacedExplorerFetch(fetchFn: ExplorerFetch, target: ExplorerTarget
 		if (hasRequested) await sleep(nextRequestDelay)
 		nextRequestDelay = REQUEST_DELAY_MILLISECONDS
 		hasRequested = true
+		let retryWaitMilliseconds = 0
 		for (let retry = 0; ; retry += 1) {
 			const response = await fetchFn(requestUrl, init)
 			if (response.status !== 429) return response
 			await response.body?.cancel()
-			const delay = rateLimitDelay(response.headers?.get('retry-after'), retry)
+			const remainingWait = MAX_RATE_LIMIT_DELAY_MILLISECONDS - retryWaitMilliseconds
+			const backoff = Math.round(INITIAL_RATE_LIMIT_DELAY_MILLISECONDS * RATE_LIMIT_BACKOFF_FACTOR ** retry)
+			// Normalize ten exponential waits to five minutes; server cooldowns consume
+			// the same per-request budget and are never shortened to fit it.
+			const scheduledWait = retry === MAX_RATE_LIMIT_RETRIES - 1 ? remainingWait : Math.min(backoff, remainingWait)
+			const delay = rateLimitDelay(response.headers?.get('retry-after'), scheduledWait > 0 ? scheduledWait : backoff)
 			// Do not retry earlier than requested or allow an unbounded server wait.
 			if (delay > MAX_RATE_LIMIT_DELAY_MILLISECONDS) {
 				cooldownError = new Error(`${target.name} responded with HTTP 429; Retry-After exceeds the ${(MAX_RATE_LIMIT_DELAY_MILLISECONDS / 1_000).toString()}s retry wait limit. Rerun verification later.`)
 				throw cooldownError
 			}
-			if (retry >= MAX_RATE_LIMIT_RETRIES) {
+			if (retry >= MAX_RATE_LIMIT_RETRIES || remainingWait <= 0 || delay > remainingWait) {
 				// The provider's cooldown also applies to the next contract or poll.
 				nextRequestDelay = delay
-				throw new Error(`${target.name} responded with HTTP 429 after ${MAX_RATE_LIMIT_RETRIES.toString()} retries`)
+				throw new Error(`${target.name} responded with HTTP 429 after ${retry.toString()} retries; exhausted the ${(MAX_RATE_LIMIT_DELAY_MILLISECONDS / 1_000).toString()}s retry wait budget`)
 			}
 			log(`  ${target.name}: HTTP 429; retry ${(retry + 1).toString()}/${MAX_RATE_LIMIT_RETRIES.toString()} in ${(delay / 1_000).toString()}s`)
 			await sleep(delay)
+			retryWaitMilliseconds += delay
 		}
 	}
 }

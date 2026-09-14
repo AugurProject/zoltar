@@ -1563,17 +1563,17 @@ describe('network indexer lifecycle', () => {
 		expect(await initialIndexStartBlock([[address, 'OpenOracle', 'openOracle']], 10n, 100n, async () => ({ block: 50n, exact: false }))).toBe(10n)
 	})
 
-	test('does not let an earlier ScalarOutcomes helper widen fresh history', async () => {
-		const scalar = '0x2000000000000000000000000000000000000002' as const
+	test('does not let an earlier Multicall3 helper widen fresh history', async () => {
+		const multicall = '0x2000000000000000000000000000000000000002' as const
 		expect(
 			await initialIndexStartBlock(
 				[
-					[scalar, 'Scalar outcomes', 'scalarOutcomes'],
+					[multicall, 'Multicall3', 'multicall3'],
 					[address, 'Zoltar', 'zoltar'],
 				],
 				0n,
 				1_000n,
-				async candidate => ({ block: candidate === scalar ? 100n : 750n, exact: true }),
+				async candidate => ({ block: candidate === multicall ? 100n : 750n, exact: true }),
 			),
 		).toBe(750n)
 	})

@@ -69,7 +69,7 @@ void describe('deployment helpers', () => {
 	})
 
 	void test('getDeployNextMissingAvailability disables when no wallet or wrong network is available', () => {
-		const nextMissingStep = createStep('scalarOutcomes', false)
+		const nextMissingStep = createStep('zoltarQuestionData', false)
 
 		expect(
 			getDeployNextMissingAvailability({
@@ -93,18 +93,18 @@ void describe('deployment helpers', () => {
 	})
 
 	void test('getDeploymentStepAvailability blocks undeployed steps behind prerequisites and allows ready steps', () => {
-		const blockedStep = createStep('zoltar', false, ['scalarOutcomes'])
+		const blockedStep = createStep('zoltar', false, ['zoltarQuestionData'])
 		expect(
 			getDeploymentStepAvailability({
 				accountAddress: zeroAddress,
 				busyStepId: undefined,
 				isOnActiveAppChain: true,
-				prerequisiteLabel: 'Scalar Outcomes',
+				prerequisiteLabel: 'Zoltar Question Data',
 				step: blockedStep,
 			}),
-		).toEqual({ disabled: true, reason: 'Requires Scalar Outcomes' })
+		).toEqual({ disabled: true, reason: 'Requires Zoltar Question Data' })
 
-		const readyStep = createStep('scalarOutcomes', false)
+		const readyStep = createStep('zoltarQuestionData', false)
 		expect(
 			getDeploymentStepAvailability({
 				accountAddress: zeroAddress,
@@ -120,9 +120,10 @@ void describe('deployment helpers', () => {
 		const deploymentSteps = getDeploymentSteps()
 		const deploymentStatusOracleStep = deploymentSteps.find(step => step.id === 'deploymentStatusOracle')
 
-		expect(deploymentSteps.map(step => step.id)).toEqual(['proxyDeployer', 'deploymentStatusOracle', 'multicall3', 'scalarOutcomes', 'zoltarQuestionData', 'zoltar'])
+		expect(deploymentSteps.map(step => step.id)).toEqual(['proxyDeployer', 'deploymentStatusOracle', 'multicall3', 'zoltarQuestionData', 'zoltar'])
 		expect(deploymentStatusOracleStep?.dependencies).toEqual(['proxyDeployer'])
 		expect(deploymentStatusOracleStep?.label).toBe('Deployment Status Oracle')
+		expect(deploymentSteps.find(step => step.id === 'zoltarQuestionData')?.dependencies).toEqual(['proxyDeployer'])
 	})
 
 	void test('getDeploymentSections groups the deployment status oracle with proxy deployer', () => {
@@ -140,7 +141,7 @@ void describe('deployment helpers', () => {
 		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: SEPOLIA_NETWORK_PROFILE }))
 		try {
 			const deploymentSteps = getDeploymentSteps()
-			const deployableIds = ['weth', 'reputationToken', 'scalarOutcomes', 'zoltarQuestionData', 'zoltar'] as const
+			const deployableIds = ['weth', 'reputationToken', 'zoltarQuestionData', 'zoltar'] as const
 			for (const stepId of deployableIds) {
 				const step = deploymentSteps.find(candidate => candidate.id === stepId)
 				if (step === undefined) throw new Error(`Expected ${stepId} Sepolia deployment step`)

@@ -24,7 +24,6 @@ const kindToContractName: Readonly<Record<string, string>> = {
 	priceCoordinator: 'OpenOraclePriceCoordinator',
 	priceCoordinatorFactory: 'PriceOracleManagerAndOperatorQueuerFactory',
 	reputationToken: 'ReputationToken',
-	scalarOutcomes: 'ScalarOutcomes',
 	securityPool: 'SecurityPool',
 	securityPoolFactory: 'SecurityPoolFactory',
 	securityPoolForker: 'SecurityPoolForker',
@@ -59,7 +58,7 @@ export const abiForKind = (kind: string): Abi | undefined => {
 	const catalogAbi = name === undefined ? undefined : catalogFile.contracts[name]?.abi
 	if (catalogAbi !== undefined) return catalogAbi
 	// These deployed helper libraries expose no project ABI, but remain known contracts.
-	if (kind === 'proxyDeployer' || kind === 'scalarOutcomes') return []
+	if (kind === 'proxyDeployer') return []
 	return undefined
 }
 
