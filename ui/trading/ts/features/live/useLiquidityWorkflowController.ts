@@ -1,3 +1,4 @@
+import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import type { Address, Hash, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { createExclusiveWorkflowGuard, createLatestRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { waitForSubmittedTransactionReceipt } from '@zoltar/ui-core-shared/transactions/transactionReceipt.js'
@@ -137,7 +138,7 @@ export function useLiquidityWorkflowController({
 		const context = transactionContext(account, revision)
 		dispatchWorkflow({ type: 'simulation-started', context })
 		try {
-			const simulated = await services.simulateLiquidity(walletClient, configuration, market, account, operation, parsed, conditionalBps ?? 5_000n, validityMinutes, slippageBps)
+			const simulated = await withReadTimeout(services.simulateLiquidity(walletClient, configuration, market, account, operation, parsed, conditionalBps ?? 5_000n, validityMinutes, slippageBps))
 			if (!mounted.current || !simulationRequests.isCurrent(request) || inputRevision.current !== revision) return
 			setQuote({ ...simulated, account, configuration, walletClient, requestRevision: revision })
 			dispatchWorkflow({ type: 'simulation-succeeded', context })

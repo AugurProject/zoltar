@@ -1,3 +1,4 @@
+import { withReadTimeout } from '../lib/promise.js'
 import { useSignal } from '@preact/signals'
 import { createConnectedReadClient } from '../wallet/clients.js'
 import { getErrorMessage, isRecoverableContractReadError } from '../lib/errors.js'
@@ -15,7 +16,7 @@ function useErc20Loader<TArgs extends unknown[]>(loadFn: (client: ReadClient, ..
 		const isCurrent = nextLoad()
 		signal.value = { ...signal.value, error: undefined, loading: true }
 		try {
-			const value = await loadFn(createConnectedReadClient(), ...args)
+			const value = await withReadTimeout(loadFn(createConnectedReadClient(), ...args))
 			if (!isCurrent()) return
 			signal.value = { error: undefined, loading: false, value }
 		} catch (error) {
@@ -52,7 +53,7 @@ export function useErc20AllowanceLoader(loadErc20Allowance: (client: ReadClient,
 			loading: true,
 		}
 		try {
-			const value = await loadErc20Allowance(createConnectedReadClient(), ...args)
+			const value = await withReadTimeout(loadErc20Allowance(createConnectedReadClient(), ...args))
 			if (!isCurrent()) return
 			signal.value = {
 				error: undefined,

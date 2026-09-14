@@ -1,7 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import { readFile } from 'node:fs/promises'
-import { dirname, join, relative } from 'node:path'
+import { basename, dirname, join, posix, relative } from 'node:path'
 import { dockerInstructions, parseDockerfile, requireDockerStage, shellCommandSegments } from '../testing/packaging-parsers.ts'
+
+import ts from 'typescript'
+import { appSharedPackages, sharedPackageClosure } from '../repo/sharedPackages.ts'
 
 const repositoryRoot = join(import.meta.dir, '..', '..')
 const dockerfile = join(repositoryRoot, 'ui', 'Dockerfile')
@@ -13,6 +16,49 @@ const rootPackage = join(repositoryRoot, 'package.json')
 const staticServer = join(repositoryRoot, 'tooling', 'ui', 'dockerServe.mts')
 
 describe('UI Docker packaging', () => {
+	test('copies inherited shared TypeScript configuration before every shared build', async () => {
+		const stageFiles = new Map<string, Map<string, string>>()
+		for (const stage of parseDockerfile(await readFile(dockerfile, 'utf8'))) {
+			const files = new Map(stageFiles.get(stage.base))
+			if (stage.name !== undefined) stageFiles.set(stage.name, files)
+			for (const instruction of stage.instructions) {
+				if (instruction.keyword === 'COPY' && !instruction.value.includes('--from=')) {
+					const parts = instruction.value.split(/\s+/u).filter(part => !part.startsWith('--'))
+					const destination = parts.at(-1)
+					if (destination === undefined) throw new Error('COPY destination missing')
+					for (const source of parts.slice(0, -1)) {
+						if (!basename(source).startsWith('tsconfig') || !source.endsWith('.json')) continue
+						const target = destination.endsWith('/') ? posix.join(destination, basename(source)) : destination
+						files.set(target, await readFile(join(repositoryRoot, source), 'utf8'))
+					}
+				}
+				if (instruction.keyword !== 'RUN') continue
+				const app = /build-shared\.mts (zoltar|statoblast|trading)/u.exec(instruction.value)?.[1]
+				if (app !== 'zoltar' && app !== 'statoblast' && app !== 'trading') continue
+				for (const entry of sharedPackageClosure(appSharedPackages[app])) {
+					const errors: ts.Diagnostic[] = []
+					const parsed = ts.getParsedCommandLineOfConfigFile(
+						`/source/${entry.path}/tsconfig.json`,
+						{},
+						{
+							fileExists: path => files.has(path),
+							readFile: path => files.get(path),
+							readDirectory: () => [],
+							getCurrentDirectory: () => '/source',
+							useCaseSensitiveFileNames: true,
+							onUnRecoverableConfigFileDiagnostic: error => errors.push(error),
+						},
+					)
+					// Source files are intentionally absent; only configuration inheritance is under test.
+					expect([...errors, ...(parsed?.errors ?? [])].filter(error => error.code !== 18003).map(error => ts.flattenDiagnosticMessageText(error.messageText, '\n'))).toEqual([])
+					expect(parsed?.options.target).toBe(ts.ScriptTarget.ESNext)
+					expect(parsed?.options.moduleResolution).toBe(ts.ModuleResolutionKind.Bundler)
+					expect(parsed?.options.strict).toBe(true)
+				}
+			}
+		}
+	})
+
 	test('only copies tracked build inputs and invokes existing UI build scripts', async () => {
 		const source = await readFile(dockerfile, 'utf8')
 		const stages = parseDockerfile(source)

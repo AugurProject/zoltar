@@ -1,3 +1,4 @@
+import { withReadTimeout } from '../lib/promise.js'
 import { assertNetworkEnabled } from './networkAvailability.js'
 import type { Address, EIP1193Provider } from '@zoltar/core-shared/evm/ethereum'
 import { tryParseAddressInput } from '../forms/inputs.js'
@@ -17,8 +18,34 @@ export function normalizeInjectedAccount(value: unknown): Address | undefined {
 	return typeof value === 'string' ? tryParseAddressInput(value) : undefined
 }
 
+const readOnlyRpcMethods = new Set([
+	'eth_accounts',
+	'eth_chainId',
+	'eth_blockNumber',
+	'eth_call',
+	'eth_estimateGas',
+	'eth_getBalance',
+	'eth_getCode',
+	'eth_getStorageAt',
+	'eth_getBlockByNumber',
+	'eth_getBlockByHash',
+	'eth_getTransactionByHash',
+	'eth_getTransactionReceipt',
+	'eth_getTransactionCount',
+	'eth_getLogs',
+	'eth_gasPrice',
+	'eth_maxPriorityFeePerGas',
+	'eth_feeHistory',
+	'net_version',
+])
+
+export function requestWalletRpc(provider: InjectedEthereum, parameters: Parameters<InjectedEthereum['request']>[0]) {
+	const response = provider.request(parameters)
+	return readOnlyRpcMethods.has(parameters.method) ? withReadTimeout(response) : response
+}
+
 export async function readInjectedAccounts(provider: InjectedEthereum, method: 'eth_accounts' | 'eth_requestAccounts' = 'eth_accounts') {
-	const result = await provider.request({ method, params: [] })
+	const result = await requestWalletRpc(provider, { method, params: [] })
 	if (!Array.isArray(result)) return []
 	return result.map(normalizeInjectedAccount).filter((account): account is Address => account !== undefined)
 }
@@ -35,7 +62,7 @@ export function parseInjectedChainId(result: unknown) {
 }
 
 export async function readInjectedChainId(provider: InjectedEthereum) {
-	return parseInjectedChainId(await provider.request({ method: 'eth_chainId', params: [] }))
+	return parseInjectedChainId(await requestWalletRpc(provider, { method: 'eth_chainId', params: [] }))
 }
 
 export async function switchInjectedChain(provider: InjectedEthereum, chainId: string) {

@@ -149,9 +149,11 @@ describe('useRepPrices', () => {
 				transport: http('http://127.0.0.1:8545'),
 			}),
 		}
-		readClient.simulateContract = async () => {
+		const rejectMissingPool = async () => {
 			throw new Error('No Uniswap pool is available')
 		}
+		readClient.readContract = rejectMissingPool
+		readClient.simulateContract = rejectMissingPool
 		const backend: ChainBackend = {
 			...createFakeBackend({ profile: SEPOLIA_NETWORK_PROFILE }),
 			createReadClient: () => readClient,
@@ -179,9 +181,11 @@ describe('useRepPrices', () => {
 				transport: http('http://127.0.0.1:8545'),
 			}),
 		}
-		readClient.simulateContract = async () => {
+		const rejectRpcRequest = async () => {
 			throw rpcError
 		}
+		readClient.readContract = rejectRpcRequest
+		readClient.simulateContract = rejectRpcRequest
 		const backend: ChainBackend = {
 			...createFakeBackend({ profile: SEPOLIA_NETWORK_PROFILE }),
 			createReadClient: () => readClient,

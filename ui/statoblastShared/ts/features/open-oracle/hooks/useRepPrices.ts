@@ -1,6 +1,7 @@
 import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
+import { withTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import type { ChainBackend } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
@@ -140,7 +141,10 @@ async function loadRepPrices(backend: ChainBackend, forceRefresh: boolean) {
 	repPriceRefreshGenerationByBackend.set(backend, refreshGeneration)
 	const refreshPromise = (async () => {
 		const client = backend.createReadClient()
-		const [repPerEthResult, repUsdcResult] = await Promise.allSettled([fetchRepPerEthPrice(client), getRepPriceQuoter().quoteRepForUsdcV4WithSource(client, ATTO_REP)])
+		const [repPerEthResult, repUsdcResult] = await Promise.allSettled([
+			withTimeout(fetchRepPerEthPrice(client), 30_000, 'RPC timeout while loading REP price. Refresh prices to retry.'),
+			withTimeout(getRepPriceQuoter().quoteRepForUsdcV4WithSource(client, ATTO_REP), 30_000, 'RPC timeout while loading REP price. Refresh prices to retry.'),
+		])
 		if (repPerEthResult.status === 'rejected' && !isRecoverableQuoteError(repPerEthResult.reason)) throw repPerEthResult.reason
 		if (repUsdcResult.status === 'rejected' && !isRecoverableQuoteError(repUsdcResult.reason)) throw repUsdcResult.reason
 		const nextCachedRepPrices: CachedRepPrices = {

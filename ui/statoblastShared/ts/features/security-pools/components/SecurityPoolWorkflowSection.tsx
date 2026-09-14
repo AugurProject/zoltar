@@ -4,8 +4,6 @@ import * as securityPoolCopy from '../../../copy/securityPool.js'
 import type { ComponentChildren } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
-import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { ForkAuctionSection } from '../../truth-auctions/components/ForkAuctionSection.js'
 import { LiquidationModal } from './LiquidationModal.js'
@@ -20,7 +18,6 @@ import { SecurityPoolSummaryMetrics } from './SecurityPoolSummaryMetrics.js'
 import { SecurityPoolLink } from './SecurityPoolLink.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { getQueuedVaultOperation } from './VaultQueuedOperationStatusCard.js'
-import { StickyObjectContext } from '@zoltar/ui-core-shared/components/StickyObjectContext.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { TradingSection } from '../../markets/components/TradingSection.js'
 import { UniverseLink } from '@zoltar/ui-zoltar-shared/features/universes/components/UniverseLink.js'
@@ -36,7 +33,6 @@ import {
 	getCurrentPoolOracleManagerDetails,
 	getCurrentSelectedPoolForkStage,
 	hasCurrentSelectedPoolForkActivity,
-	getSelectedPoolCardTitle,
 	getSelectedPoolOracleMetricValues,
 	getSelectedPoolViewForForkWorkflowSelectionStage,
 	getSelectedPoolViewLabel,
@@ -58,7 +54,6 @@ import { resolveRequestedLoadableValueState } from '@zoltar/ui-core-shared/lib/l
 import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import { getReportingLockedUntilMessage, hasReportingOpened } from '../../reporting/lib/reporting.js'
 import { addOpenOracleBountyBuffer } from '../../open-oracle/lib/openOracle.js'
-import { getSecurityPoolStatusBadgeLabel } from '../lib/securityPoolLabels.js'
 import { deriveSecurityPoolLifecycleState, deriveSecurityPoolReportingStage, deriveVaultAdmissionClosed, evaluateSecurityPoolState } from '../lib/securityPoolState.js'
 import { getVaultExecutePendingOperationGuardMessage, getVaultRequestPriceGuardMessage } from '../lib/securityVaultGuards.js'
 import { doesLoadedSecurityVaultMatchSelection, doesSecurityVaultExistOnchain, getSelectedVaultOwner, isOracleManagerPriceUsable, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper } from '../lib/securityVault.js'
@@ -67,7 +62,7 @@ import { formatUniverseIdHex } from '@zoltar/ui-zoltar-shared/features/universes
 import { useForkWorkflowSelectionState } from '../../truth-auctions/hooks/useForkWorkflowSelectionState.js'
 import { useSelectedVaultWorkflowState, type SelectedVaultView } from '../hooks/useSelectedVaultWorkflowState.js'
 import type { SecurityPoolWorkflowRouteContentProps, ViewTabOption } from '../../types.js'
-import { buildSelectedPoolSummaryPool, getSecurityPoolStatusBadgeTone } from './SecurityPoolWorkflowPresentation.js'
+import { buildSelectedPoolSummaryPool } from './SecurityPoolWorkflowPresentation.js'
 import { SecurityPoolPriceOracleSection, SecurityPoolRequestPriceModal, SecurityPoolStagedOperationsSection, type RequestPriceReview } from './SecurityPoolOracleSections.js'
 import { SecurityPoolVaultWorkspace } from './SecurityPoolVaultWorkspace.js'
 
@@ -277,13 +272,7 @@ export function SecurityPoolWorkflowSection({
 		selectedPoolLookupState,
 		selectedPoolUniverseMismatch,
 	})
-	const selectedPoolWorkflowLockedPresentation = showSelectedPoolWorkflowDetails
-		? undefined
-		: getSelectedPoolWorkflowLockedPresentation({
-				hasSelectedPoolAddress,
-				selectedPoolLookupState,
-				selectedPoolUniverseMismatch,
-			})
+	const selectedPoolWorkflowLockedPresentation = showSelectedPoolWorkflowDetails || securityPoolOverviewError !== undefined ? undefined : getSelectedPoolWorkflowLockedPresentation({ hasSelectedPoolAddress, selectedPoolLookupState, selectedPoolUniverseMismatch })
 	const selectedVaultViewOptions: ViewTabOption<SelectedVaultView>[] = [
 		{ label: securityPoolCopy.directory, value: 'browse-vaults' },
 		{ label: commonCopy.selected, value: 'selected-vault' },
@@ -404,7 +393,7 @@ export function SecurityPoolWorkflowSection({
 	const stagedOperations = currentPoolOracleManagerDetails?.stagedOperations ?? (pendingOperation === undefined ? [] : [pendingOperation])
 	const pendingSettlementOperationIds = currentPoolOracleManagerDetails?.pendingSettlementOperationIds ?? []
 	const activeStagedOperationCount = currentPoolOracleManagerDetails?.activeStagedOperationCount ?? BigInt(stagedOperations.length)
-	const selectedPoolBrowsePresentation = selectedPool === undefined ? getPoolRegistryPresentation({ mode: 'selection', state: selectedPoolLookupState }) : undefined
+	const selectedPoolBrowsePresentation = selectedPool === undefined && securityPoolOverviewError === undefined ? getPoolRegistryPresentation({ mode: 'selection', state: selectedPoolLookupState }) : undefined
 	const selectedVaultLoadNotice = (() => {
 		if (securityVault.loadingSecurityVault)
 			return (
@@ -695,26 +684,6 @@ export function SecurityPoolWorkflowSection({
 	else if (showHeader) emptyWorkflowTitle = commonCopy.managePool
 	return (
 		<RouteWorkflowPanel showHeader={showHeader} title={securityPoolCopy.selectedPool}>
-			{selectedPoolSummaryPool === undefined ? undefined : (
-				<StickyObjectContext
-					{...(loadedSelectedPool === undefined || selectedPoolSummaryPool === undefined
-						? {}
-						: {
-								badge: (
-									<Badge tone={getSecurityPoolStatusBadgeTone(selectedPoolStateModel.lifecycleState)}>
-										{getSecurityPoolStatusBadgeLabel({
-											hasForkActivity: selectedPoolSummaryPool.hasForkActivity,
-											questionOutcome: selectedPoolSummaryPool.questionOutcome,
-											lifecycleState: selectedPoolStateModel.lifecycleState,
-										})}
-									</Badge>
-								),
-							})}
-					title={getSelectedPoolCardTitle(marketDetails === undefined ? undefined : getQuestionTitle(marketDetails))}
-					items={selectedPoolSummaryPool === undefined ? [] : [{ label: commonCopy.securityPoolAddress, value: <AddressValue address={selectedPoolSummaryPool.securityPoolAddress} /> }]}
-					variant='embedded-context-strip'
-				/>
-			)}
 			<div className='selected-pool-context-nonsticky'>
 				<div className='selected-pool-context-controls'>
 					<div className='selected-pool-change-control'>

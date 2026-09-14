@@ -3,7 +3,7 @@ import { getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { bigintToSafeNumber, formatBpsMultiplier, formatCapacityOwnership, formatRoundedUnits, formatUnits, parseUnits, parseUnitsOrUndefined } from '../../lib/format.js'
 import { attoSharesToCollateralAttoEth, averagePriceBps, collateralAttoEthToAttoShares, formatCollateralEth, formatCompleteSetValue, formatLpValue, formatOutcomeValue } from '../../lib/shareValue.js'
 import { forkMigrationBatchBlocker, forkMigrationBatchWarning, insuredExitLimitMessage, migrationSimulationSummary, settlementBalanceLabel, settlementInputBlocker } from '../../features/LiveSettlementModel.js'
-import { createSecurityPoolDeploymentIndex, liveBalancesForMarket, marketAcceptsNewRisk, publicErrorMessage, marketNewRiskBlocker, mapWithConcurrency, refreshSecurityPoolDeploymentEventIndex, registryBlockAnchorIsCanonical, settlementAvailability, shareBalanceScope, type LiveMarket } from '../../protocol/live.js'
+import { createSecurityPoolDeploymentIndex, liveBalancesForMarket, marketAcceptsNewRisk, publicErrorMessage, marketNewRiskBlocker, mapWithConcurrency, refreshSecurityPoolDeploymentIndex, registryBlockAnchorIsCanonical, settlementAvailability, shareBalanceScope, type LiveMarket } from '../../protocol/live.js'
 import { maximumAfterSlippage, minimumAfterSlippage, requireTransactionSlippageBps, requireTransactionValidityMinutes, retainApprovedMaximum, retainApprovedMinimum } from '../../protocol/tradeQuote.js'
 import { broadcastUncertainMessage, discoveryCommitAllowed, failedSubmissionTransition, livePairInitialized, parseSlippageBps, parseTransactionValidityMinutes, positionControlsWorkflowLocked, securityPoolAddressFromRoute } from '../../features/liveTradingControllerHelpers.js'
 import { isTradingBrowseRoute, isTradingLookupRoute, tradingBrowseRouteFor, tradingRouting } from '../../lib/routing.js'
@@ -201,69 +201,51 @@ describe('standalone trading UI model', () => {
 		expect(marketNewRiskBlocker({ ...open, tradingStatus: 0 }, 2_000n)).toBe('Question ended')
 	})
 
-	test('increments a selected-universe event index without rescanning historical blocks', async () => {
+	test('caches only the current registry snapshot and rebuilds on a new head', async () => {
 		const index = createSecurityPoolDeploymentIndex<string, { blockHash: `0x${string}`; blockNumber: bigint }>()
 		let latest = { blockHash: `0x${'11'.repeat(32)}` as const, blockNumber: 100n }
-		const ranges: Array<{ fromBlock: bigint; toBlock: bigint }> = []
-		const loadEvents = async (fromBlock: bigint, toBlock: bigint) => {
-			ranges.push({ fromBlock, toBlock })
-			return [`${fromBlock.toString()}-${toBlock.toString()}`]
+		const reads: bigint[] = []
+		const loadSnapshot = async (anchor: typeof latest) => {
+			reads.push(anchor.blockNumber)
+			return [anchor.blockNumber.toString()]
 		}
-		const canonical = async () => true
-		expect(await refreshSecurityPoolDeploymentEventIndex(index, 'chain:factory:universe-7', async () => latest, canonical, loadEvents)).toEqual(['0-100'])
-		latest = { blockHash: `0x${'22'.repeat(32)}` as const, blockNumber: 105n }
-		expect(await refreshSecurityPoolDeploymentEventIndex(index, 'chain:factory:universe-7', async () => latest, canonical, loadEvents)).toEqual(['0-100', '101-105'])
-		expect(ranges).toEqual([
-			{ fromBlock: 0n, toBlock: 100n },
-			{ fromBlock: 101n, toBlock: 105n },
-		])
+		const refresh = () =>
+			refreshSecurityPoolDeploymentIndex(
+				index,
+				'chain:factory:universe-7',
+				async () => latest,
+				async () => true,
+				loadSnapshot,
+			)
+		expect(await refresh()).toEqual(['100'])
+		expect(await refresh()).toEqual(['100'])
+		latest = { ...latest, blockNumber: 105n }
+		expect(await refresh()).toEqual(['105'])
+		expect(reads).toEqual([100n, 105n])
 	})
 
-	test('chunks a selected-universe genesis rebuild within the bounded log range', async () => {
-		const index = createSecurityPoolDeploymentIndex<string, { blockHash: `0x${string}`; blockNumber: bigint }>()
-		const latest = { blockHash: `0x${'11'.repeat(32)}` as const, blockNumber: 20_000n }
-		const ranges: Array<{ fromBlock: bigint; toBlock: bigint }> = []
-		const result = await refreshSecurityPoolDeploymentEventIndex(
-			index,
-			'chain:factory:universe-7',
-			async () => latest,
-			async () => true,
-			async (fromBlock, toBlock) => {
-				ranges.push({ fromBlock, toBlock })
-				if (toBlock - fromBlock + 1n > 10_000n) throw new Error('block range is too large')
-				return [`${fromBlock.toString()}-${toBlock.toString()}`]
-			},
-		)
-		expect(result).toEqual(['0-9999', '10000-19999', '20000-20000'])
-		expect(ranges).toEqual([
-			{ fromBlock: 0n, toBlock: 9_999n },
-			{ fromBlock: 10_000n, toBlock: 19_999n },
-			{ fromBlock: 20_000n, toBlock: 20_000n },
-		])
-	})
-
-	test('does not retain orphan deployment events when the discovery anchor is replaced', async () => {
+	test('does not retain orphan registry entries when the discovery anchor is replaced', async () => {
 		const index = createSecurityPoolDeploymentIndex<string, { blockHash: `0x${string}`; blockNumber: bigint }>()
 		const orphanAnchor = { blockHash: `0x${'11'.repeat(32)}` as const, blockNumber: 100n }
 		const canonicalAnchor = { blockHash: `0x${'22'.repeat(32)}` as const, blockNumber: 100n }
 		let latest = orphanAnchor
 		let canonicalHash = canonicalAnchor.blockHash
 		await expect(
-			refreshSecurityPoolDeploymentEventIndex(
+			refreshSecurityPoolDeploymentIndex(
 				index,
 				'chain:factory:universe-7',
 				async () => latest,
 				async anchor => anchor.blockHash === canonicalHash,
 				async () => ['orphan'],
 			),
-		).rejects.toThrow('deployment events changed during discovery')
+		).rejects.toThrow('registry changed during discovery')
 		expect(index.deployments).toEqual([])
 		expect(index.anchor).toBeUndefined()
 
 		latest = canonicalAnchor
 		canonicalHash = canonicalAnchor.blockHash
 		expect(
-			await refreshSecurityPoolDeploymentEventIndex(
+			await refreshSecurityPoolDeploymentIndex(
 				index,
 				'chain:factory:universe-7',
 				async () => latest,
@@ -275,42 +257,26 @@ describe('standalone trading UI model', () => {
 		expect(index.anchor).toEqual(canonicalAnchor)
 	})
 
-	test('rebuilds when the retained deployment anchor is replaced during an incremental event read', async () => {
+	test('rebuilds a replaced cached head without retaining orphan entries', async () => {
 		const index = createSecurityPoolDeploymentIndex<string, { blockHash: `0x${string}`; blockNumber: bigint }>()
-		const retainedAnchor = { blockHash: `0x${'11'.repeat(32)}` as const, blockNumber: 100n }
-		const latestAnchor = { blockHash: `0x${'22'.repeat(32)}` as const, blockNumber: 101n }
-		await refreshSecurityPoolDeploymentEventIndex(
+		let anchor = { blockHash: `0x${'11'.repeat(32)}` as const, blockNumber: 100n }
+		await refreshSecurityPoolDeploymentIndex(
 			index,
-			'chain:factory:universe-7',
-			async () => retainedAnchor,
+			'key',
+			async () => anchor,
 			async () => true,
 			async () => ['orphan'],
 		)
-
-		let retainedAnchorCanonical = true
-		const ranges: Array<{ fromBlock: bigint; toBlock: bigint }> = []
-		const result = await refreshSecurityPoolDeploymentEventIndex(
-			index,
-			'chain:factory:universe-7',
-			async () => latestAnchor,
-			async anchor => anchor.blockHash !== retainedAnchor.blockHash || retainedAnchorCanonical,
-			async (fromBlock, toBlock) => {
-				ranges.push({ fromBlock, toBlock })
-				if (fromBlock === 101n) {
-					retainedAnchorCanonical = false
-					return ['incremental-on-replacement']
-				}
-				return ['canonical-rebuild']
-			},
-		)
-
-		expect(result).toEqual(['canonical-rebuild'])
-		expect(index.deployments).toEqual(['canonical-rebuild'])
-		expect(index.anchor).toEqual(latestAnchor)
-		expect(ranges).toEqual([
-			{ fromBlock: 101n, toBlock: 101n },
-			{ fromBlock: 0n, toBlock: 101n },
-		])
+		anchor = { ...anchor, blockHash: `0x${'22'.repeat(32)}` }
+		expect(
+			await refreshSecurityPoolDeploymentIndex(
+				index,
+				'key',
+				async () => anchor,
+				async () => true,
+				async () => ['canonical'],
+			),
+		).toEqual(['canonical'])
 	})
 
 	test('bounds asynchronous portfolio work while preserving registry order', async () => {

@@ -1524,30 +1524,6 @@ async function findReplacementTransaction(actions: PublicClientActions, original
 	return undefined
 }
 
-async function findReplacementTransactionBackwards(actions: PublicClientActions, originalTransaction: BlockTransaction, parameters: { fromBlock: bigint; toBlock: bigint }, blockReader: Pick<PublicClientActions, 'getBlock'> = actions) {
-	for (let blockNumber = parameters.fromBlock; blockNumber >= parameters.toBlock; blockNumber -= 1n) {
-		const replacementTransaction = await findReplacementTransaction(actions, originalTransaction, { fromBlock: blockNumber, toBlock: blockNumber }, blockReader)
-		if (replacementTransaction !== undefined) return replacementTransaction
-	}
-	return undefined
-}
-
-async function findMinedNonceBlock(actions: Pick<PublicClientActions, 'getTransactionCount'>, originalTransaction: Pick<BlockTransaction, 'from' | 'nonce'>, toBlock: bigint) {
-	if ((await actions.getTransactionCount({ address: originalTransaction.from, blockNumber: toBlock })) <= originalTransaction.nonce) return undefined
-	let lowerBlock = 0n
-	let upperBlock = toBlock
-	while (lowerBlock < upperBlock) {
-		const candidateBlock = lowerBlock + (upperBlock - lowerBlock) / 2n
-		const transactionCount = await actions.getTransactionCount({
-			address: originalTransaction.from,
-			blockNumber: candidateBlock,
-		})
-		if (transactionCount > originalTransaction.nonce) upperBlock = candidateBlock
-		else lowerBlock = candidateBlock + 1n
-	}
-	return lowerBlock
-}
-
 function buildRpcTransactionRequest(parameters: {
 	account?: Account | Address | undefined
 	amount?: bigint | undefined
@@ -1929,33 +1905,14 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 							if (originalTransaction !== undefined) {
 								const transactionToReplace = originalTransaction
 								const latestBlockNumber = await retryReceiptRateLimited(async () => await actions.getBlockNumber())
-								const initialReplacementScan = lastScannedReplacementBlock === undefined
 								let firstScanBlock = lastScannedReplacementBlock === undefined ? 0n : lastScannedReplacementBlock + 1n
-								if (lastScannedReplacementBlock === undefined && latestBlockNumber > REPLACEMENT_SCAN_BLOCK_DEPTH) {
+								if (latestBlockNumber > REPLACEMENT_SCAN_BLOCK_DEPTH && firstScanBlock < latestBlockNumber - REPLACEMENT_SCAN_BLOCK_DEPTH) {
 									firstScanBlock = latestBlockNumber - REPLACEMENT_SCAN_BLOCK_DEPTH
 								}
 								const replacementBlockReader: Pick<PublicClientActions, 'getBlock'> = {
 									getBlock: async parameters => await retryReceiptRateLimited(async () => await actions.getBlock(parameters)),
 								}
-								let replacementTransaction = firstScanBlock > latestBlockNumber ? undefined : await findReplacementTransaction(actions, transactionToReplace, { fromBlock: firstScanBlock, toBlock: latestBlockNumber }, replacementBlockReader)
-								if (replacementTransaction === undefined && initialReplacementScan && firstScanBlock > 0n) {
-									const historicalScanEnd = firstScanBlock - 1n
-									try {
-										const replacementBlock = await findMinedNonceBlock(
-											{
-												getTransactionCount: async parameters => await retryReceiptRateLimited(async () => await actions.getTransactionCount(parameters)),
-											},
-											transactionToReplace,
-											historicalScanEnd,
-										)
-										if (replacementBlock !== undefined) {
-											replacementTransaction = await findReplacementTransaction(actions, transactionToReplace, { fromBlock: replacementBlock, toBlock: replacementBlock }, replacementBlockReader)
-										}
-									} catch (error) {
-										if (Date.now() - startTime >= timeoutMilliseconds) throw error
-										replacementTransaction = await findReplacementTransactionBackwards(actions, transactionToReplace, { fromBlock: historicalScanEnd, toBlock: 0n }, replacementBlockReader)
-									}
-								}
+								const replacementTransaction = firstScanBlock > latestBlockNumber ? undefined : await findReplacementTransaction(actions, transactionToReplace, { fromBlock: firstScanBlock, toBlock: latestBlockNumber }, replacementBlockReader)
 								lastScannedReplacementBlock = latestBlockNumber
 								if (replacementTransaction !== undefined) {
 									const transactionReceipt = await retryReceiptRateLimited(

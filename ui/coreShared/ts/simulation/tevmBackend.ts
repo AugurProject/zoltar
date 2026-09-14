@@ -1,3 +1,4 @@
+import { withTimeout } from '../lib/promise.js'
 import { createPublicClient, createWalletClient, custom, publicActions, type Address } from '@zoltar/core-shared/evm/ethereum'
 import type { ChainBackend, WriteClient } from '../wallet/chainBackend.js'
 import { normalizeAccount } from '../wallet/chainBackend.js'
@@ -117,6 +118,7 @@ export async function createSimulationBackend(
 
 	const failWorker = (error: Error) => {
 		if (disposed) return
+		patchState({ bootstrapError: error.message, bootstrapLabel: 'Simulation unavailable', isBootstrapping: false, isBootstrapped: false })
 		terminalError = error
 		disposed = true
 		worker.clearHandlers()
@@ -126,34 +128,45 @@ export async function createSimulationBackend(
 		worker.terminate()
 	}
 
-	const requestFromWorker = <TResult>(message: WorkerRequestMessage): Promise<TResult> =>
-		new Promise((resolve, reject) => {
-			if (terminalError !== undefined) {
-				reject(terminalError)
-				return
-			}
-			if (disposed) {
-				reject(new Error('Simulation backend has been disposed'))
-				return
-			}
-			const requestId = nextRequestId
-			nextRequestId += 1
-			pendingRequests.set(requestId, {
-				reject,
-				resolve: value => {
-					resolve(value as TResult)
-				},
-			})
-			try {
-				worker.postMessage({
-					...message,
-					id: requestId,
-				} as SimulationWorkerMessage)
-			} catch (error) {
-				pendingRequests.delete(requestId)
-				reject(error instanceof Error ? error : new Error('Simulation worker request failed'))
-			}
+	const requestFromWorker = <TResult>(message: WorkerRequestMessage): Promise<TResult> => {
+		let settled = false
+		return withTimeout(
+			new Promise<TResult>((resolve, reject) => {
+				if (terminalError !== undefined) {
+					reject(terminalError)
+					return
+				}
+				if (disposed) {
+					reject(new Error('Simulation backend has been disposed'))
+					return
+				}
+				const requestId = nextRequestId
+				nextRequestId += 1
+				pendingRequests.set(requestId, {
+					reject,
+					resolve: value => {
+						resolve(value as TResult)
+					},
+				})
+				try {
+					worker.postMessage({
+						...message,
+						id: requestId,
+					} as SimulationWorkerMessage)
+				} catch (error) {
+					pendingRequests.delete(requestId)
+					reject(error instanceof Error ? error : new Error('Simulation worker request failed'))
+				}
+			}).finally(() => {
+				settled = true
+			}),
+			120_000,
+			'Simulation request timed out. Reload the page to retry.',
+		).catch(error => {
+			if (!settled) failWorker(error instanceof Error ? error : new Error(String(error)))
+			throw error
 		})
+	}
 
 	const callWorker = async <TMethod extends SimulationWorkerCallMethod>(method: TMethod, params: SimulationWorkerCallMap[TMethod]['params']): Promise<SimulationWorkerCallMap[TMethod]['result']> =>
 		await requestFromWorker<SimulationWorkerCallMap[TMethod]['result']>({
@@ -236,7 +249,10 @@ export async function createSimulationBackend(
 		}
 	})
 
-	await waitForReady
+	await withTimeout(waitForReady, 30_000, 'Simulation startup timed out. Reload the page to retry.').catch(error => {
+		failWorker(error instanceof Error ? error : new Error(String(error)))
+		throw error
+	})
 
 	if (initialBootstrapError !== undefined) {
 		const state = currentState

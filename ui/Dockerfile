@@ -16,6 +16,7 @@ RUN git init
 COPY ./tooling/ /source/tooling/
 
 # Shared package metadata and source for local package resolution
+COPY ./shared/tsconfig.base.json ./shared/tsconfig.strict.json /source/shared/
 COPY ./shared/core/package.json ./shared/core/bun.lock ./shared/core/tsconfig.json /source/shared/core/
 COPY ./shared/zoltar/package.json ./shared/zoltar/bun.lock ./shared/zoltar/tsconfig.json /source/shared/zoltar/
 COPY ./shared/openOracle/package.json /source/shared/openOracle/package.json

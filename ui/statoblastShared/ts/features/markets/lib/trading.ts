@@ -22,8 +22,8 @@ export function hasUndefinedCompleteSetExchangeRate(settlementCollateralAttoEth:
 }
 
 export function calculateMintingCapacityAttoEth(capacityOwnershipAttoRep: bigint | undefined, repPerEthPrice: bigint | undefined, statoblastSecurityMultiplierBps: bigint | undefined) {
-	if (capacityOwnershipAttoRep === undefined || repPerEthPrice === undefined || statoblastSecurityMultiplierBps === undefined || repPerEthPrice === 0n || statoblastSecurityMultiplierBps === 0n) return undefined
 	if (capacityOwnershipAttoRep === 0n) return 0n
+	if (capacityOwnershipAttoRep === undefined || repPerEthPrice === undefined || statoblastSecurityMultiplierBps === undefined || repPerEthPrice === 0n || statoblastSecurityMultiplierBps === 0n) return undefined
 	const capacityValueAttoEth = (capacityOwnershipAttoRep * PRICE_PRECISION) / repPerEthPrice
 	return (capacityValueAttoEth * BPS_DENOMINATOR) / statoblastSecurityMultiplierBps
 }

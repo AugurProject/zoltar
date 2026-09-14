@@ -144,7 +144,7 @@ describe('GlobalTransactionTray', () => {
 		for (const identifierButton of identifierButtons) expect(identifierButton.textContent).toBe(questionId)
 	})
 
-	test('renders a pending transaction with its explanation and hash but no dismiss control', async () => {
+	test('renders a dismissible pending transaction with its explanation and hash', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<GlobalTransactionTray
 				transaction={{
@@ -159,8 +159,8 @@ describe('GlobalTransactionTray', () => {
 		trackRendered(renderedComponent)
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.queryByRole('button', { name: 'Dismiss' })).toBeNull()
-		expect(documentQueries.queryByRole('button', { name: 'Close transaction status' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Dismiss' }) !== null).toBe(true)
+		expect(documentQueries.getByRole('button', { name: 'Close transaction status' })).not.toBeNull()
 		expect(documentQueries.getByText('Pending')).not.toBeNull()
 		expect(documentQueries.getByText('Waiting for confirmation.')).not.toBeNull()
 		expect(documentQueries.getByRole('link', { name: '0x2234000000000000000000000000000000000000000000000000000000000000' })).not.toBeNull()
@@ -429,7 +429,10 @@ describe('GlobalTransactionTray', () => {
 		const renderedComponent = await renderIntoDocument(<GlobalTransactionTray transaction={{ hash, title: 'Creating Question', tone: 'pending' }} />)
 		trackRendered(renderedComponent)
 
-		expect(within(document.body).queryByRole('button', { name: 'Close transaction status' })).toBeNull()
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Close transaction status' }))
+		})
+		expect(within(document.body).queryByText('Pending')).toBeNull()
 
 		await act(() => {
 			render(<GlobalTransactionTray transaction={{ hash, title: 'Question Created', tone: 'success' }} />, renderedComponent.container)

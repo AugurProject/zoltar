@@ -1,6 +1,6 @@
 /// <reference types="bun-types" />
 
-import { afterEach, describe, expect, mock, test } from 'bun:test'
+import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test'
 import { getAddress, isHex, keccak256, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { createInjectedBackend, normalizeAccount } from '../wallet/chainBackend.js'
 import { MAINNET_NETWORK_PROFILE } from '../wallet/networkProfile.js'
@@ -414,4 +414,39 @@ describe('injected backend read transport', () => {
 		const backend = createInjectedBackend()
 		await expect(backend.getChainId()).rejects.toThrow('Unable to verify wallet network because no injected wallet was found.')
 	})
+})
+
+test('times out wallet-backed reads while leaving wallet approval requests unbounded', async () => {
+	const originalSetTimeout = globalThis.setTimeout
+	spyOn(globalThis, 'setTimeout').mockImplementation((handler, delay, ...args) => originalSetTimeout(handler, delay === 30_000 ? 10 : delay, ...args))
+	let resolveApproval: ((value: unknown) => void) | undefined
+	const backend = createInjectedBackend({
+		provider: {
+			request: async ({ method }) => {
+				if (method === 'eth_requestAccounts')
+					return await new Promise(resolve => {
+						resolveApproval = resolve
+					})
+				return await new Promise(() => undefined)
+			},
+		},
+	})
+	const readResult = backend
+		.createReadClient()
+		.getBlockNumber()
+		.then(
+			() => 'unexpected success',
+			error => (error instanceof Error ? error.message : 'unexpected error'),
+		)
+	expect(await Promise.race([readResult, new Promise(resolve => originalSetTimeout(() => resolve('still waiting'), 50))])).toContain('timed out')
+	let approvalComplete = false
+	const approval = backend.requestAccounts().then(value => {
+		approvalComplete = true
+		return value
+	})
+	await new Promise(resolve => originalSetTimeout(resolve, 30))
+	expect(approvalComplete).toBe(false)
+	if (resolveApproval === undefined) throw new Error('Expected a wallet approval request')
+	resolveApproval([zeroAddress])
+	expect(await approval).toEqual([zeroAddress])
 })
