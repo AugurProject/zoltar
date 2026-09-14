@@ -1365,7 +1365,6 @@ summary {
 }
 
 .app-shell > .top-shell,
-.app-shell > .mainnet-disabled-notice,
 .app-shell > .simulation-banner {
 	width: min(1260px, calc(100% - 2rem));
 	margin: 1rem auto 0;

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks'
-import { NoticeStack } from '../../components/NoticeStack.js'
+import { WarningSurface } from '../../components/WarningSurface.js'
 import * as appCopy from '../../copy/app.js'
 import { getActiveBackend } from '../../lib/activeEnvironment.js'
 import { isMainnetDisabled } from '../../wallet/networkAvailability.js'
@@ -33,8 +33,9 @@ export function MainnetDisabledNotice() {
 	}, [backend])
 	if (!visible || backend.id === 'simulation') return undefined
 	return (
-		<div className='mainnet-disabled-notice'>
-			<NoticeStack items={[{ id: 'mainnet-disabled', tone: 'warning', title: appCopy.mainnetDisabled, detail: appCopy.mainnetDisabledDetail }]} />
-		</div>
+		<WarningSurface role='alert' surface='flat' variant='prominent' className='mainnet-disabled-notice'>
+			<strong className='notice-title'>{appCopy.mainnetDisabled}</strong>
+			<p>{appCopy.mainnetDisabledDetail}</p>
+		</WarningSurface>
 	)
 }

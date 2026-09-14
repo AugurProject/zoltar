@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 import { OverviewPanels } from '@zoltar/ui-zoltar-shared/features/overview/OverviewPanels.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
@@ -390,6 +390,26 @@ describe('OverviewPanels', () => {
 		expect(documentQueries.getByText(/This Universe has forked on/)).toBeDefined()
 		expect(document.body.textContent).toContain('Please migrate your REP to continue to use Augur')
 		expect(document.body.textContent).not.toContain('Migration required')
+	})
+
+	test('places both critical notices below the wallet and before balances', async () => {
+		const backend = createFakeBackend({ accountAddress: '0x1234567890123456789012345678901234567890' })
+		backend.getChainId = async () => '0x1'
+		const restore = installActiveEnvironmentForTesting(backend)
+		try {
+			await renderOverviewPanels({ universeHasForked: true })
+			await waitFor(() => expect(document.body.querySelector('.mainnet-disabled-notice')).not.toBeNull())
+			const toolbar = document.body.querySelector('.header-toolbar')
+			const mainnet = document.body.querySelector('.mainnet-disabled-notice')
+			const fork = document.body.querySelector('.universe-fork-notice')
+			expect(toolbar?.nextElementSibling).toBe(mainnet)
+			expect(mainnet?.nextElementSibling).toBe(fork)
+			expect(fork?.nextElementSibling?.classList.contains('overview-inline-metrics')).toBe(true)
+			expect(mainnet?.getAttribute('role')).toBe('alert')
+			expect(fork?.getAttribute('role')).toBe('alert')
+		} finally {
+			restore()
+		}
 	})
 
 	test('does not render a redundant forked badge in the toolbar badge slot', async () => {
