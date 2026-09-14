@@ -1088,10 +1088,18 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await driver.resize({ height: 900, width: 1440 })
 			await driver.navigate(`${baseUrl}/statoblast/?workflow=auction#/security-pools?simulate=1&simScenario=securitypoolx2-auction`)
 			await driver.waitForBodyText('Will this resolve?')
-			const allUniversesSelected = await driver.evaluate(
-				`(() => { const label = [...document.querySelectorAll('.filter-toolbar label')].find(candidate => candidate.querySelector('span')?.textContent?.trim() === 'Universe'); const select = label?.querySelector('select'); if (!(select instanceof HTMLSelectElement)) return false; select.value = 'all'; select.dispatchEvent(new Event('change', { bubbles: true })); return true })()`,
+			const universeDirectoryOpened = await driver.evaluate(
+				`(() => { const link = [...document.querySelectorAll('a')].find(candidate => candidate.textContent?.trim() === 'Universe' && candidate.href.includes('securityPoolsView=universe')); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`,
 			)
-			expect(allUniversesSelected).toBe(true)
+			expect(universeDirectoryOpened).toBe(true)
+			await driver.waitForBodyText('Child universes')
+			const yesUniverseSelected = await driver.evaluate(
+				`(() => { const record = [...document.querySelectorAll('article.entity-card')].find(candidate => candidate.querySelector('h3')?.textContent?.trim() === 'Yes'); const link = record?.querySelector('.entity-card-actions a.universe-link'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`,
+			)
+			expect(yesUniverseSelected).toBe(true)
+			const childPoolBrowserOpened = await driver.evaluate(`(() => { const link = [...document.querySelectorAll('a')].find(candidate => candidate.textContent?.trim() === 'Browse Pools'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
+			expect(childPoolBrowserOpened).toBe(true)
+			await driver.waitForBodyText('Will this resolve?')
 			await driver.clickButton('+1 month')
 			const auctionPoolOpened = await driver.evaluate(
 				`(() => { const record = [...document.querySelectorAll('article.comparison-record')].find(candidate => candidate.textContent?.toLowerCase().includes('truth auction')); const link = record?.querySelector('h3 a[aria-label^="Open pool:"]'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`,

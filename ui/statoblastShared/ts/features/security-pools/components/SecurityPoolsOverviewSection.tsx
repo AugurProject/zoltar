@@ -179,7 +179,7 @@ export function SecurityPoolsOverviewSection({
 
 			{(() => {
 				if (pagedSecurityPools.length === 0) {
-					if (registryPresentation === undefined) return undefined
+					if (registryPresentation === undefined || (effectiveSecurityPoolOverviewError !== undefined && !loadingCurrentPage)) return undefined
 					const isEmptyRegistry = registryPresentation.key === 'empty'
 					const registryActions = (() => {
 						if (isEmptyRegistry && onCreateSecurityPool !== undefined)

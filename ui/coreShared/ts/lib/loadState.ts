@@ -7,6 +7,7 @@ export type LoadableValueState = 'unknown' | 'loading' | 'ready' | 'missing'
 type RunLoadOptions<TResult> = {
 	isCurrent?: () => boolean
 	load: () => Promise<TResult>
+	waitUntilReady?: () => Promise<void>
 	onStart?: () => void
 	onSuccess?: (result: TResult) => Promise<void> | void
 	onError?: (error: unknown) => Promise<void> | void
@@ -79,11 +80,13 @@ export function createLoadController({ timeoutMilliseconds = 30_000 }: { timeout
 		syncPhase()
 	}
 
-	const run = async <TResult>({ isCurrent, load, onStart, onSuccess, onError }: RunLoadOptions<TResult>) => {
+	const run = async <TResult>({ isCurrent, load, waitUntilReady, onStart, onSuccess, onError }: RunLoadOptions<TResult>) => {
 		const isCurrentRequest = isCurrent ?? (() => true)
 		return await track(async () => {
 			onStart?.()
 			try {
+				if (waitUntilReady !== undefined) await withTimeout(waitUntilReady(), 120_000, 'Backend readiness timed out. Please retry.')
+				if (!isCurrentRequest()) return undefined
 				const result = await withTimeout(load(), timeoutMilliseconds, 'Loading timed out. Please retry.')
 				if (!isCurrentRequest()) return undefined
 				await onSuccess?.(result)

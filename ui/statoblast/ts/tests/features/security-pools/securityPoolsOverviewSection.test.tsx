@@ -497,6 +497,8 @@ describe('SecurityPoolsOverviewSection', () => {
 			<SecurityPoolsOverviewSection
 				{...createProps({
 					securityPoolOverviewError: 'Failed to load security pools',
+					securityPoolPage: undefined,
+					hasLoadedSecurityPoolPage: false,
 				})}
 			/>,
 		)
@@ -504,6 +506,10 @@ describe('SecurityPoolsOverviewSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('alert').textContent).toContain('Failed to load security pools')
+		await act(async () => {
+			await new Promise(resolve => setTimeout(resolve, 0))
+		})
+		expect(document.body.textContent).not.toContain('Loading security pools')
 		expect(documentQueries.queryByRole('dialog', { name: 'Liquidate Vault' })).toBeNull()
 	})
 
