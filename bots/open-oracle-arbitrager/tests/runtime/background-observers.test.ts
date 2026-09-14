@@ -49,7 +49,7 @@ function centralizedMarkets(assetAddress: `0x${string}`, sources: readonly { exc
 	})
 }
 
-test('head watcher logs each observed block with its age and any gap, and dedupes repeated failures', async () => {
+test('head watcher observes new blocks silently and dedupes repeated failures', async () => {
 	const logged = spyOn(console, 'log').mockImplementation(() => {})
 	const errors = spyOn(console, 'error').mockImplementation(() => {})
 	try {
@@ -72,7 +72,7 @@ test('head watcher logs each observed block with its age and any gap, and dedupe
 		expect(await watcher.waitForNewHead(undefined, 1_000)).toBe('head')
 		blockNumber = 13n
 		expect(await watcher.waitForNewHead({ hash: `0x${'ab'.repeat(32)}`, number: 10n }, 1_000)).toBe('head')
-		expect(logged.mock.calls.map(call => String(call[0]))).toEqual(['observedBlock=10 blockAgeSeconds=11', 'observedBlock=13 blockAgeSeconds=11 unobservedBlocks=2'])
+		expect(logged).not.toHaveBeenCalled()
 		fail = true
 		await Bun.sleep(30)
 		expect(errors).toHaveBeenCalledTimes(1)

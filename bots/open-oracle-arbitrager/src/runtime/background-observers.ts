@@ -13,7 +13,7 @@ type HeadReader = {
 }
 
 /**
- * Follows the chain head independently of the scan so every block is logged as soon as it exists and the
+ * Follows the chain head independently of the scan so every block is observed as soon as it exists and the
  * scan loop can be woken immediately instead of waiting for its poll interval.
  */
 export function createOperatorHeadWatcher(parameters: { config: Pick<Configuration, 'networkConfigured'>; intervalMilliseconds?: number | undefined; isStopping: () => boolean; readClient: () => HeadReader }) {
@@ -27,10 +27,8 @@ export function createOperatorHeadWatcher(parameters: { config: Pick<Configurati
 			lastFailure = message
 			console.error(`headWatchFailed=${message}`)
 		},
-		onHead: (head, previous) => {
+		onHead: () => {
 			lastFailure = undefined
-			const skipped = previous === undefined ? 0n : head.number - previous.number - 1n
-			console.log(`observedBlock=${head.number.toString()} blockAgeSeconds=${(BigInt(Math.floor(Date.now() / 1_000)) - head.timestamp).toString()}${skipped > 0n ? ` unobservedBlocks=${skipped.toString()}` : ''}`)
 		},
 		readBlock: async blockNumber => {
 			const value = await parameters.readClient().getBlock({ blockNumber })
