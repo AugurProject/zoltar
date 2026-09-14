@@ -2,7 +2,7 @@ import type { Address, Hash, Log, TransactionReceipt } from '../ethereum.ts'
 import type { ContractMetadata } from '../types.ts'
 import { ChainContinuityError, requireLogPosition } from './runtime-rpc.ts'
 
-export const isProtocolActivitySource = (contract: ContractMetadata | undefined): boolean => contract !== undefined && contract.kind !== 'weth' && contract.kind !== 'usdc' && contract.kind !== 'reputationToken' && contract.kind !== 'multicall3' && contract.kind !== 'proxyDeployer' && contract.kind !== 'scalarOutcomes'
+export const isProtocolActivitySource = (contract: ContractMetadata | undefined): boolean => contract !== undefined && contract.kind !== 'weth' && contract.kind !== 'usdc' && contract.kind !== 'reputationToken' && contract.kind !== 'multicall3' && contract.kind !== 'proxyDeployer'
 
 export const indexerLogSources = (contracts: readonly ContractMetadata[]): readonly ContractMetadata[] => contracts.filter(contract => isProtocolActivitySource(contract) || contract.kind === 'reputationToken')
 

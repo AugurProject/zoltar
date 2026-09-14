@@ -27,6 +27,17 @@ test('every manifest deployment step is either verifiable or explicitly skipped,
 	}
 })
 
+test('verification does not require a deployment for the internal scalar library', async () => {
+	const artifactLookup = await loadRealArtifactLookup()
+	for (const networkId of ['mainnet', 'sepolia'] as const) {
+		const manifest = await loadRealManifest(networkId)
+		const plan = buildVerificationPlan({ ...manifest, deploymentSteps: manifest.deploymentSteps.filter(step => step.id !== 'scalarOutcomes') }, artifactLookup)
+		expect(plan.jobs.some(job => job.id === 'scalarOutcomes')).toBe(false)
+		expect(Object.keys(plan.libraryAddresses)).toEqual(['securityPoolUtils'])
+		expect(plan.jobs.some(job => job.id === 'zoltarQuestionData')).toBe(true)
+	}
+})
+
 test('verification jobs carry the deployed constructor arguments and compiler profiles', async () => {
 	const artifactLookup = await loadRealArtifactLookup()
 	const manifest = await loadRealManifest('sepolia')

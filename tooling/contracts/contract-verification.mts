@@ -1,7 +1,6 @@
 import { createApplyLinkedLibrariesHelper } from '@zoltar/core-shared/deployment/deploymentAddresses'
 import { getAddress, getCreate2Address, keccak256, toHex, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 
-const SCALAR_OUTCOMES_SOURCE_PATH = 'contracts/ScalarOutcomes.sol'
 const SECURITY_POOL_UTILS_SOURCE_PATH = 'contracts/statoblast/SecurityPoolUtils.sol'
 const ZERO_SALT = toHex(0, { size: 32 })
 
@@ -37,7 +36,7 @@ export type VerificationJob = {
 
 export type VerificationPlan = {
 	jobs: VerificationJob[]
-	libraryAddresses: { scalarOutcomes: Address; securityPoolUtils: Address }
+	libraryAddresses: { securityPoolUtils: Address }
 	skipped: { id: string; reason: string }[]
 }
 
@@ -134,16 +133,10 @@ const STEP_DEFINITIONS: Readonly<Record<string, StepDefinition>> = {
 		compilerProfile: 'main',
 		contractName: 'Multicall3',
 	},
-	scalarOutcomes: {
-		artifactPath: SCALAR_OUTCOMES_SOURCE_PATH,
-		compilerProfile: 'main',
-		contractName: 'ScalarOutcomes',
-	},
 	zoltarQuestionData: {
 		artifactPath: 'contracts/ZoltarQuestionData.sol',
 		compilerProfile: 'main',
 		contractName: 'ZoltarQuestionData',
-		linksLibraries: true,
 	},
 	zoltar: {
 		artifactPath: 'contracts/Zoltar.sol',
@@ -215,11 +208,8 @@ export function buildVerificationPlan(manifest: DeploymentManifest, getArtifact:
 		return step.address
 	}
 	const proxyDeployerAddress = stepAddress('proxyDeployer')
-	const libraryAddresses = { scalarOutcomes: stepAddress('scalarOutcomes'), securityPoolUtils: stepAddress('securityPoolUtils') }
-	const { applyLibraries } = createApplyLinkedLibrariesHelper(() => [
-		{ address: libraryAddresses.scalarOutcomes, hash: keccak256(toHex(`${SCALAR_OUTCOMES_SOURCE_PATH}:ScalarOutcomes`)).slice(2, 36) },
-		{ address: libraryAddresses.securityPoolUtils, hash: keccak256(toHex(`${SECURITY_POOL_UTILS_SOURCE_PATH}:SecurityPoolUtils`)).slice(2, 36) },
-	])
+	const libraryAddresses = { securityPoolUtils: stepAddress('securityPoolUtils') }
+	const { applyLibraries } = createApplyLinkedLibrariesHelper(() => [{ address: libraryAddresses.securityPoolUtils, hash: keccak256(toHex(`${SECURITY_POOL_UTILS_SOURCE_PATH}:SecurityPoolUtils`)).slice(2, 36) }])
 	const jobs: VerificationJob[] = []
 	const skipped: { id: string; reason: string }[] = []
 	for (const step of manifest.deploymentSteps) {

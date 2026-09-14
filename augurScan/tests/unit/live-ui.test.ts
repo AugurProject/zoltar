@@ -1259,7 +1259,7 @@ test('clears a log deep link from the current activity entry before route naviga
 })
 
 test('groups protocol contracts, configured dependencies, and discovered contracts in the system registry', () => {
-	for (const kind of ['multicall3', 'proxyDeployer', 'reputationToken', 'scalarOutcomes', 'uniswapV2Factory', 'uniswapV3Factory', 'uniswapV4PoolManager', 'usdc', 'weth']) expect(contractRegistrySection({ kind, provenance: 'manifest' })).toBe('System dependencies')
+	for (const kind of ['multicall3', 'proxyDeployer', 'reputationToken', 'uniswapV2Factory', 'uniswapV3Factory', 'uniswapV4PoolManager', 'usdc', 'weth']) expect(contractRegistrySection({ kind, provenance: 'manifest' })).toBe('System dependencies')
 	expect(contractRegistrySection({ kind: 'openOracle', provenance: 'manifest' })).toBe('Protocol contracts')
 	expect(contractRegistrySection({ kind: 'securityPool', provenance: 'DeploySecurityPool' })).toBe('Discovered contracts')
 })

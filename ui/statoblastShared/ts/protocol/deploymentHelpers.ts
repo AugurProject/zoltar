@@ -4,7 +4,6 @@ import { constructorArgumentsFromInitCode, createApplyLinkedLibrariesHelper } fr
 import type { DeploymentStepId } from '@zoltar/ui-core-shared/types/contracts.js'
 import { createInfraContractAddressHelper } from '@zoltar/statoblast-shared/deployment/deploymentAddresses'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/core-shared/deployment/protocolConfig'
-import { ScalarOutcomes_ScalarOutcomes } from '@zoltar/ui-core-shared/contractArtifact.js'
 import {
 	statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
 	statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate,
@@ -41,18 +40,7 @@ const getSecurityPoolUtilsAddress = () =>
 		salt: ZERO_SALT,
 	})
 
-const getScalarOutcomesAddress = () =>
-	getCreate2Address({
-		bytecode: `0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`,
-		from: PROXY_DEPLOYER_ADDRESS,
-		salt: ZERO_SALT,
-	})
-
 const { applyLibraries } = createApplyLinkedLibrariesHelper(() => [
-	{
-		hash: keccak256(toHex('contracts/ScalarOutcomes.sol:ScalarOutcomes')).slice(2, 36),
-		address: getScalarOutcomesAddress(),
-	},
 	{
 		hash: keccak256(toHex('contracts/statoblast/SecurityPoolUtils.sol:SecurityPoolUtils')).slice(2, 36),
 		address: getSecurityPoolUtilsAddress(),
@@ -184,7 +172,6 @@ export function getInfraContractAddresses(profile: NetworkProfile = getRuntimeNe
 		openOracleBytecode: `0x${statoblast_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`,
 		priceOracleManagerAndOperatorQueuerFactoryBytecode: () => getPriceOracleManagerAndOperatorQueuerFactoryByteCode(profile.wethAddress),
 		proxyDeployerAddress: PROXY_DEPLOYER_ADDRESS,
-		scalarOutcomesBytecode: `0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`,
 		securityPoolUtilsBytecode: `0x${statoblast_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`,
 		securityPoolOperationsDelegateBytecode: getSecurityPoolOperationsDelegateByteCode(),
 		uniformPriceDualCapBatchAuctionFactoryBytecode: `0x${statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object}`,

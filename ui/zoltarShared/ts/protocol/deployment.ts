@@ -1,7 +1,7 @@
 import { encodeDeployData, getAddress, keccak256, type Address, type Hash, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { constructorArgumentsFromInitCode, createDeploymentStatusOracleAddressHelper } from '@zoltar/core-shared/deployment/deploymentAddresses'
-import { DeploymentStatusOracle_DeploymentStatusOracle, GenesisReputationToken_GenesisReputationToken, ScalarOutcomes_ScalarOutcomes, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData, statoblast_Multicall3_Multicall3, statoblast_WETH9_WETH9 } from '@zoltar/ui-core-shared/contractArtifact.js'
+import { DeploymentStatusOracle_DeploymentStatusOracle, GenesisReputationToken_GenesisReputationToken, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData, statoblast_Multicall3_Multicall3, statoblast_WETH9_WETH9 } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { MULTICALL3_BYTECODE, PROXY_DEPLOYER_ADDRESS, ZERO_SALT, getZoltarContractAddresses, getZoltarInitCode, getZoltarQuestionDataByteCode } from './zoltarDeploymentHelpers.js'
 import { readWithRpcStateRetries, waitForSubmittedTransactionReceipt, type RpcStateRetryWait } from './core.js'
 import type { DeploymentStatusSnapshot, DeploymentStep, DeploymentStepId, ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -23,7 +23,6 @@ export const EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<R
 	multicall3: '0x1ff11a2c64e95bb3d4e330d0235adbe3c3f78eeecb5c5104ac38c89673dfaade',
 	proxyDeployer: '0x5acaad953250bec20933f7c72a25bb03bfa54767ebd3a750396276512c46a79c',
 	reputationToken: '0x1939fc9070edce2ad78392d5145b884e58d307171bc2e24a95927db370002b86',
-	scalarOutcomes: '0x3c55237b3869f93f3e570793afec9785f20a4ee7cd0a7798a418838c833228e0',
 	weth: '0x664399615dc3e489416583855e1125048c92043bc544f20dc1de8f1a78106b20',
 	zoltar: '0xce0f32efa6776e07ed2972c37d68bafe22b8828385330b4ea8e2a886817cc272',
 	zoltarQuestionData: '0xcacb1ffe2a738ceda0aced156f7ff50b405b57d66a6c1307e5d8ff87789a4340',
@@ -32,7 +31,6 @@ export const EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<R
 const STATIC_DEPLOYMENT_ARTIFACT_RUNTIME_CODE_BY_STEP_ID = {
 	deploymentStatusOracle: `0x${DeploymentStatusOracle_DeploymentStatusOracle.evm.deployedBytecode.object}`,
 	multicall3: `0x${statoblast_Multicall3_Multicall3.evm.deployedBytecode.object}`,
-	scalarOutcomes: `0x${ScalarOutcomes_ScalarOutcomes.evm.deployedBytecode.object}`,
 	weth: `0x${statoblast_WETH9_WETH9.evm.deployedBytecode.object}`,
 	zoltarQuestionData: `0x${ZoltarQuestionData_ZoltarQuestionData.evm.deployedBytecode.object}`,
 } satisfies Readonly<Partial<Record<DeploymentStepId, Hex>>>
@@ -60,7 +58,6 @@ const EXPECTED_MAINNET_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<D
 	deploymentStatusOracle: '0xa8385e5704060e4e97fdaba0f7bf6ef692162bacc83533ebd616b455d2b190e1',
 	multicall3: '0x1ff11a2c64e95bb3d4e330d0235adbe3c3f78eeecb5c5104ac38c89673dfaade',
 	proxyDeployer: '0x5acaad953250bec20933f7c72a25bb03bfa54767ebd3a750396276512c46a79c',
-	scalarOutcomes: '0x3c55237b3869f93f3e570793afec9785f20a4ee7cd0a7798a418838c833228e0',
 	zoltar: '0x10ca7ba3ab7777c9819b542b1efe7e4b5cc2cabe2900caed51e5f067c587f687',
 	zoltarQuestionData: '0xcacb1ffe2a738ceda0aced156f7ff50b405b57d66a6c1307e5d8ff87789a4340',
 }
@@ -236,7 +233,7 @@ function markDeploymentTransactionPrepared(
 
 export function getZoltarDeploymentStatusOracleStepAddresses(profile = getRuntimeNetworkProfile()) {
 	const addresses = getZoltarContractAddresses(profile)
-	return [PROXY_DEPLOYER_ADDRESS, ...(profile.id === 'sepolia' ? [profile.wethAddress, profile.genesisRepTokenAddress] : []), addresses.multicall3, addresses.scalarOutcomes, addresses.zoltarQuestionData, addresses.zoltar] satisfies Address[]
+	return [PROXY_DEPLOYER_ADDRESS, ...(profile.id === 'sepolia' ? [profile.wethAddress, profile.genesisRepTokenAddress] : []), addresses.multicall3, addresses.zoltarQuestionData, addresses.zoltar] satisfies Address[]
 }
 
 function getDeploymentStatusOracleByteCode(profile = getRuntimeNetworkProfile()) {
@@ -419,17 +416,10 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 			deploy: async client => await deployViaProxy(client, MULTICALL3_BYTECODE),
 		},
 		{
-			id: 'scalarOutcomes',
-			label: 'ScalarOutcomes',
-			address: addresses.scalarOutcomes,
-			dependencies: ['proxyDeployer'],
-			deploy: async client => await deployViaProxy(client, `0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`),
-		},
-		{
 			id: 'zoltarQuestionData',
 			label: 'ZoltarQuestionData',
 			address: addresses.zoltarQuestionData,
-			dependencies: ['proxyDeployer', 'scalarOutcomes'],
+			dependencies: ['proxyDeployer'],
 			deploy: async client => await deployViaProxy(client, getZoltarQuestionDataByteCode()),
 		},
 		{
@@ -458,7 +448,6 @@ export function getZoltarDeploymentStepConstructorArguments(profile: NetworkProf
 	const constructorArguments: Partial<Record<DeploymentStepId, string>> = {
 		deploymentStatusOracle: constructorArgumentsFromInitCode(getDeploymentStatusOracleByteCode(profile), DeploymentStatusOracle_DeploymentStatusOracle.evm.bytecode.object),
 		multicall3: constructorArgumentsFromInitCode(MULTICALL3_BYTECODE, statoblast_Multicall3_Multicall3.evm.bytecode.object),
-		scalarOutcomes: '',
 		zoltarQuestionData: constructorArgumentsFromInitCode(getZoltarQuestionDataByteCode(), ZoltarQuestionData_ZoltarQuestionData.evm.bytecode.object),
 		zoltar: constructorArgumentsFromInitCode(getZoltarInitCode(addresses.zoltarQuestionData, profile.genesisRepTokenAddress), Zoltar_Zoltar.evm.bytecode.object),
 	}
