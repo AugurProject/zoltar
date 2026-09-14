@@ -23,7 +23,6 @@ import { getPendingOperationAmountPresentation, getPendingOperationLabel, getSta
 export type RequestPriceReview = {
 	requestValueAttoEth: bigint
 	managerAddress: Address
-	questionTitle: string | undefined
 	securityPoolAddress: Address
 	universeId: bigint
 }
@@ -53,14 +52,7 @@ export function SecurityPoolRequestPriceModal({
 	review: RequestPriceReview | undefined
 }) {
 	return (
-		<OperationModal
-			closeOnSuccessKey={closeOnSuccessKey}
-			context={review === undefined ? [] : [...(review.questionTitle === undefined ? [] : [{ label: commonCopy.question, value: review.questionTitle }]), { label: commonCopy.securityPoolAddress, value: <AddressValue address={review.securityPoolAddress} /> }]}
-			description={securityPoolCopy.requestPriceReviewDescription}
-			isOpen={review !== undefined}
-			onClose={onClose}
-			title={securityPoolCopy.requestNewPriceTitle}
-		>
+		<OperationModal closeOnSuccessKey={closeOnSuccessKey} isOpen={review !== undefined} onClose={onClose} title={securityPoolCopy.requestNewPriceTitle}>
 			<TransactionReview primary={[{ label: transactionReviewCopy.youPay, value: <CurrencyValue precision='exact' value={review?.requestValueAttoEth} suffix={commonCopy.eth} /> }]} risks={[securityPoolCopy.requestPricePendingReportRisk, securityPoolCopy.requestPriceFundingRisk]} />
 			<div className='actions oracle-actions'>
 				<button className='secondary' type='button' onClick={onClose} disabled={pending}>

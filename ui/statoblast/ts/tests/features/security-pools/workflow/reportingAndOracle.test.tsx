@@ -582,7 +582,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		expect(sectionQueries.getByRole('button', { name: /Report #\s*12/ })).not.toBeNull()
 	})
 
-	test('reviews the pool identity and ETH cost before requesting a new price', async () => {
+	test('reviews the buffered ETH cost before requesting a new price', async () => {
 		const requests: Array<{ managerAddress: string; reviewedRequestValueAttoEth: bigint; securityPoolAddress: string; universeId: bigint }> = []
 		const pool = createSelectedPool()
 		const baseProps = createSecurityPoolWorkflowProps({

@@ -880,7 +880,6 @@ export function SecurityPoolWorkflowSection({
 											setRequestPriceReview({
 												requestValueAttoEth: requestPriceTransactionEthValue,
 												managerAddress: loadedSelectedPool.managerAddress,
-												questionTitle: marketDetails === undefined ? undefined : getQuestionTitle(marketDetails),
 												securityPoolAddress: loadedSelectedPool.securityPoolAddress,
 												universeId: loadedSelectedPool.universeId,
 											})
