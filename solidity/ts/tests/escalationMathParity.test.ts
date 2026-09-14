@@ -327,7 +327,7 @@ describe('Escalation math parity', () => {
 
 	beforeAll(async () => {
 		mockWindow = getAnvilWindowEthereum()
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
 		await setupTestAccounts(mockWindow)
 		await ensureZoltarDeployed(client)
 		await ensureInfraDeployed(client)
@@ -336,7 +336,7 @@ describe('Escalation math parity', () => {
 
 	beforeEach(() => {
 		mockWindow = getAnvilWindowEthereum()
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
 	})
 
 	test('shared attrition-time inversion matches the deployed contract', async () => {

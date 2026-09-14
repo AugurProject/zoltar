@@ -75,10 +75,10 @@ if (totalGasPriceGwei <= 0) throw new Error('BASE_FEE_GWEI + PRIORITY_FEE_GWEI m
 
 const anvilNode = await createAnvilNodeForConnectionMode(getGasCostsAnvilConnectionMode(), { context: 'gas-costs', startTimestamp: 1n })
 const anvil = anvilNode.anvilWindowEthereum
-const alice = createWriteClient(anvil, TEST_ADDRESSES[0], 0)
-const bob = createWriteClient(anvil, TEST_ADDRESSES[1], 0)
-const carol = createWriteClient(anvil, TEST_ADDRESSES[2], 0)
-const dave = createWriteClient(anvil, TEST_ADDRESSES[3], 0)
+const alice = createWriteClient(anvil, TEST_ADDRESSES[0])
+const bob = createWriteClient(anvil, TEST_ADDRESSES[1])
+const carol = createWriteClient(anvil, TEST_ADDRESSES[2])
+const dave = createWriteClient(anvil, TEST_ADDRESSES[3])
 
 const waitForGas = async (client: WriteClient, txHashPromise: Promise<Hash>) => {
 	const hash = await txHashPromise

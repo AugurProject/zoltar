@@ -1,21 +1,10 @@
-:root {
-	font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-	font-synthesis: none;
-	--bg: #090d12;
-	--text: #edf2f6;
-	--yes: var(--outcome-yes);
-	--no: var(--outcome-no);
-	--warn: #f1c76f;
-	--bad: #ee8d8d;
-}
-
 html {
 	scroll-behavior: smooth;
 }
 
 body {
 	min-width: 320px;
-	background: radial-gradient(circle at 20% -10%, #16231e 0, transparent 34rem), var(--bg);
+	background: radial-gradient(circle at 20% -10%, var(--accent-soft) 0, transparent 34rem), var(--bg);
 }
 
 .app-shell {
@@ -37,7 +26,7 @@ body {
 	right: 0;
 	width: min(22rem, calc(100vw - 2rem));
 	padding: 1rem;
-	border: 1px solid var(--line-strong);
+	border: 1px solid var(--border-strong);
 	border-radius: 0.6rem;
 	background: var(--surface-modal-opaque);
 	box-shadow: 0 1rem 2.5rem rgb(0 0 0 / 35%);
@@ -56,9 +45,9 @@ body {
 .app-settings-menu select {
 	width: 100%;
 	padding: 0.55rem;
-	border: 1px solid var(--line-strong);
+	border: 1px solid var(--border-strong);
 	border-radius: 0.4rem;
-	background: var(--surface);
+	background: var(--surface-section);
 	color: var(--text);
 }
 .app-settings-menu .field-help {
@@ -66,10 +55,10 @@ body {
 	color: var(--muted);
 }
 .app-settings-menu .field-error {
-	color: var(--bad);
+	color: var(--danger);
 }
 .app-settings-menu input[aria-invalid="true"] {
-	border-color: var(--bad);
+	border-color: var(--danger);
 }
 button,
 input {
@@ -97,7 +86,7 @@ summary:focus-visible {
 	z-index: 20;
 	padding: 0.65rem 1rem;
 	background: var(--accent);
-	color: #0b1007;
+	color: var(--bg-deep);
 	transform: translateY(-150%);
 }
 .skip-link:focus {
@@ -125,8 +114,8 @@ summary:focus-visible {
 	max-width: 230px;
 	height: 36px;
 	padding: 0 1.8rem 0 0.65rem;
-	border: 1px solid var(--line-strong);
-	border-radius: 4px;
+	border: 1px solid var(--border-strong);
+	border-radius: var(--radius-control);
 	background: var(--surface-raised);
 	color: var(--text);
 	font:
@@ -141,8 +130,8 @@ summary:focus-visible {
 .wallet-button,
 .secondary-action {
 	padding: 0.62rem 0.85rem;
-	border: 1px solid var(--line-strong);
-	border-radius: 4px;
+	border: 1px solid var(--border-strong);
+	border-radius: var(--radius-control);
 	background: var(--surface-raised);
 	color: var(--text);
 	cursor: pointer;
@@ -218,17 +207,17 @@ summary:focus-visible {
 		monospace;
 }
 .status--good {
-	color: var(--yes);
+	color: var(--outcome-yes);
 }
 .status--warn {
-	color: var(--warn);
+	color: var(--warning);
 }
 .status--bad {
-	color: var(--bad);
+	color: var(--danger);
 }
 .section {
-	border: 1px solid var(--line);
-	background: var(--surface);
+	border: 1px solid var(--border-default);
+	background: var(--surface-section);
 	padding: clamp(1.1rem, 2.5vw, 1.65rem);
 }
 .section-heading {
@@ -251,7 +240,7 @@ summary:focus-visible {
 .segmented {
 	display: flex;
 	padding: 3px;
-	border: 1px solid var(--line);
+	border: 1px solid var(--border-default);
 	background: var(--bg);
 }
 .segmented button {
@@ -280,20 +269,20 @@ summary:focus-visible {
 	gap: 0.25rem;
 	text-align: left;
 	padding: 0.85rem 1rem;
-	border: 1px solid var(--line);
-	background: #0b1016;
+	border: 1px solid var(--border-default);
+	background: var(--surface-inset);
 	color: var(--muted);
 	cursor: pointer;
 }
 .side-picker button[aria-pressed="true"] {
-	border-color: #677a37;
+	border-color: var(--accent);
 	background: var(--accent-dark);
 	color: var(--accent);
 	box-shadow: inset 3px 0 var(--accent);
 }
 .segmented button:disabled,
 .side-picker button:disabled {
-	color: #73808d;
+	color: var(--muted);
 	cursor: not-allowed;
 	opacity: 0.65;
 }
@@ -322,12 +311,12 @@ summary:focus-visible {
 		sans-serif;
 }
 .field small.error {
-	color: var(--bad);
+	color: var(--danger);
 }
 .execution-settings {
 	margin: 1rem 0;
 	padding: 0.85rem;
-	border: 1px solid var(--line);
+	border: 1px solid var(--border-default);
 }
 .execution-settings legend {
 	padding: 0 0.35rem;
@@ -356,7 +345,7 @@ summary:focus-visible {
 	width: 100%;
 	min-height: 44px;
 	min-width: 0;
-	border: 1px solid var(--line-strong);
+	border: 1px solid var(--border-strong);
 	padding: 0.75rem 0.85rem;
 	background: var(--bg);
 	color: var(--text);
@@ -384,7 +373,7 @@ summary:focus-visible {
 	gap: 1rem;
 }
 .deployment-setup__advanced {
-	border: 1px solid var(--line);
+	border: 1px solid var(--border-default);
 	padding: 0.75rem 1rem;
 }
 .deployment-setup__advanced summary {
@@ -415,7 +404,7 @@ summary:focus-visible {
 	gap: 0.75rem;
 	min-width: 0;
 	padding: 0.75rem 1rem;
-	border: 1px solid var(--line);
+	border: 1px solid var(--border-default);
 	background: var(--surface-raised);
 }
 .deployment-step__details {
@@ -444,7 +433,7 @@ summary:focus-visible {
 	justify-content: space-between;
 	gap: 1rem;
 	padding: 1rem;
-	border: 1px solid var(--line);
+	border: 1px solid var(--border-default);
 	background: var(--surface-raised);
 }
 .deployment-setup__status > div {
@@ -465,7 +454,7 @@ summary:focus-visible {
 	gap: 0.75rem;
 }
 .deployment-setup__actions .primary-action {
-	border-color: var(--line-strong);
+	border-color: var(--border-strong);
 	background: var(--surface-raised);
 	color: var(--text);
 }
@@ -473,13 +462,13 @@ summary:focus-visible {
 	border-color: var(--accent);
 }
 .error {
-	color: var(--bad);
+	color: var(--danger);
 	overflow-wrap: anywhere;
 }
 .amount-input {
 	display: flex;
 	align-items: center;
-	border: 1px solid var(--line-strong);
+	border: 1px solid var(--border-strong);
 	background: var(--bg);
 }
 .amount-input:focus-within {
@@ -498,7 +487,7 @@ summary:focus-visible {
 		monospace;
 }
 .amount-input input:disabled {
-	color: #73808d;
+	color: var(--muted);
 	cursor: not-allowed;
 }
 .amount-input span {
@@ -508,8 +497,8 @@ summary:focus-visible {
 .quote {
 	margin-top: 0.85rem;
 	padding: 1rem;
-	border: 1px solid var(--line);
-	background: #0b1016;
+	border: 1px solid var(--border-default);
+	background: var(--surface-inset);
 }
 .trade-summary {
 	display: grid;
@@ -518,7 +507,7 @@ summary:focus-visible {
 	gap: 1rem;
 	margin: 1.25rem 0 1rem;
 	padding: 1rem;
-	border: 1px solid #53642b;
+	border: 1px solid var(--interactive-border);
 	background: var(--accent-dark);
 }
 .trade-summary:not(.trade-summary--review) > div {
@@ -558,7 +547,7 @@ details p,
 	line-height: 1.55;
 }
 .operation-block p.error {
-	color: var(--bad);
+	color: var(--danger);
 }
 .metrics,
 .fact-list {
@@ -572,7 +561,7 @@ details p,
 	justify-content: space-between;
 	gap: 1rem;
 	padding: 0.58rem 0;
-	border-bottom: 1px solid #1c2530;
+	border-bottom: 1px solid var(--border-default);
 }
 .metrics dt,
 .fact-list dt {
@@ -596,10 +585,10 @@ details p,
 	justify-content: center;
 	width: 100%;
 	min-height: 46px;
-	border: 1px solid #91ad48;
-	border-radius: 3px;
+	border: 1px solid var(--accent);
+	border-radius: var(--radius-control);
 	background: var(--accent);
-	color: #101508;
+	color: var(--bg-deep);
 	cursor: pointer;
 	font-weight: 700;
 	font-size: 13px;
@@ -607,9 +596,9 @@ details p,
 	text-decoration: none;
 }
 .primary-action:disabled {
-	border-color: var(--line);
-	background: #222a31;
-	color: #73808d;
+	border-color: var(--border-default);
+	background: var(--surface-raised);
+	color: var(--muted);
 	cursor: not-allowed;
 }
 .primary-action[aria-busy="true"]::before {
@@ -628,10 +617,10 @@ details p,
 	align-items: center;
 	margin-top: 0.75rem;
 	padding: 0 1rem;
-	border: 1px solid #91ad48;
-	border-radius: 3px;
+	border: 1px solid var(--accent);
+	border-radius: var(--radius-control);
 	background: var(--accent);
-	color: #101508;
+	color: var(--bg-deep);
 	font-weight: 700;
 	text-decoration: none;
 }
@@ -639,8 +628,8 @@ details p,
 	display: grid;
 	gap: 0.35rem;
 	padding: 0.75rem;
-	border: 1px solid var(--line);
-	background: #0b1016;
+	border: 1px solid var(--border-default);
+	background: var(--surface-inset);
 	color: var(--muted);
 	font-size: 13px;
 }
@@ -659,9 +648,9 @@ summary {
 .coverage,
 .warning {
 	padding: 0.85rem 1rem;
-	border-left: 3px solid var(--warn);
-	background: #201b11;
-	color: #d8c9a6;
+	border-left: 3px solid var(--warning);
+	background: var(--warning-soft);
+	color: var(--warning);
 }
 .coverage div {
 	display: flex;
@@ -688,20 +677,20 @@ summary {
 		monospace;
 }
 .probability__labels span:first-child {
-	color: var(--yes);
+	color: var(--outcome-yes);
 }
 .probability__labels span:last-child {
-	color: var(--no);
+	color: var(--outcome-no);
 }
 .probability__track {
 	height: 12px;
 	position: relative;
-	background: var(--no);
+	background: var(--outcome-no);
 	overflow: visible;
 }
 .probability__yes {
 	height: 100%;
-	background: var(--yes);
+	background: var(--outcome-yes);
 }
 .probability__marker {
 	position: absolute;
@@ -709,7 +698,7 @@ summary {
 	width: 2px;
 	height: 20px;
 	background: white;
-	box-shadow: 0 0 0 1px #000;
+	box-shadow: 0 0 0 1px var(--shadow-color-strong);
 }
 .address {
 	display: block;
@@ -717,7 +706,7 @@ summary {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
-	color: #c7d2dc;
+	color: var(--text-secondary);
 }
 
 .security-pool-link {
@@ -736,7 +725,7 @@ summary {
 	opacity: 0.55;
 }
 .market-list {
-	border-top: 1px solid var(--line);
+	border-top: 1px solid var(--border-default);
 }
 .market-row {
 	display: grid;
@@ -744,7 +733,7 @@ summary {
 	gap: 1.5rem 2rem;
 	align-items: center;
 	padding: 1.25rem 0.25rem;
-	border-bottom: 1px solid var(--line);
+	border-bottom: 1px solid var(--border-default);
 }
 .market-row__main {
 	min-width: 0;
@@ -842,7 +831,7 @@ summary {
 }
 .operation-block {
 	padding: 1rem 0;
-	border-top: 1px solid var(--line);
+	border-top: 1px solid var(--border-default);
 }
 .operation-block + .operation-block {
 	margin-top: 1rem;
@@ -881,17 +870,17 @@ summary {
 .fork-target-grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-	border: 1px solid var(--line);
+	border: 1px solid var(--border-default);
 }
 .fork-target-status {
 	display: block;
-	color: var(--yes);
+	color: var(--outcome-yes);
 	font:
 		13px ui-monospace,
 		monospace;
 }
 .fork-target-status--missing {
-	color: var(--warn);
+	color: var(--warning);
 }
 .scalar-fork-picker {
 	display: grid;
@@ -899,7 +888,7 @@ summary {
 	align-items: end;
 	gap: 0.75rem 1rem;
 	padding: 1rem 0;
-	border-block: 1px solid var(--line);
+	border-block: 1px solid var(--border-default);
 }
 .scalar-fork-picker .field {
 	margin: 0;
@@ -924,18 +913,18 @@ summary {
 .quiet-action {
 	min-height: 44px;
 	padding: 0.45rem 0.65rem;
-	border: 1px solid var(--line-strong);
+	border: 1px solid var(--border-strong);
 	background: transparent;
 	color: var(--text);
 	cursor: pointer;
 	font-size: 13px;
 }
 .quiet-action:disabled {
-	color: #73808d;
+	color: var(--muted);
 	cursor: not-allowed;
 }
 .quiet-action[aria-pressed="true"] {
-	border-color: #677a37;
+	border-color: var(--accent);
 	background: var(--accent-dark);
 	color: var(--accent);
 	box-shadow: inset 3px 0 var(--accent);
@@ -943,7 +932,7 @@ summary {
 .fork-target-selection {
 	margin: 0;
 	padding: 0;
-	border-top: 1px solid var(--line);
+	border-top: 1px solid var(--border-default);
 	list-style: none;
 }
 .fork-target-selection li {
@@ -952,7 +941,7 @@ summary {
 	justify-content: space-between;
 	gap: 1rem;
 	padding: 0.75rem 0;
-	border-bottom: 1px solid var(--line);
+	border-bottom: 1px solid var(--border-default);
 }
 .fork-target-selection li > div {
 	display: grid;
@@ -980,8 +969,8 @@ summary {
 .portfolio-groups > .operation-block {
 	margin: 0;
 	padding: 1rem;
-	border: 1px solid var(--line);
-	background: var(--surface);
+	border: 1px solid var(--border-default);
+	background: var(--surface-section);
 }
 .muted {
 	color: var(--muted);
@@ -991,12 +980,12 @@ summary {
 .explanation-flow {
 	display: grid;
 	grid-template-columns: repeat(4, 1fr);
-	border: 1px solid var(--line);
-	background: var(--surface);
+	border: 1px solid var(--border-default);
+	background: var(--surface-section);
 }
 .explanation-flow article {
 	padding: 1.25rem;
-	border-right: 1px solid var(--line);
+	border-right: 1px solid var(--border-default);
 }
 .explanation-flow article:last-child {
 	border: 0;
@@ -1093,7 +1082,7 @@ summary {
 		border-right: 0;
 	}
 	.explanation-flow article:nth-child(-n + 2) {
-		border-bottom: 1px solid var(--line);
+		border-bottom: 1px solid var(--border-default);
 	}
 }
 
@@ -1192,10 +1181,10 @@ summary {
 	}
 	.explanation-flow article {
 		border-right: 0;
-		border-bottom: 1px solid var(--line);
+		border-bottom: 1px solid var(--border-default);
 	}
 	.explanation-flow article:nth-child(3) {
-		border-bottom: 1px solid var(--line);
+		border-bottom: 1px solid var(--border-default);
 	}
 }
 

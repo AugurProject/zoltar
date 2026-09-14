@@ -872,7 +872,7 @@ describe('Escalation Game Test Suite', () => {
 
 	beforeAll(async () => {
 		mockWindow = getAnvilWindowEthereum()
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
 		await setupTestAccounts(mockWindow)
 		await ensureZoltarDeployed(client)
 		await ensureInfraDeployed(client)
@@ -881,7 +881,7 @@ describe('Escalation Game Test Suite', () => {
 
 	beforeEach(() => {
 		mockWindow = getAnvilWindowEthereum()
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
 	})
 
 	test('can start a game', async () => {
@@ -933,7 +933,7 @@ describe('Escalation Game Test Suite', () => {
 	})
 
 	test('start and fork-resume lifecycle guards report every reachable failure reason', async () => {
-		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const unauthorized = await deployEscalationGameWithProofPool()
 		await assert.rejects(
 			attacker.writeContract({
@@ -3128,7 +3128,7 @@ describe('Escalation Game Test Suite', () => {
 	test('claimDepositForWinning pays the pro-rata reward for a deposit fully below binding capital', async () => {
 		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
 		const winningDepositorAddress = client.account.address
-		const losingDepositorAddress = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0).account.address
+		const losingDepositorAddress = createWriteClient(mockWindow, TEST_ADDRESSES[1]).account.address
 		const firstWinningDeposit = 5n * 10n ** 18n
 		const secondWinningDeposit = 5n * 10n ** 18n
 		const thirdWinningDeposit = 5n * 10n ** 18n
@@ -3161,8 +3161,8 @@ describe('Escalation Game Test Suite', () => {
 	test('claimDepositForWinning treats the region between binding capital and the reward cap as the first-come safety boundary', async () => {
 		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
 		const firstWinningDepositorAddress = client.account.address
-		const secondWinningDepositorAddress = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0).account.address
-		const losingDepositorAddress = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0).account.address
+		const secondWinningDepositorAddress = createWriteClient(mockWindow, TEST_ADDRESSES[1]).account.address
+		const losingDepositorAddress = createWriteClient(mockWindow, TEST_ADDRESSES[2]).account.address
 		const firstWinningDeposit = 20n * 10n ** 18n
 		const secondWinningDeposit = 14n * 10n ** 18n
 		const losingDeposit = 20n * 10n ** 18n
@@ -3191,8 +3191,8 @@ describe('Escalation Game Test Suite', () => {
 	test('claimDepositForWinning shares the full reward pool across actual winning principal when winning depth stays below the reward cap', async () => {
 		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameTestSecurityPool()
 		const firstWinningDepositorAddress = client.account.address
-		const secondWinningDepositorAddress = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0).account.address
-		const losingDepositorAddress = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0).account.address
+		const secondWinningDepositorAddress = createWriteClient(mockWindow, TEST_ADDRESSES[1]).account.address
+		const losingDepositorAddress = createWriteClient(mockWindow, TEST_ADDRESSES[2]).account.address
 		const firstWinningDeposit = 14n * 10n ** 18n
 		const secondWinningDeposit = 10n * 10n ** 18n
 		const losingDeposit = 20n * 10n ** 18n

@@ -39,7 +39,7 @@ const parseManifest = async (filename: string): Promise<readonly ManifestContrac
 export const loadNetworks = async (): Promise<readonly NetworkConfig[]> => {
 	const definitions = (await Bun.file(path.join(configRoot, 'networks.json')).json()) as readonly NetworkFile[]
 	if (!Array.isArray(definitions) || definitions.length === 0) throw new Error('At least one network must be configured')
-	const enabled = new Set((process.env['NETWORKS'] ?? definitions.map(({ id }) => id).join(',')).split(',').map(value => value.trim()))
+	const enabled = new Set((process.env['NETWORKS'] ?? definitions.map(({ id }) => id).join(',')).split(',').map((value: string) => value.trim()))
 	const configuredIds = new Set(definitions.map(({ id }) => id))
 	const unknownIds = [...enabled].filter(id => !configuredIds.has(id))
 	if (unknownIds.length > 0) throw new Error(`NETWORKS contains unknown network${unknownIds.length === 1 ? '' : 's'}: ${unknownIds.join(', ')}`)
@@ -49,7 +49,7 @@ export const loadNetworks = async (): Promise<readonly NetworkConfig[]> => {
 			.map(async definition => {
 				const rpcUrls = (process.env[definition.rpcUrlEnv] ?? definition.defaultRpcUrl)
 					.split(',')
-					.map(value => value.trim())
+					.map((value: string) => value.trim())
 					.filter(Boolean)
 				if (rpcUrls.length === 0) throw new Error(`${definition.rpcUrlEnv} must contain at least one RPC URL`)
 				for (const rpcUrl of rpcUrls) {

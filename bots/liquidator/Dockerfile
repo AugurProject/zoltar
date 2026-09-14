@@ -2,13 +2,23 @@ ARG BUN_VERSION=1.4.2
 
 FROM oven/bun:${BUN_VERSION}-alpine AS shared-builder
 
-RUN apk add --no-cache git
 WORKDIR /source
-RUN git init
 
-COPY package.json bun.lock ./
 COPY shared/ ./shared/
 COPY tooling/ ./tooling/
+COPY package.json bun.lock /source/
+COPY augurScan/package.json /source/augurScan/package.json
+COPY bots/chaos/package.json /source/bots/chaos/package.json
+COPY bots/liquidator/package.json /source/bots/liquidator/package.json
+COPY bots/open-oracle-arbitrager/package.json /source/bots/open-oracle-arbitrager/package.json
+COPY bots/shared/package.json /source/bots/shared/package.json
+COPY solidity/package.json /source/solidity/package.json
+COPY ui/coreShared/package.json /source/ui/coreShared/package.json
+COPY ui/statoblast/package.json /source/ui/statoblast/package.json
+COPY ui/statoblastShared/package.json /source/ui/statoblastShared/package.json
+COPY ui/trading/package.json /source/ui/trading/package.json
+COPY ui/zoltar/package.json /source/ui/zoltar/package.json
+COPY ui/zoltarShared/package.json /source/ui/zoltarShared/package.json
 RUN bun install --frozen-lockfile \
 	&& bun ./tooling/repo/build-shared.mts
 
@@ -18,19 +28,21 @@ ENV BUN_ENV=production
 WORKDIR /app
 
 COPY --from=shared-builder /source/shared/ ./shared/
-COPY bots/shared/package.json bots/shared/bun.lock ./bots/shared/
 COPY bots/shared/src/ ./bots/shared/src/
-COPY bots/liquidator/package.json bots/liquidator/bun.lock ./bots/liquidator/
-# Use the repository installer for nested file: dependencies in production too.
-COPY --from=shared-builder /source/tooling/repo/install-frozen.mts /tmp/tooling/repo/install-frozen.mts
-COPY --from=shared-builder /source/tooling/ui/share-ui-preact-runtime.mts /tmp/tooling/ui/share-ui-preact-runtime.mts
-RUN cd shared/core \
-	&& bun /tmp/tooling/repo/install-frozen.mts . --production \
-	&& cd ../../bots/shared \
-	&& bun /tmp/tooling/repo/install-frozen.mts . --production \
-	&& cd ../liquidator \
-	&& bun /tmp/tooling/repo/install-frozen.mts . --production \
-	&& rm -rf /tmp/tooling
+COPY package.json bun.lock /app/
+COPY augurScan/package.json /app/augurScan/package.json
+COPY bots/chaos/package.json /app/bots/chaos/package.json
+COPY bots/liquidator/package.json /app/bots/liquidator/package.json
+COPY bots/open-oracle-arbitrager/package.json /app/bots/open-oracle-arbitrager/package.json
+COPY bots/shared/package.json /app/bots/shared/package.json
+COPY solidity/package.json /app/solidity/package.json
+COPY ui/coreShared/package.json /app/ui/coreShared/package.json
+COPY ui/statoblast/package.json /app/ui/statoblast/package.json
+COPY ui/statoblastShared/package.json /app/ui/statoblastShared/package.json
+COPY ui/trading/package.json /app/ui/trading/package.json
+COPY ui/zoltar/package.json /app/ui/zoltar/package.json
+COPY ui/zoltarShared/package.json /app/ui/zoltarShared/package.json
+RUN bun install --frozen-lockfile --production --filter @zoltar/liquidator
 
 COPY bots/liquidator/README.md ./bots/liquidator/README.md
 COPY bots/liquidator/config/ ./bots/liquidator/config/

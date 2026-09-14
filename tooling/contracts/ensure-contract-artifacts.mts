@@ -18,7 +18,7 @@ const deprecatedContractArtifactRelativePaths = ['solidity/types/contractArtifac
 
 const requiredContractArtifactRelativePaths = ['solidity/artifacts/Contracts.json', 'solidity/ts/types/contractArtifact.ts', 'ui/coreShared/ts/contractArtifact.ts', 'ui/statoblastShared/ts/contractArtifact.ts', 'ui/coreShared/ts/abis.ts']
 const requiredOutputs = requiredContractArtifactRelativePaths.map(relativePath => path.join(repositoryRoot, relativePath))
-const freshnessInputs = [path.join(solidityRoot, 'bun.lock'), path.join(solidityRoot, 'package.json'), path.join(solidityRoot, 'tsconfig-compile.json'), path.join(solidityRoot, 'ts', 'abi', 'abis.ts'), path.join(solidityRoot, 'ts', 'compile.ts'), path.join(repositoryRoot, 'tooling', 'ui', 'projectArtifacts.mts')]
+const freshnessInputs = [path.join(repositoryRoot, 'bun.lock'), path.join(solidityRoot, 'package.json'), path.join(solidityRoot, 'tsconfig-compile.json'), path.join(solidityRoot, 'ts', 'abi', 'abis.ts'), path.join(solidityRoot, 'ts', 'compile.ts'), path.join(repositoryRoot, 'tooling', 'ui', 'projectArtifacts.mts')]
 const sharedFreshnessInputs = [path.join(repositoryRoot, 'shared/tsconfig.base.json'), path.join(repositoryRoot, 'shared/tsconfig.strict.json'), ...sharedPackages.flatMap(entry => [path.join(repositoryRoot, entry.path, 'package.json'), path.join(repositoryRoot, entry.path, 'tsconfig.json')])]
 const unexpectedSharedSourceOutputSuffixes = ['.js', '.js.map', '.d.ts', '.d.ts.map']
 const sharedTypeScriptSourceSuffixes = ['.ts', '.tsx', '.mts', '.cts']
@@ -129,14 +129,6 @@ async function runSharedBuild(): Promise<void> {
 	await runBunScript(['run', 'shared:build'], `bun run shared:build`)
 }
 
-async function refreshRootSharedDependency(): Promise<void> {
-	await runBunScript(['./tooling/repo/ensure-shared-package-fresh.mts', '--refresh'], `root shared package dependency refresh`)
-}
-
-async function refreshAllSharedDependencies(): Promise<void> {
-	await runBunScript(['run', 'refresh:shared-dependencies'], `bun run refresh:shared-dependencies`)
-}
-
 async function runBunScript(args: string[], label: string): Promise<void> {
 	await new Promise<void>((resolve, reject) => {
 		const child = spawn(process.execPath, args, {
@@ -183,14 +175,13 @@ async function syncSharedFreshnessHash(): Promise<void> {
 	await writeFreshnessHash(sharedFreshnessCachePath, await computeFreshnessHash([...sharedFreshnessInputs, ...sharedSourceFiles]))
 }
 
-export async function ensureSharedBuildIsCurrent(refreshSharedDependencies = refreshAllSharedDependencies): Promise<void> {
+export async function ensureSharedBuildIsCurrent(): Promise<void> {
 	await removeUnexpectedSharedSourceOutputs()
 	const sharedRegenerationReason = await getSharedBuildRegenerationReason()
 	if (sharedRegenerationReason === undefined) return
 
 	console.log(`Regenerating shared build outputs before tests: ${sharedRegenerationReason}`)
 	await runSharedBuild()
-	await refreshSharedDependencies()
 	await syncSharedFreshnessHash()
 	const sharedRegenerationReasonAfterBuild = await getSharedBuildRegenerationReason()
 	if (sharedRegenerationReasonAfterBuild !== undefined) {
@@ -198,9 +189,9 @@ export async function ensureSharedBuildIsCurrent(refreshSharedDependencies = ref
 	}
 }
 
-export async function ensureContractArtifactsAreCurrent(refreshSharedDependencies = refreshAllSharedDependencies): Promise<void> {
+export async function ensureContractArtifactsAreCurrent(): Promise<void> {
 	await removeDeprecatedContractArtifactOutputs()
-	await ensureSharedBuildIsCurrent(refreshSharedDependencies)
+	await ensureSharedBuildIsCurrent()
 	const regenerationReason = await getArtifactRegenerationReason()
 	if (regenerationReason === undefined) return
 
@@ -213,28 +204,19 @@ export async function ensureContractArtifactsAreCurrent(refreshSharedDependencie
 	}
 }
 
-export async function prepareHeadlessContractArtifacts(refreshRootDependency = refreshRootSharedDependency, ensureArtifacts: typeof ensureContractArtifactsAreCurrent = ensureContractArtifactsAreCurrent): Promise<void> {
-	let refreshedDuringBuild = false
-	await ensureArtifacts(async () => {
-		await refreshRootDependency()
-		refreshedDuringBuild = true
-	})
-	if (!refreshedDuringBuild) await refreshRootDependency()
-}
-
 export async function runEnsureContractArtifactsCommand(args: readonly string[] = process.argv.slice(2)): Promise<void> {
 	const mode = args[0]
 	if (mode === '--ensure-shared-only') {
-		await prepareHeadlessContractArtifacts(refreshAllSharedDependencies, ensureSharedBuildIsCurrent)
+		await ensureSharedBuildIsCurrent()
 	} else if (mode === '--headless') {
-		await prepareHeadlessContractArtifacts()
+		await ensureContractArtifactsAreCurrent()
 	} else if (mode === '--sync-shared-freshness') {
 		await syncSharedFreshnessHash()
 	} else if (mode === '--sync-contract-freshness') {
 		await removeDeprecatedContractArtifactOutputs()
 		await syncContractFreshnessHash()
 	} else {
-		await prepareHeadlessContractArtifacts(refreshAllSharedDependencies)
+		await ensureContractArtifactsAreCurrent()
 	}
 }
 

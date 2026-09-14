@@ -20,13 +20,12 @@ export function useProtocolOnchainRuntime({ enableChainClock, onEnvironmentCommi
 	const walletScopedAccountAddress = getWalletScopedAccountAddress(onchain.accountState.address, onchain.accountState.chainId)
 	const hookConfigs = buildProtocolHookConfigs({ accountAddress: onchain.accountState.address, walletScopedAccountAddress, refreshState: onchain.refreshState, transactionTray: runtime.transactionTray })
 
-	return {
+	return Object.assign(onchain, {
 		...runtime,
-		...onchain,
 		...hookConfigs,
 		canReadOnchainData,
 		isOnActiveAppChain,
 		readBackendReady,
 		walletScopedAccountAddress,
-	}
+	})
 }

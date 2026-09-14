@@ -120,7 +120,7 @@ describe('Auction', () => {
 
 	function createTestClient(idx: number): WriteClient {
 		const address = ensureDefined(TEST_ADDRESSES[idx], `TEST_ADDRESSES[${idx}] is undefined`)
-		return createWriteClient(mockWindow, address, 0)
+		return createWriteClient(mockWindow, address)
 	}
 
 	const deployRejectingEthReceiver = async (): Promise<Address> => {
@@ -292,7 +292,7 @@ describe('Auction', () => {
 		const pendingRefundAfter = await getPendingEthRefund(auctionCreator, auctionAddress, userId)
 		approximatelyEqual(pendingRefundAfter - pendingRefundBefore, totalRefundAttoEth, tolerance, 'settlement must credit the complete refund before withdrawal')
 		if (pendingRefundAfter > 0n) {
-			await withdrawPendingEthRefund(createWriteClient(mockWindow, BigInt(userId), 0), auctionAddress)
+			await withdrawPendingEthRefund(createWriteClient(mockWindow, BigInt(userId)), auctionAddress)
 			strictEqualTypeSafe(await getPendingEthRefund(auctionCreator, auctionAddress, userId), 0n, 'pull payment must clear the bidder refund credit')
 		}
 		return { totalFilledAttoRep, totalRefundAttoEth }
@@ -490,7 +490,7 @@ describe('Auction', () => {
 	beforeAll(async () => {
 		mockWindow = getAnvilWindowEthereum()
 		await setupTestAccounts(mockWindow)
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
 		await ensureZoltarDeployed(client)
 		await ensureInfraDeployed(client)
 		await deployUniformPriceDualCapBatchAuction(client, client.account.address)
@@ -501,7 +501,7 @@ describe('Auction', () => {
 
 	beforeEach(() => {
 		mockWindow = getAnvilWindowEthereum()
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
 	})
 
 	// ============ Test Suites ============
@@ -652,7 +652,7 @@ describe('Auction', () => {
 			]
 
 			for (const bid of bids) {
-				const bidClient = createWriteClient(mockWindow, bid.address, 0)
+				const bidClient = createWriteClient(mockWindow, bid.address)
 				await submitBid(bidClient, auctionAddress, bid.tick, bid.bidSize)
 			}
 

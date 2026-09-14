@@ -24,9 +24,9 @@ async function zoltarPackageExports(botDirectory: string) {
 		const dependencies = manifest[field]
 		if (!isRecord(dependencies)) continue
 		for (const [name, specifier] of Object.entries(dependencies)) {
-			if (!name.startsWith('@zoltar/') || typeof specifier !== 'string' || !specifier.startsWith('file:')) continue
+			if (!name.startsWith('@zoltar/') || typeof specifier !== 'string' || !specifier.startsWith('workspace:')) continue
 			if (exportsByPackage.has(name)) continue
-			const dependencyManifest = await readManifest(join(botDirectory, specifier.slice('file:'.length), 'package.json'))
+			const dependencyManifest = await readManifest(join(botDirectory, 'node_modules', name, 'package.json'))
 			if (!isRecord(dependencyManifest['exports'])) throw new Error(`${name} package exports must be an object`)
 			exportsByPackage.set(name, { field, subpaths: new Set(Object.keys(dependencyManifest['exports'])) })
 		}
@@ -61,7 +61,7 @@ export async function unpublishedZoltarImports(botDirectory: string) {
 			importCount += subpaths.size
 			const published = exportsByPackage.get(packageName)
 			if (published === undefined) {
-				violations.push(`${sourceDirectory}: ${packageName} is imported but not declared as a file: dependency`)
+				violations.push(`${sourceDirectory}: ${packageName} is imported but not declared as a workspace dependency`)
 				continue
 			}
 			if (sourceDirectory !== 'tests' && published.field !== 'dependencies') {

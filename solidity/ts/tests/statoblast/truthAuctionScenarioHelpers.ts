@@ -81,7 +81,7 @@ export function createStatoblastTruthAuctionScenarioHelpers({
 		const outcomes = getOutcomes()
 		const questionData = getQuestionData()
 		const securityPoolAddresses = getFixtureSecurityPoolAddresses()
-		const effectiveForkingClient = forkingClient ?? createWriteClient(mockWindow, TEST_ADDRESSES[5], 0)
+		const effectiveForkingClient = forkingClient ?? createWriteClient(mockWindow, TEST_ADDRESSES[5])
 		const forkSourceQuestionData = {
 			...questionData,
 			title: `${titlePrefix} ${await mockWindow.getTime()}`,
@@ -103,14 +103,14 @@ export function createStatoblastTruthAuctionScenarioHelpers({
 		const endTime = await getQuestionEndDate(client, questionId)
 		const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 		await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
-		const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
+		const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[4])
 		await approveAndDepositRepToVault(passiveRepHolder, 2n * forkThresholdAttoRep, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 		const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
 
 		const openInterestAmount = 10n * 10n ** 18n
-		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
 
 		await triggerExternalForkForSecurityPool(undefined, titlePrefix)
@@ -138,8 +138,8 @@ export function createStatoblastTruthAuctionScenarioHelpers({
 		const client = getClient()
 		const mockWindow = getMockWindow()
 		const { yesSecurityPool, repAtFork, expectedEthToBuy } = await setupStartedTruthAuction('mixed bids fork source')
-		const losingBidder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
-		const winningBidder = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
+		const losingBidder = createWriteClient(mockWindow, TEST_ADDRESSES[2])
+		const winningBidder = createWriteClient(mockWindow, TEST_ADDRESSES[3])
 		const losingEth = expectedEthToBuy / 10n
 		strictEqualTypeSafe(losingEth > 0n, true, 'losing bid should invest a positive amount')
 		const losingTick = await participateAuction(losingBidder, yesSecurityPool.truthAuction, repAtFork, losingEth)
@@ -166,9 +166,9 @@ export function createStatoblastTruthAuctionScenarioHelpers({
 		const client = getClient()
 		const mockWindow = getMockWindow()
 		const { yesSecurityPool, repAtFork, expectedEthToBuy } = await setupStartedTruthAuction('two winning bids fork source')
-		const losingBidder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
-		const winningBidderA = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
-		const winningBidderB = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
+		const losingBidder = createWriteClient(mockWindow, TEST_ADDRESSES[2])
+		const winningBidderA = createWriteClient(mockWindow, TEST_ADDRESSES[3])
+		const winningBidderB = createWriteClient(mockWindow, TEST_ADDRESSES[6])
 		const losingEth = expectedEthToBuy / 10n
 		const winningEthA = expectedEthToBuy / 2n
 		const winningEthB = expectedEthToBuy - winningEthA

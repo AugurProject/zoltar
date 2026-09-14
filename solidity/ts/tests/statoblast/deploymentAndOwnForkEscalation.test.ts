@@ -618,7 +618,7 @@ describe('Statoblast: deployment and own-fork escalation', () => {
 		// Setup: trigger own fork and prepare
 		const endTime = await getQuestionEndDate(client, questionId)
 		const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
-		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
 		const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 		await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
@@ -679,7 +679,7 @@ describe('Statoblast: deployment and own-fork escalation', () => {
 		assert.ok(await contractExists(client, noSecurityPool.securityPool), 'NO security pool should exist')
 
 		// Create Invalid child using a third client
-		const thirdClient = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const thirdClient = createWriteClient(mockWindow, TEST_ADDRESSES[2])
 		await createChildUniverse(thirdClient, securityPoolAddresses.securityPool, QuestionOutcome.Invalid)
 		const invalidUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Invalid)
 		const invalidSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, invalidUniverse, questionId, statoblastSecurityMultiplierBps)
@@ -1043,7 +1043,7 @@ describe('Statoblast: deployment and own-fork escalation', () => {
 	})
 
 	test('optional own-fork vault cleanup allows arbitrary vault order without preparation', async () => {
-		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const endTime = await getQuestionEndDate(client, questionId)
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		await approveAndDepositRepToVault(client, 2n * forkThresholdAttoRep, questionId)
@@ -1196,7 +1196,7 @@ describe('Statoblast: deployment and own-fork escalation', () => {
 	})
 
 	test('optional own-fork cleanup creates no child escrow regardless of vault creation order', async () => {
-		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const baseSnapshot = await mockWindow.anvilSnapshot()
 		const runScenario = async (questionTitleSuffix: string, vaultCreationOrder: Address[]) => {
 			const scenarioQuestionData = {

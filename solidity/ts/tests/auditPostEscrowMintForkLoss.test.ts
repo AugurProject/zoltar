@@ -36,7 +36,7 @@ describe('Audit regression: post-escrow complete-set mint fork loss', () => {
 	})
 
 	test('cannot mint collateral after all pool-held REP was escrowed', async () => {
-		const victim = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const victim = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const victimDepositAttoEth = 1n * 10n ** 18n
 
 		await mockWindow.setTime(questionData.endTime + 1n)
@@ -83,7 +83,7 @@ describe('Audit regression: post-escrow complete-set mint fork loss', () => {
 
 		const auctionCapAttoRep = await getMaxRepBeingSoldAttoRep(client, yesSecurityPool.truthAuction)
 		assert.ok(auctionCapAttoRep > 0n, 'escrowed REP should fund the repair auction')
-		const auctionWinner = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const auctionWinner = createWriteClient(mockWindow, TEST_ADDRESSES[2])
 		await participateAuction(auctionWinner, yesSecurityPool.truthAuction, auctionCapAttoRep, repairCollateralAttoEth * 2n)
 		await mockWindow.advanceTime(7n * DAY + DAY)
 		await finalizeTruthAuction(client, yesSecurityPool.securityPool)

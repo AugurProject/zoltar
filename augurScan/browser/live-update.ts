@@ -321,7 +321,7 @@ export const timelineOccurrenceFields = (record: Readonly<Record<string, unknown
 	['Entity type', record['entity_type']],
 	['Entity identity', record['entity_identity']],
 ]
-
+/** @internal Used only by the separately built QA entry point. */
 export const demoTimelineEvidenceStatus = (canonical: boolean, invalidationReason?: string): string => {
 	if (canonical) return 'canonical'
 	switch (invalidationReason) {

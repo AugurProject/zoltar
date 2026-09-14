@@ -71,7 +71,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 
 	beforeAll(async () => {
 		mockWindow = getAnvilWindowEthereum()
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
 		await setupTestAccounts(mockWindow)
 		await ensureZoltarDeployed(client)
 		await ensureInfraDeployed(client)
@@ -80,8 +80,8 @@ describe('ERC1155 Compliance Test Suite', () => {
 
 	beforeEach(() => {
 		mockWindow = getAnvilWindowEthereum()
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
-		operatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
+		operatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 	})
 
 	test('share token supports ERC165 and ERC1155 interface identifiers', async () => {
@@ -932,7 +932,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 
 	test('ERC1155 supply equals modeled holder balances through mint, transfer, and burn churn', async () => {
 		const shareTokenAddress = await deployShareToken()
-		const thirdClient = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const thirdClient = createWriteClient(mockWindow, TEST_ADDRESSES[2])
 		const holders = [client.account.address, operatorClient.account.address, thirdClient.account.address] as const
 		const tokenIds = [await readTokenId(shareTokenAddress, 0), await readTokenId(shareTokenAddress, 1), await readTokenId(shareTokenAddress, 2)] as const
 		const modeledBalances: [[bigint, bigint, bigint], [bigint, bigint, bigint], [bigint, bigint, bigint]] = [

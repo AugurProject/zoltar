@@ -16,11 +16,12 @@ export function createProjectTaskPlan(taskName: ProjectTaskName, requestedProjec
 	}
 	const selectedProjects = topologicallySortedProjects(registry).filter(project => requested.has(project.id))
 	const orderedProjects = taskName === 'setup' && requestedProjectIds === undefined ? [...selectedProjects.filter(project => project.id === 'repository'), ...selectedProjects.filter(project => project.id !== 'repository')] : selectedProjects
-	return orderedProjects.map(project => {
+	const entries = orderedProjects.map(project => {
 		const task = project.tasks[taskName]
 		if (task === undefined) throw new Error(`${project.id} does not support ${taskName}`)
 		return { command: task.command, cwd: task.cwd, projectId: project.id }
 	})
+	return taskName === 'setup' ? entries.filter((entry, index) => entries.findIndex(other => other.cwd === entry.cwd && JSON.stringify(other.command) === JSON.stringify(entry.command)) === index) : entries
 }
 
 export async function runProjectTaskPlan(plan: readonly ProjectTaskPlanEntry[], repositoryRoot = defaultRepositoryRoot): Promise<number> {

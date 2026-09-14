@@ -148,7 +148,11 @@ describe('testnet deployment inputs', () => {
 		expect(workflow).toContain('CHAIN_ID: ${{ inputs.chain_id }}')
 		expect(workflow).toContain('MAX_FEE_PER_GAS_GWEI: ${{ inputs.max_fee_per_gas_gwei }}')
 		expect(workflow).toContain('MAX_TOTAL_COST_ETH: ${{ inputs.max_total_cost_eth }}')
-		for (const line of workflow.split('\n').filter(line => line.trim().startsWith('uses:'))) {
+		const setupBun = await Bun.file(new URL('../../.github/actions/setup-bun/action.yml', import.meta.url)).text()
+		expect(workflow).toContain('uses: ./.github/actions/setup-bun')
+		expect(setupBun).toContain('.packageManager')
+		for (const line of `${workflow}\n${setupBun}`.split('\n').filter(line => line.trim().startsWith('uses:') || line.trim().startsWith('- uses:'))) {
+			if (line.trim() === 'uses: ./.github/actions/setup-bun') continue
 			expect(line).toMatch(/uses: [^@]+@[0-9a-f]{40}(?:\s+#.*)?$/)
 		}
 	})

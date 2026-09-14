@@ -1,4 +1,7 @@
+import { isWalletRejection } from '@zoltar/ui-core-shared/lib/errors.js'
+
 export function publicErrorMessage(error: unknown, fallback: string) {
+	if (isWalletRejection(error)) return 'Action canceled in wallet.'
 	if (!(error instanceof Error)) return fallback
 	const detail = error.message.trim()
 	if (detail.length === 0) return fallback

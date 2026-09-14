@@ -43,8 +43,8 @@ describe('LiquidationApprovalRegistry', () => {
 	beforeEach(async () => {
 		ethereum = getAnvilWindowEthereum()
 		await setupTestAccounts(ethereum)
-		receiver = createWriteClient(ethereum, TEST_ADDRESSES[0], 0)
-		operator = createWriteClient(ethereum, TEST_ADDRESSES[1], 0)
+		receiver = createWriteClient(ethereum, TEST_ADDRESSES[0])
+		operator = createWriteClient(ethereum, TEST_ADDRESSES[1])
 		const coordinatorReceipt = await receiver.waitForTransactionReceipt({
 			hash: await receiver.sendTransaction({ data: `0x${test_statoblast_LiquidationApprovalTestMocks_LiquidationApprovalCoordinatorMock.evm.bytecode.object}` }),
 		})

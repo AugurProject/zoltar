@@ -1,3 +1,4 @@
+import { createDevToolsCommandSender } from '../../../tooling/ui/devToolsCommands.mts'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -83,27 +84,18 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 			socket.addEventListener('open', () => resolve(), { once: true })
 			socket.addEventListener('error', () => reject(new Error('Could not connect to Chromium DevTools')), { once: true })
 		})
-		let nextId = 1
-		const pending = new Map<number, { reject: (error: Error) => void; resolve: (value: unknown) => void }>()
 		const runtimeDiagnostics: string[] = []
 		socket.addEventListener('message', event => {
 			const response: unknown = JSON.parse(String(event.data))
 			if (typeof response !== 'object' || response === null) return
 			if ('method' in response && (response.method === 'Runtime.exceptionThrown' || response.method === 'Log.entryAdded')) runtimeDiagnostics.push(JSON.stringify(response))
-			if (!('id' in response) || typeof response.id !== 'number') return
-			const request = pending.get(response.id)
-			if (request === undefined) return
-			pending.delete(response.id)
-			const error = 'error' in response && typeof response.error === 'object' && response.error !== null && 'message' in response.error && typeof response.error.message === 'string' ? response.error.message : undefined
-			if (error !== undefined) request.reject(new Error(error))
-			else request.resolve('result' in response ? response.result : undefined)
 		})
-		const command = (method: string, params: Record<string, unknown> = {}, sessionId?: string) =>
-			new Promise<unknown>((resolve, reject) => {
-				const id = nextId++
-				pending.set(id, { reject, resolve })
-				socket.send(JSON.stringify({ id, method, params, sessionId }))
-			})
+		const command = createDevToolsCommandSender(socket, {
+			isExited: () => child.exitCode !== null,
+			onExit: listener => {
+				void child.exited.then(code => listener(`code ${code}`))
+			},
+		})
 		let targetId = ''
 		let sessionId = ''
 		const replacePage = async (url: string, width: number, height: number) => {

@@ -1,3 +1,5 @@
+import { useEnvironmentRevision } from '@zoltar/ui-core-shared/app/hooks/useEnvironmentRevision.js'
+import { useRouteSignal } from '@zoltar/ui-core-shared/app/hooks/useHashRoute.js'
 import { MainnetDisabledNotice } from '@zoltar/ui-core-shared/app/components/MainnetDisabledNotice.js'
 import { securityPoolAddressFromRoute } from '../features/liveTradingControllerHelpers.js'
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
@@ -99,7 +101,6 @@ export function App({
 	initializeEnvironment?: () => Promise<unknown>
 	loadLiveDeployment?: () => Promise<DeploymentConfiguration>
 }) {
-	const [route, setRoute] = useState(currentRoute)
 	const [liveDeploymentStatus, setLiveDeploymentStatus] = useState<LiveDeploymentStatus>('loading')
 	const [liveConfiguration, setLiveConfiguration] = useState<DeploymentConfiguration>()
 	const [liveConfigurationError, setLiveConfigurationError] = useState<string>()
@@ -111,11 +112,18 @@ export function App({
 	const [walletConnectRequestNonce, setWalletConnectRequestNonce] = useState(0)
 	const [deploymentWalletRequestNonce, setDeploymentWalletRequestNonce] = useState(0)
 	const [deploymentWalletState, setDeploymentWalletState] = useState<DeploymentWalletState>({ account: undefined, connecting: false, networkName: undefined, ready: false })
-	const [activeEnvironmentNonce, setActiveEnvironmentNonce] = useState(0)
+	const environment = useEnvironmentRevision()
+	const activeEnvironmentNonce = environment.revision.value
 	const activeEnvironmentLocationRef = useRef(getTradingEnvironmentLocationKey())
-	const routeRef = useRef(route)
 	const workflowLockedRef = useRef(workflowLocked)
-	routeRef.current = route
+	const route = useRouteSignal(currentRoute, (next, previous) => {
+		if (workflowLockedRef.current) {
+			window.history.replaceState(undefined, '', getTradingRouteHref(`#/${previous}`))
+			return false
+		}
+		setLiveWalletSummary(current => walletSummaryAfterRouteChange(current, previous, next, selectedUniverseId))
+		return true
+	}).value
 	workflowLockedRef.current = workflowLocked
 	const updateWorkflowLock = useCallback((locked: boolean) => {
 		workflowLockedRef.current = locked
@@ -162,22 +170,9 @@ export function App({
 			activeEnvironmentLocationRef.current = previousLocationKey
 			throw error
 		}
-		setActiveEnvironmentNonce(current => current + 1)
+		environment.setRevision(current => current + 1)
 	}, [initializeEnvironment])
-	useEffect(() => {
-		const update = () => {
-			if (workflowLockedRef.current) {
-				window.history.replaceState(undefined, '', getTradingRouteHref(`#/${routeRef.current}`))
-				return
-			}
-			const nextRoute = currentRoute()
-			setLiveWalletSummary(current => walletSummaryAfterRouteChange(current, routeRef.current, nextRoute, selectedUniverseId))
-			routeRef.current = nextRoute
-			setRoute(nextRoute)
-		}
-		window.addEventListener('hashchange', update)
-		return () => window.removeEventListener('hashchange', update)
-	}, [selectedUniverseId])
+
 	useEffect(() => {
 		const synchronizeEnvironment = () => {
 			queueMicrotask(() => {

@@ -90,10 +90,10 @@ contract Zoltar {
 	}
 
 	function forkUniverse(uint248 universeId, uint256 questionId) public {
-		_forkUniverse(msg.sender, universeId, questionId, false);
+		_forkUniverse(msg.sender, universeId, questionId);
 	}
 
-	function _forkUniverse(address owner, uint248 universeId, uint256 questionId, bool repAlreadyReceived) private {
+	function _forkUniverse(address owner, uint248 universeId, uint256 questionId) private {
 		Universe storage universe = universes[universeId];
 		require(address(universe.reputationToken) != address(0x0), 'Universe not initialized with a REP token');
 		require(address(universe.reputationToken).code.length != 0, 'Universe REP token address must contain code');
@@ -110,7 +110,7 @@ contract Zoltar {
 		universes[universeId].forkQuestionId = questionId;
 		uint256 forkThresholdAttoRep = getForkThresholdAttoRep(universeId);
 		require(forkThresholdAttoRep != 0, 'Fork threshold must be non-zero');
-		_burnRep(universes[universeId].reputationToken, repAlreadyReceived ? address(this) : owner, forkThresholdAttoRep);
+		_burnRep(universes[universeId].reputationToken, owner, forkThresholdAttoRep);
 		universeTheoreticalSupplies[universeId] -= forkThresholdAttoRep;
 		uint256 migrationRepBalanceAttoRep = forkThresholdAttoRep - forkThresholdAttoRep / forkBurnDivisor;
 		// The initiator's uncredited admission haircut is permanently absent from
@@ -125,15 +125,15 @@ contract Zoltar {
 	// when their question resolves without paying the winner haircut through an
 	// own-question universe fork.
 	function burnRep(uint248 universeId, uint256 amountAttoRep) external {
-		_burnRepFor(msg.sender, universeId, amountAttoRep, false);
+		_burnRepFor(msg.sender, universeId, amountAttoRep);
 	}
 
-	function _burnRepFor(address owner, uint248 universeId, uint256 amountAttoRep, bool repAlreadyReceived) private {
+	function _burnRepFor(address owner, uint248 universeId, uint256 amountAttoRep) private {
 		require(amountAttoRep > 0, 'Burn amount zero');
 		Universe storage universe = universes[universeId];
 		require(address(universe.reputationToken) != address(0x0), 'Universe not initialized with a REP token');
 		require(universeTheoreticalSupplies[universeId] >= amountAttoRep, 'Burn exceeds theoretical supply');
-		_burnRep(universe.reputationToken, repAlreadyReceived ? address(this) : owner, amountAttoRep);
+		_burnRep(universe.reputationToken, owner, amountAttoRep);
 		universeTheoreticalSupplies[universeId] -= amountAttoRep;
 		emit RepBurned(owner, universeId, amountAttoRep, universeTheoreticalSupplies[universeId]);
 	}
@@ -204,13 +204,13 @@ contract Zoltar {
 
 	// stores rep in the migration balance for a universe
 	function addRepToMigrationBalance(uint248 universeId, uint256 amountAttoRep) public {
-		_addRepToMigrationBalance(msg.sender, universeId, amountAttoRep, false);
+		_addRepToMigrationBalance(msg.sender, universeId, amountAttoRep);
 	}
 
-	function _addRepToMigrationBalance(address owner, uint248 universeId, uint256 amountAttoRep, bool repAlreadyReceived) private {
+	function _addRepToMigrationBalance(address owner, uint248 universeId, uint256 amountAttoRep) private {
 		Universe memory universe = universes[universeId];
 		require(universe.forkTime != 0, 'Universe has not forked, so migration balance cannot be added');
-		_burnRep(universe.reputationToken, repAlreadyReceived ? address(this) : owner, amountAttoRep);
+		_burnRep(universe.reputationToken, owner, amountAttoRep);
 		universeTheoreticalSupplies[universeId] -= amountAttoRep;
 		migrationRepBalances[owner][universeId].migrationRepBalanceAttoRep += amountAttoRep;
 		emit MigrationRepAdded(owner, universeId, amountAttoRep, migrationRepBalances[owner][universeId].migrationRepBalanceAttoRep, universeTheoreticalSupplies[universeId]);

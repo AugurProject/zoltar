@@ -52,7 +52,7 @@ describe('trading against authoritative Zoltar contracts', () => {
 	async function deploy<TAbi extends Abi>(artifact: Readonly<{ abi: TAbi; evm: Readonly<{ bytecode: Readonly<{ object: string }> }> }>, args: readonly unknown[] = []) {
 		const hash = await fixture.client.sendTransaction({ data: encodeDeployData({ abi: artifact.abi, bytecode: `0x${artifact.evm.bytecode.object}` as Hex, args }) })
 		const receipt = await fixture.client.waitForTransactionReceipt({ hash })
-		if (receipt.status === 'reverted' || receipt.contractAddress === undefined || receipt.contractAddress === null) throw new Error('Trading deployment failed')
+		if (receipt.status === 'reverted' || receipt.contractAddress === undefined) throw new Error('Trading deployment failed')
 		return receipt.contractAddress
 	}
 

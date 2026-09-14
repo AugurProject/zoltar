@@ -250,17 +250,19 @@ describe('useOnchainState (integration)', () => {
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		await waitFor(() => expect(requireHookState(hookState).walletBootstrapComplete).toBe(true))
+		await waitFor(() => {
+			expect(requireHookState(hookState).walletBootstrapComplete).toBe(true)
 
-		expect(requireHookState(hookState).accountState).toMatchObject({
-			address: account,
-			chainId: '0x01',
-			ethBalanceAttoEth: 123n,
-			wethBalanceAttoEth: 555n,
+			expect(requireHookState(hookState).accountState).toMatchObject({
+				address: account,
+				chainId: '0x01',
+				ethBalanceAttoEth: 123n,
+				wethBalanceAttoEth: 555n,
+			})
+			expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(true)
+			expect(requireHookState(hookState).currentBlockNumber).toBe(100n)
+			expect(requireHookState(hookState).currentTimestamp).toBe(200n)
 		})
-		expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(true)
-		expect(requireHookState(hookState).currentBlockNumber).toBe(100n)
-		expect(requireHookState(hookState).currentTimestamp).toBe(200n)
 		expect(subscriptionState.readTransportModes).toEqual(['provider'])
 		expect(loadDeploymentStatusOracleSnapshot).toHaveBeenCalledTimes(1)
 		expect(loadErc20Balance).toHaveBeenCalledTimes(1)
@@ -1506,11 +1508,13 @@ describe('useOnchainState (integration)', () => {
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		await waitFor(() => expect(requireHookState(hookState).walletBootstrapComplete).toBe(true))
-		expect(requireHookState(hookState).accountState.ethBalanceAttoEth).toBe(123n)
-		expect(requireHookState(hookState).accountState.wethBalanceAttoEth).toBe(555n)
-		expect(requireHookState(hookState).currentBlockNumber).toBe(100n)
-		expect(requireHookState(hookState).currentTimestamp).toBe(200n)
+		await waitFor(() => {
+			expect(requireHookState(hookState).walletBootstrapComplete).toBe(true)
+			expect(requireHookState(hookState).accountState.ethBalanceAttoEth).toBe(123n)
+			expect(requireHookState(hookState).accountState.wethBalanceAttoEth).toBe(555n)
+			expect(requireHookState(hookState).currentBlockNumber).toBe(100n)
+			expect(requireHookState(hookState).currentTimestamp).toBe(200n)
+		})
 		expect(loadDeploymentStatusOracleSnapshot).toHaveBeenCalledTimes(1)
 		expect(loadErc20Balance).toHaveBeenCalledTimes(1)
 		const initialGetBlockCalls = getBlockCalls
@@ -1833,10 +1837,12 @@ describe('useOnchainState (integration)', () => {
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		await waitFor(() => expect(requireHookState(hookState).walletBootstrapComplete).toBe(true))
-		expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(true)
-		expect(requireHookState(hookState).accountState.ethBalanceAttoEth).toBe(321n)
-		expect(requireHookState(hookState).accountState.wethBalanceAttoEth).toBe(654n)
+		await waitFor(() => {
+			expect(requireHookState(hookState).walletBootstrapComplete).toBe(true)
+			expect(requireHookState(hookState).hasLoadedDeploymentStatuses).toBe(true)
+			expect(requireHookState(hookState).accountState.ethBalanceAttoEth).toBe(321n)
+			expect(requireHookState(hookState).accountState.wethBalanceAttoEth).toBe(654n)
+		})
 		expect(requireHookState(hookState).currentBlockNumber).toBeUndefined()
 		expect(requireHookState(hookState).currentTimestamp).toBeUndefined()
 		expect(loadDeploymentStatusOracleSnapshot).toHaveBeenCalledTimes(1)

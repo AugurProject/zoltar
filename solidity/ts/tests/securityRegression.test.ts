@@ -52,7 +52,7 @@ describe('security regression coverage', () => {
 
 	const initializeBaseline = async () => {
 		const mockWindow = getAnvilWindowEthereum()
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
 		await setupTestAccounts(mockWindow)
 		await ensureZoltarDeployed(client)
 		await ensureInfraDeployed(client)
@@ -82,7 +82,7 @@ describe('security regression coverage', () => {
 	})
 
 	beforeEach(() => {
-		client = createWriteClient(getAnvilWindowEthereum(), TEST_ADDRESSES[0], 0)
+		client = createWriteClient(getAnvilWindowEthereum(), TEST_ADDRESSES[0])
 	})
 
 	const prepareOwnForkToYes = async () => {
@@ -107,7 +107,7 @@ describe('security regression coverage', () => {
 		})
 		const receipt = await client.waitForTransactionReceipt({ hash })
 		const contractAddress = receipt.contractAddress
-		if (contractAddress === undefined || contractAddress === null) throw new Error('reentrant receiver deployment missing address')
+		if (contractAddress === undefined) throw new Error('reentrant receiver deployment missing address')
 		return contractAddress
 	}
 
@@ -209,7 +209,7 @@ describe('security regression coverage', () => {
 
 	test('vault migration backs migrated child accounting even without prior branch REP migration', async () => {
 		const mockWindow = getAnvilWindowEthereum()
-		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await approveAndDepositRepToVault(attacker, repDeposit, questionId)
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
@@ -297,7 +297,7 @@ describe('security regression coverage', () => {
 
 	test('origin share-token address cannot be reserved by an untrusted caller', async () => {
 		const mockWindow = getAnvilWindowEthereum()
-		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const now = await mockWindow.getTime()
 		const squattedQuestionData = {
 			title: `share token salt squatting ${now}`,
@@ -343,7 +343,7 @@ describe('security regression coverage', () => {
 
 	test('stale liquidation is consumed without executing after target state changes', async () => {
 		const mockWindow = getAnvilWindowEthereum()
-		const liquidator = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const liquidator = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await approveAndDepositRepToVault(liquidator, repDeposit * 10n, questionId)
 		await mockWindow.setTime(questionEndDate + 10n * DAY)
 		const targetCapacityOwnershipAttoRep = repDeposit / 4n

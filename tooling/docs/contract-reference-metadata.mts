@@ -44,7 +44,7 @@ export const contractPagesDirectory = 'docs/reference/contracts'
 export function contractPageOutputPath(contractName: string): string {
 	return `${contractPagesDirectory}/${contractName.toLowerCase()}.html`
 }
-export const expectedProductionSoliditySourceFingerprint = 'e9c2fad94b0bb693e16a50f3bec0679bb226d793a5730173639333c9a5f1a20c'
+export const expectedProductionSoliditySourceFingerprint = 'b6188af5dd5cec99068a46674968afee0da1d842d4e15dd07d71155acc62b914'
 
 export const eventSourceByName: Record<string, string> = {
 	VaultBadDebtMigrated: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
@@ -286,11 +286,6 @@ export const documentedEventSchemas: Array<{ name: string; parameters: string; s
 	{
 		name: 'ForkedEscrowExported',
 		parameters: 'address indexed vault,address repReceiver,uint256[3] sourcePrincipalByOutcomeAttoRep,uint256[3] childRepByOutcomeAttoRep,uint256 totalChildRepToTransferAttoRep,bool transferredRep',
-		sourcePath: 'solidity/contracts/statoblast/EscalationGameState.sol',
-	},
-	{
-		name: 'ForkedEscrowClaimed',
-		parameters: 'address indexed depositor,BinaryOutcomes.BinaryOutcome indexed outcome,uint256 sourcePrincipalClaimedAttoRep,uint256 childRepClaimedAttoRep',
 		sourcePath: 'solidity/contracts/statoblast/EscalationGameState.sol',
 	},
 	{
@@ -1269,7 +1264,7 @@ export const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: 'fc3251d94de8ecab58eb38c59b0d03481b0707fda722b27063ac998ddc23cf93',
+		compiledAbiFingerprint: 'b5a5cdf236031f69d66662704e6a9f748eee9faf6ef61c8678f5e60b027196ff',
 		name: 'EscalationGame',
 		purpose: 'Escrows outcome REP, raises the running resolution cost, detects non-decision, and settles local or carried deposits.',
 		readAbiFingerprint: 'ed587e847ca84dfb0faa31896f294197b8e84a13c229b3bab68447f262dae58d',

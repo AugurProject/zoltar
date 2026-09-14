@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url'
 import { expect, test } from 'bun:test'
 import { connectToExistingAnvilNode, getAnvilConnectionMode, getGasCostsAnvilConnectionMode, getIsolatedAnvilArgs, parseAnvilListeningRpcUrl, parseAnvilReadinessResponse, resolveAnvilBinary } from '../testSupport/simulator/anvilNode'
 
@@ -121,4 +122,11 @@ test('connectToExistingAnvilNode reports an actionable setup message when RPC va
 	const failure = connectToExistingAnvilNode('https://127.0.0.1:8545', 'gas-costs')
 	await expect(failure).rejects.toThrow('Unable to connect to Anvil at https://127.0.0.1:8545 for gas-costs. Start Anvil or set GAS_COST_ANVIL_RPC to a local endpoint.')
 	await expect(failure).rejects.not.toThrow('set ANVIL_RPC')
+})
+
+test('resolves the repository-pinned binary from an isolated workspace install', () => {
+	const packageRoot = fileURLToPath(new URL('../../..', import.meta.url))
+	const binary = resolveAnvilBinary({ repositoryRoot: packageRoot, environment: { HOME: '/unavailable' }, which: () => null })
+	expect(binary).not.toBe('anvil')
+	expect(binary).toContain('node_modules')
 })

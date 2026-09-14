@@ -42,7 +42,7 @@ const server = Bun.serve({
 		}
 		const requested = url.pathname === '/' ? 'index.html' : url.pathname.slice(1)
 		const name = requested.includes('.') ? requested : 'index.html'
-		const file = Bun.file(path.join(root, name))
+		const file = Bun.file(name === 'app.js' ? path.join(root, '../qa/build/app.js') : path.join(root, name))
 		if (!(await file.exists())) return new Response('Not found', { status: 404 })
 		const type = CONTENT_TYPES.get(path.extname(name)) ?? 'text/html'
 		return new Response(file, {

@@ -1,4 +1,3 @@
-import { sharedPackages } from '../repo/sharedPackages.ts'
 import * as process from 'node:process'
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
@@ -8,20 +7,9 @@ import { createTestFingerprints, filterTestTimingHistory, getHistoricalTestWeigh
 
 const repositoryRoot = process.cwd()
 
-const SHARED_TIMING_CONTEXT_PATHS = ['bun-test-setup.ts', 'bunfig.toml', 'tooling/testing/run-bun-test-process.mts'] as const
-const APPLICATION_TIMING_CONTEXT_PATHS = [
-	...SHARED_TIMING_CONTEXT_PATHS,
-	'bun-test-setup-ui.ts',
-	'bun.lock',
-	...sharedPackages.map(entry => `${entry.path}/bun.lock`),
-	'ui/coreShared/bun.lock',
-	'ui/zoltarShared/bun.lock',
-	'ui/statoblastShared/bun.lock',
-	'ui/statoblast/bun.lock',
-	'ui/trading/bun.lock',
-	'ui/zoltar/bun.lock',
-] as const
-const SOLIDITY_TIMING_CONTEXT_PATHS = [...SHARED_TIMING_CONTEXT_PATHS, 'bun.lock', ...sharedPackages.map(entry => `${entry.path}/bun.lock`), 'solidity/bun.lock'] as const
+const SHARED_TIMING_CONTEXT_PATHS = ['bun-test-setup.ts', 'bunfig.toml', 'bun.lock', 'tooling/testing/run-bun-test-process.mts'] as const
+const APPLICATION_TIMING_CONTEXT_PATHS = [...SHARED_TIMING_CONTEXT_PATHS, 'bun-test-setup-ui.ts'] as const
+const SOLIDITY_TIMING_CONTEXT_PATHS = [...SHARED_TIMING_CONTEXT_PATHS] as const
 
 export function getTimingContextPaths(domain: TestDomain) {
 	if (domain === 'application') return [...APPLICATION_TIMING_CONTEXT_PATHS]

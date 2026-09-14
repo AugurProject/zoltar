@@ -27,7 +27,7 @@ contract EscalationGame is EscalationGameSettlement {
 
 	function startFromFork(uint256 _startBondAttoRep, uint256 _nonDecisionThresholdAttoRep, uint256 elapsedAtFork, BinaryOutcomes.BinaryOutcome _fixedQuestionOutcome, bool _winnerHaircutPaidByFork, uint256 _forkCarryInitialBackingAttoRep) external {
 		_initializeStartParams(_startBondAttoRep, _nonDecisionThresholdAttoRep);
-		if (elapsedAtFork > ESCALATION_TIME_LENGTH) revert();
+		if (elapsedAtFork > ESCALATION_TIME_LENGTH) revert('Invalid fork elapsed time');
 		forkContinuation = true;
 		forkElapsedAtStart = elapsedAtFork;
 		fixedQuestionOutcome = _fixedQuestionOutcome;
@@ -65,7 +65,7 @@ contract EscalationGame is EscalationGameSettlement {
 	}
 
 	function _initializeStartParams(uint256 _startBondAttoRep, uint256 _nonDecisionThresholdAttoRep) private {
-		if (owner != msg.sender) revert();
+		if (owner != msg.sender) revert('Only owner');
 		require(activationTime == 0 && _nonDecisionThresholdAttoRep > _startBondAttoRep && _startBondAttoRep > 0, 'Invalid game start');
 		startBondAttoRep = _startBondAttoRep;
 		nonDecisionThresholdAttoRep = _nonDecisionThresholdAttoRep;

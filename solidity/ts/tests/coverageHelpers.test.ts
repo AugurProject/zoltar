@@ -344,8 +344,8 @@ describe('Solidity bytecode coverage helpers', () => {
 
 	beforeEach(async () => {
 		mockWindow = getAnvilWindowEthereum()
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
-		participantClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
+		participantClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await setupTestAccounts(mockWindow)
 	})
 

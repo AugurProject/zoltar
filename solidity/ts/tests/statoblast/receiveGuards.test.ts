@@ -33,7 +33,7 @@ describe('Statoblast: receive guards', () => {
 	})
 
 	const expectUnauthorizedEthSendToReject = async (to: Address, value: bigint, expectedReason: RegExp) => {
-		const unauthorizedSender = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
+		const unauthorizedSender = createWriteClient(mockWindow, TEST_ADDRESSES[6])
 		await mockWindow.setBalance(unauthorizedSender.account.address, testInternalSenderBalance)
 		const targetBalanceBefore = await getETHBalance(client, to)
 		await assert.rejects(
@@ -66,7 +66,7 @@ describe('Statoblast: receive guards', () => {
 		await mockWindow.setTime(endTime + 10000n)
 		const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
-		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const openInterestAmount = 10n * 10n ** 18n
 		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
 
@@ -114,7 +114,7 @@ describe('Statoblast: receive guards', () => {
 		await mockWindow.setTime(endTime + 10000n)
 		const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
-		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const openInterestAmount = 10n * 10n ** 18n
 		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
 

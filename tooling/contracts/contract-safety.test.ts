@@ -36,7 +36,7 @@ describe('contract safety failures', () => {
 		})
 		expect(result.errors).toContain('contracts/statoblast/SecurityPool.sol:SecurityPool runtime is 24577 bytes; EIP-170 limit is 24576')
 		expect(result.errors).toContain('contracts/statoblast/SecurityPool.sol:SecurityPool initcode is 49153 bytes; EIP-3860 limit is 49152')
-		expect(result.errors.some(error => error.includes('runtime grew to 24577 bytes; reviewed budget is 24308'))).toBe(true)
+		expect(result.errors.some(error => error.includes('runtime grew to 24577 bytes; reviewed budget is 24567'))).toBe(true)
 	})
 
 	test('reports missing declared delegate artifacts', () => {

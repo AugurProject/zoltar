@@ -62,7 +62,7 @@ describe('Fork-continuation residual settlement regression', () => {
 		strictEqualTypeSafe(await getTotalRepBackingUnits(client, securityPoolAddresses.securityPool), 0n, 'all parent REP backing units must be escrowed')
 		strictEqualTypeSafe(await getTotalPoolHeldAttoRep(client, securityPoolAddresses.securityPool), 0n, 'all parent pool-held REP must be held by the escalation game')
 
-		const forkInitiator = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const forkInitiator = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const externalForkQuestion = {
 			...questionData,
 			title: 'audit external fork for zero-owner residual capture',

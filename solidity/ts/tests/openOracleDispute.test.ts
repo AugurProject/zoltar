@@ -32,7 +32,7 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 	let settler: WriteClient
 	let openOracle: Address
 
-	const clientFor = (index: number) => createWriteClient(mockWindow, ensureDefined(TEST_ADDRESSES[index], `missing test account ${index.toString()}`), 0)
+	const clientFor = (index: number) => createWriteClient(mockWindow, ensureDefined(TEST_ADDRESSES[index], `missing test account ${index.toString()}`))
 
 	const assertCustomError = async (execute: () => Promise<unknown>, errorName: string, errorSignature = `${errorName}()`, encodedArguments?: Hex) => {
 		let rejection: unknown
@@ -92,7 +92,7 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 		})
 		const receipt = await reporter.waitForTransactionReceipt({ hash })
 		const contractAddress = receipt.contractAddress
-		if (contractAddress === null || contractAddress === undefined) throw new Error('false-returning token deployment address is unavailable')
+		if (contractAddress === undefined) throw new Error('false-returning token deployment address is unavailable')
 		return contractAddress
 	}
 
@@ -105,7 +105,7 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 		})
 		const receipt = await reporter.waitForTransactionReceipt({ hash })
 		const contractAddress = receipt.contractAddress
-		if (contractAddress === null || contractAddress === undefined) throw new Error('rejecting ETH receiver deployment address is unavailable')
+		if (contractAddress === undefined) throw new Error('rejecting ETH receiver deployment address is unavailable')
 		return contractAddress
 	}
 
@@ -118,7 +118,7 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 		})
 		const receipt = await reporter.waitForTransactionReceipt({ hash })
 		const contractAddress = receipt.contractAddress
-		if (contractAddress === null || contractAddress === undefined) throw new Error('OpenOracle deployment address is unavailable')
+		if (contractAddress === undefined) throw new Error('OpenOracle deployment address is unavailable')
 		const currentCode = await reporter.getCode({ address: contractAddress })
 		if (currentCode === undefined || currentCode === '0x') throw new Error('OpenOracle runtime bytecode is unavailable')
 		await mockWindow.addStateOverrides({ [openOracle]: { code: hexToBytes(currentCode) } })

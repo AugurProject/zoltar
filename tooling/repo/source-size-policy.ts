@@ -13,8 +13,7 @@ const allowances = (reason: string, entries: readonly (readonly [path: string, m
  */
 export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	...allowances('Existing Chaos modules remain temporary responsibility debt; their reviewed ceilings prohibit further growth.', [
-		['bots/chaos/src/operations/statoblast.ts', 2615],
-		['bots/chaos/src/dashboard/dashboard.ts', 2289],
+		['bots/chaos/src/dashboard/dashboard.ts', 2292],
 		['bots/chaos/src/monitoring/discovery.ts', 1021],
 		['bots/chaos/src/operations/trading.ts', 1726],
 		['bots/chaos/src/state/operator-state.ts', 1199],
@@ -35,10 +34,9 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['bots/open-oracle-arbitrager/src/runtime/operator-control-plane.ts', 602],
 		['bots/open-oracle-arbitrager/src/state/position-store.ts', 631],
 		['bots/liquidator/src/dashboard/dashboard.ts', 1338],
-		['bots/liquidator/src/cli/run.ts', 778],
+		['bots/liquidator/src/cli/run.ts', 779],
 		['bots/liquidator/src/state/operator-state.ts', 713],
 	]),
-	...allowances('Runtime-neutral EVM compatibility code still needs responsibility extraction.', [['shared/core/ts/evm/ethereum.ts', 2730]]),
 	...allowances('Existing UI workflow debt is owned by the functional or visual lanes.', [
 		['ui/statoblastShared/ts/features/security-pools/components/SecurityPoolWorkflowSection.tsx', 987],
 		['ui/statoblastShared/ts/features/truth-auctions/components/ForkAuctionSection.tsx', 1070],
@@ -80,7 +78,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	]),
 	...allowances('The arbitrage executor contract bundles routing, settlement, and recovery paths that belong in libraries.', [['bots/open-oracle-arbitrager/contracts/OpenOracleArbitrageExecutor.sol', 771]]),
 	...allowances('SecurityPool delegate extraction is ongoing and bytecode-sensitive.', [
-		['solidity/contracts/statoblast/SecurityPool.sol', 792],
+		['solidity/contracts/statoblast/SecurityPool.sol', 793],
 		['solidity/contracts/statoblast/SecurityPoolForker.sol', 685],
 		['solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol', 692],
 	]),

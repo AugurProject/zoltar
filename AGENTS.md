@@ -80,7 +80,7 @@ Run tests for behavior changes, bug fixes, tests or helpers, contracts, dependen
 - If TypeScript has not already run and the selected validation genuinely is the complete root suite, use `bun run test`; this command includes TypeScript transitively. If TypeScript already passed in the same cycle, avoid repeating it:
 
 ```bash
-bun run ensure-contract-artifacts && bun run check:shared-dependencies && bun run test:run -- --bail=1
+bun run ensure-contract-artifacts && bun run test:run -- --bail=1
 ```
 
 If selected tests require Anvil and `anvil` is missing, run `bun run install:anvil`.

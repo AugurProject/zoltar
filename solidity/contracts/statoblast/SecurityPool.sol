@@ -174,7 +174,7 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	function burnEscalationWinnerHaircut(uint256 amountAttoRep) external {
-		if (msg.sender != address(escalationGame)) revert();
+		if (msg.sender != address(escalationGame)) revert('Unauthorized');
 		if (address(repToken) == address(zoltar.genesisReputationToken()))
 			IERC20(address(repToken)).safeApprove(address(zoltar), amountAttoRep);
 		zoltar.burnRep(universeId, amountAttoRep);
@@ -317,7 +317,7 @@ contract SecurityPool is SecurityPoolStorage {
 	////////////////////////////////////////
 
 	function withdrawRepFromVault(address vault, uint256 attoRepAmount) external isOperational onlyValidOracle {
-		if (isEscalationResolved()) revert();
+		if (isEscalationResolved()) revert('Escalation resolved');
 		updateVaultFees(vault);
 		if (address(escalationGame) != address(0x0)) {
 			require(escalationGame.disputeStakedRepByVaultAttoRep(vault) == 0, 'Escrow');
@@ -418,7 +418,7 @@ contract SecurityPool is SecurityPoolStorage {
 	function _requirePoolCoverage(uint256 totalPoolHeldAttoRep, uint256 totalDisputeStakedAttoRep, uint256 totalOpenInterestAttoEth, uint256 repEthPrice) private view {
 		if (
 			!SecurityPoolUtils.isVaultHealthy(totalPoolHeldAttoRep, totalDisputeStakedAttoRep, totalOpenInterestAttoEth, repEthPrice, statoblastSecurityMultiplierBps)
-		) revert();
+		) revert('Pool backing insufficient');
 	}
 
 	function _requireMinimumVaultRep(uint256 attoRepAmount, bool allowZeroBalance, string memory errorMessage) private view {
@@ -469,7 +469,7 @@ contract SecurityPool is SecurityPoolStorage {
 	{
 		// Pool execution uses the live backing rate; historical pool totals are emitted
 		// by the coordinator at queue time and are not persisted as execution inputs.
-		if (isEscalationResolved()) revert();
+		if (isEscalationResolved()) revert('Escalation resolved');
 		updateVaultFees(request.targetVault);
 		updateVaultFees(request.receiverVault);
 
@@ -566,7 +566,7 @@ contract SecurityPool is SecurityPoolStorage {
 	////////////////////////////////////////
 
 	function depositToEscalationGame(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep) external isOperational {
-		if (hasInheritedForkOutcome) revert();
+		if (hasInheritedForkOutcome) revert('Forked');
 		require(!awaitingForkContinuation, 'Fork await');
 		if (address(escalationGame) == address(0x0)) {
 			uint256 endTime = questionData.getQuestionEndDate(questionId);
@@ -637,7 +637,7 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	function activateForkMode() external onlyForker {
-		if (hasInheritedForkOutcome) revert();
+		if (hasInheritedForkOutcome) revert('Forked');
 		systemState = SystemState.PoolForked;
 		updateSettlementCollateral();
 		uint256 repTransferredAttoRep = repToken.balanceOf(address(this));
@@ -748,7 +748,8 @@ contract SecurityPool is SecurityPoolStorage {
 
 	function setPoolFinancials(uint256 newSettlementCollateralAttoEth, uint256 newTotalCapacityOwnershipAttoRep, uint256 newFeeEligibleCapacityOwnershipAttoRep, uint256 newTotalBadDebtAttoEth) external onlyForker {
 		// Fee-eligible capacity is a subset of total capacity.
-		if (newFeeEligibleCapacityOwnershipAttoRep > newTotalCapacityOwnershipAttoRep) revert();
+		if (newFeeEligibleCapacityOwnershipAttoRep > newTotalCapacityOwnershipAttoRep)
+			revert('Fee ownership exceeds capacity');
 		totalCapacityOwnershipAttoRep = newTotalCapacityOwnershipAttoRep;
 		feeEligibleCapacityOwnershipAttoRep = newFeeEligibleCapacityOwnershipAttoRep;
 		totalBadDebtAttoEth = newTotalBadDebtAttoEth;
@@ -786,7 +787,7 @@ contract SecurityPool is SecurityPoolStorage {
 		if (
 			selector != SecurityPoolOperationsDelegate.depositRepToVaultWithPermit.selector &&
 			selector != SecurityPoolOperationsDelegate.depositRepToVaultWithAuthorization.selector
-		) revert();
+		) revert('Unsupported pool operation');
 		DelegateCallForwarder.invoke(operationsDelegate, msg.data);
 	}
 }

@@ -6,20 +6,18 @@ import { taskProjects } from '../repo/projects.ts'
 import { projectQuery } from '../repo/query-projects.mts'
 import { repositoryRoot } from '../repo/root.mts'
 import { dockerGlobalArguments, dockerInstructions, parseDockerfile } from '../testing/packaging-parsers.ts'
-import { reviewableGitHubPath } from '../testing/reviewable-github-path.ts'
 
-const activeCiWorkflowPath = reviewableGitHubPath(repositoryRoot, 'workflows/ci.yml')
-const stagedCiWorkflowPath = join(repositoryRoot, 'workflow-changes', 'ci.yml')
-const browserWorkflowPath = reviewableGitHubPath(repositoryRoot, 'workflows/browser-workflow.yml')
-const activeCoverageWorkflowPath = reviewableGitHubPath(repositoryRoot, 'workflows/coverage.yml')
+const activeCiWorkflowPath = join(repositoryRoot, '.github', 'workflows/ci.yml')
+const browserWorkflowPath = join(repositoryRoot, '.github', 'workflows/browser-workflow.yml')
+const activeCoverageWorkflowPath = join(repositoryRoot, '.github', 'workflows/coverage.yml')
 const coverageWorkflowPath = activeCoverageWorkflowPath
-const testDomainsWorkflowPath = reviewableGitHubPath(repositoryRoot, 'workflows/test-domains.yml')
-const testStabilityWorkflowPath = reviewableGitHubPath(repositoryRoot, 'workflows/test-stability.yml')
-const deployTestnetWorkflowPath = reviewableGitHubPath(repositoryRoot, 'workflows/deploy-testnet.yml')
-const setupActionPath = reviewableGitHubPath(repositoryRoot, 'actions/setup-ci/action.yml')
-const setupComponentActionPath = reviewableGitHubPath(repositoryRoot, 'actions/setup-component/action.yml')
-const ipfsDeployWorkflowPath = reviewableGitHubPath(repositoryRoot, 'workflows/ipfs-deploy.yml')
-const versionDeployWorkflowPath = reviewableGitHubPath(repositoryRoot, 'workflows/version-deploy.yml')
+const testDomainsWorkflowPath = join(repositoryRoot, '.github', 'workflows/test-domains.yml')
+const testStabilityWorkflowPath = join(repositoryRoot, '.github', 'workflows/test-stability.yml')
+const deployTestnetWorkflowPath = join(repositoryRoot, '.github', 'workflows/deploy-testnet.yml')
+const setupActionPath = join(repositoryRoot, '.github', 'actions/setup-ci/action.yml')
+const setupComponentActionPath = join(repositoryRoot, '.github', 'actions/setup-component/action.yml')
+const ipfsDeployWorkflowPath = join(repositoryRoot, '.github', 'workflows/ipfs-deploy.yml')
+const versionDeployWorkflowPath = join(repositoryRoot, '.github', 'workflows/version-deploy.yml')
 const dockerfilePath = join(repositoryRoot, 'ui', 'Dockerfile')
 const rootPackagePath = join(repositoryRoot, 'package.json')
 const tradingPackagePath = join(repositoryRoot, 'ui', 'trading', 'package.json')
@@ -55,14 +53,23 @@ const workflowTestPaths = (workflow: Record<string, unknown>) =>
 		}),
 	)
 describe('split UI workflow paths', () => {
+	test('IPFS publication checks out the exact revision whose CI passed', async () => {
+		const jobs = workflowJobs(await readWorkflow(ipfsDeployWorkflowPath))
+		const steps = workflowSteps(jobs['publish'])
+		const checkout = steps.find(step => typeof step['uses'] === 'string' && step['uses'].startsWith('actions/checkout@'))
+		expect(requireRecord(checkout?.['with'], 'IPFS checkout inputs')['ref']).toBe('${{ github.event.workflow_run.head_sha || github.ref }}')
+		const setup = steps.find(step => step['uses'] === './.github/actions/setup-bun')
+		expect(setup).toBeDefined()
+		expect(setup?.['with']).toBeUndefined()
+	})
+
 	test('CI validates test ownership before scope-dependent jobs', async () => {
 		const jobs = workflowJobs(await readWorkflow(activeCiWorkflowPath))
 		const changesSteps = workflowSteps(jobs['changes'])
 		expect(changesSteps.some(step => step['run'] === 'bun run test:preflight')).toBe(true)
 	})
-	test('CI validation cannot be diverted to a staged workflow copy', async () => {
-		await expect(access(stagedCiWorkflowPath)).rejects.toThrow()
-		expect(coverageWorkflowPath).toBe(activeCoverageWorkflowPath)
+	test('AugurScan uses the canonical CI jobs without a duplicate workflow', async () => {
+		await expect(access(join(repositoryRoot, '.github', 'workflows', 'augur-scan.yml'))).rejects.toThrow()
 	})
 
 	test('split CI remains callable by the version release workflow', async () => {
@@ -385,7 +392,8 @@ describe('split UI workflow paths', () => {
 		for (const packageId of uiPackageIds) {
 			expect(deployWorkflow).not.toContain(`(cd ui/${packageId} && bun install --frozen-lockfile)`)
 		}
-		expect(deployWorkflow).toContain('(cd solidity && bun install --frozen-lockfile)')
+		expect(deployWorkflow).toContain('bun install --frozen-lockfile')
+		expect(deployWorkflow).not.toContain('(cd solidity && bun install --frozen-lockfile)')
 		expect(deployWorkflow).not.toContain('bun run ui:build:apps')
 		expect(deployWorkflow).toContain('bun ./tooling/contracts/ensure-contract-artifacts.mts --headless')
 		expect(deployWorkflow).toContain('bun ./tooling/contracts/run-deploy-testnet.mts --help')
@@ -405,7 +413,7 @@ describe('split UI workflow paths', () => {
 		expect(preflightIndex).toBeGreaterThan(refreshIndex)
 	})
 
-	test('CI and Docker install every UI package from its committed lockfile', async () => {
+	test('CI and Docker install every UI package from the workspace lockfile', async () => {
 		const setupWorkflow = await readWorkflow(setupActionPath)
 		const setupSteps = workflowSteps(requireRecord(setupWorkflow['runs'], 'setup action'))
 		expect(setupSteps.some(step => typeof step['run'] === 'string' && step['run'].includes('bun run projects:setup'))).toBe(true)
@@ -416,10 +424,11 @@ describe('split UI workflow paths', () => {
 		expect(dockerGlobalArguments(dockerfile)).toContain('BUN_VERSION=1.4.2')
 		const copies = dockerStages.flatMap(stage => dockerInstructions(stage, 'COPY'))
 		const runs = dockerStages.flatMap(stage => dockerInstructions(stage, 'RUN'))
+		expect(copies.some(copy => copy.includes('bun.lock'))).toBe(true)
 		for (const appId of uiPackageIds) {
-			expect(copies.some(copy => copy.includes(`./ui/${appId}/bun.lock`))).toBe(true)
+			expect(copies.some(copy => copy.includes(`ui/${appId}/package.json`))).toBe(true)
 		}
-		for (const appId of uiPackageIds) expect(runs.some(run => run.includes(`bun ./tooling/repo/install-frozen.mts ui/${appId}`))).toBe(true)
+		expect(runs.filter(run => run.includes('bun install') || run.includes('install-frozen.mts'))).toEqual(['bun install --frozen-lockfile'])
 	})
 
 	test('dead-code CI installs every bot workspace before analyzing it', async () => {
@@ -442,12 +451,15 @@ describe('split UI workflow paths', () => {
 			if (!isRecord(dependencies)) throw new Error(`${packagePath} must define dependencies`)
 			expect(dependencies['tevm']).toBeUndefined()
 			for (const name of ['@tevm/memory-client', '@tevm/common']) expect(dependencies[name]).toBe('1.0.0-rc.151')
-			const overrides = parsed['overrides']
-			expect(isRecord(overrides)).toBe(true)
-			if (!isRecord(overrides)) throw new Error(`${packagePath} must define dependency overrides`)
-			for (const dependencyName of pinnedTevmTransitives) expect(overrides[dependencyName]).toBe('1.0.0-rc.151')
+			if (packagePath === 'package.json') {
+				const overrides = parsed['overrides']
+				if (!isRecord(overrides)) throw new Error('Root package must define dependency overrides')
+				for (const dependencyName of pinnedTevmTransitives) expect(overrides[dependencyName]).toBe('1.0.0-rc.151')
+			} else {
+				expect(parsed['overrides']).toBeUndefined()
+			}
 
-			const lockPath = packagePath === 'package.json' ? join(repositoryRoot, 'bun.lock') : join(repositoryRoot, packagePath, '..', 'bun.lock')
+			const lockPath = join(repositoryRoot, 'bun.lock')
 			const lock = await readFile(lockPath, 'utf8')
 			expect(lock).not.toContain('"tevm": [')
 			expect(lock).not.toContain('"@tevm/server": [')

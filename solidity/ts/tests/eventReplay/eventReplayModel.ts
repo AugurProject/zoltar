@@ -1276,15 +1276,6 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 		state.escalationResolutionBalances.set(log.emitter, resolutionBalancesAttoRep)
 		return
 	}
-	if (log.eventName === 'ForkedEscrowClaimed') {
-		const depositor = requireAddress(log.args, 'depositor')
-		const outcome = requireBigInt(log.args, 'outcome')
-		const escrow = state.escalationForkedEscrow.get(log.emitter)?.get(`${depositor}:${outcome.toString()}`)
-		if (escrow === undefined) throw new Error('forked escrow claim references unknown escrow')
-		escrow.sourcePrincipalClaimedAttoRep = requireBigInt(log.args, 'sourcePrincipalClaimedAttoRep')
-		escrow.childRepClaimedAttoRep = requireBigInt(log.args, 'childRepClaimedAttoRep')
-		return
-	}
 	if (log.eventName === 'ForkedEscrowExported') {
 		const vault = requireAddress(log.args, 'vault')
 		const sourcePrincipalByOutcomeAttoRep = requireBigIntTriple(log.args, 'sourcePrincipalByOutcomeAttoRep')

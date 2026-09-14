@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test'
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
-import { getRequiredContractArtifactRelativePaths, getRequiredSharedOutputRelativePaths, prepareHeadlessContractArtifacts, removeDeprecatedContractArtifactOutputs, removeUnexpectedSharedSourceOutputs } from './ensure-contract-artifacts.mts'
+import { getRequiredContractArtifactRelativePaths, getRequiredSharedOutputRelativePaths, removeDeprecatedContractArtifactOutputs, removeUnexpectedSharedSourceOutputs } from './ensure-contract-artifacts.mts'
 
 async function exists(filePath: string) {
 	try {
@@ -28,52 +28,6 @@ test('core contract artifact preparation does not require Trading UI output', ()
 
 	expect(requiredOutputs).toContain('ui/coreShared/ts/contractArtifact.ts')
 	expect(requiredOutputs).not.toContain('ui/trading/ts/generated/contractArtifact.ts')
-})
-
-test('ensure-contract-artifacts reserves root-only shared refreshes for headless preparation', async () => {
-	const source = await readFile(new URL('./ensure-contract-artifacts.mts', import.meta.url), 'utf8')
-	expect(source).toContain("runBunScript(['./tooling/repo/ensure-shared-package-fresh.mts', '--refresh']")
-	expect(source).toContain("runBunScript(['run', 'refresh:shared-dependencies']")
-	expect(source).toContain("mode === '--headless'")
-	expect(source).toContain('prepareHeadlessContractArtifacts()')
-})
-
-test('artifact refresh does not require independently uninstalled UI packages', async () => {
-	const packageJson: unknown = JSON.parse(await readFile(new URL('../../package.json', import.meta.url), 'utf8'))
-	if (typeof packageJson !== 'object' || packageJson === null) throw new Error('Root package manifest must be an object')
-	const scripts = Reflect.get(packageJson, 'scripts')
-	if (typeof scripts !== 'object' || scripts === null) throw new Error('Root package scripts must be an object')
-
-	expect(Reflect.get(scripts, 'refresh:shared-dependencies')).toBe('bun ./tooling/repo/run-project-tasks.mts dependency-update')
-	expect(Reflect.get(scripts, 'check:shared-dependencies')).toBe('bun run refresh:shared-dependencies && bun ./tooling/ui/ensure-ui-preact-singleton.mts')
-})
-
-test('headless preparation refreshes the root shared install even when artifacts are current', async () => {
-	const calls: string[] = []
-	await prepareHeadlessContractArtifacts(
-		async () => {
-			calls.push('refresh')
-		},
-		async () => {
-			calls.push('ensure')
-		},
-	)
-	expect(calls).toEqual(['ensure', 'refresh'])
-})
-
-test('headless preparation refreshes the root shared install once when artifacts are rebuilt', async () => {
-	const calls: string[] = []
-	await prepareHeadlessContractArtifacts(
-		async () => {
-			calls.push('refresh')
-		},
-		async refreshSharedDependencies => {
-			calls.push('ensure')
-			if (refreshSharedDependencies === undefined) throw new Error('Headless preparation did not supply a shared dependency refresh')
-			await refreshSharedDependencies()
-		},
-	)
-	expect(calls).toEqual(['ensure', 'refresh'])
 })
 
 test('ensure-contract-artifacts removes the deprecated cached contract artifact', async () => {

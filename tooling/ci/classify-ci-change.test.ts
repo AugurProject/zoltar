@@ -107,3 +107,10 @@ test('Git path collection keeps deleted executables and both sides of renames', 
 		rmSync(repository, { force: true, recursive: true })
 	}
 })
+
+test('full-run coverage follows every scope in the registry', () => {
+	const full = classifyCiChange(['README.md'], { full: true })
+	expect(full.expandedScopes).toEqual(ciScopes)
+	expect(full.allScopesSelected).toBe(true)
+	expect(classifyCiChange(['README.md']).allScopesSelected).toBe(false)
+})
