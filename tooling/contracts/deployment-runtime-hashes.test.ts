@@ -1,9 +1,12 @@
 import { expect, test } from 'bun:test'
+import { loadDeploymentStatusOracleSnapshot as loadZoltarDeploymentSnapshot } from '../../ui/zoltarShared/ts/protocol/deployment.ts'
 import { hexToBytes, type Hex } from '@zoltar/core-shared/evm/ethereum'
-import { getDeploymentSteps } from '../../ui/statoblastShared/ts/protocol/deployment.ts'
-import { MAINNET_NETWORK_PROFILE } from '../../ui/coreShared/ts/wallet/networkProfile.ts'
+import { getDeploymentSteps, loadDeploymentStatusOracleSnapshot as loadStatoblastDeploymentSnapshot } from '../../ui/statoblastShared/ts/protocol/deployment.ts'
+import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE, getRuntimeNetworkProfile, setRuntimeNetworkProfile } from '../../ui/coreShared/ts/wallet/networkProfile.ts'
 import { createAnvilNodeForConnectionMode, type AnvilNode } from '../../solidity/ts/testSupport/simulator/anvilNode.ts'
 import { assertBootstrapDescendantCode, createPreparedDeploymentClient, deployTestnet, runDeploymentPlan } from './deploy-testnet.mts'
+import { createCompleteDeploymentPlan } from './deployment-plan.mts'
+import { getUniswapDeployment } from './uniswap-deployment.mts'
 
 const ANVIL_PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80' satisfies Hex
 const MAX_FEE_PER_GAS = 100_000_000_000n
@@ -35,9 +38,17 @@ async function withDeploymentNode<T>(chainId: number, testBody: (node: AnvilNode
 }
 
 test(
-	'Sepolia runtime hashes match a complete local deployment',
+	'Sepolia deployment repairs the missing Zoltar oracle, verifies both apps, and skips installed contracts',
 	async () => {
 		await withDeploymentNode(11_155_111, async node => {
+			const client = createPreparedDeploymentClient({ chain: SEPOLIA_NETWORK_PROFILE.chain, maxFeePerGas: MAX_FEE_PER_GAS, maxTotalCost: MAX_TOTAL_COST, privateKey: ANVIL_PRIVATE_KEY, rpcUrl: node.rpcUrl, log: () => {} })
+			const plan = createCompleteDeploymentPlan(SEPOLIA_NETWORK_PROFILE, await getUniswapDeployment(SEPOLIA_NETWORK_PROFILE.wethAddress))
+			const existing = await runDeploymentPlan(
+				plan.filter(step => step.id !== 'zoltarDeploymentStatusOracle'),
+				client,
+				() => {},
+			)
+			expect(existing.every(result => result.status === 'deployed')).toBe(true)
 			const deployment = await deployTestnet({
 				chainId: 11_155_111,
 				log: () => {},
@@ -47,7 +58,18 @@ test(
 				rpcUrl: node.rpcUrl,
 				writeGitHubSummary: false,
 			})
-			expect(deployment.results.every(result => result.status === 'deployed')).toBe(true)
+			expect(deployment.results.filter(result => result.status === 'deployed').map(result => result.id)).toEqual(['zoltarDeploymentStatusOracle'])
+			expect(deployment.results.filter(result => result.status === 'skipped')).toHaveLength(existing.length)
+			const previousProfile = getRuntimeNetworkProfile()
+			setRuntimeNetworkProfile(SEPOLIA_NETWORK_PROFILE)
+			try {
+				expect((await loadZoltarDeploymentSnapshot(client)).applicationDeploymentComplete).toBe(true)
+				expect((await loadStatoblastDeploymentSnapshot(client)).applicationDeploymentComplete).toBe(true)
+			} finally {
+				setRuntimeNetworkProfile(previousProfile)
+			}
+			const repeated = await deployTestnet({ chainId: 11_155_111, log: () => {}, maxFeePerGas: MAX_FEE_PER_GAS, maxTotalCost: MAX_TOTAL_COST, privateKey: ANVIL_PRIVATE_KEY, rpcUrl: node.rpcUrl, writeGitHubSummary: false })
+			expect(repeated.results.every(result => result.status === 'skipped')).toBe(true)
 		})
 	},
 	TEST_TIMEOUT_MS,

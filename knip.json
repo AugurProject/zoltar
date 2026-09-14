@@ -9,7 +9,7 @@
 				"bun-test-setup*.ts",
 				"docs/{charts/virtualModules,runtime/globals}.d.ts!",
 				"tooling/contracts/build-app-contracts.mts!",
-				"tooling/contracts/{deploy-testnet,run-deploy-testnet,uniswap-deployment}.mts!",
+				"tooling/contracts/{deploy-testnet,deployment-plan,run-deploy-testnet,uniswap-deployment}.mts!",
 				"tooling/docs/{build-doc-charts,documentationChartBuild,check-doc-charts,check-docs-examples}.mts!",
 				"tooling/ui/projectArtifacts.mts!"
 			],
