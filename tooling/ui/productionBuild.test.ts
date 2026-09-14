@@ -3,9 +3,10 @@ import * as fs from 'node:fs/promises'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import * as process from 'node:process'
-import { getChromiumPath, withChromiumTestLock } from './chromiumPath.js'
-import { waitForChromiumDevToolsPort } from './chromiumDevTools.mts'
+import { createDeferred } from '../../ui/coreShared/ts/tests/testUtils/deferred.js'
 import { UI_APP_IDS, getUiAppPaths, getUiCoreSharedPaths, isUiAppId, type UiAppId } from './appPaths.mts'
+import { waitForChromiumDevToolsPort } from './chromiumDevTools.mts'
+import { getChromiumPath, withChromiumTestLock } from './chromiumPath.js'
 
 const appPathsById = new Map(UI_APP_IDS.map(appId => [appId, getUiAppPaths(appId)]))
 const repositoryRootPath = getUiCoreSharedPaths().repositoryRoot
@@ -462,21 +463,6 @@ type BrowserTermination = {
 	exitStatus: number
 	signalCode: BrowserProcessStatus['signalCode']
 	stderr: string
-}
-
-function createDeferred<Value>() {
-	let resolvePromise: ((value: Value) => void) | undefined
-	const promise = new Promise<Value>(resolve => {
-		resolvePromise = resolve
-	})
-
-	return {
-		promise,
-		resolve: (value: Value) => {
-			if (resolvePromise === undefined) throw new Error('Deferred promise was not initialized')
-			resolvePromise(value)
-		},
-	}
 }
 
 function createControllableBrowserProcess() {

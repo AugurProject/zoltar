@@ -1,7 +1,7 @@
 import type { SQL } from 'bun'
-import { decodeOpaqueCursor, encodeOpaqueCursor, isJsonArray } from '../cursor-codec.ts'
+import { encodeOpaqueCursor, parseCursor } from '../cursor-codec.ts'
 import type { JsonValue } from '../ethereum.ts'
-import { addressPortfolioRows, type RichListSort, richListRows } from '../repositories/portfolio.ts'
+import { addressPortfolioRows, richListRows, type RichListSort } from '../repositories/portfolio.ts'
 import { snapshotBoundary } from './entity-details.ts'
 import { ApiConflictError, ApiRequestError, boundedInteger, evmAddress, integer, isNonNegativeSafeInteger, isPostgresBigint, json, jsonRecord } from './shared.ts'
 import { operationsAsOfForContinuations } from './snapshot.ts'
@@ -33,13 +33,13 @@ type PortfolioCursor = readonly [number, string, PortfolioCollection, string, st
 
 const parsePortfolioCursor = (value: string | null, chainId: number, address: string, kind: PortfolioCollection): { readonly total: number; readonly offset: number; readonly cursor?: PortfolioCursor } => {
 	if (value === null) return { total: 0, offset: 0 }
-	let parts: readonly JsonValue[]
-	try {
-		const parsed = decodeOpaqueCursor(value)
-		parts = isJsonArray(parsed) ? parsed : []
-	} catch (error) {
-		throw new ApiRequestError(`${kind}Cursor is invalid`, { cause: error })
-	}
+	const parts = parseCursor(
+		value,
+		parts => {
+			return parts
+		},
+		error => new ApiRequestError(`${kind}Cursor is invalid`, { cause: error }),
+	)
 	if (
 		parts.length !== 11 ||
 		!isNonNegativeSafeInteger(parts[0]) ||

@@ -1,3 +1,4 @@
+import { ceilDiv as divideUp } from '@zoltar/core-shared/math/bigint'
 const ORACLE_PERCENTAGE_PRECISION = 10_000_000n
 export const ORACLE_PROTOCOL_FEE = 100000
 export const ORACLE_FEE_PERCENTAGE = 10000
@@ -52,7 +53,7 @@ export const MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS = calculate
 
 function ceilDivide(numerator: bigint, denominator: bigint) {
 	if (denominator <= 0n) throw new Error('Cannot divide by zero or a negative denominator')
-	return (numerator + denominator - 1n) / denominator
+	return divideUp(numerator, denominator)
 }
 
 export function calculateOracleMinimumWethReportAttoEth(parameters: OracleMinimumWethReportParameters = DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS) {

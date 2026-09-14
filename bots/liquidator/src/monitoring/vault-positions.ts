@@ -1,10 +1,11 @@
 import { type Chain, type PublicClient, type Transport } from '@zoltar/bot-shared/ethereum'
+import { sameAddress } from '@zoltar/core-shared/evm/address'
 
-import { escalationGameAbi, securityPoolAbi, truthAuctionHaircutAppliedEvent, vaultAccountingCheckpointEvent, vaultEscrowUpdatedEvent } from '@zoltar/bot-shared/contracts/abi'
 import { type VaultPosition, repForBackingUnits } from '#core/strategy'
-import { type VaultStateIndex, refreshVaultStateIndex } from './vault-state-index.ts'
+import { type VaultChangeSource, loadChangedVaultAddresses } from '#monitoring/vault-change-logs'
+import { escalationGameAbi, securityPoolAbi, truthAuctionHaircutAppliedEvent, vaultAccountingCheckpointEvent, vaultEscrowUpdatedEvent } from '@zoltar/bot-shared/contracts/abi'
 import { type Address, getAddress, zeroAddress } from '@zoltar/bot-shared/ethereum'
-import { loadChangedVaultAddresses, type VaultChangeSource } from '#monitoring/vault-change-logs'
+import { type VaultStateIndex, refreshVaultStateIndex } from './vault-state-index.ts'
 
 export type ReadClient = PublicClient<Transport, Chain>
 
@@ -17,10 +18,6 @@ export type PoolMonitorIndex = {
 
 export function createPoolMonitorIndex(): PoolMonitorIndex {
 	return { operatorVaultsByPool: new Map(), vaultsByPool: new Map() }
-}
-
-export function sameAddress(left: Address, right: Address) {
-	return left.toLowerCase() === right.toLowerCase()
 }
 
 function emptyVault(address: Address): VaultPosition {

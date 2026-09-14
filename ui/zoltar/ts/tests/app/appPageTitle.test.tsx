@@ -1,13 +1,13 @@
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
-import { act } from 'preact/test-utils'
-import { render } from 'preact'
 import { AppPageHeading } from '@zoltar/ui-core-shared/app/components/AppPageHeading.js'
-import { formatAppDocumentTitle, getAppPageTitle, type AppPageTitleInput } from '../../app/lib/appPageTitle.js'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
+import { within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { describe, expect, test } from 'bun:test'
+import { render } from 'preact'
+import { act } from 'preact/test-utils'
+import { formatAppDocumentTitle, getAppPageTitle, type AppPageTitleInput } from '../../app/lib/appPageTitle.js'
 
 const baseInput: AppPageTitleInput = {
 	activeZoltarView: 'questions',
@@ -15,19 +15,13 @@ const baseInput: AppPageTitleInput = {
 }
 
 describe('app page titles', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
-	beforeEach(() => {
-		const domEnvironment = installDomEnvironment()
-		restoreDomEnvironment = domEnvironment.cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+		},
 	})
 
 	test('maps routes and active views to user-facing page titles', () => {

@@ -3,9 +3,8 @@ import { closeSync, mkdtempSync, openSync, readFileSync, rmSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { repositoryRoot } from '../repo/root.mts'
 import { runBunTestProcess } from './run-bun-test-process.mts'
-
-const repositoryRoot = join(import.meta.dir, '..', '..')
 
 test('test entrypoints protect Bun isolate workers from piped Linux stdio', async () => {
 	for (const relativePath of ['tooling/testing/run-tests.mts', 'tooling/testing/run-balanced-test-shard.mts', 'tooling/testing/run-solidity-bytecode-coverage.mts']) {

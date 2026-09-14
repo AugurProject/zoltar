@@ -1,4 +1,5 @@
 import { decodeEventLog, parseAbiItem, type Address, type Hash, type Hex } from '@zoltar/bot-shared/ethereum'
+import { sameAddress } from '@zoltar/core-shared/evm/address'
 import type { OperationEvidence, OperationStep } from '../operations/types.ts'
 
 type ReceiptLogEvidence = {
@@ -30,10 +31,6 @@ export type StorageEvidenceObservation = {
 export type SemanticEvidenceObservations = {
 	balances?: readonly BalanceEvidenceObservation[]
 	storage?: readonly StorageEvidenceObservation[]
-}
-
-function sameAddress(left: string, right: string) {
-	return left.toLowerCase() === right.toLowerCase()
 }
 
 function matchingBalanceObservation(evidence: Extract<OperationEvidence, { kind: 'balance-change' }>, observations: SemanticEvidenceObservations) {

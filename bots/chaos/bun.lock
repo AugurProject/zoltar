@@ -6,10 +6,10 @@
       "name": "@zoltar/chaos",
       "dependencies": {
         "@zoltar/bot-shared": "file:../shared",
+        "@zoltar/core-shared": "file:../../shared/core",
       },
       "devDependencies": {
         "@biomejs/biome": "2.3.11",
-        "@zoltar/core-shared": "file:../../shared/core",
         "bun-types": "1.4.2",
         "micro-eth-signer": "0.18.1",
         "solc": "0.8.17",
@@ -82,6 +82,6 @@
 
     "@noble/curves/@noble/hashes": ["@noble/hashes@2.3.0", "", {}, "sha512-oN+QwyX7VSHotibwubG3kpzbwKrfnyR6OOO+3Nk/53ADL7FmgHHz4TgrbaYKvvOw09u6QTx0oiH1cNCIOuN0CQ=="],
 
-    "@zoltar/bot-shared/@zoltar/core-shared": ["@zoltar/core-shared@file:../../shared/core", {}],
+    "@zoltar/bot-shared/@zoltar/core-shared": ["@zoltar/core-shared@file:../../shared/core", { "dependencies": { "@noble/hashes": "2.2.0", "micro-eth-signer": "0.18.1" }, "devDependencies": { "typescript": "5.8.2" } }],
   }
 }

@@ -1,26 +1,21 @@
 /// <reference types='bun-types' />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { useState } from 'preact/hooks'
-import { ImportedForkSettlementSection } from '@zoltar/ui-statoblast-shared/features/reporting/components/ImportedForkSettlementSection.js'
-import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+import { ImportedForkSettlementSection } from '@zoltar/ui-statoblast-shared/features/reporting/components/ImportedForkSettlementSection.js'
+import { describe, expect, test } from 'bun:test'
+import { useState } from 'preact/hooks'
 
 describe('ImportedForkSettlementSection', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRendered: (() => Promise<void>) | undefined
 
-	beforeEach(() => {
-		restoreDomEnvironment = installDomEnvironment().cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRendered?.()
-		cleanupRendered = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRendered?.()
+			cleanupRendered = undefined
+		},
 	})
 
 	test('renders imported deposits and reports selection changes', async () => {

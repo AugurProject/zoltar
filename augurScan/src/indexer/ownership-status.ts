@@ -1,3 +1,4 @@
+import { errorChain } from '../../../shared/core/ts/errors/errorChain.ts'
 import { DatabaseConsistencyError, databaseConsistencyDiagnosticMessage } from '../database.ts'
 import { safeIndexerFailureReason } from './runtime-diagnostics.ts'
 
@@ -88,15 +89,11 @@ export const recordOwnershipEvent = (networkId: string, event: IndexerOwnershipE
 
 export const ownershipFailureReason = (error: unknown): string => {
 	const reason = safeIndexerFailureReason(error)
-	const seen = new Set<unknown>()
-	let current: unknown = error
-	while (typeof current === 'object' && current !== null && !seen.has(current)) {
-		seen.add(current)
+	for (const current of errorChain(error)) {
 		if (current instanceof DatabaseConsistencyError) {
 			const detail = databaseConsistencyDiagnosticMessage(current)
 			if (detail !== undefined) return `${reason}: ${detail}`
 		}
-		current = 'cause' in current ? current.cause : undefined
 	}
 	return reason
 }

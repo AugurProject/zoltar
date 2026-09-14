@@ -1,25 +1,19 @@
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
+import { describe, expect, test } from 'bun:test'
 import { TransactionReview } from '../components/TransactionReview.js'
-import { installDomEnvironment } from './testUtils/domEnvironment.js'
-import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 import { within } from './testUtils/queries'
+import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
 describe('TransactionReview', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
-	beforeEach(() => {
-		const domEnvironment = installDomEnvironment()
-		restoreDomEnvironment = domEnvironment.cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+		},
 	})
 
 	test('keeps decision data without generic or technical-detail sections', async () => {

@@ -1,7 +1,8 @@
+import { Document, Element, Window } from 'happy-dom'
 import { access, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { Document, Element, Window } from 'happy-dom'
+import { repositoryRoot } from '../repo/root.mts'
 import { paragraphSourceSpans, repositoryHtmlFilePaths } from './format-html-prose.mts'
 
 type ParsedHtmlDocument = {
@@ -18,7 +19,7 @@ type ValidationFailure = {
 	relativePath: string
 }
 
-const repositoryRootPath = path.resolve(fileURLToPath(new URL('..', import.meta.url)))
+const toolingRootPath = path.join(repositoryRoot, 'tooling')
 const ariaIdReferenceAttributes = [
 	{ allowsMultiple: false, name: 'aria-activedescendant' },
 	{ allowsMultiple: true, name: 'aria-controls' },
@@ -58,7 +59,7 @@ async function parseHtmlDocument(filePath: string): Promise<ParsedHtmlDocument> 
 		filePath,
 		ids: new Set(Array.from(window.document.querySelectorAll('[id]')).map(element => element.getAttribute('id') ?? '')),
 		rawHtml,
-		relativePath: path.relative(repositoryRootPath, filePath),
+		relativePath: path.relative(toolingRootPath, filePath),
 		window,
 	}
 }

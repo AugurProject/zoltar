@@ -1,6 +1,6 @@
 import { readdir, readFile } from 'node:fs/promises'
 import * as path from 'node:path'
-import * as url from 'node:url'
+import { repositoryRoot } from './root.mts'
 
 const supportedModelReasoningEfforts = new Map([
 	['gpt-5.5', new Set(['high'])],
@@ -147,8 +147,6 @@ function validateProjectAgentSources(agentSources: ReadonlyArray<{ filePath: str
 }
 
 async function main() {
-	const scriptDirectory = path.dirname(url.fileURLToPath(import.meta.url))
-	const repositoryRoot = path.join(scriptDirectory, '..', '..')
 	const agentDirectory = path.join(repositoryRoot, '.codex', 'agents')
 	const agentFileNames = (await readdir(agentDirectory)).filter(fileName => fileName.endsWith('.toml')).sort()
 	const agentSources = await Promise.all(

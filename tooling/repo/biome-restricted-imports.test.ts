@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+import { repositoryRoot } from './root.mts'
 
-const repositoryRoot = path.resolve(import.meta.dir, '../..')
 // ui/*/ts/**/*.d.ts is gitignored (generated declarations), so the UI probe lives beside the trading scripts instead.
 const probeRoots = ['tooling/repo', 'ui/trading/scripts', 'bots/shared/src', 'augurScan/src']
 

@@ -1,9 +1,9 @@
+import { endpointLabel } from '#monitoring/connectivity'
 import type { Chain, PublicClient, Transport } from '@zoltar/bot-shared/ethereum'
+import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
 import { availableSettledValues, quorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
 import { rpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
-import { endpointLabel } from '#monitoring/connectivity'
-import { errorMessage } from '#core/rpc-validation'
 
 type ContextualRpcRead = <Value>(method: string, request: (requestClient: PublicClient<Transport, Chain>) => Promise<Value>, explicitRpcUrl: string) => Promise<Value>
 

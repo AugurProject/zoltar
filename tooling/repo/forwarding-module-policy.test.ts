@@ -1,9 +1,6 @@
 import { expect, test } from 'bun:test'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { forwardingModules, intentionalForwardingModules, isForwardingModule, unapprovedForwardingModules } from './forwarding-module-policy.ts'
-
-const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
+import { repositoryRoot } from './root.mts'
 
 test('detects source modules whose only behavior is forwarding imports or exports', () => {
 	expect(isForwardingModule('forwarder.ts', "import './bootstrap.js'\nexport { value } from './owner.js'\n")).toBe(true)

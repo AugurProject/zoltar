@@ -1,5 +1,5 @@
 import type { SQL } from 'bun'
-import { decodeOpaqueCursor, encodeOpaqueCursor, isJsonArray } from '../cursor-codec.ts'
+import { encodeOpaqueCursor, isJsonArray, parseCursor } from '../cursor-codec.ts'
 import type { JsonValue } from '../ethereum.ts'
 import { historicalExportRows, historicalExportSnapshot, historicalExportSnapshotCanonical, historicalExportTotal } from '../repositories/exports.ts'
 import { ApiConflictError, ApiRequestError, type CanonicalHistoryFilter, canonicalHistoryFilter, integer, isNonNegativeSafeInteger, isPostgresBigint, isPostgresIntegerString, normalize, postgresBigint } from './shared.ts'
@@ -37,38 +37,38 @@ const historicalExportKeyValid = (dataset: HistoricalExportDataset, key: readonl
 
 const parseHistoricalExportCursor = (value: string | null): HistoricalExportCursor | undefined => {
 	if (value === null) return undefined
-	try {
-		const parsed = decodeOpaqueCursor(value)
-		const parts = isJsonArray(parsed) ? parsed : []
-		const dataset = parts[1]
-		const canonical = parts[3]
-		const lastKey = parts[13]
-		if (
-			parts.length !== 14 ||
-			parts[0] !== 1 ||
-			(dataset !== 'logs' && dataset !== 'timeline' && dataset !== 'reorgs') ||
-			!isNonNegativeSafeInteger(parts[2]) ||
-			(canonical !== 'canonical' && canonical !== 'orphaned' && canonical !== 'all') ||
-			!isPostgresBigint(parts[4]) ||
-			!isPostgresBigint(parts[5]) ||
-			BigInt(parts[4]) > BigInt(parts[5]) ||
-			!isPostgresBigint(parts[6]) ||
-			typeof parts[7] !== 'string' ||
-			!/^0x[0-9a-f]{64}$/.test(parts[7]) ||
-			!isPostgresBigint(parts[8]) ||
-			!isPostgresBigint(parts[9]) ||
-			typeof parts[10] !== 'string' ||
-			typeof parts[11] !== 'string' ||
-			typeof parts[12] !== 'string' ||
-			lastKey === undefined ||
-			!isJsonArray(lastKey) ||
-			!historicalExportKeyValid(dataset, lastKey)
-		)
-			throw new Error('shape')
-		return [1, dataset, parts[2], canonical, parts[4], parts[5], parts[6], parts[7], parts[8], parts[9], parts[10], parts[11], parts[12], lastKey]
-	} catch (error) {
-		throw new ApiRequestError('export cursor is invalid', { cause: error })
-	}
+	return parseCursor(
+		value,
+		parts => {
+			const dataset = parts[1]
+			const canonical = parts[3]
+			const lastKey = parts[13]
+			if (
+				parts.length !== 14 ||
+				parts[0] !== 1 ||
+				(dataset !== 'logs' && dataset !== 'timeline' && dataset !== 'reorgs') ||
+				!isNonNegativeSafeInteger(parts[2]) ||
+				(canonical !== 'canonical' && canonical !== 'orphaned' && canonical !== 'all') ||
+				!isPostgresBigint(parts[4]) ||
+				!isPostgresBigint(parts[5]) ||
+				BigInt(parts[4]) > BigInt(parts[5]) ||
+				!isPostgresBigint(parts[6]) ||
+				typeof parts[7] !== 'string' ||
+				!/^0x[0-9a-f]{64}$/.test(parts[7]) ||
+				!isPostgresBigint(parts[8]) ||
+				!isPostgresBigint(parts[9]) ||
+				typeof parts[10] !== 'string' ||
+				typeof parts[11] !== 'string' ||
+				typeof parts[12] !== 'string' ||
+				lastKey === undefined ||
+				!isJsonArray(lastKey) ||
+				!historicalExportKeyValid(dataset, lastKey)
+			)
+				throw new Error('shape')
+			return [1, dataset, parts[2], canonical, parts[4], parts[5], parts[6], parts[7], parts[8], parts[9], parts[10], parts[11], parts[12], lastKey]
+		},
+		error => new ApiRequestError('export cursor is invalid', { cause: error }),
+	)
 }
 
 const historicalExportCursorFor = (snapshot: readonly JsonValue[], lastKey: readonly string[]): string => encodeOpaqueCursor([...snapshot, lastKey])

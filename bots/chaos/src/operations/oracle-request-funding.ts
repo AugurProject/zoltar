@@ -1,3 +1,4 @@
+import { ceilDiv as divideUp } from '@zoltar/core-shared/math/bigint'
 import type { CanonicalUintString } from '../core/units.ts'
 import type { OracleRequestFundingSnapshot } from './types.ts'
 
@@ -69,7 +70,7 @@ function checkedMultiply(left: bigint, right: bigint, label: string) {
 function ceilDiv(numerator: bigint, denominator: bigint) {
 	if (denominator <= 0n) throw oracleRequestFundingError('Oracle funding denominator must be positive')
 	if (numerator === 0n) return 0n
-	return (numerator - 1n) / denominator + 1n
+	return divideUp(numerator, denominator)
 }
 
 /** Matches Solidity Math.mulDiv(..., Math.Rounding.Ceil) with a uint256 result. */

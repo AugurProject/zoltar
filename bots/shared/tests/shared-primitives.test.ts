@@ -44,7 +44,7 @@ async function logRangeLimitError(error: Error) {
 describe('shared bot primitives', () => {
 	test('resolves the shared Ethereum TypeScript source without generated JavaScript under Bun', () => {
 		const resolvedPath = Bun.resolveSync('@zoltar/core-shared/evm/ethereum', import.meta.dir).replaceAll('\\', '/')
-		expect(resolvedPath).toEndWith('/shared/core/ts/evm/ethereum.ts')
+		expect(resolvedPath).toEndWith('/ts/evm/ethereum.ts')
 		expect(resolvedPath).not.toContain('/shared/js/')
 	})
 

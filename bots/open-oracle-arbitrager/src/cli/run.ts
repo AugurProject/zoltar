@@ -1,15 +1,15 @@
 #!/usr/bin/env bun
 
-import { privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
 import { loadConfiguration } from '#config/configuration'
 import { createExecutionLockManager } from '#execution/execution-locks'
-import { errorMessage } from '#core/rpc-validation'
-import { operationalFailureDisposition, retryDelayMilliseconds } from '@zoltar/bot-shared/monitoring/resilience'
 import { acquireExecutionSignerLock, acquirePositionJournalLock } from '#state/position-store'
-import { runOperator } from '../runtime/operator'
+import { privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
 import { createBotShutdownController } from '@zoltar/bot-shared/execution/bot-process-locks'
+import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
+import { operationalFailureDisposition, retryDelayMilliseconds } from '@zoltar/bot-shared/monitoring/resilience'
+import { runOperator } from '../runtime/operator'
 
-export { immediateReplacementAmounts, lifecycleExecutionFromLogs, replacementCreditExecutionFromLogs } from '#execution/recovery-support'
+export { createExecutionLockManager, persistSignerSettingsWithProvisionalLock } from '#execution/execution-locks'
 export {
 	discoverPublicReplacementWithQuorum,
 	executionRecordForConfirmedPosition,
@@ -20,7 +20,7 @@ export {
 	recoverPendingEntryWithQuorum,
 	recoverPendingLifecycleWithQuorum,
 } from '#execution/position-lifecycle'
-export { createExecutionLockManager, persistSignerSettingsWithProvisionalLock } from '#execution/execution-locks'
+export { immediateReplacementAmounts, lifecycleExecutionFromLogs, replacementCreditExecutionFromLogs } from '#execution/recovery-support'
 
 async function main() {
 	using shutdown = createBotShutdownController()

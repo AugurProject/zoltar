@@ -1,14 +1,10 @@
+import { ceilDiv } from '@zoltar/core-shared/math/bigint'
 const BPS_DENOMINATOR = 10_000n
 
 export type SwapQuote = Readonly<{ amountIn: bigint; amountOut: bigint; netInput: bigint; feeAmount: bigint }>
 
 function requirePositive(value: bigint, label: string) {
 	if (value <= 0n) throw new Error(`${label} must be positive`)
-}
-
-function ceilDiv(numerator: bigint, denominator: bigint) {
-	if (numerator < 0n || denominator <= 0n) throw new Error('ceilDiv requires a nonnegative numerator and positive denominator')
-	return numerator === 0n ? 0n : (numerator - 1n) / denominator + 1n
 }
 
 export function quoteExactOutput(reserveIn: bigint, reserveOut: bigint, amountOut: bigint, feeBps: bigint): SwapQuote {

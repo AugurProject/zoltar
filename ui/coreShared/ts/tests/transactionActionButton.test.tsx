@@ -1,29 +1,23 @@
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { fireEvent, within } from './testUtils/queries'
+import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
+import { describe, expect, test } from 'bun:test'
 import { h } from 'preact'
 import { act } from 'preact/test-utils'
-import { TransactionActionButton, TransactionActionGroup, TransactionActionButtonLockProvider } from '../components/TransactionActionButton.js'
-import { installDomEnvironment } from './testUtils/domEnvironment.js'
-import { TRANSACTION_ACTION_LOCK_REASON } from '../transactions/transactionTray.js'
-import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 import { GlobalTransactionPresentationProvider } from '../components/GlobalTransactionPresentationContext.js'
+import { TransactionActionButton, TransactionActionButtonLockProvider, TransactionActionGroup } from '../components/TransactionActionButton.js'
+import { TRANSACTION_ACTION_LOCK_REASON } from '../transactions/transactionTray.js'
+import { fireEvent, within } from './testUtils/queries'
+import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
 describe('TransactionActionButton', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
-	beforeEach(() => {
-		const domEnvironment = installDomEnvironment()
-		restoreDomEnvironment = domEnvironment.cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+		},
 	})
 
 	test('keeps the feedback region after the initiating button when there is no notice', async () => {

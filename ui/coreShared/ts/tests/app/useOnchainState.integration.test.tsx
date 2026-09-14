@@ -1,20 +1,21 @@
+import { createDeferred } from '../testUtils/deferred.js'
 /// <reference types="bun-types" />
 
-import { fireEvent, waitFor, within } from '../testUtils/queries'
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
+import { getAddress } from '@zoltar/core-shared/evm/ethereum'
+import { installDomTestLifecycle } from '../testUtils/domTestLifecycle.js'
+import { describe, expect, mock, test } from 'bun:test'
 import { h, render } from 'preact'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
-import type { Address } from '@zoltar/core-shared/evm/ethereum'
-import { getAddress } from '@zoltar/core-shared/evm/ethereum'
+import { useOnchainState, type UseOnchainStateDependencies } from '../../app/hooks/useOnchainState.js'
+import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../../lib/activeEnvironment.js'
+import { formatTimestampWithRelative } from '../../lib/formatters.js'
+import type { DeploymentStep } from '../../types/contracts.js'
 import type { ChainBackend, ReadClient } from '../../wallet/chainBackend.js'
 import { MAINNET_NETWORK_PROFILE, createSimulationProfile, type NetworkProfile } from '../../wallet/networkProfile.js'
-import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../../lib/activeEnvironment.js'
-import { installDomEnvironment } from '../testUtils/domEnvironment.js'
+import { fireEvent, waitFor, within } from '../testUtils/queries'
 import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
-import type { DeploymentStep } from '../../types/contracts.js'
-import { useOnchainState, type UseOnchainStateDependencies } from '../../app/hooks/useOnchainState.js'
-import { formatTimestampWithRelative } from '../../lib/formatters.js'
 
 const FAKE_WETH_ADDRESS = '0x0000000000000000000000000000000000000ee1' as const
 
@@ -41,16 +42,6 @@ type BackendSubscriptionState = {
 	chainHandler: (() => void) | undefined
 	readTransportModes: ('provider' | 'rpc')[]
 	unsub: UnsubCounter
-}
-
-function createDeferred<T>() {
-	let resolve: (value: T) => void = () => undefined
-	let reject: (reason?: unknown) => void = () => undefined
-	const promise = new Promise<T>((promiseResolve, promiseReject) => {
-		resolve = promiseResolve
-		reject = promiseReject
-	})
-	return { promise, reject, resolve }
 }
 
 function createReadClient({ ethBalanceAttoEth = 0n, blockNumber = 10n, blockTimestamp = BigInt(Math.floor(Date.now() / 1000)) }: { ethBalanceAttoEth?: bigint; blockNumber?: bigint; blockTimestamp?: bigint } = {}) {
@@ -207,28 +198,24 @@ function requireHookState(state: UseOnchainStateState | undefined) {
 	return state
 }
 
-let restoreDomEnvironment: (() => void) | undefined
 let cleanupRenderedComponent: (() => Promise<void>) | undefined
 let originalSetInterval: typeof window.setInterval
 let originalClearInterval: typeof window.clearInterval
 
-beforeEach(() => {
-	const domEnvironment = installDomEnvironment()
-	restoreDomEnvironment = domEnvironment.cleanup
-	originalSetInterval = window.setInterval
-	originalClearInterval = window.clearInterval
-	mock.restore()
-})
-
-afterEach(async () => {
-	await cleanupRenderedComponent?.()
-	cleanupRenderedComponent = undefined
-	if (typeof window !== 'undefined' && originalSetInterval !== undefined) window.setInterval = originalSetInterval
-	if (typeof window !== 'undefined' && originalClearInterval !== undefined) window.clearInterval = originalClearInterval
-	restoreDomEnvironment?.()
-	restoreDomEnvironment = undefined
-	mock.restore()
-	resetActiveEnvironmentForTesting()
+installDomTestLifecycle({
+	beforeTest: () => {
+		originalSetInterval = window.setInterval
+		originalClearInterval = window.clearInterval
+		mock.restore()
+	},
+	afterTest: async () => {
+		await cleanupRenderedComponent?.()
+		cleanupRenderedComponent = undefined
+		if (typeof window !== 'undefined' && originalSetInterval !== undefined) window.setInterval = originalSetInterval
+		if (typeof window !== 'undefined' && originalClearInterval !== undefined) window.clearInterval = originalClearInterval
+		mock.restore()
+		resetActiveEnvironmentForTesting()
+	},
 })
 
 describe('useOnchainState (integration)', () => {

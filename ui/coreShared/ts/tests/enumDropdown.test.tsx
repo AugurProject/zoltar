@@ -1,11 +1,11 @@
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { fireEvent, within } from './testUtils/queries'
-import { act } from 'preact/test-utils'
+import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
+import { describe, expect, test } from 'bun:test'
 import { render } from 'preact'
+import { act } from 'preact/test-utils'
 import { EnumDropdown } from '../components/EnumDropdown.js'
-import { installDomEnvironment } from './testUtils/domEnvironment.js'
+import { fireEvent, within } from './testUtils/queries'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
 function createMouseDownOutside() {
@@ -18,20 +18,14 @@ function createMouseDownOutside() {
 }
 
 describe('EnumDropdown', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
-	beforeEach(() => {
-		const domEnvironment = installDomEnvironment()
-		restoreDomEnvironment = domEnvironment.cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		document.querySelector('#outside-button')?.remove()
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+			document.querySelector('#outside-button')?.remove()
+		},
 	})
 
 	test('renders an explicit placeholder without silently selecting the first option', async () => {

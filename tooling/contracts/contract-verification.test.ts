@@ -3,10 +3,9 @@ import { promises as fs } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
+import { repositoryRoot } from '../repo/root.mts'
 import { buildVerificationPlan, getExplorerTargets, getSourcifyTarget, parseDeploymentManifest, verifyContractsWithExplorer, verifyContractsWithSourcify, type DeploymentManifest, type ExplorerFetch, type ExplorerTarget, type StandardJsonInputs, type VerificationJob } from './contract-verification.mts'
 import { createArtifactLookup, parseRequestedChainIds } from './verify-contracts.mts'
-
-const repositoryRoot = path.join(import.meta.dir, '..', '..')
 
 async function loadRealManifest(networkId: 'mainnet' | 'sepolia'): Promise<DeploymentManifest> {
 	const rawManifest: unknown = JSON.parse(await fs.readFile(path.join(repositoryRoot, 'docs', `${networkId}-deployment-addresses.json`), 'utf8'))

@@ -1,27 +1,22 @@
 /// <reference types='bun-types' />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { fireEvent } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
-import { act } from 'preact/test-utils'
-import { useState } from 'preact/hooks'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import { EscalationDepositSelectionList } from '@zoltar/ui-statoblast-shared/features/reporting/components/EscalationDepositSelectionList.js'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
+import { fireEvent } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { EscalationDepositSelectionList } from '@zoltar/ui-statoblast-shared/features/reporting/components/EscalationDepositSelectionList.js'
+import { describe, expect, test } from 'bun:test'
+import { useState } from 'preact/hooks'
+import { act } from 'preact/test-utils'
 
 describe('EscalationDepositSelectionList', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRendered: (() => Promise<void>) | undefined
 
-	beforeEach(() => {
-		restoreDomEnvironment = installDomEnvironment().cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRendered?.()
-		cleanupRendered = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRendered?.()
+			cleanupRendered = undefined
+		},
 	})
 
 	test('toggles selection when checkboxes are clicked', async () => {

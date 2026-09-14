@@ -1,9 +1,9 @@
 import { promises as fs, readFileSync } from 'node:fs'
 import * as path from 'node:path'
-import * as url from 'node:url'
 import * as ts from 'typescript'
+import { repositoryRoot as projectRoot } from '../repo/root.mts'
+import { walkFiles } from '../repo/walk.mts'
 
-const projectRoot = path.join(path.dirname(url.fileURLToPath(import.meta.url)), '..', '..')
 const uiPackageIds = ['coreShared', 'zoltarShared', 'statoblastShared', 'zoltar', 'statoblast', 'trading'] as const
 const uiSourceRoots = uiPackageIds.map(packageId => path.join(projectRoot, 'ui', packageId, 'ts'))
 
@@ -123,16 +123,8 @@ export function findUiLayerBoundaryViolations(sourcePath: string, sourceText: st
 	return findings
 }
 
-async function collectSourceFiles(directory: string, files: string[] = []): Promise<string[]> {
-	for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
-		const filePath = path.join(directory, entry.name)
-		if (entry.isDirectory()) {
-			await collectSourceFiles(filePath, files)
-			continue
-		}
-		if (entry.isFile() && /\.(?:cts|mts|ts|tsx)$/u.test(entry.name)) files.push(filePath)
-	}
-	return files
+async function collectSourceFiles(directory: string): Promise<string[]> {
+	return await walkFiles(directory, { include: file => /\.(?:cts|mts|ts|tsx)$/u.test(file) })
 }
 
 export type UiExportsManifestFinding = {

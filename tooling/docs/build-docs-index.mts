@@ -1,10 +1,9 @@
+import { Window } from 'happy-dom'
 import assert from 'node:assert/strict'
 import { readdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { Window } from 'happy-dom'
+import { repositoryRoot } from '../repo/root.mts'
 
-const repositoryRoot = path.resolve(fileURLToPath(new URL('../..', import.meta.url)))
 const docsDirectory = path.join(repositoryRoot, 'docs')
 const manifestPath = path.join(docsDirectory, 'manifest.json')
 const dataOutputPath = path.join(docsDirectory, 'assets/js/docsData.js')

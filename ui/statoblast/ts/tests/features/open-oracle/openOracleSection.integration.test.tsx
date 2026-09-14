@@ -1,35 +1,35 @@
 import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 /// <reference types="bun-types" />
 
-import { afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
-import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
-import { useState } from 'preact/hooks'
-import { act } from 'preact/test-utils'
 import type { Address, Hash } from '@zoltar/core-shared/evm/ethereum'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
-import { OpenOracleSection } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/OpenOracleSection.js'
 import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
-import { createOpenOracleReportInstance, loadOpenOracleReportDetails } from '@zoltar/ui-statoblast-shared/protocol/openOracle.js'
-import { getOpenOracleAddress } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
-import { useOpenOracleOperations } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useOpenOracleOperations.js'
-import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
-import type { InjectedEthereum } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'
-import { createInjectedBackend } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
-import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
-import { getOpenOracleSelectedReportActionMode } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracle.js'
-import type { OpenOracleView } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
-import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from '../../../../../../solidity/ts/testSupport/simulator/utils/constants.js'
-import { addressString } from '../../../../../../solidity/ts/testSupport/simulator/utils/bigint.js'
-import { setupTestAccounts, ensureProxyDeployerDeployed } from '../../../../../../solidity/ts/testSupport/simulator/utils/utilities.js'
-import { AnvilWindowEthereum } from '../../../../../../solidity/ts/testSupport/simulator/AnvilWindowEthereum.js'
-import { useIsolatedAnvilNode } from '../../../../../../solidity/ts/testSupport/simulator/useIsolatedAnvilNode.js'
-import { createWriteClient, type WriteClient } from '../../../../../../solidity/ts/testSupport/simulator/utils/clients.js'
-import { ensureInfraDeployed } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast.js'
-import { ensureZoltarDeployed } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
+import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { createInjectedBackend } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
+import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
+import type { InjectedEthereum } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'
+import { OpenOracleSection } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/OpenOracleSection.js'
+import { useOpenOracleOperations } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useOpenOracleOperations.js'
+import { getOpenOracleSelectedReportActionMode } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracle.js'
+import type { OpenOracleView } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
+import { getOpenOracleAddress } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
+import { createOpenOracleReportInstance, loadOpenOracleReportDetails } from '@zoltar/ui-statoblast-shared/protocol/openOracle.js'
+import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
+import { beforeAll, describe, expect, test } from 'bun:test'
+import { useState } from 'preact/hooks'
+import { act } from 'preact/test-utils'
+import { AnvilWindowEthereum } from '../../../../../../solidity/ts/testSupport/simulator/AnvilWindowEthereum.js'
+import { useIsolatedAnvilNode } from '../../../../../../solidity/ts/testSupport/simulator/useIsolatedAnvilNode.js'
+import { addressString } from '../../../../../../solidity/ts/testSupport/simulator/utils/bigint.js'
+import { createWriteClient, type WriteClient } from '../../../../../../solidity/ts/testSupport/simulator/utils/clients.js'
+import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from '../../../../../../solidity/ts/testSupport/simulator/utils/constants.js'
+import { ensureInfraDeployed } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast.js'
+import { ensureZoltarDeployed } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar.js'
+import { ensureProxyDeployerDeployed, setupTestAccounts } from '../../../../../../solidity/ts/testSupport/simulator/utils/utilities.js'
 
 const walletAddress = addressString(TEST_ADDRESSES[0])
 const reportId = 1n
@@ -214,7 +214,6 @@ describe.serial('OpenOracleSection integration', () => {
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
 	let resetActiveEnvironment: (() => void) | undefined
-	let restoreDomEnvironment: (() => void) | undefined
 	let uiReadClient: ReturnType<typeof createConnectedReadClient>
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
@@ -228,28 +227,24 @@ describe.serial('OpenOracleSection integration', () => {
 		await setBaselineSnapshot()
 	})
 
-	beforeEach(async () => {
-		resetActiveEnvironment?.()
-		resetActiveEnvironmentForTesting()
-		mockWindow = getAnvilWindowEthereum()
-		await mockWindow.request({ method: 'anvil_setChainId', params: [SEPOLIA_NETWORK_PROFILE.chain.id] })
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0, SEPOLIA_NETWORK_PROFILE.chain)
-		const domEnvironment = installDomEnvironment()
-		restoreDomEnvironment = domEnvironment.cleanup
-		Reflect.set(domEnvironment.window, 'ethereum', createInjectedWalletShim(mockWindow, walletAddress))
-		// The Anvil fixture seeds mainnet token addresses, but UI writes use Sepolia's chain ID.
-		resetActiveEnvironment = installActiveEnvironmentForTesting(createInjectedBackend({ profile: { ...MAINNET_NETWORK_PROFILE, chain: SEPOLIA_NETWORK_PROFILE.chain, chainIdHex: SEPOLIA_NETWORK_PROFILE.chainIdHex, id: 'sepolia', displayName: 'Sepolia' } }))
-		uiReadClient = createConnectedReadClient()
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		resetActiveEnvironment?.()
-		resetActiveEnvironment = undefined
-		resetActiveEnvironmentForTesting()
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
+	installDomTestLifecycle({
+		beforeTest: async domEnvironment => {
+			resetActiveEnvironment?.()
+			resetActiveEnvironmentForTesting()
+			mockWindow = getAnvilWindowEthereum()
+			await mockWindow.request({ method: 'anvil_setChainId', params: [SEPOLIA_NETWORK_PROFILE.chain.id] })
+			client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0, SEPOLIA_NETWORK_PROFILE.chain)
+			Reflect.set(domEnvironment.window, 'ethereum', createInjectedWalletShim(mockWindow, walletAddress))
+			resetActiveEnvironment = installActiveEnvironmentForTesting(createInjectedBackend({ profile: { ...MAINNET_NETWORK_PROFILE, chain: SEPOLIA_NETWORK_PROFILE.chain, chainIdHex: SEPOLIA_NETWORK_PROFILE.chainIdHex, id: 'sepolia', displayName: 'Sepolia' } }))
+			uiReadClient = createConnectedReadClient()
+		},
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+			resetActiveEnvironment?.()
+			resetActiveEnvironment = undefined
+			resetActiveEnvironmentForTesting()
+		},
 	})
 
 	test('creates, funds, and opens an atomic initial report through the UI', async () => {
