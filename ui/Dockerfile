@@ -14,16 +14,12 @@ COPY ./tooling/ /source/tooling/
 
 # Shared package metadata and source for local package resolution
 COPY ./shared/tsconfig.base.json ./shared/tsconfig.strict.json /source/shared/
-COPY ./shared/core/package.json ./shared/core/tsconfig.json /source/shared/core/
-COPY ./shared/zoltar/package.json ./shared/zoltar/tsconfig.json /source/shared/zoltar/
-COPY ./shared/openOracle/package.json /source/shared/openOracle/package.json
-COPY ./shared/statoblast/package.json /source/shared/statoblast/package.json
-COPY ./shared/trading/package.json /source/shared/trading/package.json
+COPY ./shared/core/tsconfig.json /source/shared/core/
+COPY ./shared/zoltar/tsconfig.json /source/shared/zoltar/
 COPY ./shared/core/ts/ /source/shared/core/ts/
 COPY ./shared/zoltar/ts/ /source/shared/zoltar/ts/
 
 # Install root dependencies and build generated shared outputs from tracked source.
-COPY ./package.json /source/
 COPY package.json bun.lock /source/
 COPY augurScan/package.json /source/augurScan/package.json
 COPY bots/chaos/package.json /source/bots/chaos/package.json
@@ -45,10 +41,6 @@ COPY ui/zoltarShared/package.json /source/ui/zoltarShared/package.json
 RUN bun install --frozen-lockfile
 RUN bun ./tooling/repo/build-shared.mts zoltar
 
-# Install Solidity dependencies
-COPY ./solidity/package.json /source/solidity/
-RUN cd /source/solidity && bun install --frozen-lockfile
-
 # Solidity contracts and TypeScript source
 COPY ./solidity/tsconfig.json /source/solidity/tsconfig.json
 COPY ./solidity/tsconfig-compile.json /source/solidity/tsconfig-compile.json
@@ -60,26 +52,21 @@ COPY ./solidity/ts/abi/ /source/solidity/ts/abi/
 RUN mkdir -p /source/ui/coreShared/ts && bun ./tooling/contracts/build-app-contracts.mts zoltar
 
 # Common UI build inputs.
-COPY ./ui/coreShared/package.json /source/ui/coreShared/package.json
 COPY ./docs/mainnet-deployment-addresses.json /source/docs/mainnet-deployment-addresses.json
 COPY ./docs/sepolia-deployment-addresses.json /source/docs/sepolia-deployment-addresses.json
 COPY ./ui/tsconfig.base.json /source/ui/tsconfig.base.json
 COPY ./ui/coreShared/tsconfig.json /source/ui/coreShared/tsconfig.json
 COPY ./ui/coreShared/css/ /source/ui/coreShared/css/
 COPY ./ui/coreShared/ts/ /source/ui/coreShared/ts/
-RUN bun ./tooling/repo/install-frozen.mts ui/coreShared
 RUN cd /source/ui/coreShared && bun x tsc --project tsconfig.json
 
 # Build reusable shared libraries before any dependency-leaf application.
-COPY ./ui/zoltarShared/package.json /source/ui/zoltarShared/package.json
 COPY ./ui/zoltarShared/tsconfig.json /source/ui/zoltarShared/tsconfig.json
 COPY ./ui/zoltarShared/ts/ /source/ui/zoltarShared/ts/
-RUN bun ./tooling/repo/install-frozen.mts ui/zoltarShared && cd /source/ui/zoltarShared && bun run build
+RUN cd /source/ui/zoltarShared && bun run build
 # Build Zoltar from only its inward dependencies.
 FROM common-builder AS zoltar-builder
 
-COPY ./ui/zoltar/package.json /source/ui/zoltar/package.json
-RUN bun ./tooling/repo/install-frozen.mts ui/zoltar
 RUN bun ./tooling/ui/vendor.mts zoltar --scoped-artifacts
 COPY ./ui/zoltar/tsconfig.json /source/ui/zoltar/tsconfig.json
 COPY ./ui/zoltar/index.html /source/ui/zoltar/index.html
@@ -109,16 +96,13 @@ COPY ./shared/openOracle/ts/ /source/shared/openOracle/ts/
 COPY ./shared/statoblast/ts/ /source/shared/statoblast/ts/
 COPY ./solidity/contracts/statoblast/ /source/solidity/contracts/statoblast/
 RUN bun ./tooling/repo/build-shared.mts statoblast && bun ./tooling/contracts/build-app-contracts.mts statoblast
-COPY ./ui/statoblastShared/package.json /source/ui/statoblastShared/package.json
 COPY ./ui/statoblastShared/tsconfig.json /source/ui/statoblastShared/tsconfig.json
 COPY ./ui/statoblastShared/ts/ /source/ui/statoblastShared/ts/
-RUN bun ./tooling/repo/install-frozen.mts ui/statoblastShared && cd /source/ui/statoblastShared && bun run build
+RUN cd /source/ui/statoblastShared && bun run build
 
 # Build Statoblast as an application leaf.
 FROM statoblast-dependencies AS statoblast-builder
 
-COPY ./ui/statoblast/package.json /source/ui/statoblast/package.json
-RUN bun ./tooling/repo/install-frozen.mts ui/statoblast
 RUN bun ./tooling/ui/vendor.mts statoblast --scoped-artifacts
 COPY ./ui/statoblast/tsconfig.json /source/ui/statoblast/tsconfig.json
 COPY ./ui/statoblast/index.html /source/ui/statoblast/index.html
@@ -146,8 +130,6 @@ COPY ./shared/trading/ts/ /source/shared/trading/ts/
 COPY ./solidity/contracts/trading/ /source/solidity/contracts/trading/
 RUN bun ./tooling/repo/build-shared.mts trading && bun ./tooling/contracts/build-app-contracts.mts trading
 
-COPY ./ui/trading/package.json /source/ui/trading/package.json
-RUN bun ./tooling/repo/install-frozen.mts ui/trading
 COPY ./ui/trading/tsconfig.json /source/ui/trading/tsconfig.json
 COPY ./ui/trading/index.html /source/ui/trading/index.html
 COPY ./ui/trading/favicon.svg /source/ui/trading/favicon.svg

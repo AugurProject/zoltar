@@ -27,7 +27,7 @@ describe('UI Docker packaging', () => {
 		expect(copies.some(copy => copy.includes('ui/coreShared/tsconfig.vendor.json'))).toBe(false)
 		expect(runSegments).not.toContain('bun run vendor')
 		expect(runSegments).toEqual(expect.arrayContaining(['bun ./tooling/ui/vendor.mts zoltar --scoped-artifacts', 'bun ./tooling/ui/vendor.mts statoblast --scoped-artifacts']))
-		for (const packageId of ['coreShared', 'zoltar', 'statoblast', 'trading']) expect(runSegments).toContain(`bun ./tooling/repo/install-frozen.mts ui/${packageId}`)
+		expect(runSegments.filter(command => command.includes('bun install') || command.includes('install-frozen.mts'))).toEqual(['bun install --frozen-lockfile'])
 		expect(runSegments.some(command => /cd \/source\/ui\/\w+ && bun install/u.test(command))).toBe(false)
 		expect(relative(join(dirname(dockerfile), '..'), join(dirname(staticServer)))).toBe('tooling/ui')
 	})

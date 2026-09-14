@@ -2,7 +2,6 @@ import { expect, test } from 'bun:test'
 import { workspaceInstall } from './install-frozen.mts'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { reviewableGitHubPath } from '../testing/reviewable-github-path.ts'
 import { componentProjects, projects, taskProjects, validateProjectRegistryFiles } from './projects.ts'
 
 const repositoryRoot = path.resolve(import.meta.dir, '../..')
@@ -88,7 +87,7 @@ test('local installation and CI use the package-manager Bun version', async () =
 	if (bunVersion === undefined) throw new Error(`Unsupported packageManager declaration: ${packageManager}`)
 
 	expect(workspaceInstall(repositoryRoot).command).toEqual([process.execPath, 'install', '--frozen-lockfile'])
-	const setup = await fs.readFile(reviewableGitHubPath(repositoryRoot, 'actions/setup-bun/action.yml'), 'utf8')
+	const setup = await fs.readFile(path.join(repositoryRoot, '.github', 'actions/setup-bun/action.yml'), 'utf8')
 	expect(setup).toContain('.packageManager')
 	expect(setup).toContain('steps.version.outputs.version')
 })

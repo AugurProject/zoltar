@@ -4,7 +4,6 @@ FROM oven/bun:${BUN_VERSION}-alpine AS shared-builder
 
 WORKDIR /source
 
-COPY package.json bun.lock ./
 COPY shared/ ./shared/
 COPY tooling/ ./tooling/
 COPY package.json bun.lock /source/
@@ -13,11 +12,6 @@ COPY bots/chaos/package.json /source/bots/chaos/package.json
 COPY bots/liquidator/package.json /source/bots/liquidator/package.json
 COPY bots/open-oracle-arbitrager/package.json /source/bots/open-oracle-arbitrager/package.json
 COPY bots/shared/package.json /source/bots/shared/package.json
-COPY shared/core/package.json /source/shared/core/package.json
-COPY shared/openOracle/package.json /source/shared/openOracle/package.json
-COPY shared/statoblast/package.json /source/shared/statoblast/package.json
-COPY shared/trading/package.json /source/shared/trading/package.json
-COPY shared/zoltar/package.json /source/shared/zoltar/package.json
 COPY solidity/package.json /source/solidity/package.json
 COPY ui/coreShared/package.json /source/ui/coreShared/package.json
 COPY ui/statoblast/package.json /source/ui/statoblast/package.json
@@ -34,20 +28,13 @@ ENV BUN_ENV=production
 WORKDIR /app
 
 COPY --from=shared-builder /source/shared/ ./shared/
-COPY bots/shared/package.json ./bots/shared/
 COPY bots/shared/src/ ./bots/shared/src/
-COPY bots/open-oracle-arbitrager/package.json ./bots/open-oracle-arbitrager/
 COPY package.json bun.lock /app/
 COPY augurScan/package.json /app/augurScan/package.json
 COPY bots/chaos/package.json /app/bots/chaos/package.json
 COPY bots/liquidator/package.json /app/bots/liquidator/package.json
 COPY bots/open-oracle-arbitrager/package.json /app/bots/open-oracle-arbitrager/package.json
 COPY bots/shared/package.json /app/bots/shared/package.json
-COPY shared/core/package.json /app/shared/core/package.json
-COPY shared/openOracle/package.json /app/shared/openOracle/package.json
-COPY shared/statoblast/package.json /app/shared/statoblast/package.json
-COPY shared/trading/package.json /app/shared/trading/package.json
-COPY shared/zoltar/package.json /app/shared/zoltar/package.json
 COPY solidity/package.json /app/solidity/package.json
 COPY ui/coreShared/package.json /app/ui/coreShared/package.json
 COPY ui/statoblast/package.json /app/ui/statoblast/package.json
