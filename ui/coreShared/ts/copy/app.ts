@@ -76,7 +76,6 @@ export const browserSimulation = 'Browser Simulation'
 export const browserLocalSimulator = 'Browser-local simulator'
 export const fallbackRpcUrl = 'Fallback RPC URL'
 export const simulationRpcDetail = 'Simulation uses its browser-local chain and does not contact an RPC server.'
-export const formatFallbackRpcDetail = (defaultRpcUrl: string) => `Used for reads when a wallet is unavailable. Leave blank to use ${defaultRpcUrl}.`
 export const saveRpc = 'Save RPC'
 export const rpcSaveFailed = 'Unable to save the RPC URL.'
 export const savingRpc = 'Saving RPC…'
