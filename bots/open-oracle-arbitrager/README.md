@@ -243,9 +243,7 @@ available when RPC validation is temporarily unavailable, reports
 `connectivity-degraded`, and retries with bounded backoff. The bot checks the chain
 whenever it validates a new endpoint set.
 
-A head watcher polls `eth_blockNumber` once per second and logs each new head it
-observes as `observedBlock=<number> blockAgeSeconds=<age>`, adding
-`unobservedBlocks=<count>` when heights were skipped between polls. Outside failure
+A head watcher polls `eth_blockNumber` once per second. Outside failure
 backoff, a new head wakes the scan immediately; a completed scan logs
 `scanBlock=<number> durationMs=<duration>`. Scan reads are batched through the
 canonical Multicall3 deployment at one pinned block, so a scan costs a handful of RPC
