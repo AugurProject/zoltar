@@ -224,6 +224,194 @@ test('explorer transport errors mark the contract as failed instead of aborting 
 	expect(outcomes[0]?.detail).toContain('HTTP 502')
 })
 
+for (const limitedAction of ['getsourcecode', 'verifysourcecode', 'checkverifystatus']) {
+	test(`explorer retries HTTP 429 during ${limitedAction} without losing the submission`, async () => {
+		const attempts = new Map<string, number>()
+		const delays: number[] = []
+		const { calls, fetchFn: successfulFetch } = createExplorerFetchStub(action => {
+			if (action === 'getsourcecode') return { result: [{ SourceCode: '' }], status: '1' }
+			if (action === 'verifysourcecode') return { result: 'preserved-guid', status: '1' }
+			return { result: 'Pass - Verified', status: '1' }
+		})
+		const fetchFn: ExplorerFetch = async (requestUrl, init) => {
+			const action = new URLSearchParams(init?.body ?? requestUrl.split('?')[1]).get('action') ?? ''
+			const attempt = (attempts.get(action) ?? 0) + 1
+			attempts.set(action, attempt)
+			if (action === limitedAction && attempt === 1)
+				return {
+					ok: false,
+					status: 429,
+					json: async () => {
+						throw new Error('429 body need not be JSON')
+					},
+				}
+			return successfulFetch(requestUrl, init)
+		}
+		const outcomes = await verifyContractsWithExplorer({
+			fetchFn,
+			inputs: testInputs,
+			jobs: [testJob],
+			log: () => {},
+			sleep: async delay => {
+				delays.push(delay)
+			},
+			target: testTarget,
+		})
+		expect(outcomes[0]?.status).toBe('verified')
+		expect(attempts.get(limitedAction)).toBe(2)
+		expect(delays.some(delay => delay >= 2_000)).toBe(true)
+		expect(calls.filter(call => call.type === 'POST')).toHaveLength(1)
+		expect(calls.at(-1)?.parameters.get('guid')).toBe('preserved-guid')
+	})
+}
+
+test('explorer paces every request including already-verified lookups and status checks', async () => {
+	let elapsed = 0
+	const requestTimes: number[] = []
+	const { fetchFn: successfulFetch } = createExplorerFetchStub((action, call) => {
+		if (action === 'getsourcecode') return { result: [{ SourceCode: call.parameters.get('address') === testJob.address ? 'verified source' : '' }], status: '1' }
+		return { result: action === 'verifysourcecode' ? 'test-guid' : 'Pass - Verified', status: '1' }
+	})
+	const fetchFn: ExplorerFetch = async (requestUrl, init) => {
+		requestTimes.push(elapsed)
+		return successfulFetch(requestUrl, init)
+	}
+	const outcomes = await verifyContractsWithExplorer({
+		fetchFn,
+		inputs: testInputs,
+		jobs: [testJob, { ...testJob, id: 'second', address: '0x0000000000000000000000000000000000000001' }],
+		log: () => {},
+		sleep: async delay => {
+			elapsed += delay
+		},
+		target: testTarget,
+	})
+	expect(outcomes.map(outcome => outcome.status)).toEqual(['already-verified', 'verified'])
+	expect(requestTimes).toHaveLength(4)
+	for (let index = 1; index < requestTimes.length; index += 1) expect((requestTimes[index] ?? 0) - (requestTimes[index - 1] ?? 0)).toBeGreaterThanOrEqual(1_000)
+})
+
+test('explorer rate-limit retries are bounded and later contracts still run', async () => {
+	let attempts = 0
+	const delays: number[] = []
+	const fetchFn: ExplorerFetch = async () => {
+		attempts += 1
+		return { ok: false, status: 429, json: async () => ({}) }
+	}
+	const outcomes = await verifyContractsWithExplorer({
+		fetchFn,
+		inputs: testInputs,
+		jobs: [testJob, { ...testJob, id: 'second' }],
+		log: () => {},
+		sleep: async delay => {
+			delays.push(delay)
+		},
+		target: testTarget,
+	})
+	expect(attempts).toBe(10)
+	expect(outcomes.map(outcome => outcome.status)).toEqual(['failed', 'failed'])
+	expect(outcomes.every(outcome => outcome.detail?.includes('HTTP 429') === true)).toBe(true)
+	expect(delays.filter(delay => delay >= 2_000)).toEqual([2_000, 4_000, 8_000, 16_000, 32_000, 2_000, 4_000, 8_000, 16_000])
+})
+
+for (const [label, header, minimumDelay, maximumDelay] of [
+	['seconds', '10', 10_000, 10_000],
+	['five-minute boundary', '300', 300_000, 300_000],
+	['HTTP date', 'future-date', 28_000, 30_000],
+	['invalid header', 'invalid', 2_000, 2_000],
+	['past date', 'Wed, 01 Jan 2020 00:00:00 GMT', 2_000, 2_000],
+] as const) {
+	test(`explorer handles Retry-After ${label}`, async () => {
+		let attempts = 0
+		let cancelled = false
+		const delays: number[] = []
+		const fetchFn: ExplorerFetch = async () => {
+			attempts += 1
+			if (attempts === 1)
+				return {
+					ok: false,
+					status: 429,
+					headers: new Headers({ 'Retry-After': header === 'future-date' ? new Date(Date.now() + 30_000).toUTCString() : header }),
+					body: {
+						cancel: async () => {
+							cancelled = true
+						},
+					},
+					json: async () => ({}),
+				}
+			return { ok: true, status: 200, json: async () => ({ result: [{ SourceCode: 'verified source' }], status: '1' }) }
+		}
+		const outcomes = await verifyContractsWithExplorer({
+			fetchFn,
+			inputs: testInputs,
+			jobs: [testJob],
+			log: () => {},
+			sleep: async delay => {
+				delays.push(delay)
+			},
+			target: testTarget,
+		})
+		expect(outcomes[0]?.status).toBe('already-verified')
+		expect(attempts).toBe(2)
+		expect(cancelled).toBe(true)
+		expect(delays).toHaveLength(1)
+		expect(delays[0]).toBeGreaterThanOrEqual(minimumDelay)
+		expect(delays[0]).toBeLessThanOrEqual(maximumDelay)
+	})
+}
+
+for (const priorRetries of [0, 4]) {
+	test(`explorer stops later jobs and pending polls after an oversized cooldown with ${priorRetries} prior retries`, async () => {
+		let limitedAttempts = 0
+		let elapsed = 0
+		const { calls, fetchFn: successfulFetch } = createExplorerFetchStub(action => ({ result: action === 'getsourcecode' ? [{ SourceCode: '' }] : 'pending-guid', status: '1' }))
+		const fetchFn: ExplorerFetch = async (requestUrl, init) => {
+			if (calls.length < 2) return successfulFetch(requestUrl, init)
+			limitedAttempts += 1
+			return { ok: false, status: 429, headers: new Headers({ 'Retry-After': limitedAttempts > priorRetries ? '301' : '1' }), json: async () => ({}) }
+		}
+		const outcomes = await verifyContractsWithExplorer({
+			fetchFn,
+			inputs: testInputs,
+			jobs: [testJob, { ...testJob, id: 'second' }, { ...testJob, id: 'third' }],
+			log: () => {},
+			sleep: async delay => {
+				elapsed += delay
+			},
+			target: testTarget,
+		})
+		expect(limitedAttempts).toBe(priorRetries + 1)
+		expect(outcomes).toHaveLength(3)
+		expect(outcomes.every(outcome => outcome.status === 'failed' && outcome.detail?.includes('Retry-After exceeds') === true)).toBe(true)
+		expect(elapsed).toBeLessThan(60_000)
+	})
+}
+
+test('explorer preserves the final retry cooldown before contacting the provider for the next contract', async () => {
+	let attempts = 0
+	let elapsed = 0
+	const requestTimes: number[] = []
+	const fetchFn: ExplorerFetch = async () => {
+		attempts += 1
+		requestTimes.push(elapsed)
+		if (attempts <= 5) return { ok: false, status: 429, headers: new Headers({ 'Retry-After': attempts === 5 ? '45' : '1' }), json: async () => ({}) }
+		return { ok: true, status: 200, json: async () => ({ result: [{ SourceCode: 'verified source' }], status: '1' }) }
+	}
+	const outcomes = await verifyContractsWithExplorer({
+		fetchFn,
+		inputs: testInputs,
+		jobs: [testJob, { ...testJob, id: 'second' }],
+		log: () => {},
+		sleep: async delay => {
+			elapsed += delay
+		},
+		target: testTarget,
+	})
+	expect(outcomes.map(outcome => outcome.status)).toEqual(['failed', 'already-verified'])
+	expect(attempts).toBe(6)
+	expect((requestTimes[5] ?? 0) - (requestTimes[4] ?? 0)).toBeGreaterThanOrEqual(45_000)
+})
+
 test('sourcify targets exist for mainnet and sepolia only', () => {
 	expect(getSourcifyTarget(1)?.apiUrl).toBe('https://sourcify.dev/server')
 	expect(getSourcifyTarget(11_155_111)?.chainId).toBe(11_155_111)
