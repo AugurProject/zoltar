@@ -1,3 +1,4 @@
+import { MAINNET_ENABLED } from '../../wallet/networkAvailability.js'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { getActiveNetworkProfile } from '../../lib/activeEnvironment.js'
 import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '../../wallet/networkProfile.js'
@@ -70,7 +71,7 @@ export function AppSettingsMenu({ onEnvironmentChanged, settingsContent }: { onE
 								setSaveState('idle')
 							}}
 						>
-							<option value='mainnet'>{appCopy.ethereumMainnet}</option>
+							{MAINNET_ENABLED ? <option value='mainnet'>{appCopy.ethereumMainnet}</option> : undefined}
 							<option value='sepolia'>{appCopy.sepolia}</option>
 							<option value='simulation'>{appCopy.browserSimulation}</option>
 						</select>

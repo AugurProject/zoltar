@@ -53,7 +53,7 @@ describe('security pool creation guards', () => {
 				statoblastSecurityMultiplier: '2',
 				zoltarUniverseHasForked: false,
 			}),
-		).toBe('Switch to Ethereum mainnet.')
+		).toBe('Switch to Sepolia.')
 
 		expect(
 			getSecurityPoolCreateDisabledReason({

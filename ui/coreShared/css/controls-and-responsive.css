@@ -1543,12 +1543,6 @@
 	align-items: center;
 }
 
-.overview-shell > .universe-fork-notice {
-	border: 1px solid var(--warning-border-strong);
-	padding: var(--space-3);
-	background: var(--notice-warning-gradient);
-}
-
 /* Until both groups fit on one row, the balance and price groups take one row each, sized to their content with a shared caption column. */
 @media (min-width: 50.0625rem) and (max-width: 75rem) {
 	.overview-metric-group,
@@ -1657,11 +1651,6 @@
 	border-bottom-color: var(--accent);
 	color: var(--text);
 	box-shadow: none;
-}
-
-.universe-fork-notice {
-	padding: var(--space-3);
-	margin: var(--space-3) var(--space-4);
 }
 
 .application-brand {

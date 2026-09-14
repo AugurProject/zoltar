@@ -124,7 +124,7 @@ describe('security vault guards', () => {
 				requiredCostAttoEth: 1n,
 				walletBalanceAttoEth: 1n,
 			}),
-		).toBe('Switch to Ethereum mainnet.')
+		).toBe('Switch to Sepolia.')
 
 		expect(
 			getVaultRequestPriceGuardMessage({
@@ -158,7 +158,7 @@ describe('security vault guards', () => {
 				isPriceValid: true,
 				resolvedPendingOperationId: 1n,
 			}),
-		).toBe('Switch to Ethereum mainnet.')
+		).toBe('Switch to Sepolia.')
 
 		expect(
 			getVaultExecutePendingOperationGuardMessage({
