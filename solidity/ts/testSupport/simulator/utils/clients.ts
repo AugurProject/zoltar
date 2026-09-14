@@ -1,5 +1,5 @@
 import { createPublicClient, createWalletClient, custom, EIP1193Provider, http, publicActions } from '@zoltar/core-shared/evm/ethereum'
-import type { Hash } from '@zoltar/core-shared/evm/ethereum'
+import type { Chain, Hash } from '@zoltar/core-shared/evm/ethereum'
 import { addressString } from './bigint'
 import { mainnet } from '@zoltar/core-shared/evm/ethereum'
 import type { AnvilWindowEthereum } from '../AnvilWindowEthereum'
@@ -14,9 +14,9 @@ const createReadClient = (ethereum: EIP1193Provider | undefined | AnvilWindowEth
 	return createWalletClient({ transport: custom(ethereum), chain: mainnet }).extend(publicActions)
 }
 
-export const createWriteClient = (ethereum: EIP1193Provider | undefined | AnvilWindowEthereum, accountAddress: bigint) => {
+export const createWriteClient = (ethereum: EIP1193Provider | undefined | AnvilWindowEthereum, accountAddress: bigint, chain: Chain = mainnet) => {
 	if (ethereum === undefined) throw new Error('no window.ethereum injected')
-	const client = createWalletClient({ account: addressString(accountAddress), transport: custom(ethereum), chain: mainnet }).extend(publicActions)
+	const client = createWalletClient({ account: addressString(accountAddress), transport: custom(ethereum), chain }).extend(publicActions)
 	if (isAnvilWindowEthereum(ethereum)) anvilWindowByClient.set(client, ethereum)
 	return client
 }

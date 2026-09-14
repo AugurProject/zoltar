@@ -1,7 +1,7 @@
 import type { ChainBackend } from '../wallet/chainBackend.js'
 import { createInjectedBackend } from '../wallet/chainBackend.js'
 import { getErrorMessage } from './errors.js'
-import { getPublicNetworkProfile, getPublicNetworkProfileForChainId, MAINNET_NETWORK_PROFILE, resetRuntimeNetworkProfile, setRuntimeNetworkProfile, type NetworkProfile } from '../wallet/networkProfile.js'
+import { getPublicNetworkProfile, getPublicNetworkProfileForChainId, getDefaultNetworkProfile, resetRuntimeNetworkProfile, setRuntimeNetworkProfile, type NetworkProfile } from '../wallet/networkProfile.js'
 import type { SimulationController } from '../simulation/controller.js'
 import { getSavedSimulationStateEnvelope } from '../simulation/savedStates.js'
 import { createSimulationBackend } from '../simulation/tevmBackend.js'
@@ -85,13 +85,13 @@ export async function initializeActiveEnvironment(location: LocationLike = windo
 		const createBackend = dependencies.createInjectedBackend ?? createInjectedBackend
 		const requestedNetwork = readLocationParams(location).get(NETWORK_QUERY_PARAM)
 		let profile = requestedNetwork === null ? undefined : getPublicNetworkProfile(requestedNetwork)
-		let injectedBackend = createBackend({ profile: profile ?? MAINNET_NETWORK_PROFILE })
+		let injectedBackend = createBackend({ profile: profile ?? getDefaultNetworkProfile() })
 		if (profile === undefined) {
 			try {
 				profile = getPublicNetworkProfileForChainId(await injectedBackend.getChainId())
 			} catch (error) {
 				void error
-				// A missing, locked, or unavailable wallet leaves Mainnet as the public default.
+				// A missing, locked, or unavailable wallet leaves the configured public default in place.
 			}
 			if (profile !== undefined && profile !== injectedBackend.profile) injectedBackend = createBackend({ profile })
 		}

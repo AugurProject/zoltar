@@ -97,7 +97,7 @@ main {
 	padding: 1rem;
 	border: 1px solid var(--border-strong);
 	border-radius: var(--radius-control, 0.6rem);
-	background: var(--surface-raised);
+	background: var(--surface-modal-opaque);
 	box-shadow: 0 1rem 2.5rem var(--shadow-color-strong, rgba(0, 0, 0, 0.35));
 }
 
@@ -144,6 +144,8 @@ main {
 }
 
 .top-shell {
+	position: relative;
+	z-index: 2;
 	display: grid;
 	gap: 0;
 	overflow: visible;

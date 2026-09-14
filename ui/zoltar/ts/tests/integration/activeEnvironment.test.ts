@@ -66,7 +66,7 @@ afterEach(() => {
 void describe('active environment', () => {
 	void test('uses the injected backend by default when no environment has been initialized', () => {
 		expect(getActiveBackend().id).toBe('injected')
-		expect(getActiveBackend().profile.id).toBe('mainnet')
+		expect(getActiveBackend().profile.id).toBe('sepolia')
 	})
 
 	void test('selects Sepolia from either page or route query parameters', async () => {
@@ -99,7 +99,7 @@ void describe('active environment', () => {
 		)
 
 		expect(backend.profile).toBe(SEPOLIA_NETWORK_PROFILE)
-		expect(requestedProfiles).toEqual([MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE])
+		expect(requestedProfiles).toEqual([SEPOLIA_NETWORK_PROFILE])
 		const pinnedBackend = await initializeActiveEnvironment(
 			{ hostname: 'localhost', search: '?network=mainnet' },
 			{
@@ -107,18 +107,18 @@ void describe('active environment', () => {
 				createSimulationBackend,
 			},
 		)
-		expect(pinnedBackend.profile).toBe(MAINNET_NETWORK_PROFILE)
+		expect(pinnedBackend.profile).toBe(SEPOLIA_NETWORK_PROFILE)
 	})
 
 	void test('keeps the newest injected wallet network when environment selections overlap', async () => {
 		const firstChainId = createDeferred<string>()
-		let mainnetBackendCount = 0
+		let backendCount = 0
 		const dependencies = {
 			createInjectedBackend: ({ profile = MAINNET_NETWORK_PROFILE } = {}) => {
 				const backend = createFakeBackend({ profile })
-				if (profile === MAINNET_NETWORK_PROFILE) {
-					mainnetBackendCount += 1
-					backend.getChainId = mainnetBackendCount === 1 ? async () => await firstChainId.promise : async () => MAINNET_NETWORK_PROFILE.chainIdHex
+				if (profile === SEPOLIA_NETWORK_PROFILE) {
+					backendCount += 1
+					backend.getChainId = backendCount === 1 ? async () => await firstChainId.promise : async () => MAINNET_NETWORK_PROFILE.chainIdHex
 				}
 				return backend
 			},
@@ -126,11 +126,12 @@ void describe('active environment', () => {
 		}
 		const firstInitialization = initializeActiveEnvironment({ hostname: 'localhost', search: '' }, dependencies)
 		const secondInitialization = initializeActiveEnvironment({ hostname: 'localhost', search: '' }, dependencies)
-		expect((await secondInitialization).profile).toBe(MAINNET_NETWORK_PROFILE)
+		const newestBackend = await secondInitialization
+		expect(newestBackend.profile).toBe(SEPOLIA_NETWORK_PROFILE)
 
 		firstChainId.resolve(SEPOLIA_NETWORK_PROFILE.chainIdHex)
-		expect((await firstInitialization).profile).toBe(MAINNET_NETWORK_PROFILE)
-		expect(getActiveBackend().profile).toBe(MAINNET_NETWORK_PROFILE)
+		expect(await firstInitialization).toBe(newestBackend)
+		expect(getActiveBackend()).toBe(newestBackend)
 	})
 
 	void test('does not commit a discovered wallet network when the commit guard closes', async () => {
@@ -146,8 +147,29 @@ void describe('active environment', () => {
 		const initialization = initializeActiveEnvironment({ hostname: 'localhost', search: '' }, dependencies, { shouldCommit: () => false })
 		walletChainId.resolve(SEPOLIA_NETWORK_PROFILE.chainIdHex)
 
-		expect((await initialization).profile).toBe(MAINNET_NETWORK_PROFILE)
-		expect(getActiveBackend().profile).toBe(MAINNET_NETWORK_PROFILE)
+		expect((await initialization).profile).toBe(SEPOLIA_NETWORK_PROFILE)
+		expect(getActiveBackend().profile).toBe(SEPOLIA_NETWORK_PROFILE)
+	})
+
+	void test('keeps Sepolia for absent wallets, mainnet wallets, and mainnet page or route links', async () => {
+		for (const location of [
+			{ hostname: 'localhost', search: '' },
+			{ hostname: 'localhost', search: '?network=mainnet' },
+			{ hostname: 'localhost', search: '', hash: '#/deploy?network=mainnet' },
+		]) {
+			for (const walletAvailable of [true, false]) {
+				const backend = await initializeActiveEnvironment(location, {
+					createInjectedBackend: ({ profile }) => ({
+						...createFakeBackend({ profile }),
+						getChainId: async () => {
+							if (!walletAvailable) throw new Error('No wallet')
+							return '0x1'
+						},
+					}),
+				})
+				expect(backend.profile).toBe(SEPOLIA_NETWORK_PROFILE)
+			}
+		}
 	})
 
 	void test('enables simulation mode when the explicit URL flag is present', async () => {
@@ -162,9 +184,9 @@ void describe('active environment', () => {
 		expect(await selectsSimulationBackend({ hash: '#/zoltar?simulate=1', hostname: 'example.com', search: '' })).toBe(true)
 	})
 
-	void test('treats both mainnet and simulation profiles as supported app chains', () => {
-		expect(isSupportedAppChain('0x1')).toBe(true)
-		expect(isSupportedAppChain('0x01')).toBe(true)
+	void test('supports Sepolia and simulation while mainnet is disabled', () => {
+		expect(isSupportedAppChain('0x1')).toBe(false)
+		expect(isSupportedAppChain('0x01')).toBe(false)
 
 		const resetEnvironment = installActiveEnvironmentForTesting(
 			createFakeBackend({
@@ -211,8 +233,8 @@ void describe('active environment', () => {
 	void test('clears wallet-scoped account access when the connected wallet is on the wrong network', () => {
 		const accountAddress = getAddress('0x00000000000000000000000000000000000000a1')
 
-		expect(getWalletScopedAccountAddress(accountAddress, '0x1')).toBe(accountAddress)
-		expect(getWalletScopedAccountAddress(accountAddress, '0xaa36a7')).toBeUndefined()
+		expect(getWalletScopedAccountAddress(accountAddress, '0xaa36a7')).toBe(accountAddress)
+		expect(getWalletScopedAccountAddress(accountAddress, '0x1')).toBeUndefined()
 		expect(getWalletScopedAccountAddress(undefined, '0x1')).toBeUndefined()
 		expect(getWalletScopedAccountAddress(accountAddress, undefined)).toBeUndefined()
 	})

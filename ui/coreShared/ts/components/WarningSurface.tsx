@@ -7,12 +7,12 @@ type WarningSurfaceProps = {
 	className?: string
 	role?: JSX.AriaRole | undefined
 	surface?: 'card' | 'flat'
-	variant?: 'compact' | 'default'
+	variant?: 'compact' | 'default' | 'prominent'
 }
 
 export function WarningSurface({ ariaLive, as = 'section', children, className = '', role, surface = 'card', variant = 'default' }: WarningSurfaceProps) {
 	const Tag = as
-	const classes = ['warning-surface', variant === 'compact' ? 'compact' : undefined, surface === 'flat' ? 'flat' : undefined, className].filter(Boolean).join(' ')
+	const classes = ['warning-surface', variant === 'default' ? undefined : variant, surface === 'flat' ? 'flat' : undefined, className].filter(Boolean).join(' ')
 
 	return (
 		<Tag className={classes} role={role} aria-live={ariaLive}>

@@ -1937,6 +1937,27 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	display: none;
 }
 
+.warning-surface.flat.prominent {
+	display: grid;
+	gap: var(--space-3);
+	margin-block: var(--space-4);
+	padding: clamp(1.25rem, 3vw, 2rem);
+	border-left: 6px solid var(--warning);
+	background: var(--notice-warning-gradient);
+	font-size: 1.125rem;
+}
+
+.warning-surface.prominent .notice-title {
+	margin: 0;
+	color: var(--warning);
+	font-size: clamp(1.5rem, 2.5vw, 2rem);
+	line-height: 1.2;
+}
+
+.warning-surface.prominent p {
+	margin: 0;
+}
+
 .warning-surface a {
 	color: inherit;
 	text-decoration-thickness: 0.08em;

@@ -28,7 +28,7 @@ body {
 	padding: 1rem;
 	border: 1px solid var(--border-strong);
 	border-radius: 0.6rem;
-	background: var(--surface-raised);
+	background: var(--surface-modal-opaque);
 	box-shadow: 0 1rem 2.5rem rgb(0 0 0 / 35%);
 	color: var(--text);
 }

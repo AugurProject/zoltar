@@ -124,6 +124,10 @@
 			"bun": "./ts/tests/app/appHeaderShell.test.tsx",
 			"default": "./js/tests/app/appHeaderShell.test.js"
 		},
+		"./tests/app/mainnetDisabledNotice.test.js": {
+			"bun": "./ts/tests/app/mainnetDisabledNotice.test.tsx",
+			"default": "./js/tests/app/mainnetDisabledNotice.test.js"
+		},
 		"./tests/app/appStatusNotices.test.js": {
 			"bun": "./ts/tests/app/appStatusNotices.test.tsx",
 			"default": "./js/tests/app/appStatusNotices.test.js"
@@ -283,6 +287,10 @@
 		"./app/components/AppHeaderShell.js": {
 			"bun": "./ts/app/components/AppHeaderShell.tsx",
 			"default": "./js/app/components/AppHeaderShell.js"
+		},
+		"./app/components/MainnetDisabledNotice.js": {
+			"bun": "./ts/app/components/MainnetDisabledNotice.tsx",
+			"default": "./js/app/components/MainnetDisabledNotice.js"
 		},
 		"./app/components/AppPageHeading.js": {
 			"bun": "./ts/app/components/AppPageHeading.tsx",

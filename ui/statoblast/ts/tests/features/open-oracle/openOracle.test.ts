@@ -1,6 +1,6 @@
 /// <reference types="bun-types" />
 
-import { beforeAll, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { getAddress, maxUint256, zeroAddress, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { createOpenOracleReportInstance, loadOpenOracleWithdrawableBalances, loadOpenOracleReportDetails, loadOpenOracleReportSummaries, settleOracleReport, withdrawOpenOracleBalance, wrapWeth as wrapUiWeth } from '@zoltar/ui-statoblast-shared/protocol/openOracle.js'
 import { executeOracleManagerStagedOperation, loadCoordinatorInitialReportFundingRequirement, loadOracleManagerDetails, queueOracleManagerOperation, queueSecurityPoolLiquidation, requestOraclePrice } from '@zoltar/ui-statoblast-shared/protocol/oracleCoordinator.js'
@@ -24,12 +24,13 @@ import { loadOpenOracleInitialReportPrice } from '@zoltar/ui-statoblast-shared/p
 import { getDefaultOpenOracleCreateFormState } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/formDefaults.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { ETH_ADDRESS } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
-import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
+import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 
 const REP_ADDRESS = getAddress(MAINNET_NETWORK_PROFILE.genesisRepTokenAddress)
 const USDC_ADDRESS = MAINNET_NETWORK_PROFILE.usdcAddress
 const UNISWAP_V4_QUOTER_ADDRESS = MAINNET_NETWORK_PROFILE.uniswapV4QuoterAddress
-import { resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { createInjectedBackend } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
+import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { statoblast_openOracle_OpenOracle_OpenOracle } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import type { InjectedEthereum } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'
 import type { WriteContractClient } from '@zoltar/ui-zoltar-shared/protocol/core.js'
@@ -49,7 +50,6 @@ function installInjectedEthereum(mockWindow: AnvilWindowEthereum, accountAddress
 	if (globalWindow.window === undefined) globalWindow.window = globalThis as Window & typeof globalThis
 	const request: InjectedEthereum['request'] = async args => {
 		if (args.method === 'eth_accounts' || args.method === 'eth_requestAccounts') return [accountAddress] as never
-		if (args.method === 'eth_chainId') return '0x1' as never
 		return (await mockWindow.request(args)) as never
 	}
 	const injectedEthereum: InjectedEthereum = {
@@ -175,8 +175,10 @@ describe('Open Oracle helpers', () => {
 
 	beforeAll(async () => {
 		mockWindow = getAnvilWindowEthereum()
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		await mockWindow.request({ method: 'anvil_setChainId', params: [SEPOLIA_NETWORK_PROFILE.chain.id] })
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0, SEPOLIA_NETWORK_PROFILE.chain)
 		installInjectedEthereum(mockWindow)
+		installActiveEnvironmentForTesting(createInjectedBackend({ profile: { ...MAINNET_NETWORK_PROFILE, chain: SEPOLIA_NETWORK_PROFILE.chain, chainIdHex: SEPOLIA_NETWORK_PROFILE.chainIdHex, id: 'sepolia', displayName: 'Sepolia' } }))
 		uiReadClient = createConnectedReadClient()
 		uiWriteClient = createWalletWriteClient(addressString(TEST_ADDRESSES[0]))
 		await setupTestAccounts(mockWindow)
@@ -202,14 +204,18 @@ describe('Open Oracle helpers', () => {
 		await setBaselineSnapshot()
 	})
 
-	beforeEach(() => {
+	beforeEach(async () => {
 		resetActiveEnvironmentForTesting()
 		mockWindow = getAnvilWindowEthereum()
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		await mockWindow.request({ method: 'anvil_setChainId', params: [SEPOLIA_NETWORK_PROFILE.chain.id] })
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0, SEPOLIA_NETWORK_PROFILE.chain)
 		installInjectedEthereum(mockWindow)
+		installActiveEnvironmentForTesting(createInjectedBackend({ profile: { ...MAINNET_NETWORK_PROFILE, chain: SEPOLIA_NETWORK_PROFILE.chain, chainIdHex: SEPOLIA_NETWORK_PROFILE.chainIdHex, id: 'sepolia', displayName: 'Sepolia' } }))
 		uiReadClient = createConnectedReadClient()
 		uiWriteClient = createWalletWriteClient(addressString(TEST_ADDRESSES[0]))
 	})
+
+	afterEach(() => resetActiveEnvironmentForTesting())
 
 	test('getOpenOracleAddress returns the deterministic non-zero oracle address', () => {
 		expect(getOpenOracleAddress()).not.toBe(zeroAddress)

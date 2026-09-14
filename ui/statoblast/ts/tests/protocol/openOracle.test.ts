@@ -9,7 +9,7 @@ import { loadOracleManagerDetails } from '@zoltar/ui-statoblast-shared/protocol/
 import { getOpenOracleAddress } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import { loadLiquidationApproval, type LiquidationApprovalParams } from '@zoltar/ui-statoblast-shared/protocol/liquidationApprovals.js'
 import { statoblast_openOracle_OpenOracle_OpenOracle } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
-import { MAINNET_WETH_ADDRESS } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
+import { SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { createBlockWithTimestamp, createMockLoaderClient, createMockWriteClient, getContractFunctionName } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { getOpenOracleDisputeSwapTokenKey } from '@zoltar/ui-statoblast-shared/protocol/openOracleMath.js'
 
@@ -17,7 +17,7 @@ const vaultAddress = getAddress('0x00000000000000000000000000000000000000c1')
 const alternateSecurityPoolAddress = getAddress('0x00000000000000000000000000000000000000a2')
 const token1Address = getAddress('0x00000000000000000000000000000000000000d1')
 const token2Address = getAddress('0x00000000000000000000000000000000000000d2')
-const wethAddress = getAddress(MAINNET_WETH_ADDRESS)
+const wethAddress = getAddress(SEPOLIA_NETWORK_PROFILE.wethAddress)
 const initialReporter = getAddress('0x00000000000000000000000000000000000000e1')
 
 function createOpenOraclePreimage(reportId = 1n): OpenOracleStatePreimage {

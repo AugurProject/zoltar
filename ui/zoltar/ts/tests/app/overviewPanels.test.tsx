@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 import { OverviewPanels } from '@zoltar/ui-zoltar-shared/features/overview/OverviewPanels.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
@@ -43,7 +43,7 @@ describe('OverviewPanels', () => {
 			activeUniverseId: 0n,
 			accountState: {
 				address: undefined,
-				chainId: '0x1',
+				chainId: '0xaa36a7',
 				ethBalanceAttoEth: undefined,
 				wethBalanceAttoEth: undefined,
 			},
@@ -245,7 +245,7 @@ describe('OverviewPanels', () => {
 		const documentQueries = await renderOverviewPanels({
 			accountState: {
 				address: '0x1234567890123456789012345678901234567890',
-				chainId: '0xaa36a7',
+				chainId: '0x1',
 				ethBalanceAttoEth: undefined,
 				wethBalanceAttoEth: undefined,
 			},
@@ -255,11 +255,11 @@ describe('OverviewPanels', () => {
 		})
 
 		openAccountMenu()
-		expect(documentQueries.getByText('Sepolia (11155111)')).not.toBeNull()
+		expect(documentQueries.getByText('Ethereum (1)')).not.toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Copy Address' })).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Address Copied' })).toBeNull()
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Change wallet' }))
-		fireEvent.click(documentQueries.getByRole('button', { name: 'Switch to Ethereum mainnet' }))
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Switch to Sepolia' }))
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Disconnect' }))
 
 		expect(onChangeWallet).toHaveBeenCalledTimes(1)
@@ -272,7 +272,7 @@ describe('OverviewPanels', () => {
 		const documentQueries = await renderOverviewPanels({
 			accountState: {
 				address,
-				chainId: '0x1',
+				chainId: '0xaa36a7',
 				ethBalanceAttoEth: undefined,
 				wethBalanceAttoEth: undefined,
 			},
@@ -392,6 +392,26 @@ describe('OverviewPanels', () => {
 		expect(document.body.textContent).not.toContain('Migration required')
 	})
 
+	test('places both critical notices below the wallet and before balances', async () => {
+		const backend = createFakeBackend({ accountAddress: '0x1234567890123456789012345678901234567890' })
+		backend.getChainId = async () => '0x1'
+		const restore = installActiveEnvironmentForTesting(backend)
+		try {
+			await renderOverviewPanels({ universeHasForked: true })
+			await waitFor(() => expect(document.body.querySelector('.mainnet-disabled-notice')).not.toBeNull())
+			const toolbar = document.body.querySelector('.header-toolbar')
+			const mainnet = document.body.querySelector('.mainnet-disabled-notice')
+			const fork = document.body.querySelector('.universe-fork-notice')
+			expect(toolbar?.nextElementSibling).toBe(mainnet)
+			expect(mainnet?.nextElementSibling).toBe(fork)
+			expect(fork?.nextElementSibling?.classList.contains('overview-inline-metrics')).toBe(true)
+			expect(mainnet?.getAttribute('role')).toBe('alert')
+			expect(fork?.getAttribute('role')).toBe('alert')
+		} finally {
+			restore()
+		}
+	})
+
 	test('does not render a redundant forked badge in the toolbar badge slot', async () => {
 		await renderOverviewPanels({
 			universeHasForked: true,
@@ -476,7 +496,7 @@ describe('OverviewPanels', () => {
 		await cleanupRenderedComponent?.()
 
 		await renderOverviewPanels({
-			accountState: { address: '0x1234567890123456789012345678901234567890', chainId: '0x1', ethBalanceAttoEth: 2n * 10n ** 18n, wethBalanceAttoEth: 10n ** 18n },
+			accountState: { address: '0x1234567890123456789012345678901234567890', chainId: '0xaa36a7', ethBalanceAttoEth: 2n * 10n ** 18n, wethBalanceAttoEth: 10n ** 18n },
 			universeRepBalanceAttoRep: 5n * 10n ** 18n,
 		})
 		expect(readSlots()).toEqual(expectedSlots)
@@ -504,7 +524,7 @@ describe('OverviewPanels', () => {
 		const documentQueries = await renderOverviewPanels({
 			accountState: {
 				address: '0x1234567890123456789012345678901234567890',
-				chainId: '0x1',
+				chainId: '0xaa36a7',
 				ethBalanceAttoEth: 999999990000n * 10n ** 18n,
 				wethBalanceAttoEth: 10000n * 10n ** 18n,
 			},
