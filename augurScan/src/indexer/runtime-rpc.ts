@@ -1,4 +1,4 @@
-import { errorChain } from '@zoltar/core-shared/errors/errorChain'
+import { errorChain } from '../../../shared/core/ts/errors/errorChain.ts'
 import type { AddressActivity, StoredTransaction } from '../database.ts'
 import { type Address, createPublicClient, type Hash, http, type Log, type PublicClient, type RpcFetchFn, zeroAddress } from '../ethereum.ts'
 import { safePrunedStateProviderMessage } from '../logging.ts'

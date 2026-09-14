@@ -1,4 +1,4 @@
-import { errorChain } from '@zoltar/core-shared/errors/errorChain'
+import { errorChain } from '../../../shared/core/ts/errors/errorChain.ts'
 import { DatabaseConsistencyError, databaseConsistencyDiagnosticMessage } from '../database.ts'
 import { safeIndexerFailureReason } from './runtime-diagnostics.ts'
 

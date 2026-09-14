@@ -1,4 +1,4 @@
-import { errorChain } from '@zoltar/core-shared/errors/errorChain'
+import { errorChain } from '../../../shared/core/ts/errors/errorChain.ts'
 import { errorChainIncludes } from '../error-chain.ts'
 import { jsonRpcErrorName, safeRpcProviderMessage } from '../logging.ts'
 import { rpcQueueSaturationFrom, RpcRequestMethodError } from '../rpc-request-queue.ts'

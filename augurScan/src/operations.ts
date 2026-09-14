@@ -1,4 +1,4 @@
-import { ceilDiv as divideUp } from '@zoltar/core-shared/math/bigint'
+import { ceilDiv as divideUp } from '../../shared/core/ts/math/bigint.ts'
 import { compareBigint } from './compare.ts'
 type ReportClock = 'block' | 'timestamp'
 

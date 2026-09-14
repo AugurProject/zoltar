@@ -1,4 +1,4 @@
-import { errorChain } from '@zoltar/core-shared/errors/errorChain'
+import { errorChain } from '../../shared/core/ts/errors/errorChain.ts'
 import type { Transport } from './ethereum.ts'
 
 export type RpcRequestQueue = {
