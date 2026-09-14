@@ -270,7 +270,7 @@ export function getExplorerTargets(chainId: number, environment: Readonly<Record
 	]
 }
 
-export type ExplorerFetch = (url: string, init?: { body?: string; headers?: Record<string, string>; method?: string }) => Promise<{ json(): Promise<unknown>; ok: boolean; status: number }>
+export type ExplorerFetch = (url: string, init?: { body?: string; headers?: Record<string, string>; method?: string }) => Promise<{ body?: { cancel(): Promise<void> } | null; headers?: { get(name: string): string | null }; json(): Promise<unknown>; ok: boolean; status: number }>
 
 export type VerificationOutcome = {
 	detail?: string
@@ -283,6 +283,50 @@ export type StandardJsonInputs = Readonly<Record<CompilerProfile, { compilerVers
 const SUBMISSION_DELAY_MILLISECONDS = 500
 const POLL_INTERVAL_MILLISECONDS = 5_000
 const POLL_TIMEOUT_MILLISECONDS = 5 * 60 * 1_000
+
+const REQUEST_DELAY_MILLISECONDS = 1_000
+const MAX_RATE_LIMIT_RETRIES = 4
+const MAX_RATE_LIMIT_DELAY_MILLISECONDS = 5 * 60_000
+
+function rateLimitDelay(retryAfter: string | null | undefined, retry: number): number {
+	const backoff = 2_000 * 2 ** retry
+	if (retryAfter === undefined || retryAfter === null) return backoff
+	const value = retryAfter.trim()
+	const requestedDelay = /^\d+$/.test(value) ? Number(value) * 1_000 : Date.parse(value) - Date.now()
+	return Number.isNaN(requestedDelay) ? backoff : Math.max(backoff, requestedDelay)
+}
+
+// All explorer stages share this transport so lookups, submissions, and polls
+// respect the same pacing, including when a contract is already verified.
+function createPacedExplorerFetch(fetchFn: ExplorerFetch, target: ExplorerTarget, sleep: (milliseconds: number) => Promise<void>, log: (message: string) => void): ExplorerFetch {
+	let hasRequested = false
+	let nextRequestDelay = REQUEST_DELAY_MILLISECONDS
+	let cooldownError: Error | undefined
+	return async (requestUrl, init) => {
+		if (cooldownError !== undefined) throw cooldownError
+		if (hasRequested) await sleep(nextRequestDelay)
+		nextRequestDelay = REQUEST_DELAY_MILLISECONDS
+		hasRequested = true
+		for (let retry = 0; ; retry += 1) {
+			const response = await fetchFn(requestUrl, init)
+			if (response.status !== 429) return response
+			await response.body?.cancel()
+			const delay = rateLimitDelay(response.headers?.get('retry-after'), retry)
+			// Do not retry earlier than requested or allow an unbounded server wait.
+			if (delay > MAX_RATE_LIMIT_DELAY_MILLISECONDS) {
+				cooldownError = new Error(`${target.name} responded with HTTP 429; Retry-After exceeds the ${(MAX_RATE_LIMIT_DELAY_MILLISECONDS / 1_000).toString()}s retry wait limit. Rerun verification later.`)
+				throw cooldownError
+			}
+			if (retry >= MAX_RATE_LIMIT_RETRIES) {
+				// The provider's cooldown also applies to the next contract or poll.
+				nextRequestDelay = delay
+				throw new Error(`${target.name} responded with HTTP 429 after ${MAX_RATE_LIMIT_RETRIES.toString()} retries`)
+			}
+			log(`  ${target.name}: HTTP 429; retry ${(retry + 1).toString()}/${MAX_RATE_LIMIT_RETRIES.toString()} in ${(delay / 1_000).toString()}s`)
+			await sleep(delay)
+		}
+	}
+}
 
 function isAlreadyVerifiedMessage(message: string) {
 	return /already verified/i.test(message)
@@ -359,7 +403,8 @@ async function pollVerificationStatus(fetchFn: ExplorerFetch, target: ExplorerTa
 }
 
 export async function verifyContractsWithExplorer(parameters: { fetchFn: ExplorerFetch; inputs: StandardJsonInputs; jobs: readonly VerificationJob[]; log: (message: string) => void; sleep: (milliseconds: number) => Promise<void>; target: ExplorerTarget }): Promise<VerificationOutcome[]> {
-	const { fetchFn, inputs, jobs, log, sleep, target } = parameters
+	const { inputs, jobs, log, sleep, target } = parameters
+	const fetchFn = createPacedExplorerFetch(parameters.fetchFn, target, sleep, log)
 	const outcomes: VerificationOutcome[] = []
 	const pendingSubmissions: { guid: string; job: VerificationJob }[] = []
 	for (const job of jobs) {
@@ -382,7 +427,6 @@ export async function verifyContractsWithExplorer(parameters: { fetchFn: Explore
 			log(`  ${job.label} (${job.address}): failed (${detail})`)
 			outcomes.push({ detail, id: job.id, status: 'failed' })
 		}
-		await sleep(SUBMISSION_DELAY_MILLISECONDS)
 	}
 	for (const { guid, job } of pendingSubmissions) {
 		try {
