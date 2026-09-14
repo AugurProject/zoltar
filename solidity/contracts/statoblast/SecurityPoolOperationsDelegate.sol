@@ -148,10 +148,8 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 	}
 
 	function _requireVaultAdmissionOpen(ISecurityPoolRepDepositContext pool) private view {
-		if (
-			systemState != SystemState.Operational ||
-			IZoltarForkState(pool.zoltar()).getForkTime(pool.universeId()) != 0
-		) revert('Pool is not operational');
+		require(IZoltarForkState(pool.zoltar()).getForkTime(pool.universeId()) == 0, 'Forked');
+		require(systemState == SystemState.Operational, 'Pool inactive');
 		if (pool.isEscalationResolved()) revert('Escalation resolved');
 		if (
 			block.timestamp >= IQuestionEndTime(pool.questionData()).getQuestionEndDate(pool.questionId()) &&

@@ -1,5 +1,5 @@
 {
-  "sourceHash": "5d24fd500f8884da94ba31e895fdeabc316d088a7ce0a44534b3eaae04874f62",
+  "sourceHash": "3ed9f0853c26683be370e13ed17d56638477e79c0335a9a40279e1df8b284253",
   "contracts": {
     "DeploymentStatusOracle": {
       "source": "contracts/DeploymentStatusOracle.sol",
@@ -17952,6 +17952,31 @@
             {
               "indexed": true,
               "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "backingFactorBps",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "capacityOwnershipAttoRep",
+              "type": "uint256"
+            }
+          ],
+          "name": "VaultBackingFactorAdjusted",
+          "type": "event"
+        },
+        {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "address",
               "name": "targetVault",
               "type": "address"
             },
@@ -24211,6 +24236,19 @@
         },
         {
           "inputs": [],
+          "name": "escalationGame",
+          "outputs": [
+            {
+              "internalType": "contract EscalationGame",
+              "name": "",
+              "type": "address"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
           "name": "eventEmitter",
           "outputs": [
             {
@@ -24436,6 +24474,31 @@
             {
               "indexed": true,
               "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "backingFactorBps",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "capacityOwnershipAttoRep",
+              "type": "uint256"
+            }
+          ],
+          "name": "VaultBackingFactorAdjusted",
+          "type": "event"
+        },
+        {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "address",
               "name": "targetVault",
               "type": "address"
             },
@@ -24491,6 +24554,19 @@
           ],
           "name": "VaultDepositTargetHealthFactorRecorded",
           "type": "event"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "uint256",
+              "name": "backingFactorBps",
+              "type": "uint256"
+            }
+          ],
+          "name": "adjustVaultBackingFactor",
+          "outputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function"
         },
         {
           "inputs": [],
@@ -29790,6 +29866,19 @@
         {
           "inputs": [],
           "name": "activateForkMode",
+          "outputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "uint256",
+              "name": "backingFactorBps",
+              "type": "uint256"
+            }
+          ],
+          "name": "adjustVaultBackingFactor",
           "outputs": [],
           "stateMutability": "nonpayable",
           "type": "function"

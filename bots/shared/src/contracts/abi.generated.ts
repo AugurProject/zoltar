@@ -829,6 +829,16 @@ export const securityPoolAbi = [
 	},
 	{
 		type: 'event',
+		name: 'VaultBackingFactorAdjusted',
+		anonymous: false,
+		inputs: [
+			{ name: 'vault', type: 'address', internalType: 'address', indexed: true },
+			{ name: 'backingFactorBps', type: 'uint256', internalType: 'uint256', indexed: false },
+			{ name: 'capacityOwnershipAttoRep', type: 'uint256', internalType: 'uint256', indexed: false },
+		],
+	},
+	{
+		type: 'event',
 		name: 'VaultBadDebtRecorded',
 		anonymous: false,
 		inputs: [
