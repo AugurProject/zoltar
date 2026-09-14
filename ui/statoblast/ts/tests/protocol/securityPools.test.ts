@@ -2,8 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { bigintToSafeNumber, getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
-import { isSecurityPoolVaultAdmissionClosed, loadAllSecurityPools, loadSecurityPoolChildren, loadSecurityPoolPage } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
+import { isSecurityPoolVaultAdmissionClosed, loadAllSecurityPools, loadSecurityPoolLineage, loadSecurityPoolChildren, loadSecurityPoolPage } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
 import { loadSecurityPoolMintCapacity } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
 import { createBlockWithTimestamp, createMockLoaderClient, createMulticallStub, getContractFunctionName } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 
@@ -29,6 +28,21 @@ const createPoolAccountingSnapshot = (settlementCollateralAttoEth = 0n, totalCap
 })
 
 describe('securityPools protocol client', () => {
+	test('opens a pool using the deployment registry without scanning historical logs', async () => {
+		const client = createMockLoaderClient({
+			getBlock: async () => ({ hash: `0x${'11'.repeat(32)}`, number: 10_000_000n, timestamp: 0n }),
+			getLogs: async () => {
+				throw new Error('Pool lookup must not scan historical logs')
+			},
+			multicall: async () => [],
+			readContract: async request => {
+				if (request.functionName === 'securityPoolDeploymentCount') return 0n
+				throw new Error(`Unexpected read: ${request.functionName}`)
+			},
+		})
+		expect(await loadSecurityPoolLineage(client, securityPoolAddress)).toEqual([])
+	})
+
 	test('revalidates ordinary vault admission against latest chain time while keeping genuine continuations open', async () => {
 		let currentTimestamp = 100n
 		let escalationGame = zeroAddress
@@ -63,36 +77,19 @@ describe('securityPools protocol client', () => {
 		expect(await isSecurityPoolVaultAdmissionClosed(client, securityPoolAddress)).toBe(false)
 	})
 
-	test('loads selected child deployments in bounded canonical log ranges', async () => {
-		const headHash = `0x${'11'.repeat(32)}` as const
-		const requestedRanges: Array<{ fromBlock: bigint; toBlock: bigint }> = []
-		const requestedEvents: unknown[] = []
-		const deploySecurityPoolEvent = statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi.find(entry => entry.type === 'event' && entry.name === 'DeploySecurityPool')
-		if (deploySecurityPoolEvent === undefined) throw new Error('DeploySecurityPool event missing from generated ABI')
+	test('loads selected children without log access', async () => {
 		const client = createMockLoaderClient({
-			getBlock: async () => ({ hash: headHash, number: 20_000n, timestamp: 0n }),
-			getLogs: async (request?: object) => {
-				const fromBlock = request === undefined ? undefined : Reflect.get(request, 'fromBlock')
-				const toBlock = request === undefined ? undefined : Reflect.get(request, 'toBlock')
-				if (typeof fromBlock !== 'bigint' || typeof toBlock !== 'bigint') throw new Error('Expected a bounded deployment log range')
-				requestedRanges.push({ fromBlock, toBlock })
-				requestedEvents.push(request === undefined ? undefined : Reflect.get(request, 'event'))
-				if (toBlock - fromBlock + 1n > 10_000n) throw new Error('block range is too large')
-				return []
+			getBlock: async () => ({ hash: `0x${'11'.repeat(32)}`, number: 20_000n, timestamp: 0n }),
+			getLogs: async () => {
+				throw new Error('Log access is unavailable')
 			},
 			multicall: async () => [],
 			readContract: async request => {
-				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+				if (request.functionName === 'securityPoolDeploymentCount') return 0n
+				throw new Error(`Unexpected read: ${request.functionName}`)
 			},
 		})
-
 		expect(await loadSecurityPoolChildren(client, securityPoolAddress)).toEqual([])
-		expect(requestedRanges).toEqual([
-			{ fromBlock: 0n, toBlock: 9_999n },
-			{ fromBlock: 10_000n, toBlock: 19_999n },
-			{ fromBlock: 20_000n, toBlock: 20_000n },
-		])
-		expect(requestedEvents).toEqual([deploySecurityPoolEvent, deploySecurityPoolEvent, deploySecurityPoolEvent])
 	})
 
 	test('rejects selected child deployments when their discovery anchor is replaced', async () => {
@@ -107,6 +104,7 @@ describe('securityPools protocol client', () => {
 			getLogs: async () => [],
 			multicall: async () => [],
 			readContract: async request => {
+				if (request.functionName === 'securityPoolDeploymentCount') return 0n
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
 		})

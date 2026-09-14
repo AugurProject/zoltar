@@ -72,6 +72,11 @@ const V3_FACTORY_ABI = [
 	},
 ] as const
 
+const V4_POOL_STATE_ABI = [
+	{ type: 'function', name: 'poolManager', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+	{ type: 'function', name: 'extsload', stateMutability: 'view', inputs: [{ name: 'slot', type: 'bytes32' }], outputs: [{ type: 'bytes32' }] },
+] as const
+
 const QUOTER_ABI = [
 	{
 		name: 'quoteExactInputSingle',
@@ -239,6 +244,14 @@ export async function quoteExactInput(client: ReadClient, tokenIn: Address, toke
 	const tokenOutBig = BigInt(tokenOut)
 	const zeroForOne = tokenInBig < tokenOutBig
 	const [currency0, currency1] = zeroForOne ? [tokenIn, tokenOut] : [tokenOut, tokenIn]
+
+	const poolManager = await client.readContract({ address: getActiveNetworkProfile().uniswapV4QuoterAddress, abi: V4_POOL_STATE_ABI, functionName: 'poolManager', args: [] })
+	const poolId = buildUniswapV4PoolId(currency0, currency1, poolConfig)
+	// Uniswap v4 StateLibrary: pools is stored at slot 6; slot0's low 160 bits hold sqrtPriceX96.
+	// https://github.com/Uniswap/v4-core/blob/main/src/libraries/StateLibrary.sol
+	const stateSlot = keccak256(encodeAbiParameters([{ type: 'bytes32' }, { type: 'uint256' }], [poolId, 6n]))
+	const slot0 = await client.readContract({ address: poolManager, abi: V4_POOL_STATE_ABI, functionName: 'extsload', args: [stateSlot] })
+	if ((BigInt(slot0) & ((1n << 160n) - 1n)) === 0n) throw new Error('Uniswap V4 pool is not initialized')
 
 	const { result } = await client.simulateContract({
 		address: getActiveNetworkProfile().uniswapV4QuoterAddress,

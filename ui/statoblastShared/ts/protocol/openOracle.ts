@@ -10,7 +10,7 @@ import type { OpenOracleActionResult, OpenOracleWithdrawableBalances, ReadClient
 import { getProtocolPageOffset, hasTimestampAndNumber } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 import { type WriteContractClient, readRequiredMulticall, writeContractAndWait } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { getOpenOracleAddress } from './deploymentHelpers.js'
-import { loadOpenOracleEventState, loadOpenOracleEventStates } from './openOracleState.js'
+import { loadOpenOracleStoredState, isOpenOracleStateUnavailable } from './openOracleState.js'
 import { requireBigintValue } from './decoders.js'
 
 const OPEN_ORACLE_PRICE_UNITS = 30n
@@ -53,8 +53,8 @@ function calculateOpenOraclePrice(amount1: bigint, amount2: bigint) {
 }
 
 export async function loadOpenOracleReportDetails(client: ReadClient, openOracleAddress: Address, reportId: bigint): Promise<import('@zoltar/ui-core-shared/types/contracts.js').OpenOracleReportDetails> {
-	const [eventState, stateHash, block] = await Promise.all([
-		loadOpenOracleEventState(client, openOracleAddress, reportId).catch(error => {
+	const [storedState, stateHash, block] = await Promise.all([
+		loadOpenOracleStoredState(client, openOracleAddress, reportId).catch(error => {
 			if (error instanceof Error && error.message === `Oracle report #${reportId.toString()} does not exist`) throw createOpenOracleReportMissingError(reportId)
 			throw error
 		}),
@@ -67,10 +67,9 @@ export async function loadOpenOracleReportDetails(client: ReadClient, openOracle
 		client.getBlock(),
 	])
 	if (!hasTimestampAndNumber(block)) throw new Error('Unexpected block response')
-	const { game } = eventState.latest
-	const initialGame = eventState.initial.game
-	const expectedStateHash = hashOpenOracleStatePreimage(eventState.latest)
-	if (stateHash.toLowerCase() !== expectedStateHash.toLowerCase()) throw new Error(`OpenOracle report #${reportId.toString()} event state does not match its on-chain state hash`)
+	const { game } = storedState.latest
+	const expectedStateHash = hashOpenOracleStatePreimage(storedState.latest)
+	if (stateHash.toLowerCase() !== expectedStateHash.toLowerCase()) throw new Error(`OpenOracle report #${reportId.toString()} stored state does not match its on-chain state hash`)
 	const [token1Decimals, token2Decimals, token1Symbol, token2Symbol] = await readRequiredMulticall(client, [
 		{
 			abi: ABIS.mainnet.erc20,
@@ -104,7 +103,7 @@ export async function loadOpenOracleReportDetails(client: ReadClient, openOracle
 		openOracleAddress,
 		currentTime: block.timestamp,
 		currentBlockNumber: block.number,
-		exactToken1Report: initialGame.currentAmount1,
+		exactToken1Report: storedState.initialAmount1,
 		escalationHalt: game.escalationHalt,
 		fee: 0n,
 		settlerRewardAttoEth: game.settlerRewardAttoEth,
@@ -122,12 +121,12 @@ export async function loadOpenOracleReportDetails(client: ReadClient, openOracle
 		currentReporter: game.currentReporter,
 		reportTimestamp: game.reportTimestamp,
 		settlementTimestamp: game.settlementTimestamp,
-		initialReporter: initialGame.currentReporter,
-		disputeOccurred: eventState.reportCount > 1n,
-		isDistributed: eventState.settled,
+		initialReporter: storedState.initialReporter,
+		disputeOccurred: storedState.reportCount > 1n,
+		isDistributed: storedState.settled,
 		stateHash,
 		callbackContract: game.callbackContract,
-		numReports: eventState.reportCount,
+		numReports: storedState.reportCount,
 		callbackGasLimit: bigintToSafeNumber(game.callbackGasLimit, 'Callback gas limit'),
 		protocolFeeRecipient: game.protocolFeeRecipient,
 		trackDisputes: hasOpenOracleFlag(game, OPEN_ORACLE_FLAG_TRACK_DISPUTES),
@@ -172,10 +171,23 @@ export async function loadOpenOracleReportSummaries(client: ReadClient, pageInde
 		reportIds.push(reportId)
 		if (reportId === pageStartId) break
 	}
-	const eventStates = await loadOpenOracleEventStates(client, openOracleAddress, new Set(reportIds))
+	const unavailableReports: Array<{ reportId: bigint; message: string }> = []
+	const storedStates = new Map<bigint, Awaited<ReturnType<typeof loadOpenOracleStoredState>>>()
+	await Promise.all(
+		reportIds.map(async reportId => {
+			try {
+				storedStates.set(reportId, await loadOpenOracleStoredState(client, openOracleAddress, reportId))
+			} catch (error) {
+				if (!isOpenOracleStateUnavailable(error)) throw error
+				unavailableReports.push({ reportId, message: error.message })
+			}
+		}),
+	)
+	unavailableReports.sort((a, b) => (a.reportId > b.reportId ? -1 : 1))
+	const supportedReportIds = reportIds.filter(reportId => storedStates.has(reportId))
 	const tokenAddresses = new Set<Address>()
-	for (const reportId of reportIds) {
-		const state = eventStates.get(reportId)
+	for (const reportId of supportedReportIds) {
+		const state = storedStates.get(reportId)
 		if (state === undefined) throw new Error(`Oracle report #${reportId.toString()} does not exist`)
 		tokenAddresses.add(state.latest.game.token1)
 		tokenAddresses.add(state.latest.game.token2)
@@ -214,8 +226,8 @@ export async function loadOpenOracleReportSummaries(client: ReadClient, pageInde
 			tokenMetadata.set(tokenAddress, normalizeOpenOracleTokenMetadata(tokenAddress, decimals, symbol))
 		}
 	}
-	const reports = reportIds.map(reportId => {
-		const state = eventStates.get(reportId)
+	const reports = supportedReportIds.map(reportId => {
+		const state = storedStates.get(reportId)
 		if (state === undefined) throw new Error('Unexpected oracle report summary response')
 		const game = state.latest.game
 		const token1Metadata = tokenMetadata.get(game.token1)
@@ -226,7 +238,7 @@ export async function loadOpenOracleReportSummaries(client: ReadClient, pageInde
 			currentAmount2: game.currentAmount2,
 			currentReporter: game.currentReporter,
 			disputeOccurred: state.reportCount > 1n,
-			exactToken1Report: state.initial.game.currentAmount1,
+			exactToken1Report: state.initialAmount1,
 			isDistributed: state.settled,
 			price: calculateOpenOraclePrice(game.currentAmount1, game.currentAmount2),
 			reportId,
@@ -247,6 +259,7 @@ export async function loadOpenOracleReportSummaries(client: ReadClient, pageInde
 		pageSize,
 		reportCount,
 		reports,
+		unavailableReports,
 	}
 }
 export async function createOpenOracleReportInstance(
@@ -405,12 +418,12 @@ export async function withdrawOpenOracleBalance<TReceipt extends Pick<Transactio
 }
 export async function settleOracleReport(client: WriteClient, openOracleAddress: Address, reportId: bigint): Promise<OpenOracleActionResult>
 export async function settleOracleReport<TReceipt extends Pick<TransactionReceipt, 'status'>>(client: WriteContractClient<TReceipt>, openOracleAddress: Address, reportId: bigint, preimage: OpenOracleStatePreimage): Promise<OpenOracleActionResult>
-export async function settleOracleReport<TReceipt extends Pick<TransactionReceipt, 'status'>>(client: WriteContractClient<TReceipt> & Partial<Pick<ReadClient, 'getBlock' | 'getLogs'> & Pick<WriteClient, 'account'>>, openOracleAddress: Address, reportId: bigint, preimage?: OpenOracleStatePreimage) {
+export async function settleOracleReport<TReceipt extends Pick<TransactionReceipt, 'status'>>(client: WriteContractClient<TReceipt> & Partial<Pick<ReadClient, 'readContract'> & Pick<WriteClient, 'account'>>, openOracleAddress: Address, reportId: bigint, preimage?: OpenOracleStatePreimage) {
 	let resolvedPreimage = preimage
 	if (resolvedPreimage === undefined) {
-		const { getBlock, getLogs } = client
-		if (getBlock === undefined || getLogs === undefined) throw new Error('OpenOracle settlement requires a client that can load report events')
-		resolvedPreimage = (await loadOpenOracleEventState({ getBlock, getLogs }, openOracleAddress, reportId)).latest
+		const { readContract } = client
+		if (readContract === undefined) throw new Error('OpenOracle settlement requires a client that can read stored report state')
+		resolvedPreimage = (await loadOpenOracleStoredState({ readContract }, openOracleAddress, reportId)).latest
 	}
 	const hash = await writeContractAndWait(client, () => ({
 		address: openOracleAddress,
@@ -425,7 +438,7 @@ export async function settleOracleReport<TReceipt extends Pick<TransactionReceip
 	} satisfies OpenOracleActionResult
 }
 export async function disputeOracleReport(client: WriteClient, openOracleAddress: Address, reportId: bigint, tokenToSwap: Address, newAmount1: bigint, newAmount2: bigint, _amt2Expected: bigint, stateHash: Hex) {
-	const state = await loadOpenOracleEventState(client, openOracleAddress, reportId)
+	const state = await loadOpenOracleStoredState(client, openOracleAddress, reportId)
 	const currentStateHash = hashOpenOracleStatePreimage(state.latest)
 	if (currentStateHash.toLowerCase() !== stateHash.toLowerCase()) throw new Error('This report changed on-chain while the dispute was being prepared. Retry to use the latest state.')
 	const derivedTokenToSwap = getOpenOracleDisputeSwapToken(state.latest.game, newAmount1, newAmount2)

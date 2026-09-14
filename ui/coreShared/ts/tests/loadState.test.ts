@@ -14,6 +14,38 @@ function createDeferred<T>() {
 }
 
 void describe('load state helpers', () => {
+	void test('times out a stalled read, allows retry, and ignores its late result', async () => {
+		const controller = createLoadController({ timeoutMilliseconds: 5 })
+		const stalled = createDeferred<number>()
+		const values: number[] = []
+		let errorMessage: string | undefined
+		const pending = controller.run({
+			load: () => stalled.promise,
+			onSuccess: value => {
+				values.push(value)
+			},
+			onError: error => {
+				errorMessage = error instanceof Error ? error.message : String(error)
+			},
+		})
+		try {
+			await Promise.race([pending, new Promise(resolve => setTimeout(resolve, 50))])
+			expect(controller.isLoading.value).toBe(false)
+			expect(errorMessage).toContain('timed out')
+			await controller.run({
+				load: async () => 2,
+				onSuccess: value => {
+					values.push(value)
+				},
+			})
+			stalled.resolve(1)
+			await pending
+			expect(values).toEqual([2])
+		} finally {
+			stalled.resolve(1)
+		}
+	})
+
 	void test('starts idle and exposes loading state during successful runs', async () => {
 		const controller = createLoadController()
 		let started = false

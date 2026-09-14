@@ -277,13 +277,7 @@ export function SecurityPoolWorkflowSection({
 		selectedPoolLookupState,
 		selectedPoolUniverseMismatch,
 	})
-	const selectedPoolWorkflowLockedPresentation = showSelectedPoolWorkflowDetails
-		? undefined
-		: getSelectedPoolWorkflowLockedPresentation({
-				hasSelectedPoolAddress,
-				selectedPoolLookupState,
-				selectedPoolUniverseMismatch,
-			})
+	const selectedPoolWorkflowLockedPresentation = showSelectedPoolWorkflowDetails || securityPoolOverviewError !== undefined ? undefined : getSelectedPoolWorkflowLockedPresentation({ hasSelectedPoolAddress, selectedPoolLookupState, selectedPoolUniverseMismatch })
 	const selectedVaultViewOptions: ViewTabOption<SelectedVaultView>[] = [
 		{ label: securityPoolCopy.directory, value: 'browse-vaults' },
 		{ label: commonCopy.selected, value: 'selected-vault' },
@@ -404,7 +398,7 @@ export function SecurityPoolWorkflowSection({
 	const stagedOperations = currentPoolOracleManagerDetails?.stagedOperations ?? (pendingOperation === undefined ? [] : [pendingOperation])
 	const pendingSettlementOperationIds = currentPoolOracleManagerDetails?.pendingSettlementOperationIds ?? []
 	const activeStagedOperationCount = currentPoolOracleManagerDetails?.activeStagedOperationCount ?? BigInt(stagedOperations.length)
-	const selectedPoolBrowsePresentation = selectedPool === undefined ? getPoolRegistryPresentation({ mode: 'selection', state: selectedPoolLookupState }) : undefined
+	const selectedPoolBrowsePresentation = selectedPool === undefined && securityPoolOverviewError === undefined ? getPoolRegistryPresentation({ mode: 'selection', state: selectedPoolLookupState }) : undefined
 	const selectedVaultLoadNotice = (() => {
 		if (securityVault.loadingSecurityVault)
 			return (

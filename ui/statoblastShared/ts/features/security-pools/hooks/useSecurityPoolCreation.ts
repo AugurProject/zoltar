@@ -1,3 +1,4 @@
+import { getQuestionId, getQuestionIdHex } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
 import { createSecurityPool, originSecurityPoolExists } from '../../../protocol/securityPools.js'
@@ -8,14 +9,14 @@ import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { getErrorMessage, isRecoverableContractReadError } from '@zoltar/ui-core-shared/lib/errors.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
 import type { ActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
-import { createSecurityPoolCreationTransactionIntent, createSecurityPoolCreationWarningPresentation } from '../../transactionPresentations.js'
+import { createSecurityPoolCreationSuccessPresentation, createSecurityPoolCreationTransactionIntent, createSecurityPoolCreationWarningPresentation } from '../../transactionPresentations.js'
 import { runWriteAction } from '@zoltar/ui-core-shared/transactions/writeAction.js'
-import { createSecurityPoolParameters } from '../../markets/lib/marketCreation.js'
+import { createMarketParameters, createSecurityPoolParameters } from '../../markets/lib/marketCreation.js'
 import { hasDeployedStep } from '@zoltar/ui-core-shared/lib/deploymentStatus.js'
 import { tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
 import { getDefaultSecurityPoolFormState, tryParseStatoblastSecurityMultiplierBpsInput } from '../../markets/lib/marketForm.js'
 import { tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
-import type { SecurityPoolFormState, TransactionLifecycleParameters, WriteOperationContext } from '../../../types/app.js'
+import type { MarketFormState, SecurityPoolFormState, TransactionLifecycleParameters, WriteOperationContext } from '../../../types/app.js'
 import type { DeploymentStatus, MarketDetails, SecurityPoolCreationResult } from '@zoltar/ui-core-shared/types/contracts.js'
 
 type UseSecurityPoolCreationParameters = TransactionLifecycleParameters &
@@ -131,7 +132,7 @@ export function useSecurityPoolCreation({
 		})
 	}
 
-	const createPool = async (questionIdOverride?: string, securityPoolFormOverride?: SecurityPoolFormState) => {
+	const createPool = async (questionIdOverride?: string, securityPoolFormOverride?: SecurityPoolFormState, newQuestionForm?: MarketFormState) => {
 		if (securityPoolSubmissionInProgress.value) {
 			securityPoolError.value = 'Security pool creation already in progress'
 			return
@@ -185,9 +186,16 @@ export function useSecurityPoolCreation({
 					if (!hasDeployedStep(deploymentStatuses, 'securityPoolFactory')) throw new Error('Deploy SecurityPoolFactory before creating a security pool')
 					if (zoltarUniverseHasForked) throw new Error('Security pools cannot be created after the universe has forked')
 
-					const parameters = createSecurityPoolParameters(submittedSecurityPoolForm)
+					if (newQuestionForm !== undefined && newQuestionForm.marketType !== 'binary') throw new Error('Security pools require a binary question')
+					const newQuestion = newQuestionForm === undefined ? undefined : createMarketParameters(newQuestionForm)
+					const parameters = createSecurityPoolParameters(newQuestion === undefined ? submittedSecurityPoolForm : { ...submittedSecurityPoolForm, marketId: getQuestionId(newQuestion.questionData, newQuestion.outcomeLabels).toString() })
 					capturedQuestionId = parameters.questionId
-					const details = marketDetails.value?.questionId === parameters.questionId.toString() ? marketDetails.value : await loadMarketDetails(createConnectedReadClient(), parameters.questionId)
+					let details: MarketDetails
+					if (newQuestion === undefined) {
+						details = marketDetails.value?.questionId === parameters.questionId.toString() ? marketDetails.value : await loadMarketDetails(createConnectedReadClient(), parameters.questionId)
+					} else {
+						details = { ...newQuestion.questionData, marketType: 'binary', outcomeLabels: newQuestion.outcomeLabels, questionId: getQuestionIdHex(parameters.questionId), exists: true, createdAt: 0n }
+					}
 					if (!details.exists) throw new Error('No market found for that ID')
 					if (details.marketType !== 'binary') {
 						if (isCurrentSubmittedQuestion(parameters.questionId)) {
@@ -202,8 +210,8 @@ export function useSecurityPoolCreation({
 						throw new Error('A security pool for this question, Statoblast security multiplier, and priority fee already exists.')
 					}
 
-					capturedDetails = details
-					const result = await createSecurityPool(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), parameters)
+					const result = await createSecurityPool(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), parameters, newQuestion?.questionData)
+					capturedDetails = result.questionCreatedAt === undefined ? details : { ...details, createdAt: result.questionCreatedAt }
 					return { ...result, hash: result.deployPoolHash }
 				},
 				'Failed to create security pool',
@@ -215,6 +223,7 @@ export function useSecurityPoolCreation({
 						}
 					}
 					securityPoolResult.value = result
+					onTransactionPresented(createSecurityPoolCreationSuccessPresentation(result))
 					securityPoolCreationFeedback.value = createSuccessActionFeedback('createSecurityPool', 'Security pool created', result.hash)
 				},
 			)

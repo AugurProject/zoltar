@@ -1,3 +1,4 @@
+import { withTimeout } from './promise.js'
 import { signal, type Signal } from '@preact/signals'
 
 export type LoadPhase = 'idle' | 'loading'
@@ -46,7 +47,7 @@ export function resolveRequestedLoadableValueState<TValue, TKey>({ currentKey, i
 	return 'unknown'
 }
 
-export function createLoadController(): LoadController {
+export function createLoadController({ timeoutMilliseconds = 30_000 }: { timeoutMilliseconds?: number } = {}): LoadController {
 	const phase = signal<LoadPhase>('idle')
 	const isLoading = signal(false)
 	let generation = 0
@@ -83,7 +84,7 @@ export function createLoadController(): LoadController {
 		return await track(async () => {
 			onStart?.()
 			try {
-				const result = await load()
+				const result = await withTimeout(load(), timeoutMilliseconds, 'Loading timed out. Please retry.')
 				if (!isCurrentRequest()) return undefined
 				await onSuccess?.(result)
 				return result

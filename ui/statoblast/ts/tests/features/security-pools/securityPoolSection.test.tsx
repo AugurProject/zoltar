@@ -354,12 +354,8 @@ describe('SecurityPoolSection', () => {
 		expect(onCreateQuestionAndSecurityPool).toHaveBeenCalledTimes(0)
 		const marketTypeTrigger = within(document.body).getByRole('button', { name: /Question Type/ })
 		fireEvent.click(marketTypeTrigger)
-		const marketTypeListbox = within(document.body).getByRole('listbox', { name: 'Dropdown options' })
-		expect(
-			within(marketTypeListbox)
-				.getAllByRole('option')
-				.map(option => option.textContent?.trim()),
-		).toEqual(['Binary'])
+		expect(marketTypeTrigger.hasAttribute('disabled')).toBe(true)
+		expect(within(document.body).queryByRole('listbox', { name: 'Dropdown options' }) === null).toBe(true)
 	})
 
 	test('submits the combined question-and-pool action instead of standalone question creation', async () => {
@@ -409,7 +405,8 @@ describe('SecurityPoolSection', () => {
 			render(h(SecurityPoolSection, { ...baseProps, questionAndPoolCreating: true }), renderedComponent.container)
 		})
 
-		expect(documentQueries.getByRole('radio', { name: 'Use a question ID' }).matches(':disabled')).toBe(true)
+		expect(documentQueries.queryByRole('radio', { name: 'Use a question ID' }) === null).toBe(true)
+		expect(documentQueries.queryByText('How do you want to choose the pool question?') === null).toBe(true)
 		expect(documentQueries.getByText('Question created. The security pool transaction is next.')).not.toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Create pool from question' })).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Create another question' })).toBeNull()
@@ -418,7 +415,8 @@ describe('SecurityPoolSection', () => {
 		await act(() => {
 			render(h(SecurityPoolSection, baseProps), renderedComponent.container)
 		})
-		expect(documentQueries.getByRole('radio', { name: 'Use a question ID' }).matches(':disabled')).toBe(true)
+		expect(documentQueries.queryByRole('radio', { name: 'Use a question ID' }) === null).toBe(true)
+		expect(documentQueries.queryByText('How do you want to choose the pool question?') === null).toBe(true)
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Retry pool creation' }))
 		expect(onCreateSecurityPool).toHaveBeenCalledTimes(1)
 		expect(onCreateSecurityPool).toHaveBeenCalledWith('0x03')

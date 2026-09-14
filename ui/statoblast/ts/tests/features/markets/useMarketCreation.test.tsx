@@ -148,7 +148,7 @@ describe('useMarketCreation', () => {
 	})
 
 	test('clears the submission-in-progress latch after a pre-request wallet disconnect', async () => {
-		const createMarketTransaction = mock(async (_accountAddress: Address, _callbacks: { onTransactionSubmitted: (hash: Hash) => void }, _parameters: { questionData: { title: string } }) => ({
+		const createMarketTransaction = mock(async (_accountAddress: Address, _callbacks: { onTransactionSubmitted: (hash: Hash) => void }, _parameters: { questionData: { title: string }; marketType: string; outcomeLabels: string[] }) => ({
 			createQuestionHash: '0xabc' as Hash,
 			hash: '0xabc' as Hash,
 			marketType: 'binary' as const,
@@ -503,7 +503,7 @@ describe('useMarketCreation', () => {
 	})
 
 	test('keeps complete question drafts scoped by account and universe and clears a successful draft', async () => {
-		const createMarketTransaction = mock(async (_accountAddress: Address, _callbacks: { onTransactionSubmitted: (hash: Hash) => void }, _parameters: { questionData: { title: string } }) => ({
+		const createMarketTransaction = mock(async (_accountAddress: Address, _callbacks: { onTransactionSubmitted: (hash: Hash) => void }, _parameters: { questionData: { title: string }; marketType: string; outcomeLabels: string[] }) => ({
 			createQuestionHash: '0xabc' as Hash,
 			hash: '0xabc' as Hash,
 			marketType: 'scalar' as const,
@@ -583,7 +583,7 @@ describe('useMarketCreation', () => {
 			render(<Harness accountAddress={WALLET_ADDRESS} activeUniverseId={7n} />, renderedComponent.container)
 		})
 		await waitFor(() => {
-			expect(requireHookState(hookState).marketForm).toEqual(scalarDraft)
+			expect(requireHookState(hookState).marketForm).toEqual({ ...scalarDraft, marketType: 'binary' })
 		})
 
 		observedFormTitles = []
@@ -597,6 +597,8 @@ describe('useMarketCreation', () => {
 			await requireHookState(hookState).createMarket()
 		})
 		expect(createMarketTransaction.mock.calls[0]?.[2].questionData.title).toBe(categoricalDraft.title)
+		expect(createMarketTransaction.mock.calls[0]?.[2].marketType).toBe('binary')
+		expect(createMarketTransaction.mock.calls[0]?.[2].outcomeLabels).toEqual(['Yes', 'No'])
 
 		resetEnvironment?.()
 		resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: WALLET_ADDRESS }))

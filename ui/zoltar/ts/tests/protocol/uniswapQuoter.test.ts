@@ -1,4 +1,5 @@
 /// <reference types="bun-types" />
+import { createReadContractStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { describe, expect, test } from 'bun:test'
 import { createPublicClient, getAddress, http, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { ETH_ADDRESS, getRepAddress, quoteBestExactInputWithSource, quoteBestV3ExactInputWithSource, quoteExactInput, quoteRepForUsdcV4WithSource } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
@@ -55,9 +56,11 @@ function extractParams(args: SimulateArgs): CapturedCall {
 	}
 }
 function createStubReadClient(): ReadClient {
-	const readContract: ReadClient['readContract'] = async () => {
+	const readContract = createReadContractStub(async request => {
+		if (request.functionName === 'poolManager') return REP_ADDRESS
+		if (request.functionName === 'extsload') return `0x${'00'.repeat(31)}01`
 		throw new Error('readContract should not be used in this test')
-	}
+	})
 	const simulateContract: ReadClient['simulateContract'] = async () => {
 		throw new Error('simulateContract must be overridden in this test')
 	}
@@ -109,6 +112,15 @@ function createV3FeeAwareClient(amountsByFee: Partial<Record<number, bigint>>): 
 	return client
 }
 void describe('quoteExactInput', () => {
+	void test('does not simulate quotes for uninitialized V4 pools', async () => {
+		const { client } = createCapturingClient(5n)
+		client.readContract = createReadContractStub(async request => {
+			if (request.functionName === 'poolManager') return REP_ADDRESS
+			if (request.functionName === 'extsload') return `0x${'00'.repeat(32)}`
+			throw new Error(`Unexpected read: ${request.functionName}`)
+		})
+		await expect(quoteExactInput(client, REP_ADDRESS, ETH_ADDRESS, 1n)).rejects.toThrow('not initialized')
+	})
 	void test('quotes Sepolia REP/ETH through the Sepolia V4 quoter', async () => {
 		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: SEPOLIA_NETWORK_PROFILE }))
 		try {
