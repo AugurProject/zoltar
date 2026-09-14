@@ -54,3 +54,35 @@
 		display: none;
 	}
 }
+
+:root[data-product="statoblast"] {
+	--disabled-primary-button-bg: color-mix(in srgb, var(--accent) 16%, var(--surface-section-opaque));
+	--disabled-primary-button-border: color-mix(in srgb, var(--accent) 35%, var(--border-default));
+	--disabled-primary-button-text: var(--text-muted);
+}
+
+.pool-question-source {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 1rem;
+	border: 0;
+	padding: 0;
+	margin: 0;
+}
+
+.pool-question-source legend {
+	margin-bottom: 0.75rem;
+}
+
+.pool-question-source label {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	min-height: 2.75rem;
+	margin: 0;
+}
+
+.pool-question-source input {
+	width: auto;
+	margin: 0;
+}

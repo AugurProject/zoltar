@@ -74,7 +74,7 @@ function readStoredQuestionDraft(storageKey: string | undefined) {
 		const storedValue = getQuestionDraftStorage()?.getItem(storageKey)
 		if (storedValue === null || storedValue === undefined) return undefined
 		const parsedValue: unknown = JSON.parse(storedValue)
-		return isMarketFormState(parsedValue) ? parsedValue : undefined
+		return isMarketFormState(parsedValue) ? { ...parsedValue, marketType: 'binary' as const } : undefined
 	} catch (error) {
 		if (!(error instanceof SyntaxError) && !(error instanceof DOMException)) throw error
 		return undefined
@@ -156,7 +156,7 @@ export function useMarketCreation(
 		}
 	}, [accountAddress, activeUniverseId, questionDraftStorageKey])
 	const setMarketForm = (updater: (current: MarketFormState) => MarketFormState) => {
-		const nextForm = updater(getMarketForm())
+		const nextForm: MarketFormState = { ...updater(getMarketForm()), marketType: 'binary' }
 		writeQuestionDraft(questionDraftStorageKey, nextForm)
 		marketFormState.value = { form: nextForm, storageKey: questionDraftStorageKey }
 	}

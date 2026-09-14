@@ -30,7 +30,7 @@ export type RequestPriceReview = {
 }
 
 function getStagedOperationsRefreshLabel({ loadingManager, managerError, managerLoaded }: { loadingManager: boolean; managerError: string | undefined; managerLoaded: boolean }) {
-	if (!managerLoaded && managerError === undefined) return <LoadingText>{securityPoolCopy.loadingStagedOperations}</LoadingText>
+	if (!managerLoaded && loadingManager && managerError === undefined) return <LoadingText>{securityPoolCopy.loadingStagedOperations}</LoadingText>
 	if (!managerLoaded) return securityPoolCopy.retryStagedOperations
 	if (loadingManager) return <LoadingText>{securityPoolCopy.refreshingOperations}</LoadingText>
 	return securityPoolCopy.refreshStagedOperations

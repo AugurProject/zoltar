@@ -60,7 +60,7 @@ export async function loadCoreDeployments() {
 			},
 		] satisfies readonly CoreDeployment[]
 	}
-	const response = await fetch('./core-deployments.json', { cache: 'no-store' })
+	const response = await fetch('./core-deployments.json', { cache: 'no-store', signal: AbortSignal.timeout(30_000) })
 	if (!response.ok) throw new Error(`Core deployment registry failed with HTTP ${response.status.toString()}`)
 	const candidate: unknown = await response.json()
 	return parseCoreDeployments(candidate)

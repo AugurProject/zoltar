@@ -1,7 +1,6 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
-import { type SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
 import type { ForkAuctionDetails, ListedSecurityPool } from '@zoltar/ui-core-shared/types/contracts.js'
 
 export function buildSelectedPoolSummaryPool({ forkAuctionDetails, selectedPool }: { forkAuctionDetails: ForkAuctionDetails | undefined; selectedPool: ListedSecurityPool | undefined }) {
@@ -47,9 +46,4 @@ export function getPendingOperationAmountPresentation(operation: 'liquidation' |
 }
 export function getStagedOperationExecutionModeLabel(operationId: bigint, pendingSettlementOperationIds: bigint[]) {
 	return pendingSettlementOperationIds.includes(operationId) ? securityPoolCopy.autoExecPending : securityPoolCopy.manualExecution
-}
-export function getSecurityPoolStatusBadgeTone(systemState: SecurityPoolLifecycleState | undefined) {
-	if (systemState === 'operational') return 'ok'
-	if (systemState === undefined) return 'muted'
-	return 'warning'
 }

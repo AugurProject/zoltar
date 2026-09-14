@@ -1,83 +1,26 @@
-import { decodeEventLog, encodeAbiParameters, encodeDeployData, getAddress, getCreate2Address, keccak256, zeroAddress, type Address, type ContractFunctionParameters, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
-import {
-	statoblast_EscalationGame_EscalationGame,
-	statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
-	statoblast_SecurityPool_SecurityPool,
-	statoblast_SecurityPoolForker_SecurityPoolForker,
-	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
-	statoblast_tokens_ShareToken_ShareToken,
-} from '../contractArtifact.js'
+export { createSecurityPool, originSecurityPoolExists } from './securityPoolCreation.js'
+import { zeroAddress, type Address, type ContractFunctionParameters } from '@zoltar/core-shared/evm/ethereum'
+import { statoblast_EscalationGame_EscalationGame, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_SecurityPool_SecurityPool, statoblast_SecurityPoolForker_SecurityPoolForker, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory } from '../contractArtifact.js'
 import { ReputationToken_ReputationToken, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
-import { isIgnorableLogDecodeError } from '@zoltar/ui-core-shared/lib/errors.js'
 import { SECURITY_POOL_QUESTION_OUTCOME_ABI } from './securityPoolAbi.js'
 import { deriveHasForkActivity } from './forkActivity.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
-import type { ListedSecurityPool, SecurityPoolCreationResult, SecurityPoolPage, SecurityPoolVaultSummary, SecurityVaultDetails, WriteClient, ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
-import { readRequiredMulticall, writeContractAndWaitForReceipt } from '@zoltar/ui-zoltar-shared/protocol/core.js'
+import type { ListedSecurityPool, SecurityPoolPage, SecurityPoolVaultSummary, SecurityVaultDetails, ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
+import { readRequiredMulticall } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { requireForkDataView } from './forkData.js'
 import { getForkOutcomeKey, getProtocolPageOffset, getQuestionIdHex, getReportingOutcomeKey, getSecurityPoolSystemState } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 import { requireSecurityPoolDeploymentTupleArray, requireSecurityVaultTupleArray, type SecurityPoolDeploymentTuple } from './helpers.js'
-import { getDeploymentSteps } from './deployment.js'
-import { getInfraContractAddresses, getZoltarAddress } from './deploymentHelpers.js'
+import { getInfraContractAddresses } from './deploymentHelpers.js'
 import { loadMarketDetails } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
-import { fetchLogsWithAdaptiveRanges } from '@zoltar/core-shared/evm/logScan'
 const SECURITY_POOL_LIST_VAULT_PREVIEW_LIMIT = 50n
 const SECURITY_POOL_PAGE_VAULT_PREVIEW_LIMIT = 3n
 const SECURITY_POOL_VAULT_SCAN_LIMIT = 500n
 const SECURITY_POOL_VAULT_SCAN_PAGE_SIZE = 50n
-const MAXIMUM_DEPLOYMENT_LOG_RANGE = 10_000n
 const securityPoolFactoryAbi = statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi
-const deploySecurityPoolEvent = securityPoolFactoryAbi.find((entry: (typeof securityPoolFactoryAbi)[number]) => entry.type === 'event' && entry.name === 'DeploySecurityPool')
-if (deploySecurityPoolEvent === undefined) throw new Error('DeploySecurityPool event missing from ABI')
 type LoadAllSecurityPoolsOptions = {
 	accountAddress?: Address
 	selectedSecurityPoolAddress?: Address | string
 	vaultDetailMode?: 'all' | 'selected'
-}
-
-function getDeploymentStepAddress(id: 'securityPoolFactory' | 'zoltarQuestionData') {
-	const step = getDeploymentSteps().find(candidate => candidate.id === id)
-	if (step === undefined) throw new Error(`Unknown deployment step: ${id}`)
-	return step.address
-}
-
-function getSecurityPoolAddressFromReceipt(receipt: TransactionReceipt) {
-	const securityPoolFactory = getInfraContractAddresses().securityPoolFactory
-	for (const log of receipt.logs) {
-		if (!sameAddress(log.address, securityPoolFactory)) continue
-		try {
-			const decodedLog = decodeEventLog({
-				abi: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
-				data: log.data,
-				topics: log.topics,
-			})
-			if (decodedLog.eventName !== 'DeploySecurityPool') continue
-			const securityPoolAddress = decodedLog.args.securityPool
-			if (securityPoolAddress === undefined) throw new Error('Deployment event missing security pool address')
-			return securityPoolAddress
-		} catch (error) {
-			if (!isIgnorableLogDecodeError(error)) throw error
-			continue
-		}
-	}
-
-	throw new Error('Security pool deployment transaction succeeded without a DeploySecurityPool event')
-}
-
-function getOriginSecurityPoolShareTokenSalt(questionId: bigint, statoblastSecurityMultiplierBps: bigint, initialReportPriorityFeeAttoEthPerGas: bigint) {
-	return keccak256(encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint248' }], [questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas, 0n]))
-}
-
-function getOriginSecurityPoolShareTokenAddress(questionId: bigint, statoblastSecurityMultiplierBps: bigint, initialReportPriorityFeeAttoEthPerGas: bigint) {
-	return getCreate2Address({
-		from: getInfraContractAddresses().shareTokenFactory,
-		salt: getOriginSecurityPoolShareTokenSalt(questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas),
-		bytecode: encodeDeployData({
-			abi: statoblast_tokens_ShareToken_ShareToken.abi,
-			bytecode: `0x${statoblast_tokens_ShareToken_ShareToken.evm.bytecode.object}`,
-			args: [getInfraContractAddresses().securityPoolFactory, getZoltarAddress(), questionId],
-		}),
-	})
 }
 
 async function securityPoolExists(client: Pick<ReadClient, 'getCode'>, securityPoolAddress: Address) {
@@ -550,7 +493,7 @@ async function loadSecurityPoolDetails(
 	}
 }
 
-async function loadSecurityPoolDeployments(client: ReadClient, startIndex: bigint, count: bigint) {
+async function loadSecurityPoolDeployments(client: ReadClient, startIndex: bigint, count: bigint, blockNumber?: bigint) {
 	if (count === 0n) return [] as readonly SecurityPoolDeploymentTuple[]
 	return requireSecurityPoolDeploymentTupleArray(
 		await client.readContract({
@@ -558,6 +501,7 @@ async function loadSecurityPoolDeployments(client: ReadClient, startIndex: bigin
 			abi: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 			functionName: 'securityPoolDeploymentsRange',
 			args: [startIndex, count],
+			blockNumber,
 		}),
 		'security pool deployments range',
 	)
@@ -576,105 +520,70 @@ async function loadListedSecurityPools(
 	return await Promise.all(deployments.map(async deployment => await loadSecurityPoolDetails(client, deployment, options)))
 }
 
-function deploymentFromEvent(log: Readonly<{ args?: unknown }>): SecurityPoolDeploymentTuple {
-	const args = log.args
-	if (typeof args !== 'object' || args === null) throw new Error('Security pool deployment event is missing its arguments')
-	const initialReportPriorityFeeAttoEthPerGas = Reflect.get(args, 'initialReportPriorityFeeAttoEthPerGas')
-	const parent = Reflect.get(args, 'parent')
-	const priceOracleManagerAndOperatorQueuer = Reflect.get(args, 'priceOracleManagerAndOperatorQueuer')
-	const questionId = Reflect.get(args, 'questionId')
-	const statoblastSecurityMultiplierBps = Reflect.get(args, 'statoblastSecurityMultiplierBps')
-	const securityPool = Reflect.get(args, 'securityPool')
-	const truthAuction = Reflect.get(args, 'truthAuction')
-	const universeId = Reflect.get(args, 'universeId')
-	if (
-		typeof initialReportPriorityFeeAttoEthPerGas !== 'bigint' ||
-		typeof parent !== 'string' ||
-		typeof priceOracleManagerAndOperatorQueuer !== 'string' ||
-		typeof questionId !== 'bigint' ||
-		typeof statoblastSecurityMultiplierBps !== 'bigint' ||
-		typeof securityPool !== 'string' ||
-		typeof truthAuction !== 'string' ||
-		typeof universeId !== 'bigint'
-	) {
-		throw new Error('Security pool deployment event is incomplete')
-	}
-	return {
-		initialReportPriorityFeeAttoEthPerGas,
-		parent: getAddress(parent),
-		priceOracleManagerAndOperatorQueuer: getAddress(priceOracleManagerAndOperatorQueuer),
-		questionId,
-		statoblastSecurityMultiplierBps,
-		securityPool: getAddress(securityPool),
-		truthAuction: getAddress(truthAuction),
-		universeId,
-	}
-}
+type DeploymentRegistryAnchor = Readonly<{ blockHash: `0x${string}`; blockNumber: bigint }>
 
-type DeploymentLogAnchor = Readonly<{ blockHash: `0x${string}`; blockNumber: bigint }>
-
-async function loadDeploymentLogAnchor(client: ReadClient): Promise<DeploymentLogAnchor> {
+async function loadDeploymentRegistryAnchor(client: ReadClient): Promise<DeploymentRegistryAnchor> {
 	const block = await client.getBlock()
 	if (block.hash === undefined || block.number === undefined) throw new Error('Security pool deployment head is missing its canonical identity')
 	return { blockHash: block.hash, blockNumber: block.number }
 }
 
-async function requireDeploymentLogAnchor(client: ReadClient, anchor: DeploymentLogAnchor) {
+async function requireDeploymentRegistryAnchor(client: ReadClient, anchor: DeploymentRegistryAnchor) {
 	const block = await client.getBlock({ blockNumber: anchor.blockNumber })
 	if (block.hash?.toLowerCase() !== anchor.blockHash.toLowerCase()) throw new Error('Security pool deployments changed during discovery')
-}
-
-async function loadSecurityPoolDeploymentEvents(client: ReadClient, anchor: DeploymentLogAnchor, args: Readonly<{ parent?: Address; securityPool?: Address }>) {
-	return (
-		await fetchLogsWithAdaptiveRanges(
-			0n,
-			anchor.blockNumber,
-			MAXIMUM_DEPLOYMENT_LOG_RANGE,
-			async range =>
-				await client.getLogs({
-					address: getInfraContractAddresses().securityPoolFactory,
-					args,
-					event: deploySecurityPoolEvent,
-					fromBlock: range.fromBlock,
-					toBlock: range.toBlock,
-				}),
-		)
-	).map(deploymentFromEvent)
 }
 
 function uniqueDeployments(deployments: readonly SecurityPoolDeploymentTuple[]) {
 	return [...new Map(deployments.map(deployment => [deployment.securityPool.toLowerCase(), deployment])).values()]
 }
 
+async function loadDeploymentRegistry(client: ReadClient, anchor: DeploymentRegistryAnchor) {
+	const deploymentCount = await client.readContract({
+		address: getInfraContractAddresses().securityPoolFactory,
+		abi: securityPoolFactoryAbi,
+		functionName: 'securityPoolDeploymentCount',
+		args: [],
+		blockNumber: anchor.blockNumber,
+	})
+	const deployments: SecurityPoolDeploymentTuple[] = []
+	for (let startIndex = 0n; startIndex < deploymentCount; startIndex += 100n) {
+		const count = deploymentCount - startIndex < 100n ? deploymentCount - startIndex : 100n
+		deployments.push(...(await loadSecurityPoolDeployments(client, startIndex, count, anchor.blockNumber)))
+	}
+	return deployments
+}
+
 export async function loadSecurityPoolLineage(client: ReadClient, securityPoolAddress: Address, accountAddress?: Address) {
-	const anchor = await loadDeploymentLogAnchor(client)
-	const selected = await loadSecurityPoolDeploymentEvents(client, anchor, { securityPool: securityPoolAddress })
+	const anchor = await loadDeploymentRegistryAnchor(client)
+	const deployments = await loadDeploymentRegistry(client, anchor)
+	const selected = deployments.filter(deployment => sameAddress(deployment.securityPool, securityPoolAddress))
 	const selectedDeployment = selected[0]
 	if (selectedDeployment === undefined) {
-		await requireDeploymentLogAnchor(client, anchor)
+		await requireDeploymentRegistryAnchor(client, anchor)
 		return []
 	}
-	const [children, parent] = await Promise.all([loadSecurityPoolDeploymentEvents(client, anchor, { parent: securityPoolAddress }), selectedDeployment.parent === zeroAddress ? [] : loadSecurityPoolDeploymentEvents(client, anchor, { securityPool: selectedDeployment.parent })])
+	const children = deployments.filter(deployment => sameAddress(deployment.parent, securityPoolAddress))
+	const parent = deployments.filter(deployment => sameAddress(deployment.securityPool, selectedDeployment.parent))
 	const pools = await loadListedSecurityPools(client, uniqueDeployments([...parent, ...selected, ...children]), {
 		...(accountAddress === undefined ? {} : { accountAddress }),
 		selectedSecurityPoolAddress: securityPoolAddress,
 		vaultDetailMode: 'selected',
 		vaultPreviewLimit: SECURITY_POOL_LIST_VAULT_PREVIEW_LIMIT,
 	})
-	await requireDeploymentLogAnchor(client, anchor)
+	await requireDeploymentRegistryAnchor(client, anchor)
 	return applyChildForkActivityHints(pools)
 }
 
 export async function loadSecurityPoolChildren(client: ReadClient, parentAddress: Address, accountAddress?: Address) {
-	const anchor = await loadDeploymentLogAnchor(client)
-	const deployments = await loadSecurityPoolDeploymentEvents(client, anchor, { parent: parentAddress })
+	const anchor = await loadDeploymentRegistryAnchor(client)
+	const deployments = (await loadDeploymentRegistry(client, anchor)).filter(deployment => sameAddress(deployment.parent, parentAddress))
 	const pools = await loadListedSecurityPools(client, deployments, {
 		...(accountAddress === undefined ? {} : { accountAddress }),
 		selectedSecurityPoolAddress: parentAddress,
 		vaultDetailMode: 'selected',
 		vaultPreviewLimit: SECURITY_POOL_LIST_VAULT_PREVIEW_LIMIT,
 	})
-	await requireDeploymentLogAnchor(client, anchor)
+	await requireDeploymentRegistryAnchor(client, anchor)
 	return pools
 }
 
@@ -704,37 +613,6 @@ export async function loadAllSecurityPools(client: ReadClient, options: LoadAllS
 		vaultPreviewLimit: SECURITY_POOL_LIST_VAULT_PREVIEW_LIMIT,
 	})
 	return applyChildForkActivityHints(pools)
-}
-
-export async function createSecurityPool(
-	client: WriteClient,
-	parameters: {
-		initialReportPriorityFeeAttoEthPerGas: bigint
-		questionId: bigint
-		statoblastSecurityMultiplierBps: bigint
-	},
-) {
-	const { hash: deployPoolHash, receipt } = await writeContractAndWaitForReceipt(client, () => ({
-		address: getDeploymentStepAddress('securityPoolFactory'),
-		abi: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
-		functionName: 'deployOriginSecurityPool',
-		args: [0n, parameters.questionId, parameters.statoblastSecurityMultiplierBps, parameters.initialReportPriorityFeeAttoEthPerGas],
-	}))
-
-	return {
-		deployPoolHash,
-		initialReportPriorityFeeAttoEthPerGas: parameters.initialReportPriorityFeeAttoEthPerGas,
-		questionId: getQuestionIdHex(parameters.questionId),
-		securityPoolAddress: getSecurityPoolAddressFromReceipt(receipt),
-		statoblastSecurityMultiplierBps: parameters.statoblastSecurityMultiplierBps,
-		universeId: 0n,
-	} satisfies SecurityPoolCreationResult
-}
-
-export async function originSecurityPoolExists(client: Pick<ReadClient, 'getCode'>, questionId: bigint, statoblastSecurityMultiplierBps: bigint, initialReportPriorityFeeAttoEthPerGas: bigint) {
-	const shareTokenAddress = getOriginSecurityPoolShareTokenAddress(questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas)
-	const code = await client.getCode({ address: shareTokenAddress })
-	return code !== undefined && code !== '0x'
 }
 
 export async function loadSecurityPoolPage(client: ReadClient, pageIndex: number, pageSize: number, accountAddress?: Address): Promise<SecurityPoolPage> {

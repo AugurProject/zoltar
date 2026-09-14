@@ -33,7 +33,7 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 			resetActiveEnvironmentForTesting()
 		}, 30_000)
 
-		test('discovers the seeded market through its Zoltar universe and factory event', async () => {
+		test('discovers the seeded market through current registries without log access', async () => {
 			activateSimulationBackendProfile(backend)
 			const addresses = getInfraContractAddresses(backend.profile)
 			const plan = getTradingDeploymentPlan(
@@ -49,7 +49,15 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 				30,
 			)
 			const configuration = deploymentConfigurationForPlan(plan, 'http://127.0.0.1/')
-			const discovery = await discoverLiveUniverseMarketPage(backend.createReadClient(), configuration, 0n)
+			const noLogsClient = {
+				...backend.createReadClient(),
+				getLogs: async () => {
+					throw new Error('Log access unavailable')
+				},
+			}
+			const discovery = await discoverLiveUniverseMarketPage(noLogsClient, configuration, 0n)
+			const tradingPage = await discoverTradingMarketPage(noLogsClient, configuration, 0n)
+			expect(tradingPage.total).toBe(scenario === FUNDED_TRADING_SIMULATION_SCENARIO ? 1n : 0n)
 
 			const dom = installDomEnvironment()
 			const restore = installActiveEnvironmentForTesting(backend, backend)

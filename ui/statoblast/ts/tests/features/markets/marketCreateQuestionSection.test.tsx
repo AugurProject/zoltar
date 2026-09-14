@@ -94,7 +94,8 @@ describe('MarketCreateQuestionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getAllByText('Ask a yes-or-no question that can be resolved from one public source of truth.')).toHaveLength(1)
+		expect(documentQueries.queryByText('Ask a yes-or-no question that can be resolved from one public source of truth.')).toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Question Type: Binary' }).hasAttribute('disabled')).toBe(true)
 		await act(() => {
 			fireEvent.input(documentQueries.getByLabelText('Title') as HTMLInputElement, { target: { value: 'Updated title' } })
 		})
@@ -136,7 +137,8 @@ describe('MarketCreateQuestionSection', () => {
 		expect(documentQueries.queryByText('Use a short question that clearly distinguishes the possible outcomes.')).toBeNull()
 		expect(document.body.querySelector('.workflow-summary-strip')).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Question Type Guidance' })).toBeNull()
-		expect(documentQueries.getAllByText('Ask a yes-or-no question that can be resolved from one public source of truth.')).toHaveLength(1)
+		expect(documentQueries.queryByText('Ask a yes-or-no question that can be resolved from one public source of truth.')).toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Question Type: Binary' }).hasAttribute('disabled')).toBe(true)
 		expect(documentQueries.getByRole('heading', { name: 'Draft Preview' })).not.toBeNull()
 		const draftPreview = documentQueries.getByRole('heading', { name: 'Draft Preview' }).closest('section')
 		if (!(draftPreview instanceof HTMLElement)) throw new Error('Expected draft preview section')

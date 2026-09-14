@@ -6,7 +6,6 @@ import { ZoltarQuestionData_ZoltarQuestionData, Zoltar_Zoltar } from '@zoltar/ui
 import type { DeploymentConfiguration } from './config.js'
 import { bigintToSafeNumber } from '../lib/format.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { fetchLogsWithAdaptiveRanges } from '@zoltar/core-shared/evm/logScan'
 export { connectWallet, connectedWalletAccount, switchWalletChain, walletChainId } from './wallet.js'
 import { SECURITY_POOL_QUESTION_OUTCOME_ABI } from '@zoltar/ui-statoblast-shared/protocol/securityPoolAbi.js'
 import { shareBalanceScope, type LiveBalances, type LiveMarket } from './liveMarket.js'
@@ -25,11 +24,6 @@ const securityPoolFactoryAbi = statoblast_factories_SecurityPoolFactory_Security
 const securityPoolAbi = statoblast_SecurityPool_SecurityPool.abi
 const zoltarAbi = Zoltar_Zoltar.abi
 const questionDataAbi = ZoltarQuestionData_ZoltarQuestionData.abi
-const deploySecurityPoolEvent = securityPoolFactoryAbi.find((entry: (typeof securityPoolFactoryAbi)[number]) => entry.type === 'event' && entry.name === 'DeploySecurityPool')
-if (deploySecurityPoolEvent === undefined) throw new Error('DeploySecurityPool event missing from ABI')
-
-const MAXIMUM_DEPLOYMENT_LOG_RANGE = 10_000n
-
 const pair = tradingContracts['contracts/trading/TwoWayConstantProductPair.sol'].TwoWayConstantProductPair
 const router = tradingContracts['contracts/trading/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter
 async function loadLiveSecurityPoolSettings(client: PublicClient, pool: Address) {
@@ -278,42 +272,29 @@ export async function registryBlockAnchorIsCanonical(anchor: RegistryBlockAnchor
 	return (await loadByNumber(anchor.blockNumber)).blockHash === anchor.blockHash
 }
 
-export async function refreshSecurityPoolDeploymentEventIndex<Deployment>(
+export async function refreshSecurityPoolDeploymentIndex<Deployment>(
 	index: SecurityPoolDeploymentIndex<Deployment, RegistryBlockAnchor>,
 	key: string,
 	loadLatest: () => Promise<RegistryBlockAnchor>,
 	isAnchorCanonical: (anchor: RegistryBlockAnchor) => Promise<boolean>,
-	loadEvents: (fromBlock: bigint, toBlock: bigint) => Promise<readonly Deployment[]>,
+	loadSnapshot: (anchor: RegistryBlockAnchor) => Promise<readonly Deployment[]>,
 ) {
 	const previous = index.pending
 	let snapshot: Deployment[] = []
 	const refresh = (async () => {
 		if (previous !== undefined) await previous.catch(() => undefined)
 		if (index.key !== key) clearSecurityPoolDeploymentIndex(index, key)
-		let currentDeployments = index.deployments
-		let currentAnchor = index.anchor
-		if (currentAnchor !== undefined && !(await isAnchorCanonical(currentAnchor))) {
-			clearSecurityPoolDeploymentIndex(index, key)
-			currentDeployments = []
-			currentAnchor = undefined
-		}
 		const anchor = await loadLatest()
-		const fromBlock = currentAnchor === undefined ? 0n : currentAnchor.blockNumber + 1n
-		let appended = fromBlock <= anchor.blockNumber ? await fetchLogsWithAdaptiveRanges(fromBlock, anchor.blockNumber, MAXIMUM_DEPLOYMENT_LOG_RANGE, async range => await loadEvents(range.fromBlock, range.toBlock)) : []
-		if (currentAnchor !== undefined && !(await isAnchorCanonical(currentAnchor))) {
-			clearSecurityPoolDeploymentIndex(index, key)
-			currentDeployments = []
-			appended = await fetchLogsWithAdaptiveRanges(0n, anchor.blockNumber, MAXIMUM_DEPLOYMENT_LOG_RANGE, async range => await loadEvents(range.fromBlock, range.toBlock))
-		}
+		const cached = index.anchor?.blockNumber === anchor.blockNumber && index.anchor.blockHash === anchor.blockHash
+		const deployments = cached ? index.deployments : await loadSnapshot(anchor)
 		if (!(await isAnchorCanonical(anchor))) {
 			clearSecurityPoolDeploymentIndex(index, key)
-			throw new Error('SecurityPool deployment events changed during discovery')
+			throw new Error('SecurityPool registry changed during discovery')
 		}
-		const nextDeployments = [...currentDeployments, ...appended]
 		index.key = key
-		index.deployments = nextDeployments
+		index.deployments = [...deployments]
 		index.anchor = anchor
-		snapshot = nextDeployments.slice()
+		snapshot = index.deployments.slice()
 	})()
 	index.pending = refresh
 	try {
@@ -322,28 +303,6 @@ export async function refreshSecurityPoolDeploymentEventIndex<Deployment>(
 		if (index.pending === refresh) index.pending = undefined
 	}
 	return snapshot
-}
-
-function securityPoolDeploymentFromEvent(log: Readonly<{ args?: unknown }>): SecurityPoolDeployment {
-	const args = log.args
-	if (typeof args !== 'object' || args === null) throw new Error('SecurityPool deployment event is missing its arguments')
-	const securityPool = Reflect.get(args, 'securityPool')
-	const shareToken = Reflect.get(args, 'shareToken')
-	const universeId = Reflect.get(args, 'universeId')
-	const questionId = Reflect.get(args, 'questionId')
-	const statoblastSecurityMultiplierBps = Reflect.get(args, 'statoblastSecurityMultiplierBps')
-	const initialReportPriorityFeeAttoEthPerGas = Reflect.get(args, 'initialReportPriorityFeeAttoEthPerGas')
-	if (typeof securityPool !== 'string' || typeof shareToken !== 'string' || typeof universeId !== 'bigint' || typeof questionId !== 'bigint' || typeof statoblastSecurityMultiplierBps !== 'bigint' || typeof initialReportPriorityFeeAttoEthPerGas !== 'bigint') {
-		throw new Error('SecurityPool deployment event is incomplete')
-	}
-	return {
-		initialReportPriorityFeeAttoEthPerGas,
-		questionId,
-		securityPool: getAddress(securityPool),
-		shareToken: getAddress(shareToken),
-		statoblastSecurityMultiplierBps,
-		universeId,
-	}
 }
 
 export async function loadUniverseIds(client: PublicClient, configuration: DeploymentConfiguration, isCurrent = () => true) {
@@ -368,31 +327,26 @@ export async function loadUniverseIds(client: PublicClient, configuration: Deplo
 	return universeIds
 }
 
-async function loadSecurityPoolDeploymentsInUniverse(client: PublicClient, configuration: DeploymentConfiguration, universeId: bigint, index: SecurityPoolDeploymentIndex<SecurityPoolDeployment, RegistryBlockAnchor>) {
-	const canonical = async (anchor: RegistryBlockAnchor) => {
-		try {
-			const loadByNumber = getActiveBackend().id === 'simulation' ? undefined : async (blockNumber: bigint) => await latestBlockIdentity({ getBlock: async () => await client.getBlock({ blockNumber }) })
-			return await registryBlockAnchorIsCanonical(anchor, async () => await latestBlockIdentity(client), loadByNumber)
-		} catch (error) {
-			if (error instanceof Error) return false
-			throw error
+export async function loadSecurityPoolRegistry(client: PublicClient, configuration: DeploymentConfiguration, universeId: bigint, blockNumber: bigint, isCurrent = () => true) {
+	const count = await client.readContract({ abi: securityPoolFactoryAbi, address: configuration.securityPoolFactory, functionName: 'securityPoolDeploymentCount', blockNumber })
+	const deployments: SecurityPoolDeployment[] = []
+	for (let start = 0n; start < count; start += 100n) {
+		if (!isCurrent()) throw new Error('Market discovery cancelled')
+		const page = await client.readContract({ abi: securityPoolFactoryAbi, address: configuration.securityPoolFactory, functionName: 'securityPoolDeploymentsRange', args: [start, count - start < 100n ? count - start : 100n], blockNumber })
+		for (const deployment of page) {
+			if (deployment.universeId === universeId) deployments.push({ ...deployment, securityPool: getAddress(deployment.securityPool), shareToken: getAddress(deployment.shareToken) })
 		}
 	}
-	return await refreshSecurityPoolDeploymentEventIndex(
+	return deployments
+}
+
+async function loadSecurityPoolDeploymentsInUniverse(client: PublicClient, configuration: DeploymentConfiguration, universeId: bigint, index: SecurityPoolDeploymentIndex<SecurityPoolDeployment, RegistryBlockAnchor>, isCurrent = () => true) {
+	return await refreshSecurityPoolDeploymentIndex(
 		index,
-		`${configuration.chainId}:${configuration.securityPoolFactory}:${configuration.rpcUrl}:${universeId.toString()}`,
+		`${configuration.chainId}:${configuration.securityPoolFactory}:${configuration.rpcUrl}:${universeId}`,
 		async () => await latestBlockIdentity(client),
-		canonical,
-		async (fromBlock, toBlock) =>
-			(
-				await client.getLogs({
-					address: configuration.securityPoolFactory,
-					args: { universeId },
-					event: deploySecurityPoolEvent,
-					fromBlock,
-					toBlock,
-				})
-			).map(securityPoolDeploymentFromEvent),
+		async anchor => await registryBlockAnchorIsCanonical(anchor, async () => await latestBlockIdentity(client), getActiveBackend().id === 'simulation' ? undefined : async blockNumber => await latestBlockIdentity({ getBlock: async () => await client.getBlock({ blockNumber }) })),
+		async ({ blockNumber }) => await loadSecurityPoolRegistry(client, configuration, universeId, blockNumber, isCurrent),
 	)
 }
 

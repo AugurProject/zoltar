@@ -137,6 +137,7 @@ export function TradingSection({
 		mintingCapacityAttoEth,
 		hasSelectedPool,
 		isOnActiveAppChain,
+		isPriceValid: calculationRepPerEthPrice !== undefined && calculationRepPerEthPrice > 0n,
 		mintAmountInput: tradingForm.completeSetAmount,
 		shareTokenSupplyAttoShares: selectedPool?.shareTokenSupplyAttoShares,
 		totalPoolHeldAttoRep: selectedPool?.totalPoolHeldAttoRep,
@@ -175,7 +176,7 @@ export function TradingSection({
 		return (() => {
 			if (!isOnActiveAppChain) return getWrongNetworkReason()
 			if (selectedPool?.questionOutcome !== 'none') return tradingCopy.marketFinalizedReason
-			if (remainingMintCapacity === undefined) return tradingCopy.loadingMintCapacity
+			if (remainingMintCapacity === undefined) return calculationRepPerEthPrice === undefined || calculationRepPerEthPrice <= 0n ? tradingCopy.mintPriceUnavailable : tradingCopy.mintCapacityUnavailable
 			if (hasUndefinedCompleteSetExchangeRate(selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares) === true) return UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE
 
 			return (() => {
@@ -198,7 +199,7 @@ export function TradingSection({
 			if (loadingTradingDetails) return tradingCopy.loadingWalletShareBalances
 
 			return (() => {
-				if (maxRedeemableCompleteSetsAttoShares === undefined) return tradingCopy.loadingWalletShareBalances
+				if (maxRedeemableCompleteSetsAttoShares === undefined) return tradingCopy.shareBalancesUnavailable
 				if (maxRedeemableCompleteSetsAttoShares === 0n) return NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE
 
 				return undefined
@@ -218,7 +219,7 @@ export function TradingSection({
 				if (loadingTradingDetails) return tradingCopy.loadingWalletShareBalances
 
 				return (() => {
-					if (selectedOutcomeBalance === undefined) return tradingCopy.loadingWalletShareBalances
+					if (selectedOutcomeBalance === undefined) return tradingCopy.shareBalancesUnavailable
 					if (selectedOutcomeBalance === 0n) return tradingCopy.formatNoSharesAvailableToMigrateReason(getReportingOutcomeLabel(tradingForm.selectedShareOutcome))
 
 					return undefined
@@ -521,6 +522,7 @@ export function TradingSection({
 					<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={tradingForm.selectedShareOutcome} onChange={selectedShareOutcome => onTradingFormChange({ selectedShareOutcome })} disabled={shareMigrationSelectionDisabled} />
 				</label>
 				<ShareMigrationTargetsSection
+					loading={loadingTradingForkUniverse}
 					disabled={shareMigrationSelectionDisabled}
 					forkUniverse={tradingForkUniverse}
 					onClearOutcomeIndexes={clearTargetOutcomeIndexes}

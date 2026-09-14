@@ -164,10 +164,6 @@ export function hashOpenOracleStatePreimage(preimage: OpenOracleStatePreimage) {
 	)
 }
 
-export function getOpenOracleReportIdFromTopic(topic: Hex) {
-	return BigInt(topic)
-}
-
 export function hasOpenOracleFlag(game: OpenOracleGame, flag: bigint) {
 	return (game.flags & flag) !== 0n
 }

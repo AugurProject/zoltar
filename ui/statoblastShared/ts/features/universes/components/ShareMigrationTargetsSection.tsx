@@ -11,6 +11,7 @@ import type { MarketDetails, ZoltarChildUniverseSummary, ZoltarUniverseSummary }
 
 type ShareMigrationTargetsSectionProps = {
 	disabled: boolean
+	loading?: boolean
 	forkUniverse: ZoltarUniverseSummary | undefined
 	onClearOutcomeIndexes: () => void
 	onSelectAllOutcomeIndexes: () => void
@@ -70,7 +71,7 @@ function renderTargetSection(title: string, children: ComponentChildren, actions
 	)
 }
 
-export function ShareMigrationTargetsSection({ disabled, forkUniverse, onClearOutcomeIndexes, onSelectAllOutcomeIndexes, onToggleOutcomeIndex, selectedOutcomeIndexes, selectedOutcomeIndexSet }: ShareMigrationTargetsSectionProps) {
+export function ShareMigrationTargetsSection({ disabled, loading = false, forkUniverse, onClearOutcomeIndexes, onSelectAllOutcomeIndexes, onToggleOutcomeIndex, selectedOutcomeIndexes, selectedOutcomeIndexSet }: ShareMigrationTargetsSectionProps) {
 	const [scalarOutcomeTick, setScalarOutcomeTick] = useState('0')
 	const [scalarOutcomeInvalid, setScalarOutcomeInvalid] = useState(false)
 	const childUniverseByOutcomeIndex = useMemo(() => new Map((forkUniverse?.childUniverses ?? []).map(child => [child.outcomeIndex.toString(), child])), [forkUniverse?.childUniverses])
@@ -84,23 +85,11 @@ export function ShareMigrationTargetsSection({ disabled, forkUniverse, onClearOu
 		setScalarOutcomeTick(nextTick)
 	}, [scalarOutcomeTick, scalarQuestion, selectedScalarTick])
 
-	if (forkUniverse === undefined)
-		return renderTargetSection(
-			tradingCopy.targetChildUniverses,
-			<p className='detail'>
-				<LoadingText>{tradingCopy.loadingForkTargetUniverses}</LoadingText>
-			</p>,
-		)
+	if (forkUniverse === undefined) return renderTargetSection(tradingCopy.targetChildUniverses, <p className='detail'>{loading ? <LoadingText>{tradingCopy.loadingForkTargetUniverses}</LoadingText> : tradingCopy.forkDetailsUnavailable}</p>)
 
 	if (!forkUniverse.hasForked) return renderTargetSection(tradingCopy.targetChildUniverses, <p className='detail'>{tradingCopy.childTargetsLockedReason}</p>)
 
-	if (forkUniverse.forkQuestionDetails === undefined)
-		return renderTargetSection(
-			tradingCopy.targetChildUniverses,
-			<p className='detail'>
-				<LoadingText>{tradingCopy.loadingForkQuestionDetails}</LoadingText>
-			</p>,
-		)
+	if (forkUniverse.forkQuestionDetails === undefined) return renderTargetSection(tradingCopy.targetChildUniverses, <p className='detail'>{loading ? <LoadingText>{tradingCopy.loadingForkQuestionDetails}</LoadingText> : tradingCopy.forkDetailsUnavailable}</p>)
 
 	if (forkUniverse.forkQuestionDetails.marketType !== 'scalar') {
 		const childUniverses = forkUniverse.childUniverses.map(child => ({
@@ -124,13 +113,7 @@ export function ShareMigrationTargetsSection({ disabled, forkUniverse, onClearOu
 		)
 	}
 
-	if (scalarQuestion === undefined)
-		return renderTargetSection(
-			tradingCopy.targetChildUniverses,
-			<p className='detail'>
-				<LoadingText>{tradingCopy.loadingScalarForkDetails}</LoadingText>
-			</p>,
-		)
+	if (scalarQuestion === undefined) return renderTargetSection(tradingCopy.targetChildUniverses, <p className='detail'>{loading ? <LoadingText>{tradingCopy.loadingScalarForkDetails}</LoadingText> : tradingCopy.forkDetailsUnavailable}</p>)
 
 	const clampedSelectedScalarTick = clampScalarTickIndex(selectedScalarTick, scalarQuestion.numTicks)
 	const clampedScalarOutcomeTick = clampedSelectedScalarTick.toString()

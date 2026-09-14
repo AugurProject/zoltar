@@ -50,7 +50,6 @@ export function SecurityPoolsOverviewSection({
 	const [activePageRequestKey, setActivePageRequestKey] = useState<string | undefined>(undefined)
 	const [pageLoadError, setPageLoadError] = useState<string | undefined>(undefined)
 	const [searchText, setSearchText] = useState('')
-	const [universeFilter, setUniverseFilter] = useState('current')
 	const [systemStateFilter, setSystemStateFilter] = useState<'all' | SecurityPoolLifecycleState>('all')
 	const loadSecurityPoolPageRef = useRef(onLoadSecurityPoolPage)
 	loadSecurityPoolPageRef.current = onLoadSecurityPoolPage
@@ -125,15 +124,12 @@ export function SecurityPoolsOverviewSection({
 	}, [currentPageRequestKey, environmentRefreshKey, resolvedPageIndex])
 	const filteredSecurityPools = securityPoolsWithState.filter(({ pool, poolState }) => {
 		const displayState = poolState.lifecycleState
-		if (universeFilter === 'current' && pool.universeId !== activeUniverseId) return false
-		if (universeFilter !== 'current' && universeFilter !== 'all' && pool.universeId.toString() !== universeFilter) return false
+		if (pool.universeId !== activeUniverseId) return false
 		if (systemStateFilter !== 'all' && displayState !== systemStateFilter) return false
 		if (normalizedSearchText === '') return true
 		return pool.securityPoolAddress.toLowerCase().includes(normalizedSearchText) || pool.questionId.toLowerCase().includes(normalizedSearchText) || pool.marketDetails.title.toLowerCase().includes(normalizedSearchText) || pool.marketDetails.description.toLowerCase().includes(normalizedSearchText)
 	})
-	const universeOptions = new Set(pagedSecurityPools.map(pool => pool.universeId.toString()))
-	if (universeFilter !== 'current' && universeFilter !== 'all') universeOptions.add(universeFilter)
-	const hasActiveFilters = normalizedSearchText !== '' || systemStateFilter !== 'all' || (universeFilter !== 'all' && filteredSecurityPools.length !== pagedSecurityPools.length)
+	const hasActiveFilters = normalizedSearchText !== '' || systemStateFilter !== 'all' || filteredSecurityPools.length !== pagedSecurityPools.length
 	return (
 		<SectionBlock
 			density='compact'
@@ -164,18 +160,6 @@ export function SecurityPoolsOverviewSection({
 			)}
 			<div className='filter-toolbar'>
 				<label className='field'>
-					<span>{commonCopy.universe}</span>
-					<select value={universeFilter} onChange={event => setUniverseFilter(event.currentTarget.value)}>
-						<option value='current'>{securityPoolCopy.currentUniverse}</option>
-						<option value='all'>{securityPoolCopy.allUniverses}</option>
-						{[...universeOptions].map(universeId => (
-							<option key={universeId} value={universeId}>
-								{formatUniverseIdHex(BigInt(universeId))}
-							</option>
-						))}
-					</select>
-				</label>
-				<label className='field'>
 					<span>{securityPoolCopy.searchLoadedPage}</span>
 					<FormInput value={searchText} onInput={event => setSearchText(event.currentTarget.value)} placeholder={securityPoolCopy.poolSearchPlaceholder} />
 				</label>
@@ -195,7 +179,7 @@ export function SecurityPoolsOverviewSection({
 
 			{(() => {
 				if (pagedSecurityPools.length === 0) {
-					if (registryPresentation === undefined) return undefined
+					if (registryPresentation === undefined || (effectiveSecurityPoolOverviewError !== undefined && !loadingCurrentPage)) return undefined
 					const isEmptyRegistry = registryPresentation.key === 'empty'
 					const registryActions = (() => {
 						if (isEmptyRegistry && onCreateSecurityPool !== undefined)
