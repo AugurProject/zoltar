@@ -103,3 +103,37 @@ test('production styles reserve sub-13px type for nonessential eyebrows and deco
 		expect(findSubminimumFontRules(stylesheet)).toEqual([])
 	}
 })
+
+test('product accent hues are only defined in tokens so Statoblast never inherits Zoltar cyan', () => {
+	const productHueLiteral = /rgba?\(\s*(?:56,\s*213,\s*255|124,\s*108,\s*255|160,\s*124,\s*255|183,\s*238,\s*81|85,\s*200,\s*228|42,\s*181,\s*216|22,\s*148,\s*184|19,\s*127,\s*159)\b|#(?:38d5ff|7c6cff|a07cff|b7ee51|55c8e4|2ab5d8|1694b8|137f9f)\b/i
+	for (const name of ['base.css', 'protocol-surfaces.css', 'reporting-visualizations.css', 'application-surfaces.css', 'controls-and-responsive.css', 'visual-foundation.css', 'protocol-apps.css']) {
+		const offendingLines = readStylesheet(name)
+			.split('\n')
+			.filter(line => productHueLiteral.test(line))
+		expect({ name, offendingLines }).toEqual({ name, offendingLines: [] })
+	}
+	const tokens = readStylesheet('tokens.css')
+	for (const derivedToken of [
+		'--accent-faint',
+		'--accent-soft',
+		'--accent-medium',
+		'--accent-emphasis-soft',
+		'--interactive-border',
+		'--interactive-border-hover',
+		'--interactive-bg-hover',
+		'--focus',
+		'--border-active',
+		'--primary-button-bg',
+		'--primary-button-bg-hover',
+		'--primary-button-border',
+		'--primary-button-border-hover',
+		'--disabled-primary-button-bg',
+		'--disabled-primary-button-border',
+	]) {
+		expect(tokens).toMatch(new RegExp(`${derivedToken}: (?:color-mix\\(in srgb, )?var\\(--accent(?:-strong)?\\)`))
+	}
+	expect(tokens).toContain('--primary-button-text: var(--bg-deep);')
+	const tokenLinesWithProductHues = tokens.split('\n').filter(line => productHueLiteral.test(line))
+	expect(tokenLinesWithProductHues).toEqual(['\t--accent-zoltar: rgba(56, 213, 255, 1);', '\t--accent-statoblast: rgba(160, 124, 255, 1);', '\t--accent-trading: rgba(183, 238, 81, 1);', '\t--accent-strong: rgba(124, 108, 255, 1);'])
+	expect(readStylesheet('base.css')).toMatch(/button\.primary \{[^}]*color: var\(--primary-button-text\);/s)
+})

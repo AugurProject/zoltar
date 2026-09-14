@@ -14,7 +14,7 @@
 	position: absolute;
 	inset: 0;
 	pointer-events: none;
-	background: linear-gradient(120deg, var(--accent-medium), transparent 26%, transparent 74%, rgba(124, 108, 255, 0.12));
+	background: linear-gradient(120deg, var(--accent-medium), transparent 26%, transparent 74%, color-mix(in srgb, var(--accent-strong) 12%, transparent));
 }
 
 .entity-card > * {

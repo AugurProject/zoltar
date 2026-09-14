@@ -116,9 +116,9 @@
 }
 
 .escalation-side.selected {
-	background: linear-gradient(90deg, var(--accent-emphasis-soft) 0%, rgba(56, 213, 255, 0.06) 100%);
+	background: linear-gradient(90deg, var(--accent-emphasis-soft) 0%, color-mix(in srgb, var(--accent) 6%, transparent) 100%);
 	box-shadow:
-		inset 0 0 0 1px rgba(56, 213, 255, 0.4),
+		inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent),
 		inset 0 0 2rem var(--accent-faint);
 }
 
@@ -127,9 +127,9 @@
 }
 
 .escalation-side.leading.selected {
-	background: linear-gradient(90deg, rgba(56, 213, 255, 0.2) 0%, rgba(66, 232, 194, 0.11) 100%);
+	background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 20%, transparent) 0%, rgba(66, 232, 194, 0.11) 100%);
 	box-shadow:
-		inset 0 0 0 1px rgba(56, 213, 255, 0.42),
+		inset 0 0 0 1px color-mix(in srgb, var(--accent) 42%, transparent),
 		inset 0 0 2rem rgba(66, 232, 194, 0.08);
 }
 
@@ -183,7 +183,7 @@
 	height: 1.65rem;
 	border: 1px solid var(--border-default);
 	border-radius: 999px;
-	background: linear-gradient(90deg, rgba(56, 213, 255, 0.03), rgba(124, 108, 255, 0.03)), var(--surface-inset);
+	background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 3%, transparent), color-mix(in srgb, var(--accent-strong) 3%, transparent)), var(--surface-inset);
 	overflow: hidden;
 }
 
