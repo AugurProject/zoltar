@@ -30,7 +30,3 @@ export function requiredHash(value: unknown, description: string): Hex {
 	if (!isHash32(value)) throw new Error(`${description} is not a 32-byte RPC hash`)
 	return value
 }
-
-export function errorMessage(error: unknown) {
-	return error instanceof Error ? error.message : String(error)
-}

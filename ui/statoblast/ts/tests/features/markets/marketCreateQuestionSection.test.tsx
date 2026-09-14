@@ -1,17 +1,18 @@
+import { createMarketDetails as marketDetailsFixture } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
-import { act } from 'preact/test-utils'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import { MarketCreateQuestionSection } from '@zoltar/ui-statoblast-shared/features/markets/components/MarketCreateQuestionSection.js'
-import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
-import { createMarketParameters } from '@zoltar/ui-statoblast-shared/features/markets/lib/marketCreation.js'
-import type { MarketFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
-import type { MarketCreationResult, MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
+import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { expectTransactionButtonDisabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
+import type { MarketCreationResult, MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
+import { MarketCreateQuestionSection } from '@zoltar/ui-statoblast-shared/features/markets/components/MarketCreateQuestionSection.js'
+import { createMarketParameters } from '@zoltar/ui-statoblast-shared/features/markets/lib/marketCreation.js'
+import type { MarketFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
+import { describe, expect, test } from 'bun:test'
+import { act } from 'preact/test-utils'
 
 function createMarketForm(overrides: Partial<MarketFormState> = {}): MarketFormState {
 	return {
@@ -30,40 +31,29 @@ function createMarketForm(overrides: Partial<MarketFormState> = {}): MarketFormS
 }
 
 function createMarketDetails(overrides: Partial<MarketDetails> = {}): MarketDetails {
-	return {
-		answerUnit: '',
-		createdAt: 1n,
-		description: 'Question description',
+	return marketDetailsFixture({
 		displayValueMax: 10n,
-		displayValueMin: 0n,
 		endTime: 2000n,
-		exists: true,
-		marketType: 'binary',
 		numTicks: 10n,
-		outcomeLabels: ['Yes', 'No'],
 		questionId: '0xquestion-1',
 		startTime: 1000n,
 		title: 'Binary question',
 		...overrides,
-	}
+	})
 }
 
 describe('MarketCreateQuestionSection', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 	let marketForm = createMarketForm()
 
-	beforeEach(() => {
-		const domEnvironment = installDomEnvironment()
-		restoreDomEnvironment = domEnvironment.cleanup
-		marketForm = createMarketForm()
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
+	installDomTestLifecycle({
+		beforeTest: () => {
+			marketForm = createMarketForm()
+		},
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+		},
 	})
 
 	test('collects form updates and blocks create without wallet', async () => {

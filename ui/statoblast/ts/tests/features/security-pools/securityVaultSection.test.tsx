@@ -1,18 +1,18 @@
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
+import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { expectTransactionButtonDisabled, expectTransactionButtonEnabled, getTransactionButtonState } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
+import type { SecurityVaultDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import { SecurityVaultSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityVaultSection.js'
 import { SelectedVaultSummarySection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SelectedVaultSummarySection.js'
 import { evaluateSecurityPoolState } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolState.js'
-import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
-import type { SecurityVaultDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { SecurityVaultSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
-import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import { expectTransactionButtonDisabled, expectTransactionButtonEnabled, getTransactionButtonState } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
-import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
+import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
+import { describe, expect, test } from 'bun:test'
 
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {
@@ -151,19 +151,13 @@ const terminalOrdinaryGameCases = [
 }>
 
 describe('SecurityVaultSection', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
-	beforeEach(() => {
-		const domEnvironment = installDomEnvironment()
-		restoreDomEnvironment = domEnvironment.cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+		},
 	})
 
 	test('shows the selected child REP symbol on vault action controls', async () => {

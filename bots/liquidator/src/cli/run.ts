@@ -1,41 +1,41 @@
 #!/usr/bin/env bun
+import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
 import { parseApprovedUniverses } from '@zoltar/bot-shared/monitoring/universe-policy'
 
 import { parseRootMarketSettings } from '#config/canonical-deployment'
 
 import { recordSystemDeploymentCheck } from '../core/deployment-observation.ts'
 
-import { createPublicClient, createWalletClient, getAddress, privateKeyToAccount, type Address, type Hash } from '@zoltar/bot-shared/ethereum'
-import { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
-import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, readRpcChainId } from '@zoltar/bot-shared/monitoring/connectivity'
-import { availableSettledValues, settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
-import { ConnectivityDegradedError, operationalFailureDisposition, pollUntilStopped, retryDelayMilliseconds } from '@zoltar/bot-shared/monitoring/resilience'
-import { availableExecutionObservations, liquidationExecutionSnapshotObservation } from '#monitoring/execution-quorum'
-import { signerCandidate } from '@zoltar/bot-shared/config/signer'
 import { parseDesiredPools, parseStrategy, serializedSettings, type OperatorSettings } from '#config/settings'
 import { assertSettingsProfileIsolation, loadSettings, saveSettings, switchSettingsNetworkProfile } from '#config/settings-store'
+import { canonicalMarketPriceAllowsExecution, marketConfigurations, marketPriceAllowsExecution, selectedCandidate } from '#core/candidate-selection'
+import { createConfigurationMutationGate } from '#core/configuration-gate'
+import { PRIVATE_INTENT_FINALITY_BLOCKS, recoveryWorkBlocksExecution, shouldStopAfterSuccessfulCycle } from '#core/cycle-control'
+import { createSystemDeploymentGate } from '#core/deployment-gate'
+import { inheritedChildPoolSelections, selectVaultMigration, validateApprovedUniverseSelection } from '#core/fork-migration'
+import { updateNetworkConnectivity } from '#core/network-connectivity'
+import { createSettingsUpdateQueue } from '#core/settings-update-queue'
+import { commitSignerMutation } from '#core/signer-mutation'
+import { evaluateCandidate, liquidationExecutionAllowed } from '#core/strategy'
+import { parseTransactionReconciliation, validateReconciliationIntentChain, verifyFinalizedReplacement } from '#core/transaction-reconciliation'
 import { startDashboardServer } from '#dashboard/dashboard-server'
 import { OperatorStopping, setExecutionShutdownCheck, TransactionAwaitingCanonicalFinality } from '#execution/execution-safety'
 import { dryRunCandidate, executeLiquidation, executeOriginPoolDeployment, executeVaultMigration, maintainVault } from '#execution/liquidation-executor'
+import { reconcilePendingStagedOperations, recoverPendingTransactions } from '#execution/recovery'
+import { availableExecutionObservations, liquidationExecutionSnapshotObservation } from '#monitoring/execution-quorum'
+import { canonicalBlockHash, chainFor, desiredPoolStatus } from '#monitoring/operator-chain'
 import { scanPools } from '#monitoring/pool-monitor'
 import { createPoolMonitorIndex } from '#monitoring/vault-positions'
 import { assertIntentSender, clearMarketEvidenceForConfigurationChange, commitReconciledIntent, initialRuntimeState, loadDurableState, operatorSnapshot, recordActivity, saveDurableState } from '#state/operator-state'
-import { evaluateCandidate, liquidationExecutionAllowed } from '#core/strategy'
-import { PRIVATE_INTENT_FINALITY_BLOCKS, recoveryWorkBlocksExecution, shouldStopAfterSuccessfulCycle } from '#core/cycle-control'
-import { inheritedChildPoolSelections, selectVaultMigration, validateApprovedUniverseSelection } from '#core/fork-migration'
-import { createConfigurationMutationGate } from '#core/configuration-gate'
-import { commitSignerMutation } from '#core/signer-mutation'
-import { parseTransactionReconciliation, validateReconciliationIntentChain, verifyFinalizedReplacement } from '#core/transaction-reconciliation'
-import { acquireBotProcessLocks, acquireBotProcessLocksForShutdown, BotProcessLockAcquisitionError, botDashboardLifecycle, createBotShutdownController, type BotProcessLockOptions, type BotProcessLocks, type BotShutdownController } from '@zoltar/bot-shared/execution/bot-process-locks'
-import { createSettingsUpdateQueue } from '#core/settings-update-queue'
-import { updateNetworkConnectivity } from '#core/network-connectivity'
+import { signerCandidate } from '@zoltar/bot-shared/config/signer'
+import { createPublicClient, createRpcEndpointPool, createWalletClient, getAddress, privateKeyToAccount, type Address, type Hash } from '@zoltar/bot-shared/ethereum'
+import { acquireBotProcessLocks, acquireBotProcessLocksForShutdown, botDashboardLifecycle, BotProcessLockAcquisitionError, createBotShutdownController, type BotProcessLockOptions, type BotProcessLocks, type BotShutdownController } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { centralizedMarketConsensusObservations, marketConsensusSettings, observeCentralizedMarkets, parseCentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
+import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, readRpcChainId } from '@zoltar/bot-shared/monitoring/connectivity'
 import { observeConstantProductMarkets, readConstantProductPairWithQuorum, requireCurrentConstantProductMarketEvidence } from '@zoltar/bot-shared/monitoring/constant-product-markets'
 import { clearOrphanedDexEvidenceForHeadReplacement, discardDexMarketObservations, estimateMarketConsensus, marketObservationsForAsset, requireCanonicalBlock } from '@zoltar/bot-shared/monitoring/market-consensus'
-import { canonicalBlockHash, chainFor, desiredPoolStatus } from '#monitoring/operator-chain'
-import { canonicalMarketPriceAllowsExecution, marketConfigurations, marketPriceAllowsExecution, selectedCandidate } from '#core/candidate-selection'
-import { reconcilePendingStagedOperations, recoverPendingTransactions } from '#execution/recovery'
-import { createSystemDeploymentGate } from '#core/deployment-gate'
+import { availableSettledValues, settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
+import { ConnectivityDegradedError, operationalFailureDisposition, pollUntilStopped, retryDelayMilliseconds } from '@zoltar/bot-shared/monitoring/resilience'
 
 /** The liquidator only reserves a signer while live execution is enabled; dry-run processes never hold signer locks. */
 const LIQUIDATOR_PROCESS_LOCK_OPTIONS: BotProcessLockOptions = { label: 'liquidator', signerLocksInDryRun: false }
@@ -54,10 +54,6 @@ function runningStatus(paused: boolean, execute: boolean): 'dry-run' | 'paused' 
 function cycleFailureMessage(disposition: ReturnType<typeof operationalFailureDisposition>, execute: boolean) {
 	if (disposition === 'connectivity-degraded') return 'RPC connectivity degraded; execution remains blocked until recovery'
 	return execute ? 'Live execution paused after a safety fault' : 'Scan cycle failed'
-}
-
-function errorMessage(error: unknown) {
-	return error instanceof Error ? error.message : String(error)
 }
 
 async function preflightNetworkProfile(target: OperatorSettings) {

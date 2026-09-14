@@ -1,14 +1,12 @@
-import { sharedPackages } from '../repo/sharedPackages.ts'
-import { promises as fs } from 'node:fs'
-import * as path from 'node:path'
-import * as url from 'node:url'
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { getSharedPackageGeneratedOutputs } from './check-generated-artifacts.mts'
+import { promises as fs } from 'node:fs'
+import * as path from 'node:path'
+import { repositoryRoot } from '../repo/root.mts'
+import { sharedPackages } from '../repo/sharedPackages.ts'
+import { walkFiles } from '../repo/walk.mts'
 import { sharedBrowserArtifactRelativePaths } from '../ui/sharedBrowserArtifacts.ts'
-
-const scriptDirectory = path.dirname(url.fileURLToPath(import.meta.url))
-const repositoryRoot = path.join(scriptDirectory, '..', '..')
+import { getSharedPackageGeneratedOutputs } from './check-generated-artifacts.mts'
 
 const solidityRoot = path.join(repositoryRoot, 'solidity')
 const contractsRoot = path.join(solidityRoot, 'contracts')
@@ -49,17 +47,7 @@ export async function removeDeprecatedContractArtifactOutputs(root = repositoryR
 }
 
 async function getFilesRecursively(directoryPath: string): Promise<string[]> {
-	const entries = await fs.readdir(directoryPath, { withFileTypes: true })
-	const files: string[] = []
-	for (const entry of entries) {
-		const entryPath = path.join(directoryPath, entry.name)
-		if (entry.isDirectory()) {
-			files.push(...(await getFilesRecursively(entryPath)))
-			continue
-		}
-		if (entry.isFile()) files.push(entryPath)
-	}
-	return files
+	return await walkFiles(directoryPath)
 }
 
 export async function removeUnexpectedSharedSourceOutputs(root = repositoryRoot): Promise<void> {

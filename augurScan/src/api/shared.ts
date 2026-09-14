@@ -1,4 +1,4 @@
-import { decodeOpaqueCursor, encodeOpaqueCursor, isJsonArray } from '../cursor-codec.ts'
+import { encodeOpaqueCursor, parseCursor } from '../cursor-codec.ts'
 import type { JsonValue } from '../ethereum.ts'
 
 export { ApiConflictError, ApiRequestError } from '../query-errors.ts'
@@ -104,14 +104,14 @@ const isLogCursor = (parts: readonly JsonValue[]): parts is LogCursor =>
 
 export const parseLogCursor = (value: string | null, chainId: number, event: string | null, address: string | null, decoded: 'true' | 'false' | null, canonical: CanonicalHistoryFilter): LogCursor | undefined => {
 	if (value === null) return undefined
-	let parts: readonly JsonValue[]
-	try {
-		const parsed = decodeOpaqueCursor(value)
-		parts = isJsonArray(parsed) ? parsed : []
-		if (!isLogCursor(parts)) throw new Error('shape')
-	} catch (error) {
-		throw new ApiRequestError('cursor is invalid', { cause: error })
-	}
+	const parts = parseCursor(
+		value,
+		parts => {
+			if (!isLogCursor(parts)) throw new Error('shape')
+			return parts
+		},
+		error => new ApiRequestError('cursor is invalid', { cause: error }),
+	)
 	if (parts[1] !== chainId || parts[2] !== event || parts[3] !== address || parts[4] !== decoded || parts[5] !== canonical) throw new ApiRequestError('cursor does not match the requested log collection')
 	return parts
 }
@@ -143,31 +143,31 @@ export const postgresBigint = (value: string | null, name: string): string | und
 
 export const parseAddressHistoryCursor = (value: string | null, kind: AddressHistoryKind): AddressHistoryCursor | undefined => {
 	if (value === null) return undefined
-	try {
-		const parsed = decodeOpaqueCursor(value)
-		const parts = isJsonArray(parsed) ? parsed : []
-		if (
-			parts.length !== 13 ||
-			parts[0] !== 1 ||
-			parts[1] !== kind ||
-			!isNonNegativeSafeInteger(parts[2]) ||
-			typeof parts[3] !== 'string' ||
-			!/^0x[0-9a-f]{40}$/.test(parts[3]) ||
-			!isPostgresBigint(parts[4]) ||
-			typeof parts[5] !== 'string' ||
-			!/^0x[0-9a-f]{64}$/.test(parts[5]) ||
-			!isPostgresBigint(parts[6]) ||
-			!parts.slice(7, 10).every(part => typeof part === 'string') ||
-			!isNonNegativeSafeInteger(parts[10]) ||
-			!isPostgresBigint(parts[11]) ||
-			!isPostgresInteger(parts[12]) ||
-			BigInt(parts[11]) > BigInt(parts[4])
-		)
-			throw new Error('shape')
-		return parts as [1, AddressHistoryKind, number, string, string, string, string, string, string, string, number, string, number]
-	} catch (error) {
-		throw new ApiRequestError('cursor is invalid', { cause: error })
-	}
+	return parseCursor(
+		value,
+		parts => {
+			if (
+				parts.length !== 13 ||
+				parts[0] !== 1 ||
+				parts[1] !== kind ||
+				!isNonNegativeSafeInteger(parts[2]) ||
+				typeof parts[3] !== 'string' ||
+				!/^0x[0-9a-f]{40}$/.test(parts[3]) ||
+				!isPostgresBigint(parts[4]) ||
+				typeof parts[5] !== 'string' ||
+				!/^0x[0-9a-f]{64}$/.test(parts[5]) ||
+				!isPostgresBigint(parts[6]) ||
+				!parts.slice(7, 10).every(part => typeof part === 'string') ||
+				!isNonNegativeSafeInteger(parts[10]) ||
+				!isPostgresBigint(parts[11]) ||
+				!isPostgresInteger(parts[12]) ||
+				BigInt(parts[11]) > BigInt(parts[4])
+			)
+				throw new Error('shape')
+			return parts as [1, AddressHistoryKind, number, string, string, string, string, string, string, string, number, string, number]
+		},
+		error => new ApiRequestError('cursor is invalid', { cause: error }),
+	)
 }
 
 export const addressHistoryCursorFor = (kind: AddressHistoryKind, chainId: number, address: string, snapshotBlock: string, snapshotHash: string, asOf: Record<string, unknown>, total: number, row: Record<string, unknown>): string =>
@@ -195,14 +195,14 @@ const isActionCursor = (parts: readonly JsonValue[]): parts is ActionCursor =>
 
 export const parseActionCursor = (value: string | null, chainId: number): ActionCursor | undefined => {
 	if (value === null) return undefined
-	let parts: readonly JsonValue[]
-	try {
-		const parsed = decodeOpaqueCursor(value)
-		parts = isJsonArray(parsed) ? parsed : []
-		if (!isActionCursor(parts)) throw new Error('shape')
-	} catch (error) {
-		throw new ApiRequestError('cursor is invalid', { cause: error })
-	}
+	const parts = parseCursor(
+		value,
+		parts => {
+			if (!isActionCursor(parts)) throw new Error('shape')
+			return parts
+		},
+		error => new ApiRequestError('cursor is invalid', { cause: error }),
+	)
 	if (parts[1] !== chainId) throw new ApiRequestError('cursor does not match the requested action collection')
 	return parts
 }

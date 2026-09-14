@@ -1,8 +1,7 @@
 import { appendFileSync } from 'node:fs'
 import path from 'node:path'
 import { generatedOutputsForTaskGroup, projects, taskProjects, uiArtifactOutputs, validateProjectRegistryFiles, type ProjectTaskName } from './projects.ts'
-
-const repositoryRoot = path.resolve(import.meta.dir, '../..')
+import { repositoryRoot } from './root.mts'
 
 async function matchingFiles(patterns: readonly string[]) {
 	const files = new Set<string>()

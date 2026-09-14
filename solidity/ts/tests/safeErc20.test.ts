@@ -1,16 +1,17 @@
+import { encodeDeployData, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
-import assert from '../testSupport/simulator/utils/assert'
-import { encodeDeployData, type Hex, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { deployContract } from '../testSupport/deployContract'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
-import { applyLibraries } from '../testSupport/simulator/utils/contracts/deployStatoblast'
-import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
-import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
+import assert from '../testSupport/simulator/utils/assert'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
+import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
+import { applyLibraries } from '../testSupport/simulator/utils/contracts/deployStatoblast'
+import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import {
+	ReputationToken_ReputationToken,
 	statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker,
 	statoblast_SecurityPoolMigrationProxy_SecurityPoolMigrationProxy,
-	ReputationToken_ReputationToken,
 	test_statoblast_FalseReturningERC20_FalseReturningERC20,
 	test_statoblast_SafeERC20OpsHarness_SafeERC20OpsHarness,
 	test_statoblast_SecurityPoolConstructorFailureZoltar_SecurityPoolConstructorFailureZoltar,
@@ -23,16 +24,9 @@ describe('Safe ERC20 Operations', () => {
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
 
-	const deployContract = async (deploymentData: Hex) => {
-		const hash = await client.sendTransaction({ data: deploymentData })
-		const receipt = await client.waitForTransactionReceipt({ hash })
-		const contractAddress = receipt.contractAddress
-		if (contractAddress === undefined || contractAddress === null) throw new Error('deployment address missing')
-		return contractAddress
-	}
-
 	const deployFalseReturningToken = async () =>
 		await deployContract(
+			client,
 			encodeDeployData({
 				abi: test_statoblast_FalseReturningERC20_FalseReturningERC20.abi,
 				bytecode: `0x${test_statoblast_FalseReturningERC20_FalseReturningERC20.evm.bytecode.object}`,
@@ -41,6 +35,7 @@ describe('Safe ERC20 Operations', () => {
 
 	const deployHarness = async () =>
 		await deployContract(
+			client,
 			encodeDeployData({
 				abi: test_statoblast_SafeERC20OpsHarness_SafeERC20OpsHarness.abi,
 				bytecode: `0x${test_statoblast_SafeERC20OpsHarness_SafeERC20OpsHarness.evm.bytecode.object}`,
@@ -97,6 +92,7 @@ describe('Safe ERC20 Operations', () => {
 	test('safe helper wrappers replace an underlying token revert with the canonical call failure', async () => {
 		const harness = await deployHarness()
 		const reputationToken = await deployContract(
+			client,
 			encodeDeployData({
 				abi: ReputationToken_ReputationToken.abi,
 				bytecode: `0x${ReputationToken_ReputationToken.evm.bytecode.object}`,
@@ -137,6 +133,7 @@ describe('Safe ERC20 Operations', () => {
 
 	test('migration proxy rejects every privileged operation from a non-owner', async () => {
 		const reputationToken = await deployContract(
+			client,
 			encodeDeployData({
 				abi: ReputationToken_ReputationToken.abi,
 				bytecode: `0x${ReputationToken_ReputationToken.evm.bytecode.object}`,
@@ -144,6 +141,7 @@ describe('Safe ERC20 Operations', () => {
 			}),
 		)
 		const proxy = await deployContract(
+			client,
 			encodeDeployData({
 				abi: statoblast_SecurityPoolMigrationProxy_SecurityPoolMigrationProxy.abi,
 				bytecode: `0x${statoblast_SecurityPoolMigrationProxy_SecurityPoolMigrationProxy.evm.bytecode.object}`,
@@ -161,12 +159,14 @@ describe('Safe ERC20 Operations', () => {
 
 	test('security pool deployment worker reports constructor failures without revert data', async () => {
 		const fakeZoltar = await deployContract(
+			client,
 			encodeDeployData({
 				abi: test_statoblast_SecurityPoolConstructorFailureZoltar_SecurityPoolConstructorFailureZoltar.abi,
 				bytecode: `0x${test_statoblast_SecurityPoolConstructorFailureZoltar_SecurityPoolConstructorFailureZoltar.evm.bytecode.object}`,
 			}),
 		)
 		const deploymentWorker = await deployContract(
+			client,
 			encodeDeployData({
 				abi: statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.abi,
 				bytecode: applyLibraries(statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.evm.bytecode.object),

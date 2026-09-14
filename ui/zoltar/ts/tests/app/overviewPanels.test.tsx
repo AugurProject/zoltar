@@ -1,16 +1,16 @@
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
-import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
-import { OverviewPanels } from '@zoltar/ui-zoltar-shared/features/overview/OverviewPanels.js'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
-import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import { act } from 'preact/test-utils'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
-import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { getUniversePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
+import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
+import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
+import { SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
+import { OverviewPanels } from '@zoltar/ui-zoltar-shared/features/overview/OverviewPanels.js'
+import { describe, expect, mock, test } from 'bun:test'
+import { act } from 'preact/test-utils'
 
 installTestRouting()
 describe('OverviewPanels', () => {
@@ -24,7 +24,6 @@ describe('OverviewPanels', () => {
 		querySelector: (selector: string) => MetricElement | null
 	}
 
-	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 	let setClientWidthResolver = (_resolver: (element: MetricElement) => number) => undefined
 	let setMeasureWidthResolver = (_resolver: (element: MetricElement) => number) => undefined
@@ -88,65 +87,62 @@ describe('OverviewPanels', () => {
 		return within(document.body)
 	}
 
-	beforeEach(() => {
-		const domEnvironment = installDomEnvironment()
-		restoreDomEnvironment = domEnvironment.cleanup
-		let resolveClientWidth = (_element: MetricElement) => 0
-		let resolveMeasureWidth = (_element: MetricElement) => 0
-		const resizeObservers: MockResizeObserver[] = []
-		const originalGetBoundingClientRect = domEnvironment.window.HTMLElement.prototype.getBoundingClientRect
+	installDomTestLifecycle({
+		beforeTest: domEnvironment => {
+			let resolveClientWidth = (_element: MetricElement) => 0
+			let resolveMeasureWidth = (_element: MetricElement) => 0
+			const resizeObservers: MockResizeObserver[] = []
+			const originalGetBoundingClientRect = domEnvironment.window.HTMLElement.prototype.getBoundingClientRect
 
-		Object.defineProperty(domEnvironment.window.HTMLElement.prototype, 'clientWidth', {
-			configurable: true,
-			get() {
-				return resolveClientWidth(this)
-			},
-		})
+			Object.defineProperty(domEnvironment.window.HTMLElement.prototype, 'clientWidth', {
+				configurable: true,
+				get() {
+					return resolveClientWidth(this)
+				},
+			})
 
-		domEnvironment.window.HTMLElement.prototype.getBoundingClientRect = function () {
-			if (this.classList.contains('currency-value-measure')) return new domEnvironment.window.DOMRect(0, 0, resolveMeasureWidth(this), 0)
-			return originalGetBoundingClientRect.call(this)
-		}
-
-		class MockResizeObserver implements ResizeObserver {
-			callback: ResizeObserverCallback
-
-			constructor(callback: ResizeObserverCallback) {
-				this.callback = callback
-				resizeObservers.push(this)
+			domEnvironment.window.HTMLElement.prototype.getBoundingClientRect = function () {
+				if (this.classList.contains('currency-value-measure')) return new domEnvironment.window.DOMRect(0, 0, resolveMeasureWidth(this), 0)
+				return originalGetBoundingClientRect.call(this)
 			}
 
-			disconnect() {}
+			class MockResizeObserver implements ResizeObserver {
+				callback: ResizeObserverCallback
 
-			observe(_target: Element, _options?: ResizeObserverOptions) {}
+				constructor(callback: ResizeObserverCallback) {
+					this.callback = callback
+					resizeObservers.push(this)
+				}
 
-			unobserve(_target: Element) {}
-		}
+				disconnect() {}
 
-		Reflect.set(globalThis, 'ResizeObserver', MockResizeObserver)
-		setClientWidthResolver = nextResolver => {
-			resolveClientWidth = nextResolver
-		}
-		setMeasureWidthResolver = nextResolver => {
-			resolveMeasureWidth = nextResolver
-		}
+				observe(_target: Element, _options?: ResizeObserverOptions) {}
 
-		triggerResizeObservers = () => {
-			for (const observer of resizeObservers) {
-				observer.callback([], observer)
+				unobserve(_target: Element) {}
 			}
-		}
-	})
 
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		Reflect.deleteProperty(globalThis, 'ResizeObserver')
-		setClientWidthResolver = (_resolver: (element: MetricElement) => number) => undefined
-		setMeasureWidthResolver = (_resolver: (element: MetricElement) => number) => undefined
-		triggerResizeObservers = () => undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
+			Reflect.set(globalThis, 'ResizeObserver', MockResizeObserver)
+			setClientWidthResolver = nextResolver => {
+				resolveClientWidth = nextResolver
+			}
+			setMeasureWidthResolver = nextResolver => {
+				resolveMeasureWidth = nextResolver
+			}
+
+			triggerResizeObservers = () => {
+				for (const observer of resizeObservers) {
+					observer.callback([], observer)
+				}
+			}
+		},
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+			Reflect.deleteProperty(globalThis, 'ResizeObserver')
+			setClientWidthResolver = (_resolver: (element: MetricElement) => number) => undefined
+			setMeasureWidthResolver = (_resolver: (element: MetricElement) => number) => undefined
+			triggerResizeObservers = () => undefined
+		},
 	})
 
 	test('shows an enabled connect wallet button when disconnected and idle', async () => {

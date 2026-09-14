@@ -1,6 +1,7 @@
 import { openOraclePriceCoordinatorAbi, securityPoolAbi } from '@zoltar/bot-shared/contracts/abi'
-import { type ChaosReadClient, drainConcurrent, sameAddress } from './discovery-client.ts'
 import { type Address, getAddress } from '@zoltar/bot-shared/ethereum'
+import { sameAddress } from '@zoltar/core-shared/evm/address'
+import { type ChaosReadClient, drainConcurrent } from './discovery-client.ts'
 
 export function requireGraphEdge(actual: Address, expected: Address, label: string) {
 	if (!sameAddress(actual, expected)) throw new Error(`${label} points to ${actual}, expected ${expected}`)

@@ -2,13 +2,13 @@ import { execFileSync } from 'node:child_process'
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
 import ts from 'typescript'
+import { repositoryRoot } from './root.mts'
 
 /**
  * Biome's noRestrictedImports (biome.json) rejects every import-syntax form of viem and abitype, but it does not visit
  * TypeScript inline import types such as `import('viem').Address`, substitution-free template-literal specifiers, or
  * `require()` calls with a subpath. This lint closes exactly those forms so the shared EVM boundary stays complete.
  */
-const repositoryRoot = path.resolve(import.meta.dir, '..', '..')
 const restrictedPackages = ['viem', 'abitype']
 const sourceExtensions = /\.(?:cjs|cts|js|jsx|mjs|mts|ts|tsx)$/
 // Mirrors the generated output biome.json and the nested package configurations exclude, so both checks skip the same files.

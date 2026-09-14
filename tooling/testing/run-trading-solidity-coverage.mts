@@ -1,7 +1,7 @@
 import { readFile, rm } from 'node:fs/promises'
 import path from 'node:path'
+import { repositoryRoot } from '../repo/root.mts'
 
-const repositoryRoot = path.resolve(import.meta.dir, '../..')
 const coverageDirectory = path.join(repositoryRoot, 'coverage', 'trading-contracts')
 const summaryPath = path.join(coverageDirectory, 'coverage-summary.json')
 const minimumCoverage = 99

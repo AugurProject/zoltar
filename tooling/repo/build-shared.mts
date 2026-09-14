@@ -1,4 +1,4 @@
-import { fileURLToPath } from 'node:url'
+import { repositoryRoot } from './root.mts'
 import { appSharedPackages, sharedPackageClosure, sharedPackages } from './sharedPackages.ts'
 
 const requested = process.argv[2]
@@ -7,6 +7,6 @@ if (requested !== undefined) ids = requested === 'zoltar' || requested === 'stat
 const packages = sharedPackageClosure(ids)
 if (packages.length === 0) throw new Error(`Unknown shared build target: ${requested}`)
 for (const entry of packages) {
-	const child = Bun.spawn([process.execPath, 'x', 'tsc', '--project', `${entry.path}/tsconfig.json`], { cwd: fileURLToPath(new URL('../..', import.meta.url)), stdout: 'inherit', stderr: 'inherit' })
+	const child = Bun.spawn([process.execPath, 'x', 'tsc', '--project', `${entry.path}/tsconfig.json`], { cwd: repositoryRoot, stdout: 'inherit', stderr: 'inherit' })
 	if ((await child.exited) !== 0) process.exit(1)
 }

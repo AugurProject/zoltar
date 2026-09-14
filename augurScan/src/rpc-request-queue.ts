@@ -1,3 +1,4 @@
+import { errorChain } from '@zoltar/core-shared/errors/errorChain'
 import type { Transport } from './ethereum.ts'
 
 export type RpcRequestQueue = {
@@ -43,12 +44,8 @@ export class RpcQueueSaturatedError extends Error {
 }
 
 export const rpcQueueSaturationFrom = (error: unknown): RpcQueueSaturatedError | undefined => {
-	const seen = new Set<unknown>()
-	let current: unknown = error
-	while (typeof current === 'object' && current !== null && !seen.has(current)) {
-		seen.add(current)
+	for (const current of errorChain(error)) {
 		if (current instanceof RpcQueueSaturatedError) return current
-		current = 'cause' in current ? current.cause : undefined
 	}
 	return undefined
 }

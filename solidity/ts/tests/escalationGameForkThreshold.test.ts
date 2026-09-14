@@ -1,22 +1,21 @@
-import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
-import { encodeAbiParameters, encodeDeployData, keccak256, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/core-shared/deployment/protocolConfig'
+import { encodeAbiParameters, encodeDeployData, keccak256, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
+import { deployContract } from '../testSupport/deployContract'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
-import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
-import { createWriteClient, WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
-import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
-import { approveToken, getERC20Balance, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
+import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import assert from '../testSupport/simulator/utils/assert'
-import { ensureInfraDeployed } from '../testSupport/simulator/utils/contracts/deployStatoblast'
-import { ensureZoltarDeployed } from '../testSupport/simulator/utils/contracts/zoltar'
-import { createQuestion, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
-import { deployOriginSecurityPool, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
-import { approveAndDepositRepToVault, manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
-import { depositToEscalationGame, getSecurityVault, backingUnitsToAttoRep, redeemRepFromVault, withdrawFromEscalationGame } from '../testSupport/simulator/utils/contracts/securityPool'
-import { getNonDecisionThresholdAttoRep } from '../testSupport/simulator/utils/contracts/escalationGame'
-import { addRepToMigrationBalance, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { addressString } from '../testSupport/simulator/utils/bigint'
+import { createWriteClient, WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
+import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
+import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
+import { getNonDecisionThresholdAttoRep } from '../testSupport/simulator/utils/contracts/escalationGame'
+import { backingUnitsToAttoRep, depositToEscalationGame, getSecurityVault, redeemRepFromVault, withdrawFromEscalationGame } from '../testSupport/simulator/utils/contracts/securityPool'
+import { approveAndDepositRepToVault, manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { addRepToMigrationBalance, ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
+import { createQuestion, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { approveToken, getERC20Balance, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import {
 	statoblast_EscalationGame_EscalationGame,
 	statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier,
@@ -26,7 +25,6 @@ import {
 	test_statoblast_EscalationGameForkThresholdHarness_EscalationGameForkThresholdHarness,
 	Zoltar_Zoltar,
 } from '../types/contractArtifact'
-import { GENESIS_REPUTATION_TOKEN } from '../testSupport/simulator/utils/constants'
 
 const DAY = 86400n
 const ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT = 2n
@@ -52,14 +50,6 @@ describe('Escalation Game Fork Threshold Test', () => {
 		priceOracleManagerAndOperatorQueuer: Address
 	}
 	let questionId: bigint
-
-	const deployContract = async (deploymentData: Hex): Promise<Address> => {
-		const hash = await client.sendTransaction({ data: deploymentData })
-		const receipt = await client.waitForTransactionReceipt({ hash })
-		const contractAddress = receipt.contractAddress
-		if (contractAddress === undefined || contractAddress === null) throw new Error('deployment address missing')
-		return contractAddress
-	}
 
 	beforeEach(async () => {
 		mockWindow = getAnvilWindowEthereum()
@@ -149,6 +139,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 
 	test('reduced-threshold scaling remains active immediately before and exactly at game end, but not one second after', async () => {
 		const proofVerifier = await deployContract(
+			client,
 			encodeDeployData({
 				abi: statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.abi,
 				bytecode: `0x${statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.evm.bytecode.object}`,
@@ -159,6 +150,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 		const winningDeposit = 40n * 10n ** 18n
 		const gameEndDate = 10_000_000n
 		const zoltar = await deployContract(
+			client,
 			encodeDeployData({
 				abi: test_statoblast_EscalationGameForkThresholdHarness_EscalationGameForkBoundaryZoltar.abi,
 				bytecode: `0x${test_statoblast_EscalationGameForkThresholdHarness_EscalationGameForkBoundaryZoltar.evm.bytecode.object}`,
@@ -166,6 +158,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 			}),
 		)
 		const securityPool = await deployContract(
+			client,
 			encodeDeployData({
 				abi: test_statoblast_EscalationGameForkThresholdHarness_EscalationGameForkBoundarySecurityPool.abi,
 				bytecode: `0x${test_statoblast_EscalationGameForkThresholdHarness_EscalationGameForkBoundarySecurityPool.evm.bytecode.object}`,
@@ -173,6 +166,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 			}),
 		)
 		const harness = await deployContract(
+			client,
 			encodeDeployData({
 				abi: test_statoblast_EscalationGameForkThresholdHarness_EscalationGameForkThresholdHarness.abi,
 				bytecode: `0x${test_statoblast_EscalationGameForkThresholdHarness_EscalationGameForkThresholdHarness.evm.bytecode.object}`,

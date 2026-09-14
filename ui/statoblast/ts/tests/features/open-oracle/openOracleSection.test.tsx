@@ -1,24 +1,24 @@
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 /// <reference types="bun-types" />
 
-import { describe, expect, test } from 'bun:test'
 import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import { render } from 'preact'
-import { act } from 'preact/test-utils'
-import { renderSelectedReportActionSection } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/OpenOracleReportContent.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
-import { deriveOpenOracleDisputeSubmissionDetails, type OpenOracleDisputeSubmissionDetails } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracle.js'
-import { getDefaultOpenOracleFormState } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/formDefaults.js'
-import type { AccountState, OpenOracleFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
-import type { OpenOracleSectionProps } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
-import type { OpenOracleReportDetails, OpenOracleReportSummaryPage } from '@zoltar/ui-core-shared/types/contracts.js'
-import { OpenOracleSection } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/OpenOracleSection.js'
-import { getDefaultOpenOracleCreateFormState } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/formDefaults.js'
-import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import type { OpenOracleReportDetails, OpenOracleReportSummaryPage } from '@zoltar/ui-core-shared/types/contracts.js'
+import { renderSelectedReportActionSection } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/OpenOracleReportContent.js'
+import { OpenOracleSection } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/OpenOracleSection.js'
+import { getDefaultOpenOracleCreateFormState, getDefaultOpenOracleFormState } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/formDefaults.js'
+import { deriveOpenOracleDisputeSubmissionDetails, type OpenOracleDisputeSubmissionDetails } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracle.js'
+import type { OpenOracleSectionProps } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
+import type { AccountState, OpenOracleFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
+import { describe, expect, test } from 'bun:test'
+import { render } from 'preact'
+import { act } from 'preact/test-utils'
 
 type VNodeLike = {
 	props: Record<string, unknown>
@@ -219,20 +219,6 @@ function createOpenOracleSectionProps(overrides: Partial<OpenOracleSectionProps>
 		openOracleWithdrawableBalancesError: undefined,
 		openOracleWithdrawableBalancesLoading: false,
 		...overrides,
-	}
-}
-
-function createDeferred<T>() {
-	let resolvePromise: ((value: T) => void) | undefined
-	const promise = new Promise<T>(resolve => {
-		resolvePromise = resolve
-	})
-	return {
-		promise,
-		resolve(value: T) {
-			if (resolvePromise === undefined) throw new Error('Deferred promise resolver is unavailable')
-			resolvePromise(value)
-		},
 	}
 }
 

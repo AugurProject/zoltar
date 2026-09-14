@@ -1,5 +1,6 @@
 import ccxt, { type Exchange } from 'ccxt'
 import { bigintToSafeNumber } from '../ethereum.ts'
+import { integer, record } from '../infrastructure/json-validation.ts'
 import { aggregateCentralizedMarketObservations } from './centralized-market-aggregation.ts'
 import type { MarketConsensusObservation, MarketConsensusSettings } from './market-consensus.ts'
 
@@ -94,18 +95,6 @@ type MarketExchange = {
 }
 export type CentralizedExchangeFactory = (exchangeId: string, timeoutMilliseconds: number) => MarketExchange
 const exchangeCache = new Map<string, MarketExchange>()
-
-function record(value: unknown, label: string) {
-	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`${label} must be an object`)
-	return value as Record<string, unknown>
-}
-
-function integer(value: unknown, label: string, minimum: number, maximum: number) {
-	if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < minimum || value > maximum) {
-		throw new Error(`${label} must be an integer from ${minimum.toString()} through ${maximum.toString()}`)
-	}
-	return value
-}
 
 function decimalEth(value: unknown, label: string) {
 	if (typeof value !== 'string' || !/^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(value)) {

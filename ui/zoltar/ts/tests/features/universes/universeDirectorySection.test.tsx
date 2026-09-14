@@ -1,16 +1,16 @@
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { h } from 'preact'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
+import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { MarketRouteContentProps } from '@zoltar/ui-zoltar-shared/features/types.js'
 import { UniverseDirectorySection } from '@zoltar/ui-zoltar-shared/features/universes/components/UniverseDirectorySection.js'
 import { ZoltarSection } from '@zoltar/ui-zoltar-shared/features/zoltarSurface/components/ZoltarSection.js'
-import type { MarketRouteContentProps } from '@zoltar/ui-zoltar-shared/features/types.js'
-import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import { describe, expect, test } from 'bun:test'
+import { h } from 'preact'
 
 function createUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarUniverseSummary {
 	return {
@@ -33,18 +33,13 @@ function createUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarU
 
 installTestRouting()
 describe('UniverseDirectorySection', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
-	beforeEach(() => {
-		restoreDomEnvironment = installDomEnvironment().cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+		},
 	})
 
 	test('shows current universe details without duplicating child universes', async () => {

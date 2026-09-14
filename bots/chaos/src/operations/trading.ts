@@ -1,13 +1,15 @@
-import { inputInteger, inputMatches, inputSpend } from './input-values.ts'
+import { erc1155Abi, erc20Abi, genesisUniswapV3FactoryAbi, genesisUniswapV3PoolStateAbi, genesisUniswapV3SeederAbi, shareTokenAbi, twoWayConstantProductFactoryAbi, twoWayConstantProductPairAbi, twoWayConstantProductRouterAbi } from '@zoltar/bot-shared/contracts/abi'
 import { decodeFunctionData, encodeAbiParameters, encodeDeployData, getAddress, getCreate2Address, isAddress, toHex, zeroAddress, type AbiValue, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import { sameAddress as addressesMatch } from '@zoltar/core-shared/evm/address'
+import { ceilDiv as divideUp } from '@zoltar/core-shared/math/bigint'
 import { trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory, trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter } from '../../../../solidity/ts/types/contractArtifact.ts'
-import { erc1155Abi, erc20Abi, genesisUniswapV3SeederAbi, shareTokenAbi, twoWayConstantProductFactoryAbi, twoWayConstantProductPairAbi, twoWayConstantProductRouterAbi, genesisUniswapV3FactoryAbi, genesisUniswapV3PoolStateAbi } from '@zoltar/bot-shared/contracts/abi'
 import { CANONICAL_UNISWAP_V3_FACTORY, GENESIS_UNISWAP_FEE, GENESIS_UNISWAP_SQRT_PRICE_X96, GENESIS_UNISWAP_TICK_LOWER, GENESIS_UNISWAP_TICK_UPPER, genesisUniswapSeederDeployment } from '../core/genesis-uniswap.ts'
+import { validForkOutcomeRoutes } from './fork-outcomes.ts'
+import { inputInteger, inputMatches, inputSpend } from './input-values.ts'
 import { allowance, amount, cappedSpend, choose, disabled, eligible, encodeStep, erc1155WalletDebit, erc20AllowanceEvidence, erc20WalletDebit, eventEvidence, mixSeed, optionAmount, planBase, randomDeadline, tokenInventory } from './planning.ts'
+import { canCreateCompleteSet, projectedEthToShares, sharesToProjectedEth } from './pool-economics.ts'
 import { timestampDeadlineHasRequiredSafety } from './timing.ts'
 import type { EcosystemSnapshot, OperationContinuationContext, OperationDefinition, OperationEvidence, OperationPlan, OperationPlanDraft, PairSnapshot, PlanningOptions, PoolSnapshot, ShareInventory } from './types.ts'
-import { validForkOutcomeRoutes } from './fork-outcomes.ts'
-import { canCreateCompleteSet, projectedEthToShares, sharesToProjectedEth } from './pool-economics.ts'
 
 const shareForPool = (snapshot: EcosystemSnapshot, pool: PoolSnapshot) => snapshot.wallet.shares.find(share => share.shareToken.toLowerCase() === pool.shareToken.toLowerCase() && share.universeId === pool.universeId)
 export const poolForPair = (snapshot: EcosystemSnapshot, pair: PairSnapshot) => snapshot.pools.find(pool => pool.address.toLowerCase() === pair.pool.toLowerCase())
@@ -620,7 +622,7 @@ function protocolQuestionDeadline(snapshot: EcosystemSnapshot, pool: PoolSnapsho
 
 function ceilDivide(numerator: bigint, denominator: bigint) {
 	if (denominator <= 0n) return undefined
-	return (numerator + denominator - 1n) / denominator
+	return divideUp(numerator, denominator)
 }
 
 function quoteExactInput(pair: PairSnapshot, yesForNo: boolean, input: bigint) {
@@ -821,7 +823,7 @@ function previousAction(context: OperationContinuationContext, id: string) {
 }
 
 function sameAddress(value: unknown, expected: Address) {
-	return typeof value === 'string' && isAddress(value) && value.toLowerCase() === expected.toLowerCase()
+	return typeof value === 'string' && isAddress(value) && addressesMatch(value, expected)
 }
 
 function previousDirectActionMatches(snapshot: EcosystemSnapshot, context: OperationContinuationContext, pair: PairSnapshot, method: 'addLiquidity' | 'initialize', shareAmount: bigint, minimumLiquidity: bigint) {

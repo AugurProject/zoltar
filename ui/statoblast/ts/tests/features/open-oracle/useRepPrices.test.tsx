@@ -1,20 +1,20 @@
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { createPublicClient, http } from '@zoltar/core-shared/evm/ethereum'
-import { act } from 'preact/test-utils'
-import { render } from 'preact'
-import type { SimulationController } from '@zoltar/ui-core-shared/simulation/controller.js'
-import { resetRepPriceCacheForTesting, useRepPrices } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useRepPrices.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import type { ChainBackend, ReadClient } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
-import { createFakeBackend, createFakeSimulationProfile } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
-import { SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
+import type { SimulationController } from '@zoltar/ui-core-shared/simulation/controller.js'
 import { serializeSavedSimulationStateEnvelope } from '@zoltar/ui-core-shared/simulation/savedStates.js'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
+import { createFakeBackend, createFakeSimulationProfile } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
+import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import type { ChainBackend, ReadClient } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
+import { SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
+import { resetRepPriceCacheForTesting, useRepPrices } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useRepPrices.js'
+import { describe, expect, test } from 'bun:test'
+import { render } from 'preact'
+import { act } from 'preact/test-utils'
 
 function createSimulationController(): SimulationController {
 	const selectedAccount = '0x00000000000000000000000000000000000000a1' as Address
@@ -93,21 +93,15 @@ function PriceProbe({ captureRefresh, enabled = true }: { captureRefresh?: (refr
 }
 
 describe('useRepPrices', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
-	beforeEach(() => {
-		const domEnvironment = installDomEnvironment()
-		restoreDomEnvironment = domEnvironment.cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
-		resetRepPriceCacheForTesting()
-		resetActiveEnvironmentForTesting()
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+			resetRepPriceCacheForTesting()
+			resetActiveEnvironmentForTesting()
+		},
 	})
 
 	test('loads simulation mock REP prices using the active profile REP token', async () => {

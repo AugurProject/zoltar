@@ -1,22 +1,22 @@
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
-import { h, render } from 'preact'
-import { act } from 'preact/test-utils'
-import { useState } from 'preact/hooks'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import { OpenOracleSection } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/OpenOracleSection.js'
-import * as openOracleCopy from '@zoltar/ui-statoblast-shared/copy/openOracle.js'
-import { ChainBlockNumberContext, ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
-import { getDefaultOpenOracleCreateFormState, getDefaultOpenOracleFormState } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/formDefaults.js'
-import { deriveOpenOracleDisputeSubmissionDetails } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracle.js'
-import type { AccountState, OpenOracleCreateFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
-import type { OpenOracleSectionProps } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
-import type { OpenOracleReportDetails } from '@zoltar/ui-core-shared/types/contracts.js'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
+import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
+import type { OpenOracleReportDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import { ChainBlockNumberContext, ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
+import * as openOracleCopy from '@zoltar/ui-statoblast-shared/copy/openOracle.js'
+import { OpenOracleSection } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/OpenOracleSection.js'
+import { getDefaultOpenOracleCreateFormState, getDefaultOpenOracleFormState } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/formDefaults.js'
+import { deriveOpenOracleDisputeSubmissionDetails } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracle.js'
+import type { OpenOracleSectionProps } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
+import type { AccountState, OpenOracleCreateFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
+import { describe, expect, mock, test } from 'bun:test'
+import { h, render } from 'preact'
+import { useState } from 'preact/hooks'
+import { act } from 'preact/test-utils'
 
 const ATTO_ETH_PER_ETH = 10n ** 18n
 
@@ -159,19 +159,13 @@ function InteractiveOpenOracleCreateSection({ initialForm }: { initialForm: Open
 }
 
 describe('OpenOracleSection route create view', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
-	beforeEach(() => {
-		const domEnvironment = installDomEnvironment()
-		restoreDomEnvironment = domEnvironment.cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+		},
 	})
 
 	test('renders create-success handoff actions in create view', async () => {

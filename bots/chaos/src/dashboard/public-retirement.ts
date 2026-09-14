@@ -1,6 +1,4 @@
-function record(value: unknown) {
-	return typeof value === 'object' && value !== null && !Array.isArray(value) ? Object.fromEntries(Object.entries(value)) : undefined
-}
+import { optionalRecord as record } from '@zoltar/bot-shared/infrastructure/json-validation'
 
 function compact(value: Record<string, unknown>) {
 	return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined))

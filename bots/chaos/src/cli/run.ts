@@ -1,16 +1,13 @@
 #!/usr/bin/env bun
+import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
 
 import { getAddress, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
-import { assertSettingsProfileIsolation, loadSettings } from '../config/settings.ts'
 import { acquireBotProcessLocksForShutdown, BotProcessLockAcquisitionError, createBotShutdownController, type BotProcessLocks } from '@zoltar/bot-shared/execution/bot-process-locks'
+import { assertSettingsProfileIsolation, loadSettings } from '../config/settings.ts'
 import { CHAOS_PROCESS_LOCK_OPTIONS } from '../core/process-lock-options.ts'
 import { executionProfileId, runChaosOperator } from '../runtime/operator.ts'
 import { loadDurableState, saveDurableState } from '../state/operator-state.ts'
 import { acceptResidualProfileReplacement, assertSafeRetirementRecipient, cancelRetirement, DEFAULT_RETIREMENT_POLICIES, registerV3Position, requestRetirement } from '../state/retirement.ts'
-
-function errorMessage(error: unknown) {
-	return error instanceof Error ? error.message : String(error)
-}
 
 type RunCommand =
 	| { kind: 'operator' }

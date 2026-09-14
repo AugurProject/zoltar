@@ -1,16 +1,16 @@
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
+import { createPublicClient, getAddress, http } from '@zoltar/core-shared/evm/ethereum'
+import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
+import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
+import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { installRepPriceQuoterForTesting } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useRepPrices.js'
+import { describe, expect, mock, test } from 'bun:test'
 import { h } from 'preact'
 import { act } from 'preact/test-utils'
-import { createPublicClient, getAddress, http } from '@zoltar/core-shared/evm/ethereum'
-import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
-import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
-import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
-import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
-import { installRepPriceQuoterForTesting } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useRepPrices.js'
 
 type UseRepPrices = typeof import('@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useRepPrices.js')['useRepPrices']
 
@@ -33,22 +33,16 @@ function createHarness(useRepPrices: UseRepPrices) {
 }
 
 describe('useRepPrices refresh races', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
-	beforeEach(() => {
-		const domEnvironment = installDomEnvironment()
-		restoreDomEnvironment = domEnvironment.cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
-		mock.restore()
-		installRepPriceQuoterForTesting(undefined)
-		resetActiveEnvironmentForTesting()
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+			mock.restore()
+			installRepPriceQuoterForTesting(undefined)
+			resetActiveEnvironmentForTesting()
+		},
 	})
 
 	test('keeps the newest REP price refresh when overlapping requests resolve out of order', async () => {

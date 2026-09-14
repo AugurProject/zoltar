@@ -3,12 +3,10 @@ import { createHash } from 'node:crypto'
 import { mkdir, readdir, readFile, unlink, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { keccak256 } from '../../shared/core/ts/evm/ethereum'
-import { renderReferencePage } from './docs-html-page.mts'
-import { repositorySourceUrl } from './repository-source-links.mts'
 import { ensureContractArtifactsAreCurrent } from '../contracts/ensure-contract-artifacts.mts'
+import { walkFiles } from '../repo/walk.mts'
 import {
 	assemblyDelegateCalls,
-	type AssemblyDelegateCall,
 	assemblyEventEmissions,
 	contractPageOutputPath,
 	contractPagesDirectory,
@@ -22,8 +20,11 @@ import {
 	readDeclarationExclusionsBySource,
 	referencedEventAbiFingerprint,
 	stateChangingAbiFingerprintBySource,
+	type AssemblyDelegateCall,
 	type ContractDeclaration,
 } from './contract-reference-metadata.mts'
+import { renderReferencePage } from './docs-html-page.mts'
+import { repositorySourceUrl } from './repository-source-links.mts'
 
 assertDeclarationCheckerRegression()
 assertProductionSoliditySourceClassifierRegression()
@@ -477,15 +478,7 @@ function isProductionSoliditySourcePath(sourcePath: string): boolean {
 }
 
 async function listSoliditySourcePaths(directory: string): Promise<string[]> {
-	const entries = await readdir(directory, { withFileTypes: true })
-	const paths = await Promise.all(
-		entries.map(entry => {
-			const path = `${directory}/${entry.name}`
-			if (entry.isDirectory()) return listSoliditySourcePaths(path)
-			return Promise.resolve(path.endsWith('.sol') ? [path] : [])
-		}),
-	)
-	return paths.flat().sort()
+	return (await walkFiles(directory, { includeNonFiles: true, include: file => file.endsWith('.sol') })).map(file => file.replaceAll('\\', '/')).sort()
 }
 
 function computeSourceContentFingerprint(sources: Array<{ source: string; sourcePath: string }>): string {

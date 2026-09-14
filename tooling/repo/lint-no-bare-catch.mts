@@ -1,7 +1,8 @@
-import * as path from 'node:path'
-import * as url from 'node:url'
 import { promises as fs } from 'node:fs'
+import * as path from 'node:path'
 import * as ts from 'typescript'
+import { repositoryRoot as projectRoot } from './root.mts'
+import { walkFiles } from './walk.mts'
 
 type CatchFinding = {
 	file: string
@@ -10,8 +11,6 @@ type CatchFinding = {
 	reason: 'general-error-swallow' | 'missing-binding' | 'unused-binding'
 }
 
-const repositoryRoot = path.dirname(url.fileURLToPath(import.meta.url))
-const projectRoot = path.join(repositoryRoot, '..', '..')
 const sourceFileExtensions = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.mts', '.cts'])
 const ignoredPathPrefixes = [
 	'.git',
@@ -53,19 +52,8 @@ function shouldCheck(filePath: string): boolean {
 	return !shouldIgnore(relativePath)
 }
 
-async function collectFiles(directory: string, files: string[] = []): Promise<string[]> {
-	const entries = await fs.readdir(directory, { withFileTypes: true })
-	for (const entry of entries) {
-		const fullPath = path.join(directory, entry.name)
-		const relativePath = path.relative(projectRoot, fullPath).replaceAll('\\', '/')
-		if (entry.isDirectory()) {
-			if (shouldIgnore(relativePath)) continue
-			await collectFiles(fullPath, files)
-			continue
-		}
-		if (entry.isFile() && shouldCheck(fullPath)) files.push(fullPath)
-	}
-	return files
+async function collectFiles(directory: string): Promise<string[]> {
+	return await walkFiles(directory, { descend: directory => !shouldIgnore(path.relative(projectRoot, directory).replaceAll('\\', '/')), include: shouldCheck })
 }
 
 function catchBindingIsReferenced(block: ts.Block, bindingName: string) {

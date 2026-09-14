@@ -1,25 +1,19 @@
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { installDomTestLifecycle } from '../testUtils/domTestLifecycle.js'
+import { describe, expect, test } from 'bun:test'
 import { NotFoundSection } from '../../app/components/NotFoundSection.js'
-import { installDomEnvironment } from '../testUtils/domEnvironment.js'
-import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
 import { within } from '../testUtils/queries'
+import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
 
 describe('NotFoundSection', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
-	beforeEach(() => {
-		const domEnvironment = installDomEnvironment()
-		restoreDomEnvironment = domEnvironment.cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+		},
 	})
 
 	test('shows one concise error heading and direct recovery links', async () => {

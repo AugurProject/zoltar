@@ -1,3 +1,4 @@
+import { errorChain } from '@zoltar/core-shared/errors/errorChain'
 function prunedLogMessage(message: string) {
 	const normalized = message.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ')
 	return normalized.includes('pruned history unavailable') || normalized.includes('historical logs unavailable')
@@ -5,17 +6,13 @@ function prunedLogMessage(message: string) {
 
 /** Only classify failures from eth_getLogs, never state reads or generic connectivity errors. */
 export function permanentHistoricalLogError(error: unknown): boolean {
-	const seen = new Set<unknown>()
-	let current = error
-	while (typeof current === 'object' && current !== null && !seen.has(current)) {
-		seen.add(current)
+	for (const current of errorChain(error)) {
 		if ('failures' in current && Array.isArray(current.failures)) {
 			return current.failures.length > 0 && current.failures.every(failure => typeof failure === 'object' && failure !== null && (('historicalLogsUnavailable' in failure && failure.historicalLogsUnavailable === true) || ('error' in failure && typeof failure.error === 'string' && prunedLogMessage(failure.error))))
 		}
 		// Inspect the underlying cause before wrapper messages, which may combine
 		// pruning with an unrelated timeout from another provider.
 		if ('cause' in current && current.cause !== undefined) {
-			current = current.cause
 			continue
 		}
 		if ('code' in current && current.code === 4444) return true

@@ -2,12 +2,12 @@ import { describe, expect, test } from 'bun:test'
 import { spawnSync } from 'node:child_process'
 import { access, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { projectQuery } from '../repo/query-projects.mts'
 import { taskProjects } from '../repo/projects.ts'
+import { projectQuery } from '../repo/query-projects.mts'
+import { repositoryRoot } from '../repo/root.mts'
 import { dockerGlobalArguments, dockerInstructions, parseDockerfile } from '../testing/packaging-parsers.ts'
 import { reviewableGitHubPath } from '../testing/reviewable-github-path.ts'
 
-const repositoryRoot = join(import.meta.dir, '..', '..')
 const activeCiWorkflowPath = reviewableGitHubPath(repositoryRoot, 'workflows/ci.yml')
 const stagedCiWorkflowPath = join(repositoryRoot, 'workflow-changes', 'ci.yml')
 const browserWorkflowPath = reviewableGitHubPath(repositoryRoot, 'workflows/browser-workflow.yml')

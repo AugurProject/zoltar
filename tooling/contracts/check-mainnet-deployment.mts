@@ -2,6 +2,7 @@ import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
 import * as process from 'node:process'
 import * as url from 'node:url'
+import { repositoryRoot as repositoryRootPath } from '../repo/root.mts'
 
 type ManifestProtocolConfig = {
 	forkBurnDivisor: string
@@ -36,8 +37,6 @@ type DeploymentManifest = {
 	derivedContracts: ManifestDeploymentStep[]
 }
 
-const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
-const repositoryRootPath = path.join(directoryOfThisFile, '..', '..')
 export const deploymentRuntimeTypeScriptProjects = ['ui/coreShared/tsconfig.json', 'ui/zoltarShared/tsconfig.json', 'ui/statoblastShared/tsconfig.json'] as const
 const deploymentRuntimeOutputPaths = [
 	path.join(repositoryRootPath, 'ui', 'coreShared', 'js', 'wallet', 'networkProfile.js'),

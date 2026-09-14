@@ -1,38 +1,39 @@
-import { executeScheduledOperation, recordDryRun, scheduleAfterRecoveredTransaction, schedulerFor } from './scheduled-operation.ts'
-import { actionableUrgentLifecyclePlan, lifecycleObstructions } from './lifecycle-readiness.ts'
-import { createManualOperationController } from './manual-operations.ts'
-import { migrateEmptyBootstrapState } from '../state/bootstrap-migration.ts'
-import { runtimeTopologySummary } from './topology-summary.ts'
-import { checkDeploymentAvailability, recordUnavailableDeploymentScan, tradingDeploymentNotice } from './deployment-availability.ts'
 import { createWalletClient, privateKeyToAccount, type Address } from '@zoltar/bot-shared/ethereum'
-import { checkRpcEndpoint, EndpointCheckFailure, type EndpointCheck } from '@zoltar/bot-shared/monitoring/connectivity'
-import { createSignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
-import { operationalFailureDisposition, pollUntilStopped, retryDelayMilliseconds } from '@zoltar/bot-shared/monitoring/resilience'
-import { saveSettings, type OperatorSettings } from '../config/settings.ts'
 import { botDashboardLifecycle, type BotProcessLocks, type BotShutdownController } from '@zoltar/bot-shared/execution/bot-process-locks'
+import { createSignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
+import { errorMessage as formatErrorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
+import { checkRpcEndpoint, EndpointCheckFailure, type EndpointCheck } from '@zoltar/bot-shared/monitoring/connectivity'
+import { operationalFailureDisposition, pollUntilStopped, retryDelayMilliseconds } from '@zoltar/bot-shared/monitoring/resilience'
+import { executionProfileId } from '../config/execution-profile.ts'
+import { saveSettings, type OperatorSettings } from '../config/settings.ts'
 import { randomInteger } from '../core/random.ts'
 import { backfillWaitMilliseconds, operatorWaitMilliseconds } from '../core/scheduler.ts'
 import { startDashboardServer } from '../dashboard/dashboard-server.ts'
 import { recoverPendingTransactions } from '../execution/recovery.ts'
 import { executeOperationPlan, TransactionAwaitingRecovery, type ExecutionEnvironment } from '../execution/transaction-executor.ts'
-import { executionProfileId } from '../config/execution-profile.ts'
 import { ChaosProtocolIndexReorgError } from '../monitoring/protocol-index-context.ts'
 import type { CanonicalImmutableTopologyCache } from '../monitoring/topology-cache.ts'
 import { evaluateSelectableOperationDefinition, operationHasCanonicalContinuationBuilder } from '../operations/catalog.ts'
 import type { OperationPlan } from '../operations/types.ts'
-import { setRuntimeExecutionAddress, bindRuntimeStateToSigner, loadRuntimeState, recordActivity, saveDurableState, type RuntimeState } from '../state/operator-state.ts'
-import { blockExecutableEvaluations, applyExecutionPolicy, chaosChain, createChaosReadPool, performCanonicalScan, planningOptions, unavailableOperationCatalog } from './canonical-scan.ts'
-import { createChaosDashboardController, type ConfigurationState } from './dashboard-controller.ts'
+import { migrateEmptyBootstrapState } from '../state/bootstrap-migration.ts'
+import { bindRuntimeStateToSigner, loadRuntimeState, recordActivity, saveDurableState, setRuntimeExecutionAddress, type RuntimeState } from '../state/operator-state.ts'
+import { applyExecutionPolicy, blockExecutableEvaluations, chaosChain, createChaosReadPool, performCanonicalScan, planningOptions, unavailableOperationCatalog } from './canonical-scan.ts'
 import { restartSafeSettings } from './configuration-candidates.ts'
+import { createChaosDashboardController, type ConfigurationState } from './dashboard-controller.ts'
+import { checkDeploymentAvailability, recordUnavailableDeploymentScan, tradingDeploymentNotice } from './deployment-availability.ts'
 import { resetPristineStateForDeploymentProfile, verifyRetirementCompletionFinality } from './deployment-profile.ts'
+import { actionableUrgentLifecyclePlan, lifecycleObstructions } from './lifecycle-readiness.ts'
+import { createManualOperationController } from './manual-operations.ts'
 import { beginLifecycleObligation, blockNovelEvaluations, completeLifecycleObligation, failLifecycleObligation, lifecyclePresenceBlockerMessage, obligationForPlan, synchronizeLifecycleObligations, waitForCanonicalLifecycleConfirmation } from './obligations.ts'
-import { genesisInitializationDefinitionId, genesisInitializationPlan, randomOperationPlans } from './selection.ts'
-import { enforceRetirementContinuation, processRetirementCycle, retirementPositionsForScan, updateRetirementAssessment } from './retirement-runner.ts'
 import { retirementPlanAllowed } from './retirement-operation-policy.ts'
+import { enforceRetirementContinuation, processRetirementCycle, retirementPositionsForScan, updateRetirementAssessment } from './retirement-runner.ts'
+import { executeScheduledOperation, recordDryRun, scheduleAfterRecoveredTransaction, schedulerFor } from './scheduled-operation.ts'
+import { genesisInitializationDefinitionId, genesisInitializationPlan, randomOperationPlans } from './selection.ts'
 import { assertSubmissionPreflightFresh, preflightTransactionSubmissionNetwork, recordEndpointPreflightChecks, submissionPreflightConfigurationIdentity, submissionPreflightIsDue } from './submission-preflight.ts'
+import { runtimeTopologySummary } from './topology-summary.ts'
 import { evaluatePolicySafeContinuation } from './workflow-continuation.ts'
 import { abandonRetryableSelectableFailure, rediscoverableExecutionFailure, repairDurableSelectableFailures, workflowForPlan } from './workflow-repair.ts'
-import { blockInterruptedWorkflows, durableWorkflowPlan, refreshWorkflowContinuation, workflowNeedsContinuation, retryableOnChainWorkflowFailure } from './workflows.ts'
+import { blockInterruptedWorkflows, durableWorkflowPlan, refreshWorkflowContinuation, retryableOnChainWorkflowFailure, workflowNeedsContinuation } from './workflows.ts'
 
 type LoadedConfiguration = {
 	path: string
@@ -48,7 +49,7 @@ type RuntimeResources = {
 }
 
 function errorMessage(error: unknown) {
-	return (error instanceof Error ? error.message : String(error)).slice(0, 1_500)
+	return formatErrorMessage(error).slice(0, 1_500)
 }
 
 function configuredWallet(settings: OperatorSettings): Address | undefined {

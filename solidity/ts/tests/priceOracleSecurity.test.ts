@@ -1,20 +1,18 @@
-import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
-import assert from '../testSupport/simulator/utils/assert'
-import { decodeEventLog, encodeAbiParameters, encodeDeployData, encodeFunctionData, keccak256, type Address, type Hex, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import { OPEN_ORACLE_FLAG_FEES_ONLY_AT_HALT, OPEN_ORACLE_FLAG_FLEXIBLE_ESCALATION, OPEN_ORACLE_FLAG_STORE_SETTLEMENT_ELIGIBILITY } from '../testSupport/openOracle/statePreimage'
-import { getOpenOracleGameTuple, getOpenOracleHelperTuple, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_FLAG_TRACK_DISPUTES, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
+import { decodeEventLog, encodeAbiParameters, encodeDeployData, encodeFunctionData, keccak256, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_FLAG_TRACK_DISPUTES, getOpenOracleGameTuple, getOpenOracleHelperTuple, hashOpenOracleStatePreimage, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS, MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, calculateOracleMinimumWethReportAttoEth } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
+import { beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
+import { deployContract } from '../testSupport/deployContract'
+import { OPEN_ORACLE_FLAG_FEES_ONLY_AT_HALT, OPEN_ORACLE_FLAG_FLEXIBLE_ESCALATION, OPEN_ORACLE_FLAG_STORE_SETTLEMENT_ELIGIBILITY } from '../testSupport/openOracle/statePreimage'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
-import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
-import { createWriteClient, WriteClient } from '../testSupport/simulator/utils/clients'
-import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, DAY, WETH_ADDRESS } from '../testSupport/simulator/utils/constants'
-import { addressString, dateToBigintSeconds } from '../testSupport/simulator/utils/bigint'
-import { approveToken, setupTestAccounts, getERC20Balance, getETHBalance } from '../testSupport/simulator/utils/utilities'
-import { approveAndDepositRepToVault, handleOracleReporting, manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
-import { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, applyLibraries, deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
-import { createQuestion, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
-import { ensureZoltarDeployed } from '../testSupport/simulator/utils/contracts/zoltar'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
+import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
+import assert from '../testSupport/simulator/utils/assert'
+import { addressString, dateToBigintSeconds } from '../testSupport/simulator/utils/bigint'
+import { WriteClient, createWriteClient } from '../testSupport/simulator/utils/clients'
+import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from '../testSupport/simulator/utils/constants'
+import { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, applyLibraries, deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
+import { createCompleteSet, depositRepToVault, depositToEscalationGame, getSecurityVault, getSettlementCollateralAttoEth, getShareTokenSupplyAttoShares, getTotalAccruedFees, getTotalClaimableVaultFeesAttoEth } from '../testSupport/simulator/utils/contracts/securityPool'
 import {
 	OperationType,
 	executeStagedOperation,
@@ -24,7 +22,6 @@ import {
 	getOpenOracleExtraData,
 	getOpenOracleReportMeta,
 	getOpenOracleReportStatus,
-	loadOpenOracleEventState,
 	getPendingOperationSlotId,
 	getPendingReportId,
 	getPendingReportMaxSettlementBaseFee,
@@ -33,6 +30,7 @@ import {
 	getQueuedOperationCostAttoEth,
 	getRequestPriceCostAttoEth,
 	getStagedOperation,
+	loadOpenOracleEventState,
 	openOracleSettle,
 	openOracleSettleWithGasPrice,
 	recoverSettledPendingReport,
@@ -42,19 +40,22 @@ import {
 	requestPriceWithValue,
 	wrapWeth,
 } from '../testSupport/simulator/utils/contracts/statoblast'
-import { createCompleteSet, depositRepToVault, depositToEscalationGame, getSettlementCollateralAttoEth, getSecurityVault, getShareTokenSupplyAttoShares, getTotalAccruedFees, getTotalClaimableVaultFeesAttoEth } from '../testSupport/simulator/utils/contracts/securityPool'
+import { approveAndDepositRepToVault, handleOracleReporting, manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { ensureZoltarDeployed } from '../testSupport/simulator/utils/contracts/zoltar'
+import { createQuestion, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { approveToken, getERC20Balance, getETHBalance, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import {
-	statoblast_openOracle_OpenOracle_OpenOracle,
+	ReputationToken_ReputationToken,
+	test_statoblast_OpenOracleAdversarialHarnesses_OpenOracleRejectingETHReceiver as rejectingEthReceiverArtifact,
 	statoblast_EscalationGame_EscalationGame,
 	statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
 	statoblast_SecurityPool_SecurityPool,
-	statoblast_tokens_ShareToken_ShareToken,
 	statoblast_WETH9_WETH9,
-	ReputationToken_ReputationToken,
-	test_statoblast_OpenOracleAdversarialHarnesses_OpenOracleRejectingETHReceiver as rejectingEthReceiverArtifact,
+	statoblast_openOracle_OpenOracle_OpenOracle,
+	statoblast_tokens_ShareToken_ShareToken,
 } from '../types/contractArtifact'
-import { isIgnorableLogDecodeError } from './logDecodeErrors'
 import { replayZoltarEvents, type ReplayLog } from './eventReplay/eventReplayModel'
+import { isIgnorableLogDecodeError } from './logDecodeErrors'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -217,14 +218,6 @@ describe('Price Oracle Refund Security Tests', () => {
 		ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS,
 		ORACLE_MIN_LIQUIDATION_PRICE_DISTANCE_BPS,
 	]
-
-	const deployContract = async (deploymentData: Hex): Promise<Address> => {
-		const hash = await client.sendTransaction({ data: deploymentData })
-		const receipt = await client.waitForTransactionReceipt({ hash })
-		const contractAddress = receipt.contractAddress
-		if (typeof contractAddress !== 'string') throw new Error('deployment address missing')
-		return contractAddress
-	}
 
 	const executeThroughRejectingReceiver = async (receiver: Address, target: Address, data: Hex, value = 0n) => {
 		const hash = await client.writeContract({
@@ -433,7 +426,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const constructorArgs = getOracleCoordinatorConstructorArgs()
 		constructorArgs[9] = 2
 		constructorArgs[14] = timeType
-		const coordinator = await deployContract(encodeOracleCoordinatorDeployData(constructorArgs))
+		const coordinator = await deployContract(client, encodeOracleCoordinatorDeployData(constructorArgs))
 		await client.writeContract({
 			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			address: coordinator,
@@ -739,7 +732,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const tunedArgs = getOracleCoordinatorConstructorArgs()
 		tunedArgs[7] = tunedTargetPriceError
 		tunedArgs[8] = tunedOpenOracleSecurityMultiplierBps
-		const tunedCoordinator = await deployContract(encodeOracleCoordinatorDeployData(tunedArgs))
+		const tunedCoordinator = await deployContract(client, encodeOracleCoordinatorDeployData(tunedArgs))
 
 		assert.strictEqual(
 			await client.readContract({
@@ -785,7 +778,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	test('coordinator constructor rejects a priority fee that would exhaust OpenOracle report limits', async () => {
 		const maximumArgs = getOracleCoordinatorConstructorArgs()
 		maximumArgs[6] = MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS
-		const maximumCoordinator = await deployContract(encodeOracleCoordinatorDeployData(maximumArgs))
+		const maximumCoordinator = await deployContract(client, encodeOracleCoordinatorDeployData(maximumArgs))
 		const maximumMinimumReport = await client.readContract({
 			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'minimumToken1ReportAttoEth',
@@ -796,7 +789,7 @@ describe('Price Oracle Refund Security Tests', () => {
 
 		const invalidArgs = getOracleCoordinatorConstructorArgs()
 		invalidArgs[6] = MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS + 1n
-		await assert.rejects(async () => await deployContract(encodeOracleCoordinatorDeployData(invalidArgs)), /initial report priority fee exceeds openoracle limits/i)
+		await assert.rejects(async () => await deployContract(client, encodeOracleCoordinatorDeployData(invalidArgs)), /initial report priority fee exceeds openoracle limits/i)
 	})
 
 	test('coordinator constructor rejects unsafe oracle risk parameters', async () => {
@@ -892,7 +885,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		]
 
 		for (const invalidCase of invalidRiskParameterCases) {
-			await assert.rejects(async () => await deployContract(encodeOracleCoordinatorDeployData(invalidCase.args)), invalidCase.message)
+			await assert.rejects(async () => await deployContract(client, encodeOracleCoordinatorDeployData(invalidCase.args)), invalidCase.message)
 		}
 	})
 
@@ -1090,6 +1083,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	test('rejecting sponsors roll back direct bounty refunds and staged-operation unused ETH refunds', async () => {
 		const coordinatorAbi = statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi
 		const receiver = await deployContract(
+			client,
 			encodeDeployData({
 				abi: rejectingEthReceiverArtifact.abi,
 				bytecode: `0x${rejectingEthReceiverArtifact.evm.bytecode.object}`,
@@ -1216,7 +1210,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	test('settlement callback gas arithmetic rejects values that cannot fit the advertised uint32 limit', async () => {
 		const args = getOracleCoordinatorConstructorArgs()
 		args[4] = 2 ** 32 - 1
-		const coordinator = await deployContract(encodeOracleCoordinatorDeployData(args))
+		const coordinator = await deployContract(client, encodeOracleCoordinatorDeployData(args))
 		await assert.rejects(
 			client.readContract({
 				abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
@@ -1233,7 +1227,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const maximumSettlerReward = (1n << 96n) - 1n
 		const overflowArgs = getOracleCoordinatorConstructorArgs()
 		overflowArgs[3] = maximumSettlerReward
-		const overflowCoordinator = await deployContract(encodeOracleCoordinatorDeployData(overflowArgs))
+		const overflowCoordinator = await deployContract(client, encodeOracleCoordinatorDeployData(overflowArgs))
 		const setupHash = await client.writeContract({
 			abi: coordinatorAbi,
 			address: overflowCoordinator,
@@ -1782,6 +1776,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const collateral = 1n * 10n ** 18n
 		await manipulatePriceOracle(client, mockWindow, priceOracle)
 		const receiver = await deployContract(
+			client,
 			encodeDeployData({
 				abi: rejectingEthReceiverArtifact.abi,
 				bytecode: `0x${rejectingEthReceiverArtifact.evm.bytecode.object}`,

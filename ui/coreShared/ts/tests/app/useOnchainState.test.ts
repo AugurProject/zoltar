@@ -1,35 +1,26 @@
+import { createDeferred } from '../testUtils/deferred.js'
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { fireEvent, within } from '../testUtils/queries'
+import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { installDomTestLifecycle } from '../testUtils/domTestLifecycle.js'
+import { describe, expect, test } from 'bun:test'
 import { h } from 'preact'
 import { act } from 'preact/test-utils'
-import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { loadWalletState } from '../../app/hooks/loadWalletState.js'
+import type { UseOnchainStateDependencies } from '../../app/hooks/useOnchainState.js'
 import { useOnchainState } from '../../app/hooks/useOnchainState.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../../lib/activeEnvironment.js'
 import { createLoadController } from '../../lib/loadState.js'
 import type { AccountState } from '../../types/app.js'
-import { installDomEnvironment } from '../testUtils/domEnvironment.js'
 import { createFakeBackend } from '../testUtils/fakeBackend.js'
+import { fireEvent, within } from '../testUtils/queries'
 import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
-import type { UseOnchainStateDependencies } from '../../app/hooks/useOnchainState.js'
 
 const fakeOnchainStateDependencies: UseOnchainStateDependencies = {
 	getDeploymentSteps: () => [],
 	getWethAddress: () => '0x0000000000000000000000000000000000000ee1' as const,
 	loadDeploymentStatusOracleSnapshot: async () => ({ applicationDeploymentComplete: false, deploymentStatuses: [] }),
 	loadErc20Balance: async () => 0n,
-}
-
-function createDeferred<T>() {
-	let resolve: (value: T) => void = () => undefined
-	let reject: (reason?: unknown) => void = () => undefined
-	const promise = new Promise<T>((promiseResolve, promiseReject) => {
-		resolve = promiseResolve
-		reject = promiseReject
-	})
-	return { promise, reject, resolve }
 }
 
 void describe('loadWalletState', () => {
@@ -462,7 +453,6 @@ void describe('loadWalletState', () => {
 })
 
 void describe('useOnchainState', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
 	function OnchainStateHarness() {
@@ -483,17 +473,12 @@ void describe('useOnchainState', () => {
 		])
 	}
 
-	beforeEach(() => {
-		const domEnvironment = installDomEnvironment()
-		restoreDomEnvironment = domEnvironment.cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
-		resetActiveEnvironmentForTesting()
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+			resetActiveEnvironmentForTesting()
+		},
 	})
 
 	void test('surfaces an explicit error when connect wallet is clicked without a wallet installed', async () => {
