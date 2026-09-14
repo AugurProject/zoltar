@@ -43,7 +43,7 @@ describe('OverviewPanels', () => {
 			activeUniverseId: 0n,
 			accountState: {
 				address: undefined,
-				chainId: '0x1',
+				chainId: '0xaa36a7',
 				ethBalanceAttoEth: undefined,
 				wethBalanceAttoEth: undefined,
 			},
@@ -245,7 +245,7 @@ describe('OverviewPanels', () => {
 		const documentQueries = await renderOverviewPanels({
 			accountState: {
 				address: '0x1234567890123456789012345678901234567890',
-				chainId: '0xaa36a7',
+				chainId: '0x1',
 				ethBalanceAttoEth: undefined,
 				wethBalanceAttoEth: undefined,
 			},
@@ -255,11 +255,11 @@ describe('OverviewPanels', () => {
 		})
 
 		openAccountMenu()
-		expect(documentQueries.getByText('Sepolia (11155111)')).not.toBeNull()
+		expect(documentQueries.getByText('Ethereum (1)')).not.toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Copy Address' })).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Address Copied' })).toBeNull()
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Change wallet' }))
-		fireEvent.click(documentQueries.getByRole('button', { name: 'Switch to Ethereum mainnet' }))
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Switch to Sepolia' }))
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Disconnect' }))
 
 		expect(onChangeWallet).toHaveBeenCalledTimes(1)
@@ -272,7 +272,7 @@ describe('OverviewPanels', () => {
 		const documentQueries = await renderOverviewPanels({
 			accountState: {
 				address,
-				chainId: '0x1',
+				chainId: '0xaa36a7',
 				ethBalanceAttoEth: undefined,
 				wethBalanceAttoEth: undefined,
 			},
@@ -476,7 +476,7 @@ describe('OverviewPanels', () => {
 		await cleanupRenderedComponent?.()
 
 		await renderOverviewPanels({
-			accountState: { address: '0x1234567890123456789012345678901234567890', chainId: '0x1', ethBalanceAttoEth: 2n * 10n ** 18n, wethBalanceAttoEth: 10n ** 18n },
+			accountState: { address: '0x1234567890123456789012345678901234567890', chainId: '0xaa36a7', ethBalanceAttoEth: 2n * 10n ** 18n, wethBalanceAttoEth: 10n ** 18n },
 			universeRepBalanceAttoRep: 5n * 10n ** 18n,
 		})
 		expect(readSlots()).toEqual(expectedSlots)
@@ -504,7 +504,7 @@ describe('OverviewPanels', () => {
 		const documentQueries = await renderOverviewPanels({
 			accountState: {
 				address: '0x1234567890123456789012345678901234567890',
-				chainId: '0x1',
+				chainId: '0xaa36a7',
 				ethBalanceAttoEth: 999999990000n * 10n ** 18n,
 				wethBalanceAttoEth: 10000n * 10n ** 18n,
 			},

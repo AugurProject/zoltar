@@ -1,3 +1,4 @@
+import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 /// <reference types="bun-types" />
 
 import { afterEach, beforeAll, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
@@ -77,7 +78,7 @@ function OpenOracleSectionHarness({ accountAddress, initialActiveView = 'create'
 	})
 	const accountState: AccountState = {
 		address: accountAddress,
-		chainId: '0x1',
+		chainId: SEPOLIA_NETWORK_PROFILE.chainIdHex,
 		ethBalanceAttoEth: 10n ** 30n,
 		wethBalanceAttoEth: undefined,
 	}
@@ -229,15 +230,17 @@ describe.serial('OpenOracleSection integration', () => {
 		await setBaselineSnapshot()
 	})
 
-	beforeEach(() => {
+	beforeEach(async () => {
 		resetActiveEnvironment?.()
 		resetActiveEnvironmentForTesting()
 		mockWindow = getAnvilWindowEthereum()
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		await mockWindow.request({ method: 'anvil_setChainId', params: [SEPOLIA_NETWORK_PROFILE.chain.id] })
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0, SEPOLIA_NETWORK_PROFILE.chain)
 		const domEnvironment = installDomEnvironment()
 		restoreDomEnvironment = domEnvironment.cleanup
 		Reflect.set(domEnvironment.window, 'ethereum', createInjectedWalletShim(mockWindow, walletAddress))
-		resetActiveEnvironment = installActiveEnvironmentForTesting(createInjectedBackend())
+		// The Anvil fixture seeds mainnet token addresses, but UI writes use Sepolia's chain ID.
+		resetActiveEnvironment = installActiveEnvironmentForTesting(createInjectedBackend({ profile: { ...MAINNET_NETWORK_PROFILE, chain: SEPOLIA_NETWORK_PROFILE.chain, chainIdHex: SEPOLIA_NETWORK_PROFILE.chainIdHex, id: 'sepolia', displayName: 'Sepolia' } }))
 		uiReadClient = createConnectedReadClient()
 	})
 

@@ -41,7 +41,7 @@ function getReportOutcomeSection() {
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {
 		address: zeroAddress,
-		chainId: '0x1',
+		chainId: '0xaa36a7',
 		ethBalanceAttoEth: 0n,
 		wethBalanceAttoEth: 0n,
 		...overrides,
@@ -753,12 +753,12 @@ describe('ReportingSection', () => {
 		expectTransactionButtonEnabled(document.body, 'Settle all Yes deposits')
 	})
 
-	test('keeps reporting disabled off mainnet and shows the switch-network recovery', async () => {
+	test('keeps reporting disabled off Sepolia and shows the switch-network recovery', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
 				createProps({
-					accountState: createAccountState({ chainId: '0xaa36a7' }),
+					accountState: createAccountState({ chainId: '0x1' }),
 					reportingForm: createReportingForm({
 						reportAmount: '1',
 						selectedOutcome: 'yes',
@@ -769,15 +769,15 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expectTransactionButtonDisabled(document.body, 'Report Yes')
-		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(true)
+		expect(document.body.textContent?.includes('Switch to Sepolia')).toBe(true)
 	})
 
-	test('keeps escalation settlement disabled off mainnet and shows the switch-network recovery', async () => {
+	test('keeps escalation settlement disabled off Sepolia and shows the switch-network recovery', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
 				createProps({
-					accountState: createAccountState({ chainId: '0xaa36a7' }),
+					accountState: createAccountState({ chainId: '0x1' }),
 					mode: 'withdraw-only',
 					reportingDetails: createReportingDetails({
 						questionOutcome: 'yes',
@@ -796,7 +796,7 @@ describe('ReportingSection', () => {
 
 		expectTransactionButtonDisabled(document.body, 'Settle selected Yes deposits')
 		expectTransactionButtonDisabled(document.body, 'Settle all Yes deposits')
-		const reason = 'Switch to Ethereum mainnet.'
+		const reason = 'Switch to Sepolia.'
 		expect(document.body.textContent?.split(reason)).toHaveLength(2)
 		const settleSelectedButton = within(document.body).getByRole('button', { name: 'Settle selected Yes deposits' })
 		const settleAllButton = within(document.body).getByRole('button', { name: 'Settle all Yes deposits' })

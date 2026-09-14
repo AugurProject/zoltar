@@ -1,6 +1,7 @@
 import { defineChain, getAddress, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { mainnet, type Chain } from '@zoltar/core-shared/evm/ethereum'
 import { SEPOLIA_GENESIS_REP_ADDRESS, SEPOLIA_WETH_ADDRESS } from '../lib/sepoliaDeploymentConfig.js'
+import { MAINNET_ENABLED } from './networkAvailability.js'
 import { sameChainId } from './chainId.js'
 
 export type NetworkProfile = {
@@ -97,13 +98,14 @@ export const SEPOLIA_NETWORK_PROFILE: NetworkProfile = {
 
 export function getPublicNetworkProfile(network: string | undefined) {
 	const normalizedNetwork = network?.trim().toLowerCase()
-	if (normalizedNetwork === undefined || normalizedNetwork === '' || normalizedNetwork === 'mainnet') return MAINNET_NETWORK_PROFILE
+	if (normalizedNetwork === undefined || normalizedNetwork === '') return SEPOLIA_NETWORK_PROFILE
+	if (normalizedNetwork === 'mainnet') return MAINNET_ENABLED ? MAINNET_NETWORK_PROFILE : SEPOLIA_NETWORK_PROFILE
 	if (normalizedNetwork === 'sepolia') return SEPOLIA_NETWORK_PROFILE
 	throw new RangeError(`Unsupported network "${network}". Use "mainnet" or "sepolia".`)
 }
 
 export function getPublicNetworkProfileForChainId(chainId: string | undefined) {
-	if (sameChainId(chainId, MAINNET_NETWORK_PROFILE.chainIdHex)) return MAINNET_NETWORK_PROFILE
+	if (MAINNET_ENABLED && sameChainId(chainId, MAINNET_NETWORK_PROFILE.chainIdHex)) return MAINNET_NETWORK_PROFILE
 	if (sameChainId(chainId, SEPOLIA_NETWORK_PROFILE.chainIdHex)) return SEPOLIA_NETWORK_PROFILE
 	return undefined
 }
@@ -117,7 +119,7 @@ declare global {
 }
 
 export function getRuntimeNetworkProfile() {
-	return globalThis.__zoltarRuntimeNetworkProfile__ ?? MAINNET_NETWORK_PROFILE
+	return globalThis.__zoltarRuntimeNetworkProfile__ ?? SEPOLIA_NETWORK_PROFILE
 }
 
 export function setRuntimeNetworkProfile(profile: NetworkProfile) {

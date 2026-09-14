@@ -185,7 +185,7 @@ void describe('trading helpers', () => {
 		expect(getDefaultShareMigrationTargetOutcomeIndexes(scalarForkUniverse)).toBe('')
 	})
 
-	void test('blocks minting until a pool is loaded and the wallet is connected on mainnet', () => {
+	void test('blocks minting until a pool is loaded and the wallet is connected on Sepolia', () => {
 		expect(
 			getTradingMintGuardMessage({
 				accountAddress: undefined,
@@ -226,7 +226,7 @@ void describe('trading helpers', () => {
 				totalPoolHeldAttoRep: 0n,
 				mintingCapacityAttoEth: 10n,
 			}),
-		).toBe('Switch to Ethereum mainnet.')
+		).toBe('Switch to Sepolia.')
 	})
 
 	void test("blocks minting when the pool's REP price is stale", () => {
@@ -613,7 +613,7 @@ void describe('trading helpers', () => {
 				hasSelectedPool: true,
 				isOnActiveAppChain: false,
 			}),
-		).toBe('Switch to Ethereum mainnet.')
+		).toBe('Switch to Sepolia.')
 
 		expect(
 			getTradingRedeemSharesGuardMessage({

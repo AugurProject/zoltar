@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test'
 import { getAddress, isHex, keccak256, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { createInjectedBackend, normalizeAccount } from '../wallet/chainBackend.js'
+import { MAINNET_NETWORK_PROFILE } from '../wallet/networkProfile.js'
 import type { InjectedEthereum } from '../wallet/injectedEthereum.js'
 import { installFetchStub } from './testUtils/fetchStub.js'
 
@@ -246,7 +247,7 @@ describe('injected backend read transport', () => {
 		const callbacks: string[] = []
 		ensureWindowObject().ethereum = createMockInjectedEthereum(async ({ method, params }) => {
 			if (method === 'eth_accounts') return [zeroAddress]
-			if (method === 'eth_chainId') return '0x01'
+			if (method === 'eth_chainId') return '0xaa36a7'
 			if (method === 'eth_getTransactionCount') return '0x1'
 			if (method === 'eth_estimateGas') return '0x5208'
 			if (method === 'eth_gasPrice') return '0x1'
@@ -321,6 +322,21 @@ describe('injected backend read transport', () => {
 	})
 
 	for (const operation of guardedWriteOperationCases) {
+		for (const profile of [undefined, MAINNET_NETWORK_PROFILE]) {
+			test(`blocks ${operation.name} on mainnet with ${profile?.id ?? 'default'} backend before requesting a signature`, async () => {
+				const calls: string[] = []
+				ensureWindowObject().ethereum = createMockInjectedEthereum(async ({ method }) => {
+					calls.push(method)
+					if (method === 'eth_accounts') return [zeroAddress]
+					if (method === 'eth_chainId') return '0x01'
+					throw new Error(`Unexpected wallet request: ${method}`)
+				})
+				const backend = createInjectedBackend(profile === undefined ? {} : { profile })
+				await expect(operation.execute(backend.createWriteClient(zeroAddress))).rejects.toThrow('Ethereum mainnet is temporarily disabled.')
+				expect(calls).toEqual(profile === undefined ? ['eth_accounts', 'eth_chainId'] : [])
+			})
+		}
+
 		test(`blocks ${operation.name} when the wallet disconnects before send`, async () => {
 			const requestCalls: string[] = []
 			ensureWindowObject().ethereum = createMockInjectedEthereum(async ({ method }) => {
@@ -358,7 +374,7 @@ describe('injected backend read transport', () => {
 			const backend = createInjectedBackend()
 			const writeClient = backend.createWriteClient(zeroAddress)
 
-			await expect(operation.execute(writeClient)).rejects.toThrow('Wallet network changed. Switch to Ethereum mainnet and try again.')
+			await expect(operation.execute(writeClient)).rejects.toThrow('Wallet network changed. Switch to Sepolia and try again.')
 			expect(requestCalls).toEqual(['eth_accounts', 'eth_chainId'])
 		})
 	}

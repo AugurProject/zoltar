@@ -74,6 +74,6 @@ void describe('user copy helpers', () => {
 	void test('maps wallet branch states with non-increasing permission checks', () => {
 		expect(getWalletPresentation({ accountAddress: undefined, hasWallet: false })?.key).toBe('wallet_disconnected')
 		expect(getWalletPresentation({ accountAddress: '0x000000000000000000000000000000000000dEaD', hasInjectedWallet: true, isSupportedChain: false })?.key).toBe('wrong_network')
-		expect(getWalletPresentation({ accountAddress: '0x000000000000000000000000000000000000dEaD', hasInjectedWallet: true, isSupportedChain: false, isOnActiveAppChain: true })?.detail).toBe('Switch to Ethereum mainnet.')
+		expect(getWalletPresentation({ accountAddress: '0x000000000000000000000000000000000000dEaD', hasInjectedWallet: true, isSupportedChain: false, isOnActiveAppChain: true })?.detail).toBe('Switch to Sepolia.')
 	})
 })

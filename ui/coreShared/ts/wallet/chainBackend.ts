@@ -1,8 +1,9 @@
+import { assertNetworkEnabled } from './networkAvailability.js'
 import { createPublicClient, createWalletClient, custom, http, publicActions, type Account, type Address, type Hash, type Hex, type PublicActions, type Transport, type WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { getInjectedEthereum, normalizeInjectedAccount, parseInjectedChainId, readInjectedAccounts, switchInjectedChain, type InjectedEthereum } from './injectedEthereum.js'
 import { hasErrorCode, hasErrorMessage } from '../lib/errors.js'
 import { sameChainId } from './chainId.js'
-import { getNetworkSwitchTarget, MAINNET_NETWORK_PROFILE, type NetworkProfile } from './networkProfile.js'
+import { getNetworkSwitchTarget, SEPOLIA_NETWORK_PROFILE, type NetworkProfile } from './networkProfile.js'
 import { resolveConfiguredRpcConfig, type ConfiguredRpcSource, type RejectedRpcOverride } from './rpcConfig.js'
 
 export type ReadClient = ReturnType<typeof createPublicClient>
@@ -146,8 +147,8 @@ async function readProviderChainId(ethereum: InjectedEthereum | undefined) {
 	return parseInjectedChainId(result)
 }
 
-export function createInjectedBackend({ profile = MAINNET_NETWORK_PROFILE, rpcUrl }: { profile?: NetworkProfile; rpcUrl?: string } = {}): ChainBackend {
-	const getProvider = () => getInjectedEthereum()
+export function createInjectedBackend({ profile = SEPOLIA_NETWORK_PROFILE, rpcUrl, provider }: { profile?: NetworkProfile; rpcUrl?: string; provider?: InjectedEthereum } = {}): ChainBackend {
+	const getProvider = () => provider ?? getInjectedEthereum()
 	let readTransportMode: ReadTransportMode = 'provider'
 	let readBackendBlockNumber: bigint | undefined
 	let readBackendBlockTimestamp: bigint | undefined
@@ -171,11 +172,13 @@ export function createInjectedBackend({ profile = MAINNET_NETWORK_PROFILE, rpcUr
 			}).extend(publicActions) as WriteClient
 
 			return withTransactionCallbacks(baseClient, callbacks, async () => {
+				assertNetworkEnabled(profile.chainIdHex)
 				const currentAccounts = await readProviderAccounts(ethereum)
 				const currentAccount = currentAccounts[0]
 				if (currentAccount === undefined) throw new Error('Wallet account is no longer connected. Reconnect your wallet and try again.')
 				if (currentAccount.toLowerCase() !== accountAddress.toLowerCase()) throw new Error('Wallet account changed. Review the action with the connected account and try again.')
 				const currentChainId = await readProviderChainId(ethereum)
+				assertNetworkEnabled(currentChainId)
 				if (!sameChainId(currentChainId, profile.chainIdHex)) throw new Error(`Wallet network changed. Switch to ${getNetworkSwitchTarget(profile)} and try again.`)
 			})
 		},

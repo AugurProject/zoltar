@@ -81,3 +81,6 @@ export const saveRpc = 'Save RPC'
 export const rpcSaveFailed = 'Unable to save the RPC URL.'
 export const savingRpc = 'Saving RPC…'
 export const rpcSaved = 'RPC setting saved.'
+
+export const mainnetDisabled = 'Ethereum mainnet is temporarily disabled.'
+export const mainnetDisabledDetail = 'Switch your wallet to Sepolia or use browser simulation.'

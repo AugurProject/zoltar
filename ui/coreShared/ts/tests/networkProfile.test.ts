@@ -2,10 +2,20 @@
 
 import { describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
-import { MAINNET_NETWORK_PROFILE, MAINNET_WETH_ADDRESS, SEPOLIA_NETWORK_PROFILE, buildTransactionExplorerUrl, createSimulationProfile, formatTransactionNetworkLabel, getPublicNetworkProfile } from '../wallet/networkProfile.js'
+import { MAINNET_NETWORK_PROFILE, MAINNET_WETH_ADDRESS, SEPOLIA_NETWORK_PROFILE, buildTransactionExplorerUrl, createSimulationProfile, formatTransactionNetworkLabel, getPublicNetworkProfile, getPublicNetworkProfileForChainId, getRuntimeNetworkProfile } from '../wallet/networkProfile.js'
 import { SEPOLIA_GENESIS_REP_ADDRESS, SEPOLIA_WETH_ADDRESS } from '../lib/sepoliaDeploymentConfig.js'
 
 describe('network profile helpers', () => {
+	test('defaults to Sepolia and excludes mainnet from wallet network discovery', () => {
+		expect(getPublicNetworkProfile(undefined)).toBe(SEPOLIA_NETWORK_PROFILE)
+		expect(getPublicNetworkProfile('')).toBe(SEPOLIA_NETWORK_PROFILE)
+		expect(getPublicNetworkProfile(' MAINNET ')).toBe(SEPOLIA_NETWORK_PROFILE)
+		expect(getPublicNetworkProfileForChainId('0x1')).toBeUndefined()
+		expect(getPublicNetworkProfileForChainId('0x01')).toBeUndefined()
+		expect(getPublicNetworkProfileForChainId('0xaa36a7')).toBe(SEPOLIA_NETWORK_PROFILE)
+		expect(getRuntimeNetworkProfile()).toBe(SEPOLIA_NETWORK_PROFILE)
+	})
+
 	test('exports expected defaults for Ethereum mainnet', () => {
 		expect(MAINNET_NETWORK_PROFILE.id).toBe('mainnet')
 		expect(MAINNET_NETWORK_PROFILE.chainIdHex).toBe('0x1')
@@ -38,8 +48,8 @@ describe('network profile helpers', () => {
 		expect(SEPOLIA_NETWORK_PROFILE.usdcAddress).toBe(getAddress('0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238'))
 		expect(buildTransactionExplorerUrl(SEPOLIA_NETWORK_PROFILE, '0xabc')).toBe('https://sepolia.etherscan.io/tx/0xabc')
 		expect(getPublicNetworkProfile('sepolia')).toBe(SEPOLIA_NETWORK_PROFILE)
-		expect(getPublicNetworkProfile('mainnet')).toBe(MAINNET_NETWORK_PROFILE)
-		expect(getPublicNetworkProfile(undefined)).toBe(MAINNET_NETWORK_PROFILE)
+		expect(getPublicNetworkProfile('mainnet')).toBe(SEPOLIA_NETWORK_PROFILE)
+		expect(getPublicNetworkProfile(undefined)).toBe(SEPOLIA_NETWORK_PROFILE)
 		expect(() => getPublicNetworkProfile('sepolai')).toThrow('Unsupported network "sepolai". Use "mainnet" or "sepolia".')
 	})
 

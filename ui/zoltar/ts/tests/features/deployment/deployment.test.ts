@@ -91,7 +91,7 @@ void describe('deployment helpers', () => {
 				isOnActiveAppChain: false,
 				nextMissingStep,
 			}),
-		).toEqual({ disabled: true, reason: 'Switch to Ethereum mainnet.' })
+		).toEqual({ disabled: true, reason: 'Switch to Sepolia.' })
 	})
 
 	void test('getDeploymentStepAvailability blocks undeployed steps behind prerequisites and allows ready steps', () => {
@@ -122,7 +122,7 @@ void describe('deployment helpers', () => {
 		const deploymentSteps = getDeploymentSteps()
 		const deploymentStatusOracleStep = deploymentSteps.find(step => step.id === 'deploymentStatusOracle')
 
-		expect(deploymentSteps.map(step => step.id)).toEqual(['proxyDeployer', 'deploymentStatusOracle', 'multicall3', 'scalarOutcomes', 'zoltarQuestionData', 'zoltar'])
+		expect(deploymentSteps.map(step => step.id)).toEqual(['proxyDeployer', 'deploymentStatusOracle', 'weth', 'reputationToken', 'multicall3', 'scalarOutcomes', 'zoltarQuestionData', 'zoltar'])
 		expect(deploymentStatusOracleStep?.dependencies).toEqual(['proxyDeployer'])
 		expect(deploymentStatusOracleStep?.label).toBe('Deployment Status Oracle')
 	})
@@ -135,7 +135,7 @@ void describe('deployment helpers', () => {
 		const sections = getDeploymentSections(deploymentStatuses)
 		const proxyDeployerSection = sections.find(section => section.title === 'Utilities')
 
-		expect(proxyDeployerSection?.steps.map(step => step.id)).toEqual(['proxyDeployer', 'deploymentStatusOracle', 'multicall3'])
+		expect(proxyDeployerSection?.steps.map(step => step.id)).toEqual(['proxyDeployer', 'deploymentStatusOracle', 'weth', 'multicall3'])
 	})
 
 	void test('deploys Sepolia WETH and allocated REP before wiring REP into Zoltar', async () => {

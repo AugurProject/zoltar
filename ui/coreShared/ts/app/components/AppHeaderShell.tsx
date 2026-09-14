@@ -5,6 +5,7 @@ import type { SimulationController } from '../../simulation/controller.js'
 import type { RouteTabDefinition } from '../../types/components.js'
 import type { ComponentChildren } from 'preact'
 import { AppSettingsMenu } from './AppSettingsMenu.js'
+import { MainnetDisabledNotice } from './MainnetDisabledNotice.js'
 
 type AppHeaderShellProps = {
 	mainElementId?: string
@@ -59,6 +60,7 @@ export function AppHeaderShell({ mainElementId = 'app-content', header, renderHe
 			) : (
 				renderHeader(simulationBanner, settingsMenu)
 			)}
+			<MainnetDisabledNotice />
 		</>
 	)
 }
