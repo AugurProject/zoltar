@@ -40,7 +40,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  BUN_VERSION: 1.4.2
   FOUNDRY_VERSION: v1.5.1
 
 jobs:
@@ -174,9 +173,7 @@ jobs:
         domain: ${{ fromJSON(needs.application-tests.result != 'success' && '["solidity"]' || (needs.solidity-tests.result == 'success' && '["application", "solidity"]' || '["application"]')) }}
     steps:
       - uses: actions/checkout@v7
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
+      - uses: ./.github/actions/setup-bun
       - uses: actions/download-artifact@v5
         with:
           name: ${{ matrix.domain }}-test-timing-history-input

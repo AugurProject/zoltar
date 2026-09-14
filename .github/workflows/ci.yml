@@ -15,7 +15,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  BUN_VERSION: 1.4.2
   FOUNDRY_VERSION: v1.5.1
 
 jobs:
@@ -34,15 +33,14 @@ jobs:
       package_matrix: ${{ steps.scope.outputs.package_matrix }}
       has_packages: ${{ steps.scope.outputs.has_packages }}
       forced_full: ${{ steps.scope.outputs.forced_full }}
+      all_scopes_selected: ${{ steps.scope.outputs.all_scopes_selected }}
       augur_scan_integration: ${{ steps.scope.outputs.augur_scan_integration }}
       artifact_inputs: ${{ steps.scope.outputs.artifact_inputs }}
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
+      - uses: ./.github/actions/setup-bun
       - name: Check production source size
         run: bun run check:source-size
       - name: Select CI scope
@@ -247,9 +245,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
+      - uses: ./.github/actions/setup-bun
       - name: Run dependency audits
         run: bun ./tooling/repo/run-project-tasks.mts audit --group core-audit
 
@@ -331,14 +327,9 @@ jobs:
       - name: Verify required jobs
         env:
           FORCED_FULL: ${{ needs.changes.outputs.forced_full }}
+          ALL_SCOPES_SELECTED: ${{ needs.changes.outputs.all_scopes_selected }}
           DOCS_SELECTED: ${{ needs.changes.outputs.docs == 'true' || needs.changes.outputs.core == 'true' }}
           CORE_SELECTED: ${{ needs.changes.outputs.core }}
-          BOT_SHARED_SELECTED: ${{ needs.changes.outputs.bot_shared }}
-          CHAOS_SELECTED: ${{ needs.changes.outputs.chaos }}
-          ARBITRAGER_SELECTED: ${{ needs.changes.outputs.arbitrager }}
-          LIQUIDATOR_SELECTED: ${{ needs.changes.outputs.liquidator }}
-          AUGUR_SCAN_SELECTED: ${{ needs.changes.outputs.augur_scan }}
-          INFRA_SELECTED: ${{ needs.changes.outputs.infrastructure }}
           INFRA_CHECKS_SELECTED: ${{ needs.changes.outputs.infrastructure == 'true' && needs.changes.outputs.core != 'true' }}
           DOMAIN_TESTS_SELECTED: ${{ needs.changes.outputs.core == 'true' || needs.changes.outputs.infrastructure == 'true' }}
           PACKAGES_SELECTED: ${{ needs.changes.outputs.has_packages }}
@@ -377,7 +368,7 @@ jobs:
           for result in PREPARE_RESULT APPLICATION_TESTS_RESULT BROWSER_SMOKE_RESULT CHECKS_RESULT KNIP_RESULT AUDIT_RESULT; do
             require_result "${CORE_SELECTED}" "${!result}" "${result}"
           done
-          if [[ "${FORCED_FULL}" == "true" && ( "${DOCS_SELECTED}" != "true" || "${CORE_SELECTED}" != "true" || "${BOT_SHARED_SELECTED}" != "true" || "${CHAOS_SELECTED}" != "true" || "${ARBITRAGER_SELECTED}" != "true" || "${LIQUIDATOR_SELECTED}" != "true" || "${AUGUR_SCAN_SELECTED}" != "true" || "${INFRA_SELECTED}" != "true" || "${PACKAGES_SELECTED}" != "true" ) ]]; then
+          if [[ "${FORCED_FULL}" == "true" && "${ALL_SCOPES_SELECTED}" != "true" ]]; then
             echo 'Forced full run did not select every ordinary route.'
             exit 1
           fi
