@@ -1,3 +1,4 @@
+import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import type { Address, Hash } from '@zoltar/core-shared/evm/ethereum'
 import { waitForSubmittedTransactionReceipt } from '@zoltar/ui-core-shared/transactions/transactionReceipt.js'
 import type { createLatestRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
@@ -61,8 +62,8 @@ export function createPositionTransactionController({
 			const quoteContext = { account, configuration, walletClient }
 			const nextQuote: Quote =
 				mode === 'entry'
-					? { ...quoteContext, kind: 'entry', value: await services.simulateEntry(walletClient, configuration, selected, account, side, amount, validityMinutes, slippageBps) }
-					: { ...quoteContext, kind: 'exit', value: await services.simulateExit(walletClient, configuration, selected, account, side, amount, validityMinutes, slippageBps) }
+					? { ...quoteContext, kind: 'entry', value: await withReadTimeout(services.simulateEntry(walletClient, configuration, selected, account, side, amount, validityMinutes, slippageBps)) }
+					: { ...quoteContext, kind: 'exit', value: await withReadTimeout(services.simulateExit(walletClient, configuration, selected, account, side, amount, validityMinutes, slippageBps)) }
 			if (!simulationRequests.isCurrent(request)) return
 			setQuote(nextQuote)
 			dispatchWorkflow({ type: 'simulation-succeeded', context })

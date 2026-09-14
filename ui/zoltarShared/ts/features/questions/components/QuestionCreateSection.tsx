@@ -292,8 +292,8 @@ export function QuestionCreateSection({
 						<fieldset className='question-create-editor' disabled={formDisabled}>
 							<div className='field'>
 								<span>{marketCopy.questionType}</span>
-								<EnumDropdown ariaLabel={marketCopy.questionType} options={marketTypeOptions} value={questionForm.marketType} onChange={marketType => onQuestionFormChange({ marketType })} />
-								<p className='field-help'>{marketTypeGuidance}</p>
+								<EnumDropdown disabled={formDisabled || marketTypeOptions.length === 1} ariaLabel={marketCopy.questionType} options={marketTypeOptions} value={questionForm.marketType} onChange={marketType => onQuestionFormChange({ marketType })} />
+								{marketTypeOptions.length === 1 ? undefined : <p className='field-help'>{marketTypeGuidance}</p>}
 							</div>
 
 							<div className='field'>

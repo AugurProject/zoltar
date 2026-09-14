@@ -26,6 +26,8 @@ import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-c
 import { ETH_ADDRESS } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
 import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 
+import { createReadContractStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+
 const REP_ADDRESS = getAddress(MAINNET_NETWORK_PROFILE.genesisRepTokenAddress)
 const USDC_ADDRESS = MAINNET_NETWORK_PROFILE.usdcAddress
 const UNISWAP_V4_QUOTER_ADDRESS = MAINNET_NETWORK_PROFILE.uniswapV4QuoterAddress
@@ -83,15 +85,22 @@ function createSuccessfulReceipt(hash: Hash, managerAddress: Address) {
 	} as never
 }
 
+function withInitializedV4Pool<T extends Pick<ReturnType<typeof createConnectedReadClient>, 'readContract'>>(client: T) {
+	const readContract = client.readContract
+	const poolReads = createReadContractStub(async request => (request.functionName === 'poolManager' ? REP_ADDRESS : `0x${'00'.repeat(31)}01`))
+	client.readContract = async request => (request.functionName === 'poolManager' || request.functionName === 'extsload' ? await poolReads(request) : await readContract(request))
+	return client
+}
+
 function createQuoteClient(amountOut: bigint): Parameters<typeof loadOpenOracleInitialReportPrice>[0] {
-	const client = createConnectedReadClient()
+	const client = withInitializedV4Pool(createConnectedReadClient())
 	const simulateContract: Parameters<typeof loadOpenOracleInitialReportPrice>[0]['simulateContract'] = async () => ({ result: [amountOut, 100000n], request: {} as never }) as never
 	client.simulateContract = simulateContract
 	return client
 }
 
 function createFailingQuoteClient(message: string): Parameters<typeof loadOpenOracleInitialReportPrice>[0] {
-	const client = createConnectedReadClient()
+	const client = withInitializedV4Pool(createConnectedReadClient())
 	const simulateContract: Parameters<typeof loadOpenOracleInitialReportPrice>[0]['simulateContract'] = async () => {
 		throw new Error(message)
 	}
@@ -179,8 +188,18 @@ describe('Open Oracle helpers', () => {
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0, SEPOLIA_NETWORK_PROFILE.chain)
 		installInjectedEthereum(mockWindow)
 		installActiveEnvironmentForTesting(createInjectedBackend({ profile: { ...MAINNET_NETWORK_PROFILE, chain: SEPOLIA_NETWORK_PROFILE.chain, chainIdHex: SEPOLIA_NETWORK_PROFILE.chainIdHex, id: 'sepolia', displayName: 'Sepolia' } }))
-		uiReadClient = createConnectedReadClient()
-		uiWriteClient = createWalletWriteClient(addressString(TEST_ADDRESSES[0]))
+		uiReadClient = {
+			...createConnectedReadClient(),
+			getLogs: async () => {
+				throw new Error('UI log access is unavailable')
+			},
+		}
+		uiWriteClient = {
+			...createWalletWriteClient(addressString(TEST_ADDRESSES[0])),
+			getLogs: async () => {
+				throw new Error('UI log access is unavailable')
+			},
+		}
 		await setupTestAccounts(mockWindow)
 		await ensureProxyDeployerDeployed(client)
 		await ensureZoltarDeployed(client)
@@ -211,8 +230,18 @@ describe('Open Oracle helpers', () => {
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0, SEPOLIA_NETWORK_PROFILE.chain)
 		installInjectedEthereum(mockWindow)
 		installActiveEnvironmentForTesting(createInjectedBackend({ profile: { ...MAINNET_NETWORK_PROFILE, chain: SEPOLIA_NETWORK_PROFILE.chain, chainIdHex: SEPOLIA_NETWORK_PROFILE.chainIdHex, id: 'sepolia', displayName: 'Sepolia' } }))
-		uiReadClient = createConnectedReadClient()
-		uiWriteClient = createWalletWriteClient(addressString(TEST_ADDRESSES[0]))
+		uiReadClient = {
+			...createConnectedReadClient(),
+			getLogs: async () => {
+				throw new Error('UI log access is unavailable')
+			},
+		}
+		uiWriteClient = {
+			...createWalletWriteClient(addressString(TEST_ADDRESSES[0])),
+			getLogs: async () => {
+				throw new Error('UI log access is unavailable')
+			},
+		}
 	})
 
 	afterEach(() => resetActiveEnvironmentForTesting())
@@ -418,7 +447,7 @@ describe('Open Oracle helpers', () => {
 	})
 
 	test('initial report price helpers select the Uniswap version with the most executable liquidity', async () => {
-		const client = createConnectedReadClient()
+		const client = withInitializedV4Pool(createConnectedReadClient())
 		client.simulateContract = async parameters => {
 			if (parameters.address === UNISWAP_V4_QUOTER_ADDRESS) return { result: [25n, 0n], request: {} as never } as never
 			return { result: [40n, 0n, 0, 0n], request: {} as never } as never
@@ -433,7 +462,7 @@ describe('Open Oracle helpers', () => {
 	})
 
 	test('initial report price helpers retain a usable V4 quote when V3 is unavailable', async () => {
-		const client = createConnectedReadClient()
+		const client = withInitializedV4Pool(createConnectedReadClient())
 		client.simulateContract = async parameters => {
 			if (parameters.address === UNISWAP_V4_QUOTER_ADDRESS) return { result: [25n, 0n], request: {} as never } as never
 			throw new Error('no v3 pool')
@@ -448,7 +477,7 @@ describe('Open Oracle helpers', () => {
 
 	test('initial report price helpers report both Uniswap V4 and V3 failures when fallback was attempted', async () => {
 		let callCount = 0
-		const failingClient = createConnectedReadClient()
+		const failingClient = withInitializedV4Pool(createConnectedReadClient())
 		const simulateContract: Parameters<typeof loadOpenOracleInitialReportPrice>[0]['simulateContract'] = async () => {
 			callCount += 1
 			throw new Error(callCount <= 4 ? 'no v4 pool' : 'v3 quote reverted')
@@ -460,7 +489,7 @@ describe('Open Oracle helpers', () => {
 
 	test('initial report price helpers use Uniswap V3 for REP/WETH pairs when V4 is unavailable', async () => {
 		let callCount = 0
-		const fallbackClient = createConnectedReadClient()
+		const fallbackClient = withInitializedV4Pool(createConnectedReadClient())
 		const simulateContract: Parameters<typeof loadOpenOracleInitialReportPrice>[0]['simulateContract'] = async () => {
 			callCount += 1
 			if (callCount <= 4) throw new Error('no v4 pool')
@@ -477,7 +506,7 @@ describe('Open Oracle helpers', () => {
 
 	test('initial report price helpers use Uniswap V3 for non-REP pairs when V4 is unavailable', async () => {
 		let callCount = 0
-		const fallbackClient = createConnectedReadClient()
+		const fallbackClient = withInitializedV4Pool(createConnectedReadClient())
 		const simulateContract: Parameters<typeof loadOpenOracleInitialReportPrice>[0]['simulateContract'] = async () => {
 			callCount += 1
 			if (callCount <= 4) throw new Error('no v4 pool')
@@ -1030,7 +1059,7 @@ describe('Open Oracle helpers', () => {
 		}
 		mockClient.simulateContract = async () => ({ result: [quotedAmount2, 100000n], request: {} as never }) as never
 
-		const funding = await loadCoordinatorInitialReportFundingRequirement(mockClient, managerAddress, uiWriteClient.account.address)
+		const funding = await loadCoordinatorInitialReportFundingRequirement(withInitializedV4Pool(mockClient), managerAddress, uiWriteClient.account.address)
 
 		expect(funding.initialReportAmount2).toBe(quotedAmount2 * 2n)
 		expect(funding.proposedRepPerEthPrice).toBe((quotedAmount2 * 10n ** 18n) / minimumToken1ReportAttoEth)
@@ -1055,7 +1084,7 @@ describe('Open Oracle helpers', () => {
 			throw new Error(`Unexpected read ${functionName} for ${address}`)
 		}
 
-		const funding = await loadCoordinatorInitialReportFundingRequirement(mockClient, managerAddress, uiWriteClient.account.address, proposedRepPerEthPrice, requestedInitialAttoWeth)
+		const funding = await loadCoordinatorInitialReportFundingRequirement(withInitializedV4Pool(mockClient), managerAddress, uiWriteClient.account.address, proposedRepPerEthPrice, requestedInitialAttoWeth)
 
 		expect(funding.minimumToken1ReportAttoEth).toBe(minimumToken1ReportAttoEth)
 		expect(funding.requestedInitialAttoWeth).toBe(requestedInitialAttoWeth)
@@ -1094,7 +1123,7 @@ describe('Open Oracle helpers', () => {
 			return { result: [100n, 0n, 0, 0n], request: {} as never } as never
 		}
 
-		const funding = await loadCoordinatorInitialReportFundingRequirement(mockClient, managerAddress, uiWriteClient.account.address, undefined, requestedInitialAttoWeth)
+		const funding = await loadCoordinatorInitialReportFundingRequirement(withInitializedV4Pool(mockClient), managerAddress, uiWriteClient.account.address, undefined, requestedInitialAttoWeth)
 
 		expect(quotedExactAmounts).toEqual(Array.from({ length: 8 }, () => requestedInitialAttoWeth))
 		expect(funding.proposedRepPerEthPrice).toBe(400_000_000_000_000_000n)
@@ -1227,9 +1256,9 @@ describe('Open Oracle helpers', () => {
 				waitForTransactionReceipt: async () => createSuccessfulReceipt(transactionHash, managerAddress),
 			}
 
-			if (operation === 'request') await requestOraclePrice(mockClient, managerAddress, undefined, requestedInitialAttoWeth, 12n)
-			else if (operation === 'liquidation-helper') await queueSecurityPoolLiquidation(mockClient, managerAddress, client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, requestedInitialAttoWeth)
-			else await queueOracleManagerOperation(mockClient, managerAddress, 'liquidation', client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, undefined, requestedInitialAttoWeth)
+			if (operation === 'request') await requestOraclePrice(withInitializedV4Pool(mockClient), managerAddress, undefined, requestedInitialAttoWeth, 12n)
+			else if (operation === 'liquidation-helper') await queueSecurityPoolLiquidation(withInitializedV4Pool(mockClient), managerAddress, client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, requestedInitialAttoWeth)
+			else await queueOracleManagerOperation(withInitializedV4Pool(mockClient), managerAddress, 'liquidation', client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, undefined, requestedInitialAttoWeth)
 
 			expect(quotedExactAmounts).toEqual(Array.from({ length: 8 }, () => requestedInitialAttoWeth))
 			let expectedArguments: readonly unknown[]

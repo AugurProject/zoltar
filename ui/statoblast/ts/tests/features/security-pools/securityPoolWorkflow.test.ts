@@ -11,7 +11,6 @@ import {
 	getCurrentSelectedPoolReportingDetails,
 	getCurrentSelectedPoolForkStage,
 	getCurrentPoolOracleManagerDetails,
-	getSelectedPoolCardTitle,
 	getForkWorkflowStageSelection,
 	getSelectedPoolOracleMetricValues,
 	getSelectedPoolWorkflowGuardMessage,
@@ -92,14 +91,6 @@ void describe('selected pool workflow lookup state', () => {
 				systemState: 'operational',
 			}),
 		).toBe('settlement')
-	})
-
-	void test('uses a single stable operate header title', () => {
-		expect(getSelectedPoolCardTitle('Will the event happen?')).toBe('Will the event happen?')
-
-		expect(getSelectedPoolCardTitle()).toBe('Manage Pool')
-
-		expect(getSelectedPoolCardTitle()).toBe('Manage Pool')
 	})
 
 	void test('maps the legacy resolution view alias to the reporting tab', () => {

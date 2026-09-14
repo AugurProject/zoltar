@@ -18,6 +18,7 @@ import { ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresse
 import { ensureZoltarDeployed } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { ensureProxyDeployerDeployed, setupTestAccounts } from '../../../../../../solidity/ts/testSupport/simulator/utils/utilities'
+import { ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 
 function installInjectedEthereum(mockWindow: AnvilWindowEthereum, accountAddress: Address = addressString(TEST_ADDRESSES[0])) {
@@ -51,6 +52,34 @@ describe('security pool creation helper', () => {
 		await ensureProxyDeployerDeployed(client)
 		await ensureZoltarDeployed(client)
 		await ensureInfraDeployed(client)
+	})
+
+	test('creates a binary question and pool with one atomic transaction', async () => {
+		const questionData = { title: 'Atomic question', description: '', startTime: 0n, endTime: (await mockWindow.getTime()) + DAY, numTicks: 0n, displayValueMin: 0n, displayValueMax: 0n, answerUnit: '' }
+		const questionId = getQuestionId(questionData, ['Yes', 'No'])
+		const submittedHashes: string[] = []
+		const result = await createSecurityPool(
+			createWalletWriteClient(addressString(TEST_ADDRESSES[0]), { onTransactionSubmitted: hash => submittedHashes.push(hash) }),
+			{
+				initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
+				questionId,
+				statoblastSecurityMultiplierBps: 20_000n,
+			},
+			questionData,
+		)
+		expect(submittedHashes).toEqual([result.deployPoolHash])
+		expect(result.questionCreatedAt).toBeGreaterThan(0n)
+		expect(result.questionId).toBe(`0x${questionId.toString(16).padStart(64, '0')}`)
+		expect(result.securityPoolAddress).toBe(getSecurityPoolAddresses(zeroAddress, 0n, questionId, 20_000n).securityPool)
+	})
+
+	test('rolls back question creation when the pool deployment fails', async () => {
+		const questionData = { title: 'Atomic rollback', description: '', startTime: 0n, endTime: (await mockWindow.getTime()) + DAY, numTicks: 0n, displayValueMin: 0n, displayValueMax: 0n, answerUnit: '' }
+		const questionId = getQuestionId(questionData, ['Yes', 'No'])
+		const walletClient = createWalletWriteClient(addressString(TEST_ADDRESSES[0]))
+		await expect(createSecurityPool(walletClient, { initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n, questionId, statoblastSecurityMultiplierBps: 10_000n }, questionData)).rejects.toThrow()
+		const createdAt = await walletClient.readContract({ address: getInfraContractAddresses().zoltarQuestionData, abi: ZoltarQuestionData_ZoltarQuestionData.abi, functionName: 'questionCreatedTimestamp', args: [questionId] })
+		expect(createdAt).toBe(0n)
 	})
 
 	afterEach(() => resetActiveEnvironmentForTesting())

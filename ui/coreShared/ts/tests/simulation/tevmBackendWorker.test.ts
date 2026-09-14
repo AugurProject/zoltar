@@ -1,6 +1,6 @@
 /// <reference types='bun-types' />
 
-import { describe, expect, mock, test } from 'bun:test'
+import { describe, expect, mock, spyOn, test } from 'bun:test'
 import { normalizeAccount } from '../../wallet/chainBackend.js'
 import { createSimulationBackend } from '../../simulation/tevmBackend.js'
 import type { SimulationWorkerEvent, SimulationWorkerMessage, SimulationWorkerState } from '../../simulation/tevmWorkerProtocol.js'
@@ -131,4 +131,26 @@ describe('simulation worker lifecycle', () => {
 		await expect(retryPromise).resolves.toBeUndefined()
 		expect(worker.terminate).not.toHaveBeenCalled()
 	})
+})
+
+test('stops a stalled simulation control and clears its loading state', async () => {
+	const originalSetTimeout = globalThis.setTimeout
+	const timer = spyOn(globalThis, 'setTimeout').mockImplementation((handler, delay, ...args) => originalSetTimeout(handler, delay === 120_000 ? 10 : delay, ...args))
+	const worker = createWorkerHarness()
+	const pendingBackend = createSimulationBackend({}, { createWorkerConnection: () => worker.connection })
+	worker.emitMessage({ state: { ...createReadyState(), isBootstrapping: true }, type: 'ready' })
+	const backend = await pendingBackend
+	try {
+		const result = backend.mineBlock().then(
+			() => 'unexpected success',
+			error => (error instanceof Error ? error.message : 'unexpected error'),
+		)
+		expect(await Promise.race([result, new Promise(resolve => originalSetTimeout(() => resolve('still waiting'), 50))])).toContain('timed out')
+		expect(backend.isBootstrapping).toBe(false)
+		expect(backend.bootstrapError).toContain('Reload')
+		expect(worker.terminate).toHaveBeenCalledTimes(1)
+	} finally {
+		await backend.dispose()
+		timer.mockRestore()
+	}
 })

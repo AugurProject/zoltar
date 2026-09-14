@@ -74,7 +74,7 @@ export function useSecurityPoolsRoute({
 	walletScopedAccountAddress: Address | undefined
 	walletScopedHookConfig: WriteOperationsParameters
 }) {
-	const [combinedCreateStage, setCombinedCreateStage] = useState<'creating-pool' | 'creating-question' | undefined>(undefined)
+	const [questionAndPoolCreating, setQuestionAndPoolCreating] = useState(false)
 	const { createMarket, loadZoltarForkAccess, marketCreating, marketError, marketForm, marketResult, resetMarket, setMarketForm, zoltarUniverse } = marketCreation
 	const { executePendingPoolOperation, loadingPoolOracleManager, loadPoolOracleManager, poolOracleActiveAction, poolOracleManagerDetails, poolOracleManagerError, poolOracleManagerErrorAddress, poolPriceOracleResult, requestPoolPrice } = priceOracleManager
 	const zoltarUniverseHasForked = zoltarUniverse?.hasForked === true
@@ -192,9 +192,7 @@ export function useSecurityPoolsRoute({
 		submitBid,
 		withdrawAuctionRefund,
 	} = useForkAuctionOperations({ ...walletScopedHookConfig, selectedSecurityPoolAddress: securityPoolAddress })
-	const combinedCreateScopeKeyRef = useRef('')
 	const lastUniverseDirectoryAutoLoadContextKeyRef = useRef<string | undefined>(undefined)
-	combinedCreateScopeKeyRef.current = `${walletScopedAccountAddress ?? ''}:${activeUniverseId.toString()}:${activeEnvironmentNonce}:${deploymentStatuses.map(status => `${status.id}:${status.deployed ? '1' : '0'}`).join(',')}`
 	const universeDirectoryContextKey = `${activeEnvironmentNonce}:${walletScopedAccountAddress ?? ''}:${activeUniverseId.toString()}`
 	const lastSecurityVaultRepRefreshHash = useRef<string | undefined>(undefined)
 	const lastStagedVaultRepRefreshHash = useRef<string | undefined>(undefined)
@@ -258,20 +256,13 @@ export function useSecurityPoolsRoute({
 		void loadZoltarForkAccess()
 	}, [loadZoltarForkAccess, poolPriceOracleResult])
 	const createQuestionAndSecurityPool = async () => {
-		if (combinedCreateStage !== undefined) return
+		if (questionAndPoolCreating) return
 		if (marketForm.marketType !== 'binary') return
-		const submittedCombinedCreateScopeKey = combinedCreateScopeKeyRef.current
-		const submittedSecurityPoolForm = securityPoolForm
-		setCombinedCreateStage('creating-question')
+		setQuestionAndPoolCreating(true)
 		try {
-			const result = await createMarket({ refreshQuestionList: false })
-			if (result === undefined || combinedCreateScopeKeyRef.current !== submittedCombinedCreateScopeKey) return
-			setSecurityPoolForm(current => ({ ...current, marketId: result.questionId }))
-			setSecurityPoolQuestionId(result.questionId)
-			setCombinedCreateStage('creating-pool')
-			await createPool(result.questionId, submittedSecurityPoolForm)
+			await createPool(undefined, securityPoolForm, marketForm)
 		} finally {
-			setCombinedCreateStage(undefined)
+			setQuestionAndPoolCreating(false)
 		}
 	}
 	useEffect(() => {
@@ -297,7 +288,7 @@ export function useSecurityPoolsRoute({
 		createPool: {
 			accountState,
 			checkingDuplicateOriginPool,
-			questionAndPoolCreating: combinedCreateStage !== undefined,
+			questionAndPoolCreating,
 			duplicateOriginPoolExists,
 			onCreateQuestionAndSecurityPool: () => void createQuestionAndSecurityPool(),
 			poolCreationMarketDetails,

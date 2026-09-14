@@ -11,3 +11,7 @@ export async function withTimeout<TResult>(work: Promise<TResult>, timeoutMillis
 		if (timeoutId !== undefined) clearTimeout(timeoutId)
 	}
 }
+
+export function withReadTimeout<TResult>(work: Promise<TResult>) {
+	return withTimeout(work, 30_000, 'RPC read timed out. Retry loading data.')
+}

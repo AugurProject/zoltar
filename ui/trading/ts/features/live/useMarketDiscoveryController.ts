@@ -1,3 +1,4 @@
+import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { useEffect, useRef } from 'preact/hooks'
 import type { createLatestRequestGuard, RequestIdentity } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
@@ -107,7 +108,7 @@ export function useMarketDiscoveryController({
 			market.setDiscoveryError(undefined)
 		}
 		try {
-			const discovered = await discover(nextConfiguration, requestedStart, () => discoveryRequests.isCurrent(request))
+			const discovered = await withReadTimeout(discover(nextConfiguration, requestedStart, () => discoveryRequests.isCurrent(request)))
 			if (discovered === undefined || !discoveryRequests.isCurrent(request)) return
 			if (!discoveryCommitAllowed(owner, transaction.positionWorkflowLockedRef.current, transaction.liquidityWorkflowLockedRef.current)) {
 				market.setDiscoveryState('ready')

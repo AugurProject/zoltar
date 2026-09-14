@@ -274,34 +274,22 @@ export type OpenOracleReportSummaryPage = {
 	pageSize: number
 	reportCount: bigint
 	reports: OpenOracleReportSummary[]
+	unavailableReports?: Array<{ reportId: bigint; message: string }>
 }
 
-export type OpenOracleReportDetails = {
-	reportId: bigint
+export type OpenOracleReportDetails = OpenOracleReportSummary & {
 	openOracleAddress: Address
 	currentTime: bigint
 	currentBlockNumber: bigint
-	exactToken1Report: bigint
 	escalationHalt: bigint
 	fee: bigint
 	settlerRewardAttoEth: bigint
-	token1: Address
-	token2: Address
 	settlementTime: bigint
-	timeType: boolean
 	feePercentage: bigint
 	protocolFee: bigint
 	multiplier: bigint
 	disputeDelay: bigint
-	currentAmount1: bigint
-	currentAmount2: bigint
-	price: bigint
-	currentReporter: Address
-	reportTimestamp: bigint
-	settlementTimestamp: bigint
-	initialReporter: Address
-	disputeOccurred: boolean
-	isDistributed: boolean
+	initialReporter: Address | undefined
 	stateHash: Hex
 	callbackContract: Address
 	callbackGasLimit: number
@@ -309,10 +297,6 @@ export type OpenOracleReportDetails = {
 	trackDisputes: boolean
 	numReports: bigint
 	lastReportOppoTime: bigint
-	token1Decimals: number
-	token2Decimals: number
-	token1Symbol: string
-	token2Symbol: string
 }
 
 export type ListedSecurityPool = {

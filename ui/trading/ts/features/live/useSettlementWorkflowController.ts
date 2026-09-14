@@ -1,3 +1,4 @@
+import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import type { Address, Hash, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { createExclusiveWorkflowGuard, createLatestRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { waitForSubmittedTransactionReceipt } from '@zoltar/ui-core-shared/transactions/transactionReceipt.js'
@@ -108,7 +109,7 @@ export function useSettlementWorkflowController({
 			let operationParameters: Readonly<{ amount?: bigint; validityMinutes?: bigint; slippageBps?: bigint; sourceOutcome?: ShareOutcome; targetOutcomeIndexes?: readonly bigint[] }> = {}
 			if (operation === 'redeem-complete-set' && parsedAmount !== undefined && parameters.slippageBps !== undefined && parameters.validityMinutes !== undefined) operationParameters = { amount: parsedAmount, validityMinutes: parameters.validityMinutes, slippageBps: parameters.slippageBps }
 			else if (operation === 'migrate-shares') operationParameters = { sourceOutcome, targetOutcomeIndexes }
-			const simulation = await services.simulate(walletClient, configuration, market, account, operation, operationParameters)
+			const simulation = await withReadTimeout(services.simulate(walletClient, configuration, market, account, operation, operationParameters))
 			if (!mounted.current || !simulationRequests.isCurrent(request) || inputRevision.current !== revision) return
 			setQuote({ ...simulation, account, walletClient, inputRevision: revision })
 			dispatchWorkflow({ type: 'simulation-succeeded', context })

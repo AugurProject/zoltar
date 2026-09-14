@@ -156,6 +156,7 @@ void describe('trading helpers', () => {
 		expect(calculateMintingCapacityAttoEth(80n * 10n ** 18n, 3n * 10n ** 18n, 20_000n)).toBe(13_333_333_333_333_333_333n)
 		expect(calculateMintingCapacityAttoEth(80n * 10n ** 18n, 6n * 10n ** 18n, 20_000n)).toBe(6_666_666_666_666_666_666n)
 		expect(calculateMintingCapacityAttoEth(0n, 3n * 10n ** 18n, 20_000n)).toBe(0n)
+		expect(calculateMintingCapacityAttoEth(0n, undefined, 20_000n)).toBe(0n)
 		expect(calculateMintingCapacityAttoEth(80n * 10n ** 18n, undefined, 20_000n)).toBeUndefined()
 	})
 
