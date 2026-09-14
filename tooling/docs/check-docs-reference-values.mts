@@ -1,12 +1,13 @@
-import { readdir, readFile } from 'node:fs/promises'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
+import { readFile } from 'node:fs/promises'
 import ts from 'typescript'
 import { diagramGraphSpecs } from '../../docs/charts/diagramModels'
 import type { DiagramGraphNode } from '../../docs/charts/diagramTypes'
 import { getMainnetProtocolConfig } from '../contracts/protocol-config.ts'
-import { repositorySourceUrl } from './repository-source-links.mts'
+import { walkFiles } from '../repo/walk.mts'
 import { htmlToDocumentationText } from './docs-html-text.mts'
+import { repositorySourceUrl } from './repository-source-links.mts'
 
 const normalizeHtmlSource = (source: string): string => source.replaceAll(/<\/([a-z][\w:-]*)\s+>/gi, '</$1>')
 const html = normalizeHtmlSource(await readFile('docs/explanation/escalation-game.html', 'utf8'))
@@ -726,13 +727,7 @@ async function assertProductionSolidityInventory(): Promise<void> {
 }
 
 async function listSoliditySources(directoryPath: string): Promise<string[]> {
-	const sourcePaths: string[] = []
-	for (const entry of await readdir(directoryPath, { withFileTypes: true })) {
-		const entryPath = `${directoryPath}/${entry.name}`
-		if (entry.isDirectory()) sourcePaths.push(...(await listSoliditySources(entryPath)))
-		else if (entry.isFile() && entry.name.endsWith('.sol')) sourcePaths.push(entryPath)
-	}
-	return sourcePaths.sort()
+	return (await walkFiles(directoryPath, { include: file => file.endsWith('.sol') })).map(file => file.replaceAll('\\', '/')).sort()
 }
 
 function readSolidityFunctionBody(source: string, functionPrefix: string): string {

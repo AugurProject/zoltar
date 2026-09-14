@@ -1,13 +1,13 @@
-import { resolve } from 'node:path'
-import { parseApprovedUniverses } from '@zoltar/bot-shared/monitoring/universe-policy'
-import { canonicalDeployment, parseRootMarketSettings } from './canonical-deployment.ts'
-import { bigintToSafeNumber, getAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
-import { validateConnectivitySettings, validateIndependentReadRpcUrls, type ConnectivitySettings, type NetworkName } from '@zoltar/bot-shared/monitoring/connectivity'
+import { bigintToSafeNumber, getAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { validateSubmissionSettings, type SubmissionSettings } from '@zoltar/bot-shared/execution/transaction-submission'
+import { boolean, formatDecimalAmount, integer, parseDecimalAmount, record, nonemptyString as string } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { parseCentralizedMarketSettings, serializeCentralizedMarketSettings, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
+import { validateConnectivitySettings, validateIndependentReadRpcUrls, type ConnectivitySettings, type NetworkName } from '@zoltar/bot-shared/monitoring/connectivity'
 import { configuredQuorumRpcUrlMinimum, rpcQuorumRequirement, type RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
-import { formatDecimalAmount, parseDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
+import { parseApprovedUniverses } from '@zoltar/bot-shared/monitoring/universe-policy'
+import { resolve } from 'node:path'
+import { canonicalDeployment, parseRootMarketSettings } from './canonical-deployment.ts'
 
 export type CandidatePriority = 'largest-bonus' | 'largest-debt' | 'lowest-top-up'
 
@@ -81,31 +81,9 @@ export type OperatorSettings = {
 	version: 1
 }
 
-type JsonRecord = Record<string, unknown>
-
 function uiHost(value: unknown): '0.0.0.0' | '127.0.0.1' {
 	if (value === '0.0.0.0' || value === '127.0.0.1') return value
 	throw new Error('runtime.uiHost must be 127.0.0.1 or 0.0.0.0')
-}
-
-function record(value: unknown, label: string): JsonRecord {
-	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`${label} must be an object`)
-	return value as JsonRecord
-}
-
-function boolean(value: unknown, label: string) {
-	if (typeof value !== 'boolean') throw new Error(`${label} must be a boolean`)
-	return value
-}
-
-function integer(value: unknown, label: string, minimum: number, maximum: number) {
-	if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < minimum || value > maximum) throw new Error(`${label} must be an integer from ${minimum.toString()} through ${maximum.toString()}`)
-	return value
-}
-
-function string(value: unknown, label: string) {
-	if (typeof value !== 'string' || value.trim() === '') throw new Error(`${label} must be a non-empty string`)
-	return value
 }
 
 function parseNetworkName(value: unknown): NetworkName {

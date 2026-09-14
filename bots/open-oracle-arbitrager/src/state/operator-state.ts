@@ -1,3 +1,4 @@
+import { record as validateRecord, integer } from '@zoltar/bot-shared/infrastructure/json-validation'
 import type { UniverseIdentity } from '@zoltar/bot-shared/monitoring/universe-policy'
 import type { MissingContractDeployment } from '@zoltar/bot-shared/monitoring/deployed-contracts'
 import { mkdir, open, readFile } from 'node:fs/promises'
@@ -615,8 +616,7 @@ export function strategySettings(strategy: MutableStrategy): StrategySettings {
 }
 
 function requiredRecord(value: unknown) {
-	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Settings must be a JSON object')
-	return value as Record<string, unknown>
+	return validateRecord(value, 'Settings', 'Settings must be a JSON object')
 }
 
 function requiredDecimal(record: Record<string, unknown>, key: keyof StrategySettings) {
@@ -626,9 +626,8 @@ function requiredDecimal(record: Record<string, unknown>, key: keyof StrategySet
 }
 
 function requiredInteger(record: Record<string, unknown>, key: keyof StrategySettings, minimum: number, maximum: number) {
-	const value = record[key]
-	if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < minimum || value > maximum) throw new Error(`${SETTING_LABELS[key]} must be an integer from ${minimum.toString()} to ${maximum.toString()}`)
-	return value
+	const label = SETTING_LABELS[key]
+	return integer(record[key], label, minimum, maximum, `${label} must be an integer from ${minimum.toString()} to ${maximum.toString()}`)
 }
 
 function requiredBigInt(record: Record<string, unknown>, key: keyof StrategySettings, minimum: bigint, maximum: bigint) {

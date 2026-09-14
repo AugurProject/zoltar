@@ -23,3 +23,13 @@ export const decodeOpaqueCursor = (value: string): JsonValue => {
 }
 
 export const isJsonArray = (value: JsonValue): value is readonly JsonValue[] => Array.isArray(value)
+
+/** Decode and validate a cursor while retaining the endpoint's public error. */
+export function parseCursor<T>(value: string, parse: (parts: readonly JsonValue[]) => T, invalid: (cause: unknown) => Error): T {
+	try {
+		const decoded = decodeOpaqueCursor(value)
+		return parse(isJsonArray(decoded) ? decoded : [])
+	} catch (error) {
+		throw invalid(error)
+	}
+}

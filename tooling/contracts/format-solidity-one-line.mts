@@ -1,8 +1,10 @@
+import parser from '@solidity-parser/parser'
 import { execFileSync } from 'node:child_process'
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
 import * as url from 'node:url'
-import parser from '@solidity-parser/parser'
+import { repositoryRoot as projectRoot } from '../repo/root.mts'
+import { walkFiles } from '../repo/walk.mts'
 
 type SourceRange = {
 	end: number
@@ -10,7 +12,6 @@ type SourceRange = {
 }
 
 const scriptDirectory = path.dirname(url.fileURLToPath(import.meta.url))
-const projectRoot = path.join(scriptDirectory, '..', '..')
 const contractsRoot = path.join(projectRoot, 'solidity', 'contracts')
 const excludedProjectPaths = new Set(['solidity/contracts/statoblast/Multicall3.sol', 'solidity/contracts/statoblast/WETH9.sol', 'solidity/contracts/statoblast/openOracle/OpenOracle.sol'])
 
@@ -22,17 +23,8 @@ function isExcluded(filePath: string): boolean {
 	return excludedProjectPaths.has(projectPath(filePath))
 }
 
-async function collectSolidityFiles(directory: string, files: string[] = []): Promise<string[]> {
-	const entries = await fs.readdir(directory, { withFileTypes: true })
-	for (const entry of entries) {
-		const filePath = path.join(directory, entry.name)
-		if (entry.isDirectory()) {
-			await collectSolidityFiles(filePath, files)
-			continue
-		}
-		if (entry.isFile() && entry.name.endsWith('.sol') && !isExcluded(filePath)) files.push(filePath)
-	}
-	return files
+async function collectSolidityFiles(directory: string): Promise<string[]> {
+	return await walkFiles(directory, { include: file => file.endsWith('.sol') && !isExcluded(file) })
 }
 
 function requiredRange(node: { range?: [number, number]; type: string }): SourceRange {

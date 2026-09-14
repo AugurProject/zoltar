@@ -2,9 +2,9 @@ import { describe, expect, test } from 'bun:test'
 import { cp, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
+import { repositoryRoot } from '../repo/root.mts'
 import { dockerInstructions, parseDockerfile, requireDockerStage } from './packaging-parsers.ts'
 
-const repositoryRoot = join(import.meta.dir, '..', '..')
 const dockerfile = join(repositoryRoot, 'ui', 'Dockerfile')
 
 async function copyToolingInput(copy: string, root: string) {

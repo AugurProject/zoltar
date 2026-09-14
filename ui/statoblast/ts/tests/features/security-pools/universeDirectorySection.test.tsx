@@ -1,14 +1,14 @@
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { h } from 'preact'
 import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
-import { UniverseDirectorySection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/UniverseDirectorySection.js'
 import type { ListedSecurityPool, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import { UniverseDirectorySection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/UniverseDirectorySection.js'
+import { describe, expect, test } from 'bun:test'
+import { h } from 'preact'
 
 function createUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarUniverseSummary {
 	return {
@@ -81,18 +81,13 @@ function createSecurityPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 
 installTestRouting()
 describe('UniverseDirectorySection', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
-	beforeEach(() => {
-		restoreDomEnvironment = installDomEnvironment().cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+		},
 	})
 
 	test('shows selection actions only for deployed non-active child universes', async () => {

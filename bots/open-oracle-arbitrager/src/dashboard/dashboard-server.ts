@@ -1,24 +1,25 @@
-import { operatorHeader } from './header.ts'
+import type { DeploymentSettings } from '#config/deployment-settings'
+import { CONFIGURATION_REVISION_CONFLICT } from '#config/settings-store'
+import type { SubmissionSettings } from '#execution/transaction-submission'
+import { publicOperatorSnapshot, type OperatorSnapshot, type StrategySettings } from '#state/operator-state'
+import { publicOperatorFailure, publicPollFailure } from '#state/public-failures'
 import { buildDashboardScript, dashboardHealthResponse, sharedDashboardAssetResponse } from '@zoltar/bot-shared/dashboard/assets'
-import { join } from 'node:path'
 import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
 import {
 	boundedDashboardJson,
 	closingDashboardJson as closingJson,
 	dashboardAuthenticationChallenge,
 	dashboardAuthorities,
-	dashboardJson as json,
 	dashboardRequestAuthorityIsAccepted,
 	dashboardRequestIsAuthenticated,
 	dashboardRequestIsSameOrigin,
+	dashboardJson as json,
 	dashboardSecurityHeaders as securityHeaders,
 	validateDashboardAuthentication,
 } from '@zoltar/bot-shared/dashboard/security'
-import { publicOperatorSnapshot, type OperatorSnapshot, type StrategySettings } from '#state/operator-state'
-import { publicOperatorFailure, publicPollFailure } from '#state/public-failures'
-import type { SubmissionSettings } from '#execution/transaction-submission'
-import type { DeploymentSettings } from '#config/deployment-settings'
-import { CONFIGURATION_REVISION_CONFLICT } from '#config/settings-store'
+import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
+import { join } from 'node:path'
+import { operatorHeader } from './header.ts'
 
 type DashboardController = {
 	getConfiguration?: () => unknown | Promise<unknown>
@@ -46,10 +47,6 @@ const CHAIN_CONFIGURATION_REQUIRED = 'Select and save the chain and RPC endpoint
 
 async function requireConfiguredChain(controller: DashboardController) {
 	if (!(await controller.isNetworkConfigured())) throw new Error(CHAIN_CONFIGURATION_REQUIRED)
-}
-
-function errorMessage(error: unknown) {
-	return error instanceof Error ? error.message : String(error)
 }
 
 function publicError(error: unknown, status: number, operation: string, fallback: string, categorize = false) {

@@ -1,19 +1,19 @@
 /// <reference types="bun-types" />
 
-import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import { h } from 'preact'
-import { act } from 'preact/test-utils'
 import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
+import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
+import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFinished, markTransactionRequested } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
 import type { ReportingDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { useReportingOperations, type UseReportingOperationsDependencies } from '@zoltar/ui-statoblast-shared/features/reporting/hooks/useReportingOperations.js'
-import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFinished, markTransactionRequested } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
 import type { TransactionIntent } from '@zoltar/ui-zoltar-shared/features/types.js'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
-import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
-import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
+import { describe, expect, mock, test } from 'bun:test'
+import { h } from 'preact'
+import { act } from 'preact/test-utils'
 
 type UseReportingOperations = typeof useReportingOperations
 type UseReportingOperationsState = ReturnType<UseReportingOperations>
@@ -127,24 +127,20 @@ function createReportingOperationsDependencies(overrides: Partial<UseReportingOp
 }
 
 describe('useReportingOperations', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let restoreActiveEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
-	beforeEach(() => {
-		const domEnvironment = installDomEnvironment()
-		restoreDomEnvironment = domEnvironment.cleanup
-		restoreActiveEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: zeroAddress }))
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		restoreActiveEnvironment?.()
-		restoreActiveEnvironment = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
-		mock.restore()
+	installDomTestLifecycle({
+		beforeTest: () => {
+			restoreActiveEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: zeroAddress }))
+		},
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+			restoreActiveEnvironment?.()
+			restoreActiveEnvironment = undefined
+			mock.restore()
+		},
 	})
 
 	test('loadReporting ignores stale results when overlapping requests resolve out of order', async () => {

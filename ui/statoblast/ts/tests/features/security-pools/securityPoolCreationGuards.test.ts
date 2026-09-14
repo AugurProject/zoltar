@@ -1,29 +1,10 @@
+import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 /// <reference types="bun-types" />
 
-import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import { getInitialReportPriorityFeeValidationMessage, getSecurityPoolCreateDisabledReason, getStatoblastSecurityMultiplierValidationMessage } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolCreationGuards.js'
-import type { MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
-
-function createMarketDetails(overrides: Partial<MarketDetails> = {}): MarketDetails {
-	return {
-		answerUnit: '',
-		createdAt: 1n,
-		description: 'Question description',
-		displayValueMax: 100n,
-		displayValueMin: 0n,
-		endTime: 2n,
-		exists: true,
-		marketType: 'binary',
-		numTicks: 2n,
-		outcomeLabels: ['Yes', 'No'],
-		questionId: '0x01',
-		startTime: 1n,
-		title: 'Will this resolve?',
-		...overrides,
-	}
-}
+import { describe, expect, test } from 'bun:test'
 
 describe('security pool creation guards', () => {
 	test('blocks creation for wallet, network, duplicate, and market-type prerequisites', () => {

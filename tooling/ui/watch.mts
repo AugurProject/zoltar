@@ -1,9 +1,10 @@
-import { isWatchedContractSource } from './watchContractSources.mts'
 import { spawn } from 'node:child_process'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as process from 'node:process'
+import { walkFiles } from '../repo/walk.mts'
 import { getUiAppDependencyOrder, getUiAppPaths, getUiPackageRoot, parseUiAppIdFromProcess, type UiAppId } from './appPaths.mts'
+import { isWatchedContractSource } from './watchContractSources.mts'
 
 const appId = parseUiAppIdFromProcess('the UI watch process')
 const appPaths = getUiAppPaths(appId)
@@ -126,28 +127,11 @@ const stopProcess = async (childProcess: ManagedProcess | undefined) => {
 	}
 }
 
-const getAllFiles = async (dirPath: string, fileList: string[] = []) => {
-	const entries = await fs.promises.readdir(dirPath, { withFileTypes: true })
-	for (const entry of entries) {
-		const entryPath = path.join(dirPath, entry.name)
-		if (entry.isDirectory()) {
-			await getAllFiles(entryPath, fileList)
-		} else {
-			fileList.push(entryPath)
-		}
-	}
-	return fileList
+const getAllFiles = async (dirPath: string) => {
+	return await walkFiles(dirPath, { includeNonFiles: true })
 }
 
-const getAllDirectories = async (dirPath: string, directoryList: string[] = []) => {
-	directoryList.push(dirPath)
-	const entries = await fs.promises.readdir(dirPath, { withFileTypes: true })
-	for (const entry of entries) {
-		if (!entry.isDirectory()) continue
-		await getAllDirectories(path.join(dirPath, entry.name), directoryList)
-	}
-	return directoryList
-}
+const getAllDirectories = async (dirPath: string) => [dirPath, ...(await walkFiles(dirPath, { includeDirectories: true, include: (_path, entry) => entry.isDirectory() }))]
 
 const queueLiveReload = (reason: string) => {
 	if (shuttingDown) return

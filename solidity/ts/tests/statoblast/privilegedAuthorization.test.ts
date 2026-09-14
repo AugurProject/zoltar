@@ -5,12 +5,12 @@ import { OperationType } from '../../testSupport/simulator/utils/contracts/stato
 import { manipulatePriceOracle, manipulatePriceOracleAndPerformOperation } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { addressString } from '../../testSupport/simulator/utils/bigint'
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
-import { createWriteClient } from '../../testSupport/simulator/utils/clients'
 import assert from '../../testSupport/simulator/utils/assert'
+import { encodeDeployData, encodeFunctionData, getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { beforeEach, describe, test } from 'bun:test'
-import { encodeDeployData, encodeFunctionData, getAddress, type Address, type Hex, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import { writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
-import { getSettlementCollateralAttoEth, getCurrentRetentionRate, getTotalRepBackingUnits, getSecurityPoolsEscalationGame, getSecurityVault, getTotalPoolHeldAttoRep, getTotalCapacityOwnershipAttoRep } from '../../testSupport/simulator/utils/contracts/securityPool'
+import { deployContract } from '../../testSupport/deployContract'
+import { createWriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
+import { getCurrentRetentionRate, getSecurityPoolsEscalationGame, getSecurityVault, getSettlementCollateralAttoEth, getTotalCapacityOwnershipAttoRep, getTotalPoolHeldAttoRep, getTotalRepBackingUnits } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { getERC20Balance, getETHBalance } from '../../testSupport/simulator/utils/utilities'
 import { ReputationToken_ReputationToken, statoblast_EscalationGame_EscalationGame, statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate, statoblast_SecurityPool_SecurityPool } from '../../types/contractArtifact'
 import { useStatoblastVaultAccountingFixture, type StatoblastVaultAccountingFixture } from './fixture'
@@ -22,13 +22,6 @@ describe('Statoblast: privileged authorization matrix', () => {
 	let client: StatoblastVaultAccountingFixture['client']
 	let mockWindow: StatoblastVaultAccountingFixture['mockWindow']
 	let securityPool: Address
-
-	const deployContract = async (deploymentClient: WriteClient, deploymentData: Hex) => {
-		const hash = await deploymentClient.sendTransaction({ data: deploymentData })
-		const receipt = await deploymentClient.waitForTransactionReceipt({ hash })
-		if (typeof receipt.contractAddress !== 'string') throw new Error('deployment address missing')
-		return receipt.contractAddress
-	}
 
 	beforeEach(() => {
 		client = fixture.client

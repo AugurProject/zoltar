@@ -2,11 +2,11 @@ import { describe, expect, test } from 'bun:test'
 import { spawnSync } from 'node:child_process'
 import { access, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { projectQuery } from '../repo/query-projects.mts'
 import { taskProjects } from '../repo/projects.ts'
+import { projectQuery } from '../repo/query-projects.mts'
+import { repositoryRoot } from '../repo/root.mts'
 import { dockerGlobalArguments, dockerInstructions, parseDockerfile } from '../testing/packaging-parsers.ts'
 
-const repositoryRoot = join(import.meta.dir, '..', '..')
 const activeCiWorkflowPath = join(repositoryRoot, '.github', 'workflows/ci.yml')
 const browserWorkflowPath = join(repositoryRoot, '.github', 'workflows/browser-workflow.yml')
 const activeCoverageWorkflowPath = join(repositoryRoot, '.github', 'workflows/coverage.yml')

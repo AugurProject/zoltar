@@ -49,6 +49,8 @@ COPY augurScan/scripts/verify-compose-source.ts ./augurScan/scripts/verify-compo
 COPY augurScan/scripts/verify-export-page.ts ./augurScan/scripts/verify-export-page.ts
 COPY augurScan/src ./augurScan/src
 COPY shared/core/ts/evm/ ./shared/core/ts/evm/
+COPY shared/core/ts/errors/ ./shared/core/ts/errors/
+COPY shared/core/ts/math/ ./shared/core/ts/math/
 RUN mkdir -p /workspace/augurScan/logs /var/log/augurscan && chown -R bun:bun /workspace/augurScan/logs /var/log/augurscan
 USER bun
 EXPOSE 3000

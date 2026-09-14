@@ -1,11 +1,10 @@
-import { contractProjectOwner, isContractProjectSource, type ContractProject } from '../../solidity/ts/contractProjects.ts'
 import { promises as fs } from 'fs'
-import * as path from 'path'
 import * as process from 'node:process'
 import * as url from 'node:url'
+import * as path from 'path'
+import { contractProjectOwner, isContractProjectSource, type ContractProject } from '../../solidity/ts/contractProjects.ts'
+import { repositoryRoot as REPOSITORY_ROOT_PATH } from '../repo/root.mts'
 
-const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
-const REPOSITORY_ROOT_PATH = path.join(directoryOfThisFile, '..', '..')
 const UI_ROOT_PATH = path.join(REPOSITORY_ROOT_PATH, 'ui')
 const CORE_SHARED_ROOT_PATH = path.join(UI_ROOT_PATH, 'coreShared')
 const ABI_OUTPUT_PATH = path.join(CORE_SHARED_ROOT_PATH, 'ts', 'abis.ts')

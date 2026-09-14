@@ -1,17 +1,18 @@
+import { createDeferred } from '../testUtils/deferred.js'
 /// <reference types="bun-types" />
 
-import { fireEvent, waitFor, within } from '../testUtils/queries'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { describe, expect, mock, test } from 'bun:test'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
-import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { SimulationBanner } from '../../components/SimulationBanner.js'
 import type { SimulationController } from '../../simulation/controller.js'
 import { serializeSavedSimulationStateEnvelope } from '../../simulation/savedStates.js'
 import { registerSimulationScenario } from '../../simulation/scenarios.js'
-import { installTestRouting } from '../testUtils/testRouting.js'
 import { installDomEnvironment } from '../testUtils/domEnvironment.js'
+import { fireEvent, waitFor, within } from '../testUtils/queries'
 import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
+import { installTestRouting } from '../testUtils/testRouting.js'
 
 const SIMULATION_REP_MINT_AMOUNT = 1_000_000n * 10n ** 18n
 
@@ -27,16 +28,6 @@ registerSimulationScenario('securitypoolx2-auction', {
 	description: 'Two security pools with an in-progress truth auction. Use it to test auction bidding and finalization paths.',
 	label: 'Security Pool x2 Auction',
 })
-
-function createDeferred<T>() {
-	let resolve: (value: T) => void = () => undefined
-	let reject: (reason?: unknown) => void = () => undefined
-	const promise = new Promise<T>((promiseResolve, promiseReject) => {
-		resolve = promiseResolve
-		reject = promiseReject
-	})
-	return { promise, reject, resolve }
-}
 
 function createSimulationController(overrides: Partial<SimulationController> = {}): SimulationController {
 	const selectedAccount = '0x00000000000000000000000000000000000000a1' as Address

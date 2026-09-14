@@ -1,9 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { access, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { repositoryRoot } from '../repo/root.mts'
 import { applyExactMutation, classifyMutantResult, getMutationJunitTestNames, getMutationTestPath, MUTATION_SMOKE_CASES, pinMutationTestToTypeScript, type SourceMutation } from './mutation-support.mts'
-
-const repositoryRoot = join(import.meta.dir, '..', '..')
 
 describe('mutation smoke support', () => {
 	test('replaces exactly one intended source fragment', () => {

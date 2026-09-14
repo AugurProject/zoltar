@@ -1,3 +1,4 @@
+import { errorChain } from '../errors/errorChain.js'
 export type LogRange = Readonly<{ fromBlock: bigint; toBlock: bigint }>
 
 export class LogScanError extends Error {
@@ -14,12 +15,8 @@ export class LogScanError extends Error {
 }
 
 function walkErrorCauses(error: unknown, visit: (current: object) => boolean) {
-	const seen = new Set<unknown>()
-	let current: unknown = error
-	while (typeof current === 'object' && current !== null && !seen.has(current)) {
-		seen.add(current)
+	for (const current of errorChain(error)) {
 		if (visit(current)) return true
-		current = 'cause' in current ? current.cause : undefined
 	}
 	return false
 }

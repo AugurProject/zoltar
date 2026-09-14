@@ -1,6 +1,6 @@
 import * as path from 'node:path'
-import * as url from 'node:url'
 import * as ts from 'typescript'
+import { repositoryRoot as projectRoot } from './root.mts'
 
 type SignalComparisonFinding = {
 	file: string
@@ -9,8 +9,6 @@ type SignalComparisonFinding = {
 	expression: string
 }
 
-const repositoryRoot = path.dirname(url.fileURLToPath(import.meta.url))
-const projectRoot = path.join(repositoryRoot, '..', '..')
 const formatDiagnosticsHost: ts.FormatDiagnosticsHost = {
 	getCanonicalFileName: fileName => fileName,
 	getCurrentDirectory: () => projectRoot,

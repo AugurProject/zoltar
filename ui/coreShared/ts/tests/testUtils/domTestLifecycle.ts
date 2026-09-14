@@ -2,6 +2,7 @@ import { afterEach, beforeEach } from 'bun:test'
 import { installDomEnvironment } from './domEnvironment.js'
 
 type DomTestLifecycleOptions = {
+	beforeTest?: (environment: ReturnType<typeof installDomEnvironment>) => Promise<void> | void
 	afterTest?: () => Promise<void> | void
 	url?: string
 }
@@ -10,9 +11,11 @@ export function installDomTestLifecycle(options: DomTestLifecycleOptions = {}) {
 	let restoreDomEnvironment: (() => void) | undefined
 	const renderedCleanups: Array<() => Promise<void> | void> = []
 
-	beforeEach(() => {
+	beforeEach(async () => {
 		renderedCleanups.length = 0
-		restoreDomEnvironment = installDomEnvironment(options.url).cleanup
+		const environment = installDomEnvironment(options.url)
+		restoreDomEnvironment = environment.cleanup
+		await options.beforeTest?.(environment)
 	})
 
 	afterEach(async () => {

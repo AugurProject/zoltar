@@ -13,21 +13,21 @@ const schemaFile = join(import.meta.dir, '..', '..', 'schema.sql')
 const rootGitIgnore = join(import.meta.dir, '..', '..', '..', '.gitignore')
 
 describe('Docker packaging', () => {
-	test('loads the shared Ethereum module from the runtime image source copies', async () => {
+	test('loads shared helper consumers from the runtime image source copies', async () => {
 		const repositoryRoot = join(import.meta.dir, '..', '..', '..')
 		const runtime = requireDockerStage(parseDockerfile(await readFile(dockerfile, 'utf8')), 'runtime')
 		const workspace = await mkdtemp(join(tmpdir(), 'augurscan-runtime-'))
 		try {
-			for (const copy of dockerInstructions(runtime, 'COPY').filter(value => value.startsWith('shared/'))) {
+			for (const copy of dockerInstructions(runtime, 'COPY').filter(value => value.startsWith('shared/') || value.startsWith('augurScan/src ') || value.startsWith('augurScan/config '))) {
 				const [source, destination] = copy.split(/\s+/u)
-				if (source === undefined || destination === undefined) throw new Error(`Invalid shared source COPY: ${copy}`)
+				if (source === undefined || destination === undefined) throw new Error(`Invalid runtime source COPY: ${copy}`)
 				const target = join(workspace, destination, source.endsWith('.json') && destination.endsWith('/') ? basename(source) : '')
 				await mkdir(dirname(target), { recursive: true })
 				await cp(join(repositoryRoot, source), target, { recursive: true })
 			}
 			await symlink(join(repositoryRoot, 'node_modules'), join(workspace, 'node_modules'), 'dir')
 			await symlink(join(repositoryRoot, 'shared/core/node_modules'), join(workspace, 'shared/core/node_modules'), 'dir')
-			const result = Bun.spawnSync([process.execPath, '-e', "await import('./shared/core/ts/evm/ethereum.ts')"], { cwd: workspace, stdout: 'pipe', stderr: 'pipe' })
+			const result = Bun.spawnSync([process.execPath, '-e', "for (const source of ['ethereum', 'operations', 'error-chain', 'rpc-request-queue', 'indexer/ownership-status']) await import('./augurScan/src/' + source + '.ts')"], { cwd: workspace, stdout: 'pipe', stderr: 'pipe' })
 			expect(result.stderr.toString()).toBe('')
 			expect(result.exitCode).toBe(0)
 		} finally {

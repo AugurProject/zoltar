@@ -1,21 +1,22 @@
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
+import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 /// <reference types='bun-types' />
 
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
+import { getAddress, zeroAddress, zeroHash, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { parseTruthAuctionAmountInput, parseTruthAuctionPriceInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
+import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
+import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
+import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFailed, markTransactionFinished, markTransactionPrepared, markTransactionRequested, markTransactionSubmitted } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
+import type { ForkAuctionActionResult, ForkAuctionDetails, TruthAuctionMetrics } from '@zoltar/ui-core-shared/types/contracts.js'
+import { useForkAuctionOperations, type UseForkAuctionOperationsDependencies } from '@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useForkAuctionOperations.js'
+import { getTruthAuctionTickAtPrice } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/truthAuctionBook.js'
+import type { SettlementSelectedBid, TransactionIntent } from '@zoltar/ui-zoltar-shared/features/types.js'
+import { describe, expect, mock, test } from 'bun:test'
 import { h } from 'preact'
 import { act } from 'preact/test-utils'
-import { getAddress, zeroAddress, zeroHash, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFailed, markTransactionFinished, markTransactionPrepared, markTransactionRequested, markTransactionSubmitted } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
-import { parseTruthAuctionAmountInput, parseTruthAuctionPriceInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
-import { getTruthAuctionTickAtPrice } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/truthAuctionBook.js'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
-import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
-import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
-import type { ForkAuctionActionResult, ForkAuctionDetails, MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { SettlementSelectedBid, TransactionIntent } from '@zoltar/ui-zoltar-shared/features/types.js'
-import type { TruthAuctionMetrics } from '@zoltar/ui-core-shared/types/contracts.js'
-import { useForkAuctionOperations, type UseForkAuctionOperationsDependencies } from '@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useForkAuctionOperations.js'
 
 type UseForkAuctionOperationsState = ReturnType<typeof useForkAuctionOperations>
 type TestForkAuctionWriteClient = { kind: 'injected-write-client' }
@@ -23,34 +24,6 @@ type TestForkAuctionWriteClient = { kind: 'injected-write-client' }
 const WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000a1')
 const SECURITY_POOL_ADDRESS = getAddress('0x00000000000000000000000000000000000000b2')
 const TRUTH_AUCTION_ADDRESS = getAddress('0x00000000000000000000000000000000000000c3')
-
-function createDeferred<T>() {
-	let resolve: (value: T) => void = () => undefined
-	let reject: (reason?: unknown) => void = () => undefined
-	const promise = new Promise<T>((promiseResolve, promiseReject) => {
-		resolve = promiseResolve
-		reject = promiseReject
-	})
-	return { promise, reject, resolve }
-}
-
-function createMarketDetails(): MarketDetails {
-	return {
-		answerUnit: '',
-		createdAt: 1n,
-		description: 'Question description',
-		displayValueMax: 100n,
-		displayValueMin: 0n,
-		endTime: 2n,
-		exists: true,
-		marketType: 'binary',
-		numTicks: 2n,
-		outcomeLabels: ['Yes', 'No'],
-		questionId: '0x01',
-		startTime: 1n,
-		title: 'Will this resolve?',
-	}
-}
 
 function createForkAuctionDetails(overrides: Partial<ForkAuctionDetails> = {}): ForkAuctionDetails {
 	return {
@@ -201,24 +174,21 @@ function createHarness(dependencies: UseForkAuctionOperationsDependencies<TestFo
 }
 
 describe('useForkAuctionOperations', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let resetEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
-	beforeEach(() => {
-		restoreDomEnvironment = installDomEnvironment().cleanup
-		resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		resetEnvironment?.()
-		resetEnvironment = undefined
-		resetActiveEnvironmentForTesting()
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
-		mock.restore()
+	installDomTestLifecycle({
+		beforeTest: () => {
+			resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
+		},
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+			resetEnvironment?.()
+			resetEnvironment = undefined
+			resetActiveEnvironmentForTesting()
+			mock.restore()
+		},
 	})
 
 	test('refundLosingBids preserves negative settlement ticks from the selection list', async () => {

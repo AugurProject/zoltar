@@ -1,3 +1,4 @@
+import { errorChain } from '../../errors/errorChain.js'
 import { type ClientRequestParameters, type DeadlineRunner, type EIP1193Provider, type HttpTransportOptions, type JsonValue, type Transport, type TransportRetryOptions } from './types.js'
 
 import { RpcError } from './errors.js'
@@ -136,12 +137,8 @@ function toRpcError(error: unknown, fallbackMessage: string) {
 }
 
 export function isRateLimitError(error: unknown) {
-	const seen = new Set<unknown>()
-	let current: unknown = error
-	while (typeof current === 'object' && current !== null && !seen.has(current)) {
-		seen.add(current)
+	for (const current of errorChain(error)) {
 		if (current instanceof RpcError && (current.code === 429 || current.code === '429' || current.code === -32_005 || current.code === '-32005' || current.message.includes('HTTP 429'))) return true
-		current = 'cause' in current ? current.cause : undefined
 	}
 	return false
 }

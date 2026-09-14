@@ -1,10 +1,6 @@
 /** Longest string any sanitized public field publishes. Producers must truncate to this visibly. */
 export const MAXIMUM_PUBLIC_FIELD_LENGTH = 1_000
 
-export function record(value: unknown): Record<string, unknown> | undefined {
-	return typeof value === 'object' && value !== null && !Array.isArray(value) ? Object.fromEntries(Object.entries(value)) : undefined
-}
-
 export function safeString(value: unknown) {
 	if (typeof value !== 'string') return undefined
 	const sensitive =
@@ -47,3 +43,5 @@ export function isoTimestampField(source: Record<string, unknown>, key: string) 
 export function compact<T extends Record<string, unknown>>(value: T) {
 	return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined))
 }
+
+export { optionalRecord as record } from '@zoltar/bot-shared/infrastructure/json-validation'

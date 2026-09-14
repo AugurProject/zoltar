@@ -1,12 +1,13 @@
+import { encodeDeployData, encodeFunctionData } from '@zoltar/core-shared/evm/ethereum'
 import { beforeEach, describe, test } from 'bun:test'
-import { encodeDeployData, encodeFunctionData, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
-import assert from '../testSupport/simulator/utils/assert'
+import { deployContract } from '../testSupport/deployContract'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
+import assert from '../testSupport/simulator/utils/assert'
+import { createWriteClient, writeContractAndWait, type WriteClient } from '../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
-import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
-import { statoblast_WETH9_WETH9, test_statoblast_OpenOracleAdversarialHarnesses_OpenOracleRejectingETHReceiver as rejectingEthReceiverArtifact } from '../types/contractArtifact'
+import { test_statoblast_OpenOracleAdversarialHarnesses_OpenOracleRejectingETHReceiver as rejectingEthReceiverArtifact, statoblast_WETH9_WETH9 } from '../types/contractArtifact'
 
 describe('WETH9 failure guards', () => {
 	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
@@ -14,16 +15,9 @@ describe('WETH9 failure guards', () => {
 	let client: WriteClient
 	let operatorClient: WriteClient
 
-	const deployContract = async (deploymentData: Hex): Promise<Address> => {
-		const hash = await client.sendTransaction({ data: deploymentData })
-		const receipt = await client.waitForTransactionReceipt({ hash })
-		const contractAddress = receipt.contractAddress
-		if (contractAddress === undefined) throw new Error('deployment address missing')
-		return contractAddress
-	}
-
 	const deployWeth = async () =>
 		await deployContract(
+			client,
 			encodeDeployData({
 				abi: statoblast_WETH9_WETH9.abi,
 				bytecode: `0x${statoblast_WETH9_WETH9.evm.bytecode.object}`,
@@ -136,6 +130,7 @@ describe('WETH9 failure guards', () => {
 	test('withdraw rolls back the burned WETH when the caller rejects the ETH transfer', async () => {
 		const weth = await deployWeth()
 		const receiver = await deployContract(
+			client,
 			encodeDeployData({
 				abi: rejectingEthReceiverArtifact.abi,
 				bytecode: `0x${rejectingEthReceiverArtifact.evm.bytecode.object}`,

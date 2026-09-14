@@ -1,13 +1,13 @@
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import { act } from 'preact/test-utils'
-import { render } from 'preact'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import type { MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { QuestionsView } from '@zoltar/ui-zoltar-shared/features/zoltarSurface/components/QuestionsView.js'
-import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { describe, expect, mock, test } from 'bun:test'
+import { render } from 'preact'
+import { act } from 'preact/test-utils'
 
 const question: MarketDetails = {
 	answerUnit: '',
@@ -26,18 +26,13 @@ const question: MarketDetails = {
 }
 
 describe('QuestionsView', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
-	beforeEach(() => {
-		restoreDomEnvironment = installDomEnvironment().cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+		},
 	})
 
 	test('renders the question registry without cross-application actions', async () => {

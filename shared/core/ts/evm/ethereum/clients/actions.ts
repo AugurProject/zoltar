@@ -1,3 +1,4 @@
+import { errorChain } from '../../../errors/errorChain.js'
 import {
 	type Abi,
 	type AbiParameter,
@@ -129,14 +130,10 @@ async function readContractRaw<TAbi extends Abi, TFunctionName extends string>(t
 			],
 		})
 	} catch (cause) {
-		const seen = new Set<unknown>()
-		let current: unknown = cause
-		while (typeof current === 'object' && current !== null && !seen.has(current)) {
-			seen.add(current)
+		for (const current of errorChain(cause)) {
 			if (current instanceof RpcError && current.message.toLowerCase().includes('revert')) {
 				throw new ContractFunctionError('ContractFunctionRevertedError', current.message, cause)
 			}
-			current = 'cause' in current ? current.cause : undefined
 		}
 		throw cause
 	}

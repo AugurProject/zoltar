@@ -1,23 +1,15 @@
 /// <reference types='bun-types' />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
-import { getSecurityPoolLinkHref } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolNavigation.js'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
+import { getSecurityPoolLinkHref } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolNavigation.js'
+import { describe, expect, test } from 'bun:test'
 
 installTestRouting()
 describe('securityPoolNavigation', () => {
-	let restoreDomEnvironment: (() => void) | undefined
-
-	beforeEach(() => {
-		const domEnvironment = installDomEnvironment('http://localhost/#/security-pools?selectedPoolView=vaults&universe=11&simulate=1&simScenario=securitypoolx2')
-		restoreDomEnvironment = domEnvironment.cleanup
-	})
-
-	afterEach(() => {
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
+	installDomTestLifecycle({
+		url: 'http://localhost/#/security-pools?selectedPoolView=vaults&universe=11&simulate=1&simScenario=securitypoolx2',
 	})
 
 	test('builds an operate-route href for a selected security pool', () => {

@@ -1,7 +1,7 @@
-import { operationalFailureDisposition } from '@zoltar/bot-shared/monitoring/resilience'
+import { recordOperation, type MarketAvailabilityNotice, type OperatorState } from '#state/operator-state'
+import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
 import { missingContractDeployment } from '@zoltar/bot-shared/monitoring/deployed-contracts'
-import { errorMessage } from '#core/rpc-validation'
-import { recordOperation, type OperatorState, type MarketAvailabilityNotice } from '#state/operator-state'
+import { operationalFailureDisposition } from '@zoltar/bot-shared/monitoring/resilience'
 
 function marketAvailabilityFromError(error: unknown): MarketAvailabilityNotice | undefined {
 	const missing = missingContractDeployment(error)

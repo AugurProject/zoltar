@@ -1,16 +1,17 @@
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 /// <reference types="bun-types" />
 
+import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
+import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import type { OpenOracleReportDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import { useOpenOracleOperations, type UseOpenOracleOperationsDependencies } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useOpenOracleOperations.js'
+import { describe, expect, mock, test } from 'bun:test'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
-import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
-import type { OpenOracleReportDetails } from '@zoltar/ui-core-shared/types/contracts.js'
-import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
-import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
-import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import { useOpenOracleOperations, type UseOpenOracleOperationsDependencies } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useOpenOracleOperations.js'
 
 type UseOpenOracleOperationsState = ReturnType<typeof useOpenOracleOperations>
 type TestOpenOracleWriteClient = { kind: 'injected-write-client' }
@@ -66,16 +67,6 @@ const OPEN_ORACLE_APPROVAL_TEST_CASES = [
 ] satisfies ReadonlyArray<OpenOracleApprovalTestCase>
 
 type TestTokenAccessReadResult = { error: Error; status: 'failure' } | { result: bigint; status: 'success' }
-
-function createDeferred<T>() {
-	let resolve: (value: T) => void = () => undefined
-	let reject: (reason?: unknown) => void = () => undefined
-	const promise = new Promise<T>((promiseResolve, promiseReject) => {
-		resolve = promiseResolve
-		reject = promiseReject
-	})
-	return { promise, reject, resolve }
-}
 
 function createOpenOracleReportDetails(overrides: Partial<OpenOracleReportDetails> = {}): OpenOracleReportDetails {
 	return {
@@ -207,24 +198,20 @@ async function invokeOpenOracleApproval(state: UseOpenOracleOperationsState, act
 }
 
 describe('useOpenOracleOperations', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let restoreActiveEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
-	beforeEach(() => {
-		const domEnvironment = installDomEnvironment()
-		restoreDomEnvironment = domEnvironment.cleanup
-		restoreActiveEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		restoreActiveEnvironment?.()
-		restoreActiveEnvironment = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
-		mock.restore()
+	installDomTestLifecycle({
+		beforeTest: () => {
+			restoreActiveEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
+		},
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+			restoreActiveEnvironment?.()
+			restoreActiveEnvironment = undefined
+			mock.restore()
+		},
 	})
 
 	test('uses consistent Open Oracle capitalization in disconnected-wallet recovery', async () => {

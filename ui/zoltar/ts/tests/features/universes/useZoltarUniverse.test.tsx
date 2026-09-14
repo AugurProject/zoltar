@@ -1,17 +1,17 @@
 /// <reference types='bun-types' />
 
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import { h, render } from 'preact'
-import { act } from 'preact/test-utils'
 import { createPublicClient, getAddress, http, zeroAddress, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { useZoltarUniverse, type UseZoltarUniverseDependencies } from '@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarUniverse.js'
-import type { DeploymentStatus, MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
-import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
-import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
+import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
+import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import type { DeploymentStatus, MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import { useZoltarUniverse, type UseZoltarUniverseDependencies } from '@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarUniverse.js'
+import { describe, expect, mock, test } from 'bun:test'
+import { h, render } from 'preact'
+import { act } from 'preact/test-utils'
 
 type UseZoltarUniverseState = ReturnType<typeof useZoltarUniverse>
 
@@ -83,25 +83,21 @@ function createZoltarUniverseDependencies(overrides: Partial<UseZoltarUniverseDe
 }
 
 describe('useZoltarUniverse', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 	let resetEnvironment: (() => void) | undefined
 
-	beforeEach(() => {
-		const domEnvironment = installDomEnvironment()
-		restoreDomEnvironment = domEnvironment.cleanup
-		resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: NEXT_WALLET_ADDRESS }))
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		resetEnvironment?.()
-		resetEnvironment = undefined
-		resetActiveEnvironmentForTesting()
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
-		mock.restore()
+	installDomTestLifecycle({
+		beforeTest: () => {
+			resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: NEXT_WALLET_ADDRESS }))
+		},
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+			resetEnvironment?.()
+			resetEnvironment = undefined
+			resetActiveEnvironmentForTesting()
+			mock.restore()
+		},
 	})
 
 	test('does not request a child-universe transaction when the active wallet account changed', async () => {

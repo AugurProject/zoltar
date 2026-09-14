@@ -1,25 +1,20 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
+import { describe, expect, test } from 'bun:test'
 import { HeaderMetricGroup, HeaderMetricStrip } from '../components/HeaderMetricStrip.js'
 import { HeaderToolbar } from '../components/HeaderToolbar.js'
 import { ToolbarField } from '../components/ToolbarField.js'
 import { WalletChip, WalletChipLabel, WalletChipPlaceholder } from '../components/WalletChip.js'
-import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
 describe('header toolbar primitives', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 	const address = '0x8ba1f109551bD432803012645Ac136ddd64DBA72'
 
-	beforeEach(() => {
-		restoreDomEnvironment = installDomEnvironment().cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+		},
 	})
 
 	test('lays out brand, badges, controls, and settings in fixed toolbar slots', async () => {

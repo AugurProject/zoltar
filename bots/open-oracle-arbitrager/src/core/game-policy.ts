@@ -1,4 +1,5 @@
 import type { Address } from '@zoltar/bot-shared/ethereum'
+import { sameAddress } from '@zoltar/core-shared/evm/address'
 import { OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TIME_TYPE, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 
 const MAX_SAFE_CALLBACK_GAS_LIMIT = 10_000_000n
@@ -19,10 +20,6 @@ export type CoordinatorGamePolicy = {
 	settlementTime: bigint
 	token1: Address
 	token2: Address
-}
-
-function sameAddress(left: Address, right: Address) {
-	return left.toLowerCase() === right.toLowerCase()
 }
 
 function fieldMismatch(actual: bigint, expected: bigint, name: string) {

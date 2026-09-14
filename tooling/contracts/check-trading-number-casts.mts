@@ -1,18 +1,13 @@
-import { readdir } from 'node:fs/promises'
 import path from 'node:path'
 import ts from 'typescript'
+import { repositoryRoot } from '../repo/root.mts'
+import { walkFiles } from '../repo/walk.mts'
 
-const repositoryRoot = path.resolve(import.meta.dir, '../..')
 const sourceExtensions = new Set(['.cts', '.mts', '.ts', '.tsx'])
 const excludedDirectories = new Set(['.git', 'artifacts', 'dist', 'generated', 'js', 'node_modules', 'vendor'])
 
 async function collectSourceFiles(directory: string, files: string[]): Promise<void> {
-	for (const entry of await readdir(directory, { withFileTypes: true })) {
-		if (entry.isDirectory() && excludedDirectories.has(entry.name)) continue
-		const child = path.join(directory, entry.name)
-		if (entry.isDirectory()) await collectSourceFiles(child, files)
-		else if (sourceExtensions.has(path.extname(entry.name))) files.push(child)
-	}
+	files.push(...(await walkFiles(directory, { includeNonFiles: true, descend: (_directory, entry) => !excludedDirectories.has(entry.name), include: file => sourceExtensions.has(path.extname(file)) })))
 }
 
 function includesBigInt(type: ts.Type): boolean {
