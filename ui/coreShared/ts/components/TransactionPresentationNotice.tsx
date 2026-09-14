@@ -85,7 +85,7 @@ export function TransactionPresentationNotice({ className = '', compact = false,
 			</div>
 			{!dismissible || compact ? undefined : (
 				<div className='global-transaction-actions'>
-					<button className='secondary global-transaction-dismiss' type='button' onClick={onDismiss}>
+					<button className='quiet global-transaction-dismiss' type='button' onClick={onDismiss}>
 						{transactionCopy.dismiss}
 					</button>
 				</div>
