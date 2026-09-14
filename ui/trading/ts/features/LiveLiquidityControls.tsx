@@ -1,6 +1,6 @@
 import type { Address, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { formatUnits } from '../lib/format.js'
-import { formatCompleteSetValue, formatLpValue, formatOutcomeValue } from '../lib/shareValue.js'
+import { formatCompleteSetQuantity, formatLpQuantity, formatOutcomeQuantity } from '../lib/shareValue.js'
 import type { DeploymentConfiguration } from '../protocol/config.js'
 import { marketAcceptsNewRisk, publicErrorMessage, simulateLiquidity, submitFreshLiquidity, type LiveMarket } from '../protocol/live.js'
 import * as workflowCopy from '../copy/workflows.js'
@@ -117,38 +117,38 @@ export function LiveLiquidityControls({
 							<>
 								<div>
 									<dt>{liquidityCopy.rawYesReturned}</dt>
-									<dd>{formatOutcomeValue(quote.expectedYes, liquidityCopy.yes, market)}</dd>
+									<dd>{formatOutcomeQuantity(quote.expectedYes, liquidityCopy.yes)}</dd>
 								</div>
 								<div>
 									<dt>{liquidityCopy.rawNoReturned}</dt>
-									<dd>{formatOutcomeValue(quote.expectedNo, liquidityCopy.no, market)}</dd>
+									<dd>{formatOutcomeQuantity(quote.expectedNo, liquidityCopy.no)}</dd>
 								</div>
 							</>
 						) : (
 							<>
 								<div>
 									<dt>{liquidityCopy.completeSetSharesCreated}</dt>
-									<dd>{formatCompleteSetValue(quote.result.completeSetShares, market)}</dd>
+									<dd>{formatCompleteSetQuantity(quote.result.completeSetShares)}</dd>
 								</div>
 								<div>
 									<dt>{liquidityCopy.sharesDeposited}</dt>
 									<dd>
-										{formatOutcomeValue(quote.result.yesUsed, liquidityCopy.yes, market)} / {formatOutcomeValue(quote.result.noUsed, liquidityCopy.no, market)}
+										{formatOutcomeQuantity(quote.result.yesUsed, liquidityCopy.yes)} / {formatOutcomeQuantity(quote.result.noUsed, liquidityCopy.no)}
 									</dd>
 								</div>
 								<div>
 									<dt>{liquidityCopy.unusedSharesReturned}</dt>
 									<dd>
-										{formatOutcomeValue(quote.result.yesReturned, liquidityCopy.yes, market)} / {formatOutcomeValue(quote.result.noReturned, liquidityCopy.no, market)}
+										{formatOutcomeQuantity(quote.result.yesReturned, liquidityCopy.yes)} / {formatOutcomeQuantity(quote.result.noReturned, liquidityCopy.no)}
 									</dd>
 								</div>
 								<div>
 									<dt>{liquidityCopy.invalidRetained}</dt>
-									<dd>{formatOutcomeValue(quote.result.invalidInsurance, liquidityCopy.invalid, market)}</dd>
+									<dd>{formatOutcomeQuantity(quote.result.invalidInsurance, liquidityCopy.invalid)}</dd>
 								</div>
 								<div>
 									<dt>{liquidityCopy.lpTokensExpected}</dt>
-									<dd>{formatLpValue(quote.expectedLiquidity, market)}</dd>
+									<dd>{formatLpQuantity(quote.expectedLiquidity)}</dd>
 								</div>
 							</>
 						)}

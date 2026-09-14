@@ -5,7 +5,7 @@ import type { LiveMarket } from '../protocol/liveMarket.js'
 export type ShareValueRate = Pick<LiveMarket, 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares'>
 
 // SecurityPool.attoEthToAttoShares mints attoEth * PRICE_PRECISION shares while no complete set exists, so the
-// genesis rate is one attoETH per 10^18 attoShares. Share amounts are therefore only readable as collateral value.
+// genesis rate is one attoETH per 10^18 attoShares. One displayed token uses a fixed 10^36 attoShares.
 const GENESIS_ATTO_SHARES_PER_ATTO_ETH = 10n ** 18n
 
 /** Settlement-collateral value of a share amount at the pool's current rate; mirrors SecurityPool.attoSharesToAttoEth. */
@@ -34,17 +34,26 @@ function formatCollateralValue(amountAttoShares: bigint, rate: ShareValueRate, m
 	return rounding === 'down' ? formatUnits(value, 18, maximumFractionDigits) : formatRoundedUnits(value, 18, maximumFractionDigits)
 }
 
-export function formatOutcomeValue(amountAttoShares: bigint, outcome: 'YES' | 'NO' | 'INVALID', rate: ShareValueRate, maximumFractionDigits = 4, rounding: ShareValueRounding = 'nearest') {
-	return `${formatCollateralValue(amountAttoShares, rate, maximumFractionDigits, rounding)} ${outcome}`
+/** Fixed genesis normalization for token quantities, independent of collateral backing. */
+export const SHARE_QUANTITY_DECIMALS = 36
+
+function formatShareQuantity(amount: bigint, maximumFractionDigits: number, rounding: ShareValueRounding) {
+	if (amount < 0n) throw new Error('Share amounts cannot be negative')
+	const formatted = rounding === 'down' ? formatUnits(amount, SHARE_QUANTITY_DECIMALS, maximumFractionDigits) : formatRoundedUnits(amount, SHARE_QUANTITY_DECIMALS, maximumFractionDigits)
+	return amount > 0n && formatted === '0' ? `<${formatUnits(1n, maximumFractionDigits, maximumFractionDigits)}` : formatted
 }
 
-/** LP tokens are minted one per attoShare of the smaller initial reserve, so they share the collateral-value scale of shares. */
-export function formatLpValue(amountLp: bigint, rate: ShareValueRate, maximumFractionDigits = 4, rounding: ShareValueRounding = 'nearest') {
-	return `${formatCollateralValue(amountLp, rate, maximumFractionDigits, rounding)} LP`
+export function formatOutcomeQuantity(amountAttoShares: bigint, outcome: 'YES' | 'NO' | 'INVALID', maximumFractionDigits = 4, rounding: ShareValueRounding = 'nearest') {
+	return `${formatShareQuantity(amountAttoShares, maximumFractionDigits, rounding)} ${outcome}`
 }
 
-export function formatCompleteSetValue(amountAttoShares: bigint, rate: ShareValueRate, maximumFractionDigits = 4, rounding: ShareValueRounding = 'nearest') {
-	const formatted = formatCollateralValue(amountAttoShares, rate, maximumFractionDigits, rounding)
+/** LP quantities use a fixed scale too; their underlying reserve claims are displayed separately. */
+export function formatLpQuantity(amountLp: bigint, maximumFractionDigits = 4, rounding: ShareValueRounding = 'nearest') {
+	return `${formatShareQuantity(amountLp, maximumFractionDigits, rounding)} LP`
+}
+
+export function formatCompleteSetQuantity(amountAttoShares: bigint, maximumFractionDigits = 4, rounding: ShareValueRounding = 'nearest') {
+	const formatted = formatShareQuantity(amountAttoShares, maximumFractionDigits, rounding)
 	return `${formatted} complete ${formatted === '1' ? 'set' : 'sets'}`
 }
 

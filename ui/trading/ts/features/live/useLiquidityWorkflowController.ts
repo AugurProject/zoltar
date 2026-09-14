@@ -4,7 +4,7 @@ import { createExclusiveWorkflowGuard, createLatestRequestGuard } from '@zoltar/
 import { waitForSubmittedTransactionReceipt } from '@zoltar/ui-core-shared/transactions/transactionReceipt.js'
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'preact/hooks'
 import { parseUnitsOrUndefined } from '../../lib/format.js'
-import { collateralAttoEthToAttoShares } from '../../lib/shareValue.js'
+import { SHARE_QUANTITY_DECIMALS } from '../../lib/shareValue.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import { marketAcceptsNewRisk, type LiquidityOperation, type LiveMarket } from '../../protocol/live.js'
 import type { LiveLiquidityServices } from '../LiveLiquidityControls.js'
@@ -63,16 +63,9 @@ export function useLiquidityWorkflowController({
 	const workflow = useRef(createExclusiveWorkflowGuard()).current
 	const mounted = useRef(true)
 	const inputRevision = useRef(0)
-	// ETH entries fund the pair directly; LP removals are entered on the collateral-value scale shared with share amounts.
-	const requestedAmount = useCallback(
-		(rate: LiveMarket) => {
-			const value = parseUnitsOrUndefined(amount)
-			if (value === undefined || operation !== 'remove') return value
-			return collateralAttoEthToAttoShares(value, rate)
-		},
-		[amount, operation],
-	)
-	const parsed = useMemo(() => requestedAmount(market), [market, requestedAmount])
+	// ETH deposits and fixed-scale LP quantities use different decimal precisions.
+	const requestedAmount = useCallback(() => parseUnitsOrUndefined(amount, operation === 'remove' ? SHARE_QUANTITY_DECIMALS : 18), [amount, operation])
+	const parsed = useMemo(() => requestedAmount(), [requestedAmount])
 	const slippageBps = useMemo(() => parseSlippageBps(slippage), [slippage])
 	const validityMinutes = useMemo(() => parseTransactionValidityMinutes(transactionValidityMinutes), [transactionValidityMinutes])
 	const conditionalBps = useMemo(() => {
@@ -172,8 +165,8 @@ export function useLiquidityWorkflowController({
 				quote.market.pool !== market.pool ||
 				quote.requestRevision !== inputRevision.current ||
 				quote.operation !== operation ||
-				// Convert with the quoted market so a background rate refresh cannot masquerade as an input change.
-				quote.amount !== requestedAmount(quote.market) ||
+				// LP inputs use fixed quantities, so backing changes cannot masquerade as input changes.
+				quote.amount !== requestedAmount() ||
 				(operation === 'initialize' && quote.conditionalYesBps !== conditionalBps)
 			)
 				throw new Error('Liquidity inputs changed; simulate the current selection again')

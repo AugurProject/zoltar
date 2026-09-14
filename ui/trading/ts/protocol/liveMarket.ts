@@ -19,6 +19,7 @@ export type LiveMarket = Readonly<{
 	vaultCount: bigint
 	shareTokenSupplyAttoShares: bigint
 	settlementCollateralAttoEth: bigint
+	valuation?: Readonly<{ timestamp: bigint; feeEndTime: bigint; projectedCollateralAttoEth: bigint }>
 	currentRetentionRate: bigint
 	totalCapacityOwnershipAttoRep: bigint
 	feeEligibleCapacityOwnershipAttoRep: bigint

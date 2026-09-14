@@ -1,3 +1,4 @@
+import { estimateMintCheckpoint } from '@zoltar/ui-statoblast-shared/features/markets/lib/trading.js'
 import { getAddress, zeroAddress, type Address, type Hash, type PublicClient, type WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { tradingContracts } from '../generated/contractArtifact.js'
 import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_SecurityPool_SecurityPool } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
@@ -26,29 +27,37 @@ const questionDataAbi = ZoltarQuestionData_ZoltarQuestionData.abi
 const pair = tradingContracts['contracts/trading/TwoWayConstantProductPair.sol'].TwoWayConstantProductPair
 const router = tradingContracts['contracts/trading/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter
 async function loadLiveSecurityPoolSettings(client: PublicClient, pool: Address) {
-	const [questionData, zoltar, parent, shareTokenSupplyAttoShares, mintingCapacityCeilingAttoEth, accounting, systemState, awaitingForkContinuation, vaultCount, forker] = await Promise.all([
-		client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'questionData' }),
-		client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'zoltar' }),
-		client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'parent' }),
-		client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'shareTokenSupplyAttoShares' }),
-		client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'getCurrentMintingCapacityAttoEth' }),
-		client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'getPoolAccountingSnapshot' }),
-		client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'systemState' }),
-		client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'awaitingForkContinuation' }),
-		client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'getVaultCount' }),
-		client.readContract({ abi: securityPoolAbi, address: pool, functionName: 'securityPoolForker' }),
+	const block = await client.getBlock()
+	const blockNumber = block.number
+	const [questionData, zoltar, parent, shareTokenSupplyAttoShares, mintingCapacityCeilingAttoEth, accounting, feeEndTime, systemState, awaitingForkContinuation, vaultCount, forker] = await Promise.all([
+		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'questionData' }),
+		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'zoltar' }),
+		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'parent' }),
+		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'shareTokenSupplyAttoShares' }),
+		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'getCurrentMintingCapacityAttoEth' }),
+		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'getPoolAccountingSnapshot' }),
+		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'getFeeEpochEndTime' }),
+		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'systemState' }),
+		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'awaitingForkContinuation' }),
+		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'getVaultCount' }),
+		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'securityPoolForker' }),
 	])
+	const checkpoint = (timestamp: bigint) => estimateMintCheckpoint({ ...accounting, currentTimestamp: timestamp, feeEndTimestamp: feeEndTime })
+	const current = checkpoint(block.timestamp)
+	const projected = checkpoint(block.timestamp + 30n * 24n * 60n * 60n)
+	if (current === undefined || projected === undefined) throw new Error('Pool fee accounting unavailable')
 	return {
 		questionData,
 		zoltar,
 		parent,
 		shareTokenSupplyAttoShares,
-		settlementCollateralAttoEth: accounting.settlementCollateralAttoEth,
+		settlementCollateralAttoEth: current.settlementCollateralAfterFeesAttoEth,
+		valuation: { timestamp: block.timestamp, feeEndTime, projectedCollateralAttoEth: projected.settlementCollateralAfterFeesAttoEth },
 		currentRetentionRate: accounting.currentRetentionRate,
 		totalCapacityOwnershipAttoRep: accounting.totalCapacityOwnershipAttoRep,
 		feeEligibleCapacityOwnershipAttoRep: accounting.feeEligibleCapacityOwnershipAttoRep,
 		mintingCapacityCeilingAttoEth,
-		availableMintingCapacityAttoEth: mintingCapacityCeilingAttoEth > accounting.settlementCollateralAttoEth ? mintingCapacityCeilingAttoEth - accounting.settlementCollateralAttoEth : 0n,
+		availableMintingCapacityAttoEth: mintingCapacityCeilingAttoEth > current.settlementCollateralAfterFeesAttoEth ? mintingCapacityCeilingAttoEth - current.settlementCollateralAfterFeesAttoEth : 0n,
 		systemState,
 		awaitingForkContinuation,
 		vaultCount,
@@ -217,6 +226,7 @@ export async function loadLiveMarket(client: PublicClient, configuration: Deploy
 		vaultCount,
 		shareTokenSupplyAttoShares,
 		settlementCollateralAttoEth,
+		valuation: poolSettings.valuation,
 		currentRetentionRate,
 		totalCapacityOwnershipAttoRep,
 		feeEligibleCapacityOwnershipAttoRep,

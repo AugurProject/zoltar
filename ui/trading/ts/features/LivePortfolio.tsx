@@ -1,4 +1,7 @@
-import { formatCollateralEth, formatCompleteSetValue, formatLpValue, formatOutcomeValue } from '../lib/shareValue.js'
+import { OutcomeHolding } from './OutcomeHolding.js'
+import { settlementAvailability } from '../protocol/settlement.js'
+import * as payoutCopy from '../copy/payout.js'
+import { formatCollateralEth, formatCompleteSetQuantity, formatLpQuantity, formatOutcomeQuantity } from '../lib/shareValue.js'
 import { Status } from '../components/Status.js'
 import { SecurityPoolAddressLink } from '../components/TradingAddress.js'
 import type { LiveBalances, LiveMarket } from '../protocol/live.js'
@@ -8,6 +11,7 @@ import { BalanceLoadError } from './LiveTradingTransactionUi.js'
 import * as portfolioCopy from '../copy/portfolio.js'
 
 function LivePortfolioBalanceMetrics({ market, balances }: { market: LiveMarket; balances: LiveBalances }) {
+	const availability = settlementAvailability(market, balances)
 	const yesClaim = market.lpTotalSupply === 0n ? 0n : (market.yesReserve * balances.lp) / market.lpTotalSupply
 	const noClaim = market.lpTotalSupply === 0n ? 0n : (market.noReserve * balances.lp) / market.lpTotalSupply
 	let coveredSets = balances.invalid
@@ -20,31 +24,37 @@ function LivePortfolioBalanceMetrics({ market, balances }: { market: LiveMarket;
 			<dl class='metrics'>
 				<div>
 					<dt>{portfolioCopy.yes}</dt>
-					<dd>{formatOutcomeValue(balances.yes, portfolioCopy.yes, market)}</dd>
+					<dd>
+						<OutcomeHolding amount={balances.yes} outcome={portfolioCopy.yes} market={market} />
+					</dd>
 				</div>
 				<div>
 					<dt>{portfolioCopy.no}</dt>
-					<dd>{formatOutcomeValue(balances.no, portfolioCopy.no, market)}</dd>
+					<dd>
+						<OutcomeHolding amount={balances.no} outcome={portfolioCopy.no} market={market} />
+					</dd>
 				</div>
 				<div>
 					<dt>{portfolioCopy.invalid}</dt>
-					<dd>{formatOutcomeValue(balances.invalid, portfolioCopy.invalid, market)}</dd>
+					<dd>
+						<OutcomeHolding amount={balances.invalid} outcome={portfolioCopy.invalid} market={market} />
+					</dd>
 				</div>
 				<div>
 					<dt>{portfolioCopy.lpTokens}</dt>
-					<dd>{formatLpValue(balances.lp, market, 4, 'down')}</dd>
+					<dd>{formatLpQuantity(balances.lp, 4, 'down')}</dd>
 				</div>
 				<div>
 					<dt>{portfolioCopy.lpYesClaim}</dt>
-					<dd>{formatOutcomeValue(yesClaim, portfolioCopy.yes, market)}</dd>
+					<dd>{formatOutcomeQuantity(yesClaim, portfolioCopy.yes)}</dd>
 				</div>
 				<div>
 					<dt>{portfolioCopy.lpNoClaim}</dt>
-					<dd>{formatOutcomeValue(noClaim, portfolioCopy.no, market)}</dd>
+					<dd>{formatOutcomeQuantity(noClaim, portfolioCopy.no)}</dd>
 				</div>
 				<div>
 					<dt>{portfolioCopy.claimCoveredByInvalid}</dt>
-					<dd>{formatCompleteSetValue(coveredSets, market)}</dd>
+					<dd>{formatCompleteSetQuantity(coveredSets)}</dd>
 				</div>
 				<div>
 					<dt>{portfolioCopy.maximumInsuredYesExit}</dt>
@@ -54,7 +64,21 @@ function LivePortfolioBalanceMetrics({ market, balances }: { market: LiveMarket;
 					<dt>{portfolioCopy.maximumInsuredNoExit}</dt>
 					<dd>{formatCollateralEth(maximumNoExit, market, 'down')}</dd>
 				</div>
+				{availability.completeSets === 0n ? null : (
+					<div>
+						<dt>{availability.canRedeemCompleteSets ? payoutCopy.redemptionValue : payoutCopy.backingValue}</dt>
+						<dd>
+							{market.loadError === undefined ? formatCollateralEth(availability.completeSets, market) : payoutCopy.unavailable}
+							<small class='payout-caption'>{formatCompleteSetQuantity(availability.completeSets)}</small>
+						</dd>
+					</div>
+				)}
 			</dl>
+			{market.questionOutcome === 3 && market.loadError === undefined ? (
+				<p class='field-note'>
+					{payoutCopy.conditionalNote} {payoutCopy.holdingFeeNote}
+				</p>
+			) : null}
 		</>
 	)
 }

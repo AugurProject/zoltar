@@ -1,3 +1,6 @@
+import { OutcomeHolding } from '../../features/OutcomeHolding.js'
+import { BackingDetails } from '../../features/BackingDetails.js'
+import { renderLiveTradeSummary } from '../../features/LiveTradingTransactionUi.js'
 import { describe, expect, test } from 'bun:test'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
@@ -26,7 +29,7 @@ const market: LiveMarket = {
 	awaitingForkContinuation: false,
 	universeForkTime: 0n,
 	vaultCount: 1n,
-	shareTokenSupplyAttoShares: 100n * 10n ** 18n,
+	shareTokenSupplyAttoShares: 100n * 10n ** 36n,
 	settlementCollateralAttoEth: 100n * 10n ** 18n,
 	currentRetentionRate: 10n ** 18n,
 	totalCapacityOwnershipAttoRep: 1n,
@@ -68,8 +71,8 @@ describe('live portfolio scope', () => {
 
 	test('renders separate balance groups for each exact SecurityPool', async () => {
 		const secondMarket = { ...market, pool: secondPool, shareToken: secondShareToken, universeId: 8n, questionId: 10n, title: 'Second scoped portfolio' }
-		const firstBalances = { scope: { pool, shareToken, invalidTokenId: 1_792n, yesTokenId: 1_793n, noTokenId: 1_794n }, invalid: 3n * 10n ** 18n, yes: 1n * 10n ** 18n, no: 2n * 10n ** 18n, lp: 0n }
-		const secondBalances = { scope: { pool: secondPool, shareToken: secondShareToken, invalidTokenId: 2_048n, yesTokenId: 2_049n, noTokenId: 2_050n }, invalid: 6n * 10n ** 18n, yes: 4n * 10n ** 18n, no: 5n * 10n ** 18n, lp: 0n }
+		const firstBalances = { scope: { pool, shareToken, invalidTokenId: 1_792n, yesTokenId: 1_793n, noTokenId: 1_794n }, invalid: 3n * 10n ** 36n, yes: 1n * 10n ** 36n, no: 2n * 10n ** 36n, lp: 0n }
+		const secondBalances = { scope: { pool: secondPool, shareToken: secondShareToken, invalidTokenId: 2_048n, yesTokenId: 2_049n, noTokenId: 2_050n }, invalid: 6n * 10n ** 36n, yes: 4n * 10n ** 36n, no: 5n * 10n ** 36n, lp: 0n }
 		const rendered = await renderIntoDocument(
 			<LivePortfolio
 				entries={[
@@ -96,6 +99,48 @@ describe('live portfolio scope', () => {
 		expect(rendered.container.textContent).not.toContain('These balances and LP claims belong only')
 		expect(rendered.container.textContent).not.toContain('live RPC')
 		expect(rendered.container.textContent).not.toContain('Balances are grouped by SecurityPool')
+	})
+
+	test('separates stable outcome quantities, conditional payouts, and finalized redemption', async () => {
+		const valuedMarket = { ...market, shareTokenSupplyAttoShares: 10n ** 36n, settlementCollateralAttoEth: 984_200_000_000_000_000n }
+		for (const [questionOutcome, systemState, expected] of [
+			[3, 0, '0.9842 ETH if YES wins'],
+			[1, 0, '0.9842 ETH redeemable'],
+			[2, 0, '0 ETH · lost'],
+			[1, 1, 'winning payout; redemption unavailable'],
+		] as const) {
+			const rendered = await renderIntoDocument(<OutcomeHolding amount={10n ** 36n} outcome='YES' market={{ ...valuedMarket, questionOutcome, systemState }} />)
+			expect(rendered.container.textContent).toContain('1 YES')
+			expect(rendered.container.textContent).toContain(expected)
+			await rendered.cleanup()
+		}
+		const unavailable = await renderIntoDocument(<OutcomeHolding amount={10n ** 36n} outcome='YES' market={{ ...valuedMarket, loadError: 'RPC failed' }} />)
+		expect(unavailable.container.textContent).toContain('Payout unavailable')
+		expect(unavailable.container.textContent).not.toContain('0.9842 ETH')
+		await unavailable.cleanup()
+		const zero = await renderIntoDocument(<OutcomeHolding amount={0n} outcome='YES' market={valuedMarket} />)
+		expect(zero.container.textContent).toBe('0 YES')
+		await zero.cleanup()
+	})
+
+	test('explains conditional entry payout once without calling it a sale or guaranteed return', async () => {
+		const rendered = await renderIntoDocument(
+			renderLiveTradeSummary({ kind: 'entry', value: { amount: 600_000_000_000_000_000n, market: { ...market, shareTokenSupplyAttoShares: 10n ** 36n, settlementCollateralAttoEth: 984_200_000_000_000_000n }, result: { totalLongShares: 10n ** 36n, invalidInsurance: 6n * 10n ** 35n } } }, 'YES'),
+		)
+		cleanupRendered = rendered.cleanup
+		expect(rendered.container.textContent).toContain('1 YES')
+		expect(rendered.container.textContent).toContain('0.9842 ETH if YES wins')
+		expect(rendered.container.textContent).toContain('0 ETH otherwise')
+		expect(rendered.container.textContent).toContain('Holding fees reduce ETH payouts')
+	})
+
+	test('discloses dated backing and a fee estimate clamped to the fee end', async () => {
+		const rendered = await renderIntoDocument(<BackingDetails market={{ ...market, shareTokenSupplyAttoShares: 10n ** 36n, settlementCollateralAttoEth: 10n ** 18n, valuation: { timestamp: 1n, feeEndTime: 2n, projectedCollateralAttoEth: 9n * 10n ** 17n } }} />)
+		cleanupRendered = rendered.cleanup
+		expect(rendered.container.querySelector('details')?.open).toBe(false)
+		expect(rendered.container.textContent).toContain('Holding fee over next 30 days10%')
+		expect(rendered.container.textContent).toContain('stopping at the fee end date')
+		expect(rendered.container.textContent).toContain('Backing as of')
 	})
 
 	test('keeps live pool identifiers and operational details in the security pool view', async () => {

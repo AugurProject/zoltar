@@ -29,19 +29,26 @@ describe('essential trading copy', () => {
 		for (const phrase of forbiddenCopy) expect(rendered.container.textContent?.toLowerCase()).not.toContain(phrase.toLowerCase())
 	})
 
-	test('shows the deployed fee in live entry and exit summaries', async () => {
-		const market = { feeBps: 125n, settlementCollateralAttoEth: 10n ** 18n, shareTokenSupplyAttoShares: 10n ** 18n }
-		const entry = await renderIntoDocument(renderLiveTradeSummary({ kind: 'entry', value: { amount: 10n ** 18n, market, result: { totalLongShares: 2n * 10n ** 18n, invalidInsurance: 3n * 10n ** 17n } } }, 'YES'))
+	test('shows the deployed fee and stable quantities separately from conditional payouts', async () => {
+		const market = { feeBps: 125n, settlementCollateralAttoEth: 984_200_000_000_000_000n, shareTokenSupplyAttoShares: 10n ** 36n }
+		const entry = await renderIntoDocument(renderLiveTradeSummary({ kind: 'entry', value: { amount: 10n ** 18n, market, result: { totalLongShares: 2n * 10n ** 36n, invalidInsurance: 3n * 10n ** 35n } } }, 'YES'))
 		expect(entry.container.textContent).toContain('Trading fee')
 		expect(entry.container.textContent).toContain('1.25%')
 		expect(entry.container.textContent).toContain('INVALID received')
 		expect(entry.container.textContent).toContain('2 YES')
+		expect(entry.container.textContent).toContain('0.3 INVALID')
+		expect(entry.container.textContent).toContain('1.9684 ETH if YES wins')
+		expect(entry.container.textContent).toContain('0 ETH otherwise')
 		await entry.cleanup()
-		const exit = await renderIntoDocument(renderLiveTradeSummary({ kind: 'exit', value: { market, result: { totalLongShares: 2n * 10n ** 18n, invalidInsurance: 3n * 10n ** 17n, ethOut: 8n * 10n ** 17n } } }, 'YES'))
+		const exit = await renderIntoDocument(renderLiveTradeSummary({ kind: 'exit', value: { market, result: { totalLongShares: 2n * 10n ** 36n, invalidInsurance: 3n * 10n ** 35n, ethOut: 8n * 10n ** 17n } } }, 'YES'))
 		cleanupRendered = exit.cleanup
 		expect(exit.container.textContent).toContain('Trading fee')
 		expect(exit.container.textContent).toContain('1.25%')
 		expect(exit.container.textContent).toContain('INVALID required')
+		expect(exit.container.textContent).toContain('2 YES')
+		expect(exit.container.textContent).toContain('0.3 INVALID')
+		expect(exit.container.textContent).toContain('0.8 ETH')
+		expect(exit.container.textContent).not.toContain('if YES wins')
 	})
 
 	test('shows configurable execution-protection controls', async () => {
