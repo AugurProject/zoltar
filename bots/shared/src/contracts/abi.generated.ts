@@ -2223,17 +2223,6 @@ export const escalationGameAbi = [
 	{ type: 'event', name: 'ForkContinuationResumed', anonymous: false, inputs: [{ name: 'resumedAt', type: 'uint256', internalType: 'uint256', indexed: false }] },
 	{
 		type: 'event',
-		name: 'ForkedEscrowClaimed',
-		anonymous: false,
-		inputs: [
-			{ name: 'depositor', type: 'address', internalType: 'address', indexed: true },
-			{ name: 'outcome', type: 'uint8', internalType: 'enum BinaryOutcomes.BinaryOutcome', indexed: true },
-			{ name: 'sourcePrincipalClaimedAttoRep', type: 'uint256', internalType: 'uint256', indexed: false },
-			{ name: 'childRepClaimedAttoRep', type: 'uint256', internalType: 'uint256', indexed: false },
-		],
-	},
-	{
-		type: 'event',
 		name: 'ForkedEscrowExported',
 		anonymous: false,
 		inputs: [

@@ -1,11 +1,13 @@
 import path from 'node:path'
 
 const projectRoot = path.resolve(import.meta.dir, '..')
+const demo = process.argv.includes('--demo')
+const entrypointSource = demo ? '../tests/browser/demo-app.ts' : 'live-app.ts'
 const result = await Bun.build({
-	entrypoints: [path.join(projectRoot, 'browser/app.ts')],
+	entrypoints: [path.join(projectRoot, 'browser', entrypointSource)],
 	format: 'esm',
 	naming: 'app.js',
-	outdir: path.join(projectRoot, 'public'),
+	outdir: path.join(projectRoot, demo ? 'qa/build' : 'public'),
 	target: 'browser',
 	banner: '// Generated from augurScan/browser/app.ts by bun run build. Do not edit.\n',
 })

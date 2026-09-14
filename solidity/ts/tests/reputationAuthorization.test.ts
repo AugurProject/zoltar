@@ -28,7 +28,7 @@ describe('REP token authorizations', () => {
 
 	beforeEach(async () => {
 		ethereum = getAnvilWindowEthereum()
-		relayer = createWriteClient(ethereum, TEST_ADDRESSES[0], 0)
+		relayer = createWriteClient(ethereum, TEST_ADDRESSES[0])
 		await setupTestAccounts(ethereum)
 		const accounts = await ethereum.request({ method: 'eth_accounts' })
 		if (!Array.isArray(accounts) || typeof accounts[0] !== 'string') throw new Error('Anvil signer missing')
@@ -41,7 +41,7 @@ describe('REP token authorizations', () => {
 			args: [relayer.account.address],
 		})
 		const receipt = await relayer.waitForTransactionReceipt({ hash: await relayer.sendTransaction({ data: deployment }) })
-		if (receipt.contractAddress === undefined || receipt.contractAddress === null) throw new Error('Child REP deployment failed')
+		if (receipt.contractAddress === undefined) throw new Error('Child REP deployment failed')
 		token = receipt.contractAddress
 		await writeContractAndWait(relayer, () => relayer.writeContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'initialize', args: [1n, 1_000n, 1n] }))
 		await writeContractAndWait(relayer, () => relayer.writeContract({ abi: ReputationToken_ReputationToken.abi, address: token, functionName: 'mint', args: [owner, 1_000n] }))
@@ -127,7 +127,7 @@ describe('REP token authorizations', () => {
 	})
 
 	test('ERC-3009 receive authorization binds recipient, validity, and nonce', async () => {
-		const recipient = createWriteClient(ethereum, TEST_ADDRESSES[1], 0)
+		const recipient = createWriteClient(ethereum, TEST_ADDRESSES[1])
 		const nonce = `0x${'12'.repeat(32)}` as Hex
 		const validBefore = 9_000_000_000n
 		const signature = await signTypedData({
@@ -154,7 +154,7 @@ describe('REP token authorizations', () => {
 	})
 
 	test('ERC-3009 transfer authorization supports relayers and rejects altered signed fields', async () => {
-		const recipient = createWriteClient(ethereum, TEST_ADDRESSES[2], 0)
+		const recipient = createWriteClient(ethereum, TEST_ADDRESSES[2])
 		const validBefore = 9_000_000_000n
 		const signTransfer = async ({ chainId = 1, from = owner, nonce, signer = owner, to = recipient.account.address, value = 7n, verifyingContract = token }: { chainId?: number; from?: Address; nonce: Hex; signer?: Address; to?: Address; value?: bigint; verifyingContract?: Address }) =>
 			await signTypedData(

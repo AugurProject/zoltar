@@ -11,7 +11,7 @@ abstract contract SecurityPoolSettlementDelegate is SecurityPoolStorage {
 	function createCompleteSet() external payable returns (uint256 completeSetsToMintAttoShares) {
 		ISecurityPool pool = ISecurityPool(payable(address(this)));
 		require(!awaitingForkContinuation, 'Fork await');
-		if (msg.value == 0 || pool.isEscalationResolved()) revert();
+		if (msg.value == 0 || pool.isEscalationResolved()) revert('Settlement unavailable');
 		require(pool.priceOracleManagerAndOperatorQueuer().isPriceValid(), 'Stale price');
 		pool.updateSettlementCollateral();
 		completeSetsToMintAttoShares = pool.attoEthToAttoShares(msg.value);

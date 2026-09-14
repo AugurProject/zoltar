@@ -44,7 +44,7 @@ describe('Truth-auction REP donation rounding regression', () => {
 	})
 
 	test('full vault migration reconciles donated REP and skips the truth auction', async () => {
-		const vaultClients = [client, createWriteClient(mockWindow, TEST_ADDRESSES[1], 0), createWriteClient(mockWindow, TEST_ADDRESSES[2], 0), createWriteClient(mockWindow, TEST_ADDRESSES[3], 0), createWriteClient(mockWindow, TEST_ADDRESSES[4], 0), createWriteClient(mockWindow, TEST_ADDRESSES[5], 0)]
+		const vaultClients = [client, createWriteClient(mockWindow, TEST_ADDRESSES[1]), createWriteClient(mockWindow, TEST_ADDRESSES[2]), createWriteClient(mockWindow, TEST_ADDRESSES[3]), createWriteClient(mockWindow, TEST_ADDRESSES[4]), createWriteClient(mockWindow, TEST_ADDRESSES[5])]
 		for (const vaultClient of vaultClients.slice(1)) {
 			await approveAndDepositRepToVault(vaultClient, repDeposit, questionId)
 		}
@@ -56,7 +56,7 @@ describe('Truth-auction REP donation rounding regression', () => {
 
 		const totalVaultRep = repDeposit * BigInt(vaultClients.length)
 		const totalCapacityOwnershipAttoRep = capacityOwnershipAttoRepPerVault * BigInt(vaultClients.length)
-		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
+		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[6])
 		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, totalCapacityOwnershipAttoRep / 10n)
 
 		strictEqualTypeSafe(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool), totalVaultRep, 'test setup should start with exactly six equal vault deposits')

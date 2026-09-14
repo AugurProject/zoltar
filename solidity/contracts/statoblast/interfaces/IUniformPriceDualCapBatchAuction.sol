@@ -27,12 +27,6 @@ interface IUniformPriceDualCapBatchAuctionEvents {
 }
 
 interface IUniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEvents {
-	struct Bid {
-		address bidder;
-		uint256 bidAmountAttoEth;
-		uint256 cumulativeBidAttoEth;
-	}
-
 	struct TickSummary {
 		int256 tick;
 		uint256 price;
@@ -59,18 +53,18 @@ interface IUniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEv
 
 	function owner() external view returns (address);
 
-	function maxAttoRepBeingSold() external view returns (uint256);
-	function attoEthRaiseCap() external view returns (uint256);
+	function maxAttoRepBeingSold() external view returns (uint88);
+	function attoEthRaiseCap() external view returns (uint128);
 	function pendingEthRefundsAttoEth(address bidder) external view returns (uint256);
 
 	function finalized() external view returns (bool);
-	function clearingTick() external view returns (int256);
-	function ethFilledAtClearingAttoEth() external view returns (uint256);
+	function clearingTick() external view returns (int24);
+	function ethFilledAtClearingAttoEth() external view returns (uint128);
 	function attoEthRaised() external view returns (uint256);
-	function totalAttoRepPurchased() external view returns (uint256);
+	function totalAttoRepPurchased() external view returns (uint88);
 
-	function auctionStarted() external view returns (uint256);
-	function minBidSizeAttoEth() external view returns (uint256);
+	function auctionStarted() external view returns (uint48);
+	function minBidSizeAttoEth() external view returns (uint128);
 
 	function startAuction(uint256 attoEthRaiseCap, uint256 maxAttoRepBeingSold) external;
 

@@ -37,8 +37,10 @@ test('component CI does not duplicate tests covered by the check task', () => {
 
 test('registered AugurScan CI runs its complete non-database suite while bots avoid duplicate tests', () => {
 	const augurScanPlan = createComponentCiPlan('augur-scan')
-	expect(augurScanPlan[0]?.command).toEqual(['bun', 'run', 'test:ci'])
+	expect(augurScanPlan[0]?.command).toEqual(['bun', 'run', 'typecheck'])
 	expect(augurScanPlan.map(entry => entry.command.slice(0, 3))).toEqual([
+		['bun', 'run', 'typecheck'],
+		['bun', 'run', 'build'],
 		['bun', 'run', 'test:ci'],
 		['bun', 'run', 'check'],
 		['bun', 'audit'],

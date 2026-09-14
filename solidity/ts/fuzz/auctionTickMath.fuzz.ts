@@ -57,7 +57,7 @@ describe('Auction tick math fuzz', () => {
 	beforeAll(async () => {
 		mockWindow = getAnvilWindowEthereum()
 		await setupTestAccounts(mockWindow)
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
 		await ensureZoltarDeployed(client)
 		await ensureInfraDeployed(client)
 		await deployUniformPriceDualCapBatchAuction(client, client.account.address)

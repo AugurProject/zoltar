@@ -75,7 +75,7 @@ describe('Question Data', () => {
 
 	beforeAll(async () => {
 		mockWindow = getAnvilWindowEthereum()
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
 		await setupTestAccounts(mockWindow)
 		await ensureZoltarDeployed(client)
 		await ensureInfraDeployed(client)
@@ -84,7 +84,7 @@ describe('Question Data', () => {
 
 	beforeEach(() => {
 		mockWindow = getAnvilWindowEthereum()
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
 	})
 
 	const createScalarParityQuestion = async (question: ScalarParityQuestion) => {

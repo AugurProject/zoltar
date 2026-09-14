@@ -9,9 +9,7 @@ runs:
   using: composite
   steps:
     - name: Setup Bun
-      uses: oven-sh/setup-bun@v2
-      with:
-        bun-version: ${{ env.BUN_VERSION }}
+      uses: ./.github/actions/setup-bun
 
     - name: Read canonical project metadata
       id: projects

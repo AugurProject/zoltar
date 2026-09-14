@@ -1,16 +1,11 @@
 import { expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
-import path from 'node:path'
-import { projects, type Project } from './projects.ts'
-import { repositoryRoot } from './root.mts'
 import { createProjectTaskPlan } from './run-project-tasks.mts'
+import { type Project } from './projects.ts'
 
 const registry: readonly Project[] = [
 	{ id: 'app', path: 'app', type: 'ui-app', dependencies: ['domain'], tasks: { build: { command: ['bun', 'run', 'build'], cwd: 'app', inputs: ['app/**'] } }, generatedDirectories: [] },
 	{ id: 'domain', path: 'domain', type: 'ui-library', dependencies: [], tasks: { build: { command: ['bun', 'run', 'build'], cwd: 'domain', inputs: ['domain/**'] } }, generatedDirectories: [] },
 ]
-
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
 
 test('project task plans preserve dependency order and explicit working directories', () => {
 	expect(createProjectTaskPlan('build', ['app', 'domain'], registry)).toEqual([
@@ -41,21 +36,10 @@ test('full setup bootstraps the repository before dependency-ordered package set
 	expect(createProjectTaskPlan('setup', ['repository', 'app', 'domain'], setupRegistry).map(entry => entry.projectId)).toEqual(['domain', 'app', 'repository'])
 })
 
-test('the real full setup plan installs the root runtime before every Preact-consuming UI package', () => {
-	const preactConsumers = projects.filter(project => {
-		if (!project.path.startsWith('ui/') || project.tasks.setup === undefined) return false
-		const manifest: unknown = JSON.parse(readFileSync(path.join(repositoryRoot, project.path, 'package.json'), 'utf8'))
-		if (!isRecord(manifest)) throw new Error(`${project.path}/package.json must contain an object`)
-		return ['dependencies', 'devDependencies', 'optionalDependencies'].some(field => {
-			const dependencies = manifest[field]
-			return isRecord(dependencies) && ('preact' in dependencies || '@preact/signals' in dependencies)
-		})
-	})
-	const planIds = createProjectTaskPlan('setup').map(entry => entry.projectId)
-	const repositoryIndex = planIds.indexOf('repository')
-
-	expect(preactConsumers.map(project => project.id)).toContain('ui-core')
-	for (const project of preactConsumers) expect(repositoryIndex).toBeLessThan(planIds.indexOf(project.id))
+test('workspace setup installs once even when several projects are selected', () => {
+	expect(createProjectTaskPlan('setup')).toHaveLength(1)
+	expect(createProjectTaskPlan('setup', ['ui-core', 'ui-trading', 'repository'])).toHaveLength(1)
+	expect(createProjectTaskPlan('setup')[0]?.command).toEqual(['bun', './tooling/repo/install-frozen.mts'])
 })
 
 test('project task plans reject unknown projects and unsupported tasks', () => {

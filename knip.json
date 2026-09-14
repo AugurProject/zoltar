@@ -16,7 +16,25 @@
 				"tooling/repo/lint-no-{bare-catch,signal-wrapper-comparisons}.mts!"
 			],
 			"project": ["docs/runtime/**/*.ts!", "docs/charts/**/*.ts!", "tooling/**/*.{ts,mts}", "bun-test-setup*.ts"],
-			"ignoreDependencies": ["@preact/signals", "@tevm/memory-client", "@tevm/common", "@zoltar/core-shared", "@zoltar/open-oracle-shared", "@zoltar/statoblast-shared", "@zoltar/trading-shared"],
+			"ignoreDependencies": [
+				"@preact/signals",
+				"@tevm/memory-client",
+				"@tevm/common",
+				"@zoltar/core-shared",
+				"@zoltar/open-oracle-shared",
+				"@zoltar/statoblast-shared",
+				"@zoltar/trading-shared",
+				"@preact/signals-core",
+				"abitype",
+				"@noble/hashes",
+				"@noble/curves",
+				"@scure/base",
+				"isows",
+				"micro-eth-signer",
+				"micro-packed",
+				"ox",
+				"pino"
+			],
 			"paths": {
 				"@zoltar/core-shared/*": ["shared/core/ts/*"],
 				"@zoltar/zoltar-shared/*": ["shared/zoltar/ts/*"],
@@ -130,7 +148,7 @@
 			}
 		},
 		"augurScan": {
-			"entry": ["src/indexer-process.ts!", "browser/app.ts!", "tests/**/*.ts", "scripts/{build-browser,check-import-boundaries,check-project-metadata,dev,serve-demo,snapshot-project-metadata,verify-compose-source,verify-export-page}.ts!"],
+			"entry": ["src/indexer-process.ts!", "browser/app.ts!", "tests/**/*.ts", "scripts/{build-browser,check-import-boundaries,check-project-metadata,dev,serve-demo,snapshot-project-metadata,verify-compose-source,verify-export-page}.ts!", "browser/live-app.ts!"],
 			"project": ["{src,browser,scripts}/**/*.ts!", "tests/**/*.ts"],
 			"ignoreDependencies": ["@noble/hashes", "micro-eth-signer"],
 			"paths": {

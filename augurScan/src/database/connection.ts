@@ -1,34 +1,26 @@
 import { type ReservedSQL, SQL } from 'bun'
-import { destroyReservedConnection, type IndexerLease, type PersistedIndexerOwnershipState, releaseReservedConnection, runSerializedIndexerLeaseOperation, scannerDatabaseOptions } from './history.ts'
+import { destroyReservedConnection, type IndexerLease, type PersistedIndexerOwnershipState, releaseReservedConnection, runSerializedIndexerLeaseOperation } from './history.ts'
 import { assertIndexerLeaseObservation, assertIndexerLeaseReleaseObservation, IndexerLeaseReleaseError, type IntegrityIssue, type LiveEvent, lockLiveEventWriter } from './records.ts'
-
+import type { ScannerDatabase } from './block-persistence.ts'
 const LEASE_HOLDER_TERMINATION_TIMEOUT_MILLISECONDS = 5_000
+export async function close(this: ScannerDatabase, timeoutSeconds = 5): Promise<void> {
+	await this.sql.close({ timeout: timeoutSeconds })
+}
 
-export class ScannerDatabaseConnection {
-	readonly sql: SQL
+export async function read<T>(this: ScannerDatabase, operation: (sql: SQL) => Promise<T>, timeoutMs = 10_000): Promise<T> {
+	return await this.sql.begin(async transaction => {
+		await transaction.unsafe('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY')
+		await transaction`SELECT set_config('statement_timeout', ${timeoutMs.toString()}, true)`
+		const versions = await transaction`SELECT current_setting('server_version_num')::integer AS version`
+		if (Number(versions[0]?.['version'] ?? 0) >= 170_000) await transaction`SELECT set_config('transaction_timeout', ${timeoutMs.toString()}, true)`
+		return await operation(transaction)
+	})
+}
 
-	constructor(url: string, maxConnections = 10, connectionTimeoutSeconds = 5) {
-		this.sql = new SQL(url, scannerDatabaseOptions(maxConnections, connectionTimeoutSeconds))
-	}
-
-	async close(timeoutSeconds = 5): Promise<void> {
-		await this.sql.close({ timeout: timeoutSeconds })
-	}
-
-	async read<T>(operation: (sql: SQL) => Promise<T>, timeoutMs = 10_000): Promise<T> {
-		return await this.sql.begin(async transaction => {
-			await transaction.unsafe('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY')
-			await transaction`SELECT set_config('statement_timeout', ${timeoutMs.toString()}, true)`
-			const versions = await transaction`SELECT current_setting('server_version_num')::integer AS version`
-			if (Number(versions[0]?.['version'] ?? 0) >= 170_000) await transaction`SELECT set_config('transaction_timeout', ${timeoutMs.toString()}, true)`
-			return await operation(transaction)
-		})
-	}
-
-	async recordIndexerOwnership(chainId: number, networkId: string, state: PersistedIndexerOwnershipState, backendPid: number | undefined, ownerRunId: string | undefined, sql: SQL = this.sql): Promise<void> {
-		if (state === 'owned') {
-			if (backendPid === undefined) throw new Error('Owned indexer state requires its PostgreSQL backend PID')
-			await sql`
+export async function recordIndexerOwnership(this: ScannerDatabase, chainId: number, networkId: string, state: PersistedIndexerOwnershipState, backendPid: number | undefined, ownerRunId: string | undefined, sql: SQL = this.sql): Promise<void> {
+	if (state === 'owned') {
+		if (backendPid === undefined) throw new Error('Owned indexer state requires its PostgreSQL backend PID')
+		await sql`
 				INSERT INTO indexer_ownership (chain_id, network_id, state, backend_pid, owner_run_id, heartbeat_at, updated_at)
 				SELECT ${chainId}, ${networkId}, ${state}, ${backendPid}, ${ownerRunId ?? null}, now(), now()
 				WHERE EXISTS (
@@ -43,10 +35,10 @@ export class ScannerDatabaseConnection {
 						AND objid::bigint = ${chainId} AND objsubid = 2 AND pid = ${backendPid} AND granted
 				)
 			`
-			return
-		}
-		if (state === 'standby' || state === 'released') {
-			await sql`
+		return
+	}
+	if (state === 'standby' || state === 'released') {
+		await sql`
 				INSERT INTO indexer_ownership (chain_id, network_id, state, backend_pid, owner_run_id, heartbeat_at, updated_at)
 				SELECT ${chainId}, ${networkId}, ${state}, ${backendPid ?? null}, ${ownerRunId ?? null}, now(), now()
 				WHERE NOT EXISTS (
@@ -61,9 +53,9 @@ export class ScannerDatabaseConnection {
 						AND objid::bigint = ${chainId} AND objsubid = 2 AND granted
 				)
 			`
-			return
-		}
-		await sql`
+		return
+	}
+	await sql`
 			INSERT INTO indexer_ownership (chain_id, network_id, state, backend_pid, owner_run_id, heartbeat_at, updated_at)
 			SELECT ${chainId}, ${networkId}, ${state}, ${backendPid ?? null}, ${ownerRunId ?? null}, now(), now()
 			WHERE NOT EXISTS (
@@ -79,21 +71,21 @@ export class ScannerDatabaseConnection {
 						AND objid::bigint = ${chainId} AND objsubid = 2 AND pid IS DISTINCT FROM ${backendPid ?? null} AND granted
 				)
 		`
-	}
+}
 
-	async latestEventId(): Promise<number> {
-		return await this.read(async sql => {
-			const rows = await sql`
+export async function latestEventId(this: ScannerDatabase): Promise<number> {
+	return await this.read(async sql => {
+		const rows = await sql`
 				SELECT GREATEST(state.pruned_through_id, COALESCE((SELECT max(id) FROM live_events), 0)) AS id
 				FROM live_event_state state WHERE singleton
 			`
-			return Number(rows[0]?.['id'] ?? 0)
-		}, 3_000)
-	}
+		return Number(rows[0]?.['id'] ?? 0)
+	}, 3_000)
+}
 
-	async eventsAfter(id: number, limit = 250): Promise<readonly LiveEvent[]> {
-		return await this.read(async sql => {
-			const rows = await sql`
+export async function eventsAfter(this: ScannerDatabase, id: number, limit = 250): Promise<readonly LiveEvent[]> {
+	return await this.read(async sql => {
+		const rows = await sql`
 				WITH event_window AS (
 					SELECT state.pruned_through_id,
 						GREATEST(state.pruned_through_id, COALESCE((SELECT max(id) FROM live_events), 0)) AS latest_id
@@ -111,25 +103,25 @@ export class ScannerDatabaseConnection {
 				FROM event_window WHERE ${id} < pruned_through_id OR ${id} > latest_id
 				ORDER BY id
 			`
-			return rows.map((row: Record<string, unknown>) => ({ id: Number(row['id']), event: String(row['event']), payload: row['payload'] }))
-		}, 3_000)
-	}
+		return rows.map((row: Record<string, unknown>) => ({ id: Number(row['id']), event: String(row['event']), payload: row['payload'] }))
+	}, 3_000)
+}
 
-	async pruneLiveEvents(): Promise<void> {
-		await this.sql.begin(async transaction => {
-			await lockLiveEventWriter(transaction)
-			const rows = await transaction`SELECT COALESCE(max(id), 0) AS id FROM live_events WHERE created_at < now() - interval '7 days'`
-			const prunedThroughId = String(rows[0]?.['id'] ?? 0)
-			await transaction`DELETE FROM live_events WHERE id <= ${prunedThroughId}`
-			await transaction`
+export async function pruneLiveEvents(this: ScannerDatabase): Promise<void> {
+	await this.sql.begin(async transaction => {
+		await lockLiveEventWriter(transaction)
+		const rows = await transaction`SELECT COALESCE(max(id), 0) AS id FROM live_events WHERE created_at < now() - interval '7 days'`
+		const prunedThroughId = String(rows[0]?.['id'] ?? 0)
+		await transaction`DELETE FROM live_events WHERE id <= ${prunedThroughId}`
+		await transaction`
 				UPDATE live_event_state SET pruned_through_id = GREATEST(pruned_through_id, ${prunedThroughId}), updated_at = now()
 				WHERE singleton
 			`
-		})
-	}
+	})
+}
 
-	async auditIntegrity(sql: SQL = this.sql): Promise<readonly IntegrityIssue[]> {
-		const rows = await sql`
+export async function auditIntegrity(this: ScannerDatabase, sql: SQL = this.sql): Promise<readonly IntegrityIssue[]> {
+	const rows = await sql`
 			WITH checkpoint_issues AS (
 				SELECT n.chain_id, 'checkpoint_missing'::text AS code,
 					'The indexed checkpoint does not identify a canonical stored block'::text AS detail
@@ -160,64 +152,64 @@ export class ScannerDatabaseConnection {
 			UNION ALL SELECT * FROM continuity_issues
 			ORDER BY chain_id, code LIMIT 100
 		`
-		return rows.map((row: Record<string, unknown>) => ({ chainId: Number(row['chain_id']), code: String(row['code']), detail: String(row['detail']) }))
-	}
+	return rows.map((row: Record<string, unknown>) => ({ chainId: Number(row['chain_id']), code: String(row['code']), detail: String(row['detail']) }))
+}
 
-	async #expectedLeaseReleased(chainId: number, backendPid: number): Promise<boolean> {
-		const held = async (): Promise<boolean> => {
-			const rows = await this.sql`
+export async function expectedLeaseReleased(this: ScannerDatabase, chainId: number, backendPid: number): Promise<boolean> {
+	const held = async (): Promise<boolean> => {
+		const rows = await this.sql`
 				SELECT EXISTS (
 					SELECT 1 FROM pg_locks WHERE locktype = 'advisory' AND classid::bigint = 92138472
 						AND objid::bigint = ${chainId} AND objsubid = 2 AND pid = ${backendPid} AND granted
 				) AS held
 			`
-			return rows[0]?.['held'] === true
-		}
-		if (!(await held())) return true
-		// The backend exits asynchronously after the signal; the timeout form waits for the exit (or reports false)
-		// so the lock check below observes the released lock instead of racing the shutdown.
-		const terminated = await this.sql`
+		return rows[0]?.['held'] === true
+	}
+	if (!(await held())) return true
+	// The backend exits asynchronously after the signal; the timeout form waits for the exit (or reports false)
+	// so the lock check below observes the released lock instead of racing the shutdown.
+	const terminated = await this.sql`
 			SELECT pg_terminate_backend(${backendPid}, ${LEASE_HOLDER_TERMINATION_TIMEOUT_MILLISECONDS}) AS terminated
 			WHERE EXISTS (
 				SELECT 1 FROM pg_locks WHERE locktype = 'advisory' AND classid::bigint = 92138472
 					AND objid::bigint = ${chainId} AND objsubid = 2 AND pid = ${backendPid} AND granted
 			)
 		`
-		// The lock observation is the only confirmation: a holder that exited on its own leaves the terminate
-		// statement without a row, while a timed-out terminate still shows the lock as held.
-		if (terminated[0]?.['terminated'] === false) return false
-		return !(await held())
-	}
+	// The lock observation is the only confirmation: a holder that exited on its own leaves the terminate
+	// statement without a row, while a timed-out terminate still shows the lock as held.
+	if (terminated[0]?.['terminated'] === false) return false
+	return !(await held())
+}
 
-	async tryAcquireIndexerLock(chainId: number, releaseConnectionOverride?: ReservedSQL): Promise<IndexerLease | undefined> {
-		const connection = await this.sql.reserve()
-		const releaseConnectionTarget = releaseConnectionOverride ?? connection
-		let connectionDisposed = false
-		const releaseConnection = async (): Promise<void> => {
-			if (connectionDisposed) return
-			connectionDisposed = true
-			await releaseReservedConnection(releaseConnectionTarget)
+export async function tryAcquireIndexerLock(this: ScannerDatabase, chainId: number, releaseConnectionOverride?: ReservedSQL): Promise<IndexerLease | undefined> {
+	const connection = await this.sql.reserve()
+	const releaseConnectionTarget = releaseConnectionOverride ?? connection
+	let connectionDisposed = false
+	const releaseConnection = async (): Promise<void> => {
+		if (connectionDisposed) return
+		connectionDisposed = true
+		await releaseReservedConnection(releaseConnectionTarget)
+	}
+	const destroyConnection = async (): Promise<void> => {
+		if (connectionDisposed) return
+		connectionDisposed = true
+		await destroyReservedConnection(releaseConnectionTarget)
+	}
+	try {
+		const rows = await connection`SELECT pg_try_advisory_lock(92138472, ${chainId}) AS locked, pg_backend_pid() AS backend_pid`
+		if (rows[0]?.['locked'] !== true) {
+			await releaseConnection()
+			return undefined
 		}
-		const destroyConnection = async (): Promise<void> => {
-			if (connectionDisposed) return
-			connectionDisposed = true
-			await destroyReservedConnection(releaseConnectionTarget)
-		}
-		try {
-			const rows = await connection`SELECT pg_try_advisory_lock(92138472, ${chainId}) AS locked, pg_backend_pid() AS backend_pid`
-			if (rows[0]?.['locked'] !== true) {
-				await releaseConnection()
-				return undefined
-			}
-			const backendPid = Number(rows[0]?.['backend_pid'])
-			let released = false
-			let releasePromise: Promise<void> | undefined
-			const lease: IndexerLease = {
-				backendPid,
-				connection,
-				assertHeld: async (sql = connection) => {
-					if (released) throw new Error('Indexer lease was released')
-					const leaseRows = await sql`
+		const backendPid = Number(rows[0]?.['backend_pid'])
+		let released = false
+		let releasePromise: Promise<void> | undefined
+		const lease: IndexerLease = {
+			backendPid,
+			connection,
+			assertHeld: async (sql = connection) => {
+				if (released) throw new Error('Indexer lease was released')
+				const leaseRows = await sql`
 						SELECT pg_backend_pid() AS backend_pid, EXISTS (
 							SELECT 1 FROM pg_locks
 							WHERE locktype = 'advisory'
@@ -228,55 +220,54 @@ export class ScannerDatabaseConnection {
 								AND granted
 						) AS held
 					`
-					assertIndexerLeaseObservation(backendPid, Number(leaseRows[0]?.['backend_pid']), leaseRows[0]?.['held'] === true)
-				},
-				release: () => {
-					if (releasePromise !== undefined) return releasePromise
-					releasePromise = runSerializedIndexerLeaseOperation(lease, async () => {
-						released = true
-						let observedBackendPid: number | undefined
-						try {
-							const releaseRows = await releaseConnectionTarget`
+				assertIndexerLeaseObservation(backendPid, Number(leaseRows[0]?.['backend_pid']), leaseRows[0]?.['held'] === true)
+			},
+			release: () => {
+				if (releasePromise !== undefined) return releasePromise
+				releasePromise = runSerializedIndexerLeaseOperation(lease, async () => {
+					released = true
+					let observedBackendPid: number | undefined
+					try {
+						const releaseRows = await releaseConnectionTarget`
 								SELECT pg_backend_pid() AS backend_pid,
 									CASE WHEN pg_backend_pid() = ${backendPid}
 										THEN pg_advisory_unlock(92138472, ${chainId})
 										ELSE false
 								END AS unlocked
 							`
-							observedBackendPid = Number(releaseRows[0]?.['backend_pid'])
-							assertIndexerLeaseReleaseObservation(backendPid, observedBackendPid, releaseRows[0]?.['unlocked'] === true)
-							await releaseConnection()
-						} catch (error) {
-							let cleanupError: unknown
-							try {
-								await destroyConnection()
-							} catch (caughtCleanupError) {
-								cleanupError = caughtCleanupError
-							}
-							let releaseConfirmed = observedBackendPid === backendPid && cleanupError === undefined
-							if (!releaseConfirmed)
-								try {
-									releaseConfirmed = await this.#expectedLeaseReleased(chainId, backendPid)
-								} catch (confirmationError) {
-									cleanupError = cleanupError === undefined ? confirmationError : new AggregateError([cleanupError, confirmationError])
-								}
-							if (releaseConnectionTarget !== connection)
-								try {
-									await destroyReservedConnection(connection)
-								} catch (expectedConnectionCleanupError) {
-									cleanupError = cleanupError === undefined ? expectedConnectionCleanupError : new AggregateError([cleanupError, expectedConnectionCleanupError])
-								}
-							if (!releaseConfirmed) throw new IndexerLeaseReleaseError('Indexer lease unlock failed and release of its expected PostgreSQL session could not be confirmed', false, cleanupError === undefined ? error : new AggregateError([error, cleanupError]))
-							throw new IndexerLeaseReleaseError('Indexer lease unlock failed; release of its expected PostgreSQL session was confirmed', true, cleanupError === undefined ? error : new AggregateError([error, cleanupError]))
+						observedBackendPid = Number(releaseRows[0]?.['backend_pid'])
+						assertIndexerLeaseReleaseObservation(backendPid, observedBackendPid, releaseRows[0]?.['unlocked'] === true)
+						await releaseConnection()
+					} catch (error) {
+						let cleanupError: unknown
+						try {
+							await destroyConnection()
+						} catch (caughtCleanupError) {
+							cleanupError = caughtCleanupError
 						}
-					})
-					return releasePromise
-				},
-			}
-			return lease
-		} catch (error) {
-			await releaseConnection()
-			throw error
+						let releaseConfirmed = observedBackendPid === backendPid && cleanupError === undefined
+						if (!releaseConfirmed)
+							try {
+								releaseConfirmed = await this.expectedLeaseReleased(chainId, backendPid)
+							} catch (confirmationError) {
+								cleanupError = cleanupError === undefined ? confirmationError : new AggregateError([cleanupError, confirmationError])
+							}
+						if (releaseConnectionTarget !== connection)
+							try {
+								await destroyReservedConnection(connection)
+							} catch (expectedConnectionCleanupError) {
+								cleanupError = cleanupError === undefined ? expectedConnectionCleanupError : new AggregateError([cleanupError, expectedConnectionCleanupError])
+							}
+						if (!releaseConfirmed) throw new IndexerLeaseReleaseError('Indexer lease unlock failed and release of its expected PostgreSQL session could not be confirmed', false, cleanupError === undefined ? error : new AggregateError([error, cleanupError]))
+						throw new IndexerLeaseReleaseError('Indexer lease unlock failed; release of its expected PostgreSQL session was confirmed', true, cleanupError === undefined ? error : new AggregateError([error, cleanupError]))
+					}
+				})
+				return releasePromise
+			},
 		}
+		return lease
+	} catch (error) {
+		await releaseConnection()
+		throw error
 	}
 }

@@ -1554,6 +1554,7 @@ describe('shared ethereum compatibility layer', () => {
 		})
 		expect(receipt.status).toBe('success')
 		expect(receipt.effectiveGasPrice).toBe(3n)
+		expect(receipt.contractAddress).toBeUndefined()
 		expect(receiptPolls).toBe(2)
 		expect(calls.map(call => call.method)).toContain('eth_getLogs')
 	})

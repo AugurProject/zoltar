@@ -68,7 +68,7 @@ describe('UI build dependency direction', () => {
 		const projectsIndex = setup.indexOf('bun run projects:setup')
 		const appsIndex = setup.indexOf('bun run ui:build:apps')
 		const testsIndex = setup.indexOf('bun run ui:build:tests')
-		expect(createProjectTaskPlan('setup').map(entry => entry.projectId)).toContain('ui-trading')
+		expect(createProjectTaskPlan('setup').map(entry => entry.projectId)).toEqual(['repository'])
 		expect(projectsIndex).toBeGreaterThanOrEqual(0)
 		expect(appsIndex).toBeGreaterThan(projectsIndex)
 		expect(testsIndex).toBeGreaterThan(appsIndex)

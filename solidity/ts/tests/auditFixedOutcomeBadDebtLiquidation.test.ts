@@ -33,8 +33,8 @@ describe('Audit PoC: fixed-outcome child synthetic bad debt', () => {
 	})
 
 	test('recycles redeemed REP to erase real capacity and seize an honest migrated vault', async () => {
-		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		const badDebtRecorder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1])
+		const badDebtRecorder = createWriteClient(mockWindow, TEST_ADDRESSES[2])
 		await approveAndDepositRepToVault(attacker, repDeposit, questionId)
 
 		const questionEnd = await getQuestionEndDate(client, questionId)

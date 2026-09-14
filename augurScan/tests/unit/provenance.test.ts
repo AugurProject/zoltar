@@ -38,7 +38,7 @@ test('changes the application hash when a shared runtime dependency changes', as
 		await mkdir(path.dirname(sharedSource), { recursive: true })
 		await Promise.all([
 			writeFile(path.join(projectRoot, 'package.json'), '{}'),
-			writeFile(path.join(projectRoot, 'bun.lock'), ''),
+			writeFile(path.join(projectRoot, '../bun.lock'), ''),
 			writeFile(path.join(projectRoot, 'src/ethereum.ts'), "export {\n\tdecoderVersion,\n} from '../../shared/core/ts/evm/ethereum.ts'\n"),
 			writeFile(path.join(projectRoot, 'src/operations.ts'), "export const operation = 'stable'\n"),
 			writeFile(path.join(projectRoot, 'src/projections.ts'), "export const projection = 'stable'\n"),

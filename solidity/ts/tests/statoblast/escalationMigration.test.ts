@@ -108,7 +108,7 @@ describe('Statoblast: escalation migration', () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
-		const unfundedVault = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
+		const unfundedVault = createWriteClient(mockWindow, TEST_ADDRESSES[3])
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		const readDepositGuardState = async () => ({
 			escalationGame: await getSecurityPoolsEscalationGame(client, securityPoolAddresses.securityPool),
@@ -125,7 +125,7 @@ describe('Statoblast: escalation migration', () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 		await refreshCurrentPrice()
-		const forkInitiator = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const forkInitiator = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const externalForkQuestion = {
 			...questionData,
 			title: 'resolved-only external fork',
@@ -163,7 +163,7 @@ describe('Statoblast: escalation migration', () => {
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, forkThresholdAttoRep)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, forkThresholdAttoRep)
 
-		const externalForker = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const externalForker = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const externalQuestion = {
 			...questionData,
 			title: 'external fork after escalation non-decision',
@@ -229,7 +229,7 @@ describe('Statoblast: escalation migration', () => {
 
 	test("own-fork claims reject another vault owner's deposit and roll back consumption, child deployment, and REP state", async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		const otherVault = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const otherVault = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const parentRepToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, parentRepToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		await approveAndDepositRepToVault(otherVault, repDeposit, questionId)
@@ -260,8 +260,8 @@ describe('Statoblast: escalation migration', () => {
 
 	test('resolved escalation withdrawal rejects mixed-vault batches and rolls back every deposit and vault mutation', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		const secondWinner = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		const losingVault = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const secondWinner = createWriteClient(mockWindow, TEST_ADDRESSES[1])
+		const losingVault = createWriteClient(mockWindow, TEST_ADDRESSES[2])
 		await approveAndDepositRepToVault(secondWinner, repDeposit, questionId)
 		await approveAndDepositRepToVault(losingVault, repDeposit, questionId)
 		await mockWindow.setTime(endTime + 10000n)
@@ -299,7 +299,7 @@ describe('Statoblast: escalation migration', () => {
 		const unresolvedDeposit = reportBond
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, unresolvedDeposit)
 
-		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const otherQuestionData = {
 			...questionData,
 			title: 'forked unresolved migration source question',
@@ -369,7 +369,7 @@ describe('Statoblast: escalation migration', () => {
 		for (let index = 0; index < depositCount; index += 1) {
 			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 		}
-		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const otherQuestionData = {
 			...questionData,
 			title: 'bounded unresolved migration source question',
@@ -423,7 +423,7 @@ describe('Statoblast: escalation migration', () => {
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
-		const relayerClient = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const relayerClient = createWriteClient(mockWindow, TEST_ADDRESSES[2])
 		await assert.rejects(migrateVaultWithUnresolvedEscalation(relayerClient, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes))
 		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
@@ -473,7 +473,7 @@ describe('Statoblast: escalation migration', () => {
 		await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 
-		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const externalForkQuestionData = {
 			...questionData,
 			title: 'late external-fork unresolved migration source',
@@ -507,7 +507,7 @@ describe('Statoblast: escalation migration', () => {
 		const unresolvedDeposit = reportBond
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, unresolvedDeposit)
 
-		const relayerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const relayerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const otherQuestionData = {
 			...questionData,
 			title: 'relayed unresolved migration source question',
@@ -579,7 +579,7 @@ describe('Statoblast: escalation migration', () => {
 		const unresolvedDeposit = reportBond
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, unresolvedDeposit)
 
-		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const externalForkQuestionData = {
 			...questionData,
 			title: 'parent for non-own unresolved migration',
@@ -614,7 +614,7 @@ describe('Statoblast: escalation migration', () => {
 
 	test('an unrelated fork carries dispute-staked REP 1:1 and burns the winner haircut only when the child settles', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		const losingClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const losingClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await approveAndDepositRepToVault(losingClient, repDeposit, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 		await refreshCurrentPrice()
@@ -684,7 +684,7 @@ describe('Statoblast: escalation migration', () => {
 
 	test('each lazily created continuation starts from the complete parent escalation totals', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 		await refreshCurrentPrice()
@@ -764,7 +764,7 @@ describe('Statoblast: escalation migration', () => {
 		const parentYesState = await getEscalationGameOutcomeState(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes)
 		const parentNoState = await getEscalationGameOutcomeState(client, securityPoolAddresses.escalationGame, QuestionOutcome.No)
 
-		const forkClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const forkClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const forkQuestionData = { ...questionData, title: 'lazy selected continuation children' }
 		await createQuestion(forkClient, forkQuestionData, outcomes)
 		await approveToken(forkClient, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
@@ -828,7 +828,7 @@ describe('Statoblast: escalation migration', () => {
 
 	test('selected branches share parent game totals while materializing only the selecting vault', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		const otherClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const otherClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await approveAndDepositRepToVault(otherClient, repDeposit, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 		await refreshCurrentPrice()
@@ -876,7 +876,7 @@ describe('Statoblast: escalation migration', () => {
 	test('claimForkedEscalationDeposits requires the vault owner to call it', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		const winningDeposit = reportBond
-		const relayerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const relayerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await approveAndDepositRepToVault(relayerClient, repDeposit, questionId)
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
@@ -986,7 +986,7 @@ describe('Statoblast: escalation migration', () => {
 			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond + index)
 		}
 
-		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const externalForkQuestionData = {
 			...questionData,
 			title: 'large imported scan race source',
@@ -1014,7 +1014,7 @@ describe('Statoblast: escalation migration', () => {
 
 	test('external-fork continuation resumes without migrating another vault', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 		await refreshCurrentPrice()
@@ -1107,7 +1107,7 @@ describe('Statoblast: escalation migration', () => {
 
 	test('a migrated winner settles from aggregate child backing when the losing vault does not migrate', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		const losingClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const losingClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const winningVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const winningVaultRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, winningVault.repBackingUnits)
@@ -1194,8 +1194,8 @@ describe('Statoblast: escalation migration', () => {
 
 	test("multiple migrated winners settle in reverse order without using another vault owner's logical entitlement", async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		const secondWinner = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		const losingClient = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const secondWinner = createWriteClient(mockWindow, TEST_ADDRESSES[1])
+		const losingClient = createWriteClient(mockWindow, TEST_ADDRESSES[2])
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const firstWinningPrincipal = forkThresholdAttoRep / 2n
 		const secondWinningPrincipal = forkThresholdAttoRep - firstWinningPrincipal
@@ -1400,7 +1400,7 @@ describe('Statoblast: escalation migration', () => {
 
 	test('forked continuation deposits can migrate again after a second unrelated fork', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 		await refreshCurrentPrice()
@@ -1474,7 +1474,7 @@ describe('Statoblast: escalation migration', () => {
 
 	test('an unrelated continuation with an inherited threshold tie can trigger its own fork without a synthetic deposit', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
 		const forkThresholdAttoRep = await getZoltarForkThreshold(client, genesisUniverse)
 		await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
@@ -1489,7 +1489,7 @@ describe('Statoblast: escalation migration', () => {
 			title: 'inherited threshold tie fork source question',
 		}
 		const unrelatedQuestionId = getQuestionId(unrelatedQuestionData, outcomes)
-		const forkInitiator = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const forkInitiator = createWriteClient(mockWindow, TEST_ADDRESSES[2])
 		const forkInitiatorBalanceSlot = keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [forkInitiator.account.address, 0n]))
 		await mockWindow.addStateOverrides({
 			[addressString(GENESIS_REPUTATION_TOKEN)]: {
@@ -1553,7 +1553,7 @@ describe('Statoblast: escalation migration', () => {
 
 	test('own-fork unresolved preparation on a continuation child includes inherited carried escrow', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 		await refreshCurrentPrice()
@@ -1620,7 +1620,7 @@ describe('Statoblast: escalation migration', () => {
 
 	test('many unresolved continuation deposits survive multiple unrelated forks recursively', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 		await refreshCurrentPrice()
@@ -1701,7 +1701,7 @@ describe('Statoblast: escalation migration', () => {
 
 	test("third parties can permissionlessly settle another vault owner's resolved escalation deposits", async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 		await refreshCurrentPrice()

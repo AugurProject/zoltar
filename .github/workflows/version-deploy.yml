@@ -14,7 +14,6 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  BUN_VERSION: 1.4.2
   REGISTRY: ghcr.io
 
 jobs:
@@ -44,6 +43,7 @@ jobs:
     steps:
       - name: Checkout tagged source
         uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-bun
 
       - name: Set image metadata
         shell: bash

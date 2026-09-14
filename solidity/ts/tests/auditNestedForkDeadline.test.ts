@@ -35,7 +35,7 @@ describe('Nested fork migration deadline', () => {
 	test('a delayed canonical pool retains a complete outgoing migration window after an early universe fork', async () => {
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, repDeposit / 4n)
 		await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
-		const passiveVault = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
+		const passiveVault = createWriteClient(mockWindow, TEST_ADDRESSES[6])
 		await approveAndDepositRepToVault(passiveVault, repDeposit, questionId)
 
 		await triggerExternalForkForSecurityPool(client, 'nested deadline parent fork')

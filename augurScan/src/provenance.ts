@@ -66,7 +66,7 @@ const runtimeSourceFiles = async (projectRoot: string, sourceFiles: readonly str
 
 export const sourceProvenance = async (projectRoot = path.resolve(import.meta.dir, '..')): Promise<SourceProvenance> => {
 	const sourceFiles = Array.fromAsync(new Bun.Glob('src/**/*.ts').scan({ cwd: projectRoot, onlyFiles: true }))
-	const applicationFiles = [...(await runtimeSourceFiles(projectRoot, await sourceFiles)), 'package.json', 'bun.lock']
+	const applicationFiles = [...(await runtimeSourceFiles(projectRoot, await sourceFiles)), 'package.json', '../bun.lock']
 	return {
 		applicationSourceHash: await hashFiles(projectRoot, applicationFiles),
 		projectionSourceHash: await hashFiles(projectRoot, ['src/operations.ts', 'src/projections.ts']),

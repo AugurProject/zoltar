@@ -14,6 +14,7 @@ export type CiChangeClassification = {
 	readonly packageMatrixJson: string
 	readonly hasPackages: boolean
 	readonly forcedFull: boolean
+	readonly allScopesSelected: boolean
 	readonly augurScanIntegration: boolean
 	readonly artifactInputs: boolean
 	readonly reason: string
@@ -88,14 +89,17 @@ export function classifyCiChange(filePaths: readonly string[], options: { readon
 	if (changedFiles.length === 0) reason = 'No changed paths were detected; using the safe full-run fallback.'
 	if (options.full === true) reason = 'A full run was explicitly requested.'
 	if (options.fallbackReason !== undefined) reason = options.fallbackReason
-	return { changedFiles, directScopes, expandedScopes, packageMatrix, packageMatrixJson, hasPackages: packageMatrix.length > 0, forcedFull, augurScanIntegration, artifactInputs: packageMatrix.some(entry => entry.artifacts), reason }
+	return { changedFiles, directScopes, expandedScopes, packageMatrix, packageMatrixJson, hasPackages: packageMatrix.length > 0, forcedFull, allScopesSelected: ciScopes.every(scope => expanded.has(scope)), augurScanIntegration, artifactInputs: packageMatrix.some(entry => entry.artifacts), reason }
 }
 
 function writeGitHubOutput(classification: CiChangeClassification): void {
 	const outputPath = process.env['GITHUB_OUTPUT']
 	if (outputPath === undefined) throw new Error('GITHUB_OUTPUT is required with --github-output')
 	for (const scope of ciScopes) appendFileSync(outputPath, `${scope.replaceAll('-', '_')}=${classification.expandedScopes.includes(scope)}\n`)
-	appendFileSync(outputPath, `package_matrix=${classification.packageMatrixJson}\nhas_packages=${classification.hasPackages}\nforced_full=${classification.forcedFull}\naugur_scan_integration=${classification.augurScanIntegration}\nartifact_inputs=${classification.artifactInputs}\n`)
+	appendFileSync(
+		outputPath,
+		`package_matrix=${classification.packageMatrixJson}\nhas_packages=${classification.hasPackages}\nforced_full=${classification.forcedFull}\nall_scopes_selected=${classification.allScopesSelected}\naugur_scan_integration=${classification.augurScanIntegration}\nartifact_inputs=${classification.artifactInputs}\n`,
+	)
 	const summaryPath = process.env['GITHUB_STEP_SUMMARY']
 	if (summaryPath === undefined) return
 	appendFileSync(

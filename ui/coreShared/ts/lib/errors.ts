@@ -194,8 +194,14 @@ export function getErrorDetail(error: unknown, fallbackMessage?: string) {
 	return undefined
 }
 
-function getCloseableMessage(error: unknown) {
-	return collectErrorDetails(error).find(detail => isCloseableErrorMessage(detail))
+export function isWalletRejection(error: unknown, seen = new Set<object>()): boolean {
+	if (isObjectRecord(error)) {
+		if (seen.has(error)) return false
+		seen.add(error)
+		if (error['code'] === 4001 || error['code'] === '4001') return true
+		if (isWalletRejection(error['cause'], seen)) return true
+	}
+	return collectErrorDetails(error).some(detail => isCloseableErrorMessage(detail))
 }
 
 function appendReason(fallbackMessage: string, detail: string | undefined) {
@@ -212,7 +218,7 @@ function rewriteWriteFallbackMessage(fallbackMessage: string) {
 }
 
 export function formatWriteErrorMessage(error: unknown, fallbackMessage: string) {
-	if (getCloseableMessage(error) !== undefined) return 'Action canceled in wallet.'
+	if (isWalletRejection(error)) return 'Action canceled in wallet.'
 
 	const detail = getErrorDetail(error, fallbackMessage)
 	if (detail !== undefined && shouldUseStandaloneWriteMessage(detail)) return detail
@@ -221,12 +227,12 @@ export function formatWriteErrorMessage(error: unknown, fallbackMessage: string)
 }
 
 export function formatRefreshErrorMessage(error: unknown, fallbackMessage: string) {
-	if (getCloseableMessage(error) !== undefined) return 'Action canceled in wallet.'
+	if (isWalletRejection(error)) return 'Action canceled in wallet.'
 	return appendReason(fallbackMessage, getErrorDetail(error, fallbackMessage))
 }
 
 export function getErrorMessage(error: unknown, fallbackMessage: string) {
-	if (getCloseableMessage(error) !== undefined) return 'Action canceled in wallet.'
+	if (isWalletRejection(error)) return 'Action canceled in wallet.'
 	return appendReason(fallbackMessage, getErrorDetail(error, fallbackMessage))
 }
 

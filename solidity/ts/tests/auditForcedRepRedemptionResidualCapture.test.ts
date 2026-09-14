@@ -30,8 +30,8 @@ describe('Audit: forced REP redemption before escalation residual sweep', () => 
 	})
 
 	test('rejects forced redemption and preserves the honest vault share of later ordinary-game residual REP', async () => {
-		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		const escalationDepositor = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1])
+		const escalationDepositor = createWriteClient(mockWindow, TEST_ADDRESSES[2])
 		await approveAndDepositRepToVault(attacker, repDeposit, questionId)
 		await approveAndDepositRepToVault(escalationDepositor, repDeposit, questionId)
 

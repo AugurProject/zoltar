@@ -15,7 +15,7 @@ describe('Escalation claim source traversal', () => {
 	const deploy = async (data: Hex) => {
 		const hash = await client.sendTransaction({ data })
 		const receipt = await client.waitForTransactionReceipt({ hash })
-		if (receipt.contractAddress === undefined || receipt.contractAddress === null) {
+		if (receipt.contractAddress === undefined) {
 			throw new Error('deployment address missing')
 		}
 		return receipt.contractAddress
@@ -32,7 +32,7 @@ describe('Escalation claim source traversal', () => {
 
 	beforeEach(async () => {
 		const mockWindow: AnvilWindowEthereum = getAnvilWindowEthereum()
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
 		await setupTestAccounts(mockWindow)
 	})
 

@@ -45,13 +45,13 @@ describe('SecurityPoolUtils', () => {
 
 	beforeEach(async () => {
 		const mockWindow = getAnvilWindowEthereum()
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
 		await setupTestAccounts(mockWindow)
 		const hash = await client.sendTransaction({
 			data: `0x${statoblast_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`,
 		})
 		const receipt = await client.waitForTransactionReceipt({ hash })
-		if (receipt.contractAddress === undefined || receipt.contractAddress === null) throw new Error('SecurityPoolUtils deployment address missing')
+		if (receipt.contractAddress === undefined) throw new Error('SecurityPoolUtils deployment address missing')
 		securityPoolUtilsAddress = receipt.contractAddress
 	})
 

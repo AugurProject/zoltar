@@ -43,12 +43,12 @@ describe('Truth-auction ownership overflow regression', () => {
 			args: [],
 		})
 		const passiveRep = 1_300_000n * PRICE_PRECISION
-		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
-		const passiveVault = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
-		const secondPassiveVault = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
-		const auctionWinner = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
-		const universeForker = createWriteClient(mockWindow, TEST_ADDRESSES[5], 0)
-		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[2])
+		const passiveVault = createWriteClient(mockWindow, TEST_ADDRESSES[4])
+		const secondPassiveVault = createWriteClient(mockWindow, TEST_ADDRESSES[6])
+		const auctionWinner = createWriteClient(mockWindow, TEST_ADDRESSES[3])
+		const universeForker = createWriteClient(mockWindow, TEST_ADDRESSES[5])
+		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 
 		await approveAndDepositRepToVault(attacker, minimumVaultRep, questionId)
 		await approveAndDepositRepToVault(passiveVault, passiveRep, questionId)

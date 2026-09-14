@@ -41,9 +41,7 @@ runs:
         fi
 
     - name: Setup Bun
-      uses: oven-sh/setup-bun@v2
-      with:
-        bun-version: ${{ env.BUN_VERSION }}
+      uses: ./.github/actions/setup-bun
 
     - name: Setup Foundry / Anvil
       if: inputs.foundry == 'true' && inputs.profile != 'root'
@@ -96,17 +94,4 @@ runs:
           bun ./tooling/contracts/ensure-contract-artifacts.mts --headless
         else
           bun run check:generated-clean
-        fi
-
-    - name: Refresh generated shared package installs
-      if: inputs.profile != 'root'
-      shell: bash
-      env:
-        PROFILE: ${{ inputs.profile }}
-      run: |
-        if [[ "${PROFILE}" == "contracts" ]]; then
-          bun ./tooling/repo/ensure-shared-package-fresh.mts --refresh
-          (cd solidity && bun ../tooling/repo/ensure-shared-package-fresh.mts --refresh)
-        else
-          bun run refresh:shared-dependencies
         fi

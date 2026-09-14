@@ -27,7 +27,6 @@ const eventDomains: Readonly<Record<string, EventDomainDefinition>> = {
 		'DepositOnOutcome',
 		'ForkCarryCheckpoint',
 		'ForkContinuationResumed',
-		'ForkedEscrowClaimed',
 		'ForkedEscrowExported',
 		'ForkedEscrowRecorded',
 		'GameContinuedFromFork',

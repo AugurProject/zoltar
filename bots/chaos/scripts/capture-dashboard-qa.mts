@@ -1,15 +1,8 @@
+import { createDevToolsCommandSender } from '../../../tooling/ui/devToolsCommands.mts'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 import { unavailableOperationCatalog } from '../src/runtime/canonical-scan.ts'
-
-type CdpMessage = {
-	error: { message?: string } | undefined
-	id: number | undefined
-	method: string | undefined
-	params: unknown
-	result: unknown
-}
 
 type CaptureRequest = {
 	catalogDetail?: true | undefined
@@ -172,41 +165,22 @@ try {
 	const debuggerUrl = Reflect.get(tab, 'webSocketDebuggerUrl')
 	if (typeof debuggerUrl !== 'string') throw new Error('Chromium tab is missing a debugger URL')
 	const socket = new WebSocket(debuggerUrl)
-	const pending = new Map<number, { reject: (error: Error) => void; resolve: (value: unknown) => void }>()
 	const diagnostics: string[] = []
-	let requestId = 0
 	socket.addEventListener('message', event => {
-		const parsed: unknown = JSON.parse(String(event.data))
-		if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return
-		const parsedId = Reflect.get(parsed, 'id')
-		const parsedMethod = Reflect.get(parsed, 'method')
-		const message: CdpMessage = {
-			error: typeof Reflect.get(parsed, 'error') === 'object' && Reflect.get(parsed, 'error') !== null ? { message: String(Reflect.get(Reflect.get(parsed, 'error'), 'message') ?? '') } : undefined,
-			id: typeof parsedId === 'number' ? parsedId : undefined,
-			method: typeof parsedMethod === 'string' ? parsedMethod : undefined,
-			params: Reflect.get(parsed, 'params'),
-			result: Reflect.get(parsed, 'result'),
-		}
-		if (message.id !== undefined) {
-			const callback = pending.get(message.id)
-			if (callback === undefined) return
-			pending.delete(message.id)
-			if (message.error === undefined) callback.resolve(message.result)
-			else callback.reject(new Error(message.error.message ?? 'CDP command failed'))
-		} else if (message.method === 'Runtime.exceptionThrown' || message.method === 'Log.entryAdded') diagnostics.push(JSON.stringify(message.params) ?? 'Unknown browser diagnostic')
+		const message: unknown = JSON.parse(String(event.data))
+		if (typeof message !== 'object' || message === null || !('method' in message)) return
+		if (message.method === 'Runtime.exceptionThrown' || message.method === 'Log.entryAdded') diagnostics.push(JSON.stringify(message))
 	})
 	await new Promise<void>((resolvePromise, reject) => {
 		socket.addEventListener('open', () => resolvePromise(), { once: true })
 		socket.addEventListener('error', () => reject(new Error('Chromium debugger connection failed')), { once: true })
 	})
-	const command = (method: string, params: Record<string, unknown> = {}) =>
-		new Promise<unknown>((resolvePromise, reject) => {
-			requestId += 1
-			pending.set(requestId, { reject, resolve: resolvePromise })
-			const body = JSON.stringify({ id: requestId, method, params })
-			if (body === undefined) throw new Error('CDP command was not serializable')
-			socket.send(body)
-		})
+	const command = createDevToolsCommandSender(socket, {
+		isExited: () => browser.exitCode !== null,
+		onExit: listener => {
+			void browser.exited.then(code => listener(`code ${code}`))
+		},
+	})
 	await command('Runtime.enable')
 	await command('Log.enable')
 	await command('Page.enable')

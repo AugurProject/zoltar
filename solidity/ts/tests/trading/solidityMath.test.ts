@@ -42,7 +42,7 @@ describe('Solidity and TypeScript AMM math parity', () => {
 		client = createWriteClient(ethereum, TEST_ADDRESSES[0])
 		const hash = await client.sendTransaction({ data: encodeDeployData({ abi: artifact.abi, bytecode: `0x${artifact.evm.bytecode.object}` }) })
 		const receipt = await client.waitForTransactionReceipt({ hash })
-		if (receipt.contractAddress === undefined || receipt.contractAddress === null) throw new Error('Math harness deployment address missing')
+		if (receipt.contractAddress === undefined) throw new Error('Math harness deployment address missing')
 		harness = receipt.contractAddress
 		await setBaselineSnapshot()
 	})

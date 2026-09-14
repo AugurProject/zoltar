@@ -1,3 +1,4 @@
+import { requestWithTimeout } from '@zoltar/bot-shared/dashboard/polling'
 import { optionalRecord as record } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { createActivityTimeline } from './activity-timeline.js'
 import { createCatalogGroups } from './catalog-groups.js'
@@ -746,35 +747,37 @@ function parseConfiguration(value: unknown): Configuration {
 }
 
 async function requestJson(path: string, timeoutMilliseconds: number, init?: RequestInit) {
-	const controller = new AbortController()
-	const timeout = window.setTimeout(() => controller.abort(), timeoutMilliseconds)
+	let response: Response
+	let value: unknown
 	try {
-		let response: Response
-		let value: unknown
-		try {
-			response = await fetch(path, { ...init, headers: { accept: 'application/json', ...init?.headers }, signal: controller.signal })
-			value = await response.json()
-		} catch (error) {
-			if (init?.method !== 'PUT') throw error
-			const unknown = new Error(error instanceof DOMException && error.name === 'AbortError' ? 'The mutation timed out and may have committed.' : 'The mutation response was lost and the change may have committed.')
-			unknown.name = 'MutationOutcomeUnknown'
-			throw unknown
-		}
-		if (!response.ok) {
-			const responseRecord = record(value)
-			const message = stringValue(responseRecord?.['error'])
-			const error = new Error(message ?? 'Dashboard request failed')
-			if (response.status === 409 && responseRecord?.['code'] === 'configuration_revision_conflict') {
-				error.name = 'ConfigurationRevisionConflict'
-			}
-			if (responseRecord?.['code'] === 'configuration_committed_safely_paused') error.name = 'MutationOutcomeUnknown'
-			if (responseRecord?.['code'] === 'configuration_commit_indeterminate') error.name = 'ConfigurationCommitIndeterminate'
-			throw error
-		}
-		return value
-	} finally {
-		window.clearTimeout(timeout)
+		const result = await requestWithTimeout(
+			async signal => {
+				const response = await fetch(path, { ...init, headers: { accept: 'application/json', ...init?.headers }, signal })
+				const value: unknown = await response.json()
+				return { response, value }
+			},
+			timeoutMilliseconds,
+			'Dashboard request timed out',
+		)
+		response = result.response
+		value = result.value
+	} catch (error) {
+		if (init?.method !== 'PUT') throw error
+		const timedOut = error instanceof Error && (error.name === 'AbortError' || error.message === 'Dashboard request timed out')
+		const unknown = new Error(timedOut ? 'The mutation timed out and may have committed.' : 'The mutation response was lost and the change may have committed.')
+		unknown.name = 'MutationOutcomeUnknown'
+		throw unknown
 	}
+	if (!response.ok) {
+		const responseRecord = record(value)
+		const message = stringValue(responseRecord?.['error'])
+		const error = new Error(message ?? 'Dashboard request failed')
+		if (response.status === 409 && responseRecord?.['code'] === 'configuration_revision_conflict') error.name = 'ConfigurationRevisionConflict'
+		if (responseRecord?.['code'] === 'configuration_committed_safely_paused') error.name = 'MutationOutcomeUnknown'
+		if (responseRecord?.['code'] === 'configuration_commit_indeterminate') error.name = 'ConfigurationCommitIndeterminate'
+		throw error
+	}
+	return value
 }
 
 function transactionIdentifier(hash: string, type: string) {

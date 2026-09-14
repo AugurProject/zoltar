@@ -56,9 +56,12 @@ test('catalog groups and manual operation dialog at desktop and mobile widths', 
 	const session = await startChromiumSession(chromium)
 	async function evaluate(expression: string) {
 		const response = await session.send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })
+		if (typeof response !== 'object' || response === null) throw new Error('Invalid browser evaluation response')
 		const details = Reflect.get(response, 'exceptionDetails')
 		if (details !== undefined) throw new Error(JSON.stringify(details))
-		return Reflect.get(Reflect.get(response, 'result'), 'value')
+		const result: unknown = Reflect.get(response, 'result')
+		if (typeof result !== 'object' || result === null) throw new Error('Browser evaluation returned no result')
+		return Reflect.get(result, 'value')
 	}
 	async function waitFor(expression: string) {
 		for (let attempt = 0; attempt < 150; attempt += 1) {
@@ -72,6 +75,7 @@ test('catalog groups and manual operation dialog at desktop and mobile widths', 
 		if (screenshotDirectory === undefined) return
 		await mkdir(screenshotDirectory, { recursive: true })
 		const response = await session.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
+		if (typeof response !== 'object' || response === null) throw new Error('Invalid screenshot response')
 		const data = Reflect.get(response, 'data')
 		if (typeof data !== 'string') throw new Error('Missing screenshot')
 		await Bun.write(`${screenshotDirectory}/${name}.png`, Buffer.from(data, 'base64'))

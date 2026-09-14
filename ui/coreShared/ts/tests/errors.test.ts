@@ -15,6 +15,17 @@ void describe('error helpers', () => {
 		expect(isCloseableErrorMessage('Failed to deploy SecurityPoolUtils: {"code":4001,"message":"Request rejected"}')).toBe(true)
 	})
 
+	void test('recognizes structured wallet rejection codes through causes without relying on message text', () => {
+		for (const error of [{ code: 4001, message: 'Request declined' }, Object.assign(new Error('Request declined'), { code: '4001' }), new Error('Provider failed', { cause: { code: 4001 } })]) {
+			expect(getErrorMessage(error, 'Connection failed')).toBe('Action canceled in wallet.')
+			expect(formatWriteErrorMessage(error, 'Failed to submit')).toBe('Action canceled in wallet.')
+			expect(formatRefreshErrorMessage(error, 'Refresh failed')).toBe('Action canceled in wallet.')
+		}
+		const cycle = new Error('RPC unavailable')
+		cycle.cause = cycle
+		expect(getErrorMessage(cycle, 'Refresh failed')).toContain('RPC unavailable')
+	})
+
 	void test('appends sanitized technical details to load failures', () => {
 		expect(getErrorMessage(new Error('execution reverted: bad stuff'), 'Couldn’t refresh pools.')).toBe('Couldn’t refresh pools. Reason: bad stuff')
 	})

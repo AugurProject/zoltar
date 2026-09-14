@@ -59,16 +59,16 @@ export const contractSafetyPolicy = {
 				sourcePath: 'contracts/statoblast/SecurityPool.sol',
 				contractName: 'SecurityPool',
 			},
-			24_308,
-			'The pool is close to the protocol deployment limit, so its reviewed runtime budget permits no growth.',
+			24_567,
+			'The reviewed pool adds understandable revert reasons while retaining the size-limited initialization guard; no further runtime growth is permitted.',
 		),
 		runtimeBudget(
 			{
 				sourcePath: 'contracts/statoblast/EscalationGame.sol',
 				contractName: 'EscalationGame',
 			},
-			24_304,
-			'The reviewed runtime includes exact selector routing for the two atomic REP authorization deposit entrypoints so internal delegate mutations stay unreachable, and permits no further growth.',
+			24_428,
+			'The reviewed game preserves selector routing and now bubbles retention-call failures; no further runtime growth is permitted.',
 		),
 		runtimeBudget(
 			{
@@ -83,8 +83,8 @@ export const contractSafetyPolicy = {
 				sourcePath: 'contracts/statoblast/SecurityPoolForker.sol',
 				contractName: 'SecurityPoolForker',
 			},
-			24_013,
-			'The forker runtime is above 97% of the protocol deployment limit, so its reviewed budget permits no growth.',
+			24_505,
+			'The reviewed forker adds understandable revert reasons while retaining size-limited migration guards; no further runtime growth is permitted.',
 		),
 	] satisfies readonly BytecodeBudget[],
 	initcodeBudgets: [
@@ -93,16 +93,16 @@ export const contractSafetyPolicy = {
 				sourcePath: 'contracts/statoblast/SecurityPoolForker.sol',
 				contractName: 'SecurityPoolForker',
 			},
-			48_323,
-			'The forker is close to the protocol initcode limit after its minimum constructor arguments, so its reviewed budget permits no growth.',
+			48_815,
+			'The reviewed forker initcode includes the added revert reasons and minimum constructor arguments; no further growth is permitted.',
 		),
 		initcodeBudget(
 			{
 				sourcePath: 'contracts/statoblast/factories/EscalationGameFactory.sol',
 				contractName: 'EscalationGameFactory',
 			},
-			46_549,
-			'The factory embeds the reviewed, question-bound EscalationGame with child-REP authorization routing and permits no further growth.',
+			46_673,
+			'The factory embeds the reviewed game with retention-call revert bubbling and permits no further growth.',
 		),
 	] satisfies readonly BytecodeBudget[],
 	exactLayoutPairs: [

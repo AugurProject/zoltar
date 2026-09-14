@@ -11,23 +11,25 @@
 		"schema:init": "bun src/schema.ts",
 		"metadata:snapshot": "bun scripts/snapshot-project-metadata.ts",
 		"metadata:check": "bun scripts/check-project-metadata.ts",
-		"qa:serve": "bun run build && bun scripts/serve-demo.ts",
+		"qa:serve": "bun run build:demo && bun scripts/serve-demo.ts",
 		"test": "bun run test:unit && bun run test:api && bun run test:replay && bun run test:integration",
 		"test:ci": "bun run test:unit && bun run test:api && bun run test:replay",
 		"test:unit": "bun test tests/unit",
 		"test:api": "bun test tests/api",
 		"test:replay": "bun test tests/replay",
 		"test:integration": "bun test tests/integration",
-		"typecheck": "cd .. && bun install --frozen-lockfile && cd augurScan && bun x tsc --noEmit",
+		"typecheck": "bun x tsc --noEmit",
 		"check:boundaries": "bun scripts/check-import-boundaries.ts",
 		"check:restricted-import-types": "bun ../tooling/repo/lint-no-restricted-import-types.mts .",
 		"check": "bun run check:boundaries && bun run check:restricted-import-types && bun run metadata:check && bun x biome check .",
 		"format": "bun x biome format --write .",
-		"format:check": "bun x biome format ."
+		"format:check": "bun x biome format .",
+		"build:demo": "bun scripts/build-browser.ts --demo"
 	},
 	"dependencies": {
 		"@noble/hashes": "2.2.0",
-		"micro-eth-signer": "0.18.1"
+		"micro-eth-signer": "0.18.1",
+		"@zoltar/core-shared": "workspace:1.0.0"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.3.11",

@@ -44,9 +44,9 @@ describe('Recursive truth-auction ownership regression', () => {
 		const passiveRep = poolRep - attackerRep
 		const maxAuctionVaultHaircutDivisor = 1_000_000n
 		const attacker = client
-		const passiveVault = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
-		const auctionWinner = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
-		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const passiveVault = createWriteClient(mockWindow, TEST_ADDRESSES[4])
+		const auctionWinner = createWriteClient(mockWindow, TEST_ADDRESSES[3])
+		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 
 		await manipulatePriceOracleAndPerformOperation(attacker, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, attacker.account.address, repDeposit)
 		strictEqualTypeSafe(await getTotalPoolHeldAttoRep(client, securityPoolAddresses.securityPool), 0n, 'the fixture pool should be empty before constructing the recursive scenario')

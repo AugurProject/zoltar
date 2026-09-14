@@ -16,7 +16,7 @@ describe('GenesisReputationToken', () => {
 
 	beforeEach(async () => {
 		mockWindow = getAnvilWindowEthereum()
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
 		await setupTestAccounts(mockWindow)
 	})
 
@@ -115,7 +115,7 @@ describe('GenesisReputationToken', () => {
 		const receipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data }) })
 		const tokenAddress = receipt.contractAddress
 		if (tokenAddress === undefined || tokenAddress === null) throw new Error('Child REP deployment address missing')
-		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await assert.rejects(attacker.writeContract({ abi: ReputationToken_ReputationToken.abi, address: tokenAddress, functionName: 'initialize', args: [1n, 100n, 1n] }), /ReputationToken caller must be the Zoltar contract|reverted/i)
 		await client.waitForTransactionReceipt({ hash: await client.writeContract({ abi: ReputationToken_ReputationToken.abi, address: tokenAddress, functionName: 'initialize', args: [1n, 100n, 1n] }) })
 		await assert.rejects(client.writeContract({ abi: ReputationToken_ReputationToken.abi, address: tokenAddress, functionName: 'initialize', args: [2n, 200n, 2n] }), /already initialized|reverted/i)

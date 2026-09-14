@@ -108,8 +108,8 @@ describe('Ordinary escalation vault-deposit freeze', () => {
 	}
 
 	test('rejects late backing-unit minting while preserving wallet-funded escalation', async () => {
-		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		const escalationDepositor = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1])
+		const escalationDepositor = createWriteClient(mockWindow, TEST_ADDRESSES[2])
 		await approveAndDepositRepToVault(escalationDepositor, repDeposit, questionId)
 
 		const questionEnd = await getQuestionEndDate(client, questionId)
@@ -191,8 +191,8 @@ describe('Ordinary escalation vault-deposit freeze', () => {
 	})
 
 	test('rejects residual-capture deposits in unrelated-fork children while preserving genuine continuations', async () => {
-		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		const escalationDepositor = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1])
+		const escalationDepositor = createWriteClient(mockWindow, TEST_ADDRESSES[2])
 		const attoRep = 10n ** 18n
 		const lowLosingPrincipal = 100n * attoRep
 		const bindingLosingPrincipal = 200n * attoRep
@@ -256,7 +256,7 @@ describe('Ordinary escalation vault-deposit freeze', () => {
 	})
 
 	test('rejects direct deposits into a non-current game without moving REP or dispute state', async () => {
-		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		const infra = getInfraContractAddresses()
 		const deploymentHash = await attacker.sendTransaction({
@@ -282,7 +282,7 @@ describe('Ordinary escalation vault-deposit freeze', () => {
 	})
 
 	test('rejects wallet deposits after a universe fork and after the pool becomes inactive', async () => {
-		const forkInitiator = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const forkInitiator = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const escalationGame = await startOrdinaryGame()
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		await approveToken(forkInitiator, repToken, escalationGame)
@@ -297,7 +297,7 @@ describe('Ordinary escalation vault-deposit freeze', () => {
 	})
 
 	test('rejects continuation wallet deposits while keeping continuation vault deposits available', async () => {
-		const forkInitiator = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const forkInitiator = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const forkThresholdAttoRep = await getZoltarForkThreshold(client, genesisUniverse)
 		const nonDecisionThresholdAttoRep = forkThresholdAttoRep / 2n + (forkThresholdAttoRep % 2n)
 		const invalidPrincipalAttoRep = nonDecisionThresholdAttoRep - 3n

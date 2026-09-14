@@ -2,7 +2,7 @@ import { bigintToSafeNumber, getAddress, type Address } from '@zoltar/core-share
 import { ABIS } from '../abis.js'
 import { getActiveBackend } from '../lib/activeEnvironment.js'
 import type { ChainBackend } from './chainBackend.js'
-import { hasErrorCode } from '../lib/errors.js'
+import { hasErrorCode, isWalletRejection } from '../lib/errors.js'
 import { sameAddress } from '../lib/address.js'
 import { sameChainId } from './chainId.js'
 
@@ -47,7 +47,7 @@ function getProviderErrorCode(error: unknown) {
 }
 
 function isUserDismissal(error: unknown) {
-	return getProviderErrorCode(error) === '4001'
+	return isWalletRejection(error)
 }
 
 function isUnsupportedMethod(error: unknown) {
