@@ -444,7 +444,9 @@ contract SecurityPool is SecurityPoolStorage {
 		return (amountAttoEth * shareTokenSupplyAttoShares) / settlementCollateralAttoEth;
 	}
 
-	function depositRepToVault(uint256 attoRepAmount, uint256 targetHealthFactorBps) external isOperational {
+	event VaultBackingFactorAdjusted(address indexed vault, uint256 backingFactorBps, uint256 capacityOwnershipAttoRep);
+
+	function depositRepToVault(uint256 attoRepAmount, uint256 targetHealthFactorBps) external {
 		DelegateCallForwarder.invoke(operationsDelegate, abi.encodeCall(SecurityPoolOperationsDelegate.depositRepToVault, (attoRepAmount, targetHealthFactorBps)));
 	}
 
@@ -784,10 +786,7 @@ contract SecurityPool is SecurityPoolStorage {
 
 	fallback() external {
 		bytes4 selector = msg.sig;
-		if (
-			selector != SecurityPoolOperationsDelegate.depositRepToVaultWithPermit.selector &&
-			selector != SecurityPoolOperationsDelegate.depositRepToVaultWithAuthorization.selector
-		) revert('Unsupported pool operation');
+		require(selector == SecurityPoolOperationsDelegate.adjustVaultBackingFactor.selector || selector == SecurityPoolOperationsDelegate.depositRepToVaultWithPermit.selector || selector == SecurityPoolOperationsDelegate.depositRepToVaultWithAuthorization.selector, 'Unsupported pool operation');
 		DelegateCallForwarder.invoke(operationsDelegate, msg.data);
 	}
 }

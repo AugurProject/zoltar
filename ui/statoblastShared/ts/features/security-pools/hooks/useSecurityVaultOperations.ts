@@ -9,8 +9,8 @@ import { loadErc20Allowance, loadErc20Balance } from '@zoltar/ui-zoltar-shared/p
 import { loadCoordinatorInitialReportFundingRequirement, loadOracleManagerDetails, queueOracleManagerOperation } from '../../../protocol/oracleCoordinator.js'
 import { approveErc20 } from '@zoltar/ui-zoltar-shared/protocol/tokenActions.js'
 import { isSecurityPoolVaultAdmissionClosed, loadSecurityVaultDetails } from '../../../protocol/securityPools.js'
-import { depositRepToVaultToSecurityPool, redeemRepFromVaultFromSecurityPool, redeemSecurityVaultFees, updateSecurityVaultFees } from '../../../protocol/securityVault.js'
-import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
+import { adjustVaultBackingFactor, depositRepToVaultToSecurityPool, redeemRepFromVaultFromSecurityPool, redeemSecurityVaultFees, updateSecurityVaultFees } from '../../../protocol/securityVault.js'
+import { getPendingTitle, getSuccessTitle, getFailureTitle } from '../lib/securityVaultActionTitles.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { normalizeAddress, sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
@@ -23,7 +23,7 @@ import { parseRepAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { getDefaultSecurityVaultFormState } from '../../markets/lib/marketForm.js'
 import { getOracleRequestEthGuardMessage, resolveOracleOperationEthFunding } from '../../open-oracle/lib/oracleRequestEth.js'
 import { requireDefined } from '@zoltar/ui-core-shared/forms/required.js'
-import { doesLoadedSecurityVaultMatchSelection, getSelectedVaultOwner, getStagedOperationTimeoutSeconds, MIN_STAGED_OPERATION_TIMEOUT_MINUTES, parseTargetHealthFactorBps } from '../lib/securityVault.js'
+import { doesLoadedSecurityVaultMatchSelection, getSelectedVaultOwner, getStagedOperationTimeoutSeconds, getVaultBackingFactorAdjustmentGuard, MIN_STAGED_OPERATION_TIMEOUT_MINUTES, parseTargetHealthFactorBps } from '../lib/securityVault.js'
 import { createSecurityVaultSuccessPresentation, createSecurityVaultTransactionIntent, createSecurityVaultWarningPresentation } from '../../transactionPresentations.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { buildWriteActionConfig, runWriteAction } from '@zoltar/ui-core-shared/transactions/writeAction.js'
@@ -46,6 +46,7 @@ type SecurityVaultProductionWriteClient = ReturnType<typeof createWalletWriteCli
 type SecurityVaultQueueResult = Pick<SecurityVaultActionResult, 'hash' | 'queuedOperation' | 'stagedExecution'>
 
 export type UseSecurityVaultOperationsDependencies<TWriteClient = SecurityVaultProductionWriteClient> = {
+	adjustVaultBackingFactor: (client: TWriteClient, securityPoolAddress: Address, backingFactorBps: bigint) => Promise<SecurityVaultActionResult>
 	approveErc20: (client: TWriteClient, tokenAddress: Address, spenderAddress: Address, amount: bigint, action: 'approveRep') => Promise<SecurityVaultActionResult>
 	createConnectedReadClient: () => SecurityVaultReadClient
 	createWalletWriteClient: (walletAddress: Address, callbacks?: Parameters<typeof createWalletWriteClient>[1]) => TWriteClient
@@ -62,6 +63,7 @@ export type UseSecurityVaultOperationsDependencies<TWriteClient = SecurityVaultP
 }
 
 const defaultUseSecurityVaultOperationsDependencies: UseSecurityVaultOperationsDependencies = {
+	adjustVaultBackingFactor,
 	approveErc20: async (client, tokenAddress, spenderAddress, amount, action) => await approveErc20(client, tokenAddress, spenderAddress, amount, action),
 	createConnectedReadClient: () => createConnectedReadClient(),
 	createWalletWriteClient,
@@ -106,60 +108,6 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 	const effectiveVaultSelectionKey = `${normalizeAddress(effectiveSecurityPoolAddressInput) ?? ''}:${normalizeAddress(effectiveSelectedVaultOwner) ?? ''}`
 	const currentVaultSelectionKeyRef = useRef(effectiveVaultSelectionKey)
 	currentVaultSelectionKeyRef.current = effectiveVaultSelectionKey
-	const getPendingTitle = (actionName: SecurityVaultActionResult['action']) => {
-		switch (actionName) {
-			case 'approveRep':
-				return 'Approving REP'
-			case 'depositRepToVault':
-				return 'Depositing REP'
-			case 'queueWithdrawRep':
-				return 'Withdrawing REP'
-			case 'redeemFees':
-				return 'Claiming fees'
-			case 'redeemRepFromVault':
-				return 'Redeeming REP'
-			case 'updateVaultFees':
-				return 'Refreshing vault fees'
-			default:
-				return assertNever(actionName)
-		}
-	}
-	const getSuccessTitle = (actionName: SecurityVaultActionResult['action']) => {
-		switch (actionName) {
-			case 'approveRep':
-				return 'REP approved'
-			case 'depositRepToVault':
-				return 'REP deposited'
-			case 'queueWithdrawRep':
-				return 'REP withdrawal queued'
-			case 'redeemFees':
-				return 'Fees claimed'
-			case 'redeemRepFromVault':
-				return 'REP redeemed'
-			case 'updateVaultFees':
-				return 'Vault fees refreshed'
-			default:
-				return assertNever(actionName)
-		}
-	}
-	const getFailureTitle = (actionName: SecurityVaultActionResult['action']) => {
-		switch (actionName) {
-			case 'approveRep':
-				return 'REP approval failed'
-			case 'depositRepToVault':
-				return 'REP deposit failed'
-			case 'queueWithdrawRep':
-				return 'REP withdrawal failed'
-			case 'redeemFees':
-				return 'Fee claim failed'
-			case 'redeemRepFromVault':
-				return 'REP redemption failed'
-			case 'updateVaultFees':
-				return 'Vault fee refresh failed'
-			default:
-				return assertNever(actionName)
-		}
-	}
 	const clearRepLoaders = () => {
 		repBalanceLoader.invalidate()
 		repBalanceLoader.signal.value = { error: undefined, loading: false, value: undefined }
@@ -346,6 +294,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 					},
 					onWriteError: message => {
 						if (!isVaultActionSnapshotCurrent(snapshot)) return
+						securityVaultError.value = message
 						securityVaultFeedback.value = createErrorActionFeedback(actionName, getFailureTitle(actionName), message)
 					},
 					refreshState: async () => {
@@ -428,6 +377,30 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				await reloadSecurityVaultRepBalance(details.repToken, vaultAddress)
 				if (!isCurrentSelection()) return
 				await reloadSecurityVaultRepAllowance(details.repToken, vaultAddress, securityPoolAddress)
+			},
+		)
+	}
+
+	const adjustBackingFactor = async (value: string) => {
+		if (securityVaultActiveAction.value !== undefined) return
+		const snapshot = createVaultActionSnapshot()
+		await runVaultAction(
+			'adjustVaultBackingFactor',
+			snapshot,
+			async (vaultAddress, securityPoolAddress, isCurrentSelection) => {
+				const factor = parseTargetHealthFactorBps(value, 'Vault backing factor')
+				const details = await dependencies.loadSecurityVaultDetails(securityPoolAddress, vaultAddress)
+				if (!isCurrentSelection()) return undefined
+				const guard = getVaultBackingFactorAdjustmentGuard(details)
+				if (guard !== undefined) throw new Error(guard)
+				if (await dependencies.isSecurityPoolVaultAdmissionClosed(securityPoolAddress)) throw new Error(securityPoolCopy.vaultDepositAdmissionClosedDetail)
+				if (!isCurrentSelection()) return undefined
+				if (details === undefined || (details.vaultAttoRepBacking * 10_000n) / factor === 0n) throw new Error('Backing factor must leave positive capacity.')
+				return await dependencies.adjustVaultBackingFactor(dependencies.createWalletWriteClient(vaultAddress, { onTransactionPrepared, onTransactionSubmitted }), securityPoolAddress, factor)
+			},
+			'Failed to adjust backing factor',
+			async (_result, securityPoolAddress, vaultAddress, isCurrentSelection) => {
+				await reloadSecurityVaultDetails(securityPoolAddress, vaultAddress, isCurrentSelection)
 			},
 		)
 	}
@@ -553,6 +526,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 	}, [accountAddress, enabled, securityVaultDetails.value?.repToken, securityVaultDetails.value?.securityPoolAddress, securityVaultForm.value.securityPoolAddress, securityVaultForm.value.selectedVaultOwner])
 
 	return {
+		adjustBackingFactor,
 		approveRep,
 		depositRepToVault,
 		loadSecurityVault,

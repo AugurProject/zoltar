@@ -65,6 +65,9 @@ function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {
 
 function createSecurityVaultOperationsDependencies(overrides: Partial<UseSecurityVaultOperationsDependencies<TestSecurityVaultWriteClient>> = {}): UseSecurityVaultOperationsDependencies<TestSecurityVaultWriteClient> {
 	return {
+		adjustVaultBackingFactor: async () => {
+			throw new Error('Unexpected adjustment')
+		},
 		approveErc20: async () => {
 			throw new Error('approveErc20 should not be called in this test')
 		},
@@ -147,6 +150,33 @@ describe('useSecurityVaultOperations', () => {
 			restoreActiveEnvironment = undefined
 			mock.restore()
 		},
+	})
+
+	test('adjustment revalidates commitments and prevents duplicate submissions', async () => {
+		const write = createDeferred<{ action: 'adjustVaultBackingFactor'; hash: '0x01' }>()
+		const adjustVaultBackingFactor = mock(async () => await write.promise)
+		let committed = false
+		const dependencies = createSecurityVaultOperationsDependencies({
+			adjustVaultBackingFactor,
+			loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails({ settlementCollateralAttoEth: committed ? 1n : 0n })),
+		})
+		let hookState: UseSecurityVaultOperationsState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		cleanupRenderedComponent = (await renderIntoDocument(h(Harness, {}))).cleanup
+		const first = act(async () => await requireHookState(hookState).adjustBackingFactor('2'))
+		await waitFor(() => expect(adjustVaultBackingFactor).toHaveBeenCalledTimes(1))
+		await requireHookState(hookState).adjustBackingFactor('3')
+		expect(adjustVaultBackingFactor).toHaveBeenCalledTimes(1)
+		expect(adjustVaultBackingFactor).toHaveBeenCalledWith(expect.anything(), SECURITY_POOL_ADDRESS, 20_000n)
+		write.resolve({ action: 'adjustVaultBackingFactor', hash: '0x01' })
+		await first
+		expect(requireHookState(hookState).securityVaultFeedback?.status.tone).toBe('success')
+		committed = true
+		await act(async () => await requireHookState(hookState).adjustBackingFactor('3'))
+		expect(adjustVaultBackingFactor).toHaveBeenCalledTimes(1)
+		expect(requireHookState(hookState).securityVaultError).toContain('committed settlement collateral')
 	})
 
 	test('approveRep snapshots the submitted deposit amount before async preflight completes', async () => {

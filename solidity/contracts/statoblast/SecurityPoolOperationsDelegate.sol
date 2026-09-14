@@ -12,6 +12,7 @@ import { SecurityPoolEventEmitter } from './SecurityPoolEventEmitter.sol';
 import { AccountingReason } from './interfaces/ISecurityPool.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
+import { EscalationGame } from './EscalationGame.sol';
 import { IShareToken } from './interfaces/IShareToken.sol';
 
 interface ISecurityPoolRepDepositContext {
@@ -21,6 +22,7 @@ interface ISecurityPoolRepDepositContext {
 	function isEscalationResolved() external view returns (bool);
 	function questionId() external view returns (uint256);
 	function questionData() external view returns (address);
+	function escalationGame() external view returns (EscalationGame);
 	function repToken() external view returns (address);
 	function universeId() external view returns (uint248);
 	function updateRetentionRate() external;
@@ -74,6 +76,29 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		}
 	}
 
+	event VaultBackingFactorAdjusted(address indexed vault, uint256 backingFactorBps, uint256 capacityOwnershipAttoRep);
+
+	function adjustVaultBackingFactor(uint256 backingFactorBps) external {
+		ISecurityPoolRepDepositContext pool = ISecurityPoolRepDepositContext(address(this));
+		_requireVaultAdmissionOpen(pool);
+		require(backingFactorBps >= SecurityPoolUtils.BPS_DENOMINATOR, 'Backing factor below minimum');
+		// Both directions are restricted: capacity also allocates live obligations and fees.
+		require(settlementCollateralAttoEth == 0, 'Capacity committed');
+		EscalationGame game = pool.escalationGame();
+		require(address(game) == address(0) || game.disputeStakedRepByVaultAttoRep(msg.sender) == 0, 'Vault REP in dispute');
+		pool.updateVaultFees(msg.sender);
+		uint256 backing = pool.backingUnitsToAttoRep(securityVaults[msg.sender].repBackingUnits);
+		require(backing > 0, 'Vault has no REP backing');
+		uint256 capacity = Math.mulDiv(backing, SecurityPoolUtils.BPS_DENOMINATOR, backingFactorBps);
+		require(capacity > 0, 'Capacity must be positive');
+		_setVaultCapacity(msg.sender, capacity, 0);
+		pool.updateRetentionRate();
+		emit VaultBackingFactorAdjusted(msg.sender, backingFactorBps, capacity);
+		SecurityPoolEventEmitter emitter = pool.eventEmitter();
+		_delegateEvent(address(emitter), abi.encodeCall(SecurityPoolEventEmitter.emitVaultAccountingCheckpoint, (msg.sender)));
+		_delegateEvent(address(emitter), abi.encodeCall(SecurityPoolEventEmitter.emitPoolAccountingCheckpoint, (AccountingReason.CapacityOwnershipChange, msg.sender)));
+	}
+
 	function depositRepToVault(uint256 attoRepAmount, uint256 targetHealthFactorBps) external {
 		_depositRepToVault(msg.sender, attoRepAmount, targetHealthFactorBps, true);
 	}
@@ -100,15 +125,7 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 
 	function _depositRepToVault(address vault, uint256 attoRepAmount, uint256 targetHealthFactorBps, bool transferRep) private {
 		ISecurityPoolRepDepositContext pool = ISecurityPoolRepDepositContext(address(this));
-		if (
-			systemState != SystemState.Operational ||
-			IZoltarForkState(pool.zoltar()).getForkTime(pool.universeId()) != 0
-		) revert('Pool is not operational');
-		if (pool.isEscalationResolved()) revert('Escalation resolved');
-		if (
-			block.timestamp >= IQuestionEndTime(pool.questionData()).getQuestionEndDate(pool.questionId()) &&
-			!postEndVaultAdmissionAllowed
-		) revert('Vault admission closed');
+		_requireVaultAdmissionOpen(pool);
 		require(attoRepAmount > 0, 'Zero REP');
 		require(targetHealthFactorBps >= SecurityPoolUtils.BPS_DENOMINATOR, 'HF low');
 		pool.updateVaultFees(vault);
@@ -128,6 +145,18 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		SecurityPoolEventEmitter emitter = pool.eventEmitter();
 		_delegateEvent(address(emitter), abi.encodeCall(SecurityPoolEventEmitter.emitVaultAccountingCheckpoint, (vault)));
 		_delegateEvent(address(emitter), abi.encodeCall(SecurityPoolEventEmitter.emitPoolAccountingCheckpoint, (AccountingReason.CapacityOwnershipChange, vault)));
+	}
+
+	function _requireVaultAdmissionOpen(ISecurityPoolRepDepositContext pool) private view {
+		if (
+			systemState != SystemState.Operational ||
+			IZoltarForkState(pool.zoltar()).getForkTime(pool.universeId()) != 0
+		) revert('Pool is not operational');
+		if (pool.isEscalationResolved()) revert('Escalation resolved');
+		if (
+			block.timestamp >= IQuestionEndTime(pool.questionData()).getQuestionEndDate(pool.questionId()) &&
+			!postEndVaultAdmissionAllowed
+		) revert('Vault admission closed');
 	}
 
 	function _delegateEvent(address emitter, bytes memory callData) private {

@@ -186,6 +186,7 @@ export type SecurityPoolCreationResult = {
 	universeId: bigint
 }
 export type SecurityVaultDetails = {
+	settlementCollateralAttoEth?: bigint
 	associatedRepPerCapacityBps?: bigint
 	badDebtAttoEth: bigint
 	currentRetentionRate: bigint
@@ -208,7 +209,7 @@ export type SecurityVaultDetails = {
 }
 
 export type SecurityVaultActionResult = ActionResult & {
-	action: 'approveRep' | 'depositRepToVault' | 'queueWithdrawRep' | 'redeemFees' | 'redeemRepFromVault' | 'updateVaultFees'
+	action: 'adjustVaultBackingFactor' | 'approveRep' | 'depositRepToVault' | 'queueWithdrawRep' | 'redeemFees' | 'redeemRepFromVault' | 'updateVaultFees'
 	queuedOperation?: StagedOracleQueuedResult
 	stagedExecution?: StagedOracleExecutionResult
 }

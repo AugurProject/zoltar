@@ -15,6 +15,7 @@ export type ContractDeclaration = {
 
 export type ContractReference = {
 	compiledAbiFingerprint: string
+	delegatedInteractions?: string
 	interactions: Interaction[]
 	name: string
 	purpose: string
@@ -44,7 +45,7 @@ export const contractPagesDirectory = 'docs/reference/contracts'
 export function contractPageOutputPath(contractName: string): string {
 	return `${contractPagesDirectory}/${contractName.toLowerCase()}.html`
 }
-export const expectedProductionSoliditySourceFingerprint = 'b6188af5dd5cec99068a46674968afee0da1d842d4e15dd07d71155acc62b914'
+export const expectedProductionSoliditySourceFingerprint = '3bae2c2924be1d65a9e04234940131adf20c2c51de12dbe735f042e37bce858d'
 
 export const eventSourceByName: Record<string, string> = {
 	VaultBadDebtMigrated: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
@@ -522,7 +523,7 @@ export const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/statoblast/EscalationGameStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol': '2a27b7ed5407ac8067de39d67bbe84902f4c1c36ab070eeaeb99375db6f8b8e1',
 	'solidity/contracts/statoblast/LiquidationApprovalRegistry.sol': '986a20fc0e4cfe0898be8fc91c6b911b93ef0ae1086d4cb1142a93c66f315684',
-	'solidity/contracts/statoblast/SecurityPool.sol': '17194c7540e3cc290313af38216a310f9456ec0f0136989af00890c4c1b36f05',
+	'solidity/contracts/statoblast/SecurityPool.sol': 'a49fd8278be655938e37018391c598f3f8198dd1b6943e938875898596e925e0',
 	'solidity/contracts/statoblast/SecurityPoolForker.sol': '282c464a68623405a6241816a1c5fcef4b80e9db39e42e89d77177d8a4f10eae',
 	'solidity/contracts/statoblast/SecurityPoolForkerBase.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/SecurityPoolForkerStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
@@ -782,8 +783,10 @@ export const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '0b87581d4be53e98d7db5eedad7e5183f878b19ba2e138847aa2f3cf8f436f60',
+		compiledAbiFingerprint: 'a50a904a0b54066de0f46ed7fdbd3101412b41b54a39b68fee45152a0872abc4',
 		name: 'SecurityPool',
+		delegatedInteractions:
+			'The pool fallback exposes `adjustVaultBackingFactor(backingFactorBps)` through `ISecurityPool`. It adjusts only the caller’s vault, without transferring REP: capacity becomes `pool-held vault REP × 10,000 / backingFactorBps`, rounded down. The factor must be at least 10,000 and leave positive capacity. The pool must be operational, unforked, unresolved, and open to vault admission; settlement collateral and the caller’s dispute-staked REP must both be zero. The call checkpoints fees before changing ownership, updates retention, and emits `VaultBackingFactorAdjusted` plus vault and pool accounting checkpoints. This is a one-time adjustment of existing capacity, not a stored target for later deposits or a health guarantee.',
 		purpose: 'Holds ETH collateral and REP underwriting, accounts for vaults and fees, mints shares, and routes local escalation.',
 		readAbiFingerprint: '5ae55878a1c73748770636fc679eb325adb0e379a2cf004e759a075fd70fc769',
 		readSurface:

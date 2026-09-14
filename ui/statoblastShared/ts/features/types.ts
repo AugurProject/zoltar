@@ -203,6 +203,7 @@ type SecurityVaultRouteContentProps = {
 	accountState: AccountState
 	loadingSecurityVault: boolean
 	onApproveRep: (amount?: bigint) => void
+	onAdjustVaultBackingFactor: (factor: string) => void
 	onDepositRepToVault: () => void
 	onLoadSecurityVault: (vaultAddress?: string) => void
 	onRedeemFees: () => void

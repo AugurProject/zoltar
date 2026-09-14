@@ -179,6 +179,7 @@ interface ISecurityPool {
 	function redeemFees(address vault) external;
 
 	function withdrawRepFromVault(address vault, uint256 attoRepAmount) external;
+	function adjustVaultBackingFactor(uint256 backingFactorBps) external;
 	function depositRepToVault(uint256 attoRepAmount, uint256 targetHealthFactorBps) external;
 	function depositRepToVaultWithPermit(uint256 attoRepAmount, uint256 targetHealthFactorBps, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external;
 	function depositRepToVaultWithAuthorization(address owner, uint256 attoRepAmount, uint256 targetHealthFactorBps, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external;

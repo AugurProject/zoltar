@@ -47,10 +47,11 @@ import {
 	MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP,
 } from '../lib/securityVault.js'
 import type { ReadinessAction, SecurityVaultSectionProps } from '../../types.js'
+import { DepositBackingFactorField, VaultBackingFactorForm } from './VaultBackingFactorForm.js'
 import { SelectedVaultSummarySection } from './SelectedVaultSummarySection.js'
 import { getQueuedVaultOperation, getQueuedVaultOperationStatus, VaultQueuedOperationStatusCard } from './VaultQueuedOperationStatusCard.js'
 
-type VaultActionModal = 'claim-fees' | 'deposit-rep' | 'withdraw-rep' | undefined
+type VaultActionModal = 'claim-fees' | 'deposit-rep' | 'withdraw-rep' | 'adjust-backing' | undefined
 
 export function SecurityVaultSection({
 	accountState,
@@ -60,6 +61,7 @@ export function SecurityVaultSection({
 	loadingSecurityVault,
 	modalFirst = false,
 	onApproveRep,
+	onAdjustVaultBackingFactor,
 	onDepositRepToVault,
 	onLoadSecurityVault,
 	onRedeemFees,
@@ -95,8 +97,6 @@ export function SecurityVaultSection({
 	const [vaultActionModal, setVaultActionModal] = useState<VaultActionModal>(undefined)
 	const refreshVaultActionsDescriptionId = useId()
 	const vaultLifecycleBlockerId = useId()
-	const embeddedTargetHealthFactorDescriptionId = useId()
-	const modalTargetHealthFactorDescriptionId = useId()
 	const isOnActiveAppChain = isActiveAppChain(accountState?.chainId)
 	const normalizedSecurityVaultForm = {
 		depositAmount: securityVaultForm.depositAmount ?? '0',
@@ -329,6 +329,8 @@ export function SecurityVaultSection({
 		lastAutoLoadKey.current = autoLoadKey
 		void onLoadSecurityVault()
 	}, [autoLoadKey, autoLoadVault, hasLoadedCurrentVault, loadingSecurityVault, normalizedSecurityVaultForm.securityPoolAddress, onLoadSecurityVault, selectedVaultOwner])
+	const adjustmentBlocker = repExitLauncherBlocker ?? vaultLifecycleBlocker ?? (!depositRepToVaultEnabled ? securityPoolCopy.vaultDepositAdmissionClosedDetail : undefined)
+	const adjustmentForm = <VaultBackingFactorForm key={autoLoadKey} details={currentSelectedVaultDetails} blocker={adjustmentBlocker} busy={securityVaultActiveAction !== undefined} pending={securityVaultActiveAction === 'adjustVaultBackingFactor'} onAdjust={onAdjustVaultBackingFactor} />
 	const vaultReadinessActions = getSecurityPoolVaultReadinessActions([
 		{
 			actionLabel: depositRepActionLabel,
@@ -359,6 +361,15 @@ export function SecurityVaultSection({
 			...(claimFeesDisabledReasonId === undefined ? {} : { disabledReasonId: claimFeesDisabledReasonId }),
 			...(claimFeesAvailabilityBlocker === undefined ? {} : { blocker: claimFeesAvailabilityBlocker }),
 			title: securityPoolCopy.claimFeesTitle,
+		},
+		{
+			actionLabel: securityPoolCopy.adjustVaultBackingFactor,
+			description: securityPoolCopy.adjustVaultBackingFactorDescription,
+			key: 'adjust-backing',
+			...(adjustmentBlocker === undefined && canUseLoadedVaultActions ? { onAction: () => setVaultActionModal('adjust-backing') } : {}),
+			readiness: adjustmentBlocker === undefined && canUseLoadedVaultActions ? 'ready' : 'blocked',
+			...(adjustmentBlocker === undefined ? {} : { blocker: adjustmentBlocker }),
+			title: securityPoolCopy.adjustVaultBackingFactor,
 		},
 		...extraReadinessActions,
 	] satisfies ReadinessAction[])
@@ -420,19 +431,7 @@ export function SecurityVaultSection({
 								</button>
 							</div>
 						</label>
-						<label className='field'>
-							<span>{securityPoolCopy.targetHealthFactor}</span>
-							<FormInput
-								aria-describedby={embeddedTargetHealthFactorDescriptionId}
-								value={normalizedSecurityVaultForm.targetHealthFactor}
-								onInput={event => onSecurityVaultFormChange({ targetHealthFactor: event.currentTarget.value })}
-								disabled={!depositRepToVaultEnabled}
-								invalid={targetHealthFactorGuardMessage !== undefined}
-							/>
-							<small className='field-help' id={embeddedTargetHealthFactorDescriptionId}>
-								{targetHealthFactorGuardMessage ?? securityPoolCopy.targetHealthFactorHelp}
-							</small>
-						</label>
+						<DepositBackingFactorField value={normalizedSecurityVaultForm.targetHealthFactor} error={targetHealthFactorGuardMessage} disabled={!depositRepToVaultEnabled} onChange={targetHealthFactor => onSecurityVaultFormChange({ targetHealthFactor })} />
 						<MetricGrid>
 							<MetricField label={securityPoolCopy.walletRep}>{walletRepBalanceLoading ? <LoadingText>{commonCopy.loading}</LoadingText> : <CurrencyValue value={walletRepBalanceAttoRep} suffix={repTokenSymbol} />}</MetricField>
 						</MetricGrid>
@@ -551,6 +550,10 @@ export function SecurityVaultSection({
 				)}
 			</OperationModal>
 
+			<OperationModal closeOnSuccessKey={securityVaultResult?.action === 'adjustVaultBackingFactor' ? securityVaultResult.hash : undefined} context={vaultTransactionContext} isOpen={vaultActionModal === 'adjust-backing'} onClose={() => setVaultActionModal(undefined)} title={securityPoolCopy.adjustVaultBackingFactor}>
+				{adjustmentForm}
+				<ErrorNotice message={securityVaultError} />
+			</OperationModal>
 			<OperationModal context={vaultTransactionContext} isOpen={vaultActionModal === 'claim-fees'} onClose={() => setVaultActionModal(undefined)} title={securityPoolCopy.claimFeesTitle}>
 				<MetricGrid>
 					<MetricField label={securityPoolCopy.claimableFees}>{currentSelectedVaultDetails === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue exactWhenRoundedToZero value={currentSelectedVaultDetails.claimableFeesAttoEth} suffix={commonCopy.eth} />}</MetricField>
@@ -572,6 +575,9 @@ export function SecurityVaultSection({
 		</>
 	) : (
 		<>
+			<SectionBlock title={securityPoolCopy.adjustVaultBackingFactor} variant='embedded'>
+				{adjustmentForm}
+			</SectionBlock>
 			<SectionBlock title={securityPoolCopy.claimFeesTitle} variant='embedded'>
 				{currentSelectedVaultDetails === undefined ? (
 					<p className='detail'>{securityPoolCopy.selectedVaultDetailsUnavailable}</p>
@@ -605,19 +611,7 @@ export function SecurityVaultSection({
 						</button>
 					</div>
 				</label>
-				<label className='field'>
-					<span>{securityPoolCopy.targetHealthFactor}</span>
-					<FormInput
-						aria-describedby={modalTargetHealthFactorDescriptionId}
-						value={normalizedSecurityVaultForm.targetHealthFactor}
-						onInput={event => onSecurityVaultFormChange({ targetHealthFactor: event.currentTarget.value })}
-						disabled={!depositRepToVaultEnabled}
-						invalid={targetHealthFactorGuardMessage !== undefined}
-					/>
-					<small className='field-help' id={modalTargetHealthFactorDescriptionId}>
-						{targetHealthFactorGuardMessage ?? securityPoolCopy.targetHealthFactorHelp}
-					</small>
-				</label>
+				<DepositBackingFactorField value={normalizedSecurityVaultForm.targetHealthFactor} error={targetHealthFactorGuardMessage} disabled={!depositRepToVaultEnabled} onChange={targetHealthFactor => onSecurityVaultFormChange({ targetHealthFactor })} />
 				<TokenApprovalControl
 					renderActions={({ button, notice, noticeId }) => renderDepositActions(button, notice, noticeId)}
 					actionLabel={depositRepActionLabel}

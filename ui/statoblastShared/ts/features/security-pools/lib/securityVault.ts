@@ -11,12 +11,12 @@ export const MAX_STAGED_OPERATION_TIMEOUT_MINUTES = 5n
 const PRICE_PRECISION = 10n ** 18n
 const BPS_DENOMINATOR = 10_000n
 
-export function parseTargetHealthFactorBps(value: string) {
+export function parseTargetHealthFactorBps(value: string, label = 'Deposit backing factor') {
 	const trimmed = value.trim()
-	if (!/^\d+(?:\.\d{1,4})?$/.test(trimmed)) throw new Error('Deposit target factor must be a number with at most four decimal places')
+	if (!/^\d+(?:\.\d{1,4})?$/.test(trimmed)) throw new Error(`${label} must be a number with at most four decimal places`)
 	const [whole = '', fraction = ''] = trimmed.split('.')
 	const factorBps = BigInt(whole) * BPS_DENOMINATOR + BigInt(fraction.padEnd(4, '0'))
-	if (factorBps < BPS_DENOMINATOR) throw new Error('Deposit target factor must be at least 1.00×')
+	if (factorBps < BPS_DENOMINATOR) throw new Error(`${label} must be at least 1.00×`)
 	return factorBps
 }
 
@@ -126,4 +126,12 @@ export function isOracleManagerPriceUsable(oracleManagerDetails: Pick<OracleMana
 	if (currentTimestamp === undefined) return true
 	const validUntilTimestamp = oracleManagerDetails.priceValidUntilTimestamp ?? getOracleManagerPriceValidUntilTimestamp(oracleManagerDetails.lastSettlementTimestamp)
 	return validUntilTimestamp !== undefined && currentTimestamp < validUntilTimestamp
+}
+
+export function getVaultBackingFactorAdjustmentGuard(details: SecurityVaultDetails | undefined) {
+	if (details === undefined || details.settlementCollateralAttoEth === undefined) return 'Refresh vault details before adjusting the backing factor.'
+	if (details.vaultAttoRepBacking <= 0n) return 'Deposit REP to create a vault first.'
+	if (details.settlementCollateralAttoEth > 0n) return 'Backing factor changes are unavailable while the pool has committed settlement collateral.'
+	if (details.disputeStakedAttoRep > 0n) return 'Backing factor changes are unavailable while vault REP is in a dispute.'
+	return undefined
 }

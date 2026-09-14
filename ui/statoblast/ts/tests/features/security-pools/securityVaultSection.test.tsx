@@ -51,6 +51,7 @@ function createSecurityVaultSectionProps(overrides: Partial<SecurityVaultSection
 		accountState: createAccountState(),
 		loadingSecurityVault: false,
 		onApproveRep: () => undefined,
+		onAdjustVaultBackingFactor: () => undefined,
 		onDepositRepToVault: () => undefined,
 		onLoadSecurityVault: () => undefined,
 		onRedeemFees: () => undefined,
@@ -158,6 +159,44 @@ describe('SecurityVaultSection', () => {
 			await cleanupRenderedComponent?.()
 			cleanupRenderedComponent = undefined
 		},
+	})
+
+	test('previews a separate whole-vault adjustment and submits its factor', async () => {
+		let submitted: string | undefined
+		const rendered = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					modalFirst: true,
+					securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n, settlementCollateralAttoEth: 0n }),
+					onAdjustVaultBackingFactor: factor => {
+						submitted = factor
+					},
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		const page = within(document.body)
+		fireEvent.click(page.getByRole('button', { name: 'Adjust backing factor' }))
+		const dialog = within(page.getByRole('dialog', { name: 'Adjust backing factor' }))
+		const input = dialog.getByLabelText('Vault backing factor')
+		if (!(input instanceof HTMLInputElement)) throw new Error('Expected backing factor input')
+		expect(input.value).toBe('6')
+		fireEvent.input(input, { target: { value: '0.9' } })
+		expect(dialog.getAllByText('Vault backing factor must be at least 1.00×')).toHaveLength(1)
+		expect(dialog.getByRole('button', { name: 'Adjust backing factor' }).getAttribute('aria-describedby')).toBe(input.getAttribute('aria-describedby'))
+		fireEvent.input(input, { target: { value: '2' } })
+		expect(dialog.getByText('Capacity after adjustment')).toBeDefined()
+		expect(page.getByRole('dialog', { name: 'Adjust backing factor' }).textContent?.replaceAll('\u00a0', ' ')).toMatch(/6(?:\.0+)?\s+capacity units/)
+		fireEvent.click(dialog.getByRole('button', { name: 'Adjust backing factor' }))
+		expect(submitted).toBe('2')
+	})
+
+	test('blocks adjustment when settlement collateral or dispute REP is committed', async () => {
+		for (const details of [createSecurityVaultDetails({ settlementCollateralAttoEth: 1n, disputeStakedAttoRep: 0n }), createSecurityVaultDetails({ settlementCollateralAttoEth: 0n, disputeStakedAttoRep: 1n })]) {
+			const rendered = await renderIntoDocument(<SecurityVaultSection {...createSecurityVaultSectionProps({ securityVaultDetails: details })} />)
+			expectTransactionButtonDisabled(document.body, 'Adjust backing factor')
+			await rendered.cleanup()
+		}
 	})
 
 	test('shows the selected child REP symbol on vault action controls', async () => {
@@ -796,9 +835,9 @@ describe('SecurityVaultSection', () => {
 			const documentQueries = within(document.body)
 			if (modalFirst) fireEvent.click(documentQueries.getByRole('button', { name: 'Deposit REP' }))
 			const scope = modalFirst ? within(documentQueries.getByRole('dialog', { name: 'Deposit REP' })) : documentQueries
-			const factorInput = scope.getByText('Deposit target factor').parentElement?.querySelector('input')
+			const factorInput = scope.getByText('Deposit backing factor').parentElement?.querySelector('input')
 			expect(factorInput).not.toBeNull()
-			const factorError = scope.getByText('Deposit target factor must be a number with at most four decimal places')
+			const factorError = scope.getByText('Deposit backing factor must be a number with at most four decimal places')
 			expect(factorInput?.getAttribute('aria-invalid')).toBe('true')
 			expect(factorInput?.getAttribute('aria-describedby')).toBe(factorError.id)
 			renderedComponent.cleanup()

@@ -664,6 +664,7 @@ export async function loadSecurityVaultDetails(client: ReadClient, securityPoolA
 		disputeStakedRepByVaultAttoRep,
 		openInterestAttoEth,
 		capacityBackingFactorsBps,
+		settlementCollateralAttoEth,
 	] = await Promise.all([
 		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'vaultBadDebtAttoEth', address: securityPoolAddress, args: [vaultAddress] }),
 		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'currentRetentionRate', address: securityPoolAddress, args: [] }),
@@ -679,6 +680,7 @@ export async function loadSecurityVaultDetails(client: ReadClient, securityPoolA
 		loadEscalationVaultData(client, securityPoolAddress, [vaultAddress]).then(values => values[0]?.disputeStakedAttoRep ?? 0n),
 		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'getVaultOpenInterestAttoEth', address: securityPoolAddress, args: [vaultAddress] }),
 		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'getVaultCapacityBackingFactorsBps', address: securityPoolAddress, args: [vaultAddress] }),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'settlementCollateralAttoEth', address: securityPoolAddress, args: [] }),
 	])
 	const repTokenSymbol = await client.readContract({ abi: ReputationToken_ReputationToken.abi, functionName: 'symbol', address: repToken, args: [] })
 
@@ -690,6 +692,7 @@ export async function loadSecurityVaultDetails(client: ReadClient, securityPoolA
 	})
 
 	return {
+		settlementCollateralAttoEth,
 		associatedRepPerCapacityBps: capacityBackingFactorsBps[0],
 		badDebtAttoEth,
 		currentRetentionRate,
