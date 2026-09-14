@@ -22,8 +22,8 @@ describe('Audit PoC: capacity-exit liquidation', () => {
 		const { client, mockWindow, securityPoolAddresses } = fixture
 		const securityPool = securityPoolAddresses.securityPool
 		const coordinator = securityPoolAddresses.priceOracleManagerAndOperatorQueuer
-		const exitVault = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		const receiverVault = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const exitVault = createWriteClient(mockWindow, TEST_ADDRESSES[1])
+		const receiverVault = createWriteClient(mockWindow, TEST_ADDRESSES[2])
 		const receiverBacking = repDeposit * 10n
 		const exitWalletBeforeSetup = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), exitVault.account.address)
 

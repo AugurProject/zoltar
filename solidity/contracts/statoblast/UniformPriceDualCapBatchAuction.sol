@@ -14,7 +14,7 @@ import { UniformPriceDualCapBatchAuctionStorage } from './UniformPriceDualCapBat
 // every possible tick has height <= 28. The auction intentionally does not add a
 // bid or tick cap because valid price levels must remain open during bidding; see
 // the synthetic max-depth gas tests.
-contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEvents {
+contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 	struct Bid {
 		address bidder;
 		bool claimed;

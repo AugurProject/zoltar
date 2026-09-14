@@ -41,8 +41,7 @@ bun run setup
 
 Important:
 
-- `bun run setup` installs every independent package from its own frozen lockfile exactly once, generates shared contract and vendor inputs once, and builds the UI and test outputs in dependency order.
-- Repository install helpers automatically use Bun 1.4.2 when invoked from another Bun version, avoiding local-package resolution differences between Bun releases.
+- `bun run setup` installs the Bun workspace from the root frozen lockfile once, generates shared contract and vendor inputs once, and builds the UI and test outputs in dependency order.
 - The root install includes the repository-pinned native Anvil binary on supported platforms. Set `ANVIL_BIN` to another installation only when overriding it intentionally.
 - Standalone commands like `bun tsc`, `bun run tsc`, and `bun run test` assume the root dependencies are already installed.
 

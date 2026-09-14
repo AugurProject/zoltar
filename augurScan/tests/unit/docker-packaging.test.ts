@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { cp, mkdir, mkdtemp, readFile, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { dockerInstructions, parseDockerfile, requireDockerStage } from '../../../tooling/testing/packaging-parsers.ts'
 
 const windowsLauncher = join(import.meta.dir, '..', '..', 'start.bat')
@@ -21,11 +21,12 @@ describe('Docker packaging', () => {
 			for (const copy of dockerInstructions(runtime, 'COPY').filter(value => value.startsWith('shared/'))) {
 				const [source, destination] = copy.split(/\s+/u)
 				if (source === undefined || destination === undefined) throw new Error(`Invalid shared source COPY: ${copy}`)
-				const target = join(workspace, destination)
+				const target = join(workspace, destination, source.endsWith('.json') && destination.endsWith('/') ? basename(source) : '')
 				await mkdir(dirname(target), { recursive: true })
 				await cp(join(repositoryRoot, source), target, { recursive: true })
 			}
 			await symlink(join(repositoryRoot, 'node_modules'), join(workspace, 'node_modules'), 'dir')
+			await symlink(join(repositoryRoot, 'shared/core/node_modules'), join(workspace, 'shared/core/node_modules'), 'dir')
 			const result = Bun.spawnSync([process.execPath, '-e', "await import('./shared/core/ts/evm/ethereum.ts')"], { cwd: workspace, stdout: 'pipe', stderr: 'pipe' })
 			expect(result.stderr.toString()).toBe('')
 			expect(result.exitCode).toBe(0)
@@ -49,10 +50,10 @@ describe('Docker packaging', () => {
 
 	test('builds browser TypeScript outside the final runtime image', async () => {
 		const source = await readFile(dockerfile, 'utf8')
-		expect(source).toContain('FROM oven/bun:1.4.2-alpine AS browser-build')
+		expect(source).toContain('FROM workspace AS browser-build')
 		expect(source).toContain('COPY augurScan/browser ./browser')
 		expect(source).toContain('RUN bun run build')
-		const runtimeStage = source.slice(source.indexOf('FROM oven/bun:1.4.2-alpine AS runtime'))
+		const runtimeStage = source.slice(source.indexOf('FROM oven/bun:${BUN_VERSION}-alpine AS runtime'))
 		expect(runtimeStage).toContain('COPY --from=browser-build /workspace/augurScan/public ./augurScan/public')
 		expect(runtimeStage).toContain('COPY augurScan/schema.sql ./augurScan/schema.sql')
 		expect(runtimeStage).toContain('COPY augurScan/migrations ./augurScan/migrations')
@@ -62,8 +63,8 @@ describe('Docker packaging', () => {
 
 	test('packages source-provenance inputs beside the runtime server', async () => {
 		const source = await readFile(dockerfile, 'utf8')
-		const runtimeStage = source.slice(source.indexOf('FROM oven/bun:1.4.2-alpine AS runtime'))
-		expect(runtimeStage).toContain('COPY augurScan/package.json augurScan/bun.lock ./augurScan/')
+		const runtimeStage = source.slice(source.indexOf('FROM oven/bun:${BUN_VERSION}-alpine AS runtime'))
+		expect(runtimeStage).toContain('COPY augurScan/package.json ./augurScan/')
 		expect(runtimeStage).toContain('COPY augurScan/scripts/verify-compose-source.ts ./augurScan/scripts/verify-compose-source.ts')
 		expect(runtimeStage).toContain('COPY augurScan/scripts/verify-export-page.ts ./augurScan/scripts/verify-export-page.ts')
 		expect(runtimeStage).not.toContain('COPY augurScan/package.json augurScan/bun.lock ./\n')

@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, realpathSync } from 'node:fs'
 import { join, win32 } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
@@ -78,6 +78,11 @@ export const resolveAnvilBinary = ({
 		const executableName = platform === 'win32' ? 'anvil.exe' : 'anvil'
 		const repositoryAnvilBin = platform === 'win32' ? win32.join(repositoryRoot, 'node_modules', '@foundry-rs', platformPackage, 'bin', executableName) : join(repositoryRoot, 'node_modules', '@foundry-rs', platformPackage, 'bin', executableName)
 		if (pathExists(repositoryAnvilBin)) return repositoryAnvilBin
+		const packageLink = join(repositoryRoot, 'node_modules', '@foundry-rs', 'anvil')
+		if (existsSync(packageLink)) {
+			const isolatedBinary = join(realpathSync(packageLink), '..', platformPackage, 'bin', executableName)
+			if (pathExists(isolatedBinary)) return isolatedBinary
+		}
 	}
 
 	const homeDirectory = environment['USERPROFILE'] ?? environment['HOME']

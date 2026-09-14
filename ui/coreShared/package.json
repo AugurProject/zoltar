@@ -20,20 +20,8 @@
 		"preact": "10.26.4",
 		"@tevm/memory-client": "1.0.0-rc.151",
 		"@tevm/common": "1.0.0-rc.151",
-		"@zoltar/core-shared": "file:../../shared/core",
-		"@zoltar/zoltar-shared": "file:../../shared/zoltar"
-	},
-	"overrides": {
-		"@tevm/actions": "1.0.0-rc.151",
-		"@tevm/node": "1.0.0-rc.151",
-		"brace-expansion": "5.0.9",
-		"fast-uri": "3.1.6",
-		"nanoid": "3.3.18",
-		"postcss": "8.5.23",
-		"tmp": "0.2.7",
-		"ws": "8.21.0",
-		"@zoltar/core-shared": "file:../../shared/core",
-		"@zoltar/zoltar-shared": "file:../../shared/zoltar"
+		"@zoltar/core-shared": "workspace:1.0.0",
+		"@zoltar/zoltar-shared": "workspace:1.0.0"
 	},
 	"scripts": {
 		"build:tests": "bun ../../tooling/ui/tests.mts coreShared",
@@ -831,6 +819,11 @@
 		"./wallet/requireWalletConnection.js": {
 			"bun": "./ts/wallet/requireWalletConnection.ts",
 			"default": "./js/wallet/requireWalletConnection.js"
+		},
+		"./app/hooks/useEnvironmentRevision.js": {
+			"bun": "./ts/app/hooks/useEnvironmentRevision.ts",
+			"default": "./js/app/hooks/useEnvironmentRevision.js"
 		}
-	}
+	},
+	"version": "1.0.0"
 }

@@ -385,7 +385,8 @@ describe('split UI workflow paths', () => {
 		for (const packageId of uiPackageIds) {
 			expect(deployWorkflow).not.toContain(`(cd ui/${packageId} && bun install --frozen-lockfile)`)
 		}
-		expect(deployWorkflow).toContain('(cd solidity && bun install --frozen-lockfile)')
+		expect(deployWorkflow).toContain('bun install --frozen-lockfile')
+		expect(deployWorkflow).not.toContain('(cd solidity && bun install --frozen-lockfile)')
 		expect(deployWorkflow).not.toContain('bun run ui:build:apps')
 		expect(deployWorkflow).toContain('bun ./tooling/contracts/ensure-contract-artifacts.mts --headless')
 		expect(deployWorkflow).toContain('bun ./tooling/contracts/run-deploy-testnet.mts --help')
@@ -405,7 +406,7 @@ describe('split UI workflow paths', () => {
 		expect(preflightIndex).toBeGreaterThan(refreshIndex)
 	})
 
-	test('CI and Docker install every UI package from its committed lockfile', async () => {
+	test('CI and Docker install every UI package from the workspace lockfile', async () => {
 		const setupWorkflow = await readWorkflow(setupActionPath)
 		const setupSteps = workflowSteps(requireRecord(setupWorkflow['runs'], 'setup action'))
 		expect(setupSteps.some(step => typeof step['run'] === 'string' && step['run'].includes('bun run projects:setup'))).toBe(true)
@@ -416,8 +417,9 @@ describe('split UI workflow paths', () => {
 		expect(dockerGlobalArguments(dockerfile)).toContain('BUN_VERSION=1.4.2')
 		const copies = dockerStages.flatMap(stage => dockerInstructions(stage, 'COPY'))
 		const runs = dockerStages.flatMap(stage => dockerInstructions(stage, 'RUN'))
+		expect(copies.some(copy => copy.includes('bun.lock'))).toBe(true)
 		for (const appId of uiPackageIds) {
-			expect(copies.some(copy => copy.includes(`./ui/${appId}/bun.lock`))).toBe(true)
+			expect(copies.some(copy => copy.includes(`./ui/${appId}/package.json`))).toBe(true)
 		}
 		for (const appId of uiPackageIds) expect(runs.some(run => run.includes(`bun ./tooling/repo/install-frozen.mts ui/${appId}`))).toBe(true)
 	})
@@ -442,12 +444,15 @@ describe('split UI workflow paths', () => {
 			if (!isRecord(dependencies)) throw new Error(`${packagePath} must define dependencies`)
 			expect(dependencies['tevm']).toBeUndefined()
 			for (const name of ['@tevm/memory-client', '@tevm/common']) expect(dependencies[name]).toBe('1.0.0-rc.151')
-			const overrides = parsed['overrides']
-			expect(isRecord(overrides)).toBe(true)
-			if (!isRecord(overrides)) throw new Error(`${packagePath} must define dependency overrides`)
-			for (const dependencyName of pinnedTevmTransitives) expect(overrides[dependencyName]).toBe('1.0.0-rc.151')
+			if (packagePath === 'package.json') {
+				const overrides = parsed['overrides']
+				if (!isRecord(overrides)) throw new Error('Root package must define dependency overrides')
+				for (const dependencyName of pinnedTevmTransitives) expect(overrides[dependencyName]).toBe('1.0.0-rc.151')
+			} else {
+				expect(parsed['overrides']).toBeUndefined()
+			}
 
-			const lockPath = packagePath === 'package.json' ? join(repositoryRoot, 'bun.lock') : join(repositoryRoot, packagePath, '..', 'bun.lock')
+			const lockPath = join(repositoryRoot, 'bun.lock')
 			const lock = await readFile(lockPath, 'utf8')
 			expect(lock).not.toContain('"tevm": [')
 			expect(lock).not.toContain('"@tevm/server": [')

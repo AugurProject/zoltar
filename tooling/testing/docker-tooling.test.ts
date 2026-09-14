@@ -46,12 +46,10 @@ describe('Docker tooling dependencies', () => {
 				for (const instruction of common.instructions) {
 					if (instruction.keyword === 'COPY') await copyToolingInput(instruction.value, root)
 					if (instruction.keyword !== 'RUN') continue
-					if (instruction.value.includes('bun install')) await expectToolImports(root, '/source/tooling/repo/link-shared-node-modules.mts')
 					if (instruction.value.includes('build-shared.mts')) await expectToolImports(root, '/source/tooling/repo/build-shared.mts')
 					if (instruction.value.includes('build-app-contracts.mts')) await expectToolImports(root, '/source/tooling/contracts/build-app-contracts.mts')
 					if (instruction.value.includes('bun run shared:build')) await expectToolImports(root, '/source/tooling/contracts/ensure-contract-artifacts.mts')
 					if (instruction.value.includes('bun run compile-contracts')) {
-						await expectToolImports(root, '/source/tooling/repo/ensure-shared-package-fresh.mts')
 						await expectToolImports(root, '/source/tooling/ui/projectArtifacts.mts')
 					}
 					if (instruction.value.includes('install-frozen.mts')) await expectToolImports(root, '/source/tooling/repo/install-frozen.mts')
@@ -74,5 +72,16 @@ describe('Docker tooling dependencies', () => {
 				await rm(root, { recursive: true, force: true })
 			}
 		})
+	}
+})
+
+test('Docker defaults match the canonical Bun package manager version', async () => {
+	const manifest: unknown = JSON.parse(await readFile(join(repositoryRoot, 'package.json'), 'utf8'))
+	if (typeof manifest !== 'object' || manifest === null || !('packageManager' in manifest) || typeof manifest.packageManager !== 'string') throw new Error('Missing package manager pin')
+	const version = manifest.packageManager.replace(/^bun@/, '')
+	for (const file of ['ui/Dockerfile', 'bots/chaos/Dockerfile', 'bots/liquidator/Dockerfile', 'bots/open-oracle-arbitrager/Dockerfile', 'augurScan/Dockerfile']) {
+		const source = await readFile(join(repositoryRoot, file), 'utf8')
+		expect(source).toContain(`ARG BUN_VERSION=${version}`)
+		expect(source.match(/FROM oven\/bun:[^\s]+/g)?.every(line => line === 'FROM oven/bun:${BUN_VERSION}-alpine')).toBe(true)
 	}
 })

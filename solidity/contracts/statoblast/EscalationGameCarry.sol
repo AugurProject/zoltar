@@ -225,28 +225,6 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		return (uint256(uint160(address(this))) << 96) | (uint256(outcomeIndex) << 88) | depositIndex;
 	}
 
-	function _appendLocalCarryLeafToCurrentSnapshot(OutcomeState storage state, uint256 nodeId) internal {
-		Node storage node = nodes[nodeId];
-		bytes32 carryHash = MerkleMountainRange.hashLeaf(node.depositor, node.outcome, node.amountAttoRep, node.parentDepositIndex, node.cumulativeAmountAttoRep, nodeId);
-		uint256 leafCount = state.currentLeafCount;
-		uint256 peakHeight = 0;
-		uint256 carryStartIndex = leafCount;
-		state.currentCarryNodeHashes[0][carryStartIndex] = carryHash;
-
-		while (((leafCount >> peakHeight) & 1) == 1) {
-			uint256 siblingStartIndex = carryStartIndex - (uint256(1) << peakHeight);
-			carryHash = MerkleMountainRange.hashParent(state.currentPeaks[peakHeight], carryHash);
-			delete state.currentPeaks[peakHeight];
-			peakHeight += 1;
-			carryStartIndex = siblingStartIndex;
-			state.currentCarryNodeHashes[peakHeight][carryStartIndex] = carryHash;
-		}
-
-		require(peakHeight < MERKLE_MOUNTAIN_RANGE_MAX_PEAKS, 'MMR too tall');
-		state.currentPeaks[peakHeight] = carryHash;
-		state.currentLeafCount = leafCount + 1;
-	}
-
 	function _verifyAndConsumeCarriedDepositProof(uint8 outcomeIndex, CarriedDepositProof calldata proof) internal {
 		_verifyCarriedDepositMerkleMountainRangeProof(outcomeIndex, proof);
 		_verifyAndAdvanceNullifier(outcomeIndex, proof.parentDepositIndex, proof.nullifierSiblings);

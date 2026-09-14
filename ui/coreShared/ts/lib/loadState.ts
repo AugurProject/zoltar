@@ -1,4 +1,4 @@
-import { signal, type Signal } from '@preact/signals'
+import { computed, signal, type ReadonlySignal } from '@preact/signals'
 
 export type LoadPhase = 'idle' | 'loading'
 export type LoadableValueState = 'unknown' | 'loading' | 'ready' | 'missing'
@@ -12,8 +12,8 @@ type RunLoadOptions<TResult> = {
 }
 
 export type LoadController = {
-	phase: Signal<LoadPhase>
-	isLoading: Signal<boolean>
+	phase: ReadonlySignal<LoadPhase>
+	isLoading: ReadonlySignal<boolean>
 	invalidate(): void
 	run<TResult>(options: RunLoadOptions<TResult>): Promise<TResult | undefined>
 	track<TResult>(work: () => Promise<TResult>): Promise<TResult>
@@ -48,14 +48,13 @@ export function resolveRequestedLoadableValueState<TValue, TKey>({ currentKey, i
 
 export function createLoadController(): LoadController {
 	const phase = signal<LoadPhase>('idle')
-	const isLoading = signal(false)
+	const isLoading = computed(() => phase.value === 'loading')
 	let generation = 0
 	let pendingCount = 0
 
 	const syncPhase = () => {
 		const nextPhase = pendingCount > 0 ? 'loading' : 'idle'
 		phase.value = nextPhase
-		isLoading.value = nextPhase === 'loading'
 	}
 
 	const track = async <TResult>(work: () => Promise<TResult>) => {

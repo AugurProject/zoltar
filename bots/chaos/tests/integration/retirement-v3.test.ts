@@ -164,7 +164,7 @@ function requiredNode() {
 async function deploy(client: ReturnType<typeof createWriteClient>, bytecode: Hex, abi: Abi, args: readonly unknown[] = []) {
 	const hash = await client.sendTransaction({ data: encodeDeployData({ abi, args, bytecode }) })
 	const receipt = await client.waitForTransactionReceipt({ hash })
-	if (receipt.contractAddress === undefined || receipt.contractAddress === null) throw new Error('Fixture deployment failed')
+	if (receipt.contractAddress === undefined) throw new Error('Fixture deployment failed')
 	return receipt.contractAddress
 }
 
@@ -187,7 +187,7 @@ async function currentV3Anchor(client: ReturnType<typeof createWriteClient>) {
 describe('Drain & Retire on a local chain', () => {
 	test('recovers idempotently across pre-confirmation, post-confirmation, and burn-to-collect restarts', async () => {
 		const simulator = requiredNode().anvilWindowEthereum
-		const owner = createWriteClient(simulator, TEST_ADDRESSES[4], 4)
+		const owner = createWriteClient(simulator, TEST_ADDRESSES[4])
 		const token0 = await deploy(owner, tokenBytecode, tokenAbi)
 		const token1 = await deploy(owner, tokenBytecode, tokenAbi)
 		const pool = await deploy(owner, poolBytecode, poolAbi, [token0, token1])
@@ -249,8 +249,8 @@ describe('Drain & Retire on a local chain', () => {
 
 	test('burns and collects exact current liquidity while leaving another wallet position untouched', async () => {
 		const simulator = requiredNode().anvilWindowEthereum
-		const owner = createWriteClient(simulator, TEST_ADDRESSES[0], 0)
-		const other = createWriteClient(simulator, TEST_ADDRESSES[1], 1)
+		const owner = createWriteClient(simulator, TEST_ADDRESSES[0])
+		const other = createWriteClient(simulator, TEST_ADDRESSES[1])
 		const token0 = await deploy(owner, tokenBytecode, tokenAbi)
 		const token1 = await deploy(owner, tokenBytecode, tokenAbi)
 		const pool = await deploy(owner, poolBytecode, poolAbi, [token0, token1])
@@ -278,7 +278,7 @@ describe('Drain & Retire on a local chain', () => {
 
 	test('collects a zero-liquidity position, revokes allowance, and sweeps native ETH last with gas reserve', async () => {
 		const simulator = requiredNode().anvilWindowEthereum
-		const owner = createWriteClient(simulator, TEST_ADDRESSES[2], 2)
+		const owner = createWriteClient(simulator, TEST_ADDRESSES[2])
 		const recipient = getAddress(addressString(TEST_ADDRESSES[3]))
 		const token0 = await deploy(owner, tokenBytecode, tokenAbi)
 		const token1 = await deploy(owner, tokenBytecode, tokenAbi)
@@ -333,7 +333,7 @@ describe('Drain & Retire on a local chain', () => {
 	})
 
 	test('never builds zero-address transfers or repeated self-sweeps on a local chain', async () => {
-		const owner = createWriteClient(requiredNode().anvilWindowEthereum, TEST_ADDRESSES[2], 2)
+		const owner = createWriteClient(requiredNode().anvilWindowEthereum, TEST_ADDRESSES[2])
 		const snapshot = snapshotFixture()
 		snapshot.wallet.address = owner.account.address
 		snapshot.wallet.ethBalanceAttoEth = (2n * 10n ** 18n).toString()

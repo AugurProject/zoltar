@@ -150,7 +150,7 @@ describe('Statoblast invariant harness', () => {
 	let client: WriteClient
 	let context: HarnessContext
 
-	const createClient = (index: number) => createWriteClient(mockWindow, ensureDefined(TEST_ADDRESSES[index], `TEST_ADDRESSES[${index}] is undefined`), 0)
+	const createClient = (index: number) => createWriteClient(mockWindow, ensureDefined(TEST_ADDRESSES[index], `TEST_ADDRESSES[${index}] is undefined`))
 
 	const buildContext = async (): Promise<HarnessContext> => {
 		const currentTimestamp = await mockWindow.getTime()
@@ -271,7 +271,7 @@ describe('Statoblast invariant harness', () => {
 
 	beforeAll(async () => {
 		mockWindow = getAnvilWindowEthereum()
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
 		await setupTestAccounts(mockWindow)
 		await ensureZoltarDeployed(client)
 		await ensureInfraDeployed(client)
@@ -281,7 +281,7 @@ describe('Statoblast invariant harness', () => {
 
 	beforeEach(() => {
 		mockWindow = getAnvilWindowEthereum()
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
 	})
 
 	test('escrow accounting model rejects dropped and duplicated migration backing', () => {

@@ -30,8 +30,8 @@ describe('Audit PoC: stale bad debt survives a collateral reset', () => {
 	test('clears bad debt before accepting a new collateral generation', async () => {
 		const securityPool = securityPoolAddresses.securityPool
 		const coordinator = securityPoolAddresses.priceOracleManagerAndOperatorQueuer
-		const liquidationReceiver = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		const victim = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const liquidationReceiver = createWriteClient(mockWindow, TEST_ADDRESSES[1])
+		const victim = createWriteClient(mockWindow, TEST_ADDRESSES[2])
 		const questionEnd = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(questionEnd - 200_000n)
 		await manipulatePriceOracle(client, mockWindow, coordinator, PRICE_PRECISION)

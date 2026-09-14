@@ -1,3 +1,4 @@
+import { buildDashboardScript } from '@zoltar/bot-shared/dashboard/assets'
 import { join } from 'node:path'
 
 const sourceByPath = new Map([
@@ -15,6 +16,7 @@ const sourceByPath = new Map([
 ])
 
 export async function browserScript(path: string, directory: string, transpiler: { transformSync: (source: string) => string }) {
+	if (path === '/dashboard.js') return await buildDashboardScript(join(directory, 'dashboard.ts'))
 	const source = sourceByPath.get(path)
 	return source === undefined ? undefined : transpiler.transformSync(await Bun.file(join(directory, source)).text())
 }

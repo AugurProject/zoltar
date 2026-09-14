@@ -18,7 +18,7 @@ describe('WETH9 failure guards', () => {
 		const hash = await client.sendTransaction({ data: deploymentData })
 		const receipt = await client.waitForTransactionReceipt({ hash })
 		const contractAddress = receipt.contractAddress
-		if (contractAddress === undefined || contractAddress === null) throw new Error('deployment address missing')
+		if (contractAddress === undefined) throw new Error('deployment address missing')
 		return contractAddress
 	}
 
@@ -32,8 +32,8 @@ describe('WETH9 failure guards', () => {
 
 	beforeEach(async () => {
 		mockWindow = getAnvilWindowEthereum()
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
-		operatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
+		operatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await setupTestAccounts(mockWindow)
 	})
 

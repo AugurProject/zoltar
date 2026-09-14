@@ -32,22 +32,14 @@
 		"manifest": "bun ./src/config/execution-manifest.ts"
 	},
 	"dependencies": {
-		"@zoltar/bot-shared": "file:../shared",
-		"@zoltar/open-oracle-shared": "file:../../shared/openOracle",
-		"@zoltar/statoblast-shared": "file:../../shared/statoblast",
+		"@zoltar/bot-shared": "workspace:1.0.0",
+		"@zoltar/open-oracle-shared": "workspace:1.0.0",
+		"@zoltar/statoblast-shared": "workspace:1.0.0",
 		"ccxt": "4.5.70"
-	},
-	"overrides": {
-		"tmp": "0.2.7",
-		"undici": "7.29.0",
-		"@zoltar/bot-shared": "file:../shared",
-		"@zoltar/core-shared": "file:../../shared/core",
-		"@zoltar/open-oracle-shared": "file:../../shared/openOracle",
-		"@zoltar/statoblast-shared": "file:../../shared/statoblast"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.3.11",
-		"@zoltar/core-shared": "file:../../shared/core",
+		"@zoltar/core-shared": "workspace:1.0.0",
 		"bun-types": "1.4.2",
 		"happy-dom": "20.12.0",
 		"micro-eth-signer": "0.18.1",

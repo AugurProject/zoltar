@@ -1135,9 +1135,12 @@ describe('chaos dashboard server', () => {
 			'topology',
 		)
 
+		if (typeof topology !== 'object' || topology === null) throw new Error('Missing topology')
+		const totalCounts: unknown = Reflect.get(topology, 'totalCounts')
+		if (typeof totalCounts !== 'object' || totalCounts === null) throw new Error('Missing topology counts')
 		expect(Reflect.get(topology, 'complete')).toBe(true)
 		expect(Reflect.get(topology, 'truncated')).toBe(true)
-		expect(Reflect.get(Reflect.get(topology, 'totalCounts'), 'pools')).toBe(501)
+		expect(Reflect.get(totalCounts, 'pools')).toBe(501)
 		expect(Reflect.get(topology, 'pools')).toHaveLength(500)
 	})
 

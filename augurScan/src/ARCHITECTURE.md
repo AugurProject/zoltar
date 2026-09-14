@@ -4,8 +4,8 @@ The backend is organized by capability and keeps dependencies directed toward ru
 
 - `api/` owns HTTP validation, cursor parsing, response serialization, and route-family controllers. It contains no SQL; `api.ts` is its public entry point.
 - `repositories/` owns the read-only SQL for API catalogs, histories, entity details, portfolios, exports, and integrity evidence. Repositories return rows or domain data and cannot depend on HTTP, indexer, database-session, or projection implementations.
-- `indexer/` owns provider selection, ownership and replay lifecycle, canonical-chain synchronization, bounded log scanning, and block ingestion. Each stage is a focused layer in the network runner, while `indexer.ts` is the stable public entry point.
-- `database/` owns lease/session handling, network and contract catalog persistence, direct observations, history and checkpoint transitions, and atomic block persistence. Repository layers inherit one connection owner so transaction boundaries stay explicit, while `database.ts` is the stable public entry point.
+- `indexer/` owns provider selection, ownership and replay lifecycle, canonical-chain synchronization, bounded log scanning, and block ingestion. The runner composes focused operation modules over one state owner, while `indexer.ts` is the stable public entry point.
+- `database/` owns lease/session handling, network and contract catalog persistence, direct observations, history and checkpoint transitions, and atomic block persistence. The database composes repository operations over one connection owner so transaction boundaries stay explicit, while `database.ts` is the stable public entry point.
 - `projections/` converts decoded evidence into typed state and domain projections. `projections.ts` is its public entry point.
 - `process-bootstrap.ts`, `server.ts`, and `indexer-process.ts` compose those capabilities into runnable processes.
 

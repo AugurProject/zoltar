@@ -70,7 +70,7 @@ describe('OpenOracle arbitrage executor', () => {
 	beforeAll(async () => {
 		const window = getAnvilWindowEthereum()
 		await setupTestAccounts(window)
-		client = createWriteClient(window, ensureDefined(TEST_ADDRESSES[0], 'test account missing'), 0)
+		client = createWriteClient(window, ensureDefined(TEST_ADDRESSES[0], 'test account missing'))
 		executor = await deploy(executorArtifact)
 		openOracle = await deploy(openOracleArtifact)
 		target = await deploy(targetArtifact)
@@ -80,7 +80,7 @@ describe('OpenOracle arbitrage executor', () => {
 
 	beforeEach(() => {
 		const window = getAnvilWindowEthereum()
-		client = createWriteClient(window, ensureDefined(TEST_ADDRESSES[0], 'test account missing'), 0)
+		client = createWriteClient(window, ensureDefined(TEST_ADDRESSES[0], 'test account missing'))
 	})
 
 	test('funds a vanilla-token dispute atomically and retains no operation-pulled token or allowance', async () => {

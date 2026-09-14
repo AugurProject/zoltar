@@ -12,11 +12,14 @@ export function createComponentCiPlan(packageName: string, registry?: readonly P
 	const definitions = new Map(
 		componentProjects(registry).map(project => {
 			const ci = project.ci
-			const test = project.tasks.test
 			const check = project.tasks.check
 			const audit = project.tasks.audit
 			if (ci?.componentName === undefined || check === undefined || audit === undefined) throw new Error(`Component ${project.id} is missing check or audit task metadata`)
-			const commands = [...(test !== undefined && check.covers?.includes('test') !== true ? [test] : []), check, audit]
+			const independentTasks = (['typecheck', 'build', 'test'] as const).flatMap(name => {
+				const task = project.tasks[name]
+				return task !== undefined && check.covers?.includes(name) !== true ? [task] : []
+			})
+			const commands = [...independentTasks, check, audit]
 			return [ci.componentName, commands] as const
 		}),
 	)

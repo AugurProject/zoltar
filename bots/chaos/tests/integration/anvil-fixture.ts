@@ -156,7 +156,7 @@ function bytecode(value: string, label: string): Hex {
 async function deploy(client: ReturnType<typeof createWriteClient>, data: Hex, label: string): Promise<Address> {
 	const hash = await client.sendTransaction({ data })
 	const receipt = await client.waitForTransactionReceipt({ hash })
-	if (receipt.status === 'reverted' || receipt.contractAddress === undefined || receipt.contractAddress === null) throw new Error(`${label} deployment failed`)
+	if (receipt.status === 'reverted' || receipt.contractAddress === undefined) throw new Error(`${label} deployment failed`)
 	return receipt.contractAddress
 }
 
@@ -237,7 +237,7 @@ export async function createChaosAnvilFixture(): Promise<ChaosAnvilFixture> {
 	try {
 		const simulator = node.anvilWindowEthereum
 		await setupTestAccounts(simulator)
-		const deployer = createWriteClient(simulator, TEST_ADDRESSES[0], 0)
+		const deployer = createWriteClient(simulator, TEST_ADDRESSES[0])
 		await ensureInfraDeployed(deployer)
 
 		const signer = privateKeyToAccount(CHAOS_TEST_PRIVATE_KEY).address

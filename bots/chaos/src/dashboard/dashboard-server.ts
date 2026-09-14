@@ -3,7 +3,7 @@ import { operatorHeader } from './header.ts'
 import { record, safeString, stringField, booleanField, scalar, safeIntegerField, isoTimestampField, compact } from './public-fields.ts'
 import { join } from 'node:path'
 import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
-import { boundedDashboardJson, dashboardJson as json, dashboardSecurityHeaders as securityHeaders } from '@zoltar/bot-shared/dashboard/security'
+import { dashboardAuthorities, dashboardRequestAuthorityIsAccepted, dashboardRequestIsSameOrigin, boundedDashboardJson, dashboardJson as json, dashboardSecurityHeaders as securityHeaders } from '@zoltar/bot-shared/dashboard/security'
 import { CONFIGURATION_REVISION_CONFLICT } from '../config/settings.ts'
 import { browserScript } from './browser-assets.ts'
 import { publicAlert, publicRetirement } from './public-retirement.ts'
@@ -908,7 +908,7 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 	}
 	const directory = import.meta.dir
 	const transpiler = new Bun.Transpiler({ loader: 'ts', target: 'browser' })
-	let authority = ''
+	let authorities: ReadonlySet<string> = new Set()
 	let configurationCommitIndeterminate = false
 	let mutationBarrier = Promise.resolve()
 	const enqueueMutation = (operation: () => Promise<Response>) => {
@@ -930,7 +930,7 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 		hostname: controller.hostname,
 		port,
 		async fetch(request) {
-			if (request.headers.get('host') !== authority) return json({ error: 'Request authority is not accepted' }, 403)
+			if (!dashboardRequestAuthorityIsAccepted(request, authorities)) return json({ error: 'Request authority is not accepted' }, 403)
 			const url = new URL(request.url)
 			if (request.method === 'GET' && url.pathname === '/healthz') return dashboardHealthResponse()
 			if (request.method === 'GET') {
@@ -981,7 +981,7 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 				}
 			}
 			if (request.method === 'PUT') {
-				if (request.headers.get('origin') !== `http://${authority}`) return json({ error: 'Cross-origin requests are not accepted' }, 403)
+				if (!dashboardRequestIsSameOrigin(request, authorities)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
 				const handlers = new Map<string, (value: unknown) => unknown | Promise<unknown>>([
 					['/api/reconciliation/candidate', controller.setCandidate],
 					['/api/reconciliation/cancellation', controller.setCancellation],
@@ -1016,6 +1016,6 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 		},
 	})
 	if (server.port === undefined) throw new Error('Dashboard server did not expose its listening port')
-	authority = `127.0.0.1:${server.port.toString()}`
+	authorities = dashboardAuthorities(server.port)
 	return server
 }

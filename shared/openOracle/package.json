@@ -17,10 +17,7 @@
 		"build": "bun x tsc --project tsconfig.json"
 	},
 	"dependencies": {
-		"@zoltar/core-shared": "file:../core"
-	},
-	"overrides": {
-		"@zoltar/core-shared": "file:../core"
+		"@zoltar/core-shared": "workspace:1.0.0"
 	},
 	"devDependencies": {
 		"typescript": "5.8.2"

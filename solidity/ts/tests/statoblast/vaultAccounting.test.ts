@@ -196,7 +196,7 @@ describe('Statoblast: vault accounting', () => {
 	})
 
 	test('supports a backing-only REP top-up without changing capacity ownership', async () => {
-		const emptyReceiver = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const emptyReceiver = createWriteClient(mockWindow, TEST_ADDRESSES[2])
 		const minimumVaultRepDepositAttoRep = await client.readContract({
 			abi: statoblast_SecurityPool_SecurityPool.abi,
 			address: securityPoolAddresses.securityPool,
@@ -215,8 +215,8 @@ describe('Statoblast: vault accounting', () => {
 	})
 
 	test('economically identical mixed-target vaults are independent of deposit order', async () => {
-		const vaultA = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
-		const vaultB = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
+		const vaultA = createWriteClient(mockWindow, TEST_ADDRESSES[2])
+		const vaultB = createWriteClient(mockWindow, TEST_ADDRESSES[3])
 		const depositAmount = repDeposit / 10n
 		for (const vault of [vaultA, vaultB]) {
 			await transferRepToAddress(client, vault.account.address, depositAmount * 2n)
@@ -285,7 +285,7 @@ describe('Statoblast: vault accounting', () => {
 	})
 
 	test('mixed non-round deposit targets derive aggregate backing factors from final economic state', async () => {
-		const vault = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const vault = createWriteClient(mockWindow, TEST_ADDRESSES[2])
 		const deposits = [
 			{ amount: repDeposit / 9n + 7n, target: 12_345n },
 			{ amount: repDeposit / 7n + 11n, target: 23_456n },
@@ -397,7 +397,7 @@ describe('Statoblast: vault accounting', () => {
 
 	test('deployment status oracle reports missing contracts from a partial deployment', async () => {
 		const partialWindow = getAnvilWindowEthereum()
-		const partialClient = createWriteClient(partialWindow, TEST_ADDRESSES[0], 0)
+		const partialClient = createWriteClient(partialWindow, TEST_ADDRESSES[0])
 		await partialWindow.resetToCleanState()
 		await setupTestAccounts(partialWindow)
 		await ensureProxyDeployerDeployed(partialClient)
@@ -411,8 +411,8 @@ describe('Statoblast: vault accounting', () => {
 	})
 
 	test('security pool exposes vault paging without duplicate entries', async () => {
-		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		const thirdClient = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
+		const thirdClient = createWriteClient(mockWindow, TEST_ADDRESSES[2])
 
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
 		await approveAndDepositRepToVault(thirdClient, repDeposit, questionId)
@@ -430,7 +430,7 @@ describe('Statoblast: vault accounting', () => {
 	})
 
 	test('vault registry retains fully exited vaults for off-chain filtering', async () => {
-		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
 
@@ -444,8 +444,8 @@ describe('Statoblast: vault accounting', () => {
 	})
 
 	test('vault registry order remains stable after exits and later updates', async () => {
-		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		const thirdClient = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
+		const thirdClient = createWriteClient(mockWindow, TEST_ADDRESSES[2])
 
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
 		await approveAndDepositRepToVault(thirdClient, repDeposit, questionId)
@@ -570,7 +570,7 @@ describe('Statoblast: vault accounting', () => {
 
 	test('withdrawFromEscalationGame shares the binding-capital reward pool across all reward-eligible winning deposits', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
@@ -657,7 +657,7 @@ describe('Statoblast: vault accounting', () => {
 
 	test('losing escalation deposits stay locked and reduce the losing vaults available REP claim after winner withdrawal', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
@@ -687,7 +687,7 @@ describe('Statoblast: vault accounting', () => {
 	})
 
 	test('withdrawRep only uses available REP and cannot drain another vaults locked escalation stake', async () => {
-		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
 
 		const endTime = await getQuestionEndDate(client, questionId)
@@ -716,7 +716,7 @@ describe('Statoblast: vault accounting', () => {
 	})
 
 	test('withdrawRepFromVault cannot run on a vault with active escalation escrow', async () => {
-		const escrowedVault = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const escrowedVault = createWriteClient(mockWindow, TEST_ADDRESSES[2])
 		await approveAndDepositRepToVault(escrowedVault, repDeposit, questionId)
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
@@ -756,7 +756,7 @@ describe('Statoblast: vault accounting', () => {
 
 	test('depositToEscalationGame burns enough backingUnits after the pool share price appreciates', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		const benefactorClient = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const benefactorClient = createWriteClient(mockWindow, TEST_ADDRESSES[2])
 		const vaultBeforeDonation = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const vaultRepBackingBeforeDonationAttoRep = await getVaultRepClaim(client.account.address)
 		await mockWindow.setTime(endTime + 10000n)
@@ -791,7 +791,7 @@ describe('Statoblast: vault accounting', () => {
 
 	test('depositToEscalationGame rechecks the local bond against the post-escrow REP balance', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		const secondVault = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const secondVault = createWriteClient(mockWindow, TEST_ADDRESSES[2])
 		const escrowAmount = 200n * 10n ** 18n
 
 		await approveAndDepositRepToVault(secondVault, repDeposit, questionId)
@@ -826,9 +826,9 @@ describe('Statoblast: vault accounting', () => {
 
 	test('withdrawFromEscalationGame gives later safety-boundary deposits a pro-rata share of the binding-capital reward pool', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		const firstWinner = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
-		const secondWinner = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
-		const losingSide = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
+		const firstWinner = createWriteClient(mockWindow, TEST_ADDRESSES[2])
+		const secondWinner = createWriteClient(mockWindow, TEST_ADDRESSES[3])
+		const losingSide = createWriteClient(mockWindow, TEST_ADDRESSES[4])
 		await approveAndDepositRepToVault(firstWinner, repDeposit, questionId)
 		await approveAndDepositRepToVault(secondWinner, repDeposit, questionId)
 		await approveAndDepositRepToVault(losingSide, repDeposit, questionId)
@@ -898,9 +898,9 @@ describe('Statoblast: vault accounting', () => {
 
 	test('withdrawFromEscalationGame shares the full reward pool across the actual winning principal when total winning principal stays below the reward cap', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		const firstWinner = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
-		const secondWinner = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
-		const losingSide = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
+		const firstWinner = createWriteClient(mockWindow, TEST_ADDRESSES[2])
+		const secondWinner = createWriteClient(mockWindow, TEST_ADDRESSES[3])
+		const losingSide = createWriteClient(mockWindow, TEST_ADDRESSES[4])
 		await approveAndDepositRepToVault(firstWinner, repDeposit, questionId)
 		await approveAndDepositRepToVault(secondWinner, repDeposit, questionId)
 		await approveAndDepositRepToVault(losingSide, repDeposit, questionId)
@@ -967,7 +967,7 @@ describe('Statoblast: vault accounting', () => {
 
 	test('external fork blocks parent escalation withdrawals and preserves escrowed REP', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
@@ -1047,7 +1047,7 @@ describe('Statoblast: vault accounting', () => {
 
 	test('withdrawFromEscalationGame rejects none outcome after an external fork', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
@@ -1077,7 +1077,7 @@ describe('Statoblast: vault accounting', () => {
 
 	test('losing escalation deposits can be settled after resolution and stop counting as locked collateral', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
@@ -1099,7 +1099,7 @@ describe('Statoblast: vault accounting', () => {
 	})
 
 	test('mixed-outcome settlements from one vault are settlement-order independent after exchange-rate changes', async () => {
-		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const secondQuestionData = {
 			...questionData,
 			title: 'mixed outcome order independence mirror pool',

@@ -55,13 +55,13 @@ describe('Escalation Game Fork Threshold Test', () => {
 		const hash = await client.sendTransaction({ data: deploymentData })
 		const receipt = await client.waitForTransactionReceipt({ hash })
 		const contractAddress = receipt.contractAddress
-		if (contractAddress === undefined || contractAddress === null) throw new Error('deployment address missing')
+		if (contractAddress === undefined) throw new Error('deployment address missing')
 		return contractAddress
 	}
 
 	beforeEach(async () => {
 		mockWindow = getAnvilWindowEthereum()
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
 		await setupTestAccounts(mockWindow)
 		await ensureZoltarDeployed(client)
 		await ensureInfraDeployed(client)
@@ -215,7 +215,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 		const depositAmount = 10_000n * 10n ** 18n
 		const firstDeposit = (depositAmount * 3n) / 10n
 		const secondDeposit = depositAmount - firstDeposit
-		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await approveAndDepositRepToVault(attacker, depositAmount, questionId)
 
 		await mockWindow.setTime(questionEndDate + 1n)
@@ -229,7 +229,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 		const victimWalletAfterFirstSettlement = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 		assert.strictEqual(victimWalletAfterFirstSettlement - victimWalletBeforeFirstSettlement, firstDeposit, 'a finalized winner settled before the unrelated fork must receive its frozen principal')
 
-		const forkInitiator = createWriteClient(mockWindow, TEST_ADDRESSES[5], 0)
+		const forkInitiator = createWriteClient(mockWindow, TEST_ADDRESSES[5])
 		const forkQuestionEnd = (await mockWindow.getTime()) + DAY
 		const forkQuestionData = {
 			title: 'Late unrelated finalized-game fork',
@@ -250,7 +250,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 		for (let accountIndex = 1; accountIndex < TEST_ADDRESSES.length; accountIndex++) {
 			const migratorAddress = TEST_ADDRESSES[accountIndex]
 			if (migratorAddress === undefined) throw new Error(`Missing migration test account ${accountIndex}`)
-			const migrator = createWriteClient(mockWindow, migratorAddress, 0)
+			const migrator = createWriteClient(mockWindow, migratorAddress)
 			const migratorBalance = await getERC20Balance(migrator, addressString(GENESIS_REPUTATION_TOKEN), migrator.account.address)
 			if (migratorBalance === 0n) continue
 			await approveToken(migrator, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())

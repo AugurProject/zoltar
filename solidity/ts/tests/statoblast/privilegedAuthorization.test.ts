@@ -37,7 +37,7 @@ describe('Statoblast: privileged authorization matrix', () => {
 	})
 
 	test('REP supply selectors reject attackers without changing balances or supply', async () => {
-		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const reputationToken = await deployContract(
 			client,
 			encodeDeployData({
@@ -131,7 +131,7 @@ describe('Statoblast: privileged authorization matrix', () => {
 	})
 
 	test('factory and oracle-only pool selectors reject attackers with full accounting unchanged', async () => {
-		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const readSnapshot = async () => ({
 			attackerVault: await getSecurityVault(client, securityPool, attacker.account.address),
 			collateral: await getSettlementCollateralAttoEth(client, securityPool),
@@ -208,7 +208,7 @@ describe('Statoblast: privileged authorization matrix', () => {
 		})
 		const factory = getAddress(rawFactory)
 		await mockWindow.impersonateAccount(factory)
-		const factoryClient = createWriteClient(mockWindow, BigInt(factory), 0)
+		const factoryClient = createWriteClient(mockWindow, BigInt(factory))
 		const currentRetentionRate = await getCurrentRetentionRate(client, securityPool)
 		const currentCollateral = await getSettlementCollateralAttoEth(client, securityPool)
 		await writeContractAndWait(factoryClient, () =>
@@ -224,7 +224,7 @@ describe('Statoblast: privileged authorization matrix', () => {
 	})
 
 	test('every forker-only pool mutation rejects direct callers without changing accounting', async () => {
-		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const poolAbi = statoblast_SecurityPool_SecurityPool.abi
 		const readSnapshot = async () => ({
 			settlementCollateralAttoEth: await getSettlementCollateralAttoEth(client, securityPool),
@@ -255,7 +255,7 @@ describe('Statoblast: privileged authorization matrix', () => {
 	})
 
 	test('pool-only escalation deposit and withdrawal selectors reject direct callers', async () => {
-		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await mockWindow.setTime(fixture.questionData.endTime + 1n)
 		await manipulatePriceOracle(client, mockWindow, fixture.securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 		await depositToEscalationGame(client, securityPool, QuestionOutcome.Yes, repDeposit / 10n)

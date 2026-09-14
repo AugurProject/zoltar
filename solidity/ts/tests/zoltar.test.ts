@@ -85,7 +85,7 @@ describe('Contract Test Suite', () => {
 
 	beforeEach(async () => {
 		mockWindow = getAnvilWindowEthereum()
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
 		await setupTestAccounts(mockWindow)
 		await ensureZoltarDeployed(client)
 	})
@@ -384,7 +384,7 @@ describe('Contract Test Suite', () => {
 		const universeTheoreticalSupplyAttoRep = await getUniverseTheoreticalSupplyAttoRep(client, genesisUniverse)
 		let totalBurned = 0n
 		for (const testAddress of TEST_ADDRESSES) {
-			const burner = createWriteClient(mockWindow, testAddress, 0)
+			const burner = createWriteClient(mockWindow, testAddress)
 			const balance = await getERC20Balance(burner, addressString(GENESIS_REPUTATION_TOKEN), burner.account.address)
 			if (balance === 0n) continue
 			await approveToken(burner, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
@@ -468,7 +468,7 @@ describe('Contract Test Suite', () => {
 	})
 
 	test('canForkQuestion', async () => {
-		const client2 = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const client2 = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const zoltar = getZoltarAddress()
 		const questionText = 'test question'
 		const outcomes = sortStringArrayByKeccak(['Outcome 1', 'Outcome 2', 'Outcome 3', 'Outcome 4'])
@@ -575,7 +575,7 @@ describe('Contract Test Suite', () => {
 		const outcomes = sortStringArrayByKeccak(['Yes', 'No'])
 		await createQuestion(client, questionData, outcomes)
 		await forkUniverse(client, genesisUniverse, getQuestionId(questionData, outcomes))
-		const migrator = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const migrator = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await approveToken(migrator, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
 		const split = async (amount: bigint, indexes: bigint[], preparationAttoRep = 0n) =>
 			await writeContractAndWait(migrator, () =>
@@ -677,7 +677,7 @@ describe('Contract Test Suite', () => {
 
 	test('child REP supply equals aggregate migrated balances and stays within its theoretical maximum', async () => {
 		const zoltar = getZoltarAddress()
-		const secondMigrator = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const secondMigrator = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
 		await approveToken(secondMigrator, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
 
@@ -757,7 +757,7 @@ describe('Contract Test Suite', () => {
 		// Use a second account that has no migration balance to call deployChild.
 		// This verifies the property createZoltarChildUniverse in the UI relies on:
 		// any caller can deploy a child universe regardless of migration balance.
-		const deployer = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const deployer = createWriteClient(mockWindow, TEST_ADDRESSES[2])
 		const deployerMigrationBalance = await getMigrationRepBalanceAttoRep(deployer, genesisUniverse, deployer.account.address)
 		assert.strictEqual(deployerMigrationBalance, 0n, 'deployer should have no migration balance')
 
@@ -1203,7 +1203,7 @@ describe('Contract Test Suite', () => {
 	})
 
 	test('forkUniverse fails for non-existent question', async () => {
-		const client2 = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const client2 = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const zoltar = getZoltarAddress()
 		await approveToken(client2, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
@@ -1214,7 +1214,7 @@ describe('Contract Test Suite', () => {
 	})
 
 	test('forkUniverse rejects before question end and succeeds at and after equality', async () => {
-		const client2 = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const client2 = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const zoltar = getZoltarAddress()
 		await approveToken(client2, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
@@ -1252,7 +1252,7 @@ describe('Contract Test Suite', () => {
 	})
 
 	test('forkUniverse succeeds when question has ended', async () => {
-		const client2 = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const client2 = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const zoltar = getZoltarAddress()
 		await approveToken(client2, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
@@ -1286,7 +1286,7 @@ describe('Contract Test Suite', () => {
 	})
 
 	test('splitMigrationRep fails for malformed outcome index', async () => {
-		const client2 = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const client2 = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const zoltar = getZoltarAddress()
 		await approveToken(client2, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)

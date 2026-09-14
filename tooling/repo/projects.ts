@@ -6,7 +6,7 @@ import path from 'node:path'
 const projectTypes = ['repository', 'library', 'contracts', 'ui-library', 'ui-app', 'service', 'bot', 'documentation'] as const
 type ProjectType = (typeof projectTypes)[number]
 
-export const projectTaskNames = ['setup', 'build', 'vendor', 'test-build', 'workers', 'test', 'check', 'lint', 'typecheck', 'knip', 'audit', 'dependency-update', 'integration'] as const
+export const projectTaskNames = ['setup', 'build', 'vendor', 'test-build', 'workers', 'test', 'check', 'lint', 'typecheck', 'knip', 'audit', 'integration'] as const
 export type ProjectTaskName = (typeof projectTaskNames)[number]
 
 type ProjectTask = {
@@ -35,7 +35,7 @@ export type Project = {
 	}
 }
 
-const packageInputs = (projectPath: string) => [`${projectPath}/package.json`, `${projectPath}/bun.lock`]
+const packageInputs = (projectPath: string) => [`${projectPath}/package.json`, 'bun.lock']
 const packageTask = (projectPath: string, scriptName: string, options: { readonly cacheInputs?: readonly string[]; readonly covers?: readonly ProjectTaskName[]; readonly groups?: readonly string[]; readonly outputs?: readonly string[] } = {}): ProjectTask => ({
 	command: ['bun', 'run', scriptName],
 	cwd: projectPath,
@@ -47,7 +47,7 @@ const packageTask = (projectPath: string, scriptName: string, options: { readonl
 })
 
 const packageInstallTask = (projectPath: string, groups?: readonly string[]): ProjectTask => ({
-	command: ['bun', './tooling/repo/install-frozen.mts', projectPath],
+	command: ['bun', './tooling/repo/install-frozen.mts'],
 	cwd: '.',
 	inputs: packageInputs(projectPath),
 	cacheInputs: packageInputs(projectPath),
@@ -56,20 +56,12 @@ const packageInstallTask = (projectPath: string, groups?: readonly string[]): Pr
 
 const packageAuditTask = (projectPath: string, groups?: readonly string[]): ProjectTask => ({ ...packageTask(projectPath, 'audit'), command: ['bun', 'audit'], ...(groups === undefined ? {} : { groups }) })
 
-const sharedDependencyTask = (projectPath: string): ProjectTask => ({
-	command: ['bun', `${'../'.repeat(projectPath.split('/').length)}tooling/repo/ensure-shared-package-fresh.mts`, '--refresh'],
-	cwd: projectPath,
-	inputs: [...packageInputs(projectPath), 'shared/*/package.json', 'shared/*/ts/**'],
-	cacheInputs: [...packageInputs(projectPath), 'shared/*/package.json'],
-})
-
 const rootTask = (command: readonly string[], inputs: readonly string[], groups?: readonly string[]): ProjectTask => ({ command, cwd: '.', inputs, ...(groups === undefined ? {} : { groups }) })
 
 const botAudit = ['bun', 'audit'] as const
 
 /**
- * Canonical repository project graph. Package boundaries remain independent:
- * every non-root package keeps its own lockfile and no workspace is implied.
+ * Canonical project ownership and build graph. All packages share the root workspace lockfile.
  */
 export const projects: readonly Project[] = [
 	{
@@ -109,7 +101,6 @@ export const projects: readonly Project[] = [
 				build: packageTask(entry.path, 'build', { cacheInputs: [...packageInputs(entry.path), 'shared/tsconfig*.json', `${entry.path}/tsconfig.json`, `${entry.path}/ts/**`], groups: ['generated', 'component-artifacts'], outputs: [`${entry.path}/js`] }),
 				typecheck: { ...packageTask(entry.path, 'build'), command: ['bun', 'x', 'tsc', '--project', 'tsconfig.json', '--noEmit'] },
 				audit: packageAuditTask(entry.path, ['core-audit']),
-				'dependency-update': sharedDependencyTask(entry.path),
 			},
 			generatedDirectories: [`${entry.path}/js`],
 			ci: { scope: 'core' },
@@ -158,7 +149,6 @@ export const projects: readonly Project[] = [
 			test: packageTask('solidity', 'test'),
 			typecheck: { ...packageTask('solidity', 'tsc'), command: ['bun', 'x', 'tsc', '--project', 'tsconfig.typecheck.json'] },
 			audit: packageAuditTask('solidity', ['core-audit']),
-			'dependency-update': sharedDependencyTask('solidity'),
 		},
 		generatedDirectories: ['solidity/artifacts', 'solidity/js'],
 		generatedFiles: ['solidity/.contract-hash.json', 'solidity/ts/types/contractArtifact.ts', 'ui/coreShared/ts/abis.ts', 'ui/coreShared/ts/contractArtifact.ts', 'ui/statoblastShared/ts/contractArtifact.ts', 'ui/trading/ts/generated/contractArtifact.ts'],
@@ -175,7 +165,6 @@ export const projects: readonly Project[] = [
 			'test-build': { ...packageTask('ui/coreShared', 'build:tests'), outputs: ['ui/coreShared/js/tests'] },
 			typecheck: { ...packageTask('ui/coreShared', 'tsc'), command: ['bun', 'x', 'tsc', '--project', 'tsconfig.json', '--noEmit'] },
 			audit: packageAuditTask('ui/coreShared', ['core-audit']),
-			'dependency-update': sharedDependencyTask('ui/coreShared'),
 		},
 		generatedDirectories: ['ui/coreShared/js'],
 		ci: { scope: 'core', artifactOutputs: ['ui/coreShared/js'] },
@@ -190,7 +179,6 @@ export const projects: readonly Project[] = [
 			build: packageTask('ui/zoltarShared', 'build', { groups: ['ui'], outputs: ['ui/zoltarShared/js'] }),
 			typecheck: packageTask('ui/zoltarShared', 'typecheck'),
 			audit: packageAuditTask('ui/zoltarShared', ['core-audit']),
-			'dependency-update': sharedDependencyTask('ui/zoltarShared'),
 		},
 		generatedDirectories: ['ui/zoltarShared/js'],
 		ci: { scope: 'core', artifactOutputs: ['ui/zoltarShared/js'] },
@@ -205,7 +193,6 @@ export const projects: readonly Project[] = [
 			build: packageTask('ui/statoblastShared', 'build', { groups: ['ui'], outputs: ['ui/statoblastShared/js'] }),
 			typecheck: packageTask('ui/statoblastShared', 'typecheck'),
 			audit: packageAuditTask('ui/statoblastShared', ['core-audit']),
-			'dependency-update': sharedDependencyTask('ui/statoblastShared'),
 		},
 		generatedDirectories: ['ui/statoblastShared/js'],
 		ci: { scope: 'core', artifactOutputs: ['ui/statoblastShared/js'] },
@@ -223,7 +210,6 @@ export const projects: readonly Project[] = [
 			workers: packageTask('ui/zoltar', 'build:workers'),
 			typecheck: { ...packageTask('ui/zoltar', 'build'), command: ['bun', 'x', 'tsc', '--project', 'tsconfig.json', '--noEmit'] },
 			audit: packageAuditTask('ui/zoltar', ['core-audit']),
-			'dependency-update': sharedDependencyTask('ui/zoltar'),
 		},
 		generatedDirectories: ['ui/zoltar/js', 'ui/zoltar/dist', 'ui/zoltar/vendor'],
 		ci: { scope: 'core', artifactOutputs: ['ui/zoltar/js', 'ui/zoltar/dist'] },
@@ -241,7 +227,6 @@ export const projects: readonly Project[] = [
 			workers: packageTask('ui/statoblast', 'build:workers'),
 			typecheck: { ...packageTask('ui/statoblast', 'build'), command: ['bun', 'x', 'tsc', '--project', 'tsconfig.json', '--noEmit'] },
 			audit: packageAuditTask('ui/statoblast', ['core-audit']),
-			'dependency-update': sharedDependencyTask('ui/statoblast'),
 		},
 		generatedDirectories: ['ui/statoblast/js', 'ui/statoblast/dist', 'ui/statoblast/vendor'],
 		ci: { scope: 'core', artifactOutputs: ['ui/statoblast/js', 'ui/statoblast/dist'] },
@@ -261,7 +246,6 @@ export const projects: readonly Project[] = [
 			typecheck: { ...packageTask('ui/trading', 'build'), command: ['bun', 'x', 'tsc', '--project', 'tsconfig.json', '--noEmit'] },
 			knip: rootTask(['bun', 'x', 'knip', '--production', '--workspace', 'ui/trading', '--include', 'files'], ['knip.json', 'ui/trading/**']),
 			audit: packageAuditTask('ui/trading', ['core-audit']),
-			'dependency-update': sharedDependencyTask('ui/trading'),
 		},
 		generatedDirectories: ['ui/trading/js', 'ui/trading/dist', 'ui/trading/vendor'],
 		ci: { scope: 'core', artifactOutputs: ['ui/trading/js', 'ui/trading/dist'] },
@@ -278,7 +262,6 @@ export const projects: readonly Project[] = [
 			lint: packageTask('bots/shared', 'check'),
 			typecheck: packageTask('bots/shared', 'typecheck'),
 			audit: { ...packageTask('bots/shared', 'audit'), command: botAudit },
-			'dependency-update': sharedDependencyTask('bots/shared'),
 		},
 		generatedDirectories: [],
 		ci: { scope: 'bot-shared', componentName: 'bot-shared', requiresContractArtifacts: true },
@@ -295,7 +278,6 @@ export const projects: readonly Project[] = [
 			lint: packageTask('bots/chaos', 'check'),
 			typecheck: packageTask('bots/chaos', 'typecheck'),
 			audit: { ...packageTask('bots/chaos', 'audit'), command: botAudit },
-			'dependency-update': sharedDependencyTask('bots/chaos'),
 		},
 		generatedDirectories: [],
 		ci: { scope: 'chaos', componentName: 'chaos', requiresContractArtifacts: true },
@@ -312,7 +294,6 @@ export const projects: readonly Project[] = [
 			lint: packageTask('bots/open-oracle-arbitrager', 'check'),
 			typecheck: packageTask('bots/open-oracle-arbitrager', 'typecheck'),
 			audit: { ...packageTask('bots/open-oracle-arbitrager', 'audit'), command: botAudit },
-			'dependency-update': sharedDependencyTask('bots/open-oracle-arbitrager'),
 		},
 		generatedDirectories: [],
 		generatedFiles: ['bots/open-oracle-arbitrager/src/contracts/artifacts.generated.ts', 'bots/open-oracle-arbitrager/tests/contracts/harness-artifacts.generated.ts'],
@@ -330,7 +311,6 @@ export const projects: readonly Project[] = [
 			lint: packageTask('bots/liquidator', 'check'),
 			typecheck: packageTask('bots/liquidator', 'typecheck'),
 			audit: { ...packageTask('bots/liquidator', 'audit'), command: botAudit },
-			'dependency-update': sharedDependencyTask('bots/liquidator'),
 		},
 		generatedDirectories: [],
 		ci: { scope: 'liquidator', componentName: 'liquidator', requiresContractArtifacts: true },
@@ -348,8 +328,7 @@ export const projects: readonly Project[] = [
 			lint: packageTask('augurScan', 'check'),
 			typecheck: packageTask('augurScan', 'typecheck'),
 			audit: packageAuditTask('augurScan'),
-			'dependency-update': sharedDependencyTask('augurScan'),
-			integration: { ...packageTask('augurScan', 'test:integration'), inputs: ['shared/**', 'augurScan/schema.sql', 'augurScan/migrations/**', 'augurScan/config/**', 'augurScan/src/**', 'augurScan/tests/**', 'augurScan/scripts/**', 'augurScan/package.json', 'augurScan/bun.lock', 'augurScan/tsconfig.json'] },
+			integration: { ...packageTask('augurScan', 'test:integration'), inputs: ['shared/**', 'augurScan/schema.sql', 'augurScan/migrations/**', 'augurScan/config/**', 'augurScan/src/**', 'augurScan/tests/**', 'augurScan/scripts/**', 'augurScan/package.json', 'bun.lock', 'augurScan/tsconfig.json'] },
 		},
 		generatedDirectories: ['augurScan/dist'],
 		ci: { scope: 'augur-scan', componentName: 'augur-scan' },
@@ -425,10 +404,12 @@ export function validateProjectRegistryFiles(repositoryRoot = path.resolve(impor
 			for (const field of ['dependencies', 'devDependencies', 'optionalDependencies'] as const) {
 				const dependencies = Reflect.get(manifest, field)
 				if (typeof dependencies !== 'object' || dependencies === null) continue
-				for (const value of Object.values(dependencies)) {
-					if (typeof value !== 'string' || !value.startsWith('file:')) continue
-					const dependencyPath = path.resolve(projectPath, value.slice('file:'.length))
-					const dependency = packagesByPath.get(dependencyPath)
+				for (const [name, value] of Object.entries(dependencies)) {
+					if (typeof value !== 'string' || !value.startsWith('workspace:')) continue
+					const dependency = [...packagesByPath.values()].find(candidate => {
+						const candidateManifest = path.join(repositoryRoot, candidate.path, 'package.json')
+						return existsSync(candidateManifest) && JSON.parse(readFileSync(candidateManifest, 'utf8')).name === name
+					})
 					if (dependency === undefined) throw new Error(`${project.id} has an unregistered local dependency at ${value}`)
 					localDependencyIds.add(dependency.id)
 				}

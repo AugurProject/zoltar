@@ -71,7 +71,7 @@ describe('factory, pair, and router integration', () => {
 	async function deploy<TAbi extends Abi>(artifact: Readonly<{ abi: TAbi; evm: Readonly<{ bytecode: Readonly<{ object: string }> }> }>, args: readonly unknown[] = [], value = 0n) {
 		const hash = await client.sendTransaction({ data: encodeDeployData({ abi: artifact.abi, bytecode: `0x${artifact.evm.bytecode.object}` as Hex, args }), value })
 		const receipt = await client.waitForTransactionReceipt({ hash })
-		if (receipt.status === 'reverted' || receipt.contractAddress === undefined || receipt.contractAddress === null) throw new Error('Contract deployment failed')
+		if (receipt.status === 'reverted' || receipt.contractAddress === undefined) throw new Error('Contract deployment failed')
 		return receipt.contractAddress
 	}
 
@@ -471,7 +471,7 @@ describe('factory, pair, and router integration', () => {
 		const permitOwner = privateKeyToAccount(permitOwnerKey)
 		await ethereum.impersonateAccount(permitOwner.address)
 		await ethereum.setBalance(permitOwner.address, 10n ** 20n)
-		const permitOwnerClient = createWriteClient(ethereum, BigInt(permitOwner.address), 0)
+		const permitOwnerClient = createWriteClient(ethereum, BigInt(permitOwner.address))
 		await writeContractAndWait(client, () => client.writeContract({ abi: pairArtifact.abi, address: currentPair, functionName: 'transfer', args: [permitOwner.address, liquidity / 2n] }))
 		const signPermit = async ({ signedChainId = chainId, name = 'Zoltar Two-Way LP', nonce, owner = permitOwner.address, signerKey = permitOwnerKey, spender = currentRouter, value }: { signedChainId?: number; name?: string; nonce?: bigint; owner?: Address; signerKey?: Hex; spender?: Address; value: bigint }) => {
 			const signedNonce = nonce ?? (await client.readContract({ abi: pairArtifact.abi, address: currentPair, functionName: 'nonces', args: [permitOwner.address] }))

@@ -126,7 +126,7 @@ function useStatoblastTestFixture() {
 		})
 		const receipt = await client.waitForTransactionReceipt({ hash: deploymentHash })
 		const contractAddress = receipt.contractAddress
-		if (contractAddress === undefined || contractAddress === null) throw new Error('deployment address missing')
+		if (contractAddress === undefined) throw new Error('deployment address missing')
 		return contractAddress
 	}
 
@@ -150,7 +150,7 @@ function useStatoblastTestFixture() {
 
 	const initializeStatoblastBaseline = async () => {
 		mockWindow = getAnvilWindowEthereum()
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
 		await setupTestAccounts(mockWindow)
 		await ensureZoltarDeployed(client)
 		await ensureInfraDeployed(client)
@@ -195,7 +195,7 @@ function useStatoblastTestFixture() {
 
 	beforeEach(() => {
 		mockWindow = getAnvilWindowEthereum()
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
 	})
 
 	return {

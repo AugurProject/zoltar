@@ -248,7 +248,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 	}
 
 	function _prepareForkState(ISecurityPool securityPool, EscalationGame escalationGame) private returns (SecurityPoolForkerForkData storage data) {
-		if (!securityPool.shareToken().isAuthorized(address(securityPool))) revert();
+		if (!securityPool.shareToken().isAuthorized(address(securityPool))) revert('Pool is not authorized');
 		uint248 universe = securityPool.universeId();
 		uint256 forkTime = zoltar.getForkTime(universe);
 		require(forkTime > 0, 'Unforked');
@@ -293,7 +293,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 	}
 
 	function initializeChildForkedEscalationGameIfNeeded(ISecurityPool parent, ISecurityPool child, EscalationGame childEscalationGame) external returns (EscalationGame) {
-		if (msg.sender != address(this)) revert();
+		if (msg.sender != address(this)) revert('Only self');
 		return _initializeChildForkedEscalationGameIfNeeded(parent, child, childEscalationGame);
 	}
 
@@ -326,9 +326,8 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 			migrationProxy.lockRep(repToLockAttoRep);
 		}
 		uint256 migrationBalanceAttoRep = zoltar.getMigrationRepBalanceAttoRep(address(migrationProxy), universe);
-		// Keep this migration accounting invariant data-free so the forker remains deployable
-		// under the EIP-3860 initcode limit.
-		if (migrationBalanceAttoRep != previousMigrationBalanceAttoRep + repToLockAttoRep) revert();
+		if (migrationBalanceAttoRep != previousMigrationBalanceAttoRep + repToLockAttoRep)
+			revert('Incorrect migration balance');
 		data.auctionableAttoRepAtFork = previousMigrationBalanceAttoRep + poolRepToLockAttoRep;
 		_emitForkSnapshotEvents(securityPool, address(migrationProxy), address(escalationGame), poolRepToLockAttoRep, disputeStakedRepToLockAttoRep, migrationBalanceAttoRep);
 		// TODO: we could pay the caller basefee*2 out of Open interest. We have to reward caller
@@ -336,7 +335,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 
 	function migrateRepToZoltar(ISecurityPool securityPool, uint256[] calldata outcomeIndices) external {
 		SecurityPoolMigrationProxy migrationProxy = migrationProxyByPool[securityPool];
-		if (address(migrationProxy) == address(0x0)) revert();
+		if (address(migrationProxy) == address(0x0)) revert('Migration proxy unavailable');
 		require(securityPool.systemState() == SystemState.PoolForked, 'Unforked');
 		SecurityPoolForkerForkData storage data = forkDataByPool[securityPool];
 		uint256 migrationAmountAttoRep = data.ownFork ? data.vaultRepAtForkAttoRep : data.auctionableAttoRepAtFork;
@@ -427,8 +426,8 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		parentData = _getForkData(parent);
 		uint256 requiredAttoRep = _getPoolAuctionableRepAtFork(parentData);
 		_delegateEnsureChildPoolRepSplit(parent, data.outcomeIndex, requiredAttoRep);
-		// Keep this invariant guard data-free: a revert string exceeds the EVM initcode limit.
-		if (securityPool.repToken().balanceOf(address(securityPool)) < requiredAttoRep) revert();
+		if (securityPool.repToken().balanceOf(address(securityPool)) < requiredAttoRep)
+			revert('Insufficient pool-held REP');
 		securityPool.setSystemState(SystemState.ForkTruthAuction);
 		data.truthAuctionStarted = block.timestamp;
 		parent.updateSettlementCollateral();
@@ -594,15 +593,13 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		uint256 repBalanceAfterAttoRep = rep.balanceOf(address(this));
 		uint256 repToForkAttoRep = repBalanceAfterAttoRep - repBalanceBeforeAttoRep;
 		uint256 forkThresholdAttoRep = zoltar.getForkThresholdAttoRep(securityPool.universeId());
-		// Keep these invariant guards data-free: revert strings exceed the EVM
-		// runtime and initcode limits once fork reconciliation is enabled.
-		if (repToForkAttoRep < forkThresholdAttoRep) revert();
+		if (repToForkAttoRep < forkThresholdAttoRep) revert('Fork threshold not reached');
 		if (repToForkAttoRep > 0) IERC20(address(rep)).safeTransfer(address(migrationProxy), repToForkAttoRep);
 		migrationProxy.forkUniverse(securityPool.questionId());
 		uint256 excessForkAttoRep = repToForkAttoRep - forkThresholdAttoRep;
 		if (excessForkAttoRep > 0) migrationProxy.lockRep(excessForkAttoRep);
 		uint256 forkTime = zoltar.getForkTime(securityPool.universeId());
-		if (forkTime == 0) revert();
+		if (forkTime == 0) revert('Universe has not forked');
 		// The universe fork extends the parent's fee horizon from the question end
 		// to the fork timestamp. Materialize that final interval before capturing
 		// collateral so the migration snapshot never includes fee-backed ETH.
@@ -680,6 +677,6 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 	}
 
 	receive() external payable {
-		if (!trustedAuctionAddresses[msg.sender]) revert();
+		if (!trustedAuctionAddresses[msg.sender]) revert('Only trusted auction');
 	}
 }

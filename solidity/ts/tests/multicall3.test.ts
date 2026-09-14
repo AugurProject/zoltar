@@ -17,7 +17,7 @@ describe('Multicall3', () => {
 		const hash = await client.sendTransaction({ data: deploymentData })
 		const receipt = await client.waitForTransactionReceipt({ hash })
 		const contractAddress = receipt.contractAddress
-		if (contractAddress === undefined || contractAddress === null) throw new Error('deployment address missing')
+		if (contractAddress === undefined) throw new Error('deployment address missing')
 		return contractAddress
 	}
 
@@ -41,7 +41,7 @@ describe('Multicall3', () => {
 
 	beforeEach(async () => {
 		mockWindow = getAnvilWindowEthereum()
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
 		await setupTestAccounts(mockWindow)
 	})
 
@@ -117,7 +117,7 @@ describe('Multicall3', () => {
 
 	test('aggregate3Value rejects a value mismatch and rolls back successful subcalls', async () => {
 		const multicall = await deployMulticall()
-		const recipient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0).account.address
+		const recipient = createWriteClient(mockWindow, TEST_ADDRESSES[1]).account.address
 		const recipientBalanceBefore = await client.getBalance({ address: recipient })
 		const multicallBalanceBefore = await client.getBalance({ address: multicall })
 		const data = encodeFunctionData({

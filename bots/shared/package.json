@@ -55,11 +55,7 @@
 		"typecheck": "bun run ensure-contract-artifacts && bun x tsc --project tsconfig.json --noEmit"
 	},
 	"dependencies": {
-		"@zoltar/core-shared": "file:../../shared/core"
-	},
-	"overrides": {
-		"undici": "7.29.0",
-		"@zoltar/core-shared": "file:../../shared/core"
+		"@zoltar/core-shared": "workspace:1.0.0"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.3.11",

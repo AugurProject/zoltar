@@ -340,7 +340,8 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 						)
 						const centralizedMarkets = parseRootMarketSettings(rootValue ?? value, settings.network.chainId)
 						if (childrenValue !== undefined && !Array.isArray(childrenValue)) throw new Error('Market configuration children must be an array')
-						const childMarketConfigurations = (childrenValue ?? []).map(parseCentralizedMarketSettings)
+						const childValues: readonly unknown[] = childrenValue ?? []
+						const childMarketConfigurations = childValues.map(parseCentralizedMarketSettings)
 						if (centralizedMarkets.assetChainId !== settings.network.chainId) throw new Error('Market consensus configuration targets another chain')
 						if (childMarketConfigurations.some(configuration => configuration.assetChainId !== settings.network.chainId)) throw new Error('Child market configuration targets another chain')
 						const configuredAssets = [centralizedMarkets, ...childMarketConfigurations].map(configuration => configuration.assetAddress.toLowerCase())

@@ -54,7 +54,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 	const deployContract = async (deploymentData: Hex): Promise<Address> => {
 		const transactionHash = await client.sendTransaction({ data: deploymentData })
 		const receipt = await client.waitForTransactionReceipt({ hash: transactionHash })
-		if (receipt.contractAddress === undefined || receipt.contractAddress === null) throw new Error('deployment address missing')
+		if (receipt.contractAddress === undefined) throw new Error('deployment address missing')
 		return receipt.contractAddress
 	}
 
@@ -62,7 +62,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 
 	beforeEach(async () => {
 		mockWindow = getAnvilWindowEthereum()
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
 		await setupTestAccounts(mockWindow)
 		await ensureZoltarDeployed(client)
 		claimDelegate = await deployContract(

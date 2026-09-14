@@ -40,10 +40,10 @@ describe('Audit PoC: truth-auction aliasing across unauthenticated lineages', ()
 		const { expectedEthToBuy, repAtFork, yesSecurityPool } = await setupStartedTruthAuction('audit truth-auction alias fork source')
 		assert.ok(expectedEthToBuy > 0n, 'canonical child must need positive repair ETH')
 
-		const bidder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const bidder = createWriteClient(mockWindow, TEST_ADDRESSES[2])
 		const winningTick = await participateAuction(bidder, yesSecurityPool.truthAuction, repAtFork / 4n, expectedEthToBuy)
 		const forker = getInfraContractAddresses().securityPoolForker
-		const attackReceiver = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
+		const attackReceiver = createWriteClient(mockWindow, TEST_ADDRESSES[6])
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		const shareTokenDeploymentHash = await client.sendTransaction({
 			data: encodeDeployData({

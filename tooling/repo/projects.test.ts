@@ -35,7 +35,6 @@ test('registry tasks carry explicit working directories and derive canonical tas
 	expect(taskProjects('setup').map(project => project.id)).toContain('ui-trading')
 	expect(projectsInTaskGroup('build', 'ui').at(-1)?.id).toBe('ui-trading')
 	expect(taskProjects('test').map(project => project.id)).toContain('chaos')
-	expect(taskProjects('dependency-update').map(project => project.id)).toContain('ui-core')
 })
 
 test('complete validation includes root and non-database AugurScan tests', () => {

@@ -30,7 +30,7 @@ describe('Audit: pre-escalation residual capture', () => {
 	})
 
 	test('rejects vault admission as soon as the question ends', async () => {
-		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const questionEnd = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(questionEnd + 1n)
 
@@ -38,7 +38,7 @@ describe('Audit: pre-escalation residual capture', () => {
 	})
 
 	test('keeps vault admission open before the question end timestamp and closes it exactly at the boundary', async () => {
-		const depositor = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const depositor = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const questionEnd = await getQuestionEndDate(client, questionId)
 		await approveToken(depositor, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
 
@@ -50,8 +50,8 @@ describe('Audit: pre-escalation residual capture', () => {
 	})
 
 	test('prevents an exact-end deposit before the first dispute from capturing an honest vault residual', async () => {
-		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		const escalationDepositor = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1])
+		const escalationDepositor = createWriteClient(mockWindow, TEST_ADDRESSES[2])
 		const attoRep = 10n ** 18n
 		const lowLosingPrincipal = 100n * attoRep
 		const bindingLosingPrincipal = 200n * attoRep

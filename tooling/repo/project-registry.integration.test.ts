@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+import { workspaceInstall } from './install-frozen.mts'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { reviewableGitHubPath } from '../testing/reviewable-github-path.ts'
@@ -86,8 +87,17 @@ test('local installation and CI use the package-manager Bun version', async () =
 	const bunVersion = packageManager.match(/^bun@(?<version>\d+\.\d+\.\d+)$/)?.groups?.['version']
 	if (bunVersion === undefined) throw new Error(`Unsupported packageManager declaration: ${packageManager}`)
 
-	const installSource = await fs.readFile(path.join(repositoryRoot, 'tooling/repo/install-frozen.mts'), 'utf8')
-	const ciSource = await fs.readFile(reviewableGitHubPath(repositoryRoot, 'workflows/ci.yml'), 'utf8')
-	expect(installSource).toContain(`const repositoryBunVersion = '${bunVersion}'`)
-	expect(ciSource).toContain(`BUN_VERSION: ${bunVersion}`)
+	expect(workspaceInstall(repositoryRoot).command).toEqual([process.execPath, 'install', '--frozen-lockfile'])
+	const setup = await fs.readFile(reviewableGitHubPath(repositoryRoot, 'actions/setup-bun/action.yml'), 'utf8')
+	expect(setup).toContain('.packageManager')
+	expect(setup).toContain('steps.version.outputs.version')
+})
+
+test('all UI workspaces resolve the same Preact and signals runtime', async () => {
+	for (const specifier of ['preact', 'preact/hooks', '@preact/signals']) {
+		const expected = await fs.realpath(Bun.resolveSync(specifier, repositoryRoot))
+		for (const project of projects.filter(project => project.path.startsWith('ui/'))) {
+			expect(await fs.realpath(Bun.resolveSync(specifier, path.join(repositoryRoot, project.path)))).toBe(expected)
+		}
+	}
 })

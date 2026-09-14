@@ -103,12 +103,12 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		if (
 			systemState != SystemState.Operational ||
 			IZoltarForkState(pool.zoltar()).getForkTime(pool.universeId()) != 0
-		) revert();
-		if (pool.isEscalationResolved()) revert();
+		) revert('Pool is not operational');
+		if (pool.isEscalationResolved()) revert('Escalation resolved');
 		if (
 			block.timestamp >= IQuestionEndTime(pool.questionData()).getQuestionEndDate(pool.questionId()) &&
 			!postEndVaultAdmissionAllowed
-		) revert();
+		) revert('Vault admission closed');
 		require(attoRepAmount > 0, 'Zero REP');
 		require(targetHealthFactorBps >= SecurityPoolUtils.BPS_DENOMINATOR, 'HF low');
 		pool.updateVaultFees(vault);
@@ -142,7 +142,8 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 	function resumeForkedEscalationGame() external {
 		// This is permissionless for liveness. The immutable carry commitment was
 		// installed during child initialization, so resumption does no unbounded work.
-		if (!awaitingForkContinuation || systemState != SystemState.Operational) revert();
+		if (!awaitingForkContinuation || systemState != SystemState.Operational)
+			revert('Fork continuation unavailable');
 		escalationGame.resumeFromFork();
 		if (escalationGame.forkResumedAt() == 0) return;
 		awaitingForkContinuation = false;

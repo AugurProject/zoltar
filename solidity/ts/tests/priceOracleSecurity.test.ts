@@ -263,7 +263,7 @@ describe('Price Oracle Refund Security Tests', () => {
 
 	beforeEach(async () => {
 		mockWindow = getAnvilWindowEthereum()
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
 		await setupTestAccounts(mockWindow)
 		await ensureZoltarDeployed(client)
 		await ensureInfraDeployed(client)
@@ -622,7 +622,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	})
 
 	test('oracle settlement distinguishes direct coordinator balances from OpenOracle beneficiary credits', async () => {
-		const donor = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const donor = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const donatedWeth = 3n * 10n ** 15n
 		const donatedRep = 5n * 10n ** 18n
 		const openOracleDonatedWeth = 2n * 10n ** 15n
@@ -973,7 +973,7 @@ describe('Price Oracle Refund Security Tests', () => {
 
 		const openOracleAddress = getInfraContractAddresses().openOracle
 		await mockWindow.impersonateAccount(openOracleAddress)
-		const openOracleClient = createWriteClient(mockWindow, BigInt(openOracleAddress), 0)
+		const openOracleClient = createWriteClient(mockWindow, BigInt(openOracleAddress))
 		await assert.rejects(
 			openOracleClient.writeContract({
 				abi: coordinatorAbi,
@@ -1375,7 +1375,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
 			baseFeeAttoEthPerGas: requestBaseFeeAttoEthPerGas,
 		})
-		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const openOracle = getInfraContractAddresses().openOracle
 
 		await wrapWeth(client, minimumWethReport)
@@ -1450,7 +1450,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
 			baseFeeAttoEthPerGas,
 		})
-		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const openOracle = getInfraContractAddresses().openOracle
 
 		await wrapWeth(client, initialWethReport * 2n)
@@ -1729,7 +1729,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	})
 
 	test('first escalation deposit REP failure rolls back game deployment and escrow accounting', async () => {
-		const emptyVaultClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const emptyVaultClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await mockWindow.setTime(questionEndDate + 1n)
 		await manipulatePriceOracle(client, mockWindow, priceOracle)
 
@@ -1742,7 +1742,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	})
 
 	test('escalation deposit minimum REP failure rolls back escrow accounting', async () => {
-		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const minimumVaultRepDepositAttoRep = await client.readContract({
 			abi: statoblast_SecurityPool_SecurityPool.abi,
 			address: securityPool,
@@ -1839,7 +1839,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	})
 
 	test('only the pending report sponsor can queue more operations while settlement is pending', async () => {
-		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const costAttoEth = await getRequestPriceCostAttoEth(client, priceOracle)
 		const sponsorCapacityOwnershipAttoRep = repDeposit / 4n
 		const counterpartyCapacityOwnershipAttoRep = repDeposit / 5n
@@ -1882,7 +1882,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	})
 
 	test('rolling OpenOracle disputes extend sponsor exclusivity without corrupting the pending operation queue', async () => {
-		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const costAttoEth = await getRequestPriceCostAttoEth(client, priceOracle)
 		const sponsorCapacityOwnershipAttoRep = repDeposit / 4n
 		const sponsorCapacityOwnershipAttoRepAfterDispute = repDeposit / 5n
@@ -1963,7 +1963,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	})
 
 	test('only the pending report sponsor can queue overflow operations while settlement is pending', async () => {
-		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const costAttoEth = await getRequestPriceCostAttoEth(client, priceOracle)
 		const queuedOperationCostAttoEth = await getQueuedOperationCostAttoEth(client, priceOracle)
 
@@ -2123,7 +2123,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	})
 
 	test('empty-vault withdrawals cannot occupy pending oracle settlement slots', async () => {
-		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const costAttoEth = await getRequestPriceCostAttoEth(attackerClient, priceOracle)
 
 		await assert.rejects(async () => await requestPriceIfNeededAndStageOperationWithValue(attackerClient, priceOracle, OperationType.WithdrawRep, attackerClient.account.address, repDeposit, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, costAttoEth), /withdraw amount has no effect/i)
@@ -2137,7 +2137,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	})
 
 	test('over-requested withdrawals withdraw the actual available REP', async () => {
-		const withdrawalClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const withdrawalClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const availableRep = repDeposit
 		await approveAndDepositRepToVault(withdrawalClient, availableRep, questionId)
 		const costAttoEth = await getRequestPriceCostAttoEth(withdrawalClient, priceOracle)
@@ -2151,7 +2151,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	})
 
 	test('pending withdrawals that become zero-effect during execution fail without blocking the successful withdrawal', async () => {
-		const withdrawalClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const withdrawalClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const availableRep = repDeposit
 		await approveAndDepositRepToVault(withdrawalClient, availableRep, questionId)
 		const costAttoEth = await getRequestPriceCostAttoEth(withdrawalClient, priceOracle)

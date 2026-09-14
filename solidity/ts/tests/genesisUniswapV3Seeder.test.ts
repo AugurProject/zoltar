@@ -14,13 +14,13 @@ describe('GenesisUniswapV3Seeder', () => {
 
 	const deploy = async (data: Hex): Promise<Address> => {
 		const receipt = await client.waitForTransactionReceipt({ hash: await client.sendTransaction({ data }) })
-		if (receipt.contractAddress === undefined || receipt.contractAddress === null) throw new Error('deployment address missing')
+		if (receipt.contractAddress === undefined) throw new Error('deployment address missing')
 		return receipt.contractAddress
 	}
 
 	beforeEach(async () => {
 		const mockWindow: AnvilWindowEthereum = getAnvilWindowEthereum()
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
 		await setupTestAccounts(mockWindow)
 	})
 

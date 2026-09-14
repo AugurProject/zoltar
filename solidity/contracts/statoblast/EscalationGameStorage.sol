@@ -63,13 +63,21 @@ abstract contract EscalationGameStorage {
 
 	function _applyInheritedSourceRetention(uint256 amountAttoRep, uint256 parentDepositIndex) internal view returns (uint256 retainedAmountAttoRep) {
 		(bool success, bytes memory retentionData) = address(this).staticcall(abi.encodeWithSignature('applyInheritedClaimRetention(uint256,uint256)', amountAttoRep, parentDepositIndex));
-		if (!success || retentionData.length != 32) revert();
-		return abi.decode(retentionData, (uint256));
+		return _decodeRetentionResponse(success, retentionData);
 	}
 
 	function _applyInheritedSourceStorageBasis(uint256 amountAttoRep, uint256 cumulativeAmountAttoRep, uint256 parentDepositIndex) internal view returns (uint256) {
 		(bool success, bytes memory retentionData) = address(this).staticcall(abi.encodeWithSignature('applyInheritedSourceStorageBasis(uint256,uint256,uint256)', amountAttoRep, cumulativeAmountAttoRep, parentDepositIndex));
-		if (!success || retentionData.length != 32) revert();
+		return _decodeRetentionResponse(success, retentionData);
+	}
+
+	function _decodeRetentionResponse(bool success, bytes memory retentionData) private pure returns (uint256) {
+		if (!success) {
+			assembly ('memory-safe') {
+				revert(add(retentionData, 32), mload(retentionData))
+			}
+		}
+		require(retentionData.length == 32, 'Invalid retention response');
 		return abi.decode(retentionData, (uint256));
 	}
 

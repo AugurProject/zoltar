@@ -9,14 +9,14 @@ const anvilWindowByClient = new WeakMap<object, AnvilWindowEthereum>()
 
 const isAnvilWindowEthereum = (ethereum: EIP1193Provider | AnvilWindowEthereum): ethereum is AnvilWindowEthereum => 'addStateOverrides' in ethereum && typeof ethereum.addStateOverrides === 'function'
 
-const createReadClient = (ethereum: EIP1193Provider | undefined | AnvilWindowEthereum, cacheTime: number = 10_000) => {
-	if (ethereum === undefined) return createPublicClient({ transport: http(DEFAULT_HTTP, { batch: { wait: 100 } }), cacheTime })
-	return createWalletClient({ transport: custom(ethereum), cacheTime, chain: mainnet }).extend(publicActions)
+const createReadClient = (ethereum: EIP1193Provider | undefined | AnvilWindowEthereum) => {
+	if (ethereum === undefined) return createPublicClient({ transport: http(DEFAULT_HTTP) })
+	return createWalletClient({ transport: custom(ethereum), chain: mainnet }).extend(publicActions)
 }
 
-export const createWriteClient = (ethereum: EIP1193Provider | undefined | AnvilWindowEthereum, accountAddress: bigint, cacheTime: number = 10_000) => {
+export const createWriteClient = (ethereum: EIP1193Provider | undefined | AnvilWindowEthereum, accountAddress: bigint) => {
 	if (ethereum === undefined) throw new Error('no window.ethereum injected')
-	const client = createWalletClient({ account: addressString(accountAddress), transport: custom(ethereum), cacheTime, chain: mainnet }).extend(publicActions)
+	const client = createWalletClient({ account: addressString(accountAddress), transport: custom(ethereum), chain: mainnet }).extend(publicActions)
 	if (isAnvilWindowEthereum(ethereum)) anvilWindowByClient.set(client, ethereum)
 	return client
 }

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { readFile } from 'node:fs/promises'
-import { dirname, join, relative } from 'node:path'
+import { basename, dirname, join, relative, resolve } from 'node:path'
 import { dockerInstructions, parseDockerfile, requireDockerStage, shellCommandSegments } from '../testing/packaging-parsers.ts'
 
 const repositoryRoot = join(import.meta.dir, '..', '..')
@@ -30,6 +30,43 @@ describe('UI Docker packaging', () => {
 		for (const packageId of ['coreShared', 'zoltar', 'statoblast', 'trading']) expect(runSegments).toContain(`bun ./tooling/repo/install-frozen.mts ui/${packageId}`)
 		expect(runSegments.some(command => /cd \/source\/ui\/\w+ && bun install/u.test(command))).toBe(false)
 		expect(relative(join(dirname(dockerfile), '..'), join(dirname(staticServer)))).toBe('tooling/ui')
+	})
+
+	test('copies complete TypeScript configuration inheritance chains before build commands', async () => {
+		const stages = parseDockerfile(await readFile(dockerfile, 'utf8'))
+		const filesByStage = new Map<string, Map<string, string>>()
+		for (const stage of stages) {
+			const copiedFiles = new Map(filesByStage.get(stage.base))
+			const validateConfig = async (containerPath: string, ancestors = new Set<string>()): Promise<void> => {
+				if (ancestors.has(containerPath)) throw new Error(`Cyclic TypeScript configuration: ${containerPath}`)
+				const sourcePath = copiedFiles.get(containerPath)
+				if (sourcePath === undefined) throw new Error(`${stage.name}: TypeScript configuration was not copied before RUN: ${containerPath}`)
+				const config: unknown = JSON.parse(await readFile(sourcePath, 'utf8'))
+				if (typeof config !== 'object' || config === null || !('extends' in config)) return
+				const bases: readonly unknown[] = Array.isArray(config.extends) ? config.extends : [config.extends]
+				for (const base of bases) {
+					if (typeof base !== 'string' || !base.startsWith('.')) throw new Error(`Unsupported TypeScript config base in ${containerPath}`)
+					await validateConfig(resolve(dirname(containerPath), base), new Set([...ancestors, containerPath]))
+				}
+			}
+			for (const instruction of stage.instructions) {
+				if (instruction.keyword === 'COPY' && !instruction.value.includes('--from=')) {
+					const parts = instruction.value.split(' ').filter(part => !part.startsWith('--'))
+					const destination = parts.pop()
+					if (destination === undefined) throw new Error('COPY destination is missing')
+					for (const source of parts.filter(part => part.endsWith('.json'))) {
+						const target = destination.endsWith('/') || parts.length > 1 ? join(destination, basename(source)) : destination
+						copiedFiles.set(resolve('/source', target), resolve(repositoryRoot, source))
+					}
+				}
+				if (instruction.keyword === 'RUN') {
+					for (const copiedPath of copiedFiles.keys()) {
+						if (basename(copiedPath).startsWith('tsconfig')) await validateConfig(copiedPath)
+					}
+				}
+			}
+			if (stage.name !== undefined) filesByStage.set(stage.name, copiedFiles)
+		}
 	})
 
 	test('builds local runtime images from only the selected application dependency stage', async () => {

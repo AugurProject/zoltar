@@ -1,5 +1,6 @@
+import { useEnvironmentRevision } from './useEnvironmentRevision.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
-import { useRef, useState } from 'preact/hooks'
+import { useRef } from 'preact/hooks'
 import { shouldFollowWalletNetwork } from '../../lib/activeEnvironment.js'
 import { createSupportedNetworkChangeCoordinator } from '../lib/supportedNetworkChange.js'
 import { useTransactionTrayController } from './useTransactionTrayController.js'
@@ -7,29 +8,26 @@ import { useTransactionTrayController } from './useTransactionTrayController.js'
 type CommitGuard = () => boolean
 
 export function useProtocolAppRuntime({ replaceEnvironment, onEnvironmentCommitted }: { replaceEnvironment(canCommit: CommitGuard): Promise<boolean>; onEnvironmentCommitted?(): void }) {
-	const [activeEnvironmentNonce, setActiveEnvironmentNonce] = useState(0)
 	const supportedNetworkChangeCoordinatorRef = useRef<ReturnType<typeof createSupportedNetworkChangeCoordinator>>()
 	const transactionTray = useTransactionTrayController({ onFinished: () => supportedNetworkChangeCoordinatorRef.current?.handleTransactionFinished() })
-	const replaceActiveEnvironmentNonce: typeof setActiveEnvironmentNonce = updater => {
-		transactionTray.resetForEnvironment()
-		setActiveEnvironmentNonce(updater)
-	}
+	const environment = useEnvironmentRevision(() => transactionTray.resetForEnvironment())
+
 	const supportedNetworkChangeCoordinator =
 		supportedNetworkChangeCoordinatorRef.current ??
 		createSupportedNetworkChangeCoordinator({
 			getInFlightCount: () => transactionTray.transactionState.value.inFlightCount,
 			replaceEnvironment: async canCommit => {
 				if (!(await replaceEnvironment(canCommit))) return false
-				replaceActiveEnvironmentNonce(currentNonce => currentNonce + 1)
+				environment.setRevision(currentNonce => currentNonce + 1)
 				onEnvironmentCommitted?.()
 				return true
 			},
 		})
 	supportedNetworkChangeCoordinatorRef.current = supportedNetworkChangeCoordinator
 	return {
-		activeEnvironmentNonce,
+		activeEnvironmentNonce: environment.revision.value,
 		followSupportedWalletNetwork: shouldFollowWalletNetwork(),
-		setActiveEnvironmentNonce: replaceActiveEnvironmentNonce,
+		setActiveEnvironmentNonce: environment.setRevision,
 		supportedNetworkChangeCoordinator,
 		transactionTray,
 	}
