@@ -304,8 +304,8 @@ describe('useSecurityPoolCreation', () => {
 		})
 		await waitFor(() => {
 			expect(originSecurityPoolExists).toHaveBeenCalledTimes(1)
+			expect(requireState(state).duplicateOriginPoolExists).toBe(true)
 		})
-		expect(requireState(state).duplicateOriginPoolExists).toBe(true)
 	})
 
 	test('ignores stale duplicate-origin responses when market inputs change out of order', async () => {
@@ -529,7 +529,7 @@ describe('useSecurityPoolCreation', () => {
 		expect(requireState(state).securityPoolResult?.deployPoolHash).toBe('0xabc')
 		expect(requireState(state).securityPoolCreationFeedback?.status.tone).toBe('success')
 		expect(requireState(state).securityPoolCreationFeedback?.status.hash).toBe('0xabc')
-		expect(onTransactionHashes).toEqual([])
+		expect(onTransactionHashes).toEqual(['0xabc'])
 		expect(refreshCalls).toBe(1)
 		expect(submittedParameters).toEqual([{ initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n, questionId: 11n, statoblastSecurityMultiplierBps: 20_000n }])
 	})

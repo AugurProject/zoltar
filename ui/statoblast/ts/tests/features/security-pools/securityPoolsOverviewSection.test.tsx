@@ -154,39 +154,20 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(identifier.textContent).toBe(questionId)
 	})
 
-	test('warns only when a browsed pool differs from the header universe', async () => {
+	test('shows only pools in the active universe without a universe selector', async () => {
 		const sameUniversePool = createSecurityPool({ marketDetails: createMarketDetails({ title: 'Same universe pool' }), securityPoolAddress: '0x0000000000000000000000000000000000000001', universeId: 1n })
-		const mismatchedPool = createSecurityPool({ marketDetails: createMarketDetails({ title: 'Mismatched pool' }), securityPoolAddress: '0x0000000000000000000000000000000000000002', universeId: 11n })
-		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ activeUniverseId: 1n, securityPools: [sameUniversePool, mismatchedPool] })} />)
+		const otherPool = createSecurityPool({ marketDetails: createMarketDetails({ title: 'Other universe pool' }), securityPoolAddress: '0x0000000000000000000000000000000000000002', universeId: 11n })
+		const view = (activeUniverseId: bigint) => <SecurityPoolsOverviewSection {...createProps({ activeUniverseId, securityPools: [sameUniversePool, otherPool] })} />
+		const renderedComponent = await renderIntoDocument(view(1n))
 		cleanupRenderedComponent = renderedComponent.cleanup
-
-		expect(within(document.body).queryByText('Mismatched pool')).toBeNull()
+		expect(within(document.body).queryByRole('combobox', { name: 'Universe' })).toBeNull()
+		expect(within(document.body).queryByText('Other universe pool')).toBeNull()
+		expect(getSecurityPoolCard('Same universe pool')).toBeDefined()
 		await act(async () => {
-			fireEvent.change(within(document.body).getByRole('combobox', { name: 'Universe' }), { target: { value: 'all' } })
+			render(view(11n), renderedComponent.container)
 		})
-		expect(getSecurityPoolCard('Mismatched pool').textContent).toContain('This pool belongs to universe 0xb')
-		expect(getSecurityPoolCard('Same universe pool').textContent).not.toContain('This pool belongs')
-	})
-
-	test('keeps a selected universe visible when a replacement page has no pools in that universe', async () => {
-		const view = (environmentRefreshKey: number, securityPools: ListedSecurityPool[]) => <SecurityPoolsOverviewSection {...createProps({ environmentRefreshKey, securityPools })} />
-		const renderedComponent = await renderIntoDocument(view(0, [createSecurityPool({ universeId: 11n })]))
-		cleanupRenderedComponent = renderedComponent.cleanup
-		await act(async () => {
-			fireEvent.change(within(document.body).getByRole('combobox', { name: 'Universe' }), { target: { value: '11' } })
-		})
-		await act(async () => {
-			render(view(1, [createSecurityPool({ universeId: 1n })]), renderedComponent.container)
-		})
-		const selector = document.querySelector<HTMLSelectElement>('.filter-toolbar select')
-		if (selector === null) throw new Error('Expected universe selector')
-		expect(selector.value).toBe('11')
-		expect(selector.selectedOptions[0]?.textContent).toBe('0xb')
-		expect(within(document.body).getByText('No pools match the current search and filter settings.')).toBeDefined()
-		await act(async () => {
-			fireEvent.change(selector, { target: { value: 'current' } })
-		})
-		expect(getSecurityPoolCard('Will this resolve?')).toBeDefined()
+		expect(within(document.body).queryByText('Same universe pool')).toBeNull()
+		expect(getSecurityPoolCard('Other universe pool')).toBeDefined()
 	})
 
 	test('renders oracle-priced ETH minting capacity separately from REP ownership', async () => {
@@ -483,6 +464,8 @@ describe('SecurityPoolsOverviewSection', () => {
 			<SecurityPoolsOverviewSection
 				{...createProps({
 					securityPoolOverviewError: 'Failed to load security pools',
+					securityPoolPage: undefined,
+					hasLoadedSecurityPoolPage: false,
 				})}
 			/>,
 		)
@@ -490,6 +473,10 @@ describe('SecurityPoolsOverviewSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('alert').textContent).toContain('Failed to load security pools')
+		await act(async () => {
+			await new Promise(resolve => setTimeout(resolve, 0))
+		})
+		expect(document.body.textContent).not.toContain('Loading security pools')
 		expect(documentQueries.queryByRole('dialog', { name: 'Liquidate Vault' })).toBeNull()
 	})
 

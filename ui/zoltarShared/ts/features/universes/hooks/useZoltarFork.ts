@@ -1,3 +1,4 @@
+import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { useSignal } from '@preact/signals'
 import { useCallback, useEffect, useRef } from 'preact/hooks'
 import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
@@ -208,7 +209,7 @@ export function useZoltarFork(
 			}
 
 		await forkAccessLoad.track(async () => {
-			const accessResults = await dependencies.loadZoltarForkAccess(accountAddress, reputationToken, universeId, childUniverses).catch(error => {
+			const accessResults = await withReadTimeout(dependencies.loadZoltarForkAccess(accountAddress, reputationToken, universeId, childUniverses)).catch(error => {
 				const failureResult = {
 					error: toReadError(error),
 					status: 'failure',

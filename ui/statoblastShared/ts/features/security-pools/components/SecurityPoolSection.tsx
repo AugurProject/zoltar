@@ -84,14 +84,12 @@ export function SecurityPoolSection({
 	const createDisabledReason = guardedCreateDisabledReason
 	const isCreateDisabled = !isOnActiveAppChain || createDisabledReason !== undefined
 	const createQuestionAndPoolDisabledReason = (() => {
+		if (questionAndPoolCreating || marketCreating || securityPoolCreating) return undefined
 		if (accountState.address === undefined) return marketCopy.questionCreationWalletRequired
 		if (!isOnActiveAppChain) return getWrongNetworkReason()
 		if (zoltarUniverseHasForked) return securityPoolCopy.poolCreationAfterForkReason
 		if (marketForm.marketType !== 'binary') return securityPoolCopy.ineligibleQuestionDetail
 		if (!questionFormValidation.isValid) return questionFormValidation.notice
-		if (questionAndPoolCreating) return securityPoolCopy.combinedQuestionAndPoolInProgress
-		if (marketCreating) return securityPoolCopy.questionCreationInProgress
-		if (securityPoolCreating) return securityPoolCopy.poolCreationInProgress
 		const multiplierValidationMessage = getStatoblastSecurityMultiplierValidationMessage(securityPoolForm.statoblastSecurityMultiplierBps)
 		if (multiplierValidationMessage !== undefined) return multiplierValidationMessage
 		return getInitialReportPriorityFeeValidationMessage(securityPoolForm.initialReportPriorityFeeGwei)
@@ -240,17 +238,19 @@ export function SecurityPoolSection({
 				</>
 			) : (
 				<>
-					<SectionBlock variant='plain'>
-						<fieldset className='form-grid' disabled={questionSourceLocked}>
-							<legend>{securityPoolCopy.questionSourceLegend}</legend>
-							<label>
-								<input checked={questionSource === 'existing'} disabled={questionSourceLocked} name='security-pool-question-source' type='radio' value='existing' onChange={() => setQuestionSource('existing')} /> {securityPoolCopy.useQuestionId}
-							</label>
-							<label>
-								<input checked={questionSource === 'new'} disabled={questionSourceLocked} name='security-pool-question-source' type='radio' value='new' onChange={() => setQuestionSource('new')} /> {securityPoolCopy.createNewQuestion}
-							</label>
-						</fieldset>
-					</SectionBlock>
+					{questionSourceLocked ? undefined : (
+						<SectionBlock variant='plain'>
+							<fieldset className='pool-question-source' disabled={questionSourceLocked}>
+								<legend>{securityPoolCopy.questionSourceLegend}</legend>
+								<label>
+									<input checked={questionSource === 'existing'} disabled={questionSourceLocked} name='security-pool-question-source' type='radio' value='existing' onChange={() => setQuestionSource('existing')} /> {securityPoolCopy.useQuestionId}
+								</label>
+								<label>
+									<input checked={questionSource === 'new'} disabled={questionSourceLocked} name='security-pool-question-source' type='radio' value='new' onChange={() => setQuestionSource('new')} /> {securityPoolCopy.createNewQuestion}
+								</label>
+							</fieldset>
+						</SectionBlock>
+					)}
 
 					{questionSource === 'existing' ? (
 						<SectionBlock variant='plain'>

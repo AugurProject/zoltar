@@ -258,7 +258,7 @@ describe('live workflow safety boundary', () => {
 		}
 		let rendered = await renderIntoDocument(<LiveTrading route={marketRoute} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />)
 		cleanupRendered = rendered.cleanup
-		await flush()
+		await waitForDom(() => document.body.textContent?.includes('Unsupported on-chain timestamp') === true, 'initial market details')
 		for (const phrase of forbiddenLiveCopy) expect(document.body.textContent?.toLowerCase()).not.toContain(phrase.toLowerCase())
 		expect(document.body.textContent).not.toContain('2 nETH / gas')
 		expect(document.body.textContent).toContain('Unsupported on-chain timestamp')
@@ -269,6 +269,7 @@ describe('live workflow safety boundary', () => {
 		expect(document.body.textContent).not.toContain('Current spot price')
 		discoveredLoadError = 'market RPC unavailable'
 		await rerouteForRefresh(marketRoute)
+		await waitForDom(() => document.body.textContent?.includes('Market data unavailable') === true, 'market refresh failure')
 		expect(document.body.textContent).toContain('Market data unavailable')
 		expect(document.body.textContent).toContain(pool)
 		expect(document.body.textContent).not.toContain(shareToken)
@@ -276,6 +277,7 @@ describe('live workflow safety boundary', () => {
 		expect(document.body.textContent).not.toContain('INVALID 256 · YES 257 · NO 258')
 		discoveredLoadError = undefined
 		await rerouteForRefresh(marketRoute)
+		await waitForDom(() => document.body.textContent?.includes('Unsupported on-chain timestamp') === true, 'recovered market details')
 		discoveredEndTime = now + 2n
 
 		deferredWalletChainRead = deferred<number>()

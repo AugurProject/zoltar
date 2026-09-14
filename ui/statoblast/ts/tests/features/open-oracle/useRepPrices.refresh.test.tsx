@@ -8,7 +8,7 @@ import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBa
 import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installRepPriceQuoterForTesting } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useRepPrices.js'
-import { describe, expect, mock, test } from 'bun:test'
+import { describe, expect, mock, spyOn, test } from 'bun:test'
 import { h } from 'preact'
 import { act } from 'preact/test-utils'
 
@@ -16,13 +16,14 @@ type UseRepPrices = typeof import('@zoltar/ui-statoblast-shared/features/open-or
 
 function createHarness(useRepPrices: UseRepPrices) {
 	return function RepPricesHarness() {
-		const { repPerEthFailure, repPerEthPrice, repUsdcFailure, repUsdcPrice, refreshRepPrices } = useRepPrices()
+		const { isLoadingRepPrices, repPerEthFailure, repPerEthPrice, repUsdcFailure, repUsdcPrice, refreshRepPrices } = useRepPrices()
 
 		return (
 			<div>
 				<button onClick={refreshRepPrices} type='button'>
 					Refresh
 				</button>
+				<span data-testid='loading'>{String(isLoadingRepPrices)}</span>
 				<span data-testid='rep-per-eth'>{repPerEthPrice?.toString() ?? '-'}</span>
 				<span data-testid='rep-per-eth-failure'>{repPerEthFailure ?? '-'}</span>
 				<span data-testid='rep-per-usdc'>{repUsdcPrice?.toString() ?? '-'}</span>
@@ -43,6 +44,37 @@ describe('useRepPrices refresh races', () => {
 			installRepPriceQuoterForTesting(undefined)
 			resetActiveEnvironmentForTesting()
 		},
+	})
+
+	test('times out stalled price quotes and allows a fresh retry without applying late results', async () => {
+		const originalSetTimeout = globalThis.setTimeout
+		spyOn(globalThis, 'setTimeout').mockImplementation((handler, delay, ...args) => originalSetTimeout(handler, delay === 30_000 ? 10 : delay, ...args))
+		const stalled = createDeferred<{ amountOut: bigint; source: { poolUrl: string | undefined; protocol: 'mock' } }>()
+		let ethCalls = 0
+		const quote = { amountOut: 3n, source: { poolUrl: undefined, protocol: 'mock' as const } }
+		installRepPriceQuoterForTesting({
+			getRepAddress: () => getAddress('0x00000000000000000000000000000000000000e1'),
+			isRepPricingEnabled: () => true,
+			quoteBestExactInputWithSource: async () => (++ethCalls === 1 ? await stalled.promise : quote),
+			quoteBestV3ExactInputWithSource: async () => quote,
+			quoteRepForUsdcV4WithSource: async () => quote,
+		})
+		installActiveEnvironmentForTesting({ ...createFakeBackend(), createReadClient: () => createPublicClient({ transport: http('http://127.0.0.1:8545') }) })
+		const { useRepPrices } = await import('@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useRepPrices.js')
+		const Harness = createHarness(useRepPrices)
+		const rendered = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = rendered.cleanup
+		const queries = within(document.body)
+		await waitFor(() => expect(queries.getByTestId('rep-per-eth-failure').textContent).toBe('rpc-error'))
+		expect(queries.getByTestId('loading').textContent).toBe('false')
+		expect(queries.getByTestId('rep-per-usdc').textContent).toBe('3')
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Refresh' })))
+		await waitFor(() => expect(queries.getByTestId('rep-per-eth').textContent).toBe('3'))
+		await act(async () => {
+			stalled.resolve({ ...quote, amountOut: 99n })
+			await stalled.promise
+		})
+		expect(queries.getByTestId('rep-per-eth').textContent).toBe('3')
 	})
 
 	test('keeps the newest REP price refresh when overlapping requests resolve out of order', async () => {

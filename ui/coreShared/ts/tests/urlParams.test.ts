@@ -71,7 +71,7 @@ void describe('url params', () => {
 		expect(writeSecurityPoolsViewQueryParam('', 'operate')).toBe('?securityPoolsView=operate')
 		expect(writeSecurityPoolsViewQueryParam('?foo=bar', 'operate')).toBe('?foo=bar&securityPoolsView=operate')
 		expect(writeSecurityPoolsViewQueryParam('?foo=bar&securityPoolsView=operate', undefined)).toBe('?foo=bar')
-		expect(writeSecurityPoolsViewQueryParam('?securityPoolsView=operate&selectedPoolView=staged-operations&securityPool=0x1234', 'create')).toBe('?securityPoolsView=create')
+		expect(writeSecurityPoolsViewQueryParam('?securityPoolsView=operate&selectedPoolView=staged-operations&securityPool=0x1234', 'create')).toBe('?securityPoolsView=create&selectedPoolView=staged-operations&securityPool=0x1234')
 		expect(writeSecurityPoolsViewQueryParam('?securityPoolsView=create&questionId=0x42', 'browse')).toBe('?securityPoolsView=browse')
 	})
 

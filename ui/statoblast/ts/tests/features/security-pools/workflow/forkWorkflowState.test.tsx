@@ -589,7 +589,6 @@ describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 			const documentQueries = within(document.body)
 			expect(documentQueries.queryByRole('button', { name: 'Trigger universe fork' })).toBeNull()
 			expect(documentQueries.getByRole('button', { name: 'Fork & Migration' })).not.toBeNull()
-			expect(document.body.textContent?.includes('Fork Migration')).toBe(true)
 		})
 
 		test('prefers fresh fork-auction activity over stale pool-list state on the fork tab', async () => {

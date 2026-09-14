@@ -144,8 +144,8 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 				securityPoolsLoadError.value = undefined
 				securityPoolsLoadErrorEnvironmentRefreshKey.value = undefined
 			},
+			waitUntilReady: dependencies.waitForSecurityPoolReadBackend,
 			load: async () => {
-				await dependencies.waitForSecurityPoolReadBackend()
 				if (nextCheckedAddress === undefined) return []
 				return await dependencies.loadSecurityPoolLineage(parseAddressInput(nextCheckedAddress, 'Security pool'), accountAddress)
 			},
@@ -172,8 +172,8 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 				if (!isCurrent()) return
 				securityPoolOverviewError.value = undefined
 			},
+			waitUntilReady: dependencies.waitForSecurityPoolReadBackend,
 			load: async () => {
-				await dependencies.waitForSecurityPoolReadBackend()
 				return await dependencies.loadSecurityPoolPage(pageIndex, pageSize, accountAddress)
 			},
 			onSuccess: page => {
@@ -199,8 +199,8 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 				universeDirectoryError.value = undefined
 				universeDirectoryLoadedEnvironmentRefreshKey.value = undefined
 			},
+			waitUntilReady: dependencies.waitForSecurityPoolReadBackend,
 			load: async () => {
-				await dependencies.waitForSecurityPoolReadBackend()
 				const loadedPools: ListedSecurityPool[] = []
 				const pageSize = 100
 				for (let pageIndex = 0; ; pageIndex += 1) {
@@ -325,8 +325,8 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 				liquidationApprovalError.value = undefined
 				liquidationApprovalLoadingKey.value = requestKey
 			},
+			waitUntilReady: dependencies.waitForSecurityPoolReadBackend,
 			load: async () => {
-				await dependencies.waitForSecurityPoolReadBackend()
 				return await dependencies.loadLiquidationApproval(managerAddress, approvalId)
 			},
 			onSuccess: approval => {
@@ -374,8 +374,8 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 				liquidationReceiverVaultSummaryResolvedKey.value = undefined
 				liquidationReceiverVaultSummaryLoadingKey.value = requestKey
 			},
+			waitUntilReady: dependencies.waitForSecurityPoolReadBackend,
 			load: async () => {
-				await dependencies.waitForSecurityPoolReadBackend()
 				return await dependencies.loadSecurityPoolVaultSummary(securityPoolAddress, receiverVault)
 			},
 			onSuccess: summary => {

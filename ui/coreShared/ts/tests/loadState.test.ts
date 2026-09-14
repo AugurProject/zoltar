@@ -1,10 +1,88 @@
 import { createDeferred } from './testUtils/deferred.js'
 /// <reference types="bun-types" />
 
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, spyOn, test } from 'bun:test'
 import { createLoadController, resolveLoadableValueState, resolveRequestedLoadableValueState, type LoadPhase } from '../lib/loadState.js'
 
 void describe('load state helpers', () => {
+	void test('bounds backend readiness and allows retry without running a premature read', async () => {
+		const originalSetTimeout = globalThis.setTimeout
+		const timer = spyOn(globalThis, 'setTimeout').mockImplementation((handler, delay, ...args) => originalSetTimeout(handler, delay === 120_000 ? 5 : delay, ...args))
+		const controller = createLoadController()
+		let reads = 0
+		let failure: unknown
+		try {
+			await controller.run({
+				waitUntilReady: () => new Promise(() => undefined),
+				load: async () => {
+					reads += 1
+					return 42
+				},
+				onError: error => {
+					failure = error
+				},
+			})
+			expect(failure).toBeInstanceOf(Error)
+			expect(failure instanceof Error ? failure.message : '').toContain('Backend readiness timed out')
+			expect(reads).toBe(0)
+			expect(controller.isLoading.value).toBe(false)
+			expect(await controller.run({ waitUntilReady: async () => undefined, load: async () => 42 })).toBe(42)
+		} finally {
+			timer.mockRestore()
+		}
+	})
+
+	void test('starts the read deadline after backend readiness', async () => {
+		const controller = createLoadController({ timeoutMilliseconds: 5 })
+		const ready = createDeferred<void>()
+		let reads = 0
+		const pending = controller.run({
+			waitUntilReady: () => ready.promise,
+			load: async () => {
+				reads += 1
+				return 42
+			},
+		})
+		await new Promise(resolve => setTimeout(resolve, 20))
+		expect(reads).toBe(0)
+		expect(controller.isLoading.value).toBe(true)
+		ready.resolve()
+		expect(await pending).toBe(42)
+		expect(controller.isLoading.value).toBe(false)
+	})
+
+	void test('times out a stalled read, allows retry, and ignores its late result', async () => {
+		const controller = createLoadController({ timeoutMilliseconds: 5 })
+		const stalled = createDeferred<number>()
+		const values: number[] = []
+		let errorMessage: string | undefined
+		const pending = controller.run({
+			load: () => stalled.promise,
+			onSuccess: value => {
+				values.push(value)
+			},
+			onError: error => {
+				errorMessage = error instanceof Error ? error.message : String(error)
+			},
+		})
+		try {
+			await Promise.race([pending, new Promise(resolve => setTimeout(resolve, 50))])
+			expect(controller.isLoading.value).toBe(false)
+			expect(errorMessage).toContain('timed out')
+			await controller.run({
+				load: async () => 2,
+				onSuccess: value => {
+					values.push(value)
+				},
+			})
+			stalled.resolve(1)
+			await pending
+			expect(values).toEqual([2])
+		} finally {
+			stalled.resolve(1)
+		}
+	})
+
 	void test('starts idle and exposes loading state during successful runs', async () => {
 		const controller = createLoadController()
 		let started = false

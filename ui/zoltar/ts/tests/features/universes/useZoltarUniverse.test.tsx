@@ -202,8 +202,10 @@ describe('useZoltarUniverse', () => {
 			newPage.resolve(refreshedPage)
 			await newPage.promise
 		})
-		await act(async () => undefined)
-		expect(requireHookState(hookState).zoltarQuestionPage).toEqual(refreshedPage)
+		await waitFor(async () => {
+			await act(async () => undefined)
+			expect(requireHookState(hookState).zoltarQuestionPage).toEqual(refreshedPage)
+		})
 	})
 
 	test('keeps the global question page when the selected universe changes', async () => {
@@ -587,8 +589,10 @@ describe('useZoltarUniverse', () => {
 		await act(async () => {
 			render(h(Harness, { deployed: true }), renderedComponent.container)
 		})
-		await act(async () => undefined)
-		expect(requireHookState(hookState).zoltarQuestionPage).toEqual(page)
+		await waitFor(async () => {
+			await act(async () => undefined)
+			expect(requireHookState(hookState).zoltarQuestionPage).toEqual(page)
+		})
 	})
 
 	test('ignores a late question-count failure after Zoltar becomes undeployed', async () => {

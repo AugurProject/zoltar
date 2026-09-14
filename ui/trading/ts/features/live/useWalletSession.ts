@@ -1,3 +1,4 @@
+import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { requireInjectedAccount } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'
 import type { Address, WalletClient } from '@zoltar/core-shared/evm/ethereum'
@@ -393,7 +394,7 @@ export function useWalletSummaryEffects({
 		}
 		const walletMarket = selected ?? { zoltar: configuration.zoltar, universeId: BigInt(selectedUniverseId ?? '0') }
 		session.setWalletSummaryStatus('loading')
-		void services.loadWalletHeaderBalances(services.createTradingPublicClient(configuration), walletMarket, session.account).then(
+		void withReadTimeout(services.loadWalletHeaderBalances(services.createTradingPublicClient(configuration), walletMarket, session.account)).then(
 			loaded => {
 				if (!requests.isCurrent(request) || session.accountRef.current !== session.account) return
 				session.setWalletEthAttoEth(loaded.ethAttoEth)
