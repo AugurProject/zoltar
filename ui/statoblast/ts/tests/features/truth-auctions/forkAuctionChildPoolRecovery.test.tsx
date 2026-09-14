@@ -409,7 +409,10 @@ describe('ForkAuctionSection child pool recovery', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		await waitFor(() => {
+		await waitFor(async () => {
+			await act(async () => {
+				await Promise.resolve()
+			})
 			expect(loadForkAuctionDetailsCalls).toBe(2)
 			expect(within(document.body).queryByRole('button', { name: `Copy address ${REFRESHED_TRUTH_AUCTION_ADDRESS}` })).not.toBeNull()
 		})
@@ -490,7 +493,10 @@ describe('ForkAuctionSection child pool recovery', () => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Retry' }))
 			await Promise.resolve()
 		})
-		await waitFor(() => {
+		await waitFor(async () => {
+			await act(async () => {
+				await Promise.resolve()
+			})
 			expect(loadForkAuctionDetailsCalls).toBe(2)
 			expect(documentQueries.queryByText('Unable to load auction details for the Yes child universe. Reason: Child auction RPC unavailable')).toBeNull()
 			expect(documentQueries.queryByRole('button', { name: 'Retrying auction details…' })).toBeNull()
@@ -574,7 +580,10 @@ describe('ForkAuctionSection child pool recovery', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const documentQueries = within(document.body)
 
-		await waitFor(() => {
+		await waitFor(async () => {
+			await act(async () => {
+				await Promise.resolve()
+			})
 			expect(documentQueries.getByRole('button', { name: `Copy address ${YES_TRUTH_AUCTION_ADDRESS}` })).not.toBeNull()
 		})
 
@@ -638,7 +647,10 @@ describe('ForkAuctionSection child pool recovery', () => {
 			)
 		})
 
-		await waitFor(() => {
+		await waitFor(async () => {
+			await act(async () => {
+				await Promise.resolve()
+			})
 			expect(loadForkAuctionDetailsCalls).toBe(2)
 			expect(within(document.body).queryByRole('button', { name: `Copy address ${secondTruthAuctionAddress}` })).not.toBeNull()
 		})

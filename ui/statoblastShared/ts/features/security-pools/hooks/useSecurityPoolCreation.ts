@@ -1,3 +1,4 @@
+import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { getQuestionId, getQuestionIdHex } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'
@@ -88,7 +89,7 @@ export function useSecurityPoolCreation({
 
 		await duplicateOriginPoolCheckLoad.track(async () => {
 			try {
-				const exists = await originSecurityPoolExists(createConnectedReadClient(), questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas)
+				const exists = await withReadTimeout(originSecurityPoolExists(createConnectedReadClient(), questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas))
 				if (!isCurrent()) return
 				duplicateOriginPoolExists.value = exists
 			} catch (error) {

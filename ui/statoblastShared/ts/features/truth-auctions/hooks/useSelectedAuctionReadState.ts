@@ -1,3 +1,4 @@
+import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { loadSecurityPoolChildren } from '../../../protocol/securityPools.js'
@@ -75,7 +76,7 @@ export function useSelectedAuctionReadState({
 		setLoadingSelectedAuctionDetails(true)
 		setSelectedAuctionError(undefined)
 		setSelectedAuctionErrorAddress(undefined)
-		void loadForkAuctionDetails(fullTruthAuctionReadClient ?? createConnectedReadClient(), selectedAuctionPoolAddress)
+		void withReadTimeout(loadForkAuctionDetails(fullTruthAuctionReadClient ?? createConnectedReadClient(), selectedAuctionPoolAddress))
 			.then(details => {
 				if (requestGeneration !== selectedAuctionRequestGenerationRef.current) return
 				setSelectedAuctionDetails(details)
@@ -113,7 +114,7 @@ export function useSelectedAuctionReadState({
 		setSelectedAuctionChildPoolRecoveryCompletedKey(undefined)
 		setSelectedAuctionChildPoolRecoveryError(undefined)
 		setSelectedAuctionChildPoolRecoveryErrorKey(undefined)
-		void loadSecurityPoolChildren(fullTruthAuctionReadClient ?? createConnectedReadClient(), securityPoolAddress, accountAddress)
+		void withReadTimeout(loadSecurityPoolChildren(fullTruthAuctionReadClient ?? createConnectedReadClient(), securityPoolAddress, accountAddress))
 			.then(allPools => {
 				if (cancelled) return
 				const recoveredPool = allPools.find(pool => sameAddress(pool.parent, securityPoolAddress) && pool.questionOutcome === selectedOutcome)
@@ -159,7 +160,7 @@ export function useSelectedAuctionReadState({
 		setSelectedAuctionError(undefined)
 		setSelectedAuctionErrorAddress(undefined)
 		lastHandledSelectedAuctionRefreshNonceRef.current = selectedPoolRefreshNonce
-		void loadForkAuctionDetails(client, selectedAuctionPoolAddress)
+		void withReadTimeout(loadForkAuctionDetails(client, selectedAuctionPoolAddress))
 			.then(details => {
 				if (cancelled || requestGeneration !== selectedAuctionRequestGenerationRef.current) return
 				setLoadingSelectedAuctionDetails(false)
@@ -189,12 +190,14 @@ export function useSelectedAuctionReadState({
 		let cancelled = false
 		setLoadingSelectedOutcomeMigrationSeedStatus(true)
 		setSelectedOutcomeMigrationSeedStatusError(undefined)
-		void loadForkOutcomeMigrationSeedStatus(client, {
-			childSecurityPoolAddress: selectedOutcomeMigrationChildPool?.securityPoolAddress,
-			outcome: selectedOutcome,
-			securityPoolAddress,
-			universeId,
-		})
+		void withReadTimeout(
+			loadForkOutcomeMigrationSeedStatus(client, {
+				childSecurityPoolAddress: selectedOutcomeMigrationChildPool?.securityPoolAddress,
+				outcome: selectedOutcome,
+				securityPoolAddress,
+				universeId,
+			}),
+		)
 			.then(status => {
 				if (cancelled) return
 				setSelectedOutcomeMigrationSeedStatus(status)

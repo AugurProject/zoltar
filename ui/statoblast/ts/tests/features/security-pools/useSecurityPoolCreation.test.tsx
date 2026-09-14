@@ -324,8 +324,8 @@ describe('useSecurityPoolCreation', () => {
 		})
 		await waitFor(() => {
 			expect(originSecurityPoolExists).toHaveBeenCalledTimes(1)
+			expect(requireState(state).duplicateOriginPoolExists).toBe(true)
 		})
-		expect(requireState(state).duplicateOriginPoolExists).toBe(true)
 	})
 
 	test('ignores stale duplicate-origin responses when market inputs change out of order', async () => {

@@ -1,3 +1,4 @@
+import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { useEffect, useState } from 'preact/hooks'
 import { type Address, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { loadTruthAuctionActiveTickPage, loadTruthAuctionBidderBidPage, loadTruthAuctionTickBidPage } from '../../../protocol/truthAuctions.js'
@@ -192,7 +193,7 @@ export function useTruthAuctionBookData({ accountAddress, enteredBidTick, forkAu
 		const client = truthAuctionReadClient ?? createConnectedReadClient()
 		let cancelled = false
 		setLoadingTruthAuctionLevels(true)
-		void loadTruthAuctionActiveTickPages(client, truthAuctionAddress, loadedTickPageCount)
+		void withReadTimeout(loadTruthAuctionActiveTickPages(client, truthAuctionAddress, loadedTickPageCount))
 			.then(tickPageData => {
 				if (cancelled) return
 				setTruthAuctionLevelsError(undefined)
@@ -250,7 +251,7 @@ export function useTruthAuctionBookData({ accountAddress, enteredBidTick, forkAu
 		const client = truthAuctionReadClient ?? createConnectedReadClient()
 		let cancelled = false
 		setLoadingViewerTruthAuctionBids(true)
-		void loadTruthAuctionBidderBidPages(client, truthAuctionAddress, accountAddress, loadedViewerBidPageCount)
+		void withReadTimeout(loadTruthAuctionBidderBidPages(client, truthAuctionAddress, accountAddress, loadedViewerBidPageCount))
 			.then(viewerBidData => {
 				if (cancelled) return
 				setViewerTruthAuctionBidsError(undefined)
@@ -290,7 +291,7 @@ export function useTruthAuctionBookData({ accountAddress, enteredBidTick, forkAu
 		const client = truthAuctionReadClient ?? createConnectedReadClient()
 		let cancelled = false
 		setLoadingAggregatedAuctionBids(true)
-		void loadAggregatedTruthAuctionBidPages(client, truthAuctionAddress, truthAuctionBookData.tickSummaries, loadedAuctionBidPageCount)
+		void withReadTimeout(loadAggregatedTruthAuctionBidPages(client, truthAuctionAddress, truthAuctionBookData.tickSummaries, loadedAuctionBidPageCount))
 			.then(({ bids, bidCountForLoadedTicks }) => {
 				if (cancelled) return
 				setAggregatedAuctionBidsError(undefined)

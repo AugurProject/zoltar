@@ -1,3 +1,4 @@
+import { withReadTimeout } from '../../lib/promise.js'
 import { useSignal } from '@preact/signals'
 import { useEffect, useLayoutEffect, useRef } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
@@ -18,7 +19,6 @@ type ChainClock = {
 	currentBlockNumber: bigint | undefined
 	currentTimestamp: bigint | undefined
 }
-
 type ReadBackendValidationResult = {
 	readBackendMessage: string | undefined
 	validated: boolean
@@ -369,7 +369,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 		if (shouldLoadDeploymentState && backend.isBootstrapped !== false && isReadBackendReady())
 			deploymentStatePromise = deploymentStatusLoad.track(async () => {
 				try {
-					const snapshot = await dependencies.loadDeploymentStatusOracleSnapshot(backend.createReadClient())
+					const snapshot = await withReadTimeout(dependencies.loadDeploymentStatusOracleSnapshot(backend.createReadClient()))
 					if (!isCurrent()) return
 					applicationDeploymentComplete.value = snapshot.applicationDeploymentComplete
 					deploymentStatuses.value = snapshot.deploymentStatuses

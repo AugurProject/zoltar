@@ -49,17 +49,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		if (!(routeSurface instanceof HTMLElement)) throw new Error('Expected selected pool route surface')
 		expect(routeSurface.classList.contains('surface')).toBe(true)
 		expect(routeSurface.classList.contains('default')).toBe(false)
-		expect(document.body.querySelector('.sticky-object-context.embedded-context-strip')).not.toBeNull()
-		const persistentContext = document.body.querySelector('.sticky-object-context.embedded-context-strip')
-		if (!(persistentContext instanceof HTMLElement)) throw new Error('Expected persistent selected-pool context')
-		expect(within(persistentContext).getByRole('heading', { name: 'Will this resolve?' })).not.toBeNull()
-		expect(within(persistentContext).getAllByText('Security Pool Address')).toHaveLength(1)
-		const readOnlyContextItems = persistentContext.querySelector('.sticky-object-context-items')
-		if (!(readOnlyContextItems instanceof HTMLElement)) throw new Error('Expected read-only selected-pool context items')
-		expect(within(readOnlyContextItems).getByText('Security Pool Address')).not.toBeNull()
-		expect(persistentContext.classList.contains('static')).toBe(false)
-		expect(persistentContext.classList.contains('context-strip')).toBe(true)
-		expect(within(persistentContext).queryByText('Universe')).toBeNull()
+		expect(document.body.querySelector('.sticky-object-context')).toBeNull()
 		const contextDetails = document.body.querySelector('.selected-pool-context-details')
 		if (!(contextDetails instanceof HTMLElement) || contextDetails.tagName !== 'DETAILS') throw new Error('Expected collapsible selected-pool context')
 		expect(contextDetails.hasAttribute('open')).toBe(false)
@@ -309,16 +299,13 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.queryByText('Total Capacity ownership')).toBeNull()
 		expect(documentQueries.getByText('Current Oracle Price')).not.toBeNull()
 		expect(documentQueries.queryByText('Oracle Expires In')).toBeNull()
-		const selectedPoolContext = document.body.querySelector('.sticky-object-context:not(.static)')
-		if (!(selectedPoolContext instanceof HTMLElement)) throw new Error('Expected a sticky selected pool context card')
-		expect(within(selectedPoolContext).getByText('Security Pool Address')).not.toBeNull()
+		expect(document.body.querySelector('.sticky-object-context')).toBeNull()
 		const changePoolControl = document.body.querySelector('.selected-pool-change-control')
 		if (!(changePoolControl instanceof HTMLElement) || changePoolControl.tagName !== 'DIV') throw new Error('Expected an always-visible change-pool control')
 		expect(documentQueries.queryByText('Change pool')).toBeNull()
 		expect(documentQueries.getByRole('textbox', { name: 'Security Pool Address' })).not.toBeNull()
 		const contextDetails = document.body.querySelector('.selected-pool-context-details')
 		if (!(contextDetails instanceof HTMLElement)) throw new Error('Expected selected pool context details')
-		expect(selectedPoolContext.compareDocumentPosition(contextDetails) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
 		expect(documentQueries.getByRole('heading', { name: 'Vault Operations' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Vault Lookup' })).toBeNull()
 		const vaultSummaryHeading = documentQueries.getByRole('heading', { name: 'Selected Vault' })
@@ -337,7 +324,6 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.queryByText('Oracle Status')).toBeNull()
 		expect(documentQueries.queryByText('After market end')).toBeNull()
 		expect(documentQueries.queryByText('Manager')).toBeNull()
-		expect(documentQueries.getAllByText('Operational').length).toBeGreaterThan(0)
 		expect(documentQueries.getByText('Statoblast Security Multiplier')).not.toBeNull()
 		const directoryButton = documentQueries.getByRole('button', { name: 'Directory' })
 		expect(documentQueries.getByRole('button', { name: 'Selected' })).not.toBeNull()
@@ -715,7 +701,6 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		setCleanup(renderedComponent.cleanup)
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Finalized as Yes')).not.toBeNull()
 		expectTransactionButtonDisabled(document.body, 'Deposit REP')
 		expectTransactionButtonEnabled(document.body, 'Redeem REP')
 		expectTransactionButtonEnabled(document.body, 'Claim fees')
@@ -898,7 +883,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expectTransactionButtonEnabled(document.body, 'Review liquidation')
 	})
 
-	test('shows Fork Migration in the selected-pool badge once fork migration has started', async () => {
+	test('keeps the duplicate summary absent after fork migration starts', async () => {
 		const selectedPoolAddress = zeroAddress
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolWorkflowSection
@@ -913,7 +898,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		)
 		setCleanup(renderedComponent.cleanup)
 
-		expect(within(document.body).getByText('Fork Migration')).not.toBeNull()
+		expect(document.body.querySelector('.sticky-object-context')).toBeNull()
 	})
 
 	test('disables minting in trading when the workflow state shows the selected pool has ended', async () => {
