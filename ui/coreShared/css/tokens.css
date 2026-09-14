@@ -19,10 +19,10 @@
 	--accent-augurscan: rgba(45, 212, 191, 1);
 	--accent: var(--accent-zoltar);
 	--accent-strong: rgba(124, 108, 255, 1);
-	--accent-faint: rgba(56, 213, 255, 0.08);
-	--accent-soft: rgba(56, 213, 255, 0.12);
-	--accent-medium: rgba(56, 213, 255, 0.16);
-	--accent-emphasis-soft: rgba(56, 213, 255, 0.18);
+	--accent-faint: color-mix(in srgb, var(--accent) 8%, transparent);
+	--accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
+	--accent-medium: color-mix(in srgb, var(--accent) 16%, transparent);
+	--accent-emphasis-soft: color-mix(in srgb, var(--accent) 18%, transparent);
 
 	/* semantic borders — structural (blue-tinted, passive) */
 	--border-subtle: rgba(159, 180, 207, 0.07);
@@ -30,12 +30,12 @@
 	--border-strong: rgba(159, 180, 207, 0.24);
 	--border-emphasis: rgba(159, 180, 207, 0.28);
 
-	/* semantic borders — interactive (cyan-tinted, signals clickability) */
-	--interactive-border: rgba(56, 213, 255, 0.22);
-	--interactive-border-hover: rgba(56, 213, 255, 0.36);
+	/* semantic borders — interactive (accent-tinted, signals clickability) */
+	--interactive-border: color-mix(in srgb, var(--accent) 26%, transparent);
+	--interactive-border-hover: color-mix(in srgb, var(--accent) 46%, transparent);
 	--interactive-bg: var(--accent-faint);
-	--interactive-bg-hover: rgba(56, 213, 255, 0.14);
-	--interactive-bg-active: rgba(124, 108, 255, 0.14);
+	--interactive-bg-hover: color-mix(in srgb, var(--accent) 14%, transparent);
+	--interactive-bg-active: color-mix(in srgb, var(--accent-strong) 14%, transparent);
 
 	/* surfaces */
 	--surface-raised: rgba(11, 22, 37, 0.9);
@@ -75,19 +75,20 @@
 	--control-bg: rgba(10, 20, 36, 0.18);
 	--control-border: rgba(154, 179, 211, 0.28);
 	--input-border: rgba(154, 179, 211, 0.3);
-	--focus: rgba(56, 213, 255, 0.48);
+	--focus: color-mix(in srgb, var(--accent) 48%, transparent);
 	--focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 38%, transparent);
-	--primary-button-bg: rgba(19, 127, 159, 1);
-	--primary-button-bg-hover: rgba(22, 148, 184, 1);
-	--primary-button-border: rgba(42, 181, 216, 1);
-	--primary-button-border-hover: rgba(85, 200, 228, 1);
+	--primary-button-bg: color-mix(in srgb, var(--accent) 88%, #123046);
+	--primary-button-bg-hover: var(--accent);
+	--primary-button-border: var(--accent);
+	--primary-button-border-hover: color-mix(in srgb, var(--accent) 78%, var(--color-white));
+	--primary-button-text: var(--bg-deep);
 	--primary-button-shadow: var(--color-white-08);
 	--disabled-control-bg: rgba(12, 28, 43, 1);
 	--disabled-control-border: rgba(154, 179, 211, 0.22);
 	--disabled-control-text: rgba(177, 196, 216, 1);
-	--disabled-primary-button-bg: rgba(16, 58, 72, 1);
-	--disabled-primary-button-border: rgba(75, 127, 145, 1);
-	--disabled-primary-button-text: rgba(185, 207, 222, 1);
+	--disabled-primary-button-bg: color-mix(in srgb, var(--accent) 16%, var(--surface-section-opaque));
+	--disabled-primary-button-border: color-mix(in srgb, var(--accent) 35%, var(--border-default));
+	--disabled-primary-button-text: var(--text-muted);
 	--touch-target-min: 2.75rem;
 	--control-height-compact: 2.75rem;
 	--control-height: 3rem;
@@ -142,7 +143,7 @@
 	/* decorative */
 	--glow-inset: 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
 	--glow-inset-subtle: 0 0 0 1px rgba(255, 255, 255, 0.02) inset;
-	--divider: linear-gradient(90deg, rgba(56, 213, 255, 0.24), var(--border-subtle) 50%, rgba(124, 108, 255, 0.2));
+	--divider: linear-gradient(90deg, color-mix(in srgb, var(--accent) 24%, transparent), var(--border-subtle) 50%, color-mix(in srgb, var(--accent-strong) 20%, transparent));
 	--slider-thumb-border: rgba(231, 243, 255, 0.8);
 	--shadow-color-soft: rgba(0, 0, 0, 0.12);
 	--shadow-color-strong: rgba(0, 0, 0, 0.35);
@@ -180,7 +181,7 @@
 	--radius-control: var(--radius-compact);
 	--divider-subtle: rgba(159, 180, 207, 0.1);
 	--divider-strong: rgba(159, 180, 207, 0.18);
-	--border-active: rgba(56, 213, 255, 0.52);
+	--border-active: color-mix(in srgb, var(--accent) 58%, transparent);
 	--text-primary: var(--text);
 
 	/* Shared layout contracts; each application retains its own shell. */
@@ -200,5 +201,4 @@
 
 :root[data-product="trading"] {
 	--accent: var(--accent-trading);
-	--focus: color-mix(in srgb, var(--accent-trading) 52%, transparent);
 }

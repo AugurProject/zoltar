@@ -352,7 +352,7 @@
 	position: absolute;
 	inset: 0 auto 0 0;
 	border-radius: inherit;
-	background: linear-gradient(90deg, rgba(56, 213, 255, 0.92) 0%, rgba(124, 108, 255, 0.84) 100%);
+	background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 92%, transparent) 0%, color-mix(in srgb, var(--accent-strong) 84%, transparent) 100%);
 	box-shadow: 0 0 16px var(--accent-emphasis-soft);
 }
 
@@ -953,7 +953,7 @@
 }
 
 .vault-position-card {
-	border-left: 3px solid rgba(56, 213, 255, 0.3);
+	border-left: 3px solid color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 .vault-position-card .entity-card-header,

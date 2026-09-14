@@ -1,14 +1,4 @@
 /* Zoltar and Statoblast remain separate operational products on one foundation. */
-:root[data-product="zoltar"],
-:root[data-product="statoblast"] {
-	--primary-button-bg: color-mix(in srgb, var(--accent) 58%, #123046 42%);
-	--primary-button-bg-hover: color-mix(in srgb, var(--accent) 68%, #123046 32%);
-	--primary-button-border: color-mix(in srgb, var(--accent) 72%, transparent);
-	--interactive-border: color-mix(in srgb, var(--accent) 26%, transparent);
-	--interactive-border-hover: color-mix(in srgb, var(--accent) 46%, transparent);
-	--border-active: color-mix(in srgb, var(--accent) 58%, transparent);
-}
-
 :root[data-product="zoltar"] body::before {
 	background: radial-gradient(circle at 14% 0%, color-mix(in srgb, var(--accent-zoltar) 10%, transparent), transparent 28%), linear-gradient(180deg, #091521 0%, var(--bg-deep) 58%);
 }
@@ -53,12 +43,6 @@
 	:root[data-product="statoblast"] .route-subnav-shell .view-tabs {
 		display: none;
 	}
-}
-
-:root[data-product="statoblast"] {
-	--disabled-primary-button-bg: color-mix(in srgb, var(--accent) 16%, var(--surface-section-opaque));
-	--disabled-primary-button-border: color-mix(in srgb, var(--accent) 35%, var(--border-default));
-	--disabled-primary-button-text: var(--text-muted);
 }
 
 .pool-question-source {
