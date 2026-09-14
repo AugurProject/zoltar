@@ -769,7 +769,7 @@ describe('SecurityVaultSection', () => {
 		expect(depositDialogQueries.getByText('This vault does not exist. Deposit REP to create it.')).not.toBeNull()
 		expect(depositDialogQueries.getByText('REP backing')).not.toBeNull()
 		expect(transactionContext.textContent?.includes('Universe 0x1')).toBe(false)
-		expect(transactionContext.textContent?.includes('Sepolia')).toBe(true)
+		expect(transactionContext.textContent?.includes('Sepolia')).toBe(false)
 		expect(
 			within(transactionContext)
 				.getAllByRole('button', { name: `Copy address ${zeroAddress}` })

@@ -259,7 +259,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 
 	test('uses the shared chain timestamp context for oracle expiry text', async () => {
 		const renderedComponent = await renderIntoDocument(
-			<ChainTimestampContext.Provider value={1n + 5n * 60n + 60n}>
+			<ChainTimestampContext.Provider value={1n + 60n * 60n + 60n}>
 				<SecurityPoolWorkflowSection
 					{...createSecurityPoolWorkflowProps({
 						checkedSecurityPoolAddress: zeroAddress,
@@ -582,7 +582,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		expect(sectionQueries.getByRole('button', { name: /Report #\s*12/ })).not.toBeNull()
 	})
 
-	test('reviews the pool identity and ETH cost before requesting a new price', async () => {
+	test('reviews the buffered ETH cost before requesting a new price', async () => {
 		const requests: Array<{ managerAddress: string; reviewedRequestValueAttoEth: bigint; securityPoolAddress: string; universeId: bigint }> = []
 		const pool = createSelectedPool()
 		const baseProps = createSecurityPoolWorkflowProps({

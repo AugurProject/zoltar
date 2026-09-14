@@ -9,7 +9,7 @@ export { getDefaultMarketFormState } from '@zoltar/ui-zoltar-shared/features/que
 
 export function getDefaultSecurityPoolFormState(): SecurityPoolFormState {
 	return {
-		initialReportPriorityFeeGwei: formatCurrencyInputBalance(DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, 9),
+		initialReportPriorityFeeEth: formatCurrencyInputBalance(DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, 18),
 		marketId: '',
 		statoblastSecurityMultiplierBps: '2',
 	}

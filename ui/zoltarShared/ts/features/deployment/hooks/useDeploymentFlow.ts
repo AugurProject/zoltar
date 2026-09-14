@@ -14,7 +14,6 @@ import type { DeploymentStatus, DeploymentStepId } from '@zoltar/ui-core-shared/
 import { assertDeploymentStepRuntimeCode } from '../../../protocol/deployment.js'
 import { readWithRpcStateRetries, type RpcStateRetryWait } from '../../../protocol/core.js'
 import { createActiveEnvironmentGuard } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { TRANSACTION_ACTION_LOCK_REASON } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
 
 type UseDeploymentFlowParameters = TransactionLifecycleParameters & {
 	accountAddress: Address | undefined
@@ -83,8 +82,8 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, environm
 				return
 			}
 			if (onTransactionRequested(createDeploymentTransactionIntent(step.label)) === false) {
-				errorMessage.value = TRANSACTION_ACTION_LOCK_REASON
-				deploymentFeedback.value = createErrorActionFeedback(feedbackAction, 'Deployment blocked', TRANSACTION_ACTION_LOCK_REASON)
+				errorMessage.value = undefined
+				deploymentFeedback.value = undefined
 				return
 			}
 			ownsTransaction = true

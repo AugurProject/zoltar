@@ -329,7 +329,7 @@ describe('useMarketCreation', () => {
 
 		expect(createMarketTransaction).not.toHaveBeenCalled()
 		expect(onTransactionFinished).not.toHaveBeenCalled()
-		expect(requireHookState(hookState).marketError).toBe('Finish the current transaction before starting another transaction.')
+		expect(requireHookState(hookState).marketError).toBeUndefined()
 	})
 
 	test('preserves an anonymous question draft when a wallet connects', async () => {

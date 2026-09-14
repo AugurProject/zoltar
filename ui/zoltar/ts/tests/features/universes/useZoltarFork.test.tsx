@@ -7,7 +7,7 @@ import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { createMockLoaderClient, getContractFunctionName } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import { createInitialTransactionTrayState, markTransactionFailed, markTransactionRequested, TRANSACTION_ACTION_LOCK_REASON } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
+import { createInitialTransactionTrayState, markTransactionFailed, markTransactionRequested } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
 import type { MarketDetails, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { useZoltarFork, type UseZoltarForkDependencies } from '@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarFork.js'
 import { describe, expect, mock, test } from 'bun:test'
@@ -249,7 +249,7 @@ describe('useZoltarFork', () => {
 		expect(forkZoltarUniverse).not.toHaveBeenCalled()
 		expect(ensureZoltarUniverse).not.toHaveBeenCalled()
 		expect(onTransactionFinished).not.toHaveBeenCalled()
-		expect(requireHookState(hookState).zoltarForkFeedback?.status.detail).toBe(TRANSACTION_ACTION_LOCK_REASON)
+		expect(requireHookState(hookState).zoltarForkFeedback?.status.detail).toBeUndefined()
 		expect(requireHookState(hookState).zoltarForkPending).toBe(false)
 	})
 

@@ -6,7 +6,7 @@ export type { MarketFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
 export type Route = 'deploy' | 'security-pools' | 'open-oracle' | 'not-found'
 
 export type SecurityPoolFormState = {
-	initialReportPriorityFeeGwei: string
+	initialReportPriorityFeeEth: string
 	marketId: string
 	statoblastSecurityMultiplierBps: string
 }

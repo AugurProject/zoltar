@@ -31,8 +31,10 @@ import {
 	getRemainingMintCapacity,
 	getMaximumMintAmount,
 	getSelectedOutcomeShareBalance,
+	getShareSettlementBalances,
 	getTradingMigrateSharesGuardMessage,
 	getTradingMintGuardMessage,
+	getTradingOraclePriceGuardMessage,
 	getTradingRedeemCompleteSetGuardMessage,
 	convertAttoSharesToSettlementCollateralAttoEth,
 	convertMintSettlementCollateralAttoEthToAttoShares,
@@ -63,6 +65,7 @@ export function TradingSection({
 	repPerEthPrice,
 	tradingDetails,
 	selectedPool,
+	oraclePriceUsable,
 	tradingActiveAction,
 	tradingError,
 	tradingForm,
@@ -95,14 +98,7 @@ export function TradingSection({
 	const shareBalances = tradingDetails?.shareBalances
 	const maxRedeemableCompleteSetsAttoShares = tradingDetails?.maxRedeemableCompleteSetsAttoShares
 	const displayMaxRedeemableCompleteSets = convertAttoSharesToSettlementCollateralAttoEth(maxRedeemableCompleteSetsAttoShares, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
-	const displayShareBalances =
-		shareBalances === undefined
-			? undefined
-			: {
-					invalid: convertAttoSharesToSettlementCollateralAttoEth(shareBalances.invalidAttoShares, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares),
-					no: convertAttoSharesToSettlementCollateralAttoEth(shareBalances.noAttoShares, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares),
-					yes: convertAttoSharesToSettlementCollateralAttoEth(shareBalances.yesAttoShares, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares),
-				}
+	const displayShareBalances = getShareSettlementBalances(shareBalances, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
 	const selectedTargetOutcomeIndexes = tryParseBigIntListInput(tradingForm.targetOutcomeIndexes) ?? []
 	const selectedTargetOutcomeIndexSet = new Set(selectedTargetOutcomeIndexes.map(value => value.toString()))
 	const totalShareCount = displayShareBalances === undefined ? undefined : displayShareBalances.invalid + displayShareBalances.no + displayShareBalances.yes
@@ -130,18 +126,21 @@ export function TradingSection({
 	const resultingRedeemEthBalance = redeemAmount === undefined || accountState.ethBalanceAttoEth === undefined ? undefined : accountState.ethBalanceAttoEth + redeemAmount
 	const resolvedWinningShareBalance = selectedPool === undefined || selectedPool.questionOutcome === 'none' ? undefined : getSelectedOutcomeShareBalance(shareBalances, selectedPool.questionOutcome)
 	const resolvedWinningPayout = convertAttoSharesToSettlementCollateralAttoEth(resolvedWinningShareBalance, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
-	const mintGuardMessage = getTradingMintGuardMessage({
-		accountAddress: accountState.address,
-		settlementCollateralAttoEth: estimatedSettlementCollateralAttoEth,
-		ethBalanceAttoEth: accountState.ethBalanceAttoEth,
-		mintingCapacityAttoEth,
-		hasSelectedPool,
-		isOnActiveAppChain,
-		isPriceValid: calculationRepPerEthPrice !== undefined && calculationRepPerEthPrice > 0n,
-		mintAmountInput: tradingForm.completeSetAmount,
-		shareTokenSupplyAttoShares: selectedPool?.shareTokenSupplyAttoShares,
-		totalPoolHeldAttoRep: selectedPool?.totalPoolHeldAttoRep,
-	})
+	const oraclePriceGuardMessage = getTradingOraclePriceGuardMessage(oraclePriceUsable)
+	const mintGuardMessage =
+		oraclePriceGuardMessage ??
+		getTradingMintGuardMessage({
+			accountAddress: accountState.address,
+			settlementCollateralAttoEth: estimatedSettlementCollateralAttoEth,
+			ethBalanceAttoEth: accountState.ethBalanceAttoEth,
+			mintingCapacityAttoEth,
+			hasSelectedPool,
+			isOnActiveAppChain,
+			isPriceValid: calculationRepPerEthPrice !== undefined && calculationRepPerEthPrice > 0n,
+			mintAmountInput: tradingForm.completeSetAmount,
+			shareTokenSupplyAttoShares: selectedPool?.shareTokenSupplyAttoShares,
+			totalPoolHeldAttoRep: selectedPool?.totalPoolHeldAttoRep,
+		})
 	const redeemCompleteSetGuardMessage = getTradingRedeemCompleteSetGuardMessage({
 		accountAddress: accountState.address,
 		settlementCollateralAttoEth: selectedPool?.settlementCollateralAttoEth,
@@ -176,6 +175,7 @@ export function TradingSection({
 		return (() => {
 			if (!isOnActiveAppChain) return getWrongNetworkReason()
 			if (selectedPool?.questionOutcome !== 'none') return tradingCopy.marketFinalizedReason
+			if (oraclePriceGuardMessage !== undefined) return oraclePriceGuardMessage
 			if (remainingMintCapacity === undefined) return calculationRepPerEthPrice === undefined || calculationRepPerEthPrice <= 0n ? tradingCopy.mintPriceUnavailable : tradingCopy.mintCapacityUnavailable
 			if (hasUndefinedCompleteSetExchangeRate(selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares) === true) return UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE
 

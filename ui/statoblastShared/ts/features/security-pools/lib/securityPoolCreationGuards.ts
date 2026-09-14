@@ -14,12 +14,12 @@ export function getStatoblastSecurityMultiplierValidationMessage(statoblastSecur
 	return undefined
 }
 
-export function getInitialReportPriorityFeeValidationMessage(initialReportPriorityFeeGwei: string) {
-	const input = initialReportPriorityFeeGwei.trim()
-	if (input === '') return 'Enter an initial-report priority fee in gwei.'
-	const priorityFeeAttoEthPerGas = tryParseDecimalInput(input, 9)
-	if (priorityFeeAttoEthPerGas === undefined) return 'Enter a gwei value with at most 9 decimal places.'
-	if (priorityFeeAttoEthPerGas <= 0n) return 'Initial-report priority fee must be greater than 0\u00a0gwei.'
+export function getInitialReportPriorityFeeValidationMessage(initialReportPriorityFeeEth: string) {
+	const input = initialReportPriorityFeeEth.trim()
+	if (input === '') return 'Enter an initial-report priority fee in ETH.'
+	const priorityFeeAttoEthPerGas = tryParseDecimalInput(input, 18)
+	if (priorityFeeAttoEthPerGas === undefined) return 'Enter an ETH value with at most 18 decimal places.'
+	if (priorityFeeAttoEthPerGas <= 0n) return 'Initial-report priority fee must be greater than 0\u00a0ETH.'
 	if (priorityFeeAttoEthPerGas > MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS) return 'Initial-report priority fee is too large for Open Oracle report limits.'
 	return undefined
 }
@@ -28,7 +28,7 @@ export function getSecurityPoolCreateDisabledReason({
 	accountAddress,
 	checkingDuplicateOriginPool,
 	duplicateOriginPoolExists,
-	initialReportPriorityFeeGwei,
+	initialReportPriorityFeeEth,
 	isOnActiveAppChain,
 	marketDetails,
 	securityPoolCreating,
@@ -38,7 +38,7 @@ export function getSecurityPoolCreateDisabledReason({
 	accountAddress: Address | undefined
 	checkingDuplicateOriginPool: boolean
 	duplicateOriginPoolExists: boolean
-	initialReportPriorityFeeGwei: string
+	initialReportPriorityFeeEth: string
 	isOnActiveAppChain: boolean
 	marketDetails: MarketDetails | undefined
 	securityPoolCreating: boolean
@@ -55,5 +55,5 @@ export function getSecurityPoolCreateDisabledReason({
 	if (marketDetails === undefined) return 'Enter an exact binary Yes / No question before creating a pool.'
 	if (marketDetails.marketType !== 'binary') return 'Security pools can only be created for exact binary Yes / No questions.'
 	if (zoltarUniverseHasForked) return 'Security pools cannot be created after this universe has forked.'
-	return getInitialReportPriorityFeeValidationMessage(initialReportPriorityFeeGwei)
+	return getInitialReportPriorityFeeValidationMessage(initialReportPriorityFeeEth)
 }

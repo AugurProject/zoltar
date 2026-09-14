@@ -1,3 +1,4 @@
+import * as tradingCopy from '../../../copy/trading.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
@@ -146,6 +147,15 @@ export function convertMintSettlementCollateralAttoEthToAttoShares(amountAttoEth
 	return (amountAttoEth * shareTokenSupplyAttoShares) / settlementCollateralAttoEth
 }
 
+export function getShareSettlementBalances(shareBalances: TradingShareBalances | undefined, settlementCollateralAttoEth: bigint | undefined, shareTokenSupplyAttoShares: bigint | undefined) {
+	if (shareBalances === undefined) return undefined
+	return {
+		invalid: convertAttoSharesToSettlementCollateralAttoEth(shareBalances.invalidAttoShares, settlementCollateralAttoEth, shareTokenSupplyAttoShares),
+		no: convertAttoSharesToSettlementCollateralAttoEth(shareBalances.noAttoShares, settlementCollateralAttoEth, shareTokenSupplyAttoShares),
+		yes: convertAttoSharesToSettlementCollateralAttoEth(shareBalances.yesAttoShares, settlementCollateralAttoEth, shareTokenSupplyAttoShares),
+	}
+}
+
 export function getSelectedOutcomeShareBalance(shareBalances: TradingShareBalances | undefined, outcome: ReportingOutcomeKey) {
 	if (shareBalances === undefined) return undefined
 	switch (outcome) {
@@ -183,6 +193,12 @@ export function isTradingSystemDeployed(deploymentStatuses: DeploymentStatus[]) 
 	return deploymentStatuses.length > 0 && deploymentStatuses.every(step => step.deployed)
 }
 
+export function getTradingOraclePriceGuardMessage(oraclePriceUsable: boolean | undefined) {
+	if (oraclePriceUsable === undefined) return tradingCopy.loadingOraclePrice
+	if (!oraclePriceUsable) return tradingCopy.staleOraclePrice
+	return undefined
+}
+
 export function getTradingMintGuardMessage({
 	accountAddress,
 	settlementCollateralAttoEth,
@@ -209,7 +225,7 @@ export function getTradingMintGuardMessage({
 	if (!hasSelectedPool) return 'Select a pool before minting.'
 	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: 'Connect a wallet before minting complete sets.' })
 	if (walletGuardState.blocked) return walletGuardState.reason
-	if (isPriceValid === false) return 'Refresh the REP price before minting.'
+	if (isPriceValid === false) return tradingCopy.staleOraclePrice
 
 	const undefinedExchangeRate = hasUndefinedCompleteSetExchangeRate(settlementCollateralAttoEth, shareTokenSupplyAttoShares)
 	if (undefinedExchangeRate === undefined) return 'Loading mint capacity.'

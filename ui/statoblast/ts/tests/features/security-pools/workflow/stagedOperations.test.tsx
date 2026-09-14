@@ -225,7 +225,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 			const executeButton = within(document.body).getByRole('button', { name: 'Execute staged operation' })
 			if (!(executeButton instanceof HTMLButtonElement)) throw new Error('Expected Execute Staged Operation button')
 			expect(executeButton.disabled).toBe(true)
-			expect(document.body.textContent).toContain('Wait for a valid oracle price before executing a staged operation.')
+			expect(document.body.textContent).toContain('Request a new price in Price Oracle before executing this operation.')
 		})
 
 		test('shows immediate execution when a withdraw uses an already valid oracle price', async () => {

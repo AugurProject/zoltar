@@ -161,10 +161,11 @@ export function useSecurityPoolsRoute({
 		setLiquidationApprovalId,
 		setLiquidationTimeoutMinutes,
 	} = useSecurityPoolsOverview({ ...walletScopedHookConfig, environmentRefreshKey: activeEnvironmentNonce })
+	const selectedPool = securityPools.find(pool => pool.securityPoolAddress.toLowerCase() === securityPoolAddress.toLowerCase())
 	const { createCompleteSet, loadingTradingDetails, loadingTradingForkUniverse, migrateShares, redeemCompleteSet, redeemShares, setTradingForm, tradingActiveAction, tradingDetails, tradingError, tradingForm, tradingForkUniverse, tradingResult } = useTradingOperations({
 		...walletScopedHookConfig,
 		deploymentStatuses,
-		enabled: route === 'security-pools' && canReadOnchainData,
+		enabled: route === 'security-pools' && canReadOnchainData && selectedPool !== undefined,
 		selectedSecurityPoolAddress: securityPoolAddress,
 	})
 	const {
@@ -196,7 +197,6 @@ export function useSecurityPoolsRoute({
 	const universeDirectoryContextKey = `${activeEnvironmentNonce}:${walletScopedAccountAddress ?? ''}:${activeUniverseId.toString()}`
 	const lastSecurityVaultRepRefreshHash = useRef<string | undefined>(undefined)
 	const lastStagedVaultRepRefreshHash = useRef<string | undefined>(undefined)
-	const selectedPool = securityPools.find(pool => pool.securityPoolAddress.toLowerCase() === securityPoolAddress.toLowerCase())
 	const selectedPoolOracleManagerDetails = getCurrentPoolOracleManagerDetails({ poolOracleManagerDetails, selectedPoolManagerAddress: selectedPool?.managerAddress })
 	const uiRepPerEthPrice = resolveUiRepPerEthPrice({
 		currentTimestamp,

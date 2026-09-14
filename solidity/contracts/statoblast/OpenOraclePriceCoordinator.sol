@@ -382,7 +382,7 @@ contract OpenOraclePriceCoordinator {
 		return
 			lastPrice > 0 &&
 			lastSettlementTimestamp != 0 &&
-			lastSettlementTimestamp + PRICE_VALID_FOR_SECONDS > block.timestamp;
+			lastSettlementTimestamp + (block.chainid == 11155111 ? 1 hours : PRICE_VALID_FOR_SECONDS) > block.timestamp;
 	}
 
 	function requestPriceIfNeededAndStageOperation(OperationType operation, address targetVault, uint256 operationAmountAttoRepOrAttoEth, uint256 validForSeconds, uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth) public payable {

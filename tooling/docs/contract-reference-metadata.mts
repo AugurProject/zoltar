@@ -44,7 +44,7 @@ export const contractPagesDirectory = 'docs/reference/contracts'
 export function contractPageOutputPath(contractName: string): string {
 	return `${contractPagesDirectory}/${contractName.toLowerCase()}.html`
 }
-export const expectedProductionSoliditySourceFingerprint = 'b6188af5dd5cec99068a46674968afee0da1d842d4e15dd07d71155acc62b914'
+export const expectedProductionSoliditySourceFingerprint = '37c02c963a1942be342e000e5b899135c6655733fe8ce71fb8683033b08da52c'
 
 export const eventSourceByName: Record<string, string> = {
 	VaultBadDebtMigrated: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',

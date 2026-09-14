@@ -46,7 +46,7 @@ function createProps(overrides: Partial<SecurityPoolSectionProps> = {}): Securit
 		securityPoolCreating: false,
 		securityPoolError: undefined,
 		securityPoolForm: {
-			initialReportPriorityFeeGwei: '10',
+			initialReportPriorityFeeEth: '0.00000001',
 			marketId: '0x01',
 			statoblastSecurityMultiplierBps: '2',
 		},
@@ -168,10 +168,10 @@ describe('SecurityPoolSection', () => {
 		const statoblastSecurityMultiplierBpsInput = documentQueries.getByRole('textbox', { name: 'Statoblast Security Multiplier' })
 		expect(statoblastSecurityMultiplierBpsInput.getAttribute('aria-describedby')).toBe('security-pool-security-multiplier-help')
 		expect(documentQueries.getByText('Multiplier target in x, with up to four decimal places; higher values require more REP.')).not.toBeNull()
-		const priorityFeeInput = documentQueries.getByRole('textbox', { name: 'Initial Report Priority Fee' })
+		const priorityFeeInput = documentQueries.getByRole('textbox', { name: 'Initial Report Priority Fee (ETH)' })
 		expect(priorityFeeInput.getAttribute('aria-describedby')).toBe('security-pool-initial-report-priority-fee-help')
-		expect((priorityFeeInput as HTMLInputElement).value).toBe('10')
-		expect(documentQueries.getByText('Fixed gas-price premium added to Open Oracle report security. Enter gwei.')).not.toBeNull()
+		expect((priorityFeeInput as HTMLInputElement).value).toBe('0.00000001')
+		expect(documentQueries.getByText('Fixed gas-price premium added to Open Oracle report security.')).not.toBeNull()
 	})
 
 	test('associates invalid priority-fee guidance and disables creation', async () => {
@@ -180,7 +180,7 @@ describe('SecurityPoolSection', () => {
 				SecurityPoolSection,
 				createProps({
 					securityPoolForm: {
-						initialReportPriorityFeeGwei: '0',
+						initialReportPriorityFeeEth: '0',
 						marketId: '0x01',
 						statoblastSecurityMultiplierBps: '2',
 					},
@@ -189,11 +189,11 @@ describe('SecurityPoolSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const priorityFeeInput = within(document.body).getByRole('textbox', { name: 'Initial Report Priority Fee' })
+		const priorityFeeInput = within(document.body).getByRole('textbox', { name: 'Initial Report Priority Fee (ETH)' })
 		expect(priorityFeeInput.getAttribute('aria-invalid')).toBe('true')
 		expect(priorityFeeInput.getAttribute('aria-describedby')).toBe('security-pool-initial-report-priority-fee-help security-pool-initial-report-priority-fee-error')
-		expect(within(document.body).getByText('Initial-report priority fee must be greater than 0\u00a0gwei.')).not.toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Create pool', 'Initial-report priority fee must be greater than 0\u00a0gwei.')
+		expect(within(document.body).getByText('Initial-report priority fee must be greater than 0\u00a0ETH.')).not.toBeNull()
+		expectTransactionButtonDisabled(document.body, 'Create pool', 'Initial-report priority fee must be greater than 0\u00a0ETH.')
 	})
 
 	test('associates invalid multiplier guidance and disables creation', async () => {
@@ -209,7 +209,7 @@ describe('SecurityPoolSection', () => {
 					SecurityPoolSection,
 					createProps({
 						securityPoolForm: {
-							initialReportPriorityFeeGwei: '10',
+							initialReportPriorityFeeEth: '0.00000001',
 							marketId: '0x01',
 							statoblastSecurityMultiplierBps: value,
 						},
@@ -238,7 +238,7 @@ describe('SecurityPoolSection', () => {
 				SecurityPoolSection,
 				createProps({
 					securityPoolForm: {
-						initialReportPriorityFeeGwei: '10',
+						initialReportPriorityFeeEth: '0.00000001',
 						marketId: '0x01',
 						statoblastSecurityMultiplierBps: '2.0001',
 					},

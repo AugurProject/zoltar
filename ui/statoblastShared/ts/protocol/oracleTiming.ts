@@ -1,6 +1,6 @@
-const ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS = 5n * 60n
+import { getRuntimeNetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 
 export function getOracleManagerPriceValidUntilTimestamp(lastSettlementTimestamp: bigint | undefined) {
 	if (lastSettlementTimestamp === undefined || lastSettlementTimestamp === 0n) return undefined
-	return lastSettlementTimestamp + ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS
+	return lastSettlementTimestamp + (getRuntimeNetworkProfile().id === 'sepolia' ? 60n : 5n) * 60n
 }

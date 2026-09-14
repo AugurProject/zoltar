@@ -6,7 +6,7 @@ import { SECURITY_POOL_QUESTION_OUTCOME_ABI } from './securityPoolAbi.js'
 import { deriveHasForkActivity } from './forkActivity.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import type { ListedSecurityPool, SecurityPoolPage, SecurityPoolVaultSummary, SecurityVaultDetails, ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
-import { readRequiredMulticall } from '@zoltar/ui-zoltar-shared/protocol/core.js'
+import { readRequiredMulticall, readWithRpcStateRetries } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { requireForkDataView } from './forkData.js'
 import { getForkOutcomeKey, getProtocolPageOffset, getQuestionIdHex, getReportingOutcomeKey, getSecurityPoolSystemState } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 import { requireSecurityPoolDeploymentTupleArray, requireSecurityVaultTupleArray, type SecurityPoolDeploymentTuple } from './helpers.js'
@@ -554,8 +554,15 @@ async function loadDeploymentRegistry(client: ReadClient, anchor: DeploymentRegi
 }
 
 export async function loadSecurityPoolLineage(client: ReadClient, securityPoolAddress: Address, accountAddress?: Address) {
-	const anchor = await loadDeploymentRegistryAnchor(client)
-	const deployments = await loadDeploymentRegistry(client, anchor)
+	const { anchor, deployments } = await readWithRpcStateRetries(
+		async () => {
+			const anchor = await loadDeploymentRegistryAnchor(client)
+			const deployments = await loadDeploymentRegistry(client, anchor)
+			await requireDeploymentRegistryAnchor(client, anchor)
+			return { anchor, deployments }
+		},
+		({ deployments }) => deployments.some(deployment => sameAddress(deployment.securityPool, securityPoolAddress)),
+	)
 	const selected = deployments.filter(deployment => sameAddress(deployment.securityPool, securityPoolAddress))
 	const selectedDeployment = selected[0]
 	if (selectedDeployment === undefined) {

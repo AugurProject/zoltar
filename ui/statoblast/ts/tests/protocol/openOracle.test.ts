@@ -238,14 +238,16 @@ describe('openOracle protocol client', () => {
 		let capturedActiveOperationArgs: readonly [bigint, bigint] | undefined
 		const requestedFunctionNames: string[] = []
 		const client = createMockLoaderClient({
-			getBlock: async () => createBlockWithTimestamp(0n),
+			getBlock: async () => ({ timestamp: 0n, baseFeePerGas: 0n }),
 			multicall: async request => {
 				for (const contract of request.contracts) {
 					requestedFunctionNames.push(getContractFunctionName(contract))
 				}
-				return [1n, pendingOperationSlotId, [pendingOperationSlotId, 13n], 4n, 0n, 1n, 5n, true, 10n, 40n, 60n]
+				return [1n, pendingOperationSlotId, [pendingOperationSlotId, 13n], 4n, 0n, 1n, true, 10n, 40n, 60n]
 			},
 			readContract: async request => {
+				if (request.functionName === 'getSettlementCallbackGasLimit') return 10
+				if (request.functionName === 'gasConsumedOpenOracleReportPrice') return 20n
 				if (request.functionName === 'getActiveStagedOperations') {
 					const args = request.args
 					if (args === undefined) throw new Error('Expected getActiveStagedOperations args')
@@ -289,19 +291,7 @@ describe('openOracle protocol client', () => {
 
 		const details = await loadOracleManagerDetails(client, managerAddress)
 
-		expect(requestedFunctionNames).toEqual([
-			'lastPrice',
-			'pendingOperationSlotId',
-			'getPendingSettlementOperationIds',
-			'MAX_PENDING_SETTLEMENT_OPERATIONS',
-			'pendingReportId',
-			'getQueuedOperationCostAttoEth',
-			'getRequestPriceCostAttoEth',
-			'isPriceValid',
-			'lastSettlementTimestamp',
-			'getActiveStagedOperationCount',
-			'settlementTime',
-		])
+		expect(requestedFunctionNames).toEqual(['lastPrice', 'pendingOperationSlotId', 'getPendingSettlementOperationIds', 'MAX_PENDING_SETTLEMENT_OPERATIONS', 'pendingReportId', 'getQueuedOperationCostAttoEth', 'isPriceValid', 'lastSettlementTimestamp', 'getActiveStagedOperationCount', 'settlementTime'])
 		expect(capturedActiveOperationArgs).toEqual([0n, 25n])
 		expect(details.activeStagedOperationCount).toBe(40n)
 		expect(details.pendingOperation?.operationId).toBe(pendingOperationSlotId)

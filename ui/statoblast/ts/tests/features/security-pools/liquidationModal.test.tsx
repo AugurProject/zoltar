@@ -1642,7 +1642,7 @@ describe('LiquidationModal', () => {
 
 	test('uses the shared chain timestamp context for oracle expiry text', async () => {
 		const renderedComponent = await renderIntoDocument(
-			<ChainTimestampContext.Provider value={1n + 5n * 60n + 60n}>
+			<ChainTimestampContext.Provider value={1n + 60n * 60n + 60n}>
 				<LiquidationModal
 					accountAddress={defaultCallerVaultAddress}
 					closeLiquidationModal={() => undefined}
