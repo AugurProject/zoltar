@@ -254,7 +254,7 @@ void describe('fork auction helpers', () => {
 				truthAuction: createTruthAuction(),
 				walletBalanceAttoEth: 100n,
 			}),
-		).toBe('Switch to Ethereum mainnet.')
+		).toBe('Switch to Sepolia.')
 
 		expect(
 			getTruthAuctionBidGuardMessage({

@@ -58,7 +58,7 @@ describe('ForkZoltarSection', () => {
 		},
 	})
 
-	test('keeps REP approval disabled off mainnet and explains recovery', async () => {
+	test('keeps REP approval disabled off Sepolia and explains recovery', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(ForkZoltarSection, {
 				accountAddress: zeroAddress,
@@ -92,7 +92,7 @@ describe('ForkZoltarSection', () => {
 			.find(button => button.textContent?.startsWith('Approve ') === true)
 		if (approveButton === undefined) throw new Error('Expected approval button')
 		expect(approveButton.hasAttribute('disabled')).toBe(true)
-		expect(document.body.textContent?.match(/Switch to Ethereum mainnet/g)?.length).toBe(1)
+		expect(document.body.textContent?.match(/Switch to Sepolia/g)?.length).toBe(1)
 		expect(document.body.querySelectorAll('.tx-action-group .tx-action-notice').length).toBe(1)
 	})
 

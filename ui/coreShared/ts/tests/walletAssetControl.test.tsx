@@ -241,7 +241,7 @@ describe('WalletAssetControl', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const addButton = within(document.body).getByRole('button', { name: 'Add Universe 0xa REP to wallet' }) as HTMLButtonElement
-		const networkReason = within(document.body).getByText('Switch to Ethereum mainnet.')
+		const networkReason = within(document.body).getByText('Switch to Sepolia.')
 		expect(addButton.disabled).toBe(true)
 		expect(networkReason.id).not.toBe('')
 		expect(addButton.getAttribute('aria-describedby')).toBe(networkReason.id)

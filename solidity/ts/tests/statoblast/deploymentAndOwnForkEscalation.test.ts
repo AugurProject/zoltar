@@ -1,3 +1,32 @@
+import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPoolForker_SecurityPoolForker, test_statoblast_OwnForkEscalationClaimHarness_OwnForkEscalationClaimHarness } from '../../types/contractArtifact'
+import { depositRepToVault, depositToEscalationGame, getTotalRepBackingUnits, getRepToken, getAwaitingForkContinuation, getSecurityPoolsEscalationGame, getSecurityVault, getSystemState, backingUnitsToAttoRep } from '../../testSupport/simulator/utils/contracts/securityPool'
+import { forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
+import { getEscalationGameOutcomeState } from '../../testSupport/simulator/utils/contracts/escalationGame'
+import {
+	createChildUniverse,
+	getMigratedAttoRep,
+	getForkedEscrowChildRepByOutcomeAndVault,
+	getOwnForkRepBuckets,
+	getQuestionOutcome,
+	getSecurityPoolForkerForkData,
+	forkZoltarWithOwnEscalationGame,
+	claimForkedEscalationDeposits,
+	migrateRepToZoltar,
+	migrateVaultWithUnresolvedEscalation,
+} from '../../testSupport/simulator/utils/contracts/securityPoolForker'
+import { SystemState } from '../../testSupport/simulator/types/statoblastTypes'
+import { QuestionOutcome } from '../../testSupport/simulator/types/types'
+import { getQuestionEndDate, OperationType } from '../../testSupport/simulator/utils/contracts/statoblast'
+import { createQuestion, getQuestionId } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { deployOriginSecurityPool, getInfraContractAddresses, getSecurityPoolAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
+import { approveAndDepositRepToVault, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { addressString } from '../../testSupport/simulator/utils/bigint'
+import { approveToken, contractExists, getChildUniverseId, getERC20Balance, sortStringArrayByKeccak } from '../../testSupport/simulator/utils/utilities'
+import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
+import { createWriteClient } from '../../testSupport/simulator/utils/clients'
+import { decodeEventLog } from '@zoltar/core-shared/evm/ethereum'
+import { strictEqualTypeSafe } from '../../testSupport/simulator/utils/testUtils'
+import assert from '../../testSupport/simulator/utils/assert'
 import { beforeEach, describe, test } from 'bun:test'
 import { useStatoblastDeploymentAndOwnForkEscalationFixture, type StatoblastDeploymentAndOwnForkEscalationFixture } from './fixture'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
@@ -11,70 +40,8 @@ import { createCarryProof, SparseNullifierTree } from '../carryProofHelpers'
 
 describe('Statoblast: deployment and own-fork escalation', () => {
 	const fixture = useStatoblastDeploymentAndOwnForkEscalationFixture()
-	const assert: StatoblastDeploymentAndOwnForkEscalationFixture['assert'] = fixture.assert
-	const strictEqualTypeSafe: StatoblastDeploymentAndOwnForkEscalationFixture['strictEqualTypeSafe'] = fixture.strictEqualTypeSafe
-	const {
-		decodeEventLog,
-		createWriteClient,
-		DAY,
-		GENESIS_REPUTATION_TOKEN,
-		TEST_ADDRESSES,
-		approveToken,
-		contractExists,
-		getChildUniverseId,
-		getERC20Balance,
-		sortStringArrayByKeccak,
-		addressString,
-		approveAndDepositRepToVault,
-		manipulatePriceOracleAndPerformOperation,
-		triggerOwnGameFork,
-		deployOriginSecurityPool,
-		getInfraContractAddresses,
-		getSecurityPoolAddresses,
-		createQuestion,
-		getQuestionId,
-		getQuestionEndDate,
-		OperationType,
-		QuestionOutcome,
-		SystemState,
-		createChildUniverse,
-		getMigratedAttoRep,
-		getForkedEscrowChildRepByOutcomeAndVault,
-		getOwnForkRepBuckets,
-		getQuestionOutcome,
-		getSecurityPoolForkerForkData,
-		forkZoltarWithOwnEscalationGame,
-		claimForkedEscalationDeposits,
-		migrateRepToZoltar,
-		migrateVaultWithUnresolvedEscalation,
-		getEscalationGameOutcomeState,
-		forkUniverse,
-		getRepTokenAddress,
-		getTotalTheoreticalSupply,
-		getUniverseData,
-		getZoltarAddress,
-		depositRepToVault,
-		depositToEscalationGame,
-		getTotalRepBackingUnits,
-		getRepToken,
-		getAwaitingForkContinuation,
-		getSecurityPoolsEscalationGame,
-		getSecurityVault,
-		getSystemState,
-		backingUnitsToAttoRep,
-		statoblast_EscalationGame_EscalationGame,
-		statoblast_SecurityPoolForker_SecurityPoolForker,
-		test_statoblast_OwnForkEscalationClaimHarness_OwnForkEscalationClaimHarness,
-		formatStorageSlot,
-		getMappingStorageSlot,
-		reportBond,
-		repDeposit,
-		genesisUniverse,
-		statoblastSecurityMultiplierBps,
-		MAX_RETENTION_RATE,
-		outcomes,
-		deployOwnForkEscalationClaimHarness,
-	} = fixture
+
+	const { formatStorageSlot, getMappingStorageSlot, reportBond, repDeposit, genesisUniverse, statoblastSecurityMultiplierBps, MAX_RETENTION_RATE, outcomes, deployOwnForkEscalationClaimHarness } = fixture
 
 	let mockWindow: StatoblastDeploymentAndOwnForkEscalationFixture['mockWindow']
 	let client: StatoblastDeploymentAndOwnForkEscalationFixture['client']

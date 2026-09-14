@@ -6,6 +6,7 @@
       "name": "@zoltar/liquidator",
       "dependencies": {
         "@zoltar/bot-shared": "file:../shared",
+        "ccxt": "4.5.70",
       },
       "devDependencies": {
         "@biomejs/biome": "2.3.11",
@@ -54,7 +55,7 @@
 
     "@types/ws": ["@types/ws@8.18.1", "", { "dependencies": { "@types/node": "*" } }, "sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg=="],
 
-    "@zoltar/bot-shared": ["@zoltar/bot-shared@file:../shared", { "dependencies": { "@zoltar/core-shared": "file:../../shared/core", "ccxt": "4.5.70" }, "devDependencies": { "@biomejs/biome": "2.3.11", "bun-types": "1.4.2", "typescript": "5.8.2" } }],
+    "@zoltar/bot-shared": ["@zoltar/bot-shared@file:../shared", { "dependencies": { "@zoltar/core-shared": "file:../../shared/core" }, "devDependencies": { "@biomejs/biome": "2.3.11", "bun-types": "1.4.2", "typescript": "5.8.2" } }],
 
     "@zoltar/core-shared": ["@zoltar/core-shared@file:../../shared/core", { "dependencies": { "@noble/hashes": "2.2.0", "micro-eth-signer": "0.18.1" }, "devDependencies": { "typescript": "5.8.2" } }],
 
@@ -88,7 +89,7 @@
 
     "ws": ["ws@8.21.1", "", { "peerDependencies": { "bufferutil": "^4.0.1", "utf-8-validate": ">=5.0.2" }, "optionalPeers": ["bufferutil", "utf-8-validate"] }, "sha512-+0NTnW77fFN/DjQi6k/Sq/Yvk4Sgajw7urW8V+asjXnRgDs9gyGkdb7EzgfhA4goXsRIZKE28fzIXBHEzhuiWw=="],
 
-    "@zoltar/bot-shared/@zoltar/core-shared": ["@zoltar/core-shared@file:../../shared/core", { "dependencies": { "@noble/hashes": "2.2.0", "micro-eth-signer": "0.18.1" }, "devDependencies": { "typescript": "5.8.2" } }],
+    "@zoltar/bot-shared/@zoltar/core-shared": ["@zoltar/core-shared@file:../../shared/core", {}],
 
     "ccxt/ws": ["ws@8.21.0", "", { "peerDependencies": { "bufferutil": "^4.0.1", "utf-8-validate": ">=5.0.2" }, "optionalPeers": ["bufferutil", "utf-8-validate"] }, "sha512-Vsp28b7DRcimFQvrqu2Wek3z1iYxDCWqHYB8Qsnk/S4RfaCQzPGPyBNuVjJV3cd6UiKtUtp6sNM77gWvzcCH+g=="],
 

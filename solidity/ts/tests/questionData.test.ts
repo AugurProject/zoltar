@@ -1,6 +1,6 @@
-import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
+import { beforeAll, beforeEach, describe, test } from 'bun:test'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
-import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
+import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient } from '../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { setupTestAccounts, sortStringArrayByKeccak } from '../testSupport/simulator/utils/utilities'
@@ -67,8 +67,6 @@ function getScalarEncodingFuzzSamples(question: ScalarParityQuestion, seed: bigi
 function withScalarReservedBits(answer: bigint, reservedBits = 1n) {
 	return answer | ((reservedBits << 240n) & SCALAR_RESERVED_BITS_MASK)
 }
-
-setDefaultTimeout(TEST_TIMEOUT_MS)
 
 describe('Question Data', () => {
 	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()

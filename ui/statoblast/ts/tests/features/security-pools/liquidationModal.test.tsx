@@ -297,7 +297,7 @@ describe('LiquidationModal', () => {
 		expectTransactionButtonDisabled(document.body, 'Queue liquidation', 'Enter a liquidation timeout of at least 1 minute.')
 	})
 
-	test('keeps liquidation disabled off mainnet and explains recovery', async () => {
+	test('keeps liquidation disabled off Sepolia and explains recovery', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: true,
@@ -306,8 +306,8 @@ describe('LiquidationModal', () => {
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(getTransactionButtonState(document.body, 'Execute vault liquidation')).toEqual({ disabled: true, reason: 'Switch to Ethereum mainnet.' })
-		expect(document.body.textContent?.includes('Switch to Ethereum mainnet.')).toBe(true)
+		expect(getTransactionButtonState(document.body, 'Execute vault liquidation')).toEqual({ disabled: true, reason: 'Switch to Sepolia.' })
+		expect(document.body.textContent?.includes('Switch to Sepolia.')).toBe(true)
 	})
 
 	test('traps focus while open and restores it when closed', async () => {

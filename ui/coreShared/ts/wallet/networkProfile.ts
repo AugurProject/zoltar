@@ -1,6 +1,7 @@
 import { defineChain, getAddress, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { mainnet, type Chain } from '@zoltar/core-shared/evm/ethereum'
 import { SEPOLIA_GENESIS_REP_ADDRESS, SEPOLIA_WETH_ADDRESS } from '../lib/sepoliaDeploymentConfig.js'
+import { DEFAULT_NETWORK, MAINNET_ENABLED } from './networkAvailability.js'
 import { sameChainId } from './chainId.js'
 
 export type NetworkProfile = {
@@ -95,15 +96,20 @@ export const SEPOLIA_NETWORK_PROFILE: NetworkProfile = {
 	wethAddress: SEPOLIA_WETH_ADDRESS,
 }
 
-export function getPublicNetworkProfile(network: string | undefined) {
+export function getPublicNetworkProfile(network: string | undefined): NetworkProfile {
 	const normalizedNetwork = network?.trim().toLowerCase()
-	if (normalizedNetwork === undefined || normalizedNetwork === '' || normalizedNetwork === 'mainnet') return MAINNET_NETWORK_PROFILE
+	if (normalizedNetwork === undefined || normalizedNetwork === '') return getDefaultNetworkProfile()
+	if (normalizedNetwork === 'mainnet') return MAINNET_ENABLED ? MAINNET_NETWORK_PROFILE : SEPOLIA_NETWORK_PROFILE
 	if (normalizedNetwork === 'sepolia') return SEPOLIA_NETWORK_PROFILE
 	throw new RangeError(`Unsupported network "${network}". Use "mainnet" or "sepolia".`)
 }
 
+export function getDefaultNetworkProfile() {
+	return getPublicNetworkProfile(DEFAULT_NETWORK)
+}
+
 export function getPublicNetworkProfileForChainId(chainId: string | undefined) {
-	if (sameChainId(chainId, MAINNET_NETWORK_PROFILE.chainIdHex)) return MAINNET_NETWORK_PROFILE
+	if (MAINNET_ENABLED && sameChainId(chainId, MAINNET_NETWORK_PROFILE.chainIdHex)) return MAINNET_NETWORK_PROFILE
 	if (sameChainId(chainId, SEPOLIA_NETWORK_PROFILE.chainIdHex)) return SEPOLIA_NETWORK_PROFILE
 	return undefined
 }
@@ -117,7 +123,7 @@ declare global {
 }
 
 export function getRuntimeNetworkProfile() {
-	return globalThis.__zoltarRuntimeNetworkProfile__ ?? MAINNET_NETWORK_PROFILE
+	return globalThis.__zoltarRuntimeNetworkProfile__ ?? getDefaultNetworkProfile()
 }
 
 export function setRuntimeNetworkProfile(profile: NetworkProfile) {

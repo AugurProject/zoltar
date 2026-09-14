@@ -1,3 +1,4 @@
+import { MainnetDisabledNotice } from '@zoltar/ui-core-shared/app/components/MainnetDisabledNotice.js'
 import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { useState } from 'preact/hooks'
@@ -146,20 +147,6 @@ export function OverviewPanels({
 	})()
 	return (
 		<section className='overview-shell'>
-			{universeHasForked ? (
-				<WarningSurface role='alert' surface='flat' className='universe-fork-notice'>
-					<p>
-						{appCopy.universeForkNoticeLead}
-						{universeForkTime === undefined ? undefined : (
-							<>
-								{' '}
-								{appCopy.forkedOnConnector} <TimestampValue timestamp={universeForkTime} />
-							</>
-						)}
-						. {appCopy.migrateRepToContinueUsingAugur}
-					</p>
-				</WarningSurface>
-			) : undefined}
 			<article className={`overview-panel overview-wallet-panel${isBrowserSimulationReadBackend ? ' is-simulation' : ''}`}>
 				<HeaderToolbar
 					brand={
@@ -186,6 +173,21 @@ export function OverviewPanels({
 					}
 					settings={settingsMenu}
 				/>
+				<MainnetDisabledNotice />
+				{universeHasForked ? (
+					<WarningSurface role='alert' surface='flat' variant='prominent' className='universe-fork-notice'>
+						<strong className='notice-title'>
+							{appCopy.universeForkNoticeLead}
+							{universeForkTime === undefined ? undefined : (
+								<>
+									{' '}
+									{appCopy.forkedOnConnector} <TimestampValue timestamp={universeForkTime} />
+								</>
+							)}
+						</strong>
+						<p>{appCopy.migrateRepToContinueUsingAugur}</p>
+					</WarningSurface>
+				) : undefined}
 				<HeaderMetricStrip expanded={showEnvironmentDetails}>
 					<HeaderMetricGroup label={commonCopy.balances}>
 						<MetricField className='overview-simulation-secondary' label={commonCopy.eth}>

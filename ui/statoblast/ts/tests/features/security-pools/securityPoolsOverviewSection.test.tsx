@@ -20,7 +20,7 @@ import { act } from 'preact/test-utils'
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {
 		address: zeroAddress,
-		chainId: '0x1',
+		chainId: '0xaa36a7',
 		ethBalanceAttoEth: 0n,
 		wethBalanceAttoEth: 0n,
 		...overrides,
@@ -441,13 +441,13 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(documentQueries.getByRole('button', { name: 'Next page' }).hasAttribute('disabled')).toBe(true)
 	})
 
-	test('uses a non-wallet request key off-mainnet and reloads with the wallet key after switching back', async () => {
+	test('uses a non-wallet request key off-Sepolia and reloads with the wallet key after switching back', async () => {
 		const accountAddress = '0x00000000000000000000000000000000000000a1'
 		const onLoadSecurityPoolPage = mock(() => undefined)
 		const wrongNetworkProps = createProps({
 			accountState: createAccountState({
 				address: accountAddress,
-				chainId: '0xaa36a7',
+				chainId: '0x1',
 			}),
 			onLoadSecurityPoolPage,
 		})
@@ -465,7 +465,7 @@ describe('SecurityPoolsOverviewSection', () => {
 					{...wrongNetworkProps}
 					accountState={createAccountState({
 						address: accountAddress,
-						chainId: '0x1',
+						chainId: '0xaa36a7',
 					})}
 				/>,
 				renderedComponent.container,

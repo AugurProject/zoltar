@@ -240,7 +240,7 @@ describe('reporting guards', () => {
 				isOnActiveAppChain: false,
 				reportingStatus: 'active',
 			}),
-		).toBe('Switch to Ethereum mainnet.')
+		).toBe('Switch to Sepolia.')
 
 		expect(
 			getReportingWithdrawGuardMessage({

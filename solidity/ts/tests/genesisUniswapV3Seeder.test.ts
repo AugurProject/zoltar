@@ -1,14 +1,12 @@
-import { beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
+import { beforeEach, describe, test } from 'bun:test'
 import { encodeDeployData, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import assert from '../testSupport/simulator/utils/assert'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
-import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
+import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { chaos_GenesisUniswapV3Seeder_GenesisUniswapV3Seeder as seederArtifact, test_chaos_GenesisUniswapV3SeederMocks_GenesisSeederPoolMock as poolArtifact, test_chaos_GenesisUniswapV3SeederMocks_GenesisSeederTokenMock as tokenArtifact } from '../types/contractArtifact'
-
-setDefaultTimeout(TEST_TIMEOUT_MS)
 
 describe('GenesisUniswapV3Seeder', () => {
 	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()

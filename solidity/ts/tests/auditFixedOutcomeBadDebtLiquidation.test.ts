@@ -1,48 +1,24 @@
+import { SystemState } from '../testSupport/simulator/types/statoblastTypes'
+import { QuestionOutcome } from '../testSupport/simulator/types/types'
+import { getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
+import { getLastPrice, getQuestionEndDate, OperationType, requestPriceIfNeededAndStageOperation } from '../testSupport/simulator/utils/contracts/statoblast'
+import { forkUniverse, getRepTokenAddress, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
+import { createCompleteSet, depositRepToVault, getSecurityVault, getSystemState, redeemRepFromVault } from '../testSupport/simulator/utils/contracts/securityPool'
+import { createChildUniverse, getQuestionOutcome, initiateSecurityPoolFork, migrateRepToZoltar, migrateVault, startTruthAuction } from '../testSupport/simulator/utils/contracts/securityPoolForker'
+import { approveAndDepositRepToVault, manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { approveToken, getChildUniverseId, getERC20Balance } from '../testSupport/simulator/utils/utilities'
+import { addressString } from '../testSupport/simulator/utils/bigint'
+import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
+import { createWriteClient } from '../testSupport/simulator/utils/clients'
+import { strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
+import assert from '../testSupport/simulator/utils/assert'
 import { beforeEach, describe, test } from 'bun:test'
 import { useStatoblastForkMigrationFixture, type StatoblastForkMigrationFixture } from './statoblast/fixture'
 import { statoblast_SecurityPool_SecurityPool } from '../types/contractArtifact'
 
 describe('Audit PoC: fixed-outcome child synthetic bad debt', () => {
 	const fixture = useStatoblastForkMigrationFixture()
-	const {
-		assert,
-		strictEqualTypeSafe,
-		createWriteClient,
-		DAY,
-		GENESIS_REPUTATION_TOKEN,
-		TEST_ADDRESSES,
-		addressString,
-		approveToken,
-		approveAndDepositRepToVault,
-		createChildUniverse,
-		createCompleteSet,
-		depositRepToVault,
-		forkUniverse,
-		getChildUniverseId,
-		getERC20Balance,
-		getLastPrice,
-		getQuestionEndDate,
-		getQuestionOutcome,
-		getRepTokenAddress,
-		getSecurityPoolAddresses,
-		getSecurityVault,
-		getSystemState,
-		getZoltarAddress,
-		initiateSecurityPoolFork,
-		manipulatePriceOracle,
-		migrateRepToZoltar,
-		migrateVault,
-		OperationType,
-		PRICE_PRECISION,
-		QuestionOutcome,
-		redeemRepFromVault,
-		repDeposit,
-		requestPriceIfNeededAndStageOperation,
-		startTruthAuction,
-		statoblastSecurityMultiplierBps,
-		SystemState,
-		genesisUniverse,
-	} = fixture
+	const { PRICE_PRECISION, repDeposit, statoblastSecurityMultiplierBps, genesisUniverse } = fixture
 
 	let mockWindow: StatoblastForkMigrationFixture['mockWindow']
 	let client: StatoblastForkMigrationFixture['client']

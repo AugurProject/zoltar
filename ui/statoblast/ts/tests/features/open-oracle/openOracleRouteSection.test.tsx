@@ -23,7 +23,7 @@ const ATTO_ETH_PER_ETH = 10n ** 18n
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {
 		address: zeroAddress,
-		chainId: '0x1',
+		chainId: '0xaa36a7',
 		ethBalanceAttoEth: 0n,
 		wethBalanceAttoEth: 0n,
 		...overrides,
@@ -196,12 +196,12 @@ describe('OpenOracleSection route create view', () => {
 		expect(documentQueries.getByRole('heading', { name: 'Standalone Oracle Report' })).not.toBeNull()
 	})
 
-	test('keeps standalone create disabled off mainnet and explains recovery', async () => {
+	test('keeps standalone create disabled off Sepolia and explains recovery', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				OpenOracleSection,
 				createOpenOracleSectionProps({
-					accountState: createAccountState({ chainId: '0xaa36a7' }),
+					accountState: createAccountState({ chainId: '0x1' }),
 					openOracleCreateForm: {
 						disputeDelay: '3600',
 						escalationHalt: '0.5',
@@ -222,7 +222,7 @@ describe('OpenOracleSection route create view', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expectTransactionButtonDisabled(document.body, 'Create standalone Oracle report')
-		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(true)
+		expect(document.body.textContent?.includes('Switch to Sepolia')).toBe(true)
 	})
 
 	test('keeps the standalone safety warning without redundant workflow guidance', async () => {

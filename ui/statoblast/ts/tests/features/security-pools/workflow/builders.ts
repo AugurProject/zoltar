@@ -9,7 +9,7 @@ import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
 export function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {
 		address: zeroAddress,
-		chainId: '0x1',
+		chainId: '0xaa36a7',
 		ethBalanceAttoEth: 0n,
 		wethBalanceAttoEth: 0n,
 		...overrides,

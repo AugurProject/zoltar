@@ -1,9 +1,9 @@
 import { encodeAbiParameters, encodeDeployData, keccak256, zeroAddress, type Abi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
-import { beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
+import { beforeEach, describe, test } from 'bun:test'
 import { deployContract } from '../testSupport/deployContract'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
-import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
+import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import assert from '../testSupport/simulator/utils/assert'
 import { addressString } from '../testSupport/simulator/utils/bigint'
 import { createWriteClient, WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
@@ -42,8 +42,6 @@ const initializeForkCarrySnapshotWithResolutionBalancesAbi: Abi = [
 		type: 'function',
 	},
 ]
-
-setDefaultTimeout(TEST_TIMEOUT_MS)
 
 describe('Audit regression: escalation fork burn divisor solvency', () => {
 	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()

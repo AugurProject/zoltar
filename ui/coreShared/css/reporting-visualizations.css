@@ -252,7 +252,7 @@
 	color: var(--muted);
 }
 
-@media (max-width: 800px) {
+@media (max-width: 50rem) {
 	main {
 		padding: 1.5rem 0.9rem 2.5rem;
 	}

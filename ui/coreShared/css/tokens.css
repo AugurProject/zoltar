@@ -188,10 +188,6 @@
 	--gutter-desktop: 2rem;
 	--gutter-tablet: 1.5rem;
 	--gutter-mobile: 1rem;
-	--breakpoint-wide: 90rem;
-	--breakpoint-desktop: 64rem;
-	--breakpoint-tablet: 48rem;
-	--breakpoint-mobile: 24.375rem;
 }
 
 :root[data-product="zoltar"] {

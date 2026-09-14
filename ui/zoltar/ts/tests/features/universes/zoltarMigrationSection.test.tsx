@@ -254,7 +254,7 @@ describe('ZoltarMigrationSection', () => {
 		expect(deployedOutcomes).toEqual([1n])
 	})
 
-	test('keeps migration approval disabled off mainnet and explains recovery', async () => {
+	test('keeps migration approval disabled off Sepolia and explains recovery', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ZoltarMigrationSection,
@@ -276,10 +276,10 @@ describe('ZoltarMigrationSection', () => {
 			.find(button => button.textContent?.startsWith('Approve ') === true)
 		if (approveButton === undefined) throw new Error('Expected approval button')
 		expect(approveButton.hasAttribute('disabled')).toBe(true)
-		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(true)
+		expect(document.body.textContent?.includes('Switch to Sepolia')).toBe(true)
 	})
 
-	test('keeps split disabled off mainnet and explains recovery', async () => {
+	test('keeps split disabled off Sepolia and explains recovery', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ZoltarMigrationSection,
@@ -292,7 +292,7 @@ describe('ZoltarMigrationSection', () => {
 
 		expectTransactionButtonDisabled(document.body, 'Split REP')
 		expect(document.body.textContent?.includes('Split the migration REP across the selected universes.')).toBe(false)
-		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(true)
+		expect(document.body.textContent?.includes('Switch to Sepolia')).toBe(true)
 	})
 
 	test('places the migration summary below outcomes and before approval controls', async () => {

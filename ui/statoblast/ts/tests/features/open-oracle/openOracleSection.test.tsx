@@ -103,7 +103,7 @@ function getSectionTitles(node: unknown) {
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {
 		address: zeroAddress,
-		chainId: '0x1',
+		chainId: '0xaa36a7',
 		ethBalanceAttoEth: 10n * 10n ** 18n,
 		wethBalanceAttoEth: 5n * 10n ** 18n,
 		...overrides,
@@ -790,12 +790,12 @@ void describe('OpenOracleSection', () => {
 		expect(getButtonDisabledReason(disputeButton)).toBe('Insufficient WETH balance for this dispute. Need 2, wallet has 1.')
 	})
 
-	void test('keeps create and selected-report actions disabled off mainnet with recovery guidance', () => {
+	void test('keeps create and selected-report actions disabled off Sepolia with recovery guidance', () => {
 		const disputeSection = renderDisputeActionSection({ isOnActiveAppChain: false })
 		const disputeButton = findButton(disputeSection, 'Dispute & swap')
 		if (disputeButton === undefined) throw new Error('Expected dispute action button to render')
 		expect(getButtonDisabled(disputeButton)).toBe(true)
-		expect(getButtonDisabledReason(disputeButton)).toBe('Switch to Ethereum mainnet.')
+		expect(getButtonDisabledReason(disputeButton)).toBe('Switch to Sepolia.')
 		expect(disputeButton.props.showDisabledReason).toBe(false)
 		expect(disputeButton.props.disabledReasonElementId).toContain('open-oracle-dispute-approval-guard-')
 
@@ -803,10 +803,10 @@ void describe('OpenOracleSection', () => {
 		const settleButton = findButton(settleSection, 'Settle report')
 		if (settleButton === undefined) throw new Error('Expected settle action button to render')
 		expect(getButtonDisabled(settleButton)).toBe(true)
-		expect(getButtonDisabledReason(settleButton)).toBe('Switch to Ethereum mainnet.')
+		expect(getButtonDisabledReason(settleButton)).toBe('Switch to Sepolia.')
 	})
 
-	void test('keeps downstream selected-report blocker copy hidden off mainnet', () => {
+	void test('keeps downstream selected-report blocker copy hidden off Sepolia', () => {
 		const invalidDisputeSection = renderDisputeActionSection({
 			isOnActiveAppChain: false,
 			openOracleForm: createOpenOracleForm({ reportId: '' }),
@@ -814,7 +814,7 @@ void describe('OpenOracleSection', () => {
 		const disputeButton = findButton(invalidDisputeSection, 'Dispute & swap')
 		if (disputeButton === undefined) throw new Error('Expected dispute action button to render')
 		expect(getButtonDisabled(disputeButton)).toBe(true)
-		expect(getButtonDisabledReason(disputeButton)).toBe('Switch to Ethereum mainnet.')
+		expect(getButtonDisabledReason(disputeButton)).toBe('Switch to Sepolia.')
 		expect(getTextContent(invalidDisputeSection)).not.toContain('Load a report first.')
 
 		const invalidSettleSection = renderSettleActionSection({
@@ -829,7 +829,7 @@ void describe('OpenOracleSection', () => {
 		const settleButton = findButton(invalidSettleSection, 'Settle report')
 		if (settleButton === undefined) throw new Error('Expected settle action button to render')
 		expect(getButtonDisabled(settleButton)).toBe(true)
-		expect(getButtonDisabledReason(settleButton)).toBe('Switch to Ethereum mainnet.')
+		expect(getButtonDisabledReason(settleButton)).toBe('Switch to Sepolia.')
 		expect(getTextContent(invalidSettleSection)).not.toContain('Load a report first.')
 	})
 

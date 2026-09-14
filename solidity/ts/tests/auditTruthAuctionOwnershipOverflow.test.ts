@@ -1,3 +1,15 @@
+import { getTotalRepPurchasedAttoRep } from '../testSupport/simulator/utils/contracts/auction'
+import { getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
+import { getRepTokenAddress, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
+import { createWriteClient } from '../testSupport/simulator/utils/clients'
+import { createCompleteSet, getTotalRepBackingUnits, getSecurityVault, backingUnitsToAttoRep } from '../testSupport/simulator/utils/contracts/securityPool'
+import { claimAuctionProceeds, finalizeTruthAuction, getMigratedAttoRep, migrateVault, startTruthAuction } from '../testSupport/simulator/utils/contracts/securityPoolForker'
+import { approveToken, getChildUniverseId, getERC20Balance } from '../testSupport/simulator/utils/utilities'
+import { approveAndDepositRepToVault, manipulatePriceOracleAndPerformOperation } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { QuestionOutcome } from '../testSupport/simulator/types/types'
+import { OperationType, participateAuction } from '../testSupport/simulator/utils/contracts/statoblast'
+import { DAY, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
+import assert from '../testSupport/simulator/utils/assert'
 import { beforeEach, describe, test } from 'bun:test'
 import { decodeEventLog, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { getMaxRepBeingSoldAttoRep, getMinBidSizeAttoEth } from '../testSupport/simulator/utils/contracts/auction'
@@ -8,38 +20,8 @@ import { useStatoblastTruthAuctionFixture, type StatoblastTruthAuctionFixture } 
 
 describe('Truth-auction ownership overflow regression', () => {
 	const fixture = useStatoblastTruthAuctionFixture()
-	const assert: StatoblastTruthAuctionFixture['assert'] = fixture.assert
 
-	const {
-		DAY,
-		OperationType,
-		PRICE_PRECISION,
-		QuestionOutcome,
-		TEST_ADDRESSES,
-		approveAndDepositRepToVault,
-		approveToken,
-		claimAuctionProceeds,
-		createCompleteSet,
-		createWriteClient,
-		finalizeTruthAuction,
-		genesisUniverse,
-		getChildUniverseId,
-		getERC20Balance,
-		getMigratedAttoRep,
-		getTotalRepBackingUnits,
-		getRepTokenAddress,
-		getSecurityPoolAddresses,
-		getSecurityVault,
-		getTotalRepPurchasedAttoRep,
-		getZoltarAddress,
-		manipulatePriceOracleAndPerformOperation,
-		migrateVault,
-		participateAuction,
-		backingUnitsToAttoRep,
-		startTruthAuction,
-		statoblastSecurityMultiplierBps,
-		triggerExternalForkForSecurityPool,
-	} = fixture
+	const { PRICE_PRECISION, genesisUniverse, statoblastSecurityMultiplierBps, triggerExternalForkForSecurityPool } = fixture
 
 	let client: StatoblastTruthAuctionFixture['client']
 	let mockWindow: StatoblastTruthAuctionFixture['mockWindow']

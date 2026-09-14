@@ -17,7 +17,7 @@ import { describe, expect, test } from 'bun:test'
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {
 		address: zeroAddress,
-		chainId: '0x1',
+		chainId: '0xaa36a7',
 		ethBalanceAttoEth: 0n,
 		wethBalanceAttoEth: 0n,
 		...overrides,
@@ -769,7 +769,7 @@ describe('SecurityVaultSection', () => {
 		expect(depositDialogQueries.getByText('This vault does not exist. Deposit REP to create it.')).not.toBeNull()
 		expect(depositDialogQueries.getByText('REP backing')).not.toBeNull()
 		expect(transactionContext.textContent?.includes('Universe 0x1')).toBe(false)
-		expect(transactionContext.textContent?.includes('Ethereum Mainnet')).toBe(true)
+		expect(transactionContext.textContent?.includes('Sepolia')).toBe(true)
 		expect(
 			within(transactionContext)
 				.getAllByRole('button', { name: `Copy address ${zeroAddress}` })
@@ -1088,7 +1088,7 @@ describe('SecurityVaultSection', () => {
 		expect(depositLauncher.title).toBe('Connect a wallet before depositing REP.')
 	})
 
-	test('keeps modal-first vault launchers disabled off mainnet with recovery guidance', async () => {
+	test('keeps modal-first vault launchers disabled off Sepolia with recovery guidance', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityVaultSection
 				{...createSecurityVaultSectionProps({
@@ -1103,7 +1103,7 @@ describe('SecurityVaultSection', () => {
 		const depositLauncher = documentQueries.getByRole('button', { name: 'Deposit REP' })
 		if (!(depositLauncher instanceof HTMLButtonElement)) throw new Error('Expected a deposit launcher button')
 		expect(depositLauncher.disabled).toBe(true)
-		expect(depositLauncher.title).toBe('Switch to Ethereum mainnet.')
+		expect(depositLauncher.title).toBe('Switch to Sepolia.')
 	})
 
 	test('prioritizes wrong-network recovery for modal-first vault launchers owned by another account', async () => {
@@ -1131,7 +1131,7 @@ describe('SecurityVaultSection', () => {
 		const depositLauncher = documentQueries.getByRole('button', { name: 'Deposit REP' })
 		if (!(depositLauncher instanceof HTMLButtonElement)) throw new Error('Expected a deposit launcher button')
 		expect(depositLauncher.disabled).toBe(true)
-		expect(depositLauncher.title).toBe('Switch to Ethereum mainnet.')
+		expect(depositLauncher.title).toBe('Switch to Sepolia.')
 	})
 
 	test('prioritizes wrong-network recovery before selected vault details load', async () => {
@@ -1159,6 +1159,6 @@ describe('SecurityVaultSection', () => {
 		const depositLauncher = documentQueries.getByRole('button', { name: 'Deposit REP' })
 		if (!(depositLauncher instanceof HTMLButtonElement)) throw new Error('Expected a deposit launcher button')
 		expect(depositLauncher.disabled).toBe(true)
-		expect(depositLauncher.title).toBe('Switch to Ethereum mainnet.')
+		expect(depositLauncher.title).toBe('Switch to Sepolia.')
 	})
 })

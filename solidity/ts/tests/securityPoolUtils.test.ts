@@ -1,14 +1,12 @@
-import { beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { beforeEach, describe, expect, test } from 'bun:test'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
-import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
+import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { addressString } from '../testSupport/simulator/utils/bigint'
 import { createWriteClient, WriteClient } from '../testSupport/simulator/utils/clients'
 import { strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
 import { statoblast_SecurityPoolUtils_SecurityPoolUtils, test_statoblast_LiquidationApprovalTestMocks_CoarseLiquidationRoundingHarness } from '../types/contractArtifact'
-
-setDefaultTimeout(TEST_TIMEOUT_MS)
 
 const PRICE_PRECISION = 1n * 10n ** 18n
 const MAX_RETENTION_RATE = 999_999_996_848_000_000n

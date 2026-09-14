@@ -1,8 +1,8 @@
-import { beforeAll, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import assert from '../testSupport/simulator/utils/assert'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
-import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
+import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, writeContractAndWait, WriteClient } from '../testSupport/simulator/utils/clients'
 import { BURN_ADDRESS, DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { addressString } from '../testSupport/simulator/utils/bigint'
@@ -76,8 +76,6 @@ import { getUniformPriceDualCapBatchAuctionAddress } from '../testSupport/simula
 import { tickToPrice } from '@zoltar/statoblast-shared/statoblast/truthAuctionTickMath'
 import { priceToClosestTick } from '../testSupport/truthAuctionTicks'
 import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool, statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '../types/contractArtifact'
-
-setDefaultTimeout(TEST_TIMEOUT_MS)
 
 const genesisUniverse = 0n
 const statoblastSecurityMultiplierBps = 20_000n

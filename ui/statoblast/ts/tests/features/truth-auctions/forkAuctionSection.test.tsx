@@ -19,7 +19,7 @@ const PARENT_POOL_ADDRESS: Address = '0x00000000000000000000000000000000000000f0
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {
 		address: zeroAddress,
-		chainId: '0x1',
+		chainId: '0xaa36a7',
 		ethBalanceAttoEth: 0n,
 		wethBalanceAttoEth: 0n,
 		...overrides,
@@ -1465,7 +1465,7 @@ describe('ForkAuctionSection', () => {
 		expect(submitBidButton.disabled).toBe(true)
 	})
 
-	test('keeps fork-auction actions disabled off mainnet and shows switch-network recovery', async () => {
+	test('keeps fork-auction actions disabled off Sepolia and shows switch-network recovery', async () => {
 		const currentChildPool = createChildPool({
 			securityPoolAddress: '0x00000000000000000000000000000000000000f7',
 			systemState: 'forkTruthAuction',
@@ -1476,7 +1476,7 @@ describe('ForkAuctionSection', () => {
 			h(
 				ForkAuctionSection,
 				createProps({
-					accountState: createAccountState({ chainId: '0xaa36a7', ethBalanceAttoEth: 10n ** 18n }),
+					accountState: createAccountState({ chainId: '0x1', ethBalanceAttoEth: 10n ** 18n }),
 					currentStageView: 'auction',
 					forkAuctionDetails: createForkAuctionDetails({
 						currentTime: 5n,
@@ -1523,11 +1523,11 @@ describe('ForkAuctionSection', () => {
 		const submitBidButton = documentQueries.getByRole('button', { name: 'Submit bid' })
 		if (!(submitBidButton instanceof HTMLButtonElement)) throw new Error('Expected Submit bid button to be a button element')
 		expect(submitBidButton.disabled).toBe(true)
-		expect(submitBidButton.title).toBe('Switch to Ethereum mainnet.')
-		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(true)
+		expect(submitBidButton.title).toBe('Switch to Sepolia.')
+		expect(document.body.textContent?.includes('Switch to Sepolia')).toBe(true)
 	})
 
-	test('keeps fork-auction downstream blocker copy hidden off mainnet', async () => {
+	test('keeps fork-auction downstream blocker copy hidden off Sepolia', async () => {
 		const currentChildPool = createChildPool({
 			securityPoolAddress: '0x00000000000000000000000000000000000000f7',
 			systemState: 'forkTruthAuction',
@@ -1538,7 +1538,7 @@ describe('ForkAuctionSection', () => {
 			h(
 				ForkAuctionSection,
 				createProps({
-					accountState: createAccountState({ chainId: '0xaa36a7', ethBalanceAttoEth: 10n ** 18n }),
+					accountState: createAccountState({ chainId: '0x1', ethBalanceAttoEth: 10n ** 18n }),
 					currentStageView: 'auction',
 					forkAuctionDetails: createForkAuctionDetails({
 						currentTime: 5n,
@@ -1585,7 +1585,7 @@ describe('ForkAuctionSection', () => {
 		const submitBidButton = documentQueries.getByRole('button', { name: 'Submit bid' })
 		if (!(submitBidButton instanceof HTMLButtonElement)) throw new Error('Expected Submit bid button to be a button element')
 		expect(submitBidButton.disabled).toBe(true)
-		expect(submitBidButton.title).toBe('Switch to Ethereum mainnet.')
+		expect(submitBidButton.title).toBe('Switch to Sepolia.')
 	})
 
 	test('shows a missing-universe notice without a creation button', async () => {

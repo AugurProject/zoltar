@@ -21,12 +21,11 @@ type TestImpactRule = TestImpactRecommendation & {
 type SpecializedTestOptions = {
 	environment?: string
 	testNamePattern?: string
-	timeout: number
+	timeout?: number
 }
 
 const TEST_INFRASTRUCTURE_PATHS = new Set([
 	'bun-test-setup.ts',
-	'bun-test-setup-solidity.ts',
 	'bun-test-setup-ui.ts',
 	'bunfig.toml',
 	'tooling/testing/merge-test-timings.mts',
@@ -34,6 +33,8 @@ const TEST_INFRASTRUCTURE_PATHS = new Set([
 	'tooling/testing/run-mutation-smoke.mts',
 	'tooling/testing/run-balanced-test-shard.mts',
 	'tooling/testing/run-tests.mts',
+	'tooling/testing/run-bun-test-process.mts',
+	'tooling/testing/bun-test.mts',
 	'tooling/testing/run-tests.test.ts',
 	'tooling/testing/test-discovery.mts',
 	'tooling/testing/test-discovery.test.ts',
@@ -44,22 +45,22 @@ const TEST_INFRASTRUCTURE_PATHS = new Set([
 
 const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
 	{
-		command: 'bun test tooling/contracts/format-solidity-one-line.test.ts',
+		command: 'bun ./tooling/testing/bun-test.mts tooling/contracts/format-solidity-one-line.test.ts',
 		reason: 'Solidity formatter subprocess engine changed',
 		matches: filePath => filePath === 'tooling/contracts/prettier-solidity-batch.mjs',
 	},
 	{
-		command: 'bun test tooling/testing/mutation-support.test.ts tooling/testing/test-discovery.test.ts tooling/testing/run-tests.test.ts tooling/testing/test-impact.test.ts',
+		command: 'bun ./tooling/testing/bun-test.mts tooling/testing/mutation-support.test.ts tooling/testing/test-discovery.test.ts tooling/testing/run-tests.test.ts tooling/testing/test-impact.test.ts',
 		reason: 'root test discovery, execution, timing, or impact selection changed',
 		matches: filePath => TEST_INFRASTRUCTURE_PATHS.has(filePath),
 	},
 	{
-		command: 'bun test tooling/testing/coverage-report.test.ts',
+		command: 'bun ./tooling/testing/bun-test.mts tooling/testing/coverage-report.test.ts',
 		reason: 'coverage collection, reporting, or policy changed',
 		matches: filePath => filePath === '.coverage-policy.json' || filePath === 'tooling/testing/coverage-report.mts' || filePath === 'tooling/testing/run-typescript-coverage.mts' || filePath === 'tooling/testing/run-solidity-bytecode-coverage.mts',
 	},
 	{
-		command: 'bun test tooling/ui/ui-split-workflows.test.ts',
+		command: 'bun ./tooling/testing/bun-test.mts tooling/ui/ui-split-workflows.test.ts',
 		reason: 'CI or coverage workflow wiring changed',
 		matches: filePath =>
 			filePath.startsWith('workflow/') ||
@@ -76,7 +77,7 @@ const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
 		command: 'bun run test:browser:smoke',
 		reason: 'production build or browser smoke behavior changed',
 		matches: filePath => filePath === 'tooling/ui/production.mts' || filePath === 'tooling/ui/appPaths.mts' || filePath === 'tooling/ui/browserSmoke.mts' || filePath === 'ui/coreShared/css/application-surfaces.css',
-		ownedTestOptions: { timeout: 300_000 },
+		ownedTestOptions: {},
 		ownedTestPaths: ['tooling/ui/browserSmoke.test.ts', 'tooling/ui/productionBuild.test.ts'],
 	},
 	{
@@ -91,7 +92,7 @@ const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
 		ownedTestPaths: ['tooling/ui/productionBuild.test.ts'],
 	},
 	{
-		command: 'bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ui/zoltar/ts/tests/protocol/uniswapQuoter.test.ts',
+		command: 'bun ./tooling/testing/bun-test.mts --preload ./bun-test-setup-ui.ts ui/zoltar/ts/tests/protocol/uniswapQuoter.test.ts',
 		reason: 'Uniswap quote selection behavior changed',
 		matches: filePath => filePath === 'ui/zoltarShared/ts/protocol/uniswapQuoter.ts',
 	},
@@ -99,7 +100,7 @@ const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
 		command: 'bun run test:integration:mainnet-fork',
 		reason: 'deterministic historical Uniswap routing changed; requires MAINNET_ARCHIVE_RPC_URL',
 		matches: filePath => filePath === 'ui/zoltarShared/ts/protocol/uniswapQuoter.ts' || filePath === 'ui/zoltar/ts/tests/protocol/uniswapQuoter.fork.test.ts',
-		ownedTestOptions: { environment: 'RUN_MAINNET_FORK_INTEGRATION_TESTS=1', timeout: 300_000 },
+		ownedTestOptions: { environment: 'RUN_MAINNET_FORK_INTEGRATION_TESTS=1' },
 		ownedTestPaths: ['ui/zoltar/ts/tests/protocol/uniswapQuoter.fork.test.ts'],
 		selectOnOwnedRename: true,
 	},
@@ -107,7 +108,7 @@ const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
 		command: 'bun run test:integration:mainnet',
 		reason: 'mutable Uniswap mainnet smoke coverage changed',
 		matches: filePath => filePath === 'ui/zoltar/ts/tests/protocol/uniswapQuoter.integration.test.ts',
-		ownedTestOptions: { environment: 'RUN_MAINNET_INTEGRATION_TESTS=1', timeout: 300_000 },
+		ownedTestOptions: { environment: 'RUN_MAINNET_INTEGRATION_TESTS=1' },
 		ownedTestPaths: ['ui/zoltar/ts/tests/protocol/uniswapQuoter.integration.test.ts'],
 		selectOnOwnedRename: true,
 	},
@@ -117,19 +118,19 @@ function directTestCommand(filePath: string) {
 	if (!/\.(?:fuzz|spec|test)\.(?:cts|mts|ts|tsx)$/.test(filePath)) return undefined
 	if (filePath.startsWith('augurScan/')) return `cd augurScan && bun test ${filePath.slice('augurScan/'.length)}`
 	const botMatch = /^bots\/([^/]+)\/(.+)$/.exec(filePath)
-	if (botMatch?.[1] !== undefined && botMatch[2] !== undefined) return `cd bots/${botMatch[1]} && bun test ${botMatch[2]}`
-	if (filePath.startsWith('solidity/ts/')) return `bun test --preload ./bun-test-setup-solidity.ts --timeout 300000 ${filePath}`
-	if (filePath.startsWith('ui/') || filePath.startsWith('tooling/ui/')) return `bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ${filePath}`
-	return `bun test ${filePath}`
+	if (botMatch?.[1] !== undefined && botMatch[2] !== undefined) return `cd bots/${botMatch[1]} && bun ../../tooling/testing/bun-test.mts ${botMatch[2]}`
+	if (filePath.startsWith('solidity/ts/')) return `bun ./tooling/testing/bun-test.mts --preload ./bun-test-setup.ts ${filePath}`
+	if (filePath.startsWith('ui/') || filePath.startsWith('tooling/ui/')) return `bun ./tooling/testing/bun-test.mts --preload ./bun-test-setup-ui.ts ${filePath}`
+	return `bun ./tooling/testing/bun-test.mts ${filePath}`
 }
 
 function specializedTestCommand(filePath: string, options: SpecializedTestOptions) {
 	const directCommand = directTestCommand(filePath)
 	if (directCommand === undefined) return undefined
 	const prerequisites = 'bun run ensure-contract-artifacts'
-	const flags = [`--timeout ${options.timeout.toString()}`, ...(options.testNamePattern === undefined ? [] : [`--test-name-pattern ${options.testNamePattern}`])].join(' ')
+	const flags = [...(options.timeout === undefined ? [] : [`--timeout ${options.timeout.toString()}`]), ...(options.testNamePattern === undefined ? [] : [`--test-name-pattern ${options.testNamePattern}`])].join(' ')
 	const commandWithoutTimeout = directCommand.replace(/ --timeout \d+/, '')
-	const commandWithOptions = commandWithoutTimeout.replace(/ ([^ ]+)$/, ` ${flags} $1`)
+	const commandWithOptions = commandWithoutTimeout.replace(/ ([^ ]+)$/, ` ${flags === '' ? '' : `${flags} `}$1`)
 	const environment = options.environment === undefined ? '' : `${options.environment} `
 	const packageCommand = /^(cd [^ ]+ && )(.+)$/.exec(commandWithOptions)
 	if (packageCommand?.[1] !== undefined && packageCommand[2] !== undefined) return `${prerequisites} && ${packageCommand[1]}${environment}${packageCommand[2]}`
@@ -284,10 +285,11 @@ function groupedTestCommands(testFiles: readonly string[]) {
 	return [...groups]
 		.map(([group, files]) => {
 			const paths = files.sort((left, right) => left.localeCompare(right)).join(' ')
-			if (group === 'augurScan' || group.startsWith('bots/')) return `cd ${group} && bun test ${paths}`
-			if (group === 'solidity') return `bun test --preload ./bun-test-setup-solidity.ts --timeout 300000 ${paths}`
-			if (group === 'ui') return `bun test --preload ./bun-test-setup-ui.ts --timeout 300000 ${paths}`
-			return `bun test ${paths}`
+			if (group === 'augurScan') return `cd ${group} && bun test ${paths}`
+			if (group.startsWith('bots/')) return `cd ${group} && bun ../../tooling/testing/bun-test.mts ${paths}`
+			if (group === 'solidity') return `bun ./tooling/testing/bun-test.mts --preload ./bun-test-setup.ts ${paths}`
+			if (group === 'ui') return `bun ./tooling/testing/bun-test.mts --preload ./bun-test-setup-ui.ts ${paths}`
+			return `bun ./tooling/testing/bun-test.mts ${paths}`
 		})
 		.sort((left, right) => left.localeCompare(right))
 }

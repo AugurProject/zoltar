@@ -90,7 +90,7 @@ function createTradingForm(overrides: Partial<TradingFormState> = {}): TradingFo
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {
 		address: zeroAddress,
-		chainId: '0x1',
+		chainId: '0xaa36a7',
 		ethBalanceAttoEth: 10n * 10n ** 18n,
 		wethBalanceAttoEth: 0n,
 		...overrides,
@@ -231,7 +231,7 @@ function TradingSectionNetworkHarness() {
 
 	return (
 		<>
-			<button type='button' onClick={() => setAccountState(createAccountState({ chainId: '0xaa36a7' }))}>
+			<button type='button' onClick={() => setAccountState(createAccountState({ chainId: '0x1' }))}>
 				Switch Test Network
 			</button>
 			<TradingSection
@@ -521,7 +521,7 @@ void describe('TradingSection', () => {
 		expect(mintedAmount).toBe('0.5')
 	})
 
-	void test('keeps minting disabled off mainnet and explains how to recover after the modal is already open', async () => {
+	void test('keeps minting disabled off Sepolia and explains how to recover after the modal is already open', async () => {
 		const renderedComponent = await renderIntoDocument(<TradingSectionNetworkHarness />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
@@ -543,8 +543,8 @@ void describe('TradingSection', () => {
 		mintSubmitButton = modalQueries.getByRole('button', { name: 'Mint complete sets' })
 		if (!(mintSubmitButton instanceof HTMLButtonElement)) throw new Error('Expected Mint complete sets transaction button after network switch')
 		expect(mintSubmitButton.disabled).toBe(true)
-		expect(mintSubmitButton.title).toBe('Switch to Ethereum mainnet.')
-		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(true)
+		expect(mintSubmitButton.title).toBe('Switch to Sepolia.')
+		expect(document.body.textContent?.includes('Switch to Sepolia')).toBe(true)
 	})
 
 	void test('uses the child fee horizon beyond question end for the mint share preview', async () => {

@@ -1,3 +1,56 @@
+import { statoblast_SecurityPoolForker_SecurityPoolForker } from '../../types/contractArtifact'
+import {
+	createCompleteSet,
+	redeemCompleteSet,
+	depositRepToVault,
+	depositToEscalationGame,
+	getSettlementCollateralAttoEth,
+	getTotalRepBackingUnits,
+	getRepToken,
+	getSecurityVault,
+	getSystemState,
+	getTotalAccruedFees,
+	getTotalClaimableVaultFeesAttoEth,
+	getTotalCapacityOwnershipAttoRep,
+	getShareTokenSupplyAttoShares,
+	getVaultCount,
+	backingUnitsToAttoRep,
+	redeemFees,
+	redeemRepFromVault,
+	updateVaultFees,
+} from '../../testSupport/simulator/utils/contracts/securityPool'
+import { isIgnorableLogDecodeError } from '../logDecodeErrors'
+import { getTotalRepPurchasedAttoRep } from '../../testSupport/simulator/utils/contracts/auction'
+import { forkUniverse, getMigrationRepBalanceAttoRep, getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
+import {
+	claimAuctionProceeds,
+	createChildUniverse,
+	finalizeTruthAuction,
+	getMigratedAttoRep,
+	getOwnForkRepBuckets,
+	getQuestionOutcome,
+	getSecurityPoolForkerForkData,
+	initiateSecurityPoolFork,
+	claimForkedEscalationDeposits,
+	migrateRepToZoltar,
+	migrateVault,
+	settleAuctionBids,
+	startTruthAuction,
+} from '../../testSupport/simulator/utils/contracts/securityPoolForker'
+import { SystemState } from '../../testSupport/simulator/types/statoblastTypes'
+import { QuestionOutcome } from '../../testSupport/simulator/types/types'
+import { tickToPrice } from '@zoltar/statoblast-shared/statoblast/truthAuctionTickMath'
+import { getEthRaiseCapAttoEth, getQuestionEndDate, OperationType, participateAuction, migrateShares } from '../../testSupport/simulator/utils/contracts/statoblast'
+import { createQuestion, getQuestionId } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { deployOriginSecurityPool, getInfraContractAddresses, getSecurityPoolAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
+import { approveAndDepositRepToVault, handleOracleReporting, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { addressString } from '../../testSupport/simulator/utils/bigint'
+import { approveToken, contractExists, getChildUniverseId, getERC20Balance, getETHBalance } from '../../testSupport/simulator/utils/utilities'
+import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
+import { createWriteClient } from '../../testSupport/simulator/utils/clients'
+import { decodeEventLog } from '@zoltar/core-shared/evm/ethereum'
+import { approximatelyEqual, strictEqualTypeSafe } from '../../testSupport/simulator/utils/testUtils'
+import assert from '../../testSupport/simulator/utils/assert'
 import { beforeEach, describe, test } from 'bun:test'
 import { encodeDeployData, encodeFunctionData, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import {
@@ -27,83 +80,9 @@ describe('Statoblast: truth auction', () => {
 	if (feeEpochStorage === undefined) throw new Error('SecurityPool storage layout is missing feeEpochEndTime')
 	const feeEpochEndTimeStorageSlot = BigInt(feeEpochStorage.slot)
 
-	const assert: StatoblastTruthAuctionFixture['assert'] = fixture.assert
-
-	const approximatelyEqual: StatoblastTruthAuctionFixture['approximatelyEqual'] = fixture.approximatelyEqual
-
-	const strictEqualTypeSafe: StatoblastTruthAuctionFixture['strictEqualTypeSafe'] = fixture.strictEqualTypeSafe
-
 	const {
-		decodeEventLog,
-		createWriteClient,
-		DAY,
-		GENESIS_REPUTATION_TOKEN,
-		TEST_ADDRESSES,
 		formatStorageSlot,
 		getMappingStorageSlot,
-		approveToken,
-		contractExists,
-		getChildUniverseId,
-		getERC20Balance,
-		getETHBalance,
-		addressString,
-		approveAndDepositRepToVault,
-		handleOracleReporting,
-		manipulatePriceOracle,
-		manipulatePriceOracleAndPerformOperation,
-		triggerOwnGameFork,
-		deployOriginSecurityPool,
-		getInfraContractAddresses,
-		getSecurityPoolAddresses,
-		createQuestion,
-		getQuestionId,
-		getEthRaiseCapAttoEth,
-		getQuestionEndDate,
-		OperationType,
-		participateAuction,
-		tickToPrice,
-		QuestionOutcome,
-		SystemState,
-		claimAuctionProceeds,
-		createChildUniverse,
-		finalizeTruthAuction,
-		getMigratedAttoRep,
-		getOwnForkRepBuckets,
-		getQuestionOutcome,
-		getSecurityPoolForkerForkData,
-		initiateSecurityPoolFork,
-		claimForkedEscalationDeposits,
-		migrateRepToZoltar,
-		migrateVault,
-		settleAuctionBids,
-		startTruthAuction,
-		forkUniverse,
-		getMigrationRepBalanceAttoRep,
-		getRepTokenAddress,
-		getTotalTheoreticalSupply,
-		getZoltarAddress,
-		getTotalRepPurchasedAttoRep,
-		isIgnorableLogDecodeError,
-		createCompleteSet,
-		migrateShares,
-		redeemCompleteSet,
-		depositRepToVault,
-		depositToEscalationGame,
-		getSettlementCollateralAttoEth,
-		getTotalRepBackingUnits,
-		getRepToken,
-		getSecurityVault,
-		getSystemState,
-		getTotalAccruedFees,
-		getTotalClaimableVaultFeesAttoEth,
-		getTotalCapacityOwnershipAttoRep,
-		getShareTokenSupplyAttoShares,
-		getVaultCount,
-		backingUnitsToAttoRep,
-		redeemFees,
-		redeemRepFromVault,
-		updateVaultFees,
-		statoblast_SecurityPoolForker_SecurityPoolForker,
 		getMigrationProxyAddressAbi,
 		PRICE_PRECISION,
 		reportBond,

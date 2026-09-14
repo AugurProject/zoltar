@@ -1,3 +1,28 @@
+import { strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
+import { getQuestionEndDate } from '../testSupport/simulator/utils/contracts/statoblast'
+import { getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
+import { forkUniverse, getZoltarAddress, getZoltarForkThreshold } from '../testSupport/simulator/utils/contracts/zoltar'
+import { createQuestion, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import {
+	createCompleteSet,
+	getAwaitingForkContinuation,
+	getRepToken,
+	getSecurityPoolsEscalationGame,
+	getSettlementCollateralAttoEth,
+	getSystemState,
+	getTotalAccruedFees,
+	getTotalClaimableVaultFeesAttoEth,
+	redeemCompleteSet,
+	updateSettlementCollateral,
+	updateVaultFees,
+} from '../testSupport/simulator/utils/contracts/securityPool'
+import { createChildUniverse, finalizeTruthAuction, initiateSecurityPoolFork, migrateRepToZoltar, migrateVault, migrateVaultWithUnresolvedEscalation, startTruthAuction } from '../testSupport/simulator/utils/contracts/securityPoolForker'
+import { approveToken, getChildUniverseId } from '../testSupport/simulator/utils/utilities'
+import { addressString } from '../testSupport/simulator/utils/bigint'
+import { SystemState } from '../testSupport/simulator/types/statoblastTypes'
+import { QuestionOutcome } from '../testSupport/simulator/types/types'
+import { DAY, GENESIS_REPUTATION_TOKEN } from '../testSupport/simulator/utils/constants'
+import assert from '../testSupport/simulator/utils/assert'
 import { describe, test } from 'bun:test'
 import { ReputationToken_ReputationToken, statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool, Zoltar_Zoltar } from '../types/contractArtifact'
 import { addRepToMigrationBalance, getMigrationRepBalanceAttoRep, splitMigrationRep } from '../testSupport/simulator/utils/contracts/zoltar'
@@ -6,46 +31,7 @@ import { useStatoblastForkMigrationFixture } from './statoblast/fixture'
 
 describe('Child-pool fee epoch regression', () => {
 	const fixture = useStatoblastForkMigrationFixture()
-	const {
-		DAY,
-		QuestionOutcome,
-		SystemState,
-		assert,
-		addressString,
-		approveToken,
-		createChildUniverse,
-		createCompleteSet,
-		createQuestion,
-		finalizeTruthAuction,
-		forkUniverse,
-		GENESIS_REPUTATION_TOKEN,
-		getAwaitingForkContinuation,
-		getChildUniverseId,
-		getQuestionId,
-		getRepToken,
-		getSecurityPoolAddresses,
-		getSecurityPoolsEscalationGame,
-		getQuestionEndDate,
-		getSettlementCollateralAttoEth,
-		getSystemState,
-		getTotalAccruedFees,
-		getTotalClaimableVaultFeesAttoEth,
-		getZoltarAddress,
-		getZoltarForkThreshold,
-		initiateSecurityPoolFork,
-		migrateRepToZoltar,
-		migrateVault,
-		migrateVaultWithUnresolvedEscalation,
-		redeemCompleteSet,
-		setupFinalizedTruthAuctionWithMixedBids,
-		setupOwnForkWithEscrow,
-		startTruthAuction,
-		statoblastSecurityMultiplierBps,
-		strictEqualTypeSafe,
-		triggerExternalForkForSecurityPool,
-		updateSettlementCollateral,
-		updateVaultFees,
-	} = fixture
+	const { setupFinalizedTruthAuctionWithMixedBids, setupOwnForkWithEscrow, statoblastSecurityMultiplierBps, triggerExternalForkForSecurityPool } = fixture
 
 	test('resolved child without a continuation game preserves collateral after activation', async () => {
 		const { client, mockWindow, questionId, securityPoolAddresses } = fixture

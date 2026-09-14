@@ -1,3 +1,4 @@
+import { assertNetworkEnabled } from './networkAvailability.js'
 import type { Address, EIP1193Provider } from '@zoltar/core-shared/evm/ethereum'
 import { tryParseAddressInput } from '../forms/inputs.js'
 
@@ -39,6 +40,7 @@ export async function readInjectedChainId(provider: InjectedEthereum) {
 
 export async function switchInjectedChain(provider: InjectedEthereum, chainId: string) {
 	if (!/^0x[0-9a-fA-F]+$/.test(chainId)) throw new Error('Requested wallet chain ID is invalid')
+	assertNetworkEnabled(chainId)
 	await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId }] })
 }
 

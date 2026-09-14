@@ -1,9 +1,9 @@
 #!/usr/bin/env bun
 import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
+import { exchanges } from 'ccxt'
+import { createCentralizedExchangeFactory } from '@zoltar/bot-shared/monitoring/centralized-exchange-factory'
 import { parseApprovedUniverses } from '@zoltar/bot-shared/monitoring/universe-policy'
-
 import { parseRootMarketSettings } from '#config/canonical-deployment'
-
 import { recordSystemDeploymentCheck } from '../core/deployment-observation.ts'
 
 import { parseDesiredPools, parseStrategy, serializedSettings, type OperatorSettings } from '#config/settings'
@@ -36,6 +36,8 @@ import { observeConstantProductMarkets, readConstantProductPairWithQuorum, requi
 import { clearOrphanedDexEvidenceForHeadReplacement, discardDexMarketObservations, estimateMarketConsensus, marketObservationsForAsset, requireCanonicalBlock } from '@zoltar/bot-shared/monitoring/market-consensus'
 import { availableSettledValues, settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { ConnectivityDegradedError, operationalFailureDisposition, pollUntilStopped, retryDelayMilliseconds } from '@zoltar/bot-shared/monitoring/resilience'
+
+const centralizedExchangeFactory = createCentralizedExchangeFactory(exchanges)
 
 /** The liquidator only reserves a signer while live execution is enabled; dry-run processes never hold signer locks. */
 const LIQUIDATOR_PROCESS_LOCK_OPTIONS: BotProcessLockOptions = { label: 'liquidator', signerLocksInDryRun: false }
@@ -255,7 +257,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 						const results = []
 						for (const configuration of marketConfigurations(settings)) {
 							const asset = getAddress(configuration.assetAddress)
-							const centralized = await observeCentralizedMarkets(configuration, asset, settings.network.chainId)
+							const centralized = await observeCentralizedMarkets(configuration, asset, settings.network.chainId, centralizedExchangeFactory)
 							const dex = await observeConfiguredDex(configuration, { hash: block.hash, number: block.number, timestamp: block.timestamp })
 							results.push({
 								assetId: asset,
@@ -564,7 +566,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 				for (const configuration of activeMarketConfigurations) {
 					if (shutdown.isRequested()) return true
 					const asset = getAddress(configuration.assetAddress)
-					const centralizedMarket = await observeCentralizedMarkets(configuration, asset, settings.network.chainId)
+					const centralizedMarket = await observeCentralizedMarkets(configuration, asset, settings.network.chainId, centralizedExchangeFactory)
 					if (shutdown.isRequested()) return true
 					if (centralizedMarket !== undefined) state.centralizedMarketsByAsset.set(asset.toLowerCase(), centralizedMarket)
 					newMarketObservations.push(...centralizedMarketConsensusObservations(centralizedMarket))

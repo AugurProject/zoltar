@@ -1,4 +1,3 @@
-import ccxt, { type Exchange } from 'ccxt'
 import { bigintToSafeNumber } from '../ethereum.ts'
 import { integer, record } from '../infrastructure/json-validation.ts'
 import { aggregateCentralizedMarketObservations } from './centralized-market-aggregation.ts'
@@ -88,13 +87,12 @@ type MarketTicker = {
 	timestamp: number | undefined
 }
 
-type MarketExchange = {
+export type MarketExchange = {
 	fetchOrderBook: (symbol: string, limit: number) => Promise<MarketOrderBook>
 	fetchTicker: (symbol: string) => Promise<MarketTicker>
 	loadMarkets: () => Promise<unknown>
 }
 export type CentralizedExchangeFactory = (exchangeId: string, timeoutMilliseconds: number) => MarketExchange
-const exchangeCache = new Map<string, MarketExchange>()
 
 function decimalEth(value: unknown, label: string) {
 	if (typeof value !== 'string' || !/^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(value)) {
@@ -420,38 +418,6 @@ function tickerPrice(ticker: MarketTicker) {
 	return requiredPositiveNumber(ticker.last, 'ETH reference ticker')
 }
 
-function ccxtExchangeFactory(exchangeId: string, timeoutMilliseconds: number): MarketExchange {
-	const cacheKey = `${exchangeId}:${timeoutMilliseconds.toString()}`
-	const cached = exchangeCache.get(cacheKey)
-	if (cached !== undefined) return cached
-	const candidate = Reflect.get(ccxt, exchangeId)
-	if (typeof candidate !== 'function') throw new Error(`CCXT exchange ${exchangeId} is not supported`)
-	const ExchangeConstructor = candidate as new (options: { enableRateLimit: boolean; timeout: number }) => Exchange
-	const exchange = new ExchangeConstructor({ enableRateLimit: true, timeout: timeoutMilliseconds })
-	const wrapped: MarketExchange = {
-		fetchOrderBook: async (symbol, limit) => {
-			const orderBook = await exchange.fetchOrderBook(symbol, limit)
-			return {
-				asks: orderBook.asks,
-				bids: orderBook.bids,
-				timestamp: optionalTimestamp(orderBook.timestamp),
-			}
-		},
-		fetchTicker: async symbol => {
-			const ticker = await exchange.fetchTicker(symbol)
-			return {
-				ask: ticker.ask,
-				bid: ticker.bid,
-				last: ticker.last,
-				timestamp: optionalTimestamp(ticker.timestamp),
-			}
-		},
-		loadMarkets: () => exchange.loadMarkets(),
-	}
-	exchangeCache.set(cacheKey, wrapped)
-	return wrapped
-}
-
 async function observeSource(source: CentralizedMarketSource, settings: CentralizedMarketSettings, assetId: string, chainId: number, factory: CentralizedExchangeFactory, observedAt: number): Promise<CentralizedMarketObservation> {
 	const exchange = factory(source.exchangeId, settings.requestTimeoutMilliseconds)
 	await exchange.loadMarkets()
@@ -480,7 +446,7 @@ async function observeSource(source: CentralizedMarketSource, settings: Centrali
 	}
 }
 
-export async function observeCentralizedMarkets(settings: CentralizedMarketSettings, assetId: string, chainId: number, factory: CentralizedExchangeFactory = ccxtExchangeFactory, now?: number): Promise<CentralizedMarketEstimate | undefined> {
+export async function observeCentralizedMarkets(settings: CentralizedMarketSettings, assetId: string, chainId: number, factory: CentralizedExchangeFactory, now?: number): Promise<CentralizedMarketEstimate | undefined> {
 	if (settings.sources.length === 0) return undefined
 	if (settings.assetAddress.toLowerCase() !== assetId.toLowerCase() || settings.assetChainId !== chainId) throw new Error('Centralized market configuration does not match the exact REP asset and chain')
 	const observedAt = now ?? Date.now()

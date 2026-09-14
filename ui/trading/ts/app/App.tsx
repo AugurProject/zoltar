@@ -1,3 +1,4 @@
+import { MainnetDisabledNotice } from '@zoltar/ui-core-shared/app/components/MainnetDisabledNotice.js'
 import { securityPoolAddressFromRoute } from '../features/liveTradingControllerHelpers.js'
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 import type { PublicClient } from '@zoltar/core-shared/evm/ethereum'
@@ -304,6 +305,7 @@ export function App({
 								}
 								settings={settingsMenu}
 							/>
+							<MainnetDisabledNotice />
 							{showUniverseSelector ? <WalletSummary simulation={simulationController !== undefined} summary={walletSummary} onRetry={retryWalletSummary} /> : null}
 						</article>
 					</section>

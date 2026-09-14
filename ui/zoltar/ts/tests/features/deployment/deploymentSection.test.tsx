@@ -81,12 +81,12 @@ describe('DeploymentSection', () => {
 		expect(rendered.container.querySelector(`#${detailId}`)?.textContent).toBe('Connect wallet to continue.')
 	})
 
-	test('shows the network-guard branch when account is present but not on mainnet', async () => {
+	test('shows the network-guard branch when account is present but not on Sepolia', async () => {
 		const deploymentStep = createDeploymentStep({ id: 'multicall3', deployed: false, dependencies: [] })
 		const rendered = await renderIntoDocument(<DeploymentSection title='Deployment' steps={[deploymentStep]} allSteps={[deploymentStep]} accountAddress={zeroAddress} busyStepId={undefined} deploymentStateReady={true} isOnActiveAppChain={false} onDeploy={async () => undefined} />)
 		cleanupRendered = rendered.cleanup
 
-		expect(rendered.container.textContent).toContain('Switch to Ethereum mainnet.')
+		expect(rendered.container.textContent).toContain('Switch to Sepolia.')
 		expectTransactionButtonDisabled(document.body, 'Deploy multicall3')
 	})
 

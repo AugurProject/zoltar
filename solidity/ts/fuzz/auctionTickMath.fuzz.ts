@@ -1,9 +1,9 @@
-import { beforeAll, describe, setDefaultTimeout, test } from 'bun:test'
+import { beforeAll, describe, test } from 'bun:test'
 import assert from '../testSupport/simulator/utils/assert'
 import { type Address } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '../types/contractArtifact'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
-import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
+import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { ensureInfraDeployed } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { getUniformPriceDualCapBatchAuctionAddress } from '../testSupport/simulator/utils/contracts/deployments'
@@ -34,8 +34,6 @@ const INDEPENDENT_PRICE_VECTORS = [
 	[511n, 1052425442063132635n],
 	[1000n, 1105165392603232697n],
 ] as const
-
-setDefaultTimeout(TEST_TIMEOUT_MS)
 
 const nextRandomUint32 = (state: bigint): bigint => (state * 1664525n + 1013904223n) & 0xffffffffn
 

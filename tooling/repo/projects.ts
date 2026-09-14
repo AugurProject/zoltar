@@ -40,7 +40,7 @@ const packageInputs = (projectPath: string) => [`${projectPath}/package.json`, `
 const packageTask = (projectPath: string, scriptName: string, options: { readonly cacheInputs?: readonly string[]; readonly covers?: readonly ProjectTaskName[]; readonly groups?: readonly string[]; readonly outputs?: readonly string[] } = {}): ProjectTask => ({
 	command: ['bun', 'run', scriptName],
 	cwd: projectPath,
-	inputs: [...packageInputs(projectPath), `${projectPath}/**`],
+	inputs: [...packageInputs(projectPath), 'shared/tsconfig*.json', `${projectPath}/**`],
 	...(options.covers === undefined ? {} : { covers: options.covers }),
 	...(options.outputs === undefined ? {} : { outputs: options.outputs }),
 	...(options.groups === undefined ? {} : { groups: options.groups }),
@@ -92,7 +92,7 @@ export const projects: readonly Project[] = [
 				['bun', 'run', 'check:static'],
 				['package.json', 'biome.json', 'knip.json', '.prettierrc.json', '.coverage-policy.json', '.vscode/**', 'tsconfig.json', 'tsconfig.scripts.json', 'bun-test-setup*.ts', 'scripts/**', 'docs/**', 'tooling/**', 'shared/*/ts/**', 'solidity/ts/**', 'ui/**', 'bots/**', 'augurScan/**'],
 			),
-			typecheck: rootTask(['bun', 'run', 'tsc:root'], ['package.json', 'tsconfig.scripts.json', 'docs/tsconfig.json', 'tooling/**']),
+			typecheck: rootTask(['bun', 'run', 'tsc:root'], ['package.json', 'shared/tsconfig*.json', 'tsconfig.scripts.json', 'docs/tsconfig.json', 'tooling/**']),
 			knip: rootTask(['bun', 'run', 'knip'], ['package.json', 'knip.json', 'tooling/**', 'shared/*/ts/**', 'solidity/ts/**', 'ui/**', 'bots/**', 'augurScan/**']),
 			audit: rootTask(['bun', 'audit'], ['package.json', 'bun.lock'], ['core-audit']),
 		},
@@ -107,7 +107,7 @@ export const projects: readonly Project[] = [
 			dependencies: entry.dependencies,
 			tasks: {
 				setup: packageInstallTask(entry.path),
-				build: packageTask(entry.path, 'build', { cacheInputs: [...packageInputs(entry.path), `${entry.path}/tsconfig.json`, `${entry.path}/ts/**`], groups: ['generated', 'component-artifacts'], outputs: [`${entry.path}/js`] }),
+				build: packageTask(entry.path, 'build', { cacheInputs: [...packageInputs(entry.path), 'shared/tsconfig*.json', `${entry.path}/tsconfig.json`, `${entry.path}/ts/**`], groups: ['generated', 'component-artifacts'], outputs: [`${entry.path}/js`] }),
 				typecheck: { ...packageTask(entry.path, 'build'), command: ['bun', 'x', 'tsc', '--project', 'tsconfig.json', '--noEmit'] },
 				audit: packageAuditTask(entry.path, ['core-audit']),
 				'dependency-update': sharedDependencyTask(entry.path),
