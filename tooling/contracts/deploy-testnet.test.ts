@@ -3,7 +3,7 @@ import { getAddress, getCreateAddress, keccak256, privateKeyToAccount, type Addr
 import { getBootstrapDescendantAddresses, getInfraContractAddresses } from '../../ui/statoblastShared/ts/protocol/deploymentHelpers.ts'
 import type { WriteClient } from '../../ui/coreShared/ts/wallet/chainBackend.ts'
 import { SEPOLIA_NETWORK_PROFILE } from '../../ui/coreShared/ts/wallet/networkProfile.ts'
-import { PROXY_DEPLOYER_RUNTIME_CODE } from '../../ui/zoltarShared/ts/protocol/deployment.ts'
+import { getDeploymentSteps as getZoltarDeploymentSteps, PROXY_DEPLOYER_RUNTIME_CODE } from '../../ui/zoltarShared/ts/protocol/deployment.ts'
 import {
 	assertBootstrapDescendantCode,
 	assertConfirmedProxyCode,
@@ -12,7 +12,6 @@ import {
 	assertNoPendingDeployerTransactions,
 	CONSERVATIVE_DEPLOYMENT_GAS,
 	createBudgetedTransactionSender,
-	createCompleteDeploymentPlan,
 	createDeploymentBudget,
 	createDeploymentReceiptWaiter,
 	DEPLOYMENT_RECEIPT_TIMEOUT_MILLISECONDS,
@@ -28,6 +27,7 @@ import {
 	resolveCanonicalProxyDeployerForPreflight,
 	runDeploymentPlan,
 } from './deploy-testnet.mts'
+import { createCompleteDeploymentPlan } from './deployment-plan.mts'
 import { getUniswapDeployment } from './uniswap-deployment.mts'
 
 const FIRST_ADDRESS = getAddress('0x0000000000000000000000000000000000000001')
@@ -559,6 +559,7 @@ describe('testnet deployment plan', () => {
 			infrastructure.zoltarQuestionData,
 		]
 		const requiredAddresses = [
+			...getZoltarDeploymentSteps(SEPOLIA_NETWORK_PROFILE).map(step => step.address),
 			...directInfrastructure,
 			SEPOLIA_NETWORK_PROFILE.wethAddress,
 			SEPOLIA_NETWORK_PROFILE.genesisRepTokenAddress,
@@ -585,7 +586,7 @@ describe('testnet deployment plan', () => {
 		expect(bootstrapDescendants.securityPoolCreationCodeFirstChunk).toBe(getCreateAddress({ from: bootstrapDescendants.securityPoolDeploymentWorker, nonce: 1n }))
 		expect(bootstrapDescendants.securityPoolCreationCodeSecondChunk).toBe(getCreateAddress({ from: bootstrapDescendants.securityPoolDeploymentWorker, nonce: 2n }))
 		expect(plan.some(step => step.id === 'escalationGameFactory')).toBe(true)
-		expect(plan).toHaveLength(24)
+		expect(plan).toHaveLength(25)
 		expect(new Set(plan.map(step => step.id)).size).toBe(plan.length)
 		expect(new Set(plan.map(step => step.address)).size).toBe(plan.length)
 		expect(Object.keys(CONSERVATIVE_DEPLOYMENT_GAS).sort()).toEqual(plan.map(step => step.id).sort())
