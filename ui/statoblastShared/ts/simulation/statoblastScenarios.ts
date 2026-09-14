@@ -526,10 +526,10 @@ async function seedSecurityPoolX2AuctionScenario({
 
 	await reportBootstrapProgress(onProgress, 'Preparing fork-auction seed pool', 0.985)
 	await getScenarioProtocol().approveErc20(writeClient, profile.genesisRepTokenAddress, parentPool.securityPoolAddress, SECURITY_POOL_X2_AUCTION_EXTRA_REP_DEPOSIT, 'approveRep')
-	await getScenarioProtocol().depositRepToVaultToSecurityPool(writeClient, parentPool.securityPoolAddress, SECURITY_POOL_X2_AUCTION_EXTRA_REP_DEPOSIT)
+	await getScenarioProtocol().depositRepToVaultToSecurityPool(writeClient, parentPool.securityPoolAddress, SECURITY_POOL_X2_AUCTION_EXTRA_REP_DEPOSIT, (await loadRequiredSecurityVault(readClient, parentPool.securityPoolAddress, primaryAccount, 'primary auction vault')).targetBackingFactorBps)
 	const secondaryWriteClient = createWriteClient(secondaryAccount)
 	await getScenarioProtocol().approveErc20(secondaryWriteClient, profile.genesisRepTokenAddress, parentPool.securityPoolAddress, SECURITY_POOL_X2_AUCTION_UNMIGRATED_REP_DEPOSIT, 'approveRep')
-	await getScenarioProtocol().depositRepToVaultToSecurityPool(secondaryWriteClient, parentPool.securityPoolAddress, SECURITY_POOL_X2_AUCTION_UNMIGRATED_REP_DEPOSIT)
+	await getScenarioProtocol().depositRepToVaultToSecurityPool(secondaryWriteClient, parentPool.securityPoolAddress, SECURITY_POOL_X2_AUCTION_UNMIGRATED_REP_DEPOSIT, (await loadRequiredSecurityVault(readClient, parentPool.securityPoolAddress, secondaryAccount, 'secondary auction vault')).targetBackingFactorBps)
 	await getScenarioProtocol().createCompleteSetInSecurityPool(createWriteClient(secondaryAccount), parentPool.securityPoolAddress, 20n * 10n ** 18n)
 
 	const universeSummary = await getScenarioProtocol().loadZoltarUniverseSummary(readClient, parentPool.universeId)

@@ -250,6 +250,8 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 		expect(documentQueries.getByText('Failed to load security vault')).toBeTruthy()
 		expect(documentQueries.queryByText('Refresh the vault to use these actions.')).toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Deposit REP' }).getAttribute('aria-describedby')).toBe(retryReason.id)
+		expect(documentQueries.getByRole('button', { name: 'Adjust backing factor' }).getAttribute('aria-describedby')).toBe(retryReason.id)
+		expectTransactionButtonDisabled(document.body, 'Adjust backing factor')
 
 		await act(() => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Retry' }))

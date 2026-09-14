@@ -156,6 +156,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 	const poolPlan = scenario === 'security-pool' ? [{ question: 'Will this resolve?' }] : [{ question: 'Will this resolve? (securitypoolx2 #1)' }, { question: 'Will this resolve? (securitypoolx2 #2)' }]
 	const repDeposits: Record<Address, Record<Address, bigint>> = {}
 	const capacityOwnershipAttoReps: Record<Address, Record<Address, bigint>> = {}
+	const savedTargets: Record<Address, Record<Address, bigint>> = {}
 	const pendingOperations: Record<Address, { targetVault: Address; amount: bigint; operationId: bigint }> = {}
 	const pendingReportIds: Record<Address, bigint> = {}
 	type PendingReportMock = { currentAmount1: bigint; currentAmount2: bigint; currentReporter: Address; reportTimestamp: bigint; settlementTime: bigint }
@@ -288,6 +289,10 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 			state.callLog.depositRepToVaultToSecurityPool += 1
 			const vaultAddress = vaultAddressByPool[poolAddress]?.find((vaultAddressCandidate: Address) => vaultAddressCandidate === client.account) ?? vaultAddressByPool[poolAddress]?.[0]
 			if (vaultAddress !== undefined) {
+				const savedTarget = savedTargets[poolAddress]?.[vaultAddress]
+				if (savedTarget !== undefined && savedTarget !== targetHealthFactorBps) throw new Error('Use saved vault target')
+				savedTargets[poolAddress] ??= {}
+				savedTargets[poolAddress][vaultAddress] = targetHealthFactorBps
 				repDeposits[poolAddress] ??= {}
 				repDeposits[poolAddress][vaultAddress] = amount
 				capacityOwnershipAttoReps[poolAddress] ??= {}
@@ -458,6 +463,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 			state.callLog.loadSecurityVaultDetails += 1
 			return {
 				currentRetentionRate: 0n,
+				targetBackingFactorBps: savedTargets[securityPoolAddress]?.[vaultAddress] ?? 0n,
 				disputeStakedAttoRep: 0n,
 				managerAddress: getManagerForPool(securityPoolAddress),
 				totalRepBackingUnits: 0n,
