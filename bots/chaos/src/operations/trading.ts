@@ -620,10 +620,7 @@ function protocolQuestionDeadline(snapshot: EcosystemSnapshot, pool: PoolSnapsho
 	return question === undefined ? undefined : (amount(question.endTime) - 1n).toString()
 }
 
-function ceilDivide(numerator: bigint, denominator: bigint) {
-	if (denominator <= 0n) return undefined
-	return divideUp(numerator, denominator)
-}
+const ceilDivide = (numerator: bigint, denominator: bigint) => (denominator <= 0n ? undefined : divideUp(numerator, denominator))
 
 function quoteExactInput(pair: PairSnapshot, yesForNo: boolean, input: bigint) {
 	const reserveIn = amount(yesForNo ? pair.effectiveYesReserve : pair.effectiveNoReserve)

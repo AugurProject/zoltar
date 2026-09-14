@@ -48,9 +48,7 @@ type RuntimeResources = {
 	submissionPreflightChecks: readonly EndpointCheck[]
 }
 
-function errorMessage(error: unknown) {
-	return formatErrorMessage(error).slice(0, 1_500)
-}
+const errorMessage = (error: unknown) => formatErrorMessage(error).slice(0, 1_500)
 
 function configuredWallet(settings: OperatorSettings): Address | undefined {
 	return settings.privateKey === undefined ? undefined : privateKeyToAccount(settings.privateKey).address
