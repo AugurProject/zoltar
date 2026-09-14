@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test'
-import { readFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { cp, mkdir, mkdtemp, readFile, rm, symlink } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
+import { dockerInstructions, parseDockerfile, requireDockerStage } from '../../../tooling/testing/packaging-parsers.ts'
 
 const windowsLauncher = join(import.meta.dir, '..', '..', 'start.bat')
 const rootDockerIgnore = join(import.meta.dir, '..', '..', '..', '.dockerignore')
@@ -11,6 +13,27 @@ const schemaFile = join(import.meta.dir, '..', '..', 'schema.sql')
 const rootGitIgnore = join(import.meta.dir, '..', '..', '..', '.gitignore')
 
 describe('Docker packaging', () => {
+	test('loads the shared Ethereum module from the runtime image source copies', async () => {
+		const repositoryRoot = join(import.meta.dir, '..', '..', '..')
+		const runtime = requireDockerStage(parseDockerfile(await readFile(dockerfile, 'utf8')), 'runtime')
+		const workspace = await mkdtemp(join(tmpdir(), 'augurscan-runtime-'))
+		try {
+			for (const copy of dockerInstructions(runtime, 'COPY').filter(value => value.startsWith('shared/'))) {
+				const [source, destination] = copy.split(/\s+/u)
+				if (source === undefined || destination === undefined) throw new Error(`Invalid shared source COPY: ${copy}`)
+				const target = join(workspace, destination)
+				await mkdir(dirname(target), { recursive: true })
+				await cp(join(repositoryRoot, source), target, { recursive: true })
+			}
+			await symlink(join(repositoryRoot, 'node_modules'), join(workspace, 'node_modules'), 'dir')
+			const result = Bun.spawnSync([process.execPath, '-e', "await import('./shared/core/ts/evm/ethereum.ts')"], { cwd: workspace, stdout: 'pipe', stderr: 'pipe' })
+			expect(result.stderr.toString()).toBe('')
+			expect(result.exitCode).toBe(0)
+		} finally {
+			await rm(workspace, { recursive: true, force: true })
+		}
+	})
+
 	test('provides a location-independent Windows launcher', async () => {
 		const source = (await readFile(windowsLauncher, 'utf8')).replaceAll('\r\n', '\n')
 		expect(source).toContain('pushd "%~dp0"')
