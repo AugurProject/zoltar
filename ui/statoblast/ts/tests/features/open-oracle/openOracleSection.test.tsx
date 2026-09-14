@@ -515,6 +515,20 @@ void describe('OpenOracleSection', () => {
 		}
 	})
 
+	test('shows an unavailable stored-state report without claiming the directory is empty', async () => {
+		const domEnvironment = installDomEnvironment()
+		const message = 'Oracle report #2 is unavailable: it did not enable stored state and dispute history'
+		const rendered = await renderIntoDocument(<OpenOracleSection {...createOpenOracleSectionProps({ loadBrowseReports: async () => ({ ...createEmptyBrowsePage(), reportCount: 1n, unavailableReports: [{ reportId: 2n, message }] }) })} />)
+		try {
+			await flushAsyncWork()
+			expect(rendered.container.textContent).toContain(message)
+			expect(rendered.container.textContent).not.toContain('No Open Oracle reports found.')
+		} finally {
+			await rendered.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
+
 	void test('shows failed browse loads with retry instead of a confirmed empty state', async () => {
 		const domEnvironment = installDomEnvironment()
 		let browseLoadAttempts = 0
@@ -528,15 +542,13 @@ void describe('OpenOracleSection', () => {
 		const rendered = await renderIntoDocument(<OpenOracleSection {...createOpenOracleSectionProps()} />)
 
 		try {
-			await Promise.resolve()
-			await Promise.resolve()
+			await flushAsyncWork()
 			const documentQueries = within(document.body)
 			expect(documentQueries.getByRole('alert', { name: /Report summary service unavailable.*Retry/ })).not.toBeNull()
 			expect(documentQueries.queryByText('No Open Oracle reports found.')).toBeNull()
 
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Retry' }))
-			await Promise.resolve()
-			await Promise.resolve()
+			await flushAsyncWork()
 			expect(browseLoadAttempts).toBe(2)
 			expect(documentQueries.queryByText('No Open Oracle reports found.')).toBeNull()
 		} finally {
@@ -561,10 +573,10 @@ void describe('OpenOracleSection', () => {
 
 		try {
 			await act(async () => {
-				await Promise.resolve()
-				await Promise.resolve()
+				await new Promise(resolve => setTimeout(resolve, 0))
 			})
 			const documentQueries = within(document.body)
+			await flushAsyncWork()
 			expect(documentQueries.getByRole('status', { name: 'No Open Oracle reports found.' })).not.toBeNull()
 
 			await act(() => {
@@ -587,6 +599,7 @@ void describe('OpenOracleSection', () => {
 				thirdEnvironmentLoad.resolve(createEmptyBrowsePage())
 				await thirdEnvironmentLoad.promise
 			})
+			await flushAsyncWork()
 			expect(documentQueries.getByRole('status', { name: 'No Open Oracle reports found.' })).not.toBeNull()
 			expect(browseLoadAttempts).toBe(3)
 		} finally {

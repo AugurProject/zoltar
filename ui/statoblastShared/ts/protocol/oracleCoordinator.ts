@@ -13,7 +13,7 @@ import type { OpenOracleActionResult, OracleManagerDetails, OracleQueueOperation
 import { requireStagedOperationTupleArray } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 import { type WriteContractClient, readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { getInfraContractAddresses } from './deploymentHelpers.js'
-import { loadOpenOracleEventState } from './openOracleState.js'
+import { loadOpenOracleStoredState } from './openOracleState.js'
 import { requireBigintArray, requireBigintValue } from './decoders.js'
 import { wrapWeth } from './openOracle.js'
 
@@ -201,16 +201,16 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 		}
 	}
 	if (pendingReportId > 0n) {
-		const eventState = await loadOpenOracleEventState(client, resolvedOracleAddress, pendingReportId)
+		const storedState = await loadOpenOracleStoredState(client, resolvedOracleAddress, pendingReportId)
 		callbackStateHash = await client.readContract({
 			abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 			functionName: 'oracleGame',
 			address: resolvedOracleAddress,
 			args: [pendingReportId],
 		})
-		exactToken1Report = eventState.initial.game.currentAmount1
-		token1 = eventState.latest.game.token1
-		token2 = eventState.latest.game.token2
+		exactToken1Report = storedState.initialAmount1
+		token1 = storedState.latest.game.token1
+		token2 = storedState.latest.game.token2
 	}
 	return {
 		activeStagedOperationCount,

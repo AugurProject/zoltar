@@ -1,3 +1,4 @@
+import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { createLatestRequestGuard, RequestIdentity } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { useEffect, useRef, useState } from 'preact/hooks'
@@ -95,7 +96,7 @@ export function usePortfolioRefreshEffects({
 			if (market.loadError !== undefined) return { market, balances: undefined, error: market.loadError }
 			let entry: PortfolioBalanceEntry
 			try {
-				const loaded = await services.loadLiveBalances(client, market, account)
+				const loaded = await withReadTimeout(services.loadLiveBalances(client, market, account))
 				entry = { market, balances: liveBalancesForMarket(loaded, market), error: undefined }
 			} catch (error) {
 				entry = { market, balances: undefined, error: publicErrorMessage(error, 'Balance refresh failed') }
@@ -149,7 +150,7 @@ export function usePortfolioRefreshEffects({
 			queries.setBalances(undefined)
 		}
 		queries.setBalanceError(undefined)
-		void services.loadLiveBalances(services.createTradingPublicClient(configuration), selected, account).then(
+		void withReadTimeout(services.loadLiveBalances(services.createTradingPublicClient(configuration), selected, account)).then(
 			loaded => {
 				settle()
 				if (!balanceRequests.isCurrent(request)) return

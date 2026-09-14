@@ -4,15 +4,12 @@ import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.j
 import type { DeploymentConfiguration } from './config.js'
 import { shareTokenAbi } from './authorization.js'
 import { tradingContracts } from '../generated/contractArtifact.js'
-import { createSecurityPoolDeploymentIndex, loadLiveMarket, loadUniverseIds, marketDiscoveryPage, refreshSecurityPoolDeploymentEventIndex, registryBlockAnchorIsCanonical, unavailableMarket, type SecurityPoolDeployment, type SecurityPoolDeploymentIndex } from './live.js'
+import { createSecurityPoolDeploymentIndex, loadSecurityPoolRegistry, mapWithConcurrency, loadLiveMarket, loadUniverseIds, marketDiscoveryPage, refreshSecurityPoolDeploymentIndex, registryBlockAnchorIsCanonical, unavailableMarket, type SecurityPoolDeployment, type SecurityPoolDeploymentIndex } from './live.js'
 import { latestBlockIdentity } from './tradeQuote.js'
 
 const poolAbi = statoblast_SecurityPool_SecurityPool.abi
 const poolFactoryAbi = statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi
 const tradingFactoryAbi = tradingContracts['contracts/trading/TwoWayConstantProductFactory.sol'].TwoWayConstantProductFactory.abi
-const pairCreated = tradingFactoryAbi.find(entry => entry.type === 'event' && entry.name === 'PairCreated')
-if (pairCreated === undefined) throw new Error('PairCreated event is missing from the trading factory ABI')
-
 type PairDeployment = Readonly<{ securityPool: Address; shareToken: Address; universeId: bigint }>
 export type TradingPairIndex = SecurityPoolDeploymentIndex<PairDeployment, { blockNumber: bigint; blockHash: Hash }>
 
@@ -57,16 +54,6 @@ export async function discoverAddressedMarket(client: PublicClient, configuratio
 	return { start: 0n, count: 1n, total: 1n, previousStart: undefined, nextStart: undefined, markets: [market], universeIds: [market.universeId], selectedUniverseId: market.universeId }
 }
 
-function deploymentFromPairEvent(log: Readonly<{ args?: unknown }>): PairDeployment {
-	const args = log.args
-	if (typeof args !== 'object' || args === null) throw new Error('Trading pair event has no arguments')
-	const securityPool = Reflect.get(args, 'securityPool')
-	const shareToken = Reflect.get(args, 'shareToken')
-	const universeId = Reflect.get(args, 'universeId')
-	if (typeof securityPool !== 'string' || typeof shareToken !== 'string' || typeof universeId !== 'bigint') throw new Error('Trading pair event is incomplete')
-	return { securityPool: getAddress(securityPool), shareToken: getAddress(shareToken), universeId }
-}
-
 /** Loads only the universe list for routes that wait for an explicit SecurityPool address instead of listing markets. */
 export async function discoverUniverses(client: PublicClient, configuration: DeploymentConfiguration, requestedUniverseId: bigint | undefined, isCurrent = () => true) {
 	const universeIds = await loadUniverseIds(client, configuration, isCurrent)
@@ -80,14 +67,19 @@ export async function discoverTradingMarketPage(client: PublicClient, configurat
 	if (selectedUniverseId === undefined) return { ...marketDiscoveryPage(0n), total: 0n, markets: [], universeIds, selectedUniverseId }
 	const canonical = async (anchor: { blockNumber: bigint; blockHash: Hash }) =>
 		await registryBlockAnchorIsCanonical(anchor, async () => await latestBlockIdentity(client), getActiveBackend().id === 'simulation' ? undefined : async blockNumber => await latestBlockIdentity({ getBlock: async () => await client.getBlock({ blockNumber }) }))
-	const deployments = await refreshSecurityPoolDeploymentEventIndex(
+	const deployments = await refreshSecurityPoolDeploymentIndex(
 		index,
 		`${configuration.chainId}:${configuration.factory}:${configuration.rpcUrl}:${selectedUniverseId}`,
 		async () => await latestBlockIdentity(client),
 		canonical,
-		async (fromBlock, toBlock) => {
-			if (!isCurrent()) throw new Error('Market discovery cancelled')
-			return (await client.getLogs({ address: configuration.factory, event: pairCreated, args: { universeId: selectedUniverseId }, fromBlock, toBlock })).map(deploymentFromPairEvent)
+		async ({ blockNumber }) => {
+			const pools = await loadSecurityPoolRegistry(client, configuration, selectedUniverseId, blockNumber, isCurrent)
+			const pairs = await mapWithConcurrency(pools, 8, async deployment => {
+				if (!isCurrent()) throw new Error('Market discovery cancelled')
+				const pair = await client.readContract({ abi: tradingFactoryAbi, address: configuration.factory, functionName: 'getPair', args: [deployment.securityPool], blockNumber })
+				return pair === zeroAddress ? [] : [deployment]
+			})
+			return pairs.flat()
 		},
 	)
 	if (!isCurrent()) throw new Error('Market discovery cancelled')

@@ -518,6 +518,23 @@ void describe('TradingSection', () => {
 		expect(mintedAmount).toBe('1.25')
 	})
 
+	void test('shows unavailable price instead of indefinite mint-capacity loading', async () => {
+		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ calculationPriceConfigured: true, repPerEthPrice: undefined })} />)
+		cleanupRenderedComponent = rendered.cleanup
+		expect(document.body.textContent).toContain('Unavailable (no price)')
+		expect(document.body.textContent).not.toContain('Loading mint capacity.')
+		const button = within(document.body).getByRole('button', { name: 'Mint complete sets' })
+		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected mint button')
+		expect(button.disabled).toBe(true)
+	})
+
+	void test('shows zero mint capacity without waiting for an unavailable price', async () => {
+		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ calculationPriceConfigured: true, repPerEthPrice: undefined, selectedPool: createSelectedPool({ totalCapacityOwnershipAttoRep: 0n, feeEligibleCapacityOwnershipAttoRep: 0n }) })} />)
+		cleanupRenderedComponent = rendered.cleanup
+		expect(document.body.textContent).toContain('No mint capacity remaining.')
+		expect(document.body.textContent).not.toContain('Loading mint capacity.')
+	})
+
 	void test('uses the configured UI price for mint capacity and maximum mint amount', async () => {
 		let mintedAmount: string | undefined
 		const renderedComponent = await renderIntoDocument(

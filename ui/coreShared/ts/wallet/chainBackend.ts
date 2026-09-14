@@ -1,6 +1,6 @@
 import { assertNetworkEnabled } from './networkAvailability.js'
 import { createPublicClient, createWalletClient, custom, http, publicActions, type Account, type Address, type Hash, type Hex, type PublicActions, type Transport, type WalletClient } from '@zoltar/core-shared/evm/ethereum'
-import { getInjectedEthereum, normalizeInjectedAccount, parseInjectedChainId, readInjectedAccounts, switchInjectedChain, type InjectedEthereum } from './injectedEthereum.js'
+import { getInjectedEthereum, normalizeInjectedAccount, parseInjectedChainId, readInjectedAccounts, requestWalletRpc, switchInjectedChain, type InjectedEthereum } from './injectedEthereum.js'
 import { hasErrorCode, hasErrorMessage } from '../lib/errors.js'
 import { sameChainId } from './chainId.js'
 import { getNetworkSwitchTarget, getDefaultNetworkProfile, type NetworkProfile } from './networkProfile.js'
@@ -81,7 +81,7 @@ export type ChainBackend = {
 function createReadClientForProfile(profile: NetworkProfile, transportMode: ReadTransportMode, rpcUrl: string, ethereum?: InjectedEthereum): ReadClient {
 	return createPublicClient({
 		chain: profile.chain,
-		transport: transportMode === 'provider' && ethereum !== undefined ? custom(ethereum, { retryCount: 0 }) : http(rpcUrl),
+		transport: transportMode === 'provider' && ethereum !== undefined ? custom({ request: parameters => requestWalletRpc(ethereum, parameters) }, { retryCount: 0 }) : http(rpcUrl),
 	})
 }
 
@@ -139,7 +139,7 @@ async function readProviderChainId(ethereum: InjectedEthereum | undefined) {
 	if (ethereum === undefined) throw new Error('Unable to verify wallet network because no injected wallet was found.')
 	let result: unknown
 	try {
-		result = await ethereum.request({ method: 'eth_chainId', params: [] })
+		result = await requestWalletRpc(ethereum, { method: 'eth_chainId', params: [] })
 	} catch (error) {
 		if (!isProviderRequestError(error)) throw error
 		throw new Error('Unable to verify wallet network.')
@@ -168,7 +168,7 @@ export function createInjectedBackend({ profile = getDefaultNetworkProfile(), rp
 			const baseClient = createWalletClient({
 				account: accountAddress,
 				chain: profile.chain,
-				transport: custom(ethereum),
+				transport: custom({ request: parameters => requestWalletRpc(ethereum, parameters) }),
 			}).extend(publicActions) as WriteClient
 
 			return withTransactionCallbacks(baseClient, callbacks, async () => {

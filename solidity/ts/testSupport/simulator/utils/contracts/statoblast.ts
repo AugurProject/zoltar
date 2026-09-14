@@ -3,7 +3,6 @@ import {
 	decodeOpenOracleStatePreimage,
 	getOpenOracleGameTuple,
 	getOpenOracleHelperTuple,
-	getOpenOracleReportIdFromTopic,
 	hasOpenOracleFlag,
 	OPEN_ORACLE_FLAG_TIME_TYPE,
 	OPEN_ORACLE_FLAG_TRACK_DISPUTES,
@@ -319,7 +318,7 @@ export const loadOpenOracleEventState = async (client: ReadClient, reportId: big
 	for (const log of [...logs].sort(compareOpenOracleLogs)) {
 		const signature = log.topics[0]?.toLowerCase()
 		const reportIdTopic = log.topics[1]
-		if (reportIdTopic === undefined || getOpenOracleReportIdFromTopic(reportIdTopic) !== reportId) continue
+		if (reportIdTopic === undefined || BigInt(reportIdTopic) !== reportId) continue
 		if (signature === OPEN_ORACLE_REPORT_SUBMITTED_TOPIC.toLowerCase() || signature === OPEN_ORACLE_REPORT_DISPUTED_TOPIC.toLowerCase()) {
 			const preimage = decodeOpenOracleStatePreimage(log.data, reportId)
 			state = state === undefined ? { initial: preimage, latest: preimage, reportCount: 1, settlementBlockNumber: undefined } : { ...state, latest: preimage, reportCount: state.reportCount + 1 }

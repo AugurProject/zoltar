@@ -243,10 +243,6 @@ export function OpenOracleReportDetailsCard({
 							label: openOracleReportDetails.token2Symbol,
 							value: <AddressValue address={openOracleReportDetails.token2} />,
 						},
-						{
-							label: openOracleCopy.initialReporter,
-							value: openOracleReportDetails.initialReporter === zeroAddress ? commonCopy.none : <AddressValue address={openOracleReportDetails.initialReporter} />,
-						},
 					])}
 				</ReadOnlyDetailAccordion>
 

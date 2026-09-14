@@ -269,10 +269,17 @@ export function OpenOracleSection({
 									/>
 								)
 							if (currentBrowsePage === undefined) return undefined
-							if (currentBrowsePage.reports.length === 0) return <StateHint announcement='polite' presentation={{ key: 'empty', badgeLabel: commonCopy.none, badgeTone: 'muted', detail: openOracleCopy.oracleGamesEmpty }} />
-							if (filteredBrowseReports.length === 0) return <StateHint announcement='polite' presentation={{ key: 'empty', badgeLabel: commonCopy.noMatches, badgeTone: 'muted', detail: openOracleCopy.reportFiltersEmpty }} />
+							if (currentBrowsePage.reports.length === 0 && (currentBrowsePage.unavailableReports?.length ?? 0) === 0) return <StateHint announcement='polite' presentation={{ key: 'empty', badgeLabel: commonCopy.none, badgeTone: 'muted', detail: openOracleCopy.oracleGamesEmpty }} />
+							if (filteredBrowseReports.length === 0 && (currentBrowsePage.unavailableReports?.length ?? 0) === 0) return <StateHint announcement='polite' presentation={{ key: 'empty', badgeLabel: commonCopy.noMatches, badgeTone: 'muted', detail: openOracleCopy.reportFiltersEmpty }} />
 
-							return <div className='comparison-record-list'>{filteredBrowseReports.map(report => renderReportSummaryCard(report, reportId => void openBrowseReport(reportId)))}</div>
+							return (
+								<div className='comparison-record-list'>
+									{currentBrowsePage.unavailableReports?.map(report => (
+										<StateHint key={report.reportId.toString()} presentation={{ key: 'unavailable', badgeLabel: commonCopy.unavailable, badgeTone: 'muted', detail: report.message }} />
+									))}
+									{filteredBrowseReports.map(report => renderReportSummaryCard(report, reportId => void openBrowseReport(reportId)))}
+								</div>
+							)
 						})()}
 					</SectionBlock>
 				</div>

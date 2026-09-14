@@ -2,8 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData, getAddress, toHex, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
-import { hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SUBMITTED_TOPIC, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
-import { encodeOpenOracleStatePreimagePacked } from '../../../../../solidity/ts/testSupport/openOracle/statePreimage.js'
+import { getOpenOracleGameTuple, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TRACK_DISPUTES, OPEN_ORACLE_FLAG_TIME_TYPE, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { loadOpenOracleReportDetails, loadOpenOracleWithdrawableBalances, loadOpenOracleReportSummaries, settleOracleReport, withdrawOpenOracleBalance } from '@zoltar/ui-statoblast-shared/protocol/openOracle.js'
 import { loadOracleManagerDetails } from '@zoltar/ui-statoblast-shared/protocol/oracleCoordinator.js'
 import { getOpenOracleAddress } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
@@ -31,7 +30,7 @@ function createOpenOraclePreimage(reportId = 1n): OpenOracleStatePreimage {
 			disputeDelay: 0n,
 			escalationHalt: 0n,
 			feePercentage: 0n,
-			flags: OPEN_ORACLE_FLAG_TIME_TYPE,
+			flags: OPEN_ORACLE_FLAG_TIME_TYPE | OPEN_ORACLE_FLAG_STORE_ALL | OPEN_ORACLE_FLAG_TRACK_DISPUTES,
 			lastReportOppoTime: 1n,
 			multiplier: 100n,
 			numReports: 1n,
@@ -48,19 +47,85 @@ function createOpenOraclePreimage(reportId = 1n): OpenOracleStatePreimage {
 	}
 }
 
-function createOpenOracleStateLog(preimage: OpenOracleStatePreimage, topic = OPEN_ORACLE_REPORT_SUBMITTED_TOPIC, logIndex = 0n) {
-	return {
-		address: getOpenOracleAddress(),
-		blockNumber: 1n,
-		data: encodeOpenOracleStatePreimagePacked(preimage),
-		logIndex,
-		removed: false,
-		topics: [topic, toHex(preimage.helper.reportId, { size: 32 })],
-		transactionIndex: 0n,
+function readStoredOracleFixture(functionName: string, preimage: OpenOracleStatePreimage) {
+	switch (functionName) {
+		case 'storedGame':
+			return getOpenOracleGameTuple(preimage.game)
+		case 'storedHelper':
+			return [preimage.helper.creator, preimage.helper.blockTimestamp, preimage.helper.blockNumber]
+		case 'disputeHistory':
+			return [100n, 10n, 0n, 1n]
+		case 'oracleGame':
+			return hashOpenOracleStatePreimage(preimage)
+		default:
+			throw new Error(`Unexpected read: ${functionName}`)
 	}
 }
 
 describe('openOracle protocol client', () => {
+	test('loads stored oracle reports with log access disabled', async () => {
+		const preimage = createOpenOraclePreimage()
+		preimage.game.flags |= OPEN_ORACLE_FLAG_STORE_ALL | OPEN_ORACLE_FLAG_TRACK_DISPUTES
+		const client = createMockLoaderClient({
+			getBlock: async () => ({ number: 1n, timestamp: 2n }),
+			getLogs: async () => {
+				throw new Error('Log access unavailable')
+			},
+			multicall: async () => [18n, 18n, 'ONE', 'TWO'],
+			readContract: async request => {
+				switch (request.functionName) {
+					case 'storedGame':
+						return getOpenOracleGameTuple(preimage.game)
+					case 'storedHelper':
+						return [initialReporter, 1n, 1n]
+					case 'disputeHistory':
+						return [100n, 10n, 0n, 1n]
+					case 'oracleGame':
+						return hashOpenOracleStatePreimage(preimage)
+					default:
+						throw new Error(`Unexpected read: ${request.functionName}`)
+				}
+			},
+		})
+		const report = await loadOpenOracleReportDetails(client, getOpenOracleAddress(), 1n)
+		expect(report.currentAmount1).toBe(100n)
+		expect(report.initialReporter).toBe(initialReporter)
+		preimage.game.numReports = 2n
+		preimage.game.currentAmount1 = 200n
+		preimage.game.settlementTimestamp = 2n
+		const settled = await loadOpenOracleReportDetails(client, getOpenOracleAddress(), 1n)
+		expect(settled.isDistributed).toBe(true)
+		expect(settled.numReports).toBe(2n)
+		expect(settled.initialReporter).toBeUndefined()
+		expect(settled.exactToken1Report).toBe(100n)
+		const invalidHashClient = { ...client, readContract: createMockLoaderClient({ getBlock: client.getBlock, multicall: async () => [], readContract: async request => (request.functionName === 'oracleGame' ? `0x${'11'.repeat(32)}` : readStoredOracleFixture(request.functionName, preimage)) }).readContract }
+		await expect(loadOpenOracleReportDetails(invalidHashClient, getOpenOracleAddress(), 1n)).rejects.toThrow('stored state does not match')
+		preimage.game.flags = 0n
+		await expect(loadOpenOracleReportDetails(client, getOpenOracleAddress(), 1n)).rejects.toThrow('did not enable stored state')
+	})
+
+	test('keeps supported reports browsable alongside a report without stored state', async () => {
+		const client = createMockLoaderClient({
+			getBlock: async () => createBlockWithTimestamp(1n),
+			getLogs: async () => {
+				throw new Error('Log access unavailable')
+			},
+			multicall: async request => (getContractFunctionName(request.contracts[0]) === 'decimals' ? [18n, 18n] : ['ONE', 'TWO']),
+			readContract: async request => {
+				if (request.functionName === 'nextReportId') return 3n
+				const reportId = request.args?.[0]
+				if (typeof reportId !== 'bigint') throw new Error('Missing report id')
+				const preimage = createOpenOraclePreimage(reportId)
+				if (reportId === 2n) preimage.game.flags = 0n
+				return readStoredOracleFixture(request.functionName, preimage)
+			},
+		})
+		const page = await loadOpenOracleReportSummaries(client, 0, 10)
+		expect(page.reportCount).toBe(2n)
+		expect(page.reports.map(report => report.reportId)).toEqual([1n])
+		expect(page.unavailableReports).toEqual([{ reportId: 2n, message: 'Oracle report #2 is unavailable: it did not enable stored state and dispute history' }])
+	})
+
 	test('derives the dispute contribution token from the strict proposed-price direction', () => {
 		const { currentAmount1, currentAmount2 } = createOpenOraclePreimage().game
 		expect(getOpenOracleDisputeSwapTokenKey({ currentAmount1, currentAmount2, newAmount1: 100n, newAmount2: 11n })).toBe('token2')
@@ -70,31 +135,24 @@ describe('openOracle protocol client', () => {
 
 	test('loadOpenOracleReportSummaries keeps reports disputed when dispute history returns to the initial reporter', async () => {
 		const initial = createOpenOraclePreimage()
-		initial.game.flags = 0n
+		initial.game.flags = OPEN_ORACLE_FLAG_STORE_ALL | OPEN_ORACLE_FLAG_TRACK_DISPUTES
 		const disputed = { ...initial, game: { ...initial.game, numReports: 2n, reportTimestamp: 2n } }
 		const client = createMockLoaderClient({
 			getBlock: async () => ({ number: 1n, timestamp: 0n }),
-			getLogs: async () => [createOpenOracleStateLog(initial), createOpenOracleStateLog(disputed, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, 1n)],
+			getLogs: async () => {
+				throw new Error('Log access unavailable')
+			},
 			multicall: async request => {
 				const contracts = request.contracts
 				const firstContract = contracts[0]
 				const functionName = getContractFunctionName(firstContract)
-				if (functionName === 'reportMeta') {
-					return [[100n, 0n, 0n, 0n, token1Address, 0, token2Address, true, 0, 0, 0, 0]]
-				}
-				if (functionName === 'reportStatus') {
-					return [[100n, 10n, initialReporter, 1, 0, initialReporter, 0]]
-				}
-				if (functionName === 'extraData') {
-					return [['0x0000000000000000000000000000000000000000000000000000000000000000', zeroAddress, 2, 0, zeroAddress, false]]
-				}
 				if (functionName === 'decimals') return [18n, 18n]
 				if (functionName === 'symbol') return ['REP', 'WETH']
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			},
 			readContract: async request => {
 				if (request.functionName === 'nextReportId') return 2n
-				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+				return readStoredOracleFixture(request.functionName, disputed)
 			},
 		})
 
@@ -111,22 +169,17 @@ describe('openOracle protocol client', () => {
 		const preimage = createOpenOraclePreimage()
 		const client = createMockLoaderClient({
 			getBlock: async () => ({ number: 1n, timestamp: 0n }),
-			getLogs: async () => [createOpenOracleStateLog(preimage)],
+			getLogs: async () => {
+				throw new Error('Log access unavailable')
+			},
 			multicall: async request => {
 				const firstFunctionName = getContractFunctionName(request.contracts[0])
-				if (firstFunctionName === 'reportMeta') {
-					return [
-						[100n, 0n, 0n, 0n, token1Address, 0, token2Address, true, 0, 0, 0, 0],
-						[100n, 10n, initialReporter, 1, 0, initialReporter, 0],
-						['0x0000000000000000000000000000000000000000000000000000000000000000', zeroAddress, 1, 0, zeroAddress, false],
-					]
-				}
 				if (firstFunctionName === 'decimals') return [256n, 18n, 'REP', 'TOK']
 				throw new Error(`Unexpected multicall contract: ${firstFunctionName}`)
 			},
 			readContract: async request => {
 				if (request.functionName === 'oracleGame') return hashOpenOracleStatePreimage(preimage)
-				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+				return readStoredOracleFixture(request.functionName, preimage)
 			},
 		})
 
@@ -137,19 +190,18 @@ describe('openOracle protocol client', () => {
 		const preimage = createOpenOraclePreimage()
 		const client = createMockLoaderClient({
 			getBlock: async () => createBlockWithTimestamp(0n),
-			getLogs: async () => [createOpenOracleStateLog(preimage)],
+			getLogs: async () => {
+				throw new Error('Log access unavailable')
+			},
 			multicall: async request => {
 				const firstFunctionName = getContractFunctionName(request.contracts[0])
-				if (firstFunctionName === 'reportMeta') return [[100n, 0n, 0n, 0n, token1Address, 0, token2Address, true, 0, 0, 0, 0]]
-				if (firstFunctionName === 'reportStatus') return [[100n, 10n, initialReporter, 1, 0, initialReporter, 0]]
-				if (firstFunctionName === 'extraData') return [['0x0000000000000000000000000000000000000000000000000000000000000000', zeroAddress, 1, 0, zeroAddress, false]]
 				if (firstFunctionName === 'decimals') return [18n, 18n]
 				if (firstFunctionName === 'symbol') return [' ', 'TOK']
 				throw new Error(`Unexpected multicall contract: ${firstFunctionName}`)
 			},
 			readContract: async request => {
 				if (request.functionName === 'nextReportId') return 2n
-				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+				return readStoredOracleFixture(request.functionName, preimage)
 			},
 		})
 
@@ -161,19 +213,18 @@ describe('openOracle protocol client', () => {
 		preimage.game.token2 = wethAddress
 		const client = createMockLoaderClient({
 			getBlock: async () => createBlockWithTimestamp(0n),
-			getLogs: async () => [createOpenOracleStateLog(preimage)],
+			getLogs: async () => {
+				throw new Error('Log access unavailable')
+			},
 			multicall: async request => {
 				const firstFunctionName = getContractFunctionName(request.contracts[0])
-				if (firstFunctionName === 'reportMeta') return [[100n, 0n, 0n, 0n, token1Address, 0, wethAddress, true, 0, 0, 0, 0]]
-				if (firstFunctionName === 'reportStatus') return [[100n, 10n, initialReporter, 1, 0, initialReporter, 0]]
-				if (firstFunctionName === 'extraData') return [['0x0000000000000000000000000000000000000000000000000000000000000000', zeroAddress, 1, 0, zeroAddress, false]]
 				if (firstFunctionName === 'decimals') return [18n, 18n]
 				if (firstFunctionName === 'symbol') return ['REP', 'ETH']
 				throw new Error(`Unexpected multicall contract: ${firstFunctionName}`)
 			},
 			readContract: async request => {
 				if (request.functionName === 'nextReportId') return 2n
-				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+				return readStoredOracleFixture(request.functionName, preimage)
 			},
 		})
 

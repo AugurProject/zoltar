@@ -1,4 +1,5 @@
 import { computed, signal, type ReadonlySignal } from '@preact/signals'
+import { withTimeout } from './promise.js'
 
 export type LoadPhase = 'idle' | 'loading'
 export type LoadableValueState = 'unknown' | 'loading' | 'ready' | 'missing'
@@ -6,6 +7,7 @@ export type LoadableValueState = 'unknown' | 'loading' | 'ready' | 'missing'
 type RunLoadOptions<TResult> = {
 	isCurrent?: () => boolean
 	load: () => Promise<TResult>
+	waitUntilReady?: () => Promise<void>
 	onStart?: () => void
 	onSuccess?: (result: TResult) => Promise<void> | void
 	onError?: (error: unknown) => Promise<void> | void
@@ -46,7 +48,7 @@ export function resolveRequestedLoadableValueState<TValue, TKey>({ currentKey, i
 	return 'unknown'
 }
 
-export function createLoadController(): LoadController {
+export function createLoadController({ timeoutMilliseconds = 30_000 }: { timeoutMilliseconds?: number } = {}): LoadController {
 	const phase = signal<LoadPhase>('idle')
 	const isLoading = computed(() => phase.value === 'loading')
 	let generation = 0
@@ -77,12 +79,14 @@ export function createLoadController(): LoadController {
 		syncPhase()
 	}
 
-	const run = async <TResult>({ isCurrent, load, onStart, onSuccess, onError }: RunLoadOptions<TResult>) => {
+	const run = async <TResult>({ isCurrent, load, waitUntilReady, onStart, onSuccess, onError }: RunLoadOptions<TResult>) => {
 		const isCurrentRequest = isCurrent ?? (() => true)
 		return await track(async () => {
 			onStart?.()
 			try {
-				const result = await load()
+				if (waitUntilReady !== undefined) await withTimeout(waitUntilReady(), 120_000, 'Backend readiness timed out. Please retry.')
+				if (!isCurrentRequest()) return undefined
+				const result = await withTimeout(load(), timeoutMilliseconds, 'Loading timed out. Please retry.')
 				if (!isCurrentRequest()) return undefined
 				await onSuccess?.(result)
 				return result

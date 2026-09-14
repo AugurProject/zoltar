@@ -1,3 +1,4 @@
+import { withReadTimeout } from '../../lib/promise.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { getErrorMessage, hasErrorCode, hasErrorMessage } from '../../lib/errors.js'
 import type { AccountState } from '../../types/app.js'
@@ -25,7 +26,7 @@ export async function loadWalletState({ chainIdPromise, connectedAddress, ethBal
 
 	void trackLoad(async () => {
 		try {
-			const chainId = await chainIdPromise
+			const chainId = await withReadTimeout(chainIdPromise)
 			if (!isCurrent()) return
 			setAccountState({ ...getAccountState(), chainId })
 		} catch (error) {
@@ -37,7 +38,7 @@ export async function loadWalletState({ chainIdPromise, connectedAddress, ethBal
 
 	void trackLoad(async () => {
 		try {
-			const ethBalanceAttoEth = await ethBalanceAttoEthPromise
+			const ethBalanceAttoEth = await withReadTimeout(ethBalanceAttoEthPromise)
 			if (!isCurrent()) return
 			setAccountState({ ...getAccountState(), ethBalanceAttoEth })
 		} catch (error) {
@@ -49,7 +50,7 @@ export async function loadWalletState({ chainIdPromise, connectedAddress, ethBal
 
 	void trackLoad(async () => {
 		try {
-			const wethBalanceAttoEth = await wethBalanceAttoEthPromise
+			const wethBalanceAttoEth = await withReadTimeout(wethBalanceAttoEthPromise)
 			if (!isCurrent()) return
 			setAccountState({ ...getAccountState(), wethBalanceAttoEth })
 		} catch (error) {
