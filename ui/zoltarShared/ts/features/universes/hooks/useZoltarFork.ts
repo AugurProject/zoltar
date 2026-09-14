@@ -25,7 +25,6 @@ import type { TransactionLifecycleParameters, WriteOperationContext } from '../.
 import type { CreateWriteClientCallbacks } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import type { ZoltarForkActionResult, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { createActiveEnvironmentGuard } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { TRANSACTION_ACTION_LOCK_REASON } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
 
 type UseZoltarForkParameters = TransactionLifecycleParameters &
 	WriteOperationContext & {
@@ -288,7 +287,7 @@ export function useZoltarFork(
 						}),
 					) === false
 				) {
-					zoltarForkFeedback.value = createErrorActionFeedback(resolveActionResultName(actionName), getFailureTitle(actionName), TRANSACTION_ACTION_LOCK_REASON)
+					zoltarForkFeedback.value = undefined
 					return
 				}
 				ownsTransaction = true

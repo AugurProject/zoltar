@@ -15,6 +15,7 @@ import { deriveHasForkActivity } from '@zoltar/ui-statoblast-shared/features/tru
 import type { TradingSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
 import type { AccountState, TradingFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import { describe, expect, test } from 'bun:test'
+import { render } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 
@@ -99,6 +100,7 @@ function createAccountState(overrides: Partial<AccountState> = {}): AccountState
 
 function createTradingSectionProps(overrides: Partial<TradingSectionProps> = {}): TradingSectionProps {
 	return {
+		oraclePriceUsable: true,
 		accountState: createAccountState(),
 		embedInCard: true,
 		loadingTradingForkUniverse: false,
@@ -251,6 +253,17 @@ void describe('TradingSection', () => {
 			await cleanupRenderedComponent?.()
 			cleanupRenderedComponent = undefined
 		},
+	})
+
+	test('blocks minting with a stale oracle even when a separate calculation price exists', async () => {
+		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ oraclePriceUsable: true, repPerEthPrice: 3n * 10n ** 18n, tradingForm: createTradingForm({ completeSetAmount: '0.1' }) })} />)
+		cleanupRenderedComponent = rendered.cleanup
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' }))
+		await act(() => render(<TradingSection {...createTradingSectionProps({ oraclePriceUsable: false, repPerEthPrice: 3n * 10n ** 18n, tradingForm: createTradingForm({ completeSetAmount: '0.1' }) })} />, rendered.container))
+		const dialog = within(document.body).getByRole('dialog')
+		const confirm = within(dialog).getByRole('button', { name: 'Mint complete sets' })
+		expect(confirm.hasAttribute('disabled')).toBe(true)
+		expect(dialog.textContent).toContain('Request a new price in Price Oracle before minting.')
 	})
 
 	void test('labels the max complete sets metric as redeemable complete sets', async () => {

@@ -14,7 +14,7 @@ import { AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL } from './truth-auctions/li
 import { formatStatoblastSecurityMultiplier } from './markets/lib/trading.js'
 
 type SecurityPoolCreationTransactionContext = {
-	initialReportPriorityFeeGwei?: string | undefined
+	initialReportPriorityFeeEth?: string | undefined
 	questionId?: string | undefined
 	statoblastSecurityMultiplierBps?: bigint | undefined
 	universeId?: bigint | undefined
@@ -23,7 +23,7 @@ type SecurityPoolCreationTransactionContext = {
 function getSecurityPoolCreationTransactionRows(context: SecurityPoolCreationTransactionContext | undefined) {
 	if (context === undefined) return undefined
 	return [
-		...(context.initialReportPriorityFeeGwei === undefined || context.initialReportPriorityFeeGwei.trim() === '' ? [] : [{ label: commonCopy.initialReportPriorityFee, value: formatValueWithUnit(context.initialReportPriorityFeeGwei.trim(), commonCopy.gwei) }]),
+		...(context.initialReportPriorityFeeEth === undefined || context.initialReportPriorityFeeEth.trim() === '' ? [] : [{ label: commonCopy.initialReportPriorityFee, value: formatValueWithUnit(context.initialReportPriorityFeeEth.trim(), commonCopy.eth) }]),
 		...(context.questionId === undefined || context.questionId.trim() === '' ? [] : [{ label: commonCopy.questionId, value: <IdentifierValue value={context.questionId.trim()} /> }]),
 		...(context.statoblastSecurityMultiplierBps === undefined ? [] : [{ label: statoblastAppCopy.statoblastSecurityMultiplierBps, value: `${formatStatoblastSecurityMultiplier(context.statoblastSecurityMultiplierBps)}x` }]),
 	]
@@ -47,7 +47,7 @@ export function createSecurityPoolCreationSuccessPresentation(result: SecurityPo
 			{ label: transactionCopy.pool, value: <AddressValue address={result.securityPoolAddress} /> },
 			{ label: commonCopy.questionId, value: <IdentifierValue value={result.questionId} /> },
 			{ label: statoblastAppCopy.statoblastSecurityMultiplierBps, value: `${formatStatoblastSecurityMultiplier(result.statoblastSecurityMultiplierBps)}x` },
-			{ label: commonCopy.initialReportPriorityFee, value: formatCurrencyBalanceWithUnit(result.initialReportPriorityFeeAttoEthPerGas, commonCopy.gwei, 9) },
+			{ label: commonCopy.initialReportPriorityFee, value: formatCurrencyBalanceWithUnit(result.initialReportPriorityFeeAttoEthPerGas, commonCopy.eth, 18) },
 		],
 		title: transactionCopy.securityPoolCreated,
 		tone: 'success',

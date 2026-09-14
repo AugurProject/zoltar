@@ -68,13 +68,13 @@ export function SecurityPoolSection({
 	const questionSourceLocked = questionAndPoolCreating || marketCreating || securityPoolCreating || marketResult !== undefined
 	const hasSecurityPoolResult = securityPoolResult !== undefined
 	const statoblastSecurityMultiplierValidationMessage = getStatoblastSecurityMultiplierValidationMessage(securityPoolForm.statoblastSecurityMultiplierBps)
-	const initialReportPriorityFeeValidationMessage = getInitialReportPriorityFeeValidationMessage(securityPoolForm.initialReportPriorityFeeGwei)
+	const initialReportPriorityFeeValidationMessage = getInitialReportPriorityFeeValidationMessage(securityPoolForm.initialReportPriorityFeeEth)
 	const questionFormValidation = validateMarketForm(marketForm)
 	const guardedCreateDisabledReason = getSecurityPoolCreateDisabledReason({
 		accountAddress: accountState.address,
 		checkingDuplicateOriginPool,
 		duplicateOriginPoolExists,
-		initialReportPriorityFeeGwei: securityPoolForm.initialReportPriorityFeeGwei,
+		initialReportPriorityFeeEth: securityPoolForm.initialReportPriorityFeeEth,
 		isOnActiveAppChain,
 		marketDetails,
 		securityPoolCreating,
@@ -92,7 +92,7 @@ export function SecurityPoolSection({
 		if (!questionFormValidation.isValid) return questionFormValidation.notice
 		const multiplierValidationMessage = getStatoblastSecurityMultiplierValidationMessage(securityPoolForm.statoblastSecurityMultiplierBps)
 		if (multiplierValidationMessage !== undefined) return multiplierValidationMessage
-		return getInitialReportPriorityFeeValidationMessage(securityPoolForm.initialReportPriorityFeeGwei)
+		return getInitialReportPriorityFeeValidationMessage(securityPoolForm.initialReportPriorityFeeEth)
 	})()
 	let visibleFieldErrorId: string | undefined = undefined
 	if (createDisabledReason === statoblastSecurityMultiplierValidationMessage) {
@@ -141,15 +141,15 @@ export function SecurityPoolSection({
 			</div>
 			<div className='field'>
 				<label htmlFor='security-pool-initial-report-priority-fee'>
-					<span>{commonCopy.initialReportPriorityFee}</span>
+					<span>{securityPoolCopy.initialReportPriorityFeeEthLabel}</span>
 				</label>
 				<FormInput
 					id='security-pool-initial-report-priority-fee'
 					aria-describedby={`security-pool-initial-report-priority-fee-help${initialReportPriorityFeeValidationMessage === undefined ? '' : ' security-pool-initial-report-priority-fee-error'}`}
 					invalid={initialReportPriorityFeeValidationMessage !== undefined}
 					disabled={questionSourceLocked}
-					value={securityPoolForm.initialReportPriorityFeeGwei}
-					onInput={event => onSecurityPoolFormChange({ initialReportPriorityFeeGwei: event.currentTarget.value })}
+					value={securityPoolForm.initialReportPriorityFeeEth}
+					onInput={event => onSecurityPoolFormChange({ initialReportPriorityFeeEth: event.currentTarget.value })}
 				/>
 				<p className='field-help' id='security-pool-initial-report-priority-fee-help'>
 					{securityPoolCopy.initialReportPriorityFeeHelpText}
@@ -215,8 +215,8 @@ export function SecurityPoolSection({
 							<strong>{formatStatoblastSecurityMultiplier(securityPoolResult.statoblastSecurityMultiplierBps)}x</strong>
 						</li>
 						<li>
-							<span>{commonCopy.initialReportPriorityFee}</span>
-							<strong>{formatCurrencyBalanceWithUnit(securityPoolResult.initialReportPriorityFeeAttoEthPerGas, commonCopy.gwei, 9)}</strong>
+							<span>{securityPoolCopy.initialReportPriorityFeeEthLabel}</span>
+							<strong>{formatCurrencyBalanceWithUnit(securityPoolResult.initialReportPriorityFeeAttoEthPerGas, commonCopy.eth, 18)}</strong>
 						</li>
 						<li>
 							<span>{securityPoolCopy.deploymentTransactionHash}</span>

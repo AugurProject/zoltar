@@ -266,6 +266,7 @@ type TradingRouteContentProps = {
 }
 
 export type TradingSectionProps = TradingRouteContentProps & {
+	oraclePriceUsable: boolean | undefined
 	calculationPriceConfigured?: boolean
 	embedInCard?: boolean
 	poolState?: SecurityPoolStateModel | undefined

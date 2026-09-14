@@ -103,6 +103,7 @@ export function writeSecurityPoolsViewQueryParam(search: string, view: string | 
 	}
 
 	if (view !== 'create') params.delete(SECURITY_POOL_QUESTION_ID_QUERY_PARAM)
+	if (view !== 'operate') params.delete(SELECTED_POOL_VIEW_QUERY_PARAM)
 
 	const nextSearch = params.toString()
 	return nextSearch === '' ? '' : `?${nextSearch}`

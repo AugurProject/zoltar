@@ -75,8 +75,8 @@ export const contractSafetyPolicy = {
 				sourcePath: 'contracts/statoblast/OpenOraclePriceCoordinator.sol',
 				contractName: 'OpenOraclePriceCoordinator',
 			},
-			23_599,
-			'The coordinator runtime is above 96% of the protocol deployment limit, so its reviewed budget permits no growth.',
+			23_561,
+			'The coordinator runtime is above 95% of the protocol deployment limit, so its reviewed budget permits no growth.',
 		),
 		runtimeBudget(
 			{

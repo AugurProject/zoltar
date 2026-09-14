@@ -2484,3 +2484,11 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 .categorical-outcome-remove {
 	justify-self: start;
 }
+
+.oracle-actions {
+	align-items: flex-start;
+}
+
+.oracle-actions > button {
+	min-block-size: 3rem;
+}

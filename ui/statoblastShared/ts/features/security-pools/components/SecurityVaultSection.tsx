@@ -1,7 +1,6 @@
 import type { ComponentChildren } from 'preact'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
-import * as transactionReviewCopy from '@zoltar/ui-core-shared/copy/transactionReview.js'
 import { useEffect, useId, useRef, useState } from 'preact/hooks'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { ActionLauncherCard } from '@zoltar/ui-core-shared/components/ActionLauncherCard.js'
@@ -19,7 +18,6 @@ import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
 import { TransactionActionButton, TransactionActionGroup } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
-import { TransactionNetworkValue } from '@zoltar/ui-core-shared/components/TransactionNetworkValue.js'
 import { normalizeAddress, sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance, formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { balanceShortage } from '@zoltar/ui-core-shared/forms/inputs.js'
@@ -122,7 +120,6 @@ export function SecurityVaultSection({
 		...(selectedMarketTitle === undefined ? [] : [{ label: commonCopy.question, value: selectedMarketTitle }]),
 		{ label: commonCopy.securityPoolAddress, value: <AddressValue address={currentSelectedVaultDetails?.securityPoolAddress ?? normalizedSecurityVaultForm.securityPoolAddress} /> },
 		{ label: securityPoolCopy.vault, value: <AddressValue address={selectedVaultOwner === '' ? undefined : selectedVaultOwner} /> },
-		{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
 	]
 	const depositAmount = tryParseRepAmountInput(normalizedSecurityVaultForm.depositAmount)
 	const withdrawAmount = tryParseRepAmountInput(normalizedSecurityVaultForm.repWithdrawAmount)

@@ -47,7 +47,7 @@ export function SecurityPoolSummaryMetrics({ calculationPriceConfigured = false,
 				) : undefined}
 				<MetricField label={securityPoolCopy.vaultCount}>{pool.vaultCount.toString()}</MetricField>
 				<MetricField label={statoblastAppCopy.statoblastSecurityMultiplierBps}>{formatStatoblastSecurityMultiplier(pool.statoblastSecurityMultiplierBps)}x</MetricField>
-				<MetricField label={commonCopy.initialReportPriorityFee}>{formatCurrencyBalanceWithUnit(pool.initialReportPriorityFeeAttoEthPerGas, commonCopy.gwei, 9)}</MetricField>
+				<MetricField label={commonCopy.initialReportPriorityFee}>{formatCurrencyBalanceWithUnit(pool.initialReportPriorityFeeAttoEthPerGas, commonCopy.eth, 18)}</MetricField>
 				<MetricField label={securityPoolCopy.openInterestFeeYear}>
 					<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix={commonCopy.percent} />
 				</MetricField>

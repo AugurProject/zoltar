@@ -111,10 +111,10 @@ describe('useUrlState', () => {
 		})
 		expect(window.location.hash.includes('securityPoolsView=universes')).toBe(true)
 		expect(window.location.hash.includes('securityPool=')).toBe(true)
-		expect(window.location.hash.includes('selectedPoolView=')).toBe(true)
+		expect(window.location.hash.includes('selectedPoolView=')).toBe(false)
 		await act(() => requireState(hookState).setSecurityPoolsView('operate'))
 		expect(requireState(hookState).securityPoolAddress).toBe('0x3333333333333333333333333333333333333333')
-		expect(requireState(hookState).selectedPoolView).toBe('positions')
+		expect(requireState(hookState).selectedPoolView).toBe('')
 
 		await act(() => {
 			requireState(hookState).setSecurityPoolQuestionId('0x99')

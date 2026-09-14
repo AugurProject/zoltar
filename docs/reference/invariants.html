@@ -1847,11 +1847,11 @@
 						</div>
 					</details>
 					<details class="invariant-entry" id="ora-03">
-						<summary><code>ORA-03</code><span class="invariant-title">Five-minute price validity</span></summary>
+						<summary><code>ORA-03</code><span class="invariant-title">Oracle price validity</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">A cached price is usable only while nonzero and strictly younger than the five-minute validity window.</div>
-							<p class="invariant-example"><strong>Example:</strong> A price settled exactly five minutes ago is stale; one settled four minutes and 59 seconds ago remains usable.</p>
+							<div class="invariant-property">A cached price is usable only while nonzero and strictly younger than its <a href="open-oracle.html#integration-terms">chain-specific validity window</a>.</div>
+							<p class="invariant-example"><strong>Example:</strong> On mainnet, a price settled exactly five minutes ago is stale; one settled four minutes and 59 seconds ago remains usable.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>

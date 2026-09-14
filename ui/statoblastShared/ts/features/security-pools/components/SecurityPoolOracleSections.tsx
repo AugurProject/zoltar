@@ -10,7 +10,6 @@ import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
-import { TransactionNetworkValue } from '@zoltar/ui-core-shared/components/TransactionNetworkValue.js'
 import { TransactionReview } from '@zoltar/ui-core-shared/components/TransactionReview.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
@@ -24,7 +23,6 @@ import { getPendingOperationAmountPresentation, getPendingOperationLabel, getSta
 export type RequestPriceReview = {
 	requestValueAttoEth: bigint
 	managerAddress: Address
-	questionTitle: string | undefined
 	securityPoolAddress: Address
 	universeId: bigint
 }
@@ -54,20 +52,9 @@ export function SecurityPoolRequestPriceModal({
 	review: RequestPriceReview | undefined
 }) {
 	return (
-		<OperationModal
-			closeOnSuccessKey={closeOnSuccessKey}
-			context={
-				review === undefined
-					? []
-					: [...(review.questionTitle === undefined ? [] : [{ label: commonCopy.question, value: review.questionTitle }]), { label: commonCopy.securityPoolAddress, value: <AddressValue address={review.securityPoolAddress} /> }, { label: transactionReviewCopy.network, value: <TransactionNetworkValue /> }]
-			}
-			description={securityPoolCopy.requestPriceReviewDescription}
-			isOpen={review !== undefined}
-			onClose={onClose}
-			title={securityPoolCopy.requestNewPriceTitle}
-		>
+		<OperationModal closeOnSuccessKey={closeOnSuccessKey} isOpen={review !== undefined} onClose={onClose} title={securityPoolCopy.requestNewPriceTitle}>
 			<TransactionReview primary={[{ label: transactionReviewCopy.youPay, value: <CurrencyValue precision='exact' value={review?.requestValueAttoEth} suffix={commonCopy.eth} /> }]} risks={[securityPoolCopy.requestPricePendingReportRisk, securityPoolCopy.requestPriceFundingRisk]} />
-			<div className='actions'>
+			<div className='actions oracle-actions'>
 				<button className='secondary' type='button' onClick={onClose} disabled={pending}>
 					{commonCopy.cancel}
 				</button>
@@ -159,7 +146,7 @@ export function SecurityPoolStagedOperationsSection({
 					<FormInput value={manualOperationId} onInput={event => onManualOperationIdChange(event.currentTarget.value)} placeholder={suggestedOperationId > 0n ? suggestedOperationId.toString() : securityPoolCopy.zeroPlaceholder} />
 				</label>
 			)}
-			<div className='actions'>
+			<div className='actions oracle-actions'>
 				<button className='secondary' onClick={() => onLoadManager(managerAddress)} disabled={loadingManager || (managerDetails === undefined && managerError === undefined)}>
 					{getStagedOperationsRefreshLabel({ loadingManager, managerError, managerLoaded: managerDetails !== undefined })}
 				</button>
@@ -230,7 +217,7 @@ export function SecurityPoolPriceOracleSection({
 				)}
 			</MetricGrid>
 			<ErrorNotice message={managerError} />
-			<div className='actions'>
+			<div className='actions oracle-actions'>
 				<button className='secondary' onClick={() => onLoadManager(managerAddress)} disabled={loadingManager}>
 					{loadingManager ? <LoadingText>{securityPoolCopy.refreshingOracle}</LoadingText> : securityPoolCopy.refreshOracle}
 				</button>

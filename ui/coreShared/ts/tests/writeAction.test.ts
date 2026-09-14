@@ -5,7 +5,7 @@ import { getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import type { ChainBackend } from '../wallet/chainBackend.js'
 import { MAINNET_NETWORK_PROFILE } from '../wallet/networkProfile.js'
-import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFailed, markTransactionFinished, markTransactionRequested, TRANSACTION_ACTION_LOCK_REASON } from '../transactions/transactionTray.js'
+import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFailed, markTransactionFinished, markTransactionRequested } from '../transactions/transactionTray.js'
 import { buildWriteActionConfig, runWriteAction } from '../transactions/writeAction.js'
 import { createFakeBackend, createFakeSimulationProfile } from './testUtils/fakeBackend.js'
 
@@ -151,7 +151,7 @@ describe('runWriteAction', () => {
 		)
 
 		expect(secondActionRuns).toBe(0)
-		expect(secondError).toBe(TRANSACTION_ACTION_LOCK_REASON)
+		expect(secondError).toBeUndefined()
 		expect(transactionState.inFlightCount).toBe(1)
 		releaseFirstAction?.()
 		await first

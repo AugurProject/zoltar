@@ -2,18 +2,7 @@
 
 import { afterEach, describe, expect, test } from 'bun:test'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
-import {
-	createInitialTransactionTrayState,
-	getTransactionActionLockReason,
-	markTransactionCanceled,
-	markTransactionFailed,
-	markTransactionFinished,
-	markTransactionPrepared,
-	markTransactionPresented,
-	markTransactionRequested,
-	markTransactionSubmitted,
-	TRANSACTION_ACTION_LOCK_REASON,
-} from '../transactions/transactionTray.js'
+import { createInitialTransactionTrayState, isTransactionActionLocked, markTransactionCanceled, markTransactionFailed, markTransactionFinished, markTransactionPrepared, markTransactionPresented, markTransactionRequested, markTransactionSubmitted } from '../transactions/transactionTray.js'
 import { createFakeBackend, createFakeSimulationProfile } from './testUtils/fakeBackend.js'
 
 const transactionHash = '0x1234000000000000000000000000000000000000000000000000000000000000'
@@ -68,13 +57,13 @@ describe('transactionTray', () => {
 		const submitted = markTransactionSubmitted(requested, transactionHash)
 		const finished = markTransactionFinished(submitted)
 
-		expect(getTransactionActionLockReason(requested)).toBe(TRANSACTION_ACTION_LOCK_REASON)
+		expect(isTransactionActionLocked(requested)).toBe(true)
 		expect(requested.inFlightCount).toBe(1)
 		expect(requested.pendingIntent).toBeDefined()
-		expect(getTransactionActionLockReason(submitted)).toBe(TRANSACTION_ACTION_LOCK_REASON)
+		expect(isTransactionActionLocked(submitted)).toBe(true)
 		expect(submitted.inFlightCount).toBe(1)
 		expect(submitted.pendingIntent).toBeDefined()
-		expect(getTransactionActionLockReason(finished)).toBeUndefined()
+		expect(isTransactionActionLocked(finished)).toBe(false)
 		expect(finished.inFlightCount).toBe(0)
 		expect(finished.pendingIntent).toBeUndefined()
 	})
@@ -334,9 +323,9 @@ describe('transactionTray', () => {
 		expect(canceled.pendingIntent).toBeUndefined()
 		expect(canceled.pendingRequestKey).toBeUndefined()
 		expect(canceled.inFlightCount).toBe(1)
-		expect(getTransactionActionLockReason(canceled)).toBe(TRANSACTION_ACTION_LOCK_REASON)
+		expect(isTransactionActionLocked(canceled)).toBe(true)
 		expect(finished.inFlightCount).toBe(0)
-		expect(getTransactionActionLockReason(finished)).toBeUndefined()
+		expect(isTransactionActionLocked(finished)).toBe(false)
 	})
 
 	test('turns a submitted pending transaction into a failed transaction while preserving the hash', () => {

@@ -128,7 +128,7 @@ export function getVaultExecutePendingOperationGuardMessage({
 	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: 'Connect a wallet before executing a staged operation.' })
 	if (walletGuardState.blocked) return walletGuardState.reason
 	if (!hasLoadedOracleManager) return 'Loading price oracle details.'
-	if (isPriceValid === false) return 'Wait for a valid oracle price before executing a staged operation.'
+	if (isPriceValid === false) return 'Request a new price in Price Oracle before executing this operation.'
 	if (resolvedPendingOperationId === undefined) return 'Enter a valid staged operation ID.'
 	return undefined
 }

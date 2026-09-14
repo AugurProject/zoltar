@@ -16,7 +16,6 @@ import { refreshWalletStateOnly } from '@zoltar/ui-core-shared/lib/refreshState.
 import type { TransactionLifecycleParameters, WriteOperationContext, ZoltarMigrationFormState } from '../../../types/app.js'
 import type { ZoltarMigrationActionResult, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { createActiveEnvironmentGuard } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { TRANSACTION_ACTION_LOCK_REASON } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
 
 type UseZoltarMigrationParameters = TransactionLifecycleParameters &
 	WriteOperationContext & {
@@ -93,7 +92,7 @@ export function useZoltarMigration({
 					) === false
 				) {
 					writeFailed = true
-					zoltarMigrationFeedback.value = createErrorActionFeedback('splitMigrationRep', 'REP split failed', TRANSACTION_ACTION_LOCK_REASON)
+					zoltarMigrationFeedback.value = undefined
 					return
 				}
 				ownsTransaction = true

@@ -168,7 +168,7 @@ describe('security vault guards', () => {
 				isPriceValid: false,
 				resolvedPendingOperationId: 1n,
 			}),
-		).toBe('Wait for a valid oracle price before executing a staged operation.')
+		).toBe('Request a new price in Price Oracle before executing this operation.')
 
 		expect(
 			getVaultExecutePendingOperationGuardMessage({

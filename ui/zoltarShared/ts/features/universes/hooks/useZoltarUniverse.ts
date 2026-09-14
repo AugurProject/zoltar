@@ -17,7 +17,6 @@ import { assertActiveWallet } from '@zoltar/ui-core-shared/wallet/assertActiveWa
 import { createActiveEnvironmentGuard } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import type { TransactionLifecycleParameters } from '../../../types/app.js'
 import type { DeploymentStatus, MarketDetails, MarketDetailsPage, ZoltarChildUniverseActionResult, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
-import { TRANSACTION_ACTION_LOCK_REASON } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
 
 function buildQuestionPageFromQuestions(questions: MarketDetails[], currentPage: MarketDetailsPage): MarketDetailsPage {
 	const questionCount = BigInt(questions.length)
@@ -386,7 +385,7 @@ export function useZoltarUniverse(
 				await assertActiveWallet(accountAddress)
 				if (!environmentGuard.isCurrent()) return
 				if (onTransactionRequested(createChildUniverseTransactionIntent('zoltar', { outcomeIndex, universeId: activeUniverseId })) === false) {
-					zoltarChildUniverseFeedback.value = createErrorActionFeedback('createChildUniverse', 'Child universe deployment blocked', TRANSACTION_ACTION_LOCK_REASON)
+					zoltarChildUniverseFeedback.value = undefined
 					return
 				}
 				ownsTransaction = true
