@@ -1,3 +1,4 @@
+import { BackingDetails } from './BackingDetails.js'
 import { formatBpsMultiplier, formatCapacityOwnership, formatMintingCapacity, formatUnits } from '../lib/format.js'
 import { Status } from '../components/Status.js'
 import { marketNewRiskBlocker, type LiveMarket } from '../protocol/live.js'
@@ -139,6 +140,7 @@ export function LiveSecurityPoolDetails({
 								<dd>{formatMintingCapacity(market.settlementCollateralAttoEth, market.mintingCapacityCeilingAttoEth)}</dd>
 							</div>
 						</dl>
+						<BackingDetails market={market} />
 						{market.pair === undefined ? (
 							<PairInitializationAction market={market} nowSeconds={nowSeconds} />
 						) : (

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { bigintToSafeNumber, formatBpsMultiplier, formatCapacityOwnership, formatRoundedUnits, formatUnits, parseUnits, parseUnitsOrUndefined } from '../../lib/format.js'
-import { attoSharesToCollateralAttoEth, averagePriceBps, collateralAttoEthToAttoShares, formatCollateralEth, formatCompleteSetValue, formatLpValue, formatOutcomeValue } from '../../lib/shareValue.js'
+import { attoSharesToCollateralAttoEth, averagePriceBps, collateralAttoEthToAttoShares, formatCollateralEth, formatCompleteSetQuantity, formatLpQuantity, formatOutcomeQuantity } from '../../lib/shareValue.js'
 import { forkMigrationBatchBlocker, forkMigrationBatchWarning, insuredExitLimitMessage, migrationSimulationSummary, settlementBalanceLabel, settlementInputBlocker } from '../../features/LiveSettlementModel.js'
 import { createSecurityPoolDeploymentIndex, liveBalancesForMarket, marketAcceptsNewRisk, publicErrorMessage, marketNewRiskBlocker, mapWithConcurrency, refreshSecurityPoolDeploymentEventIndex, registryBlockAnchorIsCanonical, settlementAvailability, shareBalanceScope, type LiveMarket } from '../../protocol/live.js'
 import { maximumAfterSlippage, minimumAfterSlippage, requireTransactionSlippageBps, requireTransactionValidityMinutes, retainApprovedMaximum, retainApprovedMinimum } from '../../protocol/tradeQuote.js'
@@ -121,8 +121,8 @@ describe('standalone trading UI model', () => {
 		expect(formatRoundedUnits(123n, 18, 18)).toBe('0.000000000000000123')
 	})
 
-	test('presents share amounts as their settlement-collateral value at the pool rate', () => {
-		// The pool mints 10^18 attoShares per attoETH at genesis, so raw share counts are unreadable without the rate.
+	test('separates fixed share quantities from settlement-collateral values', () => {
+		// Quantities use fixed genesis normalization; only ETH values use the current backing.
 		const genesis = { settlementCollateralAttoEth: 0n, shareTokenSupplyAttoShares: 0n }
 		expect(attoSharesToCollateralAttoEth(5n * 10n ** 33n, genesis)).toBe(5n * 10n ** 15n)
 		expect(collateralAttoEthToAttoShares(5n * 10n ** 15n, genesis)).toBe(5n * 10n ** 33n)
@@ -132,18 +132,18 @@ describe('standalone trading UI model', () => {
 		expect(collateralAttoEthToAttoShares(1n, rate)).toBe(1_111_111_111_111_111_111n)
 		expect(collateralAttoEthToAttoShares(1n, { settlementCollateralAttoEth: 0n, shareTokenSupplyAttoShares: 1n })).toBeUndefined()
 		expect(() => attoSharesToCollateralAttoEth(-1n, rate)).toThrow('cannot be negative')
-		expect(formatOutcomeValue(10n ** 36n, 'YES', rate)).toBe('0.9 YES')
-		expect(formatCompleteSetValue(10n ** 36n, rate)).toBe('0.9 complete sets')
+		expect(formatOutcomeQuantity(10n ** 36n, 'YES')).toBe('1 YES')
+		expect(formatCompleteSetQuantity(10n ** 36n)).toBe('1 complete set')
 		// Exactly 0.005 ETH of shares under a rate that no longer divides evenly still reads as 0.005, while limits round down.
 		const drifted = { settlementCollateralAttoEth: 9_999_999_999_999_999n, shareTokenSupplyAttoShares: 10n * 10n ** 36n }
 		const shares = collateralAttoEthToAttoShares(5n * 10n ** 15n, drifted)
 		if (shares === undefined) throw new Error('Drifted rate must convert')
-		expect(formatOutcomeValue(shares, 'YES', drifted)).toBe('0.005 YES')
-		expect(formatOutcomeValue(shares, 'YES', drifted, 4, 'down')).toBe('0.0049 YES')
+		expect(formatOutcomeQuantity(shares, 'YES')).toBe('5 YES')
+		expect(formatOutcomeQuantity(shares, 'YES', 4, 'down')).toBe('5 YES')
 		expect(formatCollateralEth(shares, drifted, 'down')).toBe('0.0049 ETH')
 		expect(formatCollateralEth(shares, drifted)).toBe('0.005 ETH')
-		expect(formatCompleteSetValue(10n ** 36n, { settlementCollateralAttoEth: 10n ** 18n, shareTokenSupplyAttoShares: 10n ** 36n })).toBe('1 complete set')
-		expect(formatLpValue(10n ** 36n, rate)).toBe('0.9 LP')
+		expect(formatCompleteSetQuantity(10n ** 36n)).toBe('1 complete set')
+		expect(formatLpQuantity(10n ** 36n)).toBe('1 LP')
 		expect(averagePriceBps(6n * 10n ** 17n, 10n ** 36n, rate)).toBe(6_666n)
 		expect(averagePriceBps(1n, 0n, rate)).toBeUndefined()
 	})
@@ -396,9 +396,9 @@ describe('standalone trading UI model', () => {
 		expect(settlementBalanceLabel('loading', 0n, unit)).toBe('Loading…')
 		expect(settlementBalanceLabel('error', 0n, unit)).toBe('Unavailable')
 		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit)).toBe('5 ETH')
-		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit, 'YES')).toBe('5 YES')
-		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit, 'NO')).toBe('5 NO')
-		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit, 'INVALID')).toBe('5 INVALID')
+		expect(settlementBalanceLabel('ready', 5n * 10n ** 36n, unit, 'YES')).toBe('5 YES')
+		expect(settlementBalanceLabel('ready', 5n * 10n ** 36n, unit, 'NO')).toBe('5 NO')
+		expect(settlementBalanceLabel('ready', 5n * 10n ** 36n, unit, 'INVALID')).toBe('5 INVALID')
 	})
 
 	test('discards failed submission quotes so every workflow can simulate again', () => {

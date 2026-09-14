@@ -175,7 +175,7 @@ describe('liquidity workflow controller state', () => {
 			submitFreshLiquidity: async () => transactionHash,
 		}
 		let controller: Controller | undefined
-		// Ten attoShares per attoETH: 0.01 ETH of LP converts to 10^17 LP units.
+		// 0.01 LP uses fixed genesis normalization, independently of ETH backing.
 		const ratedMarket: LiveMarket = { ...market, shareTokenSupplyAttoShares: 1_000n, settlementCollateralAttoEth: 100n }
 		const rendered = await renderIntoDocument(
 			controllerProbe(
@@ -188,7 +188,7 @@ describe('liquidity workflow controller state', () => {
 		)
 		await act(() => controller?.selectOperation('remove'))
 		await act(async () => controller?.simulateCurrent())
-		expect(removals).toEqual([10n ** 17n])
+		expect(removals).toEqual([10n ** 34n])
 		expect(controller?.state).toBe('ready')
 		// A background refresh that only rebuilds the market object keeps the quote submittable.
 		await act(() =>
@@ -204,7 +204,7 @@ describe('liquidity workflow controller state', () => {
 			),
 		)
 		await flush()
-		expect(controller?.quote?.amount).toBe(10n ** 17n)
+		expect(controller?.quote?.amount).toBe(10n ** 34n)
 		// Moving the pool rate changes what the entered value means, so the quote is retired instead of failing at submit.
 		await act(() =>
 			render(
@@ -221,7 +221,7 @@ describe('liquidity workflow controller state', () => {
 		await flush()
 		expect(controller?.quote).toBeUndefined()
 		expect(controller?.state).toBe('idle')
-		expect(controller?.parsed).toBe(111_111_111_111_111_111n)
+		expect(controller?.parsed).toBe(10n ** 34n)
 		await rendered.cleanup()
 	})
 

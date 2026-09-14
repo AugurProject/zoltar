@@ -1,7 +1,8 @@
+import * as payoutCopy from '../copy/payout.js'
 import { useId } from 'preact/hooks'
 import type { Hash } from '@zoltar/core-shared/evm/ethereum'
 import { bigintToSafeNumber, formatRoundedUnits, formatUnits } from '../lib/format.js'
-import { formatOutcomeValue, type ShareValueRate } from '../lib/shareValue.js'
+import { formatCollateralEth, formatOutcomeQuantity, type ShareValueRate } from '../lib/shareValue.js'
 import * as workflowCopy from '../copy/workflows.js'
 import { TransactionHashLink } from '@zoltar/ui-core-shared/components/TransactionHashLink.js'
 import { TransactionReview } from '@zoltar/ui-core-shared/components/TransactionReview.js'
@@ -51,10 +52,10 @@ export function renderLiveTradeSummary(quote: LiveTradeSummaryQuote, side: 'YES'
 		quote.kind === 'entry'
 			? [
 					{ label: workflowCopy.youPay, value: `${formatRoundedUnits(quote.value.amount)} ETH` },
-					{ label: workflowCopy.youReceive, value: formatOutcomeValue(quote.value.result.totalLongShares, side, quote.value.market) },
+					{ label: workflowCopy.youReceive, value: formatOutcomeQuantity(quote.value.result.totalLongShares, side) },
 				]
 			: [
-					{ label: workflowCopy.youUse, value: formatOutcomeValue(quote.value.result.totalLongShares, side, quote.value.market) },
+					{ label: workflowCopy.youUse, value: formatOutcomeQuantity(quote.value.result.totalLongShares, side) },
 					{ label: workflowCopy.youReceive, value: `${formatRoundedUnits(quote.value.result.ethOut)} ETH` },
 				]
 	return (
@@ -63,10 +64,21 @@ export function renderLiveTradeSummary(quote: LiveTradeSummaryQuote, side: 'YES'
 				variant='inline'
 				primary={primary}
 				details={[
-					{ label: quote.kind === 'entry' ? workflowCopy.invalidReceived : workflowCopy.invalidRequired, value: formatOutcomeValue(quote.value.result.invalidInsurance, 'INVALID', quote.value.market) },
+					{ label: quote.kind === 'entry' ? workflowCopy.invalidReceived : workflowCopy.invalidRequired, value: formatOutcomeQuantity(quote.value.result.invalidInsurance, 'INVALID') },
 					{ label: workflowCopy.tradingFee, value: `${formatUnits(quote.value.market.feeBps, 2, 2)}%` },
 				]}
 			/>
+			{quote.kind === 'entry' ? (
+				<p class='field-note'>
+					<strong>{payoutCopy.conditionalPayout(formatCollateralEth(quote.value.result.totalLongShares, quote.value.market), side)}</strong>
+					{' · '}
+					{payoutCopy.currentBacking}
+					{' · '}
+					{payoutCopy.otherwiseZero}
+					<br />
+					{payoutCopy.holdingFeeNote}
+				</p>
+			) : null}
 		</div>
 	)
 }

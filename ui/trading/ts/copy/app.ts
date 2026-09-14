@@ -56,7 +56,8 @@ export const marketGuideSteps = [
 export const priceMeaningTitle = 'What the price means'
 export const priceMeaningDescription = 'Conditional YES and NO prices sum to 100% because the pair compares only valid outcomes. This does not say INVALID has zero probability; the AMM has no invalidity estimate at all.'
 export const shareValueTitle = 'How share amounts are shown'
-export const shareValueDescription = 'YES, NO, INVALID, complete-set, and LP amounts are shown on one scale: the settlement-collateral value in ETH that the security pool currently assigns to that many shares, which is what a complete set redeems for or a winning share pays out. Amounts you enter use the same scale.'
+export const shareValueDescription =
+	'Token quantities stay unchanged as holding fees reduce their ETH backing. A complete set contains equal amounts of YES, NO, and INVALID and redeems at the current backing. An individual outcome pays that backing only if it wins, and pays 0 ETH otherwise. ETH values shown for outcomes are conditional payouts, not sale quotes. LP quantities represent a share of the pool; their underlying YES and NO claims are shown separately. Deposit and redemption inputs use ETH; LP removal inputs use LP quantities.'
 export const remainingSharesTitle = 'Why profit can remain as shares'
 export const remainingSharesDescription =
 	'An insured ETH exit requires one INVALID for every complete set redeemed. If a profitable position contains more directional shares than matching INVALID, the excess remains transferable but cannot be converted into complete sets without acquiring more INVALID. After resolution, those excess shares redeem collateral only if their outcome won.'

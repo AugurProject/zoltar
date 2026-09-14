@@ -185,6 +185,15 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 			if (account === undefined) throw new Error('Simulation wallet is missing')
 			const balances = await loadLiveBalances(backend.createReadClient(), market, account)
 			for (const balance of [balances.yes, balances.no, balances.invalid, balances.lp]) expect(balance).toBeGreaterThan(0n)
+			await backend.advanceTime(60n)
+			const refreshed = await discoverLiveUniverseMarketPage(backend.createReadClient(), configuration, 0n)
+			const valued = refreshed.markets[0]
+			if (valued?.valuation === undefined) throw new Error('Fee valuation is missing')
+			expect(valued.valuation.timestamp).toBeGreaterThan(market.valuation?.timestamp ?? 0n)
+			expect(valued.settlementCollateralAttoEth).toBeLessThan(market.settlementCollateralAttoEth)
+			expect(valued.shareTokenSupplyAttoShares).toBe(market.shareTokenSupplyAttoShares)
+			expect(valued.valuation.projectedCollateralAttoEth).toBeLessThanOrEqual(valued.settlementCollateralAttoEth)
+			expect(await loadLiveBalances(backend.createReadClient(), valued, account)).toEqual(balances)
 		}, 180_000)
 
 		test('isolates one failed market read into an explicit unavailable row without leaking provider detail', async () => {

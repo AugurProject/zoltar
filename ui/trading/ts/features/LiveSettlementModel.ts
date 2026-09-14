@@ -1,4 +1,4 @@
-import { attoSharesToCollateralAttoEth, formatCollateralEth, formatOutcomeValue, type ShareValueRate } from '../lib/shareValue.js'
+import { attoSharesToCollateralAttoEth, formatCollateralEth, formatOutcomeQuantity, type ShareValueRate } from '../lib/shareValue.js'
 import type { ForkTarget } from '../protocol/forks.js'
 import type { SettlementOperation, ShareOutcome } from '../protocol/live.js'
 import type { BalanceState } from './live/liveTradingTypes.js'
@@ -40,5 +40,5 @@ export function settlementBalanceLabel(balanceState: BalanceState, balance: bigi
 	if (balanceState === 'loading') return 'Loading…'
 	if (balanceState === 'error') return 'Unavailable'
 	if (balanceState !== 'ready' || balance === undefined) return 'Not loaded'
-	return outcome === undefined ? formatCollateralEth(balance, rate, 'down') : formatOutcomeValue(balance, outcome, rate)
+	return outcome === undefined ? formatCollateralEth(balance, rate, 'down') : formatOutcomeQuantity(balance, outcome)
 }

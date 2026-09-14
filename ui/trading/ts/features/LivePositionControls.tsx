@@ -1,6 +1,7 @@
+import { BackingDetails } from './BackingDetails.js'
 import type { Hash } from '@zoltar/core-shared/evm/ethereum'
 import { bigintToSafeNumber, formatRoundedUnits, formatUnits, parseUnitsOrUndefined } from '../lib/format.js'
-import { attoSharesToCollateralAttoEth, averagePriceBps, collateralAttoEthToAttoShares, formatCollateralEth, formatCompleteSetValue, formatOutcomeValue } from '../lib/shareValue.js'
+import { attoSharesToCollateralAttoEth, averagePriceBps, collateralAttoEthToAttoShares, formatCollateralEth, formatCompleteSetQuantity, formatOutcomeQuantity } from '../lib/shareValue.js'
 import { ProbabilityBar } from '../components/ProbabilityBar.js'
 import { marketAcceptsNewRisk, type LiveBalances, type LiveMarket, type ShareOutcome } from '../protocol/live.js'
 import { maximumInsuredExit } from '@zoltar/trading-shared/trading/positions'
@@ -85,7 +86,7 @@ export function LivePositionControls({
 	const stateText = stateLabel(state, mode === 'entry' ? workflowCopy.enterOutcome(side) : workflowCopy.insuredOutcomeExit(side))
 	const statusText = revalidatingAfterReceipt && stateText !== undefined ? workflowCopy.revalidatingAfterReceipt(stateText) : stateText
 	const walletBalanceLabel = (value: bigint | undefined, outcome: ShareOutcome) => {
-		if (value !== undefined) return formatOutcomeValue(value, outcome, market)
+		if (value !== undefined) return formatOutcomeQuantity(value, outcome)
 		if (balanceState === 'loading') return appCopy.loadingBalances
 		if (balanceState === 'error') return appCopy.unavailable
 		return appCopy.connectWallet
@@ -93,6 +94,7 @@ export function LivePositionControls({
 	return (
 		<div class='operation-block' aria-busy={balanceState === 'loading' || revalidatingAfterReceipt}>
 			<ProbabilityBar yesPercent={yesPercent} />
+			<BackingDetails market={market} />
 			<dl class='metrics'>
 				<div>
 					<dt>{workflowCopy.walletYes}</dt>
@@ -171,31 +173,31 @@ export function LivePositionControls({
 						</div>
 						<div>
 							<dt>{workflowCopy.completeSets}</dt>
-							<dd>{formatCompleteSetValue(quote.value.result.completeSetShares, market)}</dd>
+							<dd>{formatCompleteSetQuantity(quote.value.result.completeSetShares)}</dd>
 						</div>
 						<div>
 							<dt>{quote.kind === 'entry' ? workflowCopy.oppositeOutcomeSwapped : workflowCopy.outcomeSwapped(side)}</dt>
-							<dd>{formatOutcomeValue(quote.kind === 'entry' ? quote.value.result.oppositeSharesSwapped : quote.value.result.longSharesSwapped, quote.kind === 'entry' ? oppositeOutcome : side, market)}</dd>
+							<dd>{formatOutcomeQuantity(quote.kind === 'entry' ? quote.value.result.oppositeSharesSwapped : quote.value.result.longSharesSwapped, quote.kind === 'entry' ? oppositeOutcome : side)}</dd>
 						</div>
 						<div>
 							<dt>{quote.kind === 'entry' ? workflowCopy.additionalOutcomeReceived(side) : workflowCopy.totalOutcomeRequired(side)}</dt>
-							<dd>{formatOutcomeValue(quote.kind === 'entry' ? quote.value.result.additionalLongShares : quote.value.result.totalLongShares, side, market)}</dd>
+							<dd>{formatOutcomeQuantity(quote.kind === 'entry' ? quote.value.result.additionalLongShares : quote.value.result.totalLongShares, side)}</dd>
 						</div>
 						<div>
 							<dt>{quote.kind === 'entry' ? workflowCopy.totalOutcomeDelivered(side) : workflowCopy.invalidRequiredUppercase}</dt>
-							<dd>{formatOutcomeValue(quote.kind === 'entry' ? quote.value.result.totalLongShares : quote.value.result.invalidInsurance, quote.kind === 'entry' ? side : 'INVALID', market)}</dd>
+							<dd>{formatOutcomeQuantity(quote.kind === 'entry' ? quote.value.result.totalLongShares : quote.value.result.invalidInsurance, quote.kind === 'entry' ? side : 'INVALID')}</dd>
 						</div>
 						<div>
 							<dt>{quote.kind === 'entry' ? workflowCopy.invalidReceived : workflowCopy.estimatedEthOut}</dt>
-							<dd>{quote.kind === 'entry' ? formatOutcomeValue(quote.value.result.invalidInsurance, workflowCopy.invalid, market) : `${formatRoundedUnits(quote.value.result.ethOut)} ${workflowCopy.eth}`}</dd>
+							<dd>{quote.kind === 'entry' ? formatOutcomeQuantity(quote.value.result.invalidInsurance, workflowCopy.invalid) : `${formatRoundedUnits(quote.value.result.ethOut)} ${workflowCopy.eth}`}</dd>
 						</div>
 						<div>
 							<dt>{workflowCopy.ammFee}</dt>
-							<dd>{formatOutcomeValue(quote.value.result.feeAmount, quote.kind === 'entry' ? oppositeOutcome : side, market, 8)}</dd>
+							<dd>{formatOutcomeQuantity(quote.value.result.feeAmount, quote.kind === 'entry' ? oppositeOutcome : side, 8)}</dd>
 						</div>
 						<div>
 							<dt>{quote.kind === 'entry' ? workflowCopy.minimumOutcomeReceived(side) : workflowCopy.maximumOutcomeRequired(side)}</dt>
-							<dd>{formatOutcomeValue(quote.kind === 'entry' ? quote.value.minimumLongShares : quote.value.maximumLongShares, side, market)}</dd>
+							<dd>{formatOutcomeQuantity(quote.kind === 'entry' ? quote.value.minimumLongShares : quote.value.maximumLongShares, side)}</dd>
 						</div>
 						{quote.kind === 'entry' ? (
 							<div>
