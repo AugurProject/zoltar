@@ -1,35 +1,9 @@
-import { encodeFunctionData, type Address, type Hex, zeroAddress } from '@zoltar/bot-shared/ethereum'
-import { STANDARD_UNISWAP_FEES } from '#core/uniswap-v4'
-import { getOpenOracleGameTuple, getOpenOracleHelperTuple, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_TIME_TYPE, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
+import { type Configuration } from '#config/configuration'
 import { erc20Abi, multicall3Abi, openOracleArbitrageExecutorAbi, quoterAbi } from '#contracts/abi'
 import { batchRead, batchValue, type BatchReader } from '#core/batch-read'
-import { type Configuration } from '#config/configuration'
-import {
-	assertCanonicalExecutionSnapshot,
-	buildHedgeExecutionPayload,
-	canonicalBlockHashWithQuorum,
-	fundingTransactionPlan,
-	guardedTransactionSubmission,
-	guardedExecutionStep,
-	guardedRiskSubmission,
-	isExecutionPausedError,
-	journaledSubmission,
-	lifecycleAllowanceMismatch,
-	openOracleDisputeTiming,
-	privateEntryRecoveryIsConfirmed,
-	selectBestExecution,
-	simulateTrackedPrivateBundle,
-	trackPrivateBundleReceiptStatuses,
-	transactionReceiptsWithQuorum,
-} from '#execution/execution-orchestration'
-import { decimalSignedEth, decimalWeth, type BalanceSnapshot, type ExecutionRecord } from '#state/operator-state'
-import { formatTokenAmount } from '#monitoring/market-monitor'
-import { centralizedMarketConfigurationAllowsExecution, centralizedPriceAllowsExecution, type CentralizedMarketEstimate } from '@zoltar/bot-shared/monitoring/centralized-markets'
-import { marketConsensusAllowsExecution, type MarketConsensusEstimate } from '@zoltar/bot-shared/monitoring/market-consensus'
-
-const FEES = STANDARD_UNISWAP_FEES
+import type { Pool, ReadClient, WriteClient } from '#core/operator-types'
 import { expectedWithdrawalToken2, hedgedProfitBeforeGasWeth } from '#core/position-accounting'
-import { type PositionRecord } from '#state/position-store'
+import { requiredBigint, requiredTuple } from '#core/rpc-validation'
 import { positionRiskLimitMismatch, projectedLifecycleGasReserveAttoWeth } from '#core/safety-controls'
 import {
 	calculateFee,
@@ -47,15 +21,42 @@ import {
 	spotTwapDeviationWithinLimit,
 	type ArbitrageQuote,
 } from '#core/strategy'
-import { prepareSignedTransaction, simulateSignedBundleEveryRelay, submitConfiguredSignedBundle, SubmissionFailure, type SubmissionTargetResult } from '#execution/transaction-submission'
-import { receiptGasCost, submitContractTransaction, trackedActivity, waitForTrackedTransaction, type TrackTransaction } from '#execution/transaction-tracker'
+import { STANDARD_UNISWAP_FEES } from '#core/uniswap-v4'
 import type { Venue } from '#core/venue-strategy'
-import type { Pool, ReadClient, WriteClient } from '#core/operator-types'
-import { errorMessage, requiredBigint, requiredTuple } from '#core/rpc-validation'
-import { executionReadQuorum, safetyAdjustedQuote } from '#monitoring/opportunity-evaluation'
-import { operationalFailureDisposition } from '@zoltar/bot-shared/monitoring/resilience'
-import { confirmedGasExpenditures, currentBlockNumberWithQuorum, dateFromBlockTimestamp, durableTransactionIntent, hedgeExecutionFromLogs, pendingNonceWithQuorum, recoveredTransactionIntentMismatchWithQuorum } from '#execution/recovery-support'
+import {
+	assertCanonicalExecutionSnapshot,
+	buildHedgeExecutionPayload,
+	canonicalBlockHashWithQuorum,
+	fundingTransactionPlan,
+	guardedExecutionStep,
+	guardedRiskSubmission,
+	guardedTransactionSubmission,
+	isExecutionPausedError,
+	journaledSubmission,
+	lifecycleAllowanceMismatch,
+	openOracleDisputeTiming,
+	privateEntryRecoveryIsConfirmed,
+	selectBestExecution,
+	simulateTrackedPrivateBundle,
+	trackPrivateBundleReceiptStatuses,
+	transactionReceiptsWithQuorum,
+} from '#execution/execution-orchestration'
 import { executionRecordForConfirmedPosition, recoverPendingEntryWithQuorum } from '#execution/position-lifecycle'
+import { confirmedGasExpenditures, currentBlockNumberWithQuorum, dateFromBlockTimestamp, durableTransactionIntent, hedgeExecutionFromLogs, pendingNonceWithQuorum, recoveredTransactionIntentMismatchWithQuorum } from '#execution/recovery-support'
+import { prepareSignedTransaction, simulateSignedBundleEveryRelay, SubmissionFailure, submitConfiguredSignedBundle, type SubmissionTargetResult } from '#execution/transaction-submission'
+import { receiptGasCost, submitContractTransaction, trackedActivity, waitForTrackedTransaction, type TrackTransaction } from '#execution/transaction-tracker'
+import { formatTokenAmount } from '#monitoring/market-monitor'
+import { executionReadQuorum, safetyAdjustedQuote } from '#monitoring/opportunity-evaluation'
+import { decimalSignedEth, decimalWeth, type BalanceSnapshot, type ExecutionRecord } from '#state/operator-state'
+import { type PositionRecord } from '#state/position-store'
+import { encodeFunctionData, zeroAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
+import { centralizedMarketConfigurationAllowsExecution, centralizedPriceAllowsExecution, type CentralizedMarketEstimate } from '@zoltar/bot-shared/monitoring/centralized-markets'
+import { marketConsensusAllowsExecution, type MarketConsensusEstimate } from '@zoltar/bot-shared/monitoring/market-consensus'
+import { operationalFailureDisposition } from '@zoltar/bot-shared/monitoring/resilience'
+import { getOpenOracleGameTuple, getOpenOracleHelperTuple, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_TIME_TYPE, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
+
+const FEES = STANDARD_UNISWAP_FEES
 
 /** Reads wallet inventory in one batched call at the scanned block, then values the REP balance across its pools in a second. */
 export async function loadBalances(client: BatchReader, wallet: Pick<WriteClient, 'account'> | undefined, config: Pick<Configuration, 'network'>, tokens: readonly Address[], blockNumber?: bigint | undefined) {

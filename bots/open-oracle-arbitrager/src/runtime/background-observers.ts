@@ -1,8 +1,8 @@
 import { exchanges } from 'ccxt'
 import { createCentralizedExchangeFactory } from '@zoltar/bot-shared/monitoring/centralized-exchange-factory'
 import type { Configuration } from '#config/configuration'
-import { errorMessage } from '#core/rpc-validation'
 import { recordOperation, type OperatorState } from '#state/operator-state'
+import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
 import { observeCentralizedMarkets } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import { createHeadWatcher, type HeadWatcher, type ObservedHead } from '@zoltar/bot-shared/monitoring/head-watcher'
 

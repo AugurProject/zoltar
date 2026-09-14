@@ -41,6 +41,7 @@
 		"./monitoring/read-quorum": "./src/monitoring/read-quorum.ts",
 		"./monitoring/rpc-quorum-policy": "./src/monitoring/rpc-quorum-policy.ts",
 		"./monitoring/resilience": "./src/monitoring/resilience.ts",
+		"./infrastructure/error-message": "./src/infrastructure/error-message.ts",
 		"./monitoring/centralized-exchange-factory": "./src/monitoring/centralized-exchange-factory.ts"
 	},
 	"scripts": {

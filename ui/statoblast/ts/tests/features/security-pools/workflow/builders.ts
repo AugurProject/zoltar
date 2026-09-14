@@ -1,9 +1,10 @@
 import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { deriveHasForkActivity } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/forkAuction.js'
-import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
-import type { ForkAuctionDetails, ListedSecurityPool, MarketDetails, OracleManagerDetails, SecurityPoolVaultSummary, SecurityVaultDetails } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { ForkAuctionRouteContentProps, SecurityPoolWorkflowRouteContentProps, SecurityVaultRouteContentProps, TradingRouteContentProps } from '@zoltar/ui-zoltar-shared/features/types.js'
+import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
+import type { ForkAuctionDetails, ListedSecurityPool, OracleManagerDetails, SecurityPoolVaultSummary, SecurityVaultDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ReportingRouteContentProps } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
+import { deriveHasForkActivity } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/forkAuction.js'
+import type { ForkAuctionRouteContentProps, SecurityPoolWorkflowRouteContentProps, SecurityVaultRouteContentProps, TradingRouteContentProps } from '@zoltar/ui-zoltar-shared/features/types.js'
+import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
 
 export function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {
@@ -238,25 +239,6 @@ export function createForkAuctionDetails(overrides: Partial<ForkAuctionDetails> 
 	}
 }
 
-export function createMarketDetails(overrides: Partial<MarketDetails> = {}): MarketDetails {
-	return {
-		answerUnit: '',
-		createdAt: 1n,
-		description: 'Question description',
-		displayValueMax: 100n,
-		displayValueMin: 0n,
-		endTime: 2n,
-		exists: true,
-		marketType: 'binary',
-		numTicks: 2n,
-		outcomeLabels: ['Yes', 'No'],
-		questionId: '0x01',
-		startTime: 1n,
-		title: 'Will this resolve?',
-		...overrides,
-	}
-}
-
 export function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
 	const selectedPool: ListedSecurityPool = {
 		settlementCollateralAttoEth: 0n,
@@ -347,3 +329,5 @@ export function createSecurityPoolWorkflowProps(overrides: Partial<SecurityPoolW
 		...overrides,
 	}
 }
+
+export { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'

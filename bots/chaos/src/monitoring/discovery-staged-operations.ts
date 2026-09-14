@@ -1,11 +1,12 @@
 import { escalationGameAbi } from '@zoltar/bot-shared/contracts/abi'
 import { type VaultSnapshot } from '../operations/types.ts'
 
-import { openOraclePriceCoordinatorAbi, liquidationApprovalRegistryAbi, securityPoolAbi } from '@zoltar/bot-shared/contracts/abi'
-import { type PoolSnapshot, type StagedOperationSnapshot } from '../operations/types.ts'
-import { type ChaosReadClient, DISCOVERY_RPC_CONCURRENCY, contractSimulationReverted, drainConcurrent, mapWithConcurrency, sameAddress } from './discovery-client.ts'
-import { collectCountedPages } from './discovery-registry.ts'
+import { liquidationApprovalRegistryAbi, openOraclePriceCoordinatorAbi, securityPoolAbi } from '@zoltar/bot-shared/contracts/abi'
 import { type Address, type Hex, bigintToSafeNumber, encodeAbiParameters, getAddress, zeroAddress, zeroHash } from '@zoltar/bot-shared/ethereum'
+import { sameAddress } from '@zoltar/core-shared/evm/address'
+import { type PoolSnapshot, type StagedOperationSnapshot } from '../operations/types.ts'
+import { type ChaosReadClient, DISCOVERY_RPC_CONCURRENCY, contractSimulationReverted, drainConcurrent, mapWithConcurrency } from './discovery-client.ts'
+import { collectCountedPages } from './discovery-registry.ts'
 
 const stagedRouteIneligibilityErrors = new WeakSet<Error>()
 

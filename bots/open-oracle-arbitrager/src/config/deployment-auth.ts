@@ -1,4 +1,5 @@
 import { getAddress, isAddress, keccak256, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import { record } from '@zoltar/bot-shared/infrastructure/json-validation'
 
 export type DeploymentRole = 'coordinator' | 'executor' | 'open-oracle' | 'token' | 'uniswap-factory' | 'uniswap-quoter' | 'uniswap-router' | 'uniswap-v2-router' | 'uniswap-v4-pool-manager' | 'uniswap-v4-quoter' | 'weth'
 
@@ -22,11 +23,6 @@ const networkChainIds = {
 export function parseDeploymentRole(value: string): DeploymentRole {
 	if (!roles.has(value as DeploymentRole)) throw new Error(`Unsupported deployment role: ${value}`)
 	return value as DeploymentRole
-}
-
-function record(value: unknown, description: string) {
-	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`${description} must be an object`)
-	return value as Record<string, unknown>
 }
 
 export function parseDeploymentManifest(value: unknown): DeploymentManifest {

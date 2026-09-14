@@ -1,24 +1,19 @@
 /// <reference types='bun-types' />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
-import { TruthAuctionMarketViewSection } from '@zoltar/ui-statoblast-shared/features/truth-auctions/components/TruthAuctionMarketViewSection.js'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { TruthAuctionMarketViewSection } from '@zoltar/ui-statoblast-shared/features/truth-auctions/components/TruthAuctionMarketViewSection.js'
+import { describe, expect, test } from 'bun:test'
 
 describe('TruthAuctionMarketViewSection', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRendered: (() => Promise<void>) | undefined
 
-	beforeEach(() => {
-		restoreDomEnvironment = installDomEnvironment().cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRendered?.()
-		cleanupRendered = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRendered?.()
+			cleanupRendered = undefined
+		},
 	})
 
 	test('keeps ladder rows free of nested buttons and disables pagination while loading', async () => {

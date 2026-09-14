@@ -1,12 +1,11 @@
 import { describe, expect, test } from 'bun:test'
 import { readFile } from 'node:fs/promises'
 import { basename, dirname, join, posix, relative } from 'node:path'
+import { repositoryRoot } from '../repo/root.mts'
 import { dockerInstructions, parseDockerfile, requireDockerStage, shellCommandSegments } from '../testing/packaging-parsers.ts'
-
 import ts from 'typescript'
 import { appSharedPackages, sharedPackageClosure } from '../repo/sharedPackages.ts'
 
-const repositoryRoot = join(import.meta.dir, '..', '..')
 const dockerfile = join(repositoryRoot, 'ui', 'Dockerfile')
 const dockerignore = join(repositoryRoot, '.dockerignore')
 const ipfsDeployWorkflow = join(repositoryRoot, '.github', 'workflows', 'ipfs-deploy.yml')

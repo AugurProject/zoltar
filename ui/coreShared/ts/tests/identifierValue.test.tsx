@@ -1,37 +1,33 @@
 /// <reference types='bun-types' />
 
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
+import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
+import { describe, expect, mock, test } from 'bun:test'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { IdentifierValue } from '../components/IdentifierValue.js'
-import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { fireEvent, waitFor, within } from './testUtils/queries.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
 describe('IdentifierValue', () => {
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
-	let restoreDomEnvironment: (() => void) | undefined
 	let clipboardWriteText = mock(async () => undefined)
 
-	beforeEach(() => {
-		const domEnvironment = installDomEnvironment()
-		restoreDomEnvironment = domEnvironment.cleanup
-		clipboardWriteText = mock(async () => undefined)
-		Reflect.defineProperty(navigator, 'clipboard', {
-			configurable: true,
-			value: { writeText: clipboardWriteText },
-		})
-		Reflect.defineProperty(domEnvironment.window.navigator, 'clipboard', {
-			configurable: true,
-			value: { writeText: clipboardWriteText },
-		})
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
+	installDomTestLifecycle({
+		beforeTest: domEnvironment => {
+			clipboardWriteText = mock(async () => undefined)
+			Reflect.defineProperty(navigator, 'clipboard', {
+				configurable: true,
+				value: { writeText: clipboardWriteText },
+			})
+			Reflect.defineProperty(domEnvironment.window.navigator, 'clipboard', {
+				configurable: true,
+				value: { writeText: clipboardWriteText },
+			})
+		},
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+		},
 	})
 
 	test('renders and copies the complete identifier without truncating it', async () => {

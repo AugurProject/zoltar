@@ -1,5 +1,5 @@
 import type { SQL } from 'bun'
-import { decodeOpaqueCursor, encodeOpaqueCursor, isJsonArray } from '../cursor-codec.ts'
+import { encodeOpaqueCursor, parseCursor } from '../cursor-codec.ts'
 import { riskCatalogData } from '../repositories/operations.ts'
 import { riskHistoryRows } from '../repositories/risk.ts'
 import { snapshotBoundary } from './entity-details.ts'
@@ -62,29 +62,29 @@ const riskHistoryPositions = (value: unknown): RiskHistoryPositions | undefined 
 
 const parseRiskHistoryCursor = (value: string | null, chainId: number, identity: string): RiskHistoryCursor | undefined => {
 	if (value === null) return undefined
-	try {
-		const decoded = decodeOpaqueCursor(value)
-		const parts = isJsonArray(decoded) ? decoded : []
-		const positions = riskHistoryPositions(parts[11])
-		if (
-			parts.length !== 12 ||
-			parts[0] !== 1 ||
-			parts[1] !== chainId ||
-			parts[2] !== 'risk-history' ||
-			parts[3] !== identity ||
-			!isPostgresBigint(parts[4]) ||
-			typeof parts[5] !== 'string' ||
-			!/^0x[0-9a-f]{64}$/.test(parts[5]) ||
-			!isPostgresBigint(parts[6]) ||
-			!parts.slice(7, 10).every(part => typeof part === 'string') ||
-			!isNonNegativeSafeInteger(parts[10]) ||
-			positions === undefined
-		)
-			throw new Error('shape')
-		return [1, chainId, 'risk-history', identity, String(parts[4]), String(parts[5]), String(parts[6]), String(parts[7]), String(parts[8]), String(parts[9]), Number(parts[10]), positions]
-	} catch (error) {
-		throw new ApiRequestError('cursor is invalid', { cause: error })
-	}
+	return parseCursor(
+		value,
+		parts => {
+			const positions = riskHistoryPositions(parts[11])
+			if (
+				parts.length !== 12 ||
+				parts[0] !== 1 ||
+				parts[1] !== chainId ||
+				parts[2] !== 'risk-history' ||
+				parts[3] !== identity ||
+				!isPostgresBigint(parts[4]) ||
+				typeof parts[5] !== 'string' ||
+				!/^0x[0-9a-f]{64}$/.test(parts[5]) ||
+				!isPostgresBigint(parts[6]) ||
+				!parts.slice(7, 10).every(part => typeof part === 'string') ||
+				!isNonNegativeSafeInteger(parts[10]) ||
+				positions === undefined
+			)
+				throw new Error('shape')
+			return [1, chainId, 'risk-history', identity, String(parts[4]), String(parts[5]), String(parts[6]), String(parts[7]), String(parts[8]), String(parts[9]), Number(parts[10]), positions]
+		},
+		error => new ApiRequestError('cursor is invalid', { cause: error }),
+	)
 }
 
 const riskHistoryCursorFor = (chainId: number, identity: string, asOf: Record<string, unknown>, offset: number, positions: RiskHistoryPositions): string => encodeOpaqueCursor([1, chainId, 'risk-history', identity, ...snapshotBoundary(asOf), offset, positions] satisfies RiskHistoryCursor)

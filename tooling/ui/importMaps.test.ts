@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import * as fs from 'node:fs'
 import { UI_APP_IDS, getUiAppPaths } from './appPaths.mts'
+import { getSharedBrowserImports } from './sharedBrowserArtifacts.ts'
 
 type ImportMapFile = {
 	imports?: Record<string, string>
@@ -36,6 +37,8 @@ for (const appId of UI_APP_IDS) {
 		expect(importMaps).toHaveLength(1)
 		const imports = importMaps[0]
 		if (imports === undefined) throw new Error('unreachable')
+
+		for (const [specifier, target] of Object.entries(getSharedBrowserImports(appId))) expect(imports[specifier]).toBe(target)
 
 		expect(imports['preact']).toBe('./vendor/preact/preact.module.js')
 		expect(imports['preact/hooks']).toBe('./vendor/preact/hooks/hooks.module.js')

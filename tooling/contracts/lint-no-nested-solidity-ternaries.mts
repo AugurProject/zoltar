@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
-import * as url from 'node:url'
+import { repositoryRoot as projectRoot } from '../repo/root.mts'
+import { walkFiles } from '../repo/walk.mts'
 
 type TernaryFrame = {
 	file: string
@@ -20,8 +21,6 @@ type NestedTernaryFinding = {
 	parentColumn: number
 }
 
-const repositoryRoot = path.dirname(url.fileURLToPath(import.meta.url))
-const projectRoot = path.join(repositoryRoot, '..', '..')
 const contractsRoot = path.join(projectRoot, 'solidity', 'contracts')
 const ignoredFiles = new Set(['solidity/contracts/statoblast/Multicall3.sol', 'solidity/contracts/statoblast/WETH9.sol'])
 const ignoredPathPrefixes = ['solidity/contracts/statoblast/openOracle']
@@ -36,17 +35,8 @@ function shouldIgnore(filePath: string): boolean {
 	return ignoredPathPrefixes.some(prefix => relativePath === prefix || relativePath.startsWith(`${prefix}/`))
 }
 
-async function collectSolidityFiles(directory: string, files: string[] = []): Promise<string[]> {
-	const entries = await fs.readdir(directory, { withFileTypes: true })
-	for (const entry of entries) {
-		const fullPath = path.join(directory, entry.name)
-		if (entry.isDirectory()) {
-			if (!shouldIgnore(fullPath)) await collectSolidityFiles(fullPath, files)
-			continue
-		}
-		if (entry.isFile() && entry.name.endsWith('.sol') && !shouldIgnore(fullPath)) files.push(fullPath)
-	}
-	return files
+async function collectSolidityFiles(directory: string): Promise<string[]> {
+	return await walkFiles(directory, { descend: directory => !shouldIgnore(directory), include: file => file.endsWith('.sol') && !shouldIgnore(file) })
 }
 
 function atSameDepth(frame: TernaryFrame, parenDepth: number, bracketDepth: number, braceDepth: number): boolean {

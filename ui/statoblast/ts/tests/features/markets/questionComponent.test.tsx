@@ -1,11 +1,11 @@
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { Question } from '@zoltar/ui-core-shared/components/Question.js'
-import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
-import type { MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import type { MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
+import { describe, expect, test } from 'bun:test'
 
 function createQuestion(overrides: Partial<MarketDetails> = {}): MarketDetails {
 	return {
@@ -28,18 +28,12 @@ function createQuestion(overrides: Partial<MarketDetails> = {}): MarketDetails {
 
 describe('Question component', () => {
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
-	let restoreDomEnvironment: (() => void) | undefined
 
-	beforeEach(() => {
-		const domEnvironment = installDomEnvironment()
-		restoreDomEnvironment = domEnvironment.cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+		},
 	})
 
 	test('inherits the shared chain timestamp for route-level relative time rendering', async () => {

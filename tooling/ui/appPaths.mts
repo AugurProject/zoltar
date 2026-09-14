@@ -1,11 +1,12 @@
-import { appSharedPackages, sharedPackageClosure } from '../repo/sharedPackages.ts'
 import * as path from 'node:path'
 import * as process from 'node:process'
 import * as url from 'node:url'
 import { projectDependencyClosure, projects } from '../repo/projects.ts'
+import { repositoryRoot } from '../repo/root.mts'
+import { appSharedPackages, sharedPackageClosure } from '../repo/sharedPackages.ts'
 
 import { parseUiAppId, type UiAppId } from './appIds.mts'
-export { UI_APP_IDS, isUiAppId, parseUiAppId, type UiAppId } from './appIds.mts'
+export { isUiAppId, parseUiAppId, UI_APP_IDS, type UiAppId } from './appIds.mts'
 export type UiPackageId = 'coreShared' | 'zoltarShared' | 'statoblastShared' | UiAppId
 
 const UI_PROJECT_ID_BY_PACKAGE_ID: Readonly<Record<UiPackageId, string>> = {
@@ -67,7 +68,6 @@ export type UiAppPaths = {
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 
 export function getUiAppPaths(appId: UiAppId): UiAppPaths {
-	const repositoryRoot = path.resolve(directoryOfThisFile, '..', '..')
 	const uiRoot = path.join(repositoryRoot, 'ui')
 	const coreSharedRoot = path.join(uiRoot, 'coreShared')
 	const appRoot = path.join(uiRoot, appId)
@@ -103,7 +103,6 @@ export function getUiAppPaths(appId: UiAppId): UiAppPaths {
 }
 
 export function getUiCoreSharedPaths() {
-	const repositoryRoot = path.resolve(directoryOfThisFile, '..', '..')
 	const uiRoot = path.join(repositoryRoot, 'ui')
 	const coreSharedRoot = path.join(uiRoot, 'coreShared')
 	return {

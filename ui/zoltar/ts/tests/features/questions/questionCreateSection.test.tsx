@@ -1,15 +1,15 @@
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { act } from 'preact/test-utils'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { expectTransactionButtonDisabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
+import type { MarketCreationResult, MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { QuestionCreateSection } from '@zoltar/ui-zoltar-shared/features/questions/components/QuestionCreateSection.js'
 import type { MarketFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
-import type { MarketCreationResult, MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import { describe, expect, test } from 'bun:test'
+import { act } from 'preact/test-utils'
 
 function createQuestionForm(overrides: Partial<MarketFormState> = {}): MarketFormState {
 	return {
@@ -44,18 +44,13 @@ const question: MarketDetails = {
 }
 
 describe('QuestionCreateSection', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
-	beforeEach(() => {
-		restoreDomEnvironment = installDomEnvironment().cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+		},
 	})
 
 	test('blocks review without a wallet and reports field updates', async () => {

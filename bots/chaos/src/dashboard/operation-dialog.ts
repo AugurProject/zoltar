@@ -1,3 +1,4 @@
+import { isRecord } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { displayOperationInput, serializeOperationInput } from './operation-input-format.js'
 
 type Operation = { id?: string | undefined; label?: string | undefined; description?: string | undefined; blockers: string[] }
@@ -15,7 +16,7 @@ type Result = {
 }
 
 function record(value: unknown): Record<string, unknown> {
-	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Operation response unavailable')
+	if (!isRecord(value)) throw new Error('Operation response unavailable')
 	return Object.fromEntries(Object.entries(value))
 }
 

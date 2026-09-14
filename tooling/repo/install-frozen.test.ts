@@ -1,13 +1,13 @@
 import { expect, test } from 'bun:test'
-import { sharedPackages } from './sharedPackages.ts'
 import { cp, lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import * as process from 'node:process'
 import * as url from 'node:url'
+import { repositoryRoot as repositoryRootPath } from './root.mts'
+import { sharedPackages } from './sharedPackages.ts'
 
 const scriptDirectoryPath = path.dirname(url.fileURLToPath(import.meta.url))
-const repositoryRootPath = path.join(scriptDirectoryPath, '..', '..')
 const installScriptPath = path.join(scriptDirectoryPath, 'install-frozen.mts')
 
 const createPackageJson = (dependencies: Record<string, string>) =>

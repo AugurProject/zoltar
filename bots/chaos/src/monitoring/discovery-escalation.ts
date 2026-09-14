@@ -1,10 +1,10 @@
-import { contractSimulationReverted } from './discovery-client.ts'
 import { escalationGameAbi } from '@zoltar/bot-shared/contracts/abi'
+import { type Address, zeroAddress } from '@zoltar/bot-shared/ethereum'
+import { sameAddress } from '@zoltar/core-shared/evm/address'
 import { genesisUniswapSeederDeployment } from '../core/genesis-uniswap.ts'
 import { canonicalUintString } from '../core/units.ts'
 import { type EcosystemDeployments, type PoolSnapshot } from '../operations/types.ts'
-import { type ChaosReadClient, drainConcurrent, sameAddress } from './discovery-client.ts'
-import { type Address, zeroAddress } from '@zoltar/bot-shared/ethereum'
+import { type ChaosReadClient, contractSimulationReverted, drainConcurrent } from './discovery-client.ts'
 
 function fixedPointPower(value: bigint, exponent: bigint) {
 	const precision = 10n ** 18n

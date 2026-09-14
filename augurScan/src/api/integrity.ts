@@ -1,5 +1,5 @@
 import type { SQL } from 'bun'
-import { decodeOpaqueCursor, encodeOpaqueCursor, isJsonArray } from '../cursor-codec.ts'
+import { encodeOpaqueCursor, parseCursor } from '../cursor-codec.ts'
 import { integrityCatalogData, latestInvalidationId } from '../repositories/integrity.ts'
 import { snapshotBoundary } from './entity-details.ts'
 import { ApiRequestError, cursorTimestamp, integer, isCursorTimestamp, isNonNegativeSafeInteger, isPostgresBigint, json } from './shared.ts'
@@ -25,32 +25,32 @@ type IntegrityCursor = readonly [
 
 const parseIntegrityCursor = (value: string | null, chainId: number): IntegrityCursor | undefined => {
 	if (value === null) return undefined
-	try {
-		const decoded = decodeOpaqueCursor(value)
-		const parts = isJsonArray(decoded) ? decoded : []
-		if (
-			parts.length !== 14 ||
-			parts[0] !== 1 ||
-			parts[1] !== chainId ||
-			parts[2] !== 'integrity-catalog' ||
-			!isPostgresBigint(parts[3]) ||
-			!isNonNegativeSafeInteger(parts[4]) ||
-			!isPostgresBigint(parts[5]) ||
-			typeof parts[6] !== 'string' ||
-			!/^0x[0-9a-f]{64}$/.test(parts[6]) ||
-			!isPostgresBigint(parts[7]) ||
-			!parts.slice(8, 11).every(part => typeof part === 'string') ||
-			!isNonNegativeSafeInteger(parts[11]) ||
-			Number(parts[11]) > Number(parts[4]) ||
-			typeof parts[12] !== 'string' ||
-			!isCursorTimestamp(parts[12]) ||
-			!isPostgresBigint(parts[13])
-		)
-			throw new Error('shape')
-		return [1, chainId, 'integrity-catalog', String(parts[3]), Number(parts[4]), String(parts[5]), String(parts[6]), String(parts[7]), String(parts[8]), String(parts[9]), String(parts[10]), Number(parts[11]), String(parts[12]), String(parts[13])]
-	} catch (error) {
-		throw new ApiRequestError('cursor is invalid', { cause: error })
-	}
+	return parseCursor(
+		value,
+		parts => {
+			if (
+				parts.length !== 14 ||
+				parts[0] !== 1 ||
+				parts[1] !== chainId ||
+				parts[2] !== 'integrity-catalog' ||
+				!isPostgresBigint(parts[3]) ||
+				!isNonNegativeSafeInteger(parts[4]) ||
+				!isPostgresBigint(parts[5]) ||
+				typeof parts[6] !== 'string' ||
+				!/^0x[0-9a-f]{64}$/.test(parts[6]) ||
+				!isPostgresBigint(parts[7]) ||
+				!parts.slice(8, 11).every(part => typeof part === 'string') ||
+				!isNonNegativeSafeInteger(parts[11]) ||
+				Number(parts[11]) > Number(parts[4]) ||
+				typeof parts[12] !== 'string' ||
+				!isCursorTimestamp(parts[12]) ||
+				!isPostgresBigint(parts[13])
+			)
+				throw new Error('shape')
+			return [1, chainId, 'integrity-catalog', String(parts[3]), Number(parts[4]), String(parts[5]), String(parts[6]), String(parts[7]), String(parts[8]), String(parts[9]), String(parts[10]), Number(parts[11]), String(parts[12]), String(parts[13])]
+		},
+		error => new ApiRequestError('cursor is invalid', { cause: error }),
+	)
 }
 
 const integrityCursorFor = (chainId: number, snapshotId: string, total: number, asOf: Record<string, unknown>, offset: number, row: Record<string, unknown>): string =>

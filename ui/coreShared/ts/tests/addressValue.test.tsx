@@ -1,36 +1,31 @@
 /// <reference types='bun-types' />
 
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import { fireEvent, waitFor, within } from './testUtils/queries'
+import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
+import { describe, expect, mock, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { AddressValue } from '../components/AddressValue.js'
-import { installDomEnvironment } from './testUtils/domEnvironment.js'
+import { fireEvent, waitFor, within } from './testUtils/queries'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
 describe('AddressValue', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 	let clipboardWriteText = mock(async () => undefined)
 
-	beforeEach(() => {
-		const domEnvironment = installDomEnvironment()
-		restoreDomEnvironment = domEnvironment.cleanup
+	installDomTestLifecycle({
+		beforeTest: domEnvironment => {
+			clipboardWriteText = mock(async () => undefined)
 
-		clipboardWriteText = mock(async () => undefined)
-
-		Reflect.set(navigator, 'clipboard', {
-			writeText: clipboardWriteText,
-		})
-		Reflect.set(domEnvironment.window.navigator, 'clipboard', {
-			writeText: clipboardWriteText,
-		})
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
+			Reflect.set(navigator, 'clipboard', {
+				writeText: clipboardWriteText,
+			})
+			Reflect.set(domEnvironment.window.navigator, 'clipboard', {
+				writeText: clipboardWriteText,
+			})
+		},
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+		},
 	})
 
 	test('renders a placeholder when no address is available', async () => {

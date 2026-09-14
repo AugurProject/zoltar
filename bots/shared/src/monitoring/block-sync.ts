@@ -1,3 +1,4 @@
+import { errorChain } from '@zoltar/core-shared/errors/errorChain'
 import { fetchLogsWithAdaptiveRanges as fetchLogsWithAdaptiveRangesFromBlocks, LogScanError, type LogRange } from '@zoltar/core-shared/evm/logScan'
 
 export { LogScanError, type LogRange }
@@ -5,12 +6,8 @@ export { LogScanError, type LogRange }
 const DEFAULT_LATEST_LOG_BLOCKS = 256n
 
 function walkErrorCauses(error: unknown, visit: (current: object) => boolean) {
-	const seen = new Set<unknown>()
-	let current: unknown = error
-	while (typeof current === 'object' && current !== null && !seen.has(current)) {
-		seen.add(current)
+	for (const current of errorChain(error)) {
 		if (visit(current)) return true
-		current = 'cause' in current ? current.cause : undefined
 	}
 	return false
 }

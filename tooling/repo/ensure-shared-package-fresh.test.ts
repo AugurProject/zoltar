@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import * as process from 'node:process'
 import * as url from 'node:url'
+import { repositoryRoot as repositoryRootPath } from './root.mts'
 
 const scriptDirectoryPath = path.dirname(url.fileURLToPath(import.meta.url))
-const repositoryRootPath = path.join(scriptDirectoryPath, '..', '..')
 const sharedPackagePath = path.join(repositoryRootPath, 'shared', 'zoltar')
 const sharedRefreshScriptPath = path.join(scriptDirectoryPath, 'ensure-shared-package-fresh.mts')
 

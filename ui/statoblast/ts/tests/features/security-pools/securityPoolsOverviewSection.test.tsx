@@ -1,19 +1,21 @@
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
+import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
+import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
-import { render } from 'preact'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
+import type { ListedSecurityPool, SecurityPoolBrowsePage, SecurityPoolPage } from '@zoltar/ui-core-shared/types/contracts.js'
+import { getWalletScopedAccountAddress } from '@zoltar/ui-core-shared/wallet/network.js'
 import { SecurityPoolsOverviewSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolsOverviewSection.js'
 import { deriveHasForkActivity } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/forkAuction.js'
-import { getWalletScopedAccountAddress } from '@zoltar/ui-core-shared/wallet/network.js'
-import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
-import type { ListedSecurityPool, MarketDetails, SecurityPoolBrowsePage, SecurityPoolPage } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { SecurityPoolsOverviewSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
-import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
+import { describe, expect, mock, test } from 'bun:test'
+import { render } from 'preact'
 import { act } from 'preact/test-utils'
-import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {
@@ -21,35 +23,6 @@ function createAccountState(overrides: Partial<AccountState> = {}): AccountState
 		chainId: '0xaa36a7',
 		ethBalanceAttoEth: 0n,
 		wethBalanceAttoEth: 0n,
-		...overrides,
-	}
-}
-
-function createDeferred<T>() {
-	let resolve: (value: T) => void = () => undefined
-	let reject: (reason?: unknown) => void = () => undefined
-	const promise = new Promise<T>((promiseResolve, promiseReject) => {
-		resolve = promiseResolve
-		reject = promiseReject
-	})
-	return { promise, reject, resolve }
-}
-
-function createMarketDetails(overrides: Partial<MarketDetails> = {}): MarketDetails {
-	return {
-		answerUnit: '',
-		createdAt: 1n,
-		description: 'Question description',
-		displayValueMax: 100n,
-		displayValueMin: 0n,
-		endTime: 2n,
-		exists: true,
-		marketType: 'binary',
-		numTicks: 2n,
-		outcomeLabels: ['Yes', 'No'],
-		questionId: '0x01',
-		startTime: 1n,
-		title: 'Will this resolve?',
 		...overrides,
 	}
 }
@@ -144,19 +117,13 @@ function createProps(overrides: SecurityPoolsOverviewSectionTestOverrides = {}):
 
 installTestRouting()
 describe('SecurityPoolsOverviewSection', () => {
-	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
-	beforeEach(() => {
-		const domEnvironment = installDomEnvironment()
-		restoreDomEnvironment = domEnvironment.cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
+	installDomTestLifecycle({
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+		},
 	})
 
 	function getSecurityPoolCard(headingText: string): HTMLElement {

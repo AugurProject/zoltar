@@ -1,17 +1,17 @@
 /// <reference types='bun-types' />
 
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import { h, render } from 'preact'
-import { act } from 'preact/test-utils'
 import { getAddress, zeroAddress, zeroHash, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import type { DeploymentStatus, MarketCreationResult } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { UseQuestionCreationDependencies } from '@zoltar/ui-zoltar-shared/features/questions/hooks/useQuestionCreation.js'
 import type { CreateWriteClientCallbacks, TransactionRequestPreview } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
-import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
+import type { UseQuestionCreationDependencies } from '@zoltar/ui-zoltar-shared/features/questions/hooks/useQuestionCreation.js'
+import { describe, expect, mock, test } from 'bun:test'
+import { h, render } from 'preact'
+import { act } from 'preact/test-utils'
 
 type UseQuestionCreation = typeof import('@zoltar/ui-zoltar-shared/features/questions/hooks/useQuestionCreation.js')['useQuestionCreation']
 type UseQuestionCreationState = ReturnType<UseQuestionCreation>
@@ -41,24 +41,20 @@ function requireHookState(state: UseQuestionCreationState | undefined) {
 
 describe('useQuestionCreation', () => {
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
-	let restoreDomEnvironment: (() => void) | undefined
 	let resetEnvironment: (() => void) | undefined
 
-	beforeEach(() => {
-		const domEnvironment = installDomEnvironment()
-		restoreDomEnvironment = domEnvironment.cleanup
-		resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		resetEnvironment?.()
-		resetEnvironment = undefined
-		resetActiveEnvironmentForTesting()
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
-		mock.restore()
+	installDomTestLifecycle({
+		beforeTest: () => {
+			resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
+		},
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+			resetEnvironment?.()
+			resetEnvironment = undefined
+			resetActiveEnvironmentForTesting()
+			mock.restore()
+		},
 	})
 
 	async function renderHook(

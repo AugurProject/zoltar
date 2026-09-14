@@ -1,7 +1,8 @@
+import { Document, Element, Window } from 'happy-dom'
 import { access, readFile } from 'node:fs/promises'
 import path from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
-import { Document, Element, Window } from 'happy-dom'
+import { pathToFileURL } from 'node:url'
+import { repositoryRoot as repositoryRootPath } from '../repo/root.mts'
 import { repositorySourcePath } from './repository-source-links.mts'
 
 type ParsedHtmlDocument = {
@@ -19,7 +20,6 @@ type ValidationFailure = {
 	relativePath: string
 }
 
-const repositoryRootPath = path.resolve(fileURLToPath(new URL('../..', import.meta.url)))
 const docsDirectoryPath = path.join(repositoryRootPath, 'docs')
 const conflictMarkerPattern = /^(<<<<<<<|=======|>>>>>>>)($| )/m
 

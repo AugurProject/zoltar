@@ -1,12 +1,11 @@
 #!/usr/bin/env bun
+import { repositoryRoot } from '../repo/root.mts'
 
 import { existsSync } from 'node:fs'
 import { copyFile, mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
-import * as url from 'node:url'
 
-const repositoryRoot = path.join(path.dirname(url.fileURLToPath(import.meta.url)), '..', '..')
 const deploymentEntrypoint = path.join(repositoryRoot, 'tooling', 'contracts', 'deploy-testnet.mts')
 const forwardedSignals = ['SIGINT', 'SIGTERM', 'SIGHUP'] as const
 const uiSourceRoots: Readonly<Record<string, string>> = {

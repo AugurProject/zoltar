@@ -1,15 +1,16 @@
+import { createDeferred } from './testUtils/deferred.js'
 /// <reference types='bun-types' />
 
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { type Address, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
+import { describe, expect, mock, test } from 'bun:test'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { WalletAssetControl } from '../components/WalletAssetControl.js'
-import { createInjectedBackend } from '../wallet/chainBackend.js'
 import { installActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
+import { createInjectedBackend } from '../wallet/chainBackend.js'
 import type { WalletAssetWatchResult } from '../wallet/walletAsset.js'
 import { createFakeBackend, createFakeSimulationProfile } from './testUtils/fakeBackend.js'
-import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { fireEvent, waitFor, within } from './testUtils/queries.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
@@ -20,35 +21,23 @@ const NEXT_ACCOUNT_ADDRESS = '0x00000000000000000000000000000000000000d4'
 const CASE_VARIANT_TOKEN_ADDRESS = '0x00000000000000000000000000000000000000A1'
 const CASE_VARIANT_ACCOUNT_ADDRESS = '0x00000000000000000000000000000000000000C3'
 
-function createDeferred<T>() {
-	let resolve: (value: T) => void = () => undefined
-	const promise = new Promise<T>(promiseResolve => {
-		resolve = promiseResolve
-	})
-	return { promise, resolve }
-}
-
 describe('WalletAssetControl', () => {
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 	let restoreActiveEnvironment: (() => void) | undefined
-	let restoreDomEnvironment: (() => void) | undefined
 
-	beforeEach(() => {
-		const domEnvironment = installDomEnvironment()
-		restoreDomEnvironment = domEnvironment.cleanup
-		Reflect.set(domEnvironment.window, 'ethereum', {
-			request: async () => true,
-		})
-		restoreActiveEnvironment = installActiveEnvironmentForTesting(createInjectedBackend())
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		restoreActiveEnvironment?.()
-		restoreActiveEnvironment = undefined
-		restoreDomEnvironment?.()
-		restoreDomEnvironment = undefined
+	installDomTestLifecycle({
+		beforeTest: domEnvironment => {
+			Reflect.set(domEnvironment.window, 'ethereum', {
+				request: async () => true,
+			})
+			restoreActiveEnvironment = installActiveEnvironmentForTesting(createInjectedBackend())
+		},
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+			restoreActiveEnvironment?.()
+			restoreActiveEnvironment = undefined
+		},
 	})
 
 	test('guards duplicate requests and shows the accepted state', async () => {
