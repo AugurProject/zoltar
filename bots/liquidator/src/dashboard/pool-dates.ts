@@ -1,6 +1,7 @@
 import { h, render } from 'preact'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 
+/** @internal Exported for timestamp validation tests. */
 export function poolDateTimestamp(timestamp: string | undefined) {
 	if (timestamp === undefined || !/^\d+$/.test(timestamp)) return undefined
 	const seconds = BigInt(timestamp)
