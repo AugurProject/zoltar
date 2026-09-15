@@ -3,3 +3,6 @@
 # fixtures against the live npm registry (latest versions) and can poison
 # in-process module resolution for the rest of a test run. Fail loudly instead.
 auto = "disable"
+
+[test]
+preload = ['./scripts/prepare-tests.ts']

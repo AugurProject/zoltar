@@ -1,0 +1,44 @@
+{
+	"delegationManager": {
+		"name": "DelegationManager",
+		"version": "@metamask/delegation-abis@1.0.0",
+		"url": "https://raw.githubusercontent.com/MetaMask/smart-accounts-kit/a51c8a9278c0430a828b168eba9d0de450c5c1dd/packages/delegation-abis/src/artifacts/DelegationManager.sol/DelegationManager.json",
+		"artifactSha256": "6e67f5e6e41db86a24bdf97914d28b4b8af5863ce03b88aac557f3cd69291c53",
+		"abiSha256": "3bcc66ec90d0bd259acbef6f0d21c649e529f61c99d3cb7a85ec494ce9ef53a3"
+	},
+	"uniswapV2Factory": {
+		"name": "UniswapV2Factory",
+		"version": "@uniswap/v2-core@1.0.1",
+		"url": "https://unpkg.com/@uniswap/v2-core@1.0.1/build/UniswapV2Factory.json",
+		"artifactSha256": "7e666780d3ddf601a17c97dcc6a414dd77f5eae13fb37fce7e0bd282f4f61406",
+		"abiSha256": "d1c2e2633fdc88d5319a34fc887f9044edd25447734f4b8839c1e4172651a3e7"
+	},
+	"uniswapV2Pair": {
+		"name": "UniswapV2Pair",
+		"version": "@uniswap/v2-core@1.0.1",
+		"url": "https://unpkg.com/@uniswap/v2-core@1.0.1/build/UniswapV2Pair.json",
+		"artifactSha256": "bb00cb1d64deea4159731b5957eeb8354531a110fb9120b9ef14edbc950e0736",
+		"abiSha256": "028a21c54379447a103cca879cf45adc2fbebd50fc7ed5d7e1f6f93e5a5aad3d"
+	},
+	"uniswapV3Factory": {
+		"name": "UniswapV3Factory",
+		"version": "@uniswap/v3-core@1.0.1",
+		"url": "https://unpkg.com/@uniswap/v3-core@1.0.1/artifacts/contracts/UniswapV3Factory.sol/UniswapV3Factory.json",
+		"artifactSha256": "599479f60ebb056804aff7b2d05bdd0830ddbb1fdfaa0b6c62c02294ca7188b0",
+		"abiSha256": "bc35264145b07eab583fe83363e3b4c2a218b2adae2d45434a6a1cec13f4d9b7"
+	},
+	"uniswapV3Pool": {
+		"name": "UniswapV3Pool",
+		"version": "@uniswap/v3-core@1.0.1",
+		"url": "https://unpkg.com/@uniswap/v3-core@1.0.1/artifacts/contracts/UniswapV3Pool.sol/UniswapV3Pool.json",
+		"artifactSha256": "204fb2fa7ad1a639b1df5601f035f9924b064b721b97adf60c7d5d4712643e34",
+		"abiSha256": "ad35708734bf3131a452370efa32b747caaca88b3276e9711cfef4b0d7a67c1e"
+	},
+	"uniswapV4PoolManager": {
+		"name": "PoolManager",
+		"version": "@uniswap/v4-core@1.0.2",
+		"url": "https://unpkg.com/@uniswap/v4-core@1.0.2/out/PoolManager.sol/PoolManager.json",
+		"artifactSha256": "4dfd85cc5e4eeaa5ac2b30510baf003ac77954e6c661853469c0c65c37937a40",
+		"abiSha256": "f36f2c55febe700e855cfd887e0a0bc92b2950cef99c9611cca2d5a33d178741"
+	}
+}

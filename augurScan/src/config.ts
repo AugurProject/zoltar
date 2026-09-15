@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { assertAbiCoverage } from './abi-catalog.ts'
 import { getAddress, isAddress } from './ethereum.ts'
 import { parseBasicAccessCredentials } from './http.ts'
 import { parseManifestValue } from './manifest.ts'
@@ -79,6 +80,7 @@ export const loadNetworks = async (): Promise<readonly NetworkConfig[]> => {
 					const normalized = getAddress(configuredAddress)
 					if (!contracts.some(([address]) => address.toLowerCase() === normalized.toLowerCase())) contracts.push([normalized, label, kind])
 				}
+				assertAbiCoverage(contracts.map(([, , kind]) => kind))
 				return {
 					id: definition.id,
 					name: definition.name,

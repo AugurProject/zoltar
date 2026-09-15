@@ -10,14 +10,14 @@ const canonicalJson = (value: unknown): string => {
 	return JSON.stringify(value) ?? String(value)
 }
 
-export const effectiveAbiSourceHash = (catalog: Readonly<Record<string, unknown>>, kindRouting: Readonly<Record<string, string>>, externalAbis: Readonly<Record<string, unknown>>): string =>
+export const effectiveAbiSourceHash = (catalog: Readonly<Record<string, unknown>>, interfaces: Readonly<Record<string, unknown>>, wrapperFormats: Readonly<Record<string, unknown>>): string =>
 	`sha256:${createHash('sha256')
 		.update(
 			canonicalJson({
-				version: 1,
+				version: 2,
 				catalog,
-				kindRouting,
-				externalAbis,
+				interfaces,
+				wrapperFormats,
 			}),
 		)
 		.digest('hex')}`

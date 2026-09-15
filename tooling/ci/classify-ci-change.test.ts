@@ -25,7 +25,7 @@ const routingCases: readonly (readonly [readonly string[], readonly CiScope[]])[
 		['.agents/skills/babysit/SKILL.md', 'ui/trading/ts/index.ts'],
 		['core', 'docs'],
 	],
-	[['shared/trading/ts/trading/math.ts'], ['core', 'infrastructure', 'bot-shared', 'chaos', 'arbitrager', 'liquidator', 'docs']],
+	[['shared/trading/ts/trading/math.ts'], ['core', 'infrastructure', 'bot-shared', 'chaos', 'arbitrager', 'liquidator', 'augur-scan', 'docs']],
 	[['ui/trading/ts/index.ts'], ['core']],
 	[['bots/open-oracle-arbitrager/src/run.ts'], ['arbitrager']],
 	[['bots/liquidator/src/run.ts'], ['liquidator']],
@@ -34,11 +34,11 @@ const routingCases: readonly (readonly [readonly string[], readonly CiScope[]])[
 	[['augurScan/src/server.ts'], ['augur-scan']],
 	[['shared/core/ts/evm/ethereum.ts'], ['core', 'infrastructure', 'bot-shared', 'chaos', 'arbitrager', 'liquidator', 'augur-scan', 'docs']],
 	[['ui/zoltar/ts/index.ts'], ['core']],
-	[['solidity/contracts/Zoltar.sol'], ['core', 'infrastructure', 'bot-shared', 'chaos', 'arbitrager', 'liquidator', 'docs']],
+	[['solidity/contracts/Zoltar.sol'], ['core', 'infrastructure', 'bot-shared', 'chaos', 'arbitrager', 'liquidator', 'augur-scan', 'docs']],
 	[['reth/compose.yaml'], ['infrastructure']],
 	[
 		['solidity/contracts/trading/TwoWayConstantProductPair.sol', 'bots/liquidator/src/run.ts'],
-		['core', 'infrastructure', 'bot-shared', 'chaos', 'arbitrager', 'liquidator', 'docs'],
+		['core', 'infrastructure', 'bot-shared', 'chaos', 'arbitrager', 'liquidator', 'augur-scan', 'docs'],
 	],
 ]
 for (const [paths, expected] of routingCases) test(`routes ${paths.join(', ')}`, () => expect(scopes(paths)).toEqual(expected))
@@ -72,7 +72,7 @@ test('matrices are valid, deterministic JSON for empty and non-empty selections'
 	expect(docs.hasPackages).toBe(false)
 	const mixed = classifyCiChange(['bots/liquidator/src/run.ts', 'shared/trading/ts/trading/math.ts', 'bots/shared/src/ethereum.ts'])
 	expect(JSON.parse(mixed.packageMatrixJson)).toEqual({ include: [...mixed.packageMatrix] })
-	expect(mixed.packageMatrix.map(entry => entry.package)).toEqual(['bot-shared', 'chaos', 'arbitrager', 'liquidator'])
+	expect(mixed.packageMatrix.map(entry => entry.package)).toEqual(['bot-shared', 'chaos', 'arbitrager', 'liquidator', 'augur-scan'])
 	expect(classifyCiChange(['shared/trading/ts/trading/math.ts', 'bots/shared/src/ethereum.ts', 'bots/liquidator/src/run.ts']).packageMatrixJson).toBe(mixed.packageMatrixJson)
 })
 

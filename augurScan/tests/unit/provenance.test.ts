@@ -8,14 +8,14 @@ import { sourceProvenance } from '../../src/provenance.ts'
 
 test('fingerprints the complete effective ABI decoder deterministically', () => {
 	const catalog = { Zoltar: { abi: [{ name: 'QuestionCreated', type: 'event' }] } }
-	const routing = { zoltar: 'Zoltar' }
-	const external = { uniswapV2Pair: [{ name: 'Sync', type: 'event' }] }
-	const baseline = effectiveAbiSourceHash(catalog, routing, external)
+	const routing = { zoltar: { type: 'artifact', name: 'Zoltar' } }
+	const wrappers = { delegationManager: { modes: ['single'] } }
+	const baseline = effectiveAbiSourceHash(catalog, routing, wrappers)
 	expect(baseline).toMatch(/^sha256:[0-9a-f]{64}$/)
-	expect(effectiveAbiSourceHash({ ...catalog }, { ...routing }, { ...external })).toBe(baseline)
-	expect(effectiveAbiSourceHash({ Zoltar: { abi: [{ name: 'QuestionResolved', type: 'event' }] } }, routing, external)).not.toBe(baseline)
-	expect(effectiveAbiSourceHash(catalog, { zoltar: 'OtherZoltar' }, external)).not.toBe(baseline)
-	expect(effectiveAbiSourceHash(catalog, routing, { uniswapV2Pair: [{ name: 'Swap', type: 'event' }] })).not.toBe(baseline)
+	expect(effectiveAbiSourceHash({ ...catalog }, { ...routing }, { ...wrappers })).toBe(baseline)
+	expect(effectiveAbiSourceHash({ Zoltar: { abi: [{ name: 'QuestionResolved', type: 'event' }] } }, routing, wrappers)).not.toBe(baseline)
+	expect(effectiveAbiSourceHash(catalog, { zoltar: { type: 'artifact', name: 'OtherZoltar' } }, wrappers)).not.toBe(baseline)
+	expect(effectiveAbiSourceHash(catalog, routing, { delegationManager: { modes: ['single', 'batch'] } })).not.toBe(baseline)
 })
 
 test('fingerprints canonical contract sources independently of generated import aliases', () => {
