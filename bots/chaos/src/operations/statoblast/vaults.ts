@@ -153,7 +153,7 @@ export const depositVault: OperationDefinition = {
 		steps.push(
 			encodeStep({
 				abi: securityPoolAbi,
-				args: [spend, 15_000n],
+				args: [spend, amount(pool.walletVaultTargetBackingFactorBps) || amount(pool.statoblastSecurityMultiplierBps)],
 				evidence: [eventEvidence(pool.address, 'RepDepositedToVault(address,uint256,uint256,uint256)')],
 				functionName: 'depositRepToVault',
 				id: 'deposit-rep',
@@ -198,7 +198,7 @@ export const depositVault: OperationDefinition = {
 		steps.push(
 			encodeStep({
 				abi: securityPoolAbi,
-				args: [spend, 15_000n],
+				args: [spend, amount(pool.walletVaultTargetBackingFactorBps) || amount(pool.statoblastSecurityMultiplierBps)],
 				evidence: [eventEvidence(poolAddress, 'RepDepositedToVault(address,uint256,uint256,uint256)')],
 				functionName: 'depositRepToVault',
 				id: 'deposit-rep',

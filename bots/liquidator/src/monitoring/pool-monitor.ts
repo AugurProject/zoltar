@@ -109,7 +109,7 @@ async function loadPool(client: ReadClient, settings: OperatorSettings, deployme
 				stagedTargetVaults.set(targetAddress.toLowerCase(), target)
 			}
 			stagedOperations.push({
-				operationAmountAttoRepOrAttoEth: operation.operationAmountAttoRepOrAttoEth,
+				operationValue: operation.operationValue,
 				id,
 				liquidationApprovalId: operation.liquidationApprovalId,
 				isPendingSettlement: pendingSettlementOperationIds.includes(id),

@@ -194,7 +194,7 @@ async function generateReferencePages(): Promise<GeneratedPage[]> {
 	<p>${renderRichText(contractReference.readSurface)}</p>
 	${securityBoundaryHeading}
 	${securityBoundary}
-	<h2 id="interactions">State-changing interactions</h2>
+	<h2 id="interactions">State-changing interactions</h2>${contractReference.delegatedInteractions === undefined ? '' : `\n\t<p>${renderRichText(contractReference.delegatedInteractions)}</p>`}
 	<!-- Validated read ABI fingerprint: ${readAbiFingerprint} -->
 	<!-- Validated complete compiled ABI fingerprint: ${compiledAbiFingerprint} -->
 	<table>

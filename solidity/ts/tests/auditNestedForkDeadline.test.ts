@@ -5,8 +5,8 @@ import { forkUniverse, getRepTokenAddress, getZoltarAddress, getZoltarForkThresh
 import { createWriteClient } from '../testSupport/simulator/utils/clients'
 import { createCompleteSet, getSettlementCollateralAttoEth, getSystemState } from '../testSupport/simulator/utils/contracts/securityPool'
 import { createChildUniverse, finalizeTruthAuction, getSecurityPoolForkerForkData, initiateSecurityPoolFork, migrateVault, startTruthAuction } from '../testSupport/simulator/utils/contracts/securityPoolForker'
-import { balanceOfShares, migrateShares, OperationType } from '../testSupport/simulator/utils/contracts/statoblast'
-import { approveAndDepositRepToVault, manipulatePriceOracleAndPerformOperation } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { balanceOfShares, migrateShares } from '../testSupport/simulator/utils/contracts/statoblast'
+import { approveAndDepositRepToVault, setVaultCapacityFixture } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { approveToken, getChildUniverseId, getETHBalance } from '../testSupport/simulator/utils/utilities'
 import { DAY, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import assert from '../testSupport/simulator/utils/assert'
@@ -33,7 +33,7 @@ describe('Nested fork migration deadline', () => {
 	})
 
 	test('a delayed canonical pool retains a complete outgoing migration window after an early universe fork', async () => {
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, repDeposit / 4n)
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, repDeposit / 4n)
 		await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
 		const passiveVault = createWriteClient(mockWindow, TEST_ADDRESSES[6])
 		await approveAndDepositRepToVault(passiveVault, repDeposit, questionId)

@@ -1,5 +1,5 @@
 {
-  "sourceHash": "5d24fd500f8884da94ba31e895fdeabc316d088a7ce0a44534b3eaae04874f62",
+  "sourceHash": "8379c14d8b9e195f8df6fe41d4b2f8afe40c29b043a4e0fab33cde3c22c00502",
   "contracts": {
     "DeploymentStatusOracle": {
       "source": "contracts/DeploymentStatusOracle.sol",
@@ -16340,7 +16340,7 @@
             {
               "indexed": false,
               "internalType": "uint256",
-              "name": "operationAmountAttoRepOrAttoEth",
+              "name": "operationValue",
               "type": "uint256"
             },
             {
@@ -16588,7 +16588,7 @@
                 },
                 {
                   "internalType": "uint256",
-                  "name": "operationAmountAttoRepOrAttoEth",
+                  "name": "operationValue",
                   "type": "uint256"
                 },
                 {
@@ -16658,7 +16658,7 @@
                 },
                 {
                   "internalType": "uint256",
-                  "name": "operationAmountAttoRepOrAttoEth",
+                  "name": "operationValue",
                   "type": "uint256"
                 },
                 {
@@ -17119,7 +17119,7 @@
             },
             {
               "internalType": "uint256",
-              "name": "operationAmountAttoRepOrAttoEth",
+              "name": "operationValue",
               "type": "uint256"
             },
             {
@@ -17253,7 +17253,7 @@
             },
             {
               "internalType": "uint256",
-              "name": "operationAmountAttoRepOrAttoEth",
+              "name": "operationValue",
               "type": "uint256"
             },
             {
@@ -17944,6 +17944,31 @@
             }
           ],
           "name": "VaultAccountingCheckpoint",
+          "type": "event"
+        },
+        {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "backingFactorBps",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "capacityOwnershipAttoRep",
+              "type": "uint256"
+            }
+          ],
+          "name": "VaultBackingFactorAdjusted",
           "type": "event"
         },
         {
@@ -19334,6 +19359,25 @@
         {
           "inputs": [
             {
+              "internalType": "address",
+              "name": "",
+              "type": "address"
+            }
+          ],
+          "name": "vaultTargetBackingFactorBps",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
               "internalType": "enum QuestionOutcome",
               "name": "outcome",
               "type": "uint8"
@@ -19844,6 +19888,25 @@
         {
           "inputs": [],
           "name": "totalRepBackingUnits",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "",
+              "type": "address"
+            }
+          ],
+          "name": "vaultTargetBackingFactorBps",
           "outputs": [
             {
               "internalType": "uint256",
@@ -24211,6 +24274,19 @@
         },
         {
           "inputs": [],
+          "name": "escalationGame",
+          "outputs": [
+            {
+              "internalType": "contract EscalationGame",
+              "name": "",
+              "type": "address"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [],
           "name": "eventEmitter",
           "outputs": [
             {
@@ -24290,6 +24366,13 @@
         {
           "inputs": [],
           "name": "updateRetentionRate",
+          "outputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        },
+        {
+          "inputs": [],
+          "name": "updateSettlementCollateral",
           "outputs": [],
           "stateMutability": "nonpayable",
           "type": "function"
@@ -24436,6 +24519,31 @@
             {
               "indexed": true,
               "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "backingFactorBps",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "capacityOwnershipAttoRep",
+              "type": "uint256"
+            }
+          ],
+          "name": "VaultBackingFactorAdjusted",
+          "type": "event"
+        },
+        {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "address",
               "name": "targetVault",
               "type": "address"
             },
@@ -24491,6 +24599,24 @@
           ],
           "name": "VaultDepositTargetHealthFactorRecorded",
           "type": "event"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            },
+            {
+              "internalType": "uint256",
+              "name": "backingFactorBps",
+              "type": "uint256"
+            }
+          ],
+          "name": "adjustVaultBackingFactor",
+          "outputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function"
         },
         {
           "inputs": [],
@@ -25048,6 +25174,38 @@
           ],
           "stateMutability": "view",
           "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            }
+          ],
+          "name": "updateVaultFees",
+          "outputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "",
+              "type": "address"
+            }
+          ],
+          "name": "vaultTargetBackingFactorBps",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
         }
       ]
     },
@@ -25345,6 +25503,25 @@
           ],
           "stateMutability": "view",
           "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "",
+              "type": "address"
+            }
+          ],
+          "name": "vaultTargetBackingFactorBps",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
         }
       ]
     },
@@ -25570,6 +25747,25 @@
         {
           "inputs": [],
           "name": "totalRepBackingUnits",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "",
+              "type": "address"
+            }
+          ],
+          "name": "vaultTargetBackingFactorBps",
           "outputs": [
             {
               "internalType": "uint256",
@@ -29803,6 +29999,24 @@
             },
             {
               "internalType": "uint256",
+              "name": "backingFactorBps",
+              "type": "uint256"
+            }
+          ],
+          "name": "adjustVaultBackingFactor",
+          "outputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            },
+            {
+              "internalType": "uint256",
               "name": "amountAttoRep",
               "type": "uint256"
             },
@@ -31087,6 +31301,25 @@
             }
           ],
           "name": "vaultBadDebtAttoEth",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "",
+              "type": "uint256"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "vault",
+              "type": "address"
+            }
+          ],
+          "name": "vaultTargetBackingFactorBps",
           "outputs": [
             {
               "internalType": "uint256",

@@ -21,7 +21,7 @@
 				<p>Report and staged-operation liveness depends on <a href="../security-model.html#assumption-a16">A16 timely inclusion</a>, <a href="../security-model.html#assumption-a17">A17 corrector capability</a>, <a href="../security-model.html#assumption-a18">A18 independent correction incentive</a>, <a href="../security-model.html#assumption-a19">A19 observable correctable price</a>, and <a href="../security-model.html#assumption-a06">A06 lifecycle executors</a>. When <code>lastPrice</code> is zero, the official client currently needs an offchain market quote to propose the first report; quote availability is a client limitation rather than a protocol security assumption. Proposals copied from a nonzero cached price do not use that quote path.</p>
 				<h2 id="interactions">State-changing interactions</h2>
 				<!-- Validated read ABI fingerprint: 288a73d13de5a0f593226105eb11eb177bf085ac2ee708a31645c3d7c4eb7237 -->
-				<!-- Validated complete compiled ABI fingerprint: e446c4ea44c6ad3b90dfe3a5291293cc65a0638d60d8e2412ff73c7f6dd7ae36 -->
+				<!-- Validated complete compiled ABI fingerprint: 32023192fd820f2a2bae706695a30241fa41b9b831ca7cc732ea4f4f486f810b -->
 				<table>
 					<thead>
 						<tr>
@@ -42,9 +42,9 @@
 						</tr>
 						<tr>
 							<td><code>requestPriceIfNeededAndStageOperation(...)</code> with funding when stale</td>
-							<td>Vault owner for self withdrawal; legacy self-receiving liquidation callers remain supported. While a report is pending, only that report sponsor may stage more operations.</td>
-							<td><code>securityPool.isEscalationResolved()</code> is false; valid target, nonzero amount, and timeout from 1 second through 5 minutes. Bounty, buffered report funding, matching REP, and token approvals are required only when this call opens a new report. The caller must accept any positive unused-ETH refund.</td>
-							<td>Records the operation, executes immediately with a fresh price, or attaches it to a bounded pending settlement batch and opens a report when required. If unused ETH is positive, the final caller refund uses a low-level callback; rejection rolls back the entire transaction, including any queueing, immediate execution, or newly opened report.</td>
+							<td>Vault owner for self withdrawal or a target change; self-receiving liquidation callers are also supported. While a report is pending, only that report sponsor may stage more operations.</td>
+							<td><code>securityPool.isEscalationResolved()</code> is false; valid self-target for withdrawal or target adjustment, nonzero operation value (at least the pool security multiplier for a target adjustment), and timeout from 1 second through 5 minutes. Bounty, buffered report funding, matching REP, and token approvals are required only when this call opens a new report. The caller must accept any positive unused-ETH refund.</td>
+							<td>Records the operation (<code>0</code> liquidation debt in attoETH, <code>1</code> withdrawal in attoREP, <code>2</code> target backing factor in BPS), executes immediately with a fresh price, or attaches it to a bounded pending settlement batch and opens a report when required. A newly accepted target change consumes any older active target change for the same vault with <code>success=false</code> and <code>Backing target superseded</code>, freeing its settlement slot. If unused ETH is positive, the final caller refund uses a low-level callback; rejection rolls back the entire transaction, including any queueing, immediate execution, or newly opened report.</td>
 							<td><code>StagedOperationQueued</code>, possibly <code>PriceRequested</code>, then <code>ExecutedStagedOperation</code>; authoritative <code>CoordinatorStateCheckpoint</code> records</td>
 						</tr>
 						<tr>

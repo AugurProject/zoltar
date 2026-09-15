@@ -216,9 +216,7 @@ async function discoverUniverses(context: EcosystemDiscoveryContext, blockNumber
 				start += BigInt(pageOutcomes.length)
 			}
 		}
-		if (new Set(outcomes.map(outcome => outcome.toString())).size !== outcomes.length || new Set(childIds.map(childId => childId.toString())).size !== childIds.length) {
-			throw new Error(`Universe ${universeId.toString()} returned duplicate immutable child routes`)
-		}
+		if (new Set(outcomes.map(outcome => outcome.toString())).size !== outcomes.length || new Set(childIds.map(childId => childId.toString())).size !== childIds.length) throw new Error(`Universe ${universeId.toString()} returned duplicate immutable child routes`)
 		topology.universeChildren[universeId.toString()] = {
 			childUniverseIds: childIds.map(childId => childId.toString()),
 			outcomeIndexes: outcomes.map(outcome => outcome.toString()),
@@ -761,6 +759,7 @@ async function discoverPools(
 			settlementCollateralAttoEth: accounting.settlementCollateralAttoEth.toString(),
 			shareTokenSupplyAttoShares: shareTokenSupply.toString(),
 			statoblastSecurityMultiplierBps: securityMultiplier.toString(),
+			walletVaultTargetBackingFactorBps: wallet === undefined ? '0' : (await client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'vaultTargetBackingFactorBps', args: [wallet] })).toString(),
 			totalCapacityOwnershipAttoRep: accounting.totalCapacityOwnershipAttoRep.toString(),
 			totalPoolHeldAttoRep: totalPoolHeldAttoRep.toString(),
 			totalRepBackingUnits: totalRepBackingUnits.toString(),

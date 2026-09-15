@@ -258,7 +258,7 @@ describe('openOracle protocol client', () => {
 					return [
 						previewOperationIds,
 						previewOperationIds.map(operationId => ({
-							operationAmountAttoRepOrAttoEth: operationId,
+							operationValue: operationId,
 							operator: vaultAddress,
 							operation: 1,
 							queuedAt: 0n,
@@ -273,7 +273,7 @@ describe('openOracle protocol client', () => {
 				}
 				if (request.functionName === 'getPendingOperationSlot') {
 					return {
-						operationAmountAttoRepOrAttoEth: 999n,
+						operationValue: 999n,
 						operator: vaultAddress,
 						operation: 0,
 						queuedAt: 0n,

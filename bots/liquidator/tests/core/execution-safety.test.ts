@@ -81,7 +81,7 @@ function queuedLiquidationReceipt(isPendingSlot: boolean): TransactionReceipt {
 				data: encodeAbiParameters(
 					[
 						{ name: 'operation', type: 'uint8' },
-						{ name: 'operationAmountAttoRepOrAttoEth', type: 'uint256' },
+						{ name: 'operationValue', type: 'uint256' },
 						{ name: 'queuedAt', type: 'uint256' },
 						{ name: 'validForSeconds', type: 'uint256' },
 						{ name: 'snapshotTargetBackingUnits', type: 'uint256' },
@@ -498,7 +498,7 @@ describe('liquidator execution safety', () => {
 			hasStagedLiquidation(
 				[
 					{
-						operationAmountAttoRepOrAttoEth: 1n,
+						operationValue: 1n,
 						id: 7n,
 						liquidationApprovalId: `0x${'00'.repeat(32)}`,
 						isPendingSettlement: true,

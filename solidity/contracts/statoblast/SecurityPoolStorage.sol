@@ -41,6 +41,7 @@ abstract contract SecurityPoolStorage {
 	uint256 internal badDebtGeneration;
 	/// @dev Initial pools use the question end; an activated child uses max until resolution or its next fork fixes the cutoff.
 	uint256 internal feeEpochEndTime;
+	mapping(address => uint256) public vaultTargetBackingFactorBps;
 
 	function _getVaultBadDebtAttoEth(address vault) internal view returns (uint256 badDebtAttoEth) {
 		VaultBadDebt storage vaultBadDebt = vaultBadDebtByVault[vault];

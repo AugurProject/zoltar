@@ -2,9 +2,9 @@ import { createCompleteSet, depositRepToVault, getRepToken } from '../../testSup
 import { getTotalTheoreticalSupply } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { migrateRepToZoltar, migrateVault } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
-import { getQuestionEndDate, OperationType } from '../../testSupport/simulator/utils/contracts/statoblast'
+import { getQuestionEndDate } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { getInfraContractAddresses, getSecurityPoolAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
-import { manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { triggerOwnGameFork, setVaultCapacityFixture } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { getChildUniverseId, getETHBalance } from '../../testSupport/simulator/utils/utilities'
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { createWriteClient } from '../../testSupport/simulator/utils/clients'
@@ -65,7 +65,7 @@ describe('Statoblast: receive guards', () => {
 		await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 		await mockWindow.setTime(endTime + 10000n)
 		const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolCapacityOwnershipAttoRep)
 		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const openInterestAmount = 10n * 10n ** 18n
 		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
@@ -113,7 +113,7 @@ describe('Statoblast: receive guards', () => {
 		await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 		await mockWindow.setTime(endTime + 10000n)
 		const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolCapacityOwnershipAttoRep)
 		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const openInterestAmount = 10n * 10n ** 18n
 		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)

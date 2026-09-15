@@ -379,7 +379,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 					repWithdrawAmount: '1',
 					securityPoolAddress: zeroAddress,
 					selectedVaultOwner: zeroAddress,
-					targetHealthFactor: '1',
+					targetHealthFactor: '2',
 				},
 			}),
 		})
@@ -636,7 +636,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 						securityVaultForm: {
 							depositAmount: '10',
 							repWithdrawAmount: '1',
-							targetHealthFactor: '1',
+							targetHealthFactor: '2',
 							securityPoolAddress: selectedPoolAddress,
 							selectedVaultOwner: zeroAddress,
 						},
@@ -687,7 +687,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 						securityVaultForm: {
 							depositAmount: '1',
 							repWithdrawAmount: '1',
-							targetHealthFactor: '1',
+							targetHealthFactor: '2',
 							securityPoolAddress: selectedPoolAddress,
 							selectedVaultOwner: zeroAddress,
 						},
@@ -728,7 +728,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 						securityVaultForm: {
 							depositAmount: '1',
 							repWithdrawAmount: '1',
-							targetHealthFactor: '1',
+							targetHealthFactor: '2',
 							securityPoolAddress: selectedPoolAddress,
 							selectedVaultOwner: zeroAddress,
 						},
@@ -777,7 +777,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 						securityVaultForm: {
 							depositAmount: '1',
 							repWithdrawAmount: '1',
-							targetHealthFactor: '1',
+							targetHealthFactor: '2',
 							securityPoolAddress: selectedPoolAddress,
 							selectedVaultOwner: zeroAddress,
 						},
@@ -822,7 +822,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 						securityVaultForm: {
 							depositAmount: '1',
 							repWithdrawAmount: '1',
-							targetHealthFactor: '1',
+							targetHealthFactor: '2',
 							securityPoolAddress: selectedPoolAddress,
 							selectedVaultOwner: otherVaultAddress,
 						},
@@ -865,7 +865,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 						securityVaultForm: {
 							depositAmount: '1',
 							repWithdrawAmount: '1',
-							targetHealthFactor: '1',
+							targetHealthFactor: '2',
 							securityPoolAddress: selectedPoolAddress,
 							selectedVaultOwner: zeroAddress,
 						},

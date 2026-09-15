@@ -17,7 +17,7 @@ const options = {
 	seed: 0x1357_2468,
 } as const
 
-function stagedFixture(operation: 0 | 1): { pool: ReturnType<typeof snapshotFixture>['pools'][number]; snapshot: ReturnType<typeof snapshotFixture>; staged: StagedOperationSnapshot } {
+function stagedFixture(operation: 0 | 1 | 2): { pool: ReturnType<typeof snapshotFixture>['pools'][number]; snapshot: ReturnType<typeof snapshotFixture>; staged: StagedOperationSnapshot } {
 	const snapshot = snapshotFixture()
 	const pool = snapshot.pools[0]
 	if (pool === undefined) throw new Error('Pool fixture missing')
@@ -87,6 +87,19 @@ describe('safe liquidation operations', () => {
 		pool.lastOracleSettlementTimestamp = (BigInt(withdrawal.snapshot.anchor.timestamp) - 240n).toString()
 		pool.oraclePriceValid = true
 		expect(urgentOperationPlans(withdrawal.snapshot, options).find(candidate => candidate.definitionId === 'statoblast.staged.execute')).toBeUndefined()
+	})
+
+	test('plans manual target adjustments with an exact coordinator-context preflight', () => {
+		const { snapshot, pool, staged } = stagedFixture(2)
+		staged.amount = '30000'
+		const plan = urgentOperationPlans(snapshot, options).find(candidate => candidate.definitionId === 'statoblast.staged.execute')
+		const preflight = plan?.steps[0]?.preflightCalls?.[0]
+		if (preflight === undefined) throw new Error('Target adjustment preflight missing')
+		expect(preflight.caller).toBe(pool.coordinator)
+		expect(decodeFunctionData({ abi: securityPoolAbi, data: preflight.data })).toEqual({ args: [snapshot.wallet.address, 30_000n], functionName: 'adjustVaultBackingFactor' })
+		expect(canonicalLifecyclePresence(snapshot, options).some(item => item.definitionId === 'statoblast.staged.execute' && item.blocksNovelty)).toBe(true)
+		staged.executionExpectedSuccess = false
+		expect(urgentOperationPlans(snapshot, options).some(candidate => candidate.definitionId === 'statoblast.staged.execute')).toBe(false)
 	})
 
 	test('keeps stable staged identities and raw presence while execution is stale or fails simulation', () => {

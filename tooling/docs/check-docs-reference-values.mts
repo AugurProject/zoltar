@@ -186,9 +186,9 @@ function assertMigrationSecurityCoverageCommitmentDocs(): void {
 	const calculateCapacity = (capacityOwnershipAttoRep: bigint, repPerEth: bigint, securityMultiplierBps: bigint) => ((capacityOwnershipAttoRep * 10n ** 18n) / repPerEth / securityMultiplierBps) * 10_000n
 	assert.ok(calculateCapacity(100n * 10n ** 18n, 4n * 10n ** 18n, 20_000n) < calculateCapacity(100n * 10n ** 18n, 2n * 10n ** 18n, 20_000n), 'A higher REP-per-ETH quote must lower live ETH minting capacity')
 	assert.match(whitepaperStatoblast, /id="fees-capacity-liquidations"/)
-	assert.match(securityPoolOperationsDelegate, /uint256 capacityOwnershipAddedAttoRep = Math\.mulDiv\(\s*attoRepAmount,\s*SecurityPoolUtils\.BPS_DENOMINATOR,\s*targetHealthFactorBps\s*\)/)
-	assert.equal((11n * 10_000n) / 30_000n, 3n, 'capacity ownership must round a nonzero remainder downward')
-	assert.equal((1n * 10_000n) / 10_001n, 0n, 'an extreme deposit target factor may round capacity ownership to zero')
+	assert.match(securityPoolOperationsDelegate, /uint256 capacityOwnershipAddedAttoRep = Math\.mulDiv\(\s*attoRepAmount,\s*statoblastSecurityMultiplierBps,\s*targetHealthFactorBps\s*\)/)
+	assert.equal((11n * 20_000n) / 30_000n, 7n, 'capacity ownership must round a nonzero remainder downward')
+	assert.equal((1n * 20_000n) / 20_001n, 0n, 'an extreme deposit target factor may round capacity ownership to zero')
 	assert.match(securityPoolUtils, /function isVaultHealthyAtFactor\([\s\S]*Math\.Rounding\.Ceil[\s\S]*poolHeldVaultRepBackingAttoRep \+ disputeStakedAttoRep < associatedRequiredRepAttoRep[\s\S]*return poolHeldVaultRepBackingAttoRep >= freeRequiredRepAttoRep/)
 	assert.match(liquidationHtml, /id="capacity-and-health"/)
 	assert.doesNotMatch(securityPoolUtils, /function calculateLiquidationTransfer\(/, 'the obsolete bonus-priced liquidation preview must not remain externally callable')
@@ -201,8 +201,8 @@ function assertMigrationSecurityCoverageCommitmentDocs(): void {
 	for (const functionName of externalPureFunctions) {
 		assert.ok(operatorReference.includes(`${functionName}(`), `operator reference must document SecurityPoolUtils.${functionName}`)
 	}
-	assert.match(priceCoordinator, /enum OperationType \{\s*Liquidation,\s*WithdrawRep\s*\}/)
-	assert.match(coordinatorData, /"OperationType": \{ "0": "Liquidation", "1": "WithdrawRep" \}/)
+	assert.match(priceCoordinator, /enum OperationType \{\s*Liquidation,\s*WithdrawRep,\s*AdjustVaultBackingFactor\s*\}/)
+	assert.match(coordinatorData, /"OperationType": \{ "0": "Liquidation", "1": "WithdrawRep", "2": "AdjustVaultBackingFactor" \}/)
 	assert.doesNotMatch(coordinatorData, /StagedOperationDisputeStakedRepSnapshotted|initiatorVault/)
 	assert.doesNotMatch(priceCoordinator, /event PendingOperationRecoveryConsumed/)
 	assert.match(coordinatorData, /LiquidationRouteStaged\(uint256 indexed operationId, address indexed operator, address indexed receiverVault, address targetVault, bytes32 approvalId, uint256 requestedDebtAttoEth, uint256 reservedDebtAttoEth\)/)

@@ -11,6 +11,8 @@ export function decodeOracleQueueOperation(operation: bigint | number): OracleQu
 			return 'liquidation'
 		case 1n:
 			return 'withdrawRep'
+		case 2n:
+			return 'adjustVaultBackingFactor'
 		default:
 			throw new Error(`Unknown oracle operation: ${operation}`)
 	}
@@ -22,6 +24,8 @@ export function encodeOracleQueueOperation(operation: OracleQueueOperation): num
 			return LIQUIDATION_OPERATION_TYPE
 		case 'withdrawRep':
 			return WITHDRAW_REP_OPERATION_TYPE
+		case 'adjustVaultBackingFactor':
+			return 2
 		default:
 			return assertNever(operation)
 	}

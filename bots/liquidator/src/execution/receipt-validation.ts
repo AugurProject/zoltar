@@ -24,7 +24,7 @@ function requirePendingStagedOperation(receipt: TransactionReceipt, coordinator:
 		if (log.address.toLowerCase() !== coordinator.toLowerCase()) continue
 		try {
 			const decoded = decodeEventLog({ abi: openOraclePriceCoordinatorAbi, data: log.data, topics: log.topics })
-			if (decoded.eventName === 'StagedOperationQueued' && decoded.args.operation === 0n && decoded.args.operator.toLowerCase() === operator.toLowerCase() && decoded.args.targetVault.toLowerCase() === target.toLowerCase() && decoded.args.operationAmountAttoRepOrAttoEth === amount && decoded.args.isPendingSlot)
+			if (decoded.eventName === 'StagedOperationQueued' && decoded.args.operation === 0n && decoded.args.operator.toLowerCase() === operator.toLowerCase() && decoded.args.targetVault.toLowerCase() === target.toLowerCase() && decoded.args.operationValue === amount && decoded.args.isPendingSlot)
 				queuedOperationId = decoded.args.operationId
 			if (decoded.eventName === 'LiquidationRouteStaged' && decoded.args.operator.toLowerCase() === operator.toLowerCase() && decoded.args.receiverVault.toLowerCase() === receiver.toLowerCase() && decoded.args.targetVault.toLowerCase() === target.toLowerCase() && decoded.args.requestedDebtAttoEth === amount)
 				routedOperationId = decoded.args.operationId
