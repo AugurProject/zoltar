@@ -195,23 +195,21 @@ describe('Statoblast: vault accounting', () => {
 		)
 	})
 
-	test('supports a backing-only REP top-up without changing capacity ownership', async () => {
-		const emptyReceiver = createWriteClient(mockWindow, TEST_ADDRESSES[2])
-		const minimumVaultRepDepositAttoRep = await client.readContract({
-			abi: statoblast_SecurityPool_SecurityPool.abi,
-			address: securityPoolAddresses.securityPool,
-			args: [],
-			functionName: 'minimumVaultRepDepositAttoRep',
-		})
-		await transferRepToAddress(client, emptyReceiver.account.address, minimumVaultRepDepositAttoRep)
-		await approveToken(emptyReceiver, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
-		await depositRepToVault(emptyReceiver, securityPoolAddresses.securityPool, minimumVaultRepDepositAttoRep, MAX_UINT256)
-		const receiverVault = await getSecurityVault(client, securityPoolAddresses.securityPool, emptyReceiver.account.address)
-		strictEqualTypeSafe(receiverVault.capacityOwnershipAttoRep, 0n, 'backing-only top-up must not add capacity ownership')
-		assert.ok(receiverVault.repBackingUnits > 0n, 'standalone minimum top-up should initialize REP backing units')
-		const factors = await getVaultCapacityBackingFactorsBps(emptyReceiver.account.address)
-		strictEqualTypeSafe(factors[0], 0n, 'zero capacity should report zero associated REP per capacity')
-		strictEqualTypeSafe(factors[1], 0n, 'zero capacity should report zero pool-held REP per capacity')
+	test('rejects an initial deposit whose target rounds capacity to zero', async () => {
+		const receiver = createWriteClient(mockWindow, TEST_ADDRESSES[2])
+		const amount = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddresses.securityPool, functionName: 'minimumVaultRepDepositAttoRep' })
+		await transferRepToAddress(client, receiver.account.address, amount)
+		await approveToken(receiver, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
+		const before = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), receiver.account.address)
+		await assert.rejects(depositRepToVault(receiver, securityPoolAddresses.securityPool, amount, MAX_UINT256), /Capacity must be positive/)
+		strictEqualTypeSafe(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), receiver.account.address), before, 'rejected deposit preserves wallet REP')
+		strictEqualTypeSafe((await getSecurityVault(client, securityPoolAddresses.securityPool, receiver.account.address)).repBackingUnits, 0n, 'rejected deposit leaves no vault backing')
+		const oneUnitTarget = amount * statoblastSecurityMultiplierBps
+		await depositRepToVault(receiver, securityPoolAddresses.securityPool, amount, oneUnitTarget)
+		strictEqualTypeSafe((await getSecurityVault(client, securityPoolAddresses.securityPool, receiver.account.address)).capacityOwnershipAttoRep, 1n, 'one capacity unit is accepted')
+		await transferRepToAddress(client, receiver.account.address, 1n)
+		await depositRepToVault(receiver, securityPoolAddresses.securityPool, 1n, oneUnitTarget)
+		strictEqualTypeSafe((await getSecurityVault(client, securityPoolAddresses.securityPool, receiver.account.address)).capacityOwnershipAttoRep, 1n, 'an existing positive-capacity vault may receive a rounding-sized top-up')
 	})
 
 	test('same-target vaults are independent of deposit order', async () => {

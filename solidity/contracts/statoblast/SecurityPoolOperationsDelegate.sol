@@ -170,7 +170,7 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 	}
 
 	function depositRepToVault(uint256 attoRepAmount, uint256 targetHealthFactorBps) external {
-		_depositRepToVault(msg.sender, attoRepAmount, targetHealthFactorBps, true);
+		_depositRepToVault(msg.sender, attoRepAmount, targetHealthFactorBps);
 	}
 
 	function depositRepToVaultWithPermit(uint256 attoRepAmount, uint256 targetHealthFactorBps, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external {
@@ -182,18 +182,25 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		{} catch {
 			require(IERC20(token).allowance(msg.sender, address(this)) >= attoRepAmount, 'Vault permit and allowance insufficient');
 		}
-		_depositRepToVault(msg.sender, attoRepAmount, targetHealthFactorBps, true);
+		_depositRepToVault(msg.sender, attoRepAmount, targetHealthFactorBps);
 	}
 
 	function depositRepToVaultWithAuthorization(address owner, uint256 attoRepAmount, uint256 targetHealthFactorBps, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external {
 		ISecurityPoolRepDepositContext pool = ISecurityPoolRepDepositContext(address(this));
 		require(pool.universeId() != 0, 'Genesis REP does not support authorization');
 		bytes32 operationHash = keccak256(abi.encode(this.depositRepToVaultWithAuthorization.selector, owner, pool.universeId(), pool.questionId(), attoRepAmount, targetHealthFactorBps));
+		uint256 repBackingUnits = _prepareRepDeposit(owner, attoRepAmount, targetHealthFactorBps);
 		IERC3009Authorization(pool.repToken()).receiveWithAuthorization(owner, address(this), attoRepAmount, validAfter, validBefore, keccak256(abi.encode(nonce, operationHash, owner)), v, r, s);
-		_depositRepToVault(owner, attoRepAmount, targetHealthFactorBps, false);
+		_creditRepDeposit(owner, attoRepAmount, targetHealthFactorBps, repBackingUnits);
 	}
 
-	function _depositRepToVault(address vault, uint256 attoRepAmount, uint256 targetHealthFactorBps, bool transferRep) private {
+	function _depositRepToVault(address vault, uint256 attoRepAmount, uint256 targetHealthFactorBps) private {
+		uint256 repBackingUnits = _prepareRepDeposit(vault, attoRepAmount, targetHealthFactorBps);
+		IERC20(ISecurityPoolRepDepositContext(address(this)).repToken()).safeTransferFrom(vault, address(this), attoRepAmount);
+		_creditRepDeposit(vault, attoRepAmount, targetHealthFactorBps, repBackingUnits);
+	}
+
+	function _prepareRepDeposit(address vault, uint256 attoRepAmount, uint256 targetHealthFactorBps) private returns (uint256) {
 		ISecurityPoolRepDepositContext pool = ISecurityPoolRepDepositContext(address(this));
 		_requireVaultAdmissionOpen(pool);
 		require(attoRepAmount > 0, 'Zero REP');
@@ -202,8 +209,11 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		require(savedTarget == 0 || savedTarget == targetHealthFactorBps, 'Use saved vault target');
 		if (savedTarget == 0) vaultTargetBackingFactorBps[vault] = targetHealthFactorBps;
 		pool.updateVaultFees(vault);
-		uint256 repBackingUnits = pool.attoRepToBackingUnits(attoRepAmount);
-		if (transferRep) IERC20(pool.repToken()).safeTransferFrom(vault, address(this), attoRepAmount);
+		return pool.attoRepToBackingUnits(attoRepAmount);
+	}
+
+	function _creditRepDeposit(address vault, uint256 attoRepAmount, uint256 targetHealthFactorBps, uint256 repBackingUnits) private {
+		ISecurityPoolRepDepositContext pool = ISecurityPoolRepDepositContext(address(this));
 		securityVaults[vault].repBackingUnits += repBackingUnits;
 		totalRepBackingUnits += repBackingUnits;
 		require(pool.backingUnitsToAttoRep(securityVaults[vault].repBackingUnits) >= minimumVaultRepDepositAttoRep, 'Vault REP below minimum');
@@ -212,6 +222,7 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 			settlementCollateralAttoEth == 0
 				? Math.mulDiv(pool.backingUnitsToAttoRep(securityVaults[vault].repBackingUnits), statoblastSecurityMultiplierBps, targetHealthFactorBps)
 				: securityVaults[vault].capacityOwnershipAttoRep + capacityOwnershipAddedAttoRep;
+		require(nextCapacity > 0, 'Capacity must be positive');
 		_setVaultCapacity(vault, nextCapacity, targetHealthFactorBps);
 		pool.updateRetentionRate();
 		if (!isKnownVault[vault]) {

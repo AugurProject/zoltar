@@ -44,8 +44,8 @@
 						<tr>
 							<td><code>depositRepToVault(attoRepAmount, targetHealthFactorBps)</code></td>
 							<td>Vault owner</td>
-							<td>Operational and unforked; <code>isEscalationResolved()</code> is false; the transaction timestamp is strictly before the question end time unless the pool has an inherited fork-continuation game; deposit amount is positive; target backing ratio is at least <code>statoblastSecurityMultiplierBps</code> and matches any saved vault target; resulting vault REP meets the configured supply-scaled minimum.</td>
-							<td>Transfers REP into the pool and credits proportional REP backing units. The first deposit saves the target; later deposits must match it. With no settlement collateral, capacity is recalculated from all pool-held vault backing. Otherwise, only the new deposit adds capacity at the saved factor.</td>
+							<td>Operational and unforked; <code>isEscalationResolved()</code> is false; the transaction timestamp is strictly before the question end time unless the pool has an inherited fork-continuation game; deposit amount is positive; target backing ratio is at least <code>statoblastSecurityMultiplierBps</code> and matches any saved vault target; resulting vault REP meets the configured supply-scaled minimum and resulting capacity is positive.</td>
+							<td>Prices proportional REP backing units before receiving the transfer, including authorization deposits, then credits those units. The first deposit saves the target; later deposits must match it. With no settlement collateral, capacity is recalculated from all pool-held vault backing. Otherwise, only the new deposit adds capacity at the saved factor.</td>
 							<td><code>RepDepositedToVault</code>, <code>VaultDepositTargetHealthFactorRecorded</code>, and accounting checkpoints</td>
 						</tr>
 						<tr>

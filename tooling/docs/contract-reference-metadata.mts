@@ -45,7 +45,7 @@ export const contractPagesDirectory = 'docs/reference/contracts'
 export function contractPageOutputPath(contractName: string): string {
 	return `${contractPagesDirectory}/${contractName.toLowerCase()}.html`
 }
-export const expectedProductionSoliditySourceFingerprint = '20d6093094bf6338f0082d7f689d660bbadd2f5e235252ad1132f183f9866665'
+export const expectedProductionSoliditySourceFingerprint = 'd15361d2dca6cf6fa7a1da851fc26cee8a16e66bdcfba9d008d7bfde273deac1'
 
 export const eventSourceByName: Record<string, string> = {
 	VaultBadDebtMigrated: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
@@ -858,10 +858,11 @@ export const contractReferences: ContractReference[] = [
 			{
 				call: '`depositRepToVault(attoRepAmount, targetHealthFactorBps)`',
 				caller: 'Vault owner',
-				effect: 'Transfers REP into the pool and credits proportional REP backing units. The first deposit saves the target; later deposits must match it. With no settlement collateral, capacity is recalculated from all pool-held vault backing. Otherwise, only the new deposit adds capacity at the saved factor.',
+				effect:
+					'Prices proportional REP backing units before receiving the transfer, including authorization deposits, then credits those units. The first deposit saves the target; later deposits must match it. With no settlement collateral, capacity is recalculated from all pool-held vault backing. Otherwise, only the new deposit adds capacity at the saved factor.',
 				declarations: [{ name: 'depositRepToVault' }],
 				preconditions:
-					'Operational and unforked; `isEscalationResolved()` is false; the transaction timestamp is strictly before the question end time unless the pool has an inherited fork-continuation game; deposit amount is positive; target backing ratio is at least `statoblastSecurityMultiplierBps` and matches any saved vault target; resulting vault REP meets the configured supply-scaled minimum.',
+					'Operational and unforked; `isEscalationResolved()` is false; the transaction timestamp is strictly before the question end time unless the pool has an inherited fork-continuation game; deposit amount is positive; target backing ratio is at least `statoblastSecurityMultiplierBps` and matches any saved vault target; resulting vault REP meets the configured supply-scaled minimum and resulting capacity is positive.',
 				signals: '`RepDepositedToVault`, `VaultDepositTargetHealthFactorRecorded`, and accounting checkpoints',
 			},
 			{
