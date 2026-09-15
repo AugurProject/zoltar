@@ -41,7 +41,7 @@ describe('LifecycleStageBanner', () => {
 		expect(successFlatRuleIndex).toBeGreaterThan(criticalFlatRuleIndex)
 	})
 
-	test('renders loading detail with the shared accessible spinner for standard and warning stages', async () => {
+	test('renders stage detail as plain text without a loading spinner for standard and warning stages', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<>
 				<LifecycleStageBanner stage={{ availableActions: [], blockedActions: [], detail: 'Loading reporting details.', key: 'reportingOpen', label: 'Reporting Open', tone: 'success' }} />
@@ -50,8 +50,10 @@ describe('LifecycleStageBanner', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const loadingStatuses = within(document.body).getAllByRole('status')
-		expect(loadingStatuses).toHaveLength(2)
-		expect(loadingStatuses.every(status => status.querySelector('.spinner') !== null)).toBe(true)
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Loading reporting details.').classList.contains('detail')).toBe(true)
+		expect(documentQueries.getByText('Loading warning details.').classList.contains('detail')).toBe(true)
+		expect(documentQueries.queryByRole('status')).toBeNull()
+		expect(document.body.querySelector('.spinner')).toBeNull()
 	})
 })

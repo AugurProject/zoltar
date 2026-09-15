@@ -2,15 +2,23 @@ import type { Address, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { formatUnits } from '../lib/format.js'
 import { formatCompleteSetQuantity, formatLpQuantity, formatOutcomeQuantity } from '../lib/shareValue.js'
 import type { DeploymentConfiguration } from '../protocol/config.js'
-import { marketAcceptsNewRisk, publicErrorMessage, simulateLiquidity, submitFreshLiquidity, type LiveMarket } from '../protocol/live.js'
+import { marketAcceptsNewRisk, publicErrorMessage, simulateLiquidity, submitFreshLiquidity, type LiveBalances, type LiveMarket } from '../protocol/live.js'
 import * as workflowCopy from '../copy/workflows.js'
 import * as liquidityCopy from '../copy/liquidity.js'
+import { useId } from 'preact/hooks'
+import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
-import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
+import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
+import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
+import { TransactionActionButton, TransactionActionGroup } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
+import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
+import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
 import type { GuardedWalletWrite } from './liveTradingControllerHelpers.js'
 import type { BalanceState } from './live/liveTradingTypes.js'
-import { BalanceLoadError, ExecutionProtectionFields, formatTimestamp, stateLabel, TradingTransactionHash } from './LiveTradingTransactionUi.js'
+import { BalanceLoadError, ExecutionProtectionFields, formatTimestamp, stateLabel, TradingField, TradingTransactionHash } from './LiveTradingTransactionUi.js'
 import { liquidityOperationAvailable, useLiquidityWorkflowController } from './live/useLiquidityWorkflowController.js'
+import { resolveLiquiditySimulateAvailability, resolveLiquiditySubmitAvailability, resolveActionGroupMessage } from './live/actionAvailability.js'
+import { useFocusOnKeyChange } from './live/useFocusOnKeyChange.js'
 
 export type LiveLiquidityServices = Readonly<{
 	publicErrorMessage: typeof publicErrorMessage
@@ -27,10 +35,13 @@ export const liveLiquidityServices: LiveLiquidityServices = {
 export function LiveLiquidityControls({
 	configuration,
 	market,
+	balances,
 	balanceState,
 	balanceError,
 	account,
 	walletClient,
+	networkMismatchReason,
+	walletEthAttoEth,
 	externallyLocked,
 	nowSeconds,
 	refresh,
@@ -43,10 +54,13 @@ export function LiveLiquidityControls({
 }: {
 	configuration: DeploymentConfiguration
 	market: LiveMarket
+	balances: LiveBalances | undefined
 	balanceState: BalanceState
 	balanceError: string | undefined
 	account: Address | undefined
 	walletClient: WalletClient | undefined
+	networkMismatchReason: string | undefined
+	walletEthAttoEth: bigint | undefined
 	externallyLocked: boolean
 	nowSeconds: bigint
 	refresh(): Promise<void>
@@ -61,124 +75,98 @@ export function LiveLiquidityControls({
 	const { operation, amount, probability, slippage, transactionValidityMinutes, quote, state, transactionHash, error, receiptWarning, parsed, slippageBps, validityMinutes, conditionalBps, workflowLocked, selectOperation, updateAmount, updateProbability, updateSlippage, updateValidity, simulateCurrent, submit } =
 		controller
 	const closedForAdding = !marketAcceptsNewRisk(market, nowSeconds)
+	const availabilityInputs = {
+		walletConnected: account !== undefined && walletClient !== undefined,
+		networkMismatchReason,
+		balanceState,
+		operation,
+		marketClosed: closedForAdding,
+		requestedAmount: parsed,
+		walletEthAttoEth,
+		lpBalance: balances?.lp,
+		initializePriceValid: conditionalBps !== undefined,
+		protectionValid: slippageBps !== undefined && validityMinutes !== undefined,
+		workflowLocked,
+	}
+	const simulateAvailability = resolveLiquiditySimulateAvailability(availabilityInputs)
+	const submitAvailability = resolveLiquiditySubmitAvailability({ ...availabilityInputs, marketClosed: quote === undefined ? closedForAdding : !liquidityOperationAvailable(quote.operation, quote.market, nowSeconds), quoteReady: state === 'ready' })
+	const actionAvailability = quote === undefined ? simulateAvailability : submitAvailability
+	const statusText = state === 'error' ? undefined : stateLabel(state, workflowCopy.liquidityTransaction)
+	const outcomeRef = useFocusOnKeyChange<HTMLDivElement>(state === 'confirmed' ? transactionHash : undefined)
+	const fieldId = useId()
+	const amountId = `${fieldId}-amount`
+	const probabilityId = `${fieldId}-probability`
+	const probabilityInvalid = operation === 'initialize' && probability.trim() !== '' && conditionalBps === undefined
+	const groupMessage = resolveActionGroupMessage(state, actionAvailability, statusText)
 	return (
-		<div class='operation-block'>
-			<h3>{liquidityCopy.sectionTitle}</h3>
-			{balanceState === 'disconnected' ? <p>{liquidityCopy.disconnectedGuidance}</p> : null}
-			{balanceState === 'loading' ? <p role='status'>{liquidityCopy.loadingBalancesStatus}</p> : null}
+		<div class='liquidity-controls'>
+			{balanceState === 'disconnected' ? <p class='detail'>{liquidityCopy.disconnectedGuidance}</p> : null}
 			{balanceState === 'error' ? <BalanceLoadError message={liquidityCopy.balancesUnavailable(balanceError ?? liquidityCopy.balanceRefreshFallback)} retry={retryBalances} disabled={workflowLocked} /> : null}
-			<div class='segmented' aria-label={liquidityCopy.operationLabel}>
-				<button aria-pressed={operation === 'initialize'} disabled={market.lpTotalSupply > 0n || closedForAdding || workflowLocked} onClick={() => selectOperation('initialize')}>
-					{liquidityCopy.initializeAction}
-				</button>
-				<button aria-pressed={operation === 'add'} disabled={market.lpTotalSupply === 0n || closedForAdding || workflowLocked} onClick={() => selectOperation('add')}>
-					{liquidityCopy.addAction}
-				</button>
-				<button aria-pressed={operation === 'remove'} disabled={market.lpTotalSupply === 0n || workflowLocked} onClick={() => selectOperation('remove')}>
-					{liquidityCopy.removeAction}
-				</button>
-			</div>
-			<label class='field'>
-				<span>{operation === 'remove' ? liquidityCopy.lpTokenAmount : liquidityCopy.ethAmount}</span>
-				<div class='amount-input'>
-					<input value={amount} disabled={workflowLocked} inputMode='decimal' onInput={event => updateAmount(event.currentTarget.value)} />
-					<span>{operation === 'remove' ? liquidityCopy.lp : liquidityCopy.eth}</span>
-				</div>
-			</label>
+			<ViewTabs
+				ariaLabel={liquidityCopy.operationLabel}
+				semantics='switcher'
+				variant='segmented'
+				size='compact'
+				value={operation}
+				onChange={selectOperation}
+				options={[
+					{ value: 'initialize', label: liquidityCopy.initializeAction, disabled: market.lpTotalSupply > 0n || closedForAdding || workflowLocked },
+					{ value: 'add', label: liquidityCopy.addAction, disabled: market.lpTotalSupply === 0n || closedForAdding || workflowLocked },
+					{ value: 'remove', label: liquidityCopy.removeAction, disabled: market.lpTotalSupply === 0n || workflowLocked },
+				]}
+			/>
+			<TradingField id={amountId} label={operation === 'remove' ? liquidityCopy.lpTokenAmount : liquidityCopy.ethAmount}>
+				<FormInput id={amountId} name='amount' value={amount} disabled={workflowLocked} inputMode='decimal' adornment={operation === 'remove' ? liquidityCopy.lp : liquidityCopy.eth} onInput={event => updateAmount(event.currentTarget.value)} />
+			</TradingField>
 			{operation === 'initialize' ? (
-				<label class='field'>
-					<span>{liquidityCopy.conditionalYesPrice}</span>
-					<div class='amount-input'>
-						<input value={probability} disabled={workflowLocked} inputMode='numeric' onInput={event => updateProbability(event.currentTarget.value)} />
-						<span>{liquidityCopy.percent}</span>
-					</div>
-				</label>
-			) : null}
-			{operation === 'initialize' && conditionalBps === undefined ? (
-				<p class='error' role='alert'>
-					{liquidityCopy.conditionalYesPriceValidation}
-				</p>
+				<TradingField id={probabilityId} label={liquidityCopy.conditionalYesPrice}>
+					<FormInput id={probabilityId} name='probability' value={probability} disabled={workflowLocked} inputMode='numeric' adornment={liquidityCopy.percent} error={probabilityInvalid ? liquidityCopy.conditionalYesPriceValidation : undefined} onInput={event => updateProbability(event.currentTarget.value)} />
+				</TradingField>
 			) : null}
 			<ExecutionProtectionFields slippage={slippage} validityMinutes={transactionValidityMinutes} disabled={workflowLocked} onSlippageInput={updateSlippage} onValidityInput={updateValidity} />
-			{operation === 'remove' ? <p>{liquidityCopy.removalGuidance}</p> : <p>{liquidityCopy.additionGuidance}</p>}
+			<p class='detail'>{operation === 'remove' ? liquidityCopy.removalGuidance : liquidityCopy.additionGuidance}</p>
 			{quote === undefined ? null : (
 				<>
-					<p class='quote'>{liquidityCopy.simulationBlock(quote.blockNumber)}</p>
-					<dl class='metrics'>
-						<div>
-							<dt>{liquidityCopy.slippageTolerance}</dt>
-							<dd>{formatUnits(quote.slippageBps, 2, 2)}%</dd>
-						</div>
-						<div>
-							<dt>{liquidityCopy.deadline}</dt>
-							<dd>{formatTimestamp(quote.deadline)}</dd>
-						</div>
-						{quote.operation === 'remove' ? (
-							<>
-								<div>
-									<dt>{liquidityCopy.rawYesReturned}</dt>
-									<dd>{formatOutcomeQuantity(quote.expectedYes, liquidityCopy.yes)}</dd>
-								</div>
-								<div>
-									<dt>{liquidityCopy.rawNoReturned}</dt>
-									<dd>{formatOutcomeQuantity(quote.expectedNo, liquidityCopy.no)}</dd>
-								</div>
-							</>
-						) : (
-							<>
-								<div>
-									<dt>{liquidityCopy.completeSetSharesCreated}</dt>
-									<dd>{formatCompleteSetQuantity(quote.result.completeSetShares)}</dd>
-								</div>
-								<div>
-									<dt>{liquidityCopy.sharesDeposited}</dt>
-									<dd>
+					<WorkflowSubsection title={workflowCopy.quoteShares}>
+						<DataGrid dense>
+							{quote.operation === 'remove' ? (
+								<>
+									<MetricField label={liquidityCopy.rawYesReturned}>{formatOutcomeQuantity(quote.expectedYes, liquidityCopy.yes)}</MetricField>
+									<MetricField label={liquidityCopy.rawNoReturned}>{formatOutcomeQuantity(quote.expectedNo, liquidityCopy.no)}</MetricField>
+								</>
+							) : (
+								<>
+									<MetricField label={liquidityCopy.completeSetSharesCreated}>{formatCompleteSetQuantity(quote.result.completeSetShares)}</MetricField>
+									<MetricField label={liquidityCopy.sharesDeposited}>
 										{formatOutcomeQuantity(quote.result.yesUsed, liquidityCopy.yes)} / {formatOutcomeQuantity(quote.result.noUsed, liquidityCopy.no)}
-									</dd>
-								</div>
-								<div>
-									<dt>{liquidityCopy.unusedSharesReturned}</dt>
-									<dd>
+									</MetricField>
+									<MetricField label={liquidityCopy.unusedSharesReturned}>
 										{formatOutcomeQuantity(quote.result.yesReturned, liquidityCopy.yes)} / {formatOutcomeQuantity(quote.result.noReturned, liquidityCopy.no)}
-									</dd>
-								</div>
-								<div>
-									<dt>{liquidityCopy.invalidRetained}</dt>
-									<dd>{formatOutcomeQuantity(quote.result.invalidInsurance, liquidityCopy.invalid)}</dd>
-								</div>
-								<div>
-									<dt>{liquidityCopy.lpTokensExpected}</dt>
-									<dd>{formatLpQuantity(quote.expectedLiquidity)}</dd>
-								</div>
-							</>
-						)}
-					</dl>
+									</MetricField>
+									<MetricField label={liquidityCopy.invalidRetained}>{formatOutcomeQuantity(quote.result.invalidInsurance, liquidityCopy.invalid)}</MetricField>
+									<MetricField label={liquidityCopy.lpTokensExpected}>{formatLpQuantity(quote.expectedLiquidity)}</MetricField>
+								</>
+							)}
+						</DataGrid>
+					</WorkflowSubsection>
+					<WorkflowSubsection title={workflowCopy.quoteTiming}>
+						<DataGrid dense>
+							<MetricField label={liquidityCopy.simulationBlockLabel}>{quote.blockNumber.toString()}</MetricField>
+							<MetricField label={liquidityCopy.slippageTolerance}>{formatUnits(quote.slippageBps, 2, 2)}%</MetricField>
+							<MetricField label={liquidityCopy.deadline}>{formatTimestamp(quote.deadline)}</MetricField>
+						</DataGrid>
+					</WorkflowSubsection>
 				</>
 			)}
-			{transactionHash === undefined ? null : <TradingTransactionHash hash={transactionHash} />}
-			<ErrorNotice message={receiptWarning} />
-			<ErrorNotice message={error} />
-			<p role='status' aria-live='polite'>
-				{stateLabel(state, workflowCopy.liquidityTransaction)}
-			</p>
-			{quote === undefined ? (
-				<TransactionActionButton
-					disabled={balanceState !== 'ready' || account === undefined || parsed === undefined || slippageBps === undefined || validityMinutes === undefined || (operation === 'initialize' && conditionalBps === undefined) || (operation !== 'remove' && closedForAdding) || workflowLocked}
-					idleLabel={workflowCopy.simulateLiquidity}
-					pending={state === 'simulating'}
-					pendingLabel={workflowCopy.simulatingLiquidity}
-					onClick={simulateCurrent}
-				/>
-			) : null}
-			{quote !== undefined ? (
-				<TransactionActionButton
-					disabled={workflowLocked || state !== 'ready' || !liquidityOperationAvailable(quote.operation, quote.market, nowSeconds)}
-					idleLabel={workflowCopy.submitLiquidity}
-					pending={state === 'preparing' || state === 'submitting' || state === 'pending'}
-					pendingLabel={workflowCopy.submittingLiquidity}
-					onClick={submit}
-				/>
-			) : null}
+			<div class='transaction-outcome' ref={outcomeRef} tabIndex={-1}>
+				{transactionHash === undefined ? null : <TradingTransactionHash hash={transactionHash} />}
+				<ErrorNotice message={receiptWarning} />
+				<ErrorNotice message={error} />
+				<TransactionActionGroup loading={actionAvailability.loading === true} message={groupMessage}>
+					{quote === undefined ? <TransactionActionButton availability={simulateAvailability} idleLabel={workflowCopy.simulateLiquidity} pending={state === 'simulating'} pendingLabel={workflowCopy.simulatingLiquidity} onClick={simulateCurrent} /> : null}
+					{quote !== undefined ? <TransactionActionButton availability={submitAvailability} idleLabel={workflowCopy.submitLiquidity} pending={state === 'preparing' || state === 'submitting' || state === 'pending'} pendingLabel={workflowCopy.submittingLiquidity} onClick={submit} /> : null}
+				</TransactionActionGroup>
+			</div>
 		</div>
 	)
 }

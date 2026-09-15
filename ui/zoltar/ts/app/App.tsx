@@ -2,13 +2,11 @@ import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as marketCopy from '@zoltar/ui-zoltar-shared/copy/market.js'
 import * as zoltarCopy from '@zoltar/ui-zoltar-shared/copy/zoltar.js'
-import type { ComponentChildren } from 'preact'
 import { useEffect } from 'preact/hooks'
 import { AppHeaderShell } from '@zoltar/ui-core-shared/app/components/AppHeaderShell.js'
 import { AppPageHeading } from '@zoltar/ui-core-shared/app/components/AppPageHeading.js'
 import { AppStatusNotices } from '@zoltar/ui-core-shared/app/components/AppStatusNotices.js'
 import { ProtocolAppFrame } from '@zoltar/ui-core-shared/app/components/ProtocolAppFrame.js'
-import { RouteSubNavigation } from '@zoltar/ui-core-shared/app/components/RouteSubNavigation.js'
 import { AppRouteContent } from './components/AppRouteContent.js'
 import { OverviewPanels } from '@zoltar/ui-zoltar-shared/features/overview/OverviewPanels.js'
 import { useAppRouteEffects } from './hooks/useAppRouteEffects.js'
@@ -30,17 +28,15 @@ import type { RouteTabDefinition } from '@zoltar/ui-core-shared/types/components
 import type { MarketRouteContentProps, ZoltarView } from '@zoltar/ui-zoltar-shared/features/types.js'
 import type { Route } from '@zoltar/ui-zoltar-shared/types/app.js'
 import { isUniverseIndependentZoltarView, zoltarRouting } from '@zoltar/ui-zoltar-shared/lib/routing.js'
-import { hasInvalidZoltarView } from './lib/routeValidation.js'
+import { hasInvalidZoltarView, ZOLTAR_VIEWS } from './lib/routeValidation.js'
+import { createSecondaryNavigation, resolveSecondaryNavigation, withDeploymentTab } from '@zoltar/ui-core-shared/navigation/appNavigation.js'
 
 export function App() {
 	const { activeUniverseId, replaceZoltarView, setActiveUniverseId, setZoltarView, zoltarView } = useZoltarUrlState()
-	const zoltarViews: readonly ZoltarView[] = ['questions', 'create', 'fork', 'migrate', 'universes']
 	const { navigate, route } = useHashRoute()
 	const resolvedRoute = resolveEnumValue<Route>(route, 'not-found', ['deploy', 'zoltar', 'not-found'])
 	const invalidZoltarView = hasInvalidZoltarView({ resolvedRoute, search: parseRouteHash(window.location.hash).search, zoltarView })
-	const resolvedZoltarView = resolveEnumValue<ZoltarView>(zoltarView, 'questions', zoltarViews)
-	const activeZoltarView = resolvedZoltarView === 'fork' || resolvedZoltarView === 'migrate' ? 'universes' : resolvedZoltarView
-	const questionCreationView = activeZoltarView === 'universes' ? 'questions' : activeZoltarView
+	const activeZoltarView = resolveEnumValue<ZoltarView>(zoltarView, 'questions', ZOLTAR_VIEWS)
 	const activeRoute = invalidZoltarView ? 'not-found' : resolvedRoute
 	const {
 		accountState,
@@ -141,7 +137,7 @@ export function App() {
 		zoltarUniverse,
 		zoltarUniverseError,
 		zoltarUniverseMissing,
-	} = useQuestionCreation({ ...walletScopedHookConfig, activeUniverseId, activeZoltarView: questionCreationView, autoLoadInitialData: walletBootstrapComplete && canReadOnchainData, deploymentStatuses, environmentRefreshKey: activeEnvironmentNonce })
+	} = useQuestionCreation({ ...walletScopedHookConfig, activeUniverseId, autoLoadInitialData: walletBootstrapComplete && canReadOnchainData, deploymentStatuses, environmentRefreshKey: activeEnvironmentNonce })
 	const simulationController = getActiveSimulationController()
 	const refreshSimulationView = async () => {
 		await refreshState()
@@ -170,9 +166,6 @@ export function App() {
 		navigate,
 		route: activeRoute,
 	})
-	useEffect(() => {
-		if (resolvedZoltarView === 'fork' || resolvedZoltarView === 'migrate') replaceZoltarView('universes')
-	}, [replaceZoltarView, resolvedZoltarView])
 	useEffect(() => {
 		if (activeRoute !== 'zoltar' || !showZoltarUniverseWarning || !activeViewRequiresUniverse) return
 		replaceZoltarView('questions')
@@ -240,28 +233,24 @@ export function App() {
 		questionForm,
 		questionResult,
 	}
-	const tabNavigationTabs: RouteTabDefinition[] = [...(showDeployTab ? [{ hash: zoltarRouting.getHash('deploy'), label: appCopy.deployContracts, route: 'deploy' }] : []), { hash: zoltarRouting.getHash('zoltar'), label: commonCopy.zoltar, route: 'zoltar' }]
+	const deploymentTab: RouteTabDefinition = { hash: zoltarRouting.getHash('deploy'), label: appCopy.deployContracts, route: 'deploy' }
 	const tabNavigationProps = {
 		route,
-		tabs: tabNavigationTabs,
+		tabs: withDeploymentTab({ deploymentTab, deploymentIncomplete: showDeployTab, route, tabs: [{ hash: zoltarRouting.getHash('zoltar'), label: commonCopy.zoltar, route: 'zoltar' }] }),
 		onRouteChange: navigate,
 		showProtocolGuide: false,
 	}
-	let routeSubNavigation: ComponentChildren = undefined
-	if (route === 'deploy' || route === 'zoltar') {
-		routeSubNavigation = (
-			<RouteSubNavigation
-				ariaLabel={appCopy.zoltarViews}
-				value={activeZoltarView}
-				onChange={view => setZoltarView(view)}
-				options={[
-					{ href: buildRouteHref(zoltarRouting.getHash('zoltar'), writeZoltarViewQueryParam(getRouteHashSearch(), 'questions')), label: marketCopy.browseQuestions, value: 'questions' },
-					{ href: buildRouteHref(zoltarRouting.getHash('zoltar'), writeZoltarViewQueryParam(getRouteHashSearch(), 'create')), label: commonCopy.createQuestion, value: 'create' },
-					{ href: buildRouteHref(zoltarRouting.getHash('zoltar'), writeZoltarViewQueryParam(getRouteHashSearch(), 'universes')), label: commonCopy.universe, value: 'universes' as const },
-				]}
-			/>
-		)
-	}
+	const zoltarViewNavigation = createSecondaryNavigation<ZoltarView>({
+		ariaLabel: appCopy.zoltarViews,
+		value: activeZoltarView,
+		onChange: view => setZoltarView(view),
+		options: [
+			{ href: buildRouteHref(zoltarRouting.getHash('zoltar'), writeZoltarViewQueryParam(getRouteHashSearch(), 'questions')), label: marketCopy.browseQuestions, value: 'questions' },
+			{ href: buildRouteHref(zoltarRouting.getHash('zoltar'), writeZoltarViewQueryParam(getRouteHashSearch(), 'create')), label: commonCopy.createQuestion, value: 'create' },
+			{ href: buildRouteHref(zoltarRouting.getHash('zoltar'), writeZoltarViewQueryParam(getRouteHashSearch(), 'universes')), label: commonCopy.universe, value: 'universes' },
+		],
+	})
+	const secondaryNavigation = resolveSecondaryNavigation({ route: activeRoute, secondaryByRoute: { zoltar: zoltarViewNavigation } })
 	const transactionRouteKey = route === 'zoltar' ? `${route}:${activeZoltarView}` : route
 
 	return (
@@ -320,7 +309,7 @@ export function App() {
 						/>
 					)}
 					simulationController={simulationController}
-					subNavigation={routeSubNavigation}
+					secondaryNavigation={secondaryNavigation}
 					tabNavigation={tabNavigationProps}
 					onEnvironmentChanged={refreshActiveEnvironment}
 					onRefresh={refreshSimulationView}

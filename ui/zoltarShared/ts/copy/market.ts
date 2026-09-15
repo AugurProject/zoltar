@@ -4,6 +4,7 @@ export const childDeploymentWalletRequiredReason = 'Connect a wallet before depl
 export const deployingUniverse = 'Deploying universe…'
 export const deployUniverse = 'Deploy universe'
 export const noQuestions = 'No questions'
+export const noQuestionsDetail = 'Create the first reusable question for this registry.'
 export const retryQuestions = 'Retry questions'
 export const unforked = 'Unforked'
 export const answerUnit = 'Answer Unit'

@@ -21,7 +21,7 @@ export function UniverseDirectorySection({ children, zoltarUniverse }: UniverseD
 	if (zoltarUniverse === undefined)
 		return (
 			<>
-				<StateHint presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'pending', detail: commonCopy.loadingUniverseDetails }} />
+				<StateHint presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: commonCopy.loadingUniverseDetails }} />
 				{children}
 			</>
 		)

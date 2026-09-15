@@ -7,27 +7,20 @@ import { createSecurityPoolDeploymentIndex, liveBalancesForMarket, marketAccepts
 import { maximumAfterSlippage, minimumAfterSlippage, requireTransactionSlippageBps, requireTransactionValidityMinutes, retainApprovedMaximum, retainApprovedMinimum } from '../../protocol/tradeQuote.js'
 import { broadcastUncertainMessage, discoveryCommitAllowed, failedSubmissionTransition, livePairInitialized, parseSlippageBps, parseTransactionValidityMinutes, positionControlsWorkflowLocked, securityPoolAddressFromRoute } from '../../features/liveTradingControllerHelpers.js'
 import { isTradingBrowseRoute, isTradingLookupRoute, tradingBrowseRouteFor, tradingRouting } from '../../lib/routing.js'
-import { liveWorkflowRoutePresentation, portfolioRouteSubtitle } from '../../features/live/routePresentation.js'
+import { liveWorkflowRoutePresentation } from '../../features/live/routePresentation.js'
 import { liquidityOperationAvailable } from '../../features/live/useLiquidityWorkflowController.js'
 
 describe('standalone trading UI model', () => {
-	test('keeps the shared simulation banner as the only Browser Simulation disclosure', () => {
-		expect(liveWorkflowRoutePresentation('markets', 'Browser Simulation', true).description).toBeUndefined()
-		expect(liveWorkflowRoutePresentation('markets', 'Ethereum Mainnet', false).description).toBe('Ethereum Mainnet')
-		expect(portfolioRouteSubtitle('Browser Simulation', true)).toBeUndefined()
-		expect(portfolioRouteSubtitle('Ethereum Mainnet', false)).toBe('Ethereum Mainnet')
+	test('keeps the header badge as the only network disclosure on route headers', () => {
+		expect(liveWorkflowRoutePresentation('markets').description).not.toContain('Browser Simulation')
+		expect(liveWorkflowRoutePresentation('markets').description).not.toContain('Ethereum Mainnet')
 	})
 
 	test('presents liquidity as its own workflow instead of repeating the market header', () => {
-		expect(liveWorkflowRoutePresentation('liquidity', 'Browser Simulation', true)).toEqual({
-			description: undefined,
-			title: 'Liquidity',
-		})
-		expect(liveWorkflowRoutePresentation('market', 'Ethereum Mainnet', false)).toEqual({
-			description: 'Ethereum Mainnet',
-			title: 'Market',
-		})
-		expect(liveWorkflowRoutePresentation('create-market', 'Ethereum Mainnet', false).title).toBe('Create new market')
+		expect(liveWorkflowRoutePresentation('liquidity').title).toBe('Liquidity')
+		expect(liveWorkflowRoutePresentation('liquidity').description).not.toBe(liveWorkflowRoutePresentation('market').description)
+		expect(liveWorkflowRoutePresentation('market').title).toBe('Market')
+		expect(liveWorkflowRoutePresentation('create-market').title).toBe('Create new market')
 	})
 
 	test('invalidates new-risk liquidity operations at the exact end boundary while preserving removal', () => {

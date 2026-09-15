@@ -614,7 +614,7 @@ export function ReportingSection({
 					<div className='reporting-shared-action-region'>
 						{shouldRenderSharedReportSettlementDisabledReason ? (
 							<p className='detail' id={settlementDisabledReasonId}>
-								<LoadingAwareText>{sharedReportSettlementDisabledReason}</LoadingAwareText>
+								<LoadingAwareText loading={loadingReportingDetails}>{sharedReportSettlementDisabledReason}</LoadingAwareText>
 							</p>
 						) : undefined}
 						<div className={`actions${usesWalletFunding ? ' reporting-wallet-action-row' : ''}`}>
@@ -624,14 +624,14 @@ export function ReportingSection({
 								pendingLabel={reportingCopy.submittingReport}
 								onClick={onReportOutcome}
 								pending={reportingActiveAction === 'reportOutcome'}
-								availability={{ disabled: !isOnActiveAppChain || !reportOutcomeEnabled || reportButtonGuardMessage !== undefined, reason: reportActionDisabledReason }}
+								availability={{ disabled: !isOnActiveAppChain || !reportOutcomeEnabled || reportButtonGuardMessage !== undefined, loading: fullReportingLoadingReason !== undefined && reportActionDisabledReason === fullReportingLoadingReason, reason: reportActionDisabledReason }}
 								disabledReasonElementId={effectiveReportDisabledReasonElementId}
 								showDisabledReason={false}
 							/>
 						</div>
 						{standaloneReportDisabledReason === undefined ? undefined : (
 							<p className='detail disabled-reason' id={reportDisabledReasonId}>
-								<LoadingAwareText>{standaloneReportDisabledReason}</LoadingAwareText>
+								<LoadingAwareText loading={fullReportingLoadingReason !== undefined && reportActionDisabledReason === fullReportingLoadingReason}>{standaloneReportDisabledReason}</LoadingAwareText>
 							</p>
 						)}
 					</div>
@@ -642,7 +642,7 @@ export function ReportingSection({
 				<SectionBlock className='reporting-settlement-section' title={reportingCopy.settleEscalationDeposits} variant='embedded'>
 					{displayedWithdrawGuardMessage === undefined || displayedWithdrawGuardMessage === sharedReportSettlementDisabledReason ? undefined : (
 						<p className='detail' id={settlementDisabledReasonId}>
-							<LoadingAwareText>{displayedWithdrawGuardMessage}</LoadingAwareText>
+							<LoadingAwareText loading={loadingReportingDetails}>{displayedWithdrawGuardMessage}</LoadingAwareText>
 						</p>
 					)}
 					{settlementContextMessage === undefined || settlementContextMessage === withdrawGuardMessage ? undefined : <p className='detail'>{settlementContextMessage}</p>}
@@ -710,7 +710,7 @@ export function ReportingSection({
 												disabled={withdrawActionPending && pendingWithdrawOutcome !== side.key}
 												disabledReasonElementId={withdrawSelectedUsesSharedReason ? settlementActionDisabledReasonId : undefined}
 												tone='secondary'
-												availability={{ disabled: !isOnActiveAppChain || !withdrawEscalationEnabled || withdrawSelectedGuardMessage !== undefined, reason: withdrawSelectedGuardMessage }}
+												availability={{ disabled: !isOnActiveAppChain || !withdrawEscalationEnabled || withdrawSelectedGuardMessage !== undefined, loading: showSettlementSection && loadingReportingDetails, reason: withdrawSelectedGuardMessage }}
 												showDisabledReason={!withdrawSelectedUsesSharedReason}
 											/>
 											<TransactionActionButton
@@ -721,7 +721,7 @@ export function ReportingSection({
 												disabled={withdrawActionPending && pendingWithdrawOutcome !== side.key}
 												disabledReasonElementId={withdrawAllUsesSharedReason ? settlementActionDisabledReasonId : undefined}
 												tone='secondary'
-												availability={{ disabled: !isOnActiveAppChain || !withdrawEscalationEnabled || withdrawGuardMessage !== undefined, reason: withdrawGuardMessage }}
+												availability={{ disabled: !isOnActiveAppChain || !withdrawEscalationEnabled || withdrawGuardMessage !== undefined, loading: showSettlementSection && loadingReportingDetails, reason: withdrawGuardMessage }}
 												showDisabledReason={!withdrawAllUsesSharedReason}
 											/>
 										</div>

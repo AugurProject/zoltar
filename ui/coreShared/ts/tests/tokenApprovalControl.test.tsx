@@ -7,6 +7,7 @@ import { TokenApprovalControl } from '../components/TokenApprovalControl.js'
 import { TransactionActionButton, TransactionActionGroup } from '../components/TransactionActionButton.js'
 import { fireEvent, within } from './testUtils/queries'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
+import { expectTransactionButtonDisabled, getTransactionButtonState } from './testUtils/transactionActionButton.js'
 
 describe('TokenApprovalControl', () => {
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
@@ -106,7 +107,7 @@ describe('TokenApprovalControl', () => {
 		const approveButton = documentQueries.getByRole('button', { name: 'Approve WETH' }) as HTMLButtonElement
 
 		expect(approveButton.disabled).toBe(true)
-		expect(approveButton.title).toBe('Connect a wallet before approving.')
+		expectTransactionButtonDisabled(document.body, 'Approve WETH', 'Connect a wallet before approving.')
 	})
 
 	test('does not duplicate allowance errors as both disabled reason and error notice', async () => {
@@ -133,9 +134,11 @@ describe('TokenApprovalControl', () => {
 		const expectedMessage = 'Unable to verify WETH approval before submitting the initial report. Reason: Unable to read current WETH allowance. Retry loading the approval status before continuing.'
 
 		expect(approveButton.disabled).toBe(true)
-		expect(approveButton.title).toBe(expectedMessage)
-		expect(document.body.querySelector('.disabled-reason')).toBeNull()
-		expect(documentQueries.getByText(expectedMessage)).toBeDefined()
+		expect(approveButton.getAttribute('title')).toBeNull()
+		expect(documentQueries.queryByRole('note')).toBeNull()
+		expect(documentQueries.getAllByText(expectedMessage)).toHaveLength(1)
+		expect(documentQueries.getByRole('alert').textContent).toContain(expectedMessage)
+		expect(getTransactionButtonState(document.body, 'Approve 10 WETH').reason).toBe(expectedMessage)
 	})
 
 	test('shows loading state while approval is pending', async () => {
@@ -198,7 +201,7 @@ describe('TokenApprovalControl', () => {
 		const amountInput = documentQueries.getByPlaceholderText('Leave blank for required total')
 		const validationMessage = documentQueries.getByText('Approval amount must be a decimal number.')
 		expect(approveButton.disabled).toBe(true)
-		expect(approveButton.title).toBe('Approval amount must be a decimal number.')
+		expect(approveButton.getAttribute('title')).toBeNull()
 		expect(amountInput.getAttribute('aria-describedby')).toBe(validationMessage.id)
 		expect(approveButton.getAttribute('aria-describedby')).toBe(validationMessage.id)
 		expect(document.body.querySelectorAll('.field-error')).toHaveLength(1)

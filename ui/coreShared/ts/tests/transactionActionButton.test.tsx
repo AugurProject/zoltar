@@ -81,6 +81,22 @@ describe('TransactionActionButton', () => {
 		const descriptionId = button.getAttribute('aria-describedby')
 		expect(descriptionId).not.toBeNull()
 		expect(notice.getAttribute('id')).toBe(descriptionId)
+		expect(button.getAttribute('title')).toBeNull()
+	})
+
+	test('describes a disabled action by both the inline reason and an external reason element', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<>
+				<p id='external-reason'>Deployment status</p>
+				<TransactionActionButton availability={{ disabled: true, reason: 'Deploy the registry first.' }} disabledReasonElementId='external-reason' idleLabel='Deploy' onClick={() => undefined} pendingLabel='Deploying…' />
+			</>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const button = documentQueries.getByRole('button', { name: 'Deploy' })
+		const notice = documentQueries.getByRole('note', { name: 'Deploy details' })
+		expect(button.getAttribute('aria-describedby')?.split(' ')).toEqual(['external-reason', notice.id])
 	})
 
 	test('adds a spinner to a loading disabled reason', async () => {
@@ -88,6 +104,7 @@ describe('TransactionActionButton', () => {
 			<TransactionActionButton
 				availability={{
 					disabled: true,
+					loading: true,
 					reason: 'Loading truth auction status…',
 				}}
 				idleLabel='Submit Bid'

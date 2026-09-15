@@ -5,11 +5,12 @@ type MetricFieldProps = {
 	children: ComponentChildren
 	className?: string | undefined
 	label: ComponentChildren
+	loading?: boolean | undefined
 	valueClassName?: string | undefined
 	valueTagName?: 'span' | 'strong' | undefined
 }
 
-export function MetricField({ children, className = '', label, valueClassName = '', valueTagName = 'strong' }: MetricFieldProps) {
+export function MetricField({ children, className = '', label, loading = false, valueClassName = '', valueTagName = 'strong' }: MetricFieldProps) {
 	const ValueTag = valueTagName
 	const resolvedValueClassName = ['metric-field-value', valueClassName].filter(value => value !== '').join(' ')
 
@@ -17,7 +18,7 @@ export function MetricField({ children, className = '', label, valueClassName = 
 		<div className={className === '' ? undefined : className}>
 			<span className='metric-label'>{label}</span>
 			<ValueTag className={resolvedValueClassName}>
-				<LoadingAwareText>{children}</LoadingAwareText>
+				<LoadingAwareText loading={loading}>{children}</LoadingAwareText>
 			</ValueTag>
 		</div>
 	)

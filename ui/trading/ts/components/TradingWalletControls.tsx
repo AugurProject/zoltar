@@ -1,7 +1,8 @@
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { WalletChip, WalletChipPlaceholder } from '@zoltar/ui-core-shared/components/WalletChip.js'
-import { TradingAddressValue } from './TradingAddress.js'
+import { ReadOnlyAddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import * as appCopy from '../copy/app.js'
+import { formatSwitchNetworkAction } from '../copy/availability.js'
 
 /** The subset of the deployment wallet session the toolbar button presents. */
 type DeploymentWalletState = Readonly<{ account: string | undefined; connecting: boolean; ready: boolean }>
@@ -13,6 +14,9 @@ export type TradingWalletControlsProps = Readonly<{
 	liveDeploymentStatus: 'loading' | 'verified' | 'unavailable'
 	onDeploymentWalletRequest(): void
 	onWalletConnectRequest(): void
+	/** Present when the injected wallet reports another chain; the switch action re-requests the deployment chain. */
+	onSwitchNetwork?(): void
+	requiredNetworkName?: string | undefined
 	routeOwnsLiveWallet: boolean
 	simulation: boolean
 	workflowLocked: boolean
@@ -21,7 +25,7 @@ export type TradingWalletControlsProps = Readonly<{
 function deploymentWalletLabel(state: DeploymentWalletState) {
 	if (state.connecting) return appCopy.connectingWallet
 	if (state.account === undefined) return appCopy.connectWallet
-	return <TradingAddressValue value={state.account} />
+	return <ReadOnlyAddressValue address={state.account} responsiveAbbreviation />
 }
 
 type TradingWalletSlotState = Pick<TradingWalletControlsProps, 'deploymentSetupActive' | 'liveDeploymentStatus' | 'routeOwnsLiveWallet'>
@@ -32,10 +36,11 @@ export function hasTradingWalletControls({ deploymentSetupActive, liveDeployment
 }
 
 /** Toolbar wallet slot: the deployment wallet button, a reserved slot while the deployment is checked, or the live account chip and its actions. */
-export function TradingWalletControls({ account, deploymentSetupActive, deploymentWalletState, liveDeploymentStatus, onDeploymentWalletRequest, onWalletConnectRequest, routeOwnsLiveWallet, simulation, workflowLocked }: TradingWalletControlsProps) {
+export function TradingWalletControls({ account, deploymentSetupActive, deploymentWalletState, liveDeploymentStatus, onDeploymentWalletRequest, onSwitchNetwork, onWalletConnectRequest, requiredNetworkName, routeOwnsLiveWallet, simulation, workflowLocked }: TradingWalletControlsProps) {
 	const liveWalletVisible = liveDeploymentStatus === 'verified' && routeOwnsLiveWallet
 	const reservesSlot = liveDeploymentStatus === 'loading' && routeOwnsLiveWallet
-	const showsConnectAction = liveWalletVisible && (!simulation || account === undefined)
+	const showsSwitchNetworkAction = liveWalletVisible && account === undefined && requiredNetworkName !== undefined && onSwitchNetwork !== undefined
+	const showsConnectAction = liveWalletVisible && !showsSwitchNetworkAction && (!simulation || account === undefined)
 	if (!hasTradingWalletControls({ deploymentSetupActive, liveDeploymentStatus, routeOwnsLiveWallet })) return null
 	return (
 		<div class='trading-wallet-actions'>
@@ -58,6 +63,11 @@ export function TradingWalletControls({ account, deploymentSetupActive, deployme
 				</WalletChipPlaceholder>
 			) : null}
 			{liveWalletVisible && account !== undefined ? <WalletChip address={account} /> : null}
+			{showsSwitchNetworkAction ? (
+				<button class='secondary wallet-button' type='button' disabled={workflowLocked} onClick={onSwitchNetwork}>
+					{formatSwitchNetworkAction(requiredNetworkName)}
+				</button>
+			) : null}
 			{showsConnectAction ? (
 				<button class={account === undefined ? 'secondary wallet-button' : 'quiet wallet-button'} type='button' disabled={workflowLocked} onClick={onWalletConnectRequest}>
 					{account === undefined ? appCopy.connectWallet : appCopy.changeWallet}

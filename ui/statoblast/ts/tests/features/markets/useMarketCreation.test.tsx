@@ -80,7 +80,6 @@ describe('useMarketCreation', () => {
 				{
 					accountAddress: WALLET_ADDRESS,
 					activeUniverseId: 0n,
-					activeZoltarView: 'create',
 					autoLoadInitialData: false,
 					deploymentStatuses: [createStatus('zoltarQuestionData', true)],
 					onTransactionFinished: () => undefined,
@@ -161,7 +160,6 @@ describe('useMarketCreation', () => {
 				{
 					accountAddress: WALLET_ADDRESS,
 					activeUniverseId: 0n,
-					activeZoltarView: 'create',
 					autoLoadInitialData: false,
 					deploymentStatuses: [createStatus('zoltarQuestionData', true)],
 					onTransactionFinished: () => undefined,
@@ -247,7 +245,6 @@ describe('useMarketCreation', () => {
 				{
 					accountAddress: WALLET_ADDRESS,
 					activeUniverseId: 0n,
-					activeZoltarView: 'create',
 					autoLoadInitialData: false,
 					deploymentStatuses: [createStatus('zoltarQuestionData', true)],
 					onTransactionFinished: () => undefined,
@@ -308,7 +305,6 @@ describe('useMarketCreation', () => {
 				{
 					accountAddress: WALLET_ADDRESS,
 					activeUniverseId: 0n,
-					activeZoltarView: 'create',
 					autoLoadInitialData: false,
 					deploymentStatuses: [createStatus('zoltarQuestionData', true)],
 					environmentRefreshKey: 0,
@@ -346,7 +342,6 @@ describe('useMarketCreation', () => {
 				{
 					accountAddress,
 					activeUniverseId: 7n,
-					activeZoltarView: 'create',
 					autoLoadInitialData: false,
 					deploymentStatuses: [createStatus('zoltarQuestionData', true)],
 					onTransactionFinished: () => undefined,
@@ -395,7 +390,6 @@ describe('useMarketCreation', () => {
 			hookState = useMarketCreation({
 				accountAddress,
 				activeUniverseId: 7n,
-				activeZoltarView: 'create',
 				autoLoadInitialData: false,
 				deploymentStatuses: [],
 				onTransactionFinished: () => undefined,
@@ -439,7 +433,6 @@ describe('useMarketCreation', () => {
 			hookState = useMarketCreation({
 				accountAddress,
 				activeUniverseId: 7n,
-				activeZoltarView: 'create',
 				autoLoadInitialData: false,
 				deploymentStatuses: [],
 				onTransactionFinished: () => undefined,
@@ -511,7 +504,6 @@ describe('useMarketCreation', () => {
 				{
 					accountAddress,
 					activeUniverseId,
-					activeZoltarView: 'create',
 					autoLoadInitialData: false,
 					deploymentStatuses: [createStatus('zoltarQuestionData', true)],
 					onTransactionFinished: () => undefined,
@@ -630,7 +622,6 @@ describe('useMarketCreation', () => {
 				{
 					accountAddress: WALLET_ADDRESS,
 					activeUniverseId,
-					activeZoltarView: 'create',
 					autoLoadInitialData: false,
 					deploymentStatuses: [createStatus('zoltarQuestionData', true)],
 					onTransactionFinished: () => undefined,
@@ -710,7 +701,6 @@ describe('useMarketCreation', () => {
 			hookState = useMarketCreation({
 				accountAddress: WALLET_ADDRESS,
 				activeUniverseId,
-				activeZoltarView: 'create',
 				autoLoadInitialData: false,
 				deploymentStatuses: [],
 				onTransactionFinished: () => undefined,
@@ -789,7 +779,6 @@ describe('useMarketCreation', () => {
 				{
 					accountAddress: WALLET_ADDRESS,
 					activeUniverseId: 7n,
-					activeZoltarView: 'create',
 					autoLoadInitialData: false,
 					deploymentStatuses: [createStatus('zoltarQuestionData', true)],
 					environmentRefreshKey,
@@ -831,7 +820,6 @@ describe('useMarketCreation', () => {
 				{
 					accountAddress: WALLET_ADDRESS,
 					activeUniverseId: 7n,
-					activeZoltarView: 'create',
 					autoLoadInitialData: false,
 					deploymentStatuses: [createStatus('zoltarQuestionData', true)],
 					environmentRefreshKey,
@@ -881,7 +869,6 @@ describe('useMarketCreation', () => {
 				{
 					accountAddress: WALLET_ADDRESS,
 					activeUniverseId: 7n,
-					activeZoltarView: 'create',
 					autoLoadInitialData: false,
 					deploymentStatuses: [createStatus('zoltarQuestionData', true)],
 					environmentRefreshKey,
@@ -956,7 +943,6 @@ describe('useMarketCreation', () => {
 				{
 					accountAddress: WALLET_ADDRESS,
 					activeUniverseId: 7n,
-					activeZoltarView: 'create',
 					autoLoadInitialData: false,
 					deploymentStatuses: [createStatus('zoltarQuestionData', true)],
 					environmentRefreshKey,

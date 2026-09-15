@@ -831,6 +831,18 @@
 		"./app/hooks/useEnvironmentRevision.js": {
 			"bun": "./ts/app/hooks/useEnvironmentRevision.ts",
 			"default": "./js/app/hooks/useEnvironmentRevision.js"
+		},
+		"./components/EmptyState.js": {
+			"bun": "./ts/components/EmptyState.tsx",
+			"default": "./js/components/EmptyState.js"
+		},
+		"./tests/formInput.test.js": {
+			"bun": "./ts/tests/formInput.test.tsx",
+			"default": "./js/tests/formInput.test.js"
+		},
+		"./tests/emptyState.test.js": {
+			"bun": "./ts/tests/emptyState.test.tsx",
+			"default": "./js/tests/emptyState.test.js"
 		}
 	},
 	"version": "1.0.0"

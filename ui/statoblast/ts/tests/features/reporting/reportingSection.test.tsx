@@ -890,8 +890,8 @@ describe('ReportingSection', () => {
 		const withdrawCheckbox = document.body.querySelector("input[type='checkbox']") as HTMLInputElement | null
 		if (!(withdrawCheckbox instanceof HTMLInputElement)) throw new Error('Expected withdraw checkbox')
 		expect(withdrawCheckbox.disabled).toBe(true)
-		expectTransactionButtonDisabled(document.body, 'Settle selected Yes deposits', 'Loading escalation deposits.')
-		expectTransactionButtonDisabled(document.body, 'Settle all Yes deposits', 'Loading escalation deposits.')
+		expectTransactionButtonDisabled(document.body, 'Settle selected Yes deposits', 'Loading escalation deposits…')
+		expectTransactionButtonDisabled(document.body, 'Settle all Yes deposits', 'Loading escalation deposits…')
 	})
 
 	test('shares one loading reason across report and settlement controls while retained details refresh', async () => {

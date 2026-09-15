@@ -17,13 +17,14 @@ import { PaginationControls } from '@zoltar/ui-core-shared/components/Pagination
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { Question, getQuestionTitle } from '@zoltar/ui-core-shared/components/Question.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
+import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { formatUniverseIdHex } from '@zoltar/ui-zoltar-shared/features/universes/lib/universe.js'
 import { buildRouteHref, getRouteHashSearch } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { getWalletScopedAccountAddress } from '@zoltar/ui-core-shared/wallet/network.js'
 import { formatPaginationSummary, getHasNextPaginationPage, getPaginationPageCount, resolvePaginationPageIndex, SECURITY_POOL_PAGE_SIZE } from '@zoltar/ui-core-shared/lib/pagination.js'
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
-import { formatSecurityPoolPageSummary, getSecurityPoolStatusBadgeLabel } from '../lib/securityPoolLabels.js'
+import { formatSecurityPoolPageSummary, getSecurityPoolStatusBadgeLabel, getSecurityPoolStatusBadgeTone } from '../lib/securityPoolLabels.js'
 import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
 import { calculateMintingCapacityAttoEth, formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js'
 import { getPoolRegistryPresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
@@ -191,9 +192,10 @@ export function SecurityPoolsOverviewSection({
 						return undefined
 					})()
 
-					return <StateHint presentation={registryPresentation} title={isEmptyRegistry ? securityPoolCopy.noSecurityPools : undefined} actions={registryActions} />
+					if (isEmptyRegistry) return <EmptyState title={securityPoolCopy.noSecurityPools} detail={registryPresentation.detail} actions={registryActions} />
+					return <StateHint presentation={registryPresentation} actions={registryActions} />
 				}
-				if (filteredSecurityPools.length === 0) return <StateHint presentation={{ key: 'empty', badgeLabel: commonCopy.noMatches, badgeTone: 'muted', detail: securityPoolCopy.poolFiltersEmpty }} />
+				if (filteredSecurityPools.length === 0) return <EmptyState title={commonCopy.noMatches} detail={securityPoolCopy.poolFiltersEmpty} />
 
 				return (
 					<div className='comparison-record-list'>
@@ -206,12 +208,7 @@ export function SecurityPoolsOverviewSection({
 							})
 							const calculationPrice = resolveUiRepPerEthPrice({ currentTimestamp, openOraclePrice: pool.lastOraclePrice, openOracleSettlementTimestamp: pool.lastOracleSettlementTimestamp, priceOracle: uiPriceOracle, uniswapPrice: repPerEthPrice })
 							const mintingCapacityAttoEth = calculateMintingCapacityAttoEth(pool.totalCapacityOwnershipAttoRep, calculationPrice, pool.statoblastSecurityMultiplierBps)
-							const badgeTone = (() => {
-								if (displayState === 'operational') return 'ok'
-								if (displayState === undefined) return 'muted'
-
-								return 'warning'
-							})()
+							const badgeTone = getSecurityPoolStatusBadgeTone(displayState)
 							return (
 								<div className='security-pool-overview-record' key={pool.securityPoolAddress}>
 									<ComparisonRecord

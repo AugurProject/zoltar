@@ -1,4 +1,5 @@
-import { TradingAddressValue } from '../components/TradingAddress.js'
+import { ReadOnlyAddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
+import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { shareBalanceScope, type LiveMarket } from '../protocol/live.js'
 import { identityCopy } from '../copy/identity.js'
 
@@ -6,39 +7,22 @@ function marketUniverseIdentity(market: Pick<LiveMarket, 'universeId' | 'originU
 	return { currentUniverseId: market.universeId, originUniverseId: market.originUniverseId }
 }
 
-export function SecurityPoolIdentityRows({ market }: { market: Pick<LiveMarket, 'pool' | 'shareToken' | 'universeId' | 'originUniverseId' | 'questionId'> }) {
+/** Identity metrics for a SecurityPool; render inside a `DataGrid`. */
+export function SecurityPoolIdentityFields({ market }: { market: Pick<LiveMarket, 'pool' | 'shareToken' | 'universeId' | 'originUniverseId' | 'questionId'> }) {
 	const scope = shareBalanceScope(market)
 	const identity = marketUniverseIdentity(market)
 	return (
 		<>
-			<div>
-				<dt>{identityCopy.securityPoolAddress}</dt>
-				<dd>
-					<TradingAddressValue value={scope.pool} />
-				</dd>
-			</div>
-			<div>
-				<dt>{identityCopy.shareTokenAddress}</dt>
-				<dd>
-					<TradingAddressValue value={scope.shareToken} />
-				</dd>
-			</div>
-			<div>
-				<dt>{identityCopy.currentUniverseId}</dt>
-				<dd>{identity.currentUniverseId.toString()}</dd>
-			</div>
-			<div>
-				<dt>{identityCopy.marketLineageOriginUniverseId}</dt>
-				<dd>{identity.originUniverseId?.toString() ?? identityCopy.unavailableOriginUniverse}</dd>
-			</div>
-			<div>
-				<dt>{identityCopy.questionId}</dt>
-				<dd>{market.questionId.toString()}</dd>
-			</div>
-			<div>
-				<dt>{identityCopy.outcomeTokenIds}</dt>
-				<dd>{identityCopy.outcomeTokenIdSummary(scope.invalidTokenId.toString(), scope.yesTokenId.toString(), scope.noTokenId.toString())}</dd>
-			</div>
+			<MetricField label={identityCopy.securityPoolAddress}>
+				<ReadOnlyAddressValue address={scope.pool} responsiveAbbreviation />
+			</MetricField>
+			<MetricField label={identityCopy.shareTokenAddress}>
+				<ReadOnlyAddressValue address={scope.shareToken} responsiveAbbreviation />
+			</MetricField>
+			<MetricField label={identityCopy.currentUniverseId}>{identity.currentUniverseId.toString()}</MetricField>
+			<MetricField label={identityCopy.marketLineageOriginUniverseId}>{identity.originUniverseId?.toString() ?? identityCopy.unavailableOriginUniverse}</MetricField>
+			<MetricField label={identityCopy.questionId}>{market.questionId.toString()}</MetricField>
+			<MetricField label={identityCopy.outcomeTokenIds}>{identityCopy.outcomeTokenIdSummary(scope.invalidTokenId.toString(), scope.yesTokenId.toString(), scope.noTokenId.toString())}</MetricField>
 		</>
 	)
 }

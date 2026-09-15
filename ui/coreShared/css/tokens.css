@@ -3,20 +3,27 @@
 	--bg: rgba(8, 17, 29, 1);
 	--bg-deep: rgba(5, 10, 17, 1);
 
-	/* text hierarchy */
+	/*
+	 * Text hierarchy.
+	 * --text: primary copy, values, and titles.
+	 * --text-secondary: body-level secondary copy (descriptions, inactive tabs, helper sentences).
+	 * --muted: labels, captions, eyebrows, and other short metadata.
+	 * --value: numeric and tabular values.
+	 */
 	--text: rgba(231, 243, 255, 1);
 	--text-secondary: rgba(207, 221, 238, 0.9);
 	--muted: rgba(160, 181, 207, 0.76);
-	--text-muted: rgba(174, 193, 215, 0.82);
 	--value: rgba(208, 231, 245, 1);
 	--color-white: rgba(255, 255, 255, 1);
+	--color-white-04: rgba(255, 255, 255, 0.04);
 	--color-white-08: rgba(255, 255, 255, 0.08);
+	--color-white-16: rgba(255, 255, 255, 0.16);
+	--mask-opaque: rgba(0, 0, 0, 1);
 
 	/* accents */
 	--accent-zoltar: rgba(56, 213, 255, 1);
 	--accent-statoblast: rgba(160, 124, 255, 1);
 	--accent-trading: rgba(183, 238, 81, 1);
-	--accent-augurscan: rgba(45, 212, 191, 1);
 	--accent: var(--accent-zoltar);
 	--accent-strong: rgba(124, 108, 255, 1);
 	--accent-faint: color-mix(in srgb, var(--accent) 8%, transparent);
@@ -39,10 +46,7 @@
 
 	/* surfaces */
 	--surface-raised: rgba(11, 22, 37, 0.9);
-	--surface-sunken: rgba(10, 20, 36, 0.22);
 	--surface-overlay: rgba(5, 11, 21, 0.86);
-	--surface-interactive: rgba(15, 31, 49, 0.92);
-	--surface-card: rgba(12, 23, 38, 0.9);
 	--surface-card-end: rgba(8, 16, 27, 0.94);
 	--surface-inset: rgba(9, 18, 31, 0.58);
 	--surface-page: rgba(8, 16, 28, 0.72);
@@ -63,10 +67,16 @@
 	--warning-border-strong: rgba(245, 200, 106, 0.52);
 	--danger: rgba(255, 112, 143, 1);
 	--danger-soft: rgba(255, 112, 143, 0.12);
+	--danger-medium: rgba(255, 112, 143, 0.2);
 	--danger-border: rgba(255, 112, 143, 0.28);
 	--danger-border-strong: rgba(255, 112, 143, 0.56);
 	--status-pending: rgba(104, 190, 255, 1);
+	--status-pending-soft: rgba(104, 190, 255, 0.12);
+	--status-pending-border: rgba(104, 190, 255, 0.28);
+	--status-pending-surface-gradient: linear-gradient(180deg, color-mix(in srgb, var(--status-pending) 16%, var(--surface-section-opaque)) 0%, color-mix(in srgb, var(--status-pending) 8%, var(--surface-section-opaque)) 100%);
 	--status-loading: rgba(145, 170, 199, 1);
+	--status-loading-soft: rgba(145, 170, 199, 0.12);
+	--status-loading-border: rgba(145, 170, 199, 0.28);
 	--outcome-yes: rgba(91, 214, 168, 1);
 	--outcome-no: rgba(241, 130, 151, 1);
 	--outcome-invalid: rgba(191, 159, 255, 1);
@@ -88,10 +98,10 @@
 	--disabled-control-text: rgba(177, 196, 216, 1);
 	--disabled-primary-button-bg: color-mix(in srgb, var(--accent) 16%, var(--surface-section-opaque));
 	--disabled-primary-button-border: color-mix(in srgb, var(--accent) 35%, var(--border-default));
-	--disabled-primary-button-text: var(--text-muted);
+	--disabled-primary-button-text: var(--text-secondary);
 	--touch-target-min: 2.75rem;
-	--control-height-compact: 2.75rem;
-	--control-height: 3rem;
+	--scrollbar-thumb: color-mix(in srgb, var(--accent) 18%, transparent);
+	--scrollbar-thumb-hover: color-mix(in srgb, var(--accent) 32%, transparent);
 
 	/* spacing */
 	--space-1: 0.25rem;
@@ -99,54 +109,76 @@
 	--space-3: 0.75rem;
 	--space-4: 1rem;
 	--space-5: 1.5rem;
-	--space-6: 2rem;
-	--space-7: 3rem;
-	--space-8: 3rem;
 
-	/* font families */
-	--font-family-sans: "Aptos", "Segoe UI", "Helvetica Neue", sans-serif;
-	--font-family-serif: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
-	--font-family-mono: "IBM Plex Mono", "Courier New", monospace;
+	/*
+	 * Font families. Only system fonts are declared because no web font is loaded;
+	 * each stack renders the intended role (sans for copy and controls, serif for
+	 * route and hero headings, mono for labels, addresses, hashes, and numbers).
+	 */
+	--font-family-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+	--font-family-serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+	--font-family-mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 
-	/* type scale — fixed */
+	/*
+	 * Type scale — fixed.
+	 * --font-xs: nonessential eyebrows and decorative glyphs only.
+	 * --font-label: labels, chips, badges, and compact metadata.
+	 * --font-caption: captions, tabs, addresses, and detail rows.
+	 * --font-body: body copy, controls, and inline values.
+	 * --font-value: numeric values (shares the body size).
+	 * --font-lg: card and section titles.
+	 * --font-title: panel headings.
+	 */
 	--font-xs: 0.75rem;
 	--font-label: 0.8125rem;
-	--font-chip: 0.8125rem;
-	--font-tab: 0.875rem;
-	--font-subtab: 0.875rem;
-	--font-caption: 0.86rem;
-	--font-address: 0.86rem;
-	--font-value: 0.96rem;
-	--font-button: 0.95rem;
+	--font-caption: 0.875rem;
 	--font-body: 1rem;
-	--font-base: 1.03rem;
-	--font-card-title: 1.12rem;
-	--font-small: 0.8125rem;
-	--font-detail: 0.88rem;
-	--font-h4: 0.96rem;
-	--font-section-title: 1.08rem;
+	--font-value: var(--font-body);
+	--font-lg: 1.125rem;
+	--font-title: 1.25rem;
 
 	/* type scale — responsive */
 	--font-h1: clamp(1.625rem, 3vw, 2.5rem);
 	--font-h2: clamp(1.35rem, 1.9vw, 2rem);
-	--font-h2-panel: clamp(1.18rem, 1.45vw, 1.7rem);
-	--font-h2-wallet: clamp(0.88rem, 1.05vw, 1.15rem);
 	--font-h3-section: clamp(1rem, 1.55vw, 1.35rem);
-	--font-h3-preview: clamp(1.15rem, 1.8vw, 1.8rem);
-	--font-app-title: clamp(0.95rem, 1vw, 1.1rem);
-	--font-404: clamp(4rem, 9vw, 7.8rem);
+
+	/* line heights */
+	--line-height-none: 1;
+	--line-height-display: 1.05;
+	--line-height-tight: 1.2;
+	--line-height-snug: 1.35;
+	--line-height-body: 1.45;
 
 	/* motion */
 	--transition-fast: 140ms ease;
 	--transition-standard: 160ms ease;
 
-	/* decorative */
-	--glow-inset: 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
-	--glow-inset-subtle: 0 0 0 1px rgba(255, 255, 255, 0.02) inset;
-	--divider: linear-gradient(90deg, color-mix(in srgb, var(--accent) 24%, transparent), var(--border-subtle) 50%, color-mix(in srgb, var(--accent-strong) 20%, transparent));
-	--slider-thumb-border: rgba(231, 243, 255, 0.8);
+	/*
+	 * Stacking order. Local layers (--z-below, --z-content, --z-content-raised, --z-sticky)
+	 * order children inside one surface; the fixed transaction tray sits above sticky
+	 * navigation and dropdowns but below the modal backdrop and the skip link.
+	 */
+	--z-below: -1;
+	--z-content: 1;
+	--z-content-raised: 2;
+	--z-sticky: 3;
+	--z-nav: 10;
+	--z-dropdown: 20;
+	--z-tray: 30;
+	--z-modal: 40;
+	--z-skip-link: 100;
+
+	/* elevation */
 	--shadow-color-soft: rgba(0, 0, 0, 0.12);
 	--shadow-color-strong: rgba(0, 0, 0, 0.35);
+	--shadow-control: 0 5px 12px var(--shadow-color-soft);
+	--shadow-raised: 0 10px 24px var(--shadow-color-soft);
+	--shadow-overlay: 0 20px 40px var(--shadow-color-strong);
+	--glow-inset-subtle: 0 0 0 1px var(--color-white-04) inset;
+
+	/* decorative */
+	--divider: linear-gradient(90deg, color-mix(in srgb, var(--accent) 24%, transparent), var(--border-subtle) 50%, color-mix(in srgb, var(--accent-strong) 20%, transparent));
+	--slider-thumb-border: rgba(231, 243, 255, 0.8);
 
 	/* notice error */
 	--danger-text: rgba(255, 229, 235, 1);
@@ -158,10 +190,19 @@
 	--surface-modal: rgba(7, 17, 31, 0.96);
 	--surface-modal-opaque: rgba(7, 17, 31, 1);
 
-	/* simulation */
+	/* simulation banner (amber, product-independent) */
+	--simulation-accent: rgba(255, 227, 145, 1);
 	--simulation-text: rgba(255, 244, 218, 1);
 	--simulation-text-secondary: rgba(255, 242, 213, 0.82);
+	--simulation-border: color-mix(in srgb, var(--simulation-accent) 40%, transparent);
+	--simulation-border-subtle: color-mix(in srgb, var(--simulation-accent) 24%, transparent);
 	--simulation-border-hover: rgba(255, 236, 180, 0.56);
+	--simulation-surface: rgba(67, 48, 11, 0.9);
+	--simulation-control-bg: rgba(56, 40, 7, 0.42);
+	--simulation-control-bg-hover: rgba(110, 77, 12, 0.42);
+	--simulation-control-bg-opaque: rgba(95, 67, 10, 1);
+	--simulation-success-bg: rgba(29, 111, 85, 0.82);
+	--simulation-focus-ring: 0 0 0 3px color-mix(in srgb, var(--simulation-accent) 14%, transparent);
 
 	/* truth auction */
 	--truth-auction-track: rgba(8, 18, 31, 1);
@@ -174,6 +215,8 @@
 	--radius-compact: 0.25rem;
 	--radius-normal: 0.5rem;
 	--radius-overlay: 0.75rem;
+	--radius-pill: 999px;
+	--radius-circle: 50%;
 	--radius-shell: var(--radius-overlay);
 	--radius-section: var(--radius-normal);
 	--radius-panel: var(--radius-normal);
@@ -182,7 +225,6 @@
 	--divider-subtle: rgba(159, 180, 207, 0.1);
 	--divider-strong: rgba(159, 180, 207, 0.18);
 	--border-active: color-mix(in srgb, var(--accent) 58%, transparent);
-	--text-primary: var(--text);
 
 	/* Shared layout contracts; each application retains its own shell. */
 	--content-max: 90rem;

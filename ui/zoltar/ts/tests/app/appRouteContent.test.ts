@@ -11,8 +11,6 @@ describe('AppRouteContent', () => {
 	test('keeps only global question views available without a universe', () => {
 		expect(isUniverseIndependentZoltarView('questions')).toBe(true)
 		expect(isUniverseIndependentZoltarView('create')).toBe(true)
-		expect(isUniverseIndependentZoltarView('fork')).toBe(false)
-		expect(isUniverseIndependentZoltarView('migrate')).toBe(false)
 	})
 
 	test('injects the Zoltar-specific deployment plan into shared onchain state', () => {

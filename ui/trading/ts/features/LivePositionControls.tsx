@@ -7,21 +7,33 @@ import { marketAcceptsNewRisk, type LiveBalances, type LiveMarket, type ShareOut
 import { maximumInsuredExit } from '@zoltar/trading-shared/trading/positions'
 import * as workflowCopy from '../copy/workflows.js'
 import * as appCopy from '../copy/app.js'
+import { useId } from 'preact/hooks'
+import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
-import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
+import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
+import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
+import { TransactionActionButton, TransactionActionGroup } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
+import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
+import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
 import { parseSlippageBps, parseTransactionValidityMinutes, positionControlsWorkflowLocked } from './liveTradingControllerHelpers.js'
 import type { BalanceState, Quote, TransactionState } from './live/liveTradingTypes.js'
-import { BalanceLoadError, ExecutionProtectionFields, formatTimestamp, renderLiveTradeSummary, stateLabel, TradingTransactionHash } from './LiveTradingTransactionUi.js'
+import { BalanceLoadError, ExecutionProtectionFields, formatTimestamp, renderLiveTradeSummary, stateLabel, TradingField, TradingTransactionHash } from './LiveTradingTransactionUi.js'
 import { insuredExitLimitMessage } from './LiveSettlementModel.js'
+import { resolvePositionSimulateAvailability, resolvePositionSubmitAvailability, resolveActionGroupMessage } from './live/actionAvailability.js'
+import { useFocusOnKeyChange } from './live/useFocusOnKeyChange.js'
 
 export function LivePositionControls({
 	market,
 	balances,
 	balanceState,
 	balanceError,
+	walletConnected,
+	networkMismatchReason,
+	walletEthAttoEth,
 	mode,
 	side,
 	amount,
+	amountError,
 	slippage,
 	transactionValidityMinutes,
 	quote,
@@ -44,9 +56,13 @@ export function LivePositionControls({
 	balances: LiveBalances | undefined
 	balanceState: BalanceState
 	balanceError: string | undefined
+	walletConnected: boolean
+	networkMismatchReason: string | undefined
+	walletEthAttoEth: bigint | undefined
 	mode: 'entry' | 'exit'
 	side: 'YES' | 'NO'
 	amount: string
+	amountError: string | undefined
 	slippage: string
 	transactionValidityMinutes: string
 	quote: Quote | undefined
@@ -83,158 +99,147 @@ export function LivePositionControls({
 	// After a receipt the workflow stays locked until the market and balances have been re-read; say so instead of showing a silent disabled form.
 	const revalidatingAfterReceipt = state === 'confirmed' && externallyLocked
 	const submitLabel = mode === 'entry' ? workflowCopy.enterOutcome(side) : workflowCopy.exitInsuredOutcome(side)
-	const stateText = stateLabel(state, mode === 'entry' ? workflowCopy.enterOutcome(side) : workflowCopy.insuredOutcomeExit(side))
+	const stateText = state === 'error' ? undefined : stateLabel(state, mode === 'entry' ? workflowCopy.enterOutcome(side) : workflowCopy.insuredOutcomeExit(side))
 	const statusText = revalidatingAfterReceipt && stateText !== undefined ? workflowCopy.revalidatingAfterReceipt(stateText) : stateText
+	const availabilityInputs = {
+		walletConnected,
+		networkMismatchReason,
+		balanceState,
+		mode,
+		side,
+		marketClosed: closed,
+		enteredAmount: parsedInput,
+		requestedAmount: mode === 'entry' ? parsedInput : exitAttoShares,
+		amountError,
+		walletEthAttoEth,
+		outcomeBalance: longBalance,
+		exceedsInsurance,
+		exceedsInsuranceDetail: exceedsInsurance ? insuredExitLimitMessage(exitAttoShares ?? 0n, maximumExit ?? 0n, balances?.invalid ?? 0n, market) : undefined,
+		exitTooSmall,
+		protectionValid: slippageBps !== undefined && validityMinutes !== undefined,
+		workflowLocked,
+	}
+	const simulateAvailability = resolvePositionSimulateAvailability(availabilityInputs)
+	const submitAvailability = resolvePositionSubmitAvailability({ ...availabilityInputs, quoteReady: state === 'ready' })
+	const actionAvailability = quote === undefined ? simulateAvailability : submitAvailability
+	// Confirmation moves focus to the announced outcome so keyboard and screen-reader users land on the result.
+	const outcomeRef = useFocusOnKeyChange<HTMLDivElement>(state === 'confirmed' ? transactionHash : undefined)
 	const walletBalanceLabel = (value: bigint | undefined, outcome: ShareOutcome) => {
 		if (value !== undefined) return formatOutcomeQuantity(value, outcome)
 		if (balanceState === 'loading') return appCopy.loadingBalances
 		if (balanceState === 'error') return appCopy.unavailable
 		return appCopy.connectWallet
 	}
+	const amountId = useId()
+	const controlsDisabled = closed || workflowLocked
+	const quoteSide = quote?.kind === 'entry' ? oppositeOutcome : side
+	const groupMessage = resolveActionGroupMessage(state, actionAvailability, statusText)
 	return (
-		<div class='operation-block' aria-busy={balanceState === 'loading' || revalidatingAfterReceipt}>
+		<div class='position-controls' aria-busy={balanceState === 'loading' || revalidatingAfterReceipt}>
 			<ProbabilityBar yesPercent={yesPercent} />
 			<BackingDetails market={market} />
-			<dl class='metrics'>
-				<div>
-					<dt>{workflowCopy.walletYes}</dt>
-					<dd>{walletBalanceLabel(balances?.yes, workflowCopy.yes)}</dd>
-				</div>
-				<div>
-					<dt>{workflowCopy.walletNo}</dt>
-					<dd>{walletBalanceLabel(balances?.no, workflowCopy.no)}</dd>
-				</div>
-				<div>
-					<dt>{workflowCopy.walletInvalid}</dt>
-					<dd>{walletBalanceLabel(balances?.invalid, 'INVALID')}</dd>
-				</div>
-			</dl>
-			{balanceState === 'loading' ? <p role='status'>{workflowCopy.refreshingWalletBalances}</p> : null}
+			<DataGrid className='wallet-balance-grid' columns={3} dense>
+				<MetricField label={workflowCopy.walletYes} loading={balanceState === 'loading'}>
+					{walletBalanceLabel(balances?.yes, workflowCopy.yes)}
+				</MetricField>
+				<MetricField label={workflowCopy.walletNo} loading={balanceState === 'loading'}>
+					{walletBalanceLabel(balances?.no, workflowCopy.no)}
+				</MetricField>
+				<MetricField label={workflowCopy.walletInvalid} loading={balanceState === 'loading'}>
+					{walletBalanceLabel(balances?.invalid, 'INVALID')}
+				</MetricField>
+			</DataGrid>
 			{balanceState === 'error' ? <BalanceLoadError message={workflowCopy.walletBalancesUnavailable(balanceError ?? workflowCopy.balanceRefreshFailed)} retry={retryBalances} disabled={workflowLocked} /> : null}
-			<div class='segmented' aria-label={workflowCopy.livePositionOperation}>
-				<button aria-pressed={mode === 'entry'} disabled={closed || workflowLocked} onClick={() => setMode('entry')}>
-					{workflowCopy.enter}
-				</button>
-				<button aria-pressed={mode === 'exit'} disabled={closed || workflowLocked} onClick={() => setMode('exit')}>
-					{workflowCopy.exit}
-				</button>
-			</div>
-			<div class='side-picker' aria-label={workflowCopy.outcome}>
-				<button aria-pressed={side === 'YES'} disabled={closed || workflowLocked} onClick={() => setSide('YES')}>
-					{workflowCopy.yes}
-				</button>
-				<button aria-pressed={side === 'NO'} disabled={closed || workflowLocked} onClick={() => setSide('NO')}>
-					{workflowCopy.no}
-				</button>
-			</div>
-			<label class='field'>
-				<span>{mode === 'entry' ? workflowCopy.ethAmount : workflowCopy.completeSetValueToRedeem}</span>
-				<div class='amount-input'>
-					<input value={amount} disabled={closed || workflowLocked} inputMode='decimal' onInput={event => setAmount(event.currentTarget.value)} />
-					<span>{workflowCopy.eth}</span>
-				</div>
-			</label>
-			<ExecutionProtectionFields slippage={slippage} validityMinutes={transactionValidityMinutes} disabled={closed || workflowLocked} onSlippageInput={setSlippage} onValidityInput={setTransactionValidityMinutes} />
-			{mode !== 'exit' || maximumExit === undefined ? null : <p>{workflowCopy.maximumInsuredExit(side, formatCollateralEth(maximumExit, market, 'down'))}</p>}
-			{exceedsInsurance ? (
-				<p class='error' role='alert'>
-					{insuredExitLimitMessage(exitAttoShares ?? 0n, maximumExit ?? 0n, balances?.invalid ?? 0n, market)}
-				</p>
-			) : null}
-			{exitTooSmall && !exceedsInsurance ? (
-				<p class='error' role='alert'>
-					{workflowCopy.amountTooSmall}
-				</p>
-			) : null}
-			{quote === undefined ? null : renderLiveTradeSummary(quote, side)}
-			{quote === undefined ? (
-				<TransactionActionButton
-					disabled={closed || balanceState !== 'ready' || balances === undefined || parsedInput === undefined || parsedInput === 0n || slippageBps === undefined || validityMinutes === undefined || exceedsInsurance || exitTooSmall || workflowLocked}
-					idleLabel={workflowCopy.previewTrade}
-					pending={state === 'simulating'}
-					pendingLabel={workflowCopy.simulatingTrade(mode, side)}
-					onClick={simulate}
+			<ViewTabs
+				ariaLabel={workflowCopy.livePositionOperation}
+				semantics='switcher'
+				variant='segmented'
+				size='compact'
+				value={mode}
+				onChange={setMode}
+				options={[
+					{ value: 'entry', label: workflowCopy.enter, disabled: controlsDisabled },
+					{ value: 'exit', label: workflowCopy.exit, disabled: controlsDisabled },
+				]}
+			/>
+			<ViewTabs
+				ariaLabel={workflowCopy.outcome}
+				className='outcome-picker'
+				semantics='switcher'
+				variant='segmented'
+				size='compact'
+				value={side}
+				onChange={setSide}
+				options={[
+					{ value: 'YES', label: workflowCopy.yes, disabled: controlsDisabled },
+					{ value: 'NO', label: workflowCopy.no, disabled: controlsDisabled },
+				]}
+			/>
+			<TradingField id={amountId} label={mode === 'entry' ? workflowCopy.ethAmount : workflowCopy.completeSetValueToRedeem}>
+				<FormInput
+					id={amountId}
+					name='amount'
+					value={amount}
+					disabled={controlsDisabled}
+					inputMode='decimal'
+					adornment={workflowCopy.eth}
+					error={amountError}
+					hint={mode === 'exit' && maximumExit !== undefined ? workflowCopy.maximumInsuredExit(side, formatCollateralEth(maximumExit, market, 'down')) : undefined}
+					onInput={event => setAmount(event.currentTarget.value)}
 				/>
-			) : null}
-			{quote !== undefined ? <TransactionActionButton disabled={workflowLocked || closed || state !== 'ready'} idleLabel={submitLabel} pending={state === 'submitting' || state === 'pending'} pendingLabel={workflowCopy.submittingTrade} onClick={submit} /> : null}
-			<p role='status' aria-live='polite'>
-				{statusText}
-			</p>
-			{transactionHash === undefined ? null : <TradingTransactionHash hash={transactionHash} />}
-			<ErrorNotice message={receiptWarning} />
-			<ErrorNotice message={message} />
+			</TradingField>
+			<ExecutionProtectionFields slippage={slippage} validityMinutes={transactionValidityMinutes} disabled={controlsDisabled} onSlippageInput={setSlippage} onValidityInput={setTransactionValidityMinutes} />
+			{quote === undefined ? null : renderLiveTradeSummary(quote, side)}
+			<div class='transaction-outcome' ref={outcomeRef} tabIndex={-1}>
+				{transactionHash === undefined ? null : <TradingTransactionHash hash={transactionHash} />}
+				<ErrorNotice message={receiptWarning} />
+				<ErrorNotice message={message} />
+				<TransactionActionGroup loading={actionAvailability.loading === true} message={groupMessage}>
+					{quote === undefined ? <TransactionActionButton availability={simulateAvailability} idleLabel={workflowCopy.previewTrade} pending={state === 'simulating'} pendingLabel={workflowCopy.simulatingTrade(mode, side)} onClick={simulate} /> : null}
+					{quote !== undefined ? <TransactionActionButton availability={submitAvailability} idleLabel={submitLabel} pending={state === 'submitting' || state === 'pending'} pendingLabel={workflowCopy.submittingTrade} onClick={submit} /> : null}
+				</TransactionActionGroup>
+			</div>
 			{quote === undefined ? null : (
 				<details class='trade-breakdown'>
 					<summary>{workflowCopy.fullTradeBreakdown}</summary>
-					<dl class='metrics quote'>
-						<div>
-							<dt>{workflowCopy.simulationBlock}</dt>
-							<dd>{quote.value.blockNumber.toString()}</dd>
-						</div>
-						<div>
-							<dt>{workflowCopy.completeSets}</dt>
-							<dd>{formatCompleteSetQuantity(quote.value.result.completeSetShares)}</dd>
-						</div>
-						<div>
-							<dt>{quote.kind === 'entry' ? workflowCopy.oppositeOutcomeSwapped : workflowCopy.outcomeSwapped(side)}</dt>
-							<dd>{formatOutcomeQuantity(quote.kind === 'entry' ? quote.value.result.oppositeSharesSwapped : quote.value.result.longSharesSwapped, quote.kind === 'entry' ? oppositeOutcome : side)}</dd>
-						</div>
-						<div>
-							<dt>{quote.kind === 'entry' ? workflowCopy.additionalOutcomeReceived(side) : workflowCopy.totalOutcomeRequired(side)}</dt>
-							<dd>{formatOutcomeQuantity(quote.kind === 'entry' ? quote.value.result.additionalLongShares : quote.value.result.totalLongShares, side)}</dd>
-						</div>
-						<div>
-							<dt>{quote.kind === 'entry' ? workflowCopy.totalOutcomeDelivered(side) : workflowCopy.invalidRequiredUppercase}</dt>
-							<dd>{formatOutcomeQuantity(quote.kind === 'entry' ? quote.value.result.totalLongShares : quote.value.result.invalidInsurance, quote.kind === 'entry' ? side : 'INVALID')}</dd>
-						</div>
-						<div>
-							<dt>{quote.kind === 'entry' ? workflowCopy.invalidReceived : workflowCopy.estimatedEthOut}</dt>
-							<dd>{quote.kind === 'entry' ? formatOutcomeQuantity(quote.value.result.invalidInsurance, workflowCopy.invalid) : `${formatRoundedUnits(quote.value.result.ethOut)} ${workflowCopy.eth}`}</dd>
-						</div>
-						<div>
-							<dt>{workflowCopy.ammFee}</dt>
-							<dd>{formatOutcomeQuantity(quote.value.result.feeAmount, quote.kind === 'entry' ? oppositeOutcome : side, 8)}</dd>
-						</div>
-						<div>
-							<dt>{quote.kind === 'entry' ? workflowCopy.minimumOutcomeReceived(side) : workflowCopy.maximumOutcomeRequired(side)}</dt>
-							<dd>{formatOutcomeQuantity(quote.kind === 'entry' ? quote.value.minimumLongShares : quote.value.maximumLongShares, side)}</dd>
-						</div>
-						{quote.kind === 'entry' ? (
-							<div>
-								<dt>{workflowCopy.averageOutcomePrice(side)}</dt>
-								<dd>{averagePrice === undefined ? workflowCopy.unavailableMetric : `${formatUnits(averagePrice, 2, 2)}%`}</dd>
-							</div>
-						) : (
-							<div>
-								<dt>{workflowCopy.minimumEthReceived}</dt>
-								<dd>
-									{formatUnits(quote.value.minimumEth)} {workflowCopy.eth}
-								</dd>
-							</div>
-						)}
-						<div>
-							<dt>{workflowCopy.deadline}</dt>
-							<dd>{formatTimestamp(quote.value.deadline)}</dd>
-						</div>
-						<div>
-							<dt>{workflowCopy.slippageTolerance}</dt>
-							<dd>{formatUnits(quote.value.slippageBps, 2, 2)}%</dd>
-						</div>
-						{quote.kind === 'entry' ? (
-							<>
-								<div>
-									<dt>{workflowCopy.conditionalYesBeforeAfter}</dt>
-									<dd>
+					<WorkflowSubsection title={workflowCopy.quoteShares}>
+						<DataGrid dense>
+							<MetricField label={workflowCopy.completeSets}>{formatCompleteSetQuantity(quote.value.result.completeSetShares)}</MetricField>
+							<MetricField label={quote.kind === 'entry' ? workflowCopy.oppositeOutcomeSwapped : workflowCopy.outcomeSwapped(side)}>{formatOutcomeQuantity(quote.kind === 'entry' ? quote.value.result.oppositeSharesSwapped : quote.value.result.longSharesSwapped, quoteSide)}</MetricField>
+							<MetricField label={quote.kind === 'entry' ? workflowCopy.additionalOutcomeReceived(side) : workflowCopy.totalOutcomeRequired(side)}>{formatOutcomeQuantity(quote.kind === 'entry' ? quote.value.result.additionalLongShares : quote.value.result.totalLongShares, side)}</MetricField>
+							<MetricField label={quote.kind === 'entry' ? workflowCopy.totalOutcomeDelivered(side) : workflowCopy.invalidRequiredUppercase}>{formatOutcomeQuantity(quote.kind === 'entry' ? quote.value.result.totalLongShares : quote.value.result.invalidInsurance, quote.kind === 'entry' ? side : 'INVALID')}</MetricField>
+							{quote.kind === 'entry' ? <MetricField label={workflowCopy.invalidReceived}>{formatOutcomeQuantity(quote.value.result.invalidInsurance, workflowCopy.invalid)}</MetricField> : undefined}
+							<MetricField label={workflowCopy.ammFee}>{formatOutcomeQuantity(quote.value.result.feeAmount, quoteSide, 8)}</MetricField>
+							<MetricField label={quote.kind === 'entry' ? workflowCopy.minimumOutcomeReceived(side) : workflowCopy.maximumOutcomeRequired(side)}>{formatOutcomeQuantity(quote.kind === 'entry' ? quote.value.minimumLongShares : quote.value.maximumLongShares, side)}</MetricField>
+						</DataGrid>
+					</WorkflowSubsection>
+					<WorkflowSubsection title={workflowCopy.quoteEthValues}>
+						<DataGrid dense>
+							{quote.kind === 'entry' ? (
+								<>
+									<MetricField label={workflowCopy.averageOutcomePrice(side)}>{averagePrice === undefined ? workflowCopy.unavailableMetric : `${formatUnits(averagePrice, 2, 2)}%`}</MetricField>
+									<MetricField label={workflowCopy.conditionalYesBeforeAfter}>
 										{formatUnits(quote.value.result.conditionalYesBpsBefore, 2, 2)}% / {formatUnits(quote.value.result.conditionalYesBpsAfter, 2, 2)}%
-									</dd>
-								</div>
-								<div>
-									<dt>{workflowCopy.conditionalYesPriceImpact}</dt>
-									<dd>{entryPriceImpactBps === undefined ? workflowCopy.unavailableMetric : `${entryPriceImpactBps > 0n ? workflowCopy.positiveSign : ''}${formatUnits(entryPriceImpactBps, 2, 2)} ${workflowCopy.percentagePoints}`}</dd>
-								</div>
-							</>
-						) : null}
-					</dl>
+									</MetricField>
+									<MetricField label={workflowCopy.conditionalYesPriceImpact}>{entryPriceImpactBps === undefined ? workflowCopy.unavailableMetric : `${entryPriceImpactBps > 0n ? workflowCopy.positiveSign : ''}${formatUnits(entryPriceImpactBps, 2, 2)} ${workflowCopy.percentagePoints}`}</MetricField>
+								</>
+							) : (
+								<>
+									<MetricField label={workflowCopy.estimatedEthOut}>{`${formatRoundedUnits(quote.value.result.ethOut)} ${workflowCopy.eth}`}</MetricField>
+									<MetricField label={workflowCopy.minimumEthReceived}>
+										{formatUnits(quote.value.minimumEth)} {workflowCopy.eth}
+									</MetricField>
+								</>
+							)}
+						</DataGrid>
+					</WorkflowSubsection>
+					<WorkflowSubsection title={workflowCopy.quoteTiming}>
+						<DataGrid dense>
+							<MetricField label={workflowCopy.simulationBlock}>{quote.value.blockNumber.toString()}</MetricField>
+							<MetricField label={workflowCopy.deadline}>{formatTimestamp(quote.value.deadline)}</MetricField>
+							<MetricField label={workflowCopy.slippageTolerance}>{formatUnits(quote.value.slippageBps, 2, 2)}%</MetricField>
+						</DataGrid>
+					</WorkflowSubsection>
 				</details>
 			)}
 		</div>

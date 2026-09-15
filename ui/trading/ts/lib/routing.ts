@@ -63,3 +63,13 @@ export function isTradingLookupRoute(route: string): route is TradingLookupRoute
 export function tradingBrowseRouteFor(lookupRoute: TradingLookupRoute): TradingBrowseRoute {
 	return lookupRoute === 'create-market' ? 'security-pools' : 'markets'
 }
+
+/**
+ * Lookup routes are list-first: `#/market`, `#/liquidity`, and `#/create-market` render the same list as their browse
+ * alias, so both kinds resolve to the list they show. Other routes have no list.
+ */
+export function tradingListRouteFor(route: string): TradingBrowseRoute | undefined {
+	if (isTradingBrowseRoute(route)) return route
+	if (isTradingLookupRoute(route)) return tradingBrowseRouteFor(route)
+	return undefined
+}

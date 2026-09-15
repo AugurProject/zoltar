@@ -494,7 +494,7 @@ void describe('OpenOracleSection', () => {
 			await flushAsyncWork()
 
 			expect(requestedPages.at(-1)).toBe(0)
-			expect(documentQueries.getByText('Page 1 of 1')).not.toBeNull()
+			expect(documentQueries.queryByText('Page 1 of 1')).toBeNull()
 		} finally {
 			await rendered.cleanup()
 			domEnvironment.cleanup()
@@ -563,7 +563,7 @@ void describe('OpenOracleSection', () => {
 			})
 			const documentQueries = within(document.body)
 			await flushAsyncWork()
-			expect(documentQueries.getByRole('status', { name: 'No Open Oracle reports found.' })).not.toBeNull()
+			expect(documentQueries.getByRole('status').textContent).toContain('No Open Oracle reports found.')
 
 			await act(() => {
 				render(<OpenOracleSection {...createOpenOracleSectionProps({ environmentRefreshKey: 1, loadBrowseReports })} />, rendered.container)
@@ -586,7 +586,7 @@ void describe('OpenOracleSection', () => {
 				await thirdEnvironmentLoad.promise
 			})
 			await flushAsyncWork()
-			expect(documentQueries.getByRole('status', { name: 'No Open Oracle reports found.' })).not.toBeNull()
+			expect(documentQueries.getByRole('status').textContent).toContain('No Open Oracle reports found.')
 			expect(browseLoadAttempts).toBe(3)
 		} finally {
 			await rendered.cleanup()

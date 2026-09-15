@@ -1,9 +1,11 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as statoblastAppCopy from '../../../copy/app.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
-import type { ComponentChildren } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
+import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
+import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { ForkAuctionSection } from '../../truth-auctions/components/ForkAuctionSection.js'
 import { LiquidationModal } from './LiquidationModal.js'
@@ -19,6 +21,7 @@ import { SecurityPoolLink } from './SecurityPoolLink.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { getQueuedVaultOperation } from './VaultQueuedOperationStatusCard.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
+import { StickyObjectContext } from '@zoltar/ui-core-shared/components/StickyObjectContext.js'
 import { TradingSection } from '../../markets/components/TradingSection.js'
 import { UniverseLink } from '@zoltar/ui-zoltar-shared/features/universes/components/UniverseLink.js'
 import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
@@ -36,14 +39,11 @@ import {
 	getSelectedPoolOracleMetricValues,
 	getSelectedPoolViewForForkWorkflowSelectionStage,
 	getSelectedPoolViewLabel,
-	getSelectedPoolWorkflowGuardMessage,
 	getSelectedPoolWorkflowLockedPresentation,
 	isSelectedPoolForkWorkflowView,
 	isForkWorkflowDisabled,
 	resolveForkWorkflowSelectionStage,
 	resolveSelectedPoolView,
-	SELECTED_POOL_PRIMARY_VIEWS,
-	SELECTED_POOL_SECONDARY_VIEWS,
 	SELECTED_POOL_VIEWS,
 	shouldReloadSelectedPoolDetails,
 	shouldShowSelectedPoolWorkflowDetails,
@@ -54,7 +54,9 @@ import { resolveRequestedLoadableValueState } from '@zoltar/ui-core-shared/lib/l
 import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import { getReportingLockedUntilMessage, hasReportingOpened } from '../../reporting/lib/reporting.js'
 import { addOpenOracleBountyBuffer } from '../../open-oracle/lib/openOracle.js'
+import { getSecurityPoolStatusBadgeLabel, getSecurityPoolStatusBadgeTone } from '../lib/securityPoolLabels.js'
 import { deriveSecurityPoolLifecycleState, deriveSecurityPoolReportingStage, deriveVaultAdmissionClosed, evaluateSecurityPoolState } from '../lib/securityPoolState.js'
+import { calculateMintingCapacityAttoEth, formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js'
 import { getVaultExecutePendingOperationGuardMessage, getVaultRequestPriceGuardMessage } from '../lib/securityVaultGuards.js'
 import { doesLoadedSecurityVaultMatchSelection, doesSecurityVaultExistOnchain, getSelectedVaultOwner, isOracleManagerPriceUsable, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper } from '../lib/securityVault.js'
 import { getPoolRegistryPresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
@@ -65,6 +67,8 @@ import type { SecurityPoolWorkflowRouteContentProps, ViewTabOption } from '../..
 import { buildSelectedPoolSummaryPool } from './SecurityPoolWorkflowPresentation.js'
 import { SecurityPoolPriceOracleSection, SecurityPoolRequestPriceModal, SecurityPoolStagedOperationsSection, type RequestPriceReview } from './SecurityPoolOracleSections.js'
 import { SecurityPoolVaultWorkspace } from './SecurityPoolVaultWorkspace.js'
+
+const SELECTED_POOL_WORKFLOW_PANEL_ID = 'selected-pool-workflow-panel'
 
 export function SecurityPoolWorkflowSection({
 	accountState,
@@ -267,11 +271,6 @@ export function SecurityPoolWorkflowSection({
 	const openSelectedPoolForkWorkflow = selectedPoolHasActualForkActivity ? () => onSelectedPoolViewChange('fork-workflow') : undefined
 	const shouldRefreshSelectedPoolReporting =
 		showSelectedPoolWorkflowDetails && (sameAddress(reporting.reportingDetails?.securityPoolAddress, selectedPool?.securityPoolAddress) || (view === 'reporting' && normalizedSelectedPoolAddress !== undefined && normalizedReportingFormPoolAddress === normalizedSelectedPoolAddress))
-	const selectedPoolWorkflowGuardMessage = getSelectedPoolWorkflowGuardMessage({
-		hasSelectedPoolAddress,
-		selectedPoolLookupState,
-		selectedPoolUniverseMismatch,
-	})
 	const selectedPoolWorkflowLockedPresentation = showSelectedPoolWorkflowDetails || securityPoolOverviewError !== undefined ? undefined : getSelectedPoolWorkflowLockedPresentation({ hasSelectedPoolAddress, selectedPoolLookupState, selectedPoolUniverseMismatch })
 	const selectedVaultViewOptions: ViewTabOption<SelectedVaultView>[] = [
 		{ label: securityPoolCopy.directory, value: 'browse-vaults' },
@@ -405,36 +404,55 @@ export function SecurityPoolWorkflowSection({
 
 		return undefined
 	})()
-	let selectedPoolSummaryContent: ComponentChildren
-	if (selectedPoolSummaryPool === undefined) {
-		selectedPoolSummaryContent = undefined
-	} else if (view === 'vaults' || view === 'trading') {
-		selectedPoolSummaryContent = (
-			<div className='selected-pool-context-summary selected-pool-context-summary-hero selected-pool-context-summary-hero-compact'>
-				<div className='selected-pool-context-overview'>
-					<div className='selected-pool-hero-story'>
-						<div className='selected-pool-hero-story-title-row'>
-							<div className='security-pool-card-title-row'>
-								<span className='security-pool-card-title-copy'>{marketDetails === undefined ? '' : getQuestionTitle(marketDetails)}</span>
-							</div>
-						</div>
-						{marketDetails === undefined ? null : <Question className='selected-pool-hero-question' question={marketDetails} variant='preview' showTitle={false} />}
-					</div>
-					<SecurityPoolSummaryMetrics
-						calculationPriceConfigured={uiPriceOracle !== undefined}
-						calculationRepPerEthPrice={repPerEthPrice}
-						className='selected-pool-context-grid'
-						currentTimestamp={currentTimestamp}
-						pool={{
-							...selectedPoolSummaryPool,
-							lastOracleSettlementTimestamp: currentPoolOracleSettlementTimestamp ?? selectedPoolSummaryPool.lastOracleSettlementTimestamp,
-						}}
-						showTotalBacking
-						variant='hero'
-					>
-						{selectedPoolSummaryPool.parent === zeroAddress ? undefined : (
+	const selectedPoolObjectHeader = (() => {
+		if (selectedPoolSummaryPool === undefined || marketDetails === undefined) return undefined
+		const summaryPool = {
+			...selectedPoolSummaryPool,
+			lastOracleSettlementTimestamp: currentPoolOracleSettlementTimestamp ?? selectedPoolSummaryPool.lastOracleSettlementTimestamp,
+		}
+		const mintingCapacityAttoEth = calculateMintingCapacityAttoEth(summaryPool.totalCapacityOwnershipAttoRep, uiPriceOracle === undefined ? summaryPool.lastOraclePrice : repPerEthPrice, summaryPool.statoblastSecurityMultiplierBps)
+		const statusBadgeLabel = getSecurityPoolStatusBadgeLabel({
+			hasForkActivity: selectedPoolHasActualForkActivity,
+			lifecycleState: selectedPoolLifecycleState,
+			...(selectedPoolQuestionOutcome === undefined ? {} : { questionOutcome: selectedPoolQuestionOutcome }),
+		})
+		return (
+			<div className='selected-pool-object-header'>
+				<StickyObjectContext
+					badge={
+						<Badge ariaLabel={statusBadgeLabel} tone={getSecurityPoolStatusBadgeTone(selectedPoolLifecycleState)}>
+							{statusBadgeLabel}
+						</Badge>
+					}
+					items={[
+						{ label: securityPoolCopy.vaultCount, value: summaryPool.vaultCount.toString() },
+						{ label: statoblastAppCopy.statoblastSecurityMultiplierBps, value: `${formatStatoblastSecurityMultiplier(summaryPool.statoblastSecurityMultiplierBps)}x` },
+						{
+							label: statoblastAppCopy.openOraclePrice,
+							value: <OpenOraclePriceValue currentTimestamp={currentTimestamp} lastPrice={currentPoolOraclePrice} lastSettlementTimestamp={currentPoolOracleSettlementTimestamp ?? 0n} priceValidUntilTimestamp={currentPoolOracleManagerDetails?.priceValidUntilTimestamp} />,
+						},
+						{
+							label: securityPoolCopy.openInterestMinted,
+							value: (
+								<span className='comparison-record-value-stack'>
+									<CurrencyValue exactWhenRoundedToZero value={summaryPool.settlementCollateralAttoEth} suffix={commonCopy.eth} copyable={false} />
+									<span className='detail'>
+										{securityPoolCopy.maxLead}
+										{mintingCapacityAttoEth === undefined ? commonCopy.unavailable : <CurrencyValue exactWhenRoundedToZero value={mintingCapacityAttoEth} suffix={commonCopy.eth} copyable={false} />}
+									</span>
+								</span>
+							),
+						},
+					]}
+					sticky={false}
+					title={getQuestionTitle(marketDetails)}
+					variant='embedded-context-strip'
+				>
+					<Question className='selected-pool-hero-question' question={marketDetails} variant='preview' showTitle={false} />
+					<SecurityPoolSummaryMetrics calculationPriceConfigured={uiPriceOracle !== undefined} calculationRepPerEthPrice={repPerEthPrice} className='selected-pool-context-grid' metricVariant='context' omitHeadlineMetrics pool={summaryPool} showTotalBacking>
+						{summaryPool.parent === zeroAddress ? undefined : (
 							<MetricField label={securityPoolCopy.parentPool}>
-								<SecurityPoolLink securityPoolAddress={selectedPoolSummaryPool.parent} selectedPoolView={selectedPoolView} universeId={selectedPoolParentPool?.universeId} />
+								<SecurityPoolLink securityPoolAddress={summaryPool.parent} selectedPoolView={selectedPoolView} universeId={selectedPoolParentPool?.universeId} />
 							</MetricField>
 						)}
 						{currentPoolOracleManagerDetails?.pendingReportId === undefined || currentPoolOracleManagerDetails.pendingReportId === 0n ? undefined : (
@@ -445,39 +463,10 @@ export function SecurityPoolWorkflowSection({
 							</MetricField>
 						)}
 					</SecurityPoolSummaryMetrics>
-				</div>
+				</StickyObjectContext>
 			</div>
 		)
-	} else {
-		selectedPoolSummaryContent = (
-			<div className='selected-pool-context-summary'>
-				<div className='selected-pool-context-overview'>
-					<SecurityPoolSummaryMetrics calculationPriceConfigured={uiPriceOracle !== undefined} calculationRepPerEthPrice={repPerEthPrice} metricVariant='context' pool={selectedPoolSummaryPool} showTotalBacking>
-						{selectedPoolSummaryPool.parent === zeroAddress ? undefined : (
-							<MetricField label={securityPoolCopy.parentPool}>
-								<SecurityPoolLink securityPoolAddress={selectedPoolSummaryPool.parent} selectedPoolView={selectedPoolView} universeId={selectedPoolParentPool?.universeId} />
-							</MetricField>
-						)}
-						<MetricField label={statoblastAppCopy.openOraclePrice} valueTagName='span'>
-							<OpenOraclePriceValue currentTimestamp={currentTimestamp} lastPrice={currentPoolOraclePrice} lastSettlementTimestamp={currentPoolOracleSettlementTimestamp ?? 0n} priceValidUntilTimestamp={currentPoolOracleManagerDetails?.priceValidUntilTimestamp} />
-						</MetricField>
-						{currentPoolOracleManagerDetails?.pendingReportId === undefined || currentPoolOracleManagerDetails.pendingReportId === 0n ? undefined : (
-							<MetricField label={securityPoolCopy.pendingRequest}>
-								<button className='link' type='button' onClick={() => onViewPendingReport(currentPoolOracleManagerDetails.pendingReportId)}>
-									{securityPoolCopy.formatPendingReportLabel(currentPoolOracleManagerDetails.pendingReportId.toString())}
-								</button>
-							</MetricField>
-						)}
-					</SecurityPoolSummaryMetrics>
-				</div>
-				{marketDetails === undefined ? undefined : (
-					<SectionBlock headingLevel={3} title={commonCopy.question} variant='embedded'>
-						<Question question={marketDetails} />
-					</SectionBlock>
-				)}
-			</div>
-		)
-	}
+	})()
 	useEffect(() => {
 		if (selectedPoolManagerAddress === undefined) return
 		if (sameAddress(poolOracleManagerDetails?.managerAddress, selectedPoolManagerAddress)) return
@@ -666,10 +655,9 @@ export function SecurityPoolWorkflowSection({
 		if (showSelectedPoolWorkflowDetails && view === 'vaults' && hasLoadedCurrentVault) void securityVault.onLoadSecurityVault()
 	}, [hasLoadedCurrentVault, onRefreshSelectedPoolData, poolPriceOracleResult, reporting.onLoadReporting, securityVault.onLoadSecurityVault, selectedPool?.securityPoolAddress, shouldRefreshSelectedPoolReporting, showSelectedPoolWorkflowDetails, view])
 	const selectedPoolViewOptions = SELECTED_POOL_VIEWS.map(selectedPoolUiView => ({
-		disabled: selectedPoolUniverseMismatch || selectedPoolWorkflowGuardMessage !== undefined,
 		id: `selected-pool-view-${selectedPoolUiView}`,
 		label: getSelectedPoolViewLabel(selectedPoolUiView),
-		...(selectedPoolUniverseMismatch || selectedPoolWorkflowGuardMessage === undefined ? {} : { reason: selectedPoolWorkflowGuardMessage }),
+		panelId: SELECTED_POOL_WORKFLOW_PANEL_ID,
 		value: selectedPoolUiView,
 	}))
 	const vaultBrowseEmptyState = (() => {
@@ -684,32 +672,21 @@ export function SecurityPoolWorkflowSection({
 	else if (showHeader) emptyWorkflowTitle = commonCopy.managePool
 	return (
 		<RouteWorkflowPanel showHeader={showHeader} title={securityPoolCopy.selectedPool}>
-			<div className='selected-pool-context-nonsticky'>
-				<div className='selected-pool-context-controls'>
-					<div className='selected-pool-change-control'>
-						<div className='selected-pool-context-lookup'>
-							<LookupFieldRow
-								label={commonCopy.securityPoolAddress}
-								value={securityPoolAddress}
-								onInput={onSecurityPoolAddressChange}
-								placeholder={commonCopy.hexValuePlaceholder}
-								action={
-									<button className='secondary' onClick={() => onRefreshSelectedPoolData()} disabled={!hasSelectedPoolAddress || loadingSecurityPools}>
-										{loadingSecurityPools ? <LoadingText>{securityPoolCopy.refreshingPool}</LoadingText> : securityPoolCopy.refreshPool}
-									</button>
-								}
-							/>
-						</div>
-					</div>
-				</div>
-				{selectedPoolSummaryContent === undefined ? undefined : (
-					<details className='selected-pool-context-details'>
-						<summary>{securityPoolCopy.poolContextAndMetrics}</summary>
-						<div className='selected-pool-context-details-content'>{selectedPoolSummaryContent}</div>
-					</details>
-				)}
+			<div className='selected-pool-change-control'>
+				<LookupFieldRow
+					label={commonCopy.securityPoolAddress}
+					value={securityPoolAddress}
+					onInput={onSecurityPoolAddressChange}
+					placeholder={commonCopy.hexValuePlaceholder}
+					action={
+						<button className='secondary' onClick={() => onRefreshSelectedPoolData()} disabled={!hasSelectedPoolAddress || loadingSecurityPools}>
+							{loadingSecurityPools ? <LoadingText>{securityPoolCopy.refreshingPool}</LoadingText> : securityPoolCopy.refreshPool}
+						</button>
+					}
+				/>
 			</div>
 			<ErrorNotice message={securityPoolOverviewError} />
+			{selectedPoolObjectHeader}
 
 			{selectedPool === undefined || !selectedPoolUniverseMismatch ? undefined : (
 				<SectionBlock title={securityPoolCopy.universeMismatch} tone='critical' variant='embedded'>
@@ -727,174 +704,167 @@ export function SecurityPoolWorkflowSection({
 				</SectionBlock>
 			)}
 
-			<section className='selected-pool-workspace'>
-				<div className='selected-pool-workspace-grid'>
-					<div className='selected-pool-workflow-rail'>
-						<ViewTabs
-							ariaLabel={securityPoolCopy.selectedPoolViews}
-							className='selected-pool-workflow-nav'
-							groups={[
-								{ ariaLabel: securityPoolCopy.primaryPoolActions, className: 'selected-pool-workflow-group', values: SELECTED_POOL_PRIMARY_VIEWS },
-								{ ariaLabel: securityPoolCopy.additionalPoolActions, className: 'selected-pool-workflow-group selected-pool-workflow-group-secondary', values: SELECTED_POOL_SECONDARY_VIEWS },
-							]}
-							orientation='vertical'
-							semantics='switcher'
-							size='compact'
-							value={view}
-							onChange={nextView => onSelectedPoolViewChange(hasSelectedPoolAddress ? nextView : undefined)}
-							options={selectedPoolViewOptions}
-						/>
-					</div>
-
-					<div className='selected-pool-workflow-content'>
-						{!showSelectedPoolWorkflowDetails ? (
-							<SectionBlock title={emptyWorkflowTitle} variant='plain'>
-								{selectedPoolUniverseMismatch || selectedPoolWorkflowLockedPresentation === undefined ? undefined : <StateHint presentation={selectedPoolWorkflowLockedPresentation} />}
-								{hasSelectedPoolAddress ? undefined : (
-									<div className='actions'>
+			{!showSelectedPoolWorkflowDetails ? (
+				(() => {
+					if (selectedPoolUniverseMismatch) return undefined
+					if (!hasSelectedPoolAddress)
+						return (
+							<EmptyState
+								actions={
+									<>
 										<button className='primary' type='button' onClick={onBrowsePools}>
 											{commonCopy.browsePoolsAction}
 										</button>
 										<button className='secondary' type='button' onClick={onCreatePool}>
 											{commonCopy.createPoolAction}
 										</button>
-									</div>
-								)}
-							</SectionBlock>
-						) : (
-							<>
-								{view === 'vaults' ? (
-									<SecurityPoolVaultWorkspace
-										browseEmptyState={vaultBrowseEmptyState}
-										currentPoolOracleManagerDetails={currentPoolOracleManagerDetails}
-										isOnActiveAppChain={isOnActiveAppChain}
-										liquidationEnabled={liquidationEnabled}
-										onOpenLiquidationModal={onOpenLiquidationModal}
-										onSelectedPoolViewChange={onSelectedPoolViewChange}
-										poolState={selectedPoolStateModel}
-										repPerEthPrice={repPerEthPrice}
-										repPerEthSource={repPerEthSource}
-										repPerEthSourceUrl={repPerEthSourceUrl}
-										securityVault={securityVault}
-										selectedPool={selectedPool}
-										selectedVaultDetails={selectedVaultDetails}
-										selectedVaultExistsOnchain={selectedVaultExistsOnchain}
-										selectedVaultIsOwnedByAccount={selectedVaultIsOwnedByAccount}
-										selectedVaultLoadNotice={selectedVaultLoadNotice}
-										selectedVaultOwner={selectedVaultOwner}
-										selectedVaultOwnerInput={selectedVaultOwnerInput}
-										selectedVaultViewOptions={selectedVaultViewOptions}
-										setVaultView={setVaultView}
-										vaultView={vaultView}
-										walletAddress={accountState.address}
-									/>
-								) : undefined}
+									</>
+								}
+								detail={securityPoolCopy.noPoolSelectedHint}
+								title={securityPoolCopy.noPoolSelectedBadgeLabel}
+							/>
+						)
+					if (selectedPoolWorkflowLockedPresentation === undefined) return undefined
+					return (
+						<SectionBlock title={emptyWorkflowTitle} variant='plain'>
+							<StateHint presentation={selectedPoolWorkflowLockedPresentation} />
+						</SectionBlock>
+					)
+				})()
+			) : (
+				<section className='selected-pool-workspace'>
+					<ViewTabs ariaLabel={securityPoolCopy.selectedPoolViews} className='selected-pool-workspace-tabs' orientation='horizontal' semantics='tabs' size='compact' value={view} onChange={onSelectedPoolViewChange} options={selectedPoolViewOptions} />
+					<div aria-labelledby={`selected-pool-view-${view}`} className='selected-pool-workflow-content' id={SELECTED_POOL_WORKFLOW_PANEL_ID} role='tabpanel'>
+						{view === 'vaults' ? (
+							<SecurityPoolVaultWorkspace
+								browseEmptyState={vaultBrowseEmptyState}
+								currentPoolOracleManagerDetails={currentPoolOracleManagerDetails}
+								isOnActiveAppChain={isOnActiveAppChain}
+								liquidationEnabled={liquidationEnabled}
+								onOpenLiquidationModal={onOpenLiquidationModal}
+								onSelectedPoolViewChange={onSelectedPoolViewChange}
+								poolState={selectedPoolStateModel}
+								repPerEthPrice={repPerEthPrice}
+								repPerEthSource={repPerEthSource}
+								repPerEthSourceUrl={repPerEthSourceUrl}
+								securityVault={securityVault}
+								selectedPool={selectedPool}
+								selectedVaultDetails={selectedVaultDetails}
+								selectedVaultExistsOnchain={selectedVaultExistsOnchain}
+								selectedVaultIsOwnedByAccount={selectedVaultIsOwnedByAccount}
+								selectedVaultLoadNotice={selectedVaultLoadNotice}
+								selectedVaultOwner={selectedVaultOwner}
+								selectedVaultOwnerInput={selectedVaultOwnerInput}
+								selectedVaultViewOptions={selectedVaultViewOptions}
+								setVaultView={setVaultView}
+								vaultView={vaultView}
+								walletAddress={accountState.address}
+							/>
+						) : undefined}
 
-								{view === 'trading' ? (
-									<TradingSection {...trading} oraclePriceUsable={currentPoolOraclePriceUsable} calculationPriceConfigured={uiPriceOracle !== undefined} selectedPool={effectiveSelectedPool} poolState={selectedPoolStateModel} embedInCard showHeader={false} showSecurityPoolAddressInput={false} />
-								) : undefined}
+						{view === 'trading' ? (
+							<TradingSection {...trading} oraclePriceUsable={currentPoolOraclePriceUsable} calculationPriceConfigured={uiPriceOracle !== undefined} selectedPool={effectiveSelectedPool} poolState={selectedPoolStateModel} embedInCard showHeader={false} showSecurityPoolAddressInput={false} />
+						) : undefined}
 
-								{view === 'reporting' ? (
-									<ReportingSection
-										{...reporting}
-										currentTimestamp={currentTimestamp}
-										embedInCard
-										forkAlreadyTriggered={selectedPoolHasActualForkActivity}
-										lockedReason={reportingLockedReason}
-										mode='full-reporting'
-										onOpenForkWorkflow={openSelectedPoolForkWorkflow}
-										onOpenPriceOracle={() => onSelectedPoolViewChange('price-oracle')}
-										onTriggerZoltarFork={triggerZoltarForkAvailability.disabled ? undefined : forkAuction.onForkWithOwnEscalation}
-										previewMarketDetails={currentReportingDetails === undefined ? marketDetails : undefined}
-										reportingDetails={currentReportingDetails}
-										reportActionGuardMessage={reportingOracleGuardMessage}
-										showHeader={false}
-										showSecurityPoolAddressInput={false}
-										triggerZoltarForkAvailability={triggerZoltarForkAvailability}
-										triggerZoltarForkPending={forkAuction.forkAuctionActiveAction === 'forkWithOwnEscalation'}
-									/>
-								) : undefined}
+						{view === 'reporting' ? (
+							<ReportingSection
+								{...reporting}
+								currentTimestamp={currentTimestamp}
+								embedInCard
+								forkAlreadyTriggered={selectedPoolHasActualForkActivity}
+								lockedReason={reportingLockedReason}
+								mode='full-reporting'
+								onOpenForkWorkflow={openSelectedPoolForkWorkflow}
+								onOpenPriceOracle={() => onSelectedPoolViewChange('price-oracle')}
+								onTriggerZoltarFork={triggerZoltarForkAvailability.disabled ? undefined : forkAuction.onForkWithOwnEscalation}
+								previewMarketDetails={currentReportingDetails === undefined ? marketDetails : undefined}
+								reportingDetails={currentReportingDetails}
+								reportActionGuardMessage={reportingOracleGuardMessage}
+								showHeader={false}
+								showSecurityPoolAddressInput={false}
+								triggerZoltarForkAvailability={triggerZoltarForkAvailability}
+								triggerZoltarForkPending={forkAuction.forkAuctionActiveAction === 'forkWithOwnEscalation'}
+							/>
+						) : undefined}
 
-								{isSelectedPoolForkWorkflowView(view) ? (
-									<ForkAuctionSection
-										{...forkAuction}
-										currentStageView={currentForkStage}
-										currentTimestamp={currentTimestamp}
-										disabled={forkWorkflowDisabled}
-										disabledMessage={forkWorkflowDisabled ? securityPoolCopy.operationalForkReadOnlyDetail : undefined}
-										embedInCard
-										forkAuctionDetails={currentForkAuctionDetails}
-										lifecycleStateOverride={selectedPoolLifecycleState}
-										loadingReportingDetails={reporting.loadingReportingDetails}
-										onLoadReporting={reporting.onLoadReporting}
-										onReportingFormChange={reporting.onReportingFormChange}
-										previewPool={selectedPool}
-										reportingDetails={currentReportingDetails}
-										reportingError={reporting.reportingError}
-										reportingForm={reporting.reportingForm}
-										selectedStageView={forkWorkflowSelectionStage}
-										selectedPoolRefreshNonce={selectedPoolRefreshNonce}
-										securityPools={securityPools}
-										universeForkTime={universeForkTime}
-										onSelectedStageViewChange={onForkWorkflowSelectionStageChange}
-										showHeader={false}
-										showSecurityPoolAddressInput={false}
-									/>
-								) : undefined}
+						{isSelectedPoolForkWorkflowView(view) ? (
+							<ForkAuctionSection
+								{...forkAuction}
+								currentStageView={currentForkStage}
+								currentTimestamp={currentTimestamp}
+								disabled={forkWorkflowDisabled}
+								disabledMessage={forkWorkflowDisabled ? securityPoolCopy.operationalForkReadOnlyDetail : undefined}
+								embedInCard
+								forkAuctionDetails={currentForkAuctionDetails}
+								lifecycleStateOverride={selectedPoolLifecycleState}
+								loadingReportingDetails={reporting.loadingReportingDetails}
+								onLoadReporting={reporting.onLoadReporting}
+								onReportingFormChange={reporting.onReportingFormChange}
+								previewPool={selectedPool}
+								reportingDetails={currentReportingDetails}
+								reportingError={reporting.reportingError}
+								reportingForm={reporting.reportingForm}
+								selectedStageView={forkWorkflowSelectionStage}
+								selectedPoolRefreshNonce={selectedPoolRefreshNonce}
+								securityPools={securityPools}
+								universeForkTime={universeForkTime}
+								onSelectedStageViewChange={onForkWorkflowSelectionStageChange}
+								showHeader={false}
+								showSecurityPoolAddressInput={false}
+							/>
+						) : undefined}
 
-								{view === 'staged-operations' && loadedSelectedPool !== undefined ? (
-									<SecurityPoolStagedOperationsSection
-										activeOperationCount={activeStagedOperationCount}
-										canExecute={selectedPoolStateModel.actions.executeStagedOperation.enabled}
-										executeGuardMessage={executePendingOperationGuardMessage}
-										executionPending={poolOracleActiveAction === 'executeStagedOperation'}
-										loadingManager={loadingPoolOracleManager}
-										managerAddress={loadedSelectedPool.managerAddress}
-										managerDetails={currentPoolOracleManagerDetails}
-										managerError={currentPoolOracleManagerError}
-										manualOperationId={manualPendingOperationId}
-										onExecute={onExecutePendingPoolOperation}
-										onLoadManager={onLoadPoolOracleManager}
-										onManualOperationIdChange={setManualPendingOperationId}
-										pendingSettlementOperationIds={pendingSettlementOperationIds}
-										resolvedOperationId={resolvedPendingOperationId}
-										securityPoolAddress={loadedSelectedPool.securityPoolAddress}
-										stagedOperations={stagedOperations}
-										suggestedOperationId={selectedPendingOperationId}
-										universeId={loadedSelectedPool.universeId}
-									/>
-								) : undefined}
+						{view === 'staged-operations' && loadedSelectedPool !== undefined ? (
+							<SecurityPoolStagedOperationsSection
+								activeOperationCount={activeStagedOperationCount}
+								canExecute={selectedPoolStateModel.actions.executeStagedOperation.enabled}
+								executeGuardMessage={executePendingOperationGuardMessage}
+								executionPending={poolOracleActiveAction === 'executeStagedOperation'}
+								loadingManager={loadingPoolOracleManager}
+								managerAddress={loadedSelectedPool.managerAddress}
+								managerDetails={currentPoolOracleManagerDetails}
+								managerError={currentPoolOracleManagerError}
+								manualOperationId={manualPendingOperationId}
+								onExecute={onExecutePendingPoolOperation}
+								onLoadManager={onLoadPoolOracleManager}
+								onManualOperationIdChange={setManualPendingOperationId}
+								pendingSettlementOperationIds={pendingSettlementOperationIds}
+								resolvedOperationId={resolvedPendingOperationId}
+								securityPoolAddress={loadedSelectedPool.securityPoolAddress}
+								stagedOperations={stagedOperations}
+								suggestedOperationId={selectedPendingOperationId}
+								universeId={loadedSelectedPool.universeId}
+							/>
+						) : undefined}
 
-								{view === 'price-oracle' && loadedSelectedPool !== undefined ? (
-									<SecurityPoolPriceOracleSection
-										canRequest={selectedPoolStateModel.actions.requestPrice.enabled}
-										currentTimestamp={currentTimestamp}
-										loadingManager={loadingPoolOracleManager}
-										managerAddress={loadedSelectedPool.managerAddress}
-										managerDetails={currentPoolOracleManagerDetails}
-										managerError={currentPoolOracleManagerError}
-										metricValues={selectedPoolOracleMetricValues}
-										onLoadManager={onLoadPoolOracleManager}
-										onOpenRequestReview={() => {
-											if (requestPriceTransactionEthValue === undefined) return
-											setRequestPriceReview({
-												requestValueAttoEth: requestPriceTransactionEthValue,
-												managerAddress: loadedSelectedPool.managerAddress,
-												securityPoolAddress: loadedSelectedPool.securityPoolAddress,
-												universeId: loadedSelectedPool.universeId,
-											})
-										}}
-										onViewPendingReport={onViewPendingReport}
-										requestGuardMessage={requestPriceOpenGuardMessage ?? requestPriceGuardMessage}
-										requestPending={poolOracleActiveAction === 'requestPrice'}
-										requestValueAttoEth={requestPriceTransactionEthValue}
-									/>
-								) : undefined}
-							</>
-						)}
+						{view === 'price-oracle' && loadedSelectedPool !== undefined ? (
+							<SecurityPoolPriceOracleSection
+								canRequest={selectedPoolStateModel.actions.requestPrice.enabled}
+								currentTimestamp={currentTimestamp}
+								loadingManager={loadingPoolOracleManager}
+								managerAddress={loadedSelectedPool.managerAddress}
+								managerDetails={currentPoolOracleManagerDetails}
+								managerError={currentPoolOracleManagerError}
+								metricValues={selectedPoolOracleMetricValues}
+								onLoadManager={onLoadPoolOracleManager}
+								onOpenRequestReview={() => {
+									if (requestPriceTransactionEthValue === undefined) return
+									setRequestPriceReview({
+										requestValueAttoEth: requestPriceTransactionEthValue,
+										managerAddress: loadedSelectedPool.managerAddress,
+										securityPoolAddress: loadedSelectedPool.securityPoolAddress,
+										universeId: loadedSelectedPool.universeId,
+									})
+								}}
+								onViewPendingReport={onViewPendingReport}
+								requestGuardMessage={requestPriceOpenGuardMessage ?? requestPriceGuardMessage}
+								requestPending={poolOracleActiveAction === 'requestPrice'}
+								requestValueAttoEth={requestPriceTransactionEthValue}
+							/>
+						) : undefined}
 					</div>
-				</div>
-			</section>
+				</section>
+			)}
 			<SecurityPoolRequestPriceModal
 				canRequest={selectedPoolStateModel.actions.requestPrice.enabled && canUseOracleActions}
 				closeOnSuccessKey={poolPriceOracleResult?.action === 'requestPrice' ? poolPriceOracleResult.hash : undefined}

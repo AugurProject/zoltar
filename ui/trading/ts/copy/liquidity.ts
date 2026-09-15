@@ -1,6 +1,4 @@
-export const sectionTitle = 'Live liquidity'
 export const disconnectedGuidance = 'Connect a wallet to load balances and simulate liquidity transactions.'
-export const loadingBalancesStatus = 'Refreshing wallet balances…'
 export const balanceRefreshFallback = 'balance refresh failed'
 export const operationLabel = 'Liquidity operation'
 export const initializeAction = 'Initialize'
@@ -32,6 +30,4 @@ export function balancesUnavailable(reason: string) {
 	return `Wallet balances are unavailable: ${reason}.`
 }
 
-export function simulationBlock(blockNumber: bigint) {
-	return `Authoritative router simulation at block ${blockNumber.toString()}.`
-}
+export const simulationBlockLabel = 'Simulation block'

@@ -1,6 +1,7 @@
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import type { SecurityPoolLifecycleState } from './securityPoolState.js'
+import type { BadgeTone } from '@zoltar/ui-core-shared/types/components.js'
 import { getReportingOutcomeLabel } from '../../reporting/lib/reporting.js'
 import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 
@@ -37,4 +38,10 @@ export function getSecurityPoolStatusBadgeLabel({ hasForkActivity, questionOutco
 	}
 	if (lifecycleState === 'operational') return hasForkActivity ? 'Fork Finalized' : 'Operational'
 	return assertNever(lifecycleState)
+}
+
+export function getSecurityPoolStatusBadgeTone(lifecycleState: SecurityPoolLifecycleState | undefined): BadgeTone {
+	if (lifecycleState === 'operational') return 'ok'
+	if (lifecycleState === undefined) return 'muted'
+	return 'warning'
 }

@@ -13,7 +13,7 @@ const ZOLTAR_ROUTING_CONFIG: RoutingConfig<ZoltarRoute> = {
 
 export const zoltarRouting = createRouting(ZOLTAR_ROUTING_CONFIG)
 
-export function isUniverseIndependentZoltarView(view: 'create' | 'fork' | 'migrate' | 'questions' | 'universes') {
+export function isUniverseIndependentZoltarView(view: 'create' | 'questions' | 'universes') {
 	return view === 'questions' || view === 'create' || view === 'universes'
 }
 

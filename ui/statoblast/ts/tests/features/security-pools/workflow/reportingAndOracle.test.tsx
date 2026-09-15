@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { createReportingAndOracleFixture, useSecurityPoolWorkflowSectionTestDom } from './fixture'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
+import { getTransactionButtonState } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 
 installTestRouting()
 describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
@@ -91,7 +92,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		)
 		setCleanup(renderedComponent.cleanup)
 
-		const selectedPoolSummary = document.body.querySelector('.selected-pool-context-summary')
+		const selectedPoolSummary = document.body.querySelector('.sticky-object-context')
 		if (!(selectedPoolSummary instanceof HTMLElement)) throw new Error('Expected selected pool summary')
 		const summaryLabels = Array.from(selectedPoolSummary.querySelectorAll('.metric-label')).map(element => element.textContent?.trim() ?? '')
 		expect(summaryLabels).not.toContain('Truth Auction')
@@ -116,7 +117,8 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		setCleanup(renderedComponent.cleanup)
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getAllByRole('heading', { name: 'Question' }).length).toBe(1)
+		expect(documentQueries.queryByRole('heading', { name: 'Question' })).toBeNull()
+		expect(documentQueries.getAllByRole('heading', { name: 'Will this resolve?' })).toHaveLength(1)
 		expect(documentQueries.queryByRole('heading', { name: 'Reporting Context' })).toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Reporting Not Enabled' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Outcome Sides' })).toBeNull()
@@ -191,7 +193,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		const reportButton = documentQueries.getByRole('button', { name: 'Report on selected side' })
 		if (!(reportButton instanceof HTMLButtonElement)) throw new Error('Expected report button')
 		expect(reportButton.disabled).toBe(true)
-		expect(reportButton.title).toBe('This pool is in truth auction. Reporting actions unlock once the pool becomes operational.')
+		expect(getTransactionButtonState(document.body, 'Report on selected side').reason).toBe('This pool is in truth auction. Reporting actions unlock once the pool becomes operational.')
 		expect(document.body.textContent).not.toContain("The pool's oracle price expired.")
 	})
 
@@ -300,7 +302,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		const documentQueries = within(document.body)
 		const reportButton = documentQueries.getByRole('button', { name: 'Report on selected side' }) as HTMLButtonElement
 		expect(reportButton.disabled).toBe(true)
-		expect(reportButton.title).toBe('Loading reporting details.')
+		expect(getTransactionButtonState(document.body, 'Report on selected side').reason).toBe('Loading reporting details.')
 	})
 
 	test('keeps reporting disabled at the exact market end timestamp', async () => {
@@ -359,7 +361,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		setCleanup(renderedComponent.cleanup)
 
 		const documentQueries = within(document.body)
-		expect((documentQueries.getByRole('button', { name: 'Staged Operations' }) as HTMLElement).getAttribute('aria-pressed')).toBe('true')
+		expect(documentQueries.getByRole('tab', { name: 'Staged Operations' }).getAttribute('aria-selected')).toBe('true')
 		expect(documentQueries.getByRole('heading', { name: 'Staged Operations' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Pool Oracle & Pending Operations' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Staged Operations List' })).toBeNull()
@@ -569,7 +571,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		setCleanup(renderedComponent.cleanup)
 
 		const documentQueries = within(document.body)
-		expect((documentQueries.getByRole('button', { name: 'Price Oracle' }) as HTMLElement).getAttribute('aria-pressed')).toBe('true')
+		expect(documentQueries.getByRole('tab', { name: 'Price Oracle' }).getAttribute('aria-selected')).toBe('true')
 		const priceOracleSection = documentQueries.getByRole('heading', { name: 'Price Oracle' }).closest('section')
 		if (!(priceOracleSection instanceof HTMLElement)) throw new Error('Expected the Price Oracle section to render')
 		const sectionQueries = within(priceOracleSection)
@@ -745,7 +747,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		setCleanup(renderedComponent.cleanup)
 
 		const documentQueries = within(document.body)
-		expect((documentQueries.getByRole('button', { name: 'Reporting' }) as HTMLElement).getAttribute('aria-pressed')).toBe('true')
+		expect(documentQueries.getByRole('tab', { name: 'Reporting' }).getAttribute('aria-selected')).toBe('true')
 
 		expect(documentQueries.queryByRole('tab', { name: 'Withdraw Escalation Deposits' })).toBeNull()
 		expect(selectedViews).toEqual([])
@@ -766,7 +768,11 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		setCleanup(renderedComponent.cleanup)
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getAllByRole('heading', { name: 'Question' }).length).toBe(1)
+		expect(documentQueries.queryByRole('heading', { name: 'Question' })).toBeNull()
+		const objectHeader = document.body.querySelector('.sticky-object-context')
+		if (!(objectHeader instanceof HTMLElement)) throw new Error('Expected the selected-pool object header')
+		expect(within(objectHeader).getByRole('heading', { name: 'Will this resolve?' })).not.toBeNull()
+		expect(documentQueries.getAllByText('Question description')).toHaveLength(1)
 		expect(documentQueries.getByRole('heading', { name: 'Settle Escalation Deposits' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Reporting Context' })).toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Report Outcome' })).not.toBeNull()

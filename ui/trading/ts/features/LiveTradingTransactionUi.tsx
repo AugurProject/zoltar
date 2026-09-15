@@ -1,5 +1,10 @@
 import * as payoutCopy from '../copy/payout.js'
+import type { ComponentChildren } from 'preact'
 import { useId } from 'preact/hooks'
+import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
+import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
+import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
+import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
 import type { Hash } from '@zoltar/core-shared/evm/ethereum'
 import { bigintToSafeNumber, formatRoundedUnits, formatUnits } from '../lib/format.js'
 import { formatCollateralEth, formatOutcomeQuantity, type ShareValueRate } from '../lib/shareValue.js'
@@ -69,7 +74,7 @@ export function renderLiveTradeSummary(quote: LiveTradeSummaryQuote, side: 'YES'
 				]}
 			/>
 			{quote.kind === 'entry' ? (
-				<p class='field-note'>
+				<p class='detail payout-note'>
 					<strong>{payoutCopy.conditionalPayout(formatCollateralEth(quote.value.result.totalLongShares, quote.value.market), side)}</strong>
 					{' · '}
 					{payoutCopy.currentBacking}
@@ -92,55 +97,48 @@ export function TradingTransactionHash({ hash }: { hash: Hash }) {
 	)
 }
 
+/** Labelled form field: the label targets the control so validation text can follow the input. */
+export function TradingField({ id, label, children }: { id: string; label: ComponentChildren; children: ComponentChildren }) {
+	return (
+		<div class='field'>
+			<label for={id}>
+				<span>{label}</span>
+			</label>
+			{children}
+		</div>
+	)
+}
+
 export function ExecutionProtectionFields({ slippage, validityMinutes, disabled, onSlippageInput, onValidityInput }: { slippage: string; validityMinutes: string; disabled: boolean; onSlippageInput(value: string): void; onValidityInput(value: string): void }) {
 	const slippageBps = parseSlippageBps(slippage)
 	const parsedValidityMinutes = parseTransactionValidityMinutes(validityMinutes)
 	const fieldId = useId()
-	const slippageErrorId = `${fieldId}-slippage-error`
-	const validityErrorId = `${fieldId}-validity-error`
+	const slippageId = `${fieldId}-slippage`
+	const validityId = `${fieldId}-validity`
 	return (
-		<fieldset class='execution-settings'>
-			<legend>{workflowCopy.transactionProtection}</legend>
-			<div class='execution-settings__fields'>
-				<label class='field'>
-					<span>{workflowCopy.slippageTolerance}</span>
-					<div class='amount-input'>
-						<input value={slippage} disabled={disabled} inputMode='decimal' aria-invalid={slippageBps === undefined} aria-describedby={slippageBps === undefined ? slippageErrorId : undefined} onInput={event => onSlippageInput(event.currentTarget.value)} />
-						<span>{workflowCopy.percent}</span>
-					</div>
-					{slippageBps === undefined ? (
-						<small class='error' id={slippageErrorId} role='alert'>
-							{workflowCopy.slippageValidation}
-						</small>
-					) : null}
-				</label>
-				<label class='field'>
-					<span>{workflowCopy.transactionValidFor}</span>
-					<div class='amount-input'>
-						<input value={validityMinutes} disabled={disabled} inputMode='numeric' aria-invalid={parsedValidityMinutes === undefined} aria-describedby={parsedValidityMinutes === undefined ? validityErrorId : undefined} onInput={event => onValidityInput(event.currentTarget.value)} />
-						<span>{workflowCopy.minutes}</span>
-					</div>
-					{parsedValidityMinutes === undefined ? (
-						<small class='error' id={validityErrorId} role='alert'>
-							{workflowCopy.validityValidation}
-						</small>
-					) : null}
-				</label>
-			</div>
-			<small>{workflowCopy.transactionProtectionGuidance}</small>
-		</fieldset>
+		<WorkflowSubsection className='execution-protection' title={workflowCopy.transactionProtection}>
+			<DataGrid columns={2}>
+				<TradingField id={slippageId} label={workflowCopy.slippageTolerance}>
+					<FormInput id={slippageId} value={slippage} disabled={disabled} inputMode='decimal' adornment={workflowCopy.percent} error={slippageBps === undefined ? workflowCopy.slippageValidation : undefined} onInput={event => onSlippageInput(event.currentTarget.value)} />
+				</TradingField>
+				<TradingField id={validityId} label={workflowCopy.transactionValidFor}>
+					<FormInput id={validityId} value={validityMinutes} disabled={disabled} inputMode='numeric' adornment={workflowCopy.minutes} error={parsedValidityMinutes === undefined ? workflowCopy.validityValidation : undefined} onInput={event => onValidityInput(event.currentTarget.value)} />
+				</TradingField>
+			</DataGrid>
+			<p class='detail'>{workflowCopy.transactionProtectionGuidance}</p>
+		</WorkflowSubsection>
 	)
 }
 
 export function BalanceLoadError({ message, retry, disabled = false }: { message: string; retry(): Promise<void>; disabled?: boolean }) {
 	return (
 		<div class='balance-recovery'>
-			<p class='error' role='alert'>
-				{message}
-			</p>
-			<button class='secondary-action' disabled={disabled} onClick={() => void retry()}>
-				{workflowCopy.retryBalances}
-			</button>
+			<ErrorNotice message={message} />
+			<div class='actions'>
+				<button class='secondary' type='button' disabled={disabled} onClick={() => void retry()}>
+					{workflowCopy.retryBalances}
+				</button>
+			</div>
 		</div>
 	)
 }
