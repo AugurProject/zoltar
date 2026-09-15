@@ -61,6 +61,7 @@ function settings(rpcUrl: string, uiPort: number, privateKey?: Hex): PersistedOp
 			quorumRpcUrls: [],
 			rep: address,
 			uniswapV2Enabled: false,
+			uniswapV3Enabled: true,
 			uniswapV4Enabled: false,
 			uniswapFactory: address,
 			uniswapQuoter: address,
@@ -354,7 +355,7 @@ describe('file-only startup configuration', () => {
 		const initial = await waitForJson(origin, '/api/configuration')
 		const initialConfiguration = initial['configuration']
 		expect(initialConfiguration).toMatchObject({ network: 'mainnet', networkConfigured: false })
-		expect(initialConfiguration).toMatchObject({ deployment: { uniswapV2Enabled: true, uniswapV4Enabled: false } })
+		expect(initialConfiguration).toMatchObject({ deployment: { uniswapV2Enabled: true, uniswapV3Enabled: true, uniswapV4Enabled: false } })
 		expect((await waitForJson(origin, '/api/state'))['status']).toBe('paused')
 		for (const [endpoint, body] of [
 			['/api/signer', { privateKey: '', rememberSigner: false }],

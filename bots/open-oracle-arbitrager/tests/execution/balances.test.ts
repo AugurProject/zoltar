@@ -3,10 +3,14 @@ import { createPublicClient, decodeFunctionData, encodeAbiParameters, getAddress
 import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { erc20Abi, multicall3Abi, quoterAbi } from '#contracts/abi'
 import { networkConfiguration } from '#config/network'
-import { loadBalances } from '#execution/dispute-execution'
+import { loadBalances } from '#execution/balances'
 import { multicallProvider } from '../helpers/multicall-provider.ts'
 
+import type { Pool } from '#core/operator-types'
+
 const network = networkConfiguration('sepolia')
+const config = { network, router: network.factory, v2Router: undefined, v4PoolManager: undefined, v4Quoter: undefined }
+const pools: Pool[] = ([100, 500, 3000, 10000] as const).map(fee => ({ venue: 'uniswap-v3', address: network.factory, fee, token: network.rep, liquidity: 1n, spotTick: 0n, twapTick: 0n }))
 const wallet = { account: privateKeyToAccount(`0x${'11'.repeat(32)}`) }
 const account = wallet.account.address
 const healthyToken = getAddress('0x0000000000000000000000000000000000000001')
@@ -48,16 +52,16 @@ test('reads inventory in one batch, tolerates a reverting token, and values REP 
 				},
 			}),
 		})
-		const balances = await loadBalances(client, wallet, { network }, [healthyToken, revertingToken], 100n)
+		const balances = await loadBalances(client, wallet, config, [healthyToken, revertingToken], pools, 100n)
 		expect(balances?.raw).toEqual({ attoWeth: 10n ** 18n, ethAttoEth: 5n * 10n ** 18n, repAttoRep: 100n * 10n ** 18n, tokens: new Map([[healthyToken.toLowerCase(), 42n]]) })
 		expect(balances?.snapshot).toEqual({ availableEth: '5', availableRep: '100', availableWeth: '1', repValueWeth: '3', totalValueWeth: '9' })
-		// One batch for the five balances, one for the four REP valuation tiers.
-		expect(batches).toBe(2)
-		expect(blockTags).toHaveLength(9)
+		// One batch for the five balances, one per enabled REP valuation tier.
+		expect(batches).toBe(5)
+		expect(blockTags).toHaveLength(17)
 		expect(blockTags.every(blockTag => blockTag === '0x64')).toBeTrue()
 		expect(logged).toHaveBeenCalledTimes(1)
 		expect(String(logged.mock.calls[0]?.[0])).toContain(`token=${revertingToken} balanceUnavailable=`)
-		expect(await loadBalances(client, undefined, { network }, [healthyToken])).toBeUndefined()
+		expect(await loadBalances(client, undefined, config, [healthyToken], pools, 100n)).toBeUndefined()
 	} finally {
 		logged.mockRestore()
 	}

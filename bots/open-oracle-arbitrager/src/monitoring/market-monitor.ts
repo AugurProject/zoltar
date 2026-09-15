@@ -6,6 +6,7 @@ import { bigintToSafeNumber, formatUnits, getAddress, isAddress, type Address, z
 import { augurMarketAbi, augurUniverseAbi, constantProductFactoryAbi, constantProductPairAbi, erc20Abi, factoryAbi, poolAbi } from '#contracts/abi'
 import { batchRead, batchValue, type BatchCall, type BatchReader, type BatchResult } from '#core/batch-read'
 import { requiredBigint, requiredRpcAddress, requiredTuple } from '#core/rpc-validation'
+import { logMarketDiscoveryFailure } from '#monitoring/market-discovery-status'
 import { childPayouts, payoutDistributionHash } from '#monitoring/augur-payouts'
 import { constantProductSpotPriceWeth, poolSpotPriceWeth } from '#monitoring/spot-prices'
 
@@ -174,28 +175,42 @@ export async function discoverTokenPools(
 	parameters: {
 		blockNumber?: bigint | undefined
 		chainId: number
-		factory: Address
+		factory: Address | undefined
 		multicall3: Address
 		tokens: readonly Address[]
 		weth: Address
 	},
 ): Promise<readonly DiscoveredTokenPools[]> {
-	await requireDeployedContractsOnce(client, [{ name: 'Uniswap V3 factory', address: parameters.factory }], parameters.blockNumber)
+	let factory = parameters.factory
+	if (factory !== undefined) {
+		try {
+			await requireDeployedContractsOnce(client, [{ name: 'Uniswap V3 factory', address: factory }], parameters.blockNumber)
+		} catch (error) {
+			logMarketDiscoveryFailure('V3 discovery skipped: ', error)
+			factory = undefined
+		}
+	}
+	const fees = factory === undefined ? [] : UNISWAP_V3_FEES
 	const venues = parameters.chainId === 1 ? MAINNET_CONSTANT_PRODUCT_VENUES : []
 	const calls = parameters.tokens.flatMap(token => [
-		...UNISWAP_V3_FEES.map(fee => ({ address: parameters.factory, abi: factoryAbi, functionName: 'getPool', args: [parameters.weth, token, fee] }) satisfies BatchCall),
+		...(factory === undefined ? [] : fees.map(fee => ({ address: factory, abi: factoryAbi, functionName: 'getPool', args: [parameters.weth, token, fee] }) satisfies BatchCall)),
 		...venues.map(venue => ({ address: venue.factory, abi: constantProductFactoryAbi, functionName: 'getPair', args: [token, parameters.weth] }) satisfies BatchCall),
 	])
 	const results = await batchRead(client, parameters.multicall3, calls, parameters.blockNumber)
-	const stride = UNISWAP_V3_FEES.length + venues.length
+	const stride = fees.length + venues.length
 	return parameters.tokens.map((token, tokenIndex) => {
 		const base = tokenIndex * stride
-		const v3 = UNISWAP_V3_FEES.flatMap((fee, feeIndex) => {
-			const address = requiredRpcAddress(batchValue(results[base + feeIndex], 'Uniswap V3 factory getPool'), 'Uniswap V3 factory getPool')
-			return address === zeroAddress ? [] : [{ address, fee }]
+		const v3 = fees.flatMap((fee, feeIndex) => {
+			try {
+				const address = requiredRpcAddress(batchValue(results[base + feeIndex], 'Uniswap V3 factory getPool'), 'Uniswap V3 factory getPool')
+				return address === zeroAddress ? [] : [{ address, fee }]
+			} catch (error) {
+				logMarketDiscoveryFailure(`V3 fee=${fee.toString()} discovery skipped: `, error)
+				return []
+			}
 		})
 		const constantProduct = venues.flatMap((venue, venueIndex) => {
-			const result = results[base + UNISWAP_V3_FEES.length + venueIndex]
+			const result = results[base + fees.length + venueIndex]
 			if (result === undefined || result.status === 'failure') {
 				console.error(`venue=${venue.name} token=${token} skipped=${result === undefined ? 'missing pair read' : result.error.message}`)
 				return []

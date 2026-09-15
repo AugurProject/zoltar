@@ -142,7 +142,7 @@ test('clears deployment unavailability on recovery but preserves an empty-liquid
 	completeSuccessfulPoll(state, undefined, false)
 	expect(state.marketAvailability).toBeUndefined()
 	expect(state.status).toBe('running')
-	state.marketAvailability = { kind: 'no-v3-liquidity', chainId: 1 }
+	state.marketAvailability = { kind: 'no-execution-pools', chainId: 1 }
 	completeSuccessfulPoll(state, undefined, false)
-	expect(state.marketAvailability?.kind).toBe('no-v3-liquidity')
+	expect(state.marketAvailability?.kind).toBe('no-execution-pools')
 })

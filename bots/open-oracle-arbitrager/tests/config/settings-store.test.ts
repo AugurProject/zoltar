@@ -48,6 +48,7 @@ function settings(privateKeyValue: Hex | undefined) {
 			quorumRpcUrls: ['https://quorum.example/'],
 			rep: canonicalNetworkDeployment(mainnet).rep,
 			uniswapV2Enabled: false,
+			uniswapV3Enabled: true,
 			uniswapV4Enabled: false,
 			uniswapFactory: canonicalUniswapDeployment(1).factory,
 			uniswapQuoter: canonicalUniswapDeployment(1).quoter,
@@ -507,8 +508,8 @@ test('preserves default router intent through serialized network changes', () =>
 })
 
 test('stores only venue switches and derives addresses again on load', () => {
-	const parsed = parseOperatorSettings({ ...example, deployment: { ...example.deployment, uniswapV2Enabled: false, uniswapV4Enabled: true } })
+	const parsed = parseOperatorSettings({ ...example, deployment: { ...example.deployment, uniswapV2Enabled: false, uniswapV3Enabled: true, uniswapV4Enabled: true } })
 	const stored = serializeOperatorSettings(parsed)
-	expect(stored.deployment).toEqual({ coordinatorAddresses: [], deploymentManifest: undefined, executor: undefined, quorumRpcUrls: [], uniswapV2Enabled: false, uniswapV4Enabled: true })
+	expect(stored.deployment).toEqual({ coordinatorAddresses: [], deploymentManifest: undefined, executor: undefined, quorumRpcUrls: [], uniswapV2Enabled: false, uniswapV3Enabled: true, uniswapV4Enabled: true })
 	expect(parseOperatorSettings(JSON.parse(JSON.stringify(stored))).deployment).toEqual(parsed.deployment)
 })

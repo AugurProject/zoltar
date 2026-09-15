@@ -76,6 +76,7 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 		quorumRpcUrls: [],
 		rep: address,
 		uniswapV2Enabled: false,
+		uniswapV3Enabled: true,
 		uniswapV4Enabled: false,
 		uniswapFactory: address,
 		uniswapQuoter: address,
@@ -408,12 +409,14 @@ test('deployment form saves venue switches without configurable Uniswap addresse
 	expect(settings.deployment.uniswapV2Router).toBeUndefined()
 	expect(restored().uniswapV2Router).toBe(getAddress('0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D'))
 	element(window, 'deployment-v2-enabled', window.HTMLInputElement).checked = false
+	element(window, 'deployment-v3-enabled', window.HTMLInputElement).checked = false
 	element(window, 'deployment-v4-enabled', window.HTMLInputElement).checked = true
 	await save()
 	expect(settings.deployment.uniswapV4PoolManager).toBeDefined()
 	expect(settings.deployment.uniswapV4Quoter).toBeDefined()
 	expect(restored().uniswapV2Router).toBeUndefined()
-	expect(serializeOperatorSettings(settings).deployment).toEqual({ coordinatorAddresses: [], deploymentManifest: undefined, executor: address, quorumRpcUrls: [], uniswapV2Enabled: false, uniswapV4Enabled: true })
+	expect(restored().uniswapRouter).toBeUndefined()
+	expect(serializeOperatorSettings(settings).deployment).toEqual({ coordinatorAddresses: [], deploymentManifest: undefined, executor: address, quorumRpcUrls: [], uniswapV2Enabled: false, uniswapV3Enabled: false, uniswapV4Enabled: true })
 	element(window, 'deployment-v2-enabled', window.HTMLInputElement).checked = true
 	await save()
 	expect(settings.deployment.uniswapV2Router).toBeUndefined()

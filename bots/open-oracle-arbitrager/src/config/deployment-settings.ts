@@ -14,6 +14,7 @@ export type DeploymentSettings = {
 	quorumRpcUrls: readonly string[]
 	rep: Address
 	uniswapV2Enabled: boolean
+	uniswapV3Enabled: boolean
 	uniswapV4Enabled: boolean
 	uniswapFactory: Address
 	uniswapQuoter: Address
@@ -24,7 +25,7 @@ export type DeploymentSettings = {
 	weth: Address
 }
 
-export type StoredDeploymentSettings = Pick<DeploymentSettings, 'coordinatorAddresses' | 'deploymentManifest' | 'executor' | 'quorumRpcUrls' | 'uniswapV2Enabled' | 'uniswapV4Enabled'>
+export type StoredDeploymentSettings = Pick<DeploymentSettings, 'coordinatorAddresses' | 'deploymentManifest' | 'executor' | 'quorumRpcUrls' | 'uniswapV2Enabled' | 'uniswapV3Enabled' | 'uniswapV4Enabled'>
 
 function record(value: unknown) {
 	return validateRecord(value, 'Deployment settings', 'Deployment settings must be a JSON object')
@@ -54,13 +55,14 @@ function urlArray(value: unknown) {
 
 export function validateDeploymentSettings(value: unknown, network: NetworkName = 'mainnet'): DeploymentSettings {
 	const settings = record(value)
-	const keys = ['coordinatorAddresses', 'deploymentManifest', 'executor', 'openOracle', 'quorumRpcUrls', 'rep', 'uniswapV2Enabled', 'uniswapV4Enabled', 'uniswapFactory', 'uniswapQuoter', 'uniswapRouter', 'uniswapV2Router', 'uniswapV4PoolManager', 'uniswapV4Quoter', 'weth']
+	const keys = ['coordinatorAddresses', 'deploymentManifest', 'executor', 'openOracle', 'quorumRpcUrls', 'rep', 'uniswapV2Enabled', 'uniswapV3Enabled', 'uniswapV4Enabled', 'uniswapFactory', 'uniswapQuoter', 'uniswapRouter', 'uniswapV2Router', 'uniswapV4PoolManager', 'uniswapV4Quoter', 'weth']
 	const requiredKeys = ['coordinatorAddresses', 'quorumRpcUrls']
 	if (Object.keys(settings).some(key => !keys.includes(key)) || requiredKeys.some(key => !(key in settings))) throw new Error('Deployment settings require the supported core deployment fields')
 	const manifest = network === 'mainnet' ? mainnet : sepolia
 	const identity = canonicalNetworkDeployment(manifest)
 	const uniswap = canonicalUniswapDeployment(identity.chainId)
 	const uniswapV2Enabled = venueEnabled(settings['uniswapV2Enabled'], 'Uniswap V2 enabled', true)
+	const uniswapV3Enabled = venueEnabled(settings['uniswapV3Enabled'], 'Uniswap V3 enabled', true)
 	const uniswapV4Enabled = venueEnabled(settings['uniswapV4Enabled'], 'Uniswap V4 enabled', false)
 	return {
 		coordinatorAddresses: addressArray(settings['coordinatorAddresses'], 'Coordinator addresses'),
@@ -70,10 +72,11 @@ export function validateDeploymentSettings(value: unknown, network: NetworkName 
 		quorumRpcUrls: urlArray(settings['quorumRpcUrls']),
 		rep: identity.rep,
 		uniswapV2Enabled,
+		uniswapV3Enabled,
 		uniswapV4Enabled,
 		uniswapFactory: uniswap.factory,
 		uniswapQuoter: uniswap.quoter,
-		uniswapRouter: uniswap.router,
+		uniswapRouter: uniswapV3Enabled ? uniswap.router : undefined,
 		uniswapV2Router: uniswapV2Enabled ? uniswap.v2Router : undefined,
 		uniswapV4PoolManager: uniswapV4Enabled ? uniswap.v4PoolManager : undefined,
 		uniswapV4Quoter: uniswapV4Enabled ? uniswap.v4Quoter : undefined,

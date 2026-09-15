@@ -80,6 +80,7 @@ for (const network of ['mainnet', 'sepolia'] as const) {
 					coordinatorAddresses: [],
 					quorumRpcUrls: [],
 					uniswapV2Enabled: true,
+					uniswapV3Enabled: true,
 					uniswapV4Enabled: true,
 					uniswapFactory: supplied,
 					uniswapQuoter: supplied,
@@ -98,15 +99,15 @@ for (const network of ['mainnet', 'sepolia'] as const) {
 }
 
 test('restores all enabled venues through a serialized network round trip', () => {
-	const mainnet = validateDeploymentSettings({ coordinatorAddresses: [], quorumRpcUrls: [], uniswapV2Enabled: true, uniswapV4Enabled: true }, 'mainnet')
+	const mainnet = validateDeploymentSettings({ coordinatorAddresses: [], quorumRpcUrls: [], uniswapV2Enabled: true, uniswapV3Enabled: true, uniswapV4Enabled: true }, 'mainnet')
 	const sepolia = validateDeploymentSettings(JSON.parse(JSON.stringify(mainnet)), 'sepolia')
 	expect(sepolia.uniswapV2Router).toBeUndefined()
-	expect(sepolia).toMatchObject({ uniswapV2Enabled: true, uniswapV4Enabled: true })
+	expect(sepolia).toMatchObject({ uniswapV2Enabled: true, uniswapV3Enabled: true, uniswapV4Enabled: true })
 	expect(validateDeploymentSettings(JSON.parse(JSON.stringify(sepolia)), 'mainnet')).toEqual(mainnet)
 })
 
 test('keeps disabled optional venues disabled across networks', () => {
-	const original = { coordinatorAddresses: [], quorumRpcUrls: [], uniswapV2Enabled: false, uniswapV4Enabled: false }
+	const original = { coordinatorAddresses: [], quorumRpcUrls: [], uniswapV2Enabled: false, uniswapV3Enabled: true, uniswapV4Enabled: false }
 	const mainnet = validateDeploymentSettings(original, 'mainnet')
 	const sepolia = validateDeploymentSettings(JSON.parse(JSON.stringify(mainnet)), 'sepolia')
 	const restored = validateDeploymentSettings(JSON.parse(JSON.stringify(sepolia)), 'mainnet')
@@ -122,4 +123,11 @@ test('rejects invalid venue switches', () => {
 	for (const field of ['uniswapV2Enabled', 'uniswapV4Enabled']) {
 		for (const value of ['true', 1, null]) expect(() => validateDeploymentSettings({ ...example.deployment, [field]: value })).toThrow('boolean')
 	}
+})
+
+test('can disable V3 independently while keeping V4 enabled', () => {
+	const settings = validateDeploymentSettings({ coordinatorAddresses: [], quorumRpcUrls: [], uniswapV2Enabled: false, uniswapV3Enabled: false, uniswapV4Enabled: true }, 'sepolia')
+	expect(settings.uniswapRouter).toBeUndefined()
+	expect(settings.uniswapV4PoolManager).toBeDefined()
+	expect(validateDeploymentSettings(JSON.parse(JSON.stringify(settings)), 'mainnet').uniswapRouter).toBeUndefined()
 })

@@ -30,6 +30,7 @@
 		"coordinatorAddresses": [],
 		"quorumRpcUrls": [],
 		"uniswapV2Enabled": true,
+		"uniswapV3Enabled": true,
 		"uniswapV4Enabled": false
 	},
 	"paused": true,

@@ -207,6 +207,7 @@ function lines(id: string) {
 function loadDeployment(deployment: StoredDeploymentSettings) {
 	element<HTMLInputElement>('deployment-executor').value = deployment.executor ?? ''
 	element<HTMLInputElement>('deployment-v2-enabled').checked = deployment.uniswapV2Enabled
+	element<HTMLInputElement>('deployment-v3-enabled').checked = deployment.uniswapV3Enabled
 	element<HTMLInputElement>('deployment-v4-enabled').checked = deployment.uniswapV4Enabled
 	element<HTMLTextAreaElement>('deployment-coordinators').value = deployment.coordinatorAddresses.join('\n')
 	element<HTMLTextAreaElement>('deployment-quorum-rpcs').value = deployment.quorumRpcUrls.join('\n')
@@ -585,7 +586,7 @@ function isSubmissionSettings(value: unknown): value is SubmissionSettings {
 
 function isDeploymentSettings(value: unknown): value is StoredDeploymentSettings {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
-	for (const key of ['uniswapV2Enabled', 'uniswapV4Enabled']) {
+	for (const key of ['uniswapV2Enabled', 'uniswapV3Enabled', 'uniswapV4Enabled']) {
 		if (typeof Reflect.get(value, key) !== 'boolean') return false
 	}
 	for (const key of ['executor']) {
@@ -1443,6 +1444,7 @@ element<HTMLFormElement>('deployment-form').addEventListener('submit', async eve
 			executor: optionalInput('deployment-executor'),
 			quorumRpcUrls: lines('deployment-quorum-rpcs'),
 			uniswapV2Enabled: element<HTMLInputElement>('deployment-v2-enabled').checked,
+			uniswapV3Enabled: element<HTMLInputElement>('deployment-v3-enabled').checked,
 			uniswapV4Enabled: element<HTMLInputElement>('deployment-v4-enabled').checked,
 		}
 		const response = await api<{ deployment: DeploymentSettings }>('/api/deployment', {

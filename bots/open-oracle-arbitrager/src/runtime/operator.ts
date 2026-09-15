@@ -6,7 +6,8 @@ import { constantProductPairAbi } from '#contracts/abi'
 import type { ExecutionCandidate } from '#core/operator-types'
 import { positionConsumesRisk } from '#core/safety-controls'
 import { assertStoredExecutorDeploymentIntent } from '#execution/create2-executor'
-import { executeDispute, loadBalances } from '#execution/dispute-execution'
+import { executeDispute } from '#execution/dispute-execution'
+import { loadBalances } from '#execution/balances'
 import type { ExecutionLockManager } from '#execution/execution-locks'
 import { canonicalBlockHashWithQuorum, executionFailureDecision, executionTokenAllowed, isExecutionPausedError, selectBestExecution } from '#execution/execution-orchestration'
 import { executorDeploymentIntentPath, loadExecutorDeploymentIntentForChain } from '#execution/executor-deployment-store'
@@ -17,7 +18,8 @@ import { loadApprovedUniverses } from '#monitoring/approved-universes'
 import { checkConnectivity, checkSubmissionEndpoints, endpointLabel } from '#monitoring/connectivity'
 import { logMarketDiscoveryFailure, recordMarketDiscoveryFailure, recordObservedHead } from '#monitoring/market-discovery-status'
 import { appendPriceHistory, createTokenCatalogTracker, createTokenMetadataCache, discoverAugurRepTokens, discoverTokenPools, loadPriceHistory, loadTokenMarkets, missingPricePoints, pricePoints } from '#monitoring/market-monitor'
-import { candidateRiskMismatch, poolsForTokens } from '#monitoring/opportunity-evaluation'
+import { candidateRiskMismatch } from '#monitoring/opportunity-evaluation'
+import { poolsForTokens } from '#monitoring/execution-pools'
 import { applyCoordinatorReports, applyLogs, compareLogs, logBlockNumber, reportId, type ActiveReport } from '#monitoring/oracle-log-state'
 import { inspectReport } from '#monitoring/report-inspection'
 import { appendExecutionHistoryIfMissing, decimalSignedEth, ensureExecutionHistoryWritable, gameCapitalSnapshot, loadExecutionHistory, recordOperation, type OperatorState, type OpportunitySnapshot } from '#state/operator-state'
@@ -352,8 +354,6 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						fixedState.deployment = deployment
 						fixedState.executor = deployment.executor
 						fixedState.openOracle = deployment.openOracle
-						config.network.factory = deployment.uniswapFactory
-						config.network.quoter = deployment.uniswapQuoter
 						config.network.rep = deployment.rep
 						config.network.weth = deployment.weth
 						readPool = createRpcEndpointPool([config.connectivity.readRpcUrl, ...config.quorumRpcUrls])
@@ -717,13 +717,14 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						const discoveredPools = await discoverTokenPools(client, {
 							blockNumber,
 							chainId: config.network.chain.id,
-							factory: config.network.factory,
+							factory: config.router === undefined ? undefined : config.network.factory,
 							multicall3: config.network.multicall3,
 							tokens: discoveredTokens,
 							weth: config.network.weth,
 						})
 						if (stopHead()) return
-						const [tokenMarkets, pools, balances] = await Promise.all([
+						const pools = await poolsForTokens(client, config, discoveredPools, blockNumber)
+						const [tokenMarkets, balances] = await Promise.all([
 							loadTokenMarkets(client, {
 								blockNumber,
 								explorerUrl: config.network.explorerUrl,
@@ -733,12 +734,11 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 								wallet: wallet?.account.address,
 								weth: config.network.weth,
 							}),
-							poolsForTokens(client, config, discoveredPools, blockNumber),
-							loadBalances(client, wallet, config, discoveredTokens, blockNumber),
+							loadBalances(client, wallet, config, discoveredTokens, pools, blockNumber),
 						])
 						if (stopHead()) return
 						state.tokenMarkets = tokenMarkets
-						state.marketAvailability = pools.length === 0 ? { kind: 'no-v3-liquidity', chainId: config.network.chain.id } : undefined
+						state.marketAvailability = pools.length === 0 ? { kind: 'no-execution-pools', chainId: config.network.chain.id } : undefined
 						const gasPrice = (block.baseFeePerGas ?? 0n) * 2n + 2n * 10n ** 9n
 						const opportunities: OpportunitySnapshot[] = []
 						const candidates: ExecutionCandidate[] = []

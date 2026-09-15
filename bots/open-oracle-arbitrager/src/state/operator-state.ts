@@ -157,7 +157,7 @@ export type PublicOperationEntry = Omit<OperationEntry, 'details' | 'reason'> & 
 	reason?: string | undefined
 }
 
-export type MarketAvailabilityNotice = ({ kind: 'missing-deployment' } & MissingContractDeployment) | { kind: 'no-v3-liquidity'; chainId: number }
+export type MarketAvailabilityNotice = ({ kind: 'missing-deployment' } & MissingContractDeployment) | { kind: 'no-execution-pools'; chainId: number }
 
 type PollStatus = {
 	marketAvailability?: MarketAvailabilityNotice | undefined
@@ -944,7 +944,7 @@ export function operatorSnapshot(
 			},
 		},
 		connectivity,
-		deployment: fixed.deployment ?? validateDeploymentSettings({ coordinatorAddresses: [], executor: fixed.executor, quorumRpcUrls: [], uniswapV2Enabled: false, uniswapV4Enabled: false }, fixed.network),
+		deployment: fixed.deployment ?? validateDeploymentSettings({ coordinatorAddresses: [], executor: fixed.executor, quorumRpcUrls: [], uniswapV2Enabled: false, uniswapV3Enabled: false, uniswapV4Enabled: false }, fixed.network),
 		totalActualGasCostEth: sumDecimalWeth(state.executionHistory, 'actualGasCostEth'),
 		totalEstimatedNetProfitEth: sumDecimalWeth(state.executionHistory, 'estimatedNetProfitWeth'),
 		totalEstimatedNetProfitWeth: sumDecimalWeth(state.executionHistory, 'estimatedNetProfitWeth'),

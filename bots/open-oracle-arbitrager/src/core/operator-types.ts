@@ -10,12 +10,8 @@ import type { OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOra
 export type Pool = {
 	address: Address
 	fee: (typeof STANDARD_UNISWAP_FEES)[number]
-	liquidity: bigint
-	spotTick: bigint
 	token: Address
-	twapTick: bigint
-	v2Pair?: Address | undefined
-}
+} & ({ venue: 'uniswap-v3'; liquidity: bigint; spotTick: bigint; twapTick: bigint } | { venue: 'uniswap-v2' | 'uniswap-v4' })
 
 export type RawBalances = {
 	ethAttoEth: bigint
