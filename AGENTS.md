@@ -114,7 +114,7 @@ Run `bun run knip` when imports, exports, tests, package scripts or dependencies
 Run `bun run check:generated-clean` only for CI/release freshness work or when contracts, generation scripts, shared build output, UI contract artifacts, or artifact policy change.
 
 Generated outputs are intentionally untracked, except for the documentation outputs, the
-shared bot ABI module, the arbitrager generated TypeScript, AugurScan metadata, and the vendored deployment input
+shared bot ABI module, the arbitrager generated TypeScript, and the vendored deployment input
 listed below. The documentation outputs are tracked because the static documentation site loads them directly;
 `bun run docs:check-charts`, `bun run docs:check-runtime`, `bun run docs:check-contract-reference`, and
 `bun run docs:check-index` enforce their freshness. `bun run check:uniswap-deployment-artifact`
@@ -122,10 +122,12 @@ pins the deployment input and prevents its large upstream packages from entering
 The shared bot ABI module is tracked so the liquidator and arbitrager container images resolve it
 without Solidity artifacts (local `typecheck` and `test` scripts still ensure the artifacts first);
 `cd bots/shared && bun run check:generated` enforces its freshness.
-AugurScan metadata is tracked so its runtime image can decode contracts without compiler artifacts.
-`cd augurScan && bun run metadata:check` compares generated contract routes and manifests,
-checks compiled ABI freshness, and verifies dependency ABI checksums against reviewed source pins.
-Dependency refreshes download pinned artifacts explicitly; ordinary generation and checks stay offline.
+AugurScan ABI catalogs, contract routes, and network manifests are ignored build outputs.
+`cd augurScan && bun run metadata:build` generates them from Solidity sources, deployment metadata,
+and reviewed dependency source pins. Build, typecheck, and test entry points prepare these outputs
+automatically; Docker generates them in a build stage and copies them into the runtime image.
+The first build fetches pinned dependency artifacts and verifies their checksums; later builds reuse
+verified local copies. `bun run metadata:check` checks the generated results without changing them.
 
 | Output | Source or command |
 | --- | --- |
@@ -151,8 +153,8 @@ Dependency refreshes download pinned artifacts explicitly; ordinary generation a
 | `bots/open-oracle-arbitrager/src/contracts/artifacts.generated.ts` and `bots/open-oracle-arbitrager/tests/contracts/harness-artifacts.generated.ts` | `cd bots/open-oracle-arbitrager && bun run compile-contracts`; validate with `bun run check:generated` |
 | `bots/open-oracle-arbitrager/src/contracts/executor-abi.generated.ts` | `cd bots/open-oracle-arbitrager && bun run generate:abi`; validate with `bun run check:generated` |
 | `scripts/artifacts/uniswap-deployment.json` | Pinned bytecode from the upstream package versions recorded in the artifact; validate with `bun run check:uniswap-deployment-artifact` |
-| `augurScan/config/abis.json`, `augurScan/config/manifests/*.json`, and `augurScan/config/system-contracts.generated.ts` | `cd augurScan && bun run metadata:snapshot`; validate with `bun run metadata:check` in that package |
-| `augurScan/config/dependency-abis.json` | `cd augurScan && bun run metadata:dependencies`, using reviewed URLs and SHA-256 pins in `config/dependency-abi-sources.json`; validate with `bun run metadata:check` in that package |
+| `augurScan/config/abis.json`, `augurScan/config/manifests/*.json`, and `augurScan/config/system-contracts.generated.ts` | `cd augurScan && bun run metadata:build`; validate with `bun run metadata:check` in that package |
+| `augurScan/config/dependency-abis.json` | `cd augurScan && bun run metadata:build` (or `metadata:dependencies` for an explicit refresh), using reviewed URLs and SHA-256 pins in `config/dependency-abi-sources.json`; validate with `bun run metadata:check` in that package |
 
 Do not regenerate or commit these outputs unless the task requires them or a required check reports a missing expected artifact. A deployment workflow that adds another tracked generated artifact must update this policy and add a dirty-diff freshness check in the same change.
 

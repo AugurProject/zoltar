@@ -1,8 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import { cp, mkdir, mkdtemp, readFile, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { basename, dirname, join } from 'node:path'
+import { basename, dirname, join, relative } from 'node:path'
 import { dockerInstructions, parseDockerfile, requireDockerStage } from '../../../tooling/testing/packaging-parsers.ts'
+import { augurScanMetadataOutputs } from '../../../tooling/repo/projects.ts'
 
 const windowsLauncher = join(import.meta.dir, '..', '..', 'start.bat')
 const rootDockerIgnore = join(import.meta.dir, '..', '..', '..', '.dockerignore')
@@ -15,15 +16,42 @@ const rootGitIgnore = join(import.meta.dir, '..', '..', '..', '.gitignore')
 describe('Docker packaging', () => {
 	test('loads shared helper consumers from the runtime image source copies', async () => {
 		const repositoryRoot = join(import.meta.dir, '..', '..', '..')
-		const runtime = requireDockerStage(parseDockerfile(await readFile(dockerfile, 'utf8')), 'runtime')
+		const stages = parseDockerfile(await readFile(dockerfile, 'utf8'))
+		const runtime = requireDockerStage(stages, 'runtime')
+		const metadataBuild = requireDockerStage(stages, 'metadata-build')
 		const workspace = await mkdtemp(join(tmpdir(), 'augurscan-runtime-'))
+		const buildWorkspace = await mkdtemp(join(tmpdir(), 'augurscan-image-metadata-'))
 		try {
-			for (const copy of dockerInstructions(runtime, 'COPY').filter(value => value.startsWith('shared/') || value.startsWith('augurScan/src ') || value.startsWith('augurScan/config ') || value.startsWith('augurScan/scripts/'))) {
+			for (const copy of dockerInstructions(metadataBuild, 'COPY')) {
+				const [source, destination] = copy.split(/\s+/u)
+				if (source === undefined || destination === undefined) throw new Error(`Invalid metadata source COPY: ${copy}`)
+				await mkdir(dirname(join(buildWorkspace, destination)), { recursive: true })
+				await cp(join(repositoryRoot, source), join(buildWorkspace, destination), { recursive: true })
+			}
+			// Reuse verified compiler/dependency caches, as CI does. Scanner routes
+			// and manifests must be produced by the actual image build command.
+			for (const source of ['augurScan/package.json', 'solidity/.contract-hash.json', 'solidity/artifacts/Contracts.json', 'augurScan/config/dependency-abis.json']) {
+				await mkdir(dirname(join(buildWorkspace, source)), { recursive: true })
+				await cp(join(repositoryRoot, source), join(buildWorkspace, source))
+			}
+			for (const directory of ['node_modules', 'solidity/node_modules']) await symlink(join(repositoryRoot, directory), join(buildWorkspace, directory), 'dir')
+			const buildCommand = dockerInstructions(metadataBuild, 'RUN').find(command => command.includes('metadata:build'))
+			if (buildCommand === undefined) throw new Error('Runtime metadata has no Docker build command')
+			const build = Bun.spawn(buildCommand.split(/\s+/u), { cwd: buildWorkspace, stdout: 'pipe', stderr: 'pipe' })
+			const [buildStatus, buildOutput, buildErrors] = await Promise.all([build.exited, new Response(build.stdout).text(), new Response(build.stderr).text()])
+			expect(buildStatus, `${buildOutput}\n${buildErrors}`).toBe(0)
+			for (const copy of dockerInstructions(runtime, 'COPY').filter(value => value.startsWith('shared/') || value.startsWith('augurScan/src ') || value.startsWith('augurScan/config ') || value.startsWith('augurScan/scripts/') || value.startsWith('--from=metadata-build '))) {
+				if (copy.startsWith('--from=metadata-build ')) {
+					const [, source, destination] = copy.split(/\s+/u)
+					if (source === undefined || destination === undefined) throw new Error(`Invalid generated metadata COPY: ${copy}`)
+					await cp(join(buildWorkspace, source.replace('/workspace/', '')), join(workspace, destination), { recursive: true })
+					continue
+				}
 				const [source, destination] = copy.split(/\s+/u)
 				if (source === undefined || destination === undefined) throw new Error(`Invalid runtime source COPY: ${copy}`)
 				const target = join(workspace, destination, source.endsWith('.json') && destination.endsWith('/') ? basename(source) : '')
 				await mkdir(dirname(target), { recursive: true })
-				await cp(join(repositoryRoot, source), target, { recursive: true })
+				await cp(join(repositoryRoot, source), target, { recursive: true, filter: file => !augurScanMetadataOutputs.includes(relative(repositoryRoot, file)) })
 			}
 			await symlink(join(repositoryRoot, 'node_modules'), join(workspace, 'node_modules'), 'dir')
 			await symlink(join(repositoryRoot, 'shared/core/node_modules'), join(workspace, 'shared/core/node_modules'), 'dir')
@@ -36,8 +64,9 @@ describe('Docker packaging', () => {
 			expect(report.stdout.toString()).toContain('metadata:unknown-calls')
 		} finally {
 			await rm(workspace, { recursive: true, force: true })
+			await rm(buildWorkspace, { recursive: true, force: true })
 		}
-	})
+	}, 120_000)
 
 	test('provides a location-independent Windows launcher', async () => {
 		const source = (await readFile(windowsLauncher, 'utf8')).replaceAll('\r\n', '\n')
@@ -56,7 +85,7 @@ describe('Docker packaging', () => {
 		const source = await readFile(dockerfile, 'utf8')
 		expect(source).toContain('FROM workspace AS browser-build')
 		expect(source).toContain('COPY augurScan/browser ./browser')
-		expect(source).toContain('RUN bun run build')
+		expect(source).toContain('RUN bun run build:browser')
 		const runtimeStage = source.slice(source.indexOf('FROM oven/bun:${BUN_VERSION}-alpine AS runtime'))
 		expect(runtimeStage).toContain('COPY --from=browser-build /workspace/augurScan/public ./augurScan/public')
 		expect(runtimeStage).toContain('COPY augurScan/schema.sql ./augurScan/schema.sql')
