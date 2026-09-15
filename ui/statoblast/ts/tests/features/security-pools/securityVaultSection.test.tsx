@@ -176,6 +176,39 @@ describe('SecurityVaultSection', () => {
 		}
 	})
 
+	test('does not guess execution or retain a queued label after refreshed active state is empty', async () => {
+		const rendered = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					oracleManagerDetails: createOracleManagerDetails({ isPriceValid: true, stagedOperations: [], activeStagedOperationCount: 0n }),
+					securityVaultResult: { action: 'adjustVaultBackingFactor', hash: '0x01', queuedOperation: { operation: 'adjustVaultBackingFactor', operationId: 42n, isPendingSlot: true } },
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		expect(within(document.body).getByText('Backing ratio change submitted')).toBeDefined()
+		expect(within(document.body).queryByText('Backing ratio change queued')).toBeNull()
+		expect(within(document.body).queryByText('Backing ratio changed')).toBeNull()
+	})
+
+	test.each([
+		['executed', 'Backing ratio changed'],
+		['failed', 'Backing ratio change failed'],
+		['expired', 'Queued operation expired'],
+		['superseded', 'Target change replaced'],
+	] as const)('renders the reconciled %s state with the original queued receipt', async (status, title) => {
+		const rendered = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					securityVaultResult: { action: 'adjustVaultBackingFactor', hash: '0x01', queuedOperation: { operation: 'adjustVaultBackingFactor', operationId: 42n, isPendingSlot: true }, queuedOperationState: { status } },
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		expect(within(document.body).getByText(title)).toBeDefined()
+		expect(within(document.body).queryByText('Backing ratio change queued')).toBeNull()
+	})
+
 	test('previews a separate whole-vault adjustment and submits its factor', async () => {
 		let submitted: string | undefined
 		const rendered = await renderIntoDocument(

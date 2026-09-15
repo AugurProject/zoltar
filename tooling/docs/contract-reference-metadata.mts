@@ -1,3 +1,5 @@
+export { eventSourceByName } from './contract-reference-event-sources.mjs'
+
 type Interaction = {
 	call: string
 	caller: string
@@ -46,103 +48,6 @@ export function contractPageOutputPath(contractName: string): string {
 	return `${contractPagesDirectory}/${contractName.toLowerCase()}.html`
 }
 export const expectedProductionSoliditySourceFingerprint = 'd15361d2dca6cf6fa7a1da851fc26cee8a16e66bdcfba9d008d7bfde273deac1'
-
-export const eventSourceByName: Record<string, string> = {
-	VaultBadDebtMigrated: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
-	Approval: 'solidity/contracts/IERC20.sol',
-	ApprovalForAll: 'solidity/contracts/statoblast/interfaces/IERC1155.sol',
-	AuctionStarted: 'solidity/contracts/statoblast/interfaces/IUniformPriceDualCapBatchAuction.sol',
-	AwaitingForkContinuationSet: 'solidity/contracts/statoblast/SecurityPool.sol',
-	AuctionFinalized: 'solidity/contracts/statoblast/interfaces/IUniformPriceDualCapBatchAuction.sol',
-	AuthorizationUpdated: 'solidity/contracts/statoblast/interfaces/IShareToken.sol',
-	BidSettled: 'solidity/contracts/statoblast/interfaces/IUniformPriceDualCapBatchAuction.sol',
-	BidSubmitted: 'solidity/contracts/statoblast/interfaces/IUniformPriceDualCapBatchAuction.sol',
-	Burn: 'solidity/contracts/ReputationToken.sol',
-	CarryDepositConsumed: 'solidity/contracts/statoblast/interfaces/IEscalationGame.sol',
-	ChildDisputeStakedRepMaterialized: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
-	ChildPoolLinked: 'solidity/contracts/statoblast/SecurityPoolForker.sol',
-	PoolHeldRepSweptToChild: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
-	ChildRepSplit: 'solidity/contracts/statoblast/SecurityPoolForker.sol',
-	ChildReputationTokenInitialized: 'solidity/contracts/Zoltar.sol',
-	ClaimAuctionProceeds: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
-	ClaimDeposit: 'solidity/contracts/statoblast/EscalationGameState.sol',
-	ClaimForkedEscalationDepositsToWallet: 'solidity/contracts/statoblast/SecurityPoolForker.sol',
-	CompleteSetCreated: 'solidity/contracts/statoblast/interfaces/ISecurityPool.sol',
-	CompleteSetRedeemed: 'solidity/contracts/statoblast/interfaces/ISecurityPool.sol',
-	CoordinatorStateCheckpoint: 'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol',
-	DeployChild: 'solidity/contracts/Zoltar.sol',
-	DeploySecurityPool: 'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol',
-	DepositOnOutcome: 'solidity/contracts/statoblast/interfaces/IEscalationGame.sol',
-	RepDepositedToVault: 'solidity/contracts/statoblast/SecurityPool.sol',
-	DepositToEscalationGame: 'solidity/contracts/statoblast/SecurityPool.sol',
-	EscalationGameSet: 'solidity/contracts/statoblast/SecurityPool.sol',
-	EscalationMigrationEntitlementInitialized: 'solidity/contracts/statoblast/EscalationGameForker.sol',
-	EscalationMigrationEntitlementMaterialized: 'solidity/contracts/statoblast/EscalationGameForker.sol',
-	DisputeStakedRepDrainedAtFork: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
-	TruthAuctionHaircutApplied: 'solidity/contracts/statoblast/EscalationGameState.sol',
-	EthRefundCredited: 'solidity/contracts/statoblast/interfaces/IUniformPriceDualCapBatchAuction.sol',
-	ExecutedStagedOperation: 'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol',
-	ForkContinuationResumed: 'solidity/contracts/statoblast/EscalationGameState.sol',
-	ForkCarryCheckpoint: 'solidity/contracts/statoblast/interfaces/IEscalationGame.sol',
-	ForkedEscrowExported: 'solidity/contracts/statoblast/EscalationGameState.sol',
-	ForkedEscrowRecorded: 'solidity/contracts/statoblast/EscalationGameState.sol',
-	GameContinuedFromFork: 'solidity/contracts/statoblast/EscalationGameState.sol',
-	GameStarted: 'solidity/contracts/statoblast/EscalationGameState.sol',
-	InheritedThresholdTie: 'solidity/contracts/statoblast/interfaces/IEscalationGame.sol',
-	LocalDepositAppended: 'solidity/contracts/statoblast/interfaces/IEscalationGame.sol',
-	LiquidationApprovalConsumed: 'solidity/contracts/statoblast/LiquidationApprovalRegistry.sol',
-	LiquidationApprovalNonceInvalidated: 'solidity/contracts/statoblast/LiquidationApprovalRegistry.sol',
-	LiquidationApprovalReleased: 'solidity/contracts/statoblast/LiquidationApprovalRegistry.sol',
-	LiquidationApprovalReserved: 'solidity/contracts/statoblast/LiquidationApprovalRegistry.sol',
-	LiquidationApprovalRevoked: 'solidity/contracts/statoblast/LiquidationApprovalRegistry.sol',
-	LiquidationApprovalSet: 'solidity/contracts/statoblast/LiquidationApprovalRegistry.sol',
-	LiquidationRouteStaged: 'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol',
-	Migrate: 'solidity/contracts/statoblast/tokens/ShareToken.sol',
-	VaultMigrationCheckpoint: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
-	MigrationRepAdded: 'solidity/contracts/Zoltar.sol',
-	MigrationRepSplit: 'solidity/contracts/Zoltar.sol',
-	Mint: 'solidity/contracts/ReputationToken.sol',
-	NonDecisionReached: 'solidity/contracts/statoblast/interfaces/IEscalationGame.sol',
-	TotalRepBackingUnitsSet: 'solidity/contracts/statoblast/SecurityPool.sol',
-	VaultDepositTargetHealthFactorRecorded: 'solidity/contracts/statoblast/SecurityPool.sol',
-	PendingEthRefundWithdrawn: 'solidity/contracts/statoblast/interfaces/IUniformPriceDualCapBatchAuction.sol',
-	PendingReportRecovered: 'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol',
-	ParentRepLocked: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
-	RepWithdrawnFromVault: 'solidity/contracts/statoblast/SecurityPool.sol',
-	PoolForkModeActivated: 'solidity/contracts/statoblast/SecurityPool.sol',
-	PriceReportRejected: 'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol',
-	PriceReported: 'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol',
-	PriceRequested: 'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol',
-	QuestionCreated: 'solidity/contracts/ZoltarQuestionData.sol',
-	RepRedeemedFromVault: 'solidity/contracts/statoblast/SecurityPool.sol',
-	RepBurned: 'solidity/contracts/Zoltar.sol',
-	ReputationTokenInitialized: 'solidity/contracts/ReputationToken.sol',
-	RepEthPriceSet: 'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol',
-	ResidualRepSweptToSecurityPool: 'solidity/contracts/statoblast/EscalationGameState.sol',
-	ForkContinuationResidualRepBurned: 'solidity/contracts/statoblast/EscalationGameState.sol',
-	SecurityPoolSet: 'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol',
-	SecurityPoolForkSnapshot: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
-	SecurityPoolRegistered: 'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol',
-	ShareTokenSupplySet: 'solidity/contracts/statoblast/SecurityPool.sol',
-	SharesRedeemed: 'solidity/contracts/statoblast/interfaces/ISecurityPool.sol',
-	StagedOperationQueued: 'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol',
-	SystemStateSet: 'solidity/contracts/statoblast/SecurityPool.sol',
-	TruthAuctionFinalized: 'solidity/contracts/statoblast/SecurityPoolForker.sol',
-	TruthAuctionStarted: 'solidity/contracts/statoblast/SecurityPoolForker.sol',
-	TheoreticalSupplySet: 'solidity/contracts/ReputationToken.sol',
-	Transfer: 'solidity/contracts/IERC20.sol',
-	TransferBatch: 'solidity/contracts/statoblast/interfaces/IERC1155.sol',
-	TransferSingle: 'solidity/contracts/statoblast/interfaces/IERC1155.sol',
-	UniverseForked: 'solidity/contracts/Zoltar.sol',
-	PoolAccountingCheckpoint: 'solidity/contracts/statoblast/interfaces/ISecurityPool.sol',
-	VaultAccountingCheckpoint: 'solidity/contracts/statoblast/interfaces/ISecurityPool.sol',
-	VaultBadDebtRecorded: 'solidity/contracts/statoblast/SecurityPool.sol',
-	VaultLiquidated: 'solidity/contracts/statoblast/SecurityPool.sol',
-	VaultEscrowUpdated: 'solidity/contracts/statoblast/EscalationGameState.sol',
-	VaultUnresolvedTotalsExported: 'solidity/contracts/statoblast/EscalationGameState.sol',
-	AuthorizationCanceled: 'solidity/contracts/vendor/authorization/ERC20Authorization.sol',
-	AuthorizationUsed: 'solidity/contracts/vendor/authorization/ERC20Authorization.sol',
-}
 
 export const documentedEventSchemas: Array<{ name: string; parameters: string; sourcePath: string }> = [
 	{
@@ -355,7 +260,7 @@ export const assemblyDelegateCalls: AssemblyDelegateCall[] = [
 	},
 ]
 
-export const referencedEventAbiFingerprint = 'f2064985c1cbe5a64d7f4fe84c920c1a7a80467f457b65a00e8d164d965adf20'
+export const referencedEventAbiFingerprint = '1a2499d591379a5c6941dd10ff7a1d0c1c18f0721c6d60d7ca745711402dc87f'
 
 export const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 	'solidity/contracts/ERC20.sol': {
@@ -957,10 +862,11 @@ export const contractReferences: ContractReference[] = [
 				call: '`updateVaultFees(vault)`',
 				caller: 'Anyone for any address',
 				effect:
-					'First updates pool accrual, then advances the vault fee index and fractional remainder, moves whole assigned fees from reserve to the vault, registers any previously unseen nonzero vault address regardless of economic state, and returns leftover reserve to settlement collateral once a forked pool has checkpointed all fee-eligible capacity ownership. It then reapplies a saved target when the pool is operational, unforked, unresolved, and open to admission, with zero settlement collateral and no vault dispute stake.',
+					'A vault accounting checkpoint: first updates pool accrual, then advances the vault fee index and fractional remainder, moves whole assigned fees from reserve to the vault, registers any previously unseen nonzero vault address regardless of economic state, and returns leftover reserve to settlement collateral once a forked pool has checkpointed all fee-eligible capacity ownership. It then reapplies a saved target when the pool is operational, unforked, unresolved, and open to admission, with zero settlement collateral and no vault dispute stake. Reapplying the target can change capacity and recalculate retention.',
 				declarations: [{ name: 'updateVaultFees' }],
 				preconditions: 'No caller, nonzero-vault, or lifecycle restriction.',
-				signals: 'Accrual `PoolAccountingCheckpoint` when due; `VaultAccountingCheckpoint` when the vault index, remainder, or claimable fee balance changes; an additional `PoolAccountingCheckpoint` when pool accounting changes; no event when neither accrual nor vault or pool accounting changes',
+				signals:
+					'Accrual `PoolAccountingCheckpoint` when due; `VaultAccountingCheckpoint` when the vault index, remainder, or claimable fee balance changes; an additional `PoolAccountingCheckpoint` when pool accounting changes; target synchronization also emits `VaultBackingFactorAdjusted` and capacity accounting checkpoints; no event when neither accrual nor vault or pool accounting changes',
 			},
 			{
 				call: '`withdrawRepFromVault(vault, attoRepAmount)`',

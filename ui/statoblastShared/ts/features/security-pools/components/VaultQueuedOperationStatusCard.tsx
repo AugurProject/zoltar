@@ -6,48 +6,45 @@ import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
-import type { StagedOracleOperation } from '@zoltar/ui-core-shared/types/contracts.js'
-import { isOracleManagerPriceUsable } from '../lib/securityVault.js'
 import type { SecurityVaultSectionProps } from '../../types.js'
 
-type QueuedVaultOperationStatus = 'executed' | 'failed' | 'manual-queued' | 'missing' | 'queued' | 'refreshing' | undefined
+type QueuedVaultOperationStatus = 'executed' | 'failed' | 'expired' | 'superseded' | 'manual-queued' | 'missing' | 'queued' | 'refreshing' | undefined
 type QueuedVaultOperationView = {
 	amount: bigint | undefined
 	isPendingSlot: boolean
 	operationId: bigint
 }
 
-export function getQueuedVaultOperation({ pendingOperation, selectedVaultOwner, securityVaultResult }: { pendingOperation: StagedOracleOperation | undefined; selectedVaultOwner: string; securityVaultResult: SecurityVaultSectionProps['securityVaultResult'] }) {
+export function getQueuedVaultOperation({ oracleManagerDetails, selectedVaultOwner, securityVaultResult }: { oracleManagerDetails: SecurityVaultSectionProps['oracleManagerDetails']; selectedVaultOwner: string; securityVaultResult: SecurityVaultSectionProps['securityVaultResult'] }) {
 	let operation: 'withdrawRep' | 'adjustVaultBackingFactor' | undefined
 	if (securityVaultResult?.action === 'queueWithdrawRep') operation = 'withdrawRep'
 	if (securityVaultResult?.action === 'adjustVaultBackingFactor') operation = 'adjustVaultBackingFactor'
 	if (operation === undefined) return undefined
 	const queued = securityVaultResult?.queuedOperation
-	if (pendingOperation !== undefined && sameAddress(pendingOperation.targetVault, selectedVaultOwner) && pendingOperation.operation === operation && (queued === undefined || pendingOperation.operationId === queued.operationId)) {
-		return { amount: operation === 'withdrawRep' ? pendingOperation.amount : undefined, isPendingSlot: true, operationId: pendingOperation.operationId } satisfies QueuedVaultOperationView
-	}
-	if (queued?.operation === operation) return { amount: undefined, isPendingSlot: queued.isPendingSlot, operationId: queued.operationId } satisfies QueuedVaultOperationView
+	const candidates = [...(oracleManagerDetails?.stagedOperations ?? []), ...(oracleManagerDetails?.pendingOperation === undefined ? [] : [oracleManagerDetails.pendingOperation])]
+	const active = candidates.find(candidate => sameAddress(candidate.targetVault, selectedVaultOwner) && candidate.operation === operation && (queued === undefined || candidate.operationId === queued.operationId))
+	if (active !== undefined) return { amount: operation === 'withdrawRep' ? active.amount : undefined, isPendingSlot: oracleManagerDetails?.pendingSettlementOperationIds.includes(active.operationId) ?? false, operationId: active.operationId } satisfies QueuedVaultOperationView
+	const status = securityVaultResult?.queuedOperationState?.status
+	if (queued?.operation === operation && (oracleManagerDetails === undefined || status === 'queued' || status === 'manual-queued')) return { amount: undefined, isPendingSlot: status === undefined ? queued.isPendingSlot : status === 'queued', operationId: queued.operationId } satisfies QueuedVaultOperationView
 	return undefined
 }
 
 export function getQueuedVaultOperationStatus({
-	currentTimestamp,
 	currentPoolOracleManagerDetails,
 	loadingSecurityVault,
 	queuedVaultOperation,
 	securityVaultResult,
 }: {
-	currentTimestamp: bigint | undefined
 	currentPoolOracleManagerDetails: SecurityVaultSectionProps['oracleManagerDetails']
 	loadingSecurityVault: boolean
 	queuedVaultOperation: ReturnType<typeof getQueuedVaultOperation>
 	securityVaultResult: SecurityVaultSectionProps['securityVaultResult']
 }) {
 	if (securityVaultResult?.action !== 'queueWithdrawRep' && securityVaultResult?.action !== 'adjustVaultBackingFactor') return undefined
+	if (securityVaultResult.queuedOperationState !== undefined) return securityVaultResult.queuedOperationState.status
 	if (securityVaultResult.stagedExecution !== undefined) return securityVaultResult.stagedExecution.success ? 'executed' : 'failed'
 	if (queuedVaultOperation !== undefined) return queuedVaultOperation.isPendingSlot ? 'queued' : 'manual-queued'
 	if (loadingSecurityVault || currentPoolOracleManagerDetails === undefined) return 'refreshing'
-	if (isOracleManagerPriceUsable(currentPoolOracleManagerDetails, currentTimestamp)) return 'executed'
 	return 'missing'
 }
 
@@ -111,19 +108,22 @@ export function VaultQueuedOperationStatusCard({
 				)}
 			</WarningSurface>
 		)
-	if (status === 'failed')
+	if (status === 'failed' || status === 'expired' || status === 'superseded') {
+		const titles = { failed: failedTitle, expired: securityPoolCopy.queuedVaultOperationExpired, superseded: securityPoolCopy.queuedVaultOperationSuperseded }
+		const details = { failed: errorMessage ?? securityPoolCopy.actionRejectedDetail, expired: securityPoolCopy.queuedVaultOperationExpiredDetail, superseded: securityPoolCopy.queuedVaultOperationSupersededDetail }
 		return (
 			<section className='entity-card compact flat'>
 				<div className='entity-card-header'>
 					<div>
-						<h4>{failedTitle}</h4>
+						<h4>{titles[status]}</h4>
 					</div>
-					<Badge tone='blocked'>{commonCopy.failed}</Badge>
+					{status === 'failed' ? <Badge tone='blocked'>{commonCopy.failed}</Badge> : undefined}
 				</div>
-				<p className='detail'>{errorMessage ?? securityPoolCopy.actionRejectedDetail}</p>
-				<p className='detail'>{commonCopy.stagedOperationRetryDetail}</p>
+				<p className='detail'>{details[status]}</p>
+				{status === 'superseded' ? undefined : <p className='detail'>{commonCopy.stagedOperationRetryDetail}</p>}
 			</section>
 		)
+	}
 	if (status === 'executed')
 		return (
 			<section className='entity-card compact flat'>

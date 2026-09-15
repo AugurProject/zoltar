@@ -6,7 +6,7 @@ import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadControlle
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { addOpenOracleBountyBuffer } from '../../open-oracle/lib/openOracle.js'
 import { loadErc20Allowance, loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
-import { loadCoordinatorInitialReportFundingRequirement, loadOracleManagerDetails, queueOracleManagerOperation } from '../../../protocol/oracleCoordinator.js'
+import { loadCoordinatorInitialReportFundingRequirement, loadQueuedVaultOperationState, loadOracleManagerDetails, queueOracleManagerOperation } from '../../../protocol/oracleCoordinator.js'
 import { approveErc20 } from '@zoltar/ui-zoltar-shared/protocol/tokenActions.js'
 import { isSecurityPoolVaultAdmissionClosed, loadSecurityVaultDetails } from '../../../protocol/securityPools.js'
 import { depositRepToVaultToSecurityPool, redeemRepFromVaultFromSecurityPool, redeemSecurityVaultFees, updateSecurityVaultFees } from '../../../protocol/securityVault.js'
@@ -16,6 +16,7 @@ import { formatCurrencyInputBalance, formatAdditionalCurrencyBalance, formatCurr
 import { normalizeAddress, sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { getErrorMessage, isRecoverableContractReadError } from '@zoltar/ui-core-shared/lib/errors.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
+import { useQueuedVaultOperationState } from './useQueuedVaultOperationState.js'
 import type { ActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
 import { parseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { parseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
@@ -53,6 +54,7 @@ export type UseSecurityVaultOperationsDependencies<TWriteClient = SecurityVaultP
 	isSecurityPoolVaultAdmissionClosed: (securityPoolAddress: Address) => Promise<boolean>
 	loadCoordinatorInitialReportFundingRequirement: (client: TWriteClient, managerAddress: Address, walletAddress: Address) => Promise<Awaited<ReturnType<typeof loadCoordinatorInitialReportFundingRequirement>>>
 	loadErc20Balance: (tokenAddress: Address, accountAddress: Address) => Promise<bigint>
+	loadQueuedVaultOperationState: (managerAddress: Address, result: SecurityVaultActionResult) => Promise<Awaited<ReturnType<typeof loadQueuedVaultOperationState>>>
 	loadOracleManagerDetails: (managerAddress: Address) => Promise<Awaited<ReturnType<typeof loadOracleManagerDetails>>>
 	loadSecurityVaultDetails: (securityPoolAddress: Address, vaultAddress: Address) => Promise<SecurityVaultDetails | undefined>
 	queueOracleManagerOperation: (client: TWriteClient, managerAddress: Address, operation: 'withdrawRep' | 'adjustVaultBackingFactor', targetVault: Address, amount: bigint, validForSeconds: bigint) => Promise<SecurityVaultQueueResult>
@@ -69,6 +71,7 @@ const defaultUseSecurityVaultOperationsDependencies: UseSecurityVaultOperationsD
 	isSecurityPoolVaultAdmissionClosed: async securityPoolAddress => await isSecurityPoolVaultAdmissionClosed(createConnectedReadClient(), securityPoolAddress),
 	loadCoordinatorInitialReportFundingRequirement: async (client, managerAddress, walletAddress) => await loadCoordinatorInitialReportFundingRequirement(client, managerAddress, walletAddress),
 	loadErc20Balance: async (tokenAddress, accountAddress) => await loadErc20Balance(createConnectedReadClient(), tokenAddress, accountAddress),
+	loadQueuedVaultOperationState: async (managerAddress, result) => await loadQueuedVaultOperationState(createConnectedReadClient(), managerAddress, result),
 	loadOracleManagerDetails: async managerAddress => await loadOracleManagerDetails(createConnectedReadClient(), managerAddress),
 	loadSecurityVaultDetails: async (securityPoolAddress, vaultAddress) => await loadSecurityVaultDetails(createConnectedReadClient(), securityPoolAddress, vaultAddress),
 	queueOracleManagerOperation: async (client, managerAddress, operation, targetVault, amount, validForSeconds) => await queueOracleManagerOperation(client, managerAddress, operation, targetVault, amount, validForSeconds),
@@ -212,6 +215,22 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 		return undefined
 	}
 
+	const reconcileQueuedOperation = useQueuedVaultOperationState({
+		enabled,
+		selectionKey: effectiveVaultSelectionKey,
+		managerAddress: securityVaultDetails.value?.managerAddress,
+		result: securityVaultResult,
+		loadState: dependencies.loadQueuedVaultOperationState,
+		onFinalized: async () => {
+			const details = securityVaultDetails.value
+			if (details === undefined) return
+			const selectionKey = currentVaultSelectionKeyRef.current
+			await reloadSecurityVaultDetails(details.securityPoolAddress, details.vaultAddress, () => isVaultSelectionCurrent(selectionKey)).catch(error => {
+				if (isVaultSelectionCurrent(selectionKey)) securityVaultError.value = getErrorMessage(error, 'Failed to refresh security vault')
+			})
+		},
+	})
+
 	const loadSecurityVault = async (vaultAddressInput?: string) => {
 		const isCurrent = nextSecurityVaultLoad()
 		await securityVaultLoad.run({
@@ -241,6 +260,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				} else {
 					clearRepLoaders()
 				}
+				await reconcileQueuedOperation(details.managerAddress)
 				return details
 			},
 			onSuccess: () => undefined,

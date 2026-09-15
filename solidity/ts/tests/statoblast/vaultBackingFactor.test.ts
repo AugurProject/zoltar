@@ -80,6 +80,19 @@ describe('Vault backing factor adjustment', () => {
 		assert.strictEqual((await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)).capacityOwnershipAttoRep, repDeposit)
 	})
 
+	test.each(['committed', 'admission closed'] as const)('fee checkpoints preserve saved target and capacity while %s', async boundary => {
+		await adjust(40_000n)
+		const { client, mockWindow, securityPoolAddresses, repDeposit, questionData } = fixture
+		const pool = securityPoolAddresses.securityPool
+		if (boundary === 'committed') await createCompleteSet(client, pool, 10n ** 18n)
+		else await mockWindow.setTime(questionData.endTime)
+		const before = await getSecurityVault(client, pool, client.account.address)
+		await client.waitForTransactionReceipt({ hash: await client.writeContract({ address: addressString(GENESIS_REPUTATION_TOKEN), abi: IERC20_IERC20.abi, functionName: 'transfer', args: [pool, repDeposit] }) })
+		await updateVaultFees(client, pool, client.account.address)
+		assert.strictEqual((await getSecurityVault(client, pool, client.account.address)).capacityOwnershipAttoRep, before.capacityOwnershipAttoRep)
+		assert.strictEqual(await client.readContract({ address: pool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'vaultTargetBackingFactorBps', args: [client.account.address] }), 40_000n)
+	})
+
 	test.each([30_000n, 2n ** 256n - 1n])('supersedes an older manual adjustment even if its replacement fails (%s)', async newTarget => {
 		const { client, securityPoolAddresses, mockWindow, repDeposit } = fixture
 		const manager = securityPoolAddresses.priceOracleManagerAndOperatorQueuer

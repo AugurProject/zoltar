@@ -97,9 +97,8 @@ export const setVaultCapacityFixture = async (client: WriteClient, mockWindow: A
 		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'totalCapacityOwnershipAttoRep', args: [] }),
 		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'getPoolAccountingSnapshot', args: [] }),
 	])
-	const vaultAttoRep = await backingUnitsToAttoRep(client, securityPool, vault.repBackingUnits)
-	const lastDepositTargetHealthFactorBps = amount === 0n ? (1n << 256n) - 1n : (vaultAttoRep * 10_000n) / amount
-	// Explicit Anvil-only setup for accounting scenarios; this does not execute a protocol operation.
+	// Synthetic capacity setup, not a protocol operation. Clear the saved target so fee
+	// checkpoints preserve this exact capacity, including values no whole-BPS target can express.
 	const mappingSlot = (slot: bigint) => BigInt(keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [targetVault, slot])))
 	const storageHex = (value: bigint): `0x${string}` => `0x${value.toString(16).padStart(64, '0')}`
 	await mockWindow.addStateOverrides({
@@ -108,7 +107,7 @@ export const setVaultCapacityFixture = async (client: WriteClient, mockWindow: A
 				[storageHex(1n)]: totalCapacityOwnershipAttoRep - vault.capacityOwnershipAttoRep + amount,
 				[storageHex(12n)]: poolAccounting.feeEligibleCapacityOwnershipAttoRep - vault.capacityOwnershipAttoRep + amount,
 				[storageHex(mappingSlot(16n) + 1n)]: amount,
-				[storageHex(mappingSlot(25n))]: lastDepositTargetHealthFactorBps,
+				[storageHex(mappingSlot(28n))]: 0n, // SecurityPoolStorage.vaultTargetBackingFactorBps
 			},
 		},
 	})

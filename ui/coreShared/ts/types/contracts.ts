@@ -210,7 +210,13 @@ export type SecurityVaultDetails = {
 	vaultAddress: Address
 }
 
+export type QueuedVaultOperationState = {
+	status: 'queued' | 'manual-queued' | 'executed' | 'failed' | 'expired' | 'superseded' | 'missing'
+	execution?: StagedOracleExecutionResult
+}
+
 export type SecurityVaultActionResult = ActionResult & {
+	queuedOperationState?: QueuedVaultOperationState
 	action: 'adjustVaultBackingFactor' | 'approveRep' | 'depositRepToVault' | 'queueWithdrawRep' | 'redeemFees' | 'redeemRepFromVault' | 'updateVaultFees'
 	queuedOperation?: StagedOracleQueuedResult
 	stagedExecution?: StagedOracleExecutionResult

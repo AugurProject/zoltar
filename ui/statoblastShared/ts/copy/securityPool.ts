@@ -245,3 +245,8 @@ export const exposureSupported = 'Exposure supported'
 export const currentExposureSupported = 'Exposure supported now'
 export const resultingExposureSupported = 'Exposure after adjustment'
 export const repEquivalent = 'REP equivalent'
+
+export const queuedVaultOperationExpired = 'Queued operation expired'
+export const queuedVaultOperationExpiredDetail = 'The execution window ended before this operation completed.'
+export const queuedVaultOperationSuperseded = 'Target change replaced'
+export const queuedVaultOperationSupersededDetail = 'A newer target change replaced this request.'

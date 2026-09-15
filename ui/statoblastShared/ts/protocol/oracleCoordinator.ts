@@ -1,4 +1,4 @@
-import { decodeEventLog, getAddress, zeroAddress, type Address, type Hex, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
+import { decodeEventLog, parseAbiItem, getAddress, zeroAddress, type Address, type Hex, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { isIgnorableLogDecodeError } from '@zoltar/ui-core-shared/lib/errors.js'
@@ -9,7 +9,7 @@ import { loadOpenOracleInitialReportPrice } from './openOraclePricing.js'
 import { decodeOracleQueueOperation, encodeOracleQueueOperation } from './oracleQueueOperation.js'
 import { getWethAddress } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
 import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_openOracle_OpenOracle_OpenOracle } from '../contractArtifact.js'
-import type { OpenOracleActionResult, OracleManagerDetails, OracleQueueOperation, ReadClient, StagedOracleExecutionResult, StagedOracleQueuedResult, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { OpenOracleActionResult, QueuedVaultOperationState, SecurityVaultActionResult, OracleManagerDetails, OracleQueueOperation, ReadClient, StagedOracleExecutionResult, StagedOracleQueuedResult, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { requireStagedOperationTupleArray } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 import { type WriteContractClient, readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { getInfraContractAddresses } from './deploymentHelpers.js'
@@ -21,7 +21,7 @@ type CoordinatorInitialReportClient = Parameters<typeof loadOpenOracleInitialRep
 const ACTIVE_STAGED_OPERATION_PREVIEW_LIMIT = 25n
 const COORDINATOR_PRICE_PRECISION = 10n ** 18n
 
-function getStagedOracleExecutionResult(receipt: TransactionReceipt, managerAddress: Address, expectedOperation: OracleQueueOperation, expectedOperationId?: bigint): StagedOracleExecutionResult | undefined {
+function getStagedOracleExecutionResult(receipt: { logs: readonly Pick<TransactionReceipt['logs'][number], 'address' | 'data' | 'topics'>[] }, managerAddress: Address, expectedOperation: OracleQueueOperation, expectedOperationId?: bigint): StagedOracleExecutionResult | undefined {
 	for (const log of receipt.logs) {
 		if (!sameAddress(log.address, managerAddress)) continue
 		try {
@@ -502,4 +502,35 @@ export async function queueOracleManagerOperation(client: WriteClient, managerAd
 		...(queuedOperation === undefined ? {} : { queuedOperation }),
 		...(stagedExecution === undefined ? {} : { stagedExecution }),
 	} satisfies OpenOracleActionResult
+}
+
+// Read the exact operation, not the bounded active-operation preview. Pin state and logs
+// to one block so a concurrent settlement cannot turn a missing preview into guessed success.
+export async function loadQueuedVaultOperationState(client: Pick<ReadClient, 'getBlock' | 'readContract' | 'getTransactionReceipt' | 'getLogs'>, managerAddress: Address, result: SecurityVaultActionResult): Promise<QueuedVaultOperationState> {
+	const queued = result.queuedOperation
+	if (queued === undefined) return { status: 'missing' }
+	const block = await client.getBlock()
+	const blockNumber = requireBigintValue(block.number, 'mined block number')
+	const operation = await client.readContract({ address: managerAddress, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'stagedOperations', args: [queued.operationId], blockNumber })
+	if (operation.operator !== zeroAddress) {
+		if (decodeOracleQueueOperation(BigInt(operation.operation)) !== queued.operation) return { status: 'missing' }
+		const settlementTime = await client.readContract({ address: managerAddress, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'settlementTime', blockNumber })
+		if (block.timestamp > operation.queuedAt + settlementTime + operation.validForSeconds) return { status: 'expired' }
+		const ids = await client.readContract({ address: managerAddress, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'getPendingSettlementOperationIds', blockNumber })
+		return { status: ids.includes(queued.operationId) ? 'queued' : 'manual-queued' }
+	}
+	const receipt = await client.getTransactionReceipt({ hash: result.hash })
+	const event = parseAbiItem('event ExecutedStagedOperation(uint256 indexed operationId, uint8 operation, bool success, string errorMessage)')
+	for (let fromBlock = receipt.blockNumber; fromBlock <= blockNumber; fromBlock += 2_000n) {
+		const toBlock = fromBlock + 1_999n < blockNumber ? fromBlock + 1_999n : blockNumber
+		const logs = await client.getLogs({ address: managerAddress, event, args: { operationId: queued.operationId }, fromBlock, toBlock })
+		const execution = getStagedOracleExecutionResult({ logs }, managerAddress, queued.operation, queued.operationId)
+		if (execution !== undefined) {
+			if (execution.success) return { status: 'executed', execution }
+			if (execution.errorMessage === 'staged operation expired') return { status: 'expired', execution }
+			if (execution.errorMessage === 'Backing target superseded') return { status: 'superseded', execution }
+			return { status: 'failed', execution }
+		}
+	}
+	return { status: 'missing' }
 }

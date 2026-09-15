@@ -89,6 +89,7 @@ function createSecurityVaultOperationsDependencies(overrides: Partial<UseSecurit
 			wethShortfallAttoEth: 0n,
 		})),
 		loadErc20Balance: mock(async () => 0n),
+		loadQueuedVaultOperationState: mock(async () => ({ status: 'queued' as const })),
 		loadOracleManagerDetails: mock(async () => createOracleManagerDetails()),
 		loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails()),
 		queueOracleManagerOperation: async () => {
@@ -192,6 +193,73 @@ describe('useSecurityVaultOperations', () => {
 		await act(async () => await requireHookState(state).adjustBackingFactor('2'))
 		expect(requireHookState(state).securityVaultResult?.queuedOperation).toEqual(queuedOperation)
 		expect(requireHookState(state).securityVaultDetails?.targetBackingFactorBps).toBe(40_000n)
+	})
+
+	test.each(['executed', 'failed', 'expired', 'superseded'] as const)('reconciles a queued target to %s without replacing its submission receipt', async terminal => {
+		let completed = false
+		const queuedOperation = { isPendingSlot: false, operation: 'adjustVaultBackingFactor' as const, operationId: 7n }
+		const execution = { operation: 'adjustVaultBackingFactor' as const, operationId: 7n, success: terminal === 'executed', errorMessage: terminal === 'executed' ? undefined : terminal }
+		const dependencies = createSecurityVaultOperationsDependencies({
+			loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails({ settlementCollateralAttoEth: 0n })),
+			queueOracleManagerOperation: mock(async () => ({ hash: '0x01' as const, queuedOperation })),
+			loadQueuedVaultOperationState: mock(async () => (completed ? { status: terminal, execution } : { status: 'manual-queued' as const })),
+		})
+		let state: UseSecurityVaultOperationsState | undefined
+		const Harness = createHarness(dependencies, next => {
+			state = next
+		})
+		cleanupRenderedComponent = (await renderIntoDocument(h(Harness, {}))).cleanup
+		await act(async () => await requireHookState(state).adjustBackingFactor('2'))
+		await act(async () => await requireHookState(state).loadSecurityVault())
+		expect(requireHookState(state).securityVaultResult?.queuedOperationState?.status).toBe('manual-queued')
+		completed = true
+		await act(async () => await requireHookState(state).loadSecurityVault())
+		expect(requireHookState(state).securityVaultResult?.queuedOperationState?.status).toBe(terminal)
+		expect(requireHookState(state).securityVaultResult?.hash).toBe('0x01')
+		expect(requireHookState(state).securityVaultResult?.queuedOperation).toEqual(queuedOperation)
+	})
+
+	test('automatically refreshes a queued target after another actor executes it', async () => {
+		let completed = false
+		const dependencies = createSecurityVaultOperationsDependencies({
+			loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails({ settlementCollateralAttoEth: 0n, targetBackingFactorBps: completed ? 20_000n : 40_000n })),
+			queueOracleManagerOperation: mock(async () => ({ hash: '0x01' as const, queuedOperation: { isPendingSlot: true, operation: 'adjustVaultBackingFactor' as const, operationId: 7n } })),
+			loadQueuedVaultOperationState: mock(async () => ({ status: completed ? ('executed' as const) : ('queued' as const) })),
+		})
+		let state: UseSecurityVaultOperationsState | undefined
+		const Harness = createHarness(dependencies, next => {
+			state = next
+		})
+		cleanupRenderedComponent = (await renderIntoDocument(h(Harness, {}))).cleanup
+		await act(async () => await requireHookState(state).adjustBackingFactor('2'))
+		await waitFor(() => expect(requireHookState(state).securityVaultResult?.queuedOperationState?.status).toBe('queued'))
+		completed = true
+		await waitFor(() => expect(requireHookState(state).securityVaultResult?.queuedOperationState?.status).toBe('executed'), { timeout: 5_000 })
+		await waitFor(() => expect(requireHookState(state).securityVaultDetails?.targetBackingFactorBps).toBe(20_000n))
+		expect(requireHookState(state).securityVaultResult?.hash).toBe('0x01')
+	})
+
+	test('ignores an in-flight operation refresh after selecting another vault', async () => {
+		const pendingRead = createDeferred<{ status: 'executed' }>()
+		const loadQueuedVaultOperationState = mock(async () => await pendingRead.promise)
+		const dependencies = createSecurityVaultOperationsDependencies({
+			loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails({ settlementCollateralAttoEth: 0n })),
+			queueOracleManagerOperation: mock(async () => ({ hash: '0x01' as const, queuedOperation: { isPendingSlot: true, operation: 'adjustVaultBackingFactor' as const, operationId: 7n } })),
+			loadQueuedVaultOperationState,
+		})
+		let state: UseSecurityVaultOperationsState | undefined
+		const Harness = createHarness(dependencies, next => {
+			state = next
+		})
+		cleanupRenderedComponent = (await renderIntoDocument(h(Harness, {}))).cleanup
+		await act(async () => await requireHookState(state).adjustBackingFactor('2'))
+		await waitFor(() => expect(loadQueuedVaultOperationState).toHaveBeenCalled())
+		await act(async () => requireHookState(state).setSecurityVaultForm(current => ({ ...current, selectedVaultOwner: MANAGER_ADDRESS })))
+		await act(async () => {
+			pendingRead.resolve({ status: 'executed' })
+			await pendingRead.promise
+		})
+		expect(requireHookState(state).securityVaultResult).toBeUndefined()
 	})
 
 	test('reports a rejected target execution as an error instead of success', async () => {

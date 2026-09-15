@@ -1,5 +1,6 @@
+import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { handleOracleReporting, manipulatePriceOracle } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/statoblastTestUtils'
-import { queueOracleManagerOperation } from '@zoltar/ui-statoblast-shared/protocol/oracleCoordinator.js'
+import { loadOracleManagerDetails, loadQueuedVaultOperationState, queueOracleManagerOperation } from '@zoltar/ui-statoblast-shared/protocol/oracleCoordinator.js'
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -143,6 +144,48 @@ describe('Security vault integration', () => {
 		expect(replacement.stagedExecution).toBeUndefined()
 		await handleOracleReporting(client, mockWindow, details.managerAddress, 10n ** 18n)
 		expect((await loadSecurityVaultDetails(uiReadClient, securityPoolAddress, walletAddress))?.targetBackingFactorBps).toBe(30_000n)
+	})
+
+	test.each(['executed', 'failed', 'expired', 'superseded'] as const)('loads later %s from the original queued target receipt', async terminal => {
+		const details = await loadSecurityVaultDetails(uiReadClient, securityPoolAddress, walletAddress)
+		if (details === undefined) throw new Error('Expected security vault details')
+		await approveErc20(uiWriteClient, details.repToken, securityPoolAddress, depositAmount, 'approveRep')
+		await depositRepToVaultToSecurityPool(uiWriteClient, securityPoolAddress, depositAmount, 20_000n)
+		const queued = await queueOracleManagerOperation(uiWriteClient, details.managerAddress, 'adjustVaultBackingFactor', walletAddress, terminal === 'failed' ? 2n ** 256n - 1n : 40_000n, 300n, 10n ** 18n)
+		const original = { ...queued, action: 'adjustVaultBackingFactor' as const }
+		expect((await loadQueuedVaultOperationState(uiReadClient, details.managerAddress, original)).status).toBe('queued')
+		if (terminal === 'superseded') await queueOracleManagerOperation(uiWriteClient, details.managerAddress, 'adjustVaultBackingFactor', walletAddress, 30_000n, 300n, 10n ** 18n)
+		else if (terminal === 'expired') {
+			if (queued.queuedOperation === undefined) throw new Error('Expected queued operation')
+			await mockWindow.advanceTime(DAY)
+			await uiWriteClient.waitForTransactionReceipt({ hash: await uiWriteClient.sendTransaction({ to: walletAddress, value: 0n }) })
+			expect(await loadQueuedVaultOperationState(uiReadClient, details.managerAddress, original)).toEqual({ status: 'expired' })
+			await uiWriteClient.waitForTransactionReceipt({ hash: await uiWriteClient.writeContract({ address: details.managerAddress, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'expireStagedOperation', args: [queued.queuedOperation.operationId] }) })
+		} else await handleOracleReporting(client, mockWindow, details.managerAddress, 10n ** 18n)
+		const state = await loadQueuedVaultOperationState(uiReadClient, details.managerAddress, original)
+		expect(state.status).toBe(terminal)
+		expect(state.execution?.operationId).toBe(queued.queuedOperation?.operationId)
+		expect(state.execution?.success).toBe(terminal === 'executed')
+		expect(original.stagedExecution).toBeUndefined()
+		expect(original.hash).toBe(queued.hash)
+	})
+
+	test('tracks a manual target outside the active preview through later execution', async () => {
+		const details = await loadSecurityVaultDetails(uiReadClient, securityPoolAddress, walletAddress)
+		if (details === undefined) throw new Error('Expected security vault details')
+		await approveErc20(uiWriteClient, details.repToken, securityPoolAddress, depositAmount, 'approveRep')
+		await depositRepToVaultToSecurityPool(uiWriteClient, securityPoolAddress, depositAmount, 20_000n)
+		for (let index = 0; index < 4; index++) await queueOracleManagerOperation(uiWriteClient, details.managerAddress, 'withdrawRep', walletAddress, 1n, 300n, 10n ** 18n)
+		const queued = await queueOracleManagerOperation(uiWriteClient, details.managerAddress, 'adjustVaultBackingFactor', walletAddress, 40_000n, 300n, 10n ** 18n)
+		if (queued.queuedOperation === undefined) throw new Error('Expected queued target')
+		const original = { ...queued, action: 'adjustVaultBackingFactor' as const }
+		for (let index = 0; index < 30; index++) await queueOracleManagerOperation(uiWriteClient, details.managerAddress, 'withdrawRep', walletAddress, 1n, 300n, 10n ** 18n)
+		expect((await loadOracleManagerDetails(uiReadClient, details.managerAddress)).stagedOperations?.some(operation => operation.operationId === queued.queuedOperation?.operationId)).toBe(false)
+		expect((await loadQueuedVaultOperationState(uiReadClient, details.managerAddress, original)).status).toBe('manual-queued')
+		await handleOracleReporting(client, mockWindow, details.managerAddress, 10n ** 18n)
+		expect((await loadQueuedVaultOperationState(uiReadClient, details.managerAddress, original)).status).toBe('manual-queued')
+		await uiWriteClient.waitForTransactionReceipt({ hash: await uiWriteClient.writeContract({ address: details.managerAddress, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'executeStagedOperation', args: [queued.queuedOperation.operationId] }) })
+		expect((await loadQueuedVaultOperationState(uiReadClient, details.managerAddress, original)).status).toBe('executed')
 	})
 
 	test('surfaces the real revert reason when the first deposit is below the minimum', async () => {

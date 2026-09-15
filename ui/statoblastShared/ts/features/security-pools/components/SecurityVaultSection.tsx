@@ -247,12 +247,11 @@ export function SecurityVaultSection({
 	const hasLoadedCurrentVault = currentSelectedVaultDetails !== undefined && sameAddress(currentSelectedVaultDetails.vaultAddress, selectedVaultOwner) && sameAddress(currentSelectedVaultDetails.securityPoolAddress, normalizedSecurityVaultForm.securityPoolAddress)
 	const lastAutoLoadKey = useRef<string | undefined>(securityVaultError === undefined ? undefined : autoLoadKey)
 	const queuedVaultOperation = getQueuedVaultOperation({
-		pendingOperation: oracleManagerDetails?.pendingOperation,
+		oracleManagerDetails,
 		selectedVaultOwner: selectedVaultOwner ?? '',
 		securityVaultResult,
 	})
 	const queuedVaultOperationStatus = getQueuedVaultOperationStatus({
-		currentTimestamp,
 		currentPoolOracleManagerDetails: oracleManagerDetails,
 		loadingSecurityVault,
 		queuedVaultOperation,
