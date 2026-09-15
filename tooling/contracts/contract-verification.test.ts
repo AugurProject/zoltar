@@ -375,6 +375,8 @@ for (const cooldownSeconds of [100, 120, 300]) {
 }
 
 for (const [label, header, minimumDelay, maximumDelay] of [
+	['short seconds', '1', 1_000, 1_000],
+	['zero seconds', '0', 0, 0],
 	['seconds', '10', 10_000, 10_000],
 	['five-minute boundary', '300', 300_000, 300_000],
 	['HTTP date', 'future-date', 28_000, 30_000],
@@ -419,6 +421,29 @@ for (const [label, header, minimumDelay, maximumDelay] of [
 		expect(delays[0]).toBeLessThanOrEqual(maximumDelay)
 	})
 }
+
+test('explorer uses each Retry-After value instead of the growing fallback backoff', async () => {
+	const headers = ['10', '1', undefined, '2']
+	let attempts = 0
+	const delays: number[] = []
+	const outcomes = await verifyContractsWithExplorer({
+		fetchFn: async () => {
+			const header = headers[attempts]
+			attempts += 1
+			return attempts <= headers.length ? { ok: false, status: 429, headers: new Headers(header === undefined ? {} : { 'Retry-After': header }), json: async () => ({}) } : { ok: true, status: 200, json: async () => ({ result: [{ SourceCode: 'verified source' }], status: '1' }) }
+		},
+		inputs: testInputs,
+		jobs: [testJob],
+		log: () => {},
+		sleep: async delay => {
+			delays.push(delay)
+		},
+		target: testTarget,
+	})
+	expect(outcomes[0]?.status).toBe('already-verified')
+	expect(attempts).toBe(5)
+	expect(delays).toEqual([10_000, 1_000, 4_229, 2_000])
+})
 
 for (const priorRetries of [0, 4]) {
 	test(`explorer stops later jobs and pending polls after an oversized cooldown with ${priorRetries} prior retries`, async () => {
