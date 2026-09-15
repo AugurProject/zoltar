@@ -239,6 +239,36 @@ describe('useSecurityVaultOperations', () => {
 		expect(requireHookState(state).securityVaultResult?.hash).toBe('0x01')
 	})
 
+	test('retains the queued receipt through a delayed failed read and retry', async () => {
+		const delayed = createDeferred<{ status: 'manual-queued' }>()
+		let reads = 0
+		const queuedOperation = { isPendingSlot: false, operation: 'adjustVaultBackingFactor' as const, operationId: 42n }
+		const dependencies = createSecurityVaultOperationsDependencies({
+			loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails({ settlementCollateralAttoEth: 0n })),
+			queueOracleManagerOperation: mock(async () => ({ hash: '0x01' as const, queuedOperation })),
+			loadQueuedVaultOperationState: mock(async () => {
+				if (++reads === 1) return await delayed.promise
+				return { status: 'manual-queued' as const }
+			}),
+		})
+		let state: UseSecurityVaultOperationsState | undefined
+		const Harness = createHarness(dependencies, next => {
+			state = next
+		})
+		cleanupRenderedComponent = (await renderIntoDocument(h(Harness, {}))).cleanup
+		await act(async () => await requireHookState(state).adjustBackingFactor('2'))
+		await waitFor(() => expect(reads).toBe(1))
+		expect(requireHookState(state).securityVaultResult?.queuedOperation).toEqual(queuedOperation)
+		await act(async () => {
+			delayed.reject(new Error('RPC unavailable'))
+			await Promise.resolve()
+		})
+		await waitFor(() => expect(requireHookState(state).securityVaultResult?.queuedOperationState?.status).toBe('missing'))
+		expect(requireHookState(state).securityVaultResult?.queuedOperation).toEqual(queuedOperation)
+		await waitFor(() => expect(requireHookState(state).securityVaultResult?.queuedOperationState?.status).toBe('manual-queued'), { timeout: 5_000 })
+		expect(requireHookState(state).securityVaultResult?.hash).toBe('0x01')
+	})
+
 	test('ignores an in-flight operation refresh after selecting another vault', async () => {
 		const pendingRead = createDeferred<{ status: 'executed' }>()
 		const loadQueuedVaultOperationState = mock(async () => await pendingRead.promise)

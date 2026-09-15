@@ -20,10 +20,12 @@ export function VaultBackingFactorForm({
 	busy,
 	pending,
 	repPerEthPrice,
+	executionRepPerEthPrice,
 	poolSecurityMultiplierBps,
 	onAdjust,
 }: {
 	details: SecurityVaultDetails | undefined
+	executionRepPerEthPrice?: bigint | undefined
 	repPerEthPrice?: bigint | undefined
 	poolSecurityMultiplierBps?: bigint | undefined
 	blocker: string | undefined
@@ -46,7 +48,7 @@ export function VaultBackingFactorForm({
 	} catch (cause) {
 		error = cause instanceof Error ? cause.message : commonCopy.metricUnavailablePlaceholder
 	}
-	const prerequisite = blocker ?? getVaultBackingFactorAdjustmentGuard(details, factorBps, repPerEthPrice, poolSecurityMultiplierBps)
+	const prerequisite = blocker ?? getVaultBackingFactorAdjustmentGuard(details, factorBps, executionRepPerEthPrice, poolSecurityMultiplierBps)
 	const reason = prerequisite ?? error
 	return (
 		<>

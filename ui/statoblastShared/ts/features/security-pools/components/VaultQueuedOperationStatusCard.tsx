@@ -10,6 +10,7 @@ import type { SecurityVaultSectionProps } from '../../types.js'
 
 type QueuedVaultOperationStatus = 'executed' | 'failed' | 'expired' | 'superseded' | 'manual-queued' | 'missing' | 'queued' | 'refreshing' | undefined
 type QueuedVaultOperationView = {
+	isConfirmedActive: boolean
 	amount: bigint | undefined
 	isPendingSlot: boolean
 	operationId: bigint
@@ -23,9 +24,9 @@ export function getQueuedVaultOperation({ oracleManagerDetails, selectedVaultOwn
 	const queued = securityVaultResult?.queuedOperation
 	const candidates = [...(oracleManagerDetails?.stagedOperations ?? []), ...(oracleManagerDetails?.pendingOperation === undefined ? [] : [oracleManagerDetails.pendingOperation])]
 	const active = candidates.find(candidate => sameAddress(candidate.targetVault, selectedVaultOwner) && candidate.operation === operation && (queued === undefined || candidate.operationId === queued.operationId))
-	if (active !== undefined) return { amount: operation === 'withdrawRep' ? active.amount : undefined, isPendingSlot: oracleManagerDetails?.pendingSettlementOperationIds.includes(active.operationId) ?? false, operationId: active.operationId } satisfies QueuedVaultOperationView
+	if (active !== undefined) return { isConfirmedActive: true, amount: operation === 'withdrawRep' ? active.amount : undefined, isPendingSlot: oracleManagerDetails?.pendingSettlementOperationIds.includes(active.operationId) ?? false, operationId: active.operationId } satisfies QueuedVaultOperationView
 	const status = securityVaultResult?.queuedOperationState?.status
-	if (queued?.operation === operation && (oracleManagerDetails === undefined || status === 'queued' || status === 'manual-queued')) return { amount: undefined, isPendingSlot: status === undefined ? queued.isPendingSlot : status === 'queued', operationId: queued.operationId } satisfies QueuedVaultOperationView
+	if (queued?.operation === operation) return { isConfirmedActive: false, amount: undefined, isPendingSlot: status === 'queued' || (status !== 'manual-queued' && queued.isPendingSlot), operationId: queued.operationId } satisfies QueuedVaultOperationView
 	return undefined
 }
 
@@ -43,7 +44,7 @@ export function getQueuedVaultOperationStatus({
 	if (securityVaultResult?.action !== 'queueWithdrawRep' && securityVaultResult?.action !== 'adjustVaultBackingFactor') return undefined
 	if (securityVaultResult.queuedOperationState !== undefined) return securityVaultResult.queuedOperationState.status
 	if (securityVaultResult.stagedExecution !== undefined) return securityVaultResult.stagedExecution.success ? 'executed' : 'failed'
-	if (queuedVaultOperation !== undefined) return queuedVaultOperation.isPendingSlot ? 'queued' : 'manual-queued'
+	if (queuedVaultOperation !== undefined && (queuedVaultOperation.isConfirmedActive || currentPoolOracleManagerDetails === undefined)) return queuedVaultOperation.isPendingSlot ? 'queued' : 'manual-queued'
 	if (loadingSecurityVault || currentPoolOracleManagerDetails === undefined) return 'refreshing'
 	return 'missing'
 }
@@ -136,6 +137,22 @@ export function VaultQueuedOperationStatusCard({
 				<p className='detail'>{successDescription}</p>
 			</section>
 		)
+	const submittedOperationDetails =
+		queuedVaultOperation === undefined ? undefined : (
+			<>
+				<MetricGrid>
+					<MetricField label={commonCopy.stagedOperation}>{`#${queuedVaultOperation.operationId.toString()}`}</MetricField>
+				</MetricGrid>
+				<p className='detail'>{queuedVaultOperation.isPendingSlot ? securityPoolCopy.queuedVaultOperationAutomaticRefreshDetail : securityPoolCopy.queuedVaultOperationManualRefreshDetail}</p>
+				{onViewStagedOperations === undefined ? undefined : (
+					<div className='actions'>
+						<button className='secondary' type='button' onClick={onViewStagedOperations}>
+							{commonCopy.viewInStagedOperations}
+						</button>
+					</div>
+				)}
+			</>
+		)
 	if (status === 'missing')
 		return (
 			<WarningSurface as='section' surface='flat' variant='compact'>
@@ -145,6 +162,7 @@ export function VaultQueuedOperationStatusCard({
 					</div>
 				</div>
 				<p className='detail'>{missingDescription}</p>
+				{submittedOperationDetails}
 			</WarningSurface>
 		)
 	return (
@@ -156,6 +174,7 @@ export function VaultQueuedOperationStatusCard({
 				<Badge tone='muted'>{commonCopy.refreshingWithoutEllipsis}</Badge>
 			</div>
 			<p className='detail'>{refreshingDescription}</p>
+			{submittedOperationDetails}
 		</section>
 	)
 }

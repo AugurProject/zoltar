@@ -318,6 +318,7 @@ export function SecurityVaultSection({
 	const adjustmentBlocker = repExitLauncherBlocker ?? vaultLifecycleBlocker ?? (!depositRepToVaultEnabled ? securityPoolCopy.vaultDepositAdmissionClosedDetail : undefined)
 	const adjustmentForm = (
 		<VaultBackingFactorForm
+			executionRepPerEthPrice={hasValidOraclePrice ? oracleManagerDetails?.lastPrice : undefined}
 			repPerEthPrice={repPerEthPrice}
 			poolSecurityMultiplierBps={selectedPoolStatoblastSecurityMultiplierBps}
 			key={autoLoadKey}

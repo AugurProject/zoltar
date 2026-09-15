@@ -250,3 +250,6 @@ export const queuedVaultOperationExpired = 'Queued operation expired'
 export const queuedVaultOperationExpiredDetail = 'The execution window ended before this operation completed.'
 export const queuedVaultOperationSuperseded = 'Target change replaced'
 export const queuedVaultOperationSupersededDetail = 'A newer target change replaced this request.'
+
+export const queuedVaultOperationManualRefreshDetail = 'If this operation is still pending, execute it manually after a valid oracle price is available.'
+export const queuedVaultOperationAutomaticRefreshDetail = 'This request was submitted for automatic execution. Check its current status in staged operations.'
