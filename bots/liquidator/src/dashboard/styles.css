@@ -932,3 +932,32 @@ body[data-page="pools"] #network-badge::before {
 		width: 100%;
 	}
 }
+
+.pool-address-form {
+	display: flex;
+	align-items: end;
+	flex-wrap: wrap;
+	gap: 0.75rem;
+	margin: 1rem 0;
+}
+.pool-address-form label {
+	display: grid;
+	gap: 0.4rem;
+	flex: 1 1 22rem;
+	min-width: 0;
+}
+.pool-address-form input {
+	width: 100%;
+}
+.pool-address-form [role="status"] {
+	flex-basis: 100%;
+	margin: 0;
+}
+.pool-address-form [role="status"]:empty {
+	display: none;
+}
+@media (max-width: 600px) {
+	.pool-address-form button {
+		width: 100%;
+	}
+}

@@ -1,4 +1,5 @@
 import { cell, stacked, poolStatusText, botVaultState, publicFailure } from './pool-presentation.ts'
+import { createPoolAddressForm } from './pool-address-form.ts'
 import { createPoolBrowser } from './pool-browser.ts'
 import { createUniverseExplorer } from '@zoltar/bot-shared/dashboard/universe-explorer'
 import { readinessGuidance } from './readiness-status.js'
@@ -226,7 +227,7 @@ let stateConnected = false
 let configurationConnected = false
 let pauseRequestPending: boolean | undefined
 
-const poolBrowser = createPoolBrowser(element('pool-browser', HTMLElement), async (address, supported, chainId) => {
+async function saveSupportedPool(address: string, supported: boolean, chainId: number) {
 	if (pendingPoolMutations > 0 || pendingNetworkProfile !== undefined) throw new Error('A pool or network change is pending')
 	pendingPoolMutations += 1
 	setMutationControlsEnabled(stateConnected)
@@ -238,16 +239,20 @@ const poolBrowser = createPoolBrowser(element('pool-browser', HTMLElement), asyn
 		setMutationControlsEnabled(stateConnected)
 		if (currentSnapshot !== undefined) renderPools(currentSnapshot)
 	}
-})
+}
+const poolBrowser = createPoolBrowser(element('pool-browser', HTMLElement), saveSupportedPool)
+const poolAddressForm = createPoolAddressForm(element('pool-address-form', HTMLFormElement), saveSupportedPool)
 new MutationObserver(updatePoolBrowser).observe(document.body, { attributes: true, attributeFilter: ['data-page'] })
 
 function updatePoolBrowser() {
-	poolBrowser?.update({
+	const context = {
 		chainId: pendingNetworkProfile === undefined && currentConfiguration?.networkConfigured === true ? currentConfiguration.network?.chainId : undefined,
 		enabled: document.body.dataset['page'] === 'pools' && stateConnected && configurationConnected && pendingNetworkProfile === undefined && currentConfiguration?.networkConfigured === true && pendingPoolMutations === 0,
 		selected: selectedPools,
 		approved: approvedUniverses,
-	})
+	}
+	poolBrowser?.update(context)
+	poolAddressForm?.update(context)
 }
 
 function renderBlockStatus(snapshot = currentSnapshot) {

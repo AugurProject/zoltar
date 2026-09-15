@@ -210,6 +210,7 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 	const pauseRequests: unknown[] = []
 	const approvedUniverseRequests: string[][] = []
 	const selectedPoolRequests: string[][] = []
+	const supportedPoolRequests: unknown[] = []
 	let stateRequestCount = 0
 	let stateRequestFailure = initialStateRequestFailure
 	let hangNextStateRequest = false
@@ -240,6 +241,7 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 			)
 		}
 		if (url.pathname === '/api/supported-pool') {
+			supportedPoolRequests.push(JSON.parse(String(init?.body)))
 			if (selectionFailure) return new window.Response('{}', { status: 400 })
 			const value = JSON.parse(String(init?.body))
 			currentConfiguration = { ...currentConfiguration, selectedPools: value.supported ? [...currentConfiguration.selectedPools, value.address] : currentConfiguration.selectedPools.filter(address => address !== value.address) }
@@ -368,6 +370,7 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 		},
 		approvedUniverseRequests,
 		selectedPoolRequests,
+		supportedPoolRequests,
 		pauseRequests,
 		stateRequestCount: () => stateRequestCount,
 		setStateRequestFailure: (failed: boolean) => {
@@ -1107,4 +1110,53 @@ test('discovers pools when navigating from Overview without a page reload', asyn
 	await page.waitUntilComplete()
 	expect(page.catalogRequests).toEqual(['0'])
 	expect(page.window.document.querySelector('#pool-browser')?.textContent).toContain('Question 42')
+})
+
+test('adds a pool by address with validation, duplicate detection, persistence, and retry', async () => {
+	const page = await dashboard(mainnetConfiguration(), state(), false, false, true)
+	const form = page.window.document.querySelector('#pool-address-form')
+	const input = form?.querySelector('input')
+	const button = form?.querySelector('button')
+	if (!(form instanceof page.window.HTMLFormElement) || !(input instanceof page.window.HTMLInputElement) || !(button instanceof page.window.HTMLButtonElement)) throw new Error('Missing pool address form')
+	const enter = (address: string) => {
+		input.value = address
+		input.dispatchEvent(new page.window.Event('input'))
+	}
+	const submit = async () => {
+		form.dispatchEvent(new page.window.Event('submit', { cancelable: true }))
+		await page.waitUntilComplete()
+	}
+	expect(button.disabled).toBe(true)
+	for (const address of ['not-an-address', `0x${'0'.repeat(40)}`]) {
+		enter(address)
+		await submit()
+		expect(input.getAttribute('aria-invalid')).toBe('true')
+		expect(form.textContent).toContain('Enter a valid, nonzero pool address.')
+	}
+	expect(page.supportedPoolRequests).toHaveLength(0)
+	const address = `0x${'a'.repeat(40)}`
+	enter(` ${address} `)
+	page.setSelectionFailure(true)
+	await submit()
+	expect(form.textContent).toContain('Could not add pool. Try again.')
+	expect(input.value.trim()).toBe(address)
+	expect(button.disabled).toBe(false)
+	page.setSelectionFailure(false)
+	await submit()
+	expect(form.textContent).toContain('Added to supported pools.')
+	expect(button.textContent).toBe('Already supported')
+	expect(button.disabled).toBe(true)
+	const request = page.supportedPoolRequests.at(-1)
+	expect(request).toEqual({ address: expect.stringMatching(/^0xa{40}$/i), supported: true, chainId: 1 })
+	await submit()
+	expect(page.supportedPoolRequests).toHaveLength(2)
+	await page.refresh()
+	expect(button.textContent).toBe('Already supported')
+	enter(`0x${'b'.repeat(40)}`)
+	page.setStateRequestFailure(true)
+	await page.refresh()
+	expect(input.disabled).toBe(true)
+	expect(button.disabled).toBe(true)
+	await submit()
+	expect(page.supportedPoolRequests).toHaveLength(2)
 })
