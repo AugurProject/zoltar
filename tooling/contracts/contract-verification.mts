@@ -284,7 +284,8 @@ function rateLimitDelay(retryAfter: string | null | undefined, backoff: number):
 	if (retryAfter === undefined || retryAfter === null) return backoff
 	const value = retryAfter.trim()
 	const requestedDelay = /^\d+$/.test(value) ? Number(value) * 1_000 : Date.parse(value) - Date.now()
-	return Number.isNaN(requestedDelay) ? backoff : Math.max(backoff, requestedDelay)
+	// A valid server cooldown replaces the fallback, even when it is shorter.
+	return Number.isNaN(requestedDelay) || requestedDelay < 0 ? backoff : requestedDelay
 }
 
 // All explorer stages share this transport so lookups, submissions, and polls
