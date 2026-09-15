@@ -233,8 +233,7 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 								page: Number(url.searchParams.get('page')),
 								pageCount: '2',
 								total: '13',
-								block: '42',
-								pools: [{ address: '0x2222222222222222222222222222222222222222', parent: '0x0000000000000000000000000000000000000000', questionId: '42', universeId: '7', multiplierBps: '12500' }],
+								pools: [{ address: '0x2222222222222222222222222222222222222222', parent: '0x0000000000000000000000000000000000000000', questionId: '42', universeId: '7', multiplierBps: '12500', deploymentDate: '1789560000', questionDates: { startTime: '1789473600', endTime: '1792065600' } }],
 							},
 				),
 				{ status: catalogFailure ? 503 : 200 },
@@ -1069,6 +1068,10 @@ test('all-pools browser automatically discovers, paginates, persists support, an
 	}
 	expect(page.catalogRequests).toEqual(['0'])
 	expect(root.textContent).toContain('Universe approval required')
+	expect(root.textContent).not.toContain('Block ')
+	expect(root.textContent).not.toContain('Created date')
+	expect([...root.querySelectorAll('.catalog-dates dt')].map(label => label.textContent)).toEqual(['Pool deployment date', 'Question start date', 'Question end date'])
+	expect([...root.querySelectorAll('.catalog-dates time')].map(time => time.getAttribute('datetime'))).toEqual(['2026-09-16T12:00:00.000Z', '2026-09-15T12:00:00.000Z', '2026-10-15T12:00:00.000Z'])
 	button('Add to supported').click()
 	await page.waitUntilComplete()
 	expect(button('Remove from supported').disabled).toBe(false)

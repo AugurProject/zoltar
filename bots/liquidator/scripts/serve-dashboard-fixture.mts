@@ -158,13 +158,13 @@ const server = startDashboardServer(4183, {
 			page,
 			pageCount: '2',
 			total: '13',
-			block: '12345678',
 			pools: Array.from({ length: page === 0 ? 12 : 1 }, (_, index) => ({
 				address: `0x${(page * 12 + index + 10).toString(16).padStart(40, '0')}`,
 				parent: index === 1 ? '0x1111111111111111111111111111111111111111' : '0x0000000000000000000000000000000000000000',
 				questionId: index === 1 ? longUniverseId : (42 + index).toString(),
 				universeId: index === 1 ? longUniverseId : '101',
 				multiplierBps: index === 1 ? '20000' : '12500',
+				...(index === 2 ? {} : { deploymentDate: '1789560000', questionDates: { startTime: '1789473600', endTime: '1792065600' } }),
 				...(index === 2 ? {} : { metrics: { systemState: index === 1 ? '1' : '0', totalPoolHeldRep: '125000.123456789', vaultCount: '18' } }),
 			})),
 		}

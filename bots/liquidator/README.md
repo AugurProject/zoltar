@@ -162,6 +162,9 @@ monitor does not scan unrelated pools for vaults or liquidation candidates. On t
 **Pool work** page, **All pools** automatically browses the active chain's factory
 registry in pages of 12, including pools you have not selected. Cards show the
 question, universe, security multiplier, current pool-held REP, and vault count.
+Pool deployment date comes from the factory deployment event’s block timestamp.
+Question start date and Question end date come from the question’s stored time
+bounds. All three dates use UTC; unavailable dates are marked as such.
 Use **Add to supported** to save a pool to the chain profile's `selectedPools`, or
 **Remove from supported** to remove it. This does not approve its universe or
 change execution mode. A pool with unavailable metrics remains visible. Use

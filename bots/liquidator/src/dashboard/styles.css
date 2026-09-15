@@ -842,6 +842,13 @@ td small {
 	color: var(--muted);
 }
 
+body[data-page="pools"] #header-block-status {
+	display: none;
+}
+body[data-page="pools"] #network-badge::before {
+	content: none;
+}
+
 /* Statoblast comparison records adapted to the operator console's tokens. */
 .pool-catalog-list {
 	display: grid;
@@ -878,10 +885,18 @@ td small {
 	gap: 1rem;
 	margin: 1rem 0;
 }
+.catalog-dates {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 1rem;
+	margin: 1rem 0;
+}
+.catalog-dates dt,
 .catalog-metrics dt {
 	color: var(--muted);
 	font-size: 0.8rem;
 }
+.catalog-dates dd,
 .catalog-metrics dd {
 	margin: 0.35rem 0 0;
 	overflow-wrap: anywhere;
@@ -898,6 +913,9 @@ td small {
 @media (max-width: 600px) {
 	.catalog-metrics {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+	.catalog-dates {
+		grid-template-columns: 1fr;
 	}
 	.catalog-balance {
 		grid-column: 1 / -1;

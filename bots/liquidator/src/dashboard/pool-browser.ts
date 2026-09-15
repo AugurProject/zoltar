@@ -1,3 +1,4 @@
+import { poolDatePresentation } from './pool-dates.ts'
 import { publicFailure } from './pool-presentation.ts'
 import { requestWithTimeout } from '@zoltar/bot-shared/dashboard/polling'
 import type { PoolCatalogPage } from '../monitoring/pool-catalog.ts'
@@ -42,7 +43,7 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 		if (loading) return 'Discovering pools…'
 		if (data?.total === '0') return 'No pools have been deployed on this chain.'
 		if (data === undefined) return 'Waiting for connection…'
-		return `Block ${data.block}`
+		return ''
 	}
 
 	function render() {
@@ -54,6 +55,7 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 		next.disabled = loading || saving || !context.enabled || data === undefined || BigInt(page + 1) >= BigInt(data.pageCount)
 		summary.textContent = data === undefined ? '' : `${data.total} pools · Page ${page + 1} of ${data.pageCount === '0' ? '1' : data.pageCount}`
 		status.textContent = statusMessage()
+		status.hidden = status.textContent === ''
 		retry.hidden = !discoveryFailed
 		retry.disabled = loading || !context.enabled
 		cards.setAttribute('aria-busy', String(loading))
@@ -100,8 +102,27 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 					metric.append(node('dt', label), node('dd', value))
 					metrics.append(metric)
 				}
+				const dates = node('dl', '', 'catalog-dates')
+				dates.setAttribute('aria-label', 'Pool and question dates (UTC)')
+				for (const [label, timestamp] of [
+					['Pool deployment date', pool.deploymentDate],
+					['Question start date', pool.questionDates?.startTime],
+					['Question end date', pool.questionDates?.endTime],
+				]) {
+					const field = node('div')
+					const value = node('dd')
+					const presentation = poolDatePresentation(timestamp)
+					if (presentation === undefined) value.textContent = 'Unavailable'
+					else {
+						const time = node('time', presentation.text)
+						time.dateTime = presentation.dateTime
+						value.append(time)
+					}
+					field.append(node('dt', label), value)
+					dates.append(field)
+				}
 				const address = node('code', pool.address, 'catalog-address')
-				card.append(header, badges, metrics, address)
+				card.append(header, badges, dates, metrics, address)
 				if (BigInt(pool.parent) !== 0n) card.append(node('p', `Parent ${pool.parent}`, 'catalog-address muted'))
 				return card
 			}),
