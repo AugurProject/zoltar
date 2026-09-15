@@ -280,12 +280,29 @@ const MAX_RATE_LIMIT_DELAY_MILLISECONDS = 5 * 60_000
 const RATE_LIMIT_BACKOFF_FACTOR = 1.6
 const INITIAL_RATE_LIMIT_DELAY_MILLISECONDS = (MAX_RATE_LIMIT_DELAY_MILLISECONDS * (RATE_LIMIT_BACKOFF_FACTOR - 1)) / (RATE_LIMIT_BACKOFF_FACTOR ** MAX_RATE_LIMIT_RETRIES - 1)
 
-function rateLimitDelay(retryAfter: string | null | undefined, backoff: number): number {
-	if (retryAfter === undefined || retryAfter === null) return backoff
-	const value = retryAfter.trim()
-	const requestedDelay = /^\d+$/.test(value) ? Number(value) * 1_000 : Date.parse(value) - Date.now()
-	// A valid server cooldown replaces the fallback, even when it is shorter.
-	return Number.isNaN(requestedDelay) || requestedDelay < 0 ? backoff : requestedDelay
+function rateLimitDelay(retryAfter: string | null | undefined, blockscoutReset: string | null | undefined): number | undefined {
+	if (retryAfter !== undefined && retryAfter !== null) {
+		const value = retryAfter.trim()
+		const requestedDelay = /^\d+$/.test(value) ? Number(value) * 1_000 : Date.parse(value) - Date.now()
+		// A valid server cooldown replaces the fallback, even when it is shorter.
+		if (Number.isSafeInteger(requestedDelay) && requestedDelay >= 0) return requestedDelay
+	}
+	// Blockscout defines X-RateLimit-Reset as milliseconds until reset, not a timestamp.
+	// https://github.com/blockscout/blockscout/blob/master/apps/block_scout_web/rate_limits.md
+	const reset = blockscoutReset?.trim()
+	if (reset !== undefined && /^\d+$/.test(reset)) return Number.isSafeInteger(Number(reset)) ? Number(reset) : undefined
+	return undefined
+}
+
+async function waitForRateLimit(sleep: (milliseconds: number) => Promise<void>, delay: number) {
+	// Larger setTimeout values overflow and can cause an immediate retry.
+	const maximumTimerDelay = 2_147_483_647
+	let remaining = delay
+	while (remaining > maximumTimerDelay) {
+		await sleep(maximumTimerDelay)
+		remaining -= maximumTimerDelay
+	}
+	await sleep(remaining)
 }
 
 // All explorer stages share this transport so lookups, submissions, and polls
@@ -293,10 +310,8 @@ function rateLimitDelay(retryAfter: string | null | undefined, backoff: number):
 function createPacedExplorerFetch(fetchFn: ExplorerFetch, target: ExplorerTarget, sleep: (milliseconds: number) => Promise<void>, log: (message: string) => void): ExplorerFetch {
 	let hasRequested = false
 	let nextRequestDelay = REQUEST_DELAY_MILLISECONDS
-	let cooldownError: Error | undefined
 	return async (requestUrl, init) => {
-		if (cooldownError !== undefined) throw cooldownError
-		if (hasRequested) await sleep(nextRequestDelay)
+		if (hasRequested) await waitForRateLimit(sleep, nextRequestDelay)
 		nextRequestDelay = REQUEST_DELAY_MILLISECONDS
 		hasRequested = true
 		let retryWaitMilliseconds = 0
@@ -306,23 +321,19 @@ function createPacedExplorerFetch(fetchFn: ExplorerFetch, target: ExplorerTarget
 			await response.body?.cancel()
 			const remainingWait = MAX_RATE_LIMIT_DELAY_MILLISECONDS - retryWaitMilliseconds
 			const backoff = Math.round(INITIAL_RATE_LIMIT_DELAY_MILLISECONDS * RATE_LIMIT_BACKOFF_FACTOR ** retry)
-			// Normalize ten exponential waits to five minutes; server cooldowns consume
-			// the same per-request budget and are never shortened to fit it.
+			// Only fallback backoff consumes the five-minute budget. Server cooldowns
+			// may be longer and must be waited in full.
 			const scheduledWait = retry === MAX_RATE_LIMIT_RETRIES - 1 ? remainingWait : Math.min(backoff, remainingWait)
-			const delay = rateLimitDelay(response.headers?.get('retry-after'), scheduledWait > 0 ? scheduledWait : backoff)
-			// Do not retry earlier than requested or allow an unbounded server wait.
-			if (delay > MAX_RATE_LIMIT_DELAY_MILLISECONDS) {
-				cooldownError = new Error(`${target.name} responded with HTTP 429; Retry-After exceeds the ${(MAX_RATE_LIMIT_DELAY_MILLISECONDS / 1_000).toString()}s retry wait limit. Rerun verification later.`)
-				throw cooldownError
-			}
-			if (retry >= MAX_RATE_LIMIT_RETRIES || remainingWait <= 0 || delay > remainingWait) {
+			const serverDelay = rateLimitDelay(response.headers?.get('retry-after'), target.name === 'Blockscout' ? response.headers?.get('x-ratelimit-reset') : undefined)
+			const delay = serverDelay ?? (scheduledWait > 0 ? scheduledWait : backoff)
+			if (retry >= MAX_RATE_LIMIT_RETRIES || (serverDelay === undefined && remainingWait <= 0)) {
 				// The provider's cooldown also applies to the next contract or poll.
 				nextRequestDelay = delay
-				throw new Error(`${target.name} responded with HTTP 429 after ${retry.toString()} retries; exhausted the ${(MAX_RATE_LIMIT_DELAY_MILLISECONDS / 1_000).toString()}s retry wait budget`)
+				throw new Error(`${target.name} responded with HTTP 429 after ${retry.toString()} retries; exhausted the retry limit or ${(MAX_RATE_LIMIT_DELAY_MILLISECONDS / 1_000).toString()}s retry wait budget`)
 			}
 			log(`  ${target.name}: HTTP 429; retry ${(retry + 1).toString()}/${MAX_RATE_LIMIT_RETRIES.toString()} in ${(delay / 1_000).toString()}s`)
-			await sleep(delay)
-			retryWaitMilliseconds += delay
+			await waitForRateLimit(sleep, delay)
+			if (serverDelay === undefined) retryWaitMilliseconds += delay
 		}
 	}
 }
