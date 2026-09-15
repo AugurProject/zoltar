@@ -417,4 +417,5 @@ test('bot Sepolia defaults match the deployed Uniswap bytecode and WETH', async 
 	expect(defaults.quoter).toBe(deployment.addresses.uniswapV3QuoterAddress)
 	expect(defaults.router).toBe(deployment.addresses.uniswapV3SwapRouterAddress)
 	expect(defaults.v2Router).toBeUndefined()
+	expect(defaults).toMatchObject({ v4PoolManager: deployment.addresses.uniswapV4PoolManagerAddress, v4Quoter: deployment.addresses.uniswapV4QuoterAddress })
 })

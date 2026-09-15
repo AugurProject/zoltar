@@ -9,7 +9,7 @@ import { createTokenMetadataCache, discoverTokenPools, loadTokenMarkets } from '
 import { poolsForTokens } from '#monitoring/opportunity-evaluation'
 import { multicallProvider } from '../helpers/multicall-provider.ts'
 
-const network = networkConfiguration('sepolia', {})
+const network = networkConfiguration('sepolia')
 const config = { network, v2Router: undefined, twapSeconds: 60 }
 const token = getAddress('0x0000000000000000000000000000000000000abc')
 const pool500 = getAddress('0x0000000000000000000000000000000000000500')

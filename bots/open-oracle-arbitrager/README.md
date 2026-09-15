@@ -89,12 +89,12 @@ for the report lifecycle assumptions and economics used by the arbitrager.
 - A deployed `OpenOracleArbitrageExecutor`. Deploy the stateless executor at a
   predictable CREATE2 address from the dashboard or with `bun run deploy-executor --`,
   then authenticate that address in the execution manifest.
-- The exact Uniswap V3 SwapRouter address.
-- Optionally, the exact Uniswap V2 Router02 in
-  `deployment.uniswapV2Router`. When configured and authenticated, mainnet execution
-  adds direct WETH/token V2 hedges to the configured venue comparison.
-- Optionally, an exact Uniswap V4 PoolManager and V4 Quoter supplied together in
-  `deployment.uniswapV4PoolManager` and `deployment.uniswapV4Quoter`. V4 execution is limited to
+- The network-derived Uniswap V3 deployment, which remains the pricing and TWAP reference.
+- Optionally, `deployment.uniswapV2Enabled` (default `true`) adds authenticated
+  direct WETH/token V2 hedges on mainnet. V2 is unavailable on Sepolia; switching
+  networks does not discard the enabled preference.
+- Optionally, `deployment.uniswapV4Enabled` (default `false`) enables the
+  network-derived V4 PoolManager and Quoter together. V4 execution is limited to
   direct native-ETH/token pools at the standard fee/tick-spacing pairs with no hook.
   The executor converts ETH and WETH one-for-one inside the atomic entry.
 - A reviewed deployment manifest that pins chain, role, address, and runtime
@@ -732,10 +732,13 @@ to defaults. A runtime write failure rejects the dashboard
 mutation and keeps the prior runtime settings active; fix the settings path or
 permissions and retry.
 
-Deployment identities are execution trust roots. The dashboard validates the
-syntax, shape, and independent RPC set for REP, WETH, OpenOracle, coordinator,
-executor, manifest, and Uniswap V2/V3/V4 values before saving them for the next
-scan boundary. The scan authenticates configured contract bytecode before execution.
+Deployment identities are execution trust roots. REP, WETH, OpenOracle, and all
+Uniswap addresses come from the selected network. Mainnet uses upstream Uniswap;
+Sepolia uses the contracts installed by `deploy:testnet`. The saved configuration
+contains V2/V4 enable switches, not Uniswap addresses. The dashboard validates
+executor, coordinator, manifest, and independent RPC settings before saving them
+for the next scan boundary. The scan authenticates contract bytecode against the
+reviewed manifest before execution.
 
 For dashboard deployment, configure a public submission RPC on the selected chain
 and set an active signer. If execution is armed, pause the bot first; pause blocks
@@ -855,7 +858,7 @@ shows both token reserves. Neither is a token-denominated TVL or a promise that 
 full game size can execute without price impact. “Price” is the decimal-normalized
 WETH-per-token spot price derived from V3 `sqrtPriceX96` or V2 reserves; it is not
 an executable size-aware quote. V3 execution uses QuoterV2 and the configured
-spot/TWAP guard. When `deployment.uniswapV2Router` is configured, mainnet execution also
+spot/TWAP guard. When `deployment.uniswapV2Enabled` is `true`, mainnet execution also
 reads the canonical Uniswap V2 pair reserves at the exact quorum quote block and
 evaluates the direct WETH/token route with the standard 0.30% fee:
 
@@ -867,8 +870,8 @@ amount in  = floor(reserve in × amount out × 1000
              ÷ ((reserve out − amount out) × 997)) + 1
 ```
 
-When `deployment.uniswapV4PoolManager` and `deployment.uniswapV4Quoter` are both
-configured, the bot also asks the authenticated V4 Quoter for
+When `deployment.uniswapV4Enabled` is `true`, the bot also asks the
+network-derived, authenticated V4 Quoter for
 exact-input and exact-output quotes against these exact pool keys:
 
 | Fee units | Tick spacing |
@@ -1271,13 +1274,12 @@ entry from depending on wallet inventory already committed to recovery.
   but there is intentionally no claimed universal configurable V3/V4 adapter schema.
 - Ethereum mainnet and Sepolia WETH/token games using standard Uniswap V3 fee tiers
   and exact-transfer ERC-20s are supported. Mainnet can additionally execute through
-	  authenticated Uniswap V2 Router02 when `deployment.uniswapV2Router` is configured.
-	  Both networks can execute through authenticated Uniswap V4 PoolManager and Quoter
-	  contracts when `deployment.uniswapV4PoolManager` and
-	  `deployment.uniswapV4Quoter` are configured, but only against standard-fee,
+  authenticated Uniswap V2 Router02 when `deployment.uniswapV2Enabled` is `true`.
+  Both networks can execute through authenticated Uniswap V4 PoolManager and Quoter
+  contracts when `deployment.uniswapV4Enabled` is `true`, but only against standard-fee,
   hookless native-ETH/token pools. V3 remains the reference/TWAP safety anchor.
-  Identities remain operator-supplied, but
-  under the opt-in two-reader policy, live mode authenticates every address and runtime
+  Uniswap identities are network-derived. Under the opt-in two-reader policy,
+  live mode authenticates every address and runtime
   bytecode hash against the reviewed deployment manifest through at least two available read RPCs. Every
   available authentication result must agree; the manifest itself remains an
   operator trust root.

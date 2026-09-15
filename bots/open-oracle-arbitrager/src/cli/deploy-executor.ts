@@ -43,7 +43,7 @@ CREATE2 proxy, verifies its runtime bytecode, and prints the stable address.`)
 const privateKeyValue = process.env['PRIVATE_KEY']
 if (privateKeyValue === undefined || !/^0x[0-9a-fA-F]{64}$/.test(privateKeyValue)) throw new Error('PRIVATE_KEY must be a 32-byte 0x-prefixed deployment key')
 const networkName = parseNetworkName(option('network'))
-const network = networkConfiguration(networkName, {})
+const network = networkConfiguration(networkName)
 const rpcUrl = option('rpc-url') ?? process.env['ETH_RPC_URL'] ?? defaultRpcUrl(networkName)
 const quorumRpcUrls = options('quorum-rpc-url')
 const settingsFile = resolve(process.env['OPEN_ORACLE_ARBITRAGER_CONFIG'] ?? defaultConfigurationFile)

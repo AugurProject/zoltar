@@ -6,7 +6,7 @@ import { networkConfiguration } from '#config/network'
 import { loadBalances } from '#execution/dispute-execution'
 import { multicallProvider } from '../helpers/multicall-provider.ts'
 
-const network = networkConfiguration('sepolia', {})
+const network = networkConfiguration('sepolia')
 const wallet = { account: privateKeyToAccount(`0x${'11'.repeat(32)}`) }
 const account = wallet.account.address
 const healthyToken = getAddress('0x0000000000000000000000000000000000000001')

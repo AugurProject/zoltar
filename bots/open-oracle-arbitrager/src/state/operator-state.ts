@@ -5,7 +5,7 @@ import { mkdir, open, readFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { bigintToSafeNumber, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import type { OpenOracleGame } from '@zoltar/open-oracle-shared/openOracle/openOracle'
-import type { DeploymentSettings } from '#config/deployment-settings'
+import { validateDeploymentSettings, type DeploymentSettings } from '#config/deployment-settings'
 import type { ConnectivitySettings, EndpointCheck, NetworkName } from '#monitoring/connectivity'
 import type { SubmissionSettings, SubmissionTargetResult } from '#execution/transaction-submission'
 import type { Venue } from '#core/venue-strategy'
@@ -944,23 +944,7 @@ export function operatorSnapshot(
 			},
 		},
 		connectivity,
-		deployment:
-			fixed.deployment ??
-			({
-				coordinatorAddresses: [],
-				deploymentManifest: undefined,
-				executor: fixed.executor,
-				openOracle: fixed.openOracle,
-				quorumRpcUrls: [],
-				rep: fixed.openOracle,
-				uniswapFactory: fixed.openOracle,
-				uniswapQuoter: fixed.openOracle,
-				uniswapRouter: undefined,
-				uniswapV2Router: undefined,
-				uniswapV4PoolManager: undefined,
-				uniswapV4Quoter: undefined,
-				weth: fixed.openOracle,
-			} satisfies DeploymentSettings),
+		deployment: fixed.deployment ?? validateDeploymentSettings({ coordinatorAddresses: [], executor: fixed.executor, quorumRpcUrls: [], uniswapV2Enabled: false, uniswapV4Enabled: false }, fixed.network),
 		totalActualGasCostEth: sumDecimalWeth(state.executionHistory, 'actualGasCostEth'),
 		totalEstimatedNetProfitEth: sumDecimalWeth(state.executionHistory, 'estimatedNetProfitWeth'),
 		totalEstimatedNetProfitWeth: sumDecimalWeth(state.executionHistory, 'estimatedNetProfitWeth'),

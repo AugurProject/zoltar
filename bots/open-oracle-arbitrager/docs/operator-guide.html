@@ -268,7 +268,7 @@ bun run run</code></pre>
 								<td>Uniswap V2</td>
 								<td>Mainnet</td>
 								<td>Yes</td>
-								<td>Optional, through an authenticated Router02 when <code>deployment.uniswapV2Router</code> is configured</td>
+								<td>Optional, through an authenticated Router02 when <code>deployment.uniswapV2Enabled</code> is <code>true</code></td>
 								<td>Spot WETH/token comes from normalized reserves; both reserves are shown. Execution uses the exact direct-pair 0.30% constant-product quote at the quorum block.</td>
 							</tr>
 							<tr>
@@ -281,7 +281,7 @@ bun run run</code></pre>
 							<tr>
 								<td>Uniswap V4</td>
 								<td>Mainnet and Sepolia</td>
-								<td>Exact size-aware quotes when <code>deployment.uniswapV4PoolManager</code> and <code>deployment.uniswapV4Quoter</code> are configured</td>
+								<td>Exact size-aware quotes when <code>deployment.uniswapV4Enabled</code> is <code>true</code></td>
 								<td>Optional, through an authenticated PoolManager and Quoter for direct hookless native-ETH/token pools</td>
 								<td>Execution uses exact-input or exact-output V4 Quoter evidence at the quorum block, validates signed PoolManager deltas, and converts native ETH and WETH atomically. Hooked pools are excluded. See <a href="/documentation/reference#uniswap-venue-execution">V4 pool eligibility in the operator README</a> for the exact pool keys, signs, and amount bound.</td>
 							</tr>
@@ -295,6 +295,7 @@ bun run run</code></pre>
 						</tbody>
 					</table>
 				</div>
+				<p>Uniswap addresses are derived from the selected network: upstream deployments on mainnet and the <code>deploy:testnet</code> contracts on Sepolia. V3 remains enabled. The V2 switch defaults to enabled, but V2 is unavailable on Sepolia; the preference is retained. The V4 switch defaults to disabled.</p>
 				<p>The dashboard's historical chart stores one current-head sample per pool and block. Every line therefore represents a concrete exchange pool, not an aggregated token price. The exact-value table lists block, observation time, pool, venue, and WETH-per-token price. These spot samples are for comparison. V2 execution uses exact reserves at the quorum block, V3 execution uses QuoterV2, and V4 execution uses the authenticated V4 Quoter against a hookless pool key; every executable opportunity still requires the V3 spot/TWAP reference guard.</p>
 				<p>On mainnet, startup discovers REPv2 and instantiated fork REP tokens from Augur universe state. Explicitly configured tokens join the execution allowlist. Tokens seen only in approved reports are displayed for monitoring but cannot trigger a trade, and a token with no supported WETH pool is shown explicitly rather than silently omitted.</p>
 			</section>

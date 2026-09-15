@@ -75,6 +75,8 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 		openOracle: address,
 		quorumRpcUrls: [],
 		rep: address,
+		uniswapV2Enabled: false,
+		uniswapV4Enabled: false,
 		uniswapFactory: address,
 		uniswapQuoter: address,
 		uniswapRouter: undefined,
@@ -328,7 +330,7 @@ function element<T extends Element>(window: BrowserWindow, id: string, construct
 	return found
 }
 
-test('deployment form retains untouched defaults and makes edited addresses explicit', async () => {
+test('deployment form saves venue switches without configurable Uniswap addresses', async () => {
 	let settings = parseOperatorSettings({ ...example, network: 'sepolia', networkConfigured: true, connectivity: { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://rpc.example/' } })
 	const snapshot = () =>
 		operatorSnapshot(operatorState(), settings.strategy, settings.submission, settings.connectivity, {
@@ -384,7 +386,7 @@ test('deployment form retains untouched defaults and makes edited addresses expl
 	if (!build.success || output === undefined) throw new Error('Could not build dashboard fixture')
 	page.evaluate(await output.text())
 	await page.waitUntilComplete()
-	for (let attempt = 0; attempt < 100 && element(window, 'deployment-v3-factory', window.HTMLInputElement).value === ''; attempt++) await Bun.sleep(10)
+	for (let attempt = 0; attempt < 100 && !element(window, 'deployment-v2-enabled', window.HTMLInputElement).checked; attempt++) await Bun.sleep(10)
 	const form = element(window, 'deployment-form', window.HTMLFormElement)
 	const edit = (id: string, value: string) => {
 		const input = element(window, id, window.HTMLInputElement)
@@ -397,22 +399,23 @@ test('deployment form retains untouched defaults and makes edited addresses expl
 		for (let attempt = 0; attempt < 100 && element(window, 'deployment-status', window.HTMLElement).textContent === 'Validating deployment configuration…'; attempt++) await Bun.sleep(10)
 		expect(element(window, 'deployment-status', window.HTMLElement).textContent).toContain('Deployment configuration saved')
 	}
+	expect(form.checkValidity()).toBe(true)
+	for (const id of ['deployment-v3-factory', 'deployment-v3-quoter', 'deployment-v3-router', 'deployment-v2-router', 'deployment-v4-pool-manager', 'deployment-v4-quoter']) expect(window.document.getElementById(id)).toBeNull()
 	edit('deployment-executor', address)
 	await save()
 	const restored = () => parseOperatorSettings({ ...JSON.parse(JSON.stringify(serializeOperatorSettings(settings))), network: 'mainnet' }).deployment
 	expect(settings.deployment.executor).toBe(address)
 	expect(settings.deployment.uniswapV2Router).toBeUndefined()
-	expect(restored().uniswapV2Router).toBe(getAddress(example.deployment.uniswapV2Router))
-	edit('deployment-v3-factory', '0x0227628f3F023bb0B980b67D528571c95c6DaC1c')
-	edit('deployment-v3-quoter', '0xEd1f6473345F45b75F8179591dd5bA1888cf2FB3')
-	edit('deployment-v3-router', address)
+	expect(restored().uniswapV2Router).toBe(getAddress('0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D'))
+	element(window, 'deployment-v2-enabled', window.HTMLInputElement).checked = false
+	element(window, 'deployment-v4-enabled', window.HTMLInputElement).checked = true
 	await save()
-	expect(settings.deployment.uniswapFactory).toBe('0x0227628f3F023bb0B980b67D528571c95c6DaC1c')
-	expect(settings.deployment.uniswapQuoter).toBe('0xEd1f6473345F45b75F8179591dd5bA1888cf2FB3')
-	expect(settings.deployment.uniswapRouter).toBe(address)
-	expect(restored().uniswapV2Router).toBe(getAddress(example.deployment.uniswapV2Router))
-	edit('deployment-v2-router', address)
-	edit('deployment-v2-router', '')
-	await save()
+	expect(settings.deployment.uniswapV4PoolManager).toBeDefined()
+	expect(settings.deployment.uniswapV4Quoter).toBeDefined()
 	expect(restored().uniswapV2Router).toBeUndefined()
+	expect(serializeOperatorSettings(settings).deployment).toEqual({ coordinatorAddresses: [], deploymentManifest: undefined, executor: address, quorumRpcUrls: [], uniswapV2Enabled: false, uniswapV4Enabled: true })
+	element(window, 'deployment-v2-enabled', window.HTMLInputElement).checked = true
+	await save()
+	expect(settings.deployment.uniswapV2Router).toBeUndefined()
+	expect(restored().uniswapV2Router).toBeDefined()
 })

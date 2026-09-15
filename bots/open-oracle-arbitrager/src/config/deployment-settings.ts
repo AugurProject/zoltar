@@ -6,24 +6,6 @@ import { record as validateRecord } from '@zoltar/bot-shared/infrastructure/json
 import mainnet from '../../../../docs/mainnet-deployment-addresses.json'
 import sepolia from '../../../../docs/sepolia-deployment-addresses.json'
 
-const uniswapDefaultFields = {
-	uniswapFactory: 'factory',
-	uniswapQuoter: 'quoter',
-	uniswapRouter: 'router',
-	uniswapV2Router: 'v2Router',
-} as const
-
-type UniswapDefaultField = keyof typeof uniswapDefaultFields
-
-function parseUniswapDefaults(value: unknown): UniswapDefaultField[] {
-	if (value === undefined) return []
-	if (!Array.isArray(value)) throw new Error('Uniswap defaults must be an array of deployment field names')
-	return value.map(field => {
-		if (field !== 'uniswapFactory' && field !== 'uniswapQuoter' && field !== 'uniswapRouter' && field !== 'uniswapV2Router') throw new Error('Unsupported Uniswap default field')
-		return field
-	})
-}
-
 export type DeploymentSettings = {
 	coordinatorAddresses: readonly Address[]
 	deploymentManifest: DeploymentManifest | undefined
@@ -31,8 +13,8 @@ export type DeploymentSettings = {
 	openOracle: Address
 	quorumRpcUrls: readonly string[]
 	rep: Address
-	// Listed fields follow the network even when their resolved address is unavailable.
-	uniswapDefaults?: readonly UniswapDefaultField[] | undefined
+	uniswapV2Enabled: boolean
+	uniswapV4Enabled: boolean
 	uniswapFactory: Address
 	uniswapQuoter: Address
 	uniswapRouter: Address | undefined
@@ -42,6 +24,8 @@ export type DeploymentSettings = {
 	weth: Address
 }
 
+export type StoredDeploymentSettings = Pick<DeploymentSettings, 'coordinatorAddresses' | 'deploymentManifest' | 'executor' | 'quorumRpcUrls' | 'uniswapV2Enabled' | 'uniswapV4Enabled'>
+
 function record(value: unknown) {
 	return validateRecord(value, 'Deployment settings', 'Deployment settings must be a JSON object')
 }
@@ -50,6 +34,12 @@ function optionalAddress(value: unknown, name: string) {
 	if (value === undefined || value === null || value === '') return undefined
 	if (typeof value !== 'string') throw new Error(`${name} must be an address or empty`)
 	return getAddress(value)
+}
+
+function venueEnabled(value: unknown, name: string, fallback: boolean) {
+	if (value === undefined) return fallback
+	if (typeof value !== 'boolean') throw new Error(`${name} must be a boolean`)
+	return value
 }
 
 function addressArray(value: unknown, name: string) {
@@ -64,31 +54,14 @@ function urlArray(value: unknown) {
 
 export function validateDeploymentSettings(value: unknown, network: NetworkName = 'mainnet'): DeploymentSettings {
 	const settings = record(value)
-	const keys = ['coordinatorAddresses', 'deploymentManifest', 'executor', 'openOracle', 'quorumRpcUrls', 'rep', 'uniswapDefaults', 'uniswapFactory', 'uniswapQuoter', 'uniswapRouter', 'uniswapV2Router', 'uniswapV4PoolManager', 'uniswapV4Quoter', 'weth']
+	const keys = ['coordinatorAddresses', 'deploymentManifest', 'executor', 'openOracle', 'quorumRpcUrls', 'rep', 'uniswapV2Enabled', 'uniswapV4Enabled', 'uniswapFactory', 'uniswapQuoter', 'uniswapRouter', 'uniswapV2Router', 'uniswapV4PoolManager', 'uniswapV4Quoter', 'weth']
 	const requiredKeys = ['coordinatorAddresses', 'quorumRpcUrls']
 	if (Object.keys(settings).some(key => !keys.includes(key)) || requiredKeys.some(key => !(key in settings))) throw new Error('Deployment settings require the supported core deployment fields')
 	const manifest = network === 'mainnet' ? mainnet : sepolia
 	const identity = canonicalNetworkDeployment(manifest)
 	const uniswap = canonicalUniswapDeployment(identity.chainId)
-	const requestedDefaults = parseUniswapDefaults(settings['uniswapDefaults'])
-	const uniswapDefaults: UniswapDefaultField[] = []
-	function networkAddress(field: UniswapDefaultField, name: string) {
-		const supplied = optionalAddress(settings[field], name)
-		const required = field === 'uniswapFactory' || field === 'uniswapQuoter'
-		// Addresses are explicit unless default mode was selected; never infer intent from equality.
-		if (requestedDefaults.includes(field) || (required && supplied === undefined)) {
-			uniswapDefaults.push(field)
-			return uniswap[uniswapDefaultFields[field]]
-		}
-		return supplied
-	}
-	const uniswapFactory = networkAddress('uniswapFactory', 'Uniswap V3 factory') ?? uniswap.factory
-	const uniswapQuoter = networkAddress('uniswapQuoter', 'Uniswap V3 quoter') ?? uniswap.quoter
-	const uniswapRouter = networkAddress('uniswapRouter', 'Uniswap V3 router')
-	const uniswapV2Router = networkAddress('uniswapV2Router', 'Uniswap V2 router')
-	const v4PoolManager = optionalAddress(settings['uniswapV4PoolManager'], 'Uniswap V4 PoolManager')
-	const v4Quoter = optionalAddress(settings['uniswapV4Quoter'], 'Uniswap V4 Quoter')
-	if ((v4PoolManager === undefined) !== (v4Quoter === undefined)) throw new Error('Uniswap V4 requires both PoolManager and Quoter')
+	const uniswapV2Enabled = venueEnabled(settings['uniswapV2Enabled'], 'Uniswap V2 enabled', true)
+	const uniswapV4Enabled = venueEnabled(settings['uniswapV4Enabled'], 'Uniswap V4 enabled', false)
 	return {
 		coordinatorAddresses: addressArray(settings['coordinatorAddresses'], 'Coordinator addresses'),
 		deploymentManifest: settings['deploymentManifest'] === undefined || settings['deploymentManifest'] === null ? undefined : parseDeploymentManifest(settings['deploymentManifest']),
@@ -96,13 +69,14 @@ export function validateDeploymentSettings(value: unknown, network: NetworkName 
 		openOracle: canonicalCoreDeployment(manifest).openOracle,
 		quorumRpcUrls: urlArray(settings['quorumRpcUrls']),
 		rep: identity.rep,
-		...(uniswapDefaults.length === 0 ? {} : { uniswapDefaults }),
-		uniswapFactory,
-		uniswapQuoter,
-		uniswapRouter,
-		uniswapV2Router,
-		uniswapV4PoolManager: v4PoolManager,
-		uniswapV4Quoter: v4Quoter,
+		uniswapV2Enabled,
+		uniswapV4Enabled,
+		uniswapFactory: uniswap.factory,
+		uniswapQuoter: uniswap.quoter,
+		uniswapRouter: uniswap.router,
+		uniswapV2Router: uniswapV2Enabled ? uniswap.v2Router : undefined,
+		uniswapV4PoolManager: uniswapV4Enabled ? uniswap.v4PoolManager : undefined,
+		uniswapV4Quoter: uniswapV4Enabled ? uniswap.v4Quoter : undefined,
 		weth: identity.weth,
 	}
 }

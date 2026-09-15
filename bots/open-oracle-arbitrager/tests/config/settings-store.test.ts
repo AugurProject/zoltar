@@ -1,6 +1,6 @@
 import mainnet from '../../../../docs/mainnet-deployment-addresses.json'
 import sepolia from '../../../../docs/sepolia-deployment-addresses.json'
-import { canonicalCoreDeployment, canonicalNetworkDeployment } from '@zoltar/bot-shared/config/canonical-deployment'
+import { canonicalCoreDeployment, canonicalNetworkDeployment, canonicalUniswapDeployment } from '@zoltar/bot-shared/config/canonical-deployment'
 import example from '../../config/operator.example.json'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdir, mkdtemp, open, readFile, rename, rm, stat, symlink, writeFile } from 'node:fs/promises'
@@ -47,9 +47,11 @@ function settings(privateKeyValue: Hex | undefined) {
 			openOracle: canonicalCoreDeployment(mainnet).openOracle,
 			quorumRpcUrls: ['https://quorum.example/'],
 			rep: canonicalNetworkDeployment(mainnet).rep,
-			uniswapFactory: '0x0000000000000000000000000000000000000006' as const,
-			uniswapQuoter: '0x0000000000000000000000000000000000000007' as const,
-			uniswapRouter: '0x0000000000000000000000000000000000000008' as const,
+			uniswapV2Enabled: false,
+			uniswapV4Enabled: false,
+			uniswapFactory: canonicalUniswapDeployment(1).factory,
+			uniswapQuoter: canonicalUniswapDeployment(1).quoter,
+			uniswapRouter: canonicalUniswapDeployment(1).router,
 			uniswapV2Router: undefined,
 			uniswapV4PoolManager: undefined,
 			uniswapV4Quoter: undefined,
@@ -502,4 +504,11 @@ test('preserves default router intent through serialized network changes', () =>
 	const restored = parseOperatorSettings({ ...JSON.parse(JSON.stringify(serializeOperatorSettings(sepolia))), network: 'mainnet' })
 	expect(restored.deployment.uniswapV2Router).toBe(mainnet.deployment.uniswapV2Router)
 	expect(restored.deployment.uniswapV2Router).toBeDefined()
+})
+
+test('stores only venue switches and derives addresses again on load', () => {
+	const parsed = parseOperatorSettings({ ...example, deployment: { ...example.deployment, uniswapV2Enabled: false, uniswapV4Enabled: true } })
+	const stored = serializeOperatorSettings(parsed)
+	expect(stored.deployment).toEqual({ coordinatorAddresses: [], deploymentManifest: undefined, executor: undefined, quorumRpcUrls: [], uniswapV2Enabled: false, uniswapV4Enabled: true })
+	expect(parseOperatorSettings(JSON.parse(JSON.stringify(stored))).deployment).toEqual(parsed.deployment)
 })

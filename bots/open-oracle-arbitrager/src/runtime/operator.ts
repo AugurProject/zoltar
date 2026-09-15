@@ -167,22 +167,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 		savedWallet: Address | undefined
 		wallet: Address | undefined
 	} = {
-		deployment: {
-			coordinatorAddresses: config.coordinatorAddresses,
-			deploymentManifest: config.deploymentManifest,
-			executor: config.executor,
-			openOracle: config.openOracle,
-			quorumRpcUrls: config.quorumRpcUrls,
-			rep: config.network.rep,
-			uniswapDefaults: config.operatorSettings.deployment.uniswapDefaults,
-			uniswapFactory: config.network.factory,
-			uniswapQuoter: config.network.quoter,
-			uniswapRouter: config.router,
-			uniswapV2Router: config.v2Router,
-			uniswapV4PoolManager: config.v4PoolManager,
-			uniswapV4Quoter: config.v4Quoter,
-			weth: config.network.weth,
-		},
+		deployment: config.operatorSettings.deployment,
 		execute: config.execute,
 		executor: config.executor,
 		expectedChainId: config.network.chain.id,

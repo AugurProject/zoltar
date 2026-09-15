@@ -54,10 +54,7 @@ export type Configuration = MutableStrategy & {
 
 export function runnableOperatorSettings(settingsFile: string, saved: PersistedOperatorSettings) {
 	const deployment = saved.deployment
-	const network = networkConfiguration(saved.network, {
-		factory: deployment.uniswapFactory,
-		quoter: deployment.uniswapQuoter,
-	})
+	const network = networkConfiguration(saved.network)
 	const quorumRpcUrls = [...validateIndependentReadRpcUrls(saved.connectivity.readRpcUrl, deployment.quorumRpcUrls)]
 	if (saved.runtime.execute && quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(saved.rpcQuorum)) throw new Error('Execution is enabled, but live operation requires at least two independent quorum RPCs (three read endpoints total)')
 	if (saved.runtime.execute && deployment.executor === undefined) throw new Error('Execution is enabled, but deployment.executor is not configured')

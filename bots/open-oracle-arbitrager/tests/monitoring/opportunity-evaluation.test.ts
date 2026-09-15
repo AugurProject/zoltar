@@ -10,7 +10,7 @@ import { inspectReport, type ReportInspectionConfiguration } from '#monitoring/r
 import type { Pool } from '#core/operator-types'
 import { multicallProvider } from '../helpers/multicall-provider.ts'
 
-const network = networkConfiguration('sepolia', {})
+const network = networkConfiguration('sepolia')
 const rep = network.rep
 const v4Quoter = getAddress('0x0000000000000000000000000000000000000044')
 const v4PoolManager = getAddress('0x0000000000000000000000000000000000000045')
