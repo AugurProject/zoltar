@@ -80,3 +80,10 @@ export async function quoteVenue(client: BatchReader, config: QuoteConfiguration
 	}
 	return { sell, buy, replacement, failure }
 }
+
+/** Selection and final validation require the same complete quote set; valuation may use partial quotes. */
+export function executableVenueQuotes(quotes: Awaited<ReturnType<typeof quoteVenue>>) {
+	const { sell, buy, replacement } = quotes
+	if (sell === undefined || buy === undefined || replacement === undefined) return undefined
+	return { sell, buy, replacement }
+}

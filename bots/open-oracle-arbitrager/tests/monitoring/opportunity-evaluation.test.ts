@@ -9,6 +9,7 @@ import { calculateFee, calculateNextAmount1 } from '#core/strategy'
 import { networkConfiguration } from '#config/network'
 import type { RiskLimits } from '#core/safety-controls'
 import { evaluate, executionReadQuorum, type EvaluationConfiguration } from '#monitoring/opportunity-evaluation'
+import { quoteVenue } from '#monitoring/venue-quotes'
 import { inspectReport, type ReportInspectionConfiguration } from '#monitoring/report-inspection'
 import type { Pool } from '#core/operator-types'
 import { multicallProvider } from '../helpers/multicall-provider.ts'
@@ -64,7 +65,7 @@ const report: OpenOracleStatePreimage = {
 const pool: Pool = { venue: 'uniswap-v3', address: poolAddress, fee: 3000, liquidity: 10n ** 24n, spotTick: 0n, token: rep, twapTick: 0n }
 const marketBlock = { hash: `0x${'ab'.repeat(32)}` as Hex, number: 100n, observedAt: 1_000 }
 
-function quoterClient(options: { v3SellOut: bigint; v3BuyIn: bigint; replacementOut: bigint; v4: (fee: number) => { sellOut: bigint; buyIn: bigint } | undefined }) {
+function quoterClient(options: { v3SellOut: bigint; v3BuyIn: bigint | undefined; replacementOut: bigint; v4: (fee: number) => { sellOut: bigint; buyIn: bigint } | undefined }) {
 	const requests: { blockTag: unknown; functionName: string; target: string }[] = []
 	let batched = 0
 	const provider = multicallProvider(network.multicall3, ({ blockTag, data, to }) => {
@@ -75,6 +76,7 @@ function quoterClient(options: { v3SellOut: bigint; v3BuyIn: bigint; replacement
 				const amountOut = decoded.args[0].tokenIn.toLowerCase() === rep.toLowerCase() ? options.v3SellOut : options.replacementOut
 				return encodeAbiParameters(quoterAbi[0].outputs, [amountOut, 0n, 0n, 0n])
 			}
+			if (options.v3BuyIn === undefined) throw new Error('buy quote unavailable')
 			return encodeAbiParameters(quoterAbi[1].outputs, [options.v3BuyIn, 0n, 0n, 0n])
 		}
 		if (to.toLowerCase() === v4Quoter.toLowerCase()) {
@@ -294,4 +296,22 @@ test('selects a profitable direction consistent with the same venue replacement 
 	const evaluation = await evaluate(quoter.client, config, report, pool, 1n, marketBlock)
 	expect(evaluation.candidate?.quote.direction).toBe('sell-rep')
 	expect(evaluation.candidate?.quote.netProfitAttoWeth).toBeGreaterThan(0n)
+})
+
+test('a higher-profit sell with a missing buy quote cannot block an executable alternative venue', async () => {
+	const quoter = quoterClient({ replacementOut: replacement, v3BuyIn: undefined, v3SellOut: 15n * 10n ** 17n, v4: () => ({ sellOut: 13n * 10n ** 17n, buyIn: 14n * 10n ** 17n }) })
+	const raw = await quoteVenue(quoter.client, config, pool, { sellAmount: report.game.currentAmount2, buyAmount: report.game.currentAmount2, replacementAttoWeth: calculateNextAmount1(report.game) }, 100n)
+	expect(raw.sell).toBe(15n * 10n ** 17n)
+	expect(raw.replacement).toBe(replacement)
+	expect(raw.buy).toBeUndefined()
+	const saved = parseOperatorSettings(await Bun.file(new URL('../../config/operator.example.json', import.meta.url)).json())
+	const execution = { ...config, connectivity: saved.connectivity, quorumRpcUrls: [], executor: reporter, openOracle: oracle, twapSeconds: 60 }
+	await expect(executionReadQuorum([quoter.client], execution, report, pool, 'uniswap-v3', 3000, 100n, reporter)).rejects.toThrow('Selected venue quote failed')
+	const inspection: ReportInspectionConfiguration = { ...config, execute: false, maxSpotTwapTicks: 100n, minimumProfitAttoWeth: 0n, minimumProfitBps: 0n, minimumRemainingBlocks: 1n, minimumRemainingSeconds: 1n, openOracle: oracle }
+	const alternative: Pool = { venue: 'uniswap-v4', address: v4PoolManager, fee: 3000, token: rep }
+	const evaluated = await inspectReport(quoter.client, undefined, inspection, report, [pool, alternative], 100n, marketBlock.hash, 101n, 1n, undefined, { decimals: 18, symbol: 'REP' }, true, true, false, [{ ...report.game, coordinator: reporter, openOracle: oracle }], () => {})
+	expect(evaluated?.opportunity.venue).toBe('uniswap-v4')
+	expect(evaluated?.opportunity.decision).toBe('dry-run-opportunity')
+	const final = await executionReadQuorum([independentClient('uniswap-v4').client], execution, report, alternative, 'uniswap-v4', 3000, 100n, reporter)
+	expect(final.replacementAmount2).toBe(replacement)
 })

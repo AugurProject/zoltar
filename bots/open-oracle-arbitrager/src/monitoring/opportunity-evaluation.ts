@@ -9,7 +9,7 @@ import type { Venue } from '#core/venue-strategy'
 import { selectBestExecution, settledExecutionSnapshotWithQuorum } from '#execution/execution-orchestration'
 import { endpointLabel } from '#monitoring/connectivity'
 import { loadV3Pool } from '#monitoring/execution-pools'
-import { quoteVenue } from '#monitoring/venue-quotes'
+import { executableVenueQuotes, quoteVenue } from '#monitoring/venue-quotes'
 import type { PositionRecord } from '#state/position-store'
 import { readContractAtBlock, type Address } from '@zoltar/bot-shared/ethereum'
 import type { MarketConsensusObservation } from '@zoltar/bot-shared/monitoring/market-consensus'
@@ -62,7 +62,7 @@ export async function evaluate(client: BatchReader, config: EvaluationConfigurat
 		[...(sell === undefined ? [] : [sell]), ...(buy === undefined ? [] : [buy])].filter(candidate => candidate.tokenToSwap.toLowerCase() === replacementToken?.toLowerCase()),
 		candidate => candidate.netProfitAttoWeth,
 	)
-	return { candidate: quote === undefined || quotes.replacement === undefined ? undefined : { hedgeFee: pool.fee, hedgePool: pool.address, quote, venue: pool.venue }, observations, replacementAmount2: quotes.replacement, replacementQuoteFailure: quotes.failure }
+	return { candidate: quote === undefined || executableVenueQuotes(quotes) === undefined ? undefined : { hedgeFee: pool.fee, hedgePool: pool.address, quote, venue: pool.venue }, observations, replacementAmount2: quotes.replacement, replacementQuoteFailure: quotes.failure }
 }
 
 export async function executionReadQuorum(
@@ -84,7 +84,8 @@ export async function executionReadQuorum(
 	const observations = clients.map(async (readClient, index) => {
 		if (pool.venue !== hedgeVenue || pool.fee !== hedgeFee) throw new Error('Execution venue does not match the selected pool')
 		const quotes = await quoteVenue(readClient, config, pool, { sellAmount: game.currentAmount2, buyAmount: repWithFees, replacementAttoWeth: newAmount1 }, blockNumber)
-		if (quotes.sell === undefined || quotes.buy === undefined || quotes.replacement === undefined) throw new Error(`Selected venue quote failed: ${quotes.failure ?? 'missing quote'}`)
+		const executable = executableVenueQuotes(quotes)
+		if (executable === undefined) throw new Error(`Selected venue quote failed: ${quotes.failure ?? 'missing quote'}`)
 		const [block, stateHash, v3State, nonce, eth, weth, token, allowance1, allowance2, internalAllowance1, internalAllowance2] = await Promise.all([
 			readClient.getBlock({ blockNumber }),
 			readContractAtBlock(readClient, { address: config.openOracle, abi: openOracleAbi, functionName: 'oracleGame', args: [report.helper.reportId] }, blockNumber),
@@ -109,12 +110,12 @@ export async function executionReadQuorum(
 				baseFeePerGas: block.baseFeePerGas ?? 0n,
 				blockHash: block.hash,
 				blockTimestamp: block.timestamp,
-				buyHedgeQuote: quotes.buy,
+				buyHedgeQuote: executable.buy,
 				eth: requiredBigint(eth, 'Execution account ETH balance'),
 				nonce,
 				v3State,
-				replacementAmount2: quotes.replacement,
-				sellHedgeQuote: quotes.sell,
+				replacementAmount2: executable.replacement,
+				sellHedgeQuote: executable.sell,
 				stateHash: requiredHash(stateHash, 'OpenOracle report state'),
 				token: requiredBigint(token, 'Execution account report-token balance'),
 				weth: requiredBigint(weth, 'Execution account WETH balance'),

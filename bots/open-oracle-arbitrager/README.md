@@ -90,14 +90,17 @@ for the report lifecycle assumptions and economics used by the arbitrager.
   predictable CREATE2 address from the dashboard or with `bun run deploy-executor --`,
   then authenticate that address in the execution manifest.
 - At least one enabled Uniswap version available on the selected network.
-- `deployment.uniswapV3Enabled` (default `true`) enables V3 with its spot/TWAP check.
-- Optionally, `deployment.uniswapV2Enabled` (default `true`) adds authenticated
+- `deployment.uniswapV3Enabled` (new-profile default `true`) enables V3 with its spot/TWAP check.
+- Optionally, `deployment.uniswapV2Enabled` (new-profile default `true`) adds authenticated
   direct WETH/token V2 hedges on mainnet. V2 is unavailable on Sepolia; switching
   networks does not discard the enabled preference.
-- Optionally, `deployment.uniswapV4Enabled` (default `false`) enables the
+- Optionally, `deployment.uniswapV4Enabled` (new-profile default `false`) enables the
   network-derived V4 PoolManager and Quoter together. V4 execution is limited to
   direct native-ETH/token pools at the standard fee/tick-spacing pairs with no hook.
   The executor converts ETH and WETH one-for-one inside the atomic entry.
+- Existing profiles without these switches retain their venue choices: a saved
+  router enables V2 or V3, and a saved PoolManager/Quoter pair enables V4. Saving
+  records those choices as switches; all addresses still derive from the network.
 - A reviewed deployment manifest that pins chain, role, address, and runtime
   bytecode hash for every contract and executable token. The primary read RPC
   authenticates every manifest entry by default. With the saved `rpcQuorum` setting at `2`,
@@ -476,7 +479,8 @@ Before each dispute, the bot:
 4. Models both directions across configured venues: QuoterV2 for V3, exact
    constant-product reserve math for V2, and the authenticated V4 Quoter across
    every standard fee/tick-spacing pair. Each venue supplies its own replacement
-   exact-input quote. Candidates without that quote are excluded before selection.
+   exact-input quote. Selection and final validation both require successful sell,
+   buy, and replacement quotes; incomplete candidates cannot block other venues.
 5. Derives the same replacement swap side as the OpenOracle contract.
 6. Calculates the exact WETH and token contributions and checks wallet inventory.
 7. Applies the absolute-profit and basis-point thresholds.
