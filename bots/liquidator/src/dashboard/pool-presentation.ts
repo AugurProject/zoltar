@@ -18,6 +18,8 @@ export type MonitoredPool = {
 	isPriceValid: boolean
 	lastPrice: string
 	multiplierBps: string
+	parent?: string
+	universeId: string
 	questionId: string
 	selected: boolean
 	systemState: string

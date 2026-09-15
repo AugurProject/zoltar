@@ -2,7 +2,7 @@ import { clearPoolDate, renderPoolDate } from './pool-dates.ts'
 import { botVaultState, poolStatusText, publicFailure, type MonitoredPool } from './pool-presentation.ts'
 import { getAddress } from '@zoltar/bot-shared/ethereum'
 import { requestWithTimeout } from '@zoltar/bot-shared/dashboard/polling'
-import type { PoolCatalogPage } from '../monitoring/pool-catalog.ts'
+import type { CatalogPool, PoolCatalogPage } from '../monitoring/pool-catalog.ts'
 
 type Context = { chainId: number | undefined; enabled: boolean; selected: ReadonlySet<string>; approved: ReadonlySet<string>; monitored: readonly MonitoredPool[] }
 
@@ -22,7 +22,6 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 	let loading = false
 	let saving = false
 	let error: string | undefined
-	let discoveryFailed = false
 	let searchError: string | undefined
 	let renderedKey: string | undefined
 	let dateFields: { root: HTMLElement; timestamp: string | undefined }[] = []
@@ -36,7 +35,12 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 	heading.append(navigation)
 	const status = node('p', '', 'muted')
 	status.setAttribute('role', 'status')
-	const retry = node('button', 'Retry', 'secondary')
+	const refreshButton = node('button', 'Refresh', 'secondary')
+	const snapshot = node('div', '', 'catalog-snapshot muted')
+	const snapshotDate = node('span')
+	snapshot.append(node('span', 'Catalog snapshot'), snapshotDate)
+	const toolbar = node('div', '', 'catalog-toolbar')
+	toolbar.append(refreshButton, snapshot)
 	const tabs = node('div', '', 'pool-tabs')
 	tabs.setAttribute('role', 'tablist')
 	tabs.setAttribute('aria-label', 'Pool scope')
@@ -72,8 +76,22 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 	const panel = node('div')
 	panel.id = 'pool-results'
 	panel.setAttribute('role', 'tabpanel')
-	panel.append(searchLabel, status, retry, cards)
+	panel.append(searchLabel, toolbar, status, cards)
 	root.append(heading, tabs, panel)
+
+	function listing() {
+		if (scope === 'all') return data
+		const monitored = context.chainId === undefined || searchError !== undefined ? [] : context.monitored.filter(pool => search.value.trim() === '' || pool.address.toLowerCase() === search.value.trim().toLowerCase())
+		const pools: CatalogPool[] = monitored.slice(page * 12, (page + 1) * 12).map(pool => ({
+			...data?.pools.find(candidate => candidate.address.toLowerCase() === pool.address.toLowerCase()),
+			address: pool.address,
+			questionId: pool.questionId,
+			universeId: pool.universeId,
+			multiplierBps: pool.multiplierBps,
+			...(pool.parent === undefined ? {} : { parent: pool.parent }),
+		}))
+		return { pools, total: String(monitored.length), pageCount: String(Math.ceil(monitored.length / 12)) }
+	}
 
 	function statusMessage() {
 		if (context.chainId === undefined) return 'Configure the chain and RPC endpoints in Settings to browse pools.'
@@ -81,17 +99,18 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 		if (error !== undefined) return error
 		if (saving) return 'Saving pool selection…'
 		if (loading) return search.value.trim() === '' ? 'Discovering pools…' : 'Searching pools…'
-		if (data?.total === '0') {
+		if (listing()?.total === '0') {
 			if (scope === 'monitored') return search.value.trim() === '' ? 'No monitored pools yet. Find a pool in All pools to add support.' : 'No matching monitored pool.'
 			return search.value.trim() === '' ? 'No pools have been deployed on this chain.' : 'No matching pool on this chain.'
 		}
-		if (data === undefined) return 'Waiting for connection…'
+		if (scope === 'all' && data === undefined) return 'Waiting for connection…'
 		return ''
 	}
 
 	function render() {
-		const key = JSON.stringify([context.chainId, context.enabled, [...context.selected], [...context.approved], data, scope, context.monitored, page, loading, saving, error, discoveryFailed, search.value, searchError])
+		const key = JSON.stringify([context.chainId, context.enabled, [...context.selected], [...context.approved], data, scope, context.monitored, page, loading, saving, error, search.value, searchError])
 		const currentTimestamp = BigInt(Math.floor(Date.now() / 1000))
+		renderPoolDate(snapshotDate, data?.snapshotTimestamp, currentTimestamp)
 		if (key === renderedKey) {
 			for (const field of dateFields) renderPoolDate(field.root, field.timestamp, currentTimestamp)
 			return
@@ -111,18 +130,18 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 		search.disabled = !context.enabled || saving
 		search.setAttribute('aria-invalid', String(searchError !== undefined))
 		navigation.hidden = search.value.trim() !== ''
+		const visible = listing()
+		refreshButton.disabled = loading || saving || !context.enabled || searchError !== undefined
 		previous.disabled = loading || saving || !context.enabled || page === 0
-		next.disabled = loading || saving || !context.enabled || data === undefined || BigInt(page + 1) >= BigInt(data.pageCount)
-		summary.textContent = data === undefined ? '' : `${data.total} pools · Page ${page + 1} of ${data.pageCount === '0' ? '1' : data.pageCount}`
+		next.disabled = loading || saving || !context.enabled || visible === undefined || BigInt(page + 1) >= BigInt(visible.pageCount)
+		summary.textContent = visible === undefined ? '' : `${visible.total} pools · Page ${page + 1} of ${visible.pageCount === '0' ? '1' : visible.pageCount}`
 		status.textContent = statusMessage()
 		status.hidden = status.textContent === ''
-		retry.hidden = !discoveryFailed
-		retry.disabled = loading || !context.enabled
 		cards.setAttribute('aria-busy', String(loading))
 		for (const field of dateFields) clearPoolDate(field.root)
 		dateFields = []
 		cards.replaceChildren(
-			...(data?.pools ?? []).map(pool => {
+			...(visible?.pools ?? []).map(pool => {
 				// Match Statoblast's ComparisonRecord: identity and action, metric grid, then details.
 				const card = node('article', '', 'catalog-record')
 				const header = node('header', '', 'catalog-record-header')
@@ -132,7 +151,7 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 				action.disabled = !context.enabled || loading || saving
 				action.dataset['recordKey'] = `pool:${pool.address.toLowerCase()}`
 				action.setAttribute('aria-label', `${action.textContent}: ${pool.address}`)
-				const chainId = data?.chainId
+				const chainId = context.chainId
 				action.addEventListener('click', async () => {
 					if (saving || !context.enabled || chainId === undefined || chainId !== context.chainId) return
 					saving = true
@@ -186,7 +205,7 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 				}
 				const address = node('code', pool.address, 'catalog-address')
 				card.append(header, badges, dates, metrics, address)
-				if (BigInt(pool.parent) !== 0n) card.append(node('p', `Parent ${pool.parent}`, 'catalog-address muted'))
+				if (pool.parent !== undefined && BigInt(pool.parent) !== 0n) card.append(node('p', `Parent ${pool.parent}`, 'catalog-address muted'))
 				if (monitored !== undefined) {
 					const details = node('details', '', 'catalog-monitoring')
 					details.dataset['poolAddress'] = pool.address.toLowerCase()
@@ -222,7 +241,6 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 		const requestEpoch = ++epoch
 		loading = true
 		error = undefined
-		discoveryFailed = false
 		render()
 		try {
 			const result: PoolCatalogPage = await requestWithTimeout(
@@ -236,11 +254,16 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 			)
 			if (requestEpoch !== epoch) return
 			if (result.chainId !== context.chainId) throw new Error('Pool page belongs to a different chain')
+			if (scope === 'all' && page > 0 && BigInt(page) >= BigInt(result.pageCount)) {
+				page = Math.max(0, Number(result.pageCount) - 1)
+				data = undefined
+				await refresh()
+				return
+			}
 			data = result
 		} catch (cause) {
 			if (requestEpoch === epoch) {
 				error = publicFailure(cause, 'Pool discovery failed. Check RPC connectivity and retry.')
-				discoveryFailed = true
 			}
 		} finally {
 			if (requestEpoch === epoch) {
@@ -257,7 +280,6 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 		data = undefined
 		loading = false
 		error = undefined
-		discoveryFailed = false
 		render()
 		void refresh()
 	}
@@ -268,7 +290,6 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 		loading = false
 		error = undefined
 		searchError = undefined
-		discoveryFailed = false
 		if (search.value.trim() !== '') {
 			try {
 				getAddress(search.value.trim())
@@ -289,7 +310,7 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 		data = undefined
 		void refresh()
 	})
-	retry.addEventListener('click', () => {
+	refreshButton.addEventListener('click', () => {
 		void refresh()
 	})
 	return {
@@ -305,7 +326,6 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 				epoch += 1
 				data = undefined
 				page = 0
-				discoveryFailed = false
 				loading = false
 				error = undefined
 			}

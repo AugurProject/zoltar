@@ -195,6 +195,7 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 		window.clearTimeout(timeout)
 		return timeout
 	}
+	let catalogRevision = 0
 	let catalogFailure = false
 	let selectionFailure = false
 	const catalogRequests: string[] = []
@@ -225,6 +226,7 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 		if (typeof inputUrl !== 'string') throw new Error('Unexpected request URL')
 		const url = new URL(inputUrl, server.url)
 		if (url.pathname === '/api/pool-catalog') {
+			if (catalogFailure) return new window.Response('{}', { status: 503 })
 			if (url.searchParams.get('scope') === 'monitored') {
 				const address = url.searchParams.get('address')
 				const pools = snapshot.pools
@@ -246,8 +248,22 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 								chainId: currentConfiguration.network?.chainId,
 								page: Number(url.searchParams.get('page')),
 								pageCount: address === null ? '2' : String(Number(found)),
-								total: address === null ? '13' : String(Number(found)),
-								pools: found ? [{ address: address ?? '0x2222222222222222222222222222222222222222', parent: '0x0000000000000000000000000000000000000000', questionId: '42', universeId: '7', multiplierBps: '12500', deploymentDate: '1789560000', questionDates: { startTime: '1789473600', endTime: '1792065600' } }] : [],
+								total: address === null ? String(13 + catalogRevision) : String(Number(found)),
+								snapshotTimestamp: String(1789560000 + catalogRevision * 60),
+								pools: found
+									? [
+											{
+												address: address ?? '0x2222222222222222222222222222222222222222',
+												parent: '0x0000000000000000000000000000000000000000',
+												questionId: String(42 + catalogRevision),
+												universeId: '7',
+												multiplierBps: '12500',
+												metrics: { systemState: '0', totalPoolHeldRep: String(2 + catalogRevision), vaultCount: String(3 + catalogRevision) },
+												deploymentDate: '1789560000',
+												questionDates: { startTime: '1789473600', endTime: '1792065600' },
+											},
+										]
+									: [],
 							},
 				),
 				{ status: catalogFailure ? 503 : 200 },
@@ -373,6 +389,9 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 			if (!(tab instanceof window.HTMLButtonElement)) throw new Error('Missing monitored tab')
 			tab.click()
 			await page.waitUntilComplete()
+		},
+		advanceCatalog: () => {
+			catalogRevision += 1
 		},
 		catalogRequests,
 		catalogSearches,
@@ -1125,7 +1144,7 @@ test('all-pools browser automatically discovers, paginates, persists support, an
 	await page.waitUntilComplete()
 	expect(root.textContent).toContain('Pool discovery failed')
 	page.setCatalogFailure(false)
-	button('Retry').click()
+	button('Refresh').click()
 	await page.waitUntilComplete()
 	expect(root.textContent).toContain('Page 2 of 2')
 	expect(button('Next').disabled).toBe(true)
@@ -1266,4 +1285,51 @@ test('refreshes monitored membership after an in-flight support save', async () 
 	await page.waitUntilComplete()
 	expect(page.window.document.querySelector('#pool-browser')?.textContent).toContain('12 pools · Page 1 of 1')
 	expect(page.window.document.querySelectorAll('.catalog-record')).toHaveLength(12)
+})
+
+test('keeps known monitored cards and live details when catalog discovery fails', async () => {
+	const page = await dashboard(mainnetConfiguration(), state(), false, false, true)
+	page.setCatalogFailure(true)
+	await page.openMonitoredPools()
+	const root = page.window.document.querySelector('#pool-browser')
+	expect(root?.textContent).toContain('Pool discovery failed')
+	expect(root?.querySelectorAll('.catalog-record')).toHaveLength(1)
+	expect(root?.querySelector('.catalog-monitoring')?.textContent).toContain('OracleFresh')
+	const snapshot = state()
+	snapshot.pools = snapshot.pools.map(pool => ({ ...pool, lastPrice: '9', totalPoolHeldRep: '123' }))
+	page.setSnapshot(snapshot)
+	await page.refresh()
+	expect(root?.querySelector('.catalog-monitoring')?.textContent).toContain('9 REP / ETH')
+	expect(root?.querySelector('.catalog-balance')?.textContent).toContain('123')
+	const action = root?.querySelector('.catalog-record button')
+	if (!(action instanceof page.window.HTMLButtonElement)) throw new Error('Missing support action')
+	expect(action.disabled).toBe(false)
+	action.click()
+	await page.waitUntilComplete()
+	expect(page.supportedPoolRequests).toHaveLength(1)
+})
+
+test('refreshes all-pool listings counts metrics and snapshot age on demand', async () => {
+	const page = await dashboard(mainnetConfiguration(), state(), false, false, true)
+	const root = page.window.document.querySelector('#pool-browser')
+	const refresh = [...page.window.document.querySelectorAll('#pool-browser button')].find(button => button.textContent === 'Refresh')
+	expect(refresh).toBeDefined()
+	if (!(refresh instanceof page.window.HTMLButtonElement)) throw new Error('Missing catalog refresh')
+	expect(refresh.hidden).toBe(false)
+	const oldTime = root?.querySelector('.catalog-snapshot time')?.getAttribute('datetime')
+	expect(oldTime).toBeDefined()
+	page.advanceCatalog()
+	refresh.click()
+	await page.waitUntilComplete()
+	expect(root?.textContent).toContain('14 pools')
+	expect(root?.textContent).toContain('Question 43')
+	expect(root?.querySelector('.catalog-balance')?.textContent).toContain('3')
+	expect(root?.querySelector('.catalog-metrics')?.textContent).toContain('Vaults4')
+	expect(root?.querySelector('.catalog-snapshot time')?.getAttribute('datetime')).not.toBe(oldTime)
+	expect(root?.querySelector('.catalog-snapshot .timestamp-value-relative')).not.toBeNull()
+	page.setCatalogFailure(true)
+	refresh.click()
+	await page.waitUntilComplete()
+	expect(root?.textContent).toContain('Question 43')
+	expect(root?.textContent).toContain('Pool discovery failed')
 })

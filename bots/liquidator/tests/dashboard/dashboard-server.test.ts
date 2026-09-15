@@ -664,7 +664,7 @@ test('bounds factory browsing, gates network setup, sanitizes failures, and prot
 			searches.push(address)
 			scopes.push(scope)
 			if (fail) throw new Error('RPC secret at /protected/path')
-			return { chainId: 1, page, pageCount: '0', total: '0', pools: [] }
+			return { chainId: 1, snapshotTimestamp: '1789560060', page, pageCount: '0', total: '0', pools: [] }
 		},
 		setSupportedPool: value => {
 			selections.push(value)

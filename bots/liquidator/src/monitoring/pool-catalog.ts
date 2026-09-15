@@ -5,9 +5,9 @@ import { formatDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-vali
 import { getAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import type { ReadClient } from './vault-positions.ts'
 
-type CatalogPool = {
+export type CatalogPool = {
 	address: string
-	parent: string
+	parent?: string
 	questionId: string
 	universeId: string
 	multiplierBps: string
@@ -18,6 +18,7 @@ type CatalogPool = {
 
 export type PoolCatalogPage = {
 	chainId: number
+	snapshotTimestamp: string
 	page: number
 	pageCount: string
 	total: string
@@ -40,7 +41,7 @@ async function findPoolDeployment(client: ReadClient, factory: Address, address:
 	return [{ securityPool: address, parent, universeId, questionId, statoblastSecurityMultiplierBps }]
 }
 
-export async function loadPoolCatalog(client: ReadClient, factory: Address, chainId: number, page: number, searchAddress?: Address, monitoredAddresses?: readonly Address[]): Promise<PoolCatalogPage> {
+export async function loadPoolCatalog(client: ReadClient, factory: Address, chainId: number, page: number, searchAddress?: Address, monitoredAddresses?: readonly Address[], dateCache?: Parameters<typeof loadPoolDeploymentDate>[5]): Promise<PoolCatalogPage> {
 	if (!Number.isSafeInteger(page) || page < 0) throw new Error('Pool page must be a non-negative safe integer')
 	const block = await client.getBlock()
 	if (block.number === undefined || block.hash === undefined) throw new Error('Pool registry block is unavailable')
@@ -95,7 +96,7 @@ export async function loadPoolCatalog(client: ReadClient, factory: Address, chai
 			}
 
 			try {
-				const deploymentDate = await loadPoolDeploymentDate(client, factory, deployment.securityPool, blockNumber)
+				const deploymentDate = await loadPoolDeploymentDate(client, factory, deployment.securityPool, blockNumber, chainId, dateCache)
 				if (deploymentDate !== undefined) pool.deploymentDate = deploymentDate
 			} catch (error) {
 				console.warn(`Pool catalog deployment date unavailable for ${pool.address}: ${errorMessage(error)}`)
@@ -104,5 +105,5 @@ export async function loadPoolCatalog(client: ReadClient, factory: Address, chai
 		}),
 	)
 	if ((await client.getBlock({ blockNumber })).hash !== block.hash) throw new Error('Pool registry block changed during discovery')
-	return { chainId, page: searchAddress === undefined ? page : 0, pageCount: ((total + PAGE_SIZE - 1n) / PAGE_SIZE).toString(), total: total.toString(), pools }
+	return { chainId, snapshotTimestamp: block.timestamp.toString(), page: searchAddress === undefined ? page : 0, pageCount: ((total + PAGE_SIZE - 1n) / PAGE_SIZE).toString(), total: total.toString(), pools }
 }

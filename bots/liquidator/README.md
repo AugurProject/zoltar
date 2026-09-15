@@ -161,20 +161,31 @@ deployments of those pools, and deployed pools resolved from `desiredPools`; the
 monitor does not scan unrelated pools for vaults or liquidation candidates. On the
 **Pool work** page, the **All pools** tab automatically browses the active chain's factory
 registry in pages of 12, including pools you have not selected. Cards show the
-question, universe, security multiplier, current pool-held REP, and vault count.
+question, universe, security multiplier, pool-held REP, and vault count. Use
+**Refresh** to reload the listing, counts, and metrics. **Catalog snapshot** shows
+the last successful catalog snapshot in UTC and how long ago it was taken; a
+failed refresh preserves that snapshot.
+
 Pool deployment date comes from the factory deployment event’s block timestamp.
 Question start date and Question end date come from the question’s stored time
-bounds. All three dates use UTC; unavailable dates are marked as such.
+bounds. All three dates use UTC; unavailable dates are marked as such. Optional
+deployment-date discovery has a 1.5-second deadline, so a stalled historical RPC
+cannot hold up the pool catalog. Verified dates are cached per chain, factory,
+and pool, with their deployment block hash checked before reuse.
+
 To find a known pool, paste its full address into **Search by pool address** in
 the **All pools** tab, then select **Add to supported** on the matching card. Search checks
 the active chain’s factory, including pools outside the current page. Clear the
 search to return to browsing. Switch to **Monitored pools** to filter the same
 cards to pools the bot is currently monitoring. Expand **Monitoring details**
-for oracle freshness, vault balances, and liquidation targets.
+for oracle freshness, vault balances, and liquidation targets. These cards and
+monitoring values come from the bot snapshot and remain visible when catalog
+discovery fails; catalog dates are optional enrichment.
+
 Use **Add to supported** on a card to save a pool to the chain profile's `selectedPools`, or
 **Remove from supported** to remove it. This does not approve its universe or
 change execution mode. A pool with unavailable metrics remains visible. Use
-**Retry** if discovery fails. For an existing or undeployed origin pool, you can instead add its universe, question, multiplier,
+**Refresh** if discovery fails. For an existing or undeployed origin pool, you can instead add its universe, question, multiplier,
 and priority-fee tuple to `desiredPools` in **Market and pool configuration**. The
 bot resolves the canonical factory address and selects it when present; when
 `allowAutomaticPoolCreation` is enabled, it deploys a missing desired pool before

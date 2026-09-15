@@ -888,3 +888,18 @@ body[data-page="pools"] #network-badge::before {
 .catalog-monitoring summary {
 	cursor: pointer;
 }
+
+.catalog-toolbar {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 12px;
+	margin-bottom: 12px;
+}
+.catalog-snapshot {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 6px;
+	font-size: 12px;
+}

@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { createPoolDeploymentDateCache } from '../monitoring/pool-deployment-date.ts'
 import { parsePoolSelection, updateSupportedPool } from '#config/pool-selection'
 import { loadPoolCatalog } from '#monitoring/pool-catalog'
 import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
@@ -170,10 +171,11 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 		observeConstantProductMarkets(configuration, getAddress(configuration.assetAddress), settings.deployment.weth, async pair => readConfiguredDexPair(getAddress(pair), block))
 	const requireCurrentDexEvidence = async (configuration: ReturnType<typeof marketConfigurations>[number], estimate: Parameters<typeof requireCurrentConstantProductMarketEvidence>[3]) =>
 		requireCurrentConstantProductMarketEvidence(configuration, getAddress(configuration.assetAddress), settings.deployment.weth, estimate, readConfiguredDexPair)
+	const poolDeploymentDates = createPoolDeploymentDateCache()
 	const dashboard = settings.runtime.ui
 		? startDashboardServer(settings.runtime.uiPort, {
 				getConfiguration: () => serializedSettings(settings, true),
-				getPoolCatalog: (page, address, scope) => loadPoolCatalog(client, settings.deployment.securityPoolFactory, settings.network.chainId, page, address, scope === 'monitored' ? state.pools.map(pool => pool.address) : undefined),
+				getPoolCatalog: (page, address, scope) => loadPoolCatalog(client, settings.deployment.securityPoolFactory, settings.network.chainId, page, address, scope === 'monitored' ? state.pools.map(pool => pool.address) : undefined, poolDeploymentDates),
 				getState: () => {
 					state.rpcEndpointHealth = readPool.snapshot()
 					return { ...operatorSnapshot(state, settings.runtime.execute, marketConfigurations(settings)), network: settings.network.name }

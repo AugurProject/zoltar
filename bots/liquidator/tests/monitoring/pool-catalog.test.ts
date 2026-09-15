@@ -6,7 +6,7 @@ import { loadPoolCatalog } from '#monitoring/pool-catalog'
 
 const address = getAddress('0x1111111111111111111111111111111111111111')
 
-function fixture(total: bigint, options: { unknownPool?: boolean; wrongCanonical?: boolean; failSearch?: boolean; failMetrics?: boolean; failDates?: boolean; failDeployment?: boolean; missingQuestion?: boolean; reorg?: boolean } = {}) {
+function fixture(total: bigint, options: { stallDeployment?: boolean; unknownPool?: boolean; wrongCanonical?: boolean; failSearch?: boolean; failMetrics?: boolean; failDates?: boolean; failDeployment?: boolean; missingQuestion?: boolean; reorg?: boolean } = {}) {
 	const reads: { functionName: string; args: readonly unknown[]; blockNumber: bigint }[] = []
 	let blockReads = 0
 	const client = new Proxy(
@@ -23,9 +23,13 @@ function fixture(total: bigint, options: { unknownPool?: boolean; wrongCanonical
 				if (property === 'getBlock')
 					return async (parameters?: { blockNumber?: bigint }) => {
 						if (parameters?.blockNumber === 20n) return { number: 20n, hash: '0x33', timestamp: 1789560000n }
-						return { number: 42n, hash: options.reorg && blockReads++ > 0 ? '0x22' : '0x11' }
+						return { number: 42n, timestamp: 1789560060n, hash: options.reorg && blockReads++ > 0 ? '0x22' : '0x11' }
 					}
-				if (property === 'getLogs') return async () => (options.failDeployment ? [] : [{ blockNumber: 20n, blockHash: '0x33' }])
+				if (property === 'getLogs')
+					return async () => {
+						if (options.stallDeployment) return await new Promise(() => {})
+						return options.failDeployment ? [] : [{ blockNumber: 20n, blockHash: '0x33' }]
+					}
 				if (property === 'readContract')
 					return async (parameters: { functionName: string; args: readonly unknown[]; blockNumber: bigint }) => {
 						reads.push(parameters)
@@ -154,4 +158,17 @@ test('paginates monitored addresses globally and excludes unmonitored search res
 	expect(empty.reads).toEqual([])
 	const duplicated = fixture(1000000n)
 	expect(await loadPoolCatalog(duplicated.client, address, 1, 0, undefined, [address, address])).toMatchObject({ total: '1', pools: [{ address }] })
+})
+
+test('returns pools within a bounded deadline when deployment date discovery stalls', async () => {
+	const { client } = fixture(1n, { stallDeployment: true })
+	const result = await Promise.race([
+		loadPoolCatalog(client, address, 1, 0),
+		Bun.sleep(2500).then(() => {
+			throw new Error('Optional deployment date blocked catalog')
+		}),
+	])
+	expect(result.pools[0]?.address).toBe(address)
+	expect(result.pools[0]?.metrics?.vaultCount).toBe('3')
+	expect(result.pools[0]?.deploymentDate).toBeUndefined()
 })

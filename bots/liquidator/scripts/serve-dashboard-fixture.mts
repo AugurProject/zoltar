@@ -173,7 +173,7 @@ const server = startDashboardServer(4183, {
 		})
 		const pools = scope === 'monitored' ? monitored : [...monitored, ...unmonitored]
 		const matches = pools.filter(pool => address === undefined || pool.address.toLowerCase() === address.toLowerCase())
-		return { chainId: network?.chainId ?? 1, page, total: String(matches.length), pageCount: String(Math.ceil(matches.length / 12)), pools: matches.slice(page * 12, (page + 1) * 12) }
+		return { chainId: network?.chainId ?? 1, snapshotTimestamp: String(Math.floor(Date.now() / 1000) - 12), page, total: String(matches.length), pageCount: String(Math.ceil(matches.length / 12)), pools: matches.slice(page * 12, (page + 1) * 12) }
 	},
 	setSupportedPool: value => {
 		if (typeof value !== 'object' || value === null || Reflect.get(value, 'chainId') !== network?.chainId) throw new Error('Invalid pool selection chain')
