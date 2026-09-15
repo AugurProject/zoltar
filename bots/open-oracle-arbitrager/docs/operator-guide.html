@@ -28,7 +28,7 @@
 
 			<section id="architecture">
 				<h2>What the bot does</h2>
-				<p>The bot follows approved <code>OpenOraclePriceCoordinator</code> reports. For each active WETH/token game it loads the exact report state, finds supported pools, compares size-aware Uniswap V2, V3, and hookless V4 hedge quotes when configured, and applies timing, TWAP, inventory, allowance, profitability, and risk limits. Uniswap V3 remains the reference and TWAP anchor. Only the best currently eligible opportunity may be selected.</p>
+				<p>The bot follows approved <code>OpenOraclePriceCoordinator</code> reports. For each active WETH/token game it loads the exact report state, finds supported pools, compares size-aware Uniswap V2, V3, and hookless V4 hedge quotes when configured, and applies timing, TWAP, inventory, allowance, profitability, and risk limits. Each enabled version supplies its own hedge and replacement-price quotes. The spot/TWAP filter applies only to V3. Only the best currently eligible opportunity may be selected.</p>
 				<figure class="diagram diagram-wide" id="fig-open-oracle-arbitrager-lifecycle" tabindex="0" aria-label="Scrollable OpenOracle arbitrager execution and recovery lifecycle">
 					<div class="plot-chart" data-plot-chart="fig-open-oracle-arbitrager-lifecycle" data-plot-width="1160" data-plot-height="390" role="img" aria-label="OpenOracle arbitrager execution and recovery lifecycle">
 						<span class="plot-chart-fallback">Reports are synchronized and priced before one atomic entry hedges through the selected authenticated V2/V3 router or V4 PoolManager and disputes. An atomic exit settles and withdraws exact balances. Profit becomes realized only after the configured reader requirement returns the same twelfth-descendant finality evidence; every available response must agree, and ambiguous evidence stays in durable recovery.</span>
@@ -261,14 +261,14 @@ bun run run</code></pre>
 								<td>Uniswap V3</td>
 								<td>Mainnet and Sepolia</td>
 								<td>Yes: 0.01%, 0.05%, 0.3%, and 1% WETH/token pools</td>
-								<td>Yes, through QuoterV2 and the authenticated SwapRouter</td>
+								<td>When <code>deployment.uniswapV3Enabled</code> is <code>true</code>, through QuoterV2 and the authenticated SwapRouter</td>
 								<td>Spot WETH/token comes from <code>sqrtPriceX96</code>; liquidity is the raw active-range <code>liquidity()</code> value.</td>
 							</tr>
 							<tr>
 								<td>Uniswap V2</td>
 								<td>Mainnet</td>
 								<td>Yes</td>
-								<td>Optional, through an authenticated Router02 when <code>deployment.uniswapV2Router</code> is configured</td>
+								<td>Optional, through an authenticated Router02 when <code>deployment.uniswapV2Enabled</code> is <code>true</code></td>
 								<td>Spot WETH/token comes from normalized reserves; both reserves are shown. Execution uses the exact direct-pair 0.30% constant-product quote at the quorum block.</td>
 							</tr>
 							<tr>
@@ -281,7 +281,7 @@ bun run run</code></pre>
 							<tr>
 								<td>Uniswap V4</td>
 								<td>Mainnet and Sepolia</td>
-								<td>Exact size-aware quotes when <code>deployment.uniswapV4PoolManager</code> and <code>deployment.uniswapV4Quoter</code> are configured</td>
+								<td>Exact size-aware quotes when <code>deployment.uniswapV4Enabled</code> is <code>true</code></td>
 								<td>Optional, through an authenticated PoolManager and Quoter for direct hookless native-ETH/token pools</td>
 								<td>Execution uses exact-input or exact-output V4 Quoter evidence at the quorum block, validates signed PoolManager deltas, and converts native ETH and WETH atomically. Hooked pools are excluded. See <a href="/documentation/reference#uniswap-venue-execution">V4 pool eligibility in the operator README</a> for the exact pool keys, signs, and amount bound.</td>
 							</tr>
@@ -295,7 +295,8 @@ bun run run</code></pre>
 						</tbody>
 					</table>
 				</div>
-				<p>The dashboard's historical chart stores one current-head sample per pool and block. Every line therefore represents a concrete exchange pool, not an aggregated token price. The exact-value table lists block, observation time, pool, venue, and WETH-per-token price. These spot samples are for comparison. V2 execution uses exact reserves at the quorum block, V3 execution uses QuoterV2, and V4 execution uses the authenticated V4 Quoter against a hookless pool key; every executable opportunity still requires the V3 spot/TWAP reference guard.</p>
+				<p>Uniswap addresses are derived from the selected network: upstream deployments on mainnet and the <code>deploy:testnet</code> contracts on Sepolia. V2, V3, and V4 have independent enable switches. New profiles enable V2 and V3, with V4 disabled. V2 is unavailable on Sepolia, but its enabled preference is retained. Existing profiles <a href="/documentation/reference#requirements">retain their saved venue choices during migration</a>.</p>
+				<p>The dashboard's historical chart stores one current-head sample per pool and block. Every line therefore represents a concrete exchange pool, not an aggregated token price. The exact-value table lists block, observation time, pool, venue, and WETH-per-token price. These spot samples are for comparison. V2 execution uses exact reserves at the quorum block, V3 execution uses QuoterV2, and V4 execution uses the authenticated V4 Quoter against a hookless pool key; only V3 requires the spot/TWAP guard. V2/V4 use current-block evidence without a historical price filter; RPC agreement, configured market-consensus checks, slippage, profitability, and atomic execution limits still apply.</p>
 				<p>On mainnet, startup discovers REPv2 and instantiated fork REP tokens from Augur universe state. Explicitly configured tokens join the execution allowlist. Tokens seen only in approved reports are displayed for monitoring but cannot trigger a trade, and a token with no supported WETH pool is shown explicitly rather than silently omitted.</p>
 			</section>
 

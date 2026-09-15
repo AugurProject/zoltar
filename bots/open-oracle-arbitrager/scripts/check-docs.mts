@@ -49,7 +49,6 @@ const assertLocalLinksResolve = async (documentPath: string, contents: string) =
 assert.doesNotMatch(`${guide}\n${readme}`, /^(?:<<<<<<<|=======|>>>>>>>)(?: |$)/m)
 assert.doesNotMatch(`${guide}\n${readme}`, /\.\.\/docs\//, 'Arbitrager documentation must not depend on the protocol documentation tree')
 assert.match(guide, /Uniswap V2, V3, and\s+hookless V4/)
-assert.match(guide, /Uniswap V3 remains the\s+reference and TWAP anchor/)
 assert.match(readme, /Uniswap V2, V3, or hookless V4/)
 assert.match(readme, /### Executor public surface/)
 assert.match(readme, /`dispute` is a lower-level, unhedged funding helper/)

@@ -35,7 +35,7 @@ import {
 	venueLabel,
 } from './dashboard-format.js'
 import type { SubmissionSettings } from '#execution/transaction-submission'
-import type { DeploymentSettings } from '#config/deployment-settings'
+import type { DeploymentSettings, StoredDeploymentSettings } from '#config/deployment-settings'
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
 let latestSnapshot: PublicOperatorSnapshot | undefined
@@ -204,14 +204,11 @@ function lines(id: string) {
 	return urlLines(element<HTMLTextAreaElement>(id).value)
 }
 
-function loadDeployment(deployment: Omit<DeploymentSettings, 'openOracle' | 'rep' | 'weth'>) {
+function loadDeployment(deployment: StoredDeploymentSettings) {
 	element<HTMLInputElement>('deployment-executor').value = deployment.executor ?? ''
-	element<HTMLInputElement>('deployment-v3-factory').value = deployment.uniswapFactory
-	element<HTMLInputElement>('deployment-v3-quoter').value = deployment.uniswapQuoter
-	element<HTMLInputElement>('deployment-v3-router').value = deployment.uniswapRouter ?? ''
-	element<HTMLInputElement>('deployment-v2-router').value = deployment.uniswapV2Router ?? ''
-	element<HTMLInputElement>('deployment-v4-pool-manager').value = deployment.uniswapV4PoolManager ?? ''
-	element<HTMLInputElement>('deployment-v4-quoter').value = deployment.uniswapV4Quoter ?? ''
+	element<HTMLInputElement>('deployment-v2-enabled').checked = deployment.uniswapV2Enabled
+	element<HTMLInputElement>('deployment-v3-enabled').checked = deployment.uniswapV3Enabled
+	element<HTMLInputElement>('deployment-v4-enabled').checked = deployment.uniswapV4Enabled
 	element<HTMLTextAreaElement>('deployment-coordinators').value = deployment.coordinatorAddresses.join('\n')
 	element<HTMLTextAreaElement>('deployment-quorum-rpcs').value = deployment.quorumRpcUrls.join('\n')
 	element<HTMLTextAreaElement>('deployment-manifest').value = deployment.deploymentManifest === undefined ? '' : JSON.stringify(deployment.deploymentManifest, undefined, 2)
@@ -587,12 +584,12 @@ function isSubmissionSettings(value: unknown): value is SubmissionSettings {
 	return (mode === 'private' || mode === 'public') && typeof Reflect.get(value, 'minimumBundleRelaySuccesses') === 'number' && isStringArray(Reflect.get(value, 'relayUrls'))
 }
 
-function isDeploymentSettings(value: unknown): value is Omit<DeploymentSettings, 'openOracle' | 'rep' | 'weth'> {
+function isDeploymentSettings(value: unknown): value is StoredDeploymentSettings {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
-	for (const key of ['uniswapFactory', 'uniswapQuoter']) {
-		if (typeof Reflect.get(value, key) !== 'string') return false
+	for (const key of ['uniswapV2Enabled', 'uniswapV3Enabled', 'uniswapV4Enabled']) {
+		if (typeof Reflect.get(value, key) !== 'boolean') return false
 	}
-	for (const key of ['executor', 'uniswapRouter', 'uniswapV2Router', 'uniswapV4PoolManager', 'uniswapV4Quoter']) {
+	for (const key of ['executor']) {
 		const candidate = Reflect.get(value, key)
 		if (candidate !== undefined && candidate !== null && typeof candidate !== 'string') return false
 	}
@@ -1446,12 +1443,9 @@ element<HTMLFormElement>('deployment-form').addEventListener('submit', async eve
 			deploymentManifest: manifestText === '' ? undefined : JSON.parse(manifestText),
 			executor: optionalInput('deployment-executor'),
 			quorumRpcUrls: lines('deployment-quorum-rpcs'),
-			uniswapFactory: element<HTMLInputElement>('deployment-v3-factory').value.trim(),
-			uniswapQuoter: element<HTMLInputElement>('deployment-v3-quoter').value.trim(),
-			uniswapRouter: optionalInput('deployment-v3-router'),
-			uniswapV2Router: optionalInput('deployment-v2-router'),
-			uniswapV4PoolManager: optionalInput('deployment-v4-pool-manager'),
-			uniswapV4Quoter: optionalInput('deployment-v4-quoter'),
+			uniswapV2Enabled: element<HTMLInputElement>('deployment-v2-enabled').checked,
+			uniswapV3Enabled: element<HTMLInputElement>('deployment-v3-enabled').checked,
+			uniswapV4Enabled: element<HTMLInputElement>('deployment-v4-enabled').checked,
 		}
 		const response = await api<{ deployment: DeploymentSettings }>('/api/deployment', {
 			body: JSON.stringify(deployment),

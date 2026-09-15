@@ -63,15 +63,9 @@ export async function loadCoordinatorPoliciesWithQuorum(clients: readonly ReadCl
 }
 
 function requiredDeploymentIdentities(config: Configuration) {
-	const identities: { address: Address; role: DeploymentRole }[] = [
-		{ address: config.openOracle, role: 'open-oracle' },
-		{ address: config.network.weth, role: 'weth' },
-		{ address: config.network.factory, role: 'uniswap-factory' },
-		{ address: config.network.quoter, role: 'uniswap-quoter' },
-		...config.coordinatorAddresses.map(address => ({ address, role: 'coordinator' as const })),
-	]
+	const identities: { address: Address; role: DeploymentRole }[] = [{ address: config.openOracle, role: 'open-oracle' }, { address: config.network.weth, role: 'weth' }, ...config.coordinatorAddresses.map(address => ({ address, role: 'coordinator' as const }))]
 	if (config.executor !== undefined) identities.push({ address: config.executor, role: 'executor' })
-	if (config.router !== undefined) identities.push({ address: config.router, role: 'uniswap-router' })
+	if (config.router !== undefined) identities.push({ address: config.network.factory, role: 'uniswap-factory' }, { address: config.network.quoter, role: 'uniswap-quoter' }, { address: config.router, role: 'uniswap-router' })
 	if (config.v2Router !== undefined) identities.push({ address: config.v2Router, role: 'uniswap-v2-router' })
 	if (config.v4PoolManager !== undefined) identities.push({ address: config.v4PoolManager, role: 'uniswap-v4-pool-manager' })
 	if (config.v4Quoter !== undefined) identities.push({ address: config.v4Quoter, role: 'uniswap-v4-quoter' })

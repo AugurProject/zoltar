@@ -1,9 +1,7 @@
 import { type Configuration } from '#config/configuration'
-import { erc20Abi, multicall3Abi, openOracleArbitrageExecutorAbi, quoterAbi } from '#contracts/abi'
-import { batchRead, batchValue, type BatchReader } from '#core/batch-read'
+import { openOracleArbitrageExecutorAbi } from '#contracts/abi'
 import type { Pool, ReadClient, WriteClient } from '#core/operator-types'
 import { expectedWithdrawalToken2, hedgedProfitBeforeGasWeth } from '#core/position-accounting'
-import { requiredBigint, requiredTuple } from '#core/rpc-validation'
 import { positionRiskLimitMismatch, projectedLifecycleGasReserveAttoWeth } from '#core/safety-controls'
 import {
 	calculateFee,
@@ -47,7 +45,7 @@ import { prepareSignedTransaction, simulateSignedBundleEveryRelay, SubmissionFai
 import { receiptGasCost, submitContractTransaction, trackedActivity, waitForTrackedTransaction, type TrackTransaction } from '#execution/transaction-tracker'
 import { formatTokenAmount } from '#monitoring/market-monitor'
 import { executionReadQuorum, safetyAdjustedQuote } from '#monitoring/opportunity-evaluation'
-import { decimalSignedEth, decimalWeth, type BalanceSnapshot, type ExecutionRecord } from '#state/operator-state'
+import { decimalSignedEth, decimalWeth, type ExecutionRecord } from '#state/operator-state'
 import { type PositionRecord } from '#state/position-store'
 import { encodeFunctionData, zeroAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
@@ -57,60 +55,6 @@ import { operationalFailureDisposition } from '@zoltar/bot-shared/monitoring/res
 import { getOpenOracleGameTuple, getOpenOracleHelperTuple, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_TIME_TYPE, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 
 const FEES = STANDARD_UNISWAP_FEES
-
-/** Reads wallet inventory in one batched call at the scanned block, then values the REP balance across its pools in a second. */
-export async function loadBalances(client: BatchReader, wallet: Pick<WriteClient, 'account'> | undefined, config: Pick<Configuration, 'network'>, tokens: readonly Address[], blockNumber?: bigint | undefined) {
-	if (wallet === undefined) return undefined
-	const address = wallet.account.address
-	const results = await batchRead(
-		client,
-		config.network.multicall3,
-		[
-			{ address: config.network.multicall3, abi: multicall3Abi, functionName: 'getEthBalance', args: [address] },
-			{ address: config.network.weth, abi: erc20Abi, functionName: 'balanceOf', args: [address] },
-			{ address: config.network.rep, abi: erc20Abi, functionName: 'balanceOf', args: [address] },
-			...tokens.map(token => ({ address: token, abi: erc20Abi, functionName: 'balanceOf', args: [address] })),
-		],
-		blockNumber,
-	)
-	const ethAttoEth = requiredBigint(batchValue(results[0], 'Wallet ETH balance'), 'Wallet ETH balance')
-	const attoWeth = requiredBigint(batchValue(results[1], 'Wallet WETH balance'), 'Wallet WETH balance')
-	const repAttoRep = requiredBigint(batchValue(results[2], 'Wallet REP balance'), 'Wallet REP balance')
-	const tokenBalances = new Map<string, bigint>()
-	for (const [index, token] of tokens.entries()) {
-		const result = results[3 + index]
-		if (result === undefined || result.status === 'failure') {
-			console.error(`token=${token} balanceUnavailable=${result === undefined ? 'missing balance read' : result.error.message}`)
-			continue
-		}
-		tokenBalances.set(token.toLowerCase(), requiredBigint(result.result, `Token ${token} balance`))
-	}
-	const raw = { ethAttoEth, repAttoRep, tokens: tokenBalances, attoWeth }
-	let repValueAttoWeth: bigint | undefined
-	if (repAttoRep === 0n) repValueAttoWeth = 0n
-	else {
-		// Every standard fee tier is quoted; tiers without a REP pool simply fail their own entry.
-		const quotes = await batchRead(
-			client,
-			config.network.multicall3,
-			STANDARD_UNISWAP_FEES.map(fee => ({ address: config.network.quoter, abi: quoterAbi, functionName: 'quoteExactInputSingle', args: [{ tokenIn: config.network.rep, tokenOut: config.network.weth, amountIn: repAttoRep, fee, sqrtPriceLimitX96: 0n }] })),
-			blockNumber,
-		)
-		for (const quote of quotes) {
-			if (quote.status === 'failure') continue
-			const amount = requiredBigint(requiredTuple(quote.result, 1, 'Uniswap exact-input quote')[0], 'Uniswap exact-input amount')
-			if (repValueAttoWeth === undefined || amount > repValueAttoWeth) repValueAttoWeth = amount
-		}
-	}
-	const snapshot: BalanceSnapshot = {
-		availableEth: decimalWeth(ethAttoEth),
-		availableRep: decimalWeth(repAttoRep),
-		availableWeth: decimalWeth(attoWeth),
-		repValueWeth: repValueAttoWeth === undefined ? undefined : decimalWeth(repValueAttoWeth),
-		totalValueWeth: repValueAttoWeth === undefined ? undefined : decimalWeth(ethAttoEth + attoWeth + repValueAttoWeth),
-	}
-	return { raw, snapshot }
-}
 
 export async function executeDispute(
 	client: ReadClient,
@@ -140,7 +84,7 @@ export async function executeDispute(
 	let hedgePool = pool.address
 	if (hedgeVenue === 'uniswap-v2') {
 		router = config.v2Router
-		hedgePool = pool.v2Pair ?? zeroAddress
+		hedgePool = pool.address
 	} else if (hedgeVenue === 'uniswap-v4') {
 		router = config.v4PoolManager
 		hedgePool = config.v4PoolManager ?? zeroAddress
@@ -163,13 +107,7 @@ export async function executeDispute(
 		quorumBlockHash: executionSnapshot.blockHash,
 		quorumReportStateHash: executionSnapshot.stateHash,
 	})
-	const refreshedPool = {
-		...pool,
-		liquidity: executionSnapshot.poolLiquidity,
-		spotTick: executionSnapshot.poolSpotTick,
-		twapTick: executionSnapshot.poolTwapTick,
-	}
-	if (!spotTwapDeviationWithinLimit(refreshedPool.spotTick, refreshedPool.twapTick, config.maxSpotTwapTicks)) throw new Error('Selected pool failed the final spot/TWAP check')
+	if (pool.venue === 'uniswap-v3' && (executionSnapshot.v3State === undefined || !spotTwapDeviationWithinLimit(executionSnapshot.v3State.spotTick, executionSnapshot.v3State.twapTick, config.maxSpotTwapTicks))) throw new Error('Selected V3 pool failed the final spot/TWAP check')
 	const gasPrice = executionSnapshot.baseFeePerGas * 2n + 2n * 10n ** 9n
 	const lifecycleGasReserveAttoWeth = projectedLifecycleGasReserveAttoWeth({
 		callbackGasLimit: BigInt(game.callbackGasLimit),
@@ -178,8 +116,12 @@ export async function executeDispute(
 		submissionMode: config.submission.mode,
 	})
 	const entryGasCostAttoWeth = gasPrice * 1_200_000n
+	const newAmount2 = executionSnapshot.replacementAmount2
+	const tokenToSwap = deriveTokenToSwap(game, newAmount1, newAmount2)
 	const refreshedQuote = selectBestExecution(
-		[safetyAdjustedQuote(evaluateSellRep(game, executionSnapshot.sellHedgeQuote, 0n), entryGasCostAttoWeth, lifecycleGasReserveAttoWeth, config), safetyAdjustedQuote(evaluateBuyRep(game, executionSnapshot.buyHedgeQuote, 0n), entryGasCostAttoWeth, lifecycleGasReserveAttoWeth, config)],
+		[safetyAdjustedQuote(evaluateSellRep(game, executionSnapshot.sellHedgeQuote, 0n), entryGasCostAttoWeth, lifecycleGasReserveAttoWeth, config), safetyAdjustedQuote(evaluateBuyRep(game, executionSnapshot.buyHedgeQuote, 0n), entryGasCostAttoWeth, lifecycleGasReserveAttoWeth, config)].filter(
+			candidate => candidate.tokenToSwap.toLowerCase() === tokenToSwap.toLowerCase(),
+		),
 		candidate => candidate.netProfitAttoWeth,
 	)
 	if (refreshedQuote === undefined) throw new Error('Canonical execution snapshot did not produce an arbitrage quote')
@@ -204,8 +146,6 @@ export async function executeDispute(
 	if (!finalMarketPriceAllowsExecution() || !(await marketEvidenceStillCanonical())) {
 		throw new Error('Final executable DEX price is not confirmed by independent market consensus')
 	}
-	const newAmount2 = executionSnapshot.replacementAmount2
-	const tokenToSwap = deriveTokenToSwap(game, newAmount1, newAmount2)
 	if (tokenToSwap.toLowerCase() !== refreshedQuote.tokenToSwap.toLowerCase()) throw new Error('Final replacement ratio does not derive the selected arbitrage direction')
 	const hedgeLimitQuote = refreshedQuote.direction === 'sell-rep' ? refreshedQuote.grossProceedsAttoWeth : refreshedQuote.hedgeCostAttoWeth
 	const hedgeLimit = hedgeWethLimitAttoEth(refreshedQuote.direction, hedgeLimitQuote, config.maxHedgeSlippageBps)

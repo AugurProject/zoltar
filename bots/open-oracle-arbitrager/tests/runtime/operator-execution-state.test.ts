@@ -3,7 +3,12 @@ import { copyFile, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { MarketConsensusEstimate, MarketConsensusObservation } from '@zoltar/bot-shared/monitoring/market-consensus'
-import { loadConfiguration } from '#config/configuration'
+import { createPublicClient } from '@zoltar/bot-shared/ethereum'
+import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
+import { authenticateConfiguredDeployments } from '#config/runtime-deployment'
+import { createDeploymentManifest } from '#config/deployment-auth'
+import { validateDeploymentSettings } from '#config/deployment-settings'
+import { loadConfiguration, runnableOperatorSettings } from '#config/configuration'
 import type { OperatorState } from '#state/operator-state'
 import type { PendingOperatorUpdates } from '../../src/runtime/operator-control-plane.ts'
 import { applyQueuedExecutionSettings, resetReportScanState } from '../../src/runtime/operator-execution-state.ts'
@@ -143,4 +148,53 @@ describe('queued operator execution settings', () => {
 			tokenMarkets: [],
 		})
 	})
+})
+
+test('V4-only execution starts and authenticates without V3 deployment identities', async () => {
+	const config = await exampleConfiguration()
+	const deployment = validateDeploymentSettings({ coordinatorAddresses: [config.openOracle], executor: config.openOracle, quorumRpcUrls: ['https://second.example', 'https://third.example'], uniswapV2Enabled: false, uniswapV3Enabled: false, uniswapV4Enabled: true }, config.network.name)
+	const manager = deployment.uniswapV4PoolManager
+	const quoter = deployment.uniswapV4Quoter
+	if (manager === undefined || quoter === undefined) throw new Error('Expected the canonical V4 pair')
+	const manifest = createDeploymentManifest(
+		config.network.name,
+		config.network.chain.id,
+		[
+			{ address: config.openOracle, role: 'open-oracle' },
+			{ address: config.openOracle, role: 'executor' },
+			{ address: config.openOracle, role: 'coordinator' },
+			{ address: config.network.weth, role: 'weth' },
+			{ address: manager, role: 'uniswap-v4-pool-manager' },
+			{ address: quoter, role: 'uniswap-v4-quoter' },
+		],
+		async () => '0x01',
+	)
+	const settings = { ...config.operatorSettings, rpcQuorum: 2 as const, deployment: { ...deployment, deploymentManifest: await manifest }, runtime: { ...config.operatorSettings.runtime, execute: true } }
+	expect(runnableOperatorSettings(config.settingsFile, settings).deployment.uniswapRouter).toBeUndefined()
+	const reads: string[] = []
+	const client = createPublicClient({
+		chain: config.network.chain,
+		transport: custom({
+			request: async ({ method, params }) => {
+				if (method !== 'eth_getCode' || !Array.isArray(params) || typeof params[0] !== 'string') throw new Error('Unexpected authentication request')
+				reads.push(params[0])
+				if ([config.network.factory, config.network.quoter].some(address => address.toLowerCase() === String(params[0]).toLowerCase())) throw new Error('V3 is absent')
+				return '0x01'
+			},
+		}),
+	})
+	await authenticateConfiguredDeployments([client, client], {
+		...config,
+		execute: true,
+		executor: deployment.executor,
+		coordinatorAddresses: [...deployment.coordinatorAddresses],
+		deploymentManifest: settings.deployment.deploymentManifest,
+		router: undefined,
+		v2Router: undefined,
+		v4PoolManager: manager,
+		v4Quoter: quoter,
+		quorumRpcUrls: ['https://second.example', 'https://third.example'],
+	})
+	expect(reads.length).toBeGreaterThan(0)
+	expect(() => runnableOperatorSettings(config.settingsFile, { ...settings, deployment: { ...settings.deployment, uniswapV4PoolManager: undefined, uniswapV4Quoter: undefined } })).toThrow('at least one enabled Uniswap venue')
 })

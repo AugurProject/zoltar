@@ -226,10 +226,7 @@ export function startOperatorControlPlane(parameters: {
 					pending.lookbackBlocks = next.runtime.lookbackBlocks
 					pending.maxHedgeSlippageBps = next.runtime.maxHedgeSlippageBps
 					if (!config.networkConfigured && next.networkConfigured) {
-						pending.network = networkConfiguration(next.network, {
-							factory: next.deployment.uniswapFactory,
-							quoter: next.deployment.uniswapQuoter,
-						})
+						pending.network = networkConfiguration(next.network)
 					}
 					pending.operatorSettings = normalizedNext
 					pending.paused = next.paused
@@ -305,10 +302,7 @@ export function startOperatorControlPlane(parameters: {
 					value,
 				})
 				if (!config.networkConfigured) {
-					pending.network = networkConfiguration(next.network, {
-						factory: latest.settings.deployment.uniswapFactory,
-						quoter: latest.settings.deployment.uniswapQuoter,
-					})
+					pending.network = networkConfiguration(next.network)
 				}
 				pending.centralizedMarkets = next.centralizedMarkets
 				pending.rpcQuorum = next.rpcQuorum

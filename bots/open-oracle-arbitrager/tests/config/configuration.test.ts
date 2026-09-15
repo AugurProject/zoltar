@@ -60,6 +60,9 @@ function settings(rpcUrl: string, uiPort: number, privateKey?: Hex): PersistedOp
 			openOracle: '0x0000000000000000000000000000000000000000',
 			quorumRpcUrls: [],
 			rep: address,
+			uniswapV2Enabled: false,
+			uniswapV3Enabled: true,
+			uniswapV4Enabled: false,
 			uniswapFactory: address,
 			uniswapQuoter: address,
 			uniswapRouter: undefined,
@@ -352,6 +355,7 @@ describe('file-only startup configuration', () => {
 		const initial = await waitForJson(origin, '/api/configuration')
 		const initialConfiguration = initial['configuration']
 		expect(initialConfiguration).toMatchObject({ network: 'mainnet', networkConfigured: false })
+		expect(initialConfiguration).toMatchObject({ deployment: { uniswapV2Enabled: true, uniswapV3Enabled: true, uniswapV4Enabled: false } })
 		expect((await waitForJson(origin, '/api/state'))['status']).toBe('paused')
 		for (const [endpoint, body] of [
 			['/api/signer', { privateKey: '', rememberSigner: false }],

@@ -509,7 +509,8 @@ input {
 	font-family: var(--mono);
 }
 
-.remember-signer {
+.remember-signer,
+.venue-switch {
 	display: flex;
 	align-items: center;
 	grid-template-columns: none;
@@ -518,7 +519,8 @@ input {
 	font-size: 0.78rem;
 }
 
-.remember-signer input {
+.remember-signer input,
+.venue-switch input {
 	width: 16px;
 	height: 16px;
 	margin: 0;

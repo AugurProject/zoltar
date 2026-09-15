@@ -6,11 +6,11 @@ import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { erc20Abi, factoryAbi, poolAbi } from '#contracts/abi'
 import { networkConfiguration } from '#config/network'
 import { createTokenMetadataCache, discoverTokenPools, loadTokenMarkets } from '#monitoring/market-monitor'
-import { poolsForTokens } from '#monitoring/opportunity-evaluation'
+import { poolsForTokens } from '#monitoring/execution-pools'
 import { multicallProvider } from '../helpers/multicall-provider.ts'
 
-const network = networkConfiguration('sepolia', {})
-const config = { network, v2Router: undefined, twapSeconds: 60 }
+const network = networkConfiguration('sepolia')
+const config = { network, router: network.factory, v2Router: undefined, v4PoolManager: undefined, v4Quoter: undefined, twapSeconds: 60 }
 const token = getAddress('0x0000000000000000000000000000000000000abc')
 const pool500 = getAddress('0x0000000000000000000000000000000000000500')
 const pool3000 = getAddress('0x0000000000000000000000000000000000003000')
@@ -74,9 +74,9 @@ function clientWithFactory(code: '0x' | '0x01', options: { pools?: Map<string, P
 const discover = (client: ReturnType<typeof clientWithFactory>['client'], blockNumber?: bigint) => discoverTokenPools(client, { blockNumber, chainId: 11155111, factory: network.factory, multicall3: network.multicall3, tokens: [token], weth: network.weth })
 
 describe('Uniswap factory discovery', () => {
-	test('distinguishes an undeployed factory from an empty pool inventory', async () => {
+	test('keeps token discovery available when the V3 factory is undeployed', async () => {
 		const missing = clientWithFactory('0x')
-		await expect(discover(missing.client)).rejects.toThrow('Uniswap V3 factory')
+		expect(await discover(missing.client)).toEqual([{ constantProduct: [], token, v3: [] }])
 		expect(missing.contractCalls()).toBe(0)
 		const deployed = clientWithFactory('0x01')
 		expect(await discover(deployed.client)).toEqual([{ constantProduct: [], token, v3: [] }])
@@ -85,10 +85,15 @@ describe('Uniswap factory discovery', () => {
 		expect(deployed.batchedCalls()).toBe(1)
 	})
 
-	test('surfaces incompatible factory reads instead of silently skipping every fee', async () => {
-		const incompatible = clientWithFactory('0x01', { poolResult: 'invalid' })
-		await expect(discover(incompatible.client)).rejects.toThrow('getPool')
-		expect(incompatible.batchedCalls()).toBe(1)
+	test('isolates incompatible V3 factory reads and reports their failures', async () => {
+		const logged = spyOn(console, 'error').mockImplementation(() => {})
+		try {
+			const incompatible = clientWithFactory('0x01', { poolResult: 'invalid' })
+			expect(await discover(incompatible.client)).toEqual([{ constantProduct: [], token, v3: [] }])
+			expect(logged).toHaveBeenCalledTimes(4)
+		} finally {
+			logged.mockRestore()
+		}
 	})
 
 	test('verifies the factory once per client instead of on every poll', async () => {
@@ -119,8 +124,8 @@ test('loads pool state for every discovered pool in one batch and drops empty po
 	])
 	const loaded = await poolsForTokens(deployed.client, config, discovered, 100n)
 	expect(loaded).toEqual([
-		{ address: pool500, fee: 500, liquidity: 10n, spotTick: 5n, token, twapTick: 10n, v2Pair: undefined },
-		{ address: pool3000, fee: 3000, liquidity: 20n, spotTick: -7n, token, twapTick: -11n, v2Pair: undefined },
+		{ address: pool500, fee: 500, liquidity: 10n, spotTick: 5n, token, twapTick: 10n, venue: 'uniswap-v3' },
+		{ address: pool3000, fee: 3000, liquidity: 20n, spotTick: -7n, token, twapTick: -11n, venue: 'uniswap-v3' },
 	])
 	expect(deployed.batchedCalls()).toBe(2)
 })
@@ -155,7 +160,7 @@ test('market overview skips one unreadable pool while keeping the token and cach
 test('keeps missing V3 factory status for the UI without logging it on each poll', async () => {
 	const logged = spyOn(console, 'error').mockImplementation(() => {})
 	try {
-		const failure: unknown = await discover(clientWithFactory('0x').client).then(
+		const failure: unknown = await requireDeployedContracts(clientWithFactory('0x').client, [{ name: 'Uniswap V3 factory', address: network.factory }]).then(
 			() => undefined,
 			error => error,
 		)
@@ -177,13 +182,7 @@ test('logs genuine failures but presents all confirmed missing deployments as UI
 		const rpcFailure = new Error('Uniswap V3 factory RPC unavailable')
 		logMarketDiscoveryFailure('pollFailed=', rpcFailure)
 		expect(logged).toHaveBeenLastCalledWith(`pollFailed=${rpcFailure.message}`)
-		const incompatible: unknown = await discover(clientWithFactory('0x01', { poolResult: 'invalid' }).client).then(
-			() => undefined,
-			(error: unknown) => error,
-		)
-		if (!(incompatible instanceof Error)) throw new Error('Expected discovery to preserve an error for the UI')
-		logMarketDiscoveryFailure('pollFailed=', incompatible)
-		expect(logged).toHaveBeenLastCalledWith(`pollFailed=${incompatible.message}`)
+
 		const missing: unknown = await requireDeployedContracts(clientWithFactory('0x').client, [
 			{ name: 'Uniswap V3 factory', address: network.factory },
 			{ name: 'OpenOracle', address: zeroAddress },
@@ -193,7 +192,7 @@ test('logs genuine failures but presents all confirmed missing deployments as UI
 		)
 		if (!(missing instanceof Error)) throw new Error('Expected discovery to preserve an error for the UI')
 		logMarketDiscoveryFailure('pollFailed=', missing)
-		expect(logged).toHaveBeenCalledTimes(2)
+		expect(logged).toHaveBeenCalledTimes(1)
 	} finally {
 		logged.mockRestore()
 	}
@@ -201,7 +200,7 @@ test('logs genuine failures but presents all confirmed missing deployments as UI
 
 test('checks factory deployment at the displayed cycle block', async () => {
 	const missing = clientWithFactory('0x')
-	await expect(discover(missing.client, 100n)).rejects.toThrow('block 100')
+	await discover(missing.client, 100n)
 	expect(missing.codeReads).toEqual([[network.factory, '0x64']])
 })
 
@@ -219,4 +218,18 @@ test('reports which fee tier failed when pool state is unreadable', async () => 
 	} finally {
 		logged.mockRestore()
 	}
+})
+
+test('discovers V2 and V4 execution candidates without any V3 pool or reads', async () => {
+	const deployed = clientWithFactory('0x')
+	const candidates = await poolsForTokens(deployed.client, { ...config, router: undefined, v2Router: pool500, v4PoolManager: pool3000, v4Quoter: pool500 }, [{ token, v3: [], constantProduct: [{ address: pool500, fee: 3000, kind: 'uniswap-v2', venue: 'Uniswap V2' }] }], 100n)
+	expect(candidates).toEqual([{ address: pool500, fee: 3000, token, venue: 'uniswap-v2' }, ...([100, 500, 3000, 10000] as const).map(fee => ({ address: pool3000, fee, token, venue: 'uniswap-v4' as const }))])
+	expect(deployed.contractCalls()).toBe(0)
+})
+
+test('does not read the V3 factory when V3 is disabled', async () => {
+	const deployed = clientWithFactory('0x')
+	expect(await discoverTokenPools(deployed.client, { chainId: 11155111, factory: undefined, multicall3: network.multicall3, tokens: [token], weth: network.weth })).toEqual([{ constantProduct: [], token, v3: [] }])
+	expect(deployed.codeReads).toEqual([])
+	expect(deployed.contractCalls()).toBe(0)
 })

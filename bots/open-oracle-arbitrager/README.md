@@ -89,14 +89,18 @@ for the report lifecycle assumptions and economics used by the arbitrager.
 - A deployed `OpenOracleArbitrageExecutor`. Deploy the stateless executor at a
   predictable CREATE2 address from the dashboard or with `bun run deploy-executor --`,
   then authenticate that address in the execution manifest.
-- The exact Uniswap V3 SwapRouter address.
-- Optionally, the exact Uniswap V2 Router02 in
-  `deployment.uniswapV2Router`. When configured and authenticated, mainnet execution
-  adds direct WETH/token V2 hedges to the configured venue comparison.
-- Optionally, an exact Uniswap V4 PoolManager and V4 Quoter supplied together in
-  `deployment.uniswapV4PoolManager` and `deployment.uniswapV4Quoter`. V4 execution is limited to
+- At least one enabled Uniswap version available on the selected network.
+- `deployment.uniswapV3Enabled` (new-profile default `true`) enables V3 with its spot/TWAP check.
+- Optionally, `deployment.uniswapV2Enabled` (new-profile default `true`) adds authenticated
+  direct WETH/token V2 hedges on mainnet. V2 is unavailable on Sepolia; switching
+  networks does not discard the enabled preference.
+- Optionally, `deployment.uniswapV4Enabled` (new-profile default `false`) enables the
+  network-derived V4 PoolManager and Quoter together. V4 execution is limited to
   direct native-ETH/token pools at the standard fee/tick-spacing pairs with no hook.
   The executor converts ETH and WETH one-for-one inside the atomic entry.
+- Existing profiles without these switches retain their venue choices: a saved
+  router enables V2 or V3, and a saved PoolManager/Quoter pair enables V4. Saving
+  records those choices as switches; all addresses still derive from the network.
 - A reviewed deployment manifest that pins chain, role, address, and runtime
   bytecode hash for every contract and executable token. The primary read RPC
   authenticates every manifest entry by default. With the saved `rpcQuorum` setting at `2`,
@@ -470,11 +474,13 @@ Before each dispute, the bot:
 2. Checks that the game is WETH plus a usable token and inside its dispute window.
    In execute mode, token 2 must be the REP of an explicitly approved Zoltar universe
    and authenticated in the execution manifest. Other observed tokens are monitor-only.
-3. Finds an active Uniswap V3 pool and rejects excessive spot/TWAP deviation.
+3. Finds candidates for each enabled Uniswap version. V3 candidates must pass
+   the configured spot/TWAP check; V2 and V4 do not depend on V3 liquidity.
 4. Models both directions across configured venues: QuoterV2 for V3, exact
    constant-product reserve math for V2, and the authenticated V4 Quoter across
-   every standard fee/tick-spacing pair. The best executable quote competes
-   independently of the V3 pool used as the TWAP anchor.
+   every standard fee/tick-spacing pair. Each venue supplies its own replacement
+   exact-input quote. Selection and final validation both require successful sell,
+   buy, and replacement quotes; incomplete candidates cannot block other venues.
 5. Derives the same replacement swap side as the OpenOracle contract.
 6. Calculates the exact WETH and token contributions and checks wallet inventory.
 7. Applies the absolute-profit and basis-point thresholds.
@@ -732,10 +738,13 @@ to defaults. A runtime write failure rejects the dashboard
 mutation and keeps the prior runtime settings active; fix the settings path or
 permissions and retry.
 
-Deployment identities are execution trust roots. The dashboard validates the
-syntax, shape, and independent RPC set for REP, WETH, OpenOracle, coordinator,
-executor, manifest, and Uniswap V2/V3/V4 values before saving them for the next
-scan boundary. The scan authenticates configured contract bytecode before execution.
+Deployment identities are execution trust roots. REP, WETH, OpenOracle, and all
+Uniswap addresses come from the selected network. Mainnet uses upstream Uniswap;
+Sepolia uses the contracts installed by `deploy:testnet`. The saved configuration
+contains V2/V3/V4 enable switches, not Uniswap addresses. The dashboard validates
+executor, coordinator, manifest, and independent RPC settings before saving them
+for the next scan boundary. The scan authenticates contract bytecode against the
+reviewed manifest before execution.
 
 For dashboard deployment, configure a public submission RPC on the selected chain
 and set an active signer. If execution is armed, pause the bot first; pause blocks
@@ -848,14 +857,21 @@ new positions; existing positions continue settlement and recovery.
 
 ### Uniswap venue execution
 
-Market discovery checks all Uniswap V3 fee tiers (`0.01%`, `0.05%`, `0.3%`, and
-`1%`) plus mainnet Uniswap V2 and SushiSwap V2 WETH pairs. For V3, “Liquidity” is
+V2, V3, and V4 have independent enable switches. The selected venue supplies both
+hedge quotes and the replacement report ratio. Only V3 has the bot’s spot/TWAP
+filter. V2/V4 use current-block reserve or quoter evidence without a historical
+price filter; they still require RPC agreement, configured market-consensus checks,
+slippage limits, profitability, and atomic executor validation.
+
+When V3 is enabled, market discovery checks all Uniswap V3 fee tiers (`0.01%`, `0.05%`, `0.3%`, and
+`1%`). Mainnet Uniswap V2 and SushiSwap V2 WETH pairs are discovered independently
+of the V3 switch. For V3, “Liquidity” is
 the pool contract’s raw in-range `liquidity()` value; for constant-product venues it
 shows both token reserves. Neither is a token-denominated TVL or a promise that the
 full game size can execute without price impact. “Price” is the decimal-normalized
 WETH-per-token spot price derived from V3 `sqrtPriceX96` or V2 reserves; it is not
-an executable size-aware quote. V3 execution uses QuoterV2 and the configured
-spot/TWAP guard. When `deployment.uniswapV2Router` is configured, mainnet execution also
+an executable size-aware quote. Each enabled version can execute independently.
+V3 execution uses QuoterV2 and the configured spot/TWAP guard. When `deployment.uniswapV2Enabled` is `true`, mainnet execution also
 reads the canonical Uniswap V2 pair reserves at the exact quorum quote block and
 evaluates the direct WETH/token route with the standard 0.30% fee:
 
@@ -867,8 +883,8 @@ amount in  = floor(reserve in × amount out × 1000
              ÷ ((reserve out − amount out) × 997)) + 1
 ```
 
-When `deployment.uniswapV4PoolManager` and `deployment.uniswapV4Quoter` are both
-configured, the bot also asks the authenticated V4 Quoter for
+When `deployment.uniswapV4Enabled` is `true`, the bot also asks the
+network-derived, authenticated V4 Quoter for
 exact-input and exact-output quotes against these exact pool keys:
 
 | Fee units | Tick spacing |
@@ -1056,8 +1072,8 @@ scan. The same values live under `strategy` in the complete configuration:
 | --- | ---: | --- | --- |
 | Minimum profit | `0.01 WETH` | `minimumProfitWeth` | Rejects opportunities below an absolute modeled net profit. |
 | Minimum return | `100 bps` | `minimumProfitBps` | Requires modeled net profit relative to the direction-specific return basis. |
-| Spot/TWAP distance | `100 ticks` | `maxSpotTwapTicks` | Rejects pools whose current tick is too far from the TWAP. |
-| TWAP window | `1800 seconds` | `twapSeconds` | Controls the Uniswap manipulation-resistance window. Minimum: 60 seconds. |
+| Spot/TWAP distance | `100 ticks` | `maxSpotTwapTicks` | Rejects V3 pools whose current tick is too far from the TWAP. |
+| TWAP window | `1800 seconds` | `twapSeconds` | Controls the V3 manipulation-resistance window. Minimum: 60 seconds. |
 | Remaining time | `36 seconds` | `minimumRemainingSeconds` | Inclusion buffer for timestamp-based games. |
 | Remaining blocks | `3 blocks` | `minimumRemainingBlocks` | Inclusion buffer for block-based games. |
 | Poll interval | `1000 ms` | `pollMilliseconds` | Longest idle wait between scans when no new head arrives; outside failure backoff a new block wakes the scan immediately. Also the centralized-exchange sampling cadence. Coordinator-free diagnostic mode queries every unseen event-log height. |
@@ -1271,13 +1287,12 @@ entry from depending on wallet inventory already committed to recovery.
   but there is intentionally no claimed universal configurable V3/V4 adapter schema.
 - Ethereum mainnet and Sepolia WETH/token games using standard Uniswap V3 fee tiers
   and exact-transfer ERC-20s are supported. Mainnet can additionally execute through
-	  authenticated Uniswap V2 Router02 when `deployment.uniswapV2Router` is configured.
-	  Both networks can execute through authenticated Uniswap V4 PoolManager and Quoter
-	  contracts when `deployment.uniswapV4PoolManager` and
-	  `deployment.uniswapV4Quoter` are configured, but only against standard-fee,
-  hookless native-ETH/token pools. V3 remains the reference/TWAP safety anchor.
-  Identities remain operator-supplied, but
-  under the opt-in two-reader policy, live mode authenticates every address and runtime
+  authenticated Uniswap V2 Router02 when `deployment.uniswapV2Enabled` is `true`.
+  Both networks can execute through authenticated Uniswap V4 PoolManager and Quoter
+  contracts when `deployment.uniswapV4Enabled` is `true`, but only against standard-fee,
+  hookless native-ETH/token pools. Neither V2 nor V4 requires a V3 pool.
+  Uniswap identities are network-derived. Under the opt-in two-reader policy,
+  live mode authenticates every address and runtime
   bytecode hash against the reviewed deployment manifest through at least two available read RPCs. Every
   available authentication result must agree; the manifest itself remains an
   operator trust root.
