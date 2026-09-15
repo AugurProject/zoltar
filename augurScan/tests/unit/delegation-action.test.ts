@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { concatHex, encodeFunctionData, getAddress, isHex, parseAbi, toHex, zeroHash } from '../../src/ethereum.ts'
-import { decodeAction } from '../../src/metadata.ts'
+import { decodeAction, tokenAddressesFrom } from '../../src/metadata.ts'
 import transaction from './delegation-transaction.json'
 
 const wrapperAbi = parseAbi(['function redeemDelegations(bytes[] _permissionContexts,bytes32[] _modes,bytes[] _executionCallDatas)'])
@@ -86,4 +86,30 @@ test('does not reinterpret known protocol calls as delegation wrappers', () => {
 	const contract = { address: target, kind: 'securityPool', label: 'Security Pool', provenance: 'test' }
 	if (!isHex(transaction.input)) throw new Error('Invalid transaction fixture')
 	expect(decodeAction(contract, `0x${transaction.input.slice(2)}`, labels).status).toBe('failed')
+})
+
+test('collects only supported inner token amounts, deduplicated and within the decoding depth limit', () => {
+	const token = getAddress('0x3000000000000000000000000000000000000003')
+	const oracle = getAddress('0x4000000000000000000000000000000000000004')
+	const contractKinds = new Map([[oracle.toLowerCase(), 'openOracle']])
+	const deposit = encodeFunctionData({ abi: parseAbi(['function deposit(address token,uint128 amount,address beneficiary)']), functionName: 'deposit', args: [token, 1_500_001n, target] })
+	const execution = concatHex([oracle, toHex(0n, { size: 32 }), deposit])
+	const candidates = (input: `0x${string}`) => tokenAddressesFrom(undefined, decodeAction(undefined, input, new Map(), new Map(), contractKinds), undefined, contractKinds)
+	const multiple = encodeFunctionData({
+		abi: wrapperAbi,
+		functionName: 'redeemDelegations',
+		args: [
+			['0x', '0x'],
+			[zeroHash, zeroHash],
+			[execution, execution],
+		],
+	})
+	expect(candidates(multiple)).toEqual([token])
+	expect(candidates(wrapped(execution, `0xff${'00'.repeat(31)}`))).toEqual([])
+	expect(candidates(wrapped('0x1234'))).toEqual([])
+	expect(candidates('0xcef6d209')).toEqual([])
+	let nested = wrapped(execution)
+	for (let depth = 1; depth < 4; depth++) nested = wrapped(concatHex([target, toHex(0n, { size: 32 }), nested]))
+	expect(candidates(nested)).toEqual([token])
+	expect(candidates(wrapped(concatHex([target, toHex(0n, { size: 32 }), nested])))).toEqual([])
 })

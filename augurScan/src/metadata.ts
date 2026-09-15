@@ -40,6 +40,7 @@ const exactUnits = (value: string, decimals: number): string => {
 type DecodeDisplayContext = { readonly nativeSymbol: string }
 
 const defaultDisplayContext: DecodeDisplayContext = { nativeSymbol: 'ETH' }
+const maxDelegationDepth = 4
 
 const semanticUnit = (name: string, context: DecodeDisplayContext): { decimals: number; symbol: string } | undefined => {
 	const lower = name.toLowerCase()
@@ -227,12 +228,25 @@ const applyTokenFormats = (
 	}
 }
 
-export const tokenAddressesFrom = (kind: string | undefined, decoded: DecodedRecord, emitterAddress?: string): readonly Address[] => {
-	if (decoded.name === undefined || decoded.arguments === undefined) return []
+export const tokenAddressesFrom = (kind: string | undefined, decoded: DecodedRecord, emitterAddress?: string, contractKinds: ReadonlyMap<string, string> = new Map()): readonly Address[] => tokenAddressesFromRecord(kind, decoded, emitterAddress, contractKinds, 0)
+
+const tokenAddressesFromRecord = (kind: string | undefined, decoded: DecodedRecord, emitterAddress: string | undefined, contractKinds: ReadonlyMap<string, string>, depth: number): readonly Address[] => {
+	if (decoded.status !== 'decoded' || decoded.name === undefined || decoded.arguments === undefined) return []
 	const addresses = (tokenAmountRules[`${kind}.${decoded.name}`] ?? []).flatMap(rule => {
 		const address = tokenAddress(rule, decoded.arguments ?? {}, emitterAddress)
 		return address === undefined || address.toLowerCase() === zeroAddress ? [] : [address]
 	})
+	// Use the same supported modes and depth bound as display decoding.
+	// Referenced addresses also include recipients and targets, not just tokens.
+	if (decoded.name === 'redeemDelegations' && depth < maxDelegationDepth) {
+		delegationExecutionDetails(decoded.arguments, new Map(), defaultDisplayContext.nativeSymbol, (target, input) => {
+			const innerKind = contractKinds.get(target.toLowerCase())
+			const contract = innerKind === undefined ? undefined : { address: target, kind: innerKind, label: target, provenance: 'delegation calldata' }
+			const inner = decodeActionRecord(contract, input, new Map(), new Map(), contractKinds, defaultDisplayContext, depth + 1)
+			addresses.push(...tokenAddressesFromRecord(innerKind, inner, target, contractKinds, depth + 1))
+			return inner
+		})
+	}
 	return [...new Set<Address>(addresses)]
 }
 
@@ -411,7 +425,7 @@ const decodeActionRecord = (contract: ContractMetadata | undefined, input: Hex, 
 		const displayArguments = Object.keys(argumentsValue).length === 0 ? undefined : (displayValue('', argumentsValue, labels, context) as SerializedArguments)
 		if (displayArguments !== undefined) applyTokenFormats(contract?.kind, result.functionName, argumentsValue, displayArguments, tokenMetadata, contractKinds, contract?.address, context)
 		const delegation =
-			result.functionName === 'redeemDelegations' && depth < 4
+			result.functionName === 'redeemDelegations' && depth < maxDelegationDepth
 				? delegationExecutionDetails(argumentsValue, labels, context.nativeSymbol, (target, callData) => {
 						const kind = contractKinds.get(target.toLowerCase())
 						const innerContract = kind === undefined ? undefined : { address: target, kind, label: labels.get(target.toLowerCase()) ?? target, provenance: 'delegation calldata' }
