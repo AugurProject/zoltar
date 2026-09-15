@@ -150,3 +150,12 @@ describe('genesis initialization', () => {
 		expect(reserveBound.plan?.metadata[repMaximumKey]).toBe('10')
 	})
 })
+
+test('uses the Sepolia factory when an older snapshot omits the factory address', () => {
+	const snapshot = snapshotFixture()
+	snapshot.chainId = 11155111
+	delete snapshot.deployments.uniswapV3Factory
+	snapshot.genesisUniswap = { factory: true, initialized: false, liquidity: '0', proxy: true, seeder: true }
+	const creation = evaluateSelectableOperationDefinition('trading.genesis-uniswap.create-pool', snapshot, options)
+	expect(creation.plan?.steps[0]?.to).toBe('0xEf09Be426F8d6D2786cADEA7D3A8b0D09cEB79B4')
+})

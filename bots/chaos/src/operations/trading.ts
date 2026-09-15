@@ -1,9 +1,10 @@
+import { canonicalUniswapDeployment } from '@zoltar/bot-shared/config/canonical-deployment'
 import { erc1155Abi, erc20Abi, genesisUniswapV3FactoryAbi, genesisUniswapV3PoolStateAbi, genesisUniswapV3SeederAbi, shareTokenAbi, twoWayConstantProductFactoryAbi, twoWayConstantProductPairAbi, twoWayConstantProductRouterAbi } from '@zoltar/bot-shared/contracts/abi'
 import { decodeFunctionData, encodeAbiParameters, encodeDeployData, getAddress, getCreate2Address, isAddress, toHex, zeroAddress, type AbiValue, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { sameAddress as addressesMatch } from '@zoltar/core-shared/evm/address'
 import { ceilDiv as divideUp } from '@zoltar/core-shared/math/bigint'
 import { trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory, trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter } from '../../../../solidity/ts/types/contractArtifact.ts'
-import { CANONICAL_UNISWAP_V3_FACTORY, GENESIS_UNISWAP_FEE, GENESIS_UNISWAP_SQRT_PRICE_X96, GENESIS_UNISWAP_TICK_LOWER, GENESIS_UNISWAP_TICK_UPPER, genesisUniswapSeederDeployment } from '../core/genesis-uniswap.ts'
+import { GENESIS_UNISWAP_FEE, GENESIS_UNISWAP_SQRT_PRICE_X96, GENESIS_UNISWAP_TICK_LOWER, GENESIS_UNISWAP_TICK_UPPER, genesisUniswapSeederDeployment } from '../core/genesis-uniswap.ts'
 import { validForkOutcomeRoutes } from './fork-outcomes.ts'
 import { inputInteger, inputMatches, inputSpend } from './input-values.ts'
 import { allowance, amount, cappedSpend, choose, disabled, eligible, encodeStep, erc1155WalletDebit, erc20AllowanceEvidence, erc20WalletDebit, eventEvidence, mixSeed, optionAmount, planBase, randomDeadline, tokenInventory } from './planning.ts'
@@ -178,7 +179,7 @@ const createGenesisUniswapPool: OperationDefinition = {
 	buildPlan(snapshot) {
 		const rep = genesisRep(snapshot)
 		if (rep === undefined) return undefined
-		const uniswapFactory = snapshot.deployments.uniswapV3Factory ?? CANONICAL_UNISWAP_V3_FACTORY
+		const uniswapFactory = snapshot.deployments.uniswapV3Factory ?? canonicalUniswapDeployment(snapshot.chainId).factory
 		return planBase({
 			definitionId: createGenesisUniswapPool.id,
 			ecosystem: 'trading',
@@ -390,7 +391,7 @@ const createUniverseUniswapPool: OperationDefinition = {
 	buildPlan(snapshot) {
 		const target = childUniswapPool(snapshot, 'missing')
 		if (target === undefined) return undefined
-		const factory = snapshot.deployments.uniswapV3Factory ?? CANONICAL_UNISWAP_V3_FACTORY
+		const factory = snapshot.deployments.uniswapV3Factory ?? canonicalUniswapDeployment(snapshot.chainId).factory
 		return planBase({
 			definitionId: createUniverseUniswapPool.id,
 			ecosystem: 'trading',
