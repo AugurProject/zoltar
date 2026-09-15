@@ -40,17 +40,29 @@ async function findPoolDeployment(client: ReadClient, factory: Address, address:
 	return [{ securityPool: address, parent, universeId, questionId, statoblastSecurityMultiplierBps }]
 }
 
-export async function loadPoolCatalog(client: ReadClient, factory: Address, chainId: number, page: number, searchAddress?: Address): Promise<PoolCatalogPage> {
+export async function loadPoolCatalog(client: ReadClient, factory: Address, chainId: number, page: number, searchAddress?: Address, monitoredAddresses?: readonly Address[]): Promise<PoolCatalogPage> {
 	if (!Number.isSafeInteger(page) || page < 0) throw new Error('Pool page must be a non-negative safe integer')
 	const block = await client.getBlock()
 	if (block.number === undefined || block.hash === undefined) throw new Error('Pool registry block is unavailable')
 	const blockNumber = block.number
-	const match = searchAddress === undefined ? undefined : await findPoolDeployment(client, factory, getAddress(searchAddress), blockNumber)
-	const total = match === undefined ? await client.readContract({ abi: securityPoolFactoryAbi, address: factory, functionName: 'securityPoolDeploymentCount', args: [], blockNumber }) : BigInt(match.length)
+	const monitored = monitoredAddresses === undefined ? undefined : [...new Set(monitoredAddresses.map(address => getAddress(address)))]
+	let match: Awaited<ReturnType<typeof findPoolDeployment>> | undefined
+	if (searchAddress !== undefined) {
+		const address = getAddress(searchAddress)
+		match = monitored === undefined || monitored.includes(address) ? await findPoolDeployment(client, factory, address, blockNumber) : []
+	}
+	let total: bigint
+	if (match !== undefined) total = BigInt(match.length)
+	else if (monitored !== undefined) total = BigInt(monitored.length)
+	else total = await client.readContract({ abi: securityPoolFactoryAbi, address: factory, functionName: 'securityPoolDeploymentCount', args: [], blockNumber })
 	const start = BigInt(page) * PAGE_SIZE
 	const remaining = start >= total ? 0n : total - start
 	const count = remaining < PAGE_SIZE ? remaining : PAGE_SIZE
-	const deployments = match ?? (count === 0n ? [] : await client.readContract({ abi: securityPoolFactoryAbi, address: factory, functionName: 'securityPoolDeploymentsRange', args: [start, count], blockNumber }))
+	let deployments: Readonly<Awaited<ReturnType<typeof findPoolDeployment>>> = match ?? []
+	if (match === undefined && count > 0n) {
+		if (monitored === undefined) deployments = await client.readContract({ abi: securityPoolFactoryAbi, address: factory, functionName: 'securityPoolDeploymentsRange', args: [start, count], blockNumber })
+		else deployments = (await Promise.all(monitored.slice(Number(start), Number(start + count)).map(address => findPoolDeployment(client, factory, address, blockNumber)))).flat()
+	}
 	const pools = await Promise.all(
 		deployments.map(async deployment => {
 			const pool: CatalogPool = {

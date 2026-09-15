@@ -141,3 +141,17 @@ test('does not report RPC failure or reorganization as a missing search result',
 	await expect(loadPoolCatalog(fixture(1n, { failSearch: true }).client, address, 1, 0, address)).rejects.toThrow('RPC unavailable')
 	await expect(loadPoolCatalog(fixture(1n, { reorg: true }).client, address, 1, 0, address)).rejects.toThrow('changed during discovery')
 })
+
+test('paginates monitored addresses globally and excludes unmonitored search results', async () => {
+	const { client, reads } = fixture(1000000n)
+	const monitored = [...Array.from({ length: 12 }, (_, index) => getAddress(`0x${(index + 1).toString(16).padStart(40, '0')}`)), address]
+	const result = await loadPoolCatalog(client, address, 1, 1, undefined, monitored)
+	expect(result).toMatchObject({ total: '13', pageCount: '2', page: 1, pools: [{ address }] })
+	expect(reads.filter(read => read.functionName === 'getSecurityPoolOriginId').map(read => read.args)).toEqual([[address]])
+	expect(reads.some(read => read.functionName.startsWith('securityPoolDeployment'))).toBe(false)
+	const empty = fixture(1000000n)
+	expect(await loadPoolCatalog(empty.client, address, 1, 0, address, [])).toMatchObject({ total: '0', pools: [] })
+	expect(empty.reads).toEqual([])
+	const duplicated = fixture(1000000n)
+	expect(await loadPoolCatalog(duplicated.client, address, 1, 0, undefined, [address, address])).toMatchObject({ total: '1', pools: [{ address }] })
+})

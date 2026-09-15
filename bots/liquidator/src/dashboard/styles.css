@@ -378,18 +378,6 @@ input[type="checkbox"] {
 	accent-color: var(--accent);
 }
 
-.pool-toggle {
-	display: grid;
-	width: 2.75rem;
-	height: 2.75rem;
-	place-items: center;
-	cursor: pointer;
-}
-
-.pool-toggle input {
-	margin: 0;
-}
-
 .table-shell {
 	width: 100%;
 	max-width: 100%;
@@ -481,56 +469,6 @@ td small {
 td small {
 	margin-top: 0.22rem;
 	color: var(--muted);
-}
-
-.address {
-	display: inline-flex;
-	align-items: center;
-	gap: 0.35rem;
-	min-height: 2.75rem;
-	max-width: 12rem;
-	cursor: pointer;
-	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-}
-
-.address::before {
-	flex: none;
-	content: "›";
-	color: var(--accent);
-	font-family: inherit;
-	font-size: 1rem;
-	transition: transform 120ms ease;
-}
-
-.address-details[open] > .address::before {
-	transform: rotate(90deg);
-}
-
-.address:focus-visible {
-	border-radius: 0.25rem;
-	outline: 3px solid color-mix(in srgb, var(--accent), transparent 25%);
-	outline-offset: 2px;
-}
-
-.address-text {
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.address-details summary {
-	cursor: pointer;
-}
-
-.full-address {
-	display: block;
-	width: 12rem;
-	margin-top: 0.35rem;
-	overflow-wrap: anywhere;
-	color: var(--muted);
-	font-size: 0.7rem;
-	white-space: normal;
 }
 
 .empty {
@@ -776,18 +714,6 @@ td small {
 	tbody td.empty {
 		display: block;
 	}
-
-	.full-address {
-		width: 100%;
-	}
-
-	.address-details,
-	.address {
-		width: 100%;
-		min-width: 0;
-		max-width: 100%;
-		overflow: hidden;
-	}
 }
 
 @media (max-width: 26rem) {
@@ -946,4 +872,19 @@ body[data-page="pools"] #network-badge::before {
 
 .catalog-pagination[hidden] {
 	display: none;
+}
+
+.pool-tabs {
+	display: flex;
+	gap: 0.5rem;
+}
+.pool-tabs [aria-selected="true"] {
+	border-color: var(--accent);
+	color: var(--accent);
+}
+.catalog-monitoring {
+	margin-top: 1rem;
+}
+.catalog-monitoring summary {
+	cursor: pointer;
 }

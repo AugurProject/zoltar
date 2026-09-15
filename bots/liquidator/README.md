@@ -156,19 +156,21 @@ enabled:
 
 The universe browser walks Zoltar's deployed child-universe tree from universe
 zero, including deployed universes that do not have a security pool yet. The
-pool table is bounded to the chain profile's `selectedPools`, the direct child
+bot monitors the chain profile's `selectedPools`, the direct child
 deployments of those pools, and deployed pools resolved from `desiredPools`; the
 monitor does not scan unrelated pools for vaults or liquidation candidates. On the
-**Pool work** page, **All pools** automatically browses the active chain's factory
+**Pool work** page, the **All pools** tab automatically browses the active chain's factory
 registry in pages of 12, including pools you have not selected. Cards show the
 question, universe, security multiplier, current pool-held REP, and vault count.
 Pool deployment date comes from the factory deployment event’s block timestamp.
 Question start date and Question end date come from the question’s stored time
 bounds. All three dates use UTC; unavailable dates are marked as such.
 To find a known pool, paste its full address into **Search by pool address** in
-**All pools**, then select **Add to supported** on the matching card. Search checks
+the **All pools** tab, then select **Add to supported** on the matching card. Search checks
 the active chain’s factory, including pools outside the current page. Clear the
-search to return to browsing.
+search to return to browsing. Switch to **Monitored pools** to filter the same
+cards to pools the bot is currently monitoring. Expand **Monitoring details**
+for oracle freshness, vault balances, and liquidation targets.
 Use **Add to supported** on a card to save a pool to the chain profile's `selectedPools`, or
 **Remove from supported** to remove it. This does not approve its universe or
 change execution mode. A pool with unavailable metrics remains visible. Use

@@ -1,4 +1,4 @@
-import { cell, stacked, poolStatusText, botVaultState, publicFailure } from './pool-presentation.ts'
+import { cell, publicFailure, type MonitoredPool } from './pool-presentation.ts'
 import { createPoolBrowser } from './pool-browser.ts'
 import { createUniverseExplorer } from '@zoltar/bot-shared/dashboard/universe-explorer'
 import { readinessGuidance } from './readiness-status.js'
@@ -13,33 +13,6 @@ type Activity = {
 	details?: string
 	message: string
 	status: string
-}
-
-type Vault = {
-	capacityOwnershipRep: string
-	openInterestDisplay: string
-	healthBps?: string
-	vaultRepBacking: string
-	claimableFeesEth: string
-}
-
-type Pool = {
-	knownVaultCount: string
-	address: string
-	approvedUniverse: boolean
-	bestCandidateBonusValueEth?: string
-	botVault: Vault
-	candidateCount: number
-	centralizedPriceAllowed: boolean
-	centralizedPriceDeviationBps?: string
-	isPriceValid: boolean
-	lastPrice: string
-	multiplierBps: string
-	questionId: string
-	selected: boolean
-	systemState: string
-	totalCapacityOwnershipRep: string
-	totalPoolHeldRep: string
 }
 
 type Universe = {
@@ -119,7 +92,7 @@ type Snapshot = {
 	pendingStagedOperations: { candidateBlock?: string; coordinator: string; historicalRecoveryComplete: boolean; latestRecoveryBlock?: string; nextHistoricalBlock?: string; operationId: string; queuedBlock: string; target: string }[]
 	pendingTransactions: { hash: string; kind: string; label: string; maxBlockNumber: string; mode: 'private' | 'public'; nonce: string; requiresMarketEvidence: boolean; submissionBlock: string }[]
 	operatorCapable: boolean
-	pools: Pool[]
+	pools: MonitoredPool[]
 	scanning: boolean
 	status: 'connectivity-degraded' | 'dry-run' | 'error' | 'paused' | 'running' | 'starting'
 	marketSources: MarketSourceRow[]
@@ -180,7 +153,6 @@ const recoveryList = element('recovery-list', HTMLDivElement)
 const recoveryGuidance = element('recovery-guidance', HTMLParagraphElement)
 const recheckRecovery = element('recheck-recovery', HTMLButtonElement)
 const universeRows = element('universe-rows', HTMLDivElement)
-const poolRows = element('pool-rows', HTMLTableSectionElement)
 const activityList = element('activity-list', HTMLOListElement)
 const modeBadge = element('mode-badge', HTMLSpanElement)
 const networkBadge = element('network-badge', HTMLSpanElement)
@@ -193,7 +165,6 @@ const lastScan = element('last-scan', HTMLParagraphElement)
 const blockStatus = element('block-status', HTMLParagraphElement)
 const globalError = element('global-error', HTMLDivElement)
 const configurationStatus = element('configuration-status', HTMLDivElement)
-const poolFilter = element('pool-filter', HTMLInputElement)
 const strategyForm = element('strategy-form', HTMLFormElement)
 const strategyFields = element('strategy-fields', HTMLFieldSetElement)
 const strategyStatus = element('strategy-status', HTMLSpanElement)
@@ -216,7 +187,6 @@ let profileRequestEpoch = 0
 let approvedUniverses = new Set<string>()
 let selectedPools = new Set<string>()
 let pendingPoolMutations = 0
-const poolActionStates = new Map<string, { failed: boolean; message: string }>()
 let universeExplorer: ReturnType<typeof createUniverseExplorer> | undefined
 const recoveryActionStates = new Map<string, { failed: boolean; message: string }>()
 let renderedAlertKey: string | undefined
@@ -236,7 +206,7 @@ async function saveSupportedPool(address: string, supported: boolean, chainId: n
 	} finally {
 		pendingPoolMutations -= 1
 		setMutationControlsEnabled(stateConnected)
-		if (currentSnapshot !== undefined) renderPools(currentSnapshot)
+		updatePoolBrowser()
 	}
 }
 const poolBrowser = createPoolBrowser(element('pool-browser', HTMLElement), saveSupportedPool)
@@ -248,6 +218,7 @@ function updatePoolBrowser() {
 		enabled: document.body.dataset['page'] === 'pools' && stateConnected && configurationConnected && pendingNetworkProfile === undefined && currentConfiguration?.networkConfigured === true && pendingPoolMutations === 0,
 		selected: selectedPools,
 		approved: approvedUniverses,
+		monitored: currentSnapshot?.pools ?? [],
 	}
 	poolBrowser?.update(context)
 }
@@ -280,7 +251,7 @@ function setMutationControlsEnabled(enabled: boolean) {
 	testMarketSourcesButton.disabled = !chainSettingsAvailable
 	recheckRecovery.disabled = !chainSettingsAvailable
 	if (!chainSettingsAvailable) {
-		for (const control of document.querySelectorAll<HTMLInputElement | HTMLButtonElement>('#pool-rows input, #recovery-list input, #recovery-list button')) control.disabled = true
+		for (const control of document.querySelectorAll<HTMLInputElement | HTMLButtonElement>('#recovery-list input, #recovery-list button')) control.disabled = true
 	}
 	if (currentSnapshot !== undefined) renderUniverses(currentSnapshot, !chainSettingsAvailable)
 }
@@ -567,21 +538,6 @@ function universeState(universe: Universe) {
 	return 'Migration / settlement'
 }
 
-function activeRecordKey(container: HTMLElement) {
-	const active = document.activeElement
-	if (!(active instanceof HTMLElement) || !container.contains(active)) return undefined
-	return active.dataset['recordKey']
-}
-
-function restoreRecordFocus(container: HTMLElement, recordKey?: string) {
-	if (recordKey === undefined) return
-	for (const candidate of container.querySelectorAll<HTMLElement>('[data-record-key]')) {
-		if (candidate.dataset['recordKey'] !== recordKey) continue
-		candidate.focus()
-		return
-	}
-}
-
 function renderUniverses(snapshot: Snapshot, disabled?: boolean) {
 	universeExplorer ??= createUniverseExplorer(universeRows, {
 		savedMessage: 'Universe approvals saved.',
@@ -606,119 +562,6 @@ function renderUniverses(snapshot: Snapshot, disabled?: boolean) {
 function actionStatus(element: HTMLElement, message: string, failed = false) {
 	if (element.textContent !== message) element.textContent = message
 	if (element.classList.contains('error') !== failed) element.classList.toggle('error', failed)
-}
-
-function renderPools(snapshot: Snapshot) {
-	if (pendingPoolMutations > 0) return
-	const focusedRecord = activeRecordKey(poolRows)
-	const expandedAddresses = new Set(
-		[...poolRows.querySelectorAll<HTMLDetailsElement>('details[data-pool-address]')]
-			.filter(details => details.open)
-			.map(details => details.dataset['poolAddress'])
-			.filter(address => address !== undefined),
-	)
-	const filter = poolFilter.value.trim().toLowerCase()
-	const visible = snapshot.pools.filter(pool => filter === '' || pool.address.toLowerCase().includes(filter) || pool.questionId.toLowerCase().includes(filter))
-	if (visible.length === 0) {
-		const row = document.createElement('tr')
-		const empty = cell(snapshot.pools.length === 0 ? 'No supported pools yet. Choose a pool from All pools below.' : 'No pools match this filter.')
-		empty.colSpan = 7
-		empty.className = 'empty'
-		row.append(empty)
-		poolRows.replaceChildren(row)
-		return
-	}
-	poolRows.replaceChildren(
-		...visible.map(pool => {
-			const row = document.createElement('tr')
-			const checkbox = document.createElement('input')
-			checkbox.type = 'checkbox'
-			checkbox.dataset['recordKey'] = `pool:${pool.address.toLowerCase()}`
-			checkbox.checked = selectedPools.has(pool.address.toLowerCase())
-			checkbox.setAttribute('aria-label', `Select pool ${pool.address}`)
-			checkbox.disabled = pendingPoolMutations > 0 || pendingNetworkProfile !== undefined || currentConfiguration?.networkConfigured !== true || !stateConnected
-			const toggle = document.createElement('label')
-			toggle.className = 'pool-toggle'
-			const toggleText = document.createElement('span')
-			toggleText.className = 'visually-hidden'
-			toggleText.textContent = `Select pool ${pool.address}`
-			toggle.append(checkbox, toggleText)
-			const poolStatus = document.createElement('span')
-			poolStatus.className = 'action-status'
-			const savedActionState = poolActionStates.get(pool.address.toLowerCase())
-			if (savedActionState === undefined) {
-				poolStatus.textContent = poolStatusText(pool)
-			} else {
-				actionStatus(poolStatus, savedActionState.message, savedActionState.failed)
-				if (!savedActionState.failed && savedActionState.message === 'Saved') poolActionStates.delete(pool.address.toLowerCase())
-			}
-			checkbox.addEventListener('change', async () => {
-				if (pendingPoolMutations > 0) {
-					checkbox.checked = selectedPools.has(pool.address.toLowerCase())
-					return
-				}
-				pendingPoolMutations += 1
-				updatePoolBrowser()
-				for (const control of poolRows.querySelectorAll<HTMLInputElement>('input')) control.disabled = true
-				poolActionStates.set(pool.address.toLowerCase(), { failed: false, message: 'Saving…' })
-				actionStatus(poolStatus, 'Saving…')
-				const next = new Set(selectedPools)
-				if (checkbox.checked) next.add(pool.address.toLowerCase())
-				else next.delete(pool.address.toLowerCase())
-				try {
-					await put('/api/selected-pools', [...next])
-					selectedPools = next
-					poolActionStates.set(pool.address.toLowerCase(), { failed: false, message: 'Saved' })
-					actionStatus(poolStatus, 'Saved')
-				} catch (error) {
-					checkbox.checked = !checkbox.checked
-					const message = publicFailure(error, 'Could not save pool selection. Retry this selection.')
-					poolActionStates.set(pool.address.toLowerCase(), { failed: true, message })
-					actionStatus(poolStatus, message, true)
-				} finally {
-					pendingPoolMutations -= 1
-					updatePoolBrowser()
-					if (currentSnapshot !== undefined) renderPools(currentSnapshot)
-				}
-			})
-			const addressDetails = document.createElement('details')
-			addressDetails.className = 'address-details'
-			addressDetails.dataset['poolAddress'] = pool.address.toLowerCase()
-			addressDetails.open = expandedAddresses.has(pool.address.toLowerCase())
-			const address = document.createElement('summary')
-			address.className = 'address'
-			address.dataset['recordKey'] = `pool-address:${pool.address.toLowerCase()}`
-			const addressText = document.createElement('span')
-			addressText.className = 'address-text'
-			addressText.textContent = shortAddress(pool.address)
-			address.append(addressText)
-			const fullAddress = document.createElement('code')
-			fullAddress.className = 'full-address'
-			fullAddress.textContent = pool.address
-			addressDetails.append(address, fullAddress)
-			const oracleBadge = document.createElement('span')
-			oracleBadge.className = `badge ${pool.isPriceValid ? 'ok' : 'warning'}`
-			oracleBadge.textContent = pool.isPriceValid ? 'Fresh' : 'Stale'
-			const cells = [
-				cell(toggle, poolStatus),
-				cell(addressDetails),
-				cell(stacked(`#${pool.questionId}`, `${pool.multiplierBps} bps collateral`)),
-				cell(oracleBadge, stacked('', `${pool.lastPrice} REP / ETH${pool.centralizedPriceDeviationBps === undefined ? '' : ` · ${pool.centralizedPriceDeviationBps} bps from reference`}`)),
-				cell(stacked(`${pool.totalPoolHeldRep} REP`, `${pool.totalCapacityOwnershipRep} REP capacity ownership · ${pool.knownVaultCount} known vaults`)),
-				cell(stacked(botVaultState(pool.botVault), `${pool.botVault.vaultRepBacking} REP backing · ${pool.botVault.capacityOwnershipRep} REP capacity ownership · ${pool.botVault.openInterestDisplay} ETH open interest · ${pool.botVault.claimableFeesEth} ETH fees`)),
-				cell(stacked(pool.candidateCount.toString(), pool.bestCandidateBonusValueEth === undefined ? 'No executable target' : `${pool.bestCandidateBonusValueEth} ETH best bonus`)),
-			]
-			const labels = ['Supported', 'Pool', 'Question', 'Oracle', 'Pool totals', 'Bot vault', 'Targets']
-			const headings = ['pool-selected-heading', 'pool-address-heading', 'pool-question-heading', 'pool-oracle-heading', 'pool-totals-heading', 'pool-vault-heading', 'pool-targets-heading']
-			for (const [index, value] of cells.entries()) {
-				value.dataset['label'] = labels[index]
-				value.headers = headings[index] ?? ''
-			}
-			row.append(...cells)
-			return row
-		}),
-	)
-	restoreRecordFocus(poolRows, focusedRecord)
 }
 
 function renderActivities(activities: Activity[]) {
@@ -792,7 +635,7 @@ function render(snapshot: Snapshot) {
 	renderMarketSources(marketSourceProbeRows ?? snapshot.marketSources)
 	renderRecovery(snapshot)
 	renderUniverses(snapshot)
-	renderPools(snapshot)
+	updatePoolBrowser()
 	renderActivities(snapshot.activities)
 	renderCurrentRpcEndpointHealth(snapshot)
 	if (!initialFragmentApplied) {
@@ -877,7 +720,7 @@ function populateConfiguration(configuration: Configuration) {
 	if (currentSnapshot !== undefined) {
 		renderAttention(currentSnapshot)
 		renderUniverses(currentSnapshot)
-		renderPools(currentSnapshot)
+		updatePoolBrowser()
 	}
 	renderCurrentRpcEndpointHealth()
 	setMutationControlsEnabled(stateConnected)
@@ -1169,10 +1012,6 @@ pauseButton.addEventListener('click', () => {
 cancelResume.addEventListener('click', closeResumePreflight)
 confirmResume.addEventListener('click', () => void changePaused(false))
 resumeDialog.addEventListener('cancel', () => actionStatus(pauseStatus, ''))
-
-poolFilter.addEventListener('input', () => {
-	if (currentSnapshot !== undefined) renderPools(currentSnapshot)
-})
 
 strategyForm.addEventListener('input', updateHealthPolicyPreview)
 

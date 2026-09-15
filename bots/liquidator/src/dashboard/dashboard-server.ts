@@ -20,7 +20,7 @@ import type { PoolCatalogPage } from '../monitoring/pool-catalog.ts'
 import { operatorHeader } from './header.ts'
 
 export type DashboardController = {
-	getPoolCatalog?: (page: number, address?: Address) => Promise<PoolCatalogPage>
+	getPoolCatalog?: (page: number, address?: Address, scope?: 'all' | 'monitored') => Promise<PoolCatalogPage>
 	getConfiguration: () => unknown | Promise<unknown>
 	getState: () => unknown | Promise<unknown>
 	hostname: '0.0.0.0' | '127.0.0.1'
@@ -259,6 +259,8 @@ export function startDashboardServer(port: number, controller: DashboardControll
 			if (request.method === 'GET' && url.pathname === '/api/pool-catalog' && controller.getPoolCatalog !== undefined) {
 				const page = Number(url.searchParams.get('page') ?? '0')
 				if (!Number.isSafeInteger(page) || page < 0) return json({ error: 'Invalid pool page' }, 400)
+				const scope = url.searchParams.get('scope') ?? 'all'
+				if (scope !== 'all' && scope !== 'monitored') return json({ error: 'Invalid pool scope' }, 400)
 				let address: Address | undefined
 				const rawAddress = url.searchParams.get('address')
 				if (rawAddress !== null) {
@@ -270,7 +272,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				}
 				if (!(await controller.isNetworkConfigured())) return json({ error: 'Configure the chain and RPC endpoints in Settings to browse pools.' }, 400)
 				try {
-					return json(await controller.getPoolCatalog(page, address))
+					return json(await controller.getPoolCatalog(page, address, scope))
 				} catch (error) {
 					return publicError(error, 503, 'pool-catalog', 'Pool discovery failed. Check RPC connectivity and retry.')
 				}

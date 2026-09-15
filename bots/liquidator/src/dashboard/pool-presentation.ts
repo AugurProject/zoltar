@@ -1,19 +1,36 @@
+type Vault = {
+	capacityOwnershipRep: string
+	openInterestDisplay: string
+	healthBps?: string
+	vaultRepBacking: string
+	claimableFeesEth: string
+}
+
+export type MonitoredPool = {
+	knownVaultCount: string
+	address: string
+	approvedUniverse: boolean
+	bestCandidateBonusValueEth?: string
+	botVault: Vault
+	candidateCount: number
+	centralizedPriceAllowed: boolean
+	centralizedPriceDeviationBps?: string
+	isPriceValid: boolean
+	lastPrice: string
+	multiplierBps: string
+	questionId: string
+	selected: boolean
+	systemState: string
+	totalCapacityOwnershipRep: string
+	totalPoolHeldRep: string
+}
+
 export function cell(...children: (Node | string)[]) {
 	const value = document.createElement('td')
 	for (const child of children) {
 		value.append(typeof child === 'string' ? document.createTextNode(child) : child)
 	}
 	return value
-}
-
-export function stacked(primary: string, secondary: string) {
-	const fragment = document.createDocumentFragment()
-	const strong = document.createElement('strong')
-	strong.textContent = primary
-	const small = document.createElement('small')
-	small.textContent = secondary
-	fragment.append(strong, small)
-	return fragment
 }
 
 export function poolStatusText(pool: { approvedUniverse: boolean; centralizedPriceAllowed: boolean; selected: boolean; systemState: string }) {

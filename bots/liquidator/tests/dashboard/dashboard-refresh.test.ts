@@ -225,6 +225,15 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 		if (typeof inputUrl !== 'string') throw new Error('Unexpected request URL')
 		const url = new URL(inputUrl, server.url)
 		if (url.pathname === '/api/pool-catalog') {
+			if (url.searchParams.get('scope') === 'monitored') {
+				const address = url.searchParams.get('address')
+				const pools = snapshot.pools
+					.filter(pool => address === null || pool.address.toLowerCase() === address.toLowerCase())
+					.map(pool => ({ ...pool, parent: '0x0000000000000000000000000000000000000000', universeId: '7', metrics: { systemState: pool.systemState, totalPoolHeldRep: pool.totalPoolHeldRep, vaultCount: pool.knownVaultCount } }))
+				const page = Number(url.searchParams.get('page'))
+				return new window.Response(JSON.stringify({ chainId: currentConfiguration.network?.chainId, page, pageCount: String(Math.ceil(pools.length / 12)), total: String(pools.length), pools: pools.slice(page * 12, (page + 1) * 12) }))
+			}
+
 			catalogRequests.push(url.searchParams.get('page') ?? '0')
 			const address = url.searchParams.get('address')
 			catalogSearches.push(address)
@@ -246,6 +255,7 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 		}
 		if (url.pathname === '/api/supported-pool') {
 			supportedPoolRequests.push(JSON.parse(String(init?.body)))
+			if (releaseSelectedPoolRequest !== undefined) await new Promise<void>(resolve => (releaseSelectedPoolRequest = resolve))
 			if (selectionFailure) return new window.Response('{}', { status: 400 })
 			const value = JSON.parse(String(init?.body))
 			currentConfiguration = { ...currentConfiguration, selectedPools: value.supported ? [...currentConfiguration.selectedPools, value.address] : currentConfiguration.selectedPools.filter(address => address !== value.address) }
@@ -354,6 +364,16 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 	const blockTick = refreshCallbacks[1]
 	if (blockTick === undefined) throw new Error('Dashboard did not register its block-age interval')
 	return {
+		openMonitoredPools: async () => {
+			const link = window.document.querySelector('.section-nav a[href="/pools"]')
+			if (!(link instanceof window.HTMLAnchorElement)) throw new Error('Missing pool navigation')
+			link.click()
+			await page.waitUntilComplete()
+			const tab = window.document.querySelector('#pool-tab-monitored')
+			if (!(tab instanceof window.HTMLButtonElement)) throw new Error('Missing monitored tab')
+			tab.click()
+			await page.waitUntilComplete()
+		},
 		catalogRequests,
 		catalogSearches,
 		setCatalogFailure: (failed: boolean) => {
@@ -597,7 +617,7 @@ describe('liquidator dashboard refresh behavior', () => {
 			expect(control?.hasAttribute('disabled')).toBe(true)
 		}
 		const signerInput = page.window.document.querySelector('#signer-form input[name="privateKey"]')
-		const poolInput = page.window.document.querySelector('#pool-rows input')
+		const poolInput = page.window.document.querySelector('#pool-browser input[type=search]')
 		const universeInput = page.window.document.querySelector('#universe-rows input')
 		if (!(signerInput instanceof page.window.HTMLInputElement) || !(poolInput instanceof page.window.HTMLInputElement) || !(universeInput instanceof page.window.HTMLInputElement)) throw new Error('Expected mutation controls')
 		expect(signerInput.disabled).toBe(true)
@@ -612,7 +632,8 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(page.window.document.getElementById('strategy-fields')?.hasAttribute('disabled')).toBe(false)
 		expect(page.window.document.getElementById('clear-signer')?.hasAttribute('disabled')).toBe(false)
 		expect(signerInput.disabled).toBe(false)
-		const recoveredPoolInput = page.window.document.querySelector('#pool-rows input')
+		await page.openMonitoredPools()
+		const recoveredPoolInput = page.window.document.querySelector('#pool-browser input[type=search]')
 		const recoveredUniverseInput = page.window.document.querySelector('#universe-rows input')
 		if (!(recoveredPoolInput instanceof page.window.HTMLInputElement) || !(recoveredUniverseInput instanceof page.window.HTMLInputElement)) throw new Error('Expected recovered mutation controls')
 		expect(recoveredPoolInput.disabled).toBe(false)
@@ -627,7 +648,7 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(unconfigured.window.document.getElementById('network-fields')?.hasAttribute('disabled')).toBe(false)
 		for (const id of ['market-configuration-fields', 'strategy-fields']) expect(unconfigured.window.document.getElementById(id)?.hasAttribute('disabled')).toBe(true)
 		const signerInput = unconfigured.window.document.querySelector('#signer-form input[name="privateKey"]')
-		const poolInput = unconfigured.window.document.querySelector('#pool-rows input')
+		const poolInput = unconfigured.window.document.querySelector('#pool-browser input[type=search]')
 		const universeInput = unconfigured.window.document.querySelector('#universe-rows input')
 		if (!(signerInput instanceof unconfigured.window.HTMLInputElement) || !(poolInput instanceof unconfigured.window.HTMLInputElement) || !(universeInput instanceof unconfigured.window.HTMLInputElement)) throw new Error('Expected chain-specific settings controls')
 		expect(signerInput.disabled).toBe(true)
@@ -800,7 +821,7 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(page.approvedUniverseRequests.at(-1)?.sort()).toEqual(['1', '3', '5'])
 	})
 
-	test('serializes full-set universe and pool selection mutations', async () => {
+	test('serializes universe selection and pool support mutations', async () => {
 		const universes = [universe('1'), universe('2', '1', '1'), universe('3', '1', '2')]
 		const universePage = await dashboard(mainnetConfiguration(['1']), state(undefined, [], { universes }))
 		universePage.suspendNextApprovedUniverseRequest()
@@ -824,19 +845,22 @@ describe('liquidator dashboard refresh behavior', () => {
 		if (firstPool === undefined) throw new Error('Expected pool fixture')
 		poolSnapshot.pools.push({ ...firstPool, address: '0x2222222222222222222222222222222222222222', selected: false })
 		const poolPage = await dashboard(mainnetConfiguration(), poolSnapshot)
+		await poolPage.openMonitoredPools()
 		poolPage.suspendNextSelectedPoolRequest()
-		const firstPoolControl = poolPage.window.document.querySelector('input[data-record-key="pool:0x1111111111111111111111111111111111111111"]')
-		const secondPoolControl = poolPage.window.document.querySelector('input[data-record-key="pool:0x2222222222222222222222222222222222222222"]')
-		if (!(firstPoolControl instanceof poolPage.window.HTMLInputElement) || !(secondPoolControl instanceof poolPage.window.HTMLInputElement)) throw new Error('Expected pool controls')
+		const firstPoolControl = poolPage.window.document.querySelector('button[data-record-key="pool:0x1111111111111111111111111111111111111111"]')
+		const secondPoolControl = poolPage.window.document.querySelector('button[data-record-key="pool:0x2222222222222222222222222222222222222222"]')
+		if (!(firstPoolControl instanceof poolPage.window.HTMLButtonElement) || !(secondPoolControl instanceof poolPage.window.HTMLButtonElement)) throw new Error('Expected pool controls')
 		firstPoolControl.click()
 		await Bun.sleep(1)
-		expect(secondPoolControl.disabled).toBe(true)
+		const pendingSecondPool = poolPage.window.document.querySelector('button[data-record-key="pool:0x2222222222222222222222222222222222222222"]')
+		if (!(pendingSecondPool instanceof poolPage.window.HTMLButtonElement)) throw new Error('Expected pending pool control')
+		expect(pendingSecondPool.disabled).toBe(true)
 		secondPoolControl.click()
-		expect(poolPage.selectedPoolRequests).toHaveLength(1)
+		expect(poolPage.supportedPoolRequests).toHaveLength(1)
 		poolPage.releaseSelectedPoolRequest()
 		await poolPage.waitUntilComplete()
 		await Bun.sleep(1)
-		expect(poolPage.selectedPoolRequests).toEqual([[]])
+		expect(poolPage.supportedPoolRequests).toEqual([{ address: firstPool.address, supported: false, chainId: 1 }])
 	})
 
 	test('turns a scan-only error into an actionable blocker', async () => {
@@ -877,11 +901,12 @@ describe('liquidator dashboard refresh behavior', () => {
 		expect(page.window.document.getElementById('resume-dialog')?.hasAttribute('open')).toBe(false)
 	})
 
-	test('preserves focused controls and expanded pool addresses across polling', async () => {
+	test('preserves focused controls and expanded monitoring details across polling', async () => {
 		const page = await dashboard()
+		await page.openMonitoredPools()
 		const checkbox = page.window.document.querySelector('[data-record-key^="pool:"]')
 		const details = page.window.document.querySelector('details[data-pool-address]')
-		if (!(checkbox instanceof page.window.HTMLInputElement) || !(details instanceof page.window.HTMLDetailsElement)) throw new Error('Expected pool controls')
+		if (!(checkbox instanceof page.window.HTMLButtonElement) || !(details instanceof page.window.HTMLDetailsElement)) throw new Error('Expected pool controls')
 		const recordKey = checkbox.getAttribute('data-record-key')
 		checkbox.focus()
 		details.open = true
@@ -1128,7 +1153,7 @@ test('searches an address in All pools and adds it through the matching card', a
 		await page.waitUntilComplete()
 	}
 	expect(page.window.document.querySelector('#pool-address-form')).toBeNull()
-	expect(page.window.document.querySelector('#pool-rows')).not.toBeNull()
+	expect(page.window.document.querySelector('#pool-rows')).toBeNull()
 	await enter('0x123')
 	expect(root.textContent).toContain('Enter a complete pool address')
 	expect(page.catalogSearches).toEqual([null])
@@ -1158,4 +1183,87 @@ test('searches an address in All pools and adds it through the matching card', a
 	await enter('')
 	expect(page.catalogSearches.at(-1)).toBeNull()
 	expect(root.textContent).toContain('13 pools · Page 1 of 2')
+})
+
+test('uses one card component and search across keyboard-accessible monitored and all tabs', async () => {
+	const page = await dashboard(mainnetConfiguration(), state(), false, false, true)
+	const root = page.window.document.querySelector('#pool-browser')
+	const all = root?.querySelector('#pool-tab-all')
+	const monitored = root?.querySelector('#pool-tab-monitored')
+	const search = root?.querySelector('input[type=search]')
+	if (!(all instanceof page.window.HTMLButtonElement) || !(monitored instanceof page.window.HTMLButtonElement) || !(search instanceof page.window.HTMLInputElement)) throw new Error('Missing pool tabs')
+	expect(all.getAttribute('aria-selected')).toBe('true')
+	expect(page.window.document.querySelectorAll('#pools #pool-browser')).toHaveLength(1)
+	all.dispatchEvent(new page.window.KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }))
+	await page.waitUntilComplete()
+	expect(monitored.getAttribute('aria-selected')).toBe('true')
+	expect(page.window.document.activeElement).toBe(monitored)
+	expect(root?.querySelector('.catalog-record')?.textContent).toContain('0x1111111111111111111111111111111111111111')
+	expect(root?.querySelector('.catalog-monitoring')?.textContent).toContain('Vault backing')
+	search.value = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+	search.dispatchEvent(new page.window.Event('input'))
+	await page.waitUntilComplete()
+	expect(root?.textContent).toContain('No matching monitored pool.')
+	all.click()
+	await page.waitUntilComplete()
+	expect(search.value).toBe('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
+	expect(root?.querySelector('.catalog-record')?.textContent).toContain(search.value)
+	expect(root?.querySelectorAll('[role=tabpanel]')).toHaveLength(1)
+})
+
+test('refreshes monitored card metrics from snapshots without membership changes', async () => {
+	const page = await dashboard(mainnetConfiguration(), state(), false, false, true)
+	await page.openMonitoredPools()
+	const next = state()
+	next.pools = next.pools.map(pool => ({ ...pool, systemState: '1', totalPoolHeldRep: '987.65', knownVaultCount: '19' }))
+	page.setSnapshot(next)
+	await page.refresh()
+	const card = page.window.document.querySelector('.catalog-record')
+	expect(card?.querySelector('.catalog-badges')?.textContent).toContain('Inactive')
+	expect(card?.querySelector('.catalog-balance')?.textContent).toContain('987.65')
+	expect(card?.querySelector('.catalog-metrics')?.textContent).toContain('Vaults19')
+})
+
+test('resets monitored pagination when the last page disappears', async () => {
+	const snapshot = state()
+	const template = snapshot.pools[0]
+	if (template === undefined) throw new Error('Missing fixture pool')
+	snapshot.pools = Array.from({ length: 13 }, (_, index) => ({ ...template, address: `0x${(index + 1).toString(16).padStart(40, '0')}` }))
+	const page = await dashboard(mainnetConfiguration(), snapshot, false, false, true)
+	await page.openMonitoredPools()
+	const next = [...page.window.document.querySelectorAll('#pool-browser button')].find(button => button.textContent === 'Next')
+	if (!(next instanceof page.window.HTMLButtonElement)) throw new Error('Missing next page')
+	next.click()
+	await page.waitUntilComplete()
+	expect(page.window.document.querySelector('#pool-browser')?.textContent).toContain('Page 2 of 2')
+	page.setSnapshot({ ...snapshot, pools: snapshot.pools.slice(0, 12) })
+	await page.refresh()
+	expect(page.window.document.querySelector('#pool-browser')?.textContent).toContain('12 pools · Page 1 of 1')
+	expect(page.window.document.querySelectorAll('.catalog-record')).toHaveLength(12)
+})
+
+test('refreshes monitored membership after an in-flight support save', async () => {
+	const snapshot = state()
+	const template = snapshot.pools[0]
+	if (template === undefined) throw new Error('Missing fixture pool')
+	snapshot.pools = Array.from({ length: 13 }, (_, index) => ({ ...template, address: `0x${(index + 1).toString(16).padStart(40, '0')}` }))
+	const page = await dashboard(mainnetConfiguration(), snapshot, false, false, true)
+	await page.openMonitoredPools()
+	const next = [...page.window.document.querySelectorAll('#pool-browser button')].find(button => button.textContent === 'Next')
+	if (!(next instanceof page.window.HTMLButtonElement)) throw new Error('Missing next page')
+	next.click()
+	await page.waitUntilComplete()
+	page.suspendNextSelectedPoolRequest()
+	const action = page.window.document.querySelector('.catalog-record button')
+	if (!(action instanceof page.window.HTMLButtonElement)) throw new Error('Missing support action')
+	action.click()
+	await Bun.sleep(1)
+	page.setSnapshot({ ...snapshot, pools: snapshot.pools.slice(0, 12) })
+	const refresh = page.refresh()
+	await Bun.sleep(10)
+	page.releaseSelectedPoolRequest()
+	await refresh
+	await page.waitUntilComplete()
+	expect(page.window.document.querySelector('#pool-browser')?.textContent).toContain('12 pools · Page 1 of 1')
+	expect(page.window.document.querySelectorAll('.catalog-record')).toHaveLength(12)
 })

@@ -150,28 +150,30 @@ function currentConfiguration() {
 	return { approvedUniverses, centralizedMarkets, childMarketConfigurations, connectivity, desiredPools, network, networkConfigured, runtime: { historicalLogRecovery: false, logLookbackBlocks: 256 }, selectedPools, strategy }
 }
 
+const monitoredPools = () => [
+	pool('0x1111111111111111111111111111111111111111', '42', true, true, 0, '0', false, undefined, '1'),
+	pool('0x2222222222222222222222222222222222222222', '42', false, true, 0, '101', true, '0x1111111111111111111111111111111111111111', '2', '1'),
+	pool('0x3333333333333333333333333333333333333333', '900719925474099312345', true, false, 4, longUniverseId, true),
+]
+
 const server = startDashboardServer(4183, {
-	getPoolCatalog: async (page, address) => {
+	getPoolCatalog: async (page, address, scope) => {
 		await Bun.sleep(500)
-		const browseCount = page === 0 ? 12 : 1
-		const result = {
-			chainId: network?.chainId ?? 1,
-			page,
-			pageCount: '2',
-			total: '13',
-			pools: Array.from({ length: address === undefined ? browseCount : 13 }, (_, index) => ({
-				address: `0x${(page * 12 + index + 10).toString(16).padStart(40, '0')}`,
-				parent: index === 1 ? '0x1111111111111111111111111111111111111111' : '0x0000000000000000000000000000000000000000',
-				questionId: index === 1 ? longUniverseId : (42 + index).toString(),
-				universeId: index === 1 ? longUniverseId : '101',
-				multiplierBps: index === 1 ? '20000' : '12500',
-				...(index === 2 ? {} : { deploymentDate: '1789560000', questionDates: { startTime: '1789473600', endTime: '1792065600' } }),
-				...(index === 2 ? {} : { metrics: { systemState: index === 1 ? '1' : '0', totalPoolHeldRep: '125000.123456789', vaultCount: '18' } }),
-			})),
-		}
-		if (address === undefined) return result
-		const pools = result.pools.filter(pool => pool.address.toLowerCase() === address.toLowerCase())
-		return { ...result, page: 0, total: String(pools.length), pageCount: String(pools.length), pools }
+		const monitored = monitoredPools().map(pool => ({ ...pool, deploymentDate: '1789387200', questionDates: { startTime: '1789473600', endTime: '1792065600' }, metrics: { systemState: pool.systemState, totalPoolHeldRep: pool.totalPoolHeldRep, vaultCount: pool.knownVaultCount } }))
+		const unmonitored = Array.from({ length: 10 }, (_, offset) => {
+			const index = offset + 3
+			return {
+				address: `0x${(index + 10).toString(16).padStart(40, '0')}`,
+				parent: '0x0000000000000000000000000000000000000000',
+				questionId: (42 + index).toString(),
+				universeId: '101',
+				multiplierBps: '12500',
+				...(index === 3 ? {} : { deploymentDate: '1789387200', questionDates: { startTime: '1789473600', endTime: '1792065600' }, metrics: { systemState: '0', totalPoolHeldRep: '125000.123456789', vaultCount: '18' } }),
+			}
+		})
+		const pools = scope === 'monitored' ? monitored : [...monitored, ...unmonitored]
+		const matches = pools.filter(pool => address === undefined || pool.address.toLowerCase() === address.toLowerCase())
+		return { chainId: network?.chainId ?? 1, page, total: String(matches.length), pageCount: String(Math.ceil(matches.length / 12)), pools: matches.slice(page * 12, (page + 1) * 12) }
 	},
 	setSupportedPool: value => {
 		if (typeof value !== 'object' || value === null || Reflect.get(value, 'chainId') !== network?.chainId) throw new Error('Invalid pool selection chain')
@@ -261,11 +263,7 @@ const server = startDashboardServer(4183, {
 				target: '0x4444444444444444444444444444444444444444',
 			},
 		],
-		pools: [
-			pool('0x1111111111111111111111111111111111111111', '42', true, true, 0, '0', false, undefined, '1'),
-			pool('0x2222222222222222222222222222222222222222', '42', false, true, 0, '101', true, '0x1111111111111111111111111111111111111111', '2', '1'),
-			pool('0x3333333333333333333333333333333333333333', '900719925474099312345', true, false, 4, longUniverseId, true),
-		],
+		pools: monitoredPools(),
 		scanning: false,
 		startedAt: new Date(Date.now() - 3_600_000).toISOString(),
 		status: paused ? 'paused' : 'dry-run',
