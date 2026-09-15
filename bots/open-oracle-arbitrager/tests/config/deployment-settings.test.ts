@@ -4,7 +4,7 @@ import { canonicalCoreDeployment } from '@zoltar/bot-shared/config/canonical-dep
 import example from '../../config/operator.example.json'
 import { expect, test } from 'bun:test'
 import { assertFocusedDeploymentCompatible, prepareDeploymentTokenTransition, validateDeploymentSettings } from '#config/deployment-settings'
-import type { Address } from '@zoltar/bot-shared/ethereum'
+import { getAddress, type Address } from '@zoltar/bot-shared/ethereum'
 
 const address = (digit: string) => `0x${digit.repeat(40)}` as Address
 
@@ -70,3 +70,36 @@ for (const network of ['mainnet', 'sepolia'] as const) {
 		}
 	})
 }
+
+test('selects Sepolia Uniswap deployments when loading the mainnet example', () => {
+	const parsed = validateDeploymentSettings(example.deployment, 'sepolia')
+	expect(parsed.uniswapFactory).toBe('0xEf09Be426F8d6D2786cADEA7D3A8b0D09cEB79B4')
+	expect(parsed.uniswapQuoter).toBe('0x6Aa53e5023fFDa81f7EEE31bdA5D35437A5DD841')
+	expect(parsed.uniswapRouter).toBe('0xC0a0e58Ae39603398D474BFd49d2904dE1464C99')
+	expect(parsed.uniswapV2Router).toBeUndefined()
+})
+
+test('preserves custom Uniswap deployments on either chain', () => {
+	for (const network of ['mainnet', 'sepolia'] as const) {
+		const overrides = { uniswapFactory: address('3'), uniswapQuoter: address('4'), uniswapRouter: address('5'), uniswapV2Router: address('6') }
+		expect(validateDeploymentSettings({ ...example.deployment, ...overrides }, network)).toMatchObject(overrides)
+	}
+})
+test('restores mainnet defaults when loading a Sepolia profile and supports omitted defaults', () => {
+	const sepolia = validateDeploymentSettings(example.deployment, 'sepolia')
+	const mainnet = validateDeploymentSettings(sepolia, 'mainnet')
+	expect(mainnet.uniswapFactory).toBe(getAddress(example.deployment.uniswapFactory))
+	expect(mainnet.uniswapQuoter).toBe(getAddress(example.deployment.uniswapQuoter))
+	expect(mainnet.uniswapRouter).toBe(getAddress(example.deployment.uniswapRouter))
+	const minimal = validateDeploymentSettings({ coordinatorAddresses: [], quorumRpcUrls: [] }, 'sepolia')
+	expect(minimal.uniswapFactory).toBe(sepolia.uniswapFactory)
+	expect(minimal.uniswapQuoter).toBe(sepolia.uniswapQuoter)
+	expect(minimal.uniswapRouter).toBeUndefined()
+	expect(minimal.uniswapV2Router).toBeUndefined()
+})
+
+test('replaces the previous upstream Sepolia defaults with the testnet deployment', () => {
+	const settings = validateDeploymentSettings({ ...example.deployment, uniswapFactory: '0x0227628f3F023bb0B980b67D528571c95c6DaC1c', uniswapQuoter: '0xEd1f6473345F45b75F8179591dd5bA1888cf2FB3' }, 'sepolia')
+	expect(settings.uniswapFactory).toBe('0xEf09Be426F8d6D2786cADEA7D3A8b0D09cEB79B4')
+	expect(settings.uniswapQuoter).toBe('0x6Aa53e5023fFDa81f7EEE31bdA5D35437A5DD841')
+})

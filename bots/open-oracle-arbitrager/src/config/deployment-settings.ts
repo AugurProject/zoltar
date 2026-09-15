@@ -1,6 +1,6 @@
 import { parseDeploymentManifest, type DeploymentManifest } from '#config/deployment-auth'
 import { validateReadRpcUrls, type NetworkName } from '#monitoring/connectivity'
-import { canonicalCoreDeployment, canonicalNetworkDeployment } from '@zoltar/bot-shared/config/canonical-deployment'
+import { canonicalCoreDeployment, canonicalNetworkDeployment, canonicalUniswapDeployment } from '@zoltar/bot-shared/config/canonical-deployment'
 import { getAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import { record as validateRecord } from '@zoltar/bot-shared/infrastructure/json-validation'
 import mainnet from '../../../../docs/mainnet-deployment-addresses.json'
@@ -45,10 +45,19 @@ function urlArray(value: unknown) {
 export function validateDeploymentSettings(value: unknown, network: NetworkName = 'mainnet'): DeploymentSettings {
 	const settings = record(value)
 	const keys = ['coordinatorAddresses', 'deploymentManifest', 'executor', 'openOracle', 'quorumRpcUrls', 'rep', 'uniswapFactory', 'uniswapQuoter', 'uniswapRouter', 'uniswapV2Router', 'uniswapV4PoolManager', 'uniswapV4Quoter', 'weth']
-	const requiredKeys = ['coordinatorAddresses', 'quorumRpcUrls', 'uniswapFactory', 'uniswapQuoter']
+	const requiredKeys = ['coordinatorAddresses', 'quorumRpcUrls']
 	if (Object.keys(settings).some(key => !keys.includes(key)) || requiredKeys.some(key => !(key in settings))) throw new Error('Deployment settings require the supported core deployment fields')
 	const manifest = network === 'mainnet' ? mainnet : sepolia
 	const identity = canonicalNetworkDeployment(manifest)
+	const uniswap = canonicalUniswapDeployment(identity.chainId)
+	const mainnetUniswap = canonicalUniswapDeployment(1)
+	const sepoliaUniswap = canonicalUniswapDeployment(11155111)
+	// Saved example/profile defaults follow the selected network; custom deployments stay explicit.
+	function networkAddress(value: unknown, name: string, key: keyof typeof uniswap, previousDefaults: readonly string[] = []) {
+		const supplied = optionalAddress(value, name)
+		const knownDefaults = [mainnetUniswap[key], sepoliaUniswap[key], ...previousDefaults]
+		return supplied === undefined || knownDefaults.some(address => address?.toLowerCase() === supplied.toLowerCase()) ? uniswap[key] : supplied
+	}
 	const v4PoolManager = optionalAddress(settings['uniswapV4PoolManager'], 'Uniswap V4 PoolManager')
 	const v4Quoter = optionalAddress(settings['uniswapV4Quoter'], 'Uniswap V4 Quoter')
 	if ((v4PoolManager === undefined) !== (v4Quoter === undefined)) throw new Error('Uniswap V4 requires both PoolManager and Quoter')
@@ -59,10 +68,10 @@ export function validateDeploymentSettings(value: unknown, network: NetworkName 
 		openOracle: canonicalCoreDeployment(manifest).openOracle,
 		quorumRpcUrls: urlArray(settings['quorumRpcUrls']),
 		rep: identity.rep,
-		uniswapFactory: getAddress(String(settings['uniswapFactory'])),
-		uniswapQuoter: getAddress(String(settings['uniswapQuoter'])),
-		uniswapRouter: optionalAddress(settings['uniswapRouter'], 'Uniswap V3 router'),
-		uniswapV2Router: optionalAddress(settings['uniswapV2Router'], 'Uniswap V2 router'),
+		uniswapFactory: networkAddress(settings['uniswapFactory'], 'Uniswap V3 factory', 'factory', ['0x0227628f3F023bb0B980b67D528571c95c6DaC1c']) ?? uniswap.factory,
+		uniswapQuoter: networkAddress(settings['uniswapQuoter'], 'Uniswap V3 quoter', 'quoter', ['0xEd1f6473345F45b75F8179591dd5bA1888cf2FB3']) ?? uniswap.quoter,
+		uniswapRouter: optionalAddress(settings['uniswapRouter'], 'Uniswap V3 router') === undefined ? undefined : networkAddress(settings['uniswapRouter'], 'Uniswap V3 router', 'router'),
+		uniswapV2Router: optionalAddress(settings['uniswapV2Router'], 'Uniswap V2 router') === undefined ? undefined : networkAddress(settings['uniswapV2Router'], 'Uniswap V2 router', 'v2Router'),
 		uniswapV4PoolManager: v4PoolManager,
 		uniswapV4Quoter: v4Quoter,
 		weth: identity.weth,

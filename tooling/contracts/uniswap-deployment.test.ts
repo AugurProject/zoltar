@@ -1,3 +1,4 @@
+import { canonicalUniswapDeployment } from '../../bots/shared/src/config/canonical-deployment.ts'
 import { describe, expect, test } from 'bun:test'
 import { concatHex, getAddress, type Hash, type Hex, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import type { WriteClient } from '../../ui/coreShared/ts/wallet/chainBackend.ts'
@@ -407,4 +408,13 @@ describe('Uniswap testnet deployment', () => {
 		await expect(step.deploy(client)).rejects.toThrow('would exceed the authorized deployment total')
 		expect(writeCalled).toBe(false)
 	})
+})
+
+test('bot Sepolia defaults match the deployed Uniswap bytecode and WETH', async () => {
+	const deployment = await getUniswapDeployment(SEPOLIA_NETWORK_PROFILE.wethAddress)
+	const defaults = canonicalUniswapDeployment(11155111)
+	expect(defaults.factory).toBe(deployment.addresses.uniswapV3FactoryAddress)
+	expect(defaults.quoter).toBe(deployment.addresses.uniswapV3QuoterAddress)
+	expect(defaults.router).toBe(deployment.addresses.uniswapV3SwapRouterAddress)
+	expect(defaults.v2Router).toBeUndefined()
 })
