@@ -352,6 +352,7 @@ describe('file-only startup configuration', () => {
 		const initial = await waitForJson(origin, '/api/configuration')
 		const initialConfiguration = initial['configuration']
 		expect(initialConfiguration).toMatchObject({ network: 'mainnet', networkConfigured: false })
+		expect(initialConfiguration).toMatchObject({ deployment: { uniswapDefaults: ['uniswapFactory', 'uniswapQuoter', 'uniswapRouter', 'uniswapV2Router'] } })
 		expect((await waitForJson(origin, '/api/state'))['status']).toBe('paused')
 		for (const [endpoint, body] of [
 			['/api/signer', { privateKey: '', rememberSigner: false }],

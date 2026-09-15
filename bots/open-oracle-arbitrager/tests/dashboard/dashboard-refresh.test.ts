@@ -1,9 +1,12 @@
 import { afterEach, expect, test } from 'bun:test'
 import { Browser, type BrowserWindow, type Element } from 'happy-dom'
 import { join } from 'node:path'
-import type { Address } from '@zoltar/bot-shared/ethereum'
+import { getAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import { startDashboardServer } from '#dashboard/dashboard-server'
 import { operatorSnapshot, type MutableStrategy, type OperatorState } from '#state/operator-state'
+import example from '../../config/operator.example.json'
+import { parseOperatorSettings, serializeOperatorSettings } from '#config/settings-store'
+import { validateDeploymentSettings } from '#config/deployment-settings'
 import { validateSubmissionSettings } from '#execution/transaction-submission'
 
 const servers: ReturnType<typeof startDashboardServer>[] = []
@@ -324,3 +327,92 @@ function element<T extends Element>(window: BrowserWindow, id: string, construct
 	if (!(found instanceof constructor)) throw new Error(`Missing dashboard element ${id}`)
 	return found
 }
+
+test('deployment form retains untouched defaults and makes edited addresses explicit', async () => {
+	let settings = parseOperatorSettings({ ...example, network: 'sepolia', networkConfigured: true, connectivity: { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://rpc.example/' } })
+	const snapshot = () =>
+		operatorSnapshot(operatorState(), settings.strategy, settings.submission, settings.connectivity, {
+			deployment: settings.deployment,
+			execute: false,
+			executor: undefined,
+			expectedChainId: 11_155_111,
+			explorerUrl: 'https://sepolia.etherscan.io',
+			network: 'sepolia',
+			networkConfigured: true,
+			openOracle: settings.deployment.openOracle,
+			queuedWallet: undefined,
+			savedWallet: undefined,
+			wallet: undefined,
+		})
+	const server = startDashboardServer(0, {
+		getConfiguration: () => ({ configuration: serializeOperatorSettings(settings), revision: 'fixture' }),
+		getSnapshot: snapshot,
+		hostname: '127.0.0.1',
+		isNetworkConfigured: () => true,
+		setPaused: () => undefined,
+		updateConnectivity: value => value,
+		updateDeployment: value => {
+			settings = { ...settings, deployment: validateDeploymentSettings(value, 'sepolia') }
+			return settings.deployment
+		},
+		updateSigner: () => ({ wallet: undefined }),
+		updateStrategy: () => snapshot().settings,
+		updateSubmission: value => validateSubmissionSettings(value),
+	})
+	servers.push(server)
+	const browser = new Browser({ settings: { enableJavaScriptEvaluation: true, suppressInsecureJavaScriptEnvironmentWarning: true } })
+	browsers.push(browser)
+	const page = browser.newPage()
+	page.url = new URL('/settings', server.url).href
+	page.content = (await (await fetch(server.url)).text()).replace('<script type="module" src="/dashboard.js"></script>', '').replace('<script type="module" src="/header-notices.js"></script>', '')
+	const window = page.mainFrame.window
+	for (const [name, value] of Object.entries({ AbortController, Array, Boolean, Date, Error, Intl, JSON, Map, Math, Number, Object, Promise, Reflect, Set, String, SyntaxError, decodeURIComponent })) Reflect.set(window, name, value)
+	window.setInterval = () => {
+		const timeout = window.setTimeout(() => undefined, 1)
+		window.clearTimeout(timeout)
+		return timeout
+	}
+	window.fetch = async (input, init) => {
+		const inputUrl = typeof input === 'string' || input instanceof window.URL ? input.toString() : Reflect.get(input, 'url')
+		if (typeof inputUrl !== 'string') throw new Error('Unexpected request URL')
+		const url = new URL(inputUrl, server.url)
+		const response = init?.method === undefined || init.method === 'GET' ? await fetch(url) : await fetch(url, { body: String(init.body), headers: { 'content-type': 'application/json', origin: server.url.origin }, method: init.method })
+		return new window.Response(await response.text(), { headers: { 'content-type': response.headers.get('content-type') ?? 'application/json' }, status: response.status })
+	}
+	const build = await Bun.build({ entrypoints: [join(import.meta.dir, '..', '..', 'src', 'dashboard', 'dashboard.ts')], target: 'browser' })
+	const output = build.outputs[0]
+	if (!build.success || output === undefined) throw new Error('Could not build dashboard fixture')
+	page.evaluate(await output.text())
+	await page.waitUntilComplete()
+	for (let attempt = 0; attempt < 100 && element(window, 'deployment-v3-factory', window.HTMLInputElement).value === ''; attempt++) await Bun.sleep(10)
+	const form = element(window, 'deployment-form', window.HTMLFormElement)
+	const edit = (id: string, value: string) => {
+		const input = element(window, id, window.HTMLInputElement)
+		input.value = value
+		input.dispatchEvent(new window.Event('input', { bubbles: true }))
+	}
+	const save = async () => {
+		form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+		await page.waitUntilComplete()
+		for (let attempt = 0; attempt < 100 && element(window, 'deployment-status', window.HTMLElement).textContent === 'Validating deployment configuration…'; attempt++) await Bun.sleep(10)
+		expect(element(window, 'deployment-status', window.HTMLElement).textContent).toContain('Deployment configuration saved')
+	}
+	edit('deployment-executor', address)
+	await save()
+	const restored = () => parseOperatorSettings({ ...JSON.parse(JSON.stringify(serializeOperatorSettings(settings))), network: 'mainnet' }).deployment
+	expect(settings.deployment.executor).toBe(address)
+	expect(settings.deployment.uniswapV2Router).toBeUndefined()
+	expect(restored().uniswapV2Router).toBe(getAddress(example.deployment.uniswapV2Router))
+	edit('deployment-v3-factory', '0x0227628f3F023bb0B980b67D528571c95c6DaC1c')
+	edit('deployment-v3-quoter', '0xEd1f6473345F45b75F8179591dd5bA1888cf2FB3')
+	edit('deployment-v3-router', address)
+	await save()
+	expect(settings.deployment.uniswapFactory).toBe('0x0227628f3F023bb0B980b67D528571c95c6DaC1c')
+	expect(settings.deployment.uniswapQuoter).toBe('0xEd1f6473345F45b75F8179591dd5bA1888cf2FB3')
+	expect(settings.deployment.uniswapRouter).toBe(address)
+	expect(restored().uniswapV2Router).toBe(getAddress(example.deployment.uniswapV2Router))
+	edit('deployment-v2-router', address)
+	edit('deployment-v2-router', '')
+	await save()
+	expect(restored().uniswapV2Router).toBeUndefined()
+})

@@ -174,6 +174,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 			openOracle: config.openOracle,
 			quorumRpcUrls: config.quorumRpcUrls,
 			rep: config.network.rep,
+			uniswapDefaults: config.operatorSettings.deployment.uniswapDefaults,
 			uniswapFactory: config.network.factory,
 			uniswapQuoter: config.network.quoter,
 			uniswapRouter: config.router,

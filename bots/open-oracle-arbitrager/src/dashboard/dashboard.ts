@@ -3,6 +3,7 @@ let approvedUniverseIds = new Set<string>()
 let universeSavePending = false
 let universeExplorer: ReturnType<typeof createUniverseExplorer> | undefined
 
+import { createDeploymentForm } from './deployment-form.ts'
 import { operatorNoticePresentation } from './dashboard-notice.ts'
 import { endpointHealthDetail, endpointRow, renderDisconnectedHeader, setAttentionBadge } from '@zoltar/bot-shared/dashboard/components'
 import { CONFIGURATION_REQUEST_TIMEOUT_MS, PROFILE_SWITCH_REQUEST_TIMEOUT_MESSAGE, PROFILE_SWITCH_REQUEST_TIMEOUT_MS, requestWithTimeout, singleFlight, STATE_REQUEST_TIMEOUT_MS } from '@zoltar/bot-shared/dashboard/polling'
@@ -49,6 +50,7 @@ let pendingProfileStateConfirmed = false
 let profileSwitchTimedOut = false
 let profileRequestEpoch = 0
 let deploymentLoaded = false
+const { loadDeployment, getDefaults: deploymentDefaults } = createDeploymentForm()
 let tokensLoaded = false
 let configurationLoaded = false
 let configurationLoading = false
@@ -202,19 +204,6 @@ function optionalInput(id: string) {
 
 function lines(id: string) {
 	return urlLines(element<HTMLTextAreaElement>(id).value)
-}
-
-function loadDeployment(deployment: Omit<DeploymentSettings, 'openOracle' | 'rep' | 'weth'>) {
-	element<HTMLInputElement>('deployment-executor').value = deployment.executor ?? ''
-	element<HTMLInputElement>('deployment-v3-factory').value = deployment.uniswapFactory
-	element<HTMLInputElement>('deployment-v3-quoter').value = deployment.uniswapQuoter
-	element<HTMLInputElement>('deployment-v3-router').value = deployment.uniswapRouter ?? ''
-	element<HTMLInputElement>('deployment-v2-router').value = deployment.uniswapV2Router ?? ''
-	element<HTMLInputElement>('deployment-v4-pool-manager').value = deployment.uniswapV4PoolManager ?? ''
-	element<HTMLInputElement>('deployment-v4-quoter').value = deployment.uniswapV4Quoter ?? ''
-	element<HTMLTextAreaElement>('deployment-coordinators').value = deployment.coordinatorAddresses.join('\n')
-	element<HTMLTextAreaElement>('deployment-quorum-rpcs').value = deployment.quorumRpcUrls.join('\n')
-	element<HTMLTextAreaElement>('deployment-manifest').value = deployment.deploymentManifest === undefined ? '' : JSON.stringify(deployment.deploymentManifest, undefined, 2)
 }
 
 function amount(value: string | undefined, symbol: string) {
@@ -1446,6 +1435,7 @@ element<HTMLFormElement>('deployment-form').addEventListener('submit', async eve
 			deploymentManifest: manifestText === '' ? undefined : JSON.parse(manifestText),
 			executor: optionalInput('deployment-executor'),
 			quorumRpcUrls: lines('deployment-quorum-rpcs'),
+			uniswapDefaults: deploymentDefaults(),
 			uniswapFactory: element<HTMLInputElement>('deployment-v3-factory').value.trim(),
 			uniswapQuoter: element<HTMLInputElement>('deployment-v3-quoter').value.trim(),
 			uniswapRouter: optionalInput('deployment-v3-router'),

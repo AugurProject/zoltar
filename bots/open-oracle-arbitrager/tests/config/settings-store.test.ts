@@ -493,3 +493,13 @@ for (const failure of ['rename', 'directory sync']) {
 		expect(events.at(-1)).toBe('rm')
 	})
 }
+
+test('preserves default router intent through serialized network changes', () => {
+	const mainnet = parseOperatorSettings(example)
+	const serialized = JSON.parse(JSON.stringify(serializeOperatorSettings(mainnet)))
+	const sepolia = parseOperatorSettings({ ...serialized, network: 'sepolia' })
+	expect(sepolia.deployment.uniswapV2Router).toBeUndefined()
+	const restored = parseOperatorSettings({ ...JSON.parse(JSON.stringify(serializeOperatorSettings(sepolia))), network: 'mainnet' })
+	expect(restored.deployment.uniswapV2Router).toBe(mainnet.deployment.uniswapV2Router)
+	expect(restored.deployment.uniswapV2Router).toBeDefined()
+})
