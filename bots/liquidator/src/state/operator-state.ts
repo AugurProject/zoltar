@@ -59,7 +59,7 @@ export type UniverseObservation = {
 }
 
 export type StagedOperationObservation = {
-	operationAmountAttoRepOrAttoEth: bigint
+	operationValue: bigint
 	id: bigint
 	liquidationApprovalId: `0x${string}`
 	isPendingSettlement: boolean

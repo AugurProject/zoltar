@@ -1,6 +1,6 @@
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import { OperationType } from '../testSupport/simulator/utils/contracts/statoblast'
-import { manipulatePriceOracleAndPerformOperation, manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { manipulatePriceOracleAndPerformOperation, manipulatePriceOracle, setVaultCapacityFixture } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { depositToEscalationGame } from '../testSupport/simulator/utils/contracts/securityPool'
 import assert from '../testSupport/simulator/utils/assert'
 import { describe, test } from 'bun:test'
@@ -20,7 +20,7 @@ describe('Audit PoC: security multiplier withdrawal bypass', () => {
 		const coordinator = securityPoolAddresses.priceOracleManagerAndOperatorQueuer
 
 		const capacityOwnershipAttoRep = (repDeposit * PRICE_PRECISION * BPS_DENOMINATOR) / (statoblastSecurityMultiplierBps * reportedRepEthPrice)
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, coordinator, OperationType.PriceRefresh, client.account.address, capacityOwnershipAttoRep, reportedRepEthPrice)
+		await setVaultCapacityFixture(client, mockWindow, coordinator, client.account.address, capacityOwnershipAttoRep, reportedRepEthPrice)
 		await createCompleteSet(client, securityPool, 1n * 10n ** 18n)
 
 		const getVaultRep = async (vault: typeof client.account.address) => {
@@ -48,7 +48,7 @@ describe('Audit PoC: security multiplier withdrawal bypass', () => {
 		const securityPool = securityPoolAddresses.securityPool
 		const coordinator = securityPoolAddresses.priceOracleManagerAndOperatorQueuer
 		const capacityOwnershipAttoRep = (repDeposit * PRICE_PRECISION * BPS_DENOMINATOR) / (2n * statoblastSecurityMultiplierBps * reportedRepEthPrice)
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, coordinator, OperationType.PriceRefresh, client.account.address, capacityOwnershipAttoRep, reportedRepEthPrice)
+		await setVaultCapacityFixture(client, mockWindow, coordinator, client.account.address, capacityOwnershipAttoRep, reportedRepEthPrice)
 
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, coordinator, OperationType.WithdrawRep, client.account.address, repDeposit, reportedRepEthPrice)
 		const exitedVault = await getSecurityVault(client, securityPool, client.account.address)
@@ -61,7 +61,7 @@ describe('Audit PoC: security multiplier withdrawal bypass', () => {
 		const securityPool = securityPoolAddresses.securityPool
 		const coordinator = securityPoolAddresses.priceOracleManagerAndOperatorQueuer
 		const capacityOwnershipAttoRep = (repDeposit * PRICE_PRECISION * BPS_DENOMINATOR) / (statoblastSecurityMultiplierBps * reportedRepEthPrice)
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, coordinator, OperationType.PriceRefresh, client.account.address, capacityOwnershipAttoRep, reportedRepEthPrice)
+		await setVaultCapacityFixture(client, mockWindow, coordinator, client.account.address, capacityOwnershipAttoRep, reportedRepEthPrice)
 		await mockWindow.setTime(questionData.endTime + 1n)
 		await manipulatePriceOracle(client, mockWindow, coordinator, reportedRepEthPrice)
 

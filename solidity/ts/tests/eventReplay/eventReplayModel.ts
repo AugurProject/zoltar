@@ -120,7 +120,7 @@ export type CoordinatorOperationReplay = {
 	operation: bigint
 	operator: Address
 	targetVault: Address
-	operationAmountAttoRepOrAttoEth: bigint
+	operationValue: bigint
 	queuedAt: bigint
 	validForSeconds: bigint
 	snapshotTargetBackingUnits: bigint
@@ -1458,7 +1458,7 @@ export function reduceCoordinatorEvent(state: ReplayState, log: ReplayLog) {
 			operation: requireBigInt(log.args, 'operation'),
 			operator: requireAddress(log.args, 'operator'),
 			targetVault: requireAddress(log.args, 'targetVault'),
-			operationAmountAttoRepOrAttoEth: requireBigInt(log.args, 'operationAmountAttoRepOrAttoEth'),
+			operationValue: requireBigInt(log.args, 'operationValue'),
 			queuedAt: requireBigInt(log.args, 'queuedAt'),
 			validForSeconds: requireBigInt(log.args, 'validForSeconds'),
 			snapshotTargetBackingUnits: requireBigInt(log.args, 'snapshotTargetBackingUnits'),

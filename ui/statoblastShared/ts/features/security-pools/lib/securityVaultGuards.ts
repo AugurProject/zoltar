@@ -4,9 +4,9 @@ import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from '
 import { getOracleRequestEthGuardMessage } from '../../open-oracle/lib/oracleRequestEth.js'
 import { MAX_STAGED_OPERATION_TIMEOUT_MINUTES, MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP, MIN_STAGED_OPERATION_TIMEOUT_MINUTES, parseTargetHealthFactorBps } from './securityVault.js'
 
-export function getTargetHealthFactorGuardMessage(targetHealthFactor: string) {
+export function getTargetHealthFactorGuardMessage(targetHealthFactor: string, minimumBps?: bigint) {
 	try {
-		parseTargetHealthFactorBps(targetHealthFactor)
+		parseTargetHealthFactorBps(targetHealthFactor, undefined, minimumBps)
 		return undefined
 	} catch (error) {
 		return error instanceof Error ? error.message : 'Enter a valid deposit target factor.'
@@ -19,18 +19,20 @@ export function getVaultDepositGuardMessage({
 	isDepositBelowMinimum,
 	minimumVaultRepDepositAttoRep = MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP,
 	targetHealthFactor = '1',
+	minimumBackingRatioBps,
 	walletRepShortfallAttoRep,
 }: {
 	approvalSatisfied: boolean
 	depositAmount: bigint | undefined
 	isDepositBelowMinimum: boolean
 	minimumVaultRepDepositAttoRep?: bigint | undefined
+	minimumBackingRatioBps?: bigint | undefined
 	targetHealthFactor?: string | undefined
 	walletRepShortfallAttoRep: bigint | undefined
 }) {
 	if (depositAmount === undefined) return 'Enter a valid REP deposit amount.'
 	if (depositAmount <= 0n) return undefined
-	const targetHealthFactorGuardMessage = getTargetHealthFactorGuardMessage(targetHealthFactor)
+	const targetHealthFactorGuardMessage = getTargetHealthFactorGuardMessage(targetHealthFactor, minimumBackingRatioBps)
 	if (targetHealthFactorGuardMessage !== undefined) return targetHealthFactorGuardMessage
 	if (!approvalSatisfied) return 'Approve enough REP before depositing.'
 	if (walletRepShortfallAttoRep !== undefined && walletRepShortfallAttoRep > 0n) return `Need ${formatAdditionalCurrencyBalance(walletRepShortfallAttoRep, 'REP')} in this wallet.`

@@ -358,14 +358,14 @@ export function decodedStagedSuccess(coordinator: `0x${string}`): OperationEvide
 }
 
 export function stagedDownstreamPreflight(pool: PoolSnapshot, staged: EcosystemSnapshot['stagedOperations'][number]) {
-	if (staged.operation === 1) {
+	if (staged.operation === 1 || staged.operation === 2) {
 		return encodePreflightCall({
 			abi: securityPoolAbi,
 			args: [staged.operator, amount(staged.amount)],
 			caller: staged.coordinator,
 			expectedResult: staged.executionExpectedResult,
-			functionName: 'withdrawRepFromVault',
-			label: `withdraw staged REP ${staged.id}`,
+			functionName: staged.operation === 1 ? 'withdrawRepFromVault' : 'adjustVaultBackingFactor',
+			label: `${staged.operation === 1 ? 'withdraw REP' : 'adjust backing target'} for staged operation ${staged.id}`,
 			to: pool.address,
 		})
 	}

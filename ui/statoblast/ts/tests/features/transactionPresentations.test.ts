@@ -51,6 +51,16 @@ describe('transaction presentations', () => {
 		}
 	})
 
+	test('does not describe an immediately executed target change as still queued', () => {
+		const presentation = createSecurityVaultSuccessPresentation({
+			action: 'adjustVaultBackingFactor',
+			hash: transactionHash,
+			queuedOperation: { operation: 'adjustVaultBackingFactor', operationId: 1n, isPendingSlot: false },
+			stagedExecution: { operation: 'adjustVaultBackingFactor', operationId: 1n, success: true, errorMessage: undefined },
+		})
+		expect(presentation.detail).toBeUndefined()
+	})
+
 	test('renders child REP symbols in vault transaction actions', () => {
 		const context = { repTokenSymbol: 'REP2' }
 		expect(createSecurityVaultTransactionIntent('depositRepToVault', context).submittedTitle).toBe('Deposit REP2')

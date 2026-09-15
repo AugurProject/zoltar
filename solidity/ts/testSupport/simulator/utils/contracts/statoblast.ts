@@ -25,7 +25,8 @@ import { requireAddress } from '../utilities'
 export enum OperationType {
 	Liquidation = 0,
 	WithdrawRep = 1,
-	PriceRefresh = 2,
+	AdjustVaultBackingFactor = 2,
+	PriceRefresh = 3,
 }
 
 const DEFAULT_SELF_OPERATION_VALID_FOR_SECONDS = 5n * 60n

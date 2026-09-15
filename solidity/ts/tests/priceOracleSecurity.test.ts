@@ -275,7 +275,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		await createQuestion(client, questionData, outcomes)
 		questionId = getQuestionId(questionData, outcomes)
 		await deployOriginSecurityPool(client, genesisUniverse, questionId, statoblastSecurityMultiplierBps)
-		await approveAndDepositRepToVault(client, repDeposit, questionId, statoblastSecurityMultiplierBps)
+		await approveAndDepositRepToVault(client, repDeposit, questionId, statoblastSecurityMultiplierBps * 2n)
 		const addresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, statoblastSecurityMultiplierBps)
 		priceOracle = addresses.priceOracleManagerAndOperatorQueuer
 		securityPool = addresses.securityPool

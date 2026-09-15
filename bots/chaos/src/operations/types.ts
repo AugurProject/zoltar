@@ -147,6 +147,7 @@ export interface PoolSnapshot {
 	currentMintingCapacityAttoEth: CanonicalUintString
 	totalCapacityOwnershipAttoRep: CanonicalUintString
 	statoblastSecurityMultiplierBps: string
+	walletVaultTargetBackingFactorBps: string
 	unassignedRepBackingAttoRep: CanonicalUintString
 	unassignedCapacityOwnershipAttoRep: CanonicalUintString
 	unassignedBadDebtAttoEth: CanonicalUintString

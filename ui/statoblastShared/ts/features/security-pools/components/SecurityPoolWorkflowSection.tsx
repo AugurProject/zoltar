@@ -19,7 +19,6 @@ import { RouteWorkflowPanel } from '@zoltar/ui-core-shared/components/RouteWorkf
 import { SecurityPoolSummaryMetrics } from './SecurityPoolSummaryMetrics.js'
 import { SecurityPoolLink } from './SecurityPoolLink.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
-import { getQueuedVaultOperation } from './VaultQueuedOperationStatusCard.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { StickyObjectContext } from '@zoltar/ui-core-shared/components/StickyObjectContext.js'
 import { TradingSection } from '../../markets/components/TradingSection.js'
@@ -296,7 +295,6 @@ export function SecurityPoolWorkflowSection({
 		? securityVault.securityVaultDetails
 		: undefined
 	const selectedVaultExistsOnchain = doesSecurityVaultExistOnchain(selectedVaultDetails)
-	const currentSecurityVaultResult = selectedVaultDetails === undefined ? undefined : securityVault.securityVaultResult
 	const hasLoadedCurrentVault = selectedVaultDetails !== undefined && sameAddress(selectedVaultDetails.vaultAddress, selectedVaultOwner) && sameAddress(selectedVaultDetails.securityPoolAddress, selectedPool?.securityPoolAddress)
 	const { setVaultView, vaultView } = useSelectedVaultWorkflowState({
 		accountAddress: accountState.address,
@@ -320,11 +318,7 @@ export function SecurityPoolWorkflowSection({
 	const lastLiquidationOutcomeRefreshKey = useRef<string | undefined>(undefined)
 	const lastExecutedOperationRefreshHash = useRef<string | undefined>(undefined)
 	const lastForkAuctionOutcomeRefreshHash = useRef<string | undefined>(undefined)
-	const queuedVaultOperation = getQueuedVaultOperation({
-		pendingOperation: currentPoolOracleManagerDetails?.pendingOperation,
-		selectedVaultOwner,
-		securityVaultResult: currentSecurityVaultResult,
-	})
+
 	const liquidationNoticeState = getLiquidationNoticeState({
 		currentTimestamp,
 		currentPoolOracleManagerDetails,
@@ -478,7 +472,7 @@ export function SecurityPoolWorkflowSection({
 		if (selectedPoolManagerAddress === undefined) return
 		if (loadingPoolOracleManager) return
 		const queuedOperationHash = (() => {
-			if (securityVault.securityVaultResult?.action === 'queueWithdrawRep') return securityVault.securityVaultResult.hash
+			if (securityVault.securityVaultResult?.action === 'queueWithdrawRep' || securityVault.securityVaultResult?.action === 'adjustVaultBackingFactor') return securityVault.securityVaultResult.hash
 			if (securityPoolOverviewResult?.action === 'queueLiquidation') return securityPoolOverviewResult.hash
 
 			return undefined
@@ -605,17 +599,17 @@ export function SecurityPoolWorkflowSection({
 		if (shouldRefreshSelectedPoolReporting) void reporting.onLoadReporting()
 	}, [onRefreshSelectedPoolData, reporting.onLoadReporting, securityVault.securityVaultResult, selectedPool?.securityPoolAddress, shouldRefreshSelectedPoolReporting])
 	useEffect(() => {
-		const queuedOperationHash = securityVault.securityVaultResult?.action === 'queueWithdrawRep' ? securityVault.securityVaultResult.hash : undefined
+		const queuedOperationHash = securityVault.securityVaultResult?.action === 'queueWithdrawRep' || securityVault.securityVaultResult?.action === 'adjustVaultBackingFactor' ? securityVault.securityVaultResult.hash : undefined
 		if (queuedOperationHash === undefined) {
 			lastImmediateQueuedOperationRefreshHash.current = undefined
 			return
 		}
 		if (loadingPoolOracleManager || currentPoolOracleManagerDetails === undefined) return
-		if (queuedVaultOperation !== undefined || currentPoolOraclePriceUsable !== true) return
+		if (stagedOperations.some(operation => operation.operationId === securityVault.securityVaultResult?.queuedOperation?.operationId) || currentPoolOraclePriceUsable !== true) return
 		if (lastImmediateQueuedOperationRefreshHash.current === queuedOperationHash) return
 		lastImmediateQueuedOperationRefreshHash.current = queuedOperationHash
 		void onRefreshSelectedPoolData(selectedPool?.securityPoolAddress)
-		if (securityVault.securityVaultResult?.action === 'queueWithdrawRep' && shouldRefreshSelectedPoolReporting) void reporting.onLoadReporting()
+		if ((securityVault.securityVaultResult?.action === 'queueWithdrawRep' || securityVault.securityVaultResult?.action === 'adjustVaultBackingFactor') && shouldRefreshSelectedPoolReporting) void reporting.onLoadReporting()
 		if (showSelectedPoolWorkflowDetails && view === 'vaults' && hasLoadedCurrentVault) void securityVault.onLoadSecurityVault()
 	}, [
 		currentPoolOracleManagerDetails,
@@ -623,7 +617,7 @@ export function SecurityPoolWorkflowSection({
 		hasLoadedCurrentVault,
 		loadingPoolOracleManager,
 		onRefreshSelectedPoolData,
-		queuedVaultOperation,
+		stagedOperations,
 		reporting.onLoadReporting,
 		securityVault.onLoadSecurityVault,
 		securityVault.securityVaultResult,

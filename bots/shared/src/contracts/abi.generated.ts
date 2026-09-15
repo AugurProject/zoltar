@@ -829,6 +829,16 @@ export const securityPoolAbi = [
 	},
 	{
 		type: 'event',
+		name: 'VaultBackingFactorAdjusted',
+		anonymous: false,
+		inputs: [
+			{ name: 'vault', type: 'address', internalType: 'address', indexed: true },
+			{ name: 'backingFactorBps', type: 'uint256', internalType: 'uint256', indexed: false },
+			{ name: 'capacityOwnershipAttoRep', type: 'uint256', internalType: 'uint256', indexed: false },
+		],
+	},
+	{
+		type: 'event',
 		name: 'VaultBadDebtRecorded',
 		anonymous: false,
 		inputs: [
@@ -1134,6 +1144,7 @@ export const securityPoolAbi = [
 	{ type: 'function', name: 'updateSettlementCollateral', stateMutability: 'nonpayable', inputs: [], outputs: [] },
 	{ type: 'function', name: 'updateVaultFees', stateMutability: 'nonpayable', inputs: [{ name: 'vault', type: 'address', internalType: 'address' }], outputs: [] },
 	{ type: 'function', name: 'vaultBadDebtAttoEth', stateMutability: 'view', inputs: [{ name: 'vault', type: 'address', internalType: 'address' }], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
+	{ type: 'function', name: 'vaultTargetBackingFactorBps', stateMutability: 'view', inputs: [{ name: '', type: 'address', internalType: 'address' }], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{
 		type: 'function',
 		name: 'withdrawForkedEscalationDeposits',
@@ -1181,6 +1192,16 @@ export const securityPoolAbi = [
 	},
 	{ type: 'function', name: 'zoltar', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'contract Zoltar' }] },
 	{ type: 'receive', stateMutability: 'payable' },
+	{
+		type: 'function',
+		name: 'adjustVaultBackingFactor',
+		stateMutability: 'nonpayable',
+		inputs: [
+			{ name: 'vault', type: 'address', internalType: 'address' },
+			{ name: 'backingFactorBps', type: 'uint256', internalType: 'uint256' },
+		],
+		outputs: [],
+	},
 ] as const
 
 export const liquidationApprovalRegistryAbi = [
@@ -1549,7 +1570,7 @@ export const openOraclePriceCoordinatorAbi = [
 			{ name: 'operation', type: 'uint8', internalType: 'enum OperationType', indexed: false },
 			{ name: 'operator', type: 'address', internalType: 'address', indexed: true },
 			{ name: 'targetVault', type: 'address', internalType: 'address', indexed: true },
-			{ name: 'operationAmountAttoRepOrAttoEth', type: 'uint256', internalType: 'uint256', indexed: false },
+			{ name: 'operationValue', type: 'uint256', internalType: 'uint256', indexed: false },
 			{ name: 'queuedAt', type: 'uint256', internalType: 'uint256', indexed: false },
 			{ name: 'validForSeconds', type: 'uint256', internalType: 'uint256', indexed: false },
 			{ name: 'snapshotTargetBackingUnits', type: 'uint256', internalType: 'uint256', indexed: false },
@@ -1591,7 +1612,7 @@ export const openOraclePriceCoordinatorAbi = [
 					{ name: 'operator', type: 'address', internalType: 'address' },
 					{ name: 'receiverVault', type: 'address', internalType: 'address' },
 					{ name: 'targetVault', type: 'address', internalType: 'address' },
-					{ name: 'operationAmountAttoRepOrAttoEth', type: 'uint256', internalType: 'uint256' },
+					{ name: 'operationValue', type: 'uint256', internalType: 'uint256' },
 					{ name: 'queuedAt', type: 'uint256', internalType: 'uint256' },
 					{ name: 'validForSeconds', type: 'uint256', internalType: 'uint256' },
 					{ name: 'snapshotTargetBackingUnits', type: 'uint256', internalType: 'uint256' },
@@ -1617,7 +1638,7 @@ export const openOraclePriceCoordinatorAbi = [
 					{ name: 'operator', type: 'address', internalType: 'address' },
 					{ name: 'receiverVault', type: 'address', internalType: 'address' },
 					{ name: 'targetVault', type: 'address', internalType: 'address' },
-					{ name: 'operationAmountAttoRepOrAttoEth', type: 'uint256', internalType: 'uint256' },
+					{ name: 'operationValue', type: 'uint256', internalType: 'uint256' },
 					{ name: 'queuedAt', type: 'uint256', internalType: 'uint256' },
 					{ name: 'validForSeconds', type: 'uint256', internalType: 'uint256' },
 					{ name: 'snapshotTargetBackingUnits', type: 'uint256', internalType: 'uint256' },
@@ -1698,7 +1719,7 @@ export const openOraclePriceCoordinatorAbi = [
 		inputs: [
 			{ name: 'operation', type: 'uint8', internalType: 'enum OperationType' },
 			{ name: 'targetVault', type: 'address', internalType: 'address' },
-			{ name: 'operationAmountAttoRepOrAttoEth', type: 'uint256', internalType: 'uint256' },
+			{ name: 'operationValue', type: 'uint256', internalType: 'uint256' },
 			{ name: 'validForSeconds', type: 'uint256', internalType: 'uint256' },
 			{ name: 'proposedRepPerEthPrice', type: 'uint256', internalType: 'uint256' },
 			{ name: 'requestedInitialAttoWeth', type: 'uint256', internalType: 'uint256' },
@@ -1721,7 +1742,7 @@ export const openOraclePriceCoordinatorAbi = [
 			{ name: 'operator', type: 'address', internalType: 'address' },
 			{ name: 'receiverVault', type: 'address', internalType: 'address' },
 			{ name: 'targetVault', type: 'address', internalType: 'address' },
-			{ name: 'operationAmountAttoRepOrAttoEth', type: 'uint256', internalType: 'uint256' },
+			{ name: 'operationValue', type: 'uint256', internalType: 'uint256' },
 			{ name: 'queuedAt', type: 'uint256', internalType: 'uint256' },
 			{ name: 'validForSeconds', type: 'uint256', internalType: 'uint256' },
 			{ name: 'snapshotTargetBackingUnits', type: 'uint256', internalType: 'uint256' },

@@ -127,7 +127,7 @@ test('binds the complete pool scan to one canonical block', async () => {
 								{
 									liquidationApprovalId: zeroApprovalId,
 									operation: 0,
-									operationAmountAttoRepOrAttoEth: 1n,
+									operationValue: 1n,
 									operator,
 									queuedAt: 1n,
 									receiverVault: operator,

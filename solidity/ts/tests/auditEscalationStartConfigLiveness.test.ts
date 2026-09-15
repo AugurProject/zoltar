@@ -1,6 +1,6 @@
 import { statoblast_EscalationGame_EscalationGame } from '../types/contractArtifact'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
-import { manipulatePriceOracle, manipulatePriceOracleAndPerformOperation } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { manipulatePriceOracle, setVaultCapacityFixture } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { getSecurityPoolsEscalationGame, getSecurityVault, backingUnitsToAttoRep, redeemRepFromVault, withdrawFromEscalationGame, depositToEscalationGame } from '../testSupport/simulator/utils/contracts/securityPool'
 import { deployOriginSecurityPool } from '../testSupport/simulator/utils/contracts/deployStatoblast'
@@ -8,7 +8,7 @@ import assert from '../testSupport/simulator/utils/assert'
 import { describe, test } from 'bun:test'
 import { encodeAbiParameters, keccak256, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/core-shared/deployment/protocolConfig'
-import { balanceOfShares, OperationType } from '../testSupport/simulator/utils/contracts/statoblast'
+import { balanceOfShares } from '../testSupport/simulator/utils/contracts/statoblast'
 import { createCompleteSet, getShareTokenSupplyAttoShares, redeemShares } from '../testSupport/simulator/utils/contracts/securityPool'
 import { statoblast_SecurityPool_SecurityPool, Zoltar_Zoltar } from '../types/contractArtifact'
 import { useStatoblastVaultAccountingFixture } from './statoblast/fixture'
@@ -46,7 +46,7 @@ describe('Audit regression: escalation start configuration liveness', () => {
 		assert.ok(reportBond > 10n ** 18n, 'the supply-based floor must exceed the one-REP minimum in this fixture')
 		assert.ok((await readNonDecisionThreshold()) > reportBond, 'the unmodified production configuration must allow the game to start')
 
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, capacityOwnershipAttoRep, reportedRepEthPrice)
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, capacityOwnershipAttoRep, reportedRepEthPrice)
 		await createCompleteSet(client, securityPoolAddresses.securityPool, openInterestAmount)
 
 		const vaultBeforeResolution = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)

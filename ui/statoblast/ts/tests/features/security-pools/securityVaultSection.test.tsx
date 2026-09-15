@@ -51,6 +51,7 @@ function createSecurityVaultSectionProps(overrides: Partial<SecurityVaultSection
 		accountState: createAccountState(),
 		loadingSecurityVault: false,
 		onApproveRep: () => undefined,
+		onAdjustVaultBackingFactor: () => undefined,
 		onDepositRepToVault: () => undefined,
 		onLoadSecurityVault: () => undefined,
 		onRedeemFees: () => undefined,
@@ -158,6 +159,190 @@ describe('SecurityVaultSection', () => {
 			await cleanupRenderedComponent?.()
 			cleanupRenderedComponent = undefined
 		},
+	})
+
+	test.each([true, false])('shows queued target operation status in the vault panel (automatic: %s)', async isPendingSlot => {
+		const props = createSecurityVaultSectionProps({
+			onViewStagedOperations: () => undefined,
+			securityVaultResult: { action: 'adjustVaultBackingFactor', hash: '0x01', queuedOperation: { operation: 'adjustVaultBackingFactor', operationId: 42n, isPendingSlot } },
+		})
+		const rendered = await renderIntoDocument(<SecurityVaultSection {...props} />)
+		try {
+			expect(rendered.container.textContent).toContain('Backing ratio change queued')
+			expect(rendered.container.textContent).toContain('#42')
+			expect(rendered.container.textContent).toContain(isPendingSlot ? 'Executes automatically' : 'manual')
+		} finally {
+			rendered.cleanup()
+		}
+	})
+
+	test('does not guess execution or retain a queued label after refreshed active state is empty', async () => {
+		const rendered = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					oracleManagerDetails: createOracleManagerDetails({ isPriceValid: true, stagedOperations: [], activeStagedOperationCount: 0n }),
+					securityVaultResult: { action: 'adjustVaultBackingFactor', hash: '0x01', queuedOperation: { operation: 'adjustVaultBackingFactor', operationId: 42n, isPendingSlot: true } },
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		expect(within(document.body).getByText('Backing ratio change submitted')).toBeDefined()
+		expect(within(document.body).queryByText('Backing ratio change queued')).toBeNull()
+		expect(within(document.body).queryByText('Backing ratio changed')).toBeNull()
+	})
+
+	test.each([undefined, 'missing'] as const)('preserves a manual withdrawal receipt while exact status is unresolved: %s', async status => {
+		const rendered = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					modalFirst: true,
+					oracleManagerDetails: createOracleManagerDetails({ stagedOperations: [], activeStagedOperationCount: 30n }),
+					onViewStagedOperations: () => undefined,
+					securityVaultResult: { action: 'queueWithdrawRep', hash: '0x01', queuedOperation: { operation: 'withdrawRep', operationId: 42n, isPendingSlot: false }, ...(status === undefined ? {} : { queuedOperationState: { status } }) },
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Withdraw REP' }))
+		expect(within(document.body).getByText('#42')).toBeDefined()
+		expect(document.body.textContent).toContain('execute it manually')
+		expect(within(document.body).getByRole('button', { name: 'View in staged operations' })).toBeDefined()
+		expect(within(document.body).queryByText('REP Withdrawal Executed')).toBeNull()
+	})
+
+	test.each([
+		['executed', 'Backing ratio changed'],
+		['failed', 'Backing ratio change failed'],
+		['expired', 'Queued operation expired'],
+		['superseded', 'Target change replaced'],
+	] as const)('renders the reconciled %s state with the original queued receipt', async (status, title) => {
+		const rendered = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					securityVaultResult: { action: 'adjustVaultBackingFactor', hash: '0x01', queuedOperation: { operation: 'adjustVaultBackingFactor', operationId: 42n, isPendingSlot: true }, queuedOperationState: { status } },
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		expect(within(document.body).getByText(title)).toBeDefined()
+		expect(within(document.body).queryByText('Backing ratio change queued')).toBeNull()
+	})
+
+	test.each(['manual-queued', 'executed'] as const)('shows tracked target %s independently of the latest fee claim', async status => {
+		const rendered = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					securityVaultResult: { action: 'redeemFees', hash: '0x02' },
+					securityVaultQueuedOperations: [{ action: 'adjustVaultBackingFactor', hash: '0x01', queuedOperation: { operation: 'adjustVaultBackingFactor', operationId: 42n, isPendingSlot: false }, queuedOperationState: { status } }],
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		expect(within(document.body).getByText(status === 'executed' ? 'Backing ratio changed' : 'Backing ratio change queued')).toBeDefined()
+		if (status === 'manual-queued') expect(within(document.body).getByText('#42')).toBeDefined()
+	})
+
+	test('previews a separate whole-vault adjustment and submits its factor', async () => {
+		let submitted: string | undefined
+		const rendered = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					modalFirst: true,
+					securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n, settlementCollateralAttoEth: 0n }),
+					onAdjustVaultBackingFactor: factor => {
+						submitted = factor
+					},
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		const page = within(document.body)
+		fireEvent.click(page.getByRole('button', { name: 'Adjust backing ratio' }))
+		const dialog = within(page.getByRole('dialog', { name: 'Adjust backing ratio' }))
+		const input = dialog.getByLabelText('Target backing ratio')
+		if (!(input instanceof HTMLInputElement)) throw new Error('Expected backing factor input')
+		expect(input.value).toBe('2')
+		fireEvent.input(input, { target: { value: '0.9' } })
+		expect(dialog.getAllByText('Target backing ratio must be at least 2×')).toHaveLength(1)
+		expect(dialog.getByRole('button', { name: 'Adjust backing ratio' }).getAttribute('aria-describedby')).toBe(input.getAttribute('aria-describedby'))
+		fireEvent.input(input, { target: { value: '2' } })
+		expect(dialog.getByText('Exposure after adjustment')).toBeDefined()
+		expect(dialog.getByText('Technical details').closest('details')?.open).toBe(false)
+		expect(page.getByRole('dialog', { name: 'Adjust backing ratio' }).textContent?.replaceAll('\u00a0', ' ')).toMatch(/6(?:\.0+)?\s+REP equivalent/)
+		fireEvent.click(dialog.getByRole('button', { name: 'Adjust backing ratio' }))
+		expect(submitted).toBe('2')
+	})
+
+	test('blocks a capacity reduction while settlement collateral is committed', async () => {
+		const rendered = await renderIntoDocument(<SecurityVaultSection {...createSecurityVaultSectionProps({ modalFirst: true, securityVaultDetails: createSecurityVaultDetails({ settlementCollateralAttoEth: 1n, disputeStakedAttoRep: 0n }) })} />)
+		cleanupRenderedComponent = rendered.cleanup
+		const page = within(document.body)
+		fireEvent.click(page.getByRole('button', { name: 'Adjust backing ratio' }))
+		const dialog = within(page.getByRole('dialog', { name: 'Adjust backing ratio' }))
+		fireEvent.input(dialog.getByLabelText('Target backing ratio'), { target: { value: '100' } })
+		expectTransactionButtonDisabled(page.getByRole('dialog'), 'Adjust backing ratio')
+	})
+
+	test('blocks adjustment while dispute REP is committed', async () => {
+		const rendered = await renderIntoDocument(<SecurityVaultSection {...createSecurityVaultSectionProps({ securityVaultDetails: createSecurityVaultDetails({ settlementCollateralAttoEth: 0n, disputeStakedAttoRep: 1n }) })} />)
+		cleanupRenderedComponent = rendered.cleanup
+		expectTransactionButtonDisabled(document.body, 'Adjust backing ratio')
+	})
+
+	test('rejects an input whose resulting capacity leaves the vault undercollateralized', async () => {
+		const rendered = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					modalFirst: true,
+					oracleManagerDetails: createOracleManagerDetails(),
+					selectedPoolStatoblastSecurityMultiplierBps: 20_000n,
+					repPerEthPrice: 3n * 10n ** 18n,
+					securityVaultDetails: createSecurityVaultDetails({ targetBackingFactorBps: 20_000n, vaultAttoRepBacking: 12n * 10n ** 18n, capacityOwnershipAttoRep: 6n * 10n ** 18n, totalCapacityOwnershipAttoRep: 6n * 10n ** 18n, settlementCollateralAttoEth: 3n * 10n ** 18n, disputeStakedAttoRep: 0n, badDebtAttoEth: 0n }),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		const page = within(document.body)
+		fireEvent.click(page.getByRole('button', { name: 'Adjust backing ratio' }))
+		const dialog = page.getByRole('dialog', { name: 'Adjust backing ratio' })
+		fireEvent.input(within(dialog).getByLabelText('Target backing ratio'), { target: { value: '2' } })
+		expectTransactionButtonDisabled(dialog, 'Adjust backing ratio')
+		expect(within(dialog).getByText('This target would leave the vault undercollateralized.')).not.toBeNull()
+	})
+
+	test.each([
+		['Uniswap price is higher', 3n, 1n, 1n, false],
+		['Uniswap price is lower', 1n, 3n, 1n, true],
+		['coordinator price has expired', 3n, 3n, 10n, false],
+	] as const)('uses only a valid coordinator price to block adjustments: %s', async (_scenario, displayPrice, coordinatorPrice, timestamp, blocked) => {
+		const rendered = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={timestamp}>
+				<SecurityVaultSection
+					{...createSecurityVaultSectionProps({
+						modalFirst: true,
+						repPerEthPrice: displayPrice * 10n ** 18n,
+						repPerEthSource: timestamp === 10n ? 'open-oracle' : 'v3',
+						oracleManagerDetails: createOracleManagerDetails({ lastPrice: coordinatorPrice * 10n ** 18n }),
+						securityVaultDetails: createSecurityVaultDetails({ targetBackingFactorBps: 20_000n, vaultAttoRepBacking: 12n * 10n ** 18n, capacityOwnershipAttoRep: 6n * 10n ** 18n, totalCapacityOwnershipAttoRep: 6n * 10n ** 18n, settlementCollateralAttoEth: 3n * 10n ** 18n, disputeStakedAttoRep: 0n, badDebtAttoEth: 0n }),
+					})}
+				/>
+			</ChainTimestampContext.Provider>,
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Adjust backing ratio' }))
+		const dialog = within(document.body).getByRole('dialog', { name: 'Adjust backing ratio' })
+		fireEvent.input(within(dialog).getByLabelText('Target backing ratio'), { target: { value: '2' } })
+		if (blocked) expectTransactionButtonDisabled(dialog, 'Adjust backing ratio')
+		else expectTransactionButtonEnabled(dialog, 'Adjust backing ratio')
+	})
+
+	test('uses a saved target as read-only context for later deposits', async () => {
+		const rendered = await renderIntoDocument(<SecurityVaultSection {...createSecurityVaultSectionProps({ securityVaultDetails: createSecurityVaultDetails({ targetBackingFactorBps: 20_000n }) })} />)
+		cleanupRenderedComponent = rendered.cleanup
+		const page = within(document.body)
+		expect([...document.querySelectorAll('label')].filter(label => label.textContent?.includes('Target backing ratio') && label.querySelector('input') !== null)).toHaveLength(1)
+		expect(page.getAllByText('Target backing ratio').length).toBeGreaterThan(0)
+		expect(document.body.textContent).toContain('2×')
 	})
 
 	test('shows the selected child REP symbol on vault action controls', async () => {
@@ -472,7 +657,7 @@ describe('SecurityVaultSection', () => {
 					securityVaultForm: {
 						depositAmount: '1',
 						repWithdrawAmount: '1',
-						targetHealthFactor: '1',
+						targetHealthFactor: '2',
 						securityPoolAddress: zeroAddress,
 						selectedVaultOwner: zeroAddress,
 					},
@@ -680,7 +865,7 @@ describe('SecurityVaultSection', () => {
 					securityVaultForm: {
 						depositAmount: '1',
 						repWithdrawAmount: '1',
-						targetHealthFactor: '1',
+						targetHealthFactor: '2',
 						securityPoolAddress: zeroAddress,
 						selectedVaultOwner: zeroAddress,
 					},
@@ -706,7 +891,7 @@ describe('SecurityVaultSection', () => {
 					securityVaultForm: {
 						depositAmount: '1',
 						repWithdrawAmount: '1',
-						targetHealthFactor: '1',
+						targetHealthFactor: '2',
 						securityPoolAddress: zeroAddress,
 						selectedVaultOwner: otherVaultAddress,
 					},
@@ -796,9 +981,9 @@ describe('SecurityVaultSection', () => {
 			const documentQueries = within(document.body)
 			if (modalFirst) fireEvent.click(documentQueries.getByRole('button', { name: 'Deposit REP' }))
 			const scope = modalFirst ? within(documentQueries.getByRole('dialog', { name: 'Deposit REP' })) : documentQueries
-			const factorInput = scope.getByText('Deposit target factor').parentElement?.querySelector('input')
+			const factorInput = document.querySelector('input[aria-invalid="true"]')
 			expect(factorInput).not.toBeNull()
-			const factorError = scope.getByText('Deposit target factor must be a number with at most four decimal places')
+			const factorError = scope.getByText('Target backing ratio must be a number with at most four decimal places')
 			expect(factorInput?.getAttribute('aria-invalid')).toBe('true')
 			expect(factorInput?.getAttribute('aria-describedby')).toBe(factorError.id)
 			renderedComponent.cleanup()
@@ -823,7 +1008,7 @@ describe('SecurityVaultSection', () => {
 					securityVaultForm: {
 						depositAmount: '20',
 						repWithdrawAmount: '',
-						targetHealthFactor: '1',
+						targetHealthFactor: '2',
 						securityPoolAddress: zeroAddress,
 						selectedVaultOwner: zeroAddress,
 					},
@@ -904,7 +1089,7 @@ describe('SecurityVaultSection', () => {
 						securityVaultForm: {
 							depositAmount: '',
 							repWithdrawAmount: '1',
-							targetHealthFactor: '1',
+							targetHealthFactor: '2',
 							securityPoolAddress: zeroAddress,
 							selectedVaultOwner: zeroAddress,
 						},
@@ -934,7 +1119,7 @@ describe('SecurityVaultSection', () => {
 						securityVaultForm: {
 							depositAmount: '',
 							repWithdrawAmount: '1',
-							targetHealthFactor: '1',
+							targetHealthFactor: '2',
 							securityPoolAddress: zeroAddress,
 							selectedVaultOwner: zeroAddress,
 						},
@@ -1016,7 +1201,7 @@ describe('SecurityVaultSection', () => {
 					securityVaultForm: {
 						depositAmount: '1',
 						repWithdrawAmount: '1',
-						targetHealthFactor: '1',
+						targetHealthFactor: '2',
 						securityPoolAddress: zeroAddress,
 						selectedVaultOwner: zeroAddress,
 					},

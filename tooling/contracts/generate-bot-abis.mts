@@ -26,7 +26,7 @@ const SHARED_ABI_EXPORTS: readonly AbiExport[] = [
 	{ name: 'zoltarAbi', sources: [root('Zoltar')] },
 	{ name: 'zoltarQuestionDataAbi', sources: [root('ZoltarQuestionData')] },
 	{ name: 'securityPoolFactoryAbi', sources: [statoblast('factories/SecurityPoolFactory')] },
-	{ name: 'securityPoolAbi', sources: [statoblast('SecurityPool')] },
+	{ name: 'securityPoolAbi', sources: [statoblast('SecurityPool'), statoblast('SecurityPoolOperationsDelegate', ['adjustVaultBackingFactor'])] },
 	{ name: 'liquidationApprovalRegistryAbi', sources: [statoblast('LiquidationApprovalRegistry')] },
 	{ name: 'openOraclePriceCoordinatorAbi', sources: [statoblast('OpenOraclePriceCoordinator')] },
 	{ name: 'securityPoolForkerAbi', sources: [statoblast('SecurityPoolForker')] },
