@@ -18,7 +18,7 @@ describe('Docker packaging', () => {
 		const runtime = requireDockerStage(parseDockerfile(await readFile(dockerfile, 'utf8')), 'runtime')
 		const workspace = await mkdtemp(join(tmpdir(), 'augurscan-runtime-'))
 		try {
-			for (const copy of dockerInstructions(runtime, 'COPY').filter(value => value.startsWith('shared/') || value.startsWith('augurScan/src ') || value.startsWith('augurScan/config '))) {
+			for (const copy of dockerInstructions(runtime, 'COPY').filter(value => value.startsWith('shared/') || value.startsWith('augurScan/src ') || value.startsWith('augurScan/config ') || value.startsWith('augurScan/scripts/'))) {
 				const [source, destination] = copy.split(/\s+/u)
 				if (source === undefined || destination === undefined) throw new Error(`Invalid runtime source COPY: ${copy}`)
 				const target = join(workspace, destination, source.endsWith('.json') && destination.endsWith('/') ? basename(source) : '')
@@ -30,6 +30,10 @@ describe('Docker packaging', () => {
 			const result = Bun.spawnSync([process.execPath, '-e', "for (const source of ['ethereum', 'operations', 'error-chain', 'rpc-request-queue', 'indexer/ownership-status']) await import('./augurScan/src/' + source + '.ts')"], { cwd: workspace, stdout: 'pipe', stderr: 'pipe' })
 			expect(result.stderr.toString()).toBe('')
 			expect(result.exitCode).toBe(0)
+			const report = Bun.spawnSync([process.execPath, 'augurScan/scripts/report-abi-coverage.ts', '--help'], { cwd: workspace, stdout: 'pipe', stderr: 'pipe' })
+			expect(report.stderr.toString()).toBe('')
+			expect(report.exitCode).toBe(0)
+			expect(report.stdout.toString()).toContain('metadata:unknown-calls')
 		} finally {
 			await rm(workspace, { recursive: true, force: true })
 		}

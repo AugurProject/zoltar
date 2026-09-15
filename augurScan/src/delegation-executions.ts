@@ -1,5 +1,6 @@
 import { type Address, formatUnits, getAddress, type Hex, isHex } from './ethereum.ts'
 import type { DecodedRecord, SerializedArguments } from './types.ts'
+import { supportedWrappers } from './system-interfaces.ts'
 
 // ERC-7579 single execution encoding is packed address (20 bytes), value
 // (32 bytes), then calldata. Unknown modes remain opaque rather than being
@@ -12,7 +13,8 @@ export const delegationExecutionDetails = (argumentsValue: SerializedArguments, 
 	const addresses: Address[] = []
 	const summaries = executions.map((execution: unknown, index) => {
 		const mode: unknown = modes[index]
-		if (typeof mode !== 'string' || !/^0x00(?:00|01)0{60}$/i.test(mode)) return `Unsupported execution mode ${String(mode)}`
+		const format = Object.values(supportedWrappers.delegationManager.modes).find(candidate => typeof mode === 'string' && candidate.code === mode.toLowerCase())
+		if (format === undefined) return `Unsupported execution mode ${String(mode)}`
 		if (typeof execution !== 'string' || !isHex(execution) || execution.length < 106 || execution.length % 2 !== 0) return 'Malformed execution'
 		const target = getAddress(`0x${execution.slice(2, 42)}`)
 		const value = BigInt(`0x${execution.slice(42, 106)}`)
@@ -20,7 +22,7 @@ export const delegationExecutionDetails = (argumentsValue: SerializedArguments, 
 		const action = decode(target, input)
 		addresses.push(target, ...(action.referencedAddresses ?? []))
 		const valueLabel = value === 0n ? '' : ` · value=${formatUnits(value, 18)} ${nativeSymbol}`
-		const tryLabel = mode.slice(4, 6) === '01' ? ' (allow failure)' : ''
+		const tryLabel = format.allowFailure ? ' (allow failure)' : ''
 		return `${labels.get(target.toLowerCase()) ?? target}${valueLabel}${tryLabel} · ${action.summary}`
 	})
 	return { summaries, addresses: [...new Map(addresses.map(address => [address.toLowerCase(), address])).values()] }

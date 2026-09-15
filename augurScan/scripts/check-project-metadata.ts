@@ -3,6 +3,10 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { projectManifests } from './project-manifests.ts'
 import { contractSourceHash, contractSources } from './project-metadata-source.ts'
+import { assertAbiCoverage } from '../src/abi-catalog.ts'
+import { discoveredContractKinds } from '../src/contract-discovery.ts'
+import { parseManifestValue } from '../src/manifest.ts'
+import { systemInterfaces } from '../src/system-interfaces.ts'
 
 const projectRoot = path.resolve(import.meta.dir, '..')
 const repositoryRoot = path.resolve(projectRoot, '..')
@@ -20,10 +24,12 @@ const artifactAvailable = await access(artifactPath).then(
 	},
 )
 const stale: string[] = []
+assertAbiCoverage([...Object.keys(systemInterfaces), ...discoveredContractKinds])
 const expectedManifests = await projectManifests(repositoryRoot)
 for (const [networkId, expected] of Object.entries(expectedManifests)) {
 	const relativePath = `manifests/${networkId}.json`
 	const current = await readFile(path.join(projectRoot, 'config', relativePath), 'utf8')
+	parseManifestValue(JSON.parse(current), relativePath)
 	if (expected !== current) stale.push(`config/${relativePath}`)
 }
 if (artifactAvailable) {

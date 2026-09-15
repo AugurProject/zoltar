@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
+import type { SystemContractKind } from '../src/system-interfaces.ts'
 
 type DeploymentFile = {
 	readonly network: {
@@ -40,7 +41,9 @@ const deploymentFile = (value: unknown, source: string): DeploymentFile => {
 	}
 }
 
-const deploymentKind: Readonly<Record<string, string>> = {
+const deploymentKind: Readonly<Record<string, SystemContractKind>> = {
+	weth: 'weth',
+	reputationToken: 'reputationToken',
 	deploymentStatusOracle: 'deploymentStatusOracle',
 	escalationGameClaimDelegate: 'escalationGameClaimDelegate',
 	escalationGameProofVerifier: 'escalationProofVerifier',
@@ -74,9 +77,10 @@ async function projectManifest(projectRoot: string, networkId: keyof typeof usdc
 	const deploymentPath = path.join(projectRoot, 'docs', `${networkId}-deployment-addresses.json`)
 	const deployment = deploymentFile(JSON.parse(await readFile(deploymentPath, 'utf8')), deploymentPath)
 	if (deployment.network.id !== networkId) throw new Error(`${deploymentPath} describes ${deployment.network.id}, expected ${networkId}`)
-	const configured = [...deployment.deploymentSteps, ...deployment.derivedContracts].flatMap(({ id, label, address }) => {
+	const configured = [...deployment.deploymentSteps, ...deployment.derivedContracts].map(({ id, label, address }) => {
 		const kind = deploymentKind[id]
-		return kind === undefined ? [] : [manifestEntry(address, label, kind)]
+		if (kind === undefined) throw new Error(`${deploymentPath}: unmapped deployment ID ${id}`)
+		return manifestEntry(address, label, kind)
 	})
 	configured.push(manifestEntry(deployment.network.genesisRepTokenAddress, 'Genesis REP', 'reputationToken'), manifestEntry(deployment.network.wethAddress, 'Wrapped Ether', 'weth'), manifestEntry(usdcAddress[networkId], 'USD Coin', 'usdc'))
 	const current = [...new Map(configured.map(entry => [entry[0].toLowerCase(), entry])).values()]

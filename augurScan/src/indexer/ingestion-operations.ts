@@ -1,3 +1,4 @@
+import { dependencyDiscoveryKinds } from '../contract-discovery.ts'
 import type { IndexedBlock, RichListBalance, StoredTransaction } from '../database.ts'
 import { readRichListBalance } from '../direct-observations.ts'
 import { type Address, getAddress, type Hash, type Log, type BlockTransaction, type TransactionReceipt, zeroAddress } from '../ethereum.ts'
@@ -96,7 +97,7 @@ export async function indexBlock(
 			if (!contracts.has(registry.toLowerCase())) {
 				const metadata: ContractMetadata = {
 					address: registry,
-					kind: 'liquidationApprovalRegistry',
+					kind: dependencyDiscoveryKinds.liquidationApprovalRegistry,
 					label: 'Liquidation Approval Registry',
 					provenance: `${coordinator.label}.liquidationApprovalRegistry`,
 					discoveryBlock: number,

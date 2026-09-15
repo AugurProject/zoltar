@@ -47,6 +47,7 @@ COPY augurScan/migrations ./augurScan/migrations
 COPY --from=browser-build /workspace/augurScan/public ./augurScan/public
 COPY augurScan/scripts/verify-compose-source.ts ./augurScan/scripts/verify-compose-source.ts
 COPY augurScan/scripts/verify-export-page.ts ./augurScan/scripts/verify-export-page.ts
+COPY augurScan/scripts/report-abi-coverage.ts ./augurScan/scripts/report-abi-coverage.ts
 COPY augurScan/src ./augurScan/src
 COPY shared/core/ts/evm/ ./shared/core/ts/evm/
 COPY shared/core/ts/errors/ ./shared/core/ts/errors/

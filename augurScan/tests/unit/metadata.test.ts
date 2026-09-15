@@ -390,12 +390,6 @@ describe('ABI metadata', () => {
 			}),
 		).toEqual([])
 	})
-
-	test('maps all supported manifest contract kinds to ABIs', () => {
-		for (const kind of ['ammFactory', 'ammPair', 'proxyDeployer', 'multicall3', 'priceCoordinatorFactory', 'securityPoolUtils', 'securityPoolOperationsDelegate', 'shareTokenFactory', 'truthAuctionFactory']) {
-			expect(abiForKind(kind)).toBeDefined()
-		}
-	})
 })
 
 describe('deterministic proxy deployment actions', () => {

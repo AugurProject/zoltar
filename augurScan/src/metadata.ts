@@ -1,4 +1,5 @@
-import { abiForKind, catalogAbis } from './abi-catalog.ts'
+import { abiForKind, catalogAbis, wrapperAbiForInput } from './abi-catalog.ts'
+import { dependencyDiscoveryKinds, discoveries } from './contract-discovery.ts'
 import { delegationExecutionDetails } from './delegation-executions.ts'
 import { type AbiEvent, type AbiFunction, type AbiParameter, type Address, decodeEventLog, decodeFunctionData, formatAbiItem, formatAbiParameter, formatUnits, getAddress, getCreate2Address, type Hex, isAddress, keccak256, stringToHex, toEventSelector, toFunctionSelector, zeroAddress, zeroHash } from './ethereum.ts'
 import type { ContractMetadata, DecodedRecord, SerializedArguments, TokenMetadata } from './types.ts'
@@ -92,6 +93,14 @@ const tokenAmountRules: Readonly<Record<string, readonly TokenAmountRule[]>> = {
 	'shareToken.TransferSingle': [{ tokenPath: '$emitter', amountPaths: ['value'] }],
 	'shareToken.safeBatchTransferFrom': [{ tokenPath: '$emitter', amountPaths: ['values'] }],
 	'shareToken.safeTransferFrom': [{ tokenPath: '$emitter', amountPaths: ['value'] }],
+	'usdc.Approval': [{ tokenPath: '$emitter', amountPaths: ['value', 'amount'] }],
+	'usdc.Transfer': [{ tokenPath: '$emitter', amountPaths: ['value', 'amount'] }],
+	'usdc.approve': [{ tokenPath: '$emitter', amountPaths: ['value', 'amount'] }],
+	'usdc.transfer': [{ tokenPath: '$emitter', amountPaths: ['value', 'amount'] }],
+	'usdc.transferFrom': [{ tokenPath: '$emitter', amountPaths: ['value', 'amount'] }],
+	'usdc.permit': [{ tokenPath: '$emitter', amountPaths: ['value', 'amount'] }],
+	'usdc.transferWithAuthorization': [{ tokenPath: '$emitter', amountPaths: ['value', 'amount'] }],
+	'usdc.receiveWithAuthorization': [{ tokenPath: '$emitter', amountPaths: ['value', 'amount'] }],
 	'weth.Approval': [{ tokenPath: '$emitter', amountPaths: ['wad'] }],
 	'weth.Deposit': [{ tokenPath: '$emitter', amountPaths: ['wad'] }],
 	'weth.Transfer': [{ tokenPath: '$emitter', amountPaths: ['wad'] }],
@@ -389,7 +398,7 @@ const decodeActionRecord = (contract: ContractMetadata | undefined, input: Hex, 
 		if (input === '0x') return { status: 'decoded', name: 'receive', summary: `Native transfer to ${contract?.label ?? 'contract'}` }
 		// Recognize the ERC-7710 envelope even when the relayer's destination is
 		// outside the protocol manifest. Known contract ABIs retain precedence.
-		const abi = (contract === undefined ? undefined : abiForKind(contract.kind)) ?? (input.slice(0, 10).toLowerCase() === '0xcef6d209' ? abiForKind('delegationManager') : undefined)
+		const abi = (contract === undefined ? undefined : abiForKind(contract.kind)) ?? wrapperAbiForInput(input)
 		if (abi === undefined) return { status: 'unknown', summary: `Call ${input.slice(0, 10)}` }
 		const result = decodeFunctionData({ abi, data: input })
 		const selector = input.slice(0, 10)
@@ -429,19 +438,6 @@ const decodeActionRecord = (contract: ContractMetadata | undefined, input: Hex, 
 	}
 }
 
-type Discovery = { readonly argument: string; readonly kind: string; readonly label: string }
-const discoveries: Readonly<Record<string, readonly Discovery[]>> = {
-	PairCreated: [{ argument: 'pair', kind: 'ammPair', label: 'Augur AMM Pair' }],
-	DeploySecurityPool: [
-		{ argument: 'securityPool', kind: 'securityPool', label: 'Security Pool' },
-		{ argument: 'truthAuction', kind: 'truthAuction', label: 'Truth Auction' },
-		{ argument: 'priceOracleManagerAndOperatorQueuer', kind: 'priceCoordinator', label: 'Price Coordinator' },
-		{ argument: 'shareToken', kind: 'shareToken', label: 'Share Token' },
-	],
-	DeployChild: [{ argument: 'childReputationToken', kind: 'reputationToken', label: 'Child REP' }],
-	EscalationGameSet: [{ argument: 'escalationGame', kind: 'escalationGame', label: 'Escalation Game' }],
-}
-
 const knownUniswapQuoteKind = (kind: string | undefined): kind is 'weth' | 'usdc' => kind === 'weth' || kind === 'usdc'
 
 const knownRepQuotePair = (decoded: DecodedRecord, contracts: ReadonlyMap<string, ContractMetadata>): 'WETH' | 'USDC' | undefined => {
@@ -459,12 +455,12 @@ export const discoveriesFrom = (decoded: DecodedRecord, contracts: ReadonlyMap<s
 	if (decoded.name === 'PairCreated' && decoded.arguments['token0'] !== undefined) {
 		const pair = decoded.arguments['pair']
 		const quote = knownRepQuotePair(decoded, contracts)
-		return quote !== undefined && typeof pair === 'string' && isAddress(pair) ? [{ address: getAddress(pair), kind: 'uniswapV2Pair', label: `Uniswap V2 REP / ${quote} Pair` }] : []
+		return quote !== undefined && typeof pair === 'string' && isAddress(pair) ? [{ address: getAddress(pair), kind: dependencyDiscoveryKinds.uniswapPair, label: `Uniswap V2 REP / ${quote} Pair` }] : []
 	}
 	if (decoded.name === 'PoolCreated') {
 		const pool = decoded.arguments['pool']
 		const quote = knownRepQuotePair(decoded, contracts)
-		return quote !== undefined && typeof pool === 'string' && isAddress(pool) ? [{ address: getAddress(pool), kind: 'uniswapV3Pool', label: `Uniswap V3 REP / ${quote} Pool` }] : []
+		return quote !== undefined && typeof pool === 'string' && isAddress(pool) ? [{ address: getAddress(pool), kind: dependencyDiscoveryKinds.uniswapPool, label: `Uniswap V3 REP / ${quote} Pool` }] : []
 	}
 	return (discoveries[decoded.name] ?? []).flatMap(rule => {
 		const value = decoded.arguments?.[rule.argument]

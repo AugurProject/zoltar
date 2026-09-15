@@ -11,6 +11,7 @@
 		"schema:init": "bun src/schema.ts",
 		"metadata:snapshot": "bun scripts/snapshot-project-metadata.ts",
 		"metadata:check": "bun scripts/check-project-metadata.ts",
+		"metadata:unknown-calls": "bun scripts/report-abi-coverage.ts",
 		"qa:serve": "bun run build:demo && bun scripts/serve-demo.ts",
 		"test": "bun run test:unit && bun run test:api && bun run test:replay && bun run test:integration",
 		"test:ci": "bun run test:unit && bun run test:api && bun run test:replay",
