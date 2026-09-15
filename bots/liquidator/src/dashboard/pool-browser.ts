@@ -1,4 +1,4 @@
-import { poolDatePresentation } from './pool-dates.ts'
+import { clearPoolDate, renderPoolDate } from './pool-dates.ts'
 import { publicFailure } from './pool-presentation.ts'
 import { requestWithTimeout } from '@zoltar/bot-shared/dashboard/polling'
 import type { PoolCatalogPage } from '../monitoring/pool-catalog.ts'
@@ -22,6 +22,7 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 	let error: string | undefined
 	let discoveryFailed = false
 	let renderedKey: string | undefined
+	let dateFields: { root: HTMLElement; timestamp: string | undefined }[] = []
 	const heading = node('div', '', 'section-heading')
 	heading.append(node('h2', 'All pools'))
 	const navigation = node('div', '', 'catalog-pagination')
@@ -48,7 +49,11 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 
 	function render() {
 		const key = JSON.stringify([context.chainId, context.enabled, [...context.selected], [...context.approved], data, page, loading, saving, error, discoveryFailed])
-		if (key === renderedKey) return
+		const currentTimestamp = BigInt(Math.floor(Date.now() / 1000))
+		if (key === renderedKey) {
+			for (const field of dateFields) renderPoolDate(field.root, field.timestamp, currentTimestamp)
+			return
+		}
 		renderedKey = key
 		const focusedAction = document.activeElement instanceof HTMLButtonElement && cards.contains(document.activeElement) ? document.activeElement.getAttribute('aria-label') : undefined
 		previous.disabled = loading || saving || !context.enabled || page === 0
@@ -59,6 +64,8 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 		retry.hidden = !discoveryFailed
 		retry.disabled = loading || !context.enabled
 		cards.setAttribute('aria-busy', String(loading))
+		for (const field of dateFields) clearPoolDate(field.root)
+		dateFields = []
 		cards.replaceChildren(
 			...(data?.pools ?? []).map(pool => {
 				// Match Statoblast's ComparisonRecord: identity and action, metric grid, then details.
@@ -111,13 +118,8 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 				]) {
 					const field = node('div')
 					const value = node('dd')
-					const presentation = poolDatePresentation(timestamp)
-					if (presentation === undefined) value.textContent = 'Unavailable'
-					else {
-						const time = node('time', presentation.text)
-						time.dateTime = presentation.dateTime
-						value.append(time)
-					}
+					renderPoolDate(value, timestamp, currentTimestamp)
+					dateFields.push({ root: value, timestamp })
 					field.append(node('dt', label), value)
 					dates.append(field)
 				}

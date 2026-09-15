@@ -891,6 +891,14 @@ body[data-page="pools"] #network-badge::before {
 	gap: 1rem;
 	margin: 1rem 0;
 }
+.catalog-dates .timestamp-value {
+	display: grid;
+	gap: 0.25rem;
+}
+.catalog-dates .timestamp-value-relative {
+	color: var(--muted);
+	font-size: 0.8rem;
+}
 .catalog-dates dt,
 .catalog-metrics dt {
 	color: var(--muted);

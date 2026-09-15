@@ -1070,6 +1070,8 @@ test('all-pools browser automatically discovers, paginates, persists support, an
 	expect(root.textContent).toContain('Universe approval required')
 	expect(root.textContent).not.toContain('Block ')
 	expect(root.textContent).not.toContain('Created date')
+	expect(root.querySelectorAll('.catalog-dates .timestamp-value-relative')).toHaveLength(3)
+	expect([...root.querySelectorAll('.catalog-dates .timestamp-value-relative')].every(value => /\((in .+|.+ ago|now)\)/.test(value.textContent ?? ''))).toBe(true)
 	expect([...root.querySelectorAll('.catalog-dates dt')].map(label => label.textContent)).toEqual(['Pool deployment date', 'Question start date', 'Question end date'])
 	expect([...root.querySelectorAll('.catalog-dates time')].map(time => time.getAttribute('datetime'))).toEqual(['2026-09-16T12:00:00.000Z', '2026-09-15T12:00:00.000Z', '2026-10-15T12:00:00.000Z'])
 	button('Add to supported').click()

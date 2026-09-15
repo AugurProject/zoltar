@@ -1,9 +1,16 @@
-const dateFormatter = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23', timeZone: 'UTC' })
+import { h, render } from 'preact'
+import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 
-export function poolDatePresentation(timestamp: string | undefined) {
+export function poolDateTimestamp(timestamp: string | undefined) {
 	if (timestamp === undefined || !/^\d+$/.test(timestamp)) return undefined
 	const seconds = BigInt(timestamp)
-	if (seconds > 8_640_000_000_000n) return undefined
-	const date = new Date(Number(seconds) * 1000)
-	return { dateTime: date.toISOString(), text: `${dateFormatter.format(date)} UTC` }
+	return seconds > 8_640_000_000_000n ? undefined : seconds
+}
+
+export function renderPoolDate(root: HTMLElement, timestamp: string | undefined, currentTimestamp: bigint) {
+	render(h(TimestampValue, { timestamp: poolDateTimestamp(timestamp), currentTimestamp, undefinedText: 'Unavailable' }), root)
+}
+
+export function clearPoolDate(root: HTMLElement) {
+	render(undefined, root)
 }
