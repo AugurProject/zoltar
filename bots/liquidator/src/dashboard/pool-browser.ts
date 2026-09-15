@@ -37,6 +37,7 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 	heading.append(navigation)
 	const status = node('p', '', 'muted')
 	status.setAttribute('role', 'status')
+	status.setAttribute('aria-atomic', 'true')
 	const refreshButton = node('button', 'Refresh', 'secondary')
 	const snapshot = node('div', '', 'catalog-snapshot muted')
 	const snapshotDate = node('span')
@@ -148,7 +149,12 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 		previous.disabled = loading || saving || !context.enabled || page === 0
 		next.disabled = loading || saving || !context.enabled || visible === undefined || BigInt(page + 1) >= BigInt(visible.pageCount)
 		summary.textContent = visible === undefined ? '' : `${visible.total} pools · Page ${page + 1} of ${visible.pageCount === '0' ? '1' : visible.pageCount}`
-		status.textContent = statusMessage()
+		const failed = error !== undefined || searchError !== undefined
+		status.className = failed ? 'notice error' : 'muted'
+		status.setAttribute('role', failed ? 'alert' : 'status')
+		status.setAttribute('aria-live', failed ? 'assertive' : 'polite')
+		const message = statusMessage()
+		if (status.textContent !== message) status.textContent = message
 		status.hidden = status.textContent === ''
 		cards.setAttribute('aria-busy', String(loading))
 		for (const field of dateFields) clearPoolDate(field.root)
