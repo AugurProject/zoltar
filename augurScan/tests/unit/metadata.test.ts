@@ -316,10 +316,10 @@ describe('ABI metadata', () => {
 		const v2Abi = abiForKind('uniswapV2Factory')
 		const v3Abi = abiForKind('uniswapV3Factory')
 		if (v2Abi === undefined || v3Abi === undefined) throw new Error('Uniswap factory ABI missing')
-		const v2 = decodeLogRecord('uniswapV2Factory', requireTopics(encodeEventTopics({ abi: v2Abi, eventName: 'PairCreated', args: { token0: account, token1: childToken } })), encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [pair, 1n]), new Map())
+		const v2 = decodeLogRecord('uniswapV2Factory', requireTopics(encodeEventTopics({ abi: v2Abi, eventName: 'PairCreated', args: [account, childToken, pair, 1n] })), encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [pair, 1n]), new Map())
 		expect(discoveriesFrom(v2, contracts)).toEqual([{ address: pair, kind: 'uniswapV2Pair', label: 'Uniswap V2 REP / WETH Pair' }])
 
-		const unrelatedV2 = decodeLogRecord('uniswapV2Factory', requireTopics(encodeEventTopics({ abi: v2Abi, eventName: 'PairCreated', args: { token0: account, token1: unrelated } })), encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [pair, 1n]), new Map())
+		const unrelatedV2 = decodeLogRecord('uniswapV2Factory', requireTopics(encodeEventTopics({ abi: v2Abi, eventName: 'PairCreated', args: [account, unrelated, pair, 1n] })), encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [pair, 1n]), new Map())
 		expect(discoveriesFrom(unrelatedV2, contracts)).toEqual([])
 
 		const v3 = decodeLogRecord('uniswapV3Factory', requireTopics(encodeEventTopics({ abi: v3Abi, eventName: 'PoolCreated', args: { token0: account, token1: childToken, fee: 500 } })), encodeAbiParameters([{ type: 'int24' }, { type: 'address' }], [10, pair]), new Map())

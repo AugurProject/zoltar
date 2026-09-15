@@ -259,7 +259,9 @@ const decodeWithEvents = (
 	for (const event of events) {
 		try {
 			const result = decodeEventLog({ abi: [event], topics, data })
-			const argumentsValue = serializeArguments(result.args)
+			const decodedArguments = result.args
+			const namedArguments = Array.isArray(decodedArguments) ? Object.fromEntries(event.inputs.map((input, index) => [input.name || String(index), decodedArguments[index]])) : decodedArguments
+			const argumentsValue = serializeArguments(namedArguments)
 			const displayArguments = argumentsValue === undefined ? undefined : (displayValue('', argumentsValue, labels, context) as SerializedArguments)
 			if (argumentsValue !== undefined && displayArguments !== undefined) applyTokenFormats(kind, result.eventName, argumentsValue, displayArguments, tokenMetadata, contractKinds, emitterAddress, context)
 			return {

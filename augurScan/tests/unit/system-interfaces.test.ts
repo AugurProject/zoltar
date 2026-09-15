@@ -1,21 +1,23 @@
 import { expect, test } from 'bun:test'
 import { abiForKind } from '../../src/abi-catalog.ts'
 import { concatHex, encodeFunctionData, getAddress, type Hex, isHex, parseAbi, toEventSelector, toHex, zeroHash } from '../../src/ethereum.ts'
-import { decodeAction, decodeLogRecord } from '../../src/metadata.ts'
+import { decodeAction, decodeLogRecord, discoveriesFrom } from '../../src/metadata.ts'
 import { supportedWrappers, systemInterfaces } from '../../src/system-interfaces.ts'
 import transaction from './delegation-transaction.json'
 import eventFixtures from './system-interface-fixtures.json'
+import dependencyAbis from '../../config/dependency-abis.json'
 
 const hex = (value: string): Hex => {
 	if (!isHex(value)) throw new Error('Invalid hex fixture')
 	return `0x${value.slice(2)}`
 }
 
-test('every supported system interface has decoding fixtures', () => {
+test('every supported system interface workflow has decoding fixtures', () => {
 	const fixtureKinds = new Set([...eventFixtures.map(fixture => fixture.kind), 'delegationManager'])
 	const declaredKinds = new Set(Object.entries(systemInterfaces).flatMap(([kind, definition]) => (definition.type === 'interface' ? [kind] : [])))
 	expect(fixtureKinds).toEqual(declaredKinds)
-	const declaredMembers = Object.entries(systemInterfaces).flatMap(([kind, definition]) => (definition.type === 'interface' ? definition.abi.map(item => `${kind}.${item.name}`) : []))
+	expect(new Set(Object.keys(dependencyAbis))).toEqual(declaredKinds)
+	const declaredMembers = Object.entries(systemInterfaces).flatMap(([kind, definition]) => (definition.type === 'interface' ? definition.members.map(name => `${kind}.${name}`) : []))
 	expect(new Set([...eventFixtures.map(fixture => `${fixture.kind}.${fixture.name}`), 'delegationManager.redeemDelegations'])).toEqual(new Set(declaredMembers))
 })
 
@@ -28,6 +30,19 @@ for (const fixture of eventFixtures) {
 		// The declared interface itself must contain this event; the catalog's
 		// global event fallback must not conceal a missing routed ABI member.
 		expect(abiForKind(fixture.kind)?.some(item => item.type === 'event' && toEventSelector(item) === fixture.topics[0])).toBe(true)
+		if (fixture.kind === 'uniswapV2Factory') {
+			// Its fourth input is unnamed upstream. Named inputs must survive
+			// positional decoding so REP quote-pair discovery still works.
+			const token0 = getAddress('0x1111111111111111111111111111111111111111')
+			const token1 = getAddress('0x2222222222222222222222222222222222222222')
+			const pair = getAddress('0x3333333333333333333333333333333333333333')
+			const contracts = new Map([
+				[token0, { address: token0, kind: 'reputationToken', label: 'REP', provenance: 'test' }],
+				[token1, { address: token1, kind: 'usdc', label: 'USDC', provenance: 'test' }],
+			])
+			expect(decoded.referencedAddresses).toEqual([token0, token1, pair])
+			expect(discoveriesFrom(decoded, contracts)).toEqual([{ address: pair, kind: 'uniswapV2Pair', label: 'Uniswap V2 REP / USDC Pair' }])
+		}
 	})
 }
 
