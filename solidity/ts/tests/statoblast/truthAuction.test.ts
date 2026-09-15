@@ -2241,7 +2241,9 @@ describe('Statoblast: truth auction', () => {
 					},
 				},
 			})
-			await approveAndDepositRepToVault(liquidatorClient, repDeposit * 500n, questionId, 1n << 255n)
+			await approveAndDepositRepToVault(liquidatorClient, repDeposit * 500n, questionId)
+			// This accounting scenario starts with a backed vault whose capacity has been removed.
+			await manipulatePriceOracleAndPerformOperation(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, liquidatorClient.account.address, 0n)
 			await approveAndDepositRepToVault(passiveRepHolder, repDeposit * 50n, questionId)
 
 			const endTime = await getQuestionEndDate(client, questionId)

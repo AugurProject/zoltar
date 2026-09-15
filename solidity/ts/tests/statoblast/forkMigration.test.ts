@@ -1640,7 +1640,9 @@ describe('Statoblast: fork migration', () => {
 			const firstVaultCapacityOwnershipAttoRep = repDeposit / 4n + 1n
 			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, firstVaultCapacityOwnershipAttoRep)
 			const secondVaultClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
-			await approveAndDepositRepToVault(secondVaultClient, repDeposit, questionId, 1n << 255n)
+			await approveAndDepositRepToVault(secondVaultClient, repDeposit, questionId)
+			// This accounting scenario starts with a backed vault whose capacity has been removed.
+			await manipulatePriceOracleAndPerformOperation(secondVaultClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, secondVaultClient.account.address, 0n)
 
 			const openInterestAmount = 100n * 10n ** 18n
 			const splitUpdateCount = 128n
@@ -1671,7 +1673,9 @@ describe('Statoblast: fork migration', () => {
 			const firstVaultCapacityOwnershipAttoRep = repDeposit / 4n + 1n
 			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, firstVaultCapacityOwnershipAttoRep)
 			const secondVaultClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
-			await approveAndDepositRepToVault(secondVaultClient, repDeposit, questionId, 1n << 255n)
+			await approveAndDepositRepToVault(secondVaultClient, repDeposit, questionId)
+			// This accounting scenario starts with a backed vault whose capacity has been removed.
+			await manipulatePriceOracleAndPerformOperation(secondVaultClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, secondVaultClient.account.address, 0n)
 
 			const openInterestAmount = 100n * 10n ** 18n
 			const splitUpdateCount = 128n
@@ -2539,7 +2543,9 @@ describe('Statoblast: fork migration', () => {
 			const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[6])
 			const newMinter = createWriteClient(mockWindow, TEST_ADDRESSES[4])
 			await approveAndDepositRepToVault(passiveRepHolder, 2n * forkThresholdAttoRep, questionId)
-			await approveAndDepositRepToVault(newMinter, repDeposit, questionId, 1n << 255n)
+			await approveAndDepositRepToVault(newMinter, repDeposit, questionId)
+			// This accounting scenario starts with a backed vault whose capacity has been removed.
+			await manipulatePriceOracleAndPerformOperation(newMinter, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, newMinter.account.address, 0n)
 			const parentCapacityOwnershipAttoRep = repDeposit / 4n
 			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, parentCapacityOwnershipAttoRep)
 			const parentTotalCapacityOwnershipAttoRep = await getTotalCapacityOwnershipAttoRep(client, securityPoolAddresses.securityPool)
