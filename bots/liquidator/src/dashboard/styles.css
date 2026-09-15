@@ -378,18 +378,6 @@ input[type="checkbox"] {
 	accent-color: var(--accent);
 }
 
-.pool-toggle {
-	display: grid;
-	width: 2.75rem;
-	height: 2.75rem;
-	place-items: center;
-	cursor: pointer;
-}
-
-.pool-toggle input {
-	margin: 0;
-}
-
 .table-shell {
 	width: 100%;
 	max-width: 100%;
@@ -481,56 +469,6 @@ td small {
 td small {
 	margin-top: 0.22rem;
 	color: var(--muted);
-}
-
-.address {
-	display: inline-flex;
-	align-items: center;
-	gap: 0.35rem;
-	min-height: 2.75rem;
-	max-width: 12rem;
-	cursor: pointer;
-	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-}
-
-.address::before {
-	flex: none;
-	content: "›";
-	color: var(--accent);
-	font-family: inherit;
-	font-size: 1rem;
-	transition: transform 120ms ease;
-}
-
-.address-details[open] > .address::before {
-	transform: rotate(90deg);
-}
-
-.address:focus-visible {
-	border-radius: 0.25rem;
-	outline: 3px solid color-mix(in srgb, var(--accent), transparent 25%);
-	outline-offset: 2px;
-}
-
-.address-text {
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.address-details summary {
-	cursor: pointer;
-}
-
-.full-address {
-	display: block;
-	width: 12rem;
-	margin-top: 0.35rem;
-	overflow-wrap: anywhere;
-	color: var(--muted);
-	font-size: 0.7rem;
-	white-space: normal;
 }
 
 .empty {
@@ -776,18 +714,6 @@ td small {
 	tbody td.empty {
 		display: block;
 	}
-
-	.full-address {
-		width: 100%;
-	}
-
-	.address-details,
-	.address {
-		width: 100%;
-		min-width: 0;
-		max-width: 100%;
-		overflow: hidden;
-	}
 }
 
 @media (max-width: 26rem) {
@@ -840,4 +766,140 @@ td small {
 
 .rpc-health-item small {
 	color: var(--muted);
+}
+
+body[data-page="pools"] #header-block-status {
+	display: none;
+}
+body[data-page="pools"] #network-badge::before {
+	content: none;
+}
+
+/* Statoblast comparison records adapted to the operator console's tokens. */
+.pool-catalog-list {
+	display: grid;
+	gap: 1rem;
+}
+.catalog-record {
+	border: 1px solid var(--line);
+	border-radius: 12px;
+	padding: 1.25rem;
+	background: var(--surface);
+	min-width: 0;
+}
+.catalog-record-header,
+.catalog-pagination,
+.catalog-badges {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	flex-wrap: wrap;
+}
+.catalog-record-header {
+	justify-content: space-between;
+	margin-bottom: 1rem;
+}
+.catalog-record-header h3 {
+	min-width: 0;
+	overflow-wrap: anywhere;
+	flex: 1 1 15rem;
+	margin: 0;
+}
+.catalog-metrics {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 1rem;
+	margin: 1rem 0;
+}
+.catalog-dates {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 1rem;
+	margin: 1rem 0;
+}
+.catalog-dates .timestamp-value {
+	display: grid;
+	gap: 0.25rem;
+}
+.catalog-dates .timestamp-value-relative {
+	color: var(--muted);
+	font-size: 0.8rem;
+}
+.catalog-dates dt,
+.catalog-metrics dt {
+	color: var(--muted);
+	font-size: 0.8rem;
+}
+.catalog-dates dd,
+.catalog-metrics dd {
+	margin: 0.35rem 0 0;
+	overflow-wrap: anywhere;
+}
+.catalog-balance dd {
+	white-space: nowrap;
+	overflow-x: auto;
+}
+.catalog-address {
+	display: block;
+	overflow-wrap: anywhere;
+	font-size: 0.8rem;
+}
+@media (max-width: 600px) {
+	.catalog-metrics {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+	.catalog-dates {
+		grid-template-columns: 1fr;
+	}
+	.catalog-balance {
+		grid-column: 1 / -1;
+	}
+	.catalog-record-header button {
+		width: 100%;
+	}
+}
+
+.catalog-search {
+	display: grid;
+	gap: 0.4rem;
+	margin: 1rem 0;
+	max-width: 40rem;
+}
+.catalog-search input {
+	width: 100%;
+	min-width: 0;
+}
+
+.catalog-pagination[hidden] {
+	display: none;
+}
+
+.pool-tabs {
+	display: flex;
+	gap: 0.5rem;
+}
+.pool-tabs [aria-selected="true"] {
+	border-color: var(--accent);
+	color: var(--accent);
+}
+.catalog-monitoring {
+	margin-top: 1rem;
+}
+.catalog-monitoring summary {
+	cursor: pointer;
+}
+
+.catalog-toolbar {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 12px;
+	margin-bottom: 12px;
+}
+.catalog-snapshot {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 6px;
+	font-size: 12px;
 }
