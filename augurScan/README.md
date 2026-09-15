@@ -62,7 +62,7 @@ bun run dev
 
 `bun run dev` starts separate watched app and indexer processes. For manual local startup, run `bun run build && bun src/server.ts` for the web app and `bun run start:indexer` for the indexer in a second terminal.
 
-The browser source is under `browser/`. `bun run build` bundles it to the ignored `public/app.js`; do not edit that generated file.
+`bun run build` generates scanner metadata and bundles `browser/` to the ignored `public/app.js`. Typecheck, tests, and indexer startup also prepare the metadata automatically. Docker generates it in a build stage and copies the results into the runtime image.
 
 The default tests need no infrastructure. PostgreSQL integration tests require a dedicated disposable database because they recreate its `public` schema:
 
@@ -78,10 +78,15 @@ POSTGRES_TEST_URL=postgres://augurscan:augurscan@localhost:55432/augurscan_test 
 docker stop augurscan-test-postgres
 ```
 
-Regenerate the committed ABI and manifest snapshots after relevant contract or deployment changes:
+ABI catalogs, contract routes, dependency ABI copies, and network manifests are ignored build outputs. The Solidity sources, deployment metadata, and reviewed dependency source pins remain tracked. The first build downloads pinned dependency artifacts and verifies their checksums; later builds reuse verified local copies.
+
+To generate only metadata or verify existing outputs:
 
 ```bash
-bun run metadata:snapshot
+bun run metadata:build
+bun run metadata:check
 ```
 
-The script writes only under `augurScan/config`. The production image uses that self-contained snapshot and the repository's shared Ethereum adapter; it does not require Solidity or deployment sources at runtime.
+After reviewing an upstream dependency upgrade in `config/dependency-abi-sources.json`, rebuild to refresh its ABI copies automatically. `bun run metadata:dependencies` also provides an explicit refresh. Do not edit the generated files.
+
+Generated scanner metadata lives under `augurScan/config`. The production image uses those outputs and the repository's shared Ethereum adapter; it does not require Solidity or deployment sources at runtime.

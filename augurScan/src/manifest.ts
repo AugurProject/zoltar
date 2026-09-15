@@ -9,9 +9,15 @@ export const parseManifestValue = (value: { contracts?: unknown }, filename: str
 			throw new Error(`${filename} contract ${index} is invalid`)
 		}
 		const address = getAddress(entry[0])
+		try {
+			assertAbiCoverage([entry[2]])
+		} catch (error) {
+			throw new Error(`${filename} contract ${index}: ${error instanceof Error ? error.message : String(error)}`)
+		}
 		const key = address.toLowerCase()
 		if (addresses.has(key)) throw new Error(`${filename} contract ${index} duplicates address ${address}`)
 		addresses.add(key)
 		return entry[3] === undefined ? ([address, entry[1], entry[2]] as const) : ([address, entry[1], entry[2], BigInt(entry[3])] as const)
 	})
 }
+import { assertAbiCoverage } from './abi-catalog.ts'
