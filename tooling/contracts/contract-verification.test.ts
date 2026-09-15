@@ -350,7 +350,7 @@ test('explorer can recover on the tenth retry', async () => {
 })
 
 for (const cooldownSeconds of [100, 120, 300]) {
-	test(`explorer shares the five-minute wait budget with ${cooldownSeconds}s server cooldowns`, async () => {
+	test(`explorer waits beyond the fallback budget with ${cooldownSeconds}s server cooldowns`, async () => {
 		let attempts = 0
 		const delays: number[] = []
 		const outcomes = await verifyContractsWithExplorer({
@@ -366,7 +366,7 @@ for (const cooldownSeconds of [100, 120, 300]) {
 			},
 			target: testTarget,
 		})
-		const expectedRetries = Math.floor(300 / cooldownSeconds)
+		const expectedRetries = 10
 		expect(attempts).toBe(expectedRetries + 1)
 		expect(delays).toEqual(Array.from({ length: expectedRetries }, () => cooldownSeconds * 1_000))
 		expect(outcomes[0]?.status).toBe('failed')
@@ -445,30 +445,67 @@ test('explorer uses each Retry-After value instead of the growing fallback backo
 	expect(delays).toEqual([10_000, 1_000, 4_229, 2_000])
 })
 
-for (const priorRetries of [0, 4]) {
-	test(`explorer stops later jobs and pending polls after an oversized cooldown with ${priorRetries} prior retries`, async () => {
-		let limitedAttempts = 0
-		let elapsed = 0
-		const { calls, fetchFn: successfulFetch } = createExplorerFetchStub(action => ({ result: action === 'getsourcecode' ? [{ SourceCode: '' }] : 'pending-guid', status: '1' }))
-		const fetchFn: ExplorerFetch = async (requestUrl, init) => {
-			if (calls.length < 2) return successfulFetch(requestUrl, init)
-			limitedAttempts += 1
-			return { ok: false, status: 429, headers: new Headers({ 'Retry-After': limitedAttempts > priorRetries ? '301' : '1' }), json: async () => ({}) }
-		}
+for (const [label, reset, retryAfter, explorer, expectedDelay] of [
+	['milliseconds', '10000', undefined, 'Blockscout', 10_000],
+	['short delay', '500', undefined, 'Blockscout', 500],
+	['zero', '0', undefined, 'Blockscout', 0],
+	['boundary', '300000', undefined, 'Blockscout', 300_000],
+	['invalid', 'invalid', undefined, 'Blockscout', 1_652],
+	['disabled', '-1', undefined, 'Blockscout', 1_652],
+	['empty', '', undefined, 'Blockscout', 1_652],
+	['fractional', '1.5', undefined, 'Blockscout', 1_652],
+	['Retry-After precedence', '10000', '2', 'Blockscout', 2_000],
+	['invalid Retry-After fallback', '10000', 'invalid', 'Blockscout', 10_000],
+	['other explorer', '10000', undefined, 'Etherscan', 1_652],
+] as const) {
+	test(`Blockscout reset header handles ${label}`, async () => {
+		let attempts = 0
+		const delays: number[] = []
+		const headers = new Headers({ 'x-ratelimit-reset': reset })
+		if (retryAfter !== undefined) headers.set('Retry-After', retryAfter)
 		const outcomes = await verifyContractsWithExplorer({
-			fetchFn,
+			fetchFn: async () => {
+				attempts += 1
+				return attempts === 1 ? { ok: false, status: 429, headers, json: async () => ({}) } : { ok: true, status: 200, json: async () => ({ result: [{ SourceCode: 'verified source' }], status: '1' }) }
+			},
 			inputs: testInputs,
-			jobs: [testJob, { ...testJob, id: 'second' }, { ...testJob, id: 'third' }],
+			jobs: [testJob],
 			log: () => {},
 			sleep: async delay => {
-				elapsed += delay
+				delays.push(delay)
 			},
-			target: testTarget,
+			target: { ...testTarget, name: explorer },
 		})
-		expect(limitedAttempts).toBe(priorRetries + 1)
-		expect(outcomes).toHaveLength(3)
-		expect(outcomes.every(outcome => outcome.status === 'failed' && outcome.detail?.includes('Retry-After exceeds') === true)).toBe(true)
-		expect(elapsed).toBeLessThan(60_000)
+		expect(outcomes[0]?.status).toBe('already-verified')
+		expect(attempts).toBe(2)
+		expect(delays).toEqual([expectedDelay])
+	})
+}
+
+for (const [header, value, expectedDelays] of [
+	['x-ratelimit-reset', '1341588', [1_341_588]],
+	['Retry-After', '1342', [1_342_000]],
+	['x-ratelimit-reset', '2147483648', [2_147_483_647, 1]],
+] as const) {
+	test(`explorer waits the full ${header} cooldown of ${value} beyond the fallback budget`, async () => {
+		let attempts = 0
+		const delays: number[] = []
+		const outcomes = await verifyContractsWithExplorer({
+			fetchFn: async () => {
+				attempts += 1
+				return attempts === 1 ? { ok: false, status: 429, headers: new Headers({ [header]: value }), json: async () => ({}) } : { ok: true, status: 200, json: async () => ({ result: [{ SourceCode: 'verified source' }], status: '1' }) }
+			},
+			inputs: testInputs,
+			jobs: [testJob],
+			log: () => {},
+			sleep: async delay => {
+				delays.push(delay)
+			},
+			target: { ...testTarget, name: 'Blockscout' },
+		})
+		expect(attempts).toBe(2)
+		expect(delays).toEqual([...expectedDelays])
+		expect(outcomes[0]?.status).toBe('already-verified')
 	})
 }
 
