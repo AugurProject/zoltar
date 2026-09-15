@@ -161,6 +161,21 @@ describe('SecurityVaultSection', () => {
 		},
 	})
 
+	test.each([true, false])('shows queued target operation status in the vault panel (automatic: %s)', async isPendingSlot => {
+		const props = createSecurityVaultSectionProps({
+			onViewStagedOperations: () => undefined,
+			securityVaultResult: { action: 'adjustVaultBackingFactor', hash: '0x01', queuedOperation: { operation: 'adjustVaultBackingFactor', operationId: 42n, isPendingSlot } },
+		})
+		const rendered = await renderIntoDocument(<SecurityVaultSection {...props} />)
+		try {
+			expect(rendered.container.textContent).toContain('Backing ratio change queued')
+			expect(rendered.container.textContent).toContain('#42')
+			expect(rendered.container.textContent).toContain(isPendingSlot ? 'Executes automatically' : 'manual')
+		} finally {
+			rendered.cleanup()
+		}
+	})
+
 	test('previews a separate whole-vault adjustment and submits its factor', async () => {
 		let submitted: string | undefined
 		const rendered = await renderIntoDocument(

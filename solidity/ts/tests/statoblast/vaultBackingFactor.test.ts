@@ -20,11 +20,12 @@ describe('Vault backing factor adjustment', () => {
 		const hash = await requestPriceIfNeededAndStageOperation(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.AdjustVaultBackingFactor, client.account.address, factor)
 		const receipt = await client.waitForTransactionReceipt({ hash })
 		assert.strictEqual(receipt.status, 'success')
+		const operationId = await client.readContract({ address: securityPoolAddresses.priceOracleManagerAndOperatorQueuer, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'stagedOperationCounter' })
 		for (const log of receipt.logs) {
 			if (log.address.toLowerCase() !== securityPoolAddresses.priceOracleManagerAndOperatorQueuer.toLowerCase()) continue
 			try {
 				const decoded = decodeEventLog({ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, data: log.data, topics: log.topics })
-				if (decoded.eventName !== 'ExecutedStagedOperation') continue
+				if (decoded.eventName !== 'ExecutedStagedOperation' || decoded.args.operationId !== operationId) continue
 				if (!decoded.args.success) throw new Error(decoded.args.errorMessage)
 				return
 			} catch (error) {
@@ -77,6 +78,30 @@ describe('Vault backing factor adjustment', () => {
 		assert.strictEqual((await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)).capacityOwnershipAttoRep, repDeposit / 2n)
 		await updateVaultFees(client, securityPoolAddresses.securityPool, client.account.address)
 		assert.strictEqual((await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)).capacityOwnershipAttoRep, repDeposit)
+	})
+
+	test.each([30_000n, 2n ** 256n - 1n])('supersedes an older manual adjustment even if its replacement fails (%s)', async newTarget => {
+		const { client, securityPoolAddresses, mockWindow, repDeposit } = fixture
+		const manager = securityPoolAddresses.priceOracleManagerAndOperatorQueuer
+		for (let index = 0; index < 4; index++) await requestPriceIfNeededAndStageOperation(client, manager, OperationType.WithdrawRep, client.account.address, repDeposit / 100n)
+		await requestPriceIfNeededAndStageOperation(client, manager, OperationType.AdjustVaultBackingFactor, client.account.address, 40_000n)
+		const oldId = await client.readContract({ address: manager, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'stagedOperationCounter' })
+		await handleOracleReporting(client, mockWindow, manager, 10n ** 18n)
+		if (newTarget === 30_000n) await adjust(newTarget)
+		else await assert.rejects(adjust(newTarget), /Capacity must be positive/)
+		await assert.rejects(client.writeContract({ address: manager, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'executeStagedOperation', args: [oldId] }), /Staged operation unavailable/)
+		assert.strictEqual(await client.readContract({ address: securityPoolAddresses.securityPool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'vaultTargetBackingFactorBps', args: [client.account.address] }), newTarget === 30_000n ? 30_000n : 20_000n)
+	})
+
+	test('replaces an automatic queued target without occupying another settlement slot', async () => {
+		const { client, securityPoolAddresses, mockWindow } = fixture
+		const manager = securityPoolAddresses.priceOracleManagerAndOperatorQueuer
+		await requestPriceIfNeededAndStageOperation(client, manager, OperationType.AdjustVaultBackingFactor, client.account.address, 40_000n)
+		await requestPriceIfNeededAndStageOperation(client, manager, OperationType.AdjustVaultBackingFactor, client.account.address, 30_000n)
+		assert.strictEqual(await client.readContract({ address: manager, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'getActiveStagedOperationCount' }), 1n)
+		assert.strictEqual(await client.readContract({ address: manager, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'getPendingSettlementOperationCount' }), 1n)
+		await handleOracleReporting(client, mockWindow, manager, 10n ** 18n)
+		assert.strictEqual(await client.readContract({ address: securityPoolAddresses.securityPool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'vaultTargetBackingFactorBps', args: [client.account.address] }), 30_000n)
 	})
 
 	test('keeps the current target until an on-chain queued change executes', async () => {

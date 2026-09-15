@@ -45,7 +45,7 @@ export const contractPagesDirectory = 'docs/reference/contracts'
 export function contractPageOutputPath(contractName: string): string {
 	return `${contractPagesDirectory}/${contractName.toLowerCase()}.html`
 }
-export const expectedProductionSoliditySourceFingerprint = '55a1f050ef79794d95916dbb55af64c4573c6bf2dda39ddbd360d83c756719f5'
+export const expectedProductionSoliditySourceFingerprint = '20d6093094bf6338f0082d7f689d660bbadd2f5e235252ad1132f183f9866665'
 
 export const eventSourceByName: Record<string, string> = {
 	VaultBadDebtMigrated: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
@@ -1628,7 +1628,7 @@ export const contractReferences: ContractReference[] = [
 				call: '`requestPriceIfNeededAndStageOperation(...)` with funding when stale',
 				caller: 'Vault owner for self withdrawal or a target change; self-receiving liquidation callers are also supported. While a report is pending, only that report sponsor may stage more operations.',
 				effect:
-					'Records the operation (`0` liquidation debt in attoETH, `1` withdrawal in attoREP, `2` target backing factor in BPS), executes immediately with a fresh price, or attaches it to a bounded pending settlement batch and opens a report when required. If unused ETH is positive, the final caller refund uses a low-level callback; rejection rolls back the entire transaction, including any queueing, immediate execution, or newly opened report.',
+					'Records the operation (`0` liquidation debt in attoETH, `1` withdrawal in attoREP, `2` target backing factor in BPS), executes immediately with a fresh price, or attaches it to a bounded pending settlement batch and opens a report when required. A newly accepted target change consumes any older active target change for the same vault with `success=false` and `Backing target superseded`, freeing its settlement slot. If unused ETH is positive, the final caller refund uses a low-level callback; rejection rolls back the entire transaction, including any queueing, immediate execution, or newly opened report.',
 				declarations: [{ name: 'requestPriceIfNeededAndStageOperation' }],
 				preconditions:
 					'`securityPool.isEscalationResolved()` is false; valid self-target for withdrawal or target adjustment, nonzero operation value (at least the pool security multiplier for a target adjustment), and timeout from 1 second through 5 minutes. Bounty, buffered report funding, matching REP, and token approvals are required only when this call opens a new report. The caller must accept any positive unused-ETH refund.',

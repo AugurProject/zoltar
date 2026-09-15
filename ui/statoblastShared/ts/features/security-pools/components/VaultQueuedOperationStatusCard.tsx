@@ -18,11 +18,15 @@ type QueuedVaultOperationView = {
 }
 
 export function getQueuedVaultOperation({ pendingOperation, selectedVaultOwner, securityVaultResult }: { pendingOperation: StagedOracleOperation | undefined; selectedVaultOwner: string; securityVaultResult: SecurityVaultSectionProps['securityVaultResult'] }) {
-	if (pendingOperation !== undefined && sameAddress(pendingOperation.targetVault, selectedVaultOwner)) {
-		if (securityVaultResult?.action === 'queueWithdrawRep' && pendingOperation.operation === 'withdrawRep') return { amount: pendingOperation.amount, isPendingSlot: true, operationId: pendingOperation.operationId } satisfies QueuedVaultOperationView
+	let operation: 'withdrawRep' | 'adjustVaultBackingFactor' | undefined
+	if (securityVaultResult?.action === 'queueWithdrawRep') operation = 'withdrawRep'
+	if (securityVaultResult?.action === 'adjustVaultBackingFactor') operation = 'adjustVaultBackingFactor'
+	if (operation === undefined) return undefined
+	const queued = securityVaultResult?.queuedOperation
+	if (pendingOperation !== undefined && sameAddress(pendingOperation.targetVault, selectedVaultOwner) && pendingOperation.operation === operation && (queued === undefined || pendingOperation.operationId === queued.operationId)) {
+		return { amount: operation === 'withdrawRep' ? pendingOperation.amount : undefined, isPendingSlot: true, operationId: pendingOperation.operationId } satisfies QueuedVaultOperationView
 	}
-	if (securityVaultResult?.queuedOperation === undefined) return undefined
-	if (securityVaultResult.action === 'queueWithdrawRep' && securityVaultResult.queuedOperation.operation === 'withdrawRep') return { amount: undefined, isPendingSlot: securityVaultResult.queuedOperation.isPendingSlot, operationId: securityVaultResult.queuedOperation.operationId } satisfies QueuedVaultOperationView
+	if (queued?.operation === operation) return { amount: undefined, isPendingSlot: queued.isPendingSlot, operationId: queued.operationId } satisfies QueuedVaultOperationView
 	return undefined
 }
 
@@ -39,7 +43,7 @@ export function getQueuedVaultOperationStatus({
 	queuedVaultOperation: ReturnType<typeof getQueuedVaultOperation>
 	securityVaultResult: SecurityVaultSectionProps['securityVaultResult']
 }) {
-	if (securityVaultResult?.action !== 'queueWithdrawRep') return undefined
+	if (securityVaultResult?.action !== 'queueWithdrawRep' && securityVaultResult?.action !== 'adjustVaultBackingFactor') return undefined
 	if (securityVaultResult.stagedExecution !== undefined) return securityVaultResult.stagedExecution.success ? 'executed' : 'failed'
 	if (queuedVaultOperation !== undefined) return queuedVaultOperation.isPendingSlot ? 'queued' : 'manual-queued'
 	if (loadingSecurityVault || currentPoolOracleManagerDetails === undefined) return 'refreshing'
@@ -97,7 +101,7 @@ export function VaultQueuedOperationStatusCard({
 						</MetricField>
 					)}
 				</MetricGrid>
-				{status === 'manual-queued' ? <p className='detail'>{manualQueuedDescription}</p> : null}
+				<p className='detail'>{status === 'manual-queued' ? manualQueuedDescription : securityPoolCopy.queuedVaultAutomaticExecution}</p>
 				{onViewStagedOperations === undefined ? undefined : (
 					<div className='actions'>
 						<button className='secondary' type='button' onClick={onViewStagedOperations}>
@@ -153,5 +157,37 @@ export function VaultQueuedOperationStatusCard({
 			</div>
 			<p className='detail'>{refreshingDescription}</p>
 		</section>
+	)
+}
+
+export function VaultBackingTargetStatusCard({
+	result,
+	queuedVaultOperation,
+	status,
+	onViewStagedOperations,
+}: {
+	result: SecurityVaultSectionProps['securityVaultResult']
+	queuedVaultOperation: ReturnType<typeof getQueuedVaultOperation>
+	status: QueuedVaultOperationStatus
+	onViewStagedOperations: (() => void) | undefined
+}) {
+	return (
+		<VaultQueuedOperationStatusCard
+			amountLabel={securityPoolCopy.vaultBackingFactor}
+			amountSuffix=''
+			errorMessage={result?.stagedExecution?.errorMessage}
+			executedTitle={securityPoolCopy.backingRatioChangeExecuted}
+			failedTitle={securityPoolCopy.backingRatioChangeFailed}
+			manualQueuedDescription={commonCopy.manualQueuedOperationDetail}
+			missingDescription={commonCopy.transactionStateUnavailableDetail}
+			missingTitle={securityPoolCopy.backingRatioChangeSubmitted}
+			onViewStagedOperations={onViewStagedOperations}
+			queuedTitle={securityPoolCopy.backingRatioChangeQueued}
+			queuedVaultOperation={queuedVaultOperation}
+			refreshingDescription={securityPoolCopy.refreshingBackingRatioStatusDetail}
+			refreshingTitle={securityPoolCopy.refreshingBackingRatioStatus}
+			status={result?.action === 'adjustVaultBackingFactor' ? status : undefined}
+			successDescription={securityPoolCopy.backingRatioChangeSuccessDetail}
+		/>
 	)
 }

@@ -21,7 +21,7 @@ type CoordinatorInitialReportClient = Parameters<typeof loadOpenOracleInitialRep
 const ACTIVE_STAGED_OPERATION_PREVIEW_LIMIT = 25n
 const COORDINATOR_PRICE_PRECISION = 10n ** 18n
 
-function getStagedOracleExecutionResult(receipt: TransactionReceipt, managerAddress: Address, expectedOperation: OracleQueueOperation): StagedOracleExecutionResult | undefined {
+function getStagedOracleExecutionResult(receipt: TransactionReceipt, managerAddress: Address, expectedOperation: OracleQueueOperation, expectedOperationId?: bigint): StagedOracleExecutionResult | undefined {
 	for (const log of receipt.logs) {
 		if (!sameAddress(log.address, managerAddress)) continue
 		try {
@@ -30,7 +30,7 @@ function getStagedOracleExecutionResult(receipt: TransactionReceipt, managerAddr
 				data: log.data,
 				topics: log.topics,
 			})
-			if (decodedLog.eventName !== 'ExecutedStagedOperation') continue
+			if (decodedLog.eventName !== 'ExecutedStagedOperation' || (expectedOperationId !== undefined && decodedLog.args.operationId !== expectedOperationId)) continue
 			const operation = decodeOracleQueueOperation(BigInt(decodedLog.args.operation))
 			if (operation !== expectedOperation) continue
 			const errorMessage = decodedLog.args.errorMessage.trim() === '' ? undefined : decodedLog.args.errorMessage
@@ -495,7 +495,7 @@ export async function queueOracleManagerOperation(client: WriteClient, managerAd
 	}
 	const { hash, receipt } = await writeContractAndWaitForReceipt(client, () => callParams)
 	const queuedOperation = getStagedOracleQueuedResult(receipt, managerAddress, operation)
-	const stagedExecution = getStagedOracleExecutionResult(receipt, managerAddress, operation)
+	const stagedExecution = getStagedOracleExecutionResult(receipt, managerAddress, operation, queuedOperation?.operationId)
 	return {
 		action: 'queueOperation',
 		hash,

@@ -544,6 +544,28 @@ describe('useSecurityVaultOperations', () => {
 		expect(queueOracleManagerOperation).toHaveBeenCalledTimes(1)
 	})
 
+	test.each(['', 'invalid', '1.5'])('deposits with the fresh saved target despite hidden input %s', async targetHealthFactor => {
+		const deposit = mock(async () => ({ action: 'depositRepToVault' as const, hash: '0x06' as const }))
+		const dependencies = createSecurityVaultOperationsDependencies({
+			depositRepToVaultToSecurityPool: deposit,
+			loadErc20Balance: mock(async () => 10n ** 18n),
+			loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails({ targetBackingFactorBps: 30_000n })),
+		})
+		let hookState: UseSecurityVaultOperationsState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const rendered = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = rendered.cleanup
+		await act(() => {
+			requireHookState(hookState).setSecurityVaultForm(current => ({ ...current, depositAmount: '1', selectedVaultOwner: WALLET_ADDRESS, targetHealthFactor }))
+		})
+		await act(async () => {
+			await requireHookState(hookState).depositRepToVault()
+		})
+		expect(deposit).toHaveBeenCalledWith({ kind: 'injected-write-client' }, SECURITY_POOL_ADDRESS, 10n ** 18n, 30_000n)
+	})
+
 	test('depositRepToVault revalidates origin admission before broadcasting', async () => {
 		const depositRepToVaultToSecurityPool = mock(async () => ({
 			action: 'depositRepToVault' as const,

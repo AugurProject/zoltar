@@ -132,6 +132,7 @@ contract OpenOraclePriceCoordinator {
 	// execution removes older entries from the set.
 	uint256 public stagedOperationCounter;
 	mapping(uint256 => StagedOperation) public stagedOperations;
+	mapping(address => uint256) private latestBackingTargetOperationIds;
 	uint256 private activeStagedOperationCount;
 	uint256 private latestActiveStagedOperationId;
 	mapping(uint256 => uint256) private olderActiveStagedOperationIds;
@@ -416,13 +417,15 @@ contract OpenOraclePriceCoordinator {
 		}
 		stagedOperationCounter++;
 		uint256 operationId = stagedOperationCounter;
-		// Capture the complete target collateral bundle at queue time. Any later target
-		// REP backing unit or capacity ownership mutation invalidates the quote so a
-		// rescue deposit can never become part of the liquidator's purchase. Non-liquidation operations keep
-		// the snapshot for history and execution-event context, but price validity no
-		// longer meters operations by snapshot or live external-value exposure.
-		// Liquidation should value the vault's full collateral claim. That means using the
-		// pool's total REP balance here rather than only the currently withdrawable balance.
+		if (operation == OperationType.AdjustVaultBackingFactor) {
+			uint256 previousId = latestBackingTargetOperationIds[targetVault];
+			if (stagedOperations[previousId].operator != address(0))
+				_consumeAndEmitExecutedStagedOperation(previousId, operation, false, 'Backing target superseded');
+			latestBackingTargetOperationIds[targetVault] = operationId;
+		}
+		// Liquidations snapshot the complete collateral bundle, including committed REP.
+		// Backing or capacity mutations invalidate the quote, protecting rescue deposits.
+		// Other operations retain this observation only for history and event context.
 		HistoricalQueueSnapshot memory snapshot = _captureHistoricalQueueSnapshot(operation, targetVault);
 		uint256 reservedLiquidationDebtAttoEth;
 		if (operation == OperationType.Liquidation && receiverVault != msg.sender) {

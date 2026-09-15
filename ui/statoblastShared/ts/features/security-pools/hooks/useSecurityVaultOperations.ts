@@ -362,18 +362,17 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 			snapshot,
 			async (vaultAddress, securityPoolAddress, isCurrentSelection) => {
 				const depositAmount = parseRepAmountInput(snapshot.form.depositAmount, 'REP backing amount')
-				const requestedTargetHealthFactorBps = parseTargetHealthFactorBps(snapshot.form.targetHealthFactor)
 				if (depositAmount <= 0n) throw new Error('REP deposit amount must be greater than zero')
 				const details = await loadExistingSecurityVaultDetails(securityPoolAddress, vaultAddress, 'Security pool does not exist', isCurrentSelection)
 				if (details === undefined) return undefined
-				parseTargetHealthFactorBps(formatCurrencyInputBalance(details.targetBackingFactorBps || requestedTargetHealthFactorBps, 4), undefined, details.statoblastSecurityMultiplierBps)
+				const targetHealthFactorBps = parseTargetHealthFactorBps(details.targetBackingFactorBps ? formatCurrencyInputBalance(details.targetBackingFactorBps, 4) : snapshot.form.targetHealthFactor, undefined, details.statoblastSecurityMultiplierBps)
 				const currentRepBalanceAttoRep = await dependencies.loadErc20Balance(details.repToken, vaultAddress)
 				if (!isCurrentSelection()) return undefined
 				repBalanceLoader.signal.value = { error: undefined, loading: false, value: currentRepBalanceAttoRep }
 				if (currentRepBalanceAttoRep < depositAmount) throw new Error(`Insufficient REP balance. Wallet balance is ${formatCurrencyBalanceWithUnit(currentRepBalanceAttoRep, 'REP')} but the deposit amount is ${formatCurrencyBalanceWithUnit(depositAmount, 'REP')}.`)
 				if (await dependencies.isSecurityPoolVaultAdmissionClosed(securityPoolAddress)) throw new Error(securityPoolCopy.vaultDepositAdmissionClosedDetail)
 				if (!isCurrentSelection()) return undefined
-				return await dependencies.depositRepToVaultToSecurityPool(dependencies.createWalletWriteClient(vaultAddress, { onTransactionPrepared, onTransactionSubmitted }), securityPoolAddress, depositAmount, details.targetBackingFactorBps || requestedTargetHealthFactorBps)
+				return await dependencies.depositRepToVaultToSecurityPool(dependencies.createWalletWriteClient(vaultAddress, { onTransactionPrepared, onTransactionSubmitted }), securityPoolAddress, depositAmount, targetHealthFactorBps)
 			},
 			'Failed to deposit REP',
 			async (_result, securityPoolAddress, vaultAddress, isCurrentSelection) => {

@@ -1192,6 +1192,16 @@ export const securityPoolAbi = [
 	},
 	{ type: 'function', name: 'zoltar', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'contract Zoltar' }] },
 	{ type: 'receive', stateMutability: 'payable' },
+	{
+		type: 'function',
+		name: 'adjustVaultBackingFactor',
+		stateMutability: 'nonpayable',
+		inputs: [
+			{ name: 'vault', type: 'address', internalType: 'address' },
+			{ name: 'backingFactorBps', type: 'uint256', internalType: 'uint256' },
+		],
+		outputs: [],
+	},
 ] as const
 
 export const liquidationApprovalRegistryAbi = [

@@ -1,4 +1,4 @@
-import { manipulatePriceOracle } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { handleOracleReporting, manipulatePriceOracle } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { queueOracleManagerOperation } from '@zoltar/ui-statoblast-shared/protocol/oracleCoordinator.js'
 /// <reference types="bun-types" />
 
@@ -129,6 +129,20 @@ describe('Security vault integration', () => {
 		expect(adjustedVault?.vaultAttoRepBacking).toBe(depositAmount)
 		expect(adjustedVault?.poolHeldRepPerCapacityBps).toBe(20_000n)
 		expect(adjustedVault?.targetBackingFactorBps).toBe(40_000n)
+	})
+
+	test('matches a replacement target result by operation ID instead of the superseded result', async () => {
+		const details = await loadSecurityVaultDetails(uiReadClient, securityPoolAddress, walletAddress)
+		if (details === undefined) throw new Error('Expected security vault details')
+		await approveErc20(uiWriteClient, details.repToken, securityPoolAddress, depositAmount, 'approveRep')
+		await depositRepToVaultToSecurityPool(uiWriteClient, securityPoolAddress, depositAmount, 20_000n)
+		const first = await queueOracleManagerOperation(uiWriteClient, details.managerAddress, 'adjustVaultBackingFactor', walletAddress, 40_000n, 300n, 10n ** 18n)
+		const replacement = await queueOracleManagerOperation(uiWriteClient, details.managerAddress, 'adjustVaultBackingFactor', walletAddress, 30_000n, 300n, 10n ** 18n)
+		expect(replacement.queuedOperation?.operationId).not.toBe(first.queuedOperation?.operationId)
+		expect(replacement.queuedOperation?.isPendingSlot).toBe(true)
+		expect(replacement.stagedExecution).toBeUndefined()
+		await handleOracleReporting(client, mockWindow, details.managerAddress, 10n ** 18n)
+		expect((await loadSecurityVaultDetails(uiReadClient, securityPoolAddress, walletAddress))?.targetBackingFactorBps).toBe(30_000n)
 	})
 
 	test('surfaces the real revert reason when the first deposit is below the minimum', async () => {

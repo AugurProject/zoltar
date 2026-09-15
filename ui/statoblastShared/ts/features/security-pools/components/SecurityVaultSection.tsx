@@ -47,7 +47,7 @@ import {
 import type { ReadinessAction, SecurityVaultSectionProps } from '../../types.js'
 import { DepositBackingFactorField, VaultBackingFactorForm, VaultBackingFactorModal } from './VaultBackingFactorForm.js'
 import { SelectedVaultSummarySection } from './SelectedVaultSummarySection.js'
-import { getQueuedVaultOperation, getQueuedVaultOperationStatus, VaultQueuedOperationStatusCard } from './VaultQueuedOperationStatusCard.js'
+import { VaultBackingTargetStatusCard, getQueuedVaultOperation, getQueuedVaultOperationStatus, VaultQueuedOperationStatusCard } from './VaultQueuedOperationStatusCard.js'
 
 type VaultActionModal = 'claim-fees' | 'deposit-rep' | 'withdraw-rep' | 'adjust-backing' | undefined
 
@@ -729,6 +729,8 @@ export function SecurityVaultSection({
 					selectedVaultIsOwnedByAccount={selectedVaultIsOwnedByAccount}
 				/>
 			) : undefined}
+
+			<VaultBackingTargetStatusCard result={securityVaultResult} queuedVaultOperation={queuedVaultOperation} status={queuedVaultOperationStatus} onViewStagedOperations={onViewStagedOperations} />
 
 			{actionSections}
 		</>

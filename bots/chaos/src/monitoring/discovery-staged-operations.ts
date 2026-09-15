@@ -145,17 +145,17 @@ export async function discoverStagedOperations(client: ChaosReadClient, pool: Po
 				// The exact liquidation snapshot, registry reservation, or current
 				// accounting no longer satisfies the pool. Execution must fail closed.
 			}
-		} else if (operationType === 1) {
+		} else if (operationType === 1 || operationType === 2) {
 			try {
-				if (!sameAddress(operation.operator, operation.receiverVault) || !sameAddress(operation.operator, operation.targetVault)) throw stagedRouteIneligible('Staged withdrawal is not an exact self route')
-				if (operation.liquidationApprovalId.toLowerCase() !== zeroHash || operation.reservedLiquidationDebtAttoEth !== 0n) throw stagedRouteIneligible('Staged withdrawal carries liquidation approval state')
+				if (!sameAddress(operation.operator, operation.receiverVault) || !sameAddress(operation.operator, operation.targetVault)) throw stagedRouteIneligible('Staged self operation is not an exact self route')
+				if (operation.liquidationApprovalId.toLowerCase() !== zeroHash || operation.reservedLiquidationDebtAttoEth !== 0n) throw stagedRouteIneligible('Staged self operation carries liquidation approval state')
 				await client.simulateContract({
 					account: pool.coordinator,
 					abi: securityPoolAbi,
 					address: pool.address,
 					args: [operation.operator, operation.operationValue],
 					blockNumber,
-					functionName: 'withdrawRepFromVault',
+					functionName: operationType === 1 ? 'withdrawRepFromVault' : 'adjustVaultBackingFactor',
 				})
 				executionExpectedSuccess = true
 			} catch (error) {

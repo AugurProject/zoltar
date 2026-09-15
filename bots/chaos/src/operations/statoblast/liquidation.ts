@@ -36,7 +36,7 @@ export function stagedObligation(mode: 'execute' | 'expire'): OperationDefinitio
 		return snapshot.stagedOperations.filter(operation => {
 			const pool = snapshot.pools.find(candidate => candidate.coordinator.toLowerCase() === operation.coordinator.toLowerCase())
 			if (pool === undefined) return false
-			return mode === 'execute' ? operation.operation === 1 && operation.executionExpectedSuccess && pool.oraclePriceValid && timestampDeadlineHasRequiredSafety(now, executionDeadline(pool, operation), options) : now > stagedDeadline(pool, operation)
+			return mode === 'execute' ? (operation.operation === 1 || operation.operation === 2) && operation.executionExpectedSuccess && pool.oraclePriceValid && timestampDeadlineHasRequiredSafety(now, executionDeadline(pool, operation), options) : now > stagedDeadline(pool, operation)
 		})
 	}
 	const build = (snapshot: EcosystemSnapshot, staged: EcosystemSnapshot['stagedOperations'][number]) => {
@@ -109,7 +109,7 @@ export function stagedObligation(mode: 'execute' | 'expire'): OperationDefinitio
 			return candidates(snapshot, options).map(metadata)
 		},
 		enumerateLifecyclePresence(snapshot) {
-			return snapshot.stagedOperations.filter(operation => mode === 'expire' || operation.operation === 1).map(metadata)
+			return snapshot.stagedOperations.filter(operation => mode === 'expire' || operation.operation === 1 || operation.operation === 2).map(metadata)
 		},
 		classification: 'lifecycle-obligation',
 		contract: 'OpenOraclePriceCoordinator',
@@ -121,7 +121,7 @@ export function stagedObligation(mode: 'execute' | 'expire'): OperationDefinitio
 			const found = snapshot.stagedOperations.some(operation => {
 				const pool = snapshot.pools.find(candidate => candidate.coordinator.toLowerCase() === operation.coordinator.toLowerCase())
 				if (pool === undefined) return false
-				return mode === 'execute' ? operation.operation === 1 && operation.executionExpectedSuccess && pool.oraclePriceValid && timestampDeadlineHasRequiredSafety(now, executionDeadline(pool, operation), options) : now > stagedDeadline(pool, operation)
+				return mode === 'execute' ? (operation.operation === 1 || operation.operation === 2) && operation.executionExpectedSuccess && pool.oraclePriceValid && timestampDeadlineHasRequiredSafety(now, executionDeadline(pool, operation), options) : now > stagedDeadline(pool, operation)
 			})
 			return eligible(found ? undefined : `No staged operation is ready to ${mode}`)
 		},
