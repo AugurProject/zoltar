@@ -698,11 +698,12 @@ describe('useSecurityVaultOperations', () => {
 	})
 
 	test.each(['', 'invalid', '1.5'])('deposits with the fresh saved target despite hidden input %s', async targetHealthFactor => {
+		let onchainTarget = 20_000n
 		const deposit = mock(async () => ({ action: 'depositRepToVault' as const, hash: '0x06' as const }))
 		const dependencies = createSecurityVaultOperationsDependencies({
 			depositRepToVaultToSecurityPool: deposit,
 			loadErc20Balance: mock(async () => 10n ** 18n),
-			loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails({ targetBackingFactorBps: 30_000n })),
+			loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails({ targetBackingFactorBps: onchainTarget })),
 		})
 		let hookState: UseSecurityVaultOperationsState | undefined
 		const Harness = createHarness(dependencies, state => {
@@ -713,6 +714,11 @@ describe('useSecurityVaultOperations', () => {
 		await act(() => {
 			requireHookState(hookState).setSecurityVaultForm(current => ({ ...current, depositAmount: '1', selectedVaultOwner: WALLET_ADDRESS, targetHealthFactor }))
 		})
+		await act(async () => {
+			await requireHookState(hookState).loadSecurityVault()
+		})
+		expect(requireHookState(hookState).securityVaultDetails?.targetBackingFactorBps).toBe(20_000n)
+		onchainTarget = 30_000n
 		await act(async () => {
 			await requireHookState(hookState).depositRepToVault()
 		})
@@ -754,6 +760,36 @@ describe('useSecurityVaultOperations', () => {
 		await waitFor(() => {
 			expect(requireHookState(hookState).securityVaultFeedback?.status.detail).toContain('unavailable after this question ends')
 		})
+	})
+
+	test('depositRepToVault ignores refreshed target details after the selected vault changes', async () => {
+		const details = createDeferred<SecurityVaultDetails>()
+		const deposit = mock(async () => ({ action: 'depositRepToVault' as const, hash: '0x06' as const }))
+		const loadDetails = mock(async () => await details.promise)
+		const dependencies = createSecurityVaultOperationsDependencies({ loadSecurityVaultDetails: loadDetails, depositRepToVaultToSecurityPool: deposit })
+		let hookState: UseSecurityVaultOperationsState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const rendered = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = rendered.cleanup
+		await act(() => {
+			requireHookState(hookState).setSecurityVaultForm(current => ({ ...current, depositAmount: '1', selectedVaultOwner: WALLET_ADDRESS }))
+		})
+		let pending = Promise.resolve()
+		await act(() => {
+			pending = requireHookState(hookState).depositRepToVault()
+		})
+		await waitFor(() => expect(loadDetails).toHaveBeenCalledTimes(1))
+		await act(() => {
+			requireHookState(hookState).setSecurityVaultForm(current => ({ ...current, selectedVaultOwner: getAddress('0x0000000000000000000000000000000000000009') }))
+		})
+		await act(async () => {
+			details.resolve(createSecurityVaultDetails({ targetBackingFactorBps: 30_000n }))
+			await pending
+		})
+		expect(deposit).not.toHaveBeenCalled()
+		expect(requireHookState(hookState).securityVaultDetails).toBeUndefined()
 	})
 
 	test('depositRepToVault ignores a stale preflight balance refresh after the selected vault changes', async () => {

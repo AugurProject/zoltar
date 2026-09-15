@@ -381,7 +381,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 			async (vaultAddress, securityPoolAddress, isCurrentSelection) => {
 				const depositAmount = parseRepAmountInput(snapshot.form.depositAmount, 'REP backing amount')
 				if (depositAmount <= 0n) throw new Error('REP deposit amount must be greater than zero')
-				const details = await loadExistingSecurityVaultDetails(securityPoolAddress, vaultAddress, 'Security pool does not exist', isCurrentSelection)
+				const details = await reloadSecurityVaultDetails(securityPoolAddress, vaultAddress, isCurrentSelection)
 				if (details === undefined) return undefined
 				const targetHealthFactorBps = parseTargetHealthFactorBps(details.targetBackingFactorBps ? formatCurrencyInputBalance(details.targetBackingFactorBps, 4) : snapshot.form.targetHealthFactor, undefined, details.statoblastSecurityMultiplierBps)
 				const currentRepBalanceAttoRep = await dependencies.loadErc20Balance(details.repToken, vaultAddress)
