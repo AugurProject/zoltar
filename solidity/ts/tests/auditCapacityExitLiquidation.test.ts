@@ -12,7 +12,6 @@ import { createCompleteSet, getSecurityVault, getSettlementCollateralAttoEth, ge
 import { useStatoblastVaultAccountingFixture } from './statoblast/fixture'
 
 const BPS_DENOMINATOR = 10_000n
-const MAX_UINT256 = 2n ** 256n - 1n
 
 describe('Audit PoC: capacity-exit liquidation', () => {
 	const fixture = useStatoblastVaultAccountingFixture()
@@ -33,7 +32,7 @@ describe('Audit PoC: capacity-exit liquidation', () => {
 			await approveToken(vaultClient, addressString(GENESIS_REPUTATION_TOKEN), securityPool)
 		}
 		await depositRepToVault(exitVault, securityPool, repDeposit)
-		await depositRepToVault(receiverVault, securityPool, receiverBacking, MAX_UINT256)
+		await depositRepToVault(receiverVault, securityPool, receiverBacking, (receiverBacking * statoblastSecurityMultiplierBps) / 2n)
 
 		const victimBefore = await getSecurityVault(client, securityPool, client.account.address)
 		const exitBefore = await getSecurityVault(client, securityPool, exitVault.account.address)
@@ -41,9 +40,9 @@ describe('Audit PoC: capacity-exit liquidation', () => {
 		assert.strictEqual(await getVaultRepClaim(client.account.address), repDeposit, 'victim should begin with its full REP deposit')
 		assert.strictEqual(victimBefore.capacityOwnershipAttoRep, repDeposit, 'victim should use the minimum permitted deposit health factor')
 		assert.strictEqual(exitBefore.capacityOwnershipAttoRep, repDeposit, 'exit vault should initially provide half of the live capacity')
-		assert.strictEqual(receiverBefore.capacityOwnershipAttoRep, 0n, 'receiver backing should not dilute open-interest allocation before the attack')
+		assert.strictEqual(receiverBefore.capacityOwnershipAttoRep, 2n, 'receiver has the smallest capacity supporting a nonzero attoETH exposure')
 
-		const temporaryOpenInterest = repDeposit
+		const temporaryOpenInterest = repDeposit + 1n
 		const receiverEthBeforeAttack = await receiverVault.getBalance({ address: receiverVault.account.address })
 		await createCompleteSet(receiverVault, securityPool, temporaryOpenInterest)
 		const mintingCapacity = await client.readContract({
@@ -101,7 +100,7 @@ describe('Audit PoC: capacity-exit liquidation', () => {
 
 		await requestPriceIfNeededAndStageOperation(receiverVault, coordinator, OperationType.WithdrawRep, receiverVault.account.address, receiverClaimAfterLiquidation)
 		const receiverWalletAfterAttack = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), receiverVault.account.address)
-		assert.strictEqual(await getVaultRepClaim(receiverVault.account.address), 0n, 'backing-only receiver should be able to exit after open interest is removed')
+		assert.strictEqual(await getVaultRepClaim(receiverVault.account.address), 0n, 'receiver should be able to exit after open interest is removed')
 		assert.strictEqual(receiverWalletAfterAttack, receiverWalletBeforeLiquidation + receiverBacking, 'rejected attack should return only the receiver principal and no victim REP')
 	})
 })

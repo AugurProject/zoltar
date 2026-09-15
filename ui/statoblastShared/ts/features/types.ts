@@ -35,6 +35,7 @@ import type { ReportingRouteContentProps } from './oracleTypes.js'
 export type * from '@zoltar/ui-core-shared/types/components.js'
 
 export type VaultMetricGridProps = {
+	targetBackingFactorBps?: bigint | undefined
 	associatedRepPerCapacityBps?: bigint | undefined
 	badDebtAttoEth?: bigint | undefined
 	className?: string
@@ -203,6 +204,7 @@ type SecurityVaultRouteContentProps = {
 	accountState: AccountState
 	loadingSecurityVault: boolean
 	onApproveRep: (amount?: bigint) => void
+	onAdjustVaultBackingFactor: (factor: string) => void
 	onDepositRepToVault: () => void
 	onLoadSecurityVault: (vaultAddress?: string) => void
 	onRedeemFees: () => void
@@ -218,6 +220,7 @@ type SecurityVaultRouteContentProps = {
 	walletRepBalanceAttoRep: bigint | undefined
 	walletRepBalanceError: string | undefined
 	walletRepBalanceLoading: boolean
+	securityVaultQueuedOperations?: readonly SecurityVaultActionResult[]
 	securityVaultResult: SecurityVaultActionResult | undefined
 	selectedPoolStatoblastSecurityMultiplierBps: bigint | undefined
 	repPerEthPrice: bigint | undefined

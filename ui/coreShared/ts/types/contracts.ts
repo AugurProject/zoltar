@@ -48,7 +48,7 @@ export type ForkAuctionAction =
 	| 'settleForkedEscalation'
 	| 'forkUniverse'
 export type TruthAuctionSettlementMode = 'claim' | 'mixed' | 'refund'
-export type OracleQueueOperation = 'liquidation' | 'withdrawRep'
+export type OracleQueueOperation = 'liquidation' | 'withdrawRep' | 'adjustVaultBackingFactor'
 export type StagedOracleOperation = {
 	amount: bigint
 	operator: Address
@@ -186,6 +186,9 @@ export type SecurityPoolCreationResult = {
 	universeId: bigint
 }
 export type SecurityVaultDetails = {
+	statoblastSecurityMultiplierBps?: bigint
+	targetBackingFactorBps?: bigint
+	settlementCollateralAttoEth?: bigint
 	associatedRepPerCapacityBps?: bigint
 	badDebtAttoEth: bigint
 	currentRetentionRate: bigint
@@ -207,8 +210,14 @@ export type SecurityVaultDetails = {
 	vaultAddress: Address
 }
 
+export type QueuedVaultOperationState = {
+	status: 'queued' | 'manual-queued' | 'executed' | 'failed' | 'expired' | 'superseded' | 'missing'
+	execution?: StagedOracleExecutionResult
+}
+
 export type SecurityVaultActionResult = ActionResult & {
-	action: 'approveRep' | 'depositRepToVault' | 'queueWithdrawRep' | 'redeemFees' | 'redeemRepFromVault' | 'updateVaultFees'
+	queuedOperationState?: QueuedVaultOperationState
+	action: 'adjustVaultBackingFactor' | 'approveRep' | 'depositRepToVault' | 'queueWithdrawRep' | 'redeemFees' | 'redeemRepFromVault' | 'updateVaultFees'
 	queuedOperation?: StagedOracleQueuedResult
 	stagedExecution?: StagedOracleExecutionResult
 }

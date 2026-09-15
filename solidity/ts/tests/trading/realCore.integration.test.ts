@@ -1,8 +1,7 @@
 import { getZoltarAddress, forkUniverse } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { approveToken } from '../../testSupport/simulator/utils/utilities'
 import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
-import { OperationType } from '../../testSupport/simulator/utils/contracts/statoblast'
-import { manipulatePriceOracleAndPerformOperation } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { setVaultCapacityFixture } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { TEST_ADDRESSES, GENESIS_REPUTATION_TOKEN } from '../../testSupport/simulator/utils/constants'
 import { addressString } from '../../testSupport/simulator/utils/bigint'
 import { statoblast_tokens_ShareToken_ShareToken } from '../../types/contractArtifact'
@@ -79,7 +78,7 @@ describe('trading against authoritative Zoltar contracts', () => {
 
 	beforeEach(async () => {
 		account = addressString(TEST_ADDRESSES[0])
-		await manipulatePriceOracleAndPerformOperation(fixture.client, fixture.mockWindow, fixture.securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, fixture.client.account.address, fixture.repDeposit / 4n)
+		await setVaultCapacityFixture(fixture.client, fixture.mockWindow, fixture.securityPoolAddresses.priceOracleManagerAndOperatorQueuer, fixture.client.account.address, fixture.repDeposit / 4n)
 		factory = await deploy(factoryArtifact, [getInfraContractAddresses().securityPoolFactory, 30n])
 		router = await deploy(routerArtifact, [factory])
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: factoryArtifact.abi, address: factory, functionName: 'createPair', args: [fixture.securityPoolAddresses.securityPool] }))

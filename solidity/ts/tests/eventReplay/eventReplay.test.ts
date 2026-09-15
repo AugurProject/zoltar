@@ -3,7 +3,7 @@ import { getChildUniverseId } from '../../testSupport/simulator/utils/utilities'
 import { migrateRepToZoltar, createChildUniverse, claimAuctionProceeds } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
 import { depositToEscalationGame, updateSettlementCollateral, updateVaultFees, redeemFees, getSecurityVault, getTotalPoolHeldAttoRep, getSettlementCollateralAttoEth } from '../../testSupport/simulator/utils/contracts/securityPool'
-import { manipulatePriceOracleAndPerformOperation } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { setVaultCapacityFixture } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { requestPriceIfNeededAndStageOperation, OperationType } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { getInfraContractAddresses, getSecurityPoolAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { getQuestionId, createQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
@@ -498,7 +498,7 @@ describe('event-only replay', () => {
 					operation: 2n,
 					operator: forker,
 					targetVault: pool,
-					operationAmountAttoRepOrAttoEth: 3n,
+					operationValue: 3n,
 					queuedAt: 27n,
 					validForSeconds: 300n,
 					snapshotTargetBackingUnits: 11n,
@@ -568,7 +568,7 @@ describe('event-only replay', () => {
 					operation: 0n,
 					operator: firstVault,
 					targetVault: firstVault,
-					operationAmountAttoRepOrAttoEth: 3n,
+					operationValue: 3n,
 					queuedAt: 10n,
 					validForSeconds: 300n,
 					snapshotTargetBackingUnits: 5n,
@@ -587,7 +587,7 @@ describe('event-only replay', () => {
 					operation: 1n,
 					operator: secondVault,
 					targetVault: secondVault,
-					operationAmountAttoRepOrAttoEth: 4n,
+					operationValue: 4n,
 					queuedAt: 11n,
 					validForSeconds: 600n,
 					snapshotTargetBackingUnits: 9n,
@@ -602,8 +602,8 @@ describe('event-only replay', () => {
 		const replayed = replayZoltarEvents(logs.toReversed())
 		if (replayed.escalationDeposits.get(firstGame)?.get('1:1')?.depositor !== firstVault) throw new Error('first game deposit counter collided')
 		if (replayed.escalationDeposits.get(secondGame)?.get('1:1')?.depositor !== secondVault) throw new Error('second game deposit counter collided')
-		if (replayed.coordinatorOperations.get(firstCoordinator)?.get(1n)?.operationAmountAttoRepOrAttoEth !== 3n) throw new Error('first coordinator operation counter collided')
-		if (replayed.coordinatorOperations.get(secondCoordinator)?.get(1n)?.operationAmountAttoRepOrAttoEth !== 4n) throw new Error('second coordinator operation counter collided')
+		if (replayed.coordinatorOperations.get(firstCoordinator)?.get(1n)?.operationValue !== 3n) throw new Error('first coordinator operation counter collided')
+		if (replayed.coordinatorOperations.get(secondCoordinator)?.get(1n)?.operationValue !== 4n) throw new Error('second coordinator operation counter collided')
 	})
 
 	test('escalation claim replay preserves immutable depositors and truth-auction retention', () => {
@@ -1309,7 +1309,7 @@ describe('event-only replay', () => {
 					operation: 1n,
 					operator: migrator,
 					targetVault: pool,
-					operationAmountAttoRepOrAttoEth: 2n,
+					operationValue: 2n,
 					queuedAt: 21n,
 					validForSeconds: 300n,
 					snapshotTargetBackingUnits: 5n,
@@ -1473,7 +1473,7 @@ describe('event-only replay', () => {
 		strictEqualTypeSafe(operation.operation, storedOperation[0], 'queued operation type replay mismatch')
 		strictEqualTypeSafe(operation.operator, storedOperation[1], 'queued operator replay mismatch')
 		strictEqualTypeSafe(operation.targetVault, storedOperation[3], 'queued target replay mismatch')
-		strictEqualTypeSafe(operation.operationAmountAttoRepOrAttoEth, storedOperation[4], 'queued operation amount replay mismatch')
+		strictEqualTypeSafe(operation.operationValue, storedOperation[4], 'queued operation amount replay mismatch')
 		strictEqualTypeSafe(operation.queuedAt, storedOperation[5], 'queued timestamp replay mismatch')
 		strictEqualTypeSafe(operation.validForSeconds, storedOperation[6], 'queued validity replay mismatch')
 		strictEqualTypeSafe(operation.snapshotTargetBackingUnits, storedOperation[7], 'queued backingUnits snapshot replay mismatch')
@@ -1490,7 +1490,7 @@ describe('event-only replay', () => {
 
 	test('actual first escalation deposit pre-discovers the game before its lifecycle event', async () => {
 		await mockWindow.setTime(fixture.questionData.endTime + 1n)
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
 		const depositHash = await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, fixture.reportBond)
 		const receipt = await client.getTransactionReceipt({ hash: depositHash })
 		const factory = getInfraContractAddresses().securityPoolFactory
@@ -1521,7 +1521,7 @@ describe('event-only replay', () => {
 	test('actual child continuation replays its inherited carry checkpoint and storage', async () => {
 		const fromBlock = (await client.getBlockNumber()) + 1n
 		await mockWindow.setTime(fixture.questionData.endTime + 1n)
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, fixture.reportBond)
 		await fixture.triggerExternalForkForSecurityPool(undefined, 'event replay child continuation')
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
@@ -1735,6 +1735,8 @@ describe('event-only replay', () => {
 		const pool = securityPoolAddresses.securityPool
 		const vault = client.account.address
 		const storedVaultBefore = await getSecurityVault(client, pool, vault)
+		const backing = await client.readContract({ address: pool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'backingUnitsToAttoRep', args: [storedVaultBefore.repBackingUnits] })
+		const targetSlot = fixture.getMappingStorageSlot(vault, 28n)
 		const vaultSlot = fixture.getMappingStorageSlot(vault, 16n)
 		const vaultFeeRemainderSlot = fixture.getMappingStorageSlot(vault, 17n)
 		const firstFeeIndex = storedVaultBefore.feeIndex + 1n
@@ -1742,6 +1744,8 @@ describe('event-only replay', () => {
 		await mockWindow.addStateOverrides({
 			[pool]: {
 				stateDiff: {
+					// Keep the saved target consistent with this synthetic one-unit vault.
+					[fixture.formatStorageSlot(targetSlot)]: backing * 20_000n,
 					[fixture.formatStorageSlot(1n)]: 1n,
 					[fixture.formatStorageSlot(7n)]: maxUint256,
 					[fixture.formatStorageSlot(8n)]: firstFeeIndex,

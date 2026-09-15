@@ -1,3 +1,5 @@
+import { decodeFunctionData } from '@zoltar/bot-shared/ethereum'
+import { securityPoolAbi } from '@zoltar/bot-shared/contracts/abi'
 import { describe, expect, test } from 'bun:test'
 import { canonicalLifecyclePresence, evaluateOperationCatalog, reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
 import { eligibleOperationPlans, urgentOperationPlans } from '../support/operation-plans.ts'
@@ -306,6 +308,19 @@ describe('Statoblast vault-registration capacity', () => {
 		const cleanup = reevaluateOperationContinuation(snapshot, initial, continuationOptions, { confirmedStepIds: [approval.id] }).plan
 		expect(cleanup?.continuationDisposition).toBe('cleanup-only')
 		expect(cleanup?.steps.map(step => step.id)).toEqual(['revoke-direct-rep'])
+	})
+
+	test('deposits use the saved absolute target or the pool minimum for a new vault', () => {
+		for (const saved of ['0', '30000']) {
+			const snapshot = snapshotFixture()
+			const pool = requiredPool(snapshot)
+			pool.statoblastSecurityMultiplierBps = '20000'
+			pool.walletVaultTargetBackingFactorBps = saved
+			const plan = eligibleOperationPlans(snapshot, options).find(plan => plan.definitionId === 'statoblast.vault.deposit-rep')
+			const step = plan?.steps.find(step => step.id === 'deposit-rep')
+			if (step === undefined) throw new Error('Expected deposit plan')
+			expect(decodeFunctionData({ abi: securityPoolAbi, data: step.data }).args?.[1]).toBe(saved === '0' ? 20_000n : 30_000n)
+		}
 	})
 
 	test('blocks a new deposit at the vault limit, permits an authenticated existing vault, and cleans up a continuation that loses the last slot', () => {

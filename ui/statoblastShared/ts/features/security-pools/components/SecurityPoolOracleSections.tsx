@@ -132,7 +132,7 @@ export function SecurityPoolStagedOperationsSection({
 								<AddressValue address={operation.targetVault} />
 							</MetricField>
 							<MetricField label={getPendingOperationAmountPresentation(operation.operation).label}>
-								<CurrencyValue precision='exact' value={operation.amount} suffix={getPendingOperationAmountPresentation(operation.operation).suffix} />
+								<CurrencyValue precision='exact' value={operation.amount} decimals={getPendingOperationAmountPresentation(operation.operation).decimals} suffix={getPendingOperationAmountPresentation(operation.operation).suffix} />
 							</MetricField>
 						</MetricGrid>
 					</WarningSurface>

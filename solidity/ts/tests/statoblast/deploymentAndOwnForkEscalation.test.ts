@@ -16,10 +16,10 @@ import {
 } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
 import { SystemState } from '../../testSupport/simulator/types/statoblastTypes'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
-import { getQuestionEndDate, OperationType } from '../../testSupport/simulator/utils/contracts/statoblast'
+import { getQuestionEndDate } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { createQuestion, getQuestionId } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { deployOriginSecurityPool, getInfraContractAddresses, getSecurityPoolAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
-import { approveAndDepositRepToVault, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { approveAndDepositRepToVault, triggerOwnGameFork, setVaultCapacityFixture } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { addressString } from '../../testSupport/simulator/utils/bigint'
 import { approveToken, contractExists, getChildUniverseId, getERC20Balance, sortStringArrayByKeccak } from '../../testSupport/simulator/utils/utilities'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
@@ -624,8 +624,8 @@ describe('Statoblast: deployment and own-fork escalation', () => {
 		await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 		await depositRepToVault(attackerClient, securityPoolAddresses.securityPool, forkThresholdAttoRep)
 		await mockWindow.setTime(endTime + 10000n)
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, securityPoolCapacityOwnershipAttoRep)
-		await manipulatePriceOracleAndPerformOperation(attackerClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, attackerClient.account.address, securityPoolCapacityOwnershipAttoRep)
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolCapacityOwnershipAttoRep)
+		await setVaultCapacityFixture(attackerClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, attackerClient.account.address, securityPoolCapacityOwnershipAttoRep)
 
 		const repBalanceInGenesisPool = await getERC20Balance(client, getRepTokenAddress(genesisUniverse), securityPoolAddresses.securityPool)
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
@@ -711,7 +711,7 @@ describe('Statoblast: deployment and own-fork escalation', () => {
 			await depositRepToVault(client, securityPoolAddresses.securityPool, vaultRepNeeded)
 		}
 		await mockWindow.setTime(endTime + 10n * DAY)
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, forkThresholdAttoRep)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, forkThresholdAttoRep)
 		await forkZoltarWithOwnEscalationGame(client, securityPoolAddresses.securityPool)
@@ -745,7 +745,7 @@ describe('Statoblast: deployment and own-fork escalation', () => {
 			vaultAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.repBackingUnits)
 		}
 		await mockWindow.setTime(endTime + 10n * DAY)
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
 		const halfVaultRep = vaultAttoRep / 2n
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, halfVaultRep)
 		const vaultAfterFirstDeposit = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
@@ -810,7 +810,7 @@ describe('Statoblast: deployment and own-fork escalation', () => {
 			await approveAndDepositRepToVault(client, vaultRepNeeded, questionId)
 		}
 		await mockWindow.setTime(endTime + 10n * DAY)
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, forkThresholdAttoRep)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, forkThresholdAttoRep)
 		await forkZoltarWithOwnEscalationGame(client, securityPoolAddresses.securityPool)
@@ -853,7 +853,7 @@ describe('Statoblast: deployment and own-fork escalation', () => {
 		}
 		assert.ok(vaultAttoRep > 2n * forkThresholdAttoRep, 'test setup needs pool-held vault REP backing alongside the unresolved escalation deposit')
 		await mockWindow.setTime(endTime + 10n * DAY)
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
 
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, forkThresholdAttoRep)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, forkThresholdAttoRep)
@@ -882,7 +882,7 @@ describe('Statoblast: deployment and own-fork escalation', () => {
 		const vaultAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.repBackingUnits)
 		if (vaultAttoRep < 4n * forkThresholdAttoRep) await approveAndDepositRepToVault(client, 4n * forkThresholdAttoRep - vaultAttoRep, questionId)
 		await mockWindow.setTime(endTime + 10n * DAY)
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, forkThresholdAttoRep)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, forkThresholdAttoRep)
 		await forkZoltarWithOwnEscalationGame(client, securityPoolAddresses.securityPool)
@@ -948,7 +948,7 @@ describe('Statoblast: deployment and own-fork escalation', () => {
 		const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 		await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 		await mockWindow.setTime(endTime + 10n * DAY)
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
 
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
@@ -976,7 +976,7 @@ describe('Statoblast: deployment and own-fork escalation', () => {
 		}
 		assert.ok(vaultAttoRep > 2n * forkThresholdAttoRep, 'test setup needs pool-held vault REP backing alongside the controlled own-fork deposits')
 		await mockWindow.setTime(endTime + 10n * DAY)
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, forkThresholdAttoRep)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, forkThresholdAttoRep)
 		await forkZoltarWithOwnEscalationGame(client, securityPoolAddresses.securityPool)
@@ -1049,8 +1049,8 @@ describe('Statoblast: deployment and own-fork escalation', () => {
 		await approveAndDepositRepToVault(client, 2n * forkThresholdAttoRep, questionId)
 		await approveAndDepositRepToVault(attackerClient, 2n * forkThresholdAttoRep, questionId)
 		await mockWindow.setTime(endTime + 10n * DAY)
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
-		await manipulatePriceOracleAndPerformOperation(attackerClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, attackerClient.account.address, 0n)
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
+		await setVaultCapacityFixture(attackerClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, attackerClient.account.address, 0n)
 		const clientYesEscalation = forkThresholdAttoRep / 2n
 		const attackerYesEscalation = forkThresholdAttoRep - clientYesEscalation
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, clientYesEscalation)
@@ -1084,7 +1084,7 @@ describe('Statoblast: deployment and own-fork escalation', () => {
 			await approveAndDepositRepToVault(client, vaultRepNeeded, questionId)
 		}
 		await mockWindow.setTime(endTime + 10n * DAY)
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 		const parentEscalationGame = await getSecurityPoolsEscalationGame(client, securityPoolAddresses.securityPool)
 		const parentInvalidOutcomeState = await getEscalationGameOutcomeState(client, parentEscalationGame, QuestionOutcome.Invalid)
@@ -1165,7 +1165,7 @@ describe('Statoblast: deployment and own-fork escalation', () => {
 		const firstYesDeposit = reportBond
 		const secondYesDeposit = clientVaultRep / 2n > firstYesDeposit ? clientVaultRep / 2n - firstYesDeposit : 0n
 		assert.ok(secondYesDeposit > 0n, 'test setup needs two distinct yes-side deposits')
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, firstYesDeposit)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, secondYesDeposit)
 		const vaultAfterFirstDeposit = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
@@ -1220,8 +1220,8 @@ describe('Statoblast: deployment and own-fork escalation', () => {
 				await approveAndDepositRepToVault(depositor, 2n * forkThresholdAttoRep, scenarioQuestionId)
 			}
 			await mockWindow.setTime(scenarioQuestionData.endTime + 10n * DAY)
-			await manipulatePriceOracleAndPerformOperation(client, mockWindow, scenarioAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, 0n)
-			await manipulatePriceOracleAndPerformOperation(attackerClient, mockWindow, scenarioAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, attackerClient.account.address, 0n)
+			await setVaultCapacityFixture(client, mockWindow, scenarioAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
+			await setVaultCapacityFixture(attackerClient, mockWindow, scenarioAddresses.priceOracleManagerAndOperatorQueuer, attackerClient.account.address, 0n)
 			const clientYesEscalation = forkThresholdAttoRep / 2n
 			const attackerYesEscalation = forkThresholdAttoRep - clientYesEscalation
 			await depositToEscalationGame(client, scenarioPool, QuestionOutcome.Yes, clientYesEscalation)

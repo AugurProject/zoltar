@@ -75,6 +75,7 @@ function getSecurityVaultTransactionRows(context: SecurityVaultTransactionContex
 }
 
 function getSecurityVaultActionTitle(actionName: SecurityVaultActionResult['action'], repTokenSymbol = commonCopy.rep) {
+	if (actionName === 'adjustVaultBackingFactor') return securityPoolCopy.adjustVaultBackingFactor
 	if (actionName === 'depositRepToVault') return securityPoolCopy.formatDepositRepToVault(repTokenSymbol)
 	if (actionName === 'queueWithdrawRep') return securityPoolCopy.formatWithdrawRep(repTokenSymbol)
 	if (actionName === 'redeemRepFromVault') return securityPoolCopy.formatRedeemRepFromVault(repTokenSymbol)
@@ -93,7 +94,7 @@ export function createSecurityVaultTransactionIntent(actionName: SecurityVaultAc
 
 export function createSecurityVaultSuccessPresentation(result: SecurityVaultActionResult, context?: SecurityVaultTransactionContext) {
 	let queuedOperationDetail: string | undefined
-	if (result.queuedOperation !== undefined) {
+	if (result.queuedOperation !== undefined && result.stagedExecution === undefined) {
 		queuedOperationDetail = result.queuedOperation.isPendingSlot ? transactionCopy.formatQueuedOperationAutoExecutionDetail(result.queuedOperation.operationId.toString()) : transactionCopy.formatQueuedOperationManualExecutionDetail(result.queuedOperation.operationId.toString())
 	}
 	return buildPresentation({
@@ -178,7 +179,7 @@ export function createLiquidationTransactionIntent(context?: LiquidationTransact
 
 export function createLiquidationSuccessPresentation(result: SecurityPoolOverviewActionResult, context?: LiquidationTransactionContext) {
 	let queuedOperationDetail: string = transactionCopy.liquidationRequestSubmittedDetail
-	if (result.queuedOperation !== undefined) {
+	if (result.queuedOperation !== undefined && result.stagedExecution === undefined) {
 		queuedOperationDetail = result.queuedOperation.isPendingSlot ? transactionCopy.formatQueuedLiquidationAutoExecutionDetail(result.queuedOperation.operationId.toString()) : transactionCopy.formatQueuedLiquidationManualExecutionDetail(result.queuedOperation.operationId.toString())
 	}
 	return buildPresentation({

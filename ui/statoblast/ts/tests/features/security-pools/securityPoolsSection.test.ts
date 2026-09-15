@@ -89,6 +89,7 @@ function createSecurityVaultProps(overrides: Partial<SecurityVaultRouteContentPr
 		accountState: createAccountState(),
 		loadingSecurityVault: false,
 		onApproveRep: () => undefined,
+		onAdjustVaultBackingFactor: () => undefined,
 		onDepositRepToVault: () => undefined,
 		onLoadSecurityVault: () => undefined,
 		onRedeemFees: () => undefined,

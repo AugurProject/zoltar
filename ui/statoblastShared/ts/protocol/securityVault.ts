@@ -3,9 +3,9 @@ import { statoblast_SecurityPool_SecurityPool } from '../contractArtifact.js'
 import type { SecurityVaultActionResult, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { writeContractAndWait } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 
-export async function depositRepToVaultToSecurityPool(client: WriteClient, securityPoolAddress: Address, amount: bigint, targetHealthFactorBps = 10_000n) {
+export async function depositRepToVaultToSecurityPool(client: WriteClient, securityPoolAddress: Address, amount: bigint, targetHealthFactorBps: bigint) {
 	if (amount <= 0n) throw new Error('REP deposit amount must be greater than zero')
-	if (targetHealthFactorBps < 10_000n) throw new Error('Deposit target factor must be at least 1.00×')
+	if (targetHealthFactorBps < 10_000n) throw new Error('Target backing ratio must be at least 1.00×')
 	const hash = await writeContractAndWait(client, () => ({
 		address: securityPoolAddress,
 		abi: statoblast_SecurityPool_SecurityPool.abi,

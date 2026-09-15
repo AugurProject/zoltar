@@ -59,8 +59,8 @@ export const contractSafetyPolicy = {
 				sourcePath: 'contracts/statoblast/SecurityPool.sol',
 				contractName: 'SecurityPool',
 			},
-			24_567,
-			'The reviewed pool adds understandable revert reasons while retaining the size-limited initialization guard; no further runtime growth is permitted.',
+			24_371,
+			'The reviewed pool stores vault targets and delegates fee checkpoints while retaining the size-limited initialization guard; no further runtime growth is permitted.',
 		),
 		runtimeBudget(
 			{
@@ -75,8 +75,8 @@ export const contractSafetyPolicy = {
 				sourcePath: 'contracts/statoblast/OpenOraclePriceCoordinator.sol',
 				contractName: 'OpenOraclePriceCoordinator',
 			},
-			23_561,
-			'The coordinator runtime is above 95% of the protocol deployment limit, so its reviewed budget permits no growth.',
+			23_958,
+			'The reviewed coordinator supersedes older queued vault targets while preserving collateral validation; no further runtime growth is permitted.',
 		),
 		runtimeBudget(
 			{

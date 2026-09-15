@@ -97,6 +97,7 @@ export function snapshotFixture(): EcosystemSnapshot {
 				totalBadDebtAttoEth: 0n.toString(),
 				shareToken,
 				statoblastSecurityMultiplierBps: '11000',
+				walletVaultTargetBackingFactorBps: '15000',
 				systemState: 0,
 				totalCapacityOwnershipAttoRep: (10n ** 18n).toString(),
 				totalPoolHeldAttoRep: (10n ** 18n).toString(),

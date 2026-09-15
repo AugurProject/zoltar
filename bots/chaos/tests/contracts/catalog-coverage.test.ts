@@ -61,7 +61,7 @@ const curatedAbiBindings = [
 	{ abi: zoltarAbi, artifactSource: 'contracts/Zoltar.sol', contract: 'Zoltar' },
 	{ abi: genesisReputationTokenAbi, artifactSource: 'contracts/GenesisReputationToken.sol', contract: 'GenesisReputationToken' },
 	{ abi: securityPoolFactoryAbi, artifactSource: 'contracts/statoblast/factories/SecurityPoolFactory.sol', contract: 'SecurityPoolFactory' },
-	{ abi: securityPoolAbi, artifactSource: 'contracts/statoblast/SecurityPool.sol', contract: 'SecurityPool' },
+	{ abi: securityPoolAbi, artifactSource: 'contracts/statoblast/SecurityPool.sol', contract: 'SecurityPool', delegatedFunctions: [{ artifactSource: 'contracts/statoblast/SecurityPoolOperationsDelegate.sol', contract: 'SecurityPoolOperationsDelegate', functions: ['adjustVaultBackingFactor'] }] },
 	{ abi: openOraclePriceCoordinatorAbi, artifactSource: 'contracts/statoblast/OpenOraclePriceCoordinator.sol', contract: 'OpenOraclePriceCoordinator' },
 	{ abi: liquidationApprovalRegistryAbi, artifactSource: 'contracts/statoblast/LiquidationApprovalRegistry.sol', contract: 'LiquidationApprovalRegistry' },
 	{ abi: securityPoolForkerAbi, artifactSource: 'contracts/statoblast/SecurityPoolForker.sol', contract: 'SecurityPoolForker' },
@@ -70,7 +70,7 @@ const curatedAbiBindings = [
 		abi: escalationGameAbi,
 		artifactSource: 'contracts/statoblast/EscalationGame.sol',
 		contract: 'EscalationGame',
-		delegatedViews: [
+		delegatedFunctions: [
 			{
 				artifactSource: 'contracts/statoblast/EscalationGameClaimDelegate.sol',
 				contract: 'EscalationGameClaimDelegate',
@@ -415,7 +415,8 @@ describe('contract operation classification', () => {
 			const { abi, contract } = binding
 			for (const item of abi) {
 				if (item.type !== 'function' || item.stateMutability === 'view' || item.stateMutability === 'pure') continue
-				expect(classifiedMethod(contract, item.name), `${contract}.${item.name}`).toBeDefined()
+				const delegated = 'delegatedFunctions' in binding ? binding.delegatedFunctions.find(source => new Set<string>(source.functions).has(item.name)) : undefined
+				expect(classifiedMethod(delegated?.contract ?? contract, item.name), `${contract}.${item.name}`).toBeDefined()
 			}
 		}
 	})
@@ -435,12 +436,12 @@ describe('contract operation classification', () => {
 					.filter(item => typeof item === 'object' && item !== null && 'type' in item && (item.type === 'function' || item.type === 'event'))
 					.map((item, index) => [abiEntryIdentity(item, `${contract}.generated[${index.toString()}]`), item]),
 			)
-			if ('delegatedViews' in binding) {
-				for (const delegatedView of binding.delegatedViews) {
-					const functionNames = new Set<string>(delegatedView.functions)
-					for (const [index, item] of contractAbi(contracts, delegatedView.artifactSource, delegatedView.contract).entries()) {
+			if ('delegatedFunctions' in binding) {
+				for (const delegatedFunction of binding.delegatedFunctions) {
+					const functionNames = new Set<string>(delegatedFunction.functions)
+					for (const [index, item] of contractAbi(contracts, delegatedFunction.artifactSource, delegatedFunction.contract).entries()) {
 						if (typeof item !== 'object' || item === null || !('type' in item) || !('name' in item) || item.type !== 'function' || typeof item.name !== 'string' || !functionNames.has(item.name)) continue
-						generatedEntries.set(abiEntryIdentity(item, `${delegatedView.contract}.generated[${index.toString()}]`), item)
+						generatedEntries.set(abiEntryIdentity(item, `${delegatedFunction.contract}.generated[${index.toString()}]`), item)
 					}
 				}
 			}

@@ -355,7 +355,7 @@ describe('fork migration strategy', () => {
 			...parent,
 			stagedOperations: [
 				{
-					operationAmountAttoRepOrAttoEth: 1n,
+					operationValue: 1n,
 					id: 1n,
 					liquidationApprovalId: `0x${'00'.repeat(32)}`,
 					isPendingSettlement: true,

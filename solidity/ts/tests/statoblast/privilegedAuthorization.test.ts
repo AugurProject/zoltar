@@ -1,8 +1,7 @@
 import { getEscalationGameDeposits } from '../../testSupport/simulator/utils/contracts/escalationGame'
 import { depositToEscalationGame, getRepToken } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
-import { OperationType } from '../../testSupport/simulator/utils/contracts/statoblast'
-import { manipulatePriceOracle, manipulatePriceOracleAndPerformOperation } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { manipulatePriceOracle, setVaultCapacityFixture } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { addressString } from '../../testSupport/simulator/utils/bigint'
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import assert from '../../testSupport/simulator/utils/assert'
@@ -190,7 +189,7 @@ describe('Statoblast: privileged authorization matrix', () => {
 		)
 
 		const authorizedCapacityOwnershipAttoRep = repDeposit / 5n
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, fixture.securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, authorizedCapacityOwnershipAttoRep)
+		await setVaultCapacityFixture(client, mockWindow, fixture.securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, authorizedCapacityOwnershipAttoRep)
 		assert.strictEqual(await getTotalCapacityOwnershipAttoRep(client, securityPool), authorizedCapacityOwnershipAttoRep)
 
 		const rawFactory = await client.readContract({

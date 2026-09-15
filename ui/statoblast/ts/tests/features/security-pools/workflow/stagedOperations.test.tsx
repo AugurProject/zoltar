@@ -173,6 +173,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 							securityVaultResult: {
 								action: 'queueWithdrawRep',
 								hash: '0x00000000000000000000000000000000000000000000000000000000000000bc',
+								queuedOperationState: { status: 'manual-queued' },
 								queuedOperation: {
 									isPendingSlot: false,
 									operation: 'withdrawRep',
@@ -252,6 +253,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 							},
 							securityVaultResult: {
 								action: 'queueWithdrawRep',
+								stagedExecution: { operation: 'withdrawRep', operationId: 0n, success: true },
 								hash: '0x00000000000000000000000000000000000000000000000000000000000000bb',
 							},
 						}),
