@@ -6,7 +6,7 @@ import { loadPoolCatalog } from '#monitoring/pool-catalog'
 
 const address = getAddress('0x1111111111111111111111111111111111111111')
 
-function fixture(total: bigint, options: { stallDeployment?: boolean; unknownPool?: boolean; wrongCanonical?: boolean; failSearch?: boolean; failMetrics?: boolean; failDates?: boolean; failDeployment?: boolean; missingQuestion?: boolean; reorg?: boolean } = {}) {
+function fixture(total: bigint, options: { stallDeploymentBlock?: boolean; stallDeployment?: boolean; unknownPool?: boolean; wrongCanonical?: boolean; failSearch?: boolean; failMetrics?: boolean; failDates?: boolean; failDeployment?: boolean; missingQuestion?: boolean; reorg?: boolean } = {}) {
 	const reads: { functionName: string; args: readonly unknown[]; blockNumber: bigint }[] = []
 	let blockReads = 0
 	const client = new Proxy(
@@ -22,6 +22,7 @@ function fixture(total: bigint, options: { stallDeployment?: boolean; unknownPoo
 			get(target, property) {
 				if (property === 'getBlock')
 					return async (parameters?: { blockNumber?: bigint }) => {
+						if (parameters?.blockNumber === 20n && options.stallDeploymentBlock) return await new Promise(() => {})
 						if (parameters?.blockNumber === 20n) return { number: 20n, hash: '0x33', timestamp: 1789560000n }
 						return { number: 42n, timestamp: 1789560060n, hash: options.reorg && blockReads++ > 0 ? '0x22' : '0x11' }
 					}
@@ -170,5 +171,17 @@ test('returns pools within a bounded deadline when deployment date discovery sta
 	])
 	expect(result.pools[0]?.address).toBe(address)
 	expect(result.pools[0]?.metrics?.vaultCount).toBe('3')
+	expect(result.pools[0]?.deploymentDate).toBeUndefined()
+})
+
+test('returns usable pools when deployment timestamp metadata stalls after log discovery', async () => {
+	const result = await Promise.race([
+		loadPoolCatalog(fixture(1n, { stallDeploymentBlock: true }).client, address, 1, 0),
+		Bun.sleep(2500).then(() => {
+			throw new Error('Deployment timestamp blocked discovery')
+		}),
+	])
+	expect(result.pools[0]?.metrics?.vaultCount).toBe('3')
+	expect(result.pools[0]?.questionDates?.startTime).toBe('1789473600')
 	expect(result.pools[0]?.deploymentDate).toBeUndefined()
 })

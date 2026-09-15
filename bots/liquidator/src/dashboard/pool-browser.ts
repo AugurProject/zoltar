@@ -24,6 +24,8 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 	let error: string | undefined
 	let searchError: string | undefined
 	let renderedKey: string | undefined
+	let renderedChain: number | undefined
+	const expanded = new Set<string>()
 	let dateFields: { root: HTMLElement; timestamp: string | undefined }[] = []
 	const heading = node('div', '', 'section-heading')
 	heading.append(node('h2', 'Pools'))
@@ -117,7 +119,18 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 		}
 		renderedKey = key
 		const focusedAction = document.activeElement instanceof HTMLButtonElement && cards.contains(document.activeElement) ? document.activeElement.getAttribute('data-record-key') : undefined
-		const expanded = new Set([...cards.querySelectorAll<HTMLDetailsElement>('details[data-pool-address]')].filter(details => details.open).map(details => details.dataset['poolAddress']))
+		if (renderedChain !== context.chainId) expanded.clear()
+		else {
+			for (const details of cards.querySelectorAll<HTMLDetailsElement>('details[data-pool-address]')) {
+				const address = details.dataset['poolAddress']
+				if (address === undefined) continue
+				if (details.open) expanded.add(address)
+				else expanded.delete(address)
+			}
+		}
+		renderedChain = context.chainId
+		const monitoredAddresses = new Set(context.monitored.map(pool => pool.address.toLowerCase()))
+		for (const address of expanded) if (!monitoredAddresses.has(address)) expanded.delete(address)
 		for (const [tab, id] of [
 			[monitoredTab, 'monitored'],
 			[allTab, 'all'],

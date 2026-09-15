@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 import { Browser } from 'happy-dom'
+import type { PoolCatalogPage } from '../../src/monitoring/pool-catalog.ts'
 import { startDashboardServer } from '../../src/dashboard/dashboard-server.ts'
 
 const servers: ReturnType<typeof startDashboardServer>[] = []
@@ -195,6 +196,7 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 		window.clearTimeout(timeout)
 		return timeout
 	}
+	let catalogOverride: PoolCatalogPage | undefined
 	let catalogRevision = 0
 	let catalogFailure = false
 	let selectionFailure = false
@@ -227,6 +229,11 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 		const url = new URL(inputUrl, server.url)
 		if (url.pathname === '/api/pool-catalog') {
 			if (catalogFailure) return new window.Response('{}', { status: 503 })
+			if (catalogOverride !== undefined) {
+				catalogRequests.push(url.searchParams.get('page') ?? '0')
+				catalogSearches.push(url.searchParams.get('address'))
+				return new window.Response(JSON.stringify(catalogOverride))
+			}
 			if (url.searchParams.get('scope') === 'monitored') {
 				const address = url.searchParams.get('address')
 				const pools = snapshot.pools
@@ -389,6 +396,9 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 			if (!(tab instanceof window.HTMLButtonElement)) throw new Error('Missing monitored tab')
 			tab.click()
 			await page.waitUntilComplete()
+		},
+		setCatalog: (catalog: PoolCatalogPage) => {
+			catalogOverride = catalog
 		},
 		advanceCatalog: () => {
 			catalogRevision += 1
@@ -1332,4 +1342,74 @@ test('refreshes all-pool listings counts metrics and snapshot age on demand', as
 	await page.waitUntilComplete()
 	expect(root?.textContent).toContain('Question 43')
 	expect(root?.textContent).toContain('Pool discovery failed')
+})
+
+test('retains expanded monitored details after failed catalog requests and tab changes', async () => {
+	const page = await dashboard(mainnetConfiguration(), state(), false, false, true)
+	await page.openMonitoredPools()
+	const details = page.window.document.querySelector('.catalog-monitoring')
+	if (!(details instanceof page.window.HTMLDetailsElement)) throw new Error('Missing monitoring details')
+	details.open = true
+	page.setCatalogFailure(true)
+	const all = page.window.document.querySelector('#pool-tab-all')
+	if (!(all instanceof page.window.HTMLButtonElement)) throw new Error('Missing all pools tab')
+	all.click()
+	await page.waitUntilComplete()
+	const snapshot = state()
+	snapshot.pools = snapshot.pools.map(pool => ({ ...pool, lastPrice: '12', totalPoolHeldRep: '456' }))
+	page.setSnapshot(snapshot)
+	await page.refresh()
+	await page.openMonitoredPools()
+	const returned = page.window.document.querySelector('.catalog-monitoring')
+	expect(returned?.textContent).toContain('12 REP / ETH')
+	expect(page.window.document.querySelector('.catalog-balance')?.textContent).toContain('456')
+	if (!(returned instanceof page.window.HTMLDetailsElement)) throw new Error('Monitoring details disappeared')
+	expect(returned.open).toBe(true)
+	returned.open = false
+	await page.refresh()
+	expect(page.window.document.querySelector('.catalog-monitoring')?.hasAttribute('open')).toBe(false)
+})
+
+test('refreshes new pools and balances while retaining page search scope and support selection', async () => {
+	const existing = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+	const created = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+	const config = mainnetConfiguration()
+	config.selectedPools = [existing]
+	const page = await dashboard(config, state(), false, false, true)
+	const pool = { address: existing, questionId: '42', universeId: '1', multiplierBps: '10000', metrics: { systemState: '0', totalPoolHeldRep: '2', vaultCount: '1' } }
+	const before = { chainId: 1, page: 1, pageCount: '2', total: '13', snapshotTimestamp: '1789560000', pools: [pool] }
+	page.setCatalog(before)
+	const button = (label: string) => {
+		const match = [...page.window.document.querySelectorAll('#pool-browser button')].find(candidate => candidate.textContent === label)
+		if (!(match instanceof page.window.HTMLButtonElement)) throw new Error(`Missing ${label}`)
+		return match
+	}
+	button('Next').click()
+	await page.waitUntilComplete()
+	expect(page.catalogRequests.at(-1)).toBe('1')
+	const changed = { ...pool, metrics: { ...pool.metrics, totalPoolHeldRep: '9' } }
+	page.setCatalog({ ...before, total: '14', snapshotTimestamp: '1789560060', pools: [changed, { ...pool, address: created, questionId: '43' }] })
+	button('Refresh').click()
+	await page.waitUntilComplete()
+	const root = page.window.document.querySelector('#pool-browser')
+	expect(root?.textContent).toContain('14 pools · Page 2 of 2')
+	expect(root?.textContent).toContain(created)
+	expect(root?.querySelector('.catalog-balance')?.textContent).toContain('9')
+	expect(button('Remove from supported').getAttribute('aria-label')).toContain(existing)
+	expect(page.catalogRequests.at(-1)).toBe('1')
+	const search = root?.querySelector('input[type=search]')
+	if (!(search instanceof page.window.HTMLInputElement)) throw new Error('Missing search')
+	page.setCatalog({ ...before, page: 0, pageCount: '1', total: '1', pools: [changed] })
+	search.value = existing
+	search.dispatchEvent(new page.window.Event('input'))
+	await page.waitUntilComplete()
+	page.setCatalog({ ...before, page: 0, pageCount: '1', total: '1', snapshotTimestamp: '1789560120', pools: [{ ...changed, metrics: { ...changed.metrics, totalPoolHeldRep: '10' } }] })
+	button('Refresh').click()
+	await page.waitUntilComplete()
+	expect(search.value).toBe(existing)
+	expect(page.catalogSearches.at(-1)).toBe(existing)
+	expect(root?.querySelector('#pool-tab-all')?.getAttribute('aria-selected')).toBe('true')
+	expect(root?.querySelector('.catalog-balance')?.textContent).toContain('10')
+	expect(button('Remove from supported').getAttribute('aria-label')).toContain(existing)
+	expect(page.supportedPoolRequests).toHaveLength(0)
 })
