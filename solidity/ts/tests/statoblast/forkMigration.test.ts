@@ -728,7 +728,7 @@ describe('Statoblast: fork migration', () => {
 			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, client.account.address, targetCapacityOwnershipAttoRep)
 			const receiverClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 			await approveToken(receiverClient, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
-			await depositRepToVault(receiverClient, securityPoolAddresses.securityPool, repDeposit * 10n, 1_000_000_000n)
+			await depositRepToVault(receiverClient, securityPoolAddresses.securityPool, repDeposit * 10n, 2_000_000_000n)
 			await createCompleteSet(client, securityPoolAddresses.securityPool, 30n * 10n ** 18n)
 			await mockWindow.advanceTime(100000n)
 			return { receiverClient, forcedPrice: PRICE_PRECISION * 200n }
@@ -744,7 +744,7 @@ describe('Statoblast: fork migration', () => {
 
 			const liquidatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 			await approveToken(liquidatorClient, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
-			await depositRepToVault(liquidatorClient, securityPoolAddresses.securityPool, repDeposit * 10n, 1_000_000_000n)
+			await depositRepToVault(liquidatorClient, securityPoolAddresses.securityPool, repDeposit * 10n, 2_000_000_000n)
 			const openInterestAmount = 30n * 10n ** 18n
 			await createCompleteSet(client, securityPoolAddresses.securityPool, openInterestAmount)
 			await mockWindow.advanceTime(30n * DAY)
@@ -1187,7 +1187,7 @@ describe('Statoblast: fork migration', () => {
 			await manipulatePriceOracleAndPerformOperation(targetClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, targetClient.account.address, minimumCapacityOwnershipAttoRep, capacityOwnershipAttoRepCreationPrice)
 
 			await approveToken(liquidatorClient, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
-			await depositRepToVault(liquidatorClient, securityPoolAddresses.securityPool, repDeposit * 2n, 1_000_000_000n)
+			await depositRepToVault(liquidatorClient, securityPoolAddresses.securityPool, repDeposit * 2n, 2_000_000_000n)
 			await createCompleteSet(targetClient, securityPoolAddresses.securityPool, 19n * 10n ** 16n)
 			await mockWindow.advanceTime(100000n)
 
@@ -1466,7 +1466,7 @@ describe('Statoblast: fork migration', () => {
 			await mockWindow.advanceTime(100n)
 			const receiverClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 			await approveToken(receiverClient, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
-			await depositRepToVault(receiverClient, securityPoolAddresses.securityPool, repDeposit * 10n, 20_000n)
+			await depositRepToVault(receiverClient, securityPoolAddresses.securityPool, repDeposit * 10n, 40_000n)
 			const afterDeposit = await getPoolAccountingSnapshot()
 			assert.ok(beforeDeposit.feeIndexRemainder > 0n, 'capacity-transition carry reset regression requires pre-existing fee-index carry')
 			strictEqualTypeSafe(afterDeposit.feeIndexRemainder, 0n, 'ordinary capacity ownership changes should clear prior-attribution fee-index carry')

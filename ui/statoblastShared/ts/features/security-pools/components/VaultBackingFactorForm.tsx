@@ -31,15 +31,16 @@ export function VaultBackingFactorForm({
 	onAdjust: (factor: string) => void
 }) {
 	const [factorInput, setFactor] = useState<string | undefined>(undefined)
-	const currentFactorBps = details?.targetBackingFactorBps || details?.poolHeldRepPerCapacityBps
+	const minimumBps = poolSecurityMultiplierBps ?? details?.statoblastSecurityMultiplierBps
+	const currentFactorBps = details?.targetBackingFactorBps || minimumBps
 	const factor = factorInput ?? (currentFactorBps !== undefined && currentFactorBps >= 10_000n ? formatCurrencyInputBalance(currentFactorBps, 4) : '2')
 	const descriptionId = useId()
 	let nextCapacity: bigint | undefined
 	let factorBps: bigint | undefined
 	let error: string | undefined
 	try {
-		factorBps = parseTargetHealthFactorBps(factor, securityPoolCopy.vaultBackingFactor)
-		if (details !== undefined) nextCapacity = (details.vaultAttoRepBacking * 10_000n) / factorBps
+		factorBps = parseTargetHealthFactorBps(factor, securityPoolCopy.vaultBackingFactor, minimumBps)
+		if (details !== undefined && minimumBps !== undefined) nextCapacity = (details.vaultAttoRepBacking * minimumBps) / factorBps
 		if (nextCapacity === 0n) error = securityPoolCopy.positiveCapacityRequired
 	} catch (cause) {
 		error = cause instanceof Error ? cause.message : commonCopy.metricUnavailablePlaceholder
@@ -56,6 +57,7 @@ export function VaultBackingFactorForm({
 				{error ?? securityPoolCopy.vaultBackingFactorHelp}
 			</p>
 			<MetricGrid>
+				<MetricField label={securityPoolCopy.minimumBackingRatio}>{minimumBps === undefined ? commonCopy.metricUnavailablePlaceholder : `${formatCurrencyInputBalance(minimumBps, 4)}×`}</MetricField>
 				<MetricField label={securityPoolCopy.currentCapacity}>{details === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={details.capacityOwnershipAttoRep} suffix={securityPoolCopy.capacityUnits} />}</MetricField>
 				<MetricField label={securityPoolCopy.resultingCapacity}>{nextCapacity === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={nextCapacity} suffix={securityPoolCopy.capacityUnits} />}</MetricField>
 			</MetricGrid>
@@ -74,7 +76,7 @@ export function VaultBackingFactorForm({
 	)
 }
 
-export function DepositBackingFactorField({ value, error, disabled, saved = false, onChange }: { value: string; saved?: boolean; error: string | undefined; disabled: boolean; onChange: (value: string) => void }) {
+export function DepositBackingFactorField({ value, error, disabled, minimumBps, saved = false, onChange }: { value: string; minimumBps?: bigint | undefined; saved?: boolean; error: string | undefined; disabled: boolean; onChange: (value: string) => void }) {
 	const descriptionId = useId()
 	if (saved) return <MetricField label={securityPoolCopy.vaultBackingFactor}>{value}×</MetricField>
 	return (
@@ -82,7 +84,7 @@ export function DepositBackingFactorField({ value, error, disabled, saved = fals
 			<span>{securityPoolCopy.targetHealthFactor}</span>
 			<FormInput aria-describedby={descriptionId} value={value} onInput={event => onChange(event.currentTarget.value)} disabled={disabled} invalid={error !== undefined} />
 			<small className='field-help' id={descriptionId}>
-				{error ?? securityPoolCopy.targetHealthFactorHelp}
+				{error ?? `${securityPoolCopy.targetHealthFactorHelp} ${securityPoolCopy.minimumBackingRatio}: ${minimumBps === undefined ? commonCopy.metricUnavailablePlaceholder : `${formatCurrencyInputBalance(minimumBps, 4)}×`}.`}
 			</small>
 		</label>
 	)

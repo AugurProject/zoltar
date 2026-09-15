@@ -386,9 +386,9 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		)
 		setCleanup(rendered.cleanup)
 		const page = within(document.body)
-		expect(page.getByText('Vault target backing factor')).not.toBeNull()
-		expect(page.getByText('Adjust backing factor')).not.toBeNull()
-		expect(page.getByText('Vault target backing factor').parentElement?.textContent).toMatch(/2(?:\.0+)?\s*×/)
+		expect(page.getByText('Target backing ratio')).not.toBeNull()
+		expect(page.getByText('Adjust backing ratio')).not.toBeNull()
+		expect(page.getByText('Target backing ratio').parentElement?.textContent).toMatch(/2(?:\.0+)?\s*×/)
 	})
 
 	test('lists staged operations in the staged operations tab', async () => {

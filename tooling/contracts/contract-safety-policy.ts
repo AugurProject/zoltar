@@ -75,8 +75,8 @@ export const contractSafetyPolicy = {
 				sourcePath: 'contracts/statoblast/OpenOraclePriceCoordinator.sol',
 				contractName: 'OpenOraclePriceCoordinator',
 			},
-			23_701,
-			'The reviewed coordinator adds queued vault target changes; no further runtime growth is permitted.',
+			23_785,
+			'The reviewed coordinator validates queued absolute vault targets against the pool security multiplier; no further runtime growth is permitted.',
 		),
 		runtimeBudget(
 			{

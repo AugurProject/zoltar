@@ -1745,7 +1745,7 @@ describe('event-only replay', () => {
 			[pool]: {
 				stateDiff: {
 					// Keep the saved target consistent with this synthetic one-unit vault.
-					[fixture.formatStorageSlot(targetSlot)]: backing * 10_000n,
+					[fixture.formatStorageSlot(targetSlot)]: backing * 20_000n,
 					[fixture.formatStorageSlot(1n)]: 1n,
 					[fixture.formatStorageSlot(7n)]: maxUint256,
 					[fixture.formatStorageSlot(8n)]: firstFeeIndex,

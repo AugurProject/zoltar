@@ -1,3 +1,4 @@
+import { getSeededVaultDepositTargetFactorBps } from './seededVaultTarget.js'
 import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import { getStatoblastScenarioProtocol as getScenarioProtocol } from './statoblastScenarioProtocol.js'
@@ -102,16 +103,9 @@ async function loadRequiredSeededPool(readClient: ReadClient, securityPoolAddres
 async function loadRequiredSecurityVault(readClient: ReadClient, securityPoolAddress: Address, vaultAddress: Address, label: string) {
 	const vaultDetails = await getScenarioProtocol().loadSecurityVaultDetails(readClient, securityPoolAddress, vaultAddress)
 	if (vaultDetails === undefined) throw new Error(`Expected seeded security vault details for ${label}`)
-	return vaultDetails
-}
-
-function getSeededVaultDepositTargetFactorBps(vault: SeededVaultSpec) {
-	if (vault.capacityOwnershipAttoRep <= 0n) throw new Error('Seeded vault capacity ownership must be positive')
-	const numerator = vault.vaultRepBackingDepositAttoRep * 10_000n
-	if (numerator % vault.capacityOwnershipAttoRep !== 0n) throw new Error('Seeded vault capacity ownership must map to an exact deposit target factor')
-	const depositTargetFactorBps = numerator / vault.capacityOwnershipAttoRep
-	if (depositTargetFactorBps < 10_000n) throw new Error('Seeded vault deposit target factor must be at least 1.00×')
-	return depositTargetFactorBps
+	const targetBackingFactorBps = vaultDetails.targetBackingFactorBps
+	if (targetBackingFactorBps === undefined || targetBackingFactorBps < STATOBLAST_SECURITY_MULTIPLIER_BPS) throw new Error(`Expected a valid saved vault target for ${label}`)
+	return { ...vaultDetails, targetBackingFactorBps }
 }
 
 async function createSeededSecurityPool({ createWriteClient, currentTimestamp, deployerAccount, questionTitle }: { createWriteClient: (accountAddress: Address) => WriteClient; currentTimestamp: bigint; deployerAccount: Address; questionTitle: string }) {
@@ -268,7 +262,7 @@ async function seedSecurityPool({
 	for (const [index, vaultSpec] of poolSpec.vaults.entries()) {
 		const writeClient = createWriteClient(vaultSpec.accountAddress)
 		await getScenarioProtocol().approveErc20(writeClient, profile.genesisRepTokenAddress, poolResult.securityPoolAddress, vaultSpec.vaultRepBackingDepositAttoRep, 'approveRep')
-		await getScenarioProtocol().depositRepToVaultToSecurityPool(writeClient, poolResult.securityPoolAddress, vaultSpec.vaultRepBackingDepositAttoRep, getSeededVaultDepositTargetFactorBps(vaultSpec))
+		await getScenarioProtocol().depositRepToVaultToSecurityPool(writeClient, poolResult.securityPoolAddress, vaultSpec.vaultRepBackingDepositAttoRep, getSeededVaultDepositTargetFactorBps(vaultSpec, STATOBLAST_SECURITY_MULTIPLIER_BPS))
 		const seededVault = await loadRequiredSecurityVault(readClient, poolResult.securityPoolAddress, vaultSpec.accountAddress, vaultSpec.accountAddress)
 		if (seededVault.vaultAttoRepBacking !== vaultSpec.vaultRepBackingDepositAttoRep) throw new Error(`Expected seeded REP deposit for ${vaultSpec.accountAddress} in ${poolSpec.poolLabel}, got ${seededVault.vaultAttoRepBacking.toString()}`)
 		await reportStep(`Funding seeded security vault ${index + 1} of ${poolSpec.vaults.length} for ${poolSpec.poolLabel}`)
@@ -422,7 +416,7 @@ async function seedSecurityPoolX2Scenario({
 		for (const [index, vaultSpec] of seededPool.vaults.entries()) {
 			const writeClient = createWriteClient(vaultSpec.accountAddress)
 			await getScenarioProtocol().approveErc20(writeClient, profile.genesisRepTokenAddress, poolResult.securityPoolAddress, vaultSpec.vaultRepBackingDepositAttoRep, 'approveRep')
-			await getScenarioProtocol().depositRepToVaultToSecurityPool(writeClient, poolResult.securityPoolAddress, vaultSpec.vaultRepBackingDepositAttoRep, getSeededVaultDepositTargetFactorBps(vaultSpec))
+			await getScenarioProtocol().depositRepToVaultToSecurityPool(writeClient, poolResult.securityPoolAddress, vaultSpec.vaultRepBackingDepositAttoRep, getSeededVaultDepositTargetFactorBps(vaultSpec, STATOBLAST_SECURITY_MULTIPLIER_BPS))
 			const seededVault = await loadRequiredSecurityVault(readClient, poolResult.securityPoolAddress, vaultSpec.accountAddress, vaultSpec.accountAddress)
 			if (seededVault.vaultAttoRepBacking !== vaultSpec.vaultRepBackingDepositAttoRep) throw new Error(`Expected seeded REP deposit for ${vaultSpec.accountAddress} in ${seededPool.poolLabel}, got ${seededVault.vaultAttoRepBacking.toString()}`)
 			await reportStep(`Funding seeded security vault ${index + 1} of ${seededPool.vaults.length} for ${seededPool.poolLabel}`)

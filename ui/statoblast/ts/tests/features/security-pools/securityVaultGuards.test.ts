@@ -2,11 +2,17 @@
 
 import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import { getVaultDepositGuardMessage, getVaultExecutePendingOperationGuardMessage, getVaultRequestPriceGuardMessage, getVaultWithdrawGuardMessage } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityVaultGuards.js'
+import { getTargetHealthFactorGuardMessage, getVaultDepositGuardMessage, getVaultExecutePendingOperationGuardMessage, getVaultRequestPriceGuardMessage, getVaultWithdrawGuardMessage } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityVaultGuards.js'
 
 const ATTO_ETH_PER_ETH = 10n ** 18n
 
 describe('security vault guards', () => {
+	test('uses the loaded pool backing minimum inclusively, including fractional ratios', () => {
+		expect(getTargetHealthFactorGuardMessage('2.4999', 25_000n)).toBe('Target backing ratio must be at least 2.5×')
+		expect(getTargetHealthFactorGuardMessage('2.5', 25_000n)).toBeUndefined()
+		expect(getTargetHealthFactorGuardMessage('3', 25_000n)).toBeUndefined()
+	})
+
 	test('blocks deposit until deterministic deposit prerequisites are met', () => {
 		expect(
 			getVaultDepositGuardMessage({
@@ -64,9 +70,9 @@ describe('security vault guards', () => {
 				walletRepShortfallAttoRep: undefined,
 			})
 
-		expect(guard('')).toBe('Target backing factor must be a number with at most four decimal places')
-		expect(guard('abc')).toBe('Target backing factor must be a number with at most four decimal places')
-		expect(guard('0.9999')).toBe('Target backing factor must be at least 1.00×')
+		expect(guard('')).toBe('Target backing ratio must be a number with at most four decimal places')
+		expect(guard('abc')).toBe('Target backing ratio must be a number with at most four decimal places')
+		expect(guard('0.9999')).toBe('Target backing ratio must be at least 1×')
 		expect(guard('1.25')).toBeUndefined()
 	})
 

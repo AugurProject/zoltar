@@ -133,7 +133,7 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		require(msg.sender == address(securityPool.priceOracleManagerAndOperatorQueuer()), 'Unauthorized');
 		require(securityPool.priceOracleManagerAndOperatorQueuer().isPriceValid(), 'Stale price');
 		_requireVaultAdmissionOpen(pool);
-		require(backingFactorBps >= SecurityPoolUtils.BPS_DENOMINATOR, 'Backing factor below minimum');
+		require(backingFactorBps >= statoblastSecurityMultiplierBps, 'Backing factor below minimum');
 		require(address(escalationGame) == address(0) || escalationGame.disputeStakedRepByVaultAttoRep(vault) == 0, 'Vault REP in dispute');
 		pool.updateVaultFees(vault);
 		uint256 backing = pool.backingUnitsToAttoRep(securityVaults[vault].repBackingUnits);
@@ -144,7 +144,7 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 	}
 
 	function _applyVaultTarget(ISecurityPoolRepDepositContext pool, address vault, uint256 backing, uint256 factor) private {
-		uint256 capacity = Math.mulDiv(backing, SecurityPoolUtils.BPS_DENOMINATOR, factor);
+		uint256 capacity = Math.mulDiv(backing, statoblastSecurityMultiplierBps, factor);
 		require(capacity > 0, 'Capacity must be positive');
 		_setVaultCapacity(vault, capacity, 0);
 		pool.updateRetentionRate();
@@ -164,7 +164,7 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		) return;
 		if (address(escalationGame) != address(0) && escalationGame.disputeStakedRepByVaultAttoRep(vault) != 0) return;
 		uint256 backing = pool.backingUnitsToAttoRep(securityVaults[vault].repBackingUnits);
-		uint256 capacity = Math.mulDiv(backing, SecurityPoolUtils.BPS_DENOMINATOR, factor);
+		uint256 capacity = Math.mulDiv(backing, statoblastSecurityMultiplierBps, factor);
 		if (capacity == 0 || capacity == securityVaults[vault].capacityOwnershipAttoRep) return;
 		_applyVaultTarget(pool, vault, backing, factor);
 	}
@@ -197,7 +197,7 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		ISecurityPoolRepDepositContext pool = ISecurityPoolRepDepositContext(address(this));
 		_requireVaultAdmissionOpen(pool);
 		require(attoRepAmount > 0, 'Zero REP');
-		require(targetHealthFactorBps >= SecurityPoolUtils.BPS_DENOMINATOR, 'HF low');
+		require(targetHealthFactorBps >= statoblastSecurityMultiplierBps, 'Target below pool minimum');
 		uint256 savedTarget = vaultTargetBackingFactorBps[vault];
 		require(savedTarget == 0 || savedTarget == targetHealthFactorBps, 'Use saved vault target');
 		if (savedTarget == 0) vaultTargetBackingFactorBps[vault] = targetHealthFactorBps;
@@ -207,10 +207,10 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		securityVaults[vault].repBackingUnits += repBackingUnits;
 		totalRepBackingUnits += repBackingUnits;
 		require(pool.backingUnitsToAttoRep(securityVaults[vault].repBackingUnits) >= minimumVaultRepDepositAttoRep, 'Vault REP below minimum');
-		uint256 capacityOwnershipAddedAttoRep = Math.mulDiv(attoRepAmount, SecurityPoolUtils.BPS_DENOMINATOR, targetHealthFactorBps);
+		uint256 capacityOwnershipAddedAttoRep = Math.mulDiv(attoRepAmount, statoblastSecurityMultiplierBps, targetHealthFactorBps);
 		uint256 nextCapacity =
 			settlementCollateralAttoEth == 0
-				? Math.mulDiv(pool.backingUnitsToAttoRep(securityVaults[vault].repBackingUnits), SecurityPoolUtils.BPS_DENOMINATOR, targetHealthFactorBps)
+				? Math.mulDiv(pool.backingUnitsToAttoRep(securityVaults[vault].repBackingUnits), statoblastSecurityMultiplierBps, targetHealthFactorBps)
 				: securityVaults[vault].capacityOwnershipAttoRep + capacityOwnershipAddedAttoRep;
 		_setVaultCapacity(vault, nextCapacity, targetHealthFactorBps);
 		pool.updateRetentionRate();

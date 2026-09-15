@@ -24,6 +24,7 @@ const REP_TOKEN_ADDRESS = getAddress('0x0000000000000000000000000000000000000004
 function createSecurityVaultDetails(overrides: Partial<SecurityVaultDetails> = {}): SecurityVaultDetails {
 	return {
 		badDebtAttoEth: 0n,
+		statoblastSecurityMultiplierBps: 20_000n,
 		currentRetentionRate: 0n,
 		disputeStakedAttoRep: 0n,
 		managerAddress: MANAGER_ADDRESS,
@@ -179,7 +180,7 @@ describe('useSecurityVaultOperations', () => {
 	test('preserves the existing on-chain queue result for a target change', async () => {
 		const queuedOperation = { isPendingSlot: true, operation: 'adjustVaultBackingFactor' as const, operationId: 7n }
 		const dependencies = createSecurityVaultOperationsDependencies({
-			loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails({ targetBackingFactorBps: 10_000n, settlementCollateralAttoEth: 0n })),
+			loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails({ targetBackingFactorBps: 40_000n, settlementCollateralAttoEth: 0n })),
 			queueOracleManagerOperation: mock(async () => ({ hash: '0x01' as const, queuedOperation })),
 		})
 		let state: UseSecurityVaultOperationsState | undefined
@@ -190,7 +191,7 @@ describe('useSecurityVaultOperations', () => {
 		await act(async () => requireHookState(state).setSecurityVaultForm(current => ({ ...current, stagedOperationTimeoutMinutes: 'invalid' })))
 		await act(async () => await requireHookState(state).adjustBackingFactor('2'))
 		expect(requireHookState(state).securityVaultResult?.queuedOperation).toEqual(queuedOperation)
-		expect(requireHookState(state).securityVaultDetails?.targetBackingFactorBps).toBe(10_000n)
+		expect(requireHookState(state).securityVaultDetails?.targetBackingFactorBps).toBe(40_000n)
 	})
 
 	test('reports a rejected target execution as an error instead of success', async () => {

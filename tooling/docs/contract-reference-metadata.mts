@@ -45,7 +45,7 @@ export const contractPagesDirectory = 'docs/reference/contracts'
 export function contractPageOutputPath(contractName: string): string {
 	return `${contractPagesDirectory}/${contractName.toLowerCase()}.html`
 }
-export const expectedProductionSoliditySourceFingerprint = '4cab92c66f2bc9a96a34665435d750835f39018af988714a5b94968e8760f27a'
+export const expectedProductionSoliditySourceFingerprint = '55a1f050ef79794d95916dbb55af64c4573c6bf2dda39ddbd360d83c756719f5'
 
 export const eventSourceByName: Record<string, string> = {
 	VaultBadDebtMigrated: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
@@ -786,7 +786,7 @@ export const contractReferences: ContractReference[] = [
 		compiledAbiFingerprint: '706701fc3a1147becd89319b66f30b16518d8d9be0709aee9f6f4b15e216e629',
 		name: 'SecurityPool',
 		delegatedInteractions:
-			'Vault owners change their saved target through coordinator operation `AdjustVaultBackingFactor` (2), which executes immediately with a fresh price or remains in the existing on-chain queue. The pool fallback exposes `adjustVaultBackingFactor(vault, backingFactorBps)` through `ISecurityPool` only to its coordinator. Capacity becomes `pool-held vault REP × 10,000 / backingFactorBps`, rounded down, without transferring REP. The factor must be at least 10,000 and leave positive capacity and a fully collateralized vault at execution. The pool must be operational, unforked, unresolved, and open to vault admission; dispute-staked REP must be zero. Capacity reductions require zero settlement collateral. Successful execution saves the target, checkpoints fees, updates retention, and emits `VaultBackingFactorAdjusted` plus accounting checkpoints. A queued or failed change leaves the saved target unchanged.',
+			'Vault owners change their saved target through coordinator operation `AdjustVaultBackingFactor` (2), which executes immediately with a fresh price or remains in the existing on-chain queue. The pool fallback exposes `adjustVaultBackingFactor(vault, backingFactorBps)` through `ISecurityPool` only to its coordinator. Capacity becomes `pool-held vault REP × statoblastSecurityMultiplierBps / backingFactorBps`, rounded down, without transferring REP. The target is an absolute backing ratio in BPS and must be at least `statoblastSecurityMultiplierBps` (equality allowed), leaving positive capacity and a fully collateralized vault at execution. The pool must be operational, unforked, unresolved, and open to vault admission; dispute-staked REP must be zero. Capacity reductions require zero settlement collateral. Successful execution saves the target, checkpoints fees, updates retention, and emits `VaultBackingFactorAdjusted` plus accounting checkpoints. A queued or failed change leaves the saved target unchanged.',
 		purpose: 'Holds ETH collateral and REP underwriting, accounts for vaults and fees, mints shares, and routes local escalation.',
 		readAbiFingerprint: 'f030ef34eddbe062230fb4d75f91f1c469b81d35796eeaf980f6b3027970891b',
 		readSurface:
@@ -861,7 +861,7 @@ export const contractReferences: ContractReference[] = [
 				effect: 'Transfers REP into the pool and credits proportional REP backing units. The first deposit saves the target; later deposits must match it. With no settlement collateral, capacity is recalculated from all pool-held vault backing. Otherwise, only the new deposit adds capacity at the saved factor.',
 				declarations: [{ name: 'depositRepToVault' }],
 				preconditions:
-					'Operational and unforked; `isEscalationResolved()` is false; the transaction timestamp is strictly before the question end time unless the pool has an inherited fork-continuation game; deposit amount is positive; target factor is at least 10,000 and matches any saved vault target; resulting vault REP meets the configured supply-scaled minimum.',
+					'Operational and unforked; `isEscalationResolved()` is false; the transaction timestamp is strictly before the question end time unless the pool has an inherited fork-continuation game; deposit amount is positive; target backing ratio is at least `statoblastSecurityMultiplierBps` and matches any saved vault target; resulting vault REP meets the configured supply-scaled minimum.',
 				signals: '`RepDepositedToVault`, `VaultDepositTargetHealthFactorRecorded`, and accounting checkpoints',
 			},
 			{
@@ -1631,7 +1631,7 @@ export const contractReferences: ContractReference[] = [
 					'Records the operation (`0` liquidation debt in attoETH, `1` withdrawal in attoREP, `2` target backing factor in BPS), executes immediately with a fresh price, or attaches it to a bounded pending settlement batch and opens a report when required. If unused ETH is positive, the final caller refund uses a low-level callback; rejection rolls back the entire transaction, including any queueing, immediate execution, or newly opened report.',
 				declarations: [{ name: 'requestPriceIfNeededAndStageOperation' }],
 				preconditions:
-					'`securityPool.isEscalationResolved()` is false; valid self-target for withdrawal or target adjustment, nonzero operation value (at least 10,000 BPS for a target adjustment), and timeout from 1 second through 5 minutes. Bounty, buffered report funding, matching REP, and token approvals are required only when this call opens a new report. The caller must accept any positive unused-ETH refund.',
+					'`securityPool.isEscalationResolved()` is false; valid self-target for withdrawal or target adjustment, nonzero operation value (at least the pool security multiplier for a target adjustment), and timeout from 1 second through 5 minutes. Bounty, buffered report funding, matching REP, and token approvals are required only when this call opens a new report. The caller must accept any positive unused-ETH refund.',
 				signals: '`StagedOperationQueued`, possibly `PriceRequested`, then `ExecutedStagedOperation`; authoritative `CoordinatorStateCheckpoint` records',
 			},
 			{

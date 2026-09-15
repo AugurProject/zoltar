@@ -12,7 +12,7 @@ import { isSecurityPoolVaultAdmissionClosed, loadSecurityVaultDetails } from '..
 import { depositRepToVaultToSecurityPool, redeemRepFromVaultFromSecurityPool, redeemSecurityVaultFees, updateSecurityVaultFees } from '../../../protocol/securityVault.js'
 import { getPendingTitle, getSuccessTitle, getFailureTitle } from '../lib/securityVaultActionTitles.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
-import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyInputBalance, formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { normalizeAddress, sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { getErrorMessage, isRecoverableContractReadError } from '@zoltar/ui-core-shared/lib/errors.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
@@ -366,6 +366,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				if (depositAmount <= 0n) throw new Error('REP deposit amount must be greater than zero')
 				const details = await loadExistingSecurityVaultDetails(securityPoolAddress, vaultAddress, 'Security pool does not exist', isCurrentSelection)
 				if (details === undefined) return undefined
+				parseTargetHealthFactorBps(formatCurrencyInputBalance(details.targetBackingFactorBps || requestedTargetHealthFactorBps, 4), undefined, details.statoblastSecurityMultiplierBps)
 				const currentRepBalanceAttoRep = await dependencies.loadErc20Balance(details.repToken, vaultAddress)
 				if (!isCurrentSelection()) return undefined
 				repBalanceLoader.signal.value = { error: undefined, loading: false, value: currentRepBalanceAttoRep }
@@ -411,7 +412,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				if (guard !== undefined) throw new Error(guard)
 				if (await dependencies.isSecurityPoolVaultAdmissionClosed(securityPoolAddress)) throw new Error(securityPoolCopy.vaultDepositAdmissionClosedDetail)
 				if (!isCurrentSelection()) return undefined
-				if (details === undefined || (details.vaultAttoRepBacking * 10_000n) / factor === 0n) throw new Error('Backing factor must leave positive capacity.')
+				if (details === undefined || (details.vaultAttoRepBacking * (details.statoblastSecurityMultiplierBps ?? 10_000n)) / factor === 0n) throw new Error('Backing factor must leave positive capacity.')
 				const { managerDetails, writeClient } = await prepareVaultOracleOperation(details, vaultAddress)
 				if (!isCurrentSelection()) return undefined
 				const coverageGuard = getVaultBackingFactorAdjustmentGuard(details, factor, managerDetails?.isPriceValid ? managerDetails.lastPrice : undefined, details.statoblastSecurityMultiplierBps)

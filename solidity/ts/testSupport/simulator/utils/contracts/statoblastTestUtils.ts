@@ -20,7 +20,7 @@ const PRICE_PRECISION = 10n ** 18n
 const DEFAULT_SELF_OPERATION_VALID_FOR_SECONDS = 5n * 60n
 const ORACLE_PRICE_VALID_FOR_SECONDS = 5n * 60n
 
-export const approveAndDepositRepToVault = async (client: WriteClient, repDeposit: bigint, questionId: bigint, targetHealthFactorBps = 10_000n) => {
+export const approveAndDepositRepToVault = async (client: WriteClient, repDeposit: bigint, questionId: bigint, targetHealthFactorBps?: bigint) => {
 	const securityPoolAddress = getSecurityPoolAddresses(zeroAddress, genesisUniverse, questionId, statoblastSecurityMultiplierBps).securityPool
 	assert.ok(await contractExists(client, securityPoolAddress), 'security pool not deployed')
 

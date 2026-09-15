@@ -34,23 +34,43 @@ describe('Vault backing factor adjustment', () => {
 		throw new Error('Expected immediate operation execution')
 	}
 
+	test('uses the pool security multiplier as the inclusive absolute target minimum', async () => {
+		await assert.rejects(adjust(19_999n), /Backing factor below minimum/)
+		await adjust(20_000n)
+		assert.strictEqual((await getSecurityVault(fixture.client, fixture.securityPoolAddresses.securityPool, fixture.client.account.address)).capacityOwnershipAttoRep, fixture.repDeposit)
+		await adjust(30_000n)
+		assert.strictEqual((await getSecurityVault(fixture.client, fixture.securityPoolAddresses.securityPool, fixture.client.account.address)).capacityOwnershipAttoRep, (fixture.repDeposit * 2n) / 3n)
+		assert.strictEqual(await fixture.client.readContract({ address: fixture.securityPoolAddresses.securityPool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'getCurrentMintingCapacityAttoEth' }), fixture.repDeposit / 3n)
+	})
+
+	test('first deposits reject targets below the pool minimum and accept equality', async () => {
+		const { client, mockWindow, securityPoolAddresses, repDeposit } = fixture
+		const vault = createWriteClient(mockWindow, TEST_ADDRESSES[2])
+		await fixture.transferRepToAddress(client, vault.account.address, repDeposit)
+		await approveToken(vault, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
+		await assert.rejects(depositRepToVault(vault, securityPoolAddresses.securityPool, repDeposit, 19_999n), /Target below pool minimum/)
+		assert.strictEqual(await client.readContract({ address: securityPoolAddresses.securityPool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'vaultTargetBackingFactorBps', args: [vault.account.address] }), 0n)
+		await depositRepToVault(vault, securityPoolAddresses.securityPool, repDeposit, 20_000n)
+		assert.strictEqual((await getSecurityVault(client, securityPoolAddresses.securityPool, vault.account.address)).capacityOwnershipAttoRep, repDeposit)
+	})
+
 	test('initializes the target on the first deposit and persists a later change', async () => {
 		const target = () => fixture.client.readContract({ address: fixture.securityPoolAddresses.securityPool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'vaultTargetBackingFactorBps', args: [fixture.client.account.address] })
-		assert.strictEqual(await target(), 10_000n)
-		await adjust(20_000n)
 		assert.strictEqual(await target(), 20_000n)
+		await adjust(40_000n)
+		assert.strictEqual(await target(), 40_000n)
 	})
 
 	test('uses the saved target for deposits and rejects deposit-time target changes', async () => {
-		await adjust(20_000n)
+		await adjust(40_000n)
 		const { client, securityPoolAddresses, repDeposit } = fixture
-		await assert.rejects(depositRepToVault(client, securityPoolAddresses.securityPool, repDeposit, 30_000n), /Use saved vault target/)
-		await depositRepToVault(client, securityPoolAddresses.securityPool, repDeposit, 20_000n)
+		await assert.rejects(depositRepToVault(client, securityPoolAddresses.securityPool, repDeposit, 60_000n), /Use saved vault target/)
+		await depositRepToVault(client, securityPoolAddresses.securityPool, repDeposit, 40_000n)
 		assert.strictEqual((await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)).capacityOwnershipAttoRep, repDeposit)
 	})
 
 	test('applies a saved target automatically at a safe vault checkpoint after backing changes', async () => {
-		await adjust(20_000n)
+		await adjust(40_000n)
 		const { client, securityPoolAddresses, repDeposit } = fixture
 		const hash = await client.writeContract({ address: addressString(GENESIS_REPUTATION_TOKEN), abi: IERC20_IERC20.abi, functionName: 'transfer', args: [securityPoolAddresses.securityPool, repDeposit] })
 		await client.waitForTransactionReceipt({ hash })
@@ -64,16 +84,16 @@ describe('Vault backing factor adjustment', () => {
 		const pool = securityPoolAddresses.securityPool
 		const target = () => client.readContract({ address: pool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'vaultTargetBackingFactorBps', args: [client.account.address] })
 		const before = await target()
-		await requestPriceIfNeededAndStageOperation(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.AdjustVaultBackingFactor, client.account.address, 20_000n)
+		await requestPriceIfNeededAndStageOperation(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.AdjustVaultBackingFactor, client.account.address, 40_000n)
 		assert.ok((await getPendingReportId(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)) > 0n)
 		assert.strictEqual(await target(), before)
 		await handleOracleReporting(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, 10n ** 18n)
-		assert.strictEqual(await target(), 20_000n)
+		assert.strictEqual(await target(), 40_000n)
 		assert.strictEqual((await getSecurityVault(client, pool, client.account.address)).capacityOwnershipAttoRep, repDeposit / 2n)
 	})
 
 	test('rejects a capacity increase that would make a previously healthy vault undercollateralized', async () => {
-		await adjust(20_000n)
+		await adjust(40_000n)
 		const { client, securityPoolAddresses, mockWindow, repDeposit } = fixture
 		const otherVault = createWriteClient(mockWindow, TEST_ADDRESSES[2])
 		await fixture.transferRepToAddress(client, otherVault.account.address, repDeposit)
@@ -83,31 +103,31 @@ describe('Vault backing factor adjustment', () => {
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, 2n * 10n ** 18n)
 		const oldOpenInterest = await client.readContract({ address: securityPoolAddresses.securityPool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'getVaultOpenInterestAttoEth', args: [client.account.address] })
 		assert.ok(oldOpenInterest * 4n <= repDeposit, 'the current vault remains healthy before reallocating open interest')
-		await assert.rejects(adjust(10_000n), /Vault backing insufficient/)
-		assert.strictEqual(await client.readContract({ address: securityPoolAddresses.securityPool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'vaultTargetBackingFactorBps', args: [client.account.address] }), 20_000n)
+		await assert.rejects(adjust(20_000n), /Vault backing insufficient/)
+		assert.strictEqual(await client.readContract({ address: securityPoolAddresses.securityPool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'vaultTargetBackingFactorBps', args: [client.account.address] }), 40_000n)
 		assert.strictEqual((await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)).capacityOwnershipAttoRep, repDeposit / 2n)
 	})
 
 	test('allows a fully collateralized capacity increase with settlement collateral committed', async () => {
-		await adjust(20_000n)
+		await adjust(40_000n)
 		const { client, securityPoolAddresses, repDeposit } = fixture
 		await createCompleteSet(client, securityPoolAddresses.securityPool, repDeposit / 10n)
-		await adjust(10_000n)
+		await adjust(20_000n)
 		assert.strictEqual((await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)).capacityOwnershipAttoRep, repDeposit)
 	})
 
 	test('consumes a queued change that becomes unsafe without replacing the saved target', async () => {
-		await adjust(20_000n)
+		await adjust(40_000n)
 		const { client, securityPoolAddresses, repDeposit, mockWindow } = fixture
 		const manager = securityPoolAddresses.priceOracleManagerAndOperatorQueuer
 		await createCompleteSet(client, securityPoolAddresses.securityPool, repDeposit / 5n)
 		const validUntil = await client.readContract({ address: manager, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'lastSettlementTimestamp' })
 		await mockWindow.setTime(validUntil + 3601n)
-		await requestPriceIfNeededAndStageOperationWithInitialReportPrice(client, manager, OperationType.AdjustVaultBackingFactor, client.account.address, 10_000n, 300n, 3n * 10n ** 18n, await getRequestPriceCostAttoEth(client, manager))
+		await requestPriceIfNeededAndStageOperationWithInitialReportPrice(client, manager, OperationType.AdjustVaultBackingFactor, client.account.address, 20_000n, 300n, 3n * 10n ** 18n, await getRequestPriceCostAttoEth(client, manager))
 		assert.ok((await getPendingReportId(client, manager)) > 0n)
 		await handleOracleReporting(client, mockWindow, manager, 3n * 10n ** 18n)
 		assert.strictEqual(await client.readContract({ address: manager, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'getActiveStagedOperationCount' }), 0n)
-		assert.strictEqual(await client.readContract({ address: securityPoolAddresses.securityPool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'vaultTargetBackingFactorBps', args: [client.account.address] }), 20_000n)
+		assert.strictEqual(await client.readContract({ address: securityPoolAddresses.securityPool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'vaultTargetBackingFactorBps', args: [client.account.address] }), 40_000n)
 		assert.strictEqual((await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)).capacityOwnershipAttoRep, repDeposit / 2n)
 	})
 
@@ -115,11 +135,11 @@ describe('Vault backing factor adjustment', () => {
 		const { client, securityPoolAddresses, repDeposit, getVaultRepClaim } = fixture
 		const pool = securityPoolAddresses.securityPool
 		const walletBefore = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
-		await adjust(20_000n)
+		await adjust(40_000n)
 		assert.strictEqual((await getSecurityVault(client, pool, client.account.address)).capacityOwnershipAttoRep, repDeposit / 2n)
 		assert.strictEqual(await getTotalCapacityOwnershipAttoRep(client, pool), repDeposit / 2n)
 		assert.strictEqual(await getVaultRepClaim(client.account.address), repDeposit)
-		await adjust(10_000n)
+		await adjust(20_000n)
 		assert.strictEqual((await getSecurityVault(client, pool, client.account.address)).capacityOwnershipAttoRep, repDeposit)
 		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), walletBefore)
 	})
@@ -127,25 +147,25 @@ describe('Vault backing factor adjustment', () => {
 	test('rejects changes after vault admission closes', async () => {
 		await fixture.mockWindow.setTime(fixture.questionData.endTime + 1n)
 		await manipulatePriceOracle(fixture.client, fixture.mockWindow, fixture.securityPoolAddresses.priceOracleManagerAndOperatorQueuer, 10n ** 18n)
-		await assert.rejects(adjust(20_000n), /Vault admission closed/)
+		await assert.rejects(adjust(40_000n), /Vault admission closed/)
 	})
 
 	test('rejects invalid factors, zero capacity, and empty vaults', async () => {
 		await assert.rejects(adjust(9_999n), /Backing factor below minimum/)
 		await assert.rejects(adjust(2n ** 256n - 1n), /Capacity must be positive/)
 		const outsider = createWriteClient(fixture.mockWindow, TEST_ADDRESSES[1])
-		await assert.rejects(outsider.writeContract({ address: fixture.securityPoolAddresses.securityPool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'adjustVaultBackingFactor', args: [outsider.account.address, 20_000n] }), /Unauthorized/)
+		await assert.rejects(outsider.writeContract({ address: fixture.securityPoolAddresses.securityPool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'adjustVaultBackingFactor', args: [outsider.account.address, 40_000n] }), /Unauthorized/)
 	})
 
 	test('rejects committed capacity reductions without changing the saved target', async () => {
-		await adjust(20_000n)
+		await adjust(40_000n)
 		const { client, securityPoolAddresses, repDeposit } = fixture
 		await createCompleteSet(client, securityPoolAddresses.securityPool, repDeposit / 10n)
-		await assert.rejects(adjust(30_000n), /Capacity committed/)
+		await assert.rejects(adjust(60_000n), /Capacity committed/)
 		assert.strictEqual((await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)).capacityOwnershipAttoRep, repDeposit / 2n)
 		await redeemCompleteSet(client, securityPoolAddresses.securityPool, await getShareTokenSupplyAttoShares(client, securityPoolAddresses.securityPool))
 		const feesBefore = (await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)).claimableFeesAttoEth
-		await adjust(10_000n)
+		await adjust(20_000n)
 		const adjusted = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		assert.strictEqual(adjusted.capacityOwnershipAttoRep, repDeposit)
 		assert.ok(adjusted.claimableFeesAttoEth >= feesBefore, 'adjustment preserves accrued fees')

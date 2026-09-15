@@ -100,7 +100,7 @@ describe('Security vault integration', () => {
 		const approvedRep = await loadErc20Allowance(uiReadClient, initialVaultDetails.repToken, walletAddress, securityPoolAddress)
 		expect(approvedRep).toBe(depositAmount)
 
-		const depositResult = await depositRepToVaultToSecurityPool(uiWriteClient, securityPoolAddress, depositAmount)
+		const depositResult = await depositRepToVaultToSecurityPool(uiWriteClient, securityPoolAddress, depositAmount, 20_000n)
 		expect(depositResult.action).toBe('depositRepToVault')
 
 		const endPoolRepBalance = await loadErc20Balance(uiReadClient, initialVaultDetails.repToken, securityPoolAddress)
@@ -122,13 +122,13 @@ describe('Security vault integration', () => {
 		expect(updatedVaultDetails.vaultAttoRepBacking).toBe(depositAmount)
 		expect(updatedVaultDetails.settlementCollateralAttoEth).toBe(0n)
 		await manipulatePriceOracle(client, mockWindow, updatedVaultDetails.managerAddress, 10n ** 18n)
-		const adjustment = await queueOracleManagerOperation(uiWriteClient, updatedVaultDetails.managerAddress, 'adjustVaultBackingFactor', walletAddress, 20_000n, 300n)
+		const adjustment = await queueOracleManagerOperation(uiWriteClient, updatedVaultDetails.managerAddress, 'adjustVaultBackingFactor', walletAddress, 40_000n, 300n)
 		expect(adjustment.stagedExecution?.success).toBe(true)
 		const adjustedVault = await loadSecurityVaultDetails(uiReadClient, securityPoolAddress, walletAddress)
 		expect(adjustedVault?.capacityOwnershipAttoRep).toBe(depositAmount / 2n)
 		expect(adjustedVault?.vaultAttoRepBacking).toBe(depositAmount)
 		expect(adjustedVault?.poolHeldRepPerCapacityBps).toBe(20_000n)
-		expect(adjustedVault?.targetBackingFactorBps).toBe(20_000n)
+		expect(adjustedVault?.targetBackingFactorBps).toBe(40_000n)
 	})
 
 	test('surfaces the real revert reason when the first deposit is below the minimum', async () => {
@@ -137,6 +137,6 @@ describe('Security vault integration', () => {
 
 		await approveErc20(uiWriteClient, vaultDetails.repToken, securityPoolAddress, belowMinimumDepositAmount, 'approveRep')
 
-		await expect(depositRepToVaultToSecurityPool(uiWriteClient, securityPoolAddress, belowMinimumDepositAmount)).rejects.toThrow('Vault REP below minimum')
+		await expect(depositRepToVaultToSecurityPool(uiWriteClient, securityPoolAddress, belowMinimumDepositAmount, 20_000n)).rejects.toThrow('Vault REP below minimum')
 	})
 })

@@ -64,13 +64,18 @@ export const withdrawFromEscalationGame = async (client: WriteClient, securityPo
 	return hash
 }
 
-export const depositRepToVault = async (client: WriteClient, securityPoolAddress: Address, amount: bigint, targetHealthFactorBps = 10_000n) =>
-	await writeContractAndWait(client, () =>
+export const depositRepToVault = async (client: WriteClient, securityPoolAddress: Address, amount: bigint, targetHealthFactorBps?: bigint) =>
+	await writeContractAndWait(client, async () =>
 		client.writeContract({
 			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'depositRepToVault',
 			address: securityPoolAddress,
-			args: [amount, targetHealthFactorBps],
+			args: [
+				amount,
+				targetHealthFactorBps ??
+					((await client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'vaultTargetBackingFactorBps', args: [client.account.address] })) ||
+						(await client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'statoblastSecurityMultiplierBps' }))),
+			],
 			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
 	)

@@ -440,6 +440,8 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, walletVaultRegistere
 					return 1n
 				case 'targetPriceErrorForDispute':
 					return 1_000n
+				case 'vaultTargetBackingFactorBps':
+					return 0n
 				case 'openOracleSecurityMultiplierBps':
 				case 'escalationHaltMultiplierBps':
 				case 'statoblastSecurityMultiplierBps':

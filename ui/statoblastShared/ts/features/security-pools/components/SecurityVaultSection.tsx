@@ -113,6 +113,7 @@ export function SecurityVaultSection({
 	})
 		? securityVaultDetails
 		: undefined
+	const minimumBps = selectedPoolStatoblastSecurityMultiplierBps
 	const depositTargetHealthFactor = currentSelectedVaultDetails?.targetBackingFactorBps ? formatCurrencyInputBalance(currentSelectedVaultDetails.targetBackingFactorBps, 4) : normalizedSecurityVaultForm.targetHealthFactor
 	const selectedVaultIsOwnedByAccount = isSelectedVaultOwnedByAccountHelper(selectedVaultOwner, accountState.address)
 	const repTokenSymbol = currentSelectedVaultDetails?.repTokenSymbol ?? commonCopy.rep
@@ -191,9 +192,10 @@ export function SecurityVaultSection({
 		isDepositBelowMinimum,
 		minimumVaultRepDepositAttoRep,
 		targetHealthFactor: depositTargetHealthFactor,
+		minimumBackingRatioBps: selectedPoolStatoblastSecurityMultiplierBps,
 		walletRepShortfallAttoRep: hasInsufficientRepBalance ? walletRepShortfallAttoRep : undefined,
 	})
-	const targetHealthFactorGuardMessage = hasPositiveDepositAmount ? getTargetHealthFactorGuardMessage(depositTargetHealthFactor) : undefined
+	const targetHealthFactorGuardMessage = hasPositiveDepositAmount ? getTargetHealthFactorGuardMessage(depositTargetHealthFactor, selectedPoolStatoblastSecurityMultiplierBps) : undefined
 	const depositActionGuardMessage = targetHealthFactorGuardMessage === undefined ? (depositGuardMessage ?? (!hasPositiveDepositAmount ? commonCopy.positiveAmountRequired : undefined)) : undefined
 
 	const depositAmountNotice = (() => {
@@ -428,7 +430,7 @@ export function SecurityVaultSection({
 								</button>
 							</div>
 						</label>
-						<DepositBackingFactorField saved={!!currentSelectedVaultDetails?.targetBackingFactorBps} value={depositTargetHealthFactor} error={targetHealthFactorGuardMessage} disabled={!depositRepToVaultEnabled} onChange={targetHealthFactor => onSecurityVaultFormChange({ targetHealthFactor })} />
+						<DepositBackingFactorField minimumBps={minimumBps} saved={!!currentSelectedVaultDetails?.targetBackingFactorBps} value={depositTargetHealthFactor} error={targetHealthFactorGuardMessage} disabled={!depositRepToVaultEnabled} onChange={targetHealthFactor => onSecurityVaultFormChange({ targetHealthFactor })} />
 						<MetricGrid>
 							<MetricField label={securityPoolCopy.walletRep}>{walletRepBalanceLoading ? <LoadingText>{commonCopy.loading}</LoadingText> : <CurrencyValue value={walletRepBalanceAttoRep} suffix={repTokenSymbol} />}</MetricField>
 						</MetricGrid>
@@ -606,7 +608,7 @@ export function SecurityVaultSection({
 						</button>
 					</div>
 				</label>
-				<DepositBackingFactorField saved={!!currentSelectedVaultDetails?.targetBackingFactorBps} value={depositTargetHealthFactor} error={targetHealthFactorGuardMessage} disabled={!depositRepToVaultEnabled} onChange={targetHealthFactor => onSecurityVaultFormChange({ targetHealthFactor })} />
+				<DepositBackingFactorField minimumBps={minimumBps} saved={!!currentSelectedVaultDetails?.targetBackingFactorBps} value={depositTargetHealthFactor} error={targetHealthFactorGuardMessage} disabled={!depositRepToVaultEnabled} onChange={targetHealthFactor => onSecurityVaultFormChange({ targetHealthFactor })} />
 				<TokenApprovalControl
 					renderActions={({ button, notice, noticeId }) => renderDepositActions(button, notice, noticeId)}
 					actionLabel={depositRepActionLabel}

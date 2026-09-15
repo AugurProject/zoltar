@@ -409,7 +409,7 @@ contract OpenOraclePriceCoordinator {
 			require(msg.sender == pendingReportSponsor, 'Only the pending report sponsor can queue more operations until settlement');
 		}
 		if (operation == OperationType.AdjustVaultBackingFactor)
-			require(operationValue >= SecurityPoolUtils.BPS_DENOMINATOR, 'Backing factor below minimum');
+			require(operationValue >= securityPool.statoblastSecurityMultiplierBps(), 'Backing factor below minimum');
 		if (operation == OperationType.WithdrawRep) {
 			(, uint256 withdrawRepAmountAttoRep) = _previewWithdrawRep(msg.sender, operationValue);
 			require(withdrawRepAmountAttoRep > 0, 'Withdraw amount has no effect');

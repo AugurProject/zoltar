@@ -285,7 +285,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 					universeId: 1n,
 				}) as never,
 		),
-		depositRepToVaultToSecurityPool: mock(async (client: { account?: Address }, poolAddress: Address, amount: bigint, targetHealthFactorBps = 10_000n) => {
+		depositRepToVaultToSecurityPool: mock(async (client: { account?: Address }, poolAddress: Address, amount: bigint, targetHealthFactorBps = 20_000n) => {
 			state.callLog.depositRepToVaultToSecurityPool += 1
 			const vaultAddress = vaultAddressByPool[poolAddress]?.find((vaultAddressCandidate: Address) => vaultAddressCandidate === client.account) ?? vaultAddressByPool[poolAddress]?.[0]
 			if (vaultAddress !== undefined) {
@@ -296,7 +296,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 				repDeposits[poolAddress] ??= {}
 				repDeposits[poolAddress][vaultAddress] = amount
 				capacityOwnershipAttoReps[poolAddress] ??= {}
-				capacityOwnershipAttoReps[poolAddress][vaultAddress] = (amount * 10_000n) / targetHealthFactorBps
+				capacityOwnershipAttoReps[poolAddress][vaultAddress] = (amount * 20_000n) / targetHealthFactorBps
 			}
 			return {
 				action: 'depositRepToVault',

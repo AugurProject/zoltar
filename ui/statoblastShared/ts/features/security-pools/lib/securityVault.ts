@@ -1,3 +1,4 @@
+import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { isVaultHealthyAtFactor } from './liquidation.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { OracleManagerDetails } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -12,12 +13,12 @@ export const MAX_STAGED_OPERATION_TIMEOUT_MINUTES = 5n
 const PRICE_PRECISION = 10n ** 18n
 const BPS_DENOMINATOR = 10_000n
 
-export function parseTargetHealthFactorBps(value: string, label = 'Target backing factor') {
+export function parseTargetHealthFactorBps(value: string, label = 'Target backing ratio', minimumBps = BPS_DENOMINATOR) {
 	const trimmed = value.trim()
 	if (!/^\d+(?:\.\d{1,4})?$/.test(trimmed)) throw new Error(`${label} must be a number with at most four decimal places`)
 	const [whole = '', fraction = ''] = trimmed.split('.')
 	const factorBps = BigInt(whole) * BPS_DENOMINATOR + BigInt(fraction.padEnd(4, '0'))
-	if (factorBps < BPS_DENOMINATOR) throw new Error(`${label} must be at least 1.00×`)
+	if (factorBps < minimumBps) throw new Error(`${label} must be at least ${formatCurrencyInputBalance(minimumBps, 4)}×`)
 	return factorBps
 }
 
@@ -131,11 +132,14 @@ export function isOracleManagerPriceUsable(oracleManagerDetails: Pick<OracleMana
 
 export function getVaultBackingFactorAdjustmentGuard(details: SecurityVaultDetails | undefined, factorBps?: bigint, repPerEthPrice?: bigint, poolSecurityMultiplierBps?: bigint) {
 	if (details === undefined || details.settlementCollateralAttoEth === undefined) return 'Refresh vault details before adjusting the backing factor.'
+	const minimum = poolSecurityMultiplierBps ?? details.statoblastSecurityMultiplierBps
+	if (minimum === undefined) return 'Pool minimum backing ratio is unavailable.'
+	if (factorBps !== undefined && factorBps < minimum) return `Target backing ratio must be at least ${formatCurrencyInputBalance(minimum, 4)}×`
 	if (details.vaultAttoRepBacking <= 0n) return 'Deposit REP to create a vault first.'
-	if (details.settlementCollateralAttoEth > 0n && factorBps !== undefined && factorBps > 0n && (details.vaultAttoRepBacking * 10_000n) / factorBps < details.capacityOwnershipAttoRep) return 'Capacity cannot be reduced while the pool has committed settlement collateral.'
+	if (details.settlementCollateralAttoEth > 0n && factorBps !== undefined && factorBps > 0n && (details.vaultAttoRepBacking * minimum) / factorBps < details.capacityOwnershipAttoRep) return 'Capacity cannot be reduced while the pool has committed settlement collateral.'
 	if (details.disputeStakedAttoRep > 0n) return 'Backing factor changes are unavailable while vault REP is in a dispute.'
 	if (factorBps !== undefined && factorBps > 0n && repPerEthPrice !== undefined && poolSecurityMultiplierBps !== undefined) {
-		const capacity = (details.vaultAttoRepBacking * 10_000n) / factorBps
+		const capacity = (details.vaultAttoRepBacking * minimum) / factorBps
 		const totalCapacity = details.totalCapacityOwnershipAttoRep - details.capacityOwnershipAttoRep + capacity
 		const grossInterest = totalCapacity > 0n ? (details.settlementCollateralAttoEth * capacity + totalCapacity - 1n) / totalCapacity : 0n
 		const openInterestAttoEth = grossInterest > details.badDebtAttoEth ? grossInterest - details.badDebtAttoEth : 0n

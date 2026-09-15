@@ -37,7 +37,7 @@ describe('Audit PoC: stale bad debt survives a collateral reset', () => {
 		await manipulatePriceOracle(client, mockWindow, coordinator, PRICE_PRECISION)
 
 		await approveToken(liquidationReceiver, addressString(GENESIS_REPUTATION_TOKEN), securityPool)
-		await depositRepToVault(liquidationReceiver, securityPool, repDeposit * 10n, 1_000_000_000n)
+		await depositRepToVault(liquidationReceiver, securityPool, repDeposit * 10n, 2_000_000_000n)
 
 		const originalCollateralAttoEth = 30n * 10n ** 18n
 		await createCompleteSet(client, securityPool, originalCollateralAttoEth, true)

@@ -74,7 +74,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 							securityVaultForm: {
 								depositAmount: '1',
 								repWithdrawAmount: '1',
-								targetHealthFactor: '1',
+								targetHealthFactor: '2',
 								securityPoolAddress: selectedPoolAddress,
 								selectedVaultOwner: zeroAddress,
 							},
@@ -168,7 +168,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 						securityVaultForm: {
 							depositAmount: '10',
 							repWithdrawAmount: '1',
-							targetHealthFactor: '1',
+							targetHealthFactor: '2',
 							securityPoolAddress: zeroAddress,
 							selectedVaultOwner: zeroAddress,
 						},
@@ -250,8 +250,8 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 		expect(documentQueries.getByText('Failed to load security vault')).toBeTruthy()
 		expect(documentQueries.queryByText('Refresh the vault to use these actions.')).toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Deposit REP' }).getAttribute('aria-describedby')).toBe(retryReason.id)
-		expect(documentQueries.getByRole('button', { name: 'Adjust backing factor' }).getAttribute('aria-describedby')).toBe(retryReason.id)
-		expectTransactionButtonDisabled(document.body, 'Adjust backing factor')
+		expect(documentQueries.getByRole('button', { name: 'Adjust backing ratio' }).getAttribute('aria-describedby')).toBe(retryReason.id)
+		expectTransactionButtonDisabled(document.body, 'Adjust backing ratio')
 
 		await act(() => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Retry' }))
@@ -276,7 +276,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 						securityVaultForm: {
 							depositAmount: '10',
 							repWithdrawAmount: '1',
-							targetHealthFactor: '1',
+							targetHealthFactor: '2',
 							securityPoolAddress: zeroAddress,
 							selectedVaultOwner: '',
 						},
