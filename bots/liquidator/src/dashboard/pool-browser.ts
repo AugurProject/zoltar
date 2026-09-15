@@ -1,5 +1,6 @@
 import { clearPoolDate, renderPoolDate } from './pool-dates.ts'
 import { publicFailure } from './pool-presentation.ts'
+import { getAddress } from '@zoltar/bot-shared/ethereum'
 import { requestWithTimeout } from '@zoltar/bot-shared/dashboard/polling'
 import type { PoolCatalogPage } from '../monitoring/pool-catalog.ts'
 
@@ -21,6 +22,7 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 	let saving = false
 	let error: string | undefined
 	let discoveryFailed = false
+	let searchError: string | undefined
 	let renderedKey: string | undefined
 	let dateFields: { root: HTMLElement; timestamp: string | undefined }[] = []
 	const heading = node('div', '', 'section-heading')
@@ -34,21 +36,29 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 	const status = node('p', '', 'muted')
 	status.setAttribute('role', 'status')
 	const retry = node('button', 'Retry', 'secondary')
+	const searchLabel = node('label', 'Search by pool address', 'catalog-search')
+	const search = node('input')
+	search.type = 'search'
+	search.placeholder = '0x…'
+	search.autocomplete = 'off'
+	search.spellcheck = false
+	searchLabel.append(search)
 	const cards = node('div', '', 'pool-catalog-list')
-	root.append(heading, status, retry, cards)
+	root.append(heading, searchLabel, status, retry, cards)
 
 	function statusMessage() {
 		if (context.chainId === undefined) return 'Configure the chain and RPC endpoints in Settings to browse pools.'
+		if (searchError !== undefined) return searchError
 		if (error !== undefined) return error
 		if (saving) return 'Saving pool selection…'
-		if (loading) return 'Discovering pools…'
-		if (data?.total === '0') return 'No pools have been deployed on this chain.'
+		if (loading) return search.value.trim() === '' ? 'Discovering pools…' : 'Searching pools…'
+		if (data?.total === '0') return search.value.trim() === '' ? 'No pools have been deployed on this chain.' : 'No matching pool on this chain.'
 		if (data === undefined) return 'Waiting for connection…'
 		return ''
 	}
 
 	function render() {
-		const key = JSON.stringify([context.chainId, context.enabled, [...context.selected], [...context.approved], data, page, loading, saving, error, discoveryFailed])
+		const key = JSON.stringify([context.chainId, context.enabled, [...context.selected], [...context.approved], data, page, loading, saving, error, discoveryFailed, search.value, searchError])
 		const currentTimestamp = BigInt(Math.floor(Date.now() / 1000))
 		if (key === renderedKey) {
 			for (const field of dateFields) renderPoolDate(field.root, field.timestamp, currentTimestamp)
@@ -56,6 +66,9 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 		}
 		renderedKey = key
 		const focusedAction = document.activeElement instanceof HTMLButtonElement && cards.contains(document.activeElement) ? document.activeElement.getAttribute('aria-label') : undefined
+		search.disabled = !context.enabled || saving
+		search.setAttribute('aria-invalid', String(searchError !== undefined))
+		navigation.hidden = search.value.trim() !== ''
 		previous.disabled = loading || saving || !context.enabled || page === 0
 		next.disabled = loading || saving || !context.enabled || data === undefined || BigInt(page + 1) >= BigInt(data.pageCount)
 		summary.textContent = data === undefined ? '' : `${data.total} pools · Page ${page + 1} of ${data.pageCount === '0' ? '1' : data.pageCount}`
@@ -133,7 +146,7 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 	}
 
 	async function refresh() {
-		if (!context.enabled || saving) return
+		if (!context.enabled || saving || searchError !== undefined) return
 		const requestEpoch = ++epoch
 		loading = true
 		error = undefined
@@ -142,7 +155,7 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 		try {
 			const result: PoolCatalogPage = await requestWithTimeout(
 				async signal => {
-					const response = await fetch(`/api/pool-catalog?page=${page}`, { signal })
+					const response = await fetch(`/api/pool-catalog?page=${page}${search.value.trim() === '' ? '' : `&address=${encodeURIComponent(search.value.trim())}`}`, { signal })
 					if (!response.ok) throw new Error('Pool discovery failed')
 					return await response.json()
 				},
@@ -164,6 +177,24 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 			}
 		}
 	}
+	search.addEventListener('input', () => {
+		epoch += 1
+		page = 0
+		data = undefined
+		loading = false
+		error = undefined
+		searchError = undefined
+		discoveryFailed = false
+		if (search.value.trim() !== '') {
+			try {
+				getAddress(search.value.trim())
+			} catch (cause) {
+				searchError = publicFailure(cause, 'Enter a complete pool address to search.')
+			}
+		}
+		render()
+		void refresh()
+	})
 	previous.addEventListener('click', () => {
 		page -= 1
 		data = undefined
@@ -183,6 +214,8 @@ export function createPoolBrowser(root: HTMLElement, save: (address: string, sup
 			const becameEnabled = !context.enabled && nextContext.enabled
 			context = nextContext
 			if (changedChain) {
+				search.value = ''
+				searchError = undefined
 				epoch += 1
 				data = undefined
 				page = 0

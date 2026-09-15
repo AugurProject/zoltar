@@ -6,7 +6,7 @@ import { loadPoolCatalog } from '#monitoring/pool-catalog'
 
 const address = getAddress('0x1111111111111111111111111111111111111111')
 
-function fixture(total: bigint, options: { failMetrics?: boolean; failDates?: boolean; failDeployment?: boolean; missingQuestion?: boolean; reorg?: boolean } = {}) {
+function fixture(total: bigint, options: { unknownPool?: boolean; wrongCanonical?: boolean; failSearch?: boolean; failMetrics?: boolean; failDates?: boolean; failDeployment?: boolean; missingQuestion?: boolean; reorg?: boolean } = {}) {
 	const reads: { functionName: string; args: readonly unknown[]; blockNumber: bigint }[] = []
 	let blockReads = 0
 	const client = new Proxy(
@@ -30,6 +30,19 @@ function fixture(total: bigint, options: { failMetrics?: boolean; failDates?: bo
 					return async (parameters: { functionName: string; args: readonly unknown[]; blockNumber: bigint }) => {
 						reads.push(parameters)
 						switch (parameters.functionName) {
+							case 'getSecurityPoolOriginId':
+								if (options.failSearch) throw new Error('RPC unavailable')
+								return options.unknownPool ? `0x${'0'.repeat(64)}` : `0x${'1'.repeat(64)}`
+							case 'getSecurityPool':
+								return options.wrongCanonical ? zeroAddress : address
+							case 'universeId':
+								return 7n
+							case 'questionId':
+								return 42n
+							case 'parent':
+								return zeroAddress
+							case 'statoblastSecurityMultiplierBps':
+								return 12500n
 							case 'securityPoolDeploymentCount':
 								return total
 							case 'securityPoolDeploymentsRange':
@@ -105,4 +118,26 @@ test('keeps deployment and question dates independent when either source is unav
 	expect(noDeployment.pools[0]?.questionDates?.startTime).toBe('1789473600')
 	const missingQuestion = await loadPoolCatalog(fixture(1n, { missingQuestion: true }).client, address, 1, 0)
 	expect(missingQuestion.pools[0]?.questionDates).toBeUndefined()
+})
+
+test('finds an exact registered address without scanning catalog pages', async () => {
+	const { client, reads } = fixture(1000000n)
+	const result = await loadPoolCatalog(client, address, 1, 0, address)
+	expect(result).toMatchObject({ page: 0, total: '1', pageCount: '1', pools: [{ address, universeId: '7', questionId: '42', multiplierBps: '12500' }] })
+	expect(reads.some(read => read.functionName.startsWith('securityPoolDeployment'))).toBe(false)
+	expect(reads.find(read => read.functionName === 'getSecurityPool')?.args).toEqual([`0x${'1'.repeat(64)}`, 7n])
+	expect(reads.every(read => read.blockNumber === 42n)).toBe(true)
+})
+
+test('returns no match for unknown addresses or a mismatched factory registration', async () => {
+	for (const options of [{ unknownPool: true }, { wrongCanonical: true }]) {
+		const { client, reads } = fixture(1n, options)
+		expect(await loadPoolCatalog(client, address, 1, 0, address)).toMatchObject({ total: '0', pageCount: '0', pools: [] })
+		expect(reads.some(read => read.functionName === 'getTotalPoolHeldAttoRep')).toBe(false)
+	}
+})
+
+test('does not report RPC failure or reorganization as a missing search result', async () => {
+	await expect(loadPoolCatalog(fixture(1n, { failSearch: true }).client, address, 1, 0, address)).rejects.toThrow('RPC unavailable')
+	await expect(loadPoolCatalog(fixture(1n, { reorg: true }).client, address, 1, 0, address)).rejects.toThrow('changed during discovery')
 })

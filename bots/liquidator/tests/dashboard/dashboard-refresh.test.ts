@@ -198,6 +198,7 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 	let catalogFailure = false
 	let selectionFailure = false
 	const catalogRequests: string[] = []
+	const catalogSearches: (string | null)[] = []
 	let snapshot = initialState
 	let currentConfiguration = initialConfiguration
 	let pendingProfileConfiguration: DashboardConfiguration | undefined
@@ -225,6 +226,9 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 		const url = new URL(inputUrl, server.url)
 		if (url.pathname === '/api/pool-catalog') {
 			catalogRequests.push(url.searchParams.get('page') ?? '0')
+			const address = url.searchParams.get('address')
+			catalogSearches.push(address)
+			const found = address === null || /^0xa{40}$/i.test(address)
 			return new window.Response(
 				JSON.stringify(
 					catalogFailure
@@ -232,9 +236,9 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 						: {
 								chainId: currentConfiguration.network?.chainId,
 								page: Number(url.searchParams.get('page')),
-								pageCount: '2',
-								total: '13',
-								pools: [{ address: '0x2222222222222222222222222222222222222222', parent: '0x0000000000000000000000000000000000000000', questionId: '42', universeId: '7', multiplierBps: '12500', deploymentDate: '1789560000', questionDates: { startTime: '1789473600', endTime: '1792065600' } }],
+								pageCount: address === null ? '2' : String(Number(found)),
+								total: address === null ? '13' : String(Number(found)),
+								pools: found ? [{ address: address ?? '0x2222222222222222222222222222222222222222', parent: '0x0000000000000000000000000000000000000000', questionId: '42', universeId: '7', multiplierBps: '12500', deploymentDate: '1789560000', questionDates: { startTime: '1789473600', endTime: '1792065600' } }] : [],
 							},
 				),
 				{ status: catalogFailure ? 503 : 200 },
@@ -351,6 +355,7 @@ async function dashboard(initialConfiguration = mainnetConfiguration(), initialS
 	if (blockTick === undefined) throw new Error('Dashboard did not register its block-age interval')
 	return {
 		catalogRequests,
+		catalogSearches,
 		setCatalogFailure: (failed: boolean) => {
 			catalogFailure = failed
 		},
@@ -1112,51 +1117,45 @@ test('discovers pools when navigating from Overview without a page reload', asyn
 	expect(page.window.document.querySelector('#pool-browser')?.textContent).toContain('Question 42')
 })
 
-test('adds a pool by address with validation, duplicate detection, persistence, and retry', async () => {
+test('searches an address in All pools and adds it through the matching card', async () => {
 	const page = await dashboard(mainnetConfiguration(), state(), false, false, true)
-	const form = page.window.document.querySelector('#pool-address-form')
-	const input = form?.querySelector('input')
-	const button = form?.querySelector('button')
-	if (!(form instanceof page.window.HTMLFormElement) || !(input instanceof page.window.HTMLInputElement) || !(button instanceof page.window.HTMLButtonElement)) throw new Error('Missing pool address form')
-	const enter = (address: string) => {
-		input.value = address
-		input.dispatchEvent(new page.window.Event('input'))
-	}
-	const submit = async () => {
-		form.dispatchEvent(new page.window.Event('submit', { cancelable: true }))
+	const root = page.window.document.querySelector('#pool-browser')
+	const search = root?.querySelector('input[type="search"]')
+	if (root === null || root === undefined || !(search instanceof page.window.HTMLInputElement)) throw new Error('Missing pool search')
+	const enter = async (value: string) => {
+		search.value = value
+		search.dispatchEvent(new page.window.Event('input'))
 		await page.waitUntilComplete()
 	}
-	expect(button.disabled).toBe(true)
-	for (const address of ['not-an-address', `0x${'0'.repeat(40)}`]) {
-		enter(address)
-		await submit()
-		expect(input.getAttribute('aria-invalid')).toBe('true')
-		expect(form.textContent).toContain('Enter a valid, nonzero pool address.')
-	}
-	expect(page.supportedPoolRequests).toHaveLength(0)
+	expect(page.window.document.querySelector('#pool-address-form')).toBeNull()
+	expect(page.window.document.querySelector('#pool-rows')).not.toBeNull()
+	await enter('0x123')
+	expect(root.textContent).toContain('Enter a complete pool address')
+	expect(page.catalogSearches).toEqual([null])
 	const address = `0x${'a'.repeat(40)}`
-	enter(` ${address} `)
+	await enter(` ${address} `)
+	expect(page.catalogSearches.at(-1)).toBe(address)
+	expect(root.querySelectorAll('.catalog-record')).toHaveLength(1)
+	const action = () => {
+		const result = root.querySelector('.catalog-record button')
+		if (!(result instanceof page.window.HTMLButtonElement)) throw new Error('Missing pool action')
+		return result
+	}
 	page.setSelectionFailure(true)
-	await submit()
-	expect(form.textContent).toContain('Could not add pool. Try again.')
-	expect(input.value.trim()).toBe(address)
-	expect(button.disabled).toBe(false)
+	action().click()
+	await page.waitUntilComplete()
+	expect(root.textContent).toContain('Could not save pool selection')
 	page.setSelectionFailure(false)
-	await submit()
-	expect(form.textContent).toContain('Added to supported pools.')
-	expect(button.textContent).toBe('Already supported')
-	expect(button.disabled).toBe(true)
-	const request = page.supportedPoolRequests.at(-1)
-	expect(request).toEqual({ address: expect.stringMatching(/^0xa{40}$/i), supported: true, chainId: 1 })
-	await submit()
-	expect(page.supportedPoolRequests).toHaveLength(2)
+	action().click()
+	await page.waitUntilComplete()
+	expect(action().textContent).toBe('Remove from supported')
+	expect(page.supportedPoolRequests.at(-1)).toEqual({ address, supported: true, chainId: 1 })
 	await page.refresh()
-	expect(button.textContent).toBe('Already supported')
-	enter(`0x${'b'.repeat(40)}`)
-	page.setStateRequestFailure(true)
-	await page.refresh()
-	expect(input.disabled).toBe(true)
-	expect(button.disabled).toBe(true)
-	await submit()
-	expect(page.supportedPoolRequests).toHaveLength(2)
+	expect(action().textContent).toBe('Remove from supported')
+	await enter(`0x${'b'.repeat(40)}`)
+	expect(root.textContent).toContain('No matching pool on this chain.')
+	expect(root.querySelectorAll('.catalog-record')).toHaveLength(0)
+	await enter('')
+	expect(page.catalogSearches.at(-1)).toBeNull()
+	expect(root.textContent).toContain('13 pools · Page 1 of 2')
 })

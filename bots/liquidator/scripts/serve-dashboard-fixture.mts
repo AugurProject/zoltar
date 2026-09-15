@@ -151,14 +151,15 @@ function currentConfiguration() {
 }
 
 const server = startDashboardServer(4183, {
-	getPoolCatalog: async page => {
+	getPoolCatalog: async (page, address) => {
 		await Bun.sleep(500)
-		return {
+		const browseCount = page === 0 ? 12 : 1
+		const result = {
 			chainId: network?.chainId ?? 1,
 			page,
 			pageCount: '2',
 			total: '13',
-			pools: Array.from({ length: page === 0 ? 12 : 1 }, (_, index) => ({
+			pools: Array.from({ length: address === undefined ? browseCount : 13 }, (_, index) => ({
 				address: `0x${(page * 12 + index + 10).toString(16).padStart(40, '0')}`,
 				parent: index === 1 ? '0x1111111111111111111111111111111111111111' : '0x0000000000000000000000000000000000000000',
 				questionId: index === 1 ? longUniverseId : (42 + index).toString(),
@@ -168,6 +169,9 @@ const server = startDashboardServer(4183, {
 				...(index === 2 ? {} : { metrics: { systemState: index === 1 ? '1' : '0', totalPoolHeldRep: '125000.123456789', vaultCount: '18' } }),
 			})),
 		}
+		if (address === undefined) return result
+		const pools = result.pools.filter(pool => pool.address.toLowerCase() === address.toLowerCase())
+		return { ...result, page: 0, total: String(pools.length), pageCount: String(pools.length), pools }
 	},
 	setSupportedPool: value => {
 		if (typeof value !== 'object' || value === null || Reflect.get(value, 'chainId') !== network?.chainId) throw new Error('Invalid pool selection chain')

@@ -651,14 +651,16 @@ test('bounds factory browsing, gates network setup, sanitizes failures, and prot
 	let configured = false
 	let fail = false
 	const pages: number[] = []
+	const searches: (string | undefined)[] = []
 	const selections: unknown[] = []
 	const server = startDashboardServer(0, {
 		getConfiguration: () => ({}),
 		getState: () => ({}),
 		hostname: '127.0.0.1',
 		isNetworkConfigured: () => configured,
-		getPoolCatalog: async page => {
+		getPoolCatalog: async (page, address) => {
 			pages.push(page)
+			searches.push(address)
 			if (fail) throw new Error('RPC secret at /protected/path')
 			return { chainId: 1, page, pageCount: '0', total: '0', pools: [] }
 		},
@@ -680,6 +682,9 @@ test('bounds factory browsing, gates network setup, sanitizes failures, and prot
 	expect((await fetch(new URL('/api/pool-catalog?page=-1', server.url))).status).toBe(400)
 	expect((await fetch(new URL('/api/pool-catalog?page=9007199254740992', server.url))).status).toBe(400)
 	expect(await (await fetch(catalog)).json()).toMatchObject({ total: '0', pools: [] })
+	expect((await fetch(new URL('/api/pool-catalog?address=invalid', server.url))).status).toBe(400)
+	expect((await fetch(new URL('/api/pool-catalog?address=0x1111111111111111111111111111111111111111', server.url))).status).toBe(200)
+	expect(searches).toEqual([undefined, '0x1111111111111111111111111111111111111111'])
 	fail = true
 	const failed = await fetch(catalog)
 	expect(failed.status).toBe(503)

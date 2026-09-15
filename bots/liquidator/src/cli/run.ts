@@ -173,7 +173,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 	const dashboard = settings.runtime.ui
 		? startDashboardServer(settings.runtime.uiPort, {
 				getConfiguration: () => serializedSettings(settings, true),
-				getPoolCatalog: page => loadPoolCatalog(client, settings.deployment.securityPoolFactory, settings.network.chainId, page),
+				getPoolCatalog: (page, address) => loadPoolCatalog(client, settings.deployment.securityPoolFactory, settings.network.chainId, page, address),
 				getState: () => {
 					state.rpcEndpointHealth = readPool.snapshot()
 					return { ...operatorSnapshot(state, settings.runtime.execute, marketConfigurations(settings)), network: settings.network.name }

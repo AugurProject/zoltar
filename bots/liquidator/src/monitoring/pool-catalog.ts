@@ -2,7 +2,7 @@ import { loadPoolDeploymentDate } from './pool-deployment-date.ts'
 import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
 import { securityPoolAbi, securityPoolFactoryAbi, zoltarQuestionDataAbi } from '@zoltar/bot-shared/contracts/abi'
 import { formatDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
-import type { Address } from '@zoltar/bot-shared/ethereum'
+import { getAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import type { ReadClient } from './vault-positions.ts'
 
 type CatalogPool = {
@@ -26,16 +26,31 @@ export type PoolCatalogPage = {
 
 const PAGE_SIZE = 12n
 
-export async function loadPoolCatalog(client: ReadClient, factory: Address, chainId: number, page: number): Promise<PoolCatalogPage> {
+async function findPoolDeployment(client: ReadClient, factory: Address, address: Address, blockNumber: bigint) {
+	const originId = await client.readContract({ abi: securityPoolFactoryAbi, address: factory, functionName: 'getSecurityPoolOriginId', args: [address], blockNumber })
+	if (BigInt(originId) === 0n) return []
+	const universeId = await client.readContract({ abi: securityPoolAbi, address, functionName: 'universeId', args: [], blockNumber })
+	const registered = await client.readContract({ abi: securityPoolFactoryAbi, address: factory, functionName: 'getSecurityPool', args: [originId, universeId], blockNumber })
+	if (registered.toLowerCase() !== address.toLowerCase()) return []
+	const [parent, questionId, statoblastSecurityMultiplierBps] = await Promise.all([
+		client.readContract({ abi: securityPoolAbi, address, functionName: 'parent', args: [], blockNumber }),
+		client.readContract({ abi: securityPoolAbi, address, functionName: 'questionId', args: [], blockNumber }),
+		client.readContract({ abi: securityPoolAbi, address, functionName: 'statoblastSecurityMultiplierBps', args: [], blockNumber }),
+	])
+	return [{ securityPool: address, parent, universeId, questionId, statoblastSecurityMultiplierBps }]
+}
+
+export async function loadPoolCatalog(client: ReadClient, factory: Address, chainId: number, page: number, searchAddress?: Address): Promise<PoolCatalogPage> {
 	if (!Number.isSafeInteger(page) || page < 0) throw new Error('Pool page must be a non-negative safe integer')
 	const block = await client.getBlock()
 	if (block.number === undefined || block.hash === undefined) throw new Error('Pool registry block is unavailable')
 	const blockNumber = block.number
-	const total = await client.readContract({ abi: securityPoolFactoryAbi, address: factory, functionName: 'securityPoolDeploymentCount', args: [], blockNumber })
+	const match = searchAddress === undefined ? undefined : await findPoolDeployment(client, factory, getAddress(searchAddress), blockNumber)
+	const total = match === undefined ? await client.readContract({ abi: securityPoolFactoryAbi, address: factory, functionName: 'securityPoolDeploymentCount', args: [], blockNumber }) : BigInt(match.length)
 	const start = BigInt(page) * PAGE_SIZE
 	const remaining = start >= total ? 0n : total - start
 	const count = remaining < PAGE_SIZE ? remaining : PAGE_SIZE
-	const deployments = count === 0n ? [] : await client.readContract({ abi: securityPoolFactoryAbi, address: factory, functionName: 'securityPoolDeploymentsRange', args: [start, count], blockNumber })
+	const deployments = match ?? (count === 0n ? [] : await client.readContract({ abi: securityPoolFactoryAbi, address: factory, functionName: 'securityPoolDeploymentsRange', args: [start, count], blockNumber }))
 	const pools = await Promise.all(
 		deployments.map(async deployment => {
 			const pool: CatalogPool = {
@@ -77,5 +92,5 @@ export async function loadPoolCatalog(client: ReadClient, factory: Address, chai
 		}),
 	)
 	if ((await client.getBlock({ blockNumber })).hash !== block.hash) throw new Error('Pool registry block changed during discovery')
-	return { chainId, page, pageCount: ((total + PAGE_SIZE - 1n) / PAGE_SIZE).toString(), total: total.toString(), pools }
+	return { chainId, page: searchAddress === undefined ? page : 0, pageCount: ((total + PAGE_SIZE - 1n) / PAGE_SIZE).toString(), total: total.toString(), pools }
 }

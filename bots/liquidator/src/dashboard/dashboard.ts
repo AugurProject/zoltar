@@ -1,5 +1,4 @@
 import { cell, stacked, poolStatusText, botVaultState, publicFailure } from './pool-presentation.ts'
-import { createPoolAddressForm } from './pool-address-form.ts'
 import { createPoolBrowser } from './pool-browser.ts'
 import { createUniverseExplorer } from '@zoltar/bot-shared/dashboard/universe-explorer'
 import { readinessGuidance } from './readiness-status.js'
@@ -241,7 +240,6 @@ async function saveSupportedPool(address: string, supported: boolean, chainId: n
 	}
 }
 const poolBrowser = createPoolBrowser(element('pool-browser', HTMLElement), saveSupportedPool)
-const poolAddressForm = createPoolAddressForm(element('pool-address-form', HTMLFormElement), saveSupportedPool)
 new MutationObserver(updatePoolBrowser).observe(document.body, { attributes: true, attributeFilter: ['data-page'] })
 
 function updatePoolBrowser() {
@@ -252,7 +250,6 @@ function updatePoolBrowser() {
 		approved: approvedUniverses,
 	}
 	poolBrowser?.update(context)
-	poolAddressForm?.update(context)
 }
 
 function renderBlockStatus(snapshot = currentSnapshot) {
