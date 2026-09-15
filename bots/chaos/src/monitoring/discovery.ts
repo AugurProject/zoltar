@@ -1,8 +1,9 @@
+import { canonicalUniswapDeployment } from '@zoltar/bot-shared/config/canonical-deployment'
 import * as abis from '@zoltar/bot-shared/contracts/abi'
 import { bigintToSafeNumber, getAddress, zeroAddress, type Address, type Hash } from '@zoltar/bot-shared/ethereum'
 import { requireDeployedContracts } from '@zoltar/bot-shared/monitoring/deployed-contracts'
 import { sameAddress } from '@zoltar/core-shared/evm/address'
-import { CANONICAL_PROXY_DEPLOYER, CANONICAL_PROXY_DEPLOYER_RUNTIME, CANONICAL_UNISWAP_V3_FACTORY, GENESIS_UNISWAP_FEE, genesisUniswapSeederDeployment } from '../core/genesis-uniswap.ts'
+import { CANONICAL_PROXY_DEPLOYER, CANONICAL_PROXY_DEPLOYER_RUNTIME, GENESIS_UNISWAP_FEE, genesisUniswapSeederDeployment } from '../core/genesis-uniswap.ts'
 import { canonicalUintString, type CanonicalUintString } from '../core/units.ts'
 import { validForkOutcomeRoutes } from '../operations/fork-outcomes.ts'
 import { assertAnchoredOracleRequestFunding } from '../operations/oracle-request-funding.ts'
@@ -108,9 +109,9 @@ async function authenticateConfiguredGraph(context: EcosystemDiscoveryContext, b
 	return { factory, router }
 }
 
-async function discoverUniverseUniswap(context: EcosystemDiscoveryContext, universes: readonly UniverseSnapshot[], blockNumber: bigint) {
+async function discoverUniverseUniswap(context: EcosystemDiscoveryContext, universes: readonly UniverseSnapshot[], blockNumber: bigint, chainId: number) {
 	const seeder = genesisUniswapSeederDeployment()
-	const uniswapFactory = context.deployments.uniswapV3Factory ?? CANONICAL_UNISWAP_V3_FACTORY
+	const uniswapFactory = context.deployments.uniswapV3Factory ?? canonicalUniswapDeployment(chainId).factory
 	const [factoryCode, proxyCode, seederCode] = await drainConcurrent([context.client.getCode({ address: uniswapFactory, blockNumber }), context.client.getCode({ address: CANONICAL_PROXY_DEPLOYER, blockNumber }), context.client.getCode({ address: seeder.address, blockNumber })])
 	if (proxyCode !== undefined && proxyCode !== '0x' && proxyCode.toLowerCase() !== CANONICAL_PROXY_DEPLOYER_RUNTIME) throw new Error('Canonical proxy deployer has unexpected runtime code')
 	if (seederCode !== undefined && seederCode !== '0x' && seederCode.toLowerCase() !== seeder.runtime.toLowerCase()) throw new Error('Genesis Uniswap seeder has unexpected runtime code')
@@ -973,7 +974,7 @@ export async function discoverEcosystemSnapshot(context: EcosystemDiscoveryConte
 	])
 	const { pools, staged } = await discoverPools(context, blockNumber, block.timestamp, block.baseFeePerGas, limits, warnings, universes, questions, topology, topologyMutation)
 	const pairs = tradingDeployment.factory ? await discoverPairs(context, pools, blockNumber, topology, topologyMutation) : []
-	const universeUniswap = context.deployments.uniswapV3Factory !== undefined || context.discoverGenesisDeployment ? await discoverUniverseUniswap(context, universes, blockNumber) : undefined
+	const universeUniswap = context.deployments.uniswapV3Factory !== undefined || context.discoverGenesisDeployment ? await discoverUniverseUniswap(context, universes, blockNumber, chainId) : undefined
 	const genesis = universeUniswap?.pools.find(pool => pool.universeId === '0')
 	const genesisUniswap =
 		context.discoverGenesisDeployment && universeUniswap !== undefined

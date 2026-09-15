@@ -24,3 +24,9 @@ describe('operator networks', () => {
 		expect(() => parseNetworkName('holesky')).toThrow('mainnet or sepolia')
 	})
 })
+
+test('uses the deploy:testnet factory and quoter for Sepolia CLI defaults', () => {
+	const network = networkConfiguration('sepolia', {})
+	expect(network.factory).toBe('0xEf09Be426F8d6D2786cADEA7D3A8b0D09cEB79B4')
+	expect(network.quoter).toBe('0x6Aa53e5023fFDa81f7EEE31bdA5D35437A5DD841')
+})
