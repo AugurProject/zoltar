@@ -72,51 +72,49 @@ export const handleOracleReporting = async (client: WriteClient, mockWindow: Anv
 	assert.strictEqual(await getLastPrice(client, priceOracleManagerAndOperatorQueuer), expectedSettledPrice, 'settled coordinator price should match the encoded pending report price')
 }
 
-export const manipulatePriceOracleAndPerformOperation = async (client: WriteClient, mockWindow: AnvilWindowEthereum, priceOracleManagerAndOperatorQueuer: Address, operation: OperationType, targetVault: Address, amount: bigint, forceRepEthPriceTo: bigint = PRICE_PRECISION) => {
-	if (operation === OperationType.PriceRefresh) {
-		await manipulatePriceOracle(client, mockWindow, priceOracleManagerAndOperatorQueuer, forceRepEthPriceTo)
-		assert.strictEqual(targetVault, client.account.address, 'capacity target must be the caller vault')
-		const securityPool = requireAddress(
-			await client.readContract({
-				abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-				address: priceOracleManagerAndOperatorQueuer,
-				functionName: 'securityPool',
-				args: [],
-			}),
-			'Coordinator security pool',
-		)
-		await writeContractAndWait(client, () =>
-			client.writeContract({
-				abi: statoblast_SecurityPool_SecurityPool.abi,
-				address: securityPool,
-				functionName: 'updateVaultFees',
-				args: [targetVault],
-			}),
-		)
-		const [vault, totalCapacityOwnershipAttoRep, poolAccounting] = await Promise.all([
-			getSecurityVault(client, securityPool, targetVault),
-			client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'totalCapacityOwnershipAttoRep', args: [] }),
-			client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'getPoolAccountingSnapshot', args: [] }),
-		])
-		const vaultAttoRep = await backingUnitsToAttoRep(client, securityPool, vault.repBackingUnits)
-		const lastDepositTargetHealthFactorBps = amount === 0n ? (1n << 256n) - 1n : (vaultAttoRep * 10_000n) / amount
-		// Legacy scenarios used an oracle-gated absolute-capacity setter as setup. Capacity is now
-		// created only by deposit-time target factors, so preserve those scenarios with an explicit
-		// Anvil fixture override while production and focused tests exercise the new deposit path.
-		const mappingSlot = (slot: bigint) => BigInt(keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [targetVault, slot])))
-		const storageHex = (value: bigint) => `0x${value.toString(16).padStart(64, '0')}` as `0x${string}`
-		await mockWindow.addStateOverrides({
-			[securityPool]: {
-				stateDiff: {
-					[storageHex(1n)]: totalCapacityOwnershipAttoRep - vault.capacityOwnershipAttoRep + amount,
-					[storageHex(12n)]: poolAccounting.feeEligibleCapacityOwnershipAttoRep - vault.capacityOwnershipAttoRep + amount,
-					[storageHex(mappingSlot(16n) + 1n)]: amount,
-					[storageHex(mappingSlot(25n))]: lastDepositTargetHealthFactorBps,
-				},
+export const setVaultCapacityFixture = async (client: WriteClient, mockWindow: AnvilWindowEthereum, priceOracleManagerAndOperatorQueuer: Address, targetVault: Address, amount: bigint, forceRepEthPriceTo: bigint = PRICE_PRECISION) => {
+	await manipulatePriceOracle(client, mockWindow, priceOracleManagerAndOperatorQueuer, forceRepEthPriceTo)
+	assert.strictEqual(targetVault, client.account.address, 'capacity target must be the caller vault')
+	const securityPool = requireAddress(
+		await client.readContract({
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			address: priceOracleManagerAndOperatorQueuer,
+			functionName: 'securityPool',
+			args: [],
+		}),
+		'Coordinator security pool',
+	)
+	await writeContractAndWait(client, () =>
+		client.writeContract({
+			abi: statoblast_SecurityPool_SecurityPool.abi,
+			address: securityPool,
+			functionName: 'updateVaultFees',
+			args: [targetVault],
+		}),
+	)
+	const [vault, totalCapacityOwnershipAttoRep, poolAccounting] = await Promise.all([
+		getSecurityVault(client, securityPool, targetVault),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'totalCapacityOwnershipAttoRep', args: [] }),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'getPoolAccountingSnapshot', args: [] }),
+	])
+	const vaultAttoRep = await backingUnitsToAttoRep(client, securityPool, vault.repBackingUnits)
+	const lastDepositTargetHealthFactorBps = amount === 0n ? (1n << 256n) - 1n : (vaultAttoRep * 10_000n) / amount
+	// Explicit Anvil-only setup for accounting scenarios; this does not execute a protocol operation.
+	const mappingSlot = (slot: bigint) => BigInt(keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [targetVault, slot])))
+	const storageHex = (value: bigint): `0x${string}` => `0x${value.toString(16).padStart(64, '0')}`
+	await mockWindow.addStateOverrides({
+		[securityPool]: {
+			stateDiff: {
+				[storageHex(1n)]: totalCapacityOwnershipAttoRep - vault.capacityOwnershipAttoRep + amount,
+				[storageHex(12n)]: poolAccounting.feeEligibleCapacityOwnershipAttoRep - vault.capacityOwnershipAttoRep + amount,
+				[storageHex(mappingSlot(16n) + 1n)]: amount,
+				[storageHex(mappingSlot(25n))]: lastDepositTargetHealthFactorBps,
 			},
-		})
-		return
-	}
+		},
+	})
+}
+
+export const manipulatePriceOracleAndPerformOperation = async (client: WriteClient, mockWindow: AnvilWindowEthereum, priceOracleManagerAndOperatorQueuer: Address, operation: Exclude<OperationType, OperationType.PriceRefresh>, targetVault: Address, amount: bigint, forceRepEthPriceTo: bigint = PRICE_PRECISION) => {
 	const costAttoEth = await getRequestPriceCostAttoEth(client, priceOracleManagerAndOperatorQueuer)
 	await requestPriceIfNeededAndStageOperationWithInitialReportPrice(client, priceOracleManagerAndOperatorQueuer, operation, targetVault, amount, DEFAULT_SELF_OPERATION_VALID_FOR_SECONDS, forceRepEthPriceTo, costAttoEth)
 	await handleOracleReporting(client, mockWindow, priceOracleManagerAndOperatorQueuer, forceRepEthPriceTo)

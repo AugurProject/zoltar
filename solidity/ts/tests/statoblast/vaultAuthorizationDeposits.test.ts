@@ -19,7 +19,7 @@ describe('Vault authorization deposit accounting', () => {
 	const amount = fixture.repDeposit
 	const target = 20_000n
 
-	const prepare = async (existingBacking: boolean, committed: boolean, depositTarget = target, existingOwner = false) => {
+	const prepare = async (existingBacking: boolean, committed: boolean, depositTarget = target, existingOwner = false, depositAmount = amount) => {
 		const { client, mockWindow, questionData, questionId, outcomes } = fixture
 		await mockWindow.setTime(questionData.endTime + 1n)
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
@@ -37,7 +37,7 @@ describe('Vault authorization deposit accounting', () => {
 		const accounts = await mockWindow.request({ method: 'eth_accounts' })
 		if (!Array.isArray(accounts) || typeof accounts[0] !== 'string') throw new Error('Anvil signer missing')
 		const owner = getAddress(accounts[0])
-		await client.waitForTransactionReceipt({ hash: await client.writeContract({ address: token, abi: ReputationToken_ReputationToken.abi, functionName: 'transfer', args: [owner, existingOwner ? amount * 2n : amount] }) })
+		await client.waitForTransactionReceipt({ hash: await client.writeContract({ address: token, abi: ReputationToken_ReputationToken.abi, functionName: 'transfer', args: [owner, existingOwner ? amount + depositAmount : depositAmount] }) })
 		if (existingBacking) {
 			await approveToken(client, token, pool)
 			await depositRepToVault(client, pool, amount, target)
@@ -55,7 +55,7 @@ describe('Vault authorization deposit accounting', () => {
 		const operationHash = keccak256(
 			encodeAbiParameters(
 				[{ type: 'bytes4' }, { type: 'address' }, { type: 'uint248' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }],
-				[toFunctionSelector(parseAbiItem('function depositRepToVaultWithAuthorization(address,uint256,uint256,uint256,uint256,bytes32,uint8,bytes32,bytes32)')), owner, universe, childQuestionId, amount, depositTarget],
+				[toFunctionSelector(parseAbiItem('function depositRepToVaultWithAuthorization(address,uint256,uint256,uint256,uint256,bytes32,uint8,bytes32,bytes32)')), owner, universe, childQuestionId, depositAmount, depositTarget],
 			),
 		)
 		const boundNonce = keccak256(encodeAbiParameters([{ type: 'bytes32' }, { type: 'bytes32' }, { type: 'address' }], [nonce, operationHash, owner]))
@@ -78,7 +78,7 @@ describe('Vault authorization deposit accounting', () => {
 							{ name: 'nonce', type: 'bytes32' },
 						],
 					},
-					message: { from: owner, to: pool, value: amount.toString(), validAfter: '0', validBefore: validBefore.toString(), nonce: boundNonce },
+					message: { from: owner, to: pool, value: depositAmount.toString(), validAfter: '0', validBefore: validBefore.toString(), nonce: boundNonce },
 				}),
 			],
 		})
@@ -88,9 +88,9 @@ describe('Vault authorization deposit accounting', () => {
 		if (!isHex(r) || !isHex(s)) throw new Error('Invalid signature encoding')
 		const deposit = async (signatureR = r) =>
 			await client.waitForTransactionReceipt({
-				hash: await client.writeContract({ address: pool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'depositRepToVaultWithAuthorization', args: [owner, amount, depositTarget, 0n, validBefore, nonce, Number.parseInt(signature.slice(130, 132), 16), signatureR, s] }),
+				hash: await client.writeContract({ address: pool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'depositRepToVaultWithAuthorization', args: [owner, depositAmount, depositTarget, 0n, validBefore, nonce, Number.parseInt(signature.slice(130, 132), 16), signatureR, s] }),
 			})
-		return { client, pool, token, owner, boundNonce, deposit }
+		return { client, pool, token, owner, boundNonce, deposit, validBefore, name }
 	}
 
 	test.each([false, true])('prices authorized REP against pre-transfer backing (committed: %s)', async committed => {
@@ -135,5 +135,67 @@ describe('Vault authorization deposit accounting', () => {
 		assert.strictEqual(await client.readContract({ address: token, abi: ReputationToken_ReputationToken.abi, functionName: 'authorizationState', args: [owner, boundNonce] }), false)
 		assert.strictEqual((await getSecurityVault(client, pool, owner)).repBackingUnits, 0n)
 		assert.strictEqual(await client.readContract({ address: pool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'vaultTargetBackingFactorBps', args: [owner] }), 0n)
+	})
+	test.each([false, true])('ordinary, permit, and authorization deposits produce identical accounting (accrued fees: %s)', async accruedFees => {
+		const depositAmount = amount + 37n
+		const { client, pool, token, owner, deposit, validBefore, name } = await prepare(true, accruedFees, target, true, depositAmount)
+		const ownerClient = createWriteClient(fixture.mockWindow, BigInt(owner))
+		// A donation makes the backing-unit price non-integral before the non-round top-up.
+		await client.waitForTransactionReceipt({ hash: await client.writeContract({ address: token, abi: ReputationToken_ReputationToken.abi, functionName: 'transfer', args: [pool, 17n] }) })
+		await ownerClient.waitForTransactionReceipt({ hash: await ownerClient.writeContract({ address: token, abi: ReputationToken_ReputationToken.abi, functionName: 'approve', args: [pool, 0n] }) })
+		if (accruedFees) await fixture.mockWindow.advanceTime(3_600n)
+		const nonce = await client.readContract({ address: token, abi: ReputationToken_ReputationToken.abi, functionName: 'nonces', args: [owner] })
+		const signature = await fixture.mockWindow.request({
+			method: 'eth_signTypedData_v4',
+			params: [
+				owner,
+				JSON.stringify({
+					domain: { chainId: 1, name, version: '1', verifyingContract: token },
+					primaryType: 'Permit',
+					types: {
+						Permit: [
+							{ name: 'owner', type: 'address' },
+							{ name: 'spender', type: 'address' },
+							{ name: 'value', type: 'uint256' },
+							{ name: 'nonce', type: 'uint256' },
+							{ name: 'deadline', type: 'uint256' },
+						],
+					},
+					message: { owner, spender: pool, value: depositAmount.toString(), nonce: nonce.toString(), deadline: validBefore.toString() },
+				}),
+			],
+		})
+		if (typeof signature !== 'string' || signature.length !== 132) throw new Error('Expected a 65-byte permit signature')
+		const r: `0x${string}` = `0x${signature.slice(2, 66)}`
+		const s: `0x${string}` = `0x${signature.slice(66, 130)}`
+		const readAccounting = async () => ({
+			owner: await getSecurityVault(client, pool, owner),
+			existing: await getSecurityVault(client, pool, client.account.address),
+			pool: await client.readContract({ address: pool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'getPoolAccountingSnapshot' }),
+			backing: await backingUnitsToAttoRep(client, pool, (await getSecurityVault(client, pool, owner)).repBackingUnits),
+			target: await client.readContract({ address: pool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'vaultTargetBackingFactorBps', args: [owner] }),
+		})
+		const depositTimestamp = (await fixture.mockWindow.getTime()) + 10n
+		const results = []
+		for (const path of ['ordinary', 'permit', 'authorization']) {
+			const snapshot = await fixture.mockWindow.anvilSnapshot()
+			if (path === 'ordinary') {
+				await approveToken(ownerClient, token, pool)
+				await fixture.mockWindow.setTime(depositTimestamp)
+				await depositRepToVault(ownerClient, pool, depositAmount, target)
+			} else if (path === 'permit') {
+				await fixture.mockWindow.setTime(depositTimestamp)
+				await ownerClient.waitForTransactionReceipt({ hash: await ownerClient.writeContract({ address: pool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'depositRepToVaultWithPermit', args: [depositAmount, target, validBefore, Number.parseInt(signature.slice(130, 132), 16), r, s] }) })
+				assert.strictEqual(await client.readContract({ address: token, abi: ReputationToken_ReputationToken.abi, functionName: 'nonces', args: [owner] }), nonce + 1n)
+			} else {
+				await fixture.mockWindow.setTime(depositTimestamp)
+				await deposit()
+			}
+			results.push(await readAccounting())
+			await fixture.mockWindow.anvilRevert(snapshot)
+		}
+		assert.deepStrictEqual(results[1], results[0])
+		assert.deepStrictEqual(results[2], results[0])
+		if (accruedFees) assert.ok(results[0] !== undefined && results[0].owner.claimableFeesAttoEth > 0n, 'the comparison must exercise a positive fee checkpoint')
 	})
 })

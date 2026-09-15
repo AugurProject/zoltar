@@ -1,3 +1,4 @@
+import { VaultExposureValue } from './VaultExposureValue.js'
 import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import type { OperationModalProps } from '@zoltar/ui-core-shared/types/components.js'
@@ -58,9 +59,24 @@ export function VaultBackingFactorForm({
 			</p>
 			<MetricGrid>
 				<MetricField label={securityPoolCopy.minimumBackingRatio}>{minimumBps === undefined ? commonCopy.metricUnavailablePlaceholder : `${formatCurrencyInputBalance(minimumBps, 4)}×`}</MetricField>
-				<MetricField label={securityPoolCopy.currentCapacity}>{details === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={details.capacityOwnershipAttoRep} suffix={securityPoolCopy.capacityUnits} />}</MetricField>
-				<MetricField label={securityPoolCopy.resultingCapacity}>{nextCapacity === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={nextCapacity} suffix={securityPoolCopy.capacityUnits} />}</MetricField>
+				<MetricField label={securityPoolCopy.currentExposureSupported}>
+					<VaultExposureValue capacity={details?.capacityOwnershipAttoRep} multiplierBps={minimumBps} repPerEthPrice={repPerEthPrice} />
+				</MetricField>
+				<MetricField label={securityPoolCopy.resultingExposureSupported}>
+					<VaultExposureValue capacity={nextCapacity} multiplierBps={minimumBps} repPerEthPrice={repPerEthPrice} />
+				</MetricField>
 			</MetricGrid>
+			<details>
+				<summary>{commonCopy.technicalDetails}</summary>
+				<MetricGrid>
+					<MetricField label={securityPoolCopy.currentCapacity}>
+						<CurrencyValue value={details?.capacityOwnershipAttoRep} suffix={securityPoolCopy.capacityUnits} />
+					</MetricField>
+					<MetricField label={securityPoolCopy.resultingCapacity}>
+						<CurrencyValue value={nextCapacity} suffix={securityPoolCopy.capacityUnits} />
+					</MetricField>
+				</MetricGrid>
+			</details>
 			<div className='actions'>
 				<TransactionActionButton
 					idleLabel={securityPoolCopy.adjustVaultBackingFactor}

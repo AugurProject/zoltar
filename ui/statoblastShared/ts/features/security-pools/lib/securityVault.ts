@@ -147,3 +147,10 @@ export function getVaultBackingFactorAdjustmentGuard(details: SecurityVaultDetai
 	}
 	return undefined
 }
+
+// Match SecurityPoolUtils.calculateMintingCapacityAttoEth, including its rounding order.
+export function getVaultExposure(capacity: bigint | undefined, multiplierBps: bigint | undefined, repPerEthPrice: bigint | undefined) {
+	if (capacity === undefined || multiplierBps === undefined || multiplierBps <= 0n) return undefined
+	if (repPerEthPrice !== undefined && repPerEthPrice > 0n) return { amount: (((capacity * PRICE_PRECISION) / repPerEthPrice) * BPS_DENOMINATOR) / multiplierBps, priced: true }
+	return { amount: (capacity * BPS_DENOMINATOR) / multiplierBps, priced: false }
+}

@@ -1,3 +1,4 @@
+import { VaultExposureValue } from './VaultExposureValue.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
@@ -30,9 +31,9 @@ export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, r
 						</div>
 					</div>
 					<div className='security-pool-browse-vault-row-kpi'>
-						<span>{securityPoolCopy.currentCapacityOwnershipAttoRep}</span>
+						<span>{securityPoolCopy.exposureSupported}</span>
 						<strong>
-							<CurrencyValue value={capacityOwnershipAttoRep} suffix={commonCopy.rep} />
+							<VaultExposureValue capacity={capacityOwnershipAttoRep} multiplierBps={selectedPoolStatoblastSecurityMultiplierBps} repPerEthPrice={repPerEthPrice} />
 						</strong>
 					</div>
 					<div className='security-pool-browse-vault-row-kpi'>

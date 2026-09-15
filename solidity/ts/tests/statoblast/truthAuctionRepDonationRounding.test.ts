@@ -2,12 +2,12 @@ import { SystemState } from '../../testSupport/simulator/types/statoblastTypes'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
 import { getSecurityPoolAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { getMigratedAttoRep, getSecurityPoolForkerForkData, migrateRepToZoltar, migrateVault, startTruthAuction } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
-import { getEthRaiseCapAttoEth, OperationType } from '../../testSupport/simulator/utils/contracts/statoblast'
+import { getEthRaiseCapAttoEth } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { getChildUniverseId, getERC20Balance } from '../../testSupport/simulator/utils/utilities'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { createWriteClient } from '../../testSupport/simulator/utils/clients'
 import { createCompleteSet, getSettlementCollateralAttoEth, getSecurityVault, getSystemState, backingUnitsToAttoRep } from '../../testSupport/simulator/utils/contracts/securityPool'
-import { approveAndDepositRepToVault, manipulatePriceOracleAndPerformOperation } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
+import { approveAndDepositRepToVault, setVaultCapacityFixture } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { addressString } from '../../testSupport/simulator/utils/bigint'
 import { strictEqualTypeSafe } from '../../testSupport/simulator/utils/testUtils'
 import { beforeEach, describe, test } from 'bun:test'
@@ -51,7 +51,7 @@ describe('Truth-auction REP donation rounding regression', () => {
 
 		const capacityOwnershipAttoRepPerVault = repDeposit / 2n
 		for (const vaultClient of vaultClients) {
-			await manipulatePriceOracleAndPerformOperation(vaultClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.PriceRefresh, vaultClient.account.address, capacityOwnershipAttoRepPerVault)
+			await setVaultCapacityFixture(vaultClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, vaultClient.account.address, capacityOwnershipAttoRepPerVault)
 		}
 
 		const totalVaultRep = repDeposit * BigInt(vaultClients.length)

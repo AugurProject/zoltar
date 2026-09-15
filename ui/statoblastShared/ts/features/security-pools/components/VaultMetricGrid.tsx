@@ -1,3 +1,4 @@
+import { VaultExposureValue } from './VaultExposureValue.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
@@ -39,6 +40,7 @@ function getAssociatedRepStatusLabel({ associatedRepPerCapacityBps, isCurrentlyH
 }
 
 export function VaultMetricGrid({
+	repPerEthPrice,
 	targetBackingFactorBps,
 	associatedRepPerCapacityBps,
 	badDebtAttoEth,
@@ -67,7 +69,12 @@ export function VaultMetricGrid({
 		return (
 			<div className={['vault-preview-strip', className].filter(Boolean).join(' ')}>
 				<div className='vault-preview-strip-head'>
-					<VaultPrimaryMetric className='vault-preview-capacity-ownership' label={commonCopy.capacityOwnershipAttoRep} value={capacityOwnershipAttoRep} suffix={commonCopy.rep} />
+					<div className='vault-preview-capacity-ownership'>
+						<span>{securityPoolCopy.exposureSupported}</span>
+						<strong>
+							<VaultExposureValue capacity={capacityOwnershipAttoRep} multiplierBps={selectedPoolStatoblastSecurityMultiplierBps} repPerEthPrice={repPerEthPrice} />
+						</strong>
+					</div>
 				</div>
 				<div className='vault-preview-side-metrics'>
 					<VaultPrimaryMetric label={commonCopy.poolHeldVaultRepBackingAttoRep} value={vaultAttoRepBacking} suffix={commonCopy.rep} />
@@ -95,11 +102,22 @@ export function VaultMetricGrid({
 	return (
 		<div className={['vault-detail-stage', className].filter(Boolean).join(' ')}>
 			<div className='vault-detail-hero'>
-				<VaultPrimaryMetric className='vault-detail-hero-primary' label={commonCopy.capacityOwnershipAttoRep} value={capacityOwnershipAttoRep} suffix={commonCopy.rep} />
+				<div className='vault-detail-hero-primary'>
+					<span>{securityPoolCopy.exposureSupported}</span>
+					<strong>
+						<VaultExposureValue capacity={capacityOwnershipAttoRep} multiplierBps={selectedPoolStatoblastSecurityMultiplierBps} repPerEthPrice={repPerEthPrice} />
+					</strong>
+				</div>
 				<div className='vault-detail-hero-secondary'>
 					<VaultPrimaryMetric label={commonCopy.poolHeldVaultRepBackingAttoRep} value={vaultAttoRepBacking} suffix={commonCopy.rep} />
 				</div>
 			</div>
+			<details>
+				<summary>{commonCopy.technicalDetails}</summary>
+				<MetricField label={commonCopy.capacityOwnershipAttoRep}>
+					<CurrencyValue value={capacityOwnershipAttoRep} suffix={securityPoolCopy.capacityUnits} />
+				</MetricField>
+			</details>
 			<div className='vault-detail-meta'>
 				{targetBackingFactorBps === undefined || targetBackingFactorBps === 0n ? undefined : <MetricField label={securityPoolCopy.vaultBackingFactor}>{formatRepPerCapacityBps(targetBackingFactorBps)}</MetricField>}
 				{associatedRepPerCapacityBps === undefined ? undefined : (
