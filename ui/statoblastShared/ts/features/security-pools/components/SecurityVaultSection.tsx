@@ -47,7 +47,7 @@ import {
 import type { ReadinessAction, SecurityVaultSectionProps } from '../../types.js'
 import { DepositBackingFactorField, VaultBackingFactorForm, VaultBackingFactorModal } from './VaultBackingFactorForm.js'
 import { SelectedVaultSummarySection } from './SelectedVaultSummarySection.js'
-import { VaultBackingTargetStatusCard, getQueuedVaultOperation, getQueuedVaultOperationStatus, VaultQueuedOperationStatusCard } from './VaultQueuedOperationStatusCard.js'
+import { VaultQueuedOperationStatusCards } from './VaultQueuedOperationStatusCard.js'
 
 type VaultActionModal = 'claim-fees' | 'deposit-rep' | 'withdraw-rep' | 'adjust-backing' | undefined
 
@@ -81,6 +81,7 @@ export function SecurityVaultSection({
 	walletRepBalanceError,
 	walletRepBalanceLoading = false,
 	securityVaultResult,
+	securityVaultQueuedOperations = [],
 	selectedPoolStatoblastSecurityMultiplierBps,
 	selectedMarketTitle,
 	selectedPoolTotalPoolHeldAttoRep,
@@ -246,17 +247,9 @@ export function SecurityVaultSection({
 	const autoLoadKey = `${normalizeAddress(selectedVaultOwner) ?? ''}:${normalizeAddress(normalizedSecurityVaultForm.securityPoolAddress) ?? ''}`
 	const hasLoadedCurrentVault = currentSelectedVaultDetails !== undefined && sameAddress(currentSelectedVaultDetails.vaultAddress, selectedVaultOwner) && sameAddress(currentSelectedVaultDetails.securityPoolAddress, normalizedSecurityVaultForm.securityPoolAddress)
 	const lastAutoLoadKey = useRef<string | undefined>(securityVaultError === undefined ? undefined : autoLoadKey)
-	const queuedVaultOperation = getQueuedVaultOperation({
-		oracleManagerDetails,
-		selectedVaultOwner: selectedVaultOwner ?? '',
-		securityVaultResult,
-	})
-	const queuedVaultOperationStatus = getQueuedVaultOperationStatus({
-		currentPoolOracleManagerDetails: oracleManagerDetails,
-		loadingSecurityVault,
-		queuedVaultOperation,
-		securityVaultResult,
-	})
+	const operationResults = securityVaultResult === undefined || securityVaultQueuedOperations.some(result => result.hash === securityVaultResult.hash) ? securityVaultQueuedOperations : [...securityVaultQueuedOperations, securityVaultResult]
+	const operationStatusProps = { results: operationResults, oracleManagerDetails, selectedVaultOwner: selectedVaultOwner ?? '', loadingSecurityVault, onViewStagedOperations }
+
 	const stagedOperationTimeoutField = <VaultOperationTimeoutField value={normalizedSecurityVaultForm.stagedOperationTimeoutMinutes} disabled={!queueWithdrawRepEnabled} onChange={stagedOperationTimeoutMinutes => onSecurityVaultFormChange({ stagedOperationTimeoutMinutes })} />
 	const vaultLoadNotice = (() => {
 		if (loadingSecurityVault)
@@ -458,25 +451,7 @@ export function SecurityVaultSection({
 				{currentSelectedVaultDetails === undefined ? <p className='detail'>{securityPoolCopy.selectedVaultDetailsUnavailable}</p> : null}
 				{currentSelectedVaultDetails === undefined ? null : (
 					<>
-						{effectiveRepExitMode === 'redeem' ? null : (
-							<VaultQueuedOperationStatusCard
-								amountLabel={securityPoolCopy.repWithdrawal}
-								amountSuffix={commonCopy.rep}
-								errorMessage={securityVaultResult?.stagedExecution?.errorMessage ?? securityPoolCopy.immediateWithdrawalRejectedDetail}
-								executedTitle={securityPoolCopy.repWithdrawalExecuted}
-								failedTitle={securityPoolCopy.repWithdrawalFailed}
-								manualQueuedDescription={commonCopy.manualQueuedOperationDetail}
-								missingDescription={commonCopy.transactionStateUnavailableDetail}
-								missingTitle={securityPoolCopy.repWithdrawalSubmitted}
-								onViewStagedOperations={onViewStagedOperations}
-								queuedTitle={securityPoolCopy.repWithdrawalQueued}
-								queuedVaultOperation={queuedVaultOperation}
-								refreshingDescription={securityPoolCopy.refreshingWithdrawalStatusDetail}
-								refreshingTitle={securityPoolCopy.refreshingWithdrawalState}
-								status={securityVaultResult?.action === 'queueWithdrawRep' ? queuedVaultOperationStatus : undefined}
-								successDescription={securityPoolCopy.immediateWithdrawalSuccessDetail}
-							/>
-						)}
+						{effectiveRepExitMode === 'redeem' ? null : <VaultQueuedOperationStatusCards {...operationStatusProps} operation='withdrawRep' />}
 						<SelectedVaultSummarySection
 							repPerEthPrice={repPerEthPrice}
 							repPerEthSource={repPerEthSource}
@@ -730,7 +705,7 @@ export function SecurityVaultSection({
 				/>
 			) : undefined}
 
-			<VaultBackingTargetStatusCard result={securityVaultResult} queuedVaultOperation={queuedVaultOperation} status={queuedVaultOperationStatus} onViewStagedOperations={onViewStagedOperations} />
+			<VaultQueuedOperationStatusCards {...operationStatusProps} operation='adjustVaultBackingFactor' />
 
 			{actionSections}
 		</>

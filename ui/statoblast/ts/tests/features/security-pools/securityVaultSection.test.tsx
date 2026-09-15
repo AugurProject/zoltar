@@ -228,6 +228,20 @@ describe('SecurityVaultSection', () => {
 		expect(within(document.body).queryByText('Backing ratio change queued')).toBeNull()
 	})
 
+	test.each(['manual-queued', 'executed'] as const)('shows tracked target %s independently of the latest fee claim', async status => {
+		const rendered = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					securityVaultResult: { action: 'redeemFees', hash: '0x02' },
+					securityVaultQueuedOperations: [{ action: 'adjustVaultBackingFactor', hash: '0x01', queuedOperation: { operation: 'adjustVaultBackingFactor', operationId: 42n, isPendingSlot: false }, queuedOperationState: { status } }],
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		expect(within(document.body).getByText(status === 'executed' ? 'Backing ratio changed' : 'Backing ratio change queued')).toBeDefined()
+		if (status === 'manual-queued') expect(within(document.body).getByText('#42')).toBeDefined()
+	})
+
 	test('previews a separate whole-vault adjustment and submits its factor', async () => {
 		let submitted: string | undefined
 		const rendered = await renderIntoDocument(

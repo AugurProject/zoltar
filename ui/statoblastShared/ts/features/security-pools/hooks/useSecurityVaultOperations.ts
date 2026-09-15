@@ -215,11 +215,9 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 		return undefined
 	}
 
-	const reconcileQueuedOperation = useQueuedVaultOperationState({
+	const queuedOperations = useQueuedVaultOperationState({
 		enabled,
 		selectionKey: effectiveVaultSelectionKey,
-		managerAddress: securityVaultDetails.value?.managerAddress,
-		result: securityVaultResult,
 		loadState: dependencies.loadQueuedVaultOperationState,
 		onFinalized: async () => {
 			const details = securityVaultDetails.value
@@ -260,7 +258,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				} else {
 					clearRepLoaders()
 				}
-				await reconcileQueuedOperation(details.managerAddress)
+				await queuedOperations.reconcile(details.managerAddress)
 				return details
 			},
 			onSuccess: () => undefined,
@@ -437,7 +435,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				const coverageGuard = getVaultBackingFactorAdjustmentGuard(details, factor, managerDetails?.isPriceValid ? managerDetails.lastPrice : undefined, details.statoblastSecurityMultiplierBps)
 				if (coverageGuard !== undefined) throw new Error(coverageGuard)
 				const result = await dependencies.queueOracleManagerOperation(writeClient, details.managerAddress, 'adjustVaultBackingFactor', vaultAddress, factor, DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES * 60n)
-				return { ...result, action: 'adjustVaultBackingFactor' } satisfies SecurityVaultActionResult
+				return queuedOperations.track(details.managerAddress, { ...result, action: 'adjustVaultBackingFactor' })
 			},
 			'Failed to adjust backing factor',
 			async (_result, securityPoolAddress, vaultAddress, isCurrentSelection) => {
@@ -506,12 +504,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				if (withdrawRepGuardMessage !== undefined) throw new Error(withdrawRepGuardMessage)
 				if (!isCurrentSelection()) return undefined
 				const result = await dependencies.queueOracleManagerOperation(writeClient, details.managerAddress, 'withdrawRep', vaultAddress, amount, resolveStagedOperationValidForSecondsFromSnapshot(snapshot))
-				return {
-					action: 'queueWithdrawRep',
-					hash: result.hash,
-					...(result.queuedOperation === undefined ? {} : { queuedOperation: result.queuedOperation }),
-					...(result.stagedExecution === undefined ? {} : { stagedExecution: result.stagedExecution }),
-				} satisfies SecurityVaultActionResult
+				return queuedOperations.track(details.managerAddress, { ...result, action: 'queueWithdrawRep' })
 			},
 			'Failed to withdraw REP',
 			async (_result, securityPoolAddress, vaultAddress, isCurrentSelection) => {
@@ -577,7 +570,8 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 		walletRepBalanceAttoRep: repBalanceLoader.signal.value.value,
 		walletRepBalanceError: repBalanceLoader.signal.value.error,
 		walletRepBalanceLoading: repBalanceLoader.signal.value.loading,
-		securityVaultResult: securityVaultResult.value,
+		securityVaultQueuedOperations: queuedOperations.operations,
+		securityVaultResult: queuedOperations.operations.find(result => result.hash === securityVaultResult.value?.hash) ?? securityVaultResult.value,
 		setSecurityVaultForm: (updater: (current: SecurityVaultFormState) => SecurityVaultFormState) => {
 			updateSecurityVaultForm(updater)
 		},

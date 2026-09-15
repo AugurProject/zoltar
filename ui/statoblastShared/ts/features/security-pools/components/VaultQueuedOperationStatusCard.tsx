@@ -16,7 +16,7 @@ type QueuedVaultOperationView = {
 	operationId: bigint
 }
 
-export function getQueuedVaultOperation({ oracleManagerDetails, selectedVaultOwner, securityVaultResult }: { oracleManagerDetails: SecurityVaultSectionProps['oracleManagerDetails']; selectedVaultOwner: string; securityVaultResult: SecurityVaultSectionProps['securityVaultResult'] }) {
+function getQueuedVaultOperation({ oracleManagerDetails, selectedVaultOwner, securityVaultResult }: { oracleManagerDetails: SecurityVaultSectionProps['oracleManagerDetails']; selectedVaultOwner: string; securityVaultResult: SecurityVaultSectionProps['securityVaultResult'] }) {
 	let operation: 'withdrawRep' | 'adjustVaultBackingFactor' | undefined
 	if (securityVaultResult?.action === 'queueWithdrawRep') operation = 'withdrawRep'
 	if (securityVaultResult?.action === 'adjustVaultBackingFactor') operation = 'adjustVaultBackingFactor'
@@ -30,7 +30,7 @@ export function getQueuedVaultOperation({ oracleManagerDetails, selectedVaultOwn
 	return undefined
 }
 
-export function getQueuedVaultOperationStatus({
+function getQueuedVaultOperationStatus({
 	currentPoolOracleManagerDetails,
 	loadingSecurityVault,
 	queuedVaultOperation,
@@ -49,7 +49,7 @@ export function getQueuedVaultOperationStatus({
 	return 'missing'
 }
 
-export function VaultQueuedOperationStatusCard({
+function VaultQueuedOperationStatusCard({
 	amountLabel,
 	amountSuffix,
 	executedTitle,
@@ -83,6 +83,12 @@ export function VaultQueuedOperationStatusCard({
 	successDescription: string
 }) {
 	if (status === undefined) return undefined
+	const operationIdentifier =
+		queuedVaultOperation === undefined ? undefined : (
+			<MetricGrid>
+				<MetricField label={commonCopy.stagedOperation}>{`#${queuedVaultOperation.operationId.toString()}`}</MetricField>
+			</MetricGrid>
+		)
 	if (status === 'queued' || status === 'manual-queued')
 		return (
 			<WarningSurface as='section' surface='flat' variant='compact'>
@@ -120,6 +126,7 @@ export function VaultQueuedOperationStatusCard({
 					</div>
 					{status === 'failed' ? <Badge tone='blocked'>{commonCopy.failed}</Badge> : undefined}
 				</div>
+				{operationIdentifier}
 				<p className='detail'>{details[status]}</p>
 				{status === 'superseded' ? undefined : <p className='detail'>{commonCopy.stagedOperationRetryDetail}</p>}
 			</section>
@@ -134,15 +141,14 @@ export function VaultQueuedOperationStatusCard({
 					</div>
 					<Badge tone='ok'>{commonCopy.executed}</Badge>
 				</div>
+				{operationIdentifier}
 				<p className='detail'>{successDescription}</p>
 			</section>
 		)
 	const submittedOperationDetails =
 		queuedVaultOperation === undefined ? undefined : (
 			<>
-				<MetricGrid>
-					<MetricField label={commonCopy.stagedOperation}>{`#${queuedVaultOperation.operationId.toString()}`}</MetricField>
-				</MetricGrid>
+				{operationIdentifier}
 				<p className='detail'>{queuedVaultOperation.isPendingSlot ? securityPoolCopy.queuedVaultOperationAutomaticRefreshDetail : securityPoolCopy.queuedVaultOperationManualRefreshDetail}</p>
 				{onViewStagedOperations === undefined ? undefined : (
 					<div className='actions'>
@@ -179,34 +185,68 @@ export function VaultQueuedOperationStatusCard({
 	)
 }
 
-export function VaultBackingTargetStatusCard({
-	result,
-	queuedVaultOperation,
-	status,
+export function VaultQueuedOperationStatusCards({
+	results,
+	operation,
+	oracleManagerDetails,
+	selectedVaultOwner,
+	loadingSecurityVault,
 	onViewStagedOperations,
 }: {
-	result: SecurityVaultSectionProps['securityVaultResult']
-	queuedVaultOperation: ReturnType<typeof getQueuedVaultOperation>
-	status: QueuedVaultOperationStatus
+	results: readonly NonNullable<SecurityVaultSectionProps['securityVaultResult']>[]
+	operation: 'withdrawRep' | 'adjustVaultBackingFactor'
+	oracleManagerDetails: SecurityVaultSectionProps['oracleManagerDetails']
+	selectedVaultOwner: string
+	loadingSecurityVault: boolean
 	onViewStagedOperations: (() => void) | undefined
 }) {
+	const action = operation === 'withdrawRep' ? 'queueWithdrawRep' : 'adjustVaultBackingFactor'
+	const copy =
+		operation === 'withdrawRep'
+			? {
+					amountLabel: securityPoolCopy.repWithdrawal,
+					amountSuffix: commonCopy.rep,
+					errorMessage: securityPoolCopy.immediateWithdrawalRejectedDetail,
+					executedTitle: securityPoolCopy.repWithdrawalExecuted,
+					failedTitle: securityPoolCopy.repWithdrawalFailed,
+					missingTitle: securityPoolCopy.repWithdrawalSubmitted,
+					queuedTitle: securityPoolCopy.repWithdrawalQueued,
+					refreshingDescription: securityPoolCopy.refreshingWithdrawalStatusDetail,
+					refreshingTitle: securityPoolCopy.refreshingWithdrawalState,
+					successDescription: securityPoolCopy.immediateWithdrawalSuccessDetail,
+				}
+			: {
+					amountLabel: securityPoolCopy.vaultBackingFactor,
+					amountSuffix: '',
+					errorMessage: undefined,
+					executedTitle: securityPoolCopy.backingRatioChangeExecuted,
+					failedTitle: securityPoolCopy.backingRatioChangeFailed,
+					missingTitle: securityPoolCopy.backingRatioChangeSubmitted,
+					queuedTitle: securityPoolCopy.backingRatioChangeQueued,
+					refreshingDescription: securityPoolCopy.refreshingBackingRatioStatusDetail,
+					refreshingTitle: securityPoolCopy.refreshingBackingRatioStatus,
+					successDescription: securityPoolCopy.backingRatioChangeSuccessDetail,
+				}
 	return (
-		<VaultQueuedOperationStatusCard
-			amountLabel={securityPoolCopy.vaultBackingFactor}
-			amountSuffix=''
-			errorMessage={result?.stagedExecution?.errorMessage}
-			executedTitle={securityPoolCopy.backingRatioChangeExecuted}
-			failedTitle={securityPoolCopy.backingRatioChangeFailed}
-			manualQueuedDescription={commonCopy.manualQueuedOperationDetail}
-			missingDescription={commonCopy.transactionStateUnavailableDetail}
-			missingTitle={securityPoolCopy.backingRatioChangeSubmitted}
-			onViewStagedOperations={onViewStagedOperations}
-			queuedTitle={securityPoolCopy.backingRatioChangeQueued}
-			queuedVaultOperation={queuedVaultOperation}
-			refreshingDescription={securityPoolCopy.refreshingBackingRatioStatusDetail}
-			refreshingTitle={securityPoolCopy.refreshingBackingRatioStatus}
-			status={result?.action === 'adjustVaultBackingFactor' ? status : undefined}
-			successDescription={securityPoolCopy.backingRatioChangeSuccessDetail}
-		/>
+		<>
+			{results
+				.filter(result => result.action === action)
+				.map(result => {
+					const queuedVaultOperation = getQueuedVaultOperation({ oracleManagerDetails, selectedVaultOwner, securityVaultResult: result })
+					const status = getQueuedVaultOperationStatus({ currentPoolOracleManagerDetails: oracleManagerDetails, loadingSecurityVault, queuedVaultOperation, securityVaultResult: result })
+					return (
+						<VaultQueuedOperationStatusCard
+							key={result.queuedOperation?.operationId.toString() ?? result.hash}
+							{...copy}
+							errorMessage={result.stagedExecution?.errorMessage ?? copy.errorMessage}
+							manualQueuedDescription={commonCopy.manualQueuedOperationDetail}
+							missingDescription={commonCopy.transactionStateUnavailableDetail}
+							onViewStagedOperations={onViewStagedOperations}
+							queuedVaultOperation={queuedVaultOperation}
+							status={status}
+						/>
+					)
+				})}
+		</>
 	)
 }

@@ -1,5 +1,5 @@
 import { isIgnorableLogDecodeError } from '../logDecodeErrors'
-import { decodeEventLog } from '@zoltar/core-shared/evm/ethereum'
+import { decodeEventLog, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { OperationType, getRequestPriceCostAttoEth, requestPriceIfNeededAndStageOperationWithInitialReportPrice, getIsPriceValid, getPendingReportId, requestPriceIfNeededAndStageOperation } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { manipulatePriceOracle, handleOracleReporting } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { statoblast_interfaces_ISecurityPool_ISecurityPool, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, IERC20_IERC20 } from '../../types/contractArtifact'
@@ -14,8 +14,8 @@ import { createWriteClient } from '../../testSupport/simulator/utils/clients'
 
 describe('Vault backing factor adjustment', () => {
 	const fixture = useStatoblastVaultAccountingFixture()
-	const adjust = async (factor: bigint) => {
-		const { client, securityPoolAddresses } = fixture
+	const adjust = async (factor: bigint, client = fixture.client) => {
+		const { securityPoolAddresses } = fixture
 		if (!(await getIsPriceValid(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer))) await manipulatePriceOracle(client, fixture.mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 		const hash = await requestPriceIfNeededAndStageOperation(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.AdjustVaultBackingFactor, client.account.address, factor)
 		const receipt = await client.waitForTransactionReceipt({ hash })
@@ -188,11 +188,25 @@ describe('Vault backing factor adjustment', () => {
 		await assert.rejects(adjust(40_000n), /Vault admission closed/)
 	})
 
-	test('rejects invalid factors, zero capacity, and empty vaults', async () => {
+	test('rejects invalid factors and zero capacity', async () => {
 		await assert.rejects(adjust(9_999n), /Backing factor below minimum/)
 		await assert.rejects(adjust(2n ** 256n - 1n), /Capacity must be positive/)
-		const outsider = createWriteClient(fixture.mockWindow, TEST_ADDRESSES[1])
-		await assert.rejects(outsider.writeContract({ address: fixture.securityPoolAddresses.securityPool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'adjustVaultBackingFactor', args: [outsider.account.address, 40_000n] }), /Unauthorized/)
+	})
+
+	test('consumes an empty-vault owner adjustment with a failed backing check', async () => {
+		const { client, mockWindow, securityPoolAddresses } = fixture
+		const outsider = createWriteClient(mockWindow, TEST_ADDRESSES[1])
+		const manager = securityPoolAddresses.priceOracleManagerAndOperatorQueuer
+		await manipulatePriceOracle(client, mockWindow, manager)
+		const readTarget = () => client.readContract({ address: securityPoolAddresses.securityPool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'vaultTargetBackingFactorBps', args: [outsider.account.address] })
+		assert.strictEqual(await readTarget(), 0n)
+		await assert.rejects(adjust(40_000n, outsider), /Vault has no REP backing/)
+		assert.strictEqual(await readTarget(), 0n)
+		const operationId = await client.readContract({ address: manager, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'stagedOperationCounter' })
+		assert.ok(operationId > 0n)
+		const operation = await client.readContract({ address: manager, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'stagedOperations', args: [operationId] })
+		assert.strictEqual(operation.operator, zeroAddress)
+		assert.strictEqual(await client.readContract({ address: manager, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'getActiveStagedOperationCount' }), 0n)
 	})
 
 	test('rejects committed capacity reductions without changing the saved target', async () => {

@@ -220,6 +220,7 @@ type SecurityVaultRouteContentProps = {
 	walletRepBalanceAttoRep: bigint | undefined
 	walletRepBalanceError: string | undefined
 	walletRepBalanceLoading: boolean
+	securityVaultQueuedOperations?: readonly SecurityVaultActionResult[]
 	securityVaultResult: SecurityVaultActionResult | undefined
 	selectedPoolStatoblastSecurityMultiplierBps: bigint | undefined
 	repPerEthPrice: bigint | undefined

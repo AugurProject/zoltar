@@ -239,6 +239,61 @@ describe('useSecurityVaultOperations', () => {
 		expect(requireHookState(state).securityVaultResult?.hash).toBe('0x01')
 	})
 
+	test.each(['failed', 'canceled'] as const)('keeps tracking an adjustment after a fee claim is %s', async outcome => {
+		let completed = false
+		const queuedOperation = { isPendingSlot: false, operation: 'adjustVaultBackingFactor' as const, operationId: 42n }
+		const dependencies = createSecurityVaultOperationsDependencies({
+			loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails({ settlementCollateralAttoEth: 0n, targetBackingFactorBps: completed ? 20_000n : 40_000n })),
+			queueOracleManagerOperation: mock(async () => ({ hash: '0x01' as const, queuedOperation })),
+			loadQueuedVaultOperationState: mock(async () => (completed ? { status: 'executed' as const, execution: { operation: 'adjustVaultBackingFactor' as const, operationId: 42n, success: true } } : { status: 'manual-queued' as const })),
+			updateSecurityVaultFees: mock(async () => ({ action: 'updateVaultFees' as const, hash: '0x02' as const })),
+			redeemSecurityVaultFees: mock(async () => {
+				throw Object.assign(new Error(outcome === 'canceled' ? 'User rejected the request' : 'Fee claim reverted'), { code: outcome === 'canceled' ? 4001 : -32000 })
+			}),
+		})
+		let state: UseSecurityVaultOperationsState | undefined
+		const Harness = createHarness(dependencies, next => {
+			state = next
+		})
+		cleanupRenderedComponent = (await renderIntoDocument(h(Harness, {}))).cleanup
+		await act(async () => await requireHookState(state).adjustBackingFactor('2'))
+		await waitFor(() => expect(requireHookState(state).securityVaultResult?.queuedOperationState?.status).toBe('manual-queued'))
+		await act(async () => await requireHookState(state).redeemFees())
+		expect(dependencies.redeemSecurityVaultFees).toHaveBeenCalled()
+		expect(requireHookState(state).securityVaultQueuedOperations?.[0]?.queuedOperation).toEqual(queuedOperation)
+		completed = true
+		await waitFor(() => expect(requireHookState(state).securityVaultQueuedOperations?.[0]?.queuedOperationState?.status).toBe('executed'), { timeout: 5_000 })
+		expect(requireHookState(state).securityVaultQueuedOperations?.[0]?.hash).toBe('0x01')
+		await waitFor(() => expect(requireHookState(state).securityVaultDetails?.targetBackingFactorBps).toBe(20_000n))
+		expect(requireHookState(state).securityVaultResult).toBeUndefined()
+	})
+
+	test('tracks a target and withdrawal by their independent operation IDs', async () => {
+		let targetExecuted = false
+		const dependencies = createSecurityVaultOperationsDependencies({
+			loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails({ settlementCollateralAttoEth: 0n, targetBackingFactorBps: targetExecuted ? 20_000n : 40_000n })),
+			queueOracleManagerOperation: mock(async (_client: TestSecurityVaultWriteClient, _manager: Address, operation: 'withdrawRep' | 'adjustVaultBackingFactor') => ({
+				hash: operation === 'withdrawRep' ? ('0x02' as const) : ('0x01' as const),
+				queuedOperation: { isPendingSlot: false, operation, operationId: operation === 'withdrawRep' ? 43n : 42n },
+			})),
+			loadQueuedVaultOperationState: mock(async (_manager, result) => (result.queuedOperation?.operationId === 42n && targetExecuted ? { status: 'executed' as const } : { status: 'manual-queued' as const })),
+		})
+		let state: UseSecurityVaultOperationsState | undefined
+		const Harness = createHarness(dependencies, next => {
+			state = next
+		})
+		cleanupRenderedComponent = (await renderIntoDocument(h(Harness, {}))).cleanup
+		await act(async () => await requireHookState(state).adjustBackingFactor('2'))
+		await act(async () => requireHookState(state).setSecurityVaultForm(current => ({ ...current, repWithdrawAmount: '1' })))
+		await act(async () => await requireHookState(state).withdrawRep())
+		expect(requireHookState(state).securityVaultQueuedOperations.map(result => result.queuedOperation?.operationId)).toEqual([42n, 43n])
+		targetExecuted = true
+		await waitFor(() => expect(requireHookState(state).securityVaultQueuedOperations[0]?.queuedOperationState?.status).toBe('executed'), { timeout: 5_000 })
+		expect(requireHookState(state).securityVaultQueuedOperations[1]?.queuedOperationState?.status).toBe('manual-queued')
+		expect(requireHookState(state).securityVaultResult?.hash).toBe('0x02')
+		await waitFor(() => expect(requireHookState(state).securityVaultDetails?.targetBackingFactorBps).toBe(20_000n))
+	})
+
 	test('retains the queued receipt through a delayed failed read and retry', async () => {
 		const delayed = createDeferred<{ status: 'manual-queued' }>()
 		let reads = 0
